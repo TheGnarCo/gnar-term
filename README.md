@@ -1,4 +1,4 @@
-# ClawTab 🦀
+# GnarTerm 🤙
 
 Terminal workspace manager for AI coding agents. A lean, cross-platform alternative to cmux built with Tauri v2.
 

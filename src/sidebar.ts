@@ -18,7 +18,7 @@ export class Sidebar {
       border-bottom: 1px solid #222; display: flex; align-items: center;
       justify-content: space-between;
     `;
-    header.innerHTML = `<span>🦀 ClawTab</span>`;
+    header.innerHTML = `<span>🤙 GnarTerm</span>`;
 
     // Add workspace button
     this.addButton = document.createElement("button");

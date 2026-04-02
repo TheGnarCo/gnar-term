@@ -1,14 +1,14 @@
 [package]
-name = "clawtab"
+name = "gnar-term"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "clawtab_lib"
+name = "gnar_term_lib"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [[bin]]
-name = "clawtab"
+name = "gnar-term"
 path = "src/main.rs"
 
 [dependencies]

@@ -209,5 +209,5 @@ pub fn run() {
             spawn_pty, write_pty, resize_pty, kill_pty
         ])
         .run(tauri::generate_context!())
-        .expect("error while running ClawTab");
+        .expect("error while running GnarTerm");
 }

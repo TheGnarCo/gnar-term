@@ -31,6 +31,50 @@ function uid(): string {
   return `id-${++_id}-${Date.now()}`;
 }
 
+// Default font stack — Nerd Font Mono variants first (critical for powerline).
+// Non-Mono Nerd Fonts have double-width glyphs that break terminal grid alignment.
+const DEFAULT_FONTS = [
+  '"MesloLGS Nerd Font Mono"',
+  '"MesloLGS NF"',
+  '"JetBrainsMono Nerd Font Mono"',
+  '"JetBrainsMono NF"',
+  '"FiraCode Nerd Font Mono"',
+  '"Hack Nerd Font Mono"',
+  '"JetBrains Mono"',
+  '"Fira Code"',
+  '"Cascadia Code"',
+  '"SF Mono"',
+  'Menlo',
+  'monospace',
+].join(", ");
+
+let resolvedFontFamily = DEFAULT_FONTS;
+
+// Try to detect installed nerd fonts and prioritize them
+async function detectBestFont(): Promise<string> {
+  try {
+    const fonts = await invoke<string[]>("detect_fonts");
+    // Prefer Nerd Font Mono variants
+    const nerdMono = fonts.find((f) =>
+      f.toLowerCase().includes("nerd") && f.toLowerCase().includes("mono")
+    );
+    if (nerdMono) {
+      return `"${nerdMono}", ${DEFAULT_FONTS}`;
+    }
+    // Any nerd font
+    const nerd = fonts.find((f) => f.toLowerCase().includes("nerd"));
+    if (nerd) {
+      return `"${nerd}", ${DEFAULT_FONTS}`;
+    }
+  } catch {
+    // detect_fonts not available or failed
+  }
+  return DEFAULT_FONTS;
+}
+
+// Initialize font detection
+detectBestFont().then((f) => { resolvedFontFamily = f; });
+
 export class TerminalManager {
   workspaces: Workspace[] = [];
   activeWorkspaceIdx = -1;
@@ -133,7 +177,7 @@ export class TerminalManager {
     const terminal = new Terminal({
       cursorBlink: true,
       fontSize: 14,
-      fontFamily: '"JetBrains Mono", "Fira Code", "Cascadia Code", "MesloLGS NF", Menlo, monospace',
+      fontFamily: resolvedFontFamily,
       theme: {
         background: "#0a0a0a",
         foreground: "#e0e0e0",

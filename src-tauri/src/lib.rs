@@ -211,6 +211,43 @@ async fn kill_pty(state: tauri::State<'_, AppState>, pty_id: u32) -> Result<(), 
     Ok(())
 }
 
+/// Detect installed monospace/nerd fonts
+#[tauri::command]
+async fn detect_fonts() -> Result<Vec<String>, String> {
+    let output = std::process::Command::new("fc-list")
+        .args([":spacing=100", "family"])
+        .output();
+
+    // fc-list is Linux; on macOS try system_profiler or atsutil
+    let result = match output {
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).to_string(),
+        _ => {
+            // macOS fallback
+            let mac_output = std::process::Command::new("system_profiler")
+                .args(["SPFontsDataType"])
+                .output();
+            match mac_output {
+                Ok(o) => String::from_utf8_lossy(&o.stdout).to_string(),
+                Err(_) => return Ok(vec![]),
+            }
+        }
+    };
+
+    // Parse for nerd font / mono font names
+    let nerd_fonts: Vec<String> = result
+        .lines()
+        .filter(|l| {
+            let lower = l.to_lowercase();
+            lower.contains("nerd") || lower.contains("powerline") || lower.contains("mono")
+        })
+        .map(|l| l.trim().trim_end_matches(',').to_string())
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
+        .collect();
+
+    Ok(nerd_fonts)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -218,7 +255,7 @@ pub fn run() {
             ptys: Mutex::new(HashMap::new()),
         })
         .invoke_handler(tauri::generate_handler![
-            spawn_pty, write_pty, resize_pty, kill_pty
+            spawn_pty, write_pty, resize_pty, kill_pty, detect_fonts
         ])
         .run(tauri::generate_context!())
         .expect("error while running GnarTerm");

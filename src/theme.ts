@@ -1,51 +1,51 @@
 /**
  * GnarTerm color palette
- * Muted dark — inspired by cmux / macOS system dark mode
- * Quiet, professional, gets out of the way
+ * GitHub Dark Default — clean, familiar, muted
  */
 
 export const theme = {
-  // Base — neutral grays, not navy or pure black
-  bg: "#1c1c1e",          // system dark bg
-  bgSurface: "#232326",   // panels, cards
-  bgFloat: "#2c2c2e",     // floating elements (menus, palette)
-  bgHighlight: "#38383a",  // hover states
-  bgActive: "#3a3a3c",    // active/selected
+  // Base — GitHub dark mode grays
+  bg: "#0d1117",          // main background
+  bgSurface: "#161b22",   // sidebar, cards, elevated surfaces
+  bgFloat: "#1c2128",     // floating elements (menus, palette, tooltips)
+  bgHighlight: "#30363d",  // hover states
+  bgActive: "#388bfd26",   // active/selected (blue tint, translucent)
 
-  // Borders — subtle
-  border: "#38383a",
-  borderActive: "#0091ff",  // cmux blue accent
-  borderNotify: "#0091ff",
+  // Borders
+  border: "#30363d",
+  borderActive: "#58a6ff",  // blue accent
+  borderNotify: "#58a6ff",
 
-  // Text — muted hierarchy
-  fg: "#e5e5e7",           // primary
-  fgMuted: "#98989d",      // secondary / labels
-  fgDim: "#636366",        // disabled / very subtle
+  // Text
+  fg: "#e6edf3",           // primary text
+  fgMuted: "#8b949e",      // secondary / labels
+  fgDim: "#484f58",        // disabled / very subtle
 
-  // Accent — calm blue (matches cmux)
-  accent: "#0091ff",
-  accentHover: "#409cff",
-  notify: "#0091ff",
-  notifyGlow: "rgba(0, 145, 255, 0.25)",
-  danger: "#ff453a",
-  success: "#30d158",
+  // Accent — GitHub blue
+  accent: "#58a6ff",
+  accentHover: "#79c0ff",
+  notify: "#58a6ff",
+  notifyGlow: "rgba(88, 166, 255, 0.25)",
+  danger: "#f85149",
+  success: "#3fb950",
+  warning: "#d29922",
 
-  // Terminal — your ghostty/terminal theme takes over here
-  termBg: "#1c1c1e",
-  termFg: "#e5e5e7",
-  termCursor: "#e5e5e7",
-  termSelection: "#3a3a3c",
+  // Terminal
+  termBg: "#0d1117",
+  termFg: "#e6edf3",
+  termCursor: "#e6edf3",
+  termSelection: "#264f78",
 
-  // Sidebar — slightly darker than main bg
-  sidebarBg: "#161618",
-  sidebarBorder: "#2c2c2e",
+  // Sidebar
+  sidebarBg: "#010409",     // darkest layer
+  sidebarBorder: "#21262d",
 
   // Tab bar
-  tabBarBg: "#161618",
-  tabBarBorder: "#2c2c2e",
+  tabBarBg: "#010409",
+  tabBarBorder: "#21262d",
 };
 
-/** xterm.js theme — neutral, lets user's shell theme shine */
+/** xterm.js theme — GitHub dark ANSI colors */
 export const xtermTheme = {
   background: theme.termBg,
   foreground: theme.termFg,
@@ -53,21 +53,20 @@ export const xtermTheme = {
   cursorAccent: theme.termBg,
   selectionBackground: theme.termSelection,
   selectionForeground: theme.termFg,
-  // Standard ANSI — muted but readable
-  black: "#1c1c1e",
-  red: "#ff453a",
-  green: "#30d158",
-  yellow: "#ffd60a",
-  blue: "#0a84ff",
-  magenta: "#bf5af2",
-  cyan: "#64d2ff",
-  white: "#e5e5e7",
-  brightBlack: "#636366",
-  brightRed: "#ff6961",
-  brightGreen: "#4cd964",
-  brightYellow: "#ffe620",
-  brightBlue: "#409cff",
-  brightMagenta: "#da8fff",
-  brightCyan: "#70d7ff",
-  brightWhite: "#f5f5f7",
+  black: "#484f58",
+  red: "#ff7b72",
+  green: "#3fb950",
+  yellow: "#d29922",
+  blue: "#58a6ff",
+  magenta: "#bc8cff",
+  cyan: "#39c5cf",
+  white: "#b1bac4",
+  brightBlack: "#6e7681",
+  brightRed: "#ffa198",
+  brightGreen: "#56d364",
+  brightYellow: "#e3b341",
+  brightBlue: "#79c0ff",
+  brightMagenta: "#d2a8ff",
+  brightCyan: "#56d4dd",
+  brightWhite: "#f0f6fc",
 };

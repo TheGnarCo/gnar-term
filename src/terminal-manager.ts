@@ -14,6 +14,7 @@ export interface Pane {
   ptyId: number;
   notification?: string;
   hasUnread: boolean;
+  title: string;
 }
 
 export interface Workspace {
@@ -22,6 +23,7 @@ export interface Workspace {
   panes: Pane[];
   activePaneId: string | null;
   element: HTMLElement;
+  splitDirection: "row" | "column";
 }
 
 let _id = 0;
@@ -37,7 +39,7 @@ export class TerminalManager {
 
   constructor(container: HTMLElement) {
     this.container = container;
-    this.setupPtyListener();
+    this.setupListeners();
   }
 
   onChange(cb: () => void) {
@@ -48,12 +50,11 @@ export class TerminalManager {
     this.onChangeCallbacks.forEach((cb) => cb());
   }
 
-  private async setupPtyListener() {
-    // Listen for PTY output from Rust backend
+  private async setupListeners() {
+    // PTY output
     await listen<{ pty_id: number; data: number[] }>("pty-output", (event) => {
       const { pty_id, data } = event.payload;
       const bytes = new Uint8Array(data);
-      // Find the pane with this pty_id
       for (const ws of this.workspaces) {
         const pane = ws.panes.find((p) => p.ptyId === pty_id);
         if (pane) {
@@ -63,7 +64,20 @@ export class TerminalManager {
       }
     });
 
-    // Listen for notifications (OSC 9/99/777)
+    // PTY exit — close the pane
+    await listen<{ pty_id: number }>("pty-exit", (event) => {
+      const { pty_id } = event.payload;
+      for (let wi = 0; wi < this.workspaces.length; wi++) {
+        const ws = this.workspaces[wi];
+        const paneIdx = ws.panes.findIndex((p) => p.ptyId === pty_id);
+        if (paneIdx >= 0) {
+          this.removePaneByIndex(wi, paneIdx);
+          break;
+        }
+      }
+    });
+
+    // Notifications (OSC 9/99/777)
     await listen<{ pty_id: number; text: string }>("pty-notification", (event) => {
       const { pty_id, text } = event.payload;
       for (const ws of this.workspaces) {
@@ -90,7 +104,7 @@ export class TerminalManager {
 
   async createWorkspace(name: string): Promise<Workspace> {
     const wsElement = document.createElement("div");
-    wsElement.style.cssText = "flex: 1; display: flex; min-height: 0;";
+    wsElement.style.cssText = "flex: 1; display: flex; min-height: 0; min-width: 0;";
 
     const ws: Workspace = {
       id: uid(),
@@ -98,12 +112,11 @@ export class TerminalManager {
       panes: [],
       activePaneId: null,
       element: wsElement,
+      splitDirection: "row",
     };
 
     this.workspaces.push(ws);
     this.switchWorkspace(this.workspaces.length - 1);
-
-    // Auto-create first pane
     await this.addPane(ws);
 
     return ws;
@@ -111,13 +124,16 @@ export class TerminalManager {
 
   private async addPane(ws: Workspace): Promise<Pane> {
     const element = document.createElement("div");
-    element.style.cssText = "flex: 1; min-width: 0; min-height: 0; position: relative;";
+    element.style.cssText = `
+      flex: 1; min-width: 0; min-height: 0; position: relative;
+      border: 1px solid #222; margin: 1px;
+    `;
     element.classList.add("pane");
 
     const terminal = new Terminal({
       cursorBlink: true,
       fontSize: 14,
-      fontFamily: '"JetBrains Mono", "Fira Code", "Cascadia Code", Menlo, monospace',
+      fontFamily: '"JetBrains Mono", "Fira Code", "Cascadia Code", "MesloLGS NF", Menlo, monospace',
       theme: {
         background: "#0a0a0a",
         foreground: "#e0e0e0",
@@ -131,13 +147,10 @@ export class TerminalManager {
     terminal.loadAddon(fitAddon);
     terminal.loadAddon(new WebLinksAddon());
 
-    // Spawn PTY via Tauri
+    // Spawn PTY
     let ptyId: number;
     try {
-      ptyId = await invoke<number>("spawn_pty", {
-        cols: 80,
-        rows: 24,
-      });
+      ptyId = await invoke<number>("spawn_pty", { cols: 80, rows: 24 });
     } catch (err) {
       console.error("Failed to spawn PTY:", err);
       ptyId = -1;
@@ -150,6 +163,7 @@ export class TerminalManager {
       element,
       ptyId,
       hasUnread: false,
+      title: `Shell ${ws.panes.length + 1}`,
     };
 
     ws.panes.push(pane);
@@ -181,12 +195,15 @@ export class TerminalManager {
       }
     });
 
-    // Focus tracking
-    element.addEventListener("click", () => {
-      ws.activePaneId = pane.id;
-      pane.hasUnread = false;
-      terminal.focus();
+    // Track title changes
+    terminal.onTitleChange((title) => {
+      pane.title = title;
       this.notify();
+    });
+
+    // Focus tracking — highlight active pane
+    element.addEventListener("mousedown", () => {
+      this.setActivePane(ws, pane);
     });
 
     // Observe container resize
@@ -196,17 +213,67 @@ export class TerminalManager {
     resizeObserver.observe(element);
 
     terminal.focus();
+    this.updatePaneBorders(ws);
     this.notify();
     return pane;
+  }
+
+  private setActivePane(ws: Workspace, pane: Pane) {
+    ws.activePaneId = pane.id;
+    pane.hasUnread = false;
+    pane.terminal.focus();
+    this.updatePaneBorders(ws);
+    this.notify();
+  }
+
+  private updatePaneBorders(ws: Workspace) {
+    ws.panes.forEach((p) => {
+      const isActive = p.id === ws.activePaneId;
+      p.element.style.borderColor = isActive ? "#e85d04" : "#222";
+    });
+  }
+
+  private removePaneByIndex(wsIdx: number, paneIdx: number) {
+    const ws = this.workspaces[wsIdx];
+    const pane = ws.panes[paneIdx];
+
+    pane.terminal.dispose();
+    pane.element.remove();
+    if (pane.ptyId >= 0) {
+      invoke("kill_pty", { ptyId: pane.ptyId }).catch(() => {});
+    }
+
+    ws.panes.splice(paneIdx, 1);
+
+    if (ws.panes.length === 0) {
+      // Last pane closed — remove workspace
+      if (this.workspaces.length > 1) {
+        ws.element.remove();
+        this.workspaces.splice(wsIdx, 1);
+        const newIdx = Math.min(wsIdx, this.workspaces.length - 1);
+        this.switchWorkspace(newIdx);
+      } else {
+        // Last workspace — create a new pane
+        this.addPane(ws);
+      }
+    } else {
+      // Focus next pane
+      const nextIdx = Math.min(paneIdx, ws.panes.length - 1);
+      ws.activePaneId = ws.panes[nextIdx].id;
+      ws.panes[nextIdx].fitAddon.fit();
+      ws.panes[nextIdx].terminal.focus();
+      this.updatePaneBorders(ws);
+    }
+
+    this.notify();
   }
 
   switchWorkspace(idx: number) {
     if (idx < 0 || idx >= this.workspaces.length) return;
 
     // Hide current
-    if (this.activeWorkspaceIdx >= 0) {
-      const prev = this.workspaces[this.activeWorkspaceIdx];
-      prev.element.remove();
+    if (this.activeWorkspaceIdx >= 0 && this.activeWorkspaceIdx < this.workspaces.length) {
+      this.workspaces[this.activeWorkspaceIdx].element.remove();
     }
 
     this.activeWorkspaceIdx = idx;
@@ -219,6 +286,7 @@ export class TerminalManager {
       setTimeout(() => {
         active.fitAddon.fit();
         active.terminal.focus();
+        this.updatePaneBorders(ws);
       }, 10);
     }
 
@@ -229,12 +297,8 @@ export class TerminalManager {
     const ws = this.activeWorkspace;
     if (!ws) return;
 
-    // For now, just add another pane in a flex layout
-    if (direction === "right") {
-      ws.element.style.flexDirection = "row";
-    } else {
-      ws.element.style.flexDirection = "column";
-    }
+    ws.splitDirection = direction === "right" ? "row" : "column";
+    ws.element.style.flexDirection = ws.splitDirection;
 
     await this.addPane(ws);
 
@@ -245,29 +309,12 @@ export class TerminalManager {
 
   closeActivePane() {
     const ws = this.activeWorkspace;
-    if (!ws || ws.panes.length <= 1) return;
+    if (!ws) return;
 
     const idx = ws.panes.findIndex((p) => p.id === ws.activePaneId);
     if (idx < 0) return;
 
-    const pane = ws.panes[idx];
-    pane.terminal.dispose();
-    pane.element.remove();
-
-    if (pane.ptyId >= 0) {
-      invoke("kill_pty", { ptyId: pane.ptyId }).catch(() => {});
-    }
-
-    ws.panes.splice(idx, 1);
-    ws.activePaneId = ws.panes[Math.min(idx, ws.panes.length - 1)]?.id ?? null;
-
-    const active = ws.panes.find((p) => p.id === ws.activePaneId);
-    if (active) {
-      active.fitAddon.fit();
-      active.terminal.focus();
-    }
-
-    this.notify();
+    this.removePaneByIndex(this.activeWorkspaceIdx, idx);
   }
 
   closeActiveWorkspace() {
@@ -283,5 +330,23 @@ export class TerminalManager {
     this.workspaces.splice(this.activeWorkspaceIdx, 1);
     this.switchWorkspace(Math.min(this.activeWorkspaceIdx, this.workspaces.length - 1));
     this.notify();
+  }
+
+  // Navigate between panes with arrow keys
+  focusDirection(direction: "left" | "right" | "up" | "down") {
+    const ws = this.activeWorkspace;
+    if (!ws || ws.panes.length <= 1) return;
+
+    const currentIdx = ws.panes.findIndex((p) => p.id === ws.activePaneId);
+    if (currentIdx < 0) return;
+
+    let nextIdx: number;
+    if (direction === "right" || direction === "down") {
+      nextIdx = (currentIdx + 1) % ws.panes.length;
+    } else {
+      nextIdx = (currentIdx - 1 + ws.panes.length) % ws.panes.length;
+    }
+
+    this.setActivePane(ws, ws.panes[nextIdx]);
   }
 }

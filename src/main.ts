@@ -7,7 +7,7 @@ const app = document.getElementById("app")!;
 const sidebar = document.createElement("div");
 sidebar.id = "sidebar";
 sidebar.style.cssText = `
-  width: 240px; min-width: 200px; max-width: 400px;
+  width: 220px; min-width: 180px; max-width: 400px;
   background: #111; border-right: 1px solid #222;
   display: flex; flex-direction: column; overflow: hidden;
   font-size: 13px; user-select: none;
@@ -34,13 +34,13 @@ sidebarUI.refresh();
 // Keyboard shortcuts
 document.addEventListener("keydown", (e) => {
   const isMeta = e.metaKey || e.ctrlKey;
+  const isAlt = e.altKey;
 
   // Cmd+N — new workspace
   if (isMeta && e.key === "n" && !e.shiftKey) {
     e.preventDefault();
     const name = `Workspace ${termManager.workspaces.length + 1}`;
     termManager.createWorkspace(name);
-    sidebarUI.refresh();
   }
 
   // Cmd+D — split right
@@ -59,14 +59,12 @@ document.addEventListener("keydown", (e) => {
   if (isMeta && e.key === "w" && !e.shiftKey) {
     e.preventDefault();
     termManager.closeActivePane();
-    sidebarUI.refresh();
   }
 
   // Cmd+Shift+W — close workspace
   if (isMeta && e.key === "w" && e.shiftKey) {
     e.preventDefault();
     termManager.closeActiveWorkspace();
-    sidebarUI.refresh();
   }
 
   // Cmd+1-9 — jump to workspace
@@ -74,12 +72,27 @@ document.addEventListener("keydown", (e) => {
     e.preventDefault();
     const idx = e.key === "9" ? termManager.workspaces.length - 1 : parseInt(e.key) - 1;
     termManager.switchWorkspace(idx);
-    sidebarUI.refresh();
   }
 
   // Cmd+B — toggle sidebar
   if (isMeta && e.key === "b") {
     e.preventDefault();
     sidebar.style.display = sidebar.style.display === "none" ? "flex" : "none";
+  }
+
+  // Alt+Cmd+Arrow — focus pane directionally
+  if (isAlt && isMeta) {
+    if (e.key === "ArrowLeft") { e.preventDefault(); termManager.focusDirection("left"); }
+    if (e.key === "ArrowRight") { e.preventDefault(); termManager.focusDirection("right"); }
+    if (e.key === "ArrowUp") { e.preventDefault(); termManager.focusDirection("up"); }
+    if (e.key === "ArrowDown") { e.preventDefault(); termManager.focusDirection("down"); }
+  }
+
+  // Ctrl+Tab / Ctrl+Shift+Tab — next/prev workspace
+  if (e.ctrlKey && e.key === "Tab") {
+    e.preventDefault();
+    const dir = e.shiftKey ? -1 : 1;
+    const next = (termManager.activeWorkspaceIdx + dir + termManager.workspaces.length) % termManager.workspaces.length;
+    termManager.switchWorkspace(next);
   }
 });

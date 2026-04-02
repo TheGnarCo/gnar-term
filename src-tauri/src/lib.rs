@@ -30,6 +30,11 @@ struct PtyNotification {
     text: String,
 }
 
+#[derive(Clone, Serialize)]
+struct PtyExit {
+    pty_id: u32,
+}
+
 /// Spawn a new PTY with a shell
 #[tauri::command]
 async fn spawn_pty(
@@ -95,7 +100,11 @@ async fn spawn_pty(
 
         loop {
             match reader.read(&mut buf) {
-                Ok(0) => break, // PTY closed
+                Ok(0) => {
+                    // PTY closed — notify frontend
+                    let _ = app_handle.emit("pty-exit", PtyExit { pty_id: id });
+                    break;
+                }
                 Ok(n) => {
                     let data = &buf[..n];
 
@@ -143,7 +152,10 @@ async fn spawn_pty(
                         },
                     );
                 }
-                Err(_) => break,
+                Err(_) => {
+                    let _ = app_handle.emit("pty-exit", PtyExit { pty_id: id });
+                    break;
+                }
             }
         }
     });

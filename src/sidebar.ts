@@ -1,10 +1,9 @@
-import { TerminalManager, type Workspace } from "./terminal-manager";
+import { TerminalManager, type Workspace, type Pane } from "./terminal-manager";
 
 export class Sidebar {
   private container: HTMLElement;
   private manager: TerminalManager;
   private workspaceList: HTMLElement;
-  private addButton: HTMLElement;
 
   constructor(container: HTMLElement, manager: TerminalManager) {
     this.container = container;
@@ -20,29 +19,30 @@ export class Sidebar {
     `;
     header.innerHTML = `<span>🤙 GnarTerm</span>`;
 
-    // Add workspace button
-    this.addButton = document.createElement("button");
-    this.addButton.textContent = "+";
-    this.addButton.style.cssText = `
+    const addButton = document.createElement("button");
+    addButton.textContent = "+";
+    addButton.title = "New workspace (Cmd+N)";
+    addButton.style.cssText = `
       background: none; border: 1px solid #333; color: #888;
       border-radius: 4px; width: 24px; height: 24px; cursor: pointer;
       font-size: 16px; display: flex; align-items: center; justify-content: center;
     `;
-    this.addButton.addEventListener("click", () => {
+    addButton.addEventListener("click", () => {
       const name = `Workspace ${manager.workspaces.length + 1}`;
       manager.createWorkspace(name);
-      this.refresh();
     });
-    header.appendChild(this.addButton);
+    addButton.addEventListener("mouseenter", () => { addButton.style.borderColor = "#555"; });
+    addButton.addEventListener("mouseleave", () => { addButton.style.borderColor = "#333"; });
+    header.appendChild(addButton);
 
     // Workspace list
     this.workspaceList = document.createElement("div");
-    this.workspaceList.style.cssText = "flex: 1; overflow-y: auto; padding: 8px 0;";
+    this.workspaceList.style.cssText = "flex: 1; overflow-y: auto; padding: 4px 0;";
 
     container.appendChild(header);
     container.appendChild(this.workspaceList);
 
-    // Auto-refresh on terminal changes
+    // Auto-refresh on changes
     manager.onChange(() => this.refresh());
   }
 
@@ -61,23 +61,25 @@ export class Sidebar {
 
     const item = document.createElement("div");
     item.style.cssText = `
-      padding: 8px 16px; cursor: pointer; display: flex;
-      flex-direction: column; gap: 2px; transition: background 0.1s;
+      margin: 2px 8px; border-radius: 6px; overflow: hidden;
       background: ${isActive ? "#1a1a2e" : "transparent"};
       border-left: 3px solid ${isActive ? "#e85d04" : "transparent"};
     `;
 
-    item.addEventListener("mouseenter", () => {
+    // Workspace header row
+    const headerRow = document.createElement("div");
+    headerRow.style.cssText = `
+      padding: 8px 12px; cursor: pointer; display: flex;
+      align-items: center; gap: 8px;
+    `;
+    headerRow.addEventListener("mouseenter", () => {
       if (!isActive) item.style.background = "#151515";
     });
-    item.addEventListener("mouseleave", () => {
-      if (!isActive) item.style.background = "transparent";
+    headerRow.addEventListener("mouseleave", () => {
+      if (!isActive) item.style.background = isActive ? "#1a1a2e" : "transparent";
     });
 
-    // Workspace name + notification badge
-    const nameRow = document.createElement("div");
-    nameRow.style.cssText = "display: flex; align-items: center; gap: 8px;";
-
+    // Workspace name
     const name = document.createElement("span");
     name.textContent = ws.name;
     name.style.cssText = `
@@ -86,8 +88,16 @@ export class Sidebar {
       font-size: 13px; flex: 1; overflow: hidden;
       text-overflow: ellipsis; white-space: nowrap;
     `;
+    headerRow.appendChild(name);
 
-    nameRow.appendChild(name);
+    // Pane count badge
+    const countBadge = document.createElement("span");
+    countBadge.textContent = `${ws.panes.length}`;
+    countBadge.style.cssText = `
+      font-size: 10px; color: #555; background: #1a1a1a;
+      padding: 1px 5px; border-radius: 8px;
+    `;
+    headerRow.appendChild(countBadge);
 
     // Notification badge
     if (hasUnread) {
@@ -96,25 +106,83 @@ export class Sidebar {
         width: 8px; height: 8px; border-radius: 50%;
         background: #3b82f6; flex-shrink: 0;
       `;
-      nameRow.appendChild(badge);
+      headerRow.appendChild(badge);
     }
 
-    item.appendChild(nameRow);
-
-    // Pane count + latest notification
-    const meta = document.createElement("div");
-    meta.style.cssText = "font-size: 11px; color: #555; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;";
-
-    const paneCount = ws.panes.length;
-    const latestNotification = ws.panes.find((p) => p.notification)?.notification;
-    meta.textContent = latestNotification
-      ? `${paneCount} pane${paneCount > 1 ? "s" : ""} · ${latestNotification}`
-      : `${paneCount} pane${paneCount > 1 ? "s" : ""}`;
-
-    item.appendChild(meta);
-
-    item.addEventListener("click", () => {
+    headerRow.addEventListener("click", () => {
       this.manager.switchWorkspace(idx);
+    });
+
+    item.appendChild(headerRow);
+
+    // Pane list (only for active workspace)
+    if (isActive && ws.panes.length > 1) {
+      const paneList = document.createElement("div");
+      paneList.style.cssText = "padding: 0 8px 6px 20px;";
+
+      ws.panes.forEach((pane) => {
+        const paneItem = this.createPaneItem(ws, pane);
+        paneList.appendChild(paneItem);
+      });
+
+      item.appendChild(paneList);
+    }
+
+    // Latest notification preview
+    const latestNotification = ws.panes.find((p) => p.notification)?.notification;
+    if (latestNotification) {
+      const notifPreview = document.createElement("div");
+      notifPreview.style.cssText = `
+        padding: 2px 12px 6px; font-size: 11px; color: #3b82f6;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      `;
+      notifPreview.textContent = `💬 ${latestNotification}`;
+      item.appendChild(notifPreview);
+    }
+
+    return item;
+  }
+
+  private createPaneItem(ws: Workspace, pane: Pane): HTMLElement {
+    const isActive = pane.id === ws.activePaneId;
+
+    const item = document.createElement("div");
+    item.style.cssText = `
+      padding: 3px 8px; cursor: pointer; font-size: 12px;
+      color: ${isActive ? "#e0e0e0" : "#666"};
+      border-radius: 3px; display: flex; align-items: center; gap: 6px;
+      background: ${isActive ? "#222" : "transparent"};
+    `;
+
+    const icon = document.createElement("span");
+    icon.textContent = "›";
+    icon.style.cssText = `color: ${isActive ? "#e85d04" : "#444"}; font-weight: bold;`;
+
+    const title = document.createElement("span");
+    title.textContent = pane.title || "Shell";
+    title.style.cssText = "flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;";
+
+    item.appendChild(icon);
+    item.appendChild(title);
+
+    if (pane.hasUnread) {
+      const dot = document.createElement("span");
+      dot.style.cssText = "width: 6px; height: 6px; border-radius: 50%; background: #3b82f6;";
+      item.appendChild(dot);
+    }
+
+    item.addEventListener("mouseenter", () => {
+      if (!isActive) item.style.background = "#1a1a1a";
+    });
+    item.addEventListener("mouseleave", () => {
+      item.style.background = isActive ? "#222" : "transparent";
+    });
+
+    item.addEventListener("click", (e) => {
+      e.stopPropagation();
+      ws.activePaneId = pane.id;
+      pane.hasUnread = false;
+      pane.terminal.focus();
       this.refresh();
     });
 

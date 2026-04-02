@@ -90,7 +90,7 @@ export class TerminalManager {
     this.onChangeCallbacks.push(cb);
   }
 
-  private notify() {
+  notify() {
     this.onChangeCallbacks.forEach((cb) => cb());
   }
 

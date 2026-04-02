@@ -1,4 +1,5 @@
 import { Sidebar } from "./sidebar";
+import { TabBar } from "./tab-bar";
 import { TerminalManager } from "./terminal-manager";
 import { openCommandPalette } from "./command-palette";
 
@@ -14,6 +15,12 @@ sidebar.style.cssText = `
   font-size: 13px; user-select: none;
 `;
 
+const rightPanel = document.createElement("div");
+rightPanel.style.cssText = "flex: 1; display: flex; flex-direction: column; min-width: 0;";
+
+const tabBarEl = document.createElement("div");
+tabBarEl.id = "tab-bar";
+
 const terminalArea = document.createElement("div");
 terminalArea.id = "terminal-area";
 terminalArea.style.cssText = `
@@ -21,16 +28,21 @@ terminalArea.style.cssText = `
   background: #0a0a0a; min-width: 0;
 `;
 
+rightPanel.appendChild(tabBarEl);
+rightPanel.appendChild(terminalArea);
+
 app.appendChild(sidebar);
-app.appendChild(terminalArea);
+app.appendChild(rightPanel);
 
 // Initialize
 const termManager = new TerminalManager(terminalArea);
 const sidebarUI = new Sidebar(sidebar, termManager);
+const tabBar = new TabBar(tabBarEl, termManager);
 
 // Create first workspace
 termManager.createWorkspace("Workspace 1");
 sidebarUI.refresh();
+tabBar.refresh();
 
 // Keyboard shortcuts
 document.addEventListener("keydown", (e) => {

@@ -211,41 +211,126 @@ async fn kill_pty(state: tauri::State<'_, AppState>, pty_id: u32) -> Result<(), 
     Ok(())
 }
 
-/// Detect installed monospace/nerd fonts
+/// Detect the user's terminal font by reading existing terminal configs
 #[tauri::command]
-async fn detect_fonts() -> Result<Vec<String>, String> {
-    let output = std::process::Command::new("fc-list")
-        .args([":spacing=100", "family"])
-        .output();
+async fn detect_font() -> Result<String, String> {
+    let home = std::env::var("HOME").unwrap_or_default();
 
-    // fc-list is Linux; on macOS try system_profiler or atsutil
-    let result = match output {
-        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).to_string(),
-        _ => {
-            // macOS fallback
-            let mac_output = std::process::Command::new("system_profiler")
-                .args(["SPFontsDataType"])
-                .output();
-            match mac_output {
-                Ok(o) => String::from_utf8_lossy(&o.stdout).to_string(),
-                Err(_) => return Ok(vec![]),
+    // 1. Ghostty config
+    let ghostty_path = format!("{home}/.config/ghostty/config");
+    if let Ok(content) = std::fs::read_to_string(&ghostty_path) {
+        for line in content.lines() {
+            let line = line.trim();
+            if line.starts_with("font-family") {
+                if let Some(val) = line.split('=').nth(1) {
+                    let font = val.trim().to_string();
+                    if !font.is_empty() {
+                        return Ok(font);
+                    }
+                }
             }
         }
-    };
+    }
 
-    // Parse for nerd font / mono font names
-    let nerd_fonts: Vec<String> = result
-        .lines()
-        .filter(|l| {
-            let lower = l.to_lowercase();
-            lower.contains("nerd") || lower.contains("powerline") || lower.contains("mono")
-        })
-        .map(|l| l.trim().trim_end_matches(',').to_string())
-        .collect::<std::collections::HashSet<_>>()
-        .into_iter()
-        .collect();
+    // 2. Alacritty config (TOML)
+    for path in [
+        format!("{home}/.config/alacritty/alacritty.toml"),
+        format!("{home}/.alacritty.toml"),
+    ] {
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            // Look for family = "..." under [font.normal]
+            let mut in_font = false;
+            for line in content.lines() {
+                let trimmed = line.trim();
+                if trimmed.starts_with("[font") {
+                    in_font = true;
+                } else if trimmed.starts_with('[') {
+                    in_font = false;
+                }
+                if in_font && trimmed.starts_with("family") {
+                    if let Some(val) = trimmed.split('=').nth(1) {
+                        let font = val.trim().trim_matches('"').trim_matches('\'').to_string();
+                        if !font.is_empty() {
+                            return Ok(font);
+                        }
+                    }
+                }
+            }
+        }
+    }
 
-    Ok(nerd_fonts)
+    // 3. Kitty config
+    let kitty_path = format!("{home}/.config/kitty/kitty.conf");
+    if let Ok(content) = std::fs::read_to_string(&kitty_path) {
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("font_family") && !trimmed.starts_with('#') {
+                let font = trimmed
+                    .strip_prefix("font_family")
+                    .unwrap_or("")
+                    .trim()
+                    .to_string();
+                if !font.is_empty() {
+                    return Ok(font);
+                }
+            }
+        }
+    }
+
+    // 4. WezTerm config (Lua — best effort)
+    let wez_path = format!("{home}/.wezterm.lua");
+    if let Ok(content) = std::fs::read_to_string(&wez_path) {
+        for line in content.lines() {
+            if line.contains("font_family") || line.contains("font =" ) {
+                // Extract quoted string
+                if let Some(start) = line.find('"') {
+                    if let Some(end) = line[start + 1..].find('"') {
+                        let font = line[start + 1..start + 1 + end].to_string();
+                        if !font.is_empty() {
+                            return Ok(font);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 5. iTerm2 (macOS) — read from defaults
+    #[cfg(target_os = "macos")]
+    {
+        let output = std::process::Command::new("defaults")
+            .args(["read", "com.googlecode.iterm2", "New Bookmarks"])
+            .output();
+        if let Ok(o) = output {
+            let text = String::from_utf8_lossy(&o.stdout);
+            // Look for "Normal Font" = "<FontName> <Size>";
+            for line in text.lines() {
+                if line.contains("Normal Font") {
+                    if let Some(start) = line.find('"') {
+                        let rest = &line[start + 1..];
+                        if let Some(start2) = rest.find('"') {
+                            let rest2 = &rest[start2 + 1..];
+                            if let Some(end) = rest2.find('"') {
+                                let font_spec = &rest2[..end];
+                                // Format is "FontName Size" — strip the size
+                                let font = font_spec
+                                    .rsplitn(2, ' ')
+                                    .last()
+                                    .unwrap_or(font_spec)
+                                    .to_string();
+                                if !font.is_empty() {
+                                    return Ok(font);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 6. No config found — return empty, frontend will use fallback
+    Ok(String::new())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -255,7 +340,7 @@ pub fn run() {
             ptys: Mutex::new(HashMap::new()),
         })
         .invoke_handler(tauri::generate_handler![
-            spawn_pty, write_pty, resize_pty, kill_pty, detect_fonts
+            spawn_pty, write_pty, resize_pty, kill_pty, detect_font
         ])
         .run(tauri::generate_context!())
         .expect("error while running GnarTerm");

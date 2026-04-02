@@ -32,49 +32,29 @@ function uid(): string {
   return `id-${++_id}-${Date.now()}`;
 }
 
-// Default font stack — Nerd Font Mono variants first (critical for powerline).
-// Non-Mono Nerd Fonts have double-width glyphs that break terminal grid alignment.
-const DEFAULT_FONTS = [
-  '"MesloLGS Nerd Font Mono"',
-  '"MesloLGS NF"',
-  '"JetBrainsMono Nerd Font Mono"',
-  '"JetBrainsMono NF"',
-  '"FiraCode Nerd Font Mono"',
-  '"Hack Nerd Font Mono"',
-  '"JetBrains Mono"',
-  '"Fira Code"',
-  '"Cascadia Code"',
-  '"SF Mono"',
-  'Menlo',
-  'monospace',
-].join(", ");
+// Sensible fallback font stack
+const FALLBACK_FONTS = 'Menlo, "DejaVu Sans Mono", "Liberation Mono", monospace';
 
-let resolvedFontFamily = DEFAULT_FONTS;
+let resolvedFontFamily = FALLBACK_FONTS;
 
-// Try to detect installed nerd fonts and prioritize them
-async function detectBestFont(): Promise<string> {
+// Detect the user's actual terminal font from their existing configs
+// (Ghostty, Alacritty, Kitty, WezTerm, iTerm2)
+async function detectFont(): Promise<string> {
   try {
-    const fonts = await invoke<string[]>("detect_fonts");
-    // Prefer Nerd Font Mono variants
-    const nerdMono = fonts.find((f) =>
-      f.toLowerCase().includes("nerd") && f.toLowerCase().includes("mono")
-    );
-    if (nerdMono) {
-      return `"${nerdMono}", ${DEFAULT_FONTS}`;
-    }
-    // Any nerd font
-    const nerd = fonts.find((f) => f.toLowerCase().includes("nerd"));
-    if (nerd) {
-      return `"${nerd}", ${DEFAULT_FONTS}`;
+    const font = await invoke<string>("detect_font");
+    if (font) {
+      console.log(`[gnar-term] Detected terminal font: ${font}`);
+      return `"${font}", ${FALLBACK_FONTS}`;
     }
   } catch {
-    // detect_fonts not available or failed
+    // detect_font not available
   }
-  return DEFAULT_FONTS;
+  console.log("[gnar-term] No terminal font config found, using system defaults");
+  return FALLBACK_FONTS;
 }
 
 // Initialize font detection
-detectBestFont().then((f) => { resolvedFontFamily = f; });
+detectFont().then((f) => { resolvedFontFamily = f; });
 
 export class TerminalManager {
   workspaces: Workspace[] = [];

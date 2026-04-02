@@ -1,5 +1,6 @@
 import { Sidebar } from "./sidebar";
 import { TerminalManager } from "./terminal-manager";
+import { openCommandPalette } from "./command-palette";
 
 const app = document.getElementById("app")!;
 
@@ -86,6 +87,12 @@ document.addEventListener("keydown", (e) => {
     if (e.key === "ArrowRight") { e.preventDefault(); termManager.focusDirection("right"); }
     if (e.key === "ArrowUp") { e.preventDefault(); termManager.focusDirection("up"); }
     if (e.key === "ArrowDown") { e.preventDefault(); termManager.focusDirection("down"); }
+  }
+
+  // Cmd+P — command palette
+  if (isMeta && e.key === "p") {
+    e.preventDefault();
+    openCommandPalette(termManager);
   }
 
   // Ctrl+Tab / Ctrl+Shift+Tab — next/prev workspace

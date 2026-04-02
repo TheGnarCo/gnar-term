@@ -1,4 +1,5 @@
 import { TerminalManager, type Workspace, type Pane } from "./terminal-manager";
+import { showContextMenu, type MenuItem } from "./context-menu";
 
 export class Sidebar {
   private container: HTMLElement;
@@ -113,6 +114,11 @@ export class Sidebar {
       this.manager.switchWorkspace(idx);
     });
 
+    headerRow.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      this.showWorkspaceContextMenu(e.clientX, e.clientY, ws, idx);
+    });
+
     item.appendChild(headerRow);
 
     // Pane list (only for active workspace)
@@ -186,6 +192,93 @@ export class Sidebar {
       this.refresh();
     });
 
+    item.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.showPaneContextMenu(e.clientX, e.clientY, ws, pane);
+    });
+
     return item;
+  }
+
+  private showWorkspaceContextMenu(x: number, y: number, ws: Workspace, idx: number) {
+    const items: MenuItem[] = [
+      {
+        label: "Rename Workspace",
+        action: () => {
+          const name = prompt("Workspace name:", ws.name);
+          if (name) {
+            ws.name = name;
+            this.refresh();
+          }
+        },
+      },
+      {
+        label: "New Pane",
+        shortcut: "⌘D",
+        action: () => {
+          this.manager.switchWorkspace(idx);
+          this.manager.splitPane("right");
+        },
+      },
+      { label: "", action: () => {}, separator: true },
+      {
+        label: "Close Other Workspaces",
+        disabled: this.manager.workspaces.length <= 1,
+        action: () => {
+          for (let i = this.manager.workspaces.length - 1; i >= 0; i--) {
+            if (i !== idx) {
+              this.manager.switchWorkspace(i);
+              this.manager.closeActiveWorkspace();
+            }
+          }
+          this.manager.switchWorkspace(0);
+        },
+      },
+      {
+        label: "Close Workspace",
+        shortcut: "⇧⌘W",
+        danger: true,
+        disabled: this.manager.workspaces.length <= 1,
+        action: () => {
+          this.manager.switchWorkspace(idx);
+          this.manager.closeActiveWorkspace();
+        },
+      },
+    ];
+    showContextMenu(x, y, items);
+  }
+
+  private showPaneContextMenu(x: number, y: number, ws: Workspace, pane: Pane) {
+    const items: MenuItem[] = [
+      {
+        label: "Split Right",
+        shortcut: "⌘D",
+        action: () => {
+          ws.activePaneId = pane.id;
+          this.manager.splitPane("right");
+        },
+      },
+      {
+        label: "Split Down",
+        shortcut: "⇧⌘D",
+        action: () => {
+          ws.activePaneId = pane.id;
+          this.manager.splitPane("down");
+        },
+      },
+      { label: "", action: () => {}, separator: true },
+      {
+        label: "Close Pane",
+        shortcut: "⌘W",
+        danger: true,
+        disabled: ws.panes.length <= 1,
+        action: () => {
+          ws.activePaneId = pane.id;
+          this.manager.closeActivePane();
+        },
+      },
+    ];
+    showContextMenu(x, y, items);
   }
 }

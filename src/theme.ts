@@ -1,50 +1,51 @@
 /**
  * GnarTerm color palette
- * Inspired by Tokyo Night / Catppuccin — warm dark, not pure black
+ * Muted dark — inspired by cmux / macOS system dark mode
+ * Quiet, professional, gets out of the way
  */
 
 export const theme = {
-  // Base
-  bg: "#1a1b26",         // deep navy, not pure black
-  bgSurface: "#1f2030",  // slightly lighter for panels
-  bgFloat: "#24283b",    // floating elements (menus, palette)
-  bgHighlight: "#2a2e42", // hover / selection bg
-  bgActive: "#33374d",   // active tab / selected item
+  // Base — neutral grays, not navy or pure black
+  bg: "#1c1c1e",          // system dark bg
+  bgSurface: "#232326",   // panels, cards
+  bgFloat: "#2c2c2e",     // floating elements (menus, palette)
+  bgHighlight: "#38383a",  // hover states
+  bgActive: "#3a3a3c",    // active/selected
 
-  // Borders
-  border: "#2f3349",
-  borderActive: "#e0964c", // orange accent for active elements
-  borderNotify: "#7aa2f7", // blue for notifications
+  // Borders — subtle
+  border: "#38383a",
+  borderActive: "#0091ff",  // cmux blue accent
+  borderNotify: "#0091ff",
 
-  // Text
-  fg: "#c0caf5",          // primary text
-  fgMuted: "#7982a9",     // secondary / metadata text
-  fgDim: "#545c7e",       // disabled / very subtle text
+  // Text — muted hierarchy
+  fg: "#e5e5e7",           // primary
+  fgMuted: "#98989d",      // secondary / labels
+  fgDim: "#636366",        // disabled / very subtle
 
-  // Accent
-  accent: "#e0964c",      // orange — GnarTerm signature color (🤙 vibes)
-  accentHover: "#e8a862",
-  notify: "#7aa2f7",      // blue notification ring
-  notifyGlow: "rgba(122, 162, 247, 0.3)",
-  danger: "#f7768e",      // destructive actions
-  success: "#9ece6a",     // green for success states
+  // Accent — calm blue (matches cmux)
+  accent: "#0091ff",
+  accentHover: "#409cff",
+  notify: "#0091ff",
+  notifyGlow: "rgba(0, 145, 255, 0.25)",
+  danger: "#ff453a",
+  success: "#30d158",
 
-  // Terminal
-  termBg: "#1a1b26",
-  termFg: "#c0caf5",
-  termCursor: "#c0caf5",
-  termSelection: "#2e3c64",
+  // Terminal — your ghostty/terminal theme takes over here
+  termBg: "#1c1c1e",
+  termFg: "#e5e5e7",
+  termCursor: "#e5e5e7",
+  termSelection: "#3a3a3c",
 
-  // Sidebar
-  sidebarBg: "#16161e",
-  sidebarBorder: "#1f2030",
+  // Sidebar — slightly darker than main bg
+  sidebarBg: "#161618",
+  sidebarBorder: "#2c2c2e",
 
   // Tab bar
-  tabBarBg: "#16161e",
-  tabBarBorder: "#1f2030",
+  tabBarBg: "#161618",
+  tabBarBorder: "#2c2c2e",
 };
 
-/** xterm.js theme object */
+/** xterm.js theme — neutral, lets user's shell theme shine */
 export const xtermTheme = {
   background: theme.termBg,
   foreground: theme.termFg,
@@ -52,21 +53,21 @@ export const xtermTheme = {
   cursorAccent: theme.termBg,
   selectionBackground: theme.termSelection,
   selectionForeground: theme.termFg,
-  // ANSI colors (Tokyo Night inspired)
-  black: "#15161e",
-  red: "#f7768e",
-  green: "#9ece6a",
-  yellow: "#e0af68",
-  blue: "#7aa2f7",
-  magenta: "#bb9af7",
-  cyan: "#7dcfff",
-  white: "#a9b1d6",
-  brightBlack: "#414868",
-  brightRed: "#f7768e",
-  brightGreen: "#9ece6a",
-  brightYellow: "#e0af68",
-  brightBlue: "#7aa2f7",
-  brightMagenta: "#bb9af7",
-  brightCyan: "#7dcfff",
-  brightWhite: "#c0caf5",
+  // Standard ANSI — muted but readable
+  black: "#1c1c1e",
+  red: "#ff453a",
+  green: "#30d158",
+  yellow: "#ffd60a",
+  blue: "#0a84ff",
+  magenta: "#bf5af2",
+  cyan: "#64d2ff",
+  white: "#e5e5e7",
+  brightBlack: "#636366",
+  brightRed: "#ff6961",
+  brightGreen: "#4cd964",
+  brightYellow: "#ffe620",
+  brightBlue: "#409cff",
+  brightMagenta: "#da8fff",
+  brightCyan: "#70d7ff",
+  brightWhite: "#f5f5f7",
 };

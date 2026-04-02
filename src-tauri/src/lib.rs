@@ -329,7 +329,105 @@ async fn detect_font() -> Result<String, String> {
         }
     }
 
-    // 6. No config found — return empty, frontend will use fallback
+    // 6. macOS Terminal.app
+    #[cfg(target_os = "macos")]
+    {
+        let output = std::process::Command::new("defaults")
+            .args(["read", "com.apple.Terminal", "Default Window Settings"])
+            .output();
+        if let Ok(o) = output {
+            let profile = String::from_utf8_lossy(&o.stdout).trim().to_string();
+            if !profile.is_empty() {
+                let font_output = std::process::Command::new("defaults")
+                    .args(["read", "com.apple.Terminal", &format!("Window Settings")])
+                    .output();
+                if let Ok(fo) = font_output {
+                    let text = String::from_utf8_lossy(&fo.stdout);
+                    for line in text.lines() {
+                        if line.contains("Font") && line.contains("data") {
+                            // Font is stored as NSData, too complex to parse
+                            // Fall through to system font detection
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 7. Check what monospace/nerd fonts are actually installed
+    #[cfg(target_os = "macos")]
+    {
+        // Preferred fonts in order — if any is installed, use it
+        let preferred = [
+            "MesloLGS Nerd Font Mono",  // powerlevel10k default
+            "MesloLGS NF",              // older p10k installs
+            "JetBrainsMono Nerd Font Mono",
+            "Hack Nerd Font Mono",
+            "FiraCode Nerd Font Mono",
+            "JetBrains Mono",
+            "SF Mono",
+            "Menlo",
+        ];
+
+        for font_name in preferred {
+            let output = std::process::Command::new("system_profiler")
+                .args(["SPFontsDataType"])
+                .output();
+            if let Ok(o) = output {
+                let text = String::from_utf8_lossy(&o.stdout);
+                if text.contains(font_name) {
+                    return Ok(font_name.to_string());
+                }
+            }
+            break; // Only run system_profiler once
+        }
+
+        // Faster check via font file existence
+        let font_dirs = [
+            format!("{home}/Library/Fonts"),
+            "/Library/Fonts".to_string(),
+            "/System/Library/Fonts".to_string(),
+        ];
+        for font_name in preferred {
+            let search_term = font_name.replace(' ', "").to_lowercase();
+            for dir in &font_dirs {
+                if let Ok(entries) = std::fs::read_dir(dir) {
+                    for entry in entries.flatten() {
+                        let name = entry.file_name().to_string_lossy().to_lowercase().replace(' ', "");
+                        if name.contains(&search_term) || name.contains(&search_term.replace("nerdfontmono", "nfm")) {
+                            return Ok(font_name.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 7b. Linux — use fc-list
+    #[cfg(not(target_os = "macos"))]
+    {
+        let preferred = [
+            "MesloLGS Nerd Font Mono",
+            "MesloLGS NF",
+            "JetBrainsMono Nerd Font Mono",
+            "Hack Nerd Font Mono",
+            "FiraCode Nerd Font Mono",
+            "JetBrains Mono",
+            "DejaVu Sans Mono",
+        ];
+
+        if let Ok(output) = std::process::Command::new("fc-list").args([":spacing=100", "family"]).output() {
+            let text = String::from_utf8_lossy(&output.stdout).to_lowercase();
+            for font_name in preferred {
+                if text.contains(&font_name.to_lowercase()) {
+                    return Ok(font_name.to_string());
+                }
+            }
+        }
+    }
+
+    // 8. Nothing found — return empty, frontend uses platform default
     Ok(String::new())
 }
 

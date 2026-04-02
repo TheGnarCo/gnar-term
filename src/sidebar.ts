@@ -1,5 +1,6 @@
 import { TerminalManager, type Workspace, type Pane } from "./terminal-manager";
 import { showContextMenu, type MenuItem } from "./context-menu";
+import { theme } from "./theme";
 
 export class Sidebar {
   private container: HTMLElement;
@@ -14,8 +15,8 @@ export class Sidebar {
     const header = document.createElement("div");
     header.style.cssText = `
       padding: 12px 16px; font-weight: 600; font-size: 14px;
-      color: #888; text-transform: uppercase; letter-spacing: 0.5px;
-      border-bottom: 1px solid #222; display: flex; align-items: center;
+      color: ${theme.fgMuted}; text-transform: uppercase; letter-spacing: 0.5px;
+      border-bottom: 1px solid ${theme.border}; display: flex; align-items: center;
       justify-content: space-between;
     `;
     header.innerHTML = `<span>🤙 GnarTerm</span>`;
@@ -24,7 +25,7 @@ export class Sidebar {
     addButton.textContent = "+";
     addButton.title = "New workspace (Cmd+N)";
     addButton.style.cssText = `
-      background: none; border: 1px solid #333; color: #888;
+      background: none; border: 1px solid ${theme.border}; color: ${theme.fgMuted};
       border-radius: 4px; width: 24px; height: 24px; cursor: pointer;
       font-size: 16px; display: flex; align-items: center; justify-content: center;
     `;
@@ -32,8 +33,8 @@ export class Sidebar {
       const name = `Workspace ${manager.workspaces.length + 1}`;
       manager.createWorkspace(name);
     });
-    addButton.addEventListener("mouseenter", () => { addButton.style.borderColor = "#555"; });
-    addButton.addEventListener("mouseleave", () => { addButton.style.borderColor = "#333"; });
+    addButton.addEventListener("mouseenter", () => { addButton.style.borderColor = theme.fgMuted; });
+    addButton.addEventListener("mouseleave", () => { addButton.style.borderColor = theme.border; });
     header.appendChild(addButton);
 
     // Workspace list
@@ -63,8 +64,8 @@ export class Sidebar {
     const item = document.createElement("div");
     item.style.cssText = `
       margin: 2px 8px; border-radius: 6px; overflow: hidden;
-      background: ${isActive ? "#1a1a2e" : "transparent"};
-      border-left: 3px solid ${isActive ? "#e85d04" : "transparent"};
+      background: ${isActive ? theme.bgActive : "transparent"};
+      border-left: 3px solid ${isActive ? theme.accent : "transparent"};
     `;
 
     // Workspace header row
@@ -74,10 +75,10 @@ export class Sidebar {
       align-items: center; gap: 8px;
     `;
     headerRow.addEventListener("mouseenter", () => {
-      if (!isActive) item.style.background = "#151515";
+      if (!isActive) item.style.background = theme.bgHighlight;
     });
     headerRow.addEventListener("mouseleave", () => {
-      if (!isActive) item.style.background = isActive ? "#1a1a2e" : "transparent";
+      if (!isActive) item.style.background = isActive ? theme.bgActive : "transparent";
     });
 
     // Workspace name
@@ -85,7 +86,7 @@ export class Sidebar {
     name.textContent = ws.name;
     name.style.cssText = `
       font-weight: ${isActive ? "600" : "400"};
-      color: ${isActive ? "#e0e0e0" : "#888"};
+      color: ${isActive ? theme.fg : theme.fgMuted};
       font-size: 13px; flex: 1; overflow: hidden;
       text-overflow: ellipsis; white-space: nowrap;
     `;
@@ -95,7 +96,7 @@ export class Sidebar {
     const countBadge = document.createElement("span");
     countBadge.textContent = `${ws.panes.length}`;
     countBadge.style.cssText = `
-      font-size: 10px; color: #555; background: #1a1a1a;
+      font-size: 10px; color: ${theme.fgDim}; background: ${theme.bgSurface};
       padding: 1px 5px; border-radius: 8px;
     `;
     headerRow.appendChild(countBadge);
@@ -105,7 +106,7 @@ export class Sidebar {
       const badge = document.createElement("span");
       badge.style.cssText = `
         width: 8px; height: 8px; border-radius: 50%;
-        background: #3b82f6; flex-shrink: 0;
+        background: ${theme.notify}; flex-shrink: 0;
       `;
       headerRow.appendChild(badge);
     }
@@ -139,7 +140,7 @@ export class Sidebar {
     if (latestNotification) {
       const notifPreview = document.createElement("div");
       notifPreview.style.cssText = `
-        padding: 2px 12px 6px; font-size: 11px; color: #3b82f6;
+        padding: 2px 12px 6px; font-size: 11px; color: ${theme.notify};
         overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
       `;
       notifPreview.textContent = `💬 ${latestNotification}`;
@@ -155,14 +156,14 @@ export class Sidebar {
     const item = document.createElement("div");
     item.style.cssText = `
       padding: 3px 8px; cursor: pointer; font-size: 12px;
-      color: ${isActive ? "#e0e0e0" : "#666"};
+      color: ${isActive ? theme.fg : theme.fgDim};
       border-radius: 3px; display: flex; align-items: center; gap: 6px;
-      background: ${isActive ? "#222" : "transparent"};
+      background: ${isActive ? theme.bgHighlight : "transparent"};
     `;
 
     const icon = document.createElement("span");
     icon.textContent = "›";
-    icon.style.cssText = `color: ${isActive ? "#e85d04" : "#444"}; font-weight: bold;`;
+    icon.style.cssText = `color: ${isActive ? theme.accent : theme.fgDim}; font-weight: bold;`;
 
     const title = document.createElement("span");
     title.textContent = pane.title || "Shell";
@@ -173,15 +174,15 @@ export class Sidebar {
 
     if (pane.hasUnread) {
       const dot = document.createElement("span");
-      dot.style.cssText = "width: 6px; height: 6px; border-radius: 50%; background: #3b82f6;";
+      dot.style.cssText = `width: 6px; height: 6px; border-radius: 50%; background: ${theme.notify};`;
       item.appendChild(dot);
     }
 
     item.addEventListener("mouseenter", () => {
-      if (!isActive) item.style.background = "#1a1a1a";
+      if (!isActive) item.style.background = theme.bgSurface;
     });
     item.addEventListener("mouseleave", () => {
-      item.style.background = isActive ? "#222" : "transparent";
+      item.style.background = isActive ? theme.bgHighlight : "transparent";
     });
 
     item.addEventListener("click", (e) => {

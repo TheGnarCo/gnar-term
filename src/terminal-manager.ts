@@ -4,6 +4,7 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { theme, xtermTheme } from "./theme";
 import "@xterm/xterm/css/xterm.css";
 
 export interface Pane {
@@ -170,7 +171,7 @@ export class TerminalManager {
     const element = document.createElement("div");
     element.style.cssText = `
       flex: 1; min-width: 0; min-height: 0; position: relative;
-      border: 1px solid #222; margin: 1px;
+      border: 1px solid ${theme.border}; margin: 1px;
     `;
     element.classList.add("pane");
 
@@ -178,12 +179,7 @@ export class TerminalManager {
       cursorBlink: true,
       fontSize: 14,
       fontFamily: resolvedFontFamily,
-      theme: {
-        background: "#0a0a0a",
-        foreground: "#e0e0e0",
-        cursor: "#e0e0e0",
-        selectionBackground: "#264f78",
-      },
+      theme: xtermTheme,
       allowProposedApi: true,
     });
 
@@ -273,7 +269,7 @@ export class TerminalManager {
   private updatePaneBorders(ws: Workspace) {
     ws.panes.forEach((p) => {
       const isActive = p.id === ws.activePaneId;
-      p.element.style.borderColor = isActive ? "#e85d04" : "#222";
+      p.element.style.borderColor = isActive ? theme.borderActive : theme.border;
     });
   }
 

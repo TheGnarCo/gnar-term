@@ -44,8 +44,8 @@ export function openCommandPalette(manager: TerminalManager) {
 
   const panel = document.createElement("div");
   panel.style.cssText = `
-    width: 500px; max-height: 400px; background: #1e1e2e;
-    border: 1px solid #333; border-radius: 12px;
+    width: 500px; max-height: 400px; background: ${theme.bgFloat};
+    border: 1px solid ${theme.border}; border-radius: 12px;
     box-shadow: 0 12px 40px rgba(0,0,0,0.6);
     display: flex; flex-direction: column; overflow: hidden;
   `;
@@ -55,7 +55,7 @@ export function openCommandPalette(manager: TerminalManager) {
   input.placeholder = "Type a command...";
   input.style.cssText = `
     padding: 14px 18px; background: transparent; border: none;
-    border-bottom: 1px solid #333; color: #e0e0e0;
+    border-bottom: 1px solid ${theme.border}; color: ${theme.fg};
     font-size: 15px; outline: none; font-family: inherit;
   `;
 
@@ -72,8 +72,8 @@ export function openCommandPalette(manager: TerminalManager) {
       row.style.cssText = `
         padding: 8px 18px; cursor: pointer; display: flex;
         align-items: center; justify-content: space-between;
-        background: ${i === selectedIdx ? "#2a2a4a" : "transparent"};
-        color: #e0e0e0; font-size: 13px;
+        background: ${i === selectedIdx ? theme.bgHighlight : "transparent"};
+        color: ${theme.fg}; font-size: 13px;
       `;
 
       const label = document.createElement("span");
@@ -83,7 +83,7 @@ export function openCommandPalette(manager: TerminalManager) {
       if (cmd.shortcut) {
         const sc = document.createElement("span");
         sc.textContent = cmd.shortcut;
-        sc.style.cssText = "font-size: 11px; color: #555;";
+        sc.style.cssText = `font-size: 11px; color: ${theme.fgDim};`;
         row.appendChild(sc);
       }
 

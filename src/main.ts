@@ -2,6 +2,7 @@ import { Sidebar } from "./sidebar";
 import { TabBar } from "./tab-bar";
 import { TerminalManager } from "./terminal-manager";
 import { openCommandPalette } from "./command-palette";
+import { theme } from "./theme";
 
 const app = document.getElementById("app")!;
 
@@ -10,7 +11,7 @@ const sidebar = document.createElement("div");
 sidebar.id = "sidebar";
 sidebar.style.cssText = `
   width: 220px; min-width: 180px; max-width: 400px;
-  background: #111; border-right: 1px solid #222;
+  background: ${theme.sidebarBg}; border-right: 1px solid ${theme.sidebarBorder};
   display: flex; flex-direction: column; overflow: hidden;
   font-size: 13px; user-select: none;
 `;
@@ -25,7 +26,7 @@ const terminalArea = document.createElement("div");
 terminalArea.id = "terminal-area";
 terminalArea.style.cssText = `
   flex: 1; display: flex; flex-direction: column;
-  background: #0a0a0a; min-width: 0;
+  background: ${theme.bg}; min-width: 0;
 `;
 
 rightPanel.appendChild(tabBarEl);

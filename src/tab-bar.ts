@@ -5,6 +5,7 @@
 
 import { TerminalManager, type Workspace, type Pane } from "./terminal-manager";
 import { showContextMenu, type MenuItem } from "./context-menu";
+import { theme } from "./theme";
 
 export class TabBar {
   private container: HTMLElement;
@@ -16,7 +17,7 @@ export class TabBar {
     this.manager = manager;
 
     this.container.style.cssText = `
-      height: 36px; background: #111; border-bottom: 1px solid #222;
+      height: 36px; background: ${theme.tabBarBg}; border-bottom: 1px solid ${theme.tabBarBorder};
       display: flex; align-items: center; padding: 0 4px;
       gap: 2px; overflow-x: auto; overflow-y: hidden;
       flex-shrink: 0; user-select: none;
@@ -36,12 +37,12 @@ export class TabBar {
     addBtn.textContent = "+";
     addBtn.title = "New pane (⌘D)";
     addBtn.style.cssText = `
-      background: none; border: none; color: #555; cursor: pointer;
+      background: none; border: none; color: ${theme.fgDim}; cursor: pointer;
       font-size: 18px; padding: 2px 8px; border-radius: 4px;
       flex-shrink: 0; line-height: 1;
     `;
-    addBtn.addEventListener("mouseenter", () => { addBtn.style.color = "#e0e0e0"; });
-    addBtn.addEventListener("mouseleave", () => { addBtn.style.color = "#555"; });
+    addBtn.addEventListener("mouseenter", () => { addBtn.style.color = theme.fg; });
+    addBtn.addEventListener("mouseleave", () => { addBtn.style.color = theme.fgDim; });
     addBtn.addEventListener("click", () => { manager.splitPane("right"); });
 
     this.container.appendChild(this.tabsRow);
@@ -70,9 +71,9 @@ export class TabBar {
       padding: 4px 12px; border-radius: 6px 6px 0 0;
       cursor: pointer; font-size: 12px; white-space: nowrap;
       min-width: 80px; max-width: 200px;
-      background: ${isActive ? "#1a1a2e" : "transparent"};
-      color: ${isActive ? "#e0e0e0" : "#666"};
-      border-bottom: 2px solid ${isActive ? "#e85d04" : "transparent"};
+      background: ${isActive ? theme.bgActive : "transparent"};
+      color: ${isActive ? theme.fg : theme.fgMuted};
+      border-bottom: 2px solid ${isActive ? theme.accent : "transparent"};
       transition: background 0.1s;
     `;
 
@@ -81,7 +82,7 @@ export class TabBar {
       const dot = document.createElement("span");
       dot.style.cssText = `
         width: 6px; height: 6px; border-radius: 50%;
-        background: #3b82f6; flex-shrink: 0;
+        background: ${theme.notify}; flex-shrink: 0;
       `;
       tab.appendChild(dot);
     }
@@ -96,12 +97,12 @@ export class TabBar {
     const closeBtn = document.createElement("span");
     closeBtn.textContent = "×";
     closeBtn.style.cssText = `
-      color: #555; font-size: 14px; line-height: 1;
+      color: ${theme.fgDim}; font-size: 14px; line-height: 1;
       padding: 0 2px; border-radius: 3px; cursor: pointer;
       visibility: ${isActive ? "visible" : "hidden"};
     `;
-    closeBtn.addEventListener("mouseenter", () => { closeBtn.style.color = "#ef4444"; });
-    closeBtn.addEventListener("mouseleave", () => { closeBtn.style.color = "#555"; });
+    closeBtn.addEventListener("mouseenter", () => { closeBtn.style.color = theme.danger; });
+    closeBtn.addEventListener("mouseleave", () => { closeBtn.style.color = theme.fgDim; });
     closeBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       ws.activePaneId = pane.id;
@@ -111,7 +112,7 @@ export class TabBar {
 
     // Show close on hover
     tab.addEventListener("mouseenter", () => {
-      if (!isActive) tab.style.background = "#151515";
+      if (!isActive) tab.style.background = theme.bgHighlight;
       closeBtn.style.visibility = "visible";
     });
     tab.addEventListener("mouseleave", () => {

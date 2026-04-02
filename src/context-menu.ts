@@ -2,6 +2,8 @@
  * Context menu system — native-feeling right-click menus
  */
 
+import { theme } from "./theme";
+
 export interface MenuItem {
   label: string;
   action: () => void;
@@ -37,16 +39,16 @@ export function showContextMenu(x: number, y: number, items: MenuItem[]) {
   const menu = document.createElement("div");
   menu.style.cssText = `
     position: fixed; z-index: 9999;
-    background: #1e1e2e; border: 1px solid #333;
+    background: ${theme.bgFloat}; border: 1px solid ${theme.border};
     border-radius: 8px; padding: 4px 0;
     min-width: 180px; box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-    font-size: 13px; color: #e0e0e0;
+    font-size: 13px; color: ${theme.fg};
   `;
 
   for (const item of items) {
     if (item.separator) {
       const sep = document.createElement("div");
-      sep.style.cssText = "height: 1px; background: #333; margin: 4px 8px;";
+      sep.style.cssText = `height: 1px; background: ${theme.border}; margin: 4px 8px;`;
       menu.appendChild(sep);
       continue;
     }
@@ -55,7 +57,7 @@ export function showContextMenu(x: number, y: number, items: MenuItem[]) {
     row.style.cssText = `
       padding: 6px 16px; cursor: ${item.disabled ? "default" : "pointer"};
       display: flex; align-items: center; justify-content: space-between;
-      color: ${item.disabled ? "#555" : item.danger ? "#ef4444" : "#e0e0e0"};
+      color: ${item.disabled ? theme.fgDim : item.danger ? theme.danger : theme.fg};
       opacity: ${item.disabled ? "0.5" : "1"};
     `;
 
@@ -66,13 +68,13 @@ export function showContextMenu(x: number, y: number, items: MenuItem[]) {
     if (item.shortcut) {
       const shortcut = document.createElement("span");
       shortcut.textContent = item.shortcut;
-      shortcut.style.cssText = "font-size: 11px; color: #555; margin-left: 24px;";
+      shortcut.style.cssText = `font-size: 11px; color: ${theme.fgDim}; margin-left: 24px;`;
       row.appendChild(shortcut);
     }
 
     if (!item.disabled) {
       row.addEventListener("mouseenter", () => {
-        row.style.background = item.danger ? "#3b1111" : "#2a2a4a";
+        row.style.background = item.danger ? "#3b1111" : theme.bgHighlight;
       });
       row.addEventListener("mouseleave", () => {
         row.style.background = "transparent";

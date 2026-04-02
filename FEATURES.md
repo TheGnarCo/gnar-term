@@ -101,6 +101,13 @@ cmux's notification system is its killer feature for AI agents.
 
 ## 🔲 Phase 3: Configuration
 
+### Theme Selection
+- [ ] **Built-in themes** — GitHub Dark (default), Tokyo Night, Catppuccin Mocha, Dracula, Solarized Dark, One Dark Pro, Nord
+- [ ] **Theme picker** — command palette or settings, instant preview
+- [ ] **Read Ghostty/Alacritty/Kitty theme** — auto-import colors from existing terminal config
+- [ ] **Custom theme** — define in config.toml
+- [ ] **Per-workspace theme** — optional color tint per workspace (like cmux workspace colors)
+
 ### Config File
 `~/.config/gnar-term/config.toml`
 ```toml

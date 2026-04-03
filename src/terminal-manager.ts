@@ -12,7 +12,7 @@
 
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
-import { WebglAddon } from "@xterm/addon-webgl";
+import { CanvasAddon } from "@xterm/addon-canvas";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -224,6 +224,8 @@ export class TerminalManager {
       fontFamily: resolvedFontFamily,
       theme: getXtermTheme(),
       allowProposedApi: true,
+      allowTransparency: true,
+      scrollback: 5000,
     });
 
     const fitAddon = new FitAddon();
@@ -428,7 +430,13 @@ export class TerminalManager {
   private openSurface(surface: Surface) {
     if (surface.opened) return;
     surface.terminal.open(surface.termElement);
-    try { surface.terminal.loadAddon(new WebglAddon()); } catch {}
+    try {
+      // The DOM-based renderer is too slow for Vim.
+      // Use CanvasAddon (very fast, reliable) instead of WebGL (brittle on some GPUs)
+      surface.terminal.loadAddon(new CanvasAddon());
+    } catch (e) {
+      console.warn("Failed to load CanvasAddon, falling back to DOM renderer", e);
+    }
     surface.opened = true;
   }
 

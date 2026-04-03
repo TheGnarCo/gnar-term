@@ -80,30 +80,8 @@ async fn spawn_pty(
     // Inject OSC 7 cwd reporting for shells that don't do it automatically
     // This makes zsh/bash report the working directory on every prompt
     cmd.env("GNARTERM_OSC7", "1");
-    if let Some(ref dir) = cwd {
-        cmd.cwd(dir);
-    }
 
-    let child = pair.slave
-        .spawn_command(cmd)
-        .map_err(|e| format!("Failed to spawn shell: {e}"))?;
-    let child_pid = child.process_id();
-
-    // Get writer for input
-    let writer = pair
-        .master
-        .take_writer()
-        .map_err(|e| format!("Failed to get PTY writer: {e}"))?;
-
-    // Get reader for output
-    let mut reader = pair
-        .master
-        .try_clone_reader()
-        .map_err(|e| format!("Failed to get PTY reader: {e}"))?;
-
-    // Inject OSC 7 reporting hook into the shell.
-    // Uses ZDOTDIR override: create a temp .zshenv that sources the user's
-    // real config then adds our hook. This is invisible to the user.
+    // Inject OSC 7 reporting hook via ZDOTDIR override (invisible to user)
     let home = std::env::var("HOME").unwrap_or_default();
     let integration_dir = format!("{}/.config/gnar-term/shell", home);
     let _ = std::fs::create_dir_all(&integration_dir);
@@ -114,13 +92,31 @@ _gnarterm_report_cwd() { printf '\e]7;file://%s%s\a' "$(hostname)" "$PWD"; }
 precmd_functions+=(_gnarterm_report_cwd)
 chpwd_functions+=(_gnarterm_report_cwd)
 "#;
-    let _ = std::fs::write(format!("{}/.zshenv", integration_dir), &zshenv_content);
-    // Set ZDOTDIR to our integration dir, preserving original
+    let _ = std::fs::write(format!("{}/.zshenv", integration_dir), zshenv_content);
     let orig_zdotdir = std::env::var("ZDOTDIR").unwrap_or(home.clone());
     cmd.env("GNARTERM_ORIG_ZDOTDIR", &orig_zdotdir);
     cmd.env("ZDOTDIR", &integration_dir);
 
-    let mut writer = writer;
+    if let Some(ref dir) = cwd {
+        cmd.cwd(dir);
+    }
+
+    let child = pair.slave
+        .spawn_command(cmd)
+        .map_err(|e| format!("Failed to spawn shell: {e}"))?;
+    let child_pid = child.process_id();
+
+    // Get writer for input
+    let mut writer = pair
+        .master
+        .take_writer()
+        .map_err(|e| format!("Failed to get PTY writer: {e}"))?;
+
+    // Get reader for output
+    let mut reader = pair
+        .master
+        .try_clone_reader()
+        .map_err(|e| format!("Failed to get PTY reader: {e}"))?;
 
     // Store PTY
     {

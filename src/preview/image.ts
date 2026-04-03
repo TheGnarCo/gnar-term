@@ -2,7 +2,7 @@ import { registerPreviewer } from "./index";
 import { convertFileSrc } from "@tauri-apps/api/core";
 
 registerPreviewer({
-  extensions: ["png", "jpg", "jpeg", "gif", "webp", "svg", "ico", "bmp"],
+  extensions: ["png", "jpg", "jpeg", "gif", "webp", "svg", "ico", "bmp", "heic", "heif", "tiff", "tif", "avif"],
   render(_content, filePath, element) {
     const src = convertFileSrc(filePath);
     element.innerHTML = `

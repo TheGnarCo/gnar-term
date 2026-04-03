@@ -207,16 +207,16 @@ export class TerminalManager {
       border-radius: 4px; overflow: hidden;
     `;
 
-    // Tab bar — only shown when multiple surfaces
-    if (pane.surfaces.length > 1) {
-      const tabBar = document.createElement("div");
-      tabBar.style.cssText = `
-        display: flex; align-items: center; gap: 1px;
-        background: ${theme.tabBarBg}; border-bottom: 1px solid ${theme.tabBarBorder};
-        height: 28px; padding: 0 4px; flex-shrink: 0;
-      `;
+    // Tab bar — always shown so pane controls are visible
+    const tabBar = document.createElement("div");
+    tabBar.style.cssText = `
+      display: flex; align-items: center; gap: 1px;
+      background: ${theme.tabBarBg}; border-bottom: 1px solid ${theme.tabBarBorder};
+      height: 28px; padding: 0 4px; flex-shrink: 0; overflow-x: auto;
+    `;
+    tabBar.style.scrollbarWidth = "none";
 
-      pane.surfaces.forEach((s, i) => {
+    pane.surfaces.forEach((s, i) => {
         const isActive = s.id === pane.activeSurfaceId;
         const tab = document.createElement("div");
         tab.style.cssText = `
@@ -285,8 +285,50 @@ export class TerminalManager {
       addBtn.addEventListener("mouseleave", () => { addBtn.style.color = theme.fgDim; });
       tabBar.appendChild(addBtn);
 
+      // Spacer
+      const spacer = document.createElement("div");
+      spacer.style.cssText = "flex: 1;";
+      tabBar.appendChild(spacer);
+
+      // Pane controls (Split Right, Split Down, Close)
+      const controls = document.createElement("div");
+      controls.style.cssText = "display: flex; align-items: center; gap: 2px; padding-right: 2px;";
+
+      const createPaneBtn = (icon: string, title: string, onClick: () => void) => {
+        const btn = document.createElement("span");
+        btn.textContent = icon;
+        btn.title = title;
+        btn.style.cssText = `
+          color: ${theme.fgDim}; cursor: pointer; font-size: 14px;
+          padding: 2px 6px; border-radius: 3px; display: flex; align-items: center; justify-content: center;
+        `;
+        btn.addEventListener("click", (e) => { e.stopPropagation(); onClick(); });
+        btn.addEventListener("mouseenter", () => {
+          btn.style.background = title.includes("Close") ? theme.danger : theme.bgHighlight;
+          btn.style.color = title.includes("Close") ? "#fff" : theme.fg;
+        });
+        btn.addEventListener("mouseleave", () => {
+          btn.style.background = "transparent";
+          btn.style.color = theme.fgDim;
+        });
+        return btn;
+      };
+
+      controls.appendChild(createPaneBtn("◫", "Split Right (⌘D)", () => {
+        ws.activePaneId = pane.id;
+        this.splitPane("right");
+      }));
+      controls.appendChild(createPaneBtn("⊟", "Split Down (⇧⌘D)", () => {
+        ws.activePaneId = pane.id;
+        this.splitPane("down");
+      }));
+      controls.appendChild(createPaneBtn("✕", "Close Pane", () => {
+        ws.activePaneId = pane.id;
+        this.closeActivePane();
+      }));
+
+      tabBar.appendChild(controls);
       el.appendChild(tabBar);
-    }
 
     // Attach all surface terminal elements (show active, hide others)
     for (const s of pane.surfaces) {

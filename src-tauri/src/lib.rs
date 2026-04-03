@@ -218,6 +218,7 @@ async fn detect_font() -> Result<String, String> {
 
     // 1. Ghostty config
     let ghostty_path = format!("{home}/.config/ghostty/config");
+    println!("[detect_font] Checking ghostty config: {}", ghostty_path);
     if let Ok(content) = std::fs::read_to_string(&ghostty_path) {
         for line in content.lines() {
             let line = line.trim();
@@ -225,6 +226,7 @@ async fn detect_font() -> Result<String, String> {
                 if let Some(val) = line.split('=').nth(1) {
                     let font = val.trim().to_string();
                     if !font.is_empty() {
+                        println!("[detect_font] Found font in ghostty config: {}", font);
                         return Ok(font);
                     }
                 }
@@ -237,8 +239,8 @@ async fn detect_font() -> Result<String, String> {
         format!("{home}/.config/alacritty/alacritty.toml"),
         format!("{home}/.alacritty.toml"),
     ] {
+        println!("[detect_font] Checking alacritty config: {}", path);
         if let Ok(content) = std::fs::read_to_string(&path) {
-            // Look for family = "..." under [font.normal]
             let mut in_font = false;
             for line in content.lines() {
                 let trimmed = line.trim();
@@ -251,6 +253,7 @@ async fn detect_font() -> Result<String, String> {
                     if let Some(val) = trimmed.split('=').nth(1) {
                         let font = val.trim().trim_matches('"').trim_matches('\'').to_string();
                         if !font.is_empty() {
+                            println!("[detect_font] Found font in alacritty config: {}", font);
                             return Ok(font);
                         }
                     }
@@ -261,6 +264,7 @@ async fn detect_font() -> Result<String, String> {
 
     // 3. Kitty config
     let kitty_path = format!("{home}/.config/kitty/kitty.conf");
+    println!("[detect_font] Checking kitty config: {}", kitty_path);
     if let Ok(content) = std::fs::read_to_string(&kitty_path) {
         for line in content.lines() {
             let trimmed = line.trim();
@@ -271,6 +275,7 @@ async fn detect_font() -> Result<String, String> {
                     .trim()
                     .to_string();
                 if !font.is_empty() {
+                    println!("[detect_font] Found font in kitty config: {}", font);
                     return Ok(font);
                 }
             }
@@ -279,6 +284,7 @@ async fn detect_font() -> Result<String, String> {
 
     // 4. WezTerm config (Lua — best effort)
     let wez_path = format!("{home}/.wezterm.lua");
+    println!("[detect_font] Checking wezterm config: {}", wez_path);
     if let Ok(content) = std::fs::read_to_string(&wez_path) {
         for line in content.lines() {
             if line.contains("font_family") || line.contains("font =" ) {
@@ -287,6 +293,7 @@ async fn detect_font() -> Result<String, String> {
                     if let Some(end) = line[start + 1..].find('"') {
                         let font = line[start + 1..start + 1 + end].to_string();
                         if !font.is_empty() {
+                            println!("[detect_font] Found font in wezterm config: {}", font);
                             return Ok(font);
                         }
                     }
@@ -298,6 +305,7 @@ async fn detect_font() -> Result<String, String> {
     // 5. iTerm2 (macOS) — read from defaults
     #[cfg(target_os = "macos")]
     {
+        println!("[detect_font] Checking iTerm2 config");
         let output = std::process::Command::new("defaults")
             .args(["read", "com.googlecode.iterm2", "New Bookmarks"])
             .output();
@@ -319,6 +327,7 @@ async fn detect_font() -> Result<String, String> {
                                     .unwrap_or(font_spec)
                                     .to_string();
                                 if !font.is_empty() {
+                                    println!("[detect_font] Found font in iTerm2 config: {}", font);
                                     return Ok(font);
                                 }
                             }
@@ -332,6 +341,7 @@ async fn detect_font() -> Result<String, String> {
     // 6. macOS Terminal.app
     #[cfg(target_os = "macos")]
     {
+        println!("[detect_font] Checking Terminal.app config");
         let output = std::process::Command::new("defaults")
             .args(["read", "com.apple.Terminal", "Default Window Settings"])
             .output();
@@ -358,6 +368,7 @@ async fn detect_font() -> Result<String, String> {
     // 7. Check what monospace/nerd fonts are actually installed
     #[cfg(target_os = "macos")]
     {
+        println!("[detect_font] Falling back to system profiler font scan");
         // Preferred fonts in order — if any is installed, use it
         let preferred = [
             "MesloLGS Nerd Font Mono",  // powerlevel10k default
@@ -378,11 +389,13 @@ async fn detect_font() -> Result<String, String> {
             let text = String::from_utf8_lossy(&output.stdout);
             for font_name in preferred {
                 if text.contains(font_name) {
+                    println!("[detect_font] Found installed font via system_profiler: {}", font_name);
                     return Ok(font_name.to_string());
                 }
             }
         }
 
+        println!("[detect_font] Falling back to filesystem font scan");
         // Faster check via font file existence
         let font_dirs = [
             format!("{home}/Library/Fonts"),
@@ -396,6 +409,7 @@ async fn detect_font() -> Result<String, String> {
                     for entry in entries.flatten() {
                         let name = entry.file_name().to_string_lossy().to_lowercase().replace(' ', "");
                         if name.contains(&search_term) || name.contains(&search_term.replace("nerdfontmono", "nfm")) {
+                            println!("[detect_font] Found installed font via filesystem: {}", font_name);
                             return Ok(font_name.to_string());
                         }
                     }
@@ -428,6 +442,7 @@ async fn detect_font() -> Result<String, String> {
     }
 
     // 8. Nothing found — return empty, frontend uses platform default
+    println!("[detect_font] No preferred font found. Using default.");
     Ok(String::new())
 }
 

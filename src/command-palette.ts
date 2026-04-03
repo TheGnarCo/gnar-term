@@ -1,8 +1,5 @@
-/**
- * Command palette — Cmd+P fuzzy search for actions
- */
-
 import { TerminalManager } from "./terminal-manager";
+import { theme } from "./theme";
 
 interface Command {
   name: string;
@@ -13,10 +10,7 @@ interface Command {
 let overlay: HTMLElement | null = null;
 
 function close() {
-  if (overlay) {
-    overlay.remove();
-    overlay = null;
-  }
+  if (overlay) { overlay.remove(); overlay = null; }
 }
 
 export function openCommandPalette(manager: TerminalManager) {
@@ -24,10 +18,19 @@ export function openCommandPalette(manager: TerminalManager) {
 
   const commands: Command[] = [
     { name: "New Workspace", shortcut: "⌘N", action: () => manager.createWorkspace(`Workspace ${manager.workspaces.length + 1}`) },
+    { name: "New Surface (Tab)", shortcut: "⌘T", action: () => manager.newSurface() },
     { name: "Split Right", shortcut: "⌘D", action: () => manager.splitPane("right") },
     { name: "Split Down", shortcut: "⇧⌘D", action: () => manager.splitPane("down") },
-    { name: "Close Pane", shortcut: "⌘W", action: () => manager.closeActivePane() },
+    { name: "Close Surface", shortcut: "⌘W", action: () => manager.closeSurface() },
     { name: "Close Workspace", shortcut: "⇧⌘W", action: () => manager.closeActiveWorkspace() },
+    { name: "Toggle Pane Zoom", shortcut: "⇧⌘Enter", action: () => manager.togglePaneZoom() },
+    { name: "Flash Focused Pane", shortcut: "⇧⌘H", action: () => manager.flashFocusedPane() },
+    { name: "Next Surface", shortcut: "⌘⇧]", action: () => manager.nextSurface() },
+    { name: "Previous Surface", shortcut: "⌘⇧[", action: () => manager.prevSurface() },
+    { name: "Toggle Sidebar", shortcut: "⌘B", action: () => {
+      const el = document.getElementById("sidebar");
+      if (el) el.style.display = el.style.display === "none" ? "flex" : "none";
+    }},
     ...manager.workspaces.map((ws, i) => ({
       name: `Switch to: ${ws.name}`,
       shortcut: i < 9 ? `⌘${i + 1}` : undefined,
@@ -87,15 +90,8 @@ export function openCommandPalette(manager: TerminalManager) {
         row.appendChild(sc);
       }
 
-      row.addEventListener("mouseenter", () => {
-        selectedIdx = i;
-        render();
-      });
-      row.addEventListener("click", () => {
-        close();
-        cmd.action();
-      });
-
+      row.addEventListener("mouseenter", () => { selectedIdx = i; render(); });
+      row.addEventListener("click", () => { close(); cmd.action(); });
       list.appendChild(row);
     });
   }
@@ -111,21 +107,15 @@ export function openCommandPalette(manager: TerminalManager) {
     if (e.key === "Escape") { close(); return; }
     if (e.key === "ArrowDown") { e.preventDefault(); selectedIdx = Math.min(selectedIdx + 1, filtered.length - 1); render(); }
     if (e.key === "ArrowUp") { e.preventDefault(); selectedIdx = Math.max(selectedIdx - 1, 0); render(); }
-    if (e.key === "Enter" && filtered[selectedIdx]) {
-      close();
-      filtered[selectedIdx].action();
-    }
+    if (e.key === "Enter" && filtered[selectedIdx]) { close(); filtered[selectedIdx].action(); }
   });
 
-  overlay.addEventListener("mousedown", (e) => {
-    if (e.target === overlay) close();
-  });
+  overlay.addEventListener("mousedown", (e) => { if (e.target === overlay) close(); });
 
   panel.appendChild(input);
   panel.appendChild(list);
   overlay.appendChild(panel);
   document.body.appendChild(overlay);
-
   render();
   input.focus();
 }

@@ -1,4 +1,4 @@
-import { TerminalManager, type Workspace, type Pane } from "./terminal-manager";
+import { TerminalManager, type Workspace } from "./terminal-manager";
 import { showContextMenu, type MenuItem } from "./context-menu";
 import { theme } from "./theme";
 
@@ -23,43 +23,42 @@ export class Sidebar {
 
     const addButton = document.createElement("button");
     addButton.textContent = "+";
-    addButton.title = "New workspace (Cmd+N)";
+    addButton.title = "New workspace (⌘N)";
     addButton.style.cssText = `
       background: none; border: 1px solid ${theme.border}; color: ${theme.fgMuted};
       border-radius: 4px; width: 24px; height: 24px; cursor: pointer;
       font-size: 16px; display: flex; align-items: center; justify-content: center;
     `;
     addButton.addEventListener("click", () => {
-      const name = `Workspace ${manager.workspaces.length + 1}`;
-      manager.createWorkspace(name);
+      manager.createWorkspace(`Workspace ${manager.workspaces.length + 1}`);
     });
     addButton.addEventListener("mouseenter", () => { addButton.style.borderColor = theme.fgMuted; });
     addButton.addEventListener("mouseleave", () => { addButton.style.borderColor = theme.border; });
     header.appendChild(addButton);
 
-    // Workspace list
     this.workspaceList = document.createElement("div");
     this.workspaceList.style.cssText = "flex: 1; overflow-y: auto; padding: 4px 0;";
 
     container.appendChild(header);
     container.appendChild(this.workspaceList);
 
-    // Auto-refresh on changes
     manager.onChange(() => this.refresh());
   }
 
   refresh() {
     this.workspaceList.innerHTML = "";
-
     this.manager.workspaces.forEach((ws, idx) => {
-      const item = this.createWorkspaceItem(ws, idx);
-      this.workspaceList.appendChild(item);
+      this.workspaceList.appendChild(this.createWorkspaceItem(ws, idx));
     });
   }
 
   private createWorkspaceItem(ws: Workspace, idx: number): HTMLElement {
     const isActive = idx === this.manager.activeWorkspaceIdx;
-    const hasUnread = ws.panes.some((p) => p.hasUnread);
+    const allSurfaces = this.manager.getAllSurfaces(ws);
+    const hasUnread = allSurfaces.some((s) => s.hasUnread);
+    const paneCount = this.manager.getAllPanes(ws.rootNode).length;
+    const surfaceCount = allSurfaces.length;
+    const latestNotification = allSurfaces.find((s) => s.notification)?.notification;
 
     const item = document.createElement("div");
     item.style.cssText = `
@@ -68,7 +67,7 @@ export class Sidebar {
       border-left: 3px solid ${isActive ? theme.accent : "transparent"};
     `;
 
-    // Workspace header row
+    // Header row
     const headerRow = document.createElement("div");
     headerRow.style.cssText = `
       padding: 8px 12px; cursor: pointer; display: flex;
@@ -78,10 +77,10 @@ export class Sidebar {
       if (!isActive) item.style.background = theme.bgHighlight;
     });
     headerRow.addEventListener("mouseleave", () => {
-      if (!isActive) item.style.background = isActive ? theme.bgActive : "transparent";
+      item.style.background = isActive ? theme.bgActive : "transparent";
     });
 
-    // Workspace name
+    // Name
     const name = document.createElement("span");
     name.textContent = ws.name;
     name.style.cssText = `
@@ -92,22 +91,21 @@ export class Sidebar {
     `;
     headerRow.appendChild(name);
 
-    // Pane count badge
-    const countBadge = document.createElement("span");
-    countBadge.textContent = `${ws.panes.length}`;
-    countBadge.style.cssText = `
-      font-size: 10px; color: ${theme.fgDim}; background: ${theme.bgSurface};
-      padding: 1px 5px; border-radius: 8px;
-    `;
-    headerRow.appendChild(countBadge);
+    // Counts
+    const meta = document.createElement("span");
+    const parts: string[] = [];
+    if (paneCount > 1) parts.push(`${paneCount}p`);
+    if (surfaceCount > 1) parts.push(`${surfaceCount}s`);
+    if (parts.length > 0) {
+      meta.textContent = parts.join(" ");
+      meta.style.cssText = `font-size: 10px; color: ${theme.fgDim}; background: ${theme.bgSurface}; padding: 1px 5px; border-radius: 8px;`;
+      headerRow.appendChild(meta);
+    }
 
-    // Notification badge
+    // Unread badge
     if (hasUnread) {
       const badge = document.createElement("span");
-      badge.style.cssText = `
-        width: 8px; height: 8px; border-radius: 50%;
-        background: ${theme.notify}; flex-shrink: 0;
-      `;
+      badge.style.cssText = `width: 8px; height: 8px; border-radius: 50%; background: ${theme.notify}; flex-shrink: 0;`;
       headerRow.appendChild(badge);
     }
 
@@ -122,82 +120,13 @@ export class Sidebar {
 
     item.appendChild(headerRow);
 
-    // Pane list (only for active workspace)
-    if (isActive && ws.panes.length > 1) {
-      const paneList = document.createElement("div");
-      paneList.style.cssText = "padding: 0 8px 6px 20px;";
-
-      ws.panes.forEach((pane) => {
-        const paneItem = this.createPaneItem(ws, pane);
-        paneList.appendChild(paneItem);
-      });
-
-      item.appendChild(paneList);
-    }
-
-    // Latest notification preview
-    const latestNotification = ws.panes.find((p) => p.notification)?.notification;
+    // Notification preview
     if (latestNotification) {
-      const notifPreview = document.createElement("div");
-      notifPreview.style.cssText = `
-        padding: 2px 12px 6px; font-size: 11px; color: ${theme.notify};
-        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-      `;
-      notifPreview.textContent = `💬 ${latestNotification}`;
-      item.appendChild(notifPreview);
+      const notif = document.createElement("div");
+      notif.style.cssText = `padding: 2px 12px 6px; font-size: 11px; color: ${theme.notify}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;`;
+      notif.textContent = `💬 ${latestNotification}`;
+      item.appendChild(notif);
     }
-
-    return item;
-  }
-
-  private createPaneItem(ws: Workspace, pane: Pane): HTMLElement {
-    const isActive = pane.id === ws.activePaneId;
-
-    const item = document.createElement("div");
-    item.style.cssText = `
-      padding: 3px 8px; cursor: pointer; font-size: 12px;
-      color: ${isActive ? theme.fg : theme.fgDim};
-      border-radius: 3px; display: flex; align-items: center; gap: 6px;
-      background: ${isActive ? theme.bgHighlight : "transparent"};
-    `;
-
-    const icon = document.createElement("span");
-    icon.textContent = "›";
-    icon.style.cssText = `color: ${isActive ? theme.accent : theme.fgDim}; font-weight: bold;`;
-
-    const title = document.createElement("span");
-    title.textContent = pane.title || "Shell";
-    title.style.cssText = "flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;";
-
-    item.appendChild(icon);
-    item.appendChild(title);
-
-    if (pane.hasUnread) {
-      const dot = document.createElement("span");
-      dot.style.cssText = `width: 6px; height: 6px; border-radius: 50%; background: ${theme.notify};`;
-      item.appendChild(dot);
-    }
-
-    item.addEventListener("mouseenter", () => {
-      if (!isActive) item.style.background = theme.bgSurface;
-    });
-    item.addEventListener("mouseleave", () => {
-      item.style.background = isActive ? theme.bgHighlight : "transparent";
-    });
-
-    item.addEventListener("click", (e) => {
-      e.stopPropagation();
-      ws.activePaneId = pane.id;
-      pane.hasUnread = false;
-      pane.terminal.focus();
-      this.refresh();
-    });
-
-    item.addEventListener("contextmenu", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      this.showPaneContextMenu(e.clientX, e.clientY, ws, pane);
-    });
 
     return item;
   }
@@ -206,20 +135,34 @@ export class Sidebar {
     const items: MenuItem[] = [
       {
         label: "Rename Workspace",
+        shortcut: "⇧⌘R",
         action: () => {
           const name = prompt("Workspace name:", ws.name);
-          if (name) {
-            ws.name = name;
-            this.refresh();
-          }
+          if (name) { ws.name = name; this.refresh(); }
         },
       },
       {
-        label: "New Pane",
+        label: "New Surface",
+        shortcut: "⌘T",
+        action: () => {
+          this.manager.switchWorkspace(idx);
+          this.manager.newSurface();
+        },
+      },
+      {
+        label: "Split Right",
         shortcut: "⌘D",
         action: () => {
           this.manager.switchWorkspace(idx);
           this.manager.splitPane("right");
+        },
+      },
+      {
+        label: "Split Down",
+        shortcut: "⇧⌘D",
+        action: () => {
+          this.manager.switchWorkspace(idx);
+          this.manager.splitPane("down");
         },
       },
       { label: "", action: () => {}, separator: true },
@@ -244,39 +187,6 @@ export class Sidebar {
         action: () => {
           this.manager.switchWorkspace(idx);
           this.manager.closeActiveWorkspace();
-        },
-      },
-    ];
-    showContextMenu(x, y, items);
-  }
-
-  private showPaneContextMenu(x: number, y: number, ws: Workspace, pane: Pane) {
-    const items: MenuItem[] = [
-      {
-        label: "Split Right",
-        shortcut: "⌘D",
-        action: () => {
-          ws.activePaneId = pane.id;
-          this.manager.splitPane("right");
-        },
-      },
-      {
-        label: "Split Down",
-        shortcut: "⇧⌘D",
-        action: () => {
-          ws.activePaneId = pane.id;
-          this.manager.splitPane("down");
-        },
-      },
-      { label: "", action: () => {}, separator: true },
-      {
-        label: "Close Pane",
-        shortcut: "⌘W",
-        danger: true,
-        disabled: ws.panes.length <= 1,
-        action: () => {
-          ws.activePaneId = pane.id;
-          this.manager.closeActivePane();
         },
       },
     ];

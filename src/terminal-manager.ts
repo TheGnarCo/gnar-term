@@ -271,7 +271,7 @@ export class TerminalManager {
         tab.addEventListener("click", () => {
           pane.activeSurfaceId = s.id;
           s.hasUnread = false;
-          this.showActiveSurface(pane);
+          this.buildPaneElement(pane, ws);
           s.terminal.focus();
           this.notify();
         });

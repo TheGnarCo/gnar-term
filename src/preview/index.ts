@@ -99,9 +99,8 @@ function getExtension(path: string): string {
 }
 
 function renderWithChrome(previewer: Previewer, content: string, filePath: string, element: HTMLElement) {
-  element.innerHTML = `<div class="preview-path">${filePath}</div><div class="preview-content"></div>`;
-  const contentEl = element.querySelector(".preview-content")!;
-  previewer.render(content, filePath, contentEl as HTMLElement);
+  // Just render the content directly — the path is already in the tab title
+  previewer.render(content, filePath, element);
 }
 
 let _stylesInjected = false;
@@ -112,12 +111,7 @@ function injectStyles() {
   const style = document.createElement("style");
   style.id = "preview-styles";
   style.textContent = `
-    .preview-surface .preview-path {
-      font-size: 12px; color: ${theme.fgDim}; margin-bottom: 16px;
-      font-family: monospace; padding-bottom: 8px;
-      border-bottom: 1px solid ${theme.border};
-    }
-    .preview-surface h1 { font-size: 2em; font-weight: 600; border-bottom: 1px solid ${theme.border}; padding-bottom: 0.3em; margin: 0.67em 0; }
+    .preview-surface h1 { font-size: 2em; font-weight: 600; border-bottom: 1px solid ${theme.border}; padding-bottom: 0.3em; margin: 0 0 0.67em; }
     .preview-surface h2 { font-size: 1.5em; font-weight: 600; border-bottom: 1px solid ${theme.border}; padding-bottom: 0.3em; margin: 1em 0 0.5em; }
     .preview-surface h3 { font-size: 1.25em; font-weight: 600; margin: 1em 0 0.5em; }
     .preview-surface h4 { font-size: 1em; font-weight: 600; margin: 1em 0 0.5em; }

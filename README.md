@@ -17,7 +17,7 @@
 
 ## Why gnar-term?
 
-I love [cmux](https://github.com/manaflow-ai/cmux). It's the best terminal multiplexer for working with AI coding agents. But there were a few things I wanted:
+I love [cmux](https://github.com/manaflow-ai/cmux). It's currently my favorite terminal multiplexer for working with AI coding agents. But there were a few things I wanted:
 
 - **Cross-platform** — cmux is macOS-only (Swift/AppKit). I needed something that runs on Linux and Windows too. gnar-term is built with Tauri, so it runs everywhere.
 - **Built-in file previews** — Click a file path in the terminal and preview it right there. Markdown renders with GitHub styling, PDFs page through, CSVs become tables, images and videos display inline. No context switching to Finder or another app.

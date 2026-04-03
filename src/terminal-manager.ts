@@ -24,7 +24,11 @@ let _id = 0;
 
 /** Safe terminal operations (no-op for markdown surfaces) */
 function safeFocus(s: Surface | null | undefined) {
-  if (s?.terminal) s.terminal.focus();
+  if (!s?.terminal) return;
+  // xterm.js needs the DOM to be settled before it accepts focus
+  s.terminal.focus();
+  setTimeout(() => s.terminal?.focus(), 30);
+  setTimeout(() => s.terminal?.focus(), 100);
 }
 function safeDispose(s: Surface) {
   if (s.terminal) s.terminal.dispose();

@@ -15,6 +15,18 @@
   <img src="./docs/screenshot.png" alt="gnar-term screenshot" width="900" />
 </p>
 
+## Why gnar-term?
+
+I love [cmux](https://github.com/manaflow-ai/cmux). It's the best terminal multiplexer for working with AI coding agents. But there were a few things I wanted:
+
+- **Cross-platform** — cmux is macOS-only (Swift/AppKit). I needed something that runs on Linux and Windows too. gnar-term is built with Tauri, so it runs everywhere.
+- **Built-in file previews** — Click a file path in the terminal and preview it right there. Markdown renders with GitHub styling, PDFs page through, CSVs become tables, images and videos display inline. No context switching to Finder or another app.
+- **Command palette** — `⌘P` to fuzzy-search commands, switch workspaces, change themes, and load saved layouts. One keystroke to do anything.
+- **Themes** — 10 built-in themes (6 dark, 4 light) that switch instantly and persist across restarts.
+- **cmux-compatible config** — Your `cmux.json` workspace definitions work in gnar-term. Copy it over and go.
+
+gnar-term isn't trying to replace cmux. If you're on macOS and want native Metal performance with Ghostty rendering, cmux is incredible. gnar-term is for when you want those workflows on any platform, plus file previews and a command palette baked in.
+
 ## Features
 
 <table>

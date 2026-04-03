@@ -96,7 +96,7 @@ export class TerminalManager {
     return this.workspaces[this.activeWorkspaceIdx] ?? null;
   }
   
-  private getAllPanes(node: SplitNode): Pane[] {
+  getAllPanes(node: SplitNode): Pane[] {
     if (node.type === "pane") return [node.pane];
     return [...this.getAllPanes(node.children[0]), ...this.getAllPanes(node.children[1])];
   }

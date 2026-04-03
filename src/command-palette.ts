@@ -19,8 +19,8 @@ export function openCommandPalette(manager: TerminalManager) {
   const commands: Command[] = [
     { name: "New Workspace", shortcut: "⌘N", action: () => manager.createWorkspace(`Workspace ${manager.workspaces.length + 1}`) },
     { name: "New Surface (Tab)", shortcut: "⌘T", action: () => manager.newSurface() },
-    { name: "Split Right", shortcut: "⌘D", action: () => manager.splitPane("right") },
-    { name: "Split Down", shortcut: "⇧⌘D", action: () => manager.splitPane("down") },
+    { name: "Split Right", shortcut: "⌘D", action: () => manager.splitPane("horizontal") },
+    { name: "Split Down", shortcut: "⇧⌘D", action: () => manager.splitPane("vertical") },
     { name: "Close Surface", shortcut: "⌘W", action: () => manager.closeSurface() },
     { name: "Close Workspace", shortcut: "⇧⌘W", action: () => manager.closeActiveWorkspace() },
     { name: "Toggle Pane Zoom", shortcut: "⇧⌘Enter", action: () => manager.togglePaneZoom() },

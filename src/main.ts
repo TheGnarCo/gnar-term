@@ -59,14 +59,14 @@ document.addEventListener("keydown", (e) => {
   // ⌘D — Split right
   if (cmd && !shift && !alt && e.key === "d") {
     e.preventDefault();
-    termManager.splitPane("right");
+    termManager.splitPane("horizontal");
     return;
   }
 
   // ⇧⌘D — Split down
   if (cmd && shift && !alt && e.key === "d") {
     e.preventDefault();
-    termManager.splitPane("down");
+    termManager.splitPane("vertical");
     return;
   }
 

@@ -56,7 +56,7 @@ export class Sidebar {
     const isActive = idx === this.manager.activeWorkspaceIdx;
     const allSurfaces = this.manager.getAllSurfaces(ws);
     const hasUnread = allSurfaces.some((s) => s.hasUnread);
-    const paneCount = ws.panes.length;
+    const paneCount = this.manager.getAllPanes(ws.splitRoot).length;
     const surfaceCount = allSurfaces.length;
     const latestNotification = allSurfaces.find((s) => s.notification)?.notification;
 
@@ -154,7 +154,7 @@ export class Sidebar {
         shortcut: "⌘D",
         action: () => {
           this.manager.switchWorkspace(idx);
-          this.manager.splitPane("right");
+          this.manager.splitPane("horizontal");
         },
       },
       {
@@ -162,7 +162,7 @@ export class Sidebar {
         shortcut: "⇧⌘D",
         action: () => {
           this.manager.switchWorkspace(idx);
-          this.manager.splitPane("down");
+          this.manager.splitPane("vertical");
         },
       },
       { label: "", action: () => {}, separator: true },

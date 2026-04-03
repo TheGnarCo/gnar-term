@@ -145,6 +145,10 @@ export class TerminalManager {
 
     await listen<{ pty_id: number; data: string }>("pty-output", (event) => {
       const { pty_id, data } = event.payload;
+      // Decode base64 to preserve raw terminal escape sequences
+      const bin = atob(data);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
       for (const ws of this.workspaces) {
         for (const s of this.getAllSurfaces(ws)) {
           if (s.ptyId === pty_id && s.terminal) {
@@ -153,7 +157,7 @@ export class TerminalManager {
             if (pending >= PAUSE_THRESHOLD) {
               invoke("pause_pty", { ptyId: pty_id }).catch(() => {});
             }
-            s.terminal.write(data, () => {
+            s.terminal.write(bytes, () => {
               const p = Math.max((pendingWrites.get(pty_id) || 0) - 1, 0);
               pendingWrites.set(pty_id, p);
               if (p <= RESUME_THRESHOLD) {

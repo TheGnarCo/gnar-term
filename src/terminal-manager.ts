@@ -303,6 +303,9 @@ export class TerminalManager {
       // Only intercept Cmd (meta) shortcuts. NEVER intercept Ctrl-only combos
       // (vim, emacs, and other TUI apps need them).
       if (e.type !== "keydown") return true;
+      // Ctrl+Tab / Ctrl+Shift+Tab for tab switching
+      if (e.ctrlKey && !e.metaKey && e.key === "Tab") return false;
+
       if (!e.metaKey) return true; // All our shortcuts use Cmd
 
       const k = e.key.toLowerCase();

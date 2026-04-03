@@ -210,6 +210,14 @@ document.addEventListener("keydown", (e) => {
     return;
   }
 
+  // Ctrl+Tab / Ctrl+Shift+Tab — cycle tabs
+  if (ctrl && !cmd && !alt && e.key === "Tab") {
+    e.preventDefault();
+    if (shift) termManager.prevSurface();
+    else termManager.nextSurface();
+    return;
+  }
+
   // ⌘B — Toggle sidebar
   if (cmd && !shift && !alt && e.key === "b") {
     e.preventDefault();

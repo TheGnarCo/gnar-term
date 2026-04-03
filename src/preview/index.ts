@@ -112,42 +112,12 @@ function injectStyles() {
   const style = document.createElement("style");
   style.id = "preview-styles";
   style.textContent = `
-    .preview-surface h1 { font-size: 2em; font-weight: 600; border-bottom: 1px solid ${theme.border}; padding-bottom: 0.3em; margin: 0 0 0.67em; }
-    .preview-surface h2 { font-size: 1.5em; font-weight: 600; border-bottom: 1px solid ${theme.border}; padding-bottom: 0.3em; margin: 1em 0 0.5em; }
-    .preview-surface h3 { font-size: 1.25em; font-weight: 600; margin: 1em 0 0.5em; }
-    .preview-surface h4 { font-size: 1em; font-weight: 600; margin: 1em 0 0.5em; }
-    .preview-surface p { margin: 0.5em 0; }
-    .preview-surface a { color: ${theme.accent}; text-decoration: none; }
-    .preview-surface a:hover { text-decoration: underline; }
-    .preview-surface code {
-      background: ${theme.bgSurface}; padding: 0.2em 0.4em;
-      border-radius: 4px; font-size: 0.9em;
-      font-family: "JetBrainsMono Nerd Font Mono", Menlo, monospace;
-    }
-    .preview-surface pre {
-      background: ${theme.bgSurface}; padding: 16px;
-      border-radius: 8px; overflow-x: auto; margin: 1em 0;
-      border: 1px solid ${theme.border};
-    }
-    .preview-surface pre code { background: none; padding: 0; font-size: 13px; line-height: 1.5; }
-    .preview-surface blockquote {
-      border-left: 3px solid ${theme.accent}; padding: 0.5em 1em;
-      margin: 1em 0; color: ${theme.fgMuted};
-    }
-    .preview-surface ul, .preview-surface ol { padding-left: 2em; margin: 0.5em 0; }
-    .preview-surface li { margin: 0.25em 0; }
-    .preview-surface table { border-collapse: collapse; width: 100%; margin: 1em 0; }
-    .preview-surface th, .preview-surface td {
-      border: 1px solid ${theme.border}; padding: 8px 12px; text-align: left;
-    }
-    .preview-surface th { background: ${theme.bgSurface}; font-weight: 600; }
-    .preview-surface hr { border: none; border-top: 1px solid ${theme.border}; margin: 2em 0; }
-    .preview-surface img { max-width: 100%; border-radius: 4px; }
     .preview-surface .json-key { color: ${theme.ansi.blue}; }
     .preview-surface .json-string { color: ${theme.ansi.green}; }
     .preview-surface .json-number { color: ${theme.ansi.magenta}; }
     .preview-surface .json-boolean { color: ${theme.ansi.yellow}; }
     .preview-surface .json-null { color: ${theme.fgDim}; }
+    .preview-surface img { max-width: 100%; border-radius: 4px; }
   `;
   document.head.appendChild(style);
 }

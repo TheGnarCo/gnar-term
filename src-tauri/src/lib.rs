@@ -524,6 +524,24 @@ async fn read_file(path: String) -> Result<String, String> {
     std::fs::read_to_string(&path).map_err(|e| format!("Failed to read {}: {}", path, e))
 }
 
+/// Write content to a file
+#[tauri::command]
+async fn write_file(path: String, content: String) -> Result<(), String> {
+    std::fs::write(&path, &content).map_err(|e| format!("Failed to write {}: {}", path, e))
+}
+
+/// Ensure a directory exists
+#[tauri::command]
+async fn ensure_dir(path: String) -> Result<(), String> {
+    std::fs::create_dir_all(&path).map_err(|e| format!("Failed to create dir {}: {}", path, e))
+}
+
+/// Get the user's home directory
+#[tauri::command]
+async fn get_home() -> Result<String, String> {
+    std::env::var("HOME").map_err(|_| "HOME not set".to_string())
+}
+
 /// Watch a file for changes, emit events
 #[tauri::command]
 async fn watch_file(app: AppHandle, path: String) -> Result<u32, String> {
@@ -654,7 +672,7 @@ pub fn run() {
             ptys: Mutex::new(HashMap::new()),
         })
         .invoke_handler(tauri::generate_handler![
-            spawn_pty, write_pty, resize_pty, kill_pty, detect_font, get_pty_cwd, get_pty_title, read_file, watch_file
+            spawn_pty, write_pty, resize_pty, kill_pty, detect_font, get_pty_cwd, get_pty_title, read_file, write_file, ensure_dir, get_home, watch_file
         ])
         .setup(|app| {
             // Rebuild macOS menu manually so Cmd+Q, Cmd+C, Cmd+V work,

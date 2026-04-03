@@ -3,6 +3,7 @@ import { TerminalManager, fontReady } from "./terminal-manager";
 import { openCommandPalette } from "./command-palette";
 import { theme, onThemeChange, setTheme, getXtermTheme } from "./theme";
 import { listen } from "@tauri-apps/api/event";
+import { loadConfig, saveConfig } from "./config";
 
 const app = document.getElementById("app")!;
 
@@ -39,6 +40,7 @@ listen<string>("menu-theme", (event) => {
     }
   }
   termManager.refreshLayout();
+  saveConfig({ theme: id });
 });
 
 listen("menu-cmd-palette", () => {
@@ -53,8 +55,16 @@ onThemeChange(() => {
   document.body.style.background = theme.bg;
 });
 
-// Wait for font detection before creating first workspace
-fontReady.then(() => {
+// Load config, apply theme, then create first workspace
+fontReady.then(async () => {
+  const config = await loadConfig();
+  if (config.theme) {
+    setTheme(config.theme);
+    sidebar.style.background = theme.sidebarBg;
+    sidebar.style.borderColor = theme.sidebarBorder;
+    terminalArea.style.background = theme.bg;
+    document.body.style.background = theme.bg;
+  }
   termManager.createWorkspace("Workspace 1");
   sidebarUI.refresh();
 });

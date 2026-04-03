@@ -1,6 +1,7 @@
 import { TerminalManager } from "./terminal-manager";
 import { theme, themes, setTheme, activeThemeId, onThemeChange, getXtermTheme } from "./theme";
 import { createMarkdownSurface } from "./markdown-viewer";
+import { saveConfig, getWorkspaceCommands } from "./config";
 
 interface Command {
   name: string;
@@ -41,6 +42,15 @@ export function openCommandPalette(manager: TerminalManager) {
       const path = prompt("Path to .md file:");
       if (path) manager.openMarkdown(path);
     }},
+    // Workspace commands from config
+    ...getWorkspaceCommands().map((cmd) => ({
+      name: cmd.name,
+      action: () => {
+        if (cmd.workspace) {
+          manager.createWorkspaceFromDef(cmd.workspace);
+        }
+      },
+    })),
     // Theme selection
     ...Object.entries(themes).map(([id, t]) => ({
       name: `Theme: ${t.name}${id === activeThemeId() ? " ✓" : ""}`,
@@ -54,6 +64,8 @@ export function openCommandPalette(manager: TerminalManager) {
         }
         // Re-layout to pick up new chrome colors
         manager.refreshLayout();
+        // Persist to config file
+        saveConfig({ theme: id });
       },
     })),
   ];

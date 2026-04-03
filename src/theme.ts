@@ -188,7 +188,7 @@ export function setTheme(id: string) {
   document.body.style.background = t.bg;
   // Notify listeners
   for (const fn of _listeners) fn();
-  // Save preference
+  // Save to localStorage as fallback
   try { localStorage.setItem("gnarterm-theme", id); } catch {}
 }
 

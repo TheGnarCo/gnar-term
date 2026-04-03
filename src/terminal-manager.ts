@@ -18,6 +18,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { theme, getXtermTheme } from "./theme";
 import { createMarkdownSurface, type MarkdownSurface } from "./markdown-viewer";
+import { type WorkspaceDef, type LayoutNode, type SurfaceDef } from "./config";
 import "@xterm/xterm/css/xterm.css";
 
 let _id = 0;
@@ -548,6 +549,99 @@ export class TerminalManager {
 
     const surface = pane.surfaces.find((s) => s.id === pane.activeSurfaceId);
     safeFocus(surface);
+    this.notify();
+    return ws;
+  }
+
+  // --- Create workspace from cmux config definition ---
+
+  async createWorkspaceFromDef(def: WorkspaceDef): Promise<Workspace> {
+    const wsElement = document.createElement("div");
+    wsElement.style.cssText = "flex: 1; display: flex; min-height: 0; min-width: 0;";
+
+    const wsName = def.name || `Workspace ${this.workspaces.length + 1}`;
+    const rootCwd = def.cwd;
+
+    const ws: Workspace = {
+      id: uid(), name: wsName,
+      splitRoot: { type: "pane", pane: { id: "dummy", surfaces: [], activeSurfaceId: null, element: document.createElement("div") } },
+      activePaneId: null, element: wsElement,
+    };
+
+    this.workspaces.push(ws);
+    this.switchWorkspace(this.workspaces.length - 1);
+
+    // Recursively build the tree
+    const buildTree = async (nodeDef: LayoutNode, inheritedCwd?: string): Promise<SplitNode> => {
+      if ("pane" in nodeDef) {
+        const paneEl = document.createElement("div");
+        const pane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null, element: paneEl };
+        if (!ws.activePaneId) ws.activePaneId = pane.id;
+
+        for (const sDef of nodeDef.pane.surfaces) {
+          const cwd = sDef.cwd || inheritedCwd;
+          if (sDef.type === "markdown" && sDef.path) {
+            const mdSurface = await createMarkdownSurface(sDef.path);
+            const surface: Surface = {
+              id: mdSurface.id, terminal: null as any, fitAddon: { fit: () => {} } as any,
+              termElement: mdSurface.element, ptyId: -1, title: sDef.name || mdSurface.title,
+              cwd, hasUnread: false, opened: true,
+            };
+            pane.surfaces.push(surface);
+            if (!pane.activeSurfaceId || sDef.focus) pane.activeSurfaceId = surface.id;
+          } else {
+            const surface = await this.createSurface(pane, cwd);
+            if (sDef.name) {
+              surface.title = sDef.name;
+              // Override xterm listener from overwriting
+              if (surface.terminal) {
+                surface.terminal.onTitleChange(() => { /* ignore */ });
+              }
+            }
+            if (sDef.command) {
+              // Give shell time to initialize before sending command
+              setTimeout(() => {
+                invoke("write_pty", { ptyId: surface.ptyId, data: `${sDef.command}\n` }).catch(() => {});
+              }, 500);
+            }
+            if (!pane.activeSurfaceId || sDef.focus) pane.activeSurfaceId = surface.id;
+          }
+        }
+
+        if (pane.surfaces.length === 0) {
+          const surface = await this.createSurface(pane, inheritedCwd);
+          pane.activeSurfaceId = surface.id;
+        }
+
+        return { type: "pane", pane };
+      } else {
+        const left = await buildTree(nodeDef.children[0], inheritedCwd);
+        const right = await buildTree(nodeDef.children[1], inheritedCwd);
+        return {
+          type: "split",
+          direction: nodeDef.direction,
+          ratio: nodeDef.split || 0.5,
+          children: [left, right],
+        };
+      }
+    };
+
+    if (def.layout) {
+      ws.splitRoot = await buildTree(def.layout, rootCwd);
+    } else {
+      // Default single pane if no layout specified
+      const paneEl = document.createElement("div");
+      const pane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null, element: paneEl };
+      await this.createSurface(pane, rootCwd);
+      pane.activeSurfaceId = pane.surfaces[0].id;
+      ws.splitRoot = { type: "pane", pane };
+      ws.activePaneId = pane.id;
+    }
+
+    this.layoutWorkspace(ws);
+    const activePane = this.getAllPanes(ws.splitRoot).find(p => p.id === ws.activePaneId);
+    const activeSurface = activePane?.surfaces.find(s => s.id === activePane.activeSurfaceId);
+    setTimeout(() => safeFocus(activeSurface), 50);
     this.notify();
     return ws;
   }

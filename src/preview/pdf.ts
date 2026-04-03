@@ -16,7 +16,7 @@ registerPreviewer({
       element.innerHTML = "";
       element.style.height = "100%";
 
-      EmbedPDF.create({
+      EmbedPDF.init({
         target: element,
         source: bytes,
         theme: "dark",

@@ -9,3 +9,4 @@ import "./pdf";
 import "./csv";
 import "./yaml";
 import "./video";
+import "./text";

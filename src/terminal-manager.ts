@@ -628,11 +628,11 @@ export class TerminalManager {
     }
     
     const parentInfo = this.findParentSplit(ws.splitRoot, pane.id);
-    if (parentInfo) {
-      const sibling = parentInfo.parent.children[parentInfo.index === 0 ? 1 : 0];
+    if (parentInfo && parentInfo.parent.type === "split") {
+      const parent = parentInfo.parent;
+      const sibling = parent.children[parentInfo.index === 0 ? 1 : 0];
       
-      // Find parent of parentInfo.parent
-      const grandParentInfo = this.findParentSplit(ws.splitRoot, parentInfo.parent.type === "pane" ? "" : parentInfo.parent.children[0].type === "pane" ? parentInfo.parent.children[0].pane.id : ""); // Not trivial, so we do a general replace:
+      // Replace the parent split with the sibling in the tree
       
       // Helper to replace node with sibling
       const replaceNode = (root: SplitNode, target: SplitNode, replacement: SplitNode): boolean => {

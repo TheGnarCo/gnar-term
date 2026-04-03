@@ -440,8 +440,44 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             spawn_pty, write_pty, resize_pty, kill_pty, detect_font
         ])
-        // Disable default macOS menu so Cmd+T, Cmd+N, etc. reach the webview
-        .menu(|_handle| Ok(tauri::menu::Menu::new(_handle).unwrap()))
+        .setup(|app| {
+            // Rebuild macOS menu manually so Cmd+Q, Cmd+C, Cmd+V work,
+            // but Cmd+T/Cmd+W/Cmd+N are passed down to JS.
+            #[cfg(target_os = "macos")]
+            {
+                use tauri::menu::{Menu, Submenu, PredefinedMenuItem, MenuItem};
+                let handle = app.handle();
+                
+                // GnarTerm Menu
+                let hide = PredefinedMenuItem::hide(handle, None)?;
+                let hide_others = PredefinedMenuItem::hide_others(handle, None)?;
+                let show_all = PredefinedMenuItem::show_all(handle, None)?;
+                let quit = PredefinedMenuItem::quit(handle, None)?;
+                
+                let app_menu = Submenu::with_items(
+                    handle,
+                    "GnarTerm",
+                    true,
+                    &[&hide, &hide_others, &show_all, &MenuItem::separator(handle)?, &quit],
+                )?;
+
+                // Edit Menu (Copy/Paste/Select All)
+                let copy = PredefinedMenuItem::copy(handle, None)?;
+                let paste = PredefinedMenuItem::paste(handle, None)?;
+                let select_all = PredefinedMenuItem::select_all(handle, None)?;
+                
+                let edit_menu = Submenu::with_items(
+                    handle,
+                    "Edit",
+                    true,
+                    &[&copy, &paste, &select_all],
+                )?;
+
+                let menu = Menu::with_items(handle, &[&app_menu, &edit_menu])?;
+                app.set_menu(menu)?;
+            }
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running GnarTerm");
 }

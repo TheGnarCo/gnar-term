@@ -15,15 +15,13 @@
   <img src="./docs/screenshot.png" alt="gnar-term screenshot" width="900" />
 </p>
 
-> **Note:** Screenshot shows gnar-term running with Tokyo Night theme. The app supports 10 themes (6 dark + 4 light) and runs on macOS, Linux, and Windows.
-
 ## Features
 
 <table>
 <tr>
 <td width="40%" valign="middle">
 <h3>Workspace management</h3>
-Vertical sidebar tabs with drag-to-reorder, inline rename, and workspace close on hover. Save workspace layouts to <code>gnar-term.json</code> and reload them from the command palette.
+Vertical sidebar tabs with drag-to-reorder, inline rename, and workspace close on hover. Save and load workspace layouts from the command palette. Autoload workspaces on startup.
 </td>
 <td width="60%">
 
@@ -44,7 +42,7 @@ Vertical sidebar tabs with drag-to-reorder, inline rename, and workspace close o
 <tr>
 <td width="40%" valign="middle">
 <h3>Split panes</h3>
-Split horizontally (<code>⌘D</code>) and vertically (<code>⇧⌘D</code>). Each split has its own independent direction — no flat list limitations. Tabs within each pane. Pane zoom (<code>⇧⌘Enter</code>) for focus mode.
+Split horizontally (<code>⌘D</code>) and vertically (<code>⇧⌘D</code>). Each split has its own independent direction using a binary tree layout. Tabs within each pane. Pane zoom (<code>⇧⌘Enter</code>) for focus mode.
 </td>
 <td width="60%">
 
@@ -65,35 +63,42 @@ Split horizontally (<code>⌘D</code>) and vertically (<code>⇧⌘D</code>). Ea
 <tr>
 <td width="40%" valign="middle">
 <h3>File previews</h3>
-Click any file path in the terminal to preview it in a new tab. Supports Markdown, PDF, JSON, CSV, YAML, images (including HEIC), video, and text files. Live-reloads when the file changes on disk.
+Click any file path in the terminal to preview it in a new tab. Handles bare filenames, relative paths, and quoted paths with spaces. Live-reloads when the file changes on disk.
 </td>
 <td width="60%">
 
 **Supported formats:**
-- 📝 Markdown (GitHub-style rendering)
-- 📄 PDF (page-by-page canvas rendering)
-- 📊 CSV / TSV (sortable table with row highlighting)
-- 🖼️ Images (PNG, JPG, GIF, WebP, HEIC, SVG)
-- 🎥 Video (MP4, WebM, MOV)
-- 📋 JSON (syntax highlighted)
+- 📝 Markdown (GitHub-style rendering via `github-markdown-css`)
+- 📄 PDF (page-by-page canvas rendering via `pdf.js`)
+- 📊 CSV / TSV (table with sticky headers and row highlighting)
+- 🖼️ Images (PNG, JPG, GIF, WebP, HEIC, AVIF, TIFF, SVG)
+- 🎥 Video (MP4, WebM, MOV, AVI, MKV)
+- 📋 JSON / JSONC (syntax highlighted)
 - ⚙️ YAML / TOML (syntax highlighted)
-- 📄 Text files with line numbers
+- 📄 Text / Log / Config files (with line numbers)
 
 </td>
 </tr>
 <tr>
 <td width="40%" valign="middle">
-<h3>6 built-in themes</h3>
-Switch themes instantly from the command palette (<code>⌘P</code>) or the native <b>View → Theme</b> menu. Your choice persists across restarts.
+<h3>10 built-in themes</h3>
+Switch themes instantly from the command palette (<code>⌘P</code>) or the native <b>View → Theme</b> menu. Persists to <code>gnar-term.json</code> across restarts.
 </td>
 <td width="60%">
 
-- **GitHub Dark** (default)
-- **Tokyo Night**
-- **Catppuccin Mocha**
-- **Dracula**
-- **Solarized Dark**
-- **One Dark**
+**Dark:**
+- GitHub Dark (default)
+- Tokyo Night
+- Catppuccin Mocha
+- Dracula
+- Solarized Dark
+- One Dark
+
+**Light:**
+- Molly (warm ivory + rose gold)
+- GitHub Light
+- Solarized Light
+- Catppuccin Latte
 
 </td>
 </tr>
@@ -136,12 +141,29 @@ Define workspace layouts and custom commands in <code>gnar-term.json</code>. Cop
 </tr>
 <tr>
 <td width="40%" valign="middle">
-<h3>CWD tracking</h3>
-New tabs and splits inherit the working directory of the active terminal. Automatic OSC 7 shell integration for zsh — no config needed.
+<h3>CWD tracking & inheritance</h3>
+New tabs and splits inherit the working directory of the active terminal. Automatic OSC 7 shell integration for zsh via ZDOTDIR — no manual config needed.
 </td>
 <td width="60%">
 
-Tab titles show the current directory or running process. `cd ~/projects/foo` then `⌘T` opens a new tab already in `foo/`.
+Tab titles show the current directory or running process name. `cd ~/projects/foo` then `⌘T` opens a new tab already in `foo/`.
+
+</td>
+</tr>
+<tr>
+<td width="40%" valign="middle">
+<h3>Context menu</h3>
+Right-click in the terminal for contextual actions. File-specific actions appear automatically when you right-click on text that looks like a file path.
+</td>
+<td width="60%">
+
+- **Copy** / **Paste**
+- **Copy Path** (when text looks like a file path)
+- **Preview** (for supported file types)
+- **Show in File Manager** (cross-platform)
+- **Open with Default App**
+- **Clear Scrollback**
+- **Split Right** / **Split Down**
 
 </td>
 </tr>
@@ -150,9 +172,12 @@ Tab titles show the current directory or running process. `cd ~/projects/foo` th
 ### Also includes
 
 - **Command palette** (`⌘P`) — fuzzy search across all commands, workspaces, and themes
-- **Context menu** — right-click in terminal for copy, paste, file actions, split options
+- **GPU-accelerated rendering** — WebGL terminal renderer for smooth scrolling and fast TUI apps
 - **Bundled Nerd Font** — JetBrainsMono Nerd Font Mono included, powerline glyphs work out of the box
 - **Flow control** — PTY backpressure prevents the terminal from choking on fast output
+- **Process cleanup** — closing a tab kills the child process tree (no zombie processes)
+- **Ctrl+Tab / Ctrl+Shift+Tab** — cycle through tabs in the active pane
+- **Modular preview system** — add new file type previewers by dropping a plugin in `src/preview/`
 - **Cross-platform** — macOS, Linux, and Windows via Tauri v2
 
 ## Install
@@ -162,6 +187,10 @@ Tab titles show the current directory or running process. `cd ~/projects/foo` th
 Grab the latest release for your platform:
 
 👉 **[GitHub Releases](https://github.com/TheGnarCo/gnar-term/releases/latest)**
+
+- **macOS** — `.dmg` (Apple Silicon + Intel)
+- **Linux** — `.AppImage` / `.deb`
+- **Windows** — `.msi`
 
 ### Build from source
 
@@ -203,6 +232,8 @@ npm run dev
 | `⌘T` | New tab |
 | `⇧⌘]` | Next tab |
 | `⇧⌘[` | Previous tab |
+| `⌃Tab` | Next tab |
+| `⌃⇧Tab` | Previous tab |
 | `⌘W` | Close tab |
 
 ### Split panes
@@ -237,16 +268,39 @@ The config format is a superset of [cmux.json](https://cmux.com/docs/custom-comm
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `theme` | string | Active theme ID |
+| `theme` | string | Theme ID (e.g. `"tokyo-night"`, `"molly"`, `"github-light"`) |
 | `autoload` | string[] | Workspace command names to launch on startup |
-| `commands[].workspace.layout.children[].pane.surfaces[].type` | `"markdown"` | Markdown preview surface (in addition to `"terminal"` and `"browser"`) |
+| `commands[].workspace.layout...surfaces[].type` | `"markdown"` | Markdown preview surface (in addition to `"terminal"`) |
+
+### Available theme IDs
+
+`github-dark`, `tokyo-night`, `catppuccin-mocha`, `dracula`, `solarized-dark`, `one-dark`, `molly`, `github-light`, `solarized-light`, `catppuccin-latte`
+
+## Adding file preview plugins
+
+The preview system is modular. To add a new file type:
+
+1. Create `src/preview/myformat.ts`
+2. Call `registerPreviewer()` with file extensions and a render function
+3. Import it in `src/preview/init.ts`
+
+```typescript
+import { registerPreviewer } from "./index";
+
+registerPreviewer({
+  extensions: ["xyz"],
+  render(content, filePath, element) {
+    element.innerHTML = `<pre>${content}</pre>`;
+  },
+});
+```
 
 ## Architecture
 
 Built with:
 
 - **[Tauri v2](https://tauri.app)** — native app shell, Rust backend
-- **[xterm.js](https://xtermjs.org)** — terminal emulation with WebGL rendering
+- **[xterm.js](https://xtermjs.org)** — terminal emulation with WebGL GPU rendering
 - **[portable-pty](https://docs.rs/portable-pty)** — cross-platform PTY spawning
 - **[marked](https://marked.js.org)** + **[github-markdown-css](https://github.com/sindresorhus/github-markdown-css)** — Markdown rendering
 - **[pdf.js](https://mozilla.github.io/pdf.js/)** — PDF rendering

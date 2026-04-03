@@ -4,8 +4,10 @@
   "private": true,
   "description": "Terminal workspace manager for AI coding agents",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "vite": "vite",
+    "vite:build": "vite build",
     "preview": "vite preview",
     "tauri": "tauri"
   },

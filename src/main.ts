@@ -1,12 +1,11 @@
 import { Sidebar } from "./sidebar";
-import { TabBar } from "./tab-bar";
 import { TerminalManager } from "./terminal-manager";
 import { openCommandPalette } from "./command-palette";
 import { theme } from "./theme";
 
 const app = document.getElementById("app")!;
 
-// Layout: sidebar + terminal area
+// Layout: sidebar + content
 const sidebar = document.createElement("div");
 sidebar.id = "sidebar";
 sidebar.style.cssText = `
@@ -16,12 +15,6 @@ sidebar.style.cssText = `
   font-size: 13px; user-select: none;
 `;
 
-const rightPanel = document.createElement("div");
-rightPanel.style.cssText = "flex: 1; display: flex; flex-direction: column; min-width: 0;";
-
-const tabBarEl = document.createElement("div");
-tabBarEl.id = "tab-bar";
-
 const terminalArea = document.createElement("div");
 terminalArea.id = "terminal-area";
 terminalArea.style.cssText = `
@@ -29,90 +22,168 @@ terminalArea.style.cssText = `
   background: ${theme.bg}; min-width: 0;
 `;
 
-rightPanel.appendChild(tabBarEl);
-rightPanel.appendChild(terminalArea);
-
 app.appendChild(sidebar);
-app.appendChild(rightPanel);
+app.appendChild(terminalArea);
 
-// Initialize
 const termManager = new TerminalManager(terminalArea);
 const sidebarUI = new Sidebar(sidebar, termManager);
-const tabBar = new TabBar(tabBarEl, termManager);
 
-// Create first workspace
 termManager.createWorkspace("Workspace 1");
 sidebarUI.refresh();
-tabBar.refresh();
 
-// Keyboard shortcuts
+// --- Keyboard Shortcuts (cmux-compatible) ---
+
 document.addEventListener("keydown", (e) => {
-  const isMeta = e.metaKey || e.ctrlKey;
-  const isAlt = e.altKey;
+  const cmd = e.metaKey || (e.ctrlKey && !e.metaKey); // Cmd on Mac, Ctrl on Linux
+  const shift = e.shiftKey;
+  const alt = e.altKey;
+  const ctrl = e.ctrlKey;
 
-  // Cmd+N — new workspace
-  if (isMeta && e.key === "n" && !e.shiftKey) {
+  // ⌘N — New workspace
+  if (cmd && !shift && !alt && e.key === "n") {
     e.preventDefault();
-    const name = `Workspace ${termManager.workspaces.length + 1}`;
-    termManager.createWorkspace(name);
+    termManager.createWorkspace(`Workspace ${termManager.workspaces.length + 1}`);
+    return;
   }
 
-  // Cmd+D — split right
-  if (isMeta && e.key === "d" && !e.shiftKey) {
+  // ⌘T — New surface (tab in current pane)
+  if (cmd && !shift && !alt && e.key === "t") {
+    e.preventDefault();
+    termManager.newSurface();
+    return;
+  }
+
+  // ⌘D — Split right
+  if (cmd && !shift && !alt && e.key === "d") {
     e.preventDefault();
     termManager.splitPane("right");
+    return;
   }
 
-  // Cmd+Shift+D — split down
-  if (isMeta && e.key === "d" && e.shiftKey) {
+  // ⇧⌘D — Split down
+  if (cmd && shift && !alt && e.key === "d") {
     e.preventDefault();
     termManager.splitPane("down");
+    return;
   }
 
-  // Cmd+W — close pane
-  if (isMeta && e.key === "w" && !e.shiftKey) {
+  // ⌘W — Close surface
+  if (cmd && !shift && !alt && e.key === "w") {
     e.preventDefault();
-    termManager.closeActivePane();
+    termManager.closeSurface();
+    return;
   }
 
-  // Cmd+Shift+W — close workspace
-  if (isMeta && e.key === "w" && e.shiftKey) {
+  // ⇧⌘W — Close workspace
+  if (cmd && shift && !alt && e.key === "w") {
     e.preventDefault();
     termManager.closeActiveWorkspace();
+    return;
   }
 
-  // Cmd+1-9 — jump to workspace
-  if (isMeta && e.key >= "1" && e.key <= "9") {
+  // ⌘1-8 — Select workspace by number
+  if (cmd && !shift && !alt && !ctrl && e.key >= "1" && e.key <= "8") {
     e.preventDefault();
-    const idx = e.key === "9" ? termManager.workspaces.length - 1 : parseInt(e.key) - 1;
-    termManager.switchWorkspace(idx);
+    termManager.switchWorkspace(parseInt(e.key) - 1);
+    return;
   }
 
-  // Cmd+B — toggle sidebar
-  if (isMeta && e.key === "b") {
+  // ⌘9 — Last workspace
+  if (cmd && !shift && !alt && !ctrl && e.key === "9") {
+    e.preventDefault();
+    termManager.switchWorkspace(termManager.workspaces.length - 1);
+    return;
+  }
+
+  // ⌃1-8 — Select surface by number
+  if (ctrl && !cmd && !shift && !alt && e.key >= "1" && e.key <= "8") {
+    e.preventDefault();
+    termManager.selectSurface(parseInt(e.key));
+    return;
+  }
+
+  // ⌃9 — Last surface
+  if (ctrl && !cmd && !shift && !alt && e.key === "9") {
+    e.preventDefault();
+    termManager.selectSurface(9);
+    return;
+  }
+
+  // ⌃⌘] — Next workspace
+  if (ctrl && cmd && e.key === "]") {
+    e.preventDefault();
+    const next = (termManager.activeWorkspaceIdx + 1) % termManager.workspaces.length;
+    termManager.switchWorkspace(next);
+    return;
+  }
+
+  // ⌃⌘[ — Previous workspace
+  if (ctrl && cmd && e.key === "[") {
+    e.preventDefault();
+    const prev = (termManager.activeWorkspaceIdx - 1 + termManager.workspaces.length) % termManager.workspaces.length;
+    termManager.switchWorkspace(prev);
+    return;
+  }
+
+  // ⌘⇧] — Next surface
+  if (cmd && shift && e.key === "]") {
+    e.preventDefault();
+    termManager.nextSurface();
+    return;
+  }
+
+  // ⌘⇧[ — Previous surface
+  if (cmd && shift && e.key === "[") {
+    e.preventDefault();
+    termManager.prevSurface();
+    return;
+  }
+
+  // ⌘B — Toggle sidebar
+  if (cmd && !shift && !alt && e.key === "b") {
     e.preventDefault();
     sidebar.style.display = sidebar.style.display === "none" ? "flex" : "none";
+    return;
   }
 
-  // Alt+Cmd+Arrow — focus pane directionally
-  if (isAlt && isMeta) {
-    if (e.key === "ArrowLeft") { e.preventDefault(); termManager.focusDirection("left"); }
-    if (e.key === "ArrowRight") { e.preventDefault(); termManager.focusDirection("right"); }
-    if (e.key === "ArrowUp") { e.preventDefault(); termManager.focusDirection("up"); }
-    if (e.key === "ArrowDown") { e.preventDefault(); termManager.focusDirection("down"); }
+  // ⌥⌘← — Focus pane left
+  if (alt && cmd && e.key === "ArrowLeft") { e.preventDefault(); termManager.focusDirection("left"); return; }
+  // ⌥⌘→ — Focus pane right
+  if (alt && cmd && e.key === "ArrowRight") { e.preventDefault(); termManager.focusDirection("right"); return; }
+  // ⌥⌘↑ — Focus pane up
+  if (alt && cmd && e.key === "ArrowUp") { e.preventDefault(); termManager.focusDirection("up"); return; }
+  // ⌥⌘↓ — Focus pane down
+  if (alt && cmd && e.key === "ArrowDown") { e.preventDefault(); termManager.focusDirection("down"); return; }
+
+  // ⇧⌘Enter — Toggle pane zoom
+  if (cmd && shift && e.key === "Enter") {
+    e.preventDefault();
+    termManager.togglePaneZoom();
+    return;
   }
 
-  // Cmd+P — command palette
-  if (isMeta && e.key === "p") {
+  // ⇧⌘H — Flash focused panel
+  if (cmd && shift && e.key === "h") {
+    e.preventDefault();
+    termManager.flashFocusedPane();
+    return;
+  }
+
+  // ⇧⌘R — Rename workspace
+  if (cmd && shift && e.key === "r") {
+    e.preventDefault();
+    const ws = termManager.activeWorkspace;
+    if (ws) {
+      const name = prompt("Workspace name:", ws.name);
+      if (name) { ws.name = name; sidebarUI.refresh(); }
+    }
+    return;
+  }
+
+  // ⌘P — Command palette
+  if (cmd && !shift && !alt && e.key === "p") {
     e.preventDefault();
     openCommandPalette(termManager);
-  }
-
-  // Ctrl+Tab / Ctrl+Shift+Tab — next/prev workspace
-  if (e.ctrlKey && e.key === "Tab") {
-    e.preventDefault();
-    const dir = e.shiftKey ? -1 : 1;
-    const next = (termManager.activeWorkspaceIdx + dir + termManager.workspaces.length) % termManager.workspaces.length;
-    termManager.switchWorkspace(next);
+    return;
   }
 });

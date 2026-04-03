@@ -13,8 +13,8 @@ Same root cause as B2.
 
 ## Enhancements
 
-### [E1] Workspace save/restore
-Auto-save workspace state on quit, restore on launch. Also named workspace profiles (save/load layouts from command palette).
+### ~~[E1] Workspace save/restore~~ ✅ DONE
+Config system with `gnar-term.json` (cmux-compatible). Save via ⌘P, autoload on startup, manual load from palette.
 
 ### [E2] Markdown viewer: cmd+click on .md paths
 cmd+clicking a .md file path in terminal should open it in the markdown viewer tab.

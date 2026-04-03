@@ -1,27 +1,27 @@
 /**
  * GnarTerm color palette
- * GitHub Dark Default — clean, familiar, muted
+ * GitHub Dark Default — NOT pure black
  */
 
 export const theme = {
-  // Base — GitHub dark mode grays
-  bg: "#0d1117",          // main background
-  bgSurface: "#161b22",   // sidebar, cards, elevated surfaces
-  bgFloat: "#1c2128",     // floating elements (menus, palette, tooltips)
-  bgHighlight: "#30363d",  // hover states
-  bgActive: "#388bfd26",   // active/selected (blue tint, translucent)
+  // Base
+  bg: "#161b22",           // main background (GitHub's actual canvas bg)
+  bgSurface: "#1c2128",   // elevated surfaces
+  bgFloat: "#2d333b",     // floating elements (menus, palette)
+  bgHighlight: "#373e47",  // hover states
+  bgActive: "#2d333b",    // active/selected
 
   // Borders
-  border: "#30363d",
-  borderActive: "#58a6ff",  // blue accent
+  border: "#444c56",
+  borderActive: "#58a6ff",
   borderNotify: "#58a6ff",
 
   // Text
-  fg: "#e6edf3",           // primary text
-  fgMuted: "#8b949e",      // secondary / labels
-  fgDim: "#484f58",        // disabled / very subtle
+  fg: "#e6edf3",
+  fgMuted: "#8b949e",
+  fgDim: "#636e7b",
 
-  // Accent — GitHub blue
+  // Accent
   accent: "#58a6ff",
   accentHover: "#79c0ff",
   notify: "#58a6ff",
@@ -31,17 +31,17 @@ export const theme = {
   warning: "#d29922",
 
   // Terminal
-  termBg: "#0d1117",
+  termBg: "#161b22",
   termFg: "#e6edf3",
   termCursor: "#e6edf3",
   termSelection: "#264f78",
 
-  // Sidebar
-  sidebarBg: "#010409",     // darkest layer
+  // Sidebar — darker but NOT black
+  sidebarBg: "#0d1117",
   sidebarBorder: "#21262d",
 
   // Tab bar
-  tabBarBg: "#010409",
+  tabBarBg: "#1c2128",
   tabBarBorder: "#21262d",
 };
 

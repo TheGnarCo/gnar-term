@@ -15,6 +15,8 @@
   <img src="./docs/screenshot.png" alt="gnar-term screenshot" width="900" />
 </p>
 
+> **Note:** Screenshot shows gnar-term running with Tokyo Night theme. The app supports 10 themes (6 dark + 4 light) and runs on macOS, Linux, and Windows.
+
 ## Features
 
 <table>

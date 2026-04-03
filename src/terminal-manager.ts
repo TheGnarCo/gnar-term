@@ -194,7 +194,31 @@ export class TerminalManager {
     terminal.onResize(({ cols, rows }) => {
       if (surface.ptyId >= 0) invoke("resize_pty", { ptyId: surface.ptyId, cols, rows });
     });
-    terminal.onTitleChange((title) => { surface.title = title; this.notify(); });
+    let hasXtermTitle = false;
+    terminal.onTitleChange((title) => {
+      hasXtermTitle = true;
+      surface.title = title;
+      this.notify();
+    });
+
+    // Poll for process title (cwd basename or running command)
+    // Only used when shell doesn't set xterm title natively
+    if (surface.ptyId >= 0) {
+      const pollTitle = async () => {
+        if (surface.ptyId < 0) return;
+        if (!hasXtermTitle) {
+          try {
+            const t = await invoke<string>("get_pty_title", { ptyId: surface.ptyId });
+            if (t && surface.title !== t) {
+              surface.title = t;
+              this.notify();
+            }
+          } catch {}
+        }
+        setTimeout(pollTitle, 2000);
+      };
+      setTimeout(pollTitle, 500);
+    }
 
     pane.surfaces.push(surface);
     pane.activeSurfaceId = surface.id;

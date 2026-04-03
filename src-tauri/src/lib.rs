@@ -443,6 +443,63 @@ async fn detect_font() -> Result<String, String> {
     Ok(String::new())
 }
 
+/// Get the title for a PTY tab — foreground process name or cwd basename
+#[tauri::command]
+async fn get_pty_title(state: tauri::State<'_, AppState>, pty_id: u32) -> Result<String, String> {
+    let ptys = state.ptys.lock().map_err(|e| e.to_string())?;
+    if let Some(entry) = ptys.get(&pty_id) {
+        if let Some(pid) = entry.child_pid {
+            // macOS: get foreground process via ps
+            #[cfg(target_os = "macos")]
+            {
+                // Try to get the foreground process group leader
+                let output = std::process::Command::new("ps")
+                    .args(["-o", "comm=", "-g", &pid.to_string()])
+                    .output();
+                if let Ok(out) = output {
+                    let stdout = String::from_utf8_lossy(&out.stdout);
+                    let procs: Vec<&str> = stdout.lines().filter(|l| !l.is_empty()).collect();
+                    // Last process is usually the foreground one
+                    if let Some(last) = procs.last() {
+                        let name = last.rsplit('/').next().unwrap_or(last).trim();
+                        // If it's not the shell itself, return process name
+                        if !name.is_empty() && name != "zsh" && name != "bash" && name != "fish" && name != "sh" {
+                            return Ok(name.to_string());
+                        }
+                    }
+                }
+                // Fall back to cwd basename
+                let output = std::process::Command::new("lsof")
+                    .args(["-p", &pid.to_string(), "-Fn", "-d", "cwd"])
+                    .output();
+                if let Ok(out) = output {
+                    let stdout = String::from_utf8_lossy(&out.stdout);
+                    for line in stdout.lines() {
+                        if let Some(path) = line.strip_prefix('n') {
+                            if path.starts_with('/') {
+                                let base = path.rsplit('/').next().unwrap_or(path);
+                                if base == std::env::var("USER").unwrap_or_default() {
+                                    return Ok("~".to_string());
+                                }
+                                return Ok(base.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+            // Linux: read /proc foreground process
+            #[cfg(target_os = "linux")]
+            {
+                if let Ok(path) = std::fs::read_link(format!("/proc/{}/cwd", pid)) {
+                    let base = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+                    return Ok(base);
+                }
+            }
+        }
+    }
+    Ok(String::new())
+}
+
 /// Get the working directory of a PTY's child process
 #[tauri::command]
 async fn get_pty_cwd(state: tauri::State<'_, AppState>, pty_id: u32) -> Result<String, String> {
@@ -484,7 +541,7 @@ pub fn run() {
             ptys: Mutex::new(HashMap::new()),
         })
         .invoke_handler(tauri::generate_handler![
-            spawn_pty, write_pty, resize_pty, kill_pty, detect_font, get_pty_cwd
+            spawn_pty, write_pty, resize_pty, kill_pty, detect_font, get_pty_cwd, get_pty_title
         ])
         .setup(|app| {
             // Rebuild macOS menu manually so Cmd+Q, Cmd+C, Cmd+V work,

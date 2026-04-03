@@ -411,10 +411,7 @@ export class TerminalManager {
         ws.activePaneId = pane.id;
         this.splitPane("vertical");
       }));
-      controls.appendChild(createPaneBtn(svgClose, "Close Pane", () => {
-        ws.activePaneId = pane.id;
-        this.closeActivePane();
-      }));
+
 
       tabBar.appendChild(controls);
       el.appendChild(tabBar);

@@ -19,7 +19,8 @@
     "@tauri-apps/api": "^2.0.0",
     "marked": "^15.0.0",
     "github-markdown-css": "^5.8.1",
-    "pdfjs-dist": "^4.10.38"
+    "pdfjs-dist": "^4.10.38",
+    "pdfjs-viewer-element": "^3.2.2"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0",

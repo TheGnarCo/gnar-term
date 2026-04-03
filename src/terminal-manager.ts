@@ -614,16 +614,17 @@ export class TerminalManager {
     pane.element.remove();
     
     if (ws.splitRoot.type === "pane" && ws.splitRoot.pane.id === pane.id) {
-      // Last pane gone — keep workspace alive, spawn fresh terminal (cmux/tmux behavior)
-      const paneEl = document.createElement("div");
-      const newPane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null, element: paneEl };
-      ws.splitRoot = { type: "pane", pane: newPane };
-      ws.activePaneId = newPane.id;
-      this.createSurface(newPane).then(() => {
-        this.layoutWorkspace(ws);
-        this.activeSurface?.terminal.focus();
-        this.notify();
-      });
+      // Last pane gone — close the workspace
+      ws.element.remove();
+      const wsIdx = this.workspaces.indexOf(ws);
+      if (wsIdx >= 0) this.workspaces.splice(wsIdx, 1);
+      
+      if (this.workspaces.length === 0) {
+        this.createWorkspace("Workspace 1");
+      } else {
+        this.switchWorkspace(Math.min(wsIdx, this.workspaces.length - 1));
+      }
+      this.notify();
       return;
     }
     

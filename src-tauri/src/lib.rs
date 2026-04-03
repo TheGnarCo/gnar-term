@@ -368,49 +368,39 @@ async fn detect_font() -> Result<String, String> {
     // 7. Check what monospace/nerd fonts are actually installed
     #[cfg(target_os = "macos")]
     {
-        println!("[detect_font] Falling back to system profiler font scan");
-        // Preferred fonts in order — if any is installed, use it
-        let preferred = [
-            "MesloLGS Nerd Font Mono",  // powerlevel10k default
-            "MesloLGS NF",              // older p10k installs
-            "JetBrainsMono Nerd Font Mono",
-            "Hack Nerd Font Mono",
-            "FiraCode Nerd Font Mono",
-            "JetBrains Mono",
-            "SF Mono",
-            "Menlo",
-        ];
-
-        // Run system_profiler once, check all preferred fonts
-        if let Ok(output) = std::process::Command::new("system_profiler")
-            .args(["SPFontsDataType"])
-            .output()
-        {
-            let text = String::from_utf8_lossy(&output.stdout);
-            for font_name in preferred {
-                if text.contains(font_name) {
-                    println!("[detect_font] Found installed font via system_profiler: {}", font_name);
-                    return Ok(font_name.to_string());
-                }
-            }
-        }
-
-        println!("[detect_font] Falling back to filesystem font scan");
+        println!("[detect_font] Checking filesystem for fonts");
         // Faster check via font file existence
         let font_dirs = [
             format!("{home}/Library/Fonts"),
             "/Library/Fonts".to_string(),
             "/System/Library/Fonts".to_string(),
         ];
-        for font_name in preferred {
-            let search_term = font_name.replace(' ', "").to_lowercase();
+        
+        // (File name substring, CSS font-family name)
+        let preferred = [
+            ("MesloLGS NF", "MesloLGS NF"),
+            ("MesloLGS Nerd Font", "MesloLGS Nerd Font Mono"),
+            ("JetBrainsMono NF", "JetBrainsMono NFM"),
+            ("JetBrains Mono Nerd Font", "JetBrainsMono Nerd Font"),
+            ("Hack NF", "Hack NF"),
+            ("Hack Nerd Font", "Hack Nerd Font"),
+            ("FiraCode NF", "FiraCode NF"),
+            ("FiraCode Nerd Font", "FiraCode Nerd Font"),
+            ("JetBrains Mono", "JetBrains Mono"),
+            ("SF-Mono", "SF Mono"),
+            ("Menlo", "Menlo"),
+        ];
+
+        for (file_hint, css_name) in preferred {
+            let search_term = file_hint.replace(' ', "").to_lowercase();
             for dir in &font_dirs {
                 if let Ok(entries) = std::fs::read_dir(dir) {
                     for entry in entries.flatten() {
-                        let name = entry.file_name().to_string_lossy().to_lowercase().replace(' ', "");
-                        if name.contains(&search_term) || name.contains(&search_term.replace("nerdfontmono", "nfm")) {
-                            println!("[detect_font] Found installed font via filesystem: {}", font_name);
-                            return Ok(font_name.to_string());
+                        let file_name = entry.file_name().to_string_lossy().to_string();
+                        let name_lower = file_name.replace(' ', "").to_lowercase();
+                        if name_lower.contains(&search_term) {
+                            println!("[detect_font] Found installed font via filesystem: {} (file: {})", css_name, file_name);
+                            return Ok(css_name.to_string());
                         }
                     }
                 }

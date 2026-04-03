@@ -159,8 +159,11 @@ export function openCommandPalette(manager: TerminalManager) {
   panel.appendChild(input);
   panel.appendChild(list);
   overlay.appendChild(panel);
-  // Stop xterm.js from stealing focus
-  overlay.addEventListener("keydown", (e) => e.stopPropagation(), true);
+  // Stop xterm.js from stealing focus + handle Escape globally
+  overlay.addEventListener("keydown", (e) => {
+    e.stopPropagation();
+    if (e.key === "Escape") close();
+  }, true);
   
   document.body.appendChild(overlay);
   render();

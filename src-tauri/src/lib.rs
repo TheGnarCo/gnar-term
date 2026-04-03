@@ -101,11 +101,26 @@ async fn spawn_pty(
         .try_clone_reader()
         .map_err(|e| format!("Failed to get PTY reader: {e}"))?;
 
-    // Inject OSC 7 reporting hook into the shell
-    // This runs before the shell prints its first prompt
-    let osc7_hook = b" _gnarterm_report_cwd() { printf '\x1b]7;file://%s%s\x07' \"$(hostname)\" \"$PWD\"; }; precmd_functions+=(_gnarterm_report_cwd); chpwd_functions+=(_gnarterm_report_cwd); _gnarterm_report_cwd\n";
+    // Inject OSC 7 reporting hook into the shell.
+    // Uses ZDOTDIR override: create a temp .zshenv that sources the user's
+    // real config then adds our hook. This is invisible to the user.
+    let home = std::env::var("HOME").unwrap_or_default();
+    let integration_dir = format!("{}/.config/gnar-term/shell", home);
+    let _ = std::fs::create_dir_all(&integration_dir);
+    let zshenv_content = r#"# GnarTerm shell integration
+[ -f "$GNARTERM_ORIG_ZDOTDIR/.zshenv" ] && source "$GNARTERM_ORIG_ZDOTDIR/.zshenv"
+export ZDOTDIR="$GNARTERM_ORIG_ZDOTDIR"
+_gnarterm_report_cwd() { printf '\e]7;file://%s%s\a' "$(hostname)" "$PWD"; }
+precmd_functions+=(_gnarterm_report_cwd)
+chpwd_functions+=(_gnarterm_report_cwd)
+"#;
+    let _ = std::fs::write(format!("{}/.zshenv", integration_dir), &zshenv_content);
+    // Set ZDOTDIR to our integration dir, preserving original
+    let orig_zdotdir = std::env::var("ZDOTDIR").unwrap_or(home.clone());
+    cmd.env("GNARTERM_ORIG_ZDOTDIR", &orig_zdotdir);
+    cmd.env("ZDOTDIR", &integration_dir);
+
     let mut writer = writer;
-    let _ = writer.write_all(osc7_hook);
 
     // Store PTY
     {

@@ -30,11 +30,10 @@ sidebarToggle.innerHTML = `<svg width="14" height="14" viewBox="0 0 16 16" fill=
 sidebarToggle.id = "sidebar-toggle";
 sidebarToggle.title = "Show Sidebar (⌘B)";
 sidebarToggle.style.cssText = `
-  background: none; border: none; color: ${theme.fgDim};
-  cursor: pointer; width: 28px; height: 28px;
+  background: none; border: none; border-right: 1px solid ${theme.border};
+  color: ${theme.fgDim}; cursor: pointer; width: 36px;
   display: none; align-items: center; justify-content: center;
-  border-radius: 4px; padding: 0; margin: 4px;
-  flex-shrink: 0;
+  padding: 0; flex-shrink: 0; align-self: stretch;
 `;
 sidebarToggle.addEventListener("click", () => {
   sidebar.style.display = "flex";

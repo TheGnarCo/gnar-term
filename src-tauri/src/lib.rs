@@ -23,7 +23,7 @@ struct AppState {
 #[derive(Clone, Serialize)]
 struct PtyOutput {
     pty_id: u32,
-    data: Vec<u8>,
+    data: String, // base64-encoded for efficient IPC
 }
 
 #[derive(Clone, Serialize)]
@@ -145,7 +145,7 @@ PROMPT_COMMAND="_gnarterm_report_cwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
     let app_handle = app.clone();
     let id = pty_id;
     std::thread::spawn(move || {
-        let mut buf = [0u8; 8192];
+        let mut buf = [0u8; 65536]; // 64KB buffer for better batching of large outputs (Vim redraws)
         // Simple OSC notification parser state
         let mut osc_buf = Vec::new();
         let mut in_osc = false;
@@ -230,7 +230,7 @@ PROMPT_COMMAND="_gnarterm_report_cwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
                         "pty-output",
                         PtyOutput {
                             pty_id: id,
-                            data: data.to_vec(),
+                            data: b64_encode(data),
                         },
                     );
                 }

@@ -138,9 +138,12 @@ export class TerminalManager {
   // --- Event Listeners ---
 
   private async setupListeners() {
-    await listen<{ pty_id: number; data: number[] }>("pty-output", (event) => {
+    await listen<{ pty_id: number; data: string }>("pty-output", (event) => {
       const { pty_id, data } = event.payload;
-      const bytes = new Uint8Array(data);
+      // Decode base64 to Uint8Array
+      const binary = atob(data);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
       for (const ws of this.workspaces) {
         for (const s of this.getAllSurfaces(ws)) {
           if (s.ptyId === pty_id) { if (s.terminal) s.terminal.write(bytes); return; }
@@ -224,8 +227,9 @@ export class TerminalManager {
       fontFamily: resolvedFontFamily,
       theme: getXtermTheme(),
       allowProposedApi: true,
-      allowTransparency: true,
       scrollback: 5000,
+      fastScrollModifier: "alt",
+      smoothScrollDuration: 0,
     });
 
     const fitAddon = new FitAddon();

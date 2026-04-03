@@ -138,15 +138,33 @@ export class TerminalManager {
   // --- Event Listeners ---
 
   private async setupListeners() {
+    // Flow control: track pending writes per PTY to avoid flooding xterm.js
+    const pendingWrites = new Map<number, number>();
+    const PAUSE_THRESHOLD = 5;
+    const RESUME_THRESHOLD = 2;
+
     await listen<{ pty_id: number; data: string }>("pty-output", (event) => {
       const { pty_id, data } = event.payload;
-      // Decode base64 to Uint8Array
       const binary = atob(data);
       const bytes = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
       for (const ws of this.workspaces) {
         for (const s of this.getAllSurfaces(ws)) {
-          if (s.ptyId === pty_id) { if (s.terminal) s.terminal.write(bytes); return; }
+          if (s.ptyId === pty_id && s.terminal) {
+            const pending = (pendingWrites.get(pty_id) || 0) + 1;
+            pendingWrites.set(pty_id, pending);
+            if (pending >= PAUSE_THRESHOLD) {
+              invoke("pause_pty", { ptyId: pty_id }).catch(() => {});
+            }
+            s.terminal.write(bytes, () => {
+              const p = Math.max((pendingWrites.get(pty_id) || 0) - 1, 0);
+              pendingWrites.set(pty_id, p);
+              if (p <= RESUME_THRESHOLD) {
+                invoke("resume_pty", { ptyId: pty_id }).catch(() => {});
+              }
+            });
+            return;
+          }
         }
       }
     });

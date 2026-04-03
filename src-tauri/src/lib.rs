@@ -14,6 +14,7 @@ struct PtyInstance {
     // master is kept alive to keep the PTY open
     _master: Box<dyn MasterPty + Send>,
     child_pid: Option<u32>,
+    paused: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 struct AppState {
@@ -128,6 +129,9 @@ PROMPT_COMMAND="_gnarterm_report_cwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
         .try_clone_reader()
         .map_err(|e| format!("Failed to get PTY reader: {e}"))?;
 
+    let paused = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let paused_clone = paused.clone();
+
     // Store PTY
     {
         let mut ptys = state.ptys.lock().unwrap();
@@ -137,6 +141,7 @@ PROMPT_COMMAND="_gnarterm_report_cwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
                 writer,
                 _master: pair.master,
                 child_pid,
+                paused: paused_clone,
             },
         );
     }
@@ -145,13 +150,18 @@ PROMPT_COMMAND="_gnarterm_report_cwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
     let app_handle = app.clone();
     let id = pty_id;
     std::thread::spawn(move || {
-        let mut buf = [0u8; 65536]; // 64KB buffer for better batching of large outputs (Vim redraws)
+        let mut buf = [0u8; 65536];
+        let paused_flag = paused.clone();
         // Simple OSC notification parser state
         let mut osc_buf = Vec::new();
         let mut in_osc = false;
         let mut prev_esc = false;
 
         loop {
+            // Flow control: wait while frontend is overwhelmed
+            while paused_flag.load(std::sync::atomic::Ordering::Relaxed) {
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
             match reader.read(&mut buf) {
                 Ok(0) => {
                     // PTY closed — notify frontend
@@ -518,6 +528,26 @@ async fn detect_font() -> Result<String, String> {
     Ok(String::new())
 }
 
+/// Pause PTY reader (flow control)
+#[tauri::command]
+async fn pause_pty(state: tauri::State<'_, AppState>, pty_id: u32) -> Result<(), String> {
+    let ptys = state.ptys.lock().map_err(|e| e.to_string())?;
+    if let Some(pty) = ptys.get(&pty_id) {
+        pty.paused.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+    Ok(())
+}
+
+/// Resume PTY reader (flow control)
+#[tauri::command]
+async fn resume_pty(state: tauri::State<'_, AppState>, pty_id: u32) -> Result<(), String> {
+    let ptys = state.ptys.lock().map_err(|e| e.to_string())?;
+    if let Some(pty) = ptys.get(&pty_id) {
+        pty.paused.store(false, std::sync::atomic::Ordering::Relaxed);
+    }
+    Ok(())
+}
+
 /// Read a file's contents
 #[tauri::command]
 async fn read_file(path: String) -> Result<String, String> {
@@ -726,7 +756,7 @@ pub fn run() {
             ptys: Mutex::new(HashMap::new()),
         })
         .invoke_handler(tauri::generate_handler![
-            spawn_pty, write_pty, resize_pty, kill_pty, detect_font, get_pty_cwd, get_pty_title, read_file, read_file_base64, write_file, ensure_dir, get_home, watch_file, show_in_file_manager, open_with_default_app
+            spawn_pty, write_pty, resize_pty, kill_pty, pause_pty, resume_pty, detect_font, get_pty_cwd, get_pty_title, read_file, read_file_base64, write_file, ensure_dir, get_home, watch_file, show_in_file_manager, open_with_default_app
         ])
         .setup(|app| {
             // Rebuild macOS menu manually so Cmd+Q, Cmd+C, Cmd+V work,

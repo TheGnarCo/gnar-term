@@ -279,28 +279,31 @@ export class TerminalManager {
     };
 
     terminal.attachCustomKeyEventHandler((e) => {
-      // Only intercept specific shortcuts we handle in main.ts
-      // Let everything else go to the terminal (Ctrl+C, Ctrl+D, etc.)
+      // Only intercept Cmd (meta) shortcuts. NEVER intercept Ctrl-only combos
+      // (vim, emacs, and other TUI apps need them).
       if (e.type !== "keydown") return true;
-      const meta = e.metaKey;
-      const ctrl = e.ctrlKey;
+      if (!e.metaKey) return true; // All our shortcuts use Cmd
+
+      const k = e.key.toLowerCase();
       const shift = e.shiftKey;
       const alt = e.altKey;
-      const k = e.key.toLowerCase();
+      const ctrl = e.ctrlKey;
 
-      // ⌘ shortcuts we handle
-      if (meta && !alt) {
-        if (["n","t","d","w","b","p","h","r","k"].includes(k)) return false;
+      // ⌘+key (no alt)
+      if (!alt && !ctrl) {
+        if (["n","t","d","w","b","p","k"].includes(k)) return false;
         if (k >= "1" && k <= "9") return false;
+      }
+      // ⇧⌘+key
+      if (shift && !alt && !ctrl) {
+        if (["d","w","h","r","p"].includes(k)) return false;
         if (k === "enter") return false;
         if (k === "[" || k === "]") return false;
-        // ⌘+arrows with alt for pane navigation
       }
-      if (meta && alt && ["arrowleft","arrowright","arrowup","arrowdown"].includes(k)) return false;
-      // Ctrl+⌘ for workspace nav
-      if (ctrl && meta && (k === "[" || k === "]")) return false;
-      // Ctrl+1-9 for surface switching
-      if (ctrl && !meta && !alt && k >= "1" && k <= "9") return false;
+      // ⌥⌘+arrows for pane nav
+      if (alt && ["arrowleft","arrowright","arrowup","arrowdown"].includes(k)) return false;
+      // ⌃⌘ for workspace nav
+      if (ctrl && (k === "[" || k === "]")) return false;
 
       return true;
     });

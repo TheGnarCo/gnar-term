@@ -253,7 +253,9 @@ export class TerminalManager {
           links.push({
             range: { start: { x: startX + 1, y: lineNumber }, end: { x: startX + path.length + 1, y: lineNumber } },
             text: path,
-            activate: (_e: MouseEvent, linkText: string) => {
+            activate: (e: MouseEvent, linkText: string) => {
+              // Only open on left-click, not right-click (right-click shows context menu)
+              if (e.button !== 0) return;
               // Resolve relative paths against cwd
               let fullPath = linkText;
               if (!linkText.startsWith("/") && surface.cwd) {

@@ -18,8 +18,9 @@ registerPreviewer({
 
       EmbedPDF.init({
         target: element,
-        source: bytes,
+        src: url,
         theme: "dark",
+        worker: false, // Tauri loads local files, worker might complain about CORS for blob URLs
       });
     }).catch((err) => {
       element.innerHTML = `<div style="color: #f85149; padding: 20px;">Failed to load PDF: ${err}</div>`;

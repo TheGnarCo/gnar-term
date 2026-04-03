@@ -24,7 +24,27 @@ terminalArea.style.cssText = `
   background: ${theme.bg}; min-width: 0;
 `;
 
+// Sidebar toggle — only visible when sidebar is hidden
+const sidebarToggle = document.createElement("button");
+sidebarToggle.innerHTML = `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="2" width="14" height="12" rx="1.5"/><line x1="5.5" y1="2" x2="5.5" y2="14"/></svg>`;
+sidebarToggle.id = "sidebar-toggle";
+sidebarToggle.title = "Show Sidebar (⌘B)";
+sidebarToggle.style.cssText = `
+  background: none; border: none; color: ${theme.fgDim};
+  cursor: pointer; width: 28px; height: 28px;
+  display: none; align-items: center; justify-content: center;
+  border-radius: 4px; padding: 0; margin: 4px;
+  flex-shrink: 0;
+`;
+sidebarToggle.addEventListener("click", () => {
+  sidebar.style.display = "flex";
+  sidebarToggle.style.display = "none";
+});
+sidebarToggle.addEventListener("mouseenter", () => { sidebarToggle.style.background = theme.bgHighlight; sidebarToggle.style.color = theme.fg; });
+sidebarToggle.addEventListener("mouseleave", () => { sidebarToggle.style.background = "none"; sidebarToggle.style.color = theme.fgDim; });
+
 app.appendChild(sidebar);
+app.appendChild(sidebarToggle);
 app.appendChild(terminalArea);
 
 const termManager = new TerminalManager(terminalArea);
@@ -194,7 +214,9 @@ document.addEventListener("keydown", (e) => {
   // ⌘B — Toggle sidebar
   if (cmd && !shift && !alt && e.key === "b") {
     e.preventDefault();
-    sidebar.style.display = sidebar.style.display === "none" ? "flex" : "none";
+    const hidden = sidebar.style.display === "none";
+    sidebar.style.display = hidden ? "flex" : "none";
+    sidebarToggle.style.display = hidden ? "none" : "flex";
     return;
   }
 

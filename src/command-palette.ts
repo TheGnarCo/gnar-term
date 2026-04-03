@@ -37,8 +37,13 @@ export function openCommandPalette(manager: TerminalManager) {
     { name: "Next Surface", shortcut: "⌘⇧]", action: () => manager.nextSurface() },
     { name: "Previous Surface", shortcut: "⌘⇧[", action: () => manager.prevSurface() },
     { name: "Toggle Sidebar", shortcut: "⌘B", action: () => {
-      const el = document.getElementById("sidebar");
-      if (el) el.style.display = el.style.display === "none" ? "flex" : "none";
+      const sb = document.getElementById("sidebar");
+      const btn = document.getElementById("sidebar-toggle");
+      if (sb) {
+        const hidden = sb.style.display === "none";
+        sb.style.display = hidden ? "flex" : "none";
+        if (btn) btn.style.display = hidden ? "none" : "flex";
+      }
     }},
     ...manager.workspaces.map((ws, i) => ({
       name: `Switch to: ${ws.name}`,

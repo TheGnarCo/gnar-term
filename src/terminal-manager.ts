@@ -325,15 +325,19 @@ export class TerminalManager {
         return btn;
       };
 
-      controls.appendChild(createPaneBtn("&#9707;", "Split Right (⌘D)", () => {
+      const svgSplitRight = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="12" height="12" rx="1"/><line x1="7" y1="1" x2="7" y2="13"/></svg>`;
+      const svgSplitDown = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="12" height="12" rx="1"/><line x1="1" y1="7" x2="13" y2="7"/></svg>`;
+      const svgClose = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="2" y1="2" x2="10" y2="10"/><line x1="10" y1="2" x2="2" y2="10"/></svg>`;
+
+      controls.appendChild(createPaneBtn(svgSplitRight, "Split Right (⌘D)", () => {
         ws.activePaneId = pane.id;
         this.splitPane("horizontal");
       }));
-      controls.appendChild(createPaneBtn("&#9703;", "Split Down (⇧⌘D)", () => {
+      controls.appendChild(createPaneBtn(svgSplitDown, "Split Down (⇧⌘D)", () => {
         ws.activePaneId = pane.id;
         this.splitPane("vertical");
       }));
-      controls.appendChild(createPaneBtn("&times;", "Close Pane", () => {
+      controls.appendChild(createPaneBtn(svgClose, "Close Pane", () => {
         ws.activePaneId = pane.id;
         this.closeActivePane();
       }));

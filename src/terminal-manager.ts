@@ -237,11 +237,17 @@ export class TerminalManager {
         const text = line.translateToString();
         // Match file paths with previewable extensions
         const exts = getSupportedExtensions().join("|");
-        const regex = new RegExp(`(?:^|\\s|["'(])([\\w./~-]*[\\w-]+\\.(?:${exts}))(?=\\s|["')|]|$)`, "gi");
+        // Match: bare filenames, paths, and quoted paths with spaces
+        const patterns = [
+          `["']([^"']+\\.(?:${exts}))["']`,           // quoted: "my file.md" or 'my file.md'
+          `([\\w./~][\\w ./~-]*\\.(?:${exts}))(?=\\s|$)`, // unquoted paths (may have spaces before extension)
+        ];
+        const regex = new RegExp(patterns.join("|"), "gi");
         const links: any[] = [];
         let m;
         while ((m = regex.exec(text)) !== null) {
-          const path = m[1];
+          const path = m[1] || m[2]; // group 1 = quoted, group 2 = unquoted
+          if (!path) continue;
           const startX = m.index + m[0].indexOf(path);
           links.push({
             range: { start: { x: startX + 1, y: lineNumber }, end: { x: startX + path.length + 1, y: lineNumber } },

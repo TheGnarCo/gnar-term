@@ -39,13 +39,6 @@ export class Sidebar {
     spacer.style.cssText = "flex: 1;";
     header.appendChild(spacer);
 
-    // Sidebar toggle
-    const sidebarToggleSvg = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="2" width="14" height="12" rx="1.5"/><line x1="5.5" y1="2" x2="5.5" y2="14"/></svg>`;
-    header.appendChild(createToolbarBtn(sidebarToggleSvg, "Toggle Sidebar (⌘B)", () => {
-      const el = document.getElementById("sidebar");
-      if (el) el.style.display = el.style.display === "none" ? "flex" : "none";
-    }));
-
     // Add workspace button
     const addSvg = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="7" y1="2" x2="7" y2="12"/><line x1="2" y1="7" x2="12" y2="7"/></svg>`;
     header.appendChild(createToolbarBtn(addSvg, "New workspace (⌘N)", () => {

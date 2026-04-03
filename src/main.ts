@@ -24,8 +24,26 @@ terminalArea.style.cssText = `
   background: ${theme.bg}; min-width: 0;
 `;
 
+// Sidebar toggle button (always visible, lives outside the sidebar)
+const sidebarToggle = document.createElement("button");
+sidebarToggle.innerHTML = `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="2" width="14" height="12" rx="1.5"/><line x1="5.5" y1="2" x2="5.5" y2="14"/></svg>`;
+sidebarToggle.title = "Toggle Sidebar (⌘B)";
+sidebarToggle.style.cssText = `
+  position: fixed; top: 8px; left: 8px; z-index: 100;
+  background: none; border: none; color: ${theme.fgDim};
+  cursor: pointer; width: 24px; height: 24px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 4px; padding: 0;
+`;
+sidebarToggle.addEventListener("click", () => {
+  sidebar.style.display = sidebar.style.display === "none" ? "flex" : "none";
+});
+sidebarToggle.addEventListener("mouseenter", () => { sidebarToggle.style.background = theme.bgHighlight; sidebarToggle.style.color = theme.fg; });
+sidebarToggle.addEventListener("mouseleave", () => { sidebarToggle.style.background = "none"; sidebarToggle.style.color = theme.fgDim; });
+
 app.appendChild(sidebar);
 app.appendChild(terminalArea);
+document.body.appendChild(sidebarToggle);
 
 const termManager = new TerminalManager(terminalArea);
 const sidebarUI = new Sidebar(sidebar, termManager);

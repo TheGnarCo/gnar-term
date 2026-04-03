@@ -215,50 +215,50 @@ export class TerminalManager {
     const el = pane.element;
     el.innerHTML = "";
 
-    el.style.cssText = \`
+    el.style.cssText = `
       flex: 1; display: flex; flex-direction: column;
       min-width: 0; min-height: 0;
       border: 1px solid ${pane.id === ws.activePaneId ? theme.borderActive : theme.border};
       border-radius: 4px; overflow: hidden;
-    \`;
+    `;
 
     const tabBar = document.createElement("div");
-    tabBar.style.cssText = \`
+    tabBar.style.cssText = `
       display: flex; align-items: center; gap: 1px;
       background: ${theme.tabBarBg}; border-bottom: 1px solid ${theme.tabBarBorder};
       height: 28px; padding: 0 4px; flex-shrink: 0; overflow-x: auto;
-    \`;
+    `;
     tabBar.style.scrollbarWidth = "none";
 
     pane.surfaces.forEach((s, i) => {
         const isActive = s.id === pane.activeSurfaceId;
         const tab = document.createElement("div");
-        tab.style.cssText = \`
+        tab.style.cssText = `
           padding: 2px 10px; font-size: 11px; cursor: pointer;
           color: ${isActive ? theme.fg : theme.fgMuted};
           background: ${isActive ? theme.bgActive : "transparent"};
           border-bottom: 2px solid ${isActive ? theme.accent : "transparent"};
           border-radius: 4px 4px 0 0; white-space: nowrap;
           display: flex; align-items: center; gap: 4px;
-        \`;
+        `;
 
         if (s.hasUnread && !isActive) {
           const dot = document.createElement("span");
-          dot.style.cssText = \`width: 5px; height: 5px; border-radius: 50%; background: ${theme.notify}; flex-shrink: 0;\`;
+          dot.style.cssText = `width: 5px; height: 5px; border-radius: 50%; background: ${theme.notify}; flex-shrink: 0;`;
           tab.appendChild(dot);
         }
 
         const title = document.createElement("span");
-        title.textContent = s.title || \`Shell ${i + 1}\`;
+        title.textContent = s.title || `Shell ${i + 1}`;
         title.style.cssText = "overflow: hidden; text-overflow: ellipsis;";
         tab.appendChild(title);
 
         const closeBtn = document.createElement("span");
         closeBtn.textContent = "×";
-        closeBtn.style.cssText = \`
+        closeBtn.style.cssText = `
           color: ${theme.fgDim}; font-size: 13px; cursor: pointer;
           margin-left: 4px; visibility: ${isActive ? "visible" : "hidden"};
-        \`;
+        `;
         closeBtn.addEventListener("click", (e) => {
           e.stopPropagation();
           const idx = pane.surfaces.indexOf(s);
@@ -291,7 +291,7 @@ export class TerminalManager {
       const addBtn = document.createElement("span");
       addBtn.textContent = "+";
       addBtn.title = "New surface (⌘T)";
-      addBtn.style.cssText = \`color: ${theme.fgDim}; cursor: pointer; font-size: 14px; padding: 0 6px;\`;
+      addBtn.style.cssText = `color: ${theme.fgDim}; cursor: pointer; font-size: 14px; padding: 0 6px;`;
       addBtn.addEventListener("click", () => this.newSurface(ws, pane));
       addBtn.addEventListener("mouseenter", () => { addBtn.style.color = theme.fg; });
       addBtn.addEventListener("mouseleave", () => { addBtn.style.color = theme.fgDim; });
@@ -308,10 +308,10 @@ export class TerminalManager {
         const btn = document.createElement("span");
         btn.textContent = icon;
         btn.title = title;
-        btn.style.cssText = \`
+        btn.style.cssText = `
           color: ${theme.fgDim}; cursor: pointer; font-size: 14px;
           padding: 2px 6px; border-radius: 3px; display: flex; align-items: center; justify-content: center;
-        \`;
+        `;
         btn.addEventListener("click", (e) => { e.stopPropagation(); onClick(); });
         btn.addEventListener("mouseenter", () => {
           btn.style.background = title.includes("Close") ? theme.danger : theme.bgHighlight;
@@ -380,10 +380,10 @@ export class TerminalManager {
       return node.pane.element;
     } else {
       const container = document.createElement("div");
-      container.style.cssText = \`
+      container.style.cssText = `
         display: flex; flex: 1; min-width: 0; min-height: 0; gap: 2px;
         flex-direction: ${node.direction === "vertical" ? "column" : "row"};
-      \`;
+      `;
       const child1 = this.renderSplitNode(node.children[0], ws);
       const child2 = this.renderSplitNode(node.children[1], ws);
       
@@ -730,7 +730,7 @@ export class TerminalManager {
     const pane = this.activePane;
     if (!pane?.element) return;
     const el = pane.element;
-    el.style.boxShadow = \`inset 0 0 0 2px ${theme.accent}, 0 0 12px ${theme.notifyGlow}\`;
+    el.style.boxShadow = `inset 0 0 0 2px ${theme.accent}, 0 0 12px ${theme.notifyGlow}`;
     setTimeout(() => { el.style.boxShadow = "none"; }, 400);
   }
 }

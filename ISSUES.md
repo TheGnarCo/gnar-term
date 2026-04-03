@@ -31,8 +31,8 @@ Call terminal.clear() on active terminal.
 ### [E6] Font size zoom (⌘+/⌘-/⌘0)
 Adjust xterm.js fontSize and refit.
 
-### [E7] Ctrl+Tab / Ctrl+Shift+Tab surface switching
-Navigate between tabs in active pane.
+### ~~[E7] Ctrl+Tab / Ctrl+Shift+Tab surface switching~~ ✅ DONE
+Ctrl+Tab next tab, Ctrl+Shift+Tab previous tab.
 
 ### [E8] Bash/fish shell integration for CWD
 Currently only zsh gets OSC 7 via ZDOTDIR. Add bash (PROMPT_COMMAND) and fish support.

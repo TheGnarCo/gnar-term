@@ -32,6 +32,18 @@ struct PtyNotification {
 }
 
 #[derive(Clone, Serialize)]
+struct PtyTitle {
+    pty_id: u32,
+    title: String,
+}
+
+#[derive(Clone, Serialize)]
+struct PtyCwd {
+    pty_id: u32,
+    cwd: String,
+}
+
+#[derive(Clone, Serialize)]
 struct PtyExit {
     pty_id: u32,
 }
@@ -104,6 +116,7 @@ async fn spawn_pty(
         // Simple OSC notification parser state
         let mut osc_buf = Vec::new();
         let mut in_osc = false;
+        let mut prev_esc = false;
 
         loop {
             match reader.read(&mut buf) {
@@ -135,6 +148,33 @@ async fn spawn_pty(
                                             },
                                         );
                                     }
+                                    // OSC 0 or OSC 2: set window title
+                                    if s.starts_with("0;") || s.starts_with("2;") {
+                                        let title = s.splitn(2, ';').nth(1).unwrap_or("").to_string();
+                                        let _ = app_handle.emit(
+                                            "pty-title",
+                                            PtyTitle { pty_id: id, title },
+                                        );
+                                    }
+                                    // OSC 7: set working directory
+                                    if s.starts_with("7;") {
+                                        let url = s.splitn(2, ';').nth(1).unwrap_or("").to_string();
+                                        // OSC 7 sends file://hostname/path
+                                        let cwd = if let Some(path) = url.strip_prefix("file://") {
+                                            // Skip hostname part
+                                            if let Some(slash_idx) = path[1..].find('/') {
+                                                path[slash_idx + 1..].to_string()
+                                            } else {
+                                                path.to_string()
+                                            }
+                                        } else {
+                                            url
+                                        };
+                                        let _ = app_handle.emit(
+                                            "pty-cwd",
+                                            PtyCwd { pty_id: id, cwd },
+                                        );
+                                    }
                                 }
                                 osc_buf.clear();
                                 in_osc = false;
@@ -142,12 +182,14 @@ async fn spawn_pty(
                                 osc_buf.push(byte);
                             }
                         } else if byte == 0x1b {
-                            // Could be start of OSC (\x1b])
-                            // We'll check next byte
-                        } else if byte == 0x5d && !osc_buf.is_empty() {
-                            // \x1b] — OSC start (previous byte was ESC)
+                            prev_esc = true;
+                        } else if byte == 0x5d && prev_esc {
+                            // \x1b] — OSC start
                             in_osc = true;
                             osc_buf.clear();
+                            prev_esc = false;
+                        } else {
+                            prev_esc = false;
                         }
                     }
 

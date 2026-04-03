@@ -154,6 +154,39 @@ export class TerminalManager {
         }
       }
     });
+
+    // OSC 0/2: shell sets window title (shows process name or custom title)
+    await listen<{ pty_id: number; title: string }>("pty-title", (event) => {
+      const { pty_id, title } = event.payload;
+      for (const ws of this.workspaces) {
+        for (const s of this.getAllSurfaces(ws)) {
+          if (s.ptyId === pty_id) {
+            s.title = title;
+            this.notify();
+            return;
+          }
+        }
+      }
+    });
+
+    // OSC 7: shell reports cwd — use basename as tab title fallback
+    await listen<{ pty_id: number; cwd: string }>("pty-cwd", (event) => {
+      const { pty_id, cwd } = event.payload;
+      for (const ws of this.workspaces) {
+        for (const s of this.getAllSurfaces(ws)) {
+          if (s.ptyId === pty_id) {
+            // Only use cwd as title if no explicit title was set via OSC 0/2
+            const basename = cwd.split("/").pop() || cwd;
+            const home = basename === (typeof process !== "undefined" ? process.env.USER : "") ? "~" : basename;
+            if (!s.title || s.title.startsWith("Shell ") || s.title === "~" || !s.title.includes(" ")) {
+              s.title = home;
+              this.notify();
+            }
+            return;
+          }
+        }
+      }
+    });
   }
 
   // --- Create Surface (terminal.open called exactly once) ---
@@ -194,31 +227,10 @@ export class TerminalManager {
     terminal.onResize(({ cols, rows }) => {
       if (surface.ptyId >= 0) invoke("resize_pty", { ptyId: surface.ptyId, cols, rows });
     });
-    let hasXtermTitle = false;
     terminal.onTitleChange((title) => {
-      hasXtermTitle = true;
       surface.title = title;
       this.notify();
     });
-
-    // Poll for process title (cwd basename or running command)
-    // Only used when shell doesn't set xterm title natively
-    if (surface.ptyId >= 0) {
-      const pollTitle = async () => {
-        if (surface.ptyId < 0) return;
-        if (!hasXtermTitle) {
-          try {
-            const t = await invoke<string>("get_pty_title", { ptyId: surface.ptyId });
-            if (t && surface.title !== t) {
-              surface.title = t;
-              this.notify();
-            }
-          } catch {}
-        }
-        setTimeout(pollTitle, 2000);
-      };
-      setTimeout(pollTitle, 500);
-    }
 
     pane.surfaces.push(surface);
     pane.activeSurfaceId = surface.id;

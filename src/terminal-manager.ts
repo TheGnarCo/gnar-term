@@ -61,6 +61,7 @@ export interface Surface {
   termElement: HTMLElement;  // persistent DOM element for this terminal
   ptyId: number;
   title: string;
+  cwd?: string;  // last known working directory (from OSC 7)
   notification?: string;
   hasUnread: boolean;
   opened: boolean;  // whether terminal.open() has been called
@@ -184,7 +185,8 @@ export class TerminalManager {
       for (const ws of this.workspaces) {
         for (const s of this.getAllSurfaces(ws)) {
           if (s.ptyId === pty_id) {
-            // Only use cwd as title if no explicit title was set via OSC 0/2
+            s.cwd = cwd;
+            // Use cwd basename as title if no explicit title was set via OSC 0/2
             const basename = cwd.split("/").pop() || cwd;
             const home = basename || "~";
             if (!s.title || s.title.startsWith("Shell ") || s.title === "~" || !s.title.includes(" ")) {
@@ -523,15 +525,8 @@ export class TerminalManager {
 
   // --- Surface Management ---
 
-  private async getActiveCwd(): Promise<string | undefined> {
-    const surface = this.activeSurface;
-    if (surface && surface.ptyId >= 0) {
-      try {
-        const cwd = await invoke<string>("get_pty_cwd", { ptyId: surface.ptyId });
-        if (cwd) return cwd;
-      } catch {}
-    }
-    return undefined;
+  private getActiveCwd(): string | undefined {
+    return this.activeSurface?.cwd;
   }
 
   async newSurface(ws?: Workspace, pane?: Pane) {
@@ -539,7 +534,7 @@ export class TerminalManager {
     pane = pane ?? this.activePane ?? undefined;
     if (!ws || !pane) return;
 
-    const cwd = await this.getActiveCwd();
+    const cwd = this.getActiveCwd();
     await this.createSurface(pane, cwd);
     this.buildPaneElement(pane, ws);
     const surface = pane.surfaces.find((s) => s.id === pane!.activeSurfaceId);
@@ -649,7 +644,7 @@ export class TerminalManager {
 
     const paneEl = document.createElement("div");
     const newPane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null, element: paneEl };
-    const cwd = await this.getActiveCwd();
+    const cwd = this.getActiveCwd();
     await this.createSurface(newPane, cwd);
 
     const newSplit: SplitNode = {

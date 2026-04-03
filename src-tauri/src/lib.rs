@@ -75,6 +75,11 @@ async fn spawn_pty(
     let mut cmd = CommandBuilder::new_default_prog();
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
+    cmd.env("TERM_PROGRAM", "GnarTerm");
+    cmd.env("TERM_PROGRAM_VERSION", "0.1.0");
+    // Inject OSC 7 cwd reporting for shells that don't do it automatically
+    // This makes zsh/bash report the working directory on every prompt
+    cmd.env("GNARTERM_OSC7", "1");
     if let Some(ref dir) = cwd {
         cmd.cwd(dir);
     }
@@ -95,6 +100,12 @@ async fn spawn_pty(
         .master
         .try_clone_reader()
         .map_err(|e| format!("Failed to get PTY reader: {e}"))?;
+
+    // Inject OSC 7 reporting hook into the shell
+    // This runs before the shell prints its first prompt
+    let osc7_hook = b" _gnarterm_report_cwd() { printf '\x1b]7;file://%s%s\x07' \"$(hostname)\" \"$PWD\"; }; precmd_functions+=(_gnarterm_report_cwd); chpwd_functions+=(_gnarterm_report_cwd); _gnarterm_report_cwd\n";
+    let mut writer = writer;
+    let _ = writer.write_all(osc7_hook);
 
     // Store PTY
     {

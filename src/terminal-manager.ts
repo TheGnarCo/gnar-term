@@ -681,7 +681,7 @@ export class TerminalManager {
 
   // --- Surface Management ---
 
-  private getActiveCwd(): string | undefined {
+  getActiveCwd(): string | undefined {
     return this.activeSurface?.cwd;
   }
 

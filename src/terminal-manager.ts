@@ -237,7 +237,7 @@ export class TerminalManager {
         const text = line.translateToString();
         // Match file paths with previewable extensions
         const exts = getSupportedExtensions().join("|");
-        const regex = new RegExp(`(?:^|\\s|["'(])(/[^\\s"'()]+\\.(?:${exts})|(?:\\./|\\.\\./)\\S+\\.(?:${exts}))`, "gi");
+        const regex = new RegExp(`(?:^|\\s|["'(])([\\w./~-]*[\\w-]+\\.(?:${exts}))(?=\\s|["')|]|$)`, "gi");
         const links: any[] = [];
         let m;
         while ((m = regex.exec(text)) !== null) {

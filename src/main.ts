@@ -1,7 +1,8 @@
 import { Sidebar } from "./sidebar";
 import { TerminalManager, fontReady } from "./terminal-manager";
 import { openCommandPalette } from "./command-palette";
-import { theme, onThemeChange } from "./theme";
+import { theme, onThemeChange, setTheme, getXtermTheme } from "./theme";
+import { listen } from "@tauri-apps/api/event";
 
 const app = document.getElementById("app")!;
 
@@ -27,6 +28,18 @@ app.appendChild(terminalArea);
 
 const termManager = new TerminalManager(terminalArea);
 const sidebarUI = new Sidebar(sidebar, termManager);
+
+// Handle theme selection from native menu
+listen<string>("menu-theme", (event) => {
+  const id = event.payload.replace("theme-", "");
+  setTheme(id);
+  for (const ws of termManager.workspaces) {
+    for (const s of termManager.getAllSurfaces(ws)) {
+      if (s.terminal) s.terminal.options.theme = getXtermTheme();
+    }
+  }
+  termManager.refreshLayout();
+});
 
 // Update chrome colors on theme change
 onThemeChange(() => {

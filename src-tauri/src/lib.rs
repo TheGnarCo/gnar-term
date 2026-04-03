@@ -689,10 +689,39 @@ pub fn run() {
                     &[&copy, &paste, &select_all],
                 )?;
 
-                let menu = Menu::with_items(handle, &[&app_menu, &edit_menu])?;
+                // View > Theme submenu
+                use tauri::menu::MenuItem;
+                let theme_github = MenuItem::with_id(handle, "theme-github-dark", "GitHub Dark", true, None::<&str>)?;
+                let theme_tokyo = MenuItem::with_id(handle, "theme-tokyo-night", "Tokyo Night", true, None::<&str>)?;
+                let theme_catppuccin = MenuItem::with_id(handle, "theme-catppuccin-mocha", "Catppuccin Mocha", true, None::<&str>)?;
+                let theme_dracula = MenuItem::with_id(handle, "theme-dracula", "Dracula", true, None::<&str>)?;
+                let theme_solarized = MenuItem::with_id(handle, "theme-solarized-dark", "Solarized Dark", true, None::<&str>)?;
+                let theme_onedark = MenuItem::with_id(handle, "theme-one-dark", "One Dark", true, None::<&str>)?;
+
+                let theme_submenu = Submenu::with_items(
+                    handle,
+                    "Theme",
+                    true,
+                    &[&theme_github, &theme_tokyo, &theme_catppuccin, &theme_dracula, &theme_solarized, &theme_onedark],
+                )?;
+
+                let view_menu = Submenu::with_items(
+                    handle,
+                    "View",
+                    true,
+                    &[&theme_submenu],
+                )?;
+
+                let menu = Menu::with_items(handle, &[&app_menu, &edit_menu, &view_menu])?;
                 app.set_menu(menu)?;
             }
             Ok(())
+        })
+        .on_menu_event(|app, event| {
+            let id = event.id().0.as_str();
+            if id.starts_with("theme-") {
+                let _ = app.emit("menu-theme", id.to_string());
+            }
         })
         .run(tauri::generate_context!())
         .expect("error while running GnarTerm");

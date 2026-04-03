@@ -243,6 +243,24 @@ export class TerminalManager {
       this.notify();
     });
 
+    // OSC 7: shell reports cwd (parsed by xterm.js directly)
+    terminal.parser.registerOscHandler(7, (data) => {
+      // data is "file://hostname/path"
+      let cwd = data;
+      if (cwd.startsWith("file://")) {
+        const rest = cwd.slice(7); // remove file://
+        const slashIdx = rest.indexOf("/");
+        if (slashIdx >= 0) cwd = rest.slice(slashIdx);
+      }
+      surface.cwd = cwd;
+      const basename = cwd.split("/").pop() || cwd;
+      if (!surface.title || surface.title.startsWith("Shell ") || !surface.title.includes(" ")) {
+        surface.title = basename || "~";
+        this.notify();
+      }
+      return true;
+    });
+
     pane.surfaces.push(surface);
     pane.activeSurfaceId = surface.id;
 

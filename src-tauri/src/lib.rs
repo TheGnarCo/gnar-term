@@ -79,23 +79,33 @@ async fn spawn_pty(
     cmd.env("TERM_PROGRAM_VERSION", "0.1.0");
     // Inject OSC 7 cwd reporting for shells that don't do it automatically
     // This makes zsh/bash report the working directory on every prompt
-    cmd.env("GNARTERM_OSC7", "1");
-
-    // Inject OSC 7 reporting hook via ZDOTDIR override (invisible to user)
+    // Shell integration: inject OSC 7 cwd reporting (cross-platform)
     let home = std::env::var("HOME").unwrap_or_default();
     let integration_dir = format!("{}/.config/gnar-term/shell", home);
     let _ = std::fs::create_dir_all(&integration_dir);
-    let zshenv_content = r#"# GnarTerm shell integration
+
+    // zsh: ZDOTDIR override
+    let zshenv = r#"# GnarTerm shell integration
 [ -f "$GNARTERM_ORIG_ZDOTDIR/.zshenv" ] && source "$GNARTERM_ORIG_ZDOTDIR/.zshenv"
 export ZDOTDIR="$GNARTERM_ORIG_ZDOTDIR"
 _gnarterm_report_cwd() { printf '\e]7;file://%s%s\a' "$(hostname)" "$PWD"; }
 precmd_functions+=(_gnarterm_report_cwd)
 chpwd_functions+=(_gnarterm_report_cwd)
 "#;
-    let _ = std::fs::write(format!("{}/.zshenv", integration_dir), zshenv_content);
+    let _ = std::fs::write(format!("{}/.zshenv", integration_dir), zshenv);
     let orig_zdotdir = std::env::var("ZDOTDIR").unwrap_or(home.clone());
     cmd.env("GNARTERM_ORIG_ZDOTDIR", &orig_zdotdir);
     cmd.env("ZDOTDIR", &integration_dir);
+
+    // bash/fish: use GNARTERM_SHELL_INTEGRATION env var
+    // Bash users can add to .bashrc: [ -n "$GNARTERM_SHELL_INTEGRATION" ] && source "$GNARTERM_SHELL_INTEGRATION"
+    let bash_integration = format!("{}/.config/gnar-term/shell/bash-integration.sh", home);
+    let bash_content = r#"# GnarTerm bash integration
+_gnarterm_report_cwd() { printf '\e]7;file://%s%s\a' "$(hostname)" "$PWD"; }
+PROMPT_COMMAND="_gnarterm_report_cwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
+"#;
+    let _ = std::fs::write(&bash_integration, bash_content);
+    cmd.env("GNARTERM_SHELL_INTEGRATION", &bash_integration);
 
     if let Some(ref dir) = cwd {
         cmd.cwd(dir);

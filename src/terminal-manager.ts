@@ -12,7 +12,7 @@
 
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
-import { CanvasAddon } from "@xterm/addon-canvas";
+import { WebglAddon } from "@xterm/addon-webgl";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -430,13 +430,23 @@ export class TerminalManager {
   private openSurface(surface: Surface) {
     if (surface.opened) return;
     surface.terminal.open(surface.termElement);
-    try {
-      // The DOM-based renderer is too slow for Vim.
-      // Use CanvasAddon (very fast, reliable) instead of WebGL (brittle on some GPUs)
-      surface.terminal.loadAddon(new CanvasAddon());
-    } catch (e) {
-      console.warn("Failed to load CanvasAddon, falling back to DOM renderer", e);
-    }
+    // WebGL renderer is critical for Vim/TUI performance.
+    // Must be loaded AFTER terminal.open() when the element is in the DOM.
+    const initWebGL = () => {
+      try {
+        const addon = new WebglAddon();
+        addon.onContextLoss(() => {
+          // If WebGL context is lost, the addon auto-disposes.
+          // Re-init after a short delay.
+          setTimeout(initWebGL, 100);
+        });
+        surface.terminal.loadAddon(addon);
+      } catch (e) {
+        console.warn("WebGL renderer failed, using DOM renderer", e);
+      }
+    };
+    // Delay slightly to ensure DOM is settled
+    setTimeout(initWebGL, 50);
     surface.opened = true;
   }
 

@@ -11,10 +11,10 @@ export class Sidebar {
     this.container = container;
     this.manager = manager;
 
-    // Header toolbar
+    // Header toolbar (extra top padding for macOS traffic lights)
     const header = document.createElement("div");
     header.style.cssText = `
-      padding: 8px 8px; display: flex; align-items: center;
+      padding: 32px 8px 8px 8px; display: flex; align-items: center;
       gap: 4px; border-bottom: 1px solid ${theme.border};
     `;
 

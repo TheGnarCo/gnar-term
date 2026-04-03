@@ -56,7 +56,7 @@ export class Sidebar {
     const isActive = idx === this.manager.activeWorkspaceIdx;
     const allSurfaces = this.manager.getAllSurfaces(ws);
     const hasUnread = allSurfaces.some((s) => s.hasUnread);
-    const paneCount = this.manager.getAllPanes(ws.rootNode).length;
+    const paneCount = ws.panes.length;
     const surfaceCount = allSurfaces.length;
     const latestNotification = allSurfaces.find((s) => s.notification)?.notification;
 

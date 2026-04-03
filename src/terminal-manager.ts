@@ -177,7 +177,7 @@ export class TerminalManager {
           if (s.ptyId === pty_id) {
             // Only use cwd as title if no explicit title was set via OSC 0/2
             const basename = cwd.split("/").pop() || cwd;
-            const home = basename === (typeof process !== "undefined" ? process.env.USER : "") ? "~" : basename;
+            const home = basename || "~";
             if (!s.title || s.title.startsWith("Shell ") || s.title === "~" || !s.title.includes(" ")) {
               s.title = home;
               this.notify();

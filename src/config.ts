@@ -58,6 +58,7 @@ export interface GnarTermConfig {
   fontSize?: number;
   fontFamily?: string;
   opacity?: number;
+  autoload?: string[];  // workspace command names to launch on startup
   // cmux-compatible
   commands?: CommandDef[];
 }

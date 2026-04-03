@@ -65,7 +65,21 @@ fontReady.then(async () => {
     terminalArea.style.background = theme.bg;
     document.body.style.background = theme.bg;
   }
-  termManager.createWorkspace("Workspace 1");
+  // Autoload workspace commands from config
+  const autoload = config.autoload || [];
+  const commands = config.commands || [];
+  let launched = false;
+  for (const name of autoload) {
+    const cmd = commands.find(c => c.name === name && c.workspace);
+    if (cmd?.workspace) {
+      await termManager.createWorkspaceFromDef(cmd.workspace);
+      launched = true;
+    }
+  }
+  // If nothing autoloaded, create a default workspace
+  if (!launched) {
+    await termManager.createWorkspace("Workspace 1");
+  }
   sidebarUI.refresh();
 });
 

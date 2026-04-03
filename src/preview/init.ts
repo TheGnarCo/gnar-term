@@ -5,3 +5,6 @@
 import "./markdown";
 import "./json";
 import "./image";
+import "./pdf";
+import "./csv";
+import "./yaml";

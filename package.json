@@ -18,7 +18,8 @@
     "@xterm/addon-web-links": "^0.11.0",
     "@tauri-apps/api": "^2.0.0",
     "marked": "^15.0.0",
-    "github-markdown-css": "^5.8.1"
+    "github-markdown-css": "^5.8.1",
+    "pdfjs-dist": "^4.9.155"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0",

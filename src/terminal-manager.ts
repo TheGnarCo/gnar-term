@@ -310,6 +310,19 @@ export class TerminalManager {
       // Ctrl+Tab / Ctrl+Shift+Tab for tab switching
       if (e.ctrlKey && !e.metaKey && e.key === "Tab") return false;
 
+      // Linux: Ctrl+Shift+C = copy, Ctrl+Shift+V = paste
+      if (e.ctrlKey && e.shiftKey && !e.metaKey && (e.key === "C" || e.key === "c")) {
+        const sel = terminal.getSelection();
+        if (sel) navigator.clipboard.writeText(sel);
+        return false;
+      }
+      if (e.ctrlKey && e.shiftKey && !e.metaKey && (e.key === "V" || e.key === "v")) {
+        navigator.clipboard.readText().then(text => {
+          if (surface.ptyId >= 0) invoke("write_pty", { ptyId: surface.ptyId, data: text });
+        });
+        return false;
+      }
+
       if (!e.metaKey) return true; // All our shortcuts use Cmd
 
       const k = e.key.toLowerCase();

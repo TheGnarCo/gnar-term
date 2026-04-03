@@ -299,7 +299,22 @@ async fn resize_pty(
 #[tauri::command]
 async fn kill_pty(state: tauri::State<'_, AppState>, pty_id: u32) -> Result<(), String> {
     let mut ptys = state.ptys.lock().unwrap();
-    ptys.remove(&pty_id);
+    if let Some(pty) = ptys.remove(&pty_id) {
+        // Explicitly kill the child process tree
+        if let Some(pid) = pty.child_pid {
+            #[cfg(unix)]
+            {
+                // Kill the process group (negative pid kills all children)
+                unsafe { libc::kill(-(pid as i32), libc::SIGKILL); }
+                // Also kill the process directly in case it's not a group leader
+                unsafe { libc::kill(pid as i32, libc::SIGKILL); }
+            }
+            #[cfg(windows)]
+            {
+                let _ = std::process::Command::new("taskkill").args(["/F", "/T", "/PID", &pid.to_string()]).output();
+            }
+        }
+    }
     Ok(())
 }
 

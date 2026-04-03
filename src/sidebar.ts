@@ -11,15 +11,13 @@ export class Sidebar {
     this.container = container;
     this.manager = manager;
 
-    // Header
+    // Header (just the + button, no title)
     const header = document.createElement("div");
     header.style.cssText = `
-      padding: 12px 16px; font-weight: 600; font-size: 14px;
-      color: ${theme.fgMuted}; text-transform: uppercase; letter-spacing: 0.5px;
-      border-bottom: 1px solid ${theme.border}; display: flex; align-items: center;
-      justify-content: space-between;
+      padding: 8px 8px; display: flex; align-items: center;
+      justify-content: flex-end;
+      border-bottom: 1px solid ${theme.border};
     `;
-    header.innerHTML = `<span>🤙 GnarTerm</span>`;
 
     const addButton = document.createElement("button");
     addButton.textContent = "+";

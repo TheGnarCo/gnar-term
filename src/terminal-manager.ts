@@ -158,10 +158,10 @@ export class TerminalManager {
 
   // --- Create Surface (terminal.open called exactly once) ---
 
-  private async createSurface(pane: Pane): Promise<Surface> {
+  private async createSurface(pane: Pane, cwd?: string): Promise<Surface> {
     let ptyId: number;
     try {
-      ptyId = await invoke<number>("spawn_pty", { cols: 80, rows: 24 });
+      ptyId = await invoke<number>("spawn_pty", { cols: 80, rows: 24, cwd: cwd ?? null });
     } catch (err) {
       console.error("Failed to spawn PTY:", err);
       ptyId = -1;
@@ -478,12 +478,24 @@ export class TerminalManager {
 
   // --- Surface Management ---
 
+  private async getActiveCwd(): Promise<string | undefined> {
+    const surface = this.activeSurface;
+    if (surface && surface.ptyId >= 0) {
+      try {
+        const cwd = await invoke<string>("get_pty_cwd", { ptyId: surface.ptyId });
+        if (cwd) return cwd;
+      } catch {}
+    }
+    return undefined;
+  }
+
   async newSurface(ws?: Workspace, pane?: Pane) {
     ws = ws ?? this.activeWorkspace ?? undefined;
     pane = pane ?? this.activePane ?? undefined;
     if (!ws || !pane) return;
 
-    await this.createSurface(pane);
+    const cwd = await this.getActiveCwd();
+    await this.createSurface(pane, cwd);
     this.buildPaneElement(pane, ws);
     const surface = pane.surfaces.find((s) => s.id === pane!.activeSurfaceId);
     surface?.terminal.focus();
@@ -592,7 +604,8 @@ export class TerminalManager {
 
     const paneEl = document.createElement("div");
     const newPane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null, element: paneEl };
-    await this.createSurface(newPane);
+    const cwd = await this.getActiveCwd();
+    await this.createSurface(newPane, cwd);
 
     const newSplit: SplitNode = {
       type: "split",

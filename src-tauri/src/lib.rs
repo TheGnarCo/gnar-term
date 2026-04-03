@@ -12,6 +12,7 @@ struct PtyInstance {
     writer: Box<dyn Write + Send>,
     // master is kept alive to keep the PTY open
     _master: Box<dyn MasterPty + Send>,
+    child_pid: Option<u32>,
 }
 
 struct AppState {
@@ -42,6 +43,7 @@ async fn spawn_pty(
     state: tauri::State<'_, AppState>,
     cols: u16,
     rows: u16,
+    cwd: Option<String>,
 ) -> Result<u32, String> {
     let pty_system = native_pty_system();
 
@@ -60,10 +62,14 @@ async fn spawn_pty(
     let mut cmd = CommandBuilder::new_default_prog();
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
+    if let Some(ref dir) = cwd {
+        cmd.cwd(dir);
+    }
 
-    pair.slave
+    let child = pair.slave
         .spawn_command(cmd)
         .map_err(|e| format!("Failed to spawn shell: {e}"))?;
+    let child_pid = child.process_id();
 
     // Get writer for input
     let writer = pair
@@ -85,6 +91,7 @@ async fn spawn_pty(
             PtyInstance {
                 writer,
                 _master: pair.master,
+                child_pid,
             },
         );
     }
@@ -436,6 +443,40 @@ async fn detect_font() -> Result<String, String> {
     Ok(String::new())
 }
 
+/// Get the working directory of a PTY's child process
+#[tauri::command]
+async fn get_pty_cwd(state: tauri::State<'_, AppState>, pty_id: u32) -> Result<String, String> {
+    let ptys = state.ptys.lock().map_err(|e| e.to_string())?;
+    if let Some(entry) = ptys.get(&pty_id) {
+        if let Some(pid) = entry.child_pid {
+            // macOS: use lsof to get cwd
+            #[cfg(target_os = "macos")]
+            {
+                let output = std::process::Command::new("lsof")
+                    .args(["-p", &pid.to_string(), "-Fn", "-d", "cwd"])
+                    .output()
+                    .map_err(|e| format!("lsof failed: {e}"))?;
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                for line in stdout.lines() {
+                    if let Some(path) = line.strip_prefix('n') {
+                        if path.starts_with('/') {
+                            return Ok(path.to_string());
+                        }
+                    }
+                }
+            }
+            // Linux: read /proc/<pid>/cwd
+            #[cfg(target_os = "linux")]
+            {
+                if let Ok(path) = std::fs::read_link(format!("/proc/{}/cwd", pid)) {
+                    return Ok(path.to_string_lossy().to_string());
+                }
+            }
+        }
+    }
+    Ok(String::new())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -443,7 +484,7 @@ pub fn run() {
             ptys: Mutex::new(HashMap::new()),
         })
         .invoke_handler(tauri::generate_handler![
-            spawn_pty, write_pty, resize_pty, kill_pty, detect_font
+            spawn_pty, write_pty, resize_pty, kill_pty, detect_font, get_pty_cwd
         ])
         .setup(|app| {
             // Rebuild macOS menu manually so Cmd+Q, Cmd+C, Cmd+V work,

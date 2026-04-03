@@ -12,15 +12,16 @@
     "tauri": "tauri"
   },
   "dependencies": {
-    "@xterm/xterm": "^5.5.0",
-    "@xterm/addon-fit": "^0.10.0",
-    "@xterm/addon-webgl": "^0.18.0",
-    "@xterm/addon-web-links": "^0.11.0",
+    "@embedpdf/snippet": "^2.12.1",
     "@tauri-apps/api": "^2.0.0",
-    "marked": "^15.0.0",
+    "@xterm/addon-canvas": "^0.7.0",
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/addon-web-links": "^0.11.0",
+    "@xterm/addon-webgl": "^0.18.0",
+    "@xterm/xterm": "^5.5.0",
     "github-markdown-css": "^5.8.1",
-    "pdfjs-dist": "^4.10.38",
-    "@embedpdf/snippet": "^2.12.1"
+    "marked": "^15.0.0",
+    "pdfjs-dist": "^4.10.38"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0",

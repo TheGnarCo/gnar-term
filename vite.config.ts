@@ -7,6 +7,9 @@ export default defineConfig({
     strictPort: true,
   },
   envPrefix: ["VITE_", "TAURI_"],
+  optimizeDeps: {
+    exclude: ["@embedpdf/snippet"],
+  },
   build: {
     target: "esnext",
     minify: !process.env.TAURI_DEBUG ? "esbuild" : false,

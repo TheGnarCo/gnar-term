@@ -825,7 +825,7 @@ pub fn run() {
                 let theme_onedark = MenuItem::with_id(handle, "theme-one-dark", "One Dark", true, None::<&str>)?;
 
                 let theme_sep = PredefinedMenuItem::separator(handle)?;
-                let theme_molly = MenuItem::with_id(handle, "theme-molly", "Molly ✨", true, None::<&str>)?;
+                let theme_molly = MenuItem::with_id(handle, "theme-molly", "Molly", true, None::<&str>)?;
                 let theme_github_light = MenuItem::with_id(handle, "theme-github-light", "GitHub Light", true, None::<&str>)?;
                 let theme_solarized_light = MenuItem::with_id(handle, "theme-solarized-light", "Solarized Light", true, None::<&str>)?;
                 let theme_catppuccin_latte = MenuItem::with_id(handle, "theme-catppuccin-latte", "Catppuccin Latte", true, None::<&str>)?;

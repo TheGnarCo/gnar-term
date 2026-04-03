@@ -175,10 +175,10 @@ document.addEventListener("keydown", (e) => {
   // ⇧⌘R — Rename workspace
   if (cmd && shift && e.key === "r") {
     e.preventDefault();
-    const ws = termManager.activeWorkspace;
-    if (ws) {
-      const name = prompt("Workspace name:", ws.name);
-      if (name) { ws.name = name; sidebarUI.refresh(); }
+    const sidebarItems = document.querySelectorAll("#sidebar > div:nth-child(2) > div");
+    const activeItem = sidebarItems[termManager.activeWorkspaceIdx] as any;
+    if (activeItem && activeItem.startRename) {
+      activeItem.startRename();
     }
     return;
   }

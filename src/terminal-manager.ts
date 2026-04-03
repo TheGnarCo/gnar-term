@@ -306,16 +306,17 @@ export class TerminalManager {
 
       const createPaneBtn = (icon: string, title: string, onClick: () => void) => {
         const btn = document.createElement("span");
-        btn.textContent = icon;
+        btn.innerHTML = icon;
         btn.title = title;
         btn.style.cssText = `
-          color: ${theme.fgDim}; cursor: pointer; font-size: 14px;
-          padding: 2px 6px; border-radius: 3px; display: flex; align-items: center; justify-content: center;
+          color: ${theme.fgDim}; cursor: pointer; font-size: 16px; line-height: 1;
+          width: 24px; height: 24px; border-radius: 4px; 
+          display: flex; align-items: center; justify-content: center;
         `;
         btn.addEventListener("click", (e) => { e.stopPropagation(); onClick(); });
         btn.addEventListener("mouseenter", () => {
           btn.style.background = title.includes("Close") ? theme.danger : theme.bgHighlight;
-          btn.style.color = title.includes("Close") ? "#fff" : theme.fg;
+          btn.style.color = title.includes("Close") ? "#ffffff" : theme.fg;
         });
         btn.addEventListener("mouseleave", () => {
           btn.style.background = "transparent";
@@ -324,15 +325,15 @@ export class TerminalManager {
         return btn;
       };
 
-      controls.appendChild(createPaneBtn("◫", "Split Right (⌘D)", () => {
+      controls.appendChild(createPaneBtn("&#9707;", "Split Right (⌘D)", () => {
         ws.activePaneId = pane.id;
         this.splitPane("horizontal");
       }));
-      controls.appendChild(createPaneBtn("⊟", "Split Down (⇧⌘D)", () => {
+      controls.appendChild(createPaneBtn("&#9703;", "Split Down (⇧⌘D)", () => {
         ws.activePaneId = pane.id;
         this.splitPane("vertical");
       }));
-      controls.appendChild(createPaneBtn("✕", "Close Pane", () => {
+      controls.appendChild(createPaneBtn("&times;", "Close Pane", () => {
         ws.activePaneId = pane.id;
         this.closeActivePane();
       }));

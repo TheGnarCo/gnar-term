@@ -61,11 +61,54 @@ export class Sidebar {
     const latestNotification = allSurfaces.find((s) => s.notification)?.notification;
 
     const item = document.createElement("div");
+    item.draggable = true;
     item.style.cssText = `
       margin: 2px 8px; border-radius: 6px; overflow: hidden;
       background: ${isActive ? theme.bgActive : "transparent"};
       border-left: 3px solid ${isActive ? theme.accent : "transparent"};
+      transition: margin 0.15s, opacity 0.15s;
     `;
+
+    // Drag and Drop reordering
+    item.addEventListener("dragstart", (e) => {
+      e.dataTransfer?.setData("text/plain", idx.toString());
+      item.style.opacity = "0.5";
+    });
+    item.addEventListener("dragend", () => {
+      item.style.opacity = "1";
+      this.refresh(); // Clear any drop styling
+    });
+    item.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      item.style.marginTop = "24px"; // Leave gap for drop
+    });
+    item.addEventListener("dragleave", () => {
+      item.style.marginTop = "2px";
+    });
+    item.addEventListener("drop", (e) => {
+      e.preventDefault();
+      item.style.marginTop = "2px";
+      const fromIdx = parseInt(e.dataTransfer?.getData("text/plain") || "-1", 10);
+      if (fromIdx >= 0 && fromIdx !== idx) {
+        // Reorder array
+        const wsToMove = this.manager.workspaces.splice(fromIdx, 1)[0];
+        
+        // Adjust destination index if we removed from before it
+        const toIdx = fromIdx < idx ? idx : idx;
+        this.manager.workspaces.splice(toIdx, 0, wsToMove);
+        
+        // Update active index if it moved
+        if (this.manager.activeWorkspaceIdx === fromIdx) {
+          this.manager.activeWorkspaceIdx = toIdx;
+        } else if (this.manager.activeWorkspaceIdx > fromIdx && this.manager.activeWorkspaceIdx <= toIdx) {
+          this.manager.activeWorkspaceIdx--;
+        } else if (this.manager.activeWorkspaceIdx < fromIdx && this.manager.activeWorkspaceIdx >= toIdx) {
+          this.manager.activeWorkspaceIdx++;
+        }
+        
+        this.refresh();
+      }
+    });
 
     // Header row
     const headerRow = document.createElement("div");
@@ -73,16 +116,62 @@ export class Sidebar {
       padding: 8px 12px; cursor: pointer; display: flex;
       align-items: center; gap: 8px;
     `;
-    // Name
+    // Name container
+    const nameContainer = document.createElement("div");
+    nameContainer.style.cssText = "flex: 1; overflow: hidden; display: flex; align-items: center;";
+    
     const name = document.createElement("span");
     name.textContent = ws.name;
     name.style.cssText = `
       font-weight: ${isActive ? "600" : "400"};
       color: ${isActive ? theme.fg : theme.fgMuted};
-      font-size: 13px; flex: 1; overflow: hidden;
+      font-size: 13px; overflow: hidden;
       text-overflow: ellipsis; white-space: nowrap;
+      outline: none; padding: 2px 4px; margin-left: -4px; border-radius: 4px;
     `;
-    headerRow.appendChild(name);
+    nameContainer.appendChild(name);
+    headerRow.appendChild(nameContainer);
+
+    // Make rename accessible from outside
+    (item as any).startRename = () => {
+      name.contentEditable = "true";
+      name.style.background = theme.bgSurface;
+      name.style.border = `1px solid ${theme.borderActive}`;
+      name.focus();
+      
+      // Select all text
+      const range = document.createRange();
+      range.selectNodeContents(name);
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+
+      const finishRename = () => {
+        name.contentEditable = "false";
+        name.style.background = "transparent";
+        name.style.border = "none";
+        const newName = name.textContent?.trim();
+        if (newName && newName !== ws.name) {
+          ws.name = newName;
+          this.refresh();
+        } else {
+          name.textContent = ws.name; // revert
+        }
+      };
+
+      name.addEventListener("blur", finishRename, { once: true });
+      name.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          name.blur();
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          name.textContent = ws.name; // revert
+          name.blur();
+        }
+      });
+    };
 
     // Counts
     const meta = document.createElement("span");
@@ -160,8 +249,10 @@ export class Sidebar {
         label: "Rename Workspace",
         shortcut: "⇧⌘R",
         action: () => {
-          const name = prompt("Workspace name:", ws.name);
-          if (name) { ws.name = name; this.refresh(); }
+          const item = this.workspaceList.children[idx] as any;
+          if (item && item.startRename) {
+            item.startRename();
+          }
         },
       },
       {

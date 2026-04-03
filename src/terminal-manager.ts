@@ -180,7 +180,7 @@ export class TerminalManager {
     terminal.loadAddon(new WebLinksAddon());
 
     const termElement = document.createElement("div");
-    termElement.style.cssText = "flex: 1; min-height: 0; min-width: 0;";
+    termElement.style.cssText = "flex: 1; min-height: 0; min-width: 0; padding: 2px 4px;";
 
     const surface: Surface = {
       id: uid(), terminal, fitAddon, termElement, ptyId,

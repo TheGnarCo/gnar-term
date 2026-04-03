@@ -146,14 +146,91 @@ const oneDark: ThemeDef = {
   },
 };
 
+// --- Light Themes ---
+
+const molly: ThemeDef = {
+  name: "Molly",
+  // A refined, warm light theme — soft ivory base with rose gold accents
+  bg: "#faf8f5", bgSurface: "#f0ece6", bgFloat: "#e8e3db", bgHighlight: "#e0d9cf",
+  bgActive: "#ebe5dc", border: "#d4cdc3", borderActive: "#c47d5a", borderNotify: "#c47d5a",
+  fg: "#3b3228", fgMuted: "#7a7067", fgDim: "#a89f96",
+  accent: "#c47d5a", accentHover: "#b06840", notify: "#c47d5a",
+  notifyGlow: "rgba(196, 125, 90, 0.2)", danger: "#c4453a", success: "#5a8a3c", warning: "#b8860b",
+  termBg: "#faf8f5", termFg: "#3b3228", termCursor: "#c47d5a", termSelection: "#e0d5c8",
+  sidebarBg: "#f4f0ea", sidebarBorder: "#e0d9cf", tabBarBg: "#f0ece6", tabBarBorder: "#e0d9cf",
+  ansi: {
+    black: "#3b3228", red: "#c4453a", green: "#5a8a3c", yellow: "#b8860b",
+    blue: "#4a6fa5", magenta: "#945e80", cyan: "#4e8a7c", white: "#f0ece6",
+    brightBlack: "#7a7067", brightRed: "#d4574c", brightGreen: "#6a9a4c", brightYellow: "#c89620",
+    brightBlue: "#5a7fb5", brightMagenta: "#a46e90", brightCyan: "#5e9a8c", brightWhite: "#faf8f5",
+  },
+};
+
+const githubLight: ThemeDef = {
+  name: "GitHub Light",
+  bg: "#ffffff", bgSurface: "#f6f8fa", bgFloat: "#eaeef2", bgHighlight: "#d0d7de",
+  bgActive: "#ddf4ff", border: "#d0d7de", borderActive: "#0969da", borderNotify: "#0969da",
+  fg: "#1f2328", fgMuted: "#656d76", fgDim: "#8b949e",
+  accent: "#0969da", accentHover: "#0550ae", notify: "#0969da",
+  notifyGlow: "rgba(9, 105, 218, 0.15)", danger: "#cf222e", success: "#1a7f37", warning: "#9a6700",
+  termBg: "#ffffff", termFg: "#1f2328", termCursor: "#0969da", termSelection: "#ddf4ff",
+  sidebarBg: "#f6f8fa", sidebarBorder: "#d0d7de", tabBarBg: "#f6f8fa", tabBarBorder: "#d0d7de",
+  ansi: {
+    black: "#24292f", red: "#cf222e", green: "#1a7f37", yellow: "#9a6700",
+    blue: "#0969da", magenta: "#8250df", cyan: "#1b7c83", white: "#6e7781",
+    brightBlack: "#57606a", brightRed: "#a40e26", brightGreen: "#2da44e", brightYellow: "#bf8700",
+    brightBlue: "#218bff", brightMagenta: "#a475f9", brightCyan: "#3192aa", brightWhite: "#8c959f",
+  },
+};
+
+const solarizedLight: ThemeDef = {
+  name: "Solarized Light",
+  bg: "#fdf6e3", bgSurface: "#eee8d5", bgFloat: "#e6dfcb", bgHighlight: "#d6cdb7",
+  bgActive: "#eee8d5", border: "#d3cbb7", borderActive: "#268bd2", borderNotify: "#268bd2",
+  fg: "#657b83", fgMuted: "#93a1a1", fgDim: "#b0bfbf",
+  accent: "#268bd2", accentHover: "#2aa0e8", notify: "#268bd2",
+  notifyGlow: "rgba(38, 139, 210, 0.15)", danger: "#dc322f", success: "#859900", warning: "#b58900",
+  termBg: "#fdf6e3", termFg: "#657b83", termCursor: "#657b83", termSelection: "#eee8d5",
+  sidebarBg: "#eee8d5", sidebarBorder: "#d3cbb7", tabBarBg: "#eee8d5", tabBarBorder: "#d3cbb7",
+  ansi: {
+    black: "#073642", red: "#dc322f", green: "#859900", yellow: "#b58900",
+    blue: "#268bd2", magenta: "#d33682", cyan: "#2aa198", white: "#eee8d5",
+    brightBlack: "#586e75", brightRed: "#cb4b16", brightGreen: "#859900", brightYellow: "#b58900",
+    brightBlue: "#268bd2", brightMagenta: "#6c71c4", brightCyan: "#2aa198", brightWhite: "#fdf6e3",
+  },
+};
+
+const catppuccinLatte: ThemeDef = {
+  name: "Catppuccin Latte",
+  bg: "#eff1f5", bgSurface: "#e6e9ef", bgFloat: "#dce0e8", bgHighlight: "#ccd0da",
+  bgActive: "#dce0e8", border: "#bcc0cc", borderActive: "#1e66f5", borderNotify: "#1e66f5",
+  fg: "#4c4f69", fgMuted: "#6c6f85", fgDim: "#9ca0b0",
+  accent: "#1e66f5", accentHover: "#2a6ff7", notify: "#1e66f5",
+  notifyGlow: "rgba(30, 102, 245, 0.15)", danger: "#d20f39", success: "#40a02b", warning: "#df8e1d",
+  termBg: "#eff1f5", termFg: "#4c4f69", termCursor: "#dc8a78", termSelection: "#dce0e8",
+  sidebarBg: "#e6e9ef", sidebarBorder: "#ccd0da", tabBarBg: "#e6e9ef", tabBarBorder: "#ccd0da",
+  ansi: {
+    black: "#5c5f77", red: "#d20f39", green: "#40a02b", yellow: "#df8e1d",
+    blue: "#1e66f5", magenta: "#8839ef", cyan: "#179299", white: "#acb0be",
+    brightBlack: "#6c6f85", brightRed: "#d20f39", brightGreen: "#40a02b", brightYellow: "#df8e1d",
+    brightBlue: "#1e66f5", brightMagenta: "#8839ef", brightCyan: "#179299", brightWhite: "#bcc0cc",
+  },
+};
+
 // --- All themes ---
 export const themes: Record<string, ThemeDef> = {
+  // Dark
   "github-dark": githubDark,
   "tokyo-night": tokyoNight,
   "catppuccin-mocha": catppuccinMocha,
   "dracula": draculaPro,
   "solarized-dark": solarizedDark,
   "one-dark": oneDark,
+  // Light
+  "molly": molly,
+  "github-light": githubLight,
+  "solarized-light": solarizedLight,
+  "catppuccin-latte": catppuccinLatte,
 };
 
 // --- Active theme (mutable) ---

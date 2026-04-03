@@ -87,15 +87,25 @@ export function openCommandPalette(manager: TerminalManager) {
 
   let selectedIdx = 0;
   let filtered = [...commands];
+  let rows: HTMLElement[] = [];
+
+  function updateSelection() {
+    rows.forEach((row, i) => {
+      row.style.background = i === selectedIdx ? theme.bgHighlight : "transparent";
+    });
+    // Scroll selected into view
+    if (rows[selectedIdx]) rows[selectedIdx].scrollIntoView({ block: "nearest" });
+  }
 
   function render() {
     list.innerHTML = "";
+    rows = [];
     filtered.forEach((cmd, i) => {
       const row = document.createElement("div");
       row.style.cssText = `
         padding: 8px 18px; cursor: pointer; display: flex;
         align-items: center; justify-content: space-between;
-        background: ${i === selectedIdx ? theme.bgHighlight : "transparent"};
+        background: transparent;
         color: ${theme.fg}; font-size: 13px;
       `;
 
@@ -110,15 +120,12 @@ export function openCommandPalette(manager: TerminalManager) {
         row.appendChild(sc);
       }
 
-      row.addEventListener("mouseenter", () => { selectedIdx = i; render(); });
-      row.addEventListener("click", (e) => {
-        e.stopPropagation();
-        console.log("[palette] clicked:", cmd.name);
-        close();
-        cmd.action();
-      });
+      row.addEventListener("mouseenter", () => { selectedIdx = i; updateSelection(); });
+      row.addEventListener("click", () => { close(); cmd.action(); });
       list.appendChild(row);
+      rows.push(row);
     });
+    updateSelection();
   }
 
   input.addEventListener("input", () => {
@@ -130,8 +137,8 @@ export function openCommandPalette(manager: TerminalManager) {
 
   input.addEventListener("keydown", (e) => {
     if (e.key === "Escape") { close(); return; }
-    if (e.key === "ArrowDown") { e.preventDefault(); selectedIdx = Math.min(selectedIdx + 1, filtered.length - 1); render(); }
-    if (e.key === "ArrowUp") { e.preventDefault(); selectedIdx = Math.max(selectedIdx - 1, 0); render(); }
+    if (e.key === "ArrowDown") { e.preventDefault(); selectedIdx = Math.min(selectedIdx + 1, filtered.length - 1); updateSelection(); }
+    if (e.key === "ArrowUp") { e.preventDefault(); selectedIdx = Math.max(selectedIdx - 1, 0); updateSelection(); }
     if (e.key === "Enter" && filtered[selectedIdx]) { close(); filtered[selectedIdx].action(); }
   });
 

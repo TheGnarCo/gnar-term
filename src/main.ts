@@ -105,7 +105,7 @@ fontReady.then(async () => {
 // --- Keyboard Shortcuts (cmux-compatible) ---
 
 document.addEventListener("keydown", (e) => {
-  const cmd = e.metaKey || (e.ctrlKey && !e.metaKey); // Cmd on Mac, Ctrl on Linux
+  const cmd = e.metaKey; // Only Meta/Cmd key — never Ctrl (Ctrl+L, Ctrl+C etc. must reach terminal)
   const shift = e.shiftKey;
   const alt = e.altKey;
   const ctrl = e.ctrlKey;

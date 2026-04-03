@@ -17,7 +17,8 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { theme, getXtermTheme } from "./theme";
-import { createMarkdownSurface, type MarkdownSurface } from "./markdown-viewer";
+import { openPreview, canPreview, getSupportedExtensions } from "./preview/index";
+import "./preview/init";
 import { type WorkspaceDef, type LayoutNode, type SurfaceDef } from "./config";
 import "@xterm/xterm/css/xterm.css";
 
@@ -227,6 +228,37 @@ export class TerminalManager {
     const fitAddon = new FitAddon();
     terminal.loadAddon(fitAddon);
     terminal.loadAddon(new WebLinksAddon());
+
+    // Cmd+click file path detection for preview
+    terminal.registerLinkProvider({
+      provideLinks: (lineNumber, callback) => {
+        const line = terminal.buffer.active.getLine(lineNumber - 1);
+        if (!line) { callback(undefined); return; }
+        const text = line.translateToString();
+        // Match file paths with previewable extensions
+        const exts = getSupportedExtensions().join("|");
+        const regex = new RegExp(`(?:^|\\s|["'(])(/[^\\s"'()]+\\.(?:${exts})|(?:\\./|\\.\\./)\\S+\\.(?:${exts}))`, "gi");
+        const links: any[] = [];
+        let m;
+        while ((m = regex.exec(text)) !== null) {
+          const path = m[1];
+          const startX = m.index + m[0].indexOf(path);
+          links.push({
+            range: { start: { x: startX + 1, y: lineNumber }, end: { x: startX + path.length + 1, y: lineNumber } },
+            text: path,
+            activate: (_e: MouseEvent, linkText: string) => {
+              // Resolve relative paths against cwd
+              let fullPath = linkText;
+              if (!linkText.startsWith("/") && surface.cwd) {
+                fullPath = `${surface.cwd}/${linkText}`;
+              }
+              this.openPreview(fullPath);
+            },
+          });
+        }
+        callback(links.length > 0 ? links : undefined);
+      },
+    });
 
     const termElement = document.createElement("div");
     termElement.style.cssText = "flex: 1; min-height: 0; min-width: 0; padding: 2px 4px;";
@@ -581,10 +613,10 @@ export class TerminalManager {
         for (const sDef of nodeDef.pane.surfaces) {
           const cwd = sDef.cwd || inheritedCwd;
           if (sDef.type === "markdown" && sDef.path) {
-            const mdSurface = await createMarkdownSurface(sDef.path);
+            const preview = await openPreview(sDef.path);
             const surface: Surface = {
-              id: mdSurface.id, terminal: null as any, fitAddon: { fit: () => {} } as any,
-              termElement: mdSurface.element, ptyId: -1, title: sDef.name || mdSurface.title,
+              id: preview.id, terminal: null as any, fitAddon: { fit: () => {} } as any,
+              termElement: preview.element, ptyId: -1, title: sDef.name || preview.title,
               cwd, hasUnread: false, opened: true,
             };
             pane.surfaces.push(surface);
@@ -942,22 +974,21 @@ export class TerminalManager {
 
   // --- Flash ---
 
-  /** Open a markdown file in a new tab */
-  async openMarkdown(filePath: string) {
+  /** Open a file preview in a new tab */
+  async openPreview(filePath: string) {
     const ws = this.activeWorkspace;
     const pane = this.activePane;
     if (!ws || !pane) return;
 
-    const mdSurface = await createMarkdownSurface(filePath);
+    const preview = await openPreview(filePath);
 
-    // Create a fake Surface wrapper so it fits in the pane system
     const surface: Surface = {
-      id: mdSurface.id,
-      terminal: null as any, // not a terminal
+      id: preview.id,
+      terminal: null as any,
       fitAddon: { fit: () => {} } as any,
-      termElement: mdSurface.element,
+      termElement: preview.element,
       ptyId: -1,
-      title: mdSurface.title,
+      title: preview.title,
       notification: undefined,
       hasUnread: false,
       opened: true,
@@ -967,6 +998,11 @@ export class TerminalManager {
     pane.activeSurfaceId = surface.id;
     this.buildPaneElement(pane, ws);
     this.notify();
+  }
+
+  /** Check if a file can be previewed */
+  canPreview(filePath: string): boolean {
+    return canPreview(filePath);
   }
 
   flashFocusedPane() {

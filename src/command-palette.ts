@@ -1,6 +1,6 @@
 import { TerminalManager } from "./terminal-manager";
 import { theme, themes, setTheme, activeThemeId, onThemeChange, getXtermTheme } from "./theme";
-import { createMarkdownSurface } from "./markdown-viewer";
+import { getSupportedExtensions } from "./preview/index";
 import { saveConfig, getConfig, getWorkspaceCommands } from "./config";
 
 interface Command {
@@ -38,9 +38,9 @@ export function openCommandPalette(manager: TerminalManager) {
       shortcut: i < 9 ? `⌘${i + 1}` : undefined,
       action: () => manager.switchWorkspace(i),
     })),
-    { name: "Open Markdown File...", action: async () => {
-      const path = prompt("Path to .md file:");
-      if (path) manager.openMarkdown(path);
+    { name: `Preview File (${getSupportedExtensions().map(e => '.' + e).join(', ')})...`, action: async () => {
+      const path = prompt("Path to file:");
+      if (path) manager.openPreview(path);
     }},
     { name: "Save Current Workspace...", action: () => {
       const ws = manager.activeWorkspace;

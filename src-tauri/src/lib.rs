@@ -718,7 +718,7 @@ pub fn run() {
             Ok(())
         })
         .on_menu_event(|app, event| {
-            let id = event.id().0.as_str();
+            let id = event.id().as_ref();
             if id.starts_with("theme-") {
                 let _ = app.emit("menu-theme", id.to_string());
             }

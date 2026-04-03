@@ -49,7 +49,7 @@ export function openCommandPalette(manager: TerminalManager) {
         // Update all terminal themes
         for (const ws of manager.workspaces) {
           for (const s of manager.getAllSurfaces(ws)) {
-            s.terminal.options.theme = getXtermTheme();
+            if (s.terminal) s.terminal.options.theme = getXtermTheme();
           }
         }
         // Re-layout to pick up new chrome colors

@@ -689,6 +689,8 @@ pub fn run() {
                     &[&copy, &paste, &select_all],
                 )?;
 
+                let cmd_palette = MenuItem::with_id(handle, "cmd-palette", "Command Palette...", true, Some("CmdOrCtrl+P"))?;
+                
                 // View > Theme submenu
                 use tauri::menu::MenuItem;
                 let theme_github = MenuItem::with_id(handle, "theme-github-dark", "GitHub Dark", true, None::<&str>)?;
@@ -709,7 +711,7 @@ pub fn run() {
                     handle,
                     "View",
                     true,
-                    &[&theme_submenu],
+                    &[&cmd_palette, &PredefinedMenuItem::separator(handle)?, &theme_submenu],
                 )?;
 
                 let menu = Menu::with_items(handle, &[&app_menu, &edit_menu, &view_menu])?;
@@ -721,6 +723,8 @@ pub fn run() {
             let id = event.id().as_ref();
             if id.starts_with("theme-") {
                 let _ = app.emit("menu-theme", id.to_string());
+            } else if id == "cmd-palette" {
+                let _ = app.emit("menu-cmd-palette", ());
             }
         })
         .run(tauri::generate_context!())

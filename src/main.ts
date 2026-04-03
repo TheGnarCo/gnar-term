@@ -41,6 +41,10 @@ listen<string>("menu-theme", (event) => {
   termManager.refreshLayout();
 });
 
+listen("menu-cmd-palette", () => {
+  openCommandPalette(termManager);
+});
+
 // Update chrome colors on theme change
 onThemeChange(() => {
   sidebar.style.background = theme.sidebarBg;

@@ -232,6 +232,14 @@ export class TerminalManager {
       hasUnread: false, opened: false,
     };
 
+    terminal.attachCustomKeyEventHandler((e) => {
+      // Let command/ctrl shortcuts bubble up to the document handler in main.ts
+      if (e.metaKey || (e.ctrlKey && !e.altKey)) {
+        return false; // return false to skip xterm handling and let it bubble
+      }
+      return true;
+    });
+
     terminal.onData((data) => {
       if (surface.ptyId >= 0) invoke("write_pty", { ptyId: surface.ptyId, data });
     });

@@ -42,13 +42,7 @@ document.addEventListener("keydown", (e) => {
   const alt = e.altKey;
   const ctrl = e.ctrlKey;
 
-  // ⌘Q — Quit
-  if (cmd && !shift && !alt && e.key === "q") {
-    e.preventDefault();
-    invoke("kill_pty", { ptyId: 0 }).catch(() => {}); // cleanup
-    window.close();
-    return;
-  }
+  // ⌘N — New workspace
   if (cmd && !shift && !alt && e.key === "n") {
     e.preventDefault();
     termManager.createWorkspace(`Workspace ${termManager.workspaces.length + 1}`);

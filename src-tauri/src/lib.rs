@@ -370,17 +370,17 @@ async fn detect_font() -> Result<String, String> {
             "Menlo",
         ];
 
-        for font_name in preferred {
-            let output = std::process::Command::new("system_profiler")
-                .args(["SPFontsDataType"])
-                .output();
-            if let Ok(o) = output {
-                let text = String::from_utf8_lossy(&o.stdout);
+        // Run system_profiler once, check all preferred fonts
+        if let Ok(output) = std::process::Command::new("system_profiler")
+            .args(["SPFontsDataType"])
+            .output()
+        {
+            let text = String::from_utf8_lossy(&output.stdout);
+            for font_name in preferred {
                 if text.contains(font_name) {
                     return Ok(font_name.to_string());
                 }
             }
-            break; // Only run system_profiler once
         }
 
         // Faster check via font file existence

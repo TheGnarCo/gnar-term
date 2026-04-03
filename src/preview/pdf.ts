@@ -1,6 +1,6 @@
 import { registerPreviewer } from "./index";
 import { invoke } from "@tauri-apps/api/core";
-import { EmbedPDF } from "@embedpdf/snippet";
+import EmbedPDF from "@embedpdf/snippet";
 
 registerPreviewer({
   extensions: ["pdf"],

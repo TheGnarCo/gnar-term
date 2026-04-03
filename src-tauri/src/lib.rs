@@ -236,11 +236,14 @@ PROMPT_COMMAND="_gnarterm_report_cwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
                         }
                     }
 
+                    // Send as lossy UTF-8 string — avoids base64 encode/decode overhead
+                    // Terminal output is almost always valid UTF-8/ASCII
+                    let text = String::from_utf8_lossy(data).into_owned();
                     let _ = app_handle.emit(
                         "pty-output",
                         PtyOutput {
                             pty_id: id,
-                            data: b64_encode(data),
+                            data: text,
                         },
                     );
                 }

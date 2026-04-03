@@ -2,14 +2,14 @@
 
 ## Bugs
 
-### [B1] Theme selection not working reliably
-Theme selection via command palette and View menu may not apply correctly. Need to verify terminal ANSI colors, sidebar, and tab bar all update.
+### ~~[B1] Theme selection not working reliably~~ ✅ FIXED
+Root cause: mouseenter on palette rows called render() which destroyed the click target DOM element.
 
-### [B2] Close pane button not working
-Pane close button (✕) may use stale refs. Verify with fresh ref lookup.
+### ~~[B2] Close pane button not working~~ ✅ FIXED
+Root cause: safeFocus/safeDispose were infinitely recursive + stale closure refs.
 
-### [B3] Close tab not working reliably
-Stale closure issue — handlers capture ws/pane at build time. Fixed with fresh ref lookup but needs verification.
+### ~~[B3] Close tab not working reliably~~ ✅ FIXED
+Same root cause as B2.
 
 ## Enhancements
 

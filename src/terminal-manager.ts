@@ -24,10 +24,10 @@ let _id = 0;
 
 /** Safe terminal operations (no-op for markdown surfaces) */
 function safeFocus(s: Surface | null | undefined) {
-  if (s?.terminal) safeFocus(s);
+  if (s?.terminal) s.terminal.focus();
 }
 function safeDispose(s: Surface) {
-  if (s.terminal) safeDispose(s);
+  if (s.terminal) s.terminal.dispose();
 }
 function uid(): string { return `id-${++_id}-${Date.now()}`; }
 

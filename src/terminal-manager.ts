@@ -5,8 +5,9 @@
  *   └─ Pane(s) (split regions — horizontal/vertical tree)
  *       └─ Surface(s) (tabs within each pane — terminal, etc.)
  *
- * Key distinction from v1: surfaces (tabs) live INSIDE panes, not at workspace level.
- * Each pane has its own tab bar. Splits divide the workspace into pane regions.
+ * CRITICAL: xterm.js terminals can only be opened once. We create each terminal's
+ * DOM container once and reuse it. Layout changes move/show/hide existing elements
+ * rather than destroying and recreating them.
  */
 
 import { Terminal } from "@xterm/xterm";
@@ -18,14 +19,9 @@ import { listen } from "@tauri-apps/api/event";
 import { theme, xtermTheme } from "./theme";
 import "@xterm/xterm/css/xterm.css";
 
-// --- Types ---
-
 let _id = 0;
-function uid(): string {
-  return `id-${++_id}-${Date.now()}`;
-}
+function uid(): string { return `id-${++_id}-${Date.now()}`; }
 
-// Sensible fallback font stack
 const FALLBACK_FONTS = 'Menlo, "DejaVu Sans Mono", "Liberation Mono", monospace';
 let resolvedFontFamily = FALLBACK_FONTS;
 
@@ -37,48 +33,41 @@ async function detectFont(): Promise<string> {
       return `"${font}", ${FALLBACK_FONTS}`;
     }
   } catch {}
-  console.log("[gnar-term] No terminal font config found, using system defaults");
   return FALLBACK_FONTS;
 }
-
-// Exported so main.ts can await before creating first workspace
 export const fontReady = detectFont().then((f) => { resolvedFontFamily = f; });
+
+// --- Data Types ---
 
 export interface Surface {
   id: string;
   terminal: Terminal;
   fitAddon: FitAddon;
+  termElement: HTMLElement;  // persistent DOM element for this terminal
   ptyId: number;
   title: string;
   notification?: string;
   hasUnread: boolean;
+  opened: boolean;  // whether terminal.open() has been called
 }
 
 export interface Pane {
   id: string;
   surfaces: Surface[];
   activeSurfaceId: string | null;
-  element: HTMLElement;
-}
-
-export interface SplitNode {
-  type: "pane" | "split";
-  pane?: Pane;               // if type === "pane"
-  direction?: "horizontal" | "vertical"; // if type === "split"
-  ratio?: number;            // 0-1, default 0.5
-  children?: [SplitNode, SplitNode]; // if type === "split"
-  element: HTMLElement;
+  element: HTMLElement;  // persistent pane container
 }
 
 export interface Workspace {
   id: string;
   name: string;
-  rootNode: SplitNode;
+  panes: Pane[];
+  splitDirections: Map<string, "horizontal" | "vertical">; // pane pair -> direction
   activePaneId: string | null;
-  element: HTMLElement;
+  element: HTMLElement;  // persistent workspace container
 }
 
-// --- Terminal Manager ---
+// --- Manager ---
 
 export class TerminalManager {
   workspaces: Workspace[] = [];
@@ -94,43 +83,22 @@ export class TerminalManager {
   onChange(cb: () => void) { this.onChangeCallbacks.push(cb); }
   notify() { this.onChangeCallbacks.forEach((cb) => cb()); }
 
-  // --- Getters ---
-
   get activeWorkspace(): Workspace | null {
     return this.workspaces[this.activeWorkspaceIdx] ?? null;
   }
-
   get activePane(): Pane | null {
     const ws = this.activeWorkspace;
     if (!ws) return null;
-    return this.findPane(ws.rootNode, ws.activePaneId);
+    return ws.panes.find((p) => p.id === ws.activePaneId) ?? null;
   }
-
   get activeSurface(): Surface | null {
     const pane = this.activePane;
     if (!pane) return null;
     return pane.surfaces.find((s) => s.id === pane.activeSurfaceId) ?? null;
   }
 
-  // --- All panes in a workspace ---
-
-  getAllPanes(node: SplitNode): Pane[] {
-    if (node.type === "pane" && node.pane) return [node.pane];
-    if (node.children) return [...this.getAllPanes(node.children[0]), ...this.getAllPanes(node.children[1])];
-    return [];
-  }
-
   getAllSurfaces(ws: Workspace): Surface[] {
-    return this.getAllPanes(ws.rootNode).flatMap((p) => p.surfaces);
-  }
-
-  private findPane(node: SplitNode, paneId: string | null): Pane | null {
-    if (!paneId) return null;
-    if (node.type === "pane" && node.pane?.id === paneId) return node.pane;
-    if (node.children) {
-      return this.findPane(node.children[0], paneId) || this.findPane(node.children[1], paneId);
-    }
-    return null;
+    return ws.panes.flatMap((p) => p.surfaces);
   }
 
   // --- Event Listeners ---
@@ -140,11 +108,8 @@ export class TerminalManager {
       const { pty_id, data } = event.payload;
       const bytes = new Uint8Array(data);
       for (const ws of this.workspaces) {
-        for (const surface of this.getAllSurfaces(ws)) {
-          if (surface.ptyId === pty_id) {
-            surface.terminal.write(bytes);
-            return;
-          }
+        for (const s of this.getAllSurfaces(ws)) {
+          if (s.ptyId === pty_id) { s.terminal.write(bytes); return; }
         }
       }
     });
@@ -152,12 +117,9 @@ export class TerminalManager {
     await listen<{ pty_id: number }>("pty-exit", (event) => {
       const { pty_id } = event.payload;
       for (const ws of this.workspaces) {
-        for (const pane of this.getAllPanes(ws.rootNode)) {
+        for (const pane of ws.panes) {
           const idx = pane.surfaces.findIndex((s) => s.ptyId === pty_id);
-          if (idx >= 0) {
-            this.removeSurface(ws, pane, idx);
-            return;
-          }
+          if (idx >= 0) { this.removeSurface(ws, pane, idx); return; }
         }
       }
     });
@@ -165,10 +127,10 @@ export class TerminalManager {
     await listen<{ pty_id: number; text: string }>("pty-notification", (event) => {
       const { pty_id, text } = event.payload;
       for (const ws of this.workspaces) {
-        for (const surface of this.getAllSurfaces(ws)) {
-          if (surface.ptyId === pty_id) {
-            surface.notification = text;
-            surface.hasUnread = true;
+        for (const s of this.getAllSurfaces(ws)) {
+          if (s.ptyId === pty_id) {
+            s.notification = text;
+            s.hasUnread = true;
             this.notify();
             return;
           }
@@ -177,7 +139,7 @@ export class TerminalManager {
     });
   }
 
-  // --- Create Surface ---
+  // --- Create Surface (terminal.open called exactly once) ---
 
   private async createSurface(pane: Pane): Promise<Surface> {
     let ptyId: number;
@@ -200,26 +162,23 @@ export class TerminalManager {
     terminal.loadAddon(fitAddon);
     terminal.loadAddon(new WebLinksAddon());
 
+    // Create persistent DOM element for this terminal
+    const termElement = document.createElement("div");
+    termElement.style.cssText = "flex: 1; min-height: 0; min-width: 0;";
+
     const surface: Surface = {
-      id: uid(),
-      terminal,
-      fitAddon,
-      ptyId,
+      id: uid(), terminal, fitAddon, termElement, ptyId,
       title: `Shell ${pane.surfaces.length + 1}`,
-      hasUnread: false,
+      hasUnread: false, opened: false,
     };
 
-    // Forward input
     terminal.onData((data) => {
       if (surface.ptyId >= 0) invoke("write_pty", { ptyId: surface.ptyId, data });
     });
     terminal.onResize(({ cols, rows }) => {
       if (surface.ptyId >= 0) invoke("resize_pty", { ptyId: surface.ptyId, cols, rows });
     });
-    terminal.onTitleChange((title) => {
-      surface.title = title;
-      this.notify();
-    });
+    terminal.onTitleChange((title) => { surface.title = title; this.notify(); });
 
     pane.surfaces.push(surface);
     pane.activeSurfaceId = surface.id;
@@ -227,11 +186,20 @@ export class TerminalManager {
     return surface;
   }
 
-  // --- Render Pane ---
+  // Open a terminal into its element (called once, idempotent)
+  private openSurface(surface: Surface) {
+    if (surface.opened) return;
+    surface.terminal.open(surface.termElement);
+    try { surface.terminal.loadAddon(new WebglAddon()); } catch {}
+    surface.opened = true;
+  }
 
-  private renderPane(pane: Pane, ws: Workspace): HTMLElement {
-    const el = document.createElement("div");
-    el.className = "gnar-pane";
+  // --- Layout: build pane DOM without destroying terminals ---
+
+  private buildPaneElement(pane: Pane, ws: Workspace) {
+    const el = pane.element;
+    el.innerHTML = ""; // clear only the pane's chrome (tab bar), not terminal elements
+
     el.style.cssText = `
       flex: 1; display: flex; flex-direction: column;
       min-width: 0; min-height: 0;
@@ -239,19 +207,18 @@ export class TerminalManager {
       border-radius: 4px; overflow: hidden;
     `;
 
-    // Per-pane tab bar (surfaces)
+    // Tab bar — only shown when multiple surfaces
     if (pane.surfaces.length > 1) {
       const tabBar = document.createElement("div");
       tabBar.style.cssText = `
         display: flex; align-items: center; gap: 1px;
         background: ${theme.tabBarBg}; border-bottom: 1px solid ${theme.tabBarBorder};
-        height: 28px; padding: 0 4px; flex-shrink: 0; overflow-x: auto;
+        height: 28px; padding: 0 4px; flex-shrink: 0;
       `;
-      tabBar.style.scrollbarWidth = "none";
 
       pane.surfaces.forEach((s, i) => {
-        const tab = document.createElement("div");
         const isActive = s.id === pane.activeSurfaceId;
+        const tab = document.createElement("div");
         tab.style.cssText = `
           padding: 2px 10px; font-size: 11px; cursor: pointer;
           color: ${isActive ? theme.fg : theme.fgMuted};
@@ -261,37 +228,58 @@ export class TerminalManager {
           display: flex; align-items: center; gap: 4px;
         `;
 
-        if (s.hasUnread) {
+        if (s.hasUnread && !isActive) {
           const dot = document.createElement("span");
-          dot.style.cssText = `width: 5px; height: 5px; border-radius: 50%; background: ${theme.notify};`;
+          dot.style.cssText = `width: 5px; height: 5px; border-radius: 50%; background: ${theme.notify}; flex-shrink: 0;`;
           tab.appendChild(dot);
         }
 
         const title = document.createElement("span");
         title.textContent = s.title || `Shell ${i + 1}`;
+        title.style.cssText = "overflow: hidden; text-overflow: ellipsis;";
         tab.appendChild(title);
+
+        // Close button
+        const closeBtn = document.createElement("span");
+        closeBtn.textContent = "×";
+        closeBtn.style.cssText = `
+          color: ${theme.fgDim}; font-size: 13px; cursor: pointer;
+          margin-left: 4px; visibility: ${isActive ? "visible" : "hidden"};
+        `;
+        closeBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const idx = pane.surfaces.indexOf(s);
+          if (idx >= 0) this.removeSurface(ws, pane, idx);
+        });
+        closeBtn.addEventListener("mouseenter", () => { closeBtn.style.color = theme.danger; });
+        closeBtn.addEventListener("mouseleave", () => { closeBtn.style.color = theme.fgDim; });
+        tab.appendChild(closeBtn);
 
         tab.addEventListener("click", () => {
           pane.activeSurfaceId = s.id;
           s.hasUnread = false;
-          this.renderWorkspaceContent(ws);
+          this.showActiveSurface(pane);
           s.terminal.focus();
           this.notify();
         });
 
-        tab.addEventListener("mouseenter", () => { if (!isActive) tab.style.background = theme.bgHighlight; });
-        tab.addEventListener("mouseleave", () => { if (!isActive) tab.style.background = "transparent"; });
+        tab.addEventListener("mouseenter", () => {
+          if (!isActive) tab.style.background = theme.bgHighlight;
+          closeBtn.style.visibility = "visible";
+        });
+        tab.addEventListener("mouseleave", () => {
+          if (!isActive) tab.style.background = "transparent";
+          if (!isActive) closeBtn.style.visibility = "hidden";
+        });
 
         tabBar.appendChild(tab);
       });
 
-      // + button for new surface in this pane
+      // + button
       const addBtn = document.createElement("span");
       addBtn.textContent = "+";
-      addBtn.style.cssText = `
-        color: ${theme.fgDim}; cursor: pointer; font-size: 14px;
-        padding: 0 6px; margin-left: 2px;
-      `;
+      addBtn.title = "New surface (⌘T)";
+      addBtn.style.cssText = `color: ${theme.fgDim}; cursor: pointer; font-size: 14px; padding: 0 6px;`;
       addBtn.addEventListener("click", () => this.newSurface(ws, pane));
       addBtn.addEventListener("mouseenter", () => { addBtn.style.color = theme.fg; });
       addBtn.addEventListener("mouseleave", () => { addBtn.style.color = theme.fgDim; });
@@ -300,74 +288,75 @@ export class TerminalManager {
       el.appendChild(tabBar);
     }
 
-    // Terminal container for the active surface
-    const termContainer = document.createElement("div");
-    termContainer.style.cssText = "flex: 1; min-height: 0;";
-
-    const activeSurface = pane.surfaces.find((s) => s.id === pane.activeSurfaceId);
-    if (activeSurface) {
-      activeSurface.terminal.open(termContainer);
-      try { activeSurface.terminal.loadAddon(new WebglAddon()); } catch {}
-      setTimeout(() => activeSurface.fitAddon.fit(), 10);
-
-      const resizeObserver = new ResizeObserver(() => activeSurface.fitAddon.fit());
-      resizeObserver.observe(termContainer);
+    // Attach all surface terminal elements (show active, hide others)
+    for (const s of pane.surfaces) {
+      this.openSurface(s);
+      s.termElement.style.display = s.id === pane.activeSurfaceId ? "flex" : "none";
+      el.appendChild(s.termElement);
     }
 
-    // Click to focus this pane
+    // Click to focus pane
     el.addEventListener("mousedown", () => {
-      ws.activePaneId = pane.id;
-      this.updatePaneBorders(ws);
-      activeSurface?.terminal.focus();
-      this.notify();
+      if (ws.activePaneId !== pane.id) {
+        ws.activePaneId = pane.id;
+        this.updatePaneBorders(ws);
+        this.notify();
+      }
     });
 
-    pane.element = el;
-    return el;
+    // Fit active terminal
+    const activeSurface = pane.surfaces.find((s) => s.id === pane.activeSurfaceId);
+    if (activeSurface) {
+      const observer = new ResizeObserver(() => activeSurface.fitAddon.fit());
+      observer.observe(el);
+      setTimeout(() => activeSurface.fitAddon.fit(), 20);
+    }
   }
 
-  // --- Render Split Tree ---
+  // Show/hide surfaces in a pane without rebuilding
+  private showActiveSurface(pane: Pane) {
+    for (const s of pane.surfaces) {
+      s.termElement.style.display = s.id === pane.activeSurfaceId ? "flex" : "none";
+      if (s.id === pane.activeSurfaceId) {
+        setTimeout(() => s.fitAddon.fit(), 10);
+      }
+    }
+  }
 
-  private renderSplitNode(node: SplitNode, ws: Workspace): HTMLElement {
-    if (node.type === "pane" && node.pane) {
-      const el = this.renderPane(node.pane, ws);
-      node.element = el;
-      return el;
+  // --- Layout workspace (builds split structure, reuses pane elements) ---
+
+  private layoutWorkspace(ws: Workspace) {
+    ws.element.innerHTML = "";
+
+    if (ws.panes.length === 0) return;
+
+    if (ws.panes.length === 1) {
+      this.buildPaneElement(ws.panes[0], ws);
+      ws.element.appendChild(ws.panes[0].element);
+      return;
     }
 
+    // Multiple panes — create flex containers for splits
+    // Simple approach: chain splits in the last-used direction
     const container = document.createElement("div");
+    const lastDirection = ws.splitDirections.get("last") || "horizontal";
     container.style.cssText = `
       display: flex; flex: 1; min-width: 0; min-height: 0; gap: 2px;
-      flex-direction: ${node.direction === "vertical" ? "column" : "row"};
+      flex-direction: ${lastDirection === "vertical" ? "column" : "row"};
     `;
 
-    if (node.children) {
-      const child0 = this.renderSplitNode(node.children[0], ws);
-      const child1 = this.renderSplitNode(node.children[1], ws);
-      const ratio = node.ratio ?? 0.5;
-      child0.style.flex = `${ratio}`;
-      child1.style.flex = `${1 - ratio}`;
-      container.appendChild(child0);
-      container.appendChild(child1);
+    for (const pane of ws.panes) {
+      this.buildPaneElement(pane, ws);
+      pane.element.style.flex = "1";
+      container.appendChild(pane.element);
     }
 
-    node.element = container;
-    return container;
-  }
-
-  // --- Render Workspace Content ---
-
-  renderWorkspaceContent(ws: Workspace) {
-    ws.element.innerHTML = "";
-    const content = this.renderSplitNode(ws.rootNode, ws);
-    ws.element.appendChild(content);
+    ws.element.appendChild(container);
   }
 
   private updatePaneBorders(ws: Workspace) {
-    for (const pane of this.getAllPanes(ws.rootNode)) {
-      if (pane.element) {
-        pane.element.style.borderColor = pane.id === ws.activePaneId ? theme.borderActive : theme.border;
-      }
+    for (const pane of ws.panes) {
+      pane.element.style.borderColor = pane.id === ws.activePaneId ? theme.borderActive : theme.border;
     }
   }
 
@@ -377,35 +366,43 @@ export class TerminalManager {
     const wsElement = document.createElement("div");
     wsElement.style.cssText = "flex: 1; display: flex; min-height: 0; min-width: 0;";
 
-    const pane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null, element: wsElement };
-    const rootNode: SplitNode = { type: "pane", pane, element: wsElement };
+    const paneEl = document.createElement("div");
+    const pane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null, element: paneEl };
 
-    const ws: Workspace = { id: uid(), name, rootNode, activePaneId: pane.id, element: wsElement };
+    const ws: Workspace = {
+      id: uid(), name, panes: [pane],
+      splitDirections: new Map(), activePaneId: pane.id, element: wsElement,
+    };
+
     this.workspaces.push(ws);
     this.switchWorkspace(this.workspaces.length - 1);
 
     await this.createSurface(pane);
-    this.renderWorkspaceContent(ws);
-    const activeSurface = pane.surfaces.find((s) => s.id === pane.activeSurfaceId);
-    activeSurface?.terminal.focus();
+    this.layoutWorkspace(ws);
 
+    const surface = pane.surfaces.find((s) => s.id === pane.activeSurfaceId);
+    surface?.terminal.focus();
     this.notify();
     return ws;
   }
 
   switchWorkspace(idx: number) {
     if (idx < 0 || idx >= this.workspaces.length) return;
+
+    // Detach current workspace
     if (this.activeWorkspaceIdx >= 0 && this.activeWorkspaceIdx < this.workspaces.length) {
       this.workspaces[this.activeWorkspaceIdx].element.remove();
     }
+
     this.activeWorkspaceIdx = idx;
     const ws = this.workspaces[idx];
     this.container.appendChild(ws.element);
 
-    // Re-render and focus
-    this.renderWorkspaceContent(ws);
-    const pane = this.findPane(ws.rootNode, ws.activePaneId);
-    const surface = pane?.surfaces.find((s) => s.id === pane.activeSurfaceId);
+    // Re-layout (moves existing elements, doesn't recreate terminals)
+    this.layoutWorkspace(ws);
+
+    // Focus active surface
+    const surface = this.activeSurface;
     setTimeout(() => {
       surface?.fitAddon.fit();
       surface?.terminal.focus();
@@ -433,7 +430,7 @@ export class TerminalManager {
     if (!ws || !pane) return;
 
     await this.createSurface(pane);
-    this.renderWorkspaceContent(ws);
+    this.buildPaneElement(pane, ws);  // rebuild just this pane's chrome
     const surface = pane.surfaces.find((s) => s.id === pane!.activeSurfaceId);
     surface?.terminal.focus();
     this.notify();
@@ -441,31 +438,34 @@ export class TerminalManager {
 
   nextSurface() {
     const pane = this.activePane;
-    if (!pane || pane.surfaces.length <= 1) return;
+    const ws = this.activeWorkspace;
+    if (!pane || !ws || pane.surfaces.length <= 1) return;
     const idx = pane.surfaces.findIndex((s) => s.id === pane.activeSurfaceId);
     pane.activeSurfaceId = pane.surfaces[(idx + 1) % pane.surfaces.length].id;
-    this.renderWorkspaceContent(this.activeWorkspace!);
+    this.buildPaneElement(pane, ws);
     this.activeSurface?.terminal.focus();
     this.notify();
   }
 
   prevSurface() {
     const pane = this.activePane;
-    if (!pane || pane.surfaces.length <= 1) return;
+    const ws = this.activeWorkspace;
+    if (!pane || !ws || pane.surfaces.length <= 1) return;
     const idx = pane.surfaces.findIndex((s) => s.id === pane.activeSurfaceId);
     pane.activeSurfaceId = pane.surfaces[(idx - 1 + pane.surfaces.length) % pane.surfaces.length].id;
-    this.renderWorkspaceContent(this.activeWorkspace!);
+    this.buildPaneElement(pane, ws);
     this.activeSurface?.terminal.focus();
     this.notify();
   }
 
   selectSurface(num: number) {
     const pane = this.activePane;
-    if (!pane) return;
+    const ws = this.activeWorkspace;
+    if (!pane || !ws) return;
     const idx = num === 9 ? pane.surfaces.length - 1 : num - 1;
     if (idx >= 0 && idx < pane.surfaces.length) {
       pane.activeSurfaceId = pane.surfaces[idx].id;
-      this.renderWorkspaceContent(this.activeWorkspace!);
+      this.buildPaneElement(pane, ws);
       this.activeSurface?.terminal.focus();
       this.notify();
     }
@@ -483,129 +483,95 @@ export class TerminalManager {
   private removeSurface(ws: Workspace, pane: Pane, surfaceIdx: number) {
     const surface = pane.surfaces[surfaceIdx];
     surface.terminal.dispose();
+    surface.termElement.remove();
     if (surface.ptyId >= 0) invoke("kill_pty", { ptyId: surface.ptyId }).catch(() => {});
     pane.surfaces.splice(surfaceIdx, 1);
 
     if (pane.surfaces.length === 0) {
-      // Pane has no surfaces — remove the pane from the split tree
-      this.removePaneFromTree(ws, pane.id);
+      // Remove pane
+      this.removePane(ws, pane);
     } else {
       pane.activeSurfaceId = pane.surfaces[Math.min(surfaceIdx, pane.surfaces.length - 1)].id;
-      this.renderWorkspaceContent(ws);
+      this.buildPaneElement(pane, ws);
       const s = pane.surfaces.find((s) => s.id === pane.activeSurfaceId);
       s?.terminal.focus();
     }
     this.notify();
   }
 
-  // --- Split Pane ---
+  // --- Pane Split / Remove ---
 
   async splitPane(direction: "right" | "down") {
     const ws = this.activeWorkspace;
     if (!ws) return;
-    const currentPane = this.activePane;
-    if (!currentPane) return;
 
-    // Create new pane with a surface
-    const newPane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null, element: document.createElement("div") };
+    const paneEl = document.createElement("div");
+    const newPane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null, element: paneEl };
     await this.createSurface(newPane);
 
-    // Find the current pane's node in the tree and replace it with a split
-    this.replacePaneWithSplit(ws.rootNode, currentPane.id, newPane, direction === "right" ? "horizontal" : "vertical");
-
+    ws.panes.push(newPane);
     ws.activePaneId = newPane.id;
-    this.renderWorkspaceContent(ws);
+    ws.splitDirections.set("last", direction === "right" ? "horizontal" : "vertical");
+
+    this.layoutWorkspace(ws);
     const surface = newPane.surfaces.find((s) => s.id === newPane.activeSurfaceId);
     surface?.terminal.focus();
     this.notify();
   }
 
-  private replacePaneWithSplit(node: SplitNode, targetPaneId: string, newPane: Pane, direction: "horizontal" | "vertical"): boolean {
-    if (node.type === "pane" && node.pane?.id === targetPaneId) {
-      // Replace this leaf with a split containing [oldPane, newPane]
-      const oldPane = node.pane;
-      node.type = "split";
-      node.direction = direction;
-      node.ratio = 0.5;
-      node.pane = undefined;
-      node.children = [
-        { type: "pane", pane: oldPane, element: document.createElement("div") },
-        { type: "pane", pane: newPane, element: document.createElement("div") },
-      ];
-      return true;
-    }
+  private removePane(ws: Workspace, pane: Pane) {
+    pane.element.remove();
+    const idx = ws.panes.indexOf(pane);
+    if (idx >= 0) ws.panes.splice(idx, 1);
 
-    if (node.children) {
-      return this.replacePaneWithSplit(node.children[0], targetPaneId, newPane, direction) ||
-             this.replacePaneWithSplit(node.children[1], targetPaneId, newPane, direction);
+    if (ws.panes.length === 0) {
+      // Last pane gone — create a fresh one
+      const paneEl = document.createElement("div");
+      const newPane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null, element: paneEl };
+      ws.panes.push(newPane);
+      ws.activePaneId = newPane.id;
+      this.createSurface(newPane).then(() => {
+        this.layoutWorkspace(ws);
+        this.activeSurface?.terminal.focus();
+        this.notify();
+      });
+    } else {
+      ws.activePaneId = ws.panes[Math.min(idx, ws.panes.length - 1)].id;
+      this.layoutWorkspace(ws);
+      this.activeSurface?.terminal.focus();
     }
-    return false;
   }
 
-  private removePaneFromTree(ws: Workspace, paneId: string) {
-    const allPanes = this.getAllPanes(ws.rootNode);
-    if (allPanes.length <= 1) {
-      // Last pane — create a new one instead of removing
-      const pane = allPanes[0];
-      if (pane) {
-        this.createSurface(pane).then(() => {
-          this.renderWorkspaceContent(ws);
-          const s = pane.surfaces.find((s) => s.id === pane.activeSurfaceId);
-          s?.terminal.focus();
-          this.notify();
-        });
-      }
-      return;
+  closeActivePane() {
+    const ws = this.activeWorkspace;
+    const pane = this.activePane;
+    if (!ws || !pane) return;
+    // Kill all surfaces in the pane
+    for (const s of [...pane.surfaces]) {
+      s.terminal.dispose();
+      s.termElement.remove();
+      if (s.ptyId >= 0) invoke("kill_pty", { ptyId: s.ptyId }).catch(() => {});
     }
-
-    // Find the parent split and replace it with the sibling
-    this.collapsePane(ws.rootNode, paneId, null, ws);
-    ws.activePaneId = this.getAllPanes(ws.rootNode)[0]?.id ?? null;
-    this.renderWorkspaceContent(ws);
-    const activeSurface = this.activeSurface;
-    activeSurface?.terminal.focus();
+    pane.surfaces = [];
+    this.removePane(ws, pane);
     this.notify();
   }
 
-  private collapsePane(node: SplitNode, targetPaneId: string, parent: SplitNode | null, ws: Workspace): boolean {
-    if (node.type !== "split" || !node.children) return false;
-
-    for (let i = 0; i < 2; i++) {
-      const child = node.children[i];
-      if (child.type === "pane" && child.pane?.id === targetPaneId) {
-        // Replace this split node with the sibling
-        const sibling = node.children[1 - i];
-        node.type = sibling.type;
-        node.pane = sibling.pane;
-        node.direction = sibling.direction;
-        node.ratio = sibling.ratio;
-        node.children = sibling.children;
-        return true;
-      }
-      if (this.collapsePane(child, targetPaneId, node, ws)) return true;
-    }
-    return false;
-  }
-
-  // --- Pane Focus Navigation ---
+  // --- Pane Navigation ---
 
   focusDirection(direction: "left" | "right" | "up" | "down") {
     const ws = this.activeWorkspace;
-    if (!ws) return;
-    const panes = this.getAllPanes(ws.rootNode);
-    if (panes.length <= 1) return;
-
-    const currentIdx = panes.findIndex((p) => p.id === ws.activePaneId);
+    if (!ws || ws.panes.length <= 1) return;
+    const currentIdx = ws.panes.findIndex((p) => p.id === ws.activePaneId);
     let nextIdx: number;
     if (direction === "right" || direction === "down") {
-      nextIdx = (currentIdx + 1) % panes.length;
+      nextIdx = (currentIdx + 1) % ws.panes.length;
     } else {
-      nextIdx = (currentIdx - 1 + panes.length) % panes.length;
+      nextIdx = (currentIdx - 1 + ws.panes.length) % ws.panes.length;
     }
-
-    ws.activePaneId = panes[nextIdx].id;
+    ws.activePaneId = ws.panes[nextIdx].id;
     this.updatePaneBorders(ws);
-    const surface = panes[nextIdx].surfaces.find((s) => s.id === panes[nextIdx].activeSurfaceId);
+    const surface = ws.panes[nextIdx].surfaces.find((s) => s.id === ws.panes[nextIdx].activeSurfaceId);
     surface?.terminal.focus();
     this.notify();
   }
@@ -617,33 +583,31 @@ export class TerminalManager {
   togglePaneZoom() {
     const ws = this.activeWorkspace;
     if (!ws) return;
-    // Toggle: if zoomed, un-zoom by re-rendering. If not, render only the active pane.
     this.zoomedPaneId = this.zoomedPaneId ? null : ws.activePaneId;
+
     if (this.zoomedPaneId) {
-      const pane = this.activePane;
-      if (pane) {
-        ws.element.innerHTML = "";
-        const el = this.renderPane(pane, ws);
-        ws.element.appendChild(el);
+      // Hide all panes except zoomed
+      for (const pane of ws.panes) {
+        pane.element.style.display = pane.id === this.zoomedPaneId ? "flex" : "none";
       }
     } else {
-      this.renderWorkspaceContent(ws);
+      // Show all panes
+      for (const pane of ws.panes) {
+        pane.element.style.display = "flex";
+      }
     }
+    this.activeSurface?.fitAddon.fit();
     this.activeSurface?.terminal.focus();
     this.notify();
   }
 
-  // --- Flash focused pane ---
+  // --- Flash ---
 
   flashFocusedPane() {
     const pane = this.activePane;
     if (!pane?.element) return;
     const el = pane.element;
-    el.style.borderColor = theme.accent;
-    el.style.boxShadow = `0 0 12px ${theme.notifyGlow}`;
-    setTimeout(() => {
-      el.style.borderColor = pane.id === this.activeWorkspace?.activePaneId ? theme.borderActive : theme.border;
-      el.style.boxShadow = "none";
-    }, 400);
+    el.style.boxShadow = `inset 0 0 0 2px ${theme.accent}, 0 0 12px ${theme.notifyGlow}`;
+    setTimeout(() => { el.style.boxShadow = "none"; }, 400);
   }
 }

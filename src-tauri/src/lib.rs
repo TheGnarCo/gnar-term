@@ -117,7 +117,7 @@ PROMPT_COMMAND="_gnarterm_report_cwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
     let child_pid = child.process_id();
 
     // Get writer for input
-    let mut writer = pair
+    let writer = pair
         .master
         .take_writer()
         .map_err(|e| format!("Failed to get PTY writer: {e}"))?;

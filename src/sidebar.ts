@@ -73,13 +73,6 @@ export class Sidebar {
       padding: 8px 12px; cursor: pointer; display: flex;
       align-items: center; gap: 8px;
     `;
-    headerRow.addEventListener("mouseenter", () => {
-      if (!isActive) item.style.background = theme.bgHighlight;
-    });
-    headerRow.addEventListener("mouseleave", () => {
-      item.style.background = isActive ? theme.bgActive : "transparent";
-    });
-
     // Name
     const name = document.createElement("span");
     name.textContent = ws.name;
@@ -108,6 +101,36 @@ export class Sidebar {
       badge.style.cssText = `width: 8px; height: 8px; border-radius: 50%; background: ${theme.notify}; flex-shrink: 0;`;
       headerRow.appendChild(badge);
     }
+
+    // Close button (visible on hover)
+    const closeBtn = document.createElement("span");
+    closeBtn.textContent = "×";
+    closeBtn.title = "Close Workspace (⇧⌘W)";
+    closeBtn.style.cssText = `
+      color: ${theme.fgDim}; font-size: 14px; cursor: pointer;
+      opacity: 0; transition: opacity 0.15s;
+      padding: 0 2px; flex-shrink: 0;
+    `;
+    closeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (this.manager.workspaces.length > 1) {
+        this.manager.switchWorkspace(idx);
+        this.manager.closeActiveWorkspace();
+      }
+    });
+    closeBtn.addEventListener("mouseenter", () => { closeBtn.style.color = theme.danger; });
+    closeBtn.addEventListener("mouseleave", () => { closeBtn.style.color = theme.fgDim; });
+    headerRow.appendChild(closeBtn);
+
+    // Show close button on hover
+    headerRow.addEventListener("mouseenter", () => {
+      closeBtn.style.opacity = "1";
+      if (!isActive) item.style.background = theme.bgHighlight;
+    });
+    headerRow.addEventListener("mouseleave", () => {
+      closeBtn.style.opacity = "0";
+      item.style.background = isActive ? theme.bgActive : "transparent";
+    });
 
     headerRow.addEventListener("click", () => {
       this.manager.switchWorkspace(idx);

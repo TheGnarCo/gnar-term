@@ -577,7 +577,8 @@ export class TerminalManager {
     await this.createSurface(pane, cwd);
     this.buildPaneElement(pane, ws);
     const surface = pane.surfaces.find((s) => s.id === pane!.activeSurfaceId);
-    safeFocus(surface);
+    // Delay focus — xterm.js needs DOM to settle after rebuild
+    setTimeout(() => safeFocus(surface), 50);
     this.notify();
   }
 

@@ -137,5 +137,9 @@ export function openCommandPalette(manager: TerminalManager) {
   overlay.appendChild(panel);
   document.body.appendChild(overlay);
   render();
-  input.focus();
+  // Force focus away from xterm.js
+  setTimeout(() => {
+    input.focus();
+    input.click();
+  }, 10);
 }

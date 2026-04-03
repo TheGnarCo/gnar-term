@@ -233,10 +233,29 @@ export class TerminalManager {
     };
 
     terminal.attachCustomKeyEventHandler((e) => {
-      // Let command/ctrl shortcuts bubble up to the document handler in main.ts
-      if (e.metaKey || (e.ctrlKey && !e.altKey)) {
-        return false; // return false to skip xterm handling and let it bubble
+      // Only intercept specific shortcuts we handle in main.ts
+      // Let everything else go to the terminal (Ctrl+C, Ctrl+D, etc.)
+      if (e.type !== "keydown") return true;
+      const meta = e.metaKey;
+      const ctrl = e.ctrlKey;
+      const shift = e.shiftKey;
+      const alt = e.altKey;
+      const k = e.key.toLowerCase();
+
+      // ⌘ shortcuts we handle
+      if (meta && !alt) {
+        if (["n","t","d","w","b","p","h","r","k"].includes(k)) return false;
+        if (k >= "1" && k <= "9") return false;
+        if (k === "enter") return false;
+        if (k === "[" || k === "]") return false;
+        // ⌘+arrows with alt for pane navigation
       }
+      if (meta && alt && ["arrowleft","arrowright","arrowup","arrowdown"].includes(k)) return false;
+      // Ctrl+⌘ for workspace nav
+      if (ctrl && meta && (k === "[" || k === "]")) return false;
+      // Ctrl+1-9 for surface switching
+      if (ctrl && !meta && !alt && k >= "1" && k <= "9") return false;
+
       return true;
     });
 

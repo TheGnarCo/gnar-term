@@ -34,7 +34,15 @@ export class Sidebar {
       return btn;
     };
 
-    // Spacer pushes buttons to the right
+    // Sidebar toggle
+    const sidebarToggleSvg = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="2" width="14" height="12" rx="1.5"/><line x1="5.5" y1="2" x2="5.5" y2="14"/></svg>`;
+    header.appendChild(createToolbarBtn(sidebarToggleSvg, "Hide Sidebar (⌘B)", () => {
+      container.style.display = "none";
+      const btn = document.getElementById("sidebar-toggle");
+      if (btn) btn.style.display = "flex";
+    }));
+
+    // Spacer pushes + button to the right
     const spacer = document.createElement("div");
     spacer.style.cssText = "flex: 1;";
     header.appendChild(spacer);

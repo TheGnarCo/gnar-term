@@ -1,7 +1,7 @@
 import { TerminalManager } from "./terminal-manager";
 import { theme, themes, setTheme, activeThemeId, onThemeChange, getXtermTheme } from "./theme";
 import { createMarkdownSurface } from "./markdown-viewer";
-import { saveConfig, getWorkspaceCommands } from "./config";
+import { saveConfig, getConfig, getWorkspaceCommands } from "./config";
 
 interface Command {
   name: string;
@@ -41,6 +41,48 @@ export function openCommandPalette(manager: TerminalManager) {
     { name: "Open Markdown File...", action: async () => {
       const path = prompt("Path to .md file:");
       if (path) manager.openMarkdown(path);
+    }},
+    { name: "Save Current Workspace...", action: () => {
+      const ws = manager.activeWorkspace;
+      if (!ws) return;
+      // Inline rename prompt
+      const nameInput = document.createElement("input");
+      nameInput.type = "text";
+      nameInput.value = ws.name;
+      nameInput.placeholder = "Workspace name";
+      nameInput.style.cssText = `
+        position: fixed; top: 100px; left: 50%; transform: translateX(-50%);
+        z-index: 9999; padding: 12px 18px; width: 400px;
+        background: ${theme.bgFloat}; border: 1px solid ${theme.borderActive};
+        border-radius: 8px; color: ${theme.fg}; font-size: 15px;
+        outline: none; font-family: inherit;
+        box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+      `;
+      document.body.appendChild(nameInput);
+      nameInput.focus();
+      nameInput.select();
+      const finish = async (save: boolean) => {
+        nameInput.remove();
+        if (!save) return;
+        const name = nameInput.value.trim() || ws.name;
+        const layout = manager.serializeLayout(ws.splitRoot);
+        const wsDef = { name, cwd: manager.getActiveCwd() || "~", layout };
+        const config = getConfig();
+        const commands = config.commands || [];
+        const existing = commands.findIndex(c => c.name === name);
+        const entry = { name, workspace: wsDef };
+        if (existing >= 0) {
+          commands[existing] = entry;
+        } else {
+          commands.push(entry);
+        }
+        await saveConfig({ commands });
+      };
+      nameInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { e.preventDefault(); finish(true); }
+        if (e.key === "Escape") { e.preventDefault(); finish(false); }
+      });
+      nameInput.addEventListener("blur", () => finish(false));
     }},
     // Workspace commands from config
     ...getWorkspaceCommands().map((cmd) => ({

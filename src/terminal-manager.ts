@@ -977,6 +977,28 @@ export class TerminalManager {
     setTimeout(() => { el.style.boxShadow = "none"; }, 400);
   }
 
+  /** Serialize a split tree to a config-compatible layout definition */
+  serializeLayout(node: SplitNode): any {
+    if (node.type === "pane") {
+      const surfaces = node.pane.surfaces.map(s => {
+        const def: any = { type: "terminal" };
+        if (s.title) def.name = s.title;
+        if (s.cwd) def.cwd = s.cwd;
+        if (s.id === node.pane.activeSurfaceId) def.focus = true;
+        return def;
+      });
+      return { pane: { surfaces } };
+    }
+    return {
+      direction: node.direction,
+      split: node.ratio,
+      children: [
+        this.serializeLayout(node.children[0]),
+        this.serializeLayout(node.children[1]),
+      ],
+    };
+  }
+
   /** Re-layout all workspaces (called after theme change) */
   refreshLayout() {
     const ws = this.activeWorkspace;

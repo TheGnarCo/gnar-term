@@ -8,3 +8,4 @@ import "./image";
 import "./pdf";
 import "./csv";
 import "./yaml";
+import "./video";

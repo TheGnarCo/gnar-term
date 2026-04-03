@@ -40,7 +40,9 @@ async function detectFont(): Promise<string> {
   console.log("[gnar-term] No terminal font config found, using system defaults");
   return FALLBACK_FONTS;
 }
-detectFont().then((f) => { resolvedFontFamily = f; });
+
+// Exported so main.ts can await before creating first workspace
+export const fontReady = detectFont().then((f) => { resolvedFontFamily = f; });
 
 export interface Surface {
   id: string;

@@ -1,5 +1,5 @@
 import { Sidebar } from "./sidebar";
-import { TerminalManager } from "./terminal-manager";
+import { TerminalManager, fontReady } from "./terminal-manager";
 import { openCommandPalette } from "./command-palette";
 import { theme } from "./theme";
 
@@ -28,8 +28,11 @@ app.appendChild(terminalArea);
 const termManager = new TerminalManager(terminalArea);
 const sidebarUI = new Sidebar(sidebar, termManager);
 
-termManager.createWorkspace("Workspace 1");
-sidebarUI.refresh();
+// Wait for font detection before creating first workspace
+fontReady.then(() => {
+  termManager.createWorkspace("Workspace 1");
+  sidebarUI.refresh();
+});
 
 // --- Keyboard Shortcuts (cmux-compatible) ---
 

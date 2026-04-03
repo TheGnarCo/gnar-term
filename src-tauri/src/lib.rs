@@ -440,6 +440,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             spawn_pty, write_pty, resize_pty, kill_pty, detect_font
         ])
+        // Disable default macOS menu so Cmd+T, Cmd+N, etc. reach the webview
+        .menu(|_handle| Ok(tauri::menu::Menu::new(_handle).unwrap()))
         .run(tauri::generate_context!())
         .expect("error while running GnarTerm");
 }

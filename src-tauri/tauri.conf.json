@@ -23,7 +23,9 @@
     ],
     "security": {
       "csp": null
-    }
+    },
+    "enableGTKAppId": false,
+    "withGlobalTauri": false
   },
   "bundle": {
     "active": true,

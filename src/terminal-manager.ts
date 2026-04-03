@@ -18,6 +18,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { theme, getXtermTheme } from "./theme";
 import { openPreview, canPreview, getSupportedExtensions } from "./preview/index";
+import { showContextMenu, type MenuItem } from "./context-menu";
 import "./preview/init";
 import { type WorkspaceDef, type LayoutNode, type SurfaceDef } from "./config";
 import "@xterm/xterm/css/xterm.css";
@@ -329,6 +330,88 @@ export class TerminalManager {
         this.notify();
       }
       return true;
+    });
+
+    // Context menu on right-click
+    termElement.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      const selection = terminal.getSelection();
+      const items: MenuItem[] = [];
+
+      // Copy (only if text selected)
+      if (selection) {
+        items.push({
+          label: "Copy",
+          shortcut: "⌘C",
+          action: () => navigator.clipboard.writeText(selection),
+        });
+      }
+
+      // Paste
+      items.push({
+        label: "Paste",
+        shortcut: "⌘V",
+        action: () => navigator.clipboard.readText().then(t => {
+          if (surface.ptyId >= 0) invoke("write_pty", { ptyId: surface.ptyId, data: t });
+        }),
+      });
+
+      // Check if selection looks like a file path
+      const pathText = (selection || "").trim();
+      const looksLikePath = pathText && (pathText.startsWith("/") || pathText.startsWith("./") || pathText.startsWith("~/") || pathText.match(/^[\w.-]+\.[a-z]+$/i));
+
+      if (looksLikePath) {
+        const fullPath = pathText.startsWith("/") ? pathText :
+          pathText.startsWith("~") ? pathText :
+          surface.cwd ? `${surface.cwd}/${pathText}` : pathText;
+
+        items.push({ label: "", action: () => {}, separator: true });
+
+        items.push({
+          label: "Copy Path",
+          action: () => navigator.clipboard.writeText(fullPath),
+        });
+
+        if (canPreview(fullPath)) {
+          items.push({
+            label: "Preview",
+            action: () => this.openPreview(fullPath),
+          });
+        }
+
+        items.push({
+          label: "Show in File Manager",
+          action: () => invoke("show_in_file_manager", { path: fullPath }),
+        });
+
+        items.push({
+          label: "Open with Default App",
+          action: () => invoke("open_with_default_app", { path: fullPath }),
+        });
+      }
+
+      items.push({ label: "", action: () => {}, separator: true });
+
+      // Terminal actions
+      items.push({
+        label: "Clear Scrollback",
+        shortcut: "⌘K",
+        action: () => terminal.clear(),
+      });
+
+      items.push({
+        label: "Split Right",
+        shortcut: "⌘D",
+        action: () => this.splitPane("horizontal"),
+      });
+
+      items.push({
+        label: "Split Down",
+        shortcut: "⇧⌘D",
+        action: () => this.splitPane("vertical"),
+      });
+
+      showContextMenu(e.clientX, e.clientY, items);
     });
 
     pane.surfaces.push(surface);

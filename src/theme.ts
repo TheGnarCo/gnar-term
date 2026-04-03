@@ -180,9 +180,11 @@ export function getXtermTheme() {
 }
 
 export function setTheme(id: string) {
+  console.log("[theme] setTheme called with:", id, "found:", !!themes[id]);
   const t = themes[id];
   if (!t) return;
   _active = t;
+  console.log("[theme] active theme now:", t.name, "bg:", t.bg);
   // Update CSS vars on body
   document.documentElement.style.setProperty("--bg", t.bg);
   document.body.style.background = t.bg;

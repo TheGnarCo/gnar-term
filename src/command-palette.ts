@@ -111,7 +111,12 @@ export function openCommandPalette(manager: TerminalManager) {
       }
 
       row.addEventListener("mouseenter", () => { selectedIdx = i; render(); });
-      row.addEventListener("click", () => { close(); cmd.action(); });
+      row.addEventListener("click", (e) => {
+        e.stopPropagation();
+        console.log("[palette] clicked:", cmd.name);
+        close();
+        cmd.action();
+      });
       list.appendChild(row);
     });
   }

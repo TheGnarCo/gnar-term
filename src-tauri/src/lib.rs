@@ -440,13 +440,13 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             spawn_pty, write_pty, resize_pty, kill_pty, detect_font
         ])
-        .setup(|app| {
+        .setup(|_app| {
             // Rebuild macOS menu manually so Cmd+Q, Cmd+C, Cmd+V work,
             // but Cmd+T/Cmd+W/Cmd+N are passed down to JS.
             #[cfg(target_os = "macos")]
             {
                 use tauri::menu::{Menu, Submenu, PredefinedMenuItem, MenuItem};
-                let handle = app.handle();
+                let handle = _app.handle();
                 
                 // GnarTerm Menu
                 let hide = PredefinedMenuItem::hide(handle, None)?;

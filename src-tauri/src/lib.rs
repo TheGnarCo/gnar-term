@@ -7,6 +7,7 @@ use std::sync::Mutex;
 use tauri::{AppHandle, Emitter};
 
 static NEXT_PTY_ID: AtomicU32 = AtomicU32::new(1);
+static NEXT_WATCH_ID: AtomicU32 = AtomicU32::new(1);
 
 struct PtyInstance {
     writer: Box<dyn Write + Send>,
@@ -485,6 +486,44 @@ async fn detect_font() -> Result<String, String> {
     Ok(String::new())
 }
 
+/// Read a file's contents
+#[tauri::command]
+async fn read_file(path: String) -> Result<String, String> {
+    std::fs::read_to_string(&path).map_err(|e| format!("Failed to read {}: {}", path, e))
+}
+
+/// Watch a file for changes, emit events
+#[tauri::command]
+async fn watch_file(app: AppHandle, path: String) -> Result<u32, String> {
+    let watch_id = NEXT_WATCH_ID.fetch_add(1, Ordering::Relaxed);
+    let path_clone = path.clone();
+    std::thread::spawn(move || {
+        let mut last_modified = std::fs::metadata(&path_clone)
+            .and_then(|m| m.modified())
+            .ok();
+        loop {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            let current = std::fs::metadata(&path_clone)
+                .and_then(|m| m.modified())
+                .ok();
+            if current != last_modified {
+                last_modified = current;
+                if let Ok(content) = std::fs::read_to_string(&path_clone) {
+                    let _ = app.emit("file-changed", FileChanged { watch_id, path: path_clone.clone(), content });
+                }
+            }
+        }
+    });
+    Ok(watch_id)
+}
+
+#[derive(Clone, Serialize)]
+struct FileChanged {
+    watch_id: u32,
+    path: String,
+    content: String,
+}
+
 /// Get the title for a PTY tab — foreground process name or cwd basename
 #[tauri::command]
 async fn get_pty_title(state: tauri::State<'_, AppState>, pty_id: u32) -> Result<String, String> {
@@ -583,7 +622,7 @@ pub fn run() {
             ptys: Mutex::new(HashMap::new()),
         })
         .invoke_handler(tauri::generate_handler![
-            spawn_pty, write_pty, resize_pty, kill_pty, detect_font, get_pty_cwd, get_pty_title
+            spawn_pty, write_pty, resize_pty, kill_pty, detect_font, get_pty_cwd, get_pty_title, read_file, watch_file
         ])
         .setup(|app| {
             // Rebuild macOS menu manually so Cmd+Q, Cmd+C, Cmd+V work,

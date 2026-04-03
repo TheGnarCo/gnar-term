@@ -1,5 +1,6 @@
 import { TerminalManager } from "./terminal-manager";
 import { theme, themes, setTheme, activeThemeId, onThemeChange, getXtermTheme } from "./theme";
+import { createMarkdownSurface } from "./markdown-viewer";
 
 interface Command {
   name: string;
@@ -36,6 +37,10 @@ export function openCommandPalette(manager: TerminalManager) {
       shortcut: i < 9 ? `⌘${i + 1}` : undefined,
       action: () => manager.switchWorkspace(i),
     })),
+    { name: "Open Markdown File...", action: async () => {
+      const path = prompt("Path to .md file:");
+      if (path) manager.openMarkdown(path);
+    }},
     // Theme selection
     ...Object.entries(themes).map(([id, t]) => ({
       name: `Theme: ${t.name}${id === activeThemeId() ? " ✓" : ""}`,

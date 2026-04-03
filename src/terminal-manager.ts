@@ -17,9 +17,18 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { theme, getXtermTheme } from "./theme";
+import { createMarkdownSurface, type MarkdownSurface } from "./markdown-viewer";
 import "@xterm/xterm/css/xterm.css";
 
 let _id = 0;
+
+/** Safe terminal operations (no-op for markdown surfaces) */
+function safeFocus(s: Surface | null | undefined) {
+  if (s?.terminal) safeFocus(s);
+}
+function safeDispose(s: Surface) {
+  if (s.terminal) safeDispose(s);
+}
 function uid(): string { return `id-${++_id}-${Date.now()}`; }
 
 // Bundled Nerd Font guarantees powerline glyphs always render.
@@ -126,7 +135,7 @@ export class TerminalManager {
       const bytes = new Uint8Array(data);
       for (const ws of this.workspaces) {
         for (const s of this.getAllSurfaces(ws)) {
-          if (s.ptyId === pty_id) { s.terminal.write(bytes); return; }
+          if (s.ptyId === pty_id) { if (s.terminal) s.terminal.write(bytes); return; }
         }
       }
     });
@@ -308,7 +317,7 @@ export class TerminalManager {
           pane.activeSurfaceId = s.id;
           s.hasUnread = false;
           this.buildPaneElement(pane, ws);
-          s.terminal.focus();
+          safeFocus(s);
           this.notify();
         });
 
@@ -474,7 +483,7 @@ export class TerminalManager {
     this.layoutWorkspace(ws);
 
     const surface = pane.surfaces.find((s) => s.id === pane.activeSurfaceId);
-    surface?.terminal.focus();
+    safeFocus(surface);
     this.notify();
     return ws;
   }
@@ -495,7 +504,7 @@ export class TerminalManager {
     const surface = this.activeSurface;
     setTimeout(() => {
       surface?.fitAddon.fit();
-      surface?.terminal.focus();
+      safeFocus(surface);
     }, 20);
     this.notify();
   }
@@ -504,7 +513,7 @@ export class TerminalManager {
     if (this.workspaces.length <= 1) return;
     const ws = this.workspaces[this.activeWorkspaceIdx];
     for (const s of this.getAllSurfaces(ws)) {
-      s.terminal.dispose();
+      safeDispose(s);
       if (s.ptyId >= 0) invoke("kill_pty", { ptyId: s.ptyId }).catch(() => {});
     }
     ws.element.remove();
@@ -534,7 +543,7 @@ export class TerminalManager {
     await this.createSurface(pane, cwd);
     this.buildPaneElement(pane, ws);
     const surface = pane.surfaces.find((s) => s.id === pane!.activeSurfaceId);
-    surface?.terminal.focus();
+    safeFocus(surface);
     this.notify();
   }
 
@@ -545,7 +554,7 @@ export class TerminalManager {
     const idx = pane.surfaces.findIndex((s) => s.id === pane.activeSurfaceId);
     pane.activeSurfaceId = pane.surfaces[(idx + 1) % pane.surfaces.length].id;
     this.buildPaneElement(pane, ws);
-    this.activeSurface?.terminal.focus();
+    safeFocus(this.activeSurface);
     this.notify();
   }
 
@@ -556,7 +565,7 @@ export class TerminalManager {
     const idx = pane.surfaces.findIndex((s) => s.id === pane.activeSurfaceId);
     pane.activeSurfaceId = pane.surfaces[(idx - 1 + pane.surfaces.length) % pane.surfaces.length].id;
     this.buildPaneElement(pane, ws);
-    this.activeSurface?.terminal.focus();
+    safeFocus(this.activeSurface);
     this.notify();
   }
 
@@ -568,7 +577,7 @@ export class TerminalManager {
     if (idx >= 0 && idx < pane.surfaces.length) {
       pane.activeSurfaceId = pane.surfaces[idx].id;
       this.buildPaneElement(pane, ws);
-      this.activeSurface?.terminal.focus();
+      safeFocus(this.activeSurface);
       this.notify();
     }
   }
@@ -584,7 +593,7 @@ export class TerminalManager {
 
   private removeSurface(ws: Workspace, pane: Pane, surfaceIdx: number) {
     const surface = pane.surfaces[surfaceIdx];
-    surface.terminal.dispose();
+    safeDispose(surface);
     surface.termElement.remove();
     if (surface.ptyId >= 0) invoke("kill_pty", { ptyId: surface.ptyId }).catch(() => {});
     pane.surfaces.splice(surfaceIdx, 1);
@@ -595,7 +604,7 @@ export class TerminalManager {
       pane.activeSurfaceId = pane.surfaces[Math.min(surfaceIdx, pane.surfaces.length - 1)].id;
       this.buildPaneElement(pane, ws);
       const s = pane.surfaces.find((s) => s.id === pane.activeSurfaceId);
-      s?.terminal.focus();
+      safeFocus(s);
     }
     this.notify();
   }
@@ -660,7 +669,7 @@ export class TerminalManager {
 
     this.layoutWorkspace(ws);
     const surface = newPane.surfaces.find((s) => s.id === newPane.activeSurfaceId);
-    surface?.terminal.focus();
+    safeFocus(surface);
     this.notify();
   }
 
@@ -716,7 +725,7 @@ export class TerminalManager {
     }
 
     this.layoutWorkspace(ws);
-    this.activeSurface?.terminal.focus();
+    safeFocus(this.activeSurface);
     this.notify();
   }
 
@@ -725,7 +734,7 @@ export class TerminalManager {
     const pane = this.activePane;
     if (!ws || !pane) return;
     for (const s of [...pane.surfaces]) {
-      s.terminal.dispose();
+      safeDispose(s);
       s.termElement.remove();
       if (s.ptyId >= 0) invoke("kill_pty", { ptyId: s.ptyId }).catch(() => {});
     }
@@ -751,7 +760,7 @@ export class TerminalManager {
     ws.activePaneId = panes[nextIdx].id;
     this.updatePaneBorders(ws);
     const surface = panes[nextIdx].surfaces.find((s) => s.id === panes[nextIdx].activeSurfaceId);
-    surface?.terminal.focus();
+    safeFocus(surface);
     this.notify();
   }
 
@@ -775,11 +784,38 @@ export class TerminalManager {
       }
     }
     this.activeSurface?.fitAddon.fit();
-    this.activeSurface?.terminal.focus();
+    safeFocus(this.activeSurface);
     this.notify();
   }
 
   // --- Flash ---
+
+  /** Open a markdown file in a new tab */
+  async openMarkdown(filePath: string) {
+    const ws = this.activeWorkspace;
+    const pane = this.activePane;
+    if (!ws || !pane) return;
+
+    const mdSurface = await createMarkdownSurface(filePath);
+
+    // Create a fake Surface wrapper so it fits in the pane system
+    const surface: Surface = {
+      id: mdSurface.id,
+      terminal: null as any, // not a terminal
+      fitAddon: { fit: () => {} } as any,
+      termElement: mdSurface.element,
+      ptyId: -1,
+      title: mdSurface.title,
+      notification: undefined,
+      hasUnread: false,
+      opened: true,
+    };
+
+    pane.surfaces.push(surface);
+    pane.activeSurfaceId = surface.id;
+    this.buildPaneElement(pane, ws);
+    this.notify();
+  }
 
   flashFocusedPane() {
     const pane = this.activePane;

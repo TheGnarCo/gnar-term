@@ -135,11 +135,13 @@ export function openCommandPalette(manager: TerminalManager) {
   panel.appendChild(input);
   panel.appendChild(list);
   overlay.appendChild(panel);
+  // Stop xterm.js from stealing focus
+  overlay.addEventListener("keydown", (e) => e.stopPropagation(), true);
+  
   document.body.appendChild(overlay);
   render();
-  // Force focus away from xterm.js
-  setTimeout(() => {
-    input.focus();
-    input.click();
-  }, 10);
+  
+  // Aggressively grab focus
+  input.focus();
+  requestAnimationFrame(() => input.focus());
 }

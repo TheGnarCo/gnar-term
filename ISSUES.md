@@ -16,8 +16,8 @@ Same root cause as B2.
 ### ~~[E1] Workspace save/restore~~ ✅ DONE
 Config system with `gnar-term.json` (cmux-compatible). Save via ⌘P, autoload on startup, manual load from palette.
 
-### [E2] Markdown viewer: cmd+click on .md paths
-cmd+clicking a .md file path in terminal should open it in the markdown viewer tab.
+### ~~[E2] Markdown viewer / file preview~~ ✅ DONE
+Modular preview system with markdown (github-markdown-css), JSON (syntax highlighted), image preview. Cmd+click on file paths in terminal. Live-reload on file change.
 
 ### [E3] Pane divider drag to resize
 Split panes are always 50/50. Add draggable dividers between panes to resize.

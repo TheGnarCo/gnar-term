@@ -326,17 +326,26 @@ export class TerminalManager {
         `;
         closeBtn.addEventListener("click", (e) => {
           e.stopPropagation();
-          const idx = pane.surfaces.indexOf(s);
-          if (idx >= 0) this.removeSurface(ws, pane, idx);
+          // Look up fresh references (closures can go stale after rebuilds)
+          const currentWs = this.activeWorkspace;
+          if (!currentWs) return;
+          const currentPane = this.getAllPanes(currentWs.splitRoot).find(p => p.surfaces.includes(s));
+          if (!currentPane) return;
+          const idx = currentPane.surfaces.indexOf(s);
+          if (idx >= 0) this.removeSurface(currentWs, currentPane, idx);
         });
         closeBtn.addEventListener("mouseenter", () => { closeBtn.style.color = theme.danger; });
         closeBtn.addEventListener("mouseleave", () => { closeBtn.style.color = theme.fgDim; });
         tab.appendChild(closeBtn);
 
         tab.addEventListener("click", () => {
-          pane.activeSurfaceId = s.id;
+          const currentWs = this.activeWorkspace;
+          if (!currentWs) return;
+          const currentPane = this.getAllPanes(currentWs.splitRoot).find(p => p.surfaces.includes(s));
+          if (!currentPane) return;
+          currentPane.activeSurfaceId = s.id;
           s.hasUnread = false;
-          this.buildPaneElement(pane, ws);
+          this.buildPaneElement(currentPane, currentWs);
           safeFocus(s);
           this.notify();
         });

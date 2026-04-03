@@ -1,72 +1,217 @@
 /**
- * GnarTerm color palette
- * GitHub Dark Default — NOT pure black
+ * GnarTerm Theme System
+ * Themes define UI chrome + terminal ANSI colors.
+ * Switch at runtime via setTheme(). All consumers read from `theme` and `xtermTheme`.
  */
 
-export const theme = {
-  // Base
-  bg: "#161b22",           // main background (GitHub's actual canvas bg)
-  bgSurface: "#1c2128",   // elevated surfaces
-  bgFloat: "#2d333b",     // floating elements (menus, palette)
-  bgHighlight: "#373e47",  // hover states
-  bgActive: "#2d333b",    // active/selected
+export interface ThemeDef {
+  name: string;
+  // UI chrome
+  bg: string;
+  bgSurface: string;
+  bgFloat: string;
+  bgHighlight: string;
+  bgActive: string;
+  border: string;
+  borderActive: string;
+  borderNotify: string;
+  fg: string;
+  fgMuted: string;
+  fgDim: string;
+  accent: string;
+  accentHover: string;
+  notify: string;
+  notifyGlow: string;
+  danger: string;
+  success: string;
+  warning: string;
+  termBg: string;
+  termFg: string;
+  termCursor: string;
+  termSelection: string;
+  sidebarBg: string;
+  sidebarBorder: string;
+  tabBarBg: string;
+  tabBarBorder: string;
+  // ANSI colors
+  ansi: {
+    black: string; red: string; green: string; yellow: string;
+    blue: string; magenta: string; cyan: string; white: string;
+    brightBlack: string; brightRed: string; brightGreen: string; brightYellow: string;
+    brightBlue: string; brightMagenta: string; brightCyan: string; brightWhite: string;
+  };
+}
 
-  // Borders
-  border: "#444c56",
-  borderActive: "#58a6ff",
-  borderNotify: "#58a6ff",
+// --- Theme Presets ---
 
-  // Text
-  fg: "#e6edf3",
-  fgMuted: "#8b949e",
-  fgDim: "#636e7b",
-
-  // Accent
-  accent: "#58a6ff",
-  accentHover: "#79c0ff",
-  notify: "#58a6ff",
-  notifyGlow: "rgba(88, 166, 255, 0.25)",
-  danger: "#f85149",
-  success: "#3fb950",
-  warning: "#d29922",
-
-  // Terminal
-  termBg: "#161b22",
-  termFg: "#e6edf3",
-  termCursor: "#e6edf3",
-  termSelection: "#264f78",
-
-  // Sidebar — darker but NOT black
-  sidebarBg: "#0d1117",
-  sidebarBorder: "#21262d",
-
-  // Tab bar
-  tabBarBg: "#1c2128",
-  tabBarBorder: "#21262d",
+const githubDark: ThemeDef = {
+  name: "GitHub Dark",
+  bg: "#161b22", bgSurface: "#1c2128", bgFloat: "#2d333b", bgHighlight: "#373e47",
+  bgActive: "#2d333b", border: "#444c56", borderActive: "#58a6ff", borderNotify: "#58a6ff",
+  fg: "#e6edf3", fgMuted: "#8b949e", fgDim: "#636e7b",
+  accent: "#58a6ff", accentHover: "#79c0ff", notify: "#58a6ff",
+  notifyGlow: "rgba(88, 166, 255, 0.25)", danger: "#f85149", success: "#3fb950", warning: "#d29922",
+  termBg: "#161b22", termFg: "#e6edf3", termCursor: "#e6edf3", termSelection: "#264f78",
+  sidebarBg: "#0d1117", sidebarBorder: "#21262d", tabBarBg: "#1c2128", tabBarBorder: "#21262d",
+  ansi: {
+    black: "#484f58", red: "#ff7b72", green: "#3fb950", yellow: "#d29922",
+    blue: "#58a6ff", magenta: "#bc8cff", cyan: "#39c5cf", white: "#b1bac4",
+    brightBlack: "#6e7681", brightRed: "#ffa198", brightGreen: "#56d364", brightYellow: "#e3b341",
+    brightBlue: "#79c0ff", brightMagenta: "#d2a8ff", brightCyan: "#56d4dd", brightWhite: "#f0f6fc",
+  },
 };
 
-/** xterm.js theme — GitHub dark ANSI colors */
-export const xtermTheme = {
-  background: theme.termBg,
-  foreground: theme.termFg,
-  cursor: theme.termCursor,
-  cursorAccent: theme.termBg,
-  selectionBackground: theme.termSelection,
-  selectionForeground: theme.termFg,
-  black: "#484f58",
-  red: "#ff7b72",
-  green: "#3fb950",
-  yellow: "#d29922",
-  blue: "#58a6ff",
-  magenta: "#bc8cff",
-  cyan: "#39c5cf",
-  white: "#b1bac4",
-  brightBlack: "#6e7681",
-  brightRed: "#ffa198",
-  brightGreen: "#56d364",
-  brightYellow: "#e3b341",
-  brightBlue: "#79c0ff",
-  brightMagenta: "#d2a8ff",
-  brightCyan: "#56d4dd",
-  brightWhite: "#f0f6fc",
+const tokyoNight: ThemeDef = {
+  name: "Tokyo Night",
+  bg: "#1a1b26", bgSurface: "#1f2335", bgFloat: "#292e42", bgHighlight: "#33467c",
+  bgActive: "#292e42", border: "#3b4261", borderActive: "#7aa2f7", borderNotify: "#7aa2f7",
+  fg: "#c0caf5", fgMuted: "#9aa5ce", fgDim: "#565f89",
+  accent: "#7aa2f7", accentHover: "#89b4fa", notify: "#7aa2f7",
+  notifyGlow: "rgba(122, 162, 247, 0.25)", danger: "#f7768e", success: "#9ece6a", warning: "#e0af68",
+  termBg: "#1a1b26", termFg: "#c0caf5", termCursor: "#c0caf5", termSelection: "#33467c",
+  sidebarBg: "#16161e", sidebarBorder: "#1f2335", tabBarBg: "#1f2335", tabBarBorder: "#1f2335",
+  ansi: {
+    black: "#414868", red: "#f7768e", green: "#9ece6a", yellow: "#e0af68",
+    blue: "#7aa2f7", magenta: "#bb9af7", cyan: "#7dcfff", white: "#a9b1d6",
+    brightBlack: "#565f89", brightRed: "#f7768e", brightGreen: "#9ece6a", brightYellow: "#e0af68",
+    brightBlue: "#7aa2f7", brightMagenta: "#bb9af7", brightCyan: "#7dcfff", brightWhite: "#c0caf5",
+  },
 };
+
+const catppuccinMocha: ThemeDef = {
+  name: "Catppuccin Mocha",
+  bg: "#1e1e2e", bgSurface: "#24243e", bgFloat: "#313244", bgHighlight: "#45475a",
+  bgActive: "#313244", border: "#45475a", borderActive: "#89b4fa", borderNotify: "#89b4fa",
+  fg: "#cdd6f4", fgMuted: "#a6adc8", fgDim: "#6c7086",
+  accent: "#89b4fa", accentHover: "#b4d0fb", notify: "#89b4fa",
+  notifyGlow: "rgba(137, 180, 250, 0.25)", danger: "#f38ba8", success: "#a6e3a1", warning: "#f9e2af",
+  termBg: "#1e1e2e", termFg: "#cdd6f4", termCursor: "#f5e0dc", termSelection: "#45475a",
+  sidebarBg: "#181825", sidebarBorder: "#1e1e2e", tabBarBg: "#24243e", tabBarBorder: "#1e1e2e",
+  ansi: {
+    black: "#45475a", red: "#f38ba8", green: "#a6e3a1", yellow: "#f9e2af",
+    blue: "#89b4fa", magenta: "#cba6f7", cyan: "#94e2d5", white: "#bac2de",
+    brightBlack: "#585b70", brightRed: "#f38ba8", brightGreen: "#a6e3a1", brightYellow: "#f9e2af",
+    brightBlue: "#89b4fa", brightMagenta: "#cba6f7", brightCyan: "#94e2d5", brightWhite: "#a6adc8",
+  },
+};
+
+const draculaPro: ThemeDef = {
+  name: "Dracula",
+  bg: "#282a36", bgSurface: "#2d2f3d", bgFloat: "#383a4a", bgHighlight: "#44475a",
+  bgActive: "#383a4a", border: "#44475a", borderActive: "#bd93f9", borderNotify: "#bd93f9",
+  fg: "#f8f8f2", fgMuted: "#bfbfbf", fgDim: "#6272a4",
+  accent: "#bd93f9", accentHover: "#caa9fa", notify: "#bd93f9",
+  notifyGlow: "rgba(189, 147, 249, 0.25)", danger: "#ff5555", success: "#50fa7b", warning: "#f1fa8c",
+  termBg: "#282a36", termFg: "#f8f8f2", termCursor: "#f8f8f2", termSelection: "#44475a",
+  sidebarBg: "#21222c", sidebarBorder: "#282a36", tabBarBg: "#2d2f3d", tabBarBorder: "#282a36",
+  ansi: {
+    black: "#44475a", red: "#ff5555", green: "#50fa7b", yellow: "#f1fa8c",
+    blue: "#6272a4", magenta: "#ff79c6", cyan: "#8be9fd", white: "#f8f8f2",
+    brightBlack: "#6272a4", brightRed: "#ff6e6e", brightGreen: "#69ff94", brightYellow: "#ffffa5",
+    brightBlue: "#d6acff", brightMagenta: "#ff92df", brightCyan: "#a4ffff", brightWhite: "#ffffff",
+  },
+};
+
+const solarizedDark: ThemeDef = {
+  name: "Solarized Dark",
+  bg: "#002b36", bgSurface: "#073642", bgFloat: "#0a4050", bgHighlight: "#1a5060",
+  bgActive: "#073642", border: "#586e75", borderActive: "#268bd2", borderNotify: "#268bd2",
+  fg: "#839496", fgMuted: "#657b83", fgDim: "#586e75",
+  accent: "#268bd2", accentHover: "#2aa0e8", notify: "#268bd2",
+  notifyGlow: "rgba(38, 139, 210, 0.25)", danger: "#dc322f", success: "#859900", warning: "#b58900",
+  termBg: "#002b36", termFg: "#839496", termCursor: "#839496", termSelection: "#073642",
+  sidebarBg: "#001e26", sidebarBorder: "#002b36", tabBarBg: "#073642", tabBarBorder: "#002b36",
+  ansi: {
+    black: "#073642", red: "#dc322f", green: "#859900", yellow: "#b58900",
+    blue: "#268bd2", magenta: "#d33682", cyan: "#2aa198", white: "#eee8d5",
+    brightBlack: "#586e75", brightRed: "#cb4b16", brightGreen: "#859900", brightYellow: "#b58900",
+    brightBlue: "#268bd2", brightMagenta: "#6c71c4", brightCyan: "#2aa198", brightWhite: "#fdf6e3",
+  },
+};
+
+const oneDark: ThemeDef = {
+  name: "One Dark",
+  bg: "#282c34", bgSurface: "#2c313c", bgFloat: "#353b45", bgHighlight: "#3e4452",
+  bgActive: "#353b45", border: "#3e4452", borderActive: "#61afef", borderNotify: "#61afef",
+  fg: "#abb2bf", fgMuted: "#8b929e", fgDim: "#5c6370",
+  accent: "#61afef", accentHover: "#74bef4", notify: "#61afef",
+  notifyGlow: "rgba(97, 175, 239, 0.25)", danger: "#e06c75", success: "#98c379", warning: "#e5c07b",
+  termBg: "#282c34", termFg: "#abb2bf", termCursor: "#528bff", termSelection: "#3e4452",
+  sidebarBg: "#21252b", sidebarBorder: "#282c34", tabBarBg: "#2c313c", tabBarBorder: "#282c34",
+  ansi: {
+    black: "#3e4452", red: "#e06c75", green: "#98c379", yellow: "#e5c07b",
+    blue: "#61afef", magenta: "#c678dd", cyan: "#56b6c2", white: "#abb2bf",
+    brightBlack: "#5c6370", brightRed: "#be5046", brightGreen: "#98c379", brightYellow: "#d19a66",
+    brightBlue: "#61afef", brightMagenta: "#c678dd", brightCyan: "#56b6c2", brightWhite: "#ffffff",
+  },
+};
+
+// --- All themes ---
+export const themes: Record<string, ThemeDef> = {
+  "github-dark": githubDark,
+  "tokyo-night": tokyoNight,
+  "catppuccin-mocha": catppuccinMocha,
+  "dracula": draculaPro,
+  "solarized-dark": solarizedDark,
+  "one-dark": oneDark,
+};
+
+// --- Active theme (mutable) ---
+let _active: ThemeDef = githubDark;
+const _listeners: (() => void)[] = [];
+
+export const theme: ThemeDef = new Proxy({} as ThemeDef, {
+  get(_target, prop) {
+    if (prop === "ansi") return _active.ansi;
+    return (_active as any)[prop as string];
+  },
+});
+
+export function getXtermTheme() {
+  return {
+    background: _active.termBg,
+    foreground: _active.termFg,
+    cursor: _active.termCursor,
+    cursorAccent: _active.termBg,
+    selectionBackground: _active.termSelection,
+    selectionForeground: _active.termFg,
+    ..._active.ansi,
+  };
+}
+
+export function setTheme(id: string) {
+  const t = themes[id];
+  if (!t) return;
+  _active = t;
+  // Update CSS vars on body
+  document.documentElement.style.setProperty("--bg", t.bg);
+  document.body.style.background = t.bg;
+  // Notify listeners
+  for (const fn of _listeners) fn();
+  // Save preference
+  try { localStorage.setItem("gnarterm-theme", id); } catch {}
+}
+
+export function onThemeChange(fn: () => void) {
+  _listeners.push(fn);
+}
+
+export function activeThemeId(): string {
+  for (const [id, t] of Object.entries(themes)) {
+    if (t === _active) return id;
+  }
+  return "github-dark";
+}
+
+// Restore saved theme on load
+try {
+  const saved = localStorage.getItem("gnarterm-theme");
+  if (saved && themes[saved]) _active = themes[saved];
+} catch {}
+
+// Legacy export for existing code that imports xtermTheme
+export const xtermTheme = new Proxy({} as Record<string, string>, {
+  get(_target, prop) {
+    return getXtermTheme()[prop as keyof ReturnType<typeof getXtermTheme>];
+  },
+});

@@ -16,7 +16,7 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { theme, xtermTheme } from "./theme";
+import { theme, getXtermTheme } from "./theme";
 import "@xterm/xterm/css/xterm.css";
 
 let _id = 0;
@@ -204,7 +204,7 @@ export class TerminalManager {
       cursorBlink: true,
       fontSize: 14,
       fontFamily: resolvedFontFamily,
-      theme: xtermTheme,
+      theme: getXtermTheme(),
       allowProposedApi: true,
     });
 
@@ -787,5 +787,14 @@ export class TerminalManager {
     const el = pane.element;
     el.style.boxShadow = `inset 0 0 0 2px ${theme.accent}, 0 0 12px ${theme.notifyGlow}`;
     setTimeout(() => { el.style.boxShadow = "none"; }, 400);
+  }
+
+  /** Re-layout all workspaces (called after theme change) */
+  refreshLayout() {
+    const ws = this.activeWorkspace;
+    if (ws) {
+      this.layoutWorkspace(ws);
+    }
+    this.notify();
   }
 }

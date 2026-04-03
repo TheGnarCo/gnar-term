@@ -1,5 +1,5 @@
 import { TerminalManager } from "./terminal-manager";
-import { theme } from "./theme";
+import { theme, themes, setTheme, activeThemeId, onThemeChange, getXtermTheme } from "./theme";
 
 interface Command {
   name: string;
@@ -35,6 +35,21 @@ export function openCommandPalette(manager: TerminalManager) {
       name: `Switch to: ${ws.name}`,
       shortcut: i < 9 ? `⌘${i + 1}` : undefined,
       action: () => manager.switchWorkspace(i),
+    })),
+    // Theme selection
+    ...Object.entries(themes).map(([id, t]) => ({
+      name: `Theme: ${t.name}${id === activeThemeId() ? " ✓" : ""}`,
+      action: () => {
+        setTheme(id);
+        // Update all terminal themes
+        for (const ws of manager.workspaces) {
+          for (const s of manager.getAllSurfaces(ws)) {
+            s.terminal.options.theme = getXtermTheme();
+          }
+        }
+        // Re-layout to pick up new chrome colors
+        manager.refreshLayout();
+      },
     })),
   ];
 

@@ -1,7 +1,7 @@
 import { Sidebar } from "./sidebar";
 import { TerminalManager, fontReady } from "./terminal-manager";
 import { openCommandPalette } from "./command-palette";
-import { theme } from "./theme";
+import { theme, onThemeChange } from "./theme";
 
 const app = document.getElementById("app")!;
 
@@ -27,6 +27,14 @@ app.appendChild(terminalArea);
 
 const termManager = new TerminalManager(terminalArea);
 const sidebarUI = new Sidebar(sidebar, termManager);
+
+// Update chrome colors on theme change
+onThemeChange(() => {
+  sidebar.style.background = theme.sidebarBg;
+  sidebar.style.borderColor = theme.sidebarBorder;
+  terminalArea.style.background = theme.bg;
+  document.body.style.background = theme.bg;
+});
 
 // Wait for font detection before creating first workspace
 fontReady.then(() => {

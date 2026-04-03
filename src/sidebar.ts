@@ -11,28 +11,51 @@ export class Sidebar {
     this.container = container;
     this.manager = manager;
 
-    // Header (just the + button, no title)
+    // Header toolbar
     const header = document.createElement("div");
     header.style.cssText = `
       padding: 8px 8px; display: flex; align-items: center;
-      justify-content: flex-end;
-      border-bottom: 1px solid ${theme.border};
+      gap: 4px; border-bottom: 1px solid ${theme.border};
     `;
 
-    const addButton = document.createElement("button");
-    addButton.textContent = "+";
-    addButton.title = "New workspace (⌘N)";
-    addButton.style.cssText = `
-      background: none; border: 1px solid ${theme.border}; color: ${theme.fgMuted};
-      border-radius: 4px; width: 24px; height: 24px; cursor: pointer;
-      font-size: 16px; display: flex; align-items: center; justify-content: center;
-    `;
-    addButton.addEventListener("click", () => {
+    // macOS traffic light spacer (leaves room for window controls)
+    const trafficSpacer = document.createElement("div");
+    trafficSpacer.style.cssText = "width: 60px; flex-shrink: 0;";
+    header.appendChild(trafficSpacer);
+
+    const createToolbarBtn = (svg: string, title: string, onClick: () => void) => {
+      const btn = document.createElement("button");
+      btn.innerHTML = svg;
+      btn.title = title;
+      btn.style.cssText = `
+        background: none; border: none; color: ${theme.fgMuted};
+        border-radius: 4px; width: 28px; height: 28px; cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        padding: 0;
+      `;
+      btn.addEventListener("click", onClick);
+      btn.addEventListener("mouseenter", () => { btn.style.background = theme.bgHighlight; btn.style.color = theme.fg; });
+      btn.addEventListener("mouseleave", () => { btn.style.background = "none"; btn.style.color = theme.fgMuted; });
+      return btn;
+    };
+
+    // Sidebar toggle
+    const sidebarToggleSvg = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="2" width="14" height="12" rx="1.5"/><line x1="5.5" y1="2" x2="5.5" y2="14"/></svg>`;
+    header.appendChild(createToolbarBtn(sidebarToggleSvg, "Toggle Sidebar (⌘B)", () => {
+      const el = document.getElementById("sidebar");
+      if (el) el.style.display = el.style.display === "none" ? "flex" : "none";
+    }));
+
+    // Spacer
+    const spacer = document.createElement("div");
+    spacer.style.cssText = "flex: 1;";
+    header.appendChild(spacer);
+
+    // Add workspace button
+    const addSvg = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="7" y1="2" x2="7" y2="12"/><line x1="2" y1="7" x2="12" y2="7"/></svg>`;
+    header.appendChild(createToolbarBtn(addSvg, "New workspace (⌘N)", () => {
       manager.createWorkspace(`Workspace ${manager.workspaces.length + 1}`);
-    });
-    addButton.addEventListener("mouseenter", () => { addButton.style.borderColor = theme.fgMuted; });
-    addButton.addEventListener("mouseleave", () => { addButton.style.borderColor = theme.border; });
-    header.appendChild(addButton);
+    }));
 
     this.workspaceList = document.createElement("div");
     this.workspaceList.style.cssText = "flex: 1; overflow-y: auto; padding: 4px 0;";

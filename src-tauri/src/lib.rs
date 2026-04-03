@@ -300,20 +300,24 @@ async fn resize_pty(
 async fn kill_pty(state: tauri::State<'_, AppState>, pty_id: u32) -> Result<(), String> {
     let mut ptys = state.ptys.lock().unwrap();
     if let Some(pty) = ptys.remove(&pty_id) {
-        // Explicitly kill the child process tree
+        // Stop the reader thread first
+        pty.paused.store(true, std::sync::atomic::Ordering::Relaxed);
+        
         if let Some(pid) = pty.child_pid {
+            println!("[kill_pty] Killing pid {} and its process group", pid);
             #[cfg(unix)]
             {
-                // Kill the process group (negative pid kills all children)
                 unsafe { libc::kill(-(pid as i32), libc::SIGKILL); }
-                // Also kill the process directly in case it's not a group leader
                 unsafe { libc::kill(pid as i32, libc::SIGKILL); }
             }
             #[cfg(windows)]
             {
                 let _ = std::process::Command::new("taskkill").args(["/F", "/T", "/PID", &pid.to_string()]).output();
             }
+        } else {
+            println!("[kill_pty] No child_pid for pty_id {}, dropping master handle", pty_id);
         }
+        // Dropping pty closes the master fd which sends SIGHUP
     }
     Ok(())
 }

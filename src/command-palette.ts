@@ -10,12 +10,19 @@ interface Command {
 }
 
 let overlay: HTMLElement | null = null;
+let _manager: TerminalManager | null = null;
 
 function close() {
   if (overlay) { overlay.remove(); overlay = null; }
+  // Return focus to active terminal
+  if (_manager) {
+    const s = _manager.activeSurface;
+    if (s?.terminal) setTimeout(() => s.terminal.focus(), 30);
+  }
 }
 
 export function openCommandPalette(manager: TerminalManager) {
+  _manager = manager;
   if (overlay) { close(); return; }
 
   const commands: Command[] = [

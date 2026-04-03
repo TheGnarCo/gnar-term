@@ -489,7 +489,7 @@ export class TerminalManager {
 
     for (const s of pane.surfaces) {
       this.openSurface(s);
-      s.termElement.style.display = s.id === pane.activeSurfaceId ? "flex" : "none";
+      s.termElement.style.display = s.id === pane.activeSurfaceId ? (s.terminal ? "flex" : "block") : "none";
       el.appendChild(s.termElement);
     }
 
@@ -511,7 +511,7 @@ export class TerminalManager {
 
   private showActiveSurface(pane: Pane) {
     for (const s of pane.surfaces) {
-      s.termElement.style.display = s.id === pane.activeSurfaceId ? "flex" : "none";
+      s.termElement.style.display = s.id === pane.activeSurfaceId ? (s.terminal ? "flex" : "block") : "none";
       if (s.id === pane.activeSurfaceId) {
         setTimeout(() => s.fitAddon.fit(), 10);
       }

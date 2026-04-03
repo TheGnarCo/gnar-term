@@ -61,6 +61,7 @@ export async function openPreview(filePath: string): Promise<PreviewSurface> {
     background: ${theme.bg}; color: ${theme.fg};
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
     font-size: 14px; line-height: 1.6;
+    display: block; min-height: 0;
   `;
   element.className = "preview-surface";
 

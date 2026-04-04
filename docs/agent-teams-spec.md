@@ -24,9 +24,29 @@ Agent Teams is an experimental Claude Code feature (`CLAUDE_CODE_EXPERIMENTAL_AG
   - `tmux` — each teammate in a tmux/iTerm2 split pane
   - `auto` (default) — tmux if available, else in-process
 
-### What cmux Does
+### How cmux Integrates (The Tmux Shim Pattern)
 
-cmux's `claude-teams` command spawns Claude Code teammates as native terminal splits. Each gets a pane with sidebar metadata and notification badges. No tmux required.
+cmux's `claude-teams` command does NOT use `--teammate-mode tmux` directly. Instead it:
+
+1. Sets `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`
+2. Prepends a **tmux shim** to `PATH` at `~/.cmuxterm/claude-teams-bin/`
+3. The shim (~350 lines) intercepts tmux commands and translates them to cmux's socket API:
+   - `tmux split-window` → `surface.split` (native cmux splits)
+   - `tmux send-keys` → `surface.send_text`
+   - `tmux capture-pane` → `surface.read_output`
+   - `tmux select-pane` → `surface.focus`
+   - `tmux kill-pane` → `surface.close`
+   - `tmux list-panes` → `workspace.list`
+4. Claude Code thinks it's talking to tmux, but cmux handles everything natively
+
+**This is the pattern gnar-term should follow.** Rather than implementing a custom `--teammate-mode gnar-term`, we write a tmux shim that translates tmux commands into Tauri IPC calls (via a local socket or CLI bridge). Claude Code's existing `--teammate-mode tmux` works unchanged.
+
+### cmux Sidebar Features for Teams
+
+- Status pills (custom text per pane via `set-status`)
+- Progress bars (`set-progress`)
+- Notification rings (blue = needs attention)
+- Auto-equalized pane layouts as teammates spawn/exit
 
 ### Where gnar-term Goes Further
 
@@ -86,19 +106,43 @@ Extend config to define agent team workspaces:
 }
 ```
 
-#### 1.2 Team Spawning
+#### 1.2 Tmux Shim (Critical Path)
 
-When a team workspace launches:
+gnar-term implements a **tmux shim** — a script placed on `PATH` that intercepts tmux commands from Claude Code and translates them into gnar-term operations. This is the same pattern cmux uses.
 
-1. Spawn the lead Claude Code session in the first pane
-2. The lead creates teammates via its own Agent Teams mechanism
-3. gnar-term watches `~/.claude/teams/{team-name}/config.json` for new teammates
-4. As teammates appear in config, gnar-term spawns their terminal panes automatically
-5. Each teammate pane runs its Claude Code CLI process
+**How it works:**
 
-**Alternative (simpler):** gnar-term spawns all processes directly:
-- Lead pane: `claude --teammate-mode in-process`
-- Teammate panes: spawned by the lead, gnar-term just provides the terminal
+1. gnar-term writes a shim script to `~/.config/gnar-term/bin/tmux`
+2. When launching a team workspace, gnar-term prepends this directory to `PATH`
+3. gnar-term starts a local Unix socket server (Rust backend) for IPC
+4. Claude Code runs with `--teammate-mode tmux` and issues tmux commands
+5. The shim intercepts those commands and sends them to gnar-term's socket
+
+**Shim command mapping:**
+
+| tmux command | gnar-term action |
+|---|---|
+| `tmux split-window [-h\|-v]` | Split active pane horizontally/vertically, spawn PTY in new pane |
+| `tmux send-keys "text"` | Write to PTY via `write_pty` |
+| `tmux capture-pane` | Read terminal buffer content |
+| `tmux select-pane -t N` | Focus pane N |
+| `tmux kill-pane` | Close surface, kill PTY |
+| `tmux list-panes` | Return pane list with dimensions |
+| `tmux new-window` | Create new workspace |
+| `tmux select-window` | Switch workspace |
+
+**Socket protocol:** JSON-RPC over Unix domain socket at `$GNARTERM_SOCKET_PATH`.
+
+#### 1.3 Team Spawning
+
+With the shim in place, team spawning is straightforward:
+
+1. Create a workspace with a single lead pane
+2. Set environment: `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`, `PATH` with shim prepended
+3. Spawn `claude --teammate-mode tmux` in the lead pane
+4. Claude Code's own team mechanism handles the rest — it calls "tmux" (our shim) to create splits
+5. gnar-term receives split/spawn commands via the socket and creates panes automatically
+6. Tag surfaces with agent metadata as they're created by the shim
 
 #### 1.3 Sidebar Metadata
 
@@ -236,26 +280,74 @@ export interface CommandDef {
 
 Update `loadConfig()` to parse team definitions.
 
-#### Step 2: Team Workspace Spawning
+#### Step 2: Tmux Shim Script
+
+**Files:** new `src-tauri/resources/tmux-shim.sh`
+
+Write a shell script (~200-300 lines) that:
+- Parses tmux CLI arguments (split-window, send-keys, capture-pane, list-panes, etc.)
+- Translates them into JSON-RPC requests
+- Sends requests to gnar-term's Unix socket at `$GNARTERM_SOCKET_PATH`
+- Returns tmux-compatible output (e.g., `list-panes` format: `%0: [80x24] [history 0/5000]`)
+
+Key commands to implement:
+- `split-window [-h|-v] [command]` → `{"method":"pane.split","params":{"direction":"h|v","command":"..."}}`
+- `send-keys "text" [Enter]` → `{"method":"pty.write","params":{"text":"..."}}`
+- `capture-pane -p` → `{"method":"pane.capture","params":{}}`
+- `select-pane -t N` → `{"method":"pane.focus","params":{"index":N}}`
+- `kill-pane` → `{"method":"pane.close","params":{}}`
+- `list-panes` → `{"method":"pane.list","params":{}}`
+- `display-message` → `{"method":"notify","params":{"text":"..."}}`
+
+The shim is bundled as a Tauri resource and written to `~/.config/gnar-term/bin/tmux` at startup.
+
+#### Step 3: Socket Server (Rust Backend)
+
+**Files:** `src-tauri/src/lib.rs` (or new `src-tauri/src/socket.rs`)
+
+Add a Unix domain socket server that:
+- Listens at a path stored in `$GNARTERM_SOCKET_PATH` (e.g., `/tmp/gnar-term-{pid}.sock`)
+- Accepts JSON-RPC requests from the tmux shim
+- Dispatches to existing Tauri commands (spawn_pty, write_pty, resize_pty, kill_pty)
+- For pane operations (split, focus, close), emits Tauri events that the frontend handles
+- Returns JSON-RPC responses with results (pane IDs, terminal content, etc.)
+
+New Tauri events:
+- `shim-split-pane` → frontend creates new pane + surface
+- `shim-focus-pane` → frontend switches active pane
+- `shim-close-pane` → frontend removes surface
+- `shim-capture-pane` → frontend reads terminal buffer, returns via command
+
+#### Step 4: Team Workspace Spawning
 
 **Files:** `src/terminal-manager.ts`
 
 Add `createTeamWorkspace(teamDef, workspaceDef)`:
 
-1. Call existing `createWorkspaceFromDef()` to build the layout
+1. Call existing `createWorkspaceFromDef()` to build initial layout (lead pane only)
 2. Tag the workspace as a team workspace (add `teamId?: string` to `Workspace` interface)
-3. For each surface, store the agent name/role (add `agentName?: string`, `agentRole?: string` to `Surface` interface)
-4. If a surface has a `command` in config, write it to the PTY after spawn
+3. Set environment for the lead PTY: `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`, `PATH` with shim prepended, `GNARTERM_SOCKET_PATH`
+4. Spawn `claude --teammate-mode tmux` in the lead pane
+5. Listen for `shim-split-pane` events — create new panes/surfaces as Claude Code spawns teammates
+6. Tag each shim-created surface with agent metadata (`agentName`, `agentRole`)
 
-#### Step 3: Team File Watcher
+Also add `watch_directory(path)` Rust command for `~/.claude/teams/{team-name}/` to track team state changes (task updates, teammate status).
 
-**Files:** `src-tauri/src/lib.rs`, `src/terminal-manager.ts`
+#### Step 5: Shim Event Handlers (Frontend)
 
-Add Rust command `watch_directory(path)` that emits events when files in `~/.claude/teams/{team-name}/` change.
+**Files:** `src/terminal-manager.ts`
 
-Frontend listener reacts to config changes:
-- New teammate appears → spawn new surface in team workspace
-- Teammate removed → mark surface as exited
+Listen for shim events and translate to terminal-manager operations:
+
+```typescript
+listen("shim-split-pane", ({ direction, command }) => {
+  const ws = this.activeWorkspace;
+  const pane = this.activePane;
+  this.splitPane(direction === "h" ? "horizontal" : "vertical");
+  // New pane is now active; write command if provided
+  if (command) invoke("write_pty", { ptyId: newSurface.ptyId, data: command + "\n" });
+});
+```
 
 #### Step 4: Sidebar Agent Metadata
 
@@ -352,9 +444,9 @@ Extend `pty-notification` handler:
 
 Claude Code's inter-agent coordination is entirely file-based (`~/.claude/teams/`, `~/.claude/tasks/`). There is no API server or WebSocket to connect to. File watching is the correct integration pattern — it's what Claude Code itself uses internally.
 
-### Why not use Claude Code's `--teammate-mode tmux`?
+### Why the tmux shim pattern instead of a custom `--teammate-mode`?
 
-gnar-term replaces tmux. The whole point is to provide a native GUI alternative. We use `--teammate-mode in-process` (or spawn teammates directly) and let gnar-term handle the pane layout.
+Claude Code already knows how to talk to tmux. Rather than waiting for Anthropic to add a `--teammate-mode gnar-term`, we impersonate tmux via a shim script. This is exactly what cmux does — it's a proven pattern. Claude Code runs with `--teammate-mode tmux` and our shim translates commands to native gnar-term operations. Zero changes needed on the Claude Code side.
 
 ### Why surfaces instead of a separate UI layer?
 
@@ -375,3 +467,15 @@ The existing `watch_file` Rust command already polls at 500ms intervals. This is
 3. **Permission handling:** When an agent needs approval, should gnar-term auto-focus that pane? (Recommendation: yes, with a setting to disable)
 
 4. **Max agents:** Should there be a limit on simultaneous agent panes? (Recommendation: no hard limit, but warn at >6 agents about performance)
+
+---
+
+## References
+
+- [Claude Code Agent Teams docs](https://code.claude.com/docs/en/agent-teams)
+- [Claude Code CLI reference](https://code.claude.com/docs/en/cli-reference)
+- [Claude Code Hooks reference](https://code.claude.com/docs/en/hooks)
+- [cmux claude-teams PR #1179](https://github.com/manaflow-ai/cmux/pull/1179) — tmux shim implementation
+- [cmux Socket API](https://cmux.com/docs/automation/socket-api)
+- [Claude Code Agent Teams architecture (reverse-engineered)](https://dev.to/nwyin/reverse-engineering-claude-code-agent-teams-architecture-and-protocol-o49)
+- [Claude Code issue #36926: Support cmux as teammateMode backend](https://github.com/anthropics/claude-code/issues/36926)

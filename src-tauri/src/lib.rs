@@ -227,11 +227,14 @@ PROMPT_COMMAND="_gnarterm_report_cwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
                                     // OSC 7: set working directory
                                     if s.starts_with("7;") {
                                         let url = s.splitn(2, ';').nth(1).unwrap_or("").to_string();
-                                        // OSC 7 sends file://hostname/path
+                                        // OSC 7 sends file://hostname/path or file:///path
                                         let cwd = if let Some(path) = url.strip_prefix("file://") {
-                                            // Skip hostname part
-                                            if let Some(slash_idx) = path[1..].find('/') {
-                                                path[slash_idx + 1..].to_string()
+                                            if path.starts_with('/') {
+                                                // Empty hostname (file:///path) — already absolute
+                                                path.to_string()
+                                            } else if let Some(slash_idx) = path.find('/') {
+                                                // Has hostname — skip it, keep the /
+                                                path[slash_idx..].to_string()
                                             } else {
                                                 path.to_string()
                                             }
@@ -334,8 +337,9 @@ async fn kill_pty(state: tauri::State<'_, AppState>, pty_id: u32) -> Result<(), 
             println!("[kill_pty] Killing pid {} and its process group", pid);
             #[cfg(unix)]
             {
-                unsafe { libc::kill(-(pid as i32), libc::SIGKILL); }
-                unsafe { libc::kill(pid as i32, libc::SIGKILL); }
+                let pid_i32 = i32::try_from(pid).map_err(|_| format!("PID {} exceeds i32::MAX", pid))?;
+                unsafe { libc::kill(-pid_i32, libc::SIGKILL); }
+                unsafe { libc::kill(pid_i32, libc::SIGKILL); }
             }
             #[cfg(windows)]
             {
@@ -594,16 +598,38 @@ async fn resume_pty(state: tauri::State<'_, AppState>, pty_id: u32) -> Result<()
     Ok(())
 }
 
+/// Block reads to sensitive directories (SSH keys, credentials, etc.)
+fn validate_read_path(path: &str) -> Result<std::path::PathBuf, String> {
+    let canonical = std::fs::canonicalize(path)
+        .map_err(|e| format!("Invalid path {}: {}", path, e))?;
+    let path_str = canonical.to_string_lossy();
+
+    if let Ok(home) = std::env::var("HOME") {
+        let blocked = ["/.ssh", "/.gnupg", "/.aws", "/.kube", "/.config/gcloud", "/.docker"];
+        for prefix in blocked {
+            if path_str.starts_with(&format!("{}{}", home, prefix)) {
+                return Err(format!("Access denied: {}", path));
+            }
+        }
+    }
+    if path_str.starts_with("/etc/shadow") || path_str.starts_with("/etc/gshadow") {
+        return Err(format!("Access denied: {}", path));
+    }
+    Ok(canonical)
+}
+
 /// Read a file's contents
 #[tauri::command]
 async fn read_file(path: String) -> Result<String, String> {
-    std::fs::read_to_string(&path).map_err(|e| format!("Failed to read {}: {}", path, e))
+    let validated = validate_read_path(&path)?;
+    std::fs::read_to_string(&validated).map_err(|e| format!("Failed to read {}: {}", path, e))
 }
 
 /// Read a file as base64 (for binary files like images)
 #[tauri::command]
 async fn read_file_base64(path: String) -> Result<String, String> {
-    let bytes = std::fs::read(&path).map_err(|e| format!("Failed to read {}: {}", path, e))?;
+    let validated = validate_read_path(&path)?;
+    let bytes = std::fs::read(&validated).map_err(|e| format!("Failed to read {}: {}", path, e))?;
     Ok(b64_encode(&bytes))
 }
 
@@ -623,15 +649,32 @@ fn b64_encode(data: &[u8]) -> String {
     result
 }
 
+/// Validate that a write path is under ~/.config/gnar-term/
+fn validate_write_path(path: &str) -> Result<(), String> {
+    let home = std::env::var("HOME").map_err(|_| "HOME not set".to_string())?;
+    let allowed = format!("{}/.config/gnar-term", home);
+
+    // Normalize components to prevent traversal via ../
+    let norm_path = std::path::Path::new(path).components().collect::<std::path::PathBuf>();
+    let norm_allowed = std::path::Path::new(&allowed).components().collect::<std::path::PathBuf>();
+
+    if !norm_path.starts_with(&norm_allowed) {
+        return Err(format!("Write denied: path must be under {}", allowed));
+    }
+    Ok(())
+}
+
 /// Write content to a file
 #[tauri::command]
 async fn write_file(path: String, content: String) -> Result<(), String> {
+    validate_write_path(&path)?;
     std::fs::write(&path, &content).map_err(|e| format!("Failed to write {}: {}", path, e))
 }
 
 /// Ensure a directory exists
 #[tauri::command]
 async fn ensure_dir(path: String) -> Result<(), String> {
+    validate_write_path(&path)?;
     std::fs::create_dir_all(&path).map_err(|e| format!("Failed to create dir {}: {}", path, e))
 }
 
@@ -655,7 +698,8 @@ async fn show_in_file_manager(path: String) -> Result<(), String> {
     }
     #[cfg(target_os = "windows")]
     {
-        std::process::Command::new("explorer").args(["/select,", &path]).spawn().map_err(|e| e.to_string())?;
+        let canonical = std::fs::canonicalize(&path).map_err(|e| format!("Invalid path: {}", e))?;
+        std::process::Command::new("explorer").args(["/select,", &canonical.to_string_lossy()]).spawn().map_err(|e| e.to_string())?;
     }
     Ok(())
 }
@@ -668,7 +712,7 @@ async fn open_with_default_app(path: String) -> Result<(), String> {
     #[cfg(target_os = "linux")]
     std::process::Command::new("xdg-open").arg(&path).spawn().map_err(|e| e.to_string())?;
     #[cfg(target_os = "windows")]
-    std::process::Command::new("cmd").args(["/C", "start", "", &path]).spawn().map_err(|e| e.to_string())?;
+    std::process::Command::new("explorer").arg(&path).spawn().map_err(|e| e.to_string())?;
     Ok(())
 }
 

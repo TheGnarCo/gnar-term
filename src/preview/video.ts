@@ -5,12 +5,22 @@ registerPreviewer({
   extensions: ["mp4", "webm", "mov", "avi", "mkv", "m4v", "ogv"],
   render(_content, filePath, element) {
     const src = convertFileSrc(filePath);
-    element.innerHTML = `
-      <div style="display: flex; justify-content: center; align-items: center; min-height: 200px;">
-        <video src="${src}" controls autoplay
-          style="max-width: 100%; max-height: 80vh; border-radius: 4px;"
-          onerror="this.parentElement.innerHTML='<div style=color:#f85149>Failed to load video</div>'" />
-      </div>
-    `;
+    const wrapper = document.createElement("div");
+    wrapper.style.cssText = "display: flex; justify-content: center; align-items: center; min-height: 200px;";
+    const video = document.createElement("video");
+    video.src = src;
+    video.controls = true;
+    video.autoplay = true;
+    video.style.cssText = "max-width: 100%; max-height: 80vh; border-radius: 4px;";
+    video.onerror = () => {
+      wrapper.textContent = "";
+      const errDiv = document.createElement("div");
+      errDiv.style.color = "#f85149";
+      errDiv.textContent = "Failed to load video";
+      wrapper.appendChild(errDiv);
+    };
+    wrapper.appendChild(video);
+    element.textContent = "";
+    element.appendChild(wrapper);
   },
 });

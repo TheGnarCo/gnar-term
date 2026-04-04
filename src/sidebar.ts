@@ -111,7 +111,7 @@ export class Sidebar {
         const wsToMove = this.manager.workspaces.splice(fromIdx, 1)[0];
         
         // Adjust destination index if we removed from before it
-        const toIdx = fromIdx < idx ? idx : idx;
+        const toIdx = fromIdx < idx ? idx - 1 : idx;
         this.manager.workspaces.splice(toIdx, 0, wsToMove);
         
         // Update active index if it moved
@@ -301,10 +301,12 @@ export class Sidebar {
         label: "Close Other Workspaces",
         disabled: this.manager.workspaces.length <= 1,
         action: () => {
+          let adjustedIdx = idx;
           for (let i = this.manager.workspaces.length - 1; i >= 0; i--) {
-            if (i !== idx) {
+            if (i !== adjustedIdx) {
               this.manager.switchWorkspace(i);
               this.manager.closeActiveWorkspace();
+              if (i < adjustedIdx) adjustedIdx--;
             }
           }
           this.manager.switchWorkspace(0);

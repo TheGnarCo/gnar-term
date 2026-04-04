@@ -4,6 +4,7 @@
  */
 
 import { marked } from "marked";
+import DOMPurify from "dompurify";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { theme } from "./theme";
@@ -87,8 +88,9 @@ export async function createMarkdownSurface(filePath: string): Promise<MarkdownS
   const fileName = filePath.split("/").pop() || filePath;
 
   function render(md: string) {
-    const html = marked.parse(md) as string;
-    element.innerHTML = `<div class="md-path">${filePath}</div>${html}`;
+    const html = DOMPurify.sanitize(marked.parse(md) as string);
+    const escapedPath = filePath.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    element.innerHTML = `<div class="md-path">${escapedPath}</div>${html}`;
   }
 
   render(content);

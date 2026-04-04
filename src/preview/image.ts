@@ -5,12 +5,21 @@ registerPreviewer({
   extensions: ["png", "jpg", "jpeg", "gif", "webp", "svg", "ico", "bmp", "heic", "heif", "tiff", "tif", "avif"],
   render(_content, filePath, element) {
     const src = convertFileSrc(filePath);
-    element.innerHTML = `
-      <div style="display: flex; justify-content: center; align-items: center; min-height: 200px;">
-        <img src="${src}" alt="${filePath}" 
-          style="max-width: 100%; max-height: 80vh; border-radius: 4px;"
-          onerror="this.parentElement.innerHTML='<div style=color:#f85149>Failed to load image</div>'" />
-      </div>
-    `;
+    const wrapper = document.createElement("div");
+    wrapper.style.cssText = "display: flex; justify-content: center; align-items: center; min-height: 200px;";
+    const img = document.createElement("img");
+    img.src = src;
+    img.alt = filePath;
+    img.style.cssText = "max-width: 100%; max-height: 80vh; border-radius: 4px;";
+    img.onerror = () => {
+      wrapper.textContent = "";
+      const errDiv = document.createElement("div");
+      errDiv.style.color = "#f85149";
+      errDiv.textContent = "Failed to load image";
+      wrapper.appendChild(errDiv);
+    };
+    wrapper.appendChild(img);
+    element.textContent = "";
+    element.appendChild(wrapper);
   },
 });

@@ -79,6 +79,7 @@ export interface Pane {
   surfaces: Surface[];
   activeSurfaceId: string | null;
   element: HTMLElement;  // persistent pane container
+  resizeObserver?: ResizeObserver;  // tracked so we can disconnect on rebuild
 }
 
 export type SplitNode = 
@@ -143,6 +144,11 @@ export class TerminalManager {
     const PAUSE_THRESHOLD = 5;
     const RESUME_THRESHOLD = 2;
 
+    // Safety timer: if a PTY stays paused for too long (write callbacks stalled),
+    // force a resume to prevent permanent deadlock.
+    const pauseTimers = new Map<number, ReturnType<typeof setTimeout>>();
+    const PAUSE_TIMEOUT_MS = 2000;
+
     await listen<{ pty_id: number; data: string }>("pty-output", (event) => {
       const { pty_id, data } = event.payload;
       // Decode base64 to preserve raw terminal escape sequences
@@ -156,12 +162,23 @@ export class TerminalManager {
             pendingWrites.set(pty_id, pending);
             if (pending >= PAUSE_THRESHOLD) {
               invoke("pause_pty", { ptyId: pty_id }).catch(() => {});
+              // Start a safety timer to force resume if callbacks stall
+              if (!pauseTimers.has(pty_id)) {
+                pauseTimers.set(pty_id, setTimeout(() => {
+                  pauseTimers.delete(pty_id);
+                  pendingWrites.set(pty_id, 0);
+                  invoke("resume_pty", { ptyId: pty_id }).catch(() => {});
+                }, PAUSE_TIMEOUT_MS));
+              }
             }
             s.terminal.write(bytes, () => {
               const p = Math.max((pendingWrites.get(pty_id) || 0) - 1, 0);
               pendingWrites.set(pty_id, p);
               if (p <= RESUME_THRESHOLD) {
                 invoke("resume_pty", { ptyId: pty_id }).catch(() => {});
+                // Clear safety timer since flow resumed normally
+                const timer = pauseTimers.get(pty_id);
+                if (timer) { clearTimeout(timer); pauseTimers.delete(pty_id); }
               }
             });
             return;
@@ -172,6 +189,10 @@ export class TerminalManager {
 
     await listen<{ pty_id: number }>("pty-exit", (event) => {
       const { pty_id } = event.payload;
+      // Clean up flow control state for the dead PTY
+      const timer = pauseTimers.get(pty_id);
+      if (timer) { clearTimeout(timer); pauseTimers.delete(pty_id); }
+      pendingWrites.delete(pty_id);
       for (const ws of this.workspaces) {
         for (const pane of this.getAllPanes(ws.splitRoot)) {
           const idx = pane.surfaces.findIndex((s) => s.ptyId === pty_id);
@@ -652,10 +673,21 @@ export class TerminalManager {
       }
     });
 
+    // Disconnect any previous observer to avoid stale closures and leaked observers
+    if (pane.resizeObserver) {
+      pane.resizeObserver.disconnect();
+    }
+    // Use a dynamic lookup so the observer always fits the *current* active surface,
+    // not the one that was active when the observer was created.
+    pane.resizeObserver = new ResizeObserver(() => {
+      const active = pane.surfaces.find((s) => s.id === pane.activeSurfaceId);
+      if (active && active.termElement.offsetParent !== null) {
+        active.fitAddon.fit();
+      }
+    });
+    pane.resizeObserver.observe(el);
     const activeSurface = pane.surfaces.find((s) => s.id === pane.activeSurfaceId);
     if (activeSurface) {
-      const observer = new ResizeObserver(() => activeSurface.fitAddon.fit());
-      observer.observe(el);
       setTimeout(() => activeSurface.fitAddon.fit(), 20);
     }
   }
@@ -853,6 +885,9 @@ export class TerminalManager {
   closeActiveWorkspace() {
     if (this.workspaces.length <= 1) return;
     const ws = this.workspaces[this.activeWorkspaceIdx];
+    for (const pane of this.getAllPanes(ws.splitRoot)) {
+      pane.resizeObserver?.disconnect();
+    }
     for (const s of this.getAllSurfaces(ws)) {
       safeDispose(s);
       if (s.ptyId >= 0) invoke("kill_pty", { ptyId: s.ptyId }).catch(() => {});
@@ -1009,6 +1044,7 @@ export class TerminalManager {
   }
 
   private removePane(ws: Workspace, pane: Pane) {
+    pane.resizeObserver?.disconnect();
     pane.element.remove();
     
     if (ws.splitRoot.type === "pane" && ws.splitRoot.pane.id === pane.id) {

@@ -412,6 +412,20 @@ export class TerminalManager {
       const alt = e.altKey;
       const ctrl = e.ctrlKey;
 
+      // ⌘C — copy selection
+      if (!alt && !ctrl && k === "c") {
+        const sel = terminal.getSelection();
+        if (sel) navigator.clipboard.writeText(sel);
+        return false;
+      }
+      // ⌘V — paste
+      if (!alt && !ctrl && k === "v") {
+        navigator.clipboard.readText().then(text => {
+          if (surface.ptyId >= 0) invoke("write_pty", { ptyId: surface.ptyId, data: text });
+        });
+        return false;
+      }
+
       // ⌘+key (no alt)
       if (!alt && !ctrl) {
         if (["n","t","d","w","b","p","k","f","g"].includes(k)) return false;

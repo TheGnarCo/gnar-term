@@ -18,12 +18,37 @@ sidebar.style.cssText = `
   font-size: 13px; user-select: none;
 `;
 
+// Wrapper holds the drag region + terminal area in a column
+const terminalWrapper = document.createElement("div");
+terminalWrapper.style.cssText = `
+  flex: 1; display: flex; flex-direction: column;
+  background: ${theme.bg}; min-width: 0;
+`;
+
+// Title bar drag region above terminal area (matches sidebar header height)
+const titleBarDrag = document.createElement("div");
+titleBarDrag.setAttribute("data-tauri-drag-region", "");
+titleBarDrag.style.cssText = `
+  height: 38px; flex-shrink: 0; display: flex; align-items: center;
+  padding-left: 16px;
+  -webkit-app-region: drag;
+`;
+const titleLabel = document.createElement("span");
+titleLabel.textContent = "GNARTERM";
+titleLabel.style.cssText = `
+  font-size: 11px; font-weight: 600; letter-spacing: 1.5px;
+  color: ${theme.fgDim}; pointer-events: none;
+`;
+titleBarDrag.appendChild(titleLabel);
+terminalWrapper.appendChild(titleBarDrag);
+
 const terminalArea = document.createElement("div");
 terminalArea.id = "terminal-area";
 terminalArea.style.cssText = `
   flex: 1; display: flex; flex-direction: column;
-  background: ${theme.bg}; min-width: 0;
+  min-width: 0;
 `;
+terminalWrapper.appendChild(terminalArea);
 
 // Sidebar toggle — only visible when sidebar is hidden
 const sidebarToggle = document.createElement("button");
@@ -34,7 +59,7 @@ sidebarToggle.style.cssText = `
   background: none; border: none; border-right: 1px solid ${theme.border};
   color: ${theme.fgDim}; cursor: pointer; width: 36px;
   display: none; align-items: center; justify-content: center;
-  padding: 0; flex-shrink: 0; align-self: stretch;
+  padding: 38px 0 0 0; flex-shrink: 0; align-self: stretch;
 `;
 sidebarToggle.addEventListener("click", () => {
   sidebar.style.display = "flex";
@@ -45,7 +70,7 @@ sidebarToggle.addEventListener("mouseleave", () => { sidebarToggle.style.backgro
 
 app.appendChild(sidebar);
 app.appendChild(sidebarToggle);
-app.appendChild(terminalArea);
+app.appendChild(terminalWrapper);
 
 const termManager = new TerminalManager(terminalArea);
 const sidebarUI = new Sidebar(sidebar, termManager);
@@ -71,7 +96,8 @@ listen("menu-cmd-palette", () => {
 onThemeChange(() => {
   sidebar.style.background = theme.sidebarBg;
   sidebar.style.borderColor = theme.sidebarBorder;
-  terminalArea.style.background = theme.bg;
+  terminalWrapper.style.background = theme.bg;
+  titleLabel.style.color = theme.fgDim;
   document.body.style.background = theme.bg;
 });
 
@@ -82,7 +108,7 @@ fontReady.then(async () => {
     setTheme(config.theme);
     sidebar.style.background = theme.sidebarBg;
     sidebar.style.borderColor = theme.sidebarBorder;
-    terminalArea.style.background = theme.bg;
+    terminalWrapper.style.background = theme.bg;
     document.body.style.background = theme.bg;
   }
   // Autoload workspace commands from config

@@ -11,11 +11,14 @@ export class Sidebar {
     this.container = container;
     this.manager = manager;
 
-    // Header toolbar (extra top padding for macOS traffic lights)
+    // Title bar row — sits next to macOS traffic light buttons
     const header = document.createElement("div");
+    header.setAttribute("data-tauri-drag-region", "");
     header.style.cssText = `
-      padding: 32px 8px 8px 8px; display: flex; align-items: center;
-      gap: 4px; border-bottom: 1px solid ${theme.border};
+      height: 38px; padding: 0 6px 0 0; display: flex; align-items: center;
+      justify-content: flex-end; gap: 2px;
+      border-bottom: 1px solid ${theme.border};
+      -webkit-app-region: drag;
     `;
 
     const createToolbarBtn = (svg: string, title: string, onClick: () => void) => {
@@ -24,9 +27,9 @@ export class Sidebar {
       btn.title = title;
       btn.style.cssText = `
         background: none; border: none; color: ${theme.fgMuted};
-        border-radius: 4px; width: 28px; height: 28px; cursor: pointer;
+        border-radius: 4px; width: 26px; height: 26px; cursor: pointer;
         display: flex; align-items: center; justify-content: center;
-        padding: 0;
+        padding: 0; -webkit-app-region: no-drag;
       `;
       btn.addEventListener("click", onClick);
       btn.addEventListener("mouseenter", () => { btn.style.background = theme.bgHighlight; btn.style.color = theme.fg; });
@@ -42,10 +45,11 @@ export class Sidebar {
       if (btn) btn.style.display = "flex";
     }));
 
-    // Spacer pushes + button to the right
-    const spacer = document.createElement("div");
-    spacer.style.cssText = "flex: 1;";
-    header.appendChild(spacer);
+    // Split pane button
+    const splitSvg = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="12" height="12" rx="1.5"/><line x1="7" y1="1" x2="7" y2="13"/></svg>`;
+    header.appendChild(createToolbarBtn(splitSvg, "Split Pane (⌘D)", () => {
+      manager.splitPane("horizontal");
+    }));
 
     // Add workspace button
     const addSvg = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="7" y1="2" x2="7" y2="12"/><line x1="2" y1="7" x2="12" y2="7"/></svg>`;

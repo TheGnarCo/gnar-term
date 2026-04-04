@@ -323,9 +323,10 @@ export class TerminalManager {
       theme: getXtermTheme(),
       allowProposedApi: true,
       scrollback: 5000,
-      fastScrollModifier: "alt",
       smoothScrollDuration: 0,
     });
+    // fastScrollModifier is a valid xterm.js option but missing from the bundled type definitions
+    (terminal.options as Record<string, unknown>).fastScrollModifier = "alt";
 
     const fitAddon = new FitAddon();
     const searchAddon = new SearchAddon();

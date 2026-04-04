@@ -3,3 +3,13 @@ dist/
 src-tauri/target/
 *.log
 .DS_Store
+*.swp
+*.swo
+
+# Secrets / credentials
+.env*
+*.p12
+*.pem
+*.key
+*.cert
+*.pfx

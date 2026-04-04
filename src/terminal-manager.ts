@@ -323,8 +323,10 @@ export class TerminalManager {
       theme: getXtermTheme(),
       allowProposedApi: true,
       scrollback: 5000,
-      fastScrollModifier: "alt",
       smoothScrollDuration: 0,
+      vtExtensions: {
+        kittyKeyboard: true,
+      },
     });
 
     const fitAddon = new FitAddon();

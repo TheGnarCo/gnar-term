@@ -547,6 +547,10 @@ export class TerminalManager {
   private openSurface(surface: Surface) {
     if (surface.opened) return;
     surface.terminal.open(surface.termElement);
+    // Fit immediately after open so the PTY gets correct dimensions right away.
+    // This ensures TUI apps (like Claude Code statusline) that query terminal
+    // size on startup get accurate rows/cols instead of the default 80x24.
+    try { surface.fitAddon.fit(); } catch (_) { /* element may not be laid out yet */ }
     // WebGL renderer is critical for Vim/TUI performance.
     // Must be loaded AFTER terminal.open() when the element is in the DOM.
     const initWebGL = () => {

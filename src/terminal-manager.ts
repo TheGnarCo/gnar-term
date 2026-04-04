@@ -750,7 +750,10 @@ export class TerminalManager {
     pane.resizeObserver.observe(el);
     const activeSurface = pane.surfaces.find((s) => s.id === pane.activeSurfaceId);
     if (activeSurface) {
-      setTimeout(() => activeSurface.fitAddon.fit(), 20);
+      setTimeout(() => {
+        activeSurface.fitAddon.fit();
+        activeSurface.terminal.scrollToBottom();
+      }, 20);
     }
   }
 
@@ -758,7 +761,10 @@ export class TerminalManager {
     for (const s of pane.surfaces) {
       s.termElement.style.display = s.id === pane.activeSurfaceId ? (s.terminal ? "flex" : "block") : "none";
       if (s.id === pane.activeSurfaceId) {
-        setTimeout(() => s.fitAddon.fit(), 10);
+        setTimeout(() => {
+          s.fitAddon.fit();
+          s.terminal.scrollToBottom();
+        }, 10);
       }
     }
   }
@@ -940,6 +946,7 @@ export class TerminalManager {
     const surface = this.activeSurface;
     setTimeout(() => {
       surface?.fitAddon.fit();
+      surface?.terminal.scrollToBottom();
       safeFocus(surface);
     }, 20);
     this.notify();
@@ -1218,6 +1225,7 @@ export class TerminalManager {
       }
     }
     this.activeSurface?.fitAddon.fit();
+    this.activeSurface?.terminal.scrollToBottom();
     safeFocus(this.activeSurface);
     this.notify();
   }

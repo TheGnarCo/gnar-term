@@ -22,7 +22,7 @@ sidebar.style.cssText = `
 const terminalWrapper = document.createElement("div");
 terminalWrapper.style.cssText = `
   flex: 1; display: flex; flex-direction: column;
-  background: ${theme.bg}; min-width: 0;
+  background: ${theme.bg}; min-height: 0; min-width: 0;
 `;
 
 // Title bar drag region above terminal area (matches sidebar header height)

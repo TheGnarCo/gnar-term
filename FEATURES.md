@@ -1,6 +1,6 @@
 # GnarTerm Feature Spec
 
-Informed by cmux's design. Not a 1:1 clone — taking what it does right and making it work cross-platform.
+Informed this by cmux's design. Not a 1:1 clone — taking what it does right and making it work cross-platform.
 
 ## Layout (cmux model)
 

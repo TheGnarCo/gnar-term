@@ -138,61 +138,114 @@ export class TerminalManager {
 
   // --- Event Listeners ---
 
+  // Flow control: buffer incoming PTY data and flush to xterm.js at screen refresh
+  // rate via requestAnimationFrame. This prevents the UI from freezing when commands
+  // like `ps aux` or `find /` dump large output — events accumulate in the buffer
+  // and get written in a single batch per frame (~16ms).
+  private ptyBuffers = new Map<number, Uint8Array[]>();
+  private ptyBufferBytes = new Map<number, number>();
+  private ptyFlushScheduled = new Set<number>();
+  private ptyPaused = new Set<number>();
+
+  // Max bytes to buffer before pausing the PTY reader. This limits memory usage
+  // when the frontend can't keep up.
+  private static readonly BUFFER_HIGH_WATER = 128 * 1024; // 128KB
+  private static readonly BUFFER_LOW_WATER = 32 * 1024;   // 32KB
+
+  private findSurfaceByPty(ptyId: number): Surface | null {
+    for (const ws of this.workspaces) {
+      for (const s of this.getAllSurfaces(ws)) {
+        if (s.ptyId === ptyId && s.terminal) return s;
+      }
+    }
+    return null;
+  }
+
+  private scheduleFlush(ptyId: number) {
+    if (this.ptyFlushScheduled.has(ptyId)) return;
+    this.ptyFlushScheduled.add(ptyId);
+    requestAnimationFrame(() => this.flushPtyBuffer(ptyId));
+  }
+
+  private flushPtyBuffer(ptyId: number) {
+    this.ptyFlushScheduled.delete(ptyId);
+    const chunks = this.ptyBuffers.get(ptyId);
+    if (!chunks || chunks.length === 0) return;
+
+    const surface = this.findSurfaceByPty(ptyId);
+    if (!surface) {
+      // Surface gone — discard buffered data and resume PTY so reader thread exits
+      this.ptyBuffers.delete(ptyId);
+      this.ptyBufferBytes.delete(ptyId);
+      if (this.ptyPaused.has(ptyId)) {
+        this.ptyPaused.delete(ptyId);
+        invoke("resume_pty", { ptyId }).catch(() => {});
+      }
+      return;
+    }
+
+    // Concatenate all buffered chunks into one write
+    const totalBytes = this.ptyBufferBytes.get(ptyId) || 0;
+    const merged = new Uint8Array(totalBytes);
+    let offset = 0;
+    for (const chunk of chunks) {
+      merged.set(chunk, offset);
+      offset += chunk.length;
+    }
+    chunks.length = 0;
+    this.ptyBufferBytes.set(ptyId, 0);
+
+    // Single write to xterm.js per frame — the callback fires when xterm.js has
+    // processed this batch, which is our signal that it's ready for more.
+    surface.terminal.write(merged, () => {
+      // If more data arrived while we were rendering, flush again next frame
+      const buffered = this.ptyBufferBytes.get(ptyId) || 0;
+      if (buffered > 0) {
+        this.scheduleFlush(ptyId);
+      }
+      // Resume PTY reader if we drained below low water mark
+      if (this.ptyPaused.has(ptyId) && buffered < TerminalManager.BUFFER_LOW_WATER) {
+        this.ptyPaused.delete(ptyId);
+        invoke("resume_pty", { ptyId }).catch(() => {});
+      }
+    });
+  }
+
   private async setupListeners() {
-    // Flow control: track pending writes per PTY to avoid flooding xterm.js
-    const pendingWrites = new Map<number, number>();
-    const PAUSE_THRESHOLD = 5;
-    const RESUME_THRESHOLD = 2;
-
-    // Safety timer: if a PTY stays paused for too long (write callbacks stalled),
-    // force a resume to prevent permanent deadlock.
-    const pauseTimers = new Map<number, ReturnType<typeof setTimeout>>();
-    const PAUSE_TIMEOUT_MS = 2000;
-
     await listen<{ pty_id: number; data: string }>("pty-output", (event) => {
       const { pty_id, data } = event.payload;
       // Decode base64 to preserve raw terminal escape sequences
       const bin = atob(data);
       const bytes = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      for (const ws of this.workspaces) {
-        for (const s of this.getAllSurfaces(ws)) {
-          if (s.ptyId === pty_id && s.terminal) {
-            const pending = (pendingWrites.get(pty_id) || 0) + 1;
-            pendingWrites.set(pty_id, pending);
-            if (pending >= PAUSE_THRESHOLD) {
-              invoke("pause_pty", { ptyId: pty_id }).catch(() => {});
-              // Start a safety timer to force resume if callbacks stall
-              if (!pauseTimers.has(pty_id)) {
-                pauseTimers.set(pty_id, setTimeout(() => {
-                  pauseTimers.delete(pty_id);
-                  pendingWrites.set(pty_id, 0);
-                  invoke("resume_pty", { ptyId: pty_id }).catch(() => {});
-                }, PAUSE_TIMEOUT_MS));
-              }
-            }
-            s.terminal.write(bytes, () => {
-              const p = Math.max((pendingWrites.get(pty_id) || 0) - 1, 0);
-              pendingWrites.set(pty_id, p);
-              if (p <= RESUME_THRESHOLD) {
-                invoke("resume_pty", { ptyId: pty_id }).catch(() => {});
-                // Clear safety timer since flow resumed normally
-                const timer = pauseTimers.get(pty_id);
-                if (timer) { clearTimeout(timer); pauseTimers.delete(pty_id); }
-              }
-            });
-            return;
-          }
-        }
+
+      // Append to buffer
+      let chunks = this.ptyBuffers.get(pty_id);
+      if (!chunks) {
+        chunks = [];
+        this.ptyBuffers.set(pty_id, chunks);
       }
+      chunks.push(bytes);
+      const buffered = (this.ptyBufferBytes.get(pty_id) || 0) + bytes.length;
+      this.ptyBufferBytes.set(pty_id, buffered);
+
+      // Pause PTY reader if buffer is getting large
+      if (!this.ptyPaused.has(pty_id) && buffered >= TerminalManager.BUFFER_HIGH_WATER) {
+        this.ptyPaused.add(pty_id);
+        invoke("pause_pty", { ptyId: pty_id }).catch(() => {});
+      }
+
+      // Schedule a flush on the next animation frame
+      this.scheduleFlush(pty_id);
     });
 
     await listen<{ pty_id: number }>("pty-exit", (event) => {
       const { pty_id } = event.payload;
       // Clean up flow control state for the dead PTY
-      const timer = pauseTimers.get(pty_id);
-      if (timer) { clearTimeout(timer); pauseTimers.delete(pty_id); }
-      pendingWrites.delete(pty_id);
+      this.ptyBuffers.delete(pty_id);
+      this.ptyBufferBytes.delete(pty_id);
+      this.ptyFlushScheduled.delete(pty_id);
+      this.ptyPaused.delete(pty_id);
       for (const ws of this.workspaces) {
         for (const pane of this.getAllPanes(ws.splitRoot)) {
           const idx = pane.surfaces.findIndex((s) => s.ptyId === pty_id);

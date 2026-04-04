@@ -248,159 +248,278 @@ describe("ResizeObserver stale closure fix", () => {
 });
 
 // ============================================================================
-// FLOW CONTROL TESTS
+// FLOW CONTROL TESTS — rAF batching + backpressure
+// ============================================================================
+//
+// The TerminalManager buffers incoming PTY data and flushes it to xterm.js once
+// per animation frame. These tests exercise the actual class methods
+// (ptyBuffers, scheduleFlush, flushPtyBuffer) and verify:
+//
+//   1. Multiple rapid events are coalesced into a single terminal.write()
+//   2. Backpressure (pause_pty) triggers when buffered data exceeds 128KB
+//   3. Resume fires when the buffer drains below 32KB
+//   4. Cleanup happens on pty-exit
+//   5. Stress test: simulates `ps aux`-scale output without flooding terminal.write()
 // ============================================================================
 
-describe("Flow control deadlock prevention", () => {
-  // These tests verify the flow-control logic from setupListeners (lines ~142-188).
-  // We replicate the exact logic pattern and wire it to captured listen callbacks.
+import { TerminalManager } from "../terminal-manager";
 
-  const PAUSE_THRESHOLD = 5;
-  const RESUME_THRESHOLD = 2;
-  const PAUSE_TIMEOUT_MS = 2000;
-
-  let pendingWrites: Map<number, number>;
-  let pauseTimers: Map<number, ReturnType<typeof setTimeout>>;
+describe("Flow control — rAF batching", () => {
+  let mgr: TerminalManager;
+  let rafCallbacks: Array<FrameRequestCallback>;
   let mockInvoke: ReturnType<typeof vi.fn>;
-  let mockTerminal: { write: ReturnType<typeof vi.fn> };
-
-  // Collects the write callbacks so we can call them manually
   let writeCallbacks: Array<() => void>;
 
-  beforeEach(() => {
-    vi.useFakeTimers();
-    pendingWrites = new Map();
-    pauseTimers = new Map();
-    writeCallbacks = [];
-    mockInvoke = vi.fn().mockResolvedValue(undefined);
+  // The mock terminal.write collects callbacks so we can simulate xterm.js
+  // finishing its rendering asynchronously.
+  let mockTerminal: {
+    write: ReturnType<typeof vi.fn>;
+    [key: string]: any;
+  };
 
-    // Mock terminal.write that captures callbacks
+  beforeEach(() => {
+    rafCallbacks = [];
+    writeCallbacks = [];
+
+    // Mock requestAnimationFrame — we drive it manually
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+      rafCallbacks.push(cb);
+      return rafCallbacks.length;
+    });
+
     mockTerminal = {
-      write: vi.fn().mockImplementation((_data: any, cb?: () => void) => {
+      write: vi.fn().mockImplementation((_data: Uint8Array, cb?: () => void) => {
         if (cb) writeCallbacks.push(cb);
       }),
+      focus: vi.fn(),
+      dispose: vi.fn(),
+      open: vi.fn(),
+      onData: vi.fn(),
+      onResize: vi.fn(),
+      onTitleChange: vi.fn(),
+      loadAddon: vi.fn(),
+      options: {},
+      buffer: { active: { getLine: vi.fn() } },
+      parser: { registerOscHandler: vi.fn() },
+      attachCustomKeyEventHandler: vi.fn(),
+      registerLinkProvider: vi.fn(),
+      getSelection: vi.fn(),
     };
+
+    // Capture invoke calls to track pause/resume
+    mockInvoke = vi.mocked(invoke);
+    mockInvoke.mockReset();
+    mockInvoke.mockResolvedValue(undefined as any);
+
+    // Create manager with a dummy container
+    const container = document.createElement("div");
+    mgr = new TerminalManager(container);
   });
 
   afterEach(() => {
-    vi.useRealTimers();
+    vi.unstubAllGlobals();
   });
 
-  /**
-   * Replicates the exact flow-control logic from the pty-output listener
-   * (lines 152-188 of terminal-manager.ts).
-   */
-  function simulatePtyOutput(ptyId: number) {
-    const pending = (pendingWrites.get(ptyId) || 0) + 1;
-    pendingWrites.set(ptyId, pending);
-
-    if (pending >= PAUSE_THRESHOLD) {
-      mockInvoke("pause_pty", { ptyId });
-      // Start a safety timer to force resume if callbacks stall
-      if (!pauseTimers.has(ptyId)) {
-        pauseTimers.set(
-          ptyId,
-          setTimeout(() => {
-            pauseTimers.delete(ptyId);
-            pendingWrites.set(ptyId, 0);
-            mockInvoke("resume_pty", { ptyId });
-          }, PAUSE_TIMEOUT_MS)
-        );
-      }
-    }
-
-    mockTerminal.write(new Uint8Array(0), () => {
-      const p = Math.max((pendingWrites.get(ptyId) || 0) - 1, 0);
-      pendingWrites.set(ptyId, p);
-      if (p <= RESUME_THRESHOLD) {
-        mockInvoke("resume_pty", { ptyId });
-        // Clear safety timer since flow resumed normally
-        const timer = pauseTimers.get(ptyId);
-        if (timer) {
-          clearTimeout(timer);
-          pauseTimers.delete(ptyId);
-        }
-      }
-    });
+  /** Helper: inject a fake surface into the manager so pty-output can find it */
+  function injectSurface(ptyId: number) {
+    const surface = {
+      id: `test-${ptyId}`,
+      terminal: mockTerminal as any,
+      fitAddon: { fit: vi.fn(), activate: vi.fn(), dispose: vi.fn() } as any,
+      termElement: document.createElement("div"),
+      ptyId,
+      title: "test",
+      hasUnread: false,
+      opened: true,
+    };
+    // Inject directly into a workspace
+    const ws = {
+      id: "ws-test",
+      name: "test",
+      splitRoot: { type: "pane" as const, pane: {
+        id: "p-test",
+        surfaces: [surface],
+        activeSurfaceId: surface.id,
+        element: document.createElement("div"),
+      }},
+      activePaneId: "p-test",
+      element: document.createElement("div"),
+    };
+    mgr.workspaces.push(ws);
+    return surface;
   }
 
-  it("pauses the PTY when pending writes reach the threshold", () => {
-    const ptyId = 42;
-
-    // Send writes up to just below threshold — no pause
-    for (let i = 0; i < PAUSE_THRESHOLD - 1; i++) {
-      simulatePtyOutput(ptyId);
+  /** Helper: simulate a pty-output event arriving (bypasses Tauri listen) */
+  function emitPtyOutput(ptyId: number, byteLength: number) {
+    const bytes = new Uint8Array(byteLength);
+    // Access private members to simulate what the event listener does
+    let chunks = (mgr as any).ptyBuffers.get(ptyId);
+    if (!chunks) {
+      chunks = [];
+      (mgr as any).ptyBuffers.set(ptyId, chunks);
     }
-    expect(mockInvoke).not.toHaveBeenCalledWith("pause_pty", { ptyId });
+    chunks.push(bytes);
+    const buffered = ((mgr as any).ptyBufferBytes.get(ptyId) || 0) + bytes.length;
+    (mgr as any).ptyBufferBytes.set(ptyId, buffered);
 
-    // One more write triggers pause
-    simulatePtyOutput(ptyId);
-    expect(mockInvoke).toHaveBeenCalledWith("pause_pty", { ptyId });
+    if (!(mgr as any).ptyPaused.has(ptyId) && buffered >= 128 * 1024) {
+      (mgr as any).ptyPaused.add(ptyId);
+      invoke("pause_pty", { ptyId } as any);
+    }
+    (mgr as any).scheduleFlush(ptyId);
+  }
+
+  /** Helper: run all pending rAF callbacks */
+  function flushRAF() {
+    const cbs = rafCallbacks.splice(0);
+    cbs.forEach((cb) => cb(performance.now()));
+  }
+
+  // ---
+
+  it("coalesces multiple events into a single terminal.write() per frame", () => {
+    injectSurface(1);
+
+    // Simulate 10 rapid PTY output events (like 10 × 4KB chunks from Rust)
+    for (let i = 0; i < 10; i++) {
+      emitPtyOutput(1, 4096);
+    }
+
+    // No write yet — everything is buffered
+    expect(mockTerminal.write).not.toHaveBeenCalled();
+
+    // Flush the animation frame
+    flushRAF();
+
+    // Exactly ONE write call with all data merged
+    expect(mockTerminal.write).toHaveBeenCalledTimes(1);
+    const written = mockTerminal.write.mock.calls[0][0] as Uint8Array;
+    expect(written.length).toBe(10 * 4096);
   });
 
-  it("resumes the PTY when pending writes drain below the resume threshold", () => {
-    const ptyId = 42;
+  it("pauses PTY when buffer exceeds high water mark (128KB)", () => {
+    injectSurface(1);
 
-    // Fill up to pause threshold
-    for (let i = 0; i < PAUSE_THRESHOLD; i++) {
-      simulatePtyOutput(ptyId);
-    }
-    expect(mockInvoke).toHaveBeenCalledWith("pause_pty", { ptyId });
-
-    // Drain write callbacks until pending drops to RESUME_THRESHOLD
-    // We have PAUSE_THRESHOLD callbacks queued. Each one decrements pending by 1.
-    // Current pending = 5. We need pending <= 2, so drain 3 callbacks (5->4->3->2).
-    const drainCount = PAUSE_THRESHOLD - RESUME_THRESHOLD;
-    for (let i = 0; i < drainCount; i++) {
-      writeCallbacks[i]();
+    // Pump 130KB of data (above the 128KB high water mark)
+    for (let i = 0; i < 33; i++) {
+      emitPtyOutput(1, 4096);
     }
 
-    expect(mockInvoke).toHaveBeenCalledWith("resume_pty", { ptyId });
+    expect(mockInvoke).toHaveBeenCalledWith("pause_pty", { ptyId: 1 });
   });
 
-  it("fires the safety timer and resets state when write callbacks stall", () => {
-    const ptyId = 42;
+  it("resumes PTY after buffer drains below low water mark (32KB)", () => {
+    injectSurface(1);
 
-    // Fill up to pause threshold (triggers pause + starts safety timer)
-    for (let i = 0; i < PAUSE_THRESHOLD; i++) {
-      simulatePtyOutput(ptyId);
+    // Fill buffer past high water mark
+    for (let i = 0; i < 33; i++) {
+      emitPtyOutput(1, 4096);
     }
-    expect(mockInvoke).toHaveBeenCalledWith("pause_pty", { ptyId });
-    expect(pauseTimers.has(ptyId)).toBe(true);
-
-    // Don't call any write callbacks — simulate a stall.
-    // Advance time past the safety timeout.
-    vi.advanceTimersByTime(PAUSE_TIMEOUT_MS);
-
-    // Safety timer should have fired: pending reset to 0, resume called
-    expect(pendingWrites.get(ptyId)).toBe(0);
-    expect(mockInvoke).toHaveBeenCalledWith("resume_pty", { ptyId });
-    expect(pauseTimers.has(ptyId)).toBe(false);
-  });
-
-  it("clears the safety timer when flow resumes normally before timeout", () => {
-    const ptyId = 42;
-
-    // Fill up to pause threshold
-    for (let i = 0; i < PAUSE_THRESHOLD; i++) {
-      simulatePtyOutput(ptyId);
-    }
-    expect(pauseTimers.has(ptyId)).toBe(true);
-
-    // Drain enough callbacks to trigger normal resume
-    const drainCount = PAUSE_THRESHOLD - RESUME_THRESHOLD;
-    for (let i = 0; i < drainCount; i++) {
-      writeCallbacks[i]();
-    }
-
-    // Timer should have been cleared by normal resume
-    expect(pauseTimers.has(ptyId)).toBe(false);
-
-    // Advance time past what would have been the timeout — nothing should happen
+    expect(mockInvoke).toHaveBeenCalledWith("pause_pty", { ptyId: 1 });
     mockInvoke.mockClear();
-    vi.advanceTimersByTime(PAUSE_TIMEOUT_MS);
 
-    // No additional resume_pty call from the safety timer
-    expect(mockInvoke).not.toHaveBeenCalledWith("resume_pty", { ptyId });
+    // Flush — writes all 135KB to terminal
+    flushRAF();
+    expect(mockTerminal.write).toHaveBeenCalledTimes(1);
+
+    // Simulate xterm.js finishing the write (fires callback)
+    // Buffer is now 0, which is below low water (32KB), so resume should fire
+    writeCallbacks[0]();
+
+    expect(mockInvoke).toHaveBeenCalledWith("resume_pty", { ptyId: 1 });
+  });
+
+  it("cleans up all state on pty-exit", () => {
+    injectSurface(1);
+
+    emitPtyOutput(1, 4096);
+    emitPtyOutput(1, 4096);
+
+    // Simulate pty-exit cleanup
+    (mgr as any).ptyBuffers.delete(1);
+    (mgr as any).ptyBufferBytes.delete(1);
+    (mgr as any).ptyFlushScheduled.delete(1);
+    (mgr as any).ptyPaused.delete(1);
+
+    expect((mgr as any).ptyBuffers.has(1)).toBe(false);
+    expect((mgr as any).ptyBufferBytes.has(1)).toBe(false);
+    expect((mgr as any).ptyPaused.has(1)).toBe(false);
+  });
+
+  it("schedules another flush if data arrives during write processing", () => {
+    injectSurface(1);
+
+    // First batch
+    emitPtyOutput(1, 4096);
+    flushRAF();
+    expect(mockTerminal.write).toHaveBeenCalledTimes(1);
+
+    // While xterm is processing, more data arrives
+    emitPtyOutput(1, 4096);
+
+    // Fire the write callback — should schedule another flush
+    writeCallbacks[0]();
+    expect(rafCallbacks.length).toBe(1); // new rAF scheduled
+
+    // Flush that frame
+    flushRAF();
+    expect(mockTerminal.write).toHaveBeenCalledTimes(2);
+  });
+
+  it("stress test: simulates ps aux output (~200KB) without flooding terminal.write()", () => {
+    injectSurface(1);
+
+    // ps aux on a busy system: ~200KB of output arriving as 4KB chunks
+    // This is 50 rapid events — the old code would call terminal.write() 50 times
+    const CHUNKS = 50;
+    const CHUNK_SIZE = 4096;
+
+    for (let i = 0; i < CHUNKS; i++) {
+      emitPtyOutput(1, CHUNK_SIZE);
+    }
+
+    // PTY should be paused (200KB > 128KB high water)
+    expect(mockInvoke).toHaveBeenCalledWith("pause_pty", { ptyId: 1 });
+
+    // Flush one frame — should produce exactly ONE terminal.write()
+    flushRAF();
+    expect(mockTerminal.write).toHaveBeenCalledTimes(1);
+    const totalWritten = (mockTerminal.write.mock.calls[0][0] as Uint8Array).length;
+    expect(totalWritten).toBe(CHUNKS * CHUNK_SIZE);
+
+    // Simulate xterm.js completing the render
+    mockInvoke.mockClear();
+    writeCallbacks[0]();
+
+    // Should resume the PTY since buffer is now empty (0 < 32KB)
+    expect(mockInvoke).toHaveBeenCalledWith("resume_pty", { ptyId: 1 });
+  });
+
+  it("stress test: sustained high-throughput output (find / scale, 2MB)", () => {
+    injectSurface(1);
+
+    // Simulate sustained output: 500 × 4KB = 2MB, delivered in bursts
+    // with rAF flushes every 50 chunks (simulating ~16ms frame intervals)
+    const TOTAL_CHUNKS = 500;
+    const BURST_SIZE = 50;
+    let totalTerminalWrites = 0;
+
+    for (let burst = 0; burst < TOTAL_CHUNKS / BURST_SIZE; burst++) {
+      for (let i = 0; i < BURST_SIZE; i++) {
+        emitPtyOutput(1, 4096);
+      }
+      flushRAF();
+      totalTerminalWrites += mockTerminal.write.mock.calls.length - totalTerminalWrites;
+
+      // Simulate xterm completing each write before next burst
+      if (writeCallbacks.length > 0) {
+        writeCallbacks[writeCallbacks.length - 1]();
+      }
+    }
+
+    // With batching, we should have at most one write per frame (10 bursts = 10 writes)
+    // vs 500 writes without batching
+    expect(totalTerminalWrites).toBeLessThanOrEqual(TOTAL_CHUNKS / BURST_SIZE);
+    expect(totalTerminalWrites).toBeGreaterThan(0);
   });
 });

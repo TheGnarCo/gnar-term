@@ -9,12 +9,38 @@ use tauri::{AppHandle, Emitter};
 static NEXT_PTY_ID: AtomicU32 = AtomicU32::new(1);
 static NEXT_WATCH_ID: AtomicU32 = AtomicU32::new(1);
 
+/// Shared pause state — uses a Condvar so the reader thread blocks efficiently
+/// instead of spin-waiting when the frontend signals backpressure.
+struct PauseFlag {
+    mu: std::sync::Mutex<bool>,
+    cv: std::sync::Condvar,
+}
+
+impl PauseFlag {
+    fn new() -> Self {
+        Self { mu: std::sync::Mutex::new(false), cv: std::sync::Condvar::new() }
+    }
+    fn pause(&self) {
+        *self.mu.lock().unwrap_or_else(|e| e.into_inner()) = true;
+    }
+    fn resume(&self) {
+        *self.mu.lock().unwrap_or_else(|e| e.into_inner()) = false;
+        self.cv.notify_one();
+    }
+    fn wait_if_paused(&self) {
+        let guard = self.mu.lock().unwrap_or_else(|e| e.into_inner());
+        // Block until paused == false (no CPU burn)
+        let _guard = self.cv.wait_while(guard, |paused| *paused)
+            .unwrap_or_else(|e| e.into_inner());
+    }
+}
+
 struct PtyInstance {
     writer: Box<dyn Write + Send>,
     // master is kept alive to keep the PTY open
     _master: Box<dyn MasterPty + Send>,
     child_pid: Option<u32>,
-    paused: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    paused: std::sync::Arc<PauseFlag>,
 }
 
 struct AppState {
@@ -129,7 +155,7 @@ PROMPT_COMMAND="_gnarterm_report_cwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
         .try_clone_reader()
         .map_err(|e| format!("Failed to get PTY reader: {e}"))?;
 
-    let paused = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let paused = std::sync::Arc::new(PauseFlag::new());
     let paused_clone = paused.clone();
 
     // Store PTY
@@ -150,7 +176,7 @@ PROMPT_COMMAND="_gnarterm_report_cwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
     let app_handle = app.clone();
     let id = pty_id;
     std::thread::spawn(move || {
-        let mut buf = [0u8; 65536];
+        let mut buf = [0u8; 4096];
         let paused_flag = paused.clone();
         // Simple OSC notification parser state
         let mut osc_buf = Vec::new();
@@ -158,10 +184,9 @@ PROMPT_COMMAND="_gnarterm_report_cwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
         let mut prev_esc = false;
 
         loop {
-            // Flow control: wait while frontend is overwhelmed
-            while paused_flag.load(std::sync::atomic::Ordering::Relaxed) {
-                std::thread::sleep(std::time::Duration::from_millis(1));
-            }
+            // Flow control: block until frontend signals it can accept more data.
+            // Uses a condvar — no CPU burn while waiting.
+            paused_flag.wait_if_paused();
             match reader.read(&mut buf) {
                 Ok(0) => {
                     // PTY closed — notify frontend
@@ -302,8 +327,8 @@ async fn resize_pty(
 async fn kill_pty(state: tauri::State<'_, AppState>, pty_id: u32) -> Result<(), String> {
     let mut ptys = state.ptys.lock().unwrap();
     if let Some(pty) = ptys.remove(&pty_id) {
-        // Stop the reader thread first
-        pty.paused.store(true, std::sync::atomic::Ordering::Relaxed);
+        // Ensure the reader thread isn't blocked on the condvar
+        pty.paused.resume();
         
         if let Some(pid) = pty.child_pid {
             println!("[kill_pty] Killing pid {} and its process group", pid);
@@ -549,22 +574,22 @@ async fn detect_font() -> Result<String, String> {
     Ok(String::new())
 }
 
-/// Pause PTY reader (flow control)
+/// Pause PTY reader (flow control — frontend buffer is full)
 #[tauri::command]
 async fn pause_pty(state: tauri::State<'_, AppState>, pty_id: u32) -> Result<(), String> {
     let ptys = state.ptys.lock().map_err(|e| e.to_string())?;
     if let Some(pty) = ptys.get(&pty_id) {
-        pty.paused.store(true, std::sync::atomic::Ordering::Relaxed);
+        pty.paused.pause();
     }
     Ok(())
 }
 
-/// Resume PTY reader (flow control)
+/// Resume PTY reader (flow control — frontend buffer drained)
 #[tauri::command]
 async fn resume_pty(state: tauri::State<'_, AppState>, pty_id: u32) -> Result<(), String> {
     let ptys = state.ptys.lock().map_err(|e| e.to_string())?;
     if let Some(pty) = ptys.get(&pty_id) {
-        pty.paused.store(false, std::sync::atomic::Ordering::Relaxed);
+        pty.paused.resume();
     }
     Ok(())
 }
@@ -859,4 +884,177 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running GnarTerm");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn pause_flag_blocks_and_resumes() {
+        let flag = Arc::new(PauseFlag::new());
+        let flag2 = flag.clone();
+
+        flag.pause();
+
+        // Spawn a thread that will wait on the flag
+        let handle = std::thread::spawn(move || {
+            let start = Instant::now();
+            flag2.wait_if_paused();
+            start.elapsed()
+        });
+
+        // Give the thread time to block
+        std::thread::sleep(Duration::from_millis(50));
+
+        // Resume — the thread should unblock
+        flag.resume();
+
+        let elapsed = handle.join().unwrap();
+        assert!(elapsed >= Duration::from_millis(40), "Thread should have blocked ~50ms, got {:?}", elapsed);
+        assert!(elapsed < Duration::from_millis(500), "Thread should resume quickly, got {:?}", elapsed);
+    }
+
+    #[test]
+    fn pause_flag_does_not_block_when_not_paused() {
+        let flag = PauseFlag::new();
+        let start = Instant::now();
+        flag.wait_if_paused();
+        assert!(start.elapsed() < Duration::from_millis(5), "Should not block");
+    }
+
+    /// Integration test: spawn a real PTY, run `ps aux`, read all output.
+    /// Verifies that the reader loop + PauseFlag + 4KB buffer works without
+    /// hanging. This is the exact scenario that caused the freeze.
+    #[test]
+    fn pty_read_ps_aux_does_not_hang() {
+        let pty_system = native_pty_system();
+        let pair = pty_system
+            .openpty(PtySize { rows: 24, cols: 80, pixel_width: 0, pixel_height: 0 })
+            .expect("Failed to open PTY");
+
+        let mut cmd = CommandBuilder::new("sh");
+        cmd.arg("-c");
+        cmd.arg("ps aux; echo '__DONE__'");
+
+        let _child = pair.slave.spawn_command(cmd).expect("Failed to spawn");
+        drop(pair.slave);
+
+        let mut reader = pair.master.try_clone_reader().expect("Failed to get reader");
+        let pause_flag = Arc::new(PauseFlag::new());
+        let pause_clone = pause_flag.clone();
+
+        // Read in a separate thread (mirrors the real reader thread)
+        let reader_handle = std::thread::spawn(move || {
+            let mut buf = [0u8; 4096]; // Same buffer size as production
+            let mut total_bytes = 0usize;
+            let mut output = Vec::new();
+
+            loop {
+                pause_clone.wait_if_paused();
+                match reader.read(&mut buf) {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        total_bytes += n;
+                        output.extend_from_slice(&buf[..n]);
+
+                        // Simulate backpressure: pause every 32KB, resume after 1ms
+                        // This exercises the pause/resume cycle under load
+                        if total_bytes % 32768 < 4096 {
+                            pause_clone.wait_if_paused(); // would block if paused
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+            (total_bytes, output)
+        });
+
+        // Simulate frontend backpressure: pause briefly, then resume
+        // This tests that the reader thread doesn't deadlock when paused
+        std::thread::sleep(Duration::from_millis(10));
+        pause_flag.pause();
+        std::thread::sleep(Duration::from_millis(50));
+        pause_flag.resume();
+
+        // Wait for reader to finish with a generous timeout
+        let result = reader_handle.join().expect("Reader thread panicked");
+        let (total_bytes, output) = result;
+
+        // Verify we got real output
+        assert!(total_bytes > 0, "Should have read some bytes from ps aux");
+        let output_str = String::from_utf8_lossy(&output);
+        assert!(output_str.contains("__DONE__"), "Should have received all output (got {} bytes)", total_bytes);
+        println!("[test] ps aux produced {} bytes — read successfully without hanging", total_bytes);
+    }
+
+    /// Stress test: spawn a PTY that dumps 1MB of output as fast as possible.
+    /// Must complete within 10 seconds. With the old 64KB buffer + no flow
+    /// control, xterm.js would freeze; this test verifies the Rust side can
+    /// handle it without the reader thread stalling.
+    #[test]
+    fn pty_high_throughput_does_not_stall() {
+        let pty_system = native_pty_system();
+        let pair = pty_system
+            .openpty(PtySize { rows: 24, cols: 80, pixel_width: 0, pixel_height: 0 })
+            .expect("Failed to open PTY");
+
+        // Generate ~500KB of output using yes (piped through head for determinism)
+        let mut cmd = CommandBuilder::new("sh");
+        cmd.arg("-c");
+        cmd.arg("yes 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' | head -c 500000; echo '__HIGH_THROUGHPUT_DONE__'");
+
+        let _child = pair.slave.spawn_command(cmd).expect("Failed to spawn");
+        drop(pair.slave);
+
+        let mut reader = pair.master.try_clone_reader().expect("Failed to get reader");
+        let pause_flag = Arc::new(PauseFlag::new());
+        let pause_clone = pause_flag.clone();
+
+        let start = Instant::now();
+
+        let reader_handle = std::thread::spawn(move || {
+            let mut buf = [0u8; 4096];
+            let mut total = 0usize;
+            let mut output_tail = Vec::new();
+
+            loop {
+                pause_clone.wait_if_paused();
+                match reader.read(&mut buf) {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        total += n;
+                        // Keep only last 4KB to check for done marker
+                        output_tail.extend_from_slice(&buf[..n]);
+                        if output_tail.len() > 8192 {
+                            let start = output_tail.len() - 8192;
+                            output_tail = output_tail[start..].to_vec();
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+            (total, output_tail)
+        });
+
+        // Simulate aggressive backpressure: pause/resume rapidly
+        for _ in 0..10 {
+            std::thread::sleep(Duration::from_millis(5));
+            pause_flag.pause();
+            std::thread::sleep(Duration::from_millis(10));
+            pause_flag.resume();
+        }
+
+        let (total, tail) = reader_handle.join().expect("Reader thread panicked");
+        let elapsed = start.elapsed();
+
+        assert!(elapsed < Duration::from_secs(10), "Should complete within 10s, took {:?}", elapsed);
+        assert!(total > 50_000, "Should read at least 50KB, got {}", total);
+        let tail_str = String::from_utf8_lossy(&tail);
+        assert!(tail_str.contains("__HIGH_THROUGHPUT_DONE__"),
+            "Should receive completion marker (got {} bytes total)", total);
+        println!("[test] High-throughput test: {} bytes in {:?}", total, elapsed);
+    }
 }

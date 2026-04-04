@@ -43,45 +43,44 @@ jobs:
           ssh-key: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
 
       - name: Update cask formula
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          SHA_ARM64: ${{ steps.hashes.outputs.sha256_arm64 }}
+          SHA_X64: ${{ steps.hashes.outputs.sha256_x64 }}
         run: |
-          VERSION=${{ steps.version.outputs.version }}
-          SHA_ARM64=${{ steps.hashes.outputs.sha256_arm64 }}
-          SHA_X64=${{ steps.hashes.outputs.sha256_x64 }}
-
-          cat > Casks/gnar-term.rb << 'RUBY'
-          cask "gnar-term" do
-            version "VERSION_PLACEHOLDER"
+          python3 -c "
+          import os
+          v = os.environ['VERSION']
+          sha_arm = os.environ['SHA_ARM64']
+          sha_x64 = os.environ['SHA_X64']
+          formula = '''cask \"gnar-term\" do
+            version \"{version}\"
 
             if Hardware::CPU.arm?
-              url "https://github.com/TheGnarCo/gnar-term/releases/download/v#{version}/GnarTerm_#{version}_aarch64.dmg"
-              sha256 "SHA_ARM64_PLACEHOLDER"
+              url \"https://github.com/TheGnarCo/gnar-term/releases/download/v#{{version}}/GnarTerm_#{{version}}_aarch64.dmg\"
+              sha256 \"{sha_arm64}\"
             else
-              url "https://github.com/TheGnarCo/gnar-term/releases/download/v#{version}/GnarTerm_#{version}_x64.dmg"
-              sha256 "SHA_X64_PLACEHOLDER"
+              url \"https://github.com/TheGnarCo/gnar-term/releases/download/v#{{version}}/GnarTerm_#{{version}}_x64.dmg\"
+              sha256 \"{sha_x64}\"
             end
 
-            name "GnarTerm"
-            desc "Terminal workspace manager for AI coding agents"
-            homepage "https://github.com/TheGnarCo/gnar-term"
+            name \"GnarTerm\"
+            desc \"Terminal workspace manager for AI coding agents\"
+            homepage \"https://github.com/TheGnarCo/gnar-term\"
 
-            app "GnarTerm.app"
+            app \"GnarTerm.app\"
 
             zap trash: [
-              "~/Library/Caches/com.thegnar.gnar-term",
-              "~/Library/Preferences/com.thegnar.gnar-term.plist",
-              "~/Library/Saved Application State/com.thegnar.gnar-term.savedState",
-              "~/.config/gnar-term",
+              \"~/Library/Caches/com.thegnar.gnar-term\",
+              \"~/Library/Preferences/com.thegnar.gnar-term.plist\",
+              \"~/Library/Saved Application State/com.thegnar.gnar-term.savedState\",
+              \"~/.config/gnar-term\",
             ]
           end
-          RUBY
-
-          # Replace placeholders
-          sed -i "s/VERSION_PLACEHOLDER/${VERSION}/g" Casks/gnar-term.rb
-          sed -i "s/SHA_ARM64_PLACEHOLDER/${SHA_ARM64}/g" Casks/gnar-term.rb
-          sed -i "s/SHA_X64_PLACEHOLDER/${SHA_X64}/g" Casks/gnar-term.rb
-
-          # Fix indentation (heredoc adds extra spaces)
-          sed -i 's/^          //' Casks/gnar-term.rb
+          '''.format(version=v, sha_arm64=sha_arm, sha_x64=sha_x64)
+          with open('Casks/gnar-term.rb', 'w') as f:
+              f.write(formula)
+          "
 
       - name: Commit and push
         run: |

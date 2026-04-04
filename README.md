@@ -194,15 +194,22 @@ Right-click in the terminal for contextual actions. File-specific actions appear
 
 ## Install
 
+### Homebrew (macOS)
+
+```bash
+brew tap TheGnarCo/tap
+brew install --cask gnar-term
+```
+
 ### Download
 
 Grab the latest release for your platform:
 
-👉 **[GitHub Releases](https://github.com/TheGnarCo/gnar-term/releases/latest)**
+**[GitHub Releases](https://github.com/TheGnarCo/gnar-term/releases/latest)**
 
-- **macOS** — `.dmg` (Apple Silicon + Intel)
-- **Linux** — `.AppImage` / `.deb`
-- **Windows** — `.msi`
+- **macOS** — `.dmg` (Apple Silicon + Intel, signed and notarized)
+- **Linux** — `.AppImage` / `.deb` / `.rpm`
+- **Windows** — `.msi` / `.exe`
 
 ### Build from source
 

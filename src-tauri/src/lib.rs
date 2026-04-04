@@ -102,8 +102,11 @@ async fn spawn_pty(
     let mut cmd = CommandBuilder::new_default_prog();
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
-    cmd.env("TERM_PROGRAM", "GnarTerm");
-    cmd.env("TERM_PROGRAM_VERSION", "0.1.0");
+    // Report as ghostty so CLI apps (e.g. Claude Code) enable the kitty
+    // keyboard protocol. Claude Code gates this on a hardcoded TERM_PROGRAM
+    // allowlist with no capability negotiation fallback.
+    cmd.env("TERM_PROGRAM", "ghostty");
+    cmd.env("TERM_PROGRAM_VERSION", "0.2.3");
     // Inject OSC 7 cwd reporting for shells that don't do it automatically
     // This makes zsh/bash report the working directory on every prompt
     // Shell integration: inject OSC 7 cwd reporting (cross-platform)

@@ -324,6 +324,9 @@ export class TerminalManager {
       allowProposedApi: true,
       scrollback: 5000,
       smoothScrollDuration: 0,
+      vtExtensions: {
+        kittyKeyboard: true,
+      },
     });
     // fastScrollModifier is a valid xterm.js option but missing from the bundled type definitions
     (terminal.options as Record<string, unknown>).fastScrollModifier = "alt";

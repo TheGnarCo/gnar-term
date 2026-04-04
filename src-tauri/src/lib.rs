@@ -654,8 +654,17 @@ fn validate_write_path(path: &str) -> Result<(), String> {
     let home = std::env::var("HOME").map_err(|_| "HOME not set".to_string())?;
     let allowed = format!("{}/.config/gnar-term", home);
 
-    // Normalize components to prevent traversal via ../
-    let norm_path = std::path::Path::new(path).components().collect::<std::path::PathBuf>();
+    // Manually resolve .. components to prevent traversal attacks on paths
+    // that may not exist yet (canonicalize requires the path to exist).
+    let mut resolved = Vec::new();
+    for component in std::path::Path::new(path).components() {
+        match component {
+            std::path::Component::ParentDir => { resolved.pop(); }
+            std::path::Component::CurDir => {}
+            c => resolved.push(c),
+        }
+    }
+    let norm_path: std::path::PathBuf = resolved.into_iter().collect();
     let norm_allowed = std::path::Path::new(&allowed).components().collect::<std::path::PathBuf>();
 
     if !norm_path.starts_with(&norm_allowed) {
@@ -1100,5 +1109,158 @@ mod tests {
         assert!(tail_str.contains("__HIGH_THROUGHPUT_DONE__"),
             "Should receive completion marker (got {} bytes total)", total);
         println!("[test] High-throughput test: {} bytes in {:?}", total, elapsed);
+    }
+
+    // -----------------------------------------------------------------------
+    // Security: path validation (S4-S6)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn validate_read_path_allows_normal_files() {
+        // /etc/hosts exists on all unix systems and is not blocked
+        let result = validate_read_path("/etc/hosts");
+        assert!(result.is_ok(), "Should allow reading /etc/hosts: {:?}", result);
+    }
+
+    #[test]
+    fn validate_read_path_blocks_ssh_dir() {
+        let home = std::env::var("HOME").unwrap();
+        let ssh_key = format!("{}/.ssh/id_rsa", home);
+        let result = validate_read_path(&ssh_key);
+        assert!(result.is_err(), "Should block reading ~/.ssh/id_rsa");
+        assert!(result.unwrap_err().contains("Access denied"));
+    }
+
+    #[test]
+    fn validate_read_path_blocks_gnupg_dir() {
+        let home = std::env::var("HOME").unwrap();
+        let gpg = format!("{}/.gnupg/trustdb.gpg", home);
+        let result = validate_read_path(&gpg);
+        // Rejected either because dir doesn't exist (canonicalize fails)
+        // or because it's in the blocklist — both are safe outcomes
+        assert!(result.is_err(), "Should block reading ~/.gnupg/");
+    }
+
+    #[test]
+    fn validate_read_path_blocks_aws_credentials() {
+        let home = std::env::var("HOME").unwrap();
+        let aws = format!("{}/.aws/credentials", home);
+        let result = validate_read_path(&aws);
+        assert!(result.is_err(), "Should block reading ~/.aws/credentials");
+    }
+
+    #[test]
+    fn validate_read_path_rejects_nonexistent_file() {
+        let result = validate_read_path("/nonexistent/path/to/file.txt");
+        assert!(result.is_err(), "Should reject nonexistent paths");
+    }
+
+    #[test]
+    fn validate_write_path_allows_config_dir() {
+        let home = std::env::var("HOME").unwrap();
+        let config = format!("{}/.config/gnar-term/gnar-term.json", home);
+        let result = validate_write_path(&config);
+        assert!(result.is_ok(), "Should allow writing to ~/.config/gnar-term/: {:?}", result);
+    }
+
+    #[test]
+    fn validate_write_path_blocks_home_dir() {
+        let home = std::env::var("HOME").unwrap();
+        let path = format!("{}/.bashrc", home);
+        let result = validate_write_path(&path);
+        assert!(result.is_err(), "Should block writing to ~/.bashrc");
+        assert!(result.unwrap_err().contains("Write denied"));
+    }
+
+    #[test]
+    fn validate_write_path_blocks_system_paths() {
+        let result = validate_write_path("/etc/passwd");
+        assert!(result.is_err(), "Should block writing to /etc/passwd");
+    }
+
+    #[test]
+    fn validate_write_path_blocks_traversal() {
+        let home = std::env::var("HOME").unwrap();
+        let traversal = format!("{}/.config/gnar-term/../../.bashrc", home);
+        let result = validate_write_path(&traversal);
+        assert!(result.is_err(), "Should block path traversal via ../");
+    }
+
+    #[test]
+    fn validate_write_path_allows_nested_config() {
+        let home = std::env::var("HOME").unwrap();
+        let nested = format!("{}/.config/gnar-term/themes/custom.json", home);
+        let result = validate_write_path(&nested);
+        assert!(result.is_ok(), "Should allow nested paths under config dir: {:?}", result);
+    }
+
+    // -----------------------------------------------------------------------
+    // Bug fix: OSC 7 CWD parsing (B2)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn osc7_parse_empty_hostname() {
+        // file:///Users/foo → /Users/foo
+        let url = "file:///Users/foo";
+        let path = url.strip_prefix("file://").unwrap();
+        let cwd = if path.starts_with('/') {
+            path.to_string()
+        } else if let Some(slash_idx) = path.find('/') {
+            path[slash_idx..].to_string()
+        } else {
+            path.to_string()
+        };
+        assert_eq!(cwd, "/Users/foo");
+    }
+
+    #[test]
+    fn osc7_parse_with_hostname() {
+        // file://myhost/Users/foo → /Users/foo
+        let url = "file://myhost/Users/foo";
+        let path = url.strip_prefix("file://").unwrap();
+        let cwd = if path.starts_with('/') {
+            path.to_string()
+        } else if let Some(slash_idx) = path.find('/') {
+            path[slash_idx..].to_string()
+        } else {
+            path.to_string()
+        };
+        assert_eq!(cwd, "/Users/foo");
+    }
+
+    #[test]
+    fn osc7_parse_no_scheme() {
+        let url = "/Users/foo".to_string();
+        let cwd = if let Some(path) = url.strip_prefix("file://") {
+            if path.starts_with('/') {
+                path.to_string()
+            } else if let Some(slash_idx) = path.find('/') {
+                path[slash_idx..].to_string()
+            } else {
+                path.to_string()
+            }
+        } else {
+            url.clone()
+        };
+        assert_eq!(cwd, "/Users/foo");
+    }
+
+    // -----------------------------------------------------------------------
+    // Bug fix: PID cast safety (B1)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn pid_i32_cast_rejects_overflow() {
+        let big_pid: u32 = u32::MAX;
+        let result = i32::try_from(big_pid);
+        assert!(result.is_err(), "i32::try_from(u32::MAX) should fail");
+    }
+
+    #[test]
+    fn pid_i32_cast_accepts_normal_pid() {
+        let normal_pid: u32 = 12345;
+        let result = i32::try_from(normal_pid);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 12345);
     }
 }

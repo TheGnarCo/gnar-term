@@ -21,11 +21,16 @@ jobs:
           echo "sha256_x64=$(sha256sum x64.dmg | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
         id: hashes
 
+      - name: Setup SSH for homebrew-tap
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+
       - name: Checkout homebrew-tap
         uses: actions/checkout@v4
         with:
           repository: TheGnarCo/homebrew-tap
-          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          ssh-key: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
 
       - name: Update cask formula
         run: |

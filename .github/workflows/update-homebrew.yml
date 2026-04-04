@@ -1,0 +1,77 @@
+name: 'Update Homebrew Tap'
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  update-tap:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get release version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Download macOS DMGs and compute sha256
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          curl -sL "https://github.com/TheGnarCo/gnar-term/releases/download/v${VERSION}/GnarTerm_${VERSION}_aarch64.dmg" -o aarch64.dmg
+          curl -sL "https://github.com/TheGnarCo/gnar-term/releases/download/v${VERSION}/GnarTerm_${VERSION}_x64.dmg" -o x64.dmg
+          echo "sha256_arm64=$(sha256sum aarch64.dmg | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "sha256_x64=$(sha256sum x64.dmg | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+        id: hashes
+
+      - name: Checkout homebrew-tap
+        uses: actions/checkout@v4
+        with:
+          repository: TheGnarCo/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+      - name: Update cask formula
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          SHA_ARM64=${{ steps.hashes.outputs.sha256_arm64 }}
+          SHA_X64=${{ steps.hashes.outputs.sha256_x64 }}
+
+          cat > Casks/gnar-term.rb << 'RUBY'
+          cask "gnar-term" do
+            version "VERSION_PLACEHOLDER"
+
+            if Hardware::CPU.arm?
+              url "https://github.com/TheGnarCo/gnar-term/releases/download/v#{version}/GnarTerm_#{version}_aarch64.dmg"
+              sha256 "SHA_ARM64_PLACEHOLDER"
+            else
+              url "https://github.com/TheGnarCo/gnar-term/releases/download/v#{version}/GnarTerm_#{version}_x64.dmg"
+              sha256 "SHA_X64_PLACEHOLDER"
+            end
+
+            name "GnarTerm"
+            desc "Terminal workspace manager for AI coding agents"
+            homepage "https://github.com/TheGnarCo/gnar-term"
+
+            app "GnarTerm.app"
+
+            zap trash: [
+              "~/Library/Caches/com.thegnar.gnar-term",
+              "~/Library/Preferences/com.thegnar.gnar-term.plist",
+              "~/Library/Saved Application State/com.thegnar.gnar-term.savedState",
+              "~/.config/gnar-term",
+            ]
+          end
+          RUBY
+
+          # Replace placeholders
+          sed -i "s/VERSION_PLACEHOLDER/${VERSION}/g" Casks/gnar-term.rb
+          sed -i "s/SHA_ARM64_PLACEHOLDER/${SHA_ARM64}/g" Casks/gnar-term.rb
+          sed -i "s/SHA_X64_PLACEHOLDER/${SHA_X64}/g" Casks/gnar-term.rb
+
+          # Fix indentation (heredoc adds extra spaces)
+          sed -i 's/^          //' Casks/gnar-term.rb
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Casks/gnar-term.rb
+          git commit -m "Update GnarTerm to ${{ steps.version.outputs.version }}"
+          git push

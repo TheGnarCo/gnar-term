@@ -14,6 +14,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { WebLinksAddon } from "@xterm/addon-web-links";
+import { SearchAddon } from "@xterm/addon-search";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { theme, getXtermTheme } from "./theme";
@@ -72,6 +73,7 @@ export interface Surface {
   notification?: string;
   hasUnread: boolean;
   opened: boolean;  // whether terminal.open() has been called
+  searchAddon: SearchAddon;
 }
 
 export interface Pane {
@@ -326,8 +328,10 @@ export class TerminalManager {
     });
 
     const fitAddon = new FitAddon();
+    const searchAddon = new SearchAddon();
     terminal.loadAddon(fitAddon);
     terminal.loadAddon(new WebLinksAddon());
+    terminal.loadAddon(searchAddon);
 
     // Cmd+click file path detection for preview
     terminal.registerLinkProvider({
@@ -372,7 +376,7 @@ export class TerminalManager {
     termElement.style.cssText = "flex: 1; min-height: 0; min-width: 0; padding: 2px 4px;";
 
     const surface: Surface = {
-      id: uid(), terminal, fitAddon, termElement, ptyId,
+      id: uid(), terminal, fitAddon, searchAddon, termElement, ptyId,
       title: `Shell ${pane.surfaces.length + 1}`,
       hasUnread: false, opened: false,
     };
@@ -406,12 +410,12 @@ export class TerminalManager {
 
       // ⌘+key (no alt)
       if (!alt && !ctrl) {
-        if (["n","t","d","w","b","p","k"].includes(k)) return false;
+        if (["n","t","d","w","b","p","k","f","g"].includes(k)) return false;
         if (k >= "1" && k <= "9") return false;
       }
       // ⇧⌘+key
       if (shift && !alt && !ctrl) {
-        if (["d","w","h","r","p"].includes(k)) return false;
+        if (["d","w","h","r","p","g"].includes(k)) return false;
         if (k === "enter") return false;
         if (k === "[" || k === "]") return false;
       }
@@ -852,6 +856,7 @@ export class TerminalManager {
             const preview = await openPreview(sDef.path);
             const surface: Surface = {
               id: preview.id, terminal: null as any, fitAddon: { fit: () => {} } as any,
+              searchAddon: null as any,
               termElement: preview.element, ptyId: -1, title: sDef.name || preview.title,
               cwd, hasUnread: false, opened: true,
             };
@@ -1226,6 +1231,7 @@ export class TerminalManager {
       id: preview.id,
       terminal: null as any,
       fitAddon: { fit: () => {} } as any,
+      searchAddon: null as any,
       termElement: preview.element,
       ptyId: -1,
       title: preview.title,

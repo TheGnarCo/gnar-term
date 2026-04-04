@@ -140,6 +140,7 @@ describe("ResizeObserver stale closure fix", () => {
       title: id,
       hasUnread: false,
       opened: true,
+      searchAddon: null as any,
     };
   }
 
@@ -326,6 +327,7 @@ describe("Flow control — rAF batching", () => {
       id: `test-${ptyId}`,
       terminal: mockTerminal as any,
       fitAddon: { fit: vi.fn(), activate: vi.fn(), dispose: vi.fn() } as any,
+      searchAddon: null as any,
       termElement: document.createElement("div"),
       ptyId,
       title: "test",

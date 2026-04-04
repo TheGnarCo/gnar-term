@@ -1,6 +1,7 @@
 import { Sidebar } from "./sidebar";
 import { TerminalManager, fontReady } from "./terminal-manager";
 import { openCommandPalette } from "./command-palette";
+import { toggleFindBar, findNext, findPrev, isFindBarVisible, hideFindBar } from "./find-bar";
 import { theme, onThemeChange, setTheme, getXtermTheme } from "./theme";
 import { listen } from "@tauri-apps/api/event";
 import { loadConfig, saveConfig } from "./config";
@@ -265,6 +266,34 @@ document.addEventListener("keydown", (e) => {
   if (cmd && !shift && !alt && e.key === "p") {
     e.preventDefault();
     openCommandPalette(termManager);
+    return;
+  }
+
+  // ⌘F — Toggle find bar
+  if (cmd && !shift && !alt && e.key === "f") {
+    e.preventDefault();
+    toggleFindBar(termManager);
+    return;
+  }
+
+  // ⌘G — Find next
+  if (cmd && !shift && !alt && e.key === "g") {
+    e.preventDefault();
+    findNext();
+    return;
+  }
+
+  // ⇧⌘G — Find previous
+  if (cmd && shift && !alt && e.key === "g") {
+    e.preventDefault();
+    findPrev();
+    return;
+  }
+
+  // Escape — Close find bar (when visible and focus is not in terminal)
+  if (e.key === "Escape" && isFindBarVisible()) {
+    e.preventDefault();
+    hideFindBar();
     return;
   }
 });

@@ -46,7 +46,7 @@ const terminalArea = document.createElement("div");
 terminalArea.id = "terminal-area";
 terminalArea.style.cssText = `
   flex: 1; display: flex; flex-direction: column;
-  min-width: 0;
+  min-height: 0; min-width: 0;
 `;
 terminalWrapper.appendChild(terminalArea);
 

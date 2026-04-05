@@ -5,7 +5,7 @@ registerPreviewer({
   render(content, _filePath, element) {
     try {
       const parsed = JSON.parse(content);
-      element.innerHTML = `<pre><code>${syntaxHighlight(JSON.stringify(parsed, null, 2))}</code></pre>`;
+      element.innerHTML = `<pre><code>${syntaxHighlight(escapeHtml(JSON.stringify(parsed, null, 2)))}</code></pre>`;
     } catch {
       element.innerHTML = `<pre><code>${escapeHtml(content)}</code></pre>`;
     }

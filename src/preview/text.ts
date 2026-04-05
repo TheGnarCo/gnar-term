@@ -1,5 +1,5 @@
 import { registerPreviewer } from "./index";
-import { theme } from "../theme";
+import { themeProxy as theme } from "../lib/theme-accessor";
 
 registerPreviewer({
   extensions: ["txt", "log", "conf", "cfg", "ini", "env", "gitignore", "dockerignore", "editorconfig"],

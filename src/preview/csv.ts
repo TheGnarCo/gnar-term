@@ -1,5 +1,5 @@
 import { registerPreviewer } from "./index";
-import { theme } from "../theme";
+import { themeProxy as theme } from "../lib/theme-accessor";
 
 registerPreviewer({
   extensions: ["csv", "tsv"],

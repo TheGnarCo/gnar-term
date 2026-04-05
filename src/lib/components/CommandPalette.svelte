@@ -1,0 +1,112 @@
+<script lang="ts">
+  import { tick } from "svelte";
+  import { theme } from "../stores/theme";
+  import { commandPaletteOpen } from "../stores/ui";
+  import { activeSurface } from "../stores/workspace";
+  import { isTerminalSurface } from "../types";
+
+  interface Command {
+    name: string;
+    shortcut?: string;
+    action: () => void;
+  }
+
+  export let commands: Command[] = [];
+
+  let inputEl: HTMLInputElement;
+  let query = "";
+  let selectedIdx = 0;
+
+  $: filtered = query
+    ? commands.filter(c => c.name.toLowerCase().includes(query.toLowerCase()))
+    : commands;
+
+  $: if (filtered.length > 0 && selectedIdx >= filtered.length) {
+    selectedIdx = 0;
+  }
+
+  function close() {
+    commandPaletteOpen.set(false);
+    query = "";
+    selectedIdx = 0;
+    const s = $activeSurface;
+    if (s && isTerminalSurface(s)) tick().then(() => s.terminal.focus());
+  }
+
+  function execute(cmd: Command) {
+    close();
+    cmd.action();
+  }
+
+  function handleKeydown(e: KeyboardEvent) {
+    e.stopPropagation();
+    if (e.key === "Escape") { close(); return; }
+    if (e.key === "ArrowDown") { e.preventDefault(); selectedIdx = Math.min(selectedIdx + 1, filtered.length - 1); return; }
+    if (e.key === "ArrowUp") { e.preventDefault(); selectedIdx = Math.max(selectedIdx - 1, 0); return; }
+    if (e.key === "Enter" && filtered[selectedIdx]) { execute(filtered[selectedIdx]); return; }
+  }
+
+  function handleOverlayClick(e: MouseEvent) {
+    if ((e.target as HTMLElement)?.id === "cmd-palette-overlay") close();
+  }
+
+  $: if ($commandPaletteOpen) {
+    tick().then(() => inputEl?.focus());
+  }
+</script>
+
+{#if $commandPaletteOpen}
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    id="cmd-palette-overlay"
+    style="
+      position: fixed; inset: 0; z-index: 9998;
+      background: rgba(0,0,0,0.5); display: flex;
+      justify-content: center; padding-top: 80px;
+    "
+    on:mousedown={handleOverlayClick}
+    on:keydown={handleKeydown}
+  >
+    <div style="
+      width: 500px; max-height: 400px; background: {$theme.bgFloat};
+      border: 1px solid {$theme.border}; border-radius: 12px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+      display: flex; flex-direction: column; overflow: hidden;
+    ">
+      <input
+        bind:this={inputEl}
+        type="text"
+        placeholder="Type a command..."
+        bind:value={query}
+        on:input={() => { selectedIdx = 0; }}
+        style="
+          padding: 14px 18px; background: transparent; border: none;
+          border-bottom: 1px solid {$theme.border}; color: {$theme.fg};
+          font-size: 15px; outline: none; font-family: inherit;
+        "
+      />
+      <div style="flex: 1; overflow-y: auto; padding: 4px 0;">
+        {#each filtered as cmd, i}
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div
+            style="
+              padding: 8px 18px; cursor: pointer; display: flex;
+              align-items: center; justify-content: space-between;
+              background: {i === selectedIdx ? $theme.bgHighlight : 'transparent'};
+              color: {$theme.fg}; font-size: 13px;
+            "
+            on:mouseenter={() => selectedIdx = i}
+            on:click={() => execute(cmd)}
+          >
+            <span>{cmd.name}</span>
+            {#if cmd.shortcut}
+              <span style="font-size: 11px; color: {$theme.fgDim};">{cmd.shortcut}</span>
+            {/if}
+          </div>
+        {/each}
+      </div>
+    </div>
+  </div>
+{/if}

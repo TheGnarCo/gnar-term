@@ -1,6 +1,5 @@
 import { registerPreviewer } from "./index";
 import { invoke } from "@tauri-apps/api/core";
-import EmbedPDF from "@embedpdf/snippet";
 
 registerPreviewer({
   extensions: ["pdf"],
@@ -19,13 +18,10 @@ registerPreviewer({
       element.style.height = "100%";
       element.style.padding = "0";
 
-      EmbedPDF.init({
-        type: "container",
-        target: element,
-        src: url,
-        theme: "dark" as any,
-        worker: false,
-      });
+      const iframe = document.createElement("iframe");
+      iframe.src = url;
+      iframe.style.cssText = "width: 100%; height: 100%; border: none;";
+      element.appendChild(iframe);
     }).catch((err) => {
       element.innerHTML = `<div style="color: #f85149; padding: 20px;">Failed to load PDF: ${err}</div>`;
     });

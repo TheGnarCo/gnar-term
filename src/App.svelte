@@ -547,7 +547,7 @@
     if (cmd && !shift && !alt && e.key === "t") { e.preventDefault(); handleNewSurfaceFromSidebar(); return; }
     if (cmd && !shift && !alt && e.key === "d") { e.preventDefault(); handleSplitFromSidebar("horizontal"); return; }
     if (cmd && shift && !alt && e.key === "d") { e.preventDefault(); handleSplitFromSidebar("vertical"); return; }
-    if (cmd && !shift && !alt && e.key === "w") { e.preventDefault(); closeSurface(); return; }
+    // Cmd+W handled by native menu accelerator (menu-close-tab event) — works even when iframe has focus
     if (cmd && shift && !alt && e.key === "w") { e.preventDefault(); closeWorkspace($activeWorkspaceIdx); return; }
     if (cmd && !shift && !alt && !ctrl && e.key >= "1" && e.key <= "8") { e.preventDefault(); switchWorkspace(parseInt(e.key) - 1); return; }
     if (cmd && !shift && !alt && !ctrl && e.key === "9") { e.preventDefault(); switchWorkspace($workspaces.length - 1); return; }
@@ -613,11 +613,11 @@
       saveConfig({ theme: id });
     });
 
-    listen("menu-cmd-palette", () => {
+    await listen("menu-cmd-palette", () => {
       commandPaletteOpen.update(v => !v);
     });
 
-    listen("menu-close-tab", () => {
+    await listen("menu-close-tab", () => {
       closeSurface();
     });
   });

@@ -26,27 +26,11 @@ vi.mock("@tauri-apps/api/event", () => ({
 
 describe("Markdown preview XSS prevention", () => {
   it("imports DOMPurify in preview/markdown.ts", async () => {
-    // Verify the module imports DOMPurify by reading the source
     const fs = await import("fs");
     const source = fs.readFileSync("src/preview/markdown.ts", "utf-8");
     expect(source).toContain('import DOMPurify from "dompurify"');
     expect(source).toContain("DOMPurify.sanitize");
     expect(source).not.toMatch(/element\.innerHTML\s*=\s*marked\.parse/);
-  });
-
-  it("imports DOMPurify in markdown-viewer.ts", async () => {
-    const fs = await import("fs");
-    const source = fs.readFileSync("src/markdown-viewer.ts", "utf-8");
-    expect(source).toContain('import DOMPurify from "dompurify"');
-    expect(source).toContain("DOMPurify.sanitize");
-  });
-
-  it("escapes filePath in markdown-viewer.ts", async () => {
-    const fs = await import("fs");
-    const source = fs.readFileSync("src/markdown-viewer.ts", "utf-8");
-    // filePath must be escaped before interpolation into HTML
-    expect(source).toContain("escapedPath");
-    expect(source).toMatch(/replace\(.*&lt;/);
   });
 });
 
@@ -91,16 +75,11 @@ describe("Video preview XSS prevention", () => {
 
 describe("Sidebar drag-drop reorder (B3)", () => {
   it("adjusts destination index when dragging forward", () => {
-    // Simulate: 3 workspaces [A, B, C], drag A (idx 0) to after C (idx 2)
     const workspaces = ["A", "B", "C"];
     const fromIdx = 0;
     const dropTargetIdx = 2;
 
-    // Remove from source
     const item = workspaces.splice(fromIdx, 1)[0];
-    // After splice, array is [B, C] and dropTargetIdx points to what was C
-
-    // The fix: subtract 1 when dragging forward
     const toIdx = fromIdx < dropTargetIdx ? dropTargetIdx - 1 : dropTargetIdx;
     workspaces.splice(toIdx, 0, item);
 
@@ -108,7 +87,6 @@ describe("Sidebar drag-drop reorder (B3)", () => {
   });
 
   it("does not adjust index when dragging backward", () => {
-    // Simulate: 3 workspaces [A, B, C], drag C (idx 2) to before A (idx 0)
     const workspaces = ["A", "B", "C"];
     const fromIdx = 2;
     const dropTargetIdx = 0;
@@ -127,9 +105,8 @@ describe("Sidebar drag-drop reorder (B3)", () => {
 
 describe("Close Other Workspaces (B4)", () => {
   it("keeps only the target workspace when closing others", () => {
-    // Simulate the fixed algorithm
     const workspaces = ["A", "B", "C", "D", "E"];
-    let targetIdx = 2; // Keep "C"
+    let targetIdx = 2;
 
     for (let i = workspaces.length - 1; i >= 0; i--) {
       if (i !== targetIdx) {
@@ -167,5 +144,36 @@ describe("Close Other Workspaces (B4)", () => {
     }
 
     expect(workspaces).toEqual(["C"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Discriminated union type safety
+// ---------------------------------------------------------------------------
+
+describe("Surface discriminated union", () => {
+  it("no more null-as-any hacks in source code", async () => {
+    const fs = await import("fs");
+    const tsFiles = [
+      "src/App.svelte",
+      "src/lib/terminal-service.ts",
+      "src/lib/types.ts",
+    ];
+
+    for (const file of tsFiles) {
+      try {
+        const source = fs.readFileSync(file, "utf-8");
+        expect(source).not.toContain("terminal: null as any");
+        expect(source).not.toContain("fitAddon: { fit: () => {} } as any");
+        expect(source).not.toContain("searchAddon: null as any");
+      } catch (e: any) {
+        if (e.code !== "ENOENT") throw e;
+      }
+    }
+  });
+
+  it("dead code markdown-viewer.ts is deleted", async () => {
+    const fs = await import("fs");
+    expect(() => fs.readFileSync("src/markdown-viewer.ts", "utf-8")).toThrow();
   });
 });

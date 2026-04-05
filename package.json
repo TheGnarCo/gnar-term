@@ -2,6 +2,7 @@
   "name": "gnar-term",
   "version": "0.2.3",
   "private": true,
+  "type": "module",
   "description": "Terminal workspace manager for AI coding agents",
   "scripts": {
     "dev": "tauri dev",
@@ -15,7 +16,9 @@
   },
   "dependencies": {
     "@embedpdf/snippet": "^2.12.1",
+    "@sveltejs/vite-plugin-svelte": "^5.1.1",
     "@tauri-apps/api": "^2.0.0",
+    "@tauri-apps/plugin-clipboard-manager": "^2.3.2",
     "@xterm/addon-fit": "^0.12.0-beta.196",
     "@xterm/addon-search": "^0.17.0-beta.196",
     "@xterm/addon-web-links": "^0.13.0-beta.196",
@@ -24,10 +27,13 @@
     "dompurify": "^3.3.3",
     "github-markdown-css": "^5.8.1",
     "marked": "^15.0.0",
-    "pdfjs-dist": "^4.10.38"
+    "pdfjs-dist": "^4.10.38",
+    "svelte": "^5.55.1"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/svelte": "^5.3.1",
     "@types/dompurify": "^3.0.5",
     "jsdom": "^27.0.1",
     "typescript": "^5.5.0",

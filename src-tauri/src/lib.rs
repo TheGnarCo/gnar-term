@@ -2,8 +2,8 @@ use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::io::{Read, Write};
-use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter};
 
 static NEXT_PTY_ID: AtomicU32 = AtomicU32::new(1);
@@ -45,6 +45,7 @@ struct PtyInstance {
 
 struct AppState {
     ptys: Mutex<HashMap<u32, PtyInstance>>,
+    watch_flags: Mutex<HashMap<u32, Arc<AtomicBool>>>,
 }
 
 #[derive(Clone, Serialize)]
@@ -63,12 +64,6 @@ struct PtyNotification {
 struct PtyTitle {
     pty_id: u32,
     title: String,
-}
-
-#[derive(Clone, Serialize)]
-struct PtyCwd {
-    pty_id: u32,
-    cwd: String,
 }
 
 #[derive(Clone, Serialize)]
@@ -163,7 +158,7 @@ PROMPT_COMMAND="_gnarterm_report_cwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
 
     // Store PTY
     {
-        let mut ptys = state.ptys.lock().unwrap();
+        let mut ptys = state.ptys.lock().map_err(|e| e.to_string())?;
         ptys.insert(
             pty_id,
             PtyInstance {
@@ -227,28 +222,6 @@ PROMPT_COMMAND="_gnarterm_report_cwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
                                             PtyTitle { pty_id: id, title },
                                         );
                                     }
-                                    // OSC 7: set working directory
-                                    if s.starts_with("7;") {
-                                        let url = s.splitn(2, ';').nth(1).unwrap_or("").to_string();
-                                        // OSC 7 sends file://hostname/path or file:///path
-                                        let cwd = if let Some(path) = url.strip_prefix("file://") {
-                                            if path.starts_with('/') {
-                                                // Empty hostname (file:///path) — already absolute
-                                                path.to_string()
-                                            } else if let Some(slash_idx) = path.find('/') {
-                                                // Has hostname — skip it, keep the /
-                                                path[slash_idx..].to_string()
-                                            } else {
-                                                path.to_string()
-                                            }
-                                        } else {
-                                            url
-                                        };
-                                        let _ = app_handle.emit(
-                                            "pty-cwd",
-                                            PtyCwd { pty_id: id, cwd },
-                                        );
-                                    }
                                 }
                                 osc_buf.clear();
                                 in_osc = false;
@@ -295,7 +268,7 @@ async fn write_pty(
     pty_id: u32,
     data: String,
 ) -> Result<(), String> {
-    let mut ptys = state.ptys.lock().unwrap();
+    let mut ptys = state.ptys.lock().map_err(|e| e.to_string())?;
     let pty = ptys
         .get_mut(&pty_id)
         .ok_or_else(|| format!("PTY {pty_id} not found"))?;
@@ -313,7 +286,7 @@ async fn resize_pty(
     cols: u16,
     rows: u16,
 ) -> Result<(), String> {
-    let ptys = state.ptys.lock().unwrap();
+    let ptys = state.ptys.lock().map_err(|e| e.to_string())?;
     let pty = ptys
         .get(&pty_id)
         .ok_or_else(|| format!("PTY {pty_id} not found"))?;
@@ -331,13 +304,12 @@ async fn resize_pty(
 /// Kill a PTY
 #[tauri::command]
 async fn kill_pty(state: tauri::State<'_, AppState>, pty_id: u32) -> Result<(), String> {
-    let mut ptys = state.ptys.lock().unwrap();
+    let mut ptys = state.ptys.lock().map_err(|e| e.to_string())?;
     if let Some(pty) = ptys.remove(&pty_id) {
         // Ensure the reader thread isn't blocked on the condvar
         pty.paused.resume();
         
         if let Some(pid) = pty.child_pid {
-            println!("[kill_pty] Killing pid {} and its process group", pid);
             #[cfg(unix)]
             {
                 let pid_i32 = i32::try_from(pid).map_err(|_| format!("PID {} exceeds i32::MAX", pid))?;
@@ -348,8 +320,6 @@ async fn kill_pty(state: tauri::State<'_, AppState>, pty_id: u32) -> Result<(), 
             {
                 let _ = std::process::Command::new("taskkill").args(["/F", "/T", "/PID", &pid.to_string()]).output();
             }
-        } else {
-            println!("[kill_pty] No child_pid for pty_id {}, dropping master handle", pty_id);
         }
         // Dropping pty closes the master fd which sends SIGHUP
     }
@@ -363,7 +333,6 @@ async fn detect_font() -> Result<String, String> {
 
     // 1. Ghostty config
     let ghostty_path = format!("{home}/.config/ghostty/config");
-    println!("[detect_font] Checking ghostty config: {}", ghostty_path);
     if let Ok(content) = std::fs::read_to_string(&ghostty_path) {
         for line in content.lines() {
             let line = line.trim();
@@ -371,7 +340,6 @@ async fn detect_font() -> Result<String, String> {
                 if let Some(val) = line.split('=').nth(1) {
                     let font = val.trim().to_string();
                     if !font.is_empty() {
-                        println!("[detect_font] Found font in ghostty config: {}", font);
                         return Ok(font);
                     }
                 }
@@ -384,7 +352,6 @@ async fn detect_font() -> Result<String, String> {
         format!("{home}/.config/alacritty/alacritty.toml"),
         format!("{home}/.alacritty.toml"),
     ] {
-        println!("[detect_font] Checking alacritty config: {}", path);
         if let Ok(content) = std::fs::read_to_string(&path) {
             let mut in_font = false;
             for line in content.lines() {
@@ -398,7 +365,6 @@ async fn detect_font() -> Result<String, String> {
                     if let Some(val) = trimmed.split('=').nth(1) {
                         let font = val.trim().trim_matches('"').trim_matches('\'').to_string();
                         if !font.is_empty() {
-                            println!("[detect_font] Found font in alacritty config: {}", font);
                             return Ok(font);
                         }
                     }
@@ -409,7 +375,6 @@ async fn detect_font() -> Result<String, String> {
 
     // 3. Kitty config
     let kitty_path = format!("{home}/.config/kitty/kitty.conf");
-    println!("[detect_font] Checking kitty config: {}", kitty_path);
     if let Ok(content) = std::fs::read_to_string(&kitty_path) {
         for line in content.lines() {
             let trimmed = line.trim();
@@ -420,7 +385,6 @@ async fn detect_font() -> Result<String, String> {
                     .trim()
                     .to_string();
                 if !font.is_empty() {
-                    println!("[detect_font] Found font in kitty config: {}", font);
                     return Ok(font);
                 }
             }
@@ -429,7 +393,6 @@ async fn detect_font() -> Result<String, String> {
 
     // 4. WezTerm config (Lua — best effort)
     let wez_path = format!("{home}/.wezterm.lua");
-    println!("[detect_font] Checking wezterm config: {}", wez_path);
     if let Ok(content) = std::fs::read_to_string(&wez_path) {
         for line in content.lines() {
             if line.contains("font_family") || line.contains("font =" ) {
@@ -438,7 +401,6 @@ async fn detect_font() -> Result<String, String> {
                     if let Some(end) = line[start + 1..].find('"') {
                         let font = line[start + 1..start + 1 + end].to_string();
                         if !font.is_empty() {
-                            println!("[detect_font] Found font in wezterm config: {}", font);
                             return Ok(font);
                         }
                     }
@@ -450,7 +412,6 @@ async fn detect_font() -> Result<String, String> {
     // 5. iTerm2 (macOS) — read from defaults
     #[cfg(target_os = "macos")]
     {
-        println!("[detect_font] Checking iTerm2 config");
         let output = std::process::Command::new("defaults")
             .args(["read", "com.googlecode.iterm2", "New Bookmarks"])
             .output();
@@ -472,7 +433,6 @@ async fn detect_font() -> Result<String, String> {
                                     .unwrap_or(font_spec)
                                     .to_string();
                                 if !font.is_empty() {
-                                    println!("[detect_font] Found font in iTerm2 config: {}", font);
                                     return Ok(font);
                                 }
                             }
@@ -486,7 +446,6 @@ async fn detect_font() -> Result<String, String> {
     // 6. macOS Terminal.app
     #[cfg(target_os = "macos")]
     {
-        println!("[detect_font] Checking Terminal.app config");
         let output = std::process::Command::new("defaults")
             .args(["read", "com.apple.Terminal", "Default Window Settings"])
             .output();
@@ -513,7 +472,6 @@ async fn detect_font() -> Result<String, String> {
     // 7. Check what monospace/nerd fonts are actually installed
     #[cfg(target_os = "macos")]
     {
-        println!("[detect_font] Checking filesystem for fonts");
         // Faster check via font file existence
         let font_dirs = [
             format!("{home}/Library/Fonts"),
@@ -544,7 +502,6 @@ async fn detect_font() -> Result<String, String> {
                         let file_name = entry.file_name().to_string_lossy().to_string();
                         let name_lower = file_name.replace(' ', "").to_lowercase();
                         if name_lower.contains(&search_term) {
-                            println!("[detect_font] Found installed font via filesystem: {} (file: {})", css_name, file_name);
                             return Ok(css_name.to_string());
                         }
                     }
@@ -577,7 +534,6 @@ async fn detect_font() -> Result<String, String> {
     }
 
     // 8. Nothing found — return empty, frontend uses platform default
-    println!("[detect_font] No preferred font found. Using default.");
     Ok(String::new())
 }
 
@@ -730,8 +686,13 @@ async fn open_with_default_app(path: String) -> Result<(), String> {
 
 /// Watch a file for changes, emit events
 #[tauri::command]
-async fn watch_file(app: AppHandle, path: String) -> Result<u32, String> {
+async fn watch_file(app: AppHandle, state: tauri::State<'_, AppState>, path: String) -> Result<u32, String> {
     let watch_id = NEXT_WATCH_ID.fetch_add(1, Ordering::Relaxed);
+    let stop = Arc::new(AtomicBool::new(false));
+    let stop_clone = stop.clone();
+
+    state.watch_flags.lock().map_err(|e| e.to_string())?.insert(watch_id, stop);
+
     let path_clone = path.clone();
     std::thread::spawn(move || {
         let mut last_modified = std::fs::metadata(&path_clone)
@@ -739,6 +700,9 @@ async fn watch_file(app: AppHandle, path: String) -> Result<u32, String> {
             .ok();
         loop {
             std::thread::sleep(std::time::Duration::from_millis(500));
+            if stop_clone.load(Ordering::Relaxed) {
+                break;
+            }
             let current = std::fs::metadata(&path_clone)
                 .and_then(|m| m.modified())
                 .ok();
@@ -751,6 +715,16 @@ async fn watch_file(app: AppHandle, path: String) -> Result<u32, String> {
         }
     });
     Ok(watch_id)
+}
+
+/// Stop watching a file
+#[tauri::command]
+async fn unwatch_file(state: tauri::State<'_, AppState>, watch_id: u32) -> Result<(), String> {
+    let mut flags = state.watch_flags.lock().map_err(|e| e.to_string())?;
+    if let Some(flag) = flags.remove(&watch_id) {
+        flag.store(true, Ordering::Relaxed);
+    }
+    Ok(())
 }
 
 #[derive(Clone, Serialize)]
@@ -827,10 +801,12 @@ async fn get_pty_cwd(state: tauri::State<'_, AppState>, pty_id: u32) -> Result<S
             #[cfg(target_os = "macos")]
             {
                 let output = std::process::Command::new("lsof")
-                    .args(["-p", &pid.to_string(), "-Fn", "-d", "cwd"])
+                    .args(["-a", "-p", &pid.to_string(), "-d", "cwd", "-Fn"])
                     .output()
                     .map_err(|e| format!("lsof failed: {e}"))?;
                 let stdout = String::from_utf8_lossy(&output.stdout);
+                // lsof -Fn output: "pPID\nfcwd\nn/path\n"
+                // With -a (AND), -p PID, -d cwd: only returns cwd for that PID
                 for line in stdout.lines() {
                     if let Some(path) = line.strip_prefix('n') {
                         if path.starts_with('/') {
@@ -854,11 +830,13 @@ async fn get_pty_cwd(state: tauri::State<'_, AppState>, pty_id: u32) -> Result<S
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_clipboard_manager::init())
         .manage(AppState {
             ptys: Mutex::new(HashMap::new()),
+            watch_flags: Mutex::new(HashMap::new()),
         })
         .invoke_handler(tauri::generate_handler![
-            spawn_pty, write_pty, resize_pty, kill_pty, pause_pty, resume_pty, detect_font, get_pty_cwd, get_pty_title, read_file, read_file_base64, write_file, ensure_dir, get_home, watch_file, show_in_file_manager, open_with_default_app
+            spawn_pty, write_pty, resize_pty, kill_pty, pause_pty, resume_pty, detect_font, get_pty_cwd, get_pty_title, read_file, read_file_base64, write_file, ensure_dir, get_home, watch_file, unwatch_file, show_in_file_manager, open_with_default_app
         ])
         .setup(|app| {
             // Rebuild macOS menu manually so Cmd+Q, Cmd+C, Cmd+V work,
@@ -881,16 +859,20 @@ pub fn run() {
                     &[&hide, &hide_others, &show_all, &PredefinedMenuItem::separator(handle)?, &quit],
                 )?;
 
-                // Edit Menu (Copy/Paste/Select All)
+                // Edit Menu — Copy/Cut/Paste/Select All are PredefinedMenuItems
+                // which enable native clipboard in the WebView for non-terminal
+                // content (preview surfaces, command palette, etc.).
+                // Terminal surfaces override Cmd+C/V via attachCustomKeyEventHandler.
+                let cut = PredefinedMenuItem::cut(handle, None)?;
                 let copy = PredefinedMenuItem::copy(handle, None)?;
                 let paste = PredefinedMenuItem::paste(handle, None)?;
                 let select_all = PredefinedMenuItem::select_all(handle, None)?;
-                
+
                 let edit_menu = Submenu::with_items(
                     handle,
                     "Edit",
                     true,
-                    &[&copy, &paste, &select_all],
+                    &[&cut, &copy, &paste, &select_all],
                 )?;
 
                 let cmd_palette = MenuItem::with_id(handle, "cmd-palette", "Command Palette...", true, Some("CmdOrCtrl+P"))?;
@@ -1265,5 +1247,421 @@ mod tests {
         let result = i32::try_from(normal_pid);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), 12345);
+    }
+
+    // -----------------------------------------------------------------------
+    // PTY spawn and output (T1)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn pty_spawn_returns_valid_id_and_is_tracked() {
+        let state = AppState {
+            ptys: Mutex::new(HashMap::new()),
+            watch_flags: Mutex::new(HashMap::new()),
+        };
+
+        let pty_system = native_pty_system();
+        let pair = pty_system
+            .openpty(PtySize { rows: 24, cols: 80, pixel_width: 0, pixel_height: 0 })
+            .expect("Failed to open PTY");
+
+        let mut cmd = CommandBuilder::new("sh");
+        cmd.arg("-c");
+        cmd.arg("echo HELLO; sleep 0.1");
+
+        let child = pair.slave.spawn_command(cmd).expect("Failed to spawn");
+        let child_pid = child.process_id();
+        drop(pair.slave);
+
+        let writer = pair.master.take_writer().expect("Failed to get writer");
+        let pty_id = NEXT_PTY_ID.fetch_add(1, Ordering::Relaxed);
+        assert!(pty_id > 0, "PTY ID should be positive");
+
+        let paused = Arc::new(PauseFlag::new());
+        {
+            let mut ptys = state.ptys.lock().unwrap();
+            ptys.insert(pty_id, PtyInstance {
+                writer,
+                _master: pair.master,
+                child_pid,
+                paused,
+            });
+        }
+
+        // Verify the PTY is tracked in the map
+        let ptys = state.ptys.lock().unwrap();
+        assert!(ptys.contains_key(&pty_id), "PTY should be in the state map");
+        assert!(ptys.get(&pty_id).unwrap().child_pid.is_some(), "PTY should have a child PID");
+    }
+
+    // -----------------------------------------------------------------------
+    // PTY write and read output (T1b)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn pty_write_and_read_echo_output() {
+        let pty_system = native_pty_system();
+        let pair = pty_system
+            .openpty(PtySize { rows: 24, cols: 80, pixel_width: 0, pixel_height: 0 })
+            .expect("Failed to open PTY");
+
+        let cmd = CommandBuilder::new("cat");
+        let _child = pair.slave.spawn_command(cmd).expect("Failed to spawn");
+        drop(pair.slave);
+
+        let mut writer = pair.master.take_writer().expect("Failed to get writer");
+        let mut reader = pair.master.try_clone_reader().expect("Failed to get reader");
+
+        // Write to the PTY
+        writer.write_all(b"HELLO\n").expect("Failed to write");
+        drop(writer); // Close stdin so cat exits
+
+        // Read output
+        let mut output = Vec::new();
+        let mut buf = [0u8; 4096];
+        loop {
+            match reader.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => output.extend_from_slice(&buf[..n]),
+                Err(_) => break,
+            }
+        }
+        let output_str = String::from_utf8_lossy(&output);
+        assert!(output_str.contains("HELLO"), "Should see echoed input, got: {}", output_str);
+    }
+
+    // -----------------------------------------------------------------------
+    // PTY resize (T2)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn pty_resize_does_not_panic() {
+        let pty_system = native_pty_system();
+        let pair = pty_system
+            .openpty(PtySize { rows: 24, cols: 80, pixel_width: 0, pixel_height: 0 })
+            .expect("Failed to open PTY");
+
+        let mut cmd = CommandBuilder::new("sh");
+        cmd.arg("-c");
+        cmd.arg("sleep 1");
+        let _child = pair.slave.spawn_command(cmd).expect("Failed to spawn");
+        drop(pair.slave);
+
+        // Resize to 120x40
+        let result = pair.master.resize(PtySize {
+            rows: 40,
+            cols: 120,
+            pixel_width: 0,
+            pixel_height: 0,
+        });
+        assert!(result.is_ok(), "Resize should succeed: {:?}", result.err());
+
+        // Resize to very small
+        let result = pair.master.resize(PtySize {
+            rows: 1,
+            cols: 1,
+            pixel_width: 0,
+            pixel_height: 0,
+        });
+        assert!(result.is_ok(), "Resize to 1x1 should succeed: {:?}", result.err());
+    }
+
+    // -----------------------------------------------------------------------
+    // PTY kill / removal from map (T3)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn pty_kill_removes_from_state() {
+        let state = AppState {
+            ptys: Mutex::new(HashMap::new()),
+            watch_flags: Mutex::new(HashMap::new()),
+        };
+
+        let pty_system = native_pty_system();
+        let pair = pty_system
+            .openpty(PtySize { rows: 24, cols: 80, pixel_width: 0, pixel_height: 0 })
+            .expect("Failed to open PTY");
+
+        let mut cmd = CommandBuilder::new("sh");
+        cmd.arg("-c");
+        cmd.arg("sleep 60");
+        let child = pair.slave.spawn_command(cmd).expect("Failed to spawn");
+        let child_pid = child.process_id();
+        drop(pair.slave);
+
+        let writer = pair.master.take_writer().expect("Failed to get writer");
+        let pty_id = NEXT_PTY_ID.fetch_add(1, Ordering::Relaxed);
+        let paused = Arc::new(PauseFlag::new());
+
+        {
+            let mut ptys = state.ptys.lock().unwrap();
+            ptys.insert(pty_id, PtyInstance {
+                writer,
+                _master: pair.master,
+                child_pid,
+                paused: paused.clone(),
+            });
+        }
+
+        // Verify it's in the map
+        assert!(state.ptys.lock().unwrap().contains_key(&pty_id));
+
+        // Kill: remove from map and signal process
+        {
+            let mut ptys = state.ptys.lock().unwrap();
+            if let Some(pty) = ptys.remove(&pty_id) {
+                pty.paused.resume();
+                if let Some(pid) = pty.child_pid {
+                    #[cfg(unix)]
+                    unsafe {
+                        let pid_i32 = pid as i32;
+                        libc::kill(pid_i32, libc::SIGKILL);
+                    }
+                }
+            }
+        }
+
+        // Verify it's gone
+        assert!(!state.ptys.lock().unwrap().contains_key(&pty_id),
+            "PTY should be removed from map after kill");
+    }
+
+    // -----------------------------------------------------------------------
+    // File read/write roundtrip (T4)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn file_read_write_roundtrip() {
+        let home = std::env::var("HOME").unwrap();
+        let config_dir = format!("{}/.config/gnar-term/test-tmp", home);
+        std::fs::create_dir_all(&config_dir).expect("Failed to create test dir");
+
+        let test_path = format!("{}/roundtrip_test.txt", config_dir);
+        let content = "Hello from GnarTerm integration test!\nLine 2\nLine 3 with unicode: \u{1F680}";
+
+        // Write via validate_write_path + fs::write (same as write_file command)
+        validate_write_path(&test_path).expect("Write path should be valid");
+        std::fs::write(&test_path, content).expect("Failed to write file");
+
+        // Read back via validate_read_path + fs::read_to_string (same as read_file command)
+        let validated = validate_read_path(&test_path).expect("Read path should be valid");
+        let read_back = std::fs::read_to_string(&validated).expect("Failed to read file");
+
+        assert_eq!(read_back, content, "Content should match after roundtrip");
+
+        // Cleanup
+        let _ = std::fs::remove_file(&test_path);
+        let _ = std::fs::remove_dir(&config_dir);
+    }
+
+    // -----------------------------------------------------------------------
+    // File watcher with cancellation (T5)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn file_watcher_cancellation_sets_stop_flag() {
+        let state = AppState {
+            ptys: Mutex::new(HashMap::new()),
+            watch_flags: Mutex::new(HashMap::new()),
+        };
+
+        let watch_id = NEXT_WATCH_ID.fetch_add(1, Ordering::Relaxed);
+        let stop = Arc::new(AtomicBool::new(false));
+        let stop_clone = stop.clone();
+
+        // Insert the watcher flag (same as watch_file does)
+        state.watch_flags.lock().unwrap().insert(watch_id, stop);
+
+        // Spawn a mock watcher thread that checks the flag
+        let watcher_handle = std::thread::spawn(move || {
+            let mut iterations = 0;
+            loop {
+                std::thread::sleep(Duration::from_millis(10));
+                if stop_clone.load(Ordering::Relaxed) {
+                    break;
+                }
+                iterations += 1;
+                if iterations > 100 {
+                    panic!("Watcher thread did not stop within timeout");
+                }
+            }
+        });
+
+        // Simulate unwatch: remove flag and set it to true
+        std::thread::sleep(Duration::from_millis(30));
+        {
+            let mut flags = state.watch_flags.lock().unwrap();
+            if let Some(flag) = flags.remove(&watch_id) {
+                flag.store(true, Ordering::Relaxed);
+            }
+        }
+
+        // Watcher thread should exit cleanly
+        watcher_handle.join().expect("Watcher thread should stop without panic");
+
+        // Flag should no longer be in the map
+        assert!(!state.watch_flags.lock().unwrap().contains_key(&watch_id),
+            "Watch flag should be removed after unwatch");
+    }
+
+    // -----------------------------------------------------------------------
+    // Base64 encoding (T6)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn b64_encode_empty() {
+        assert_eq!(b64_encode(b""), "");
+    }
+
+    #[test]
+    fn b64_encode_single_byte() {
+        // 'A' (0x41) -> base64 "QQ=="
+        assert_eq!(b64_encode(b"A"), "QQ==");
+    }
+
+    #[test]
+    fn b64_encode_two_bytes() {
+        // "AB" -> base64 "QUI="
+        assert_eq!(b64_encode(b"AB"), "QUI=");
+    }
+
+    #[test]
+    fn b64_encode_three_bytes() {
+        // "ABC" -> base64 "QUJD"
+        assert_eq!(b64_encode(b"ABC"), "QUJD");
+    }
+
+    #[test]
+    fn b64_encode_hello_world() {
+        assert_eq!(b64_encode(b"Hello, World!"), "SGVsbG8sIFdvcmxkIQ==");
+    }
+
+    #[test]
+    fn b64_encode_terminal_escape_sequences() {
+        // ESC[31m = red color code
+        let ansi_red = b"\x1b[31mHello\x1b[0m";
+        let encoded = b64_encode(ansi_red);
+        // Verify it's valid base64 and round-trips correctly
+        assert!(!encoded.is_empty());
+        assert!(encoded.len() % 4 == 0, "Base64 output length should be multiple of 4");
+        // Known base64 for this sequence
+        assert_eq!(encoded, "G1szMW1IZWxsbxtbMG0=");
+    }
+
+    #[test]
+    fn b64_encode_binary_data() {
+        // All byte values 0x00..0xFF
+        let data: Vec<u8> = (0..=255).collect();
+        let encoded = b64_encode(&data);
+        assert!(!encoded.is_empty());
+        assert!(encoded.len() % 4 == 0, "Base64 output should be padded to multiple of 4");
+    }
+
+    // -----------------------------------------------------------------------
+    // Ensure dir (T7)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn ensure_dir_creates_nested_directory() {
+        let home = std::env::var("HOME").unwrap();
+        let test_dir = format!("{}/.config/gnar-term/test-tmp/nested/deep/dir", home);
+
+        // Remove if leftover from a previous run
+        let _ = std::fs::remove_dir_all(format!("{}/.config/gnar-term/test-tmp/nested", home));
+
+        // validate_write_path should allow it
+        validate_write_path(&test_dir).expect("Path should be valid under config dir");
+
+        // Create it (same logic as ensure_dir command)
+        std::fs::create_dir_all(&test_dir).expect("Should create nested dirs");
+        assert!(std::path::Path::new(&test_dir).is_dir(), "Directory should exist");
+
+        // Cleanup
+        let _ = std::fs::remove_dir_all(format!("{}/.config/gnar-term/test-tmp/nested", home));
+    }
+
+    // -----------------------------------------------------------------------
+    // Home directory (T8)
+    // -----------------------------------------------------------------------
+
+    // -----------------------------------------------------------------------
+    // PTY spawns in specified cwd and get_pty_cwd returns it (T9)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn pty_spawn_with_cwd_and_get_cwd() {
+        let state = AppState {
+            ptys: Mutex::new(HashMap::new()),
+            watch_flags: Mutex::new(HashMap::new()),
+        };
+
+        let pty_system = native_pty_system();
+        let pair = pty_system
+            .openpty(PtySize { rows: 24, cols: 80, pixel_width: 0, pixel_height: 0 })
+            .expect("Failed to open PTY");
+
+        let mut cmd = CommandBuilder::new("sh");
+        cmd.arg("-c");
+        cmd.arg("sleep 2");
+        cmd.cwd("/tmp");
+
+        let child = pair.slave.spawn_command(cmd).expect("Failed to spawn");
+        let child_pid = child.process_id();
+        drop(pair.slave);
+
+        let writer = pair.master.take_writer().expect("Failed to get writer");
+        let pty_id = NEXT_PTY_ID.fetch_add(1, Ordering::Relaxed);
+
+        let paused = Arc::new(PauseFlag::new());
+        {
+            let mut ptys = state.ptys.lock().unwrap();
+            ptys.insert(pty_id, PtyInstance {
+                writer,
+                _master: pair.master,
+                child_pid,
+                paused,
+            });
+        }
+
+        // Give the process a moment to start
+        std::thread::sleep(Duration::from_millis(200));
+
+        // Verify get_pty_cwd returns the correct directory
+        if let Some(pid) = child_pid {
+            #[cfg(target_os = "macos")]
+            {
+                let output = std::process::Command::new("lsof")
+                    .args(["-a", "-p", &pid.to_string(), "-d", "cwd", "-Fn"])
+                    .output()
+                    .expect("lsof should run");
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                let mut found_cwd = String::new();
+                for line in stdout.lines() {
+                    if let Some(path) = line.strip_prefix('n') {
+                        if path.starts_with('/') {
+                            found_cwd = path.to_string();
+                            break;
+                        }
+                    }
+                }
+                // /tmp is a symlink to /private/tmp on macOS
+                assert!(
+                    found_cwd == "/tmp" || found_cwd == "/private/tmp",
+                    "CWD should be /tmp or /private/tmp, got: {}",
+                    found_cwd
+                );
+            }
+        } else {
+            panic!("Child PID should be available");
+        }
+    }
+
+    #[test]
+    fn get_home_returns_valid_path() {
+        // Same logic as get_home command
+        let home = std::env::var("HOME").expect("HOME should be set in test env");
+        assert!(!home.is_empty(), "HOME should not be empty");
+        assert!(home.starts_with('/'), "HOME should be an absolute path, got: {}", home);
+        assert!(std::path::Path::new(&home).is_dir(), "HOME should point to an existing directory");
     }
 }

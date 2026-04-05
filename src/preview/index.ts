@@ -7,7 +7,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { theme } from "../theme";
+import { themeProxy as theme } from "../lib/theme-accessor";
 
 // --- Preview interface ---
 
@@ -68,26 +68,33 @@ export async function openPreview(filePath: string): Promise<PreviewSurface> {
   // Inject base preview styles once
   injectStyles();
 
-  // Read and render
+  // Binary formats (pdf, image, video) read files themselves — skip text read
+  const binaryExts = new Set(["pdf", "png", "jpg", "jpeg", "gif", "webp", "svg", "ico", "bmp", "heic", "heif", "tiff", "tif", "avif", "mp4", "webm", "mov", "avi", "mkv", "m4v", "ogv"]);
+  const isBinary = binaryExts.has(ext);
+
   let content = "";
-  try {
-    content = await invoke<string>("read_file", { path: filePath });
-  } catch (err) {
-    content = `Error reading file: ${err}`;
+  if (!isBinary) {
+    try {
+      content = await invoke<string>("read_file", { path: filePath });
+    } catch (err) {
+      content = `Error reading file: ${err}`;
+    }
   }
 
   renderWithChrome(previewer, content, filePath, element);
 
-  // Watch for changes
+  // Watch for changes (text formats only — binary previewers handle their own reload)
   let watchId = 0;
-  try {
-    watchId = await invoke<number>("watch_file", { path: filePath });
-    await listen<{ watch_id: number; content: string }>("file-changed", (event) => {
-      if (event.payload.watch_id === watchId) {
-        renderWithChrome(previewer, event.payload.content, filePath, element);
-      }
-    });
-  } catch {}
+  if (!isBinary) {
+    try {
+      watchId = await invoke<number>("watch_file", { path: filePath });
+      await listen<{ watch_id: number; content: string }>("file-changed", (event) => {
+        if (event.payload.watch_id === watchId) {
+          renderWithChrome(previewer, event.payload.content, filePath, element);
+        }
+      });
+    } catch {}
+  }
 
   return { id, filePath, title: fileName, element, watchId };
 }
@@ -104,13 +111,13 @@ function renderWithChrome(previewer: Previewer, content: string, filePath: strin
   previewer.render(content, filePath, element);
 }
 
-let _stylesInjected = false;
 function injectStyles() {
-  if (_stylesInjected) return;
-  _stylesInjected = true;
-
-  const style = document.createElement("style");
-  style.id = "preview-styles";
+  let style = document.getElementById("preview-styles") as HTMLStyleElement | null;
+  if (!style) {
+    style = document.createElement("style");
+    style.id = "preview-styles";
+    document.head.appendChild(style);
+  }
   style.textContent = `
     .preview-surface .json-key { color: ${theme.ansi.blue}; }
     .preview-surface .json-string { color: ${theme.ansi.green}; }
@@ -119,5 +126,9 @@ function injectStyles() {
     .preview-surface .json-null { color: ${theme.fgDim}; }
     .preview-surface img { max-width: 100%; border-radius: 4px; }
   `;
-  document.head.appendChild(style);
+}
+
+// Re-inject styles when theme changes (themeProxy reads current theme on access)
+export function refreshPreviewStyles() {
+  injectStyles();
 }

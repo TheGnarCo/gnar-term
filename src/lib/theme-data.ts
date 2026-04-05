@@ -1,9 +1,3 @@
-/**
- * GnarTerm Theme System
- * Themes define UI chrome + terminal ANSI colors.
- * Switch at runtime via setTheme(). All consumers read from `theme` and `xtermTheme`.
- */
-
 export interface ThemeDef {
   name: string;
   // UI chrome
@@ -150,7 +144,6 @@ const oneDark: ThemeDef = {
 
 const molly: ThemeDef = {
   name: "Molly",
-  // A refined, warm light theme — soft ivory base with rose gold accents
   bg: "#faf8f5", bgSurface: "#f0ece6", bgFloat: "#e8e3db", bgHighlight: "#e0d9cf",
   bgActive: "#ebe5dc", border: "#d4cdc3", borderActive: "#c47d5a", borderNotify: "#c47d5a",
   fg: "#3b3228", fgMuted: "#7a7067", fgDim: "#a89f96",
@@ -232,63 +225,3 @@ export const themes: Record<string, ThemeDef> = {
   "solarized-light": solarizedLight,
   "catppuccin-latte": catppuccinLatte,
 };
-
-// --- Active theme (mutable) ---
-let _active: ThemeDef = githubDark;
-const _listeners: (() => void)[] = [];
-
-export const theme: ThemeDef = new Proxy({} as ThemeDef, {
-  get(_target, prop) {
-    if (prop === "ansi") return _active.ansi;
-    return (_active as any)[prop as string];
-  },
-});
-
-export function getXtermTheme() {
-  return {
-    background: _active.termBg,
-    foreground: _active.termFg,
-    cursor: _active.termCursor,
-    cursorAccent: _active.termBg,
-    selectionBackground: _active.termSelection,
-    selectionForeground: _active.termFg,
-    ..._active.ansi,
-  };
-}
-
-export function setTheme(id: string) {
-  const t = themes[id];
-  if (!t) return;
-  _active = t;
-  // Update CSS vars on body
-  document.documentElement.style.setProperty("--bg", t.bg);
-  document.body.style.background = t.bg;
-  // Notify listeners
-  for (const fn of _listeners) fn();
-  // Save to localStorage as fallback
-  try { localStorage.setItem("gnarterm-theme", id); } catch {}
-}
-
-export function onThemeChange(fn: () => void) {
-  _listeners.push(fn);
-}
-
-export function activeThemeId(): string {
-  for (const [id, t] of Object.entries(themes)) {
-    if (t === _active) return id;
-  }
-  return "github-dark";
-}
-
-// Restore saved theme on load
-try {
-  const saved = localStorage.getItem("gnarterm-theme");
-  if (saved && themes[saved]) _active = themes[saved];
-} catch {}
-
-// Legacy export for existing code that imports xtermTheme
-export const xtermTheme = new Proxy({} as Record<string, string>, {
-  get(_target, prop) {
-    return getXtermTheme()[prop as keyof ReturnType<typeof getXtermTheme>];
-  },
-});

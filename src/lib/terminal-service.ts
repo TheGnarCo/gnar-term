@@ -343,15 +343,11 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
       const line = terminal.buffer.active.getLine(lineNumber - 1);
       if (!line) { callback(undefined); return; }
       const text = line.translateToString();
-      // Match file paths with previewable extensions.
-      // Only match paths with a directory component (/, ./, ~/) — bare filenames
-      // like "file.pdf" from ls output are ambiguous (we don't know which directory).
+      // Match file paths with previewable extensions
       const exts = getSupportedExtensions().join("|");
       const patterns = [
-        `["']([^"']*[/][^"']+\\.(?:${exts}))["']`,           // quoted paths with /: "dir/file.md"
-        `(/[\\w ./~-]+\\.(?:${exts}))(?=\\s|$)`,              // absolute: /path/to/file.md
-        `(\\./[\\w ./~-]+\\.(?:${exts}))(?=\\s|$)`,           // relative: ./file.md
-        `(~/[\\w ./~-]+\\.(?:${exts}))(?=\\s|$)`,             // home: ~/file.md
+        `["']([^"']+\\.(?:${exts}))["']`,           // quoted: "my file.md" or 'my file.md'
+        `([\\w./~][\\w ./~-]*\\.(?:${exts}))(?=\\s|$)`, // unquoted paths (may have spaces before extension)
       ];
       const regex = new RegExp(patterns.join("|"), "gi");
       const links: any[] = [];
@@ -363,16 +359,22 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
         links.push({
           range: { start: { x: startX + 1, y: lineNumber }, end: { x: startX + path.length + 1, y: lineNumber } },
           text: path,
-          activate: (e: MouseEvent, linkText: string) => {
-            // Only open on left-click, not right-click (right-click shows context menu)
+          activate: async (e: MouseEvent, linkText: string) => {
             if (e.button !== 0) return;
-            // Resolve relative paths against cwd
             let fullPath = linkText;
             if (!linkText.startsWith("/") && surface.cwd) {
               const base = surface.cwd.endsWith("/") ? surface.cwd.slice(0, -1) : surface.cwd;
               fullPath = `${base}/${linkText}`;
             }
-            // Dispatch to App.svelte which will open preview in the active pane
+            // Check if resolved path exists; if not, use mdfind to locate the file
+            try {
+              await invoke("read_file_base64", { path: fullPath });
+            } catch {
+              try {
+                const found = await invoke<string>("find_file", { name: linkText.split("/").pop() || linkText });
+                if (found) fullPath = found;
+              } catch {}
+            }
             pendingAction.set({ type: "open-preview", payload: fullPath });
           },
         });

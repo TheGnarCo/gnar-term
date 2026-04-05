@@ -827,6 +827,23 @@ async fn get_pty_cwd(state: tauri::State<'_, AppState>, pty_id: u32) -> Result<S
     Ok(String::new())
 }
 
+/// Find a file by name using macOS Spotlight (mdfind)
+#[tauri::command]
+async fn find_file(name: String) -> Result<String, String> {
+    let output = std::process::Command::new("mdfind")
+        .args(["-name", &name])
+        .output()
+        .map_err(|e| format!("mdfind failed: {e}"))?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // Return the first match
+    for line in stdout.lines() {
+        if line.starts_with('/') && line.ends_with(&name) {
+            return Ok(line.to_string());
+        }
+    }
+    Err(format!("File not found: {}", name))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -836,7 +853,7 @@ pub fn run() {
             watch_flags: Mutex::new(HashMap::new()),
         })
         .invoke_handler(tauri::generate_handler![
-            spawn_pty, write_pty, resize_pty, kill_pty, pause_pty, resume_pty, detect_font, get_pty_cwd, get_pty_title, read_file, read_file_base64, write_file, ensure_dir, get_home, watch_file, unwatch_file, show_in_file_manager, open_with_default_app
+            spawn_pty, write_pty, resize_pty, kill_pty, pause_pty, resume_pty, detect_font, get_pty_cwd, get_pty_title, read_file, read_file_base64, write_file, ensure_dir, get_home, watch_file, unwatch_file, show_in_file_manager, open_with_default_app, find_file
         ])
         .setup(|app| {
             // Rebuild macOS menu manually so Cmd+Q, Cmd+C, Cmd+V work,

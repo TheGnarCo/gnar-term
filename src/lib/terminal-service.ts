@@ -391,7 +391,7 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
           };
         })
       ).then((results) => {
-        const links = results.filter(Boolean);
+        const links = results.filter((r): r is NonNullable<typeof r> => r !== null);
         callback(links.length > 0 ? links : undefined);
       });
     },

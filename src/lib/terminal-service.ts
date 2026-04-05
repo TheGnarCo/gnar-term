@@ -343,12 +343,15 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
       const line = terminal.buffer.active.getLine(lineNumber - 1);
       if (!line) { callback(undefined); return; }
       const text = line.translateToString();
-      // Match file paths with previewable extensions
+      // Match file paths with previewable extensions.
+      // Only match paths with a directory component (/, ./, ~/) — bare filenames
+      // like "file.pdf" from ls output are ambiguous (we don't know which directory).
       const exts = getSupportedExtensions().join("|");
-      // Match: bare filenames, paths, and quoted paths with spaces
       const patterns = [
-        `["']([^"']+\\.(?:${exts}))["']`,           // quoted: "my file.md" or 'my file.md'
-        `([\\w./~][\\w ./~-]*\\.(?:${exts}))(?=\\s|$)`, // unquoted paths (may have spaces before extension)
+        `["']([^"']*[/][^"']+\\.(?:${exts}))["']`,           // quoted paths with /: "dir/file.md"
+        `(/[\\w ./~-]+\\.(?:${exts}))(?=\\s|$)`,              // absolute: /path/to/file.md
+        `(\\./[\\w ./~-]+\\.(?:${exts}))(?=\\s|$)`,           // relative: ./file.md
+        `(~/[\\w ./~-]+\\.(?:${exts}))(?=\\s|$)`,             // home: ~/file.md
       ];
       const regex = new RegExp(patterns.join("|"), "gi");
       const links: any[] = [];

@@ -827,18 +827,49 @@ async fn get_pty_cwd(state: tauri::State<'_, AppState>, pty_id: u32) -> Result<S
     Ok(String::new())
 }
 
-/// Find a file by name using macOS Spotlight (mdfind)
+/// Find a file by name using platform-specific search
 #[tauri::command]
 async fn find_file(name: String) -> Result<String, String> {
-    let output = std::process::Command::new("mdfind")
-        .args(["-name", &name])
-        .output()
-        .map_err(|e| format!("mdfind failed: {e}"))?;
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    // Return the first match
-    for line in stdout.lines() {
-        if line.starts_with('/') && line.ends_with(&name) {
-            return Ok(line.to_string());
+    // macOS: use Spotlight (mdfind) — fast indexed search
+    #[cfg(target_os = "macos")]
+    {
+        let output = std::process::Command::new("mdfind")
+            .args(["-name", &name])
+            .output()
+            .map_err(|e| format!("mdfind failed: {e}"))?;
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        for line in stdout.lines() {
+            if line.starts_with('/') && line.ends_with(&name) {
+                return Ok(line.to_string());
+            }
+        }
+    }
+    // Linux: use locate (if available) then fall back to find in home
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(output) = std::process::Command::new("locate")
+            .args(["-l", "1", &name])
+            .output()
+        {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            if let Some(line) = stdout.lines().next() {
+                if line.starts_with('/') {
+                    return Ok(line.to_string());
+                }
+            }
+        }
+        // Fall back to find in home directory
+        let home = std::env::var("HOME").unwrap_or_default();
+        if let Ok(output) = std::process::Command::new("find")
+            .args([&home, "-maxdepth", "4", "-name", &name, "-print", "-quit"])
+            .output()
+        {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            if let Some(line) = stdout.lines().next() {
+                if line.starts_with('/') {
+                    return Ok(line.to_string());
+                }
+            }
         }
     }
     Err(format!("File not found: {}", name))

@@ -947,6 +947,7 @@ pub fn run() {
                 )?;
 
                 let cmd_palette = MenuItem::with_id(handle, "cmd-palette", "Command Palette...", true, Some("CmdOrCtrl+P"))?;
+                let close_tab = MenuItem::with_id(handle, "close-tab", "Close Tab", true, Some("CmdOrCtrl+W"))?;
                 
                 // View > Theme submenu
                 use tauri::menu::MenuItem;
@@ -975,7 +976,7 @@ pub fn run() {
                     handle,
                     "View",
                     true,
-                    &[&cmd_palette, &PredefinedMenuItem::separator(handle)?, &theme_submenu],
+                    &[&cmd_palette, &close_tab, &PredefinedMenuItem::separator(handle)?, &theme_submenu],
                 )?;
 
                 let menu = Menu::with_items(handle, &[&app_menu, &edit_menu, &view_menu])?;
@@ -989,6 +990,8 @@ pub fn run() {
                 let _ = app.emit("menu-theme", id.to_string());
             } else if id == "cmd-palette" {
                 let _ = app.emit("menu-cmd-palette", ());
+            } else if id == "close-tab" {
+                let _ = app.emit("menu-close-tab", ());
             }
         })
         .run(tauri::generate_context!())

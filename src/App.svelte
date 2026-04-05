@@ -616,6 +616,10 @@
     listen("menu-cmd-palette", () => {
       commandPaletteOpen.update(v => !v);
     });
+
+    listen("menu-close-tab", () => {
+      closeSurface();
+    });
   });
 </script>
 

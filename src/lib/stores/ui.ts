@@ -19,3 +19,17 @@ export interface PendingAction {
   payload?: any;
 }
 export const pendingAction = writable<PendingAction | null>(null);
+
+/** Input prompt — replaces window.prompt() which doesn't work in Tauri WKWebView */
+export interface InputPromptState {
+  placeholder: string;
+  defaultValue?: string;
+  resolve: (value: string | null) => void;
+}
+export const inputPrompt = writable<InputPromptState | null>(null);
+
+export function showInputPrompt(placeholder: string, defaultValue?: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    inputPrompt.set({ placeholder, defaultValue, resolve });
+  });
+}

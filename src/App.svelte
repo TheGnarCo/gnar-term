@@ -2,7 +2,7 @@
   import { onMount, tick } from "svelte";
   import { listen } from "@tauri-apps/api/event";
   import { theme, themes, xtermTheme } from "./lib/stores/theme";
-  import { sidebarVisible, commandPaletteOpen, findBarVisible, pendingAction } from "./lib/stores/ui";
+  import { sidebarVisible, commandPaletteOpen, findBarVisible, pendingAction, showInputPrompt } from "./lib/stores/ui";
   import { workspaces, activeWorkspaceIdx, activeWorkspace, activePane, activeSurface } from "./lib/stores/workspace";
   import { invoke } from "@tauri-apps/api/core";
   import { loadConfig, saveConfig, getConfig, getWorkspaceCommands, type WorkspaceDef, type LayoutNode } from "./lib/config";
@@ -19,6 +19,7 @@
   import CommandPalette from "./lib/components/CommandPalette.svelte";
   import FindBar from "./lib/components/FindBar.svelte";
   import ContextMenu from "./lib/components/ContextMenu.svelte";
+  import InputPrompt from "./lib/components/InputPrompt.svelte";
 
   let sidebarComponent: Sidebar;
   let findBarComponent: FindBar;
@@ -404,7 +405,7 @@
   async function saveCurrentWorkspace() {
     const ws = $activeWorkspace;
     if (!ws) return;
-    const name = prompt("Save workspace as:", ws.name);
+    const name = await showInputPrompt("Workspace name", ws.name);
     if (!name) return;
     const layout = serializeLayout(ws.splitRoot);
     const activeCwd = $activeSurface && isTerminalSurface($activeSurface) ? $activeSurface.cwd : undefined;
@@ -442,7 +443,7 @@
     })),
     { name: "Save Current Workspace...", action: () => saveCurrentWorkspace() },
     { name: `Preview File...`, action: async () => {
-      const path = prompt("Path to file:");
+      const path = await showInputPrompt("Path to file");
       if (path) openPreviewInPane(path);
     }},
     ...getWorkspaceCommands().map(cmd => ({
@@ -666,3 +667,4 @@
 
 <CommandPalette commands={paletteCommands} />
 <ContextMenu />
+<InputPrompt />

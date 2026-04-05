@@ -355,7 +355,9 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
       const line = terminal.buffer.active.getLine(lineNumber - 1);
       if (!line) { callback(undefined); return; }
       const text = line.translateToString();
-      const exts = getSupportedExtensions().join("|");
+      const extsList = getSupportedExtensions();
+      const exts = extsList.join("|");
+      const extRegex = new RegExp(`\\.(?:${exts})$`, "i");
       const patterns = [
         `["']([^"']+\\.(?:${exts}))["']`,
         `((?:/|\\./|~/)\\S[\\S ]*\\.(?:${exts}))(?=\\s|$)`,
@@ -363,11 +365,22 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
       ];
       const regex = new RegExp(patterns.join("|"), "gi");
       const candidates: { path: string; startX: number; endX: number }[] = [];
+
+      // Try the whole trimmed line as a filename (handles spaces, parens, apostrophes, etc.)
+      const trimmed = text.trim();
+      if (trimmed && extRegex.test(trimmed)) {
+        const startX = text.indexOf(trimmed);
+        candidates.push({ path: trimmed, startX, endX: startX + trimmed.length });
+      }
+
+      // Regex patterns for quoted, path-prefixed, and simple bare filenames
       let m;
       while ((m = regex.exec(text)) !== null) {
         const path = m[1] || m[2] || m[3];
         if (!path) continue;
         const startX = m.index + m[0].indexOf(path);
+        // Skip if already covered by the whole-line candidate
+        if (candidates.some(c => startX >= c.startX && startX + path.length <= c.endX)) continue;
         candidates.push({ path, startX, endX: startX + path.length });
       }
 

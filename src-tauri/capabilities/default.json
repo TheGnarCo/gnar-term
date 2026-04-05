@@ -9,11 +9,6 @@
     "core:event:allow-emit",
     "core:window:allow-start-dragging",
     "clipboard-manager:allow-read-text",
-    "clipboard-manager:allow-write-text",
-    "core:app:default",
-    {
-      "identifier": "asset-protocol",
-      "allow": [{ "path": "**" }]
-    }
+    "clipboard-manager:allow-write-text"
   ]
 }

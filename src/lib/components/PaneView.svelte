@@ -22,16 +22,18 @@
   let resizeObserver: ResizeObserver;
   let resizeTimer: ReturnType<typeof setTimeout> | null = null;
 
+  function fitActiveTerminal() {
+    const active = pane.surfaces.find(s => s.id === pane.activeSurfaceId);
+    if (active && isTerminalSurface(active)) {
+      try { active.fitAddon.fit(); } catch {}
+    }
+  }
+
   onMount(() => {
     pane.element = paneEl;
     resizeObserver = new ResizeObserver(() => {
       if (resizeTimer) clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(() => {
-        const active = pane.surfaces.find(s => s.id === pane.activeSurfaceId);
-        if (active && isTerminalSurface(active) && active.termElement.offsetParent !== null) {
-          active.fitAddon.fit();
-        }
-      }, 50);
+      resizeTimer = setTimeout(fitActiveTerminal, 50);
     });
     resizeObserver.observe(paneEl);
   });
@@ -56,7 +58,6 @@
 >
   <TabBar
     {pane}
-    {isActivePane}
     {onSelectSurface}
     {onCloseSurface}
     {onNewSurface}
@@ -68,7 +69,7 @@
 
   {#each pane.surfaces as surface (surface.id)}
     {#if isTerminalSurface(surface)}
-      <TerminalSurface {surface} visible={surface.id === pane.activeSurfaceId} />
+      <TerminalSurface {surface} visible={surface.id === pane.activeSurfaceId} cwd={surface.cwd} />
     {:else if isPreviewSurface(surface)}
       <PreviewSurface {surface} visible={surface.id === pane.activeSurfaceId} />
     {/if}

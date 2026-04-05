@@ -577,6 +577,29 @@ fn validate_read_path(path: &str) -> Result<std::path::PathBuf, String> {
     Ok(canonical)
 }
 
+/// Check if a file exists (lightweight — no read)
+#[tauri::command]
+async fn file_exists(path: String) -> bool {
+    std::path::Path::new(&path).exists()
+}
+
+/// List filenames in a directory (non-recursive, files only)
+#[tauri::command]
+async fn list_dir(path: String) -> Result<Vec<String>, String> {
+    let entries = std::fs::read_dir(&path).map_err(|e| format!("Failed to read dir {}: {}", path, e))?;
+    let mut names = Vec::new();
+    for entry in entries.flatten() {
+        if let Ok(ft) = entry.file_type() {
+            if ft.is_file() {
+                if let Some(name) = entry.file_name().to_str() {
+                    names.push(name.to_string());
+                }
+            }
+        }
+    }
+    Ok(names)
+}
+
 /// Read a file's contents
 #[tauri::command]
 async fn read_file(path: String) -> Result<String, String> {
@@ -884,7 +907,7 @@ pub fn run() {
             watch_flags: Mutex::new(HashMap::new()),
         })
         .invoke_handler(tauri::generate_handler![
-            spawn_pty, write_pty, resize_pty, kill_pty, pause_pty, resume_pty, detect_font, get_pty_cwd, get_pty_title, read_file, read_file_base64, write_file, ensure_dir, get_home, watch_file, unwatch_file, show_in_file_manager, open_with_default_app, find_file
+            spawn_pty, write_pty, resize_pty, kill_pty, pause_pty, resume_pty, detect_font, get_pty_cwd, get_pty_title, file_exists, list_dir, read_file, read_file_base64, write_file, ensure_dir, get_home, watch_file, unwatch_file, show_in_file_manager, open_with_default_app, find_file
         ])
         .setup(|app| {
             // Rebuild macOS menu manually so Cmd+Q, Cmd+C, Cmd+V work,

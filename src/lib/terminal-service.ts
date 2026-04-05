@@ -18,11 +18,29 @@ import { get } from "svelte/store";
 import { xtermTheme } from "./stores/theme";
 import { workspaces, activeWorkspaceIdx } from "./stores/workspace";
 import { contextMenu, pendingAction } from "./stores/ui";
-import { canPreview, getSupportedExtensions } from "../preview/index";
+import { canPreview, getSupportedExtensions, openPreview } from "../preview/index";
 import type { TerminalSurface, Pane, Surface, Workspace } from "./types";
 import { uid, getAllSurfaces, getAllPanes, isTerminalSurface } from "./types";
 import type { MenuItem } from "./context-menu-types";
 import "@xterm/xterm/css/xterm.css";
+
+/** Resolve a link path to an absolute filesystem path. Expands ~ and prepends cwd for relative paths. */
+export async function resolveFilePath(linkText: string, cwd: string | undefined): Promise<string> {
+  if (linkText.startsWith("/")) return linkText;
+  if (linkText.startsWith("~/")) {
+    try {
+      const home = await invoke<string>("get_home");
+      return home + linkText.slice(1);
+    } catch {
+      return linkText;
+    }
+  }
+  if (cwd) {
+    const base = cwd.endsWith("/") ? cwd.slice(0, -1) : cwd;
+    return `${base}/${linkText}`;
+  }
+  return linkText;
+}
 
 // --- Font Detection ---
 
@@ -295,13 +313,7 @@ export async function createDefaultWorkspace() {
 // --- Surface Creation ---
 
 export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<TerminalSurface> {
-  let ptyId: number;
-  try {
-    ptyId = await invoke<number>("spawn_pty", { cols: 80, rows: 24, cwd: cwd || null });
-  } catch (err) {
-    console.error("Failed to spawn PTY:", err);
-    ptyId = -1;
-  }
+  const ptyId = -1; // PTY spawned later via connectPty() after fit()
 
   const currentXtermTheme = get(xtermTheme);
 
@@ -338,44 +350,92 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
   };
 
   // Cmd+click file path detection for preview
+  // Cache cwd file listing so provideLinks doesn't hit disk per-line
+  let cachedCwd: string | undefined;
+  let cachedFiles: Set<string> = new Set();
+  const supportedExtsSet = new Set(getSupportedExtensions());
+
+  function refreshFileCache() {
+    const cwd = surface.cwd;
+    if (!cwd || cwd === cachedCwd) return;
+    cachedCwd = cwd;
+    invoke<string[]>("list_dir", { path: cwd })
+      .then(files => {
+        cachedFiles = new Set(
+          files.filter(f => {
+            const dot = f.lastIndexOf(".");
+            return dot > 0 && supportedExtsSet.has(f.slice(dot + 1).toLowerCase());
+          })
+        );
+      })
+      .catch(() => { cachedFiles = new Set(); });
+  }
+
+  refreshFileCache();
+
   terminal.registerLinkProvider({
     provideLinks: (lineNumber, callback) => {
+      // Refresh file cache if cwd changed (cheap — skips if unchanged)
+      refreshFileCache();
       const line = terminal.buffer.active.getLine(lineNumber - 1);
       if (!line) { callback(undefined); return; }
       const text = line.translateToString();
-      // Match file paths with previewable extensions
       const exts = getSupportedExtensions().join("|");
+      // Patterns for quoted and path-prefixed links (handle spaces natively)
       const patterns = [
-        `["']([^"']+\\.(?:${exts}))["']`,              // quoted: "my file.md" (supports spaces)
-        `((?:/|\\./|~/)\\S[\\S ]*\\.(?:${exts}))(?=\\s|$)`, // paths with dir prefix (supports spaces): /path/to/My File.pdf
-        `(\\S+\\.(?:${exts}))(?=\\s|$)`,                // bare filenames without spaces: file.pdf
+        `["']([^"']+\\.(?:${exts}))["']`,
+        `((?:/|\\./|~/)\\S[\\S ]*\\.(?:${exts}))(?=\\s|$)`,
+        `(\\S+\\.(?:${exts}))(?=\\s|$)`,
       ];
       const regex = new RegExp(patterns.join("|"), "gi");
       const links: any[] = [];
+      const linkedRanges: [number, number][] = []; // track covered ranges to avoid duplicates
+
+      // Phase 1: Match real filenames from cwd against the line text.
+      // This catches filenames with spaces like "WR Product Requirements Doc.pdf"
+      for (const filename of cachedFiles) {
+        let searchFrom = 0;
+        while (true) {
+          const idx = text.indexOf(filename, searchFrom);
+          if (idx < 0) break;
+          searchFrom = idx + filename.length;
+          // Ensure it's bounded by whitespace/start/end (not a substring of a longer path)
+          const before = idx === 0 || /\s|["']/.test(text[idx - 1]);
+          const after = idx + filename.length >= text.length || /\s|["']/.test(text[idx + filename.length]);
+          if (!before || !after) continue;
+          linkedRanges.push([idx, idx + filename.length]);
+          links.push({
+            range: { start: { x: idx + 1, y: lineNumber }, end: { x: idx + filename.length + 1, y: lineNumber } },
+            text: filename,
+            activate: async (e: MouseEvent, linkText: string) => {
+              if (e.button !== 0) return;
+              const fullPath = await resolveFilePath(linkText, surface.cwd);
+              pendingAction.set({ type: "open-preview", payload: fullPath });
+            },
+          });
+        }
+      }
+
+      // Phase 2: Regex patterns for quoted paths, absolute/relative paths, and bare filenames
       let m;
       while ((m = regex.exec(text)) !== null) {
-        const path = m[1] || m[2] || m[3]; // group 1 = quoted, group 2 = path with dir, group 3 = bare
+        const path = m[1] || m[2] || m[3];
         if (!path) continue;
+        const isBare = !!(m[3] && !m[1] && !m[2]);
+        // Bare filenames (no path prefix, no quotes): only link if the file exists in cwd.
+        // This avoids broken links for partial matches like "Doc.pdf" from "WR Product Requirements Doc.pdf"
+        // when the file isn't in cwd.
+        if (isBare && !cachedFiles.has(path)) continue;
         const startX = m.index + m[0].indexOf(path);
+        const endX = startX + path.length;
+        // Skip if already covered by a cwd file match (avoid duplicate links)
+        if (linkedRanges.some(([s, e]) => startX >= s && endX <= e)) continue;
         links.push({
-          range: { start: { x: startX + 1, y: lineNumber }, end: { x: startX + path.length + 1, y: lineNumber } },
+          range: { start: { x: startX + 1, y: lineNumber }, end: { x: endX + 1, y: lineNumber } },
           text: path,
           activate: async (e: MouseEvent, linkText: string) => {
             if (e.button !== 0) return;
-            let fullPath = linkText;
-            if (!linkText.startsWith("/") && surface.cwd) {
-              const base = surface.cwd.endsWith("/") ? surface.cwd.slice(0, -1) : surface.cwd;
-              fullPath = `${base}/${linkText}`;
-            }
-            // Check if resolved path exists; if not, use mdfind to locate the file
-            try {
-              await invoke("read_file_base64", { path: fullPath });
-            } catch {
-              try {
-                const found = await invoke<string>("find_file", { name: linkText.split("/").pop() || linkText });
-                if (found) fullPath = found;
-              } catch {}
-            }
+            const fullPath = await resolveFilePath(linkText, surface.cwd);
             pendingAction.set({ type: "open-preview", payload: fullPath });
           },
         });
@@ -501,33 +561,30 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
     const looksLikePath = pathText && (pathText.startsWith("/") || pathText.startsWith("./") || pathText.startsWith("~/") || pathText.match(/^[\w.-]+\.[a-z]+$/i));
 
     if (looksLikePath) {
-      const cwdBase = surface.cwd?.endsWith("/") ? surface.cwd.slice(0, -1) : surface.cwd;
-      const fullPath = pathText.startsWith("/") ? pathText :
-        pathText.startsWith("~") ? pathText :
-        cwdBase ? `${cwdBase}/${pathText}` : pathText;
+      const resolvePath = () => resolveFilePath(pathText, surface.cwd);
 
       items.push({ label: "", action: () => {}, separator: true });
 
       items.push({
         label: "Copy Path",
-        action: () => clipboardWrite(fullPath),
+        action: async () => clipboardWrite(await resolvePath()),
       });
 
-      if (canPreview(fullPath)) {
+      if (canPreview(pathText)) {
         items.push({
           label: "Preview",
-          action: () => import("../preview/index").then(({ openPreview }) => openPreview(fullPath)),
+          action: async () => openPreview(await resolvePath()),
         });
       }
 
       items.push({
         label: "Show in File Manager",
-        action: () => invoke("show_in_file_manager", { path: fullPath }),
+        action: async () => invoke("show_in_file_manager", { path: await resolvePath() }),
       });
 
       items.push({
         label: "Open with Default App",
-        action: () => invoke("open_with_default_app", { path: fullPath }),
+        action: async () => invoke("open_with_default_app", { path: await resolvePath() }),
       });
     }
 
@@ -559,5 +616,19 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
   pane.activeSurfaceId = surface.id;
 
   return surface;
+}
+
+/** Spawn the PTY for a surface. Called after terminal.open() + fit() so the PTY
+ *  gets the real terminal dimensions instead of hardcoded 80x24. */
+export async function connectPty(surface: TerminalSurface, cwd?: string): Promise<void> {
+  if (surface.ptyId >= 0) return; // already connected
+  const cols = surface.terminal.cols;
+  const rows = surface.terminal.rows;
+  try {
+    surface.ptyId = await invoke<number>("spawn_pty", { cols, rows, cwd: cwd || null });
+  } catch (err) {
+    console.error("Failed to spawn PTY:", err);
+    surface.ptyId = -1;
+  }
 }
 

@@ -129,7 +129,7 @@
       if (isTerminalSurface(s)) {
         s.terminal.dispose();
         if (s.ptyId >= 0) {
-          import("@tauri-apps/api/core").then(m => m.invoke("kill_pty", { ptyId: s.ptyId }).catch(() => {}));
+          invoke("kill_pty", { ptyId: s.ptyId }).catch(() => {});
         }
       }
     }
@@ -185,7 +185,7 @@
     if (isTerminalSurface(surface)) {
       surface.terminal.dispose();
       if (surface.ptyId >= 0) {
-        import("@tauri-apps/api/core").then(m => m.invoke("kill_pty", { ptyId: surface.ptyId }).catch(() => {}));
+        invoke("kill_pty", { ptyId: surface.ptyId }).catch(() => {});
       }
     }
     pane.surfaces.splice(surfaceIdx, 1);
@@ -306,7 +306,7 @@
     for (const s of [...pane.surfaces]) {
       if (isTerminalSurface(s)) {
         s.terminal.dispose();
-        if (s.ptyId >= 0) import("@tauri-apps/api/core").then(m => m.invoke("kill_pty", { ptyId: s.ptyId }).catch(() => {}));
+        if (s.ptyId >= 0) invoke("kill_pty", { ptyId: s.ptyId }).catch(() => {});
       }
     }
     pane.surfaces = [];

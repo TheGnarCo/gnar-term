@@ -101,6 +101,7 @@ import CommandPalette from "../lib/components/CommandPalette.svelte";
 import WorkspaceItem from "../lib/components/WorkspaceItem.svelte";
 import PaneView from "../lib/components/PaneView.svelte";
 import Sidebar from "../lib/components/Sidebar.svelte";
+import TerminalSurfaceComponent from "../lib/components/TerminalSurface.svelte";
 
 // Store imports
 import { sidebarVisible, commandPaletteOpen, findBarVisible, contextMenu } from "../lib/stores/ui";
@@ -841,5 +842,28 @@ describe("Sidebar", () => {
     expect(screen.getByText("WS One")).toBeTruthy();
     expect(screen.getByText("WS Two")).toBeTruthy();
     expect(screen.getByText("WS Three")).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TerminalSurface
+// ---------------------------------------------------------------------------
+
+describe("TerminalSurface", () => {
+  it("opens terminal and defers fit to after layout", async () => {
+    const surface = makeSurface("fit-test", { opened: false });
+    render(TerminalSurfaceComponent, { props: { surface, visible: true } });
+
+    // open() is called synchronously in onMount
+    expect(surface.terminal.open).toHaveBeenCalledWith(surface.termElement);
+    // fit() is deferred via tick + rAF, so not called synchronously
+    expect(surface.fitAddon.fit).not.toHaveBeenCalled();
+  });
+
+  it("does not call terminal.open on already-opened surfaces", () => {
+    const surface = makeSurface("reopen-test", { opened: true });
+    render(TerminalSurfaceComponent, { props: { surface, visible: true } });
+
+    expect(surface.terminal.open).not.toHaveBeenCalled();
   });
 });

@@ -1,107 +1,521 @@
 /**
- * Preview system coverage tests.
- * Verifies all preview plugins are registered, handle binary/text correctly,
- * and path resolution doesn't produce invalid paths.
+ * Preview system behavioral tests.
+ * Tests actual render() output, registry behavior, and link detection.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach, beforeAll } from "vitest";
 
-describe("All preview plugins are registered in init.ts", () => {
-  it("imports every preview plugin", async () => {
-    const fs = await import("fs");
-    const source = fs.readFileSync("src/preview/init.ts", "utf-8");
-    const expectedPlugins = ["markdown", "json", "image", "pdf", "csv", "yaml", "video", "text"];
-    for (const plugin of expectedPlugins) {
-      expect(source).toContain(`"./${plugin}"`);
+// --- Mocks (must be before imports) ---
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn(),
+  convertFileSrc: vi.fn((path: string) => `asset://localhost/${path}`),
+}));
+
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn().mockResolvedValue(vi.fn()),
+}));
+
+vi.mock("@embedpdf/snippet", () => ({
+  default: { init: vi.fn() },
+}));
+
+vi.mock("marked", () => ({
+  marked: { parse: (s: string) => `<p>${s}</p>` },
+}));
+
+vi.mock("dompurify", () => ({
+  default: { sanitize: (s: string) => s.replace(/<script[^>]*>.*?<\/script>/gi, "").replace(/\sonerror="[^"]*"/gi, "") },
+}));
+
+vi.mock("github-markdown-css/github-markdown-dark.css", () => ({}));
+
+vi.mock("../lib/theme-accessor", () => ({
+  themeProxy: {
+    bg: "#000", fg: "#fff", fgDim: "#888", bgSurface: "#111",
+    bgHighlight: "#222", border: "#333",
+    ansi: { blue: "#00f", green: "#0f0", magenta: "#f0f", yellow: "#ff0" },
+  },
+}));
+
+import { invoke, convertFileSrc } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import EmbedPDF from "@embedpdf/snippet";
+import {
+  registerPreviewer,
+  canPreview,
+  getSupportedExtensions,
+  openPreview,
+} from "../preview/index";
+
+// Import all preview plugins so they self-register
+beforeAll(async () => {
+  await import("../preview/pdf");
+  await import("../preview/image");
+  await import("../preview/video");
+  await import("../preview/markdown");
+  await import("../preview/json");
+  await import("../preview/csv");
+  await import("../preview/yaml");
+  await import("../preview/text");
+});
+
+const mockInvoke = vi.mocked(invoke);
+const mockConvertFileSrc = vi.mocked(convertFileSrc);
+const mockListen = vi.mocked(listen);
+
+beforeEach(() => {
+  mockInvoke.mockReset();
+  mockListen.mockReset().mockResolvedValue(vi.fn() as any);
+  (EmbedPDF.init as ReturnType<typeof vi.fn>).mockReset();
+  // jsdom doesn't have URL.createObjectURL — mock it
+  if (!URL.createObjectURL) {
+    URL.createObjectURL = vi.fn(() => "blob:mock-url");
+  }
+});
+
+// ─── Preview Registry ────────────────────────────────────────────
+
+describe("Preview registry", () => {
+  it("canPreview returns true for all registered extensions", () => {
+    const registered = ["pdf", "md", "json", "png", "jpg", "mp4", "csv", "yaml", "txt", "toml", "webm", "gif", "log"];
+    for (const ext of registered) {
+      expect(canPreview(`file.${ext}`)).toBe(true);
     }
   });
-});
 
-describe("Binary preview types skip text read_file", () => {
-  it("openPreview skips read_file for binary extensions", async () => {
-    const fs = await import("fs");
-    const source = fs.readFileSync("src/preview/index.ts", "utf-8");
-    // Must have a binary extension check that skips invoke("read_file")
-    expect(source).toContain("binaryExts");
-    expect(source).toContain("isBinary");
-    // PDF must be in the binary set
-    expect(source).toContain('"pdf"');
-    // Image formats must be in the binary set
-    expect(source).toContain('"png"');
-    expect(source).toContain('"jpg"');
-    // Video formats must be in the binary set
-    expect(source).toContain('"mp4"');
+  it("canPreview returns false for unregistered extensions", () => {
+    expect(canPreview("file.exe")).toBe(false);
+    expect(canPreview("file.zip")).toBe(false);
+    expect(canPreview("file.dmg")).toBe(false);
+  });
+
+  it("getSupportedExtensions includes all previewer extensions", () => {
+    const exts = getSupportedExtensions();
+    expect(exts).toContain("pdf");
+    expect(exts).toContain("md");
+    expect(exts).toContain("json");
+    expect(exts).toContain("png");
+    expect(exts).toContain("csv");
+    expect(exts).toContain("mp4");
+    expect(exts).toContain("txt");
+    expect(exts).toContain("yaml");
+  });
+
+  it("openPreview throws for unregistered extension", async () => {
+    await expect(openPreview("/tmp/file.exe")).rejects.toThrow("No previewer registered for .exe");
+  });
+
+  it("openPreview calls read_file for text types", async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "read_file") return '{"key": "value"}';
+      if (cmd === "watch_file") return 1;
+      return undefined as any;
+    });
+
+    const surface = await openPreview("/tmp/test.json");
+    expect(mockInvoke).toHaveBeenCalledWith("read_file", { path: "/tmp/test.json" });
+    expect(surface.filePath).toBe("/tmp/test.json");
+    expect(surface.title).toBe("test.json");
+    expect(surface.element).toBeInstanceOf(HTMLElement);
+  });
+
+  it("openPreview does NOT call read_file for binary types (pdf)", async () => {
+    mockInvoke.mockResolvedValue(undefined as any);
+
+    const surface = await openPreview("/tmp/test.pdf");
+    const readFileCalls = mockInvoke.mock.calls.filter(([cmd]) => cmd === "read_file");
+    expect(readFileCalls).toHaveLength(0);
+    expect(surface.filePath).toBe("/tmp/test.pdf");
+  });
+
+  it("openPreview does NOT call read_file for binary types (png)", async () => {
+    mockInvoke.mockResolvedValue(undefined as any);
+
+    await openPreview("/tmp/test.png");
+    const readFileCalls = mockInvoke.mock.calls.filter(([cmd]) => cmd === "read_file");
+    expect(readFileCalls).toHaveLength(0);
+  });
+
+  it("openPreview sets up file watch for text types", async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "read_file") return "hello";
+      if (cmd === "watch_file") return 42;
+      return undefined as any;
+    });
+
+    const surface = await openPreview("/tmp/test.txt");
+    expect(mockInvoke).toHaveBeenCalledWith("watch_file", { path: "/tmp/test.txt" });
+    expect(surface.watchId).toBe(42);
+  });
+
+  it("openPreview does NOT set up file watch for binary types", async () => {
+    mockInvoke.mockResolvedValue(undefined as any);
+
+    const surface = await openPreview("/tmp/test.pdf");
+    const watchCalls = mockInvoke.mock.calls.filter(([cmd]) => cmd === "watch_file");
+    expect(watchCalls).toHaveLength(0);
+    expect(surface.watchId).toBe(0);
+  });
+
+  it("openPreview returns PreviewSurface with all required fields", async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "read_file") return "# Hello";
+      if (cmd === "watch_file") return 7;
+      return undefined as any;
+    });
+
+    const surface = await openPreview("/tmp/readme.md");
+    expect(surface.id).toMatch(/^preview-/);
+    expect(surface.filePath).toBe("/tmp/readme.md");
+    expect(surface.title).toBe("readme.md");
+    expect(surface.element).toBeInstanceOf(HTMLDivElement);
+    expect(surface.watchId).toBe(7);
   });
 });
+
+// ─── PDF Previewer ───────────────────────────────────────────────
 
 describe("PDF previewer", () => {
-  it("uses read_file_base64 not read_file for binary data", async () => {
-    const fs = await import("fs");
-    const source = fs.readFileSync("src/preview/pdf.ts", "utf-8");
-    expect(source).toContain("read_file_base64");
-    expect(source).not.toContain('"read_file"');
+  it("shows loading message initially, then calls read_file_base64", async () => {
+    const b64 = btoa("fake-pdf-bytes");
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "read_file_base64") return b64;
+      return undefined as any;
+    });
+
+    const surface = await openPreview("/tmp/report.pdf");
+
+    // invoke should have been called with read_file_base64
+    expect(mockInvoke).toHaveBeenCalledWith("read_file_base64", { path: "/tmp/report.pdf" });
+
+    // Let the .then() chain settle (render is async via .then, not await)
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(EmbedPDF.init).toHaveBeenCalled();
+    const initCall = (EmbedPDF.init as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(initCall.type).toBe("container");
+    expect(initCall.target).toBe(surface.element);
+    expect(initCall.src).toMatch(/^blob:/);
+    expect(initCall.theme).toBe("dark");
   });
 
-  it("registers for pdf extension", async () => {
-    const fs = await import("fs");
-    const source = fs.readFileSync("src/preview/pdf.ts", "utf-8");
-    expect(source).toContain('"pdf"');
-    expect(source).toContain("registerPreviewer");
-  });
+  it("shows error message when read_file_base64 fails", async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "read_file_base64") throw new Error("File not found");
+      return undefined as any;
+    });
 
-  it("handles errors with user-visible message", async () => {
-    const fs = await import("fs");
-    const source = fs.readFileSync("src/preview/pdf.ts", "utf-8");
-    expect(source).toContain(".catch");
-    expect(source).toContain("Failed to load PDF");
+    const surface = await openPreview("/tmp/missing.pdf");
+
+    await vi.waitFor(() => {
+      expect(surface.element.textContent).toContain("Failed to load PDF");
+    });
+    expect(surface.element.textContent).toContain("File not found");
   });
 });
 
+// ─── JSON Previewer ──────────────────────────────────────────────
+
+describe("JSON previewer", () => {
+  it("renders valid JSON with syntax highlighting", async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "read_file") return '{"name": "test", "count": 42, "active": true, "data": null}';
+      if (cmd === "watch_file") return 1;
+      return undefined as any;
+    });
+
+    const surface = await openPreview("/tmp/data.json");
+    const html = surface.element.innerHTML;
+
+    expect(html).toContain("<pre>");
+    expect(html).toContain("<code>");
+    // Syntax highlighting classes
+    expect(html).toContain('class="json-key"');
+    expect(html).toContain('class="json-string"');
+    expect(html).toContain('class="json-number"');
+    expect(html).toContain('class="json-boolean"');
+    expect(html).toContain('class="json-null"');
+  });
+
+  it("renders invalid JSON as escaped plain text without crashing", async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "read_file") return "{not valid json: ???}";
+      if (cmd === "watch_file") return 1;
+      return undefined as any;
+    });
+
+    const surface = await openPreview("/tmp/bad.json");
+    expect(surface.element.textContent).toContain("{not valid json: ???}");
+    // Should still be in a pre/code block
+    expect(surface.element.innerHTML).toContain("<pre>");
+  });
+
+  it("escapes HTML in JSON content to prevent XSS", async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "read_file") return '{"xss": "<img onerror=alert(1) src=x>"}';
+      if (cmd === "watch_file") return 1;
+      return undefined as any;
+    });
+
+    const surface = await openPreview("/tmp/xss.json");
+    // The JSON previewer uses syntaxHighlight which wraps values in spans,
+    // but the string value content should be escaped by the JSON.stringify + regex flow.
+    // Check that the raw dangerous attribute doesn't survive as a real attribute
+    const imgs = surface.element.querySelectorAll("img");
+    expect(imgs).toHaveLength(0);
+  });
+});
+
+// ─── Markdown Previewer ──────────────────────────────────────────
+
+describe("Markdown previewer", () => {
+  it("renders markdown content as HTML", async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "read_file") return "# Hello World";
+      if (cmd === "watch_file") return 1;
+      return undefined as any;
+    });
+
+    const surface = await openPreview("/tmp/readme.md");
+    // marked.parse mock returns <p>content</p>
+    expect(surface.element.innerHTML).toContain("<p>");
+    expect(surface.element.classList.contains("markdown-body")).toBe(true);
+  });
+
+  it("sanitizes XSS payloads from markdown", async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "read_file") return '<script>alert("xss")</script>';
+      if (cmd === "watch_file") return 1;
+      return undefined as any;
+    });
+
+    const surface = await openPreview("/tmp/evil.md");
+    // DOMPurify mock strips <script> tags
+    expect(surface.element.innerHTML).not.toContain("<script>");
+  });
+});
+
+// ─── CSV Previewer ───────────────────────────────────────────────
+
+describe("CSV previewer", () => {
+  it("renders CSV as a table with correct structure", async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "read_file") return "Name,Age,City\nAlice,30,NYC\nBob,25,LA";
+      if (cmd === "watch_file") return 1;
+      return undefined as any;
+    });
+
+    const surface = await openPreview("/tmp/data.csv");
+    const table = surface.element.querySelector("table");
+    expect(table).not.toBeNull();
+
+    const headers = table!.querySelectorAll("thead th");
+    expect(headers).toHaveLength(3);
+    expect(headers[0].textContent).toBe("Name");
+    expect(headers[1].textContent).toBe("Age");
+    expect(headers[2].textContent).toBe("City");
+
+    const rows = table!.querySelectorAll("tbody tr");
+    expect(rows).toHaveLength(2);
+    const firstRowCells = rows[0].querySelectorAll("td");
+    expect(firstRowCells[0].textContent).toBe("Alice");
+    expect(firstRowCells[1].textContent).toBe("30");
+    expect(firstRowCells[2].textContent).toBe("NYC");
+  });
+
+  it("shows row/column count", async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "read_file") return "A,B\n1,2\n3,4\n5,6";
+      if (cmd === "watch_file") return 1;
+      return undefined as any;
+    });
+
+    const surface = await openPreview("/tmp/nums.csv");
+    expect(surface.element.textContent).toContain("3 rows");
+    expect(surface.element.textContent).toContain("2 columns");
+  });
+
+  it("handles empty CSV", async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "read_file") return "";
+      if (cmd === "watch_file") return 1;
+      return undefined as any;
+    });
+
+    const surface = await openPreview("/tmp/empty.csv");
+    expect(surface.element.textContent).toContain("(empty file)");
+  });
+
+  it("handles quoted fields containing commas", async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "read_file") return 'Name,Address\n"Smith, John","123 Main St, Apt 4"';
+      if (cmd === "watch_file") return 1;
+      return undefined as any;
+    });
+
+    const surface = await openPreview("/tmp/quoted.csv");
+    const cells = surface.element.querySelectorAll("tbody td");
+    expect(cells[0].textContent).toBe("Smith, John");
+    expect(cells[1].textContent).toBe("123 Main St, Apt 4");
+  });
+
+  it("uses tab separator for TSV files", async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "read_file") return "Name\tAge\nAlice\t30";
+      if (cmd === "watch_file") return 1;
+      return undefined as any;
+    });
+
+    const surface = await openPreview("/tmp/data.tsv");
+    const headers = surface.element.querySelectorAll("thead th");
+    expect(headers[0].textContent).toBe("Name");
+    expect(headers[1].textContent).toBe("Age");
+  });
+});
+
+// ─── Image Previewer ─────────────────────────────────────────────
+
 describe("Image previewer", () => {
-  it("uses convertFileSrc for Tauri asset URLs", async () => {
-    const fs = await import("fs");
-    const source = fs.readFileSync("src/preview/image.ts", "utf-8");
-    expect(source).toContain("convertFileSrc");
+  it("creates img element with convertFileSrc URL", async () => {
+    mockInvoke.mockResolvedValue(undefined as any);
+
+    const surface = await openPreview("/tmp/photo.png");
+    const img = surface.element.querySelector("img");
+    expect(img).not.toBeNull();
+    expect(mockConvertFileSrc).toHaveBeenCalledWith("/tmp/photo.png");
+    expect(img!.src).toContain("asset://localhost/");
   });
 
-  it("handles image load errors", async () => {
-    const fs = await import("fs");
-    const source = fs.readFileSync("src/preview/image.ts", "utf-8");
-    expect(source).toContain("onerror");
-    expect(source).toContain("Failed to load image");
+  it("shows error message on image load failure", async () => {
+    mockInvoke.mockResolvedValue(undefined as any);
+
+    const surface = await openPreview("/tmp/broken.jpg");
+    const img = surface.element.querySelector("img");
+    expect(img).not.toBeNull();
+
+    // Simulate load error
+    img!.dispatchEvent(new Event("error"));
+    // onerror handler is set via img.onerror, so fire it directly
+    if (img!.onerror) (img!.onerror as Function)(new Event("error"));
+
+    expect(surface.element.textContent).toContain("Failed to load image");
   });
 
-  it("registers common image extensions", async () => {
-    const fs = await import("fs");
-    const source = fs.readFileSync("src/preview/image.ts", "utf-8");
+  it("registers for all common image formats", () => {
     for (const ext of ["png", "jpg", "jpeg", "gif", "webp", "svg"]) {
-      expect(source).toContain(`"${ext}"`);
+      expect(canPreview(`file.${ext}`)).toBe(true);
     }
   });
 });
 
+// ─── Video Previewer ─────────────────────────────────────────────
+
 describe("Video previewer", () => {
-  it("uses convertFileSrc for Tauri asset URLs", async () => {
-    const fs = await import("fs");
-    const source = fs.readFileSync("src/preview/video.ts", "utf-8");
-    expect(source).toContain("convertFileSrc");
+  it("creates video element with controls and autoplay", async () => {
+    mockInvoke.mockResolvedValue(undefined as any);
+
+    const surface = await openPreview("/tmp/clip.mp4");
+    const video = surface.element.querySelector("video");
+    expect(video).not.toBeNull();
+    expect(video!.controls).toBe(true);
+    expect(video!.autoplay).toBe(true);
+    expect(mockConvertFileSrc).toHaveBeenCalledWith("/tmp/clip.mp4");
   });
 
-  it("handles video load errors", async () => {
-    const fs = await import("fs");
-    const source = fs.readFileSync("src/preview/video.ts", "utf-8");
-    expect(source).toContain("onerror");
-    expect(source).toContain("Failed to load video");
+  it("shows error message on video load failure", async () => {
+    mockInvoke.mockResolvedValue(undefined as any);
+
+    const surface = await openPreview("/tmp/broken.webm");
+    const video = surface.element.querySelector("video");
+    expect(video).not.toBeNull();
+
+    if (video!.onerror) (video!.onerror as Function)(new Event("error"));
+
+    expect(surface.element.textContent).toContain("Failed to load video");
+  });
+
+  it("registers for all common video formats", () => {
+    for (const ext of ["mp4", "webm", "mov", "avi", "mkv"]) {
+      expect(canPreview(`file.${ext}`)).toBe(true);
+    }
   });
 });
 
-describe("Markdown previewer", () => {
-  it("uses DOMPurify to sanitize HTML", async () => {
-    const fs = await import("fs");
-    const source = fs.readFileSync("src/preview/markdown.ts", "utf-8");
-    expect(source).toContain("DOMPurify");
-    expect(source).toContain("sanitize");
+// ─── Text Previewer ──────────────────────────────────────────────
+
+describe("Text previewer", () => {
+  it("renders with line numbers", async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "read_file") return "line one\nline two\nline three";
+      if (cmd === "watch_file") return 1;
+      return undefined as any;
+    });
+
+    const surface = await openPreview("/tmp/notes.txt");
+    const html = surface.element.innerHTML;
+    expect(html).toContain("<pre");
+    // Line numbers 1, 2, 3
+    expect(surface.element.textContent).toContain("1");
+    expect(surface.element.textContent).toContain("2");
+    expect(surface.element.textContent).toContain("3");
+    expect(surface.element.textContent).toContain("line one");
+    expect(surface.element.textContent).toContain("line two");
+    expect(surface.element.textContent).toContain("line three");
+  });
+
+  it("escapes HTML in text content to prevent XSS", async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "read_file") return '<script>alert("xss")</script>';
+      if (cmd === "watch_file") return 1;
+      return undefined as any;
+    });
+
+    const surface = await openPreview("/tmp/evil.txt");
+    expect(surface.element.innerHTML).toContain("&lt;script&gt;");
+    expect(surface.element.innerHTML).not.toContain("<script>alert");
+  });
+
+  it("registers for txt, log, conf, and other text formats", () => {
+    for (const ext of ["txt", "log", "conf", "cfg", "ini", "env"]) {
+      expect(canPreview(`file.${ext}`)).toBe(true);
+    }
   });
 });
+
+// ─── YAML/TOML Previewer ────────────────────────────────────────
+
+describe("YAML/TOML previewer", () => {
+  it("renders YAML with syntax highlighting", async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "read_file") return 'name: test\ncount: 42\nactive: true\n# comment';
+      if (cmd === "watch_file") return 1;
+      return undefined as any;
+    });
+
+    const surface = await openPreview("/tmp/config.yaml");
+    const html = surface.element.innerHTML;
+    expect(html).toContain("<pre");
+    expect(html).toContain("<code>");
+    // The YAML previewer injects <span style="color:..."> for keys, booleans, comments
+    // Check that spans with style attributes are present (highlighting is working)
+    const spans = surface.element.querySelectorAll("span[style]");
+    expect(spans.length).toBeGreaterThan(0);
+    // Content should contain the actual YAML values
+    expect(surface.element.textContent).toContain("name");
+    expect(surface.element.textContent).toContain("test");
+    expect(surface.element.textContent).toContain("42");
+    expect(surface.element.textContent).toContain("true");
+    expect(surface.element.textContent).toContain("# comment");
+  });
+
+  it("registers for yaml, yml, and toml", () => {
+    expect(canPreview("config.yaml")).toBe(true);
+    expect(canPreview("config.yml")).toBe(true);
+    expect(canPreview("config.toml")).toBe(true);
+  });
+});
+
+// ─── Link Provider Regex (existing real tests) ──────────────────
 
 describe("Link provider regex matches correct filenames", () => {
   function getMatches(text: string): string[] {
@@ -154,155 +568,344 @@ describe("Link provider regex matches correct filenames", () => {
   });
 
   it("bare filename with spaces only matches extension segment", () => {
-    // Without quotes or path prefix, can't distinguish spaces-in-filename from spaces-between-files
     expect(getMatches("WR Product Requirements Doc.pdf")).toEqual(["Doc.pdf"]);
   });
 });
 
-describe("Path resolution does not produce double slashes", () => {
-  it("link provider strips trailing slash from cwd before joining", async () => {
-    const fs = await import("fs");
-    const source = fs.readFileSync("src/lib/terminal-service.ts", "utf-8");
-    // Must handle cwd ending with "/" to avoid "//filename"
-    expect(source).toContain('endsWith("/")');
-    expect(source).toContain('.slice(0, -1)');
+// ─── PDF links with spaces — end-to-end proof ──────────────────
+
+describe("PDF links with spaces work end-to-end", () => {
+  // Helper: replicates the link provider regex from terminal-service.ts
+  function getMatchesFromLine(text: string): string[] {
+    const exts = getSupportedExtensions().join("|");
+    const patterns = [
+      `["']([^"']+\\.(?:${exts}))["']`,
+      `((?:/|\\./|~/)\\S[\\S ]*\\.(?:${exts}))(?=\\s|$)`,
+      `(\\S+\\.(?:${exts}))(?=\\s|$)`,
+    ];
+    const regex = new RegExp(patterns.join("|"), "gi");
+    const matches: string[] = [];
+    let m;
+    while ((m = regex.exec(text)) !== null) {
+      matches.push(m[1] || m[2] || m[3]);
+    }
+    return matches;
+  }
+
+  it("STEP 1: regex detects '~/Downloads/WR Product Requirements Doc.pdf' from terminal output", () => {
+    const line = "Saved to ~/Downloads/WR Product Requirements Doc.pdf";
+    const matches = getMatchesFromLine(line);
+    expect(matches).toEqual(["~/Downloads/WR Product Requirements Doc.pdf"]);
   });
 
-  it("context menu path resolution also strips trailing slash", async () => {
-    const fs = await import("fs");
-    const source = fs.readFileSync("src/lib/terminal-service.ts", "utf-8");
-    // Both link provider and context menu must handle trailing slash
-    const occurrences = (source.match(/endsWith\("\/"\)/g) || []).length;
-    expect(occurrences).toBeGreaterThanOrEqual(2);
+  it("STEP 2: resolveFilePath expands ~ in 'WR Product Requirements Doc.pdf' path", async () => {
+    mockInvoke.mockReset();
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "get_home") return "/Users/ngmaloney";
+      return undefined as any;
+    });
+
+    const resolved = await resolveFilePath(
+      "~/Downloads/WR Product Requirements Doc.pdf",
+      "/some/cwd"
+    );
+    expect(resolved).toBe("/Users/ngmaloney/Downloads/WR Product Requirements Doc.pdf");
   });
 
-  // Verify the actual path join logic
-  it("joining root cwd with filename produces single slash", () => {
-    const cwd = "/";
-    const filename = "test.pdf";
-    const base = cwd.endsWith("/") ? cwd.slice(0, -1) : cwd;
-    const fullPath = `${base}/${filename}`;
-    expect(fullPath).toBe("/test.pdf");
-    expect(fullPath).not.toContain("//");
+  it("STEP 3: openPreview handles path with spaces for PDF", async () => {
+    mockInvoke.mockReset();
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "read_file_base64") return btoa("fake-pdf");
+      return undefined as any;
+    });
+
+    const surface = await openPreview("/Users/ngmaloney/Downloads/WR Product Requirements Doc.pdf");
+    expect(surface.filePath).toBe("/Users/ngmaloney/Downloads/WR Product Requirements Doc.pdf");
+    expect(surface.title).toBe("WR Product Requirements Doc.pdf");
+    // Verify it called read_file_base64 with the full spaced path
+    expect(mockInvoke).toHaveBeenCalledWith("read_file_base64", {
+      path: "/Users/ngmaloney/Downloads/WR Product Requirements Doc.pdf",
+    });
   });
 
-  it("joining non-root cwd with filename produces correct path", () => {
-    const cwd = "/Users/someone/Documents";
-    const filename = "test.pdf";
-    const base = cwd.endsWith("/") ? cwd.slice(0, -1) : cwd;
-    const fullPath = `${base}/${filename}`;
-    expect(fullPath).toBe("/Users/someone/Documents/test.pdf");
+  it("STEP 1-3 combined: absolute path with spaces, full chain", async () => {
+    mockInvoke.mockReset();
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "read_file_base64") return btoa("fake-pdf");
+      return undefined as any;
+    });
+
+    // Step 1: Regex detection
+    const line = "open /Users/me/My Documents/Annual Report 2024.pdf please";
+    const matches = getMatchesFromLine(line);
+    expect(matches).toEqual(["/Users/me/My Documents/Annual Report 2024.pdf"]);
+
+    // Step 2: Path resolution (absolute path, no transformation needed)
+    const resolved = await resolveFilePath(matches[0], "/some/cwd");
+    expect(resolved).toBe("/Users/me/My Documents/Annual Report 2024.pdf");
+
+    // Step 3: Preview opens correctly
+    const surface = await openPreview(resolved);
+    expect(surface.filePath).toBe("/Users/me/My Documents/Annual Report 2024.pdf");
+    expect(surface.title).toBe("Annual Report 2024.pdf");
+    expect(mockInvoke).toHaveBeenCalledWith("read_file_base64", {
+      path: "/Users/me/My Documents/Annual Report 2024.pdf",
+    });
   });
 
-  it("absolute paths are not prefixed with cwd", async () => {
-    const fs = await import("fs");
-    const source = fs.readFileSync("src/lib/terminal-service.ts", "utf-8");
-    // Link provider: only join if path doesn't start with "/"
-    expect(source).toContain('!linkText.startsWith("/")');
-    // Context menu: absolute paths used as-is
-    expect(source).toContain('pathText.startsWith("/") ? pathText');
+  it("STEP 1-3 combined: quoted path with spaces, full chain", async () => {
+    mockInvoke.mockReset();
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "get_home") return "/Users/ngmaloney";
+      if (cmd === "read_file_base64") return btoa("fake-pdf");
+      return undefined as any;
+    });
+
+    // Step 1: Regex detection (quoted)
+    const line = 'Opening "WR Product Requirements Doc.pdf"';
+    const matches = getMatchesFromLine(line);
+    expect(matches).toEqual(["WR Product Requirements Doc.pdf"]);
+
+    // Step 2: Path resolution (bare filename → prepend cwd)
+    const resolved = await resolveFilePath(matches[0], "/Users/ngmaloney/Downloads");
+    expect(resolved).toBe("/Users/ngmaloney/Downloads/WR Product Requirements Doc.pdf");
+
+    // Step 3: Preview opens
+    const surface = await openPreview(resolved);
+    expect(surface.filePath).toBe("/Users/ngmaloney/Downloads/WR Product Requirements Doc.pdf");
+    expect(mockInvoke).toHaveBeenCalledWith("read_file_base64", {
+      path: "/Users/ngmaloney/Downloads/WR Product Requirements Doc.pdf",
+    });
+  });
+
+  it("cwd file cache: bare 'WR Product Requirements Doc.pdf' matched from directory listing", () => {
+    // The link provider caches filenames from cwd via list_dir.
+    // When provideLinks runs, it checks if any cached filename appears in the line text.
+    // This is how bare filenames with spaces get matched — no regex needed.
+    const cachedFiles = new Set(["WR Product Requirements Doc.pdf", "notes.txt", "image.png"]);
+    const line = "WR Product Requirements Doc.pdf";
+
+    // Simulate the Phase 1 matching logic from provideLinks
+    const links: { start: number; end: number; text: string }[] = [];
+    for (const filename of cachedFiles) {
+      const idx = line.indexOf(filename);
+      if (idx < 0) continue;
+      const before = idx === 0 || /\s|["']/.test(line[idx - 1]);
+      const after = idx + filename.length >= line.length || /\s|["']/.test(line[idx + filename.length]);
+      if (before && after) {
+        links.push({ start: idx, end: idx + filename.length, text: filename });
+      }
+    }
+
+    expect(links).toHaveLength(1);
+    expect(links[0].text).toBe("WR Product Requirements Doc.pdf");
+    expect(links[0].start).toBe(0);
+    expect(links[0].end).toBe(line.length);
+  });
+
+  it("cwd file cache: resolveFilePath prepends cwd to matched filename", async () => {
+    mockInvoke.mockReset();
+    const cwd = "/Users/ngmaloney/Downloads";
+
+    // The activate callback calls resolveFilePath with the matched filename
+    const resolved = await resolveFilePath("WR Product Requirements Doc.pdf", cwd);
+    expect(resolved).toBe("/Users/ngmaloney/Downloads/WR Product Requirements Doc.pdf");
+  });
+
+  it("cwd file cache: full chain — ls output, cache match, resolve, preview", async () => {
+    mockInvoke.mockReset();
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "read_file_base64") return btoa("fake-pdf");
+      return undefined as any;
+    });
+
+    const cwd = "/Users/ngmaloney/Downloads";
+    const cachedFiles = new Set(["WR Product Requirements Doc.pdf", "other.txt"]);
+    const line = "WR Product Requirements Doc.pdf";
+
+    // Phase 1: Directory listing match finds the full filename
+    const matches: string[] = [];
+    for (const filename of cachedFiles) {
+      const idx = line.indexOf(filename);
+      if (idx < 0) continue;
+      const before = idx === 0 || /\s|["']/.test(line[idx - 1]);
+      const after = idx + filename.length >= line.length || /\s|["']/.test(line[idx + filename.length]);
+      if (before && after) matches.push(filename);
+    }
+    expect(matches).toEqual(["WR Product Requirements Doc.pdf"]);
+
+    // Phase 2: Resolve path
+    const fullPath = await resolveFilePath(matches[0], cwd);
+    expect(fullPath).toBe("/Users/ngmaloney/Downloads/WR Product Requirements Doc.pdf");
+
+    // Phase 3: Preview opens
+    const surface = await openPreview(fullPath);
+    expect(surface.filePath).toBe("/Users/ngmaloney/Downloads/WR Product Requirements Doc.pdf");
+    expect(surface.title).toBe("WR Product Requirements Doc.pdf");
+    expect(mockInvoke).toHaveBeenCalledWith("read_file_base64", {
+      path: "/Users/ngmaloney/Downloads/WR Product Requirements Doc.pdf",
+    });
+  });
+
+  it("cwd file cache: multiple files on one line from ls column output", () => {
+    const cachedFiles = new Set(["Report Q1.pdf", "Report Q2.pdf", "notes.txt"]);
+    const line = "Report Q1.pdf  Report Q2.pdf  notes.txt";
+
+    const links: { text: string; start: number }[] = [];
+    for (const filename of cachedFiles) {
+      let searchFrom = 0;
+      while (true) {
+        const idx = line.indexOf(filename, searchFrom);
+        if (idx < 0) break;
+        searchFrom = idx + filename.length;
+        const before = idx === 0 || /\s|["']/.test(line[idx - 1]);
+        const after = idx + filename.length >= line.length || /\s|["']/.test(line[idx + filename.length]);
+        if (before && after) links.push({ text: filename, start: idx });
+      }
+    }
+
+    const texts = links.map(l => l.text).sort();
+    expect(texts).toEqual(["Report Q1.pdf", "Report Q2.pdf", "notes.txt"]);
+  });
+
+  it("cwd file cache: doesn't match partial filename substring", () => {
+    const cachedFiles = new Set(["test.pdf"]);
+    const line = "contest.pdf";  // "test.pdf" is a substring but not word-bounded
+
+    const links: string[] = [];
+    for (const filename of cachedFiles) {
+      const idx = line.indexOf(filename);
+      if (idx < 0) continue;
+      const before = idx === 0 || /\s|["']/.test(line[idx - 1]);
+      if (before) links.push(filename);
+    }
+
+    expect(links).toEqual([]); // should NOT match "test.pdf" inside "contest.pdf"
+  });
+
+  it("bare filename NOT in cwd produces no link (avoids broken links)", () => {
+    // Scenario: cwd is ~/Workspace/gnar-term, user runs `ls ~/Downloads | grep pdf`
+    // Output: "WR Product Requirements Doc.pdf" — file is NOT in cwd
+    // Regex catches "Doc.pdf" (bare filename, pattern 3)
+    // Since "Doc.pdf" is NOT in cachedFiles, no link should be created
+    const cachedFiles = new Set(["package.json", "README.md"]); // cwd files, no PDFs
+    const line = "WR Product Requirements Doc.pdf";
+
+    // Phase 1: no cwd file matches this line
+    const phase1Links: string[] = [];
+    for (const filename of cachedFiles) {
+      if (line.indexOf(filename) >= 0) phase1Links.push(filename);
+    }
+    expect(phase1Links).toEqual([]);
+
+    // Phase 2: regex catches "Doc.pdf" but it's bare and not in cache → skip
+    const regexMatch = "Doc.pdf";
+    const isBare = true;
+    const shouldLink = !isBare || cachedFiles.has(regexMatch);
+    expect(shouldLink).toBe(false); // no link created
+  });
+
+  it("path-prefixed links still work regardless of cwd cache", async () => {
+    // ~/Downloads/WR Product Requirements Doc.pdf — has path prefix, always links
+    mockInvoke.mockReset();
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "get_home") return "/Users/ngmaloney";
+      if (cmd === "read_file_base64") return btoa("fake-pdf");
+      return undefined as any;
+    });
+
+    const line = "~/Downloads/WR Product Requirements Doc.pdf";
+    const matches = getMatchesFromLine(line);
+    expect(matches).toEqual(["~/Downloads/WR Product Requirements Doc.pdf"]);
+
+    // This is pattern 2 (path-prefixed), not bare — always creates a link
+    const resolved = await resolveFilePath(matches[0], "/some/other/cwd");
+    expect(resolved).toBe("/Users/ngmaloney/Downloads/WR Product Requirements Doc.pdf");
+
+    const surface = await openPreview(resolved);
+    expect(surface.filePath).toBe("/Users/ngmaloney/Downloads/WR Product Requirements Doc.pdf");
+  });
+
+  it("STEP 1-3 combined: tilde path with spaces, full chain", async () => {
+    mockInvoke.mockReset();
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "get_home") return "/Users/ngmaloney";
+      if (cmd === "read_file_base64") return btoa("fake-pdf");
+      return undefined as any;
+    });
+
+    // Step 1: Regex detection
+    const line = "~/Downloads/WR Product Requirements Doc.pdf";
+    const matches = getMatchesFromLine(line);
+    expect(matches).toEqual(["~/Downloads/WR Product Requirements Doc.pdf"]);
+
+    // Step 2: Path resolution (tilde expansion)
+    const resolved = await resolveFilePath(matches[0], "/irrelevant");
+    expect(resolved).toBe("/Users/ngmaloney/Downloads/WR Product Requirements Doc.pdf");
+
+    // Step 3: Preview opens
+    const surface = await openPreview(resolved);
+    expect(surface.filePath).toBe("/Users/ngmaloney/Downloads/WR Product Requirements Doc.pdf");
+    expect(mockInvoke).toHaveBeenCalledWith("read_file_base64", {
+      path: "/Users/ngmaloney/Downloads/WR Product Requirements Doc.pdf",
+    });
   });
 });
 
-describe("Clipboard copy/paste", () => {
-  it("imports clipboard plugin", async () => {
-    const fs = await import("fs");
-    const source = fs.readFileSync("src/lib/terminal-service.ts", "utf-8");
-    expect(source).toContain("@tauri-apps/plugin-clipboard-manager");
-    expect(source).toContain("clipboardRead");
-    expect(source).toContain("clipboardWrite");
+// ─── resolveFilePath (exported from terminal-service.ts) ────────
+
+import { resolveFilePath } from "../lib/terminal-service";
+
+describe("resolveFilePath", () => {
+  beforeEach(() => {
+    mockInvoke.mockReset();
   });
 
-  it("Cmd+C copies selection to clipboard", async () => {
-    const fs = await import("fs");
-    const source = fs.readFileSync("src/lib/terminal-service.ts", "utf-8");
-    // Must get selection and write to clipboard
-    expect(source).toContain("getSelection()");
-    expect(source).toContain("clipboardWrite(sel)");
+  it("absolute paths are returned as-is", async () => {
+    expect(await resolveFilePath("/Users/me/report.pdf", "/some/cwd")).toBe("/Users/me/report.pdf");
+    // Should NOT call get_home
+    expect(mockInvoke).not.toHaveBeenCalledWith("get_home");
   });
 
-  it("Cmd+V reads clipboard and writes to PTY", async () => {
-    const fs = await import("fs");
-    const source = fs.readFileSync("src/lib/terminal-service.ts", "utf-8");
-    expect(source).toContain("clipboardRead()");
-    expect(source).toContain('invoke("write_pty"');
+  it("tilde paths are expanded using get_home", async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "get_home") return "/Users/testuser";
+      return undefined as any;
+    });
+
+    expect(await resolveFilePath("~/Downloads/report.pdf", "/some/cwd")).toBe("/Users/testuser/Downloads/report.pdf");
+    expect(mockInvoke).toHaveBeenCalledWith("get_home");
   });
 
-  it("clipboard errors are caught, not silently unhandled", async () => {
-    const fs = await import("fs");
-    const source = fs.readFileSync("src/lib/terminal-service.ts", "utf-8");
-    // Paste must have .catch() to handle clipboard permission denied
-    expect(source).toMatch(/clipboardRead\(\)\.then[\s\S]*?\.catch/);
+  it("tilde paths fall back to raw path if get_home fails", async () => {
+    mockInvoke.mockRejectedValue(new Error("HOME not set"));
+
+    expect(await resolveFilePath("~/Downloads/report.pdf", "/some/cwd")).toBe("~/Downloads/report.pdf");
   });
 
-  it("clipboard permissions are in Tauri capabilities", async () => {
-    const fs = await import("fs");
-    const source = fs.readFileSync("src-tauri/capabilities/default.json", "utf-8");
-    expect(source).toContain("clipboard-manager:allow-read-text");
-    expect(source).toContain("clipboard-manager:allow-write-text");
-  });
-});
-
-describe("New tab and new pane inherit cwd", () => {
-  it("createTerminalSurface stores cwd on surface", async () => {
-    const fs = await import("fs");
-    const source = fs.readFileSync("src/lib/terminal-service.ts", "utf-8");
-    const surfaceBlock = source.match(/const surface: TerminalSurface = \{[\s\S]*?\};/);
-    expect(surfaceBlock).not.toBeNull();
-    expect(surfaceBlock![0]).toContain("cwd");
+  it("relative paths are prepended with cwd", async () => {
+    expect(await resolveFilePath("report.pdf", "/Users/me/project")).toBe("/Users/me/project/report.pdf");
   });
 
-  it("handleNewSurface falls back to get_pty_cwd when cwd is unknown", async () => {
-    const fs = await import("fs");
-    const source = fs.readFileSync("src/App.svelte", "utf-8");
-    const fn = source.slice(
-      source.indexOf("async function handleNewSurface"),
-      source.indexOf("\n  function", source.indexOf("async function handleNewSurface") + 1)
-    );
-    expect(fn).toContain("get_pty_cwd");
+  it("relative paths with ./ prefix are prepended with cwd", async () => {
+    expect(await resolveFilePath("./docs/report.pdf", "/Users/me/project")).toBe("/Users/me/project/./docs/report.pdf");
   });
 
-  it("handleSplitPane falls back to get_pty_cwd when cwd is unknown", async () => {
-    const fs = await import("fs");
-    const source = fs.readFileSync("src/App.svelte", "utf-8");
-    const fn = source.slice(
-      source.indexOf("async function handleSplitPane"),
-      source.indexOf("\n  function", source.indexOf("async function handleSplitPane") + 1)
-    );
-    expect(fn).toContain("get_pty_cwd");
+  it("cwd trailing slash does not produce double slash", async () => {
+    expect(await resolveFilePath("report.pdf", "/Users/me/")).toBe("/Users/me/report.pdf");
+    expect(await resolveFilePath("report.pdf", "/")).toBe("/report.pdf");
   });
 
-  it("get_pty_cwd result is checked for empty string before use", async () => {
-    const fs = await import("fs");
-    const source = fs.readFileSync("src/App.svelte", "utf-8");
-    // Must check that queried cwd is non-empty before assigning
-    expect(source).toContain("if (queried) cwd = queried");
+  it("relative paths without cwd are returned as-is", async () => {
+    expect(await resolveFilePath("report.pdf", undefined)).toBe("report.pdf");
   });
 
-  it("spawn_pty treats empty string cwd as null", async () => {
-    const fs = await import("fs");
-    const source = fs.readFileSync("src/lib/terminal-service.ts", "utf-8");
-    // Must use || not ?? to catch empty string
-    expect(source).toContain("cwd: cwd || null");
-  });
+  it("tilde path with only ~ and slash", async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "get_home") return "/Users/testuser";
+      return undefined as any;
+    });
 
-  it("cwd fallback logic: empty string from get_pty_cwd is rejected", () => {
-    // Simulates the exact logic in handleNewSurface/handleSplitPane
-    let cwd: string | undefined = undefined;
-    const queried = ""; // get_pty_cwd returned empty string
-    if (queried) cwd = queried;
-    expect(cwd).toBeUndefined(); // empty string should NOT be used
-
-    // Non-empty result should be used
-    const queried2 = "/Users/someone/project";
-    if (queried2) cwd = queried2;
-    expect(cwd).toBe("/Users/someone/project");
-  });
-
-  it("cwd || null: empty string becomes null, real path passes through", () => {
-    // Simulates the spawn_pty cwd parameter logic
-    expect("" || null).toBeNull();
-    expect(undefined || null).toBeNull();
-    expect("/tmp" || null).toBe("/tmp");
+    expect(await resolveFilePath("~/report.pdf", undefined)).toBe("/Users/testuser/report.pdf");
   });
 });

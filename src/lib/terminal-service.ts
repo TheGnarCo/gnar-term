@@ -346,14 +346,15 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
       // Match file paths with previewable extensions
       const exts = getSupportedExtensions().join("|");
       const patterns = [
-        `["']([^"']+\\.(?:${exts}))["']`,              // quoted: "my file.md" or 'my file.md' (supports spaces)
-        `([\\w./~-][\\w./~-]*\\.(?:${exts}))(?=\\s|$)`, // unquoted: no spaces (avoids matching across multiple filenames)
+        `["']([^"']+\\.(?:${exts}))["']`,              // quoted: "my file.md" (supports spaces)
+        `((?:/|\\./|~/)\\S[\\S ]*\\.(?:${exts}))(?=\\s|$)`, // paths with dir prefix (supports spaces): /path/to/My File.pdf
+        `(\\S+\\.(?:${exts}))(?=\\s|$)`,                // bare filenames without spaces: file.pdf
       ];
       const regex = new RegExp(patterns.join("|"), "gi");
       const links: any[] = [];
       let m;
       while ((m = regex.exec(text)) !== null) {
-        const path = m[1] || m[2]; // group 1 = quoted, group 2 = unquoted
+        const path = m[1] || m[2] || m[3]; // group 1 = quoted, group 2 = path with dir, group 3 = bare
         if (!path) continue;
         const startX = m.index + m[0].indexOf(path);
         links.push({

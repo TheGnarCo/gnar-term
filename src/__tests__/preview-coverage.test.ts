@@ -103,6 +103,62 @@ describe("Markdown previewer", () => {
   });
 });
 
+describe("Link provider regex matches correct filenames", () => {
+  function getMatches(text: string): string[] {
+    const exts = 'pdf|md|txt|csv|json|yaml|yml|toml|png|jpg|jpeg|gif|webp|svg|ico|bmp|heic|heif|tiff|tif|avif|mp4|webm|mov|avi|mkv|m4v|ogv|log|conf|cfg|ini|env|gitignore|dockerignore|editorconfig|tsv|mdx|markdown';
+    const patterns = [
+      `["']([^"']+\\.(?:${exts}))["']`,
+      `((?:/|\\./|~/)\\S[\\S ]*\\.(?:${exts}))(?=\\s|$)`,
+      `(\\S+\\.(?:${exts}))(?=\\s|$)`,
+    ];
+    const regex = new RegExp(patterns.join('|'), 'gi');
+    const matches: string[] = [];
+    let m;
+    while ((m = regex.exec(text)) !== null) {
+      matches.push(m[1] || m[2] || m[3]);
+    }
+    return matches;
+  }
+
+  it("matches multiple bare files on one line separately", () => {
+    expect(getMatches("file1.pdf  file2.pdf  file3.txt")).toEqual(["file1.pdf", "file2.pdf", "file3.txt"]);
+  });
+
+  it("does not match garbage from ls -la output", () => {
+    const matches = getMatches("-rw-r--r--  1 user  staff  1234 Jan  1 12:00 Doc.pdf");
+    expect(matches).toEqual(["Doc.pdf"]);
+  });
+
+  it("matches absolute paths with spaces", () => {
+    expect(getMatches("/Users/me/My Doc.pdf")).toEqual(["/Users/me/My Doc.pdf"]);
+  });
+
+  it("matches home paths with spaces", () => {
+    expect(getMatches("~/Downloads/WR Product Requirements Doc.pdf")).toEqual(["~/Downloads/WR Product Requirements Doc.pdf"]);
+  });
+
+  it("matches relative paths with spaces", () => {
+    expect(getMatches("./local/My File.md")).toEqual(["./local/My File.md"]);
+  });
+
+  it("matches quoted filenames with spaces", () => {
+    expect(getMatches('"WR Product Requirements Doc.pdf"')).toEqual(["WR Product Requirements Doc.pdf"]);
+  });
+
+  it("matches simple absolute paths", () => {
+    expect(getMatches("/tmp/test-link.md")).toEqual(["/tmp/test-link.md"]);
+  });
+
+  it("matches path embedded in a sentence", () => {
+    expect(getMatches("Saved to /Users/me/Downloads/Report.pdf done")).toEqual(["/Users/me/Downloads/Report.pdf"]);
+  });
+
+  it("bare filename with spaces only matches extension segment", () => {
+    // Without quotes or path prefix, can't distinguish spaces-in-filename from spaces-between-files
+    expect(getMatches("WR Product Requirements Doc.pdf")).toEqual(["Doc.pdf"]);
+  });
+});
+
 describe("Path resolution does not produce double slashes", () => {
   it("link provider strips trailing slash from cwd before joining", async () => {
     const fs = await import("fs");

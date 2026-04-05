@@ -521,7 +521,8 @@ describe("Link provider regex matches correct filenames", () => {
   function getMatches(text: string): string[] {
     const exts = 'pdf|md|txt|csv|json|yaml|yml|toml|png|jpg|jpeg|gif|webp|svg|ico|bmp|heic|heif|tiff|tif|avif|mp4|webm|mov|avi|mkv|m4v|ogv|log|conf|cfg|ini|env|gitignore|dockerignore|editorconfig|tsv|mdx|markdown';
     const patterns = [
-      `["']([^"']+\\.(?:${exts}))["']`,
+      `"([^"]+\\.(?:${exts}))"`,
+      `'([^']+\\.(?:${exts}))'`,
       `((?:/|\\./|~/)\\S[\\S ]*\\.(?:${exts}))(?=\\s|$)`,
       `(\\S+\\.(?:${exts}))(?=\\s|$)`,
     ];
@@ -529,13 +530,25 @@ describe("Link provider regex matches correct filenames", () => {
     const matches: string[] = [];
     let m;
     while ((m = regex.exec(text)) !== null) {
-      matches.push(m[1] || m[2] || m[3]);
+      matches.push(m[1] || m[2] || m[3] || m[4]);
     }
     return matches;
   }
 
   it("matches multiple bare files on one line separately", () => {
     expect(getMatches("file1.pdf  file2.pdf  file3.txt")).toEqual(["file1.pdf", "file2.pdf", "file3.txt"]);
+  });
+
+  it("matches ls column output with quoted filename containing spaces, parens, apostrophes, double dots", () => {
+    const line = 'u8328834736_A_happy_derpy_unicorn.png  "Walpole Sportsman\'s Association Inc..Invoice.03853 (1).pdf"';
+    const matches = getMatches(line);
+    expect(matches).toContain("u8328834736_A_happy_derpy_unicorn.png");
+    expect(matches).toContain("Walpole Sportsman's Association Inc..Invoice.03853 (1).pdf");
+  });
+
+  it("matches bare filename with underscores and long name", () => {
+    expect(getMatches("u8328834736_A_happy_derpy_unicorn_with_bubble_text_that_says__812d01a7-9e05-44b4-ab08-64b53d739064_3.png"))
+      .toEqual(["u8328834736_A_happy_derpy_unicorn_with_bubble_text_that_says__812d01a7-9e05-44b4-ab08-64b53d739064_3.png"]);
   });
 
   it("does not match garbage from ls -la output", () => {
@@ -579,7 +592,8 @@ describe("PDF links with spaces work end-to-end", () => {
   function getMatchesFromLine(text: string): string[] {
     const exts = getSupportedExtensions().join("|");
     const patterns = [
-      `["']([^"']+\\.(?:${exts}))["']`,
+      `"([^"]+\\.(?:${exts}))"`,
+      `'([^']+\\.(?:${exts}))'`,
       `((?:/|\\./|~/)\\S[\\S ]*\\.(?:${exts}))(?=\\s|$)`,
       `(\\S+\\.(?:${exts}))(?=\\s|$)`,
     ];
@@ -587,7 +601,7 @@ describe("PDF links with spaces work end-to-end", () => {
     const matches: string[] = [];
     let m;
     while ((m = regex.exec(text)) !== null) {
-      matches.push(m[1] || m[2] || m[3]);
+      matches.push(m[1] || m[2] || m[3] || m[4]);
     }
     return matches;
   }

@@ -359,7 +359,8 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
       const exts = extsList.join("|");
       const extRegex = new RegExp(`\\.(?:${exts})$`, "i");
       const patterns = [
-        `["']([^"']+\\.(?:${exts}))["']`,
+        `"([^"]+\\.(?:${exts}))"`,
+        `'([^']+\\.(?:${exts}))'`,
         `((?:/|\\./|~/)\\S[\\S ]*\\.(?:${exts}))(?=\\s|$)`,
         `(\\S+\\.(?:${exts}))(?=\\s|$)`,
       ];
@@ -376,7 +377,7 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
       // Regex patterns for quoted, path-prefixed, and simple bare filenames
       let m;
       while ((m = regex.exec(text)) !== null) {
-        const path = m[1] || m[2] || m[3];
+        const path = m[1] || m[2] || m[3] || m[4];
         if (!path) continue;
         const startX = m.index + m[0].indexOf(path);
         // Skip if already covered by the whole-line candidate

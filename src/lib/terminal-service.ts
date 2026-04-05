@@ -350,97 +350,48 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
   };
 
   // Cmd+click file path detection for preview
-  // Cache cwd file listing so provideLinks doesn't hit disk per-line
-  let cachedCwd: string | undefined;
-  let cachedFiles: Set<string> = new Set();
-  const supportedExtsSet = new Set(getSupportedExtensions());
-
-  function refreshFileCache() {
-    const cwd = surface.cwd;
-    if (!cwd || cwd === cachedCwd) return;
-    cachedCwd = cwd;
-    invoke<string[]>("list_dir", { path: cwd })
-      .then(files => {
-        cachedFiles = new Set(
-          files.filter(f => {
-            const dot = f.lastIndexOf(".");
-            return dot > 0 && supportedExtsSet.has(f.slice(dot + 1).toLowerCase());
-          })
-        );
-      })
-      .catch(() => { cachedFiles = new Set(); });
-  }
-
-  refreshFileCache();
-
   terminal.registerLinkProvider({
     provideLinks: (lineNumber, callback) => {
-      // Refresh file cache if cwd changed (cheap — skips if unchanged)
-      refreshFileCache();
       const line = terminal.buffer.active.getLine(lineNumber - 1);
       if (!line) { callback(undefined); return; }
       const text = line.translateToString();
       const exts = getSupportedExtensions().join("|");
-      // Patterns for quoted and path-prefixed links (handle spaces natively)
       const patterns = [
         `["']([^"']+\\.(?:${exts}))["']`,
         `((?:/|\\./|~/)\\S[\\S ]*\\.(?:${exts}))(?=\\s|$)`,
         `(\\S+\\.(?:${exts}))(?=\\s|$)`,
       ];
       const regex = new RegExp(patterns.join("|"), "gi");
-      const links: any[] = [];
-      const linkedRanges: [number, number][] = []; // track covered ranges to avoid duplicates
-
-      // Phase 1: Match real filenames from cwd against the line text.
-      // This catches filenames with spaces like "WR Product Requirements Doc.pdf"
-      for (const filename of cachedFiles) {
-        let searchFrom = 0;
-        while (true) {
-          const idx = text.indexOf(filename, searchFrom);
-          if (idx < 0) break;
-          searchFrom = idx + filename.length;
-          // Ensure it's bounded by whitespace/start/end (not a substring of a longer path)
-          const before = idx === 0 || /\s|["']/.test(text[idx - 1]);
-          const after = idx + filename.length >= text.length || /\s|["']/.test(text[idx + filename.length]);
-          if (!before || !after) continue;
-          linkedRanges.push([idx, idx + filename.length]);
-          links.push({
-            range: { start: { x: idx + 1, y: lineNumber }, end: { x: idx + filename.length + 1, y: lineNumber } },
-            text: filename,
-            activate: async (e: MouseEvent, linkText: string) => {
-              if (e.button !== 0) return;
-              const fullPath = await resolveFilePath(linkText, surface.cwd);
-              pendingAction.set({ type: "open-preview", payload: fullPath });
-            },
-          });
-        }
-      }
-
-      // Phase 2: Regex patterns for quoted paths, absolute/relative paths, and bare filenames
+      const candidates: { path: string; startX: number; endX: number }[] = [];
       let m;
       while ((m = regex.exec(text)) !== null) {
         const path = m[1] || m[2] || m[3];
         if (!path) continue;
-        const isBare = !!(m[3] && !m[1] && !m[2]);
-        // Bare filenames (no path prefix, no quotes): only link if the file exists in cwd.
-        // This avoids broken links for partial matches like "Doc.pdf" from "WR Product Requirements Doc.pdf"
-        // when the file isn't in cwd.
-        if (isBare && !cachedFiles.has(path)) continue;
         const startX = m.index + m[0].indexOf(path);
-        const endX = startX + path.length;
-        // Skip if already covered by a cwd file match (avoid duplicate links)
-        if (linkedRanges.some(([s, e]) => startX >= s && endX <= e)) continue;
-        links.push({
-          range: { start: { x: startX + 1, y: lineNumber }, end: { x: endX + 1, y: lineNumber } },
-          text: path,
-          activate: async (e: MouseEvent, linkText: string) => {
-            if (e.button !== 0) return;
-            const fullPath = await resolveFilePath(linkText, surface.cwd);
-            pendingAction.set({ type: "open-preview", payload: fullPath });
-          },
-        });
+        candidates.push({ path, startX, endX: startX + path.length });
       }
-      callback(links.length > 0 ? links : undefined);
+
+      if (candidates.length === 0) { callback(undefined); return; }
+
+      Promise.all(
+        candidates.map(async (c) => {
+          const fullPath = await resolveFilePath(c.path, surface.cwd);
+          const exists = await invoke<boolean>("file_exists", { path: fullPath });
+          if (!exists) return null;
+          return {
+            range: { start: { x: c.startX + 1, y: lineNumber }, end: { x: c.endX + 1, y: lineNumber } },
+            text: c.path,
+            activate: async (e: MouseEvent, linkText: string) => {
+              if (e.button !== 0) return;
+              const resolved = await resolveFilePath(linkText, surface.cwd);
+              pendingAction.set({ type: "open-preview", payload: resolved });
+            },
+          };
+        })
+      ).then((results) => {
+        const links = results.filter(Boolean);
+        callback(links.length > 0 ? links : undefined);
+      });
     },
   });
 

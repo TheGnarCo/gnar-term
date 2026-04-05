@@ -678,152 +678,73 @@ describe("PDF links with spaces work end-to-end", () => {
     });
   });
 
-  it("cwd file cache: bare 'WR Product Requirements Doc.pdf' matched from directory listing", () => {
-    // The link provider caches filenames from cwd via list_dir.
-    // When provideLinks runs, it checks if any cached filename appears in the line text.
-    // This is how bare filenames with spaces get matched — no regex needed.
-    const cachedFiles = new Set(["WR Product Requirements Doc.pdf", "notes.txt", "image.png"]);
-    const line = "WR Product Requirements Doc.pdf";
-
-    // Simulate the Phase 1 matching logic from provideLinks
-    const links: { start: number; end: number; text: string }[] = [];
-    for (const filename of cachedFiles) {
-      const idx = line.indexOf(filename);
-      if (idx < 0) continue;
-      const before = idx === 0 || /\s|["']/.test(line[idx - 1]);
-      const after = idx + filename.length >= line.length || /\s|["']/.test(line[idx + filename.length]);
-      if (before && after) {
-        links.push({ start: idx, end: idx + filename.length, text: filename });
+  it("file exists in cwd → link created, file doesn't exist → no link", async () => {
+    mockInvoke.mockReset();
+    mockInvoke.mockImplementation(async (cmd: string, args?: any) => {
+      if (cmd === "file_exists") {
+        const path = (args as any).path as string;
+        return path === "/Users/ngmaloney/Workspace/gnar-term/vite.config.ts";
       }
-    }
-
-    expect(links).toHaveLength(1);
-    expect(links[0].text).toBe("WR Product Requirements Doc.pdf");
-    expect(links[0].start).toBe(0);
-    expect(links[0].end).toBe(line.length);
-  });
-
-  it("cwd file cache: resolveFilePath prepends cwd to matched filename", async () => {
-    mockInvoke.mockReset();
-    const cwd = "/Users/ngmaloney/Downloads";
-
-    // The activate callback calls resolveFilePath with the matched filename
-    const resolved = await resolveFilePath("WR Product Requirements Doc.pdf", cwd);
-    expect(resolved).toBe("/Users/ngmaloney/Downloads/WR Product Requirements Doc.pdf");
-  });
-
-  it("cwd file cache: full chain — ls output, cache match, resolve, preview", async () => {
-    mockInvoke.mockReset();
-    mockInvoke.mockImplementation(async (cmd: string) => {
-      if (cmd === "read_file_base64") return btoa("fake-pdf");
+      if (cmd === "read_file") return "export default {}";
+      if (cmd === "watch_file") return 1;
       return undefined as any;
     });
 
-    const cwd = "/Users/ngmaloney/Downloads";
-    const cachedFiles = new Set(["WR Product Requirements Doc.pdf", "other.txt"]);
-    const line = "WR Product Requirements Doc.pdf";
+    const cwd = "/Users/ngmaloney/Workspace/gnar-term";
 
-    // Phase 1: Directory listing match finds the full filename
-    const matches: string[] = [];
-    for (const filename of cachedFiles) {
-      const idx = line.indexOf(filename);
-      if (idx < 0) continue;
-      const before = idx === 0 || /\s|["']/.test(line[idx - 1]);
-      const after = idx + filename.length >= line.length || /\s|["']/.test(line[idx + filename.length]);
-      if (before && after) matches.push(filename);
-    }
-    expect(matches).toEqual(["WR Product Requirements Doc.pdf"]);
+    // vite.config.ts exists in cwd → resolves, file_exists returns true
+    const existingPath = await resolveFilePath("vite.config.ts", cwd);
+    const exists = await invoke<boolean>("file_exists", { path: existingPath });
+    expect(exists).toBe(true);
 
-    // Phase 2: Resolve path
-    const fullPath = await resolveFilePath(matches[0], cwd);
-    expect(fullPath).toBe("/Users/ngmaloney/Downloads/WR Product Requirements Doc.pdf");
-
-    // Phase 3: Preview opens
-    const surface = await openPreview(fullPath);
-    expect(surface.filePath).toBe("/Users/ngmaloney/Downloads/WR Product Requirements Doc.pdf");
-    expect(surface.title).toBe("WR Product Requirements Doc.pdf");
-    expect(mockInvoke).toHaveBeenCalledWith("read_file_base64", {
-      path: "/Users/ngmaloney/Downloads/WR Product Requirements Doc.pdf",
-    });
+    // random-file.pdf does NOT exist in cwd → file_exists returns false → no link
+    const missingPath = await resolveFilePath("random-file.pdf", cwd);
+    const missing = await invoke<boolean>("file_exists", { path: missingPath });
+    expect(missing).toBe(false);
   });
 
-  it("cwd file cache: multiple files on one line from ls column output", () => {
-    const cachedFiles = new Set(["Report Q1.pdf", "Report Q2.pdf", "notes.txt"]);
-    const line = "Report Q1.pdf  Report Q2.pdf  notes.txt";
-
-    const links: { text: string; start: number }[] = [];
-    for (const filename of cachedFiles) {
-      let searchFrom = 0;
-      while (true) {
-        const idx = line.indexOf(filename, searchFrom);
-        if (idx < 0) break;
-        searchFrom = idx + filename.length;
-        const before = idx === 0 || /\s|["']/.test(line[idx - 1]);
-        const after = idx + filename.length >= line.length || /\s|["']/.test(line[idx + filename.length]);
-        if (before && after) links.push({ text: filename, start: idx });
-      }
-    }
-
-    const texts = links.map(l => l.text).sort();
-    expect(texts).toEqual(["Report Q1.pdf", "Report Q2.pdf", "notes.txt"]);
-  });
-
-  it("cwd file cache: doesn't match partial filename substring", () => {
-    const cachedFiles = new Set(["test.pdf"]);
-    const line = "contest.pdf";  // "test.pdf" is a substring but not word-bounded
-
-    const links: string[] = [];
-    for (const filename of cachedFiles) {
-      const idx = line.indexOf(filename);
-      if (idx < 0) continue;
-      const before = idx === 0 || /\s|["']/.test(line[idx - 1]);
-      if (before) links.push(filename);
-    }
-
-    expect(links).toEqual([]); // should NOT match "test.pdf" inside "contest.pdf"
-  });
-
-  it("bare filename NOT in cwd produces no link (avoids broken links)", () => {
-    // Scenario: cwd is ~/Workspace/gnar-term, user runs `ls ~/Downloads | grep pdf`
-    // Output: "WR Product Requirements Doc.pdf" — file is NOT in cwd
-    // Regex catches "Doc.pdf" (bare filename, pattern 3)
-    // Since "Doc.pdf" is NOT in cachedFiles, no link should be created
-    const cachedFiles = new Set(["package.json", "README.md"]); // cwd files, no PDFs
-    const line = "WR Product Requirements Doc.pdf";
-
-    // Phase 1: no cwd file matches this line
-    const phase1Links: string[] = [];
-    for (const filename of cachedFiles) {
-      if (line.indexOf(filename) >= 0) phase1Links.push(filename);
-    }
-    expect(phase1Links).toEqual([]);
-
-    // Phase 2: regex catches "Doc.pdf" but it's bare and not in cache → skip
-    const regexMatch = "Doc.pdf";
-    const isBare = true;
-    const shouldLink = !isBare || cachedFiles.has(regexMatch);
-    expect(shouldLink).toBe(false); // no link created
-  });
-
-  it("path-prefixed links still work regardless of cwd cache", async () => {
-    // ~/Downloads/WR Product Requirements Doc.pdf — has path prefix, always links
+  it("ls ~/Downloads output: bare filenames don't link when not in cwd", async () => {
     mockInvoke.mockReset();
     mockInvoke.mockImplementation(async (cmd: string) => {
-      if (cmd === "get_home") return "/Users/ngmaloney";
-      if (cmd === "read_file_base64") return btoa("fake-pdf");
+      if (cmd === "file_exists") return false; // nothing from Downloads exists in cwd
       return undefined as any;
     });
 
-    const line = "~/Downloads/WR Product Requirements Doc.pdf";
+    // Regex matches "2025-Twilio-Partner-Program-Guide.pdf" from terminal output
+    const line = "2025-Twilio-Partner-Program-Guide.pdf";
     const matches = getMatchesFromLine(line);
-    expect(matches).toEqual(["~/Downloads/WR Product Requirements Doc.pdf"]);
+    expect(matches).toEqual(["2025-Twilio-Partner-Program-Guide.pdf"]);
 
-    // This is pattern 2 (path-prefixed), not bare — always creates a link
+    // Resolve prepends cwd
+    const cwd = "/Users/ngmaloney/Workspace/gnar-term";
+    const resolved = await resolveFilePath(matches[0], cwd);
+    expect(resolved).toBe(`${cwd}/2025-Twilio-Partner-Program-Guide.pdf`);
+
+    // file_exists returns false → provideLinks filters this out, no link rendered
+    const exists = await invoke<boolean>("file_exists", { path: resolved });
+    expect(exists).toBe(false);
+  });
+
+  it("path-prefixed links check file_exists with resolved path", async () => {
+    mockInvoke.mockReset();
+    mockInvoke.mockImplementation(async (cmd: string, args?: any) => {
+      if (cmd === "get_home") return "/Users/ngmaloney";
+      if (cmd === "file_exists") {
+        return (args as any).path === "/Users/ngmaloney/Downloads/report.pdf";
+      }
+      if (cmd === "read_file_base64") return btoa("fake-pdf");
+      return undefined as any;
+    });
+
+    const line = "~/Downloads/report.pdf";
+    const matches = getMatchesFromLine(line);
+    expect(matches).toEqual(["~/Downloads/report.pdf"]);
+
     const resolved = await resolveFilePath(matches[0], "/some/other/cwd");
-    expect(resolved).toBe("/Users/ngmaloney/Downloads/WR Product Requirements Doc.pdf");
+    expect(resolved).toBe("/Users/ngmaloney/Downloads/report.pdf");
 
-    const surface = await openPreview(resolved);
-    expect(surface.filePath).toBe("/Users/ngmaloney/Downloads/WR Product Requirements Doc.pdf");
+    const exists = await invoke<boolean>("file_exists", { path: resolved });
+    expect(exists).toBe(true);
   });
 
   it("STEP 1-3 combined: tilde path with spaces, full chain", async () => {

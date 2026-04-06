@@ -25,7 +25,7 @@
   function fitActiveTerminal() {
     const active = pane.surfaces.find(s => s.id === pane.activeSurfaceId);
     if (active && isTerminalSurface(active)) {
-      try { active.fitAddon.fit(); } catch {}
+      try { active.fitAddon.fit(); } catch (e) { console.warn("fitAddon.fit() failed on resize:", e); }
     }
   }
 

@@ -205,9 +205,9 @@ describe("Workspace from config definition", () => {
     // Must handle split layouts recursively
     expect(source).toContain("buildTree(nodeDef.children[0]");
     expect(source).toContain("buildTree(nodeDef.children[1]");
-    // Must handle command injection
+    // Must handle startup commands via startupCommand field (sent after PTY connects)
     expect(source).toContain("sDef.command");
-    expect(source).toContain('write_pty');
+    expect(source).toContain('startupCommand');
     // Must handle markdown surfaces
     expect(source).toContain('sDef.type === "markdown"');
   });

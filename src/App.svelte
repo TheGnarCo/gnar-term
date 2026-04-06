@@ -7,7 +7,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { loadConfig, saveConfig, getConfig, getWorkspaceCommands, type WorkspaceDef, type LayoutNode } from "./lib/config";
   import { setupListeners, createTerminalSurface, fontReady, startCwdPolling } from "./lib/terminal-service";
-  import { uid, getAllPanes, getAllSurfaces, isTerminalSurface, type Workspace, type Pane, type SplitNode, type Surface, type TerminalSurface as TermSurface } from "./lib/types";
+  import { uid, getAllPanes, getAllSurfaces, isTerminalSurface, findParentSplit, replaceNodeInTree, type Workspace, type Pane, type SplitNode, type Surface, type TerminalSurface as TermSurface } from "./lib/types";
   import { openPreview, canPreview, getSupportedExtensions, refreshPreviewStyles } from "./preview/index";
   import "./preview/init";
   import { type ThemeDef } from "./lib/theme-data";
@@ -23,6 +23,19 @@
 
   let sidebarComponent: Sidebar;
   let findBarComponent: FindBar;
+
+  // ---- Shared helpers ----
+
+  function applyTheme(id: string) {
+    theme.set(id);
+    for (const ws of $workspaces) {
+      for (const s of getAllSurfaces(ws)) {
+        if (isTerminalSurface(s)) s.terminal.options.theme = $xtermTheme;
+      }
+    }
+    refreshPreviewStyles();
+    saveConfig({ theme: id });
+  }
 
   // ---- Workspace service functions ----
 
@@ -71,11 +84,7 @@
           } else {
             const surface = await createTerminalSurface(pane, cwd);
             if (sDef.name) surface.title = sDef.name;
-            if (sDef.command) {
-              setTimeout(() => {
-                invoke("write_pty", { ptyId: surface.ptyId, data: `${sDef.command}\n` }).catch(() => {});
-              }, 500);
-            }
+            if (sDef.command) surface.startupCommand = sDef.command;
             if (sDef.focus) pane.activeSurfaceId = surface.id;
           }
         }
@@ -200,37 +209,30 @@
     }
   }
 
+  /** Get the CWD of the active terminal surface, querying the PTY if needed. */
+  async function getActiveCwd(): Promise<string | undefined> {
+    if (!$activeSurface || !isTerminalSurface($activeSurface)) return undefined;
+    if ($activeSurface.cwd) return $activeSurface.cwd;
+    if ($activeSurface.ptyId >= 0) {
+      try {
+        return await invoke<string>("get_pty_cwd", { ptyId: $activeSurface.ptyId }) || undefined;
+      } catch { return undefined; }
+    }
+    return undefined;
+  }
+
   async function handleNewSurface(paneId: string) {
     const ws = $activeWorkspace;
     if (!ws) return;
     const pane = getAllPanes(ws.splitRoot).find(p => p.id === paneId);
     if (!pane) return;
-    let cwd = $activeSurface && isTerminalSurface($activeSurface) ? $activeSurface.cwd : undefined;
-    if (!cwd && $activeSurface && isTerminalSurface($activeSurface) && $activeSurface.ptyId >= 0) {
-      try {
-        const queried = await invoke<string>("get_pty_cwd", { ptyId: $activeSurface.ptyId });
-        if (queried) cwd = queried;
-      } catch {}
-    }
-    // createTerminalSurface already pushes to pane.surfaces and sets activeSurfaceId
+    const cwd = await getActiveCwd();
     const surface = await createTerminalSurface(pane, cwd);
     workspaces.update(l => [...l]);
     safeFocus(surface);
   }
 
-  function findParentSplit(node: SplitNode, paneId: string): { parent: SplitNode, index: number } | null {
-    if (node.type === "pane") return null;
-    if (node.children[0].type === "pane" && node.children[0].pane.id === paneId) return { parent: node, index: 0 };
-    if (node.children[1].type === "pane" && node.children[1].pane.id === paneId) return { parent: node, index: 1 };
-    return findParentSplit(node.children[0], paneId) || findParentSplit(node.children[1], paneId);
-  }
-
-  function replacePaneWithSplit(node: SplitNode, targetPaneId: string, newSplit: SplitNode): boolean {
-    if (node.type === "pane") return false;
-    if (node.children[0].type === "pane" && node.children[0].pane.id === targetPaneId) { node.children[0] = newSplit; return true; }
-    if (node.children[1].type === "pane" && node.children[1].pane.id === targetPaneId) { node.children[1] = newSplit; return true; }
-    return replacePaneWithSplit(node.children[0], targetPaneId, newSplit) || replacePaneWithSplit(node.children[1], targetPaneId, newSplit);
-  }
+  // findParentSplit and replaceNodeInTree imported from types.ts
 
   async function handleSplitPane(paneId: string, direction: "horizontal" | "vertical") {
     const ws = $activeWorkspace;
@@ -239,15 +241,7 @@
     if (!activeP) return;
 
     const newPane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
-    let cwd = $activeSurface && isTerminalSurface($activeSurface) ? $activeSurface.cwd : undefined;
-    // If cwd not yet known (OSC 7 hasn't fired), query the PTY directly
-    if (!cwd && $activeSurface && isTerminalSurface($activeSurface) && $activeSurface.ptyId >= 0) {
-      try {
-        const queried = await invoke<string>("get_pty_cwd", { ptyId: $activeSurface.ptyId });
-        if (queried) cwd = queried;
-      } catch {}
-    }
-    // createTerminalSurface already pushes to newPane.surfaces and sets activeSurfaceId
+    const cwd = await getActiveCwd();
     const surface = await createTerminalSurface(newPane, cwd);
 
     const newSplit: SplitNode = {
@@ -259,7 +253,10 @@
     if (ws.splitRoot.type === "pane" && ws.splitRoot.pane.id === activeP.id) {
       ws.splitRoot = newSplit;
     } else {
-      replacePaneWithSplit(ws.splitRoot, activeP.id, newSplit);
+      const parentInfo = findParentSplit(ws.splitRoot, activeP.id);
+      if (parentInfo && parentInfo.parent.type === "split") {
+        parentInfo.parent.children[parentInfo.index] = newSplit;
+      }
     }
     ws.activePaneId = newPane.id;
     workspaces.update(l => [...l]);
@@ -284,13 +281,7 @@
       if (ws.splitRoot === parentInfo.parent) {
         ws.splitRoot = sibling;
       } else {
-        const replaceNode = (root: SplitNode, target: SplitNode, replacement: SplitNode): boolean => {
-          if (root.type === "pane") return false;
-          if (root.children[0] === target) { root.children[0] = replacement; return true; }
-          if (root.children[1] === target) { root.children[1] = replacement; return true; }
-          return replaceNode(root.children[0], target, replacement) || replaceNode(root.children[1], target, replacement);
-        };
-        replaceNode(ws.splitRoot, parentInfo.parent, sibling);
+        replaceNodeInTree(ws.splitRoot, parentInfo.parent, sibling);
       }
       ws.activePaneId = getAllPanes(ws.splitRoot)[0]?.id ?? null;
     }
@@ -452,16 +443,7 @@
     })),
     ...Object.entries(themes).map(([id, t]) => ({
       name: `Theme: ${t.name}`,
-      action: () => {
-        theme.set(id);
-        for (const ws of $workspaces) {
-          for (const s of getAllSurfaces(ws)) {
-            if (isTerminalSurface(s)) s.terminal.options.theme = $xtermTheme;
-          }
-        }
-        refreshPreviewStyles();
-        saveConfig({ theme: id });
-      },
+      action: () => applyTheme(id),
     })),
   ];
 
@@ -602,15 +584,7 @@
 
     // Listen for menu events
     listen<string>("menu-theme", (event) => {
-      const id = event.payload.replace("theme-", "");
-      theme.set(id);
-      for (const ws of $workspaces) {
-        for (const s of getAllSurfaces(ws)) {
-          if (isTerminalSurface(s)) s.terminal.options.theme = $xtermTheme;
-        }
-      }
-      refreshPreviewStyles();
-      saveConfig({ theme: id });
+      applyTheme(event.payload.replace("theme-", ""));
     });
 
     await listen("menu-cmd-palette", () => {

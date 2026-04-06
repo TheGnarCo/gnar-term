@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
   import { WebglAddon } from "@xterm/addon-webgl";
+  import { invoke } from "@tauri-apps/api/core";
   import { connectPty } from "../terminal-service";
   import type { TerminalSurface as TermSurface } from "../types";
 
@@ -19,8 +20,16 @@
       await tick();
       await new Promise(r => requestAnimationFrame(r));
 
-      try { surface.fitAddon.fit(); } catch {}
+      try { surface.fitAddon.fit(); } catch (e) { console.warn("fitAddon.fit() failed on mount:", e); }
       await connectPty(surface, cwd);
+
+      // Send startup command after PTY is connected (not on a timer)
+      if (surface.startupCommand && surface.ptyId >= 0) {
+        invoke("write_pty", { ptyId: surface.ptyId, data: `${surface.startupCommand}\n` }).catch((e) =>
+          console.warn("Failed to send startup command:", e)
+        );
+        surface.startupCommand = undefined;
+      }
 
       const initWebGL = () => {
         try {
@@ -38,7 +47,7 @@
 
   $: if (visible && surface.opened && termEl) {
     requestAnimationFrame(() => {
-      try { surface.fitAddon.fit(); } catch {}
+      try { surface.fitAddon.fit(); } catch (e) { console.warn("fitAddon.fit() failed on visibility change:", e); }
     });
   }
 </script>

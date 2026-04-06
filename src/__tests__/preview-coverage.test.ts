@@ -176,7 +176,7 @@ describe("Preview registry", () => {
 // ─── PDF Previewer ───────────────────────────────────────────────
 
 describe("PDF previewer", () => {
-  it("shows loading message initially, then calls read_file_base64", async () => {
+  it("shows loading message initially, then renders iframe after read_file_base64", async () => {
     const b64 = btoa("fake-pdf-bytes");
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === "read_file_base64") return b64;
@@ -191,12 +191,12 @@ describe("PDF previewer", () => {
     // Let the .then() chain settle (render is async via .then, not await)
     await new Promise((r) => setTimeout(r, 50));
 
-    expect(EmbedPDF.init).toHaveBeenCalled();
-    const initCall = (EmbedPDF.init as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(initCall.type).toBe("container");
-    expect(initCall.target).toBe(surface.element);
-    expect(initCall.src).toMatch(/^blob:/);
-    expect(initCall.theme).toBe("dark");
+    // PDF previewer creates an iframe with a blob: URL
+    const iframe = surface.element.querySelector("iframe");
+    expect(iframe).not.toBeNull();
+    expect(iframe!.src).toMatch(/^blob:/);
+    expect(iframe!.style.width).toBe("100%");
+    expect(iframe!.style.height).toBe("100%");
   });
 
   it("shows error message when read_file_base64 fails", async () => {

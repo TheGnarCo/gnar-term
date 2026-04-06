@@ -1,8 +1,9 @@
 name: 'Update Homebrew Tap'
 
 on:
-  release:
-    types: [published]
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
   workflow_dispatch:
     inputs:
       version:
@@ -11,7 +12,12 @@ on:
 
 jobs:
   update-tap:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Get release version
         id: version
@@ -19,16 +25,46 @@ jobs:
           if [ -n "${{ github.event.inputs.version }}" ]; then
             echo "version=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
           else
-            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+            TAG="${{ github.event.workflow_run.head_branch }}"
+            echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Download macOS DMGs and compute sha256
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION=${{ steps.version.outputs.version }}
-          curl -sL "https://github.com/TheGnarCo/gnar-term/releases/download/v${VERSION}/GnarTerm_${VERSION}_aarch64.dmg" -o aarch64.dmg
-          curl -sL "https://github.com/TheGnarCo/gnar-term/releases/download/v${VERSION}/GnarTerm_${VERSION}_x64.dmg" -o x64.dmg
-          echo "sha256_arm64=$(sha256sum aarch64.dmg | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
-          echo "sha256_x64=$(sha256sum x64.dmg | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          TAG="v${VERSION}"
+
+          gh release download "$TAG" \
+            --repo "${{ github.repository }}" \
+            --pattern "GnarTerm_${VERSION}_aarch64.dmg" \
+            --output aarch64.dmg
+
+          gh release download "$TAG" \
+            --repo "${{ github.repository }}" \
+            --pattern "GnarTerm_${VERSION}_x64.dmg" \
+            --output x64.dmg
+
+          # Validate downloads are real DMGs
+          for f in aarch64.dmg x64.dmg; do
+            size=$(stat --format=%s "$f")
+            if [ "$size" -lt 1000000 ]; then
+              echo "::error::$f is only ${size} bytes, expected a DMG"
+              exit 1
+            fi
+          done
+
+          SHA_ARM64=$(sha256sum aarch64.dmg | cut -d' ' -f1)
+          SHA_X64=$(sha256sum x64.dmg | cut -d' ' -f1)
+
+          if [ "$SHA_ARM64" = "$SHA_X64" ]; then
+            echo "::error::arm64 and x64 hashes are identical — something went wrong"
+            exit 1
+          fi
+
+          echo "sha256_arm64=$SHA_ARM64" >> "$GITHUB_OUTPUT"
+          echo "sha256_x64=$SHA_X64" >> "$GITHUB_OUTPUT"
         id: hashes
 
       - name: Setup SSH for homebrew-tap

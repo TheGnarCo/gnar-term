@@ -52,3 +52,40 @@ export interface AgentSession {
   createdAt: string;
   exitCode: number | undefined;
 }
+
+// --- Screen layout types ---
+
+/** Leaf node: a session to spawn */
+export interface ScreenPaneSpec {
+  agent: AgentType;
+  command?: string;
+  name: string;
+  task?: string;
+  cwd?: string;
+  env?: Record<string, string>;
+}
+
+/** Recursive layout: either a leaf pane or a split with two children */
+export type ScreenLayoutSpec =
+  | ScreenPaneSpec
+  | { direction: "horizontal" | "vertical"; ratio?: number; children: [ScreenLayoutSpec, ScreenLayoutSpec] };
+
+/** Resolved leaf: has a spawned session (or error) instead of spawn params */
+export type ScreenLeaf = {
+  session: AgentSession;
+  error?: string;
+};
+
+/** Resolved layout tree sent over the bridge */
+export type ScreenLayoutResolved =
+  | ScreenLeaf
+  | { direction: "horizontal" | "vertical"; ratio: number; children: [ScreenLayoutResolved, ScreenLayoutResolved] };
+
+/** Full screen descriptor sent to the frontend */
+export interface ScreenDescriptor {
+  name: string;
+  layout: ScreenLayoutResolved;
+}
+
+/** Where a single session should be placed in the UI */
+export type SessionPlacement = "tab" | "split-right" | "split-down";

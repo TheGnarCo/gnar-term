@@ -22,7 +22,7 @@ export class PtyManager extends EventEmitter {
     onStatusChange: (status: SessionStatus, exitCode?: number) => void,
   ): { pid: number } {
     const args = this.resolveCommand(opts);
-    const cwd = opts.cwd ?? process.env.HOME ?? "/";
+    const cwd = opts.cwd ?? process.cwd() ?? process.env.HOME ?? "/";
     const env: Record<string, string> = {
       ...process.env as Record<string, string>,
       TERM: "xterm-256color",
@@ -116,7 +116,9 @@ export class PtyManager extends EventEmitter {
   private resolveCommand(opts: SpawnOptions): string[] {
     if (opts.agent === "custom") {
       if (!opts.command) throw new Error('agent "custom" requires a command');
-      return opts.command.split(/\s+/);
+      const shell = process.env.SHELL || "/bin/bash";
+      // Run command in a login shell, then drop to interactive prompt so the pane stays open
+      return [shell, "-l", "-c", `${opts.command}; exec ${shell} -l`];
     }
     const cmd = AGENT_COMMANDS[opts.agent];
     if (!cmd || cmd.length === 0) {

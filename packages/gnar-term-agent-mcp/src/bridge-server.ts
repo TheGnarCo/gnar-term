@@ -4,14 +4,17 @@ import { join } from "node:path";
 import { homedir } from "node:os";
 import type { SessionStore } from "./session-store.js";
 import type { PtyManager } from "./pty-manager.js";
-import type { AgentSession } from "./types.js";
+import type { AgentSession, ScreenDescriptor, SessionPlacement } from "./types.js";
 
 /** Bridge protocol messages: server → client */
 export type ServerMessage =
   | { type: "session-created"; session: AgentSession }
+  | { type: "session-placed"; session: AgentSession; placement: SessionPlacement }
   | { type: "session-output"; sessionId: string; data: string }
   | { type: "session-exit"; sessionId: string; exitCode: number }
-  | { type: "session-list"; sessions: AgentSession[] };
+  | { type: "session-list"; sessions: AgentSession[] }
+  | { type: "screen-created"; screen: ScreenDescriptor }
+  | { type: "preview-placed"; previewId: string; title: string; content: string; placement: SessionPlacement };
 
 /** Bridge protocol messages: client → server */
 export type ClientMessage =
@@ -72,9 +75,24 @@ export class BridgeServer {
       this.broadcast({ type: "session-created", session });
     });
 
+    // Forward placed sessions (tab, split-right, split-down)
+    this.sessions.on("session-placed", ({ session, placement }: { session: AgentSession; placement: SessionPlacement }) => {
+      this.broadcast({ type: "session-placed", session, placement });
+    });
+
     // Forward session exit events
     this.sessions.on("session-exit", ({ sessionId, exitCode }: { sessionId: string; exitCode: number }) => {
       this.broadcast({ type: "session-exit", sessionId, exitCode });
+    });
+
+    // Forward screen creation events (composite layout with multiple sessions)
+    this.sessions.on("screen-created", (screen: ScreenDescriptor) => {
+      this.broadcast({ type: "screen-created", screen });
+    });
+
+    // Forward preview placement events (rich markdown content panes)
+    this.sessions.on("preview-placed", ({ previewId, title, content, placement }: { previewId: string; title: string; content: string; placement: SessionPlacement }) => {
+      this.broadcast({ type: "preview-placed", previewId, title, content, placement });
     });
 
     // Forward raw PTY output (base64 encoded for binary safety)

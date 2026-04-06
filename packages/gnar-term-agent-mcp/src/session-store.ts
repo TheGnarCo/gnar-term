@@ -5,7 +5,7 @@ import type { AgentSession, SpawnOptions, SessionStatus } from "./types.js";
 export class SessionStore extends EventEmitter {
   private sessions = new Map<string, AgentSession>();
 
-  create(opts: SpawnOptions, command: string): AgentSession {
+  create(opts: SpawnOptions, command: string, options?: { silent?: boolean }): AgentSession {
     const session: AgentSession = {
       id: randomUUID(),
       name: opts.name,
@@ -18,7 +18,9 @@ export class SessionStore extends EventEmitter {
       exitCode: undefined,
     };
     this.sessions.set(session.id, session);
-    this.emit("session-created", session);
+    if (!options?.silent) {
+      this.emit("session-created", session);
+    }
     return session;
   }
 

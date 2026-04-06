@@ -9,6 +9,57 @@ use tauri::{AppHandle, Emitter};
 static NEXT_PTY_ID: AtomicU32 = AtomicU32::new(1);
 static NEXT_WATCH_ID: AtomicU32 = AtomicU32::new(1);
 
+/// Classification of a parsed OSC sequence.
+#[derive(Debug, PartialEq)]
+enum OscAction {
+    /// A user-facing notification (OSC 9 / 99 / 777).
+    Notification(String),
+    /// A window/tab title update (OSC 0 / 2).
+    Title(String),
+    /// An OSC we don't handle — ignore it.
+    Ignore,
+}
+
+/// Classify a raw OSC payload (the bytes between `ESC]` and `BEL`/`ST`).
+///
+/// Returns an `OscAction` describing what the sequence means.
+fn classify_osc(raw: &str) -> OscAction {
+    // OSC 0 or OSC 2: set window title  (e.g. "0;my title")
+    if raw.starts_with("0;") || raw.starts_with("2;") {
+        let title = raw.splitn(2, ';').nth(1).unwrap_or("").to_string();
+        return OscAction::Title(title);
+    }
+
+    // OSC 9 (iTerm2), OSC 99 (kitty), OSC 777 (rxvt) notifications.
+    let text = if let Some(rest) = raw.strip_prefix("9;") {
+        rest
+    } else if let Some(rest) = raw.strip_prefix("99;") {
+        rest
+    } else if let Some(rest) = raw.strip_prefix("777;") {
+        rest
+    } else {
+        return OscAction::Ignore;
+    };
+
+    // Guard: if the payload starts with "<digits>;" it is a sub-command or
+    // color-query response (e.g. "4;0;rgb:..."), not a human-readable
+    // notification.  Drop it.
+    if text.starts_with(|c: char| c.is_ascii_digit()) {
+        if let Some(pos) = text.find(';') {
+            if text[..pos].chars().all(|c| c.is_ascii_digit()) {
+                return OscAction::Ignore;
+            }
+        }
+    }
+
+    // Empty payloads aren't useful either.
+    if text.is_empty() {
+        return OscAction::Ignore;
+    }
+
+    OscAction::Notification(text.to_string())
+}
+
 /// Shared pause state — uses a Condvar so the reader thread blocks efficiently
 /// instead of spin-waiting when the frontend signals backpressure.
 struct PauseFlag {
@@ -198,29 +249,22 @@ PROMPT_COMMAND="_gnarterm_report_cwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
                     for &byte in data {
                         if in_osc {
                             if byte == 0x07 || byte == 0x9c {
-                                // End of OSC — check if it's a notification
+                                // End of OSC — classify and dispatch
                                 if let Ok(s) = String::from_utf8(osc_buf.clone()) {
-                                    // OSC 9 (iterm2), OSC 99 (kitty), OSC 777 (rxvt)
-                                    let is_notify = s.starts_with("9;")
-                                        || s.starts_with("99;")
-                                        || s.starts_with("777;");
-                                    if is_notify {
-                                        let text = s.splitn(2, ';').nth(1).unwrap_or("").to_string();
-                                        let _ = app_handle.emit(
-                                            "pty-notification",
-                                            PtyNotification {
-                                                pty_id: id,
-                                                text,
-                                            },
-                                        );
-                                    }
-                                    // OSC 0 or OSC 2: set window title
-                                    if s.starts_with("0;") || s.starts_with("2;") {
-                                        let title = s.splitn(2, ';').nth(1).unwrap_or("").to_string();
-                                        let _ = app_handle.emit(
-                                            "pty-title",
-                                            PtyTitle { pty_id: id, title },
-                                        );
+                                    match classify_osc(&s) {
+                                        OscAction::Notification(text) => {
+                                            let _ = app_handle.emit(
+                                                "pty-notification",
+                                                PtyNotification { pty_id: id, text },
+                                            );
+                                        }
+                                        OscAction::Title(title) => {
+                                            let _ = app_handle.emit(
+                                                "pty-title",
+                                                PtyTitle { pty_id: id, title },
+                                            );
+                                        }
+                                        OscAction::Ignore => {}
                                     }
                                 }
                                 osc_buf.clear();
@@ -1737,5 +1781,82 @@ mod tests {
         assert!(!home.is_empty(), "HOME should not be empty");
         assert!(home.starts_with('/'), "HOME should be an absolute path, got: {}", home);
         assert!(std::path::Path::new(&home).is_dir(), "HOME should point to an existing directory");
+    }
+
+    // --- OSC classifier tests (issue #20) ---
+
+    #[test]
+    fn osc9_plain_text_is_notification() {
+        assert_eq!(
+            classify_osc("9;Build complete"),
+            OscAction::Notification("Build complete".into())
+        );
+    }
+
+    #[test]
+    fn osc9_subcommand_is_ignored() {
+        // "4;0;" is a color-query / sub-command, not a notification
+        assert_eq!(classify_osc("9;4;0;"), OscAction::Ignore);
+        assert_eq!(classify_osc("9;4;0;rgb:0000/0000/0000"), OscAction::Ignore);
+    }
+
+    #[test]
+    fn osc99_plain_text_is_notification() {
+        assert_eq!(
+            classify_osc("99;Hello from kitty"),
+            OscAction::Notification("Hello from kitty".into())
+        );
+    }
+
+    #[test]
+    fn osc777_plain_text_is_notification() {
+        assert_eq!(
+            classify_osc("777;notify;Title;Body text"),
+            OscAction::Notification("notify;Title;Body text".into())
+        );
+    }
+
+    #[test]
+    fn osc0_sets_title() {
+        assert_eq!(
+            classify_osc("0;my terminal title"),
+            OscAction::Title("my terminal title".into())
+        );
+    }
+
+    #[test]
+    fn osc2_sets_title() {
+        assert_eq!(
+            classify_osc("2;window name"),
+            OscAction::Title("window name".into())
+        );
+    }
+
+    #[test]
+    fn osc_unknown_is_ignored() {
+        assert_eq!(classify_osc("52;c;dGVzdA=="), OscAction::Ignore);
+        assert_eq!(classify_osc("4;1;rgb:ffff/0000/0000"), OscAction::Ignore);
+    }
+
+    #[test]
+    fn osc9_empty_payload_is_ignored() {
+        assert_eq!(classify_osc("9;"), OscAction::Ignore);
+    }
+
+    #[test]
+    fn osc9_text_starting_with_letter_is_notification() {
+        assert_eq!(
+            classify_osc("9;3 new emails"),
+            OscAction::Notification("3 new emails".into())
+        );
+    }
+
+    #[test]
+    fn osc9_number_without_semicolon_is_notification() {
+        // A payload like "9;42" — just a number, no sub-command semicolon
+        assert_eq!(
+            classify_osc("9;42"),
+            OscAction::Notification("42".into())
+        );
     }
 }

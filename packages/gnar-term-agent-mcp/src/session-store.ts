@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
+import { EventEmitter } from "node:events";
 import type { AgentSession, SpawnOptions, SessionStatus } from "./types.js";
 
-export class SessionStore {
+export class SessionStore extends EventEmitter {
   private sessions = new Map<string, AgentSession>();
 
   create(opts: SpawnOptions, command: string): AgentSession {
@@ -17,6 +18,7 @@ export class SessionStore {
       exitCode: undefined,
     };
     this.sessions.set(session.id, session);
+    this.emit("session-created", session);
     return session;
   }
 
@@ -35,6 +37,7 @@ export class SessionStore {
     if (status === "exited") {
       session.status = "exited";
       session.exitCode = exitCode;
+      this.emit("session-exit", { sessionId: id, exitCode });
     } else if (session.status !== "exited") {
       session.status = status;
     }

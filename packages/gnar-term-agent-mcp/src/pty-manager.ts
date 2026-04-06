@@ -1,28 +1,28 @@
 import * as pty from "node-pty";
+import { EventEmitter } from "node:events";
 import { OutputBuffer } from "./output-buffer.js";
-import type { SpawnOptions } from "./types.js";
 import { AGENT_COMMANDS, PROMPT_PATTERNS } from "./types.js";
-
-export interface ManagedPty {
-  ptyProcess: pty.IPty;
-  buffer: OutputBuffer;
-  idleTimer: ReturnType<typeof setTimeout> | null;
-  onStatusChange: (status: "running" | "idle" | "exited", exitCode?: number) => void;
-}
+import type { SpawnOptions, SessionStatus } from "./types.js";
 
 const IDLE_TIMEOUT_MS = 5000;
 
-export class PtyManager {
+interface ManagedPty {
+  ptyProcess: pty.IPty;
+  buffer: OutputBuffer;
+  idleTimer: ReturnType<typeof setTimeout> | null;
+  onStatusChange: (status: SessionStatus, exitCode?: number) => void;
+}
+
+export class PtyManager extends EventEmitter {
   private ptys = new Map<string, ManagedPty>();
 
   spawn(
     id: string,
     opts: SpawnOptions,
-    onStatusChange: ManagedPty["onStatusChange"]
+    onStatusChange: (status: SessionStatus, exitCode?: number) => void,
   ): { pid: number } {
     const args = this.resolveCommand(opts);
     const cwd = opts.cwd ?? process.env.HOME ?? "/";
-
     const env: Record<string, string> = {
       ...process.env as Record<string, string>,
       TERM: "xterm-256color",
@@ -39,7 +39,6 @@ export class PtyManager {
     });
 
     const buffer = new OutputBuffer();
-
     const managed: ManagedPty = {
       ptyProcess,
       buffer,
@@ -51,12 +50,15 @@ export class PtyManager {
       buffer.append(data);
       onStatusChange("running");
       this.resetIdleTimer(managed);
+      // Emit raw data for bridge subscribers
+      this.emit("pty-data", { sessionId: id, data });
     });
 
-    ptyProcess.onExit(({ exitCode }) => {
+    ptyProcess.onExit(({ exitCode }: { exitCode: number }) => {
       this.clearIdleTimer(managed);
       onStatusChange("exited", exitCode);
       this.ptys.delete(id);
+      this.emit("pty-exit", { sessionId: id, exitCode });
     });
 
     this.ptys.set(id, managed);
@@ -65,7 +67,7 @@ export class PtyManager {
     if (opts.task) {
       setTimeout(() => {
         if (this.ptys.has(id)) {
-          this.write(id, opts.task + "\r");
+          this.write(id, opts.task! + "\r");
         }
       }, 3000);
     }

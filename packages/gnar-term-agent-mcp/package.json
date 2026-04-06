@@ -19,10 +19,12 @@
     "@modelcontextprotocol/sdk": "^1.12.1",
     "node-pty": "^1.0.0",
     "strip-ansi": "^7.1.0",
+    "ws": "^8.18.0",
     "zod": "^3.25.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.0",
     "typescript": "^5.5.0"
   },
   "engines": {

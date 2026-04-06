@@ -1,31 +1,4 @@
-export type AgentType = "claude-code" | "codex" | "aider" | "custom";
-
-export type SessionStatus = "starting" | "running" | "idle" | "exited";
-
-export interface AgentSession {
-  id: string;
-  name: string;
-  agentType: AgentType;
-  command: string;
-  status: SessionStatus;
-  cwd: string;
-  pid: number | undefined;
-  createdAt: string;
-  exitCode: number | undefined;
-}
-
-export interface SpawnOptions {
-  name: string;
-  agent: AgentType;
-  task?: string;
-  cwd?: string;
-  command?: string;
-  env?: Record<string, string>;
-  cols?: number;
-  rows?: number;
-}
-
-export const AGENT_COMMANDS: Record<AgentType, string[]> = {
+export const AGENT_COMMANDS: Record<string, string[]> = {
   "claude-code": ["claude"],
   codex: ["codex"],
   aider: ["aider"],
@@ -53,3 +26,29 @@ export const KEY_MAP: Record<string, string> = {
 
 /** Prompt patterns for idle detection */
 export const PROMPT_PATTERNS = [/\$\s*$/, />\s*$/, /%\s*$/, /❯\s*$/, /#\s*$/];
+
+export type AgentType = "claude-code" | "codex" | "aider" | "custom";
+export type SessionStatus = "starting" | "running" | "idle" | "exited";
+
+export interface SpawnOptions {
+  name: string;
+  agent: AgentType;
+  task?: string;
+  cwd?: string;
+  command?: string;
+  env?: Record<string, string>;
+  cols?: number;
+  rows?: number;
+}
+
+export interface AgentSession {
+  id: string;
+  name: string;
+  agentType: AgentType;
+  command: string;
+  status: SessionStatus;
+  cwd: string;
+  pid: number | undefined;
+  createdAt: string;
+  exitCode: number | undefined;
+}

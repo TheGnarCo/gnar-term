@@ -6,6 +6,12 @@ export interface ReadResult {
   totalLines: number;
 }
 
+export interface ReadOptions {
+  lastN?: number;
+  sinceCursor?: number;
+  shouldStripAnsi?: boolean;
+}
+
 /**
  * Ring buffer that stores terminal output lines with monotonic cursor tracking.
  * Supports two read modes:
@@ -16,7 +22,7 @@ export class OutputBuffer {
   private buffer: string[] = [];
   private cursor = 0; // monotonic sequence number for next line
   private partialLine = "";
-  private readonly maxLines: number;
+  private maxLines: number;
 
   constructor(maxLines = 5000) {
     this.maxLines = maxLines;
@@ -26,10 +32,8 @@ export class OutputBuffer {
   append(data: string): void {
     const text = this.partialLine + data;
     const parts = text.split("\n");
-
     // Last element is either empty (if data ended with \n) or a partial line
     this.partialLine = parts.pop() ?? "";
-
     for (const line of parts) {
       this.pushLine(line);
     }
@@ -44,22 +48,15 @@ export class OutputBuffer {
   }
 
   /** Read lines from the buffer. */
-  read(opts: {
-    lastN?: number;
-    sinceCursor?: number;
-    shouldStripAnsi?: boolean;
-  }): ReadResult {
+  read(opts: ReadOptions): ReadResult {
     const { lastN = 50, sinceCursor, shouldStripAnsi = true } = opts;
     const transform = shouldStripAnsi ? stripAnsi : (s: string) => s;
 
     let lines: string[];
-
     if (sinceCursor !== undefined) {
-      // Return all lines written after the given cursor
       const startIndex = this.cursorToIndex(sinceCursor);
       lines = this.buffer.slice(startIndex);
     } else {
-      // Return the last N lines
       lines = this.buffer.slice(-lastN);
     }
 
@@ -78,8 +75,7 @@ export class OutputBuffer {
   /** Get the last line (or partial) for prompt pattern matching. */
   getLastLine(): string {
     if (this.partialLine) return stripAnsi(this.partialLine);
-    if (this.buffer.length > 0)
-      return stripAnsi(this.buffer[this.buffer.length - 1]);
+    if (this.buffer.length > 0) return stripAnsi(this.buffer[this.buffer.length - 1]);
     return "";
   }
 
@@ -90,9 +86,6 @@ export class OutputBuffer {
 
   /** Convert a cursor value to a buffer index. */
   private cursorToIndex(targetCursor: number): number {
-    // cursor = total lines ever written
-    // buffer holds the last `maxLines` lines
-    // bufferStartCursor = cursor value of buffer[0]
     const bufferStartCursor = this.cursor - this.buffer.length;
     if (targetCursor <= bufferStartCursor) return 0;
     if (targetCursor >= this.cursor) return this.buffer.length;

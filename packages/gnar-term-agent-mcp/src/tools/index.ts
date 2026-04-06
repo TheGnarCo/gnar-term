@@ -8,7 +8,7 @@ import { registerOrchestrationTools } from "./orchestration.js";
 export function registerAllTools(
   server: McpServer,
   sessions: SessionStore,
-  ptyManager: PtyManager
+  ptyManager: PtyManager,
 ): void {
   registerSessionTools(server, sessions, ptyManager);
   registerInteractionTools(server, sessions, ptyManager);

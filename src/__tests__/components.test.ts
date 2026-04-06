@@ -866,4 +866,23 @@ describe("TerminalSurface", () => {
 
     expect(surface.terminal.open).not.toHaveBeenCalled();
   });
+
+  it("calls scrollToBottom after fit when pane becomes visible (#22)", async () => {
+    const surface = makeSurface("scroll-test", { opened: true });
+    // Start hidden
+    const { rerender } = render(TerminalSurfaceComponent, { props: { surface, visible: false } });
+
+    // Reset mocks from any mount-time calls
+    (surface.fitAddon.fit as ReturnType<typeof vi.fn>).mockClear();
+    (surface.terminal.scrollToBottom as ReturnType<typeof vi.fn>).mockClear();
+
+    // Become visible — triggers the reactive block
+    await rerender({ surface, visible: true });
+
+    // The reactive block uses requestAnimationFrame, so flush it
+    await new Promise(r => requestAnimationFrame(r));
+
+    expect(surface.fitAddon.fit).toHaveBeenCalled();
+    expect(surface.terminal.scrollToBottom).toHaveBeenCalled();
+  });
 });

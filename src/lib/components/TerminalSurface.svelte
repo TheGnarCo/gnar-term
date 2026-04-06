@@ -47,7 +47,10 @@
 
   $: if (visible && surface.opened && termEl) {
     requestAnimationFrame(() => {
-      try { surface.fitAddon.fit(); } catch (e) { console.warn("fitAddon.fit() failed on visibility change:", e); }
+      try {
+        surface.fitAddon.fit();
+        surface.terminal.scrollToBottom();
+      } catch (e) { console.warn("fitAddon.fit() failed on visibility change:", e); }
     });
   }
 </script>

@@ -51,9 +51,11 @@ jobs:
 
       - name: Get version from tag
         id: version
+        shell: bash
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
       - name: Set version from tag
+        shell: bash
         run: |
           VERSION=${{ steps.version.outputs.VERSION }}
           # Update Cargo.toml so CARGO_PKG_VERSION matches the release tag

@@ -1,0 +1,31 @@
+{
+  "name": "gnar-term-agent-mcp",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "MCP server for orchestrating AI coding agents via managed terminal sessions",
+  "bin": {
+    "gnar-term-agent-mcp": "./bin/gnar-term-agent-mcp.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.52.0",
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "node-pty": "^1.0.0",
+    "strip-ansi": "^7.1.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.5.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT"
+}

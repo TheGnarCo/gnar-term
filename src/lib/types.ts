@@ -18,6 +18,7 @@ export interface TerminalSurface {
   notification?: string;
   hasUnread: boolean;
   opened: boolean;
+  startupCommand?: string;
 }
 
 export interface PreviewSurface {
@@ -68,4 +69,20 @@ export function isTerminalSurface(s: Surface): s is TerminalSurface {
 
 export function isPreviewSurface(s: Surface): s is PreviewSurface {
   return s.kind === "preview";
+}
+
+/** Find the parent split node containing a pane with the given ID. */
+export function findParentSplit(node: SplitNode, paneId: string): { parent: SplitNode; index: number } | null {
+  if (node.type === "pane") return null;
+  if (node.children[0].type === "pane" && node.children[0].pane.id === paneId) return { parent: node, index: 0 };
+  if (node.children[1].type === "pane" && node.children[1].pane.id === paneId) return { parent: node, index: 1 };
+  return findParentSplit(node.children[0], paneId) || findParentSplit(node.children[1], paneId);
+}
+
+/** Replace a target node in the split tree with a replacement. Returns true if found. */
+export function replaceNodeInTree(root: SplitNode, target: SplitNode, replacement: SplitNode): boolean {
+  if (root.type === "pane") return false;
+  if (root.children[0] === target) { root.children[0] = replacement; return true; }
+  if (root.children[1] === target) { root.children[1] = replacement; return true; }
+  return replaceNodeInTree(root.children[0], target, replacement) || replaceNodeInTree(root.children[1], target, replacement);
 }

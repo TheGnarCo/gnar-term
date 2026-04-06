@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import { theme } from "../stores/theme";
   import { contextMenu } from "../stores/ui";
   import type { Workspace, Surface } from "../types";
@@ -30,20 +31,19 @@
     ...(surfaceCount > 1 ? [`${surfaceCount}s`] : []),
   ];
 
-  export function startRename() {
+  export async function startRename() {
     renaming = true;
-    setTimeout(() => {
-      if (!nameEl) return;
-      nameEl.contentEditable = "true";
-      nameEl.style.background = $theme.bgSurface;
-      nameEl.style.border = `1px solid ${$theme.borderActive}`;
-      nameEl.focus();
-      const range = document.createRange();
-      range.selectNodeContents(nameEl);
-      const sel = window.getSelection();
-      sel?.removeAllRanges();
-      sel?.addRange(range);
-    }, 0);
+    await tick();
+    if (!nameEl) return;
+    nameEl.contentEditable = "true";
+    nameEl.style.background = $theme.bgSurface;
+    nameEl.style.border = `1px solid ${$theme.borderActive}`;
+    nameEl.focus();
+    const range = document.createRange();
+    range.selectNodeContents(nameEl);
+    const sel = window.getSelection();
+    sel?.removeAllRanges();
+    sel?.addRange(range);
   }
 
   function finishRename() {

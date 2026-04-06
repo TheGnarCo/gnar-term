@@ -20,7 +20,7 @@ import { workspaces, activeWorkspaceIdx } from "./stores/workspace";
 import { contextMenu, pendingAction } from "./stores/ui";
 import { canPreview, getSupportedExtensions, openPreview } from "../preview/index";
 import type { TerminalSurface, Pane, Surface, Workspace } from "./types";
-import { uid, getAllSurfaces, getAllPanes, isTerminalSurface } from "./types";
+import { uid, getAllSurfaces, getAllPanes, isTerminalSurface, findParentSplit, replaceNodeInTree } from "./types";
 import type { MenuItem } from "./context-menu-types";
 import "@xterm/xterm/css/xterm.css";
 
@@ -171,6 +171,7 @@ export async function setupListeners() {
     ptyPaused.delete(pty_id);
 
     // Remove the surface from its pane, and collapse empty panes
+    let needsDefaultWorkspace = false;
     workspaces.update((wsList) => {
       for (const ws of wsList) {
         for (const pane of getAllPanes(ws.splitRoot)) {
@@ -189,38 +190,23 @@ export async function setupListeners() {
                 // This was the only pane in the workspace — remove the workspace
                 const wsIdx = wsList.indexOf(ws);
                 wsList.splice(wsIdx, 1);
-                // Clamp activeWorkspaceIdx to valid range
                 const currentIdx = get(activeWorkspaceIdx);
                 if (currentIdx >= wsList.length) {
                   activeWorkspaceIdx.set(Math.max(0, wsList.length - 1));
                 }
-                // If no workspaces left, create a default one
                 if (wsList.length === 0) {
-                  // Schedule creation outside the store update to avoid reentrancy
-                  setTimeout(() => createDefaultWorkspace(), 0);
+                  needsDefaultWorkspace = true;
                 }
                 return wsList;
               }
               // Find parent split and collapse it
-              const findParent = (node: import("./types").SplitNode, targetId: string): { parent: import("./types").SplitNode; index: number } | null => {
-                if (node.type === "pane") return null;
-                if (node.children[0].type === "pane" && node.children[0].pane.id === targetId) return { parent: node, index: 0 };
-                if (node.children[1].type === "pane" && node.children[1].pane.id === targetId) return { parent: node, index: 1 };
-                return findParent(node.children[0], targetId) || findParent(node.children[1], targetId);
-              };
-              const parentInfo = findParent(ws.splitRoot, pane.id);
+              const parentInfo = findParentSplit(ws.splitRoot, pane.id);
               if (parentInfo && parentInfo.parent.type === "split") {
                 const sibling = parentInfo.parent.children[parentInfo.index === 0 ? 1 : 0];
                 if (ws.splitRoot === parentInfo.parent) {
                   ws.splitRoot = sibling;
                 } else {
-                  const replaceNode = (root: import("./types").SplitNode, target: import("./types").SplitNode, replacement: import("./types").SplitNode): boolean => {
-                    if (root.type === "pane") return false;
-                    if (root.children[0] === target) { root.children[0] = replacement; return true; }
-                    if (root.children[1] === target) { root.children[1] = replacement; return true; }
-                    return replaceNode(root.children[0], target, replacement) || replaceNode(root.children[1], target, replacement);
-                  };
-                  replaceNode(ws.splitRoot, parentInfo.parent, sibling);
+                  replaceNodeInTree(ws.splitRoot, parentInfo.parent, sibling);
                 }
                 ws.activePaneId = getAllPanes(ws.splitRoot)[0]?.id ?? null;
               }
@@ -231,6 +217,9 @@ export async function setupListeners() {
       }
       return wsList;
     });
+    if (needsDefaultWorkspace) {
+      createDefaultWorkspace();
+    }
   });
 
   await listen<{ pty_id: number; text: string }>("pty-notification", (event) => {
@@ -325,12 +314,11 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
     allowProposedApi: true,
     scrollback: 5000,
     smoothScrollDuration: 0,
+    fastScrollModifier: "alt",
     vtExtensions: {
       kittyKeyboard: true,
     },
   });
-  // fastScrollModifier is a valid xterm.js option but missing from the bundled type definitions
-  (terminal.options as Record<string, unknown>).fastScrollModifier = "alt";
 
   const fitAddon = new FitAddon();
   const searchAddon = new SearchAddon();
@@ -406,12 +394,14 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
     if (e.ctrlKey && !e.metaKey && e.key === "Tab") return false;
 
     // Linux: Ctrl+Shift+C = copy, Ctrl+Shift+V = paste
+    // Uses Tauri clipboard plugin because webview clipboard access isn't guaranteed.
     if (e.ctrlKey && e.shiftKey && !e.metaKey && (e.key === "C" || e.key === "c")) {
       const sel = terminal.getSelection();
       if (sel) clipboardWrite(sel);
       return false;
     }
     if (e.ctrlKey && e.shiftKey && !e.metaKey && (e.key === "V" || e.key === "v")) {
+      e.preventDefault();
       clipboardRead().then(text => {
         if (text && surface.ptyId >= 0) invoke("write_pty", { ptyId: surface.ptyId, data: text });
       });
@@ -425,17 +415,19 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
     const alt = e.altKey;
     const ctrl = e.ctrlKey;
 
-    // Cmd+C — copy selection
+    // Cmd+C — copy selection (uses Tauri clipboard plugin for webview compat)
     if (!alt && !ctrl && k === "c") {
       const sel = terminal.getSelection();
       if (sel) clipboardWrite(sel);
       return false;
     }
-    // Cmd+V — paste
+    // Cmd+V — paste (uses Tauri clipboard plugin; preventDefault stops browser
+    // paste event from also firing through onData → double write)
     if (!alt && !ctrl && k === "v") {
+      e.preventDefault();
       clipboardRead().then(text => {
         if (text && surface.ptyId >= 0) invoke("write_pty", { ptyId: surface.ptyId, data: text });
-      }).catch(() => {});
+      }).catch((err) => console.warn("Clipboard read failed:", err));
       return false;
     }
 

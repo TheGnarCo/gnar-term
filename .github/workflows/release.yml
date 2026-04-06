@@ -49,6 +49,16 @@ jobs:
         with:
           workspaces: './src-tauri -> target'
 
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Set version from tag
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          # Update Cargo.toml so CARGO_PKG_VERSION matches the release tag
+          sed -i.bak "s/^version = \".*\"/version = \"$VERSION\"/" src-tauri/Cargo.toml && rm -f src-tauri/Cargo.toml.bak
+
       - name: Install frontend dependencies
         run: npm install
 
@@ -64,10 +74,10 @@ jobs:
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
-          tagName: v__VERSION__
-          releaseName: 'GnarTerm v__VERSION__'
+          tagName: v${{ steps.version.outputs.VERSION }}
+          releaseName: 'GnarTerm v${{ steps.version.outputs.VERSION }}'
           releaseBody: 'Download the installer for your platform below.'
           releaseDraft: false
           prerelease: false
-          args: ${{ matrix.args }}
+          args: ${{ matrix.args }} --config {"version":"${{ steps.version.outputs.VERSION }}"}
 

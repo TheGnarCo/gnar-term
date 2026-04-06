@@ -152,7 +152,7 @@ async fn spawn_pty(
     // keyboard protocol. Claude Code gates this on a hardcoded TERM_PROGRAM
     // allowlist with no capability negotiation fallback.
     cmd.env("TERM_PROGRAM", "ghostty");
-    cmd.env("TERM_PROGRAM_VERSION", "0.2.3");
+    cmd.env("TERM_PROGRAM_VERSION", env!("CARGO_PKG_VERSION"));
     // Inject OSC 7 cwd reporting for shells that don't do it automatically
     // This makes zsh/bash report the working directory on every prompt
     // Shell integration: inject OSC 7 cwd reporting (cross-platform)

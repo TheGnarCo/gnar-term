@@ -108,6 +108,7 @@ Switch themes instantly from the command palette (<code>⌘P</code>) or the nati
 
 **Light:**
 - Molly (warm ivory + rose gold)
+- Molly Disco (Lisa Frank-inspired vibrant purples + neon)
 - GitHub Light
 - Solarized Light
 - Catppuccin Latte
@@ -293,7 +294,7 @@ The config format is a superset of [cmux.json](https://cmux.com/docs/custom-comm
 
 ### Available theme IDs
 
-`github-dark`, `tokyo-night`, `catppuccin-mocha`, `dracula`, `solarized-dark`, `one-dark`, `molly`, `github-light`, `solarized-light`, `catppuccin-latte`
+`github-dark`, `tokyo-night`, `catppuccin-mocha`, `dracula`, `solarized-dark`, `one-dark`, `molly`, `molly-disco`, `github-light`, `solarized-light`, `catppuccin-latte`
 
 ## Adding file preview plugins
 

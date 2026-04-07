@@ -24,6 +24,13 @@ import { uid, getAllSurfaces, getAllPanes, isTerminalSurface, findParentSplit, r
 import type { MenuItem } from "./context-menu-types";
 import "@xterm/xterm/css/xterm.css";
 
+/** Platform detection — used for Cmd (macOS) vs Ctrl (Linux/Windows) shortcuts. */
+export const isMac = typeof navigator !== "undefined" && navigator.platform.toUpperCase().includes("MAC");
+
+/** Shortcut label helpers for platform-appropriate display. */
+export const modLabel = isMac ? "⌘" : "Ctrl+";
+export const shiftModLabel = isMac ? "⇧⌘" : "Ctrl+Shift+";
+
 /** Resolve a link path to an absolute filesystem path. Expands ~ and prepends cwd for relative paths. */
 export async function resolveFilePath(linkText: string, cwd: string | undefined): Promise<string> {
   if (linkText.startsWith("/")) return linkText;
@@ -135,6 +142,14 @@ function flushPtyBuffer(ptyId: number) {
 // --- Event Listeners ---
 
 export async function setupListeners() {
+  // On Linux, prevent WebKitGTK from intercepting Ctrl+Shift+C/V before xterm.js
+  if (!isMac) {
+    window.addEventListener("keydown", (e) => {
+      if (e.ctrlKey && e.shiftKey && (e.key === "C" || e.key === "c" || e.key === "V" || e.key === "v")) {
+        e.preventDefault();
+      }
+    }, { capture: true });
+  }
   await listen<{ pty_id: number; data: string }>("pty-output", (event) => {
     const { pty_id, data } = event.payload;
     // Decode base64 to preserve raw terminal escape sequences
@@ -224,6 +239,8 @@ export async function setupListeners() {
 
   await listen<{ pty_id: number; text: string }>("pty-notification", (event) => {
     const { pty_id, text } = event.payload;
+    // Filter out escape-sequence fragments that slipped through (e.g. "4;0;")
+    if (/^\d+[;\d:\/]*$/.test(text) || !text.trim()) return;
     workspaces.update((wsList) => {
       for (const ws of wsList) {
         for (const s of getAllSurfaces(ws)) {
@@ -241,6 +258,8 @@ export async function setupListeners() {
   // OSC 0/2: shell sets window title (shows process name or custom title)
   await listen<{ pty_id: number; title: string }>("pty-title", (event) => {
     const { pty_id, title } = event.payload;
+    // Filter out escape-sequence fragments that may slip through
+    if (!title || /[\x00-\x1f\x7f]/.test(title) || /^\d+[;\d:\/]*$/.test(title)) return;
     workspaces.update((wsList) => {
       for (const ws of wsList) {
         for (const s of getAllSurfaces(ws)) {
@@ -385,10 +404,8 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
     },
   });
 
-  // Key handler — intercept Cmd shortcuts, pass everything else to PTY
+  // Key handler — intercept Cmd/Ctrl shortcuts, pass everything else to PTY
   terminal.attachCustomKeyEventHandler((e) => {
-    // Only intercept Cmd (meta) shortcuts. NEVER intercept Ctrl-only combos
-    // (vim, emacs, and other TUI apps need them).
     if (e.type !== "keydown") return true;
     // Ctrl+Tab / Ctrl+Shift+Tab for tab switching
     if (e.ctrlKey && !e.metaKey && e.key === "Tab") return false;
@@ -408,22 +425,22 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
       return false;
     }
 
-    if (!e.metaKey) return true; // All our shortcuts use Cmd
+    // Platform-aware command key: Cmd on macOS, Ctrl on Linux/Windows
+    const cmdKey = isMac ? e.metaKey : e.ctrlKey;
+    if (!cmdKey) return true;
 
     const k = e.key.toLowerCase();
     const shift = e.shiftKey;
     const alt = e.altKey;
-    const ctrl = e.ctrlKey;
 
-    // Cmd+C — copy selection (uses Tauri clipboard plugin for webview compat)
-    if (!alt && !ctrl && k === "c") {
+    // Cmd/Ctrl+C — copy selection
+    if (!alt && !shift && k === "c") {
       const sel = terminal.getSelection();
       if (sel) clipboardWrite(sel);
       return false;
     }
-    // Cmd+V — paste (uses Tauri clipboard plugin; preventDefault stops browser
-    // paste event from also firing through onData → double write)
-    if (!alt && !ctrl && k === "v") {
+    // Cmd/Ctrl+V — paste
+    if (!alt && !shift && k === "v") {
       e.preventDefault();
       clipboardRead().then(text => {
         if (text && surface.ptyId >= 0) invoke("write_pty", { ptyId: surface.ptyId, data: text });
@@ -431,21 +448,19 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
       return false;
     }
 
-    // Cmd+key (no alt)
-    if (!alt && !ctrl) {
+    // Cmd/Ctrl+key (no alt) — let App.svelte handle these
+    if (!alt && !shift) {
       if (["n","t","d","w","b","p","k","f","g"].includes(k)) return false;
       if (k >= "1" && k <= "9") return false;
     }
-    // Shift+Cmd+key
-    if (shift && !alt && !ctrl) {
-      if (["d","w","h","r","p","g"].includes(k)) return false;
+    // Shift+Cmd/Ctrl+key
+    if (shift && !alt) {
+      if (["d","w","h","r","p","g","t"].includes(k)) return false;
       if (k === "enter") return false;
       if (k === "[" || k === "]") return false;
     }
-    // Alt+Cmd+arrows for pane nav
+    // Alt+Cmd/Ctrl+arrows for pane nav
     if (alt && ["arrowleft","arrowright","arrowup","arrowdown"].includes(k)) return false;
-    // Ctrl+Cmd for workspace nav
-    if (ctrl && (k === "[" || k === "]")) return false;
 
     return true;
   });
@@ -456,9 +471,11 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
   terminal.onResize(({ cols, rows }) => {
     if (surface.ptyId >= 0) invoke("resize_pty", { ptyId: surface.ptyId, cols, rows });
   });
-  terminal.onTitleChange((title) => {
-    surface.title = title;
-  });
+  // NOTE: We intentionally do NOT use terminal.onTitleChange() here.
+  // xterm.js fires it with raw/partial escape sequence fragments (OSC 7 cwd data,
+  // bracketed paste mode, etc.) concatenated into the title string. Instead, the
+  // Rust backend parses OSC 0/2 cleanly and emits "pty-title" events (handled in
+  // setupListeners), and OSC 7 cwd is handled by the registerOscHandler below.
 
   // OSC 7: shell reports cwd (parsed by xterm.js directly)
   terminal.parser.registerOscHandler(7, (data) => {
@@ -487,7 +504,7 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
     if (selection) {
       items.push({
         label: "Copy",
-        shortcut: "Cmd+C",
+        shortcut: isMac ? "⌘C" : "Ctrl+Shift+C",
         action: () => clipboardWrite(selection),
       });
     }
@@ -495,7 +512,7 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
     // Paste
     items.push({
       label: "Paste",
-      shortcut: "Cmd+V",
+      shortcut: isMac ? "⌘V" : "Ctrl+Shift+V",
       action: () => clipboardRead().then(t => {
         if (t && surface.ptyId >= 0) invoke("write_pty", { ptyId: surface.ptyId, data: t });
       }),
@@ -538,19 +555,19 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
     // Terminal actions
     items.push({
       label: "Clear Scrollback",
-      shortcut: "Cmd+K",
+      shortcut: `${modLabel}K`,
       action: () => terminal.clear(),
     });
 
     items.push({
       label: "Split Right",
-      shortcut: "⌘D",
+      shortcut: `${modLabel}D`,
       action: () => pendingAction.set({ type: "split-right" }),
     });
 
     items.push({
       label: "Split Down",
-      shortcut: "⇧⌘D",
+      shortcut: `${shiftModLabel}D`,
       action: () => pendingAction.set({ type: "split-down" }),
     });
 

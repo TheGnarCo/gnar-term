@@ -78,9 +78,12 @@ vi.stubGlobal(
 
 import { invoke } from "@tauri-apps/api/core";
 import { readText as clipboardRead, writeText as clipboardWrite } from "@tauri-apps/plugin-clipboard-manager";
-import { createTerminalSurface } from "../lib/terminal-service";
+import { createTerminalSurface, isMac } from "../lib/terminal-service";
 import type { Pane } from "../lib/types";
 import { uid } from "../lib/types";
+
+// Platform-aware modifier key for tests: Cmd on macOS, Ctrl on Linux/Windows
+const cmdKeyProp = isMac ? "metaKey" : "ctrlKey";
 
 describe("Paste — single write to PTY via Tauri clipboard plugin", () => {
   let keyHandler: (e: KeyboardEvent) => boolean;
@@ -102,16 +105,16 @@ describe("Paste — single write to PTY via Tauri clipboard plugin", () => {
     onDataHandler = termMock.onData.mock.calls[0][0];
   });
 
-  describe("Cmd+V paste", () => {
+  describe("Cmd/Ctrl+V paste", () => {
     it("calls preventDefault to block browser paste event (prevents double-write)", () => {
-      const event = new KeyboardEvent("keydown", { key: "v", metaKey: true });
+      const event = new KeyboardEvent("keydown", { key: "v", [cmdKeyProp]: true });
       const spy = vi.spyOn(event, "preventDefault");
       keyHandler(event);
       expect(spy).toHaveBeenCalled();
     });
 
     it("reads clipboard via Tauri plugin and writes to PTY exactly once", async () => {
-      const event = new KeyboardEvent("keydown", { key: "v", metaKey: true });
+      const event = new KeyboardEvent("keydown", { key: "v", [cmdKeyProp]: true });
       keyHandler(event);
 
       // clipboardRead is async — wait for it to resolve
@@ -124,13 +127,13 @@ describe("Paste — single write to PTY via Tauri clipboard plugin", () => {
     });
 
     it("returns false to prevent xterm.js from also processing the keydown", () => {
-      const event = new KeyboardEvent("keydown", { key: "v", metaKey: true });
+      const event = new KeyboardEvent("keydown", { key: "v", [cmdKeyProp]: true });
       expect(keyHandler(event)).toBe(false);
     });
 
     it("does not write to PTY when clipboard is empty", async () => {
       vi.mocked(clipboardRead).mockResolvedValueOnce("");
-      const event = new KeyboardEvent("keydown", { key: "v", metaKey: true });
+      const event = new KeyboardEvent("keydown", { key: "v", [cmdKeyProp]: true });
       keyHandler(event);
 
       // Give the promise time to resolve
@@ -141,7 +144,7 @@ describe("Paste — single write to PTY via Tauri clipboard plugin", () => {
 
     it("does not write to PTY when ptyId is -1 (disconnected)", async () => {
       (surface as any).ptyId = -1;
-      const event = new KeyboardEvent("keydown", { key: "v", metaKey: true });
+      const event = new KeyboardEvent("keydown", { key: "v", [cmdKeyProp]: true });
       keyHandler(event);
 
       await new Promise(r => setTimeout(r, 10));
@@ -163,15 +166,15 @@ describe("Paste — single write to PTY via Tauri clipboard plugin", () => {
     });
   });
 
-  describe("Cmd+C copy", () => {
+  describe("Cmd/Ctrl+C copy", () => {
     it("writes selection to clipboard via Tauri plugin", () => {
-      const event = new KeyboardEvent("keydown", { key: "c", metaKey: true });
+      const event = new KeyboardEvent("keydown", { key: "c", [cmdKeyProp]: true });
       keyHandler(event);
       expect(clipboardWrite).toHaveBeenCalledWith("selected text");
     });
 
     it("returns false to prevent xterm.js from processing", () => {
-      const event = new KeyboardEvent("keydown", { key: "c", metaKey: true });
+      const event = new KeyboardEvent("keydown", { key: "c", [cmdKeyProp]: true });
       expect(keyHandler(event)).toBe(false);
     });
   });

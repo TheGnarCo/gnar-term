@@ -1,10 +1,27 @@
 <script lang="ts">
   import { tick } from "svelte";
-  import { theme } from "../stores/theme";
+  import { theme, themes } from "../stores/theme";
+
+  $: isDisco = $theme.name === "Molly Disco";
   import { contextMenu } from "../stores/ui";
   import type { Workspace, Surface } from "../types";
   import { getAllPanes, getAllSurfaces } from "../types";
   import type { MenuItem } from "../context-menu-types";
+
+  const discoEmojis = ["✨","🦄","🌈","💜","🪩","⚡","💫","🔮","🎀","💎","🌸","🍭","🫧","💗","🦋","🎠","🧚","💖","🌺","🎵","🩵","🪻","🎪","🧸","🌟","💐","🩷","🏄","🐬","🌊","🎨","🧜","🫶","💕","🌙","🐾","🍬","🎶","🌻","🐱","💝","🎈","🪼","🦩","🫀","🧁","🍩","🎯"];
+  const discoColors = ["#e91e63","#c026d3","#2979ff","#00bfa5","#ff4081","#e040fb","#448aff","#1de9b6","#ff9100","#18ffff"];
+
+  // Stable emoji per workspace based on id hash
+  function discoEmojiFor(id: string): string {
+    let h = 0;
+    for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
+    return discoEmojis[Math.abs(h) % discoEmojis.length];
+  }
+  function discoColorFor(id: string): string {
+    let h = 0;
+    for (let i = 0; i < id.length; i++) h = (h * 37 + id.charCodeAt(i)) | 0;
+    return discoColors[Math.abs(h) % discoColors.length];
+  }
 
   export let workspace: Workspace;
   export let index: number;
@@ -101,7 +118,7 @@
         bind:this={nameEl}
         style="
           font-weight: {isActive ? '600' : '400'};
-          color: {isActive ? $theme.fg : $theme.fgMuted};
+          color: {isDisco ? discoColorFor(workspace.id) : isActive ? $theme.fg : $theme.fgMuted};
           font-size: 13px; overflow: hidden;
           text-overflow: ellipsis; white-space: nowrap;
           outline: none; padding: 2px 4px; margin-left: -4px; border-radius: 4px;
@@ -111,7 +128,7 @@
           if (e.key === "Enter") { e.preventDefault(); nameEl.blur(); }
           if (e.key === "Escape") { e.preventDefault(); nameEl.textContent = workspace.name; nameEl.blur(); }
         }}
-      >{workspace.name}</span>
+      >{#if isDisco}{discoEmojiFor(workspace.id)} {/if}{workspace.name}</span>
     </div>
 
     {#if metaParts.length > 0}

@@ -57,6 +57,13 @@ fn classify_osc(raw: &str) -> OscAction {
         return OscAction::Ignore;
     }
 
+    // A real notification should contain at least one letter. Payloads made
+    // entirely of digits, semicolons, colons, and hex chars (e.g. "4;0;",
+    // "rgb:ffff/ffff/ffff") are escape-sequence fragments, not user text.
+    if !text.chars().any(|c| c.is_ascii_alphabetic() && !"abcdefABCDEF".contains(c)) {
+        return OscAction::Ignore;
+    }
+
     OscAction::Notification(text.to_string())
 }
 
@@ -183,6 +190,14 @@ PROMPT_COMMAND="_gnarterm_report_cwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
     let _ = std::fs::write(&bash_integration, bash_content);
     cmd.env("GNARTERM_SHELL_INTEGRATION", &bash_integration);
 
+    // Pass through EDITOR/VISUAL so git commit, crontab, etc. open the right editor
+    if let Ok(editor) = std::env::var("EDITOR") {
+        cmd.env("EDITOR", &editor);
+    }
+    if let Ok(visual) = std::env::var("VISUAL") {
+        cmd.env("VISUAL", &visual);
+    }
+
     if let Some(ref dir) = cwd {
         cmd.cwd(dir);
     }
@@ -191,6 +206,11 @@ PROMPT_COMMAND="_gnarterm_report_cwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
         .spawn_command(cmd)
         .map_err(|e| format!("Failed to spawn shell: {e}"))?;
     let child_pid = child.process_id();
+
+    // Drop the slave fd in the parent — the child now owns it exclusively.
+    // Without this, interactive programs (vim, nano, etc.) spawned by the child
+    // shell cannot properly take control of the terminal.
+    drop(pair.slave);
 
     // Get writer for input
     let writer = pair
@@ -245,30 +265,55 @@ PROMPT_COMMAND="_gnarterm_report_cwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
                 Ok(n) => {
                     let data = &buf[..n];
 
-                    // Scan for OSC sequences (notifications)
+                    // Helper: classify and dispatch a completed OSC sequence
+                    let dispatch_osc = |buf: &[u8]| {
+                        if let Ok(s) = String::from_utf8(buf.to_vec()) {
+                            match classify_osc(&s) {
+                                OscAction::Notification(text) => {
+                                    let _ = app_handle.emit(
+                                        "pty-notification",
+                                        PtyNotification { pty_id: id, text },
+                                    );
+                                }
+                                OscAction::Title(title) => {
+                                    let _ = app_handle.emit(
+                                        "pty-title",
+                                        PtyTitle { pty_id: id, title },
+                                    );
+                                }
+                                OscAction::Ignore => {}
+                            }
+                        }
+                    };
+
+                    // Scan for OSC sequences (notifications/titles)
                     for &byte in data {
                         if in_osc {
                             if byte == 0x07 || byte == 0x9c {
-                                // End of OSC — classify and dispatch
-                                if let Ok(s) = String::from_utf8(osc_buf.clone()) {
-                                    match classify_osc(&s) {
-                                        OscAction::Notification(text) => {
-                                            let _ = app_handle.emit(
-                                                "pty-notification",
-                                                PtyNotification { pty_id: id, text },
-                                            );
-                                        }
-                                        OscAction::Title(title) => {
-                                            let _ = app_handle.emit(
-                                                "pty-title",
-                                                PtyTitle { pty_id: id, title },
-                                            );
-                                        }
-                                        OscAction::Ignore => {}
-                                    }
-                                }
+                                // BEL or single-byte ST — end of OSC
+                                dispatch_osc(&osc_buf);
                                 osc_buf.clear();
                                 in_osc = false;
+                                prev_esc = false;
+                            } else if byte == 0x1b {
+                                // Could be ESC \ (two-byte ST) — set flag
+                                prev_esc = true;
+                            } else if byte == 0x5c && prev_esc {
+                                // ESC \ — two-byte String Terminator, end of OSC
+                                dispatch_osc(&osc_buf);
+                                osc_buf.clear();
+                                in_osc = false;
+                                prev_esc = false;
+                            } else if prev_esc {
+                                // ESC followed by something other than \ or ] —
+                                // the OSC was malformed; abort and start fresh
+                                osc_buf.clear();
+                                in_osc = false;
+                                // Check if this ESC starts a new OSC
+                                if byte == 0x5d {
+                                    in_osc = true;
+                                }
+                                prev_esc = false;
                             } else {
                                 osc_buf.push(byte);
                             }
@@ -1004,6 +1049,7 @@ pub fn run() {
 
                 let theme_sep = PredefinedMenuItem::separator(handle)?;
                 let theme_molly = MenuItem::with_id(handle, "theme-molly", "Molly", true, None::<&str>)?;
+                let theme_molly_disco = MenuItem::with_id(handle, "theme-molly-disco", "Molly Disco", true, None::<&str>)?;
                 let theme_github_light = MenuItem::with_id(handle, "theme-github-light", "GitHub Light", true, None::<&str>)?;
                 let theme_solarized_light = MenuItem::with_id(handle, "theme-solarized-light", "Solarized Light", true, None::<&str>)?;
                 let theme_catppuccin_latte = MenuItem::with_id(handle, "theme-catppuccin-latte", "Catppuccin Latte", true, None::<&str>)?;
@@ -1013,7 +1059,7 @@ pub fn run() {
                     "Theme",
                     true,
                     &[&theme_github, &theme_tokyo, &theme_catppuccin, &theme_dracula, &theme_solarized, &theme_onedark,
-                      &theme_sep, &theme_molly, &theme_github_light, &theme_solarized_light, &theme_catppuccin_latte],
+                      &theme_sep, &theme_molly, &theme_molly_disco, &theme_github_light, &theme_solarized_light, &theme_catppuccin_latte],
                 )?;
 
                 let view_menu = Submenu::with_items(

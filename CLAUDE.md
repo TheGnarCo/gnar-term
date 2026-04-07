@@ -12,6 +12,10 @@ cargo check                 # quick Rust compilation check
 
 All tests must pass and `npm run build` must succeed before pushing any commit. Do not declare work complete without a green test suite.
 
+## Slack
+
+When posting in the `#pull-requests` Slack channel, prefix the message with the `:gnar-term:` emoji.
+
 ## Branching & PRs
 
 - All work on feature branches, never commit directly to main
@@ -45,6 +49,15 @@ The Claude GitHub App is installed on this repo. `@claude` mentions in PRs trigg
 
 Custom slash commands live in `.claude/commands/`:
 - `/create_new_release <version>` - tag and push a release
+
+## Cross-Platform
+
+gnar-term runs on macOS, Linux, and Windows. When making changes:
+
+- **Never fix Linux and break macOS (or vice versa).** Use platform detection (`isMac` from `terminal-service.ts`) to branch behavior, not platform-specific code that replaces the other platform's logic.
+- Keyboard shortcuts use Cmd on macOS, Ctrl on Linux/Windows. Both must work.
+- Test clipboard, keyboard shortcuts, and PTY behavior on all platforms when possible.
+- WebKitGTK (Linux webview) behaves differently from WKWebView (macOS) — watch for webview-level key interception differences.
 
 ## Testing Guidelines
 

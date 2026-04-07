@@ -210,6 +210,36 @@ const catppuccinLatte: ThemeDef = {
   },
 };
 
+const mollyDisco: ThemeDef = {
+  name: "Molly Disco",
+  // Lisa Frank-inspired: vibrant purples, hot pinks, teals, neon on light lavender
+  bg: "#faf5ff", bgSurface: "#f0e6ff", bgFloat: "#e8d5ff", bgHighlight: "#e0c8ff",
+  bgActive: "#edd8ff", border: "#d4b0f0", borderActive: "#c026d3", borderNotify: "#e040fb",
+  fg: "#2d1b4e", fgMuted: "#6b4d8a", fgDim: "#a88bc7",
+  accent: "#c026d3", accentHover: "#a020b0", notify: "#e040fb",
+  notifyGlow: "rgba(224, 64, 251, 0.25)", danger: "#e91e63", success: "#00bfa5", warning: "#ff9100",
+  termBg: "#faf5ff", termFg: "#2d1b4e", termCursor: "#c026d3", termSelection: "#e0c8ff",
+  sidebarBg: "#f3e8ff", sidebarBorder: "#d4b0f0", tabBarBg: "#f0e6ff", tabBarBorder: "#d4b0f0",
+  ansi: {
+    black: "#2d1b4e",       // deep purple
+    red: "#e91e63",         // hot pink
+    green: "#00bfa5",       // teal
+    yellow: "#ff9100",      // bright orange
+    blue: "#2979ff",        // electric blue
+    magenta: "#c026d3",     // fuchsia
+    cyan: "#00b8d4",        // bright cyan
+    white: "#f0e6ff",       // light purple
+    brightBlack: "#6b4d8a", // muted purple
+    brightRed: "#ff4081",   // neon pink
+    brightGreen: "#1de9b6", // neon teal
+    brightYellow: "#ffab40", // bright amber
+    brightBlue: "#448aff",  // bright blue
+    brightMagenta: "#e040fb", // electric purple
+    brightCyan: "#18ffff",  // neon cyan
+    brightWhite: "#faf5ff", // white lavender
+  },
+};
+
 // --- All themes ---
 export const themes: Record<string, ThemeDef> = {
   // Dark
@@ -221,6 +251,7 @@ export const themes: Record<string, ThemeDef> = {
   "one-dark": oneDark,
   // Light
   "molly": molly,
+  "molly-disco": mollyDisco,
   "github-light": githubLight,
   "solarized-light": solarizedLight,
   "catppuccin-latte": catppuccinLatte,

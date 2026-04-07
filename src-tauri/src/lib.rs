@@ -57,10 +57,8 @@ fn classify_osc(raw: &str) -> OscAction {
         return OscAction::Ignore;
     }
 
-    // A real notification should contain at least one letter. Payloads made
-    // entirely of digits, semicolons, colons, and hex chars (e.g. "4;0;",
-    // "rgb:ffff/ffff/ffff") are escape-sequence fragments, not user text.
-    if !text.chars().any(|c| c.is_ascii_alphabetic() && !"abcdefABCDEF".contains(c)) {
+    // Filter out color-query responses like "rgb:ffff/ffff/ffff" or "rgba:..."
+    if text.starts_with("rgb:") || text.starts_with("rgba:") {
         return OscAction::Ignore;
     }
 

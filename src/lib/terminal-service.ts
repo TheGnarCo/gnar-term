@@ -425,42 +425,59 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
       return false;
     }
 
-    // Platform-aware command key: Cmd on macOS, Ctrl on Linux/Windows
-    const cmdKey = isMac ? e.metaKey : e.ctrlKey;
-    if (!cmdKey) return true;
+    // On macOS, intercept Cmd (meta) shortcuts. On Linux, NEVER intercept
+    // Ctrl-only combos — vim, emacs, readline, and TUI apps need Ctrl+C (SIGINT),
+    // Ctrl+D (EOF), Ctrl+W (delete word), Ctrl+K (kill line), etc.
+    // Linux app shortcuts use Ctrl+Shift instead.
+    if (isMac) {
+      if (!e.metaKey) return true; // Only intercept Cmd shortcuts on macOS
 
-    const k = e.key.toLowerCase();
-    const shift = e.shiftKey;
-    const alt = e.altKey;
+      const k = e.key.toLowerCase();
+      const shift = e.shiftKey;
+      const alt = e.altKey;
 
-    // Cmd/Ctrl+C — copy selection
-    if (!alt && !shift && k === "c") {
-      const sel = terminal.getSelection();
-      if (sel) clipboardWrite(sel);
-      return false;
-    }
-    // Cmd/Ctrl+V — paste
-    if (!alt && !shift && k === "v") {
-      e.preventDefault();
-      clipboardRead().then(text => {
-        if (text && surface.ptyId >= 0) invoke("write_pty", { ptyId: surface.ptyId, data: text });
-      }).catch((err) => console.warn("Clipboard read failed:", err));
-      return false;
-    }
+      // Cmd+C — copy selection
+      if (!alt && !shift && k === "c") {
+        const sel = terminal.getSelection();
+        if (sel) clipboardWrite(sel);
+        return false;
+      }
+      // Cmd+V — paste
+      if (!alt && !shift && k === "v") {
+        e.preventDefault();
+        clipboardRead().then(text => {
+          if (text && surface.ptyId >= 0) invoke("write_pty", { ptyId: surface.ptyId, data: text });
+        }).catch((err) => console.warn("Clipboard read failed:", err));
+        return false;
+      }
 
-    // Cmd/Ctrl+key (no alt) — let App.svelte handle these
-    if (!alt && !shift) {
-      if (["n","t","d","w","b","p","k","f","g"].includes(k)) return false;
-      if (k >= "1" && k <= "9") return false;
+      // Cmd+key (no alt) — let App.svelte handle
+      if (!alt && !shift) {
+        if (["n","t","d","w","b","p","k","f","g"].includes(k)) return false;
+        if (k >= "1" && k <= "9") return false;
+      }
+      // Shift+Cmd+key
+      if (shift && !alt) {
+        if (["d","w","h","r","p","g","t"].includes(k)) return false;
+        if (k === "enter") return false;
+        if (k === "[" || k === "]") return false;
+      }
+      // Alt+Cmd+arrows for pane nav
+      if (alt && ["arrowleft","arrowright","arrowup","arrowdown"].includes(k)) return false;
+    } else {
+      // Linux/Windows: only intercept Ctrl+Shift combos for app shortcuts.
+      // Plain Ctrl+key passes through to PTY for TUI apps.
+      if (!e.ctrlKey || !e.shiftKey) return true;
+
+      const k = e.key.toLowerCase();
+      const alt = e.altKey;
+      // Ctrl+Shift+key — let App.svelte handle app shortcuts
+      if (!alt) {
+        if (["n","t","d","w","b","p","k","f","g","h","r"].includes(k)) return false;
+        if (k === "enter") return false;
+        if (k === "[" || k === "]") return false;
+      }
     }
-    // Shift+Cmd/Ctrl+key
-    if (shift && !alt) {
-      if (["d","w","h","r","p","g","t"].includes(k)) return false;
-      if (k === "enter") return false;
-      if (k === "[" || k === "]") return false;
-    }
-    // Alt+Cmd/Ctrl+arrows for pane nav
-    if (alt && ["arrowleft","arrowright","arrowup","arrowdown"].includes(k)) return false;
 
     return true;
   });

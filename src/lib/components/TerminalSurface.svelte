@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, tick } from "svelte";
+  import { onMount, onDestroy, tick } from "svelte";
   import { WebglAddon } from "@xterm/addon-webgl";
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
@@ -13,6 +13,7 @@
 
   let termEl: HTMLElement;
   let dragOver = false;
+  let unlistenDragDrop: (() => void) | undefined;
 
   /** Shell-escape a file path by wrapping in single quotes. */
   function shellEscape(path: string): string {
@@ -71,7 +72,7 @@
     }
 
     // Tauri native file drop (more reliable than HTML5 on Linux WebKitGTK)
-    const unlisten = await listen<{ paths: string[]; position: { x: number; y: number } }>("tauri://drag-drop", (event) => {
+    unlistenDragDrop = await listen<{ paths: string[]; position: { x: number; y: number } }>("tauri://drag-drop", (event) => {
       if (!visible || surface.ptyId < 0) return;
       const { paths } = event.payload;
       if (paths.length > 0) {
@@ -79,8 +80,10 @@
         invoke("write_pty", { ptyId: surface.ptyId, data: escaped });
       }
     });
+  });
 
-    return () => { unlisten(); };
+  onDestroy(() => {
+    unlistenDragDrop?.();
   });
 
   $: if (visible && surface.opened && termEl) {

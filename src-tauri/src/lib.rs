@@ -1,3 +1,4 @@
+use clap::Parser;
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 use serde::Serialize;
 use std::collections::HashMap;
@@ -5,6 +6,60 @@ use std::io::{Read, Write};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter};
+
+/// CLI arguments for GnarTerm.
+#[derive(Parser, Debug, Clone, Default, Serialize)]
+#[command(name = "gnar-term", version, about = "Terminal workspace manager")]
+pub struct CliArgs {
+    /// Directory to open in
+    #[arg(value_name = "PATH", conflicts_with = "working_directory")]
+    pub path: Option<String>,
+
+    /// Directory to open in (explicit flag)
+    #[arg(short = 'd', long = "working-directory")]
+    pub working_directory: Option<String>,
+
+    /// Command to execute in the terminal
+    #[arg(short = 'e', long = "command")]
+    pub command: Option<String>,
+
+    /// Window/workspace title
+    #[arg(long)]
+    pub title: Option<String>,
+
+    /// Load a named workspace from config
+    #[arg(short = 'w', long)]
+    pub workspace: Option<String>,
+
+    /// Path to config file
+    #[arg(short = 'c', long)]
+    pub config: Option<String>,
+}
+
+fn expand_path(path: &str) -> String {
+    let expanded = if path.starts_with("~/") {
+        let home = std::env::var("HOME").unwrap_or_default();
+        format!("{}/{}", home, &path[2..])
+    } else {
+        path.to_string()
+    };
+    std::fs::canonicalize(&expanded)
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or(expanded)
+}
+
+fn resolve_cli_paths(mut args: CliArgs) -> CliArgs {
+    if let Some(ref p) = args.path {
+        args.path = Some(expand_path(p));
+    }
+    if let Some(ref p) = args.working_directory {
+        args.working_directory = Some(expand_path(p));
+    }
+    if let Some(ref p) = args.config {
+        args.config = Some(expand_path(p));
+    }
+    args
+}
 
 static NEXT_PTY_ID: AtomicU32 = AtomicU32::new(1);
 static NEXT_WATCH_ID: AtomicU32 = AtomicU32::new(1);
@@ -120,6 +175,12 @@ struct PtyTitle {
 #[derive(Clone, Serialize)]
 struct PtyExit {
     pty_id: u32,
+}
+
+/// Return CLI arguments passed to the app.
+#[tauri::command]
+fn get_cli_args(args: tauri::State<'_, CliArgs>) -> CliArgs {
+    args.inner().clone()
 }
 
 /// Spawn a new PTY with a shell
@@ -944,16 +1005,34 @@ async fn find_file(name: String) -> Result<String, String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Parse CLI args. Filter out macOS Finder's -psn_ process serial number arg.
+    let filtered_args: Vec<String> = std::env::args()
+        .filter(|a| !a.starts_with("-psn_"))
+        .collect();
+    let cli_args = resolve_cli_paths(CliArgs::parse_from(filtered_args));
+
     tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
         .manage(AppState {
             ptys: Mutex::new(HashMap::new()),
             watch_flags: Mutex::new(HashMap::new()),
         })
+        .manage(cli_args)
         .invoke_handler(tauri::generate_handler![
-            spawn_pty, write_pty, resize_pty, kill_pty, pause_pty, resume_pty, detect_font, get_pty_cwd, get_pty_title, file_exists, list_dir, read_file, read_file_base64, write_file, ensure_dir, get_home, watch_file, unwatch_file, show_in_file_manager, open_with_default_app, find_file
+            get_cli_args, spawn_pty, write_pty, resize_pty, kill_pty, pause_pty, resume_pty, detect_font, get_pty_cwd, get_pty_title, file_exists, list_dir, read_file, read_file_base64, write_file, ensure_dir, get_home, watch_file, unwatch_file, show_in_file_manager, open_with_default_app, find_file
         ])
         .setup(|app| {
+            // Set window title from CLI --title flag
+            {
+                use tauri::Manager;
+                let cli = app.state::<CliArgs>();
+                if let Some(ref title) = cli.title {
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.set_title(title);
+                    }
+                }
+            }
+
             // Rebuild macOS menu manually so Cmd+Q, Cmd+C, Cmd+V work,
             // but Cmd+T/Cmd+W/Cmd+N are passed down to JS.
             #[cfg(target_os = "macos")]

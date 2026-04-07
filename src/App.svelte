@@ -553,7 +553,8 @@
     // Shared Cmd+Shift / Ctrl+Shift shortcuts (work on both platforms)
     if (cmd && shift && !alt) {
       const k = e.key.toLowerCase();
-      if (k === "t" || k === "n") { e.preventDefault(); handleNewSurfaceFromSidebar(); return; }
+      if (k === "t") { e.preventDefault(); handleNewSurfaceFromSidebar(); return; }
+      if (k === "n") { e.preventDefault(); createWorkspace(`Workspace ${$workspaces.length + 1}`); return; }
       if (k === "d") { e.preventDefault(); handleSplitFromSidebar("vertical"); return; }
       if (k === "w") { e.preventDefault(); closeWorkspace($activeWorkspaceIdx); return; }
       if (k === "h") { e.preventDefault(); flashFocusedPane(); return; }

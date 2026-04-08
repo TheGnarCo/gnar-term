@@ -1,8 +1,10 @@
 <script lang="ts">
-  import { onMount, tick } from "svelte";
+  import { onMount, onDestroy, tick } from "svelte";
   import { WebglAddon } from "@xterm/addon-webgl";
   import { invoke } from "@tauri-apps/api/core";
+  import { listen } from "@tauri-apps/api/event";
   import { connectPty } from "../terminal-service";
+  import { theme } from "../stores/theme";
   import type { TerminalSurface as TermSurface } from "../types";
 
   export let surface: TermSurface;
@@ -10,6 +12,31 @@
   export let cwd: string | undefined = undefined;
 
   let termEl: HTMLElement;
+  let dragOver = false;
+  let unlistenDragDrop: (() => void) | undefined;
+
+  /** Shell-escape a file path by wrapping in single quotes. */
+  function shellEscape(path: string): string {
+    return "'" + path.replace(/'/g, "'\\''") + "'";
+  }
+
+  function handleDragOver(e: DragEvent) {
+    e.preventDefault();
+    dragOver = true;
+  }
+
+  function handleDragLeave() {
+    dragOver = false;
+  }
+
+  function handleDrop(e: DragEvent) {
+    e.preventDefault();
+    dragOver = false;
+    const files = e.dataTransfer?.files;
+    if (!files || files.length === 0 || surface.ptyId < 0) return;
+    const paths = Array.from(files).map(f => shellEscape((f as any).path || f.name));
+    invoke("write_pty", { ptyId: surface.ptyId, data: paths.join(" ") });
+  }
 
   onMount(async () => {
     termEl.appendChild(surface.termElement);
@@ -43,6 +70,20 @@
       requestAnimationFrame(initWebGL);
       surface.opened = true;
     }
+
+    // Tauri native file drop (more reliable than HTML5 on Linux WebKitGTK)
+    unlistenDragDrop = await listen<{ paths: string[]; position: { x: number; y: number } }>("tauri://drag-drop", (event) => {
+      if (!visible || surface.ptyId < 0) return;
+      const { paths } = event.payload;
+      if (paths.length > 0) {
+        const escaped = paths.map(p => shellEscape(p)).join(" ");
+        invoke("write_pty", { ptyId: surface.ptyId, data: escaped });
+      }
+    });
+  });
+
+  onDestroy(() => {
+    unlistenDragDrop?.();
   });
 
   $: if (visible && surface.opened && termEl) {
@@ -55,7 +96,11 @@
   }
 </script>
 
+<!-- svelte-ignore a11y-no-static-element-interactions -->
 <div
   bind:this={termEl}
-  style="flex: 1; min-height: 0; min-width: 0; overflow: hidden; display: {visible ? 'flex' : 'none'}; flex-direction: column;"
+  on:dragover={handleDragOver}
+  on:dragleave={handleDragLeave}
+  on:drop={handleDrop}
+  style="flex: 1; min-height: 0; min-width: 0; overflow: hidden; display: {visible ? 'flex' : 'none'}; flex-direction: column; {dragOver ? `box-shadow: inset 0 0 0 2px ${$theme.accent}; border-radius: 4px;` : ''}"
 ></div>

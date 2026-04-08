@@ -6,7 +6,7 @@
   import { workspaces, activeWorkspaceIdx, activeWorkspace, activePane, activeSurface } from "./lib/stores/workspace";
   import { invoke } from "@tauri-apps/api/core";
   import { loadConfig, saveConfig, getConfig, getWorkspaceCommands, type WorkspaceDef, type LayoutNode } from "./lib/config";
-  import { setupListeners, createTerminalSurface, fontReady, startCwdPolling } from "./lib/terminal-service";
+  import { setupListeners, createTerminalSurface, fontReady, startCwdPolling, isMac, modLabel, shiftModLabel } from "./lib/terminal-service";
   import { uid, getAllPanes, getAllSurfaces, isTerminalSurface, findParentSplit, replaceNodeInTree, type Workspace, type Pane, type SplitNode, type Surface, type TerminalSurface as TermSurface } from "./lib/types";
   import { openPreview, canPreview, getSupportedExtensions, refreshPreviewStyles } from "./preview/index";
   import "./preview/init";
@@ -415,21 +415,21 @@
 
   // ---- Command palette commands ----
   $: paletteCommands = [
-    { name: "New Workspace", shortcut: "⌘N", action: () => createWorkspace(`Workspace ${$workspaces.length + 1}`) },
-    { name: "New Surface (Tab)", shortcut: "⌘T", action: () => handleNewSurfaceFromSidebar() },
-    { name: "Split Right", shortcut: "⌘D", action: () => handleSplitFromSidebar("horizontal") },
-    { name: "Split Down", shortcut: "⇧⌘D", action: () => handleSplitFromSidebar("vertical") },
-    { name: "Close Surface", shortcut: "⌘W", action: () => closeSurface() },
-    { name: "Close Workspace", shortcut: "⇧⌘W", action: () => closeWorkspace($activeWorkspaceIdx) },
-    { name: "Toggle Pane Zoom", shortcut: "⇧⌘Enter", action: () => togglePaneZoom() },
-    { name: "Next Surface", shortcut: "⌘⇧]", action: () => nextSurface() },
-    { name: "Previous Surface", shortcut: "⌘⇧[", action: () => prevSurface() },
-    { name: "Toggle Sidebar", shortcut: "⌘B", action: () => sidebarVisible.update(v => !v) },
-    { name: "Toggle Find Bar", shortcut: "⌘F", action: () => findBarVisible.update(v => !v) },
-    { name: "Clear Scrollback", shortcut: "⌘K", action: () => { const s = $activeSurface; if (s && isTerminalSurface(s)) s.terminal.clear(); } },
+    { name: "New Workspace", shortcut: `${shiftModLabel}N`, action: () => createWorkspace(`Workspace ${$workspaces.length + 1}`) },
+    { name: "New Surface (Tab)", shortcut: `${shiftModLabel}T`, action: () => handleNewSurfaceFromSidebar() },
+    { name: "Split Right", shortcut: isMac ? `${modLabel}D` : `${shiftModLabel}D`, action: () => handleSplitFromSidebar("horizontal") },
+    { name: "Split Down", shortcut: `${shiftModLabel}D`, action: () => handleSplitFromSidebar("vertical") },
+    { name: "Close Surface", shortcut: isMac ? `${modLabel}W` : `${shiftModLabel}W`, action: () => closeSurface() },
+    { name: "Close Workspace", shortcut: `${shiftModLabel}W`, action: () => closeWorkspace($activeWorkspaceIdx) },
+    { name: "Toggle Pane Zoom", shortcut: `${shiftModLabel}Enter`, action: () => togglePaneZoom() },
+    { name: "Next Surface", shortcut: `${shiftModLabel}]`, action: () => nextSurface() },
+    { name: "Previous Surface", shortcut: `${shiftModLabel}[`, action: () => prevSurface() },
+    { name: "Toggle Sidebar", shortcut: `${shiftModLabel}B`, action: () => sidebarVisible.update(v => !v) },
+    { name: "Toggle Find Bar", shortcut: `${shiftModLabel}F`, action: () => findBarVisible.update(v => !v) },
+    { name: "Clear Scrollback", shortcut: `${shiftModLabel}K`, action: () => { const s = $activeSurface; if (s && isTerminalSurface(s)) s.terminal.clear(); } },
     ...$workspaces.map((ws, i) => ({
       name: `Switch to: ${ws.name}`,
-      shortcut: i < 9 ? `⌘${i + 1}` : undefined,
+      shortcut: i < 9 ? `${modLabel}${i + 1}` : undefined,
       action: () => switchWorkspace(i),
     })),
     { name: "Save Current Workspace...", action: () => saveCurrentWorkspace() },
@@ -519,40 +519,67 @@
   }
 
   // ---- Keyboard shortcuts ----
+  // macOS: Cmd+key for non-shift, Cmd+Shift+key for shift variants
+  // Linux: Ctrl+Shift+key for ALL app shortcuts (plain Ctrl+key must pass to PTY)
   function handleKeydown(e: KeyboardEvent) {
-    const cmd = e.metaKey;
     const shift = e.shiftKey;
     const alt = e.altKey;
     const ctrl = e.ctrlKey;
 
-    if (cmd && !shift && !alt && e.key === "n") { e.preventDefault(); createWorkspace(`Workspace ${$workspaces.length + 1}`); return; }
-    if (cmd && !shift && !alt && e.key === "t") { e.preventDefault(); handleNewSurfaceFromSidebar(); return; }
-    if (cmd && !shift && !alt && e.key === "d") { e.preventDefault(); handleSplitFromSidebar("horizontal"); return; }
-    if (cmd && shift && !alt && e.key === "d") { e.preventDefault(); handleSplitFromSidebar("vertical"); return; }
-    // Cmd+W handled by native menu accelerator (menu-close-tab event) — works even when iframe has focus
-    if (cmd && shift && !alt && e.key === "w") { e.preventDefault(); closeWorkspace($activeWorkspaceIdx); return; }
-    if (cmd && !shift && !alt && !ctrl && e.key >= "1" && e.key <= "8") { e.preventDefault(); switchWorkspace(parseInt(e.key) - 1); return; }
-    if (cmd && !shift && !alt && !ctrl && e.key === "9") { e.preventDefault(); switchWorkspace($workspaces.length - 1); return; }
-    if (ctrl && !cmd && !shift && !alt && e.key >= "1" && e.key <= "8") { e.preventDefault(); selectSurface(parseInt(e.key)); return; }
-    if (ctrl && !cmd && !shift && !alt && e.key === "9") { e.preventDefault(); selectSurface(9); return; }
-    if (ctrl && cmd && e.key === "]") { e.preventDefault(); switchWorkspace(($activeWorkspaceIdx + 1) % $workspaces.length); return; }
-    if (ctrl && cmd && e.key === "[") { e.preventDefault(); switchWorkspace(($activeWorkspaceIdx - 1 + $workspaces.length) % $workspaces.length); return; }
-    if (cmd && shift && e.key === "]") { e.preventDefault(); nextSurface(); return; }
-    if (cmd && shift && e.key === "[") { e.preventDefault(); prevSurface(); return; }
-    if (ctrl && !cmd && !alt && e.key === "Tab") { e.preventDefault(); if (shift) prevSurface(); else nextSurface(); return; }
-    if (cmd && !shift && !alt && e.key === "b") { e.preventDefault(); sidebarVisible.update(v => !v); return; }
-    if (cmd && !shift && !alt && e.key === "k") { e.preventDefault(); const s = $activeSurface; if (s && isTerminalSurface(s)) s.terminal.clear(); return; }
-    if (alt && cmd && e.key === "ArrowLeft") { e.preventDefault(); focusDirection("left"); return; }
-    if (alt && cmd && e.key === "ArrowRight") { e.preventDefault(); focusDirection("right"); return; }
-    if (alt && cmd && e.key === "ArrowUp") { e.preventDefault(); focusDirection("up"); return; }
-    if (alt && cmd && e.key === "ArrowDown") { e.preventDefault(); focusDirection("down"); return; }
-    if (cmd && shift && e.key === "Enter") { e.preventDefault(); togglePaneZoom(); return; }
-    if (cmd && shift && e.key === "h") { e.preventDefault(); flashFocusedPane(); return; }
-    if (cmd && shift && e.key === "r") { e.preventDefault(); sidebarComponent?.startRename($activeWorkspaceIdx); return; }
-    if (cmd && !shift && !alt && e.key === "p") { e.preventDefault(); commandPaletteOpen.update(v => !v); return; }
-    if (cmd && !shift && !alt && e.key === "f") { e.preventDefault(); findBarVisible.update(v => !v); return; }
-    if (cmd && !shift && !alt && e.key === "g") { e.preventDefault(); findBarVisible.set(true); findBarComponent?.findNext(); return; }
-    if (cmd && shift && !alt && e.key === "g") { e.preventDefault(); findBarVisible.set(true); findBarComponent?.findPrev(); return; }
+    // Platform-aware "command" modifier:
+    // macOS: Cmd (metaKey)
+    // Linux: Ctrl+Shift (ctrlKey && shiftKey) for app shortcuts
+    const cmd = isMac ? e.metaKey : (ctrl && shift);
+
+    // macOS-only: Cmd+key (no shift) shortcuts
+    if (isMac && e.metaKey && !shift && !alt) {
+      if (e.key === "n") { e.preventDefault(); createWorkspace(`Workspace ${$workspaces.length + 1}`); return; }
+      if (e.key === "t") { e.preventDefault(); handleNewSurfaceFromSidebar(); return; }
+      if (e.key === "d") { e.preventDefault(); handleSplitFromSidebar("horizontal"); return; }
+      if (e.key === "w") { e.preventDefault(); closeSurface(); return; }
+      if (e.key >= "1" && e.key <= "8") { e.preventDefault(); switchWorkspace(parseInt(e.key) - 1); return; }
+      if (e.key === "9") { e.preventDefault(); switchWorkspace($workspaces.length - 1); return; }
+      if (e.key === "b") { e.preventDefault(); sidebarVisible.update(v => !v); return; }
+      if (e.key === "k") { e.preventDefault(); const s = $activeSurface; if (s && isTerminalSurface(s)) s.terminal.clear(); return; }
+      if (e.key === "p") { e.preventDefault(); commandPaletteOpen.update(v => !v); return; }
+      if (e.key === "f") { e.preventDefault(); findBarVisible.update(v => !v); return; }
+      if (e.key === "g") { e.preventDefault(); findBarVisible.set(true); findBarComponent?.findNext(); return; }
+    }
+
+    // macOS: Ctrl+number selects surfaces (tabs within pane)
+    if (isMac && ctrl && !e.metaKey && !shift && !alt && e.key >= "1" && e.key <= "8") { e.preventDefault(); selectSurface(parseInt(e.key)); return; }
+    if (isMac && ctrl && !e.metaKey && !shift && !alt && e.key === "9") { e.preventDefault(); selectSurface(9); return; }
+
+    // Shared Cmd+Shift / Ctrl+Shift shortcuts (work on both platforms)
+    if (cmd && shift && !alt) {
+      const k = e.key.toLowerCase();
+      if (k === "t") { e.preventDefault(); handleNewSurfaceFromSidebar(); return; }
+      if (k === "n") { e.preventDefault(); createWorkspace(`Workspace ${$workspaces.length + 1}`); return; }
+      if (k === "d") { e.preventDefault(); handleSplitFromSidebar("vertical"); return; }
+      if (k === "w") { e.preventDefault(); closeWorkspace($activeWorkspaceIdx); return; }
+      if (k === "h") { e.preventDefault(); flashFocusedPane(); return; }
+      if (k === "r") { e.preventDefault(); sidebarComponent?.startRename($activeWorkspaceIdx); return; }
+      if (k === "g") { e.preventDefault(); findBarVisible.set(true); findBarComponent?.findPrev(); return; }
+      if (k === "b") { e.preventDefault(); sidebarVisible.update(v => !v); return; }
+      if (k === "p") { e.preventDefault(); commandPaletteOpen.update(v => !v); return; }
+      if (k === "k") { e.preventDefault(); const s = $activeSurface; if (s && isTerminalSurface(s)) s.terminal.clear(); return; }
+      if (k === "f") { e.preventDefault(); findBarVisible.update(v => !v); return; }
+      if (e.key === "Enter") { e.preventDefault(); togglePaneZoom(); return; }
+      if (e.key === "]") { e.preventDefault(); nextSurface(); return; }
+      if (e.key === "[") { e.preventDefault(); prevSurface(); return; }
+    }
+
+    // Ctrl+Tab / Ctrl+Shift+Tab for tab switching (both platforms)
+    if (ctrl && !alt && e.key === "Tab") { e.preventDefault(); if (shift) prevSurface(); else nextSurface(); return; }
+
+    // Alt+Cmd/Ctrl+arrows for pane navigation
+    if (alt && (isMac ? e.metaKey : ctrl) && !shift) {
+      if (e.key === "ArrowLeft") { e.preventDefault(); focusDirection("left"); return; }
+      if (e.key === "ArrowRight") { e.preventDefault(); focusDirection("right"); return; }
+      if (e.key === "ArrowUp") { e.preventDefault(); focusDirection("up"); return; }
+      if (e.key === "ArrowDown") { e.preventDefault(); focusDirection("down"); return; }
+    }
+
     if (e.key === "Escape" && $findBarVisible) { e.preventDefault(); findBarVisible.set(false); return; }
   }
 

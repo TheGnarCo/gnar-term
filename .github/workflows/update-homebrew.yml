@@ -105,6 +105,7 @@ jobs:
             homepage \"https://github.com/TheGnarCo/gnar-term\"
 
             app \"GnarTerm.app\"
+            binary \"#{appdir}/GnarTerm.app/Contents/MacOS/gnar-term\"
 
             zap trash: [
               \"~/Library/Caches/com.thegnar.gnar-term\",

@@ -564,13 +564,16 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
 }
 
 /** Spawn the PTY for a surface. Called after terminal.open() + fit() so the PTY
- *  gets the real terminal dimensions instead of hardcoded 80x24. */
+ *  gets the real terminal dimensions instead of hardcoded 80x24.
+ *  Uses surface.cwd as the working directory. The optional cwd parameter is
+ *  accepted for backwards compatibility but surface.cwd takes priority. */
 export async function connectPty(surface: TerminalSurface, cwd?: string): Promise<void> {
   if (surface.ptyId >= 0) return; // already connected
   const cols = surface.terminal.cols;
   const rows = surface.terminal.rows;
+  const effectiveCwd = surface.cwd || cwd || null;
   try {
-    surface.ptyId = await invoke<number>("spawn_pty", { cols, rows, cwd: cwd || null });
+    surface.ptyId = await invoke<number>("spawn_pty", { cols, rows, cwd: effectiveCwd });
   } catch (err) {
     console.error("Failed to spawn PTY:", err);
     surface.ptyId = -1;

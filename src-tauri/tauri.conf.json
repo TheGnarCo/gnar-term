@@ -5,7 +5,7 @@
   "identifier": "com.thegnar.gnar-term",
   "build": {
     "frontendDist": "../dist",
-    "devUrl": "http://localhost:1420",
+    "devUrl": "http://127.0.0.1:1420",
     "beforeDevCommand": "npm run vite",
     "beforeBuildCommand": "npm run vite:build"
   },

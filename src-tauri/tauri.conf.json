@@ -5,7 +5,7 @@
   "identifier": "com.thegnar.gnar-term",
   "build": {
     "frontendDist": "../dist",
-    "devUrl": "http://localhost:1420",
+    "devUrl": "http://127.0.0.1:1420",
     "beforeDevCommand": "npm run vite",
     "beforeBuildCommand": "npm run vite:build"
   },
@@ -43,6 +43,11 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "windows": {
+      "nsis": {
+        "installerHooks": "./windows/hooks.nsh"
+      }
+    },
     "macOS": {
       "signingIdentity": null,
       "entitlements": "entitlements.plist"

@@ -556,30 +556,76 @@
     if (e.key === "Escape" && $findBarVisible) { e.preventDefault(); findBarVisible.set(false); return; }
   }
 
+  // ---- CLI args type (matches Rust CliArgs struct) ----
+  interface CliArgs {
+    path: string | null;
+    working_directory: string | null;
+    command: string | null;
+    title: string | null;
+    workspace: string | null;
+    config: string | null;
+  }
+
   // ---- Initialization ----
   onMount(async () => {
     await fontReady;
     setupListeners();
     startCwdPolling();
 
-    const config = await loadConfig();
+    // Fetch CLI arguments from Rust backend
+    const cliArgs = await invoke<CliArgs>("get_cli_args");
+
+    const config = await loadConfig(cliArgs.config || undefined);
     if (config.theme) {
       theme.set(config.theme);
     }
 
-    // Autoload workspaces from config, or create a default one
-    let autoloaded = false;
-    if (config.autoload && config.autoload.length > 0 && config.commands) {
-      for (const name of config.autoload) {
-        const cmd = config.commands.find(c => c.name === name && c.workspace);
-        if (cmd?.workspace) {
-          await createWorkspaceFromDef(cmd.workspace);
-          autoloaded = true;
+    // CLI args take priority over config autoload
+    const cliCwd = cliArgs.path || cliArgs.working_directory;
+
+    if (cliArgs.workspace) {
+      // --workspace flag: load a named workspace from config
+      const cmd = config.commands?.find(
+        c => c.name === cliArgs.workspace && c.workspace
+      );
+      if (cmd?.workspace) {
+        await createWorkspaceFromDef(cmd.workspace);
+      } else {
+        console.warn(`[cli] Workspace "${cliArgs.workspace}" not found in config`);
+        await createWorkspace(cliArgs.title || "Workspace 1");
+      }
+    } else if (cliCwd || cliArgs.command) {
+      // CLI provided a cwd and/or command
+      const wsName = cliArgs.title || cliCwd?.split("/").pop() || "Workspace 1";
+      const def: WorkspaceDef = {
+        name: wsName,
+        cwd: cliCwd || undefined,
+        layout: {
+          pane: {
+            surfaces: [{
+              type: "terminal",
+              cwd: cliCwd || undefined,
+              command: cliArgs.command || undefined,
+            }]
+          }
+        }
+      };
+      await createWorkspaceFromDef(def);
+    } else {
+      // No CLI args — fall back to config autoload or default
+      let autoloaded = false;
+      if (config.autoload && config.autoload.length > 0 && config.commands) {
+        for (const name of config.autoload) {
+          const cmd = config.commands.find(c => c.name === name && c.workspace);
+          if (cmd?.workspace) {
+            await createWorkspaceFromDef(cmd.workspace);
+            autoloaded = true;
+          }
         }
       }
-    }
-    if (!autoloaded) {
-      await createWorkspace("Workspace 1");
+      if (!autoloaded) {
+        await createWorkspace("Workspace 1");
+      }
     }
 
     // Listen for menu events

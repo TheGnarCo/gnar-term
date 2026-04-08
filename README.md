@@ -192,6 +192,37 @@ Right-click in the terminal for contextual actions. File-specific actions appear
 - **Modular preview system** — add new file type previewers by dropping a plugin in `src/preview/`
 - **Cross-platform** — macOS, Linux, and Windows via Tauri v2
 
+## CLI Usage
+
+```bash
+gnar-term [PATH]                     # open with working directory
+gnar-term -e <COMMAND>               # run a command in the terminal
+gnar-term -d <DIR>                   # explicit working directory flag
+gnar-term --title <TITLE>            # set window/workspace title
+gnar-term -w <NAME>                  # load a named workspace from config
+gnar-term -c <FILE>                  # use a specific config file
+gnar-term --help                     # show all options
+gnar-term --version                  # print version
+```
+
+**Examples:**
+
+```bash
+# Open in a project directory (workspace named after the folder)
+gnar-term ~/projects/myapp
+
+# Open and run a dev server
+gnar-term ~/projects/myapp -e "npm run dev"
+
+# Load a saved workspace layout
+gnar-term -w Dev
+
+# Custom window title
+gnar-term --title "API Server" ~/projects/api
+```
+
+When launched without arguments, gnar-term loads workspaces from config (if `autoload` is set) or opens a default workspace.
+
 ## Install
 
 ### Homebrew (macOS)

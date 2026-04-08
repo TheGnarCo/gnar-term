@@ -75,7 +75,19 @@ const CONFIG_FILENAMES = [
 let _config: GnarTermConfig = {};
 let _configPath = "";
 
-export async function loadConfig(): Promise<GnarTermConfig> {
+export async function loadConfig(explicitPath?: string): Promise<GnarTermConfig> {
+  // If an explicit config path was provided (e.g. via --config), try it first
+  if (explicitPath) {
+    try {
+      const content = await invoke<string>("read_file", { path: explicitPath });
+      _config = JSON.parse(content);
+      _configPath = explicitPath;
+      return _config;
+    } catch (e) {
+      console.warn(`[config] Failed to load ${explicitPath}:`, e);
+    }
+  }
+
   const home = await getHome();
 
   // Try per-project config first (higher priority), then global

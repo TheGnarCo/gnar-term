@@ -56,6 +56,105 @@ describe("connectPty uses real terminal dimensions", () => {
     expect(surface.ptyId).toBe(1);
   });
 
+  it("passes cwd from surface.cwd to spawn_pty", async () => {
+    const spawnCalls: { cols: number; rows: number; cwd: string | null }[] = [];
+
+    mockIPC((cmd, args) => {
+      if (cmd === "spawn_pty") {
+        spawnCalls.push({ cols: (args as any).cols, rows: (args as any).rows, cwd: (args as any).cwd });
+        return 3;
+      }
+      return undefined;
+    });
+
+    const { connectPty } = await import("../lib/terminal-service");
+
+    const surface = {
+      ptyId: -1,
+      terminal: { cols: 80, rows: 24 },
+      cwd: "/Users/test/Documents",
+    } as any;
+
+    await connectPty(surface);
+
+    expect(spawnCalls).toHaveLength(1);
+    expect(spawnCalls[0].cwd).toBe("/Users/test/Documents");
+    expect(surface.ptyId).toBe(3);
+  });
+
+  it("passes cwd parameter to spawn_pty when surface.cwd is unset", async () => {
+    const spawnCalls: { cwd: string | null }[] = [];
+
+    mockIPC((cmd, args) => {
+      if (cmd === "spawn_pty") {
+        spawnCalls.push({ cwd: (args as any).cwd });
+        return 4;
+      }
+      return undefined;
+    });
+
+    const { connectPty } = await import("../lib/terminal-service");
+
+    const surface = {
+      ptyId: -1,
+      terminal: { cols: 80, rows: 24 },
+    } as any;
+
+    await connectPty(surface, "/tmp/fallback");
+
+    expect(spawnCalls).toHaveLength(1);
+    expect(spawnCalls[0].cwd).toBe("/tmp/fallback");
+  });
+
+  it("surface.cwd takes priority over cwd parameter", async () => {
+    const spawnCalls: { cwd: string | null }[] = [];
+
+    mockIPC((cmd, args) => {
+      if (cmd === "spawn_pty") {
+        spawnCalls.push({ cwd: (args as any).cwd });
+        return 5;
+      }
+      return undefined;
+    });
+
+    const { connectPty } = await import("../lib/terminal-service");
+
+    const surface = {
+      ptyId: -1,
+      terminal: { cols: 80, rows: 24 },
+      cwd: "/Users/test/Documents",
+    } as any;
+
+    await connectPty(surface, "/tmp/ignored");
+
+    expect(spawnCalls).toHaveLength(1);
+    expect(spawnCalls[0].cwd).toBe("/Users/test/Documents");
+  });
+
+  it("sends null cwd when neither surface.cwd nor parameter is set", async () => {
+    const spawnCalls: { cwd: string | null }[] = [];
+
+    mockIPC((cmd, args) => {
+      if (cmd === "spawn_pty") {
+        spawnCalls.push({ cwd: (args as any).cwd });
+        return 6;
+      }
+      return undefined;
+    });
+
+    const { connectPty } = await import("../lib/terminal-service");
+
+    const surface = {
+      ptyId: -1,
+      terminal: { cols: 80, rows: 24 },
+    } as any;
+
+    await connectPty(surface);
+
+    expect(spawnCalls).toHaveLength(1);
+    expect(spawnCalls[0].cwd).toBeNull();
+  });
+
   it("does not spawn if already connected", async () => {
     const spawnCalls: any[] = [];
 

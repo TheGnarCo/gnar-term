@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
-use std::process::Command;
+use tokio::process::Command;
 
 /// Run a git command and return stdout, or an error string.
 /// If `cwd` is `Some`, the command runs in that directory; otherwise it inherits
 /// the process working directory (needed for commands like `git clone` that create
 /// the target directory).
-fn run_git(args: &[&str], cwd: Option<&str>) -> Result<String, String> {
+async fn run_git(args: &[&str], cwd: Option<&str>) -> Result<String, String> {
     let mut cmd = Command::new("git");
     cmd.args(args);
     if let Some(dir) = cwd {
@@ -13,6 +13,7 @@ fn run_git(args: &[&str], cwd: Option<&str>) -> Result<String, String> {
     }
     let output = cmd
         .output()
+        .await
         .map_err(|e| format!("Failed to run git: {}", e))?;
 
     if output.status.success() {
@@ -28,7 +29,7 @@ fn run_git(args: &[&str], cwd: Option<&str>) -> Result<String, String> {
 /// Clone a git repository
 #[tauri::command]
 pub async fn git_clone(url: String, target_dir: String) -> Result<(), String> {
-    run_git(&["clone", &url, &target_dir], None)?;
+    run_git(&["clone", &url, &target_dir], None).await?;
     Ok(())
 }
 
@@ -131,6 +132,7 @@ pub async fn create_worktree(repo_path: String, branch: String, base: String, wo
 
     // Check if the branch already exists locally
     let branch_exists = run_git(&["branch", "--list", &branch], Some(&repo_path))
+        .await
         .map(|out| !out.trim().is_empty())
         .unwrap_or(false);
 
@@ -138,12 +140,12 @@ pub async fn create_worktree(repo_path: String, branch: String, base: String, wo
         run_git(
             &["worktree", "add", worktree_str, &branch],
             Some(&repo_path),
-        )?;
+        ).await?;
     } else {
         run_git(
             &["worktree", "add", "-b", &branch, worktree_str, &base],
             Some(&repo_path),
-        )?;
+        ).await?;
     }
 
     Ok(worktree_str.to_string())
@@ -155,21 +157,21 @@ pub async fn git_checkout(repo_path: String, branch: String) -> Result<(), Strin
     if branch.starts_with('-') {
         return Err("Invalid branch name".into());
     }
-    run_git(&["checkout", &branch], Some(&repo_path))?;
+    run_git(&["checkout", &branch], Some(&repo_path)).await?;
     Ok(())
 }
 
 /// Remove a git worktree
 #[tauri::command]
 pub async fn remove_worktree(repo_path: String, worktree_path: String) -> Result<(), String> {
-    run_git(&["worktree", "remove", &worktree_path, "--force"], Some(&repo_path))?;
+    run_git(&["worktree", "remove", &worktree_path, "--force"], Some(&repo_path)).await?;
     Ok(())
 }
 
 /// List all worktrees for a repository
 #[tauri::command]
 pub async fn list_worktrees(repo_path: String) -> Result<Vec<WorktreeInfo>, String> {
-    let output = run_git(&["worktree", "list", "--porcelain"], Some(&repo_path))?;
+    let output = run_git(&["worktree", "list", "--porcelain"], Some(&repo_path)).await?;
     Ok(parse_worktree_list(&output))
 }
 
@@ -218,7 +220,7 @@ pub fn parse_branch_list(output: &str) -> Vec<BranchInfo> {
 /// Fetch all remotes
 #[tauri::command]
 pub async fn git_fetch_all(repo_path: String) -> Result<(), String> {
-    run_git(&["fetch", "--all"], Some(&repo_path))?;
+    run_git(&["fetch", "--all"], Some(&repo_path)).await?;
     Ok(())
 }
 
@@ -232,7 +234,7 @@ pub async fn list_branches(repo_path: String, include_remote: bool) -> Result<Ve
     if include_remote {
         args.push("-a");
     }
-    let output = run_git(&args, Some(&repo_path))?;
+    let output = run_git(&args, Some(&repo_path)).await?;
     Ok(parse_branch_list(&output))
 }
 
@@ -242,7 +244,7 @@ pub async fn push_branch(repo_path: String, branch: String) -> Result<(), String
     if branch.starts_with('-') {
         return Err("Invalid branch name".into());
     }
-    run_git(&["push", "origin", &branch], Some(&repo_path))?;
+    run_git(&["push", "origin", &branch], Some(&repo_path)).await?;
     Ok(())
 }
 
@@ -253,9 +255,9 @@ pub async fn delete_branch(repo_path: String, branch: String, remote: bool) -> R
         return Err("Invalid branch name".into());
     }
     if remote {
-        run_git(&["push", "origin", "--delete", &branch], Some(&repo_path))?;
+        run_git(&["push", "origin", "--delete", &branch], Some(&repo_path)).await?;
     } else {
-        run_git(&["branch", "-D", &branch], Some(&repo_path))?;
+        run_git(&["branch", "-D", &branch], Some(&repo_path)).await?;
     }
     Ok(())
 }
@@ -320,7 +322,7 @@ pub fn parse_git_log(output: &str) -> Vec<CommitInfo> {
 /// Get working tree status (staged + unstaged changes)
 #[tauri::command]
 pub async fn git_status(worktree_path: String) -> Result<Vec<FileStatus>, String> {
-    let output = run_git(&["status", "--porcelain=v1"], Some(&worktree_path))?;
+    let output = run_git(&["status", "--porcelain=v1"], Some(&worktree_path)).await?;
     Ok(parse_git_status(&output))
 }
 
@@ -332,7 +334,7 @@ pub async fn git_diff(worktree_path: String, path: Option<String>) -> Result<Str
         args.push("--");
         args.push(p);
     }
-    run_git(&args, Some(&worktree_path))
+    run_git(&args, Some(&worktree_path)).await
 }
 
 /// Get commit log (all commits, or only those ahead of a base branch)
@@ -349,14 +351,14 @@ pub async fn git_log(worktree_path: String, base_branch: Option<String>) -> Resu
     } else {
         vec!["log", format_str, "-50"]
     };
-    let output = run_git(&args, Some(&worktree_path))?;
+    let output = run_git(&args, Some(&worktree_path)).await?;
     Ok(parse_git_log(&output))
 }
 
 /// List tracked files in a worktree (git ls-files)
 #[tauri::command]
 pub async fn git_ls_files(worktree_path: String) -> Result<Vec<String>, String> {
-    let output = run_git(&["ls-files"], Some(&worktree_path))?;
+    let output = run_git(&["ls-files"], Some(&worktree_path)).await?;
     Ok(output.lines().filter(|l| !l.is_empty()).map(String::from).collect())
 }
 
@@ -414,6 +416,7 @@ pub async fn gh_list_issues(repo_path: String, state: Option<String>) -> Result<
         ])
         .current_dir(&repo_path)
         .output()
+        .await
         .map_err(|e| format!("Failed to run gh: {}", e))?;
 
     if !output.status.success() {
@@ -484,6 +487,7 @@ pub async fn gh_list_prs(repo_path: String, state: Option<String>) -> Result<Vec
         ])
         .current_dir(&repo_path)
         .output()
+        .await
         .map_err(|e| format!("Failed to run gh: {}", e))?;
 
     if !output.status.success() {
@@ -515,12 +519,12 @@ pub async fn gh_list_prs(repo_path: String, state: Option<String>) -> Result<Vec
 #[tauri::command]
 pub async fn git_add(worktree_path: String, paths: Vec<String>) -> Result<(), String> {
     if paths.is_empty() {
-        run_git(&["add", "-A"], Some(&worktree_path))?;
+        run_git(&["add", "-A"], Some(&worktree_path)).await?;
     } else {
         let mut args = vec!["add", "--"];
         let path_refs: Vec<&str> = paths.iter().map(|s| s.as_str()).collect();
         args.extend(path_refs);
-        run_git(&args, Some(&worktree_path))?;
+        run_git(&args, Some(&worktree_path)).await?;
     }
     Ok(())
 }
@@ -532,31 +536,31 @@ pub async fn git_commit(worktree_path: String, message: String) -> Result<String
     if trimmed.is_empty() {
         return Err("Commit message cannot be empty".to_string());
     }
-    run_git(&["commit", "-m", trimmed], Some(&worktree_path))?;
-    let hash = run_git(&["rev-parse", "--short", "HEAD"], Some(&worktree_path))?;
+    run_git(&["commit", "-m", trimmed], Some(&worktree_path)).await?;
+    let hash = run_git(&["rev-parse", "--short", "HEAD"], Some(&worktree_path)).await?;
     Ok(hash.trim().to_string())
 }
 
 /// Push the current branch to origin with upstream tracking.
 #[tauri::command]
 pub async fn git_push(worktree_path: String) -> Result<String, String> {
-    let branch = run_git(&["rev-parse", "--abbrev-ref", "HEAD"], Some(&worktree_path))?;
+    let branch = run_git(&["rev-parse", "--abbrev-ref", "HEAD"], Some(&worktree_path)).await?;
     let branch = branch.trim();
-    run_git(&["push", "-u", "origin", branch], Some(&worktree_path))?;
+    run_git(&["push", "-u", "origin", branch], Some(&worktree_path)).await?;
     Ok(branch.to_string())
 }
 
 /// Get the current branch name.
 #[tauri::command]
 pub async fn git_branch_name(worktree_path: String) -> Result<String, String> {
-    let name = run_git(&["rev-parse", "--abbrev-ref", "HEAD"], Some(&worktree_path))?;
+    let name = run_git(&["rev-parse", "--abbrev-ref", "HEAD"], Some(&worktree_path)).await?;
     Ok(name.trim().to_string())
 }
 
 /// Get the staged diff (`git diff --cached`).
 #[tauri::command]
 pub async fn git_diff_staged(worktree_path: String) -> Result<String, String> {
-    run_git(&["diff", "--cached"], Some(&worktree_path))
+    run_git(&["diff", "--cached"], Some(&worktree_path)).await
 }
 
 /// Create a GitHub pull request via the `gh` CLI. Returns the PR URL.
@@ -592,6 +596,7 @@ pub async fn gh_create_pr(
         .args(&args)
         .current_dir(&repo_path)
         .output()
+        .await
         .map_err(|e| format!("Failed to run gh: {}", e))?;
 
     if !output.status.success() {
@@ -621,6 +626,7 @@ pub async fn run_script(cwd: String, command: String) -> Result<String, String> 
         .args(["-c", &command])
         .current_dir(&cwd)
         .output()
+        .await
         .map_err(|e| format!("Failed to run script: {}", e))?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();

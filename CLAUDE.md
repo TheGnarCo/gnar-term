@@ -1,13 +1,14 @@
 # GnarTerm
 
-Tauri v2 terminal workspace manager. Rust backend (portable-pty), Svelte frontend (xterm.js).
+Terminal-first developer cockpit. Tauri v2 app with a Rust backend (portable-pty) and Svelte 5 frontend (xterm.js). Combines terminal workspaces, git worktree management, and AI agent orchestration.
 
 ## Build & Test
 
 ```bash
-npm test                    # vitest unit tests (246 tests)
+npm test                    # vitest unit tests (448 tests)
 npm run build               # full tauri build (frontend + Rust)
-cargo check                 # quick Rust compilation check
+cargo check                 # quick Rust compilation check (from src-tauri/)
+cargo test                  # Rust unit tests (66 tests, from src-tauri/)
 ```
 
 All tests must pass and `npm run build` must succeed before pushing any commit. Do not declare work complete without a green test suite.
@@ -48,6 +49,7 @@ The Claude GitHub App is installed on this repo. `@claude` mentions in PRs trigg
 ## Commands
 
 Custom slash commands live in `.claude/commands/`:
+
 - `/create_new_release <version>` - tag and push a release
 
 ## Cross-Platform

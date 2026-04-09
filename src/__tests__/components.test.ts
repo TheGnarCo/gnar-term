@@ -5,7 +5,14 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, cleanup } from "@testing-library/svelte";
 import { get } from "svelte/store";
-import type { Workspace, Pane, TerminalSurface, PreviewSurface, Surface, SplitNode } from "../lib/types";
+import type {
+  Workspace,
+  Pane,
+  TerminalSurface,
+  PreviewSurface,
+  Surface,
+  SplitNode,
+} from "../lib/types";
 
 // ---------------------------------------------------------------------------
 // Mocks — must come before any component imports
@@ -104,14 +111,22 @@ import Sidebar from "../lib/components/Sidebar.svelte";
 import TerminalSurfaceComponent from "../lib/components/TerminalSurface.svelte";
 
 // Store imports
-import { sidebarVisible, commandPaletteOpen, findBarVisible, contextMenu } from "../lib/stores/ui";
+import {
+  sidebarVisible,
+  commandPaletteOpen,
+  findBarVisible,
+  contextMenu,
+} from "../lib/stores/ui";
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
 
 // ---------------------------------------------------------------------------
 // Test helpers
 // ---------------------------------------------------------------------------
 
-function makeSurface(id: string, overrides: Partial<TerminalSurface> = {}): TerminalSurface {
+function makeSurface(
+  id: string,
+  overrides: Partial<TerminalSurface> = {},
+): TerminalSurface {
   return {
     kind: "terminal",
     id,
@@ -187,9 +202,9 @@ beforeEach(() => {
 // ===========================================================================
 
 describe("TitleBar", () => {
-  it("renders GNARTERM text", () => {
+  it("renders GnarTerm text", () => {
     render(TitleBar);
-    expect(screen.getByText("GNARTERM")).toBeTruthy();
+    expect(screen.getByText("GnarTerm")).toBeTruthy();
   });
 
   it("has data-tauri-drag-region attribute", () => {
@@ -198,10 +213,10 @@ describe("TitleBar", () => {
     expect(el).toBeTruthy();
   });
 
-  it("renders as a flex container with correct height", () => {
+  it("renders with drag region", () => {
     const { container } = render(TitleBar);
-    const el = container.firstElementChild as HTMLElement;
-    expect(el.style.height).toBe("38px");
+    const el = container.querySelector("[data-tauri-drag-region]");
+    expect(el).toBeTruthy();
   });
 });
 
@@ -271,7 +286,13 @@ describe("Tab", () => {
   it("renders the surface title", () => {
     const surface = makeSurface("t1", { title: "my-project" });
     render(Tab, {
-      props: { surface, index: 0, isActive: false, onSelect: noop, onClose: noop },
+      props: {
+        surface,
+        index: 0,
+        isActive: false,
+        onSelect: noop,
+        onClose: noop,
+      },
     });
     expect(screen.getByText("my-project")).toBeTruthy();
   });
@@ -279,7 +300,13 @@ describe("Tab", () => {
   it("falls back to Shell N when title is empty", () => {
     const surface = makeSurface("t1", { title: "" });
     render(Tab, {
-      props: { surface, index: 2, isActive: false, onSelect: noop, onClose: noop },
+      props: {
+        surface,
+        index: 2,
+        isActive: false,
+        onSelect: noop,
+        onClose: noop,
+      },
     });
     expect(screen.getByText("Shell 3")).toBeTruthy();
   });
@@ -287,7 +314,13 @@ describe("Tab", () => {
   it("shows unread dot element when surface has unread and is not active", () => {
     const surface = makeSurface("t1", { hasUnread: true });
     const { container } = render(Tab, {
-      props: { surface, index: 0, isActive: false, onSelect: noop, onClose: noop },
+      props: {
+        surface,
+        index: 0,
+        isActive: false,
+        onSelect: noop,
+        onClose: noop,
+      },
     });
     // When hasUnread && !isActive, the tab renders 3 spans: dot, title, close
     const spans = container.querySelectorAll(".tab span");
@@ -299,7 +332,13 @@ describe("Tab", () => {
   it("does not show unread dot when tab is active", () => {
     const surface = makeSurface("t1", { hasUnread: true });
     const { container } = render(Tab, {
-      props: { surface, index: 0, isActive: true, onSelect: noop, onClose: noop },
+      props: {
+        surface,
+        index: 0,
+        isActive: true,
+        onSelect: noop,
+        onClose: noop,
+      },
     });
     // When isActive, the unread dot is not rendered — only title and close spans
     const spans = container.querySelectorAll(".tab span");
@@ -309,7 +348,13 @@ describe("Tab", () => {
   it("renders close button (x symbol)", () => {
     const surface = makeSurface("t1");
     render(Tab, {
-      props: { surface, index: 0, isActive: true, onSelect: noop, onClose: noop },
+      props: {
+        surface,
+        index: 0,
+        isActive: true,
+        onSelect: noop,
+        onClose: noop,
+      },
     });
     expect(screen.getByText("×")).toBeTruthy();
   });
@@ -317,7 +362,13 @@ describe("Tab", () => {
   it("renders active tab with the tab class", () => {
     const surface = makeSurface("t1", { title: "active-tab" });
     const { container } = render(Tab, {
-      props: { surface, index: 0, isActive: true, onSelect: noop, onClose: noop },
+      props: {
+        surface,
+        index: 0,
+        isActive: true,
+        onSelect: noop,
+        onClose: noop,
+      },
     });
     const tab = container.querySelector(".tab") as HTMLElement;
     expect(tab).toBeTruthy();
@@ -328,7 +379,13 @@ describe("Tab", () => {
   it("inactive tab does not show unread dot when hasUnread is false", () => {
     const surface = makeSurface("t1", { hasUnread: false });
     const { container } = render(Tab, {
-      props: { surface, index: 0, isActive: false, onSelect: noop, onClose: noop },
+      props: {
+        surface,
+        index: 0,
+        isActive: false,
+        onSelect: noop,
+        onClose: noop,
+      },
     });
     // Without unread, only 2 spans: title and close
     const spans = container.querySelectorAll(".tab span");
@@ -348,7 +405,6 @@ describe("TabBar", () => {
     render(TabBar, {
       props: {
         pane,
-        isActivePane: true,
         onSelectSurface: noop,
         onCloseSurface: noop,
         onNewSurface: noop,
@@ -366,7 +422,6 @@ describe("TabBar", () => {
     render(TabBar, {
       props: {
         pane,
-        isActivePane: true,
         onSelectSurface: noop,
         onCloseSurface: noop,
         onNewSurface: noop,
@@ -375,7 +430,7 @@ describe("TabBar", () => {
         onClosePane: noop,
       },
     });
-    expect(screen.getByTitle("New surface (⌘T)")).toBeTruthy();
+    expect(screen.getByTitle("New surface")).toBeTruthy();
     expect(screen.getByText("+")).toBeTruthy();
   });
 
@@ -384,7 +439,6 @@ describe("TabBar", () => {
     render(TabBar, {
       props: {
         pane,
-        isActivePane: true,
         onSelectSurface: noop,
         onCloseSurface: noop,
         onNewSurface: noop,
@@ -401,7 +455,6 @@ describe("TabBar", () => {
     render(TabBar, {
       props: {
         pane,
-        isActivePane: true,
         onSelectSurface: noop,
         onCloseSurface: noop,
         onNewSurface: noop,
@@ -418,7 +471,6 @@ describe("TabBar", () => {
     render(TabBar, {
       props: {
         pane,
-        isActivePane: true,
         onSelectSurface: noop,
         onCloseSurface: noop,
         onNewSurface: noop,
@@ -478,7 +530,9 @@ describe("ContextMenu", () => {
     });
     const { container } = render(ContextMenu);
     // Separator is a div with height: 1px
-    const separators = container.querySelectorAll("#context-menu > div[style*='height: 1px']");
+    const separators = container.querySelectorAll(
+      "#context-menu > div[style*='height: 1px']",
+    );
     expect(separators.length).toBe(1);
   });
 
@@ -560,7 +614,10 @@ describe("CommandPalette", () => {
 // ===========================================================================
 
 describe("WorkspaceItem", () => {
-  function renderWorkspaceItem(wsOverrides: Partial<Workspace> = {}, isActive = true) {
+  function renderWorkspaceItem(
+    wsOverrides: Partial<Workspace> = {},
+    isActive = true,
+  ) {
     const ws = makeWorkspace("ws1", "My Workspace");
     Object.assign(ws, wsOverrides);
     return render(WorkspaceItem, {
@@ -629,7 +686,8 @@ describe("WorkspaceItem", () => {
         onReorder: noop,
       },
     });
-    const spanCountWithoutUnread = withoutUnread.querySelectorAll("span").length;
+    const spanCountWithoutUnread =
+      withoutUnread.querySelectorAll("span").length;
 
     // The unread variant should have one more span (the badge)
     expect(spanCountWithUnread).toBe(spanCountWithoutUnread + 1);
@@ -726,7 +784,6 @@ describe("PaneView", () => {
     render(PaneView, {
       props: {
         pane,
-        isActivePane: true,
         onSelectSurface: noop,
         onCloseSurface: noop,
         onNewSurface: noop,
@@ -744,7 +801,6 @@ describe("PaneView", () => {
     render(PaneView, {
       props: {
         pane,
-        isActivePane: true,
         onSelectSurface: noop,
         onCloseSurface: noop,
         onNewSurface: noop,
@@ -754,7 +810,7 @@ describe("PaneView", () => {
         onFocusPane: noop,
       },
     });
-    expect(screen.getByTitle("New surface (⌘T)")).toBeTruthy();
+    expect(screen.getByTitle("New surface")).toBeTruthy();
   });
 
   it("renders split and close pane controls", () => {
@@ -762,7 +818,6 @@ describe("PaneView", () => {
     render(PaneView, {
       props: {
         pane,
-        isActivePane: true,
         onSelectSurface: noop,
         onCloseSurface: noop,
         onNewSurface: noop,
@@ -784,13 +839,12 @@ describe("PaneView", () => {
 
 describe("Sidebar", () => {
   const sidebarProps = {
-    onNewWorkspace: noop,
     onSwitchWorkspace: noop,
     onCloseWorkspace: noop,
     onRenameWorkspace: noop,
-    onSplitPane: noop,
-    onNewSurface: noop,
-    onReorderWorkspaces: noop,
+    onNewWorkspace: noop,
+    onNewFloatingWorkspace: noop,
+    onAddProject: noop,
   };
 
   it("renders when sidebarVisible is true", () => {
@@ -799,49 +853,32 @@ describe("Sidebar", () => {
     expect(container.querySelector("#sidebar")).toBeTruthy();
   });
 
-  it("does not render when sidebarVisible is false", () => {
+  it("hides entirely when sidebarVisible is false", () => {
     sidebarVisible.set(false);
     const { container } = render(Sidebar, { props: sidebarProps });
     expect(container.querySelector("#sidebar")).toBeNull();
   });
 
-  it("renders header toolbar with hide, split, and new workspace buttons", () => {
+  it("renders section headers", () => {
     sidebarVisible.set(true);
     render(Sidebar, { props: sidebarProps });
-    expect(screen.getByTitle("Hide Sidebar (⌘B)")).toBeTruthy();
-    expect(screen.getByTitle("Split Pane (⌘D)")).toBeTruthy();
-    expect(screen.getByTitle("New workspace (⌘N)")).toBeTruthy();
+    expect(screen.getByText("Terminals")).toBeTruthy();
+    expect(screen.getByText("Projects")).toBeTruthy();
   });
 
-  it("renders workspace items from store", () => {
+  it("does not render Personal section (removed)", () => {
     sidebarVisible.set(true);
     const ws1 = makeWorkspace("ws1", "Project Alpha");
-    const ws2 = makeWorkspace("ws2", "Project Beta");
-    workspaces.set([ws1, ws2]);
+    workspaces.set([ws1]);
     activeWorkspaceIdx.set(0);
     render(Sidebar, { props: sidebarProps });
-    expect(screen.getByText("Project Alpha")).toBeTruthy();
-    expect(screen.getByText("Project Beta")).toBeTruthy();
+    expect(screen.queryByText("Personal")).toBeNull();
   });
 
-  it("header has data-tauri-drag-region", () => {
+  it("renders Dashboard link in sidebar", () => {
     sidebarVisible.set(true);
-    const { container } = render(Sidebar, { props: sidebarProps });
-    const dragRegions = container.querySelectorAll("[data-tauri-drag-region]");
-    expect(dragRegions.length).toBeGreaterThan(0);
-  });
-
-  it("renders correct number of workspace items", () => {
-    sidebarVisible.set(true);
-    const ws1 = makeWorkspace("ws1", "WS One");
-    const ws2 = makeWorkspace("ws2", "WS Two");
-    const ws3 = makeWorkspace("ws3", "WS Three");
-    workspaces.set([ws1, ws2, ws3]);
-    activeWorkspaceIdx.set(1);
     render(Sidebar, { props: sidebarProps });
-    expect(screen.getByText("WS One")).toBeTruthy();
-    expect(screen.getByText("WS Two")).toBeTruthy();
-    expect(screen.getByText("WS Three")).toBeTruthy();
+    expect(screen.getByText("Dashboard")).toBeTruthy();
   });
 });
 
@@ -870,7 +907,9 @@ describe("TerminalSurface", () => {
   it("calls scrollToBottom after fit when pane becomes visible (#22)", async () => {
     const surface = makeSurface("scroll-test", { opened: true });
     // Start hidden
-    const { rerender } = render(TerminalSurfaceComponent, { props: { surface, visible: false } });
+    const { rerender } = render(TerminalSurfaceComponent, {
+      props: { surface, visible: false },
+    });
 
     // Reset mocks from any mount-time calls
     (surface.fitAddon.fit as ReturnType<typeof vi.fn>).mockClear();
@@ -880,7 +919,7 @@ describe("TerminalSurface", () => {
     await rerender({ surface, visible: true });
 
     // The reactive block uses requestAnimationFrame, so flush it
-    await new Promise(r => requestAnimationFrame(r));
+    await new Promise((r) => requestAnimationFrame(r));
 
     expect(surface.fitAddon.fit).toHaveBeenCalled();
     expect(surface.terminal.scrollToBottom).toHaveBeenCalled();

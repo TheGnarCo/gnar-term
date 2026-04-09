@@ -1,0 +1,90 @@
+/**
+ * Shared utilities for agent display — used by dashboards, sidebar, etc.
+ *
+ * All functions here are pure (no side effects, no DOM, no stores).
+ * They operate on the domain types from types.ts and theme data from theme-data.ts.
+ */
+
+import type { AgentStatus, Workspace, HarnessSurface } from "./types";
+import { getAllSurfaces, isHarnessSurface, isTerminalSurface } from "./types";
+import type { ThemeDef } from "./theme-data";
+
+/** Map an agent status to a theme-appropriate color string. */
+export function agentStatusColor(status: AgentStatus, theme: ThemeDef): string {
+  switch (status) {
+    case "running":
+      return theme.accent;
+    case "waiting":
+      return theme.warning;
+    case "error":
+      return theme.danger;
+    case "idle":
+      return theme.success;
+    case "exited":
+      return theme.fgDim;
+  }
+}
+
+/** Human-readable label for an agent status. */
+export function agentStatusLabel(status: AgentStatus): string {
+  switch (status) {
+    case "running":
+      return "Running";
+    case "waiting":
+      return "Waiting";
+    case "error":
+      return "Error";
+    case "idle":
+      return "Idle";
+    case "exited":
+      return "Exited";
+  }
+}
+
+/** Flattened info about a single agent (harness or terminal-with-agent) for display. */
+export interface AgentInfo {
+  surfaceId: string;
+  presetId: string;
+  title: string;
+  status: AgentStatus;
+  workspaceId: string;
+  workspaceName: string;
+  projectId?: string;
+  branch?: string;
+}
+
+/** Extract all agents from a single workspace. */
+export function getAgentsFromWorkspace(ws: Workspace): AgentInfo[] {
+  const agents: AgentInfo[] = [];
+  for (const s of getAllSurfaces(ws)) {
+    if (isHarnessSurface(s)) {
+      agents.push({
+        surfaceId: s.id,
+        presetId: s.presetId,
+        title: s.title,
+        status: s.status,
+        workspaceId: ws.id,
+        workspaceName: ws.name,
+        projectId: ws.record?.projectId,
+        branch: ws.record?.branch,
+      });
+    } else if (isTerminalSurface(s) && s.agentStatus) {
+      agents.push({
+        surfaceId: s.id,
+        presetId: "terminal-agent",
+        title: s.title,
+        status: s.agentStatus,
+        workspaceId: ws.id,
+        workspaceName: ws.name,
+        projectId: ws.record?.projectId,
+        branch: ws.record?.branch,
+      });
+    }
+  }
+  return agents;
+}
+
+/** Extract all agents from multiple workspaces. */
+export function getAgentsFromWorkspaces(workspaces: Workspace[]): AgentInfo[] {
+  return workspaces.flatMap(getAgentsFromWorkspace);
+}

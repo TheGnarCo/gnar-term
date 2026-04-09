@@ -21,6 +21,7 @@
   import { activeProjects, reorderProjects } from "../stores/project";
   import {
     getAggregatedHarnessStatus,
+    getAllPanes,
     type Workspace,
     type AgentStatus,
     type AggregatedHarnessStatus,
@@ -28,8 +29,22 @@
   import { fetchChanges } from "../right-sidebar-data";
   import type { FileStatus } from "../git";
   import type { MenuItem } from "../context-menu-types";
-  import { agentStatusColor } from "../agent-utils";
+  import { agentStatusColor, resolvePresetName } from "../agent-utils";
+  import { getSettings } from "../settings";
   import { startSidebarResize } from "../sidebar-resize";
+
+  function harnessLabel(ws: Workspace): string {
+    const settings = getSettings();
+    // Find first harness surface in the workspace to get its presetId
+    for (const pane of getAllPanes(ws.splitRoot)) {
+      for (const s of pane.surfaces) {
+        if (s.kind === "harness") {
+          return resolvePresetName(s.presetId, settings.harnesses);
+        }
+      }
+    }
+    return "Agent";
+  }
 
   export let onSwitchWorkspace: (idx: number) => void;
   export let onCloseWorkspace: (idx: number) => void;
@@ -557,7 +572,7 @@
                   >{statusIndicator(floatingAgg.primary)}</span
                 >
                 <span style="overflow: hidden; text-overflow: ellipsis;"
-                  >Claude: {floatingAgg.primary}</span
+                  >{harnessLabel(ws)}: {floatingAgg.primary}</span
                 >
                 {#if floatingAgg.total > 1}
                   <span
@@ -770,7 +785,7 @@
                         >{statusIndicator(harness.primary)}</span
                       >
                       <span style="overflow: hidden; text-overflow: ellipsis;"
-                        >Claude: {harness.primary}</span
+                        >{harnessLabel(ws)}: {harness.primary}</span
                       >
                       {#if harness.total > 1}
                         <span
@@ -914,7 +929,7 @@
                         >{statusIndicator(harness.primary)}</span
                       >
                       <span style="overflow: hidden; text-overflow: ellipsis;"
-                        >Claude: {harness.primary}</span
+                        >{harnessLabel(ws)}: {harness.primary}</span
                       >
                       {#if harness.total > 1}
                         <span

@@ -5,6 +5,7 @@
  */
 
 import type { AgentStatus, HarnessSurface, TerminalSurface } from "./types";
+import { getSettings } from "./settings";
 
 // --- Layer 2: Title Pattern Matching ---
 
@@ -71,12 +72,44 @@ export function createHarnessStatusTracker(
     }
   }
 
+  function sendWaitingNotification(entry: TrackedHarness) {
+    try {
+      const settings = getSettings();
+      if (!settings.harnessSettings.notifyOnWaiting) return;
+      if (typeof document !== "undefined" && document.hasFocus()) return;
+
+      const title =
+        entry.surface.kind === "harness"
+          ? entry.surface.title
+          : entry.surface.title || "Agent";
+      const body = "Needs your input";
+
+      // Use Web Notification API as the portable fallback
+      if (typeof Notification !== "undefined") {
+        if (Notification.permission === "granted") {
+          new Notification(title, { body });
+        } else if (Notification.permission !== "denied") {
+          Notification.requestPermission().then((perm) => {
+            if (perm === "granted") {
+              new Notification(title, { body });
+            }
+          });
+        }
+      }
+    } catch {
+      // Notification not available — ignore silently
+    }
+  }
+
   function setStatus(ptyId: number, newStatus: AgentStatus) {
     const entry = tracked.get(ptyId);
     if (!entry) return;
     const oldStatus = getStatus(entry);
     if (oldStatus === newStatus) return;
     writeStatus(entry, newStatus);
+    if (newStatus === "waiting") {
+      sendWaitingNotification(entry);
+    }
     options.onChange?.(ptyId, newStatus);
   }
 

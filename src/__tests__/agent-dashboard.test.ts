@@ -19,6 +19,8 @@ import {
   agentStatusLabel,
   getAgentsFromWorkspace,
   getAgentsFromWorkspaces,
+  findNextWaitingAgent,
+  resolvePresetName,
   type AgentInfo,
 } from "../lib/agent-utils";
 import type { ThemeDef } from "../lib/theme-data";
@@ -274,12 +276,12 @@ describe("agentStatusColor", () => {
     expect(agentStatusColor("error", mockTheme)).toBe(mockTheme.danger);
   });
 
-  it("returns success for idle", () => {
-    expect(agentStatusColor("idle", mockTheme)).toBe(mockTheme.success);
+  it("returns fgDim for idle (neutral grey)", () => {
+    expect(agentStatusColor("idle", mockTheme)).toBe(mockTheme.fgDim);
   });
 
-  it("returns fgDim for exited", () => {
-    expect(agentStatusColor("exited", mockTheme)).toBe(mockTheme.fgDim);
+  it("returns success for exited (clean exit)", () => {
+    expect(agentStatusColor("exited", mockTheme)).toBe(mockTheme.success);
   });
 });
 
@@ -399,5 +401,114 @@ describe("getAgentsFromWorkspaces", () => {
     expect(agents[0].workspaceName).toBe("Main");
     expect(agents[1].projectId).toBe("proj-b");
     expect(agents[1].branch).toBe("feat/y");
+  });
+});
+
+// --- agentStatusColor comprehensive ---
+
+describe("agentStatusColor (comprehensive)", () => {
+  it("returns correct theme color for each status", () => {
+    expect(agentStatusColor("running", mockTheme)).toBe(mockTheme.accent);
+    expect(agentStatusColor("waiting", mockTheme)).toBe(mockTheme.warning);
+    expect(agentStatusColor("error", mockTheme)).toBe(mockTheme.danger);
+    expect(agentStatusColor("idle", mockTheme)).toBe(mockTheme.fgDim);
+    expect(agentStatusColor("exited", mockTheme)).toBe(mockTheme.success);
+  });
+
+  it("idle returns neutral grey (fgDim), not success green", () => {
+    expect(agentStatusColor("idle", mockTheme)).not.toBe(mockTheme.success);
+    expect(agentStatusColor("idle", mockTheme)).toBe(mockTheme.fgDim);
+  });
+
+  it("exited returns success green (clean exit), not fgDim grey", () => {
+    expect(agentStatusColor("exited", mockTheme)).not.toBe(mockTheme.fgDim);
+    expect(agentStatusColor("exited", mockTheme)).toBe(mockTheme.success);
+  });
+});
+
+// --- findNextWaitingAgent ---
+
+describe("findNextWaitingAgent", () => {
+  it("returns null when no workspaces exist", () => {
+    expect(findNextWaitingAgent([])).toBeNull();
+  });
+
+  it("returns null when no agents are waiting", () => {
+    const ws1 = makeWorkspace("ws1", [makeMockHarnessSurface("h1", "running")]);
+    const ws2 = makeWorkspace("ws2", [makeMockHarnessSurface("h2", "idle")]);
+    expect(findNextWaitingAgent([ws1, ws2])).toBeNull();
+  });
+
+  it("returns null for workspaces with only plain terminals", () => {
+    const ws = makeWorkspace("ws1", [makeMockTerminalSurface("t1")]);
+    expect(findNextWaitingAgent([ws])).toBeNull();
+  });
+
+  it("finds a waiting harness surface", () => {
+    const ws = makeWorkspace("ws1", [
+      makeMockHarnessSurface("h1", "running"),
+      makeMockHarnessSurface("h2", "waiting"),
+    ]);
+    const result = findNextWaitingAgent([ws]);
+    expect(result).toEqual({ workspaceId: "ws1", surfaceId: "h2" });
+  });
+
+  it("finds a waiting terminal agent", () => {
+    const ws = makeWorkspace("ws1", [makeMockTerminalSurface("t1", "waiting")]);
+    const result = findNextWaitingAgent([ws]);
+    expect(result).toEqual({ workspaceId: "ws1", surfaceId: "t1" });
+  });
+
+  it("returns the first waiting agent across multiple workspaces", () => {
+    const ws1 = makeWorkspace("ws1", [makeMockHarnessSurface("h1", "running")]);
+    const ws2 = makeWorkspace("ws2", [makeMockHarnessSurface("h2", "waiting")]);
+    const ws3 = makeWorkspace("ws3", [makeMockHarnessSurface("h3", "waiting")]);
+    const result = findNextWaitingAgent([ws1, ws2, ws3]);
+    expect(result).toEqual({ workspaceId: "ws2", surfaceId: "h2" });
+  });
+
+  it("scans surfaces in order within a workspace", () => {
+    const ws = makeWorkspace("ws1", [
+      makeMockHarnessSurface("h1", "idle"),
+      makeMockTerminalSurface("t1", "waiting"),
+      makeMockHarnessSurface("h2", "waiting"),
+    ]);
+    const result = findNextWaitingAgent([ws]);
+    // terminal-with-agent comes before the second harness
+    expect(result).toEqual({ workspaceId: "ws1", surfaceId: "t1" });
+  });
+});
+
+// --- resolvePresetName ---
+
+describe("resolvePresetName", () => {
+  const harnesses = [
+    { id: "claude", name: "Claude Code" },
+    { id: "aider", name: "Aider" },
+  ];
+
+  it("resolves a known preset by id", () => {
+    expect(resolvePresetName("claude", harnesses)).toBe("Claude Code");
+  });
+
+  it("resolves a different preset", () => {
+    expect(resolvePresetName("aider", harnesses)).toBe("Aider");
+  });
+
+  it("falls back to 'Agent' for unknown presetId", () => {
+    expect(resolvePresetName("unknown-preset", harnesses)).toBe("Agent");
+  });
+
+  it("falls back to 'Agent' when harnesses list is empty", () => {
+    expect(resolvePresetName("claude", [])).toBe("Agent");
+  });
+});
+
+// --- Idle timeout consistency ---
+
+describe("idle timeout default", () => {
+  it("DEFAULT_SETTINGS.statusDetection.idleThresholdMs is 10000", async () => {
+    const { DEFAULT_SETTINGS } = await import("../lib/settings");
+    expect(DEFAULT_SETTINGS.statusDetection.idleThresholdMs).toBe(10000);
   });
 });

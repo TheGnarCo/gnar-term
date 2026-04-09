@@ -227,7 +227,7 @@ export async function setupListeners() {
   }
   const settings = getSettings();
   harnessTracker = createHarnessStatusTracker({
-    idleThresholdMs: settings.statusDetection.idleThresholdMs ?? 30000,
+    idleThresholdMs: settings.statusDetection.idleThresholdMs ?? 10000,
     onChange: () => {
       // Trigger reactive update when harness status changes
       notifyWorkspacesChanged();

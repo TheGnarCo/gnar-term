@@ -19,9 +19,9 @@ export function agentStatusColor(status: AgentStatus, theme: ThemeDef): string {
     case "error":
       return theme.danger;
     case "idle":
-      return theme.success;
-    case "exited":
       return theme.fgDim;
+    case "exited":
+      return theme.success;
   }
 }
 
@@ -87,4 +87,36 @@ export function getAgentsFromWorkspace(ws: Workspace): AgentInfo[] {
 /** Extract all agents from multiple workspaces. */
 export function getAgentsFromWorkspaces(workspaces: Workspace[]): AgentInfo[] {
   return workspaces.flatMap(getAgentsFromWorkspace);
+}
+
+/**
+ * Find the first waiting agent across all workspaces.
+ * Scans workspaces in order, surfaces in order within each workspace.
+ * Returns the workspaceId and surfaceId of the first waiting agent, or null if none.
+ */
+export function findNextWaitingAgent(
+  workspaces: Workspace[],
+): { workspaceId: string; surfaceId: string } | null {
+  for (const ws of workspaces) {
+    for (const s of getAllSurfaces(ws)) {
+      if (isHarnessSurface(s) && s.status === "waiting") {
+        return { workspaceId: ws.id, surfaceId: s.id };
+      }
+      if (isTerminalSurface(s) && s.agentStatus === "waiting") {
+        return { workspaceId: ws.id, surfaceId: s.id };
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Resolve the display name for a harness preset.
+ * Looks up presetId in the provided harness presets list, falling back to "Agent".
+ */
+export function resolvePresetName(
+  presetId: string,
+  harnesses: Array<{ id: string; name: string }>,
+): string {
+  return harnesses.find((h) => h.id === presetId)?.name || "Agent";
 }

@@ -5,6 +5,11 @@
   import { showConfirmDialog } from "../stores/dialog-service";
   import type { ProjectState } from "../state";
   import type { Workspace } from "../types";
+  import {
+    getAggregatedHarnessStatus,
+    type AggregatedHarnessStatus,
+  } from "../types";
+  import { agentStatusColor } from "../agent-utils";
   import type { MenuItem } from "../context-menu-types";
 
   export let project: ProjectState;
@@ -16,6 +21,16 @@
 
   // Currently open workspaces for this project
   $: visibleWorkspaces = openWorkspaces;
+
+  // Aggregate agent status across all workspaces for this project
+  $: agentAggs = openWorkspaces
+    .map((ws) => getAggregatedHarnessStatus(ws))
+    .filter((a): a is AggregatedHarnessStatus => a !== null);
+  $: totalAgents = agentAggs.reduce((sum, a) => sum + a.total, 0);
+  $: totalRunning = agentAggs.reduce((sum, a) => sum + a.running, 0);
+  $: totalWaiting = agentAggs.reduce((sum, a) => sum + a.waiting, 0);
+  $: totalIdle = agentAggs.reduce((sum, a) => sum + a.idle, 0);
+  $: totalError = agentAggs.reduce((sum, a) => sum + a.error, 0);
 
   function showContextMenu(e: MouseEvent) {
     e.preventDefault();
@@ -69,10 +84,41 @@
     >
   </div>
   <div
-    style="font-size: 11px; color: {$theme.fgDim}80; margin-bottom: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+    style="font-size: 11px; color: {$theme.fgDim}80; margin-bottom: {totalAgents >
+    0
+      ? '6px'
+      : '12px'}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
   >
     {project.path}
   </div>
+
+  {#if totalAgents > 0}
+    <div
+      style="font-size: 11px; color: {$theme.fgMuted}; margin-bottom: 8px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center;"
+    >
+      <span>{totalAgents} agent{totalAgents !== 1 ? "s" : ""}:</span>
+      {#if totalRunning > 0}
+        <span style="color: {agentStatusColor('running', $theme)};"
+          >{totalRunning} running</span
+        >
+      {/if}
+      {#if totalWaiting > 0}
+        <span style="color: {agentStatusColor('waiting', $theme)};"
+          >{totalWaiting} waiting</span
+        >
+      {/if}
+      {#if totalIdle > 0}
+        <span style="color: {agentStatusColor('idle', $theme)};"
+          >{totalIdle} idle</span
+        >
+      {/if}
+      {#if totalError > 0}
+        <span style="color: {agentStatusColor('error', $theme)};"
+          >{totalError} error</span
+        >
+      {/if}
+    </div>
+  {/if}
 
   {#if visibleWorkspaces.length > 0}
     <div

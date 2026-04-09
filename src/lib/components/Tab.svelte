@@ -108,11 +108,11 @@
   {#if statusColor}
     <span
       data-status-dot
-      style="width: 6px; height: 6px; border-radius: 50%; background: {statusColor}; flex-shrink: 0;"
+      style="width: 8px; height: 8px; border-radius: 50%; background: {statusColor}; flex-shrink: 0;"
     ></span>
   {:else if surface.hasUnread && !isActive}
     <span
-      style="width: 5px; height: 5px; border-radius: 50%; background: {$theme.notify}; flex-shrink: 0;"
+      style="width: 8px; height: 8px; border-radius: 50%; background: {$theme.notify}; flex-shrink: 0;"
     ></span>
   {/if}
   <span style="overflow: hidden; text-overflow: ellipsis;">

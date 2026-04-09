@@ -8,6 +8,7 @@
     getAgentsFromWorkspaces,
     agentStatusColor,
     agentStatusLabel,
+    type AgentInfo,
   } from "../agent-utils";
 
   import { goToProject } from "../stores/ui";
@@ -26,6 +27,29 @@
   }
 
   $: allAgents = getAgentsFromWorkspaces($workspaces);
+
+  // Group agents by project for display
+  $: agentGroups = (() => {
+    const groups = new Map<string, { name: string; agents: AgentInfo[] }>();
+    for (const agent of allAgents) {
+      const key = agent.projectId || "__personal__";
+      if (!groups.has(key)) {
+        const proj = agent.projectId
+          ? $projects.find((p) => p.id === agent.projectId)
+          : null;
+        groups.set(key, {
+          name: proj?.name || "Personal",
+          agents: [],
+        });
+      }
+      groups.get(key)!.agents.push(agent);
+    }
+    return Array.from(groups.entries()).map(([id, g]) => ({
+      id,
+      name: g.name,
+      agents: g.agents,
+    }));
+  })();
 
   function projectColor(projectId: string | undefined): string | null {
     if (!projectId) return null;
@@ -96,66 +120,73 @@
           >
         </h2>
       </div>
-      <div
-        style="display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 24px;"
-      >
-        {#each allAgents as agent (agent.surfaceId)}
-          {@const pColor = projectColor(agent.projectId)}
-          <button
-            style="
-            background: {$theme.bgSurface}; border: 1px solid {$theme.border};
-            border-left: 3px solid {agentStatusColor(
-              agent.status,
-              $theme,
-            )}; border-radius: 8px;
-            padding: 12px 16px; min-width: 180px; cursor: pointer;
-            color: {$theme.fg}; text-align: left;
-            display: flex; flex-direction: column; gap: 4px;
-          "
-            on:click={() => onSwitchToWorkspace(agent.workspaceId)}
-          >
-            <div style="display: flex; align-items: center; gap: 6px;">
-              <span
-                style="width: 8px; height: 8px; border-radius: 50%; background: {agentStatusColor(
-                  agent.status,
-                  $theme,
-                )}; flex-shrink: 0;"
-                title={agentStatusLabel(agent.status)}
-              ></span>
-              <span
-                style="font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
-              >
-                {agent.title}
-              </span>
-            </div>
-            <div
-              style="display: flex; align-items: center; gap: 4px; font-size: 10px;"
+      {#each agentGroups as group (group.id)}
+        <div
+          style="font-size: 11px; font-weight: 600; color: {$theme.fgDim}; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;"
+        >
+          {group.name}
+        </div>
+        <div
+          style="display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;"
+        >
+          {#each group.agents as agent (agent.surfaceId)}
+            {@const pColor = projectColor(agent.projectId)}
+            <button
+              style="
+              background: {$theme.bgSurface}; border: 1px solid {$theme.border};
+              border-left: 3px solid {agentStatusColor(
+                agent.status,
+                $theme,
+              )}; border-radius: 8px;
+              padding: 12px 16px; min-width: 180px; cursor: pointer;
+              color: {$theme.fg}; text-align: left;
+              display: flex; flex-direction: column; gap: 4px;
+            "
+              on:click={() => onSwitchToWorkspace(agent.workspaceId)}
             >
-              {#if pColor}
+              <div style="display: flex; align-items: center; gap: 6px;">
                 <span
-                  style="width: 6px; height: 6px; border-radius: 50%; background: {pColor}; flex-shrink: 0;"
+                  style="width: 8px; height: 8px; border-radius: 50%; background: {agentStatusColor(
+                    agent.status,
+                    $theme,
+                  )}; flex-shrink: 0;"
+                  title={agentStatusLabel(agent.status)}
                 ></span>
-              {/if}
-              <span
-                style="color: {$theme.fgDim}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+                <span
+                  style="font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+                >
+                  {agent.title}
+                </span>
+              </div>
+              <div
+                style="display: flex; align-items: center; gap: 4px; font-size: 10px;"
               >
-                {agent.branch || agent.workspaceName}
-              </span>
-              <span
-                style="margin-left: auto; padding: 0 5px; border-radius: 8px; background: {agentStatusColor(
-                  agent.status,
-                  $theme,
-                )}20; color: {agentStatusColor(
-                  agent.status,
-                  $theme,
-                )}; flex-shrink: 0;"
-              >
-                {agentStatusLabel(agent.status)}
-              </span>
-            </div>
-          </button>
-        {/each}
-      </div>
+                {#if pColor}
+                  <span
+                    style="width: 6px; height: 6px; border-radius: 50%; background: {pColor}; flex-shrink: 0;"
+                  ></span>
+                {/if}
+                <span
+                  style="color: {$theme.fgDim}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+                >
+                  {agent.branch || agent.workspaceName}
+                </span>
+                <span
+                  style="margin-left: auto; padding: 0 5px; border-radius: 8px; background: {agentStatusColor(
+                    agent.status,
+                    $theme,
+                  )}20; color: {agentStatusColor(
+                    agent.status,
+                    $theme,
+                  )}; flex-shrink: 0;"
+                >
+                  {agentStatusLabel(agent.status)}
+                </span>
+              </div>
+            </button>
+          {/each}
+        </div>
+      {/each}
     {/if}
 
     <!-- Projects section -->

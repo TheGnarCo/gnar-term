@@ -71,7 +71,7 @@ describe("DEFAULT_SETTINGS", () => {
     expect(sd.oscNotifications).toBe(true);
     expect(sd.titleParsing).toBe(true);
     expect(sd.processMonitoring).toBe(true);
-    expect(sd.idleThresholdMs).toBe(5000);
+    expect(sd.idleThresholdMs).toBe(10000);
   });
 
   it("defaults worktreeBaseDir to nested", () => {

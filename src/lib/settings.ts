@@ -161,7 +161,7 @@ export const DEFAULT_SETTINGS: Settings = {
     oscNotifications: true,
     titleParsing: true,
     processMonitoring: true,
-    idleThresholdMs: 5000,
+    idleThresholdMs: 10000,
   },
   terminal: {
     scrollback: 5000,

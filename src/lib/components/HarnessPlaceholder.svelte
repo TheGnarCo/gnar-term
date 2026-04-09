@@ -28,7 +28,15 @@
       />
     </svg>
     <div style="font-size: 14px; font-weight: 500; color: {$theme.fgMuted};">
-      {surface.title} closed
+      {#if surface.exitCode !== undefined}
+        {#if surface.exitCode === 0}
+          Exited (code 0)
+        {:else}
+          Exited with error (code {surface.exitCode})
+        {/if}
+      {:else}
+        {surface.title} closed
+      {/if}
     </div>
     <button
       class="relaunch-btn"

@@ -146,6 +146,7 @@ export interface HarnessPlaceholderSurface {
   title: string;
   presetId: string;
   cwd?: string;
+  exitCode?: number;
   hasUnread: boolean;
 }
 

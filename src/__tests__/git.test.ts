@@ -13,6 +13,8 @@ import {
   gitStatus,
   gitDiff,
   gitLog,
+  gitPull,
+  gitRevListCount,
   type WorktreeInfo,
   type BranchInfo,
   type FileStatus,
@@ -247,6 +249,42 @@ describe("Diff / status / log", () => {
       worktreePath: "/code/worktree",
       baseBranch: "main",
     });
+  });
+
+  it("gitPull calls invoke with worktreePath", async () => {
+    mockInvoke.mockResolvedValue("Already up to date.\n");
+
+    const result = await gitPull("/code/worktree");
+
+    expect(mockInvoke).toHaveBeenCalledWith("git_pull", {
+      worktreePath: "/code/worktree",
+    });
+    expect(result).toBe("Already up to date.\n");
+  });
+
+  it("gitPull propagates error when invoke rejects", async () => {
+    mockInvoke.mockRejectedValueOnce("error: cannot pull with rebase");
+
+    await expect(gitPull("/code/worktree")).rejects.toThrow(
+      "cannot pull with rebase",
+    );
+  });
+
+  it("gitRevListCount calls invoke with correct args", async () => {
+    mockInvoke.mockResolvedValue("3\t1\n");
+
+    const result = await gitRevListCount(
+      "/code/worktree",
+      "feature/test",
+      "origin/feature/test",
+    );
+
+    expect(mockInvoke).toHaveBeenCalledWith("git_rev_list_count", {
+      worktreePath: "/code/worktree",
+      branch: "feature/test",
+      remoteBranch: "origin/feature/test",
+    });
+    expect(result).toBe("3\t1\n");
   });
 });
 

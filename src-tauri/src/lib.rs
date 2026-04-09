@@ -46,7 +46,7 @@ pub fn run() {
             git::push_branch, git::delete_branch,
             git::git_status, git::git_diff, git::git_log, git::git_ls_files,
             git::gh_list_issues, git::gh_list_prs,
-            git::git_add, git::git_commit, git::git_push,
+            git::git_add, git::git_commit, git::git_push, git::git_pull, git::git_rev_list_count,
             git::git_branch_name, git::git_diff_staged, git::gh_create_pr,
             git::run_script, git::copy_files,
             cli::get_cli_args,

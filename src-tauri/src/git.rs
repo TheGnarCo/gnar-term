@@ -550,6 +550,24 @@ pub async fn git_push(worktree_path: String) -> Result<String, String> {
     Ok(branch.to_string())
 }
 
+/// Pull with rebase from the remote tracking branch.
+#[tauri::command]
+pub async fn git_pull(worktree_path: String) -> Result<String, String> {
+    run_git(&["pull", "--rebase"], Some(&worktree_path)).await
+}
+
+/// Get ahead/behind counts relative to a remote tracking branch.
+/// Returns a string like "3\t1\n" (ahead\tbehind).
+#[tauri::command]
+pub async fn git_rev_list_count(
+    worktree_path: String,
+    branch: String,
+    remote_branch: String,
+) -> Result<String, String> {
+    let range = format!("{}...{}", branch, remote_branch);
+    run_git(&["rev-list", "--left-right", "--count", &range], Some(&worktree_path)).await
+}
+
 /// Get the current branch name.
 #[tauri::command]
 pub async fn git_branch_name(worktree_path: String) -> Result<String, String> {

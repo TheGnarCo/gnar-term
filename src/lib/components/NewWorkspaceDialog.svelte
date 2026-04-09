@@ -6,6 +6,10 @@
   import { getState } from "../state";
   import Dialog from "./Dialog.svelte";
   import type { BranchInfo, WorktreeInfo } from "../git";
+  import {
+    validateBranchName,
+    checkBranchDuplicate,
+  } from "../branch-validation";
 
   let tab: "terminal" | "managed" = "terminal";
   let managedMode: "new-branch" | "existing" = "new-branch";
@@ -181,6 +185,10 @@
         error = "Branch name is required";
         return;
       }
+      if (branchNameInvalid) {
+        error = branchNameError || "Invalid branch name";
+        return;
+      }
       if (!baseBranch.trim()) {
         error = "Base branch is required";
         return;
@@ -233,6 +241,21 @@
   $: localBranches = branches.filter((b) => !b.isRemote);
   $: remoteBranches = branches.filter((b) => b.isRemote);
 
+  // Branch name validation
+  $: branchNameValidation = branchName.trim()
+    ? validateBranchName(branchName.trim())
+    : { valid: true };
+  $: branchDuplicateCheck =
+    branchName.trim() && branches.length > 0
+      ? checkBranchDuplicate(branchName.trim(), branches)
+      : { valid: true };
+  $: branchNameError = !branchNameValidation.valid
+    ? branchNameValidation.error
+    : !branchDuplicateCheck.valid
+      ? branchDuplicateCheck.error
+      : "";
+  $: branchNameInvalid = !!branchNameError;
+
   // For "Existing" mode — branches that don't already have a worktree
   $: worktreeBranches = new Set(worktrees.map((w) => w.branch));
   $: availableLocal = localBranches.filter(
@@ -251,6 +274,9 @@
       ? "Attach"
       : "Create"
     : "Create"}
+  submitDisabled={tab === "managed" &&
+    managedMode === "new-branch" &&
+    branchNameInvalid}
   onCancel={cancel}
   onSubmit={submit}
 >
@@ -334,8 +360,18 @@
             type="text"
             placeholder="feature/my-branch"
             bind:value={branchName}
-            style={styles.input}
+            style="{styles.input}{branchNameInvalid
+              ? ` border-color: ${$theme.danger || '#e55'};`
+              : ''}"
           />
+          {#if branchNameInvalid}
+            <div
+              style="font-size: 11px; color: {$theme.danger ||
+                '#e55'}; margin-top: 2px;"
+            >
+              {branchNameError}
+            </div>
+          {/if}
         </div>
         <div style="display: flex; flex-direction: column; gap: 6px;">
           <div

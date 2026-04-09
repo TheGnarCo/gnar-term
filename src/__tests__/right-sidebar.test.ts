@@ -38,6 +38,8 @@ vi.mock("../lib/git", () => ({
     },
   ]),
   gitDiff: vi.fn(async () => "diff --git a/src/app.ts\n+new line"),
+  gitBranchName: vi.fn(async () => "feature/test"),
+  gitRevListCount: vi.fn(async () => "3\t1\n"),
   listWorktrees: vi.fn(async () => [
     { path: "/repo", branch: "main", isMain: true },
     { path: "/repo/worktrees/feature", branch: "feature/test", isMain: false },
@@ -55,7 +57,10 @@ import {
   fetchCommits,
   fetchFiles,
   shouldShowRightSidebar,
+  fetchAheadBehind,
+  groupStagedUnstaged,
 } from "../lib/right-sidebar-data";
+import { gitBranchName, gitRevListCount } from "../lib/git";
 
 describe("Right Sidebar", () => {
   beforeEach(() => {
@@ -208,6 +213,104 @@ describe("Right Sidebar", () => {
       await fetchCommits("/my/worktree");
 
       expect(gitLog).toHaveBeenCalledWith("/my/worktree", undefined);
+    });
+  });
+
+  describe("fetchAheadBehind", () => {
+    it("returns ahead and behind counts from git rev-list", async () => {
+      const result = await fetchAheadBehind("/my/worktree");
+
+      expect(gitBranchName).toHaveBeenCalledWith("/my/worktree");
+      expect(gitRevListCount).toHaveBeenCalledWith(
+        "/my/worktree",
+        "feature/test",
+        "origin/feature/test",
+      );
+      expect(result).toEqual({ ahead: 3, behind: 1 });
+    });
+
+    it("returns zeros when gitBranchName fails", async () => {
+      vi.mocked(gitBranchName).mockRejectedValueOnce(
+        new Error("detached HEAD"),
+      );
+
+      const result = await fetchAheadBehind("/my/worktree");
+
+      expect(result).toEqual({ ahead: 0, behind: 0 });
+    });
+
+    it("returns zeros when gitRevListCount fails", async () => {
+      vi.mocked(gitRevListCount).mockRejectedValueOnce(
+        new Error("no upstream"),
+      );
+
+      const result = await fetchAheadBehind("/my/worktree");
+
+      expect(result).toEqual({ ahead: 0, behind: 0 });
+    });
+
+    it("handles zero counts", async () => {
+      vi.mocked(gitRevListCount).mockResolvedValueOnce("0\t0\n");
+
+      const result = await fetchAheadBehind("/my/worktree");
+
+      expect(result).toEqual({ ahead: 0, behind: 0 });
+    });
+  });
+
+  describe("groupStagedUnstaged", () => {
+    it("groups files into staged and unstaged sections", () => {
+      const changes = [
+        { path: "src/staged.ts", indexStatus: "M", workStatus: " " },
+        { path: "src/unstaged.ts", indexStatus: " ", workStatus: "M" },
+        { path: "src/both.ts", indexStatus: "A", workStatus: "M" },
+        { path: "src/untracked.ts", indexStatus: "?", workStatus: "?" },
+      ];
+
+      const result = groupStagedUnstaged(changes);
+
+      expect(result.staged).toHaveLength(2);
+      expect(result.staged.map((f) => f.path)).toEqual([
+        "src/staged.ts",
+        "src/both.ts",
+      ]);
+      expect(result.unstaged).toHaveLength(3);
+      expect(result.unstaged.map((f) => f.path)).toEqual([
+        "src/unstaged.ts",
+        "src/both.ts",
+        "src/untracked.ts",
+      ]);
+    });
+
+    it("returns empty arrays when no changes", () => {
+      const result = groupStagedUnstaged([]);
+
+      expect(result.staged).toEqual([]);
+      expect(result.unstaged).toEqual([]);
+    });
+
+    it("handles all-staged scenario", () => {
+      const changes = [
+        { path: "a.ts", indexStatus: "A", workStatus: " " },
+        { path: "b.ts", indexStatus: "M", workStatus: " " },
+      ];
+
+      const result = groupStagedUnstaged(changes);
+
+      expect(result.staged).toHaveLength(2);
+      expect(result.unstaged).toHaveLength(0);
+    });
+
+    it("handles all-unstaged scenario", () => {
+      const changes = [
+        { path: "a.ts", indexStatus: " ", workStatus: "M" },
+        { path: "b.ts", indexStatus: " ", workStatus: "D" },
+      ];
+
+      const result = groupStagedUnstaged(changes);
+
+      expect(result.staged).toHaveLength(0);
+      expect(result.unstaged).toHaveLength(2);
     });
   });
 });

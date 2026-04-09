@@ -1,12 +1,18 @@
 <script lang="ts">
+  import { onDestroy } from "svelte";
   import { theme } from "../stores/theme";
   import { pendingAction } from "../stores/ui";
   import type { WorkspaceRecord } from "../types";
-  import type { FileStatus } from "../git";
+  import type { FileStatus, CommitInfo } from "../git";
+  import { gitPush, gitPull, fetchAll } from "../git";
   import {
     fetchChanges,
     fetchFiles,
+    fetchCommits,
+    fetchAheadBehind,
+    groupStagedUnstaged,
     shouldShowRightSidebar,
+    type AheadBehind,
   } from "../right-sidebar-data";
   import { startSidebarResize } from "../sidebar-resize";
 
@@ -15,9 +21,11 @@
   export let projectPath: string | undefined = undefined;
   export let gitBacked = false;
   export let activeCwd: string | undefined = undefined;
+  export let onOpenDiff: ((filePath: string) => void) | undefined = undefined;
 
-  let activeTab: "diff" | "files" = "files";
-  $: if (!gitBacked && activeTab === "diff") activeTab = "files";
+  let activeTab: "changes" | "files" | "commits" = "files";
+  $: if (!gitBacked && activeTab === "changes") activeTab = "files";
+  $: if (!gitBacked && activeTab === "commits") activeTab = "files";
   let sidebarWidth = 220;
   let dragging = false;
 
@@ -36,11 +44,15 @@
   let files: string[] = [];
   let trackedFiles: Set<string> = new Set();
   let changes: FileStatus[] = [];
+  let commits: CommitInfo[] = [];
+  let aheadBehind: AheadBehind = { ahead: 0, behind: 0 };
   let loading = false;
+  let actionLoading = false;
   let showIgnored = false;
 
   let filesExpandedDirs = new Set<string>();
   let diffExpandedDirs = new Set<string>();
+  let refreshTimer: ReturnType<typeof setInterval> | null = null;
 
   // --- Tree building ---
 
@@ -152,6 +164,7 @@
   );
   $: visibleFiles = flattenVisible(fileTree, 0, filesExpandedDirs);
   $: visibleChanges = flattenVisible(changeTree, 0, diffExpandedDirs);
+  $: stagedUnstaged = groupStagedUnstaged(changes);
 
   // --- Diff summary stats ---
 
@@ -186,14 +199,27 @@
               .then((m) => m.gitLsFiles(gitRoot!))
               .catch(() => [] as string[])
           : Promise.resolve([] as string[]);
-      const [allFiles, changeResults, tracked] = await Promise.all([
-        fileFetch,
-        changeFetch,
-        trackedFetch,
-      ]);
+      const commitFetch =
+        gitBacked && gitRoot
+          ? fetchCommits(gitRoot)
+          : Promise.resolve([] as CommitInfo[]);
+      const aheadBehindFetch =
+        gitBacked && gitRoot
+          ? fetchAheadBehind(gitRoot)
+          : Promise.resolve({ ahead: 0, behind: 0 });
+      const [allFiles, changeResults, tracked, commitResults, abResult] =
+        await Promise.all([
+          fileFetch,
+          changeFetch,
+          trackedFetch,
+          commitFetch,
+          aheadBehindFetch,
+        ]);
       files = allFiles;
       changes = changeResults;
       trackedFiles = new Set(tracked);
+      commits = commitResults;
+      aheadBehind = abResult;
       // Expand all dirs in diff view (usually small)
       const ct = buildTree(
         changes.map((c) => c.path),
@@ -208,8 +234,70 @@
     }
   }
 
+  // --- Refresh polling (10s interval) ---
+
+  function startPolling() {
+    stopPolling();
+    refreshTimer = setInterval(refresh, 10_000);
+  }
+
+  function stopPolling() {
+    if (refreshTimer !== null) {
+      clearInterval(refreshTimer);
+      refreshTimer = null;
+    }
+  }
+
   $: if (visible && filesRoot) {
     refresh();
+    startPolling();
+  } else {
+    stopPolling();
+  }
+
+  onDestroy(() => {
+    stopPolling();
+  });
+
+  // --- Git action handlers ---
+
+  async function handlePush() {
+    if (!gitRoot || actionLoading) return;
+    actionLoading = true;
+    try {
+      await gitPush(gitRoot);
+      await refresh();
+    } catch (e) {
+      console.warn("Push failed:", e);
+    } finally {
+      actionLoading = false;
+    }
+  }
+
+  async function handlePull() {
+    if (!gitRoot || actionLoading) return;
+    actionLoading = true;
+    try {
+      await gitPull(gitRoot);
+      await refresh();
+    } catch (e) {
+      console.warn("Pull failed:", e);
+    } finally {
+      actionLoading = false;
+    }
+  }
+
+  async function handleFetch() {
+    if (!gitRoot || actionLoading) return;
+    actionLoading = true;
+    try {
+      await fetchAll(gitRoot);
+      await refresh();
+    } catch (e) {
+      console.warn("Fetch failed:", e);
+    } finally {
+      actionLoading = false;
+    }
   }
 
   // --- Helpers ---
@@ -235,7 +323,7 @@
     }
   }
 
-  function toggleDir(tab: "files" | "diff", path: string) {
+  function toggleDir(tab: "files" | "changes", path: string) {
     if (tab === "files") {
       const next = new Set(filesExpandedDirs);
       if (next.has(path)) next.delete(path);
@@ -254,6 +342,12 @@
     if (!root) return;
     const fullPath = root.replace(/\/$/, "") + "/" + relativePath;
     pendingAction.set({ type: "open-in-editor", payload: fullPath });
+  }
+
+  function handleChangeClick(relativePath: string) {
+    if (onOpenDiff) {
+      onOpenDiff(relativePath);
+    }
   }
 </script>
 
@@ -280,6 +374,49 @@
     <div
       style="flex: 1; display: flex; flex-direction: column; overflow: hidden;"
     >
+      <!-- Ahead/behind + action buttons header -->
+      {#if gitBacked}
+        <div
+          style="
+          display: flex; align-items: center; gap: 6px;
+          padding: 4px 8px; flex-shrink: 0;
+          background: {$theme.tabBarBg};
+          border-bottom: 1px solid {$theme.bg};
+          font-size: 10px;
+        "
+        >
+          {#if aheadBehind.ahead > 0 || aheadBehind.behind > 0}
+            <span style="color: {$theme.fgMuted};">
+              {aheadBehind.ahead} ahead / {aheadBehind.behind} behind
+            </span>
+          {/if}
+          <span style="flex: 1;"></span>
+          {#if actionLoading}
+            <span style="color: {$theme.fgMuted}; font-style: italic;">...</span
+            >
+          {:else}
+            <button
+              class="action-btn"
+              style="background: none; border: none; color: {$theme.fgMuted}; cursor: pointer; padding: 1px 4px; font-size: 10px; border-radius: 3px;"
+              title="Push"
+              on:click={handlePush}>Push</button
+            >
+            <button
+              class="action-btn"
+              style="background: none; border: none; color: {$theme.fgMuted}; cursor: pointer; padding: 1px 4px; font-size: 10px; border-radius: 3px;"
+              title="Pull"
+              on:click={handlePull}>Pull</button
+            >
+            <button
+              class="action-btn"
+              style="background: none; border: none; color: {$theme.fgMuted}; cursor: pointer; padding: 1px 4px; font-size: 10px; border-radius: 3px;"
+              title="Fetch"
+              on:click={handleFetch}>Fetch</button
+            >
+          {/if}
+        </div>
+      {/if}
+
       <!-- Tab bar (matches main TabBar: 28px height) -->
       <div
         style="
@@ -290,14 +427,18 @@
       >
         <button
           style="
-          background: {activeTab === 'diff' ? $theme.bgActive : 'transparent'};
+          background: {activeTab === 'changes'
+            ? $theme.bgActive
+            : 'transparent'};
           border: none; padding: 2px 10px; cursor: {gitBacked
             ? 'pointer'
             : 'default'};
-          font-size: 11px; font-weight: {activeTab === 'diff' ? '600' : '400'};
+          font-size: 11px; font-weight: {activeTab === 'changes'
+            ? '600'
+            : '400'};
           color: {!gitBacked
             ? $theme.fgDim + '60'
-            : activeTab === 'diff'
+            : activeTab === 'changes'
               ? $theme.fg
               : $theme.fgMuted};
           border-radius: 4px 4px 0 0; white-space: nowrap;
@@ -305,8 +446,8 @@
         "
           disabled={!gitBacked}
           on:click={() => {
-            if (gitBacked) activeTab = "diff";
-          }}>Diff</button
+            if (gitBacked) activeTab = "changes";
+          }}>Changes</button
         >
         <button
           style="
@@ -317,6 +458,30 @@
           border-radius: 4px 4px 0 0; white-space: nowrap;
         "
           on:click={() => (activeTab = "files")}>Files</button
+        >
+        <button
+          style="
+          background: {activeTab === 'commits'
+            ? $theme.bgActive
+            : 'transparent'};
+          border: none; padding: 2px 10px; cursor: {gitBacked
+            ? 'pointer'
+            : 'default'};
+          font-size: 11px; font-weight: {activeTab === 'commits'
+            ? '600'
+            : '400'};
+          color: {!gitBacked
+            ? $theme.fgDim + '60'
+            : activeTab === 'commits'
+              ? $theme.fg
+              : $theme.fgMuted};
+          border-radius: 4px 4px 0 0; white-space: nowrap;
+          opacity: {gitBacked ? '1' : '0.5'};
+        "
+          disabled={!gitBacked}
+          on:click={() => {
+            if (gitBacked) activeTab = "commits";
+          }}>Commits</button
         >
         <span style="flex: 1;"></span>
         {#if activeTab === "files" && gitBacked}
@@ -363,9 +528,16 @@
           >
             Loading...
           </div>
-        {:else if activeTab === "diff"}
-          <!-- Diff summary bar -->
-          {#if changes.length > 0}
+        {:else if activeTab === "changes"}
+          <!-- Changes tab with Staged/Unstaged sections -->
+          {#if changes.length === 0}
+            <div
+              style="padding: 12px; color: {$theme.fgMuted}; font-size: 12px; text-align: center;"
+            >
+              No changes
+            </div>
+          {:else}
+            <!-- Diff summary bar -->
             <div
               style="
               padding: 6px 10px; margin: 2px 4px 4px; border-radius: 4px;
@@ -394,71 +566,130 @@
                 >
               {/if}
             </div>
-          {/if}
 
-          <!-- Changed files tree -->
-          {#if changes.length === 0}
-            <div
-              style="padding: 12px; color: {$theme.fgMuted}; font-size: 12px; text-align: center;"
-            >
-              No changes
-            </div>
-          {:else}
-            {#each visibleChanges as entry (entry.path)}
-              <!-- svelte-ignore a11y_click_events_have_key_events -->
-              <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <!-- Staged section -->
+            {#if stagedUnstaged.staged.length > 0}
               <div
                 style="
-                padding: 3px 8px 3px {8 + entry.depth * 16}px;
-                margin: 0 4px; border-radius: 3px;
-                display: flex; align-items: center; gap: 5px;
-                cursor: {entry.isDir ? 'pointer' : 'default'};
-                font-size: 12px; color: {$theme.fg};
+                padding: 4px 10px 2px; font-size: 10px; font-weight: 600;
+                color: {$theme.ansi.green}; text-transform: uppercase;
+                letter-spacing: 0.5px;
               "
-                on:click={() => entry.isDir && toggleDir("diff", entry.path)}
-                on:mouseenter={(e) =>
-                  (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
-                on:mouseleave={(e) =>
-                  (e.currentTarget.style.background = "transparent")}
               >
-                {#if entry.isDir}
-                  <span
-                    style="width: 12px; text-align: center; font-size: 10px; color: {$theme.fgDim}; flex-shrink: 0;"
-                  >
-                    {diffExpandedDirs.has(entry.path) ? "\u25BE" : "\u25B8"}
-                  </span>
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 16 16"
-                    fill={$theme.fgDim}
-                    style="flex-shrink: 0;"
-                  >
-                    <path
-                      d="M1.75 1A1.75 1.75 0 0 0 0 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0 0 16 13.25v-8.5A1.75 1.75 0 0 0 14.25 3H7.5a.25.25 0 0 1-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75z"
-                    />
-                  </svg>
-                  <span
-                    style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; color: {$theme.fgMuted};"
-                  >
-                    {entry.name}
-                  </span>
-                {:else}
+                Staged ({stagedUnstaged.staged.length})
+              </div>
+              {#each stagedUnstaged.staged as file (file.path + ":staged")}
+                <!-- svelte-ignore a11y_click_events_have_key_events -->
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <div
+                  style="
+                  padding: 3px 8px 3px 16px;
+                  margin: 0 4px; border-radius: 3px;
+                  display: flex; align-items: center; gap: 5px;
+                  cursor: pointer; font-size: 12px; color: {$theme.fg};
+                "
+                  on:click={() => handleChangeClick(file.path)}
+                  on:mouseenter={(e) =>
+                    (e.currentTarget.style.background =
+                      "rgba(255,255,255,0.04)")}
+                  on:mouseleave={(e) =>
+                    (e.currentTarget.style.background = "transparent")}
+                >
                   <span
                     style="width: 12px; text-align: center; font-weight: 600; font-size: 10px; flex-shrink: 0; color: {statusColor(
-                      entry.status || '?',
+                      file.indexStatus,
                     )};"
                   >
-                    {entry.status}
+                    {file.indexStatus}
                   </span>
                   <span
                     style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; color: {statusColor(
-                      entry.status || '?',
+                      file.indexStatus,
                     )};"
                   >
-                    {entry.name}
+                    {file.path}
                   </span>
-                {/if}
+                </div>
+              {/each}
+            {/if}
+
+            <!-- Unstaged section -->
+            {#if stagedUnstaged.unstaged.length > 0}
+              <div
+                style="
+                padding: 4px 10px 2px; font-size: 10px; font-weight: 600;
+                color: {$theme.ansi.yellow}; text-transform: uppercase;
+                letter-spacing: 0.5px;
+                {stagedUnstaged.staged.length > 0 ? 'margin-top: 6px;' : ''}
+              "
+              >
+                Unstaged ({stagedUnstaged.unstaged.length})
+              </div>
+              {#each stagedUnstaged.unstaged as file (file.path + ":unstaged")}
+                <!-- svelte-ignore a11y_click_events_have_key_events -->
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <div
+                  style="
+                  padding: 3px 8px 3px 16px;
+                  margin: 0 4px; border-radius: 3px;
+                  display: flex; align-items: center; gap: 5px;
+                  cursor: pointer; font-size: 12px; color: {$theme.fg};
+                "
+                  on:click={() => handleChangeClick(file.path)}
+                  on:mouseenter={(e) =>
+                    (e.currentTarget.style.background =
+                      "rgba(255,255,255,0.04)")}
+                  on:mouseleave={(e) =>
+                    (e.currentTarget.style.background = "transparent")}
+                >
+                  <span
+                    style="width: 12px; text-align: center; font-weight: 600; font-size: 10px; flex-shrink: 0; color: {statusColor(
+                      file.workStatus,
+                    )};"
+                  >
+                    {file.workStatus}
+                  </span>
+                  <span
+                    style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; color: {statusColor(
+                      file.workStatus,
+                    )};"
+                  >
+                    {file.path}
+                  </span>
+                </div>
+              {/each}
+            {/if}
+          {/if}
+        {:else if activeTab === "commits"}
+          <!-- Commits tab -->
+          {#if commits.length === 0}
+            <div
+              style="padding: 12px; color: {$theme.fgMuted}; font-size: 12px; text-align: center;"
+            >
+              No commits
+            </div>
+          {:else}
+            {#each commits as commit (commit.hash)}
+              <div
+                style="
+                  padding: 6px 10px; display: flex; flex-direction: column; gap: 2px;
+                  border-bottom: 1px solid rgba(255,255,255,0.04);
+                "
+              >
+                <div
+                  style="font-size: 12px; color: {$theme.fg}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+                >
+                  {commit.subject}
+                </div>
+                <div
+                  style="font-size: 10px; color: {$theme.fgMuted}; display: flex; gap: 6px; font-family: monospace;"
+                >
+                  <span style="color: {$theme.accent || $theme.fg};"
+                    >{commit.shortHash}</span
+                  >
+                  <span>{commit.author}</span>
+                  <span>{commit.date}</span>
+                </div>
               </div>
             {/each}
           {/if}
@@ -547,6 +778,9 @@
 
 <style>
   .resize-handle:hover {
+    background: rgba(255, 255, 255, 0.08) !important;
+  }
+  .action-btn:hover {
     background: rgba(255, 255, 255, 0.08) !important;
   }
 </style>

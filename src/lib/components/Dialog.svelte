@@ -8,6 +8,7 @@
   export let onCancel: () => void;
   export let onSubmit: () => void;
   export let submitLabel: string = "OK";
+  export let submitDisabled: boolean = false;
   export let onKeydown: ((e: KeyboardEvent) => void) | undefined = undefined;
 
   function handleKeydown(e: KeyboardEvent) {
@@ -16,7 +17,7 @@
       return;
     }
     e.stopPropagation();
-    if (e.key === "Enter") {
+    if (e.key === "Enter" && !submitDisabled) {
       e.preventDefault();
       onSubmit();
     }
@@ -68,9 +69,12 @@
         >
         <button
           on:click={onSubmit}
+          disabled={submitDisabled}
           style="
             padding: 6px 16px; border-radius: 6px; border: none;
-            background: {$theme.accent}; color: white; cursor: pointer; font-size: 13px;
+            background: {submitDisabled ? $theme.fgDim : $theme.accent};
+            color: white; cursor: {submitDisabled ? 'default' : 'pointer'};
+            font-size: 13px; opacity: {submitDisabled ? '0.5' : '1'};
           ">{submitLabel}</button
         >
       </div>

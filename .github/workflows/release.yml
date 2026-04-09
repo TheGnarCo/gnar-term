@@ -61,6 +61,19 @@ jobs:
           # Update Cargo.toml so CARGO_PKG_VERSION matches the release tag
           sed -i.bak "s/^version = \".*\"/version = \"$VERSION\"/" src-tauri/Cargo.toml && rm -f src-tauri/Cargo.toml.bak
 
+      - name: Install NSIS EnVar plugin (Windows only)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          $nsisPluginDir = "$env:LOCALAPPDATA\tauri\NSIS\Plugins"
+          New-Item -ItemType Directory -Force "$nsisPluginDir\x86-unicode"
+          New-Item -ItemType Directory -Force "$nsisPluginDir\amd64-unicode"
+          $zip = "$env:TEMP\EnVar.zip"
+          Invoke-WebRequest -Uri "https://github.com/GsNSIS/EnVar/releases/download/v0.3.1/EnVar-Plugin.zip" -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath "$env:TEMP\EnVar"
+          Copy-Item "$env:TEMP\EnVar\Plugins\x86-unicode\EnVar.dll" "$nsisPluginDir\x86-unicode\" -Force
+          Copy-Item "$env:TEMP\EnVar\Plugins\amd64-unicode\EnVar.dll" "$nsisPluginDir\amd64-unicode\" -Force
+
       - name: Install frontend dependencies
         run: npm install
 

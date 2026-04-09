@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tick } from "svelte";
-  import { theme, themes } from "../stores/theme";
+  import { theme } from "../stores/theme";
 
   $: isDisco = $theme.name === "Molly Disco";
   import { contextMenu } from "../stores/ui";

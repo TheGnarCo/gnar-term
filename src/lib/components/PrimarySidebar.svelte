@@ -1,6 +1,7 @@
 <script lang="ts">
   import { theme } from "../stores/theme";
-  import { sidebarVisible, contextMenu } from "../stores/ui";
+  import { primarySidebarVisible, primarySidebarWidth, contextMenu } from "../stores/ui";
+  import { dragResize } from "../actions/drag-resize";
   import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
   import WorkspaceItem from "./WorkspaceItem.svelte";
   import type { MenuItem } from "../context-menu-types";
@@ -9,7 +10,6 @@
   export let onSwitchWorkspace: (idx: number) => void;
   export let onCloseWorkspace: (idx: number) => void;
   export let onRenameWorkspace: (idx: number, name: string) => void;
-  export let onSplitPane: (direction: "horizontal" | "vertical") => void;
   export let onNewSurface: () => void;
   export let onReorderWorkspaces: (fromIdx: number, toIdx: number) => void;
 
@@ -22,12 +22,12 @@
     }
   }
 
+  let dragging = false;
+
   function showWorkspaceContextMenu(x: number, y: number, idx: number) {
     const items: MenuItem[] = [
       { label: "Rename Workspace", shortcut: "⇧⌘R", action: () => startRename(idx) },
       { label: "New Surface", shortcut: "⌘T", action: () => { onSwitchWorkspace(idx); onNewSurface(); } },
-      { label: "Split Right", shortcut: "⌘D", action: () => { onSwitchWorkspace(idx); onSplitPane("horizontal"); } },
-      { label: "Split Down", shortcut: "⇧⌘D", action: () => { onSwitchWorkspace(idx); onSplitPane("vertical"); } },
       { label: "", action: () => {}, separator: true },
       {
         label: "Close Other Workspaces",
@@ -49,44 +49,40 @@
     contextMenu.set({ x, y, items });
   }
 
-  let btnStyle = "";
-  $: btnStyle = `
-    background: none; border: none; color: ${$theme.fgMuted};
-    border-radius: 4px; width: 26px; height: 26px; cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    padding: 0; -webkit-app-region: no-drag;
-  `;
 </script>
 
-{#if $sidebarVisible}
+{#if $primarySidebarVisible}
   <div
-    id="sidebar"
+    id="primary-sidebar"
     style="
-      width: 220px; min-width: 180px; max-width: 400px;
-      background: {$theme.sidebarBg}; border-right: 1px solid {$theme.sidebarBorder};
-      display: flex; flex-direction: column; overflow: hidden;
+      width: {$primarySidebarWidth}px;
+      background: {$theme.sidebarBg};
+      display: flex; overflow: hidden;
       font-size: 13px; user-select: none;
+      flex-shrink: 0;
     "
   >
-    <!-- Header toolbar -->
+  <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+    <!-- Top row: controls + drag region for window chrome -->
     <div
       data-tauri-drag-region=""
       style="
-        height: 38px; padding: 0 6px 0 0; display: flex; align-items: center;
-        justify-content: flex-end; gap: 2px;
-        border-bottom: 1px solid {$theme.border};
+        height: 38px; flex-shrink: 0; display: flex; align-items: center;
+        justify-content: flex-end; padding: 0 6px;
         -webkit-app-region: drag;
       "
     >
-      <button style={btnStyle} title="Hide Sidebar (⌘B)" on:click={() => sidebarVisible.set(false)}>
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="2" width="14" height="12" rx="1.5"/><line x1="5.5" y1="2" x2="5.5" y2="14"/></svg>
-      </button>
-      <button style={btnStyle} title="Split Pane (⌘D)" on:click={() => onSplitPane("horizontal")}>
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="12" height="12" rx="1.5"/><line x1="7" y1="1" x2="7" y2="13"/></svg>
-      </button>
-      <button style={btnStyle} title="New workspace (⌘N)" on:click={onNewWorkspace}>
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="7" y1="2" x2="7" y2="12"/><line x1="2" y1="7" x2="12" y2="7"/></svg>
-      </button>
+      <button
+        title="New Workspace (⌘N)"
+        style="
+          background: none; border: none; cursor: pointer;
+          width: 26px; height: 26px; border-radius: 4px;
+          display: flex; align-items: center; justify-content: center;
+          color: {$theme.fgDim}; font-size: 18px; line-height: 1;
+          -webkit-app-region: no-drag;
+        "
+        on:click={onNewWorkspace}
+      >+</button>
     </div>
 
     <!-- Workspace list -->
@@ -106,4 +102,27 @@
       {/each}
     </div>
   </div>
+  <div
+    class="sidebar-resize-handle"
+    style="
+      width: 4px; cursor: col-resize; flex-shrink: 0;
+      background: {dragging ? $theme.accent : $theme.sidebarBorder};
+      transition: background 0.15s;
+    "
+    use:dragResize={{
+      onDrag: (ev) => {
+        const maxWidth = window.innerWidth * 0.33;
+        primarySidebarWidth.set(Math.max(140, Math.min(maxWidth, ev.clientX)));
+      },
+      onStart: () => { dragging = true; },
+      onEnd: () => { dragging = false; },
+    }}
+  ></div>
+  </div>
 {/if}
+
+<style>
+  .sidebar-resize-handle:hover {
+    filter: brightness(1.3);
+  }
+</style>

@@ -1,7 +1,10 @@
 import { writable } from "svelte/store";
 import type { MenuItem } from "../context-menu-types";
 
-export const sidebarVisible = writable<boolean>(true);
+export const primarySidebarVisible = writable<boolean>(true);
+export const primarySidebarWidth = writable<number>(220);
+export const secondarySidebarVisible = writable<boolean>(false);
+export const secondarySidebarWidth = writable<number>(220);
 export const commandPaletteOpen = writable<boolean>(false);
 export const findBarVisible = writable<boolean>(false);
 
@@ -14,10 +17,10 @@ export interface ContextMenuState {
 export const contextMenu = writable<ContextMenuState | null>(null);
 
 /** Pending action dispatched from terminal-service.ts for App.svelte to handle */
-export interface PendingAction {
-  type: string;
-  payload?: any;
-}
+export type PendingAction =
+  | { type: "open-preview"; payload: string }
+  | { type: "split-right" }
+  | { type: "split-down" };
 export const pendingAction = writable<PendingAction | null>(null);
 
 /** Input prompt — replaces window.prompt() which doesn't work in Tauri WKWebView */

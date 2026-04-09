@@ -6,11 +6,7 @@ import { get } from "svelte/store";
 import { theme } from "./stores/theme";
 import type { ThemeDef } from "./theme-data";
 
-export function getTheme(): ThemeDef {
-  return get(theme);
-}
-
-// Proxy for backwards-compatible access: theme.bg, theme.fg, etc.
+// Proxy for non-reactive access: theme.bg, theme.fg, etc.
 export const themeProxy: ThemeDef = new Proxy({} as ThemeDef, {
   get(_target, prop) {
     const t = get(theme);

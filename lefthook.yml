@@ -1,0 +1,18 @@
+# lefthook.yml — local git hooks only (not run in CI)
+
+pre-commit:
+  parallel: true
+  commands:
+    typecheck:
+      run: npx tsc --noEmit
+    rust-check:
+      run: cargo check --manifest-path src-tauri/Cargo.toml
+    prettier:
+      glob: "*.{ts,svelte,json,css,md,yml}"
+      run: npx prettier --check {staged_files}
+      stage_fixed: true
+
+pre-push:
+  commands:
+    tests:
+      run: npm test

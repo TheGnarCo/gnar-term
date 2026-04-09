@@ -1,5 +1,5 @@
 ; Add gnar-term to the system PATH on install, remove on uninstall.
-; Uses the EnVar plugin bundled with Tauri's NSIS toolchain.
+; Requires the EnVar plugin (https://github.com/GsNSIS/EnVar) — installed via CI workflow.
 
 !macro NSIS_HOOK_POSTINSTALL
   ; Add the install directory to the user PATH so `gnar-term` works from any shell.

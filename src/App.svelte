@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
+  import type { UnlistenFn } from "@tauri-apps/api/event";
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import { theme, themes, xtermTheme } from "./lib/stores/theme";
@@ -34,9 +35,11 @@
   } from "./lib/settings";
   import {
     setupListeners,
+    cleanupListeners,
     createTerminalSurface,
     fontReady,
     startCwdPolling,
+    stopCwdPolling,
   } from "./lib/terminal-service";
   import {
     uid,
@@ -100,6 +103,7 @@
 
   let sidebarComponent: Sidebar;
   let findBarComponent: FindBar;
+  const menuUnlisteners: UnlistenFn[] = [];
 
   // ---- Shared helpers ----
 
@@ -1105,17 +1109,32 @@
     }
 
     // Listen for menu events
-    listen<string>("menu-theme", (event) => {
-      applyTheme(event.payload.replace("theme-", ""));
-    });
+    menuUnlisteners.push(
+      await listen<string>("menu-theme", (event) => {
+        applyTheme(event.payload.replace("theme-", ""));
+      }),
+    );
 
-    await listen("menu-cmd-palette", () => {
-      commandPaletteOpen.update((v) => !v);
-    });
+    menuUnlisteners.push(
+      await listen("menu-cmd-palette", () => {
+        commandPaletteOpen.update((v) => !v);
+      }),
+    );
 
-    await listen("menu-close-tab", () => {
-      closeSurface();
-    });
+    menuUnlisteners.push(
+      await listen("menu-close-tab", () => {
+        closeSurface();
+      }),
+    );
+  });
+
+  onDestroy(() => {
+    for (const unlisten of menuUnlisteners) {
+      unlisten();
+    }
+    menuUnlisteners.length = 0;
+    cleanupListeners();
+    stopCwdPolling();
   });
 </script>
 

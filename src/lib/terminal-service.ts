@@ -191,6 +191,18 @@ function flushPtyBuffer(ptyId: number) {
 
 // --- Event Listeners ---
 
+import type { UnlistenFn } from "@tauri-apps/api/event";
+
+const eventUnlisteners: UnlistenFn[] = [];
+
+/** Remove all Tauri event listeners registered by setupListeners(). */
+export function cleanupListeners(): void {
+  for (const unlisten of eventUnlisteners) {
+    unlisten();
+  }
+  eventUnlisteners.length = 0;
+}
+
 export async function setupListeners() {
   // On Linux, prevent WebKitGTK from intercepting Ctrl+Shift+C/V before xterm.js
   if (!isMac) {
@@ -209,7 +221,10 @@ export async function setupListeners() {
     );
   }
 
-  // Initialize harness status tracker
+  // Initialize harness status tracker (dispose previous if hot-reloading)
+  if (harnessTracker) {
+    harnessTracker.dispose();
+  }
   const settings = getSettings();
   harnessTracker = createHarnessStatusTracker({
     idleThresholdMs: settings.statusDetection.idleThresholdMs ?? 30000,
@@ -219,131 +234,190 @@ export async function setupListeners() {
     },
   });
 
-  await listen<{ pty_id: number; data: string }>("pty-output", (event) => {
-    const { pty_id, data } = event.payload;
-    // Decode base64 to preserve raw terminal escape sequences
-    const bin = atob(data);
-    const bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  eventUnlisteners.push(
+    await listen<{ pty_id: number; data: string }>("pty-output", (event) => {
+      const { pty_id, data } = event.payload;
+      // Decode base64 to preserve raw terminal escape sequences
+      const bin = atob(data);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
 
-    // Append to buffer
-    let chunks = ptyBuffers.get(pty_id);
-    if (!chunks) {
-      chunks = [];
-      ptyBuffers.set(pty_id, chunks);
-    }
-    chunks.push(bytes);
-    const buffered = (ptyBufferBytes.get(pty_id) || 0) + bytes.length;
-    ptyBufferBytes.set(pty_id, buffered);
+      // Append to buffer
+      let chunks = ptyBuffers.get(pty_id);
+      if (!chunks) {
+        chunks = [];
+        ptyBuffers.set(pty_id, chunks);
+      }
+      chunks.push(bytes);
+      const buffered = (ptyBufferBytes.get(pty_id) || 0) + bytes.length;
+      ptyBufferBytes.set(pty_id, buffered);
 
-    // Pause PTY reader if buffer is getting large
-    if (!ptyPaused.has(pty_id) && buffered >= BUFFER_HIGH_WATER) {
-      ptyPaused.add(pty_id);
-      invoke("pause_pty", { ptyId: pty_id }).catch(() => {});
-    }
+      // Pause PTY reader if buffer is getting large
+      if (!ptyPaused.has(pty_id) && buffered >= BUFFER_HIGH_WATER) {
+        ptyPaused.add(pty_id);
+        invoke("pause_pty", { ptyId: pty_id }).catch(() => {});
+      }
 
-    // Notify harness tracker of output activity
-    harnessTracker?.handleOutput(pty_id);
+      // Notify harness tracker of output activity
+      harnessTracker?.handleOutput(pty_id);
 
-    // Schedule a flush on the next animation frame
-    scheduleFlush(pty_id);
-  });
+      // Schedule a flush on the next animation frame
+      scheduleFlush(pty_id);
+    }),
+  );
 
-  await listen<{ pty_id: number; exit_code?: number }>("pty-exit", (event) => {
-    const { pty_id, exit_code } = event.payload;
-    // Clean up flow control state for the dead PTY
-    ptyBuffers.delete(pty_id);
-    ptyBufferBytes.delete(pty_id);
-    ptyFlushScheduled.delete(pty_id);
-    ptyPaused.delete(pty_id);
+  eventUnlisteners.push(
+    await listen<{ pty_id: number; exit_code?: number }>(
+      "pty-exit",
+      (event) => {
+        const { pty_id, exit_code } = event.payload;
+        // Clean up flow control state for the dead PTY
+        ptyBuffers.delete(pty_id);
+        ptyBufferBytes.delete(pty_id);
+        ptyFlushScheduled.delete(pty_id);
+        ptyPaused.delete(pty_id);
 
-    // Notify harness tracker — sets status to exited/error and keeps the surface
-    harnessTracker?.handleExit(pty_id, exit_code ?? 0);
-    harnessTracker?.unregister(pty_id);
+        // Notify harness tracker — sets status to exited/error and keeps the surface
+        harnessTracker?.handleExit(pty_id, exit_code ?? 0);
+        harnessTracker?.unregister(pty_id);
 
-    // Remove the surface from its pane, and collapse empty panes
-    // (Harness surfaces stay on exit — only terminal surfaces are removed)
-    let needsGoHome = false;
-    let removedWsRecord: import("./types").WorkspaceRecord | undefined;
-    workspaces.update((wsList) => {
-      for (const ws of wsList) {
-        for (const pane of getAllPanes(ws.splitRoot)) {
-          const idx = pane.surfaces.findIndex(
-            (s) => isTerminalSurface(s) && s.ptyId === pty_id,
-          );
-          if (idx >= 0) {
-            pane.surfaces.splice(idx, 1);
-            if (pane.surfaces.length > 0) {
-              pane.activeSurfaceId =
-                pane.surfaces[Math.min(idx, pane.surfaces.length - 1)].id;
-            } else {
-              // Pane is empty — collapse it from the split tree
-              pane.activeSurfaceId = null;
-              pane.resizeObserver?.disconnect();
-              if (
-                ws.splitRoot.type === "pane" &&
-                ws.splitRoot.pane.id === pane.id
-              ) {
-                // This was the only pane in the workspace — remove the workspace
-                removedWsRecord = ws.record;
-                const wsIdx = wsList.indexOf(ws);
-                wsList.splice(wsIdx, 1);
-                const currentIdx = get(activeWorkspaceIdx);
-                if (currentIdx >= wsList.length) {
-                  activeWorkspaceIdx.set(Math.max(0, wsList.length - 1));
-                }
-                if (wsList.length === 0) {
-                  needsGoHome = true;
+        // Remove the surface from its pane, and collapse empty panes
+        // (Harness surfaces stay on exit — only terminal surfaces are removed)
+        let needsGoHome = false;
+        let removedWsRecord: import("./types").WorkspaceRecord | undefined;
+        workspaces.update((wsList) => {
+          for (const ws of wsList) {
+            for (const pane of getAllPanes(ws.splitRoot)) {
+              const idx = pane.surfaces.findIndex(
+                (s) => isTerminalSurface(s) && s.ptyId === pty_id,
+              );
+              if (idx >= 0) {
+                pane.surfaces.splice(idx, 1);
+                if (pane.surfaces.length > 0) {
+                  pane.activeSurfaceId =
+                    pane.surfaces[Math.min(idx, pane.surfaces.length - 1)].id;
+                } else {
+                  // Pane is empty — collapse it from the split tree
+                  pane.activeSurfaceId = null;
+                  pane.resizeObserver?.disconnect();
+                  if (
+                    ws.splitRoot.type === "pane" &&
+                    ws.splitRoot.pane.id === pane.id
+                  ) {
+                    // This was the only pane in the workspace — remove the workspace
+                    removedWsRecord = ws.record;
+                    const wsIdx = wsList.indexOf(ws);
+                    wsList.splice(wsIdx, 1);
+                    const currentIdx = get(activeWorkspaceIdx);
+                    if (currentIdx >= wsList.length) {
+                      activeWorkspaceIdx.set(Math.max(0, wsList.length - 1));
+                    }
+                    if (wsList.length === 0) {
+                      needsGoHome = true;
+                    }
+                    return wsList;
+                  }
+                  // Find parent split and collapse it
+                  const parentInfo = findParentSplit(ws.splitRoot, pane.id);
+                  if (parentInfo && parentInfo.parent.type === "split") {
+                    const sibling =
+                      parentInfo.parent.children[
+                        parentInfo.index === 0 ? 1 : 0
+                      ];
+                    if (ws.splitRoot === parentInfo.parent) {
+                      ws.splitRoot = sibling;
+                    } else {
+                      replaceNodeInTree(
+                        ws.splitRoot,
+                        parentInfo.parent,
+                        sibling,
+                      );
+                    }
+                    ws.activePaneId = getAllPanes(ws.splitRoot)[0]?.id ?? null;
+                  }
                 }
                 return wsList;
               }
-              // Find parent split and collapse it
-              const parentInfo = findParentSplit(ws.splitRoot, pane.id);
-              if (parentInfo && parentInfo.parent.type === "split") {
-                const sibling =
-                  parentInfo.parent.children[parentInfo.index === 0 ? 1 : 0];
-                if (ws.splitRoot === parentInfo.parent) {
-                  ws.splitRoot = sibling;
-                } else {
-                  replaceNodeInTree(ws.splitRoot, parentInfo.parent, sibling);
-                }
-                ws.activePaneId = getAllPanes(ws.splitRoot)[0]?.id ?? null;
+            }
+          }
+          return wsList;
+        });
+
+        // Persist workspace removal to state.json (source of truth)
+        if (removedWsRecord?.id) {
+          import("./state").then(async (state) => {
+            if (removedWsRecord!.projectId) {
+              state.removeWorkspace(
+                removedWsRecord!.projectId,
+                removedWsRecord!.id,
+              );
+            } else {
+              state.removeFloatingWorkspace(removedWsRecord!.id);
+            }
+            await state.saveState();
+            import("./stores/project").then((m) => m.initProjects());
+          });
+        }
+
+        if (needsGoHome) {
+          goHome();
+        }
+      },
+    ),
+  );
+
+  eventUnlisteners.push(
+    await listen<{ pty_id: number; text: string }>(
+      "pty-notification",
+      (event) => {
+        const { pty_id, text } = event.payload;
+        // Notify harness status tracker (Layer 1 — highest priority)
+        harnessTracker?.handleNotification(pty_id, text);
+        workspaces.update((wsList) => {
+          for (const ws of wsList) {
+            for (const s of getAllSurfaces(ws)) {
+              if (
+                (isTerminalSurface(s) || isHarnessSurface(s)) &&
+                s.ptyId === pty_id
+              ) {
+                s.notification = text;
+                s.hasUnread = true;
+                return wsList;
               }
             }
-            return wsList;
           }
-        }
+          return wsList;
+        });
+      },
+    ),
+  );
+
+  // OSC 0/2: shell sets window title (shows process name or custom title)
+  eventUnlisteners.push(
+    await listen<{ pty_id: number; title: string }>("pty-title", (event) => {
+      const { pty_id, title } = event.payload;
+      // Notify harness status tracker (Layer 2 — title parsing)
+      harnessTracker?.handleTitle(pty_id, title);
+
+      // Auto-detect Claude running in a regular terminal
+      if (
+        harnessTracker &&
+        !harnessTracker.isTracked(pty_id) &&
+        /\bclaude\b/i.test(title)
+      ) {
+        workspaces.update((wsList) => {
+          for (const ws of wsList) {
+            for (const s of getAllSurfaces(ws)) {
+              if (isTerminalSurface(s) && s.ptyId === pty_id) {
+                harnessTracker!.registerTerminal(s);
+                return wsList;
+              }
+            }
+          }
+          return wsList;
+        });
       }
-      return wsList;
-    });
 
-    // Persist workspace removal to state.json (source of truth)
-    if (removedWsRecord?.id) {
-      import("./state").then(async (state) => {
-        if (removedWsRecord!.projectId) {
-          state.removeWorkspace(
-            removedWsRecord!.projectId,
-            removedWsRecord!.id,
-          );
-        } else {
-          state.removeFloatingWorkspace(removedWsRecord!.id);
-        }
-        await state.saveState();
-        import("./stores/project").then((m) => m.initProjects());
-      });
-    }
-
-    if (needsGoHome) {
-      goHome();
-    }
-  });
-
-  await listen<{ pty_id: number; text: string }>(
-    "pty-notification",
-    (event) => {
-      const { pty_id, text } = event.payload;
-      // Notify harness status tracker (Layer 1 — highest priority)
-      harnessTracker?.handleNotification(pty_id, text);
       workspaces.update((wsList) => {
         for (const ws of wsList) {
           for (const s of getAllSurfaces(ws)) {
@@ -351,62 +425,28 @@ export async function setupListeners() {
               (isTerminalSurface(s) || isHarnessSurface(s)) &&
               s.ptyId === pty_id
             ) {
-              s.notification = text;
-              s.hasUnread = true;
+              s.title = title;
               return wsList;
             }
           }
         }
         return wsList;
       });
-    },
+    }),
   );
-
-  // OSC 0/2: shell sets window title (shows process name or custom title)
-  await listen<{ pty_id: number; title: string }>("pty-title", (event) => {
-    const { pty_id, title } = event.payload;
-    // Notify harness status tracker (Layer 2 — title parsing)
-    harnessTracker?.handleTitle(pty_id, title);
-
-    // Auto-detect Claude running in a regular terminal
-    if (
-      harnessTracker &&
-      !harnessTracker.isTracked(pty_id) &&
-      /\bclaude\b/i.test(title)
-    ) {
-      workspaces.update((wsList) => {
-        for (const ws of wsList) {
-          for (const s of getAllSurfaces(ws)) {
-            if (isTerminalSurface(s) && s.ptyId === pty_id) {
-              harnessTracker!.registerTerminal(s);
-              return wsList;
-            }
-          }
-        }
-        return wsList;
-      });
-    }
-
-    workspaces.update((wsList) => {
-      for (const ws of wsList) {
-        for (const s of getAllSurfaces(ws)) {
-          if (
-            (isTerminalSurface(s) || isHarnessSurface(s)) &&
-            s.ptyId === pty_id
-          ) {
-            s.title = title;
-            return wsList;
-          }
-        }
-      }
-      return wsList;
-    });
-  });
 }
 
 // --- CWD Polling Fallback ---
 // For shells that don't emit OSC 7, poll get_pty_cwd periodically
 let cwdPollTimer: ReturnType<typeof setInterval> | null = null;
+
+/** Stop the CWD polling interval and release the timer. */
+export function stopCwdPolling(): void {
+  if (cwdPollTimer) {
+    clearInterval(cwdPollTimer);
+    cwdPollTimer = null;
+  }
+}
 
 export function startCwdPolling() {
   if (cwdPollTimer) return;

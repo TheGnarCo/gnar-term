@@ -378,19 +378,31 @@ export async function sendIssueToAgent(
     openWorkspace();
     safeFocusTerminal(surface);
 
-    // Send issue context to the harness after a brief delay for PTY to connect
-    setTimeout(async () => {
-      const ws = get(workspaces).find((w) => w.record?.branch === branch);
-      if (!ws) return;
+    // Wait for PTY to connect, then send issue context to the harness
+    const ws = get(workspaces).find((w) => w.record?.branch === branch);
+    if (ws) {
       const { getAllSurfaces, isHarnessSurface } = await import("./types");
-      for (const s of getAllSurfaces(ws)) {
-        if (isHarnessSurface(s) && s.ptyId >= 0) {
-          const prompt = `Fix issue #${issue.number}: ${issue.title}\n${issue.url}\n`;
-          invoke("write_pty", { ptyId: s.ptyId, data: prompt });
-          break;
-        }
+      const surface = getAllSurfaces(ws).find((s) => isHarnessSurface(s));
+      if (surface && isHarnessSurface(surface)) {
+        let attempts = 0;
+        const maxAttempts = 20;
+        const pollInterval = 200;
+        const waitForPty = async () => {
+          while (attempts < maxAttempts && surface.ptyId < 0) {
+            await new Promise((r) => setTimeout(r, pollInterval));
+            attempts++;
+          }
+          if (surface.ptyId >= 0) {
+            const prompt = `Review and work on this GitHub issue:\n\nTitle: ${issue.title} (#${issue.number})\n${issue.url}\n`;
+            await invoke("write_pty", {
+              ptyId: surface.ptyId,
+              data: prompt,
+            });
+          }
+        };
+        waitForPty();
       }
-    }, 2000);
+    }
   } catch (err) {
     const { showConfirmDialog } = await import("./stores/dialog-service");
     await showConfirmDialog(`Failed to create workspace for issue: ${err}`, {

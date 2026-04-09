@@ -49,6 +49,9 @@ export async function fetchFiles(dirPath: string): Promise<string[]> {
 /**
  * Fetch commits ahead of the base branch for a worktree.
  * Returns an empty array on error.
+ *
+ * Not currently used in production UI, but exported as a tested utility
+ * for future commit-log features (see right-sidebar.test.ts).
  */
 export async function fetchCommits(
   worktreePath: string,

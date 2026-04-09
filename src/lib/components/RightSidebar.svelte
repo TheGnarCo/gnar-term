@@ -8,6 +8,7 @@
     fetchFiles,
     shouldShowRightSidebar,
   } from "../right-sidebar-data";
+  import { startSidebarResize } from "../sidebar-resize";
 
   export let meta: WorkspaceRecord | undefined = undefined;
   export let visible = false;
@@ -21,24 +22,16 @@
   let dragging = false;
 
   function startResize(e: MouseEvent) {
-    e.preventDefault();
     dragging = true;
-    const startX = e.clientX;
-    const startW = sidebarWidth;
-    function onMove(ev: MouseEvent) {
-      const maxW = window.innerWidth * 0.45;
-      sidebarWidth = Math.max(
-        160,
-        Math.min(maxW, startW - (ev.clientX - startX)),
-      );
-    }
-    function onUp() {
-      dragging = false;
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    }
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
+    startSidebarResize(
+      e,
+      "right",
+      sidebarWidth,
+      160,
+      0.45,
+      (w) => (sidebarWidth = w),
+      () => (dragging = false),
+    );
   }
   let files: string[] = [];
   let trackedFiles: Set<string> = new Set();

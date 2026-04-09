@@ -99,8 +99,3 @@ export function showConfirmDialog(
     confirmDialog.set({ message, ...opts, resolve });
   });
 }
-
-// --- Settings Dialog ---
-
-export const settingsDialogOpen = writable<boolean>(false);
-export const needsReload = writable<boolean>(false);

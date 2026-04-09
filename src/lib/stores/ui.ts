@@ -10,6 +10,7 @@ import type { MenuItem } from "../context-menu-types";
 export const sidebarVisible = writable<boolean>(true);
 export const commandPaletteOpen = writable<boolean>(false);
 export const findBarVisible = writable<boolean>(false);
+/** Visibility toggle for the right sidebar (file explorer / diff view). */
 export const rightSidebarVisible = writable<boolean>(false);
 
 // --- Context menu ---

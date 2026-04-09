@@ -4,8 +4,8 @@
   import { showInputPrompt } from "../stores/dialog-service";
   import type { Surface } from "../types";
   import { isHarnessSurface } from "../types";
-  import type { AgentStatus } from "../types";
   import type { MenuItem } from "../context-menu-types";
+  import { agentStatusColor } from "../agent-utils";
 
   export let surface: Surface;
   export let index: number;
@@ -20,18 +20,10 @@
   let closeHovered = false;
   let dragOver = false;
 
-  const STATUS_COLORS: Record<AgentStatus, string> = {
-    idle: "#4caf50",
-    running: "#ffb300",
-    waiting: "#42a5f5",
-    error: "#ef5350",
-    exited: "#9e9e9e",
-  };
-
-  $: harnessStatus = isHarnessSurface(surface)
-    ? ((surface as any).status as AgentStatus)
+  $: harnessStatus = isHarnessSurface(surface) ? surface.status : null;
+  $: statusColor = harnessStatus
+    ? agentStatusColor(harnessStatus, $theme)
     : null;
-  $: statusColor = harnessStatus ? STATUS_COLORS[harnessStatus] : null;
 
   function handleDragStart(e: DragEvent) {
     e.dataTransfer?.setData("text/plain", index.toString());

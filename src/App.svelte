@@ -94,7 +94,6 @@
   import InputPrompt from "./lib/components/InputPrompt.svelte";
   import NewProjectDialog from "./lib/components/NewProjectDialog.svelte";
   import NewWorkspaceDialog from "./lib/components/NewWorkspaceDialog.svelte";
-  // SettingsDialog replaced by SettingsView (full-screen)
   import ConfirmDialog from "./lib/components/ConfirmDialog.svelte";
   import RightSidebar from "./lib/components/RightSidebar.svelte";
   import ProjectDashboard from "./lib/components/ProjectDashboard.svelte";

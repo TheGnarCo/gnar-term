@@ -28,6 +28,8 @@
   import { fetchChanges } from "../right-sidebar-data";
   import type { FileStatus } from "../git";
   import type { MenuItem } from "../context-menu-types";
+  import { agentStatusColor } from "../agent-utils";
+  import { startSidebarResize } from "../sidebar-resize";
 
   export let onSwitchWorkspace: (idx: number) => void;
   export let onCloseWorkspace: (idx: number) => void;
@@ -41,24 +43,16 @@
   let dragging = false;
 
   function startResize(e: MouseEvent) {
-    e.preventDefault();
     dragging = true;
-    const startX = e.clientX;
-    const startW = sidebarWidth;
-    function onMove(ev: MouseEvent) {
-      const maxW = window.innerWidth * 0.45;
-      sidebarWidth = Math.max(
-        160,
-        Math.min(maxW, startW + (ev.clientX - startX)),
-      );
-    }
-    function onUp() {
-      dragging = false;
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    }
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
+    startSidebarResize(
+      e,
+      "left",
+      sidebarWidth,
+      160,
+      0.45,
+      (w) => (sidebarWidth = w),
+      () => (dragging = false),
+    );
   }
   let hoveredSection: string | null = null;
   let hoveredProject: string | null = null;
@@ -136,16 +130,7 @@
   }
 
   function statusColor(status: AgentStatus): string {
-    switch (status) {
-      case "running":
-        return $theme.accent;
-      case "waiting":
-        return $theme.warning;
-      case "error":
-        return $theme.danger;
-      default:
-        return $theme.fgDim;
-    }
+    return agentStatusColor(status, $theme);
   }
 
   // Refresh git stats when workspaces change
@@ -257,7 +242,7 @@
 
     if (
       dragSource.kind === "ws" &&
-      (scope === "__projects__" || (dragSource as any).scope !== scope)
+      (scope === "__projects__" || dragSource.scope !== scope)
     ) {
       insertIndicator = null;
       return;
@@ -306,9 +291,9 @@
     if (dragSource && insertIndicator) {
       if (
         dragSource.kind === "ws" &&
-        (dragSource as any).scope === insertIndicator.scope
+        dragSource.scope === insertIndicator.scope
       ) {
-        const from = (dragSource as any).localIdx as number;
+        const from = dragSource.localIdx;
         let to = insertIndicator.localIdx;
         if (insertIndicator.edge === "after") to += 1;
         if (from < to) to -= 1;
@@ -529,8 +514,8 @@
                 : 'transparent'};
             opacity: {dragActive &&
             dragSource?.kind === 'ws' &&
-            (dragSource as any).localIdx === localIdx &&
-            (dragSource as any).scope === 'floating'
+            dragSource.localIdx === localIdx &&
+            dragSource.scope === 'floating'
               ? '0.4'
               : '1'};
             position: relative;
@@ -710,8 +695,8 @@
               {@const isDragged =
                 dragActive &&
                 dragSource?.kind === "ws" &&
-                (dragSource as any).localIdx === localIdx &&
-                (dragSource as any).scope === project.id}
+                dragSource.localIdx === localIdx &&
+                dragSource.scope === project.id}
 
               {#if insertIndicator?.scope === project.id && insertIndicator.localIdx === localIdx && insertIndicator.edge === "before"}
                 <div

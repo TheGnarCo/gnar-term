@@ -7,7 +7,13 @@
  */
 import { get } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
-import { uid, type Workspace, type Pane, type WorkspaceRecord } from "./types";
+import {
+  uid,
+  getWorktreeEnv,
+  type Workspace,
+  type Pane,
+  type WorkspaceRecord,
+} from "./types";
 import { workspaces, activeWorkspaceIdx } from "./stores/workspace";
 import { openWorkspace, loadingMessage } from "./stores/ui";
 import {
@@ -16,6 +22,7 @@ import {
 } from "./stores/dialog-service";
 import { registerProject } from "./stores/project";
 import { getSettings, getProjectAutoSpawnHarnesses } from "./settings";
+import { showErrorDialog } from "./dialog-utils";
 import { createTerminalSurface } from "./terminal-service";
 import { safeFocusTerminal } from "./terminal-focus";
 
@@ -37,10 +44,7 @@ export async function openNewWorkspace(
     rightSidebarOpen: wsMeta.type === "managed",
   };
   // For managed workspaces, set GNARTERM_WORKTREE_ROOT to enforce boundary
-  const worktreeEnv =
-    wsMeta.type === "managed" && cwd
-      ? { GNARTERM_WORKTREE_ROOT: cwd }
-      : undefined;
+  const worktreeEnv = getWorktreeEnv(ws);
 
   let activeSurface: import("./types").Surface;
   if (launchHarness) {
@@ -103,12 +107,7 @@ export async function handleAddProject(): Promise<void> {
       await cloneProject(result.url, targetDir);
       await registerProject(targetDir, repoName);
     } catch (err) {
-      const { showConfirmDialog } = await import("./stores/dialog-service");
-      await showConfirmDialog(`Clone failed: ${err}`, {
-        title: "Error",
-        confirmLabel: "OK",
-        danger: true,
-      });
+      await showErrorDialog(`Clone failed: ${err}`);
     } finally {
       loadingMessage.set(null);
     }
@@ -199,12 +198,7 @@ async function attachExistingWorktree(
       await gitCheckout(worktreePath, localName);
       branch = localName;
     } catch (err) {
-      const { showConfirmDialog } = await import("./stores/dialog-service");
-      await showConfirmDialog(`Checkout failed: ${err}`, {
-        title: "Error",
-        confirmLabel: "OK",
-        danger: true,
-      });
+      await showErrorDialog(`Checkout failed: ${err}`);
       return;
     }
   }
@@ -300,12 +294,7 @@ async function createWorktreeWorkspace(
     openWorkspace();
     safeFocusTerminal(surface);
   } catch (err) {
-    const { showConfirmDialog } = await import("./stores/dialog-service");
-    await showConfirmDialog(`Worktree creation failed: ${err}`, {
-      title: "Error",
-      confirmLabel: "OK",
-      danger: true,
-    });
+    await showErrorDialog(`Worktree creation failed: ${err}`);
   } finally {
     loadingMessage.set(null);
   }
@@ -404,12 +393,7 @@ export async function sendIssueToAgent(
       }
     }
   } catch (err) {
-    const { showConfirmDialog } = await import("./stores/dialog-service");
-    await showConfirmDialog(`Failed to create workspace for issue: ${err}`, {
-      title: "Error",
-      confirmLabel: "OK",
-      danger: true,
-    });
+    await showErrorDialog(`Failed to create workspace for issue: ${err}`);
   } finally {
     loadingMessage.set(null);
   }

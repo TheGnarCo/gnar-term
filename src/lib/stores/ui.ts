@@ -53,37 +53,28 @@ export type ViewName =
 export const currentView = writable<ViewName>("home");
 export const currentProjectId = writable<string | null>(null);
 
-export function goHome(): void {
+export async function goHome(): Promise<void> {
   currentView.set("home");
   currentProjectId.set(null);
-  import("./workspace").then((m) => m.activeWorkspaceIdx.set(-1));
+  const { activeWorkspaceIdx } = await import("./workspace");
+  activeWorkspaceIdx.set(-1);
 }
 
-export function goToProject(projectId: string): void {
+export async function goToProject(projectId: string): Promise<void> {
   currentView.set("project");
   currentProjectId.set(projectId);
-  import("./workspace").then((m) => m.activeWorkspaceIdx.set(-1));
+  const { activeWorkspaceIdx } = await import("./workspace");
+  activeWorkspaceIdx.set(-1);
 }
 
-export function goToProjectSettings(projectId: string): void {
+export async function goToProjectSettings(projectId: string): Promise<void> {
   currentView.set("project-settings");
   currentProjectId.set(projectId);
-  import("./workspace").then((m) => m.activeWorkspaceIdx.set(-1));
+  const { activeWorkspaceIdx } = await import("./workspace");
+  activeWorkspaceIdx.set(-1);
 }
 
 export function openWorkspace(): void {
   currentView.set("workspace");
   currentProjectId.set(null);
 }
-
-// Re-export dialog service for backward compatibility
-export {
-  inputPrompt,
-  showInputPrompt,
-  newProjectDialog,
-  showNewProjectDialog,
-  newWorkspaceDialog,
-  showNewWorkspaceDialog,
-  settingsDialogOpen,
-  needsReload,
-} from "./dialog-service";

@@ -219,6 +219,16 @@ export interface HarnessPreset {
   icon?: string;
 }
 
+// --- Worktree environment helper ---
+
+export function getWorktreeEnv(
+  ws: Workspace,
+): Record<string, string> | undefined {
+  return ws.record?.type === "managed" && ws.record.worktreePath
+    ? { GNARTERM_WORKTREE_ROOT: ws.record.worktreePath }
+    : undefined;
+}
+
 // --- Helper functions for tree traversal ---
 
 export function findPane(ws: Workspace, paneId: string): Pane | null {

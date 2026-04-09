@@ -33,6 +33,16 @@ export function dialogStyles(theme: ThemeDef) {
   };
 }
 
+/** Show a modal error dialog with an OK button */
+export async function showErrorDialog(message: string): Promise<void> {
+  const { showConfirmDialog } = await import("./stores/dialog-service");
+  await showConfirmDialog(message, {
+    title: "Error",
+    confirmLabel: "OK",
+    danger: true,
+  });
+}
+
 /** Open a native directory picker and return the selected path, or null */
 export async function browseDirectory(title: string): Promise<string | null> {
   try {

@@ -123,7 +123,9 @@ export async function saveState(): Promise<void> {
 
   try {
     await invoke("ensure_dir", { path: `${home}/.config/gnar` });
-  } catch {}
+  } catch (e) {
+    console.warn("ensure_dir failed:", e);
+  }
 
   await invoke("write_file", {
     path: statePath(home),
@@ -136,6 +138,28 @@ export function getState(): AppState {
 }
 
 // --- Project CRUD ---
+
+export async function updateProjectActive(
+  projectId: string,
+  active: boolean,
+): Promise<void> {
+  const proj = _state.projects.find((p) => p.id === projectId);
+  if (proj) {
+    proj.active = active;
+    await saveState();
+  }
+}
+
+export async function updateProjectColor(
+  projectId: string,
+  color: string,
+): Promise<void> {
+  const proj = _state.projects.find((p) => p.id === projectId);
+  if (proj) {
+    proj.color = color;
+    await saveState();
+  }
+}
 
 export function addProject(project: ProjectState): void {
   if (_state.projects.some((p) => p.id === project.id)) return;

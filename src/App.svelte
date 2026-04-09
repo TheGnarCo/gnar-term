@@ -9,13 +9,13 @@
     commandPaletteOpen,
     findBarVisible,
     pendingAction,
-    showInputPrompt,
     currentView,
     currentProjectId,
     goHome,
     openWorkspace,
     loadingMessage,
   } from "./lib/stores/ui";
+  import { showInputPrompt } from "./lib/stores/dialog-service";
   import { openNewWorkspace } from "./lib/workspace-actions";
   import {
     workspaces,
@@ -48,6 +48,7 @@
     isTerminalSurface,
     isHarnessSurface,
     findPane,
+    getWorktreeEnv,
     type Workspace,
     type Pane,
     type SplitNode,
@@ -122,10 +123,6 @@
   // ---- Workspace service functions ----
 
   // safeFocus is now safeFocusTerminal from terminal-focus.ts
-
-  async function createWorkspace(_name?: string) {
-    await handleNewFloatingWorkspace();
-  }
 
   async function createWorkspaceFromDef(def: WorkspaceDef) {
     const wsName = def.name || `Workspace ${$workspaces.length + 1}`;
@@ -319,18 +316,6 @@
     }
   }
 
-  function reorderWorkspaces(fromIdx: number, toIdx: number) {
-    workspaces.update((list) => {
-      const item = list.splice(fromIdx, 1)[0];
-      const adjustedTo = fromIdx < toIdx ? toIdx - 1 : toIdx;
-      list.splice(adjustedTo, 0, item);
-      return [...list];
-    });
-    if ($activeWorkspaceIdx === fromIdx) {
-      activeWorkspaceIdx.set(fromIdx < toIdx ? toIdx - 1 : toIdx);
-    }
-  }
-
   // ---- Pane/Surface service functions ----
 
   function handleSelectSurface(paneId: string, surfaceId: string) {
@@ -398,10 +383,7 @@
     const { createHarnessSurface, registerHarnessWithTracker } =
       await import("./lib/terminal-service");
     const cwd = placeholder.cwd || ws.record?.worktreePath;
-    const worktreeEnv =
-      ws.record?.type === "managed" && cwd
-        ? { GNARTERM_WORKTREE_ROOT: cwd }
-        : undefined;
+    const worktreeEnv = getWorktreeEnv(ws);
     pane.surfaces.splice(idx, 1);
     const h = await createHarnessSurface(
       pane,
@@ -455,9 +437,8 @@
     const cwd = await getActiveCwd();
     const surface = await createTerminalSurface(pane, cwd);
     // Enforce worktree boundary for managed workspaces
-    if (ws.record?.type === "managed" && ws.record.worktreePath) {
-      surface.env = { GNARTERM_WORKTREE_ROOT: ws.record.worktreePath };
-    }
+    const env = getWorktreeEnv(ws);
+    if (env) surface.env = env;
     notifyWorkspacesChanged();
     safeFocusTerminal(surface);
   }
@@ -468,10 +449,7 @@
     const pane = findPane(ws, paneId);
     if (!pane) return;
     const cwd = await getActiveCwd();
-    const worktreeEnv =
-      ws.record?.type === "managed" && ws.record.worktreePath
-        ? { GNARTERM_WORKTREE_ROOT: ws.record.worktreePath }
-        : undefined;
+    const worktreeEnv = getWorktreeEnv(ws);
     const { createHarnessSurface, registerHarnessWithTracker } =
       await import("./lib/terminal-service");
     const h = await createHarnessSurface(pane, presetId, cwd, worktreeEnv);
@@ -500,10 +478,7 @@
     }
 
     const cwd = await getActiveCwd();
-    const worktreeEnv =
-      ws.record?.type === "managed" && ws.record.worktreePath
-        ? { GNARTERM_WORKTREE_ROOT: ws.record.worktreePath }
-        : undefined;
+    const worktreeEnv = getWorktreeEnv(ws);
 
     if (kind === "harness" && presetId) {
       const { createHarnessSurface, registerHarnessWithTracker } =
@@ -796,7 +771,7 @@
     {
       name: "New Terminal Workspace",
       shortcut: "⌘N",
-      action: () => createWorkspace(),
+      action: () => handleNewFloatingWorkspace(),
     },
     {
       name: "New Surface (Tab)",
@@ -929,8 +904,9 @@
     const cwd = await getActiveCwd();
     const surface = await createTerminalSurface(pane, cwd);
     const ws = $activeWorkspace;
-    if (ws?.record?.type === "managed" && ws.record.worktreePath) {
-      surface.env = { GNARTERM_WORKTREE_ROOT: ws.record.worktreePath };
+    if (ws) {
+      const env = getWorktreeEnv(ws);
+      if (env) surface.env = env;
     }
     const fileName = filePath.split("/").pop() || filePath;
     surface.title = `$EDITOR: ${fileName}`;
@@ -1000,7 +976,7 @@
 
   // ---- Keyboard shortcuts (dispatched via keybindings.ts) ----
   const kbActions: KeybindingActions = {
-    createWorkspace: () => createWorkspace(),
+    createWorkspace: () => handleNewFloatingWorkspace(),
     newSurface: handleNewSurfaceFromSidebar,
     splitHorizontal: () => handleSplitFromSidebar("horizontal"),
     splitVertical: () => handleSplitFromSidebar("vertical"),

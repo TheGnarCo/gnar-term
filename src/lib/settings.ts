@@ -159,7 +159,7 @@ export function mergeHarnessPresets(
 
 // --- Internal state ---
 
-let _settings: Settings = { ...DEFAULT_SETTINGS };
+let _settings: Settings = structuredClone(DEFAULT_SETTINGS);
 
 function settingsPath(home: string): string {
   return `${home}/.config/gnar/settings.json`;
@@ -195,10 +195,7 @@ export async function loadSettings(): Promise<Settings> {
     // No settings file yet — use defaults
   }
 
-  _settings = {
-    ...DEFAULT_SETTINGS,
-    harnesses: [...DEFAULT_SETTINGS.harnesses],
-  };
+  _settings = structuredClone(DEFAULT_SETTINGS);
   return _settings;
 }
 
@@ -257,7 +254,9 @@ export async function saveSettings(updates: Partial<Settings>): Promise<void> {
 
   try {
     await invoke("ensure_dir", { path: `${home}/.config/gnar` });
-  } catch {}
+  } catch (e) {
+    console.warn("ensure_dir failed:", e);
+  }
 
   await invoke("write_file", {
     path: settingsPath(home),
@@ -289,9 +288,6 @@ export async function getProjectAutoSpawnHarnesses(
 
 /** Reset module state — for tests only */
 export function _resetForTesting(): void {
-  _settings = {
-    ...DEFAULT_SETTINGS,
-    harnesses: [...DEFAULT_SETTINGS.harnesses],
-  };
+  _settings = structuredClone(DEFAULT_SETTINGS);
   _resetHome();
 }

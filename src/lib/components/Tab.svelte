@@ -1,6 +1,7 @@
 <script lang="ts">
   import { theme } from "../stores/theme";
-  import { contextMenu, showInputPrompt } from "../stores/ui";
+  import { contextMenu } from "../stores/ui";
+  import { showInputPrompt } from "../stores/dialog-service";
   import type { Surface } from "../types";
   import { isHarnessSurface } from "../types";
   import type { AgentStatus } from "../types";

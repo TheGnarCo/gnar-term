@@ -1,7 +1,7 @@
 <script lang="ts">
   import { theme } from "../stores/theme";
   import { themes } from "../theme-data";
-  import { settingsDialogOpen, needsReload } from "../stores/ui";
+  import { settingsDialogOpen, needsReload } from "../stores/dialog-service";
   import { getSettings, saveSettings } from "../settings";
   import { dialogStyles, browseDirectory } from "../dialog-utils";
   import Dialog from "./Dialog.svelte";

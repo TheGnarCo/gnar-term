@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tick, onDestroy } from "svelte";
   import { theme } from "../stores/theme";
-  import { newProjectDialog } from "../stores/ui";
+  import { newProjectDialog } from "../stores/dialog-service";
   import { dialogStyles, browseDirectory } from "../dialog-utils";
   import Dialog from "./Dialog.svelte";
 

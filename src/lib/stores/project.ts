@@ -16,6 +16,8 @@ import {
   addWorkspace as stateAddWorkspace,
   removeWorkspace,
   updateWorkspaceStatus,
+  updateProjectActive,
+  updateProjectColor,
   saveState,
   nextProjectColor,
   type ProjectState,
@@ -113,30 +115,16 @@ export async function setProjectActive(
   projectId: string,
   active: boolean,
 ): Promise<void> {
-  projects.update((list) =>
-    list.map((p) => (p.id === projectId ? { ...p, active } : p)),
-  );
-
-  const state = getState();
-  const proj = state.projects.find((p) => p.id === projectId);
-  if (proj) proj.active = active;
-
-  await saveState();
+  await updateProjectActive(projectId, active);
+  refreshProjectStore(projectId);
 }
 
 export async function setProjectColor(
   projectId: string,
   color: string,
 ): Promise<void> {
-  projects.update((list) =>
-    list.map((p) => (p.id === projectId ? { ...p, color } : p)),
-  );
-
-  const state = getState();
-  const proj = state.projects.find((p) => p.id === projectId);
-  if (proj) proj.color = color;
-
-  await saveState();
+  await updateProjectColor(projectId, color);
+  refreshProjectStore(projectId);
 }
 
 export async function reorderProjects(

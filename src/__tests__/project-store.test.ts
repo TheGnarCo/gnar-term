@@ -22,6 +22,8 @@ vi.mock("../lib/state", async () => {
     addProject: vi.fn(),
     removeProject: vi.fn(),
     saveState: vi.fn(() => Promise.resolve()),
+    updateProjectActive: vi.fn(() => Promise.resolve()),
+    updateProjectColor: vi.fn(() => Promise.resolve()),
     nextProjectColor: actual.nextProjectColor,
   };
 });
@@ -31,11 +33,20 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(() => Promise.reject("not found")),
 }));
 
-import { getState, addProject, removeProject, saveState } from "../lib/state";
+import {
+  getState,
+  addProject,
+  removeProject,
+  saveState,
+  updateProjectActive,
+  updateProjectColor,
+} from "../lib/state";
 const mockGetState = vi.mocked(getState);
 const mockAddProject = vi.mocked(addProject);
 const mockRemoveProject = vi.mocked(removeProject);
 const mockSaveState = vi.mocked(saveState);
+const mockUpdateProjectActive = vi.mocked(updateProjectActive);
+const mockUpdateProjectColor = vi.mocked(updateProjectColor);
 
 describe("projects store", () => {
   beforeEach(() => {
@@ -220,9 +231,25 @@ describe("setProjectActive()", () => {
   });
 
   it("sets project inactive", async () => {
+    // After updateProjectActive, getState should return the updated project
+    mockGetState.mockReturnValue({
+      projects: [
+        {
+          id: "p1",
+          name: "proj",
+          path: "/a",
+          active: false,
+          gitBacked: true,
+          color: "#e06c75",
+          workspaces: [],
+        },
+      ],
+      floatingWorkspaces: [],
+    });
+
     await setProjectActive("p1", false);
 
-    expect(mockSaveState).toHaveBeenCalled();
+    expect(mockUpdateProjectActive).toHaveBeenCalledWith("p1", false);
     expect(get(projects)[0].active).toBe(false);
   });
 
@@ -239,8 +266,25 @@ describe("setProjectActive()", () => {
       },
     ]);
 
+    // After updateProjectActive, getState should return the updated project
+    mockGetState.mockReturnValue({
+      projects: [
+        {
+          id: "p1",
+          name: "proj",
+          path: "/a",
+          active: true,
+          gitBacked: false,
+          color: "#61afef",
+          workspaces: [],
+        },
+      ],
+      floatingWorkspaces: [],
+    });
+
     await setProjectActive("p1", true);
 
+    expect(mockUpdateProjectActive).toHaveBeenCalledWith("p1", true);
     expect(get(projects)[0].active).toBe(true);
   });
 });

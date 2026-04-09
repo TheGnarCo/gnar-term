@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tick, onDestroy } from "svelte";
   import { theme } from "../stores/theme";
-  import { newWorkspaceDialog } from "../stores/ui";
+  import { newWorkspaceDialog } from "../stores/dialog-service";
   import { dialogStyles } from "../dialog-utils";
   import { getState } from "../state";
   import Dialog from "./Dialog.svelte";

@@ -109,6 +109,7 @@ import WorkspaceItem from "../lib/components/WorkspaceItem.svelte";
 import PaneView from "../lib/components/PaneView.svelte";
 import Sidebar from "../lib/components/Sidebar.svelte";
 import TerminalSurfaceComponent from "../lib/components/TerminalSurface.svelte";
+import { modLabel, shiftModLabel } from "../lib/terminal-service";
 
 // Store imports
 import {
@@ -391,7 +392,7 @@ describe("TabBar", () => {
         onClosePane: noop,
       },
     });
-    expect(screen.getByTitle("Split Right (⌘D)")).toBeDefined();
+    expect(screen.getByTitle(`Split Right (${modLabel}D)`)).toBeDefined();
   });
 
   it("renders split down button", () => {
@@ -407,7 +408,7 @@ describe("TabBar", () => {
         onClosePane: noop,
       },
     });
-    expect(screen.getByTitle("Split Down (⇧⌘D)")).toBeDefined();
+    expect(screen.getByTitle(`Split Down (${shiftModLabel}D)`)).toBeDefined();
   });
 
   it("renders close pane button", () => {
@@ -771,8 +772,8 @@ describe("PaneView", () => {
         onFocusPane: noop,
       },
     });
-    expect(screen.getByTitle("Split Right (⌘D)")).toBeDefined();
-    expect(screen.getByTitle("Split Down (⇧⌘D)")).toBeDefined();
+    expect(screen.getByTitle(`Split Right (${modLabel}D)`)).toBeDefined();
+    expect(screen.getByTitle(`Split Down (${shiftModLabel}D)`)).toBeDefined();
     expect(screen.getByTitle("Close Pane")).toBeDefined();
   });
 });

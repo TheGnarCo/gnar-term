@@ -2,6 +2,9 @@
   import { theme } from "../stores/theme";
   import { contextMenu } from "../stores/ui";
   import { getSettings } from "../settings";
+  import { showConfirmDialog } from "../stores/dialog-service";
+  import { modLabel, shiftModLabel } from "../terminal-service";
+  import { isHarnessSurface } from "../types";
   import Tab from "./Tab.svelte";
   import type { Pane } from "../types";
   import type { MenuItem } from "../context-menu-types";
@@ -27,6 +30,53 @@
   export let worktreePath: string | undefined = undefined;
   export let onNewContextualSurface: ((kind: string) => void) | undefined =
     undefined;
+
+  /** Partition surfaces into harness-kind (left) and terminal-kind (right) */
+  $: harnessSurfaces = pane.surfaces.filter((s) => isHarnessSurface(s));
+  $: terminalSurfaces = pane.surfaces.filter((s) => !isHarnessSurface(s));
+  $: hasBothKinds = harnessSurfaces.length > 0 && terminalSurfaces.length > 0;
+
+  /** Overflow scroll state */
+  let tabContainer: HTMLElement;
+  let showLeftArrow = false;
+  let showRightArrow = false;
+
+  function updateScrollArrows() {
+    if (!tabContainer) return;
+    const { scrollLeft, scrollWidth, clientWidth } = tabContainer;
+    showLeftArrow = scrollLeft > 0;
+    showRightArrow = scrollLeft + clientWidth < scrollWidth - 1;
+  }
+
+  function scrollLeft() {
+    tabContainer?.scrollBy({ left: -120, behavior: "smooth" });
+  }
+
+  function scrollRight() {
+    tabContainer?.scrollBy({ left: 120, behavior: "smooth" });
+  }
+
+  /** Close pane with confirmation when pane has >1 surface or any active harness */
+  async function handleClosePane() {
+    const hasMultipleSurfaces = pane.surfaces.length > 1;
+    const hasActiveHarness = pane.surfaces.some((s) => isHarnessSurface(s));
+
+    if (hasMultipleSurfaces || hasActiveHarness) {
+      const confirmed = await showConfirmDialog(
+        hasActiveHarness
+          ? "This pane contains an active harness. Close it anyway?"
+          : `This pane contains ${pane.surfaces.length} tabs. Close all of them?`,
+        {
+          title: "Close Pane",
+          confirmLabel: "Close",
+          danger: true,
+        },
+      );
+      if (!confirmed) return;
+    }
+
+    onClosePane();
+  }
 
   function showNewSurfaceMenu(e: MouseEvent) {
     const items: MenuItem[] = [{ label: "Terminal", action: onNewSurface }];
@@ -83,33 +133,94 @@
 
 <div
   style="
-    display: flex; align-items: center; gap: 1px;
+    display: flex; align-items: center;
     background: {$theme.tabBarBg}; border-bottom: none;
-    height: 28px; padding: 0 4px; flex-shrink: 0; overflow-x: auto;
-    scrollbar-width: none;
+    height: 28px; padding: 0 4px; flex-shrink: 0;
+    position: relative;
   "
 >
-  {#each pane.surfaces as surface, i (surface.id)}
-    <Tab
-      {surface}
-      index={i}
-      isActive={surface.id === pane.activeSurfaceId}
-      onSelect={() => onSelectSurface(surface.id)}
-      onClose={() => onCloseSurface(surface.id)}
-      onRename={onRenameTab ? (t) => onRenameTab!(surface.id, t) : undefined}
-      onReorder={onReorderTab}
-    />
-  {/each}
+  {#if showLeftArrow}
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <span
+      data-scroll-left
+      style="
+        color: {$theme.fgDim}; cursor: pointer; font-size: 12px;
+        padding: 0 4px; flex-shrink: 0; display: flex; align-items: center;
+        z-index: 1;
+      "
+      on:click={scrollLeft}>&lsaquo;</span
+    >
+  {/if}
 
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <span
-    title="New surface"
-    style="color: {$theme.fgDim}; cursor: pointer; font-size: 14px; padding: 0 6px;"
-    on:click={showNewSurfaceMenu}>+</span
+  <div
+    bind:this={tabContainer}
+    on:scroll={updateScrollArrows}
+    style="
+      display: flex; align-items: center; gap: 1px;
+      overflow-x: auto; scrollbar-width: none;
+      flex: 1; min-width: 0;
+    "
+    data-tab-container
   >
+    {#each harnessSurfaces as surface, i (surface.id)}
+      <Tab
+        {surface}
+        index={pane.surfaces.indexOf(surface)}
+        isActive={surface.id === pane.activeSurfaceId}
+        onSelect={() => onSelectSurface(surface.id)}
+        onClose={() => onCloseSurface(surface.id)}
+        onRename={onRenameTab ? (t) => onRenameTab!(surface.id, t) : undefined}
+        onReorder={onReorderTab}
+      />
+    {/each}
 
-  <div style="flex: 1;"></div>
+    {#if hasBothKinds}
+      <span
+        data-tab-divider
+        style="
+          width: 1px; height: 16px; background: {$theme.border};
+          flex-shrink: 0; margin: 0 4px;
+        "
+      ></span>
+    {/if}
+
+    {#each terminalSurfaces as surface, i (surface.id)}
+      <Tab
+        {surface}
+        index={pane.surfaces.indexOf(surface)}
+        isActive={surface.id === pane.activeSurfaceId}
+        onSelect={() => onSelectSurface(surface.id)}
+        onClose={() => onCloseSurface(surface.id)}
+        onRename={onRenameTab ? (t) => onRenameTab!(surface.id, t) : undefined}
+        onReorder={onReorderTab}
+      />
+    {/each}
+
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <span
+      title="New surface"
+      style="color: {$theme.fgDim}; cursor: pointer; font-size: 14px; padding: 0 6px;"
+      on:click={showNewSurfaceMenu}>+</span
+    >
+  </div>
+
+  {#if showRightArrow}
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <span
+      data-scroll-right
+      style="
+        color: {$theme.fgDim}; cursor: pointer; font-size: 12px;
+        padding: 0 4px; flex-shrink: 0; display: flex; align-items: center;
+        z-index: 1;
+      "
+      on:click={scrollRight}>&rsaquo;</span
+    >
+  {/if}
+
+  <div style="flex-shrink: 0;"></div>
 
   <div
     style="display: flex; align-items: center; gap: 2px; padding-right: 2px;"
@@ -117,7 +228,7 @@
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <span
-      title="Split Right (⌘D)"
+      title="Split Right ({modLabel}D)"
       style="color: {$theme.fgDim}; cursor: pointer; width: 24px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center;"
       on:click|stopPropagation={onSplitRight}
     >
@@ -139,7 +250,7 @@
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <span
-      title="Split Down (⇧⌘D)"
+      title="Split Down ({shiftModLabel}D)"
       style="color: {$theme.fgDim}; cursor: pointer; width: 24px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center;"
       on:click|stopPropagation={onSplitDown}
     >
@@ -188,7 +299,7 @@
     <span
       title="Close Pane"
       style="color: {$theme.fgDim}; cursor: pointer; width: 24px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center;"
-      on:click|stopPropagation={onClosePane}
+      on:click|stopPropagation={handleClosePane}
     >
       <svg
         width="12"
@@ -208,3 +319,9 @@
     </span>
   </div>
 </div>
+
+<style>
+  [data-tab-container]::-webkit-scrollbar {
+    display: none;
+  }
+</style>

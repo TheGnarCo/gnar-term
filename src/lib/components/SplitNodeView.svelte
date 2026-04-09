@@ -62,11 +62,18 @@
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
   }
+
+  function handleDividerDblClick() {
+    if (node.type === "split") {
+      node.ratio = 0.5;
+    }
+  }
 </script>
 
 {#if node.type === "pane"}
   <PaneView
     pane={node.pane}
+    isFocused={workspace.activePaneId === node.pane.id}
     onSelectSurface={(sid) => onSelectSurface(node.pane.id, sid)}
     onCloseSurface={(sid) => onCloseSurface(node.pane.id, sid)}
     onNewSurface={() => onNewSurface(node.pane.id)}
@@ -136,6 +143,7 @@
         transition: background 0.15s;
       "
       on:mousedown={startDrag}
+      on:dblclick={handleDividerDblClick}
     ></div>
     <div
       style="flex: {1 -

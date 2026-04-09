@@ -3,6 +3,7 @@
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
+  cloneProject,
   createWorktree,
   removeWorktree,
   listWorktrees,
@@ -246,5 +247,91 @@ describe("Diff / status / log", () => {
       worktreePath: "/code/worktree",
       baseBranch: "main",
     });
+  });
+});
+
+// ===========================================================================
+// Error path tests — verify rejection propagation
+// ===========================================================================
+
+describe("Worktree error paths", () => {
+  beforeEach(() => {
+    mockInvoke.mockReset();
+  });
+
+  it("cloneProject propagates error when invoke rejects", async () => {
+    mockInvoke.mockRejectedValueOnce("git error: repository not found");
+    await expect(
+      cloneProject("https://example.com/repo.git", "/tmp/clone"),
+    ).rejects.toThrow("repository not found");
+  });
+
+  it("createWorktree propagates error when invoke rejects", async () => {
+    mockInvoke.mockRejectedValueOnce("git error: branch already exists");
+    await expect(
+      createWorktree("/code/project", "jrvs/feat-x", "main"),
+    ).rejects.toThrow("branch already exists");
+  });
+
+  it("removeWorktree propagates error when invoke rejects", async () => {
+    mockInvoke.mockRejectedValueOnce("git error: worktree is dirty");
+    await expect(
+      removeWorktree("/code/project", "/code/worktrees/feat"),
+    ).rejects.toThrow("worktree is dirty");
+  });
+
+  it("listWorktrees propagates error when invoke rejects", async () => {
+    mockInvoke.mockRejectedValueOnce("git error: not a git repository");
+    await expect(listWorktrees("/bad/path")).rejects.toThrow(
+      "not a git repository",
+    );
+  });
+});
+
+describe("Branch error paths", () => {
+  beforeEach(() => {
+    mockInvoke.mockReset();
+  });
+
+  it("listBranches propagates error when invoke rejects", async () => {
+    mockInvoke.mockRejectedValueOnce("git error: not a git repository");
+    await expect(listBranches("/bad/path")).rejects.toThrow(
+      "not a git repository",
+    );
+  });
+
+  it("pushBranch propagates error when invoke rejects", async () => {
+    mockInvoke.mockRejectedValueOnce("git error: remote rejected");
+    await expect(pushBranch("/code/project", "jrvs/feat")).rejects.toThrow(
+      "remote rejected",
+    );
+  });
+
+  it("deleteBranch propagates error when invoke rejects", async () => {
+    mockInvoke.mockRejectedValueOnce("git error: branch not found");
+    await expect(
+      deleteBranch("/code/project", "nonexistent", false),
+    ).rejects.toThrow("branch not found");
+  });
+});
+
+describe("Diff / status / log error paths", () => {
+  beforeEach(() => {
+    mockInvoke.mockReset();
+  });
+
+  it("gitStatus propagates error when invoke rejects", async () => {
+    mockInvoke.mockRejectedValueOnce("git error: path not found");
+    await expect(gitStatus("/bad/worktree")).rejects.toThrow("path not found");
+  });
+
+  it("gitDiff propagates error when invoke rejects", async () => {
+    mockInvoke.mockRejectedValueOnce("git error: bad revision");
+    await expect(gitDiff("/bad/worktree")).rejects.toThrow("bad revision");
+  });
+
+  it("gitLog propagates error when invoke rejects", async () => {
+    mockInvoke.mockRejectedValueOnce("git error: ambiguous argument");
+    await expect(gitLog("/bad/worktree")).rejects.toThrow("ambiguous argument");
   });
 });

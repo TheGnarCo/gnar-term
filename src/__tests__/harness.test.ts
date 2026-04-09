@@ -119,6 +119,10 @@ import {
 } from "@testing-library/svelte";
 import TabBar from "../lib/components/TabBar.svelte";
 import Tab from "../lib/components/Tab.svelte";
+import {
+  makeSurface as sharedMakeSurface,
+  makeHarnessSurface as sharedMakeHarnessSurface,
+} from "./helpers/mocks";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -472,92 +476,13 @@ describe("HarnessStatusTracker", () => {
 describe("TabBar harness UI", () => {
   const noop = () => {};
 
-  function makeTermSurface(
-    id: string,
-    title: string,
-  ): import("../lib/types").TerminalSurface {
-    return {
-      kind: "terminal",
-      id,
-      terminal: {
-        focus: vi.fn(),
-        open: vi.fn(),
-        dispose: vi.fn(),
-        scrollToBottom: vi.fn(),
-        write: vi.fn(),
-        onData: vi.fn(),
-        onResize: vi.fn(),
-        onTitleChange: vi.fn(),
-        loadAddon: vi.fn(),
-        options: {},
-        buffer: { active: { getLine: vi.fn() } },
-        parser: { registerOscHandler: vi.fn() },
-        attachCustomKeyEventHandler: vi.fn(),
-        registerLinkProvider: vi.fn(),
-        getSelection: vi.fn(),
-      } as any,
-      fitAddon: { fit: vi.fn() } as any,
-      searchAddon: {
-        findNext: vi.fn(),
-        findPrevious: vi.fn(),
-        clearDecorations: vi.fn(),
-      } as any,
-      termElement: document.createElement("div"),
-      ptyId: 1,
-      title,
-      hasUnread: false,
-      opened: true,
-    };
-  }
-
-  function makeHarnessTab(
-    id: string,
-    title: string,
-    status: AgentStatus = "idle",
-  ): HarnessSurface {
-    return {
-      kind: "harness",
-      id,
-      terminal: {
-        focus: vi.fn(),
-        open: vi.fn(),
-        dispose: vi.fn(),
-        scrollToBottom: vi.fn(),
-        write: vi.fn(),
-        onData: vi.fn(),
-        onResize: vi.fn(),
-        onTitleChange: vi.fn(),
-        loadAddon: vi.fn(),
-        options: {},
-        buffer: { active: { getLine: vi.fn() } },
-        parser: { registerOscHandler: vi.fn() },
-        attachCustomKeyEventHandler: vi.fn(),
-        registerLinkProvider: vi.fn(),
-        getSelection: vi.fn(),
-      } as any,
-      fitAddon: { fit: vi.fn() } as any,
-      searchAddon: {
-        findNext: vi.fn(),
-        findPrevious: vi.fn(),
-        clearDecorations: vi.fn(),
-      } as any,
-      termElement: document.createElement("div"),
-      ptyId: 2,
-      title,
-      hasUnread: false,
-      opened: true,
-      presetId: "claude",
-      status,
-    };
-  }
-
   beforeEach(() => {
     testingCleanup();
   });
 
   it("renders all tabs in natural order (unified tab bar)", () => {
-    const harness = makeHarnessTab("h1", "Claude Code");
-    const term = makeTermSurface("t1", "Shell 1");
+    const harness = sharedMakeHarnessSurface("h1", { title: "Claude Code" });
+    const term = sharedMakeSurface("t1", { title: "Shell 1" });
     const pane: Pane = {
       id: "p1",
       surfaces: [term, harness],
@@ -581,7 +506,10 @@ describe("TabBar harness UI", () => {
   });
 
   it("shows a status dot for harness surfaces", () => {
-    const harness = makeHarnessTab("h1", "Claude Code", "running");
+    const harness = sharedMakeHarnessSurface("h1", {
+      title: "Claude Code",
+      status: "running",
+    });
     const pane: Pane = {
       id: "p1",
       surfaces: [harness],
@@ -599,12 +527,12 @@ describe("TabBar harness UI", () => {
       },
     });
     const dot = container.querySelector("[data-status-dot]");
-    expect(dot).toBeTruthy();
+    expect(dot).not.toBeNull();
   });
 
   it("does not render divider (unified tab bar)", () => {
-    const harness = makeHarnessTab("h1", "Claude Code");
-    const term = makeTermSurface("t1", "Shell 1");
+    const harness = sharedMakeHarnessSurface("h1", { title: "Claude Code" });
+    const term = sharedMakeSurface("t1", { title: "Shell 1" });
     const pane: Pane = {
       id: "p1",
       surfaces: [harness, term],

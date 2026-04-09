@@ -172,3 +172,81 @@ describe("ghCreatePr", () => {
     });
   });
 });
+
+// ===========================================================================
+// Error path tests — verify rejection propagation
+// ===========================================================================
+
+describe("gitAdd error paths", () => {
+  beforeEach(() => {
+    mockInvoke.mockReset();
+  });
+
+  it("propagates error when invoke rejects", async () => {
+    mockInvoke.mockRejectedValueOnce("git error: pathspec did not match");
+    await expect(gitAdd("/code/worktree", ["nonexistent.ts"])).rejects.toThrow(
+      "pathspec did not match",
+    );
+  });
+});
+
+describe("gitCommit error paths", () => {
+  beforeEach(() => {
+    mockInvoke.mockReset();
+  });
+
+  it("propagates error when invoke rejects", async () => {
+    mockInvoke.mockRejectedValueOnce("git error: nothing to commit");
+    await expect(gitCommit("/code/worktree", "feat: empty")).rejects.toThrow(
+      "nothing to commit",
+    );
+  });
+});
+
+describe("gitPush error paths", () => {
+  beforeEach(() => {
+    mockInvoke.mockReset();
+  });
+
+  it("propagates error when invoke rejects", async () => {
+    mockInvoke.mockRejectedValueOnce("git error: remote rejected");
+    await expect(gitPush("/code/worktree")).rejects.toThrow("remote rejected");
+  });
+});
+
+describe("gitBranchName error paths", () => {
+  beforeEach(() => {
+    mockInvoke.mockReset();
+  });
+
+  it("propagates error when invoke rejects", async () => {
+    mockInvoke.mockRejectedValueOnce("git error: HEAD detached");
+    await expect(gitBranchName("/code/worktree")).rejects.toThrow(
+      "HEAD detached",
+    );
+  });
+});
+
+describe("gitDiffStaged error paths", () => {
+  beforeEach(() => {
+    mockInvoke.mockReset();
+  });
+
+  it("propagates error when invoke rejects", async () => {
+    mockInvoke.mockRejectedValueOnce("git error: bad object");
+    await expect(gitDiffStaged("/code/worktree")).rejects.toThrow("bad object");
+  });
+});
+
+describe("ghCreatePr error paths", () => {
+  beforeEach(() => {
+    mockInvoke.mockReset();
+  });
+
+  it("propagates error when invoke rejects", async () => {
+    mockInvoke.mockRejectedValueOnce("gh error: pull request already exists");
+    await expect(ghCreatePr("/code/repo", "feat: duplicate")).rejects.toThrow(
+      "pull request already exists",
+    );
+  });
+});

@@ -113,6 +113,7 @@ import { getSettings } from "../lib/settings";
 import type { Pane, HarnessPreset } from "../lib/types";
 import { uid } from "../lib/types";
 import type { MenuItem } from "../lib/context-menu-types";
+import { makeSurface } from "./helpers/mocks";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -120,29 +121,17 @@ import type { MenuItem } from "../lib/context-menu-types";
 
 const noop = () => {};
 
-function makePane(): Pane {
+function makeDiscoverabilityPane(): Pane {
+  const surface = makeSurface(uid(), { title: "Shell" });
   return {
     id: uid(),
-    surfaces: [
-      {
-        kind: "terminal",
-        id: uid(),
-        terminal: { focus: vi.fn() } as any,
-        fitAddon: { fit: vi.fn() } as any,
-        searchAddon: {} as any,
-        termElement: document.createElement("div"),
-        ptyId: 1,
-        title: "Shell",
-        hasUnread: false,
-        opened: true,
-      },
-    ],
+    surfaces: [surface],
     activeSurfaceId: null,
   };
 }
 
 function renderTabBar(overrides: Record<string, unknown> = {}) {
-  const pane = makePane();
+  const pane = makeDiscoverabilityPane();
   pane.activeSurfaceId = pane.surfaces[0].id;
   return render(TabBar, {
     props: {

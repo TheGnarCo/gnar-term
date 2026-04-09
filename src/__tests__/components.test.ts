@@ -120,66 +120,10 @@ import {
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
 
 // ---------------------------------------------------------------------------
-// Test helpers
+// Test helpers (shared)
 // ---------------------------------------------------------------------------
 
-function makeSurface(
-  id: string,
-  overrides: Partial<TerminalSurface> = {},
-): TerminalSurface {
-  return {
-    kind: "terminal",
-    id,
-    terminal: {
-      focus: vi.fn(),
-      open: vi.fn(),
-      dispose: vi.fn(),
-      scrollToBottom: vi.fn(),
-      write: vi.fn(),
-      onData: vi.fn(),
-      onResize: vi.fn(),
-      onTitleChange: vi.fn(),
-      loadAddon: vi.fn(),
-      options: {},
-      buffer: { active: { getLine: vi.fn() } },
-      parser: { registerOscHandler: vi.fn() },
-      attachCustomKeyEventHandler: vi.fn(),
-      registerLinkProvider: vi.fn(),
-      getSelection: vi.fn(),
-    } as any,
-    fitAddon: { fit: vi.fn() } as any,
-    searchAddon: {
-      findNext: vi.fn(),
-      findPrevious: vi.fn(),
-      clearDecorations: vi.fn(),
-    } as any,
-    termElement: document.createElement("div"),
-    ptyId: 1,
-    title: `Shell ${id}`,
-    hasUnread: false,
-    opened: true,
-    ...overrides,
-  };
-}
-
-function makePane(id: string, surfaces?: TerminalSurface[]): Pane {
-  const s = surfaces ?? [makeSurface(`${id}-s1`)];
-  return {
-    id,
-    surfaces: s,
-    activeSurfaceId: s[0].id,
-  };
-}
-
-function makeWorkspace(id: string, name: string, pane?: Pane): Workspace {
-  const p = pane ?? makePane(`${id}-p1`);
-  return {
-    id,
-    name,
-    splitRoot: { type: "pane", pane: p },
-    activePaneId: p.id,
-  };
-}
+import { makeSurface, makePane, makeWorkspace } from "./helpers/mocks";
 
 const noop = () => {};
 
@@ -204,19 +148,19 @@ beforeEach(() => {
 describe("TitleBar", () => {
   it("renders GnarTerm text", () => {
     render(TitleBar);
-    expect(screen.getByText("GnarTerm")).toBeTruthy();
+    expect(screen.getByText("GnarTerm")).toBeDefined();
   });
 
   it("has data-tauri-drag-region attribute", () => {
     const { container } = render(TitleBar);
     const el = container.querySelector("[data-tauri-drag-region]");
-    expect(el).toBeTruthy();
+    expect(el).not.toBeNull();
   });
 
   it("renders with drag region", () => {
     const { container } = render(TitleBar);
     const el = container.querySelector("[data-tauri-drag-region]");
-    expect(el).toBeTruthy();
+    expect(el).not.toBeNull();
   });
 });
 
@@ -228,7 +172,7 @@ describe("SidebarToggle", () => {
   it("renders toggle button when sidebar is hidden", () => {
     sidebarVisible.set(false);
     render(SidebarToggle);
-    expect(screen.getByTitle("Show Sidebar (⌘B)")).toBeTruthy();
+    expect(screen.getByTitle("Show Sidebar (⌘B)")).toBeDefined();
   });
 
   it("does not render when sidebar is visible", () => {
@@ -241,7 +185,7 @@ describe("SidebarToggle", () => {
     sidebarVisible.set(false);
     render(SidebarToggle);
     const btn = screen.getByTitle("Show Sidebar (⌘B)");
-    expect(btn.querySelector("svg")).toBeTruthy();
+    expect(btn.querySelector("svg")).not.toBeNull();
   });
 });
 
@@ -253,7 +197,7 @@ describe("FindBar", () => {
   it("renders search input when visible", () => {
     findBarVisible.set(true);
     render(FindBar);
-    expect(screen.getByPlaceholderText("Find...")).toBeTruthy();
+    expect(screen.getByPlaceholderText("Find...")).toBeDefined();
   });
 
   it("does not render when not visible", () => {
@@ -265,9 +209,9 @@ describe("FindBar", () => {
   it("renders previous, next, and close buttons", () => {
     findBarVisible.set(true);
     render(FindBar);
-    expect(screen.getByTitle("Previous match (⇧⌘G)")).toBeTruthy();
-    expect(screen.getByTitle("Next match (⌘G)")).toBeTruthy();
-    expect(screen.getByTitle("Close (Esc)")).toBeTruthy();
+    expect(screen.getByTitle("Previous match (⇧⌘G)")).toBeDefined();
+    expect(screen.getByTitle("Next match (⌘G)")).toBeDefined();
+    expect(screen.getByTitle("Close (Esc)")).toBeDefined();
   });
 
   it("search input has text type", () => {
@@ -294,7 +238,7 @@ describe("Tab", () => {
         onClose: noop,
       },
     });
-    expect(screen.getByText("my-project")).toBeTruthy();
+    expect(screen.getByText("my-project")).toBeDefined();
   });
 
   it("falls back to Shell N when title is empty", () => {
@@ -308,7 +252,7 @@ describe("Tab", () => {
         onClose: noop,
       },
     });
-    expect(screen.getByText("Shell 3")).toBeTruthy();
+    expect(screen.getByText("Shell 3")).toBeDefined();
   });
 
   it("shows unread dot element when surface has unread and is not active", () => {
@@ -356,7 +300,7 @@ describe("Tab", () => {
         onClose: noop,
       },
     });
-    expect(screen.getByText("×")).toBeTruthy();
+    expect(screen.getByText("×")).toBeDefined();
   });
 
   it("renders active tab with the tab class", () => {
@@ -371,7 +315,7 @@ describe("Tab", () => {
       },
     });
     const tab = container.querySelector(".tab") as HTMLElement;
-    expect(tab).toBeTruthy();
+    expect(tab).not.toBeNull();
     // Verify the active tab renders its title
     expect(tab.textContent).toContain("active-tab");
   });
@@ -413,8 +357,8 @@ describe("TabBar", () => {
         onClosePane: noop,
       },
     });
-    expect(screen.getByText("Tab One")).toBeTruthy();
-    expect(screen.getByText("Tab Two")).toBeTruthy();
+    expect(screen.getByText("Tab One")).toBeDefined();
+    expect(screen.getByText("Tab Two")).toBeDefined();
   });
 
   it("renders + button for new surface", () => {
@@ -430,8 +374,8 @@ describe("TabBar", () => {
         onClosePane: noop,
       },
     });
-    expect(screen.getByTitle("New surface")).toBeTruthy();
-    expect(screen.getByText("+")).toBeTruthy();
+    expect(screen.getByTitle("New surface")).toBeDefined();
+    expect(screen.getByText("+")).toBeDefined();
   });
 
   it("renders split right button", () => {
@@ -447,7 +391,7 @@ describe("TabBar", () => {
         onClosePane: noop,
       },
     });
-    expect(screen.getByTitle("Split Right (⌘D)")).toBeTruthy();
+    expect(screen.getByTitle("Split Right (⌘D)")).toBeDefined();
   });
 
   it("renders split down button", () => {
@@ -463,7 +407,7 @@ describe("TabBar", () => {
         onClosePane: noop,
       },
     });
-    expect(screen.getByTitle("Split Down (⇧⌘D)")).toBeTruthy();
+    expect(screen.getByTitle("Split Down (⇧⌘D)")).toBeDefined();
   });
 
   it("renders close pane button", () => {
@@ -479,7 +423,7 @@ describe("TabBar", () => {
         onClosePane: noop,
       },
     });
-    expect(screen.getByTitle("Close Pane")).toBeTruthy();
+    expect(screen.getByTitle("Close Pane")).toBeDefined();
   });
 });
 
@@ -504,8 +448,8 @@ describe("ContextMenu", () => {
       ],
     });
     render(ContextMenu);
-    expect(screen.getByText("Copy")).toBeTruthy();
-    expect(screen.getByText("Paste")).toBeTruthy();
+    expect(screen.getByText("Copy")).toBeDefined();
+    expect(screen.getByText("Paste")).toBeDefined();
   });
 
   it("renders shortcut text for items that have shortcuts", () => {
@@ -515,7 +459,7 @@ describe("ContextMenu", () => {
       items: [{ label: "Copy", action: noop, shortcut: "⌘C" }],
     });
     render(ContextMenu);
-    expect(screen.getByText("⌘C")).toBeTruthy();
+    expect(screen.getByText("⌘C")).toBeDefined();
   });
 
   it("renders separators between items", () => {
@@ -544,7 +488,7 @@ describe("ContextMenu", () => {
     });
     const { container } = render(ContextMenu);
     const row = container.querySelector(".disabled") as HTMLElement;
-    expect(row).toBeTruthy();
+    expect(row).not.toBeNull();
     expect(row.style.opacity).toBe("0.5");
   });
 });
@@ -571,7 +515,7 @@ describe("CommandPalette", () => {
         commands: [{ name: "New Terminal", action: noop }],
       },
     });
-    expect(screen.getByPlaceholderText("Type a command...")).toBeTruthy();
+    expect(screen.getByPlaceholderText("Type a command...")).toBeDefined();
   });
 
   it("renders command list", () => {
@@ -585,9 +529,9 @@ describe("CommandPalette", () => {
         ],
       },
     });
-    expect(screen.getByText("New Terminal")).toBeTruthy();
-    expect(screen.getByText("Close Tab")).toBeTruthy();
-    expect(screen.getByText("Toggle Sidebar")).toBeTruthy();
+    expect(screen.getByText("New Terminal")).toBeDefined();
+    expect(screen.getByText("Close Tab")).toBeDefined();
+    expect(screen.getByText("Toggle Sidebar")).toBeDefined();
   });
 
   it("renders shortcuts for commands that have them", () => {
@@ -597,7 +541,7 @@ describe("CommandPalette", () => {
         commands: [{ name: "New Terminal", action: noop, shortcut: "⌘T" }],
       },
     });
-    expect(screen.getByText("⌘T")).toBeTruthy();
+    expect(screen.getByText("⌘T")).toBeDefined();
   });
 
   it("renders the overlay element", () => {
@@ -605,7 +549,7 @@ describe("CommandPalette", () => {
     const { container } = render(CommandPalette, {
       props: { commands: [] },
     });
-    expect(container.querySelector("#cmd-palette-overlay")).toBeTruthy();
+    expect(container.querySelector("#cmd-palette-overlay")).not.toBeNull();
   });
 });
 
@@ -636,18 +580,18 @@ describe("WorkspaceItem", () => {
 
   it("renders the workspace name", () => {
     renderWorkspaceItem();
-    expect(screen.getByText("My Workspace")).toBeTruthy();
+    expect(screen.getByText("My Workspace")).toBeDefined();
   });
 
   it("renders close button with correct title", () => {
     renderWorkspaceItem();
-    expect(screen.getByTitle("Close Workspace (⇧⌘W)")).toBeTruthy();
+    expect(screen.getByTitle("Close Workspace (⇧⌘W)")).toBeDefined();
   });
 
   it("renders close button with x symbol", () => {
     renderWorkspaceItem();
     // The close button renders the multiplication sign
-    expect(screen.getByText("×")).toBeTruthy();
+    expect(screen.getByText("×")).toBeDefined();
   });
 
   it("shows unread badge when surfaces have unread data", () => {
@@ -744,7 +688,7 @@ describe("WorkspaceItem", () => {
       },
     });
     // Should show "2s" for 2 surfaces
-    expect(screen.getByText("2s")).toBeTruthy();
+    expect(screen.getByText("2s")).toBeDefined();
   });
 
   it("renders notification text when a surface has a notification", () => {
@@ -763,13 +707,13 @@ describe("WorkspaceItem", () => {
         onReorder: noop,
       },
     });
-    expect(screen.getByText("Build complete")).toBeTruthy();
+    expect(screen.getByText("Build complete")).toBeDefined();
   });
 
   it("is draggable", () => {
     const { container } = renderWorkspaceItem();
     const draggable = container.querySelector("[draggable='true']");
-    expect(draggable).toBeTruthy();
+    expect(draggable).not.toBeNull();
   });
 });
 
@@ -793,7 +737,7 @@ describe("PaneView", () => {
         onFocusPane: noop,
       },
     });
-    expect(screen.getByText("Pane Tab")).toBeTruthy();
+    expect(screen.getByText("Pane Tab")).toBeDefined();
   });
 
   it("renders the + button via the embedded TabBar", () => {
@@ -810,7 +754,7 @@ describe("PaneView", () => {
         onFocusPane: noop,
       },
     });
-    expect(screen.getByTitle("New surface")).toBeTruthy();
+    expect(screen.getByTitle("New surface")).toBeDefined();
   });
 
   it("renders split and close pane controls", () => {
@@ -827,9 +771,9 @@ describe("PaneView", () => {
         onFocusPane: noop,
       },
     });
-    expect(screen.getByTitle("Split Right (⌘D)")).toBeTruthy();
-    expect(screen.getByTitle("Split Down (⇧⌘D)")).toBeTruthy();
-    expect(screen.getByTitle("Close Pane")).toBeTruthy();
+    expect(screen.getByTitle("Split Right (⌘D)")).toBeDefined();
+    expect(screen.getByTitle("Split Down (⇧⌘D)")).toBeDefined();
+    expect(screen.getByTitle("Close Pane")).toBeDefined();
   });
 });
 
@@ -850,7 +794,7 @@ describe("Sidebar", () => {
   it("renders when sidebarVisible is true", () => {
     sidebarVisible.set(true);
     const { container } = render(Sidebar, { props: sidebarProps });
-    expect(container.querySelector("#sidebar")).toBeTruthy();
+    expect(container.querySelector("#sidebar")).not.toBeNull();
   });
 
   it("hides entirely when sidebarVisible is false", () => {
@@ -862,8 +806,8 @@ describe("Sidebar", () => {
   it("renders section headers", () => {
     sidebarVisible.set(true);
     render(Sidebar, { props: sidebarProps });
-    expect(screen.getByText("Terminals")).toBeTruthy();
-    expect(screen.getByText("Projects")).toBeTruthy();
+    expect(screen.getByText("Terminals")).toBeDefined();
+    expect(screen.getByText("Projects")).toBeDefined();
   });
 
   it("does not render Personal section (removed)", () => {
@@ -878,7 +822,7 @@ describe("Sidebar", () => {
   it("renders Dashboard link in sidebar", () => {
     sidebarVisible.set(true);
     render(Sidebar, { props: sidebarProps });
-    expect(screen.getByText("Dashboard")).toBeTruthy();
+    expect(screen.getByText("Dashboard")).toBeDefined();
   });
 });
 

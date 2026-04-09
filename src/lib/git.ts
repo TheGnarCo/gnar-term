@@ -203,6 +203,22 @@ export async function gitPush(worktreePath: string): Promise<string> {
   return invoke<string>("git_push", { worktreePath });
 }
 
+export async function gitPull(worktreePath: string): Promise<string> {
+  return invoke<string>("git_pull", { worktreePath });
+}
+
+export async function gitRevListCount(
+  worktreePath: string,
+  branch: string,
+  remoteBranch: string,
+): Promise<string> {
+  return invoke<string>("git_rev_list_count", {
+    worktreePath,
+    branch,
+    remoteBranch,
+  });
+}
+
 export async function gitBranchName(worktreePath: string): Promise<string> {
   return invoke<string>("git_branch_name", { worktreePath });
 }

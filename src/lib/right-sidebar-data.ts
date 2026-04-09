@@ -8,7 +8,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { WorkspaceRecord } from "./types";
 import type { FileStatus, CommitInfo } from "./git";
-import { gitStatus, gitLog } from "./git";
+import { gitStatus, gitLog, gitBranchName, gitRevListCount } from "./git";
 
 /**
  * Determine whether the right sidebar should be displayed.
@@ -49,9 +49,6 @@ export async function fetchFiles(dirPath: string): Promise<string[]> {
 /**
  * Fetch commits ahead of the base branch for a worktree.
  * Returns an empty array on error.
- *
- * Not currently used in production UI, but exported as a tested utility
- * for future commit-log features (see right-sidebar.test.ts).
  */
 export async function fetchCommits(
   worktreePath: string,
@@ -62,4 +59,56 @@ export async function fetchCommits(
   } catch {
     return [];
   }
+}
+
+/**
+ * Ahead/behind count relative to the remote tracking branch.
+ * Returns { ahead: 0, behind: 0 } on error (e.g. no remote tracking).
+ */
+export interface AheadBehind {
+  ahead: number;
+  behind: number;
+}
+
+export async function fetchAheadBehind(
+  worktreePath: string,
+): Promise<AheadBehind> {
+  try {
+    const branch = (await gitBranchName(worktreePath)).trim();
+    const remoteBranch = `origin/${branch}`;
+    const raw = await gitRevListCount(worktreePath, branch, remoteBranch);
+    const parts = raw.trim().split(/\s+/);
+    const ahead = parseInt(parts[0], 10) || 0;
+    const behind = parseInt(parts[1], 10) || 0;
+    return { ahead, behind };
+  } catch {
+    return { ahead: 0, behind: 0 };
+  }
+}
+
+/**
+ * Grouping helper: split file statuses into staged and unstaged.
+ * A file can appear in both groups.
+ */
+export interface StagedUnstagedGroups {
+  staged: FileStatus[];
+  unstaged: FileStatus[];
+}
+
+export function groupStagedUnstaged(
+  changes: FileStatus[],
+): StagedUnstagedGroups {
+  const staged: FileStatus[] = [];
+  const unstaged: FileStatus[] = [];
+
+  for (const file of changes) {
+    if (file.indexStatus !== " " && file.indexStatus !== "?") {
+      staged.push(file);
+    }
+    if (file.workStatus !== " ") {
+      unstaged.push(file);
+    }
+  }
+
+  return { staged, unstaged };
 }

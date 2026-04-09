@@ -480,7 +480,7 @@ describe("TabBar harness UI", () => {
     testingCleanup();
   });
 
-  it("renders all tabs in natural order (unified tab bar)", () => {
+  it("renders tabs partitioned: harness left, terminal right", () => {
     const harness = sharedMakeHarnessSurface("h1", { title: "Claude Code" });
     const term = sharedMakeSurface("t1", { title: "Shell 1" });
     const pane: Pane = {
@@ -501,8 +501,9 @@ describe("TabBar harness UI", () => {
     });
     const tabs = container.querySelectorAll(".tab");
     expect(tabs.length).toBe(2);
-    expect(tabs[0].textContent).toContain("Shell 1");
-    expect(tabs[1].textContent).toContain("Claude Code");
+    // Harness tabs render first (left), terminal tabs second (right)
+    expect(tabs[0].textContent).toContain("Claude Code");
+    expect(tabs[1].textContent).toContain("Shell 1");
   });
 
   it("shows a status dot for harness surfaces", () => {
@@ -530,7 +531,7 @@ describe("TabBar harness UI", () => {
     expect(dot).not.toBeNull();
   });
 
-  it("does not render divider (unified tab bar)", () => {
+  it("renders divider between harness and terminal tabs", () => {
     const harness = sharedMakeHarnessSurface("h1", { title: "Claude Code" });
     const term = sharedMakeSurface("t1", { title: "Shell 1" });
     const pane: Pane = {
@@ -550,6 +551,6 @@ describe("TabBar harness UI", () => {
       },
     });
     const divider = container.querySelector("[data-tab-divider]");
-    expect(divider).toBeNull();
+    expect(divider).not.toBeNull();
   });
 });

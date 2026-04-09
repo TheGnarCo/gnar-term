@@ -6,6 +6,8 @@
   import { isHarnessSurface } from "../types";
   import type { MenuItem } from "../context-menu-types";
   import { agentStatusColor } from "../agent-utils";
+  import { modLabel } from "../terminal-service";
+  import { getSettings } from "../settings";
 
   export let surface: Surface;
   export let index: number;
@@ -24,6 +26,16 @@
   $: statusColor = harnessStatus
     ? agentStatusColor(harnessStatus, $theme)
     : null;
+
+  /** Resolve the display title: harness tabs show preset name, fallback to surface.title */
+  $: displayTitle = (() => {
+    if (isHarnessSurface(surface)) {
+      const settings = getSettings();
+      const preset = settings.harnesses.find((h) => h.id === surface.presetId);
+      return preset?.name || surface.title || "Harness";
+    }
+    return surface.title || `Shell ${index + 1}`;
+  })();
 
   function handleDragStart(e: DragEvent) {
     e.dataTransfer?.setData("text/plain", index.toString());
@@ -44,7 +56,12 @@
     }
     items.push(
       { label: "", action: () => {}, separator: true },
-      { label: "Close", shortcut: "\u2318W", danger: true, action: onClose },
+      {
+        label: "Close",
+        shortcut: `${modLabel}W`,
+        danger: true,
+        action: onClose,
+      },
     );
     contextMenu.set({ x: e.clientX, y: e.clientY, items });
   }
@@ -72,7 +89,9 @@
     : hovered
       ? $theme.bgHighlight
       : 'transparent'};
-    border-bottom: none;
+    border-bottom: {isActive
+    ? `2px solid ${$theme.accent}`
+    : '2px solid transparent'};
     border-radius: 4px 4px 0 0; white-space: nowrap;
     display: flex; align-items: center; gap: 4px;
     {dragOver ? `outline: 1px solid ${$theme.accent};` : ''}
@@ -97,7 +116,7 @@
     ></span>
   {/if}
   <span style="overflow: hidden; text-overflow: ellipsis;">
-    {surface.title || `Shell ${index + 1}`}
+    {displayTitle}
   </span>
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->

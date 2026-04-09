@@ -8,6 +8,7 @@
   import FileBrowserView from "./FileBrowserView.svelte";
   import CommitHistoryView from "./CommitHistoryView.svelte";
   import HarnessPlaceholder from "./HarnessPlaceholder.svelte";
+  import EmptyPanePlaceholder from "./EmptyPanePlaceholder.svelte";
   import type { Pane } from "../types";
   import {
     isTerminalSurface,
@@ -20,6 +21,7 @@
   } from "../types";
 
   export let pane: Pane;
+  export let isFocused: boolean = false;
   export let onSelectSurface: (surfaceId: string) => void;
   export let onCloseSurface: (surfaceId: string) => void;
   export let onNewSurface: () => void;
@@ -43,6 +45,8 @@
   export let worktreePath: string | undefined = undefined;
   export let onNewContextualSurface: ((kind: string) => void) | undefined =
     undefined;
+
+  $: isEmpty = pane.surfaces.length === 0;
 
   let paneEl: HTMLElement;
   let resizeObserver: ResizeObserver;
@@ -86,55 +90,69 @@
   "
   on:mousedown={onFocusPane}
 >
-  <TabBar
-    {pane}
-    {onSelectSurface}
-    {onCloseSurface}
-    {onNewSurface}
-    {onNewHarnessSurface}
-    {onSwitchSurface}
-    {onSplitRight}
-    {onSplitDown}
-    {onClosePane}
-    {onRenameTab}
-    {onReorderTab}
-    {worktreePath}
-    {onNewContextualSurface}
-  />
+  {#if isEmpty}
+    <EmptyPanePlaceholder {onNewSurface} {onNewHarnessSurface} {onClosePane} />
+  {:else}
+    <div
+      data-tab-bar-area
+      style="border-top: {isFocused
+        ? `2px solid ${$theme.accent}`
+        : '2px solid transparent'};"
+    >
+      <TabBar
+        {pane}
+        {onSelectSurface}
+        {onCloseSurface}
+        {onNewSurface}
+        {onNewHarnessSurface}
+        {onSwitchSurface}
+        {onSplitRight}
+        {onSplitDown}
+        {onClosePane}
+        {onRenameTab}
+        {onReorderTab}
+        {worktreePath}
+        {onNewContextualSurface}
+      />
+    </div>
 
-  {#each pane.surfaces as surface (surface.id)}
-    {#if isTerminalSurface(surface)}
-      <TerminalSurface
-        {surface}
-        visible={surface.id === pane.activeSurfaceId}
-        cwd={surface.cwd}
-      />
-    {:else if isHarnessSurface(surface)}
-      <TerminalSurface
-        {surface}
-        visible={surface.id === pane.activeSurfaceId}
-        cwd={surface.cwd}
-      />
-    {:else if isPreviewSurface(surface)}
-      <PreviewSurface {surface} visible={surface.id === pane.activeSurfaceId} />
-    {:else if isDiffSurface(surface)}
-      <DiffView {surface} visible={surface.id === pane.activeSurfaceId} />
-    {:else if isFileBrowserSurface(surface)}
-      <FileBrowserView
-        {surface}
-        visible={surface.id === pane.activeSurfaceId}
-      />
-    {:else if isCommitHistorySurface(surface)}
-      <CommitHistoryView
-        {surface}
-        visible={surface.id === pane.activeSurfaceId}
-      />
-    {:else if isHarnessPlaceholderSurface(surface)}
-      <HarnessPlaceholder
-        {surface}
-        visible={surface.id === pane.activeSurfaceId}
-        onRelaunch={() => onRelaunchHarness?.(surface.id)}
-      />
-    {/if}
-  {/each}
+    {#each pane.surfaces as surface (surface.id)}
+      {#if isTerminalSurface(surface)}
+        <TerminalSurface
+          {surface}
+          visible={surface.id === pane.activeSurfaceId}
+          cwd={surface.cwd}
+        />
+      {:else if isHarnessSurface(surface)}
+        <TerminalSurface
+          {surface}
+          visible={surface.id === pane.activeSurfaceId}
+          cwd={surface.cwd}
+        />
+      {:else if isPreviewSurface(surface)}
+        <PreviewSurface
+          {surface}
+          visible={surface.id === pane.activeSurfaceId}
+        />
+      {:else if isDiffSurface(surface)}
+        <DiffView {surface} visible={surface.id === pane.activeSurfaceId} />
+      {:else if isFileBrowserSurface(surface)}
+        <FileBrowserView
+          {surface}
+          visible={surface.id === pane.activeSurfaceId}
+        />
+      {:else if isCommitHistorySurface(surface)}
+        <CommitHistoryView
+          {surface}
+          visible={surface.id === pane.activeSurfaceId}
+        />
+      {:else if isHarnessPlaceholderSurface(surface)}
+        <HarnessPlaceholder
+          {surface}
+          visible={surface.id === pane.activeSurfaceId}
+          onRelaunch={() => onRelaunchHarness?.(surface.id)}
+        />
+      {/if}
+    {/each}
+  {/if}
 </div>

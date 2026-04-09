@@ -78,6 +78,8 @@ pub async fn spawn_pty(
     rows: u16,
     cwd: Option<String>,
     env: Option<HashMap<String, String>>,
+    shell_path: Option<String>,
+    shell_args: Option<Vec<String>>,
 ) -> Result<u32, String> {
     let pty_system = native_pty_system();
 
@@ -92,8 +94,17 @@ pub async fn spawn_pty(
 
     let pty_id = NEXT_PTY_ID.fetch_add(1, Ordering::Relaxed);
 
-    // Spawn shell
-    let mut cmd = CommandBuilder::new_default_prog();
+    // Spawn shell — use custom shell if provided, otherwise system default
+    let mut cmd = if let Some(ref path) = shell_path {
+        CommandBuilder::new(path)
+    } else {
+        CommandBuilder::new_default_prog()
+    };
+    if let Some(ref args) = shell_args {
+        for arg in args {
+            cmd.arg(arg);
+        }
+    }
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
     cmd.env("TERM_PROGRAM", "GnarTerm");

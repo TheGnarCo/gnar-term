@@ -26,6 +26,25 @@ export interface StatusDetectionSettings {
   idleThresholdMs: number;
 }
 
+export interface TerminalSettings {
+  scrollback: number;
+  cursorStyle: "block" | "bar" | "underline";
+  cursorBlink: boolean;
+}
+
+export interface ShellSettings {
+  path: string | null;
+  args: string[];
+}
+
+export interface AccessibilitySettings {
+  reducedMotion: boolean;
+}
+
+export interface HarnessSettings {
+  notifyOnWaiting: boolean;
+}
+
 export interface CommandDef {
   name: string;
   command?: string;
@@ -84,6 +103,10 @@ export interface Settings {
   keybindings: KeybindingSettings;
   commands: CommandDef[];
   statusDetection: StatusDetectionSettings;
+  terminal: TerminalSettings;
+  shell: ShellSettings;
+  accessibility: AccessibilitySettings;
+  harnessSettings: HarnessSettings;
   /** Glob patterns of files to copy from main worktree into new worktrees. */
   copyFiles: string[];
   /** Shell command to run after creating a new worktree (e.g. "bun install"). */
@@ -140,6 +163,21 @@ export const DEFAULT_SETTINGS: Settings = {
     processMonitoring: true,
     idleThresholdMs: 5000,
   },
+  terminal: {
+    scrollback: 5000,
+    cursorStyle: "block",
+    cursorBlink: true,
+  },
+  shell: {
+    path: null,
+    args: [],
+  },
+  accessibility: {
+    reducedMotion: false,
+  },
+  harnessSettings: {
+    notifyOnWaiting: true,
+  },
 };
 
 // --- Harness merge ---
@@ -173,6 +211,16 @@ function mergeWithDefaults(partial: Partial<Settings>): Settings {
     statusDetection: {
       ...DEFAULT_SETTINGS.statusDetection,
       ...partial.statusDetection,
+    },
+    terminal: { ...DEFAULT_SETTINGS.terminal, ...partial.terminal },
+    shell: { ...DEFAULT_SETTINGS.shell, ...partial.shell },
+    accessibility: {
+      ...DEFAULT_SETTINGS.accessibility,
+      ...partial.accessibility,
+    },
+    harnessSettings: {
+      ...DEFAULT_SETTINGS.harnessSettings,
+      ...partial.harnessSettings,
     },
     harnesses: partial.harnesses
       ? mergeHarnessPresets(DEFAULT_SETTINGS.harnesses, partial.harnesses)
@@ -244,6 +292,13 @@ export async function saveSettings(updates: Partial<Settings>): Promise<void> {
     statusDetection: {
       ..._settings.statusDetection,
       ...updates.statusDetection,
+    },
+    terminal: { ..._settings.terminal, ...updates.terminal },
+    shell: { ..._settings.shell, ...updates.shell },
+    accessibility: { ..._settings.accessibility, ...updates.accessibility },
+    harnessSettings: {
+      ..._settings.harnessSettings,
+      ...updates.harnessSettings,
     },
     harnesses: updates.harnesses
       ? mergeHarnessPresets(_settings.harnesses, updates.harnesses)

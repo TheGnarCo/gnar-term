@@ -490,13 +490,15 @@ function createBaseTerminal(opts?: {
   const currentXtermTheme = get(xtermTheme);
 
   const settings = getSettings();
+  const termSettings = settings.terminal;
   const terminal = new Terminal({
-    cursorBlink: true,
+    cursorBlink: termSettings.cursorBlink,
+    cursorStyle: termSettings.cursorStyle,
     fontSize: settings.fontSize || 14,
     fontFamily: buildFontStack(settings.fontFamily),
     theme: currentXtermTheme,
     allowProposedApi: true,
-    scrollback: 5000,
+    scrollback: termSettings.scrollback,
     smoothScrollDuration: 0,
     fastScrollModifier: "alt",
     ...(opts?.kittyKeyboard && { vtExtensions: { kittyKeyboard: true } }),
@@ -831,12 +833,17 @@ export async function connectPty(
   if (surface.ptyId >= 0) return; // already connected
   const cols = surface.terminal.cols;
   const rows = surface.terminal.rows;
+  const settings = getSettings();
+  const shellPath = settings.shell.path || null;
+  const shellArgs = settings.shell.args.length > 0 ? settings.shell.args : null;
   try {
     surface.ptyId = await invoke<number>("spawn_pty", {
       cols,
       rows,
       cwd: surface.cwd || cwd || null,
       env: env || null,
+      shellPath,
+      shellArgs,
     });
   } catch (err) {
     console.error("Failed to spawn PTY:", err);

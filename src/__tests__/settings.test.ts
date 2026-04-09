@@ -12,6 +12,10 @@ import {
   _resetForTesting,
   type Settings,
   type StatusDetectionSettings,
+  type TerminalSettings,
+  type ShellSettings,
+  type AccessibilitySettings,
+  type HarnessSettings,
 } from "../lib/settings";
 
 // Mock Tauri invoke
@@ -446,5 +450,249 @@ describe("loadSettings() fallback to defaults", () => {
 
     const settings = await loadSettings();
     expect(settings).toEqual(DEFAULT_SETTINGS);
+  });
+});
+
+// --- S3: Settings Foundation tests ---
+
+describe("DEFAULT_SETTINGS — new sub-objects", () => {
+  it("has terminal settings with correct defaults", () => {
+    expect(DEFAULT_SETTINGS.terminal).toEqual({
+      scrollback: 5000,
+      cursorStyle: "block",
+      cursorBlink: true,
+    });
+  });
+
+  it("has shell settings with correct defaults", () => {
+    expect(DEFAULT_SETTINGS.shell).toEqual({
+      path: null,
+      args: [],
+    });
+  });
+
+  it("has accessibility settings with correct defaults", () => {
+    expect(DEFAULT_SETTINGS.accessibility).toEqual({
+      reducedMotion: false,
+    });
+  });
+
+  it("has harnessSettings with correct defaults", () => {
+    expect(DEFAULT_SETTINGS.harnessSettings).toEqual({
+      notifyOnWaiting: true,
+    });
+  });
+});
+
+describe("mergeWithDefaults — new sub-objects", () => {
+  beforeEach(() => {
+    mockInvoke.mockReset();
+    _resetForTesting();
+  });
+
+  it("deep-merges terminal settings with defaults", async () => {
+    setupInvoke({
+      "/Users/test/.config/gnar/settings.json": JSON.stringify({
+        terminal: { scrollback: 10000 },
+      }),
+    });
+
+    const settings = await loadSettings();
+    expect(settings.terminal.scrollback).toBe(10000);
+    expect(settings.terminal.cursorStyle).toBe("block");
+    expect(settings.terminal.cursorBlink).toBe(true);
+  });
+
+  it("deep-merges shell settings with defaults", async () => {
+    setupInvoke({
+      "/Users/test/.config/gnar/settings.json": JSON.stringify({
+        shell: { path: "/bin/zsh" },
+      }),
+    });
+
+    const settings = await loadSettings();
+    expect(settings.shell.path).toBe("/bin/zsh");
+    expect(settings.shell.args).toEqual([]);
+  });
+
+  it("deep-merges accessibility settings with defaults", async () => {
+    setupInvoke({
+      "/Users/test/.config/gnar/settings.json": JSON.stringify({
+        accessibility: { reducedMotion: true },
+      }),
+    });
+
+    const settings = await loadSettings();
+    expect(settings.accessibility.reducedMotion).toBe(true);
+  });
+
+  it("deep-merges harnessSettings with defaults", async () => {
+    setupInvoke({
+      "/Users/test/.config/gnar/settings.json": JSON.stringify({
+        harnessSettings: { notifyOnWaiting: false },
+      }),
+    });
+
+    const settings = await loadSettings();
+    expect(settings.harnessSettings.notifyOnWaiting).toBe(false);
+  });
+
+  it("handles partial terminal overrides (only scrollback set)", async () => {
+    setupInvoke({
+      "/Users/test/.config/gnar/settings.json": JSON.stringify({
+        terminal: { scrollback: 2000 },
+      }),
+    });
+
+    const settings = await loadSettings();
+    expect(settings.terminal).toEqual({
+      scrollback: 2000,
+      cursorStyle: "block",
+      cursorBlink: true,
+    });
+  });
+
+  it("handles partial shell overrides (only args set)", async () => {
+    setupInvoke({
+      "/Users/test/.config/gnar/settings.json": JSON.stringify({
+        shell: { args: ["--login"] },
+      }),
+    });
+
+    const settings = await loadSettings();
+    expect(settings.shell.path).toBeNull();
+    expect(settings.shell.args).toEqual(["--login"]);
+  });
+
+  it("returns all defaults when no sub-objects are specified", async () => {
+    setupInvoke({
+      "/Users/test/.config/gnar/settings.json": JSON.stringify({
+        theme: "dracula",
+      }),
+    });
+
+    const settings = await loadSettings();
+    expect(settings.terminal).toEqual(DEFAULT_SETTINGS.terminal);
+    expect(settings.shell).toEqual(DEFAULT_SETTINGS.shell);
+    expect(settings.accessibility).toEqual(DEFAULT_SETTINGS.accessibility);
+    expect(settings.harnessSettings).toEqual(DEFAULT_SETTINGS.harnessSettings);
+  });
+
+  it("overrides all terminal fields when all are specified", async () => {
+    setupInvoke({
+      "/Users/test/.config/gnar/settings.json": JSON.stringify({
+        terminal: { scrollback: 1000, cursorStyle: "bar", cursorBlink: false },
+      }),
+    });
+
+    const settings = await loadSettings();
+    expect(settings.terminal).toEqual({
+      scrollback: 1000,
+      cursorStyle: "bar",
+      cursorBlink: false,
+    });
+  });
+});
+
+describe("saveSettings — new sub-objects", () => {
+  beforeEach(() => {
+    mockInvoke.mockReset();
+    _resetForTesting();
+  });
+
+  it("deep-merges terminal settings on save", async () => {
+    setupInvoke({});
+    await loadSettings();
+    await saveSettings({ terminal: { scrollback: 3000 } } as any);
+
+    const t = getSettings().terminal;
+    expect(t.scrollback).toBe(3000);
+    expect(t.cursorStyle).toBe("block");
+    expect(t.cursorBlink).toBe(true);
+  });
+
+  it("deep-merges shell settings on save", async () => {
+    setupInvoke({});
+    await loadSettings();
+    await saveSettings({ shell: { path: "/usr/local/bin/fish" } } as any);
+
+    const s = getSettings().shell;
+    expect(s.path).toBe("/usr/local/bin/fish");
+    expect(s.args).toEqual([]);
+  });
+
+  it("deep-merges accessibility settings on save", async () => {
+    setupInvoke({});
+    await loadSettings();
+    await saveSettings({
+      accessibility: { reducedMotion: true },
+    } as any);
+
+    expect(getSettings().accessibility.reducedMotion).toBe(true);
+  });
+
+  it("deep-merges harnessSettings on save", async () => {
+    setupInvoke({});
+    await loadSettings();
+    await saveSettings({
+      harnessSettings: { notifyOnWaiting: false },
+    } as any);
+
+    expect(getSettings().harnessSettings.notifyOnWaiting).toBe(false);
+  });
+});
+
+describe("settings round-trip — new sub-objects", () => {
+  beforeEach(() => {
+    mockInvoke.mockReset();
+    _resetForTesting();
+  });
+
+  it("round-trips terminal, shell, accessibility, harnessSettings through save/load", async () => {
+    let savedContent = "";
+    mockInvoke.mockImplementation(async (cmd: string, args?: any) => {
+      if (cmd === "get_home") return "/Users/test";
+      if (cmd === "read_file") {
+        const path = (args as any)?.path;
+        if (path === "/Users/test/.config/gnar/settings.json" && savedContent) {
+          return savedContent;
+        }
+        throw new Error("File not found");
+      }
+      if (cmd === "write_file") {
+        savedContent = (args as any).content;
+        return undefined;
+      }
+      if (cmd === "ensure_dir") return undefined;
+      throw new Error(`Unknown command: ${cmd}`);
+    });
+
+    await loadSettings();
+    await saveSettings({
+      terminal: {
+        scrollback: 8000,
+        cursorStyle: "underline",
+        cursorBlink: false,
+      },
+      shell: { path: "/bin/bash", args: ["-l"] },
+      accessibility: { reducedMotion: true },
+      harnessSettings: { notifyOnWaiting: false },
+    });
+
+    // Reset and reload from the "saved" content
+    _resetForTesting();
+    const reloaded = await loadSettings();
+
+    expect(reloaded.terminal).toEqual({
+      scrollback: 8000,
+      cursorStyle: "underline",
+      cursorBlink: false,
+    });
+    expect(reloaded.shell).toEqual({
+      path: "/bin/bash",
+      args: ["-l"],
+    });
+    expect(reloaded.accessibility).toEqual({ reducedMotion: true });
+    expect(reloaded.harnessSettings).toEqual({ notifyOnWaiting: false });
   });
 });

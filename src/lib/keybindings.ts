@@ -35,9 +35,14 @@ export interface KeybindingActions {
   findNext: () => void;
   findPrev: () => void;
   closeFindBar: () => void;
+  goHome: () => void;
+  openSettings: () => void;
+  escapeBack: () => void;
   workspaceCount: () => number;
   activeIdx: () => number;
   findBarVisible: () => boolean;
+  commandPaletteOpen: () => boolean;
+  currentView: () => string;
 }
 
 export function handleKeydown(
@@ -200,7 +205,7 @@ export function handleKeydown(
   }
   if (modShift && (e.key === "h" || e.key === "H")) {
     e.preventDefault();
-    actions.flashFocusedPane();
+    actions.goHome();
     return;
   }
   if (modShift && (e.key === "r" || e.key === "R")) {
@@ -232,5 +237,32 @@ export function handleKeydown(
     e.preventDefault();
     actions.closeFindBar();
     return;
+  }
+  // Cmd+, (macOS) / Ctrl+, (Linux): open settings
+  if (
+    (isMac ? e.metaKey && !e.shiftKey && !e.altKey : e.ctrlKey && !e.altKey) &&
+    e.key === ","
+  ) {
+    e.preventDefault();
+    actions.openSettings();
+    return;
+  }
+  // Escape: go back from non-workspace views (when no overlay is open)
+  if (
+    e.key === "Escape" &&
+    !actions.findBarVisible() &&
+    !actions.commandPaletteOpen()
+  ) {
+    const view = actions.currentView();
+    if (
+      view === "settings" ||
+      view === "project-settings" ||
+      view === "project-dashboard" ||
+      view === "project"
+    ) {
+      e.preventDefault();
+      actions.escapeBack();
+      return;
+    }
   }
 }

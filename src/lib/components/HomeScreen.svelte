@@ -1,6 +1,11 @@
 <script lang="ts">
   import { theme } from "../stores/theme";
-  import { activeProjects, projects } from "../stores/project";
+  import {
+    activeProjects,
+    inactiveProjects,
+    projects,
+    setProjectActive,
+  } from "../stores/project";
   import { workspaces, floatingWorkspaces } from "../stores/workspace";
   import ProjectCard from "./ProjectCard.svelte";
   import type { Workspace } from "../types";
@@ -24,6 +29,8 @@
   ): Workspace[] {
     return allWs.filter((ws) => ws.record?.projectId === projectId);
   }
+
+  let inactiveExpanded = false;
 
   $: allAgents = getAgentsFromWorkspaces($workspaces);
 
@@ -190,6 +197,75 @@
     {:else}
       <div style="color: {$theme.fgDim}; font-size: 12px; padding: 8px 0 24px;">
         No projects
+      </div>
+    {/if}
+
+    <!-- Inactive projects drawer -->
+    {#if $inactiveProjects.length > 0}
+      <div data-testid="inactive-projects" style="margin-top: 8px;">
+        <button
+          data-testid="inactive-projects-toggle"
+          style="
+            background: none; border: none; cursor: pointer; padding: 4px 0;
+            color: {$theme.fgDim}; font-size: 12px; display: flex;
+            align-items: center; gap: 6px;
+          "
+          on:click={() => (inactiveExpanded = !inactiveExpanded)}
+        >
+          <svg
+            width="10"
+            height="10"
+            viewBox="0 0 16 16"
+            fill="currentColor"
+            style="transition: transform 0.15s; transform: rotate({inactiveExpanded
+              ? '90'
+              : '0'}deg);"
+          >
+            <path d="M6 3l5 5-5 5z" />
+          </svg>
+          Inactive Projects ({$inactiveProjects.length})
+        </button>
+        {#if inactiveExpanded}
+          <div
+            style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px; padding-left: 4px;"
+          >
+            {#each $inactiveProjects as proj (proj.id)}
+              <div
+                data-testid="inactive-project-row"
+                style="
+                  display: flex; align-items: center; justify-content: space-between;
+                  padding: 8px 12px; border-radius: 6px;
+                  background: {$theme.bgSurface}; border: 1px solid {$theme.border};
+                "
+              >
+                <div
+                  style="display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1;"
+                >
+                  <span
+                    style="font-size: 13px; font-weight: 500; color: {$theme.fg};
+                    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+                    >{proj.name}</span
+                  >
+                  <span
+                    style="font-size: 11px; color: {$theme.fgDim};
+                    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+                    >{proj.path}</span
+                  >
+                </div>
+                <button
+                  data-testid="reactivate-btn"
+                  style="
+                    font-size: 11px; padding: 4px 10px; border-radius: 4px;
+                    border: 1px solid {$theme.border}; cursor: pointer;
+                    color: {$theme.fg}; background: none; flex-shrink: 0; margin-left: 8px;
+                  "
+                  on:click={() => setProjectActive(proj.id, true)}
+                  >Reactivate</button
+                >
+              </div>
+            {/each}
+          </div>
+        {/if}
       </div>
     {/if}
   </div>

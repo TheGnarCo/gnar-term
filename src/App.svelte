@@ -12,6 +12,7 @@
     currentView,
     currentProjectId,
     goHome,
+    goToProject,
     openWorkspace,
     loadingMessage,
   } from "./lib/stores/ui";
@@ -38,6 +39,7 @@
     cleanupListeners,
     createTerminalSurface,
     fontReady,
+    isMac,
     startCwdPolling,
     stopCwdPolling,
   } from "./lib/terminal-service";
@@ -77,7 +79,7 @@
 
   import Sidebar from "./lib/components/Sidebar.svelte";
   import HomeScreen from "./lib/components/HomeScreen.svelte";
-  import { initProjects, projects } from "./lib/stores/project";
+  import { initProjects, projects, activeProjects } from "./lib/stores/project";
   import { loadState } from "./lib/state";
   import {
     handleKeydown as dispatchKeydown,
@@ -205,7 +207,7 @@
     const idx = $workspaces.findIndex((ws) => ws.id === wsId);
     if (idx >= 0) {
       switchWorkspace(idx);
-      openWorkspace();
+      openWorkspace($workspaces[idx]?.record?.projectId);
     }
   }
 
@@ -800,6 +802,49 @@
         if (cmd.workspace) createWorkspaceFromDef(cmd.workspace);
       },
     })),
+    {
+      name: "Go to Dashboard",
+      shortcut: isMac ? "\u21E7\u2318H" : "Ctrl+Shift+H",
+      action: () => goHome(),
+    },
+    {
+      name: "Open Settings",
+      shortcut: isMac ? "\u2318," : "Ctrl+,",
+      action: () => currentView.set("settings"),
+    },
+    ...$activeProjects.map((p) => ({
+      name: `Go to: ${p.name}`,
+      action: () => goToProject(p.id),
+    })),
+    {
+      name: "New Harness",
+      action: () => handleNewHarness(getSettings().defaultHarness),
+    },
+    ...getSettings().harnesses.map((preset) => ({
+      name: `New Harness: ${preset.name}`,
+      action: () => handleNewHarness(preset.id),
+    })),
+    {
+      name: "Jump to Waiting Agent",
+      action: async () => {
+        // S5 will export findNextWaitingAgent() from agent-utils.ts.
+        // Once merged, import and navigate to the waiting agent's workspace.
+        try {
+          const { findNextWaitingAgent } = await import("./lib/agent-utils");
+          if (typeof findNextWaitingAgent === "function") {
+            const agent = findNextWaitingAgent(
+              $workspaces,
+              $activeWorkspaceIdx,
+            );
+            if (agent) {
+              handleSwitchToWorkspace(agent.workspaceId);
+            }
+          }
+        } catch {
+          // findNextWaitingAgent not yet available (S5 not merged)
+        }
+      },
+    },
     ...Object.entries(themes).map(([id, t]) => ({
       name: `Theme: ${t.name}`,
       action: () => applyTheme(id),
@@ -944,9 +989,23 @@
       findBarComponent?.findPrev();
     },
     closeFindBar: () => findBarVisible.set(false),
+    goHome: () => goHome(),
+    openSettings: () => currentView.set("settings"),
+    escapeBack: () => {
+      // Navigate back: if workspaces exist, switch to last active; otherwise go home
+      if ($workspaces.length > 0) {
+        const idx = Math.max(0, $activeWorkspaceIdx);
+        switchWorkspace(idx);
+        openWorkspace($workspaces[idx]?.record?.projectId);
+      } else {
+        goHome();
+      }
+    },
     workspaceCount: () => $workspaces.length,
     activeIdx: () => $activeWorkspaceIdx,
     findBarVisible: () => $findBarVisible,
+    commandPaletteOpen: () => $commandPaletteOpen,
+    currentView: () => $currentView,
   };
   function handleKeydown(e: KeyboardEvent) {
     dispatchKeydown(e, kbActions);
@@ -1020,7 +1079,8 @@
     if ($workspaces.length === 0) {
       goHome();
     } else {
-      openWorkspace();
+      const activeWs = $workspaces[$activeWorkspaceIdx];
+      openWorkspace(activeWs?.record?.projectId);
     }
 
     // Listen for menu events

@@ -1,6 +1,12 @@
 <script lang="ts">
   import { theme } from "../stores/theme";
-  import { currentView, currentProjectId, sidebarVisible } from "../stores/ui";
+  import {
+    currentView,
+    currentProjectId,
+    sidebarVisible,
+    goHome,
+    goToProject,
+  } from "../stores/ui";
   import {
     workspaces,
     activeWorkspace,
@@ -16,24 +22,16 @@
   $: ws = $activeWorkspace;
   $: projectId = ws?.record?.projectId;
   $: project = projectId ? $projects.find((p) => p.id === projectId) : null;
-  $: wsType = ws?.record?.type;
 
   $: viewProject = $currentProjectId
     ? $projects.find((p) => p.id === $currentProjectId)
     : null;
 
-  $: titleText = (() => {
-    if ($currentView === "settings") return "Settings";
-    if ($currentView === "project" && viewProject)
-      return `${viewProject.name} Dashboard`;
-    if (isDashboard) return "GnarTerm";
-    if (!ws) return "";
-    if (project) {
-      const typeLabel = wsType === "managed" ? "Managed Workspace" : "Terminal";
-      return `${project.name}  >  ${ws.name} (${typeLabel})`;
-    }
-    return `${ws.name} (Workspace)`;
-  })();
+  // Breadcrumb mode: show segments when viewing a workspace
+  $: showBreadcrumbs = $currentView === "workspace" && ws != null;
+
+  // Workspace display name
+  $: wsLabel = ws ? ws.record?.branch || ws.name : "";
 
   function openSettings() {
     currentView.set("settings");
@@ -49,23 +47,74 @@
     position: relative;
   "
 >
-  <!-- Center: title (absolutely positioned for true centering) -->
+  <!-- Center: breadcrumbs / title (absolutely positioned for true centering) -->
   <div
+    data-testid="titlebar-center"
     style="
     position: absolute; left: 0; right: 0; top: 0; bottom: 0;
     display: flex; align-items: center; justify-content: center;
     pointer-events: none;
   "
   >
-    <span
-      style="
-      font-size: {isDashboard ? '13px' : '12px'};
-      font-weight: {isDashboard ? '600' : '500'};
-      color: {isDashboard ? $theme.fg : $theme.fgMuted};
-      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-      max-width: 60%;
-    ">{titleText}</span
-    >
+    {#if showBreadcrumbs}
+      <div
+        style="display: flex; align-items: center; gap: 4px; max-width: 60%; overflow: hidden; pointer-events: auto;"
+      >
+        <!-- Home icon button -->
+        <button
+          data-testid="breadcrumb-home"
+          title="Go to Dashboard"
+          style="
+            background: none; border: none; cursor: pointer; padding: 2px 4px;
+            color: {$theme.fgDim}; display: flex; align-items: center;
+            border-radius: 4px; -webkit-app-region: no-drag;
+          "
+          on:click={() => goHome()}
+        >
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+            <rect x="1" y="1" width="6" height="6" rx="1" />
+            <rect x="9" y="1" width="6" height="6" rx="1" />
+            <rect x="1" y="9" width="6" height="6" rx="1" />
+            <rect x="9" y="9" width="6" height="6" rx="1" />
+          </svg>
+        </button>
+        {#if project}
+          <span style="color: {$theme.fgDim}; font-size: 11px;">/</span>
+          <button
+            data-testid="breadcrumb-project"
+            title="Go to {project.name} Dashboard"
+            style="
+              background: none; border: none; cursor: pointer; padding: 2px 6px;
+              color: {$theme.fgMuted}; font-size: 12px; font-weight: 500;
+              border-radius: 4px; -webkit-app-region: no-drag;
+              overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            "
+            on:click={() => goToProject(project.id)}>{project.name}</button
+          >
+        {/if}
+        <span style="color: {$theme.fgDim}; font-size: 11px;">/</span>
+        <span
+          data-testid="breadcrumb-workspace"
+          style="
+            font-size: 12px; font-weight: 500; color: {$theme.fg};
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+          ">{wsLabel}</span
+        >
+      </div>
+    {:else}
+      <span
+        style="
+        font-size: {isDashboard ? '13px' : '12px'};
+        font-weight: {isDashboard ? '600' : '500'};
+        color: {isDashboard ? $theme.fg : $theme.fgMuted};
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        max-width: 60%;
+      "
+        >{#if $currentView === "settings"}Settings{:else if $currentView === "project" && viewProject}{viewProject.name}
+          Dashboard{:else if $currentView === "project-settings" && viewProject}{viewProject.name}
+          Settings{:else}GnarTerm{/if}</span
+      >
+    {/if}
   </div>
 
   <!-- Left: spacer (traffic lights) -->
@@ -141,3 +190,10 @@
     </button>
   </div>
 </div>
+
+<style>
+  [data-testid="breadcrumb-home"]:hover,
+  [data-testid="breadcrumb-project"]:hover {
+    background: rgba(255, 255, 255, 0.08) !important;
+  }
+</style>

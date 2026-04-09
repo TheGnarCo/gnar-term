@@ -165,7 +165,8 @@
 
   function handleWorkspaceClick(idx: number) {
     onSwitchWorkspace(idx);
-    openWorkspace();
+    const ws = $workspaces[idx];
+    openWorkspace(ws?.record?.projectId);
   }
 
   // --- Drag & drop reordering (pure mouse events — HTML5 DnD broken in Tauri WKWebView) ---
@@ -381,8 +382,25 @@
     contextMenu.set({ x, y, items });
   }
 
-  /** No-op kept for API compatibility (collapsible state removed) */
-  export function expandProject(_projectId: string) {}
+  /** Collapse state for project sections, keyed by projectId. Default: expanded. */
+  let collapsedProjects = new Map<string, boolean>();
+
+  function isProjectCollapsed(projectId: string): boolean {
+    return collapsedProjects.get(projectId) === true;
+  }
+
+  function toggleProjectCollapse(projectId: string) {
+    collapsedProjects.set(projectId, !isProjectCollapsed(projectId));
+    collapsedProjects = collapsedProjects; // trigger reactivity
+  }
+
+  /** Expand a project section (used by external callers after creating workspace) */
+  export function expandProject(projectId: string) {
+    if (isProjectCollapsed(projectId)) {
+      collapsedProjects.set(projectId, false);
+      collapsedProjects = collapsedProjects;
+    }
+  }
 
   // Expose startRename for keyboard shortcut compatibility
   export function startRename(idx: number) {
@@ -664,8 +682,27 @@
             >
               <span
                 style="display: flex; align-items: center; gap: 5px; color: {project.color ||
-                  $theme.fgMuted};"
+                  $theme.fgMuted}; min-width: 0;"
               >
+                <!-- Disclosure chevron -->
+                <!-- svelte-ignore a11y_click_events_have_key_events -->
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <svg
+                  data-testid="project-chevron-{project.id}"
+                  width="8"
+                  height="8"
+                  viewBox="0 0 16 16"
+                  fill="currentColor"
+                  style="flex-shrink: 0; transition: transform 0.15s; transform: rotate({isProjectCollapsed(
+                    project.id,
+                  )
+                    ? '0'
+                    : '90'}deg); opacity: 0.6; cursor: pointer;"
+                  on:click|stopPropagation={() =>
+                    toggleProjectCollapse(project.id)}
+                >
+                  <path d="M6 3l5 5-5 5z" />
+                </svg>
                 {#if project.gitBacked}
                   <span
                     style="
@@ -701,262 +738,264 @@
               {/if}
             </div>
 
-            {#each projectWs as { ws, idx }, localIdx (ws.id)}
-              {@const hovered = hoveredWsIdx === idx}
-              {@const isManaged = ws.record?.type === "managed"}
-              {@const color = project.color || $theme.accent}
-              {@const harness = getAggregatedHarnessStatus(ws)}
-              {@const stats = isManaged ? gitStatusCache.get(ws.id) : null}
-              {@const isDragged =
-                dragActive &&
-                dragSource?.kind === "ws" &&
-                dragSource.localIdx === localIdx &&
-                dragSource.scope === project.id}
+            {#if !isProjectCollapsed(project.id)}
+              {#each projectWs as { ws, idx }, localIdx (ws.id)}
+                {@const hovered = hoveredWsIdx === idx}
+                {@const isManaged = ws.record?.type === "managed"}
+                {@const color = project.color || $theme.accent}
+                {@const harness = getAggregatedHarnessStatus(ws)}
+                {@const stats = isManaged ? gitStatusCache.get(ws.id) : null}
+                {@const isDragged =
+                  dragActive &&
+                  dragSource?.kind === "ws" &&
+                  dragSource.localIdx === localIdx &&
+                  dragSource.scope === project.id}
 
-              {#if insertIndicator?.scope === project.id && insertIndicator.localIdx === localIdx && insertIndicator.edge === "before"}
-                <div
-                  style="height: 2px; background: {$theme.accent}; margin: 0 12px; border-radius: 1px;"
-                ></div>
-              {/if}
+                {#if insertIndicator?.scope === project.id && insertIndicator.localIdx === localIdx && insertIndicator.edge === "before"}
+                  <div
+                    style="height: 2px; background: {$theme.accent}; margin: 0 12px; border-radius: 1px;"
+                  ></div>
+                {/if}
 
-              {#if isManaged}
-                <!-- Managed workspace: rich card -->
-                <div
-                  data-ws-entry=""
-                  style="
+                {#if isManaged}
+                  <!-- Managed workspace: rich card -->
+                  <div
+                    data-ws-entry=""
+                    style="
                   margin: 3px 0 3px 12px;
                   padding: 6px 10px; border-radius: 4px 0 0 4px; cursor: {dragActive
-                    ? 'grabbing'
-                    : 'pointer'};
+                      ? 'grabbing'
+                      : 'pointer'};
                   border-left: 2px solid {idx === $activeWorkspaceIdx &&
-                  $currentView === 'workspace'
-                    ? color
-                    : color + '30'};
+                    $currentView === 'workspace'
+                      ? color
+                      : color + '30'};
                   background: {idx === $activeWorkspaceIdx &&
-                  $currentView === 'workspace'
-                    ? $theme.bg
-                    : hovered
-                      ? 'rgba(255,255,255,0.02)'
-                      : 'transparent'};
+                    $currentView === 'workspace'
+                      ? $theme.bg
+                      : hovered
+                        ? 'rgba(255,255,255,0.02)'
+                        : 'transparent'};
                   opacity: {isDragged ? '0.4' : '1'};
                   display: flex; flex-direction: column; gap: 3px; position: relative;
                 "
-                  role="button"
-                  tabindex="0"
-                  data-drag-scope={project.id}
-                  data-drag-idx={localIdx}
-                  on:click={() => {
-                    if (!dragActive) handleWorkspaceClick(idx);
-                  }}
-                  on:keydown={(e) => {
-                    if (e.key === "Enter") handleWorkspaceClick(idx);
-                  }}
-                  on:mouseenter={() => (hoveredWsIdx = idx)}
-                  on:mouseleave={() => {
-                    if (hoveredWsIdx === idx) hoveredWsIdx = null;
-                  }}
-                  on:mousedown={(e) =>
-                    startDrag(e, { kind: "ws", scope: project.id, localIdx })}
-                  on:contextmenu|preventDefault={(e) =>
-                    showWorkspaceContextMenu(
-                      e.clientX,
-                      e.clientY,
-                      idx,
-                      project.id,
-                    )}
-                >
-                  {#if hovered}
-                    <button
-                      style="position: absolute; top: 4px; right: 4px; background: none; border: none; color: {$theme.fgDim}; cursor: pointer; padding: 0 2px; font-size: 14px; line-height: 1; -webkit-app-region: no-drag; z-index: 1;"
-                      title="Close workspace"
-                      on:click|stopPropagation={() => onCloseWorkspace(idx)}
-                      >&times;</button
-                    >
-                  {/if}
-                  {#if harness}
-                    <div
-                      style="display: flex; align-items: center; gap: 4px; font-size: 10px; color: {statusColor(
-                        harness.primary,
-                      )}; white-space: nowrap; overflow: hidden; min-width: 0;"
-                      title={harnessTooltip(harness)}
-                    >
-                      <span
-                        style="font-family: monospace; width: 10px; text-align: center; flex-shrink: 0;"
-                        >{statusIndicator(harness.primary)}</span
+                    role="button"
+                    tabindex="0"
+                    data-drag-scope={project.id}
+                    data-drag-idx={localIdx}
+                    on:click={() => {
+                      if (!dragActive) handleWorkspaceClick(idx);
+                    }}
+                    on:keydown={(e) => {
+                      if (e.key === "Enter") handleWorkspaceClick(idx);
+                    }}
+                    on:mouseenter={() => (hoveredWsIdx = idx)}
+                    on:mouseleave={() => {
+                      if (hoveredWsIdx === idx) hoveredWsIdx = null;
+                    }}
+                    on:mousedown={(e) =>
+                      startDrag(e, { kind: "ws", scope: project.id, localIdx })}
+                    on:contextmenu|preventDefault={(e) =>
+                      showWorkspaceContextMenu(
+                        e.clientX,
+                        e.clientY,
+                        idx,
+                        project.id,
+                      )}
+                  >
+                    {#if hovered}
+                      <button
+                        style="position: absolute; top: 4px; right: 4px; background: none; border: none; color: {$theme.fgDim}; cursor: pointer; padding: 0 2px; font-size: 14px; line-height: 1; -webkit-app-region: no-drag; z-index: 1;"
+                        title="Close workspace"
+                        on:click|stopPropagation={() => onCloseWorkspace(idx)}
+                        >&times;</button
                       >
-                      <span style="overflow: hidden; text-overflow: ellipsis;"
-                        >{harnessLabel(ws)}: {harness.primary}</span
+                    {/if}
+                    {#if harness}
+                      <div
+                        style="display: flex; align-items: center; gap: 4px; font-size: 10px; color: {statusColor(
+                          harness.primary,
+                        )}; white-space: nowrap; overflow: hidden; min-width: 0;"
+                        title={harnessTooltip(harness)}
                       >
-                      {#if harness.total > 1}
                         <span
-                          style="font-size: 9px; padding: 0 4px; border-radius: 8px; background: {statusColor(
-                            harness.primary,
-                          )}20; flex-shrink: 0;">{harness.total}</span
+                          style="font-family: monospace; width: 10px; text-align: center; flex-shrink: 0;"
+                          >{statusIndicator(harness.primary)}</span
+                        >
+                        <span style="overflow: hidden; text-overflow: ellipsis;"
+                          >{harnessLabel(ws)}: {harness.primary}</span
+                        >
+                        {#if harness.total > 1}
+                          <span
+                            style="font-size: 9px; padding: 0 4px; border-radius: 8px; background: {statusColor(
+                              harness.primary,
+                            )}20; flex-shrink: 0;">{harness.total}</span
+                          >
+                        {/if}
+                      </div>
+                    {/if}
+
+                    <!-- Branch name -->
+                    <div
+                      style="display: flex; align-items: center; gap: 4px; font-size: 12px;"
+                    >
+                      <svg
+                        width="10"
+                        height="10"
+                        viewBox="0 0 16 16"
+                        fill={idx === $activeWorkspaceIdx
+                          ? $theme.fg
+                          : $theme.fgMuted}
+                        style="flex-shrink: 0; opacity: 0.7;"
+                      >
+                        <path
+                          d="M9.5 3.25a2.25 2.25 0 1 1 3 2.122V6A2.5 2.5 0 0 1 10 8.5H6a1 1 0 0 0-1 1v1.128a2.251 2.251 0 1 1-1.5 0V5.372a2.25 2.25 0 1 1 1.5 0v1.836A2.5 2.5 0 0 1 6 7h4a1 1 0 0 0 1-1v-.628A2.25 2.25 0 0 1 9.5 3.25z"
+                        />
+                      </svg>
+                      <span
+                        style="
+                    font-weight: {idx === $activeWorkspaceIdx ? '600' : '500'};
+                    color: {idx === $activeWorkspaceIdx
+                          ? $theme.fg
+                          : $theme.fgMuted};
+                    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;
+                  ">{ws.record?.branch || ws.name}</span
+                      >
+                    </div>
+
+                    <!-- Git stats + age -->
+                    <div
+                      style="display: flex; align-items: center; gap: 6px; font-size: 10px;"
+                    >
+                      {#if stats && (stats.added > 0 || stats.modified > 0 || stats.deleted > 0)}
+                        <span
+                          style="display: flex; align-items: center; gap: 4px; flex: 1;"
+                        >
+                          {#if stats.added > 0}
+                            <span style="color: {$theme.ansi.green};"
+                              >+{stats.added}</span
+                            >
+                          {/if}
+                          {#if stats.modified > 0}
+                            <span style="color: {$theme.ansi.blue};"
+                              >~{stats.modified}</span
+                            >
+                          {/if}
+                          {#if stats.deleted > 0}
+                            <span style="color: {$theme.ansi.red};"
+                              >-{stats.deleted}</span
+                            >
+                          {/if}
+                        </span>
+                      {:else}
+                        <span style="flex: 1;"></span>
+                      {/if}
+                      {#if ws.record?.createdAt}
+                        <span style="color: {$theme.fgDim}; flex-shrink: 0;"
+                          >{relativeAge(ws.record.createdAt)}</span
                         >
                       {/if}
                     </div>
-                  {/if}
-
-                  <!-- Branch name -->
-                  <div
-                    style="display: flex; align-items: center; gap: 4px; font-size: 12px;"
-                  >
-                    <svg
-                      width="10"
-                      height="10"
-                      viewBox="0 0 16 16"
-                      fill={idx === $activeWorkspaceIdx
-                        ? $theme.fg
-                        : $theme.fgMuted}
-                      style="flex-shrink: 0; opacity: 0.7;"
-                    >
-                      <path
-                        d="M9.5 3.25a2.25 2.25 0 1 1 3 2.122V6A2.5 2.5 0 0 1 10 8.5H6a1 1 0 0 0-1 1v1.128a2.251 2.251 0 1 1-1.5 0V5.372a2.25 2.25 0 1 1 1.5 0v1.836A2.5 2.5 0 0 1 6 7h4a1 1 0 0 0 1-1v-.628A2.25 2.25 0 0 1 9.5 3.25z"
-                      />
-                    </svg>
-                    <span
-                      style="
-                    font-weight: {idx === $activeWorkspaceIdx ? '600' : '500'};
-                    color: {idx === $activeWorkspaceIdx
-                        ? $theme.fg
-                        : $theme.fgMuted};
-                    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;
-                  ">{ws.record?.branch || ws.name}</span
-                    >
                   </div>
-
-                  <!-- Git stats + age -->
+                {:else}
+                  <!-- Terminal workspace: simple row -->
                   <div
-                    style="display: flex; align-items: center; gap: 6px; font-size: 10px;"
-                  >
-                    {#if stats && (stats.added > 0 || stats.modified > 0 || stats.deleted > 0)}
-                      <span
-                        style="display: flex; align-items: center; gap: 4px; flex: 1;"
-                      >
-                        {#if stats.added > 0}
-                          <span style="color: {$theme.ansi.green};"
-                            >+{stats.added}</span
-                          >
-                        {/if}
-                        {#if stats.modified > 0}
-                          <span style="color: {$theme.ansi.blue};"
-                            >~{stats.modified}</span
-                          >
-                        {/if}
-                        {#if stats.deleted > 0}
-                          <span style="color: {$theme.ansi.red};"
-                            >-{stats.deleted}</span
-                          >
-                        {/if}
-                      </span>
-                    {:else}
-                      <span style="flex: 1;"></span>
-                    {/if}
-                    {#if ws.record?.createdAt}
-                      <span style="color: {$theme.fgDim}; flex-shrink: 0;"
-                        >{relativeAge(ws.record.createdAt)}</span
-                      >
-                    {/if}
-                  </div>
-                </div>
-              {:else}
-                <!-- Terminal workspace: simple row -->
-                <div
-                  data-ws-entry=""
-                  style="
+                    data-ws-entry=""
+                    style="
                   margin: 3px 0 3px 12px;
                   padding: 5px 10px; border-radius: 4px 0 0 4px; cursor: pointer;
                   border-left: 2px solid {idx === $activeWorkspaceIdx &&
-                  $currentView === 'workspace'
-                    ? color
-                    : color + '30'};
+                    $currentView === 'workspace'
+                      ? color
+                      : color + '30'};
                   display: flex; flex-direction: column; gap: {harness
-                    ? '2px'
-                    : '0'}; position: relative;
+                      ? '2px'
+                      : '0'}; position: relative;
                   background: {idx === $activeWorkspaceIdx &&
-                  $currentView === 'workspace'
-                    ? $theme.bg
-                    : hovered
-                      ? 'rgba(255,255,255,0.02)'
-                      : 'transparent'};
+                    $currentView === 'workspace'
+                      ? $theme.bg
+                      : hovered
+                        ? 'rgba(255,255,255,0.02)'
+                        : 'transparent'};
                   opacity: {isDragged
-                    ? '0.4'
-                    : ws.record?.status === 'stashed'
-                      ? '0.6'
-                      : '1'};
+                      ? '0.4'
+                      : ws.record?.status === 'stashed'
+                        ? '0.6'
+                        : '1'};
                 "
-                  role="button"
-                  tabindex="0"
-                  data-drag-scope={project.id}
-                  data-drag-idx={localIdx}
-                  on:click={() => {
-                    if (!dragActive) handleWorkspaceClick(idx);
-                  }}
-                  on:keydown={(e) => {
-                    if (e.key === "Enter") handleWorkspaceClick(idx);
-                  }}
-                  on:mouseenter={() => (hoveredWsIdx = idx)}
-                  on:mouseleave={() => {
-                    if (hoveredWsIdx === idx) hoveredWsIdx = null;
-                  }}
-                  on:mousedown={(e) =>
-                    startDrag(e, { kind: "ws", scope: project.id, localIdx })}
-                  on:contextmenu|preventDefault={(e) =>
-                    showWorkspaceContextMenu(
-                      e.clientX,
-                      e.clientY,
-                      idx,
-                      project.id,
-                    )}
-                >
-                  {#if hovered}
-                    <button
-                      style="position: absolute; top: 4px; right: 4px; background: none; border: none; color: {$theme.fgDim}; cursor: pointer; padding: 0 2px; font-size: 14px; line-height: 1; -webkit-app-region: no-drag; z-index: 1;"
-                      title="Close workspace"
-                      on:click|stopPropagation={() => onCloseWorkspace(idx)}
-                      >&times;</button
-                    >
-                  {/if}
-                  {#if harness}
-                    <div
-                      style="display: flex; align-items: center; gap: 4px; font-size: 10px; color: {statusColor(
-                        harness.primary,
-                      )}; white-space: nowrap; overflow: hidden; min-width: 0;"
-                      title={harnessTooltip(harness)}
-                    >
-                      <span
-                        style="font-family: monospace; width: 10px; text-align: center; flex-shrink: 0;"
-                        >{statusIndicator(harness.primary)}</span
+                    role="button"
+                    tabindex="0"
+                    data-drag-scope={project.id}
+                    data-drag-idx={localIdx}
+                    on:click={() => {
+                      if (!dragActive) handleWorkspaceClick(idx);
+                    }}
+                    on:keydown={(e) => {
+                      if (e.key === "Enter") handleWorkspaceClick(idx);
+                    }}
+                    on:mouseenter={() => (hoveredWsIdx = idx)}
+                    on:mouseleave={() => {
+                      if (hoveredWsIdx === idx) hoveredWsIdx = null;
+                    }}
+                    on:mousedown={(e) =>
+                      startDrag(e, { kind: "ws", scope: project.id, localIdx })}
+                    on:contextmenu|preventDefault={(e) =>
+                      showWorkspaceContextMenu(
+                        e.clientX,
+                        e.clientY,
+                        idx,
+                        project.id,
+                      )}
+                  >
+                    {#if hovered}
+                      <button
+                        style="position: absolute; top: 4px; right: 4px; background: none; border: none; color: {$theme.fgDim}; cursor: pointer; padding: 0 2px; font-size: 14px; line-height: 1; -webkit-app-region: no-drag; z-index: 1;"
+                        title="Close workspace"
+                        on:click|stopPropagation={() => onCloseWorkspace(idx)}
+                        >&times;</button
                       >
-                      <span style="overflow: hidden; text-overflow: ellipsis;"
-                        >{harnessLabel(ws)}: {harness.primary}</span
+                    {/if}
+                    {#if harness}
+                      <div
+                        style="display: flex; align-items: center; gap: 4px; font-size: 10px; color: {statusColor(
+                          harness.primary,
+                        )}; white-space: nowrap; overflow: hidden; min-width: 0;"
+                        title={harnessTooltip(harness)}
                       >
-                      {#if harness.total > 1}
                         <span
-                          style="font-size: 9px; padding: 0 4px; border-radius: 8px; background: {statusColor(
-                            harness.primary,
-                          )}20; flex-shrink: 0;">{harness.total}</span
+                          style="font-family: monospace; width: 10px; text-align: center; flex-shrink: 0;"
+                          >{statusIndicator(harness.primary)}</span
                         >
-                      {/if}
-                    </div>
-                  {/if}
-                  <span
-                    style="
+                        <span style="overflow: hidden; text-overflow: ellipsis;"
+                          >{harnessLabel(ws)}: {harness.primary}</span
+                        >
+                        {#if harness.total > 1}
+                          <span
+                            style="font-size: 9px; padding: 0 4px; border-radius: 8px; background: {statusColor(
+                              harness.primary,
+                            )}20; flex-shrink: 0;">{harness.total}</span
+                          >
+                        {/if}
+                      </div>
+                    {/if}
+                    <span
+                      style="
                   font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
                   font-weight: {idx === $activeWorkspaceIdx ? '600' : '400'};
                   color: {idx === $activeWorkspaceIdx
-                      ? $theme.fg
-                      : $theme.fgMuted};
+                        ? $theme.fg
+                        : $theme.fgMuted};
                 ">{ws.name}</span
-                  >
-                </div>
-              {/if}
-              {#if insertIndicator?.scope === project.id && insertIndicator.localIdx === localIdx && insertIndicator.edge === "after"}
-                <div
-                  style="height: 2px; background: {$theme.accent}; margin: 0 12px; border-radius: 1px;"
-                ></div>
-              {/if}
-            {/each}
+                    >
+                  </div>
+                {/if}
+                {#if insertIndicator?.scope === project.id && insertIndicator.localIdx === localIdx && insertIndicator.edge === "after"}
+                  <div
+                    style="height: 2px; background: {$theme.accent}; margin: 0 12px; border-radius: 1px;"
+                  ></div>
+                {/if}
+              {/each}
+            {/if}
           </div>
           <!-- /data-project-block -->
           {#if insertIndicator?.scope === "__projects__" && insertIndicator.localIdx === projectIdx && insertIndicator.edge === "after"}

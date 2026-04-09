@@ -2,7 +2,7 @@
  * UI State — visibility flags, navigation, and pending actions.
  * Dialog-specific stores live in dialog-service.ts.
  */
-import { writable } from "svelte/store";
+import { writable, get } from "svelte/store";
 import type { MenuItem } from "../context-menu-types";
 
 // --- Visibility flags ---
@@ -75,7 +75,22 @@ export async function goToProjectSettings(projectId: string): Promise<void> {
   activeWorkspaceIdx.set(-1);
 }
 
-export function openWorkspace(): void {
+/**
+ * Switch to workspace view.
+ * When called without args, infers the projectId from the active workspace.
+ * Pass an explicit projectId (or null) to override.
+ */
+export function openWorkspace(projectId?: string | null): void {
   currentView.set("workspace");
-  currentProjectId.set(null);
+  if (projectId !== undefined) {
+    currentProjectId.set(projectId ?? null);
+  } else {
+    // Infer projectId from the active workspace.
+    // Import is lazy (dynamic) to keep the module dependency one-directional.
+    import("./workspace").then(({ workspaces, activeWorkspaceIdx }) => {
+      currentProjectId.set(
+        get(workspaces)[get(activeWorkspaceIdx)]?.record?.projectId ?? null,
+      );
+    });
+  }
 }

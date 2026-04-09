@@ -226,9 +226,14 @@ describe("L5: Cross-platform keybindings", () => {
       findNext: vi.fn(),
       findPrev: vi.fn(),
       closeFindBar: vi.fn(),
+      goHome: vi.fn(),
+      openSettings: vi.fn(),
+      escapeBack: vi.fn(),
       workspaceCount: vi.fn().mockReturnValue(3),
       activeIdx: vi.fn().mockReturnValue(0),
       findBarVisible: vi.fn().mockReturnValue(false),
+      commandPaletteOpen: vi.fn().mockReturnValue(false),
+      currentView: vi.fn().mockReturnValue("workspace"),
     };
   }
 
@@ -297,7 +302,7 @@ describe("L5: Cross-platform keybindings", () => {
     }> = [
       { key: "w", action: "closeWorkspace" },
       { key: "d", action: "splitVertical" },
-      { key: "h", action: "flashFocusedPane" },
+      { key: "h", action: "goHome" },
       { key: "r", action: "startRename" },
       { key: "g", action: "findPrev" },
       // Enter does not change case, so keep it as-is on both platforms

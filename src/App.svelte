@@ -52,7 +52,6 @@
     type Workspace,
     type Pane,
     type SplitNode,
-    type Surface,
   } from "./lib/types";
   import {
     disposeSurface,
@@ -62,6 +61,11 @@
     disposeAllSurfaces,
     countActivePtys,
   } from "./lib/pane-service";
+  import {
+    createContextualSurface,
+    createDiffSurface,
+    createCommitDiffSurface,
+  } from "./lib/surface-actions";
   import {
     openPreview,
     canPreview,
@@ -511,48 +515,7 @@
     }
   }
 
-  async function createContextualSurface(
-    kind: string,
-    worktreePath: string,
-    baseBranch?: string,
-  ): Promise<Surface | null> {
-    if (kind === "diff") {
-      const { gitDiff } = await import("./lib/git");
-      const diffContent = await gitDiff(worktreePath).catch(() => "");
-      return {
-        kind: "diff",
-        id: uid(),
-        title: "Diff",
-        worktreePath,
-        diffContent,
-        hasUnread: false,
-      };
-    } else if (kind === "filebrowser") {
-      const { gitLsFiles } = await import("./lib/git");
-      const files = await gitLsFiles(worktreePath).catch(() => []);
-      return {
-        kind: "filebrowser",
-        id: uid(),
-        title: "Files",
-        worktreePath,
-        files,
-        hasUnread: false,
-      };
-    } else if (kind === "commithistory") {
-      const { gitLog } = await import("./lib/git");
-      const commits = await gitLog(worktreePath, baseBranch).catch(() => []);
-      return {
-        kind: "commithistory",
-        id: uid(),
-        title: "Commits",
-        worktreePath,
-        baseBranch,
-        commits,
-        hasUnread: false,
-      };
-    }
-    return null;
-  }
+  // createContextualSurface imported from surface-actions.ts
 
   async function handleNewContextualSurface(paneId: string, kind: string) {
     const ws = $activeWorkspace;
@@ -856,19 +819,7 @@
   async function openDiffInPane(worktreePath: string, filePath?: string) {
     const pane = $activePane;
     if (!pane) return;
-    const { gitDiff } = await import("./lib/git");
-    const diffContent = await gitDiff(worktreePath, filePath).catch(() => "");
-    const surface = {
-      kind: "diff" as const,
-      id: uid(),
-      title: filePath
-        ? `Diff: ${filePath.split("/").pop()}`
-        : "Working Tree Diff",
-      worktreePath,
-      filePath,
-      diffContent,
-      hasUnread: false,
-    };
+    const surface = await createDiffSurface(worktreePath, filePath);
     pane.surfaces.push(surface);
     pane.activeSurfaceId = surface.id;
     notifyWorkspacesChanged();
@@ -880,18 +831,7 @@
   ) {
     const pane = $activePane;
     if (!pane) return;
-    const { gitDiff: gitDiffFn } = await import("./lib/git");
-    const diffContent = await gitDiffFn(worktreePath, commit.hash).catch(
-      () => "",
-    );
-    const surface = {
-      kind: "diff" as const,
-      id: uid(),
-      title: `${commit.shortHash}: ${commit.subject}`,
-      worktreePath,
-      diffContent,
-      hasUnread: false,
-    };
+    const surface = await createCommitDiffSurface(worktreePath, commit);
     pane.surfaces.push(surface);
     pane.activeSurfaceId = surface.id;
     notifyWorkspacesChanged();

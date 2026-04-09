@@ -3,8 +3,22 @@
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { get } from "svelte/store";
-import { workspaces, activeWorkspaceIdx, activeWorkspace, activePane, activeSurface } from "../lib/stores/workspace";
-import { sidebarVisible, commandPaletteOpen, findBarVisible, contextMenu } from "../lib/stores/ui";
+import {
+  workspaces,
+  activeWorkspaceIdx,
+  activeWorkspace,
+  activePane,
+  activeSurface,
+} from "../lib/stores/workspace";
+import {
+  sidebarVisible,
+  commandPaletteOpen,
+  findBarVisible,
+  contextMenu,
+  currentView,
+  goHome,
+  openWorkspace,
+} from "../lib/stores/ui";
 import type { Workspace, Pane, TerminalSurface } from "../lib/types";
 
 function makeSurface(id: string): TerminalSurface {
@@ -90,7 +104,7 @@ describe("Workspace stores", () => {
 
     expect(get(activeWorkspace)?.name).toBe("Test");
 
-    workspaces.update(list => {
+    workspaces.update((list) => {
       list[0].name = "Updated";
       return [...list];
     });
@@ -142,10 +156,35 @@ describe("UI stores", () => {
   });
 
   it("sets context menu state", () => {
-    contextMenu.set({ x: 100, y: 200, items: [{ label: "Test", action: () => {} }] });
+    contextMenu.set({
+      x: 100,
+      y: 200,
+      items: [{ label: "Test", action: () => {} }],
+    });
     const state = get(contextMenu);
     expect(state?.x).toBe(100);
     expect(state?.y).toBe(200);
     expect(state?.items).toHaveLength(1);
+  });
+});
+
+describe("Navigation stores", () => {
+  beforeEach(() => {
+    currentView.set("home");
+  });
+
+  it("currentView defaults to home", () => {
+    expect(get(currentView)).toBe("home");
+  });
+
+  it("goHome sets view to home", () => {
+    currentView.set("workspace");
+    goHome();
+    expect(get(currentView)).toBe("home");
+  });
+
+  it("openWorkspace sets view to workspace", () => {
+    openWorkspace();
+    expect(get(currentView)).toBe("workspace");
   });
 });

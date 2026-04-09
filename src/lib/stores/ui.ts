@@ -1,35 +1,96 @@
-import { writable } from "svelte/store";
+/**
+ * UI State — visibility flags, navigation, and pending actions.
+ * Dialog-specific stores live in dialog-service.ts.
+ */
+import { writable, get } from "svelte/store";
 import type { MenuItem } from "../context-menu-types";
+
+// --- Visibility flags ---
 
 export const sidebarVisible = writable<boolean>(true);
 export const commandPaletteOpen = writable<boolean>(false);
 export const findBarVisible = writable<boolean>(false);
+/** Visibility toggle for the right sidebar (file explorer / diff view). */
+export const rightSidebarVisible = writable<boolean>(false);
+
+// --- Context menu ---
 
 export interface ContextMenuState {
   x: number;
   y: number;
   items: MenuItem[];
 }
-
 export const contextMenu = writable<ContextMenuState | null>(null);
 
-/** Pending action dispatched from terminal-service.ts for App.svelte to handle */
-export interface PendingAction {
-  type: string;
-  payload?: any;
-}
+// --- Pending action bus (terminal-service → App.svelte) ---
+
+export type PendingAction =
+  | { type: "open-preview"; payload: string }
+  | { type: "split-right" }
+  | { type: "split-down" }
+  | { type: "open-diff"; payload: { worktreePath: string; filePath: string } }
+  | {
+      type: "open-commit";
+      payload: {
+        worktreePath: string;
+        commit: { hash: string; shortHash: string; subject: string };
+      };
+    }
+  | { type: "open-in-editor"; payload: string };
 export const pendingAction = writable<PendingAction | null>(null);
 
-/** Input prompt — replaces window.prompt() which doesn't work in Tauri WKWebView */
-export interface InputPromptState {
-  placeholder: string;
-  defaultValue?: string;
-  resolve: (value: string | null) => void;
-}
-export const inputPrompt = writable<InputPromptState | null>(null);
+// --- Loading state ---
 
-export function showInputPrompt(placeholder: string, defaultValue?: string): Promise<string | null> {
-  return new Promise((resolve) => {
-    inputPrompt.set({ placeholder, defaultValue, resolve });
-  });
+export const loadingMessage = writable<string | null>(null);
+
+// --- Navigation ---
+
+export type ViewName =
+  | "home"
+  | "workspace"
+  | "project"
+  | "settings"
+  | "project-settings";
+export const currentView = writable<ViewName>("home");
+export const currentProjectId = writable<string | null>(null);
+
+export async function goHome(): Promise<void> {
+  currentView.set("home");
+  currentProjectId.set(null);
+  const { activeWorkspaceIdx } = await import("./workspace");
+  activeWorkspaceIdx.set(-1);
+}
+
+export async function goToProject(projectId: string): Promise<void> {
+  currentView.set("project");
+  currentProjectId.set(projectId);
+  const { activeWorkspaceIdx } = await import("./workspace");
+  activeWorkspaceIdx.set(-1);
+}
+
+export async function goToProjectSettings(projectId: string): Promise<void> {
+  currentView.set("project-settings");
+  currentProjectId.set(projectId);
+  const { activeWorkspaceIdx } = await import("./workspace");
+  activeWorkspaceIdx.set(-1);
+}
+
+/**
+ * Switch to workspace view.
+ * When called without args, infers the projectId from the active workspace.
+ * Pass an explicit projectId (or null) to override.
+ */
+export function openWorkspace(projectId?: string | null): void {
+  currentView.set("workspace");
+  if (projectId !== undefined) {
+    currentProjectId.set(projectId ?? null);
+  } else {
+    // Infer projectId from the active workspace.
+    // Import is lazy (dynamic) to keep the module dependency one-directional.
+    import("./workspace").then(({ workspaces, activeWorkspaceIdx }) => {
+      currentProjectId.set(
+        get(workspaces)[get(activeWorkspaceIdx)]?.record?.projectId ?? null,
+      );
+    });
+  }
 }

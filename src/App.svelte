@@ -1,28 +1,115 @@
 <script lang="ts">
-  import { onMount, tick } from "svelte";
+  import { onMount, onDestroy } from "svelte";
+  import type { UnlistenFn } from "@tauri-apps/api/event";
+  import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import { theme, themes, xtermTheme } from "./lib/stores/theme";
-  import { sidebarVisible, commandPaletteOpen, findBarVisible, pendingAction, showInputPrompt } from "./lib/stores/ui";
-  import { workspaces, activeWorkspaceIdx, activeWorkspace, activePane, activeSurface } from "./lib/stores/workspace";
-  import { invoke } from "@tauri-apps/api/core";
-  import { loadConfig, saveConfig, getConfig, getWorkspaceCommands, type WorkspaceDef, type LayoutNode } from "./lib/config";
-  import { setupListeners, createTerminalSurface, fontReady, startCwdPolling, isMac, modLabel, shiftModLabel } from "./lib/terminal-service";
-  import { uid, getAllPanes, getAllSurfaces, isTerminalSurface, findParentSplit, replaceNodeInTree, type Workspace, type Pane, type SplitNode, type Surface, type TerminalSurface as TermSurface } from "./lib/types";
-  import { openPreview, canPreview, getSupportedExtensions, refreshPreviewStyles } from "./preview/index";
+  import {
+    sidebarVisible,
+    commandPaletteOpen,
+    findBarVisible,
+    pendingAction,
+    currentView,
+    currentProjectId,
+    goHome,
+    goToProject,
+    openWorkspace,
+    loadingMessage,
+  } from "./lib/stores/ui";
+  import { showInputPrompt } from "./lib/stores/dialog-service";
+  import { openNewWorkspace } from "./lib/workspace-actions";
+  import {
+    workspaces,
+    activeWorkspaceIdx,
+    activeWorkspace,
+    activePane,
+    activeSurface,
+    notifyWorkspacesChanged,
+  } from "./lib/stores/workspace";
+  import {
+    loadSettings,
+    saveSettings,
+    getSettings,
+    getWorkspaceCommands,
+    type WorkspaceDef,
+    type LayoutNode,
+  } from "./lib/settings";
+  import {
+    setupListeners,
+    cleanupListeners,
+    createTerminalSurface,
+    fontReady,
+    isMac,
+    startCwdPolling,
+    stopCwdPolling,
+  } from "./lib/terminal-service";
+  import {
+    uid,
+    getAllPanes,
+    getAllSurfaces,
+    isTerminalSurface,
+    isHarnessSurface,
+    findPane,
+    getWorktreeEnv,
+    type Workspace,
+    type Pane,
+    type SplitNode,
+  } from "./lib/types";
+  import {
+    disposeSurface,
+    removeSurfaceFromPane,
+    collapsePaneFromTree,
+    splitPane,
+    disposeAllSurfaces,
+    countActivePtys,
+  } from "./lib/pane-service";
+  import {
+    createContextualSurface,
+    createDiffSurface,
+    createCommitDiffSurface,
+  } from "./lib/surface-actions";
+  import {
+    openPreview,
+    canPreview,
+    getSupportedExtensions,
+    refreshPreviewStyles,
+  } from "./preview/index";
   import "./preview/init";
   import { type ThemeDef } from "./lib/theme-data";
 
   import Sidebar from "./lib/components/Sidebar.svelte";
-  import SidebarToggle from "./lib/components/SidebarToggle.svelte";
+  import HomeScreen from "./lib/components/HomeScreen.svelte";
+  import { initProjects, projects, activeProjects } from "./lib/stores/project";
+  import { loadState } from "./lib/state";
+  import {
+    handleKeydown as dispatchKeydown,
+    type KeybindingActions,
+  } from "./lib/keybindings";
+  import {
+    handleAddProject,
+    handleNewWorkspace as handleNewWs,
+    createFloatingWorkspace,
+    restoreActiveWorkspaces,
+  } from "./lib/workspace-actions";
+  import { safeFocusTerminal } from "./lib/terminal-focus";
   import TitleBar from "./lib/components/TitleBar.svelte";
   import WorkspaceView from "./lib/components/WorkspaceView.svelte";
   import CommandPalette from "./lib/components/CommandPalette.svelte";
   import FindBar from "./lib/components/FindBar.svelte";
   import ContextMenu from "./lib/components/ContextMenu.svelte";
   import InputPrompt from "./lib/components/InputPrompt.svelte";
+  import NewProjectDialog from "./lib/components/NewProjectDialog.svelte";
+  import NewWorkspaceDialog from "./lib/components/NewWorkspaceDialog.svelte";
+  import ConfirmDialog from "./lib/components/ConfirmDialog.svelte";
+  import RightSidebar from "./lib/components/RightSidebar.svelte";
+  import ProjectDashboard from "./lib/components/ProjectDashboard.svelte";
+  import SettingsView from "./lib/components/SettingsView.svelte";
+  import ProjectSettingsView from "./lib/components/ProjectSettingsView.svelte";
+  import { showConfirmDialog } from "./lib/stores/dialog-service";
 
   let sidebarComponent: Sidebar;
   let findBarComponent: FindBar;
+  const menuUnlisteners: UnlistenFn[] = [];
 
   // ---- Shared helpers ----
 
@@ -30,57 +117,46 @@
     theme.set(id);
     for (const ws of $workspaces) {
       for (const s of getAllSurfaces(ws)) {
-        if (isTerminalSurface(s)) s.terminal.options.theme = $xtermTheme;
+        if (isTerminalSurface(s) || isHarnessSurface(s))
+          s.terminal.options.theme = $xtermTheme;
       }
     }
     refreshPreviewStyles();
-    saveConfig({ theme: id });
+    saveSettings({ theme: id });
   }
 
   // ---- Workspace service functions ----
 
-  async function safeFocus(s: Surface | null | undefined) {
-    if (!s || !isTerminalSurface(s)) return;
-    await tick(); // Wait for Svelte DOM update
-    s.terminal.focus();
-  }
-
-  async function createWorkspace(name: string) {
-    const pane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
-    const ws: Workspace = {
-      id: uid(), name,
-      splitRoot: { type: "pane", pane },
-      activePaneId: pane.id,
-    };
-
-    // createTerminalSurface already pushes to pane.surfaces and sets activeSurfaceId
-    const surface = await createTerminalSurface(pane);
-
-    workspaces.update(list => [...list, ws]);
-    activeWorkspaceIdx.set($workspaces.length - 1);
-    safeFocus(surface);
-  }
+  // safeFocus is now safeFocusTerminal from terminal-focus.ts
 
   async function createWorkspaceFromDef(def: WorkspaceDef) {
     const wsName = def.name || `Workspace ${$workspaces.length + 1}`;
     const rootCwd = def.cwd;
 
-    async function buildTree(nodeDef: LayoutNode, inheritedCwd?: string): Promise<SplitNode> {
+    async function buildTree(
+      nodeDef: LayoutNode,
+      inheritedCwd?: string,
+    ): Promise<SplitNode> {
       if ("pane" in nodeDef) {
         const pane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
         for (const sDef of nodeDef.pane.surfaces) {
           const cwd = sDef.cwd || inheritedCwd;
           if (sDef.type === "markdown" && sDef.path) {
-            const preview = await openPreview(sDef.path);
-            const surface = {
-              kind: "preview" as const,
-              id: preview.id, filePath: preview.filePath,
-              title: sDef.name || preview.title,
-              element: preview.element, watchId: preview.watchId,
-              hasUnread: false,
-            };
+            const surface = await openPreview(sDef.path);
+            if (sDef.name) surface.title = sDef.name;
             pane.surfaces.push(surface);
-            if (!pane.activeSurfaceId || sDef.focus) pane.activeSurfaceId = surface.id;
+            if (!pane.activeSurfaceId || sDef.focus)
+              pane.activeSurfaceId = surface.id;
+          } else if (sDef.type === "harness" && sDef.presetId) {
+            const { createHarnessSurface } =
+              await import("./lib/terminal-service");
+            const surface = await createHarnessSurface(
+              pane,
+              sDef.presetId,
+              cwd,
+            );
+            if (sDef.name) surface.title = sDef.name;
+            if (sDef.focus) pane.activeSurfaceId = surface.id;
           } else {
             const surface = await createTerminalSurface(pane, cwd);
             if (sDef.name) surface.title = sDef.name;
@@ -95,7 +171,12 @@
       } else {
         const left = await buildTree(nodeDef.children[0], inheritedCwd);
         const right = await buildTree(nodeDef.children[1], inheritedCwd);
-        return { type: "split", direction: nodeDef.direction, ratio: nodeDef.split || 0.5, children: [left, right] };
+        return {
+          type: "split",
+          direction: nodeDef.direction,
+          ratio: nodeDef.split || 0.5,
+          children: [left, right],
+        };
       }
     }
 
@@ -109,15 +190,25 @@
     }
 
     const ws: Workspace = {
-      id: uid(), name: wsName, splitRoot,
+      id: uid(),
+      name: wsName,
+      splitRoot,
       activePaneId: getAllPanes(splitRoot)[0]?.id ?? null,
     };
 
-    workspaces.update(list => [...list, ws]);
+    workspaces.update((list) => [...list, ws]);
     activeWorkspaceIdx.set($workspaces.length - 1);
-    const ap = getAllPanes(splitRoot).find(p => p.id === ws.activePaneId);
-    const as_ = ap?.surfaces.find(s => s.id === ap.activeSurfaceId);
-    safeFocus(as_);
+    const ap = getAllPanes(splitRoot).find((p) => p.id === ws.activePaneId);
+    const as_ = ap?.surfaces.find((s) => s.id === ap.activeSurfaceId);
+    safeFocusTerminal(as_);
+  }
+
+  function handleSwitchToWorkspace(wsId: string) {
+    const idx = $workspaces.findIndex((ws) => ws.id === wsId);
+    if (idx >= 0) {
+      switchWorkspace(idx);
+      openWorkspace($workspaces[idx]?.record?.projectId);
+    }
   }
 
   function switchWorkspace(idx: number) {
@@ -125,43 +216,108 @@
     activeWorkspaceIdx.set(idx);
     // fit() and scrollToBottom() are handled by TerminalSurface's visibility transition.
     // Just need to set focus after the transition settles.
-    safeFocus($activeSurface);
+    safeFocusTerminal($activeSurface);
   }
 
-  function closeWorkspace(idx: number) {
-    if ($workspaces.length <= 1) return;
+  async function closeWorkspace(idx: number) {
     const ws = $workspaces[idx];
-    for (const pane of getAllPanes(ws.splitRoot)) {
-      pane.resizeObserver?.disconnect();
-    }
-    for (const s of getAllSurfaces(ws)) {
-      if (isTerminalSurface(s)) {
-        s.terminal.dispose();
-        if (s.ptyId >= 0) {
-          invoke("kill_pty", { ptyId: s.ptyId }).catch(() => {});
+    if (!ws) return;
+
+    const ptyCount = countActivePtys(ws);
+    const msg =
+      ptyCount > 0
+        ? `Close "${ws.name}"? This will kill ${ptyCount} running process${ptyCount > 1 ? "es" : ""}.`
+        : `Close "${ws.name}"?`;
+    const confirmed = await showConfirmDialog(msg, {
+      title: "Close Workspace",
+      confirmLabel: "Close",
+      danger: true,
+    });
+    if (!confirmed) return;
+
+    disposeAllSurfaces(ws);
+
+    // For managed workspaces, offer to clean up the git worktree
+    if (
+      ws.record?.type === "managed" &&
+      ws.record.worktreePath &&
+      ws.record.projectId
+    ) {
+      const shouldCleanup = await showConfirmDialog(
+        `Remove the git worktree at ${ws.record.worktreePath}? This deletes the worktree directory.`,
+        {
+          title: "Clean Up Worktree",
+          confirmLabel: "Remove Worktree",
+          danger: true,
+        },
+      );
+      if (shouldCleanup) {
+        try {
+          const state = await import("./lib/state");
+          const project = state
+            .getState()
+            .projects.find((p) => p.id === ws.record!.projectId);
+          if (project) {
+            const { removeWorktree } = await import("./lib/git");
+            await removeWorktree(project.path, ws.record.worktreePath!);
+          }
+        } catch (err) {
+          await showConfirmDialog(`Worktree removal failed: ${err}`, {
+            title: "Error",
+            confirmLabel: "OK",
+            danger: true,
+          });
         }
       }
     }
-    workspaces.update(list => list.filter((_, i) => i !== idx));
-    activeWorkspaceIdx.set(Math.min($activeWorkspaceIdx, $workspaces.length - 1));
+
+    // Update persisted state first (source of truth), then sync Svelte store
+    if (ws.record?.id) {
+      const state = await import("./lib/state");
+      if (ws.record.projectId) {
+        state.removeWorkspace(ws.record.projectId, ws.record.id);
+      } else {
+        state.removeFloatingWorkspace(ws.record.id);
+      }
+      await state.saveState();
+      (await import("./lib/stores/project")).initProjects();
+    }
+
+    // Mirror persisted state in Svelte store
+    const remaining = $workspaces.filter((_, i) => i !== idx);
+    workspaces.set(remaining);
+    if (remaining.length === 0) {
+      activeWorkspaceIdx.set(-1);
+      goHome();
+    } else {
+      activeWorkspaceIdx.set(
+        Math.min($activeWorkspaceIdx, remaining.length - 1),
+      );
+    }
   }
 
-  function renameWorkspace(idx: number, name: string) {
-    workspaces.update(list => {
-      list[idx].name = name;
+  async function renameWorkspace(idx: number, currentName: string) {
+    const newName = await showInputPrompt("Rename workspace", currentName);
+    if (!newName || newName === currentName) return;
+    workspaces.update((list) => {
+      list[idx].name = newName;
+      // Also update persisted metadata if present
+      if (list[idx].record) {
+        list[idx].record!.name = newName;
+      }
       return [...list];
     });
-  }
-
-  function reorderWorkspaces(fromIdx: number, toIdx: number) {
-    workspaces.update(list => {
-      const item = list.splice(fromIdx, 1)[0];
-      const adjustedTo = fromIdx < toIdx ? toIdx - 1 : toIdx;
-      list.splice(adjustedTo, 0, item);
-      return [...list];
-    });
-    if ($activeWorkspaceIdx === fromIdx) {
-      activeWorkspaceIdx.set(fromIdx < toIdx ? toIdx - 1 : toIdx);
+    // Persist the rename
+    const ws = $workspaces[idx];
+    if (ws?.record?.projectId && ws.record.id) {
+      const { getState, saveState } = await import("./lib/state");
+      const state = getState();
+      const project = state.projects.find((p) => p.id === ws.record!.projectId);
+      const wsMeta = project?.workspaces.find((w) => w.id === ws.record!.id);
+      if (wsMeta) {
+        wsMeta.name = newName;
+        await saveState();
+      }
     }
   }
 
@@ -170,53 +326,110 @@
   function handleSelectSurface(paneId: string, surfaceId: string) {
     const ws = $activeWorkspace;
     if (!ws) return;
-    const pane = getAllPanes(ws.splitRoot).find(p => p.id === paneId);
+    const pane = findPane(ws, paneId);
     if (!pane) return;
     pane.activeSurfaceId = surfaceId;
-    const s = pane.surfaces.find(s => s.id === surfaceId);
+    const s = pane.surfaces.find((s) => s.id === surfaceId);
     if (s) s.hasUnread = false;
-    workspaces.update(l => [...l]);
-    safeFocus(s);
+    notifyWorkspacesChanged();
+    safeFocusTerminal(s);
   }
 
   function handleCloseSurface(paneId: string, surfaceId: string) {
     const ws = $activeWorkspace;
     if (!ws) return;
-    const pane = getAllPanes(ws.splitRoot).find(p => p.id === paneId);
+    const pane = findPane(ws, paneId);
     if (!pane) return;
-    const idx = pane.surfaces.findIndex(s => s.id === surfaceId);
+    const idx = pane.surfaces.findIndex((s) => s.id === surfaceId);
     if (idx < 0) return;
+
+    // If closing a harness in a managed workspace, replace with placeholder
+    const surface = pane.surfaces[idx];
+    if (isHarnessSurface(surface) && ws.record?.type === "managed") {
+      disposeSurface(surface);
+      const placeholder: import("./lib/types").HarnessPlaceholderSurface = {
+        kind: "harness-placeholder",
+        id: uid(),
+        title: "Harness",
+        presetId: surface.presetId,
+        cwd: surface.cwd,
+        hasUnread: false,
+      };
+      pane.surfaces.splice(idx, 1, placeholder);
+      pane.activeSurfaceId = placeholder.id;
+      notifyWorkspacesChanged();
+      return;
+    }
+
     removeSurface(ws, pane, idx);
   }
 
   function removeSurface(ws: Workspace, pane: Pane, surfaceIdx: number) {
-    const surface = pane.surfaces[surfaceIdx];
-    if (isTerminalSurface(surface)) {
-      surface.terminal.dispose();
-      if (surface.ptyId >= 0) {
-        invoke("kill_pty", { ptyId: surface.ptyId }).catch(() => {});
-      }
-    }
-    pane.surfaces.splice(surfaceIdx, 1);
-
-    if (pane.surfaces.length === 0) {
+    const newActive = removeSurfaceFromPane(pane, surfaceIdx);
+    if (newActive === null) {
       removePane(ws, pane);
     } else {
-      pane.activeSurfaceId = pane.surfaces[Math.min(surfaceIdx, pane.surfaces.length - 1)].id;
-      workspaces.update(l => [...l]);
-      const s = pane.surfaces.find(s => s.id === pane.activeSurfaceId);
-      safeFocus(s);
+      notifyWorkspacesChanged();
+      const s = pane.surfaces.find((s) => s.id === newActive);
+      safeFocusTerminal(s);
     }
   }
 
-  /** Get the CWD of the active terminal surface, querying the PTY if needed. */
+  async function handleRelaunchHarness(paneId: string, surfaceId: string) {
+    const ws = $activeWorkspace;
+    if (!ws) return;
+    const pane = findPane(ws, paneId);
+    if (!pane) return;
+    const idx = pane.surfaces.findIndex((s) => s.id === surfaceId);
+    if (idx < 0) return;
+    const placeholder = pane.surfaces[idx];
+    if (placeholder.kind !== "harness-placeholder") return;
+
+    const { createHarnessSurface, registerHarnessWithTracker } =
+      await import("./lib/terminal-service");
+    const cwd = placeholder.cwd || ws.record?.worktreePath;
+    const worktreeEnv = getWorktreeEnv(ws);
+    pane.surfaces.splice(idx, 1);
+    const h = await createHarnessSurface(
+      pane,
+      placeholder.presetId,
+      cwd,
+      worktreeEnv,
+    );
+    if (h) {
+      registerHarnessWithTracker(h);
+      pane.activeSurfaceId = h.id;
+    }
+    notifyWorkspacesChanged();
+    safeFocusTerminal(h);
+  }
+
+  /** Get the CWD — from active surface, then workspace record, then project path. */
   async function getActiveCwd(): Promise<string | undefined> {
-    if (!$activeSurface || !isTerminalSurface($activeSurface)) return undefined;
-    if ($activeSurface.cwd) return $activeSurface.cwd;
-    if ($activeSurface.ptyId >= 0) {
-      try {
-        return await invoke<string>("get_pty_cwd", { ptyId: $activeSurface.ptyId }) || undefined;
-      } catch { return undefined; }
+    // Try active surface (terminal or harness)
+    if (
+      $activeSurface &&
+      (isTerminalSurface($activeSurface) || isHarnessSurface($activeSurface))
+    ) {
+      if ($activeSurface.cwd) return $activeSurface.cwd;
+      if ($activeSurface.ptyId >= 0) {
+        try {
+          const cwd = await invoke<string>("get_pty_cwd", {
+            ptyId: $activeSurface.ptyId,
+          });
+          if (cwd) return cwd;
+        } catch {}
+      }
+    }
+    // Fall back to workspace worktree path or project path
+    const ws = $activeWorkspace;
+    if (ws?.record?.worktreePath) return ws.record.worktreePath;
+    if (ws?.record?.projectId) {
+      const { getState } = await import("./lib/state");
+      const project = getState().projects.find(
+        (p) => p.id === ws.record!.projectId,
+      );
+      if (project) return project.path;
     }
     return undefined;
   }
@@ -224,82 +437,147 @@
   async function handleNewSurface(paneId: string) {
     const ws = $activeWorkspace;
     if (!ws) return;
-    const pane = getAllPanes(ws.splitRoot).find(p => p.id === paneId);
+    const pane = findPane(ws, paneId);
     if (!pane) return;
     const cwd = await getActiveCwd();
     const surface = await createTerminalSurface(pane, cwd);
-    workspaces.update(l => [...l]);
-    safeFocus(surface);
+    // Enforce worktree boundary for managed workspaces
+    const env = getWorktreeEnv(ws);
+    if (env) surface.env = env;
+    notifyWorkspacesChanged();
+    safeFocusTerminal(surface);
+  }
+
+  async function handleNewHarnessSurface(paneId: string, presetId: string) {
+    const ws = $activeWorkspace;
+    if (!ws) return;
+    const pane = findPane(ws, paneId);
+    if (!pane) return;
+    const cwd = await getActiveCwd();
+    const worktreeEnv = getWorktreeEnv(ws);
+    const { createHarnessSurface, registerHarnessWithTracker } =
+      await import("./lib/terminal-service");
+    const h = await createHarnessSurface(pane, presetId, cwd, worktreeEnv);
+    if (h) registerHarnessWithTracker(h);
+    notifyWorkspacesChanged();
+    safeFocusTerminal(h);
+  }
+
+  async function handleSwitchSurface(
+    paneId: string,
+    kind: string,
+    presetId?: string,
+  ) {
+    const ws = $activeWorkspace;
+    if (!ws) return;
+    const pane = findPane(ws, paneId);
+    if (!pane) return;
+
+    // Find and dispose the currently active surface
+    const activeIdx = pane.surfaces.findIndex(
+      (s) => s.id === pane.activeSurfaceId,
+    );
+    if (activeIdx >= 0) {
+      disposeSurface(pane.surfaces[activeIdx]);
+      pane.surfaces.splice(activeIdx, 1);
+    }
+
+    const cwd = await getActiveCwd();
+    const worktreeEnv = getWorktreeEnv(ws);
+
+    if (kind === "harness" && presetId) {
+      const { createHarnessSurface, registerHarnessWithTracker } =
+        await import("./lib/terminal-service");
+      const h = await createHarnessSurface(pane, presetId, cwd, worktreeEnv);
+      if (h) registerHarnessWithTracker(h);
+      notifyWorkspacesChanged();
+      safeFocusTerminal(h);
+    } else if (
+      kind === "diff" ||
+      kind === "filebrowser" ||
+      kind === "commithistory"
+    ) {
+      const wp = ws.record?.worktreePath;
+      if (!wp) return;
+      const newSurface = await createContextualSurface(
+        kind,
+        wp,
+        ws.record?.baseBranch,
+      );
+      if (newSurface) {
+        pane.surfaces.push(newSurface);
+        pane.activeSurfaceId = newSurface.id;
+        notifyWorkspacesChanged();
+      }
+    } else {
+      const surface = await createTerminalSurface(pane, cwd);
+      if (worktreeEnv) surface.env = worktreeEnv;
+      notifyWorkspacesChanged();
+      safeFocusTerminal(surface);
+    }
+  }
+
+  // createContextualSurface imported from surface-actions.ts
+
+  async function handleNewContextualSurface(paneId: string, kind: string) {
+    const ws = $activeWorkspace;
+    if (!ws) return;
+    const pane = findPane(ws, paneId);
+    if (!pane) return;
+    const wp = ws.record?.worktreePath;
+    if (!wp) return;
+    const newSurface = await createContextualSurface(
+      kind,
+      wp,
+      ws.record?.baseBranch,
+    );
+    if (newSurface) {
+      pane.surfaces.push(newSurface);
+      pane.activeSurfaceId = newSurface.id;
+      notifyWorkspacesChanged();
+    }
   }
 
   // findParentSplit and replaceNodeInTree imported from types.ts
 
-  async function handleSplitPane(paneId: string, direction: "horizontal" | "vertical") {
+  async function handleSplitPane(
+    paneId: string,
+    direction: "horizontal" | "vertical",
+  ) {
     const ws = $activeWorkspace;
     if (!ws) return;
-    const activeP = getAllPanes(ws.splitRoot).find(p => p.id === paneId) ?? $activePane;
-    if (!activeP) return;
+    const targetPaneId = findPane(ws, paneId)?.id ?? $activePane?.id;
+    if (!targetPaneId) return;
 
-    const newPane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
     const cwd = await getActiveCwd();
-    const surface = await createTerminalSurface(newPane, cwd);
-
-    const newSplit: SplitNode = {
-      type: "split", direction,
-      children: [{ type: "pane", pane: activeP }, { type: "pane", pane: newPane }],
-      ratio: 0.5,
-    };
-
-    if (ws.splitRoot.type === "pane" && ws.splitRoot.pane.id === activeP.id) {
-      ws.splitRoot = newSplit;
-    } else {
-      const parentInfo = findParentSplit(ws.splitRoot, activeP.id);
-      if (parentInfo && parentInfo.parent.type === "split") {
-        parentInfo.parent.children[parentInfo.index] = newSplit;
-      }
-    }
-    ws.activePaneId = newPane.id;
-    workspaces.update(l => [...l]);
-    safeFocus(surface);
+    const surface = await splitPane(ws, targetPaneId, direction, cwd);
+    notifyWorkspacesChanged();
+    safeFocusTerminal(surface);
   }
 
   function removePane(ws: Workspace, pane: Pane) {
-    pane.resizeObserver?.disconnect();
-    if (ws.splitRoot.type === "pane" && ws.splitRoot.pane.id === pane.id) {
+    const shouldRemoveWorkspace = collapsePaneFromTree(ws, pane);
+    if (shouldRemoveWorkspace) {
       const wsIdx = $workspaces.indexOf(ws);
-      workspaces.update(list => list.filter(w => w.id !== ws.id));
+      workspaces.update((list) => list.filter((w) => w.id !== ws.id));
       if ($workspaces.length === 0) {
-        createWorkspace("Workspace 1");
+        activeWorkspaceIdx.set(-1);
+        goHome();
       } else {
         activeWorkspaceIdx.set(Math.min(wsIdx, $workspaces.length - 1));
       }
       return;
     }
-    const parentInfo = findParentSplit(ws.splitRoot, pane.id);
-    if (parentInfo && parentInfo.parent.type === "split") {
-      const sibling = parentInfo.parent.children[parentInfo.index === 0 ? 1 : 0];
-      if (ws.splitRoot === parentInfo.parent) {
-        ws.splitRoot = sibling;
-      } else {
-        replaceNodeInTree(ws.splitRoot, parentInfo.parent, sibling);
-      }
-      ws.activePaneId = getAllPanes(ws.splitRoot)[0]?.id ?? null;
-    }
-    workspaces.update(l => [...l]);
-    safeFocus($activeSurface);
+    notifyWorkspacesChanged();
+    safeFocusTerminal($activeSurface);
   }
 
   function handleClosePane(paneId: string) {
     const ws = $activeWorkspace;
     if (!ws) return;
-    const pane = getAllPanes(ws.splitRoot).find(p => p.id === paneId);
+    const pane = findPane(ws, paneId);
     if (!pane) return;
-    for (const s of [...pane.surfaces]) {
-      if (isTerminalSurface(s)) {
-        s.terminal.dispose();
-        if (s.ptyId >= 0) invoke("kill_pty", { ptyId: s.ptyId }).catch(() => {});
-      }
-    }
+    for (const s of [...pane.surfaces]) disposeSurface(s);
     pane.surfaces = [];
     removePane(ws, pane);
   }
@@ -308,18 +586,33 @@
     const ws = $activeWorkspace;
     if (!ws || ws.activePaneId === paneId) return;
     ws.activePaneId = paneId;
-    workspaces.update(l => [...l]);
+    notifyWorkspacesChanged();
+  }
+
+  function handleRenameTab(
+    paneId: string,
+    surfaceId: string,
+    newTitle: string,
+  ) {
+    const ws = $activeWorkspace;
+    if (!ws) return;
+    const pane = findPane(ws, paneId);
+    if (!pane) return;
+    const surface = pane.surfaces.find((s) => s.id === surfaceId);
+    if (surface) {
+      surface.title = newTitle;
+      notifyWorkspacesChanged();
+    }
   }
 
   function handleReorderTab(paneId: string, fromIdx: number, toIdx: number) {
     const ws = $activeWorkspace;
     if (!ws) return;
-    const pane = getAllPanes(ws.splitRoot).find(p => p.id === paneId);
+    const pane = findPane(ws, paneId);
     if (!pane || fromIdx === toIdx) return;
-    const item = pane.surfaces.splice(fromIdx, 1)[0];
-    const adjustedTo = fromIdx < toIdx ? toIdx - 1 : toIdx;
-    pane.surfaces.splice(adjustedTo, 0, item);
-    workspaces.update(l => [...l]);
+    const [item] = pane.surfaces.splice(fromIdx, 1);
+    pane.surfaces.splice(toIdx, 0, item);
+    notifyWorkspacesChanged();
   }
 
   function handleSplitFromSidebar(direction: "horizontal" | "vertical") {
@@ -338,14 +631,17 @@
     if (!ws) return;
     const panes = getAllPanes(ws.splitRoot);
     if (panes.length <= 1) return;
-    const currentIdx = panes.findIndex(p => p.id === ws.activePaneId);
-    const nextIdx = (dir === "right" || dir === "down")
-      ? (currentIdx + 1) % panes.length
-      : (currentIdx - 1 + panes.length) % panes.length;
+    const currentIdx = panes.findIndex((p) => p.id === ws.activePaneId);
+    const nextIdx =
+      dir === "right" || dir === "down"
+        ? (currentIdx + 1) % panes.length
+        : (currentIdx - 1 + panes.length) % panes.length;
     ws.activePaneId = panes[nextIdx].id;
-    workspaces.update(l => [...l]);
-    const s = panes[nextIdx].surfaces.find(s => s.id === panes[nextIdx].activeSurfaceId);
-    safeFocus(s);
+    notifyWorkspacesChanged();
+    const s = panes[nextIdx].surfaces.find(
+      (s) => s.id === panes[nextIdx].activeSurfaceId,
+    );
+    safeFocusTerminal(s);
   }
 
   // ---- Pane zoom ----
@@ -355,9 +651,9 @@
     const ws = $activeWorkspace;
     if (!ws) return;
     zoomedPaneId = zoomedPaneId ? null : ws.activePaneId;
-    workspaces.update(l => [...l]);
+    notifyWorkspacesChanged();
     // ResizeObserver handles fit() when the pane size changes.
-    safeFocus($activeSurface);
+    safeFocusTerminal($activeSurface);
   }
 
   // ---- Flash ----
@@ -369,19 +665,29 @@
     el.style.transition = "box-shadow 0.3s";
     setTimeout(() => {
       el.style.boxShadow = "";
-      setTimeout(() => { el.style.transition = ""; }, 300);
+      setTimeout(() => {
+        el.style.transition = "";
+      }, 300);
     }, 400);
   }
 
   // ---- Workspace serialization ----
   function serializeLayout(node: SplitNode): LayoutNode {
     if (node.type === "pane") {
-      const surfaces = node.pane.surfaces.map(s => {
-        const def: any = { type: isTerminalSurface(s) ? "terminal" : "markdown" };
+      const surfaces = node.pane.surfaces.map((s) => {
+        const type = isTerminalSurface(s)
+          ? "terminal"
+          : isHarnessSurface(s)
+            ? "harness"
+            : "markdown";
+        const def: Record<string, string | boolean> = { type };
         if (s.title) def.name = s.title;
-        if (isTerminalSurface(s) && s.cwd) def.cwd = s.cwd;
+        if ((isTerminalSurface(s) || isHarnessSurface(s)) && s.cwd)
+          def.cwd = s.cwd;
+        if (isHarnessSurface(s)) def.presetId = s.presetId;
         if (s.id === node.pane.activeSurfaceId) def.focus = true;
-        if (!isTerminalSurface(s) && "filePath" in s) def.path = s.filePath;
+        if (!isTerminalSurface(s) && !isHarnessSurface(s) && "filePath" in s)
+          def.path = (s as { filePath: string }).filePath;
         return def;
       });
       return { pane: { surfaces } };
@@ -389,7 +695,10 @@
     return {
       direction: node.direction,
       split: node.ratio,
-      children: [serializeLayout(node.children[0]), serializeLayout(node.children[1])],
+      children: [
+        serializeLayout(node.children[0]),
+        serializeLayout(node.children[1]),
+      ],
     };
   }
 
@@ -399,48 +708,143 @@
     const name = await showInputPrompt("Workspace name", ws.name);
     if (!name) return;
     const layout = serializeLayout(ws.splitRoot);
-    const activeCwd = $activeSurface && isTerminalSurface($activeSurface) ? $activeSurface.cwd : undefined;
+    const activeCwd =
+      $activeSurface && isTerminalSurface($activeSurface)
+        ? $activeSurface.cwd
+        : undefined;
     const wsDef: WorkspaceDef = { name, cwd: activeCwd || "~", layout };
-    const config = getConfig();
+    const config = getSettings();
     const commands = config.commands || [];
-    const existing = commands.findIndex(c => c.name === name);
+    const existing = commands.findIndex((c) => c.name === name);
     const entry = { name, workspace: wsDef };
     if (existing >= 0) {
       commands[existing] = entry;
     } else {
       commands.push(entry);
     }
-    await saveConfig({ commands });
+    await saveSettings({ commands });
   }
+
+  // ---- Derived state for right sidebar ----
+  $: activeProject = $activeWorkspace?.record?.projectId
+    ? $projects.find((p) => p.id === $activeWorkspace?.record?.projectId)
+    : null;
 
   // ---- Command palette commands ----
   $: paletteCommands = [
-    { name: "New Workspace", shortcut: `${shiftModLabel}N`, action: () => createWorkspace(`Workspace ${$workspaces.length + 1}`) },
-    { name: "New Surface (Tab)", shortcut: `${shiftModLabel}T`, action: () => handleNewSurfaceFromSidebar() },
-    { name: "Split Right", shortcut: isMac ? `${modLabel}D` : `${shiftModLabel}D`, action: () => handleSplitFromSidebar("horizontal") },
-    { name: "Split Down", shortcut: `${shiftModLabel}D`, action: () => handleSplitFromSidebar("vertical") },
-    { name: "Close Surface", shortcut: isMac ? `${modLabel}W` : `${shiftModLabel}W`, action: () => closeSurface() },
-    { name: "Close Workspace", shortcut: `${shiftModLabel}W`, action: () => closeWorkspace($activeWorkspaceIdx) },
-    { name: "Toggle Pane Zoom", shortcut: `${shiftModLabel}Enter`, action: () => togglePaneZoom() },
-    { name: "Next Surface", shortcut: `${shiftModLabel}]`, action: () => nextSurface() },
-    { name: "Previous Surface", shortcut: `${shiftModLabel}[`, action: () => prevSurface() },
-    { name: "Toggle Sidebar", shortcut: `${shiftModLabel}B`, action: () => sidebarVisible.update(v => !v) },
-    { name: "Toggle Find Bar", shortcut: `${shiftModLabel}F`, action: () => findBarVisible.update(v => !v) },
-    { name: "Clear Scrollback", shortcut: `${shiftModLabel}K`, action: () => { const s = $activeSurface; if (s && isTerminalSurface(s)) s.terminal.clear(); } },
+    {
+      name: "New Terminal Workspace",
+      shortcut: "⌘N",
+      action: () => handleNewFloatingWorkspace(),
+    },
+    {
+      name: "New Surface (Tab)",
+      shortcut: "⌘T",
+      action: () => handleNewSurfaceFromSidebar(),
+    },
+    {
+      name: "Split Right",
+      shortcut: "⌘D",
+      action: () => handleSplitFromSidebar("horizontal"),
+    },
+    {
+      name: "Split Down",
+      shortcut: "⇧⌘D",
+      action: () => handleSplitFromSidebar("vertical"),
+    },
+    { name: "Close Surface", shortcut: "⌘W", action: () => closeSurface() },
+    {
+      name: "Close Workspace",
+      shortcut: "⇧⌘W",
+      action: () => closeWorkspace($activeWorkspaceIdx),
+    },
+    {
+      name: "Toggle Pane Zoom",
+      shortcut: "⇧⌘Enter",
+      action: () => togglePaneZoom(),
+    },
+    { name: "Next Surface", shortcut: "⌘⇧]", action: () => nextSurface() },
+    { name: "Previous Surface", shortcut: "⌘⇧[", action: () => prevSurface() },
+    {
+      name: "Toggle Sidebar",
+      shortcut: "⌘B",
+      action: () => sidebarVisible.update((v) => !v),
+    },
+    {
+      name: "Toggle Find Bar",
+      shortcut: "⌘F",
+      action: () => findBarVisible.update((v) => !v),
+    },
+    {
+      name: "Clear Scrollback",
+      shortcut: "⌘K",
+      action: () => {
+        const s = $activeSurface;
+        if (s && isTerminalSurface(s)) s.terminal.clear();
+      },
+    },
     ...$workspaces.map((ws, i) => ({
       name: `Switch to: ${ws.name}`,
-      shortcut: i < 9 ? `${modLabel}${i + 1}` : undefined,
+      shortcut: i < 9 ? `⌘${i + 1}` : undefined,
       action: () => switchWorkspace(i),
     })),
     { name: "Save Current Workspace...", action: () => saveCurrentWorkspace() },
-    { name: `Preview File...`, action: async () => {
-      const path = await showInputPrompt("Path to file");
-      if (path) openPreviewInPane(path);
-    }},
-    ...getWorkspaceCommands().map(cmd => ({
+    {
+      name: `Preview File...`,
+      action: async () => {
+        const path = await showInputPrompt("Path to file");
+        if (path) openPreviewInPane(path);
+      },
+    },
+    ...getWorkspaceCommands().map((cmd) => ({
       name: cmd.name,
-      action: () => { if (cmd.workspace) createWorkspaceFromDef(cmd.workspace); },
+      action: () => {
+        if (cmd.workspace) createWorkspaceFromDef(cmd.workspace);
+      },
     })),
+    {
+      name: "Go to Dashboard",
+      shortcut: isMac ? "\u21E7\u2318H" : "Ctrl+Shift+H",
+      action: () => goHome(),
+    },
+    {
+      name: "Open Settings",
+      shortcut: isMac ? "\u2318," : "Ctrl+,",
+      action: () => currentView.set("settings"),
+    },
+    ...$activeProjects.map((p) => ({
+      name: `Go to: ${p.name}`,
+      action: () => goToProject(p.id),
+    })),
+    {
+      name: "New Harness",
+      action: () => handleNewHarness(getSettings().defaultHarness),
+    },
+    ...getSettings().harnesses.map((preset) => ({
+      name: `New Harness: ${preset.name}`,
+      action: () => handleNewHarness(preset.id),
+    })),
+    {
+      name: "Jump to Waiting Agent",
+      action: async () => {
+        // S5 will export findNextWaitingAgent() from agent-utils.ts.
+        // Once merged, import and navigate to the waiting agent's workspace.
+        try {
+          const { findNextWaitingAgent } = await import("./lib/agent-utils");
+          if (typeof findNextWaitingAgent === "function") {
+            const agent = findNextWaitingAgent(
+              $workspaces,
+              $activeWorkspaceIdx,
+            );
+            if (agent) {
+              handleSwitchToWorkspace(agent.workspaceId);
+            }
+          }
+        } catch {
+          // findNextWaitingAgent not yet available (S5 not merged)
+        }
+      },
+    },
     ...Object.entries(themes).map(([id, t]) => ({
       name: `Theme: ${t.name}`,
       action: () => applyTheme(id),
@@ -451,22 +855,51 @@
     const ws = $activeWorkspace;
     const pane = $activePane;
     if (!ws || !pane) return;
-    const preview = await openPreview(filePath);
-    const surface = {
-      kind: "preview" as const,
-      id: preview.id,
-      filePath: preview.filePath,
-      title: preview.title,
-      element: preview.element,
-      watchId: preview.watchId,
-      hasUnread: false,
-    };
+    const surface = await openPreview(filePath);
     pane.surfaces.push(surface);
     pane.activeSurfaceId = surface.id;
-    workspaces.update(l => [...l]);
+    notifyWorkspacesChanged();
   }
 
-  // ---- Pending action consumer (dispatched from terminal-service.ts) ----
+  async function openDiffInPane(worktreePath: string, filePath?: string) {
+    const pane = $activePane;
+    if (!pane) return;
+    const surface = await createDiffSurface(worktreePath, filePath);
+    pane.surfaces.push(surface);
+    pane.activeSurfaceId = surface.id;
+    notifyWorkspacesChanged();
+  }
+
+  async function openCommitInPane(
+    worktreePath: string,
+    commit: { hash: string; shortHash: string; subject: string },
+  ) {
+    const pane = $activePane;
+    if (!pane) return;
+    const surface = await createCommitDiffSurface(worktreePath, commit);
+    pane.surfaces.push(surface);
+    pane.activeSurfaceId = surface.id;
+    notifyWorkspacesChanged();
+  }
+
+  async function openFileInEditor(filePath: string) {
+    const pane = $activePane;
+    if (!pane) return;
+    const cwd = await getActiveCwd();
+    const surface = await createTerminalSurface(pane, cwd);
+    const ws = $activeWorkspace;
+    if (ws) {
+      const env = getWorktreeEnv(ws);
+      if (env) surface.env = env;
+    }
+    const fileName = filePath.split("/").pop() || filePath;
+    surface.title = `$EDITOR: ${fileName}`;
+    surface.startupCommand = `\${EDITOR:-vi} ${filePath.includes(" ") ? `"${filePath}"` : filePath}`;
+    notifyWorkspacesChanged();
+    safeFocusTerminal(surface);
+  }
+
+  // ---- Pending action consumer (dispatched from terminal-service.ts + right sidebar) ----
   $: if ($pendingAction) {
     const action = $pendingAction;
     pendingAction.set(null);
@@ -476,6 +909,12 @@
       handleSplitFromSidebar("horizontal");
     } else if (action.type === "split-down") {
       handleSplitFromSidebar("vertical");
+    } else if (action.type === "open-diff" && action.payload) {
+      openDiffInPane(action.payload.worktreePath, action.payload.filePath);
+    } else if (action.type === "open-commit" && action.payload) {
+      openCommitInPane(action.payload.worktreePath, action.payload.commit);
+    } else if (action.type === "open-in-editor" && action.payload) {
+      openFileInEditor(action.payload);
     }
   }
 
@@ -483,19 +922,20 @@
   function nextSurface() {
     const pane = $activePane;
     if (!pane || pane.surfaces.length <= 1) return;
-    const idx = pane.surfaces.findIndex(s => s.id === pane.activeSurfaceId);
+    const idx = pane.surfaces.findIndex((s) => s.id === pane.activeSurfaceId);
     pane.activeSurfaceId = pane.surfaces[(idx + 1) % pane.surfaces.length].id;
-    workspaces.update(l => [...l]);
-    safeFocus($activeSurface);
+    notifyWorkspacesChanged();
+    safeFocusTerminal($activeSurface);
   }
 
   function prevSurface() {
     const pane = $activePane;
     if (!pane || pane.surfaces.length <= 1) return;
-    const idx = pane.surfaces.findIndex(s => s.id === pane.activeSurfaceId);
-    pane.activeSurfaceId = pane.surfaces[(idx - 1 + pane.surfaces.length) % pane.surfaces.length].id;
-    workspaces.update(l => [...l]);
-    safeFocus($activeSurface);
+    const idx = pane.surfaces.findIndex((s) => s.id === pane.activeSurfaceId);
+    pane.activeSurfaceId =
+      pane.surfaces[(idx - 1 + pane.surfaces.length) % pane.surfaces.length].id;
+    notifyWorkspacesChanged();
+    safeFocusTerminal($activeSurface);
   }
 
   function selectSurface(num: number) {
@@ -504,8 +944,8 @@
     const idx = num === 9 ? pane.surfaces.length - 1 : num - 1;
     if (idx >= 0 && idx < pane.surfaces.length) {
       pane.activeSurfaceId = pane.surfaces[idx].id;
-      workspaces.update(l => [...l]);
-      safeFocus($activeSurface);
+      notifyWorkspacesChanged();
+      safeFocusTerminal($activeSurface);
     }
   }
 
@@ -513,205 +953,251 @@
     const ws = $activeWorkspace;
     const pane = $activePane;
     if (!ws || !pane) return;
-    const idx = pane.surfaces.findIndex(s => s.id === pane.activeSurfaceId);
+    const idx = pane.surfaces.findIndex((s) => s.id === pane.activeSurfaceId);
     if (idx < 0) return;
     removeSurface(ws, pane, idx);
   }
 
-  // ---- Keyboard shortcuts ----
-  // macOS: Cmd+key for non-shift, Cmd+Shift+key for shift variants
-  // Linux: Ctrl+Shift+key for ALL app shortcuts (plain Ctrl+key must pass to PTY)
+  // ---- Keyboard shortcuts (dispatched via keybindings.ts) ----
+  const kbActions: KeybindingActions = {
+    createWorkspace: () => handleNewFloatingWorkspace(),
+    newSurface: handleNewSurfaceFromSidebar,
+    splitHorizontal: () => handleSplitFromSidebar("horizontal"),
+    splitVertical: () => handleSplitFromSidebar("vertical"),
+    closeWorkspace: () => closeWorkspace($activeWorkspaceIdx),
+    switchWorkspace,
+    selectSurface,
+    nextSurface,
+    prevSurface,
+    toggleSidebar: () => sidebarVisible.update((v) => !v),
+    clearTerminal: () => {
+      const s = $activeSurface;
+      if (s && isTerminalSurface(s)) s.terminal.clear();
+    },
+    focusDirection,
+    togglePaneZoom,
+    flashFocusedPane,
+    startRename: () => sidebarComponent?.startRename($activeWorkspaceIdx),
+    toggleCommandPalette: () => commandPaletteOpen.update((v) => !v),
+    toggleFindBar: () => findBarVisible.update((v) => !v),
+    findNext: () => {
+      findBarVisible.set(true);
+      findBarComponent?.findNext();
+    },
+    findPrev: () => {
+      findBarVisible.set(true);
+      findBarComponent?.findPrev();
+    },
+    closeFindBar: () => findBarVisible.set(false),
+    goHome: () => goHome(),
+    openSettings: () => currentView.set("settings"),
+    escapeBack: () => {
+      // Navigate back: if workspaces exist, switch to last active; otherwise go home
+      if ($workspaces.length > 0) {
+        const idx = Math.max(0, $activeWorkspaceIdx);
+        switchWorkspace(idx);
+        openWorkspace($workspaces[idx]?.record?.projectId);
+      } else {
+        goHome();
+      }
+    },
+    workspaceCount: () => $workspaces.length,
+    activeIdx: () => $activeWorkspaceIdx,
+    findBarVisible: () => $findBarVisible,
+    commandPaletteOpen: () => $commandPaletteOpen,
+    currentView: () => $currentView,
+  };
   function handleKeydown(e: KeyboardEvent) {
-    const shift = e.shiftKey;
-    const alt = e.altKey;
-    const ctrl = e.ctrlKey;
-
-    // Platform-aware "command" modifier:
-    // macOS: Cmd (metaKey)
-    // Linux: Ctrl+Shift (ctrlKey && shiftKey) for app shortcuts
-    const cmd = isMac ? e.metaKey : (ctrl && shift);
-
-    // macOS-only: Cmd+key (no shift) shortcuts
-    if (isMac && e.metaKey && !shift && !alt) {
-      if (e.key === "n") { e.preventDefault(); createWorkspace(`Workspace ${$workspaces.length + 1}`); return; }
-      if (e.key === "t") { e.preventDefault(); handleNewSurfaceFromSidebar(); return; }
-      if (e.key === "d") { e.preventDefault(); handleSplitFromSidebar("horizontal"); return; }
-      if (e.key === "w") { e.preventDefault(); closeSurface(); return; }
-      if (e.key >= "1" && e.key <= "8") { e.preventDefault(); switchWorkspace(parseInt(e.key) - 1); return; }
-      if (e.key === "9") { e.preventDefault(); switchWorkspace($workspaces.length - 1); return; }
-      if (e.key === "b") { e.preventDefault(); sidebarVisible.update(v => !v); return; }
-      if (e.key === "k") { e.preventDefault(); const s = $activeSurface; if (s && isTerminalSurface(s)) s.terminal.clear(); return; }
-      if (e.key === "p") { e.preventDefault(); commandPaletteOpen.update(v => !v); return; }
-      if (e.key === "f") { e.preventDefault(); findBarVisible.update(v => !v); return; }
-      if (e.key === "g") { e.preventDefault(); findBarVisible.set(true); findBarComponent?.findNext(); return; }
-    }
-
-    // macOS: Ctrl+number selects surfaces (tabs within pane)
-    if (isMac && ctrl && !e.metaKey && !shift && !alt && e.key >= "1" && e.key <= "8") { e.preventDefault(); selectSurface(parseInt(e.key)); return; }
-    if (isMac && ctrl && !e.metaKey && !shift && !alt && e.key === "9") { e.preventDefault(); selectSurface(9); return; }
-
-    // Shared Cmd+Shift / Ctrl+Shift shortcuts (work on both platforms)
-    if (cmd && shift && !alt) {
-      const k = e.key.toLowerCase();
-      if (k === "t") { e.preventDefault(); handleNewSurfaceFromSidebar(); return; }
-      if (k === "n") { e.preventDefault(); createWorkspace(`Workspace ${$workspaces.length + 1}`); return; }
-      if (k === "d") { e.preventDefault(); handleSplitFromSidebar("vertical"); return; }
-      if (k === "w") { e.preventDefault(); closeWorkspace($activeWorkspaceIdx); return; }
-      if (k === "h") { e.preventDefault(); flashFocusedPane(); return; }
-      if (k === "r") { e.preventDefault(); sidebarComponent?.startRename($activeWorkspaceIdx); return; }
-      if (k === "g") { e.preventDefault(); findBarVisible.set(true); findBarComponent?.findPrev(); return; }
-      if (k === "b") { e.preventDefault(); sidebarVisible.update(v => !v); return; }
-      if (k === "p") { e.preventDefault(); commandPaletteOpen.update(v => !v); return; }
-      if (k === "k") { e.preventDefault(); const s = $activeSurface; if (s && isTerminalSurface(s)) s.terminal.clear(); return; }
-      if (k === "f") { e.preventDefault(); findBarVisible.update(v => !v); return; }
-      if (e.key === "Enter") { e.preventDefault(); togglePaneZoom(); return; }
-      if (e.key === "]") { e.preventDefault(); nextSurface(); return; }
-      if (e.key === "[") { e.preventDefault(); prevSurface(); return; }
-    }
-
-    // Ctrl+Tab / Ctrl+Shift+Tab for tab switching (both platforms)
-    if (ctrl && !alt && e.key === "Tab") { e.preventDefault(); if (shift) prevSurface(); else nextSurface(); return; }
-
-    // Alt+Cmd/Ctrl+arrows for pane navigation
-    if (alt && (isMac ? e.metaKey : ctrl) && !shift) {
-      if (e.key === "ArrowLeft") { e.preventDefault(); focusDirection("left"); return; }
-      if (e.key === "ArrowRight") { e.preventDefault(); focusDirection("right"); return; }
-      if (e.key === "ArrowUp") { e.preventDefault(); focusDirection("up"); return; }
-      if (e.key === "ArrowDown") { e.preventDefault(); focusDirection("down"); return; }
-    }
-
-    if (e.key === "Escape" && $findBarVisible) { e.preventDefault(); findBarVisible.set(false); return; }
+    dispatchKeydown(e, kbActions);
   }
 
-  // ---- CLI args type (matches Rust CliArgs struct) ----
-  interface CliArgs {
-    path: string | null;
-    working_directory: string | null;
-    command: string | null;
-    title: string | null;
-    workspace: string | null;
-    config: string | null;
+  // ---- Home screen handlers (delegated to workspace-actions.ts) ----
+
+  async function handleNewHarness(presetId: string) {
+    const pane = $activePane;
+    if (!pane) return;
+    const { createHarnessSurface } = await import("./lib/terminal-service");
+    const cwd =
+      $activeSurface && "cwd" in $activeSurface
+        ? $activeSurface.cwd
+        : undefined;
+    await createHarnessSurface(pane, presetId, cwd);
+    notifyWorkspacesChanged();
+  }
+
+  function handleNewWorkspace(projectId: string) {
+    handleNewWs(projectId, (id) => sidebarComponent?.expandProject(id));
+  }
+
+  async function handleNewFloatingWorkspace() {
+    const existing = $workspaces.filter(
+      (ws) => ws.record && !ws.record.projectId,
+    );
+    const usedNames = new Set(existing.map((ws) => ws.name));
+    let n = existing.length + 1;
+    let name = `Terminal ${n}`;
+    while (usedNames.has(name)) {
+      n++;
+      name = `Terminal ${n}`;
+    }
+    await createFloatingWorkspace(name);
   }
 
   // ---- Initialization ----
   onMount(async () => {
     await fontReady;
-    setupListeners();
+    await setupListeners();
     startCwdPolling();
 
-    // Fetch CLI arguments from Rust backend
-    const cliArgs = await invoke<CliArgs>("get_cli_args");
-
-    const config = await loadConfig(cliArgs.config || undefined);
+    const config = await loadSettings();
     if (config.theme) {
       theme.set(config.theme);
     }
 
-    // CLI args take priority over config autoload
-    const cliCwd = cliArgs.path || cliArgs.working_directory;
+    // Load project state from disk, then seed the Svelte store
+    await loadState();
+    initProjects();
 
-    if (cliArgs.workspace) {
-      // --workspace flag: load a named workspace from config
-      const cmd = config.commands?.find(
-        c => c.name === cliArgs.workspace && c.workspace
-      );
-      if (cmd?.workspace) {
-        await createWorkspaceFromDef(cmd.workspace);
-      } else {
-        console.warn(`[cli] Workspace "${cliArgs.workspace}" not found in config`);
-        await createWorkspace(cliArgs.title || "Workspace 1");
-      }
-    } else if (cliCwd || cliArgs.command) {
-      // CLI provided a cwd and/or command
-      const wsName = cliArgs.title || cliCwd?.split("/").pop() || "Workspace 1";
-      const def: WorkspaceDef = {
-        name: wsName,
-        cwd: cliCwd || undefined,
-        layout: {
-          pane: {
-            surfaces: [{
-              type: "terminal",
-              cwd: cliCwd || undefined,
-              command: cliArgs.command || undefined,
-            }]
-          }
+    // Restore all active workspaces from persisted project state
+    await restoreActiveWorkspaces();
+
+    // Autoload config-defined workspaces if none were restored
+    if (
+      $workspaces.length === 0 &&
+      config.autoload &&
+      config.autoload.length > 0 &&
+      config.commands
+    ) {
+      for (const name of config.autoload) {
+        const cmd = config.commands.find((c) => c.name === name && c.workspace);
+        if (cmd?.workspace) {
+          await createWorkspaceFromDef(cmd.workspace);
         }
-      };
-      await createWorkspaceFromDef(def);
-    } else {
-      // No CLI args — fall back to config autoload or default
-      let autoloaded = false;
-      if (config.autoload && config.autoload.length > 0 && config.commands) {
-        for (const name of config.autoload) {
-          const cmd = config.commands.find(c => c.name === name && c.workspace);
-          if (cmd?.workspace) {
-            await createWorkspaceFromDef(cmd.workspace);
-            autoloaded = true;
-          }
-        }
-      }
-      if (!autoloaded) {
-        await createWorkspace("Workspace 1");
       }
     }
 
+    if ($workspaces.length === 0) {
+      goHome();
+    } else {
+      const activeWs = $workspaces[$activeWorkspaceIdx];
+      openWorkspace(activeWs?.record?.projectId);
+    }
+
     // Listen for menu events
-    listen<string>("menu-theme", (event) => {
-      applyTheme(event.payload.replace("theme-", ""));
-    });
+    menuUnlisteners.push(
+      await listen<string>("menu-theme", (event) => {
+        applyTheme(event.payload.replace("theme-", ""));
+      }),
+    );
 
-    await listen("menu-cmd-palette", () => {
-      commandPaletteOpen.update(v => !v);
-    });
+    menuUnlisteners.push(
+      await listen("menu-cmd-palette", () => {
+        commandPaletteOpen.update((v) => !v);
+      }),
+    );
 
-    await listen("menu-close-tab", () => {
-      closeSurface();
-    });
+    menuUnlisteners.push(
+      await listen("menu-close-tab", () => {
+        closeSurface();
+      }),
+    );
+  });
+
+  onDestroy(() => {
+    for (const unlisten of menuUnlisteners) {
+      unlisten();
+    }
+    menuUnlisteners.length = 0;
+    cleanupListeners();
+    stopCwdPolling();
   });
 </script>
 
 <svelte:window on:keydown={handleKeydown} />
 
-<div id="app" style="display: flex; height: 100vh; overflow: hidden;">
-  <Sidebar
-    bind:this={sidebarComponent}
-    onNewWorkspace={() => createWorkspace(`Workspace ${$workspaces.length + 1}`)}
-    onSwitchWorkspace={switchWorkspace}
-    onCloseWorkspace={closeWorkspace}
-    onRenameWorkspace={renameWorkspace}
-    onSplitPane={handleSplitFromSidebar}
-    onNewSurface={handleNewSurfaceFromSidebar}
-    onReorderWorkspaces={reorderWorkspaces}
-  />
+<div
+  id="app"
+  style="display: flex; flex-direction: column; height: 100vh; overflow: hidden;"
+>
+  <TitleBar />
 
-  <SidebarToggle />
-
-  <div style="
-    flex: 1; display: flex; flex-direction: column;
-    background: {$theme.bg}; min-width: 0; min-height: 0; overflow: hidden;
-  ">
-    <TitleBar />
+  <div style="flex: 1; display: flex; min-height: 0; overflow: hidden;">
+    <Sidebar
+      bind:this={sidebarComponent}
+      onSwitchWorkspace={switchWorkspace}
+      onCloseWorkspace={closeWorkspace}
+      onRenameWorkspace={renameWorkspace}
+      onNewWorkspace={handleNewWorkspace}
+      onNewFloatingWorkspace={handleNewFloatingWorkspace}
+      onAddProject={handleAddProject}
+    />
 
     <div
-      id="terminal-area"
-      style="flex: 1; display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; position: relative;"
+      style="
+      flex: 1; display: flex; flex-direction: column;
+      background: {$theme.bg}; min-width: 0; min-height: 0; overflow: hidden;
+    "
     >
-      {#each $workspaces as ws, i (ws.id)}
-        <WorkspaceView
-          workspace={ws}
-          visible={i === $activeWorkspaceIdx}
-          onSelectSurface={handleSelectSurface}
-          onCloseSurface={handleCloseSurface}
-          onNewSurface={handleNewSurface}
-          onSplitRight={(paneId) => handleSplitPane(paneId, "horizontal")}
-          onSplitDown={(paneId) => handleSplitPane(paneId, "vertical")}
-          onClosePane={handleClosePane}
-          onFocusPane={handleFocusPane}
-          onReorderTab={handleReorderTab}
+      {#if $currentView === "settings"}
+        <SettingsView />
+      {:else if $currentView === "project-settings" && $currentProjectId}
+        <ProjectSettingsView />
+      {:else if $currentView === "project" && $currentProjectId}
+        <ProjectDashboard
+          onSwitchToWorkspace={handleSwitchToWorkspace}
+          onNewWorkspace={handleNewWorkspace}
         />
-      {/each}
+      {:else if $currentView === "home" || $workspaces.length === 0}
+        <HomeScreen
+          onSwitchToWorkspace={handleSwitchToWorkspace}
+          onAddProject={handleAddProject}
+          onNewWorkspace={handleNewWorkspace}
+          onNewFloatingWorkspace={handleNewFloatingWorkspace}
+        />
+      {:else}
+        <div
+          style="flex: 1; display: flex; min-height: 0; min-width: 0; overflow: hidden;"
+        >
+          <div
+            id="terminal-area"
+            style="flex: 1; display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; position: relative;"
+          >
+            {#each $workspaces as ws, i (ws.id)}
+              <WorkspaceView
+                workspace={ws}
+                visible={i === $activeWorkspaceIdx}
+                onSelectSurface={handleSelectSurface}
+                onCloseSurface={handleCloseSurface}
+                onNewSurface={handleNewSurface}
+                onNewHarnessSurface={handleNewHarnessSurface}
+                onSwitchSurface={handleSwitchSurface}
+                onSplitRight={(paneId) => handleSplitPane(paneId, "horizontal")}
+                onSplitDown={(paneId) => handleSplitPane(paneId, "vertical")}
+                onClosePane={handleClosePane}
+                onFocusPane={handleFocusPane}
+                onRenameTab={handleRenameTab}
+                onReorderTab={handleReorderTab}
+                onRelaunchHarness={handleRelaunchHarness}
+                worktreePath={ws.record?.worktreePath}
+                baseBranch={ws.record?.baseBranch}
+                onNewContextualSurface={handleNewContextualSurface}
+              />
+            {/each}
 
-      <FindBar bind:this={findBarComponent} />
+            <FindBar bind:this={findBarComponent} />
+          </div>
+
+          <RightSidebar
+            meta={$activeWorkspace?.record}
+            visible={$activeWorkspace?.rightSidebarOpen ?? false}
+            projectPath={activeProject?.path}
+            gitBacked={activeProject?.gitBacked ?? false}
+            activeCwd={$activeSurface && "cwd" in $activeSurface
+              ? $activeSurface.cwd
+              : undefined}
+          />
+        </div>
+      {/if}
     </div>
   </div>
 </div>
@@ -719,3 +1205,18 @@
 <CommandPalette commands={paletteCommands} />
 <ContextMenu />
 <InputPrompt />
+<NewProjectDialog />
+<NewWorkspaceDialog />
+<ConfirmDialog />
+
+{#if $loadingMessage}
+  <div
+    style="
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 9999;
+    background: {$theme.accent}; color: white; padding: 6px 16px;
+    font-size: 12px; font-weight: 500; text-align: center;
+  "
+  >
+    {$loadingMessage}
+  </div>
+{/if}

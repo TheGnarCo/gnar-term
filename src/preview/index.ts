@@ -1,6 +1,6 @@
 /**
  * Preview System — modular file preview in tabs
- * 
+ *
  * Each previewer registers file extensions it handles.
  * Usage: const surface = await openPreview("/path/to/file.md");
  */
@@ -8,17 +8,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { themeProxy as theme } from "../lib/theme-accessor";
+import type { PreviewSurface } from "../lib/types";
 
 // --- Preview interface ---
 
-export interface PreviewSurface {
-  id: string;
-  filePath: string;
-  title: string;
-  element: HTMLElement;
-  watchId: number;
-  dispose?: () => void;
-}
+export type { PreviewSurface } from "../lib/types";
 
 export interface Previewer {
   extensions: string[];
@@ -35,19 +29,19 @@ export function registerPreviewer(previewer: Previewer) {
 
 export function canPreview(filePath: string): boolean {
   const ext = getExtension(filePath);
-  return previewers.some(p => p.extensions.includes(ext));
+  return previewers.some((p) => p.extensions.includes(ext));
 }
 
 export function getSupportedExtensions(): string[] {
-  return previewers.flatMap(p => p.extensions);
+  return previewers.flatMap((p) => p.extensions);
 }
 
 // --- Open a preview surface ---
 
 export async function openPreview(filePath: string): Promise<PreviewSurface> {
   const ext = getExtension(filePath);
-  const previewer = previewers.find(p => p.extensions.includes(ext));
-  
+  const previewer = previewers.find((p) => p.extensions.includes(ext));
+
   if (!previewer) {
     throw new Error(`No previewer registered for .${ext}`);
   }
@@ -69,7 +63,29 @@ export async function openPreview(filePath: string): Promise<PreviewSurface> {
   injectStyles();
 
   // Binary formats (pdf, image, video) read files themselves — skip text read
-  const binaryExts = new Set(["pdf", "png", "jpg", "jpeg", "gif", "webp", "svg", "ico", "bmp", "heic", "heif", "tiff", "tif", "avif", "mp4", "webm", "mov", "avi", "mkv", "m4v", "ogv"]);
+  const binaryExts = new Set([
+    "pdf",
+    "png",
+    "jpg",
+    "jpeg",
+    "gif",
+    "webp",
+    "svg",
+    "ico",
+    "bmp",
+    "heic",
+    "heif",
+    "tiff",
+    "tif",
+    "avif",
+    "mp4",
+    "webm",
+    "mov",
+    "avi",
+    "mkv",
+    "m4v",
+    "ogv",
+  ]);
   const isBinary = binaryExts.has(ext);
 
   let content = "";
@@ -88,15 +104,31 @@ export async function openPreview(filePath: string): Promise<PreviewSurface> {
   if (!isBinary) {
     try {
       watchId = await invoke<number>("watch_file", { path: filePath });
-      await listen<{ watch_id: number; content: string }>("file-changed", (event) => {
-        if (event.payload.watch_id === watchId) {
-          renderWithChrome(previewer, event.payload.content, filePath, element);
-        }
-      });
+      await listen<{ watch_id: number; content: string }>(
+        "file-changed",
+        (event) => {
+          if (event.payload.watch_id === watchId) {
+            renderWithChrome(
+              previewer,
+              event.payload.content,
+              filePath,
+              element,
+            );
+          }
+        },
+      );
     } catch {}
   }
 
-  return { id, filePath, title: fileName, element, watchId };
+  return {
+    kind: "preview",
+    id,
+    filePath,
+    title: fileName,
+    element,
+    watchId,
+    hasUnread: false,
+  };
 }
 
 // --- Helpers ---
@@ -106,13 +138,20 @@ function getExtension(path: string): string {
   return parts.length > 1 ? parts.pop()!.toLowerCase() : "";
 }
 
-function renderWithChrome(previewer: Previewer, content: string, filePath: string, element: HTMLElement) {
+function renderWithChrome(
+  previewer: Previewer,
+  content: string,
+  filePath: string,
+  element: HTMLElement,
+) {
   // Just render the content directly — the path is already in the tab title
   previewer.render(content, filePath, element);
 }
 
 function injectStyles() {
-  let style = document.getElementById("preview-styles") as HTMLStyleElement | null;
+  let style = document.getElementById(
+    "preview-styles",
+  ) as HTMLStyleElement | null;
   if (!style) {
     style = document.createElement("style");
     style.id = "preview-styles";

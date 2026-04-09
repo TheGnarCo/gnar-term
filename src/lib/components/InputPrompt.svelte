@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tick } from "svelte";
   import { theme } from "../stores/theme";
-  import { inputPrompt } from "../stores/ui";
+  import { inputPrompt } from "../stores/dialog-service";
 
   let inputEl: HTMLInputElement;
 
@@ -20,12 +20,21 @@
 
   function handleKeydown(e: KeyboardEvent) {
     e.stopPropagation();
-    if (e.key === "Enter") { e.preventDefault(); submit(); }
-    if (e.key === "Escape") { e.preventDefault(); cancel(); }
+    if (e.key === "Enter") {
+      e.preventDefault();
+      submit();
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      cancel();
+    }
   }
 
   $: if ($inputPrompt) {
-    tick().then(() => { inputEl?.focus(); inputEl?.select(); });
+    tick().then(() => {
+      inputEl?.focus();
+      inputEl?.select();
+    });
   }
 </script>
 
@@ -67,15 +76,15 @@
           style="
             padding: 6px 16px; border-radius: 6px; border: 1px solid {$theme.border};
             background: transparent; color: {$theme.fgMuted}; cursor: pointer; font-size: 13px;
-          "
-        >Cancel</button>
+          ">Cancel</button
+        >
         <button
           on:click={submit}
           style="
             padding: 6px 16px; border-radius: 6px; border: none;
             background: {$theme.accent}; color: white; cursor: pointer; font-size: 13px;
-          "
-        >OK</button>
+          ">OK</button
+        >
       </div>
     </div>
   </div>

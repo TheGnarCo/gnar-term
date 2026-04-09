@@ -1,0 +1,43 @@
+{
+  "request": "Fix all integration gaps from branch review, including deferred items",
+  "classification": "focused/low",
+  "branch": "jrvs/orchestrator",
+  "plan_summary": "Fixed 14 issues from deep branch review — all complete including previously deferred items.",
+  "stories": [
+    { "name": "Fix 1: Add projectId to WorkspaceMeta", "status": "complete" },
+    { "name": "Fix 2: Fix file.status in RightSidebar", "status": "complete" },
+    { "name": "Fix 3: Wire harness startup command", "status": "complete" },
+    {
+      "name": "Fix 4+8: Wire onOpenWorkspace/onAddWorktree/worktree env",
+      "status": "complete"
+    },
+    {
+      "name": "Fix 5: Wire worktreeBaseDir to create_worktree",
+      "status": "complete"
+    },
+    {
+      "name": "Fix 6: Add FILES section to right sidebar",
+      "status": "complete"
+    },
+    {
+      "name": "Fix 7: DiffSurface/FileBrowserSurface/CommitHistorySurface",
+      "status": "complete"
+    },
+    { "name": "Fix 9: Extract shared getHome utility", "status": "complete" },
+    {
+      "name": "Fix 10: Fix PersonalWorkspaceState any[]",
+      "status": "complete"
+    },
+    {
+      "name": "Fix 11: Fix serializeLayout harness mapping",
+      "status": "complete"
+    },
+    {
+      "name": "Fix 12: Fix applyTheme for harness surfaces",
+      "status": "complete"
+    },
+    { "name": "Fix 14: Extract shared terminal setup", "status": "complete" }
+  ],
+  "phase": "C",
+  "test_count": 456
+}

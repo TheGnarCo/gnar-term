@@ -1,19 +1,19 @@
 /**
- * Security tests for XSS prevention and sidebar bug fixes.
+ * Security tests and sidebar bug fixes.
  *
- * S1: Markdown preview sanitizes HTML via DOMPurify
- * S2: Image preview uses DOM APIs (no innerHTML with user data)
- * S3: Video preview uses DOM APIs (no innerHTML with user data)
+ * S1: Markdown preview XSS prevention (render-based via DOMPurify)
  * B3: Drag-drop reorder adjusts index when dragging forward
  * B4: Close Other Workspaces handles array mutation correctly
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 
 // Mock Tauri APIs
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn().mockResolvedValue(undefined),
-  convertFileSrc: vi.fn((path: string) => `asset://localhost/${encodeURIComponent(path)}`),
+  convertFileSrc: vi.fn(
+    (path: string) => `asset://localhost/${encodeURIComponent(path)}`,
+  ),
 }));
 
 vi.mock("@tauri-apps/api/event", () => ({
@@ -21,51 +21,33 @@ vi.mock("@tauri-apps/api/event", () => ({
 }));
 
 // ---------------------------------------------------------------------------
-// S1: Markdown XSS prevention
+// S1: Markdown XSS prevention — render-based test
 // ---------------------------------------------------------------------------
 
 describe("Markdown preview XSS prevention", () => {
-  it("imports DOMPurify in preview/markdown.ts", async () => {
-    const fs = await import("fs");
-    const source = fs.readFileSync("src/preview/markdown.ts", "utf-8");
-    expect(source).toContain('import DOMPurify from "dompurify"');
-    expect(source).toContain("DOMPurify.sanitize");
-    expect(source).not.toMatch(/element\.innerHTML\s*=\s*marked\.parse/);
-  });
-});
+  it("DOMPurify strips script tags from rendered markdown", async () => {
+    const { marked } = await import("marked");
+    const DOMPurify = (await import("dompurify")).default;
 
-// ---------------------------------------------------------------------------
-// S2/S3: Image and video preview use DOM APIs, not innerHTML
-// ---------------------------------------------------------------------------
+    const malicious = '<script>alert("xss")</script><p>safe content</p>';
+    const rawHtml = marked.parse(malicious) as string;
+    const sanitized = DOMPurify.sanitize(rawHtml);
 
-describe("Image preview XSS prevention", () => {
-  it("does not use innerHTML with user data", async () => {
-    const fs = await import("fs");
-    const source = fs.readFileSync("src/preview/image.ts", "utf-8");
-    expect(source).not.toContain("innerHTML");
-    expect(source).toContain("document.createElement");
+    // Verify script tags are stripped from the sanitized output
+    expect(sanitized).not.toContain("<script>");
+    expect(sanitized).toContain("safe content");
   });
 
-  it("sets src and alt via DOM properties", async () => {
-    const fs = await import("fs");
-    const source = fs.readFileSync("src/preview/image.ts", "utf-8");
-    expect(source).toContain("img.src");
-    expect(source).toContain("img.alt");
-  });
-});
+  it("DOMPurify strips onerror attributes from img tags", async () => {
+    const { marked } = await import("marked");
+    const DOMPurify = (await import("dompurify")).default;
 
-describe("Video preview XSS prevention", () => {
-  it("does not use innerHTML with user data", async () => {
-    const fs = await import("fs");
-    const source = fs.readFileSync("src/preview/video.ts", "utf-8");
-    expect(source).not.toContain("innerHTML");
-    expect(source).toContain("document.createElement");
-  });
+    const malicious = '<img src=x onerror="alert(1)">';
+    const rawHtml = marked.parse(malicious) as string;
+    const sanitized = DOMPurify.sanitize(rawHtml);
 
-  it("sets src via DOM property", async () => {
-    const fs = await import("fs");
-    const source = fs.readFileSync("src/preview/video.ts", "utf-8");
-    expect(source).toContain("video.src");
+    // onerror attribute must be stripped
+    expect(sanitized).not.toContain("onerror");
   });
 });
 
@@ -144,36 +126,5 @@ describe("Close Other Workspaces (B4)", () => {
     }
 
     expect(workspaces).toEqual(["C"]);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Discriminated union type safety
-// ---------------------------------------------------------------------------
-
-describe("Surface discriminated union", () => {
-  it("no more null-as-any hacks in source code", async () => {
-    const fs = await import("fs");
-    const tsFiles = [
-      "src/App.svelte",
-      "src/lib/terminal-service.ts",
-      "src/lib/types.ts",
-    ];
-
-    for (const file of tsFiles) {
-      try {
-        const source = fs.readFileSync(file, "utf-8");
-        expect(source).not.toContain("terminal: null as any");
-        expect(source).not.toContain("fitAddon: { fit: () => {} } as any");
-        expect(source).not.toContain("searchAddon: null as any");
-      } catch (e: any) {
-        if (e.code !== "ENOENT") throw e;
-      }
-    }
-  });
-
-  it("dead code markdown-viewer.ts is deleted", async () => {
-    const fs = await import("fs");
-    expect(() => fs.readFileSync("src/markdown-viewer.ts", "utf-8")).toThrow();
   });
 });

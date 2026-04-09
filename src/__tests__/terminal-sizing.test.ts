@@ -8,7 +8,12 @@
  * - connectPty passes terminal.cols/rows to spawn_pty
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mockIPC, mockWindows, clearMocks, mockConvertFileSrc } from "@tauri-apps/api/mocks";
+import {
+  mockIPC,
+  mockWindows,
+  clearMocks,
+  mockConvertFileSrc,
+} from "@tauri-apps/api/mocks";
 import { invoke } from "@tauri-apps/api/core";
 import { randomFillSync } from "crypto";
 
@@ -61,7 +66,11 @@ describe("connectPty uses real terminal dimensions", () => {
 
     mockIPC((cmd, args) => {
       if (cmd === "spawn_pty") {
-        spawnCalls.push({ cols: (args as any).cols, rows: (args as any).rows, cwd: (args as any).cwd });
+        spawnCalls.push({
+          cols: (args as any).cols,
+          rows: (args as any).rows,
+          cwd: (args as any).cwd,
+        });
         return 3;
       }
       return undefined;
@@ -187,6 +196,115 @@ describe("connectPty uses real terminal dimensions", () => {
     await connectPty(surface);
 
     expect(surface.ptyId).toBe(-1);
+  });
+});
+
+// ─── connectPty shell settings ──────────────────────────────────
+
+describe("connectPty passes shell settings from getSettings()", () => {
+  it("passes shellPath and shellArgs when shell.path and shell.args are set", async () => {
+    const spawnCalls: any[] = [];
+
+    mockIPC((cmd, args) => {
+      if (cmd === "get_home") return "/Users/test";
+      if (cmd === "read_file") {
+        const path = (args as any)?.path;
+        if (path === "/Users/test/.config/gnar/settings.json") {
+          return JSON.stringify({
+            shell: { path: "/bin/bash", args: ["-l", "--norc"] },
+          });
+        }
+        throw new Error("File not found");
+      }
+      if (cmd === "spawn_pty") {
+        spawnCalls.push(args);
+        return 10;
+      }
+      return undefined;
+    });
+
+    const { connectPty } = await import("../lib/terminal-service");
+    const { loadSettings } = await import("../lib/settings");
+    await loadSettings();
+
+    const surface = {
+      ptyId: -1,
+      terminal: { cols: 80, rows: 24 },
+    } as any;
+
+    await connectPty(surface);
+
+    expect(spawnCalls).toHaveLength(1);
+    expect(spawnCalls[0].shellPath).toBe("/bin/bash");
+    expect(spawnCalls[0].shellArgs).toEqual(["-l", "--norc"]);
+  });
+
+  it("passes null shellPath and shellArgs when shell settings are defaults", async () => {
+    const spawnCalls: any[] = [];
+
+    mockIPC((cmd, args) => {
+      if (cmd === "get_home") return "/Users/test";
+      if (cmd === "read_file") {
+        throw new Error("File not found");
+      }
+      if (cmd === "spawn_pty") {
+        spawnCalls.push(args);
+        return 11;
+      }
+      return undefined;
+    });
+
+    const { connectPty } = await import("../lib/terminal-service");
+    const { loadSettings } = await import("../lib/settings");
+    await loadSettings();
+
+    const surface = {
+      ptyId: -1,
+      terminal: { cols: 80, rows: 24 },
+    } as any;
+
+    await connectPty(surface);
+
+    expect(spawnCalls).toHaveLength(1);
+    expect(spawnCalls[0].shellPath).toBeNull();
+    expect(spawnCalls[0].shellArgs).toBeNull();
+  });
+
+  it("passes null shellArgs when shell.args is empty array", async () => {
+    const spawnCalls: any[] = [];
+
+    mockIPC((cmd, args) => {
+      if (cmd === "get_home") return "/Users/test";
+      if (cmd === "read_file") {
+        const path = (args as any)?.path;
+        if (path === "/Users/test/.config/gnar/settings.json") {
+          return JSON.stringify({
+            shell: { path: "/usr/local/bin/fish", args: [] },
+          });
+        }
+        throw new Error("File not found");
+      }
+      if (cmd === "spawn_pty") {
+        spawnCalls.push(args);
+        return 12;
+      }
+      return undefined;
+    });
+
+    const { connectPty } = await import("../lib/terminal-service");
+    const { loadSettings } = await import("../lib/settings");
+    await loadSettings();
+
+    const surface = {
+      ptyId: -1,
+      terminal: { cols: 80, rows: 24 },
+    } as any;
+
+    await connectPty(surface);
+
+    expect(spawnCalls).toHaveLength(1);
+    expect(spawnCalls[0].shellPath).toBe("/usr/local/bin/fish");
+    expect(spawnCalls[0].shellArgs).toBeNull();
   });
 });
 

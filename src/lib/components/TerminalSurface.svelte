@@ -4,10 +4,12 @@
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import { connectPty } from "../terminal-service";
-  import { theme } from "../stores/theme";
-  import type { TerminalSurface as TermSurface } from "../types";
+  import type {
+    TerminalSurface as TermSurface,
+    HarnessSurface as HarnSurface,
+  } from "../types";
 
-  export let surface: TermSurface;
+  export let surface: TermSurface | HarnSurface;
   export let visible: boolean;
   export let cwd: string | undefined = undefined;
 
@@ -15,7 +17,6 @@
   let dragOver = false;
   let unlistenDragDrop: (() => void) | undefined;
 
-  /** Shell-escape a file path by wrapping in single quotes. */
   function shellEscape(path: string): string {
     return "'" + path.replace(/'/g, "'\\''") + "'";
   }
@@ -34,9 +35,15 @@
     dragOver = false;
     const files = e.dataTransfer?.files;
     if (!files || files.length === 0 || surface.ptyId < 0) return;
-    const paths = Array.from(files).map(f => shellEscape((f as any).path || f.name));
+    const paths = Array.from(files).map((f) =>
+      shellEscape((f as any).path || f.name),
+    );
     invoke("write_pty", { ptyId: surface.ptyId, data: paths.join(" ") });
   }
+
+  onDestroy(() => {
+    unlistenDragDrop?.();
+  });
 
   onMount(async () => {
     termEl.appendChild(surface.termElement);
@@ -45,16 +52,21 @@
       surface.terminal.open(surface.termElement);
 
       await tick();
-      await new Promise(r => requestAnimationFrame(r));
+      await new Promise((r) => requestAnimationFrame(r));
 
-      try { surface.fitAddon.fit(); } catch (e) { console.warn("fitAddon.fit() failed on mount:", e); }
-      await connectPty(surface, cwd);
+      try {
+        surface.fitAddon.fit();
+      } catch (e) {
+        console.warn("fitAddon.fit() failed on mount:", e);
+      }
+      await connectPty(surface, cwd, surface.env);
 
       // Send startup command after PTY is connected (not on a timer)
       if (surface.startupCommand && surface.ptyId >= 0) {
-        invoke("write_pty", { ptyId: surface.ptyId, data: `${surface.startupCommand}\n` }).catch((e) =>
-          console.warn("Failed to send startup command:", e)
-        );
+        invoke("write_pty", {
+          ptyId: surface.ptyId,
+          data: `${surface.startupCommand}\n`,
+        }).catch((e) => console.warn("Failed to send startup command:", e));
         surface.startupCommand = undefined;
       }
 
@@ -69,21 +81,18 @@
       };
       requestAnimationFrame(initWebGL);
       surface.opened = true;
+
+      // Tauri native file drop (more reliable than HTML5 on Linux WebKitGTK)
+      listen("tauri://drag-drop", (event: any) => {
+        const paths: string[] = event.payload?.paths || [];
+        if (paths.length > 0 && surface.ptyId >= 0) {
+          const escaped = paths.map(shellEscape).join(" ");
+          invoke("write_pty", { ptyId: surface.ptyId, data: escaped });
+        }
+      }).then((fn) => {
+        unlistenDragDrop = fn;
+      });
     }
-
-    // Tauri native file drop (more reliable than HTML5 on Linux WebKitGTK)
-    unlistenDragDrop = await listen<{ paths: string[]; position: { x: number; y: number } }>("tauri://drag-drop", (event) => {
-      if (!visible || surface.ptyId < 0) return;
-      const { paths } = event.payload;
-      if (paths.length > 0) {
-        const escaped = paths.map(p => shellEscape(p)).join(" ");
-        invoke("write_pty", { ptyId: surface.ptyId, data: escaped });
-      }
-    });
-  });
-
-  onDestroy(() => {
-    unlistenDragDrop?.();
   });
 
   $: if (visible && surface.opened && termEl) {
@@ -91,16 +100,22 @@
       try {
         surface.fitAddon.fit();
         surface.terminal.scrollToBottom();
-      } catch (e) { console.warn("fitAddon.fit() failed on visibility change:", e); }
+      } catch (e) {
+        console.warn("fitAddon.fit() failed on visibility change:", e);
+      }
     });
   }
 </script>
 
-<!-- svelte-ignore a11y-no-static-element-interactions -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   bind:this={termEl}
   on:dragover={handleDragOver}
   on:dragleave={handleDragLeave}
   on:drop={handleDrop}
-  style="flex: 1; min-height: 0; min-width: 0; overflow: hidden; display: {visible ? 'flex' : 'none'}; flex-direction: column; {dragOver ? `box-shadow: inset 0 0 0 2px ${$theme.accent}; border-radius: 4px;` : ''}"
+  style="flex: 1; min-height: 0; min-width: 0; overflow: hidden; display: {visible
+    ? 'flex'
+    : 'none'}; flex-direction: column; {dragOver
+    ? 'outline: 2px dashed var(--accent, #58a6ff); outline-offset: -2px;'
+    : ''}"
 ></div>

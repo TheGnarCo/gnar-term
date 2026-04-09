@@ -8,11 +8,20 @@ import {
   getAllSurfaces,
   isTerminalSurface,
   isPreviewSurface,
+  isHarnessSurface,
+  isDiffSurface,
+  isFileBrowserSurface,
+  isCommitHistorySurface,
   type Pane,
   type SplitNode,
   type Workspace,
   type TerminalSurface,
   type PreviewSurface,
+  type HarnessSurface,
+  type DiffSurface,
+  type FileBrowserSurface,
+  type CommitHistorySurface,
+  type Surface,
 } from "../lib/types";
 
 function makeMockTerminalSurface(id: string): TerminalSurface {
@@ -99,7 +108,7 @@ describe("getAllPanes()", () => {
 
     const panes = getAllPanes(tree);
     expect(panes).toHaveLength(3);
-    expect(panes.map(p => p.id)).toEqual(["p1", "p2", "p3"]);
+    expect(panes.map((p) => p.id)).toEqual(["p1", "p2", "p3"]);
   });
 });
 
@@ -109,7 +118,11 @@ describe("getAllSurfaces()", () => {
     const p1 = makeMockPreviewSurface("p1");
     const t2 = makeMockTerminalSurface("t2");
 
-    const pane1: Pane = { id: "pane1", surfaces: [t1, p1], activeSurfaceId: "t1" };
+    const pane1: Pane = {
+      id: "pane1",
+      surfaces: [t1, p1],
+      activeSurfaceId: "t1",
+    };
     const pane2: Pane = { id: "pane2", surfaces: [t2], activeSurfaceId: "t2" };
 
     const ws: Workspace = {
@@ -129,14 +142,18 @@ describe("getAllSurfaces()", () => {
 
     const surfaces = getAllSurfaces(ws);
     expect(surfaces).toHaveLength(3);
-    expect(surfaces.map(s => s.id)).toEqual(["t1", "p1", "t2"]);
+    expect(surfaces.map((s) => s.id)).toEqual(["t1", "p1", "t2"]);
   });
 
   it("correctly mixes terminal and preview surfaces", () => {
     const t1 = makeMockTerminalSurface("t1");
     const p1 = makeMockPreviewSurface("p1");
 
-    const pane: Pane = { id: "pane1", surfaces: [t1, p1], activeSurfaceId: "t1" };
+    const pane: Pane = {
+      id: "pane1",
+      surfaces: [t1, p1],
+      activeSurfaceId: "t1",
+    };
     const ws: Workspace = {
       id: "ws1",
       name: "Test",
@@ -151,3 +168,156 @@ describe("getAllSurfaces()", () => {
     expect(isPreviewSurface(surfaces[1])).toBe(true);
   });
 });
+
+// --- New domain types ---
+
+function makeMockHarnessSurface(id: string): HarnessSurface {
+  return {
+    kind: "harness",
+    id,
+    presetId: "claude",
+    terminal: {} as any,
+    fitAddon: { fit: () => {} } as any,
+    searchAddon: {} as any,
+    termElement: document.createElement("div"),
+    ptyId: 2,
+    status: "idle",
+    title: `Claude Code ${id}`,
+    hasUnread: false,
+    opened: true,
+  };
+}
+
+describe("HarnessSurface", () => {
+  it("isHarnessSurface correctly identifies harness surfaces", () => {
+    const h = makeMockHarnessSurface("h1");
+    expect(isHarnessSurface(h)).toBe(true);
+    expect(isTerminalSurface(h as unknown as Surface)).toBe(false);
+    expect(isPreviewSurface(h as unknown as Surface)).toBe(false);
+  });
+
+  it("isHarnessSurface returns false for terminal surfaces", () => {
+    const t = makeMockTerminalSurface("t1");
+    expect(isHarnessSurface(t as unknown as Surface)).toBe(false);
+  });
+
+  it("includes harness surfaces in pane surface list", () => {
+    const h1 = makeMockHarnessSurface("h1");
+    const t1 = makeMockTerminalSurface("t1");
+    const pane: Pane = { id: "p1", surfaces: [h1, t1], activeSurfaceId: "h1" };
+    const ws: Workspace = {
+      id: "ws1",
+      name: "Test",
+      splitRoot: { type: "pane", pane },
+      activePaneId: "p1",
+    };
+
+    const surfaces = getAllSurfaces(ws);
+    expect(surfaces).toHaveLength(2);
+    expect(surfaces[0].kind).toBe("harness");
+    expect(surfaces[1].kind).toBe("terminal");
+  });
+});
+
+describe("New surface type guards", () => {
+  it("isDiffSurface correctly identifies diff surfaces", () => {
+    const diff: DiffSurface = {
+      kind: "diff",
+      id: "d1",
+      title: "Diff",
+      worktreePath: "/repo",
+      diffContent: "+added line",
+      hasUnread: false,
+    };
+    expect(isDiffSurface(diff)).toBe(true);
+    expect(isTerminalSurface(diff as unknown as Surface)).toBe(false);
+  });
+
+  it("isFileBrowserSurface correctly identifies file browser surfaces", () => {
+    const fb: FileBrowserSurface = {
+      kind: "filebrowser",
+      id: "fb1",
+      title: "Files",
+      worktreePath: "/repo",
+      files: ["src/app.ts"],
+      hasUnread: false,
+    };
+    expect(isFileBrowserSurface(fb)).toBe(true);
+    expect(isDiffSurface(fb as unknown as Surface)).toBe(false);
+  });
+
+  it("isCommitHistorySurface correctly identifies commit history surfaces", () => {
+    const ch: CommitHistorySurface = {
+      kind: "commithistory",
+      id: "ch1",
+      title: "Commits",
+      worktreePath: "/repo",
+      commits: [
+        {
+          hash: "abc",
+          shortHash: "abc",
+          subject: "test",
+          author: "dev",
+          date: "2026-01-01",
+        },
+      ],
+      hasUnread: false,
+    };
+    expect(isCommitHistorySurface(ch)).toBe(true);
+    expect(isFileBrowserSurface(ch as unknown as Surface)).toBe(false);
+  });
+
+  it("Surface union accepts all six surface kinds", () => {
+    const kinds = [
+      "terminal",
+      "preview",
+      "harness",
+      "diff",
+      "filebrowser",
+      "commithistory",
+    ];
+    const surfaces: Surface[] = [
+      makeMockTerminalSurface("t1"),
+      {
+        kind: "preview",
+        id: "p1",
+        filePath: "/f",
+        title: "P",
+        element: document.createElement("div"),
+        watchId: 0,
+        hasUnread: false,
+      } as PreviewSurface,
+      makeMockHarnessSurface("h1"),
+      {
+        kind: "diff",
+        id: "d1",
+        title: "D",
+        worktreePath: "/r",
+        diffContent: "",
+        hasUnread: false,
+      } as DiffSurface,
+      {
+        kind: "filebrowser",
+        id: "fb1",
+        title: "FB",
+        worktreePath: "/r",
+        files: [],
+        hasUnread: false,
+      } as FileBrowserSurface,
+      {
+        kind: "commithistory",
+        id: "ch1",
+        title: "CH",
+        worktreePath: "/r",
+        commits: [],
+        hasUnread: false,
+      } as CommitHistorySurface,
+    ];
+    expect(surfaces.map((s) => s.kind)).toEqual(kinds);
+  });
+});
+
+// No-op type construction tests removed — they tested TypeScript's type
+// system (constructing objects and asserting on properties just set) rather
+// than runtime behavior. AgentStatus, ProjectState, WorkspaceRecord,
+// HarnessPreset, and Workspace-with-meta tests were removed in stream 5.

@@ -3,7 +3,10 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Once;
 use tauri::{AppHandle, Emitter};
+
+static SHELL_INIT: Once = Once::new();
 
 use crate::b64;
 use crate::osc::{classify_osc, OscAction};
@@ -93,14 +96,17 @@ pub async fn spawn_pty(
     let mut cmd = CommandBuilder::new_default_prog();
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
-    cmd.env("TERM_PROGRAM", "ghostty");
+    cmd.env("TERM_PROGRAM", "GnarTerm");
     cmd.env("TERM_PROGRAM_VERSION", env!("CARGO_PKG_VERSION"));
 
     let home = std::env::var("HOME").unwrap_or_default();
     let integration_dir = format!("{}/.config/gnar/shell", home);
-    let _ = std::fs::create_dir_all(&integration_dir);
+    let orig_zdotdir = std::env::var("ZDOTDIR").unwrap_or(home.clone());
 
-    let zshenv = r#"# GnarTerm shell integration
+    SHELL_INIT.call_once(|| {
+        let _ = std::fs::create_dir_all(&integration_dir);
+
+        let zshenv = r#"# GnarTerm shell integration
 [ -f "$GNARTERM_ORIG_ZDOTDIR/.zshenv" ] && source "$GNARTERM_ORIG_ZDOTDIR/.zshenv"
 export ZDOTDIR="$GNARTERM_ORIG_ZDOTDIR"
 _gnarterm_report_cwd() { printf '\e]7;file://%s%s\a' "$(hostname)" "$PWD"; }
@@ -117,17 +123,19 @@ if [ -n "$GNARTERM_WORKTREE_ROOT" ]; then
   chpwd_functions+=(_gnarterm_enforce_worktree)
 fi
 "#;
-    let _ = std::fs::write(format!("{}/.zshenv", integration_dir), zshenv);
-    let orig_zdotdir = std::env::var("ZDOTDIR").unwrap_or(home.clone());
-    cmd.env("GNARTERM_ORIG_ZDOTDIR", &orig_zdotdir);
-    cmd.env("ZDOTDIR", &integration_dir);
+        let _ = std::fs::write(format!("{}/.zshenv", integration_dir), zshenv);
 
-    let bash_integration = format!("{}/.config/gnar/shell/bash-integration.sh", home);
-    let bash_content = r#"# GnarTerm bash integration
+        let bash_integration = format!("{}/bash-integration.sh", integration_dir);
+        let bash_content = r#"# GnarTerm bash integration
 _gnarterm_report_cwd() { printf '\e]7;file://%s%s\a' "$(hostname)" "$PWD"; }
 PROMPT_COMMAND="_gnarterm_report_cwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
 "#;
-    let _ = std::fs::write(&bash_integration, bash_content);
+        let _ = std::fs::write(&bash_integration, bash_content);
+    });
+
+    cmd.env("GNARTERM_ORIG_ZDOTDIR", &orig_zdotdir);
+    cmd.env("ZDOTDIR", &integration_dir);
+    let bash_integration = format!("{}/bash-integration.sh", integration_dir);
     cmd.env("GNARTERM_SHELL_INTEGRATION", &bash_integration);
 
     if let Some(ref env_vars) = env {
@@ -189,15 +197,26 @@ PROMPT_COMMAND="_gnarterm_report_cwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
                     let exit_code = child.wait()
                         .map(|status| if status.success() { 0u32 } else { 1u32 })
                         .ok();
+                    // CONTRACT: The frontend MUST call kill_pty(pty_id) after receiving
+                    // this event to clean up the PtyInstance from AppState. The reader
+                    // thread cannot access AppState to self-cleanup.
                     let _ = app_handle.emit("pty-exit", PtyExit { pty_id: id, exit_code });
                     break;
                 }
                 Ok(n) => {
                     let data = &buf[..n];
 
+                    let mut prev_byte_in_osc: u8 = 0;
                     for &byte in data {
                         if in_osc {
-                            if byte == 0x07 || byte == 0x9c {
+                            // Single-byte terminators: BEL (0x07) or ST (0x9C)
+                            // Two-byte ST: ESC (0x1B) followed by 0x5C
+                            let is_two_byte_st = byte == 0x5c && prev_byte_in_osc == 0x1b;
+                            if byte == 0x07 || byte == 0x9c || is_two_byte_st {
+                                // Remove trailing ESC from buffer if two-byte ST
+                                if is_two_byte_st {
+                                    osc_buf.pop();
+                                }
                                 if let Ok(s) = String::from_utf8(osc_buf.clone()) {
                                     match classify_osc(&s) {
                                         OscAction::Notification(text) => {
@@ -219,13 +238,20 @@ PROMPT_COMMAND="_gnarterm_report_cwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
                                 in_osc = false;
                             } else {
                                 osc_buf.push(byte);
+                                // L1: Prevent unbounded OSC buffer growth
+                                if osc_buf.len() > 4096 {
+                                    osc_buf.clear();
+                                    in_osc = false;
+                                }
                             }
+                            prev_byte_in_osc = byte;
                         } else if byte == 0x1b {
                             prev_esc = true;
                         } else if byte == 0x5d && prev_esc {
                             in_osc = true;
                             osc_buf.clear();
                             prev_esc = false;
+                            prev_byte_in_osc = 0;
                         } else {
                             prev_esc = false;
                         }

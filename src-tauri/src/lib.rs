@@ -602,7 +602,7 @@ mod tests {
 
     #[test]
     fn parse_branch_list_local_only() {
-        let output = "refs/heads/main\x00abc1234\x00*\nrefs/heads/feature\x00def5678\x00 \n";
+        let output = "refs/heads/main\tabc1234\t*\nrefs/heads/feature\tdef5678\t \n";
         let result = parse_branch_list(output);
         assert_eq!(result.len(), 2);
         assert!(result[0].is_current);
@@ -612,7 +612,7 @@ mod tests {
 
     #[test]
     fn parse_branch_list_with_remotes() {
-        let output = "refs/heads/main\x00abc1234\x00*\nrefs/remotes/origin/main\x00abc1234\x00 \n";
+        let output = "refs/heads/main\tabc1234\t*\nrefs/remotes/origin/main\tabc1234\t \n";
         let result = parse_branch_list(output);
         assert_eq!(result.len(), 2);
         assert!(!result[0].is_remote);
@@ -653,7 +653,6 @@ mod tests {
         assert!(home.unwrap().starts_with('/'), "HOME should be an absolute path");
     }
 
-    #[test]
     #[test]
     fn ensure_dir_creates_nested_directory() {
         let home = std::env::var("HOME").unwrap();

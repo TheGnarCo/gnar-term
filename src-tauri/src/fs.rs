@@ -53,12 +53,16 @@ pub fn validate_write_path(path: &str) -> Result<(), String> {
 /// Check if a file exists (lightweight — no read)
 #[tauri::command]
 pub async fn file_exists(path: String) -> bool {
+    if validate_read_path(&path).is_err() {
+        return false;
+    }
     std::path::Path::new(&path).exists()
 }
 
 /// List filenames in a directory (non-recursive, files only)
 #[tauri::command]
 pub async fn list_dir(path: String) -> Result<Vec<String>, String> {
+    validate_read_path(&path)?;
     let entries = std::fs::read_dir(&path).map_err(|e| format!("Failed to read dir {}: {}", path, e))?;
     let mut names = Vec::new();
     for entry in entries.flatten() {
@@ -77,6 +81,7 @@ pub async fn list_dir(path: String) -> Result<Vec<String>, String> {
 /// Skips directories and files whose names start with '.'.
 #[tauri::command]
 pub async fn list_files_recursive(path: String) -> Result<Vec<String>, String> {
+    validate_read_path(&path)?;
     let root = std::path::Path::new(&path);
     let mut result = Vec::new();
     list_files_walk(root, root, &mut result)?;
@@ -160,6 +165,9 @@ pub async fn show_in_file_manager(path: String) -> Result<(), String> {
 /// Open a file with the default system app
 #[tauri::command]
 pub async fn open_with_default_app(path: String) -> Result<(), String> {
+    if !path.starts_with('/') || !std::path::Path::new(&path).exists() {
+        return Err("Path must be an existing file".into());
+    }
     #[cfg(target_os = "macos")]
     std::process::Command::new("open").arg(&path).spawn().map_err(|e| e.to_string())?;
     #[cfg(target_os = "linux")]
@@ -190,18 +198,28 @@ pub async fn watch_file(app: AppHandle, state: tauri::State<'_, crate::AppState>
         let mut last_modified = std::fs::metadata(&path_clone)
             .and_then(|m| m.modified())
             .ok();
+        let mut consecutive_failures: u32 = 0;
         loop {
             std::thread::sleep(std::time::Duration::from_millis(500));
             if stop_clone.load(Ordering::Relaxed) {
                 break;
             }
-            let current = std::fs::metadata(&path_clone)
-                .and_then(|m| m.modified())
-                .ok();
-            if current != last_modified {
-                last_modified = current;
-                if let Ok(content) = std::fs::read_to_string(&path_clone) {
-                    let _ = app.emit("file-changed", FileChanged { watch_id, path: path_clone.clone(), content });
+            match std::fs::metadata(&path_clone) {
+                Ok(meta) => {
+                    consecutive_failures = 0;
+                    let current = meta.modified().ok();
+                    if current != last_modified {
+                        last_modified = current;
+                        if let Ok(content) = std::fs::read_to_string(&path_clone) {
+                            let _ = app.emit("file-changed", FileChanged { watch_id, path: path_clone.clone(), content });
+                        }
+                    }
+                }
+                Err(_) => {
+                    consecutive_failures += 1;
+                    if consecutive_failures >= 10 {
+                        break;
+                    }
                 }
             }
         }
@@ -231,7 +249,9 @@ pub async fn find_file(name: String) -> Result<String, String> {
         let stdout = String::from_utf8_lossy(&output.stdout);
         for line in stdout.lines() {
             if line.starts_with('/') && line.ends_with(&name) {
-                return Ok(line.to_string());
+                if validate_read_path(line).is_ok() {
+                    return Ok(line.to_string());
+                }
             }
         }
     }
@@ -243,7 +263,7 @@ pub async fn find_file(name: String) -> Result<String, String> {
         {
             let stdout = String::from_utf8_lossy(&output.stdout);
             if let Some(line) = stdout.lines().next() {
-                if line.starts_with('/') {
+                if line.starts_with('/') && validate_read_path(line).is_ok() {
                     return Ok(line.to_string());
                 }
             }
@@ -255,7 +275,7 @@ pub async fn find_file(name: String) -> Result<String, String> {
         {
             let stdout = String::from_utf8_lossy(&output.stdout);
             if let Some(line) = stdout.lines().next() {
-                if line.starts_with('/') {
+                if line.starts_with('/') && validate_read_path(line).is_ok() {
                     return Ok(line.to_string());
                 }
             }

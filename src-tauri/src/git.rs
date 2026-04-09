@@ -1,11 +1,17 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::process::Command;
 
-/// Run a git command and return stdout, or an error string
-fn run_git(args: &[&str], cwd: &str) -> Result<String, String> {
-    let output = Command::new("git")
-        .args(args)
-        .current_dir(cwd)
+/// Run a git command and return stdout, or an error string.
+/// If `cwd` is `Some`, the command runs in that directory; otherwise it inherits
+/// the process working directory (needed for commands like `git clone` that create
+/// the target directory).
+fn run_git(args: &[&str], cwd: Option<&str>) -> Result<String, String> {
+    let mut cmd = Command::new("git");
+    cmd.args(args);
+    if let Some(dir) = cwd {
+        cmd.current_dir(dir);
+    }
+    let output = cmd
         .output()
         .map_err(|e| format!("Failed to run git: {}", e))?;
 
@@ -22,14 +28,7 @@ fn run_git(args: &[&str], cwd: &str) -> Result<String, String> {
 /// Clone a git repository
 #[tauri::command]
 pub async fn git_clone(url: String, target_dir: String) -> Result<(), String> {
-    let output = Command::new("git")
-        .args(["clone", &url, &target_dir])
-        .output()
-        .map_err(|e| format!("Failed to run git clone: {e}"))?;
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("git clone failed: {}", stderr.trim()));
-    }
+    run_git(&["clone", &url, &target_dir], None)?;
     Ok(())
 }
 
@@ -91,6 +90,13 @@ pub fn parse_worktree_list(output: &str) -> Vec<WorktreeInfo> {
 /// - Any other string: treated as an absolute base path
 #[tauri::command]
 pub async fn create_worktree(repo_path: String, branch: String, base: String, worktree_base_dir: Option<String>) -> Result<String, String> {
+    if branch.starts_with('-') {
+        return Err("Invalid branch name".into());
+    }
+    if base.starts_with('-') {
+        return Err("Invalid base branch name".into());
+    }
+
     let repo = std::path::Path::new(&repo_path);
     let strategy = worktree_base_dir.as_deref().unwrap_or("nested");
 
@@ -123,10 +129,22 @@ pub async fn create_worktree(repo_path: String, branch: String, base: String, wo
             .map_err(|e| format!("Failed to create worktree directory: {}", e))?;
     }
 
-    run_git(
-        &["worktree", "add", "-b", &branch, worktree_str, &base],
-        &repo_path,
-    )?;
+    // Check if the branch already exists locally
+    let branch_exists = run_git(&["branch", "--list", &branch], Some(&repo_path))
+        .map(|out| !out.trim().is_empty())
+        .unwrap_or(false);
+
+    if branch_exists {
+        run_git(
+            &["worktree", "add", worktree_str, &branch],
+            Some(&repo_path),
+        )?;
+    } else {
+        run_git(
+            &["worktree", "add", "-b", &branch, worktree_str, &base],
+            Some(&repo_path),
+        )?;
+    }
 
     Ok(worktree_str.to_string())
 }
@@ -134,21 +152,24 @@ pub async fn create_worktree(repo_path: String, branch: String, base: String, wo
 /// Checkout a branch (creates local tracking branch from remote if needed)
 #[tauri::command]
 pub async fn git_checkout(repo_path: String, branch: String) -> Result<(), String> {
-    run_git(&["checkout", &branch], &repo_path)?;
+    if branch.starts_with('-') {
+        return Err("Invalid branch name".into());
+    }
+    run_git(&["checkout", &branch], Some(&repo_path))?;
     Ok(())
 }
 
 /// Remove a git worktree
 #[tauri::command]
 pub async fn remove_worktree(repo_path: String, worktree_path: String) -> Result<(), String> {
-    run_git(&["worktree", "remove", &worktree_path, "--force"], &repo_path)?;
+    run_git(&["worktree", "remove", &worktree_path, "--force"], Some(&repo_path))?;
     Ok(())
 }
 
 /// List all worktrees for a repository
 #[tauri::command]
 pub async fn list_worktrees(repo_path: String) -> Result<Vec<WorktreeInfo>, String> {
-    let output = run_git(&["worktree", "list", "--porcelain"], &repo_path)?;
+    let output = run_git(&["worktree", "list", "--porcelain"], Some(&repo_path))?;
     Ok(parse_worktree_list(&output))
 }
 
@@ -197,7 +218,7 @@ pub fn parse_branch_list(output: &str) -> Vec<BranchInfo> {
 /// Fetch all remotes
 #[tauri::command]
 pub async fn git_fetch_all(repo_path: String) -> Result<(), String> {
-    run_git(&["fetch", "--all"], &repo_path)?;
+    run_git(&["fetch", "--all"], Some(&repo_path))?;
     Ok(())
 }
 
@@ -211,24 +232,30 @@ pub async fn list_branches(repo_path: String, include_remote: bool) -> Result<Ve
     if include_remote {
         args.push("-a");
     }
-    let output = run_git(&args, &repo_path)?;
+    let output = run_git(&args, Some(&repo_path))?;
     Ok(parse_branch_list(&output))
 }
 
 /// Push a branch to origin
 #[tauri::command]
 pub async fn push_branch(repo_path: String, branch: String) -> Result<(), String> {
-    run_git(&["push", "origin", &branch], &repo_path)?;
+    if branch.starts_with('-') {
+        return Err("Invalid branch name".into());
+    }
+    run_git(&["push", "origin", &branch], Some(&repo_path))?;
     Ok(())
 }
 
 /// Delete a branch (local, or remote via --remote flag)
 #[tauri::command]
 pub async fn delete_branch(repo_path: String, branch: String, remote: bool) -> Result<(), String> {
+    if branch.starts_with('-') {
+        return Err("Invalid branch name".into());
+    }
     if remote {
-        run_git(&["push", "origin", "--delete", &branch], &repo_path)?;
+        run_git(&["push", "origin", "--delete", &branch], Some(&repo_path))?;
     } else {
-        run_git(&["branch", "-D", &branch], &repo_path)?;
+        run_git(&["branch", "-D", &branch], Some(&repo_path))?;
     }
     Ok(())
 }
@@ -293,7 +320,7 @@ pub fn parse_git_log(output: &str) -> Vec<CommitInfo> {
 /// Get working tree status (staged + unstaged changes)
 #[tauri::command]
 pub async fn git_status(worktree_path: String) -> Result<Vec<FileStatus>, String> {
-    let output = run_git(&["status", "--porcelain=v1"], &worktree_path)?;
+    let output = run_git(&["status", "--porcelain=v1"], Some(&worktree_path))?;
     Ok(parse_git_status(&output))
 }
 
@@ -305,7 +332,7 @@ pub async fn git_diff(worktree_path: String, path: Option<String>) -> Result<Str
         args.push("--");
         args.push(p);
     }
-    run_git(&args, &worktree_path)
+    run_git(&args, Some(&worktree_path))
 }
 
 /// Get commit log (all commits, or only those ahead of a base branch)
@@ -322,14 +349,14 @@ pub async fn git_log(worktree_path: String, base_branch: Option<String>) -> Resu
     } else {
         vec!["log", format_str, "-50"]
     };
-    let output = run_git(&args, &worktree_path)?;
+    let output = run_git(&args, Some(&worktree_path))?;
     Ok(parse_git_log(&output))
 }
 
 /// List tracked files in a worktree (git ls-files)
 #[tauri::command]
 pub async fn git_ls_files(worktree_path: String) -> Result<Vec<String>, String> {
-    let output = run_git(&["ls-files"], &worktree_path)?;
+    let output = run_git(&["ls-files"], Some(&worktree_path))?;
     Ok(output.lines().filter(|l| !l.is_empty()).map(String::from).collect())
 }
 
@@ -346,6 +373,31 @@ pub struct GhIssue {
     pub url: String,
     pub created_at: String,
     pub updated_at: String,
+}
+
+/// Intermediate struct for deserializing gh issue JSON output.
+#[derive(Deserialize)]
+struct GhIssueRaw {
+    number: i64,
+    title: String,
+    state: String,
+    author: GhAuthor,
+    labels: Vec<GhLabel>,
+    url: String,
+    #[serde(rename = "createdAt")]
+    created_at: String,
+    #[serde(rename = "updatedAt")]
+    updated_at: String,
+}
+
+#[derive(Deserialize)]
+struct GhAuthor {
+    login: String,
+}
+
+#[derive(Deserialize)]
+struct GhLabel {
+    name: String,
 }
 
 /// List GitHub issues for a repo using the gh CLI.
@@ -370,24 +422,18 @@ pub async fn gh_list_issues(repo_path: String, state: Option<String>) -> Result<
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    // gh outputs JSON array; parse into our struct
-    let raw: Vec<serde_json::Value> = serde_json::from_str(&stdout)
+    let raw: Vec<GhIssueRaw> = serde_json::from_str(&stdout)
         .map_err(|e| format!("Failed to parse gh output: {}", e))?;
 
-    Ok(raw.iter().filter_map(|v| {
-        Some(GhIssue {
-            number: v.get("number")?.as_i64()?,
-            title: v.get("title")?.as_str()?.to_string(),
-            state: v.get("state")?.as_str()?.to_string(),
-            author: v.get("author")?.get("login")?.as_str()?.to_string(),
-            labels: v.get("labels")?.as_array()?
-                .iter()
-                .filter_map(|l| l.get("name")?.as_str().map(String::from))
-                .collect(),
-            url: v.get("url")?.as_str()?.to_string(),
-            created_at: v.get("createdAt")?.as_str()?.to_string(),
-            updated_at: v.get("updatedAt")?.as_str()?.to_string(),
-        })
+    Ok(raw.into_iter().map(|r| GhIssue {
+        number: r.number,
+        title: r.title,
+        state: r.state,
+        author: r.author.login,
+        labels: r.labels.into_iter().map(|l| l.name).collect(),
+        url: r.url,
+        created_at: r.created_at,
+        updated_at: r.updated_at,
     }).collect())
 }
 
@@ -404,6 +450,25 @@ pub struct GhPullRequest {
     pub is_draft: bool,
     pub created_at: String,
     pub updated_at: String,
+}
+
+/// Intermediate struct for deserializing gh PR JSON output.
+#[derive(Deserialize)]
+struct GhPrRaw {
+    number: i64,
+    title: String,
+    state: String,
+    author: GhAuthor,
+    #[serde(rename = "headRefName")]
+    head_ref: String,
+    labels: Vec<GhLabel>,
+    url: String,
+    #[serde(rename = "isDraft")]
+    is_draft: bool,
+    #[serde(rename = "createdAt")]
+    created_at: String,
+    #[serde(rename = "updatedAt")]
+    updated_at: String,
 }
 
 /// List GitHub pull requests for a repo using the gh CLI.
@@ -427,25 +492,20 @@ pub async fn gh_list_prs(repo_path: String, state: Option<String>) -> Result<Vec
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let raw: Vec<serde_json::Value> = serde_json::from_str(&stdout)
+    let raw: Vec<GhPrRaw> = serde_json::from_str(&stdout)
         .map_err(|e| format!("Failed to parse gh output: {}", e))?;
 
-    Ok(raw.iter().filter_map(|v| {
-        Some(GhPullRequest {
-            number: v.get("number")?.as_i64()?,
-            title: v.get("title")?.as_str()?.to_string(),
-            state: v.get("state")?.as_str()?.to_string(),
-            author: v.get("author")?.get("login")?.as_str()?.to_string(),
-            head_ref: v.get("headRefName")?.as_str()?.to_string(),
-            labels: v.get("labels")?.as_array()?
-                .iter()
-                .filter_map(|l| l.get("name")?.as_str().map(String::from))
-                .collect(),
-            url: v.get("url")?.as_str()?.to_string(),
-            is_draft: v.get("isDraft")?.as_bool().unwrap_or(false),
-            created_at: v.get("createdAt")?.as_str()?.to_string(),
-            updated_at: v.get("updatedAt")?.as_str()?.to_string(),
-        })
+    Ok(raw.into_iter().map(|r| GhPullRequest {
+        number: r.number,
+        title: r.title,
+        state: r.state,
+        author: r.author.login,
+        head_ref: r.head_ref,
+        labels: r.labels.into_iter().map(|l| l.name).collect(),
+        url: r.url,
+        is_draft: r.is_draft,
+        created_at: r.created_at,
+        updated_at: r.updated_at,
     }).collect())
 }
 
@@ -455,12 +515,12 @@ pub async fn gh_list_prs(repo_path: String, state: Option<String>) -> Result<Vec
 #[tauri::command]
 pub async fn git_add(worktree_path: String, paths: Vec<String>) -> Result<(), String> {
     if paths.is_empty() {
-        run_git(&["add", "-A"], &worktree_path)?;
+        run_git(&["add", "-A"], Some(&worktree_path))?;
     } else {
         let mut args = vec!["add", "--"];
         let path_refs: Vec<&str> = paths.iter().map(|s| s.as_str()).collect();
         args.extend(path_refs);
-        run_git(&args, &worktree_path)?;
+        run_git(&args, Some(&worktree_path))?;
     }
     Ok(())
 }
@@ -472,31 +532,31 @@ pub async fn git_commit(worktree_path: String, message: String) -> Result<String
     if trimmed.is_empty() {
         return Err("Commit message cannot be empty".to_string());
     }
-    run_git(&["commit", "-m", trimmed], &worktree_path)?;
-    let hash = run_git(&["rev-parse", "--short", "HEAD"], &worktree_path)?;
+    run_git(&["commit", "-m", trimmed], Some(&worktree_path))?;
+    let hash = run_git(&["rev-parse", "--short", "HEAD"], Some(&worktree_path))?;
     Ok(hash.trim().to_string())
 }
 
 /// Push the current branch to origin with upstream tracking.
 #[tauri::command]
 pub async fn git_push(worktree_path: String) -> Result<String, String> {
-    let branch = run_git(&["rev-parse", "--abbrev-ref", "HEAD"], &worktree_path)?;
+    let branch = run_git(&["rev-parse", "--abbrev-ref", "HEAD"], Some(&worktree_path))?;
     let branch = branch.trim();
-    run_git(&["push", "-u", "origin", branch], &worktree_path)?;
+    run_git(&["push", "-u", "origin", branch], Some(&worktree_path))?;
     Ok(branch.to_string())
 }
 
 /// Get the current branch name.
 #[tauri::command]
 pub async fn git_branch_name(worktree_path: String) -> Result<String, String> {
-    let name = run_git(&["rev-parse", "--abbrev-ref", "HEAD"], &worktree_path)?;
+    let name = run_git(&["rev-parse", "--abbrev-ref", "HEAD"], Some(&worktree_path))?;
     Ok(name.trim().to_string())
 }
 
 /// Get the staged diff (`git diff --cached`).
 #[tauri::command]
 pub async fn git_diff_staged(worktree_path: String) -> Result<String, String> {
-    run_git(&["diff", "--cached"], &worktree_path)
+    run_git(&["diff", "--cached"], Some(&worktree_path))
 }
 
 /// Create a GitHub pull request via the `gh` CLI. Returns the PR URL.
@@ -546,10 +606,16 @@ pub async fn gh_create_pr(
 // ---- Worktree lifecycle commands ----
 
 /// Run a shell command in a given directory. Returns stdout.
+///
+/// SECURITY: This command is equivalent to shell access. Only call from trusted
+/// frontend paths. The `cwd` must be a non-empty absolute path.
 #[tauri::command]
 pub async fn run_script(cwd: String, command: String) -> Result<String, String> {
     if command.trim().is_empty() {
         return Ok(String::new());
+    }
+    if cwd.is_empty() || !cwd.starts_with('/') {
+        return Err("cwd must be a non-empty absolute path".into());
     }
     let output = Command::new("sh")
         .args(["-c", &command])
@@ -567,6 +633,10 @@ pub async fn run_script(cwd: String, command: String) -> Result<String, String> 
 /// Preserves relative paths.
 #[tauri::command]
 pub async fn copy_files(source_dir: String, dest_dir: String, patterns: Vec<String>) -> Result<Vec<String>, String> {
+    if !dest_dir.starts_with('/') || !std::path::Path::new(&dest_dir).exists() {
+        return Err("dest_dir must be an existing absolute path".into());
+    }
+
     let mut copied = Vec::new();
     let src = std::path::Path::new(&source_dir);
     let dst = std::path::Path::new(&dest_dir);
@@ -577,6 +647,11 @@ pub async fn copy_files(source_dir: String, dest_dir: String, patterns: Vec<Stri
         let entries = glob::glob(full_str).map_err(|e| format!("Invalid glob pattern '{}': {}", pattern, e))?;
         for entry in entries.flatten() {
             if entry.is_file() {
+                // Validate the source file is readable (not in a blocked directory)
+                let entry_str = entry.to_string_lossy();
+                if crate::fs::validate_read_path(&entry_str).is_err() {
+                    continue;
+                }
                 let rel = entry.strip_prefix(src).map_err(|e| e.to_string())?;
                 let dest_path = dst.join(rel);
                 if let Some(parent) = dest_path.parent() {

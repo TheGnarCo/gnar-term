@@ -5,7 +5,7 @@ Tauri v2 terminal workspace manager. Rust backend (portable-pty), Svelte fronten
 ## Build & Test
 
 ```bash
-npm test                    # vitest unit tests (246 tests)
+npm test                    # vitest unit tests (293 tests)
 npm run build               # full tauri build (frontend + Rust)
 cargo check                 # quick Rust compilation check
 ```
@@ -67,3 +67,32 @@ gnar-term runs on macOS, Linux, and Windows. When making changes:
 - For PTY/terminal fixes, test with real terminal output, not just mocks
 - Do NOT use AppleScript/screenshot GUI tests (they interrupt the user's screen)
 - No `setTimeout` hacks to fix timing issues — diagnose root cause
+
+## Architecture
+
+See `docs/` for design documentation:
+
+- **[docs/glossary.md](docs/glossary.md)** — canonical definitions for terms used across the codebase (workspace, pane, surface, etc.)
+- **[docs/sidebar-architecture.md](docs/sidebar-architecture.md)** — primary/secondary sidebar layout, extension model, and control placement rules
+
+### Frontend Structure
+
+App.svelte is a thin shell that wires services to the DOM. Business logic lives in service modules:
+
+- `src/lib/services/workspace-service.ts` — workspace CRUD, serialization, config persistence
+- `src/lib/services/pane-service.ts` — pane split/close/focus, tab reorder, flash
+- `src/lib/services/surface-service.ts` — surface select/close/navigate, preview
+- `src/lib/services/service-helpers.ts` — shared utilities (safeFocus, getActiveCwd)
+
+Shared behaviors are extracted as Svelte actions:
+
+- `src/lib/actions/drag-resize.ts` — drag-to-resize for sidebars and split dividers
+
+When adding new functionality, put business logic in the appropriate service module, not in App.svelte. App.svelte should only contain: component imports, store subscriptions, command palette definitions, keyboard shortcut handlers, and the template.
+
+### Sidebar Rules
+
+- Sidebar toggle buttons always live in the TitleBar, never in sidebar headers
+- Primary sidebar: vertically scrolling sections; Workspaces section is always first
+- Secondary sidebar: tab-controlled; each section is a tab; control row only renders when populated (via `controls` slot)
+- Both sidebars are resizable (max 33% viewport width, min 140px)

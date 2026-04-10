@@ -8,7 +8,6 @@
   import { isTerminalSurface, isPreviewSurface } from "../types";
 
   export let pane: Pane;
-  export let isActivePane: boolean;
   export let onSelectSurface: (surfaceId: string) => void;
   export let onCloseSurface: (surfaceId: string) => void;
   export let onNewSurface: () => void;
@@ -51,7 +50,7 @@
   style="
     flex: 1; display: flex; flex-direction: column;
     min-width: 0; min-height: 0;
-    border: 1px solid {isActivePane ? $theme.borderActive : $theme.border};
+    border: 1px solid {$theme.border};
     border-radius: 4px; overflow: hidden;
   "
   on:mousedown={onFocusPane}

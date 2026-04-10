@@ -92,7 +92,6 @@ vi.stubGlobal(
 // ---------------------------------------------------------------------------
 
 import TitleBar from "../lib/components/TitleBar.svelte";
-import SidebarToggle from "../lib/components/SidebarToggle.svelte";
 import FindBar from "../lib/components/FindBar.svelte";
 import Tab from "../lib/components/Tab.svelte";
 import TabBar from "../lib/components/TabBar.svelte";
@@ -100,11 +99,12 @@ import ContextMenu from "../lib/components/ContextMenu.svelte";
 import CommandPalette from "../lib/components/CommandPalette.svelte";
 import WorkspaceItem from "../lib/components/WorkspaceItem.svelte";
 import PaneView from "../lib/components/PaneView.svelte";
-import Sidebar from "../lib/components/Sidebar.svelte";
+import PrimarySidebar from "../lib/components/PrimarySidebar.svelte";
+import SecondarySidebar from "../lib/components/SecondarySidebar.svelte";
 import TerminalSurfaceComponent from "../lib/components/TerminalSurface.svelte";
 
 // Store imports
-import { sidebarVisible, commandPaletteOpen, findBarVisible, contextMenu } from "../lib/stores/ui";
+import { primarySidebarVisible, secondarySidebarVisible, commandPaletteOpen, findBarVisible, contextMenu } from "../lib/stores/ui";
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
 
 // ---------------------------------------------------------------------------
@@ -174,7 +174,8 @@ const noop = () => {};
 
 beforeEach(() => {
   cleanup();
-  sidebarVisible.set(true);
+  primarySidebarVisible.set(true);
+  secondarySidebarVisible.set(false);
   commandPaletteOpen.set(false);
   findBarVisible.set(false);
   contextMenu.set(null);
@@ -203,30 +204,48 @@ describe("TitleBar", () => {
     const el = container.firstElementChild as HTMLElement;
     expect(el.style.height).toBe("38px");
   });
+
+  it("always renders both sidebar toggles", () => {
+    render(TitleBar);
+    expect(screen.getByTitle("Toggle Primary Sidebar (⌘B)")).toBeTruthy();
+    expect(screen.getByTitle("Toggle Secondary Sidebar")).toBeTruthy();
+  });
 });
 
 // ===========================================================================
-// SidebarToggle
+// SecondarySidebar
 // ===========================================================================
 
-describe("SidebarToggle", () => {
-  it("renders toggle button when sidebar is hidden", () => {
-    sidebarVisible.set(false);
-    render(SidebarToggle);
-    expect(screen.getByTitle("Show Sidebar (⌘B)")).toBeTruthy();
+describe("SecondarySidebar", () => {
+  it("renders when secondarySidebarVisible is true", () => {
+    secondarySidebarVisible.set(true);
+    const { container } = render(SecondarySidebar);
+    expect(container.querySelector("#secondary-sidebar")).toBeTruthy();
   });
 
-  it("does not render when sidebar is visible", () => {
-    sidebarVisible.set(true);
-    const { container } = render(SidebarToggle);
-    expect(container.querySelector("#sidebar-toggle")).toBeNull();
+  it("does not render when secondarySidebarVisible is false", () => {
+    secondarySidebarVisible.set(false);
+    const { container } = render(SecondarySidebar);
+    expect(container.querySelector("#secondary-sidebar")).toBeNull();
   });
 
-  it("toggle button contains an SVG icon", () => {
-    sidebarVisible.set(false);
-    render(SidebarToggle);
-    const btn = screen.getByTitle("Show Sidebar (⌘B)");
-    expect(btn.querySelector("svg")).toBeTruthy();
+  it("has data-tauri-drag-region", () => {
+    secondarySidebarVisible.set(true);
+    const { container } = render(SecondarySidebar);
+    const dragRegions = container.querySelectorAll("[data-tauri-drag-region]");
+    expect(dragRegions.length).toBeGreaterThan(0);
+  });
+
+  it("shows empty state message when no tabs are registered", () => {
+    secondarySidebarVisible.set(true);
+    render(SecondarySidebar);
+    expect(screen.getByText("No Secondary Sidebar Content")).toBeTruthy();
+  });
+
+  it("does not render toggle in header (lives in TitleBar)", () => {
+    secondarySidebarVisible.set(true);
+    render(SecondarySidebar);
+    expect(screen.queryByTitle("Toggle Secondary Sidebar")).toBeNull();
   });
 });
 
@@ -348,7 +367,6 @@ describe("TabBar", () => {
     render(TabBar, {
       props: {
         pane,
-        isActivePane: true,
         onSelectSurface: noop,
         onCloseSurface: noop,
         onNewSurface: noop,
@@ -366,7 +384,6 @@ describe("TabBar", () => {
     render(TabBar, {
       props: {
         pane,
-        isActivePane: true,
         onSelectSurface: noop,
         onCloseSurface: noop,
         onNewSurface: noop,
@@ -384,7 +401,6 @@ describe("TabBar", () => {
     render(TabBar, {
       props: {
         pane,
-        isActivePane: true,
         onSelectSurface: noop,
         onCloseSurface: noop,
         onNewSurface: noop,
@@ -401,7 +417,6 @@ describe("TabBar", () => {
     render(TabBar, {
       props: {
         pane,
-        isActivePane: true,
         onSelectSurface: noop,
         onCloseSurface: noop,
         onNewSurface: noop,
@@ -418,7 +433,6 @@ describe("TabBar", () => {
     render(TabBar, {
       props: {
         pane,
-        isActivePane: true,
         onSelectSurface: noop,
         onCloseSurface: noop,
         onNewSurface: noop,
@@ -726,7 +740,6 @@ describe("PaneView", () => {
     render(PaneView, {
       props: {
         pane,
-        isActivePane: true,
         onSelectSurface: noop,
         onCloseSurface: noop,
         onNewSurface: noop,
@@ -744,7 +757,6 @@ describe("PaneView", () => {
     render(PaneView, {
       props: {
         pane,
-        isActivePane: true,
         onSelectSurface: noop,
         onCloseSurface: noop,
         onNewSurface: noop,
@@ -762,7 +774,6 @@ describe("PaneView", () => {
     render(PaneView, {
       props: {
         pane,
-        isActivePane: true,
         onSelectSurface: noop,
         onCloseSurface: noop,
         onNewSurface: noop,
@@ -782,63 +793,62 @@ describe("PaneView", () => {
 // Sidebar
 // ===========================================================================
 
-describe("Sidebar", () => {
+describe("PrimarySidebar", () => {
   const sidebarProps = {
     onNewWorkspace: noop,
     onSwitchWorkspace: noop,
     onCloseWorkspace: noop,
     onRenameWorkspace: noop,
-    onSplitPane: noop,
     onNewSurface: noop,
     onReorderWorkspaces: noop,
   };
 
-  it("renders when sidebarVisible is true", () => {
-    sidebarVisible.set(true);
-    const { container } = render(Sidebar, { props: sidebarProps });
-    expect(container.querySelector("#sidebar")).toBeTruthy();
+  it("renders when primarySidebarVisible is true", () => {
+    primarySidebarVisible.set(true);
+    const { container } = render(PrimarySidebar, { props: sidebarProps });
+    expect(container.querySelector("#primary-sidebar")).toBeTruthy();
   });
 
-  it("does not render when sidebarVisible is false", () => {
-    sidebarVisible.set(false);
-    const { container } = render(Sidebar, { props: sidebarProps });
-    expect(container.querySelector("#sidebar")).toBeNull();
+  it("does not render when primarySidebarVisible is false", () => {
+    primarySidebarVisible.set(false);
+    const { container } = render(PrimarySidebar, { props: sidebarProps });
+    expect(container.querySelector("#primary-sidebar")).toBeNull();
   });
 
-  it("renders header toolbar with hide, split, and new workspace buttons", () => {
-    sidebarVisible.set(true);
-    render(Sidebar, { props: sidebarProps });
-    expect(screen.getByTitle("Hide Sidebar (⌘B)")).toBeTruthy();
-    expect(screen.getByTitle("Split Pane (⌘D)")).toBeTruthy();
-    expect(screen.getByTitle("New workspace (⌘N)")).toBeTruthy();
+  it("renders + button in header (sidebar toggles live in TitleBar)", () => {
+    primarySidebarVisible.set(true);
+    render(PrimarySidebar, { props: sidebarProps });
+    expect(screen.getByTitle("New Workspace (⌘N)")).toBeTruthy();
+    expect(screen.queryByTitle("Toggle Primary Sidebar (⌘B)")).toBeNull();
+    expect(screen.queryByTitle("Toggle Secondary Sidebar")).toBeNull();
   });
 
   it("renders workspace items from store", () => {
-    sidebarVisible.set(true);
+    primarySidebarVisible.set(true);
     const ws1 = makeWorkspace("ws1", "Project Alpha");
     const ws2 = makeWorkspace("ws2", "Project Beta");
     workspaces.set([ws1, ws2]);
     activeWorkspaceIdx.set(0);
-    render(Sidebar, { props: sidebarProps });
+    render(PrimarySidebar, { props: sidebarProps });
     expect(screen.getByText("Project Alpha")).toBeTruthy();
     expect(screen.getByText("Project Beta")).toBeTruthy();
   });
 
   it("header has data-tauri-drag-region", () => {
-    sidebarVisible.set(true);
-    const { container } = render(Sidebar, { props: sidebarProps });
+    primarySidebarVisible.set(true);
+    const { container } = render(PrimarySidebar, { props: sidebarProps });
     const dragRegions = container.querySelectorAll("[data-tauri-drag-region]");
     expect(dragRegions.length).toBeGreaterThan(0);
   });
 
   it("renders correct number of workspace items", () => {
-    sidebarVisible.set(true);
+    primarySidebarVisible.set(true);
     const ws1 = makeWorkspace("ws1", "WS One");
     const ws2 = makeWorkspace("ws2", "WS Two");
     const ws3 = makeWorkspace("ws3", "WS Three");
     workspaces.set([ws1, ws2, ws3]);
     activeWorkspaceIdx.set(1);
-    render(Sidebar, { props: sidebarProps });
+    render(PrimarySidebar, { props: sidebarProps });
     expect(screen.getByText("WS One")).toBeTruthy();
     expect(screen.getByText("WS Two")).toBeTruthy();
     expect(screen.getByText("WS Three")).toBeTruthy();

@@ -1,17 +1,47 @@
 <script lang="ts">
   import { theme } from "../stores/theme";
+  import { primarySidebarVisible, secondarySidebarVisible } from "../stores/ui";
+  import { isMac } from "../terminal-service";
+
+  let btnStyle = "";
+  $: btnStyle = `
+    background: none; border: none; cursor: pointer;
+    width: 26px; height: 26px; border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    padding: 0; -webkit-app-region: no-drag;
+  `;
+
+  $: leftPadding = !$primarySidebarVisible && isMac ? "78px" : "8px";
 </script>
 
 <div
   data-tauri-drag-region=""
   style="
     height: 38px; flex-shrink: 0; display: flex; align-items: center;
-    padding-left: 16px; -webkit-app-region: drag;
+    padding: 0 8px 0 {leftPadding}; -webkit-app-region: drag;
     background: {$theme.bg}; border-bottom: 1px solid {$theme.border};
   "
 >
-  <span style="
-    font-size: 11px; font-weight: 600; letter-spacing: 1.5px;
-    color: {$theme.fgDim}; pointer-events: none;
-  ">GNARTERM</span>
+  <button
+    style="{btnStyle} color: {$primarySidebarVisible ? $theme.fg : $theme.fgDim};"
+    title="Toggle Primary Sidebar (⌘B)"
+    on:click={() => primarySidebarVisible.update(v => !v)}
+  >
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="2" width="14" height="12" rx="1.5"/><line x1="5.5" y1="2" x2="5.5" y2="14"/></svg>
+  </button>
+
+  <div style="flex: 1; display: flex; justify-content: center; pointer-events: none;">
+    <span style="
+      font-size: 11px; font-weight: 600; letter-spacing: 1.5px;
+      color: {$theme.fgDim};
+    ">GNARTERM</span>
+  </div>
+
+  <button
+    style="{btnStyle} color: {$secondarySidebarVisible ? $theme.fg : $theme.fgDim};"
+    title="Toggle Secondary Sidebar"
+    on:click={() => secondarySidebarVisible.update(v => !v)}
+  >
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="2" width="14" height="12" rx="1.5"/><line x1="10.5" y1="2" x2="10.5" y2="14"/></svg>
+  </button>
 </div>

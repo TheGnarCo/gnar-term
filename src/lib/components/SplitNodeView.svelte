@@ -43,7 +43,6 @@
 {#if node.type === "pane"}
   <PaneView
     pane={node.pane}
-    isActivePane={node.pane.id === workspace.activePaneId}
     onSelectSurface={(sid) => onSelectSurface(node.pane.id, sid)}
     onCloseSurface={(sid) => onCloseSurface(node.pane.id, sid)}
     onNewSurface={() => onNewSurface(node.pane.id)}

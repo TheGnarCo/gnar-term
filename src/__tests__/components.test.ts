@@ -367,7 +367,6 @@ describe("TabBar", () => {
     render(TabBar, {
       props: {
         pane,
-        isActivePane: true,
         onSelectSurface: noop,
         onCloseSurface: noop,
         onNewSurface: noop,
@@ -385,7 +384,6 @@ describe("TabBar", () => {
     render(TabBar, {
       props: {
         pane,
-        isActivePane: true,
         onSelectSurface: noop,
         onCloseSurface: noop,
         onNewSurface: noop,
@@ -403,7 +401,6 @@ describe("TabBar", () => {
     render(TabBar, {
       props: {
         pane,
-        isActivePane: true,
         onSelectSurface: noop,
         onCloseSurface: noop,
         onNewSurface: noop,
@@ -420,7 +417,6 @@ describe("TabBar", () => {
     render(TabBar, {
       props: {
         pane,
-        isActivePane: true,
         onSelectSurface: noop,
         onCloseSurface: noop,
         onNewSurface: noop,
@@ -437,7 +433,6 @@ describe("TabBar", () => {
     render(TabBar, {
       props: {
         pane,
-        isActivePane: true,
         onSelectSurface: noop,
         onCloseSurface: noop,
         onNewSurface: noop,
@@ -745,7 +740,6 @@ describe("PaneView", () => {
     render(PaneView, {
       props: {
         pane,
-        isActivePane: true,
         onSelectSurface: noop,
         onCloseSurface: noop,
         onNewSurface: noop,
@@ -763,7 +757,6 @@ describe("PaneView", () => {
     render(PaneView, {
       props: {
         pane,
-        isActivePane: true,
         onSelectSurface: noop,
         onCloseSurface: noop,
         onNewSurface: noop,
@@ -781,7 +774,6 @@ describe("PaneView", () => {
     render(PaneView, {
       props: {
         pane,
-        isActivePane: true,
         onSelectSurface: noop,
         onCloseSurface: noop,
         onNewSurface: noop,

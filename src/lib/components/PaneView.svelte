@@ -8,7 +8,6 @@
   import { isTerminalSurface, isPreviewSurface } from "../types";
 
   export let pane: Pane;
-  export let isActivePane: boolean;
   export let onSelectSurface: (surfaceId: string) => void;
   export let onCloseSurface: (surfaceId: string) => void;
   export let onNewSurface: () => void;

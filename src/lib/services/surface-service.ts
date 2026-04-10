@@ -6,6 +6,7 @@ import { getAllPanes, isTerminalSurface, type Workspace, type Pane } from "../ty
 import { openPreview } from "../../preview/index";
 import { removePane } from "./pane-service";
 import { safeFocus, getActiveCwd } from "./service-helpers";
+import { clearScrollAnchor } from "../resize-guard";
 
 export function selectSurface(paneId: string, surfaceId: string) {
   const ws = get(activeWorkspace);
@@ -34,6 +35,7 @@ function removeSurface(ws: Workspace, pane: Pane, surfaceIdx: number) {
   if (isTerminalSurface(surface)) {
     surface.terminal.dispose();
     if (surface.ptyId >= 0) {
+      clearScrollAnchor(surface.ptyId);
       invoke("kill_pty", { ptyId: surface.ptyId }).catch(() => {});
     }
   }

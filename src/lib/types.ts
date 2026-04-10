@@ -17,6 +17,7 @@ export interface TerminalSurface {
   ptyId: number;
   title: string;
   cwd?: string;
+  env?: Record<string, string>;
   notification?: string;
   hasUnread: boolean;
   opened: boolean;

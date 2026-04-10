@@ -99,6 +99,8 @@ export interface ExtensionManifest {
   description?: string;
   entry: string;
   included?: boolean;
+  /** Elevated permissions (e.g., ["pty"] for PTY access) */
+  permissions?: string[];
   contributes?: ExtensionContributions;
 }
 
@@ -120,8 +122,11 @@ export interface ExtensionAPI {
   onDeactivate(callback: () => void): void;
 
   // Event bus (filtered to declared events in manifest)
-  on(event: AppEventType, handler: (payload: AppEvent) => void): void;
-  off(event: AppEventType, handler: (payload: AppEvent) => void): void;
+  // Accepts both core AppEventType and "extension:*" custom events
+  on(event: string, handler: (payload: AppEvent) => void): void;
+  off(event: string, handler: (payload: AppEvent) => void): void;
+  // Emit custom events (must use "extension:" prefix)
+  emit(event: string, payload?: Record<string, unknown>): void;
 
   // UI registration — core owns chrome, extension provides content
   registerSecondarySidebarTab(tabId: string, component: unknown): void;
@@ -153,8 +158,17 @@ export interface ExtensionAPI {
   getActiveCwd(): Promise<string | undefined>;
   showInputPrompt(label: string, defaultValue?: string): Promise<string | null>;
   toggleSecondarySidebar(): void;
-  createWorkspace(name: string, cwd: string): void;
+  createWorkspace(
+    name: string,
+    cwd: string,
+    options?: CreateWorkspaceOptions,
+  ): void;
   openInEditor(filePath: string): void;
+  openSurface(
+    surfaceTypeId: string,
+    title: string,
+    props?: Record<string, unknown>,
+  ): void;
 
   // Context menus — show a menu with items from all extensions matching the target
   showFileContextMenu(x: number, y: number, filePath: string): void;
@@ -195,6 +209,23 @@ export interface ExtensionAPI {
     [key: string]: string;
   }>;
   settings: Readable<Record<string, unknown>>;
+
+  // Dashboard zone helpers — query mountable content from registries
+  getSidebarTabs(): Array<{ id: string; label: string; component: unknown }>;
+  getSidebarSections(): Array<{
+    id: string;
+    label: string;
+    component: unknown;
+  }>;
+}
+
+// --- Workspace creation options ---
+
+export interface CreateWorkspaceOptions {
+  /** Environment variables to set on the workspace's terminal PTY */
+  env?: Record<string, string>;
+  /** Arbitrary metadata stored alongside the workspace (e.g., branch, worktreePath) */
+  metadata?: Record<string, unknown>;
 }
 
 // --- Public-facing core state types (stable subset for extensions) ---

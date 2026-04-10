@@ -38,6 +38,12 @@ export type AppEvent =
 
 export type AppEventType = AppEvent["type"];
 
+/** Extension-defined custom events use the "extension:" prefix */
+export interface ExtensionEvent {
+  type: string;
+  [key: string]: unknown;
+}
+
 // Extract the payload for a specific event type
 type EventPayload<T extends AppEventType> = Extract<AppEvent, { type: T }>;
 
@@ -62,19 +68,38 @@ class EventBus {
       ?.delete(handler as unknown as Handler<AppEventType>);
   }
 
-  emit(event: AppEvent): void {
+  emit(event: AppEvent | ExtensionEvent): void {
     const handlers = this.handlers.get(event.type);
     if (handlers) {
       for (const handler of handlers) {
         try {
-          (handler as Handler<typeof event.type>)(
-            event as EventPayload<typeof event.type>,
-          );
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (handler as (e: any) => void)(event);
         } catch (err) {
           console.error(`[event-bus] Error in handler for ${event.type}:`, err);
         }
       }
     }
+  }
+
+  /** Subscribe to extension-defined custom events (extension:* namespace) */
+  onExtension(type: string, handler: (event: ExtensionEvent) => void): void {
+    if (!this.handlers.has(type)) {
+      this.handlers.set(type, new Set());
+    }
+    this.handlers.get(type)!.add(handler as unknown as Handler<AppEventType>);
+  }
+
+  /** Unsubscribe from extension-defined custom events */
+  offExtension(type: string, handler: (event: ExtensionEvent) => void): void {
+    this.handlers
+      .get(type)
+      ?.delete(handler as unknown as Handler<AppEventType>);
+  }
+
+  /** Emit an extension-defined custom event */
+  emitExtension(event: ExtensionEvent): void {
+    this.emit(event as unknown as AppEvent);
   }
 }
 

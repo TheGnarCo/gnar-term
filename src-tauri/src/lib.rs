@@ -260,6 +260,7 @@ async fn spawn_pty(
     cols: u16,
     rows: u16,
     cwd: Option<String>,
+    env: Option<std::collections::HashMap<String, String>>,
 ) -> Result<u32, String> {
     let pty_system = native_pty_system();
 
@@ -302,6 +303,13 @@ async fn spawn_pty(
     }
     if let Ok(visual) = std::env::var("VISUAL") {
         cmd.env("VISUAL", &visual);
+    }
+
+    // Apply extension-supplied environment variables (e.g., GNARTERM_WORKTREE_ROOT)
+    if let Some(ref extra_env) = env {
+        for (key, value) in extra_env {
+            cmd.env(key, value);
+        }
     }
 
     if let Some(ref dir) = cwd {

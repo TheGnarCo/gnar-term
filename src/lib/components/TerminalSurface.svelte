@@ -54,7 +54,7 @@
       } catch (e) {
         console.warn("fitAddon.fit() failed on mount:", e);
       }
-      await connectPty(surface, cwd);
+      await connectPty(surface, cwd, surface.env);
 
       // Send startup command after PTY is connected (not on a timer)
       if (surface.startupCommand && surface.ptyId >= 0) {

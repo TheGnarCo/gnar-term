@@ -367,6 +367,7 @@ export async function createDefaultWorkspace() {
 export async function createTerminalSurface(
   pane: Pane,
   cwd?: string,
+  env?: Record<string, string>,
 ): Promise<TerminalSurface> {
   const ptyId = -1; // PTY spawned later via connectPty() after fit()
 
@@ -406,6 +407,7 @@ export async function createTerminalSurface(
     ptyId,
     title: `Shell ${pane.surfaces.length + 1}`,
     cwd: cwd,
+    env: env,
     hasUnread: false,
     opened: false,
   };
@@ -711,6 +713,7 @@ export async function createTerminalSurface(
 export async function connectPty(
   surface: TerminalSurface,
   cwd?: string,
+  env?: Record<string, string>,
 ): Promise<void> {
   if (surface.ptyId >= 0) return; // already connected
   const cols = surface.terminal.cols;
@@ -721,6 +724,7 @@ export async function connectPty(
       cols,
       rows,
       cwd: effectiveCwd,
+      env: env ?? null,
     });
   } catch (err) {
     console.error("Failed to spawn PTY:", err);

@@ -9,6 +9,7 @@ import {
 import { createTerminalSurface } from "../terminal-service";
 import {
   getAllPanes,
+  uid,
   isTerminalSurface,
   isExtensionSurface,
   type Workspace,
@@ -164,6 +165,27 @@ export async function openPreviewInPane(filePath: string) {
       element: preview.element,
       watchId: preview.watchId,
     },
+  };
+  pane.surfaces.push(surface);
+  pane.activeSurfaceId = surface.id;
+  workspaces.update((l) => [...l]);
+}
+
+export function openExtensionSurfaceInPane(
+  surfaceTypeId: string,
+  title: string,
+  props?: Record<string, unknown>,
+) {
+  const ws = get(activeWorkspace);
+  const pane = get(activePane);
+  if (!ws || !pane) return;
+  const surface = {
+    kind: "extension" as const,
+    id: uid(),
+    surfaceTypeId,
+    title,
+    hasUnread: false,
+    props: props || {},
   };
   pane.surfaces.push(surface);
   pane.activeSurfaceId = surface.id;

@@ -75,10 +75,12 @@ export async function createWorkspace(name: string) {
 export async function createWorkspaceFromDef(def: WorkspaceDef) {
   const wsName = def.name || `Workspace ${get(workspaces).length + 1}`;
   const rootCwd = def.cwd;
+  const rootEnv = def.env;
 
   async function buildTree(
     nodeDef: LayoutNode,
     inheritedCwd?: string,
+    inheritedEnv?: Record<string, string>,
   ): Promise<SplitNode> {
     if ("pane" in nodeDef) {
       const pane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
@@ -114,19 +116,32 @@ export async function createWorkspaceFromDef(def: WorkspaceDef) {
           if (!pane.activeSurfaceId || sDef.focus)
             pane.activeSurfaceId = surface.id;
         } else {
-          const surface = await createTerminalSurface(pane, cwd);
+          const envMerged = { ...inheritedEnv, ...sDef.env };
+          const surface = await createTerminalSurface(
+            pane,
+            cwd,
+            Object.keys(envMerged).length > 0 ? envMerged : undefined,
+          );
           if (sDef.name) surface.title = sDef.name;
           if (sDef.command) surface.startupCommand = sDef.command;
           if (sDef.focus) pane.activeSurfaceId = surface.id;
         }
       }
       if (pane.surfaces.length === 0) {
-        await createTerminalSurface(pane, inheritedCwd);
+        await createTerminalSurface(pane, inheritedCwd, inheritedEnv);
       }
       return { type: "pane", pane };
     } else {
-      const left = await buildTree(nodeDef.children[0], inheritedCwd);
-      const right = await buildTree(nodeDef.children[1], inheritedCwd);
+      const left = await buildTree(
+        nodeDef.children[0],
+        inheritedCwd,
+        inheritedEnv,
+      );
+      const right = await buildTree(
+        nodeDef.children[1],
+        inheritedCwd,
+        inheritedEnv,
+      );
       return {
         type: "split",
         direction: nodeDef.direction,
@@ -138,10 +153,10 @@ export async function createWorkspaceFromDef(def: WorkspaceDef) {
 
   let splitRoot: SplitNode;
   if (def.layout) {
-    splitRoot = await buildTree(def.layout, rootCwd);
+    splitRoot = await buildTree(def.layout, rootCwd, rootEnv);
   } else {
     const pane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
-    await createTerminalSurface(pane, rootCwd);
+    await createTerminalSurface(pane, rootCwd, rootEnv);
     splitRoot = { type: "pane", pane };
   }
 

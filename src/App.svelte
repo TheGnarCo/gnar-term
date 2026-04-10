@@ -84,6 +84,7 @@
     selectSurfaceByNumber,
     closeActiveSurface,
     openPreviewInPane,
+    openExtensionSurfaceInPane,
     newSurfaceFromSidebar,
   } from "./lib/services/surface-service";
   import { registerCommands } from "./lib/services/command-registry";
@@ -289,10 +290,18 @@
       createWorkspaceFromDef({
         name: action.name,
         cwd: action.cwd,
+        env: action.options?.env,
+        metadata: action.options?.metadata,
         layout: { pane: { surfaces: [{ type: "terminal" }] } },
       });
     } else if (action.type === "open-in-editor") {
       openInEditor(action.filePath);
+    } else if (action.type === "open-surface") {
+      openExtensionSurfaceInPane(
+        action.surfaceTypeId,
+        action.title,
+        action.props,
+      );
     }
   }
 

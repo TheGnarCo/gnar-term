@@ -47,6 +47,8 @@ export interface WorkspaceDef {
   name?: string;
   cwd?: string;
   color?: string;
+  env?: Record<string, string>;
+  metadata?: Record<string, unknown>;
   layout?: LayoutNode;
 }
 

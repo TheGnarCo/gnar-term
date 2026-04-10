@@ -22,8 +22,22 @@ export type PendingAction =
   | { type: "open-preview"; payload: string }
   | { type: "split-right" }
   | { type: "split-down" }
-  | { type: "create-workspace"; name: string; cwd: string }
-  | { type: "open-in-editor"; filePath: string };
+  | {
+      type: "create-workspace";
+      name: string;
+      cwd: string;
+      options?: {
+        env?: Record<string, string>;
+        metadata?: Record<string, unknown>;
+      };
+    }
+  | { type: "open-in-editor"; filePath: string }
+  | {
+      type: "open-surface";
+      surfaceTypeId: string;
+      title: string;
+      props?: Record<string, unknown>;
+    };
 export const pendingAction = writable<PendingAction | null>(null);
 
 /** Input prompt — replaces window.prompt() which doesn't work in Tauri WKWebView */

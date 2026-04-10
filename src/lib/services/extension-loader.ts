@@ -8,7 +8,12 @@
  * - Expose a reactive store of loaded extensions
  */
 import { writable, get, type Readable } from "svelte/store";
-import { eventBus, type AppEventType, type AppEvent } from "./event-bus";
+import {
+  eventBus,
+  type AppEventType,
+  type AppEvent,
+  type ExtensionEvent,
+} from "./event-bus";
 import {
   registerCommand as registryRegisterCommand,
   unregisterBySource,
@@ -17,10 +22,12 @@ import {
   registerSidebarTab,
   registerSidebarAction,
   unregisterSidebarTabsBySource,
+  sidebarTabStore,
 } from "./sidebar-tab-registry";
 import {
   registerSidebarSection,
   unregisterSidebarSectionsBySource,
+  sidebarSectionStore,
 } from "./sidebar-section-registry";
 import {
   registerSurfaceType as registryRegisterSurfaceType,
@@ -81,6 +88,18 @@ const EXTENSION_ALLOWED_COMMANDS: Set<string> = new Set([
   "show_in_file_manager",
   "open_with_default_app",
   "find_file",
+]);
+
+// PTY commands — only available to extensions with "pty" permission
+const PTY_COMMANDS: Set<string> = new Set([
+  "spawn_pty",
+  "write_pty",
+  "kill_pty",
+  "resize_pty",
+  "get_pty_cwd",
+  "get_pty_title",
+  "pause_pty",
+  "resume_pty",
 ]);
 
 // Commands that accept a `path` arg — blocked from accessing app config
@@ -285,7 +304,7 @@ export function validateManifest(manifest: unknown): ValidationResult {
   const contributes = m.contributes as Record<string, unknown> | undefined;
   if (contributes?.events) {
     for (const event of contributes.events as string[]) {
-      if (!VALID_EVENTS.has(event)) {
+      if (!VALID_EVENTS.has(event) && !event.startsWith("extension:")) {
         errors.push(`Invalid event type: ${event}`);
       }
     }
@@ -327,6 +346,16 @@ export function createExtensionAPI(manifest: ExtensionManifest): {
 
   const declaredEvents = manifest.contributes?.events ?? [];
   const eventAllowSet = new Set(declaredEvents);
+
+  // Build per-extension command allowlist — expand with PTY commands if permitted
+  const permissions = new Set(manifest.permissions ?? []);
+  const allowedCommands = new Set(EXTENSION_ALLOWED_COMMANDS);
+  if (permissions.has("pty")) {
+    for (const cmd of PTY_COMMANDS) allowedCommands.add(cmd);
+    console.warn(
+      `[extension:${extId}] Elevated permissions: PTY access granted`,
+    );
+  }
 
   // Initialize state and event tracking for this extension
   if (!extensionStateMap.has(extId)) {
@@ -380,19 +409,35 @@ export function createExtensionAPI(manifest: ExtensionManifest): {
       _onDeactivate = callback;
     },
 
-    on(event: AppEventType, handler: (payload: AppEvent) => void) {
+    on(event: string, handler: (payload: AppEvent) => void) {
       if (!eventAllowSet.has(event)) {
         throw new Error(
           `[extension:${extId}] Event "${event}" not declared in manifest. ` +
             `Declared events: ${declaredEvents.join(", ") || "(none)"}`,
         );
       }
-      eventBus.on(event, handler as Parameters<typeof eventBus.on>[1]);
-      extensionEventHandlers.get(extId)!.push({ event, handler });
+      if (event.startsWith("extension:")) {
+        eventBus.onExtension(event, handler as (e: ExtensionEvent) => void);
+      } else {
+        eventBus.on(
+          event as AppEventType,
+          handler as Parameters<typeof eventBus.on>[1],
+        );
+      }
+      extensionEventHandlers
+        .get(extId)!
+        .push({ event: event as AppEventType, handler });
     },
 
-    off(event: AppEventType, handler: (payload: AppEvent) => void) {
-      eventBus.off(event, handler as Parameters<typeof eventBus.off>[1]);
+    off(event: string, handler: (payload: AppEvent) => void) {
+      if (event.startsWith("extension:")) {
+        eventBus.offExtension(event, handler as (e: ExtensionEvent) => void);
+      } else {
+        eventBus.off(
+          event as AppEventType,
+          handler as Parameters<typeof eventBus.off>[1],
+        );
+      }
       const handlers = extensionEventHandlers.get(extId);
       if (handlers) {
         const idx = handlers.findIndex(
@@ -400,6 +445,15 @@ export function createExtensionAPI(manifest: ExtensionManifest): {
         );
         if (idx >= 0) handlers.splice(idx, 1);
       }
+    },
+
+    emit(event: string, payload?: Record<string, unknown>) {
+      if (!event.startsWith("extension:")) {
+        throw new Error(
+          `[extension:${extId}] Extensions can only emit "extension:" prefixed events, got "${event}"`,
+        );
+      }
+      eventBus.emitExtension({ type: event, ...payload });
     },
 
     registerSecondarySidebarTab(tabId: string, component: unknown) {
@@ -558,11 +612,11 @@ export function createExtensionAPI(manifest: ExtensionManifest): {
       command: string,
       args?: Record<string, unknown>,
     ): Promise<T> {
-      if (!EXTENSION_ALLOWED_COMMANDS.has(command)) {
+      if (!allowedCommands.has(command)) {
         return Promise.reject(
           new Error(
             `[extension:${extId}] Command "${command}" is not allowed. ` +
-              `Allowed commands: ${[...EXTENSION_ALLOWED_COMMANDS].join(", ")}`,
+              `Allowed commands: ${[...allowedCommands].join(", ")}`,
           ),
         );
       }
@@ -605,11 +659,25 @@ export function createExtensionAPI(manifest: ExtensionManifest): {
     toggleSecondarySidebar() {
       secondarySidebarVisible.update((v) => !v);
     },
-    createWorkspace(name: string, cwd: string) {
-      pendingAction.set({ type: "create-workspace", name, cwd });
+    createWorkspace(
+      name: string,
+      cwd: string,
+      options?: {
+        env?: Record<string, string>;
+        metadata?: Record<string, unknown>;
+      },
+    ) {
+      pendingAction.set({ type: "create-workspace", name, cwd, options });
     },
     openInEditor(filePath: string) {
       pendingAction.set({ type: "open-in-editor", filePath });
+    },
+    openSurface(
+      surfaceTypeId: string,
+      title: string,
+      props?: Record<string, unknown>,
+    ) {
+      pendingAction.set({ type: "open-surface", surfaceTypeId, title, props });
     },
 
     showFileContextMenu(x: number, y: number, filePath: string) {
@@ -710,6 +778,21 @@ export function createExtensionAPI(manifest: ExtensionManifest): {
     } as ExtensionAPI["activeSurface"],
     theme: readOnly(theme) as unknown as ExtensionAPI["theme"],
     settings: settingsStore,
+
+    getSidebarTabs() {
+      return get(sidebarTabStore).map((t) => ({
+        id: t.id,
+        label: t.label,
+        component: t.component,
+      }));
+    },
+    getSidebarSections() {
+      return get(sidebarSectionStore).map((s) => ({
+        id: s.id,
+        label: s.label,
+        component: s.component,
+      }));
+    },
   };
 
   return {

@@ -5,6 +5,10 @@
  * content is written, even when container dimensions haven't changed. This
  * triggers fitAddon.fit() → resize_pty → SIGWINCH → full-screen redraw → loop.
  *
+ * On macOS (WKWebView), these guards are effectively no-ops: WKWebView only
+ * fires ResizeObserver on real container size changes, so the dedup checks
+ * always pass through and the existing behavior is unchanged.
+ *
  * These utilities break the loop at two points:
  * 1. createResizeHandler — deduplicates resize_pty calls (same cols/rows = no-op)
  * 2. shouldFit — skips fitAddon.fit() when container pixel dims are unchanged
@@ -16,6 +20,8 @@ import type { Terminal } from "@xterm/xterm";
 /**
  * Creates a resize handler that deduplicates resize_pty calls.
  * Only invokes resize_pty when cols or rows actually change.
+ * On macOS this is a no-op guard — WKWebView doesn't fire spurious resizes,
+ * so the dedup check passes through every time.
  *
  * @param getPtyId - function returning current ptyId (may change over surface lifetime)
  */
@@ -36,6 +42,8 @@ export function createResizeHandler(getPtyId: () => number) {
 /**
  * Checks whether fitAddon.fit() should run based on container pixel dimensions.
  * Returns false (skip) when width and height are unchanged from last call.
+ * On macOS this always returns true for real resizes — WKWebView's ResizeObserver
+ * only fires when the container actually changed size.
  */
 export function shouldFit(
   width: number,
@@ -52,6 +60,8 @@ export function shouldFit(
  * Detects whether the terminal viewport is scrolled to the bottom.
  * Used to decide whether new PTY output should auto-scroll or preserve position.
  * Allows 1-row tolerance to account for partial-line rendering.
+ * Cross-platform: when viewport is at the bottom (the default), the scroll
+ * anchor in flushPtyBuffer is a no-op — only activates when user scrolls up.
  */
 export function isScrolledToBottom(terminal: Terminal): boolean {
   const buf = terminal.buffer.active;

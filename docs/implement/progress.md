@@ -24,8 +24,18 @@
 | 2.4 | GitHub CLI commands (gh_list_issues, gh_list_prs)                                       | complete | `gh_commands.rs`  | 11    |
 | 2.5 | Git info commands (git_log, git_status, git_diff)                                       | complete | `git_info.rs`     | 18    |
 
-**Total: 15 new Tauri commands, 80 new Rust tests (135 total Rust tests passing)**
+## Phase 3: Extensions — COMPLETE
+
+| #   | Story                | Status   | Directory                              | Tests |
+| --- | -------------------- | -------- | -------------------------------------- | ----- |
+| 3.1 | Managed Workspaces   | complete | `src/extensions/managed-workspaces/`   | 8     |
+| 3.2 | Agentic Orchestrator | complete | `src/extensions/agentic-orchestrator/` | 20    |
+| 3.3 | GitHub               | complete | `src/extensions/github/`               | 10    |
+| 3.4 | Project Scope        | complete | `src/extensions/project-scope/`        | 13    |
+| 3.5 | Dashboard            | complete | `src/extensions/dashboard/`            | 11    |
+
+**Total: 559 frontend tests passing, 135 Rust tests passing**
 
 ## Next
 
-Resume with `/implement:build --resume` — Phase 3 Extensions.
+Resume with `/implement:build --resume` — Phase 4 Integration.

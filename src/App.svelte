@@ -50,6 +50,23 @@
     registerProfileCardExtension,
   } from "./extensions/profile-card";
   import {
+    managedWorkspacesManifest,
+    registerManagedWorkspacesExtension,
+  } from "./extensions/managed-workspaces";
+  import {
+    agenticOrchestratorManifest,
+    registerAgenticOrchestratorExtension,
+  } from "./extensions/agentic-orchestrator";
+  import { githubManifest, registerGitHubExtension } from "./extensions/github";
+  import {
+    projectScopeManifest,
+    registerProjectScopeExtension,
+  } from "./extensions/project-scope";
+  import {
+    dashboardManifest,
+    registerDashboardExtension,
+  } from "./extensions/dashboard";
+  import {
     registerExtension,
     activateExtension,
   } from "./lib/services/extension-loader";
@@ -551,6 +568,19 @@
       [previewManifest, registerPreviewExtension, "preview"],
       [fileBrowserManifest, registerFileBrowserExtension, "file-browser"],
       [profileCardManifest, registerProfileCardExtension, "profile-card"],
+      [
+        managedWorkspacesManifest,
+        registerManagedWorkspacesExtension,
+        "managed-workspaces",
+      ],
+      [
+        agenticOrchestratorManifest,
+        registerAgenticOrchestratorExtension,
+        "agentic-orchestrator",
+      ],
+      [githubManifest, registerGitHubExtension, "github"],
+      [projectScopeManifest, registerProjectScopeExtension, "project-scope"],
+      [dashboardManifest, registerDashboardExtension, "dashboard"],
     ] as const) {
       try {
         registerExtension(manifest, registerFn);

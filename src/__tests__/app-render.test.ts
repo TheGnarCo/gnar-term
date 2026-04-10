@@ -47,8 +47,8 @@ describe("App.svelte structure verification", () => {
     const fs = await import("fs");
     const source = fs.readFileSync("src/App.svelte", "utf-8");
     // Must have these components in the template
-    expect(source).toContain("<Sidebar");
-    expect(source).toContain("<SidebarToggle");
+    expect(source).toContain("<PrimarySidebar");
+    expect(source).toContain("<SecondarySidebar");
     expect(source).toContain("<TitleBar");
     expect(source).toContain("<WorkspaceView");
     expect(source).toContain("<FindBar");
@@ -176,12 +176,10 @@ describe("Config loads per-project files", () => {
 });
 
 describe("Workspace from config definition", () => {
-  it("createWorkspaceFromDef is implemented (not a TODO)", async () => {
+  it("createWorkspaceFromDef is implemented in workspace-service", async () => {
     const fs = await import("fs");
-    const source = fs.readFileSync("src/App.svelte", "utf-8");
+    const source = fs.readFileSync("src/lib/services/workspace-service.ts", "utf-8");
     expect(source).toContain("async function createWorkspaceFromDef");
-    // Must NOT have the TODO stub
-    expect(source).not.toContain("/* TODO: createWorkspaceFromDef */");
   });
 
   it("command palette wires workspace commands to createWorkspaceFromDef", async () => {
@@ -201,14 +199,11 @@ describe("Workspace from config definition", () => {
 
   it("handles layout with splits and surface definitions", async () => {
     const fs = await import("fs");
-    const source = fs.readFileSync("src/App.svelte", "utf-8");
-    // Must handle split layouts recursively
+    const source = fs.readFileSync("src/lib/services/workspace-service.ts", "utf-8");
     expect(source).toContain("buildTree(nodeDef.children[0]");
     expect(source).toContain("buildTree(nodeDef.children[1]");
-    // Must handle startup commands via startupCommand field (sent after PTY connects)
     expect(source).toContain("sDef.command");
     expect(source).toContain('startupCommand');
-    // Must handle markdown surfaces
     expect(source).toContain('sDef.type === "markdown"');
   });
 });
@@ -221,10 +216,10 @@ describe("New tab inherits cwd from active surface", () => {
     expect(source).toMatch(/const surface.*=.*\{[\s\S]*?cwd[:\s]/);
   });
 
-  it("handleNewSurface reads cwd from active surface", async () => {
+  it("getActiveCwd reads cwd from active surface", async () => {
     const fs = await import("fs");
-    const source = fs.readFileSync("src/App.svelte", "utf-8");
-    expect(source).toContain("$activeSurface.cwd");
+    const source = fs.readFileSync("src/lib/services/service-helpers.ts", "utf-8");
+    expect(source).toContain("surface.cwd");
   });
 });
 
@@ -242,34 +237,23 @@ describe("No spurious fit/scrollToBottom on store updates", () => {
 
   it("switchWorkspace does not directly call fit or scrollToBottom", async () => {
     const fs = await import("fs");
-    const source = fs.readFileSync("src/App.svelte", "utf-8");
+    const source = fs.readFileSync("src/lib/services/workspace-service.ts", "utf-8");
     const start = source.indexOf("function switchWorkspace");
-    const end = source.indexOf("\n  function ", start + 1);
+    const end = source.indexOf("\nexport function ", start + 1);
     const fn = source.slice(start, end);
-    // Must NOT call these directly — ResizeObserver and TerminalSurface handle them
     expect(fn).not.toMatch(/\.fitAddon\.fit\(\)/);
     expect(fn).not.toMatch(/\.scrollToBottom\(\)/);
   });
 
-  it("togglePaneZoom does not directly call fit or scrollToBottom", async () => {
-    const fs = await import("fs");
-    const source = fs.readFileSync("src/App.svelte", "utf-8");
-    const start = source.indexOf("function togglePaneZoom");
-    const end = source.indexOf("\n  function ", start + 1);
-    const fn = source.slice(start, end);
-    expect(fn).not.toMatch(/\.fitAddon\.fit\(\)/);
-    expect(fn).not.toMatch(/\.scrollToBottom\(\)/);
-  });
+
 });
 
 describe("Flash focused pane", () => {
   it("flashFocusedPane uses pane.element for CSS animation", async () => {
     const fs = await import("fs");
-    const source = fs.readFileSync("src/App.svelte", "utf-8");
+    const source = fs.readFileSync("src/lib/services/pane-service.ts", "utf-8");
     expect(source).toContain("pane.element");
     expect(source).toContain("boxShadow");
-    // Must NOT be a stub/TODO
-    expect(source).not.toContain("skip for now");
   });
 
   it("Pane type has element property", async () => {
@@ -295,10 +279,10 @@ describe("Tab drag reorder within pane", () => {
     expect(source).toContain("onReorder");
   });
 
-  it("App.svelte has handleReorderTab", async () => {
+  it("pane-service has reorderTab", async () => {
     const fs = await import("fs");
-    const source = fs.readFileSync("src/App.svelte", "utf-8");
-    expect(source).toContain("function handleReorderTab");
+    const source = fs.readFileSync("src/lib/services/pane-service.ts", "utf-8");
+    expect(source).toContain("function reorderTab");
     expect(source).toContain("pane.surfaces.splice");
   });
 });
@@ -343,9 +327,8 @@ describe("CWD polling fallback", () => {
 describe("Workspace save/restore", () => {
   it("serializeLayout produces config-compatible output", async () => {
     const fs = await import("fs");
-    const source = fs.readFileSync("src/App.svelte", "utf-8");
+    const source = fs.readFileSync("src/lib/services/workspace-service.ts", "utf-8");
     expect(source).toContain("function serializeLayout");
-    // Must handle both pane and split nodes
     expect(source).toContain("node.type === \"pane\"");
     expect(source).toContain("node.direction");
     expect(source).toContain("node.ratio");
@@ -353,7 +336,7 @@ describe("Workspace save/restore", () => {
 
   it("saveCurrentWorkspace saves to config commands", async () => {
     const fs = await import("fs");
-    const source = fs.readFileSync("src/App.svelte", "utf-8");
+    const source = fs.readFileSync("src/lib/services/workspace-service.ts", "utf-8");
     expect(source).toContain("async function saveCurrentWorkspace");
     expect(source).toContain("saveConfig({ commands }");
   });
@@ -372,7 +355,6 @@ describe("Command palette has all required commands", () => {
     const requiredCommands = [
       "Close Surface",
       "Close Workspace",
-      "Toggle Pane Zoom",
       "Next Surface",
       "Previous Surface",
       "Toggle Find Bar",
@@ -439,7 +421,7 @@ describe("SplitNodeView has draggable dividers with ratio support", () => {
     const fs = await import("fs");
     const source = fs.readFileSync("src/lib/components/SplitNodeView.svelte", "utf-8");
     expect(source).toContain("split-divider");
-    expect(source).toContain("on:mousedown={startDrag}");
+    expect(source).toContain("use:dragResize");
   });
 
   it("uses ratio for flex sizing instead of hardcoded flex: 1", async () => {

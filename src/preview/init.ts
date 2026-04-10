@@ -1,5 +1,5 @@
 /**
- * Import all preview plugins.
+ * Import all preview extensions.
  * Add new previewers here — just import the file and it self-registers.
  */
 import "./markdown";

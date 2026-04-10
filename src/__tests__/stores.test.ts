@@ -4,7 +4,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { get } from "svelte/store";
 import { workspaces, activeWorkspaceIdx, activeWorkspace, activePane, activeSurface } from "../lib/stores/workspace";
-import { sidebarVisible, commandPaletteOpen, findBarVisible, contextMenu } from "../lib/stores/ui";
+import { primarySidebarVisible, secondarySidebarVisible, commandPaletteOpen, findBarVisible, contextMenu } from "../lib/stores/ui";
 import type { Workspace, Pane, TerminalSurface } from "../lib/types";
 
 function makeSurface(id: string): TerminalSurface {
@@ -118,8 +118,12 @@ describe("Workspace stores", () => {
 });
 
 describe("UI stores", () => {
-  it("sidebarVisible defaults to true", () => {
-    expect(get(sidebarVisible)).toBe(true);
+  it("primarySidebarVisible defaults to true", () => {
+    expect(get(primarySidebarVisible)).toBe(true);
+  });
+
+  it("secondarySidebarVisible defaults to false", () => {
+    expect(get(secondarySidebarVisible)).toBe(false);
   });
 
   it("commandPaletteOpen defaults to false", () => {
@@ -134,11 +138,18 @@ describe("UI stores", () => {
     expect(get(contextMenu)).toBeNull();
   });
 
-  it("toggles sidebar visibility", () => {
-    sidebarVisible.set(false);
-    expect(get(sidebarVisible)).toBe(false);
-    sidebarVisible.set(true);
-    expect(get(sidebarVisible)).toBe(true);
+  it("toggles primary sidebar visibility", () => {
+    primarySidebarVisible.set(false);
+    expect(get(primarySidebarVisible)).toBe(false);
+    primarySidebarVisible.set(true);
+    expect(get(primarySidebarVisible)).toBe(true);
+  });
+
+  it("toggles secondary sidebar visibility", () => {
+    secondarySidebarVisible.set(true);
+    expect(get(secondarySidebarVisible)).toBe(true);
+    secondarySidebarVisible.set(false);
+    expect(get(secondarySidebarVisible)).toBe(false);
   });
 
   it("sets context menu state", () => {

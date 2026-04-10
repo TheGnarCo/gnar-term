@@ -1,3 +1,5 @@
+mod internal_bridge;
+
 use clap::Parser;
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 use serde::Serialize;
@@ -1128,6 +1130,11 @@ pub fn run() {
             get_cli_args, spawn_pty, write_pty, resize_pty, kill_pty, pause_pty, resume_pty, detect_font, get_pty_cwd, get_pty_title, file_exists, list_dir, read_file, read_file_base64, write_file, ensure_dir, get_home, watch_file, unwatch_file, show_in_file_manager, open_with_default_app, find_file
         ])
         .setup(|app| {
+            // Spawn the internal WebSocket bridge so the webview frontend and
+            // any external MCP sidecar can connect to a single backend-hosted
+            // wire. Phase 1 of the extension/MCP roadmap.
+            internal_bridge::spawn();
+
             // Set window title from CLI --title flag
             {
                 use tauri::Manager;

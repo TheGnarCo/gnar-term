@@ -29,6 +29,7 @@ vi.mock("@xterm/xterm", () => ({
     dispose: vi.fn(),
     onData: vi.fn(),
     onResize: vi.fn(),
+    onScroll: vi.fn(),
     onTitleChange: vi.fn(),
     loadAddon: vi.fn(),
     options: {},

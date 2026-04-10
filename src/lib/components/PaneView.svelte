@@ -6,6 +6,7 @@
   import PreviewSurface from "./PreviewSurface.svelte";
   import type { Pane } from "../types";
   import { isTerminalSurface, isPreviewSurface } from "../types";
+  import { shouldFit } from "../resize-guard";
 
   export let pane: Pane;
   export let onSelectSurface: (surfaceId: string) => void;
@@ -20,8 +21,10 @@
   let paneEl: HTMLElement;
   let resizeObserver: ResizeObserver;
   let resizeTimer: ReturnType<typeof setTimeout> | null = null;
+  let fitState = { lastWidth: 0, lastHeight: 0 };
 
   function fitActiveTerminal() {
+    if (!shouldFit(paneEl.offsetWidth, paneEl.offsetHeight, fitState)) return;
     const active = pane.surfaces.find(s => s.id === pane.activeSurfaceId);
     if (active && isTerminalSurface(active)) {
       try { active.fitAddon.fit(); } catch (e) { console.warn("fitAddon.fit() failed on resize:", e); }

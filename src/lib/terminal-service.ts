@@ -21,6 +21,7 @@ import { canPreview, getSupportedExtensions, openPreview } from "../preview/inde
 import type { TerminalSurface, Pane, Surface, Workspace } from "./types";
 import { uid, getAllSurfaces, getAllPanes, isTerminalSurface, findParentSplit, replaceNodeInTree } from "./types";
 import type { MenuItem } from "./context-menu-types";
+import { createResizeHandler } from "./resize-guard";
 import "@xterm/xterm/css/xterm.css";
 
 /** Platform detection — used for Cmd (macOS) vs Ctrl (Linux/Windows) shortcuts. */
@@ -124,6 +125,10 @@ function flushPtyBuffer(ptyId: number) {
 
   // Single write to xterm.js per frame — the callback fires when xterm.js has
   // processed this batch, which is our signal that it's ready for more.
+  // Note: xterm.js has built-in scroll lock (isUserScrolling) that prevents
+  // auto-scroll when the user has scrolled up. The resize guards in
+  // resize-guard.ts protect this flag from being cleared by spurious resize
+  // cycles on Linux (#46).
   surface.terminal.write(merged, () => {
     // If more data arrived while we were rendering, flush again next frame
     const buffered = ptyBufferBytes.get(ptyId) || 0;
@@ -484,9 +489,7 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
   terminal.onData((data) => {
     if (surface.ptyId >= 0) invoke("write_pty", { ptyId: surface.ptyId, data });
   });
-  terminal.onResize(({ cols, rows }) => {
-    if (surface.ptyId >= 0) invoke("resize_pty", { ptyId: surface.ptyId, cols, rows });
-  });
+  terminal.onResize(createResizeHandler(() => surface.ptyId));
   // NOTE: We intentionally do NOT use terminal.onTitleChange() here.
   // xterm.js fires it with raw/partial escape sequence fragments (OSC 7 cwd data,
   // bracketed paste mode, etc.) concatenated into the title string. Instead, the

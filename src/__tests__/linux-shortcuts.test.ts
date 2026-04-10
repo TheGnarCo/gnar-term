@@ -24,7 +24,7 @@ vi.mock("@xterm/xterm", () => ({
   Terminal: vi.fn().mockImplementation(() => ({
     open: vi.fn(), write: vi.fn(), focus: vi.fn(), dispose: vi.fn(),
     cols: 80, rows: 24,
-    onData: vi.fn(), onResize: vi.fn(), onTitleChange: vi.fn(),
+    onData: vi.fn(), onResize: vi.fn(), onScroll: vi.fn(), onTitleChange: vi.fn(),
     loadAddon: vi.fn(), options: {},
     buffer: { active: { getLine: vi.fn() } },
     parser: { registerOscHandler: vi.fn() },

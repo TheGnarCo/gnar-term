@@ -14,7 +14,9 @@
   export let onSplitDown: (paneId: string) => void;
   export let onClosePane: (paneId: string) => void;
   export let onFocusPane: (paneId: string) => void;
-  export let onReorderTab: ((paneId: string, fromIdx: number, toIdx: number) => void) | undefined = undefined;
+  export let onReorderTab:
+    | ((paneId: string, fromIdx: number, toIdx: number) => void)
+    | undefined = undefined;
 
   let dragging = false;
   let dragRect: DOMRect | null = null;
@@ -23,7 +25,9 @@
     onStart: (e: MouseEvent) => {
       if (node.type !== "split") return false;
       dragging = true;
-      dragRect = (e.target as HTMLElement).parentElement!.getBoundingClientRect();
+      dragRect = (
+        e.target as HTMLElement
+      ).parentElement!.getBoundingClientRect();
     },
     onDrag: (ev: MouseEvent) => {
       if (node.type !== "split" || !dragRect) return;
@@ -50,14 +54,20 @@
     onSplitDown={() => onSplitDown(node.pane.id)}
     onClosePane={() => onClosePane(node.pane.id)}
     onFocusPane={() => onFocusPane(node.pane.id)}
-    onReorderTab={onReorderTab ? (from, to) => onReorderTab!(node.pane.id, from, to) : undefined}
+    onReorderTab={onReorderTab
+      ? (from, to) => onReorderTab!(node.pane.id, from, to)
+      : undefined}
   />
 {:else}
-  <div style="
+  <div
+    style="
     display: flex; flex: 1; min-width: 0; min-height: 0; gap: 0;
     flex-direction: {node.direction === 'vertical' ? 'column' : 'row'};
-  ">
-    <div style="flex: {node.ratio}; display: flex; min-width: 0; min-height: 0;">
+  "
+  >
+    <div
+      style="flex: {node.ratio}; display: flex; min-width: 0; min-height: 0;"
+    >
       <SplitNodeView
         node={node.children[0]}
         {workspace}
@@ -74,14 +84,19 @@
     <div
       class="split-divider"
       style="
-        {node.direction === 'vertical' ? 'height: 6px; cursor: row-resize;' : 'width: 6px; cursor: col-resize;'}
+        {node.direction === 'vertical'
+        ? 'height: 6px; cursor: row-resize;'
+        : 'width: 6px; cursor: col-resize;'}
         background: {dragging ? $theme.accent : $theme.border};
         flex-shrink: 0;
         transition: background 0.15s;
       "
       use:dragResize={splitDragOptions}
     ></div>
-    <div style="flex: {1 - node.ratio}; display: flex; min-width: 0; min-height: 0;">
+    <div
+      style="flex: {1 -
+        node.ratio}; display: flex; min-width: 0; min-height: 0;"
+    >
       <SplitNodeView
         node={node.children[1]}
         {workspace}

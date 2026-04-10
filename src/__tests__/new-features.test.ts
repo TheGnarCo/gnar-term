@@ -40,7 +40,9 @@ describe("PTY slave fd is dropped after spawn (fix #29)", () => {
   it("calls drop(pair.slave) after spawn_command", () => {
     // The slave fd must be dropped in the parent so vim/nano can take
     // control of the terminal. Every test in lib.rs does this too.
-    const spawnIdx = RUST_SOURCE.indexOf("pair.slave\n        .spawn_command(cmd)");
+    const spawnIdx = RUST_SOURCE.indexOf(
+      "pair.slave\n        .spawn_command(cmd)",
+    );
     expect(spawnIdx).toBeGreaterThan(-1);
 
     // drop(pair.slave) should appear after spawn, before writer/reader setup
@@ -62,7 +64,9 @@ describe("OSC parser handles ESC \\\\ two-byte ST (fix #32)", () => {
 
   it("handles malformed OSC by aborting on unexpected ESC sequence", () => {
     // If ESC is followed by something other than \\ or ], abort OSC
-    expect(RUST_SOURCE).toContain("the OSC was malformed; abort and start fresh");
+    expect(RUST_SOURCE).toContain(
+      "the OSC was malformed; abort and start fresh",
+    );
   });
 });
 
@@ -90,20 +94,29 @@ describe("OSC notification filtering (fix #32)", () => {
 
 describe("Drag-and-drop shell escaping", () => {
   it("TerminalSurface has drop event handlers", () => {
-    const svelte = readFileSync("src/lib/components/TerminalSurface.svelte", "utf-8");
+    const svelte = readFileSync(
+      "src/lib/components/TerminalSurface.svelte",
+      "utf-8",
+    );
     expect(svelte).toContain("on:dragover");
     expect(svelte).toContain("on:drop");
     expect(svelte).toContain("on:dragleave");
   });
 
   it("uses onDestroy for Tauri drag-drop listener cleanup", () => {
-    const svelte = readFileSync("src/lib/components/TerminalSurface.svelte", "utf-8");
+    const svelte = readFileSync(
+      "src/lib/components/TerminalSurface.svelte",
+      "utf-8",
+    );
     expect(svelte).toContain("onDestroy");
     expect(svelte).toContain("unlistenDragDrop");
   });
 
   it("shell-escapes file paths with single quotes", () => {
-    const svelte = readFileSync("src/lib/components/TerminalSurface.svelte", "utf-8");
+    const svelte = readFileSync(
+      "src/lib/components/TerminalSurface.svelte",
+      "utf-8",
+    );
     // shellEscape wraps in single quotes and escapes embedded quotes
     expect(svelte).toContain("shellEscape");
     expect(svelte).toContain("'\\\\''");

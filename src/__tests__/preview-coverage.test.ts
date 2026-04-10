@@ -24,15 +24,24 @@ vi.mock("marked", () => ({
 }));
 
 vi.mock("dompurify", () => ({
-  default: { sanitize: (s: string) => s.replace(/<script[^>]*>.*?<\/script>/gi, "").replace(/\sonerror="[^"]*"/gi, "") },
+  default: {
+    sanitize: (s: string) =>
+      s
+        .replace(/<script[^>]*>.*?<\/script>/gi, "")
+        .replace(/\sonerror="[^"]*"/gi, ""),
+  },
 }));
 
 vi.mock("github-markdown-css/github-markdown-dark.css", () => ({}));
 
 vi.mock("../lib/theme-accessor", () => ({
   themeProxy: {
-    bg: "#000", fg: "#fff", fgDim: "#888", bgSurface: "#111",
-    bgHighlight: "#222", border: "#333",
+    bg: "#000",
+    fg: "#fff",
+    fgDim: "#888",
+    bgSurface: "#111",
+    bgHighlight: "#222",
+    border: "#333",
     ansi: { blue: "#00f", green: "#0f0", magenta: "#f0f", yellow: "#ff0" },
   },
 }));
@@ -41,7 +50,6 @@ import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import EmbedPDF from "@embedpdf/snippet";
 import {
-  registerPreviewer,
   canPreview,
   getSupportedExtensions,
   openPreview,
@@ -65,7 +73,9 @@ const mockListen = vi.mocked(listen);
 
 beforeEach(() => {
   mockInvoke.mockReset();
-  mockListen.mockReset().mockResolvedValue(vi.fn() as any);
+  mockListen
+    .mockReset()
+    .mockResolvedValue(vi.fn() as unknown as ReturnType<typeof listen>);
   (EmbedPDF.init as ReturnType<typeof vi.fn>).mockReset();
   // jsdom doesn't have URL.createObjectURL — mock it
   if (!URL.createObjectURL) {
@@ -77,7 +87,21 @@ beforeEach(() => {
 
 describe("Preview registry", () => {
   it("canPreview returns true for all registered extensions", () => {
-    const registered = ["pdf", "md", "json", "png", "jpg", "mp4", "csv", "yaml", "txt", "toml", "webm", "gif", "log"];
+    const registered = [
+      "pdf",
+      "md",
+      "json",
+      "png",
+      "jpg",
+      "mp4",
+      "csv",
+      "yaml",
+      "txt",
+      "toml",
+      "webm",
+      "gif",
+      "log",
+    ];
     for (const ext of registered) {
       expect(canPreview(`file.${ext}`)).toBe(true);
     }
@@ -102,37 +126,45 @@ describe("Preview registry", () => {
   });
 
   it("openPreview throws for unregistered extension", async () => {
-    await expect(openPreview("/tmp/file.exe")).rejects.toThrow("No previewer registered for .exe");
+    await expect(openPreview("/tmp/file.exe")).rejects.toThrow(
+      "No previewer registered for .exe",
+    );
   });
 
   it("openPreview calls read_file for text types", async () => {
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === "read_file") return '{"key": "value"}';
       if (cmd === "watch_file") return 1;
-      return undefined as any;
+      return undefined;
     });
 
     const surface = await openPreview("/tmp/test.json");
-    expect(mockInvoke).toHaveBeenCalledWith("read_file", { path: "/tmp/test.json" });
+    expect(mockInvoke).toHaveBeenCalledWith("read_file", {
+      path: "/tmp/test.json",
+    });
     expect(surface.filePath).toBe("/tmp/test.json");
     expect(surface.title).toBe("test.json");
     expect(surface.element).toBeInstanceOf(HTMLElement);
   });
 
   it("openPreview does NOT call read_file for binary types (pdf)", async () => {
-    mockInvoke.mockResolvedValue(undefined as any);
+    mockInvoke.mockResolvedValue(undefined);
 
     const surface = await openPreview("/tmp/test.pdf");
-    const readFileCalls = mockInvoke.mock.calls.filter(([cmd]) => cmd === "read_file");
+    const readFileCalls = mockInvoke.mock.calls.filter(
+      ([cmd]) => cmd === "read_file",
+    );
     expect(readFileCalls).toHaveLength(0);
     expect(surface.filePath).toBe("/tmp/test.pdf");
   });
 
   it("openPreview does NOT call read_file for binary types (png)", async () => {
-    mockInvoke.mockResolvedValue(undefined as any);
+    mockInvoke.mockResolvedValue(undefined);
 
     await openPreview("/tmp/test.png");
-    const readFileCalls = mockInvoke.mock.calls.filter(([cmd]) => cmd === "read_file");
+    const readFileCalls = mockInvoke.mock.calls.filter(
+      ([cmd]) => cmd === "read_file",
+    );
     expect(readFileCalls).toHaveLength(0);
   });
 
@@ -140,19 +172,23 @@ describe("Preview registry", () => {
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === "read_file") return "hello";
       if (cmd === "watch_file") return 42;
-      return undefined as any;
+      return undefined;
     });
 
     const surface = await openPreview("/tmp/test.txt");
-    expect(mockInvoke).toHaveBeenCalledWith("watch_file", { path: "/tmp/test.txt" });
+    expect(mockInvoke).toHaveBeenCalledWith("watch_file", {
+      path: "/tmp/test.txt",
+    });
     expect(surface.watchId).toBe(42);
   });
 
   it("openPreview does NOT set up file watch for binary types", async () => {
-    mockInvoke.mockResolvedValue(undefined as any);
+    mockInvoke.mockResolvedValue(undefined);
 
     const surface = await openPreview("/tmp/test.pdf");
-    const watchCalls = mockInvoke.mock.calls.filter(([cmd]) => cmd === "watch_file");
+    const watchCalls = mockInvoke.mock.calls.filter(
+      ([cmd]) => cmd === "watch_file",
+    );
     expect(watchCalls).toHaveLength(0);
     expect(surface.watchId).toBe(0);
   });
@@ -161,7 +197,7 @@ describe("Preview registry", () => {
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === "read_file") return "# Hello";
       if (cmd === "watch_file") return 7;
-      return undefined as any;
+      return undefined;
     });
 
     const surface = await openPreview("/tmp/readme.md");
@@ -180,13 +216,15 @@ describe("PDF previewer", () => {
     const b64 = btoa("fake-pdf-bytes");
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === "read_file_base64") return b64;
-      return undefined as any;
+      return undefined;
     });
 
     const surface = await openPreview("/tmp/report.pdf");
 
     // invoke should have been called with read_file_base64
-    expect(mockInvoke).toHaveBeenCalledWith("read_file_base64", { path: "/tmp/report.pdf" });
+    expect(mockInvoke).toHaveBeenCalledWith("read_file_base64", {
+      path: "/tmp/report.pdf",
+    });
 
     // Let the .then() chain settle (render is async via .then, not await)
     await new Promise((r) => setTimeout(r, 50));
@@ -202,7 +240,7 @@ describe("PDF previewer", () => {
   it("shows error message when read_file_base64 fails", async () => {
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === "read_file_base64") throw new Error("File not found");
-      return undefined as any;
+      return undefined;
     });
 
     const surface = await openPreview("/tmp/missing.pdf");
@@ -219,9 +257,10 @@ describe("PDF previewer", () => {
 describe("JSON previewer", () => {
   it("renders valid JSON with syntax highlighting", async () => {
     mockInvoke.mockImplementation(async (cmd: string) => {
-      if (cmd === "read_file") return '{"name": "test", "count": 42, "active": true, "data": null}';
+      if (cmd === "read_file")
+        return '{"name": "test", "count": 42, "active": true, "data": null}';
       if (cmd === "watch_file") return 1;
-      return undefined as any;
+      return undefined;
     });
 
     const surface = await openPreview("/tmp/data.json");
@@ -241,7 +280,7 @@ describe("JSON previewer", () => {
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === "read_file") return "{not valid json: ???}";
       if (cmd === "watch_file") return 1;
-      return undefined as any;
+      return undefined;
     });
 
     const surface = await openPreview("/tmp/bad.json");
@@ -254,7 +293,7 @@ describe("JSON previewer", () => {
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === "read_file") return '{"xss": "<img onerror=alert(1) src=x>"}';
       if (cmd === "watch_file") return 1;
-      return undefined as any;
+      return undefined;
     });
 
     const surface = await openPreview("/tmp/xss.json");
@@ -273,7 +312,7 @@ describe("Markdown previewer", () => {
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === "read_file") return "# Hello World";
       if (cmd === "watch_file") return 1;
-      return undefined as any;
+      return undefined;
     });
 
     const surface = await openPreview("/tmp/readme.md");
@@ -286,7 +325,7 @@ describe("Markdown previewer", () => {
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === "read_file") return '<script>alert("xss")</script>';
       if (cmd === "watch_file") return 1;
-      return undefined as any;
+      return undefined;
     });
 
     const surface = await openPreview("/tmp/evil.md");
@@ -302,7 +341,7 @@ describe("CSV previewer", () => {
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === "read_file") return "Name,Age,City\nAlice,30,NYC\nBob,25,LA";
       if (cmd === "watch_file") return 1;
-      return undefined as any;
+      return undefined;
     });
 
     const surface = await openPreview("/tmp/data.csv");
@@ -327,7 +366,7 @@ describe("CSV previewer", () => {
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === "read_file") return "A,B\n1,2\n3,4\n5,6";
       if (cmd === "watch_file") return 1;
-      return undefined as any;
+      return undefined;
     });
 
     const surface = await openPreview("/tmp/nums.csv");
@@ -339,7 +378,7 @@ describe("CSV previewer", () => {
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === "read_file") return "";
       if (cmd === "watch_file") return 1;
-      return undefined as any;
+      return undefined;
     });
 
     const surface = await openPreview("/tmp/empty.csv");
@@ -348,9 +387,10 @@ describe("CSV previewer", () => {
 
   it("handles quoted fields containing commas", async () => {
     mockInvoke.mockImplementation(async (cmd: string) => {
-      if (cmd === "read_file") return 'Name,Address\n"Smith, John","123 Main St, Apt 4"';
+      if (cmd === "read_file")
+        return 'Name,Address\n"Smith, John","123 Main St, Apt 4"';
       if (cmd === "watch_file") return 1;
-      return undefined as any;
+      return undefined;
     });
 
     const surface = await openPreview("/tmp/quoted.csv");
@@ -363,7 +403,7 @@ describe("CSV previewer", () => {
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === "read_file") return "Name\tAge\nAlice\t30";
       if (cmd === "watch_file") return 1;
-      return undefined as any;
+      return undefined;
     });
 
     const surface = await openPreview("/tmp/data.tsv");
@@ -377,7 +417,7 @@ describe("CSV previewer", () => {
 
 describe("Image previewer", () => {
   it("creates img element with convertFileSrc URL", async () => {
-    mockInvoke.mockResolvedValue(undefined as any);
+    mockInvoke.mockResolvedValue(undefined);
 
     const surface = await openPreview("/tmp/photo.png");
     const img = surface.element.querySelector("img");
@@ -387,7 +427,7 @@ describe("Image previewer", () => {
   });
 
   it("shows error message on image load failure", async () => {
-    mockInvoke.mockResolvedValue(undefined as any);
+    mockInvoke.mockResolvedValue(undefined);
 
     const surface = await openPreview("/tmp/broken.jpg");
     const img = surface.element.querySelector("img");
@@ -396,7 +436,7 @@ describe("Image previewer", () => {
     // Simulate load error
     img!.dispatchEvent(new Event("error"));
     // onerror handler is set via img.onerror, so fire it directly
-    if (img!.onerror) (img!.onerror as Function)(new Event("error"));
+    if (img!.onerror) (img!.onerror as (ev: Event) => void)(new Event("error"));
 
     expect(surface.element.textContent).toContain("Failed to load image");
   });
@@ -412,7 +452,7 @@ describe("Image previewer", () => {
 
 describe("Video previewer", () => {
   it("creates video element with controls and autoplay", async () => {
-    mockInvoke.mockResolvedValue(undefined as any);
+    mockInvoke.mockResolvedValue(undefined);
 
     const surface = await openPreview("/tmp/clip.mp4");
     const video = surface.element.querySelector("video");
@@ -423,13 +463,14 @@ describe("Video previewer", () => {
   });
 
   it("shows error message on video load failure", async () => {
-    mockInvoke.mockResolvedValue(undefined as any);
+    mockInvoke.mockResolvedValue(undefined);
 
     const surface = await openPreview("/tmp/broken.webm");
     const video = surface.element.querySelector("video");
     expect(video).not.toBeNull();
 
-    if (video!.onerror) (video!.onerror as Function)(new Event("error"));
+    if (video!.onerror)
+      (video!.onerror as (ev: Event) => void)(new Event("error"));
 
     expect(surface.element.textContent).toContain("Failed to load video");
   });
@@ -448,7 +489,7 @@ describe("Text previewer", () => {
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === "read_file") return "line one\nline two\nline three";
       if (cmd === "watch_file") return 1;
-      return undefined as any;
+      return undefined;
     });
 
     const surface = await openPreview("/tmp/notes.txt");
@@ -467,7 +508,7 @@ describe("Text previewer", () => {
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === "read_file") return '<script>alert("xss")</script>';
       if (cmd === "watch_file") return 1;
-      return undefined as any;
+      return undefined;
     });
 
     const surface = await openPreview("/tmp/evil.txt");
@@ -487,9 +528,10 @@ describe("Text previewer", () => {
 describe("YAML/TOML previewer", () => {
   it("renders YAML with syntax highlighting", async () => {
     mockInvoke.mockImplementation(async (cmd: string) => {
-      if (cmd === "read_file") return 'name: test\ncount: 42\nactive: true\n# comment';
+      if (cmd === "read_file")
+        return "name: test\ncount: 42\nactive: true\n# comment";
       if (cmd === "watch_file") return 1;
-      return undefined as any;
+      return undefined;
     });
 
     const surface = await openPreview("/tmp/config.yaml");
@@ -519,14 +561,16 @@ describe("YAML/TOML previewer", () => {
 
 describe("Link provider regex matches correct filenames", () => {
   function getMatches(text: string): string[] {
-    const exts = 'pdf|md|txt|csv|json|yaml|yml|toml|png|jpg|jpeg|gif|webp|svg|ico|bmp|heic|heif|tiff|tif|avif|mp4|webm|mov|avi|mkv|m4v|ogv|log|conf|cfg|ini|env|gitignore|dockerignore|editorconfig|tsv|mdx|markdown';
+    const exts =
+      "pdf|md|txt|csv|json|yaml|yml|toml|png|jpg|jpeg|gif|webp|svg|ico|bmp|heic|heif|tiff|tif|avif|mp4|webm|mov|avi|mkv|m4v|ogv|log|conf|cfg|ini|env|gitignore|dockerignore|editorconfig|tsv|mdx|markdown";
     const patterns = [
       `"([^"]+\\.(?:${exts}))"`,
       `'([^']+\\.(?:${exts}))'`,
       `((?:/|\\./|~/)\\S[\\S ]*\\.(?:${exts}))(?=\\s|$)`,
       `(\\S+\\.(?:${exts}))(?=\\s|$)`,
     ];
-    const regex = new RegExp(patterns.join('|'), 'gi');
+    // eslint-disable-next-line security/detect-non-literal-regexp -- pattern built from hardcoded file extensions
+    const regex = new RegExp(patterns.join("|"), "gi");
     const matches: string[] = [];
     let m;
     while ((m = regex.exec(text)) !== null) {
@@ -536,32 +580,50 @@ describe("Link provider regex matches correct filenames", () => {
   }
 
   it("matches multiple bare files on one line separately", () => {
-    expect(getMatches("file1.pdf  file2.pdf  file3.txt")).toEqual(["file1.pdf", "file2.pdf", "file3.txt"]);
+    expect(getMatches("file1.pdf  file2.pdf  file3.txt")).toEqual([
+      "file1.pdf",
+      "file2.pdf",
+      "file3.txt",
+    ]);
   });
 
   it("matches ls column output with quoted filename containing spaces, parens, apostrophes, double dots", () => {
-    const line = 'u8328834736_A_happy_derpy_unicorn.png  "Walpole Sportsman\'s Association Inc..Invoice.03853 (1).pdf"';
+    const line =
+      'u8328834736_A_happy_derpy_unicorn.png  "Walpole Sportsman\'s Association Inc..Invoice.03853 (1).pdf"';
     const matches = getMatches(line);
     expect(matches).toContain("u8328834736_A_happy_derpy_unicorn.png");
-    expect(matches).toContain("Walpole Sportsman's Association Inc..Invoice.03853 (1).pdf");
+    expect(matches).toContain(
+      "Walpole Sportsman's Association Inc..Invoice.03853 (1).pdf",
+    );
   });
 
   it("matches bare filename with underscores and long name", () => {
-    expect(getMatches("u8328834736_A_happy_derpy_unicorn_with_bubble_text_that_says__812d01a7-9e05-44b4-ab08-64b53d739064_3.png"))
-      .toEqual(["u8328834736_A_happy_derpy_unicorn_with_bubble_text_that_says__812d01a7-9e05-44b4-ab08-64b53d739064_3.png"]);
+    expect(
+      getMatches(
+        "u8328834736_A_happy_derpy_unicorn_with_bubble_text_that_says__812d01a7-9e05-44b4-ab08-64b53d739064_3.png",
+      ),
+    ).toEqual([
+      "u8328834736_A_happy_derpy_unicorn_with_bubble_text_that_says__812d01a7-9e05-44b4-ab08-64b53d739064_3.png",
+    ]);
   });
 
   it("does not match garbage from ls -la output", () => {
-    const matches = getMatches("-rw-r--r--  1 user  staff  1234 Jan  1 12:00 Doc.pdf");
+    const matches = getMatches(
+      "-rw-r--r--  1 user  staff  1234 Jan  1 12:00 Doc.pdf",
+    );
     expect(matches).toEqual(["Doc.pdf"]);
   });
 
   it("matches absolute paths with spaces", () => {
-    expect(getMatches("/Users/me/My Doc.pdf")).toEqual(["/Users/me/My Doc.pdf"]);
+    expect(getMatches("/Users/me/My Doc.pdf")).toEqual([
+      "/Users/me/My Doc.pdf",
+    ]);
   });
 
   it("matches home paths with spaces", () => {
-    expect(getMatches("~/Downloads/WR Product Requirements Doc.pdf")).toEqual(["~/Downloads/WR Product Requirements Doc.pdf"]);
+    expect(getMatches("~/Downloads/WR Product Requirements Doc.pdf")).toEqual([
+      "~/Downloads/WR Product Requirements Doc.pdf",
+    ]);
   });
 
   it("matches relative paths with spaces", () => {
@@ -569,7 +631,9 @@ describe("Link provider regex matches correct filenames", () => {
   });
 
   it("matches quoted filenames with spaces", () => {
-    expect(getMatches('"WR Product Requirements Doc.pdf"')).toEqual(["WR Product Requirements Doc.pdf"]);
+    expect(getMatches('"WR Product Requirements Doc.pdf"')).toEqual([
+      "WR Product Requirements Doc.pdf",
+    ]);
   });
 
   it("matches simple absolute paths", () => {
@@ -577,7 +641,9 @@ describe("Link provider regex matches correct filenames", () => {
   });
 
   it("matches path embedded in a sentence", () => {
-    expect(getMatches("Saved to /Users/me/Downloads/Report.pdf done")).toEqual(["/Users/me/Downloads/Report.pdf"]);
+    expect(getMatches("Saved to /Users/me/Downloads/Report.pdf done")).toEqual([
+      "/Users/me/Downloads/Report.pdf",
+    ]);
   });
 
   it("bare filename with spaces only matches extension segment", () => {
@@ -597,6 +663,7 @@ describe("PDF links with spaces work end-to-end", () => {
       `((?:/|\\./|~/)\\S[\\S ]*\\.(?:${exts}))(?=\\s|$)`,
       `(\\S+\\.(?:${exts}))(?=\\s|$)`,
     ];
+    // eslint-disable-next-line security/detect-non-literal-regexp -- pattern built from hardcoded file extensions
     const regex = new RegExp(patterns.join("|"), "gi");
     const matches: string[] = [];
     let m;
@@ -616,25 +683,31 @@ describe("PDF links with spaces work end-to-end", () => {
     mockInvoke.mockReset();
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === "get_home") return "/Users/ngmaloney";
-      return undefined as any;
+      return undefined;
     });
 
     const resolved = await resolveFilePath(
       "~/Downloads/WR Product Requirements Doc.pdf",
-      "/some/cwd"
+      "/some/cwd",
     );
-    expect(resolved).toBe("/Users/ngmaloney/Downloads/WR Product Requirements Doc.pdf");
+    expect(resolved).toBe(
+      "/Users/ngmaloney/Downloads/WR Product Requirements Doc.pdf",
+    );
   });
 
   it("STEP 3: openPreview handles path with spaces for PDF", async () => {
     mockInvoke.mockReset();
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === "read_file_base64") return btoa("fake-pdf");
-      return undefined as any;
+      return undefined;
     });
 
-    const surface = await openPreview("/Users/ngmaloney/Downloads/WR Product Requirements Doc.pdf");
-    expect(surface.filePath).toBe("/Users/ngmaloney/Downloads/WR Product Requirements Doc.pdf");
+    const surface = await openPreview(
+      "/Users/ngmaloney/Downloads/WR Product Requirements Doc.pdf",
+    );
+    expect(surface.filePath).toBe(
+      "/Users/ngmaloney/Downloads/WR Product Requirements Doc.pdf",
+    );
     expect(surface.title).toBe("WR Product Requirements Doc.pdf");
     // Verify it called read_file_base64 with the full spaced path
     expect(mockInvoke).toHaveBeenCalledWith("read_file_base64", {
@@ -646,7 +719,7 @@ describe("PDF links with spaces work end-to-end", () => {
     mockInvoke.mockReset();
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === "read_file_base64") return btoa("fake-pdf");
-      return undefined as any;
+      return undefined;
     });
 
     // Step 1: Regex detection
@@ -660,7 +733,9 @@ describe("PDF links with spaces work end-to-end", () => {
 
     // Step 3: Preview opens correctly
     const surface = await openPreview(resolved);
-    expect(surface.filePath).toBe("/Users/me/My Documents/Annual Report 2024.pdf");
+    expect(surface.filePath).toBe(
+      "/Users/me/My Documents/Annual Report 2024.pdf",
+    );
     expect(surface.title).toBe("Annual Report 2024.pdf");
     expect(mockInvoke).toHaveBeenCalledWith("read_file_base64", {
       path: "/Users/me/My Documents/Annual Report 2024.pdf",
@@ -672,7 +747,7 @@ describe("PDF links with spaces work end-to-end", () => {
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === "get_home") return "/Users/ngmaloney";
       if (cmd === "read_file_base64") return btoa("fake-pdf");
-      return undefined as any;
+      return undefined;
     });
 
     // Step 1: Regex detection (quoted)
@@ -681,12 +756,19 @@ describe("PDF links with spaces work end-to-end", () => {
     expect(matches).toEqual(["WR Product Requirements Doc.pdf"]);
 
     // Step 2: Path resolution (bare filename → prepend cwd)
-    const resolved = await resolveFilePath(matches[0], "/Users/ngmaloney/Downloads");
-    expect(resolved).toBe("/Users/ngmaloney/Downloads/WR Product Requirements Doc.pdf");
+    const resolved = await resolveFilePath(
+      matches[0],
+      "/Users/ngmaloney/Downloads",
+    );
+    expect(resolved).toBe(
+      "/Users/ngmaloney/Downloads/WR Product Requirements Doc.pdf",
+    );
 
     // Step 3: Preview opens
     const surface = await openPreview(resolved);
-    expect(surface.filePath).toBe("/Users/ngmaloney/Downloads/WR Product Requirements Doc.pdf");
+    expect(surface.filePath).toBe(
+      "/Users/ngmaloney/Downloads/WR Product Requirements Doc.pdf",
+    );
     expect(mockInvoke).toHaveBeenCalledWith("read_file_base64", {
       path: "/Users/ngmaloney/Downloads/WR Product Requirements Doc.pdf",
     });
@@ -694,15 +776,17 @@ describe("PDF links with spaces work end-to-end", () => {
 
   it("file exists in cwd → link created, file doesn't exist → no link", async () => {
     mockInvoke.mockReset();
-    mockInvoke.mockImplementation(async (cmd: string, args?: any) => {
-      if (cmd === "file_exists") {
-        const path = (args as any).path as string;
-        return path === "/Users/ngmaloney/Workspace/gnar-term/vite.config.ts";
-      }
-      if (cmd === "read_file") return "export default {}";
-      if (cmd === "watch_file") return 1;
-      return undefined as any;
-    });
+    mockInvoke.mockImplementation(
+      async (cmd: string, args?: Record<string, unknown>) => {
+        if (cmd === "file_exists") {
+          const path = (args as Record<string, unknown>).path as string;
+          return path === "/Users/ngmaloney/Workspace/gnar-term/vite.config.ts";
+        }
+        if (cmd === "read_file") return "export default {}";
+        if (cmd === "watch_file") return 1;
+        return undefined;
+      },
+    );
 
     const cwd = "/Users/ngmaloney/Workspace/gnar-term";
 
@@ -721,7 +805,7 @@ describe("PDF links with spaces work end-to-end", () => {
     mockInvoke.mockReset();
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === "file_exists") return false; // nothing from Downloads exists in cwd
-      return undefined as any;
+      return undefined;
     });
 
     // Regex matches "2025-Twilio-Partner-Program-Guide.pdf" from terminal output
@@ -741,14 +825,19 @@ describe("PDF links with spaces work end-to-end", () => {
 
   it("path-prefixed links check file_exists with resolved path", async () => {
     mockInvoke.mockReset();
-    mockInvoke.mockImplementation(async (cmd: string, args?: any) => {
-      if (cmd === "get_home") return "/Users/ngmaloney";
-      if (cmd === "file_exists") {
-        return (args as any).path === "/Users/ngmaloney/Downloads/report.pdf";
-      }
-      if (cmd === "read_file_base64") return btoa("fake-pdf");
-      return undefined as any;
-    });
+    mockInvoke.mockImplementation(
+      async (cmd: string, args?: Record<string, unknown>) => {
+        if (cmd === "get_home") return "/Users/ngmaloney";
+        if (cmd === "file_exists") {
+          return (
+            (args as Record<string, unknown>).path ===
+            "/Users/ngmaloney/Downloads/report.pdf"
+          );
+        }
+        if (cmd === "read_file_base64") return btoa("fake-pdf");
+        return undefined;
+      },
+    );
 
     const line = "~/Downloads/report.pdf";
     const matches = getMatchesFromLine(line);
@@ -766,7 +855,7 @@ describe("PDF links with spaces work end-to-end", () => {
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === "get_home") return "/Users/ngmaloney";
       if (cmd === "read_file_base64") return btoa("fake-pdf");
-      return undefined as any;
+      return undefined;
     });
 
     // Step 1: Regex detection
@@ -776,11 +865,15 @@ describe("PDF links with spaces work end-to-end", () => {
 
     // Step 2: Path resolution (tilde expansion)
     const resolved = await resolveFilePath(matches[0], "/irrelevant");
-    expect(resolved).toBe("/Users/ngmaloney/Downloads/WR Product Requirements Doc.pdf");
+    expect(resolved).toBe(
+      "/Users/ngmaloney/Downloads/WR Product Requirements Doc.pdf",
+    );
 
     // Step 3: Preview opens
     const surface = await openPreview(resolved);
-    expect(surface.filePath).toBe("/Users/ngmaloney/Downloads/WR Product Requirements Doc.pdf");
+    expect(surface.filePath).toBe(
+      "/Users/ngmaloney/Downloads/WR Product Requirements Doc.pdf",
+    );
     expect(mockInvoke).toHaveBeenCalledWith("read_file_base64", {
       path: "/Users/ngmaloney/Downloads/WR Product Requirements Doc.pdf",
     });
@@ -797,7 +890,9 @@ describe("resolveFilePath", () => {
   });
 
   it("absolute paths are returned as-is", async () => {
-    expect(await resolveFilePath("/Users/me/report.pdf", "/some/cwd")).toBe("/Users/me/report.pdf");
+    expect(await resolveFilePath("/Users/me/report.pdf", "/some/cwd")).toBe(
+      "/Users/me/report.pdf",
+    );
     // Should NOT call get_home
     expect(mockInvoke).not.toHaveBeenCalledWith("get_home");
   });
@@ -805,29 +900,39 @@ describe("resolveFilePath", () => {
   it("tilde paths are expanded using get_home", async () => {
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === "get_home") return "/Users/testuser";
-      return undefined as any;
+      return undefined;
     });
 
-    expect(await resolveFilePath("~/Downloads/report.pdf", "/some/cwd")).toBe("/Users/testuser/Downloads/report.pdf");
+    expect(await resolveFilePath("~/Downloads/report.pdf", "/some/cwd")).toBe(
+      "/Users/testuser/Downloads/report.pdf",
+    );
     expect(mockInvoke).toHaveBeenCalledWith("get_home");
   });
 
   it("tilde paths fall back to raw path if get_home fails", async () => {
     mockInvoke.mockRejectedValue(new Error("HOME not set"));
 
-    expect(await resolveFilePath("~/Downloads/report.pdf", "/some/cwd")).toBe("~/Downloads/report.pdf");
+    expect(await resolveFilePath("~/Downloads/report.pdf", "/some/cwd")).toBe(
+      "~/Downloads/report.pdf",
+    );
   });
 
   it("relative paths are prepended with cwd", async () => {
-    expect(await resolveFilePath("report.pdf", "/Users/me/project")).toBe("/Users/me/project/report.pdf");
+    expect(await resolveFilePath("report.pdf", "/Users/me/project")).toBe(
+      "/Users/me/project/report.pdf",
+    );
   });
 
   it("relative paths with ./ prefix are prepended with cwd", async () => {
-    expect(await resolveFilePath("./docs/report.pdf", "/Users/me/project")).toBe("/Users/me/project/./docs/report.pdf");
+    expect(
+      await resolveFilePath("./docs/report.pdf", "/Users/me/project"),
+    ).toBe("/Users/me/project/./docs/report.pdf");
   });
 
   it("cwd trailing slash does not produce double slash", async () => {
-    expect(await resolveFilePath("report.pdf", "/Users/me/")).toBe("/Users/me/report.pdf");
+    expect(await resolveFilePath("report.pdf", "/Users/me/")).toBe(
+      "/Users/me/report.pdf",
+    );
     expect(await resolveFilePath("report.pdf", "/")).toBe("/report.pdf");
   });
 
@@ -838,9 +943,11 @@ describe("resolveFilePath", () => {
   it("tilde path with only ~ and slash", async () => {
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === "get_home") return "/Users/testuser";
-      return undefined as any;
+      return undefined;
     });
 
-    expect(await resolveFilePath("~/report.pdf", undefined)).toBe("/Users/testuser/report.pdf");
+    expect(await resolveFilePath("~/report.pdf", undefined)).toBe(
+      "/Users/testuser/report.pdf",
+    );
   });
 });

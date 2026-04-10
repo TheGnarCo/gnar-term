@@ -5,7 +5,7 @@ Tauri v2 terminal workspace manager. Rust backend (portable-pty), Svelte fronten
 ## Build & Test
 
 ```bash
-npm test                    # vitest unit tests (293 tests)
+npm test                    # vitest unit tests (497 tests)
 npm run build               # full tauri build (frontend + Rust)
 cargo check                 # quick Rust compilation check
 ```
@@ -39,7 +39,7 @@ git push origin v0.4.0
 
 CI derives version from the tag. Do NOT edit version files for releases.
 
-See `.github/workflows/release.yml` for the full pipeline (macOS, Linux, Windows builds + signing + Homebrew tap update).
+See `.github/workflows/release.yml` for the full pipeline (macOS, Linux builds + signing + Homebrew tap update).
 
 ## GitHub Actions
 
@@ -48,15 +48,16 @@ The Claude GitHub App is installed on this repo. `@claude` mentions in PRs trigg
 ## Commands
 
 Custom slash commands live in `.claude/commands/`:
+
 - `/create_new_release <version>` - tag and push a release
 
 ## Cross-Platform
 
-gnar-term runs on macOS, Linux, and Windows. When making changes:
+gnar-term targets macOS and Linux only. Windows is not a build target.
 
 - **Never fix Linux and break macOS (or vice versa).** Use platform detection (`isMac` from `terminal-service.ts`) to branch behavior, not platform-specific code that replaces the other platform's logic.
-- Keyboard shortcuts use Cmd on macOS, Ctrl on Linux/Windows. Both must work.
-- Test clipboard, keyboard shortcuts, and PTY behavior on all platforms when possible.
+- Keyboard shortcuts use Cmd on macOS, Ctrl on Linux. Both must work.
+- Test clipboard, keyboard shortcuts, and PTY behavior on both platforms when possible.
 - WebKitGTK (Linux webview) behaves differently from WKWebView (macOS) — watch for webview-level key interception differences.
 
 ## Testing Guidelines
@@ -74,6 +75,8 @@ See `docs/` for design documentation:
 
 - **[docs/glossary.md](docs/glossary.md)** — canonical definitions for terms used across the codebase (workspace, pane, surface, etc.)
 - **[docs/sidebar-architecture.md](docs/sidebar-architecture.md)** — primary/secondary sidebar layout, extension model, and control placement rules
+- **[EXTENSIONS.md](EXTENSIONS.md)** — extension API reference and developer guide
+- **[docs/adr/001-extension-architecture.md](docs/adr/001-extension-architecture.md)** — architecture decision record for the extension system
 
 ### Frontend Structure
 
@@ -83,6 +86,8 @@ App.svelte is a thin shell that wires services to the DOM. Business logic lives 
 - `src/lib/services/pane-service.ts` — pane split/close/focus, tab reorder, flash
 - `src/lib/services/surface-service.ts` — surface select/close/navigate, preview
 - `src/lib/services/service-helpers.ts` — shared utilities (safeFocus, getActiveCwd)
+- `src/lib/services/extension-loader.ts` — extension registration, lifecycle, API construction
+- `src/lib/services/extension-management.ts` — install/uninstall, enable/disable, startup loading
 
 Shared behaviors are extracted as Svelte actions:
 

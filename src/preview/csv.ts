@@ -5,7 +5,7 @@ registerPreviewer({
   extensions: ["csv", "tsv"],
   render(content, filePath, element) {
     const separator = filePath.endsWith(".tsv") ? "\t" : ",";
-    const lines = content.split("\n").filter(l => l.trim());
+    const lines = content.split("\n").filter((l) => l.trim());
     if (lines.length === 0) {
       element.textContent = "(empty file)";
       return;
@@ -16,9 +16,14 @@ registerPreviewer({
       let current = "";
       let inQuotes = false;
       for (const ch of line) {
-        if (ch === '"') { inQuotes = !inQuotes; }
-        else if (ch === separator && !inQuotes) { cells.push(current.trim()); current = ""; }
-        else { current += ch; }
+        if (ch === '"') {
+          inQuotes = !inQuotes;
+        } else if (ch === separator && !inQuotes) {
+          cells.push(current.trim());
+          current = "";
+        } else {
+          current += ch;
+        }
       }
       cells.push(current.trim());
       return cells;
@@ -62,8 +67,12 @@ registerPreviewer({
         `;
         tr.appendChild(td);
       }
-      tr.addEventListener("mouseenter", () => { tr.style.background = theme.bgHighlight; });
-      tr.addEventListener("mouseleave", () => { tr.style.background = "transparent"; });
+      tr.addEventListener("mouseenter", () => {
+        tr.style.background = theme.bgHighlight;
+      });
+      tr.addEventListener("mouseleave", () => {
+        tr.style.background = "transparent";
+      });
       tbody.appendChild(tr);
     }
     table.appendChild(tbody);

@@ -8,20 +8,22 @@ import {
   getAllSurfaces,
   isTerminalSurface,
   isPreviewSurface,
+  isExtensionSurface,
   type Pane,
   type SplitNode,
   type Workspace,
   type TerminalSurface,
   type PreviewSurface,
+  type ExtensionSurface,
 } from "../lib/types";
 
 function makeMockTerminalSurface(id: string): TerminalSurface {
   return {
     kind: "terminal",
     id,
-    terminal: {} as any,
-    fitAddon: { fit: () => {} } as any,
-    searchAddon: {} as any,
+    terminal: {} as unknown as TerminalSurface["terminal"],
+    fitAddon: { fit: () => {} } as unknown as TerminalSurface["fitAddon"],
+    searchAddon: {} as unknown as TerminalSurface["searchAddon"],
     termElement: document.createElement("div"),
     ptyId: 1,
     title: `Terminal ${id}`,
@@ -39,6 +41,17 @@ function makeMockPreviewSurface(id: string): PreviewSurface {
     element: document.createElement("div"),
     watchId: 1,
     hasUnread: false,
+  };
+}
+
+function makeMockExtensionSurface(id: string): ExtensionSurface {
+  return {
+    kind: "extension",
+    id,
+    surfaceTypeId: "custom-viewer",
+    title: `Extension ${id}`,
+    hasUnread: false,
+    props: { filePath: "/some/path" },
   };
 }
 
@@ -99,7 +112,7 @@ describe("getAllPanes()", () => {
 
     const panes = getAllPanes(tree);
     expect(panes).toHaveLength(3);
-    expect(panes.map(p => p.id)).toEqual(["p1", "p2", "p3"]);
+    expect(panes.map((p) => p.id)).toEqual(["p1", "p2", "p3"]);
   });
 });
 
@@ -109,7 +122,11 @@ describe("getAllSurfaces()", () => {
     const p1 = makeMockPreviewSurface("p1");
     const t2 = makeMockTerminalSurface("t2");
 
-    const pane1: Pane = { id: "pane1", surfaces: [t1, p1], activeSurfaceId: "t1" };
+    const pane1: Pane = {
+      id: "pane1",
+      surfaces: [t1, p1],
+      activeSurfaceId: "t1",
+    };
     const pane2: Pane = { id: "pane2", surfaces: [t2], activeSurfaceId: "t2" };
 
     const ws: Workspace = {
@@ -129,14 +146,18 @@ describe("getAllSurfaces()", () => {
 
     const surfaces = getAllSurfaces(ws);
     expect(surfaces).toHaveLength(3);
-    expect(surfaces.map(s => s.id)).toEqual(["t1", "p1", "t2"]);
+    expect(surfaces.map((s) => s.id)).toEqual(["t1", "p1", "t2"]);
   });
 
-  it("correctly mixes terminal and preview surfaces", () => {
+  it("correctly mixes terminal and extension surfaces", () => {
     const t1 = makeMockTerminalSurface("t1");
-    const p1 = makeMockPreviewSurface("p1");
+    const e1 = makeMockExtensionSurface("e1");
 
-    const pane: Pane = { id: "pane1", surfaces: [t1, p1], activeSurfaceId: "t1" };
+    const pane: Pane = {
+      id: "pane1",
+      surfaces: [t1, e1],
+      activeSurfaceId: "t1",
+    };
     const ws: Workspace = {
       id: "ws1",
       name: "Test",
@@ -146,8 +167,46 @@ describe("getAllSurfaces()", () => {
 
     const surfaces = getAllSurfaces(ws);
     expect(surfaces[0].kind).toBe("terminal");
-    expect(surfaces[1].kind).toBe("preview");
+    expect(surfaces[1].kind).toBe("extension");
     expect(isTerminalSurface(surfaces[0])).toBe(true);
-    expect(isPreviewSurface(surfaces[1])).toBe(true);
+    expect(isExtensionSurface(surfaces[1])).toBe(true);
+  });
+});
+
+describe("ExtensionSurface", () => {
+  it("isExtensionSurface correctly identifies extension surfaces", () => {
+    const es = makeMockExtensionSurface("e1");
+    expect(isExtensionSurface(es)).toBe(true);
+    expect(isTerminalSurface(es)).toBe(false);
+    expect(isPreviewSurface(es)).toBe(false);
+  });
+
+  it("extension surfaces can coexist with terminal and preview in a pane", () => {
+    const t1 = makeMockTerminalSurface("t1");
+    const p1 = makeMockPreviewSurface("p1");
+    const e1 = makeMockExtensionSurface("e1");
+
+    const pane: Pane = {
+      id: "pane1",
+      surfaces: [t1, p1, e1],
+      activeSurfaceId: "t1",
+    };
+    const ws: Workspace = {
+      id: "ws1",
+      name: "Test",
+      splitRoot: { type: "pane", pane },
+      activePaneId: "pane1",
+    };
+
+    const surfaces = getAllSurfaces(ws);
+    expect(surfaces).toHaveLength(3);
+    expect(surfaces[2].kind).toBe("extension");
+    expect(isExtensionSurface(surfaces[2])).toBe(true);
+  });
+
+  it("extension surface carries surfaceTypeId and arbitrary props", () => {
+    const es = makeMockExtensionSurface("e1");
+    expect(es.surfaceTypeId).toBe("custom-viewer");
+    expect(es.props).toEqual({ filePath: "/some/path" });
   });
 });

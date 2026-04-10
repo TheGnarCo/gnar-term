@@ -12,7 +12,10 @@ describe("Rust backend audit", () => {
   it("has no debug println! statements", () => {
     const lines = RUST_SOURCE.split("\n");
     const printlnLines = lines.filter(
-      (line) => line.includes("println!") && !line.trim().startsWith("//") && !line.includes("[test]")
+      (line) =>
+        line.includes("println!") &&
+        !line.trim().startsWith("//") &&
+        !line.includes("[test]"),
     );
     expect(printlnLines).toEqual([]);
   });
@@ -20,10 +23,12 @@ describe("Rust backend audit", () => {
   it("has no .lock().unwrap() on mutex in production code (should use map_err)", () => {
     // Split source at #[cfg(test)] — only check production code before it
     const testBoundary = RUST_SOURCE.indexOf("#[cfg(test)]");
-    const prodCode = testBoundary >= 0 ? RUST_SOURCE.slice(0, testBoundary) : RUST_SOURCE;
+    const prodCode =
+      testBoundary >= 0 ? RUST_SOURCE.slice(0, testBoundary) : RUST_SOURCE;
     const lines = prodCode.split("\n");
     const unwrapLockLines = lines.filter(
-      line => line.includes(".lock().unwrap()") && !line.trim().startsWith("//")
+      (line) =>
+        line.includes(".lock().unwrap()") && !line.trim().startsWith("//"),
     );
     expect(unwrapLockLines).toEqual([]);
   });
@@ -44,7 +49,10 @@ describe("Rust backend audit", () => {
   });
 
   it("has clipboard permissions in capabilities", () => {
-    const capabilities = readFileSync("src-tauri/capabilities/default.json", "utf-8");
+    const capabilities = readFileSync(
+      "src-tauri/capabilities/default.json",
+      "utf-8",
+    );
     expect(capabilities).toContain("clipboard-manager:allow-read-text");
     expect(capabilities).toContain("clipboard-manager:allow-write-text");
   });
@@ -52,16 +60,18 @@ describe("Rust backend audit", () => {
 
 describe("Frontend code quality", () => {
   it("no navigator.clipboard usage (should use Tauri plugin)", () => {
-    const files = [
-      "src/App.svelte",
-      "src/lib/terminal-service.ts",
-    ];
+    const files = ["src/App.svelte", "src/lib/terminal-service.ts"];
     for (const file of files) {
       try {
+        // eslint-disable-next-line security/detect-non-literal-fs-filename -- hardcoded test file paths
         const source = readFileSync(file, "utf-8");
         expect(source).not.toContain("navigator.clipboard");
-      } catch (e: any) {
-        if (e.code !== "ENOENT") throw e;
+      } catch (e: unknown) {
+        if (
+          e instanceof Error &&
+          (e as NodeJS.ErrnoException).code !== "ENOENT"
+        )
+          throw e;
       }
     }
   });
@@ -71,11 +81,12 @@ describe("Frontend code quality", () => {
       const source = readFileSync("src/lib/terminal-service.ts", "utf-8");
       const lines = source.split("\n");
       const debugLogs = lines.filter(
-        line => line.includes("console.log") && !line.trim().startsWith("//")
+        (line) => line.includes("console.log") && !line.trim().startsWith("//"),
       );
       expect(debugLogs).toEqual([]);
-    } catch (e: any) {
-      if (e.code !== "ENOENT") throw e;
+    } catch (e: unknown) {
+      if (e instanceof Error && (e as NodeJS.ErrnoException).code !== "ENOENT")
+        throw e;
     }
   });
 
@@ -90,6 +101,7 @@ describe("Frontend code quality", () => {
       "src/theme.ts",
     ];
     for (const file of deadFiles) {
+      // eslint-disable-next-line security/detect-non-literal-fs-filename -- hardcoded test file paths
       expect(() => readFileSync(file, "utf-8")).toThrow();
     }
   });

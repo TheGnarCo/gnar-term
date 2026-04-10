@@ -21,7 +21,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: lts/*
-          cache: 'npm'
+          cache: "npm"
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -29,13 +29,19 @@ jobs:
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
-          workspaces: './src-tauri -> target'
+          workspaces: "./src-tauri -> target"
 
       - name: Install frontend dependencies
         run: npm install
 
+      - name: ESLint
+        run: npm run lint
+
       - name: TypeScript check
         run: npx tsc --noEmit
+
+      - name: Tests
+        run: npm test
 
       - name: Vite build
         run: npx vite build

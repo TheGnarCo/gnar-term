@@ -20,6 +20,7 @@
     "@sveltejs/vite-plugin-svelte": "^5.1.1",
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-clipboard-manager": "^2.3.2",
+    "@tauri-apps/plugin-dialog": "2.7.0",
     "@xterm/addon-fit": "^0.12.0-beta.196",
     "@xterm/addon-search": "^0.17.0-beta.196",
     "@xterm/addon-web-links": "^0.13.0-beta.196",

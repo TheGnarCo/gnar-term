@@ -40,6 +40,11 @@ import {
   getContextMenuItemsForFile,
   getContextMenuItemsForDir,
 } from "./context-menu-item-registry";
+import {
+  registerWorkspaceAction as registryRegisterWorkspaceAction,
+  unregisterWorkspaceActionsBySource,
+  getWorkspaceActions as registryGetWorkspaceActions,
+} from "./workspace-action-registry";
 import { loadExtensionState, saveExtensionState } from "./extension-state";
 import { closeExtensionSurfaces } from "./surface-service";
 import {
@@ -61,6 +66,7 @@ import {
   readText as clipboardRead,
   writeText as clipboardWrite,
 } from "@tauri-apps/plugin-clipboard-manager";
+import { open as dialogOpen } from "@tauri-apps/plugin-dialog";
 import { getActiveCwd } from "./service-helpers";
 import { configStore as configStoreReadable, getConfig } from "../config";
 import type {
@@ -512,14 +518,14 @@ export function createExtensionAPI(manifest: ExtensionManifest): {
     registerPrimarySidebarSection(
       sectionId: string,
       component: unknown,
-      options?: { collapsible?: boolean; showLabel?: boolean },
+      options?: { collapsible?: boolean; showLabel?: boolean; label?: string },
     ) {
       const declared = manifest.contributes?.primarySidebarSections?.find(
         (s) => s.id === sectionId,
       );
       registerSidebarSection({
         id: `${extId}:${sectionId}`,
-        label: declared?.label ?? sectionId,
+        label: options?.label ?? declared?.label ?? sectionId,
         component,
         source: extId,
         collapsible: options?.collapsible,
@@ -574,6 +580,52 @@ export function createExtensionAPI(manifest: ExtensionManifest): {
         handler,
         source: extId,
       });
+    },
+
+    registerWorkspaceAction(
+      actionId: string,
+      options: {
+        label: string;
+        icon: string;
+        shortcut?: string;
+        handler: (
+          ctx: import("./workspace-action-registry").WorkspaceActionContext,
+        ) => void | Promise<void>;
+        when?: (
+          ctx: import("./workspace-action-registry").WorkspaceActionContext,
+        ) => boolean;
+      },
+    ) {
+      const namespacedId = `${extId}:${actionId}`;
+      registryRegisterWorkspaceAction({
+        id: namespacedId,
+        label: options.label,
+        icon: options.icon,
+        shortcut: options.shortcut,
+        source: extId,
+        handler: options.handler,
+        when: options.when,
+      });
+    },
+
+    getWorkspaceActions() {
+      return registryGetWorkspaceActions().map((a) => ({
+        id: a.id,
+        label: a.label,
+        icon: a.icon,
+        shortcut: a.shortcut,
+        handler: a.handler,
+        when: a.when,
+      }));
+    },
+
+    async pickDirectory(title?: string): Promise<string | null> {
+      const result = await dialogOpen({
+        directory: true,
+        title: title ?? "Select Directory",
+      });
+      if (typeof result === "string") return result;
+      return null;
     },
 
     state: {
@@ -897,6 +949,7 @@ export async function activateExtension(id: string): Promise<void> {
       unregisterSidebarSectionsBySource(id);
       unregisterSurfaceTypesBySource(id);
       unregisterContextMenuItemsBySource(id);
+      unregisterWorkspaceActionsBySource(id);
       // Clean up event subscriptions registered during activation
       const handlers = extensionEventHandlers.get(id);
       if (handlers) {
@@ -992,6 +1045,7 @@ export function deactivateExtension(id: string): void {
   unregisterSidebarSectionsBySource(id);
   unregisterSurfaceTypesBySource(id);
   unregisterContextMenuItemsBySource(id);
+  unregisterWorkspaceActionsBySource(id);
 
   _extensions.update((list) =>
     list.map((e) => (e.manifest.id === id ? { ...e, enabled: false } : e)),

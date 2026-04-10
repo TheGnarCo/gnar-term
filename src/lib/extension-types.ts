@@ -18,6 +18,7 @@ export type {
   ExtensionManifestCommand,
   ExtensionManifestSurface,
   ExtensionManifestContextMenu,
+  ExtensionManifestWorkspaceAction,
   ExtensionSettingsField,
   ExtensionSettingsSchema,
   ExtensionContributions,
@@ -28,6 +29,8 @@ export type {
   WorkspaceRef,
   SurfaceRef,
   PaneRef,
+  WorkspaceActionContext,
+  WorkspaceActionInfo,
 } from "../extensions/api";
 
 export { EXTENSION_API_KEY } from "../extensions/api";

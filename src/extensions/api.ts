@@ -82,12 +82,18 @@ export interface ExtensionSettingsSchema {
   fields: Record<string, ExtensionSettingsField>;
 }
 
+export interface ExtensionManifestWorkspaceAction {
+  id: string;
+  title: string;
+}
+
 export interface ExtensionContributions {
   secondarySidebarTabs?: ExtensionManifestTab[];
   primarySidebarSections?: ExtensionManifestSection[];
   commands?: ExtensionManifestCommand[];
   surfaces?: ExtensionManifestSurface[];
   contextMenuItems?: ExtensionManifestContextMenu[];
+  workspaceActions?: ExtensionManifestWorkspaceAction[];
   events?: string[];
   settings?: ExtensionSettingsSchema;
 }
@@ -138,7 +144,7 @@ export interface ExtensionAPI {
   registerPrimarySidebarSection(
     sectionId: string,
     component: unknown,
-    options?: { collapsible?: boolean; showLabel?: boolean },
+    options?: { collapsible?: boolean; showLabel?: boolean; label?: string },
   ): void;
   registerSurfaceType(surfaceId: string, component: unknown): void;
   registerCommand(commandId: string, handler: () => void | Promise<void>): void;
@@ -146,6 +152,19 @@ export interface ExtensionAPI {
     itemId: string,
     handler: (filePath: string) => void,
   ): void;
+
+  // Workspace actions — buttons in the workspace header and project sections
+  registerWorkspaceAction(
+    actionId: string,
+    options: {
+      label: string;
+      icon: string;
+      shortcut?: string;
+      handler: (ctx: WorkspaceActionContext) => void | Promise<void>;
+      when?: (ctx: WorkspaceActionContext) => boolean;
+    },
+  ): void;
+  getWorkspaceActions(): WorkspaceActionInfo[];
 
   // Tauri command invocation — use this instead of @tauri-apps/api/core
   invoke<T = unknown>(
@@ -156,6 +175,7 @@ export interface ExtensionAPI {
   // Actions — open surfaces, prompt user, toggle sidebar
   openFile(path: string): void;
   getActiveCwd(): Promise<string | undefined>;
+  pickDirectory(title?: string): Promise<string | null>;
   showInputPrompt(label: string, defaultValue?: string): Promise<string | null>;
   toggleSecondarySidebar(): void;
   createWorkspace(
@@ -217,6 +237,24 @@ export interface ExtensionAPI {
     label: string;
     component: unknown;
   }>;
+}
+
+// --- Workspace action types ---
+
+export interface WorkspaceActionContext {
+  projectId?: string;
+  projectPath?: string;
+  projectName?: string;
+  isGit?: boolean;
+}
+
+export interface WorkspaceActionInfo {
+  id: string;
+  label: string;
+  icon: string;
+  shortcut?: string;
+  handler: (ctx: WorkspaceActionContext) => void | Promise<void>;
+  when?: (ctx: WorkspaceActionContext) => boolean;
 }
 
 // --- Workspace creation options ---

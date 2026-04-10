@@ -190,7 +190,7 @@ Right-click in the terminal for contextual actions. File-specific actions appear
 - **Flow control** — PTY backpressure prevents the terminal from choking on fast output
 - **Process cleanup** — closing a tab kills the child process tree (no zombie processes)
 - **Ctrl+Tab / Ctrl+Shift+Tab** — cycle through tabs in the active pane
-- **Modular preview system** — add new file type previewers by dropping a plugin in `src/preview/`
+- **Modular preview system** — add new file type previewers by dropping an extension in `src/preview/`
 - **Cross-platform** — macOS, Linux, and Windows via Tauri v2
 
 ## CLI Usage
@@ -327,7 +327,7 @@ The config format is a superset of [cmux.json](https://cmux.com/docs/custom-comm
 
 `github-dark`, `tokyo-night`, `catppuccin-mocha`, `dracula`, `solarized-dark`, `one-dark`, `molly`, `molly-disco`, `github-light`, `solarized-light`, `catppuccin-latte`
 
-## Adding file preview plugins
+## Adding file preview extensions
 
 The preview system is modular. To add a new file type:
 

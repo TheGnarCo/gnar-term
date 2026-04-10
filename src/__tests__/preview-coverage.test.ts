@@ -47,7 +47,7 @@ import {
   openPreview,
 } from "../preview/index";
 
-// Import all preview plugins so they self-register
+// Import all preview extensions so they self-register
 beforeAll(async () => {
   await import("../preview/pdf");
   await import("../preview/image");

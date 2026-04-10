@@ -48,7 +48,7 @@
       <!-- Tab area (scrollable, future tabs go here) -->
     </div>
 
-    <!-- Control row: plugin-supplied quick actions (only rendered when populated) -->
+    <!-- Control row: extension-supplied quick actions (only rendered when populated) -->
     {#if $$slots.controls}
       <div
         id="secondary-sidebar-controls"

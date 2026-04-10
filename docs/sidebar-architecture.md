@@ -26,7 +26,7 @@ The secondary sidebar is **tab-controlled**. Each section is its own tab, displa
 
 ### Control Row
 
-Below the tab bar, the secondary sidebar has a **control row** — a 28px-tall action bar that matches the height of the surface tab bar. This row is reserved for plugin-supplied quick-action buttons (e.g., refresh, filter, settings toggles). The control row is always visible regardless of which tab is active, making it suitable for cross-tab actions.
+Below the tab bar, the secondary sidebar has a **control row** — a 28px-tall action bar that matches the height of the surface tab bar. This row is reserved for extension-supplied quick-action buttons (e.g., refresh, filter, settings toggles). The control row is always visible regardless of which tab is active, making it suitable for cross-tab actions.
 
 ## Layout Anatomy
 
@@ -52,7 +52,7 @@ Below the tab bar, the secondary sidebar has a **control row** — a 28px-tall a
 The asymmetry is intentional:
 
 - The **primary sidebar** favors glanceability. Workspaces, the most-used panel, is always visible at the top. Secondary sections (future: file tree, git, etc.) stack below and can be scanned without switching views.
-- The **secondary sidebar** favors depth. Each tab gets the full sidebar height for its content, which suits panels that need more vertical space (future: AI chat, documentation, terminal inspector, plugin panels).
+- The **secondary sidebar** favors depth. Each tab gets the full sidebar height for its content, which suits panels that need more vertical space (future: AI chat, documentation, terminal inspector, extension panels).
 
 ## Controls
 
@@ -62,7 +62,7 @@ The new workspace button (+) lives in the primary sidebar's header row and is on
 
 ## Extending the Sidebars
 
-When building a plugin or feature that needs sidebar space:
+When building an extension or feature that needs sidebar space:
 
 1. Decide whether the content benefits from being always-visible alongside other sections (primary) or needs dedicated vertical space (secondary).
 2. **Primary**: add a new collapsible section component beneath Workspaces.

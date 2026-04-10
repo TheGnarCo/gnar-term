@@ -1,5 +1,5 @@
 /**
- * Non-reactive theme accessor for imperative code (preview plugins, etc.)
+ * Non-reactive theme accessor for imperative code (preview extensions, etc.)
  * that can't use Svelte stores directly.
  */
 import { get } from "svelte/store";

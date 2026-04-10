@@ -1,6 +1,6 @@
 # GnarTerm Glossary
 
-Canonical definitions for terms used across the codebase, documentation, and plugin APIs.
+Canonical definitions for terms used across the codebase, documentation, and extension APIs.
 
 ## Core Concepts
 
@@ -20,7 +20,7 @@ Canonical definitions for terms used across the codebase, documentation, and plu
 | **Secondary Sidebar** | The right sidebar. Tab-controlled, where each section is a separate tab. Collapsible and resizable. |
 | **TitleBar** | The 38px-tall bar at the top of the main content area. Contains the GNARTERM title and sidebar toggle buttons. Also serves as a window drag region. |
 | **Tab Bar** | The 28px-tall horizontal strip at the top of each pane, showing tabs for each surface. Contains controls for splitting, adding surfaces, and closing the pane. |
-| **Control Row** | A 28px-tall action bar in the secondary sidebar, positioned below its tab bar. Hosts plugin-supplied quick-action buttons that persist across tab switches. |
+| **Control Row** | A 28px-tall action bar in the secondary sidebar, positioned below its tab bar. Hosts extension-supplied quick-action buttons that persist across tab switches. |
 | **Section** | A discrete content region within a sidebar. In the primary sidebar, sections stack vertically and can be collapsed. In the secondary sidebar, each section is a tab. |
 | **Resize Handle** | A 4px draggable edge on the inner border of each sidebar and between split panes. Allows the user to adjust sizes by dragging. |
 | **Drag Region** | Areas marked with `data-tauri-drag-region` that allow the user to move the application window by clicking and dragging. |

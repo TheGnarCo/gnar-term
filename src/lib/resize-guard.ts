@@ -66,13 +66,28 @@ export function isScrolledToBottom(terminal: Terminal): boolean {
 }
 
 // --- Scroll Anchor ---
-// Persistent per-surface scroll anchor, set by user wheel events (not by
-// xterm.js auto-scroll). Survives across rapid flushPtyBuffer cycles where
-// checking viewport position is unreliable because xterm auto-scrolls
-// during write() before our restore callback fires.
+//
+// Intercepts xterm.js auto-scroll during write() to keep the viewport anchored
+// when the user has scrolled up. The key insight: terminal.onScroll fires
+// synchronously during write() processing, BEFORE the browser paints. By
+// calling scrollToLine(anchor) in the onScroll handler, the viewport is
+// corrected before any frame is rendered — zero flicker.
+//
+// A writeInFlight flag distinguishes auto-scrolls (during write) from user
+// scrolls (wheel, keyboard, scrollbar). User scrolls update the anchor;
+// auto-scrolls are counteracted.
+//
+// On macOS this is effectively a no-op — when no anchor is set (user at
+// bottom), the onScroll handler returns early and auto-scroll proceeds normally.
 
 /** Map of ptyId → viewport line the user scrolled to (absent = at bottom). */
 const scrollAnchors = new Map<number, number>();
+
+/** Tracks whether a terminal.write() is in progress for each PTY. */
+const writeInFlight = new Set<number>();
+
+/** Re-entrancy guard: prevents our scrollToLine restore from re-triggering onScroll. */
+const restoreInFlight = new Set<number>();
 
 /** Get the scroll anchor for a PTY, or null if viewport should auto-scroll. */
 export function getScrollAnchor(ptyId: number): number | null {
@@ -84,30 +99,58 @@ export function clearScrollAnchor(ptyId: number): void {
   scrollAnchors.delete(ptyId);
 }
 
+/** Mark that a terminal.write() is starting for this PTY. */
+export function markWriteStart(ptyId: number): void {
+  writeInFlight.add(ptyId);
+}
+
+/** Mark that a terminal.write() has completed for this PTY. */
+export function markWriteEnd(ptyId: number): void {
+  writeInFlight.delete(ptyId);
+}
+
 /**
- * Wire up scroll anchoring on a terminal's DOM element.
- * Listens for wheel events (user-initiated scroll) and updates the anchor.
- * Auto-scrolls from terminal.write() don't trigger wheel events, so the
- * anchor is stable during active output.
+ * Wire up scroll anchoring via terminal.onScroll.
  *
- * Cross-platform: when viewport is at the bottom (the default), no anchor
- * is set and flushPtyBuffer auto-scrolls normally.
+ * The onScroll handler serves two purposes:
+ * 1. When no write is in-flight → user-initiated scroll → update/clear anchor
+ * 2. When a write IS in-flight → auto-scroll from write() → counteract by
+ *    restoring the anchor immediately (before render)
+ *
+ * This replaces the previous wheel-event-only approach which couldn't prevent
+ * the one-frame flicker between auto-scroll and restore.
  */
 export function setupScrollAnchor(
-  termElement: HTMLElement,
   terminal: Terminal,
   getPtyId: () => number,
 ): void {
-  termElement.addEventListener("wheel", () => {
-    // Read viewport position after xterm.js processes the scroll
-    requestAnimationFrame(() => {
-      const ptyId = getPtyId();
-      if (ptyId < 0) return;
+  terminal.onScroll(() => {
+    const ptyId = getPtyId();
+    if (ptyId < 0) return;
+
+    // Don't re-enter when our own scrollToLine triggers onScroll
+    if (restoreInFlight.has(ptyId)) return;
+
+    if (!writeInFlight.has(ptyId)) {
+      // No write in-flight → this is a user scroll (wheel, keyboard, scrollbar).
+      // Update or clear the anchor based on current position.
       if (isScrolledToBottom(terminal)) {
         scrollAnchors.delete(ptyId);
       } else {
         scrollAnchors.set(ptyId, terminal.buffer.active.viewportY);
       }
-    });
+      return;
+    }
+
+    // Write in-flight → auto-scroll from terminal.write(). Counteract it.
+    const anchor = scrollAnchors.get(ptyId);
+    if (anchor == null) return;
+
+    // Cap anchor at current buffer size in case scrollback was trimmed
+    const effectiveAnchor = Math.min(anchor, terminal.buffer.active.baseY);
+
+    restoreInFlight.add(ptyId);
+    terminal.scrollToLine(effectiveAnchor);
+    restoreInFlight.delete(ptyId);
   });
 }

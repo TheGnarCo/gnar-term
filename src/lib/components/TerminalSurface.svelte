@@ -4,6 +4,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import { connectPty } from "../terminal-service";
+  import { clearScrollAnchor } from "../resize-guard";
   import { theme } from "../stores/theme";
   import type { TerminalSurface as TermSurface } from "../types";
 
@@ -90,6 +91,7 @@
     requestAnimationFrame(() => {
       try {
         surface.fitAddon.fit();
+        clearScrollAnchor(surface.ptyId);  // Clear anchor so onScroll handler doesn't fight scrollToBottom
         surface.terminal.scrollToBottom();
       } catch (e) { console.warn("fitAddon.fit() failed on visibility change:", e); }
     });

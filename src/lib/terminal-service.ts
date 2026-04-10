@@ -21,7 +21,7 @@ import { canPreview, getSupportedExtensions, openPreview } from "../preview/inde
 import type { TerminalSurface, Pane, Surface, Workspace } from "./types";
 import { uid, getAllSurfaces, getAllPanes, isTerminalSurface, findParentSplit, replaceNodeInTree } from "./types";
 import type { MenuItem } from "./context-menu-types";
-import { createResizeHandler, getScrollAnchor, clearScrollAnchor, setupScrollAnchor } from "./resize-guard";
+import { createResizeHandler, markWriteStart, markWriteEnd, setupScrollAnchor } from "./resize-guard";
 import "@xterm/xterm/css/xterm.css";
 
 /** Platform detection — used for Cmd (macOS) vs Ctrl (Linux/Windows) shortcuts. */
@@ -123,19 +123,14 @@ function flushPtyBuffer(ptyId: number) {
   chunks.length = 0;
   ptyBufferBytes.set(ptyId, 0);
 
-  // Scroll anchor (#46): if the user has scrolled up (set via wheel events in
-  // setupScrollAnchor), restore their position after the write. The anchor is
-  // persistent — it survives across rapid flush cycles where checking viewport
-  // position is unreliable because xterm auto-scrolls during write().
-  const anchor = getScrollAnchor(ptyId);
+  // Mark write as in-flight so the onScroll handler (in resize-guard.ts) can
+  // distinguish auto-scrolls from user scrolls and counteract them (#46).
+  markWriteStart(ptyId);
 
   // Single write to xterm.js per frame — the callback fires when xterm.js has
   // processed this batch, which is our signal that it's ready for more.
   surface.terminal.write(merged, () => {
-    // Restore scroll position if user was scrolled up
-    if (anchor != null) {
-      surface.terminal.scrollToLine(anchor);
-    }
+    markWriteEnd(ptyId);
     // If more data arrived while we were rendering, flush again next frame
     const buffered = ptyBufferBytes.get(ptyId) || 0;
     if (buffered > 0) {
@@ -599,9 +594,9 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
     contextMenu.set({ x: e.clientX, y: e.clientY, items });
   });
 
-  // Scroll anchor: track user scroll-up via wheel events so flushPtyBuffer
-  // can preserve viewport position during active output (#46).
-  setupScrollAnchor(termElement, terminal, () => surface.ptyId);
+  // Scroll anchor: intercept auto-scrolls during write() via onScroll handler,
+  // and track user scrolls to set/clear the anchor (#46).
+  setupScrollAnchor(terminal, () => surface.ptyId);
 
   pane.surfaces.push(surface);
   pane.activeSurfaceId = surface.id;

@@ -2,12 +2,16 @@
  * Linux scroll/redraw loop regression tests (#46)
  *
  * On Linux (WebKitGTK), PTY output can trigger spurious ResizeObserver
- * callbacks, creating a fit() → resize_pty → SIGWINCH → redraw loop that
- * yanks the viewport to the top. These tests verify:
+ * callbacks, creating a fit() → resize_pty → SIGWINCH → redraw loop.
+ * The resize cycle also breaks xterm.js's native scroll lock
+ * (isUserScrolling) via the Viewport._sync() → scrollLines() path.
  *
- * 1. resize_pty dedup — onResize skips invoke when cols/rows haven't changed
+ * These tests verify the two resize guards that break the loop:
+ * 1. createResizeHandler — deduplicates resize_pty calls
  * 2. shouldFit — skips fit() when container pixel dimensions are unchanged
- * 3. Scroll anchor — onScroll interception prevents auto-scroll during writes
+ *
+ * Scroll anchoring is handled natively by xterm.js (BufferService.isUserScrolling).
+ * The resize guards protect that flag by preventing spurious resize cycles.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -88,179 +92,21 @@ describe("fitActiveTerminal dimension guard (#46)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 3. Scroll anchor — onScroll interception
+// 3. Regression guard — no scroll anchor exports
 // ---------------------------------------------------------------------------
 
-describe("Scroll anchor (#46)", () => {
-  it("detects when terminal is at the bottom of scrollback", async () => {
-    const { isScrolledToBottom } = await import("../lib/resize-guard");
-
-    const mockTerminal = {
-      buffer: { active: { baseY: 100, viewportY: 100 } },
-      rows: 24,
-    };
-
-    expect(isScrolledToBottom(mockTerminal as any)).toBe(true);
-
-    mockTerminal.buffer.active.viewportY = 50;
-    expect(isScrolledToBottom(mockTerminal as any)).toBe(false);
-  });
-
-  it("considers viewport at bottom when within 1 row tolerance", async () => {
-    const { isScrolledToBottom } = await import("../lib/resize-guard");
-
-    const mockTerminal = {
-      buffer: { active: { baseY: 100, viewportY: 99 } },
-      rows: 24,
-    };
-
-    expect(isScrolledToBottom(mockTerminal as any)).toBe(true);
-  });
-
-  it("getScrollAnchor returns null when no anchor set", async () => {
-    const { getScrollAnchor, clearScrollAnchor } = await import("../lib/resize-guard");
-    clearScrollAnchor(99);
-    expect(getScrollAnchor(99)).toBeNull();
-  });
-
-  it("clearScrollAnchor removes anchor for a ptyId", async () => {
+describe("resize-guard exports (#46)", () => {
+  it("does not export scroll anchor functions (xterm.js handles scroll lock natively)", async () => {
     const mod = await import("../lib/resize-guard");
-    mod.clearScrollAnchor(42);
-    expect(mod.getScrollAnchor(42)).toBeNull();
-  });
-
-  it("markWriteStart/markWriteEnd lifecycle", async () => {
-    // These should not throw and should be idempotent
-    const { markWriteStart, markWriteEnd } = await import("../lib/resize-guard");
-    markWriteStart(1);
-    markWriteStart(1); // double-start is safe (Set)
-    markWriteEnd(1);
-    markWriteEnd(1); // double-end is safe
-  });
-
-  it("setupScrollAnchor registers onScroll handler on terminal", async () => {
-    const { setupScrollAnchor } = await import("../lib/resize-guard");
-
-    const onScrollHandler = vi.fn();
-    const mockTerminal = {
-      onScroll: onScrollHandler,
-      buffer: { active: { baseY: 0, viewportY: 0 } },
-      scrollToLine: vi.fn(),
-    };
-
-    setupScrollAnchor(mockTerminal as any, () => 1);
-    expect(onScrollHandler).toHaveBeenCalledTimes(1);
-    expect(typeof onScrollHandler.mock.calls[0][0]).toBe("function");
-  });
-
-  it("onScroll handler updates anchor on user scroll (no write in-flight)", async () => {
-    const mod = await import("../lib/resize-guard");
-
-    // Set up a mock terminal with onScroll that captures the handler
-    let scrollHandler: (() => void) | null = null;
-    const mockTerminal = {
-      onScroll: (fn: () => void) => { scrollHandler = fn; },
-      buffer: { active: { baseY: 100, viewportY: 50 } },
-      scrollToLine: vi.fn(),
-    };
-
-    mod.clearScrollAnchor(10);
-    mod.markWriteEnd(10); // ensure no write in-flight
-    mod.setupScrollAnchor(mockTerminal as any, () => 10);
-
-    // Simulate user scroll (no write in-flight) to non-bottom position
-    scrollHandler!();
-    expect(mod.getScrollAnchor(10)).toBe(50);
-
-    // Simulate user scroll to bottom
-    mockTerminal.buffer.active.viewportY = 100;
-    scrollHandler!();
-    expect(mod.getScrollAnchor(10)).toBeNull();
-
-    mod.clearScrollAnchor(10);
-  });
-
-  it("onScroll handler counteracts auto-scroll during write", async () => {
-    const mod = await import("../lib/resize-guard");
-
-    let scrollHandler: (() => void) | null = null;
-    const mockTerminal = {
-      onScroll: (fn: () => void) => { scrollHandler = fn; },
-      buffer: { active: { baseY: 200, viewportY: 200 } },
-      scrollToLine: vi.fn(),
-    };
-
-    const ptyId = 20;
-    mod.clearScrollAnchor(ptyId);
-    mod.setupScrollAnchor(mockTerminal as any, () => ptyId);
-
-    // Simulate: user scrolled up, anchor is at line 50
-    mockTerminal.buffer.active.viewportY = 50;
-    scrollHandler!(); // user scroll sets anchor
-    expect(mod.getScrollAnchor(ptyId)).toBe(50);
-
-    // Now simulate: write starts, xterm auto-scrolls to bottom
-    mod.markWriteStart(ptyId);
-    mockTerminal.buffer.active.viewportY = 200; // xterm auto-scrolled
-    scrollHandler!(); // onScroll fires during write
-
-    // Should have called scrollToLine to restore anchor
-    expect(mockTerminal.scrollToLine).toHaveBeenCalledWith(50);
-
-    mod.markWriteEnd(ptyId);
-    mod.clearScrollAnchor(ptyId);
-  });
-
-  it("onScroll handler does not counteract when no anchor set", async () => {
-    const mod = await import("../lib/resize-guard");
-
-    let scrollHandler: (() => void) | null = null;
-    const mockTerminal = {
-      onScroll: (fn: () => void) => { scrollHandler = fn; },
-      buffer: { active: { baseY: 100, viewportY: 100 } },
-      scrollToLine: vi.fn(),
-    };
-
-    const ptyId = 30;
-    mod.clearScrollAnchor(ptyId);
-    mod.setupScrollAnchor(mockTerminal as any, () => ptyId);
-
-    // Write in-flight but no anchor → auto-scroll should pass through
-    mod.markWriteStart(ptyId);
-    scrollHandler!();
-    expect(mockTerminal.scrollToLine).not.toHaveBeenCalled();
-
-    mod.markWriteEnd(ptyId);
-  });
-
-  it("caps anchor at baseY when scrollback has been trimmed", async () => {
-    const mod = await import("../lib/resize-guard");
-
-    let scrollHandler: (() => void) | null = null;
-    const mockTerminal = {
-      onScroll: (fn: () => void) => { scrollHandler = fn; },
-      buffer: { active: { baseY: 200, viewportY: 150 } },
-      scrollToLine: vi.fn(),
-    };
-
-    const ptyId = 40;
-    mod.clearScrollAnchor(ptyId);
-    mod.setupScrollAnchor(mockTerminal as any, () => ptyId);
-
-    // User scrolls to line 150
-    scrollHandler!();
-    expect(mod.getScrollAnchor(ptyId)).toBe(150);
-
-    // Scrollback trimmed: baseY dropped to 100 (lines were evicted)
-    mockTerminal.buffer.active.baseY = 100;
-    mockTerminal.buffer.active.viewportY = 100; // xterm auto-scrolled during write
-    mod.markWriteStart(ptyId);
-    scrollHandler!();
-
-    // Should cap at baseY (100), not try to scroll to 150
-    expect(mockTerminal.scrollToLine).toHaveBeenCalledWith(100);
-
-    mod.markWriteEnd(ptyId);
-    mod.clearScrollAnchor(ptyId);
+    const exports = Object.keys(mod);
+    expect(exports).toContain("createResizeHandler");
+    expect(exports).toContain("shouldFit");
+    // These should NOT be exported — scroll anchoring is handled by xterm.js's
+    // built-in isUserScrolling flag. Our resize guards protect that flag.
+    expect(exports).not.toContain("setupScrollAnchor");
+    expect(exports).not.toContain("markWriteStart");
+    expect(exports).not.toContain("markWriteEnd");
+    expect(exports).not.toContain("getScrollAnchor");
+    expect(exports).not.toContain("clearScrollAnchor");
   });
 });

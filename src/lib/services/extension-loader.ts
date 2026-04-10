@@ -88,6 +88,26 @@ const EXTENSION_ALLOWED_COMMANDS: Set<string> = new Set([
   "show_in_file_manager",
   "open_with_default_app",
   "find_file",
+  // Git worktree commands
+  "create_worktree",
+  "remove_worktree",
+  "list_worktrees",
+  "list_branches",
+  // Git operation commands
+  "git_clone",
+  "push_branch",
+  "delete_branch",
+  "git_checkout",
+  // File utility commands
+  "copy_files",
+  "run_script",
+  // GitHub CLI commands
+  "gh_list_issues",
+  "gh_list_prs",
+  // Git info commands
+  "git_log",
+  "git_status",
+  "git_diff",
 ]);
 
 // PTY commands — only available to extensions with "pty" permission

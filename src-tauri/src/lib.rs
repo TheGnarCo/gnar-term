@@ -1,3 +1,9 @@
+mod file_utils;
+mod gh_commands;
+mod git_info;
+mod git_ops;
+mod git_worktree;
+
 use clap::Parser;
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 use serde::Serialize;
@@ -1340,7 +1346,13 @@ pub fn run() {
         })
         .manage(cli_args)
         .invoke_handler(tauri::generate_handler![
-            get_cli_args, spawn_pty, write_pty, resize_pty, kill_pty, pause_pty, resume_pty, detect_font, list_monospace_fonts, get_pty_cwd, get_pty_title, file_exists, list_dir, is_git_repo, list_gitignored, read_file, read_file_base64, write_file, ensure_dir, remove_dir, get_home, watch_file, unwatch_file, show_in_file_manager, open_with_default_app, find_file
+            get_cli_args, spawn_pty, write_pty, resize_pty, kill_pty, pause_pty, resume_pty, detect_font, list_monospace_fonts, get_pty_cwd, get_pty_title, file_exists, list_dir, is_git_repo, list_gitignored, read_file, read_file_base64, write_file, ensure_dir, remove_dir, get_home, watch_file, unwatch_file, show_in_file_manager, open_with_default_app, find_file,
+            // Phase 2: Git & file utility commands
+            git_worktree::create_worktree, git_worktree::remove_worktree, git_worktree::list_worktrees, git_worktree::list_branches,
+            git_ops::git_clone, git_ops::push_branch, git_ops::delete_branch, git_ops::git_checkout,
+            file_utils::copy_files, file_utils::run_script,
+            gh_commands::gh_list_issues, gh_commands::gh_list_prs,
+            git_info::git_log, git_info::git_status, git_info::git_diff
         ])
         .setup(|app| {
             // Write shell integration files once at startup (static content)

@@ -62,11 +62,12 @@ The `extension.json` manifest declares metadata and contributions.
 
 ### Optional Fields
 
-| Field         | Type      | Description                                                             |
-| ------------- | --------- | ----------------------------------------------------------------------- |
-| `description` | `string`  | One-line description.                                                   |
-| `included`    | `boolean` | `true` for extensions shipped with core. External extensions omit this. |
-| `contributes` | `object`  | Declares what the extension provides. See below.                        |
+| Field         | Type       | Description                                                                 |
+| ------------- | ---------- | --------------------------------------------------------------------------- |
+| `description` | `string`   | One-line description.                                                       |
+| `included`    | `boolean`  | `true` for extensions shipped with core. External extensions omit this.     |
+| `permissions` | `string[]` | Elevated permissions. Currently supported: `"pty"` (PTY access). See below. |
+| `contributes` | `object`   | Declares what the extension provides. See below.                            |
 
 ### Contributions
 
@@ -114,6 +115,39 @@ All contributions are declared upfront in the manifest. Core reads them before l
   }
 }
 ```
+
+---
+
+### Permissions
+
+Extensions run with a restricted set of Tauri commands by default. The `permissions` field in the manifest requests elevated access:
+
+| Permission | Grants access to                                                                                              |
+| ---------- | ------------------------------------------------------------------------------------------------------------- |
+| `"pty"`    | `spawn_pty`, `write_pty`, `kill_pty`, `resize_pty`, `get_pty_cwd`, `get_pty_title`, `pause_pty`, `resume_pty` |
+
+A warning is logged when an extension with elevated permissions is activated.
+
+### Custom Events
+
+Extensions can declare and emit custom events using the `extension:` prefix:
+
+```json
+{
+  "contributes": {
+    "events": ["extension:harness:statusChanged"]
+  }
+}
+```
+
+```typescript
+api.emit("extension:harness:statusChanged", { status: "running" });
+api.on("extension:harness:statusChanged", (event) => {
+  /* ... */
+});
+```
+
+Custom events follow the same deny-by-default model as core events — they must be declared in the manifest.
 
 ---
 
@@ -281,7 +315,7 @@ const content = await api.invoke<string>("read_file", {
 });
 ```
 
-**Allowed commands:** `file_exists`, `list_dir`, `read_file`, `read_file_base64`, `write_file`, `ensure_dir`, `remove_dir`, `get_home`, `is_git_repo`, `list_gitignored`, `watch_file`, `unwatch_file`, `show_in_file_manager`, `open_with_default_app`, `find_file`.
+**Allowed commands:** `file_exists`, `list_dir`, `read_file`, `read_file_base64`, `write_file`, `ensure_dir`, `remove_dir`, `get_home`, `is_git_repo`, `list_gitignored`, `watch_file`, `unwatch_file`, `show_in_file_manager`, `open_with_default_app`, `find_file`, `create_worktree`, `remove_worktree`, `list_worktrees`, `list_branches`, `git_clone`, `push_branch`, `delete_branch`, `git_checkout`, `copy_files`, `run_script`, `gh_list_issues`, `gh_list_prs`, `git_log`, `git_status`, `git_diff`.
 
 #### File System
 
@@ -311,6 +345,118 @@ interface DirEntry {
 | `is_git_repo`     | `{ path }` | `boolean`  |
 | `list_gitignored` | `{ path }` | `string[]` |
 
+#### Git Worktree
+
+| Command           | Args                                         | Returns          |
+| ----------------- | -------------------------------------------- | ---------------- |
+| `create_worktree` | `{ repo_path, branch, base, worktree_path }` | `void`           |
+| `remove_worktree` | `{ repo_path, worktree_path }`               | `void`           |
+| `list_worktrees`  | `{ repo_path }`                              | `WorktreeInfo[]` |
+| `list_branches`   | `{ repo_path, include_remote }`              | `BranchInfo[]`   |
+
+```typescript
+interface WorktreeInfo {
+  path: string;
+  head: string;
+  branch: string | null;
+  is_bare: boolean;
+}
+interface BranchInfo {
+  name: string;
+  is_current: boolean;
+  is_remote: boolean;
+}
+```
+
+#### Git Operations
+
+| Command         | Args                             | Returns |
+| --------------- | -------------------------------- | ------- |
+| `git_clone`     | `{ url, target_dir }`            | `void`  |
+| `push_branch`   | `{ repo_path, branch, remote? }` | `void`  |
+| `delete_branch` | `{ repo_path, branch, remote? }` | `void`  |
+| `git_checkout`  | `{ repo_path, branch }`          | `void`  |
+
+#### Git Info
+
+| Command      | Args                    | Returns        |
+| ------------ | ----------------------- | -------------- |
+| `git_log`    | `{ repo_path, count? }` | `CommitInfo[]` |
+| `git_status` | `{ repo_path }`         | `FileStatus[]` |
+| `git_diff`   | `{ repo_path, file? }`  | `string`       |
+
+```typescript
+interface CommitInfo {
+  hash: string;
+  short_hash: string;
+  author_name: string;
+  author_email: string;
+  subject: string;
+  date: string;
+}
+interface FileStatus {
+  path: string;
+  status: string;
+  staged: string;
+}
+```
+
+#### GitHub CLI
+
+Requires the [GitHub CLI](https://cli.github.com/) (`gh`) to be installed.
+
+| Command          | Args                    | Returns     |
+| ---------------- | ----------------------- | ----------- |
+| `gh_list_issues` | `{ repo_path, state? }` | `GhIssue[]` |
+| `gh_list_prs`    | `{ repo_path, state? }` | `GhPr[]`    |
+
+```typescript
+interface GhAuthor {
+  login: string;
+}
+interface GhLabel {
+  name: string;
+  color: string;
+}
+interface GhIssue {
+  number: number;
+  title: string;
+  state: string;
+  author: GhAuthor;
+  labels: GhLabel[];
+  created_at: string;
+  url: string;
+}
+interface GhPr {
+  number: number;
+  title: string;
+  state: string;
+  author: GhAuthor;
+  labels: GhLabel[];
+  created_at: string;
+  url: string;
+  head_ref_name: string;
+  is_draft: boolean;
+}
+```
+
+#### File Utilities
+
+| Command      | Args                                 | Returns        |
+| ------------ | ------------------------------------ | -------------- |
+| `copy_files` | `{ source_dir, dest_dir, patterns }` | `number`       |
+| `run_script` | `{ cwd, command }`                   | `ScriptOutput` |
+
+```typescript
+interface ScriptOutput {
+  stdout: string;
+  stderr: string;
+  exit_code: number;
+}
+```
+
+`copy_files` supports glob patterns with `*` (single segment) and `**` (any depth). `run_script` runs via `sh -c`.
+
 #### File Watching
 
 | Command        | Args          | Returns  | Notes              |
@@ -339,6 +485,13 @@ api.showFileContextMenu(x, y, "/path/to/file"); // Show context menu for file
 api.showDirContextMenu(x, y, "/path/to/dir"); // Show context menu for directory
 
 api.createWorkspace("Backend", "/home/user/api"); // Create a new workspace
+api.createWorkspace("Worktree", "/path/to/wt", {
+  // With options
+  env: { GNARTERM_WORKTREE_ROOT: "/path" }, // PTY environment variables
+  metadata: { branch: "feat/x", repoPath: "/repo" }, // Stored with workspace
+});
+
+api.openSurface("dashboard:dashboard", "My Dashboard", { projectId: "abc" }); // Open an extension surface
 api.openInEditor("/path/to/file.ts"); // Open in system default editor
 
 const cwd = await api.getActiveCwd(); // CWD of focused terminal
@@ -431,6 +584,20 @@ In Svelte components, use the `$` prefix for auto-subscription:
 </div>
 ```
 
+### Dashboard Zone Helpers
+
+Query registered sidebar content for use in dashboard zones or other dynamic layouts:
+
+```typescript
+const tabs = api.getSidebarTabs();
+// → [{ id: "files", label: "Files", component: FileBrowser }, ...]
+
+const sections = api.getSidebarSections();
+// → [{ id: "profile", label: "Profile", component: ProfileCard }, ...]
+```
+
+Both methods return all registered content from all extensions, including the calling extension's own registrations.
+
 ---
 
 ## Writing Extension Components
@@ -509,16 +676,17 @@ Common theme properties: `bg`, `fg`, `fgDim`, `fgMuted`, `accent`, `border`, `bo
 
 ## Extension Points Summary
 
-| Extension Point          | Where it Appears               | Component?   | Manifest Key                     |
-| ------------------------ | ------------------------------ | ------------ | -------------------------------- |
-| Secondary sidebar tab    | Right sidebar                  | Yes          | `secondarySidebarTabs`           |
-| Secondary sidebar action | Tab control row                | No (handler) | `secondarySidebarTabs[].actions` |
-| Primary sidebar section  | Left sidebar, below workspaces | Yes          | `primarySidebarSections`         |
-| Surface type             | Pane content area              | Yes          | `surfaces`                       |
-| Command                  | Command palette                | No (handler) | `commands`                       |
-| Context menu item        | Right-click on files           | No (handler) | `contextMenuItems`               |
-| Settings                 | Settings overlay               | No (schema)  | `settings`                       |
-| Event subscription       | N/A (background)               | No           | `events`                         |
+| Extension Point          | Where it Appears               | Component?   | Manifest Key                        |
+| ------------------------ | ------------------------------ | ------------ | ----------------------------------- |
+| Secondary sidebar tab    | Right sidebar + dashboard zone | Yes          | `secondarySidebarTabs`              |
+| Secondary sidebar action | Tab control row                | No (handler) | `secondarySidebarTabs[].actions`    |
+| Primary sidebar section  | Left sidebar + dashboard zone  | Yes          | `primarySidebarSections`            |
+| Surface type             | Pane content area              | Yes          | `surfaces`                          |
+| Command                  | Command palette                | No (handler) | `commands`                          |
+| Context menu item        | Right-click on files           | No (handler) | `contextMenuItems`                  |
+| Settings                 | Settings overlay               | No (schema)  | `settings`                          |
+| Event subscription       | N/A (background)               | No           | `events`                            |
+| Custom event             | N/A (inter-extension)          | No           | `events` (with `extension:` prefix) |
 
 ---
 
@@ -596,7 +764,7 @@ Each extension gets its own state file at `~/.config/gnar-term/extensions/<id>/s
 
 The extension API enforces multiple layers of sandboxing:
 
-- **Invoke allowlist** — Extensions can only call a fixed set of Tauri commands (file system, git, file watching, system). PTY commands (`spawn_pty`, `write_pty`, `kill_pty`, etc.) are blocked — extensions cannot read from or write to terminal sessions.
+- **Invoke allowlist** — Extensions can only call a fixed set of Tauri commands (file system, git, git worktree, GitHub CLI, file utilities, file watching, system). PTY commands are blocked by default — extensions must declare `permissions: ["pty"]` in their manifest to access terminal sessions. A warning is logged when PTY permission is granted.
 - **Event filtering** — Extensions can only subscribe to events declared in their manifest's `contributes.events`. Omitting the field means no event access (deny-by-default).
 - **Read blocks** — File reads are blocked for sensitive paths: `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.kube`, `~/.config/gcloud`, `~/.docker`, `/etc/shadow`, `/etc/gshadow`
 - **Write sandbox** — All writes (`write_file`, `ensure_dir`, `remove_dir`) are restricted to `~/.config/gnar-term/`
@@ -607,7 +775,7 @@ The extension API enforces multiple layers of sandboxing:
 
 ## Included Extensions
 
-GnarTerm ships with three included extensions as reference implementations:
+GnarTerm ships with eight included extensions:
 
 ### Preview (`src/extensions/preview/`)
 
@@ -620,6 +788,26 @@ Registers a secondary sidebar tab showing the directory tree of the active termi
 ### Profile Card (`src/extensions/profile-card/`)
 
 Registers a primary sidebar section showing user profile info. Demonstrates an extension with a settings schema — exposes `name`, `description`, and `avatarUrl` fields that the user can configure in the Settings overlay.
+
+### Managed Workspaces (`src/extensions/managed-workspaces/`)
+
+Git worktree-backed workspace lifecycle management. Provides "Create Worktree Workspace..." and "Archive Managed Workspace..." commands. Creates git worktrees, optionally copies config files (via `copy_files`) and runs setup scripts (via `run_script`), then opens the worktree as a workspace. Archiving pushes the branch and removes the worktree. Configurable via settings: branch prefix, copy patterns, and setup script.
+
+### Agentic Orchestrator (`src/extensions/agentic-orchestrator/`)
+
+Registers a "harness" surface type for running AI agent processes with three-layer status tracking (OSC notifications → waiting, title pattern matching → running/idle, idle timeout → idle). Requires `"pty"` permission. Emits `extension:harness:statusChanged` events on status transitions.
+
+### GitHub (`src/extensions/github/`)
+
+Registers a secondary sidebar tab with three sections: Issues, Pull Requests, and Recent Commits. Fetches data via `gh_list_issues`, `gh_list_prs`, and `git_log` commands. Caches results per workspace. Requires the GitHub CLI (`gh`) for issues and PRs; git info works without it.
+
+### Project Scope (`src/extensions/project-scope/`)
+
+Groups workspaces into named projects. Each project appears as a primary sidebar section showing its nested workspaces with a color-coded indicator. Workspaces created while a project is active are auto-associated. Provides "Create Project..." and "Open Project Dashboard..." commands.
+
+### Dashboard (`src/extensions/dashboard/`)
+
+Registers a configurable zone-based dashboard surface type. Each zone can mount content from the sidebar tab or sidebar section registries via `getSidebarTabs()`/`getSidebarSections()`. Zone configuration is persisted per dashboard instance. Provides an "Open Dashboard" command.
 
 ---
 

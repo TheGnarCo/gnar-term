@@ -34,8 +34,13 @@
 | 3.4 | Project Scope        | complete | `src/extensions/project-scope/`        | 13    |
 | 3.5 | Dashboard            | complete | `src/extensions/dashboard/`            | 11    |
 
+## Phase 4: Integration — COMPLETE
+
+| #   | Story                             | Status                                 |
+| --- | --------------------------------- | -------------------------------------- |
+| 4.1 | Wire extensions in App.svelte     | complete                               |
+| 4.2 | Update EXTENSION_ALLOWED_COMMANDS | complete                               |
+| 4.3 | Update EXTENSIONS.md              | complete                               |
+| 4.4 | Cross-extension conventions       | complete (documented in EXTENSIONS.md) |
+
 **Total: 559 frontend tests passing, 135 Rust tests passing**
-
-## Next
-
-Resume with `/implement:build --resume` — Phase 4 Integration.

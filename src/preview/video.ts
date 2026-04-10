@@ -6,12 +6,14 @@ registerPreviewer({
   render(_content, filePath, element) {
     const src = convertFileSrc(filePath);
     const wrapper = document.createElement("div");
-    wrapper.style.cssText = "display: flex; justify-content: center; align-items: center; min-height: 200px;";
+    wrapper.style.cssText =
+      "display: flex; justify-content: center; align-items: center; min-height: 200px;";
     const video = document.createElement("video");
     video.src = src;
     video.controls = true;
     video.autoplay = true;
-    video.style.cssText = "max-width: 100%; max-height: 80vh; border-radius: 4px;";
+    video.style.cssText =
+      "max-width: 100%; max-height: 80vh; border-radius: 4px;";
     video.onerror = () => {
       wrapper.textContent = "";
       const errDiv = document.createElement("div");

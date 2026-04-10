@@ -7,9 +7,13 @@
  * - Tab visibility change triggers re-fit
  * - connectPty passes terminal.cols/rows to spawn_pty
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mockIPC, mockWindows, clearMocks, mockConvertFileSrc } from "@tauri-apps/api/mocks";
-import { invoke } from "@tauri-apps/api/core";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import {
+  mockIPC,
+  mockWindows,
+  clearMocks,
+  mockConvertFileSrc,
+} from "@tauri-apps/api/mocks";
 import { randomFillSync } from "crypto";
 
 // jsdom doesn't provide WebCrypto — polyfill for mockIPC
@@ -33,8 +37,9 @@ describe("connectPty uses real terminal dimensions", () => {
     const spawnCalls: { cols: number; rows: number }[] = [];
 
     mockIPC((cmd, args) => {
+      const a = args as Record<string, unknown>;
       if (cmd === "spawn_pty") {
-        spawnCalls.push({ cols: (args as any).cols, rows: (args as any).rows });
+        spawnCalls.push({ cols: a.cols as number, rows: a.rows as number });
         return 1; // ptyId
       }
       return undefined;
@@ -46,7 +51,7 @@ describe("connectPty uses real terminal dimensions", () => {
     const surface = {
       ptyId: -1,
       terminal: { cols: 120, rows: 36 },
-    } as any;
+    } as unknown as Parameters<typeof connectPty>[0];
 
     await connectPty(surface, "/tmp");
 
@@ -60,8 +65,13 @@ describe("connectPty uses real terminal dimensions", () => {
     const spawnCalls: { cols: number; rows: number; cwd: string | null }[] = [];
 
     mockIPC((cmd, args) => {
+      const a = args as Record<string, unknown>;
       if (cmd === "spawn_pty") {
-        spawnCalls.push({ cols: (args as any).cols, rows: (args as any).rows, cwd: (args as any).cwd });
+        spawnCalls.push({
+          cols: a.cols as number,
+          rows: a.rows as number,
+          cwd: a.cwd as string | null,
+        });
         return 3;
       }
       return undefined;
@@ -73,7 +83,7 @@ describe("connectPty uses real terminal dimensions", () => {
       ptyId: -1,
       terminal: { cols: 80, rows: 24 },
       cwd: "/Users/test/Documents",
-    } as any;
+    } as unknown as Parameters<typeof connectPty>[0];
 
     await connectPty(surface);
 
@@ -86,8 +96,9 @@ describe("connectPty uses real terminal dimensions", () => {
     const spawnCalls: { cwd: string | null }[] = [];
 
     mockIPC((cmd, args) => {
+      const a = args as Record<string, unknown>;
       if (cmd === "spawn_pty") {
-        spawnCalls.push({ cwd: (args as any).cwd });
+        spawnCalls.push({ cwd: a.cwd as string | null });
         return 4;
       }
       return undefined;
@@ -98,7 +109,7 @@ describe("connectPty uses real terminal dimensions", () => {
     const surface = {
       ptyId: -1,
       terminal: { cols: 80, rows: 24 },
-    } as any;
+    } as unknown as Parameters<typeof connectPty>[0];
 
     await connectPty(surface, "/tmp/fallback");
 
@@ -110,8 +121,9 @@ describe("connectPty uses real terminal dimensions", () => {
     const spawnCalls: { cwd: string | null }[] = [];
 
     mockIPC((cmd, args) => {
+      const a = args as Record<string, unknown>;
       if (cmd === "spawn_pty") {
-        spawnCalls.push({ cwd: (args as any).cwd });
+        spawnCalls.push({ cwd: a.cwd as string | null });
         return 5;
       }
       return undefined;
@@ -123,7 +135,7 @@ describe("connectPty uses real terminal dimensions", () => {
       ptyId: -1,
       terminal: { cols: 80, rows: 24 },
       cwd: "/Users/test/Documents",
-    } as any;
+    } as unknown as Parameters<typeof connectPty>[0];
 
     await connectPty(surface, "/tmp/ignored");
 
@@ -135,8 +147,9 @@ describe("connectPty uses real terminal dimensions", () => {
     const spawnCalls: { cwd: string | null }[] = [];
 
     mockIPC((cmd, args) => {
+      const a = args as Record<string, unknown>;
       if (cmd === "spawn_pty") {
-        spawnCalls.push({ cwd: (args as any).cwd });
+        spawnCalls.push({ cwd: a.cwd as string | null });
         return 6;
       }
       return undefined;
@@ -147,7 +160,7 @@ describe("connectPty uses real terminal dimensions", () => {
     const surface = {
       ptyId: -1,
       terminal: { cols: 80, rows: 24 },
-    } as any;
+    } as unknown as Parameters<typeof connectPty>[0];
 
     await connectPty(surface);
 
@@ -156,7 +169,7 @@ describe("connectPty uses real terminal dimensions", () => {
   });
 
   it("does not spawn if already connected", async () => {
-    const spawnCalls: any[] = [];
+    const spawnCalls: unknown[] = [];
 
     mockIPC((cmd, args) => {
       if (cmd === "spawn_pty") {
@@ -168,7 +181,10 @@ describe("connectPty uses real terminal dimensions", () => {
 
     const { connectPty } = await import("../lib/terminal-service");
 
-    const surface = { ptyId: 5, terminal: { cols: 80, rows: 24 } } as any;
+    const surface = {
+      ptyId: 5,
+      terminal: { cols: 80, rows: 24 },
+    } as unknown as Parameters<typeof connectPty>[0];
     await connectPty(surface);
 
     expect(spawnCalls).toHaveLength(0);
@@ -183,7 +199,10 @@ describe("connectPty uses real terminal dimensions", () => {
 
     const { connectPty } = await import("../lib/terminal-service");
 
-    const surface = { ptyId: -1, terminal: { cols: 80, rows: 24 } } as any;
+    const surface = {
+      ptyId: -1,
+      terminal: { cols: 80, rows: 24 },
+    } as unknown as Parameters<typeof connectPty>[0];
     await connectPty(surface);
 
     expect(surface.ptyId).toBe(-1);

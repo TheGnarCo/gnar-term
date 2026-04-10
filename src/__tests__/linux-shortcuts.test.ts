@@ -22,10 +22,17 @@ vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
 }));
 vi.mock("@xterm/xterm", () => ({
   Terminal: vi.fn().mockImplementation(() => ({
-    open: vi.fn(), write: vi.fn(), focus: vi.fn(), dispose: vi.fn(),
-    cols: 80, rows: 24,
-    onData: vi.fn(), onResize: vi.fn(), onTitleChange: vi.fn(),
-    loadAddon: vi.fn(), options: {},
+    open: vi.fn(),
+    write: vi.fn(),
+    focus: vi.fn(),
+    dispose: vi.fn(),
+    cols: 80,
+    rows: 24,
+    onData: vi.fn(),
+    onResize: vi.fn(),
+    onTitleChange: vi.fn(),
+    loadAddon: vi.fn(),
+    options: {},
     buffer: { active: { getLine: vi.fn() } },
     parser: { registerOscHandler: vi.fn() },
     attachCustomKeyEventHandler: vi.fn(),
@@ -36,23 +43,31 @@ vi.mock("@xterm/xterm", () => ({
 }));
 vi.mock("@xterm/addon-fit", () => ({
   FitAddon: vi.fn().mockImplementation(() => ({
-    fit: vi.fn(), activate: vi.fn(), dispose: vi.fn(),
+    fit: vi.fn(),
+    activate: vi.fn(),
+    dispose: vi.fn(),
   })),
 }));
 vi.mock("@xterm/addon-webgl", () => ({
   WebglAddon: vi.fn().mockImplementation(() => ({
-    activate: vi.fn(), dispose: vi.fn(), onContextLoss: vi.fn(),
+    activate: vi.fn(),
+    dispose: vi.fn(),
+    onContextLoss: vi.fn(),
   })),
 }));
 vi.mock("@xterm/addon-web-links", () => ({
   WebLinksAddon: vi.fn().mockImplementation(() => ({
-    activate: vi.fn(), dispose: vi.fn(),
+    activate: vi.fn(),
+    dispose: vi.fn(),
   })),
 }));
 vi.mock("@xterm/addon-search", () => ({
   SearchAddon: vi.fn().mockImplementation(() => ({
-    activate: vi.fn(), dispose: vi.fn(),
-    findNext: vi.fn(), findPrevious: vi.fn(), clearDecorations: vi.fn(),
+    activate: vi.fn(),
+    dispose: vi.fn(),
+    findNext: vi.fn(),
+    findPrevious: vi.fn(),
+    clearDecorations: vi.fn(),
   })),
 }));
 vi.mock("@xterm/xterm/css/xterm.css", () => ({}));
@@ -65,7 +80,9 @@ vi.stubGlobal("localStorage", {
 vi.stubGlobal(
   "ResizeObserver",
   vi.fn().mockImplementation(() => ({
-    observe: vi.fn(), unobserve: vi.fn(), disconnect: vi.fn(),
+    observe: vi.fn(),
+    unobserve: vi.fn(),
+    disconnect: vi.fn(),
   })),
 );
 
@@ -79,9 +96,12 @@ describe("Linux keyboard shortcut handling", () => {
   beforeEach(async () => {
     const pane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
     const surface = await createTerminalSurface(pane);
-    (surface as any).ptyId = 42;
+    (surface as unknown as { ptyId: number }).ptyId = 42;
 
-    const termMock = surface.terminal as any;
+    const termMock = surface.terminal as unknown as Record<
+      string,
+      ReturnType<typeof vi.fn>
+    >;
     keyHandler = termMock.attachCustomKeyEventHandler.mock.calls[0][0];
   });
 
@@ -116,23 +136,47 @@ describe("Linux keyboard shortcut handling", () => {
 
   describe("Ctrl+Shift+C/V intercepted for clipboard", () => {
     it("Ctrl+Shift+C intercepts for copy", () => {
-      const event = new KeyboardEvent("keydown", { key: "C", ctrlKey: true, shiftKey: true });
+      const event = new KeyboardEvent("keydown", {
+        key: "C",
+        ctrlKey: true,
+        shiftKey: true,
+      });
       expect(keyHandler(event)).toBe(false);
     });
 
     it("Ctrl+Shift+V intercepts for paste", () => {
-      const event = new KeyboardEvent("keydown", { key: "V", ctrlKey: true, shiftKey: true });
+      const event = new KeyboardEvent("keydown", {
+        key: "V",
+        ctrlKey: true,
+        shiftKey: true,
+      });
       expect(keyHandler(event)).toBe(false);
     });
   });
 
   if (!isMac) {
     describe("Ctrl+Shift+key intercepted for app shortcuts on Linux", () => {
-      const appShortcuts = ["n", "t", "d", "w", "b", "p", "k", "f", "g", "h", "r"];
+      const appShortcuts = [
+        "n",
+        "t",
+        "d",
+        "w",
+        "b",
+        "p",
+        "k",
+        "f",
+        "g",
+        "h",
+        "r",
+      ];
 
       for (const key of appShortcuts) {
         it(`Ctrl+Shift+${key.toUpperCase()} intercepted for app`, () => {
-          const event = new KeyboardEvent("keydown", { key, ctrlKey: true, shiftKey: true });
+          const event = new KeyboardEvent("keydown", {
+            key,
+            ctrlKey: true,
+            shiftKey: true,
+          });
           expect(keyHandler(event)).toBe(false);
         });
       }

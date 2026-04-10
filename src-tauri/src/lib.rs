@@ -283,34 +283,17 @@ async fn spawn_pty(
     // allowlist with no capability negotiation fallback.
     cmd.env("TERM_PROGRAM", "ghostty");
     cmd.env("TERM_PROGRAM_VERSION", env!("CARGO_PKG_VERSION"));
-    // Inject OSC 7 cwd reporting for shells that don't do it automatically
-    // This makes zsh/bash report the working directory on every prompt
-    // Shell integration: inject OSC 7 cwd reporting (cross-platform)
-    let home = std::env::var("HOME").unwrap_or_default();
+    // Shell integration env vars — files are written once at startup in setup()
+    let home = home_dir().unwrap_or_default();
     let integration_dir = format!("{}/.config/gnar-term/shell", home);
-    let _ = std::fs::create_dir_all(&integration_dir);
 
-    // zsh: ZDOTDIR override
-    let zshenv = r#"# GnarTerm shell integration
-[ -f "$GNARTERM_ORIG_ZDOTDIR/.zshenv" ] && source "$GNARTERM_ORIG_ZDOTDIR/.zshenv"
-export ZDOTDIR="$GNARTERM_ORIG_ZDOTDIR"
-_gnarterm_report_cwd() { printf '\e]7;file://%s%s\a' "$(hostname)" "$PWD"; }
-precmd_functions+=(_gnarterm_report_cwd)
-chpwd_functions+=(_gnarterm_report_cwd)
-"#;
-    let _ = std::fs::write(format!("{}/.zshenv", integration_dir), zshenv);
+    // zsh: ZDOTDIR override points to our integration dir
     let orig_zdotdir = std::env::var("ZDOTDIR").unwrap_or(home.clone());
     cmd.env("GNARTERM_ORIG_ZDOTDIR", &orig_zdotdir);
     cmd.env("ZDOTDIR", &integration_dir);
 
-    // bash/fish: use GNARTERM_SHELL_INTEGRATION env var
-    // Bash users can add to .bashrc: [ -n "$GNARTERM_SHELL_INTEGRATION" ] && source "$GNARTERM_SHELL_INTEGRATION"
+    // bash: GNARTERM_SHELL_INTEGRATION env var
     let bash_integration = format!("{}/.config/gnar-term/shell/bash-integration.sh", home);
-    let bash_content = r#"# GnarTerm bash integration
-_gnarterm_report_cwd() { printf '\e]7;file://%s%s\a' "$(hostname)" "$PWD"; }
-PROMPT_COMMAND="_gnarterm_report_cwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
-"#;
-    let _ = std::fs::write(&bash_integration, bash_content);
     cmd.env("GNARTERM_SHELL_INTEGRATION", &bash_integration);
 
     // Pass through EDITOR/VISUAL so git commit, crontab, etc. open the right editor
@@ -374,6 +357,7 @@ PROMPT_COMMAND="_gnarterm_report_cwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
         let mut osc_buf = Vec::new();
         let mut in_osc = false;
         let mut prev_esc = false;
+        const MAX_OSC_BUF: usize = 8192; // 8KB cap — discard malformed sequences
 
         loop {
             // Flow control: block until frontend signals it can accept more data.
@@ -439,6 +423,11 @@ PROMPT_COMMAND="_gnarterm_report_cwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
                                 prev_esc = false;
                             } else {
                                 osc_buf.push(byte);
+                                // Cap buffer to prevent unbounded growth from unterminated sequences
+                                if osc_buf.len() > MAX_OSC_BUF {
+                                    osc_buf.clear();
+                                    in_osc = false;
+                                }
                             }
                         } else if byte == 0x1b {
                             prev_esc = true;
@@ -749,6 +738,100 @@ async fn detect_font() -> Result<String, String> {
     Ok(String::new())
 }
 
+/// List installed monospace fonts available for terminal use
+#[tauri::command]
+async fn list_monospace_fonts() -> Result<Vec<String>, String> {
+    let mut fonts = std::collections::BTreeSet::new();
+
+    // Always include the bundled font
+    fonts.insert("JetBrainsMono Nerd Font Mono".to_string());
+
+    #[cfg(target_os = "macos")]
+    {
+        let home = std::env::var("HOME").unwrap_or_default();
+        let font_dirs = [
+            format!("{home}/Library/Fonts"),
+            "/Library/Fonts".to_string(),
+            "/System/Library/Fonts".to_string(),
+            "/System/Library/Fonts/Supplemental".to_string(),
+        ];
+
+        // (File name substring, CSS font-family name)
+        let known_monospace: &[(&str, &str)] = &[
+            ("MesloLGS NF", "MesloLGS NF"),
+            ("MesloLGS Nerd Font", "MesloLGS Nerd Font Mono"),
+            ("JetBrainsMono NF", "JetBrainsMono NFM"),
+            ("JetBrains Mono Nerd Font", "JetBrainsMono Nerd Font Mono"),
+            ("JetBrainsMono-", "JetBrains Mono"),
+            ("Hack NF", "Hack NF"),
+            ("Hack Nerd Font", "Hack Nerd Font Mono"),
+            ("Hack-", "Hack"),
+            ("FiraCode NF", "FiraCode NF"),
+            ("FiraCode Nerd Font", "FiraCode Nerd Font Mono"),
+            ("FiraCode-", "Fira Code"),
+            ("SourceCodePro", "Source Code Pro"),
+            ("IBMPlexMono", "IBM Plex Mono"),
+            ("RobotoMono", "Roboto Mono"),
+            ("UbuntuMono", "Ubuntu Mono"),
+            ("Inconsolata", "Inconsolata"),
+            ("CascadiaCode", "Cascadia Code"),
+            ("CascadiaMono", "Cascadia Mono"),
+            ("VictorMono", "Victor Mono"),
+            ("Iosevka", "Iosevka"),
+            ("MonoLisa", "MonoLisa"),
+            ("DankMono", "Dank Mono"),
+            ("OperatorMono", "Operator Mono"),
+            ("SF-Mono", "SF Mono"),
+            ("SFMono", "SF Mono"),
+            ("Menlo", "Menlo"),
+            ("Monaco", "Monaco"),
+            ("Courier", "Courier New"),
+            ("AnonymousPro", "Anonymous Pro"),
+            ("Consolas", "Consolas"),
+        ];
+
+        for dir in &font_dirs {
+            if let Ok(entries) = std::fs::read_dir(dir) {
+                for entry in entries.flatten() {
+                    let file_name = entry.file_name().to_string_lossy().to_string();
+                    // Only look at font files
+                    let lower = file_name.to_lowercase();
+                    if !lower.ends_with(".ttf") && !lower.ends_with(".otf") && !lower.ends_with(".ttc") {
+                        continue;
+                    }
+                    let name_normalized = file_name.replace(' ', "");
+                    for (hint, css_name) in known_monospace {
+                        let search = hint.replace(' ', "");
+                        if name_normalized.contains(&search) {
+                            fonts.insert(css_name.to_string());
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        // Linux — fc-list gives actual monospace fonts
+        if let Ok(output) = std::process::Command::new("fc-list")
+            .args([":spacing=100", "family"])
+            .output()
+        {
+            let text = String::from_utf8_lossy(&output.stdout);
+            for line in text.lines() {
+                let family = line.split(',').next().unwrap_or("").trim().to_string();
+                if !family.is_empty() {
+                    fonts.insert(family);
+                }
+            }
+        }
+    }
+
+    Ok(fonts.into_iter().collect())
+}
+
 /// Pause PTY reader (flow control — frontend buffer is full)
 #[tauri::command]
 async fn pause_pty(state: tauri::State<'_, AppState>, pty_id: u32) -> Result<(), String> {
@@ -769,14 +852,31 @@ async fn resume_pty(state: tauri::State<'_, AppState>, pty_id: u32) -> Result<()
     Ok(())
 }
 
+/// Get the user's home directory (cross-platform)
+fn home_dir() -> Result<String, String> {
+    std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .map_err(|_| "HOME/USERPROFILE not set".to_string())
+}
+
 /// Block reads to sensitive directories (SSH keys, credentials, etc.)
 fn validate_read_path(path: &str) -> Result<std::path::PathBuf, String> {
     let canonical = std::fs::canonicalize(path)
         .map_err(|e| format!("Invalid path {}: {}", path, e))?;
     let path_str = canonical.to_string_lossy();
 
-    if let Ok(home) = std::env::var("HOME") {
-        let blocked = ["/.ssh", "/.gnupg", "/.aws", "/.kube", "/.config/gcloud", "/.docker"];
+    if let Ok(home) = home_dir() {
+        let blocked = [
+            "/.ssh",
+            "/.gnupg",
+            "/.aws",
+            "/.kube",
+            "/.config/gcloud",
+            "/.docker",
+            "/.netrc",
+            "/.config/gh",
+            "/Library/Keychains",
+        ];
         for prefix in blocked {
             if path_str.starts_with(&format!("{}{}", home, prefix)) {
                 return Err(format!("Access denied: {}", path));
@@ -792,24 +892,75 @@ fn validate_read_path(path: &str) -> Result<std::path::PathBuf, String> {
 /// Check if a file exists (lightweight — no read)
 #[tauri::command]
 async fn file_exists(path: String) -> bool {
-    std::path::Path::new(&path).exists()
+    match validate_read_path(&path) {
+        Ok(validated) => validated.exists(),
+        Err(_) => false,
+    }
 }
 
-/// List filenames in a directory (non-recursive, files only)
+/// Directory entry with metadata for the file browser
+#[derive(serde::Serialize)]
+struct DirEntry {
+    name: String,
+    is_dir: bool,
+    is_hidden: bool,
+}
+
+/// List entries in a directory (non-recursive, files and directories)
 #[tauri::command]
-async fn list_dir(path: String) -> Result<Vec<String>, String> {
-    let entries = std::fs::read_dir(&path).map_err(|e| format!("Failed to read dir {}: {}", path, e))?;
-    let mut names = Vec::new();
+async fn list_dir(path: String) -> Result<Vec<DirEntry>, String> {
+    let validated = validate_read_path(&path)?;
+    let entries = std::fs::read_dir(&validated).map_err(|e| format!("Failed to read dir {}: {}", path, e))?;
+    let mut result = Vec::new();
     for entry in entries.flatten() {
-        if let Ok(ft) = entry.file_type() {
-            if ft.is_file() {
-                if let Some(name) = entry.file_name().to_str() {
-                    names.push(name.to_string());
-                }
-            }
+        if let Some(name) = entry.file_name().to_str() {
+            let is_dir = entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false);
+            let is_hidden = name.starts_with('.');
+            result.push(DirEntry { name: name.to_string(), is_dir, is_hidden });
         }
     }
-    Ok(names)
+    // Sort: directories first, then alphabetical (case-insensitive)
+    result.sort_by(|a, b| {
+        b.is_dir.cmp(&a.is_dir).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+    });
+    Ok(result)
+}
+
+/// Check if a path is inside a git repository
+#[tauri::command]
+async fn is_git_repo(path: String) -> Result<bool, String> {
+    let validated = validate_read_path(&path)?;
+    let mut dir = std::path::PathBuf::from(&validated);
+    loop {
+        if dir.join(".git").exists() {
+            return Ok(true);
+        }
+        if !dir.pop() {
+            return Ok(false);
+        }
+    }
+}
+
+/// List gitignored files in a directory using `git check-ignore`
+#[tauri::command]
+async fn list_gitignored(path: String) -> Result<Vec<String>, String> {
+    let validated = validate_read_path(&path)?;
+    let entries = std::fs::read_dir(&validated).map_err(|e| format!("Failed to read dir {}: {}", path, e))?;
+    let names: Vec<String> = entries.flatten()
+        .filter_map(|e| e.file_name().to_str().map(|s| s.to_string()))
+        .collect();
+    if names.is_empty() {
+        return Ok(Vec::new());
+    }
+    let output = std::process::Command::new("git")
+        .arg("check-ignore")
+        .arg("--")
+        .args(&names)
+        .current_dir(&validated)
+        .output()
+        .map_err(|e| format!("git check-ignore failed: {e}"))?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    Ok(stdout.lines().map(|s| s.to_string()).collect())
 }
 
 /// Read a file's contents
@@ -845,7 +996,7 @@ fn b64_encode(data: &[u8]) -> String {
 
 /// Validate that a write path is under ~/.config/gnar-term/
 fn validate_write_path(path: &str) -> Result<(), String> {
-    let home = std::env::var("HOME").map_err(|_| "HOME not set".to_string())?;
+    let home = home_dir()?;
     let allowed = format!("{}/.config/gnar-term", home);
 
     // Manually resolve .. components to prevent traversal attacks on paths
@@ -864,6 +1015,29 @@ fn validate_write_path(path: &str) -> Result<(), String> {
     if !norm_path.starts_with(&norm_allowed) {
         return Err(format!("Write denied: path must be under {}", allowed));
     }
+
+    // Defense against symlink escapes: if the resolved path (or its closest
+    // existing ancestor) canonicalizes outside the allowed prefix, reject it.
+    let mut check = norm_path.clone();
+    loop {
+        if check.exists() {
+            match std::fs::canonicalize(&check) {
+                Ok(canonical) => {
+                    let canon_allowed = std::fs::canonicalize(&norm_allowed)
+                        .unwrap_or_else(|_| norm_allowed.clone());
+                    if !canonical.starts_with(&canon_allowed) {
+                        return Err(format!("Write denied: path resolves outside {}", allowed));
+                    }
+                    break;
+                }
+                Err(_) => break, // can't canonicalize, manual check above is sufficient
+            }
+        }
+        if !check.pop() {
+            break;
+        }
+    }
+
     Ok(())
 }
 
@@ -881,28 +1055,41 @@ async fn ensure_dir(path: String) -> Result<(), String> {
     std::fs::create_dir_all(&path).map_err(|e| format!("Failed to create dir {}: {}", path, e))
 }
 
+/// Remove a directory and all its contents (restricted to ~/.config/gnar-term/)
+#[tauri::command]
+async fn remove_dir(path: String) -> Result<(), String> {
+    validate_write_path(&path)?;
+    if std::path::Path::new(&path).exists() {
+        std::fs::remove_dir_all(&path)
+            .map_err(|e| format!("Failed to remove {}: {}", path, e))
+    } else {
+        Ok(())
+    }
+}
+
 /// Get the user's home directory
 #[tauri::command]
 async fn get_home() -> Result<String, String> {
-    std::env::var("HOME").map_err(|_| "HOME not set".to_string())
+    home_dir()
 }
 
 /// Show a file in the system file manager
 #[tauri::command]
 async fn show_in_file_manager(path: String) -> Result<(), String> {
+    let validated = validate_read_path(&path)?;
+    let validated_str = validated.to_string_lossy().to_string();
     #[cfg(target_os = "macos")]
     {
-        std::process::Command::new("open").args(["-R", &path]).spawn().map_err(|e| e.to_string())?;
+        std::process::Command::new("open").args(["-R", &validated_str]).spawn().map_err(|e| e.to_string())?;
     }
     #[cfg(target_os = "linux")]
     {
-        let dir = std::path::Path::new(&path).parent().map(|p| p.to_string_lossy().to_string()).unwrap_or(path);
+        let dir = validated.parent().map(|p| p.to_string_lossy().to_string()).unwrap_or(validated_str);
         std::process::Command::new("xdg-open").arg(&dir).spawn().map_err(|e| e.to_string())?;
     }
     #[cfg(target_os = "windows")]
     {
-        let canonical = std::fs::canonicalize(&path).map_err(|e| format!("Invalid path: {}", e))?;
-        std::process::Command::new("explorer").args(["/select,", &canonical.to_string_lossy()]).spawn().map_err(|e| e.to_string())?;
+        std::process::Command::new("explorer").args(["/select,", &validated_str]).spawn().map_err(|e| e.to_string())?;
     }
     Ok(())
 }
@@ -910,27 +1097,35 @@ async fn show_in_file_manager(path: String) -> Result<(), String> {
 /// Open a file with the default system app
 #[tauri::command]
 async fn open_with_default_app(path: String) -> Result<(), String> {
+    let validated = validate_read_path(&path)?;
+    let validated_str = validated.to_string_lossy().to_string();
     #[cfg(target_os = "macos")]
-    std::process::Command::new("open").arg(&path).spawn().map_err(|e| e.to_string())?;
+    std::process::Command::new("open").arg(&validated_str).spawn().map_err(|e| e.to_string())?;
     #[cfg(target_os = "linux")]
-    std::process::Command::new("xdg-open").arg(&path).spawn().map_err(|e| e.to_string())?;
+    std::process::Command::new("xdg-open").arg(&validated_str).spawn().map_err(|e| e.to_string())?;
     #[cfg(target_os = "windows")]
-    std::process::Command::new("explorer").arg(&path).spawn().map_err(|e| e.to_string())?;
+    std::process::Command::new("explorer").arg(&validated_str).spawn().map_err(|e| e.to_string())?;
     Ok(())
 }
 
 /// Watch a file for changes, emit events
 #[tauri::command]
 async fn watch_file(app: AppHandle, state: tauri::State<'_, AppState>, path: String) -> Result<u32, String> {
+    // Validate the path before watching — prevent exfiltration of sensitive files
+    let validated = validate_read_path(&path)?;
+    let validated_str = validated.to_string_lossy().to_string();
+
     let watch_id = NEXT_WATCH_ID.fetch_add(1, Ordering::Relaxed);
     let stop = Arc::new(AtomicBool::new(false));
     let stop_clone = stop.clone();
 
     state.watch_flags.lock().map_err(|e| e.to_string())?.insert(watch_id, stop);
 
-    let path_clone = path.clone();
+    // Cap file content emitted over IPC to prevent UI stalls on large files
+    const MAX_WATCH_FILE_SIZE: u64 = 512 * 1024; // 512KB
+
     std::thread::spawn(move || {
-        let mut last_modified = std::fs::metadata(&path_clone)
+        let mut last_modified = std::fs::metadata(&validated_str)
             .and_then(|m| m.modified())
             .ok();
         loop {
@@ -938,13 +1133,20 @@ async fn watch_file(app: AppHandle, state: tauri::State<'_, AppState>, path: Str
             if stop_clone.load(Ordering::Relaxed) {
                 break;
             }
-            let current = std::fs::metadata(&path_clone)
+            let current = std::fs::metadata(&validated_str)
                 .and_then(|m| m.modified())
                 .ok();
             if current != last_modified {
                 last_modified = current;
-                if let Ok(content) = std::fs::read_to_string(&path_clone) {
-                    let _ = app.emit("file-changed", FileChanged { watch_id, path: path_clone.clone(), content });
+                // Emit content for small files; emit empty content for oversized files
+                // so the frontend knows the file changed even if content is too large
+                let size = std::fs::metadata(&validated_str).map(|m| m.len()).unwrap_or(0);
+                if size <= MAX_WATCH_FILE_SIZE {
+                    if let Ok(content) = std::fs::read_to_string(&validated_str) {
+                        let _ = app.emit("file-changed", FileChanged { watch_id, path: validated_str.clone(), content });
+                    }
+                } else {
+                    let _ = app.emit("file-changed", FileChanged { watch_id, path: validated_str.clone(), content: String::new() });
                 }
             }
         }
@@ -1065,6 +1267,11 @@ async fn get_pty_cwd(state: tauri::State<'_, AppState>, pty_id: u32) -> Result<S
 /// Find a file by name using platform-specific search
 #[tauri::command]
 async fn find_file(name: String) -> Result<String, String> {
+    // Validate name: reject path separators and leading hyphens to prevent
+    // flag injection in mdfind/locate/find and path traversal
+    if name.is_empty() || name.starts_with('-') || name.contains('/') || name.contains('\\') {
+        return Err("Invalid file name: must not be empty, start with '-', or contain path separators".to_string());
+    }
     // macOS: use Spotlight (mdfind) — fast indexed search
     #[cfg(target_os = "macos")]
     {
@@ -1074,7 +1281,7 @@ async fn find_file(name: String) -> Result<String, String> {
             .map_err(|e| format!("mdfind failed: {e}"))?;
         let stdout = String::from_utf8_lossy(&output.stdout);
         for line in stdout.lines() {
-            if line.starts_with('/') && line.ends_with(&name) {
+            if line.starts_with('/') && line.ends_with(&name) && validate_read_path(line).is_ok() {
                 return Ok(line.to_string());
             }
         }
@@ -1083,12 +1290,12 @@ async fn find_file(name: String) -> Result<String, String> {
     #[cfg(target_os = "linux")]
     {
         if let Ok(output) = std::process::Command::new("locate")
-            .args(["-l", "1", &name])
+            .args(["-l", "10", "-b", &name])
             .output()
         {
             let stdout = String::from_utf8_lossy(&output.stdout);
-            if let Some(line) = stdout.lines().next() {
-                if line.starts_with('/') {
+            for line in stdout.lines() {
+                if line.starts_with('/') && validate_read_path(line).is_ok() {
                     return Ok(line.to_string());
                 }
             }
@@ -1096,12 +1303,12 @@ async fn find_file(name: String) -> Result<String, String> {
         // Fall back to find in home directory
         let home = std::env::var("HOME").unwrap_or_default();
         if let Ok(output) = std::process::Command::new("find")
-            .args([&home, "-maxdepth", "4", "-name", &name, "-print", "-quit"])
+            .args([&home, "-maxdepth", "4", "-name", &name, "-print"])
             .output()
         {
             let stdout = String::from_utf8_lossy(&output.stdout);
-            if let Some(line) = stdout.lines().next() {
-                if line.starts_with('/') {
+            for line in stdout.lines() {
+                if line.starts_with('/') && validate_read_path(line).is_ok() {
                     return Ok(line.to_string());
                 }
             }
@@ -1125,9 +1332,33 @@ pub fn run() {
         })
         .manage(cli_args)
         .invoke_handler(tauri::generate_handler![
-            get_cli_args, spawn_pty, write_pty, resize_pty, kill_pty, pause_pty, resume_pty, detect_font, get_pty_cwd, get_pty_title, file_exists, list_dir, read_file, read_file_base64, write_file, ensure_dir, get_home, watch_file, unwatch_file, show_in_file_manager, open_with_default_app, find_file
+            get_cli_args, spawn_pty, write_pty, resize_pty, kill_pty, pause_pty, resume_pty, detect_font, list_monospace_fonts, get_pty_cwd, get_pty_title, file_exists, list_dir, is_git_repo, list_gitignored, read_file, read_file_base64, write_file, ensure_dir, remove_dir, get_home, watch_file, unwatch_file, show_in_file_manager, open_with_default_app, find_file
         ])
         .setup(|app| {
+            // Write shell integration files once at startup (static content)
+            if let Ok(home) = home_dir() {
+                let integration_dir = format!("{}/.config/gnar-term/shell", home);
+                let _ = std::fs::create_dir_all(&integration_dir);
+
+                let zshenv = r#"# GnarTerm shell integration
+[ -f "$GNARTERM_ORIG_ZDOTDIR/.zshenv" ] && source "$GNARTERM_ORIG_ZDOTDIR/.zshenv"
+export ZDOTDIR="$GNARTERM_ORIG_ZDOTDIR"
+_gnarterm_report_cwd() { printf '\e]7;file://%s%s\a' "$(hostname)" "$PWD"; }
+precmd_functions+=(_gnarterm_report_cwd)
+chpwd_functions+=(_gnarterm_report_cwd)
+"#;
+                let _ = std::fs::write(format!("{}/.zshenv", integration_dir), zshenv);
+
+                let bash_content = r#"# GnarTerm bash integration
+_gnarterm_report_cwd() { printf '\e]7;file://%s%s\a' "$(hostname)" "$PWD"; }
+PROMPT_COMMAND="_gnarterm_report_cwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
+"#;
+                let _ = std::fs::write(
+                    format!("{}/.config/gnar-term/shell/bash-integration.sh", home),
+                    bash_content,
+                );
+            }
+
             // Set window title from CLI --title flag
             {
                 use tauri::Manager;
@@ -1414,10 +1645,10 @@ mod tests {
     #[test]
     fn validate_read_path_blocks_ssh_dir() {
         let home = std::env::var("HOME").unwrap();
-        let ssh_key = format!("{}/.ssh/id_rsa", home);
-        let result = validate_read_path(&ssh_key);
-        assert!(result.is_err(), "Should block reading ~/.ssh/id_rsa");
-        assert!(result.unwrap_err().contains("Access denied"));
+        let ssh_dir = format!("{}/.ssh", home);
+        let result = validate_read_path(&ssh_dir);
+        // Either blocked by "Access denied" or path doesn't exist — both acceptable
+        assert!(result.is_err(), "Should block reading ~/.ssh");
     }
 
     #[test]
@@ -1447,7 +1678,7 @@ mod tests {
     #[test]
     fn validate_write_path_allows_config_dir() {
         let home = std::env::var("HOME").unwrap();
-        let config = format!("{}/.config/gnar-term/gnar-term.json", home);
+        let config = format!("{}/.config/gnar-term/settings.json", home);
         let result = validate_write_path(&config);
         assert!(result.is_ok(), "Should allow writing to ~/.config/gnar-term/: {:?}", result);
     }

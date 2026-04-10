@@ -7,6 +7,9 @@ pre-commit:
       run: npx tsc --noEmit
     rust-check:
       run: cargo check --manifest-path src-tauri/Cargo.toml
+    eslint:
+      glob: "*.{ts,svelte}"
+      run: npx eslint {staged_files}
     prettier:
       glob: "*.{ts,svelte,json,css,md,yml}"
       run: npx prettier --check {staged_files}

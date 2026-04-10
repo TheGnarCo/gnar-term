@@ -1,5 +1,5 @@
 /**
- * Non-reactive theme accessor for imperative code (preview extensions, etc.)
+ * Non-reactive theme accessor for imperative code (preview modules, etc.)
  * that can't use Svelte stores directly.
  */
 import { get } from "svelte/store";
@@ -11,6 +11,6 @@ export const themeProxy: ThemeDef = new Proxy({} as ThemeDef, {
   get(_target, prop) {
     const t = get(theme);
     if (prop === "ansi") return t.ansi;
-    return (t as any)[prop as string];
+    return t[prop as keyof ThemeDef];
   },
 });

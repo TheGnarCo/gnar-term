@@ -1,27 +1,32 @@
 <script lang="ts">
-  import { onMount, onDestroy } from "svelte";
-  import { invoke } from "@tauri-apps/api/core";
-  import { theme } from "../stores/theme";
-  import type { PreviewSurface as PreviewSurfaceType } from "../types";
+  import { onMount, onDestroy, getContext } from "svelte";
+  import { EXTENSION_API_KEY, type ExtensionAPI } from "../extension-types";
+  import type { ExtensionSurface } from "../types";
 
-  export let surface: PreviewSurfaceType;
+  export let surface: ExtensionSurface;
   export let visible: boolean;
+
+  const api = getContext<ExtensionAPI>(EXTENSION_API_KEY);
+  const theme = api.theme;
 
   let container: HTMLElement;
 
+  $: element = surface.props?.element as HTMLElement | undefined;
+  $: watchId = (surface.props?.watchId as number) || 0;
+
   onMount(() => {
-    container.appendChild(surface.element);
+    if (element) container.appendChild(element);
   });
 
   // Update preview colors when theme changes
-  $: if (surface.element) {
-    surface.element.style.background = $theme.bg;
-    surface.element.style.color = $theme.fg;
+  $: if (element) {
+    element.style.background = $theme.bg;
+    element.style.color = $theme.fg;
   }
 
   onDestroy(() => {
-    if (surface.watchId > 0) {
-      invoke("unwatch_file", { watchId: surface.watchId }).catch(() => {});
+    if (watchId > 0) {
+      api.invoke("unwatch_file", { watchId }).catch(() => {});
     }
     surface.dispose?.();
   });
@@ -29,5 +34,7 @@
 
 <div
   bind:this={container}
-  style="flex: 1; min-height: 0; overflow-y: auto; display: {visible ? 'flex' : 'none'}; flex-direction: column;"
+  style="flex: 1; min-height: 0; overflow-y: auto; display: {visible
+    ? 'flex'
+    : 'none'}; flex-direction: column;"
 ></div>

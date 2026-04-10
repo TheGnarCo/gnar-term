@@ -8,12 +8,14 @@
  * B4: Close Other Workspaces handles array mutation correctly
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 
 // Mock Tauri APIs
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn().mockResolvedValue(undefined),
-  convertFileSrc: vi.fn((path: string) => `asset://localhost/${encodeURIComponent(path)}`),
+  convertFileSrc: vi.fn(
+    (path: string) => `asset://localhost/${encodeURIComponent(path)}`,
+  ),
 }));
 
 vi.mock("@tauri-apps/api/event", () => ({
@@ -166,8 +168,12 @@ describe("Surface discriminated union", () => {
         expect(source).not.toContain("terminal: null as any");
         expect(source).not.toContain("fitAddon: { fit: () => {} } as any");
         expect(source).not.toContain("searchAddon: null as any");
-      } catch (e: any) {
-        if (e.code !== "ENOENT") throw e;
+      } catch (e: unknown) {
+        if (
+          e instanceof Error &&
+          (e as NodeJS.ErrnoException).code !== "ENOENT"
+        )
+          throw e;
       }
     }
   });

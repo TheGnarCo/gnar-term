@@ -2,8 +2,26 @@
   import { theme } from "../stores/theme";
   import { secondarySidebarVisible, secondarySidebarWidth } from "../stores/ui";
   import { dragResize } from "../actions/drag-resize";
+  import {
+    sidebarTabStore,
+    sidebarActionStore,
+  } from "../services/sidebar-tab-registry";
+  import { getExtensionApiById } from "../services/extension-loader";
+  import ExtensionWrapper from "./ExtensionWrapper.svelte";
 
   let dragging = false;
+  let activeTabId: string | null = null;
+
+  // Auto-select first tab when tabs change
+  $: if (
+    $sidebarTabStore.length > 0 &&
+    !$sidebarTabStore.find((t) => t.id === activeTabId)
+  ) {
+    activeTabId = $sidebarTabStore[0].id;
+  }
+
+  $: activeTab = $sidebarTabStore.find((t) => t.id === activeTabId);
+  $: activeActions = $sidebarActionStore.filter((a) => a.tabId === activeTabId);
 </script>
 
 {#if $secondarySidebarVisible}
@@ -17,56 +35,103 @@
       flex-shrink: 0;
     "
   >
-  <div
-    class="sidebar-resize-handle"
-    style="
+    <div
+      class="sidebar-resize-handle"
+      style="
       width: 4px; cursor: col-resize; flex-shrink: 0;
       background: {dragging ? $theme.accent : $theme.sidebarBorder};
       transition: background 0.15s;
     "
-    use:dragResize={{
-      onDrag: (ev) => {
-        const maxWidth = window.innerWidth * 0.33;
-        secondarySidebarWidth.set(Math.max(140, Math.min(maxWidth, window.innerWidth - ev.clientX)));
-      },
-      onStart: () => { dragging = true; },
-      onEnd: () => { dragging = false; },
-    }}
-  ></div>
-  <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
-    <!-- Top row: tab bar -->
+      use:dragResize={{
+        onDrag: (ev) => {
+          const maxWidth = window.innerWidth * 0.33;
+          secondarySidebarWidth.set(
+            Math.max(140, Math.min(maxWidth, window.innerWidth - ev.clientX)),
+          );
+        },
+        onStart: () => {
+          dragging = true;
+        },
+        onEnd: () => {
+          dragging = false;
+        },
+      }}
+    ></div>
     <div
-      data-tauri-drag-region=""
-      style="
+      style="flex: 1; display: flex; flex-direction: column; overflow: hidden;"
+    >
+      <!-- Top row: tab bar -->
+      <div
+        data-tauri-drag-region=""
+        style="
         height: 38px; display: flex; align-items: center;
         border-bottom: 1px solid {$theme.border};
         padding: 0 6px;
         overflow-x: auto; scrollbar-width: none;
         -webkit-app-region: drag;
       "
-    >
-      <!-- Tab area (scrollable, future tabs go here) -->
-    </div>
+      >
+        {#each $sidebarTabStore as tab (tab.id)}
+          <button
+            style="
+            background: none; border: none; cursor: pointer;
+            padding: 4px 10px; border-radius: 4px; font-size: 11px;
+            color: {activeTabId === tab.id ? $theme.fg : $theme.fgDim};
+            font-weight: {activeTabId === tab.id ? '600' : '400'};
+            -webkit-app-region: no-drag;
+          "
+            on:click={() => (activeTabId = tab.id)}>{tab.label}</button
+          >
+        {/each}
+      </div>
 
-    <!-- Control row: extension-supplied quick actions (only rendered when populated) -->
-    {#if $$slots.controls}
-      <div
-        id="secondary-sidebar-controls"
-        style="
+      <!-- Control row: tab-specific actions (only rendered when populated) -->
+      {#if activeActions.length > 0}
+        <div
+          id="secondary-sidebar-controls"
+          style="
           height: 28px; display: flex; align-items: center; gap: 2px;
           padding: 0 6px; flex-shrink: 0;
           background: {$theme.tabBarBg}; border-bottom: 1px solid {$theme.tabBarBorder};
         "
-      >
-        <slot name="controls" />
-      </div>
-    {/if}
+        >
+          {#each activeActions as action}
+            <button
+              style="
+              background: none; border: none; cursor: pointer;
+              padding: 2px 6px; border-radius: 4px; font-size: 11px;
+              color: {$theme.fgDim};
+            "
+              title={action.title || action.actionId}
+              on:click={action.handler}
+              >{action.title || action.actionId}</button
+            >
+          {/each}
+        </div>
+      {/if}
 
-    <!-- Content area -->
-    <div style="flex: 1; overflow-y: auto; padding: 8px; display: flex; align-items: center; justify-content: center;">
-      <span style="color: {$theme.fgDim}; font-size: 12px;">No Secondary Sidebar Content</span>
+      <!-- Content area -->
+      <div
+        style="flex: 1; overflow-y: auto; display: flex; flex-direction: column;"
+      >
+        {#if activeTab}
+          {@const tabApi = getExtensionApiById(activeTab.source)}
+          {#if tabApi}
+            <ExtensionWrapper api={tabApi} component={activeTab.component} />
+          {:else}
+            <svelte:component this={activeTab.component} />
+          {/if}
+        {:else}
+          <div
+            style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 8px;"
+          >
+            <span style="color: {$theme.fgDim}; font-size: 12px;"
+              >No tabs registered</span
+            >
+          </div>
+        {/if}
+      </div>
     </div>
-  </div>
   </div>
 {/if}
 

@@ -21,6 +21,7 @@ import { canPreview, getSupportedExtensions, openPreview } from "../preview/inde
 import type { TerminalSurface, Pane, Surface, Workspace } from "./types";
 import { uid, getAllSurfaces, getAllPanes, isTerminalSurface, findParentSplit, replaceNodeInTree } from "./types";
 import type { MenuItem } from "./context-menu-types";
+import { createResizeHandler, isScrolledToBottom } from "./resize-guard";
 import "@xterm/xterm/css/xterm.css";
 
 /** Platform detection — used for Cmd (macOS) vs Ctrl (Linux/Windows) shortcuts. */
@@ -122,9 +123,19 @@ function flushPtyBuffer(ptyId: number) {
   chunks.length = 0;
   ptyBufferBytes.set(ptyId, 0);
 
+  // Scroll anchor: snapshot whether user is at bottom BEFORE writing new data.
+  // If they've scrolled up, restore their viewport position after the write
+  // so new output doesn't yank them back down (#46).
+  const wasAtBottom = isScrolledToBottom(surface.terminal);
+  const viewportY = surface.terminal.buffer.active.viewportY;
+
   // Single write to xterm.js per frame — the callback fires when xterm.js has
   // processed this batch, which is our signal that it's ready for more.
   surface.terminal.write(merged, () => {
+    // Restore scroll position if user was scrolled up
+    if (!wasAtBottom) {
+      surface.terminal.scrollToLine(viewportY);
+    }
     // If more data arrived while we were rendering, flush again next frame
     const buffered = ptyBufferBytes.get(ptyId) || 0;
     if (buffered > 0) {
@@ -484,9 +495,7 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
   terminal.onData((data) => {
     if (surface.ptyId >= 0) invoke("write_pty", { ptyId: surface.ptyId, data });
   });
-  terminal.onResize(({ cols, rows }) => {
-    if (surface.ptyId >= 0) invoke("resize_pty", { ptyId: surface.ptyId, cols, rows });
-  });
+  terminal.onResize(createResizeHandler(() => surface.ptyId));
   // NOTE: We intentionally do NOT use terminal.onTitleChange() here.
   // xterm.js fires it with raw/partial escape sequence fragments (OSC 7 cwd data,
   // bracketed paste mode, etc.) concatenated into the title string. Instead, the

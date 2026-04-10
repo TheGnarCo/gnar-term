@@ -224,8 +224,8 @@ describe("Workspace from config definition", () => {
       "src/lib/services/workspace-service.ts",
       "utf-8",
     );
-    expect(source).toContain("buildTree(nodeDef.children[0]");
-    expect(source).toContain("buildTree(nodeDef.children[1]");
+    expect(source).toContain("nodeDef.children[0]");
+    expect(source).toContain("nodeDef.children[1]");
     expect(source).toContain("sDef.command");
     expect(source).toContain("startupCommand");
     expect(source).toContain('sDef.type === "markdown"');

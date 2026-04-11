@@ -16,10 +16,14 @@
   import { getExtensionApiById } from "../services/extension-loader";
   import ExtensionWrapper from "./ExtensionWrapper.svelte";
 
-  const iconMap: Record<string, string> = {
-    plus: "+",
-    "git-branch": "\u2442",
-    "folder-plus": "\u2795",
+  // SVG icon definitions for workspace actions — all variations on the "+" shape
+  const iconSvgMap: Record<string, string> = {
+    // Plain plus
+    plus: `<line x1="8" y1="3" x2="8" y2="13" /><line x1="3" y1="8" x2="13" y2="8" />`,
+    // Plus with small branch fork (bottom-right corner)
+    "git-branch": `<line x1="7" y1="2" x2="7" y2="10" /><line x1="3" y1="6" x2="11" y2="6" /><circle cx="12" cy="12" r="1.5" fill="currentColor" /><path d="M7 10 C7 12 10 12 12 12" fill="none" />`,
+    // Plus with small folder tab (top-right corner)
+    "folder-plus": `<line x1="7" y1="3" x2="7" y2="11" /><line x1="3" y1="7" x2="11" y2="7" /><path d="M10 2 L12 2 L13 3 L15 3 L15 5 L10 5 Z" fill="currentColor" opacity="0.6" />`,
   };
 
   let collapsedSections: Record<string, boolean> = {};
@@ -267,12 +271,24 @@
             background: none; border: none; cursor: pointer;
             width: 26px; height: 26px; border-radius: 4px;
             display: flex; align-items: center; justify-content: center;
-            color: {$theme.fgDim}; font-size: 18px; line-height: 1;
+            color: {$theme.fgDim};
             -webkit-app-region: no-drag;
           "
             on:click={() => action.handler({})}
-            >{iconMap[action.icon] ?? action.icon}</button
           >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              {@html iconSvgMap[action.icon] ?? iconSvgMap["plus"]}
+            </svg>
+          </button>
         {/each}
       </div>
 

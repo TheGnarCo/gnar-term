@@ -188,6 +188,10 @@ export interface ExtensionAPI {
     cwd: string,
     options?: CreateWorkspaceOptions,
   ): void;
+  /** Mark a workspace as claimed — it will not appear in the main Workspaces list. */
+  claimWorkspace(workspaceId: string): void;
+  /** Release a claimed workspace back to the main list. */
+  unclaimWorkspace(workspaceId: string): void;
   openInEditor(filePath: string): void;
   openSurface(
     surfaceTypeId: string,

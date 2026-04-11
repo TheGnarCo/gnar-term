@@ -13,6 +13,7 @@
   import type { MenuItem } from "../context-menu-types";
   import { sidebarSectionStore } from "../services/sidebar-section-registry";
   import { workspaceActionStore } from "../services/workspace-action-registry";
+  import { claimedWorkspaceIds } from "../services/claimed-workspace-registry";
   import { getExtensionApiById } from "../services/extension-loader";
   import ExtensionWrapper from "./ExtensionWrapper.svelte";
 
@@ -27,6 +28,12 @@
   };
 
   let collapsedSections: Record<string, boolean> = {};
+
+  // Filter out workspaces claimed by extensions (e.g., project-scope).
+  // Track original indices for callbacks that need global store positions.
+  $: unclaimedEntries = $workspaces
+    .map((ws, idx) => ({ ws, idx }))
+    .filter(({ ws }) => !$claimedWorkspaceIds.has(ws.id));
 
   export let onSwitchWorkspace: (idx: number) => void;
   export let onCloseWorkspace: (idx: number) => void;
@@ -314,7 +321,9 @@
               {#if block.type === "workspaces"}
                 {#if !sectionReorderMode}
                   <!-- svelte-ignore a11y_no_static_element_interactions -->
-                  {#each $workspaces as ws, idx (ws.id)}
+                  {#each unclaimedEntries as entry, _i (entry.ws.id)}
+                    {@const ws = entry.ws}
+                    {@const idx = entry.idx}
                     <div animate:flip={{ duration: 200 }}>
                       {#if insertIndicator?.idx === idx && insertIndicator.edge === "before"}
                         <div
@@ -347,10 +356,10 @@
                   {/each}
                 {:else}
                   <!-- Reorder mode: render workspace items but muted -->
-                  {#each $workspaces as ws (ws.id)}
+                  {#each unclaimedEntries as entry (entry.ws.id)}
                     <div style="opacity: 0.3; pointer-events: none;">
                       <WorkspaceItem
-                        workspace={ws}
+                        workspace={entry.ws}
                         index={0}
                         isActive={false}
                         dragActive={false}

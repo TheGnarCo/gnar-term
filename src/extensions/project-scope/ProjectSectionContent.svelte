@@ -88,7 +88,11 @@
         {#each actions as action (action.id)}
           <button
             title={actionTooltip(action)}
-            on:click={() => action.handler(projectContext)}
+            on:click={() => {
+              // Set active project so workspace:created handler associates it
+              api.state.set("activeProjectId", projectId);
+              action.handler(projectContext);
+            }}
             style="
               padding: 2px 6px; border: 1px solid {$theme.border};
               background: transparent; color: {$theme.fgDim};

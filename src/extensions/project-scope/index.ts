@@ -53,7 +53,7 @@ function registerProjectSection(
     `project-${project.id}`,
     ProjectSectionContent,
     {
-      collapsible: true,
+      collapsible: false,
       showLabel: true,
       label: project.name,
       props: { projectId: project.id },
@@ -122,10 +122,13 @@ export function registerProjectScopeExtension(api: ExtensionAPI): void {
       },
     });
 
-    // Load persisted projects and register a section for each
+    // Load persisted projects, register sections, and claim their workspaces
     const projects = api.state.get<ProjectEntry[]>("projects") || [];
     for (const project of projects) {
       registerProjectSection(api, project);
+      for (const wsId of project.workspaceIds) {
+        api.claimWorkspace(wsId);
+      }
     }
 
     // Command: create-project (command palette entry)
@@ -177,12 +180,12 @@ export function registerProjectScopeExtension(api: ExtensionAPI): void {
       });
     });
 
-    // Auto-associate new workspaces with the active project
+    // Auto-associate new workspaces with the active project and claim them
     api.on("workspace:created", (event) => {
       const activeProjectId = api.state.get<string | null>("activeProjectId");
       if (!activeProjectId) return;
 
-      const workspaceId = event.workspaceId as string | undefined;
+      const workspaceId = event.id as string | undefined;
       if (!workspaceId) return;
 
       const projects = api.state.get<ProjectEntry[]>("projects") ?? [];
@@ -193,11 +196,12 @@ export function registerProjectScopeExtension(api: ExtensionAPI): void {
         return p;
       });
       api.state.set("projects", updated);
+      api.claimWorkspace(workspaceId);
     });
 
     // Clean up closed workspaces from all projects
     api.on("workspace:closed", (event) => {
-      const workspaceId = event.workspaceId as string | undefined;
+      const workspaceId = event.id as string | undefined;
       if (!workspaceId) return;
 
       const projects = api.state.get<ProjectEntry[]>("projects") ?? [];
@@ -206,6 +210,7 @@ export function registerProjectScopeExtension(api: ExtensionAPI): void {
         workspaceIds: p.workspaceIds.filter((id) => id !== workspaceId),
       }));
       api.state.set("projects", updated);
+      api.unclaimWorkspace(workspaceId);
     });
   });
 }

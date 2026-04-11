@@ -45,6 +45,10 @@ import {
   unregisterWorkspaceActionsBySource,
   getWorkspaceActions as registryGetWorkspaceActions,
 } from "./workspace-action-registry";
+import {
+  claimWorkspace as registryClaimWorkspace,
+  unclaimWorkspace as registryUnclaimWorkspace,
+} from "./claimed-workspace-registry";
 import { loadExtensionState, saveExtensionState } from "./extension-state";
 import { closeExtensionSurfaces } from "./surface-service";
 import {
@@ -632,6 +636,14 @@ export function createExtensionAPI(manifest: ExtensionManifest): {
       });
       if (typeof result === "string") return result;
       return null;
+    },
+
+    claimWorkspace(workspaceId: string) {
+      registryClaimWorkspace(workspaceId);
+    },
+
+    unclaimWorkspace(workspaceId: string) {
+      registryUnclaimWorkspace(workspaceId);
     },
 
     state: {

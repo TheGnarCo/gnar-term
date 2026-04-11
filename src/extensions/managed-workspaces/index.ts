@@ -92,7 +92,9 @@ export function registerManagedWorkspacesExtension(api: ExtensionAPI): void {
           path: repoPath,
         });
         if (!isGit) {
-          // Not a git repo — bail silently
+          await api.showInputPrompt(
+            `"${repoPath.split("/").pop()}" is not a git repository. Select a folder that contains a .git directory.`,
+          );
           return;
         }
 

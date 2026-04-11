@@ -64,10 +64,6 @@
     registerProjectScopeExtension,
   } from "./extensions/project-scope";
   import {
-    dashboardManifest,
-    registerDashboardExtension,
-  } from "./extensions/dashboard";
-  import {
     registerExtension,
     activateExtension,
   } from "./lib/services/extension-loader";
@@ -582,7 +578,6 @@
       ],
       [githubManifest, registerGitHubExtension, "github"],
       [projectScopeManifest, registerProjectScopeExtension, "project-scope"],
-      [dashboardManifest, registerDashboardExtension, "dashboard"],
     ] as const) {
       try {
         registerExtension(manifest, registerFn);

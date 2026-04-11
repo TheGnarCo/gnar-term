@@ -99,6 +99,7 @@
   $: paneCount = getAllPanes(workspace.splitRoot).length;
   $: surfaceCount = allSurfaces.length;
   $: latestNotification = allSurfaces.find((s) => s.notification)?.notification;
+  $: isManaged = !!workspace.metadata?.worktreePath;
   $: metaParts = [
     ...(paneCount > 1 ? [`${paneCount}p`] : []),
     ...(surfaceCount > 1 ? [`${surfaceCount}s`] : []),
@@ -162,7 +163,29 @@
       closeHovered = false;
     }}
   >
-    <div style="flex: 1; overflow: hidden; display: flex; align-items: center;">
+    <div
+      style="flex: 1; overflow: hidden; display: flex; align-items: center; gap: 4px;"
+    >
+      {#if isManaged}
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          style="flex-shrink: 0; color: {$theme.fgDim};"
+          title="Git worktree workspace"
+        >
+          <circle cx="4" cy="4" r="2" />
+          <circle cx="4" cy="12" r="2" />
+          <circle cx="12" cy="8" r="2" />
+          <path d="M4 6 L4 10" />
+          <path d="M6 4 C8 4 10 6 10 8" />
+        </svg>
+      {/if}
       <span
         bind:this={nameEl}
         style="

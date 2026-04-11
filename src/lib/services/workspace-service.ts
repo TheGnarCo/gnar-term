@@ -165,6 +165,7 @@ export async function createWorkspaceFromDef(def: WorkspaceDef) {
     name: wsName,
     splitRoot,
     activePaneId: getAllPanes(splitRoot)[0]?.id ?? null,
+    ...(def.metadata ? { metadata: def.metadata } : {}),
   };
 
   workspaces.update((list) => [...list, ws]);

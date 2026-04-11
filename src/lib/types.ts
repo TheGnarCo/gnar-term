@@ -69,6 +69,7 @@ export interface Workspace {
   name: string;
   splitRoot: SplitNode;
   activePaneId: string | null;
+  metadata?: Record<string, unknown>;
 }
 
 // Helper functions for tree traversal

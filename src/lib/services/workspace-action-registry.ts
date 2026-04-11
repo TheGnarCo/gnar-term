@@ -53,3 +53,7 @@ export function getWorkspaceActions(): WorkspaceAction[] {
   actions.subscribe((v) => (current = v))();
   return current;
 }
+
+export function resetWorkspaceActions(): void {
+  actions.set([]);
+}

@@ -16,6 +16,7 @@ export interface SidebarSection {
   source: string; // extension id
   collapsible?: boolean; // default true
   showLabel?: boolean; // default true
+  props?: Record<string, unknown>; // passed through to the component
 }
 
 // --- Registry ---

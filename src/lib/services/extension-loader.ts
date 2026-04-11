@@ -518,7 +518,12 @@ export function createExtensionAPI(manifest: ExtensionManifest): {
     registerPrimarySidebarSection(
       sectionId: string,
       component: unknown,
-      options?: { collapsible?: boolean; showLabel?: boolean; label?: string },
+      options?: {
+        collapsible?: boolean;
+        showLabel?: boolean;
+        label?: string;
+        props?: Record<string, unknown>;
+      },
     ) {
       const declared = manifest.contributes?.primarySidebarSections?.find(
         (s) => s.id === sectionId,
@@ -530,6 +535,7 @@ export function createExtensionAPI(manifest: ExtensionManifest): {
         source: extId,
         collapsible: options?.collapsible,
         showLabel: options?.showLabel,
+        props: options?.props,
       });
     },
 

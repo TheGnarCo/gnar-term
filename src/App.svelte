@@ -17,6 +17,7 @@
     activePane,
     activeSurface,
   } from "./lib/stores/workspace";
+  import { get } from "svelte/store";
   import { invoke } from "@tauri-apps/api/core";
   import {
     loadConfig,
@@ -105,6 +106,7 @@
     newSurfaceFromSidebar,
   } from "./lib/services/surface-service";
   import { registerCommands } from "./lib/services/command-registry";
+  import { registerWorkspaceAction } from "./lib/services/workspace-action-registry";
 
   // Components
   import PrimarySidebar from "./lib/components/PrimarySidebar.svelte";
@@ -596,6 +598,16 @@
     // Load external extensions from config (after config is loaded)
     await loadExternalExtensions();
 
+    // Register core workspace actions (after extensions so they appear first)
+    registerWorkspaceAction({
+      id: "core:new-workspace",
+      label: "New Workspace",
+      icon: "plus",
+      shortcut: isMac ? "Cmd+Shift+N" : "Ctrl+Shift+N",
+      source: "core",
+      handler: () => createWorkspace(`Workspace ${get(workspaces).length + 1}`),
+    });
+
     const cliCwd = cliArgs.path || cliArgs.working_directory;
 
     if (cliArgs.workspace) {
@@ -686,8 +698,6 @@
 <div id="app" style="display: flex; height: 100vh; overflow: hidden;">
   <PrimarySidebar
     bind:this={sidebarComponent}
-    onNewWorkspace={() =>
-      createWorkspace(`Workspace ${$workspaces.length + 1}`)}
     onSwitchWorkspace={switchWorkspace}
     onCloseWorkspace={closeWorkspace}
     onRenameWorkspace={renameWorkspace}

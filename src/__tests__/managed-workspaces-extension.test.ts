@@ -1,6 +1,6 @@
 /**
  * Tests for the managed-workspaces included extension — validates that it
- * registers a primary sidebar section and commands via the extension API,
+ * registers a workspace action and archive command via the extension API,
  * and correctly manages state for worktree-backed workspaces.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
@@ -17,11 +17,11 @@ import {
   managedWorkspacesManifest,
   registerManagedWorkspacesExtension,
 } from "../extensions/managed-workspaces";
-import {
-  sidebarSectionStore,
-  resetSidebarSections,
-} from "../lib/services/sidebar-section-registry";
 import { commandStore, resetCommands } from "../lib/services/command-registry";
+import {
+  workspaceActionStore,
+  resetWorkspaceActions,
+} from "../lib/services/workspace-action-registry";
 import {
   registerExtension,
   activateExtension,
@@ -32,8 +32,8 @@ import {
 describe("Managed Workspaces included extension", () => {
   beforeEach(async () => {
     await resetExtensions();
-    resetSidebarSections();
     resetCommands();
+    resetWorkspaceActions();
   });
 
   it("manifest has correct id and metadata", () => {
@@ -51,19 +51,21 @@ describe("Managed Workspaces included extension", () => {
     );
   });
 
-  it("manifest declares two commands", () => {
+  it("manifest declares one command (archive-workspace)", () => {
     const commands = managedWorkspacesManifest.contributes?.commands;
-    expect(commands).toHaveLength(2);
-    expect(commands![0].id).toBe("create-worktree-workspace");
-    expect(commands![1].id).toBe("archive-workspace");
+    expect(commands).toHaveLength(1);
+    expect(commands![0].id).toBe("archive-workspace");
+    expect(commands![0].title).toBe("Archive Managed Workspace...");
   });
 
-  it("manifest declares primary sidebar section", () => {
-    const sections =
-      managedWorkspacesManifest.contributes?.primarySidebarSections;
-    expect(sections).toHaveLength(1);
-    expect(sections![0].id).toBe("managed-workspaces");
-    expect(sections![0].label).toBe("Managed Workspaces");
+  it("manifest declares workspace action instead of primary sidebar section", () => {
+    expect(
+      managedWorkspacesManifest.contributes?.primarySidebarSections,
+    ).toBeUndefined();
+    const actions = managedWorkspacesManifest.contributes?.workspaceActions;
+    expect(actions).toHaveLength(1);
+    expect(actions![0].id).toBe("create-worktree-workspace");
+    expect(actions![0].title).toBe("New Managed Workspace");
   });
 
   it("manifest declares branchPrefix, copyPatterns, and setupScript settings", () => {
@@ -86,33 +88,59 @@ describe("Managed Workspaces included extension", () => {
     });
   });
 
-  it("registers primary sidebar section via API with namespaced id", async () => {
+  it("registers workspace action with correct id on activation", async () => {
     registerExtension(
       managedWorkspacesManifest,
       registerManagedWorkspacesExtension,
     );
     await activateExtension("managed-workspaces");
-    const sections = get(sidebarSectionStore);
-    expect(sections).toHaveLength(1);
-    expect(sections[0].id).toBe("managed-workspaces:managed-workspaces");
-    expect(sections[0].label).toBe("Managed Workspaces");
-    expect(sections[0].source).toBe("managed-workspaces");
-    expect(sections[0].component).toBeTruthy();
+    const actions = get(workspaceActionStore);
+    const action = actions.find(
+      (a) => a.id === "managed-workspaces:create-worktree-workspace",
+    );
+    expect(action).toBeTruthy();
+    expect(action!.label).toBe("New Managed Workspace");
+    expect(action!.icon).toBe("git-branch");
+    expect(action!.source).toBe("managed-workspaces");
   });
 
-  it("registers create-worktree-workspace command via API", async () => {
+  it("workspace action when filter returns true with no project context", async () => {
     registerExtension(
       managedWorkspacesManifest,
       registerManagedWorkspacesExtension,
     );
     await activateExtension("managed-workspaces");
-    const cmds = get(commandStore);
-    const cmd = cmds.find(
-      (c) => c.id === "managed-workspaces:create-worktree-workspace",
+    const actions = get(workspaceActionStore);
+    const action = actions.find(
+      (a) => a.id === "managed-workspaces:create-worktree-workspace",
     );
-    expect(cmd).toBeTruthy();
-    expect(cmd!.title).toBe("Create Worktree Workspace...");
-    expect(cmd!.source).toBe("managed-workspaces");
+    expect(action!.when!({})).toBe(true);
+  });
+
+  it("workspace action when filter returns true when isGit is true", async () => {
+    registerExtension(
+      managedWorkspacesManifest,
+      registerManagedWorkspacesExtension,
+    );
+    await activateExtension("managed-workspaces");
+    const actions = get(workspaceActionStore);
+    const action = actions.find(
+      (a) => a.id === "managed-workspaces:create-worktree-workspace",
+    );
+    expect(action!.when!({ projectId: "proj-1", isGit: true })).toBe(true);
+  });
+
+  it("workspace action when filter returns false when isGit is false", async () => {
+    registerExtension(
+      managedWorkspacesManifest,
+      registerManagedWorkspacesExtension,
+    );
+    await activateExtension("managed-workspaces");
+    const actions = get(workspaceActionStore);
+    const action = actions.find(
+      (a) => a.id === "managed-workspaces:create-worktree-workspace",
+    );
+    expect(action!.when!({ projectId: "proj-1", isGit: false })).toBe(false);
   });
 
   it("registers archive-workspace command via API", async () => {
@@ -152,7 +180,6 @@ describe("Managed Workspaces included extension", () => {
 
     const entries = [
       {
-        workspaceId: "feature-x",
         worktreePath: "/repo/../feature-x",
         branch: "feature-x",
         baseBranch: "main",

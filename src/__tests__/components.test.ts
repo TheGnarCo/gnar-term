@@ -121,6 +121,10 @@ import {
   registerSidebarSection,
   resetSidebarSections,
 } from "../lib/services/sidebar-section-registry";
+import {
+  registerWorkspaceAction,
+  resetWorkspaceActions,
+} from "../lib/services/workspace-action-registry";
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -225,8 +229,11 @@ describe("TitleBar", () => {
   });
 
   it("always renders both sidebar toggles", () => {
-    render(TitleBar);
-    expect(screen.getByTitle("Toggle Primary Sidebar (⌘B)")).toBeTruthy();
+    const { container } = render(TitleBar);
+    const primaryBtn = container.querySelector(
+      "button[title^='Toggle Primary Sidebar']",
+    );
+    expect(primaryBtn).toBeTruthy();
     expect(screen.getByTitle("Toggle Secondary Sidebar")).toBeTruthy();
   });
 
@@ -890,7 +897,6 @@ describe("PaneView", () => {
 
 describe("PrimarySidebar", () => {
   const sidebarProps = {
-    onNewWorkspace: noop,
     onSwitchWorkspace: noop,
     onCloseWorkspace: noop,
     onRenameWorkspace: noop,
@@ -900,6 +906,7 @@ describe("PrimarySidebar", () => {
 
   beforeEach(() => {
     resetSidebarSections();
+    resetWorkspaceActions();
     cleanup();
   });
 
@@ -915,10 +922,18 @@ describe("PrimarySidebar", () => {
     expect(container.querySelector("#primary-sidebar")).toBeNull();
   });
 
-  it("renders + button in header (sidebar toggles live in TitleBar)", () => {
+  it("renders workspace action buttons from store (sidebar toggles live in TitleBar)", () => {
     primarySidebarVisible.set(true);
+    registerWorkspaceAction({
+      id: "core:new-workspace",
+      label: "New Workspace",
+      icon: "plus",
+      shortcut: "Cmd+Shift+N",
+      source: "core",
+      handler: noop,
+    });
     render(PrimarySidebar, { props: sidebarProps });
-    expect(screen.getByTitle("New Workspace (⌘N)")).toBeTruthy();
+    expect(screen.getByTitle("New Workspace (Cmd+Shift+N)")).toBeTruthy();
     expect(screen.queryByTitle("Toggle Primary Sidebar (⌘B)")).toBeNull();
     expect(screen.queryByTitle("Toggle Secondary Sidebar")).toBeNull();
   });

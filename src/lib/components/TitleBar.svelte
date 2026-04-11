@@ -5,7 +5,7 @@
     secondarySidebarVisible,
     settingsOpen,
   } from "../stores/ui";
-  import { isMac } from "../terminal-service";
+  import { isMac, modLabel } from "../terminal-service";
 
   let btnStyle = "";
   $: btnStyle = `
@@ -30,7 +30,7 @@
     style="{btnStyle} color: {$primarySidebarVisible
       ? $theme.fg
       : $theme.fgDim};"
-    title="Toggle Primary Sidebar (⌘B)"
+    title="Toggle Primary Sidebar ({modLabel}B)"
     on:click={() => primarySidebarVisible.update((v) => !v)}
   >
     <svg
@@ -62,7 +62,7 @@
 
   <button
     style="{btnStyle} color: {$settingsOpen ? $theme.fg : $theme.fgDim};"
-    title="Settings ({isMac ? '⌘,' : 'Ctrl+,'})"
+    title="Settings ({modLabel},)"
     on:click={() => settingsOpen.update((v) => !v)}
   >
     <svg

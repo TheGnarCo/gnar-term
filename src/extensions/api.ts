@@ -144,7 +144,12 @@ export interface ExtensionAPI {
   registerPrimarySidebarSection(
     sectionId: string,
     component: unknown,
-    options?: { collapsible?: boolean; showLabel?: boolean; label?: string },
+    options?: {
+      collapsible?: boolean;
+      showLabel?: boolean;
+      label?: string;
+      props?: Record<string, unknown>;
+    },
   ): void;
   registerSurfaceType(surfaceId: string, component: unknown): void;
   registerCommand(commandId: string, handler: () => void | Promise<void>): void;

@@ -1,46 +1,33 @@
-# Orchestrator Core Infrastructure — Progress
+# Workspace Action Registry — Progress
 
-**Branch:** `jrvs/orchestrator-core` (from `jarvis/plugin-base` @ 83bf5d0)
-**Plan:** `/Users/jarvis/.claude/plans/zany-jingling-willow.md`
+**Branch:** `jrvs/orchestrator-core`
+**Spec:** `docs/superpowers/specs/2026-04-10-workspace-action-registry-design.md`
 
-## Phase 1: Core Infrastructure — COMPLETE
+## S1: Core Infrastructure — COMPLETE
 
-| #   | Story                               | Status   | Commit    |
-| --- | ----------------------------------- | -------- | --------- |
-| 1.1 | Extend spawn_pty with env vars      | complete | `1a56b78` |
-| 1.2 | Extend createWorkspace with options | complete | `1a56b78` |
-| 1.3 | Add openSurface() to ExtensionAPI   | complete | `1a56b78` |
-| 1.4 | Add extension:\* event namespace    | complete | `1a56b78` |
-| 1.5 | Add PTY permission tier             | complete | `1a56b78` |
-| 1.6 | Dashboard zone infrastructure       | complete | `1a56b78` |
+| Item                                   | Status   | Commit    |
+| -------------------------------------- | -------- | --------- |
+| tauri-plugin-dialog                    | complete | `ebf9b4f` |
+| workspace-action-registry.ts           | complete | `ebf9b4f` |
+| API types (api.ts, extension-types.ts) | complete | `ebf9b4f` |
+| extension-loader (new methods)         | complete | `ebf9b4f` |
 
-## Phase 2: Rust Commands — COMPLETE
+## S2: PrimarySidebar + Tooltips — IN PROGRESS
 
-| #   | Story                                                                                   | Status   | Module            | Tests |
-| --- | --------------------------------------------------------------------------------------- | -------- | ----------------- | ----- |
-| 2.1 | Git worktree commands (create_worktree, remove_worktree, list_worktrees, list_branches) | complete | `git_worktree.rs` | 13    |
-| 2.2 | Git operation commands (git_clone, push_branch, delete_branch, git_checkout)            | complete | `git_ops.rs`      | 17    |
-| 2.3 | File utility commands (copy_files, run_script)                                          | complete | `file_utils.rs`   | 21    |
-| 2.4 | GitHub CLI commands (gh_list_issues, gh_list_prs)                                       | complete | `gh_commands.rs`  | 11    |
-| 2.5 | Git info commands (git_log, git_status, git_diff)                                       | complete | `git_info.rs`     | 18    |
+Render workspace action buttons from store in sidebar header. Add tooltips to all icon buttons.
 
-## Phase 3: Extensions — COMPLETE
+## S3: Managed Workspaces Rework — IN PROGRESS
 
-| #   | Story                | Status   | Directory                              | Tests |
-| --- | -------------------- | -------- | -------------------------------------- | ----- |
-| 3.1 | Managed Workspaces   | complete | `src/extensions/managed-workspaces/`   | 8     |
-| 3.2 | Agentic Orchestrator | complete | `src/extensions/agentic-orchestrator/` | 20    |
-| 3.3 | GitHub               | complete | `src/extensions/github/`               | 10    |
-| 3.4 | Project Scope        | complete | `src/extensions/project-scope/`        | 13    |
-| 3.5 | Dashboard            | complete | `src/extensions/dashboard/`            | 11    |
+Remove sidebar section, register workspace action, use pickDirectory.
 
-## Phase 4: Integration — COMPLETE
+## S4: Project Scope Rework — IN PROGRESS
 
-| #   | Story                             | Status                                 |
-| --- | --------------------------------- | -------------------------------------- |
-| 4.1 | Wire extensions in App.svelte     | complete                               |
-| 4.2 | Update EXTENSION_ALLOWED_COMMANDS | complete                               |
-| 4.3 | Update EXTENSIONS.md              | complete                               |
-| 4.4 | Cross-extension conventions       | complete (documented in EXTENSIONS.md) |
+Dynamic per-project sections, workspace action buttons, remove floating workspaces.
 
-**Total: 559 frontend tests passing, 135 Rust tests passing**
+## S5: Test Updates — IN PROGRESS
+
+Update tests for reworked extensions.
+
+## Next
+
+Resume with `/implement:build --resume` if context runs out.

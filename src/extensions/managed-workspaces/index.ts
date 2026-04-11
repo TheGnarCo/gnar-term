@@ -2,16 +2,15 @@
  * Managed Workspaces — included extension
  *
  * Git worktree-backed workspace management. Creates worktrees, opens them
- * as workspaces, and archives them when done.
+ * as workspaces, and archives them when done. Uses workspace actions
+ * instead of a sidebar section for workspace creation.
  */
 import type {
   ExtensionManifest,
   ExtensionAPI,
 } from "../../lib/extension-types";
-import ManagedWorkspacesList from "./ManagedWorkspacesList.svelte";
 
-export interface ManagedWorkspaceEntry {
-  workspaceId: string;
+interface ManagedWorkspaceEntry {
   worktreePath: string;
   branch: string;
   baseBranch: string;
@@ -28,14 +27,10 @@ export const managedWorkspacesManifest: ExtensionManifest = {
   included: true,
   contributes: {
     commands: [
-      {
-        id: "create-worktree-workspace",
-        title: "Create Worktree Workspace...",
-      },
       { id: "archive-workspace", title: "Archive Managed Workspace..." },
     ],
-    primarySidebarSections: [
-      { id: "managed-workspaces", label: "Managed Workspaces" },
+    workspaceActions: [
+      { id: "create-worktree-workspace", title: "New Managed Workspace" },
     ],
     settings: {
       fields: {
@@ -78,77 +73,95 @@ function saveManagedWorkspaces(
 
 export function registerManagedWorkspacesExtension(api: ExtensionAPI): void {
   api.onActivate(() => {
-    api.registerPrimarySidebarSection(
-      "managed-workspaces",
-      ManagedWorkspacesList,
-    );
+    api.registerWorkspaceAction("create-worktree-workspace", {
+      label: "New Managed Workspace",
+      icon: "git-branch",
+      handler: async (ctx) => {
+        let repoPath: string | null;
 
-    api.registerCommand("create-worktree-workspace", async () => {
-      const activeCwd = await api.getActiveCwd();
+        if (ctx.projectPath) {
+          // Called from a project context — use the project root
+          repoPath = ctx.projectPath;
+        } else {
+          // Called from top level — open native directory picker
+          repoPath = await api.pickDirectory("Select Git Repository");
+          if (!repoPath) return;
+        }
 
-      const repoPath = await api.showInputPrompt(
-        "Repository path",
-        activeCwd || "",
-      );
-      if (!repoPath) return;
-
-      const prefix = api.getSetting<string>("branchPrefix") || "";
-
-      const branchName = await api.showInputPrompt("Branch name", prefix);
-      if (!branchName) return;
-
-      const baseBranch = await api.showInputPrompt("Base branch", "main");
-      if (!baseBranch) return;
-
-      const worktreePath = `${repoPath}/../${branchName}`;
-
-      await api.invoke("create_worktree", {
-        repo_path: repoPath,
-        branch: branchName,
-        base: baseBranch,
-        worktree_path: worktreePath,
-      });
-
-      const copyPatterns = api.getSetting<string>("copyPatterns") || "";
-      if (copyPatterns.trim()) {
-        const patterns = copyPatterns
-          .split(",")
-          .map((p) => p.trim())
-          .filter(Boolean);
-        await api.invoke("copy_files", {
-          source_dir: repoPath,
-          dest_dir: worktreePath,
-          patterns,
+        const isGit = await api.invoke<boolean>("is_git_repo", {
+          path: repoPath,
         });
-      }
+        if (!isGit) {
+          // Not a git repo — bail silently
+          return;
+        }
 
-      const setupScript = api.getSetting<string>("setupScript") || "";
-      if (setupScript.trim()) {
-        await api.invoke("run_script", {
-          cwd: worktreePath,
-          command: setupScript.trim(),
+        const branch = await api.showInputPrompt("Branch name");
+        if (!branch) return;
+
+        const base = await api.showInputPrompt("Base branch", "main");
+        if (!base) return;
+
+        // Derive worktree path from repo parent + branch name
+        const repoName = repoPath.split("/").pop() || "repo";
+        const parentDir = repoPath.substring(0, repoPath.lastIndexOf("/"));
+        const worktreePath = `${parentDir}/${repoName}-${branch}`;
+
+        await api.invoke("create_worktree", {
+          repo_path: repoPath,
+          branch,
+          base,
+          worktree_path: worktreePath,
         });
-      }
 
-      api.createWorkspace(branchName, worktreePath, {
-        metadata: {
+        // Copy config files if setting is configured
+        const copyPatternsStr = api.getSetting<string>("copyPatterns") || "";
+        if (copyPatternsStr.trim()) {
+          const patterns = copyPatternsStr
+            .split(",")
+            .map((p) => p.trim())
+            .filter(Boolean);
+          if (patterns.length > 0) {
+            await api.invoke("copy_files", {
+              source_dir: repoPath,
+              dest_dir: worktreePath,
+              patterns,
+            });
+          }
+        }
+
+        // Run setup script if configured
+        const setupScript = api.getSetting<string>("setupScript") || "";
+        if (setupScript.trim()) {
+          await api.invoke("run_script", {
+            cwd: worktreePath,
+            command: setupScript,
+          });
+        }
+
+        // Create the workspace
+        api.createWorkspace(branch, worktreePath, {
+          env: { GNARTERM_WORKTREE_ROOT: repoPath },
+          metadata: { worktreePath, branch, baseBranch: base, repoPath },
+        });
+
+        // Save to state
+        const entries = getManagedWorkspaces(api);
+        entries.push({
           worktreePath,
-          branch: branchName,
-          baseBranch,
+          branch,
+          baseBranch: base,
           repoPath,
-        },
-      });
-
-      const entries = getManagedWorkspaces(api);
-      const newEntry: ManagedWorkspaceEntry = {
-        workspaceId: branchName,
-        worktreePath,
-        branch: branchName,
-        baseBranch,
-        repoPath,
-        createdAt: new Date().toISOString(),
-      };
-      saveManagedWorkspaces(api, [...entries, newEntry]);
+          createdAt: new Date().toISOString(),
+        });
+        saveManagedWorkspaces(api, entries);
+      },
+      when: (ctx) => {
+        // Top level: always show
+        if (!ctx.projectId) return true;
+        // In project context: only show if project is a git repo
+        return ctx.isGit === true;
+      },
     });
 
     api.registerCommand("archive-workspace", async () => {

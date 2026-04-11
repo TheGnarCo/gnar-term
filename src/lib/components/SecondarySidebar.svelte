@@ -80,6 +80,7 @@
             font-weight: {activeTabId === tab.id ? '600' : '400'};
             -webkit-app-region: no-drag;
           "
+            title={tab.label}
             on:click={() => (activeTabId = tab.id)}>{tab.label}</button
           >
         {/each}

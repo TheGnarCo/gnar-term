@@ -12,12 +12,18 @@
   import WorkspaceItem from "./WorkspaceItem.svelte";
   import type { MenuItem } from "../context-menu-types";
   import { sidebarSectionStore } from "../services/sidebar-section-registry";
+  import { workspaceActionStore } from "../services/workspace-action-registry";
   import { getExtensionApiById } from "../services/extension-loader";
   import ExtensionWrapper from "./ExtensionWrapper.svelte";
 
+  const iconMap: Record<string, string> = {
+    plus: "+",
+    "git-branch": "\u2442",
+    "folder-plus": "\u2795",
+  };
+
   let collapsedSections: Record<string, boolean> = {};
 
-  export let onNewWorkspace: () => void;
   export let onSwitchWorkspace: (idx: number) => void;
   export let onCloseWorkspace: (idx: number) => void;
   export let onRenameWorkspace: (idx: number, name: string) => void;
@@ -252,17 +258,22 @@
             </svg>
           </button>
         {/if}
-        <button
-          title="New Workspace (⌘N)"
-          style="
-          background: none; border: none; cursor: pointer;
-          width: 26px; height: 26px; border-radius: 4px;
-          display: flex; align-items: center; justify-content: center;
-          color: {$theme.fgDim}; font-size: 18px; line-height: 1;
-          -webkit-app-region: no-drag;
-        "
-          on:click={onNewWorkspace}>+</button
-        >
+        {#each $workspaceActionStore as action (action.id)}
+          <button
+            title={action.shortcut
+              ? `${action.label} (${action.shortcut})`
+              : action.label}
+            style="
+            background: none; border: none; cursor: pointer;
+            width: 26px; height: 26px; border-radius: 4px;
+            display: flex; align-items: center; justify-content: center;
+            color: {$theme.fgDim}; font-size: 18px; line-height: 1;
+            -webkit-app-region: no-drag;
+          "
+            on:click={() => action.handler({})}
+            >{iconMap[action.icon] ?? action.icon}</button
+          >
+        {/each}
       </div>
 
       <!-- Scrollable content: blocks rendered in order -->
@@ -382,6 +393,7 @@
                         <ExtensionWrapper
                           api={sectionApi}
                           component={section.component}
+                          props={section.props ?? {}}
                         />
                       {:else if typeof section.component === "function"}
                         <svelte:component this={section.component} />

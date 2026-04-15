@@ -1,4 +1,3 @@
-mod internal_bridge;
 
 use clap::Parser;
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
@@ -1130,13 +1129,6 @@ pub fn run() {
             get_cli_args, spawn_pty, write_pty, resize_pty, kill_pty, pause_pty, resume_pty, detect_font, get_pty_cwd, get_pty_title, file_exists, list_dir, read_file, read_file_base64, write_file, ensure_dir, get_home, watch_file, unwatch_file, show_in_file_manager, open_with_default_app, find_file
         ])
         .setup(|app| {
-            // Spawn the internal WebSocket bridge. The bridge is a dumb proxy
-            // that forwards JSON requests to the webview via Tauri events;
-            // all op handlers live in TypeScript in the webview. See
-            // `src-tauri/src/internal_bridge.rs` and
-            // `src/lib/services/bridge-handler.ts`.
-            internal_bridge::spawn(app.handle().clone());
-
             // Set window title from CLI --title flag
             {
                 use tauri::Manager;

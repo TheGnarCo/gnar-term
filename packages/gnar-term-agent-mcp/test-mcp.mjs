@@ -104,8 +104,8 @@ async function run() {
   console.log("\n2. List tools");
   const toolsResp = await send("tools/list", {});
   const toolNames = toolsResp.result.tools.map((t) => t.name).sort();
-  assert(toolNames.length === 12, `Found ${toolNames.length} tools`);
-  const expected = ["create_pane", "create_preview", "create_screen", "create_tab", "dispatch_tasks", "get_session_info", "kill_session", "list_sessions", "read_output", "send_keys", "send_prompt", "spawn_agent"];
+  assert(toolNames.length === 8, `Found ${toolNames.length} tools`);
+  const expected = ["dispatch_tasks", "get_session_info", "kill_session", "list_sessions", "read_output", "send_keys", "send_prompt", "spawn_agent"];
   assert(JSON.stringify(toolNames) === JSON.stringify(expected), `Tool names: ${toolNames.join(", ")}`);
 
   // 3. List sessions (should be empty)
@@ -216,114 +216,6 @@ async function run() {
     arguments: { session_id: "nonexistent" },
   });
   assert(badResp.result.isError === true, "read_output on bad session returns isError");
-
-  // 14. Create screen — simple 2-pane horizontal split
-  console.log("\n14. Create screen (2-pane split)");
-  const screenResp = await send("tools/call", {
-    name: "create_screen",
-    arguments: {
-      name: "Test Dashboard",
-      layout: {
-        direction: "horizontal",
-        ratio: 0.4,
-        children: [
-          { agent: "custom", command: "bash", name: "Left Pane" },
-          { agent: "custom", command: "bash", name: "Right Pane" },
-        ],
-      },
-    },
-  });
-  assert(!screenResp.result.isError, "create_screen succeeded");
-  const screenData = JSON.parse(screenResp.result.content[0].text);
-  assert(screenData.screen_name === "Test Dashboard", "Screen name matches");
-  assert(screenData.spawned === 2, `Spawned ${screenData.spawned} panes`);
-  assert(screenData.failed === 0, "No failures");
-  assert(screenData.sessions.length === 2, "Two session IDs returned");
-
-  // Kill screen sessions
-  for (const s of screenData.sessions) {
-    if (s.session_id) {
-      await send("tools/call", { name: "kill_session", arguments: { session_id: s.session_id } });
-    }
-  }
-
-  // 15. Create screen — nested 3-pane layout
-  console.log("\n15. Create screen (nested 3-pane)");
-  const nestedResp = await send("tools/call", {
-    name: "create_screen",
-    arguments: {
-      name: "Nested Dashboard",
-      layout: {
-        direction: "vertical",
-        children: [
-          {
-            direction: "horizontal",
-            ratio: 0.5,
-            children: [
-              { agent: "custom", command: "bash", name: "Top Left" },
-              { agent: "custom", command: "bash", name: "Top Right" },
-            ],
-          },
-          { agent: "custom", command: "bash", name: "Bottom" },
-        ],
-      },
-    },
-  });
-  assert(!nestedResp.result.isError, "Nested create_screen succeeded");
-  const nestedData = JSON.parse(nestedResp.result.content[0].text);
-  assert(nestedData.spawned === 3, `Spawned ${nestedData.spawned} panes`);
-
-  // Kill nested sessions
-  for (const s of nestedData.sessions) {
-    if (s.session_id) {
-      await send("tools/call", { name: "kill_session", arguments: { session_id: s.session_id } });
-    }
-  }
-
-  // 16. Create screen — partial failure (custom agent without command)
-  console.log("\n16. Create screen (partial failure)");
-  const partialResp = await send("tools/call", {
-    name: "create_screen",
-    arguments: {
-      name: "Partial Screen",
-      layout: {
-        direction: "horizontal",
-        children: [
-          { agent: "custom", command: "bash", name: "Good Pane" },
-          { agent: "custom", name: "Bad Pane" },
-        ],
-      },
-    },
-  });
-  assert(!partialResp.result.isError, "Partial failure still returns success (one pane worked)");
-  const partialData = JSON.parse(partialResp.result.content[0].text);
-  assert(partialData.spawned === 1, "One pane spawned");
-  assert(partialData.failed === 1, "One pane failed");
-  assert(partialData.errors.length === 1, "One error reported");
-
-  // Kill partial session
-  for (const s of partialData.sessions) {
-    if (s.session_id) {
-      await send("tools/call", { name: "kill_session", arguments: { session_id: s.session_id } });
-    }
-  }
-
-  // 17. Create screen — total failure
-  console.log("\n17. Create screen (total failure)");
-  const failResp = await send("tools/call", {
-    name: "create_screen",
-    arguments: {
-      name: "Fail Screen",
-      layout: {
-        direction: "horizontal",
-        children: [
-          { agent: "custom", name: "Bad 1" },
-          { agent: "custom", name: "Bad 2" },
-        ],
-      },
-    },
-  });
-  assert(failResp.result.isError === true, "Total failure returns isError");
 
   // Cleanup: kill dispatched sessions
   for (const s of dispatchData.sessions) {

@@ -1261,8 +1261,9 @@ pub fn run() {
             // Code detection.
             if mcp_should_start() {
                 let bridge_state = mcp_bridge::BridgeState::new();
-                if let Err(e) = mcp_bridge::spawn(app.handle().clone(), bridge_state) {
-                    eprintln!("[mcp-bridge] failed to start: {e}");
+                if let Err(_e) = mcp_bridge::spawn(app.handle().clone(), bridge_state) {
+                    // Bridge failure is non-fatal; the module logs its own
+                    // error. We intentionally swallow it so the GUI stays up.
                 } else if let Ok(exe) = std::env::current_exe() {
                     let exe_str = exe.to_string_lossy().to_string();
                     std::thread::spawn(move || {

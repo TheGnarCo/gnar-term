@@ -3,7 +3,9 @@
   import { primarySidebarVisible, primarySidebarWidth, contextMenu } from "../stores/ui";
   import { dragResize } from "../actions/drag-resize";
   import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
+  import { primarySections } from "../stores/extension-sidebar";
   import WorkspaceItem from "./WorkspaceItem.svelte";
+  import ExtensionSidebarSection from "./ExtensionSidebarSection.svelte";
   import type { MenuItem } from "../context-menu-types";
 
   export let onNewWorkspace: () => void;
@@ -85,7 +87,7 @@
       >+</button>
     </div>
 
-    <!-- Workspace list -->
+    <!-- Workspace list (always first) + extension sections -->
     <div style="flex: 1; overflow-y: auto; padding: 4px 0;">
       {#each $workspaces as ws, idx (ws.id)}
         <WorkspaceItem
@@ -99,6 +101,9 @@
           onContextMenu={(x, y) => showWorkspaceContextMenu(x, y, idx)}
           onReorder={onReorderWorkspaces}
         />
+      {/each}
+      {#each $primarySections as section (section.sectionId)}
+        <ExtensionSidebarSection {section} />
       {/each}
     </div>
   </div>

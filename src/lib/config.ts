@@ -52,6 +52,8 @@ export interface CommandDef {
   workspace?: WorkspaceDef;  // workspace command
 }
 
+export type McpSetting = "auto" | "on" | "off";
+
 export interface GnarTermConfig {
   // gnar-term extensions
   theme?: string;
@@ -59,6 +61,18 @@ export interface GnarTermConfig {
   fontFamily?: string;
   opacity?: number;
   autoload?: string[];  // workspace command names to launch on startup
+  /**
+   * MCP integration module. Controls whether gnar-term exposes its MCP tools
+   * to Claude Code (or any other MCP client) over a local Unix domain socket.
+   *
+   * - "auto" (default): enable when Claude Code is detected on PATH or
+   *   ~/.claude.json exists; otherwise dormant.
+   * - "on": always attempt to enable. Shows a one-time warning if Claude
+   *   Code can't be detected.
+   * - "off": hard opt-out. No socket is bound, no files outside gnar-term's
+   *   own config are touched.
+   */
+  mcp?: McpSetting;
   // cmux-compatible
   commands?: CommandDef[];
 }
@@ -135,6 +149,12 @@ export function getConfig(): GnarTermConfig {
 
 export function getCommands(): CommandDef[] {
   return _config.commands || [];
+}
+
+export function getMcpSetting(): McpSetting {
+  const v = _config.mcp;
+  if (v === "on" || v === "off" || v === "auto") return v;
+  return "auto";
 }
 
 export function getWorkspaceCommands(): CommandDef[] {

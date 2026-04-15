@@ -15,7 +15,7 @@
   import { createWorkspace, createWorkspaceFromDef, switchWorkspace, closeWorkspace, renameWorkspace, reorderWorkspaces, saveCurrentWorkspace } from "./lib/services/workspace-service";
   import { splitPane, closePane, focusPane, reorderTab, focusDirection, flashFocusedPane, splitFromSidebar } from "./lib/services/pane-service";
   import { selectSurface, closeSurfaceById, newSurface, nextSurface, prevSurface, selectSurfaceByNumber, closeActiveSurface, openPreviewInPane, newSurfaceFromSidebar } from "./lib/services/surface-service";
-  import { initMcpBridgeClient } from "./lib/services/mcp-bridge-client";
+  import { initMcpServer } from "./lib/services/mcp-server";
 
   // Components
   import PrimarySidebar from "./lib/components/PrimarySidebar.svelte";
@@ -166,7 +166,7 @@
     await fontReady;
     setupListeners();
     startCwdPolling();
-    initMcpBridgeClient().catch((err) => console.warn("[mcp-bridge] init failed:", err));
+    initMcpServer().catch((err) => console.warn("[mcp] init failed:", err));
 
     const cliArgs = await invoke<CliArgs>("get_cli_args");
     const config = await loadConfig(cliArgs.config || undefined);

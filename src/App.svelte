@@ -15,6 +15,7 @@
   import { createWorkspace, createWorkspaceFromDef, switchWorkspace, closeWorkspace, renameWorkspace, reorderWorkspaces, saveCurrentWorkspace } from "./lib/services/workspace-service";
   import { splitPane, closePane, focusPane, reorderTab, focusDirection, flashFocusedPane, splitFromSidebar } from "./lib/services/pane-service";
   import { selectSurface, closeSurfaceById, newSurface, nextSurface, prevSurface, selectSurfaceByNumber, closeActiveSurface, openPreviewInPane, newSurfaceFromSidebar } from "./lib/services/surface-service";
+  import { initBridgeHandler } from "./lib/services/bridge-handler";
 
   // Components
   import PrimarySidebar from "./lib/components/PrimarySidebar.svelte";
@@ -165,6 +166,7 @@
     await fontReady;
     setupListeners();
     startCwdPolling();
+    initBridgeHandler();
 
     const cliArgs = await invoke<CliArgs>("get_cli_args");
     const config = await loadConfig(cliArgs.config || undefined);

@@ -970,6 +970,13 @@ struct FileChanged {
     content: String,
 }
 
+/// Get the child process PID for a PTY, if known.
+#[tauri::command]
+async fn get_pty_pid(state: tauri::State<'_, AppState>, pty_id: u32) -> Result<Option<u32>, String> {
+    let ptys = state.ptys.lock().map_err(|e| e.to_string())?;
+    Ok(ptys.get(&pty_id).and_then(|p| p.child_pid))
+}
+
 /// Get the title for a PTY tab — foreground process name or cwd basename
 #[tauri::command]
 async fn get_pty_title(state: tauri::State<'_, AppState>, pty_id: u32) -> Result<String, String> {
@@ -1126,7 +1133,7 @@ pub fn run() {
         })
         .manage(cli_args)
         .invoke_handler(tauri::generate_handler![
-            get_cli_args, spawn_pty, write_pty, resize_pty, kill_pty, pause_pty, resume_pty, detect_font, get_pty_cwd, get_pty_title, file_exists, list_dir, read_file, read_file_base64, write_file, ensure_dir, get_home, watch_file, unwatch_file, show_in_file_manager, open_with_default_app, find_file
+            get_cli_args, spawn_pty, write_pty, resize_pty, kill_pty, pause_pty, resume_pty, detect_font, get_pty_cwd, get_pty_pid, get_pty_title, file_exists, list_dir, read_file, read_file_base64, write_file, ensure_dir, get_home, watch_file, unwatch_file, show_in_file_manager, open_with_default_app, find_file
         ])
         .setup(|app| {
             // Set window title from CLI --title flag

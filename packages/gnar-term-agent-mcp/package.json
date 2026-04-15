@@ -2,7 +2,7 @@
   "name": "gnar-term-agent-mcp",
   "version": "0.1.0",
   "type": "module",
-  "description": "MCP server for orchestrating AI coding agents via managed terminal sessions",
+  "description": "MCP server bridging Claude Code (or any MCP client) to real Gnar Term panes",
   "bin": {
     "gnar-term-agent-mcp": "./bin/gnar-term-agent-mcp.js"
   },
@@ -12,13 +12,10 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "start": "node dist/index.js",
-    "postinstall": "chmod +x node_modules/node-pty/prebuilds/darwin-arm64/spawn-helper 2>/dev/null || true",
     "test": "npm run build && node test-mcp.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",
-    "node-pty": "^1.0.0",
-    "strip-ansi": "^7.1.0",
     "ws": "^8.18.0",
     "zod": "^3.25.0"
   },

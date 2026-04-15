@@ -1,20 +1,41 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { SessionStore } from "../session-store.js";
-import type { PtyManager } from "../pty-manager.js";
-import { AGENT_COMMANDS } from "../types.js";
+import type { BridgeServer } from "../bridge-server.js";
 import type { SpawnOptions } from "../types.js";
 
-export function registerOrchestrationTools(
-  server: McpServer,
-  sessions: SessionStore,
-  ptyManager: PtyManager,
-): void {
+function errorResult(message: string) {
+  return {
+    content: [{ type: "text" as const, text: message }],
+    isError: true,
+  };
+}
+
+function successResult(data: unknown) {
+  return {
+    content: [
+      {
+        type: "text" as const,
+        text: typeof data === "string" ? data : JSON.stringify(data, null, 2),
+      },
+    ],
+  };
+}
+
+async function forward<T = unknown>(bridge: BridgeServer, op: string, params: unknown) {
+  try {
+    const result = await bridge.request<T>(op, params);
+    return successResult(result);
+  } catch (err) {
+    return errorResult(err instanceof Error ? err.message : String(err));
+  }
+}
+
+export function registerOrchestrationTools(server: McpServer, bridge: BridgeServer): void {
   server.registerTool(
     "dispatch_tasks",
     {
       description:
-        "Spawn multiple agent sessions in parallel, each with its own task. Returns all session IDs for subsequent monitoring.",
+        "Spawn multiple sessions in parallel, each with its own task, as Gnar Term panes.",
       inputSchema: {
         tasks: z
           .array(
@@ -35,89 +56,18 @@ export function registerOrchestrationTools(
                 .describe("Additional environment variables"),
             }),
           )
-          .describe("Array of agent tasks to dispatch"),
+          .describe("Array of tasks to dispatch"),
       },
     },
     async ({ tasks }: { tasks: Array<SpawnOptions & { task: string }> }) => {
-      const results: Array<{
-        session_id: string;
-        name: string;
-        agent: string;
-        pid: number | undefined;
-        error?: string;
-      }> = [];
-
-      for (const taskDef of tasks) {
-        const opts: SpawnOptions = {
-          name: taskDef.name,
-          agent: taskDef.agent,
-          task: taskDef.task,
-          cwd: taskDef.cwd,
-          command: taskDef.command,
-          env: taskDef.env,
-        };
-
-        let commandStr: string;
-        if (opts.agent === "custom") {
-          if (!opts.command) {
-            results.push({
-              session_id: "",
-              name: opts.name,
-              agent: opts.agent,
-              pid: undefined,
-              error: 'agent "custom" requires a command parameter',
-            });
-            continue;
-          }
-          commandStr = opts.command;
-        } else {
-          commandStr = AGENT_COMMANDS[opts.agent].join(" ");
-        }
-
-        const session = sessions.create(opts, commandStr);
-        try {
-          const { pid } = ptyManager.spawn(
-            session.id,
-            opts,
-            (status, exitCode) => {
-              sessions.updateStatus(session.id, status, exitCode);
-            },
+      for (const t of tasks) {
+        if (t.agent === "custom" && !t.command) {
+          return errorResult(
+            `task "${t.name}": agent "custom" requires a command parameter`,
           );
-          sessions.updatePid(session.id, pid);
-          results.push({
-            session_id: session.id,
-            name: session.name,
-            agent: session.agentType,
-            pid,
-          });
-        } catch (err) {
-          sessions.delete(session.id);
-          results.push({
-            session_id: "",
-            name: opts.name,
-            agent: opts.agent,
-            pid: undefined,
-            error: err instanceof Error ? err.message : String(err),
-          });
         }
       }
-
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(
-              {
-                dispatched: results.filter((r) => !r.error).length,
-                failed: results.filter((r) => r.error).length,
-                sessions: results,
-              },
-              null,
-              2,
-            ),
-          },
-        ],
-      };
+      return forward(bridge, "dispatch_tasks", { tasks });
     },
   );
 }

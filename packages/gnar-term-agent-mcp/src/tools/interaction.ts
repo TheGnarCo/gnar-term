@@ -1,22 +1,44 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { SessionStore } from "../session-store.js";
-import type { PtyManager } from "../pty-manager.js";
+import type { BridgeServer } from "../bridge-server.js";
 import { KEY_MAP } from "../types.js";
 
-export function registerInteractionTools(
-  server: McpServer,
-  sessions: SessionStore,
-  ptyManager: PtyManager,
-): void {
+function errorResult(message: string) {
+  return {
+    content: [{ type: "text" as const, text: message }],
+    isError: true,
+  };
+}
+
+function successResult(data: unknown) {
+  return {
+    content: [
+      {
+        type: "text" as const,
+        text: typeof data === "string" ? data : JSON.stringify(data, null, 2),
+      },
+    ],
+  };
+}
+
+async function forward<T = unknown>(bridge: BridgeServer, op: string, params: unknown) {
+  try {
+    const result = await bridge.request<T>(op, params);
+    return successResult(result);
+  } catch (err) {
+    return errorResult(err instanceof Error ? err.message : String(err));
+  }
+}
+
+export function registerInteractionTools(server: McpServer, bridge: BridgeServer): void {
   server.registerTool(
     "send_prompt",
     {
       description:
-        "Send text input to a running agent session, simulating user typing. By default appends Enter to submit.",
+        "Send text input to a running session, simulating user typing. Appends Enter by default.",
       inputSchema: {
         session_id: z.string().describe("Target session ID"),
-        text: z.string().describe("Text to send to the agent"),
+        text: z.string().describe("Text to send to the session"),
         press_enter: z
           .boolean()
           .optional()
@@ -31,97 +53,27 @@ export function registerInteractionTools(
       session_id: string;
       text: string;
       press_enter?: boolean;
-    }) => {
-      const session = sessions.get(session_id);
-      if (!session) {
-        return {
-          content: [
-            { type: "text" as const, text: `Error: session ${session_id} not found` },
-          ],
-          isError: true,
-        };
-      }
-      try {
-        const shouldPressEnter = press_enter !== false;
-        ptyManager.write(session_id, text + (shouldPressEnter ? "\r" : ""));
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Sent to ${session.name}: "${text}"${shouldPressEnter ? " [Enter]" : ""}`,
-            },
-          ],
-        };
-      } catch (err) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Error sending prompt: ${err instanceof Error ? err.message : String(err)}`,
-            },
-          ],
-          isError: true,
-        };
-      }
-    },
+    }) => forward(bridge, "send_prompt", { session_id, text, press_enter }),
   );
 
   server.registerTool(
     "send_keys",
     {
-      description: `Send control sequences or special keys to an agent session. Available keys: ${Object.keys(KEY_MAP).join(", ")}`,
+      description: `Send control sequences or special keys to a session. Available keys: ${Object.keys(KEY_MAP).join(", ")}`,
       inputSchema: {
         session_id: z.string().describe("Target session ID"),
         keys: z
           .string()
-          .describe(
-            "Key name to send (e.g. ctrl+c, enter, escape, up, down, tab)",
-          ),
+          .describe("Key name (e.g. ctrl+c, enter, escape, up, down, tab)"),
       },
     },
     async ({ session_id, keys }: { session_id: string; keys: string }) => {
-      const session = sessions.get(session_id);
-      if (!session) {
-        return {
-          content: [
-            { type: "text" as const, text: `Error: session ${session_id} not found` },
-          ],
-          isError: true,
-        };
+      if (!KEY_MAP[keys.toLowerCase()]) {
+        return errorResult(
+          `unknown key "${keys}". Available: ${Object.keys(KEY_MAP).join(", ")}`,
+        );
       }
-      const sequence = KEY_MAP[keys.toLowerCase()];
-      if (!sequence) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Error: unknown key "${keys}". Available: ${Object.keys(KEY_MAP).join(", ")}`,
-            },
-          ],
-          isError: true,
-        };
-      }
-      try {
-        ptyManager.write(session_id, sequence);
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Sent ${keys} to ${session.name}`,
-            },
-          ],
-        };
-      } catch (err) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Error sending keys: ${err instanceof Error ? err.message : String(err)}`,
-            },
-          ],
-          isError: true,
-        };
-      }
+      return forward(bridge, "send_keys", { session_id, keys: keys.toLowerCase() });
     },
   );
 
@@ -129,7 +81,7 @@ export function registerInteractionTools(
     "read_output",
     {
       description:
-        "Read recent terminal output from an agent session. Use cursor-based reads for polling without missing data.",
+        "Read recent terminal output from a session. Use cursor-based polling to read incrementally.",
       inputSchema: {
         session_id: z.string().describe("Target session ID"),
         lines: z
@@ -139,13 +91,11 @@ export function registerInteractionTools(
         cursor: z
           .number()
           .optional()
-          .describe(
-            "Return lines written after this cursor value (for incremental polling)",
-          ),
+          .describe("Return lines written after this cursor value"),
         strip_ansi: z
           .boolean()
           .optional()
-          .describe("Strip ANSI escape codes from output (default: true)"),
+          .describe("Strip ANSI escape codes (default: true)"),
       },
     },
     async ({
@@ -158,54 +108,12 @@ export function registerInteractionTools(
       lines?: number;
       cursor?: number;
       strip_ansi?: boolean;
-    }) => {
-      const session = sessions.get(session_id);
-      if (!session) {
-        return {
-          content: [
-            { type: "text" as const, text: `Error: session ${session_id} not found` },
-          ],
-          isError: true,
-        };
-      }
-      const buffer = ptyManager.getBuffer(session_id);
-      if (!buffer) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify({
-                output: "",
-                cursor: 0,
-                total_lines: 0,
-                session_status: session.status,
-              }),
-            },
-          ],
-        };
-      }
-      const result = buffer.read({
-        lastN: lines,
-        sinceCursor: cursor,
-        shouldStripAnsi: strip_ansi !== false,
-      });
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(
-              {
-                output: result.lines.join("\n"),
-                cursor: result.cursor,
-                total_lines: result.totalLines,
-                session_status: session.status,
-              },
-              null,
-              2,
-            ),
-          },
-        ],
-      };
-    },
+    }) =>
+      forward(bridge, "read_output", {
+        session_id,
+        lines,
+        cursor,
+        strip_ansi,
+      }),
   );
 }

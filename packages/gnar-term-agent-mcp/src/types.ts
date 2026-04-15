@@ -24,9 +24,6 @@ export const KEY_MAP: Record<string, string> = {
   left: "\x1b[D",
 };
 
-/** Prompt patterns for idle detection */
-export const PROMPT_PATTERNS = [/\$\s*$/, />\s*$/, /%\s*$/, /❯\s*$/, /#\s*$/];
-
 export type AgentType = "claude-code" | "codex" | "aider" | "custom";
 export type SessionStatus = "starting" | "running" | "idle" | "exited";
 
@@ -42,50 +39,11 @@ export interface SpawnOptions {
 }
 
 export interface AgentSession {
-  id: string;
+  session_id: string;
   name: string;
-  agentType: AgentType;
-  command: string;
+  agent: AgentType;
+  pid: number | undefined;
   status: SessionStatus;
   cwd: string;
-  pid: number | undefined;
   createdAt: string;
-  exitCode: number | undefined;
 }
-
-// --- Screen layout types ---
-
-/** Leaf node: a session to spawn */
-export interface ScreenPaneSpec {
-  agent: AgentType;
-  command?: string;
-  name: string;
-  task?: string;
-  cwd?: string;
-  env?: Record<string, string>;
-}
-
-/** Recursive layout: either a leaf pane or a split with two children */
-export type ScreenLayoutSpec =
-  | ScreenPaneSpec
-  | { direction: "horizontal" | "vertical"; ratio?: number; children: [ScreenLayoutSpec, ScreenLayoutSpec] };
-
-/** Resolved leaf: has a spawned session (or error) instead of spawn params */
-export type ScreenLeaf = {
-  session: AgentSession;
-  error?: string;
-};
-
-/** Resolved layout tree sent over the bridge */
-export type ScreenLayoutResolved =
-  | ScreenLeaf
-  | { direction: "horizontal" | "vertical"; ratio: number; children: [ScreenLayoutResolved, ScreenLayoutResolved] };
-
-/** Full screen descriptor sent to the frontend */
-export interface ScreenDescriptor {
-  name: string;
-  layout: ScreenLayoutResolved;
-}
-
-/** Where a single session should be placed in the UI */
-export type SessionPlacement = "tab" | "split-right" | "split-down";

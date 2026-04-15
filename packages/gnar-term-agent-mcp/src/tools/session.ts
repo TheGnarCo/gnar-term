@@ -1,20 +1,41 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { SessionStore } from "../session-store.js";
-import type { PtyManager } from "../pty-manager.js";
-import { AGENT_COMMANDS } from "../types.js";
+import type { BridgeServer } from "../bridge-server.js";
 import type { SpawnOptions } from "../types.js";
 
-export function registerSessionTools(
-  server: McpServer,
-  sessions: SessionStore,
-  ptyManager: PtyManager,
-): void {
+function errorResult(message: string) {
+  return {
+    content: [{ type: "text" as const, text: message }],
+    isError: true,
+  };
+}
+
+function successResult(data: unknown) {
+  return {
+    content: [
+      {
+        type: "text" as const,
+        text: typeof data === "string" ? data : JSON.stringify(data, null, 2),
+      },
+    ],
+  };
+}
+
+async function forward<T = unknown>(bridge: BridgeServer, op: string, params: unknown) {
+  try {
+    const result = await bridge.request<T>(op, params);
+    return successResult(result);
+  } catch (err) {
+    return errorResult(err instanceof Error ? err.message : String(err));
+  }
+}
+
+export function registerSessionTools(server: McpServer, bridge: BridgeServer): void {
   server.registerTool(
     "spawn_agent",
     {
       description:
-        "Start an AI coding agent CLI in a managed terminal session. Returns session ID for subsequent interaction.",
+        "Start an AI coding agent CLI in a new Gnar Term pane. Returns a session ID for subsequent interaction.",
       inputSchema: {
         name: z.string().describe("Human-readable session label"),
         agent: z
@@ -23,9 +44,7 @@ export function registerSessionTools(
         task: z
           .string()
           .optional()
-          .describe(
-            "Initial prompt to send after agent starts (delivered after 3s startup delay)",
-          ),
+          .describe("Initial prompt to send after startup delay"),
         cwd: z.string().optional().describe("Working directory for the session"),
         command: z
           .string()
@@ -35,71 +54,16 @@ export function registerSessionTools(
           .record(z.string())
           .optional()
           .describe("Additional environment variables"),
-        cols: z.number().optional().describe("Terminal columns (default 120)"),
-        rows: z.number().optional().describe("Terminal rows (default 30)"),
+        cols: z.number().optional().describe("Terminal columns"),
+        rows: z.number().optional().describe("Terminal rows"),
       },
     },
     async (args) => {
       const opts = args as unknown as SpawnOptions;
-      // Resolve the command string for metadata
-      let commandStr: string;
-      if (opts.agent === "custom") {
-        if (!opts.command)
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: 'Error: agent "custom" requires a command parameter',
-              },
-            ],
-            isError: true,
-          };
-        commandStr = opts.command;
-      } else {
-        commandStr = AGENT_COMMANDS[opts.agent].join(" ");
+      if (opts.agent === "custom" && !opts.command) {
+        return errorResult('agent "custom" requires a command parameter');
       }
-
-      const session = sessions.create(opts, commandStr);
-      try {
-        const { pid } = ptyManager.spawn(
-          session.id,
-          opts,
-          (status, exitCode) => {
-            sessions.updateStatus(session.id, status, exitCode);
-          },
-        );
-        sessions.updatePid(session.id, pid);
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify(
-                {
-                  session_id: session.id,
-                  name: session.name,
-                  agent: session.agentType,
-                  pid,
-                  status: "starting",
-                  cwd: session.cwd,
-                },
-                null,
-                2,
-              ),
-            },
-          ],
-        };
-      } catch (err) {
-        sessions.delete(session.id);
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Error spawning agent: ${err instanceof Error ? err.message : String(err)}`,
-            },
-          ],
-          isError: true,
-        };
-      }
+      return forward(bridge, "spawn_pane", opts);
     },
   );
 
@@ -107,63 +71,29 @@ export function registerSessionTools(
     "list_sessions",
     {
       description:
-        "List all active agent sessions with their current status, PID, and working directory.",
+        "List all active MCP-spawned sessions in Gnar Term with their current status, PID, and working directory.",
     },
-    async () => {
-      const all = sessions.list();
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(all, null, 2),
-          },
-        ],
-      };
-    },
+    async () => forward(bridge, "list_sessions", {}),
   );
 
   server.registerTool(
     "get_session_info",
     {
       description:
-        "Get detailed information about a specific agent session including output buffer stats.",
+        "Get detailed information about a specific session including output buffer stats.",
       inputSchema: {
         session_id: z.string().describe("Session ID returned by spawn_agent"),
       },
     },
-    async ({ session_id }: { session_id: string }) => {
-      const session = sessions.get(session_id);
-      if (!session) {
-        return {
-          content: [
-            { type: "text" as const, text: `Error: session ${session_id} not found` },
-          ],
-          isError: true,
-        };
-      }
-      const buffer = ptyManager.getBuffer(session_id);
-      const bufferStats = buffer
-        ? {
-            cursor: buffer.getCursor(),
-            lastLine: buffer.getLastLine(),
-          }
-        : null;
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify({ ...session, bufferStats }, null, 2),
-          },
-        ],
-      };
-    },
+    async ({ session_id }: { session_id: string }) =>
+      forward(bridge, "get_session_info", { session_id }),
   );
 
   server.registerTool(
     "kill_session",
     {
       description:
-        "Terminate an agent session. Sends the specified signal to the process.",
+        "Terminate a session and close its Gnar Term pane.",
       inputSchema: {
         session_id: z.string().describe("Session ID to terminate"),
         signal: z
@@ -172,37 +102,7 @@ export function registerSessionTools(
           .describe("Signal to send (default: SIGTERM)"),
       },
     },
-    async ({ session_id, signal }: { session_id: string; signal?: string }) => {
-      const session = sessions.get(session_id);
-      if (!session) {
-        return {
-          content: [
-            { type: "text" as const, text: `Error: session ${session_id} not found` },
-          ],
-          isError: true,
-        };
-      }
-      try {
-        ptyManager.kill(session_id, signal);
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Session ${session.name} (${session_id}) terminated with ${signal ?? "SIGTERM"}`,
-            },
-          ],
-        };
-      } catch (err) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Error killing session: ${err instanceof Error ? err.message : String(err)}`,
-            },
-          ],
-          isError: true,
-        };
-      }
-    },
+    async ({ session_id, signal }: { session_id: string; signal?: string }) =>
+      forward(bridge, "kill_session", { session_id, signal }),
   );
 }

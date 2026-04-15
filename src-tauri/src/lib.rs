@@ -212,7 +212,7 @@ impl PauseFlag {
     }
 }
 
-struct PtyInstance {
+pub(crate) struct PtyInstance {
     writer: Box<dyn Write + Send>,
     // master is kept alive to keep the PTY open
     _master: Box<dyn MasterPty + Send>,
@@ -220,8 +220,11 @@ struct PtyInstance {
     paused: std::sync::Arc<PauseFlag>,
 }
 
+/// Shared PTY map, accessible by Tauri commands and the internal WS bridge.
+pub(crate) type PtyMap = Arc<Mutex<HashMap<u32, PtyInstance>>>;
+
 struct AppState {
-    ptys: Mutex<HashMap<u32, PtyInstance>>,
+    ptys: PtyMap,
     watch_flags: Mutex<HashMap<u32, Arc<AtomicBool>>>,
 }
 
@@ -1119,21 +1122,25 @@ pub fn run() {
     let filtered_args = filter_known_args(std::env::args());
     let cli_args = resolve_cli_paths(CliArgs::parse_from(filtered_args));
 
+    // Create the shared PTY map. Both Tauri commands and the internal WS
+    // bridge hold a reference via Arc.
+    let pty_map: PtyMap = Arc::new(Mutex::new(HashMap::new()));
+
     tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
         .manage(AppState {
-            ptys: Mutex::new(HashMap::new()),
+            ptys: pty_map.clone(),
             watch_flags: Mutex::new(HashMap::new()),
         })
         .manage(cli_args)
         .invoke_handler(tauri::generate_handler![
             get_cli_args, spawn_pty, write_pty, resize_pty, kill_pty, pause_pty, resume_pty, detect_font, get_pty_cwd, get_pty_title, file_exists, list_dir, read_file, read_file_base64, write_file, ensure_dir, get_home, watch_file, unwatch_file, show_in_file_manager, open_with_default_app, find_file
         ])
-        .setup(|app| {
+        .setup(move |app| {
             // Spawn the internal WebSocket bridge so the webview frontend and
             // any external MCP sidecar can connect to a single backend-hosted
             // wire. Phase 1 of the extension/MCP roadmap.
-            internal_bridge::spawn();
+            internal_bridge::spawn(pty_map.clone());
 
             // Set window title from CLI --title flag
             {

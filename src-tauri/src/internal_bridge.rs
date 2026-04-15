@@ -19,9 +19,11 @@
 //! that depend on frontend state will be added in a follow-up that forwards
 //! those messages to the webview.
 
+use crate::PtyMap;
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
+use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::tungstenite::Message;
 
@@ -62,15 +64,15 @@ struct BridgeError {
 /// Spawn the bridge server as a background tokio task. Logs errors to stderr
 /// but never panics — if the bridge fails to start, gnar-term keeps running
 /// without it.
-pub fn spawn() {
-    tokio::spawn(async {
-        if let Err(e) = run().await {
+pub fn spawn(pty_map: PtyMap) {
+    tokio::spawn(async move {
+        if let Err(e) = run(pty_map).await {
             eprintln!("[gnar-term::internal_bridge] server error: {e}");
         }
     });
 }
 
-async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn run(pty_map: PtyMap) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let port: u16 = std::env::var("GNAR_TERM_BRIDGE_PORT")
         .ok()
         .and_then(|s| s.parse().ok())
@@ -82,8 +84,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     loop {
         let (stream, peer) = listener.accept().await?;
+        let pty_map = Arc::clone(&pty_map);
         tokio::spawn(async move {
-            if let Err(e) = handle_connection(stream).await {
+            if let Err(e) = handle_connection(stream, pty_map).await {
                 eprintln!("[gnar-term::internal_bridge] connection {peer} error: {e}");
             }
         });
@@ -92,6 +95,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
 async fn handle_connection(
     stream: TcpStream,
+    pty_map: PtyMap,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let ws = tokio_tungstenite::accept_async(stream).await?;
     let (mut write, mut read) = ws.split();
@@ -105,7 +109,7 @@ async fn handle_connection(
         };
 
         let response = match serde_json::from_str::<BridgeRequest>(&text) {
-            Ok(req) => dispatch(req),
+            Ok(req) => dispatch(req, &pty_map),
             Err(e) => serde_json::to_string(&BridgeError {
                 id: String::new(),
                 error: format!("malformed request: {e}"),
@@ -120,18 +124,19 @@ async fn handle_connection(
 }
 
 /// Resolve a request to a JSON-encoded response string.
-///
-/// Phase 1 placeholder: only `list_ptys` is wired up, and it currently returns
-/// an empty list because the WS task does not yet share `AppState`. The next
-/// commit will refactor `AppState` to make the PTY map cheaply shareable with
-/// the bridge task and replace this stub with the real lookup.
-fn dispatch(req: BridgeRequest) -> String {
+fn dispatch(req: BridgeRequest, pty_map: &PtyMap) -> String {
     match req.op.as_str() {
-        "list_ptys" => serde_json::to_string(&BridgeResponse {
-            id: req.id,
-            result: serde_json::json!({ "pty_ids": Vec::<u32>::new() }),
-        })
-        .unwrap_or_default(),
+        "list_ptys" => {
+            let pty_ids: Vec<u32> = pty_map
+                .lock()
+                .map(|ptys| ptys.keys().copied().collect())
+                .unwrap_or_default();
+            serde_json::to_string(&BridgeResponse {
+                id: req.id,
+                result: serde_json::json!({ "pty_ids": pty_ids }),
+            })
+            .unwrap_or_default()
+        }
         unknown => serde_json::to_string(&BridgeError {
             id: req.id,
             error: format!("unknown op: {unknown}"),

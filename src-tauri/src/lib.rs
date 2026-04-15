@@ -1574,7 +1574,7 @@ mod tests {
     #[test]
     fn pty_spawn_returns_valid_id_and_is_tracked() {
         let state = AppState {
-            ptys: Mutex::new(HashMap::new()),
+            ptys: Arc::new(Mutex::new(HashMap::new())),
             watch_flags: Mutex::new(HashMap::new()),
         };
 
@@ -1691,7 +1691,7 @@ mod tests {
     #[test]
     fn pty_kill_removes_from_state() {
         let state = AppState {
-            ptys: Mutex::new(HashMap::new()),
+            ptys: Arc::new(Mutex::new(HashMap::new())),
             watch_flags: Mutex::new(HashMap::new()),
         };
 
@@ -1779,7 +1779,7 @@ mod tests {
     #[test]
     fn file_watcher_cancellation_sets_stop_flag() {
         let state = AppState {
-            ptys: Mutex::new(HashMap::new()),
+            ptys: Arc::new(Mutex::new(HashMap::new())),
             watch_flags: Mutex::new(HashMap::new()),
         };
 
@@ -1909,7 +1909,7 @@ mod tests {
     #[test]
     fn pty_spawn_with_cwd_and_get_cwd() {
         let state = AppState {
-            ptys: Mutex::new(HashMap::new()),
+            ptys: Arc::new(Mutex::new(HashMap::new())),
             watch_flags: Mutex::new(HashMap::new()),
         };
 

@@ -104,8 +104,8 @@ async function run() {
   console.log("\n2. List tools");
   const toolsResp = await send("tools/list", {});
   const toolNames = toolsResp.result.tools.map((t) => t.name).sort();
-  assert(toolNames.length === 9, `Found ${toolNames.length} tools`);
-  const expected = ["create_screen", "dispatch_tasks", "get_session_info", "kill_session", "list_sessions", "read_output", "send_keys", "send_prompt", "spawn_agent"];
+  assert(toolNames.length === 12, `Found ${toolNames.length} tools`);
+  const expected = ["create_pane", "create_preview", "create_screen", "create_tab", "dispatch_tasks", "get_session_info", "kill_session", "list_sessions", "read_output", "send_keys", "send_prompt", "spawn_agent"];
   assert(JSON.stringify(toolNames) === JSON.stringify(expected), `Tool names: ${toolNames.join(", ")}`);
 
   // 3. List sessions (should be empty)

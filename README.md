@@ -346,6 +346,161 @@ registerPreviewer({
 });
 ```
 
+## MCP integration (agent orchestration)
+
+gnar-term ships an MCP (Model Context Protocol) server that lets an AI
+agent — Claude Code, Cursor, or anything else that speaks MCP over stdio
+— drive **real, visible gnar-term panes**. The agent calls tools like
+`spawn_agent`, `send_prompt`, and `read_output`; each call creates or
+acts on a live pane the user can see in gnar-term.
+
+### Architecture
+
+```
+┌─────────────────┐   stdio MCP    ┌────────────────────────┐   bridge WS    ┌──────────────────┐
+│   Claude Code   │◄──────────────►│  gnar-term-agent-mcp   │◄──────────────►│   gnar-term app  │
+│   (MCP client)  │                │  (sidecar, stateless)  │                │   (owns panes)   │
+└─────────────────┘                └────────────────────────┘                └──────────────────┘
+```
+
+The sidecar is a small, stateless Node process. It speaks stdio MCP to
+the client on one side and hosts a localhost WebSocket server on the
+other. Every tool call forwards to the gnar-term webview, which creates
+or mutates the real pane. State (sessions, PTYs, output buffers) lives
+entirely in gnar-term; the sidecar is a protocol shim.
+
+See [`packages/gnar-term-agent-mcp/SPEC.md`](./packages/gnar-term-agent-mcp/SPEC.md)
+for the full tool reference and bridge protocol.
+
+### Setup
+
+**Prerequisites**: Node 18+, a running gnar-term build (dev or installed
+release), and an MCP-capable client (e.g. Claude Code).
+
+#### 1. Build the sidecar
+
+From the gnar-term repo root:
+
+```bash
+cd packages/gnar-term-agent-mcp
+npm install
+npm run build
+```
+
+This produces `packages/gnar-term-agent-mcp/dist/index.js`, the sidecar
+entrypoint.
+
+#### 2. Register the sidecar with Claude Code
+
+Use `claude mcp add` to install it at user scope (persists across
+sessions and projects):
+
+```bash
+claude mcp add -s user gnar-term node /absolute/path/to/gnar-term/packages/gnar-term-agent-mcp/dist/index.js
+```
+
+Replace the path with the absolute path on your machine. Confirm it's
+registered:
+
+```bash
+claude mcp list
+```
+
+You should see `gnar-term` in the list.
+
+> **Note**: Do not install the MCP server via `~/.claude/settings.json`
+> directly — use `claude mcp add -s user` so Claude Code's process
+> model stays consistent across restarts.
+
+#### 3. Start gnar-term
+
+```bash
+# if installed via Homebrew / release
+gnar-term
+
+# or from source
+npm run dev
+```
+
+The gnar-term webview polls for the sidecar's bridge port on startup
+and connects automatically. It also reconnects if the sidecar is
+restarted mid-session.
+
+#### 4. Restart Claude Code
+
+Claude Code spawns MCP servers at launch. Restart it so the newly
+registered `gnar-term` server boots and its 8 tools become visible.
+
+### Usage
+
+Once everything is running, the tools are available to the MCP client.
+The 8 tools are:
+
+| Tool | What it does |
+|---|---|
+| `spawn_agent` | Create a new pane running an agent CLI (`claude-code`, `codex`, `aider`, or a custom command) |
+| `list_sessions` | List MCP-spawned panes currently alive |
+| `get_session_info` | Detailed info for one session including output buffer stats |
+| `kill_session` | Terminate a session and close its pane |
+| `send_prompt` | Send text input (simulates typing) |
+| `send_keys` | Send control sequences (ctrl+c, enter, arrow keys, etc.) |
+| `read_output` | Read recent terminal output with cursor-based polling |
+| `dispatch_tasks` | Spawn multiple sessions in parallel with individual tasks |
+
+Example flow (from Claude Code or any other MCP client, in
+pseudo-tool-call form):
+
+```
+1. spawn_agent(name: "worker-1", agent: "claude-code", cwd: "~/projects/myapp",
+                task: "Implement the login form")
+   → { session_id: "mcp-abc123", pid: 12345 }
+
+2. [wait a few seconds, agent boots and starts working]
+
+3. read_output(session_id: "mcp-abc123", lines: 50)
+   → { output: "...", cursor: 87 }
+
+4. send_prompt(session_id: "mcp-abc123", text: "Also add a password reset link.")
+   → { ok: true }
+
+5. read_output(session_id: "mcp-abc123", cursor: 87)
+   → { output: "[only new lines since cursor 87]", cursor: 112 }
+```
+
+The pane appears in the currently active gnar-term workspace,
+side-by-side with whatever you were doing. You can watch the agent
+work in real time.
+
+### Troubleshooting
+
+**"Gnar Term is not connected to the MCP bridge"**
+The webview hasn't connected to the sidecar yet. Make sure gnar-term is
+running and visible. The webview connects on startup and reconnects
+automatically if the sidecar restarts.
+
+**Port file location**
+The sidecar writes its bridge port to `~/.config/gnar-term/mcp-bridge.port`
+on startup. If connection troubles persist, delete that file, restart
+both the sidecar (by restarting Claude Code) and gnar-term, and try
+again.
+
+**Sandbox / permission prompts in Claude Code**
+Claude Code may ask permission the first time an MCP tool tries to spawn
+a child process. Approve it. If a spawned agent is stuck waiting on
+approval, the agent's pane will be blocked — approve the prompt in
+Claude Code to unblock it.
+
+**Verifying the bridge is live**
+Check the sidecar's stderr output (Claude Code surfaces it in its MCP
+server logs). You should see:
+
+```
+[gnar-term-mcp] Bridge server listening on ws://127.0.0.1:<port>
+[gnar-term-mcp] Gnar Term webview connected to bridge
+```
+
+Both lines mean the sidecar is ready and gnar-term is on the wire.
+
 ## Architecture
 
 Built with:
@@ -355,6 +510,7 @@ Built with:
 - **[portable-pty](https://docs.rs/portable-pty)** — cross-platform PTY spawning
 - **[marked](https://marked.js.org)** + **[github-markdown-css](https://github.com/sindresorhus/github-markdown-css)** — Markdown rendering
 - **[pdf.js](https://mozilla.github.io/pdf.js/)** — PDF rendering
+- **[@modelcontextprotocol/sdk](https://github.com/modelcontextprotocol/typescript-sdk)** — MCP sidecar
 
 ## Contributing
 

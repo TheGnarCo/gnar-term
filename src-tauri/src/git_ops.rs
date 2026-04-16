@@ -1,0 +1,375 @@
+use std::path::Path;
+use std::process::Command;
+
+/// Validate that a repo path exists and is a directory.
+fn validate_repo(repo_path: &str) -> Result<(), String> {
+    let path = Path::new(repo_path);
+    if !path.exists() {
+        return Err(format!("Repository path does not exist: {repo_path}"));
+    }
+    if !path.is_dir() {
+        return Err(format!("Repository path is not a directory: {repo_path}"));
+    }
+    Ok(())
+}
+
+/// Run a git command in the given repo directory and return stdout on success
+/// or a descriptive error including stderr on failure.
+fn run_git(repo_path: &str, args: &[&str]) -> Result<String, String> {
+    let output = Command::new("git")
+        .args(args)
+        .current_dir(repo_path)
+        .output()
+        .map_err(|e| format!("Failed to execute git: {e}"))?;
+
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(format!(
+            "git {} failed (exit {}): {}",
+            args.join(" "),
+            output.status.code().unwrap_or(-1),
+            stderr.trim()
+        ))
+    }
+}
+
+#[tauri::command]
+pub async fn git_clone(url: String, target_dir: String) -> Result<(), String> {
+    if url.is_empty() {
+        return Err("Clone URL must not be empty".to_string());
+    }
+
+    let output = Command::new("git")
+        .args(["clone", &url, &target_dir])
+        .output()
+        .map_err(|e| format!("Failed to execute git clone: {e}"))?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(format!(
+            "git clone failed (exit {}): {}",
+            output.status.code().unwrap_or(-1),
+            stderr.trim()
+        ))
+    }
+}
+
+#[tauri::command]
+pub async fn push_branch(
+    repo_path: String,
+    branch: String,
+    remote: Option<String>,
+) -> Result<(), String> {
+    validate_repo(&repo_path)?;
+    let remote_name = remote.unwrap_or_else(|| "origin".to_string());
+    run_git(&repo_path, &["push", &remote_name, &branch])?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn delete_branch(
+    repo_path: String,
+    branch: String,
+    remote: Option<bool>,
+) -> Result<(), String> {
+    validate_repo(&repo_path)?;
+
+    if remote == Some(true) {
+        run_git(&repo_path, &["push", "origin", "--delete", &branch])?;
+    } else {
+        run_git(&repo_path, &["branch", "-d", &branch])?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn git_checkout(repo_path: String, branch: String) -> Result<(), String> {
+    validate_repo(&repo_path)?;
+    run_git(&repo_path, &["checkout", &branch])?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    static TEST_COUNTER: AtomicU32 = AtomicU32::new(0);
+
+    /// Create a temporary git repo and return its path.
+    fn setup_test_repo() -> std::path::PathBuf {
+        let id = TEST_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let dir =
+            std::env::temp_dir().join(format!("gnar-term-test-{}-{}", std::process::id(), id));
+        // Clean up any leftover from a previous run
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("Failed to create temp dir");
+
+        Command::new("git")
+            .args(["init"])
+            .current_dir(&dir)
+            .output()
+            .expect("Failed to git init");
+
+        Command::new("git")
+            .args(["config", "user.email", "test@test.com"])
+            .current_dir(&dir)
+            .output()
+            .expect("Failed to set git email");
+
+        Command::new("git")
+            .args(["config", "user.name", "Test"])
+            .current_dir(&dir)
+            .output()
+            .expect("Failed to set git name");
+
+        // Create an initial commit so HEAD exists
+        fs::write(dir.join("README.md"), "test").expect("Failed to write file");
+        Command::new("git")
+            .args(["add", "."])
+            .current_dir(&dir)
+            .output()
+            .expect("Failed to git add");
+        Command::new("git")
+            .args(["commit", "-m", "initial"])
+            .current_dir(&dir)
+            .output()
+            .expect("Failed to git commit");
+
+        dir
+    }
+
+    fn cleanup_test_repo(dir: &std::path::Path) {
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    // -- validate_repo tests --
+
+    #[test]
+    fn test_validate_repo_nonexistent_path() {
+        let result = validate_repo("/tmp/definitely-does-not-exist-gnarterm");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("does not exist"));
+    }
+
+    #[test]
+    fn test_validate_repo_file_not_dir() {
+        let file_path = std::env::temp_dir().join("gnar-term-test-file");
+        fs::write(&file_path, "not a dir").expect("Failed to write temp file");
+        let result = validate_repo(file_path.to_str().unwrap());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not a directory"));
+        let _ = fs::remove_file(&file_path);
+    }
+
+    #[test]
+    fn test_validate_repo_valid_dir() {
+        let dir = std::env::temp_dir();
+        assert!(validate_repo(dir.to_str().unwrap()).is_ok());
+    }
+
+    // -- git_clone tests --
+
+    #[tokio::test]
+    async fn test_git_clone_empty_url() {
+        let result = git_clone(String::new(), "/tmp/target".to_string()).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("must not be empty"));
+    }
+
+    #[tokio::test]
+    async fn test_git_clone_invalid_url() {
+        let target = std::env::temp_dir().join("gnar-term-clone-invalid");
+        let _ = fs::remove_dir_all(&target);
+        let result = git_clone(
+            "https://invalid.example.com/no-repo.git".to_string(),
+            target.to_str().unwrap().to_string(),
+        )
+        .await;
+        assert!(result.is_err());
+        let _ = fs::remove_dir_all(&target);
+    }
+
+    #[tokio::test]
+    async fn test_git_clone_local_repo() {
+        let source = setup_test_repo();
+        let target = std::env::temp_dir().join("gnar-term-clone-dest");
+        let _ = fs::remove_dir_all(&target);
+
+        let result = git_clone(
+            source.to_str().unwrap().to_string(),
+            target.to_str().unwrap().to_string(),
+        )
+        .await;
+        assert!(result.is_ok(), "Clone failed: {result:?}");
+        assert!(target.join(".git").exists());
+
+        cleanup_test_repo(&source);
+        cleanup_test_repo(&target);
+    }
+
+    // -- push_branch tests --
+
+    #[tokio::test]
+    async fn test_push_branch_invalid_repo() {
+        let result = push_branch(
+            "/tmp/no-such-repo-gnarterm".to_string(),
+            "main".to_string(),
+            None,
+        )
+        .await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("does not exist"));
+    }
+
+    #[tokio::test]
+    async fn test_push_branch_default_remote() {
+        // push_branch with None remote should use "origin" — which won't exist
+        // in our bare test repo, producing an error mentioning "origin"
+        let repo = setup_test_repo();
+        let result =
+            push_branch(repo.to_str().unwrap().to_string(), "main".to_string(), None).await;
+        assert!(result.is_err());
+        // The error should reference "origin" since that's the default
+        let err = result.unwrap_err();
+        assert!(
+            err.contains("origin") || err.contains("remote"),
+            "Expected error about origin remote, got: {err}"
+        );
+        cleanup_test_repo(&repo);
+    }
+
+    #[tokio::test]
+    async fn test_push_branch_custom_remote() {
+        let repo = setup_test_repo();
+        let result = push_branch(
+            repo.to_str().unwrap().to_string(),
+            "main".to_string(),
+            Some("upstream".to_string()),
+        )
+        .await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            err.contains("upstream") || err.contains("remote"),
+            "Expected error about upstream remote, got: {err}"
+        );
+        cleanup_test_repo(&repo);
+    }
+
+    // -- delete_branch tests --
+
+    #[tokio::test]
+    async fn test_delete_branch_invalid_repo() {
+        let result = delete_branch(
+            "/tmp/no-such-repo-gnarterm".to_string(),
+            "feature".to_string(),
+            None,
+        )
+        .await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_delete_branch_local() {
+        let repo = setup_test_repo();
+        // Create a branch, then delete it
+        Command::new("git")
+            .args(["branch", "test-branch"])
+            .current_dir(&repo)
+            .output()
+            .expect("Failed to create branch");
+
+        let result = delete_branch(
+            repo.to_str().unwrap().to_string(),
+            "test-branch".to_string(),
+            None,
+        )
+        .await;
+        assert!(result.is_ok(), "Delete local branch failed: {result:?}");
+        cleanup_test_repo(&repo);
+    }
+
+    #[tokio::test]
+    async fn test_delete_branch_remote_no_origin() {
+        let repo = setup_test_repo();
+        let result = delete_branch(
+            repo.to_str().unwrap().to_string(),
+            "feature".to_string(),
+            Some(true),
+        )
+        .await;
+        assert!(result.is_err());
+        cleanup_test_repo(&repo);
+    }
+
+    // -- git_checkout tests --
+
+    #[tokio::test]
+    async fn test_git_checkout_invalid_repo() {
+        let result =
+            git_checkout("/tmp/no-such-repo-gnarterm".to_string(), "main".to_string()).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_git_checkout_existing_branch() {
+        let repo = setup_test_repo();
+        // Create a branch, then check it out
+        Command::new("git")
+            .args(["branch", "feature-x"])
+            .current_dir(&repo)
+            .output()
+            .expect("Failed to create branch");
+
+        let result =
+            git_checkout(repo.to_str().unwrap().to_string(), "feature-x".to_string()).await;
+        assert!(result.is_ok(), "Checkout failed: {result:?}");
+
+        // Verify we're on the right branch
+        let output = Command::new("git")
+            .args(["branch", "--show-current"])
+            .current_dir(&repo)
+            .output()
+            .expect("Failed to check branch");
+        let current = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        assert_eq!(current, "feature-x");
+
+        cleanup_test_repo(&repo);
+    }
+
+    #[tokio::test]
+    async fn test_git_checkout_nonexistent_branch() {
+        let repo = setup_test_repo();
+        let result = git_checkout(
+            repo.to_str().unwrap().to_string(),
+            "no-such-branch".to_string(),
+        )
+        .await;
+        assert!(result.is_err());
+        cleanup_test_repo(&repo);
+    }
+
+    // -- run_git tests --
+
+    #[test]
+    fn test_run_git_invalid_command() {
+        let repo = setup_test_repo();
+        let result = run_git(repo.to_str().unwrap(), &["not-a-real-subcommand"]);
+        assert!(result.is_err());
+        cleanup_test_repo(&repo);
+    }
+
+    #[test]
+    fn test_run_git_status() {
+        let repo = setup_test_repo();
+        let result = run_git(repo.to_str().unwrap(), &["status", "--short"]);
+        assert!(result.is_ok());
+        cleanup_test_repo(&repo);
+    }
+}

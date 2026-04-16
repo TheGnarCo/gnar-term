@@ -1,6 +1,6 @@
 import { marked } from "marked";
 import DOMPurify from "dompurify";
-import { registerPreviewer } from "./index";
+import { registerPreviewer } from "../preview-registry";
 import "github-markdown-css/github-markdown-dark.css";
 
 registerPreviewer({

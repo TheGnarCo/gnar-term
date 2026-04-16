@@ -1,4 +1,4 @@
-import { registerPreviewer } from "./index";
+import { registerPreviewer } from "../preview-registry";
 
 registerPreviewer({
   extensions: ["json", "jsonc", "json5"],
@@ -14,6 +14,7 @@ registerPreviewer({
 
 function syntaxHighlight(json: string): string {
   return json.replace(
+    // eslint-disable-next-line security/detect-unsafe-regex -- well-known JSON syntax highlighting pattern, input is pre-validated JSON
     /("(\\u[\da-fA-F]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
     (match) => {
       let cls = "json-number";
@@ -25,7 +26,7 @@ function syntaxHighlight(json: string): string {
         cls = "json-null";
       }
       return `<span class="${cls}">${match}</span>`;
-    }
+    },
   );
 }
 

@@ -1,11 +1,17 @@
-import { registerPreviewer } from "./index";
-import { themeProxy as theme } from "../lib/theme-accessor";
+import { registerPreviewer } from "../preview-registry";
 
 registerPreviewer({
   extensions: ["csv", "tsv"],
-  render(content, filePath, element) {
+  render(content, filePath, element, ctx) {
+    const theme = ctx?.theme ?? {
+      fg: "#fff",
+      fgDim: "#888",
+      bgSurface: "#111",
+      bgHighlight: "#222",
+      border: "#333",
+    };
     const separator = filePath.endsWith(".tsv") ? "\t" : ",";
-    const lines = content.split("\n").filter(l => l.trim());
+    const lines = content.split("\n").filter((l) => l.trim());
     if (lines.length === 0) {
       element.textContent = "(empty file)";
       return;
@@ -16,15 +22,20 @@ registerPreviewer({
       let current = "";
       let inQuotes = false;
       for (const ch of line) {
-        if (ch === '"') { inQuotes = !inQuotes; }
-        else if (ch === separator && !inQuotes) { cells.push(current.trim()); current = ""; }
-        else { current += ch; }
+        if (ch === '"') {
+          inQuotes = !inQuotes;
+        } else if (ch === separator && !inQuotes) {
+          cells.push(current.trim());
+          current = "";
+        } else {
+          current += ch;
+        }
       }
       cells.push(current.trim());
       return cells;
     };
 
-    const headers = parseRow(lines[0]);
+    const headers = parseRow(lines[0]!);
     const rows = lines.slice(1).map(parseRow);
 
     const table = document.createElement("table");
@@ -33,7 +44,6 @@ registerPreviewer({
       font-family: "JetBrainsMono Nerd Font Mono", Menlo, monospace;
     `;
 
-    // Header
     const thead = document.createElement("thead");
     const headerRow = document.createElement("tr");
     for (const h of headers) {
@@ -49,7 +59,6 @@ registerPreviewer({
     thead.appendChild(headerRow);
     table.appendChild(thead);
 
-    // Body
     const tbody = document.createElement("tbody");
     for (const row of rows) {
       const tr = document.createElement("tr");
@@ -62,13 +71,21 @@ registerPreviewer({
         `;
         tr.appendChild(td);
       }
-      tr.addEventListener("mouseenter", () => { tr.style.background = theme.bgHighlight; });
-      tr.addEventListener("mouseleave", () => { tr.style.background = "transparent"; });
+      tr.addEventListener("mouseenter", () => {
+        tr.style.background = theme.bgHighlight as string;
+      });
+      tr.addEventListener("mouseleave", () => {
+        tr.style.background = "transparent";
+      });
       tbody.appendChild(tr);
     }
     table.appendChild(tbody);
 
-    element.innerHTML = `<div style="color: ${theme.fgDim}; font-size: 12px; margin-bottom: 8px;">${rows.length} rows × ${headers.length} columns</div>`;
+    element.textContent = "";
+    const summary = document.createElement("div");
+    summary.style.cssText = `color: ${theme.fgDim}; font-size: 12px; margin-bottom: 8px;`;
+    summary.textContent = `${rows.length} rows \u00d7 ${headers.length} columns`;
+    element.appendChild(summary);
     element.appendChild(table);
   },
 });

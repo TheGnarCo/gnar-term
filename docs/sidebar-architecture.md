@@ -1,3 +1,9 @@
+---
+title: Sidebar Architecture
+parent: Architecture
+nav_order: 3
+---
+
 # Sidebar Architecture
 
 GnarTerm uses a dual-sidebar layout: a **Primary Sidebar** (left) and a **Secondary Sidebar** (right). Both are collapsible and resizable, but they differ in how they organize content and accept new sections.
@@ -26,7 +32,7 @@ The secondary sidebar is **tab-controlled**. Each section is its own tab, displa
 
 ### Control Row
 
-Below the tab bar, the secondary sidebar has a **control row** — a 28px-tall action bar that matches the height of the surface tab bar. This row is reserved for extension-supplied quick-action buttons (e.g., refresh, filter, settings toggles). The control row is always visible regardless of which tab is active, making it suitable for cross-tab actions.
+Below the tab bar, the secondary sidebar has a **control row** — a 28px-tall action bar that matches the height of the surface tab bar. This row is reserved for extension-supplied quick-action buttons (e.g., refresh, filter, settings toggles). The control row only renders when the active tab has registered actions (i.e., when the active tab's action list is non-empty), keeping the UI clean when no actions are available.
 
 ## Layout Anatomy
 

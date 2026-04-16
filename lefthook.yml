@@ -27,4 +27,7 @@ pre-push:
     tests:
       run: npm test
     rust-tests:
-      run: cargo test --manifest-path src-tauri/Cargo.toml
+      # Strip GIT_* env vars so nested `git` invocations in integration tests
+      # operate on the temp repos they create instead of the outer repo that
+      # triggered the hook (GIT_DIR/GIT_INDEX_FILE/GIT_PREFIX leakage).
+      run: env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_PREFIX -u GIT_COMMON_DIR -u GIT_NAMESPACE -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES -u GIT_CONFIG -u GIT_CONFIG_PARAMETERS -u GIT_CONFIG_COUNT cargo test --manifest-path src-tauri/Cargo.toml

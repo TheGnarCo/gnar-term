@@ -99,6 +99,37 @@ export async function openPreview(filePath: string): Promise<PreviewSurface> {
   return { id, filePath, title: fileName, element, watchId };
 }
 
+// --- Content-based preview (no file backing) ---
+
+export function openPreviewFromContent(
+  content: string,
+  title: string,
+  previewId?: string,
+): PreviewSurface {
+  const id = previewId ?? `preview-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+
+  const element = document.createElement("div");
+  element.style.cssText = `
+    flex: 1; overflow-y: auto; padding: 24px 32px;
+    background: ${theme.bg}; color: ${theme.fg};
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size: 14px; line-height: 1.6;
+    display: block; min-height: 0;
+  `;
+  element.className = "preview-surface";
+
+  injectStyles();
+
+  const mdPreviewer = previewers.find(p => p.extensions.includes("md"));
+  if (mdPreviewer) {
+    mdPreviewer.render(content, "", element);
+  } else {
+    element.textContent = content;
+  }
+
+  return { id, filePath: "", title, element, watchId: 0 };
+}
+
 // --- Helpers ---
 
 function getExtension(path: string): string {

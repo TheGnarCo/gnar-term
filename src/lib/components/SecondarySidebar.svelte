@@ -1,7 +1,9 @@
 <script lang="ts">
   import { theme } from "../stores/theme";
   import { secondarySidebarVisible, secondarySidebarWidth } from "../stores/ui";
+  import { secondarySections } from "../stores/extension-sidebar";
   import { dragResize } from "../actions/drag-resize";
+  import ExtensionSidebarSection from "./ExtensionSidebarSection.svelte";
 
   let dragging = false;
 </script>
@@ -62,9 +64,17 @@
       </div>
     {/if}
 
-    <!-- Content area -->
-    <div style="flex: 1; overflow-y: auto; padding: 8px; display: flex; align-items: center; justify-content: center;">
-      <span style="color: {$theme.fgDim}; font-size: 12px;">No Secondary Sidebar Content</span>
+    <!-- Content area: extension-declared sections or placeholder -->
+    <div style="flex: 1; overflow-y: auto; padding: 4px 0;">
+      {#if $secondarySections.length === 0}
+        <div style="display: flex; align-items: center; justify-content: center; padding: 16px 8px;">
+          <span style="color: {$theme.fgDim}; font-size: 12px;">No Secondary Sidebar Content</span>
+        </div>
+      {:else}
+        {#each $secondarySections as section (section.sectionId)}
+          <ExtensionSidebarSection {section} />
+        {/each}
+      {/if}
     </div>
   </div>
   </div>

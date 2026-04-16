@@ -346,6 +346,99 @@ registerPreviewer({
 });
 ```
 
+## MCP integration (agent orchestration)
+
+Gnar Term ships an optional MCP (Model Context Protocol) server that lets
+an AI agent — Claude Code, Cursor, or anything else that speaks MCP over
+stdio — drive **real, visible gnar-term panes**. The agent calls tools
+like `spawn_agent`, `send_prompt`, and `read_output`; each call creates
+or acts on a live pane the user can see in gnar-term.
+
+**Gnar Term is a terminal first.** The MCP module is a strictly optional
+feature: if you never install Claude Code, you will never see or pay any
+cost for the MCP plumbing. There is no sidecar to build, no extra
+process, and no configuration required unless you want to disable it.
+
+### Settings
+
+A single field in `gnar-term.json` controls the module:
+
+```json
+{ "mcp": "auto" }
+```
+
+- **`auto`** (default) — enable if Claude Code is detected (`claude` on
+  PATH or `~/.claude.json` exists). Otherwise completely dormant: no
+  Unix socket bound, no files outside gnar-term's own config touched,
+  no extra threads.
+- **`on`** — always enable the module.
+- **`off`** — hard opt-out. The module never starts and `~/.claude.json`
+  is never read or written.
+
+### Architecture
+
+```
+                              gnar-term (single binary)
+                              ───────────────────────
+[Claude Code]  --stdio-->  [gnar-term --mcp-stdio]   byte
+                              (shim, ~30 LOC Rust)   pipe
+                                       │
+                                    UDS (chmod 600)
+                                       │
+                              [Rust UDS bridge]  ──events──>  [Webview MCP server]
+                              (no protocol parsing)            (JSON-RPC + 19 tools
+                                                                in ~500 LOC TypeScript)
+```
+
+There is no sidecar package. Claude Code spawns `gnar-term --mcp-stdio`
+as a subprocess; that mode is a pure byte pipe that connects stdin/stdout
+to the Unix domain socket exposed by the running gnar-term GUI. The Rust
+bridge forwards raw bytes; the MCP protocol and all tool handlers live in
+TypeScript inside the webview. **Adding a new tool is a pure TypeScript
+change in `src/lib/services/mcp-server.ts`.**
+
+Security: the socket is chmod'd 600 so only the owning user can connect.
+There is no network listening port, no HTTP, no auth token, and no
+DNS-rebinding attack surface. Same-user trust boundary.
+
+### Automatic registration
+
+On first launch when MCP is enabled, gnar-term registers itself with
+Claude Code by shelling out to `claude mcp add-json -s user gnar-term ...`
+with a pointer to its own binary. If the CLI isn't available, it falls
+back to an atomic write of `~/.claude.json`. After registration you only
+need to restart Claude Code once; no manual `claude mcp add` is needed.
+
+### The 19 tools
+
+| Category | Tools |
+|---|---|
+| Session management | `spawn_agent`, `list_sessions`, `get_session_info`, `kill_session` |
+| Interaction | `send_prompt`, `send_keys`, `read_output` |
+| Orchestration | `dispatch_tasks` |
+| UI writes | `render_sidebar`, `remove_sidebar_section`, `create_preview` |
+| UI introspection | `get_active_workspace`, `list_workspaces`, `get_active_pane`, `list_panes` |
+| Lifecycle events | `poll_events` |
+| Filesystem | `list_dir`, `read_file`, `file_exists` |
+
+See the Spacebase spec (doc id `jzvBxDRrkevx`) for full argument schemas
+and the wire-level contract, or read `src/lib/services/mcp-server.ts` for
+the authoritative TypeScript definitions.
+
+### Integration test harness
+
+A Node script at `tests/mcp-integration.mjs` speaks JSON-RPC 2.0 over the
+UDS to a running gnar-term instance. Useful for smoke-testing a real
+build end-to-end:
+
+```bash
+# Start gnar-term (with mcp: "on" or mcp: "auto" + Claude Code installed)
+node tests/mcp-integration.mjs
+```
+
+The harness exercises `initialize`, `tools/list`, `list_workspaces`,
+`poll_events`, and `render_sidebar`/`remove_sidebar_section`.
+
 ## Architecture
 
 Built with:

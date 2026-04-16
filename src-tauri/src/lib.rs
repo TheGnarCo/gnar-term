@@ -1,3 +1,4 @@
+
 use clap::Parser;
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 use serde::Serialize;
@@ -6,6 +7,9 @@ use std::io::{Read, Write};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter};
+
+pub mod mcp_bridge;
+pub mod mcp_register;
 
 /// CLI arguments for GnarTerm.
 #[derive(Parser, Debug, Clone, Default, Serialize)]
@@ -819,6 +823,65 @@ async fn read_file(path: String) -> Result<String, String> {
     std::fs::read_to_string(&validated).map_err(|e| format!("Failed to read {}: {}", path, e))
 }
 
+/// Directory entry metadata for the MCP `list_dir` tool.
+#[derive(Clone, Serialize)]
+struct McpDirEntry {
+    name: String,
+    path: String,
+    is_dir: bool,
+    size: u64,
+}
+
+/// List a directory as a vector of entries with type + size metadata.
+/// Unlike `list_dir` (which returns only file names) this returns directories
+/// and files so the CWD File Navigator can render a tree.
+#[tauri::command]
+async fn mcp_list_dir(
+    path: String,
+    include_hidden: Option<bool>,
+) -> Result<Vec<McpDirEntry>, String> {
+    let include_hidden = include_hidden.unwrap_or(false);
+    let entries = std::fs::read_dir(&path)
+        .map_err(|e| format!("Failed to read dir {}: {}", path, e))?;
+    let mut out = Vec::new();
+    for entry in entries.flatten() {
+        let name = match entry.file_name().to_str() {
+            Some(n) => n.to_string(),
+            None => continue,
+        };
+        if !include_hidden && name.starts_with('.') {
+            continue;
+        }
+        let metadata = match entry.metadata() {
+            Ok(m) => m,
+            Err(_) => continue,
+        };
+        let entry_path = entry.path().to_string_lossy().to_string();
+        out.push(McpDirEntry {
+            name,
+            path: entry_path,
+            is_dir: metadata.is_dir(),
+            size: metadata.len(),
+        });
+    }
+    // Stable ordering: directories first, then files, alphabetic within.
+    out.sort_by(|a, b| match (a.is_dir, b.is_dir) {
+        (true, false) => std::cmp::Ordering::Less,
+        (false, true) => std::cmp::Ordering::Greater,
+        _ => a.name.cmp(&b.name),
+    });
+    Ok(out)
+}
+
+/// Return `(exists, is_dir)` for the MCP `file_exists` tool.
+#[tauri::command]
+async fn mcp_file_info(path: String) -> (bool, bool) {
+    match std::fs::metadata(&path) {
+        Ok(m) => (true, m.is_dir()),
+        Err(_) => (false, false),
+    }
+}
+
 /// Read a file as base64 (for binary files like images)
 #[tauri::command]
 async fn read_file_base64(path: String) -> Result<String, String> {
@@ -969,6 +1032,13 @@ struct FileChanged {
     content: String,
 }
 
+/// Get the child process PID for a PTY, if known.
+#[tauri::command]
+async fn get_pty_pid(state: tauri::State<'_, AppState>, pty_id: u32) -> Result<Option<u32>, String> {
+    let ptys = state.ptys.lock().map_err(|e| e.to_string())?;
+    Ok(ptys.get(&pty_id).and_then(|p| p.child_pid))
+}
+
 /// Get the title for a PTY tab — foreground process name or cwd basename
 #[tauri::command]
 async fn get_pty_title(state: tauri::State<'_, AppState>, pty_id: u32) -> Result<String, String> {
@@ -1110,8 +1180,56 @@ async fn find_file(name: String) -> Result<String, String> {
     Err(format!("File not found: {}", name))
 }
 
+/// Read the `mcp` setting from `gnar-term.json`. Returns `"auto"` if no
+/// config exists or the field is missing. Values that aren't recognized fall
+/// back to `"auto"`.
+fn read_mcp_setting() -> String {
+    let paths: Vec<std::path::PathBuf> = {
+        let mut v = Vec::new();
+        v.push(std::path::PathBuf::from("gnar-term.json"));
+        v.push(std::path::PathBuf::from("cmux.json"));
+        if let Ok(home) = std::env::var("HOME") {
+            v.push(std::path::PathBuf::from(format!(
+                "{}/.config/gnar-term/gnar-term.json",
+                home
+            )));
+        }
+        v
+    };
+    for p in paths {
+        if let Ok(s) = std::fs::read_to_string(&p) {
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&s) {
+                if let Some(mcp) = v.get("mcp").and_then(|m| m.as_str()) {
+                    match mcp {
+                        "on" | "off" | "auto" => return mcp.to_string(),
+                        _ => return "auto".to_string(),
+                    }
+                }
+            }
+        }
+    }
+    "auto".to_string()
+}
+
+/// Decide whether the MCP bridge should bind on this launch based on the user
+/// setting and Claude Code detection.
+fn mcp_should_start() -> bool {
+    match read_mcp_setting().as_str() {
+        "off" => false,
+        "on" => true,
+        _ => mcp_register::detect_claude_code(),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Handle --mcp-stdio BEFORE touching Tauri — this mode is a pure byte
+    // pipe and never launches the GUI.
+    let raw_args: Vec<String> = std::env::args().collect();
+    if raw_args.iter().any(|a| a == "--mcp-stdio") {
+        std::process::exit(mcp_bridge::run_stdio_shim());
+    }
+
     // Parse CLI args. Use whitelist filter to drop unknown flags that leak
     // from Cargo/Tauri during `tauri dev` (--color, --no-default-features, etc.).
     let filtered_args = filter_known_args(std::env::args());
@@ -1125,7 +1243,7 @@ pub fn run() {
         })
         .manage(cli_args)
         .invoke_handler(tauri::generate_handler![
-            get_cli_args, spawn_pty, write_pty, resize_pty, kill_pty, pause_pty, resume_pty, detect_font, get_pty_cwd, get_pty_title, file_exists, list_dir, read_file, read_file_base64, write_file, ensure_dir, get_home, watch_file, unwatch_file, show_in_file_manager, open_with_default_app, find_file
+            get_cli_args, spawn_pty, write_pty, resize_pty, kill_pty, pause_pty, resume_pty, detect_font, get_pty_cwd, get_pty_pid, get_pty_title, file_exists, list_dir, read_file, read_file_base64, write_file, ensure_dir, get_home, watch_file, unwatch_file, show_in_file_manager, open_with_default_app, find_file, mcp_list_dir, mcp_file_info
         ])
         .setup(|app| {
             // Set window title from CLI --title flag
@@ -1136,6 +1254,21 @@ pub fn run() {
                     if let Some(window) = app.get_webview_window("main") {
                         let _ = window.set_title(title);
                     }
+                }
+            }
+
+            // MCP bridge — opt-in, dormant unless enabled by setting + Claude
+            // Code detection.
+            if mcp_should_start() {
+                let bridge_state = mcp_bridge::BridgeState::new();
+                if let Err(_e) = mcp_bridge::spawn(app.handle().clone(), bridge_state) {
+                    // Bridge failure is non-fatal; the module logs its own
+                    // error. We intentionally swallow it so the GUI stays up.
+                } else if let Ok(exe) = std::env::current_exe() {
+                    let exe_str = exe.to_string_lossy().to_string();
+                    std::thread::spawn(move || {
+                        mcp_register::register_if_needed(&exe_str);
+                    });
                 }
             }
 

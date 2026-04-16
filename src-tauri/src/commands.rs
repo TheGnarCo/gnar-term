@@ -350,7 +350,7 @@ pub(crate) async fn list_dir(path: String) -> Result<Vec<DirEntry>, String> {
     let mut result = Vec::new();
     for entry in entries.flatten() {
         if let Some(name) = entry.file_name().to_str() {
-            let is_dir = entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false);
+            let is_dir = entry.file_type().is_ok_and(|ft| ft.is_dir());
             let is_hidden = name.starts_with('.');
             result.push(DirEntry {
                 name: name.to_string(),
@@ -551,9 +551,7 @@ pub(crate) async fn watch_file(
                 last_modified = current;
                 // Emit content for small files; emit empty content for oversized files
                 // so the frontend knows the file changed even if content is too large
-                let size = std::fs::metadata(&validated_str)
-                    .map(|m| m.len())
-                    .unwrap_or(0);
+                let size = std::fs::metadata(&validated_str).map_or(0, |m| m.len());
                 if size <= MAX_WATCH_FILE_SIZE {
                     if let Ok(content) = std::fs::read_to_string(&validated_str) {
                         let _ = app.emit(

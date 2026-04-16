@@ -12,26 +12,43 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import { SearchAddon } from "@xterm/addon-search";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { readText as clipboardRead, writeText as clipboardWrite } from "@tauri-apps/plugin-clipboard-manager";
+import {
+  readText as clipboardRead,
+  writeText as clipboardWrite,
+} from "@tauri-apps/plugin-clipboard-manager";
 import { get } from "svelte/store";
 import { xtermTheme } from "./stores/theme";
 import { workspaces, activeWorkspaceIdx } from "./stores/workspace";
 import { contextMenu, pendingAction } from "./stores/ui";
-import { canPreview, getSupportedExtensions, openPreview } from "../preview/index";
-import type { TerminalSurface, Pane, Surface, Workspace } from "./types";
-import { uid, getAllSurfaces, getAllPanes, isTerminalSurface, findParentSplit, replaceNodeInTree } from "./types";
+import { getContextMenuItemsForFile } from "./services/context-menu-item-registry";
+import type { TerminalSurface, Pane, Workspace } from "./types";
+import {
+  uid,
+  getAllSurfaces,
+  getAllPanes,
+  isTerminalSurface,
+  findParentSplit,
+  replaceNodeInTree,
+} from "./types";
 import type { MenuItem } from "./context-menu-types";
+import { notifyOutputObservers } from "./services/surface-output-observer";
+import { eventBus } from "./services/event-bus";
 import "@xterm/xterm/css/xterm.css";
 
 /** Platform detection — used for Cmd (macOS) vs Ctrl (Linux/Windows) shortcuts. */
-export const isMac = typeof navigator !== "undefined" && navigator.platform.toUpperCase().includes("MAC");
+export const isMac =
+  typeof navigator !== "undefined" &&
+  navigator.platform.toUpperCase().includes("MAC");
 
 /** Shortcut label helpers for platform-appropriate display. */
 export const modLabel = isMac ? "⌘" : "Ctrl+";
 export const shiftModLabel = isMac ? "⇧⌘" : "Ctrl+Shift+";
 
 /** Resolve a link path to an absolute filesystem path. Expands ~ and prepends cwd for relative paths. */
-export async function resolveFilePath(linkText: string, cwd: string | undefined): Promise<string> {
+export async function resolveFilePath(
+  linkText: string,
+  cwd: string | undefined,
+): Promise<string> {
   if (linkText.startsWith("/")) return linkText;
   if (linkText.startsWith("~/")) {
     try {
@@ -60,13 +77,15 @@ async function detectFont(): Promise<string> {
     if (font) {
       return `"${font}", ${BUNDLED_FONT}, ${SYSTEM_FALLBACK}`;
     }
-  } catch (_) {
+  } catch {
     // Font detection not available — use bundled font
   }
   return `${BUNDLED_FONT}, ${SYSTEM_FALLBACK}`;
 }
 
-export const fontReady = detectFont().then((f) => { resolvedFontFamily = f; });
+export const fontReady = detectFont().then((f) => {
+  resolvedFontFamily = f;
+});
 
 // --- Flow Control ---
 
@@ -76,7 +95,7 @@ const ptyFlushScheduled = new Set<number>();
 const ptyPaused = new Set<number>();
 
 const BUFFER_HIGH_WATER = 128 * 1024; // 128KB
-const BUFFER_LOW_WATER = 32 * 1024;   // 32KB
+const BUFFER_LOW_WATER = 32 * 1024; // 32KB
 
 function findSurfaceByPty(ptyId: number): TerminalSurface | null {
   const wsList = get(workspaces);
@@ -106,6 +125,7 @@ function flushPtyBuffer(ptyId: number) {
     ptyBufferBytes.delete(ptyId);
     if (ptyPaused.has(ptyId)) {
       ptyPaused.delete(ptyId);
+      // PTY may already be dead — safe to ignore
       invoke("resume_pty", { ptyId }).catch(() => {});
     }
     return;
@@ -133,6 +153,7 @@ function flushPtyBuffer(ptyId: number) {
     // Resume PTY reader if we drained below low water mark
     if (ptyPaused.has(ptyId) && buffered < BUFFER_LOW_WATER) {
       ptyPaused.delete(ptyId);
+      // PTY may have exited during render — safe to ignore
       invoke("resume_pty", { ptyId }).catch(() => {});
     }
   });
@@ -140,40 +161,67 @@ function flushPtyBuffer(ptyId: number) {
 
 // --- Event Listeners ---
 
+let listenersInitialized = false;
+
 export async function setupListeners() {
+  // Guard against duplicate listener registration (e.g. HMR re-mount).
+  // Each listen() call adds a new handler — duplicates cause repeated output.
+  if (listenersInitialized) return;
+  listenersInitialized = true;
+
   // On Linux, prevent WebKitGTK from intercepting Ctrl+Shift+C/V before xterm.js
   if (!isMac) {
-    window.addEventListener("keydown", (e) => {
-      if (e.ctrlKey && e.shiftKey && (e.key === "C" || e.key === "c" || e.key === "V" || e.key === "v")) {
-        e.preventDefault();
-      }
-    }, { capture: true });
+    window.addEventListener(
+      "keydown",
+      (e) => {
+        if (
+          e.ctrlKey &&
+          e.shiftKey &&
+          (e.key === "C" || e.key === "c" || e.key === "V" || e.key === "v")
+        ) {
+          e.preventDefault();
+        }
+      },
+      { capture: true },
+    );
   }
   await listen<{ pty_id: number; data: string }>("pty-output", (event) => {
     const { pty_id, data } = event.payload;
-    // Decode base64 to preserve raw terminal escape sequences
-    const bin = atob(data);
-    const bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    try {
+      // Decode base64 to preserve raw terminal escape sequences
+      const bin = atob(data);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
 
-    // Append to buffer
-    let chunks = ptyBuffers.get(pty_id);
-    if (!chunks) {
-      chunks = [];
-      ptyBuffers.set(pty_id, chunks);
+      // Notify extension observers (decoded string, before buffering)
+      notifyOutputObservers(pty_id, bin);
+
+      // Append to buffer
+      let chunks = ptyBuffers.get(pty_id);
+      if (!chunks) {
+        chunks = [];
+        ptyBuffers.set(pty_id, chunks);
+      }
+      chunks.push(bytes);
+      const buffered = (ptyBufferBytes.get(pty_id) || 0) + bytes.length;
+      ptyBufferBytes.set(pty_id, buffered);
+
+      // Pause PTY reader if buffer is getting large
+      if (!ptyPaused.has(pty_id) && buffered >= BUFFER_HIGH_WATER) {
+        ptyPaused.add(pty_id);
+        // Best-effort backpressure — PTY may have exited
+        invoke("pause_pty", { ptyId: pty_id }).catch(() => {});
+      }
+
+      // Schedule a flush on the next animation frame
+      scheduleFlush(pty_id);
+    } catch (e) {
+      console.error(
+        `[terminal] Failed to decode PTY output for pty ${pty_id}:`,
+        e,
+      );
+      return;
     }
-    chunks.push(bytes);
-    const buffered = (ptyBufferBytes.get(pty_id) || 0) + bytes.length;
-    ptyBufferBytes.set(pty_id, buffered);
-
-    // Pause PTY reader if buffer is getting large
-    if (!ptyPaused.has(pty_id) && buffered >= BUFFER_HIGH_WATER) {
-      ptyPaused.add(pty_id);
-      invoke("pause_pty", { ptyId: pty_id }).catch(() => {});
-    }
-
-    // Schedule a flush on the next animation frame
-    scheduleFlush(pty_id);
   });
 
   await listen<{ pty_id: number }>("pty-exit", (event) => {
@@ -190,17 +238,21 @@ export async function setupListeners() {
       for (const ws of wsList) {
         for (const pane of getAllPanes(ws.splitRoot)) {
           const idx = pane.surfaces.findIndex(
-            (s) => isTerminalSurface(s) && s.ptyId === pty_id
+            (s) => isTerminalSurface(s) && s.ptyId === pty_id,
           );
           if (idx >= 0) {
             pane.surfaces.splice(idx, 1);
             if (pane.surfaces.length > 0) {
-              pane.activeSurfaceId = pane.surfaces[Math.min(idx, pane.surfaces.length - 1)].id;
+              pane.activeSurfaceId =
+                pane.surfaces[Math.min(idx, pane.surfaces.length - 1)]!.id;
             } else {
               // Pane is empty — collapse it from the split tree
               pane.activeSurfaceId = null;
               pane.resizeObserver?.disconnect();
-              if (ws.splitRoot.type === "pane" && ws.splitRoot.pane.id === pane.id) {
+              if (
+                ws.splitRoot.type === "pane" &&
+                ws.splitRoot.pane.id === pane.id
+              ) {
                 // This was the only pane in the workspace — remove the workspace
                 const wsIdx = wsList.indexOf(ws);
                 wsList.splice(wsIdx, 1);
@@ -216,7 +268,8 @@ export async function setupListeners() {
               // Find parent split and collapse it
               const parentInfo = findParentSplit(ws.splitRoot, pane.id);
               if (parentInfo && parentInfo.parent.type === "split") {
-                const sibling = parentInfo.parent.children[parentInfo.index === 0 ? 1 : 0];
+                const sibling =
+                  parentInfo.parent.children[parentInfo.index === 0 ? 1 : 0];
                 if (ws.splitRoot === parentInfo.parent) {
                   ws.splitRoot = sibling;
                 } else {
@@ -232,38 +285,62 @@ export async function setupListeners() {
       return wsList;
     });
     if (needsDefaultWorkspace) {
-      createDefaultWorkspace();
+      void createDefaultWorkspace();
     }
   });
 
-  await listen<{ pty_id: number; text: string }>("pty-notification", (event) => {
-    const { pty_id, text } = event.payload;
-    // Filter out escape-sequence fragments that slipped through (e.g. "4;0;")
-    if (/^\d+[;\d:\/]*$/.test(text) || !text.trim()) return;
-    workspaces.update((wsList) => {
-      for (const ws of wsList) {
-        for (const s of getAllSurfaces(ws)) {
-          if (isTerminalSurface(s) && s.ptyId === pty_id) {
-            s.notification = text;
-            s.hasUnread = true;
-            return wsList;
+  await listen<{ pty_id: number; text: string }>(
+    "pty-notification",
+    (event) => {
+      const { pty_id, text } = event.payload;
+      // Filter out escape-sequence fragments that slipped through (e.g. "4;0;")
+      if (/^\d+[;\d:\/]*$/.test(text) || !text.trim()) return;
+
+      // Strip common notification prefixes. Many apps (Claude Code, iTerm-
+      // compatible) send OSC 9 as `notify;<app>;<body>` — we only want body.
+      let clean = text.trim();
+      if (clean.toLowerCase().startsWith("notify;")) {
+        clean = clean.slice("notify;".length);
+        const semiIdx = clean.indexOf(";");
+        if (semiIdx >= 0) clean = clean.slice(semiIdx + 1);
+      }
+      clean = clean.trim();
+      if (!clean) return;
+
+      workspaces.update((wsList) => {
+        for (const ws of wsList) {
+          for (const s of getAllSurfaces(ws)) {
+            if (isTerminalSurface(s) && s.ptyId === pty_id) {
+              s.notification = clean;
+              s.hasUnread = true;
+              return wsList;
+            }
           }
         }
-      }
-      return wsList;
-    });
-  });
+        return wsList;
+      });
+    },
+  );
 
   // OSC 0/2: shell sets window title (shows process name or custom title)
   await listen<{ pty_id: number; title: string }>("pty-title", (event) => {
     const { pty_id, title } = event.payload;
     // Filter out escape-sequence fragments that may slip through
-    if (!title || /[\x00-\x1f\x7f]/.test(title) || /^\d+[;\d:\/]*$/.test(title)) return;
+    if (!title || /[\x00-\x1f\x7f]/.test(title) || /^\d+[;\d:\/]*$/.test(title))
+      return;
     workspaces.update((wsList) => {
       for (const ws of wsList) {
         for (const s of getAllSurfaces(ws)) {
           if (isTerminalSurface(s) && s.ptyId === pty_id) {
+            const oldTitle = s.title;
             s.title = title;
+            if (oldTitle !== title) {
+              eventBus.emit({
+                type: "surface:titleChanged",
+                id: s.id,
+                title,
+              });
+            }
             return wsList;
           }
         }
@@ -285,16 +362,17 @@ export function startCwdPolling() {
       for (const s of getAllSurfaces(ws)) {
         if (isTerminalSurface(s) && s.ptyId >= 0) {
           invoke<string>("get_pty_cwd", { ptyId: s.ptyId })
-            .then(cwd => {
+            .then((cwd) => {
               if (cwd && cwd !== s.cwd) {
                 s.cwd = cwd;
                 const basename = cwd.split("/").pop() || cwd;
                 if (!s.title || s.title.startsWith("Shell ")) {
                   s.title = basename || "~";
-                  workspaces.update(l => [...l]);
                 }
+                workspaces.update((l) => [...l]);
               }
             })
+            // Best-effort CWD poll — shell may have exited
             .catch(() => {});
         }
       }
@@ -313,13 +391,17 @@ export async function createDefaultWorkspace() {
     activePaneId: pane.id,
   };
   await createTerminalSurface(pane);
-  workspaces.update(list => [...list, ws]);
+  workspaces.update((list) => [...list, ws]);
   activeWorkspaceIdx.set(0);
 }
 
 // --- Surface Creation ---
 
-export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<TerminalSurface> {
+export async function createTerminalSurface(
+  pane: Pane,
+  cwd?: string,
+  env?: Record<string, string>,
+): Promise<TerminalSurface> {
   const ptyId = -1; // PTY spawned later via connectPty() after fit()
 
   const currentXtermTheme = get(xtermTheme);
@@ -345,49 +427,71 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
   terminal.loadAddon(searchAddon);
 
   const termElement = document.createElement("div");
-  termElement.style.cssText = "flex: 1; min-height: 0; min-width: 0; padding: 2px 4px;";
+  termElement.style.cssText =
+    "flex: 1; min-height: 0; min-width: 0; padding: 2px 4px;";
 
   const surface: TerminalSurface = {
     kind: "terminal",
-    id: uid(), terminal, fitAddon, searchAddon, termElement, ptyId,
+    id: uid(),
+    terminal,
+    fitAddon,
+    searchAddon,
+    termElement,
+    ptyId,
     title: `Shell ${pane.surfaces.length + 1}`,
     cwd: cwd,
-    hasUnread: false, opened: false,
+    env: env,
+    hasUnread: false,
+    opened: false,
   };
 
-  // Cmd+click file path detection for preview
+  // Cmd+click file path detection — links file paths to extension handlers
   terminal.registerLinkProvider({
     provideLinks: (lineNumber, callback) => {
       const line = terminal.buffer.active.getLine(lineNumber - 1);
-      if (!line) { callback(undefined); return; }
+      if (!line) {
+        callback(undefined);
+        return;
+      }
       const text = line.translateToString();
-      const exts = getSupportedExtensions().join("|");
+      // Match any file path (absolute, relative, or with extension)
       const patterns = [
-        `"([^"]+\\.(?:${exts}))"`,
-        `'([^']+\\.(?:${exts}))'`,
-        `((?:/|\\./|~/)\\S[\\S ]*\\.(?:${exts}))(?=\\s|$)`,
-        `(\\S+\\.(?:${exts}))(?=\\s|$)`,
+        `"([^"]+\\.[a-z0-9]+)"`,
+        `'([^']+\\.[a-z0-9]+)'`,
+        `((?:/|\\./|~/)\\S[\\S ]*\\.[a-z0-9]+)(?=\\s|$)`,
       ];
+      // eslint-disable-next-line security/detect-non-literal-regexp -- patterns array is hardcoded string literals, no user input
       const regex = new RegExp(patterns.join("|"), "gi");
       const candidates: { path: string; startX: number; endX: number }[] = [];
 
       let m;
       while ((m = regex.exec(text)) !== null) {
-        const path = m[1] || m[2] || m[3] || m[4];
+        const path = m[1] || m[2] || m[3];
         if (!path) continue;
         const startX = m.index + m[0].indexOf(path);
         candidates.push({ path, startX, endX: startX + path.length });
       }
 
-      if (candidates.length === 0) { callback(undefined); return; }
+      if (candidates.length === 0) {
+        callback(undefined);
+        return;
+      }
 
-      Promise.all(
+      void Promise.all(
         candidates.map(async (c) => {
           const fullPath = await resolveFilePath(c.path, surface.cwd);
-          const exists = await invoke<boolean>("file_exists", { path: fullPath });
+          // Only linkify files that exist and have an extension handler
+          const exists = await invoke<boolean>("file_exists", {
+            path: fullPath,
+          });
           if (!exists) return null;
+          const extHandlers = getContextMenuItemsForFile(fullPath);
+          if (extHandlers.length === 0) return null;
           return {
-            range: { start: { x: c.startX + 1, y: lineNumber }, end: { x: c.endX + 1, y: lineNumber } },
+            range: {
+              start: { x: c.startX + 1, y: lineNumber },
+              end: { x: c.endX + 1, y: lineNumber },
+            },
             text: c.path,
             activate: async (e: MouseEvent, linkText: string) => {
               if (e.button !== 0) return;
@@ -395,9 +499,11 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
               pendingAction.set({ type: "open-preview", payload: resolved });
             },
           };
-        })
+        }),
       ).then((results) => {
-        const links = results.filter((r): r is NonNullable<typeof r> => r !== null);
+        const links = results.filter(
+          (r): r is NonNullable<typeof r> => r !== null,
+        );
         callback(links.length > 0 ? links : undefined);
       });
     },
@@ -411,15 +517,26 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
 
     // Linux: Ctrl+Shift+C = copy, Ctrl+Shift+V = paste
     // Uses Tauri clipboard plugin because webview clipboard access isn't guaranteed.
-    if (e.ctrlKey && e.shiftKey && !e.metaKey && (e.key === "C" || e.key === "c")) {
+    if (
+      e.ctrlKey &&
+      e.shiftKey &&
+      !e.metaKey &&
+      (e.key === "C" || e.key === "c")
+    ) {
       const sel = terminal.getSelection();
-      if (sel) clipboardWrite(sel);
+      if (sel) void clipboardWrite(sel);
       return false;
     }
-    if (e.ctrlKey && e.shiftKey && !e.metaKey && (e.key === "V" || e.key === "v")) {
+    if (
+      e.ctrlKey &&
+      e.shiftKey &&
+      !e.metaKey &&
+      (e.key === "V" || e.key === "v")
+    ) {
       e.preventDefault();
-      clipboardRead().then(text => {
-        if (text && surface.ptyId >= 0) invoke("write_pty", { ptyId: surface.ptyId, data: text });
+      void clipboardRead().then((text) => {
+        if (text && surface.ptyId >= 0)
+          void invoke("write_pty", { ptyId: surface.ptyId, data: text });
       });
       return false;
     }
@@ -438,31 +555,39 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
       // Cmd+C — copy selection
       if (!alt && !shift && k === "c") {
         const sel = terminal.getSelection();
-        if (sel) clipboardWrite(sel);
+        if (sel) void clipboardWrite(sel);
         return false;
       }
       // Cmd+V — paste
       if (!alt && !shift && k === "v") {
         e.preventDefault();
-        clipboardRead().then(text => {
-          if (text && surface.ptyId >= 0) invoke("write_pty", { ptyId: surface.ptyId, data: text });
-        }).catch((err) => console.warn("Clipboard read failed:", err));
+        void clipboardRead()
+          .then((text) => {
+            if (text && surface.ptyId >= 0)
+              void invoke("write_pty", { ptyId: surface.ptyId, data: text });
+          })
+          .catch((err) => console.warn("Clipboard read failed:", err));
         return false;
       }
 
       // Cmd+key (no alt) — let App.svelte handle
       if (!alt && !shift) {
-        if (["n","t","d","w","b","p","k","f","g"].includes(k)) return false;
+        if (["n", "t", "d", "w", "b", "p", "k", "f", "g"].includes(k))
+          return false;
         if (k >= "1" && k <= "9") return false;
       }
       // Shift+Cmd+key
       if (shift && !alt) {
-        if (["d","w","h","r","p","g","t"].includes(k)) return false;
+        if (["d", "w", "h", "r", "p", "g", "t"].includes(k)) return false;
         if (k === "enter") return false;
         if (k === "[" || k === "]") return false;
       }
       // Alt+Cmd+arrows for pane nav
-      if (alt && ["arrowleft","arrowright","arrowup","arrowdown"].includes(k)) return false;
+      if (
+        alt &&
+        ["arrowleft", "arrowright", "arrowup", "arrowdown"].includes(k)
+      )
+        return false;
     } else {
       // Linux/Windows: only intercept Ctrl+Shift combos for app shortcuts.
       // Plain Ctrl+key passes through to PTY for TUI apps.
@@ -472,7 +597,8 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
       const alt = e.altKey;
       // Ctrl+Shift+key — let App.svelte handle app shortcuts
       if (!alt) {
-        if (["n","t","d","w","b","p","k","f","g","h","r"].includes(k)) return false;
+        if (["n", "t", "d", "w", "b", "p", "k", "f", "g", "h", "r"].includes(k))
+          return false;
         if (k === "enter") return false;
         if (k === "[" || k === "]") return false;
       }
@@ -482,10 +608,12 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
   });
 
   terminal.onData((data) => {
-    if (surface.ptyId >= 0) invoke("write_pty", { ptyId: surface.ptyId, data });
+    if (surface.ptyId >= 0)
+      void invoke("write_pty", { ptyId: surface.ptyId, data });
   });
   terminal.onResize(({ cols, rows }) => {
-    if (surface.ptyId >= 0) invoke("resize_pty", { ptyId: surface.ptyId, cols, rows });
+    if (surface.ptyId >= 0)
+      void invoke("resize_pty", { ptyId: surface.ptyId, cols, rows });
   });
   // NOTE: We intentionally do NOT use terminal.onTitleChange() here.
   // xterm.js fires it with raw/partial escape sequence fragments (OSC 7 cwd data,
@@ -502,10 +630,19 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
       const slashIdx = rest.indexOf("/");
       if (slashIdx >= 0) cwd = rest.slice(slashIdx);
     }
+    const cwdChanged = cwd !== surface.cwd;
     surface.cwd = cwd;
     const basename = cwd.split("/").pop() || cwd;
-    if (!surface.title || surface.title.startsWith("Shell ") || !surface.title.includes(" ")) {
+    if (
+      !surface.title ||
+      surface.title.startsWith("Shell ") ||
+      !surface.title.includes(" ")
+    ) {
       surface.title = basename || "~";
+    }
+    // Notify subscribers (file browser, workspace persistence) on CWD change
+    if (cwdChanged) {
+      workspaces.update((l) => [...l]);
     }
     return true;
   });
@@ -529,14 +666,21 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
     items.push({
       label: "Paste",
       shortcut: isMac ? "⌘V" : "Ctrl+Shift+V",
-      action: () => clipboardRead().then(t => {
-        if (t && surface.ptyId >= 0) invoke("write_pty", { ptyId: surface.ptyId, data: t });
-      }),
+      action: () =>
+        clipboardRead().then((t) => {
+          if (t && surface.ptyId >= 0)
+            void invoke("write_pty", { ptyId: surface.ptyId, data: t });
+        }),
     });
 
     // Check if selection looks like a file path
     const pathText = (selection || "").trim();
-    const looksLikePath = pathText && (pathText.startsWith("/") || pathText.startsWith("./") || pathText.startsWith("~/") || pathText.match(/^[\w.-]+\.[a-z]+$/i));
+    const looksLikePath =
+      pathText &&
+      (pathText.startsWith("/") ||
+        pathText.startsWith("./") ||
+        pathText.startsWith("~/") ||
+        pathText.match(/^[\w.-]+\.[a-z]+$/i));
 
     if (looksLikePath) {
       const resolvePath = () => resolveFilePath(pathText, surface.cwd);
@@ -548,21 +692,25 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
         action: async () => clipboardWrite(await resolvePath()),
       });
 
-      if (canPreview(pathText)) {
+      // Add extension-contributed context menu items for this file type
+      const extItems = getContextMenuItemsForFile(pathText);
+      for (const extItem of extItems) {
         items.push({
-          label: "Preview",
-          action: async () => openPreview(await resolvePath()),
+          label: extItem.label,
+          action: async () => extItem.handler(await resolvePath()),
         });
       }
 
       items.push({
         label: "Show in File Manager",
-        action: async () => invoke("show_in_file_manager", { path: await resolvePath() }),
+        action: async () =>
+          invoke("show_in_file_manager", { path: await resolvePath() }),
       });
 
       items.push({
         label: "Open with Default App",
-        action: async () => invoke("open_with_default_app", { path: await resolvePath() }),
+        action: async () =>
+          invoke("open_with_default_app", { path: await resolvePath() }),
       });
     }
 
@@ -600,16 +748,24 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
  *  gets the real terminal dimensions instead of hardcoded 80x24.
  *  Uses surface.cwd as the working directory. The optional cwd parameter is
  *  accepted for backwards compatibility but surface.cwd takes priority. */
-export async function connectPty(surface: TerminalSurface, cwd?: string): Promise<void> {
+export async function connectPty(
+  surface: TerminalSurface,
+  cwd?: string,
+  env?: Record<string, string>,
+): Promise<void> {
   if (surface.ptyId >= 0) return; // already connected
   const cols = surface.terminal.cols;
   const rows = surface.terminal.rows;
   const effectiveCwd = surface.cwd || cwd || null;
   try {
-    surface.ptyId = await invoke<number>("spawn_pty", { cols, rows, cwd: effectiveCwd });
+    surface.ptyId = await invoke<number>("spawn_pty", {
+      cols,
+      rows,
+      cwd: effectiveCwd,
+      env: env ?? null,
+    });
   } catch (err) {
     console.error("Failed to spawn PTY:", err);
     surface.ptyId = -1;
   }
 }
-

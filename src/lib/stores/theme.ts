@@ -27,7 +27,9 @@ function createThemeStore() {
     id.set(newId);
     document.documentElement.style.setProperty("--bg", t.bg);
     document.body.style.background = t.bg;
-    try { localStorage.setItem("gnarterm-theme", newId); } catch {}
+    try {
+      localStorage.setItem("gnarterm-theme", newId);
+    } catch {}
   }
 
   return {

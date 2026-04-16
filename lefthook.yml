@@ -5,10 +5,20 @@ pre-commit:
   commands:
     typecheck:
       run: npx tsc --noEmit
+    svelte-check:
+      run: npx svelte-check --tsconfig ./tsconfig.json --threshold error
     rust-check:
       run: cargo check --manifest-path src-tauri/Cargo.toml
+    rust-clippy:
+      run: cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+    rust-fmt:
+      run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
+    eslint:
+      glob: "*.{ts,svelte}"
+      run: npx eslint --no-warn-ignored {staged_files}
     prettier:
       glob: "*.{ts,svelte,json,css,md,yml}"
+      exclude: "docs/extensions/api-reference.md"
       run: npx prettier --check {staged_files}
       stage_fixed: true
 
@@ -16,3 +26,5 @@ pre-push:
   commands:
     tests:
       run: npm test
+    rust-tests:
+      run: cargo test --manifest-path src-tauri/Cargo.toml

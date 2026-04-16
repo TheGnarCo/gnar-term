@@ -1,0 +1,6 @@
+# Rust formatting — applied by `cargo fmt` and checked in CI/pre-commit
+# Only stable options are used; nightly-only options (imports_granularity,
+# group_imports) are omitted to avoid warnings on stable toolchain.
+edition = "2021"
+max_width = 100
+use_field_init_shorthand = true

@@ -129,7 +129,7 @@ export function registerProjectScopeExtension(api: ExtensionAPI): void {
     // as sub-items inside it, with inner drag-reorder.
     api.registerPrimarySidebarSection("projects", ProjectsContainer, {
       collapsible: false,
-      showLabel: true,
+      showLabel: false,
       label: "Projects",
       props: { onCreateProject: createProjectFlow },
     });

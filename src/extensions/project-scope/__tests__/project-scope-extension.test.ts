@@ -97,6 +97,19 @@ describe("Project Scope included extension", () => {
     expect(sections[0].label).toBe("Projects");
   });
 
+  it("registers the projects sidebar section with showLabel: false", async () => {
+    registerExtension(projectScopeManifest, registerProjectScopeExtension);
+    await activateExtension("project-scope");
+    const sections = get(sidebarSectionStore);
+    const projectsSection = sections.find(
+      (s: { id: string }) => s.id === "project-scope:projects",
+    );
+    expect(projectsSection).toBeDefined();
+    expect(
+      (projectsSection as unknown as { showLabel: boolean }).showLabel,
+    ).toBe(false);
+  });
+
   it("Projects section exposes onCreateProject prop to the container", async () => {
     registerExtension(projectScopeManifest, registerProjectScopeExtension);
     await activateExtension("project-scope");

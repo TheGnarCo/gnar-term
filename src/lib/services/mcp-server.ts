@@ -35,7 +35,6 @@ import { createTerminalSurface } from "../terminal-service";
 import { createWorkspace } from "./workspace-service";
 import { safeFocus } from "./service-helpers";
 import {
-  installMcpOutputListener,
   registerMcpPty,
   unregisterMcpPty,
   getMcpBuffer,
@@ -982,9 +981,6 @@ export async function initMcpServer(): Promise<void> {
   if (setting === "off") {
     return;
   }
-
-  // pty-output taps (for McpOutputBuffer)
-  await installMcpOutputListener();
 
   // Bridge pty-exit to session status updates.
   await listen<{ pty_id: number }>("pty-exit", (event) => {

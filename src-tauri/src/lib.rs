@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
+use tauri::ipc::{Channel, InvokeResponseBody};
 use tauri::{AppHandle, Emitter};
 
 pub mod mcp_bridge;
@@ -228,12 +229,6 @@ struct AppState {
 }
 
 #[derive(Clone, Serialize)]
-struct PtyOutput {
-    pty_id: u32,
-    data: String, // base64-encoded for efficient IPC
-}
-
-#[derive(Clone, Serialize)]
 struct PtyNotification {
     pty_id: u32,
     text: String,
@@ -256,7 +251,11 @@ fn get_cli_args(args: tauri::State<'_, CliArgs>) -> CliArgs {
     args.inner().clone()
 }
 
-/// Spawn a new PTY with a shell
+/// Spawn a new PTY with a shell. `on_output` is a Tauri v2 IPC Channel that
+/// carries raw PTY bytes to the webview. Using a per-pty Channel with
+/// `InvokeResponseBody::Raw` delivers bytes via the ipc custom-protocol path
+/// (ArrayBuffer in JS) instead of one `evaluateJavaScript` call per chunk, so
+/// bursty output no longer pegs the WebContent main thread on macOS.
 #[tauri::command]
 async fn spawn_pty(
     app: AppHandle,
@@ -264,6 +263,7 @@ async fn spawn_pty(
     cols: u16,
     rows: u16,
     cwd: Option<String>,
+    on_output: Channel<InvokeResponseBody>,
 ) -> Result<u32, String> {
     let pty_system = native_pty_system();
 
@@ -456,15 +456,12 @@ PROMPT_COMMAND="_gnarterm_report_cwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
                         }
                     }
 
-                    // Base64 encode to preserve raw bytes (terminal escape sequences
-                    // contain bytes that aren't valid UTF-8)
-                    let _ = app_handle.emit(
-                        "pty-output",
-                        PtyOutput {
-                            pty_id: id,
-                            data: b64_encode(data),
-                        },
-                    );
+                    if on_output
+                        .send(InvokeResponseBody::Raw(data.to_vec()))
+                        .is_err()
+                    {
+                        break;
+                    }
                 }
                 Err(_) => {
                     let _ = app_handle.emit("pty-exit", PtyExit { pty_id: id });

@@ -5,7 +5,10 @@ import {
 } from "./sidebar-tab-registry";
 import { registerSidebarSection } from "./sidebar-section-registry";
 import { registerSurfaceType as registryRegisterSurfaceType } from "./surface-type-registry";
-import { registerContextMenuItem as registryRegisterContextMenuItem } from "./context-menu-item-registry";
+import {
+  registerContextMenuItem as registryRegisterContextMenuItem,
+  validateWhenPattern,
+} from "./context-menu-item-registry";
 import {
   registerWorkspaceAction as registryRegisterWorkspaceAction,
   getWorkspaceActions as registryGetWorkspaceActions,
@@ -128,16 +131,18 @@ export function createUIRegistrationAPI(
     registerCommand(
       commandId: string,
       handler: () => void | Promise<void>,
-      options?: { title?: string },
+      options?: { title?: string; shortcut?: string },
     ) {
       const namespacedId = `${extId}:${commandId}`;
-      // Look up title from manifest contributions, then options, then commandId
+      // Look up title from manifest contributions, then options, then commandId.
+      // Shortcut falls back to the manifest when runtime options don't provide one.
       const declared = manifest.contributes?.commands?.find(
         (c) => c.id === commandId,
       );
       registryRegisterCommand({
         id: namespacedId,
         title: declared?.title ?? options?.title ?? commandId,
+        shortcut: options?.shortcut ?? declared?.shortcut,
         action: handler,
         source: extId,
       });
@@ -156,11 +161,18 @@ export function createUIRegistrationAPI(
             `Add it to contributes.contextMenuItems before registering.`,
         );
       }
+      const when = declared.when ?? "*";
+      const whenError = validateWhenPattern(when);
+      if (whenError) {
+        throw new Error(
+          `[extension:${extId}] Context menu item "${itemId}" has invalid "when": ${whenError}`,
+        );
+      }
       const namespacedId = `${extId}:${itemId}`;
       registryRegisterContextMenuItem({
         id: namespacedId,
         label: declared.label ?? itemId,
-        when: declared.when ?? "*",
+        when,
         handler,
         source: extId,
       });
@@ -184,7 +196,7 @@ export function createUIRegistrationAPI(
       actionId: string,
       options: {
         label: string;
-        icon: string;
+        icon?: string;
         shortcut?: string;
         zone?: "workspace" | "sidebar";
         handler: (ctx: WorkspaceActionContext) => void | Promise<void>;
@@ -192,12 +204,17 @@ export function createUIRegistrationAPI(
       },
     ) {
       const namespacedId = `${extId}:${actionId}`;
+      // Manifest fills in missing runtime metadata — shortcut/zone/icon can
+      // be declared once and omitted at the registerWorkspaceAction call.
+      const declared = manifest.contributes?.workspaceActions?.find(
+        (a) => a.id === actionId,
+      );
       registryRegisterWorkspaceAction({
         id: namespacedId,
         label: options.label,
-        icon: options.icon,
-        shortcut: options.shortcut,
-        zone: options.zone,
+        icon: options.icon ?? declared?.icon ?? "",
+        shortcut: options.shortcut ?? declared?.shortcut,
+        zone: options.zone ?? declared?.zone,
         source: extId,
         handler: options.handler,
         when: options.when,
@@ -217,11 +234,13 @@ export function createUIRegistrationAPI(
     },
 
     registerWorkspaceSubtitle(component: unknown, priority?: number) {
+      // Priority falls back to manifest declaration, then to 50.
+      const declared = manifest.contributes?.workspaceSubtitle;
       registryRegisterWorkspaceSubtitle({
         id: `${extId}:subtitle`,
         component,
         source: extId,
-        priority: priority ?? 50,
+        priority: priority ?? declared?.priority ?? 50,
       });
     },
   };

@@ -78,6 +78,12 @@ export interface ExtensionManifestSection {
 export interface ExtensionManifestCommand {
   id: string;
   title: string;
+  /**
+   * Optional keyboard shortcut (e.g. "⌘⇧P" or "Ctrl+Shift+P"). When set,
+   * pressing the shortcut invokes the command's action — so keep it
+   * consistent with the runtime `options.shortcut` on `registerCommand`.
+   */
+  shortcut?: string;
 }
 
 export interface ExtensionManifestSurface {
@@ -105,7 +111,20 @@ export interface ExtensionSettingsSchema {
 
 export interface ExtensionManifestWorkspaceAction {
   id: string;
+  /** Button label shown in the workspace header / sidebar. */
   title: string;
+  /** Icon name rendered alongside the label. Required at runtime — declare it
+   *  here so tools (MCP, command palette, shortcut help) can discover it. */
+  icon?: string;
+  /** Optional keyboard shortcut (e.g. "⌘⇧N"). */
+  shortcut?: string;
+  /** Where the action appears: "workspace" (default) or "sidebar". */
+  zone?: "workspace" | "sidebar";
+}
+
+export interface ExtensionManifestWorkspaceSubtitle {
+  /** Render priority (ascending — lower renders first). Default 50. */
+  priority?: number;
 }
 
 export interface ExtensionContributions {
@@ -115,6 +134,8 @@ export interface ExtensionContributions {
   surfaces?: ExtensionManifestSurface[];
   contextMenuItems?: ExtensionManifestContextMenu[];
   workspaceActions?: ExtensionManifestWorkspaceAction[];
+  /** Declare that the extension renders a component below workspace names. */
+  workspaceSubtitle?: ExtensionManifestWorkspaceSubtitle;
   events?: string[];
   settings?: ExtensionSettingsSchema;
 }
@@ -195,7 +216,7 @@ export interface ExtensionAPI {
   registerCommand(
     commandId: string,
     handler: () => void | Promise<void>,
-    options?: { title?: string },
+    options?: { title?: string; shortcut?: string },
   ): void;
   registerContextMenuItem(
     itemId: string,
@@ -206,12 +227,14 @@ export interface ExtensionAPI {
   /** Register a Svelte component to render below workspace names. Component receives { workspaceId } prop. */
   registerWorkspaceSubtitle(component: unknown, priority?: number): void;
 
-  // Workspace actions — buttons in the workspace header and sidebar top bar
+  // Workspace actions — buttons in the workspace header and sidebar top bar.
+  // Icon/shortcut/zone may be declared once in the manifest and omitted here;
+  // runtime values win over manifest fallbacks.
   registerWorkspaceAction(
     actionId: string,
     options: {
       label: string;
-      icon: string;
+      icon?: string;
       shortcut?: string;
       /** Where the action appears: "workspace" (default) in the workspace header,
        *  "sidebar" in the top bar alongside reorder. */

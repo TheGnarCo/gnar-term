@@ -125,7 +125,10 @@
     registerCommands,
     executeByShortcut,
   } from "./lib/services/command-registry";
-  import { registerWorkspaceAction } from "./lib/services/workspace-action-registry";
+  import {
+    registerWorkspaceAction,
+    executeWorkspaceActionByShortcut,
+  } from "./lib/services/workspace-action-registry";
   import { initMcpServer } from "./lib/services/mcp-server";
 
   // Components
@@ -429,8 +432,10 @@
   // ---- Keyboard shortcuts ----
 
   function handleKeydown(e: KeyboardEvent) {
-    // Try command-palette-registered shortcuts first
+    // Try command-palette-registered shortcuts first, then extension-
+    // registered workspace-action shortcuts.
     if (executeByShortcut(e)) return;
+    if (executeWorkspaceActionByShortcut(e)) return;
 
     const shift = e.shiftKey;
     const alt = e.altKey;

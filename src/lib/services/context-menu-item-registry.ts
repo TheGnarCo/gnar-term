@@ -80,3 +80,26 @@ function matchesWhen(fileName: string, pattern: string): boolean {
 
   return false;
 }
+
+/**
+ * Validate a `when` glob pattern.
+ * Returns null when valid, an error message otherwise.
+ * Surfaced at registration time in extension-api-ui so authors hear about
+ * typos (`*.{md,}`, `**.md`) instead of silently registering dead items.
+ */
+export function validateWhenPattern(pattern: string): string | null {
+  if (pattern === "*" || pattern === "directory") return null;
+
+  const braceMatch = pattern.match(/^\*\.\{(.+)\}$/);
+  if (braceMatch) {
+    const exts = braceMatch[1]!.split(",").map((e) => e.trim());
+    if (exts.length === 0 || exts.some((e) => e.length === 0)) {
+      return `Invalid brace-extension pattern "${pattern}": empty extension in list`;
+    }
+    return null;
+  }
+
+  if (/^\*\.[^*{}\s]+$/.test(pattern)) return null;
+
+  return `Unsupported "when" pattern "${pattern}": use "*", "*.ext", "*.{ext1,ext2}", or "directory"`;
+}

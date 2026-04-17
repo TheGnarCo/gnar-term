@@ -88,7 +88,7 @@ describe("MCP server JSON-RPC", () => {
     expect((resp as any).result.capabilities.tools).toBeDefined();
   });
 
-  it("lists all 27 tools with correct names", async () => {
+  it("lists all tools with correct names", async () => {
     const resp = await dispatch(rpc("tools/list"));
     const tools = (resp as any).result.tools as Array<{ name: string }>;
     const names = tools.map((t) => t.name).sort();
@@ -101,16 +101,21 @@ describe("MCP server JSON-RPC", () => {
         "get_active_workspace",
         "get_agent_context",
         "get_session_info",
+        "get_status_for_workspace",
         "invoke_command",
         "invoke_workspace_action",
         "kill_session",
         "list_commands",
+        "list_dashboard_tabs",
         "list_dir",
+        "list_overlays",
         "list_panes",
         "list_sessions",
+        "list_sidebar_sections",
         "list_sidebar_tabs",
         "list_surface_types",
         "list_workspace_actions",
+        "list_workspace_subtitles",
         "list_workspaces",
         "open_surface",
         "poll_events",
@@ -123,7 +128,7 @@ describe("MCP server JSON-RPC", () => {
         "spawn_agent",
       ].sort(),
     );
-    expect(names).toHaveLength(27);
+    expect(names).toHaveLength(32);
     for (const t of tools) {
       expect(t).toHaveProperty("inputSchema");
     }
@@ -813,6 +818,7 @@ describe("MCP mirror tools — workspace actions", () => {
         id: "create-worktree",
         label: "New Worktree",
         icon: "git-branch",
+        shortcut: undefined,
         zone: "sidebar",
         source: "managed-workspaces",
       },
@@ -850,6 +856,170 @@ describe("MCP mirror tools — workspace actions", () => {
   });
 });
 
+describe("MCP mirror tools — sidebar sections", () => {
+  beforeEach(async () => {
+    const mod = await import("../lib/services/sidebar-section-registry");
+    mod.resetSidebarSections();
+  });
+
+  it("list_sidebar_sections returns registered sections", async () => {
+    const mod = await import("../lib/services/sidebar-section-registry");
+    mod.registerSidebarSection({
+      id: "ext:status",
+      label: "Status",
+      component: {},
+      source: "ext",
+    });
+    const r = await dispatch(
+      rpc("tools/call", { name: "list_sidebar_sections", arguments: {} }),
+    );
+    expect((r as any).result.structuredContent.sections).toEqual([
+      { id: "ext:status", label: "Status", source: "ext" },
+    ]);
+  });
+});
+
+describe("MCP mirror tools — overlays", () => {
+  beforeEach(async () => {
+    const mod = await import("../lib/services/overlay-registry");
+    mod.resetOverlays();
+  });
+
+  it("list_overlays returns registered overlays", async () => {
+    const mod = await import("../lib/services/overlay-registry");
+    mod.registerOverlay({
+      id: "ext:dash",
+      component: {},
+      source: "ext",
+    });
+    const r = await dispatch(
+      rpc("tools/call", { name: "list_overlays", arguments: {} }),
+    );
+    expect((r as any).result.structuredContent.overlays).toEqual([
+      { id: "ext:dash", source: "ext" },
+    ]);
+  });
+});
+
+describe("MCP mirror tools — workspace subtitles", () => {
+  beforeEach(async () => {
+    const mod = await import("../lib/services/workspace-subtitle-registry");
+    mod.resetWorkspaceSubtitles();
+  });
+
+  it("list_workspace_subtitles returns entries sorted by priority", async () => {
+    const mod = await import("../lib/services/workspace-subtitle-registry");
+    mod.registerWorkspaceSubtitle({
+      id: "a:subtitle",
+      component: {},
+      source: "a",
+      priority: 80,
+    });
+    mod.registerWorkspaceSubtitle({
+      id: "b:subtitle",
+      component: {},
+      source: "b",
+      priority: 10,
+    });
+    const r = await dispatch(
+      rpc("tools/call", { name: "list_workspace_subtitles", arguments: {} }),
+    );
+    const subtitles = (r as any).result.structuredContent.subtitles as Array<{
+      id: string;
+      priority: number;
+    }>;
+    expect(subtitles.map((s) => s.id)).toEqual(["b:subtitle", "a:subtitle"]);
+    expect(subtitles[0]!.priority).toBe(10);
+  });
+});
+
+describe("MCP mirror tools — dashboard tabs", () => {
+  beforeEach(async () => {
+    const mod = await import("../lib/services/dashboard-tab-registry");
+    mod.resetDashboardTabs();
+  });
+
+  it("list_dashboard_tabs returns registered tabs", async () => {
+    const mod = await import("../lib/services/dashboard-tab-registry");
+    mod.registerDashboardTab({
+      id: "ext:analytics",
+      label: "Analytics",
+      component: {},
+      source: "ext",
+    });
+    const r = await dispatch(
+      rpc("tools/call", { name: "list_dashboard_tabs", arguments: {} }),
+    );
+    expect((r as any).result.structuredContent.tabs).toEqual([
+      { id: "ext:analytics", label: "Analytics", source: "ext" },
+    ]);
+  });
+});
+
+describe("MCP mirror tools — status items", () => {
+  beforeEach(async () => {
+    const mod = await import("../lib/services/status-registry");
+    mod.statusRegistry.reset();
+    workspaces.set([]);
+    activeWorkspaceIdx.set(-1);
+  });
+
+  it("get_status_for_workspace returns items for the resolved workspace", async () => {
+    const mod = await import("../lib/services/status-registry");
+    const { ws } = makeWorkspace("ws-1");
+    workspaces.set([ws]);
+    mod.setStatusItem("git-status", "ws-1", "branch", {
+      category: "git",
+      priority: 10,
+      label: "main",
+      icon: "git-branch",
+    });
+    mod.setStatusItem("agent", "ws-1", "running", {
+      category: "agent",
+      priority: 20,
+      label: "Running",
+      variant: "success",
+    });
+    const ctx = _testContext({ workspaceId: "ws-1" });
+    const r = await dispatch(
+      rpc("tools/call", {
+        name: "get_status_for_workspace",
+        arguments: {},
+      }),
+      ctx,
+    );
+    const result = (r as any).result.structuredContent;
+    expect(result.workspace_id).toBe("ws-1");
+    expect(result.items).toHaveLength(2);
+    expect(result.items[0].label).toBe("main");
+    expect(result.items[1].label).toBe("Running");
+  });
+
+  it("get_status_for_workspace honors explicit workspace_id", async () => {
+    const mod = await import("../lib/services/status-registry");
+    const { ws: a } = makeWorkspace("ws-a");
+    const { ws: b } = makeWorkspace("ws-b");
+    workspaces.set([a, b]);
+    mod.setStatusItem("git", "ws-b", "branch", {
+      category: "git",
+      priority: 10,
+      label: "feature",
+    });
+    const ctx = _testContext({ workspaceId: "ws-a" });
+    const r = await dispatch(
+      rpc("tools/call", {
+        name: "get_status_for_workspace",
+        arguments: { workspace_id: "ws-b" },
+      }),
+      ctx,
+    );
+    const result = (r as any).result.structuredContent;
+    expect(result.workspace_id).toBe("ws-b");
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].label).toBe("feature");
+  });
+});
+
 describe("tool metadata", () => {
   it("every tool has a non-empty description", () => {
     const tools = _getToolsForTest();
@@ -858,7 +1028,7 @@ describe("tool metadata", () => {
     }
   });
 
-  it("tool count matches spec (27)", () => {
-    expect(_getToolsForTest()).toHaveLength(27);
+  it("tool count matches spec (32)", () => {
+    expect(_getToolsForTest()).toHaveLength(32);
   });
 });

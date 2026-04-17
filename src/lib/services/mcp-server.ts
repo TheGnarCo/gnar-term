@@ -75,6 +75,11 @@ import { surfaceTypeStore } from "./surface-type-registry";
 import { commandStore } from "./command-registry";
 import { sidebarTabStore, activateSidebarTab } from "./sidebar-tab-registry";
 import { workspaceActionStore } from "./workspace-action-registry";
+import { sidebarSectionStore } from "./sidebar-section-registry";
+import { overlayStore } from "./overlay-registry";
+import { workspaceSubtitleStore } from "./workspace-subtitle-registry";
+import { dashboardTabStore } from "./dashboard-tab-registry";
+import { getWorkspaceStatus } from "./status-registry";
 import { getMcpSetting } from "../config";
 
 // ---- Types ----
@@ -953,7 +958,7 @@ registerTool({
 registerTool({
   name: "open_surface",
   description:
-    "Open any registered extension surface type in a pane. Props are passed to the extension's surface component unchanged — consult the owning extension for the expected prop shape. Targets the agent's host workspace by default; pass workspace_id/pane_id to override.",
+    "Open any registered extension surface type in a pane. Call list_surface_types first to see which ids exist; props are forwarded to the owning extension's surface component unchanged — consult that extension for the expected prop shape. Targets the agent's host workspace by default; pass workspace_id/pane_id to override.",
   inputSchema: {
     type: "object",
     properties: {
@@ -1049,7 +1054,7 @@ registerTool({
 registerTool({
   name: "invoke_command",
   description:
-    "Invoke a command by id (see list_commands). The command's action runs in the webview; some commands may open interactive prompts.",
+    "Invoke a command by id (see list_commands). The command's action runs in the webview and takes no arguments; some commands may open interactive prompts (text input, directory picker) — agents should expect those to block until the user responds.",
   inputSchema: {
     type: "object",
     properties: {
@@ -1114,13 +1119,14 @@ registerTool({
 registerTool({
   name: "list_workspace_actions",
   description:
-    "List workspace actions — buttons extensions add to the workspace header or top bar. Returns `{ id, label, icon, zone, source }` for each.",
+    "List workspace actions — buttons extensions add to the workspace header or top bar. Returns `{ id, label, icon, shortcut?, zone, source }` for each. Use invoke_workspace_action to trigger one.",
   inputSchema: { type: "object", properties: {} },
   handler: () => {
     const actions = get(workspaceActionStore).map((a) => ({
       id: a.id,
       label: a.label,
       icon: a.icon,
+      shortcut: a.shortcut,
       zone: a.zone ?? "workspace",
       source: a.source,
     }));
@@ -1131,12 +1137,17 @@ registerTool({
 registerTool({
   name: "invoke_workspace_action",
   description:
-    "Invoke a workspace action by id (see list_workspace_actions). Optional `context` is a free-form object forwarded to the action's handler.",
+    "Invoke a workspace action by id (see list_workspace_actions). `context` is forwarded to the action's handler — core passes an empty object for top-level invocations; extensions that dispatch actions from their own UI may populate fields like `{ workspaceId, projectId, branch, isGit }`. Use the owning extension's docs to learn which fields it reads.",
   inputSchema: {
     type: "object",
     properties: {
       action_id: { type: "string" },
-      context: { type: "object", additionalProperties: true },
+      context: {
+        type: "object",
+        additionalProperties: true,
+        description:
+          "Free-form object forwarded to the handler. Typical fields: workspaceId, projectId, projectPath, branch, isGit. Shape depends on the owning extension.",
+      },
     },
     required: ["action_id"],
   },
@@ -1153,6 +1164,111 @@ registerTool({
     }
     await action.handler(p.context ?? {});
     return { ok: true };
+  },
+});
+
+// ---- Sidebar sections (mirror of sidebarSectionStore) ----
+//
+// Extensions register collapsible sections in the primary sidebar.
+// These are UI-only; there is no "invoke" action, but agents can list
+// them to see what's contributed (e.g. a harness status panel).
+
+registerTool({
+  name: "list_sidebar_sections",
+  description:
+    "List primary-sidebar sections contributed by extensions — sticky panels below Workspaces. Returns `{ id, label, source }` for each. Sections are rendered by core; no invoke tool exists because interaction happens inside the section's own component.",
+  inputSchema: { type: "object", properties: {} },
+  handler: () => {
+    const sections = get(sidebarSectionStore).map((s) => ({
+      id: s.id,
+      label: s.label,
+      source: s.source,
+    }));
+    return { sections };
+  },
+});
+
+// ---- Overlays (mirror of overlayStore) ----
+//
+// Overlays are full-screen components registered by extensions
+// (dashboards, modal dialogs). Agents can list them; invoking is
+// intentionally not exposed — overlays are triggered via commands
+// or workspace actions the extension also registers.
+
+registerTool({
+  name: "list_overlays",
+  description:
+    "List overlay components (dialogs, dashboards, modals) contributed by extensions. Returns `{ id, source }` for each. Overlays are opened via the extension's own command or action — use invoke_command/invoke_workspace_action with the owning extension's id.",
+  inputSchema: { type: "object", properties: {} },
+  handler: () => {
+    const overlays = get(overlayStore).map((o) => ({
+      id: o.id,
+      source: o.source,
+    }));
+    return { overlays };
+  },
+});
+
+// ---- Workspace subtitles (mirror of workspaceSubtitleStore) ----
+
+registerTool({
+  name: "list_workspace_subtitles",
+  description:
+    "List workspace-subtitle contributors — components extensions render below workspace names in the sidebar (e.g. git branch label). Returns `{ id, source, priority }` for each, sorted by priority ascending (lower renders first).",
+  inputSchema: { type: "object", properties: {} },
+  handler: () => {
+    const entries = get(workspaceSubtitleStore).map((s) => ({
+      id: s.id,
+      source: s.source,
+      priority: s.priority,
+    }));
+    return { subtitles: entries };
+  },
+});
+
+// ---- Dashboard tabs (mirror of dashboardTabStore) ----
+
+registerTool({
+  name: "list_dashboard_tabs",
+  description:
+    "List extension-contributed tabs for the dashboard overlay. Returns `{ id, label, source }` for each.",
+  inputSchema: { type: "object", properties: {} },
+  handler: () => {
+    const tabs = get(dashboardTabStore).map((t) => ({
+      id: t.id,
+      label: t.label,
+      source: t.source,
+    }));
+    return { tabs };
+  },
+});
+
+// ---- Status items (mirror of statusRegistry, scoped per workspace) ----
+
+registerTool({
+  name: "get_status_for_workspace",
+  description:
+    "List structured status items contributed by extensions for a workspace (e.g. git branch, agent-running badge). Returns `{ items }` with each item carrying `{ id, source, category, priority, label, icon?, tooltip?, variant? }`. Sorted by priority ascending. Defaults to the agent's bound workspace; pass workspace_id to override.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      workspace_id: { type: "string" },
+    },
+  },
+  handler: (args, ctx) => {
+    const p = args as { workspace_id?: string };
+    const target = resolveTarget({ workspace_id: p.workspace_id }, ctx);
+    const items = get(getWorkspaceStatus(target.workspace.id)).map((i) => ({
+      id: i.id,
+      source: i.source,
+      category: i.category,
+      priority: i.priority,
+      label: i.label,
+      icon: i.icon,
+      tooltip: i.tooltip,
+      variant: i.variant,
+    }));
+    return { workspace_id: target.workspace.id, items };
   },
 });
 

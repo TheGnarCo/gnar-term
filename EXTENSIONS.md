@@ -113,7 +113,15 @@ All contributions are declared upfront in the manifest. Core reads them before l
       { "id": "copy-path", "label": "Copy Path", "when": "*" },
       { "id": "preview", "label": "Open as Preview", "when": "*.{md,json,png}" }
     ],
-    "workspaceActions": [{ "id": "quick-terminal", "title": "Quick Terminal" }],
+    "workspaceActions": [
+      {
+        "id": "quick-terminal",
+        "title": "Quick Terminal",
+        "icon": "terminal",
+        "shortcut": "⌘⇧T",
+        "zone": "workspace"
+      }
+    ],
     "events": ["workspace:created", "workspace:closed"],
     "settings": {
       "fields": {
@@ -280,7 +288,7 @@ api.registerCommand("refresh-issues", async () => {
 });
 ```
 
-The command title comes from `contributes.commands` in the manifest.
+The command title (and optional `shortcut`) come from `contributes.commands` in the manifest. Shortcuts can also be passed at runtime via `registerCommand(id, handler, { shortcut })` — when both are set the runtime value wins.
 
 #### Context Menu Item
 
@@ -830,7 +838,7 @@ api.onSurfaceOutput((surfaceId, data) => {
 
 `registerWorkspaceSubtitle(component: typeof SvelteComponent, priority?: number): void`
 
-Registers a Svelte component to render below the workspace name in the sidebar. Lower priority numbers render first (default: 100). The component receives a `workspaceId` prop. Used by git-status to show branch name and status indicators.
+Registers a Svelte component to render below the workspace name in the sidebar. Lower priority numbers render first (default: 50; can also be declared in `contributes.workspaceSubtitle.priority`). The component receives a `workspaceId` prop. Used by git-status to show branch name and status indicators.
 
 ```typescript
 import BranchLabel from "./BranchLabel.svelte";

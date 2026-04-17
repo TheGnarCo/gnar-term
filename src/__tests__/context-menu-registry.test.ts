@@ -13,6 +13,7 @@ import {
   getContextMenuItemsForDir,
   contextMenuItemStore,
   resetContextMenuItems,
+  validateWhenPattern,
 } from "../lib/services/context-menu-item-registry";
 
 describe("context-menu-item-registry", () => {
@@ -163,5 +164,27 @@ describe("context-menu-item-registry", () => {
     const dirItems = getContextMenuItemsForDir("/path/to/src");
     expect(dirItems).toHaveLength(1);
     expect(dirItems[0].id).toBe("ext:open-ws");
+  });
+});
+
+describe("validateWhenPattern", () => {
+  it("accepts the documented shapes", () => {
+    expect(validateWhenPattern("*")).toBeNull();
+    expect(validateWhenPattern("directory")).toBeNull();
+    expect(validateWhenPattern("*.md")).toBeNull();
+    expect(validateWhenPattern("*.{md,json,png}")).toBeNull();
+  });
+
+  it("rejects empty extension lists", () => {
+    expect(validateWhenPattern("*.{}")).not.toBeNull();
+    expect(validateWhenPattern("*.{md,}")).not.toBeNull();
+    expect(validateWhenPattern("*.{,md}")).not.toBeNull();
+  });
+
+  it("rejects unsupported shapes", () => {
+    expect(validateWhenPattern("**")).not.toBeNull();
+    expect(validateWhenPattern("foo.md")).not.toBeNull();
+    expect(validateWhenPattern("*.md ")).not.toBeNull();
+    expect(validateWhenPattern("")).not.toBeNull();
   });
 });

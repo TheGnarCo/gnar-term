@@ -10,6 +10,7 @@ import {
   unregisterWorkspaceActionsBySource,
   resetWorkspaceActions,
   getWorkspaceActions,
+  executeWorkspaceActionByShortcut,
   type WorkspaceAction,
   type WorkspaceActionContext,
 } from "../lib/services/workspace-action-registry";
@@ -101,5 +102,81 @@ describe("workspace-action-registry", () => {
     registerWorkspaceAction(makeAction({ id: "a" }));
     registerWorkspaceAction(makeAction({ id: "b" }));
     expect(getWorkspaceActions()).toEqual(get(workspaceActionStore));
+  });
+});
+
+describe("executeWorkspaceActionByShortcut", () => {
+  beforeEach(() => resetWorkspaceActions());
+
+  function keyEvent(
+    key: string,
+    mods: {
+      meta?: boolean;
+      ctrl?: boolean;
+      shift?: boolean;
+      alt?: boolean;
+    } = {},
+  ): KeyboardEvent {
+    return new KeyboardEvent("keydown", {
+      key,
+      metaKey: !!mods.meta,
+      ctrlKey: !!mods.ctrl,
+      shiftKey: !!mods.shift,
+      altKey: !!mods.alt,
+      cancelable: true,
+    });
+  }
+
+  it("invokes an action whose shortcut matches and preventDefaults", () => {
+    const handler = vi.fn();
+    registerWorkspaceAction(makeAction({ id: "n", shortcut: "⌘⇧N", handler }));
+    const e = keyEvent("n", { meta: true, shift: true });
+    expect(executeWorkspaceActionByShortcut(e)).toBe(true);
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(e.defaultPrevented).toBe(true);
+  });
+
+  it("returns false when no shortcut matches", () => {
+    const handler = vi.fn();
+    registerWorkspaceAction(makeAction({ id: "n", shortcut: "⌘⇧N", handler }));
+    const e = keyEvent("x", { meta: true });
+    expect(executeWorkspaceActionByShortcut(e)).toBe(false);
+    expect(handler).not.toHaveBeenCalled();
+    expect(e.defaultPrevented).toBe(false);
+  });
+
+  it("skips actions whose when() filter rejects", () => {
+    const handler = vi.fn();
+    registerWorkspaceAction(
+      makeAction({
+        id: "n",
+        shortcut: "⌘⇧N",
+        handler,
+        when: () => false,
+      }),
+    );
+    const e = keyEvent("n", { meta: true, shift: true });
+    expect(executeWorkspaceActionByShortcut(e)).toBe(false);
+    expect(handler).not.toHaveBeenCalled();
+    expect(e.defaultPrevented).toBe(false);
+  });
+
+  it("accepts Ctrl+Shift+X word format", () => {
+    const handler = vi.fn();
+    registerWorkspaceAction(
+      makeAction({ id: "n", shortcut: "Ctrl+Shift+P", handler }),
+    );
+    const e = keyEvent("p", { ctrl: true, shift: true });
+    expect(executeWorkspaceActionByShortcut(e)).toBe(true);
+    expect(handler).toHaveBeenCalled();
+  });
+
+  it("passes an empty context to the handler", () => {
+    const handler = vi.fn();
+    registerWorkspaceAction(makeAction({ id: "n", shortcut: "⌘⇧N", handler }));
+    executeWorkspaceActionByShortcut(
+      keyEvent("n", { meta: true, shift: true }),
+    );
+    expect(handler).toHaveBeenCalledWith({});
   });
 });

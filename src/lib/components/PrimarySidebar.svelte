@@ -232,52 +232,60 @@
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <div
               data-block-idx={bIdx}
-              style="position: relative;
+              style="
+                display: flex;
+                position: relative;
                 opacity: {blockDragActive && blockDragSourceIdx === bIdx
                 ? 0.4
                 : 1};
-                {bIdx > 0 ? `margin-top: 4px;` : ''}"
-              on:mouseenter={() => (hoverBlockIdx = bIdx)}
-              on:mouseleave={() => (hoverBlockIdx = null)}
+                {bIdx > 0 ? 'margin-top: 4px;' : ''}
+              "
             >
-              <DragGrip
-                theme={$theme}
-                visible={!$innerReorderActive &&
-                  (hoverBlockIdx === bIdx ||
-                    (blockDragActive && blockDragSourceIdx === bIdx))}
-                onMouseDown={(e) => startBlockDrag(e, bIdx)}
-                ariaLabel="Drag block to reorder"
-              />
-
-              {#if block.type === "workspaces"}
-                <WorkspaceListBlock
-                  bind:this={workspaceListBlock}
-                  {unclaimedEntries}
-                  {coreAction}
-                  {splitDropdownItems}
-                  {insertIndicator}
-                  {dragActive}
-                  {dragSourceIdx}
-                  onStartDrag={startDrag}
-                  {onSwitchWorkspace}
-                  {onCloseWorkspace}
-                  {onRenameWorkspace}
-                  {onNewSurface}
+              <div
+                on:mouseenter={() => (hoverBlockIdx = bIdx)}
+                on:mouseleave={() => (hoverBlockIdx = null)}
+                style="flex-shrink: 0; align-self: stretch; display: flex;"
+              >
+                <DragGrip
+                  theme={$theme}
+                  visible={!$innerReorderActive &&
+                    (hoverBlockIdx === bIdx ||
+                      (blockDragActive && blockDragSourceIdx === bIdx))}
+                  onMouseDown={(e) => startBlockDrag(e, bIdx)}
+                  ariaLabel="Drag block to reorder"
                 />
-              {:else}
-                {@const section = $sidebarSectionStore.find(
-                  (s) => s.id === block.id,
-                )}
-                {#if section}
-                  <SidebarSectionBlock
-                    {section}
-                    collapsed={collapsedSections[section.id] ?? false}
-                    onToggleCollapse={() =>
-                      (collapsedSections[section.id] =
-                        !collapsedSections[section.id])}
+              </div>
+              <div style="flex: 1; min-width: 0;">
+                {#if block.type === "workspaces"}
+                  <WorkspaceListBlock
+                    bind:this={workspaceListBlock}
+                    {unclaimedEntries}
+                    {coreAction}
+                    {splitDropdownItems}
+                    {insertIndicator}
+                    {dragActive}
+                    {dragSourceIdx}
+                    onStartDrag={startDrag}
+                    {onSwitchWorkspace}
+                    {onCloseWorkspace}
+                    {onRenameWorkspace}
+                    {onNewSurface}
                   />
+                {:else}
+                  {@const section = $sidebarSectionStore.find(
+                    (s) => s.id === block.id,
+                  )}
+                  {#if section}
+                    <SidebarSectionBlock
+                      {section}
+                      collapsed={collapsedSections[section.id] ?? false}
+                      onToggleCollapse={() =>
+                        (collapsedSections[section.id] =
+                          !collapsedSections[section.id])}
+                    />
+                  {/if}
                 {/if}
-              {/if}
+              </div>
             </div>
 
             {#if blockInsertIndicator?.idx === bIdx && blockInsertIndicator.edge === "after"}

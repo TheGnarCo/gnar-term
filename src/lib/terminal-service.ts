@@ -10,8 +10,9 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { SearchAddon } from "@xterm/addon-search";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, Channel } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { appendMcpOutput } from "./services/mcp-output-buffer";
 import { readText as clipboardRead, writeText as clipboardWrite } from "@tauri-apps/plugin-clipboard-manager";
 import { get } from "svelte/store";
 import { xtermTheme } from "./stores/theme";
@@ -94,6 +95,29 @@ function scheduleFlush(ptyId: number) {
   requestAnimationFrame(() => flushPtyBuffer(ptyId));
 }
 
+/** Append a raw PTY chunk to the per-pty buffer, tee it to the MCP buffer
+ *  if one is registered, and schedule an rAF flush to xterm.js. Exported for
+ *  tests; in production this is called from the Channel onmessage handler
+ *  created in connectPty(). */
+export function handlePtyChunk(ptyId: number, bytes: Uint8Array): void {
+  let chunks = ptyBuffers.get(ptyId);
+  if (!chunks) {
+    chunks = [];
+    ptyBuffers.set(ptyId, chunks);
+  }
+  chunks.push(bytes);
+  const buffered = (ptyBufferBytes.get(ptyId) || 0) + bytes.length;
+  ptyBufferBytes.set(ptyId, buffered);
+
+  if (!ptyPaused.has(ptyId) && buffered >= BUFFER_HIGH_WATER) {
+    ptyPaused.add(ptyId);
+    invoke("pause_pty", { ptyId }).catch(() => {});
+  }
+
+  appendMcpOutput(ptyId, bytes);
+  scheduleFlush(ptyId);
+}
+
 function flushPtyBuffer(ptyId: number) {
   ptyFlushScheduled.delete(ptyId);
   const chunks = ptyBuffers.get(ptyId);
@@ -149,36 +173,26 @@ export async function setupListeners() {
       }
     }, { capture: true });
   }
-  await listen<{ pty_id: number; data: string }>("pty-output", (event) => {
-    const { pty_id, data } = event.payload;
-    // Decode base64 to preserve raw terminal escape sequences
-    const bin = atob(data);
-    const bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-
-    // Append to buffer
-    let chunks = ptyBuffers.get(pty_id);
-    if (!chunks) {
-      chunks = [];
-      ptyBuffers.set(pty_id, chunks);
-    }
-    chunks.push(bytes);
-    const buffered = (ptyBufferBytes.get(pty_id) || 0) + bytes.length;
-    ptyBufferBytes.set(pty_id, buffered);
-
-    // Pause PTY reader if buffer is getting large
-    if (!ptyPaused.has(pty_id) && buffered >= BUFFER_HIGH_WATER) {
-      ptyPaused.add(pty_id);
-      invoke("pause_pty", { ptyId: pty_id }).catch(() => {});
-    }
-
-    // Schedule a flush on the next animation frame
-    scheduleFlush(pty_id);
-  });
-
   await listen<{ pty_id: number }>("pty-exit", (event) => {
     const { pty_id } = event.payload;
-    // Clean up flow control state for the dead PTY
+    // pty-exit arrives via emit while chunks arrive via Channel — different
+    // transports, so a trailing chunk may already be in the per-pty buffer.
+    // Flush it synchronously to the surface's terminal before we tear down
+    // flow-control state and remove the surface from the workspace tree.
+    const chunks = ptyBuffers.get(pty_id);
+    const bytesBuffered = ptyBufferBytes.get(pty_id) || 0;
+    if (chunks && chunks.length > 0 && bytesBuffered > 0) {
+      const surface = findSurfaceByPty(pty_id);
+      if (surface) {
+        const merged = new Uint8Array(bytesBuffered);
+        let offset = 0;
+        for (const chunk of chunks) {
+          merged.set(chunk, offset);
+          offset += chunk.length;
+        }
+        surface.terminal.write(merged);
+      }
+    }
     ptyBuffers.delete(pty_id);
     ptyBufferBytes.delete(pty_id);
     ptyFlushScheduled.delete(pty_id);
@@ -605,8 +619,33 @@ export async function connectPty(surface: TerminalSurface, cwd?: string): Promis
   const cols = surface.terminal.cols;
   const rows = surface.terminal.rows;
   const effectiveCwd = surface.cwd || cwd || null;
+
+  // Per-pty Channel carries raw output bytes from the Rust reader thread to
+  // xterm.js. Holds a pending ptyId in a closure so chunks delivered before
+  // spawn_pty resolves are still routable once the id is known.
+  let resolvedPtyId = -1;
+  const pending: Uint8Array[] = [];
+  const onOutput = new Channel<ArrayBuffer>();
+  onOutput.onmessage = (buf) => {
+    const bytes = new Uint8Array(buf);
+    if (resolvedPtyId < 0) {
+      pending.push(bytes);
+      return;
+    }
+    handlePtyChunk(resolvedPtyId, bytes);
+  };
+
   try {
-    surface.ptyId = await invoke<number>("spawn_pty", { cols, rows, cwd: effectiveCwd });
+    const ptyId = await invoke<number>("spawn_pty", {
+      cols,
+      rows,
+      cwd: effectiveCwd,
+      onOutput,
+    });
+    surface.ptyId = ptyId;
+    resolvedPtyId = ptyId;
+    for (const bytes of pending) handlePtyChunk(ptyId, bytes);
+    pending.length = 0;
   } catch (err) {
     console.error("Failed to spawn PTY:", err);
     surface.ptyId = -1;

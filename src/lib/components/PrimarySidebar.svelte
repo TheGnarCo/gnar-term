@@ -225,18 +225,19 @@
         <div
           style="
             height: 38px; flex-shrink: 0; display: flex; align-items: center;
-            padding: 0 8px;
+            padding: 0 8px; gap: 8px;
           "
         >
-          <div style="flex: 1; min-width: 0;">
-            <SplitButton
-              label="New Workspace"
-              onMainClick={() => coreAction?.handler({})}
-              dropdownItems={splitDropdownItems}
-              theme={theme as unknown as Readable<Record<string, string>>}
-              fullWidth={true}
-            />
-          </div>
+          <span
+            style="font-size: 13px; font-weight: 600; color: {$theme.fg}; flex: 1; min-width: 0;"
+            >Workspaces</span
+          >
+          <SplitButton
+            label="+ New"
+            onMainClick={() => coreAction?.handler({})}
+            dropdownItems={splitDropdownItems}
+            theme={theme as unknown as Readable<Record<string, string>>}
+          />
         </div>
       {/if}
 

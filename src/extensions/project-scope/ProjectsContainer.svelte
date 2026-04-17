@@ -84,16 +84,19 @@
   class="projects-container"
   style="padding: 2px 0; font-size: 12px; color: {$theme.fg};"
 >
-  <div style="padding: 4px 8px;">
+  <div style="padding: 4px 8px; display: flex; align-items: center; gap: 8px;">
+    <span
+      style="font-size: 13px; font-weight: 600; color: {$theme.fg}; flex: 1; min-width: 0;"
+      >Projects</span
+    >
     <svelte:component
       this={SplitButton as Component}
-      label="New Project"
+      label="+ New"
       onMainClick={() => {
         void onCreateProject();
       }}
       dropdownItems={[]}
       {theme}
-      fullWidth={true}
     />
   </div>
 

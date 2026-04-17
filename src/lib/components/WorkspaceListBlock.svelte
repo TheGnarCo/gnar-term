@@ -75,13 +75,16 @@
 </script>
 
 {#if coreAction && !suppressNewButton}
-  <div style="padding: 4px 8px;">
+  <div style="padding: 4px 8px; display: flex; align-items: center; gap: 8px;">
+    <span
+      style="font-size: 13px; font-weight: 600; color: {$theme.fg}; flex: 1; min-width: 0;"
+      >Workspaces</span
+    >
     <SplitButton
-      label="New Workspace"
+      label="+ New"
       onMainClick={() => coreAction?.handler({})}
       dropdownItems={splitDropdownItems}
       theme={theme as unknown as Readable<Record<string, string>>}
-      fullWidth={true}
     />
   </div>
 {/if}

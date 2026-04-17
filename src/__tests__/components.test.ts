@@ -986,7 +986,8 @@ describe("PrimarySidebar", () => {
       handler: noop,
     });
     render(PrimarySidebar, { props: sidebarProps });
-    expect(screen.getByText("New Workspace")).toBeTruthy();
+    expect(screen.getByText("+ New")).toBeTruthy();
+    expect(screen.getByText("Workspaces")).toBeTruthy();
     expect(screen.queryByTitle("Toggle Primary Sidebar (⌘B)")).toBeNull();
     expect(screen.queryByTitle("Toggle Secondary Sidebar")).toBeNull();
   });
@@ -1067,7 +1068,7 @@ describe("PrimarySidebar", () => {
       props: { ...sidebarProps },
     });
     // Only 1 button (main), no caret
-    const splitContainer = screen.getByText("New Workspace").closest("div")!;
+    const splitContainer = screen.getByText("+ New").closest("div")!;
     const buttons = splitContainer.querySelectorAll("button");
     expect(buttons.length).toBe(1);
   });
@@ -1115,8 +1116,9 @@ describe("PrimarySidebar", () => {
     render(PrimarySidebar, { props: sidebarProps });
     // Sidebar-zone action renders as a button in the top row
     expect(screen.getByTitle("New Project")).toBeTruthy();
-    // It should NOT appear in the workspace dropdown
-    expect(screen.getByText("New Workspace")).toBeTruthy();
+    // Main split button now reads "+ New"; section label reads "Workspaces"
+    expect(screen.getByText("+ New")).toBeTruthy();
+    expect(screen.getByText("Workspaces")).toBeTruthy();
   });
 
   it("dropdown includes default action when workspace-zone extensions exist", async () => {
@@ -1136,17 +1138,15 @@ describe("PrimarySidebar", () => {
       handler: noop,
     });
     render(PrimarySidebar, { props: sidebarProps });
-    // Open the dropdown — use getAllByText since "New Workspace" appears
-    // both as the main button label and as a dropdown entry
-    const allNewWs = screen.getAllByText("New Workspace");
-    const caretBtn = allNewWs[0]
+    // Open the dropdown by clicking the caret next to the "+ New" main button.
+    // "New Workspace" is present only inside the dropdown menu items.
+    const mainBtn = screen.getByText("+ New");
+    const caretBtn = mainBtn
       .closest("div")!
       .querySelector("button:last-child") as HTMLElement;
     await fireEvent.click(caretBtn);
     // Dropdown includes both the default action and the extension action
-    expect(screen.getAllByText("New Workspace").length).toBeGreaterThanOrEqual(
-      2,
-    );
+    expect(screen.getByText("New Workspace")).toBeTruthy();
     expect(screen.getByText("New Worktree")).toBeTruthy();
   });
 });

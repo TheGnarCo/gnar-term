@@ -104,6 +104,11 @@ export interface ConnectionBinding {
 export interface ConnectionContext {
   connectionId: number;
   binding: ConnectionBinding | null;
+  /** Most-recent pane this connection spawned into. Used as the split host for
+   *  the *next* spawn so rapid-fire `dispatch_tasks` produces a shallow
+   *  right-chain instead of an N-deep left spine around the binding pane —
+   *  the latter exploded `findParentSplit` + DOM render cost into O(N²). */
+  lastSpawnedPaneId: string | null;
 }
 
 /** Sentinel for callers that have no transport context (test code calling
@@ -113,6 +118,7 @@ export interface ConnectionContext {
 const ANONYMOUS_CONTEXT: ConnectionContext = {
   connectionId: 0,
   binding: null,
+  lastSpawnedPaneId: null,
 };
 
 // ---- Agent command map ----
@@ -223,7 +229,21 @@ function resolveTarget(args: TargetArgs, ctx: ConnectionContext): ResolvedTarget
     }
     return { workspace: ws, hostPane: null, source: "args-workspace" };
   }
-  // Rule 3: connection-bound pane (re-derive workspace in case pane was moved).
+  // Rule 3a: chain off the most recent pane this connection spawned, if any.
+  // Keeps the split tree shallow under rapid-fire spawns — see the comment on
+  // `ConnectionContext.lastSpawnedPaneId`.
+  if (ctx.lastSpawnedPaneId) {
+    const found = findPaneById(ctx.lastSpawnedPaneId);
+    if (found) {
+      return {
+        workspace: found.workspace,
+        hostPane: found.pane,
+        source: "binding-pane",
+      };
+    }
+    // Last pane was closed. Fall through.
+  }
+  // Rule 3b: connection-bound pane (re-derive workspace in case pane was moved).
   const binding = ctx.binding;
   if (binding?.paneId) {
     const found = findPaneById(binding.paneId);
@@ -489,6 +509,7 @@ registerTool({
     const target = resolveTarget(p, ctx);
     const hostPane = target.hostPane ?? pickHostPane(target.workspace);
     const newPane = splitPaneInWorkspace(target.workspace, hostPane, "vertical");
+    ctx.lastSpawnedPaneId = newPane.id;
 
     const surface = await createTerminalSurface(newPane, p.cwd);
     surface.title = p.name;
@@ -924,8 +945,10 @@ registerTool({
     let targetPane: Pane;
     if (placement === "split-right") {
       targetPane = splitPaneInWorkspace(target.workspace, hostPane, "horizontal");
+      ctx.lastSpawnedPaneId = targetPane.id;
     } else if (placement === "split-down") {
       targetPane = splitPaneInWorkspace(target.workspace, hostPane, "vertical");
+      ctx.lastSpawnedPaneId = targetPane.id;
     } else {
       // new-tab and current-pane drop into the host pane's surface list.
       targetPane = hostPane;
@@ -1265,7 +1288,7 @@ interface ConnectionClosedEnvelope {
 function getOrCreateContext(connectionId: number): ConnectionContext {
   let ctx = connectionContexts.get(connectionId);
   if (!ctx) {
-    ctx = { connectionId, binding: null };
+    ctx = { connectionId, binding: null, lastSpawnedPaneId: null };
     connectionContexts.set(connectionId, ctx);
   }
   return ctx;
@@ -1393,6 +1416,7 @@ export function _testContext(
           clientPid: binding.clientPid ?? null,
         }
       : null,
+    lastSpawnedPaneId: null,
   };
   return ctx;
 }

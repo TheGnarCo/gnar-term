@@ -464,6 +464,49 @@ describe("resolveTarget — connection-binding resolution rules (the v1 bug fenc
     expect(resolved.workspace.id).toBe("ws-1");
     expect(resolved.source).toBe("binding-workspace");
   });
+
+  it("PERF FENCE: rapid spawns chain off the last-spawned pane, not the binding pane", () => {
+    // Without this, dispatch_tasks with N tasks deeply nests N splits around
+    // the same binding pane. findParentSplit + DOM render become O(depth)
+    // per spawn → O(N²) total → UI freeze. The original freeze we hit on
+    // 2026-04-16. Regression test: resolveTarget must prefer lastSpawnedPaneId.
+    const { ws, pane: hostPane } = makeWorkspace("ws-host");
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+    const ctx = _testContext({ paneId: hostPane.id, workspaceId: "ws-host" });
+
+    // First resolution: no lastSpawnedPaneId yet → use binding pane.
+    const first = _resolveTargetForTest({}, ctx);
+    expect(first.hostPane?.id).toBe(hostPane.id);
+
+    // Simulate a successful spawn: push a new pane into the tree and record it.
+    const newPane: Pane = { id: "new-1", surfaces: [], activeSurfaceId: null };
+    ws.splitRoot = {
+      type: "split",
+      direction: "vertical",
+      ratio: 0.5,
+      children: [
+        { type: "pane", pane: hostPane },
+        { type: "pane", pane: newPane },
+      ],
+    };
+    workspaces.set([ws]);
+    ctx.lastSpawnedPaneId = newPane.id;
+
+    // Next resolution: must use the new pane, NOT the binding pane.
+    const second = _resolveTargetForTest({}, ctx);
+    expect(second.hostPane?.id).toBe(newPane.id);
+  });
+
+  it("lastSpawnedPaneId is ignored when the pane was closed (falls through to binding)", () => {
+    const { ws, pane: hostPane } = makeWorkspace("ws-host");
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+    const ctx = _testContext({ paneId: hostPane.id, workspaceId: "ws-host" });
+    ctx.lastSpawnedPaneId = "never-existed";
+    const resolved = _resolveTargetForTest({}, ctx);
+    expect(resolved.hostPane?.id).toBe(hostPane.id);
+  });
 });
 
 describe("tool metadata", () => {

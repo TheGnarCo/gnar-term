@@ -137,16 +137,15 @@ describe("pendingAction consumer", () => {
     const source = fs.readFileSync("src/App.svelte", "utf-8");
     expect(source).toContain("pendingAction");
     expect(source).toContain("$pendingAction");
-    // Must handle open-preview action type
-    expect(source).toContain('"open-preview"');
     // Must clear the action after consuming it
     expect(source).toContain("pendingAction.set(null)");
   });
 
-  it("terminal-service sets pendingAction for file preview links", async () => {
+  it("terminal-service dispatches file-link clicks via the context-menu registry", async () => {
     const fs = await import("fs");
     const source = fs.readFileSync("src/lib/terminal-service.ts", "utf-8");
-    expect(source).toContain('pendingAction.set({ type: "open-preview"');
+    expect(source).toContain("getContextMenuItemsForFile");
+    expect(source).not.toContain('"open-preview"');
   });
 });
 

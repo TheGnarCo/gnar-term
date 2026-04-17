@@ -31,7 +31,6 @@ export const contextMenu = writable<ContextMenuState | null>(null);
 
 /** Pending action dispatched from terminal-service.ts for App.svelte to handle */
 export type PendingAction =
-  | { type: "open-preview"; payload: string }
   | { type: "split-right" }
   | { type: "split-down" }
   | {

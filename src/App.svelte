@@ -42,8 +42,6 @@
   import { relaunch } from "@tauri-apps/plugin-process";
   import { eventBus } from "./lib/services/event-bus";
 
-  import { getContextMenuItemsForFile } from "./lib/services/context-menu-item-registry";
-
   // Included extensions
   import {
     previewManifest,
@@ -394,13 +392,7 @@
   $: if ($pendingAction) {
     const action = $pendingAction;
     pendingAction.set(null);
-    if (action.type === "open-preview" && action.payload) {
-      // Route through the extension-contributed context menu handler
-      const previewItems = getContextMenuItemsForFile(action.payload);
-      if (previewItems.length > 0) {
-        previewItems[0]!.handler(action.payload);
-      }
-    } else if (action.type === "split-right") {
+    if (action.type === "split-right") {
       splitFromSidebar("horizontal");
     } else if (action.type === "split-down") {
       splitFromSidebar("vertical");

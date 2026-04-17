@@ -1,7 +1,11 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * MCP server unit tests. Exercises the JSON-RPC dispatcher and the handlers
  * that don't require a live PTY (tools/list, sidebar, poll_events, fs tools,
  * workspace introspection).
+ *
+ * `any` casts below are for narrowing loosely-typed JSON-RPC response bodies
+ * in test assertions — a common pattern for test-only code.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { get } from "svelte/store";
@@ -133,7 +137,9 @@ describe("MCP server JSON-RPC", () => {
         arguments: { side: "primary", section_id: "x", title: "X", items: [] },
       }),
     );
-    const resp = await dispatch(rpc("tools/call", { name: "poll_events", arguments: {} }));
+    const resp = await dispatch(
+      rpc("tools/call", { name: "poll_events", arguments: {} }),
+    );
     const result = (resp as any).result.structuredContent;
     expect(result).toHaveProperty("cursor");
     expect(Array.isArray(result.events)).toBe(true);
@@ -175,7 +181,10 @@ describe("MCP server JSON-RPC", () => {
     const r = await dispatch(
       rpc("tools/call", { name: "file_exists", arguments: { path: "/tmp" } }),
     );
-    expect((r as any).result.structuredContent).toEqual({ exists: true, is_dir: true });
+    expect((r as any).result.structuredContent).toEqual({
+      exists: true,
+      is_dir: true,
+    });
 
     invokeMock.mockResolvedValueOnce([false, false]);
     const r2 = await dispatch(
@@ -185,7 +194,9 @@ describe("MCP server JSON-RPC", () => {
   });
 
   it("list_workspaces returns an array (possibly empty)", async () => {
-    const r = await dispatch(rpc("tools/call", { name: "list_workspaces", arguments: {} }));
+    const r = await dispatch(
+      rpc("tools/call", { name: "list_workspaces", arguments: {} }),
+    );
     const result = (r as any).result.structuredContent;
     expect(Array.isArray(result)).toBe(true);
   });
@@ -202,7 +213,9 @@ describe("MCP server JSON-RPC", () => {
   });
 
   it("returns -32601 for unknown tool names", async () => {
-    const resp = await dispatch(rpc("tools/call", { name: "nope", arguments: {} }));
+    const resp = await dispatch(
+      rpc("tools/call", { name: "nope", arguments: {} }),
+    );
     expect((resp as any).error.code).toBe(-32601);
   });
 });

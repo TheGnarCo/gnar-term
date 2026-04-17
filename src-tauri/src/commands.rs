@@ -677,9 +677,8 @@ pub(crate) async fn mcp_list_dir(
         if !include_hidden && name.starts_with('.') {
             continue;
         }
-        let metadata = match entry.metadata() {
-            Ok(m) => m,
-            Err(_) => continue,
+        let Ok(metadata) = entry.metadata() else {
+            continue;
         };
         let entry_path = entry.path().to_string_lossy().to_string();
         out.push(McpDirEntry {

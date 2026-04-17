@@ -1,6 +1,9 @@
 <script lang="ts">
   import { theme } from "../stores/theme";
-  import type { SidebarItem, SidebarSection } from "../stores/extension-sidebar";
+  import type {
+    SidebarItem,
+    SidebarSection,
+  } from "../stores/extension-sidebar";
   import { pushEvent } from "../services/mcp-event-buffer";
 
   export let section: SidebarSection;
@@ -23,7 +26,10 @@
     });
   }
 
-  function flatten(items: SidebarItem[], depth: number): Array<SidebarItem & { depth: number }> {
+  function flatten(
+    items: SidebarItem[],
+    depth: number,
+  ): Array<SidebarItem & { depth: number }> {
     const out: Array<SidebarItem & { depth: number }> = [];
     for (const item of items) {
       out.push({ ...item, depth });
@@ -53,7 +59,9 @@
         on:click={() => handleClick(item)}
       >
         {#if item.icon}
-          <span class="extension-section-icon" aria-hidden="true">{item.icon}</span>
+          <span class="extension-section-icon" aria-hidden="true"
+            >{item.icon}</span
+          >
         {/if}
         <span class="extension-section-label">{item.label}</span>
       </button>

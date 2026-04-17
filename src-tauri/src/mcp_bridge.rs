@@ -29,8 +29,7 @@ pub fn uds_path() -> Option<PathBuf> {
     {
         let home = std::env::var("HOME").ok()?;
         Some(PathBuf::from(format!(
-            "{}/Library/Application Support/gnar-term/mcp.sock",
-            home
+            "{home}/Library/Application Support/gnar-term/mcp.sock"
         )))
     }
     #[cfg(target_os = "linux")]
@@ -109,10 +108,7 @@ pub fn install_response_listener(app: AppHandle, state: BridgeState) {
             .ok()
             .and_then(|v| v.get("payload").and_then(|p| p.as_str()).map(String::from))
             .or_else(|| serde_json::from_str::<String>(payload).ok());
-        let line = match inner {
-            Some(s) => s,
-            None => return,
-        };
+        let Some(line) = inner else { return };
         if let Ok(guard) = writer.lock() {
             if let Some(tx) = guard.as_ref() {
                 let _ = tx.send(line);
@@ -131,7 +127,7 @@ pub fn spawn(app: AppHandle, state: BridgeState) -> Result<(), String> {
 
     // Ensure parent directory exists.
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| format!("mkdir {:?}: {e}", parent))?;
+        std::fs::create_dir_all(parent).map_err(|e| format!("mkdir {}: {e}", parent.display()))?;
     }
 
     // Remove stale socket if a previous run left it behind.
@@ -148,16 +144,16 @@ pub fn spawn(app: AppHandle, state: BridgeState) -> Result<(), String> {
             Ok(l) => l,
             Err(e) => {
                 eprintln!(
-                    "[mcp-bridge] failed to bind {:?}: {e} (another gnar-term instance may be running)",
-                    path_clone
+                    "[mcp-bridge] failed to bind {}: {e} (another gnar-term instance may be running)",
+                    path_clone.display()
                 );
                 return;
             }
         };
         if let Err(e) = set_socket_perms(&path_clone) {
-            eprintln!("[mcp-bridge] failed to chmod {:?}: {e}", path_clone);
+            eprintln!("[mcp-bridge] failed to chmod {}: {e}", path_clone.display());
         }
-        eprintln!("[mcp-bridge] listening on {:?}", path_clone);
+        eprintln!("[mcp-bridge] listening on {}", path_clone.display());
 
         loop {
             let (stream, _) = match listener.accept().await {
@@ -189,11 +185,7 @@ pub fn spawn(_app: AppHandle, _state: BridgeState) -> Result<(), String> {
 }
 
 #[cfg(unix)]
-async fn handle_connection(
-    stream: tokio::net::UnixStream,
-    app: AppHandle,
-    state: BridgeState,
-) {
+async fn handle_connection(stream: tokio::net::UnixStream, app: AppHandle, state: BridgeState) {
     let (read_half, mut write_half) = stream.into_split();
     let (tx, mut rx) = mpsc::unbounded_channel::<String>();
 
@@ -254,12 +246,9 @@ pub fn run_stdio_shim() -> i32 {
     use tokio::io::{stdin, stdout};
     use tokio::net::UnixStream;
 
-    let path = match uds_path() {
-        Some(p) => p,
-        None => {
-            eprintln!("gnar-term: failed to resolve MCP socket path");
-            return 1;
-        }
+    let Some(path) = uds_path() else {
+        eprintln!("gnar-term: failed to resolve MCP socket path");
+        return 1;
     };
 
     if !path.exists() {
@@ -282,9 +271,7 @@ pub fn run_stdio_shim() -> i32 {
         let stream = match UnixStream::connect(&path).await {
             Ok(s) => s,
             Err(e) => {
-                eprintln!(
-                    "gnar-term is not running. Start gnar-term and try again. ({e})"
-                );
+                eprintln!("gnar-term is not running. Start gnar-term and try again. ({e})");
                 return 1;
             }
         };
@@ -325,7 +312,10 @@ mod tests {
             s.contains("gnar-term"),
             "uds path should contain gnar-term: {s}"
         );
-        assert!(s.ends_with("mcp.sock"), "uds path should end in mcp.sock: {s}");
+        assert!(
+            s.ends_with("mcp.sock"),
+            "uds path should end in mcp.sock: {s}"
+        );
     }
 
     #[cfg(unix)]
@@ -372,9 +362,8 @@ mod tests {
     fn tempfile_dir() -> std::path::PathBuf {
         // Pick a writable tmp dir. TMPDIR honours the harness sandbox, and
         // falls back to std::env::temp_dir otherwise.
-        let base = std::env::var("TMPDIR")
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|_| std::env::temp_dir());
+        let base =
+            std::env::var("TMPDIR").map_or_else(|_| std::env::temp_dir(), std::path::PathBuf::from);
         let dir = base.join(format!("gnar-term-mcp-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         dir

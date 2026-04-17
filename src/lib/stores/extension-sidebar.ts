@@ -40,7 +40,10 @@ export function upsertSection(section: SidebarSection): void {
   });
 }
 
-export function removeSection(side: "primary" | "secondary", sectionId: string): void {
+export function removeSection(
+  side: "primary" | "secondary",
+  sectionId: string,
+): void {
   extensionSidebarSections.update((map) => {
     if (!map.has(keyOf(side, sectionId))) return map;
     const next = new Map(map);
@@ -49,14 +52,12 @@ export function removeSection(side: "primary" | "secondary", sectionId: string):
   });
 }
 
-export const primarySections = derived(
-  extensionSidebarSections,
-  ($map) => Array.from($map.values()).filter((s) => s.side === "primary"),
+export const primarySections = derived(extensionSidebarSections, ($map) =>
+  Array.from($map.values()).filter((s) => s.side === "primary"),
 );
 
-export const secondarySections = derived(
-  extensionSidebarSections,
-  ($map) => Array.from($map.values()).filter((s) => s.side === "secondary"),
+export const secondarySections = derived(extensionSidebarSections, ($map) =>
+  Array.from($map.values()).filter((s) => s.side === "secondary"),
 );
 
 export function _resetExtensionSidebarForTest(): void {

@@ -11,7 +11,9 @@
     activeSidebarTabStore,
   } from "../services/sidebar-tab-registry";
   import { getExtensionApiById } from "../services/extension-loader";
+  import { secondarySections } from "../stores/extension-sidebar";
   import ExtensionWrapper from "./ExtensionWrapper.svelte";
+  import ExtensionSidebarSection from "./ExtensionSidebarSection.svelte";
 
   let dragging = false;
   let activeTabId: string | null = null;
@@ -168,6 +170,11 @@
             >
           </div>
         {/if}
+
+        <!-- MCP-declared sections (render_sidebar tool) -->
+        {#each $secondarySections as section (section.sectionId)}
+          <ExtensionSidebarSection {section} />
+        {/each}
       </div>
     </div>
   </div>

@@ -38,7 +38,12 @@ describe("extension-sidebar store", () => {
   });
 
   it("replaces an existing section with the same id", () => {
-    upsertSection({ side: "secondary", sectionId: "s1", title: "first", items: [] });
+    upsertSection({
+      side: "secondary",
+      sectionId: "s1",
+      title: "first",
+      items: [],
+    });
     upsertSection({
       side: "secondary",
       sectionId: "s1",
@@ -57,8 +62,18 @@ describe("extension-sidebar store", () => {
   });
 
   it("allows same section_id on different sides", () => {
-    upsertSection({ side: "primary", sectionId: "tools", title: "P", items: [] });
-    upsertSection({ side: "secondary", sectionId: "tools", title: "S", items: [] });
+    upsertSection({
+      side: "primary",
+      sectionId: "tools",
+      title: "P",
+      items: [],
+    });
+    upsertSection({
+      side: "secondary",
+      sectionId: "tools",
+      title: "S",
+      items: [],
+    });
     expect(get(primarySections)).toHaveLength(1);
     expect(get(secondarySections)).toHaveLength(1);
     removeSection("primary", "tools");

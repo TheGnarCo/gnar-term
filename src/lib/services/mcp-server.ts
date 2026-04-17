@@ -15,11 +15,7 @@
 import { get } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, emit } from "@tauri-apps/api/event";
-import {
-  workspaces,
-  activeWorkspace,
-  activePane,
-} from "../stores/workspace";
+import { workspaces, activeWorkspace, activePane } from "../stores/workspace";
 import {
   getAllPanes,
   getAllSurfaces,
@@ -46,7 +42,8 @@ import {
   removeSection,
   type SidebarItem,
 } from "../stores/extension-sidebar";
-import { openPreviewFromContent } from "../../preview";
+import { openPreviewFromContent } from "../../extensions/preview";
+import { theme } from "../stores/theme";
 import { getMcpSetting } from "../config";
 
 // ---- Types ----
@@ -130,13 +127,13 @@ function newSessionId(): string {
 function getOrCreateActivePane(): Pane {
   let ws = get(activeWorkspace);
   if (!ws) {
-    createWorkspace("MCP");
+    void createWorkspace("MCP");
     ws = get(activeWorkspace)!;
   }
   const existingActive = get(activePane);
   if (existingActive) return existingActive;
   const panes = getAllPanes(ws.splitRoot);
-  if (panes.length > 0) return panes[0];
+  if (panes.length > 0) return panes[0]!;
   const newPane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
   ws.splitRoot = { type: "pane", pane: newPane };
   workspaces.update((l) => [...l]);
@@ -145,7 +142,7 @@ function getOrCreateActivePane(): Pane {
 
 function splitActivePane(direction: "horizontal" | "vertical"): Pane {
   const wsVal = get(activeWorkspace);
-  if (!wsVal) createWorkspace("MCP");
+  if (!wsVal) void createWorkspace("MCP");
   const workspace = get(activeWorkspace)!;
   const currentActive = get(activePane) ?? getAllPanes(workspace.splitRoot)[0];
   if (!currentActive) return getOrCreateActivePane();
@@ -204,7 +201,7 @@ function removeSurfaceFromPane(paneId: string, surfaceId: string): void {
         if (pane.id !== paneId) continue;
         const idx = pane.surfaces.findIndex((s) => s.id === surfaceId);
         if (idx < 0) continue;
-        const surface = pane.surfaces[idx];
+        const surface = pane.surfaces[idx]!;
         if (isTerminalSurface(surface)) {
           try {
             surface.terminal.dispose();
@@ -217,7 +214,7 @@ function removeSurfaceFromPane(paneId: string, surfaceId: string): void {
           pane.activeSurfaceId = null;
         } else {
           pane.activeSurfaceId =
-            pane.surfaces[Math.min(idx, pane.surfaces.length - 1)].id;
+            pane.surfaces[Math.min(idx, pane.surfaces.length - 1)]!.id;
         }
       }
     }
@@ -252,7 +249,9 @@ function describeSurface(s: Surface) {
 }
 
 function describePane(pane: Pane, workspaceId: string) {
-  const activeSurface = pane.surfaces.find((s) => s.id === pane.activeSurfaceId);
+  const activeSurface = pane.surfaces.find(
+    (s) => s.id === pane.activeSurfaceId,
+  );
   let cwd = "";
   if (activeSurface && isTerminalSurface(activeSurface)) {
     cwd = activeSurface.cwd ?? "";
@@ -291,7 +290,10 @@ registerTool({
     type: "object",
     properties: {
       name: { type: "string" },
-      agent: { type: "string", enum: ["claude-code", "codex", "aider", "custom"] },
+      agent: {
+        type: "string",
+        enum: ["claude-code", "codex", "aider", "custom"],
+      },
       task: { type: "string" },
       cwd: { type: "string" },
       command: { type: "string" },
@@ -322,14 +324,16 @@ registerTool({
     }
 
     const existingActive = get(activePane);
-    const target = existingActive ? splitActivePane("vertical") : getOrCreateActivePane();
+    const target = existingActive
+      ? splitActivePane("vertical")
+      : getOrCreateActivePane();
 
     const surface = await createTerminalSurface(target, p.cwd);
     surface.title = p.name;
     surface.startupCommand = startupCommand;
     target.activeSurfaceId = surface.id;
     workspaces.update((l) => [...l]);
-    safeFocus(surface);
+    void safeFocus(surface);
 
     const ptyId = await waitForPtyId(surface);
     registerMcpPty(ptyId);
@@ -467,7 +471,8 @@ registerTool({
 
 registerTool({
   name: "send_prompt",
-  description: "Send text to an MCP session's PTY. Appends Enter unless press_enter is false.",
+  description:
+    "Send text to an MCP session's PTY. Appends Enter unless press_enter is false.",
   inputSchema: {
     type: "object",
     properties: {
@@ -478,7 +483,11 @@ registerTool({
     required: ["session_id", "text"],
   },
   handler: async (args) => {
-    const p = args as { session_id: string; text: string; press_enter?: boolean };
+    const p = args as {
+      session_id: string;
+      text: string;
+      press_enter?: boolean;
+    };
     const session = sessions.get(p.session_id);
     if (!session) throw new Error(`session ${p.session_id} not found`);
     const data = p.text + (p.press_enter === false ? "" : "\r");
@@ -489,7 +498,8 @@ registerTool({
 
 registerTool({
   name: "send_keys",
-  description: "Send a named keystroke (ctrl+c, enter, escape, arrows, etc.) to an MCP session.",
+  description:
+    "Send a named keystroke (ctrl+c, enter, escape, arrows, etc.) to an MCP session.",
   inputSchema: {
     type: "object",
     properties: {
@@ -515,7 +525,8 @@ registerTool({
 
 registerTool({
   name: "read_output",
-  description: "Read terminal output from an MCP session. Supports cursor-based polling and ANSI stripping.",
+  description:
+    "Read terminal output from an MCP session. Supports cursor-based polling and ANSI stripping.",
   inputSchema: {
     type: "object",
     properties: {
@@ -557,7 +568,8 @@ registerTool({
 
 registerTool({
   name: "dispatch_tasks",
-  description: "Spawn multiple agent sessions in parallel for fan-out workflows.",
+  description:
+    "Spawn multiple agent sessions in parallel for fan-out workflows.",
   inputSchema: {
     type: "object",
     properties: {
@@ -669,7 +681,8 @@ registerTool({
 
 registerTool({
   name: "remove_sidebar_section",
-  description: "Remove an extension-declared sidebar section. Safe for non-existent IDs.",
+  description:
+    "Remove an extension-declared sidebar section. Safe for non-existent IDs.",
   inputSchema: {
     type: "object",
     properties: {
@@ -722,27 +735,38 @@ registerTool({
     } else {
       rendered = "```\n" + p.content + "\n```";
     }
-    const previewSurface = openPreviewFromContent(rendered, title);
+    const previewSurface = openPreviewFromContent(
+      rendered,
+      title,
+      get(theme) as unknown as Parameters<typeof openPreviewFromContent>[2],
+    );
 
     const placement = p.placement ?? "split-right";
     let targetPane: Pane;
     if (placement === "split-right") {
-      targetPane = get(activePane) ? splitActivePane("horizontal") : getOrCreateActivePane();
+      targetPane = get(activePane)
+        ? splitActivePane("horizontal")
+        : getOrCreateActivePane();
     } else if (placement === "split-down") {
-      targetPane = get(activePane) ? splitActivePane("vertical") : getOrCreateActivePane();
+      targetPane = get(activePane)
+        ? splitActivePane("vertical")
+        : getOrCreateActivePane();
     } else {
       // new-tab and current-pane both drop into the active pane's surface list
       targetPane = getOrCreateActivePane();
     }
 
-    const surface = {
-      kind: "preview" as const,
+    const surface: Surface = {
+      kind: "extension",
       id: previewSurface.id,
-      filePath: previewSurface.filePath,
+      surfaceTypeId: "preview:preview",
       title: previewSurface.title,
-      element: previewSurface.element,
-      watchId: previewSurface.watchId,
       hasUnread: false,
+      props: {
+        filePath: previewSurface.filePath,
+        element: previewSurface.element,
+        watchId: previewSurface.watchId,
+      },
     };
     targetPane.surfaces.push(surface);
     targetPane.activeSurfaceId = surface.id;
@@ -803,7 +827,9 @@ registerTool({
       ? get(workspaces).find((w) => w.id === p.workspace_id)
       : get(activeWorkspace);
     if (!target) return [];
-    return getAllPanes(target.splitRoot).map((pane) => describePane(pane, target.id));
+    return getAllPanes(target.splitRoot).map((pane) =>
+      describePane(pane, target.id),
+    );
   },
 });
 
@@ -829,7 +855,8 @@ registerTool({
 
 registerTool({
   name: "list_dir",
-  description: "List a directory. Returns entries with name, path, is_dir, size.",
+  description:
+    "List a directory. Returns entries with name, path, is_dir, size.",
   inputSchema: {
     type: "object",
     properties: {
@@ -849,7 +876,8 @@ registerTool({
 
 registerTool({
   name: "read_file",
-  description: "Read a UTF-8 file and return its contents. Non-UTF-8 content is an error.",
+  description:
+    "Read a UTF-8 file and return its contents. Non-UTF-8 content is an error.",
   inputSchema: {
     type: "object",
     properties: {
@@ -870,7 +898,8 @@ registerTool({
 
 registerTool({
   name: "file_exists",
-  description: "Check whether a path exists. Returns exists and (if it does) is_dir.",
+  description:
+    "Check whether a path exists. Returns exists and (if it does) is_dir.",
   inputSchema: {
     type: "object",
     properties: { path: { type: "string" } },
@@ -890,7 +919,9 @@ registerTool({
 const PROTOCOL_VERSION = "2025-11-25";
 const SERVER_INFO = { name: "gnar-term", version: "0.3.1" };
 
-export async function dispatch(req: JsonRpcRequest): Promise<JsonRpcResponse | null> {
+export async function dispatch(
+  req: JsonRpcRequest,
+): Promise<JsonRpcResponse | null> {
   const id = req.id ?? null;
   // Notifications (no id) are fire-and-forget.
   const isNotification = req.id === undefined || req.id === null;
@@ -914,7 +945,9 @@ export async function dispatch(req: JsonRpcRequest): Promise<JsonRpcResponse | n
           description: t.description,
           inputSchema: t.inputSchema,
         }));
-        return isNotification ? null : { jsonrpc: "2.0", id, result: { tools } };
+        return isNotification
+          ? null
+          : { jsonrpc: "2.0", id, result: { tools } };
       }
       case "tools/call": {
         const params = (req.params ?? {}) as {

@@ -11,7 +11,7 @@ import { listen } from "@tauri-apps/api/event";
 
 const MAX_LINES_DEFAULT = 5000;
 const ANSI_REGEX =
-  // eslint-disable-next-line no-control-regex
+  // eslint-disable-next-line security/detect-unsafe-regex
   /[\u001B\u009B][[\]()#;?]*(?:(?:(?:(?:;[-a-zA-Z0-9/#&.:=?%@~_]+)*|[a-zA-Z0-9]+(?:;[-a-zA-Z0-9/#&.:=?%@~_]*)*)?\u0007)|(?:(?:\d{1,4}(?:;\d{0,4})*)?[\dA-PR-TZcf-nq-uy=><~]))/g;
 
 function stripAnsi(s: string): string {
@@ -43,10 +43,11 @@ export class McpOutputBuffer {
     // parts[0] extends the current partial line; each subsequent entry is a
     // new line. The trailing empty string (when text ends with \n) is the
     // start of a new empty partial line.
-    this.lines[this.lines.length - 1] += parts[0];
+    this.lines[this.lines.length - 1] =
+      (this.lines[this.lines.length - 1] ?? "") + (parts[0] ?? "");
     for (let i = 1; i < parts.length; i++) {
       this.cursor += 1;
-      this.lines.push(parts[i]);
+      this.lines.push(parts[i] ?? "");
       if (this.lines.length > this.maxLines) {
         this.lines.shift();
       }

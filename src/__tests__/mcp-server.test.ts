@@ -30,6 +30,19 @@ import {
   registerSurfaceType,
   resetSurfaceTypes,
 } from "../lib/services/surface-type-registry";
+import {
+  registerCommand,
+  resetCommands,
+} from "../lib/services/command-registry";
+import {
+  registerSidebarTab,
+  resetSidebarTabs,
+  activeSidebarTabStore,
+} from "../lib/services/sidebar-tab-registry";
+import {
+  registerWorkspaceAction,
+  resetWorkspaceActions,
+} from "../lib/services/workspace-action-registry";
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
 import { getAllSurfaces } from "../lib/types";
 
@@ -52,22 +65,28 @@ describe("MCP server JSON-RPC", () => {
     expect((resp as any).result.capabilities.tools).toBeDefined();
   });
 
-  it("lists all 20 tools with correct names", async () => {
+  it("lists all 26 tools with correct names", async () => {
     const resp = await dispatch(rpc("tools/list"));
     const tools = (resp as any).result.tools as Array<{ name: string }>;
     const names = tools.map((t) => t.name).sort();
     expect(names).toEqual(
       [
+        "activate_sidebar_tab",
         "dispatch_tasks",
         "file_exists",
         "get_active_pane",
         "get_active_workspace",
         "get_session_info",
+        "invoke_command",
+        "invoke_workspace_action",
         "kill_session",
+        "list_commands",
         "list_dir",
         "list_panes",
         "list_sessions",
+        "list_sidebar_tabs",
         "list_surface_types",
+        "list_workspace_actions",
         "list_workspaces",
         "open_surface",
         "poll_events",
@@ -80,7 +99,7 @@ describe("MCP server JSON-RPC", () => {
         "spawn_agent",
       ].sort(),
     );
-    expect(names).toHaveLength(20);
+    expect(names).toHaveLength(26);
     // Every tool must ship a JSON Schema shaped object.
     for (const t of tools) {
       expect(t).toHaveProperty("inputSchema");
@@ -438,6 +457,173 @@ describe("MCP server JSON-RPC", () => {
   });
 });
 
+describe("MCP mirror tools — commands", () => {
+  beforeEach(() => {
+    resetCommands();
+  });
+
+  it("list_commands returns every registered command", async () => {
+    registerCommand({
+      id: "ext.do-thing",
+      title: "Do Thing",
+      shortcut: "⌘⇧T",
+      action: () => {},
+      source: "my-ext",
+    });
+    const r = await dispatch(
+      rpc("tools/call", { name: "list_commands", arguments: {} }),
+    );
+    const result = (r as any).result.structuredContent;
+    expect(result.commands).toHaveLength(1);
+    expect(result.commands[0]).toEqual({
+      id: "ext.do-thing",
+      title: "Do Thing",
+      shortcut: "⌘⇧T",
+      source: "my-ext",
+    });
+  });
+
+  it("invoke_command runs the action", async () => {
+    let called = 0;
+    registerCommand({
+      id: "ext.run",
+      title: "Run",
+      action: () => {
+        called += 1;
+      },
+      source: "my-ext",
+    });
+    const r = await dispatch(
+      rpc("tools/call", {
+        name: "invoke_command",
+        arguments: { command_id: "ext.run" },
+      }),
+    );
+    expect((r as any).result.structuredContent).toEqual({ ok: true });
+    expect(called).toBe(1);
+  });
+
+  it("invoke_command rejects an unknown id", async () => {
+    const resp = await dispatch(
+      rpc("tools/call", {
+        name: "invoke_command",
+        arguments: { command_id: "does-not-exist" },
+      }),
+    );
+    expect((resp as any).error.code).toBe(-32000);
+    expect((resp as any).error.message).toMatch(/Unknown command/);
+  });
+});
+
+describe("MCP mirror tools — sidebar tabs", () => {
+  beforeEach(() => {
+    resetSidebarTabs();
+  });
+
+  it("list_sidebar_tabs returns registered tabs", async () => {
+    registerSidebarTab({
+      id: "files",
+      label: "Files",
+      component: {},
+      source: "file-browser",
+    });
+    const r = await dispatch(
+      rpc("tools/call", { name: "list_sidebar_tabs", arguments: {} }),
+    );
+    const result = (r as any).result.structuredContent;
+    expect(result.tabs).toEqual([
+      { id: "files", label: "Files", source: "file-browser" },
+    ]);
+  });
+
+  it("activate_sidebar_tab updates the active tab store", async () => {
+    registerSidebarTab({
+      id: "changes",
+      label: "Changes",
+      component: {},
+      source: "diff-viewer",
+    });
+    const r = await dispatch(
+      rpc("tools/call", {
+        name: "activate_sidebar_tab",
+        arguments: { tab_id: "changes" },
+      }),
+    );
+    expect((r as any).result.structuredContent).toEqual({ ok: true });
+    expect(get(activeSidebarTabStore)).toBe("changes");
+  });
+
+  it("activate_sidebar_tab rejects unknown tab ids", async () => {
+    const resp = await dispatch(
+      rpc("tools/call", {
+        name: "activate_sidebar_tab",
+        arguments: { tab_id: "nope" },
+      }),
+    );
+    expect((resp as any).error.code).toBe(-32000);
+  });
+});
+
+describe("MCP mirror tools — workspace actions", () => {
+  beforeEach(() => {
+    resetWorkspaceActions();
+  });
+
+  it("list_workspace_actions returns registered actions", async () => {
+    registerWorkspaceAction({
+      id: "create-worktree",
+      label: "New Worktree",
+      icon: "git-branch",
+      zone: "sidebar",
+      handler: () => {},
+      source: "managed-workspaces",
+    });
+    const r = await dispatch(
+      rpc("tools/call", { name: "list_workspace_actions", arguments: {} }),
+    );
+    const result = (r as any).result.structuredContent;
+    expect(result.actions).toEqual([
+      {
+        id: "create-worktree",
+        label: "New Worktree",
+        icon: "git-branch",
+        zone: "sidebar",
+        source: "managed-workspaces",
+      },
+    ]);
+  });
+
+  it("invoke_workspace_action forwards context to the handler", async () => {
+    let received: Record<string, unknown> | null = null;
+    registerWorkspaceAction({
+      id: "ext.thing",
+      label: "Thing",
+      icon: "star",
+      handler: (ctx) => {
+        received = ctx as Record<string, unknown>;
+      },
+      source: "ext",
+    });
+    await dispatch(
+      rpc("tools/call", {
+        name: "invoke_workspace_action",
+        arguments: { action_id: "ext.thing", context: { branch: "main" } },
+      }),
+    );
+    expect(received).toEqual({ branch: "main" });
+  });
+
+  it("invoke_workspace_action rejects unknown action ids", async () => {
+    const resp = await dispatch(
+      rpc("tools/call", {
+        name: "invoke_workspace_action",
+        arguments: { action_id: "nope" },
+      }),
+    );
+    expect((resp as any).error.code).toBe(-32000);
+  });
+});
+
 describe("tool metadata", () => {
   it("every tool has a non-empty description", () => {
     const tools = _getToolsForTest();
@@ -446,7 +632,7 @@ describe("tool metadata", () => {
     }
   });
 
-  it("tool count matches spec (20)", () => {
-    expect(_getToolsForTest()).toHaveLength(20);
+  it("tool count matches spec (26)", () => {
+    expect(_getToolsForTest()).toHaveLength(26);
   });
 });

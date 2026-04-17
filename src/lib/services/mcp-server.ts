@@ -2,15 +2,48 @@
  * Gnar Term MCP server — runs in the Svelte webview and speaks JSON-RPC 2.0
  * over Tauri events to the Rust UDS bridge.
  *
- * Design note (2026-04-15): We hand-roll JSON-RPC 2.0 rather than pulling in
- * @modelcontextprotocol/sdk. The SDK isn't in package.json, the bundler
- * target is a Chromium/WebKit webview (not node), and the required surface
- * area is tiny: initialize, tools/list, tools/call, and MCP notifications.
- * Hand-rolling keeps the module ~500 LOC and sidesteps Node/ESM polyfills.
+ * # Design note (2026-04-15)
+ *
+ * We hand-roll JSON-RPC 2.0 rather than pulling in @modelcontextprotocol/sdk.
+ * The SDK isn't in package.json, the bundler target is a Chromium/WebKit
+ * webview (not node), and the required surface area is tiny: initialize,
+ * tools/list, tools/call, and MCP notifications. Hand-rolling keeps the
+ * module ~500 LOC and sidesteps Node/ESM polyfills.
  *
  * Rust emits `mcp-request` with `{ payload: <raw json-rpc string> }`. The
  * server dispatches and emits `mcp-response` with the same shape. Clients are
  * responsible for their own request ordering.
+ *
+ * # Ideology: MCP mirrors the extension contribution points
+ *
+ * Extensions contribute capabilities by registering into core registries
+ * (commands, surface types, sidebar tabs, workspace actions, …). Rather than
+ * handcoding an MCP tool per extension, each contribution registry is
+ * reflected as a generic `list_X` / `invoke_X` pair:
+ *
+ *   | Registry                | Tools                                        |
+ *   | ----------------------- | -------------------------------------------- |
+ *   | surface-type-registry   | list_surface_types, open_surface             |
+ *   | command-registry        | list_commands, invoke_command                |
+ *   | sidebar-tab-registry    | list_sidebar_tabs, activate_sidebar_tab      |
+ *   | workspace-action-reg…   | list_workspace_actions, invoke_workspace_…   |
+ *
+ * Adding an extension automatically increases MCP's surface area by its
+ * contributions; adding an MCP tool never requires touching an extension.
+ * MCP never imports from `src/extensions/*` — the extension barrier runs in
+ * one direction (extensions depend on core) and MCP sits on the core side.
+ *
+ * The small number of non-mirror tools fall into three buckets:
+ *   - session management (spawn_agent, list_sessions, send_prompt, …) — these
+ *     wrap the PTY abstraction, which is core infrastructure
+ *   - UI-declared-data tools (render_sidebar, remove_sidebar_section) —
+ *     MCP-owned sidebar sections with no analogue in the extension API
+ *   - introspection (list_workspaces, get_active_pane, poll_events, …) — pure
+ *     reads of core state
+ *
+ * Anything else an agent wants to do should be expressible as a registry
+ * entry + generic mirror tool. If you catch yourself writing a tool named
+ * after a specific extension, stop — that's the old pattern.
  */
 import { get } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
@@ -43,6 +76,9 @@ import {
   type SidebarItem,
 } from "../stores/mcp-sidebar";
 import { surfaceTypeStore } from "./surface-type-registry";
+import { commandStore } from "./command-registry";
+import { sidebarTabStore, activateSidebarTab } from "./sidebar-tab-registry";
+import { workspaceActionStore } from "./workspace-action-registry";
 import { getMcpSetting } from "../config";
 
 // ---- Types ----
@@ -759,6 +795,134 @@ registerTool({
       throw new Error("Could not place surface in a pane");
     }
     return { surface_id: result.surfaceId, pane_id: result.paneId };
+  },
+});
+
+// ---- Commands (mirror of commandStore) ----
+
+registerTool({
+  name: "list_commands",
+  description:
+    "List every command registered in the command palette — core seed commands and anything contributed by an extension. Returns `{ id, title, shortcut?, source }` for each.",
+  inputSchema: { type: "object", properties: {} },
+  handler: () => {
+    const commands = get(commandStore).map((c) => ({
+      id: c.id,
+      title: c.title,
+      shortcut: c.shortcut,
+      source: c.source,
+    }));
+    return { commands };
+  },
+});
+
+registerTool({
+  name: "invoke_command",
+  description:
+    "Invoke a command by id (see list_commands). The command's action runs in the webview; some commands may open interactive prompts.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      command_id: { type: "string" },
+    },
+    required: ["command_id"],
+  },
+  handler: async (args) => {
+    const p = args as { command_id: string };
+    const cmd = get(commandStore).find((c) => c.id === p.command_id);
+    if (!cmd) {
+      throw new Error(
+        `Unknown command: ${p.command_id}. Call list_commands to see what's available.`,
+      );
+    }
+    await cmd.action();
+    return { ok: true };
+  },
+});
+
+// ---- Sidebar tabs (mirror of sidebarTabStore) ----
+
+registerTool({
+  name: "list_sidebar_tabs",
+  description:
+    "List secondary-sidebar tabs contributed by extensions. Returns `{ id, label, source }` for each. Use activate_sidebar_tab to switch to one.",
+  inputSchema: { type: "object", properties: {} },
+  handler: () => {
+    const tabs = get(sidebarTabStore).map((t) => ({
+      id: t.id,
+      label: t.label,
+      source: t.source,
+    }));
+    return { tabs };
+  },
+});
+
+registerTool({
+  name: "activate_sidebar_tab",
+  description:
+    "Switch the secondary sidebar to a registered tab by id (see list_sidebar_tabs).",
+  inputSchema: {
+    type: "object",
+    properties: { tab_id: { type: "string" } },
+    required: ["tab_id"],
+  },
+  handler: (args) => {
+    const p = args as { tab_id: string };
+    const tab = get(sidebarTabStore).find((t) => t.id === p.tab_id);
+    if (!tab) {
+      throw new Error(
+        `Unknown sidebar tab: ${p.tab_id}. Call list_sidebar_tabs to see what's registered.`,
+      );
+    }
+    activateSidebarTab(p.tab_id);
+    return { ok: true };
+  },
+});
+
+// ---- Workspace actions (mirror of workspaceActionStore) ----
+
+registerTool({
+  name: "list_workspace_actions",
+  description:
+    "List workspace actions — buttons extensions add to the workspace header or top bar. Returns `{ id, label, icon, zone, source }` for each.",
+  inputSchema: { type: "object", properties: {} },
+  handler: () => {
+    const actions = get(workspaceActionStore).map((a) => ({
+      id: a.id,
+      label: a.label,
+      icon: a.icon,
+      zone: a.zone ?? "workspace",
+      source: a.source,
+    }));
+    return { actions };
+  },
+});
+
+registerTool({
+  name: "invoke_workspace_action",
+  description:
+    "Invoke a workspace action by id (see list_workspace_actions). Optional `context` is a free-form object forwarded to the action's handler.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      action_id: { type: "string" },
+      context: { type: "object", additionalProperties: true },
+    },
+    required: ["action_id"],
+  },
+  handler: async (args) => {
+    const p = args as {
+      action_id: string;
+      context?: Record<string, unknown>;
+    };
+    const action = get(workspaceActionStore).find((a) => a.id === p.action_id);
+    if (!action) {
+      throw new Error(
+        `Unknown workspace action: ${p.action_id}. Call list_workspace_actions to see what's registered.`,
+      );
+    }
+    await action.handler(p.context ?? {});
+    return { ok: true };
   },
 });
 

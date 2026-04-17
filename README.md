@@ -430,21 +430,44 @@ with a pointer to its own binary. If the CLI isn't available, it falls
 back to an atomic write of `~/.claude.json`. After registration you only
 need to restart Claude Code once; no manual `claude mcp add` is needed.
 
-### The 19 tools
+### The 20 tools
 
-| Category | Tools |
-|---|---|
-| Session management | `spawn_agent`, `list_sessions`, `get_session_info`, `kill_session` |
-| Interaction | `send_prompt`, `send_keys`, `read_output` |
-| Orchestration | `dispatch_tasks` |
-| UI writes | `render_sidebar`, `remove_sidebar_section`, `create_preview` |
-| UI introspection | `get_active_workspace`, `list_workspaces`, `get_active_pane`, `list_panes` |
-| Lifecycle events | `poll_events` |
-| Filesystem | `list_dir`, `read_file`, `file_exists` |
+| Category            | Tools                                                                      |
+| ------------------- | -------------------------------------------------------------------------- |
+| Session management  | `spawn_agent`, `list_sessions`, `get_session_info`, `kill_session`         |
+| Interaction         | `send_prompt`, `send_keys`, `read_output`                                  |
+| Orchestration       | `dispatch_tasks`                                                           |
+| UI writes           | `render_sidebar`, `remove_sidebar_section`, `create_preview`               |
+| Agent introspection | `get_agent_context`                                                        |
+| UI introspection    | `get_active_workspace`, `list_workspaces`, `get_active_pane`, `list_panes` |
+| Lifecycle events    | `poll_events`                                                              |
+| Filesystem          | `list_dir`, `read_file`, `file_exists`                                     |
 
 See the Spacebase spec (doc id `jzvBxDRrkevx`) for full argument schemas
 and the wire-level contract, or read `src/lib/services/mcp-server.ts` for
 the authoritative TypeScript definitions.
+
+### Connection binding (where do agent-spawned panes go?)
+
+When gnar-term spawns a PTY for any pane, it injects
+`GNAR_TERM_PANE_ID` and `GNAR_TERM_WORKSPACE_ID` into the child process's
+environment. Agents launched inside the pane (e.g. `claude`) inherit these
+vars; the `gnar-term --mcp-stdio` shim forwards them in a
+`$/gnar-term/hello` notification on connect. The webview binds the
+connection to that pane / workspace.
+
+UI-mutating tools then resolve their target deterministically:
+
+1. Explicit `pane_id` argument wins.
+2. Explicit `workspace_id` argument wins.
+3. Connection's bound `pane_id` (workspace re-derived in case the pane was moved).
+4. Connection's bound `workspace_id`.
+5. Otherwise: error. The server **never** falls back to "user GUI focus" for
+   write decisions — that's how the v1 routing-follows-focus bug shipped.
+
+Agents can call `get_agent_context` to learn their binding. UI introspection
+tools (`get_active_workspace`, `get_active_pane`) still report user GUI focus —
+they're observers, not authoritative for routing.
 
 ### Integration test harness
 
@@ -457,8 +480,12 @@ build end-to-end:
 node tests/mcp-integration.mjs
 ```
 
-The harness exercises `initialize`, `tools/list`, `list_workspaces`,
-`poll_events`, and `render_sidebar`/`remove_sidebar_section`.
+For the full mandatory scenario matrix from the spec (15 scenarios covering
+multi-connection isolation, binding rules, override semantics, error paths):
+
+```bash
+node tests/mcp-scenarios.mjs
+```
 
 ## Architecture
 

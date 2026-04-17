@@ -10,8 +10,9 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { SearchAddon } from "@xterm/addon-search";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, Channel } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { appendMcpOutput } from "./services/mcp-output-buffer";
 import {
   readText as clipboardRead,
   writeText as clipboardWrite,
@@ -20,7 +21,7 @@ import { get } from "svelte/store";
 import { xtermTheme } from "./stores/theme";
 import { workspaces, activeWorkspaceIdx } from "./stores/workspace";
 import { contextMenu, pendingAction } from "./stores/ui";
-import { getContextMenuItemsForFile } from "./services/context-menu-item-registry";
+import { getSupportedExtensions } from "../extensions/preview";
 import type { TerminalSurface, Pane, Workspace } from "./types";
 import {
   uid,
@@ -31,14 +32,60 @@ import {
   replaceNodeInTree,
 } from "./types";
 import type { MenuItem } from "./context-menu-types";
-import { notifyOutputObservers } from "./services/surface-output-observer";
-import { eventBus } from "./services/event-bus";
 import "@xterm/xterm/css/xterm.css";
 
 /** Platform detection — used for Cmd (macOS) vs Ctrl (Linux/Windows) shortcuts. */
 export const isMac =
   typeof navigator !== "undefined" &&
   navigator.platform.toUpperCase().includes("MAC");
+
+// Per-surface PTY-ready signal. connectPty() resolves the deferred once the
+// Rust spawn_pty call returns; waitForPtyReady() awaits it instead of polling
+// surface.ptyId every 50ms. The polling version created a 50ms timer storm
+// during spawn bursts that contributed to a compositor freeze.
+interface PtyReadyDeferred {
+  promise: Promise<number>;
+  resolve: (ptyId: number) => void;
+  reject: (err: Error) => void;
+}
+const ptyReady = new Map<string, PtyReadyDeferred>();
+
+function makeDeferred(): PtyReadyDeferred {
+  let resolve!: (n: number) => void;
+  let reject!: (e: Error) => void;
+  const promise = new Promise<number>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+export function waitForPtyReady(
+  surface: TerminalSurface,
+  timeoutMs = 5000,
+): Promise<number> {
+  if (surface.ptyId >= 0) return Promise.resolve(surface.ptyId);
+  let d = ptyReady.get(surface.id);
+  if (!d) {
+    d = makeDeferred();
+    ptyReady.set(surface.id, d);
+  }
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error("timed out waiting for PTY to spawn"));
+    }, timeoutMs);
+    d!.promise.then(
+      (n) => {
+        clearTimeout(timer);
+        resolve(n);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      },
+    );
+  });
+}
 
 /** Shortcut label helpers for platform-appropriate display. */
 export const modLabel = isMac ? "⌘" : "Ctrl+";
@@ -113,6 +160,29 @@ function scheduleFlush(ptyId: number) {
   requestAnimationFrame(() => flushPtyBuffer(ptyId));
 }
 
+/** Append a raw PTY chunk to the per-pty buffer, tee it to the MCP buffer
+ *  if one is registered, and schedule an rAF flush to xterm.js. Exported for
+ *  tests; in production this is called from the Channel onmessage handler
+ *  created in connectPty(). */
+export function handlePtyChunk(ptyId: number, bytes: Uint8Array): void {
+  let chunks = ptyBuffers.get(ptyId);
+  if (!chunks) {
+    chunks = [];
+    ptyBuffers.set(ptyId, chunks);
+  }
+  chunks.push(bytes);
+  const buffered = (ptyBufferBytes.get(ptyId) || 0) + bytes.length;
+  ptyBufferBytes.set(ptyId, buffered);
+
+  if (!ptyPaused.has(ptyId) && buffered >= BUFFER_HIGH_WATER) {
+    ptyPaused.add(ptyId);
+    invoke("pause_pty", { ptyId }).catch(() => {});
+  }
+
+  appendMcpOutput(ptyId, bytes);
+  scheduleFlush(ptyId);
+}
+
 function flushPtyBuffer(ptyId: number) {
   ptyFlushScheduled.delete(ptyId);
   const chunks = ptyBuffers.get(ptyId);
@@ -125,7 +195,6 @@ function flushPtyBuffer(ptyId: number) {
     ptyBufferBytes.delete(ptyId);
     if (ptyPaused.has(ptyId)) {
       ptyPaused.delete(ptyId);
-      // PTY may already be dead — safe to ignore
       invoke("resume_pty", { ptyId }).catch(() => {});
     }
     return;
@@ -153,7 +222,6 @@ function flushPtyBuffer(ptyId: number) {
     // Resume PTY reader if we drained below low water mark
     if (ptyPaused.has(ptyId) && buffered < BUFFER_LOW_WATER) {
       ptyPaused.delete(ptyId);
-      // PTY may have exited during render — safe to ignore
       invoke("resume_pty", { ptyId }).catch(() => {});
     }
   });
@@ -161,14 +229,7 @@ function flushPtyBuffer(ptyId: number) {
 
 // --- Event Listeners ---
 
-let listenersInitialized = false;
-
 export async function setupListeners() {
-  // Guard against duplicate listener registration (e.g. HMR re-mount).
-  // Each listen() call adds a new handler — duplicates cause repeated output.
-  if (listenersInitialized) return;
-  listenersInitialized = true;
-
   // On Linux, prevent WebKitGTK from intercepting Ctrl+Shift+C/V before xterm.js
   if (!isMac) {
     window.addEventListener(
@@ -185,48 +246,26 @@ export async function setupListeners() {
       { capture: true },
     );
   }
-  await listen<{ pty_id: number; data: string }>("pty-output", (event) => {
-    const { pty_id, data } = event.payload;
-    try {
-      // Decode base64 to preserve raw terminal escape sequences
-      const bin = atob(data);
-      const bytes = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-
-      // Notify extension observers (decoded string, before buffering)
-      notifyOutputObservers(pty_id, bin);
-
-      // Append to buffer
-      let chunks = ptyBuffers.get(pty_id);
-      if (!chunks) {
-        chunks = [];
-        ptyBuffers.set(pty_id, chunks);
-      }
-      chunks.push(bytes);
-      const buffered = (ptyBufferBytes.get(pty_id) || 0) + bytes.length;
-      ptyBufferBytes.set(pty_id, buffered);
-
-      // Pause PTY reader if buffer is getting large
-      if (!ptyPaused.has(pty_id) && buffered >= BUFFER_HIGH_WATER) {
-        ptyPaused.add(pty_id);
-        // Best-effort backpressure — PTY may have exited
-        invoke("pause_pty", { ptyId: pty_id }).catch(() => {});
-      }
-
-      // Schedule a flush on the next animation frame
-      scheduleFlush(pty_id);
-    } catch (e) {
-      console.error(
-        `[terminal] Failed to decode PTY output for pty ${pty_id}:`,
-        e,
-      );
-      return;
-    }
-  });
-
   await listen<{ pty_id: number }>("pty-exit", (event) => {
     const { pty_id } = event.payload;
-    // Clean up flow control state for the dead PTY
+    // pty-exit arrives via emit while chunks arrive via Channel — different
+    // transports, so a trailing chunk may already be in the per-pty buffer.
+    // Flush it synchronously to the surface's terminal before we tear down
+    // flow-control state and remove the surface from the workspace tree.
+    const chunks = ptyBuffers.get(pty_id);
+    const bytesBuffered = ptyBufferBytes.get(pty_id) || 0;
+    if (chunks && chunks.length > 0 && bytesBuffered > 0) {
+      const surface = findSurfaceByPty(pty_id);
+      if (surface) {
+        const merged = new Uint8Array(bytesBuffered);
+        let offset = 0;
+        for (const chunk of chunks) {
+          merged.set(chunk, offset);
+          offset += chunk.length;
+        }
+        surface.terminal.write(merged);
+      }
+    }
     ptyBuffers.delete(pty_id);
     ptyBufferBytes.delete(pty_id);
     ptyFlushScheduled.delete(pty_id);
@@ -295,23 +334,11 @@ export async function setupListeners() {
       const { pty_id, text } = event.payload;
       // Filter out escape-sequence fragments that slipped through (e.g. "4;0;")
       if (/^\d+[;\d:\/]*$/.test(text) || !text.trim()) return;
-
-      // Strip common notification prefixes. Many apps (Claude Code, iTerm-
-      // compatible) send OSC 9 as `notify;<app>;<body>` — we only want body.
-      let clean = text.trim();
-      if (clean.toLowerCase().startsWith("notify;")) {
-        clean = clean.slice("notify;".length);
-        const semiIdx = clean.indexOf(";");
-        if (semiIdx >= 0) clean = clean.slice(semiIdx + 1);
-      }
-      clean = clean.trim();
-      if (!clean) return;
-
       workspaces.update((wsList) => {
         for (const ws of wsList) {
           for (const s of getAllSurfaces(ws)) {
             if (isTerminalSurface(s) && s.ptyId === pty_id) {
-              s.notification = clean;
+              s.notification = text;
               s.hasUnread = true;
               return wsList;
             }
@@ -332,15 +359,7 @@ export async function setupListeners() {
       for (const ws of wsList) {
         for (const s of getAllSurfaces(ws)) {
           if (isTerminalSurface(s) && s.ptyId === pty_id) {
-            const oldTitle = s.title;
             s.title = title;
-            if (oldTitle !== title) {
-              eventBus.emit({
-                type: "surface:titleChanged",
-                id: s.id,
-                title,
-              });
-            }
             return wsList;
           }
         }
@@ -368,11 +387,10 @@ export function startCwdPolling() {
                 const basename = cwd.split("/").pop() || cwd;
                 if (!s.title || s.title.startsWith("Shell ")) {
                   s.title = basename || "~";
+                  workspaces.update((l) => [...l]);
                 }
-                workspaces.update((l) => [...l]);
               }
             })
-            // Best-effort CWD poll — shell may have exited
             .catch(() => {});
         }
       }
@@ -445,7 +463,7 @@ export async function createTerminalSurface(
     opened: false,
   };
 
-  // Cmd+click file path detection — links file paths to extension handlers
+  // Cmd+click file path detection for preview
   terminal.registerLinkProvider({
     provideLinks: (lineNumber, callback) => {
       const line = terminal.buffer.active.getLine(lineNumber - 1);
@@ -454,19 +472,20 @@ export async function createTerminalSurface(
         return;
       }
       const text = line.translateToString();
-      // Match any file path (absolute, relative, or with extension)
+      const exts = getSupportedExtensions().join("|");
       const patterns = [
-        `"([^"]+\\.[a-z0-9]+)"`,
-        `'([^']+\\.[a-z0-9]+)'`,
-        `((?:/|\\./|~/)\\S[\\S ]*\\.[a-z0-9]+)(?=\\s|$)`,
+        `"([^"]+\\.(?:${exts}))"`,
+        `'([^']+\\.(?:${exts}))'`,
+        `((?:/|\\./|~/)\\S[\\S ]*\\.(?:${exts}))(?=\\s|$)`,
+        `(\\S+\\.(?:${exts}))(?=\\s|$)`,
       ];
-      // eslint-disable-next-line security/detect-non-literal-regexp -- patterns array is hardcoded string literals, no user input
+      // eslint-disable-next-line security/detect-non-literal-regexp -- patterns are constant, only the allowed-extension list is interpolated
       const regex = new RegExp(patterns.join("|"), "gi");
       const candidates: { path: string; startX: number; endX: number }[] = [];
 
       let m;
       while ((m = regex.exec(text)) !== null) {
-        const path = m[1] || m[2] || m[3];
+        const path = m[1] || m[2] || m[3] || m[4];
         if (!path) continue;
         const startX = m.index + m[0].indexOf(path);
         candidates.push({ path, startX, endX: startX + path.length });
@@ -480,13 +499,10 @@ export async function createTerminalSurface(
       void Promise.all(
         candidates.map(async (c) => {
           const fullPath = await resolveFilePath(c.path, surface.cwd);
-          // Only linkify files that exist and have an extension handler
           const exists = await invoke<boolean>("file_exists", {
             path: fullPath,
           });
           if (!exists) return null;
-          const extHandlers = getContextMenuItemsForFile(fullPath);
-          if (extHandlers.length === 0) return null;
           return {
             range: {
               start: { x: c.startX + 1, y: lineNumber },
@@ -630,7 +646,6 @@ export async function createTerminalSurface(
       const slashIdx = rest.indexOf("/");
       if (slashIdx >= 0) cwd = rest.slice(slashIdx);
     }
-    const cwdChanged = cwd !== surface.cwd;
     surface.cwd = cwd;
     const basename = cwd.split("/").pop() || cwd;
     if (
@@ -639,10 +654,6 @@ export async function createTerminalSurface(
       !surface.title.includes(" ")
     ) {
       surface.title = basename || "~";
-    }
-    // Notify subscribers (file browser, workspace persistence) on CWD change
-    if (cwdChanged) {
-      workspaces.update((l) => [...l]);
     }
     return true;
   });
@@ -667,7 +678,7 @@ export async function createTerminalSurface(
       label: "Paste",
       shortcut: isMac ? "⌘V" : "Ctrl+Shift+V",
       action: () =>
-        clipboardRead().then((t) => {
+        void clipboardRead().then((t) => {
           if (t && surface.ptyId >= 0)
             void invoke("write_pty", { ptyId: surface.ptyId, data: t });
         }),
@@ -691,15 +702,6 @@ export async function createTerminalSurface(
         label: "Copy Path",
         action: async () => clipboardWrite(await resolvePath()),
       });
-
-      // Add extension-contributed context menu items for this file type
-      const extItems = getContextMenuItemsForFile(pathText);
-      for (const extItem of extItems) {
-        items.push({
-          label: extItem.label,
-          action: async () => extItem.handler(await resolvePath()),
-        });
-      }
 
       items.push({
         label: "Show in File Manager",
@@ -744,10 +746,34 @@ export async function createTerminalSurface(
   return surface;
 }
 
+/** Find the workspace + pane currently containing a given surface. Used to
+ *  inject `GNAR_TERM_PANE_ID` / `GNAR_TERM_WORKSPACE_ID` into the PTY's env so
+ *  any MCP-aware agent run inside the pane (claude, codex, etc.) can advertise
+ *  its host context to the gnar-term GUI via the `$/gnar-term/hello` handshake.
+ *
+ *  Returns null if the surface isn't yet attached (rare race during creation). */
+function findContextForSurface(
+  surfaceId: string,
+): { paneId: string; workspaceId: string } | null {
+  for (const ws of get(workspaces)) {
+    for (const pane of getAllPanes(ws.splitRoot)) {
+      if (pane.surfaces.some((s) => s.id === surfaceId)) {
+        return { paneId: pane.id, workspaceId: ws.id };
+      }
+    }
+  }
+  return null;
+}
+
 /** Spawn the PTY for a surface. Called after terminal.open() + fit() so the PTY
  *  gets the real terminal dimensions instead of hardcoded 80x24.
  *  Uses surface.cwd as the working directory. The optional cwd parameter is
- *  accepted for backwards compatibility but surface.cwd takes priority. */
+ *  accepted for backwards compatibility but surface.cwd takes priority.
+ *
+ *  Injects `GNAR_TERM_PANE_ID` and `GNAR_TERM_WORKSPACE_ID` into the PTY env
+ *  when the surface is already attached to a workspace pane. This is the
+ *  delivery mechanism for the MCP connection-binding contract — see the
+ *  Spacebase MCP spec § Connection binding. */
 export async function connectPty(
   surface: TerminalSurface,
   cwd?: string,
@@ -757,15 +783,48 @@ export async function connectPty(
   const cols = surface.terminal.cols;
   const rows = surface.terminal.rows;
   const effectiveCwd = surface.cwd || cwd || null;
+
+  // Per-pty Channel carries raw output bytes from the Rust reader thread to
+  // xterm.js. Holds a pending ptyId in a closure so chunks delivered before
+  // spawn_pty resolves are still routable once the id is known.
+  let resolvedPtyId = -1;
+  const pending: Uint8Array[] = [];
+  const onOutput = new Channel<ArrayBuffer>();
+  onOutput.onmessage = (buf) => {
+    const bytes = new Uint8Array(buf);
+    if (resolvedPtyId < 0) {
+      pending.push(bytes);
+      return;
+    }
+    handlePtyChunk(resolvedPtyId, bytes);
+  };
+
+  const ctx = findContextForSurface(surface.id);
+  const extraEnv: Record<string, string> = { ...(env ?? {}) };
+  if (ctx) {
+    extraEnv.GNAR_TERM_PANE_ID = ctx.paneId;
+    extraEnv.GNAR_TERM_WORKSPACE_ID = ctx.workspaceId;
+  }
+
+  const deferred = ptyReady.get(surface.id);
   try {
-    surface.ptyId = await invoke<number>("spawn_pty", {
+    const ptyId = await invoke<number>("spawn_pty", {
       cols,
       rows,
       cwd: effectiveCwd,
-      env: env ?? null,
+      onOutput,
+      extraEnv,
     });
+    surface.ptyId = ptyId;
+    resolvedPtyId = ptyId;
+    for (const bytes of pending) handlePtyChunk(ptyId, bytes);
+    pending.length = 0;
+    deferred?.resolve(ptyId);
+    ptyReady.delete(surface.id);
   } catch (err) {
     console.error("Failed to spawn PTY:", err);
     surface.ptyId = -1;
+    deferred?.reject(err instanceof Error ? err : new Error(String(err)));
+    ptyReady.delete(surface.id);
   }
 }

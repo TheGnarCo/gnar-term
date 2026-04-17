@@ -148,7 +148,7 @@ async function main() {
   // tools/list
   const list = await client.call("tools/list", {});
   assert(Array.isArray(list.tools), "tools/list returns array");
-  assert(list.tools.length === 19, `expected 19 tools, got ${list.tools.length}`);
+  assert(list.tools.length === 27, `expected 27 tools, got ${list.tools.length}`);
   const names = new Set(list.tools.map((t) => t.name));
   const required = [
     "spawn_agent",
@@ -169,6 +169,7 @@ async function main() {
     "activate_sidebar_tab",
     "list_workspace_actions",
     "invoke_workspace_action",
+    "get_agent_context",
     "get_active_workspace",
     "list_workspaces",
     "get_active_pane",
@@ -189,8 +190,8 @@ async function main() {
   });
   assert(workspaces?.structuredContent !== undefined, "tools/call returns structuredContent");
   assert(
-    Array.isArray(workspaces.structuredContent),
-    "list_workspaces result is an array",
+    Array.isArray(workspaces.structuredContent?.workspaces),
+    "list_workspaces result has workspaces array",
   );
 
   // poll_events — should return a cursor regardless of state
@@ -203,7 +204,15 @@ async function main() {
     "poll_events returns numeric cursor",
   );
 
-  // render_sidebar + remove_sidebar_section — write path smoke test
+  // render_sidebar + remove_sidebar_section — write path smoke test.
+  // The harness is unbound (no $/gnar-term/hello), so it MUST pass an
+  // explicit workspace_id per the resolution rules. Use the first known one.
+  const wsList = await client.call("tools/call", {
+    name: "list_workspaces",
+    arguments: {},
+  });
+  const wsId = wsList?.structuredContent?.workspaces?.[0]?.id;
+  assert(typeof wsId === "string", "list_workspaces returned a workspace id for the harness");
   const render = await client.call("tools/call", {
     name: "render_sidebar",
     arguments: {
@@ -211,6 +220,7 @@ async function main() {
       section_id: "harness-smoke",
       title: "Harness",
       items: [{ id: "ok", label: "OK" }],
+      workspace_id: wsId,
     },
   });
   assert(
@@ -219,7 +229,7 @@ async function main() {
   );
   const removed = await client.call("tools/call", {
     name: "remove_sidebar_section",
-    arguments: { side: "secondary", section_id: "harness-smoke" },
+    arguments: { side: "secondary", section_id: "harness-smoke", workspace_id: wsId },
   });
   assert(
     removed?.structuredContent?.ok === true,

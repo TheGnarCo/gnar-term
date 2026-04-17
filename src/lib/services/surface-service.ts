@@ -198,9 +198,17 @@ export function openExtensionSurfaceInPaneById(
   title: string,
   props?: Record<string, unknown>,
 ): { surfaceId: string; paneId: string } | null {
-  const ws = get(activeWorkspace);
-  if (!ws) return null;
-  const pane = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
+  // Search all workspaces, not just the active one — this helper is called
+  // from both UI code (where active workspace is set) and from MCP (where
+  // the agent's target workspace may not be the user's focused one).
+  let pane: Pane | undefined;
+  for (const ws of get(workspaces)) {
+    const found = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
+    if (found) {
+      pane = found;
+      break;
+    }
+  }
   if (!pane) return null;
   const surface = {
     kind: "extension" as const,

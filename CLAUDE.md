@@ -2,30 +2,15 @@
 
 Tauri v2 terminal workspace manager. Rust backend (portable-pty), Svelte frontend (xterm.js).
 
-## Setup
-
-```bash
-npm install                 # installs deps + lefthook git hooks (via prepare script)
-```
-
-Requires: Node.js >= 20, Rust stable toolchain, platform deps (see README.md).
-
 ## Build & Test
 
 ```bash
-npm test                    # vitest unit tests
-npm run vite:build          # frontend-only build (no Rust toolchain needed)
-npm run build               # full tauri build (frontend + Rust) — use for final verification
-npm run typecheck           # tsc --noEmit
-npm run check               # svelte-check
-npm run lint                # eslint
-npm run format              # prettier --write
+npm test                    # vitest unit tests (293 tests)
+npm run build               # full tauri build (frontend + Rust)
 cargo check                 # quick Rust compilation check
 ```
 
-For frontend-only work, `npm run vite:build` is sufficient. Use `npm run build` (full Tauri build) for final verification before pushing.
-
-All tests must pass and `npm run build` must succeed before pushing any commit. Do not declare work complete without a green test suite.
+All tests must pass and `npm run build` must succeed before pushing any commit. Do not declare work complete without a green test suite. You must NEVER merge PR's, especially to main.
 
 ## Slack
 
@@ -54,19 +39,25 @@ git push origin v0.4.0
 
 CI derives version from the tag. Do NOT edit version files for releases.
 
-See `.github/workflows/release.yml` for the full pipeline (macOS, Linux builds + signing + Homebrew tap update).
+See `.github/workflows/release.yml` for the full pipeline (macOS, Linux, Windows builds + signing + Homebrew tap update).
 
 ## GitHub Actions
 
 The Claude GitHub App is installed on this repo. `@claude` mentions in PRs trigger Claude Code via GitHub Actions to review, implement, or respond to requests.
 
+## Commands
+
+Custom slash commands live in `.claude/commands/`:
+
+- `/create_new_release <version>` - tag and push a release
+
 ## Cross-Platform
 
-gnar-term targets macOS and Linux only. Windows is not a build target.
+gnar-term runs on macOS, Linux, and Windows. When making changes:
 
 - **Never fix Linux and break macOS (or vice versa).** Use platform detection (`isMac` from `terminal-service.ts`) to branch behavior, not platform-specific code that replaces the other platform's logic.
-- Keyboard shortcuts use Cmd on macOS, Ctrl on Linux. Both must work.
-- Test clipboard, keyboard shortcuts, and PTY behavior on both platforms when possible.
+- Keyboard shortcuts use Cmd on macOS, Ctrl on Linux/Windows. Both must work.
+- Test clipboard, keyboard shortcuts, and PTY behavior on all platforms when possible.
 - WebKitGTK (Linux webview) behaves differently from WKWebView (macOS) — watch for webview-level key interception differences.
 
 ## Testing Guidelines
@@ -78,24 +69,12 @@ gnar-term targets macOS and Linux only. Windows is not a build target.
 - Do NOT use AppleScript/screenshot GUI tests (they interrupt the user's screen)
 - No `setTimeout` hacks to fix timing issues — diagnose root cause
 
-## Dependencies
-
-### xterm.js beta versions
-
-The `@xterm/*` packages are pinned to `beta.196` channel versions intentionally. These betas include the kitty keyboard protocol support and improved sixel rendering that gnar-term depends on. Do not upgrade to the latest stable releases — they lack these features. Only upgrade within the beta channel (e.g., `beta.196` to `beta.200+`) after verifying kitty keyboard protocol support is retained.
-
 ## Architecture
 
 See `docs/` for design documentation:
 
 - **[docs/glossary.md](docs/glossary.md)** — canonical definitions for terms used across the codebase (workspace, pane, surface, etc.)
 - **[docs/sidebar-architecture.md](docs/sidebar-architecture.md)** — primary/secondary sidebar layout, extension model, and control placement rules
-- **[docs/registry-system.md](docs/registry-system.md)** — registry pattern architecture, catalog of all registries, data flow, and event bus
-- **[docs/extension-getting-started.md](docs/extension-getting-started.md)** — tutorial: build your first extension from scratch
-- **[docs/extension-cookbook.md](docs/extension-cookbook.md)** — step-by-step recipes for common extension patterns
-- **[docs/extension-development.md](docs/extension-development.md)** — extension development setup, building, testing, debugging, and distribution
-- **[EXTENSIONS.md](EXTENSIONS.md)** — extension API reference and developer guide
-- **[docs/adr/001-extension-architecture.md](docs/adr/001-extension-architecture.md)** — architecture decision record for the extension system
 
 ### Frontend Structure
 
@@ -105,8 +84,6 @@ App.svelte is a thin shell that wires services to the DOM. Business logic lives 
 - `src/lib/services/pane-service.ts` — pane split/close/focus, tab reorder, flash
 - `src/lib/services/surface-service.ts` — surface select/close/navigate, preview
 - `src/lib/services/service-helpers.ts` — shared utilities (safeFocus, getActiveCwd)
-- `src/lib/services/extension-loader.ts` — extension registration, lifecycle, API construction
-- `src/lib/services/extension-management.ts` — install/uninstall, enable/disable, startup loading
 
 Shared behaviors are extracted as Svelte actions:
 

@@ -1,14 +1,11 @@
 /**
  * Programmatic output buffer for MCP-spawned terminal sessions.
  *
- * Taps into the existing Tauri `pty-output` event stream (the same stream
- * terminal-service listens to for xterm rendering) and maintains a parallel
- * plain-text ring buffer that MCP `read_output` calls can query. Only ptyIds
- * explicitly registered via registerMcpPty() are buffered — plain user-spawned
- * terminals pay nothing for this.
+ * terminal-service routes each PTY chunk through `appendMcpOutput()` after
+ * writing to xterm; this maintains a parallel plain-text ring buffer that MCP
+ * `read_output` calls can query. Only ptyIds explicitly registered via
+ * `registerMcpPty()` are buffered — plain user-spawned terminals pay nothing.
  */
-import { listen } from "@tauri-apps/api/event";
-
 const MAX_LINES_DEFAULT = 5000;
 const ANSI_REGEX =
   // eslint-disable-next-line security/detect-unsafe-regex
@@ -103,7 +100,6 @@ export class McpOutputBuffer {
 }
 
 const buffers = new Map<number, McpOutputBuffer>();
-let listenerInstalled = false;
 
 export function registerMcpPty(ptyId: number): McpOutputBuffer {
   if (ptyId < 0) {
@@ -126,22 +122,16 @@ export function getMcpBuffer(ptyId: number): McpOutputBuffer | undefined {
 }
 
 /**
- * Install the Tauri pty-output listener. Safe to call multiple times — the
- * listener is installed exactly once per page load.
+ * Feed raw PTY bytes into the per-pty MCP buffer, if one is registered.
+ * Cheap no-op for ptys that no MCP caller is observing. Called from
+ * terminal-service's channel onmessage handler.
  */
-export async function installMcpOutputListener(): Promise<void> {
-  if (listenerInstalled) return;
-  listenerInstalled = true;
-  await listen<{ pty_id: number; data: string }>("pty-output", (event) => {
-    const { pty_id, data } = event.payload;
-    const buffer = buffers.get(pty_id);
-    if (!buffer) return;
-    // data is base64-encoded raw bytes, matching terminal-service's decode
-    const bin = atob(data);
-    let text = "";
-    for (let i = 0; i < bin.length; i++) {
-      text += String.fromCharCode(bin.charCodeAt(i));
-    }
-    buffer.append(text);
-  });
+export function appendMcpOutput(ptyId: number, bytes: Uint8Array): void {
+  const buffer = buffers.get(ptyId);
+  if (!buffer) return;
+  let text = "";
+  for (let i = 0; i < bytes.length; i++) {
+    text += String.fromCharCode(bytes[i]!);
+  }
+  buffer.append(text);
 }

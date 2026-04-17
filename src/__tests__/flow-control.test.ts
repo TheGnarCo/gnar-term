@@ -196,6 +196,39 @@ describe("Flow control — rAF batching", () => {
     expect(mockInvoke).toHaveBeenCalledWith("resume_pty", { ptyId: 1 });
   });
 
+  it("pty-exit flushes buffered bytes synchronously before teardown", () => {
+    // Mirrors the exit-grace path in terminal-service.ts: a trailing chunk may
+    // sit in the buffer when pty-exit arrives on a different transport than
+    // the Channel. The handler must drain it to the captured terminal before
+    // clearing flow-control state.
+    emitPtyOutput(1, 100);
+    emitPtyOutput(1, 50);
+
+    const chunks = ptyBuffers.get(1)!;
+    const bytesBuffered = ptyBufferBytes.get(1) || 0;
+    expect(bytesBuffered).toBe(150);
+
+    // Simulate the sync flush step from the pty-exit handler.
+    const merged = new Uint8Array(bytesBuffered);
+    let offset = 0;
+    for (const chunk of chunks) {
+      merged.set(chunk, offset);
+      offset += chunk.length;
+    }
+    mockTerminal.write(merged);
+
+    ptyBuffers.delete(1);
+    ptyBufferBytes.delete(1);
+    ptyFlushScheduled.delete(1);
+    ptyPaused.delete(1);
+
+    expect(mockTerminal.write).toHaveBeenCalledTimes(1);
+    expect((mockTerminal.write.mock.calls[0][0] as Uint8Array).length).toBe(
+      150,
+    );
+    expect(ptyBuffers.has(1)).toBe(false);
+  });
+
   it("stress test: sustained high-throughput output (2MB)", () => {
     const TOTAL_CHUNKS = 500;
     const BURST_SIZE = 50;

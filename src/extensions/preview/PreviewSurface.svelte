@@ -22,7 +22,7 @@
     // Three content sources, in priority order:
     //   1. pre-built element (file-based preview created eagerly)
     //   2. filePath (file-based; render lazily on mount)
-    //   3. content + format (in-memory; created by MCP create_preview)
+    //   3. content + format (in-memory; e.g. MCP open_surface)
     if (!element && surface.props?.filePath) {
       const preview = await openPreview(surface.props.filePath as string, api);
       surface.props = {

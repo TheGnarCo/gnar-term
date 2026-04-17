@@ -22,10 +22,16 @@ vi.mock("@tauri-apps/api/event", () => ({
 
 import { dispatch, _getToolsForTest } from "../lib/services/mcp-server";
 import {
-  extensionSidebarSections,
-  _resetExtensionSidebarForTest,
-} from "../lib/stores/extension-sidebar";
+  mcpSidebarSections,
+  _resetMcpSidebarForTest,
+} from "../lib/stores/mcp-sidebar";
 import { _resetEventBufferForTest } from "../lib/services/mcp-event-buffer";
+import {
+  registerSurfaceType,
+  resetSurfaceTypes,
+} from "../lib/services/surface-type-registry";
+import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
+import { getAllSurfaces } from "../lib/types";
 
 function rpc(method: string, params?: unknown, id: number = 1) {
   return { jsonrpc: "2.0" as const, id, method, params };
@@ -34,7 +40,7 @@ function rpc(method: string, params?: unknown, id: number = 1) {
 describe("MCP server JSON-RPC", () => {
   beforeEach(() => {
     invokeMock.mockReset();
-    _resetExtensionSidebarForTest();
+    _resetMcpSidebarForTest();
     _resetEventBufferForTest();
   });
 
@@ -46,13 +52,12 @@ describe("MCP server JSON-RPC", () => {
     expect((resp as any).result.capabilities.tools).toBeDefined();
   });
 
-  it("lists all 21 tools with correct names", async () => {
+  it("lists all 20 tools with correct names", async () => {
     const resp = await dispatch(rpc("tools/list"));
     const tools = (resp as any).result.tools as Array<{ name: string }>;
     const names = tools.map((t) => t.name).sort();
     expect(names).toEqual(
       [
-        "create_preview",
         "dispatch_tasks",
         "file_exists",
         "get_active_pane",
@@ -75,7 +80,7 @@ describe("MCP server JSON-RPC", () => {
         "spawn_agent",
       ].sort(),
     );
-    expect(names).toHaveLength(21);
+    expect(names).toHaveLength(20);
     // Every tool must ship a JSON Schema shaped object.
     for (const t of tools) {
       expect(t).toHaveProperty("inputSchema");
@@ -115,7 +120,7 @@ describe("MCP server JSON-RPC", () => {
       }),
     );
     expect((resp as any).result.structuredContent).toEqual({ ok: true });
-    const map = get(extensionSidebarSections);
+    const map = get(mcpSidebarSections);
     expect(map.size).toBe(1);
     const section = map.get("secondary:cwd-file-navigator");
     expect(section?.title).toBe("Files");
@@ -226,6 +231,194 @@ describe("MCP server JSON-RPC", () => {
     expect((resp as any).error.message).toMatch(/Unknown surface type/);
   });
 
+  it("open_surface places a registered surface into the active pane", async () => {
+    resetSurfaceTypes();
+    registerSurfaceType({
+      id: "test:panel",
+      label: "Panel",
+      component: {} as unknown,
+      source: "test",
+    });
+    workspaces.set([
+      {
+        id: "ws-1",
+        name: "WS",
+        activePaneId: "pane-1",
+        splitRoot: {
+          type: "pane",
+          pane: { id: "pane-1", surfaces: [], activeSurfaceId: null },
+        },
+      },
+    ]);
+    activeWorkspaceIdx.set(0);
+
+    const resp = await dispatch(
+      rpc("tools/call", {
+        name: "open_surface",
+        arguments: {
+          surface_type_id: "test:panel",
+          title: "Test Panel",
+          props: { hello: "world" },
+          placement: "current-pane",
+        },
+      }),
+    );
+    const r = (resp as any).result.structuredContent;
+    expect(r.surface_id).toBeTruthy();
+    expect(r.pane_id).toBe("pane-1");
+
+    const ws = get(workspaces)[0]!;
+    const placed = getAllSurfaces(ws);
+    expect(placed).toHaveLength(1);
+    expect(placed[0]!.kind).toBe("extension");
+    expect(placed[0]!.title).toBe("Test Panel");
+    expect((placed[0] as { props: Record<string, unknown> }).props).toEqual({
+      hello: "world",
+    });
+  });
+
+  it("open_surface split-down creates a vertical split", async () => {
+    resetSurfaceTypes();
+    registerSurfaceType({
+      id: "test:panel",
+      label: "Panel",
+      component: {},
+      source: "test",
+    });
+    workspaces.set([
+      {
+        id: "ws-d",
+        name: "WS",
+        activePaneId: "pane-d",
+        splitRoot: {
+          type: "pane",
+          pane: { id: "pane-d", surfaces: [], activeSurfaceId: null },
+        },
+      },
+    ]);
+    activeWorkspaceIdx.set(0);
+
+    await dispatch(
+      rpc("tools/call", {
+        name: "open_surface",
+        arguments: {
+          surface_type_id: "test:panel",
+          title: "P",
+          placement: "split-down",
+        },
+      }),
+    );
+    const ws = get(workspaces)[0]!;
+    expect(ws.splitRoot.type).toBe("split");
+    if (ws.splitRoot.type === "split") {
+      expect(ws.splitRoot.direction).toBe("vertical");
+    }
+  });
+
+  it("open_surface split-right creates a new pane and places the surface there", async () => {
+    resetSurfaceTypes();
+    registerSurfaceType({
+      id: "test:panel",
+      label: "Panel",
+      component: {} as unknown,
+      source: "test",
+    });
+    workspaces.set([
+      {
+        id: "ws-2",
+        name: "WS2",
+        activePaneId: "pane-a",
+        splitRoot: {
+          type: "pane",
+          pane: { id: "pane-a", surfaces: [], activeSurfaceId: null },
+        },
+      },
+    ]);
+    activeWorkspaceIdx.set(0);
+
+    const resp = await dispatch(
+      rpc("tools/call", {
+        name: "open_surface",
+        arguments: {
+          surface_type_id: "test:panel",
+          title: "Panel B",
+          placement: "split-right",
+        },
+      }),
+    );
+    const r = (resp as any).result.structuredContent;
+    expect(r.pane_id).not.toBe("pane-a"); // a new pane was created
+    const ws = get(workspaces)[0]!;
+    // Splitting should have promoted the root to a split node
+    expect(ws.splitRoot.type).toBe("split");
+  });
+
+  it("get_active_pane returns the active pane's info", async () => {
+    workspaces.set([
+      {
+        id: "ws-ap",
+        name: "WS",
+        activePaneId: "pane-ap",
+        splitRoot: {
+          type: "pane",
+          pane: { id: "pane-ap", surfaces: [], activeSurfaceId: null },
+        },
+      },
+    ]);
+    activeWorkspaceIdx.set(0);
+    const r = await dispatch(
+      rpc("tools/call", { name: "get_active_pane", arguments: {} }),
+    );
+    const info = (r as any).result.structuredContent;
+    expect(info.id).toBe("pane-ap");
+    expect(info.workspaceId).toBe("ws-ap");
+  });
+
+  it("get_active_workspace returns info when a workspace is active", async () => {
+    workspaces.set([
+      {
+        id: "ws-aw",
+        name: "Active",
+        activePaneId: null,
+        splitRoot: {
+          type: "pane",
+          pane: { id: "p", surfaces: [], activeSurfaceId: null },
+        },
+      },
+    ]);
+    activeWorkspaceIdx.set(0);
+    const r = await dispatch(
+      rpc("tools/call", { name: "get_active_workspace", arguments: {} }),
+    );
+    const info = (r as any).result.structuredContent;
+    expect(info).not.toBeNull();
+    expect(info.id).toBe("ws-aw");
+  });
+
+  it("list_surface_types includes every registered type", async () => {
+    resetSurfaceTypes();
+    registerSurfaceType({
+      id: "a:b",
+      label: "AB",
+      component: {},
+      source: "a",
+    });
+    registerSurfaceType({
+      id: "c:d",
+      label: "CD",
+      component: {},
+      source: "c",
+    });
+    const r = await dispatch(
+      rpc("tools/call", { name: "list_surface_types", arguments: {} }),
+    );
+    const types = (r as any).result.structuredContent.types as Array<{
+      id: string;
+    }>;
+    const ids = types.map((t) => t.id).sort();
+    expect(ids).toEqual(["a:b", "c:d"]);
+  });
+
   it("returns a JSON-RPC error when a tool handler throws", async () => {
     const resp = await dispatch(
       rpc("tools/call", {
@@ -253,7 +446,7 @@ describe("tool metadata", () => {
     }
   });
 
-  it("tool count matches spec (21)", () => {
-    expect(_getToolsForTest()).toHaveLength(21);
+  it("tool count matches spec (20)", () => {
+    expect(_getToolsForTest()).toHaveLength(20);
   });
 });

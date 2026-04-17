@@ -14,11 +14,11 @@
   import { sidebarSectionStore } from "../services/sidebar-section-registry";
   import { workspaceActionStore } from "../services/workspace-action-registry";
   import { claimedWorkspaceIds } from "../services/claimed-workspace-registry";
-  import { primarySections } from "../stores/extension-sidebar";
+  import { primarySections } from "../stores/mcp-sidebar";
   import WorkspaceListBlock from "./WorkspaceListBlock.svelte";
   import SidebarSectionBlock from "./SidebarSectionBlock.svelte";
   import SidebarActionButton from "./SidebarActionButton.svelte";
-  import ExtensionSidebarSection from "./ExtensionSidebarSection.svelte";
+  import McpSidebarSection from "./McpSidebarSection.svelte";
   import DragGrip from "./DragGrip.svelte";
 
   const iconSvgMap: Record<string, string> = {
@@ -290,7 +290,7 @@
 
         <!-- MCP-declared sections (render_sidebar tool) -->
         {#each $primarySections as section (section.sectionId)}
-          <ExtensionSidebarSection {section} />
+          <McpSidebarSection {section} />
         {/each}
       </div>
     </div>

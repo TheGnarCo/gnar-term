@@ -11,9 +11,9 @@
     activeSidebarTabStore,
   } from "../services/sidebar-tab-registry";
   import { getExtensionApiById } from "../services/extension-loader";
-  import { secondarySections } from "../stores/extension-sidebar";
+  import { secondarySections } from "../stores/mcp-sidebar";
   import ExtensionWrapper from "./ExtensionWrapper.svelte";
-  import ExtensionSidebarSection from "./ExtensionSidebarSection.svelte";
+  import McpSidebarSection from "./McpSidebarSection.svelte";
 
   let dragging = false;
   let activeTabId: string | null = null;
@@ -173,7 +173,7 @@
 
         <!-- MCP-declared sections (render_sidebar tool) -->
         {#each $secondarySections as section (section.sectionId)}
-          <ExtensionSidebarSection {section} />
+          <McpSidebarSection {section} />
         {/each}
       </div>
     </div>

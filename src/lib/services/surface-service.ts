@@ -197,11 +197,11 @@ export function openExtensionSurfaceInPaneById(
   surfaceTypeId: string,
   title: string,
   props?: Record<string, unknown>,
-) {
+): { surfaceId: string; paneId: string } | null {
   const ws = get(activeWorkspace);
-  if (!ws) return;
+  if (!ws) return null;
   const pane = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
-  if (!pane) return;
+  if (!pane) return null;
   const surface = {
     kind: "extension" as const,
     id: uid(),
@@ -213,6 +213,7 @@ export function openExtensionSurfaceInPaneById(
   pane.surfaces.push(surface);
   pane.activeSurfaceId = surface.id;
   workspaces.update((l) => [...l]);
+  return { surfaceId: surface.id, paneId: pane.id };
 }
 
 /**

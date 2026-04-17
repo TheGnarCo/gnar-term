@@ -23,20 +23,25 @@ import { createWorkspace, schedulePersist } from "./workspace-service";
 import { safeFocus, getActiveCwd } from "./service-helpers";
 import { eventBus } from "./event-bus";
 
-export async function splitPane(
+/**
+ * Split the given pane (or the active pane if none found) without attaching
+ * any surface to the new pane. Returns the new empty pane, or null if there
+ * was nothing to split from. Callers decide what surface (if any) to push.
+ *
+ * Used by `splitPane` (which then creates a terminal) and by MCP tools that
+ * need to split and drop a non-terminal surface into the new pane.
+ */
+export function splitPaneEmpty(
   paneId: string,
   direction: "horizontal" | "vertical",
-) {
+): { newPane: Pane; parentPaneId: string } | null {
   const ws = get(activeWorkspace);
-  if (!ws) return;
+  if (!ws) return null;
   const activeP =
     getAllPanes(ws.splitRoot).find((p) => p.id === paneId) ?? get(activePane);
-  if (!activeP) return;
+  if (!activeP) return null;
 
   const newPane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
-  const cwd = await getActiveCwd();
-  const surface = await createTerminalSurface(newPane, cwd);
-
   const newSplit: SplitNode = {
     type: "split",
     direction,
@@ -63,6 +68,18 @@ export async function splitPane(
     newPaneId: newPane.id,
     direction,
   });
+  return { newPane, parentPaneId: activeP.id };
+}
+
+export async function splitPane(
+  paneId: string,
+  direction: "horizontal" | "vertical",
+) {
+  const result = splitPaneEmpty(paneId, direction);
+  if (!result) return;
+  const cwd = await getActiveCwd();
+  const surface = await createTerminalSurface(result.newPane, cwd);
+  workspaces.update((l) => [...l]);
   void safeFocus(surface);
   schedulePersist();
 }

@@ -131,9 +131,10 @@ export function refreshPreviewStyles(api: ExtensionAPI) {
 
 /**
  * Render in-memory content (markdown/text/code) into a styled preview element.
- * Called by PreviewSurface.svelte when the MCP `create_preview` tool opens an
- * extension surface with a `{ content, format, language }` prop set rather
- * than a filePath. Kept inside the preview extension (uses the extension's
+ * Called by PreviewSurface.svelte whenever a surface opens with a
+ * `{ content, format, language }` prop set rather than a filePath — e.g.
+ * when an MCP client invokes `open_surface` on "preview:preview" with
+ * content props. Kept inside the preview extension (uses the extension's
  * own previewer registry and the caller's ExtensionAPI for theme access) so
  * core code never needs to reach across the extension barrier.
  */

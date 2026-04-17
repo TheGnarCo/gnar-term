@@ -1,9 +1,6 @@
 <script lang="ts">
   import { theme } from "../stores/theme";
-  import type {
-    SidebarItem,
-    SidebarSection,
-  } from "../stores/extension-sidebar";
+  import type { SidebarItem, SidebarSection } from "../stores/mcp-sidebar";
   import { pushEvent } from "../services/mcp-event-buffer";
 
   export let section: SidebarSection;
@@ -43,14 +40,14 @@
   $: flatItems = flatten(section.items, 0);
 </script>
 
-<div class="extension-section" data-section-id={section.sectionId}>
-  <div class="extension-section-header" style="color: {$theme.fgDim};">
+<div class="mcp-section" data-section-id={section.sectionId}>
+  <div class="mcp-section-header" style="color: {$theme.fgDim};">
     {section.title}
   </div>
-  <div class="extension-section-items">
+  <div class="mcp-section-items">
     {#each flatItems as item (item.id)}
       <button
-        class="extension-section-item"
+        class="mcp-section-item"
         type="button"
         style="
           color: {$theme.fg};
@@ -59,34 +56,32 @@
         on:click={() => handleClick(item)}
       >
         {#if item.icon}
-          <span class="extension-section-icon" aria-hidden="true"
-            >{item.icon}</span
-          >
+          <span class="mcp-section-icon" aria-hidden="true">{item.icon}</span>
         {/if}
-        <span class="extension-section-label">{item.label}</span>
+        <span class="mcp-section-label">{item.label}</span>
       </button>
     {/each}
   </div>
 </div>
 
 <style>
-  .extension-section {
+  .mcp-section {
     display: flex;
     flex-direction: column;
     margin-bottom: 8px;
   }
-  .extension-section-header {
+  .mcp-section-header {
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     padding: 6px 8px 4px 8px;
     font-weight: 600;
   }
-  .extension-section-items {
+  .mcp-section-items {
     display: flex;
     flex-direction: column;
   }
-  .extension-section-item {
+  .mcp-section-item {
     display: flex;
     align-items: center;
     gap: 6px;
@@ -100,16 +95,16 @@
     border-radius: 4px;
     margin: 0 4px;
   }
-  .extension-section-item:hover {
+  .mcp-section-item:hover {
     background: rgba(255, 255, 255, 0.06);
   }
-  .extension-section-icon {
+  .mcp-section-icon {
     flex-shrink: 0;
     width: 14px;
     display: inline-flex;
     justify-content: center;
   }
-  .extension-section-label {
+  .mcp-section-label {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

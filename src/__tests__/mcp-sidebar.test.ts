@@ -1,19 +1,19 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { get } from "svelte/store";
 import {
-  extensionSidebarSections,
+  mcpSidebarSections,
   upsertSection,
   removeSection,
   primarySections,
   secondarySections,
-  _resetExtensionSidebarForTest,
-} from "../lib/stores/extension-sidebar";
+  _resetMcpSidebarForTest,
+} from "../lib/stores/mcp-sidebar";
 
-describe("extension-sidebar store", () => {
-  beforeEach(() => _resetExtensionSidebarForTest());
+describe("mcp-sidebar store", () => {
+  beforeEach(() => _resetMcpSidebarForTest());
 
   it("starts empty", () => {
-    expect(get(extensionSidebarSections).size).toBe(0);
+    expect(get(mcpSidebarSections).size).toBe(0);
     expect(get(primarySections)).toEqual([]);
     expect(get(secondarySections)).toEqual([]);
   });

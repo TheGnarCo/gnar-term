@@ -22,13 +22,13 @@ import {
   isTerminalSurface,
   uid,
   type Pane,
-  type SplitNode,
   type Surface,
   type TerminalSurface,
 } from "../types";
-import { findParentSplit } from "../types";
 import { createTerminalSurface } from "../terminal-service";
 import { createWorkspace } from "./workspace-service";
+import { splitPaneEmpty } from "./pane-service";
+import { openExtensionSurfaceInPaneById } from "./surface-service";
 import { safeFocus } from "./service-helpers";
 import {
   installMcpOutputListener,
@@ -41,7 +41,7 @@ import {
   upsertSection,
   removeSection,
   type SidebarItem,
-} from "../stores/extension-sidebar";
+} from "../stores/mcp-sidebar";
 import { surfaceTypeStore } from "./surface-type-registry";
 import { getMcpSetting } from "../config";
 
@@ -123,6 +123,11 @@ function newSessionId(): string {
 
 // ---- Pane helpers (same semantics as the old bridge client) ----
 
+/**
+ * Resolve or create an active pane. If there's no workspace, create one; if
+ * the workspace has panes but none active, pick the first. Used as a fallback
+ * when MCP tools need a pane but the UI state doesn't guarantee one.
+ */
 function getOrCreateActivePane(): Pane {
   let ws = get(activeWorkspace);
   if (!ws) {
@@ -139,52 +144,21 @@ function getOrCreateActivePane(): Pane {
   return newPane;
 }
 
-function splitActivePane(direction: "horizontal" | "vertical"): Pane {
-  const wsVal = get(activeWorkspace);
-  if (!wsVal) void createWorkspace("MCP");
-  const workspace = get(activeWorkspace)!;
-  const currentActive = get(activePane) ?? getAllPanes(workspace.splitRoot)[0];
-  if (!currentActive) return getOrCreateActivePane();
-  const newPane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
-  const newSplit: SplitNode = {
-    type: "split",
-    direction,
-    children: [
-      { type: "pane", pane: currentActive },
-      { type: "pane", pane: newPane },
-    ],
-    ratio: 0.5,
-  };
-  if (
-    workspace.splitRoot.type === "pane" &&
-    workspace.splitRoot.pane.id === currentActive.id
-  ) {
-    workspace.splitRoot = newSplit;
-  } else {
-    const parentInfo = findParentSplit(workspace.splitRoot, currentActive.id);
-    if (parentInfo && parentInfo.parent.type === "split") {
-      parentInfo.parent.children[parentInfo.index] = newSplit;
-    }
-  }
-  workspace.activePaneId = newPane.id;
-  workspaces.update((l) => [...l]);
-  return newPane;
-}
-
 type Placement = "split-right" | "split-down" | "new-tab" | "current-pane";
 
+/**
+ * Translate an MCP placement into a target pane. Uses the shared
+ * `splitPaneEmpty` primitive from pane-service so split semantics stay in
+ * one place.
+ */
 function resolvePlacement(placement: Placement): Pane {
-  if (placement === "split-right") {
-    return get(activePane)
-      ? splitActivePane("horizontal")
-      : getOrCreateActivePane();
+  const active = get(activePane);
+  if ((placement === "split-right" || placement === "split-down") && active) {
+    const direction = placement === "split-right" ? "horizontal" : "vertical";
+    const result = splitPaneEmpty(active.id, direction);
+    if (result) return result.newPane;
   }
-  if (placement === "split-down") {
-    return get(activePane)
-      ? splitActivePane("vertical")
-      : getOrCreateActivePane();
-  }
-  // new-tab and current-pane both drop into the active pane's surface list
+  // new-tab, current-pane, and fallback paths all drop into the active pane
   return getOrCreateActivePane();
 }
 
@@ -339,10 +313,7 @@ registerTool({
       startupCommand = agentCmd;
     }
 
-    const existingActive = get(activePane);
-    const target = existingActive
-      ? splitActivePane("vertical")
-      : getOrCreateActivePane();
+    const target = resolvePlacement("split-down");
 
     const surface = await createTerminalSurface(target, p.cwd);
     surface.title = p.name;
@@ -714,58 +685,6 @@ registerTool({
   },
 });
 
-registerTool({
-  name: "create_preview",
-  description:
-    "Open a preview surface with markdown/text/code content. Placement controls where the preview appears.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      content: { type: "string" },
-      format: { type: "string", enum: ["markdown", "text", "code"] },
-      language: { type: "string" },
-      title: { type: "string" },
-      placement: {
-        type: "string",
-        enum: ["split-right", "split-down", "new-tab", "current-pane"],
-      },
-    },
-    required: ["content", "format"],
-  },
-  handler: (args) => {
-    const p = args as {
-      content: string;
-      format: "markdown" | "text" | "code";
-      language?: string;
-      title?: string;
-      placement?: "split-right" | "split-down" | "new-tab" | "current-pane";
-    };
-    const title = p.title ?? "Preview";
-    const targetPane = resolvePlacement(p.placement ?? "split-right");
-
-    // Core doesn't know how to render markdown — that belongs to the preview
-    // extension. We hand it { content, format, language } as props; the
-    // extension's PreviewSurface component renders on mount.
-    const surface: Surface = {
-      kind: "extension",
-      id: `preview-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      surfaceTypeId: "preview:preview",
-      title,
-      hasUnread: false,
-      props: {
-        content: p.content,
-        format: p.format,
-        language: p.language ?? "",
-      },
-    };
-    targetPane.surfaces.push(surface);
-    targetPane.activeSurfaceId = surface.id;
-    workspaces.update((l) => [...l]);
-
-    return { preview_id: surface.id, pane_id: targetPane.id };
-  },
-});
-
 // ---- Generic surface-type discovery + open ----
 //
 // Extensions register surface types at runtime (preview:preview,
@@ -830,18 +749,16 @@ registerTool({
       );
     }
     const targetPane = resolvePlacement(p.placement ?? "split-right");
-    const surface: Surface = {
-      kind: "extension",
-      id: `surface-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      surfaceTypeId: p.surface_type_id,
-      title: p.title,
-      hasUnread: false,
-      props: p.props ?? {},
-    };
-    targetPane.surfaces.push(surface);
-    targetPane.activeSurfaceId = surface.id;
-    workspaces.update((l) => [...l]);
-    return { surface_id: surface.id, pane_id: targetPane.id };
+    const result = openExtensionSurfaceInPaneById(
+      targetPane.id,
+      p.surface_type_id,
+      p.title,
+      p.props,
+    );
+    if (!result) {
+      throw new Error("Could not place surface in a pane");
+    }
+    return { surface_id: result.surfaceId, pane_id: result.paneId };
   },
 });
 

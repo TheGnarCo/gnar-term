@@ -24,7 +24,7 @@
     flex-shrink: 0;
     align-self: stretch;
     position: relative;
-    width: {visible ? '14px' : '3px'};
+    width: {visible ? '14px' : '6px'};
     cursor: {visible ? 'grab' : 'default'};
     transition: width 0.12s ease-out;
     overflow: hidden;
@@ -35,7 +35,7 @@
     style="
       position: absolute;
       left: 0; top: 0; bottom: 0;
-      width: 3px;
+      width: {visible ? '3px' : '6px'};
       background: {effectiveColor};
       opacity: {railOpacity};
     "

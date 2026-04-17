@@ -521,7 +521,7 @@ export async function createTerminalSurface(
               if (e.button !== 0) return;
               const resolved = await resolveFilePath(linkText, surface.cwd);
               const items = getContextMenuItemsForFile(resolved);
-              items[0]?.handler(resolved);
+              await items[0]?.handler(resolved);
             },
           };
         }),

@@ -211,7 +211,7 @@ export function createExtensionAPI(
 
     openFile(path: string) {
       const items = getContextMenuItemsForFile(path);
-      items[0]?.handler(path);
+      void items[0]?.handler(path);
     },
     getActiveCwd() {
       return getActiveCwd();

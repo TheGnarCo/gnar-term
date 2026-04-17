@@ -16,8 +16,13 @@
     padding: 0; -webkit-app-region: no-drag;
   `;
 
+  // macOS traffic lights (close/min/max) overlay the top-left of the window
+  // when `titleBarStyle: Overlay` is set. When the primary sidebar is visible,
+  // it sits to the left of the TitleBar and absorbs that space. When it's
+  // hidden (and we're not fullscreen), the TitleBar starts at x=0, so push
+  // its first button well past the traffic-light cluster.
   $: leftPadding =
-    !$primarySidebarVisible && isMac && !$isFullscreen ? "78px" : "8px";
+    !$primarySidebarVisible && isMac && !$isFullscreen ? "84px" : "8px";
 </script>
 
 <div

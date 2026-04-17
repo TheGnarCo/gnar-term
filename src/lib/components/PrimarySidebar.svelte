@@ -10,6 +10,8 @@
   import { dragResize } from "../actions/drag-resize";
   import { createDragReorder } from "../actions/drag-reorder";
   import { workspaces } from "../stores/workspace";
+  import type { Readable } from "svelte/store";
+  import SplitButton from "./SplitButton.svelte";
   import type { SplitButtonItem } from "./SplitButton.svelte";
   import { sidebarSectionStore } from "../services/sidebar-section-registry";
   import { workspaceActionStore } from "../services/workspace-action-registry";
@@ -219,6 +221,25 @@
         </div>
       {/if}
 
+      {#if $isFullscreen && coreAction && orderedBlocks.length > 0 && orderedBlocks[0] && orderedBlocks[0].type === "workspaces"}
+        <div
+          style="
+            height: 38px; flex-shrink: 0; display: flex; align-items: center;
+            padding: 0 8px;
+          "
+        >
+          <div style="flex: 1; min-width: 0;">
+            <SplitButton
+              label="New Workspace"
+              onMainClick={() => coreAction?.handler({})}
+              dropdownItems={splitDropdownItems}
+              theme={theme as unknown as Readable<Record<string, string>>}
+              fullWidth={true}
+            />
+          </div>
+        </div>
+      {/if}
+
       <!-- Scrollable content: blocks rendered in order -->
       <div style="flex: 1; overflow-y: auto; padding: 0;">
         {#each orderedBlocks as block, bIdx (block.id)}
@@ -259,6 +280,7 @@
                 {#if block.type === "workspaces"}
                   <WorkspaceListBlock
                     bind:this={workspaceListBlock}
+                    suppressNewButton={$isFullscreen && bIdx === 0}
                     {unclaimedEntries}
                     {coreAction}
                     {splitDropdownItems}

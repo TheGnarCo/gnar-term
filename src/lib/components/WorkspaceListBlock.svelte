@@ -18,6 +18,8 @@
   export let dragActive: boolean;
   export let dragSourceIdx: number | null;
 
+  export let suppressNewButton = false;
+
   export let onStartDrag: (e: MouseEvent, idx: number) => void;
   export let onSwitchWorkspace: (idx: number) => void;
   export let onCloseWorkspace: (idx: number) => void;
@@ -72,7 +74,7 @@
   }
 </script>
 
-{#if coreAction}
+{#if coreAction && !suppressNewButton}
   <div style="padding: 4px 8px;">
     <SplitButton
       label="New Workspace"

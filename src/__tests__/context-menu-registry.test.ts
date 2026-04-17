@@ -5,6 +5,7 @@
  * The registry resolves which items apply to a given file context.
  */
 import { describe, it, expect, beforeEach } from "vitest";
+import { readFile } from "node:fs/promises";
 import { get } from "svelte/store";
 import {
   registerContextMenuItem,
@@ -279,5 +280,18 @@ describe("validateWhenPattern", () => {
     expect(validateWhenPattern("foo.md")).not.toBeNull();
     expect(validateWhenPattern("*.md ")).not.toBeNull();
     expect(validateWhenPattern("")).not.toBeNull();
+  });
+});
+
+describe("terminal-service <-> context-menu integration", () => {
+  it("terminal-service imports getRegisteredFileExtensions from the registry, not from preview", async () => {
+    // Note: jsdom's URL resolves relative URLs against the document base
+    // (http://localhost:3000/), not against a file:// base. Pass a relative
+    // path string instead so readFile resolves it against cwd (project root).
+    const source = await readFile("src/lib/terminal-service.ts", "utf-8");
+    expect(source).not.toContain('from "../extensions/preview"');
+    expect(source).not.toMatch(/getSupportedExtensions\s*\(/);
+    expect(source).toContain("getRegisteredFileExtensions");
+    expect(source).toContain('from "./services/context-menu-item-registry"');
   });
 });

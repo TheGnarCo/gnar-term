@@ -21,7 +21,11 @@ import { get } from "svelte/store";
 import { xtermTheme } from "./stores/theme";
 import { workspaces, activeWorkspaceIdx } from "./stores/workspace";
 import { contextMenu, pendingAction } from "./stores/ui";
-import { getSupportedExtensions } from "../extensions/preview";
+import {
+  getRegisteredFileExtensions,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- consumed in Task 3 (preview/core decoupling)
+  getContextMenuItemsForFile,
+} from "./services/context-menu-item-registry";
 import type { TerminalSurface, Pane, Workspace } from "./types";
 import {
   uid,
@@ -472,7 +476,12 @@ export async function createTerminalSurface(
         return;
       }
       const text = line.translateToString();
-      const exts = getSupportedExtensions().join("|");
+      const registered = getRegisteredFileExtensions();
+      if (registered.length === 0) {
+        callback([]);
+        return;
+      }
+      const exts = registered.join("|");
       const patterns = [
         `"([^"]+\\.(?:${exts}))"`,
         `'([^']+\\.(?:${exts}))'`,

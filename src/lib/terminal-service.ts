@@ -23,7 +23,6 @@ import { workspaces, activeWorkspaceIdx } from "./stores/workspace";
 import { contextMenu, pendingAction } from "./stores/ui";
 import {
   getRegisteredFileExtensions,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- consumed in Task 3 (preview/core decoupling)
   getContextMenuItemsForFile,
 } from "./services/context-menu-item-registry";
 import type { TerminalSurface, Pane, Workspace } from "./types";
@@ -521,7 +520,8 @@ export async function createTerminalSurface(
             activate: async (e: MouseEvent, linkText: string) => {
               if (e.button !== 0) return;
               const resolved = await resolveFilePath(linkText, surface.cwd);
-              pendingAction.set({ type: "open-preview", payload: resolved });
+              const items = getContextMenuItemsForFile(resolved);
+              items[0]?.handler(resolved);
             },
           };
         }),

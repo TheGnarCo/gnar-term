@@ -295,3 +295,13 @@ describe("terminal-service <-> context-menu integration", () => {
     expect(source).toContain('from "./services/context-menu-item-registry"');
   });
 });
+
+describe("terminal-service link-click dispatch", () => {
+  it("invokes the first matching context-menu handler directly, without pendingAction", async () => {
+    const source = await readFile("src/lib/terminal-service.ts", "utf-8");
+    // The old dispatch went through pendingAction:
+    expect(source).not.toContain('"open-preview"');
+    // The new dispatch invokes the registry handler directly:
+    expect(source).toContain("getContextMenuItemsForFile");
+  });
+});

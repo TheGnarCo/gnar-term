@@ -7,6 +7,23 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
 
+const CONTAINER_SOURCE = readFileSync(
+  "src/extensions/project-scope/ProjectsContainer.svelte",
+  "utf-8",
+);
+
+describe("ProjectsContainer template", () => {
+  it("no longer renders DragGrip at the outer per-project wrapper", () => {
+    expect(CONTAINER_SOURCE).not.toMatch(/DragGrip/);
+  });
+
+  it("forwards onGripMouseDown + gripActive to ProjectSectionContent", () => {
+    const oneLine = CONTAINER_SOURCE.replace(/\s+/g, " ");
+    expect(oneLine).toMatch(/onGripMouseDown=\{\(e\) => startDrag\(e, i\)\}/);
+    expect(oneLine).toMatch(/gripActive=\{active && sourceIdx === i\}/);
+  });
+});
+
 const SOURCE = readFileSync(
   "src/extensions/project-scope/ProjectSectionContent.svelte",
   "utf-8",
@@ -52,5 +69,21 @@ describe("ProjectSectionContent template", () => {
     expect(oneLine).toMatch(
       /font-size:\s*13px;\s*font-weight:\s*600;\s*color:\s*\{\$theme\.fg\}/,
     );
+  });
+
+  it("renders DragGrip inside the project header (not wrapping the whole project)", () => {
+    // Search within the template section only (after </script>) so we
+    // don't match the destructure line where WorkspaceListView comes first.
+    const templateSection = SOURCE.slice(SOURCE.indexOf("</script>"));
+    const gripIdx = templateSection.indexOf("DragGrip");
+    const listIdx = templateSection.indexOf("WorkspaceListView");
+    expect(gripIdx).toBeGreaterThan(-1);
+    expect(listIdx).toBeGreaterThan(-1);
+    expect(gripIdx).toBeLessThan(listIdx);
+  });
+
+  it("exposes onGripMouseDown and gripActive props", () => {
+    expect(SOURCE).toMatch(/export let onGripMouseDown:/);
+    expect(SOURCE).toMatch(/export let gripActive/);
   });
 });

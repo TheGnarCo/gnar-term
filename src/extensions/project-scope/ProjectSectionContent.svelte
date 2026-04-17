@@ -9,11 +9,15 @@
   import { dashboardProjectId$ } from "./index";
 
   export let projectId: string;
+  export let onGripMouseDown: ((e: MouseEvent) => void) | undefined = undefined;
+  export let gripActive = false;
+
+  let hovered = false;
 
   const api = getContext<ExtensionAPI>(EXTENSION_API_KEY);
   const theme = api.theme;
   const workspacesStore = api.workspaces;
-  const { WorkspaceListView, SplitButton } = api.getComponents();
+  const { WorkspaceListView, SplitButton, DragGrip } = api.getComponents();
 
   let project: ProjectEntry | undefined;
   let stateVersion = 0;
@@ -75,12 +79,25 @@
 {#if project}
   <div style="padding: 2px 0; font-size: 12px; color: {$theme.fg};">
     <!-- Project header: colored dot + name (clickable → dashboard) + SplitButton -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
       style="
+        position: relative;
         padding: 6px 12px; display: flex; align-items: center;
         justify-content: space-between; gap: 8px;
       "
+      on:mouseenter={() => (hovered = true)}
+      on:mouseleave={() => (hovered = false)}
     >
+      {#if onGripMouseDown}
+        <svelte:component
+          this={DragGrip as Component}
+          theme={$theme}
+          visible={hovered || gripActive}
+          onMouseDown={onGripMouseDown}
+          ariaLabel="Drag project to reorder"
+        />
+      {/if}
       <!-- svelte-ignore a11y_click_events_have_key_events -->
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div

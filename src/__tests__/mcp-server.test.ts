@@ -53,6 +53,10 @@ import {
   registerWorkspaceAction,
   resetWorkspaceActions,
 } from "../lib/services/workspace-action-registry";
+import {
+  registerContextMenuItem,
+  resetContextMenuItems,
+} from "../lib/services/context-menu-item-registry";
 
 function rpc(method: string, params?: unknown, id: number = 1) {
   return { jsonrpc: "2.0" as const, id, method, params };
@@ -103,9 +107,11 @@ describe("MCP server JSON-RPC", () => {
         "get_session_info",
         "get_status_for_workspace",
         "invoke_command",
+        "invoke_context_menu_item",
         "invoke_workspace_action",
         "kill_session",
         "list_commands",
+        "list_context_menu_items",
         "list_dashboard_tabs",
         "list_dir",
         "list_overlays",
@@ -128,7 +134,7 @@ describe("MCP server JSON-RPC", () => {
         "spawn_agent",
       ].sort(),
     );
-    expect(names).toHaveLength(32);
+    expect(names).toHaveLength(34);
     for (const t of tools) {
       expect(t).toHaveProperty("inputSchema");
     }
@@ -856,6 +862,117 @@ describe("MCP mirror tools — workspace actions", () => {
   });
 });
 
+describe("MCP mirror tools — context menu items", () => {
+  beforeEach(() => resetContextMenuItems());
+
+  it("list_context_menu_items mirrors the registry", async () => {
+    registerContextMenuItem({
+      id: "preview:open-as-preview",
+      source: "preview",
+      label: "Open as Preview",
+      when: "*.{md,json}",
+      handler: () => {},
+    });
+
+    const r = await dispatch(
+      rpc("tools/call", { name: "list_context_menu_items", arguments: {} }),
+    );
+    expect((r as any).result.structuredContent).toEqual({
+      items: [
+        {
+          id: "preview:open-as-preview",
+          label: "Open as Preview",
+          when: "*.{md,json}",
+          source: "preview",
+        },
+      ],
+    });
+  });
+
+  it("list_context_menu_items can filter by file_path match", async () => {
+    registerContextMenuItem({
+      id: "preview:open-as-preview",
+      source: "preview",
+      label: "Open as Preview",
+      when: "*.md",
+      handler: () => {},
+    });
+    registerContextMenuItem({
+      id: "other:unrelated",
+      source: "other",
+      label: "Unrelated",
+      when: "*.exe",
+      handler: () => {},
+    });
+
+    const r = await dispatch(
+      rpc("tools/call", {
+        name: "list_context_menu_items",
+        arguments: { file_path: "/tmp/readme.md" },
+      }),
+    );
+    const items = (r as any).result.structuredContent.items as Array<{
+      id: string;
+    }>;
+    expect(items.map((i) => i.id)).toEqual(["preview:open-as-preview"]);
+  });
+
+  it("invoke_context_menu_item invokes the registered handler with the file path", async () => {
+    const received: string[] = [];
+    registerContextMenuItem({
+      id: "preview:open-as-preview",
+      source: "preview",
+      label: "Open as Preview",
+      when: "*.md",
+      handler: (p) => received.push(p),
+    });
+
+    const r = await dispatch(
+      rpc("tools/call", {
+        name: "invoke_context_menu_item",
+        arguments: {
+          item_id: "preview:open-as-preview",
+          file_path: "/tmp/readme.md",
+        },
+      }),
+    );
+    expect((r as any).result.structuredContent).toEqual({ ok: true });
+    expect(received).toEqual(["/tmp/readme.md"]);
+  });
+
+  it("invoke_context_menu_item errors when the pattern does not match the path", async () => {
+    registerContextMenuItem({
+      id: "preview:open-as-preview",
+      source: "preview",
+      label: "Open as Preview",
+      when: "*.md",
+      handler: () => {},
+    });
+    const resp = await dispatch(
+      rpc("tools/call", {
+        name: "invoke_context_menu_item",
+        arguments: {
+          item_id: "preview:open-as-preview",
+          file_path: "/tmp/data.exe",
+        },
+      }),
+    );
+    expect((resp as any).error.code).toBe(-32000);
+    expect((resp as any).error.message).toMatch(/does not match/i);
+  });
+
+  it("invoke_context_menu_item errors on unknown item_id", async () => {
+    const resp = await dispatch(
+      rpc("tools/call", {
+        name: "invoke_context_menu_item",
+        arguments: { item_id: "nope", file_path: "/tmp/x" },
+      }),
+    );
+    expect((resp as any).error.code).toBe(-32000);
+    expect((resp as any).error.message).toMatch(/unknown context menu item/i);
+  });
+});
+
 describe("MCP mirror tools — sidebar sections", () => {
   beforeEach(async () => {
     const mod = await import("../lib/services/sidebar-section-registry");
@@ -1028,7 +1145,7 @@ describe("tool metadata", () => {
     }
   });
 
-  it("tool count matches spec (32)", () => {
-    expect(_getToolsForTest()).toHaveLength(32);
+  it("tool count matches spec (34)", () => {
+    expect(_getToolsForTest()).toHaveLength(34);
   });
 });

@@ -32,6 +32,7 @@
  *   | command-registry        | list_commands, invoke_command                |
  *   | sidebar-tab-registry    | list_sidebar_tabs, activate_sidebar_tab      |
  *   | workspace-action-reg…   | list_workspace_actions, invoke_workspace_…   |
+ *   | context-menu-item-reg…  | list_context_menu_items, invoke_context_…   |
  *
  * Adding an extension automatically increases MCP's surface area by its
  * contributions; adding an MCP tool never requires touching an extension.
@@ -75,6 +76,10 @@ import { surfaceTypeStore } from "./surface-type-registry";
 import { commandStore } from "./command-registry";
 import { sidebarTabStore, activateSidebarTab } from "./sidebar-tab-registry";
 import { workspaceActionStore } from "./workspace-action-registry";
+import {
+  contextMenuItemStore,
+  getContextMenuItemsForFile,
+} from "./context-menu-item-registry";
 import { sidebarSectionStore } from "./sidebar-section-registry";
 import { overlayStore } from "./overlay-registry";
 import { workspaceSubtitleStore } from "./workspace-subtitle-registry";
@@ -1163,6 +1168,75 @@ registerTool({
       );
     }
     await action.handler(p.context ?? {});
+    return { ok: true };
+  },
+});
+
+// ---- Context menu items (mirror of contextMenuItemStore) ----
+//
+// Extensions register handlers for files by `when` glob pattern (e.g.
+// "*.{md,json}"). Agents can either list everything an extension
+// contributes, or filter by a concrete file path to discover which
+// handlers would fire for that file.
+
+registerTool({
+  name: "list_context_menu_items",
+  description:
+    "List context-menu items contributed by extensions — file-typed actions like 'Open as Preview'. Pass `file_path` to filter to items whose `when` pattern matches that path. Returns `{ id, label, when, source }` for each. Use invoke_context_menu_item to trigger one.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      file_path: {
+        type: "string",
+        description:
+          "Optional. When provided, only items whose `when` pattern matches the file's extension are returned.",
+      },
+    },
+  },
+  handler: (args) => {
+    const p = (args ?? {}) as { file_path?: string };
+    const all = get(contextMenuItemStore);
+    const filtered = p.file_path
+      ? getContextMenuItemsForFile(p.file_path)
+      : all;
+    return {
+      items: filtered.map((i) => ({
+        id: i.id,
+        label: i.label,
+        when: i.when,
+        source: i.source,
+      })),
+    };
+  },
+});
+
+registerTool({
+  name: "invoke_context_menu_item",
+  description:
+    "Invoke a context-menu item against a concrete file path. Errors if the item's `when` pattern does not match the file. Use list_context_menu_items with `file_path` to find matching items first.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      item_id: { type: "string" },
+      file_path: { type: "string" },
+    },
+    required: ["item_id", "file_path"],
+  },
+  handler: (args) => {
+    const p = args as { item_id: string; file_path: string };
+    const item = get(contextMenuItemStore).find((i) => i.id === p.item_id);
+    if (!item) {
+      throw new Error(
+        `Unknown context menu item: ${p.item_id}. Call list_context_menu_items to see what's registered.`,
+      );
+    }
+    const matching = getContextMenuItemsForFile(p.file_path);
+    if (!matching.some((i) => i.id === p.item_id)) {
+      throw new Error(
+        `Context menu item ${p.item_id} (when=${item.when}) does not match file path ${p.file_path}.`,
+      );
+    }
+    item.handler(p.file_path);
     return { ok: true };
   },
 });

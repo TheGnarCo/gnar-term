@@ -103,3 +103,34 @@ export function validateWhenPattern(pattern: string): string | null {
 
   return `Unsupported "when" pattern "${pattern}": use "*", "*.ext", "*.{ext1,ext2}", or "directory"`;
 }
+
+/**
+ * Return the deduped, lowercased union of file extensions referenced by all
+ * registered context-menu items. Derived from `when` patterns of the form
+ * `*.ext` or `*.{ext1,ext2,...}`; `*` and `directory` patterns contribute
+ * nothing.
+ *
+ * Used by terminal-service to build its link-detection regex without needing
+ * to know which extensions contributed which file types.
+ */
+export function getRegisteredFileExtensions(): string[] {
+  const items = get(registry.store);
+  const seen = new Set<string>();
+  for (const item of items) {
+    const p = item.when;
+    if (p === "*" || p === "directory") continue;
+    const brace = p.match(/^\*\.\{(.+)\}$/);
+    if (brace) {
+      for (const ext of brace[1]!.split(",")) {
+        const trimmed = ext.trim().toLowerCase();
+        if (trimmed) seen.add(trimmed);
+      }
+      continue;
+    }
+    const simple = p.match(/^\*\.(.+)$/);
+    if (simple) {
+      seen.add(simple[1]!.toLowerCase());
+    }
+  }
+  return [...seen];
+}

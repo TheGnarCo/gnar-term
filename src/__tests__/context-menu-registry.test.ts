@@ -14,6 +14,7 @@ import {
   contextMenuItemStore,
   resetContextMenuItems,
   validateWhenPattern,
+  getRegisteredFileExtensions,
 } from "../lib/services/context-menu-item-registry";
 
 describe("context-menu-item-registry", () => {
@@ -164,6 +165,98 @@ describe("context-menu-item-registry", () => {
     const dirItems = getContextMenuItemsForDir("/path/to/src");
     expect(dirItems).toHaveLength(1);
     expect(dirItems[0].id).toBe("ext:open-ws");
+  });
+
+  describe("getRegisteredFileExtensions", () => {
+    it("returns empty array when no items are registered", () => {
+      resetContextMenuItems();
+      expect(getRegisteredFileExtensions()).toEqual([]);
+    });
+
+    it("extracts extensions from *.ext patterns", () => {
+      resetContextMenuItems();
+      registerContextMenuItem({
+        id: "a",
+        source: "ext-a",
+        label: "A",
+        when: "*.md",
+        handler: () => {},
+      });
+      expect(getRegisteredFileExtensions()).toEqual(["md"]);
+    });
+
+    it("extracts extensions from brace patterns", () => {
+      resetContextMenuItems();
+      registerContextMenuItem({
+        id: "b",
+        source: "ext-b",
+        label: "B",
+        when: "*.{png,jpg,gif}",
+        handler: () => {},
+      });
+      expect(getRegisteredFileExtensions().sort()).toEqual([
+        "gif",
+        "jpg",
+        "png",
+      ]);
+    });
+
+    it("merges and dedupes extensions across multiple items", () => {
+      resetContextMenuItems();
+      registerContextMenuItem({
+        id: "c1",
+        source: "ext-c",
+        label: "C1",
+        when: "*.md",
+        handler: () => {},
+      });
+      registerContextMenuItem({
+        id: "c2",
+        source: "ext-c",
+        label: "C2",
+        when: "*.{md,json}",
+        handler: () => {},
+      });
+      expect(getRegisteredFileExtensions().sort()).toEqual(["json", "md"]);
+    });
+
+    it("ignores '*' and 'directory' patterns", () => {
+      resetContextMenuItems();
+      registerContextMenuItem({
+        id: "d1",
+        source: "ext-d",
+        label: "D1",
+        when: "*",
+        handler: () => {},
+      });
+      registerContextMenuItem({
+        id: "d2",
+        source: "ext-d",
+        label: "D2",
+        when: "directory",
+        handler: () => {},
+      });
+      registerContextMenuItem({
+        id: "d3",
+        source: "ext-d",
+        label: "D3",
+        when: "*.toml",
+        handler: () => {},
+      });
+      expect(getRegisteredFileExtensions()).toEqual(["toml"]);
+    });
+
+    it("lowercases extensions", () => {
+      resetContextMenuItems();
+      registerContextMenuItem({
+        id: "e",
+        source: "ext-e",
+        label: "E",
+        when: "*.PDF",
+        handler: () => {},
+      });
+      expect(getRegisteredFileExtensions()).toEqual(["pdf"]);
+    });
   });
 });
 

@@ -395,10 +395,18 @@ mod tests {
         );
     }
 
+    /// Serialize tests that mutate `GNAR_TERM_*` env vars so cargo's
+    /// default parallel runner doesn't let one test clobber another's
+    /// expected state.
+    fn env_mutation_guard() -> std::sync::MutexGuard<'static, ()> {
+        use std::sync::Mutex;
+        static GUARD: Mutex<()> = Mutex::new(());
+        GUARD.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
     #[test]
     fn hello_message_includes_env_vars() {
-        // Use a separate process to control env without polluting other tests.
-        // We test the function directly by setting env, then unsetting.
+        let _g = env_mutation_guard();
         std::env::set_var("GNAR_TERM_PANE_ID", "pane-abc");
         std::env::set_var("GNAR_TERM_WORKSPACE_ID", "ws-xyz");
         let line = build_hello_message();
@@ -417,7 +425,7 @@ mod tests {
 
     #[test]
     fn hello_message_when_unbound_uses_null() {
-        // Ensure clean env.
+        let _g = env_mutation_guard();
         std::env::remove_var("GNAR_TERM_PANE_ID");
         std::env::remove_var("GNAR_TERM_WORKSPACE_ID");
         let line = build_hello_message();

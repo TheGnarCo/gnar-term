@@ -36,21 +36,17 @@ pub fn uds_path() -> Option<PathBuf> {
     {
         if let Ok(runtime) = std::env::var("XDG_RUNTIME_DIR") {
             if !runtime.is_empty() {
-                return Some(PathBuf::from(format!("{}/gnar-term/mcp.sock", runtime)));
+                return Some(PathBuf::from(format!("{runtime}/gnar-term/mcp.sock")));
             }
         }
         let home = std::env::var("HOME").ok()?;
-        Some(PathBuf::from(format!(
-            "{}/.config/gnar-term/mcp.sock",
-            home
-        )))
+        Some(PathBuf::from(format!("{home}/.config/gnar-term/mcp.sock")))
     }
     #[cfg(target_os = "windows")]
     {
         let localappdata = std::env::var("LOCALAPPDATA").ok()?;
         Some(PathBuf::from(format!(
-            "{}\\gnar-term\\mcp.sock",
-            localappdata
+            "{localappdata}\\gnar-term\\mcp.sock"
         )))
     }
 }

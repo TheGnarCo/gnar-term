@@ -152,13 +152,17 @@ describe("MCP server JSON-RPC", () => {
     });
   });
 
-  it("get_agent_context returns null when the agent is unbound", async () => {
+  it("get_agent_context returns null fields when the agent is unbound", async () => {
     const ctx = _testContext(null);
     const resp = await dispatch(
       rpc("tools/call", { name: "get_agent_context", arguments: {} }),
       ctx,
     );
-    expect((resp as any).result.structuredContent).toBeNull();
+    expect((resp as any).result.structuredContent).toEqual({
+      pane_id: null,
+      workspace_id: null,
+      client_pid: null,
+    });
   });
 
   it("render_sidebar with an explicit workspace_id stores in that workspace", async () => {
@@ -328,10 +332,63 @@ describe("MCP server JSON-RPC", () => {
     expect((r2 as any).result.structuredContent).toEqual({ exists: false });
   });
 
-  it("list_workspaces returns an array (possibly empty)", async () => {
+  it("list_workspaces wraps the list in a record (structuredContent must be an object)", async () => {
+    const { ws: wsA } = makeWorkspace("ws-A");
+    workspaces.set([wsA]);
+    activeWorkspaceIdx.set(0);
     const r = await dispatch(rpc("tools/call", { name: "list_workspaces", arguments: {} }));
     const result = (r as any).result.structuredContent;
-    expect(Array.isArray(result)).toBe(true);
+    expect(result).not.toBeNull();
+    expect(Array.isArray(result)).toBe(false);
+    expect(Array.isArray(result.workspaces)).toBe(true);
+    expect(result.workspaces[0].id).toBe("ws-A");
+  });
+
+  it("list_panes wraps the list in a record", async () => {
+    const { ws: wsA } = makeWorkspace("ws-A");
+    workspaces.set([wsA]);
+    activeWorkspaceIdx.set(0);
+    const r = await dispatch(rpc("tools/call", { name: "list_panes", arguments: {} }));
+    const result = (r as any).result.structuredContent;
+    expect(Array.isArray(result)).toBe(false);
+    expect(Array.isArray(result.panes)).toBe(true);
+    expect(result.panes[0].id).toBe("ws-A-pane");
+  });
+
+  it("list_panes with an unknown workspace_id returns an empty record", async () => {
+    const r = await dispatch(
+      rpc("tools/call", {
+        name: "list_panes",
+        arguments: { workspace_id: "nope" },
+      }),
+    );
+    const result = (r as any).result.structuredContent;
+    expect(result).toEqual({ panes: [] });
+  });
+
+  it("list_sessions wraps the list in a record", async () => {
+    const r = await dispatch(rpc("tools/call", { name: "list_sessions", arguments: {} }));
+    const result = (r as any).result.structuredContent;
+    expect(Array.isArray(result)).toBe(false);
+    expect(Array.isArray(result.sessions)).toBe(true);
+  });
+
+  it("get_active_workspace returns nullable fields when no workspace is open", async () => {
+    const r = await dispatch(
+      rpc("tools/call", { name: "get_active_workspace", arguments: {} }),
+    );
+    expect((r as any).result.structuredContent).toEqual({
+      id: null,
+      name: null,
+      activePaneId: null,
+    });
+  });
+
+  it("get_active_pane returns { pane: null } when no pane is focused", async () => {
+    const r = await dispatch(
+      rpc("tools/call", { name: "get_active_pane", arguments: {} }),
+    );
+    expect((r as any).result.structuredContent).toEqual({ pane: null });
   });
 
   it("returns a JSON-RPC error when a tool handler throws", async () => {

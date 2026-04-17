@@ -579,7 +579,7 @@ registerTool({
   inputSchema: { type: "object", properties: {} },
   handler: () => {
     reapDeadSessions();
-    return Array.from(sessions.values()).map((s) => ({
+    const list = Array.from(sessions.values()).map((s) => ({
       session_id: s.session_id,
       name: s.name,
       agent: s.agent,
@@ -588,6 +588,7 @@ registerTool({
       cwd: s.cwd,
       createdAt: s.createdAt,
     }));
+    return { sessions: list };
   },
 });
 
@@ -980,15 +981,14 @@ registerTool({
 registerTool({
   name: "get_agent_context",
   description:
-    "Return the connection's bound {pane_id, workspace_id, client_pid} from the $/gnar-term/hello handshake. Returns null when the agent is unbound (was not run inside a gnar-term pane). Agents should call this once on startup to learn their context.",
+    "Return the connection's bound {pane_id, workspace_id, client_pid} from the $/gnar-term/hello handshake. All fields are null when the agent is unbound (was not run inside a gnar-term pane). Agents should call this once on startup to learn their context.",
   inputSchema: { type: "object", properties: {} },
   handler: (_args, ctx) => {
     const b = ctx.binding;
-    if (!b) return null;
     return {
-      pane_id: b.paneId,
-      workspace_id: b.workspaceId,
-      client_pid: b.clientPid,
+      pane_id: b?.paneId ?? null,
+      workspace_id: b?.workspaceId ?? null,
+      client_pid: b?.clientPid ?? null,
     };
   },
 });
@@ -998,12 +998,15 @@ registerTool({
 registerTool({
   name: "get_active_workspace",
   description:
-    "Return the workspace the user is currently focused on. Reports user GUI focus, NOT the agent's binding — agents should use get_agent_context for routing.",
+    "Return the workspace the user is currently focused on. Reports user GUI focus, NOT the agent's binding — agents should use get_agent_context for routing. Fields are null when no workspace is open.",
   inputSchema: { type: "object", properties: {} },
   handler: () => {
     const ws = get(activeWorkspace);
-    if (!ws) return null;
-    return { id: ws.id, name: ws.name, activePaneId: ws.activePaneId };
+    return {
+      id: ws?.id ?? null,
+      name: ws?.name ?? null,
+      activePaneId: ws?.activePaneId ?? null,
+    };
   },
 });
 
@@ -1012,24 +1015,25 @@ registerTool({
   description: "List all open workspaces.",
   inputSchema: { type: "object", properties: {} },
   handler: () => {
-    return get(workspaces).map((ws) => ({
+    const list = get(workspaces).map((ws) => ({
       id: ws.id,
       name: ws.name,
       activePaneId: ws.activePaneId,
     }));
+    return { workspaces: list };
   },
 });
 
 registerTool({
   name: "get_active_pane",
   description:
-    "Return the user-focused pane and its surfaces. Reports user GUI focus, NOT the agent's binding.",
+    "Return the user-focused pane and its surfaces. Reports user GUI focus, NOT the agent's binding. `pane` is null when no pane is focused.",
   inputSchema: { type: "object", properties: {} },
   handler: () => {
     const ws = get(activeWorkspace);
     const pane = get(activePane);
-    if (!ws || !pane) return null;
-    return describePane(pane, ws.id);
+    if (!ws || !pane) return { pane: null };
+    return { pane: describePane(pane, ws.id) };
   },
 });
 
@@ -1045,8 +1049,9 @@ registerTool({
     const target = p.workspace_id
       ? get(workspaces).find((w) => w.id === p.workspace_id)
       : get(activeWorkspace);
-    if (!target) return [];
-    return getAllPanes(target.splitRoot).map((pane) => describePane(pane, target.id));
+    if (!target) return { panes: [] };
+    const list = getAllPanes(target.splitRoot).map((pane) => describePane(pane, target.id));
+    return { panes: list };
   },
 });
 
@@ -1229,12 +1234,18 @@ export async function dispatch(
             logDispatch(logEntry);
           }
           if (isNotification) return null;
+          // MCP spec requires `structuredContent` to be a JSON object (record).
+          // Arrays, null, and primitives are rejected by client-side Zod
+          // validators, so only attach structuredContent when the tool returned
+          // a plain object. Text `content` still carries the full JSON payload.
+          const isRecord =
+            value !== null && typeof value === "object" && !Array.isArray(value);
           return {
             jsonrpc: "2.0",
             id,
             result: {
               content: [{ type: "text", text: JSON.stringify(value) }],
-              structuredContent: value,
+              ...(isRecord ? { structuredContent: value } : {}),
             },
           };
         } catch (err) {

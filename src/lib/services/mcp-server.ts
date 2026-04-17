@@ -39,7 +39,7 @@ import {
   type Workspace,
 } from "../types";
 import { findParentSplit } from "../types";
-import { createTerminalSurface } from "../terminal-service";
+import { createTerminalSurface, waitForPtyReady } from "../terminal-service";
 import { safeFocus } from "./service-helpers";
 import {
   registerMcpPty,
@@ -321,14 +321,7 @@ async function waitForPtyId(
   surface: TerminalSurface,
   timeoutMs = 5000,
 ): Promise<number> {
-  const start = Date.now();
-  while (surface.ptyId < 0) {
-    if (Date.now() - start > timeoutMs) {
-      throw new Error("timed out waiting for PTY to spawn");
-    }
-    await new Promise((r) => setTimeout(r, 50));
-  }
-  return surface.ptyId;
+  return waitForPtyReady(surface, timeoutMs);
 }
 
 async function getPtyCwd(ptyId: number): Promise<string> {

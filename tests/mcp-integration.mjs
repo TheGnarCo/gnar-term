@@ -183,8 +183,8 @@ async function main() {
   });
   assert(workspaces?.structuredContent !== undefined, "tools/call returns structuredContent");
   assert(
-    Array.isArray(workspaces.structuredContent),
-    "list_workspaces result is an array",
+    Array.isArray(workspaces.structuredContent?.workspaces),
+    "list_workspaces result has workspaces array",
   );
 
   // poll_events — should return a cursor regardless of state
@@ -204,7 +204,7 @@ async function main() {
     name: "list_workspaces",
     arguments: {},
   });
-  const wsId = wsList?.structuredContent?.[0]?.id;
+  const wsId = wsList?.structuredContent?.workspaces?.[0]?.id;
   assert(typeof wsId === "string", "list_workspaces returned a workspace id for the harness");
   const render = await client.call("tools/call", {
     name: "render_sidebar",

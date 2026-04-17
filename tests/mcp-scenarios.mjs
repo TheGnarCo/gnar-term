@@ -177,6 +177,63 @@ async function scenario(num, title, fn) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// Watchdog: periodically ping the server with a cheap tools/call. Two
+// consecutive misses = the app is wedged; dump diagnostics and exit non-zero
+// so CI / the developer does not have to observe the freeze manually.
+// See project_mcp_testing_strategy.md.
+function startWatchdog(probeConn, intervalMs = 2000, pingTimeoutMs = 3000) {
+  let misses = 0;
+  let stopped = false;
+  const pingOnce = async () => {
+    try {
+      const id = ++probeConn.id;
+      await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          probeConn.pending.delete(id);
+          reject(new Error("watchdog ping timeout"));
+        }, pingTimeoutMs);
+        probeConn.pending.set(id, {
+          resolve: (v) => {
+            clearTimeout(timer);
+            resolve(v);
+          },
+          reject: (e) => {
+            clearTimeout(timer);
+            reject(e);
+          },
+        });
+        probeConn.sock.write(
+          JSON.stringify({ jsonrpc: "2.0", id, method: "ping", params: {} }) + "\n",
+        );
+      });
+      misses = 0;
+    } catch {
+      misses++;
+      if (misses >= 2) {
+        console.error(
+          `\n!!! WATCHDOG: app appears frozen (${misses} consecutive ping misses).`,
+        );
+        console.error(
+          `!!! This is the freeze pattern described in project_mcp_freeze_investigation.md.`,
+        );
+        console.error(`!!! Killing test with non-zero exit so CI fails loud.`);
+        process.exit(3);
+      }
+    }
+  };
+  const loop = async () => {
+    while (!stopped) {
+      await sleep(intervalMs);
+      if (stopped) break;
+      await pingOnce();
+    }
+  };
+  loop();
+  return () => {
+    stopped = true;
+  };
+}
+
 // ------------------------------------------------------------------
 // Helpers shared across scenarios
 // ------------------------------------------------------------------
@@ -188,12 +245,12 @@ async function getActiveWorkspaceId(c) {
 
 async function listWorkspaceIds(c) {
   const list = await c.tool("list_workspaces", {});
-  return (list ?? []).map((w) => w.id);
+  return (list?.workspaces ?? []).map((w) => w.id);
 }
 
 async function paneCountInWorkspace(c, wsId) {
   const panes = await c.tool("list_panes", { workspace_id: wsId });
-  return Array.isArray(panes) ? panes.length : 0;
+  return Array.isArray(panes?.panes) ? panes.panes.length : 0;
 }
 
 async function spawnProbe(c, name, extra = {}) {
@@ -230,6 +287,11 @@ console.log(`MCP scenarios -> ${sock}`);
 
 // Probe connection used to read state across the suite.
 const probe = await newConn("probe");
+
+// Watchdog fires against the probe connection. If it misses twice, the suite
+// aborts so a hung app is a hard test failure rather than a user-observed
+// freeze.
+const stopWatchdog = startWatchdog(probe);
 
 // Pre-flight: capture baseline workspaces.
 const wsIds = await listWorkspaceIds(probe);
@@ -358,11 +420,12 @@ await scenario(5, "pane_id wins over a stale workspace_id binding", async () => 
   }
   // Find a pane in W2.
   const w2Panes = await probe.tool("list_panes", { workspace_id: W2 });
-  if (!Array.isArray(w2Panes) || w2Panes.length === 0) {
+  const w2PaneList = w2Panes?.panes;
+  if (!Array.isArray(w2PaneList) || w2PaneList.length === 0) {
     console.log("  SKIP — W2 has no panes");
     return;
   }
-  const targetPane = w2Panes[0].id;
+  const targetPane = w2PaneList[0].id;
 
   const c = await newConn("scn5");
   // Bind to a stale workspace (W1) but pass an explicit pane_id in W2.
@@ -615,6 +678,7 @@ await scenario(15, "render_sidebar is workspace-scoped (per-workspace visibility
 // ------------------------------------------------------------------
 console.log(`\nCleanup: killing ${spawnedSessions.length} spawned sessions`);
 await killAll(probe, spawnedSessions);
+stopWatchdog();
 probe.close();
 
 console.log(`\n${pass} passed, ${fail} failed`);

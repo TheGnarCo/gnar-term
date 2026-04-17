@@ -305,3 +305,21 @@ describe("terminal-service link-click dispatch", () => {
     expect(source).toContain("getContextMenuItemsForFile");
   });
 });
+
+describe("ExtensionAPI.openFile", () => {
+  it("openFile implementation does not fire open-preview pendingAction (dispatches via registry)", async () => {
+    const implSrc = await readFile(
+      "src/lib/services/extension-api.ts",
+      "utf-8",
+    );
+    // Extract the openFile method body — must NOT reference pendingAction or "open-preview"
+    const match = implSrc.match(/openFile\([^)]*\)\s*\{([\s\S]*?)\n\s{4}\},/);
+    expect(match, "openFile method not found in extension-api.ts").not.toBe(
+      null,
+    );
+    const body = match![1]!;
+    expect(body).not.toContain("pendingAction");
+    expect(body).not.toContain("open-preview");
+    expect(body).toContain("getContextMenuItemsForFile");
+  });
+});

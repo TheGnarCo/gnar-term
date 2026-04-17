@@ -210,7 +210,8 @@ export function createExtensionAPI(
     },
 
     openFile(path: string) {
-      pendingAction.set({ type: "open-preview", payload: path });
+      const items = getContextMenuItemsForFile(path);
+      items[0]?.handler(path);
     },
     getActiveCwd() {
       return getActiveCwd();

@@ -1222,7 +1222,7 @@ registerTool({
     },
     required: ["item_id", "file_path"],
   },
-  handler: (args) => {
+  handler: async (args) => {
     const p = args as { item_id: string; file_path: string };
     const item = get(contextMenuItemStore).find((i) => i.id === p.item_id);
     if (!item) {
@@ -1236,7 +1236,7 @@ registerTool({
         `Context menu item ${p.item_id} (when=${item.when}) does not match file path ${p.file_path}.`,
       );
     }
-    item.handler(p.file_path);
+    await item.handler(p.file_path);
     return { ok: true };
   },
 });

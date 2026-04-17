@@ -19,7 +19,7 @@ import { createRegistry, type RegistryItem } from "./create-registry";
 export interface ExtensionContextMenuItem extends RegistryItem {
   label: string;
   when: string; // glob pattern: "*", "*.md", "*.{png,jpg}", "directory"
-  handler: (filePath: string) => void;
+  handler: (filePath: string) => void | Promise<void>;
 }
 
 // --- Registry ---

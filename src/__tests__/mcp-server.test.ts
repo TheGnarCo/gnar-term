@@ -971,6 +971,30 @@ describe("MCP mirror tools — context menu items", () => {
     expect((resp as any).error.code).toBe(-32000);
     expect((resp as any).error.message).toMatch(/unknown context menu item/i);
   });
+
+  it("invoke_context_menu_item awaits async handlers", async () => {
+    resetContextMenuItems();
+    let handlerResolved = false;
+    registerContextMenuItem({
+      id: "async:handler",
+      source: "async",
+      label: "Async Handler",
+      when: "*.md",
+      handler: async (_p: string) => {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        handlerResolved = true;
+      },
+    });
+
+    const response = await dispatch(
+      rpc("tools/call", {
+        name: "invoke_context_menu_item",
+        arguments: { item_id: "async:handler", file_path: "/tmp/readme.md" },
+      }),
+    );
+    expect((response as any).error).toBeUndefined();
+    expect(handlerResolved).toBe(true);
+  });
 });
 
 describe("MCP mirror tools — sidebar sections", () => {

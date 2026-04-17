@@ -52,18 +52,17 @@ describe("Project Scope included extension", () => {
     expect(projectScopeManifest.included).toBe(true);
   });
 
-  it("manifest declares workspace actions", () => {
+  it("manifest does not declare workspace actions", () => {
+    // "+ New Project" now lives inside the Projects section container,
+    // not as a sidebar-zone workspace action button.
     const actions = projectScopeManifest.contributes?.workspaceActions;
-    expect(actions).toHaveLength(1);
-    expect(actions![0].id).toBe("create-project");
-    expect(actions![0].title).toBe("New Project");
+    expect(actions === undefined || actions.length === 0).toBe(true);
   });
 
-  it("manifest does not declare primarySidebarSections", () => {
-    // Sections are now registered dynamically per project, not statically
-    expect(
-      projectScopeManifest.contributes?.primarySidebarSections,
-    ).toBeUndefined();
+  it("manifest declares a single 'projects' primary sidebar section", () => {
+    const sections = projectScopeManifest.contributes?.primarySidebarSections;
+    expect(sections).toHaveLength(1);
+    expect(sections![0].id).toBe("projects");
   });
 
   it("manifest declares commands", () => {
@@ -82,72 +81,32 @@ describe("Project Scope included extension", () => {
     expect(events).toContain("workspace:activated");
   });
 
-  it("registers workspace action via API", async () => {
+  it("registers no workspace actions", async () => {
     registerExtension(projectScopeManifest, registerProjectScopeExtension);
     await activateExtension("project-scope");
     const actions = get(workspaceActionStore);
-    expect(actions).toHaveLength(1);
-    expect(actions[0].id).toBe("project-scope:create-project");
-    expect(actions[0].label).toBe("New Project");
-    expect(actions[0].icon).toBe("folder-plus");
-    expect(actions[0].zone).toBe("sidebar");
+    expect(actions).toHaveLength(0);
   });
 
-  it("workspace action when filter hides in project context", async () => {
-    registerExtension(projectScopeManifest, registerProjectScopeExtension);
-    await activateExtension("project-scope");
-    const actions = get(workspaceActionStore);
-    const createAction = actions[0];
-    expect(createAction.when).toBeDefined();
-    // Should be visible when not in a project context
-    expect(createAction.when!({ projectId: undefined })).toBe(true);
-    expect(createAction.when!({})).toBe(true);
-    // Should be hidden when inside a project context
-    expect(createAction.when!({ projectId: "some-project" })).toBe(false);
-  });
-
-  it("registers no sidebar sections when no projects exist", async () => {
+  it("registers a single 'projects' sidebar section regardless of project count", async () => {
     registerExtension(projectScopeManifest, registerProjectScopeExtension);
     await activateExtension("project-scope");
     const sections = get(sidebarSectionStore);
-    expect(sections).toHaveLength(0);
+    expect(sections).toHaveLength(1);
+    expect(sections[0].id).toBe("project-scope:projects");
+    expect(sections[0].label).toBe("Projects");
   });
 
-  it("registers sidebar sections for persisted projects on activate", async () => {
-    const { api } = createExtensionAPI(projectScopeManifest);
-    // Pre-populate state with projects before activation
-    api.state.set("projects", [
-      {
-        id: "proj-1",
-        name: "Alpha",
-        path: "/tmp/alpha",
-        color: "#e06c75",
-        workspaceIds: [],
-        isGit: false,
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: "proj-2",
-        name: "Beta",
-        path: "/tmp/beta",
-        color: "#98c379",
-        workspaceIds: [],
-        isGit: true,
-        createdAt: new Date().toISOString(),
-      },
-    ]);
-
+  it("Projects section exposes onCreateProject prop to the container", async () => {
     registerExtension(projectScopeManifest, registerProjectScopeExtension);
     await activateExtension("project-scope");
-
     const sections = get(sidebarSectionStore);
-    expect(sections).toHaveLength(2);
-    expect(sections[0].id).toBe("project-scope:project-proj-1");
-    expect(sections[0].label).toBe("Alpha");
-    expect(sections[0].props).toEqual({ projectId: "proj-1" });
-    expect(sections[1].id).toBe("project-scope:project-proj-2");
-    expect(sections[1].label).toBe("Beta");
-    expect(sections[1].props).toEqual({ projectId: "proj-2" });
+    const projectsSection = sections[0];
+    expect(projectsSection.props).toBeDefined();
+    expect(
+      typeof (projectsSection.props as { onCreateProject?: unknown })
+        .onCreateProject,
+    ).toBe("function");
   });
 
   it("registers commands via API", async () => {

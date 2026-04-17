@@ -186,16 +186,34 @@ describe("createExtensionAPI", () => {
     ).toBeUndefined();
   });
 
-  it("getComponents returns WorkspaceListView, SplitButton, and ColorPicker", () => {
+  it("getComponents returns WorkspaceListView, SplitButton, ColorPicker, DragGrip", () => {
     const { api } = createExtensionAPI(manifest);
     const components = api.getComponents();
     expect(components).toHaveProperty("WorkspaceListView");
     expect(components).toHaveProperty("SplitButton");
     expect(components).toHaveProperty("ColorPicker");
-    // Components should be truthy (Svelte component constructors)
+    expect(components).toHaveProperty("DragGrip");
     expect(components.WorkspaceListView).toBeTruthy();
     expect(components.SplitButton).toBeTruthy();
     expect(components.ColorPicker).toBeTruthy();
+    expect(components.DragGrip).toBeTruthy();
+  });
+
+  it("createDragReorder returns a handle with start() and getState()", () => {
+    const { api } = createExtensionAPI(manifest);
+    const handle = api.createDragReorder({
+      dataAttr: "test-idx",
+      containerSelector: "#none",
+      ghostStyle: () => ({ background: "#000", border: "none" }),
+      onDrop: () => {},
+    });
+    expect(typeof handle.start).toBe("function");
+    expect(typeof handle.getState).toBe("function");
+    expect(handle.getState()).toEqual({
+      sourceIdx: null,
+      indicator: null,
+      active: false,
+    });
   });
 
   it("openSurface auto-namespaces bare surface type IDs", () => {

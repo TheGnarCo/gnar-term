@@ -20,6 +20,13 @@ export interface DragReorderConfig {
   onDrop: (fromIdx: number, toIdx: number) => void;
   /** Optional precondition — if provided, must return true for drag to start */
   canStart?: () => boolean;
+  /**
+   * Optional callback fired on every state transition (start, move, drop,
+   * cancel). Svelte consumers use this to re-read `getState()` and mirror
+   * into reactive state — without it, Escape-to-cancel would leave the UI
+   * stuck until the next mouse event.
+   */
+  onStateChange?: () => void;
 }
 
 export interface DragReorderState {
@@ -55,45 +62,63 @@ export function createDragReorder(
       ghostEl.style.top = e.clientY - 12 + "px";
     }
     const el = document.elementFromPoint(e.clientX, e.clientY);
+    const prev = indicator;
     if (!el) {
       indicator = null;
-      return;
+    } else {
+      const item = (el as HTMLElement).closest(selector) as HTMLElement | null;
+      if (!item) {
+        const inContainer = (el as HTMLElement).closest(
+          config.containerSelector,
+        );
+        if (!inContainer) indicator = null;
+        // else: keep current indicator
+      } else {
+        const targetIdx = parseInt(item.dataset[dataKey]!, 10);
+        const rect = item.getBoundingClientRect();
+        const edge: "before" | "after" =
+          e.clientY - rect.top < rect.height / 2 ? "before" : "after";
+        indicator = { idx: targetIdx, edge };
+      }
     }
-    const item = (el as HTMLElement).closest(selector) as HTMLElement | null;
-    if (!item) {
-      const inContainer = (el as HTMLElement).closest(config.containerSelector);
-      if (inContainer) return; // keep current indicator
-      indicator = null;
-      return;
+    if (prev?.idx !== indicator?.idx || prev?.edge !== indicator?.edge) {
+      config.onStateChange?.();
     }
-    const targetIdx = parseInt(item.dataset[dataKey]!, 10);
-    const rect = item.getBoundingClientRect();
-    const edge: "before" | "after" =
-      e.clientY - rect.top < rect.height / 2 ? "before" : "after";
-    indicator = { idx: targetIdx, edge };
   }
 
-  function onDragEnd() {
+  function teardownDrag() {
     window.removeEventListener("mousemove", onDragMove);
     window.removeEventListener("mouseup", onDragEnd);
+    window.removeEventListener("keydown", onKeyDown);
     if (ghostEl) {
       ghostEl.remove();
       ghostEl = null;
     }
-
-    if (sourceIdx !== null && indicator) {
-      const from = sourceIdx;
-      let to = indicator.idx;
-      if (indicator.edge === "after") to += 1;
-      if (from !== to) {
-        config.onDrop(from, to);
-      }
-    }
-
     sourceIdx = null;
     indicator = null;
     active = false;
     document.body.style.cursor = "";
+    config.onStateChange?.();
+  }
+
+  function onDragEnd() {
+    const from = sourceIdx;
+    const dropIndicator = indicator;
+    if (from !== null && dropIndicator) {
+      let to = dropIndicator.idx;
+      if (dropIndicator.edge === "after") to += 1;
+      if (from !== to) {
+        config.onDrop(from, to);
+      }
+    }
+    teardownDrag();
+  }
+
+  function onKeyDown(e: KeyboardEvent) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      teardownDrag();
+    }
   }
 
   function start(e: MouseEvent, idx: number) {
@@ -114,6 +139,7 @@ export function createDragReorder(
         sourceIdx = idx;
         active = true;
         document.body.style.cursor = "grabbing";
+        config.onStateChange?.();
         if (originEl) {
           ghostEl = originEl.cloneNode(true) as HTMLElement;
           const { background, border } = config.ghostStyle();
@@ -134,6 +160,7 @@ export function createDragReorder(
         }
         window.addEventListener("mousemove", onDragMove);
         window.addEventListener("mouseup", onDragEnd);
+        window.addEventListener("keydown", onKeyDown);
       }
     }
 

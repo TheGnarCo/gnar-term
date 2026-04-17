@@ -85,12 +85,11 @@ describe("Agentic Orchestrator manifest", () => {
     expect(events).toContain("extension:harness:statusChanged");
   });
 
-  it("declares secondary sidebar tab", () => {
+  it("does not declare a secondary sidebar tab", () => {
+    // Agent tracking is passive — no dedicated UI tab. Status surfaces
+    // through workspace row indicators.
     const tabs = agenticOrchestratorManifest.contributes?.secondarySidebarTabs;
-    expect(tabs).toBeDefined();
-    const agentsTab = tabs!.find((t) => t.id === "agents");
-    expect(agentsTab).toBeDefined();
-    expect(agentsTab!.label).toBe("Agents");
+    expect(tabs === undefined || tabs.length === 0).toBe(true);
   });
 });
 

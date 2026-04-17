@@ -14,7 +14,6 @@
   export let unclaimedEntries: Array<{ ws: Workspace; idx: number }>;
   export let coreAction: WorkspaceAction | undefined;
   export let splitDropdownItems: SplitButtonItem[];
-  export let sectionReorderMode: boolean;
   export let insertIndicator: { idx: number; edge: "before" | "after" } | null;
   export let dragActive: boolean;
   export let dragSourceIdx: number | null;
@@ -73,67 +72,44 @@
   }
 </script>
 
-{#if !sectionReorderMode}
-  {#if coreAction}
-    <div style="padding: 4px 8px;">
-      <SplitButton
-        label="New Workspace"
-        onMainClick={() => coreAction?.handler({})}
-        dropdownItems={splitDropdownItems}
-        theme={theme as unknown as Readable<Record<string, string>>}
-        fullWidth={true}
-      />
-    </div>
-  {/if}
+{#if coreAction}
+  <div style="padding: 4px 8px;">
+    <SplitButton
+      label="New Workspace"
+      onMainClick={() => coreAction?.handler({})}
+      dropdownItems={splitDropdownItems}
+      theme={theme as unknown as Readable<Record<string, string>>}
+      fullWidth={true}
+    />
+  </div>
 {/if}
-{#if !sectionReorderMode}
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  {#each unclaimedEntries as entry, _i (entry.ws.id)}
-    {@const ws = entry.ws}
-    {@const idx = entry.idx}
-    <div animate:flip={{ duration: 200 }}>
-      {#if insertIndicator?.idx === idx && insertIndicator.edge === "before"}
-        <div
-          style="height: 2px; background: {$theme.accent}; margin: 0 12px; border-radius: 1px;"
-        ></div>
-      {/if}
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div on:mousedown={(e) => onStartDrag(e, idx)}>
-        <WorkspaceItem
-          bind:this={workspaceItems[ws.id]}
-          workspace={ws}
-          index={idx}
-          isActive={idx === $activeWorkspaceIdx}
-          dragActive={dragActive && dragSourceIdx === idx}
-          onSelect={() => {
-            if (!dragActive) onSwitchWorkspace(idx);
-          }}
-          onClose={() => onCloseWorkspace(idx)}
-          onRename={(name) => onRenameWorkspace(idx, name)}
-          onContextMenu={(x, y) => showWorkspaceContextMenu(x, y, idx)}
-        />
-      </div>
-      {#if insertIndicator?.idx === idx && insertIndicator.edge === "after"}
-        <div
-          style="height: 2px; background: {$theme.accent}; margin: 0 12px; border-radius: 1px;"
-        ></div>
-      {/if}
-    </div>
-  {/each}
-{:else}
-  <!-- Reorder mode: render workspace items but muted -->
-  {#each unclaimedEntries as entry (entry.ws.id)}
-    <div style="opacity: 0.3; pointer-events: none;">
-      <WorkspaceItem
-        workspace={entry.ws}
-        index={0}
-        isActive={false}
-        dragActive={false}
-        onSelect={() => {}}
-        onClose={() => {}}
-        onRename={() => {}}
-        onContextMenu={() => {}}
-      />
-    </div>
-  {/each}
-{/if}
+{#each unclaimedEntries as entry, _i (entry.ws.id)}
+  {@const ws = entry.ws}
+  {@const idx = entry.idx}
+  <div animate:flip={{ duration: 200 }}>
+    {#if insertIndicator?.idx === idx && insertIndicator.edge === "before"}
+      <div
+        style="height: 2px; background: {$theme.accent}; margin: 0 12px; border-radius: 1px;"
+      ></div>
+    {/if}
+    <WorkspaceItem
+      bind:this={workspaceItems[ws.id]}
+      workspace={ws}
+      index={idx}
+      isActive={idx === $activeWorkspaceIdx}
+      dragActive={dragActive && dragSourceIdx === idx}
+      onSelect={() => {
+        if (!dragActive) onSwitchWorkspace(idx);
+      }}
+      onClose={() => onCloseWorkspace(idx)}
+      onRename={(name) => onRenameWorkspace(idx, name)}
+      onContextMenu={(x, y) => showWorkspaceContextMenu(x, y, idx)}
+      onGripMouseDown={(e) => onStartDrag(e, idx)}
+    />
+    {#if insertIndicator?.idx === idx && insertIndicator.edge === "after"}
+      <div
+        style="height: 2px; background: {$theme.accent}; margin: 0 12px; border-radius: 1px;"
+      ></div>
+    {/if}
+  </div>
+{/each}

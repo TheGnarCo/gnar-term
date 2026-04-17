@@ -4,6 +4,14 @@ import type { MenuItem } from "../context-menu-types";
 export const isFullscreen = writable<boolean>(false);
 export const primarySidebarVisible = writable<boolean>(true);
 
+/**
+ * True while a within-block drag-reorder is in progress (workspace row,
+ * project row, etc.). Outer-block drag grips hide and outer-block
+ * drag-start is suppressed while this is true, so the two reorder contexts
+ * never compete.
+ */
+export const innerReorderActive = writable<boolean>(false);
+
 /** When set, the settings overlay opens to this page ("general", "extensions", "ext:<id>") */
 export const settingsPage = writable<string | null>(null);
 export const primarySidebarWidth = writable<number>(220);

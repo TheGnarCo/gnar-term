@@ -13,7 +13,6 @@
     component: Component | unknown;
     props?: Record<string, unknown>;
   };
-  export let sectionReorderMode: boolean;
   export let collapsed: boolean;
 
   export let onToggleCollapse: () => void;
@@ -21,7 +20,7 @@
   $: sectionApi = getExtensionApiById(section.source);
 </script>
 
-{#if !sectionReorderMode && section.showLabel !== false}
+{#if section.showLabel !== false}
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
@@ -47,8 +46,8 @@
     {section.label}
   </div>
 {/if}
-{#if section.collapsible === false || !collapsed || sectionReorderMode}
-  <div style={sectionReorderMode ? "opacity: 0.3; pointer-events: none;" : ""}>
+{#if section.collapsible === false || !collapsed}
+  <div>
     {#if sectionApi}
       <ExtensionWrapper
         api={sectionApi}

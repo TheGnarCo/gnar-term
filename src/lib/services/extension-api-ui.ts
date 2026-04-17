@@ -17,10 +17,6 @@ import {
   unregisterOverlay as registryUnregisterOverlay,
 } from "./overlay-registry";
 import { registerWorkspaceSubtitle as registryRegisterWorkspaceSubtitle } from "./workspace-subtitle-registry";
-import {
-  registerAgentLauncher as registryRegisterAgentLauncher,
-  unregisterAgentLaunchersBySource as registryUnregisterAgentLaunchersBySource,
-} from "./agent-launcher-registry";
 import type { ExtensionManifest, ExtensionAPI } from "../extension-types";
 
 /** All register*() methods for UI contributions (sidebar tabs, surfaces, overlays, etc.). */
@@ -33,8 +29,6 @@ export function createUIRegistrationAPI(
   | "registerSecondarySidebarAction"
   | "registerPrimarySidebarSection"
   | "registerSurfaceType"
-  | "registerAgentLauncher"
-  | "unregisterAgentLaunchers"
   | "registerOverlay"
   | "unregisterOverlay"
   | "registerCommand"
@@ -112,19 +106,6 @@ export function createUIRegistrationAPI(
         component,
         source: extId,
       });
-    },
-
-    registerAgentLauncher(id: string, label: string, command: string) {
-      registryRegisterAgentLauncher({
-        id: `${extId}:${id}`,
-        label,
-        command,
-        source: extId,
-      });
-    },
-
-    unregisterAgentLaunchers() {
-      registryUnregisterAgentLaunchersBySource(extId);
     },
 
     registerOverlay(

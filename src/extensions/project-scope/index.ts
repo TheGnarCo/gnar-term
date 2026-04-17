@@ -8,7 +8,7 @@
  */
 import { writable } from "svelte/store";
 import type { ExtensionManifest, ExtensionAPI } from "../api";
-import ProjectSectionContent from "./ProjectSectionContent.svelte";
+import ProjectsContainer from "./ProjectsContainer.svelte";
 import ProjectDashboardOverlay from "./ProjectDashboardOverlay.svelte";
 import ProjectCreateOverlay from "./ProjectCreateOverlay.svelte";
 
@@ -48,27 +48,6 @@ function generateId(): string {
   return crypto.randomUUID();
 }
 
-/**
- * Register a primary sidebar section for a single project.
- * The section renders ProjectSectionContent with the project's ID
- * passed as a prop.
- */
-function registerProjectSection(
-  api: ExtensionAPI,
-  project: ProjectEntry,
-): void {
-  api.registerPrimarySidebarSection(
-    `project-${project.id}`,
-    ProjectSectionContent,
-    {
-      collapsible: false,
-      showLabel: false,
-      label: project.name,
-      props: { projectId: project.id },
-    },
-  );
-}
-
 export const projectScopeManifest: ExtensionManifest = {
   id: "project-scope",
   name: "Project Scope",
@@ -77,7 +56,7 @@ export const projectScopeManifest: ExtensionManifest = {
   entry: "./index.ts",
   included: true,
   contributes: {
-    workspaceActions: [{ id: "create-project", title: "New Project" }],
+    primarySidebarSections: [{ id: "projects", label: "Projects" }],
     commands: [
       { id: "create-project", title: "Create Project..." },
       { id: "open-project-dashboard", title: "Open Project Dashboard..." },
@@ -143,17 +122,16 @@ export function registerProjectScopeExtension(api: ExtensionAPI): void {
       projects.push(project);
       api.state.set("projects", projects);
       api.state.set("activeProjectId", id);
-
-      registerProjectSection(api, project);
+      api.emit("extension:project:state-changed", { projectId: id });
     }
 
-    // Register workspace action for creating new projects (in sidebar top bar)
-    api.registerWorkspaceAction("create-project", {
-      label: "New Project",
-      icon: "folder-plus",
-      zone: "sidebar",
-      handler: createProjectFlow,
-      when: (ctx) => !ctx.projectId,
+    // Register the single "Projects" container section. All projects render
+    // as sub-items inside it, with inner drag-reorder.
+    api.registerPrimarySidebarSection("projects", ProjectsContainer, {
+      collapsible: false,
+      showLabel: true,
+      label: "Projects",
+      props: { onCreateProject: createProjectFlow },
     });
 
     // Load persisted projects. Workspace IDs are regenerated every restart
@@ -163,9 +141,6 @@ export function registerProjectScopeExtension(api: ExtensionAPI): void {
     const projects = api.state.get<ProjectEntry[]>("projects") || [];
     const cleared = projects.map((p) => ({ ...p, workspaceIds: [] }));
     api.state.set("projects", cleared);
-    for (const project of cleared) {
-      registerProjectSection(api, project);
-    }
 
     // Register per-project "New Workspace" commands for the command palette
     function registerProjectCommands(projects: ProjectEntry[]): void {

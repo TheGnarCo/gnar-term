@@ -6,7 +6,6 @@
  * observational.
  */
 import type { ExtensionManifest, ExtensionAPI, AppEvent } from "../api";
-import AgentsTab from "./AgentsTab.svelte";
 import {
   initRegistry,
   generateAgentId,
@@ -75,14 +74,6 @@ export const agenticOrchestratorManifest: ExtensionManifest = {
   included: true,
   permissions: ["observe"],
   contributes: {
-    secondarySidebarTabs: [
-      {
-        id: "agents",
-        label: "Agents",
-        icon: "terminal",
-        actions: [{ id: "refresh", icon: "refresh", title: "Refresh" }],
-      },
-    ],
     settings: {
       fields: {
         idleTimeout: {
@@ -121,38 +112,15 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
     // Build merged pattern list: defaults + user-defined
     const patterns = buildPatternList(api);
 
-    // Register agent launchers for the new-tab dropdown
-    for (const pattern of patterns) {
-      const cmd = pattern.titlePatterns[0];
-      if (!cmd) continue;
-      api.registerAgentLauncher(`agent-${cmd}`, pattern.name, cmd);
-    }
-
-    // Register sidebar tab
-    api.registerSecondarySidebarTab("agents", AgentsTab);
-
-    const triggerAgentsRefresh = () => {
-      const refresh = api.state.get<() => void>("agents-refresh");
-      if (refresh) refresh();
-    };
-    api.registerSecondarySidebarAction(
-      "agents",
-      "refresh",
-      triggerAgentsRefresh,
-    );
-
-    // React to agent status changes: badge tab, mark unread, update workspace + surface dots
+    // React to agent status changes: mark unread, update workspace + surface dots
     const handleStatusChanged = (event: AppEvent) => {
       const e = event as Record<string, unknown>;
       const status = e.status as string;
       const workspaceId = e.workspaceId as string | undefined;
       const surfaceId = e.surfaceId as string | undefined;
 
-      if (status === "waiting") {
-        api.badgeSidebarTab("agents", true);
-        if (surfaceId) {
-          api.markSurfaceUnread(surfaceId);
-        }
+      if (status === "waiting" && surfaceId) {
+        api.markSurfaceUnread(surfaceId);
       }
 
       if (workspaceId) {
@@ -342,9 +310,6 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
       cleanup();
     }
     eventCleanups.length = 0;
-
-    // Clean up agent launchers
-    api.unregisterAgentLaunchers();
   });
 }
 

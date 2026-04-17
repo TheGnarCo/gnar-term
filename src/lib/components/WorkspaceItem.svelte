@@ -7,6 +7,7 @@
   import { workspaceSubtitleStore } from "../services/workspace-subtitle-registry";
   import { getExtensionApiById } from "../services/extension-loader";
   import ExtensionWrapper from "./ExtensionWrapper.svelte";
+  import DragGrip from "./DragGrip.svelte";
 
   $: isDisco = $theme.name === "Molly Disco";
   import { getAllSurfaces } from "../types";
@@ -159,6 +160,8 @@
   }
 
   export let dragActive = false;
+  /** Mousedown handler fired when the drag grip is pressed. Drag origin, not row body. */
+  export let onGripMouseDown: ((e: MouseEvent) => void) | undefined = undefined;
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -166,6 +169,7 @@
 <div
   data-drag-idx={index}
   style="
+    position: relative;
     margin: 2px 8px; border-radius: 6px; overflow: hidden; cursor: pointer;
     background: {isActive
     ? $theme.bgActive
@@ -186,6 +190,14 @@
     closeHovered = false;
   }}
 >
+  {#if onGripMouseDown}
+    <DragGrip
+      theme={$theme}
+      visible={hovered}
+      onMouseDown={onGripMouseDown}
+      ariaLabel="Drag workspace to reorder"
+    />
+  {/if}
   <div style="padding: 8px 12px; display: flex; align-items: center; gap: 8px;">
     <div
       style="flex: 1; overflow: hidden; display: flex; align-items: center; gap: 4px;"

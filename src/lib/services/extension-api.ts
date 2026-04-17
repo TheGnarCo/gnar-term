@@ -68,6 +68,13 @@ import {
 import WorkspaceListView from "../components/WorkspaceListView.svelte";
 import SplitButton from "../components/SplitButton.svelte";
 import ColorPicker from "../components/ColorPicker.svelte";
+import DragGrip from "../components/DragGrip.svelte";
+import {
+  createDragReorder,
+  type DragReorderConfig,
+  type DragReorderHandle,
+} from "../actions/drag-reorder";
+import { innerReorderActive } from "../stores/ui";
 import { getActiveCwd } from "./service-helpers";
 import { workspaces } from "../stores/workspace";
 import { getAllSurfaces, isTerminalSurface } from "../types";
@@ -461,7 +468,27 @@ export function createExtensionAPI(
       return tauriConvertFileSrc(path);
     },
     getComponents() {
-      return { WorkspaceListView, SplitButton, ColorPicker };
+      return { WorkspaceListView, SplitButton, ColorPicker, DragGrip };
+    },
+    createDragReorder(
+      config: DragReorderConfig & { scope?: "inner" | "block" },
+    ): DragReorderHandle {
+      const { scope, onStateChange, ...rest } = config;
+      let handle: DragReorderHandle;
+      if (scope === "inner") {
+        // Inner (row-level) scope writes to innerReorderActive so the
+        // primary-sidebar block drag can suppress itself for the duration.
+        handle = createDragReorder({
+          ...rest,
+          onStateChange: () => {
+            innerReorderActive.set(handle.getState().active);
+            onStateChange?.();
+          },
+        });
+      } else {
+        handle = createDragReorder(config);
+      }
+      return handle;
     },
   };
 

@@ -17,7 +17,6 @@ import { unregisterOverlaysBySource } from "./overlay-registry";
 import { unclaimBySource } from "./claimed-workspace-registry";
 import { unregisterStatusBySource } from "./status-registry";
 import { unregisterWorkspaceSubtitlesBySource } from "./workspace-subtitle-registry";
-import { unregisterAgentLaunchersBySource } from "./agent-launcher-registry";
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 
 // --- Tauri commands safe for extension use (allowlist) ---
@@ -143,7 +142,6 @@ export const REGISTRY_CLEANUP_FNS: Array<(source: string) => void> = [
   unclaimBySource,
   unregisterStatusBySource,
   unregisterWorkspaceSubtitlesBySource,
-  unregisterAgentLaunchersBySource,
 ];
 
 // --- Valid event types (for manifest validation) ---

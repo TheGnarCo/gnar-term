@@ -758,7 +758,11 @@
           console.error("[shutdown] flush failed:", r.reason);
         }
       }
-      await appWindow.destroy();
+      try {
+        await appWindow.destroy();
+      } catch (err) {
+        console.error("[shutdown] destroy failed:", err);
+      }
     });
   });
 </script>
@@ -809,9 +813,6 @@
             if (typeDef) {
               openExtensionSurfaceInPaneById(paneId, typeId, typeDef.label);
             }
-          }}
-          onLaunchAgent={(paneId, command) => {
-            void newSurfaceWithCommand(paneId, command);
           }}
           onSplitRight={(paneId) => splitPane(paneId, "horizontal")}
           onSplitDown={(paneId) => splitPane(paneId, "vertical")}

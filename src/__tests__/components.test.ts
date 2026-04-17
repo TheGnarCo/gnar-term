@@ -111,6 +111,7 @@ import {
   commandPaletteOpen,
   findBarVisible,
   contextMenu,
+  isFullscreen,
 } from "../lib/stores/ui";
 import {
   registerCommands,
@@ -445,7 +446,6 @@ describe("TabBar", () => {
         onCloseSurface: noop,
         onNewSurface: noop,
         onSelectSurfaceType: noop,
-        onLaunchAgent: noop,
         onSplitRight: noop,
         onSplitDown: noop,
         onClosePane: noop,
@@ -464,7 +464,6 @@ describe("TabBar", () => {
         onCloseSurface: noop,
         onNewSurface: noop,
         onSelectSurfaceType: noop,
-        onLaunchAgent: noop,
         onSplitRight: noop,
         onSplitDown: noop,
         onClosePane: noop,
@@ -482,7 +481,6 @@ describe("TabBar", () => {
         onCloseSurface: noop,
         onNewSurface: noop,
         onSelectSurfaceType: noop,
-        onLaunchAgent: noop,
         onSplitRight: noop,
         onSplitDown: noop,
         onClosePane: noop,
@@ -500,7 +498,6 @@ describe("TabBar", () => {
         onCloseSurface: noop,
         onNewSurface: noop,
         onSelectSurfaceType: noop,
-        onLaunchAgent: noop,
         onSplitRight: noop,
         onSplitDown: noop,
         onClosePane: noop,
@@ -518,7 +515,6 @@ describe("TabBar", () => {
         onCloseSurface: noop,
         onNewSurface: noop,
         onSelectSurfaceType: noop,
-        onLaunchAgent: noop,
         onSplitRight: noop,
         onSplitDown: noop,
         onClosePane: noop,
@@ -902,7 +898,6 @@ describe("PaneView", () => {
         onCloseSurface: noop,
         onNewSurface: noop,
         onSelectSurfaceType: noop,
-        onLaunchAgent: noop,
         onSplitRight: noop,
         onSplitDown: noop,
         onClosePane: noop,
@@ -921,7 +916,6 @@ describe("PaneView", () => {
         onCloseSurface: noop,
         onNewSurface: noop,
         onSelectSurfaceType: noop,
-        onLaunchAgent: noop,
         onSplitRight: noop,
         onSplitDown: noop,
         onClosePane: noop,
@@ -940,7 +934,6 @@ describe("PaneView", () => {
         onCloseSurface: noop,
         onNewSurface: noop,
         onSelectSurfaceType: noop,
-        onLaunchAgent: noop,
         onSplitRight: noop,
         onSplitDown: noop,
         onClosePane: noop,
@@ -1011,11 +1004,21 @@ describe("PrimarySidebar", () => {
     expect(screen.getByText("Project Beta")).toBeTruthy();
   });
 
-  it("header has data-tauri-drag-region", () => {
+  it("header has data-tauri-drag-region (when windowed, for traffic-light padding)", () => {
     primarySidebarVisible.set(true);
+    isFullscreen.set(false);
     const { container } = render(PrimarySidebar, { props: sidebarProps });
     const dragRegions = container.querySelectorAll("[data-tauri-drag-region]");
     expect(dragRegions.length).toBeGreaterThan(0);
+  });
+
+  it("hides the top drag region bar when fullscreen (no traffic lights)", () => {
+    primarySidebarVisible.set(true);
+    isFullscreen.set(true);
+    const { container } = render(PrimarySidebar, { props: sidebarProps });
+    const dragRegions = container.querySelectorAll("[data-tauri-drag-region]");
+    expect(dragRegions.length).toBe(0);
+    isFullscreen.set(false);
   });
 
   it("renders correct number of workspace items", () => {
@@ -1037,7 +1040,7 @@ describe("PrimarySidebar", () => {
     return { id, label, component: "mock", source, collapsible: true };
   }
 
-  it("shows Re-order button in top row when extension sections are registered", () => {
+  it("does NOT show a 'Re-order Sections' button (reorder is implicit via grip)", () => {
     primarySidebarVisible.set(true);
     registerWorkspaceAction({
       id: "core:new-workspace",
@@ -1050,23 +1053,7 @@ describe("PrimarySidebar", () => {
     registerSidebarSection(makeSection("s2", "Section 2", "ext-b"));
 
     render(PrimarySidebar, { props: { ...sidebarProps } });
-    // Reorder button should be a standalone button in the top row
-    expect(screen.getByTitle("Re-order Sections")).toBeTruthy();
-  });
-
-  it("shows Re-order button with just 1 extension section", () => {
-    primarySidebarVisible.set(true);
-    registerWorkspaceAction({
-      id: "core:new-workspace",
-      label: "New Workspace",
-      icon: "plus",
-      source: "core",
-      handler: noop,
-    });
-    registerSidebarSection(makeSection("s1", "Section 1", "ext-a"));
-
-    render(PrimarySidebar, { props: { ...sidebarProps } });
-    expect(screen.getByTitle("Re-order Sections")).toBeTruthy();
+    expect(screen.queryByTitle("Re-order Sections")).toBeNull();
   });
 
   it("does not show dropdown caret with no extension sections and no extra actions", () => {
@@ -1087,7 +1074,7 @@ describe("PrimarySidebar", () => {
     expect(buttons.length).toBe(1);
   });
 
-  it("toggles reorder mode from top row button and shows drag handles", async () => {
+  it("renders a block-level DragGrip per block (workspaces + each section)", () => {
     primarySidebarVisible.set(true);
     registerWorkspaceAction({
       id: "core:new-workspace",
@@ -1103,14 +1090,11 @@ describe("PrimarySidebar", () => {
       props: { ...sidebarProps },
     });
 
-    // No drag handles initially
-    expect(container.querySelectorAll("[data-section-drag]").length).toBe(0);
-
-    // Click the standalone reorder button in the top row
-    await fireEvent.click(screen.getByTitle("Re-order Sections"));
-
-    // Drag handles should now be visible (2 sections + 1 workspaces block = 3)
-    expect(container.querySelectorAll("[data-section-drag]").length).toBe(3);
+    // One grip per top-level block (workspaces + 2 sections = 3)
+    const grips = container.querySelectorAll(
+      '[role="button"][aria-label*="block" i]',
+    );
+    expect(grips.length).toBe(3);
   });
 
   it("renders sidebar-zone actions as buttons in the top row", () => {

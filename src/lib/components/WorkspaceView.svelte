@@ -8,7 +8,6 @@
   export let onCloseSurface: (paneId: string, surfaceId: string) => void;
   export let onNewSurface: (paneId: string) => void;
   export let onSelectSurfaceType: (paneId: string, typeId: string) => void;
-  export let onLaunchAgent: (paneId: string, command: string) => void;
   export let onSplitRight: (paneId: string) => void;
   export let onSplitDown: (paneId: string) => void;
   export let onClosePane: (paneId: string) => void;
@@ -30,7 +29,6 @@
     {onCloseSurface}
     {onNewSurface}
     {onSelectSurfaceType}
-    {onLaunchAgent}
     {onSplitRight}
     {onSplitDown}
     {onClosePane}

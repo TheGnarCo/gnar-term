@@ -179,10 +179,6 @@ export interface ExtensionAPI {
     },
   ): void;
   registerSurfaceType(surfaceId: string, component: unknown): void;
-  /** Register an agent launcher that appears in the new-tab dropdown. */
-  registerAgentLauncher(id: string, label: string, command: string): void;
-  /** Unregister all agent launchers registered by this extension. */
-  unregisterAgentLaunchers(): void;
   /** Register an overlay component (dialog, dashboard, modal) rendered above the main UI. */
   registerOverlay(
     overlayId: string,
@@ -395,12 +391,51 @@ export interface ExtensionAPI {
    *   Props: `{ label, onMainClick, dropdownItems, theme }`
    * - **ColorPicker** — grid of color swatches with selection state
    *   Props: `{ theme: Readable<ThemeDef>, value: string (bindable), colors?: string[] }`
+   * - **DragGrip** — left-border drag handle that appears on hover
+   *   Props: `{ theme, visible, onMouseDown, ariaLabel? }`
    */
   getComponents(): {
     WorkspaceListView: unknown;
     SplitButton: unknown;
     ColorPicker: unknown;
+    DragGrip: unknown;
   };
+
+  /**
+   * Create a drag-reorder handle for a custom reorderable list.
+   * Shared mouse-based implementation (HTML5 DnD is broken in Tauri WKWebView).
+   * The caller provides a data attribute selector, container selector, and
+   * onDrop callback; the returned handle exposes `start(e, idx)` and
+   * `getState()` for wiring into the component's own reactive state.
+   *
+   * Pass `scope: "inner"` for row-level drags nested inside a sidebar block —
+   * outer-block drag will be suppressed while this drag is active, so the
+   * two reorder contexts never compete.
+   */
+  createDragReorder(
+    config: DragReorderConfig & { scope?: "inner" | "block" },
+  ): DragReorderHandle;
+}
+
+/** Config for createDragReorder — re-exported so extensions can type their usage. */
+export interface DragReorderConfig {
+  dataAttr: string;
+  containerSelector: string;
+  ghostStyle: () => { background: string; border: string };
+  onDrop: (fromIdx: number, toIdx: number) => void;
+  canStart?: () => boolean;
+  onStateChange?: () => void;
+}
+
+export interface DragReorderState {
+  sourceIdx: number | null;
+  indicator: { idx: number; edge: "before" | "after" } | null;
+  active: boolean;
+}
+
+export interface DragReorderHandle {
+  start: (e: MouseEvent, idx: number) => void;
+  getState: () => DragReorderState;
 }
 
 // --- Workspace action types ---

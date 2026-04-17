@@ -16,7 +16,6 @@
   export let onCloseSurface: (surfaceId: string) => void;
   export let onNewSurface: () => void;
   export let onSelectSurfaceType: (typeId: string) => void;
-  export let onLaunchAgent: (command: string) => void;
   export let onSplitRight: () => void;
   export let onSplitDown: () => void;
   export let onClosePane: () => void;
@@ -74,7 +73,6 @@
     {onCloseSurface}
     {onNewSurface}
     {onSelectSurfaceType}
-    {onLaunchAgent}
     {onSplitRight}
     {onSplitDown}
     {onClosePane}

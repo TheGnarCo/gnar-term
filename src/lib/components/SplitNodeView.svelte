@@ -11,7 +11,6 @@
   export let onCloseSurface: (paneId: string, surfaceId: string) => void;
   export let onNewSurface: (paneId: string) => void;
   export let onSelectSurfaceType: (paneId: string, typeId: string) => void;
-  export let onLaunchAgent: (paneId: string, command: string) => void;
   export let onSplitRight: (paneId: string) => void;
   export let onSplitDown: (paneId: string) => void;
   export let onClosePane: (paneId: string) => void;
@@ -54,7 +53,6 @@
     onCloseSurface={(sid) => onCloseSurface(node.pane.id, sid)}
     onNewSurface={() => onNewSurface(node.pane.id)}
     onSelectSurfaceType={(typeId) => onSelectSurfaceType(node.pane.id, typeId)}
-    onLaunchAgent={(command) => onLaunchAgent(node.pane.id, command)}
     onSplitRight={() => onSplitRight(node.pane.id)}
     onSplitDown={() => onSplitDown(node.pane.id)}
     onClosePane={() => onClosePane(node.pane.id)}
@@ -80,7 +78,6 @@
         {onCloseSurface}
         {onNewSurface}
         {onSelectSurfaceType}
-        {onLaunchAgent}
         {onSplitRight}
         {onSplitDown}
         {onClosePane}
@@ -111,7 +108,6 @@
         {onCloseSurface}
         {onNewSurface}
         {onSelectSurfaceType}
-        {onLaunchAgent}
         {onSplitRight}
         {onSplitDown}
         {onClosePane}

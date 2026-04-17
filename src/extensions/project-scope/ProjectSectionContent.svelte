@@ -74,21 +74,39 @@
 
 {#if project}
   <div style="padding: 2px 0; font-size: 12px; color: {$theme.fg};">
-    <!-- Project header with SplitButton matching Workspaces section -->
+    <!-- Project header: colored dot + name (clickable → dashboard) + SplitButton -->
     <div
       style="
-        padding: 6px 12px; font-size: 10px; font-weight: 600;
-        letter-spacing: 0.5px; text-transform: uppercase;
-        color: {$theme.fgDim};
-        display: flex; align-items: center; justify-content: space-between;
-        border-left: 3px solid {project.color};
+        padding: 6px 12px; display: flex; align-items: center;
+        justify-content: space-between; gap: 8px;
       "
     >
-      <span>{project.name}</span>
-      {#if coreAction}
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div
+        style="
+          display: flex; align-items: center; gap: 8px;
+          min-width: 0; flex: 1; cursor: pointer;
+        "
+        on:click={() => {
+          if (project) dashboardProjectId$.set(project.id);
+        }}
+      >
         <span
-          style="text-transform: none; letter-spacing: normal; font-weight: 400;"
+          style="
+            width: 8px; height: 8px; border-radius: 50%;
+            background: {project.color}; flex-shrink: 0;
+          "
+        ></span>
+        <span
+          style="
+            font-size: 13px; font-weight: 600; color: {$theme.fg};
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+          ">{project.name}</span
         >
+      </div>
+      {#if coreAction}
+        <span style="flex-shrink: 0;">
           <svelte:component
             this={SplitButton as Component}
             label="+ New"
@@ -98,28 +116,6 @@
           />
         </span>
       {/if}
-    </div>
-
-    <!-- Dashboard link -->
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div
-      style="
-        padding: 3px 12px 4px; font-size: 10px; color: {$theme.fgDim};
-        cursor: pointer; border-left: 3px solid {project.color};
-      "
-      on:click={() => {
-        if (project) dashboardProjectId$.set(project.id);
-      }}
-    >
-      <span
-        style="
-          border: 1px solid {$theme.border}; border-radius: 4px;
-          padding: 2px 8px; display: inline-block;
-        "
-      >
-        Dashboard
-      </span>
     </div>
 
     <!-- Workspace list -->

@@ -401,7 +401,9 @@ mod tests {
     fn env_mutation_guard() -> std::sync::MutexGuard<'static, ()> {
         use std::sync::Mutex;
         static GUARD: Mutex<()> = Mutex::new(());
-        GUARD.lock().unwrap_or_else(|e| e.into_inner())
+        GUARD
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     #[test]

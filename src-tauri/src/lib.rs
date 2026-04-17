@@ -2384,11 +2384,12 @@ mod tests {
         std::thread::sleep(Duration::from_millis(200));
 
         // Verify get_pty_cwd returns the correct directory
-        if let Some(_pid) = child_pid {
+        #[allow(unused_variables)] // `pid` is only read in the macOS cfg block
+        if let Some(pid) = child_pid {
             #[cfg(target_os = "macos")]
             {
                 let output = std::process::Command::new("lsof")
-                    .args(["-a", "-p", &_pid.to_string(), "-d", "cwd", "-Fn"])
+                    .args(["-a", "-p", &pid.to_string(), "-d", "cwd", "-Fn"])
                     .output()
                     .expect("lsof should run");
                 let stdout = String::from_utf8_lossy(&output.stdout);

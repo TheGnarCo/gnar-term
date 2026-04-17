@@ -5,7 +5,7 @@
     type ExtensionAPI,
     type ExtensionSurfacePayload,
   } from "../api";
-  import { openPreview } from "./preview-service";
+  import { openPreview, renderContentToElement } from "./preview-service";
 
   export let surface: ExtensionSurfacePayload;
   export let visible: boolean;
@@ -19,8 +19,10 @@
   $: watchId = (surface.props?.watchId as number) || 0;
 
   onMount(async () => {
-    // Lazy creation: if we only have filePath (e.g. from workspace
-    // deserialization), create the preview element on mount.
+    // Three content sources, in priority order:
+    //   1. pre-built element (file-based preview created eagerly)
+    //   2. filePath (file-based; render lazily on mount)
+    //   3. content + format (in-memory; created by MCP create_preview)
     if (!element && surface.props?.filePath) {
       const preview = await openPreview(surface.props.filePath as string, api);
       surface.props = {
@@ -30,6 +32,17 @@
       };
       element = preview.element;
       watchId = preview.watchId;
+    } else if (!element && typeof surface.props?.content === "string") {
+      const format =
+        (surface.props.format as "markdown" | "text" | "code") ?? "markdown";
+      const language = (surface.props.language as string | undefined) ?? "";
+      element = renderContentToElement(
+        surface.props.content as string,
+        format,
+        language,
+        api,
+      );
+      surface.props = { ...surface.props, element };
     }
     if (element) container.appendChild(element);
   });

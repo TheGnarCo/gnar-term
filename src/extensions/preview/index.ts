@@ -30,7 +30,6 @@ import "./previewers/text";
 // Re-export for tests
 export { SUPPORTED_EXTENSIONS } from "./preview-registry-list";
 export { getSupportedExtensions } from "./preview-registry";
-export { openPreviewFromContent } from "./preview-service";
 
 export const previewManifest: ExtensionManifest = {
   id: "preview",

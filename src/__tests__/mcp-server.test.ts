@@ -46,7 +46,7 @@ describe("MCP server JSON-RPC", () => {
     expect((resp as any).result.capabilities.tools).toBeDefined();
   });
 
-  it("lists all 19 tools with correct names", async () => {
+  it("lists all 21 tools with correct names", async () => {
     const resp = await dispatch(rpc("tools/list"));
     const tools = (resp as any).result.tools as Array<{ name: string }>;
     const names = tools.map((t) => t.name).sort();
@@ -62,7 +62,9 @@ describe("MCP server JSON-RPC", () => {
         "list_dir",
         "list_panes",
         "list_sessions",
+        "list_surface_types",
         "list_workspaces",
+        "open_surface",
         "poll_events",
         "read_file",
         "read_output",
@@ -73,7 +75,7 @@ describe("MCP server JSON-RPC", () => {
         "spawn_agent",
       ].sort(),
     );
-    expect(names).toHaveLength(19);
+    expect(names).toHaveLength(21);
     // Every tool must ship a JSON Schema shaped object.
     for (const t of tools) {
       expect(t).toHaveProperty("inputSchema");
@@ -201,6 +203,29 @@ describe("MCP server JSON-RPC", () => {
     expect(Array.isArray(result)).toBe(true);
   });
 
+  it("list_surface_types returns an array of { id, label, source }", async () => {
+    const r = await dispatch(
+      rpc("tools/call", { name: "list_surface_types", arguments: {} }),
+    );
+    const result = (r as any).result.structuredContent;
+    expect(result).toHaveProperty("types");
+    expect(Array.isArray(result.types)).toBe(true);
+  });
+
+  it("open_surface rejects an unregistered surface type", async () => {
+    const resp = await dispatch(
+      rpc("tools/call", {
+        name: "open_surface",
+        arguments: {
+          surface_type_id: "nope:nope",
+          title: "x",
+        },
+      }),
+    );
+    expect((resp as any).error.code).toBe(-32000);
+    expect((resp as any).error.message).toMatch(/Unknown surface type/);
+  });
+
   it("returns a JSON-RPC error when a tool handler throws", async () => {
     const resp = await dispatch(
       rpc("tools/call", {
@@ -228,7 +253,7 @@ describe("tool metadata", () => {
     }
   });
 
-  it("tool count matches spec (19)", () => {
-    expect(_getToolsForTest()).toHaveLength(19);
+  it("tool count matches spec (21)", () => {
+    expect(_getToolsForTest()).toHaveLength(21);
   });
 });

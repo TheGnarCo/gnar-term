@@ -15,7 +15,6 @@ import {
   type PreviewResult,
 } from "./preview-registry";
 import { get } from "svelte/store";
-import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 
 export async function openPreview(
   filePath: string,
@@ -132,25 +131,19 @@ export function refreshPreviewStyles(api: ExtensionAPI) {
 
 /**
  * Render in-memory content (markdown/text/code) into a styled preview element.
- * Used by the MCP `create_preview` tool where there is no backing file.
- * Caller supplies the current theme value so this function stays pure with
- * respect to core state (preserves the extension barrier).
+ * Called by PreviewSurface.svelte when the MCP `create_preview` tool opens an
+ * extension surface with a `{ content, format, language }` prop set rather
+ * than a filePath. Kept inside the preview extension (uses the extension's
+ * own previewer registry and the caller's ExtensionAPI for theme access) so
+ * core code never needs to reach across the extension barrier.
  */
-export function openPreviewFromContent(
+export function renderContentToElement(
   content: string,
-  title: string,
-  themeValue: PreviewContext["theme"],
-  previewId?: string,
-): {
-  id: string;
-  filePath: "";
-  title: string;
-  element: HTMLElement;
-  watchId: 0;
-} {
-  const id =
-    previewId ??
-    `preview-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  format: "markdown" | "text" | "code",
+  language: string,
+  api: ExtensionAPI,
+): HTMLElement {
+  const themeValue = get(api.theme);
 
   const element = document.createElement("div");
   element.style.cssText = `
@@ -162,40 +155,26 @@ export function openPreviewFromContent(
   `;
   element.className = "preview-surface";
 
-  injectStylesForTheme(themeValue);
+  injectStyles(api);
+
+  // Wrap text/code as fenced markdown so the markdown previewer handles
+  // monospacing and syntax highlighting in one place.
+  let rendered: string;
+  if (format === "markdown") {
+    rendered = content;
+  } else if (format === "code") {
+    rendered = "```" + language + "\n" + content + "\n```";
+  } else {
+    rendered = "```\n" + content + "\n```";
+  }
 
   const mdPreviewer = findPreviewer("stub.md");
   if (mdPreviewer) {
-    const ctx: PreviewContext = {
-      theme: themeValue,
-      convertFileSrc,
-      invoke,
-    };
-    mdPreviewer.render(content, "", element, ctx);
+    mdPreviewer.render(rendered, "", element, buildPreviewContext(api));
   } else {
     element.textContent = content;
   }
-
-  return { id, filePath: "", title, element, watchId: 0 };
-}
-
-function injectStylesForTheme(themeValue: PreviewContext["theme"]) {
-  let style = document.getElementById(
-    "preview-styles",
-  ) as HTMLStyleElement | null;
-  if (!style) {
-    style = document.createElement("style");
-    style.id = "preview-styles";
-    document.head.appendChild(style);
-  }
-  style.textContent = `
-    .preview-surface .json-key { color: ${themeValue.ansi.blue}; }
-    .preview-surface .json-string { color: ${themeValue.ansi.green}; }
-    .preview-surface .json-number { color: ${themeValue.ansi.magenta}; }
-    .preview-surface .json-boolean { color: ${themeValue.ansi.yellow}; }
-    .preview-surface .json-null { color: ${themeValue.fgDim}; }
-    .preview-surface img { max-width: 100%; border-radius: 4px; }
-  `;
+  return element;
 }
 
 function getExtension(path: string): string {

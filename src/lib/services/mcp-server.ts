@@ -42,8 +42,7 @@ import {
   removeSection,
   type SidebarItem,
 } from "../stores/extension-sidebar";
-import { openPreviewFromContent } from "../../extensions/preview";
-import { theme } from "../stores/theme";
+import { surfaceTypeStore } from "./surface-type-registry";
 import { getMcpSetting } from "../config";
 
 // ---- Types ----
@@ -170,6 +169,23 @@ function splitActivePane(direction: "horizontal" | "vertical"): Pane {
   workspace.activePaneId = newPane.id;
   workspaces.update((l) => [...l]);
   return newPane;
+}
+
+type Placement = "split-right" | "split-down" | "new-tab" | "current-pane";
+
+function resolvePlacement(placement: Placement): Pane {
+  if (placement === "split-right") {
+    return get(activePane)
+      ? splitActivePane("horizontal")
+      : getOrCreateActivePane();
+  }
+  if (placement === "split-down") {
+    return get(activePane)
+      ? splitActivePane("vertical")
+      : getOrCreateActivePane();
+  }
+  // new-tab and current-pane both drop into the active pane's surface list
+  return getOrCreateActivePane();
 }
 
 async function waitForPtyId(
@@ -725,47 +741,21 @@ registerTool({
       placement?: "split-right" | "split-down" | "new-tab" | "current-pane";
     };
     const title = p.title ?? "Preview";
-    // Wrap text/code as markdown fenced blocks so the markdown previewer
-    // renders them with monospacing and syntax highlighting.
-    let rendered: string;
-    if (p.format === "markdown") {
-      rendered = p.content;
-    } else if (p.format === "code") {
-      rendered = "```" + (p.language ?? "") + "\n" + p.content + "\n```";
-    } else {
-      rendered = "```\n" + p.content + "\n```";
-    }
-    const previewSurface = openPreviewFromContent(
-      rendered,
-      title,
-      get(theme) as unknown as Parameters<typeof openPreviewFromContent>[2],
-    );
+    const targetPane = resolvePlacement(p.placement ?? "split-right");
 
-    const placement = p.placement ?? "split-right";
-    let targetPane: Pane;
-    if (placement === "split-right") {
-      targetPane = get(activePane)
-        ? splitActivePane("horizontal")
-        : getOrCreateActivePane();
-    } else if (placement === "split-down") {
-      targetPane = get(activePane)
-        ? splitActivePane("vertical")
-        : getOrCreateActivePane();
-    } else {
-      // new-tab and current-pane both drop into the active pane's surface list
-      targetPane = getOrCreateActivePane();
-    }
-
+    // Core doesn't know how to render markdown — that belongs to the preview
+    // extension. We hand it { content, format, language } as props; the
+    // extension's PreviewSurface component renders on mount.
     const surface: Surface = {
       kind: "extension",
-      id: previewSurface.id,
+      id: `preview-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       surfaceTypeId: "preview:preview",
-      title: previewSurface.title,
+      title,
       hasUnread: false,
       props: {
-        filePath: previewSurface.filePath,
-        element: previewSurface.element,
-        watchId: previewSurface.watchId,
+        content: p.content,
+        format: p.format,
+        language: p.language ?? "",
       },
     };
     targetPane.surfaces.push(surface);
@@ -773,6 +763,85 @@ registerTool({
     workspaces.update((l) => [...l]);
 
     return { preview_id: surface.id, pane_id: targetPane.id };
+  },
+});
+
+// ---- Generic surface-type discovery + open ----
+//
+// Extensions register surface types at runtime (preview:preview,
+// diff-viewer:diff, and future third-party extensions). Agents can
+// discover what's available via list_surface_types and open any of them
+// via open_surface. This keeps MCP agnostic to which extensions exist —
+// no hard-coded surface names beyond the convenience tools above.
+
+registerTool({
+  name: "list_surface_types",
+  description:
+    "List all registered extension surface types (e.g. preview:preview, diff-viewer:diff). Returns `{ id, label, source }` for each. Built-in terminals are not included — use spawn_agent to create one.",
+  inputSchema: { type: "object", properties: {} },
+  handler: () => {
+    const types = get(surfaceTypeStore).map((t) => ({
+      id: t.id,
+      label: t.label,
+      source: t.source,
+    }));
+    return { types };
+  },
+});
+
+registerTool({
+  name: "open_surface",
+  description:
+    "Open any registered extension surface type in a pane. Props are passed to the extension's surface component unchanged — consult the owning extension for the expected prop shape.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      surface_type_id: {
+        type: "string",
+        description:
+          "Surface type id as returned by list_surface_types (e.g. 'preview:preview').",
+      },
+      title: { type: "string" },
+      props: {
+        type: "object",
+        additionalProperties: true,
+        description: "Opaque props object forwarded to the surface component.",
+      },
+      placement: {
+        type: "string",
+        enum: ["split-right", "split-down", "new-tab", "current-pane"],
+      },
+    },
+    required: ["surface_type_id", "title"],
+  },
+  handler: (args) => {
+    const p = args as {
+      surface_type_id: string;
+      title: string;
+      props?: Record<string, unknown>;
+      placement?: Placement;
+    };
+    const typeDef = get(surfaceTypeStore).find(
+      (t) => t.id === p.surface_type_id,
+    );
+    if (!typeDef) {
+      throw new Error(
+        `Unknown surface type: ${p.surface_type_id}. Call list_surface_types to see what's registered.`,
+      );
+    }
+    const targetPane = resolvePlacement(p.placement ?? "split-right");
+    const surface: Surface = {
+      kind: "extension",
+      id: `surface-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      surfaceTypeId: p.surface_type_id,
+      title: p.title,
+      hasUnread: false,
+      props: p.props ?? {},
+    };
+    targetPane.surfaces.push(surface);
+    targetPane.activeSurfaceId = surface.id;
+    workspaces.update((l) => [...l]);
+    return { surface_id: surface.id, pane_id: targetPane.id };
   },
 });
 

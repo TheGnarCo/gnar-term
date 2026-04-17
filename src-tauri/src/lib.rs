@@ -251,11 +251,18 @@ fn get_cli_args(args: tauri::State<'_, CliArgs>) -> CliArgs {
     args.inner().clone()
 }
 
-/// Spawn a new PTY with a shell. `on_output` is a Tauri v2 IPC Channel that
-/// carries raw PTY bytes to the webview. Using a per-pty Channel with
-/// `InvokeResponseBody::Raw` delivers bytes via the ipc custom-protocol path
-/// (ArrayBuffer in JS) instead of one `evaluateJavaScript` call per chunk, so
-/// bursty output no longer pegs the WebContent main thread on macOS.
+/// Spawn a new PTY with a shell.
+///
+/// `on_output` is a Tauri v2 IPC Channel that carries raw PTY bytes to the
+/// webview. Using a per-pty Channel with `InvokeResponseBody::Raw` delivers
+/// bytes via the ipc custom-protocol path (ArrayBuffer in JS) instead of one
+/// `evaluateJavaScript` call per chunk, so bursty output no longer pegs the
+/// WebContent main thread on macOS.
+///
+/// `extra_env` is an optional map of additional env vars merged into the
+/// child's environment after the shell-integration vars are set. Used to
+/// inject `GNAR_TERM_PANE_ID` and `GNAR_TERM_WORKSPACE_ID` so MCP agents
+/// running inside a pane can advertise their host context to the GUI.
 #[tauri::command]
 async fn spawn_pty(
     app: AppHandle,
@@ -264,6 +271,7 @@ async fn spawn_pty(
     rows: u16,
     cwd: Option<String>,
     on_output: Channel<InvokeResponseBody>,
+    extra_env: Option<HashMap<String, String>>,
 ) -> Result<u32, String> {
     let pty_system = native_pty_system();
 
@@ -327,6 +335,14 @@ PROMPT_COMMAND="_gnarterm_report_cwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
 
     if let Some(ref dir) = cwd {
         cmd.cwd(dir);
+    }
+
+    // Merge caller-provided env vars last so they win over our shell-integration
+    // defaults (e.g. allow MCP context vars or test harnesses to override).
+    if let Some(extra) = extra_env {
+        for (k, v) in extra {
+            cmd.env(&k, &v);
+        }
     }
 
     let child = pair.slave

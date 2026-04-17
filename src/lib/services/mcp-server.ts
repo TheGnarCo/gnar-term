@@ -2,15 +2,22 @@
  * Gnar Term MCP server — runs in the Svelte webview and speaks JSON-RPC 2.0
  * over Tauri events to the Rust UDS bridge.
  *
- * Design note (2026-04-15): We hand-roll JSON-RPC 2.0 rather than pulling in
- * @modelcontextprotocol/sdk. The SDK isn't in package.json, the bundler
- * target is a Chromium/WebKit webview (not node), and the required surface
- * area is tiny: initialize, tools/list, tools/call, and MCP notifications.
- * Hand-rolling keeps the module ~500 LOC and sidesteps Node/ESM polyfills.
+ * Architecture (see Spacebase MCP spec § Connection binding):
  *
- * Rust emits `mcp-request` with `{ payload: <raw json-rpc string> }`. The
- * server dispatches and emits `mcp-response` with the same shape. Clients are
- * responsible for their own request ordering.
+ * - The Rust bridge accepts multiple concurrent connections, assigns each a
+ *   `connection_id`, and forwards `mcp-request` events as
+ *   `{ connection_id, payload }`. Responses are emitted back the same way.
+ * - The shim sends a `$/gnar-term/hello` notification on connect carrying
+ *   the `pane_id` and `workspace_id` env vars it inherited. The webview
+ *   stores the binding in a per-connection context map.
+ * - UI-mutating tools resolve their target workspace/pane via `resolveTarget`
+ *   which follows the spec's resolution rules deterministically (explicit args
+ *   first, then connection binding, then **error** — never silently fall back
+ *   to "active workspace"). The previous bug-class — panes following user GUI
+ *   focus — is impossible because no write tool consults `activeWorkspace`.
+ *
+ * We hand-roll JSON-RPC 2.0 rather than pulling in `@modelcontextprotocol/sdk`
+ * for two reasons: the SDK targets Node, and the surface area is tiny.
  */
 import { get } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
@@ -29,10 +36,10 @@ import {
   type SplitNode,
   type Surface,
   type TerminalSurface,
+  type Workspace,
 } from "../types";
 import { findParentSplit } from "../types";
-import { createTerminalSurface } from "../terminal-service";
-import { createWorkspace } from "./workspace-service";
+import { createTerminalSurface, waitForPtyReady } from "../terminal-service";
 import { safeFocus } from "./service-helpers";
 import {
   registerMcpPty,
@@ -87,6 +94,33 @@ interface JsonRpcError {
 
 type JsonRpcResponse = JsonRpcSuccess | JsonRpcError;
 
+/** Per-connection state recorded from the `$/gnar-term/hello` handshake. */
+export interface ConnectionBinding {
+  paneId: string | null;
+  workspaceId: string | null;
+  clientPid: number | null;
+}
+
+export interface ConnectionContext {
+  connectionId: number;
+  binding: ConnectionBinding | null;
+  /** Most-recent pane this connection spawned into. Used as the split host for
+   *  the *next* spawn so rapid-fire `dispatch_tasks` produces a shallow
+   *  right-chain instead of an N-deep left spine around the binding pane —
+   *  the latter exploded `findParentSplit` + DOM render cost into O(N²). */
+  lastSpawnedPaneId: string | null;
+}
+
+/** Sentinel for callers that have no transport context (test code calling
+ *  dispatch directly, etc). Tools that require binding will error with the
+ *  standard "agent has no pane/workspace context" message — exactly the same
+ *  error path real unbound agents hit. */
+const ANONYMOUS_CONTEXT: ConnectionContext = {
+  connectionId: 0,
+  binding: null,
+  lastSpawnedPaneId: null,
+};
+
 // ---- Agent command map ----
 
 const AGENT_COMMANDS: Record<AgentType, string | null> = {
@@ -120,51 +154,160 @@ const KEY_MAP: Record<string, string> = {
 const sessions = new Map<string, McpSession>();
 const ptyToSession = new Map<number, string>();
 
+/** Per-connection binding state. Keyed by connection_id from the bridge. */
+const connectionContexts = new Map<number, ConnectionContext>();
+
 function newSessionId(): string {
   return `mcp-${crypto.randomUUID?.() ?? Math.random().toString(36).slice(2)}`;
 }
 
-// ---- Pane helpers (same semantics as the old bridge client) ----
+// ---- Workspace / pane resolution ----
 
-function getOrCreateActivePane(): Pane {
-  let ws = get(activeWorkspace);
-  if (!ws) {
-    createWorkspace("MCP");
-    ws = get(activeWorkspace)!;
+/** Find the workspace that currently contains a pane with the given id, or
+ *  null if no workspace contains it (pane was closed, or invalid id). */
+function findWorkspaceForPane(paneId: string): Workspace | null {
+  for (const ws of get(workspaces)) {
+    for (const pane of getAllPanes(ws.splitRoot)) {
+      if (pane.id === paneId) return ws;
+    }
   }
-  const existingActive = get(activePane);
-  if (existingActive) return existingActive;
-  const panes = getAllPanes(ws.splitRoot);
-  if (panes.length > 0) return panes[0];
+  return null;
+}
+
+function findPaneById(paneId: string): { workspace: Workspace; pane: Pane } | null {
+  for (const ws of get(workspaces)) {
+    for (const pane of getAllPanes(ws.splitRoot)) {
+      if (pane.id === paneId) return { workspace: ws, pane };
+    }
+  }
+  return null;
+}
+
+function findWorkspaceById(workspaceId: string): Workspace | null {
+  return get(workspaces).find((w) => w.id === workspaceId) ?? null;
+}
+
+/** Resolution result returned by `resolveTarget`. `hostPane` is non-null when
+ *  the caller expressed a specific host pane to split; null means "place in
+ *  the workspace's active pane (or first pane)." */
+interface ResolvedTarget {
+  workspace: Workspace;
+  hostPane: Pane | null;
+  source:
+    | "args-pane"
+    | "args-workspace"
+    | "binding-pane"
+    | "binding-workspace";
+}
+
+interface TargetArgs {
+  workspace_id?: string;
+  pane_id?: string;
+}
+
+/** Resolve which workspace (and optional host pane) a UI-mutating tool should
+ *  target. Implements the resolution rules in the MCP spec § Connection binding.
+ *  Throws with an actionable error message if no target can be resolved.
+ *  Critically: this function NEVER reads `activeWorkspace`. User GUI focus is
+ *  not an authoritative routing input. */
+function resolveTarget(args: TargetArgs, ctx: ConnectionContext): ResolvedTarget {
+  // Rule 1: explicit pane_id wins.
+  if (args.pane_id) {
+    const found = findPaneById(args.pane_id);
+    if (!found) {
+      throw new Error(
+        `pane_id "${args.pane_id}" not found (it may have been closed)`,
+      );
+    }
+    return { workspace: found.workspace, hostPane: found.pane, source: "args-pane" };
+  }
+  // Rule 2: explicit workspace_id.
+  if (args.workspace_id) {
+    const ws = findWorkspaceById(args.workspace_id);
+    if (!ws) {
+      throw new Error(`workspace_id "${args.workspace_id}" not found`);
+    }
+    return { workspace: ws, hostPane: null, source: "args-workspace" };
+  }
+  // Rule 3a: chain off the most recent pane this connection spawned, if any.
+  // Keeps the split tree shallow under rapid-fire spawns — see the comment on
+  // `ConnectionContext.lastSpawnedPaneId`.
+  if (ctx.lastSpawnedPaneId) {
+    const found = findPaneById(ctx.lastSpawnedPaneId);
+    if (found) {
+      return {
+        workspace: found.workspace,
+        hostPane: found.pane,
+        source: "binding-pane",
+      };
+    }
+    // Last pane was closed. Fall through.
+  }
+  // Rule 3b: connection-bound pane (re-derive workspace in case pane was moved).
+  const binding = ctx.binding;
+  if (binding?.paneId) {
+    const found = findPaneById(binding.paneId);
+    if (found) {
+      return {
+        workspace: found.workspace,
+        hostPane: found.pane,
+        source: "binding-pane",
+      };
+    }
+    // Bound pane was closed. Fall through to rule 4 (workspace-only binding).
+  }
+  // Rule 4: connection-bound workspace.
+  if (binding?.workspaceId) {
+    const ws = findWorkspaceById(binding.workspaceId);
+    if (ws) {
+      return { workspace: ws, hostPane: null, source: "binding-workspace" };
+    }
+  }
+  // Rule 5: no target. Error loudly — never fall back to active workspace.
+  throw new Error(
+    "agent has no pane/workspace context — pass workspace_id explicitly, or run the agent inside a gnar-term pane",
+  );
+}
+
+/** Pick a host pane to split off when the caller didn't supply one. Prefers
+ *  the workspace's active pane; falls back to the first pane in the tree. */
+function pickHostPane(workspace: Workspace): Pane {
+  const all = getAllPanes(workspace.splitRoot);
+  if (workspace.activePaneId) {
+    const active = all.find((p) => p.id === workspace.activePaneId);
+    if (active) return active;
+  }
+  if (all.length > 0) return all[0];
+  // Workspace exists but has no panes (shouldn't happen in practice; create one).
   const newPane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
-  ws.splitRoot = { type: "pane", pane: newPane };
+  workspace.splitRoot = { type: "pane", pane: newPane };
   workspaces.update((l) => [...l]);
   return newPane;
 }
 
-function splitActivePane(direction: "horizontal" | "vertical"): Pane {
-  const wsVal = get(activeWorkspace);
-  if (!wsVal) createWorkspace("MCP");
-  const workspace = get(activeWorkspace)!;
-  const currentActive = get(activePane) ?? getAllPanes(workspace.splitRoot)[0];
-  if (!currentActive) return getOrCreateActivePane();
+/** Split `hostPane` off into a new sibling pane within its workspace. */
+function splitPaneInWorkspace(
+  workspace: Workspace,
+  hostPane: Pane,
+  direction: "horizontal" | "vertical",
+): Pane {
   const newPane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
   const newSplit: SplitNode = {
     type: "split",
     direction,
     children: [
-      { type: "pane", pane: currentActive },
+      { type: "pane", pane: hostPane },
       { type: "pane", pane: newPane },
     ],
     ratio: 0.5,
   };
   if (
     workspace.splitRoot.type === "pane" &&
-    workspace.splitRoot.pane.id === currentActive.id
+    workspace.splitRoot.pane.id === hostPane.id
   ) {
     workspace.splitRoot = newSplit;
   } else {
-    const parentInfo = findParentSplit(workspace.splitRoot, currentActive.id);
+    const parentInfo = findParentSplit(workspace.splitRoot, hostPane.id);
     if (parentInfo && parentInfo.parent.type === "split") {
       parentInfo.parent.children[parentInfo.index] = newSplit;
     }
@@ -178,14 +321,7 @@ async function waitForPtyId(
   surface: TerminalSurface,
   timeoutMs = 5000,
 ): Promise<number> {
-  const start = Date.now();
-  while (surface.ptyId < 0) {
-    if (Date.now() - start > timeoutMs) {
-      throw new Error("timed out waiting for PTY to spawn");
-    }
-    await new Promise((r) => setTimeout(r, 50));
-  }
-  return surface.ptyId;
+  return waitForPtyReady(surface, timeoutMs);
 }
 
 async function getPtyCwd(ptyId: number): Promise<string> {
@@ -243,11 +379,7 @@ function reapDeadSessions(): void {
 // ---- Workspace introspection helpers ----
 
 function describeSurface(s: Surface) {
-  return {
-    id: s.id,
-    kind: s.kind,
-    title: s.title,
-  };
+  return { id: s.id, kind: s.kind, title: s.title };
 }
 
 function describePane(pane: Pane, workspaceId: string) {
@@ -265,13 +397,58 @@ function describePane(pane: Pane, workspaceId: string) {
   };
 }
 
+// ---- Observability: dispatch log ----
+
+interface DispatchLogEntry {
+  ts: string;
+  connectionId: number;
+  tool: string;
+  binding: ConnectionBinding | null;
+  args: unknown;
+  resolved?: { workspaceId: string; paneId: string | null; source: string };
+  result?: { kind: "ok"; summary: string } | { kind: "error"; message: string };
+}
+
+const DISPATCH_LOG_MAX = 500;
+const dispatchLog: DispatchLogEntry[] = [];
+
+function logDispatch(entry: DispatchLogEntry): void {
+  dispatchLog.push(entry);
+  if (dispatchLog.length > DISPATCH_LOG_MAX) {
+    dispatchLog.shift();
+  }
+  // Echo to console in a structured single line so devtools can grep.
+  const resolved = entry.resolved
+    ? `resolved={ws=${entry.resolved.workspaceId},pane=${entry.resolved.paneId ?? "-"},src=${entry.resolved.source}}`
+    : "resolved=<unresolved>";
+  const bind = entry.binding
+    ? `binding={ws=${entry.binding.workspaceId ?? "null"},pane=${entry.binding.paneId ?? "null"}}`
+    : "binding=<none>";
+  const result = entry.result
+    ? entry.result.kind === "ok"
+      ? `result=ok(${entry.result.summary})`
+      : `result=ERR(${entry.result.message})`
+    : "result=<pending>";
+  // eslint-disable-next-line no-console
+  console.log(
+    `[mcp] conn=#${entry.connectionId} tool=${entry.tool} ${bind} args=${JSON.stringify(entry.args)} ${resolved} ${result}`,
+  );
+}
+
+export function getDispatchLog(): readonly DispatchLogEntry[] {
+  return dispatchLog;
+}
+
 // ---- Tool definitions ----
 
 interface ToolDef {
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
-  handler: (args: Record<string, unknown>) => Promise<unknown> | unknown;
+  handler: (
+    args: Record<string, unknown>,
+    ctx: ConnectionContext,
+  ) => Promise<unknown> | unknown;
 }
 
 const TOOLS: ToolDef[] = [];
@@ -285,7 +462,7 @@ function registerTool(t: ToolDef) {
 registerTool({
   name: "spawn_agent",
   description:
-    "Spawn a new gnar-term pane running an AI coding agent (claude-code, codex, aider) or a custom command.",
+    "Spawn a new gnar-term pane running an AI coding agent (claude-code, codex, aider) or a custom command. Targets the agent's host workspace by default (per connection binding); pass workspace_id/pane_id to override.",
   inputSchema: {
     type: "object",
     properties: {
@@ -297,22 +474,24 @@ registerTool({
       env: { type: "object", additionalProperties: { type: "string" } },
       cols: { type: "number" },
       rows: { type: "number" },
+      workspace_id: { type: "string" },
+      pane_id: { type: "string" },
     },
     required: ["name", "agent"],
   },
-  handler: async (args) => {
+  handler: async (args, ctx) => {
     const p = args as {
       name: string;
       agent: AgentType;
       task?: string;
       cwd?: string;
       command?: string;
+      workspace_id?: string;
+      pane_id?: string;
     };
     let startupCommand: string | undefined;
     if (p.agent === "custom") {
-      if (!p.command) {
-        throw new Error('agent "custom" requires a command parameter');
-      }
+      if (!p.command) throw new Error('agent "custom" requires a command parameter');
       startupCommand = p.command;
     } else {
       const agentCmd = AGENT_COMMANDS[p.agent];
@@ -320,13 +499,15 @@ registerTool({
       startupCommand = agentCmd;
     }
 
-    const existingActive = get(activePane);
-    const target = existingActive ? splitActivePane("vertical") : getOrCreateActivePane();
+    const target = resolveTarget(p, ctx);
+    const hostPane = target.hostPane ?? pickHostPane(target.workspace);
+    const newPane = splitPaneInWorkspace(target.workspace, hostPane, "vertical");
+    ctx.lastSpawnedPaneId = newPane.id;
 
-    const surface = await createTerminalSurface(target, p.cwd);
+    const surface = await createTerminalSurface(newPane, p.cwd);
     surface.title = p.name;
     surface.startupCommand = startupCommand;
-    target.activeSurfaceId = surface.id;
+    newPane.activeSurfaceId = surface.id;
     workspaces.update((l) => [...l]);
     safeFocus(surface);
 
@@ -349,7 +530,7 @@ registerTool({
       status: "starting",
       cwd,
       createdAt: new Date().toISOString(),
-      paneId: target.id,
+      paneId: newPane.id,
       surfaceId: surface.id,
       ptyId,
     };
@@ -357,8 +538,8 @@ registerTool({
     ptyToSession.set(ptyId, session.session_id);
     pushEvent({
       type: "pane.created",
-      paneId: target.id,
-      workspaceId: get(activeWorkspace)?.id ?? "",
+      paneId: newPane.id,
+      workspaceId: target.workspace.id,
     });
     pushEvent({
       type: "session.statusChanged",
@@ -379,6 +560,8 @@ registerTool({
       pid: session.pid,
       status: session.status,
       cwd: session.cwd,
+      pane_id: newPane.id,
+      workspace_id: target.workspace.id,
     };
   },
 });
@@ -389,7 +572,7 @@ registerTool({
   inputSchema: { type: "object", properties: {} },
   handler: () => {
     reapDeadSessions();
-    return Array.from(sessions.values()).map((s) => ({
+    const list = Array.from(sessions.values()).map((s) => ({
       session_id: s.session_id,
       name: s.name,
       agent: s.agent,
@@ -398,6 +581,7 @@ registerTool({
       cwd: s.cwd,
       createdAt: s.createdAt,
     }));
+    return { sessions: list };
   },
 });
 
@@ -556,7 +740,8 @@ registerTool({
 
 registerTool({
   name: "dispatch_tasks",
-  description: "Spawn multiple agent sessions in parallel for fan-out workflows.",
+  description:
+    "Spawn multiple agent sessions in parallel. Each task resolves its target independently — pass workspace_id/pane_id per task to override the connection binding.",
   inputSchema: {
     type: "object",
     properties: {
@@ -570,6 +755,8 @@ registerTool({
             task: { type: "string" },
             cwd: { type: "string" },
             command: { type: "string" },
+            workspace_id: { type: "string" },
+            pane_id: { type: "string" },
           },
           required: ["name", "agent", "task"],
         },
@@ -577,7 +764,7 @@ registerTool({
     },
     required: ["tasks"],
   },
-  handler: async (args) => {
+  handler: async (args, ctx) => {
     const { tasks } = args as {
       tasks: Array<{
         name: string;
@@ -585,6 +772,8 @@ registerTool({
         task: string;
         cwd?: string;
         command?: string;
+        workspace_id?: string;
+        pane_id?: string;
       }>;
     };
     const results: Array<{
@@ -592,28 +781,39 @@ registerTool({
       name: string;
       agent: AgentType;
       pid: number | undefined;
+      pane_id?: string;
+      workspace_id?: string;
       error?: string;
     }> = [];
     const spawnTool = TOOLS.find((t) => t.name === "spawn_agent")!;
     for (const taskDef of tasks) {
       try {
-        const resp = (await spawnTool.handler({
-          name: taskDef.name,
-          agent: taskDef.agent,
-          task: taskDef.task,
-          cwd: taskDef.cwd,
-          command: taskDef.command,
-        })) as {
+        const resp = (await spawnTool.handler(
+          {
+            name: taskDef.name,
+            agent: taskDef.agent,
+            task: taskDef.task,
+            cwd: taskDef.cwd,
+            command: taskDef.command,
+            workspace_id: taskDef.workspace_id,
+            pane_id: taskDef.pane_id,
+          },
+          ctx,
+        )) as {
           session_id: string;
           name: string;
           agent: AgentType;
           pid: number | undefined;
+          pane_id: string;
+          workspace_id: string;
         };
         results.push({
           session_id: resp.session_id,
           name: resp.name,
           agent: resp.agent,
           pid: resp.pid,
+          pane_id: resp.pane_id,
+          workspace_id: resp.workspace_id,
         });
       } catch (err) {
         results.push({
@@ -638,7 +838,7 @@ registerTool({
 registerTool({
   name: "render_sidebar",
   description:
-    "Declare or replace an extension sidebar section. Side is 'primary' or 'secondary'; items are clickable.",
+    "Declare or replace an extension sidebar section in the resolved workspace. Sections are workspace-scoped: invisible from other workspaces.",
   inputSchema: {
     type: "object",
     properties: {
@@ -646,48 +846,59 @@ registerTool({
       section_id: { type: "string" },
       title: { type: "string" },
       items: { type: "array" },
+      workspace_id: { type: "string" },
     },
     required: ["side", "section_id", "title", "items"],
   },
-  handler: (args) => {
+  handler: (args, ctx) => {
     const p = args as {
       side: "primary" | "secondary";
       section_id: string;
       title: string;
       items: SidebarItem[];
+      workspace_id?: string;
     };
+    const target = resolveTarget({ workspace_id: p.workspace_id }, ctx);
     upsertSection({
       side: p.side,
       sectionId: p.section_id,
       title: p.title,
       items: p.items ?? [],
+      workspaceId: target.workspace.id,
     });
-    return { ok: true };
+    return { ok: true, workspace_id: target.workspace.id };
   },
 });
 
 registerTool({
   name: "remove_sidebar_section",
-  description: "Remove an extension-declared sidebar section. Safe for non-existent IDs.",
+  description:
+    "Remove an extension-declared sidebar section from the resolved workspace. Safe for non-existent IDs.",
   inputSchema: {
     type: "object",
     properties: {
       side: { type: "string", enum: ["primary", "secondary"] },
       section_id: { type: "string" },
+      workspace_id: { type: "string" },
     },
     required: ["side", "section_id"],
   },
-  handler: (args) => {
-    const p = args as { side: "primary" | "secondary"; section_id: string };
-    removeSection(p.side, p.section_id);
-    return { ok: true };
+  handler: (args, ctx) => {
+    const p = args as {
+      side: "primary" | "secondary";
+      section_id: string;
+      workspace_id?: string;
+    };
+    const target = resolveTarget({ workspace_id: p.workspace_id }, ctx);
+    removeSection(target.workspace.id, p.side, p.section_id);
+    return { ok: true, workspace_id: target.workspace.id };
   },
 });
 
 registerTool({
   name: "create_preview",
   description:
-    "Open a preview surface with markdown/text/code content. Placement controls where the preview appears.",
+    "Open a preview surface with markdown/text/code content. Targets the agent's host workspace by default; pass workspace_id/pane_id to override.",
   inputSchema: {
     type: "object",
     properties: {
@@ -699,39 +910,42 @@ registerTool({
         type: "string",
         enum: ["split-right", "split-down", "new-tab", "current-pane"],
       },
+      workspace_id: { type: "string" },
+      pane_id: { type: "string" },
     },
     required: ["content", "format"],
   },
-  handler: (args) => {
+  handler: (args, ctx) => {
     const p = args as {
       content: string;
       format: "markdown" | "text" | "code";
       language?: string;
       title?: string;
       placement?: "split-right" | "split-down" | "new-tab" | "current-pane";
+      workspace_id?: string;
+      pane_id?: string;
     };
+    const target = resolveTarget(p, ctx);
     const title = p.title ?? "Preview";
-    // Wrap text/code as markdown fenced blocks so the markdown previewer
-    // renders them with monospacing and syntax highlighting.
     let rendered: string;
-    if (p.format === "markdown") {
-      rendered = p.content;
-    } else if (p.format === "code") {
+    if (p.format === "markdown") rendered = p.content;
+    else if (p.format === "code")
       rendered = "```" + (p.language ?? "") + "\n" + p.content + "\n```";
-    } else {
-      rendered = "```\n" + p.content + "\n```";
-    }
+    else rendered = "```\n" + p.content + "\n```";
     const previewSurface = openPreviewFromContent(rendered, title);
 
     const placement = p.placement ?? "split-right";
+    const hostPane = target.hostPane ?? pickHostPane(target.workspace);
     let targetPane: Pane;
     if (placement === "split-right") {
-      targetPane = get(activePane) ? splitActivePane("horizontal") : getOrCreateActivePane();
+      targetPane = splitPaneInWorkspace(target.workspace, hostPane, "horizontal");
+      ctx.lastSpawnedPaneId = targetPane.id;
     } else if (placement === "split-down") {
-      targetPane = get(activePane) ? splitActivePane("vertical") : getOrCreateActivePane();
+      targetPane = splitPaneInWorkspace(target.workspace, hostPane, "vertical");
+      ctx.lastSpawnedPaneId = targetPane.id;
     } else {
-      // new-tab and current-pane both drop into the active pane's surface list
-      targetPane = getOrCreateActivePane();
+      // new-tab and current-pane drop into the host pane's surface list.
+      targetPane = hostPane;
     }
 
     const surface = {
@@ -747,20 +961,45 @@ registerTool({
     targetPane.activeSurfaceId = surface.id;
     workspaces.update((l) => [...l]);
 
-    return { preview_id: surface.id, pane_id: targetPane.id };
+    return {
+      preview_id: surface.id,
+      pane_id: targetPane.id,
+      workspace_id: target.workspace.id,
+    };
   },
 });
 
-// ---- UI introspection ----
+// ---- Agent introspection ----
+
+registerTool({
+  name: "get_agent_context",
+  description:
+    "Return the connection's bound {pane_id, workspace_id, client_pid} from the $/gnar-term/hello handshake. All fields are null when the agent is unbound (was not run inside a gnar-term pane). Agents should call this once on startup to learn their context.",
+  inputSchema: { type: "object", properties: {} },
+  handler: (_args, ctx) => {
+    const b = ctx.binding;
+    return {
+      pane_id: b?.paneId ?? null,
+      workspace_id: b?.workspaceId ?? null,
+      client_pid: b?.clientPid ?? null,
+    };
+  },
+});
+
+// ---- UI introspection (observers; report user GUI focus) ----
 
 registerTool({
   name: "get_active_workspace",
-  description: "Return the currently active workspace, or null if none.",
+  description:
+    "Return the workspace the user is currently focused on. Reports user GUI focus, NOT the agent's binding — agents should use get_agent_context for routing. Fields are null when no workspace is open.",
   inputSchema: { type: "object", properties: {} },
   handler: () => {
     const ws = get(activeWorkspace);
-    if (!ws) return null;
-    return { id: ws.id, name: ws.name, activePaneId: ws.activePaneId };
+    return {
+      id: ws?.id ?? null,
+      name: ws?.name ?? null,
+      activePaneId: ws?.activePaneId ?? null,
+    };
   },
 });
 
@@ -769,23 +1008,25 @@ registerTool({
   description: "List all open workspaces.",
   inputSchema: { type: "object", properties: {} },
   handler: () => {
-    return get(workspaces).map((ws) => ({
+    const list = get(workspaces).map((ws) => ({
       id: ws.id,
       name: ws.name,
       activePaneId: ws.activePaneId,
     }));
+    return { workspaces: list };
   },
 });
 
 registerTool({
   name: "get_active_pane",
-  description: "Return the currently active pane with its surfaces, or null.",
+  description:
+    "Return the user-focused pane and its surfaces. Reports user GUI focus, NOT the agent's binding. `pane` is null when no pane is focused.",
   inputSchema: { type: "object", properties: {} },
   handler: () => {
     const ws = get(activeWorkspace);
     const pane = get(activePane);
-    if (!ws || !pane) return null;
-    return describePane(pane, ws.id);
+    if (!ws || !pane) return { pane: null };
+    return { pane: describePane(pane, ws.id) };
   },
 });
 
@@ -801,8 +1042,9 @@ registerTool({
     const target = p.workspace_id
       ? get(workspaces).find((w) => w.id === p.workspace_id)
       : get(activeWorkspace);
-    if (!target) return [];
-    return getAllPanes(target.splitRoot).map((pane) => describePane(pane, target.id));
+    if (!target) return { panes: [] };
+    const list = getAllPanes(target.splitRoot).map((pane) => describePane(pane, target.id));
+    return { panes: list };
   },
 });
 
@@ -889,9 +1131,21 @@ registerTool({
 const PROTOCOL_VERSION = "2025-11-25";
 const SERVER_INFO = { name: "gnar-term", version: "0.3.1" };
 
-export async function dispatch(req: JsonRpcRequest): Promise<JsonRpcResponse | null> {
+/** Tools that mutate UI surfaces — these are the ones that get logged to
+ *  dispatchLog with binding/resolution metadata. */
+const UI_MUTATING_TOOLS = new Set([
+  "spawn_agent",
+  "dispatch_tasks",
+  "create_preview",
+  "render_sidebar",
+  "remove_sidebar_section",
+]);
+
+export async function dispatch(
+  req: JsonRpcRequest,
+  ctx: ConnectionContext = ANONYMOUS_CONTEXT,
+): Promise<JsonRpcResponse | null> {
   const id = req.id ?? null;
-  // Notifications (no id) are fire-and-forget.
   const isNotification = req.id === undefined || req.id === null;
 
   try {
@@ -903,6 +1157,20 @@ export async function dispatch(req: JsonRpcRequest): Promise<JsonRpcResponse | n
           serverInfo: SERVER_INFO,
         };
         return isNotification ? null : { jsonrpc: "2.0", id, result };
+      }
+      case "$/gnar-term/hello": {
+        // Connection-binding handshake. Always a notification (no id).
+        const params = (req.params ?? {}) as {
+          pane_id?: string | null;
+          workspace_id?: string | null;
+          client_pid?: number | null;
+        };
+        ctx.binding = {
+          paneId: params.pane_id ?? null,
+          workspaceId: params.workspace_id ?? null,
+          clientPid: params.client_pid ?? null,
+        };
+        return null;
       }
       case "notifications/initialized":
       case "initialized":
@@ -929,16 +1197,60 @@ export async function dispatch(req: JsonRpcRequest): Promise<JsonRpcResponse | n
             error: { code: -32601, message: `unknown tool: ${params.name}` },
           };
         }
-        const value = await tool.handler(params.arguments ?? {});
-        if (isNotification) return null;
-        return {
-          jsonrpc: "2.0",
-          id,
-          result: {
-            content: [{ type: "text", text: JSON.stringify(value) }],
-            structuredContent: value,
-          },
-        };
+        const args = params.arguments ?? {};
+        const shouldLog = UI_MUTATING_TOOLS.has(tool.name);
+        const logEntry: DispatchLogEntry | null = shouldLog
+          ? {
+              ts: new Date().toISOString(),
+              connectionId: ctx.connectionId,
+              tool: tool.name,
+              binding: ctx.binding,
+              args,
+            }
+          : null;
+        try {
+          const value = await tool.handler(args, ctx);
+          if (logEntry) {
+            // Try to surface the resolution metadata when the result includes it.
+            const v = value as
+              | { workspace_id?: string; pane_id?: string }
+              | undefined
+              | null;
+            if (v && v.workspace_id) {
+              logEntry.resolved = {
+                workspaceId: v.workspace_id,
+                paneId: v.pane_id ?? null,
+                source: "tool-result",
+              };
+            }
+            logEntry.result = { kind: "ok", summary: JSON.stringify(value).slice(0, 120) };
+            logDispatch(logEntry);
+          }
+          if (isNotification) return null;
+          // MCP spec requires `structuredContent` to be a JSON object (record).
+          // Arrays, null, and primitives are rejected by client-side Zod
+          // validators, so only attach structuredContent when the tool returned
+          // a plain object. Text `content` still carries the full JSON payload.
+          const isRecord =
+            value !== null && typeof value === "object" && !Array.isArray(value);
+          return {
+            jsonrpc: "2.0",
+            id,
+            result: {
+              content: [{ type: "text", text: JSON.stringify(value) }],
+              ...(isRecord ? { structuredContent: value } : {}),
+            },
+          };
+        } catch (err) {
+          if (logEntry) {
+            logEntry.result = {
+              kind: "error",
+              message: err instanceof Error ? err.message : String(err),
+            };
+            logDispatch(logEntry);
+          }
+          throw err;
+        }
       }
       case "ping":
         return isNotification ? null : { jsonrpc: "2.0", id, result: {} };
@@ -968,19 +1280,31 @@ export async function dispatch(req: JsonRpcRequest): Promise<JsonRpcResponse | n
 
 let initialized = false;
 
-/**
- * Initialize the MCP server. Honors the `mcp` config setting:
- * - "off": no-op, module is fully dormant
- * - otherwise: install pty listeners and subscribe to mcp-request events
- */
+interface RequestEnvelope {
+  connection_id: number;
+  payload: string;
+}
+
+interface ConnectionClosedEnvelope {
+  connection_id: number;
+}
+
+function getOrCreateContext(connectionId: number): ConnectionContext {
+  let ctx = connectionContexts.get(connectionId);
+  if (!ctx) {
+    ctx = { connectionId, binding: null, lastSpawnedPaneId: null };
+    connectionContexts.set(connectionId, ctx);
+  }
+  return ctx;
+}
+
+/** Initialize the MCP server. Honors the `mcp` config setting. */
 export async function initMcpServer(): Promise<void> {
   if (initialized) return;
   initialized = true;
 
   const setting = getMcpSetting();
-  if (setting === "off") {
-    return;
-  }
+  if (setting === "off") return;
 
   // Bridge pty-exit to session status updates.
   await listen<{ pty_id: number }>("pty-exit", (event) => {
@@ -999,23 +1323,51 @@ export async function initMcpServer(): Promise<void> {
     ptyToSession.delete(event.payload.pty_id);
   });
 
-  // mcp-request from Rust bridge — each event carries one JSON-RPC message.
   await listen<string>("mcp-request", async (event) => {
-    const raw = event.payload;
-    let req: JsonRpcRequest;
+    let envelope: RequestEnvelope;
     try {
-      req = JSON.parse(raw) as JsonRpcRequest;
+      envelope = JSON.parse(event.payload) as RequestEnvelope;
     } catch {
-      console.warn("[mcp] malformed request:", raw);
+      console.warn("[mcp] malformed request envelope:", event.payload);
       return;
     }
-    const resp = await dispatch(req);
+    if (
+      typeof envelope.connection_id !== "number" ||
+      typeof envelope.payload !== "string"
+    ) {
+      console.warn("[mcp] invalid request envelope shape:", envelope);
+      return;
+    }
+    let req: JsonRpcRequest;
+    try {
+      req = JSON.parse(envelope.payload) as JsonRpcRequest;
+    } catch {
+      console.warn("[mcp] malformed request payload:", envelope.payload);
+      return;
+    }
+    const ctx = getOrCreateContext(envelope.connection_id);
+    const resp = await dispatch(req, ctx);
     if (resp) {
-      await emit("mcp-response", JSON.stringify(resp));
+      const out = {
+        connection_id: envelope.connection_id,
+        payload: JSON.stringify(resp),
+      };
+      await emit("mcp-response", JSON.stringify(out));
     }
   });
 
-  // Track workspace/pane focus changes → lifecycle events.
+  await listen<string>("mcp-connection-closed", (event) => {
+    let envelope: ConnectionClosedEnvelope;
+    try {
+      envelope = JSON.parse(event.payload) as ConnectionClosedEnvelope;
+    } catch {
+      console.warn("[mcp] malformed close envelope:", event.payload);
+      return;
+    }
+    connectionContexts.delete(envelope.connection_id);
+  });
+
+  // Lifecycle events for user GUI focus changes (observers).
   let lastWorkspaceId: string | null = null;
   let lastPaneId: string | null = null;
   activeWorkspace.subscribe((ws) => {
@@ -1049,8 +1401,42 @@ export function _getSessionsForTest(): Map<string, McpSession> {
   return sessions;
 }
 
+export function _getConnectionContextsForTest(): Map<number, ConnectionContext> {
+  return connectionContexts;
+}
+
+/** Build a connection context for tests. Pass binding=null for an unbound
+ *  agent (will hit resolution rule 5); pass partial binding for the bound
+ *  cases. The connectionId is auto-assigned to a synthetic value. */
+export function _testContext(
+  binding: Partial<ConnectionBinding> | null = null,
+): ConnectionContext {
+  const ctx: ConnectionContext = {
+    connectionId: -1,
+    binding: binding
+      ? {
+          paneId: binding.paneId ?? null,
+          workspaceId: binding.workspaceId ?? null,
+          clientPid: binding.clientPid ?? null,
+        }
+      : null,
+    lastSpawnedPaneId: null,
+  };
+  return ctx;
+}
+
+/** Test-only wrapper that exposes resolveTarget for unit testing. */
+export function _resolveTargetForTest(
+  args: TargetArgs,
+  ctx: ConnectionContext,
+): ResolvedTarget {
+  return resolveTarget(args, ctx);
+}
+
 export function _resetMcpServerForTest(): void {
   sessions.clear();
   ptyToSession.clear();
+  connectionContexts.clear();
+  dispatchLog.length = 0;
   initialized = false;
 }

@@ -10,7 +10,7 @@ npm run build               # full tauri build (frontend + Rust)
 cargo check                 # quick Rust compilation check
 ```
 
-All tests must pass and `npm run build` must succeed before pushing any commit. Do not declare work complete without a green test suite.
+All tests must pass and `npm run build` must succeed before pushing any commit. Do not declare work complete without a green test suite. You must NEVER merge PR's, especially to main.
 
 ## Slack
 

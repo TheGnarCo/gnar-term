@@ -58,10 +58,23 @@
         surface.startupCommand = undefined;
       }
 
+      // WebGL contexts are capped by the webview (WKWebView ~16). Under a
+      // burst of spawned panes, exceeding the cap evicts existing contexts
+      // and fires onContextLoss; an unbounded retry cascade wedges the
+      // compositor and freezes the app. Cap retries and fall back to the
+      // DOM renderer, which is slower but stable.
+      let webglAttempts = 0;
+      const MAX_WEBGL_ATTEMPTS = 3;
       const initWebGL = () => {
+        if (webglAttempts >= MAX_WEBGL_ATTEMPTS) return;
+        webglAttempts++;
         try {
           const addon = new WebglAddon();
-          addon.onContextLoss(() => setTimeout(initWebGL, 100));
+          addon.onContextLoss(() => {
+            if (webglAttempts < MAX_WEBGL_ATTEMPTS) {
+              setTimeout(initWebGL, 100);
+            }
+          });
           surface.terminal.loadAddon(addon);
         } catch (e) {
           console.warn("WebGL renderer failed, using DOM renderer", e);

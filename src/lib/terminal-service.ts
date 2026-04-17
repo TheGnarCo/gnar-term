@@ -27,6 +27,51 @@ import "@xterm/xterm/css/xterm.css";
 /** Platform detection — used for Cmd (macOS) vs Ctrl (Linux/Windows) shortcuts. */
 export const isMac = typeof navigator !== "undefined" && navigator.platform.toUpperCase().includes("MAC");
 
+// Per-surface PTY-ready signal. connectPty() resolves the deferred once the
+// Rust spawn_pty call returns; waitForPtyReady() awaits it instead of polling
+// surface.ptyId every 50ms. The polling version created a 50ms timer storm
+// during spawn bursts that contributed to a compositor freeze.
+interface PtyReadyDeferred {
+  promise: Promise<number>;
+  resolve: (ptyId: number) => void;
+  reject: (err: Error) => void;
+}
+const ptyReady = new Map<string, PtyReadyDeferred>();
+
+function makeDeferred(): PtyReadyDeferred {
+  let resolve!: (n: number) => void;
+  let reject!: (e: Error) => void;
+  const promise = new Promise<number>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+export function waitForPtyReady(surface: TerminalSurface, timeoutMs = 5000): Promise<number> {
+  if (surface.ptyId >= 0) return Promise.resolve(surface.ptyId);
+  let d = ptyReady.get(surface.id);
+  if (!d) {
+    d = makeDeferred();
+    ptyReady.set(surface.id, d);
+  }
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error("timed out waiting for PTY to spawn"));
+    }, timeoutMs);
+    d!.promise.then(
+      (n) => {
+        clearTimeout(timer);
+        resolve(n);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      },
+    );
+  });
+}
+
 /** Shortcut label helpers for platform-appropriate display. */
 export const modLabel = isMac ? "⌘" : "Ctrl+";
 export const shiftModLabel = isMac ? "⇧⌘" : "Ctrl+Shift+";
@@ -610,10 +655,34 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
   return surface;
 }
 
+/** Find the workspace + pane currently containing a given surface. Used to
+ *  inject `GNAR_TERM_PANE_ID` / `GNAR_TERM_WORKSPACE_ID` into the PTY's env so
+ *  any MCP-aware agent run inside the pane (claude, codex, etc.) can advertise
+ *  its host context to the gnar-term GUI via the `$/gnar-term/hello` handshake.
+ *
+ *  Returns null if the surface isn't yet attached (rare race during creation). */
+function findContextForSurface(
+  surfaceId: string,
+): { paneId: string; workspaceId: string } | null {
+  for (const ws of get(workspaces)) {
+    for (const pane of getAllPanes(ws.splitRoot)) {
+      if (pane.surfaces.some((s) => s.id === surfaceId)) {
+        return { paneId: pane.id, workspaceId: ws.id };
+      }
+    }
+  }
+  return null;
+}
+
 /** Spawn the PTY for a surface. Called after terminal.open() + fit() so the PTY
  *  gets the real terminal dimensions instead of hardcoded 80x24.
  *  Uses surface.cwd as the working directory. The optional cwd parameter is
- *  accepted for backwards compatibility but surface.cwd takes priority. */
+ *  accepted for backwards compatibility but surface.cwd takes priority.
+ *
+ *  Injects `GNAR_TERM_PANE_ID` and `GNAR_TERM_WORKSPACE_ID` into the PTY env
+ *  when the surface is already attached to a workspace pane. This is the
+ *  delivery mechanism for the MCP connection-binding contract — see the
+ *  Spacebase MCP spec § Connection binding. */
 export async function connectPty(surface: TerminalSurface, cwd?: string): Promise<void> {
   if (surface.ptyId >= 0) return; // already connected
   const cols = surface.terminal.cols;
@@ -635,20 +704,33 @@ export async function connectPty(surface: TerminalSurface, cwd?: string): Promis
     handlePtyChunk(resolvedPtyId, bytes);
   };
 
+  const ctx = findContextForSurface(surface.id);
+  const extraEnv: Record<string, string> = {};
+  if (ctx) {
+    extraEnv.GNAR_TERM_PANE_ID = ctx.paneId;
+    extraEnv.GNAR_TERM_WORKSPACE_ID = ctx.workspaceId;
+  }
+
+  const deferred = ptyReady.get(surface.id);
   try {
     const ptyId = await invoke<number>("spawn_pty", {
       cols,
       rows,
       cwd: effectiveCwd,
       onOutput,
+      extraEnv,
     });
     surface.ptyId = ptyId;
     resolvedPtyId = ptyId;
     for (const bytes of pending) handlePtyChunk(ptyId, bytes);
     pending.length = 0;
+    deferred?.resolve(ptyId);
+    ptyReady.delete(surface.id);
   } catch (err) {
     console.error("Failed to spawn PTY:", err);
     surface.ptyId = -1;
+    deferred?.reject(err instanceof Error ? err : new Error(String(err)));
+    ptyReady.delete(surface.id);
   }
 }
 

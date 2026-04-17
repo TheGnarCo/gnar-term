@@ -1197,7 +1197,7 @@ async fn get_pty_title(state: tauri::State<'_, AppState>, pty_id: u32) -> Result
             // Linux: read /proc foreground process
             #[cfg(target_os = "linux")]
             {
-                if let Ok(path) = std::fs::read_link(format!("/proc/{}/cwd", pid)) {
+                if let Ok(path) = std::fs::read_link(format!("/proc/{pid}/cwd")) {
                     let base = path
                         .file_name()
                         .map(|n| n.to_string_lossy().to_string())
@@ -1237,7 +1237,7 @@ async fn get_pty_cwd(state: tauri::State<'_, AppState>, pty_id: u32) -> Result<S
             // Linux: read /proc/<pid>/cwd
             #[cfg(target_os = "linux")]
             {
-                if let Ok(path) = std::fs::read_link(format!("/proc/{}/cwd", pid)) {
+                if let Ok(path) = std::fs::read_link(format!("/proc/{pid}/cwd")) {
                     return Ok(path.to_string_lossy().to_string());
                 }
             }
@@ -2384,11 +2384,11 @@ mod tests {
         std::thread::sleep(Duration::from_millis(200));
 
         // Verify get_pty_cwd returns the correct directory
-        if let Some(pid) = child_pid {
+        if let Some(_pid) = child_pid {
             #[cfg(target_os = "macos")]
             {
                 let output = std::process::Command::new("lsof")
-                    .args(["-a", "-p", &pid.to_string(), "-d", "cwd", "-Fn"])
+                    .args(["-a", "-p", &_pid.to_string(), "-d", "cwd", "-Fn"])
                     .output()
                     .expect("lsof should run");
                 let stdout = String::from_utf8_lossy(&output.stdout);

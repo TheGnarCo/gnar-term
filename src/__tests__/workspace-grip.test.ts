@@ -79,8 +79,11 @@ describe("WorkspaceItem drag grip", () => {
     await fireEvent.mouseDown(row);
     // Mousedown on body bubbles, but the grip handler should not fire
     expect(onGripMouseDown).not.toHaveBeenCalled();
-    // Click on body still selects
-    await fireEvent.click(row);
+    // Click on the inner content div (not the grip) still selects
+    const contentDiv = container.querySelector(
+      "[data-drag-idx] > div:last-child",
+    ) as HTMLElement;
+    await fireEvent.click(contentDiv);
     expect(onSelect).toHaveBeenCalled();
   });
 });

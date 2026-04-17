@@ -835,7 +835,7 @@ describe("WorkspaceItem", () => {
     expect(sidebarSource).toContain("dragActive");
   });
 
-  it("applies accentColor as border-left when provided", () => {
+  it("applies accentColor as DragGrip railColor when provided", () => {
     const ws = makeWorkspace("ws1", "Accent WS");
     render(WorkspaceItem, {
       props: {
@@ -856,21 +856,19 @@ describe("WorkspaceItem", () => {
     );
     expect(source).toContain("export let accentColor");
     expect(source).toContain("accentColor");
-    // The border-left logic uses accentColor when provided
-    expect(source).toMatch(/border-left:.*accentColor/s);
+    // The DragGrip rail uses accentColor when provided
+    expect(source).toMatch(/railColor=\{accentColor.*\$theme\.accent\}/s);
   });
 
-  it("uses accentColor or theme.accent for border, dimmed when inactive", () => {
+  it("uses accentColor or theme.accent for DragGrip rail, dimmed when inactive", () => {
     const source = readFileSync(
       "src/lib/components/WorkspaceItem.svelte",
       "utf-8",
     );
-    // Active uses accentColor or falls back to theme.accent
-    expect(source).toContain("accentColor || $theme.accent");
-    // Inactive uses color-mix to dim
-    expect(source).toContain(
-      "color-mix(in srgb, ${accentColor || $theme.accent} 35%",
-    );
+    // railColor uses accentColor falling back to theme.accent
+    expect(source).toContain("accentColor ?? $theme.accent");
+    // railOpacity is 1 when active, dimmed otherwise
+    expect(source).toContain("railOpacity={isActive ? 1 : 0.35}");
   });
 
   it("passes accentColor through WorkspaceListView", () => {

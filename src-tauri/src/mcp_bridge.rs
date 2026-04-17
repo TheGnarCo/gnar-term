@@ -1,15 +1,19 @@
-//! MCP UDS bridge. A tokio task inside the GUI process that binds a Unix
-//! domain socket, forwards newline-delimited JSON-RPC messages from the socket
-//! to the webview as `mcp-request` events, and writes `mcp-response` events
-//! back to the socket.
+//! MCP UDS bridge. A tokio server inside the GUI process that binds a Unix
+//! domain socket, accepts multiple concurrent connections, and forwards
+//! newline-delimited JSON-RPC messages between each connection's socket and
+//! the webview as `mcp-request` / `mcp-response` events.
 //!
 //! Rust has ZERO knowledge of MCP or JSON-RPC. It is a byte pipe between the
-//! `gnar-term --mcp-stdio` shim and the webview's MCP server.
+//! `gnar-term --mcp-stdio` shim and the webview's MCP server. The only
+//! metadata Rust adds is a per-connection `connection_id` so the webview can
+//! route requests, route responses, and isolate per-connection state.
 //!
 //! Security: the socket is chmod'd 600 so only the owning user can connect.
 //! Same-user threat boundary matches iTerm2/WezTerm local-IPC practice.
 
+use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use tauri::{AppHandle, Emitter, Listener};
@@ -18,6 +22,7 @@ use tokio::sync::mpsc;
 
 pub const REQUEST_EVENT: &str = "mcp-request";
 pub const RESPONSE_EVENT: &str = "mcp-response";
+pub const CONNECTION_CLOSED_EVENT: &str = "mcp-connection-closed";
 
 /// Resolve the UDS path for the current platform.
 ///
@@ -69,21 +74,50 @@ fn set_socket_perms(_path: &std::path::Path) -> std::io::Result<()> {
     Ok(())
 }
 
-/// Handle for the currently active connection's response writer side. When a
-/// connection is accepted, a new sender is installed here; responses emitted by
-/// the webview are routed to that sender and written to the connection's
-/// socket. When the connection drops, the sender is cleared.
-type ActiveWriter = Arc<Mutex<Option<mpsc::UnboundedSender<String>>>>;
+/// Per-connection writer registry. The bridge supports multiple concurrent
+/// connections; each gets a unique `connection_id` and a writer channel that
+/// the response listener routes to.
+type ConnectionRegistry = Arc<Mutex<HashMap<u64, mpsc::UnboundedSender<String>>>>;
 
 #[derive(Clone)]
 pub struct BridgeState {
-    active_writer: ActiveWriter,
+    connections: ConnectionRegistry,
+    next_id: Arc<AtomicU64>,
 }
 
 impl BridgeState {
     pub fn new() -> Self {
         Self {
-            active_writer: Arc::new(Mutex::new(None)),
+            connections: Arc::new(Mutex::new(HashMap::new())),
+            next_id: Arc::new(AtomicU64::new(1)),
+        }
+    }
+
+    fn next_connection_id(&self) -> u64 {
+        self.next_id.fetch_add(1, Ordering::Relaxed)
+    }
+
+    fn register(&self, id: u64, tx: mpsc::UnboundedSender<String>) {
+        if let Ok(mut guard) = self.connections.lock() {
+            guard.insert(id, tx);
+        }
+    }
+
+    fn unregister(&self, id: u64) {
+        if let Ok(mut guard) = self.connections.lock() {
+            guard.remove(&id);
+        }
+    }
+
+    fn send_to(&self, id: u64, payload: String) -> bool {
+        let tx = match self.connections.lock() {
+            Ok(g) => g.get(&id).cloned(),
+            Err(_) => None,
+        };
+        if let Some(tx) = tx {
+            tx.send(payload).is_ok()
+        } else {
+            false
         }
     }
 }
@@ -94,35 +128,49 @@ impl Default for BridgeState {
     }
 }
 
-/// Install the global `mcp-response` listener. Every response emitted by the
-/// webview is forwarded to the active connection's writer, if any. Safe to
-/// call once on startup.
+/// Install the global `mcp-response` listener. Each response carries a
+/// `connection_id` and is routed to that connection's writer.
+///
+/// Event payload shape (JSON object string emitted by the webview):
+/// ```json
+/// { "connection_id": 3, "payload": "<raw JSON-RPC line, no trailing newline>" }
+/// ```
 pub fn install_response_listener(app: AppHandle, state: BridgeState) {
-    let writer = state.active_writer.clone();
+    let state_clone = state.clone();
     app.listen(RESPONSE_EVENT, move |event| {
-        let payload = event.payload();
-        // Events arrive with the payload JSON-encoded by Tauri. Expected shape:
-        //   { "payload": "<raw json-rpc string>" }
-        // Extract the inner string without adding serde_derive churn for a
-        // tiny wrapper.
-        let inner: Option<String> = serde_json::from_str::<serde_json::Value>(payload)
+        let raw = event.payload();
+        // Tauri wraps event payloads as `{ "payload": <serialized> }`. Parse
+        // both the wrapper and the inner shape.
+        let inner_str: Option<String> = serde_json::from_str::<serde_json::Value>(raw)
             .ok()
             .and_then(|v| v.get("payload").and_then(|p| p.as_str()).map(String::from))
-            .or_else(|| serde_json::from_str::<String>(payload).ok());
-        let line = match inner {
+            .or_else(|| serde_json::from_str::<String>(raw).ok());
+        let payload = match inner_str {
             Some(s) => s,
             None => return,
         };
-        if let Ok(guard) = writer.lock() {
-            if let Some(tx) = guard.as_ref() {
-                let _ = tx.send(line);
-            }
-        }
+        // Inner is itself a JSON object: { connection_id: u64, payload: string }
+        let parsed: Option<(u64, String)> =
+            serde_json::from_str::<serde_json::Value>(&payload)
+                .ok()
+                .and_then(|v| {
+                    let id = v.get("connection_id")?.as_u64()?;
+                    let line = v.get("payload")?.as_str()?.to_string();
+                    Some((id, line))
+                });
+        let (connection_id, line) = match parsed {
+            Some(t) => t,
+            None => return,
+        };
+        // Route to the right connection. Drops silently if the connection
+        // closed between dispatch and response (legitimate race).
+        state_clone.send_to(connection_id, line);
     });
 }
 
 /// Bind the UDS and serve connections forever. Returns immediately after
-/// spawning the task. Only one connection is serviced at a time.
+/// spawning the task. Multiple connections are accepted concurrently — each
+/// runs in its own tokio task.
 #[cfg(unix)]
 pub fn spawn(app: AppHandle, state: BridgeState) -> Result<(), String> {
     use tokio::net::UnixListener;
@@ -167,7 +215,13 @@ pub fn spawn(app: AppHandle, state: BridgeState) -> Result<(), String> {
                     continue;
                 }
             };
-            handle_connection(stream, app_for_task.clone(), state.clone()).await;
+            // Spawn each connection as an independent task — concurrent, not
+            // serialized. Multi-agent scenarios depend on this.
+            let app_for_conn = app_for_task.clone();
+            let state_for_conn = state.clone();
+            tauri::async_runtime::spawn(async move {
+                handle_connection(stream, app_for_conn, state_for_conn).await;
+            });
         }
     });
 
@@ -183,8 +237,7 @@ pub fn spawn(app: AppHandle, state: BridgeState) -> Result<(), String> {
 #[cfg(not(unix))]
 pub fn spawn(_app: AppHandle, _state: BridgeState) -> Result<(), String> {
     // Windows uses AF_UNIX via the stdlib on Win10 1803+. tokio's UnixListener
-    // is unix-only, so we stub the MVP to the unix path and plan a Windows
-    // named-pipe fallback as a follow-up.
+    // is unix-only; named-pipe fallback is a follow-up.
     Err("MCP bridge UDS not yet supported on this platform".to_string())
 }
 
@@ -194,15 +247,10 @@ async fn handle_connection(
     app: AppHandle,
     state: BridgeState,
 ) {
+    let connection_id = state.next_connection_id();
     let (read_half, mut write_half) = stream.into_split();
     let (tx, mut rx) = mpsc::unbounded_channel::<String>();
-
-    // Install this connection's writer as the active one. On drop it will be
-    // replaced; the guard below restores None on exit.
-    {
-        let mut guard = state.active_writer.lock().unwrap();
-        *guard = Some(tx.clone());
-    }
+    state.register(connection_id, tx.clone());
 
     // Task: pump responses from channel to socket.
     let writer_task = tauri::async_runtime::spawn(async move {
@@ -217,7 +265,8 @@ async fn handle_connection(
         }
     });
 
-    // Read loop: one line per JSON-RPC message; emit as Tauri event.
+    // Read loop: one line per JSON-RPC message; emit as Tauri event with
+    // connection_id metadata so the webview can route it.
     let mut reader = BufReader::new(read_half);
     let mut buf = String::new();
     loop {
@@ -225,30 +274,33 @@ async fn handle_connection(
         match reader.read_line(&mut buf).await {
             Ok(0) => break, // EOF
             Ok(_) => {
-                // Strip trailing newline, ignore empty heartbeat lines.
                 let trimmed = buf.trim_end_matches(['\r', '\n']).to_string();
                 if trimmed.is_empty() {
                     continue;
                 }
-                // Emit the raw line as the event payload. Webview receives
-                // `{ payload: "<raw json>" }`.
-                let _ = app.emit(REQUEST_EVENT, trimmed);
+                // Build the envelope: { connection_id, payload }
+                // Use serde_json to be robust against arbitrary payload contents.
+                let envelope = serde_json::json!({
+                    "connection_id": connection_id,
+                    "payload": trimmed,
+                });
+                let _ = app.emit(REQUEST_EVENT, envelope.to_string());
             }
             Err(_) => break,
         }
     }
 
-    // Connection closed. Clear active writer and terminate the writer task.
-    {
-        let mut guard = state.active_writer.lock().unwrap();
-        *guard = None;
-    }
+    // Connection closed. Notify webview, free per-connection state, drain.
+    state.unregister(connection_id);
+    let close_envelope = serde_json::json!({ "connection_id": connection_id });
+    let _ = app.emit(CONNECTION_CLOSED_EVENT, close_envelope.to_string());
     drop(tx);
     let _ = writer_task.await;
 }
 
-/// Run the `--mcp-stdio` byte pipe: open the UDS, copy stdin ↔ socket ↔ stdout.
-/// Blocks until one side closes. Returns a non-zero-worthy error on failure.
+/// Run the `--mcp-stdio` byte pipe: open the UDS, send the gnar-term hello
+/// notification carrying any pane/workspace context inherited from env vars,
+/// then copy stdin ↔ socket ↔ stdout. Blocks until one side closes.
 #[cfg(unix)]
 pub fn run_stdio_shim() -> i32 {
     use tokio::io::{stdin, stdout};
@@ -289,6 +341,15 @@ pub fn run_stdio_shim() -> i32 {
             }
         };
         let (mut sock_r, mut sock_w) = stream.into_split();
+
+        // Send the hello notification first so the GUI can bind this
+        // connection to the agent's host pane/workspace.
+        let hello = build_hello_message();
+        if sock_w.write_all(hello.as_bytes()).await.is_err() {
+            eprintln!("gnar-term: failed to send hello to GUI");
+            return 1;
+        }
+
         let mut stdin = stdin();
         let mut stdout = stdout();
 
@@ -311,67 +372,174 @@ pub fn run_stdio_shim() -> i32 {
     1
 }
 
+/// Build the `$/gnar-term/hello` notification line (with trailing newline).
+/// Reads `GNAR_TERM_PANE_ID` and `GNAR_TERM_WORKSPACE_ID` from env; both are
+/// optional. Always sends a hello (even when unbound) so the GUI can record
+/// the connection's binding state explicitly.
+pub fn build_hello_message() -> String {
+    let pane_id = std::env::var("GNAR_TERM_PANE_ID").ok();
+    let workspace_id = std::env::var("GNAR_TERM_WORKSPACE_ID").ok();
+    let client_pid = std::process::id();
+    let payload = serde_json::json!({
+        "jsonrpc": "2.0",
+        "method": "$/gnar-term/hello",
+        "params": {
+            "pane_id": pane_id,
+            "workspace_id": workspace_id,
+            "client_pid": client_pid,
+        }
+    });
+    let mut s = payload.to_string();
+    s.push('\n');
+    s
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn uds_path_is_resolved() {
-        // On CI and dev machines, HOME/LOCALAPPDATA are set; the function should
-        // yield Some and the path should mention gnar-term.
         let p = uds_path().expect("uds_path should resolve");
         let s = p.to_string_lossy();
-        assert!(
-            s.contains("gnar-term"),
-            "uds path should contain gnar-term: {s}"
-        );
+        assert!(s.contains("gnar-term"), "uds path should contain gnar-term: {s}");
         assert!(s.ends_with("mcp.sock"), "uds path should end in mcp.sock: {s}");
+    }
+
+    #[test]
+    fn hello_message_includes_env_vars() {
+        // Use a separate process to control env without polluting other tests.
+        // We test the function directly by setting env, then unsetting.
+        std::env::set_var("GNAR_TERM_PANE_ID", "pane-abc");
+        std::env::set_var("GNAR_TERM_WORKSPACE_ID", "ws-xyz");
+        let line = build_hello_message();
+        assert!(line.ends_with('\n'), "hello must terminate with newline");
+        let parsed: serde_json::Value =
+            serde_json::from_str(line.trim_end()).expect("hello must be valid JSON");
+        assert_eq!(parsed["jsonrpc"], "2.0");
+        assert_eq!(parsed["method"], "$/gnar-term/hello");
+        assert_eq!(parsed["params"]["pane_id"], "pane-abc");
+        assert_eq!(parsed["params"]["workspace_id"], "ws-xyz");
+        assert!(parsed["params"]["client_pid"].is_number());
+        assert!(parsed.get("id").is_none(), "hello is a notification, no id");
+        std::env::remove_var("GNAR_TERM_PANE_ID");
+        std::env::remove_var("GNAR_TERM_WORKSPACE_ID");
+    }
+
+    #[test]
+    fn hello_message_when_unbound_uses_null() {
+        // Ensure clean env.
+        std::env::remove_var("GNAR_TERM_PANE_ID");
+        std::env::remove_var("GNAR_TERM_WORKSPACE_ID");
+        let line = build_hello_message();
+        let parsed: serde_json::Value =
+            serde_json::from_str(line.trim_end()).expect("valid JSON");
+        assert!(parsed["params"]["pane_id"].is_null());
+        assert!(parsed["params"]["workspace_id"].is_null());
+        assert!(parsed["params"]["client_pid"].is_number());
+    }
+
+    #[test]
+    fn connection_registry_isolates_writers() {
+        let state = BridgeState::new();
+        let (tx1, mut rx1) = mpsc::unbounded_channel::<String>();
+        let (tx2, mut rx2) = mpsc::unbounded_channel::<String>();
+        state.register(1, tx1);
+        state.register(2, tx2);
+
+        assert!(state.send_to(1, "to one".to_string()));
+        assert!(state.send_to(2, "to two".to_string()));
+        assert_eq!(rx1.try_recv().unwrap(), "to one");
+        assert_eq!(rx2.try_recv().unwrap(), "to two");
+        assert!(rx1.try_recv().is_err(), "conn 1 must not see conn 2's traffic");
+        assert!(rx2.try_recv().is_err(), "conn 2 must not see conn 1's traffic");
+
+        state.unregister(1);
+        assert!(!state.send_to(1, "after close".to_string()));
+        assert!(state.send_to(2, "still alive".to_string()));
+        assert_eq!(rx2.try_recv().unwrap(), "still alive");
+    }
+
+    #[test]
+    fn connection_ids_are_monotonic() {
+        let state = BridgeState::new();
+        let a = state.next_connection_id();
+        let b = state.next_connection_id();
+        let c = state.next_connection_id();
+        assert!(b > a && c > b, "ids must be monotonic: {a} {b} {c}");
     }
 
     #[cfg(unix)]
     #[tokio::test]
-    async fn uds_round_trip_bytes() {
+    async fn uds_two_concurrent_connections_each_round_trip() {
         use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
         use tokio::net::{UnixListener, UnixStream};
 
         let dir = tempfile_dir();
-        let path = dir.join("test.sock");
+        let path = dir.join("multi.sock");
         let _ = std::fs::remove_file(&path);
         let listener = match UnixListener::bind(&path) {
             Ok(l) => l,
             Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
-                eprintln!("[test] skipping uds_round_trip_bytes: sandbox forbids bind ({e})");
+                eprintln!("[test] skipping multi-conn test: sandbox forbids bind ({e})");
                 return;
             }
             Err(e) => panic!("bind: {e}"),
         };
 
+        // Server: accept two connections concurrently. Each echoes the line
+        // it receives, prefixed with its accept order.
         let server = tokio::spawn(async move {
-            let (stream, _) = listener.accept().await.unwrap();
-            let (r, mut w) = stream.into_split();
-            let mut reader = BufReader::new(r);
-            let mut line = String::new();
-            reader.read_line(&mut line).await.unwrap();
-            assert!(line.contains("hello"));
-            w.write_all(b"{\"pong\":true}\n").await.unwrap();
+            for i in 0..2u32 {
+                let (stream, _) = listener.accept().await.unwrap();
+                tokio::spawn(async move {
+                    let (r, mut w) = stream.into_split();
+                    let mut reader = BufReader::new(r);
+                    let mut line = String::new();
+                    reader.read_line(&mut line).await.unwrap();
+                    let resp = format!("conn{} echoed: {}", i, line.trim());
+                    w.write_all(resp.as_bytes()).await.unwrap();
+                    w.write_all(b"\n").await.unwrap();
+                    w.shutdown().await.unwrap();
+                });
+            }
         });
 
-        let client = UnixStream::connect(&path).await.expect("connect");
-        let (r, mut w) = client.into_split();
-        w.write_all(b"{\"hello\":1}\n").await.unwrap();
-        let mut reader = BufReader::new(r);
-        let mut line = String::new();
-        reader.read_line(&mut line).await.unwrap();
-        assert!(line.contains("pong"));
+        // Two clients in parallel.
+        let p1 = path.clone();
+        let p2 = path.clone();
+        let c1 = tokio::spawn(async move {
+            let s = UnixStream::connect(&p1).await.unwrap();
+            let (r, mut w) = s.into_split();
+            w.write_all(b"hi-from-1\n").await.unwrap();
+            w.shutdown().await.unwrap();
+            let mut line = String::new();
+            BufReader::new(r).read_line(&mut line).await.unwrap();
+            line
+        });
+        let c2 = tokio::spawn(async move {
+            let s = UnixStream::connect(&p2).await.unwrap();
+            let (r, mut w) = s.into_split();
+            w.write_all(b"hi-from-2\n").await.unwrap();
+            w.shutdown().await.unwrap();
+            let mut line = String::new();
+            BufReader::new(r).read_line(&mut line).await.unwrap();
+            line
+        });
 
+        let (r1, r2) = tokio::join!(c1, c2);
+        let r1 = r1.unwrap();
+        let r2 = r2.unwrap();
+        // Both clients must receive a response that mentions their own input —
+        // proving traffic was not cross-contaminated between connections.
+        assert!(r1.contains("hi-from-1"), "client 1 must see its own message: {r1}");
+        assert!(r2.contains("hi-from-2"), "client 2 must see its own message: {r2}");
         server.await.unwrap();
         let _ = std::fs::remove_file(&path);
     }
 
     #[cfg(unix)]
     fn tempfile_dir() -> std::path::PathBuf {
-        // Pick a writable tmp dir. TMPDIR honours the harness sandbox, and
-        // falls back to std::env::temp_dir otherwise.
         let base = std::env::var("TMPDIR")
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|_| std::env::temp_dir());

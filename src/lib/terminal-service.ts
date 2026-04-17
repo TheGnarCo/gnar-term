@@ -610,10 +610,34 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
   return surface;
 }
 
+/** Find the workspace + pane currently containing a given surface. Used to
+ *  inject `GNAR_TERM_PANE_ID` / `GNAR_TERM_WORKSPACE_ID` into the PTY's env so
+ *  any MCP-aware agent run inside the pane (claude, codex, etc.) can advertise
+ *  its host context to the gnar-term GUI via the `$/gnar-term/hello` handshake.
+ *
+ *  Returns null if the surface isn't yet attached (rare race during creation). */
+function findContextForSurface(
+  surfaceId: string,
+): { paneId: string; workspaceId: string } | null {
+  for (const ws of get(workspaces)) {
+    for (const pane of getAllPanes(ws.splitRoot)) {
+      if (pane.surfaces.some((s) => s.id === surfaceId)) {
+        return { paneId: pane.id, workspaceId: ws.id };
+      }
+    }
+  }
+  return null;
+}
+
 /** Spawn the PTY for a surface. Called after terminal.open() + fit() so the PTY
  *  gets the real terminal dimensions instead of hardcoded 80x24.
  *  Uses surface.cwd as the working directory. The optional cwd parameter is
- *  accepted for backwards compatibility but surface.cwd takes priority. */
+ *  accepted for backwards compatibility but surface.cwd takes priority.
+ *
+ *  Injects `GNAR_TERM_PANE_ID` and `GNAR_TERM_WORKSPACE_ID` into the PTY env
+ *  when the surface is already attached to a workspace pane. This is the
+ *  delivery mechanism for the MCP connection-binding contract — see the
+ *  Spacebase MCP spec § Connection binding. */
 export async function connectPty(surface: TerminalSurface, cwd?: string): Promise<void> {
   if (surface.ptyId >= 0) return; // already connected
   const cols = surface.terminal.cols;
@@ -635,12 +659,20 @@ export async function connectPty(surface: TerminalSurface, cwd?: string): Promis
     handlePtyChunk(resolvedPtyId, bytes);
   };
 
+  const ctx = findContextForSurface(surface.id);
+  const extraEnv: Record<string, string> = {};
+  if (ctx) {
+    extraEnv.GNAR_TERM_PANE_ID = ctx.paneId;
+    extraEnv.GNAR_TERM_WORKSPACE_ID = ctx.workspaceId;
+  }
+
   try {
     const ptyId = await invoke<number>("spawn_pty", {
       cols,
       rows,
       cwd: effectiveCwd,
       onOutput,
+      extraEnv,
     });
     surface.ptyId = ptyId;
     resolvedPtyId = ptyId;

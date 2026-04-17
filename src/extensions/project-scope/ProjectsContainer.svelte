@@ -10,7 +10,7 @@
   const api = getContext<ExtensionAPI>(EXTENSION_API_KEY);
   const theme = api.theme;
   const workspacesStore = api.workspaces;
-  const { SplitButton } = api.getComponents();
+  const { SplitButton, DragGrip } = api.getComponents();
 
   let stateVersion = 0;
   api.on("extension:project:state-changed", () => {
@@ -40,6 +40,7 @@
     orderedProjects = next;
   }
 
+  let projectHoverIdx: number | null = null;
   let sourceIdx: number | null = null;
   let indicator: { idx: number; edge: "before" | "after" } | null = null;
   let active = false;
@@ -103,17 +104,31 @@
           style="height: 2px; background: {$theme.accent}; margin: 0 12px; border-radius: 1px;"
         ></div>
       {/if}
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div
         data-project-drag-idx={i}
-        style="position: relative; opacity: {active && sourceIdx === i
-          ? 0.4
-          : 1};"
+        style="
+          display: flex;
+          opacity: {active && sourceIdx === i ? 0.4 : 1};
+        "
       >
-        <ProjectSectionContent
-          projectId={project.id}
-          onGripMouseDown={(e) => startDrag(e, i)}
-          gripActive={active && sourceIdx === i}
-        />
+        <div
+          on:mouseenter={() => (projectHoverIdx = i)}
+          on:mouseleave={() => (projectHoverIdx = null)}
+          style="flex-shrink: 0; align-self: stretch; display: flex;"
+        >
+          <svelte:component
+            this={DragGrip as Component}
+            theme={$theme}
+            visible={projectHoverIdx === i || (active && sourceIdx === i)}
+            onMouseDown={(e: MouseEvent) => startDrag(e, i)}
+            ariaLabel="Drag project to reorder"
+            railColor={project.color}
+          />
+        </div>
+        <div style="flex: 1; min-width: 0;">
+          <ProjectSectionContent projectId={project.id} />
+        </div>
       </div>
       {#if indicator?.idx === i && indicator.edge === "after"}
         <div

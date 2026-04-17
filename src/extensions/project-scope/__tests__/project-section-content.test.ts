@@ -13,14 +13,23 @@ const CONTAINER_SOURCE = readFileSync(
 );
 
 describe("ProjectsContainer template", () => {
-  it("no longer renders DragGrip at the outer per-project wrapper", () => {
-    expect(CONTAINER_SOURCE).not.toMatch(/DragGrip/);
+  it("renders a DragGrip in the per-project handle column", () => {
+    expect(CONTAINER_SOURCE).toMatch(/this=\{DragGrip as Component\}/);
   });
 
-  it("forwards onGripMouseDown + gripActive to ProjectSectionContent", () => {
+  it("passes railColor={project.color} to the per-project DragGrip", () => {
     const oneLine = CONTAINER_SOURCE.replace(/\s+/g, " ");
-    expect(oneLine).toMatch(/onGripMouseDown=\{\(e\) => startDrag\(e, i\)\}/);
-    expect(oneLine).toMatch(/gripActive=\{active && sourceIdx === i\}/);
+    expect(oneLine).toMatch(/railColor=\{project\.color\}/);
+  });
+
+  it("scopes mouseenter/mouseleave to the handle column (not the outer wrapper or content)", () => {
+    const oneLine = CONTAINER_SOURCE.replace(/\s+/g, " ");
+    // There must be exactly ONE set of mouseenter/mouseleave handlers in the per-project block, on the handle div.
+    const enterMatches = oneLine.match(
+      /on:mouseenter=\{\(\) => \(projectHoverIdx = i\)\}/g,
+    );
+    expect(enterMatches).not.toBeNull();
+    expect(enterMatches!.length).toBe(1);
   });
 });
 
@@ -69,21 +78,5 @@ describe("ProjectSectionContent template", () => {
     expect(oneLine).toMatch(
       /font-size:\s*13px;\s*font-weight:\s*600;\s*color:\s*\{\$theme\.fg\}/,
     );
-  });
-
-  it("renders DragGrip inside the project header (not wrapping the whole project)", () => {
-    // Search within the template section only (after </script>) so we
-    // don't match the destructure line where WorkspaceListView comes first.
-    const templateSection = SOURCE.slice(SOURCE.indexOf("</script>"));
-    const gripIdx = templateSection.indexOf("DragGrip");
-    const listIdx = templateSection.indexOf("WorkspaceListView");
-    expect(gripIdx).toBeGreaterThan(-1);
-    expect(listIdx).toBeGreaterThan(-1);
-    expect(gripIdx).toBeLessThan(listIdx);
-  });
-
-  it("exposes onGripMouseDown and gripActive props", () => {
-    expect(SOURCE).toMatch(/export let onGripMouseDown:/);
-    expect(SOURCE).toMatch(/export let gripActive/);
   });
 });

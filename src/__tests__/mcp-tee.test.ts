@@ -39,7 +39,9 @@ describe("appendMcpOutput", () => {
   });
 
   it("is a cheap no-op for unregistered ptyIds", () => {
-    expect(() => appendMcpOutput(999, encode("should be ignored"))).not.toThrow();
+    expect(() =>
+      appendMcpOutput(999, encode("should be ignored")),
+    ).not.toThrow();
     expect(getMcpBuffer(999)).toBeUndefined();
   });
 

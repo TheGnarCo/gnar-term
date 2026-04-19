@@ -57,14 +57,16 @@ describe("Flow control — rAF batching", () => {
     });
 
     mockTerminal = {
-      write: vi.fn().mockImplementation((_data: Uint8Array, cb?: () => void) => {
-        if (cb) writeCallbacks.push(cb);
-      }),
+      write: vi
+        .fn()
+        .mockImplementation((_data: Uint8Array, cb?: () => void) => {
+          if (cb) writeCallbacks.push(cb);
+        }),
     };
 
     mockInvoke = vi.mocked(invoke);
     mockInvoke.mockReset();
-    mockInvoke.mockResolvedValue(undefined as any);
+    mockInvoke.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -97,7 +99,7 @@ describe("Flow control — rAF batching", () => {
       if (buffered > 0) scheduleFlush(ptyId);
       if (ptyPaused.has(ptyId) && buffered < BUFFER_LOW_WATER) {
         ptyPaused.delete(ptyId);
-        invoke("resume_pty", { ptyId } as any);
+        invoke("resume_pty", { ptyId } as Record<string, unknown>);
       }
     });
   }
@@ -115,14 +117,14 @@ describe("Flow control — rAF batching", () => {
 
     if (!ptyPaused.has(ptyId) && buffered >= BUFFER_HIGH_WATER) {
       ptyPaused.add(ptyId);
-      invoke("pause_pty", { ptyId } as any);
+      invoke("pause_pty", { ptyId } as Record<string, unknown>);
     }
     scheduleFlush(ptyId);
   }
 
   function flushRAF() {
     const cbs = rafCallbacks.splice(0);
-    cbs.forEach(cb => cb(performance.now()));
+    cbs.forEach((cb) => cb(performance.now()));
   }
 
   it("coalesces multiple events into a single terminal.write() per frame", () => {
@@ -185,7 +187,8 @@ describe("Flow control — rAF batching", () => {
     expect(mockInvoke).toHaveBeenCalledWith("pause_pty", { ptyId: 1 });
     flushRAF();
     expect(mockTerminal.write).toHaveBeenCalledTimes(1);
-    const totalWritten = (mockTerminal.write.mock.calls[0][0] as Uint8Array).length;
+    const totalWritten = (mockTerminal.write.mock.calls[0][0] as Uint8Array)
+      .length;
     expect(totalWritten).toBe(CHUNKS * CHUNK_SIZE);
 
     mockInvoke.mockClear();
@@ -232,8 +235,10 @@ describe("Flow control — rAF batching", () => {
     for (let burst = 0; burst < TOTAL_CHUNKS / BURST_SIZE; burst++) {
       for (let i = 0; i < BURST_SIZE; i++) emitPtyOutput(1, 4096);
       flushRAF();
-      totalTerminalWrites += mockTerminal.write.mock.calls.length - totalTerminalWrites;
-      if (writeCallbacks.length > 0) writeCallbacks[writeCallbacks.length - 1]();
+      totalTerminalWrites +=
+        mockTerminal.write.mock.calls.length - totalTerminalWrites;
+      if (writeCallbacks.length > 0)
+        writeCallbacks[writeCallbacks.length - 1]();
     }
 
     expect(totalTerminalWrites).toBeLessThanOrEqual(TOTAL_CHUNKS / BURST_SIZE);

@@ -1,25 +1,33 @@
 /**
- * GnarTerm Config — cmux-compatible with extensions
+ * GnarTerm Config — settings and runtime state
  *
- * File locations (in priority order):
- *   ./gnar-term.json        (per-project)
- *   ~/.config/gnar-term/gnar-term.json  (global)
- *   ./cmux.json             (per-project, cmux compat)
- *   ~/.config/cmux/cmux.json (global, cmux compat)
+ * Settings file locations (in priority order):
+ *   ./settings.json                     (per-project)
+ *   ~/.config/gnar-term/settings.json   (global)
+ *   ./gnar-term.json                    (legacy per-project)
+ *   ./cmux.json                         (per-project, cmux compat)
+ *   ~/.config/cmux/cmux.json            (global, cmux compat)
+ *
+ * Runtime state:
+ *   ~/.config/gnar-term/state.json      (written on quit, restored on launch)
  */
 
 import { invoke } from "@tauri-apps/api/core";
+import { writable, type Readable } from "svelte/store";
+import { getHome } from "./services/service-helpers";
 
 // --- Types (cmux-compatible + extensions) ---
 
 export interface SurfaceDef {
-  type?: "terminal" | "browser" | "markdown";  // "markdown" is gnar-term extension
+  type?: "terminal" | "browser" | "markdown" | "extension";
   name?: string;
   command?: string;
   cwd?: string;
   env?: Record<string, string>;
-  url?: string;       // browser only
-  path?: string;      // markdown only (gnar-term extension)
+  url?: string; // browser only
+  path?: string; // markdown (legacy, maps to extension type "preview:preview")
+  extensionType?: string; // e.g. "preview:preview" — maps to surfaceTypeId
+  extensionProps?: Record<string, unknown>; // arbitrary props for the extension surface
   focus?: boolean;
 }
 
@@ -29,7 +37,7 @@ export interface PaneDef {
 
 export interface SplitDef {
   direction: "horizontal" | "vertical";
-  split?: number;  // 0.1–0.9, default 0.5
+  split?: number; // 0.1–0.9, default 0.5
   children: [LayoutNode, LayoutNode];
 }
 
@@ -39,6 +47,8 @@ export interface WorkspaceDef {
   name?: string;
   cwd?: string;
   color?: string;
+  env?: Record<string, string>;
+  metadata?: Record<string, unknown>;
   layout?: LayoutNode;
 }
 
@@ -46,11 +56,18 @@ export interface CommandDef {
   name: string;
   description?: string;
   keywords?: string[];
-  command?: string;       // simple shell command
+  command?: string; // simple shell command
   confirm?: boolean;
   restart?: "ignore" | "recreate" | "confirm";
-  workspace?: WorkspaceDef;  // workspace command
+  workspace?: WorkspaceDef; // workspace command
 }
+
+export interface ExtensionConfig {
+  enabled: boolean;
+  source?: string; // e.g. "github:TheGnarCo/gnar-term-ext-github-issues"
+  settings?: Record<string, unknown>; // extension-specific settings values
+}
+
 
 export type McpSetting = "auto" | "on" | "off";
 
@@ -60,7 +77,8 @@ export interface GnarTermConfig {
   fontSize?: number;
   fontFamily?: string;
   opacity?: number;
-  autoload?: string[];  // workspace command names to launch on startup
+  autoload?: string[]; // workspace command names to launch on startup
+  extensions?: Record<string, ExtensionConfig>;
   /**
    * MCP integration module. Controls whether gnar-term exposes its MCP tools
    * to Claude Code (or any other MCP client) over a local Unix domain socket.
@@ -77,10 +95,23 @@ export interface GnarTermConfig {
   commands?: CommandDef[];
 }
 
+export interface AppState {
+  sidebarWidths?: { primary?: number; secondary?: number };
+  sidebarVisible?: { primary?: boolean; secondary?: boolean };
+  windowBounds?: { x?: number; y?: number; width?: number; height?: number };
+  workspaces?: (WorkspaceDef & { name: string })[];
+  activeWorkspaceIdx?: number;
+  // Interleaved ordering for the Workspaces section: unclaimed
+  // workspaces and whole project blocks sit in a single list the user
+  // can drag across freely. See stores/root-row-order.ts.
+  rootRowOrder?: { kind: string; id: string }[];
+}
+
 // --- Config file paths ---
 
 const CONFIG_FILENAMES = [
-  "gnar-term.json",
+  "settings.json",
+  "gnar-term.json", // legacy
   "cmux.json",
 ];
 
@@ -88,14 +119,19 @@ const CONFIG_FILENAMES = [
 
 let _config: GnarTermConfig = {};
 let _configPath = "";
+const _configStore = writable<GnarTermConfig>({});
+export const configStore: Readable<GnarTermConfig> = _configStore;
 
-export async function loadConfig(explicitPath?: string): Promise<GnarTermConfig> {
+export async function loadConfig(
+  explicitPath?: string,
+): Promise<GnarTermConfig> {
   // If an explicit config path was provided (e.g. via --config), try it first
   if (explicitPath) {
     try {
       const content = await invoke<string>("read_file", { path: explicitPath });
       _config = JSON.parse(content);
       _configPath = explicitPath;
+      _configStore.set(_config);
       return _config;
     } catch (e) {
       console.warn(`[config] Failed to load ${explicitPath}:`, e);
@@ -106,8 +142,8 @@ export async function loadConfig(explicitPath?: string): Promise<GnarTermConfig>
 
   // Try per-project config first (higher priority), then global
   const paths = [
-    ...CONFIG_FILENAMES,  // ./gnar-term.json, ./cmux.json
-    `${home}/.config/gnar-term/gnar-term.json`,
+    ...CONFIG_FILENAMES, // ./gnar-term.json, ./cmux.json
+    `${home}/.config/gnar-term/settings.json`,
     `${home}/.config/cmux/cmux.json`,
   ];
 
@@ -116,20 +152,25 @@ export async function loadConfig(explicitPath?: string): Promise<GnarTermConfig>
       const content = await invoke<string>("read_file", { path });
       _config = JSON.parse(content);
       _configPath = path;
+      _configStore.set(_config);
       return _config;
     } catch {}
   }
 
   // No config found — use defaults
   _config = {};
-  _configPath = `${home}/.config/gnar-term/gnar-term.json`;
+  _configPath = `${home}/.config/gnar-term/settings.json`;
+  _configStore.set(_config);
   return _config;
 }
 
-export async function saveConfig(updates: Partial<GnarTermConfig>): Promise<void> {
+export async function saveConfig(
+  updates: Partial<GnarTermConfig>,
+): Promise<void> {
   _config = { ..._config, ...updates };
+  _configStore.set(_config);
   const home = await getHome();
-  const path = _configPath || `${home}/.config/gnar-term/gnar-term.json`;
+  const path = _configPath || `${home}/.config/gnar-term/settings.json`;
 
   // Ensure directory exists
   try {
@@ -137,7 +178,10 @@ export async function saveConfig(updates: Partial<GnarTermConfig>): Promise<void
   } catch {}
 
   try {
-    await invoke("write_file", { path, content: JSON.stringify(_config, null, 2) });
+    await invoke("write_file", {
+      path,
+      content: JSON.stringify(_config, null, 2),
+    });
   } catch (err) {
     console.error("[config] Failed to save:", err);
   }
@@ -158,18 +202,46 @@ export function getMcpSetting(): McpSetting {
 }
 
 export function getWorkspaceCommands(): CommandDef[] {
-  return getCommands().filter(c => c.workspace);
+  return getCommands().filter((c) => c.workspace);
 }
 
-// --- Helpers ---
+// --- Runtime state ---
 
-let _home = "";
-async function getHome(): Promise<string> {
-  if (_home) return _home;
+let _appState: AppState = {};
+const _appStateStore = writable<AppState>({});
+export const appStateStore: Readable<AppState> = _appStateStore;
+
+export async function loadState(): Promise<AppState> {
+  const home = await getHome();
+  const path = `${home}/.config/gnar-term/state.json`;
   try {
-    _home = await invoke<string>("get_home");
+    const content = await invoke<string>("read_file", { path });
+    _appState = JSON.parse(content);
   } catch {
-    _home = "/tmp";
+    _appState = {};
   }
-  return _home;
+  _appStateStore.set(_appState);
+  return _appState;
 }
+
+export async function saveState(updates: Partial<AppState>): Promise<void> {
+  _appState = { ..._appState, ...updates };
+  _appStateStore.set(_appState);
+  const home = await getHome();
+  const path = `${home}/.config/gnar-term/state.json`;
+  try {
+    await invoke("ensure_dir", { path: `${home}/.config/gnar-term` });
+    await invoke("write_file", {
+      path,
+      content: JSON.stringify(_appState, null, 2),
+    });
+  } catch (err) {
+    console.error("[state] Failed to save:", err);
+  }
+}
+
+export function getState(): AppState {
+  return _appState;
+}
+
+// getHome is imported from service-helpers

@@ -8,12 +8,14 @@
  * B4: Close Other Workspaces handles array mutation correctly
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 
 // Mock Tauri APIs
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn().mockResolvedValue(undefined),
-  convertFileSrc: vi.fn((path: string) => `asset://localhost/${encodeURIComponent(path)}`),
+  convertFileSrc: vi.fn(
+    (path: string) => `asset://localhost/${encodeURIComponent(path)}`,
+  ),
 }));
 
 vi.mock("@tauri-apps/api/event", () => ({
@@ -27,7 +29,10 @@ vi.mock("@tauri-apps/api/event", () => ({
 describe("Markdown preview XSS prevention", () => {
   it("imports DOMPurify in preview/markdown.ts", async () => {
     const fs = await import("fs");
-    const source = fs.readFileSync("src/preview/markdown.ts", "utf-8");
+    const source = fs.readFileSync(
+      "src/extensions/preview/previewers/markdown.ts",
+      "utf-8",
+    );
     expect(source).toContain('import DOMPurify from "dompurify"');
     expect(source).toContain("DOMPurify.sanitize");
     expect(source).not.toMatch(/element\.innerHTML\s*=\s*marked\.parse/);
@@ -41,14 +46,20 @@ describe("Markdown preview XSS prevention", () => {
 describe("Image preview XSS prevention", () => {
   it("does not use innerHTML with user data", async () => {
     const fs = await import("fs");
-    const source = fs.readFileSync("src/preview/image.ts", "utf-8");
+    const source = fs.readFileSync(
+      "src/extensions/preview/previewers/image.ts",
+      "utf-8",
+    );
     expect(source).not.toContain("innerHTML");
     expect(source).toContain("document.createElement");
   });
 
   it("sets src and alt via DOM properties", async () => {
     const fs = await import("fs");
-    const source = fs.readFileSync("src/preview/image.ts", "utf-8");
+    const source = fs.readFileSync(
+      "src/extensions/preview/previewers/image.ts",
+      "utf-8",
+    );
     expect(source).toContain("img.src");
     expect(source).toContain("img.alt");
   });
@@ -57,14 +68,20 @@ describe("Image preview XSS prevention", () => {
 describe("Video preview XSS prevention", () => {
   it("does not use innerHTML with user data", async () => {
     const fs = await import("fs");
-    const source = fs.readFileSync("src/preview/video.ts", "utf-8");
+    const source = fs.readFileSync(
+      "src/extensions/preview/previewers/video.ts",
+      "utf-8",
+    );
     expect(source).not.toContain("innerHTML");
     expect(source).toContain("document.createElement");
   });
 
   it("sets src via DOM property", async () => {
     const fs = await import("fs");
-    const source = fs.readFileSync("src/preview/video.ts", "utf-8");
+    const source = fs.readFileSync(
+      "src/extensions/preview/previewers/video.ts",
+      "utf-8",
+    );
     expect(source).toContain("video.src");
   });
 });
@@ -166,8 +183,12 @@ describe("Surface discriminated union", () => {
         expect(source).not.toContain("terminal: null as any");
         expect(source).not.toContain("fitAddon: { fit: () => {} } as any");
         expect(source).not.toContain("searchAddon: null as any");
-      } catch (e: any) {
-        if (e.code !== "ENOENT") throw e;
+      } catch (e: unknown) {
+        if (
+          e instanceof Error &&
+          (e as NodeJS.ErrnoException).code !== "ENOENT"
+        )
+          throw e;
       }
     }
   });

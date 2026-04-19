@@ -1,10 +1,13 @@
 node_modules/
 dist/
+coverage/
 src-tauri/target/
+src-tauri/gen/schemas/
 *.log
 .DS_Store
 *.swp
 *.swo
+bun.lock
 
 # Secrets / credentials
 .env*
@@ -13,3 +16,10 @@ src-tauri/target/
 *.key
 *.cert
 *.pfx
+docs/superpowers/
+docs/implement/
+.superpowers/
+
+# Jekyll build artifacts
+docs/_site/
+docs/.jekyll-cache/

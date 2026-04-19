@@ -1,3 +1,9 @@
+---
+title: Sidebar Architecture
+parent: Architecture
+nav_order: 3
+---
+
 # Sidebar Architecture
 
 GnarTerm uses a dual-sidebar layout: a **Primary Sidebar** (left) and a **Secondary Sidebar** (right). Both are collapsible and resizable, but they differ in how they organize content and accept new sections.
@@ -6,12 +12,13 @@ For term definitions, see the [app-wide glossary](glossary.md).
 
 ## Primary Sidebar
 
-The primary sidebar is a **vertically scrolling list of sections**. New features add sections beneath the existing ones.
+The primary sidebar is a **vertically scrolling list of blocks**. New features add sections beneath the existing ones.
 
-- The **Workspaces** section is always the first section and cannot be reordered below other sections.
-- Sections below Workspaces can be reordered by the user.
-- Each section occupies a collapsible region within the single scrolling column.
-- The header row contains only the new workspace button (+). Sidebar toggles live in the TitleBar.
+- Each block (the **Workspaces** block, the **Projects** block, any extension section block) has its own collapsible region within the single scrolling column.
+- Blocks can be reordered by hovering to reveal a drag grip on the block's left border and dragging it. There is no explicit "reorder mode" — dragging the grip is the only entry point, and releasing or pressing Escape exits it.
+- Individual items inside a block (e.g., workspace rows, project rows) use the same hover-grip pattern and reorder only within their own container. Outer-block drag and inner-item drag never share state.
+- Drag-drop is implemented with mouse events, not HTML5 DnD (which is broken in Tauri WKWebView). Extensions use `api.createDragReorder({...})` and `api.getComponents().DragGrip` to add reorderable lists without importing core internals.
+- When windowed, the top row of the sidebar holds the traffic-light padding and acts as the window drag region. When fullscreen, this row collapses and content shifts to the top edge.
 - When adding a new section (e.g., a file browser, git status panel), append it below the current sections. Do not introduce tabs or horizontal navigation.
 
 ## Secondary Sidebar
@@ -26,7 +33,7 @@ The secondary sidebar is **tab-controlled**. Each section is its own tab, displa
 
 ### Control Row
 
-Below the tab bar, the secondary sidebar has a **control row** — a 28px-tall action bar that matches the height of the surface tab bar. This row is reserved for extension-supplied quick-action buttons (e.g., refresh, filter, settings toggles). The control row is always visible regardless of which tab is active, making it suitable for cross-tab actions.
+Below the tab bar, the secondary sidebar has a **control row** — a 28px-tall action bar that matches the height of the surface tab bar. This row is reserved for extension-supplied quick-action buttons (e.g., refresh, filter, settings toggles). The control row only renders when the active tab has registered actions (i.e., when the active tab's action list is non-empty), keeping the UI clean when no actions are available.
 
 ## Layout Anatomy
 
@@ -58,7 +65,7 @@ The asymmetry is intentional:
 
 Sidebar toggle buttons always live in the **TitleBar** — the primary toggle on the left, the secondary toggle on the right. They are always visible regardless of sidebar state. The button color is bright when its sidebar is open, dim when closed.
 
-The new workspace button (+) lives in the primary sidebar's header row and is only visible when the primary sidebar is open.
+The **+ New Workspace** button lives at the top of the Workspaces block; **+ New Project** lives at the top of the Projects block. Both are always visible when their block is present.
 
 ## Extending the Sidebars
 

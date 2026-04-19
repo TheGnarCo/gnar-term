@@ -1,56 +1,96 @@
 <script lang="ts">
+  /**
+   * PrimarySidebar — thin host that mounts the Workspaces section
+   * plus any extension-registered SidebarSectionBlocks / MCP
+   * sections after it.
+   *
+   * Post Phase-B: the Workspaces section is fixed at the top and is
+   * no longer user-draggable. Projects have folded into that section
+   * as siblings of unclaimed workspaces; the unified root-row drag
+   * pipeline lives inside WorkspaceListBlock. Extension-registered
+   * sections still render below it in their declared order but
+   * aren't reorderable at the top level either.
+   */
   import { theme } from "../stores/theme";
-  import { primarySidebarVisible, primarySidebarWidth, contextMenu } from "../stores/ui";
+  import {
+    primarySidebarVisible,
+    primarySidebarWidth,
+    isFullscreen,
+  } from "../stores/ui";
   import { dragResize } from "../actions/drag-resize";
-  import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
-  import { primarySections } from "../stores/extension-sidebar";
-  import WorkspaceItem from "./WorkspaceItem.svelte";
-  import ExtensionSidebarSection from "./ExtensionSidebarSection.svelte";
-  import type { MenuItem } from "../context-menu-types";
+  import type { Readable } from "svelte/store";
+  import type { SplitButtonItem } from "./SplitButton.svelte";
+  import { sidebarSectionStore } from "../services/sidebar-section-registry";
+  import { workspaceActionStore } from "../services/workspace-action-registry";
+  import { primarySections } from "../stores/mcp-sidebar";
+  import WorkspaceListBlock from "./WorkspaceListBlock.svelte";
+  import SidebarSectionBlock from "./SidebarSectionBlock.svelte";
+  import SidebarActionButton from "./SidebarActionButton.svelte";
+  import McpSidebarSection from "./McpSidebarSection.svelte";
+  import SplitButton from "./SplitButton.svelte";
 
-  export let onNewWorkspace: () => void;
+  const iconSvgMap: Record<string, string> = {
+    plus: `<line x1="8" y1="3" x2="8" y2="13" /><line x1="3" y1="8" x2="13" y2="8" />`,
+    "git-branch": `<line x1="7" y1="2" x2="7" y2="10" /><line x1="3" y1="6" x2="11" y2="6" /><circle cx="12" cy="12" r="1.5" fill="currentColor" /><path d="M7 10 C7 12 10 12 12 12" fill="none" />`,
+    "folder-plus": `<path d="M2 4 L2 13 L14 13 L14 6 L8 6 L7 4 Z" fill="none" /><line x1="8" y1="8" x2="8" y2="12" /><line x1="6" y1="10" x2="10" y2="10" />`,
+  };
+  function iconSvg(icon: string): string {
+    return iconSvgMap[icon] ?? "";
+  }
+
+  let collapsedSections: Record<string, boolean> = {};
+
   export let onSwitchWorkspace: (idx: number) => void;
   export let onCloseWorkspace: (idx: number) => void;
   export let onRenameWorkspace: (idx: number, name: string) => void;
   export let onNewSurface: () => void;
-  export let onReorderWorkspaces: (fromIdx: number, toIdx: number) => void;
 
-  let workspaceItems: Record<string, WorkspaceItem> = {};
+  let workspaceListBlock: WorkspaceListBlock;
+
+  // "New Workspace" (core-registered) is always the primary action in
+  // the Workspaces header "+ New" split-button. Additional workspace-
+  // zone actions (e.g. project-scope's "New Project") surface in the
+  // dropdown below it.
+  $: coreAction = $workspaceActionStore.find(
+    (a) => a.id === "core:new-workspace",
+  );
+  $: workspaceZoneActions = $workspaceActionStore.filter(
+    (a) =>
+      a.id !== "core:new-workspace" &&
+      a.zone !== "sidebar" &&
+      (!a.when || a.when({})),
+  );
+  $: sidebarZoneActions = $workspaceActionStore.filter(
+    (a) => a.zone === "sidebar" && (!a.when || a.when({})),
+  );
+
+  $: splitDropdownItems = (() => {
+    if (workspaceZoneActions.length === 0) return [];
+    const items: SplitButtonItem[] = [];
+    if (coreAction) {
+      items.push({
+        id: coreAction.id,
+        label: coreAction.label,
+        icon: coreAction.icon,
+        handler: () => coreAction!.handler({}),
+      });
+    }
+    for (const a of workspaceZoneActions) {
+      items.push({
+        id: a.id,
+        label: a.label,
+        icon: a.icon,
+        handler: () => a.handler({}),
+      });
+    }
+    return items;
+  })();
 
   export function startRename(idx: number) {
-    const ws = $workspaces[idx];
-    if (ws && workspaceItems[ws.id]) {
-      workspaceItems[ws.id].startRename();
-    }
+    workspaceListBlock?.startRename(idx);
   }
 
   let dragging = false;
-
-  function showWorkspaceContextMenu(x: number, y: number, idx: number) {
-    const items: MenuItem[] = [
-      { label: "Rename Workspace", shortcut: "⇧⌘R", action: () => startRename(idx) },
-      { label: "New Surface", shortcut: "⌘T", action: () => { onSwitchWorkspace(idx); onNewSurface(); } },
-      { label: "", action: () => {}, separator: true },
-      {
-        label: "Close Other Workspaces",
-        disabled: $workspaces.length <= 1,
-        action: () => {
-          for (let i = $workspaces.length - 1; i >= 0; i--) {
-            if (i !== idx) onCloseWorkspace(i);
-          }
-        },
-      },
-      {
-        label: "Close Workspace",
-        shortcut: "⇧⌘W",
-        danger: true,
-        disabled: $workspaces.length <= 1,
-        action: () => onCloseWorkspace(idx),
-      },
-    ];
-    contextMenu.set({ x, y, items });
-  }
-
 </script>
 
 {#if $primarySidebarVisible}
@@ -60,74 +100,137 @@
       width: {$primarySidebarWidth}px;
       background: {$theme.sidebarBg};
       display: flex; overflow: hidden;
-      font-size: 13px; user-select: none;
+      font-size: 13px;
       flex-shrink: 0;
     "
   >
-  <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
-    <!-- Top row: controls + drag region for window chrome -->
     <div
-      data-tauri-drag-region=""
-      style="
-        height: 38px; flex-shrink: 0; display: flex; align-items: center;
-        justify-content: flex-end; padding: 0 6px;
-        -webkit-app-region: drag;
-      "
+      style="flex: 1; display: flex; flex-direction: column; overflow: hidden;"
     >
-      <button
-        title="New Workspace (⌘N)"
+      <!-- Top row: traffic-light spacer + any sidebar-zone actions.
+           Always rendered (no conditional branch) so the sidebar's
+           DOM stays stable across fullscreen toggles. In fullscreen
+           the row collapses to height: 0 so content pushes up to the
+           top edge; the window-drag attributes are harmless no-ops
+           when there's no window to drag. -->
+      <div
+        data-tauri-drag-region=""
         style="
-          background: none; border: none; cursor: pointer;
-          width: 26px; height: 26px; border-radius: 4px;
-          display: flex; align-items: center; justify-content: center;
-          color: {$theme.fgDim}; font-size: 18px; line-height: 1;
-          -webkit-app-region: no-drag;
+          height: {$isFullscreen ? '0' : '38px'};
+          flex-shrink: 0;
+          display: flex; align-items: center; justify-content: flex-end;
+          padding: 0 6px; gap: 4px;
+          overflow: hidden;
+          transition: height 0.12s ease-out;
+          -webkit-app-region: drag;
         "
-        on:click={onNewWorkspace}
-      >+</button>
-    </div>
+      >
+        {#if coreAction}
+          <!-- "+ New" split-button lives here (previously inside the
+               Workspaces header). Chip styling mirrors the old header
+               chip so New Workspace stays the primary action with the
+               dropdown holding extension contributions like New
+               Project. The -webkit-app-region: no-drag on buttons
+               inside the chip keeps them clickable even though the
+               parent row is a window drag region. -->
+          <span
+            class="top-row-new-chip"
+            style="
+              flex-shrink: 0; border-radius: 6px; overflow: visible;
+              background: rgba(0, 0, 0, 0.3);
+              --section-btn-fg: {$theme.fg};
+              -webkit-app-region: no-drag;
+            "
+          >
+            <SplitButton
+              label="+ New"
+              onMainClick={() => coreAction?.handler({})}
+              dropdownItems={splitDropdownItems}
+              theme={theme as unknown as Readable<Record<string, string>>}
+            />
+          </span>
+        {/if}
+        {#each sidebarZoneActions as action (action.id)}
+          <SidebarActionButton
+            title={action.label}
+            onClick={() => action.handler({})}
+            theme={$theme}
+            svgContent={iconSvg(action.icon)}
+          />
+        {/each}
+      </div>
 
-    <!-- Workspace list (always first) + extension sections -->
-    <div style="flex: 1; overflow-y: auto; padding: 4px 0;">
-      {#each $workspaces as ws, idx (ws.id)}
-        <WorkspaceItem
-          bind:this={workspaceItems[ws.id]}
-          workspace={ws}
-          index={idx}
-          isActive={idx === $activeWorkspaceIdx}
-          onSelect={() => onSwitchWorkspace(idx)}
-          onClose={() => onCloseWorkspace(idx)}
-          onRename={(name) => onRenameWorkspace(idx, name)}
-          onContextMenu={(x, y) => showWorkspaceContextMenu(x, y, idx)}
-          onReorder={onReorderWorkspaces}
+      <!-- Scrollable content: the Workspaces section, any
+           extension-registered SidebarSectionBlocks, and any MCP-
+           declared sections, in that order. 4px left inset gives a
+           dark strip between the sidebar's left edge and each row's
+           rail. -->
+      <div style="flex: 1; overflow-y: auto; padding: 0 0 0 4px;">
+        <WorkspaceListBlock
+          bind:this={workspaceListBlock}
+          {onSwitchWorkspace}
+          {onCloseWorkspace}
+          {onRenameWorkspace}
+          {onNewSurface}
         />
-      {/each}
-      {#each $primarySections as section (section.sectionId)}
-        <ExtensionSidebarSection {section} />
-      {/each}
+
+        <!-- Extension-registered sections (legacy registerPrimarySidebarSection
+             API, e.g. profile-card). 16px gap above each so they
+             breathe below the Workspaces block. -->
+        {#each $sidebarSectionStore as section (section.id)}
+          <div aria-hidden="true" style="height: 16px;"></div>
+          <SidebarSectionBlock
+            {section}
+            collapsed={collapsedSections[section.id] ?? false}
+            onToggleCollapse={() =>
+              (collapsedSections[section.id] = !collapsedSections[section.id])}
+          />
+        {/each}
+
+        <!-- MCP-declared sections (render_sidebar tool). -->
+        {#each $primarySections as section (section.sectionId)}
+          <McpSidebarSection {section} />
+        {/each}
+      </div>
     </div>
-  </div>
-  <div
-    class="sidebar-resize-handle"
-    style="
+    <div
+      class="sidebar-resize-handle"
+      style="
       width: 4px; cursor: col-resize; flex-shrink: 0;
       background: {dragging ? $theme.accent : $theme.sidebarBorder};
       transition: background 0.15s;
     "
-    use:dragResize={{
-      onDrag: (ev) => {
-        const maxWidth = window.innerWidth * 0.33;
-        primarySidebarWidth.set(Math.max(140, Math.min(maxWidth, ev.clientX)));
-      },
-      onStart: () => { dragging = true; },
-      onEnd: () => { dragging = false; },
-    }}
-  ></div>
+      use:dragResize={{
+        onDrag: (ev) => {
+          const maxWidth = window.innerWidth * 0.33;
+          primarySidebarWidth.set(
+            Math.max(140, Math.min(maxWidth, ev.clientX)),
+          );
+        },
+        onStart: () => {
+          dragging = true;
+        },
+        onEnd: () => {
+          dragging = false;
+        },
+      }}
+    ></div>
   </div>
 {/if}
 
 <style>
   .sidebar-resize-handle:hover {
     filter: brightness(1.3);
+  }
+  /* Top-row "+ New" chip — suppress SplitButton's own border/color so
+     the chip wash defines its look, and tint the hover bg to match
+     the rest of the top-row buttons. --section-btn-fg is set inline
+     so the button text reads as $theme.fg. */
+  :global(.top-row-new-chip button) {
+    border-color: transparent !important;
+    color: var(--section-btn-fg) !important;
+  }
+  :global(.top-row-new-chip button:hover) {
+    background: rgba(255, 255, 255, 0.08) !important;
   }
 </style>

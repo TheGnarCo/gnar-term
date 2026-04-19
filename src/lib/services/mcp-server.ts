@@ -2,7 +2,7 @@
  * Gnar Term MCP server — runs in the Svelte webview and speaks JSON-RPC 2.0
  * over Tauri events to the Rust UDS bridge.
  *
- * Architecture (see Spacebase MCP spec § Connection binding):
+ * # Architecture (see Spacebase MCP spec § Connection binding)
  *
  * - The Rust bridge accepts multiple concurrent connections, assigns each a
  *   `connection_id`, and forwards `mcp-request` events as
@@ -18,15 +18,34 @@
  *
  * We hand-roll JSON-RPC 2.0 rather than pulling in `@modelcontextprotocol/sdk`
  * for two reasons: the SDK targets Node, and the surface area is tiny.
+ *
+ * # Ideology: MCP mirrors the extension contribution points
+ *
+ * Extensions contribute capabilities by registering into core registries
+ * (commands, surface types, sidebar tabs, workspace actions, …). Rather than
+ * handcoding an MCP tool per extension, each contribution registry is
+ * reflected as a generic `list_X` / `invoke_X` pair:
+ *
+ *   | Registry                | Tools                                        |
+ *   | ----------------------- | -------------------------------------------- |
+ *   | surface-type-registry   | list_surface_types, open_surface             |
+ *   | command-registry        | list_commands, invoke_command                |
+ *   | sidebar-tab-registry    | list_sidebar_tabs, activate_sidebar_tab      |
+ *   | workspace-action-reg…   | list_workspace_actions, invoke_workspace_…   |
+ *   | context-menu-item-reg…  | list_context_menu_items, invoke_context_…   |
+ *
+ * Adding an extension automatically increases MCP's surface area by its
+ * contributions; adding an MCP tool never requires touching an extension.
+ * MCP never imports from `src/extensions/*` — the extension barrier runs in
+ * one direction (extensions depend on core) and MCP sits on the core side.
+ *
+ * If you catch yourself writing a tool named after a specific extension,
+ * stop — that's the old pattern.
  */
 import { get } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, emit } from "@tauri-apps/api/event";
-import {
-  workspaces,
-  activeWorkspace,
-  activePane,
-} from "../stores/workspace";
+import { workspaces, activeWorkspace, activePane } from "../stores/workspace";
 import {
   getAllPanes,
   getAllSurfaces,
@@ -51,8 +70,21 @@ import {
   upsertSection,
   removeSection,
   type SidebarItem,
-} from "../stores/extension-sidebar";
-import { openPreviewFromContent } from "../../preview";
+} from "../stores/mcp-sidebar";
+import { openExtensionSurfaceInPaneById } from "./surface-service";
+import { surfaceTypeStore } from "./surface-type-registry";
+import { commandStore } from "./command-registry";
+import { sidebarTabStore, activateSidebarTab } from "./sidebar-tab-registry";
+import { workspaceActionStore } from "./workspace-action-registry";
+import {
+  contextMenuItemStore,
+  getContextMenuItemsForFile,
+} from "./context-menu-item-registry";
+import { sidebarSectionStore } from "./sidebar-section-registry";
+import { overlayStore } from "./overlay-registry";
+import { workspaceSubtitleStore } from "./workspace-subtitle-registry";
+import { dashboardTabStore } from "./dashboard-tab-registry";
+import { getWorkspaceStatus } from "./status-registry";
 import { getMcpSetting } from "../config";
 
 // ---- Types ----
@@ -163,18 +195,9 @@ function newSessionId(): string {
 
 // ---- Workspace / pane resolution ----
 
-/** Find the workspace that currently contains a pane with the given id, or
- *  null if no workspace contains it (pane was closed, or invalid id). */
-function findWorkspaceForPane(paneId: string): Workspace | null {
-  for (const ws of get(workspaces)) {
-    for (const pane of getAllPanes(ws.splitRoot)) {
-      if (pane.id === paneId) return ws;
-    }
-  }
-  return null;
-}
-
-function findPaneById(paneId: string): { workspace: Workspace; pane: Pane } | null {
+function findPaneById(
+  paneId: string,
+): { workspace: Workspace; pane: Pane } | null {
   for (const ws of get(workspaces)) {
     for (const pane of getAllPanes(ws.splitRoot)) {
       if (pane.id === paneId) return { workspace: ws, pane };
@@ -193,11 +216,7 @@ function findWorkspaceById(workspaceId: string): Workspace | null {
 interface ResolvedTarget {
   workspace: Workspace;
   hostPane: Pane | null;
-  source:
-    | "args-pane"
-    | "args-workspace"
-    | "binding-pane"
-    | "binding-workspace";
+  source: "args-pane" | "args-workspace" | "binding-pane" | "binding-workspace";
 }
 
 interface TargetArgs {
@@ -210,7 +229,10 @@ interface TargetArgs {
  *  Throws with an actionable error message if no target can be resolved.
  *  Critically: this function NEVER reads `activeWorkspace`. User GUI focus is
  *  not an authoritative routing input. */
-function resolveTarget(args: TargetArgs, ctx: ConnectionContext): ResolvedTarget {
+function resolveTarget(
+  args: TargetArgs,
+  ctx: ConnectionContext,
+): ResolvedTarget {
   // Rule 1: explicit pane_id wins.
   if (args.pane_id) {
     const found = findPaneById(args.pane_id);
@@ -219,7 +241,11 @@ function resolveTarget(args: TargetArgs, ctx: ConnectionContext): ResolvedTarget
         `pane_id "${args.pane_id}" not found (it may have been closed)`,
       );
     }
-    return { workspace: found.workspace, hostPane: found.pane, source: "args-pane" };
+    return {
+      workspace: found.workspace,
+      hostPane: found.pane,
+      source: "args-pane",
+    };
   }
   // Rule 2: explicit workspace_id.
   if (args.workspace_id) {
@@ -277,7 +303,7 @@ function pickHostPane(workspace: Workspace): Pane {
     const active = all.find((p) => p.id === workspace.activePaneId);
     if (active) return active;
   }
-  if (all.length > 0) return all[0];
+  if (all.length > 0) return all[0]!;
   // Workspace exists but has no panes (shouldn't happen in practice; create one).
   const newPane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
   workspace.splitRoot = { type: "pane", pane: newPane };
@@ -339,7 +365,7 @@ function removeSurfaceFromPane(paneId: string, surfaceId: string): void {
         if (pane.id !== paneId) continue;
         const idx = pane.surfaces.findIndex((s) => s.id === surfaceId);
         if (idx < 0) continue;
-        const surface = pane.surfaces[idx];
+        const surface = pane.surfaces[idx]!;
         if (isTerminalSurface(surface)) {
           try {
             surface.terminal.dispose();
@@ -352,7 +378,7 @@ function removeSurfaceFromPane(paneId: string, surfaceId: string): void {
           pane.activeSurfaceId = null;
         } else {
           pane.activeSurfaceId =
-            pane.surfaces[Math.min(idx, pane.surfaces.length - 1)].id;
+            pane.surfaces[Math.min(idx, pane.surfaces.length - 1)]!.id;
         }
       }
     }
@@ -383,7 +409,9 @@ function describeSurface(s: Surface) {
 }
 
 function describePane(pane: Pane, workspaceId: string) {
-  const activeSurface = pane.surfaces.find((s) => s.id === pane.activeSurfaceId);
+  const activeSurface = pane.surfaces.find(
+    (s) => s.id === pane.activeSurfaceId,
+  );
   let cwd = "";
   if (activeSurface && isTerminalSurface(activeSurface)) {
     cwd = activeSurface.cwd ?? "";
@@ -449,12 +477,47 @@ interface ToolDef {
     args: Record<string, unknown>,
     ctx: ConnectionContext,
   ) => Promise<unknown> | unknown;
+  /** Extension id that contributed this tool; undefined for core tools. */
+  source?: string;
 }
 
 const TOOLS: ToolDef[] = [];
 
 function registerTool(t: ToolDef) {
   TOOLS.push(t);
+}
+
+/**
+ * Register an MCP tool contributed by an extension. Extensions expand the
+ * MCP surface with domain-specific tools (e.g. the preview extension owns
+ * create_preview). Tools registered here are unregistered automatically
+ * when the extension deactivates via unregisterMcpToolsBySource.
+ *
+ * Exposed indirectly to extensions through the ExtensionAPI.registerMcpTool
+ * method in extension-api-ui.ts — extensions do not import this directly.
+ *
+ * Handler signature intentionally omits ConnectionContext; extensions
+ * should not read or mutate per-connection state (that's reserved for
+ * core tools that bind pane/workspace targets). If a future extension
+ * genuinely needs connection context, promote the signature then, not
+ * preemptively.
+ */
+export function registerExtensionMcpTool(
+  source: string,
+  name: string,
+  description: string,
+  inputSchema: Record<string, unknown>,
+  handler: (args: Record<string, unknown>) => Promise<unknown> | unknown,
+): void {
+  TOOLS.push({ name, description, inputSchema, handler, source });
+}
+
+/** Cleanup: remove all tools contributed by a given extension id. */
+export function unregisterMcpToolsBySource(source: string): void {
+  for (let i = TOOLS.length - 1; i >= 0; i--) {
+    const tool = TOOLS[i];
+    if (tool && tool.source === source) TOOLS.splice(i, 1);
+  }
 }
 
 // ---- Session management ----
@@ -467,7 +530,10 @@ registerTool({
     type: "object",
     properties: {
       name: { type: "string" },
-      agent: { type: "string", enum: ["claude-code", "codex", "aider", "custom"] },
+      agent: {
+        type: "string",
+        enum: ["claude-code", "codex", "aider", "custom"],
+      },
       task: { type: "string" },
       cwd: { type: "string" },
       command: { type: "string" },
@@ -491,7 +557,8 @@ registerTool({
     };
     let startupCommand: string | undefined;
     if (p.agent === "custom") {
-      if (!p.command) throw new Error('agent "custom" requires a command parameter');
+      if (!p.command)
+        throw new Error('agent "custom" requires a command parameter');
       startupCommand = p.command;
     } else {
       const agentCmd = AGENT_COMMANDS[p.agent];
@@ -501,7 +568,11 @@ registerTool({
 
     const target = resolveTarget(p, ctx);
     const hostPane = target.hostPane ?? pickHostPane(target.workspace);
-    const newPane = splitPaneInWorkspace(target.workspace, hostPane, "vertical");
+    const newPane = splitPaneInWorkspace(
+      target.workspace,
+      hostPane,
+      "vertical",
+    );
     ctx.lastSpawnedPaneId = newPane.id;
 
     const surface = await createTerminalSurface(newPane, p.cwd);
@@ -509,7 +580,7 @@ registerTool({
     surface.startupCommand = startupCommand;
     newPane.activeSurfaceId = surface.id;
     workspaces.update((l) => [...l]);
-    safeFocus(surface);
+    void safeFocus(surface);
 
     const ptyId = await waitForPtyId(surface);
     registerMcpPty(ptyId);
@@ -650,7 +721,8 @@ registerTool({
 
 registerTool({
   name: "send_prompt",
-  description: "Send text to an MCP session's PTY. Appends Enter unless press_enter is false.",
+  description:
+    "Send text to an MCP session's PTY. Appends Enter unless press_enter is false.",
   inputSchema: {
     type: "object",
     properties: {
@@ -661,7 +733,11 @@ registerTool({
     required: ["session_id", "text"],
   },
   handler: async (args) => {
-    const p = args as { session_id: string; text: string; press_enter?: boolean };
+    const p = args as {
+      session_id: string;
+      text: string;
+      press_enter?: boolean;
+    };
     const session = sessions.get(p.session_id);
     if (!session) throw new Error(`session ${p.session_id} not found`);
     const data = p.text + (p.press_enter === false ? "" : "\r");
@@ -672,7 +748,8 @@ registerTool({
 
 registerTool({
   name: "send_keys",
-  description: "Send a named keystroke (ctrl+c, enter, escape, arrows, etc.) to an MCP session.",
+  description:
+    "Send a named keystroke (ctrl+c, enter, escape, arrows, etc.) to an MCP session.",
   inputSchema: {
     type: "object",
     properties: {
@@ -698,7 +775,8 @@ registerTool({
 
 registerTool({
   name: "read_output",
-  description: "Read terminal output from an MCP session. Supports cursor-based polling and ANSI stripping.",
+  description:
+    "Read terminal output from an MCP session. Supports cursor-based polling and ANSI stripping.",
   inputSchema: {
     type: "object",
     properties: {
@@ -895,17 +973,46 @@ registerTool({
   },
 });
 
+// ---- Generic surface-type discovery + open ----
+//
+// Extensions register surface types at runtime (preview:preview,
+// diff-viewer:diff, and any third-party extension). Agents can discover
+// what's available via list_surface_types and open any of them via
+// open_surface. MCP stays agnostic to which extensions exist.
+
 registerTool({
-  name: "create_preview",
+  name: "list_surface_types",
   description:
-    "Open a preview surface with markdown/text/code content. Targets the agent's host workspace by default; pass workspace_id/pane_id to override.",
+    "List all registered extension surface types (e.g. preview:preview, diff-viewer:diff). Returns `{ id, label, source }` for each. Built-in terminals are not included — use spawn_agent to create one.",
+  inputSchema: { type: "object", properties: {} },
+  handler: () => {
+    const types = get(surfaceTypeStore).map((t) => ({
+      id: t.id,
+      label: t.label,
+      source: t.source,
+    }));
+    return { types };
+  },
+});
+
+registerTool({
+  name: "open_surface",
+  description:
+    "Open any registered extension surface type in a pane. Call list_surface_types first to see which ids exist; props are forwarded to the owning extension's surface component unchanged — consult that extension for the expected prop shape. Targets the agent's host workspace by default; pass workspace_id/pane_id to override.",
   inputSchema: {
     type: "object",
     properties: {
-      content: { type: "string" },
-      format: { type: "string", enum: ["markdown", "text", "code"] },
-      language: { type: "string" },
+      surface_type_id: {
+        type: "string",
+        description:
+          "Surface type id as returned by list_surface_types (e.g. 'preview:preview').",
+      },
       title: { type: "string" },
+      props: {
+        type: "object",
+        additionalProperties: true,
+        description: "Opaque props object forwarded to the surface component.",
+      },
       placement: {
         type: "string",
         enum: ["split-right", "split-down", "new-tab", "current-pane"],
@@ -913,59 +1020,372 @@ registerTool({
       workspace_id: { type: "string" },
       pane_id: { type: "string" },
     },
-    required: ["content", "format"],
+    required: ["surface_type_id", "title"],
   },
   handler: (args, ctx) => {
     const p = args as {
-      content: string;
-      format: "markdown" | "text" | "code";
-      language?: string;
-      title?: string;
+      surface_type_id: string;
+      title: string;
+      props?: Record<string, unknown>;
       placement?: "split-right" | "split-down" | "new-tab" | "current-pane";
       workspace_id?: string;
       pane_id?: string;
     };
+    const typeDef = get(surfaceTypeStore).find(
+      (t) => t.id === p.surface_type_id,
+    );
+    if (!typeDef) {
+      throw new Error(
+        `Unknown surface type: ${p.surface_type_id}. Call list_surface_types to see what's registered.`,
+      );
+    }
     const target = resolveTarget(p, ctx);
-    const title = p.title ?? "Preview";
-    let rendered: string;
-    if (p.format === "markdown") rendered = p.content;
-    else if (p.format === "code")
-      rendered = "```" + (p.language ?? "") + "\n" + p.content + "\n```";
-    else rendered = "```\n" + p.content + "\n```";
-    const previewSurface = openPreviewFromContent(rendered, title);
-
     const placement = p.placement ?? "split-right";
     const hostPane = target.hostPane ?? pickHostPane(target.workspace);
     let targetPane: Pane;
     if (placement === "split-right") {
-      targetPane = splitPaneInWorkspace(target.workspace, hostPane, "horizontal");
+      targetPane = splitPaneInWorkspace(
+        target.workspace,
+        hostPane,
+        "horizontal",
+      );
       ctx.lastSpawnedPaneId = targetPane.id;
     } else if (placement === "split-down") {
       targetPane = splitPaneInWorkspace(target.workspace, hostPane, "vertical");
       ctx.lastSpawnedPaneId = targetPane.id;
     } else {
-      // new-tab and current-pane drop into the host pane's surface list.
       targetPane = hostPane;
     }
-
-    const surface = {
-      kind: "preview" as const,
-      id: previewSurface.id,
-      filePath: previewSurface.filePath,
-      title: previewSurface.title,
-      element: previewSurface.element,
-      watchId: previewSurface.watchId,
-      hasUnread: false,
-    };
-    targetPane.surfaces.push(surface);
-    targetPane.activeSurfaceId = surface.id;
-    workspaces.update((l) => [...l]);
-
+    const result = openExtensionSurfaceInPaneById(
+      targetPane.id,
+      p.surface_type_id,
+      p.title,
+      p.props,
+    );
+    if (!result) {
+      throw new Error("Could not place surface in a pane");
+    }
     return {
-      preview_id: surface.id,
-      pane_id: targetPane.id,
+      surface_id: result.surfaceId,
+      pane_id: result.paneId,
       workspace_id: target.workspace.id,
     };
+  },
+});
+
+// ---- Commands (mirror of commandStore) ----
+
+registerTool({
+  name: "list_commands",
+  description:
+    "List every command registered in the command palette — core seed commands and anything contributed by an extension. Returns `{ id, title, shortcut?, source }` for each.",
+  inputSchema: { type: "object", properties: {} },
+  handler: () => {
+    const commands = get(commandStore).map((c) => ({
+      id: c.id,
+      title: c.title,
+      shortcut: c.shortcut,
+      source: c.source,
+    }));
+    return { commands };
+  },
+});
+
+registerTool({
+  name: "invoke_command",
+  description:
+    "Invoke a command by id (see list_commands). The command's action runs in the webview and takes no arguments; some commands may open interactive prompts (text input, directory picker) — agents should expect those to block until the user responds.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      command_id: { type: "string" },
+    },
+    required: ["command_id"],
+  },
+  handler: async (args) => {
+    const p = args as { command_id: string };
+    const cmd = get(commandStore).find((c) => c.id === p.command_id);
+    if (!cmd) {
+      throw new Error(
+        `Unknown command: ${p.command_id}. Call list_commands to see what's available.`,
+      );
+    }
+    await cmd.action();
+    return { ok: true };
+  },
+});
+
+// ---- Sidebar tabs (mirror of sidebarTabStore) ----
+
+registerTool({
+  name: "list_sidebar_tabs",
+  description:
+    "List secondary-sidebar tabs contributed by extensions. Returns `{ id, label, source }` for each. Use activate_sidebar_tab to switch to one.",
+  inputSchema: { type: "object", properties: {} },
+  handler: () => {
+    const tabs = get(sidebarTabStore).map((t) => ({
+      id: t.id,
+      label: t.label,
+      source: t.source,
+    }));
+    return { tabs };
+  },
+});
+
+registerTool({
+  name: "activate_sidebar_tab",
+  description:
+    "Switch the secondary sidebar to a registered tab by id (see list_sidebar_tabs).",
+  inputSchema: {
+    type: "object",
+    properties: { tab_id: { type: "string" } },
+    required: ["tab_id"],
+  },
+  handler: (args) => {
+    const p = args as { tab_id: string };
+    const tab = get(sidebarTabStore).find((t) => t.id === p.tab_id);
+    if (!tab) {
+      throw new Error(
+        `Unknown sidebar tab: ${p.tab_id}. Call list_sidebar_tabs to see what's registered.`,
+      );
+    }
+    activateSidebarTab(p.tab_id);
+    return { ok: true };
+  },
+});
+
+// ---- Workspace actions (mirror of workspaceActionStore) ----
+
+registerTool({
+  name: "list_workspace_actions",
+  description:
+    "List workspace actions — buttons extensions add to the workspace header or top bar. Returns `{ id, label, icon, shortcut?, zone, source }` for each. Use invoke_workspace_action to trigger one.",
+  inputSchema: { type: "object", properties: {} },
+  handler: () => {
+    const actions = get(workspaceActionStore).map((a) => ({
+      id: a.id,
+      label: a.label,
+      icon: a.icon,
+      shortcut: a.shortcut,
+      zone: a.zone ?? "workspace",
+      source: a.source,
+    }));
+    return { actions };
+  },
+});
+
+registerTool({
+  name: "invoke_workspace_action",
+  description:
+    "Invoke a workspace action by id (see list_workspace_actions). `context` is forwarded to the action's handler — core passes an empty object for top-level invocations; extensions that dispatch actions from their own UI may populate fields like `{ workspaceId, projectId, branch, isGit }`. Use the owning extension's docs to learn which fields it reads.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      action_id: { type: "string" },
+      context: {
+        type: "object",
+        additionalProperties: true,
+        description:
+          "Free-form object forwarded to the handler. Typical fields: workspaceId, projectId, projectPath, branch, isGit. Shape depends on the owning extension.",
+      },
+    },
+    required: ["action_id"],
+  },
+  handler: async (args) => {
+    const p = args as {
+      action_id: string;
+      context?: Record<string, unknown>;
+    };
+    const action = get(workspaceActionStore).find((a) => a.id === p.action_id);
+    if (!action) {
+      throw new Error(
+        `Unknown workspace action: ${p.action_id}. Call list_workspace_actions to see what's registered.`,
+      );
+    }
+    await action.handler(p.context ?? {});
+    return { ok: true };
+  },
+});
+
+// ---- Context menu items (mirror of contextMenuItemStore) ----
+//
+// Extensions register handlers for files by `when` glob pattern (e.g.
+// "*.{md,json}"). Agents can either list everything an extension
+// contributes, or filter by a concrete file path to discover which
+// handlers would fire for that file.
+
+registerTool({
+  name: "list_context_menu_items",
+  description:
+    "List context-menu items contributed by extensions — file-typed actions like 'Open as Preview'. Pass `file_path` to filter to items whose `when` pattern matches that path. Returns `{ id, label, when, source }` for each. Use invoke_context_menu_item to trigger one.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      file_path: {
+        type: "string",
+        description:
+          "Optional. When provided, only items whose `when` pattern matches the file's extension are returned.",
+      },
+    },
+  },
+  handler: (args) => {
+    const p = (args ?? {}) as { file_path?: string };
+    const all = get(contextMenuItemStore);
+    const filtered = p.file_path
+      ? getContextMenuItemsForFile(p.file_path)
+      : all;
+    return {
+      items: filtered.map((i) => ({
+        id: i.id,
+        label: i.label,
+        when: i.when,
+        source: i.source,
+      })),
+    };
+  },
+});
+
+registerTool({
+  name: "invoke_context_menu_item",
+  description:
+    "Invoke a context-menu item against a concrete file path. Errors if the item's `when` pattern does not match the file. Use list_context_menu_items with `file_path` to find matching items first.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      item_id: { type: "string" },
+      file_path: { type: "string" },
+    },
+    required: ["item_id", "file_path"],
+  },
+  handler: async (args) => {
+    const p = args as { item_id: string; file_path: string };
+    const item = get(contextMenuItemStore).find((i) => i.id === p.item_id);
+    if (!item) {
+      throw new Error(
+        `Unknown context menu item: ${p.item_id}. Call list_context_menu_items to see what's registered.`,
+      );
+    }
+    const [exists] = await invoke<[boolean, boolean]>("mcp_file_info", {
+      path: p.file_path,
+    });
+    if (!exists) {
+      throw new Error(
+        `File path not accessible (missing or blocked by read allowlist): ${p.file_path}`,
+      );
+    }
+    const matching = getContextMenuItemsForFile(p.file_path);
+    if (!matching.some((i) => i.id === p.item_id)) {
+      throw new Error(
+        `Context menu item ${p.item_id} (when=${item.when}) does not match file path ${p.file_path}.`,
+      );
+    }
+    await item.handler(p.file_path);
+    return { ok: true };
+  },
+});
+
+// ---- Sidebar sections (mirror of sidebarSectionStore) ----
+//
+// Extensions register collapsible sections in the primary sidebar.
+// These are UI-only; there is no "invoke" action, but agents can list
+// them to see what's contributed (e.g. a harness status panel).
+
+registerTool({
+  name: "list_sidebar_sections",
+  description:
+    "List primary-sidebar sections contributed by extensions — sticky panels below Workspaces. Returns `{ id, label, source }` for each. Sections are rendered by core; no invoke tool exists because interaction happens inside the section's own component.",
+  inputSchema: { type: "object", properties: {} },
+  handler: () => {
+    const sections = get(sidebarSectionStore).map((s) => ({
+      id: s.id,
+      label: s.label,
+      source: s.source,
+    }));
+    return { sections };
+  },
+});
+
+// ---- Overlays (mirror of overlayStore) ----
+//
+// Overlays are full-screen components registered by extensions
+// (dashboards, modal dialogs). Agents can list them; invoking is
+// intentionally not exposed — overlays are triggered via commands
+// or workspace actions the extension also registers.
+
+registerTool({
+  name: "list_overlays",
+  description:
+    "List overlay components (dialogs, dashboards, modals) contributed by extensions. Returns `{ id, source }` for each. Overlays are opened via the extension's own command or action — use invoke_command/invoke_workspace_action with the owning extension's id.",
+  inputSchema: { type: "object", properties: {} },
+  handler: () => {
+    const overlays = get(overlayStore).map((o) => ({
+      id: o.id,
+      source: o.source,
+    }));
+    return { overlays };
+  },
+});
+
+// ---- Workspace subtitles (mirror of workspaceSubtitleStore) ----
+
+registerTool({
+  name: "list_workspace_subtitles",
+  description:
+    "List workspace-subtitle contributors — components extensions render below workspace names in the sidebar (e.g. git branch label). Returns `{ id, source, priority }` for each, sorted by priority ascending (lower renders first).",
+  inputSchema: { type: "object", properties: {} },
+  handler: () => {
+    const entries = get(workspaceSubtitleStore).map((s) => ({
+      id: s.id,
+      source: s.source,
+      priority: s.priority,
+    }));
+    return { subtitles: entries };
+  },
+});
+
+// ---- Dashboard tabs (mirror of dashboardTabStore) ----
+
+registerTool({
+  name: "list_dashboard_tabs",
+  description:
+    "List extension-contributed tabs for the dashboard overlay. Returns `{ id, label, source }` for each.",
+  inputSchema: { type: "object", properties: {} },
+  handler: () => {
+    const tabs = get(dashboardTabStore).map((t) => ({
+      id: t.id,
+      label: t.label,
+      source: t.source,
+    }));
+    return { tabs };
+  },
+});
+
+// ---- Status items (mirror of statusRegistry, scoped per workspace) ----
+
+registerTool({
+  name: "get_status_for_workspace",
+  description:
+    "List structured status items contributed by extensions for a workspace (e.g. git branch, agent-running badge). Returns `{ items }` with each item carrying `{ id, source, category, priority, label, icon?, tooltip?, variant? }`. Sorted by priority ascending. Defaults to the agent's bound workspace; pass workspace_id to override.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      workspace_id: { type: "string" },
+    },
+  },
+  handler: (args, ctx) => {
+    const p = args as { workspace_id?: string };
+    const target = resolveTarget({ workspace_id: p.workspace_id }, ctx);
+    const items = get(getWorkspaceStatus(target.workspace.id)).map((i) => ({
+      id: i.id,
+      source: i.source,
+      category: i.category,
+      priority: i.priority,
+      label: i.label,
+      icon: i.icon,
+      tooltip: i.tooltip,
+      variant: i.variant,
+    }));
+    return { workspace_id: target.workspace.id, items };
   },
 });
 
@@ -1043,7 +1463,9 @@ registerTool({
       ? get(workspaces).find((w) => w.id === p.workspace_id)
       : get(activeWorkspace);
     if (!target) return { panes: [] };
-    const list = getAllPanes(target.splitRoot).map((pane) => describePane(pane, target.id));
+    const list = getAllPanes(target.splitRoot).map((pane) =>
+      describePane(pane, target.id),
+    );
     return { panes: list };
   },
 });
@@ -1070,7 +1492,8 @@ registerTool({
 
 registerTool({
   name: "list_dir",
-  description: "List a directory. Returns entries with name, path, is_dir, size.",
+  description:
+    "List a directory. Returns entries with name, path, is_dir, size.",
   inputSchema: {
     type: "object",
     properties: {
@@ -1090,7 +1513,8 @@ registerTool({
 
 registerTool({
   name: "read_file",
-  description: "Read a UTF-8 file and return its contents. Non-UTF-8 content is an error.",
+  description:
+    "Read a UTF-8 file and return its contents. Non-UTF-8 content is an error.",
   inputSchema: {
     type: "object",
     properties: {
@@ -1111,7 +1535,8 @@ registerTool({
 
 registerTool({
   name: "file_exists",
-  description: "Check whether a path exists. Returns exists and (if it does) is_dir.",
+  description:
+    "Check whether a path exists. Returns exists and (if it does) is_dir.",
   inputSchema: {
     type: "object",
     properties: { path: { type: "string" } },
@@ -1136,7 +1561,7 @@ const SERVER_INFO = { name: "gnar-term", version: "0.3.1" };
 const UI_MUTATING_TOOLS = new Set([
   "spawn_agent",
   "dispatch_tasks",
-  "create_preview",
+  "open_surface",
   "render_sidebar",
   "remove_sidebar_section",
 ]);
@@ -1181,7 +1606,9 @@ export async function dispatch(
           description: t.description,
           inputSchema: t.inputSchema,
         }));
-        return isNotification ? null : { jsonrpc: "2.0", id, result: { tools } };
+        return isNotification
+          ? null
+          : { jsonrpc: "2.0", id, result: { tools } };
       }
       case "tools/call": {
         const params = (req.params ?? {}) as {
@@ -1223,7 +1650,10 @@ export async function dispatch(
                 source: "tool-result",
               };
             }
-            logEntry.result = { kind: "ok", summary: JSON.stringify(value).slice(0, 120) };
+            logEntry.result = {
+              kind: "ok",
+              summary: JSON.stringify(value).slice(0, 120),
+            };
             logDispatch(logEntry);
           }
           if (isNotification) return null;
@@ -1232,7 +1662,9 @@ export async function dispatch(
           // validators, so only attach structuredContent when the tool returned
           // a plain object. Text `content` still carries the full JSON payload.
           const isRecord =
-            value !== null && typeof value === "object" && !Array.isArray(value);
+            value !== null &&
+            typeof value === "object" &&
+            !Array.isArray(value);
           return {
             jsonrpc: "2.0",
             id,
@@ -1401,7 +1833,10 @@ export function _getSessionsForTest(): Map<string, McpSession> {
   return sessions;
 }
 
-export function _getConnectionContextsForTest(): Map<number, ConnectionContext> {
+export function _getConnectionContextsForTest(): Map<
+  number,
+  ConnectionContext
+> {
   return connectionContexts;
 }
 

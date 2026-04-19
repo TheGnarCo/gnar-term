@@ -19,55 +19,57 @@ vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
   readText: vi.fn().mockResolvedValue("pasted text"),
   writeText: vi.fn().mockResolvedValue(undefined),
 }));
+// xterm + addon mocks must be real classes under Svelte 5.55.4 — see
+// linux-shortcuts.test.ts for the full rationale.
 vi.mock("@xterm/xterm", () => ({
-  Terminal: vi.fn().mockImplementation(() => ({
-    open: vi.fn(),
-    write: vi.fn(),
-    focus: vi.fn(),
-    dispose: vi.fn(),
-    cols: 80,
-    rows: 24,
-    onData: vi.fn(),
-    onResize: vi.fn(),
-    onTitleChange: vi.fn(),
-    loadAddon: vi.fn(),
-    options: {},
-    buffer: { active: { getLine: vi.fn() } },
-    parser: { registerOscHandler: vi.fn() },
-    attachCustomKeyEventHandler: vi.fn(),
-    registerLinkProvider: vi.fn(),
-    getSelection: vi.fn().mockReturnValue("selected text"),
-    scrollToBottom: vi.fn(),
-  })),
+  Terminal: class {
+    open = vi.fn();
+    write = vi.fn();
+    focus = vi.fn();
+    dispose = vi.fn();
+    cols = 80;
+    rows = 24;
+    onData = vi.fn();
+    onResize = vi.fn();
+    onTitleChange = vi.fn();
+    loadAddon = vi.fn();
+    options: Record<string, unknown> = {};
+    buffer = { active: { getLine: vi.fn() } };
+    parser = { registerOscHandler: vi.fn() };
+    attachCustomKeyEventHandler = vi.fn();
+    registerLinkProvider = vi.fn();
+    getSelection = vi.fn().mockReturnValue("selected text");
+    scrollToBottom = vi.fn();
+  },
 }));
 vi.mock("@xterm/addon-fit", () => ({
-  FitAddon: vi.fn().mockImplementation(() => ({
-    fit: vi.fn(),
-    activate: vi.fn(),
-    dispose: vi.fn(),
-  })),
+  FitAddon: class {
+    fit = vi.fn();
+    activate = vi.fn();
+    dispose = vi.fn();
+  },
 }));
 vi.mock("@xterm/addon-webgl", () => ({
-  WebglAddon: vi.fn().mockImplementation(() => ({
-    activate: vi.fn(),
-    dispose: vi.fn(),
-    onContextLoss: vi.fn(),
-  })),
+  WebglAddon: class {
+    activate = vi.fn();
+    dispose = vi.fn();
+    onContextLoss = vi.fn();
+  },
 }));
 vi.mock("@xterm/addon-web-links", () => ({
-  WebLinksAddon: vi.fn().mockImplementation(() => ({
-    activate: vi.fn(),
-    dispose: vi.fn(),
-  })),
+  WebLinksAddon: class {
+    activate = vi.fn();
+    dispose = vi.fn();
+  },
 }));
 vi.mock("@xterm/addon-search", () => ({
-  SearchAddon: vi.fn().mockImplementation(() => ({
-    activate: vi.fn(),
-    dispose: vi.fn(),
-    findNext: vi.fn(),
-    findPrevious: vi.fn(),
-    clearDecorations: vi.fn(),
-  })),
+  SearchAddon: class {
+    activate = vi.fn();
+    dispose = vi.fn();
+    findNext = vi.fn();
+    findPrevious = vi.fn();
+    clearDecorations = vi.fn();
+  },
 }));
 vi.mock("@xterm/xterm/css/xterm.css", () => ({}));
 
@@ -77,14 +79,12 @@ vi.stubGlobal("localStorage", {
   removeItem: vi.fn(),
 });
 
-vi.stubGlobal(
-  "ResizeObserver",
-  vi.fn().mockImplementation(() => ({
-    observe: vi.fn(),
-    unobserve: vi.fn(),
-    disconnect: vi.fn(),
-  })),
-);
+class MockResizeObserver {
+  observe = vi.fn();
+  unobserve = vi.fn();
+  disconnect = vi.fn();
+}
+vi.stubGlobal("ResizeObserver", MockResizeObserver);
 
 import { invoke } from "@tauri-apps/api/core";
 import {

@@ -68,7 +68,7 @@ jobs:
         id: hashes
 
       - name: Setup SSH for homebrew-tap
-        uses: webfactory/ssh-agent@v0.9.0
+        uses: webfactory/ssh-agent@v0.10.0
         with:
           ssh-private-key: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
 

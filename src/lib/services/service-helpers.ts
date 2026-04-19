@@ -4,6 +4,18 @@ import { invoke } from "@tauri-apps/api/core";
 import { activeSurface } from "../stores/workspace";
 import { isTerminalSurface, type Surface } from "../types";
 
+// Cached home directory — resolved once, reused everywhere
+let _home = "";
+export async function getHome(): Promise<string> {
+  if (_home) return _home;
+  try {
+    _home = await invoke<string>("get_home");
+  } catch {
+    _home = "/tmp";
+  }
+  return _home;
+}
+
 export async function safeFocus(s: Surface | null | undefined) {
   if (!s || !isTerminalSurface(s)) return;
   await tick();

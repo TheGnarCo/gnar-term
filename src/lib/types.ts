@@ -3,7 +3,9 @@ import type { FitAddon } from "@xterm/addon-fit";
 import type { SearchAddon } from "@xterm/addon-search";
 
 let _id = 0;
-export function uid(): string { return `id-${++_id}-${Date.now()}`; }
+export function uid(): string {
+  return `id-${++_id}-${Date.now()}`;
+}
 
 export interface TerminalSurface {
   kind: "terminal";
@@ -15,24 +17,25 @@ export interface TerminalSurface {
   ptyId: number;
   title: string;
   cwd?: string;
+  env?: Record<string, string>;
   notification?: string;
   hasUnread: boolean;
   opened: boolean;
   startupCommand?: string;
 }
 
-export interface PreviewSurface {
-  kind: "preview";
+export interface ExtensionSurface {
+  kind: "extension";
   id: string;
-  filePath: string;
+  surfaceTypeId: string; // maps to SurfaceTypeDef.id in the registry
   title: string;
-  element: HTMLElement;
-  watchId: number;
   hasUnread: boolean;
+  notification?: string;
+  props?: Record<string, unknown>; // arbitrary data passed to the extension component
   dispose?: () => void;
 }
 
-export type Surface = TerminalSurface | PreviewSurface;
+export type Surface = TerminalSurface | ExtensionSurface;
 
 export interface Pane {
   id: string;
@@ -44,13 +47,19 @@ export interface Pane {
 
 export type SplitNode =
   | { type: "pane"; pane: Pane }
-  | { type: "split"; direction: "horizontal" | "vertical"; children: [SplitNode, SplitNode]; ratio: number };
+  | {
+      type: "split";
+      direction: "horizontal" | "vertical";
+      children: [SplitNode, SplitNode];
+      ratio: number;
+    };
 
 export interface Workspace {
   id: string;
   name: string;
   splitRoot: SplitNode;
   activePaneId: string | null;
+  metadata?: Record<string, unknown>;
 }
 
 // Helper functions for tree traversal
@@ -60,29 +69,50 @@ export function getAllPanes(node: SplitNode): Pane[] {
 }
 
 export function getAllSurfaces(ws: Workspace): Surface[] {
-  return getAllPanes(ws.splitRoot).flatMap(p => p.surfaces);
+  return getAllPanes(ws.splitRoot).flatMap((p) => p.surfaces);
 }
 
 export function isTerminalSurface(s: Surface): s is TerminalSurface {
   return s.kind === "terminal";
 }
 
-export function isPreviewSurface(s: Surface): s is PreviewSurface {
-  return s.kind === "preview";
+export function isExtensionSurface(s: Surface): s is ExtensionSurface {
+  return s.kind === "extension";
 }
 
 /** Find the parent split node containing a pane with the given ID. */
-export function findParentSplit(node: SplitNode, paneId: string): { parent: SplitNode; index: number } | null {
+export function findParentSplit(
+  node: SplitNode,
+  paneId: string,
+): { parent: SplitNode; index: number } | null {
   if (node.type === "pane") return null;
-  if (node.children[0].type === "pane" && node.children[0].pane.id === paneId) return { parent: node, index: 0 };
-  if (node.children[1].type === "pane" && node.children[1].pane.id === paneId) return { parent: node, index: 1 };
-  return findParentSplit(node.children[0], paneId) || findParentSplit(node.children[1], paneId);
+  if (node.children[0].type === "pane" && node.children[0].pane.id === paneId)
+    return { parent: node, index: 0 };
+  if (node.children[1].type === "pane" && node.children[1].pane.id === paneId)
+    return { parent: node, index: 1 };
+  return (
+    findParentSplit(node.children[0], paneId) ||
+    findParentSplit(node.children[1], paneId)
+  );
 }
 
 /** Replace a target node in the split tree with a replacement. Returns true if found. */
-export function replaceNodeInTree(root: SplitNode, target: SplitNode, replacement: SplitNode): boolean {
+export function replaceNodeInTree(
+  root: SplitNode,
+  target: SplitNode,
+  replacement: SplitNode,
+): boolean {
   if (root.type === "pane") return false;
-  if (root.children[0] === target) { root.children[0] = replacement; return true; }
-  if (root.children[1] === target) { root.children[1] = replacement; return true; }
-  return replaceNodeInTree(root.children[0], target, replacement) || replaceNodeInTree(root.children[1], target, replacement);
+  if (root.children[0] === target) {
+    root.children[0] = replacement;
+    return true;
+  }
+  if (root.children[1] === target) {
+    root.children[1] = replacement;
+    return true;
+  }
+  return (
+    replaceNodeInTree(root.children[0], target, replacement) ||
+    replaceNodeInTree(root.children[1], target, replacement)
+  );
 }

@@ -5,10 +5,20 @@ pre-commit:
   commands:
     typecheck:
       run: npx tsc --noEmit
+    svelte-check:
+      run: npx svelte-check --tsconfig ./tsconfig.json --threshold error
     rust-check:
       run: cargo check --manifest-path src-tauri/Cargo.toml
+    rust-clippy:
+      run: cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+    rust-fmt:
+      run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
+    eslint:
+      glob: "*.{ts,svelte}"
+      run: npx eslint --no-warn-ignored {staged_files}
     prettier:
       glob: "*.{ts,svelte,json,css,md,yml}"
+      exclude: "docs/extensions/api-reference.md"
       run: npx prettier --check {staged_files}
       stage_fixed: true
 
@@ -16,3 +26,8 @@ pre-push:
   commands:
     tests:
       run: npm test
+    rust-tests:
+      # Strip GIT_* env vars so nested `git` invocations in integration tests
+      # operate on the temp repos they create instead of the outer repo that
+      # triggered the hook (GIT_DIR/GIT_INDEX_FILE/GIT_PREFIX leakage).
+      run: env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_PREFIX -u GIT_COMMON_DIR -u GIT_NAMESPACE -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES -u GIT_CONFIG -u GIT_CONFIG_PARAMETERS -u GIT_CONFIG_COUNT cargo test --manifest-path src-tauri/Cargo.toml

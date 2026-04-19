@@ -9,6 +9,25 @@ export default defineConfig({
     environment: "jsdom",
     include: ["src/**/*.test.ts"],
     globals: true,
+    onConsoleLog: (msg) => !msg.includes("HTMLCanvasElement"),
+    coverage: {
+      provider: "v8",
+      include: ["src/lib/**/*.ts", "src/extensions/**/*.ts"],
+      exclude: [
+        "src/**/*.test.ts",
+        "src/**/*.d.ts",
+        "src/lib/types/**/*.ts",
+        "src/extensions/git-status/index.ts",
+        "src/extensions/agentic-orchestrator/index.ts",
+        // Dominated by a Tauri event listener (installMcpOutputListener)
+        // that can't be exercised without a live Tauri runtime.
+        "src/lib/services/mcp-output-buffer.ts",
+      ],
+      thresholds: {
+        lines: 65,
+        branches: 80,
+      },
+    },
   },
   clearScreen: false,
   server: {

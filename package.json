@@ -43,7 +43,7 @@
     "dompurify": "^3.3.3",
     "github-markdown-css": "^5.8.1",
     "marked": "^15.0.0",
-    "pdfjs-dist": "^4.10.38",
+    "pdfjs-dist": "^5.6.205",
     "svelte": "^5.55.1"
   },
   "devDependencies": {

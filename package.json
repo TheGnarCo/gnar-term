@@ -42,7 +42,7 @@
     "@xterm/xterm": "6.1.0-beta.196",
     "dompurify": "^3.3.3",
     "github-markdown-css": "^5.8.1",
-    "marked": "^15.0.0",
+    "marked": "^18.0.2",
     "pdfjs-dist": "^4.10.38",
     "svelte": "^5.55.1"
   },

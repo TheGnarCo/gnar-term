@@ -365,7 +365,17 @@ export interface ExtensionAPI {
    * was rendering at the root level.
    */
   removeRootRow(row: { kind: string; id: string }): void;
-  registerSurfaceType(surfaceId: string, component: unknown): void;
+  /**
+   * Register a new surface type. `options.hideFromNewSurface` keeps the
+   * type out of the "+ new surface" menu — use it for surfaces that
+   * need external context (a file path, a commit sha) and can't be
+   * opened from an empty click.
+   */
+  registerSurfaceType(
+    surfaceId: string,
+    component: unknown,
+    options?: { hideFromNewSurface?: boolean },
+  ): void;
   /** Register an overlay component (dialog, dashboard, modal) rendered above the main UI. */
   registerOverlay(
     overlayId: string,

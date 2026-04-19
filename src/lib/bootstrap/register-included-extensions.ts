@@ -18,6 +18,39 @@ import {
 } from "../services/extension-loader";
 import type { ExtensionManifest } from "../extension-types";
 
+import {
+  previewManifest,
+  registerPreviewExtension,
+} from "../../extensions/preview";
+import {
+  fileBrowserManifest,
+  registerFileBrowserExtension,
+} from "../../extensions/file-browser";
+import {
+  worktreeWorkspacesManifest,
+  registerWorktreeWorkspacesExtension,
+} from "../../extensions/worktree-workspaces";
+import {
+  githubManifest,
+  registerGitHubExtension,
+} from "../../extensions/github";
+import {
+  projectScopeManifest,
+  registerProjectScopeExtension,
+} from "../../extensions/project-scope";
+import {
+  diffViewerManifest,
+  registerDiffViewerExtension,
+} from "../../extensions/diff-viewer";
+import {
+  gitStatusManifest,
+  registerGitStatusExtension,
+} from "../../extensions/git-status";
+import {
+  jrvsThemesManifest,
+  registerJrvsThemesExtension,
+} from "../../extensions/jrvs-themes";
+
 type IncludedExtension = readonly [
   ExtensionManifest,
   Parameters<typeof registerExtension>[1],
@@ -25,12 +58,24 @@ type IncludedExtension = readonly [
 ];
 
 /**
- * The static list of included extensions. Empty at this layer — the
- * extensions stack populates it. Keeping the wiring in place means
- * the app boots cleanly on just this infra PR and the extensions PR
- * only has to edit this one array.
+ * The static list of included extensions. Order matters only for first
+ * launch (affects the order they appear in the manage-extensions UI);
+ * activation is independent per extension.
  */
-export const INCLUDED_EXTENSIONS: readonly IncludedExtension[] = [] as const;
+export const INCLUDED_EXTENSIONS: readonly IncludedExtension[] = [
+  [previewManifest, registerPreviewExtension, "preview"],
+  [fileBrowserManifest, registerFileBrowserExtension, "file-browser"],
+  [
+    worktreeWorkspacesManifest,
+    registerWorktreeWorkspacesExtension,
+    "worktree-workspaces",
+  ],
+  [githubManifest, registerGitHubExtension, "github"],
+  [projectScopeManifest, registerProjectScopeExtension, "project-scope"],
+  [diffViewerManifest, registerDiffViewerExtension, "diff-viewer"],
+  [gitStatusManifest, registerGitStatusExtension, "git-status"],
+  [jrvsThemesManifest, registerJrvsThemesExtension, "jrvs-themes"],
+] as const;
 
 export async function registerIncludedExtensions(
   config: GnarTermConfig,

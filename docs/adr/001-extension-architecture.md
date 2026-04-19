@@ -208,8 +208,7 @@ The Extensions page lists all extensions with enable/disable toggles and install
 | -------------------- | ------------------------- | ------------------------------------------------------------------------ |
 | Preview              | Surface type              | File preview (47 file types) — extracted from core                       |
 | File Browser         | Secondary sidebar tab     | Directory tree with context menu actions                                 |
-| Profile Card         | Primary sidebar section   | Editable user profile card with settings schema                          |
-| Managed Workspaces   | Commands + state          | Git worktree-backed workspace lifecycle (create, archive)                |
+| Worktree Workspaces  | Commands + state          | Git worktree-backed workspace lifecycle (create, archive)                |
 | Agentic Orchestrator | Passive AI agent detector | Passive AI agent detector with status tracking (requires "observe" perm) |
 | GitHub               | Secondary sidebar tab     | Issues, PRs, and commits via `gh` CLI                                    |
 | Project Scope        | Primary sidebar section   | Group workspaces into color-coded projects with dashboards               |

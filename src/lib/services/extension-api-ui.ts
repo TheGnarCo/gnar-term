@@ -116,7 +116,11 @@ export function createUIRegistrationAPI(
       });
     },
 
-    registerSurfaceType(surfaceId: string, component: unknown) {
+    registerSurfaceType(
+      surfaceId: string,
+      component: unknown,
+      options?: { hideFromNewSurface?: boolean },
+    ) {
       const declared = manifest.contributes?.surfaces?.find(
         (s) => s.id === surfaceId,
       );
@@ -125,6 +129,7 @@ export function createUIRegistrationAPI(
         label: declared?.label ?? surfaceId,
         component,
         source: extId,
+        hideFromNewSurface: options?.hideFromNewSurface,
       });
     },
 

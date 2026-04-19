@@ -378,8 +378,7 @@ The nine included extensions in `src/extensions/` demonstrate every extension pa
 | ----------------------- | ----------------------------------------------------------------------------------------- |
 | `preview/`              | Surface type registration, context menu items, file type handling                         |
 | `file-browser/`         | Sidebar tab + actions, directory tree, context menus, workspace actions                   |
-| `profile-card/`         | Primary sidebar section, settings schema with user-editable fields                        |
-| `managed-workspaces/`   | Workspace actions, form prompts, Tauri invoke chains, state persistence                   |
+| `worktree-workspaces/`  | Workspace actions, form prompts, Tauri invoke chains, state persistence                   |
 | `agentic-orchestrator/` | Observe permission, custom events, status tracking                                        |
 | `github/`               | Sidebar tab with refresh action, per-workspace caching, multiple Tauri commands           |
 | `diff-viewer/`          | Surface type, commands, context menus, cross-extension events, settings                   |

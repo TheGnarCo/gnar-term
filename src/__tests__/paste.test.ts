@@ -43,33 +43,33 @@ vi.mock("@xterm/xterm", () => ({
   },
 }));
 vi.mock("@xterm/addon-fit", () => ({
-  FitAddon: vi.fn().mockImplementation(() => ({
-    fit: vi.fn(),
-    activate: vi.fn(),
-    dispose: vi.fn(),
-  })),
+  FitAddon: class {
+    fit = vi.fn();
+    activate = vi.fn();
+    dispose = vi.fn();
+  },
 }));
 vi.mock("@xterm/addon-webgl", () => ({
-  WebglAddon: vi.fn().mockImplementation(() => ({
-    activate: vi.fn(),
-    dispose: vi.fn(),
-    onContextLoss: vi.fn(),
-  })),
+  WebglAddon: class {
+    activate = vi.fn();
+    dispose = vi.fn();
+    onContextLoss = vi.fn();
+  },
 }));
 vi.mock("@xterm/addon-web-links", () => ({
-  WebLinksAddon: vi.fn().mockImplementation(() => ({
-    activate: vi.fn(),
-    dispose: vi.fn(),
-  })),
+  WebLinksAddon: class {
+    activate = vi.fn();
+    dispose = vi.fn();
+  },
 }));
 vi.mock("@xterm/addon-search", () => ({
-  SearchAddon: vi.fn().mockImplementation(() => ({
-    activate: vi.fn(),
-    dispose: vi.fn(),
-    findNext: vi.fn(),
-    findPrevious: vi.fn(),
-    clearDecorations: vi.fn(),
-  })),
+  SearchAddon: class {
+    activate = vi.fn();
+    dispose = vi.fn();
+    findNext = vi.fn();
+    findPrevious = vi.fn();
+    clearDecorations = vi.fn();
+  },
 }));
 vi.mock("@xterm/xterm/css/xterm.css", () => ({}));
 
@@ -79,14 +79,12 @@ vi.stubGlobal("localStorage", {
   removeItem: vi.fn(),
 });
 
-vi.stubGlobal(
-  "ResizeObserver",
-  vi.fn().mockImplementation(() => ({
-    observe: vi.fn(),
-    unobserve: vi.fn(),
-    disconnect: vi.fn(),
-  })),
-);
+class MockResizeObserver {
+  observe = vi.fn();
+  unobserve = vi.fn();
+  disconnect = vi.fn();
+}
+vi.stubGlobal("ResizeObserver", MockResizeObserver);
 
 import { invoke } from "@tauri-apps/api/core";
 import {

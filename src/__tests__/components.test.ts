@@ -79,7 +79,8 @@ vi.stubGlobal("localStorage", {
 });
 
 // Mock ResizeObserver (not available in jsdom). Svelte 5.55.4 treats
-// ResizeObserver as a constructor inside $effect — must be a class.
+// ResizeObserver as a constructor inside $effect — it must be a class,
+// not a plain function, so vi.fn() no longer suffices.
 class MockResizeObserver {
   observe = vi.fn();
   unobserve = vi.fn();

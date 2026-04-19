@@ -8,4 +8,7 @@ declare module "@xterm/xterm" {
   }
 }
 
+// Side-effect CSS imports — TS bundler resolution needs an explicit shim
+// once we moved to @xterm/xterm@6.1.0-beta.197 (which dropped the implicit
+// CSS types).
 declare module "*.css";

@@ -26,6 +26,7 @@ import {
   removeRootRow as storeRemoveRootRow,
 } from "../stores/root-row-order";
 import { registerTheme as registryRegisterTheme } from "./theme-registry";
+import { registerExtensionMcpTool } from "./mcp-server";
 import type { ThemeDef } from "../theme-data";
 import type { ExtensionManifest, ExtensionAPI } from "../extension-types";
 
@@ -47,6 +48,7 @@ export function createUIRegistrationAPI(
   | "registerTheme"
   | "registerCommand"
   | "registerContextMenuItem"
+  | "registerMcpTool"
   | "registerDashboardTab"
   | "registerWorkspaceAction"
   | "getWorkspaceActions"
@@ -169,6 +171,25 @@ export function createUIRegistrationAPI(
         action: handler,
         source: extId,
       });
+    },
+
+    registerMcpTool(
+      toolName: string,
+      options: {
+        description: string;
+        inputSchema: Record<string, unknown>;
+        handler: (
+          args: Record<string, unknown>,
+        ) => unknown | Promise<unknown>;
+      },
+    ) {
+      registerExtensionMcpTool(
+        extId,
+        toolName,
+        options.description,
+        options.inputSchema,
+        options.handler,
+      );
     },
 
     registerContextMenuItem(

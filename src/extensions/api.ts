@@ -398,6 +398,29 @@ export interface ExtensionAPI {
     handler: (filePath: string) => void,
   ): void;
 
+  /**
+   * Contribute a tool to the MCP surface. Extensions expand what MCP
+   * clients (agents) can do; the core MCP server exposes generic
+   * primitives (open_surface, list_commands, etc.) while each
+   * extension registers domain-specific shortcuts here.
+   *
+   * The tool name is registered as-is (no extension-id prefix) so that
+   * contracts like `create_preview` stay stable for external agents.
+   * Conflicts across extensions are the author's responsibility to avoid.
+   *
+   * Automatically unregistered on extension deactivate.
+   */
+  registerMcpTool(
+    toolName: string,
+    options: {
+      description: string;
+      inputSchema: Record<string, unknown>;
+      handler: (
+        args: Record<string, unknown>,
+      ) => unknown | Promise<unknown>;
+    },
+  ): void;
+
   // Workspace subtitle — components rendered below workspace name in sidebar
   /** Register a Svelte component to render below workspace names. Component receives { workspaceId } prop. */
   registerWorkspaceSubtitle(component: unknown, priority?: number): void;

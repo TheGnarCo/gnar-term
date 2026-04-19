@@ -14,7 +14,11 @@
  */
 import type { ExtensionManifest, ExtensionAPI } from "../api";
 import { getSupportedExtensions } from "./preview-registry";
-import { openPreview, refreshPreviewStyles } from "./preview-service";
+import {
+  openPreview,
+  refreshPreviewStyles,
+  renderContentToElement,
+} from "./preview-service";
 import PreviewSurface from "./PreviewSurface.svelte";
 
 // Import all previewers — they self-register via registerPreviewer()
@@ -83,6 +87,50 @@ export function registerPreviewExtension(api: ExtensionAPI): void {
         element: preview.element,
         watchId: preview.watchId,
       });
+    });
+
+    // MCP tool: create a preview surface from in-memory content. The preview
+    // extension owns this tool — core MCP has generic open_surface, and the
+    // preview-specific shortcut lives here alongside the rest of the preview
+    // pipeline. Preserves main's `create_preview` contract so external agents
+    // that call it by name continue to work.
+    api.registerMcpTool("create_preview", {
+      description:
+        "Open a preview surface with markdown/text/code content. Opens in the active pane of the bound (or specified) workspace.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          content: { type: "string" },
+          format: { type: "string", enum: ["markdown", "text", "code"] },
+          language: { type: "string" },
+          title: { type: "string" },
+          workspace_id: { type: "string" },
+        },
+        required: ["content", "format"],
+      },
+      handler: (args) => {
+        const p = args as {
+          content: string;
+          format: "markdown" | "text" | "code";
+          language?: string;
+          title?: string;
+          workspace_id?: string;
+        };
+        if (p.workspace_id) api.switchWorkspace(p.workspace_id);
+        const element = renderContentToElement(
+          p.content,
+          p.format,
+          p.language ?? "",
+          api,
+        );
+        const title = p.title ?? "Preview";
+        api.openSurface("preview", title, {
+          filePath: "",
+          element,
+          watchId: 0,
+        });
+        return { ok: true, title };
+      },
     });
   });
 }

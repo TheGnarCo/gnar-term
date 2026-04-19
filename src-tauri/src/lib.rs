@@ -968,65 +968,6 @@ async fn mcp_file_info(path: String) -> (bool, bool) {
     }
 }
 
-/// Directory entry metadata for the MCP `list_dir` tool.
-#[derive(Clone, Serialize)]
-struct McpDirEntry {
-    name: String,
-    path: String,
-    is_dir: bool,
-    size: u64,
-}
-
-/// List a directory as a vector of entries with type + size metadata.
-/// Unlike `list_dir` (which returns only file names) this returns directories
-/// and files so the CWD File Navigator can render a tree.
-#[tauri::command]
-async fn mcp_list_dir(
-    path: String,
-    include_hidden: Option<bool>,
-) -> Result<Vec<McpDirEntry>, String> {
-    let include_hidden = include_hidden.unwrap_or(false);
-    let entries = std::fs::read_dir(&path)
-        .map_err(|e| format!("Failed to read dir {}: {}", path, e))?;
-    let mut out = Vec::new();
-    for entry in entries.flatten() {
-        let name = match entry.file_name().to_str() {
-            Some(n) => n.to_string(),
-            None => continue,
-        };
-        if !include_hidden && name.starts_with('.') {
-            continue;
-        }
-        let metadata = match entry.metadata() {
-            Ok(m) => m,
-            Err(_) => continue,
-        };
-        let entry_path = entry.path().to_string_lossy().to_string();
-        out.push(McpDirEntry {
-            name,
-            path: entry_path,
-            is_dir: metadata.is_dir(),
-            size: metadata.len(),
-        });
-    }
-    // Stable ordering: directories first, then files, alphabetic within.
-    out.sort_by(|a, b| match (a.is_dir, b.is_dir) {
-        (true, false) => std::cmp::Ordering::Less,
-        (false, true) => std::cmp::Ordering::Greater,
-        _ => a.name.cmp(&b.name),
-    });
-    Ok(out)
-}
-
-/// Return `(exists, is_dir)` for the MCP `file_exists` tool.
-#[tauri::command]
-async fn mcp_file_info(path: String) -> (bool, bool) {
-    match std::fs::metadata(&path) {
-        Ok(m) => (true, m.is_dir()),
-        Err(_) => (false, false),
-    }
-}
-
 /// Read a file as base64 (for binary files like images)
 #[tauri::command]
 async fn read_file_base64(path: String) -> Result<String, String> {
@@ -1444,47 +1385,6 @@ fn read_mcp_setting() -> String {
         if let Ok(home) = std::env::var("HOME") {
             v.push(std::path::PathBuf::from(format!(
                 "{home}/.config/gnar-term/gnar-term.json"
-            )));
-        }
-        v
-    };
-    for p in paths {
-        if let Ok(s) = std::fs::read_to_string(&p) {
-            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&s) {
-                if let Some(mcp) = v.get("mcp").and_then(|m| m.as_str()) {
-                    match mcp {
-                        "on" | "off" | "auto" => return mcp.to_string(),
-                        _ => return "auto".to_string(),
-                    }
-                }
-            }
-        }
-    }
-    "auto".to_string()
-}
-
-/// Decide whether the MCP bridge should bind on this launch based on the user
-/// setting and Claude Code detection.
-fn mcp_should_start() -> bool {
-    match read_mcp_setting().as_str() {
-        "off" => false,
-        "on" => true,
-        _ => mcp_register::detect_claude_code(),
-    }
-}
-
-/// Read the `mcp` setting from `gnar-term.json`. Returns `"auto"` if no
-/// config exists or the field is missing. Values that aren't recognized fall
-/// back to `"auto"`.
-fn read_mcp_setting() -> String {
-    let paths: Vec<std::path::PathBuf> = {
-        let mut v = Vec::new();
-        v.push(std::path::PathBuf::from("gnar-term.json"));
-        v.push(std::path::PathBuf::from("cmux.json"));
-        if let Ok(home) = std::env::var("HOME") {
-            v.push(std::path::PathBuf::from(format!(
-                "{}/.config/gnar-term/gnar-term.json",
-                home
             )));
         }
         v

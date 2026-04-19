@@ -90,51 +90,6 @@ export function waitForPtyReady(
   });
 }
 
-// Per-surface PTY-ready signal. connectPty() resolves the deferred once the
-// Rust spawn_pty call returns; waitForPtyReady() awaits it instead of polling
-// surface.ptyId every 50ms. The polling version created a 50ms timer storm
-// during spawn bursts that contributed to a compositor freeze.
-interface PtyReadyDeferred {
-  promise: Promise<number>;
-  resolve: (ptyId: number) => void;
-  reject: (err: Error) => void;
-}
-const ptyReady = new Map<string, PtyReadyDeferred>();
-
-function makeDeferred(): PtyReadyDeferred {
-  let resolve!: (n: number) => void;
-  let reject!: (e: Error) => void;
-  const promise = new Promise<number>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
-}
-
-export function waitForPtyReady(surface: TerminalSurface, timeoutMs = 5000): Promise<number> {
-  if (surface.ptyId >= 0) return Promise.resolve(surface.ptyId);
-  let d = ptyReady.get(surface.id);
-  if (!d) {
-    d = makeDeferred();
-    ptyReady.set(surface.id, d);
-  }
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      reject(new Error("timed out waiting for PTY to spawn"));
-    }, timeoutMs);
-    d!.promise.then(
-      (n) => {
-        clearTimeout(timer);
-        resolve(n);
-      },
-      (e) => {
-        clearTimeout(timer);
-        reject(e);
-      },
-    );
-  });
-}
-
 /** Shortcut label helpers for platform-appropriate display. */
 export const modLabel = isMac ? "⌘" : "Ctrl+";
 export const shiftModLabel = isMac ? "⇧⌘" : "Ctrl+Shift+";

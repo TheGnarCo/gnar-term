@@ -19,6 +19,7 @@ import { unregisterStatusBySource } from "./status-registry";
 import { unregisterWorkspaceSubtitlesBySource } from "./workspace-subtitle-registry";
 import { unregisterRootRowRenderersBySource } from "./root-row-renderer-registry";
 import { unregisterThemesBySource } from "./theme-registry";
+import { unregisterMcpToolsBySource } from "./mcp-server";
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 
 // --- Tauri commands safe for extension use (allowlist) ---
@@ -156,6 +157,7 @@ export const REGISTRY_CLEANUP_FNS: Array<(source: string) => void> = [
   unregisterWorkspaceSubtitlesBySource,
   unregisterRootRowRenderersBySource,
   unregisterThemesBySource,
+  unregisterMcpToolsBySource,
 ];
 
 // --- Valid event types (for manifest validation) ---

@@ -477,12 +477,47 @@ interface ToolDef {
     args: Record<string, unknown>,
     ctx: ConnectionContext,
   ) => Promise<unknown> | unknown;
+  /** Extension id that contributed this tool; undefined for core tools. */
+  source?: string;
 }
 
 const TOOLS: ToolDef[] = [];
 
 function registerTool(t: ToolDef) {
   TOOLS.push(t);
+}
+
+/**
+ * Register an MCP tool contributed by an extension. Extensions expand the
+ * MCP surface with domain-specific tools (e.g. the preview extension owns
+ * create_preview). Tools registered here are unregistered automatically
+ * when the extension deactivates via unregisterMcpToolsBySource.
+ *
+ * Exposed indirectly to extensions through the ExtensionAPI.registerMcpTool
+ * method in extension-api-ui.ts — extensions do not import this directly.
+ *
+ * Handler signature intentionally omits ConnectionContext; extensions
+ * should not read or mutate per-connection state (that's reserved for
+ * core tools that bind pane/workspace targets). If a future extension
+ * genuinely needs connection context, promote the signature then, not
+ * preemptively.
+ */
+export function registerExtensionMcpTool(
+  source: string,
+  name: string,
+  description: string,
+  inputSchema: Record<string, unknown>,
+  handler: (args: Record<string, unknown>) => Promise<unknown> | unknown,
+): void {
+  TOOLS.push({ name, description, inputSchema, handler, source });
+}
+
+/** Cleanup: remove all tools contributed by a given extension id. */
+export function unregisterMcpToolsBySource(source: string): void {
+  for (let i = TOOLS.length - 1; i >= 0; i--) {
+    const tool = TOOLS[i];
+    if (tool && tool.source === source) TOOLS.splice(i, 1);
+  }
 }
 
 // ---- Session management ----

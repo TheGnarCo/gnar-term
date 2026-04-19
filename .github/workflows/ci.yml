@@ -4,15 +4,24 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    branches: ["**"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   check:
-    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
 
-      - name: Install system dependencies
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
@@ -21,21 +30,50 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: lts/*
-          cache: 'npm'
+          cache: "npm"
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
-          workspaces: './src-tauri -> target'
+          workspaces: "./src-tauri -> target"
 
       - name: Install frontend dependencies
         run: npm install
 
+      - name: Audit npm dependencies
+        run: npm audit --audit-level=high
+
+      - name: Prettier check
+        run: npx prettier --check src/
+
+      - name: ESLint
+        run: npm run lint
+
       - name: TypeScript check
         run: npx tsc --noEmit
+
+      - name: Svelte check
+        run: npx svelte-check --tsconfig ./tsconfig.json --threshold error
+
+      - name: Tests
+        run: npm test
+
+      - name: Coverage
+        if: matrix.os == 'macos-latest'
+        run: npm test -- --coverage
+
+      - name: Upload coverage report
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 14
 
       - name: Vite build
         run: npx vite build
@@ -43,3 +81,27 @@ jobs:
       - name: Rust check
         working-directory: src-tauri
         run: cargo check
+
+      - name: Rust format check
+        working-directory: src-tauri
+        run: cargo fmt --check
+
+      - name: Clippy
+        working-directory: src-tauri
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Rust tests
+        working-directory: src-tauri
+        run: cargo test
+
+      - name: Audit Rust dependencies
+        working-directory: src-tauri
+        run: |
+          cargo install cargo-audit --quiet
+          cargo audit
+
+      - name: Cargo deny
+        working-directory: src-tauri
+        run: |
+          cargo install cargo-deny --quiet
+          cargo deny check

@@ -4,12 +4,15 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "strict": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
     "esModuleInterop": true,
+    "isolatedModules": true,
     "skipLibCheck": true,
     "outDir": "dist",
     "rootDir": "src",
     "types": ["svelte", "vitest/globals"]
   },
   "include": ["src"],
-  "exclude": ["src/__tests__"]
+  "exclude": ["src/__tests__", "src/**/__tests__"]
 }

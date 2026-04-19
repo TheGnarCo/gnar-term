@@ -34,29 +34,24 @@ pub fn uds_path() -> Option<PathBuf> {
     {
         let home = std::env::var("HOME").ok()?;
         Some(PathBuf::from(format!(
-            "{}/Library/Application Support/gnar-term/mcp.sock",
-            home
+            "{home}/Library/Application Support/gnar-term/mcp.sock"
         )))
     }
     #[cfg(target_os = "linux")]
     {
         if let Ok(runtime) = std::env::var("XDG_RUNTIME_DIR") {
             if !runtime.is_empty() {
-                return Some(PathBuf::from(format!("{}/gnar-term/mcp.sock", runtime)));
+                return Some(PathBuf::from(format!("{runtime}/gnar-term/mcp.sock")));
             }
         }
         let home = std::env::var("HOME").ok()?;
-        Some(PathBuf::from(format!(
-            "{}/.config/gnar-term/mcp.sock",
-            home
-        )))
+        Some(PathBuf::from(format!("{home}/.config/gnar-term/mcp.sock")))
     }
     #[cfg(target_os = "windows")]
     {
         let localappdata = std::env::var("LOCALAPPDATA").ok()?;
         Some(PathBuf::from(format!(
-            "{}\\gnar-term\\mcp.sock",
-            localappdata
+            "{localappdata}\\gnar-term\\mcp.sock"
         )))
     }
 }
@@ -145,22 +140,19 @@ pub fn install_response_listener(app: AppHandle, state: BridgeState) {
             .ok()
             .and_then(|v| v.get("payload").and_then(|p| p.as_str()).map(String::from))
             .or_else(|| serde_json::from_str::<String>(raw).ok());
-        let payload = match inner_str {
-            Some(s) => s,
-            None => return,
+        let Some(payload) = inner_str else {
+            return;
         };
         // Inner is itself a JSON object: { connection_id: u64, payload: string }
-        let parsed: Option<(u64, String)> =
-            serde_json::from_str::<serde_json::Value>(&payload)
-                .ok()
-                .and_then(|v| {
-                    let id = v.get("connection_id")?.as_u64()?;
-                    let line = v.get("payload")?.as_str()?.to_string();
-                    Some((id, line))
-                });
-        let (connection_id, line) = match parsed {
-            Some(t) => t,
-            None => return,
+        let parsed: Option<(u64, String)> = serde_json::from_str::<serde_json::Value>(&payload)
+            .ok()
+            .and_then(|v| {
+                let id = v.get("connection_id")?.as_u64()?;
+                let line = v.get("payload")?.as_str()?.to_string();
+                Some((id, line))
+            });
+        let Some((connection_id, line)) = parsed else {
+            return;
         };
         // Route to the right connection. Drops silently if the connection
         // closed between dispatch and response (legitimate race).
@@ -179,7 +171,7 @@ pub fn spawn(app: AppHandle, state: BridgeState) -> Result<(), String> {
 
     // Ensure parent directory exists.
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| format!("mkdir {:?}: {e}", parent))?;
+        std::fs::create_dir_all(parent).map_err(|e| format!("mkdir {}: {e}", parent.display()))?;
     }
 
     // Remove stale socket if a previous run left it behind.
@@ -196,16 +188,16 @@ pub fn spawn(app: AppHandle, state: BridgeState) -> Result<(), String> {
             Ok(l) => l,
             Err(e) => {
                 eprintln!(
-                    "[mcp-bridge] failed to bind {:?}: {e} (another gnar-term instance may be running)",
-                    path_clone
+                    "[mcp-bridge] failed to bind {}: {e} (another gnar-term instance may be running)",
+                    path_clone.display()
                 );
                 return;
             }
         };
         if let Err(e) = set_socket_perms(&path_clone) {
-            eprintln!("[mcp-bridge] failed to chmod {:?}: {e}", path_clone);
+            eprintln!("[mcp-bridge] failed to chmod {}: {e}", path_clone.display());
         }
-        eprintln!("[mcp-bridge] listening on {:?}", path_clone);
+        eprintln!("[mcp-bridge] listening on {}", path_clone.display());
 
         loop {
             let (stream, _) = match listener.accept().await {
@@ -242,11 +234,7 @@ pub fn spawn(_app: AppHandle, _state: BridgeState) -> Result<(), String> {
 }
 
 #[cfg(unix)]
-async fn handle_connection(
-    stream: tokio::net::UnixStream,
-    app: AppHandle,
-    state: BridgeState,
-) {
+async fn handle_connection(stream: tokio::net::UnixStream, app: AppHandle, state: BridgeState) {
     let connection_id = state.next_connection_id();
     let (read_half, mut write_half) = stream.into_split();
     let (tx, mut rx) = mpsc::unbounded_channel::<String>();
@@ -306,12 +294,9 @@ pub fn run_stdio_shim() -> i32 {
     use tokio::io::{stdin, stdout};
     use tokio::net::UnixStream;
 
-    let path = match uds_path() {
-        Some(p) => p,
-        None => {
-            eprintln!("gnar-term: failed to resolve MCP socket path");
-            return 1;
-        }
+    let Some(path) = uds_path() else {
+        eprintln!("gnar-term: failed to resolve MCP socket path");
+        return 1;
     };
 
     if !path.exists() {
@@ -334,9 +319,7 @@ pub fn run_stdio_shim() -> i32 {
         let stream = match UnixStream::connect(&path).await {
             Ok(s) => s,
             Err(e) => {
-                eprintln!(
-                    "gnar-term is not running. Start gnar-term and try again. ({e})"
-                );
+                eprintln!("gnar-term is not running. Start gnar-term and try again. ({e})");
                 return 1;
             }
         };
@@ -402,14 +385,30 @@ mod tests {
     fn uds_path_is_resolved() {
         let p = uds_path().expect("uds_path should resolve");
         let s = p.to_string_lossy();
-        assert!(s.contains("gnar-term"), "uds path should contain gnar-term: {s}");
-        assert!(s.ends_with("mcp.sock"), "uds path should end in mcp.sock: {s}");
+        assert!(
+            s.contains("gnar-term"),
+            "uds path should contain gnar-term: {s}"
+        );
+        assert!(
+            s.ends_with("mcp.sock"),
+            "uds path should end in mcp.sock: {s}"
+        );
+    }
+
+    /// Serialize tests that mutate `GNAR_TERM_*` env vars so cargo's
+    /// default parallel runner doesn't let one test clobber another's
+    /// expected state.
+    fn env_mutation_guard() -> std::sync::MutexGuard<'static, ()> {
+        use std::sync::Mutex;
+        static GUARD: Mutex<()> = Mutex::new(());
+        GUARD
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     #[test]
     fn hello_message_includes_env_vars() {
-        // Use a separate process to control env without polluting other tests.
-        // We test the function directly by setting env, then unsetting.
+        let _g = env_mutation_guard();
         std::env::set_var("GNAR_TERM_PANE_ID", "pane-abc");
         std::env::set_var("GNAR_TERM_WORKSPACE_ID", "ws-xyz");
         let line = build_hello_message();
@@ -428,12 +427,11 @@ mod tests {
 
     #[test]
     fn hello_message_when_unbound_uses_null() {
-        // Ensure clean env.
+        let _g = env_mutation_guard();
         std::env::remove_var("GNAR_TERM_PANE_ID");
         std::env::remove_var("GNAR_TERM_WORKSPACE_ID");
         let line = build_hello_message();
-        let parsed: serde_json::Value =
-            serde_json::from_str(line.trim_end()).expect("valid JSON");
+        let parsed: serde_json::Value = serde_json::from_str(line.trim_end()).expect("valid JSON");
         assert!(parsed["params"]["pane_id"].is_null());
         assert!(parsed["params"]["workspace_id"].is_null());
         assert!(parsed["params"]["client_pid"].is_number());
@@ -451,8 +449,14 @@ mod tests {
         assert!(state.send_to(2, "to two".to_string()));
         assert_eq!(rx1.try_recv().unwrap(), "to one");
         assert_eq!(rx2.try_recv().unwrap(), "to two");
-        assert!(rx1.try_recv().is_err(), "conn 1 must not see conn 2's traffic");
-        assert!(rx2.try_recv().is_err(), "conn 2 must not see conn 1's traffic");
+        assert!(
+            rx1.try_recv().is_err(),
+            "conn 1 must not see conn 2's traffic"
+        );
+        assert!(
+            rx2.try_recv().is_err(),
+            "conn 2 must not see conn 1's traffic"
+        );
 
         state.unregister(1);
         assert!(!state.send_to(1, "after close".to_string()));
@@ -532,17 +536,22 @@ mod tests {
         let r2 = r2.unwrap();
         // Both clients must receive a response that mentions their own input —
         // proving traffic was not cross-contaminated between connections.
-        assert!(r1.contains("hi-from-1"), "client 1 must see its own message: {r1}");
-        assert!(r2.contains("hi-from-2"), "client 2 must see its own message: {r2}");
+        assert!(
+            r1.contains("hi-from-1"),
+            "client 1 must see its own message: {r1}"
+        );
+        assert!(
+            r2.contains("hi-from-2"),
+            "client 2 must see its own message: {r2}"
+        );
         server.await.unwrap();
         let _ = std::fs::remove_file(&path);
     }
 
     #[cfg(unix)]
     fn tempfile_dir() -> std::path::PathBuf {
-        let base = std::env::var("TMPDIR")
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|_| std::env::temp_dir());
+        let base =
+            std::env::var("TMPDIR").map_or_else(|_| std::env::temp_dir(), std::path::PathBuf::from);
         let dir = base.join(format!("gnar-term-mcp-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         dir

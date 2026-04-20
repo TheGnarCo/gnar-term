@@ -1,6 +1,6 @@
 # gnar-term vs. Agentic Orchestrators — Comparative Analysis
 
-_Last updated: 2026-04-19_
+_Last updated: 2026-04-20_
 
 ## TL;DR
 
@@ -31,8 +31,13 @@ agent can run inside, plus an MCP surface those agents can drive.
 **gnar-term has a second axis that nobody else in the group has: the plugin axis.** It ships a
 first-party **`agentic-orchestrator`** extension whose goal is to deliver the orchestrator-first
 workflow — parallel agents, fleet dashboard, diff surface, issue-tracker ingestion — as an opt-in
-layer on top of the terminal-first core. Today the extension ships passive agent detection and
-status tracking (v0.2.0); the direction is full orchestration.
+layer on top of the terminal-first core. The extension already ships passive detection, an
+**AgentDashboard** entity (project-scoped), a **New Agent Dashboard** workspace action, a
+global **Agents** secondary sidebar tab, a **TaskSpawner** widget that creates a worktree +
+launches an agent, an **Issues** widget with a one-click "spawn agent on this issue" flow,
+plus **Kanban / AgentList / AgentStatusRow / Columns** widgets usable from dashboard markdown
+via `gnar:<name>` directives. MCP `spawn_agent` accepts a `worktree` flag that routes through
+the same spawn pipeline — external agents and in-app widgets share one code path.
 
 The architecture has settled into a clear division of labor: **core owns the nouns, extensions
 own the buttons.** Worktree workspaces, the git/PR/CI status rail, the GitHub integration that
@@ -107,12 +112,18 @@ rendering. Distinguishing features:
   workspace actions, settings pages, plus `runCommand(commandId, args?)` so extensions can trigger
   any registered core command. Eight included extensions (all `included: true`, all disableable in
   Settings → Extensions) ship on the same API third parties use:
-  1. **`agentic-orchestrator`** — passive AI agent detector that watches every terminal across
-     every workspace, matches PTY titles and streaming output against a pattern list (Claude Code,
-     Codex, Aider, Cursor, GitHub Copilot + user patterns via `knownAgents`), and tracks each
-     detected agent through `running` / `waiting` / `idle` / `closed` states. Renders per-surface
-     tab dots + per-workspace indicators; surfaces with agents waiting on human input are marked
-     unread. v0.2.0 today; designed as the hosting layer for the full orchestrator-first workflow.
+  1. **`agentic-orchestrator`** — AI agent detector + dashboard host. Watches every terminal
+     across every workspace, matches PTY titles and streaming output against a pattern list
+     (Claude Code, Codex, Aider, Cursor, GitHub Copilot + user patterns via `knownAgents`), and
+     tracks each detected agent through `running` / `waiting` / `idle` / `closed` states.
+     Renders per-surface tab dots, per-workspace indicators, and marks surfaces with agents
+     waiting on human input as unread. Ships an **AgentDashboard** entity (project-scoped or
+     root, persisted), a **New Agent Dashboard** workspace action, a global **Agents**
+     secondary sidebar tab, a **TaskSpawner** widget, an **Issues** widget with one-click
+     issue→spawn, plus **Kanban / AgentList / AgentStatusRow / Columns** widgets surfaced as
+     markdown components. Spawns create a fresh worktree workspace tagged
+     `metadata.parentDashboardId`, and MCP `spawn_agent` accepts a `worktree` flag that routes
+     through the same pipeline.
   2. **`diff-viewer`** — diff surface + commands (uncommitted / staged / file diff / branch
      compare); subscribes to the core `worktree:merged` event to auto-refresh after a merge.
   3. **`file-browser`** — secondary sidebar tab showing the active terminal's directory tree.
@@ -282,16 +293,34 @@ The "terminal-first vs. orchestrator-first vs. vendor-chrome" framing is a produ
 not a cap on functionality. gnar-term's built-in **`agentic-orchestrator`** extension is the path
 by which orchestrator-first workflows become available without reshaping the core terminal.
 
-**What it does today (v0.2.0 — passive detection).** On activation the extension bootstraps
-tracking for every pre-existing terminal surface across all workspaces and panes, then subscribes
-to `surface:created` / `surface:titleChanged` / `surface:closed` / output streams. It matches titles
-and output against a pattern list (Claude Code, Codex, Aider, Cursor, GitHub Copilot + user-defined
-`knownAgents`), and for each detected agent spins up a status tracker. OSC-notification-capable
-agents feed directly into the tracker; the rest infer state from title + output activity + an
-`idleTimeout` (configurable, default 30s). Status changes emit `extension:harness:statusChanged`,
-which the extension consumes to render per-surface tab dots (`running`/`waiting`/`idle` variants) +
-per-workspace indicators, and to mark `waiting` surfaces unread. Permissions: `observe` only. No
-harness launching. No git worktree management. Purely observational.
+**What it does today.** On activation the extension bootstraps tracking for every pre-existing
+terminal surface across all workspaces and panes, then subscribes to `surface:created` /
+`surface:titleChanged` / `surface:closed` / output streams. It matches titles and output against
+a pattern list (Claude Code, Codex, Aider, Cursor, GitHub Copilot + user-defined `knownAgents`),
+and for each detected agent spins up a status tracker. OSC-notification-capable agents feed
+directly into the tracker; the rest infer state from title + output activity + an `idleTimeout`
+(configurable, default 30s). Status changes emit `extension:harness:statusChanged`, which the
+extension consumes to render per-surface tab dots (`running`/`waiting`/`idle` variants) +
+per-workspace indicators, and to mark `waiting` surfaces unread.
+
+The extension also ships an **AgentDashboard** entity, persisted and rendered as a root row
+(project-nested via `parentProjectId`, or root-level when detached). Dashboards have a baseDir
+
+- color and own a preview surface over a templated markdown file that hosts
+  `gnar:<component>` directives. Bundled components: **Kanban** (agent fleet view), **Issues**
+  (GitHub issues via `gh` with split-button one-click spawn), **AgentList** + **AgentStatusRow**
+  (scoped or global roster), **TaskSpawner** (manual "+ New Task" → worktree + agent), and
+  **Columns** (layout helper). All are registered via `registerMarkdownComponent` with JSON
+  schema so `list_markdown_components` can enumerate them.
+
+Spawns go through a single shared helper (`spawnAgentInWorktree`). It creates a worktree
+workspace (via the core `worktrees:create-workspace` lifecycle), tags
+`metadata.parentDashboardId`, writes the agent's startup command into the workspace's first
+terminal surface, and returns the new workspace/pane/surface ids. The same helper is called
+from the TaskSpawner widget, the Issues widget's spawn button, and the MCP `spawn_agent`
+tool's `worktree` branch — so external agents and in-app UI exercise the same pipeline.
+A global **Agents** secondary sidebar tab and a **New Agent Dashboard** workspace action
+round out the UI. Permissions: `observe` (+ the core spawn pipeline via `runCommand`).
 
 **Why the hybrid works architecturally.** gnar-term's extension API ships sidebar tabs, surface
 types, commands, context menu items, overlays, workspace actions, settings pages, and
@@ -320,6 +349,18 @@ those three moved into core — they were the primitives every other orchestrati
 depended on, and routing them through the extension barrier added coordination cost without buying
 genuine pluggability.
 
+**Passive agent detection is the next thing to move into core.** The extension currently owns
+both the detection pipeline (title/output pattern matching, OSC notification parsing, idle
+timeout, status tracker, agent registry) _and_ the orchestration UI (dashboards, widgets,
+spawn flow). Detection is agentic-orchestrator _context_ — the noun every downstream UI
+reads — and it belongs next to the terminal-service / git-status-service in core: always-on,
+enabled before any extension activates, consumable by third-party extensions via the same
+event bus. After the split, the extension shrinks to "the orchestrator UI" — dashboards,
+Kanban / Issues / TaskSpawner widgets, the spawn pipeline — and the agent registry becomes a
+core-owned store like the workspace store. That also unlocks future extensions (a slack-ping
+extension, an audit-log extension, a test-watchdog extension) that want to react to agent
+status without pulling in the full orchestrator plugin.
+
 The current arrangement adds one more piece of nuance: **bundled extensions are control surfaces
 on top of core concepts.** `worktree-workspaces` doesn't own worktree workspaces — it owns the
 "New Worktree" button. `github-sidebar` doesn't own the GitHub integration — it owns the issues /
@@ -334,60 +375,63 @@ get Conductor-class functionality without leaving their terminal, with the orche
 calling core directly for the heavy lifting.
 
 This also reframes how to read the feature matrix below: rows that gnar-term shows `❌` on —
-diff viewer surfaced as primary UI, Kanban, issue-tracker ingestion beyond a list view, one-click
-PR — are not _core_ gaps. They're the `agentic-orchestrator` extension's forward roadmap, built on
-the worktree/gh primitives core now ships.
+Linear/Jira/GitLab ingestion, one-click PR, auto-fix CI / auto-merge, N-parallel fan-out,
+inline diff comments — are not _core_ gaps. They're the `agentic-orchestrator` extension's
+forward roadmap, built on the worktree / `gh` / detection primitives core already ships (or,
+in detection's case, is slated to adopt).
 
 ---
 
 ## Feature Matrix
 
-| Feature                                          | gnar-term           | cmux                      | Conductor     | Emdash                 | Baton                                   | Superset         | Claude Code Desktop                |
-| ------------------------------------------------ | ------------------- | ------------------------- | ------------- | ---------------------- | --------------------------------------- | ---------------- | ---------------------------------- |
-| Shape                                            | terminal            | terminal                  | orchestrator  | orchestrator           | orchestrator                            | orchestrator/IDE | vendor chrome                      |
-| macOS                                            | ✅                  | ✅                        | ✅            | ✅                     | ✅                                      | ✅               | ✅                                 |
-| Linux                                            | ✅                  | ❌                        | ❌            | ✅                     | ✅                                      | ✅ (disputed)    | ❌                                 |
-| Windows                                          | ❌                  | ❌                        | ❌            | ✅                     | ✅                                      | ❌               | ✅ (x64 + ARM64)                   |
-| License                                          | MIT                 | AGPL-3.0 + comm.          | proprietary   | open source            | proprietary ($49)                       | open source      | proprietary                        |
-| Price                                            | free                | free                      | paid/freemium | free                   | $49 one-time                            | free             | $20/mo Pro · $100–$200/mo Max      |
-| Account required                                 | ❌                  | ❌                        | login         | ❌                     | ❌                                      | API keys         | ✅ Anthropic acct.                 |
-| Agent-agnostic                                   | ✅                  | ✅                        | Claude+Codex  | ✅ (20+ CLIs)          | ✅                                      | ✅               | ❌ (Claude only)                   |
-| Native rendering                                 | xterm/WebGL         | libghostty/Metal          | —             | —                      | —                                       | —                | —                                  |
-| Terminal-first                                   | ✅                  | ✅                        | ❌            | ❌                     | ❌ (rich terminals, but not primary)    | ❌               | ❌ (terminal is one pane of many)  |
-| Worktree workspace primitive                     | ✅ (core)           | ❌                        | ✅            | ✅                     | ✅                                      | ✅               | ✅ (`.claude/worktrees/`)          |
-| Git worktree per spawned agent                   | ⚠️ primitives only  | ❌                        | ✅            | ✅                     | ✅                                      | ✅               | ✅ (per session, automatic)        |
-| Workspace status rail (branch + dirty + PR + CI) | ✅ (core)           | branch + PR (sidebar)     | ?             | ?                      | toolbar buttons                         | ?                | CI bar after PR open               |
-| Diff viewer                                      | ✅ (extension)      | ❌                        | ✅            | ✅                     | ✅ (Monaco)                             | ✅               | ✅ (inline comments + auto-fix CI) |
-| PR open / monitor                                | ❌                  | (PR status shown)         | ✅            | ✅                     | ✅ one-click                            | ✅               | ✅ open + auto-fix + auto-merge    |
-| Issue tracker integration                        | ⚠️ GH list (ext.)   | ❌                        | ?             | ✅ (Linear/Jira/GH/GL) | GH issues (autonomous mode)             | ❌               | ✅ via Connectors (GH/Linear/…)    |
-| Kanban/dashboard view                            | ❌                  | vertical tabs w/ status   | ✅            | ✅                     | ✅                                      | ✅               | session sidebar w/ filter+group    |
-| File previews (MD/PDF/CSV/…)                     | ✅                  | ❌                        | ❌            | ❌                     | ❌ (file viewer, not preview renderers) | ❌               | ✅ (preview pane: HTML/PDF/img)    |
-| Live app preview / dev-server browser            | ❌                  | scriptable browser        | ❌            | ❌                     | ❌                                      | ❌               | ✅ (headless browser + autoVerify) |
-| Embedded scriptable browser                      | ❌                  | ✅                        | ❌            | ❌                     | ❌                                      | ❌               | ✅ (preview pane)                  |
-| MCP server surface (host exposes tools)          | ✅ (~20 tools)      | ❌                        | ❌            | ❌                     | ❌ (MCP _client_ setup)                 | ✅               | ❌ (host is MCP _client_ only)     |
-| MCP client (consume external MCP servers)        | n/a                 | n/a                       | ?             | ?                      | ✅                                      | ✅               | ✅ + Connectors GUI                |
-| Unix socket agent API                            | ✅                  | ✅                        | ?             | ?                      | ?                                       | ?                | ❌                                 |
-| Agent → UI writes from inside terminal           | ✅ (pane-bound MCP) | ✅ (CLI)                  | ❌            | ❌                     | ❌                                      | ❌               | n/a (single agent)                 |
-| Extension / plugin system                        | ✅                  | ❌                        | ❌            | ❌                     | ❌                                      | ❌               | ✅ (Plugins + Skills marketplace)  |
-| Command palette                                  | ✅                  | ✅                        | ?             | ?                      | ?                                       | ?                | slash commands + plugin browser    |
-| Themes                                           | 11 built-in         | Ghostty config            | ?             | ?                      | ?                                       | ?                | system-driven                      |
-| Remote SSH                                       | ❌                  | ✅ (workspaces + browser) | ❌            | ✅                     | ❌                                      | ❌               | ✅ (Mac/Linux targets)             |
-| Cloud / remote execution                         | ❌                  | ❌                        | ❌            | ❌                     | ❌                                      | ❌               | ✅ (Anthropic-hosted)              |
-| Scheduled agent runs                             | ❌                  | ❌                        | ❌            | ❌                     | ❌                                      | ❌               | ✅ (Routines, research preview)    |
-| Computer use / GUI automation                    | ❌                  | ❌                        | ❌            | ❌                     | ❌                                      | ❌               | ✅ (research preview)              |
-| Session restore                                  | partial             | ✅                        | ?             | ?                      | ?                                       | ?                | ✅ (session sidebar persists)      |
-| OSC 9/99/777 notifications                       | ❌ (gap)            | ✅                        | ❌            | ❌                     | ❌                                      | ❌               | desktop notify on CI / Dispatch    |
+| Feature                                          | gnar-term                            | cmux                      | Conductor     | Emdash                 | Baton                                   | Superset         | Claude Code Desktop                |
+| ------------------------------------------------ | ------------------------------------ | ------------------------- | ------------- | ---------------------- | --------------------------------------- | ---------------- | ---------------------------------- |
+| Shape                                            | terminal                             | terminal                  | orchestrator  | orchestrator           | orchestrator                            | orchestrator/IDE | vendor chrome                      |
+| macOS                                            | ✅                                   | ✅                        | ✅            | ✅                     | ✅                                      | ✅               | ✅                                 |
+| Linux                                            | ✅                                   | ❌                        | ❌            | ✅                     | ✅                                      | ✅ (disputed)    | ❌                                 |
+| Windows                                          | ❌                                   | ❌                        | ❌            | ✅                     | ✅                                      | ❌               | ✅ (x64 + ARM64)                   |
+| License                                          | MIT                                  | AGPL-3.0 + comm.          | proprietary   | open source            | proprietary ($49)                       | open source      | proprietary                        |
+| Price                                            | free                                 | free                      | paid/freemium | free                   | $49 one-time                            | free             | $20/mo Pro · $100–$200/mo Max      |
+| Account required                                 | ❌                                   | ❌                        | login         | ❌                     | ❌                                      | API keys         | ✅ Anthropic acct.                 |
+| Agent-agnostic                                   | ✅                                   | ✅                        | Claude+Codex  | ✅ (20+ CLIs)          | ✅                                      | ✅               | ❌ (Claude only)                   |
+| Native rendering                                 | xterm/WebGL                          | libghostty/Metal          | —             | —                      | —                                       | —                | —                                  |
+| Terminal-first                                   | ✅                                   | ✅                        | ❌            | ❌                     | ❌ (rich terminals, but not primary)    | ❌               | ❌ (terminal is one pane of many)  |
+| Worktree workspace primitive                     | ✅ (core)                            | ❌                        | ✅            | ✅                     | ✅                                      | ✅               | ✅ (`.claude/worktrees/`)          |
+| Git worktree per spawned agent                   | ✅ (via `spawn_agent` + TaskSpawner) | ❌                        | ✅            | ✅                     | ✅                                      | ✅               | ✅ (per session, automatic)        |
+| Workspace status rail (branch + dirty + PR + CI) | ✅ (core)                            | branch + PR (sidebar)     | ?             | ?                      | toolbar buttons                         | ?                | CI bar after PR open               |
+| Diff viewer                                      | ✅ (extension)                       | ❌                        | ✅            | ✅                     | ✅ (Monaco)                             | ✅               | ✅ (inline comments + auto-fix CI) |
+| PR open / monitor                                | ❌                                   | (PR status shown)         | ✅            | ✅                     | ✅ one-click                            | ✅               | ✅ open + auto-fix + auto-merge    |
+| Issue tracker integration                        | ⚠️ GH list (ext.)                    | ❌                        | ?             | ✅ (Linear/Jira/GH/GL) | GH issues (autonomous mode)             | ❌               | ✅ via Connectors (GH/Linear/…)    |
+| Kanban/dashboard view                            | ✅ (extension)                       | vertical tabs w/ status   | ✅            | ✅                     | ✅                                      | ✅               | session sidebar w/ filter+group    |
+| File previews (MD/PDF/CSV/…)                     | ✅                                   | ❌                        | ❌            | ❌                     | ❌ (file viewer, not preview renderers) | ❌               | ✅ (preview pane: HTML/PDF/img)    |
+| Live app preview / dev-server browser            | ❌                                   | scriptable browser        | ❌            | ❌                     | ❌                                      | ❌               | ✅ (headless browser + autoVerify) |
+| Embedded scriptable browser                      | ❌                                   | ✅                        | ❌            | ❌                     | ❌                                      | ❌               | ✅ (preview pane)                  |
+| MCP server surface (host exposes tools)          | ✅ (~20 tools)                       | ❌                        | ❌            | ❌                     | ❌ (MCP _client_ setup)                 | ✅               | ❌ (host is MCP _client_ only)     |
+| MCP client (consume external MCP servers)        | n/a                                  | n/a                       | ?             | ?                      | ✅                                      | ✅               | ✅ + Connectors GUI                |
+| Unix socket agent API                            | ✅                                   | ✅                        | ?             | ?                      | ?                                       | ?                | ❌                                 |
+| Agent → UI writes from inside terminal           | ✅ (pane-bound MCP)                  | ✅ (CLI)                  | ❌            | ❌                     | ❌                                      | ❌               | n/a (single agent)                 |
+| Extension / plugin system                        | ✅                                   | ❌                        | ❌            | ❌                     | ❌                                      | ❌               | ✅ (Plugins + Skills marketplace)  |
+| Command palette                                  | ✅                                   | ✅                        | ?             | ?                      | ?                                       | ?                | slash commands + plugin browser    |
+| Themes                                           | 11 built-in                          | Ghostty config            | ?             | ?                      | ?                                       | ?                | system-driven                      |
+| Remote SSH                                       | ❌                                   | ✅ (workspaces + browser) | ❌            | ✅                     | ❌                                      | ❌               | ✅ (Mac/Linux targets)             |
+| Cloud / remote execution                         | ❌                                   | ❌                        | ❌            | ❌                     | ❌                                      | ❌               | ✅ (Anthropic-hosted)              |
+| Scheduled agent runs                             | ❌                                   | ❌                        | ❌            | ❌                     | ❌                                      | ❌               | ✅ (Routines, research preview)    |
+| Computer use / GUI automation                    | ❌                                   | ❌                        | ❌            | ❌                     | ❌                                      | ❌               | ✅ (research preview)              |
+| Session restore                                  | partial                              | ✅                        | ?             | ?                      | ?                                       | ?                | ✅ (session sidebar persists)      |
+| OSC 9/99/777 notifications                       | ❌ (gap)                             | ✅                        | ❌            | ❌                     | ❌                                      | ❌               | desktop notify on CI / Dispatch    |
 
 Legend: ✅ has it · ❌ doesn't · ⚠️ partial · `?` unclear from public docs.
 
 Notes on the partials:
 
-- **Git worktree per agent (gnar-term)**: core ships `worktrees:create-workspace`, archive,
-  merge, and the `worktree:merged` event, but does not yet auto-spawn or recycle worktrees per
-  spawned agent — that's the agentic-orchestrator extension's roadmap.
-- **Issue tracker integration (gnar-term)**: the bundled `github-sidebar` extension lists
-  issues / PRs / commits via `gh`, but there's no one-click "ingest this issue and spawn an
-  agent" flow yet (also orchestrator roadmap).
+- **Git worktree per agent (gnar-term)**: wired end-to-end. The shared `spawnAgentInWorktree`
+  pipeline is called from the MCP `spawn_agent` tool (`worktree` flag), the TaskSpawner
+  widget, and the Issues widget's one-click spawn. Each spawn creates a fresh worktree
+  workspace via the core `worktrees:create-workspace` lifecycle and tags
+  `metadata.parentDashboardId` so the sidebar nests it under the owning dashboard.
+- **Issue tracker integration (gnar-term)**: GitHub is covered — `gnar:issues` lists open
+  issues via `gh` and each row has a split-button spawner that hands the issue body in as
+  the agent's task context. Linear / Jira / GitLab adapters are still roadmap.
 - **MCP server surface vs. MCP client**: gnar-term, cmux, and Claude Code Desktop sit on
   opposite sides of the MCP boundary. gnar-term and Superset _expose_ MCP tools to the agent
   running inside; Claude Code Desktop _consumes_ external MCP servers for connector-style
@@ -451,18 +495,23 @@ two tables. Plugin-layer items don't require core changes; core-layer items do.
 
 **`agentic-orchestrator` extension roadmap (plugin-layer, opt-in)**
 
-| Capability                                            | Tool that has it                                        | Status     | Effort                                                                                                           |
-| ----------------------------------------------------- | ------------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------- |
-| Passive agent detection + per-surface status dots     | cmux (via OSC)                                          | ✅ shipped | shipped (extension, v0.2.0)                                                                                      |
-| Per-workspace git branch / PR / CI status in sidebar  | cmux, Claude Code Desktop, all orchestrators            | ✅ shipped | shipped in core (git status service writes the workspace subtitle)                                               |
-| Worktree workspaces as a first-class concept          | Conductor, Emdash, Baton, Superset, Claude Code Desktop | ✅ shipped | shipped in core (data model + lifecycle + archive/merge + sidebar railColor border + `worktree:merged` event)    |
-| Diff viewer surface                                   | Baton, Superset, Emdash, Claude Code Desktop            | ✅ shipped | shipped (bundled `diff-viewer` extension; subscribes to `worktree:merged`)                                       |
-| GitHub issues / PRs / commits sidebar                 | Baton, Superset, Claude Code Desktop (Connectors)       | ✅ shipped | shipped (bundled `github-sidebar` extension consumes `gh`; PR/CI badge already in core subtitle)                 |
-| New-worktree workspace-action button                  | Conductor, Emdash, Baton, Superset, Claude Code Desktop | ✅ shipped | shipped (bundled `worktree-workspaces` extension; delegates to core `worktrees:create-workspace`)                |
-| Git worktree _per spawned agent_ (auto-orchestration) | Conductor, Emdash, Baton, Superset, Claude Code Desktop | ⚠️ near    | Wire `spawn_agent` to call `worktrees:create-workspace` via `runCommand`. Primitive is core-shipped; low effort. |
-| Kanban / fleet-overview sidebar tab                   | Conductor, Emdash, Baton                                | ❌ roadmap | Agent registry is already there; needs a sidebar surface.                                                        |
-| Issue-tracker ingestion (Linear / Jira / GitLab)      | Emdash, Baton, Claude Code Desktop                      | ❌ roadmap | Commands + extension settings; GitHub side is already covered by the `github-sidebar` extension.                 |
-| One-click PR open                                     | Baton, Superset, Emdash, Claude Code Desktop            | ❌ roadmap | Workspace action shelling `gh pr create`. Low.                                                                   |
+| Capability                                            | Tool that has it                                        | Status                    | Notes                                                                                                                                                                |
+| ----------------------------------------------------- | ------------------------------------------------------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Passive agent detection + per-surface status dots     | cmux (via OSC)                                          | ✅ shipped · ⤴ core-bound | Currently lives in the extension; planned to move into core as a first-class noun (agent registry + status tracker). The extension will consume, not own, detection. |
+| Per-workspace git branch / PR / CI status in sidebar  | cmux, Claude Code Desktop, all orchestrators            | ✅ shipped                | Core (git status service writes the workspace subtitle).                                                                                                             |
+| Worktree workspaces as a first-class concept          | Conductor, Emdash, Baton, Superset, Claude Code Desktop | ✅ shipped                | Core (data model + lifecycle + archive/merge + sidebar railColor border + `worktree:merged` event).                                                                  |
+| Diff viewer surface                                   | Baton, Superset, Emdash, Claude Code Desktop            | ✅ shipped                | Bundled `diff-viewer` extension; subscribes to `worktree:merged`.                                                                                                    |
+| GitHub issues / PRs / commits sidebar                 | Baton, Superset, Claude Code Desktop (Connectors)       | ✅ shipped                | Bundled `github-sidebar` extension consumes `gh`; PR/CI badge already in core subtitle.                                                                              |
+| New-worktree workspace-action button                  | Conductor, Emdash, Baton, Superset, Claude Code Desktop | ✅ shipped                | Bundled `worktree-workspaces` extension; delegates to core `worktrees:create-workspace`.                                                                             |
+| Git worktree _per spawned agent_ (auto-orchestration) | Conductor, Emdash, Baton, Superset, Claude Code Desktop | ✅ shipped                | `spawn_agent` MCP tool + TaskSpawner widget + Issues-row spawn all call the shared `spawnAgentInWorktree` pipeline.                                                  |
+| AgentDashboard entity (project-scoped, persisted)     | Conductor, Emdash, Baton                                | ✅ shipped                | `dashboard-service.ts`. Rendered as a root row, nestable under a project, preview surface over a templated markdown file.                                            |
+| Kanban / fleet-overview sidebar tab                   | Conductor, Emdash, Baton                                | ✅ shipped                | Global "Agents" secondary sidebar tab + `gnar:kanban` markdown component scoped to a dashboard.                                                                      |
+| GitHub issue → agent spawn (one-click)                | Emdash, Baton, Claude Code Desktop                      | ✅ shipped                | `gnar:issues` markdown component renders `gh` issues with a split-button spawner.                                                                                    |
+| Issue-tracker ingestion (Linear / Jira / GitLab)      | Emdash, Baton, Claude Code Desktop                      | ❌ roadmap                | GitHub is covered. Linear/Jira/GitLab adapters + per-dashboard settings still to do.                                                                                 |
+| One-click PR open                                     | Baton, Superset, Emdash, Claude Code Desktop            | ❌ roadmap                | Workspace action shelling `gh pr create`. Low effort.                                                                                                                |
+| N-parallel same-task fan-out                          | Emdash                                                  | ❌ roadmap                | Dispatch one task to N agents in N worktrees side-by-side for comparison.                                                                                            |
+| Auto-fix failing CI / auto-merge on green             | Claude Code Desktop                                     | ❌ roadmap                | Depends on the PR-open flow + a poller on `gh pr checks`.                                                                                                            |
+| Diff-viewer inline comments + "Review code" action    | Claude Code Desktop                                     | ❌ roadmap                | Requires widening the existing `diff-viewer` extension.                                                                                                              |
 
 **Core-app gaps (would live outside the plugin)**
 

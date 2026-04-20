@@ -232,25 +232,32 @@
      flush when a container has no nested content at all. -->
 {#if dashboardEntries.length > 0 || entries.length > 0}
   <div class="workspace-list-view">
-    {#if dashboardEntries.length >= 2 && accentColor}
-      <!-- Multi-dashboard mode: render as a horizontal row of small
-           icon-only buttons. Active one is full-color, others are
-           muted. Labels hidden; hover title reveals the name. Only
-           applies in nested (container) scope — root-level lists show
-           individual tiles stacked. -->
-      <div class="dashboard-row" data-dashboard-row="multi">
+    {#if dashboardEntries.length > 0}
+      {@const count = dashboardEntries.length}
+      {@const cols = Math.min(count, 3)}
+      {@const singleRail = count === 1}
+      {@const isNested = !!accentColor}
+      <!-- Dashboards share a grid container so they fill available width.
+           Up to 3 per row; extras wrap. A container query collapses tiles
+           to icon-only when there's genuinely no room for labels. -->
+      <div
+        class="dashboard-grid"
+        data-dashboard-count={count}
+        style="--cols: {cols};"
+      >
         {#each dashboardEntries as entry (entry.ws.id)}
+          {@const dashAccent = accentColor ?? $theme.accent}
+          {@const dashFg = contrastColor(dashAccent)}
           {@const isActive = entry.idx === $activeWorkspaceIdx}
           {@const wsMeta = entry.ws.metadata as
             | Record<string, unknown>
             | undefined}
           {@const isAgentic = typeof wsMeta?.orchestratorId === "string"}
-          {@const dashAccent = accentColor ?? $theme.accent}
-          {@const dashFg = contrastColor(dashAccent)}
           <!-- svelte-ignore a11y_click_events_have_key_events -->
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div
-            class="dashboard-chip"
+            class="dashboard-tile"
+            class:dashboard-tile--rail={singleRail}
             data-dashboard-item={entry.ws.id}
             data-dashboard-agentic={isAgentic ? "true" : undefined}
             data-active={isActive ? "true" : undefined}
@@ -260,150 +267,57 @@
               showNestedContextMenu(e.clientX, e.clientY, entry.idx)}
             style="
               background: {dashAccent}; color: {dashFg};
-              cursor: pointer;
-              width: 28px; height: 28px;
-              border-radius: 6px;
-              display: inline-flex; align-items: center; justify-content: center;
-              flex-shrink: 0;
-              opacity: {isActive ? 1 : 0.5};
-              box-shadow: {isActive ? `0 0 0 2px ${$theme.fg}` : 'none'};
-              transition: opacity 0.12s, box-shadow 0.12s;
+              opacity: {isActive ? 1 : 0.55};
+              {isActive ? `box-shadow: 0 0 0 2px ${$theme.fg};` : ''}
             "
           >
-            {#if isAgentic}
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <title>{entry.ws.name}</title>
-                <path d="M12 8V4H8" />
-                <rect width="16" height="12" x="4" y="8" rx="2" />
-                <path d="M2 14h2" />
-                <path d="M20 14h2" />
-                <path d="M15 13v2" />
-                <path d="M9 13v2" />
-              </svg>
-            {:else}
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <title>{entry.ws.name}</title>
-                <rect x="3" y="3" width="7" height="9" />
-                <rect x="14" y="3" width="7" height="5" />
-                <rect x="14" y="12" width="7" height="9" />
-                <rect x="3" y="16" width="7" height="5" />
-              </svg>
+            {#if isNested}
+              <span class="dashboard-tile-icon" aria-hidden="true">
+                {#if isAgentic}
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <title>{entry.ws.name}</title>
+                    <path d="M12 8V4H8" />
+                    <rect width="16" height="12" x="4" y="8" rx="2" />
+                    <path d="M2 14h2" />
+                    <path d="M20 14h2" />
+                    <path d="M15 13v2" />
+                    <path d="M9 13v2" />
+                  </svg>
+                {:else}
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <title>{entry.ws.name}</title>
+                    <rect x="3" y="3" width="7" height="9" />
+                    <rect x="14" y="3" width="7" height="5" />
+                    <rect x="14" y="12" width="7" height="9" />
+                    <rect x="3" y="16" width="7" height="5" />
+                  </svg>
+                {/if}
+              </span>
             {/if}
+            <span class="dashboard-tile-label">{entry.ws.name}</span>
           </div>
         {/each}
       </div>
-    {:else}
-      {#each dashboardEntries as entry (entry.ws.id)}
-        {@const dashAccent = accentColor ?? $theme.accent}
-        {@const dashFg = contrastColor(dashAccent)}
-        {@const isActive = entry.idx === $activeWorkspaceIdx}
-        {@const wsMeta = entry.ws.metadata as
-          | Record<string, unknown>
-          | undefined}
-        {@const isAgentic = typeof wsMeta?.orchestratorId === "string"}
-        {@const isNested = !!accentColor}
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div
-          class="dashboard-item"
-          data-dashboard-item={entry.ws.id}
-          data-dashboard-agentic={isAgentic ? "true" : undefined}
-          data-active={isActive ? "true" : undefined}
-          on:click={() => switchWorkspace(entry.idx)}
-          on:contextmenu|preventDefault={(e) =>
-            showNestedContextMenu(e.clientX, e.clientY, entry.idx)}
-          style="
-            margin: 0 8px 0 0;
-            border-radius: 0 6px 6px 0;
-            background: {dashAccent}; color: {dashFg};
-            cursor: pointer;
-            padding: 4px 8px;
-            display: flex; align-items: center; gap: 8px;
-            min-height: 32px;
-            opacity: {isActive ? 1 : 0.55};
-            {isActive ? `box-shadow: 0 0 0 2px ${$theme.fg};` : ''}
-            transition: opacity 0.12s, box-shadow 0.12s;
-          "
-        >
-          {#if isNested}
-            <span
-              aria-hidden="true"
-              style="
-                flex-shrink: 0; display: inline-flex; align-items: center;
-                justify-content: center; width: 14px; height: 14px;
-                color: {dashFg};
-              "
-            >
-              {#if isAgentic}
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <title>Agent Dashboard</title>
-                  <path d="M12 8V4H8" />
-                  <rect width="16" height="12" x="4" y="8" rx="2" />
-                  <path d="M2 14h2" />
-                  <path d="M20 14h2" />
-                  <path d="M15 13v2" />
-                  <path d="M9 13v2" />
-                </svg>
-              {:else}
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <title>Dashboard</title>
-                  <rect x="3" y="3" width="7" height="9" />
-                  <rect x="14" y="3" width="7" height="5" />
-                  <rect x="14" y="12" width="7" height="9" />
-                  <rect x="3" y="16" width="7" height="5" />
-                </svg>
-              {/if}
-            </span>
-          {/if}
-          <span
-            style="
-              flex: 1; min-width: 0;
-              font-size: 13px; font-weight: 600;
-              overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-            ">{entry.ws.name}</span
-          >
-        </div>
-      {/each}
     {/if}
     {#each entries as entry (entry.ws.id)}
       {@const isSrc = active && sourceIdx === entry.idx}
@@ -481,25 +395,74 @@
   .workspace-list-row + .workspace-list-row {
     margin-top: 6px;
   }
-  /* Dashboard → workspace boundary and dashboard → dashboard gap:
-     larger than the workspace-row gap so the dashboard block reads as
-     a separate region from the workspace list below. */
-  .dashboard-item + .workspace-list-row,
-  .dashboard-item + .dashboard-item,
-  .dashboard-row + .workspace-list-row {
+  /* Dashboard block → workspace list: 10px gap so the dashboard region
+     reads as a separate block from the workspace list below. */
+  .dashboard-grid + .workspace-list-row {
     margin-top: 10px;
   }
-  .dashboard-item:hover,
-  .dashboard-chip:hover {
-    filter: brightness(1.1);
+
+  /* Dashboard grid — up to 3 equal-width tiles per row; extras wrap.
+     `container-type: inline-size` lets us collapse to icon-only when
+     the grid container is too narrow to fit labels. */
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr));
+    gap: 8px;
+    margin-right: 8px;
+    container-type: inline-size;
   }
-  /* Horizontal icon row for multi-dashboard mode. */
-  .dashboard-row {
+  .dashboard-tile {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 4px 8px 4px 0;
-    flex-wrap: wrap;
+    gap: 6px;
+    padding: 6px 8px;
+    min-height: 32px;
+    min-width: 0;
+    border-radius: 6px;
+    cursor: pointer;
+    transition:
+      opacity 0.12s,
+      box-shadow 0.12s,
+      filter 0.12s;
+  }
+  .dashboard-tile:hover {
+    filter: brightness(1.1);
+  }
+  /* Single-tile rail mode: match the WorkspaceItem look (rounded right
+     only, flush left against the rail). */
+  .dashboard-tile--rail {
+    border-radius: 0 6px 6px 0;
+  }
+  .dashboard-tile-icon {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+  }
+  .dashboard-tile-label {
+    flex: 1;
+    min-width: 0;
+    font-size: 13px;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* When the grid is too narrow to fit labels meaningfully, collapse
+     to icon-only (centered icon inside a compact tile). Threshold is
+     ~220px which, with 3 columns + gaps, puts each tile at ~65px —
+     below that the label ellipsizes to almost nothing anyway. */
+  @container (max-width: 220px) {
+    .dashboard-tile {
+      justify-content: center;
+      padding: 6px;
+    }
+    .dashboard-tile-label {
+      display: none;
+    }
   }
   /* 8px left + top margin on the nested list so the workspace rails
      sit visually inset from the parent project's rail and the first

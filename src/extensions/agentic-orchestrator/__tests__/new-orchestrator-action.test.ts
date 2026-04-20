@@ -132,7 +132,7 @@ describe("agentic-orchestrator new-orchestrator action: registration", () => {
     await activate();
     const action = getWorkspaceActions().find((a) => a.id === ACTION_ID);
     expect(action).toBeDefined();
-    expect(action!.label).toBe("New Agent Orchestrator");
+    expect(action!.label).toBe("Create Agent Dashboard");
     expect(action!.icon).toBe("layout-dashboard");
   });
 });
@@ -189,11 +189,9 @@ describe("agentic-orchestrator new-orchestrator action: handler", () => {
     expect(writeArgs.content).toContain(o.id);
   });
 
-  it("project context: only asks for name; inherits baseDir + color from the project", async () => {
+  it("project context: zero-prompt. Creates 'Agents' with inherited baseDir + color", async () => {
     await activate();
     patchApi();
-
-    showFormPromptMock.mockResolvedValue({ name: "Project Orch" });
 
     const handler = getHandler();
     await handler({
@@ -203,19 +201,36 @@ describe("agentic-orchestrator new-orchestrator action: handler", () => {
       isGit: true,
     });
 
-    expect(showFormPromptMock).toHaveBeenCalledTimes(1);
-    const fields = showFormPromptMock.mock.calls[0]![1] as Array<{
-      key: string;
-    }>;
-    expect(fields.map((f) => f.key)).toEqual(["name"]);
+    // No form prompt is shown for nested creation.
+    expect(showFormPromptMock).not.toHaveBeenCalled();
 
     const orchestrators = getOrchestrators();
     expect(orchestrators).toHaveLength(1);
     const o = orchestrators[0];
+    expect(o.name).toBe("Agents");
     expect(o.baseDir).toBe("/work/proj");
     expect(o.color).toBe("blue");
     expect(o.parentProjectId).toBe("proj-42");
     expect(o.path).toBe(`/work/proj/.gnar-term/orchestrators/${o.id}.md`);
+  });
+
+  it("project context: reuses the existing orchestrator when one already exists (one-per-project)", async () => {
+    await activate();
+    patchApi();
+
+    const handler = getHandler();
+    await handler({
+      projectId: "proj-42",
+      projectPath: "/work/proj",
+      projectColor: "blue",
+    });
+    await handler({
+      projectId: "proj-42",
+      projectPath: "/work/proj",
+      projectColor: "blue",
+    });
+
+    expect(getOrchestrators()).toHaveLength(1);
   });
 
   it("aborts when form is cancelled", async () => {

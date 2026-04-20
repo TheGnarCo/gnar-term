@@ -232,92 +232,179 @@
      flush when a container has no nested content at all. -->
 {#if dashboardEntries.length > 0 || entries.length > 0}
   <div class="workspace-list-view">
-    {#each dashboardEntries as entry (entry.ws.id)}
-      {@const dashAccent = accentColor ?? $theme.accent}
-      {@const dashFg = contrastColor(dashAccent)}
-      {@const isActive = entry.idx === $activeWorkspaceIdx}
-      {@const wsMeta = entry.ws.metadata as Record<string, unknown> | undefined}
-      {@const isAgentic = typeof wsMeta?.orchestratorId === "string"}
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div
-        class="dashboard-item"
-        data-dashboard-item={entry.ws.id}
-        data-dashboard-agentic={isAgentic ? "true" : undefined}
-        data-active={isActive ? "true" : undefined}
-        on:click={() => switchWorkspace(entry.idx)}
-        on:contextmenu|preventDefault={(e) =>
-          showNestedContextMenu(e.clientX, e.clientY, entry.idx)}
-        style="
-          margin: 0 8px 0 0;
-          border-radius: 0 6px 6px 0;
-          background: {dashAccent}; color: {dashFg};
-          cursor: pointer;
-          padding: 4px 8px;
-          display: flex; align-items: center; gap: 8px;
-          min-height: 32px;
-          {isActive ? 'outline: 2px solid ' + dashFg + ';' : ''}
-        "
-      >
-        <span
-          aria-hidden="true"
+    {#if dashboardEntries.length >= 2 && accentColor}
+      <!-- Multi-dashboard mode: render as a horizontal row of small
+           icon-only buttons. Active one is full-color, others are
+           muted. Labels hidden; hover title reveals the name. Only
+           applies in nested (container) scope — root-level lists show
+           individual tiles stacked. -->
+      <div class="dashboard-row" data-dashboard-row="multi">
+        {#each dashboardEntries as entry (entry.ws.id)}
+          {@const isActive = entry.idx === $activeWorkspaceIdx}
+          {@const wsMeta = entry.ws.metadata as
+            | Record<string, unknown>
+            | undefined}
+          {@const isAgentic = typeof wsMeta?.orchestratorId === "string"}
+          {@const dashAccent = accentColor ?? $theme.accent}
+          {@const dashFg = contrastColor(dashAccent)}
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div
+            class="dashboard-chip"
+            data-dashboard-item={entry.ws.id}
+            data-dashboard-agentic={isAgentic ? "true" : undefined}
+            data-active={isActive ? "true" : undefined}
+            title={entry.ws.name}
+            on:click={() => switchWorkspace(entry.idx)}
+            on:contextmenu|preventDefault={(e) =>
+              showNestedContextMenu(e.clientX, e.clientY, entry.idx)}
+            style="
+              background: {dashAccent}; color: {dashFg};
+              cursor: pointer;
+              width: 28px; height: 28px;
+              border-radius: 6px;
+              display: inline-flex; align-items: center; justify-content: center;
+              flex-shrink: 0;
+              opacity: {isActive ? 1 : 0.5};
+              box-shadow: {isActive ? `0 0 0 2px ${$theme.fg}` : 'none'};
+              transition: opacity 0.12s, box-shadow 0.12s;
+            "
+          >
+            {#if isAgentic}
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <title>{entry.ws.name}</title>
+                <path d="M12 8V4H8" />
+                <rect width="16" height="12" x="4" y="8" rx="2" />
+                <path d="M2 14h2" />
+                <path d="M20 14h2" />
+                <path d="M15 13v2" />
+                <path d="M9 13v2" />
+              </svg>
+            {:else}
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <title>{entry.ws.name}</title>
+                <rect x="3" y="3" width="7" height="9" />
+                <rect x="14" y="3" width="7" height="5" />
+                <rect x="14" y="12" width="7" height="9" />
+                <rect x="3" y="16" width="7" height="5" />
+              </svg>
+            {/if}
+          </div>
+        {/each}
+      </div>
+    {:else}
+      {#each dashboardEntries as entry (entry.ws.id)}
+        {@const dashAccent = accentColor ?? $theme.accent}
+        {@const dashFg = contrastColor(dashAccent)}
+        {@const isActive = entry.idx === $activeWorkspaceIdx}
+        {@const wsMeta = entry.ws.metadata as
+          | Record<string, unknown>
+          | undefined}
+        {@const isAgentic = typeof wsMeta?.orchestratorId === "string"}
+        {@const isNested = !!accentColor}
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+          class="dashboard-item"
+          data-dashboard-item={entry.ws.id}
+          data-dashboard-agentic={isAgentic ? "true" : undefined}
+          data-active={isActive ? "true" : undefined}
+          on:click={() => switchWorkspace(entry.idx)}
+          on:contextmenu|preventDefault={(e) =>
+            showNestedContextMenu(e.clientX, e.clientY, entry.idx)}
           style="
-            flex-shrink: 0; display: inline-flex; align-items: center;
-            justify-content: center; width: 14px; height: 14px;
-            color: {dashFg};
+            margin: 0 8px 0 0;
+            border-radius: 0 6px 6px 0;
+            background: {dashAccent}; color: {dashFg};
+            cursor: pointer;
+            padding: 4px 8px;
+            display: flex; align-items: center; gap: 8px;
+            min-height: 32px;
+            opacity: {isActive ? 1 : 0.55};
+            {isActive ? `box-shadow: 0 0 0 2px ${$theme.fg};` : ''}
+            transition: opacity 0.12s, box-shadow 0.12s;
           "
         >
-          {#if isAgentic}
-            <!-- Agentic Dashboard icon: canonical lucide:bot. Antenna,
-                 rounded body with two dot eyes, side "ear" ticks. -->
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
+          {#if isNested}
+            <span
+              aria-hidden="true"
+              style="
+                flex-shrink: 0; display: inline-flex; align-items: center;
+                justify-content: center; width: 14px; height: 14px;
+                color: {dashFg};
+              "
             >
-              <title>Agent Dashboard</title>
-              <path d="M12 8V4H8" />
-              <rect width="16" height="12" x="4" y="8" rx="2" />
-              <path d="M2 14h2" />
-              <path d="M20 14h2" />
-              <path d="M15 13v2" />
-              <path d="M9 13v2" />
-            </svg>
-          {:else}
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <title>Dashboard</title>
-              <rect x="3" y="3" width="7" height="9" />
-              <rect x="14" y="3" width="7" height="5" />
-              <rect x="14" y="12" width="7" height="9" />
-              <rect x="3" y="16" width="7" height="5" />
-            </svg>
+              {#if isAgentic}
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <title>Agent Dashboard</title>
+                  <path d="M12 8V4H8" />
+                  <rect width="16" height="12" x="4" y="8" rx="2" />
+                  <path d="M2 14h2" />
+                  <path d="M20 14h2" />
+                  <path d="M15 13v2" />
+                  <path d="M9 13v2" />
+                </svg>
+              {:else}
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <title>Dashboard</title>
+                  <rect x="3" y="3" width="7" height="9" />
+                  <rect x="14" y="3" width="7" height="5" />
+                  <rect x="14" y="12" width="7" height="9" />
+                  <rect x="3" y="16" width="7" height="5" />
+                </svg>
+              {/if}
+            </span>
           {/if}
-        </span>
-        <span
-          style="
-            flex: 1; min-width: 0;
-            font-size: 13px; font-weight: 600;
-            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-          ">{entry.ws.name}</span
-        >
-      </div>
-    {/each}
+          <span
+            style="
+              flex: 1; min-width: 0;
+              font-size: 13px; font-weight: 600;
+              overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            ">{entry.ws.name}</span
+          >
+        </div>
+      {/each}
+    {/if}
     {#each entries as entry (entry.ws.id)}
       {@const isSrc = active && sourceIdx === entry.idx}
       {@const isSibling = active && sourceIdx !== entry.idx}
@@ -391,13 +478,28 @@
      of discrete workspace tiles rather than one unbroken column.
      Matched by WorkspaceListBlock's .root-row + rule so root and
      nested workspace lists have identical vertical rhythm. */
-  .workspace-list-row + .workspace-list-row,
-  .dashboard-item + .workspace-list-row,
-  .dashboard-item + .dashboard-item {
+  .workspace-list-row + .workspace-list-row {
     margin-top: 6px;
   }
-  .dashboard-item:hover {
-    filter: brightness(1.08);
+  /* Dashboard → workspace boundary and dashboard → dashboard gap:
+     larger than the workspace-row gap so the dashboard block reads as
+     a separate region from the workspace list below. */
+  .dashboard-item + .workspace-list-row,
+  .dashboard-item + .dashboard-item,
+  .dashboard-row + .workspace-list-row {
+    margin-top: 10px;
+  }
+  .dashboard-item:hover,
+  .dashboard-chip:hover {
+    filter: brightness(1.1);
+  }
+  /* Horizontal icon row for multi-dashboard mode. */
+  .dashboard-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px 4px 0;
+    flex-wrap: wrap;
   }
   /* 8px left + top margin on the nested list so the workspace rails
      sit visually inset from the parent project's rail and the first

@@ -59,7 +59,7 @@ export const agenticOrchestratorManifest: ExtensionManifest = {
     workspaceActions: [
       {
         id: "new-orchestrator",
-        title: "New Agent Orchestrator",
+        title: "Create Agent Dashboard",
         icon: "layout-dashboard",
       },
     ],
@@ -85,7 +85,7 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
     void ensureOrchestratorDashboards();
 
     api.registerWorkspaceAction("new-orchestrator", {
-      label: "New Agent Orchestrator",
+      label: "Create Agent Dashboard",
       icon: "layout-dashboard",
       handler: (ctx) => newOrchestratorFlow(api, ctx),
     });
@@ -286,21 +286,17 @@ export { ORCHESTRATOR_WORKSPACE_META_KEY, DASHBOARD_METADATA_KEY };
 // --- Internal helpers ---
 
 /**
- * Workspace action handler for `new-orchestrator`. Two modes:
+ * Workspace action handler for `new-orchestrator` (labelled "Create
+ * Agent Dashboard" in the UI). Two modes:
  *
- *   - **Project context** (`ctx.projectPath` set): baseDir + color
- *     inherited from the project and locked. The dialog only asks for a
- *     name — both derived fields stay off-screen so the user can't drift
- *     an orchestrator's scope away from its host project.
+ *   - **Project context** (`ctx.projectPath` set): zero-prompt. baseDir,
+ *     color, and name are all derived from the project — name defaults
+ *     to "Agents". Enforces one agent dashboard per project: if one
+ *     already exists, just open it.
  *   - **Root context** (no project): the dialog asks for baseDir
- *     (required, with Browse), name, and color.
- *
- * Writes the templated markdown only when the file does not already
- * exist — re-creating at the same path preserves the user's edits.
- *
- * Activation flow: `createOrchestrator` already creates the Dashboard
- * workspace and switches to it (workspace auto-switches on create). We
- * don't need to call `openOrchestratorDashboard` explicitly.
+ *     (required, with Browse), name (default "Agent Dashboard"), and
+ *     color. Root-level agent dashboards are independent; no
+ *     one-per-scope constraint.
  */
 async function newOrchestratorFlow(
   api: ExtensionAPI,
@@ -313,55 +309,71 @@ async function newOrchestratorFlow(
   const projectColor =
     typeof ctx.projectColor === "string" ? ctx.projectColor : undefined;
 
-  const fields = projectPath
-    ? [
-        {
-          key: "name" as const,
-          label: "Name",
-          defaultValue: "Agent Orchestrator",
-          placeholder: "Agent Orchestrator",
-        },
-      ]
-    : [
-        {
-          key: "baseDir" as const,
-          label: "Base directory",
-          type: "directory" as const,
-          required: true,
-          defaultValue: "",
-          pickerTitle: "Select orchestrator base directory",
-          placeholder: "Pick a folder...",
-        },
-        {
-          key: "name" as const,
-          label: "Name",
-          defaultValue: "Agent Orchestrator",
-          placeholder: "Agent Orchestrator",
-        },
-        {
-          key: "color" as const,
-          label: "Color",
-          type: "color" as const,
-          defaultValue: "purple",
-        },
-      ];
+  // Nested: zero-prompt create. One-per-project — reuse the existing
+  // orchestrator if the project already has one.
+  if (projectId && projectPath) {
+    const existing = getOrchestrators().find(
+      (o) => o.parentProjectId === projectId,
+    );
+    if (existing) {
+      openOrchestratorDashboard(existing);
+      return;
+    }
+    const orchestrator = await createOrchestrator({
+      name: "Agents",
+      baseDir: projectPath,
+      ...(projectColor ? { color: projectColor } : {}),
+      parentProjectId: projectId,
+    });
+    try {
+      await writeOrchestratorDashboardTemplate(orchestrator);
+    } catch (err) {
+      api.reportError(`Failed to write orchestrator markdown: ${err}`);
+    }
+    openOrchestratorDashboard(orchestrator);
+    return;
+  }
 
-  const result = await api.showFormPrompt("New Agent Orchestrator", fields, {
-    submitLabel: "Create",
-  });
+  // Root: full form.
+  const result = await api.showFormPrompt(
+    "Create Agent Dashboard",
+    [
+      {
+        key: "baseDir" as const,
+        label: "Base directory",
+        type: "directory" as const,
+        required: true,
+        defaultValue: "",
+        pickerTitle: "Select base directory",
+        placeholder: "Pick a folder...",
+      },
+      {
+        key: "name" as const,
+        label: "Name",
+        defaultValue: "Agent Dashboard",
+        placeholder: "Agent Dashboard",
+      },
+      {
+        key: "color" as const,
+        label: "Color",
+        type: "color" as const,
+        defaultValue: "purple",
+      },
+    ],
+    { submitLabel: "Create" },
+  );
   if (!result) return;
 
-  const baseDir = (projectPath ?? result.baseDir ?? "").trim();
+  const baseDir = (result.baseDir ?? "").trim();
   if (!baseDir) return;
   const name = (result.name ?? "").trim();
   if (!name) return;
-  const color = projectColor ?? (result.color || "purple");
+  const color = result.color || "purple";
 
   const orchestrator = await createOrchestrator({
     name,
     baseDir,
     color,
-    ...(projectId ? { parentProjectId: projectId } : {}),
   });
 
   try {
@@ -370,9 +382,5 @@ async function newOrchestratorFlow(
     api.reportError(`Failed to write orchestrator markdown: ${err}`);
   }
 
-  // createOrchestrator auto-switches to the new Dashboard workspace via
-  // createWorkspaceFromDef; this call is a no-op when the switch already
-  // happened, but keeps the "opening an orchestrator brings its Dashboard
-  // forward" contract explicit.
   openOrchestratorDashboard(orchestrator);
 }

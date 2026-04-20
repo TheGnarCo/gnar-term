@@ -123,7 +123,7 @@
         seen.add(ws.id);
         continue;
       }
-      // Non-workspace row kinds (project, agent-dashboard…). Use their
+      // Non-workspace row kinds (project, agent-orchestrator…). Use their
       // renderer-contributed label as a visual header, then fan out
       // any workspaces tagged with the row's projectId.
       const rendererMeta = $rootRowRendererStore.find((r) => r.id === row.kind);

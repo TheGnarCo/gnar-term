@@ -1,7 +1,7 @@
 /**
- * Tests for the agentic-orchestrator "new-dashboard" workspace action.
- * Exercises both context branches (root vs project), the templated
- * markdown write path, and the openDashboard hand-off after creation.
+ * Tests for the agentic-orchestrator "new-orchestrator" workspace
+ * action. Exercises both context branches (root vs project) and the
+ * templated markdown write path.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
@@ -54,21 +54,19 @@ vi.mock("../../../lib/config", async (importOriginal) => {
   };
 });
 
-const { openDashboardMock, pickDirectoryMock, showFormPromptMock } = vi.hoisted(
-  () => ({
-    openDashboardMock: vi.fn(() => true),
-    pickDirectoryMock: vi.fn(),
-    showFormPromptMock: vi.fn(),
-  }),
-);
+const { createWorkspaceFromDefMock, closeWorkspaceMock } = vi.hoisted(() => ({
+  createWorkspaceFromDefMock: vi.fn().mockResolvedValue("ws-new"),
+  closeWorkspaceMock: vi.fn(),
+}));
 
-vi.mock("../dashboard-service", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../dashboard-service")>();
-  return {
-    ...actual,
-    openDashboard: openDashboardMock,
-  };
-});
+vi.mock("../../../lib/services/workspace-service", () => ({
+  createWorkspaceFromDef: createWorkspaceFromDefMock,
+  closeWorkspace: closeWorkspaceMock,
+}));
+
+const { showFormPromptMock } = vi.hoisted(() => ({
+  showFormPromptMock: vi.fn(),
+}));
 
 import {
   agenticOrchestratorManifest,
@@ -85,13 +83,13 @@ import {
   resetWorkspaceActions,
 } from "../../../lib/services/workspace-action-registry";
 import {
-  _resetDashboardService,
-  getDashboards,
-  buildDashboardMarkdown,
-} from "../dashboard-service";
+  _resetOrchestratorService,
+  getOrchestrators,
+  buildOrchestratorDashboardMarkdown,
+} from "../orchestrator-service";
 import { resetAgentDetectionForTests } from "../../../lib/services/agent-detection-service";
 
-const ACTION_ID = "agentic-orchestrator:new-dashboard";
+const ACTION_ID = "agentic-orchestrator:new-orchestrator";
 
 async function activate() {
   registerExtension(
@@ -105,12 +103,11 @@ beforeEach(async () => {
   configRef.current = {};
   saveConfigMock.mockClear();
   invokeMock.mockClear();
-  openDashboardMock.mockClear();
-  pickDirectoryMock.mockReset();
+  createWorkspaceFromDefMock.mockClear();
+  createWorkspaceFromDefMock.mockResolvedValue("ws-new");
+  closeWorkspaceMock.mockClear();
   showFormPromptMock.mockReset();
 
-  // Re-stub Tauri invoke default behavior — earlier mockClear wipes
-  // implementations, leaving the spy returning undefined for everything.
   invokeMock.mockImplementation(async (cmd: string) => {
     if (cmd === "get_home") return "/home/test";
     if (cmd === "file_exists") return false;
@@ -119,45 +116,40 @@ beforeEach(async () => {
 
   await resetExtensions();
   resetWorkspaceActions();
-  _resetDashboardService();
+  _resetOrchestratorService();
   resetAgentDetectionForTests();
-
-  // The action handler reads pickDirectory / showFormPrompt off the
-  // ExtensionAPI instance handed to the extension. We stub them after
-  // activation so the registered handler sees our mocks at call-time.
 });
 
 function patchApi() {
   const api = getExtensionApiById("agentic-orchestrator");
   if (!api) throw new Error("extension api not registered");
-  (api as unknown as Record<string, unknown>).pickDirectory = pickDirectoryMock;
   (api as unknown as Record<string, unknown>).showFormPrompt =
     showFormPromptMock;
 }
 
-describe("agentic-orchestrator new-dashboard action: registration", () => {
+describe("agentic-orchestrator new-orchestrator action: registration", () => {
   it("registers the workspace action with label/icon after activation", async () => {
     await activate();
     const action = getWorkspaceActions().find((a) => a.id === ACTION_ID);
     expect(action).toBeDefined();
-    expect(action!.label).toBe("New Agent Dashboard");
+    expect(action!.label).toBe("New Agent Orchestrator");
     expect(action!.icon).toBe("layout-dashboard");
   });
 });
 
-describe("agentic-orchestrator new-dashboard action: handler", () => {
+describe("agentic-orchestrator new-orchestrator action: handler", () => {
   function getHandler() {
     const action = getWorkspaceActions().find((a) => a.id === ACTION_ID);
     if (!action) throw new Error("action not registered");
     return action.handler;
   }
 
-  it("root context: shows dialog with directory field, then creates + writes + opens", async () => {
+  it("root context: shows dialog with directory field, then creates orchestrator + Dashboard workspace + writes markdown", async () => {
     await activate();
     patchApi();
 
     showFormPromptMock.mockResolvedValue({
-      name: "My Dash",
+      name: "My Orch",
       baseDir: "/picked/base",
       color: "blue",
     });
@@ -165,61 +157,43 @@ describe("agentic-orchestrator new-dashboard action: handler", () => {
     const handler = getHandler();
     await handler({});
 
-    expect(pickDirectoryMock).not.toHaveBeenCalled();
     expect(showFormPromptMock).toHaveBeenCalledTimes(1);
     const fields = showFormPromptMock.mock.calls[0]![1] as Array<{
       key: string;
       type?: string;
-      defaultValue?: string;
-      required?: boolean;
     }>;
     expect(fields.map((f) => f.key)).toEqual(["baseDir", "name", "color"]);
-    const dirField = fields.find((f) => f.key === "baseDir") as
-      | { type: string; required: boolean; defaultValue: string }
-      | undefined;
-    expect(dirField?.type).toBe("directory");
-    expect(dirField?.required).toBe(true);
-    expect(dirField?.defaultValue).toBe("");
 
-    const dashboards = getDashboards();
-    expect(dashboards).toHaveLength(1);
-    const d = dashboards[0];
-    expect(d.name).toBe("My Dash");
-    expect(d.baseDir).toBe("/picked/base");
-    expect(d.color).toBe("blue");
-    expect(d.parentProjectId).toBeUndefined();
+    const orchestrators = getOrchestrators();
+    expect(orchestrators).toHaveLength(1);
+    const o = orchestrators[0];
+    expect(o.name).toBe("My Orch");
+    expect(o.baseDir).toBe("/picked/base");
+    expect(o.color).toBe("blue");
+    expect(o.parentProjectId).toBeUndefined();
+    expect(o.dashboardWorkspaceId).toBe("ws-new");
 
-    // Templated md write — ensure_dir for parent, then write_file.
+    // createOrchestrator creates the Dashboard workspace.
+    expect(createWorkspaceFromDefMock).toHaveBeenCalledTimes(1);
+
+    // Templated md write.
     const writeCall = invokeMock.mock.calls.find(
       ([cmd]) => cmd === "write_file",
     );
     expect(writeCall).toBeDefined();
     const writeArgs = writeCall![1] as { path: string; content: string };
-    expect(writeArgs.path).toBe(d.path);
-    expect(writeArgs.content).toBe(buildDashboardMarkdown(d));
-    expect(writeArgs.content).toContain("# My Dash");
+    expect(writeArgs.path).toBe(o.path);
+    expect(writeArgs.content).toBe(buildOrchestratorDashboardMarkdown(o));
+    expect(writeArgs.content).toContain("# My Orch");
     expect(writeArgs.content).toContain("/picked/base");
-    expect(writeArgs.content).toContain(d.id);
-
-    const ensureCall = invokeMock.mock.calls.find(
-      ([cmd]) => cmd === "ensure_dir",
-    );
-    expect(ensureCall).toBeDefined();
-    expect((ensureCall![1] as { path: string }).path).toBe(
-      d.path.replace(/\/[^/]+$/, ""),
-    );
-
-    expect(openDashboardMock).toHaveBeenCalledTimes(1);
-    expect(openDashboardMock).toHaveBeenCalledWith(d);
+    expect(writeArgs.content).toContain(o.id);
   });
 
   it("project context: only asks for name; inherits baseDir + color from the project", async () => {
     await activate();
     patchApi();
 
-    // Only returns the name — baseDir/color never appear in the dialog
-    // because the flow inherits them from ctx.
-    showFormPromptMock.mockResolvedValue({ name: "Project Dash" });
+    showFormPromptMock.mockResolvedValue({ name: "Project Orch" });
 
     const handler = getHandler();
     await handler({
@@ -229,22 +203,19 @@ describe("agentic-orchestrator new-dashboard action: handler", () => {
       isGit: true,
     });
 
-    expect(pickDirectoryMock).not.toHaveBeenCalled();
     expect(showFormPromptMock).toHaveBeenCalledTimes(1);
     const fields = showFormPromptMock.mock.calls[0]![1] as Array<{
       key: string;
     }>;
     expect(fields.map((f) => f.key)).toEqual(["name"]);
 
-    const dashboards = getDashboards();
-    expect(dashboards).toHaveLength(1);
-    const d = dashboards[0];
-    expect(d.baseDir).toBe("/work/proj");
-    expect(d.color).toBe("blue");
-    expect(d.parentProjectId).toBe("proj-42");
-    expect(d.path).toBe(`/work/proj/.gnar-term/dashboards/${d.id}.md`);
-
-    expect(openDashboardMock).toHaveBeenCalledWith(d);
+    const orchestrators = getOrchestrators();
+    expect(orchestrators).toHaveLength(1);
+    const o = orchestrators[0];
+    expect(o.baseDir).toBe("/work/proj");
+    expect(o.color).toBe("blue");
+    expect(o.parentProjectId).toBe("proj-42");
+    expect(o.path).toBe(`/work/proj/.gnar-term/orchestrators/${o.id}.md`);
   });
 
   it("aborts when form is cancelled", async () => {
@@ -256,8 +227,7 @@ describe("agentic-orchestrator new-dashboard action: handler", () => {
     const handler = getHandler();
     await handler({});
 
-    expect(getDashboards()).toHaveLength(0);
-    expect(openDashboardMock).not.toHaveBeenCalled();
+    expect(getOrchestrators()).toHaveLength(0);
   });
 
   it("aborts when baseDir comes back blank", async () => {
@@ -273,8 +243,7 @@ describe("agentic-orchestrator new-dashboard action: handler", () => {
     const handler = getHandler();
     await handler({});
 
-    expect(getDashboards()).toHaveLength(0);
-    expect(openDashboardMock).not.toHaveBeenCalled();
+    expect(getOrchestrators()).toHaveLength(0);
   });
 
   it("aborts when name is blank/whitespace-only", async () => {
@@ -290,11 +259,10 @@ describe("agentic-orchestrator new-dashboard action: handler", () => {
     const handler = getHandler();
     await handler({});
 
-    expect(getDashboards()).toHaveLength(0);
-    expect(openDashboardMock).not.toHaveBeenCalled();
+    expect(getOrchestrators()).toHaveLength(0);
   });
 
-  it("does not overwrite an existing markdown file but still opens it", async () => {
+  it("does not overwrite an existing markdown file", async () => {
     await activate();
     patchApi();
 
@@ -317,9 +285,6 @@ describe("agentic-orchestrator new-dashboard action: handler", () => {
       ([cmd]) => cmd === "write_file",
     );
     expect(writeCall).toBeUndefined();
-
-    const dashboards = getDashboards();
-    expect(dashboards).toHaveLength(1);
-    expect(openDashboardMock).toHaveBeenCalledWith(dashboards[0]);
+    expect(getOrchestrators()).toHaveLength(1);
   });
 });

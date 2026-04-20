@@ -6,9 +6,8 @@
  * workspace actions. Manages its own overlays (create dialog) via the
  * overlay registry — no core store dependencies.
  *
- * Project dashboards now render as PreviewSurfaces backed by a templated
- * markdown file at `<projectPath>/.gnar-term/project-dashboard.md`,
- * mirroring the AgentDashboard preview pattern (P9).
+ * Project dashboards render as PreviewSurfaces backed by a templated
+ * markdown file at `<projectPath>/.gnar-term/project-dashboard.md`.
  */
 import { invoke } from "@tauri-apps/api/core";
 import type { ExtensionManifest, ExtensionAPI, AppEvent } from "../api";
@@ -60,9 +59,9 @@ export function projectDashboardPath(projectPath: string): string {
 
 /**
  * Templated markdown for a freshly-created project dashboard. Embeds
- * the gnar:agent-list widget without a `dashboardId` so it shows every
- * agent in the registry (the project's own scope is implicit through
- * the surface's location).
+ * the gnar:agent-list widget without an `orchestratorId` so it shows
+ * every agent in the registry (the project's own scope is implicit
+ * through the surface's location).
  */
 function buildProjectDashboardMarkdown(project: ProjectEntry): string {
   return `# ${project.name}

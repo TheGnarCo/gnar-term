@@ -56,6 +56,11 @@ vi.mock("../../../lib/services/spawn-helper", () => ({
   spawnAgentInWorktree: spawnAgentInWorktreeMock,
 }));
 
+vi.mock("../../../lib/services/workspace-service", () => ({
+  createWorkspaceFromDef: vi.fn().mockResolvedValue("ws-new"),
+  closeWorkspace: vi.fn(),
+}));
+
 const { configRef, saveConfigMock } = vi.hoisted(() => {
   const ref: { current: Record<string, unknown> } = { current: {} };
   return {
@@ -112,7 +117,10 @@ function registerAgent(agent: DetectedAgent): void {
 function resetRegistry(): void {
   _testAgentsRef.store.set([]);
 }
-import { createDashboard, _resetDashboardService } from "../dashboard-service";
+import {
+  createOrchestrator,
+  _resetOrchestratorService,
+} from "../orchestrator-service";
 import { invalidateGhAvailability } from "../../../lib/services/gh-availability";
 import ExtensionWrapper from "../../../lib/components/ExtensionWrapper.svelte";
 import Kanban from "../components/Kanban.svelte";
@@ -122,7 +130,7 @@ import AgentStatusRow from "../components/AgentStatusRow.svelte";
 import TaskSpawner from "../components/TaskSpawner.svelte";
 import { themes } from "../../../lib/theme-data";
 import type { ExtensionAPI } from "../../../extensions/api";
-import type { AgentDashboard } from "../../../lib/config";
+import type { AgentOrchestrator } from "../../../lib/config";
 
 const COMPONENT_NAMES = [
   "kanban",
@@ -184,7 +192,7 @@ describe("agentic-orchestrator markdown-components: registration", () => {
   beforeEach(async () => {
     await resetExtensions();
     resetMarkdownComponents();
-    _resetDashboardService();
+    _resetOrchestratorService();
     resetRegistry();
     configRef.current = {};
   });
@@ -247,14 +255,14 @@ describe("agentic-orchestrator markdown-components: registration", () => {
 // --- Kanban ---
 
 describe("Kanban widget", () => {
-  let dashboard: AgentDashboard;
+  let orchestrator: AgentOrchestrator;
 
   beforeEach(async () => {
     configRef.current = {};
     saveConfigMock.mockClear();
-    _resetDashboardService();
+    _resetOrchestratorService();
     resetRegistry();
-    dashboard = await createDashboard({
+    orchestrator = await createOrchestrator({
       name: "Project A",
       baseDir: "/work/proj",
       pathOverride: "/tmp/dash.md",
@@ -392,7 +400,7 @@ describe("Kanban widget", () => {
       props: {
         api,
         component: Kanban,
-        props: { dashboardId: dashboard.id },
+        props: { orchestratorId: orchestrator.id },
       },
     });
 
@@ -417,19 +425,19 @@ describe("Kanban widget", () => {
 // --- Issues ---
 
 describe("Issues widget", () => {
-  let dashboard: AgentDashboard;
+  let orchestrator: AgentOrchestrator;
 
   beforeEach(async () => {
     configRef.current = {};
     saveConfigMock.mockClear();
-    _resetDashboardService();
+    _resetOrchestratorService();
     resetRegistry();
     // The gh-availability cache is module-level; clearing it between
     // tests prevents a previous test's gh_available mock from bleeding
     // into the next one.
     invalidateGhAvailability();
     tauriInvokeGhAvailable.current = true;
-    dashboard = await createDashboard({
+    orchestrator = await createOrchestrator({
       name: "Issues Dash",
       baseDir: "/work/proj",
       pathOverride: "/tmp/i.md",
@@ -472,7 +480,7 @@ describe("Issues widget", () => {
       props: {
         api,
         component: Issues,
-        props: { dashboardId: dashboard.id },
+        props: { orchestratorId: orchestrator.id },
       },
     });
 
@@ -521,7 +529,7 @@ describe("Issues widget", () => {
       props: {
         api,
         component: Issues,
-        props: { dashboardId: dashboard.id },
+        props: { orchestratorId: orchestrator.id },
       },
     });
 
@@ -542,7 +550,7 @@ describe("Issues widget", () => {
     expect(callArg).toMatchObject({
       agent: "claude-code",
       repoPath: "/work/proj",
-      dashboardId: dashboard.id,
+      orchestratorId: orchestrator.id,
     });
     expect(callArg.taskContext).toContain("Issue #7");
     expect(callArg.taskContext).toContain("Make it faster");
@@ -573,7 +581,7 @@ describe("Issues widget", () => {
       props: {
         api,
         component: Issues,
-        props: { dashboardId: dashboard.id },
+        props: { orchestratorId: orchestrator.id },
       },
     });
 
@@ -610,7 +618,7 @@ describe("Issues widget", () => {
       props: {
         api,
         component: Issues,
-        props: { dashboardId: dashboard.id },
+        props: { orchestratorId: orchestrator.id },
       },
     });
 
@@ -635,7 +643,7 @@ describe("AgentStatusRow widget", () => {
   beforeEach(async () => {
     configRef.current = {};
     saveConfigMock.mockClear();
-    _resetDashboardService();
+    _resetOrchestratorService();
     resetRegistry();
     switchSpy.mockReset();
     focusSpy.mockReset();
@@ -722,7 +730,7 @@ describe("AgentList widget", () => {
   beforeEach(async () => {
     configRef.current = {};
     saveConfigMock.mockClear();
-    _resetDashboardService();
+    _resetOrchestratorService();
     resetRegistry();
   });
 
@@ -772,15 +780,15 @@ describe("AgentList widget", () => {
 // --- TaskSpawner ---
 
 describe("TaskSpawner widget", () => {
-  let dashboard: AgentDashboard;
+  let orchestrator: AgentOrchestrator;
 
   beforeEach(async () => {
     configRef.current = {};
     saveConfigMock.mockClear();
     spawnAgentInWorktreeMock.mockClear();
-    _resetDashboardService();
+    _resetOrchestratorService();
     resetRegistry();
-    dashboard = await createDashboard({
+    orchestrator = await createOrchestrator({
       name: "Spawn Dash",
       baseDir: "/work/proj",
       pathOverride: "/tmp/sp.md",
@@ -797,7 +805,7 @@ describe("TaskSpawner widget", () => {
       props: {
         api,
         component: TaskSpawner,
-        props: { dashboardId: dashboard.id },
+        props: { orchestratorId: orchestrator.id },
       },
     });
 
@@ -821,7 +829,7 @@ describe("TaskSpawner widget", () => {
       props: {
         api,
         component: TaskSpawner,
-        props: { dashboardId: dashboard.id },
+        props: { orchestratorId: orchestrator.id },
       },
     });
 
@@ -841,7 +849,7 @@ describe("TaskSpawner widget", () => {
       props: {
         api,
         component: TaskSpawner,
-        props: { dashboardId: dashboard.id },
+        props: { orchestratorId: orchestrator.id },
       },
     });
 
@@ -868,7 +876,7 @@ describe("TaskSpawner widget", () => {
       props: {
         api,
         component: TaskSpawner,
-        props: { dashboardId: dashboard.id },
+        props: { orchestratorId: orchestrator.id },
       },
     });
 
@@ -898,7 +906,7 @@ describe("TaskSpawner widget", () => {
       agent: "claude-code",
       taskContext: "Refactor the thing",
       repoPath: "/work/proj",
-      dashboardId: dashboard.id,
+      orchestratorId: orchestrator.id,
       branch: "agent/claude-code/refactor-the-thing",
     });
     // Form collapses on success.
@@ -915,7 +923,7 @@ describe("TaskSpawner widget", () => {
       props: {
         api,
         component: TaskSpawner,
-        props: { dashboardId: dashboard.id },
+        props: { orchestratorId: orchestrator.id },
       },
     });
 
@@ -944,7 +952,7 @@ describe("TaskSpawner widget", () => {
       props: {
         api,
         component: TaskSpawner,
-        props: { dashboardId: dashboard.id },
+        props: { orchestratorId: orchestrator.id },
       },
     });
 

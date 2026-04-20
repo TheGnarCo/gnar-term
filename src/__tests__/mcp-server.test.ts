@@ -1256,7 +1256,7 @@ describe("MCP — spawn_agent worktree flag", () => {
             repoPath: "/work/proj",
             branch: "agent/claude-code/1-fix",
             taskContext: "Fix issue #1",
-            dashboardId: "dash-1",
+            orchestratorId: "orch-1",
           },
         },
       }),
@@ -1274,7 +1274,7 @@ describe("MCP — spawn_agent worktree flag", () => {
       repoPath: "/work/proj",
       branch: "agent/claude-code/1-fix",
       taskContext: "Fix issue #1",
-      dashboardId: "dash-1",
+      orchestratorId: "orch-1",
     });
 
     const result = (resp as any).result.structuredContent;

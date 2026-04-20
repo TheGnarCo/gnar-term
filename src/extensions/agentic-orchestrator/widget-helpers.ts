@@ -7,7 +7,10 @@
  */
 import { derived, type Readable } from "svelte/store";
 import type { AgentRef, ExtensionAPI } from "../api";
-import { dashboardScopedAgents, getDashboard } from "./dashboard-service";
+import {
+  getOrchestrator,
+  orchestratorScopedAgents,
+} from "./orchestrator-service";
 
 /**
  * Legacy alias preserved for the orchestrator's widget internals — the
@@ -59,9 +62,9 @@ export function throttle<TArgs extends unknown[]>(
 
 /**
  * Reactive store of the agents in scope for a given widget config.
- * When `dashboardId` is provided, scopes via `dashboardScopedAgents`.
- * When absent, returns the full agent list (used by the global
- * "Active Agents" sidebar tab in P11).
+ * When `orchestratorId` is provided, scopes via
+ * `orchestratorScopedAgents`. When absent, returns the full agent list
+ * (used by the global "Active Agents" sidebar tab).
  *
  * Updates are throttled at the source (one batch per
  * WIDGET_THROTTLE_MS) so a flurry of status events doesn't trash the
@@ -69,13 +72,13 @@ export function throttle<TArgs extends unknown[]>(
  */
 export function scopedAgentsStore(
   api: ExtensionAPI,
-  dashboardId: string | undefined,
+  orchestratorId: string | undefined,
 ): Readable<DetectedAgent[]> {
   return derived(api.agents, (agents) => {
-    if (!dashboardId) return agents;
-    const dashboard = getDashboard(dashboardId);
-    if (!dashboard) return [];
-    return dashboardScopedAgents(dashboard, agents);
+    if (!orchestratorId) return agents;
+    const orchestrator = getOrchestrator(orchestratorId);
+    if (!orchestrator) return [];
+    return orchestratorScopedAgents(orchestrator, agents);
   });
 }
 

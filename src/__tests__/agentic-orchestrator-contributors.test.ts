@@ -1,12 +1,9 @@
 /**
  * Tests for the contributor registrations made by agentic-orchestrator
  * during activation:
- *   - "project" parentType — returns dashboards belonging to that project
- *     (filtered by parentProjectId), each as { kind: "agent-dashboard",
- *     id: dashboardId }
- *   - "dashboard" parentType — returns workspaces tagged with
- *     metadata.parentDashboardId === dashboardId, each as { kind:
- *     "workspace", id: workspaceId }
+ *   - "project" parentType — returns orchestrators belonging to that
+ *     project (filtered by parentProjectId), each as
+ *     { kind: "agent-orchestrator", id: orchestratorId }
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
@@ -130,20 +127,20 @@ import {
   agenticOrchestratorManifest,
   registerAgenticOrchestratorExtension,
 } from "../extensions/agentic-orchestrator";
-import { _resetDashboardService } from "../extensions/agentic-orchestrator/dashboard-service";
-import type { AgentDashboard } from "../lib/config";
+import { _resetOrchestratorService } from "../extensions/agentic-orchestrator/orchestrator-service";
+import type { AgentOrchestrator } from "../lib/config";
 
 describe("agentic-orchestrator child-row contributors", () => {
   beforeEach(async () => {
     await resetExtensions();
     resetChildRowContributors();
-    _resetDashboardService();
+    _resetOrchestratorService();
     configRef.current = {};
     workspacesStore.set([]);
   });
 
-  it('contributes dashboards under "project" rows by parentProjectId', async () => {
-    const dashboards: AgentDashboard[] = [
+  it('contributes orchestrators under "project" rows by parentProjectId', async () => {
+    const orchestrators: AgentOrchestrator[] = [
       {
         id: "d-root",
         name: "Root",
@@ -180,7 +177,7 @@ describe("agentic-orchestrator child-row contributors", () => {
         parentProjectId: "project-2",
       },
     ];
-    configRef.current = { agentDashboards: dashboards };
+    configRef.current = { agentOrchestrators: orchestrators };
 
     registerExtension(
       agenticOrchestratorManifest,
@@ -189,27 +186,23 @@ describe("agentic-orchestrator child-row contributors", () => {
     await activateExtension("agentic-orchestrator");
 
     expect(getChildRowsFor("project", "project-1")).toEqual([
-      { kind: "agent-dashboard", id: "d-p1-a" },
-      { kind: "agent-dashboard", id: "d-p1-b" },
+      { kind: "agent-orchestrator", id: "d-p1-a" },
+      { kind: "agent-orchestrator", id: "d-p1-b" },
     ]);
     expect(getChildRowsFor("project", "project-2")).toEqual([
-      { kind: "agent-dashboard", id: "d-p2" },
+      { kind: "agent-orchestrator", id: "d-p2" },
     ]);
-    // Root-level dashboards (no parentProjectId) don't show up under
+    // Root-level orchestrators (no parentProjectId) don't show up under
     // any project — they're root rows on the sidebar instead.
     expect(getChildRowsFor("project", "no-such-project")).toEqual([]);
   });
 
-  it('does not register a "dashboard" child-row contributor for workspaces', async () => {
-    // Workspaces tagged with metadata.parentDashboardId used to come back
-    // as child rows of kind "workspace" here. That emitted rows no renderer
-    // claimed, so nothing painted. The extension now renders nested
-    // worktree workspaces directly via WorkspaceListView inside
-    // AgentDashboardRow — no contributor needed. See that component's
-    // `nestedWorkspaceIds` block.
+  it('does not register an "orchestrator" child-row contributor for workspaces', async () => {
+    // AgentOrchestratorRow renders nested worktree workspaces directly
+    // via WorkspaceListView — no contributor needed.
     workspacesStore.set([
-      mkWs("ws-d1-a", { parentDashboardId: "dash-1" }),
-      mkWs("ws-d1-b", { parentDashboardId: "dash-1" }),
+      mkWs("ws-o1-a", { parentOrchestratorId: "orch-1" }),
+      mkWs("ws-o1-b", { parentOrchestratorId: "orch-1" }),
     ]);
 
     registerExtension(
@@ -218,6 +211,6 @@ describe("agentic-orchestrator child-row contributors", () => {
     );
     await activateExtension("agentic-orchestrator");
 
-    expect(getChildRowsFor("dashboard", "dash-1")).toEqual([]);
+    expect(getChildRowsFor("orchestrator", "orch-1")).toEqual([]);
   });
 });

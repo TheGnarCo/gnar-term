@@ -43,24 +43,22 @@
   // arrives. Cleared when the pane focuses (handleFocus below).
   $: paneHasUnread = pane.surfaces.some((s) => s.hasUnread);
 
-  // Dashboard-regen affordance on the tab bar — resolve the command
-  // registered by agentic-orchestrator or project-scope based on what
-  // metadata the owning workspace carries. Extensions register these
-  // commands when they activate:
-  //   - metadata.dashboardId (agent-dashboard host)
-  //       → "agentic-orchestrator:regenerate-active-dashboard"
-  //   - metadata.projectId   (project workspace)
-  //       → "project-scope:regenerate-active-project-dashboard"
-  // When the workspace has neither, no regen button renders. The pane
-  // bar stays as-is.
+  // When the workspace is a constrained Dashboard (metadata.isDashboard
+  // === true), hide the tab bar, split buttons, and new-surface
+  // affordances entirely. The single Live Preview surface fills the pane.
+  // Dashboard workspaces can't accumulate surfaces — the preview cannot
+  // be closed from the UI, so no regen affordance is needed either.
+  //
+  // For non-Dashboard workspaces tied to a project (metadata.projectId),
+  // keep the project-scope regen affordance so users can re-spawn a
+  // project-dashboard preview surface after closing it.
   $: workspaceMetadata = $workspaces.find((w) => w.id === workspaceId)
     ?.metadata as Record<string, unknown> | undefined;
+  $: isDashboardWorkspace = workspaceMetadata?.isDashboard === true;
   $: regenCommandId =
-    typeof workspaceMetadata?.dashboardId === "string"
-      ? "agentic-orchestrator:regenerate-active-dashboard"
-      : typeof workspaceMetadata?.projectId === "string"
-        ? "project-scope:regenerate-active-project-dashboard"
-        : undefined;
+    !isDashboardWorkspace && typeof workspaceMetadata?.projectId === "string"
+      ? "project-scope:regenerate-active-project-dashboard"
+      : undefined;
   $: regenCommand = regenCommandId
     ? $commandStore.find((c) => c.id === regenCommandId)
     : undefined;
@@ -154,20 +152,22 @@
   "
   on:mousedown={handleFocus}
 >
-  <TabBar
-    {pane}
-    {workspaceId}
-    {onSelectSurface}
-    {onCloseSurface}
-    {onNewSurface}
-    {onSelectSurfaceType}
-    {onSplitRight}
-    {onSplitDown}
-    {onClosePane}
-    {onReorderTab}
-    {onRegenDashboard}
-    {regenDashboardTitle}
-  />
+  {#if !isDashboardWorkspace}
+    <TabBar
+      {pane}
+      {workspaceId}
+      {onSelectSurface}
+      {onCloseSurface}
+      {onNewSurface}
+      {onSelectSurfaceType}
+      {onSplitRight}
+      {onSplitDown}
+      {onClosePane}
+      {onReorderTab}
+      {onRegenDashboard}
+      {regenDashboardTitle}
+    />
+  {/if}
 
   {#each pane.surfaces.filter((s) => s.id === pane.activeSurfaceId && isTerminalSurface(s)) as activeTerm (activeTerm.id)}
     {#if isTerminalSurface(activeTerm)}

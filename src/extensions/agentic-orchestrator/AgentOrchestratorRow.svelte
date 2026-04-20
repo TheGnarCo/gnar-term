@@ -1,23 +1,19 @@
 <script lang="ts">
   /**
-   * AgentDashboardRow — root-row renderer for AgentDashboard entities.
+   * AgentOrchestratorRow — root-row renderer for AgentOrchestrator entities.
    *
-   * The agent-dashboard row is a **container workspace**: its banner
-   * represents the hosting workspace itself (the one tagged with
-   * metadata.dashboardId), and worktree workspaces spawned from the
-   * dashboard nest underneath. Compare to project rows, whose banner is
-   * pure chrome (no workspace of its own).
+   * The orchestrator row is a **container**: its banner is chrome (inert
+   * click; context menu only), and a list of nested workspaces renders
+   * beneath it. The first item in the nested list is the orchestrator's
+   * Dashboard workspace (a constrained workspace with
+   * `metadata.isDashboard = true`) — click the Dashboard to activate it.
    *
    * Rendering delegates to the shared `<ContainerRow>` primitive:
-   *   - Banner click → openDashboard (switches to hosting workspace +
-   *     ensures the dashboard preview surface exists).
-   *   - Close X → closes the hosting workspace.
-   *   - Nested list → WorkspaceListView filtered by
-   *     metadata.parentDashboardId === this dashboard's id. Hosting
-   *     workspace is NOT in the nested list — the banner represents it.
-   *   - Visual modes: root (grip + banner + nested) vs. project-nested
-   *     (banner only, right-edge accent) are handled by ContainerRow
-   *     via the `parentColor` prop.
+   *   - Banner: chrome only; context menu for rename/delete.
+   *   - Close X: absent (orchestrators are deleted via the context menu,
+   *     which also closes the Dashboard workspace).
+   *   - Nested list: WorkspaceListView filtered to Dashboard workspace +
+   *     worktrees tagged with `metadata.parentOrchestratorId === this.id`.
    */
   import { getContext, type Component } from "svelte";
   import type ContainerRowType from "../../lib/components/ContainerRow.svelte";
@@ -28,13 +24,12 @@
     resolveProjectColor,
   } from "../api";
   import {
-    openDashboard,
-    dashboardScopedAgents,
-    getDashboard,
-    dashboardsStore,
-    renameDashboard,
-    deleteDashboard,
-  } from "./dashboard-service";
+    orchestratorScopedAgents,
+    getOrchestrator,
+    orchestratorsStore,
+    renameOrchestrator,
+    deleteOrchestrator,
+  } from "./orchestrator-service";
   import {
     spawnAgentInWorktree,
     type SpawnAgentType,
@@ -42,7 +37,7 @@
   import { isGhAvailable } from "../../lib/services/gh-availability";
   import { slugify } from "./widget-helpers";
 
-  /** The AgentDashboard's id — passed by core's WorkspaceListBlock. */
+  /** The AgentOrchestrator's id — passed by core's WorkspaceListBlock. */
   export let id: string;
   /** Drag handle forwarded to ContainerRow's grip. */
   export let onGripMouseDown: ((e: MouseEvent) => void) | undefined = undefined;
@@ -54,28 +49,26 @@
   const workspacesStore = api.workspaces;
   const { ContainerRow, WorkspaceListView, SplitButton, PathStatusLine } =
     api.getComponents();
-  // Type-only import binds slot defs so <svelte:component> can type-check
-  // the slot contents this file provides.
   const ContainerRowTyped = ContainerRow as typeof ContainerRowType;
   const PathStatusLineTyped = PathStatusLine as typeof PathStatusLineType;
 
-  $: void $dashboardsStore;
-  $: dashboard = getDashboard(id);
+  $: void $orchestratorsStore;
+  $: orchestrator = getOrchestrator(id);
 
-  // Nested list = worktree workspaces spawned from this dashboard. The
-  // hosting workspace (metadata.dashboardId === id) is represented by the
-  // banner itself — never re-rendered as a nested row.
+  // Nested list = the Dashboard workspace (always first) + any worktree
+  // workspaces spawned from this orchestrator. WorkspaceListView sorts
+  // Dashboard workspaces ahead of others and renders them as a distinct
+  // tile (no grip, no X, full-color background).
   $: nestedWorkspaceIds = new Set(
     $workspacesStore
-      .filter(
-        (ws) =>
-          (ws.metadata as Record<string, unknown> | undefined)
-            ?.parentDashboardId === id,
-      )
+      .filter((ws) => {
+        const meta = ws.metadata as Record<string, unknown> | undefined;
+        if (!meta) return false;
+        return meta.parentOrchestratorId === id || meta.orchestratorId === id;
+      })
       .map((ws) => ws.id),
   );
 
-  // Pick a foreground that remains legible on an arbitrary dashboard color.
   function contrastColor(hex: string): string {
     const clean = hex.replace(/^#/, "");
     if (clean.length !== 6) return "#fff";
@@ -86,16 +79,18 @@
     return lum > 0.55 ? "#000" : "#fff";
   }
 
-  $: dashboardHex = dashboard
-    ? resolveProjectColor(dashboard.color, $theme)
+  $: orchestratorHex = orchestrator
+    ? resolveProjectColor(orchestrator.color, $theme)
     : $theme.accent;
-  $: bannerFg = contrastColor(dashboardHex);
+  $: bannerFg = contrastColor(orchestratorHex);
   $: subtitleFg =
     bannerFg === "#000" ? "rgba(0, 0, 0, 0.7)" : "rgba(255, 255, 255, 0.8)";
 
-  // Aggregated dashboard status for the banner dot (detected-agent rollup).
+  // Aggregated orchestrator status for the banner dot (detected-agent rollup).
   const agentsStore = api.agents;
-  $: scoped = dashboard ? dashboardScopedAgents(dashboard, $agentsStore) : [];
+  $: scoped = orchestrator
+    ? orchestratorScopedAgents(orchestrator, $agentsStore)
+    : [];
   $: runningCount = scoped.filter((a) => a.status === "running").length;
   $: waitingCount = scoped.filter((a) => a.status === "waiting").length;
   $: dotStatus =
@@ -114,39 +109,46 @@
         : dotStatus === "idle"
           ? "#888888"
           : null;
+
   async function handleRename() {
-    if (!dashboard) return;
-    const next = await api.showInputPrompt("Rename dashboard", dashboard.name);
+    if (!orchestrator) return;
+    const next = await api.showInputPrompt(
+      "Rename orchestrator",
+      orchestrator.name,
+    );
     const trimmed = next?.trim();
-    if (!trimmed || trimmed === dashboard.name) return;
-    await renameDashboard(dashboard.id, trimmed);
+    if (!trimmed || trimmed === orchestrator.name) return;
+    await renameOrchestrator(orchestrator.id, trimmed);
   }
 
   async function handleDelete() {
-    if (!dashboard) return;
-    await deleteDashboard(dashboard.id);
+    if (!orchestrator) return;
+    const confirmed = await api.showConfirm(
+      `Delete orchestrator "${orchestrator.name}"? Its Dashboard workspace will be closed; spawned worktrees are not affected.`,
+      {
+        title: "Delete Orchestrator",
+        confirmLabel: "Delete",
+        cancelLabel: "Cancel",
+      },
+    );
+    if (!confirmed) return;
+    await deleteOrchestrator(orchestrator.id);
   }
 
   function handleContextMenu(e: MouseEvent) {
-    if (!dashboard) return;
+    if (!orchestrator) return;
     e.preventDefault();
     e.stopPropagation();
     api.showContextMenu(e.clientX, e.clientY, [
       {
-        label: "Rename Dashboard",
+        label: "Rename Orchestrator",
         action: () => {
           void handleRename();
         },
       },
-      {
-        label: "Open Dashboard",
-        action: () => {
-          if (dashboard) openDashboard(dashboard);
-        },
-      },
       { label: "", action: () => {}, separator: true },
       {
-        label: "Delete Dashboard",
+        label: "Delete Orchestrator",
         danger: true,
         action: () => {
           void handleDelete();
@@ -155,17 +157,7 @@
     ]);
   }
 
-  function handleBannerClick() {
-    if (dashboard) openDashboard(dashboard);
-  }
-
   // --- "+ New" split-button handlers ---
-  //
-  // Primary: New Task — prompts for a description + agent, spawns a
-  // worktree workspace tagged to this dashboard.
-  // Dropdown: Resolve Issue — fetches open GH issues scoped to the
-  // dashboard's baseDir, user picks one, spawns an agent with the
-  // issue context and URL as the startup task.
 
   const AGENT_CHOICES = [
     { label: "Claude Code", value: "claude-code" },
@@ -175,7 +167,7 @@
   ];
 
   async function handleNewTask() {
-    if (!dashboard) return;
+    if (!orchestrator) return;
     const result = await api.showFormPrompt("New Task", [
       {
         key: "task",
@@ -211,9 +203,9 @@
         agent,
         ...(agent === "custom" ? { command: agent } : {}),
         taskContext: task,
-        repoPath: dashboard.baseDir,
+        repoPath: orchestrator.baseDir,
         branch,
-        dashboardId: dashboard.id,
+        orchestratorId: orchestrator.id,
       });
     } catch (err) {
       api.reportError(
@@ -229,7 +221,7 @@
   }
 
   async function handleResolveIssue() {
-    if (!dashboard) return;
+    if (!orchestrator) return;
     if (!(await isGhAvailable())) {
       api.reportError(
         "GitHub CLI not available — install `gh` and run `gh auth login` to resolve issues.",
@@ -239,7 +231,7 @@
     let issues: GhIssueSummary[] = [];
     try {
       const raw = await api.invoke<GhIssueSummary[]>("gh_list_issues", {
-        repoPath: dashboard.baseDir,
+        repoPath: orchestrator.baseDir,
         state: "open",
       });
       issues = Array.isArray(raw) ? raw : [];
@@ -285,9 +277,9 @@
         agent,
         ...(agent === "custom" ? { command: agent } : {}),
         taskContext: `Issue #${issue.number}: ${issue.title}\n${issue.url}`,
-        repoPath: dashboard.baseDir,
+        repoPath: orchestrator.baseDir,
         branch: `agent/${agent}/${issue.number}-${branchSlug}`,
-        dashboardId: dashboard.id,
+        orchestratorId: orchestrator.id,
       });
     } catch (err) {
       api.reportError(
@@ -311,26 +303,6 @@
     },
   ];
 
-  // Close X on the dashboard container row — destructive, removes the
-  // dashboard entity entirely (delete). Confirms first. The hosting
-  // workspace and any spawned worktrees are left alone — users manage
-  // their own workspace lifecycle; the X scoped to the container deletes
-  // just the dashboard record. Per user direction: "Projects delete
-  // project; Agent-dashboards delete dashboard."
-  async function handleClose() {
-    if (!dashboard) return;
-    const confirmed = await api.showConfirm(
-      `Delete dashboard "${dashboard.name}"? This removes the dashboard record; open workspaces are not affected.`,
-      {
-        title: "Delete Dashboard",
-        confirmLabel: "Delete",
-        cancelLabel: "Cancel",
-      },
-    );
-    if (!confirmed) return;
-    await deleteDashboard(dashboard.id);
-  }
-
   function isIconName(value: string): boolean {
     return /^[a-z][a-z0-9-]*:[a-z0-9-]+$/i.test(value);
   }
@@ -339,30 +311,29 @@
   $: showIconAsName = isIconName(iconValue);
 </script>
 
-{#if dashboard}
-  <div data-dashboard-row-wrapper={dashboard.id}>
+{#if orchestrator}
+  <div data-orchestrator-row-wrapper={orchestrator.id}>
     <svelte:component
       this={ContainerRowTyped}
-      color={dashboardHex}
+      color={orchestratorHex}
       foreground={bannerFg}
       {parentColor}
       onGripMouseDown={parentColor ? undefined : onGripMouseDown}
-      gripAriaLabel="Drag dashboard to reorder"
-      onBannerClick={handleBannerClick}
+      gripAriaLabel="Drag orchestrator to reorder"
       onBannerContextMenu={handleContextMenu}
-      onClose={handleClose}
-      closeTitle="Delete dashboard"
+      onClose={() => void handleDelete()}
+      closeTitle="Delete orchestrator"
       filterIds={nestedWorkspaceIds}
-      scopeId={dashboard.id}
+      scopeId={orchestrator.id}
       containerBlockId="__workspaces__"
-      containerLabel={dashboard.name}
-      testId={dashboard.id}
+      containerLabel={orchestrator.name}
+      testId={orchestrator.id}
       workspaceListViewComponent={WorkspaceListView ?? undefined}
     >
       <span
         slot="icon"
         aria-hidden="true"
-        data-dashboard-icon
+        data-orchestrator-icon
         style="
           flex-shrink: 0; display: inline-flex; align-items: center;
           justify-content: center; width: 14px; height: 14px;
@@ -381,7 +352,7 @@
             stroke-linecap="round"
             stroke-linejoin="round"
           >
-            <title>Dashboard</title>
+            <title>Orchestrator</title>
             <rect x="3" y="3" width="7" height="9" />
             <rect x="14" y="3" width="7" height="5" />
             <rect x="14" y="12" width="7" height="9" />
@@ -393,19 +364,19 @@
       </span>
 
       <span
-        data-dashboard-id={dashboard.id}
+        data-orchestrator-id={orchestrator.id}
         style="
           flex: 1; min-width: 0;
           font-size: 13px; font-weight: 600; color: {bannerFg};
           overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-        ">{dashboard.name}</span
+        ">{orchestrator.name}</span
       >
 
       <svelte:fragment slot="banner-end">
         {#if dotColor}
           <span
             title={dotStatus ?? ""}
-            data-dashboard-banner-status-dot={dotStatus}
+            data-orchestrator-banner-status-dot={dotStatus}
             style="
               display: inline-flex; align-items: center; gap: 3px;
               font-size: 10px; color: {bannerFg};
@@ -421,23 +392,18 @@
           </span>
         {/if}
         {#if SplitButton}
-          <!-- "+ New" chip — offers New Task (primary) and Resolve
-               Issue (dropdown). Mirrors the project banner chip so both
-               container rows have a consistent spawn affordance.
-               stopPropagation prevents the banner-wide click handler
-               from firing when the user interacts with the chip. -->
           <!-- svelte-ignore a11y_click_events_have_key_events -->
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <span
-            class="dashboard-new-chip"
+            class="orchestrator-new-chip"
             on:click|stopPropagation
             style="
               flex-shrink: 0; border-radius: 6px; overflow: visible;
               background: {bannerFg === '#000'
               ? 'rgba(0, 0, 0, 0.12)'
               : 'rgba(0, 0, 0, 0.22)'};
-              --dashboard-btn-fg: {bannerFg};
-              --dashboard-btn-hover-bg: {bannerFg === '#000'
+              --orchestrator-btn-fg: {bannerFg};
+              --orchestrator-btn-hover-bg: {bannerFg === '#000'
               ? 'rgba(0, 0, 0, 0.22)'
               : 'rgba(0, 0, 0, 0.36)'};
             "
@@ -454,17 +420,12 @@
       </svelte:fragment>
 
       <svelte:fragment slot="banner-subtitle">
-        <!-- Same status rendering as project rows: path + branch + open
-             PRs + dirty count. Scoped to the dashboard's baseDir so it
-             shows the state of the repo the dashboard covers. Assumes
-             baseDir is a git repo (dashboards are typically created
-             against project roots). -->
         <div style="pointer-events: auto;">
           <svelte:component
             this={PathStatusLineTyped}
             target={{
-              id: dashboard.id,
-              path: dashboard.baseDir,
+              id: orchestrator.id,
+              path: orchestrator.baseDir,
               isGit: true,
             }}
             fgColor={subtitleFg}
@@ -476,14 +437,11 @@
 {/if}
 
 <style>
-  /* SplitButton inside the banner-embedded "+ New" chip — mirrors
-     project-scope's project-new-chip styling so the chip reads as a
-     tonal wash on any dashboard color, not a bordered grey button. */
-  :global(.dashboard-new-chip button) {
+  :global(.orchestrator-new-chip button) {
     border-color: transparent !important;
-    color: var(--dashboard-btn-fg) !important;
+    color: var(--orchestrator-btn-fg) !important;
   }
-  :global(.dashboard-new-chip button:hover) {
-    background: var(--dashboard-btn-hover-bg) !important;
+  :global(.orchestrator-new-chip button:hover) {
+    background: var(--orchestrator-btn-hover-bg) !important;
   }
 </style>

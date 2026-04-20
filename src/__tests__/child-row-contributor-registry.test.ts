@@ -28,12 +28,12 @@ describe("child-row contributor registry", () => {
       parentType: "project",
       source: "agentic-orchestrator",
       contribute: (parentId) => [
-        { kind: "agent-dashboard", id: `${parentId}-d1` },
+        { kind: "agent-orchestrator", id: `${parentId}-d1` },
       ],
     });
 
     expect(getChildRowsFor("project", "p1")).toEqual([
-      { kind: "agent-dashboard", id: "p1-d1" },
+      { kind: "agent-orchestrator", id: "p1-d1" },
     ]);
   });
 

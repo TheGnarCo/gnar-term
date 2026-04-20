@@ -4,7 +4,7 @@
    * Each column lists scoped-to-dashboard agents as cards. Click a card
    * → jump to the owning surface.
    *
-   * When `dashboardId` is provided, scopes via dashboardScopedAgents.
+   * When `orchestratorId` is provided, scopes via dashboardScopedAgents.
    * When absent, all agents render — useful for a global overview.
    */
   import { getContext } from "svelte";
@@ -21,7 +21,7 @@
   } from "../widget-helpers";
 
   /** Optional dashboard scope. */
-  export let dashboardId: string | undefined = undefined;
+  export let orchestratorId: string | undefined = undefined;
   /**
    * Optional title shown above the column grid. Empty by default — the
    * dashboard's top-level markdown heading is the authoritative title,
@@ -32,7 +32,7 @@
   const api = getContext<ExtensionAPI>(EXTENSION_API_KEY);
   const theme = api.theme;
 
-  $: agents = scopedAgentsStore(api, dashboardId);
+  $: agents = scopedAgentsStore(api, orchestratorId);
 
   // Bucket agents into the four columns. Re-derived on every store change.
   const COLUMN_DEFS: Array<{ id: KanbanColumn; label: string }> = [
@@ -58,7 +58,7 @@
 
 <div
   data-kanban
-  data-dashboard-id={dashboardId ?? ""}
+  data-orchestrator-id={orchestratorId ?? ""}
   style="
     display: flex; flex-direction: column; gap: 8px;
     padding: 12px; border: 1px solid {$theme.border};

@@ -117,20 +117,30 @@ export interface AgentsConfig {
 }
 
 /**
- * Agentic Orchestrator dashboard — a markdown-backed agent workspace.
+ * Agent Orchestrator — a markdown-backed agent workspace container.
  * Defined in core (config.ts) rather than in the extension because it is
  * persisted user data (parallel to projects/worktrees) and other
  * extensions may need to read it.
+ *
+ * Each orchestrator owns a Dashboard workspace (`dashboardWorkspaceId`)
+ * that renders the templated markdown as a single Live Preview surface.
  */
-export interface AgentDashboard {
+export interface AgentOrchestrator {
   id: string;
   name: string;
   baseDir: string;
   color: string;
   /** Absolute path to the backing .md file. Resolved at create-time. */
   path: string;
-  /** When set, the dashboard is nested under a project; otherwise root-level. */
+  /** When set, the orchestrator is nested under a project; otherwise root-level. */
   parentProjectId?: string;
+  /**
+   * Id of the Dashboard workspace that hosts this orchestrator's
+   * markdown Live Preview. Set when the Dashboard is created (eagerly,
+   * alongside the orchestrator). Resolved from the workspaces store by
+   * consumers.
+   */
+  dashboardWorkspaceId?: string;
   createdAt: string;
 }
 
@@ -144,7 +154,7 @@ export interface GnarTermConfig {
   extensions?: Record<string, ExtensionConfig>;
   worktrees?: WorktreesConfig;
   agents?: AgentsConfig;
-  agentDashboards?: AgentDashboard[];
+  agentOrchestrators?: AgentOrchestrator[];
   /**
    * MCP integration module. Controls whether gnar-term exposes its MCP tools
    * to Claude Code (or any other MCP client) over a local Unix domain socket.

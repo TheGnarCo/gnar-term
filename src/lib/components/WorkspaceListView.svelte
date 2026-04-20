@@ -79,9 +79,23 @@
    */
   export let containerLabel: string | undefined = undefined;
 
-  $: entries = $workspaces
+  $: allEntries = $workspaces
     .map((ws, idx) => ({ ws, idx }))
     .filter(({ ws }) => (filterIds ? filterIds.has(ws.id) : true));
+
+  // Dashboard workspaces (metadata.isDashboard) render first as a pinned,
+  // non-reorderable, full-color tile (no grip, no X, icon-only). Regular
+  // workspaces render below via the standard WorkspaceItem path, fully
+  // draggable among themselves. This mirrors the "Dashboard is the first
+  // item in the nested list" invariant.
+  function isDashboardWs(ws: import("../types").Workspace): boolean {
+    return (
+      (ws.metadata as Record<string, unknown> | undefined)?.isDashboard === true
+    );
+  }
+
+  $: dashboardEntries = allEntries.filter(({ ws }) => isDashboardWs(ws));
+  $: entries = allEntries.filter(({ ws }) => !isDashboardWs(ws));
 
   let sourceIdx: number | null = null;
   let indicator: { idx: number; edge: "before" | "after" } | null = null;
@@ -211,14 +225,72 @@
   }
 </script>
 
-<!-- Skip the whole container when the filtered list is empty. The
-     class applies an 8px top+left inset so nested rows breathe below
-     the banner — rendering an empty container with that inset leaves
-     a visible "lip" on the parent's colored rail (project row with no
-     workspaces, dashboard row with no worktrees). Guarding here keeps
-     the rail flush. -->
-{#if entries.length > 0}
+<!-- Skip the whole container when both lists are empty. The class
+     applies an 8px top+left inset so nested rows breathe below the
+     banner — rendering an empty container with that inset leaves a
+     visible "lip" on the parent's rail. Guarding here keeps the rail
+     flush when a container has no nested content at all. -->
+{#if dashboardEntries.length > 0 || entries.length > 0}
   <div class="workspace-list-view">
+    {#each dashboardEntries as entry (entry.ws.id)}
+      {@const dashAccent = accentColor ?? $theme.accent}
+      {@const dashFg = contrastColor(dashAccent)}
+      {@const isActive = entry.idx === $activeWorkspaceIdx}
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div
+        class="dashboard-item"
+        data-dashboard-item={entry.ws.id}
+        data-active={isActive ? "true" : undefined}
+        on:click={() => switchWorkspace(entry.idx)}
+        on:contextmenu|preventDefault={(e) =>
+          showNestedContextMenu(e.clientX, e.clientY, entry.idx)}
+        style="
+          margin: 0 8px 0 0;
+          border-radius: 0 6px 6px 0;
+          background: {dashAccent}; color: {dashFg};
+          cursor: pointer;
+          padding: 4px 8px;
+          display: flex; align-items: center; gap: 8px;
+          min-height: 32px;
+          {isActive ? 'outline: 2px solid ' + dashFg + ';' : ''}
+        "
+      >
+        <span
+          aria-hidden="true"
+          style="
+            flex-shrink: 0; display: inline-flex; align-items: center;
+            justify-content: center; width: 14px; height: 14px;
+            color: {dashFg};
+          "
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <title>Dashboard</title>
+            <rect x="3" y="3" width="7" height="9" />
+            <rect x="14" y="3" width="7" height="5" />
+            <rect x="14" y="12" width="7" height="9" />
+            <rect x="3" y="16" width="7" height="5" />
+          </svg>
+        </span>
+        <span
+          style="
+            flex: 1; min-width: 0;
+            font-size: 13px; font-weight: 600;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+          ">{entry.ws.name}</span
+        >
+      </div>
+    {/each}
     {#each entries as entry (entry.ws.id)}
       {@const isSrc = active && sourceIdx === entry.idx}
       {@const isSibling = active && sourceIdx !== entry.idx}
@@ -292,8 +364,13 @@
      of discrete workspace tiles rather than one unbroken column.
      Matched by WorkspaceListBlock's .root-row + rule so root and
      nested workspace lists have identical vertical rhythm. */
-  .workspace-list-row + .workspace-list-row {
+  .workspace-list-row + .workspace-list-row,
+  .dashboard-item + .workspace-list-row,
+  .dashboard-item + .dashboard-item {
     margin-top: 6px;
+  }
+  .dashboard-item:hover {
+    filter: brightness(1.08);
   }
   /* 8px left + top margin on the nested list so the workspace rails
      sit visually inset from the parent project's rail and the first

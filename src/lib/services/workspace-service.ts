@@ -86,7 +86,7 @@ export async function createWorkspace(name: string) {
 export async function createWorkspaceFromDef(
   def: WorkspaceDef,
   options?: { restoring?: boolean },
-) {
+): Promise<string> {
   const wsName = def.name || `Workspace ${get(workspaces).length + 1}`;
   const rootCwd = def.cwd;
   const rootEnv = def.env;
@@ -216,6 +216,7 @@ export async function createWorkspaceFromDef(
   const as_ = ap?.surfaces.find((s) => s.id === ap.activeSurfaceId);
   void safeFocus(as_);
   schedulePersist();
+  return ws.id;
 }
 
 export function switchWorkspace(idx: number) {

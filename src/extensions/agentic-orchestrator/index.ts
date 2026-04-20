@@ -4,39 +4,37 @@
  *
  * Passive detection (title/output pattern matching, status tracking,
  * agent registry, workspace indicators, per-surface tab dots) lives in
- * core now — see src/lib/services/agent-detection-service.ts. The
+ * core — see src/lib/services/agent-detection-service.ts. The
  * extension consumes that via `api.agents`.
  *
  * What this extension owns:
- *   - AgentDashboard entity (dashboard-service.ts) + New Agent
- *     Dashboard workspace action
+ *   - AgentOrchestrator entity (orchestrator-service.ts) + New
+ *     Orchestrator workspace action
  *   - Global Agents secondary sidebar tab
  *   - Markdown widgets (Kanban / Issues / AgentList / AgentStatusRow /
  *     Columns / TaskSpawner) registered via registerMarkdownComponent
- *   - Child-row contributors that nest dashboards under projects and
- *     worktree workspaces under dashboards
- *   - Dashboard preview re-spawn on workspace:activated
+ *   - Child-row contributor that nests orchestrators under projects
  *
- * Detection-related listeners, pattern lists, trackers, and registry
- * code are intentionally absent — if you find yourself reaching for
- * them, use api.agents (a Readable<AgentRef[]>) or subscribe to the
- * core `agent:statusChanged` event instead.
+ * Each orchestrator owns a Dashboard workspace (see
+ * orchestrator-service.createOrchestrator) created eagerly with the
+ * orchestrator and destroyed alongside it.
  */
 import type { ExtensionManifest, ExtensionAPI } from "../api";
 import { resolveProjectColor } from "../api";
 import { get } from "svelte/store";
 import {
-  loadDashboards,
-  dashboardsStore,
-  getDashboardsForProject,
-  getDashboards,
-  createDashboard,
-  openDashboard,
-  ensureDashboardSurface,
-  writeDashboardTemplate,
-  DASHBOARD_WORKSPACE_META_KEY,
-} from "./dashboard-service";
-import AgentDashboardRow from "./AgentDashboardRow.svelte";
+  loadOrchestrators,
+  orchestratorsStore,
+  getOrchestratorsForProject,
+  getOrchestrators,
+  createOrchestrator,
+  openOrchestratorDashboard,
+  ensureOrchestratorDashboards,
+  writeOrchestratorDashboardTemplate,
+  ORCHESTRATOR_WORKSPACE_META_KEY,
+  DASHBOARD_METADATA_KEY,
+} from "./orchestrator-service";
+import AgentOrchestratorRow from "./AgentOrchestratorRow.svelte";
 import Kanban from "./components/Kanban.svelte";
 import Issues from "./components/Issues.svelte";
 import AgentList from "./components/AgentList.svelte";
@@ -45,15 +43,15 @@ import AgentStatusRow from "./components/AgentStatusRow.svelte";
 import TaskSpawner from "./components/TaskSpawner.svelte";
 import Columns from "./components/Columns.svelte";
 
-const ROOT_ROW_KIND = "agent-dashboard";
+const ROOT_ROW_KIND = "agent-orchestrator";
 
 /**
- * Stable id used to render an AgentDashboard via a child-row contributor.
- * Re-exported so AgentDashboardRow can compute the same key when
+ * Stable id used to render an AgentOrchestrator via a child-row contributor.
+ * Re-exported so AgentOrchestratorRow can compute the same key when
  * enumerating contributed children for nested rendering.
  */
-export function agentDashboardRowId(dashboardId: string): string {
-  return dashboardId;
+export function agentOrchestratorRowId(orchestratorId: string): string {
+  return orchestratorId;
 }
 
 // --- Manifest ---
@@ -61,28 +59,22 @@ export function agentDashboardRowId(dashboardId: string): string {
 export const agenticOrchestratorManifest: ExtensionManifest = {
   id: "agentic-orchestrator",
   name: "Agentic Orchestrator",
-  version: "0.3.0",
+  version: "0.4.0",
   description:
-    "Dashboards, widgets, and spawn UI for parallel AI agents. Consumes core's passive detection via api.agents.",
+    "Orchestrators, Dashboards, widgets, and spawn UI for parallel AI agents. Consumes core's passive detection via api.agents.",
   entry: "./index.ts",
   included: true,
   permissions: [],
   contributes: {
     workspaceActions: [
       {
-        id: "new-dashboard",
-        title: "New Agent Dashboard",
+        id: "new-orchestrator",
+        title: "New Agent Orchestrator",
         icon: "layout-dashboard",
       },
     ],
-    secondarySidebarTabs: [
-      // Global "Agents" tab pinned to the secondary sidebar that mirrors
-      // `gnar:agent-list` with no scope. Lets users see every detected
-      // agent (from the core registry) without opening a dashboard
-      // markdown file.
-      { id: "agents", label: "Agents", icon: "users" },
-    ],
-    events: ["workspace:activated", "workspace:created", "workspace:closed"],
+    secondarySidebarTabs: [{ id: "agents", label: "Agents", icon: "users" }],
+    events: ["workspace:created", "workspace:closed"],
   },
 };
 
@@ -91,43 +83,42 @@ export const agenticOrchestratorManifest: ExtensionManifest = {
 export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
   const eventCleanups: Array<() => void> = [];
 
-  // Tracks which dashboard ids are currently published as root rows so the
-  // store-subscription diff can add/remove without re-emitting the full list.
-  const publishedDashboardIds = new Set<string>();
-  let dashboardUnsub: (() => void) | null = null;
+  const publishedOrchestratorIds = new Set<string>();
+  let orchestratorUnsub: (() => void) | null = null;
 
   api.onActivate(() => {
-    loadDashboards();
+    loadOrchestrators();
 
-    api.registerWorkspaceAction("new-dashboard", {
-      label: "New Agent Dashboard",
+    // Ensure each orchestrator has a Dashboard workspace (post-load
+    // reconciliation). Fires asynchronously; UI handles missing workspaces
+    // gracefully until it completes.
+    void ensureOrchestratorDashboards();
+
+    api.registerWorkspaceAction("new-orchestrator", {
+      label: "New Agent Orchestrator",
       icon: "layout-dashboard",
-      handler: (ctx) => newDashboardFlow(api, ctx),
+      handler: (ctx) => newOrchestratorFlow(api, ctx),
     });
 
     api.registerSecondarySidebarTab("agents", AgentListSidebarTab);
 
-    // Register with railColor + label resolvers so drag overlays + drop
-    // ghosts paint the dashboard's own color and name — without these
-    // the drag state falls back to theme.accent + no label and reads as
-    // a generic row rather than this specific dashboard.
-    api.registerRootRowRenderer(ROOT_ROW_KIND, AgentDashboardRow, {
+    api.registerRootRowRenderer(ROOT_ROW_KIND, AgentOrchestratorRow, {
       railColor: (rowId: string) => {
-        const d = getDashboards().find((dash) => dash.id === rowId);
-        if (!d) return undefined;
-        return resolveProjectColor(d.color, get(api.theme));
+        const o = getOrchestrators().find((orch) => orch.id === rowId);
+        if (!o) return undefined;
+        return resolveProjectColor(o.color, get(api.theme));
       },
       label: (rowId: string) =>
-        getDashboards().find((dash) => dash.id === rowId)?.name,
+        getOrchestrators().find((orch) => orch.id === rowId)?.name,
     });
 
     api.registerMarkdownComponent("kanban", Kanban, {
       configSchema: {
         type: "object",
         properties: {
-          dashboardId: {
+          orchestratorId: {
             type: "string",
-            description: "Optional dashboard scope. Omit for global view.",
+            description: "Optional orchestrator scope. Omit for global view.",
           },
           title: {
             type: "string",
@@ -140,7 +131,7 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
       configSchema: {
         type: "object",
         properties: {
-          dashboardId: { type: "string" },
+          orchestratorId: { type: "string" },
           repo: {
             type: "string",
             description: "owner/name (defaults to gh inference).",
@@ -158,7 +149,7 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
       configSchema: {
         type: "object",
         properties: {
-          dashboardId: { type: "string" },
+          orchestratorId: { type: "string" },
           title: { type: "string" },
         },
       },
@@ -197,108 +188,51 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
       configSchema: {
         type: "object",
         properties: {
-          dashboardId: { type: "string", description: "Required scope." },
+          orchestratorId: { type: "string", description: "Required scope." },
           defaultAgent: { type: "string", default: "claude-code" },
         },
-        required: ["dashboardId"],
+        required: ["orchestratorId"],
       },
     });
 
-    // Project rows: contribute the dashboards that belong to this project.
-    // project-scope's ProjectSectionContent enumerates these and renders
-    // each via the root-row-renderer registered above.
+    // Project rows: contribute the orchestrators that belong to this project.
     api.registerChildRowContributor("project", (projectId) =>
-      getDashboardsForProject(projectId).map((d) => ({
+      getOrchestratorsForProject(projectId).map((o) => ({
         kind: ROOT_ROW_KIND,
-        id: agentDashboardRowId(d.id),
+        id: agentOrchestratorRowId(o.id),
       })),
     );
 
-    // Worktree workspaces tagged with metadata.parentDashboardId are now
-    // rendered directly by AgentDashboardRow via the shared
-    // WorkspaceListView component (see that component's nested-workspaces
-    // block). The previous child-row-contributor emitted workspace-kind
-    // rows that no registered renderer claimed — rendering them through
-    // WorkspaceListView removes that dead wire and gives nested workspaces
-    // the same drag/reorder/color inheritance as root-level ones.
-
-    // Regenerate-dashboard command — surfaced on the EmptySurface view
-    // when the active workspace is the host of an agent dashboard
-    // (metadata.dashboardId set). Reads that id off the active workspace,
-    // resolves the dashboard, and ensures its preview surface exists in
-    // the workspace's active pane. A no-op when the active workspace
-    // doesn't host a dashboard (EmptySurface gates the button anyway).
-    api.registerCommand(
-      "agentic-orchestrator:regenerate-active-dashboard",
-      () => {
-        let activeMetadata: Record<string, unknown> | undefined;
-        const unsub = api.activeWorkspace.subscribe((w) => {
-          activeMetadata = w?.metadata as Record<string, unknown> | undefined;
-        });
-        unsub();
-        const dashboardId = activeMetadata?.[DASHBOARD_WORKSPACE_META_KEY];
-        if (typeof dashboardId !== "string") return;
-        const dashboard = getDashboards().find((d) => d.id === dashboardId);
-        if (dashboard) ensureDashboardSurface(dashboard);
-      },
-      { title: "Regenerate Dashboard" },
-    );
-
-    dashboardUnsub = dashboardsStore.subscribe((dashboards) => {
+    orchestratorUnsub = orchestratorsStore.subscribe((orchestrators) => {
       const rootIds = new Set(
-        dashboards.filter((d) => !d.parentProjectId).map((d) => d.id),
+        orchestrators.filter((o) => !o.parentProjectId).map((o) => o.id),
       );
       for (const id of rootIds) {
-        if (!publishedDashboardIds.has(id)) {
+        if (!publishedOrchestratorIds.has(id)) {
           api.appendRootRow({ kind: ROOT_ROW_KIND, id });
-          publishedDashboardIds.add(id);
+          publishedOrchestratorIds.add(id);
         }
       }
-      for (const id of [...publishedDashboardIds]) {
+      for (const id of [...publishedOrchestratorIds]) {
         if (!rootIds.has(id)) {
           api.removeRootRow({ kind: ROOT_ROW_KIND, id });
-          publishedDashboardIds.delete(id);
+          publishedOrchestratorIds.delete(id);
         }
       }
     });
 
-    // When the user returns to a workspace dedicated to a dashboard
-    // (metadata.dashboardId set by openDashboard), make sure the
-    // dashboard preview surface is present. If the user closed it
-    // earlier and then navigated away, the workspace is empty —
-    // re-spawn so revisiting never leaves the user at an empty pane
-    // with no way back to the dashboard view.
-    const handleWorkspaceActivated = (event: { type: string; id?: string }) => {
-      const workspaceId = event.id;
-      if (!workspaceId) return;
-      let wsMetadata: Record<string, unknown> | undefined;
-      const unsubLookup = api.workspaces.subscribe((list) => {
-        const ws = list.find((w) => w.id === workspaceId);
-        wsMetadata = ws?.metadata as Record<string, unknown> | undefined;
-      });
-      unsubLookup();
-      const dashboardId = wsMetadata?.[DASHBOARD_WORKSPACE_META_KEY];
-      if (typeof dashboardId !== "string") return;
-      const dashboard = getDashboards().find((d) => d.id === dashboardId);
-      if (dashboard) ensureDashboardSurface(dashboard);
-    };
-    api.on("workspace:activated", handleWorkspaceActivated);
-    eventCleanups.push(() =>
-      api.off("workspace:activated", handleWorkspaceActivated),
-    );
-
-    // Workspaces that belong to a dashboard — either as spawned worktrees
-    // (metadata.parentDashboardId) or as the dashboard's own hosting
-    // workspace (metadata.dashboardId) — render nested under their
-    // dashboard in the sidebar. Claim them so they don't ALSO appear at
-    // root, mirroring project-scope's claim-on-create pattern.
-    function isDashboardOwned(
+    // Workspaces that belong to an orchestrator — either as spawned worktrees
+    // (metadata.parentOrchestratorId) or as the Dashboard workspace itself
+    // (metadata.orchestratorId + metadata.isDashboard) — render nested under
+    // their orchestrator in the sidebar. Claim them so they don't ALSO
+    // appear at root.
+    function isOrchestratorOwned(
       metadata: Record<string, unknown> | undefined,
     ): boolean {
       if (!metadata) return false;
       return (
-        typeof metadata.parentDashboardId === "string" ||
-        typeof metadata[DASHBOARD_WORKSPACE_META_KEY] === "string"
+        typeof metadata.parentOrchestratorId === "string" ||
+        typeof metadata[ORCHESTRATOR_WORKSPACE_META_KEY] === "string"
       );
     }
 
@@ -309,7 +243,7 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
     }) => {
       const workspaceId = event.id;
       if (!workspaceId) return;
-      if (isDashboardOwned(event.metadata as Record<string, unknown>)) {
+      if (isOrchestratorOwned(event.metadata as Record<string, unknown>)) {
         api.claimWorkspace(workspaceId);
       }
     };
@@ -328,13 +262,13 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
       api.off("workspace:closed", handleWorkspaceClosed),
     );
 
-    // Catch workspaces that were already open when the extension
-    // activated (e.g. restored-from-session). Without this, pre-existing
-    // dashboard-owned workspaces appear at root until the user closes and
+    // Catch workspaces that were already open when the extension activated
+    // (e.g. restored-from-session). Without this, pre-existing
+    // orchestrator-owned workspaces appear at root until the user closes and
     // reopens them.
     const unsubInitialScan = api.workspaces.subscribe((list) => {
       for (const ws of list) {
-        if (isDashboardOwned(ws.metadata as Record<string, unknown>)) {
+        if (isOrchestratorOwned(ws.metadata as Record<string, unknown>)) {
           api.claimWorkspace(ws.id);
         }
       }
@@ -346,33 +280,41 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
     for (const cleanup of eventCleanups) cleanup();
     eventCleanups.length = 0;
 
-    if (dashboardUnsub) {
-      dashboardUnsub();
-      dashboardUnsub = null;
+    if (orchestratorUnsub) {
+      orchestratorUnsub();
+      orchestratorUnsub = null;
     }
-    for (const id of publishedDashboardIds) {
+    for (const id of publishedOrchestratorIds) {
       api.removeRootRow({ kind: ROOT_ROW_KIND, id });
     }
-    publishedDashboardIds.clear();
+    publishedOrchestratorIds.clear();
   });
 }
+
+// Re-export the metadata keys so other modules consuming the extension's
+// module can read them without importing the service directly.
+export { ORCHESTRATOR_WORKSPACE_META_KEY, DASHBOARD_METADATA_KEY };
 
 // --- Internal helpers ---
 
 /**
- * Workspace action handler for `new-dashboard`. Two modes:
+ * Workspace action handler for `new-orchestrator`. Two modes:
  *
- *   - **Project context** (`ctx.projectPath` set): the baseDir and color
- *     are inherited from the project and locked. The dialog only asks
- *     for a name — both derived fields stay off-screen so the user
- *     can't drift a dashboard's scope away from its host project.
+ *   - **Project context** (`ctx.projectPath` set): baseDir + color
+ *     inherited from the project and locked. The dialog only asks for a
+ *     name — both derived fields stay off-screen so the user can't drift
+ *     an orchestrator's scope away from its host project.
  *   - **Root context** (no project): the dialog asks for baseDir
  *     (required, with Browse), name, and color.
  *
  * Writes the templated markdown only when the file does not already
  * exist — re-creating at the same path preserves the user's edits.
+ *
+ * Activation flow: `createOrchestrator` already creates the Dashboard
+ * workspace and switches to it (workspace auto-switches on create). We
+ * don't need to call `openOrchestratorDashboard` explicitly.
  */
-async function newDashboardFlow(
+async function newOrchestratorFlow(
   api: ExtensionAPI,
   ctx: Record<string, unknown>,
 ): Promise<void> {
@@ -388,8 +330,8 @@ async function newDashboardFlow(
         {
           key: "name" as const,
           label: "Name",
-          defaultValue: "Agent Dashboard",
-          placeholder: "Agent Dashboard",
+          defaultValue: "Agent Orchestrator",
+          placeholder: "Agent Orchestrator",
         },
       ]
     : [
@@ -399,14 +341,14 @@ async function newDashboardFlow(
           type: "directory" as const,
           required: true,
           defaultValue: "",
-          pickerTitle: "Select dashboard base directory",
+          pickerTitle: "Select orchestrator base directory",
           placeholder: "Pick a folder...",
         },
         {
           key: "name" as const,
           label: "Name",
-          defaultValue: "Agent Dashboard",
-          placeholder: "Agent Dashboard",
+          defaultValue: "Agent Orchestrator",
+          placeholder: "Agent Orchestrator",
         },
         {
           key: "color" as const,
@@ -416,7 +358,7 @@ async function newDashboardFlow(
         },
       ];
 
-  const result = await api.showFormPrompt("New Agent Dashboard", fields, {
+  const result = await api.showFormPrompt("New Agent Orchestrator", fields, {
     submitLabel: "Create",
   });
   if (!result) return;
@@ -425,12 +367,9 @@ async function newDashboardFlow(
   if (!baseDir) return;
   const name = (result.name ?? "").trim();
   if (!name) return;
-  // In project mode the color is inherited from the project. In root
-  // mode we read the picked slot, falling back to purple if somehow the
-  // field came back empty (e.g. a future refactor drops the default).
   const color = projectColor ?? (result.color || "purple");
 
-  const dashboard = await createDashboard({
+  const orchestrator = await createOrchestrator({
     name,
     baseDir,
     color,
@@ -438,10 +377,14 @@ async function newDashboardFlow(
   });
 
   try {
-    await writeDashboardTemplate(dashboard);
+    await writeOrchestratorDashboardTemplate(orchestrator);
   } catch (err) {
-    api.reportError(`Failed to write dashboard markdown: ${err}`);
+    api.reportError(`Failed to write orchestrator markdown: ${err}`);
   }
 
-  openDashboard(dashboard);
+  // createOrchestrator auto-switches to the new Dashboard workspace via
+  // createWorkspaceFromDef; this call is a no-op when the switch already
+  // happened, but keeps the "opening an orchestrator brings its Dashboard
+  // forward" contract explicit.
+  openOrchestratorDashboard(orchestrator);
 }

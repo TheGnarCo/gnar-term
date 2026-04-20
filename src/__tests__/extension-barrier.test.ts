@@ -43,18 +43,15 @@ describe("Extension barrier enforcement", () => {
     // worktree-service which lives in core for the same reason).
     // Keep this list small — each entry is a deliberate departure.
     const FILE_EXCEPTIONS: Record<string, string[]> = {
-      "agentic-orchestrator/dashboard-service.ts": [
+      "agentic-orchestrator/orchestrator-service.ts": [
         "../../lib/config",
         "../../lib/services/service-helpers",
-        "../../lib/services/surface-service",
         "../../lib/services/workspace-service",
-        "../../lib/services/preview-surface-registry",
         "../../lib/stores/workspace",
       ],
-      // P9: project-scope's openProjectDashboard mirrors the AgentDashboard
-      // open-as-preview pattern (find existing preview by path, otherwise
-      // spawn into the active pane), so it needs the same set of core
-      // imports the dashboard-service does.
+      // project-scope's openProjectDashboard mirrors the open-as-preview
+      // pattern (find existing preview by path, otherwise spawn into the
+      // active pane), so it needs the same set of core imports.
       "project-scope/index.ts": [
         "../../lib/services/surface-service",
         "../../lib/services/preview-surface-registry",
@@ -77,10 +74,10 @@ describe("Extension barrier enforcement", () => {
       "agentic-orchestrator/components/TaskSpawner.svelte": [
         "../../../lib/services/spawn-helper",
       ],
-      // AgentDashboardRow's banner "+ New" surfaces task + issue spawn
+      // AgentOrchestratorRow's banner "+ New" surfaces task + issue spawn
       // flows alongside TaskSpawner / Issues. Same allowlist applies —
-      // all three are dashboard-spawn call sites for the core helper.
-      "agentic-orchestrator/AgentDashboardRow.svelte": [
+      // all three are orchestrator-spawn call sites for the core helper.
+      "agentic-orchestrator/AgentOrchestratorRow.svelte": [
         "../../lib/services/spawn-helper",
         "../../lib/services/gh-availability",
       ],

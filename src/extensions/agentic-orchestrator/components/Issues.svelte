@@ -3,7 +3,7 @@
    * Issues — renders `gh issue list` output inside a markdown doc.
    *
    * Config:
-   *   dashboardId?: string   — scopes default repo to this dashboard's baseDir
+   *   orchestratorId?: string   — scopes default repo to this dashboard's baseDir
    *   repo?: string          — owner/name (falls back to gh inference from baseDir)
    *   state?: "open" | "closed" | "all"  (default "open")
    *   limit?: number         (default 25)
@@ -14,7 +14,7 @@
    */
   import { getContext, onDestroy, onMount } from "svelte";
   import { EXTENSION_API_KEY, type ExtensionAPI } from "../../api";
-  import { getDashboard } from "../dashboard-service";
+  import { getOrchestrator } from "../orchestrator-service";
   import { GH_POLL_THROTTLE_MS, slugify, timeAgo } from "../widget-helpers";
   import {
     spawnAgentInWorktree,
@@ -25,7 +25,7 @@
     invalidateGhAvailability,
   } from "../../../lib/services/gh-availability";
 
-  export let dashboardId: string | undefined = undefined;
+  export let orchestratorId: string | undefined = undefined;
   export let repo: string | undefined = undefined;
   export let state: "open" | "closed" | "all" = "open";
   export let limit: number = 25;
@@ -75,8 +75,8 @@
   }
 
   function resolveRepoPath(): string | null {
-    if (dashboardId) {
-      const d = getDashboard(dashboardId);
+    if (orchestratorId) {
+      const d = getOrchestrator(orchestratorId);
       if (d) return d.baseDir;
     }
     // No dashboard — rely on "repo" (owner/name) when provided. The gh
@@ -100,7 +100,7 @@
 
     const repoPath = resolveRepoPath();
     if (!repoPath && !repo) {
-      error = "No repo: provide dashboardId or repo";
+      error = "No repo: provide orchestratorId or repo";
       return;
     }
 
@@ -147,10 +147,12 @@
   }
 
   async function spawnForIssue(issue: GhIssue, agent: SpawnAgentType) {
-    const dashboard = dashboardId ? getDashboard(dashboardId) : undefined;
-    const repoPath = dashboard?.baseDir;
+    const orchestrator = orchestratorId
+      ? getOrchestrator(orchestratorId)
+      : undefined;
+    const repoPath = orchestrator?.baseDir;
     if (!repoPath) {
-      spawnError = "Cannot spawn: no dashboard repo path resolved.";
+      spawnError = "Cannot spawn: no orchestrator repo path resolved.";
       return;
     }
     spawnError = "";
@@ -166,7 +168,7 @@
         taskContext,
         repoPath,
         branch: `agent/${agent}/${issue.number}-${branchSlug}`,
-        ...(dashboardId ? { dashboardId } : {}),
+        ...(orchestratorId ? { orchestratorId } : {}),
       });
     } catch (err) {
       spawnError = `Spawn failed: ${err instanceof Error ? err.message : String(err)}`;
@@ -208,7 +210,7 @@
 
 <div
   data-issues
-  data-dashboard-id={dashboardId ?? ""}
+  data-dashboard-id={orchestratorId ?? ""}
   style="
     display: flex; flex-direction: column; gap: 6px;
     padding: 12px; border: 1px solid {$theme.border};

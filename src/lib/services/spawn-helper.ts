@@ -10,7 +10,7 @@
  *   - Computes the worktree path (sibling of the repo, hyphen-joined branch)
  *   - Calls createWorktreeWorkspaceFromConfig (which creates the worktree,
  *     applies copyPatterns/setupScript, creates the workspace with metadata
- *     including parentDashboardId, and returns the new workspace id)
+ *     including parentOrchestratorId, and returns the new workspace id)
  *   - Sets the agent's startup command on the workspace's first terminal
  *     surface (already wired by createWorkspaceFromDef via WorkspaceDef.command)
  *
@@ -67,11 +67,11 @@ export interface SpawnAgentInWorktreeArgs {
   /** Base branch. Default: "main". */
   base?: string;
   /**
-   * When provided, the new workspace's metadata.parentDashboardId is set
-   * to this id. The agentic-orchestrator's child-row contributor reads
-   * this to nest the workspace under the dashboard row in the sidebar.
+   * When provided, the new workspace's metadata.parentOrchestratorId is
+   * set to this id. The agentic-orchestrator extension claims the
+   * workspace so it renders nested under the orchestrator row.
    */
-  dashboardId?: string;
+  orchestratorId?: string;
 }
 
 export interface SpawnAgentInWorktreeResult {
@@ -159,7 +159,7 @@ export async function spawnAgentInWorktree(
 ): Promise<SpawnAgentInWorktreeResult> {
   if (!args.repoPath || !args.repoPath.trim()) {
     throw new Error(
-      "spawnAgentInWorktree requires repoPath — caller must resolve from dashboard.baseDir or workspace cwd",
+      "spawnAgentInWorktree requires repoPath — caller must resolve from orchestrator.baseDir or workspace cwd",
     );
   }
 
@@ -178,7 +178,9 @@ export async function spawnAgentInWorktree(
     base,
     worktreePath,
     startupCommand,
-    ...(args.dashboardId ? { parentDashboardId: args.dashboardId } : {}),
+    ...(args.orchestratorId
+      ? { parentOrchestratorId: args.orchestratorId }
+      : {}),
   };
 
   const { workspaceId } = await createWorktreeWorkspaceFromConfig(config);

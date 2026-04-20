@@ -6,7 +6,7 @@
  * remembers its backing file path along with the pane and workspace it
  * lives in. Consumers use this registry to:
  *   - dedupe spawn-by-path (focus an existing preview instead of opening
- *     a duplicate — used by openDashboard for AgentDashboards)
+ *     a duplicate — e.g. project dashboard previews)
  *   - drive future MCP discovery tools
  *
  * Population is owned by PreviewSurface.svelte's mount/destroy lifecycle

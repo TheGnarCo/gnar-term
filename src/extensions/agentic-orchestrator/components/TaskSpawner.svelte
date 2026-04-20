@@ -1,25 +1,25 @@
 <script lang="ts">
   /**
-   * TaskSpawner — manual "+ New Task" affordance for a dashboard.
+   * TaskSpawner — manual "+ New Task" affordance for an orchestrator.
    *
    * Spawns the chosen agent into a fresh worktree workspace tagged
-   * with this dashboard. The form's task description becomes the
+   * with this orchestrator. The form's task description becomes the
    * agent's startup task context (passed as a single quoted argument).
    *
    * Config:
-   *   dashboardId: string         — required; scopes the spawn target
+   *   orchestratorId: string         — required; scopes the spawn target
    *   defaultAgent?: string       — picker default (defaults to claude-code)
    */
   import { getContext } from "svelte";
   import { EXTENSION_API_KEY, type ExtensionAPI } from "../../api";
-  import { getDashboard } from "../dashboard-service";
+  import { getOrchestrator } from "../orchestrator-service";
   import { slugify } from "../widget-helpers";
   import {
     spawnAgentInWorktree,
     type SpawnAgentType,
   } from "../../../lib/services/spawn-helper";
 
-  export let dashboardId: string;
+  export let orchestratorId: string;
   export let defaultAgent: string = "claude-code";
 
   const api = getContext<ExtensionAPI>(EXTENSION_API_KEY);
@@ -40,9 +40,9 @@
     { id: "custom", label: "Custom..." },
   ];
 
-  $: dashboard = getDashboard(dashboardId);
+  $: orchestrator = getOrchestrator(orchestratorId);
   $: branchPlaceholder = task ? slugify(task) : "task-branch";
-  $: canSpawn = task.trim().length > 0 && !!dashboard && !spawning;
+  $: canSpawn = task.trim().length > 0 && !!orchestrator && !spawning;
 
   function expand() {
     expanded = true;
@@ -59,8 +59,8 @@
 
   async function spawn() {
     if (!canSpawn) return;
-    if (!dashboard) {
-      spawnError = "Dashboard not found";
+    if (!orchestrator) {
+      spawnError = "Orchestrator not found";
       return;
     }
     spawning = true;
@@ -76,9 +76,9 @@
         agent,
         ...(agent === "custom" ? { command: agent } : {}),
         taskContext: trimmedTask,
-        repoPath: dashboard.baseDir,
+        repoPath: orchestrator.baseDir,
         branch: branchName,
-        dashboardId,
+        orchestratorId,
       });
       // Success — collapse the form back to the "+ New Task" button.
       cancel();
@@ -99,7 +99,7 @@
 
 <div
   data-task-spawner
-  data-dashboard-id={dashboardId}
+  data-orchestrator-id={orchestratorId}
   style="
     display: flex; flex-direction: column; gap: 8px;
     padding: 12px; border: 1px solid {$theme.border};

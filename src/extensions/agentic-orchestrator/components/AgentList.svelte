@@ -1,6 +1,6 @@
 <script lang="ts">
   /**
-   * AgentList — flat list of agents in scope. When `dashboardId` is
+   * AgentList — flat list of agents in scope. When `orchestratorId` is
    * provided, scopes to that dashboard's baseDir. When omitted, lists
    * every detected agent (used by P11's secondary sidebar tab).
    *
@@ -13,19 +13,19 @@
   import { scopedAgentsStore } from "../widget-helpers";
 
   /** Optional dashboard scope. */
-  export let dashboardId: string | undefined = undefined;
+  export let orchestratorId: string | undefined = undefined;
   /** Optional override of the section title. */
   export let title: string = "Active Agents";
 
   const api = getContext<ExtensionAPI>(EXTENSION_API_KEY);
   const theme = api.theme;
 
-  $: agents = scopedAgentsStore(api, dashboardId);
+  $: agents = scopedAgentsStore(api, orchestratorId);
 </script>
 
 <div
   data-agent-list
-  data-dashboard-id={dashboardId ?? ""}
+  data-orchestrator-id={orchestratorId ?? ""}
   style="
     display: flex; flex-direction: column; gap: 6px;
     padding: 12px; border: 1px solid {$theme.border};

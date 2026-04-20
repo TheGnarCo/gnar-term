@@ -71,7 +71,7 @@ export function _seedWorktreeEntries(entries: WorktreeWorkspaceEntry[]): void {
 interface CreateContext {
   projectPath?: unknown;
   projectId?: unknown;
-  parentDashboardId?: unknown;
+  parentOrchestratorId?: unknown;
 }
 
 /** Run the full "new worktree workspace" flow. */
@@ -95,9 +95,10 @@ export async function createWorktreeWorkspace(
       ctx.projectId !== undefined && ctx.projectId !== null
         ? String(ctx.projectId)
         : undefined,
-    parentDashboardId:
-      ctx.parentDashboardId !== undefined && ctx.parentDashboardId !== null
-        ? String(ctx.parentDashboardId)
+    parentOrchestratorId:
+      ctx.parentOrchestratorId !== undefined &&
+      ctx.parentOrchestratorId !== null
+        ? String(ctx.parentOrchestratorId)
         : undefined,
   });
 }
@@ -121,7 +122,7 @@ export interface WorktreeWorkspaceConfig {
   base: string;
   worktreePath: string;
   projectId?: string;
-  parentDashboardId?: string;
+  parentOrchestratorId?: string;
   /**
    * Optional startup command to run in the new workspace's terminal.
    * Maps to surface.startupCommand via the WorkspaceDef layout — fires
@@ -192,8 +193,8 @@ export async function createWorktreeWorkspaceFromConfig(
       baseBranch: config.base,
       repoPath: config.repoPath,
       ...(config.projectId ? { projectId: config.projectId } : {}),
-      ...(config.parentDashboardId
-        ? { parentDashboardId: config.parentDashboardId }
+      ...(config.parentOrchestratorId
+        ? { parentOrchestratorId: config.parentOrchestratorId }
         : {}),
     },
     layout: {

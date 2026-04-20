@@ -1,36 +1,18 @@
 <script lang="ts">
   /**
    * ContainerRow — shared root-row chrome for "container workspaces" in
-   * the Workspaces sidebar section. Encodes the three shapes the sidebar
-   * supports:
+   * the Workspaces sidebar section (projects, agent orchestrators).
    *
-   *   - **Container Workspaces** (projects, agent dashboards) render a
-   *     colored banner + a nested list of workspaces. This component is
-   *     that shell: grip on the left, colored banner body on the right,
-   *     nested WorkspaceListView below.
-   *   - **Nested Workspaces** are rendered by the nested WorkspaceListView
-   *     slot (via `filterIds`).
-   *   - **Root Workspaces** render directly via WorkspaceItem — NOT this
-   *     component.
-   *
-   * Two usage modes driven by callers:
-   *
-   *   1. *Pure-chrome* — the banner is a visual header only (e.g. project
-   *      rows). Caller provides `onBannerClick`, `onBannerContextMenu`,
-   *      and fills the `icon` / `banner-end` / `banner-subtitle` slots.
-   *
-   *   2. *Workspace-backed* — the banner represents a first-class
-   *      workspace (e.g. the hosting workspace of an agent dashboard).
-   *      Caller provides `onClose` for the close affordance (usually
-   *      wrapping `closeWorkspace(idx)`) and `onBannerClick` wired to
-   *      `switchWorkspace(idx)`. The slots fill in dashboard-specific
-   *      chrome (icon, status badges, latest event).
+   * The banner is **inert**: callers cannot register a click handler.
+   * Interaction lives in the child rows inside the nested list (e.g. the
+   * Dashboard workspace item) or in the context menu. Internal buttons
+   * and links in `banner-end` stop their own propagation.
    *
    * Visual variants:
    *   - `parentColor` unset → root mode: grip + banner + nested list
    *     stretch together with the shared rail color.
    *   - `parentColor` set → nested-inside-another-container mode: banner
-   *     only, no outer grip, with the dashboard/project color painting
+   *     only, no outer grip, with the orchestrator/project color painting
    *     the banner background and a small accent strip on the right.
    */
   import { type Component } from "svelte";
@@ -57,8 +39,6 @@
   export let onGripMouseDown: ((e: MouseEvent) => void) | undefined = undefined;
   export let gripAriaLabel: string = "Drag to reorder";
 
-  /** Banner body click — ignored if undefined. */
-  export let onBannerClick: (() => void) | undefined = undefined;
   /** Banner body right-click — ignored if undefined. */
   export let onBannerContextMenu: ((e: MouseEvent) => void) | undefined =
     undefined;
@@ -103,7 +83,6 @@
   let gripHovered = false;
   let bannerHovered = false;
 
-  $: bannerClickable = !!onBannerClick;
   $: WorkspaceListViewResolved = (workspaceListViewComponent ??
     DefaultWorkspaceListView) as Component;
 </script>
@@ -125,10 +104,9 @@
         border-radius: 0 6px 6px 0;
         overflow: hidden;
         min-height: 40px;
-        cursor: {bannerClickable ? 'pointer' : 'default'};
+        cursor: default;
         background: {color}; color: {foreground};
       "
-      on:click={onBannerClick}
       on:contextmenu={onBannerContextMenu}
       on:mouseenter={() => (bannerHovered = true)}
       on:mouseleave={() => (bannerHovered = false)}
@@ -233,9 +211,8 @@
           min-height: 40px;
           background: {color}; color: {foreground};
           border-radius: 0 6px 6px 0;
-          cursor: {bannerClickable ? 'pointer' : 'default'};
+          cursor: default;
         "
-        on:click={onBannerClick}
         on:contextmenu={onBannerContextMenu}
         on:mouseenter={() => (bannerHovered = true)}
         on:mouseleave={() => (bannerHovered = false)}

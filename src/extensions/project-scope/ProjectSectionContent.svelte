@@ -214,10 +214,6 @@
     })),
   ];
 
-  function handleBannerClick() {
-    if (project) void openProjectDashboard(project);
-  }
-
   // Close X on the project container row — destructive; deletes the
   // project entity. Confirms first. Nested workspaces are unclaimed and
   // return to the root-level list; they are not closed. Per user
@@ -241,10 +237,9 @@
   // whose panes currently contain a preview surface at the project's
   // dashboard path gets a dashboard icon — clicking it opens that
   // dashboard (via openProjectDashboard, which focuses the existing
-  // preview if present). Unlike agent-dashboards (tagged by metadata),
-  // project-dashboard hosts are identified dynamically by surface
-  // presence so any project workspace that happens to host the preview
-  // gets the indicator.
+  // preview if present). Project-dashboard hosts are identified
+  // dynamically by surface presence so any project workspace that
+  // happens to host the preview gets the indicator.
   function hintForProjectDashboardHost(ws: Workspace) {
     if (!project) return undefined;
     const path = projectDashboardPath(project.path);
@@ -277,7 +272,6 @@
       foreground={headerFg}
       {onGripMouseDown}
       gripAriaLabel="Drag project to reorder"
-      onBannerClick={handleBannerClick}
       onBannerContextMenu={handleBannerContextMenu}
       onClose={handleClose}
       closeTitle="Delete project"
@@ -290,9 +284,9 @@
       workspaceListViewComponent={WorkspaceListView ?? undefined}
     >
       <!-- Title fills the main banner slot; flex:1 pushes banner-end to
-           the right. Clicking the title is redundant with the
-           banner-wide onBannerClick, but kept here as an accessibility
-           hit target with its own cursor styling. -->
+           the right. The banner itself is inert — clicks inside the
+           banner land on chrome only; use the context menu to open the
+           project's Dashboard. -->
       <span
         style="
           flex: 1; min-width: 0;

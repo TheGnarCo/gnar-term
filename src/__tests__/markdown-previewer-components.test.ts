@@ -209,6 +209,81 @@ describe("markdown previewer — markdown-component handling", () => {
     expect(stub?.getAttribute("data-api-marker")).toBe("ctx-ext-api");
   });
 
+  it("injects DashboardHostContext from the nearest preview surface entry into mounted widgets", async () => {
+    const HostStub = (
+      await import("./markdown-previewer-host-stub-widget.svelte")
+    ).default;
+    const { registerPreviewSurface, resetPreviewSurfaceRegistry } =
+      await import("../lib/services/preview-surface-registry");
+
+    resetPreviewSurfaceRegistry();
+    registerMarkdownComponent({
+      name: "host-stub",
+      component: HostStub,
+      source: "test",
+    });
+
+    const previewer = findPreviewer("notes.md")!;
+    // The mounted widget looks up the host via element.closest(...) on the
+    // preview-surface marker element; the registry lookup reveals the
+    // workspace's metadata, which gets routed into DashboardHostContext.
+    const surface = document.createElement("div");
+    surface.setAttribute("data-preview-surface-id", "surf-host-1");
+    document.body.appendChild(surface);
+
+    registerPreviewSurface({
+      surfaceId: "surf-host-1",
+      path: "/abs/x.md",
+      paneId: "pane-host-1",
+      workspaceId: "ws-host-1",
+      hostMetadata: { groupId: "group-abc", isDashboard: true },
+    });
+
+    previewer.render(
+      ["```gnar:host-stub", "```"].join("\n"),
+      "/abs/x.md",
+      surface,
+      ctx,
+    );
+
+    const stub = surface.querySelector("[data-host-stub-widget]");
+    expect(stub).not.toBeNull();
+    expect(stub?.getAttribute("data-host-present")).toBe("yes");
+    expect(stub?.getAttribute("data-host-group-id")).toBe("group-abc");
+    expect(stub?.getAttribute("data-host-global")).toBe("no");
+
+    document.body.removeChild(surface);
+    resetPreviewSurfaceRegistry();
+  });
+
+  it("provides a null DashboardHostContext when widget is mounted outside any preview surface", async () => {
+    const HostStub = (
+      await import("./markdown-previewer-host-stub-widget.svelte")
+    ).default;
+    const { resetPreviewSurfaceRegistry } =
+      await import("../lib/services/preview-surface-registry");
+    resetPreviewSurfaceRegistry();
+
+    registerMarkdownComponent({
+      name: "host-stub",
+      component: HostStub,
+      source: "test",
+    });
+
+    const previewer = findPreviewer("notes.md")!;
+    const el = document.createElement("div");
+    // No data-preview-surface-id on ancestor chain; widget receives null host.
+    previewer.render(
+      ["```gnar:host-stub", "```"].join("\n"),
+      "/abs/x.md",
+      el,
+      ctx,
+    );
+
+    const stub = el.querySelector("[data-host-stub-widget]");
+    expect(stub?.getAttribute("data-host-present")).toBe("no");
+  });
+
   // Imports for theme store / readable may be needed in the future;
   // suppress unused warnings without the dead-code optimizer trimming.
   void readable;

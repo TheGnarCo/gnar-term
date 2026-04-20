@@ -312,6 +312,11 @@ export async function ensureOrchestratorDashboards(): Promise<void> {
  * `issues` sit side by side below it via the built-in `gnar:columns`
  * layout widget. The H1 serves as the only title — widgets render
  * without their own redundant section headers.
+ *
+ * Widgets pull scope from the enclosing DashboardHostContext (spec §5.3),
+ * so no `orchestratorId:` props are emitted. Nested-under-group
+ * orchestrators get their groupId from the workspace metadata; root-level
+ * orchestrators render inert until Stage 7 migrates them away.
  */
 export function buildOrchestratorDashboardMarkdown(
   orchestrator: AgentOrchestrator,
@@ -321,17 +326,14 @@ export function buildOrchestratorDashboardMarkdown(
 Live status of agents working in \`${orchestrator.baseDir}\`.
 
 \`\`\`gnar:kanban
-orchestratorId: ${orchestrator.id}
 \`\`\`
 
 \`\`\`gnar:columns
 children:
   - name: task-spawner
-    config:
-      orchestratorId: ${orchestrator.id}
+    config: {}
   - name: issues
-    config:
-      orchestratorId: ${orchestrator.id}
+    config: {}
 \`\`\`
 `;
 }

@@ -21,11 +21,22 @@
   let dispose: (() => void) | undefined;
   let loadError: string | null = null;
 
-  function locate(): { workspaceId: string; paneId: string } | null {
+  function locate(): {
+    workspaceId: string;
+    paneId: string;
+    hostMetadata?: Record<string, unknown>;
+  } | null {
     for (const ws of get(workspaces)) {
       for (const pane of getAllPanes(ws.splitRoot)) {
         if (pane.surfaces.some((s) => s.id === surface.id)) {
-          return { workspaceId: ws.id, paneId: pane.id };
+          const hostMetadata = ws.metadata as
+            | Record<string, unknown>
+            | undefined;
+          return {
+            workspaceId: ws.id,
+            paneId: pane.id,
+            ...(hostMetadata ? { hostMetadata } : {}),
+          };
         }
       }
     }
@@ -40,6 +51,7 @@
         path: surface.path,
         paneId: loc.paneId,
         workspaceId: loc.workspaceId,
+        ...(loc.hostMetadata ? { hostMetadata: loc.hostMetadata } : {}),
       });
     }
 

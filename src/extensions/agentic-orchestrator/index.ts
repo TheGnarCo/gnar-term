@@ -106,10 +106,6 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
       configSchema: {
         type: "object",
         properties: {
-          orchestratorId: {
-            type: "string",
-            description: "Optional orchestrator scope. Omit for global view.",
-          },
           title: {
             type: "string",
             description: "Optional title override (default: 'Agents').",
@@ -139,7 +135,6 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
       configSchema: {
         type: "object",
         properties: {
-          orchestratorId: { type: "string" },
           title: { type: "string" },
         },
       },
@@ -178,10 +173,13 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
       configSchema: {
         type: "object",
         properties: {
-          orchestratorId: { type: "string", description: "Required scope." },
+          repoPath: {
+            type: "string",
+            description:
+              "Required when the enclosing dashboard host is global; ignored under a group host (uses group.path instead).",
+          },
           defaultAgent: { type: "string", default: "claude-code" },
         },
-        required: ["orchestratorId"],
       },
     });
 

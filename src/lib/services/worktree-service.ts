@@ -129,6 +129,13 @@ export interface WorktreeWorkspaceConfig {
    * once the PTY is ready (no setTimeout).
    */
   startupCommand?: string;
+  /**
+   * Dashboard provenance — when the worktree is spawned from the Global
+   * Agentic Dashboard or an Agentic Dashboard contribution on a group,
+   * this records which. Surfaces as `metadata.spawnedBy` on the new
+   * workspace. See spec §5.3.
+   */
+  spawnedBy?: { kind: "global" } | { kind: "group"; groupId: string };
 }
 
 export async function createWorktreeWorkspaceFromConfig(
@@ -196,6 +203,7 @@ export async function createWorktreeWorkspaceFromConfig(
       ...(config.parentOrchestratorId
         ? { parentOrchestratorId: config.parentOrchestratorId }
         : {}),
+      ...(config.spawnedBy ? { spawnedBy: config.spawnedBy } : {}),
     },
     layout: {
       pane: {

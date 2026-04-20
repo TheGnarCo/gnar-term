@@ -229,6 +229,47 @@ describe("spawn-helper: spawnAgentInWorktree", () => {
     expect(cfg.parentOrchestratorId).toBeUndefined();
   });
 
+  it("propagates spawnedBy={kind:'group', groupId} when a group-scoped caller passes it", async () => {
+    const newWsId = "ws-new-5";
+    createWorktreeWorkspaceFromConfigMock.mockImplementation(async () => {
+      workspaces.set([seedWorkspaceAfterCreate(newWsId)]);
+      return { workspaceId: newWsId };
+    });
+
+    await spawnAgentInWorktree({
+      name: "claude-code",
+      agent: "claude-code",
+      repoPath: "/work/proj",
+      branch: "agent/claude-code/grp",
+      groupId: "grp-1",
+      spawnedBy: { kind: "group", groupId: "grp-1" },
+    });
+
+    const cfg = createWorktreeWorkspaceFromConfigMock.mock.calls[0]?.[0];
+    expect(cfg.spawnedBy).toEqual({ kind: "group", groupId: "grp-1" });
+    expect(cfg.groupId).toBe("grp-1");
+  });
+
+  it("propagates spawnedBy={kind:'global'} and omits groupId for global-scoped spawns", async () => {
+    const newWsId = "ws-new-6";
+    createWorktreeWorkspaceFromConfigMock.mockImplementation(async () => {
+      workspaces.set([seedWorkspaceAfterCreate(newWsId)]);
+      return { workspaceId: newWsId };
+    });
+
+    await spawnAgentInWorktree({
+      name: "aider",
+      agent: "aider",
+      repoPath: "/work/proj",
+      branch: "agent/aider/glob",
+      spawnedBy: { kind: "global" },
+    });
+
+    const cfg = createWorktreeWorkspaceFromConfigMock.mock.calls[0]?.[0];
+    expect(cfg.spawnedBy).toEqual({ kind: "global" });
+    expect(cfg.groupId).toBeUndefined();
+  });
+
   it("throws when repoPath is missing", async () => {
     await expect(
       spawnAgentInWorktree({

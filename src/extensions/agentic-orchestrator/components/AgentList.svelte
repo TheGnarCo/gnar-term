@@ -1,8 +1,9 @@
 <script lang="ts">
   /**
-   * AgentList — flat list of agents in scope. When `orchestratorId` is
-   * provided, scopes to that dashboard's baseDir. When omitted, lists
-   * every detected agent (used by P11's secondary sidebar tab).
+   * AgentList — flat list of agents in scope derived from the enclosing
+   * `DashboardHostContext`. Global hosts (e.g. the Global Agentic
+   * Dashboard) show every detected agent; group hosts show only the
+   * agents matching that group's rules (see widget-helpers §5.3).
    *
    * Each row delegates to AgentStatusRow so the visual contract stays
    * consistent across composers (Kanban cards reuse the same row).
@@ -10,22 +11,26 @@
   import { getContext } from "svelte";
   import { EXTENSION_API_KEY, type ExtensionAPI } from "../../api";
   import AgentStatusRow from "./AgentStatusRow.svelte";
-  import { scopedAgentsStore } from "../widget-helpers";
+  import { hostScopedAgentsStore } from "../widget-helpers";
+  import {
+    getDashboardHost,
+    deriveDashboardScope,
+  } from "../../../lib/contexts/dashboard-host";
 
-  /** Optional dashboard scope. */
-  export let orchestratorId: string | undefined = undefined;
   /** Optional override of the section title. */
   export let title: string = "Active Agents";
 
   const api = getContext<ExtensionAPI>(EXTENSION_API_KEY);
   const theme = api.theme;
-
-  $: agents = scopedAgentsStore(api, orchestratorId);
+  const host = getDashboardHost();
+  const scope = deriveDashboardScope(host);
+  const agents = hostScopedAgentsStore(api, host);
 </script>
 
 <div
   data-agent-list
-  data-orchestrator-id={orchestratorId ?? ""}
+  data-scope-kind={scope.kind}
+  data-scope-group-id={scope.kind === "group" ? scope.groupId : ""}
   style="
     display: flex; flex-direction: column; gap: 6px;
     padding: 12px; border: 1px solid {$theme.border};

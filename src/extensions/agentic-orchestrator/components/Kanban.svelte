@@ -1,27 +1,27 @@
 <script lang="ts">
   /**
    * Kanban — four-column status grid: Running / Waiting / Idle / Done.
-   * Each column lists scoped-to-dashboard agents as cards. Click a card
-   * → jump to the owning surface.
-   *
-   * When `orchestratorId` is provided, scopes via dashboardScopedAgents.
-   * When absent, all agents render — useful for a global overview.
+   * Each column lists scoped agents as cards derived from the enclosing
+   * `DashboardHostContext`. Click a card → jump to the owning surface.
+   * Scope follows widget-helpers' rules (global, group, or none).
    */
   import { getContext } from "svelte";
   import { EXTENSION_API_KEY, type ExtensionAPI } from "../../api";
   import {
     bucketForStatus,
+    hostScopedAgentsStore,
     jumpToAgent,
-    scopedAgentsStore,
     statusColor,
     timeAgo,
     workspaceNameFor,
     type DetectedAgent,
     type KanbanColumn,
   } from "../widget-helpers";
+  import {
+    deriveDashboardScope,
+    getDashboardHost,
+  } from "../../../lib/contexts/dashboard-host";
 
-  /** Optional dashboard scope. */
-  export let orchestratorId: string | undefined = undefined;
   /**
    * Optional title shown above the column grid. Empty by default — the
    * dashboard's top-level markdown heading is the authoritative title,
@@ -31,8 +31,9 @@
 
   const api = getContext<ExtensionAPI>(EXTENSION_API_KEY);
   const theme = api.theme;
-
-  $: agents = scopedAgentsStore(api, orchestratorId);
+  const host = getDashboardHost();
+  const scope = deriveDashboardScope(host);
+  const agents = hostScopedAgentsStore(api, host);
 
   // Bucket agents into the four columns. Re-derived on every store change.
   const COLUMN_DEFS: Array<{ id: KanbanColumn; label: string }> = [
@@ -58,7 +59,8 @@
 
 <div
   data-kanban
-  data-orchestrator-id={orchestratorId ?? ""}
+  data-scope-kind={scope.kind}
+  data-scope-group-id={scope.kind === "group" ? scope.groupId : ""}
   style="
     display: flex; flex-direction: column; gap: 8px;
     padding: 12px; border: 1px solid {$theme.border};

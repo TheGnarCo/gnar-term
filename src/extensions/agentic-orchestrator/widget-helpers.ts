@@ -5,12 +5,16 @@
  * resolution, jump-to-pane, and a few small utilities so each widget
  * stays focused on rendering.
  */
-import { derived, type Readable } from "svelte/store";
+import { derived, readable, type Readable } from "svelte/store";
 import type { AgentRef, ExtensionAPI } from "../api";
 import {
-  getOrchestrator,
-  orchestratorScopedAgents,
-} from "./orchestrator-service";
+  deriveDashboardScope,
+  type DashboardHostContext,
+} from "../../lib/contexts/dashboard-host";
+import { workspaces } from "../../lib/stores/workspace";
+import { workspaceGroupsStore } from "../../lib/stores/workspace-groups";
+import { claimedWorkspaceIds } from "../../lib/services/claimed-workspace-registry";
+import { getAllSurfaces, isTerminalSurface } from "../../lib/types";
 
 /**
  * Legacy alias preserved for the orchestrator's widget internals — the
@@ -61,25 +65,56 @@ export function throttle<TArgs extends unknown[]>(
 }
 
 /**
- * Reactive store of the agents in scope for a given widget config.
- * When `orchestratorId` is provided, scopes via
- * `orchestratorScopedAgents`. When absent, returns the full agent list
- * (used by the global "Active Agents" sidebar tab).
+ * Reactive store of the agents in scope for a widget mounted inside a
+ * DashboardHostContext. Implements the §5.3 scope rules:
+ *   - no host / "none" scope → empty list
+ *   - "global" scope         → every detected agent
+ *   - "group" scope          → agents whose workspace has
+ *        `metadata.groupId === groupId`, OR whose first terminal CWD
+ *        sits under the group's `path` AND the workspace is unclaimed
+ *        (claimed workspaces already belong to another owner).
  *
- * Updates are throttled at the source (one batch per
- * WIDGET_THROTTLE_MS) so a flurry of status events doesn't trash the
- * frame budget.
+ * Prefix containment uses a trailing-slash suffix so `/work/one` never
+ * captures `/work/one-other` by accident.
  */
-export function scopedAgentsStore(
+export function hostScopedAgentsStore(
   api: ExtensionAPI,
-  orchestratorId: string | undefined,
+  host: DashboardHostContext | null,
 ): Readable<DetectedAgent[]> {
-  return derived(api.agents, (agents) => {
-    if (!orchestratorId) return agents;
-    const orchestrator = getOrchestrator(orchestratorId);
-    if (!orchestrator) return [];
-    return orchestratorScopedAgents(orchestrator, agents);
-  });
+  const scope = deriveDashboardScope(host);
+  if (scope.kind === "none") {
+    return readable<DetectedAgent[]>([]);
+  }
+  if (scope.kind === "global") {
+    return derived(api.agents, (agents) => agents);
+  }
+  return derived(
+    [api.agents, workspaces, workspaceGroupsStore, claimedWorkspaceIds],
+    ([$agents, $workspaces, $groups, $claimedIds]) => {
+      const group = $groups.find((g) => g.id === scope.groupId);
+      const base = group?.path ? group.path.replace(/\/+$/, "") : "";
+      const prefix = base ? `${base}/` : "";
+      const wsById = new Map<string, (typeof $workspaces)[number]>();
+      for (const ws of $workspaces) wsById.set(ws.id, ws);
+      return $agents.filter((a) => {
+        const ws = wsById.get(a.workspaceId);
+        if (!ws) return false;
+        const md = ws.metadata as Record<string, unknown> | undefined;
+        if (md?.groupId === scope.groupId) return true;
+        if (!base || $claimedIds.has(ws.id)) return false;
+        for (const surface of getAllSurfaces(ws)) {
+          if (
+            isTerminalSurface(surface) &&
+            surface.cwd &&
+            (surface.cwd === base || surface.cwd.startsWith(prefix))
+          ) {
+            return true;
+          }
+        }
+        return false;
+      });
+    },
+  );
 }
 
 /**

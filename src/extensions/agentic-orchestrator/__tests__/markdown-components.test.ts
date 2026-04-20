@@ -255,18 +255,11 @@ describe("agentic-orchestrator markdown-components: registration", () => {
 // --- Kanban ---
 
 describe("Kanban widget", () => {
-  let orchestrator: AgentOrchestrator;
-
   beforeEach(async () => {
     configRef.current = {};
     saveConfigMock.mockClear();
     _resetOrchestratorService();
     resetRegistry();
-    orchestrator = await createOrchestrator({
-      name: "Project A",
-      baseDir: "/work/proj",
-      pathOverride: "/tmp/dash.md",
-    });
     switchSpy.mockReset();
     focusSpy.mockReset();
   });
@@ -281,6 +274,7 @@ describe("Kanban widget", () => {
         api: makeApi(),
         component: Kanban,
         props: {},
+        host: { metadata: { isGlobalAgenticDashboard: true } },
       },
     });
     const cols = container.querySelectorAll("[data-kanban-column]");
@@ -293,7 +287,7 @@ describe("Kanban widget", () => {
     expect(container.querySelectorAll("[data-kanban-empty]").length).toBe(4);
   });
 
-  it("buckets agents into the correct columns when scoped to a dashboard", async () => {
+  it("buckets agents into the correct columns when scoped to a group host", async () => {
     // Seed an api whose agentsStore receives the agents we register through
     // the registry. Since the widget reads agentsStore directly, we drive
     // it through registerAgent (which syncs the store).
@@ -396,11 +390,29 @@ describe("Kanban widget", () => {
       }),
     );
 
+    // Seed a workspace group whose path matches the workspaces' CWD so
+    // the host-context-driven filter includes them as unclaimed CWD
+    // matches — mirroring the group-scope rule in widget-helpers.
+    const { setWorkspaceGroups, resetWorkspaceGroupsForTest } =
+      await import("../../../lib/stores/workspace-groups");
+    resetWorkspaceGroupsForTest();
+    setWorkspaceGroups([
+      {
+        id: "group-proj",
+        name: "Project A",
+        path: "/work/proj",
+        color: "blue",
+        groupDashboardEnabled: true,
+        workspaceIds: [],
+      },
+    ]);
+
     const { container } = render(ExtensionWrapper, {
       props: {
         api,
         component: Kanban,
-        props: { orchestratorId: orchestrator.id },
+        props: {},
+        host: { metadata: { groupId: "group-proj" } },
       },
     });
 
@@ -749,6 +761,7 @@ describe("AgentList widget", () => {
         api,
         component: AgentList,
         props: {},
+        host: { metadata: { isGlobalAgenticDashboard: true } },
       },
     });
 
@@ -769,18 +782,44 @@ describe("AgentList widget", () => {
         api,
         component: AgentList,
         props: {},
+        host: { metadata: { isGlobalAgenticDashboard: true } },
       },
     });
 
     await tick();
     expect(container.querySelector("[data-agent-list-empty]")).not.toBeNull();
   });
+
+  it("renders an inert 'no scope' panel when mounted without a dashboard host", async () => {
+    const api = makeApi();
+    registerAgent(makeAgent({ agentId: "a-ignored" }));
+
+    const { container } = render(ExtensionWrapper, {
+      props: {
+        api,
+        component: AgentList,
+        props: {},
+      },
+    });
+
+    await tick();
+    // No host → scope="none" → widget renders the empty state, not the
+    // agent rows from the global store.
+    expect(container.querySelectorAll("[data-agent-status-row]").length).toBe(
+      0,
+    );
+    const list = container.querySelector("[data-agent-list]");
+    expect(list?.getAttribute("data-scope-kind")).toBe("none");
+  });
 });
 
 // --- TaskSpawner ---
 
 describe("TaskSpawner widget", () => {
-  let orchestrator: AgentOrchestrator;
+  const GROUP_ID = "grp-spawn";
+  const GROUP_PATH = "/work/proj";
+  const groupHost = { metadata: { groupId: GROUP_ID } };
+  const globalHost = { metadata: { isGlobalAgenticDashboard: true } };
 
   beforeEach(async () => {
     configRef.current = {};
@@ -788,11 +827,19 @@ describe("TaskSpawner widget", () => {
     spawnAgentInWorktreeMock.mockClear();
     _resetOrchestratorService();
     resetRegistry();
-    orchestrator = await createOrchestrator({
-      name: "Spawn Dash",
-      baseDir: "/work/proj",
-      pathOverride: "/tmp/sp.md",
-    });
+    const { setWorkspaceGroups, resetWorkspaceGroupsForTest } =
+      await import("../../../lib/stores/workspace-groups");
+    resetWorkspaceGroupsForTest();
+    setWorkspaceGroups([
+      {
+        id: GROUP_ID,
+        name: "Spawn Group",
+        path: GROUP_PATH,
+        color: "blue",
+        groupDashboardEnabled: true,
+        workspaceIds: [],
+      },
+    ]);
   });
 
   afterEach(() => {
@@ -805,7 +852,8 @@ describe("TaskSpawner widget", () => {
       props: {
         api,
         component: TaskSpawner,
-        props: { orchestratorId: orchestrator.id },
+        props: {},
+        host: groupHost,
       },
     });
 
@@ -829,7 +877,8 @@ describe("TaskSpawner widget", () => {
       props: {
         api,
         component: TaskSpawner,
-        props: { orchestratorId: orchestrator.id },
+        props: {},
+        host: groupHost,
       },
     });
 
@@ -849,7 +898,8 @@ describe("TaskSpawner widget", () => {
       props: {
         api,
         component: TaskSpawner,
-        props: { orchestratorId: orchestrator.id },
+        props: {},
+        host: groupHost,
       },
     });
 
@@ -870,13 +920,14 @@ describe("TaskSpawner widget", () => {
     expect(spawnBtn.disabled).toBe(false);
   });
 
-  it("Spawn invokes spawnAgentInWorktree with form values, then collapses", async () => {
+  it("group scope → spawns with repoPath=group.path, groupId, spawnedBy={kind:'group'}", async () => {
     const api = makeApi();
     const { container } = render(ExtensionWrapper, {
       props: {
         api,
         component: TaskSpawner,
-        props: { orchestratorId: orchestrator.id },
+        props: {},
+        host: groupHost,
       },
     });
 
@@ -896,7 +947,6 @@ describe("TaskSpawner widget", () => {
     ) as HTMLButtonElement;
     await fireEvent.click(spawnBtn);
 
-    // Wait for the async spawn handler to resolve and the form to collapse.
     await tick();
     await tick();
 
@@ -905,15 +955,80 @@ describe("TaskSpawner widget", () => {
     expect(callArg).toMatchObject({
       agent: "claude-code",
       taskContext: "Refactor the thing",
-      repoPath: "/work/proj",
-      orchestratorId: orchestrator.id,
+      repoPath: GROUP_PATH,
+      groupId: GROUP_ID,
+      spawnedBy: { kind: "group", groupId: GROUP_ID },
       branch: "agent/claude-code/refactor-the-thing",
     });
+    expect(callArg.orchestratorId).toBeUndefined();
     // Form collapses on success.
     expect(container.querySelector("[data-task-spawner-form]")).toBeNull();
     expect(
       container.querySelector("[data-task-spawner-expand]"),
     ).not.toBeNull();
+  });
+
+  it("global scope + repoPath config → spawns with spawnedBy={kind:'global'} and no groupId", async () => {
+    const api = makeApi();
+    const { container } = render(ExtensionWrapper, {
+      props: {
+        api,
+        component: TaskSpawner,
+        props: { repoPath: "/work/anywhere" },
+        host: globalHost,
+      },
+    });
+
+    await fireEvent.click(
+      container.querySelector("[data-task-spawner-expand]") as HTMLElement,
+    );
+
+    const textarea = container.querySelector(
+      "[data-task-spawner-task]",
+    ) as HTMLTextAreaElement;
+    await fireEvent.input(textarea, { target: { value: "Do global task" } });
+
+    await fireEvent.click(
+      container.querySelector("[data-task-spawner-spawn]") as HTMLElement,
+    );
+    await tick();
+    await tick();
+
+    expect(spawnAgentInWorktreeMock).toHaveBeenCalledTimes(1);
+    const callArg = spawnAgentInWorktreeMock.mock.calls[0]?.[0];
+    expect(callArg).toMatchObject({
+      repoPath: "/work/anywhere",
+      spawnedBy: { kind: "global" },
+    });
+    expect(callArg.groupId).toBeUndefined();
+    expect(callArg.orchestratorId).toBeUndefined();
+  });
+
+  it("no host / scope=none → spawn button stays disabled even with task text", async () => {
+    const api = makeApi();
+    const { container } = render(ExtensionWrapper, {
+      props: {
+        api,
+        component: TaskSpawner,
+        props: {},
+      },
+    });
+
+    const host = container.querySelector("[data-task-spawner]");
+    expect(host?.getAttribute("data-scope-kind")).toBe("none");
+
+    await fireEvent.click(
+      container.querySelector("[data-task-spawner-expand]") as HTMLElement,
+    );
+    const textarea = container.querySelector(
+      "[data-task-spawner-task]",
+    ) as HTMLTextAreaElement;
+    await fireEvent.input(textarea, { target: { value: "anything" } });
+    const spawnBtn = container.querySelector(
+      "[data-task-spawner-spawn]",
+    ) as HTMLButtonElement;
+    expect(spawnBtn.disabled).toBe(true);
+    expect(spawnAgentInWorktreeMock).not.toHaveBeenCalled();
   });
 
   it("Spawn surfaces the error and keeps the form expanded on failure", async () => {
@@ -923,7 +1038,8 @@ describe("TaskSpawner widget", () => {
       props: {
         api,
         component: TaskSpawner,
-        props: { orchestratorId: orchestrator.id },
+        props: {},
+        host: groupHost,
       },
     });
 
@@ -952,7 +1068,8 @@ describe("TaskSpawner widget", () => {
       props: {
         api,
         component: TaskSpawner,
-        props: { orchestratorId: orchestrator.id },
+        props: {},
+        host: groupHost,
       },
     });
 

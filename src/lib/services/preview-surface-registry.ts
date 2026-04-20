@@ -19,6 +19,14 @@ export interface PreviewSurfaceEntry {
   path: string;
   paneId: string;
   workspaceId: string;
+  /**
+   * Snapshot of the owning workspace's metadata at registration time.
+   * Consumed by the markdown previewer to inject `DashboardHostContext`
+   * into widgets mounted inside the surface (see spec §5.3). The field
+   * is optional so non-dashboard preview surfaces don't have to
+   * fabricate one — widgets outside any preview simply see no host.
+   */
+  hostMetadata?: Record<string, unknown>;
 }
 
 const _store = writable<PreviewSurfaceEntry[]>([]);
@@ -49,6 +57,12 @@ export function findPreviewSurfaceByPath(
   path: string,
 ): PreviewSurfaceEntry | undefined {
   return get(_store).find((e) => e.path === path);
+}
+
+export function getPreviewSurfaceById(
+  surfaceId: string,
+): PreviewSurfaceEntry | undefined {
+  return get(_store).find((e) => e.surfaceId === surfaceId);
 }
 
 export function resetPreviewSurfaceRegistry(): void {

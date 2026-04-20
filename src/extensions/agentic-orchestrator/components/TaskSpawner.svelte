@@ -1,29 +1,44 @@
 <script lang="ts">
   /**
-   * TaskSpawner — manual "+ New Task" affordance for an orchestrator.
+   * TaskSpawner — manual "+ New Task" affordance inside a dashboard.
    *
-   * Spawns the chosen agent into a fresh worktree workspace tagged
-   * with this orchestrator. The form's task description becomes the
-   * agent's startup task context (passed as a single quoted argument).
+   * The spawn target is derived from the enclosing DashboardHostContext:
+   *   - "group" scope → repoPath = the group's path;
+   *     metadata.groupId + metadata.spawnedBy = { kind:'group', groupId }
+   *   - "global" scope → repoPath from the `repoPath` config prop (the
+   *     Global Agentic Dashboard can't infer a repo on its own);
+   *     metadata.spawnedBy = { kind:'global' }
+   *   - "none" → form is disabled, "No scope" error shown
+   *
+   * The form's task description becomes the agent's startup task context
+   * (passed as a single quoted argument).
    *
    * Config:
-   *   orchestratorId: string         — required; scopes the spawn target
-   *   defaultAgent?: string       — picker default (defaults to claude-code)
+   *   repoPath?: string — required for global scope; ignored for group
+   *   defaultAgent?: string — picker default (defaults to claude-code)
    */
   import { getContext } from "svelte";
   import { EXTENSION_API_KEY, type ExtensionAPI } from "../../api";
-  import { getOrchestrator } from "../orchestrator-service";
   import { slugify } from "../widget-helpers";
   import {
     spawnAgentInWorktree,
     type SpawnAgentType,
+    type SpawnedByMarker,
   } from "../../../lib/services/spawn-helper";
+  import {
+    deriveDashboardScope,
+    getDashboardHost,
+  } from "../../../lib/contexts/dashboard-host";
+  import { getWorkspaceGroup } from "../../../lib/stores/workspace-groups";
 
-  export let orchestratorId: string;
+  /** Required when the enclosing host is global (no group.path to infer). */
+  export let repoPath: string | undefined = undefined;
   export let defaultAgent: string = "claude-code";
 
   const api = getContext<ExtensionAPI>(EXTENSION_API_KEY);
   const theme = api.theme;
+  const host = getDashboardHost();
+  const scope = deriveDashboardScope(host);
 
   let expanded = false;
   let task = "";
@@ -40,9 +55,31 @@
     { id: "custom", label: "Custom..." },
   ];
 
-  $: orchestrator = getOrchestrator(orchestratorId);
+  function resolveSpawnTarget():
+    | { repoPath: string; spawnedBy: SpawnedByMarker; groupId?: string }
+    | { error: string } {
+    if (scope.kind === "group") {
+      const group = getWorkspaceGroup(scope.groupId);
+      if (!group) return { error: "Workspace Group not found" };
+      return {
+        repoPath: group.path,
+        spawnedBy: { kind: "group", groupId: scope.groupId },
+        groupId: scope.groupId,
+      };
+    }
+    if (scope.kind === "global") {
+      if (!repoPath || !repoPath.trim()) {
+        return { error: "Global TaskSpawner requires a repoPath config" };
+      }
+      return { repoPath, spawnedBy: { kind: "global" } };
+    }
+    return { error: "TaskSpawner requires a dashboard host scope" };
+  }
+
+  $: target = resolveSpawnTarget();
+  $: hasTarget = !("error" in target);
   $: branchPlaceholder = task ? slugify(task) : "task-branch";
-  $: canSpawn = task.trim().length > 0 && !!orchestrator && !spawning;
+  $: canSpawn = task.trim().length > 0 && hasTarget && !spawning;
 
   function expand() {
     expanded = true;
@@ -59,8 +96,8 @@
 
   async function spawn() {
     if (!canSpawn) return;
-    if (!orchestrator) {
-      spawnError = "Orchestrator not found";
+    if ("error" in target) {
+      spawnError = target.error;
       return;
     }
     spawning = true;
@@ -76,12 +113,10 @@
         agent,
         ...(agent === "custom" ? { command: agent } : {}),
         taskContext: trimmedTask,
-        repoPath: orchestrator.baseDir,
+        repoPath: target.repoPath,
         branch: branchName,
-        orchestratorId,
-        ...(orchestrator.parentGroupId
-          ? { groupId: orchestrator.parentGroupId }
-          : {}),
+        spawnedBy: target.spawnedBy,
+        ...(target.groupId ? { groupId: target.groupId } : {}),
       });
       // Success — collapse the form back to the "+ New Task" button.
       cancel();
@@ -102,7 +137,8 @@
 
 <div
   data-task-spawner
-  data-orchestrator-id={orchestratorId}
+  data-scope-kind={scope.kind}
+  data-scope-group-id={scope.kind === "group" ? scope.groupId : ""}
   style="
     display: flex; flex-direction: column; gap: 8px;
     padding: 12px; border: 1px solid {$theme.border};

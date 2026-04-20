@@ -8,6 +8,11 @@ import {
 } from "../../services/markdown-component-registry";
 import { getExtensionApiById } from "../../services/extension-loader";
 import { EXTENSION_API_KEY } from "../../extension-types";
+import {
+  DASHBOARD_HOST_KEY,
+  type DashboardHostContext,
+} from "../../contexts/dashboard-host";
+import { getPreviewSurfaceById } from "../../services/preview-surface-registry";
 import "github-markdown-css/github-markdown-dark.css";
 
 /**
@@ -26,6 +31,25 @@ const elementUnsubs = new WeakMap<HTMLElement, () => void>();
 /** Most recently rendered content per element — used by the store-driven
  *  re-render to avoid re-reading from disk. */
 const elementContent = new WeakMap<HTMLElement, string>();
+
+/**
+ * Look up the owning PreviewSurface for a widget mount target by walking
+ * ancestor elements for the `data-preview-surface-id` marker and matching
+ * it against the preview-surface registry. Returns null when the widget
+ * is mounted outside any surface (e.g. a markdown preview rendered in a
+ * test harness or a future embedder) so widgets can decide to render
+ * empty / error state.
+ */
+function resolveDashboardHost(
+  target: HTMLElement,
+): DashboardHostContext | null {
+  const surfaceEl = target.closest("[data-preview-surface-id]");
+  const surfaceId = surfaceEl?.getAttribute("data-preview-surface-id") ?? "";
+  if (!surfaceId) return null;
+  const entry = getPreviewSurfaceById(surfaceId);
+  if (!entry?.hostMetadata) return null;
+  return { metadata: entry.hostMetadata };
+}
 
 function disposeMounts(element: HTMLElement): void {
   const mounts = elementMounts.get(element);
@@ -115,6 +139,12 @@ function renderChunks(content: string, element: HTMLElement): void {
       const extApi = getExtensionApiById(widget.source);
       const context = new Map<unknown, unknown>();
       if (extApi) context.set(EXTENSION_API_KEY, extApi);
+      // Inject DashboardHostContext when the widget's target element sits
+      // inside a PreviewSurface. Dashboard widgets (agent-list, kanban,
+      // task-spawner) derive their scope from this context — see the
+      // spec's §5.3 widget-scope-derivation rules.
+      const dashboardHost = resolveDashboardHost(host);
+      if (dashboardHost) context.set(DASHBOARD_HOST_KEY, dashboardHost);
       const instance = mount(widget.component as Component, {
         target: host,
         props: chunk.config,

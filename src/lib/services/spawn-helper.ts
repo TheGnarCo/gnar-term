@@ -48,6 +48,15 @@ const AGENT_COMMANDS: Record<Exclude<SpawnAgentType, "custom">, string> = {
   aider: "aider",
 };
 
+/**
+ * Provenance marker attached to workspaces spawned from a dashboard.
+ * Mirrors `metadata.spawnedBy` on the created workspace and ultimately
+ * drives the bot-icon affordance in the sidebar. See spec §3.2 / §5.3.
+ */
+export type SpawnedByMarker =
+  | { kind: "global" }
+  | { kind: "group"; groupId: string };
+
 export interface SpawnAgentInWorktreeArgs {
   /** Display name for the spawned workspace. */
   name: string;
@@ -79,6 +88,12 @@ export interface SpawnAgentInWorktreeArgs {
    * nested list alongside other group workspaces.
    */
   groupId?: string;
+  /**
+   * Provenance marker — the new workspace's metadata.spawnedBy records
+   * which dashboard spawned it. Presence drives the bot-icon treatment
+   * in the sidebar; shape supports later "jump to spawner" affordances.
+   */
+  spawnedBy?: SpawnedByMarker;
 }
 
 export interface SpawnAgentInWorktreeResult {
@@ -189,6 +204,7 @@ export async function spawnAgentInWorktree(
       ? { parentOrchestratorId: args.orchestratorId }
       : {}),
     ...(args.groupId ? { groupId: args.groupId } : {}),
+    ...(args.spawnedBy ? { spawnedBy: args.spawnedBy } : {}),
   };
 
   const { workspaceId } = await createWorktreeWorkspaceFromConfig(config);

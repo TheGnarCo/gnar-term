@@ -186,7 +186,13 @@ describe("agentic-orchestrator new-orchestrator action: handler", () => {
     expect(writeArgs.content).toBe(buildOrchestratorDashboardMarkdown(o));
     expect(writeArgs.content).toContain("# My Orch");
     expect(writeArgs.content).toContain("/picked/base");
-    expect(writeArgs.content).toContain(o.id);
+    // Stage 6 drops orchestratorId from the markdown template — widgets
+    // pull scope from the enclosing DashboardHostContext instead. The
+    // template is identity-free and relies on the workspace metadata
+    // (groupId, isDashboard) carried by the Dashboard workspace.
+    expect(writeArgs.content).not.toContain(o.id);
+    expect(writeArgs.content).toContain("```gnar:kanban");
+    expect(writeArgs.content).toContain("task-spawner");
   });
 
   it("project context: zero-prompt. Creates 'Agents' with inherited baseDir + color", async () => {

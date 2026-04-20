@@ -65,6 +65,29 @@ describe("Extension barrier enforcement", () => {
       ],
       "agentic-orchestrator/components/TaskSpawner.svelte": [
         "../../../lib/services/spawn-helper",
+        // Dashboard widgets (kanban, agent-list, task-spawner) derive
+        // their scope from the enclosing DashboardHostContext — a core
+        // contract every dashboard contribution consumes. The core-side
+        // stores are needed for group path + claimed-workspace filtering
+        // per spec §5.3. These piercings are load-bearing until Stage 7
+        // collapses the agentic extension to pure register calls.
+        "../../../lib/contexts/dashboard-host",
+        "../../../lib/stores/workspace-groups",
+      ],
+      "agentic-orchestrator/components/AgentList.svelte": [
+        "../../../lib/contexts/dashboard-host",
+      ],
+      "agentic-orchestrator/components/AgentListSidebarTab.svelte": [
+        "../../../lib/contexts/dashboard-host",
+      ],
+      "agentic-orchestrator/components/Kanban.svelte": [
+        "../../../lib/contexts/dashboard-host",
+      ],
+      "agentic-orchestrator/widget-helpers.ts": [
+        "../../lib/contexts/dashboard-host",
+        "../../lib/stores/workspace",
+        "../../lib/stores/workspace-groups",
+        "../../lib/services/claimed-workspace-registry",
       ],
       // AgentOrchestratorRow's banner "+ New" surfaces task + issue spawn
       // flows alongside TaskSpawner / Issues. Same allowlist applies —

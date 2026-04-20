@@ -213,11 +213,16 @@
           <ExtensionWrapper
             api={surfaceApi}
             component={typeDef.component}
-            props={{ surface, visible: surface.id === pane.activeSurfaceId }}
+            props={{
+              ...(surface.props ?? {}),
+              surface,
+              visible: surface.id === pane.activeSurfaceId,
+            }}
           />
         {:else}
           <svelte:component
             this={typeDef.component as Component}
+            {...surface.props ?? {}}
             {surface}
             visible={surface.id === pane.activeSurfaceId}
           />

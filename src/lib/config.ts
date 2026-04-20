@@ -118,6 +118,37 @@ export interface AgentsConfig {
 }
 
 /**
+ * Workspace Group — a named, colored, path-rooted grouping of
+ * workspaces. Workspaces whose CWD falls under `path` are auto-adopted
+ * (via `metadata.groupId`) and render nested inside the group's block
+ * in the Workspaces section.
+ *
+ * Defined in core (rather than in an extension) because it is persisted
+ * user data that multiple core services and extensions read. Stage 5
+ * relocates the backing CRUD service from project-scope to core; the
+ * type already lives here so dashboard-contribution consumers can depend
+ * on a stable core import path.
+ */
+export interface WorkspaceGroupEntry {
+  id: string;
+  name: string;
+  /** Root CWD — auto-adoption uses this as a longest-prefix ancestor match. */
+  path: string;
+  color: string;
+  /** Ids of workspaces currently claimed by this group. */
+  workspaceIds: string[];
+  /** True when `path` is the root of a git repo. Used by gates (e.g. worktree actions). */
+  isGit: boolean;
+  createdAt: string;
+  /**
+   * Id of the Group Dashboard workspace hosting this group's markdown
+   * Live Preview. Eagerly created alongside the group. Resolved from
+   * the workspaces store by consumers.
+   */
+  dashboardWorkspaceId?: string;
+}
+
+/**
  * Agent Orchestrator — a markdown-backed agent workspace container.
  * Defined in core (config.ts) rather than in the extension because it is
  * persisted user data (parallel to projects/worktrees) and other

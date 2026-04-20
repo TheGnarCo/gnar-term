@@ -513,6 +513,31 @@ export interface ExtensionAPI {
    */
   getRootRowRenderer(kind: string): { component: unknown } | undefined;
 
+  /**
+   * Register a dashboard contribution — a "kind of dashboard" that can
+   * attach to a Workspace Group. Each group's context menu surfaces an
+   * "Add <actionLabel>" affordance per registered contribution whose
+   * `isAvailableFor` gate accepts the group and whose `capPerGroup`
+   * isn't already met. When invoked, core calls `create(group)` to
+   * materialize the dashboard workspace. Automatically unregistered on
+   * extension deactivate.
+   *
+   * Core's built-in Group Dashboard registers under `id: "group"`. The
+   * agentic extension registers under `id: "agentic"`. Dashboard tiles
+   * carry `metadata.dashboardContributionId = contribution.id` so the
+   * multi-dashboard grid can attribute them back to their contribution.
+   */
+  registerDashboardContribution(contribution: DashboardContributionInput): void;
+
+  /**
+   * Register a pseudo-workspace — a non-persisted, pinned entry that
+   * renders in the root sidebar list. Pseudo-workspaces cannot be
+   * deleted, renamed, or have panes/surfaces added through normal
+   * workspace controls. The canonical use is the Global Agentic
+   * Dashboard. Automatically unregistered on extension deactivate.
+   */
+  registerPseudoWorkspace(pw: PseudoWorkspaceInput): void;
+
   // Workspace subtitle — components rendered below workspace name in sidebar
   /** Register a Svelte component to render below workspace names. Component receives { workspaceId } prop. */
   registerWorkspaceSubtitle(component: unknown, priority?: number): void;
@@ -906,6 +931,86 @@ export interface WorkspaceActionInfo {
   zone?: "workspace" | "sidebar";
   handler: (ctx: WorkspaceActionContext) => void | Promise<void>;
   when?: (ctx: WorkspaceActionContext) => boolean;
+}
+
+// --- Dashboard contributions / pseudo-workspaces ---
+//
+// Stage 4 surface. Extensions register a DashboardContributionInput or
+// PseudoWorkspaceInput via the corresponding ExtensionAPI method; core
+// attaches `source` and stores the full record in the registry.
+
+/**
+ * Minimum shape of a Workspace Group passed to contribution hooks. The
+ * canonical type lives in core (`src/lib/config.ts#WorkspaceGroupEntry`);
+ * the public API only exposes the fields contributions are allowed to
+ * read so core can evolve the stored record without breaking extensions.
+ */
+export interface WorkspaceGroupRef {
+  id: string;
+  name: string;
+  /** Root CWD — contributions typically place markdown under `<path>/.gnar-term/...`. */
+  path: string;
+  color: string;
+  isGit: boolean;
+}
+
+/**
+ * Arguments for `ExtensionAPI.registerDashboardContribution`. See the
+ * registry docs in `src/lib/services/dashboard-contribution-registry.ts`
+ * for lifecycle details.
+ */
+export interface DashboardContributionInput {
+  /**
+   * Stable identifier. Also stamped as `metadata.dashboardContributionId`
+   * on the created dashboard workspace so the grid can attribute tiles.
+   * Must be unique across all contributions.
+   */
+  id: string;
+  /** Tile label (e.g. "Agentic Dashboard"). */
+  label: string;
+  /** Context-menu verb (e.g. "Add Agentic Dashboard"). */
+  actionLabel: string;
+  /**
+   * Maximum coexisting dashboards of this kind per group. `1` is the
+   * canonical exclusive cap; `Number.POSITIVE_INFINITY` for unlimited.
+   */
+  capPerGroup: number;
+  /**
+   * Materialize the dashboard for the given group. Must resolve to the
+   * new workspace's id.
+   */
+  create: (group: WorkspaceGroupRef) => Promise<string>;
+  /**
+   * Optional gate — when returns false, the contribution is hidden from
+   * this group's "Add Dashboard" menu.
+   */
+  isAvailableFor?: (group: WorkspaceGroupRef) => boolean;
+}
+
+/**
+ * Arguments for `ExtensionAPI.registerPseudoWorkspace`. See the registry
+ * docs in `src/lib/services/pseudo-workspace-registry.ts`.
+ */
+export interface PseudoWorkspaceInput {
+  /** Stable identifier. Convention: `<extensionId>.<name>`. */
+  id: string;
+  /** Human-readable label (a11y + context menus). */
+  label: string;
+  /** Pin position within the root list. */
+  position: "root-top" | "root-bottom";
+  /** Icon component rendered in the root-row entry. */
+  icon: unknown;
+  /** Body component rendered when the pseudo-workspace is active. */
+  render: unknown;
+  /**
+   * Synthetic workspace metadata made available to the body via
+   * `DashboardHostContext`. Mirror whatever a real dashboard workspace
+   * would carry for the same role (e.g.
+   * `{ isGlobalAgenticDashboard: true }`).
+   */
+  metadata: Record<string, unknown>;
+  /** Optional settings component surfaced in the extension's settings page. */
+  settings?: unknown;
 }
 
 // --- Workspace creation options ---

@@ -100,8 +100,11 @@ describe("Extension barrier enforcement", () => {
       for (const line of lines) {
         // Match any import from a ../../lib/ or ../../../lib/ path
         if (!line.match(/from\s+["'][^"']*\/lib\//)) continue;
-        // Allow type-only imports
-        if (line.trimStart().startsWith("import type")) continue;
+        // Allow type-only imports and type-only re-exports — neither
+        // emits a runtime dependency, so they don't pierce the barrier.
+        const trimmed = line.trimStart();
+        if (trimmed.startsWith("import type")) continue;
+        if (trimmed.startsWith("export type")) continue;
         // Allow specific utilities
         if (ALLOWED_IMPORTS.some((mod) => line.includes(mod))) continue;
         // Allow per-file exceptions

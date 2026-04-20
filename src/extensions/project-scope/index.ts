@@ -27,24 +27,13 @@ import {
 } from "./project-service";
 
 /**
- * A Workspace Group: a named, colored grouping of workspaces rooted at
- * a path. Workspaces join a group by carrying `metadata.groupId`.
+ * Re-export of the core Workspace Group type. The canonical definition
+ * lives in `src/lib/config.ts` so core services (dashboard contribution
+ * registry, pseudo-workspace registry, Stage 5's workspace-group
+ * service) can reference it without depending on an extension.
  */
-export interface WorkspaceGroupEntry {
-  id: string;
-  name: string;
-  path: string;
-  color: string;
-  workspaceIds: string[];
-  isGit: boolean;
-  createdAt: string;
-  /**
-   * Id of the Dashboard workspace that hosts this group's markdown
-   * Live Preview. Set when the Dashboard is created eagerly on group
-   * creation. Resolved from the workspaces store by consumers.
-   */
-  dashboardWorkspaceId?: string;
-}
+export type { WorkspaceGroupEntry } from "../../lib/config";
+import type { WorkspaceGroupEntry } from "../../lib/config";
 
 function generateId(): string {
   return crypto.randomUUID();

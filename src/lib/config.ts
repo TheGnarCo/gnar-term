@@ -16,6 +16,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { writable, type Readable } from "svelte/store";
 import { getHome } from "./services/service-helpers";
+import { runConfigMigrations } from "./services/config-migrations";
 
 // --- Types (cmux-compatible + extensions) ---
 
@@ -145,6 +146,16 @@ export interface AgentOrchestrator {
 }
 
 export interface GnarTermConfig {
+  /**
+   * Monotonic schema version for on-disk config shape. Loaders call
+   * `runConfigMigrations` (src/lib/services/config-migrations.ts) after
+   * parsing; migrations advance this to the current target and the
+   * loader saves back when it changes.
+   *
+   * Absent on configs written before the migration scaffold landed —
+   * those are treated as version 0 and stamped on first load.
+   */
+  schemaVersion?: number;
   // gnar-term extensions
   theme?: string;
   fontSize?: number;
@@ -198,6 +209,25 @@ let _configPath = "";
 const _configStore = writable<GnarTermConfig>({});
 export const configStore: Readable<GnarTermConfig> = _configStore;
 
+async function applyMigrationsAndPersist(
+  parsed: GnarTermConfig,
+  path: string,
+): Promise<GnarTermConfig> {
+  const { migrated, changed } = runConfigMigrations(parsed);
+  if (!changed) return migrated;
+  try {
+    await invoke("write_file", {
+      path,
+      content: JSON.stringify(migrated, null, 2),
+    });
+  } catch (err) {
+    // Migration is in-memory-correct; disk persistence is best-effort.
+    // Next successful saveConfig will flush the new shape.
+    console.warn("[config] Failed to persist migrated config:", err);
+  }
+  return migrated;
+}
+
 export async function loadConfig(
   explicitPath?: string,
 ): Promise<GnarTermConfig> {
@@ -205,7 +235,8 @@ export async function loadConfig(
   if (explicitPath) {
     try {
       const content = await invoke<string>("read_file", { path: explicitPath });
-      _config = JSON.parse(content);
+      const parsed = JSON.parse(content) as GnarTermConfig;
+      _config = await applyMigrationsAndPersist(parsed, explicitPath);
       _configPath = explicitPath;
       _configStore.set(_config);
       return _config;
@@ -229,7 +260,8 @@ export async function loadConfig(
   for (const path of paths) {
     try {
       const content = await invoke<string>("read_file", { path });
-      _config = JSON.parse(content);
+      const parsed = JSON.parse(content) as GnarTermConfig;
+      _config = await applyMigrationsAndPersist(parsed, path);
       _configPath = path;
       _configStore.set(_config);
       return _config;

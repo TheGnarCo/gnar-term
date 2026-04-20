@@ -27,10 +27,6 @@ import {
   registerAgenticOrchestratorExtension,
 } from "../../extensions/agentic-orchestrator";
 import {
-  projectScopeManifest,
-  registerProjectScopeExtension,
-} from "../../extensions/project-scope";
-import {
   diffViewerManifest,
   registerDiffViewerExtension,
 } from "../../extensions/diff-viewer";
@@ -65,7 +61,6 @@ export const INCLUDED_EXTENSIONS: readonly IncludedExtension[] = [
     registerAgenticOrchestratorExtension,
     "agentic-orchestrator",
   ],
-  [projectScopeManifest, registerProjectScopeExtension, "workspace-groups"],
   [diffViewerManifest, registerDiffViewerExtension, "diff-viewer"],
   [jrvsThemesManifest, registerJrvsThemesExtension, "jrvs-themes"],
   [

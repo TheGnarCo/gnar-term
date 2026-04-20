@@ -49,13 +49,6 @@ describe("Extension barrier enforcement", () => {
         "../../lib/services/workspace-service",
         "../../lib/stores/workspace",
       ],
-      // project-scope creates + closes a Dashboard workspace eagerly for
-      // each project, so it imports createWorkspaceFromDef and reads
-      // the workspaces store directly.
-      "project-scope/index.ts": [
-        "../../lib/services/workspace-service",
-        "../../lib/stores/workspace",
-      ],
       // P7: Issues + TaskSpawner widgets call the shared spawn-helper
       // (core service that composes worktree-service + agent command
       // construction). The MCP `spawn_agent` tool calls the same helper

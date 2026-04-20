@@ -1,59 +1,66 @@
 <script lang="ts">
-  import { tick, getContext, type Component } from "svelte";
+  import { tick } from "svelte";
+  import type { Readable } from "svelte/store";
+  import { open as dialogOpen } from "@tauri-apps/plugin-dialog";
+  import ColorPicker from "./ColorPicker.svelte";
+  import { theme } from "../stores/theme";
+  import { PROJECT_COLOR_SLOTS, resolveProjectColor } from "../theme-data";
   import {
-    EXTENSION_API_KEY,
-    type ExtensionAPI,
-    resolveProjectColor,
-    PROJECT_COLOR_SLOTS,
-  } from "../api";
+    pendingCreateResolver,
+    createDialogPrefill,
+    type CreateDialogResult,
+  } from "../stores/workspace-groups-ui";
 
-  const api = getContext<ExtensionAPI>(EXTENSION_API_KEY);
-  const theme = api.theme;
-  const { ColorPicker } = api.getComponents();
+  // ColorPicker types theme as Readable<Record<string, string>>; the
+  // core store is Readable<ThemeDef>, structurally compatible but not
+  // assignable without a cast.
+  const themeView = theme as unknown as Readable<Record<string, string>>;
+
+  function randomColor(): string {
+    return (
+      PROJECT_COLOR_SLOTS[
+        Math.floor(Math.random() * PROJECT_COLOR_SLOTS.length)
+      ] ?? "#4a90e2"
+    );
+  }
 
   let name = "";
   let path = "";
-  let color =
-    PROJECT_COLOR_SLOTS[Math.floor(Math.random() * PROJECT_COLOR_SLOTS.length)];
+  let color: string = randomColor();
   let error = "";
   let nameManuallyEdited = false;
   let nameInput: HTMLInputElement;
 
-  // Dialog visibility is driven by custom event from createProjectFlow
   let showDialog = false;
-  api.on("extension:workspace-group:dialog-toggle", (event) => {
-    const e = event as Record<string, unknown>;
-    showDialog = (e.visible as boolean) ?? false;
-  });
 
-  interface CreateDialogPrefill {
-    path: string;
-    name?: string;
-  }
-
-  function reset() {
-    // Honor a prefill passed in via state (e.g. Promote-to-Project flow).
-    // The caller is responsible for clearing it afterwards; we just read.
-    const prefill = api.state.get<CreateDialogPrefill | null>(
-      "createDialogPrefill",
-    );
-    name = prefill?.name ?? "";
-    path = prefill?.path ?? "";
-    color =
-      PROJECT_COLOR_SLOTS[
-        Math.floor(Math.random() * PROJECT_COLOR_SLOTS.length)
-      ];
-    error = "";
-    // If we got a name from prefill, treat it as manually-edited so the
-    // "auto-derive name from path on browse" path doesn't clobber it.
-    nameManuallyEdited = Boolean(prefill?.name);
+  $: {
+    // Mount/unmount based on resolver presence. The dialog reads the
+    // current prefill each time it opens so reopening after a cancel
+    // picks up fresh defaults.
+    const hasResolver = $pendingCreateResolver !== null;
+    if (hasResolver && !showDialog) {
+      const prefill = $createDialogPrefill;
+      name = prefill?.name ?? "";
+      path = prefill?.path ?? "";
+      color = randomColor();
+      error = "";
+      // If we got a name from prefill, treat it as manually-edited so
+      // browsing later doesn't clobber it with the derived basename.
+      nameManuallyEdited = Boolean(prefill?.name);
+      showDialog = true;
+      void tick().then(() => nameInput?.focus());
+    } else if (!hasResolver && showDialog) {
+      showDialog = false;
+    }
   }
 
   async function browse() {
-    const selected = await api.pickDirectory("Select Project Root");
-    if (!selected) return;
+    const selected = await dialogOpen({
+      directory: true,
+      title: "Select Project Root",
+    });
+    if (typeof selected !== "string") return;
     path = selected;
-
     if (!nameManuallyEdited || !name) {
       const parts = selected.replace(/\/+$/, "").split("/");
       name = parts[parts.length - 1] || "";
@@ -65,19 +72,10 @@
     nameManuallyEdited = true;
   }
 
-  function resolveDialog(
-    value: { name: string; path: string; color: string } | null,
-  ) {
-    const resolve = api.state.get<((v: unknown) => void) | null>(
-      "createDialogResolve",
-    );
-    if (resolve) {
-      resolve(value);
-      api.state.set("createDialogResolve", null);
-    }
-    api.state.set("showCreateDialog", false);
-    showDialog = false;
-    reset();
+  function resolveWith(value: CreateDialogResult) {
+    const resolver = $pendingCreateResolver;
+    if (resolver) resolver(value);
+    createDialogPrefill.set(null);
   }
 
   function submit() {
@@ -86,14 +84,14 @@
       return;
     }
     if (!name.trim()) {
-      error = "Please enter a project name.";
+      error = "Please enter a name.";
       return;
     }
-    resolveDialog({ name: name.trim(), path, color: color ?? "" });
+    resolveWith({ name: name.trim(), path, color: color ?? "" });
   }
 
   function cancel() {
-    resolveDialog(null);
+    resolveWith(null);
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -106,11 +104,6 @@
       e.preventDefault();
       cancel();
     }
-  }
-
-  $: if (showDialog) {
-    reset();
-    void tick().then(() => nameInput?.focus());
   }
 </script>
 
@@ -136,7 +129,7 @@
       on:keydown={handleKeydown}
     >
       <div style="font-size: 14px; font-weight: 600; color: {$theme.fg};">
-        New Project
+        New Workspace Group
       </div>
 
       {#if error}
@@ -153,13 +146,13 @@
 
       <div style="display: flex; flex-direction: column; gap: 4px;">
         <label
-          for="project-folder"
+          for="workspace-group-folder"
           style="font-size: 12px; color: {$theme.fgDim}; font-weight: 500;"
-          >Project Folder</label
+          >Folder</label
         >
         <div style="display: flex; gap: 8px;">
           <input
-            id="project-folder"
+            id="workspace-group-folder"
             type="text"
             readonly
             value={path}
@@ -185,12 +178,12 @@
 
       <div style="display: flex; flex-direction: column; gap: 4px;">
         <label
-          for="project-name"
+          for="workspace-group-name"
           style="font-size: 12px; color: {$theme.fgDim}; font-weight: 500;"
-          >Project Name</label
+          >Name</label
         >
         <input
-          id="project-name"
+          id="workspace-group-name"
           bind:this={nameInput}
           type="text"
           bind:value={name}
@@ -209,12 +202,11 @@
         <span style="font-size: 12px; color: {$theme.fgDim}; font-weight: 500;"
           >Color</span
         >
-        <svelte:component
-          this={ColorPicker as Component}
+        <ColorPicker
           bind:value={color}
-          colors={PROJECT_COLOR_SLOTS}
+          colors={[...PROJECT_COLOR_SLOTS]}
           resolveColor={(c: string) => resolveProjectColor(c, $theme)}
-          {theme}
+          theme={themeView}
         />
       </div>
 

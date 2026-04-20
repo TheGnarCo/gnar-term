@@ -54,6 +54,8 @@
   import { initGitStatus } from "./lib/bootstrap/init-git-status";
   import { initPreview } from "./lib/bootstrap/init-preview";
   import { initAgentDetectionBootstrap } from "./lib/bootstrap/init-agent-detection";
+  import { initWorkspaceGroups } from "./lib/bootstrap/init-workspace-groups";
+  import { flushWorkspaceGroups } from "./lib/stores/workspace-groups";
   import {
     restoreWorkspaces,
     type CliArgs,
@@ -107,6 +109,7 @@
   import FormPrompt from "./lib/components/FormPrompt.svelte";
   import SettingsOverlay from "./lib/components/SettingsOverlay.svelte";
   import RestoreCommandsOverlay from "./lib/components/RestoreCommandsOverlay.svelte";
+  import WorkspaceGroupCreateOverlay from "./lib/components/WorkspaceGroupCreateOverlay.svelte";
   import { overlayStore } from "./lib/services/overlay-registry";
   import { surfaceTypeStore } from "./lib/services/surface-type-registry";
   import ExtensionWrapper from "./lib/components/ExtensionWrapper.svelte";
@@ -510,6 +513,11 @@
     initPreview();
     initAgentDetectionBootstrap();
 
+    // Workspace Groups (formerly the project-scope extension) —
+    // registered from core so the root-row renderer, commands, and
+    // Dashboard contribution are available before extensions activate.
+    await initWorkspaceGroups();
+
     // Register included extensions. Only activate if explicitly enabled
     // in config — a fresh install starts with no extensions active
     // (opt-in model). Errors per extension are isolated.
@@ -609,10 +617,11 @@
     // and project membership / debounced writes can be lost on quit.
     void appWindow.onCloseRequested(async (event) => {
       event.preventDefault();
-      // Run both flushes defensively so one failure can't strand the other.
+      // Run all flushes defensively so one failure can't strand the others.
       const results = await Promise.allSettled([
         persistWorkspaces(),
         flushAllExtensionState(),
+        flushWorkspaceGroups(),
       ]);
       for (const r of results) {
         if (r.status === "rejected") {
@@ -699,6 +708,7 @@
 <ConfirmPrompt />
 <FormPrompt />
 <SettingsOverlay />
+<WorkspaceGroupCreateOverlay />
 {#if showRestoreCommandsOverlay}
   <RestoreCommandsOverlay
     onClose={() => (showRestoreCommandsOverlay = false)}

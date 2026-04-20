@@ -29,6 +29,7 @@ import {
 import { executeByShortcut } from "./command-registry";
 import { executeWorkspaceActionByShortcut } from "./workspace-action-registry";
 import { isMac } from "../terminal-service";
+import { zoomIn, zoomOut, resetFontSize } from "../stores/font-size";
 
 /**
  * Context required by shortcuts that have to reach into component
@@ -69,6 +70,10 @@ export function handleAppKeydown(
         findBarVisible.set(true);
         ctx.findNext();
       },
+      "=": zoomIn,
+      "+": zoomIn,
+      "-": zoomOut,
+      "0": resetFontSize,
     };
     const handler = cmdShortcuts[e.key];
     if (handler) {
@@ -102,6 +107,37 @@ export function handleAppKeydown(
       e.preventDefault();
       commandPaletteOpen.update((v) => !v);
       return;
+    }
+    // Non-mac only: Ctrl+Shift+K/F/= /-/0 mirror the mac Cmd bindings
+    // above. Terminal convention on Linux/Windows reserves bare Ctrl
+    // for shell signals, so in-terminal actions use Ctrl+Shift.
+    if (!isMac) {
+      if (k === "k") {
+        e.preventDefault();
+        const s = get(activeSurface);
+        if (s && isTerminalSurface(s)) s.terminal.clear();
+        return;
+      }
+      if (k === "f") {
+        e.preventDefault();
+        findBarVisible.update((v) => !v);
+        return;
+      }
+      if (e.key === "+" || e.key === "=") {
+        e.preventDefault();
+        zoomIn();
+        return;
+      }
+      if (e.key === "_" || e.key === "-") {
+        e.preventDefault();
+        zoomOut();
+        return;
+      }
+      if (e.key === ")" || e.key === "0") {
+        e.preventDefault();
+        resetFontSize();
+        return;
+      }
     }
   }
 

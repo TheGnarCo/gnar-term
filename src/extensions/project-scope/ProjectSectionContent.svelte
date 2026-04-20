@@ -8,9 +8,13 @@
     type WorkspaceActionContext,
     resolveProjectColor,
   } from "../api";
-  import type { ProjectEntry } from "./index";
+  import type { WorkspaceGroupEntry } from "./index";
   import { openProjectDashboard, projectDashboardPath } from "./index";
-  import { deleteProject, getProjects, updateProject } from "./project-service";
+  import {
+    deleteWorkspaceGroup,
+    getWorkspaceGroups,
+    updateWorkspaceGroup,
+  } from "./project-service";
   import {
     getAllSurfaces,
     isPreviewSurface,
@@ -57,7 +61,7 @@
   const ContainerRowTyped = ContainerRow as typeof ContainerRowType;
   const PathStatusLineTyped = PathStatusLine as typeof PathStatusLineType;
 
-  let project: ProjectEntry | undefined;
+  let project: WorkspaceGroupEntry | undefined;
   let stateVersion = 0;
 
   // Re-read when project state changes (not reactive — force via event).
@@ -77,7 +81,7 @@
   $: {
     void $workspacesStore;
     void stateVersion;
-    project = getProjects(api).find((p) => p.id === projectId);
+    project = getWorkspaceGroups(api).find((p) => p.id === projectId);
   }
 
   $: filterIds = project ? new Set(project.workspaceIds) : new Set<string>();
@@ -94,7 +98,7 @@
         isGit: project.isGit,
         // Forwarded so workspace actions spawned from a project (e.g.
         // "New Agent Dashboard") can inherit the project's palette
-        // choice without a second lookup through getProjects.
+        // choice without a second lookup through getWorkspaceGroups.
         projectColor: project.color,
       } satisfies WorkspaceActionContext)
     : undefined;
@@ -113,7 +117,7 @@
     const next = await api.showInputPrompt("Rename project", project.name);
     const trimmed = next?.trim();
     if (!trimmed || trimmed === project.name) return;
-    updateProject(api, project.id, { name: trimmed });
+    updateWorkspaceGroup(api, project.id, { name: trimmed });
   }
 
   async function handleDeleteProject() {
@@ -133,7 +137,7 @@
         closeWorkspace(wsIdx);
       }
     }
-    deleteProject(api, project.id);
+    deleteWorkspaceGroup(api, project.id);
   }
 
   function handleBannerContextMenu(e: MouseEvent) {

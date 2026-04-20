@@ -18,15 +18,21 @@ import ProjectCreateOverlay from "./ProjectCreateOverlay.svelte";
 import { createWorkspaceFromDef } from "../../lib/services/workspace-service";
 import { workspaces, activeWorkspaceIdx } from "../../lib/stores/workspace";
 import {
-  getProjects,
-  addProject,
-  addWorkspaceToProject,
-  removeWorkspaceFromAllProjects,
+  getWorkspaceGroups,
+  addWorkspaceGroup,
+  addWorkspaceToGroup,
+  removeWorkspaceFromAllGroups,
   clearWorkspaceIds,
-  updateProject,
+  updateWorkspaceGroup,
 } from "./project-service";
 
-export interface ProjectEntry {
+/**
+ * A Workspace Group: a named, colored grouping of workspaces rooted at
+ * a path. Workspaces join a group by carrying `metadata.projectId` (the
+ * wire-format key, preserved for backwards compatibility until the
+ * schema migration in a later stage).
+ */
+export interface WorkspaceGroupEntry {
   id: string;
   name: string;
   path: string;
@@ -35,8 +41,8 @@ export interface ProjectEntry {
   isGit: boolean;
   createdAt: string;
   /**
-   * Id of the Dashboard workspace that hosts this project's markdown
-   * Live Preview. Set when the Dashboard is created eagerly on project
+   * Id of the Dashboard workspace that hosts this group's markdown
+   * Live Preview. Set when the Dashboard is created eagerly on group
    * creation. Resolved from the workspaces store by consumers.
    */
   dashboardWorkspaceId?: string;
@@ -61,7 +67,7 @@ export function projectDashboardPath(projectPath: string): string {
  * every agent in the registry (the project's own scope is implicit
  * through the surface's location).
  */
-function buildProjectDashboardMarkdown(project: ProjectEntry): string {
+function buildProjectDashboardMarkdown(project: WorkspaceGroupEntry): string {
   return `# ${project.name}
 
 Project at \`${project.path}\`.
@@ -78,7 +84,7 @@ Project at \`${project.path}\`.
  * the file is missing. User edits survive a re-open.
  */
 async function writeProjectDashboardTemplate(
-  project: ProjectEntry,
+  project: WorkspaceGroupEntry,
   path: string,
 ): Promise<void> {
   const exists = await invoke<boolean>("file_exists", { path }).catch(
@@ -100,7 +106,7 @@ async function writeProjectDashboardTemplate(
  * record can link to it.
  */
 async function createProjectDashboardWorkspace(
-  project: ProjectEntry,
+  project: WorkspaceGroupEntry,
 ): Promise<string> {
   const path = projectDashboardPath(project.path);
   try {
@@ -135,7 +141,7 @@ async function createProjectDashboardWorkspace(
  * eagerly on project creation, so this is a pure activation call.
  * Returns true on success.
  */
-export function openProjectDashboard(project: ProjectEntry): boolean {
+export function openProjectDashboard(project: WorkspaceGroupEntry): boolean {
   const targetId = project.dashboardWorkspaceId;
   if (!targetId) return false;
   const idx = get(workspaces).findIndex((w) => w.id === targetId);
@@ -197,7 +203,7 @@ export function registerProjectScopeExtension(api: ExtensionAPI): void {
     const workspaceId = event.id as string | undefined;
     if (!workspaceId) return;
 
-    addWorkspaceToProject(api, targetProjectId, workspaceId);
+    addWorkspaceToGroup(api, targetProjectId, workspaceId);
     api.claimWorkspace(workspaceId);
   };
 
@@ -205,7 +211,7 @@ export function registerProjectScopeExtension(api: ExtensionAPI): void {
     const workspaceId = event.id as string | undefined;
     if (!workspaceId) return;
 
-    removeWorkspaceFromAllProjects(api, workspaceId);
+    removeWorkspaceFromAllGroups(api, workspaceId);
     api.unclaimWorkspace(workspaceId);
   };
 
@@ -257,7 +263,7 @@ export function registerProjectScopeExtension(api: ExtensionAPI): void {
       }
 
       const id = generateId();
-      const project: ProjectEntry = {
+      const project: WorkspaceGroupEntry = {
         id,
         name: result.name,
         path: result.path,
@@ -267,7 +273,7 @@ export function registerProjectScopeExtension(api: ExtensionAPI): void {
         createdAt: new Date().toISOString(),
       };
 
-      addProject(api, project);
+      addWorkspaceGroup(api, project);
 
       // Eagerly spawn the project's Dashboard workspace. The
       // workspace:created event below will claim it (metadata.projectId
@@ -276,7 +282,7 @@ export function registerProjectScopeExtension(api: ExtensionAPI): void {
       try {
         const dashboardWorkspaceId =
           await createProjectDashboardWorkspace(project);
-        updateProject(api, id, { dashboardWorkspaceId });
+        updateWorkspaceGroup(api, id, { dashboardWorkspaceId });
       } catch (err) {
         api.reportError(
           `Failed to create project Dashboard workspace: ${
@@ -329,7 +335,7 @@ export function registerProjectScopeExtension(api: ExtensionAPI): void {
       // handler below claims workspaces tagged with metadata.projectId,
       // but promotion happens after creation, so we apply the same
       // bookkeeping manually.
-      addWorkspaceToProject(api, newProjectId, activeWs.id);
+      addWorkspaceToGroup(api, newProjectId, activeWs.id);
       api.claimWorkspace(activeWs.id);
     }
 
@@ -341,11 +347,12 @@ export function registerProjectScopeExtension(api: ExtensionAPI): void {
     // own color so the rail reads as part of the project block.
     api.registerRootRowRenderer("project", ProjectRowBody, {
       railColor: (id: string) => {
-        const project = getProjects(api).find((p) => p.id === id);
+        const project = getWorkspaceGroups(api).find((p) => p.id === id);
         if (!project) return undefined;
         return resolveProjectColor(project.color, get(api.theme));
       },
-      label: (id: string) => getProjects(api).find((p) => p.id === id)?.name,
+      label: (id: string) =>
+        getWorkspaceGroups(api).find((p) => p.id === id)?.name,
     });
 
     // "New Project" surfaces in the Workspaces header "+ New" split-
@@ -364,7 +371,7 @@ export function registerProjectScopeExtension(api: ExtensionAPI): void {
     // workspace:created handler will rebuild it from each workspace's
     // metadata.projectId as workspaces are restored.
     clearWorkspaceIds(api);
-    const projects = getProjects(api);
+    const projects = getWorkspaceGroups(api);
 
     // Seed rootRowOrder with each existing project. appendRootRow is
     // idempotent, so if a previous session already persisted an order
@@ -379,7 +386,7 @@ export function registerProjectScopeExtension(api: ExtensionAPI): void {
     // asynchronously; UI handles missing workspaces gracefully until
     // it completes.
     void (async () => {
-      for (const project of getProjects(api)) {
+      for (const project of getWorkspaceGroups(api)) {
         const hasWs =
           !!project.dashboardWorkspaceId &&
           get(workspaces).some((w) => w.id === project.dashboardWorkspaceId);
@@ -387,7 +394,7 @@ export function registerProjectScopeExtension(api: ExtensionAPI): void {
         try {
           const dashboardWorkspaceId =
             await createProjectDashboardWorkspace(project);
-          updateProject(api, project.id, { dashboardWorkspaceId });
+          updateWorkspaceGroup(api, project.id, { dashboardWorkspaceId });
         } catch (err) {
           console.warn("[project-scope] Dashboard reconciliation failed:", err);
         }
@@ -395,15 +402,15 @@ export function registerProjectScopeExtension(api: ExtensionAPI): void {
     })();
 
     // Register per-project "New Workspace" commands for the command palette
-    function registerProjectCommands(projects: ProjectEntry[]): void {
+    function registerProjectCommands(projects: WorkspaceGroupEntry[]): void {
       for (const project of projects) {
         const cmdId = `new-ws-${project.id}`;
         api.registerCommand(
           cmdId,
           () => {
             const count =
-              getProjects(api).find((p) => p.id === project.id)?.workspaceIds
-                .length ?? 0;
+              getWorkspaceGroups(api).find((p) => p.id === project.id)
+                ?.workspaceIds.length ?? 0;
             api.createWorkspace(
               `${project.name} Workspace ${count + 1}`,
               project.path,
@@ -426,7 +433,7 @@ export function registerProjectScopeExtension(api: ExtensionAPI): void {
     );
 
     api.registerCommand("open-project-dashboard", () => {
-      const projects = getProjects(api);
+      const projects = getWorkspaceGroups(api);
       if (projects.length === 0) return;
 
       const activeId = api.state.get<string | null>("activeProjectId");
@@ -451,7 +458,7 @@ export function registerProjectScopeExtension(api: ExtensionAPI): void {
         unsub();
         const projectId = activeMetadata?.projectId;
         if (typeof projectId !== "string") return;
-        const project = getProjects(api).find((p) => p.id === projectId);
+        const project = getWorkspaceGroups(api).find((p) => p.id === projectId);
         if (project) void openProjectDashboard(project);
       },
       { title: "Spawn Project Dashboard" },

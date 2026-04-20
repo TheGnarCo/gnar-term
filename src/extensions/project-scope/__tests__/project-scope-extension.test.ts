@@ -39,7 +39,7 @@ import {
   projectScopeManifest,
   registerProjectScopeExtension,
   openProjectDashboard,
-  type ProjectEntry,
+  type WorkspaceGroupEntry,
 } from "..";
 import { invoke } from "@tauri-apps/api/core";
 import { workspaces, activeWorkspaceIdx } from "../../../lib/stores/workspace";
@@ -163,7 +163,7 @@ describe("Project Scope dashboard switching", () => {
     path: string,
     name = id,
     dashboardWorkspaceId?: string,
-  ): ProjectEntry {
+  ): WorkspaceGroupEntry {
     return {
       id,
       name,

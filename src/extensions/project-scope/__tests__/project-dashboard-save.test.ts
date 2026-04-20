@@ -9,13 +9,13 @@
 import { describe, it, expect, vi } from "vitest";
 import type { ExtensionAPI } from "../../api";
 import {
-  updateProject,
-  deleteProject,
-  setProjectOrder,
+  updateWorkspaceGroup,
+  deleteWorkspaceGroup,
+  setWorkspaceGroupOrder,
 } from "../project-service";
-import type { ProjectEntry } from "../index";
+import type { WorkspaceGroupEntry } from "../index";
 
-function makeProject(id: string, name = "P"): ProjectEntry {
+function makeProject(id: string, name = "P"): WorkspaceGroupEntry {
   return {
     id,
     name,
@@ -27,10 +27,10 @@ function makeProject(id: string, name = "P"): ProjectEntry {
   };
 }
 
-function makeApiStub(initial: ProjectEntry[] = []): {
+function makeApiStub(initial: WorkspaceGroupEntry[] = []): {
   api: ExtensionAPI;
   emit: ReturnType<typeof vi.fn>;
-  readProjects: () => ProjectEntry[];
+  readProjects: () => WorkspaceGroupEntry[];
 } {
   const store = new Map<string, unknown>();
   store.set("projects", initial);
@@ -41,7 +41,7 @@ function makeApiStub(initial: ProjectEntry[] = []): {
       set: (key: string, value: unknown) => store.set(key, value),
     },
     emit,
-    // addProject / deleteProject mirror into the root-row list; stub
+    // addWorkspaceGroup / deleteWorkspaceGroup mirror into the root-row list; stub
     // the mutators so the test doesn't crash and doesn't care about
     // the order. Core root-row-order is tested separately.
     appendRootRow: vi.fn(),
@@ -50,35 +50,35 @@ function makeApiStub(initial: ProjectEntry[] = []): {
   return {
     api,
     emit,
-    readProjects: () => store.get("projects") as ProjectEntry[],
+    readProjects: () => store.get("projects") as WorkspaceGroupEntry[],
   };
 }
 
 describe("project-service mutations", () => {
-  it("updateProject writes projects and emits state-changed with the id", () => {
+  it("updateWorkspaceGroup writes the group and emits state-changed with the id", () => {
     const { api, emit, readProjects } = makeApiStub([makeProject("p1", "old")]);
-    updateProject(api, "p1", { name: "new" });
+    updateWorkspaceGroup(api, "p1", { name: "new" });
     expect(readProjects()[0].name).toBe("new");
     expect(emit).toHaveBeenCalledWith("extension:project:state-changed", {
       projectId: "p1",
     });
   });
 
-  it("deleteProject drops the project and emits state-changed", () => {
+  it("deleteWorkspaceGroup drops the group and emits state-changed", () => {
     const { api, emit, readProjects } = makeApiStub([
       makeProject("p1"),
       makeProject("p2"),
     ]);
-    deleteProject(api, "p1");
+    deleteWorkspaceGroup(api, "p1");
     expect(readProjects().map((p) => p.id)).toEqual(["p2"]);
     expect(emit).toHaveBeenCalledWith("extension:project:state-changed", {
       projectId: "p1",
     });
   });
 
-  it("setProjectOrder persists the order and emits state-changed", () => {
+  it("setWorkspaceGroupOrder persists the order and emits state-changed", () => {
     const { api, emit } = makeApiStub();
-    setProjectOrder(api, ["b", "a"]);
+    setWorkspaceGroupOrder(api, ["b", "a"]);
     expect(api.state.get<string[]>("projectOrder")).toEqual(["b", "a"]);
     expect(emit).toHaveBeenCalledWith("extension:project:state-changed", {});
   });

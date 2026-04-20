@@ -615,6 +615,20 @@ describe("SplitNodeView has draggable dividers with ratio support", () => {
     expect(source).toContain("Math.max(0.1, Math.min(0.9");
   });
 
+  it("schedules persistence when drag ends so ratio survives restart", async () => {
+    const fs = await import("fs");
+    const source = fs.readFileSync(
+      "src/lib/components/SplitNodeView.svelte",
+      "utf-8",
+    );
+    expect(source).toContain(
+      'import { schedulePersist } from "../services/workspace-service"',
+    );
+    const onEndMatch = source.match(/onEnd:\s*\(\)\s*=>\s*\{([^}]+)\}/);
+    expect(onEndMatch).not.toBeNull();
+    expect(onEndMatch![1]).toContain("schedulePersist()");
+  });
+
   it("uses correct cursor for horizontal vs vertical splits", async () => {
     const fs = await import("fs");
     const source = fs.readFileSync(

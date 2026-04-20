@@ -2,6 +2,7 @@
   import type { SplitNode, Workspace } from "../types";
   import { theme } from "../stores/theme";
   import { dragResize } from "../actions/drag-resize";
+  import { schedulePersist } from "../services/workspace-service";
   import PaneView from "./PaneView.svelte";
   import SplitNodeView from "./SplitNodeView.svelte";
 
@@ -41,6 +42,7 @@
     onEnd: () => {
       dragging = false;
       dragRect = null;
+      schedulePersist();
     },
   };
 </script>

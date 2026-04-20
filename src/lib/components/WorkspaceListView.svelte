@@ -235,7 +235,6 @@
     {#if dashboardEntries.length > 0}
       {@const count = dashboardEntries.length}
       {@const cols = Math.min(count, 3)}
-      {@const singleRail = count === 1}
       {@const isNested = !!accentColor}
       <!-- Dashboards share a grid container so they fill available width.
            Up to 3 per row; extras wrap. A container query collapses tiles
@@ -257,7 +256,6 @@
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div
             class="dashboard-tile"
-            class:dashboard-tile--rail={singleRail}
             data-dashboard-item={entry.ws.id}
             data-dashboard-agentic={isAgentic ? "true" : undefined}
             data-active={isActive ? "true" : undefined}
@@ -268,7 +266,7 @@
             style="
               background: {dashAccent}; color: {dashFg};
               opacity: {isActive ? 1 : 0.55};
-              {isActive ? `box-shadow: 0 0 0 2px ${$theme.fg};` : ''}
+              {isActive ? `box-shadow: 0 0 0 1.5px ${$theme.fg};` : ''}
             "
           >
             {#if isNested}
@@ -414,6 +412,7 @@
   .dashboard-tile {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 6px;
     padding: 6px 8px;
     min-height: 32px;
@@ -428,11 +427,6 @@
   .dashboard-tile:hover {
     filter: brightness(1.1);
   }
-  /* Single-tile rail mode: match the WorkspaceItem look (rounded right
-     only, flush left against the rail). */
-  .dashboard-tile--rail {
-    border-radius: 0 6px 6px 0;
-  }
   .dashboard-tile-icon {
     flex-shrink: 0;
     display: inline-flex;
@@ -442,22 +436,21 @@
     height: 14px;
   }
   .dashboard-tile-label {
-    flex: 1;
     min-width: 0;
     font-size: 13px;
     font-weight: 600;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    text-align: center;
   }
 
   /* When the grid is too narrow to fit labels meaningfully, collapse
-     to icon-only (centered icon inside a compact tile). Threshold is
-     ~220px which, with 3 columns + gaps, puts each tile at ~65px —
-     below that the label ellipsizes to almost nothing anyway. */
+     to icon-only. Threshold is ~220px which, with 3 columns + gaps,
+     puts each tile at ~65px — below that the label ellipsizes to
+     almost nothing anyway. */
   @container (max-width: 220px) {
     .dashboard-tile {
-      justify-content: center;
       padding: 6px;
     }
     .dashboard-tile-label {

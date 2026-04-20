@@ -199,6 +199,7 @@
       ? $theme.bgHighlight
       : 'transparent'};
     {isManaged ? `border: 1px solid ${railColor};` : ''}
+    {isActive ? `box-shadow: 0 0 0 1.5px ${$theme.fg};` : ''}
   "
   on:contextmenu|preventDefault={(e) => onContextMenu(e.clientX, e.clientY)}
   on:mouseenter={() => (hovered = true)}

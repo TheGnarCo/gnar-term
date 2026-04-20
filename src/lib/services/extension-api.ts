@@ -52,6 +52,7 @@ import {
   pendingAction,
   showInputPrompt as coreShowInputPrompt,
   showFormPrompt as coreShowFormPrompt,
+  showConfirmPrompt as coreShowConfirmPrompt,
 } from "../stores/ui";
 import { setAgentStatus, clearAgentStatus } from "../stores/agent-status";
 import {
@@ -233,11 +234,10 @@ export function createExtensionAPI(
         cancelLabel?: string;
       },
     ): Promise<boolean> {
-      // MVP: native confirm. Tauri's webview supports it. A themed modal
-      // would be a future upgrade — the API shape is already async to
-      // allow that swap without breaking callers.
-      void options;
-      return Promise.resolve(window.confirm(message));
+      // Uses the themed ConfirmPrompt overlay (store-driven). Tauri v2
+      // blocks window.confirm() behind the dialog plugin capability,
+      // so we render our own modal instead.
+      return coreShowConfirmPrompt(message, options);
     },
     showFormPrompt(
       title: string,

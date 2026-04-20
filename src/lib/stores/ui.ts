@@ -118,6 +118,41 @@ export function showInputPrompt(
   });
 }
 
+/**
+ * Confirmation prompt — themed replacement for window.confirm() which
+ * Tauri v2 blocks without the dialog plugin capability.
+ */
+export interface ConfirmPromptState {
+  message: string;
+  title?: string;
+  confirmLabel: string;
+  cancelLabel: string;
+  danger?: boolean;
+  resolve: (value: boolean) => void;
+}
+export const confirmPrompt = writable<ConfirmPromptState | null>(null);
+
+export function showConfirmPrompt(
+  message: string,
+  options?: {
+    title?: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    danger?: boolean;
+  },
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    confirmPrompt.set({
+      message,
+      title: options?.title,
+      confirmLabel: options?.confirmLabel ?? "Confirm",
+      cancelLabel: options?.cancelLabel ?? "Cancel",
+      danger: options?.danger,
+      resolve,
+    });
+  });
+}
+
 /** Form prompt — multi-field dialog
  *
  * Field types:

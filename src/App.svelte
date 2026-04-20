@@ -103,6 +103,7 @@
   import FindBar from "./lib/components/FindBar.svelte";
   import ContextMenu from "./lib/components/ContextMenu.svelte";
   import InputPrompt from "./lib/components/InputPrompt.svelte";
+  import ConfirmPrompt from "./lib/components/ConfirmPrompt.svelte";
   import FormPrompt from "./lib/components/FormPrompt.svelte";
   import SettingsOverlay from "./lib/components/SettingsOverlay.svelte";
   import RestoreCommandsOverlay from "./lib/components/RestoreCommandsOverlay.svelte";
@@ -695,6 +696,7 @@
 <CommandPalette />
 <ContextMenu />
 <InputPrompt />
+<ConfirmPrompt />
 <FormPrompt />
 <SettingsOverlay />
 {#if showRestoreCommandsOverlay}

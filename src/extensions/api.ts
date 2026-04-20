@@ -129,7 +129,8 @@ export type AppEventType =
   | "surface:titleChanged"
   | "sidebar:toggled"
   | "theme:changed"
-  | "worktree:merged";
+  | "worktree:merged"
+  | "agent:statusChanged";
 
 /** Base shape for all events delivered to extension handlers. */
 export interface AppEvent {
@@ -723,6 +724,14 @@ export interface ExtensionAPI {
   activeWorkspace: Readable<WorkspaceRef | null>;
   activePane: Readable<PaneRef | null>;
   activeSurface: Readable<SurfaceRef | null>;
+  /**
+   * Reactive list of AI agents currently detected by the core
+   * agent-detection-service. Extensions subscribe here to render agent
+   * UI (dashboards, kanbans, status rows) without owning the detection
+   * pipeline itself. Each entry is live — status transitions update the
+   * store in place and emit `agent:statusChanged` on the event bus.
+   */
+  agents: Readable<AgentRef[]>;
   theme: Readable<ExtensionTheme>;
   /** The sidebar drag-reorder currently in progress, or null when idle. */
   reorderContext: Readable<ReorderContext | null>;
@@ -917,6 +926,21 @@ export interface PaneRef {
   id: string;
   surfaces: SurfaceRef[];
   activeSurfaceId: string | null;
+}
+
+/**
+ * Public projection of a detected agent. Matches the core
+ * DetectedAgent type but keeps the extension-visible shape narrow so
+ * the public API can evolve without breaking downstream extensions.
+ */
+export interface AgentRef {
+  agentId: string;
+  agentName: string;
+  surfaceId: string;
+  workspaceId: string;
+  status: string;
+  createdAt: string;
+  lastStatusChange: string;
 }
 
 /** Shape of a surface created by an extension, as delivered to surface components. */

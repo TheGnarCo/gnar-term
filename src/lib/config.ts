@@ -95,6 +95,27 @@ export interface WorktreesConfig {
 }
 
 /**
+ * Agent detection — user-tunable settings for core's passive agent
+ * detection service (src/lib/services/agent-detection-service.ts).
+ *
+ * - `knownAgents`: additional pattern entries merged with the built-in
+ *   list (Claude Code / Codex / Aider / Cursor / Copilot). Each entry
+ *   is matched against PTY titles and streaming output.
+ * - `idleTimeout`: seconds of no output before an active agent is
+ *   reclassified as idle. Default 30.
+ */
+export interface AgentDetectionPattern {
+  name: string;
+  titlePatterns: string[];
+  oscDetectable?: boolean;
+}
+
+export interface AgentsConfig {
+  knownAgents?: AgentDetectionPattern[];
+  idleTimeout?: number;
+}
+
+/**
  * Agentic Orchestrator dashboard — a markdown-backed agent workspace.
  * Defined in core (config.ts) rather than in the extension because it is
  * persisted user data (parallel to projects/worktrees) and other
@@ -121,6 +142,7 @@ export interface GnarTermConfig {
   autoload?: string[]; // workspace command names to launch on startup
   extensions?: Record<string, ExtensionConfig>;
   worktrees?: WorktreesConfig;
+  agents?: AgentsConfig;
   agentDashboards?: AgentDashboard[];
   /**
    * MCP integration module. Controls whether gnar-term exposes its MCP tools

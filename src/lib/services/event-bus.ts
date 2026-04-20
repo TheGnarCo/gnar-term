@@ -47,6 +47,18 @@ export type AppEvent =
       baseBranch: string;
       repoPath: string;
       workspaceId: string;
+    }
+  | {
+      // Emitted by agent-detection-service whenever a detected agent
+      // transitions state. `status` is one of running | waiting | idle |
+      // active | closed (closed fires once as the agent detaches).
+      // `workspaceId` may be an empty string when the surface couldn't
+      // be resolved to a workspace.
+      type: "agent:statusChanged";
+      status: string;
+      surfaceId: string;
+      workspaceId: string;
+      agentName: string;
     };
 
 export type AppEventType = AppEvent["type"];

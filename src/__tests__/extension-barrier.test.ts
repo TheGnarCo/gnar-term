@@ -77,6 +77,13 @@ describe("Extension barrier enforcement", () => {
       "agentic-orchestrator/components/TaskSpawner.svelte": [
         "../../../lib/services/spawn-helper",
       ],
+      // AgentDashboardRow's banner "+ New" surfaces task + issue spawn
+      // flows alongside TaskSpawner / Issues. Same allowlist applies —
+      // all three are dashboard-spawn call sites for the core helper.
+      "agentic-orchestrator/AgentDashboardRow.svelte": [
+        "../../lib/services/spawn-helper",
+        "../../lib/services/gh-availability",
+      ],
       // Columns layout widget looks up registered markdown components by
       // name so authors can place arbitrary `gnar:*` widgets in columns
       // from the dashboard template. Reaching the core registry is the

@@ -23,6 +23,8 @@
  * core `agent:statusChanged` event instead.
  */
 import type { ExtensionManifest, ExtensionAPI } from "../api";
+import { resolveProjectColor } from "../api";
+import { get } from "svelte/store";
 import {
   loadDashboards,
   dashboardsStore,
@@ -105,7 +107,19 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
 
     api.registerSecondarySidebarTab("agents", AgentListSidebarTab);
 
-    api.registerRootRowRenderer(ROOT_ROW_KIND, AgentDashboardRow);
+    // Register with railColor + label resolvers so drag overlays + drop
+    // ghosts paint the dashboard's own color and name — without these
+    // the drag state falls back to theme.accent + no label and reads as
+    // a generic row rather than this specific dashboard.
+    api.registerRootRowRenderer(ROOT_ROW_KIND, AgentDashboardRow, {
+      railColor: (rowId: string) => {
+        const d = getDashboards().find((dash) => dash.id === rowId);
+        if (!d) return undefined;
+        return resolveProjectColor(d.color, get(api.theme));
+      },
+      label: (rowId: string) =>
+        getDashboards().find((dash) => dash.id === rowId)?.name,
+    });
 
     api.registerMarkdownComponent("kanban", Kanban, {
       configSchema: {
@@ -207,6 +221,28 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
     // rows that no registered renderer claimed — rendering them through
     // WorkspaceListView removes that dead wire and gives nested workspaces
     // the same drag/reorder/color inheritance as root-level ones.
+
+    // Regenerate-dashboard command — surfaced on the EmptySurface view
+    // when the active workspace is the host of an agent dashboard
+    // (metadata.dashboardId set). Reads that id off the active workspace,
+    // resolves the dashboard, and ensures its preview surface exists in
+    // the workspace's active pane. A no-op when the active workspace
+    // doesn't host a dashboard (EmptySurface gates the button anyway).
+    api.registerCommand(
+      "agentic-orchestrator:regenerate-active-dashboard",
+      () => {
+        let activeMetadata: Record<string, unknown> | undefined;
+        const unsub = api.activeWorkspace.subscribe((w) => {
+          activeMetadata = w?.metadata as Record<string, unknown> | undefined;
+        });
+        unsub();
+        const dashboardId = activeMetadata?.[DASHBOARD_WORKSPACE_META_KEY];
+        if (typeof dashboardId !== "string") return;
+        const dashboard = getDashboards().find((d) => d.id === dashboardId);
+        if (dashboard) ensureDashboardSurface(dashboard);
+      },
+      { title: "Regenerate Dashboard" },
+    );
 
     dashboardUnsub = dashboardsStore.subscribe((dashboards) => {
       const rootIds = new Set(

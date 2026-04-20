@@ -9,6 +9,7 @@
         ws: Workspace,
       ) => { id: string; color?: string; onClick: () => void } | undefined)
     | undefined = undefined;
+  export let hideStatusBadges: boolean = false;
 
   // Reflect the real WorkspaceListView contract: it reads the global
   // workspaces store filtered by filterIds and passes full Workspace
@@ -24,6 +25,7 @@
   data-workspace-list-view-stub
   data-accent-color={accentColor ?? ""}
   data-filter-count={rows.length}
+  data-hide-status-badges={hideStatusBadges ? "true" : "false"}
 >
   {#each rows as ws (ws.id)}
     {@const hint = dashboardHintFor?.(ws as unknown as Workspace)}

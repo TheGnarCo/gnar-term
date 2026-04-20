@@ -546,6 +546,15 @@ export interface ExtensionAPI {
   getActiveCwd(): Promise<string | undefined>;
   pickDirectory(title?: string): Promise<string | null>;
   showInputPrompt(label: string, defaultValue?: string): Promise<string | null>;
+  /**
+   * Ask the user to confirm a destructive action. Returns true when
+   * confirmed, false when cancelled. Use for close/delete affordances
+   * on container rows that remove user-visible state.
+   */
+  showConfirm(
+    message: string,
+    options?: { title?: string; confirmLabel?: string; cancelLabel?: string },
+  ): Promise<boolean>;
   showFormPrompt(
     title: string,
     fields: Array<
@@ -772,6 +781,14 @@ export interface ExtensionAPI {
    *   Props: `{ theme: Readable<ThemeDef>, value: string (bindable), colors?: string[] }`
    * - **DragGrip** — left-border drag handle that appears on hover
    *   Props: `{ theme, visible, onMouseDown, ariaLabel? }`
+   * - **ContainerRow** — shared banner + nested-list chrome for
+   *   "container workspaces" (projects, agent dashboards). Banner can
+   *   represent a first-class workspace by wiring onBannerClick/onClose
+   *   to switchWorkspace/closeWorkspace.
+   *   Props: `{ color, foreground, parentColor?, onGripMouseDown?,
+   *     onBannerClick?, onBannerContextMenu?, onClose?, filterIds,
+   *     dashboardHintFor?, hideStatusBadges?, scopeId, containerBlockId,
+   *     containerLabel }` + slots: icon / banner-end / banner-subtitle.
    */
   getComponents(): {
     WorkspaceListView: unknown;
@@ -779,6 +796,8 @@ export interface ExtensionAPI {
     ColorPicker: unknown;
     DragGrip: unknown;
     DropGhost: unknown;
+    ContainerRow: unknown;
+    PathStatusLine: unknown;
   };
 
   /**

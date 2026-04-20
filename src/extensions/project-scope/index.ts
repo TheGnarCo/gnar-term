@@ -21,7 +21,12 @@ import {
   focusSurfaceById,
 } from "../../lib/services/surface-service";
 import { findPreviewSurfaceByPath } from "../../lib/services/preview-surface-registry";
-import { activePane } from "../../lib/stores/workspace";
+import {
+  activePane,
+  workspaces,
+  activeWorkspaceIdx,
+} from "../../lib/stores/workspace";
+import { getAllPanes, getAllSurfaces, isPreviewSurface } from "../../lib/types";
 import {
   getProjects,
   addProject,
@@ -49,7 +54,7 @@ function generateId(): string {
  * the project's own `.gnar-term/` directory so multi-machine sync /
  * checkout follows the project itself.
  */
-function projectDashboardPath(projectPath: string): string {
+export function projectDashboardPath(projectPath: string): string {
   return `${projectPath.replace(/\/+$/, "")}/.gnar-term/project-dashboard.md`;
 }
 
@@ -92,10 +97,21 @@ async function writeProjectDashboardTemplate(
 }
 
 /**
- * Open a project's markdown dashboard as a PreviewSurface. Mirrors
- * dashboard-service.openDashboard: dedupes by path (focuses an existing
- * preview anywhere in the app) and otherwise spawns a new preview into
- * the active pane. Returns true on success.
+ * Open a project's markdown dashboard as a PreviewSurface. Target
+ * resolution, in order:
+ *
+ *   1. An existing preview surface at the dashboard path — focus it
+ *      wherever it lives (focusSurfaceById switches workspaces too).
+ *   2. The first workspace claimed by this project that already has a
+ *      preview at the dashboard path (belt-and-suspenders for cases
+ *      where the global registry missed it, e.g. pre-hydration races).
+ *   3. The first workspace claimed by this project — switch to it and
+ *      spawn the preview in its active pane. This is the "no dashboard
+ *      open anywhere yet" path.
+ *   4. No project workspaces exist — fall back to the global active
+ *      pane (preserves old behavior for projects with zero workspaces).
+ *
+ * Returns true on success.
  */
 export async function openProjectDashboard(
   project: ProjectEntry,
@@ -107,11 +123,59 @@ export async function openProjectDashboard(
     // Best-effort write — proceed to open even if the seed fails so the
     // user still sees something they can react to.
   }
+  // (1) Registry hit — focus it wherever it is.
   const existing = findPreviewSurfaceByPath(path);
   if (existing) {
     focusSurfaceById(existing.surfaceId);
     return true;
   }
+
+  // (2) Fallback: any project workspace already hosting the preview.
+  const wsList = get(workspaces);
+  const projectWorkspaces: Array<{
+    idx: number;
+    ws: import("../../lib/types").Workspace;
+  }> = [];
+  for (const id of project.workspaceIds) {
+    const idx = wsList.findIndex((w) => w.id === id);
+    if (idx < 0) continue;
+    const ws = wsList[idx];
+    if (!ws) continue;
+    projectWorkspaces.push({ idx, ws });
+  }
+  const target = projectWorkspaces.find((e) =>
+    getAllSurfaces(e.ws).some((s) => isPreviewSurface(s) && s.path === path),
+  );
+  if (target) {
+    activeWorkspaceIdx.set(target.idx);
+    const pane = getAllPanes(target.ws.splitRoot).find(
+      (p) => p.id === target.ws.activePaneId,
+    );
+    if (pane) {
+      const hostedSurface = getAllSurfaces(target.ws).find(
+        (s) => isPreviewSurface(s) && s.path === path,
+      );
+      if (hostedSurface) focusSurfaceById(hostedSurface.id);
+    }
+    return true;
+  }
+
+  // (3) No host yet — pick the first project workspace, switch, spawn.
+  const first = projectWorkspaces[0];
+  if (first) {
+    activeWorkspaceIdx.set(first.idx);
+    const pane = getAllPanes(first.ws.splitRoot).find(
+      (p) => p.id === first.ws.activePaneId,
+    );
+    if (!pane) return false;
+    const surface = createPreviewSurfaceInPane(pane.id, path, {
+      focus: true,
+      title: project.name,
+    });
+    return surface !== null;
+  }
+
+  // (4) No project workspaces — fall back to global active pane.
   const pane = get(activePane);
   if (!pane) return false;
   const surface = createPreviewSurfaceInPane(pane.id, path, {
@@ -376,6 +440,25 @@ export function registerProjectScopeExtension(api: ExtensionAPI): void {
 
       void openProjectDashboard(project);
     });
+
+    // Surfaced in PaneView's TabBar when the active workspace is a
+    // project workspace. Resolves the workspace's projectId metadata
+    // and spawns / focuses that project's dashboard preview.
+    api.registerCommand(
+      "project-scope:regenerate-active-project-dashboard",
+      () => {
+        let activeMetadata: Record<string, unknown> | undefined;
+        const unsub = api.activeWorkspace.subscribe((w) => {
+          activeMetadata = w?.metadata as Record<string, unknown> | undefined;
+        });
+        unsub();
+        const projectId = activeMetadata?.projectId;
+        if (typeof projectId !== "string") return;
+        const project = getProjects(api).find((p) => p.id === projectId);
+        if (project) void openProjectDashboard(project);
+      },
+      { title: "Spawn Project Dashboard" },
+    );
 
     api.on("workspace:created", onWorkspaceCreated);
     api.on("workspace:closed", onWorkspaceClosed);

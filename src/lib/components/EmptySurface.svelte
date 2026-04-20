@@ -46,6 +46,11 @@
     run: () => void;
   }
 
+  // Dashboard-regen lives on the pane's TabBar (see PaneView + TabBar),
+  // not here. EmptySurface stays focused on "there's nothing here, do
+  // something" — the regen affordance is always-available via the tab
+  // bar icon on dashboard-hosting workspaces.
+
   $: buttons = [
     ...workspaceActions.map(
       (a): Button => ({

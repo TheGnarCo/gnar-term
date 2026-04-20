@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from "svelte";
   import { theme } from "../stores/theme";
   import { workspaces } from "../stores/workspace";
+  import { commandStore } from "../services/command-registry";
   import TabBar from "./TabBar.svelte";
   import TerminalSurface from "./TerminalSurface.svelte";
   import PreviewSurface from "./PreviewSurface.svelte";
@@ -41,6 +42,32 @@
   // this pane has hasUnread; one swell animation when an unread first
   // arrives. Cleared when the pane focuses (handleFocus below).
   $: paneHasUnread = pane.surfaces.some((s) => s.hasUnread);
+
+  // Dashboard-regen affordance on the tab bar — resolve the command
+  // registered by agentic-orchestrator or project-scope based on what
+  // metadata the owning workspace carries. Extensions register these
+  // commands when they activate:
+  //   - metadata.dashboardId (agent-dashboard host)
+  //       → "agentic-orchestrator:regenerate-active-dashboard"
+  //   - metadata.projectId   (project workspace)
+  //       → "project-scope:regenerate-active-project-dashboard"
+  // When the workspace has neither, no regen button renders. The pane
+  // bar stays as-is.
+  $: workspaceMetadata = $workspaces.find((w) => w.id === workspaceId)
+    ?.metadata as Record<string, unknown> | undefined;
+  $: regenCommandId =
+    typeof workspaceMetadata?.dashboardId === "string"
+      ? "agentic-orchestrator:regenerate-active-dashboard"
+      : typeof workspaceMetadata?.projectId === "string"
+        ? "project-scope:regenerate-active-project-dashboard"
+        : undefined;
+  $: regenCommand = regenCommandId
+    ? $commandStore.find((c) => c.id === regenCommandId)
+    : undefined;
+  $: regenDashboardTitle = regenCommand?.title ?? "Regenerate Dashboard";
+  $: onRegenDashboard = regenCommand
+    ? () => void regenCommand.action()
+    : undefined;
 
   let arriving = false;
   let prevUnread = false;
@@ -138,6 +165,8 @@
     {onSplitDown}
     {onClosePane}
     {onReorderTab}
+    {onRegenDashboard}
+    {regenDashboardTitle}
   />
 
   {#each pane.surfaces.filter((s) => s.id === pane.activeSurfaceId && isTerminalSurface(s)) as activeTerm (activeTerm.id)}

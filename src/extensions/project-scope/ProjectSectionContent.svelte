@@ -1,5 +1,7 @@
 <script lang="ts">
   import { getContext, onDestroy, type Component } from "svelte";
+  import type ContainerRowType from "../../lib/components/ContainerRow.svelte";
+  import type PathStatusLineType from "../../lib/components/PathStatusLine.svelte";
   import {
     EXTENSION_API_KEY,
     type ExtensionAPI,
@@ -7,18 +9,27 @@
     resolveProjectColor,
   } from "../api";
   import type { ProjectEntry } from "./index";
-  import { openProjectDashboard } from "./index";
+  import { openProjectDashboard, projectDashboardPath } from "./index";
   import { deleteProject, getProjects, updateProject } from "./project-service";
-  import ProjectStatusLine from "./ProjectStatusLine.svelte";
+  import {
+    getAllSurfaces,
+    isPreviewSurface,
+    type Workspace,
+  } from "../../lib/types";
 
   export let projectId: string;
   /**
    * The namespaced sidebar-block id that hosts this project — passed
-   * through from ProjectsContainer. Forwarded to WorkspaceListView as
-   * `containerBlockId` so workspace-drag ReorderContext publishes the
-   * actual block id, not a hardcoded "projects" string.
+   * through from ProjectsContainer. Forwarded to the ContainerRow's
+   * nested WorkspaceListView so workspace-drag ReorderContext publishes
+   * the actual block id, not a hardcoded "projects" string.
    */
   export let containerBlockId: string = "";
+  /**
+   * Forwarded from ProjectRowBody — the drag grip is owned by
+   * ContainerRow in root mode.
+   */
+  export let onGripMouseDown: ((e: MouseEvent) => void) | undefined = undefined;
   /**
    * Project overlay directive, resolved by the parent from the current
    * reorder context. Covers the entire project block (header +
@@ -39,7 +50,12 @@
   const theme = api.theme;
   const workspacesStore = api.workspaces;
   const contributors = api.childRowContributors;
-  const { WorkspaceListView, SplitButton } = api.getComponents();
+  const { WorkspaceListView, SplitButton, ContainerRow, PathStatusLine } =
+    api.getComponents();
+  // Type-only import binds slot defs so <svelte:component> can type-check
+  // the slot contents this file provides.
+  const ContainerRowTyped = ContainerRow as typeof ContainerRowType;
+  const PathStatusLineTyped = PathStatusLine as typeof PathStatusLineType;
 
   let project: ProjectEntry | undefined;
   let stateVersion = 0;
@@ -197,106 +213,105 @@
       },
     })),
   ];
+
+  function handleBannerClick() {
+    if (project) void openProjectDashboard(project);
+  }
+
+  // Close X on the project container row — destructive; deletes the
+  // project entity. Confirms first. Nested workspaces are unclaimed and
+  // return to the root-level list; they are not closed. Per user
+  // direction: "Projects delete project; Agent-dashboards delete
+  // dashboard."
+  async function handleClose() {
+    if (!project) return;
+    const confirmed = await api.showConfirm(
+      `Delete project "${project.name}"? Workspaces belonging to this project return to the root list; they are not closed.`,
+      {
+        title: "Delete Project",
+        confirmLabel: "Delete",
+        cancelLabel: "Cancel",
+      },
+    );
+    if (!confirmed) return;
+    handleDeleteProject();
+  }
+
+  // Dashboard-hint for nested workspaces: surface-based. Any workspace
+  // whose panes currently contain a preview surface at the project's
+  // dashboard path gets a dashboard icon — clicking it opens that
+  // dashboard (via openProjectDashboard, which focuses the existing
+  // preview if present). Unlike agent-dashboards (tagged by metadata),
+  // project-dashboard hosts are identified dynamically by surface
+  // presence so any project workspace that happens to host the preview
+  // gets the indicator.
+  function hintForProjectDashboardHost(ws: Workspace) {
+    if (!project) return undefined;
+    const path = projectDashboardPath(project.path);
+    const hosts = getAllSurfaces(ws).some(
+      (s) => isPreviewSurface(s) && s.path === path,
+    );
+    if (!hosts) return undefined;
+    return {
+      id: project.id,
+      color: projectHex,
+      onClick: () => {
+        if (project) void openProjectDashboard(project);
+      },
+    };
+  }
 </script>
 
 {#if project}
   <div
+    data-project-section
+    data-project-id={project.id}
     style="
       font-size: 12px; color: {$theme.fg};
       position: relative;
     "
   >
-    <!-- Project header: painted with the project's color so it reads as a
-         banner for this project. Title color is derived for contrast
-         (white on dark, black on light). Banner overlaps the rail by
-         its current width (10px rest, 20px expanded) so the dark frit
-         zone paints dark dots over the rail's colored dots in the
-         header row. On hover, the banner bumps to z:2 above the rail
-         wrapper (z:1 in ProjectsContainer while expanded) so the
-         banner's frit paints above the rail's colored frit. -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div
-      style="
-        position: relative;
-        padding: 4px 6px;
-        background: {projectHex}; color: {headerFg};
-        border-radius: 0 6px 6px 0;
-      "
-      on:contextmenu={handleBannerContextMenu}
+    <svelte:component
+      this={ContainerRowTyped}
+      color={projectHex}
+      foreground={headerFg}
+      {onGripMouseDown}
+      gripAriaLabel="Drag project to reorder"
+      onBannerClick={handleBannerClick}
+      onBannerContextMenu={handleBannerContextMenu}
+      onClose={handleClose}
+      closeTitle="Delete project"
+      {filterIds}
+      dashboardHintFor={hintForProjectDashboardHost}
+      scopeId={project.id}
+      {containerBlockId}
+      containerLabel={project.name}
+      testId={project.id}
+      workspaceListViewComponent={WorkspaceListView ?? undefined}
     >
-      <!-- Left-edge frit continuation: the rail's diamond pattern
-           extends onto the banner's left edge with an aggressive
-           fade-out to the right. Rail and banner share projectHex
-           bg so there's no color seam; this pass concentrates the
-           dots near the rail and drops off fast — fully clear by
-           the time the banner's content area starts. Rendered in
-           both rest and expanded states. -->
-      <div
-        aria-hidden="true"
+      <!-- Title fills the main banner slot; flex:1 pushes banner-end to
+           the right. Clicking the title is redundant with the
+           banner-wide onBannerClick, but kept here as an accessibility
+           hit target with its own cursor styling. -->
+      <span
         style="
-          position: absolute;
-          top: 0; bottom: 0;
-          left: 0; width: 14px;
-          pointer-events: none;
-          background-image:
-            radial-gradient(circle, #000 1.1px, transparent 1.6px),
-            radial-gradient(circle, #000 1.1px, transparent 1.6px);
-          background-size: 5px 5px;
-          background-position: 0 0, 2.5px 2.5px;
-          background-repeat: repeat;
-          -webkit-mask-image: linear-gradient(
-            to right,
-            rgba(0, 0, 0, 1) 0%,
-            rgba(0, 0, 0, 0.5) 25%,
-            rgba(0, 0, 0, 0.15) 60%,
-            rgba(0, 0, 0, 0) 100%
-          );
-          mask-image: linear-gradient(
-            to right,
-            rgba(0, 0, 0, 1) 0%,
-            rgba(0, 0, 0, 0.5) 25%,
-            rgba(0, 0, 0, 0.15) 60%,
-            rgba(0, 0, 0, 0) 100%
-          );
-        "
-      ></div>
-      <!-- Title row: 8px left padding creates the same gap other rows
-           use between the rail's right edge and their leading content. -->
-      <div
-        style="
-          display: flex; align-items: center; justify-content: space-between;
-          gap: 8px;
-          padding-left: 8px;
-          pointer-events: auto;
-        "
+          flex: 1; min-width: 0;
+          font-size: 13px; font-weight: 600; color: {headerFg};
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        ">{project.name}</span
       >
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div
-          style="
-            display: flex; align-items: center;
-            min-width: 0; flex: 1; cursor: pointer;
-          "
-          on:click={() => {
-            if (project) void openProjectDashboard(project);
-          }}
-        >
-          <span
-            style="
-              font-size: 13px; font-weight: 600; color: {headerFg};
-              overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-            ">{project.name}</span
-          >
-        </div>
+
+      <svelte:fragment slot="banner-end">
         {#if coreAction}
-          <!-- Button chip: borderless wash of the banner's contrast color, so
-               the button reads as a tonal shift of the project color on any
-               hue. SplitButton's internal theme.border is suppressed inside
-               this chip via the scoped :global rule below — on a saturated
-               banner that pale grey line looked like an outline around the
-               button rather than part of the design. -->
+          <!-- Button chip: borderless wash of the banner's contrast color
+               so the button reads as a tonal shift of the project color
+               on any hue. stopPropagation keeps clicks on the chip from
+               bubbling up to ContainerRow's banner-wide click handler. -->
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
           <span
             class="project-new-chip"
+            on:click|stopPropagation
             style="
               flex-shrink: 0; border-radius: 6px; overflow: visible;
               background: {headerFg === '#000'
@@ -317,69 +332,60 @@
             />
           </span>
         {/if}
-      </div>
+      </svelte:fragment>
 
-      <!-- Status line: project path/branch on row 1, open PRs + dirty
-           count on row 2. Lives inside the banner so the project row
-           encapsulates both the title and its subtitle metadata under a
-           single colored background. pointer-events:auto keeps PR
-           links clickable (outer banner is pointer-events:none so the
-           rail-overlap zone falls through to the grip). -->
-      <div style="pointer-events: auto;">
-        <ProjectStatusLine {project} fgColor={subtitleFg} />
-      </div>
-    </div>
+      <svelte:fragment slot="banner-subtitle">
+        <!-- Status line: project path/branch on row 1, open PRs + dirty
+             count on row 2. Lives inside the banner so the project row
+             encapsulates both the title and its subtitle metadata under
+             a single colored background. -->
+        <div style="pointer-events: auto;">
+          <svelte:component
+            this={PathStatusLineTyped}
+            target={{
+              id: project.id,
+              path: project.path,
+              isGit: project.isGit,
+            }}
+            fgColor={subtitleFg}
+          />
+        </div>
+      </svelte:fragment>
 
-    <!-- Workspace list — left edge flush with the content column (same
-         as ProjectStatusLine's box), so workspaces sit directly under
-         the project's subtext row with no extra inset. Each workspace's
-         own rail starts at content-col-x=0 (right after the project
-         rail's right edge) — adjacent but not overlapping, so the
-         hierarchy reads without wasted air. -->
-    <div style="margin-left: 0;">
-      <svelte:component
-        this={WorkspaceListView as Component}
-        {filterIds}
-        accentColor={projectHex}
-        scopeId={project.id}
-        {containerBlockId}
-        containerLabel={project.name}
-      />
-    </div>
-
-    <!-- Contributed child rows (e.g. agentic-orchestrator dashboards
-         tagged with parentProjectId === project.id). Each row dispatches
-         to whichever extension registered a renderer for its kind via
-         registerRootRowRenderer. -->
-    {#if childRows.length > 0}
-      <div
-        data-project-children={project.id}
-        style="display: flex; flex-direction: column;"
-      >
-        {#each childRows as row (row.kind + ":" + row.id)}
-          {@const renderer = api.getRootRowRenderer(row.kind)}
-          {#if renderer}
-            <svelte:component
-              this={renderer.component as Component}
-              id={row.id}
-              parentColor={projectHex}
-            />
-          {/if}
-        {/each}
-      </div>
-    {/if}
+      <svelte:fragment slot="after-nested">
+        <!-- Contributed child rows (e.g. agentic-orchestrator dashboards
+             tagged with parentProjectId === project.id). Each row
+             dispatches to whichever extension registered a renderer for
+             its kind via registerRootRowRenderer. -->
+        {#if childRows.length > 0}
+          <div
+            data-project-children={project.id}
+            style="display: flex; flex-direction: column;"
+          >
+            {#each childRows as row (row.kind + ":" + row.id)}
+              {@const renderer = api.getRootRowRenderer(row.kind)}
+              {#if renderer}
+                <svelte:component
+                  this={renderer.component as Component}
+                  id={row.id}
+                  parentColor={projectHex}
+                />
+              {/if}
+            {/each}
+          </div>
+        {/if}
+      </svelte:fragment>
+    </svelte:component>
 
     <!-- Unified project overlay: one scrim covering header + workspaces.
-         Strong variant (project drag, non-source project) paints the full
-         block with THIS project's color — solid and opaque — so during a
-         drag each non-source project reads as its own colored tile with
-         its name centered. Light variant (nested workspace drag on a
-         non-parent project) still renders a subtle dim. -->
+         Strong variant (project drag, non-source project) paints the
+         full block with THIS project's color — solid and opaque — so
+         during a drag each non-source project reads as its own colored
+         tile with its name centered. Light variant (nested workspace
+         drag on a non-parent project) still renders a subtle dim.
+         Left: -10px extends over the grip column so the drag overlay
+         covers the full row without a visible gap at the rail edge. -->
     {#if overlay}
-      <!-- left: -10px extends the overlay across the drag-grip rail column
-           (10px wide, sibling of this content div in ProjectsContainer).
-           Without this, the strong-variant overlay leaves a visible gap
-           between the rail and the project body during a project drag. -->
       <div
         style="
           position: absolute; top: 0; right: 0; bottom: 0; left: -10px;

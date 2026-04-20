@@ -1007,10 +1007,14 @@ fn b64_encode(data: &[u8]) -> String {
     result
 }
 
-/// Validate that a write path is under ~/.config/gnar-term/
+/// Validate that a write path is within gnar-term's allowlist:
+///   - under `~/.config/gnar-term/` (global state), OR
+///   - under any `.gnar-term/` directory (project-local state — projects
+///     and project-nested dashboards persist their markdown there so
+///     multi-machine sync / checkout follows the project itself).
 pub(crate) fn validate_write_path(path: &str) -> Result<(), String> {
     let home = std::env::var("HOME").map_err(|_| "HOME not set".to_string())?;
-    let allowed = format!("{home}/.config/gnar-term");
+    let global_allowed = format!("{home}/.config/gnar-term");
 
     // Manually resolve .. components to prevent traversal attacks on paths
     // that may not exist yet (canonicalize requires the path to exist).
@@ -1025,12 +1029,21 @@ pub(crate) fn validate_write_path(path: &str) -> Result<(), String> {
         }
     }
     let norm_path: std::path::PathBuf = resolved.into_iter().collect();
-    let norm_allowed = std::path::Path::new(&allowed)
+    let norm_global_allowed = std::path::Path::new(&global_allowed)
         .components()
         .collect::<std::path::PathBuf>();
 
-    if !norm_path.starts_with(&norm_allowed) {
-        return Err(format!("Write denied: path must be under {allowed}"));
+    // Does the normalized path contain a `.gnar-term` directory segment
+    // anywhere in its ancestry? If so it's a project-local state file.
+    let has_gnar_term_segment = norm_path
+        .components()
+        .any(|c| matches!(c, std::path::Component::Normal(s) if s == ".gnar-term"));
+    let under_global_allowed = norm_path.starts_with(&norm_global_allowed);
+
+    if !under_global_allowed && !has_gnar_term_segment {
+        return Err(format!(
+            "Write denied: path must be under {global_allowed} or inside a .gnar-term/ directory"
+        ));
     }
 
     // Walk the deepest existing ancestor through canonicalize so a symlink
@@ -1046,9 +1059,33 @@ pub(crate) fn validate_write_path(path: &str) -> Result<(), String> {
     }
     let canonical = std::fs::canonicalize(probe)
         .map_err(|e| format!("Failed to canonicalize {}: {e}", probe.display()))?;
-    let canonical_allowed = std::fs::canonicalize(&norm_allowed).unwrap_or(norm_allowed);
-    if !canonical.starts_with(&canonical_allowed) {
-        return Err(format!("Write denied: path must be under {allowed}"));
+    if under_global_allowed {
+        let canonical_allowed =
+            std::fs::canonicalize(&norm_global_allowed).unwrap_or(norm_global_allowed);
+        if !canonical.starts_with(&canonical_allowed) {
+            return Err(format!("Write denied: path must be under {global_allowed}"));
+        }
+        return Ok(());
+    }
+    // project-local state: the declared path had a `.gnar-term` segment
+    // and we need to verify no symlink in its ancestry escapes out. If
+    // the deepest existing ancestor is ABOVE the `.gnar-term` segment,
+    // the `.gnar-term` directory doesn't exist yet — there's nothing for
+    // a symlink to redirect. Safe.
+    let probe_has_gnar_term = probe
+        .components()
+        .any(|c| matches!(c, std::path::Component::Normal(s) if s == ".gnar-term"));
+    if !probe_has_gnar_term {
+        return Ok(());
+    }
+    // `.gnar-term` exists somewhere in the ancestor chain. Verify its
+    // canonical still contains that segment (catches a
+    // `.gnar-term` → `~/.ssh` symlink that would resolve past the intent).
+    let canonical_has_gnar_term = canonical
+        .components()
+        .any(|c| matches!(c, std::path::Component::Normal(s) if s == ".gnar-term"));
+    if !canonical_has_gnar_term {
+        return Err("Write denied: resolved path escapes the .gnar-term/ allowlist".to_string());
     }
     Ok(())
 }
@@ -1973,6 +2010,33 @@ mod tests {
         assert!(
             result.is_ok(),
             "Should allow nested paths under config dir: {result:?}"
+        );
+    }
+
+    #[test]
+    fn validate_write_path_allows_project_local_dot_gnar_term() {
+        // Project-local state files (project dashboards, project-nested
+        // agent dashboards) live inside a `.gnar-term/` directory under
+        // the project's own path. This path shape is allowed even though
+        // it's not under ~/.config/gnar-term/.
+        let path = "/tmp/some-project/.gnar-term/project-dashboard.md";
+        let result = validate_write_path(path);
+        assert!(
+            result.is_ok(),
+            "Should allow writes under a project-local .gnar-term/ dir: {result:?}"
+        );
+    }
+
+    #[test]
+    fn validate_write_path_rejects_dot_gnar_term_lookalike() {
+        // `.gnar-term.evil` is NOT the .gnar-term segment; must still be
+        // blocked. Also tests that a path whose only "match" is a
+        // prefix-sharing filename fails.
+        let path = "/tmp/some-project/.gnar-term.evil/x.md";
+        let result = validate_write_path(path);
+        assert!(
+            result.is_err(),
+            "Should reject look-alike dirs (.gnar-term.evil): {result:?}"
         );
     }
 

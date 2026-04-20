@@ -69,6 +69,8 @@ import {
   sendNotification as notifSend,
 } from "@tauri-apps/plugin-notification";
 import WorkspaceListView from "../components/WorkspaceListView.svelte";
+import ContainerRow from "../components/ContainerRow.svelte";
+import PathStatusLine from "../components/PathStatusLine.svelte";
 import SplitButton from "../components/SplitButton.svelte";
 import ColorPicker from "../components/ColorPicker.svelte";
 import DragGrip from "../components/DragGrip.svelte";
@@ -222,6 +224,20 @@ export function createExtensionAPI(
     },
     showInputPrompt(label: string, defaultValue?: string) {
       return coreShowInputPrompt(label, defaultValue);
+    },
+    showConfirm(
+      message: string,
+      options?: {
+        title?: string;
+        confirmLabel?: string;
+        cancelLabel?: string;
+      },
+    ): Promise<boolean> {
+      // MVP: native confirm. Tauri's webview supports it. A themed modal
+      // would be a future upgrade — the API shape is already async to
+      // allow that swap without breaking callers.
+      void options;
+      return Promise.resolve(window.confirm(message));
     },
     showFormPrompt(
       title: string,
@@ -526,6 +542,8 @@ export function createExtensionAPI(
         ColorPicker,
         DragGrip,
         DropGhost,
+        ContainerRow,
+        PathStatusLine,
       };
     },
     createDragReorder(

@@ -1,24 +1,73 @@
 <script lang="ts">
+  /**
+   * PathStatusLine — shared git-status subtitle row used inside
+   * container banners (projects + agent dashboards). Renders two lines:
+   *
+   *   1. the last two path segments (e.g. `Code/my-repo`)
+   *   2. git branch + open PR numbers + dirty-count, when the path is a
+   *      git repo or has either signal
+   *
+   * Generic over the target — callers pass an object with `{ id, path,
+   * isGit }`. The id drives caching so switching between projects /
+   * dashboards reseeds the poll loop.
+   *
+   * Extracted from project-scope's ProjectStatusLine so agentic-
+   * orchestrator can reuse the same renderer for dashboard banners
+   * without cross-extension imports.
+   */
   import { onDestroy, getContext } from "svelte";
-  import { EXTENSION_API_KEY, type ExtensionAPI } from "../api";
-  import type { ProjectEntry } from "./index";
+  import { EXTENSION_API_KEY, type ExtensionAPI } from "../../extensions/api";
 
-  export let project: ProjectEntry;
+  export let target: { id: string; path: string; isGit: boolean };
   /**
    * Optional override for the subtitle's text color. When the status
-   * line sits inside a colored project banner, callers pass the
+   * line sits inside a colored container banner, callers pass the
    * banner's contrast-adjusted foreground so the text stays readable
-   * on any project color. Defaults to theme.fgMuted otherwise.
+   * on any banner color. Defaults to theme.fgMuted otherwise.
    */
   export let fgColor: string | undefined = undefined;
 
   const api = getContext<ExtensionAPI>(EXTENSION_API_KEY);
   const theme = api.theme;
 
-  // fgMuted is an indexed property — cast to string for type safety
   let themeMuted: string;
   $: themeMuted = ($theme["fgMuted"] ?? $theme.fgDim) as string;
   $: fgMuted = fgColor ?? themeMuted;
+
+  // Dirty-count colour adapts to the subtitle foreground:
+  //   - light fg (e.g. white on a dark banner) → lighter amber
+  //   - dark fg (e.g. black on a yellow banner) → darker amber so the
+  //     text doesn't disappear against a warm-coloured background
+  // When no banner context is passed (project-scope default — theme
+  // fgMuted), fall back to the light amber. The heuristic: strip rgba/#
+  // and compare average channel brightness.
+  function isDarkForeground(fg: string | undefined): boolean {
+    if (!fg) return false;
+    const m = fg.match(/#([0-9a-f]{3,6})/i);
+    if (m && m[1]) {
+      const raw = m[1];
+      const hex =
+        raw.length === 3
+          ? raw
+              .split("")
+              .map((c) => c + c)
+              .join("")
+          : raw;
+      const r = parseInt(hex.substring(0, 2), 16);
+      const g = parseInt(hex.substring(2, 4), 16);
+      const b = parseInt(hex.substring(4, 6), 16);
+      return (0.299 * r + 0.587 * g + 0.114 * b) / 255 < 0.5;
+    }
+    const rgb = fg.match(/(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})/);
+    if (rgb && rgb[1] && rgb[2] && rgb[3]) {
+      const r = Number(rgb[1]);
+      const g = Number(rgb[2]);
+      const b = Number(rgb[3]);
+      return (0.299 * r + 0.587 * g + 0.114 * b) / 255 < 0.5;
+    }
+    return false;
+  }
+  $: dirtyColor = isDarkForeground(fgColor) ? "#7a4a00" : "#e8b73a";
 
   interface BranchInfo {
     name: string;
@@ -43,26 +92,14 @@
   let dirtyCount = 0;
   let prs: GhPr[] = [];
   let branchError = false;
-  let lastProjectId: string | null = null;
-  let homeDir: string | null = null;
+  let lastTargetId: string | null = null;
 
-  // Resolve HOME once so prettyCwd works on macOS (/Users/..), Linux
-  // (/home/..), and any non-standard layout. Previously hardcoded to
-  // /Users/NAME which silently no-op'd on Linux.
-  void api
-    .invoke<string>("get_home")
-    .then((h) => (homeDir = h))
-    .catch(() => (homeDir = null));
-
-  // Refresh roughly every 45s while the component is mounted — matches the
-  // cadence the workspace-level git status service polls at and is cheap
-  // for the 2 gh/git calls we issue.
   const REFRESH_MS = 45_000;
 
   async function refreshBranch(): Promise<void> {
     try {
       const branches = await api.invoke<BranchInfo[]>("list_branches", {
-        repoPath: project.path,
+        repoPath: target.path,
         includeRemote: false,
       });
       const current = branches.find((b) => b.is_current);
@@ -77,7 +114,7 @@
   async function refreshDirty(): Promise<void> {
     try {
       const status = await api.invoke<FileStatus[]>("git_status", {
-        repoPath: project.path,
+        repoPath: target.path,
       });
       dirtyCount = status.length;
     } catch {
@@ -88,11 +125,9 @@
   async function refreshPrs(): Promise<void> {
     try {
       const list = await api.invoke<GhPr[]>("gh_list_prs", {
-        repoPath: project.path,
+        repoPath: target.path,
         state: "open",
       });
-      // Cap what we render — 50 is the Rust limit, but even 5 is plenty
-      // for a sidebar line. Sort by PR number descending (most recent first).
       prs = list
         .slice()
         .sort((a, b) => b.number - a.number)
@@ -110,9 +145,9 @@
 
   let timer: ReturnType<typeof setInterval> | null = null;
 
-  function start(projectId: string): void {
+  function start(id: string): void {
     if (timer) clearInterval(timer);
-    lastProjectId = projectId;
+    lastTargetId = id;
     refreshAll();
     timer = setInterval(refreshAll, REFRESH_MS);
   }
@@ -124,15 +159,14 @@
     }
   }
 
-  // Re-seed whenever this component is bound to a different project.
-  $: if (project?.isGit) {
-    if (project.id !== lastProjectId) start(project.id);
+  $: if (target?.isGit) {
+    if (target.id !== lastTargetId) start(target.id);
   } else {
     stop();
     branch = null;
     dirtyCount = 0;
     prs = [];
-    lastProjectId = null;
+    lastTargetId = null;
   }
 
   onDestroy(() => stop());
@@ -145,39 +179,32 @@
     document.dispatchEvent(event);
   }
 
-  $: showFirstRow = Boolean(project);
-  // Compact path form: only the parent directory + project directory name,
-  // e.g. `Code/agentic-assessment`. The full absolute path is always
-  // available via the title attribute on hover.
-  $: prettyPath = project
+  $: showFirstRow = Boolean(target);
+  $: prettyPath = target
     ? (() => {
-        const parts = project.path.split("/").filter(Boolean);
-        return parts.slice(-2).join("/") || project.path;
+        const parts = target.path.split("/").filter(Boolean);
+        return parts.slice(-2).join("/") || target.path;
       })()
     : "";
-  // Still used: keep homeDir resolve alive so future expansions can use it
-  void homeDir;
 </script>
 
 {#if showFirstRow}
-  <!-- CWD row: project path on its own line. -->
+  <!-- Path row -->
   <div
     style="padding: 2px 12px 0 8px; display: flex; align-items: center; min-width: 0; overflow: hidden; line-height: 1.2;"
   >
     <span
       style="font-size: 10px; color: {fgMuted}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;"
-      title={project.path}>{prettyPath}</span
+      title={target.path}>{prettyPath}</span
     >
   </div>
 
-  <!-- Git row: branch, open PRs, and dirty count sit together on a
-       second line below the path. Only renders when the project is a
-       git repo and has at least one git-derived metadata item to show. -->
-  {#if project.isGit || prs.length > 0 || dirtyCount > 0}
+  <!-- Git row: branch + PRs + dirty count. Only when git and signals exist. -->
+  {#if target.isGit || prs.length > 0 || dirtyCount > 0}
     <div
       style="padding: 0 12px 2px 8px; display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; line-height: 1.2; flex-wrap: wrap;"
     >
-      {#if project.isGit}
+      {#if target.isGit}
         <span
           style="font-size: 10px; color: {fgMuted}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0;"
           title={branchError
@@ -185,7 +212,7 @@
             : (branch ?? "detached HEAD")}>⎇ {branch ?? "…"}</span
         >
       {/if}
-      {#if project.isGit && prs.length > 0}
+      {#if target.isGit && prs.length > 0}
         <span
           aria-hidden="true"
           style="font-size: 10px; color: {fgMuted}; opacity: 0.4; flex-shrink: 0;"
@@ -212,7 +239,7 @@
         {/each}
       {/if}
       {#if dirtyCount > 0}
-        {#if project.isGit || prs.length > 0}
+        {#if target.isGit || prs.length > 0}
           <span
             aria-hidden="true"
             style="font-size: 10px; color: {fgMuted}; opacity: 0.4; flex-shrink: 0;"
@@ -220,7 +247,7 @@
           >
         {/if}
         <span
-          style="font-size: 10px; color: #e8b73a; white-space: nowrap; flex-shrink: 0;"
+          style="font-size: 10px; color: {dirtyColor}; white-space: nowrap; flex-shrink: 0;"
           title="{dirtyCount} file(s) modified in project root"
           >{dirtyCount}·modified</span
         >

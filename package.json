@@ -45,7 +45,8 @@
     "github-markdown-css": "^5.8.1",
     "marked": "^18.0.2",
     "pdfjs-dist": "^5.6.205",
-    "svelte": "^5.55.4"
+    "svelte": "^5.55.4",
+    "yaml": "2.8.3"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0",

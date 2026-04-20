@@ -109,6 +109,7 @@
   $: hasUnread = allSurfaces.some((s) => s.hasUnread);
   $: latestNotification = allSurfaces.find((s) => s.notification)?.notification;
   $: isManaged = !!workspace.metadata?.worktreePath;
+  $: railColor = accentColor ?? $theme.accent;
   // Legacy agent status — kept for backwards compatibility
   $: agentStatus = $agentStatusStore[workspace.id] || null;
   $: agentDotColor =
@@ -170,6 +171,7 @@
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <div
   data-drag-idx={index}
+  data-worktree={isManaged ? "true" : undefined}
   style="
     display: {dragActive ? 'none' : 'flex'};
     position: relative;
@@ -179,6 +181,7 @@
     : hovered
       ? $theme.bgHighlight
       : 'transparent'};
+    {isManaged ? `border: 1px solid ${railColor};` : ''}
   "
   on:contextmenu|preventDefault={(e) => onContextMenu(e.clientX, e.clientY)}
   on:mouseenter={() => (hovered = true)}
@@ -189,7 +192,6 @@
   }}
 >
   {#if onGripMouseDown}
-    {@const railColor = accentColor ?? $theme.accent}
     <!-- Wrapper scopes grip-expansion hover to the grip column only.
          Row-level hover (for close button etc.) stays separate. No
          background on the wrapper — the rail reads as its dot

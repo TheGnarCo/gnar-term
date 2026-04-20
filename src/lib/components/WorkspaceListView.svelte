@@ -20,9 +20,13 @@
     renameWorkspace,
     reorderWorkspaces,
   } from "../services/workspace-service";
+  import { get } from "svelte/store";
   import WorkspaceItem from "./WorkspaceItem.svelte";
   import DropGhost from "./DropGhost.svelte";
   import { contrastColor } from "../utils/contrast";
+  import { contextMenu } from "../stores/ui";
+  import { commandStore } from "../services/command-registry";
+  import type { MenuItem } from "../context-menu-types";
 
   /** Set of workspace IDs to display. If undefined, shows all. */
   export let filterIds: Set<string> | undefined = undefined;
@@ -44,6 +48,16 @@
    * here.
    */
   export let containerBlockId: string | null = null;
+
+  /**
+   * Human-readable name of the scope this list lives in — e.g. the
+   * project name for workspaces nested under a project. Surfaces in the
+   * context menu's "Close Other Workspaces in <label>…" item so the
+   * action's blast radius is obvious at a glance. Leave undefined and
+   * the menu falls back to the global "Close Other Workspaces" label
+   * with no scoping.
+   */
+  export let containerLabel: string | undefined = undefined;
 
   $: entries = $workspaces
     .map((ws, idx) => ({ ws, idx }))
@@ -98,47 +112,132 @@
       : null;
   $: railColor = accentColor ?? $theme.accent;
   $: overlayFg = contrastColor(railColor);
+
+  let itemRefs: Record<string, WorkspaceItem> = {};
+
+  // Nested workspaces share the same context menu surface as the root
+  // workspace list: Rename / New Surface / (Promote) / Close Other /
+  // Close. Rename drives the underlying WorkspaceItem's inline rename
+  // via the bound ref; everything else routes through the workspace
+  // service. Kept local to WorkspaceListView so this shared component
+  // doesn't need parent callbacks for each item.
+  function showNestedContextMenu(x: number, y: number, globalIdx: number) {
+    const ws = $workspaces[globalIdx];
+    if (!ws) return;
+    const canPromote = get(commandStore).some(
+      (c) => c.id === "promote-workspace-to-project",
+    );
+
+    // Scope "Close Other" to this list when a filterIds is in effect
+    // (i.e. we're rendered under a project/dashboard). Without a filter
+    // the list is the global root, so "Close Other" closes every other
+    // workspace in the app. With one, it only closes the visible peers
+    // so the user doesn't accidentally nuke other projects' workspaces.
+    const siblingIds = filterIds
+      ? Array.from(filterIds).filter((id) => id !== ws.id)
+      : $workspaces
+          .map((w, i) => (i === globalIdx ? null : w.id))
+          .filter((id): id is string => !!id);
+    const closeOtherLabel = containerLabel
+      ? `Close Other Workspaces in ${containerLabel}`
+      : "Close Other Workspaces";
+
+    const items: MenuItem[] = [
+      {
+        label: "Rename Workspace",
+        shortcut: "⇧⌘R",
+        action: () => itemRefs[ws.id]?.startRename(),
+      },
+      ...(canPromote
+        ? [
+            { label: "", action: () => {}, separator: true } as MenuItem,
+            {
+              label: "Promote to Project...",
+              action: () => {
+                switchWorkspace(globalIdx);
+                const cmd = get(commandStore).find(
+                  (c) => c.id === "promote-workspace-to-project",
+                );
+                if (cmd) void cmd.action();
+              },
+            } as MenuItem,
+          ]
+        : []),
+      { label: "", action: () => {}, separator: true },
+      {
+        label: closeOtherLabel,
+        disabled: siblingIds.length === 0,
+        action: () => {
+          // Walk back-to-front so indices stay valid as we splice. Map
+          // siblingIds → current indices just before closing; the list
+          // doesn't mutate mid-loop in a way that invalidates the stable
+          // id snapshot we captured above.
+          const targets = siblingIds
+            .map((id) => $workspaces.findIndex((w) => w.id === id))
+            .filter((i) => i >= 0)
+            .sort((a, b) => b - a);
+          for (const i of targets) closeWorkspace(i);
+        },
+      },
+      {
+        label: "Close Workspace",
+        shortcut: "⇧⌘W",
+        danger: true,
+        disabled: $workspaces.length <= 1,
+        action: () => closeWorkspace(globalIdx),
+      },
+    ];
+    contextMenu.set({ x, y, items });
+  }
 </script>
 
-<div class="workspace-list-view">
-  {#each entries as entry (entry.ws.id)}
-    {@const isSrc = active && sourceIdx === entry.idx}
-    {@const isSibling = active && sourceIdx !== entry.idx}
-    <div
-      class="workspace-list-row"
-      animate:flip={{ duration: 200 }}
-      data-ws-view-drag-idx={entry.idx}
-    >
-      {#if indicator?.idx === entry.idx && indicator.edge === "before"}
-        <DropGhost
-          theme={$theme}
-          height={sourceHeight}
-          accent={railColor}
-          label={sourceWs?.name}
-        />
-      {/if}
-      <div style="position: relative;">
-        <WorkspaceItem
-          workspace={entry.ws}
-          index={entry.idx}
-          isActive={entry.idx === $activeWorkspaceIdx}
-          dragActive={isSrc}
-          {accentColor}
-          onSelect={() => {
-            if (!active) switchWorkspace(entry.idx);
-          }}
-          onClose={() => closeWorkspace(entry.idx)}
-          onRename={(name) => renameWorkspace(entry.idx, name)}
-          onContextMenu={() => {}}
-          onGripMouseDown={(e) => startDrag(e, entry.idx)}
-        />
-        {#if isSibling}
-          <!-- Strong overlay on non-source nested rows during drag —
+<!-- Skip the whole container when the filtered list is empty. The
+     class applies an 8px top+left inset so nested rows breathe below
+     the banner — rendering an empty container with that inset leaves
+     a visible "lip" on the parent's colored rail (project row with no
+     workspaces, dashboard row with no worktrees). Guarding here keeps
+     the rail flush. -->
+{#if entries.length > 0}
+  <div class="workspace-list-view">
+    {#each entries as entry (entry.ws.id)}
+      {@const isSrc = active && sourceIdx === entry.idx}
+      {@const isSibling = active && sourceIdx !== entry.idx}
+      <div
+        class="workspace-list-row"
+        animate:flip={{ duration: 200 }}
+        data-ws-view-drag-idx={entry.idx}
+      >
+        {#if indicator?.idx === entry.idx && indicator.edge === "before"}
+          <DropGhost
+            theme={$theme}
+            height={sourceHeight}
+            accent={railColor}
+            label={sourceWs?.name}
+          />
+        {/if}
+        <div style="position: relative;">
+          <WorkspaceItem
+            bind:this={itemRefs[entry.ws.id]}
+            workspace={entry.ws}
+            index={entry.idx}
+            isActive={entry.idx === $activeWorkspaceIdx}
+            dragActive={isSrc}
+            {accentColor}
+            onSelect={() => {
+              if (!active) switchWorkspace(entry.idx);
+            }}
+            onClose={() => closeWorkspace(entry.idx)}
+            onRename={(name) => renameWorkspace(entry.idx, name)}
+            onContextMenu={(x, y) => showNestedContextMenu(x, y, entry.idx)}
+            onGripMouseDown={(e) => startDrag(e, entry.idx)}
+          />
+          {#if isSibling}
+            <!-- Strong overlay on non-source nested rows during drag —
                matches the root-level drag treatment so a nested
                reorder reads identically to a root reorder. -->
-          <div
-            aria-hidden="true"
-            style="
+            <div
+              aria-hidden="true"
+              style="
               position: absolute; inset: 0;
               background: {railColor}; color: {overlayFg};
               display: flex; align-items: center; justify-content: center;
@@ -148,22 +247,23 @@
               border-radius: 0 6px 6px 0;
               margin-right: 8px;
             "
-          >
-            {entry.ws.name}
-          </div>
+            >
+              {entry.ws.name}
+            </div>
+          {/if}
+        </div>
+        {#if indicator?.idx === entry.idx && indicator.edge === "after"}
+          <DropGhost
+            theme={$theme}
+            height={sourceHeight}
+            accent={railColor}
+            label={sourceWs?.name}
+          />
         {/if}
       </div>
-      {#if indicator?.idx === entry.idx && indicator.edge === "after"}
-        <DropGhost
-          theme={$theme}
-          height={sourceHeight}
-          accent={railColor}
-          label={sourceWs?.name}
-        />
-      {/if}
-    </div>
-  {/each}
-</div>
+    {/each}
+  </div>
+{/if}
 
 <style>
   /* Gap between adjacent workspace rows so the rail reads as a stack

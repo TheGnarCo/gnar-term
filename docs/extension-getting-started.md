@@ -291,7 +291,7 @@ You now have a working extension. Here's where to go from here:
 | Set up unit tests                    | [Development Guide](extension-development.md#testing)              |
 | Understand the registry architecture | [Registry System](registry-system.md)                              |
 | Learn the design decisions           | [ADR-001](adr/001-extension-architecture.md)                       |
-| Look at real extension source code   | `src/extensions/` in the GnarTerm repo — all 9 included extensions |
+| Look at real extension source code   | `src/extensions/` in the GnarTerm repo — all 6 included extensions |
 
 ## Extension doc map
 

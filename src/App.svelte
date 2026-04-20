@@ -31,7 +31,7 @@
     modLabel,
     shiftModLabel,
   } from "./lib/terminal-service";
-  import { getAllSurfaces, isTerminalSurface } from "./lib/types";
+  import { getAllSurfaces, getAllPanes, isTerminalSurface } from "./lib/types";
   import { check } from "@tauri-apps/plugin-updater";
   import { relaunch } from "@tauri-apps/plugin-process";
   import { eventBus } from "./lib/services/event-bus";
@@ -45,6 +45,9 @@
   } from "./lib/services/extension-loader";
   import { loadExternalExtensions } from "./lib/services/extension-management";
   import { registerIncludedExtensions } from "./lib/bootstrap/register-included-extensions";
+  import { initWorktrees } from "./lib/bootstrap/init-worktrees";
+  import { initGitStatus } from "./lib/bootstrap/init-git-status";
+  import { initPreview } from "./lib/bootstrap/init-preview";
   import {
     restoreWorkspaces,
     type CliArgs,
@@ -96,6 +99,7 @@
   import InputPrompt from "./lib/components/InputPrompt.svelte";
   import FormPrompt from "./lib/components/FormPrompt.svelte";
   import SettingsOverlay from "./lib/components/SettingsOverlay.svelte";
+  import RestoreCommandsOverlay from "./lib/components/RestoreCommandsOverlay.svelte";
   import { overlayStore } from "./lib/services/overlay-registry";
   import { surfaceTypeStore } from "./lib/services/surface-type-registry";
   import ExtensionWrapper from "./lib/components/ExtensionWrapper.svelte";
@@ -105,6 +109,12 @@
 
   let sidebarComponent: PrimarySidebar;
   let findBarComponent: FindBar;
+
+  // Module-scoped within this component instance; gates the bulk
+  // "Restore commands?" dialog so it only fires once per launch even if
+  // workspaces are re-restored later (rare, but possible via dev reload).
+  let restoreCommandsOverlayShown = false;
+  let showRestoreCommandsOverlay = false;
 
   // ---- Extension error toast ----
   let activeToasts: {
@@ -146,6 +156,40 @@
     }
     eventBus.emit({ type: "theme:changed", id, previousId });
     void saveConfig({ theme: id });
+  }
+
+  // ---- Notification navigation ----
+
+  /**
+   * Jump to the next surface with an unread notification. Search order is
+   * deterministic — start at the active workspace's active pane and walk
+   * forward through workspaces / panes / surfaces, wrapping around. The
+   * landed surface is marked read; other unreads stay until visited.
+   */
+  function jumpToNextUnread(): void {
+    const ws = $workspaces;
+    if (ws.length === 0) return;
+    const startWsIdx = Math.max(0, $activeWorkspaceIdx);
+    const len = ws.length;
+    for (let i = 0; i < len; i++) {
+      const wsIdx = (startWsIdx + i) % len;
+      const w = ws[wsIdx];
+      if (!w) continue;
+      const panes = getAllPanes(w.splitRoot);
+      for (const p of panes) {
+        const surface = p.surfaces.find((s) => s.hasUnread);
+        if (!surface) continue;
+        if (wsIdx !== $activeWorkspaceIdx) switchWorkspace(wsIdx);
+        focusPane(p.id);
+        selectSurface(p.id, surface.id);
+        workspaces.update((wsList) => {
+          surface.hasUnread = false;
+          surface.notification = undefined;
+          return [...wsList];
+        });
+        return;
+      }
+    }
   }
 
   // ---- Command palette (register into command registry) ----
@@ -245,6 +289,13 @@
         const s = $activeSurface;
         if (s && isTerminalSurface(s)) s.terminal.clear();
       },
+      source: "core",
+    },
+    {
+      id: "core.jump-to-unread",
+      title: "Jump to Next Unread Notification",
+      shortcut: `${shiftModLabel}U`,
+      action: () => jumpToNextUnread(),
       source: "core",
     },
     ...$workspaces.map((ws, i) => ({
@@ -419,6 +470,12 @@
       theme.set(config.theme);
     }
 
+    // Wire core worktree handling before extensions register so any
+    // extension subscribing to "worktree:merged" finds the emitter live.
+    initWorktrees();
+    initGitStatus();
+    initPreview();
+
     // Register included extensions. Only activate if explicitly enabled
     // in config — a fresh install starts with no extensions active
     // (opt-in model). Errors per extension are isolated.
@@ -450,6 +507,18 @@
     });
 
     await restoreWorkspaces(cliArgs, config);
+
+    if (!restoreCommandsOverlayShown) {
+      const hasPending = $workspaces.some((ws) =>
+        getAllSurfaces(ws).some(
+          (s) => isTerminalSurface(s) && s.pendingRestoreCommand,
+        ),
+      );
+      if (hasPending) {
+        restoreCommandsOverlayShown = true;
+        showRestoreCommandsOverlay = true;
+      }
+    }
 
     void listen<string>("menu-theme", (event) => {
       applyTheme(event.payload.replace("theme-", ""));
@@ -582,6 +651,11 @@
 <InputPrompt />
 <FormPrompt />
 <SettingsOverlay />
+{#if showRestoreCommandsOverlay}
+  <RestoreCommandsOverlay
+    onClose={() => (showRestoreCommandsOverlay = false)}
+  />
+{/if}
 {#each $overlayStore as overlay (overlay.id)}
   {@const overlayApi = getExtensionApiById(overlay.source)}
   {#if overlayApi}

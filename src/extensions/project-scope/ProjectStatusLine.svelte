@@ -55,7 +55,7 @@
     .catch(() => (homeDir = null));
 
   // Refresh roughly every 45s while the component is mounted — matches the
-  // cadence the workspace-level git-status extension polls at and is cheap
+  // cadence the workspace-level git status service polls at and is cheap
   // for the 2 gh/git calls we issue.
   const REFRESH_MS = 45_000;
 

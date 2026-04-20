@@ -29,7 +29,7 @@ describe("status registry", () => {
   // --- setStatusItem ---
 
   it("registers a status item with composite id", () => {
-    setStatusItem("git-status", "ws-1", "branch", {
+    setStatusItem("git", "ws-1", "branch", {
       category: "git",
       priority: 10,
       label: "main",
@@ -38,8 +38,8 @@ describe("status registry", () => {
     const items = get(statusRegistry.store);
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({
-      id: "git-status:ws-1:branch",
-      source: "git-status",
+      id: "git:ws-1:branch",
+      source: "git",
       workspaceId: "ws-1",
       category: "git",
       priority: 10,
@@ -48,12 +48,12 @@ describe("status registry", () => {
   });
 
   it("upserts when same source + workspace + itemId", () => {
-    setStatusItem("git-status", "ws-1", "branch", {
+    setStatusItem("git", "ws-1", "branch", {
       category: "git",
       priority: 10,
       label: "main",
     });
-    setStatusItem("git-status", "ws-1", "branch", {
+    setStatusItem("git", "ws-1", "branch", {
       category: "git",
       priority: 10,
       label: "feat/status-bar",
@@ -65,12 +65,12 @@ describe("status registry", () => {
   });
 
   it("keeps items from different workspaces separate", () => {
-    setStatusItem("git-status", "ws-1", "branch", {
+    setStatusItem("git", "ws-1", "branch", {
       category: "git",
       priority: 10,
       label: "main",
     });
-    setStatusItem("git-status", "ws-2", "branch", {
+    setStatusItem("git", "ws-2", "branch", {
       category: "git",
       priority: 10,
       label: "develop",
@@ -82,12 +82,12 @@ describe("status registry", () => {
   // --- clearStatusItem ---
 
   it("removes a specific status item", () => {
-    setStatusItem("git-status", "ws-1", "branch", {
+    setStatusItem("git", "ws-1", "branch", {
       category: "git",
       priority: 10,
       label: "main",
     });
-    clearStatusItem("git-status", "ws-1", "branch");
+    clearStatusItem("git", "ws-1", "branch");
 
     expect(get(statusRegistry.store)).toHaveLength(0);
   });
@@ -95,23 +95,23 @@ describe("status registry", () => {
   // --- clearAllStatusForSourceAndWorkspace ---
 
   it("removes all items from one source for one workspace", () => {
-    setStatusItem("git-status", "ws-1", "branch", {
+    setStatusItem("git", "ws-1", "branch", {
       category: "git",
       priority: 10,
       label: "main",
     });
-    setStatusItem("git-status", "ws-1", "dirty", {
+    setStatusItem("git", "ws-1", "dirty", {
       category: "git",
       priority: 30,
       label: "3 modified",
     });
-    setStatusItem("git-status", "ws-2", "branch", {
+    setStatusItem("git", "ws-2", "branch", {
       category: "git",
       priority: 10,
       label: "develop",
     });
 
-    clearAllStatusForSourceAndWorkspace("git-status", "ws-1");
+    clearAllStatusForSourceAndWorkspace("git", "ws-1");
 
     const items = get(statusRegistry.store);
     expect(items).toHaveLength(1);
@@ -121,7 +121,7 @@ describe("status registry", () => {
   // --- clearAllStatusForWorkspace ---
 
   it("removes all items for a workspace regardless of source", () => {
-    setStatusItem("git-status", "ws-1", "branch", {
+    setStatusItem("git", "ws-1", "branch", {
       category: "git",
       priority: 10,
       label: "main",
@@ -131,7 +131,7 @@ describe("status registry", () => {
       priority: 40,
       label: "up",
     });
-    setStatusItem("git-status", "ws-2", "branch", {
+    setStatusItem("git", "ws-2", "branch", {
       category: "git",
       priority: 10,
       label: "develop",
@@ -147,12 +147,12 @@ describe("status registry", () => {
   // --- unregisterStatusBySource ---
 
   it("removes all items from a source across all workspaces", () => {
-    setStatusItem("git-status", "ws-1", "branch", {
+    setStatusItem("git", "ws-1", "branch", {
       category: "git",
       priority: 10,
       label: "main",
     });
-    setStatusItem("git-status", "ws-2", "branch", {
+    setStatusItem("git", "ws-2", "branch", {
       category: "git",
       priority: 10,
       label: "develop",
@@ -163,7 +163,7 @@ describe("status registry", () => {
       label: "up",
     });
 
-    unregisterStatusBySource("git-status");
+    unregisterStatusBySource("git");
 
     const items = get(statusRegistry.store);
     expect(items).toHaveLength(1);
@@ -173,17 +173,17 @@ describe("status registry", () => {
   // --- getWorkspaceStatus ---
 
   it("returns items filtered by workspace, sorted by priority", () => {
-    setStatusItem("git-status", "ws-1", "dirty", {
+    setStatusItem("git", "ws-1", "dirty", {
       category: "git",
       priority: 30,
       label: "3 modified",
     });
-    setStatusItem("git-status", "ws-1", "branch", {
+    setStatusItem("git", "ws-1", "branch", {
       category: "git",
       priority: 10,
       label: "main",
     });
-    setStatusItem("git-status", "ws-2", "branch", {
+    setStatusItem("git", "ws-2", "branch", {
       category: "git",
       priority: 10,
       label: "develop",

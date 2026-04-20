@@ -31,8 +31,7 @@
   $: project = getProjects(api).find((p) => p.id === id);
   $: projectHex = project ? resolveProjectColor(project.color, $theme) : "";
 
-  // Local grip-hover state drives both the rail width and the
-  // banner's frit-overlap zone — no external signalling needed.
+  // Local grip-hover state drives the rail width.
   let gripHovered = false;
 </script>
 
@@ -79,7 +78,6 @@
         projectId={id}
         containerBlockId="__workspaces__"
         overlay={null}
-        showBannerFrit={gripHovered}
       />
     </div>
   </div>

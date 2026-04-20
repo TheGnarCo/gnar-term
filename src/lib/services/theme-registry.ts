@@ -46,6 +46,7 @@ const REQUIRED_THEME_KEYS: ReadonlyArray<keyof ThemeDef> = [
   "sidebarBorder",
   "tabBarBg",
   "tabBarBorder",
+  "dashboardIcon",
 ];
 
 const REQUIRED_ANSI_KEYS = [

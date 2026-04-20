@@ -26,11 +26,11 @@ Emitted by `agentic-orchestrator` when a harness surface changes status.
 
 **Status lifecycle:** `idle` (initial) → `running` (on output) → `waiting` (on OSC notification) → `idle` (on timeout) → `closed` (on surface destroy). Any status can transition to `closed`.
 
-**Subscribers:** `worktree-workspaces` (status dots on worktree entries), `diff-viewer` (Review Agent Changes visibility).
+**Subscribers:** `diff-viewer` (Review Agent Changes visibility).
 
-## extension:worktree:merged
+## worktree:merged
 
-Emitted by `worktree-workspaces` when a worktree branch is merged back to its base.
+Core event emitted by the worktree service when a worktree branch is merged back to its base. This is a core `AppEvent`, not an extension-emitted event — extensions subscribe via `api.on("worktree:merged", ...)` after declaring it in `contributes.events`.
 
 ```typescript
 {

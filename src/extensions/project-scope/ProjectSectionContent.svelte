@@ -7,8 +7,8 @@
     resolveProjectColor,
   } from "../api";
   import type { ProjectEntry } from "./index";
-  import { dashboardProjectId$ } from "./index";
-  import { getProjects } from "./project-service";
+  import { openProjectDashboard } from "./index";
+  import { deleteProject, getProjects, updateProject } from "./project-service";
   import ProjectStatusLine from "./ProjectStatusLine.svelte";
 
   export let projectId: string;
@@ -34,19 +34,11 @@
     | { kind: "strong"; label: string }
     | { kind: "light" }
     | null = null;
-  /**
-   * When true, render a dark-dot overlay on the banner's first 10px so
-   * the portion of the project rail that overlaps the project row
-   * reads dark against the bright project color. Driven by the
-   * parent's expanded/hover state — matches when the DragGrip is
-   * rendering its own colored dots on the rail proper so the two
-   * zones read as one continuous frit with a dark band in the banner.
-   */
-  export let showBannerFrit: boolean = false;
 
   const api = getContext<ExtensionAPI>(EXTENSION_API_KEY);
   const theme = api.theme;
   const workspacesStore = api.workspaces;
+  const contributors = api.childRowContributors;
   const { WorkspaceListView, SplitButton } = api.getComponents();
 
   let project: ProjectEntry | undefined;
@@ -74,12 +66,20 @@
 
   $: filterIds = project ? new Set(project.workspaceIds) : new Set<string>();
 
+  // Re-evaluate contributed children when contributors register/unregister.
+  $: void $contributors;
+  $: childRows = project ? api.getChildRowsFor("project", project.id) : [];
+
   $: projectContext = project
     ? ({
         projectId: project.id,
         projectPath: project.path,
         projectName: project.name,
         isGit: project.isGit,
+        // Forwarded so workspace actions spawned from a project (e.g.
+        // "New Agent Dashboard") can inherit the project's palette
+        // choice without a second lookup through getProjects.
+        projectColor: project.color,
       } satisfies WorkspaceActionContext)
     : undefined;
 
@@ -91,6 +91,67 @@
 
   $: coreAction = actions.find((a) => a.id === "core:new-workspace");
   $: otherActions = actions.filter((a) => a.id !== "core:new-workspace");
+
+  async function handleRenameProject() {
+    if (!project) return;
+    const next = await api.showInputPrompt("Rename project", project.name);
+    const trimmed = next?.trim();
+    if (!trimmed || trimmed === project.name) return;
+    updateProject(api, project.id, { name: trimmed });
+  }
+
+  function handleDeleteProject() {
+    if (!project) return;
+    deleteProject(api, project.id);
+  }
+
+  function handleBannerContextMenu(e: MouseEvent) {
+    if (!project) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const items: Array<{
+      label: string;
+      action: () => void;
+      shortcut?: string;
+      separator?: boolean;
+      danger?: boolean;
+    }> = [
+      {
+        label: "Rename Project",
+        action: () => {
+          void handleRenameProject();
+        },
+      },
+      {
+        label: "Open Project Dashboard",
+        action: () => {
+          if (project) void openProjectDashboard(project);
+        },
+      },
+    ];
+    // Append "New <action>" items contributed for this project (New
+    // Workspace from core, New Agent Dashboard, etc.) so the banner
+    // menu mirrors the same surface the split-button dropdown offers.
+    if (coreAction && projectContext) {
+      items.push({
+        label: "New Workspace",
+        action: () => coreAction!.handler(projectContext!),
+      });
+    }
+    for (const a of otherActions) {
+      items.push({
+        label: a.label,
+        action: () => void a.handler(projectContext!),
+      });
+    }
+    items.push({ label: "", action: () => {}, separator: true });
+    items.push({
+      label: "Delete Project",
+      danger: true,
+      action: handleDeleteProject,
+    });
+    api.showContextMenu(e.clientX, e.clientY, items);
+  }
 
   // Pick a foreground that remains legible on an arbitrary project color.
   // Mirrors src/lib/utils/contrast.ts — duplicated here because the
@@ -153,6 +214,7 @@
          header row. On hover, the banner bumps to z:2 above the rail
          wrapper (z:1 in ProjectsContainer while expanded) so the
          banner's frit paints above the rail's colored frit. -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
       style="
         position: relative;
@@ -160,6 +222,7 @@
         background: {projectHex}; color: {headerFg};
         border-radius: 0 6px 6px 0;
       "
+      on:contextmenu={handleBannerContextMenu}
     >
       <!-- Left-edge frit continuation: the rail's diamond pattern
            extends onto the banner's left edge with an aggressive
@@ -215,7 +278,7 @@
             min-width: 0; flex: 1; cursor: pointer;
           "
           on:click={() => {
-            if (project) dashboardProjectId$.set(project.id);
+            if (project) void openProjectDashboard(project);
           }}
         >
           <span
@@ -280,8 +343,31 @@
         accentColor={projectHex}
         scopeId={project.id}
         {containerBlockId}
+        containerLabel={project.name}
       />
     </div>
+
+    <!-- Contributed child rows (e.g. agentic-orchestrator dashboards
+         tagged with parentProjectId === project.id). Each row dispatches
+         to whichever extension registered a renderer for its kind via
+         registerRootRowRenderer. -->
+    {#if childRows.length > 0}
+      <div
+        data-project-children={project.id}
+        style="display: flex; flex-direction: column;"
+      >
+        {#each childRows as row (row.kind + ":" + row.id)}
+          {@const renderer = api.getRootRowRenderer(row.kind)}
+          {#if renderer}
+            <svelte:component
+              this={renderer.component as Component}
+              id={row.id}
+              parentColor={projectHex}
+            />
+          {/if}
+        {/each}
+      </div>
+    {/if}
 
     <!-- Unified project overlay: one scrim covering header + workspaces.
          Strong variant (project drag, non-source project) paints the full

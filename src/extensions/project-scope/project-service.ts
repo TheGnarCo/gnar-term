@@ -2,7 +2,7 @@
  * Project state helpers — the single path through which project-scope
  * components mutate the `projects` / `projectOrder` state slots.
  *
- * Components (ProjectsContainer, ProjectDashboardOverlay, …) call these
+ * Components (ProjectsContainer, ProjectSectionContent, …) call these
  * helpers instead of reaching into `api.state.set` directly so that the
  * read → mutate → emit sequence stays consistent (and testable).
  */

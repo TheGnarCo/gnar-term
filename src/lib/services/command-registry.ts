@@ -12,7 +12,7 @@ export interface Command {
   id: string;
   title: string;
   shortcut?: string;
-  action: () => void | Promise<void>;
+  action: (args?: unknown) => void | Promise<void>;
   source: string;
 }
 
@@ -27,6 +27,14 @@ export function registerCommands(cmds: Command[]): void {
   for (const cmd of cmds) {
     registry.register(cmd);
   }
+}
+
+/** Execute a registered command by id. Returns false if not found. */
+export function runCommandById(id: string, args?: unknown): boolean {
+  const cmd = get(commandStore).find((c) => c.id === id);
+  if (!cmd) return false;
+  void cmd.action(args);
+  return true;
 }
 
 /**

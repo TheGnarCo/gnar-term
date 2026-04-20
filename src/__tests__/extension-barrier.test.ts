@@ -38,9 +38,54 @@ describe("Extension barrier enforcement", () => {
   it("no extension file imports from core lib (except allowed utilities)", () => {
     // Allowed: types (type definitions), extension-types (shared type definitions)
     const ALLOWED_IMPORTS = ["/types"];
+    // Per-file barrier exceptions for included extensions that own
+    // first-class persisted entities in GnarTermConfig (parallel to
+    // worktree-service which lives in core for the same reason).
+    // Keep this list small — each entry is a deliberate departure.
+    const FILE_EXCEPTIONS: Record<string, string[]> = {
+      "agentic-orchestrator/dashboard-service.ts": [
+        "../../lib/config",
+        "../../lib/services/service-helpers",
+        "../../lib/services/surface-service",
+        "../../lib/services/workspace-service",
+        "../../lib/services/preview-surface-registry",
+        "../../lib/stores/workspace",
+      ],
+      // P9: project-scope's openProjectDashboard mirrors the AgentDashboard
+      // open-as-preview pattern (find existing preview by path, otherwise
+      // spawn into the active pane), so it needs the same set of core
+      // imports the dashboard-service does.
+      "project-scope/index.ts": [
+        "../../lib/services/surface-service",
+        "../../lib/services/preview-surface-registry",
+        "../../lib/stores/workspace",
+      ],
+      // P7: Issues + TaskSpawner widgets call the shared spawn-helper
+      // (core service that composes worktree-service + agent command
+      // construction). The MCP `spawn_agent` tool calls the same helper
+      // when its worktree flag is set — keeping the widgets and MCP on
+      // the same code path is the whole point of the helper, so the
+      // widgets get a deliberate barrier exception.
+      "agentic-orchestrator/components/Issues.svelte": [
+        "../../../lib/services/spawn-helper",
+      ],
+      "agentic-orchestrator/components/TaskSpawner.svelte": [
+        "../../../lib/services/spawn-helper",
+      ],
+      // Columns layout widget looks up registered markdown components by
+      // name so authors can place arbitrary `gnar:*` widgets in columns
+      // from the dashboard template. Reaching the core registry is the
+      // cleanest hook for that — no extension-facing API exposes it and
+      // duplicating the lookup logic would invite drift.
+      "agentic-orchestrator/components/Columns.svelte": [
+        "../../../lib/services/markdown-component-registry",
+      ],
+    };
     const violations: string[] = [];
     for (const file of extensionFiles) {
       if (file.endsWith("/api.ts")) continue;
+      const relPath = path.relative(EXTENSIONS_DIR, file);
+      const fileExceptions = FILE_EXCEPTIONS[relPath] ?? [];
       // eslint-disable-next-line security/detect-non-literal-fs-filename -- test reads extension source files to validate import boundaries
       const content = fs.readFileSync(file, "utf-8");
       const lines = content.split("\n");
@@ -51,7 +96,8 @@ describe("Extension barrier enforcement", () => {
         if (line.trimStart().startsWith("import type")) continue;
         // Allow specific utilities
         if (ALLOWED_IMPORTS.some((mod) => line.includes(mod))) continue;
-        const relPath = path.relative(EXTENSIONS_DIR, file);
+        // Allow per-file exceptions
+        if (fileExceptions.some((mod) => line.includes(`"${mod}"`))) continue;
         violations.push(`${relPath}: ${line.trim()}`);
       }
     }

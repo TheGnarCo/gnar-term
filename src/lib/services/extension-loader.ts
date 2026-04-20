@@ -269,7 +269,6 @@ export async function flushAllExtensionState(): Promise<void> {
 }
 
 export async function unloadExtension(id: string): Promise<void> {
-  // Deactivate first if active
   deactivateExtension(id);
 
   // Flush any pending debounced state write before clearing

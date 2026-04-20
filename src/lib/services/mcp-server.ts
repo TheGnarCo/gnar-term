@@ -71,7 +71,17 @@ import {
   removeSection,
   type SidebarItem,
 } from "../stores/mcp-sidebar";
-import { openExtensionSurfaceInPaneById } from "./surface-service";
+import {
+  openExtensionSurfaceInPaneById,
+  createPreviewSurfaceInPane,
+  focusSurfaceById,
+  closeSurfaceById,
+} from "./surface-service";
+import {
+  findPreviewSurfaceByPath,
+  listPreviewSurfaces,
+} from "./preview-surface-registry";
+import { listMarkdownComponents } from "./markdown-component-registry";
 import { surfaceTypeStore } from "./surface-type-registry";
 import { commandStore } from "./command-registry";
 import { sidebarTabStore, activateSidebarTab } from "./sidebar-tab-registry";
@@ -86,6 +96,7 @@ import { workspaceSubtitleStore } from "./workspace-subtitle-registry";
 import { dashboardTabStore } from "./dashboard-tab-registry";
 import { getWorkspaceStatus } from "./status-registry";
 import { getMcpSetting } from "../config";
+import { spawnAgentInWorktree } from "./spawn-helper";
 
 // ---- Types ----
 
@@ -525,7 +536,7 @@ export function unregisterMcpToolsBySource(source: string): void {
 registerTool({
   name: "spawn_agent",
   description:
-    "Spawn a new gnar-term pane running an AI coding agent (claude-code, codex, aider) or a custom command. Targets the agent's host workspace by default (per connection binding); pass workspace_id/pane_id to override.",
+    "Spawn a new gnar-term pane running an AI coding agent (claude-code, codex, aider) or a custom command. Targets the agent's host workspace by default (per connection binding); pass workspace_id/pane_id to override. Pass `worktree` to instead create a fresh worktree workspace and spawn the agent there (auto-resolves branch / worktree path; optionally tags the workspace under a dashboard).",
   inputSchema: {
     type: "object",
     properties: {
@@ -542,6 +553,37 @@ registerTool({
       rows: { type: "number" },
       workspace_id: { type: "string" },
       pane_id: { type: "string" },
+      worktree: {
+        type: "object",
+        description:
+          "When set, spawn into a freshly-created worktree workspace instead of splitting the host pane.",
+        properties: {
+          branch: {
+            type: "string",
+            description:
+              "Branch name. Default: agent/<agent>/<short-timestamp>.",
+          },
+          base: {
+            type: "string",
+            description: "Base branch. Default: main.",
+          },
+          repoPath: {
+            type: "string",
+            description:
+              "Source repo path. Required if not in a workspace context.",
+          },
+          dashboardId: {
+            type: "string",
+            description:
+              "When set, the new worktree workspace's metadata.parentDashboardId is set to this id (so the contributor registry renders it under the dashboard row).",
+          },
+          taskContext: {
+            type: "string",
+            description:
+              "Optional free-text task description prepended to the agent's startup command (quoted as a single argument).",
+          },
+        },
+      },
     },
     required: ["name", "agent"],
   },
@@ -554,7 +596,58 @@ registerTool({
       command?: string;
       workspace_id?: string;
       pane_id?: string;
+      worktree?: {
+        branch?: string;
+        base?: string;
+        repoPath?: string;
+        dashboardId?: string;
+        taskContext?: string;
+      };
     };
+
+    // --- Worktree path: spawn into a brand-new worktree workspace.
+    if (p.worktree) {
+      // Resolve repoPath from arg, else from the binding workspace's first
+      // terminal cwd. Lazy-import the helper so the MCP module isn't a
+      // hard dep on the agentic-orchestrator extension at module load.
+      let repoPath = p.worktree.repoPath?.trim() ?? "";
+      if (!repoPath) {
+        try {
+          const target = resolveTarget(p, ctx);
+          for (const pane of getAllPanes(target.workspace.splitRoot)) {
+            for (const s of pane.surfaces) {
+              if (isTerminalSurface(s) && s.cwd) {
+                repoPath = s.cwd;
+                break;
+              }
+            }
+            if (repoPath) break;
+          }
+        } catch {
+          // resolveTarget threw — surface the original "no repoPath" error.
+        }
+      }
+      if (!repoPath) {
+        throw new Error(
+          "spawn_agent worktree: repoPath required (no workspace context to derive it from)",
+        );
+      }
+      const result = await spawnAgentInWorktree({
+        name: p.name,
+        agent: p.agent,
+        command: p.command,
+        taskContext: p.worktree.taskContext,
+        repoPath,
+        ...(p.worktree.branch ? { branch: p.worktree.branch } : {}),
+        ...(p.worktree.base ? { base: p.worktree.base } : {}),
+        ...(p.worktree.dashboardId
+          ? { dashboardId: p.worktree.dashboardId }
+          : {}),
+      });
+      ctx.lastSpawnedPaneId = result.pane_id;
+      return result;
+    }
+
     let startupCommand: string | undefined;
     if (p.agent === "custom") {
       if (!p.command)
@@ -1407,6 +1500,166 @@ registerTool({
   },
 });
 
+// ---- Preview surfaces ----
+
+registerTool({
+  name: "spawn_preview",
+  description:
+    "Open a file as a preview surface in a pane. Markdown files render with gnar:<name> markdown-components as live widgets. If a preview surface for the same path is already open anywhere in the app, focuses it instead of opening a duplicate. Returns the new (or existing) surface id.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      path: {
+        type: "string",
+        description: "Absolute path to the file to preview.",
+      },
+      workspace_id: {
+        type: "string",
+        description:
+          "Optional override; defaults to the agent's host workspace.",
+      },
+      pane_id: {
+        type: "string",
+        description:
+          "Optional override; defaults to the agent's host pane (or the workspace's primary pane if no host context).",
+      },
+      focus: {
+        type: "boolean",
+        description: "Whether to focus the new surface. Default true.",
+      },
+    },
+    required: ["path"],
+  },
+  handler: (args, ctx) => {
+    const p = args as {
+      path: string;
+      workspace_id?: string;
+      pane_id?: string;
+      focus?: boolean;
+    };
+    // Dedupe across the entire app — preview surfaces are unique by path.
+    const existing = findPreviewSurfaceByPath(p.path);
+    if (existing) {
+      if (p.focus !== false) focusSurfaceById(existing.surfaceId);
+      return {
+        surface_id: existing.surfaceId,
+        pane_id: existing.paneId,
+        workspace_id: existing.workspaceId,
+        reused: true,
+      };
+    }
+    const target = resolveTarget(p, ctx);
+    const hostPane = target.hostPane ?? pickHostPane(target.workspace);
+    const surface = createPreviewSurfaceInPane(hostPane.id, p.path, {
+      focus: p.focus !== false,
+    });
+    if (!surface) {
+      throw new Error(
+        `Could not place preview surface in pane ${hostPane.id} (workspace ${target.workspace.id})`,
+      );
+    }
+    return {
+      surface_id: surface.id,
+      pane_id: hostPane.id,
+      workspace_id: target.workspace.id,
+      reused: false,
+    };
+  },
+});
+
+registerTool({
+  name: "create_preview_file",
+  description:
+    "Write a file with the given content and immediately open it as a preview surface. Convenience for agents producing rich reports — equivalent to write_file followed by spawn_preview, with the same dedupe-by-path behavior.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      path: { type: "string" },
+      content: { type: "string" },
+      workspace_id: { type: "string" },
+      pane_id: { type: "string" },
+      focus: { type: "boolean" },
+    },
+    required: ["path", "content"],
+  },
+  handler: async (args, ctx) => {
+    const p = args as {
+      path: string;
+      content: string;
+      workspace_id?: string;
+      pane_id?: string;
+      focus?: boolean;
+    };
+    await invoke("write_file", { path: p.path, content: p.content });
+    const spawn = TOOLS.find((t) => t.name === "spawn_preview")!;
+    return spawn.handler(
+      {
+        path: p.path,
+        workspace_id: p.workspace_id,
+        pane_id: p.pane_id,
+        focus: p.focus,
+      },
+      ctx,
+    );
+  },
+});
+
+registerTool({
+  name: "list_open_previews",
+  description:
+    "List all currently open preview surfaces. Returns `{ surface_id, path, pane_id, workspace_id }` for each.",
+  inputSchema: { type: "object", properties: {} },
+  handler: () => {
+    const previews = listPreviewSurfaces().map((e) => ({
+      surface_id: e.surfaceId,
+      path: e.path,
+      pane_id: e.paneId,
+      workspace_id: e.workspaceId,
+    }));
+    return { previews };
+  },
+});
+
+registerTool({
+  name: "list_markdown_components",
+  description:
+    "List all registered markdown components — the things `gnar:<name>` markdown directives can reference. Returns `{ name, source, configSchema? }` for each.",
+  inputSchema: { type: "object", properties: {} },
+  handler: () => {
+    const components = listMarkdownComponents().map((c) => ({
+      name: c.name,
+      source: c.source,
+      configSchema: c.configSchema,
+    }));
+    return { components };
+  },
+});
+
+registerTool({
+  name: "close_preview",
+  description:
+    "Close an open preview surface by id. Looks the surface up in the preview-surface registry and removes it from its host pane (collapsing the pane / closing the workspace if it becomes empty, same as a user-driven tab close). Safe to call for an unknown id — returns `{ closed: false }`.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      surface_id: {
+        type: "string",
+        description: "Id of the preview surface to close.",
+      },
+    },
+    required: ["surface_id"],
+  },
+  handler: (args) => {
+    const p = args as { surface_id: string };
+    const entry = listPreviewSurfaces().find(
+      (e) => e.surfaceId === p.surface_id,
+    );
+    if (!entry) return { closed: false };
+    closeSurfaceById(entry.paneId, entry.surfaceId);
+    return { closed: true };
+  },
+});
+
 // ---- UI introspection (observers; report user GUI focus) ----
 
 registerTool({
@@ -1565,6 +1818,9 @@ const UI_MUTATING_TOOLS = new Set([
   "open_surface",
   "render_sidebar",
   "remove_sidebar_section",
+  "spawn_preview",
+  "create_preview_file",
+  "close_preview",
 ]);
 
 export async function dispatch(

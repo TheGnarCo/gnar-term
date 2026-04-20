@@ -19,21 +19,9 @@ import {
 import type { ExtensionManifest } from "../extension-types";
 
 import {
-  previewManifest,
-  registerPreviewExtension,
-} from "../../extensions/preview";
-import {
   fileBrowserManifest,
   registerFileBrowserExtension,
 } from "../../extensions/file-browser";
-import {
-  worktreeWorkspacesManifest,
-  registerWorktreeWorkspacesExtension,
-} from "../../extensions/worktree-workspaces";
-import {
-  githubManifest,
-  registerGitHubExtension,
-} from "../../extensions/github";
 import {
   projectScopeManifest,
   registerProjectScopeExtension,
@@ -43,13 +31,17 @@ import {
   registerDiffViewerExtension,
 } from "../../extensions/diff-viewer";
 import {
-  gitStatusManifest,
-  registerGitStatusExtension,
-} from "../../extensions/git-status";
-import {
   jrvsThemesManifest,
   registerJrvsThemesExtension,
 } from "../../extensions/jrvs-themes";
+import {
+  worktreeWorkspacesManifest,
+  registerWorktreeWorkspacesExtension,
+} from "../../extensions/worktree-workspaces";
+import {
+  githubSidebarManifest,
+  registerGitHubSidebarExtension,
+} from "../../extensions/github-sidebar";
 
 type IncludedExtension = readonly [
   ExtensionManifest,
@@ -63,18 +55,16 @@ type IncludedExtension = readonly [
  * activation is independent per extension.
  */
 export const INCLUDED_EXTENSIONS: readonly IncludedExtension[] = [
-  [previewManifest, registerPreviewExtension, "preview"],
   [fileBrowserManifest, registerFileBrowserExtension, "file-browser"],
+  [projectScopeManifest, registerProjectScopeExtension, "project-scope"],
+  [diffViewerManifest, registerDiffViewerExtension, "diff-viewer"],
+  [jrvsThemesManifest, registerJrvsThemesExtension, "jrvs-themes"],
   [
     worktreeWorkspacesManifest,
     registerWorktreeWorkspacesExtension,
     "worktree-workspaces",
   ],
-  [githubManifest, registerGitHubExtension, "github"],
-  [projectScopeManifest, registerProjectScopeExtension, "project-scope"],
-  [diffViewerManifest, registerDiffViewerExtension, "diff-viewer"],
-  [gitStatusManifest, registerGitStatusExtension, "git-status"],
-  [jrvsThemesManifest, registerJrvsThemesExtension, "jrvs-themes"],
+  [githubSidebarManifest, registerGitHubSidebarExtension, "github-sidebar"],
 ] as const;
 
 export async function registerIncludedExtensions(

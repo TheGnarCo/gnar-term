@@ -1,20 +1,29 @@
 <script lang="ts">
   /**
-   * EmptySurface — shown in the terminal area when `$workspaces` is
-   * empty (the user has closed every workspace). Provides generic
-   * buttons to reopen the app into a useful state without needing to
-   * know the command palette.
+   * EmptySurface — shown in the terminal area when no workspace is open,
+   * or when the current workspace's active pane has zero surfaces (the
+   * user just closed the last one). Provides quick actions plus a
+   * launcher into existing projects and workspaces.
    *
    * Buttons are sourced from:
    *   - `workspaceActionStore` (core + extension non-sidebar actions
    *     whose `when` filter accepts an empty context)
    *   - `commandStore` entries registered with the ids listed in
    *     `empty-surface-commands.ts` (e.g. project-scope:create-project)
+   *
+   * The "Jump to existing" list pulls from `rootRowOrder` so projects +
+   * workspace rows render in the same order the sidebar shows them.
    */
+  import { get } from "svelte/store";
   import { theme } from "../stores/theme";
   import { workspaceActionStore } from "../services/workspace-action-registry";
   import { commandStore } from "../services/command-registry";
   import { EMPTY_SURFACE_COMMAND_IDS } from "../services/empty-surface-commands";
+  import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
+  import { rootRowOrder } from "../stores/root-row-order";
+  import { rootRowRendererStore } from "../services/root-row-renderer-registry";
+  import { switchWorkspace } from "../services/workspace-service";
+  import { newSurface } from "../services/surface-service";
 
   const iconSvgMap: Record<string, string> = {
     plus: `<line x1="8" y1="3" x2="8" y2="13" /><line x1="3" y1="8" x2="13" y2="8" />`,
@@ -53,6 +62,103 @@
       }),
     ),
   ];
+
+  // --- Existing workspaces / projects / dashboards ---
+  //
+  // When the current empty pane lives inside a workspace, clicking its
+  // own entry should spawn a terminal in the pane rather than switch
+  // to itself (a no-op would feel broken). Every other click routes
+  // to switchWorkspace / the row's renderer label for context.
+  $: currentWs = $workspaces[$activeWorkspaceIdx];
+  function activateWorkspaceAt(idx: number) {
+    if (idx === $activeWorkspaceIdx && currentWs) {
+      // The click-target IS the current empty workspace — start a new
+      // terminal surface in its active pane so the user transitions
+      // from "empty" to "usable" without leaving context.
+      const paneId = currentWs.activePaneId;
+      if (paneId) {
+        void newSurface(paneId);
+      }
+      return;
+    }
+    switchWorkspace(idx);
+  }
+
+  // Build a "jump list" modeled after the sidebar rootRowOrder. Project
+  // rows render as a header (click = switch to that project's first
+  // workspace); nested workspaces fan out below. Standalone workspaces
+  // render as leaf entries. Non-workspace/project rows (e.g. agent
+  // dashboards) are rendered through their label resolver so they show
+  // something, but lack an activation handler beyond switchWorkspace —
+  // dashboards open as preview surfaces via their own row click, not
+  // through this launcher.
+  interface JumpRow {
+    kind: "workspace";
+    workspaceId: string;
+    idx: number;
+    label: string;
+    badge?: string;
+  }
+
+  $: jumpRows = (() => {
+    const list = get(workspaces);
+    const out: JumpRow[] = [];
+    const seen = new Set<string>();
+    for (const row of $rootRowOrder) {
+      if (row.kind === "workspace") {
+        const idx = list.findIndex((w) => w.id === row.id);
+        if (idx < 0) continue;
+        const ws = list[idx]!;
+        out.push({
+          kind: "workspace",
+          workspaceId: ws.id,
+          idx,
+          label: ws.name,
+        });
+        seen.add(ws.id);
+        continue;
+      }
+      // Non-workspace row kinds (project, agent-dashboard…). Use their
+      // renderer-contributed label as a visual header, then fan out
+      // any workspaces tagged with the row's projectId.
+      const rendererMeta = $rootRowRendererStore.find((r) => r.id === row.kind);
+      const headerLabel = rendererMeta?.label?.(row.id);
+      if (headerLabel && row.kind === "project") {
+        for (let i = 0; i < list.length; i++) {
+          const ws = list[i]!;
+          if (seen.has(ws.id)) continue;
+          if (
+            (ws.metadata as Record<string, unknown> | undefined)?.projectId ===
+            row.id
+          ) {
+            out.push({
+              kind: "workspace",
+              workspaceId: ws.id,
+              idx: i,
+              label: ws.name,
+              badge: headerLabel,
+            });
+            seen.add(ws.id);
+          }
+        }
+      }
+    }
+    // Fallback pass — any workspaces not yet rendered (e.g. tagged to
+    // a project whose root row isn't in the order). Keeps the launcher
+    // exhaustive rather than silently hiding entries.
+    for (let i = 0; i < list.length; i++) {
+      const ws = list[i]!;
+      if (seen.has(ws.id)) continue;
+      out.push({
+        kind: "workspace",
+        workspaceId: ws.id,
+        idx: i,
+        label: ws.name,
+      });
+      seen.add(ws.id);
+    }
+    return out;
+  })();
 </script>
 
 <div
@@ -83,7 +189,13 @@
         line-height: 1.5;
       "
     >
-      No workspaces are open. Create one to get started.
+      {#if currentWs}
+        No surfaces in <strong style="color: {$theme.fg};"
+          >{currentWs.name}</strong
+        >. Start something new, or jump to another workspace.
+      {:else}
+        No workspaces are open. Create one to get started.
+      {/if}
     </div>
     {#if buttons.length > 0}
       <div
@@ -134,6 +246,64 @@
               {@html iconSvgMap[btn.icon] ?? iconSvgMap.plus}
             </svg>
             {btn.label}
+          </button>
+        {/each}
+      </div>
+    {/if}
+
+    {#if jumpRows.length > 0}
+      <div
+        style="
+          display: flex; flex-direction: column; gap: 6px;
+          width: 100%; max-width: 420px;
+          margin-top: 4px;
+        "
+      >
+        <div
+          style="
+            font-size: 11px; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 0.5px; color: {$theme.fgDim}; text-align: left;
+          "
+        >
+          Jump to workspace
+        </div>
+        {#each jumpRows as row (row.workspaceId)}
+          <button
+            type="button"
+            on:click={() => activateWorkspaceAt(row.idx)}
+            style="
+              display: flex; align-items: center; gap: 8px;
+              padding: 8px 12px;
+              border: 1px solid {row.idx === $activeWorkspaceIdx
+              ? ($theme.borderActive ?? $theme.accent)
+              : $theme.border};
+              background: {row.idx === $activeWorkspaceIdx
+              ? $theme.bgHighlight
+              : $theme.bgSurface};
+              color: {$theme.fg};
+              border-radius: 6px;
+              font-size: 13px; font-family: inherit; cursor: pointer;
+              text-align: left;
+            "
+          >
+            <span style="flex: 1; min-width: 0;">{row.label}</span>
+            {#if row.badge}
+              <span
+                style="
+                  font-size: 10px; color: {$theme.fgDim};
+                  padding: 1px 6px; border-radius: 8px;
+                  background: {$theme.bgHighlight};
+                  white-space: nowrap;
+                "
+              >
+                {row.badge}
+              </span>
+            {/if}
+            {#if row.idx === $activeWorkspaceIdx}
+              <span style="font-size: 10px; color: {$theme.fgDim};">
+                current — starts a new terminal
+              </span>
+            {/if}
           </button>
         {/each}
       </div>

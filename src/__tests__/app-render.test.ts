@@ -203,11 +203,11 @@ describe("Preview scrolling works", () => {
   it("PreviewSurface container allows scrolling (not overflow: hidden)", async () => {
     const fs = await import("fs");
     const source = fs.readFileSync(
-      "src/extensions/preview/PreviewSurface.svelte",
+      "src/lib/components/PreviewSurface.svelte",
       "utf-8",
     );
     // Container must allow vertical scrolling
-    expect(source).toContain("overflow-y: auto");
+    expect(source).toMatch(/overflow:\s*auto/);
     // Must NOT have overflow: hidden which would clip scrollable content
     expect(source).not.toContain("overflow: hidden");
   });
@@ -381,7 +381,7 @@ describe("Theme reactivity for previews", () => {
   it("PreviewSurface updates colors on theme change", async () => {
     const fs = await import("fs");
     const source = fs.readFileSync(
-      "src/extensions/preview/PreviewSurface.svelte",
+      "src/lib/components/PreviewSurface.svelte",
       "utf-8",
     );
     expect(source).toContain("$theme.bg");
@@ -389,15 +389,18 @@ describe("Theme reactivity for previews", () => {
     expect(source).toContain("element.style.background");
   });
 
-  it("preview extension exports refreshPreviewStyles", async () => {
-    const preview = await import("../extensions/preview/preview-service");
+  it("preview-service exports refreshPreviewStyles", async () => {
+    const preview = await import("../lib/services/preview-service");
     expect(typeof preview.refreshPreviewStyles).toBe("function");
   });
 
-  // Structural invariant: preview extension subscribes to theme:changed
-  it("preview extension subscribes to theme:changed for style refresh", async () => {
+  // Structural invariant: init-preview subscribes to theme:changed for refresh
+  it("preview bootstrap subscribes to theme:changed for style refresh", async () => {
     const fs = await import("fs");
-    const source = fs.readFileSync("src/extensions/preview/index.ts", "utf-8");
+    const source = fs.readFileSync(
+      "src/lib/bootstrap/init-preview.ts",
+      "utf-8",
+    );
     expect(source).toContain('"theme:changed"');
     expect(source).toContain("refreshPreviewStyles");
   });

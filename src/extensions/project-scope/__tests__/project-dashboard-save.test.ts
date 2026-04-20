@@ -1,20 +1,12 @@
 /**
- * Regression test: saving or deleting a project via the dashboard must
- * emit `extension:project:state-changed` so the sidebar re-reads and the
- * dashboard itself re-renders the edited project.
- *
- * Prior bug: saveChanges called `api.state.set("projects", updated)` but
- * did not emit the event. Since the dashboard's reactive block only
- * re-reads on `$workspacesStore` changes, nothing refreshed after save —
- * the UI looked stuck with the Save button still armed.
- *
- * The mutations have since moved into project-service.ts — this test now
- * enforces the invariant at the service layer (state-set + emit in one
- * step) and verifies the dashboard delegates to the service + subscribes
- * to the emit.
+ * Regression test: saving or deleting a project must go through
+ * project-service.ts so the read → mutate → emit sequence stays
+ * consistent. Originally enforced an invariant on the dashboard
+ * overlay's wiring; the overlay was removed in P9 (project dashboards
+ * are now markdown PreviewSurfaces), so only the service-layer
+ * contract remains.
  */
 import { describe, it, expect, vi } from "vitest";
-import { readFileSync } from "fs";
 import type { ExtensionAPI } from "../../api";
 import {
   updateProject,
@@ -22,12 +14,6 @@ import {
   setProjectOrder,
 } from "../project-service";
 import type { ProjectEntry } from "../index";
-
-const DASHBOARD_SOURCE = readFileSync(
-  "src/extensions/project-scope/ProjectDashboardOverlay.svelte",
-  "utf-8",
-);
-const ONE_LINE = DASHBOARD_SOURCE.replace(/\s+/g, " ");
 
 function makeProject(id: string, name = "P"): ProjectEntry {
   return {
@@ -95,27 +81,5 @@ describe("project-service mutations", () => {
     setProjectOrder(api, ["b", "a"]);
     expect(api.state.get<string[]>("projectOrder")).toEqual(["b", "a"]);
     expect(emit).toHaveBeenCalledWith("extension:project:state-changed", {});
-  });
-});
-
-describe("ProjectDashboardOverlay wiring", () => {
-  it("delegates save + delete to the project-service helpers", () => {
-    expect(ONE_LINE).toMatch(
-      /import \{[^}]*updateProject[^}]*\} from "\.\/project-service"/,
-    );
-    expect(ONE_LINE).toMatch(
-      /import \{[^}]*deleteProject[^}]*\} from "\.\/project-service"/,
-    );
-    expect(ONE_LINE).toMatch(/updateProject\(api,\s*project\.id/);
-    expect(ONE_LINE).toMatch(/deleteProject\(api,\s*project!\.id\)/);
-  });
-
-  it("re-reads project when extension:project:state-changed fires", () => {
-    // A version counter bumped inside the event listener feeds the
-    // reactive block that re-reads from the service.
-    expect(ONE_LINE).toMatch(
-      /api\.on\(\s*"extension:project:state-changed".*?projectStateVersion\+\+/,
-    );
-    expect(ONE_LINE).toMatch(/void projectStateVersion/);
   });
 });

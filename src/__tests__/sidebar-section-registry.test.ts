@@ -48,7 +48,7 @@ describe("sidebarSectionStore", () => {
       source: "ext-a",
     });
     registerSidebarSection({
-      id: "git-status",
+      id: "git-info",
       label: "Git",
       component: "B",
       source: "ext-b",

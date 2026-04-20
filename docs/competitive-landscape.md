@@ -1,8 +1,8 @@
 # Competitive Landscape — Reference Seed
 
 _Purpose: the raw input for competitive analyses. Tracks **competitors, sources, and
-feature inventories** without reference to gnar-term. When producing a comparison
-(`competitive-analysis.md`), start here — do not restate facts inline, cite this file._
+feature inventories** without reference to gnar-term. When producing a comparison,
+start here — do not restate facts inline, cite this file._
 
 ## How to use
 
@@ -13,7 +13,8 @@ feature inventories** without reference to gnar-term. When producing a compariso
   shifted, and note the change in the refresh log at the bottom.
 - **Shape**: categorize into _terminal-first_, _orchestrator-first_, _vendor
   chrome_, or a new shape (note the reasoning).
-- **No gnar-term comparisons here.** That framing lives in `competitive-analysis.md`.
+- **No gnar-term comparisons here.** This file is reference material only —
+  comparisons live in a separate analysis document produced on demand.
 - **Unknowns stay unknown.** Use `?` rather than guessing. Flag conflicting signals
   explicitly.
 

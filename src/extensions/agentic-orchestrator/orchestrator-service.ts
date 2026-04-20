@@ -100,15 +100,22 @@ async function derivePath(
  * Create a Dashboard workspace dedicated to an orchestrator. Returns the
  * new workspace id so the orchestrator record can link to it.
  *
- * The Dashboard is always named "Dashboard" (it renders nested under the
- * orchestrator's banner, which carries the orchestrator's name — naming
- * the workspace after the orchestrator would duplicate that label).
+ * The Dashboard is always named "Dashboard". When the orchestrator has a
+ * `parentProjectId`, the Dashboard workspace is tagged with `projectId`
+ * too so project-scope claims it and renders it inside the project's
+ * nested list (as an agentic Dashboard tile).
  */
 export async function createOrchestratorDashboardWorkspace(
   orchestrator: AgentOrchestrator,
 ): Promise<string> {
+  // When nested under a project, the Dashboard tile renders in the
+  // project's list and needs to self-identify — use the orchestrator
+  // name. When root-level, the tile sits inside the orchestrator's own
+  // nested list below its banner; the banner already carries the name,
+  // so the tile uses the generic "Dashboard" label.
+  const wsName = orchestrator.parentProjectId ? orchestrator.name : "Dashboard";
   return await createWorkspaceFromDef({
-    name: "Dashboard",
+    name: wsName,
     layout: {
       pane: {
         surfaces: [
@@ -124,6 +131,9 @@ export async function createOrchestratorDashboardWorkspace(
     metadata: {
       [DASHBOARD_METADATA_KEY]: true,
       [ORCHESTRATOR_WORKSPACE_META_KEY]: orchestrator.id,
+      ...(orchestrator.parentProjectId
+        ? { projectId: orchestrator.parentProjectId }
+        : {}),
     },
   });
 }

@@ -169,6 +169,9 @@
         repoPath,
         branch: `agent/${agent}/${issue.number}-${branchSlug}`,
         ...(orchestratorId ? { orchestratorId } : {}),
+        ...(orchestrator?.parentProjectId
+          ? { projectId: orchestrator.parentProjectId }
+          : {}),
       });
     } catch (err) {
       spawnError = `Spawn failed: ${err instanceof Error ? err.message : String(err)}`;

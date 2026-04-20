@@ -49,12 +49,11 @@ describe("Extension barrier enforcement", () => {
         "../../lib/services/workspace-service",
         "../../lib/stores/workspace",
       ],
-      // project-scope's openProjectDashboard mirrors the open-as-preview
-      // pattern (find existing preview by path, otherwise spawn into the
-      // active pane), so it needs the same set of core imports.
+      // project-scope creates + closes a Dashboard workspace eagerly for
+      // each project, so it imports createWorkspaceFromDef and reads
+      // the workspaces store directly.
       "project-scope/index.ts": [
-        "../../lib/services/surface-service",
-        "../../lib/services/preview-surface-registry",
+        "../../lib/services/workspace-service",
         "../../lib/stores/workspace",
       ],
       // P7: Issues + TaskSpawner widgets call the shared spawn-helper

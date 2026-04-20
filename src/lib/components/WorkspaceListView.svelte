@@ -236,11 +236,14 @@
       {@const dashAccent = accentColor ?? $theme.accent}
       {@const dashFg = contrastColor(dashAccent)}
       {@const isActive = entry.idx === $activeWorkspaceIdx}
+      {@const wsMeta = entry.ws.metadata as Record<string, unknown> | undefined}
+      {@const isAgentic = typeof wsMeta?.orchestratorId === "string"}
       <!-- svelte-ignore a11y_click_events_have_key_events -->
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div
         class="dashboard-item"
         data-dashboard-item={entry.ws.id}
+        data-dashboard-agentic={isAgentic ? "true" : undefined}
         data-active={isActive ? "true" : undefined}
         on:click={() => switchWorkspace(entry.idx)}
         on:contextmenu|preventDefault={(e) =>
@@ -264,23 +267,47 @@
             color: {dashFg};
           "
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <title>Dashboard</title>
-            <rect x="3" y="3" width="7" height="9" />
-            <rect x="14" y="3" width="7" height="5" />
-            <rect x="14" y="12" width="7" height="9" />
-            <rect x="3" y="16" width="7" height="5" />
-          </svg>
+          {#if isAgentic}
+            <!-- Agentic Dashboard icon: canonical lucide:bot. Antenna,
+                 rounded body with two dot eyes, side "ear" ticks. -->
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <title>Agent Dashboard</title>
+              <path d="M12 8V4H8" />
+              <rect width="16" height="12" x="4" y="8" rx="2" />
+              <path d="M2 14h2" />
+              <path d="M20 14h2" />
+              <path d="M15 13v2" />
+              <path d="M9 13v2" />
+            </svg>
+          {:else}
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <title>Dashboard</title>
+              <rect x="3" y="3" width="7" height="9" />
+              <rect x="14" y="3" width="7" height="5" />
+              <rect x="14" y="12" width="7" height="9" />
+              <rect x="3" y="16" width="7" height="5" />
+            </svg>
+          {/if}
         </span>
         <span
           style="

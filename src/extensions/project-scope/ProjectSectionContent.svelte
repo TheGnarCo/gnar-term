@@ -116,8 +116,23 @@
     updateProject(api, project.id, { name: trimmed });
   }
 
-  function handleDeleteProject() {
+  async function handleDeleteProject() {
     if (!project) return;
+    // Close the project's Dashboard workspace first so it's removed from
+    // the workspaces store alongside the project record.
+    const dashboardWsId = project.dashboardWorkspaceId;
+    if (dashboardWsId) {
+      let wsIdx = -1;
+      const unsub = api.workspaces.subscribe((list) => {
+        wsIdx = list.findIndex((w) => w.id === dashboardWsId);
+      });
+      unsub();
+      if (wsIdx >= 0) {
+        const { closeWorkspace } =
+          await import("../../lib/services/workspace-service");
+        closeWorkspace(wsIdx);
+      }
+    }
     deleteProject(api, project.id);
   }
 
@@ -230,7 +245,7 @@
       },
     );
     if (!confirmed) return;
-    handleDeleteProject();
+    void handleDeleteProject();
   }
 
   // Dashboard-hint for nested workspaces: surface-based. Any workspace

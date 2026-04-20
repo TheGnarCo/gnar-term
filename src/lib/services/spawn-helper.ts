@@ -72,6 +72,13 @@ export interface SpawnAgentInWorktreeArgs {
    * workspace so it renders nested under the orchestrator row.
    */
   orchestratorId?: string;
+  /**
+   * When provided, the new workspace's metadata.projectId is set to this
+   * id too — used when the spawning orchestrator lives under a project,
+   * so project-scope claims the worktree into the project's nested list
+   * alongside other project workspaces.
+   */
+  projectId?: string;
 }
 
 export interface SpawnAgentInWorktreeResult {
@@ -181,6 +188,7 @@ export async function spawnAgentInWorktree(
     ...(args.orchestratorId
       ? { parentOrchestratorId: args.orchestratorId }
       : {}),
+    ...(args.projectId ? { projectId: args.projectId } : {}),
   };
 
   const { workspaceId } = await createWorktreeWorkspaceFromConfig(config);

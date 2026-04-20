@@ -157,8 +157,13 @@ describe("Project Scope included extension", () => {
   });
 });
 
-describe("Project Scope dashboard preview", () => {
-  function makeProject(id: string, path: string, name = id): ProjectEntry {
+describe("Project Scope dashboard switching", () => {
+  function makeProject(
+    id: string,
+    path: string,
+    name = id,
+    dashboardWorkspaceId?: string,
+  ): ProjectEntry {
     return {
       id,
       name,
@@ -167,118 +172,47 @@ describe("Project Scope dashboard preview", () => {
       workspaceIds: [],
       isGit: false,
       createdAt: "2026-04-19T00:00:00.000Z",
+      ...(dashboardWorkspaceId ? { dashboardWorkspaceId } : {}),
     };
-  }
-
-  function seedActivePane(paneId: string): void {
-    const ws: Workspace = {
-      id: "ws-active",
-      name: "Active",
-      activePaneId: paneId,
-      splitRoot: {
-        type: "pane",
-        pane: { id: paneId, surfaces: [], activeSurfaceId: null },
-      },
-    };
-    workspaces.set([ws]);
-    activeWorkspaceIdx.set(0);
   }
 
   beforeEach(async () => {
     await resetExtensions();
     resetCommands();
-    findByPathSpy.mockReset();
-    focusSpy.mockReset();
-    createSpy.mockReset();
     workspaces.set([]);
     activeWorkspaceIdx.set(-1);
     (invoke as ReturnType<typeof vi.fn>).mockClear();
   });
 
-  it("openProjectDashboard spawns a preview when no existing surface matches the path", async () => {
-    findByPathSpy.mockReturnValue(undefined);
-    createSpy.mockReturnValue({ id: "s-new" });
-    seedActivePane("pane-active");
-
-    const project = makeProject("proj-1", "/tmp/alpha", "Alpha");
-    const ok = await openProjectDashboard(project);
-
-    expect(ok).toBe(true);
-    expect(findByPathSpy).toHaveBeenCalledWith(
-      "/tmp/alpha/.gnar-term/project-dashboard.md",
-    );
-    expect(createSpy).toHaveBeenCalledWith(
-      "pane-active",
-      "/tmp/alpha/.gnar-term/project-dashboard.md",
-      expect.objectContaining({ focus: true, title: "Alpha" }),
-    );
-    expect(focusSpy).not.toHaveBeenCalled();
-  });
-
-  it("openProjectDashboard focuses an already-open preview instead of duplicating it", async () => {
-    findByPathSpy.mockReturnValue({
-      surfaceId: "s-existing",
-      path: "/tmp/alpha/.gnar-term/project-dashboard.md",
-      paneId: "pane-other",
-      workspaceId: "ws-other",
-    });
-    seedActivePane("pane-active");
-
-    const project = makeProject("proj-1", "/tmp/alpha", "Alpha");
-    const ok = await openProjectDashboard(project);
-
-    expect(ok).toBe(true);
-    expect(focusSpy).toHaveBeenCalledWith("s-existing");
-    expect(createSpy).not.toHaveBeenCalled();
-  });
-
-  it("open-project-dashboard command is registered and routes through openProjectDashboard", async () => {
-    const { api } = createExtensionAPI(projectScopeManifest);
-    api.state.set("projects", [
-      {
-        id: "proj-1",
-        name: "Alpha",
-        path: "/tmp/alpha",
-        color: "purple",
-        workspaceIds: [],
-        isGit: false,
-        createdAt: new Date().toISOString(),
+  it("openProjectDashboard switches to the project's Dashboard workspace", () => {
+    const dashboardWs: Workspace = {
+      id: "ws-dash",
+      name: "Dashboard",
+      activePaneId: "p",
+      splitRoot: {
+        type: "pane",
+        pane: { id: "p", surfaces: [], activeSurfaceId: null },
       },
-    ]);
-    api.state.set("activeProjectId", "proj-1");
+      metadata: { isDashboard: true, projectId: "proj-1" },
+    };
+    workspaces.set([dashboardWs]);
 
-    registerExtension(projectScopeManifest, registerProjectScopeExtension);
-    await activateExtension("project-scope");
+    const project = makeProject("proj-1", "/tmp/alpha", "Alpha", "ws-dash");
+    const ok = openProjectDashboard(project);
 
-    const cmd = get(commandStore).find(
-      (c) => c.id === "project-scope:open-project-dashboard",
-    );
-    expect(cmd).toBeTruthy();
+    expect(ok).toBe(true);
+    expect(get(activeWorkspaceIdx)).toBe(0);
+  });
 
-    // Synchronous call; openProjectDashboard kicks off async invokes but
-    // schedules findPreviewSurfaceByPath via the same microtask queue. We
-    // assert the lookup fired (which is what the command must do before
-    // it can decide between focus vs spawn), regardless of how far the
-    // async write chain progresses inside the same tick.
-    findByPathSpy.mockReset();
-    findByPathSpy.mockReturnValue({
-      surfaceId: "s-existing",
-      path: "/tmp/alpha/.gnar-term/project-dashboard.md",
-      paneId: "pane-active",
-      workspaceId: "ws-active",
-    });
-    seedActivePane("pane-active");
+  it("openProjectDashboard returns false when no Dashboard workspace id is set", () => {
+    const project = makeProject("proj-1", "/tmp/alpha", "Alpha");
+    expect(openProjectDashboard(project)).toBe(false);
+  });
 
-    cmd!.action();
-
-    // Drain the microtask queue: file_exists (mocked truthy) → no
-    // ensure_dir/write_file → findPreviewSurfaceByPath → focusSurfaceById.
-    for (let i = 0; i < 10; i++) await Promise.resolve();
-
-    expect(findByPathSpy).toHaveBeenCalledWith(
-      "/tmp/alpha/.gnar-term/project-dashboard.md",
-    );
-    expect(focusSpy).toHaveBeenCalledWith("s-existing");
+  it("openProjectDashboard returns false when the Dashboard workspace id no longer resolves", () => {
+    workspaces.set([]);
+    const project = makeProject("proj-1", "/tmp/alpha", "Alpha", "ws-missing");
+    expect(openProjectDashboard(project)).toBe(false);
   });
 });
 

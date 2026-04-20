@@ -139,16 +139,8 @@ describe("agentic-orchestrator child-row contributors", () => {
     workspacesStore.set([]);
   });
 
-  it('contributes orchestrators under "project" rows by parentProjectId', async () => {
+  it('does not contribute an "agent-orchestrator" child-row under projects — nested orchestrators render via their Dashboard workspace tile instead', async () => {
     const orchestrators: AgentOrchestrator[] = [
-      {
-        id: "d-root",
-        name: "Root",
-        baseDir: "/work",
-        color: "purple",
-        path: "/abs/root.md",
-        createdAt: "2026-01-01",
-      },
       {
         id: "d-p1-a",
         name: "P1 Dash A",
@@ -157,24 +149,6 @@ describe("agentic-orchestrator child-row contributors", () => {
         path: "/abs/p1a.md",
         createdAt: "2026-01-01",
         parentProjectId: "project-1",
-      },
-      {
-        id: "d-p1-b",
-        name: "P1 Dash B",
-        baseDir: "/work/p1",
-        color: "green",
-        path: "/abs/p1b.md",
-        createdAt: "2026-01-01",
-        parentProjectId: "project-1",
-      },
-      {
-        id: "d-p2",
-        name: "P2 Dash",
-        baseDir: "/work/p2",
-        color: "red",
-        path: "/abs/p2.md",
-        createdAt: "2026-01-01",
-        parentProjectId: "project-2",
       },
     ];
     configRef.current = { agentOrchestrators: orchestrators };
@@ -185,16 +159,12 @@ describe("agentic-orchestrator child-row contributors", () => {
     );
     await activateExtension("agentic-orchestrator");
 
-    expect(getChildRowsFor("project", "project-1")).toEqual([
-      { kind: "agent-orchestrator", id: "d-p1-a" },
-      { kind: "agent-orchestrator", id: "d-p1-b" },
-    ]);
-    expect(getChildRowsFor("project", "project-2")).toEqual([
-      { kind: "agent-orchestrator", id: "d-p2" },
-    ]);
-    // Root-level orchestrators (no parentProjectId) don't show up under
-    // any project — they're root rows on the sidebar instead.
-    expect(getChildRowsFor("project", "no-such-project")).toEqual([]);
+    // Under the new model, nested orchestrators are represented inside a
+    // project's nested list by their own Dashboard workspace (which
+    // project-scope claims via metadata.projectId). The extension no
+    // longer contributes a separate "agent-orchestrator" row under
+    // projects.
+    expect(getChildRowsFor("project", "project-1")).toEqual([]);
   });
 
   it('does not register an "orchestrator" child-row contributor for workspaces', async () => {

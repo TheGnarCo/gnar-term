@@ -15,23 +15,15 @@ import { resolveProjectColor } from "../api";
 import { get } from "svelte/store";
 import ProjectRowBody from "./ProjectRowBody.svelte";
 import ProjectCreateOverlay from "./ProjectCreateOverlay.svelte";
-import {
-  createPreviewSurfaceInPane,
-  focusSurfaceById,
-} from "../../lib/services/surface-service";
-import { findPreviewSurfaceByPath } from "../../lib/services/preview-surface-registry";
-import {
-  activePane,
-  workspaces,
-  activeWorkspaceIdx,
-} from "../../lib/stores/workspace";
-import { getAllPanes, getAllSurfaces, isPreviewSurface } from "../../lib/types";
+import { createWorkspaceFromDef } from "../../lib/services/workspace-service";
+import { workspaces, activeWorkspaceIdx } from "../../lib/stores/workspace";
 import {
   getProjects,
   addProject,
   addWorkspaceToProject,
   removeWorkspaceFromAllProjects,
   clearWorkspaceIds,
+  updateProject,
 } from "./project-service";
 
 export interface ProjectEntry {
@@ -42,6 +34,12 @@ export interface ProjectEntry {
   workspaceIds: string[];
   isGit: boolean;
   createdAt: string;
+  /**
+   * Id of the Dashboard workspace that hosts this project's markdown
+   * Live Preview. Set when the Dashboard is created eagerly on project
+   * creation. Resolved from the workspaces store by consumers.
+   */
+  dashboardWorkspaceId?: string;
 }
 
 function generateId(): string {
@@ -96,92 +94,54 @@ async function writeProjectDashboardTemplate(
 }
 
 /**
- * Open a project's markdown dashboard as a PreviewSurface. Target
- * resolution, in order:
- *
- *   1. An existing preview surface at the dashboard path — focus it
- *      wherever it lives (focusSurfaceById switches workspaces too).
- *   2. The first workspace claimed by this project that already has a
- *      preview at the dashboard path (belt-and-suspenders for cases
- *      where the global registry missed it, e.g. pre-hydration races).
- *   3. The first workspace claimed by this project — switch to it and
- *      spawn the preview in its active pane. This is the "no dashboard
- *      open anywhere yet" path.
- *   4. No project workspaces exist — fall back to the global active
- *      pane (preserves old behavior for projects with zero workspaces).
- *
- * Returns true on success.
+ * Create the Dashboard workspace for a project: a constrained workspace
+ * (metadata.isDashboard = true) hosting a single Live Preview of the
+ * project's markdown file. Returns the new workspace id so the project
+ * record can link to it.
  */
-export async function openProjectDashboard(
+async function createProjectDashboardWorkspace(
   project: ProjectEntry,
-): Promise<boolean> {
+): Promise<string> {
   const path = projectDashboardPath(project.path);
   try {
     await writeProjectDashboardTemplate(project, path);
   } catch {
-    // Best-effort write — proceed to open even if the seed fails so the
-    // user still sees something they can react to.
+    // Best-effort write — the workspace can still be created; the
+    // preview surface will surface the backing-file error if relevant.
   }
-  // (1) Registry hit — focus it wherever it is.
-  const existing = findPreviewSurfaceByPath(path);
-  if (existing) {
-    focusSurfaceById(existing.surfaceId);
-    return true;
-  }
-
-  // (2) Fallback: any project workspace already hosting the preview.
-  const wsList = get(workspaces);
-  const projectWorkspaces: Array<{
-    idx: number;
-    ws: import("../../lib/types").Workspace;
-  }> = [];
-  for (const id of project.workspaceIds) {
-    const idx = wsList.findIndex((w) => w.id === id);
-    if (idx < 0) continue;
-    const ws = wsList[idx];
-    if (!ws) continue;
-    projectWorkspaces.push({ idx, ws });
-  }
-  const target = projectWorkspaces.find((e) =>
-    getAllSurfaces(e.ws).some((s) => isPreviewSurface(s) && s.path === path),
-  );
-  if (target) {
-    activeWorkspaceIdx.set(target.idx);
-    const pane = getAllPanes(target.ws.splitRoot).find(
-      (p) => p.id === target.ws.activePaneId,
-    );
-    if (pane) {
-      const hostedSurface = getAllSurfaces(target.ws).find(
-        (s) => isPreviewSurface(s) && s.path === path,
-      );
-      if (hostedSurface) focusSurfaceById(hostedSurface.id);
-    }
-    return true;
-  }
-
-  // (3) No host yet — pick the first project workspace, switch, spawn.
-  const first = projectWorkspaces[0];
-  if (first) {
-    activeWorkspaceIdx.set(first.idx);
-    const pane = getAllPanes(first.ws.splitRoot).find(
-      (p) => p.id === first.ws.activePaneId,
-    );
-    if (!pane) return false;
-    const surface = createPreviewSurfaceInPane(pane.id, path, {
-      focus: true,
-      title: project.name,
-    });
-    return surface !== null;
-  }
-
-  // (4) No project workspaces — fall back to global active pane.
-  const pane = get(activePane);
-  if (!pane) return false;
-  const surface = createPreviewSurfaceInPane(pane.id, path, {
-    focus: true,
-    title: project.name,
+  return await createWorkspaceFromDef({
+    name: "Dashboard",
+    layout: {
+      pane: {
+        surfaces: [
+          {
+            type: "preview",
+            path,
+            name: project.name,
+            focus: true,
+          },
+        ],
+      },
+    },
+    metadata: {
+      isDashboard: true,
+      projectId: project.id,
+    },
   });
-  return surface !== null;
+}
+
+/**
+ * Switch to a project's Dashboard workspace. The Dashboard is created
+ * eagerly on project creation, so this is a pure activation call.
+ * Returns true on success.
+ */
+export function openProjectDashboard(project: ProjectEntry): boolean {
+  const targetId = project.dashboardWorkspaceId;
+  if (!targetId) return false;
+  const idx = get(workspaces).findIndex((w) => w.id === targetId);
+  if (idx < 0) return false;
+  activeWorkspaceIdx.set(idx);
+  return true;
 }
 
 export const projectScopeManifest: ExtensionManifest = {
@@ -308,6 +268,23 @@ export function registerProjectScopeExtension(api: ExtensionAPI): void {
       };
 
       addProject(api, project);
+
+      // Eagerly spawn the project's Dashboard workspace. The
+      // workspace:created event below will claim it (metadata.projectId
+      // is set), and it will appear as the first tile in the project's
+      // nested list.
+      try {
+        const dashboardWorkspaceId =
+          await createProjectDashboardWorkspace(project);
+        updateProject(api, id, { dashboardWorkspaceId });
+      } catch (err) {
+        api.reportError(
+          `Failed to create project Dashboard workspace: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
+
       api.state.set("activeProjectId", id);
       return id;
     }
@@ -395,6 +372,27 @@ export function registerProjectScopeExtension(api: ExtensionAPI): void {
     for (const project of projects) {
       api.appendRootRow({ kind: "project", id: project.id });
     }
+
+    // Ensure each project has a Dashboard workspace. New projects get
+    // one via createProjectFlow; this reconciliation catches anything
+    // that was lost (first run after the redesign, corruption). Fires
+    // asynchronously; UI handles missing workspaces gracefully until
+    // it completes.
+    void (async () => {
+      for (const project of getProjects(api)) {
+        const hasWs =
+          !!project.dashboardWorkspaceId &&
+          get(workspaces).some((w) => w.id === project.dashboardWorkspaceId);
+        if (hasWs) continue;
+        try {
+          const dashboardWorkspaceId =
+            await createProjectDashboardWorkspace(project);
+          updateProject(api, project.id, { dashboardWorkspaceId });
+        } catch (err) {
+          console.warn("[project-scope] Dashboard reconciliation failed:", err);
+        }
+      }
+    })();
 
     // Register per-project "New Workspace" commands for the command palette
     function registerProjectCommands(projects: ProjectEntry[]): void {

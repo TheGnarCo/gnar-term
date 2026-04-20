@@ -25,7 +25,6 @@ import { get } from "svelte/store";
 import {
   loadOrchestrators,
   orchestratorsStore,
-  getOrchestratorsForProject,
   getOrchestrators,
   createOrchestrator,
   openOrchestratorDashboard,
@@ -44,15 +43,6 @@ import TaskSpawner from "./components/TaskSpawner.svelte";
 import Columns from "./components/Columns.svelte";
 
 const ROOT_ROW_KIND = "agent-orchestrator";
-
-/**
- * Stable id used to render an AgentOrchestrator via a child-row contributor.
- * Re-exported so AgentOrchestratorRow can compute the same key when
- * enumerating contributed children for nested rendering.
- */
-export function agentOrchestratorRowId(orchestratorId: string): string {
-  return orchestratorId;
-}
 
 // --- Manifest ---
 
@@ -195,13 +185,11 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
       },
     });
 
-    // Project rows: contribute the orchestrators that belong to this project.
-    api.registerChildRowContributor("project", (projectId) =>
-      getOrchestratorsForProject(projectId).map((o) => ({
-        kind: ROOT_ROW_KIND,
-        id: agentOrchestratorRowId(o.id),
-      })),
-    );
+    // Nested orchestrators no longer contribute a separate row under
+    // projects — their Dashboard workspace is claimed by project-scope
+    // (via metadata.projectId on the Dashboard) and renders as an
+    // agentic Dashboard tile inside the project's nested list. Spawned
+    // worktrees similarly bubble up via their metadata.projectId.
 
     orchestratorUnsub = orchestratorsStore.subscribe((orchestrators) => {
       const rootIds = new Set(

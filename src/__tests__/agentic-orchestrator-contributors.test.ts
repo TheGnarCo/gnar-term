@@ -200,13 +200,16 @@ describe("agentic-orchestrator child-row contributors", () => {
     expect(getChildRowsFor("project", "no-such-project")).toEqual([]);
   });
 
-  it('contributes workspaces under "dashboard" rows by parentDashboardId metadata', async () => {
+  it('does not register a "dashboard" child-row contributor for workspaces', async () => {
+    // Workspaces tagged with metadata.parentDashboardId used to come back
+    // as child rows of kind "workspace" here. That emitted rows no renderer
+    // claimed, so nothing painted. The extension now renders nested
+    // worktree workspaces directly via WorkspaceListView inside
+    // AgentDashboardRow — no contributor needed. See that component's
+    // `nestedWorkspaceIds` block.
     workspacesStore.set([
-      mkWs("ws-root"),
       mkWs("ws-d1-a", { parentDashboardId: "dash-1" }),
       mkWs("ws-d1-b", { parentDashboardId: "dash-1" }),
-      mkWs("ws-d2", { parentDashboardId: "dash-2" }),
-      mkWs("ws-other-meta", { worktreePath: "/a" }),
     ]);
 
     registerExtension(
@@ -215,14 +218,6 @@ describe("agentic-orchestrator child-row contributors", () => {
     );
     await activateExtension("agentic-orchestrator");
 
-    const d1 = getChildRowsFor("dashboard", "dash-1");
-    expect(d1).toHaveLength(2);
-    expect(d1.map((r) => r.id).sort()).toEqual(["ws-d1-a", "ws-d1-b"]);
-    expect(d1.every((r) => r.kind === "workspace")).toBe(true);
-
-    expect(getChildRowsFor("dashboard", "dash-2")).toEqual([
-      { kind: "workspace", id: "ws-d2" },
-    ]);
-    expect(getChildRowsFor("dashboard", "no-such-dashboard")).toEqual([]);
+    expect(getChildRowsFor("dashboard", "dash-1")).toEqual([]);
   });
 });

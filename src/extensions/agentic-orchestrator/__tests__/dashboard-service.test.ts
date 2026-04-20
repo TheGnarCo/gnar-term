@@ -41,6 +41,7 @@ vi.mock("../../../lib/config", async (importOriginal) => {
 
 import {
   createDashboard,
+  dashboardScopedAgents,
   deleteDashboard,
   getDashboard,
   getDashboards,
@@ -51,6 +52,10 @@ import {
   dashboardsStore,
   _resetDashboardService,
 } from "../dashboard-service";
+import { workspaces } from "../../../lib/stores/workspace";
+import type { AgentRef } from "../../api";
+import type { AgentDashboard } from "../../../lib/config";
+import type { Workspace } from "../../../lib/types";
 
 describe("dashboard-service", () => {
   beforeEach(() => {
@@ -256,6 +261,101 @@ describe("dashboard-service", () => {
       configRef.current = {};
       loadDashboards();
       expect(getDashboards()).toEqual([]);
+    });
+  });
+
+  describe("dashboardScopedAgents", () => {
+    const dashboard: AgentDashboard = {
+      id: "dash-1",
+      name: "Dash",
+      baseDir: "/work/repo",
+      color: "purple",
+      path: "/abs/dash.md",
+      createdAt: "2026-01-01T00:00:00.000Z",
+    };
+
+    function makeWorkspace(
+      id: string,
+      opts: { cwd?: string; metadata?: Record<string, unknown> } = {},
+    ): Workspace {
+      const surfaces = opts.cwd
+        ? [
+            {
+              kind: "terminal" as const,
+              id: `${id}-s`,
+              cwd: opts.cwd,
+            } as unknown as import("../../../lib/types").Surface,
+          ]
+        : [];
+      return {
+        id,
+        name: id,
+        splitRoot: {
+          type: "pane",
+          pane: {
+            id: `${id}-p`,
+            surfaces,
+            activeSurfaceId: null,
+          },
+        },
+        activePaneId: `${id}-p`,
+        ...(opts.metadata ? { metadata: opts.metadata } : {}),
+      };
+    }
+
+    function makeAgent(workspaceId: string): AgentRef {
+      return {
+        agentId: `agent-${workspaceId}`,
+        agentName: "claude-code",
+        workspaceId,
+        surfaceId: `${workspaceId}-s`,
+        status: "running",
+        lastStatusChange: "2026-01-01T00:00:00.000Z",
+      } as AgentRef;
+    }
+
+    beforeEach(() => {
+      workspaces.set([]);
+    });
+
+    it("includes agents whose workspace cwd is under baseDir", () => {
+      workspaces.set([makeWorkspace("ws-a", { cwd: "/work/repo/src" })]);
+      const result = dashboardScopedAgents(dashboard, [makeAgent("ws-a")]);
+      expect(result.map((a) => a.workspaceId)).toEqual(["ws-a"]);
+    });
+
+    it("excludes agents whose workspace cwd is a sibling directory", () => {
+      workspaces.set([
+        makeWorkspace("ws-sibling", { cwd: "/work/repo-agent-xyz" }),
+      ]);
+      const result = dashboardScopedAgents(dashboard, [
+        makeAgent("ws-sibling"),
+      ]);
+      expect(result).toEqual([]);
+    });
+
+    it("includes agents whose workspace metadata.parentDashboardId matches even when cwd is outside baseDir", () => {
+      workspaces.set([
+        makeWorkspace("ws-worktree", {
+          cwd: "/work/repo-agent-xyz",
+          metadata: { parentDashboardId: "dash-1" },
+        }),
+      ]);
+      const result = dashboardScopedAgents(dashboard, [
+        makeAgent("ws-worktree"),
+      ]);
+      expect(result.map((a) => a.workspaceId)).toEqual(["ws-worktree"]);
+    });
+
+    it("excludes agents whose metadata parentDashboardId points at a different dashboard", () => {
+      workspaces.set([
+        makeWorkspace("ws-other", {
+          cwd: "/elsewhere",
+          metadata: { parentDashboardId: "some-other-dashboard" },
+        }),
+      ]);
+      const result = dashboardScopedAgents(dashboard, [makeAgent("ws-other")]);
+      expect(result).toEqual([]);
     });
   });
 });

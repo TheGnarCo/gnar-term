@@ -20,6 +20,10 @@
     activePane,
     activeSurface,
   } from "./lib/stores/workspace";
+  import {
+    rootRowOrder,
+    bootstrapRootRowOrder,
+  } from "./lib/stores/root-row-order";
   import { get } from "svelte/store";
   import { invoke } from "@tauri-apps/api/core";
   import { loadConfig, saveConfig, getWorkspaceCommands } from "./lib/config";
@@ -509,6 +513,19 @@
     });
 
     await restoreWorkspaces(cliArgs, config);
+
+    // Rehydrate the persisted root-row order so drag-sorted layouts
+    // survive across restarts. Entities are all registered by this
+    // point — extensions (projects, agent dashboards) appended during
+    // activation, and restoreWorkspaces appended workspaces — so the
+    // known set is stable. bootstrapRootRowOrder re-sorts to match the
+    // persisted order and appends any brand-new entity at the end.
+    const currentOrder = get(rootRowOrder);
+    const extensionRows = currentOrder.filter((r) => r.kind !== "workspace");
+    bootstrapRootRowOrder(
+      get(workspaces).map((w) => w.id),
+      extensionRows,
+    );
 
     if (!restoreCommandsOverlayShown) {
       const hasPending = $workspaces.some((ws) =>

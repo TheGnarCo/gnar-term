@@ -135,11 +135,16 @@ export async function deleteDashboard(id: string): Promise<void> {
 }
 
 /**
- * Filter agents to those whose owning surface's `cwd` is under the
- * dashboard's `baseDir`. Used by both the sidebar row (P5) and the
- * dashboard widgets (P6) so scoping logic stays consistent — an agent
- * "belongs" to a dashboard when its terminal is rooted somewhere
- * inside the dashboard's baseDir.
+ * Filter agents to those that belong to a dashboard. Used by both the
+ * sidebar row (P5) and the dashboard widgets (P6) so scoping logic stays
+ * consistent. An agent belongs to a dashboard when either:
+ *
+ *   1. its workspace's first terminal cwd is under `dashboard.baseDir`
+ *      (covers terminals rooted in the project), OR
+ *   2. its workspace carries `metadata.parentDashboardId === dashboard.id`
+ *      (covers worktrees spawned by the dashboard's widgets — those live
+ *      in a sibling directory of `baseDir` via deriveWorktreePath, so the
+ *      prefix match in (1) rejects them).
  *
  * Path containment uses prefix match with a trailing slash to avoid
  * `/work/proj` matching `/work/project-other`.
@@ -152,6 +157,7 @@ export function dashboardScopedAgents(
   const prefix = `${base}/`;
   const wsList = get(workspaces);
   const wsCwdById = new Map<string, string>();
+  const wsParentDashboardById = new Map<string, string>();
   for (const ws of wsList) {
     for (const s of getAllSurfaces(ws)) {
       if (isTerminalSurface(s) && s.cwd) {
@@ -161,8 +167,17 @@ export function dashboardScopedAgents(
         }
       }
     }
+    const parentDashboardId = (
+      ws.metadata as Record<string, unknown> | undefined
+    )?.parentDashboardId;
+    if (typeof parentDashboardId === "string") {
+      wsParentDashboardById.set(ws.id, parentDashboardId);
+    }
   }
   return allAgents.filter((a) => {
+    if (wsParentDashboardById.get(a.workspaceId) === dashboard.id) {
+      return true;
+    }
     const cwd = wsCwdById.get(a.workspaceId);
     if (!cwd) return false;
     return cwd === base || cwd.startsWith(prefix);
@@ -251,8 +266,11 @@ export function openDashboard(dashboard: AgentDashboard): boolean {
   // No dedicated workspace yet — build one whose only surface is the
   // dashboard preview. Tagging via metadata lets workspace:activated
   // listeners find it later and re-spawn the surface when empty.
+  // Name is always "Dashboard" — the hosting workspace is rendered nested
+  // under the dashboard's banner (which already carries the dashboard's
+  // name), so labeling it after the dashboard would duplicate that label.
   void createWorkspaceFromDef({
-    name: dashboard.name,
+    name: "Dashboard",
     layout: {
       pane: {
         surfaces: [

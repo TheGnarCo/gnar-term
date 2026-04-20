@@ -51,16 +51,46 @@
   const api = getContext<ExtensionAPI>(EXTENSION_API_KEY);
   const theme = api.theme;
   const reorderCtx = api.reorderContext;
-  const contributors = api.childRowContributors;
-  const { DragGrip } = api.getComponents();
+  const workspacesStore = api.workspaces;
+  const { DragGrip, WorkspaceListView } = api.getComponents();
 
   // Subscribe so rename/recolor + add/remove from the store re-renders.
   $: void $dashboardsStore;
   $: dashboard = getDashboard(id);
 
-  // Re-evaluate contributed children when contributors register/unregister.
-  $: void $contributors;
-  $: childRows = api.getChildRowsFor("dashboard", id);
+  // Workspaces that belong to this dashboard render nested underneath via
+  // the shared WorkspaceListView. A workspace "belongs" when its metadata
+  // carries either:
+  //   - parentDashboardId === id   (spawned worktree from a widget), or
+  //   - dashboardId === id         (the dashboard's own hosting workspace)
+  // The hosting workspace appearing under the banner makes the dashboard an
+  // always-on nested entry — no separate root-level row for the dashboard
+  // preview surface.
+  $: nestedWorkspaceIds = new Set(
+    $workspacesStore
+      .filter((ws) => {
+        const meta = ws.metadata as Record<string, unknown> | undefined;
+        return meta?.parentDashboardId === id || meta?.dashboardId === id;
+      })
+      .map((ws) => ws.id),
+  );
+
+  // WorkspaceItem shows a dashboard icon only for workspaces that HOST a
+  // dashboard (metadata.dashboardId set). Spawned worktrees (marked with
+  // parentDashboardId) get no icon — they're children of the dashboard,
+  // not hosts of one. Click focuses the owning dashboard's preview.
+  function hintForHostingWorkspace(ws: { metadata?: Record<string, unknown> }) {
+    const hostedId = ws.metadata?.dashboardId;
+    if (typeof hostedId !== "string") return undefined;
+    const d = getDashboard(hostedId);
+    if (!d) return undefined;
+    const hostedHex = resolveProjectColor(d.color, $theme);
+    return {
+      id: hostedId,
+      color: hostedHex,
+      onClick: () => openDashboard(d),
+    };
+  }
 
   // Pick a foreground that remains legible on an arbitrary dashboard color.
   // Duplicated locally (matches ProjectSectionContent) to avoid the
@@ -255,6 +285,28 @@
           {/if}
         </div>
       </div>
+      <!-- Nested worktree workspaces under a project-nested dashboard —
+           render the same list the root-mode branch does so the hierarchy
+           (project > dashboard > worktree) reads the same at every level. -->
+      {#if nestedWorkspaceIds.size > 0}
+        <div
+          data-dashboard-nested-workspaces={dashboard.id}
+          data-nested-count={nestedWorkspaceIds.size}
+          style="display: flex; flex-direction: column;"
+        >
+          {#if WorkspaceListView}
+            <svelte:component
+              this={WorkspaceListView as Component}
+              filterIds={nestedWorkspaceIds}
+              accentColor={dashboardHex}
+              scopeId={dashboard.id}
+              containerBlockId="__workspaces__"
+              containerLabel={dashboard.name}
+              dashboardHintFor={hintForHostingWorkspace}
+            />
+          {/if}
+        </div>
+      {/if}
     {:else}
       <!-- Root mode — grip on the left shares the dashboard color with the
            banner, and when contributed child rows exist the grip + content
@@ -378,27 +430,30 @@
             </div>
           </div>
 
-          <!-- Contributed child rows. Worktree workspaces tagged with
-               metadata.parentDashboardId === dashboard.id render here via
-               the contributor registered in agentic-orchestrator/index.ts.
-               Rendering them inside the content column means the grip's
-               colored rail on the left stretches across the whole block,
-               mirroring the project row pattern. -->
-          {#if childRows.length > 0}
+          <!-- Nested worktree workspaces. Spawned from this dashboard
+               (TaskSpawner / Issues / MCP), tagged with
+               metadata.parentDashboardId === dashboard.id. Rendered
+               through the shared WorkspaceListView so they pick up
+               accent coloring, drag-reorder, and context-menu behavior
+               identical to root-level workspace rows. -->
+          {#if nestedWorkspaceIds.size > 0}
             <div
-              data-dashboard-children
-              style="display: flex; flex-direction: column; margin-top: 4px;"
+              data-dashboard-nested-workspaces={dashboard.id}
+              data-nested-count={nestedWorkspaceIds.size}
+              style="display: flex; flex-direction: column;"
             >
-              {#each childRows as row (row.kind + ":" + row.id)}
-                {@const renderer = api.getRootRowRenderer(row.kind)}
-                {#if renderer}
-                  <svelte:component
-                    this={renderer.component as Component}
-                    id={row.id}
-                    parentColor={dashboardHex}
-                  />
-                {/if}
-              {/each}
+              {#if WorkspaceListView}
+                <svelte:component
+                  this={WorkspaceListView as Component}
+                  filterIds={nestedWorkspaceIds}
+                  accentColor={dashboardHex}
+                  scopeId={dashboard.id}
+                  containerBlockId="__workspaces__"
+                  containerLabel={dashboard.name}
+                  dashboardHintFor={hintForHostingWorkspace}
+                  hideStatusBadges={true}
+                />
+              {/if}
             </div>
           {/if}
         </div>

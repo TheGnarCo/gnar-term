@@ -887,6 +887,68 @@ describe("WorkspaceItem", () => {
     expect(source).toContain("export let accentColor");
     expect(source).toContain("{accentColor}");
   });
+
+  it("does not render a dashboard icon when no dashboardHint is provided", () => {
+    const { container } = renderWorkspaceItem();
+    expect(
+      container.querySelector("[data-workspace-dashboard-icon]"),
+    ).toBeNull();
+  });
+
+  it("renders a clickable dashboard icon when dashboardHint is provided", async () => {
+    const hintOnClick = vi.fn();
+    const ws = makeWorkspace("ws-nested", "Nested WS");
+    const { container } = render(WorkspaceItem, {
+      props: {
+        workspace: ws,
+        index: 0,
+        isActive: false,
+        onSelect: noop,
+        onClose: noop,
+        onRename: noop,
+        onContextMenu: noop,
+        dashboardHint: {
+          id: "dash-1",
+          color: "#ff8800",
+          onClick: hintOnClick,
+        },
+      },
+    });
+    const icon = container.querySelector(
+      "[data-workspace-dashboard-icon]",
+    ) as HTMLElement | null;
+    expect(icon).not.toBeNull();
+    await fireEvent.click(icon!);
+    expect(hintOnClick).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not trigger workspace select when the dashboard icon is clicked", async () => {
+    const onSelect = vi.fn();
+    const hintOnClick = vi.fn();
+    const ws = makeWorkspace("ws-nested", "Nested WS");
+    const { container } = render(WorkspaceItem, {
+      props: {
+        workspace: ws,
+        index: 0,
+        isActive: false,
+        onSelect,
+        onClose: noop,
+        onRename: noop,
+        onContextMenu: noop,
+        dashboardHint: {
+          id: "dash-1",
+          color: "#ff8800",
+          onClick: hintOnClick,
+        },
+      },
+    });
+    const icon = container.querySelector(
+      "[data-workspace-dashboard-icon]",
+    ) as HTMLElement;
+    await fireEvent.click(icon);
+    expect(hintOnClick).toHaveBeenCalledTimes(1);
+    expect(onSelect).not.toHaveBeenCalled();
+  });
 });
 
 // ===========================================================================

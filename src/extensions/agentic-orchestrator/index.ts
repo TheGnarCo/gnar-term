@@ -80,7 +80,7 @@ export const agenticOrchestratorManifest: ExtensionManifest = {
       // markdown file.
       { id: "agents", label: "Agents", icon: "users" },
     ],
-    events: ["workspace:activated"],
+    events: ["workspace:activated", "workspace:created", "workspace:closed"],
   },
 };
 
@@ -200,21 +200,13 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
       })),
     );
 
-    // Dashboard rows: contribute worktree workspaces tagged with
-    // metadata.parentDashboardId === <this dashboard>. The spawn
-    // pipeline writes that tag when creating a worktree workspace
-    // from a dashboard widget.
-    api.registerChildRowContributor("dashboard", (dashboardId) => {
-      let snapshot: Array<{ id: string; metadata?: Record<string, unknown> }> =
-        [];
-      const unsub = api.workspaces.subscribe((list) => {
-        snapshot = list;
-      });
-      unsub();
-      return snapshot
-        .filter((ws) => ws.metadata?.parentDashboardId === dashboardId)
-        .map((ws) => ({ kind: "workspace", id: ws.id }));
-    });
+    // Worktree workspaces tagged with metadata.parentDashboardId are now
+    // rendered directly by AgentDashboardRow via the shared
+    // WorkspaceListView component (see that component's nested-workspaces
+    // block). The previous child-row-contributor emitted workspace-kind
+    // rows that no registered renderer claimed — rendering them through
+    // WorkspaceListView removes that dead wire and gives nested workspaces
+    // the same drag/reorder/color inheritance as root-level ones.
 
     dashboardUnsub = dashboardsStore.subscribe((dashboards) => {
       const rootIds = new Set(
@@ -258,6 +250,60 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
     eventCleanups.push(() =>
       api.off("workspace:activated", handleWorkspaceActivated),
     );
+
+    // Workspaces that belong to a dashboard — either as spawned worktrees
+    // (metadata.parentDashboardId) or as the dashboard's own hosting
+    // workspace (metadata.dashboardId) — render nested under their
+    // dashboard in the sidebar. Claim them so they don't ALSO appear at
+    // root, mirroring project-scope's claim-on-create pattern.
+    function isDashboardOwned(
+      metadata: Record<string, unknown> | undefined,
+    ): boolean {
+      if (!metadata) return false;
+      return (
+        typeof metadata.parentDashboardId === "string" ||
+        typeof metadata[DASHBOARD_WORKSPACE_META_KEY] === "string"
+      );
+    }
+
+    const handleWorkspaceCreated = (event: {
+      type: string;
+      id?: string;
+      metadata?: unknown;
+    }) => {
+      const workspaceId = event.id;
+      if (!workspaceId) return;
+      if (isDashboardOwned(event.metadata as Record<string, unknown>)) {
+        api.claimWorkspace(workspaceId);
+      }
+    };
+    api.on("workspace:created", handleWorkspaceCreated);
+    eventCleanups.push(() =>
+      api.off("workspace:created", handleWorkspaceCreated),
+    );
+
+    const handleWorkspaceClosed = (event: { type: string; id?: string }) => {
+      const workspaceId = event.id;
+      if (!workspaceId) return;
+      api.unclaimWorkspace(workspaceId);
+    };
+    api.on("workspace:closed", handleWorkspaceClosed);
+    eventCleanups.push(() =>
+      api.off("workspace:closed", handleWorkspaceClosed),
+    );
+
+    // Catch workspaces that were already open when the extension
+    // activated (e.g. restored-from-session). Without this, pre-existing
+    // dashboard-owned workspaces appear at root until the user closes and
+    // reopens them.
+    const unsubInitialScan = api.workspaces.subscribe((list) => {
+      for (const ws of list) {
+        if (isDashboardOwned(ws.metadata as Record<string, unknown>)) {
+          api.claimWorkspace(ws.id);
+        }
+      }
+    });
+    unsubInitialScan();
   });
 
   api.onDeactivate(() => {

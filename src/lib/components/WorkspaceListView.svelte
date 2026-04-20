@@ -35,6 +35,26 @@
   export let accentColor: string | undefined = undefined;
 
   /**
+   * Optional per-workspace dashboard hint provider. When set, each rendered
+   * WorkspaceItem receives the result as its `dashboardHint` prop — a small
+   * clickable dashboard icon whose handler the caller owns. Used by
+   * AgentDashboardRow to navigate back to a nested workspace's owning
+   * dashboard without selecting the workspace.
+   */
+  export let dashboardHintFor:
+    | ((
+        ws: import("../types").Workspace,
+      ) => { id: string; color?: string; onClick: () => void } | undefined)
+    | undefined = undefined;
+  /**
+   * Forwarded to every WorkspaceItem. When true, per-row unread/agent
+   * badges and the latest-notification row are suppressed — the caller
+   * aggregates that status at the container level (e.g. AgentDashboardRow
+   * banner).
+   */
+  export let hideStatusBadges: boolean = false;
+
+  /**
    * The immediate container ("scope") this list's workspaces live in — a
    * project id when rendered inside a project scope, otherwise
    * "__workspaces__". Published to `reorderContext` as `scopeId` during a
@@ -223,6 +243,8 @@
             isActive={entry.idx === $activeWorkspaceIdx}
             dragActive={isSrc}
             {accentColor}
+            dashboardHint={dashboardHintFor?.(entry.ws)}
+            {hideStatusBadges}
             onSelect={() => {
               if (!active) switchWorkspace(entry.idx);
             }}

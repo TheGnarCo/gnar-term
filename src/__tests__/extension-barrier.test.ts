@@ -68,6 +68,11 @@ describe("Extension barrier enforcement", () => {
       // widgets get a deliberate barrier exception.
       "agentic-orchestrator/components/Issues.svelte": [
         "../../../lib/services/spawn-helper",
+        // Shared gh-availability probe — cached across widgets so a user
+        // with many dashboards doesn't fan out a dozen redundant
+        // `gh --version` calls on mount. Keeping the cache in core is the
+        // cleanest way to share it; a per-extension copy would drift.
+        "../../../lib/services/gh-availability",
       ],
       "agentic-orchestrator/components/TaskSpawner.svelte": [
         "../../../lib/services/spawn-helper",

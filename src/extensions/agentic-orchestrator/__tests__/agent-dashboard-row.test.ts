@@ -30,6 +30,7 @@ vi.mock("../dashboard-service", async (importOriginal) => {
 
 import AgentDashboardRow from "../AgentDashboardRow.svelte";
 import ExtensionWrapper from "../../../lib/components/ExtensionWrapper.svelte";
+import WorkspaceListViewStub from "./stubs/WorkspaceListViewStub.svelte";
 import { themes } from "../../../lib/theme-data";
 import type { ExtensionAPI } from "../../../extensions/api";
 import type { AgentDashboard } from "../../../lib/config";
@@ -57,12 +58,17 @@ vi.mock("../../../lib/config", async (importOriginal) => {
 vi.mock("../../../lib/stores/workspace", async () => {
   const { writable: w } = await import("svelte/store");
   return {
-    workspaces: w([]),
+    workspaces: w<Array<Record<string, unknown>>>([]),
     activePane: w<{ id: string } | null>({ id: "p" }),
   };
 });
 
-function makeApi(themeId: keyof typeof themes): ExtensionAPI {
+import { workspaces as mockedWorkspaces } from "../../../lib/stores/workspace";
+
+function makeApi(
+  themeId: keyof typeof themes,
+  opts: { workspaceListView?: unknown } = {},
+): ExtensionAPI {
   const stateMap = new Map<string, unknown>();
   return {
     state: {
@@ -73,12 +79,13 @@ function makeApi(themeId: keyof typeof themes): ExtensionAPI {
     },
     theme: writable(themes[themeId]),
     agents: writable([]),
+    workspaces: mockedWorkspaces,
     reorderContext: writable(null),
     childRowContributors: writable([]),
     getChildRowsFor: () => [],
     getRootRowRenderer: () => undefined,
     getComponents: () => ({
-      WorkspaceListView: null,
+      WorkspaceListView: opts.workspaceListView ?? null,
       SplitButton: null,
       ColorPicker: null,
       DragGrip: null,
@@ -95,6 +102,7 @@ describe("AgentDashboardRow", () => {
     saveConfigMock.mockClear();
     openSpy.mockReset();
     _resetDashboardService();
+    mockedWorkspaces.set([]);
     dashboard = await createDashboard({
       name: "Field Notes",
       baseDir: "/work/proj",
@@ -177,5 +185,133 @@ describe("AgentDashboardRow", () => {
     await fireEvent.click(row);
     expect(openSpy).toHaveBeenCalledTimes(1);
     expect(openSpy.mock.calls[0]?.[0]?.id).toBe(dashboard.id);
+  });
+
+  it("does not render the nested-workspaces wrapper when no workspaces match", () => {
+    // One unrelated workspace — no metadata.parentDashboardId match.
+    mockedWorkspaces.set([
+      {
+        id: "ws-other",
+        name: "Unrelated",
+        splitRoot: { type: "pane", pane: { id: "p1", surfaces: [] } },
+        activePaneId: "p1",
+        metadata: {},
+      },
+    ]);
+    const { container } = render(ExtensionWrapper, {
+      props: {
+        api: makeApi("github-dark"),
+        component: AgentDashboardRow,
+        props: { id: dashboard.id, onGripMouseDown: () => {} },
+      },
+    });
+    expect(
+      container.querySelector("[data-dashboard-nested-workspaces]"),
+    ).toBeNull();
+  });
+
+  it("renders the nested-workspaces wrapper with the count of matching workspaces", () => {
+    mockedWorkspaces.set([
+      {
+        id: "ws-a",
+        name: "Worktree Alpha",
+        splitRoot: { type: "pane", pane: { id: "p1", surfaces: [] } },
+        activePaneId: "p1",
+        metadata: { parentDashboardId: dashboard.id },
+      },
+      {
+        id: "ws-other",
+        name: "Unrelated",
+        splitRoot: { type: "pane", pane: { id: "p2", surfaces: [] } },
+        activePaneId: "p2",
+        metadata: {},
+      },
+      {
+        id: "ws-b",
+        name: "Worktree Beta",
+        splitRoot: { type: "pane", pane: { id: "p3", surfaces: [] } },
+        activePaneId: "p3",
+        metadata: { parentDashboardId: dashboard.id },
+      },
+    ]);
+    const { container } = render(ExtensionWrapper, {
+      props: {
+        api: makeApi("github-dark"),
+        component: AgentDashboardRow,
+        props: { id: dashboard.id, onGripMouseDown: () => {} },
+      },
+    });
+    const wrapper = container.querySelector(
+      `[data-dashboard-nested-workspaces="${dashboard.id}"]`,
+    ) as HTMLElement | null;
+    expect(wrapper).not.toBeNull();
+    expect(wrapper?.getAttribute("data-nested-count")).toBe("2");
+  });
+
+  it("renders the nested-workspaces wrapper in the project-nested banner variant too", () => {
+    mockedWorkspaces.set([
+      {
+        id: "ws-a",
+        name: "Worktree Alpha",
+        splitRoot: { type: "pane", pane: { id: "p1", surfaces: [] } },
+        activePaneId: "p1",
+        metadata: { parentDashboardId: dashboard.id },
+      },
+    ]);
+    const { container } = render(ExtensionWrapper, {
+      props: {
+        api: makeApi("github-dark"),
+        component: AgentDashboardRow,
+        props: { id: dashboard.id, parentColor: "#3366ff" },
+      },
+    });
+    const wrapper = container.querySelector(
+      `[data-dashboard-nested-workspaces="${dashboard.id}"]`,
+    );
+    expect(wrapper).not.toBeNull();
+  });
+
+  it("produces a hint only for hosting workspaces (metadata.dashboardId), not for spawned worktrees", async () => {
+    mockedWorkspaces.set([
+      {
+        id: "ws-host",
+        name: "Dashboard",
+        splitRoot: { type: "pane", pane: { id: "p0", surfaces: [] } },
+        activePaneId: "p0",
+        metadata: { dashboardId: dashboard.id },
+      },
+      {
+        id: "ws-spawn",
+        name: "Worktree Alpha",
+        splitRoot: { type: "pane", pane: { id: "p1", surfaces: [] } },
+        activePaneId: "p1",
+        metadata: { parentDashboardId: dashboard.id },
+      },
+    ]);
+    const { container } = render(ExtensionWrapper, {
+      props: {
+        api: makeApi("github-dark", {
+          workspaceListView: WorkspaceListViewStub,
+        }),
+        component: AgentDashboardRow,
+        props: { id: dashboard.id, onGripMouseDown: () => {} },
+      },
+    });
+    const host = container.querySelector(
+      '[data-stub-row="ws-host"]',
+    ) as HTMLElement | null;
+    const spawn = container.querySelector(
+      '[data-stub-row="ws-spawn"]',
+    ) as HTMLElement | null;
+    expect(host?.getAttribute("data-stub-hint-id")).toBe(dashboard.id);
+    expect(spawn?.getAttribute("data-stub-hint-id")).toBe("");
+
+    await fireEvent.click(host!);
+    expect(openSpy).toHaveBeenCalledTimes(1);
+    expect(openSpy.mock.calls[0]?.[0]?.id).toBe(dashboard.id);
+
+    await fireEvent.click(spawn!);
+    // Clicking a non-hosting row's stub (no hint) must not call openDashboard.
+    expect(openSpy).toHaveBeenCalledTimes(1);
   });
 });

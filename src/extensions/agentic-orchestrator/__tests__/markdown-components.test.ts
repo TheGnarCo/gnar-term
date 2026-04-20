@@ -13,9 +13,14 @@ import { render, cleanup, fireEvent } from "@testing-library/svelte";
 import { writable } from "svelte/store";
 import { tick } from "svelte";
 
+const { tauriInvokeGhAvailable } = vi.hoisted(() => ({
+  tauriInvokeGhAvailable: { current: true as boolean },
+}));
+
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(async (cmd: string) => {
     if (cmd === "get_home") return "/home/test";
+    if (cmd === "gh_available") return tauriInvokeGhAvailable.current;
     return undefined;
   }),
 }));
@@ -108,6 +113,7 @@ function resetRegistry(): void {
   _testAgentsRef.store.set([]);
 }
 import { createDashboard, _resetDashboardService } from "../dashboard-service";
+import { invalidateGhAvailability } from "../../../lib/services/gh-availability";
 import ExtensionWrapper from "../../../lib/components/ExtensionWrapper.svelte";
 import Kanban from "../components/Kanban.svelte";
 import Issues from "../components/Issues.svelte";
@@ -418,6 +424,11 @@ describe("Issues widget", () => {
     saveConfigMock.mockClear();
     _resetDashboardService();
     resetRegistry();
+    // The gh-availability cache is module-level; clearing it between
+    // tests prevents a previous test's gh_available mock from bleeding
+    // into the next one.
+    invalidateGhAvailability();
+    tauriInvokeGhAvailable.current = true;
     dashboard = await createDashboard({
       name: "Issues Dash",
       baseDir: "/work/proj",
@@ -451,6 +462,7 @@ describe("Issues widget", () => {
       },
     ];
     const invokeFn = vi.fn(async (cmd: string) => {
+      if (cmd === "gh_available") return true;
       if (cmd === "gh_list_issues") return fakeIssues;
       return undefined;
     });
@@ -466,6 +478,7 @@ describe("Issues widget", () => {
 
     // The first fetch is fired in onMount — wait a microtask for it.
     await new Promise((r) => setTimeout(r, 0));
+    await tick();
     await tick();
 
     const rows = container.querySelectorAll("[data-issue-row]");
@@ -498,6 +511,7 @@ describe("Issues widget", () => {
       },
     ];
     const invokeFn = vi.fn(async (cmd: string) => {
+      if (cmd === "gh_available") return true;
       if (cmd === "gh_list_issues") return fakeIssues;
       return undefined;
     });
@@ -512,6 +526,7 @@ describe("Issues widget", () => {
     });
 
     await new Promise((r) => setTimeout(r, 0));
+    await tick();
     await tick();
 
     const spawnBtn = container.querySelector(
@@ -548,6 +563,7 @@ describe("Issues widget", () => {
       },
     ];
     const invokeFn = vi.fn(async (cmd: string) => {
+      if (cmd === "gh_available") return true;
       if (cmd === "gh_list_issues") return fakeIssues;
       return undefined;
     });
@@ -562,6 +578,7 @@ describe("Issues widget", () => {
     });
 
     await new Promise((r) => setTimeout(r, 0));
+    await tick();
     await tick();
 
     const caret = container.querySelector(
@@ -584,13 +601,9 @@ describe("Issues widget", () => {
     });
   });
 
-  it("renders the gh-missing empty state when invoke rejects with 'gh not found'", async () => {
-    const invokeFn = vi.fn(async (cmd: string) => {
-      if (cmd === "gh_list_issues") {
-        throw new Error("gh: command not found");
-      }
-      return undefined;
-    });
+  it("renders the actionable gh-missing panel when gh_available resolves false", async () => {
+    tauriInvokeGhAvailable.current = false;
+    const invokeFn = vi.fn(async () => undefined);
     const api = makeApi({ invoke: invokeFn });
 
     const { container } = render(ExtensionWrapper, {
@@ -603,10 +616,16 @@ describe("Issues widget", () => {
 
     await new Promise((r) => setTimeout(r, 0));
     await tick();
+    await tick();
 
     const missing = container.querySelector("[data-issues-gh-missing]");
     expect(missing).not.toBeNull();
-    expect(missing?.textContent).toContain("gh CLI required");
+    expect(missing?.textContent).toContain("GitHub CLI not available");
+    expect(missing?.textContent).toContain("gh auth login");
+    const retry = container.querySelector(
+      "[data-issues-gh-missing-retry]",
+    ) as HTMLButtonElement | null;
+    expect(retry).not.toBeNull();
   });
 });
 

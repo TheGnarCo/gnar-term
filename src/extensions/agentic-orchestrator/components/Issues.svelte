@@ -20,6 +20,10 @@
     spawnAgentInWorktree,
     type SpawnAgentType,
   } from "../../../lib/services/spawn-helper";
+  import {
+    isGhAvailable,
+    invalidateGhAvailability,
+  } from "../../../lib/services/gh-availability";
 
   export let dashboardId: string | undefined = undefined;
   export let repo: string | undefined = undefined;
@@ -84,6 +88,16 @@
   }
 
   async function fetchIssues(options: { force?: boolean } = {}) {
+    // Ask the shared cache whether gh is available before invoking — the
+    // Tauri command itself exists, so a "command not found" error would
+    // come from `gh` missing on PATH, not from the extension barrier.
+    // Short-circuiting here avoids the noisy error path entirely.
+    if (!(await isGhAvailable())) {
+      ghMissing = true;
+      issues = [];
+      return;
+    }
+
     const repoPath = resolveRepoPath();
     if (!repoPath && !repo) {
       error = "No repo: provide dashboardId or repo";
@@ -123,6 +137,12 @@
   }
 
   function refresh() {
+    void fetchIssues({ force: true });
+  }
+
+  function retryGhProbe() {
+    invalidateGhAvailability();
+    ghMissing = false;
     void fetchIssues({ force: true });
   }
 
@@ -231,9 +251,37 @@
   {:else if ghMissing}
     <div
       data-issues-gh-missing
-      style="color: {$theme.fgDim}; font-style: italic; font-size: 12px; padding: 6px 0;"
+      style="
+        display: flex; flex-direction: column; gap: 6px;
+        padding: 8px 10px; border-radius: 4px;
+        border: 1px solid {$theme.border}; background: {$theme.bg};
+      "
     >
-      gh CLI required to load issues
+      <div
+        data-issues-gh-missing-title
+        style="color: {$theme.fg}; font-size: 12px; font-weight: 600;"
+      >
+        GitHub CLI not available
+      </div>
+      <div style="color: {$theme.fgDim}; font-size: 11px; line-height: 1.5;">
+        Install <code style="font-family: monospace;">gh</code> then run
+        <code style="font-family: monospace;">gh auth login</code> to fetch issues
+        for this dashboard.
+      </div>
+      <div style="display: flex; gap: 6px;">
+        <button
+          data-issues-gh-missing-retry
+          type="button"
+          on:click={retryGhProbe}
+          style="
+            background: transparent; color: {$theme.fg};
+            border: 1px solid {$theme.border}; border-radius: 3px;
+            padding: 2px 10px; font-size: 11px; cursor: pointer;
+          "
+        >
+          Retry
+        </button>
+      </div>
     </div>
   {:else if error}
     <div data-issues-error style="color: {$theme.danger}; font-size: 12px;">

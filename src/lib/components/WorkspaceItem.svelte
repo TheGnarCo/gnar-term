@@ -98,6 +98,23 @@
   export let onContextMenu: (x: number, y: number) => void;
   /** Project accent color — when set, overrides the default border-left styling. */
   export let accentColor: string | undefined = undefined;
+  /**
+   * Optional hint that this workspace belongs to a dashboard. Adds a small
+   * clickable icon inside the row that navigates to the owning dashboard
+   * without selecting the workspace itself.
+   */
+  export let dashboardHint:
+    | { id: string; color?: string; onClick: () => void }
+    | undefined = undefined;
+  /**
+   * Suppress per-workspace status chrome (unread, agent badges, latest
+   * notification). Used when the workspace is rendered inside a
+   * container that aggregates status itself — e.g. nested under an
+   * AgentDashboardRow whose banner already rolls up detected-agent
+   * activity. Projects leave this false so their nested workspaces
+   * keep showing their own status.
+   */
+  export let hideStatusBadges: boolean = false;
 
   let hovered = false;
   let gripHovered = false;
@@ -274,6 +291,39 @@
             <path d="M6 4 C8 4 10 6 10 8" />
           </svg>
         {/if}
+        {#if dashboardHint}
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <span
+            data-workspace-dashboard-icon
+            data-dashboard-id={dashboardHint.id}
+            title="Open owning dashboard"
+            on:click|stopPropagation={() => dashboardHint?.onClick()}
+            style="
+              flex-shrink: 0; display: inline-flex; align-items: center;
+              justify-content: center; width: 14px; height: 14px;
+              color: {dashboardHint.color ?? $theme.fgDim}; cursor: pointer;
+            "
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <title>Open dashboard</title>
+              <rect x="3" y="3" width="7" height="9" />
+              <rect x="14" y="3" width="7" height="5" />
+              <rect x="14" y="12" width="7" height="9" />
+              <rect x="3" y="16" width="7" height="5" />
+            </svg>
+          </span>
+        {/if}
         <span
           bind:this={nameEl}
           style="
@@ -304,65 +354,67 @@
         >
       </div>
 
-      {#if agentBadges.length > 0 && agentBadges[0]}
-        {@const topBadge = agentBadges[0]}
-        {@const statusLabel =
-          topBadge.variant === "success"
-            ? "running"
-            : topBadge.variant === "warning"
-              ? "waiting"
-              : topBadge.variant === "muted"
-                ? "idle"
-                : topBadge.variant === "error"
-                  ? "error"
-                  : ""}
-        <span
-          title={agentBadges.map((b) => b.label).join(", ")}
-          style="
-            display: inline-flex; align-items: center; gap: 3px;
-            font-size: 10px; color: {topBadge.color};
-            background: color-mix(in srgb, {topBadge.color} 15%, transparent);
-            padding: 1px 6px; border-radius: 8px; flex-shrink: 0;
-          "
-        >
+      {#if !hideStatusBadges}
+        {#if agentBadges.length > 0 && agentBadges[0]}
+          {@const topBadge = agentBadges[0]}
+          {@const statusLabel =
+            topBadge.variant === "success"
+              ? "running"
+              : topBadge.variant === "warning"
+                ? "waiting"
+                : topBadge.variant === "muted"
+                  ? "idle"
+                  : topBadge.variant === "error"
+                    ? "error"
+                    : ""}
           <span
-            style="width: 6px; height: 6px; border-radius: 50%; background: {topBadge.color};"
-          ></span>
-          {#if agentCount > 1}{agentCount}
-          {/if}{statusLabel}
-        </span>
-      {:else if agentDotColor}
-        <span
-          title="Agent: {agentStatus}"
-          style="
-            display: inline-flex; align-items: center; gap: 3px;
-            font-size: 10px; color: {agentDotColor};
-            background: color-mix(in srgb, {agentDotColor} 15%, transparent);
-            padding: 1px 6px; border-radius: 8px; flex-shrink: 0;
-          "
-        >
+            title={agentBadges.map((b) => b.label).join(", ")}
+            style="
+              display: inline-flex; align-items: center; gap: 3px;
+              font-size: 10px; color: {topBadge.color};
+              background: color-mix(in srgb, {topBadge.color} 15%, transparent);
+              padding: 1px 6px; border-radius: 8px; flex-shrink: 0;
+            "
+          >
+            <span
+              style="width: 6px; height: 6px; border-radius: 50%; background: {topBadge.color};"
+            ></span>
+            {#if agentCount > 1}{agentCount}
+            {/if}{statusLabel}
+          </span>
+        {:else if agentDotColor}
           <span
-            style="width: 6px; height: 6px; border-radius: 50%; background: {agentDotColor};"
-          ></span>
-          {agentStatus}
-        </span>
-      {/if}
+            title="Agent: {agentStatus}"
+            style="
+              display: inline-flex; align-items: center; gap: 3px;
+              font-size: 10px; color: {agentDotColor};
+              background: color-mix(in srgb, {agentDotColor} 15%, transparent);
+              padding: 1px 6px; border-radius: 8px; flex-shrink: 0;
+            "
+          >
+            <span
+              style="width: 6px; height: 6px; border-radius: 50%; background: {agentDotColor};"
+            ></span>
+            {agentStatus}
+          </span>
+        {/if}
 
-      {#if hasUnread && !agentDotColor && agentBadges.length === 0}
-        <span
-          title="Workspace has new terminal activity"
-          style="
-            display: inline-flex; align-items: center; gap: 3px;
-            font-size: 10px; color: {$theme.notify};
-            background: color-mix(in srgb, {$theme.notify} 15%, transparent);
-            padding: 1px 6px; border-radius: 8px; flex-shrink: 0;
-          "
-        >
+        {#if hasUnread && !agentDotColor && agentBadges.length === 0}
           <span
-            style="width: 6px; height: 6px; border-radius: 50%; background: {$theme.notify};"
-          ></span>
-          new
-        </span>
+            title="Workspace has new terminal activity"
+            style="
+              display: inline-flex; align-items: center; gap: 3px;
+              font-size: 10px; color: {$theme.notify};
+              background: color-mix(in srgb, {$theme.notify} 15%, transparent);
+              padding: 1px 6px; border-radius: 8px; flex-shrink: 0;
+            "
+          >
+            <span
+              style="width: 6px; height: 6px; border-radius: 50%; background: {$theme.notify};"
+            ></span>
+            new
+          </span>
+        {/if}
       {/if}
     </div>
 
@@ -382,7 +434,7 @@
       {/if}
     {/each}
 
-    {#if latestNotification}
+    {#if latestNotification && !hideStatusBadges}
       <div
         style="padding: 2px 12px 6px 6px; font-size: 11px; color: {$theme.notify}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
       >

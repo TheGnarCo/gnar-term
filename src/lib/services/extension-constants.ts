@@ -56,6 +56,7 @@ export const EXTENSION_ALLOWED_COMMANDS: Set<string> = new Set([
   // GitHub CLI commands
   "gh_list_issues",
   "gh_list_prs",
+  "gh_available",
   // Git info commands
   "git_log",
   "git_status",

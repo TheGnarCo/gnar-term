@@ -120,7 +120,11 @@ describe("openDashboard", () => {
       metadata?: Record<string, unknown>;
       layout: { pane: { surfaces: Array<{ type: string; path: string }> } };
     };
-    expect(def.name).toBe(fixture.name);
+    // The workspace hosting the dashboard is always named "Dashboard" —
+    // it renders nested under the dashboard's own banner (which carries
+    // the dashboard's name), so labeling the workspace after the
+    // dashboard would duplicate that label.
+    expect(def.name).toBe("Dashboard");
     expect(def.metadata?.[DASHBOARD_WORKSPACE_META_KEY]).toBe(fixture.id);
     expect(def.layout.pane.surfaces[0]).toMatchObject({
       type: "preview",

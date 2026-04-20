@@ -126,6 +126,12 @@
   $: hasUnread = allSurfaces.some((s) => s.hasUnread);
   $: latestNotification = allSurfaces.find((s) => s.notification)?.notification;
   $: isManaged = !!workspace.metadata?.worktreePath;
+  // Workspaces spawned by an agent orchestrator (nested under a
+  // project or at root) get a bot marker so they're visually
+  // distinguishable from plain project workspaces or worktrees.
+  $: isAgentSpawned =
+    typeof (workspace.metadata as Record<string, unknown> | undefined)
+      ?.parentOrchestratorId === "string";
   $: railColor = accentColor ?? $theme.accent;
   // Legacy agent status — kept for backwards compatibility
   $: agentStatus = $agentStatusStore[workspace.id] || null;
@@ -272,7 +278,36 @@
       <div
         style="flex: 1; overflow: hidden; display: flex; align-items: center; gap: 4px;"
       >
-        {#if isManaged}
+        {#if isAgentSpawned}
+          <span
+            data-workspace-agent-icon
+            title="Spawned by agent dashboard"
+            style="
+              flex-shrink: 0; display: inline-flex; align-items: center;
+              justify-content: center; color: {$theme.fgDim};
+            "
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <title>Agent-spawned workspace</title>
+              <path d="M12 8V4H8" />
+              <rect width="16" height="12" x="4" y="8" rx="2" />
+              <path d="M2 14h2" />
+              <path d="M20 14h2" />
+              <path d="M15 13v2" />
+              <path d="M9 13v2" />
+            </svg>
+          </span>
+        {:else if isManaged}
           <svg
             width="12"
             height="12"

@@ -171,6 +171,24 @@
 
   onDestroy(() => stop());
 
+  function handleDirtyClick() {
+    // Open the diff-viewer surface scoped to this target's repo path.
+    // App.svelte's "status-action" listener routes this through
+    // openExtensionSurfaceInPane.
+    const event = new CustomEvent("status-action", {
+      detail: {
+        command: "open-surface",
+        args: [
+          "diff-viewer:diff",
+          "Uncommitted Changes",
+          { repoPath: target.path },
+        ],
+      },
+      bubbles: true,
+    });
+    document.dispatchEvent(event);
+  }
+
   function handlePrClick(url: string) {
     const event = new CustomEvent("status-action", {
       detail: { command: "open-url", args: [url] },
@@ -246,9 +264,12 @@
             >|</span
           >
         {/if}
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
         <span
-          style="font-size: 10px; color: {dirtyColor}; white-space: nowrap; flex-shrink: 0;"
-          title="{dirtyCount} file(s) modified in project root"
+          style="font-size: 10px; color: {dirtyColor}; white-space: nowrap; flex-shrink: 0; cursor: pointer; text-decoration: underline;"
+          title="Open uncommitted changes"
+          on:click|stopPropagation={() => handleDirtyClick()}
           >{dirtyCount}·modified</span
         >
       {/if}

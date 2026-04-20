@@ -149,13 +149,13 @@ export interface WorkspaceGroupEntry {
 }
 
 /**
- * Agent Orchestrator — a markdown-backed agent workspace container.
- * Defined in core (config.ts) rather than in the extension because it is
- * persisted user data (parallel to projects/worktrees) and other
- * extensions may need to read it.
- *
- * Each orchestrator owns a Dashboard workspace (`dashboardWorkspaceId`)
- * that renders the templated markdown as a single Live Preview surface.
+ * @deprecated Stage 7 collapsed AgentOrchestrator into the Agentic
+ * Dashboard contribution + Global Agentic Dashboard pseudo-workspace;
+ * Stage 8's v2 migration drains `config.agentOrchestrators` into
+ * markdown files on disk. The type + field stay on the public
+ * `GnarTermConfig` surface only so the migration has typed access to
+ * legacy input. No runtime code outside the migration pipeline should
+ * read or write either.
  */
 export interface AgentOrchestrator {
   id: string;
@@ -196,7 +196,19 @@ export interface GnarTermConfig {
   extensions?: Record<string, ExtensionConfig>;
   worktrees?: WorktreesConfig;
   agents?: AgentsConfig;
+  /** @deprecated Migration-only — see {@link AgentOrchestrator}. */
   agentOrchestrators?: AgentOrchestrator[];
+  /**
+   * Global Agentic Dashboard configuration — the singleton
+   * pseudo-workspace pinned at the top of the root sidebar. `markdownPath`
+   * points at the backing markdown file the dashboard renders. Absent on
+   * fresh installs; the pseudo-workspace falls back to the default
+   * `~/.config/gnar-term/global-agents.md` path. Stage 8 migration stamps
+   * this field when converting a legacy rootless orchestrator.
+   */
+  agenticGlobal?: {
+    markdownPath?: string;
+  };
   /**
    * MCP integration module. Controls whether gnar-term exposes its MCP tools
    * to Claude Code (or any other MCP client) over a local Unix domain socket.
@@ -244,7 +256,7 @@ async function applyMigrationsAndPersist(
   parsed: GnarTermConfig,
   path: string,
 ): Promise<GnarTermConfig> {
-  const { migrated, changed } = runConfigMigrations(parsed);
+  const { migrated, changed } = await runConfigMigrations(parsed);
   if (!changed) return migrated;
   try {
     await invoke("write_file", {
@@ -354,16 +366,22 @@ const _appStateStore = writable<AppState>({});
 export const appStateStore: Readable<AppState> = _appStateStore;
 
 /**
- * Rewrite legacy "Projects" state shapes to the "Workspace Groups" shape:
+ * Rewrite legacy workspace-scoped state shapes to the new Workspace
+ * Groups + Dashboard Contributions layout:
  *   - workspaces[].metadata.projectId → metadata.groupId
+ *   - workspaces[].metadata.parentOrchestratorId → metadata.spawnedBy
+ *   - workspaces[].metadata.orchestratorId (on dashboards) →
+ *       metadata.dashboardContributionId = "agentic"
  *   - rootRowOrder[].kind === "project" → "workspace-group"
+ *   - rootRowOrder[].kind === "agent-orchestrator" → dropped (Stage 7
+ *     removed the orchestrator root-row)
  *
  * Runs on every load — idempotent when the shape is already migrated.
- * Paired with the v1 migration in config-migrations.ts; both land in the
- * same release so old configs on disk read as new shapes in memory
- * without requiring a config.schemaVersion lookup.
+ * Paired with the v1/v2 migrations in config-migrations.ts; both land
+ * in the same release so old state on disk reads as the new shape in
+ * memory without requiring an explicit schemaVersion lookup.
  */
-function migrateLegacyProjectShapes(state: AppState): {
+export function migrateLegacyProjectShapes(state: AppState): {
   migrated: AppState;
   changed: boolean;
 } {
@@ -371,31 +389,93 @@ function migrateLegacyProjectShapes(state: AppState): {
   let next: AppState = state;
 
   if (Array.isArray(state.workspaces)) {
+    let workspacesChanged = false;
     const workspaces = state.workspaces.map((ws) => {
       const md = ws.metadata as Record<string, unknown> | undefined;
-      if (!md || !("projectId" in md)) return ws;
-      const { projectId, ...rest } = md;
-      changed = true;
-      return {
-        ...ws,
-        metadata: {
-          ...rest,
-          ...(rest.groupId !== undefined || projectId === undefined
-            ? {}
-            : { groupId: projectId }),
-        },
-      };
+      if (!md) return ws;
+
+      const needsProjectIdRewrite = "projectId" in md;
+      const needsSpawnedBy =
+        typeof md.parentOrchestratorId === "string" && !("spawnedBy" in md);
+      const needsLegacyDrop =
+        "parentOrchestratorId" in md || "orchestratorId" in md;
+      const needsContributionId =
+        md.isDashboard === true &&
+        typeof md.orchestratorId === "string" &&
+        !("dashboardContributionId" in md);
+
+      if (
+        !needsProjectIdRewrite &&
+        !needsSpawnedBy &&
+        !needsContributionId &&
+        !needsLegacyDrop
+      ) {
+        return ws;
+      }
+
+      const { projectId, parentOrchestratorId, orchestratorId, ...rest } =
+        md as Record<string, unknown> & {
+          projectId?: unknown;
+          parentOrchestratorId?: unknown;
+          orchestratorId?: unknown;
+        };
+      const nextMd: Record<string, unknown> = { ...rest };
+
+      if (needsProjectIdRewrite) {
+        if (
+          nextMd.groupId === undefined &&
+          projectId !== undefined &&
+          projectId !== null
+        ) {
+          nextMd.groupId = projectId;
+        }
+      }
+
+      if (needsSpawnedBy) {
+        const groupId =
+          typeof nextMd.groupId === "string" ? nextMd.groupId : undefined;
+        nextMd.spawnedBy = groupId
+          ? { kind: "group", groupId }
+          : { kind: "global" };
+      } else if (parentOrchestratorId !== undefined) {
+        // parentOrchestratorId present but spawnedBy already set — drop the
+        // legacy marker without synthesizing a replacement.
+      }
+
+      if (needsContributionId) {
+        nextMd.dashboardContributionId = "agentic";
+      } else if (orchestratorId !== undefined && md.isDashboard !== true) {
+        // Preserve stray orchestratorId on non-dashboard workspaces only if
+        // the caller didn't otherwise trigger a rewrite path — but since we
+        // decompose `md` above, drop it.
+      }
+
+      workspacesChanged = true;
+      return { ...ws, metadata: nextMd };
     });
-    if (changed) next = { ...next, workspaces };
+    if (workspacesChanged) {
+      changed = true;
+      next = { ...next, workspaces };
+    }
   }
 
   if (Array.isArray(state.rootRowOrder)) {
-    const rootRowOrder = state.rootRowOrder.map((row) => {
-      if (row.kind !== "project") return row;
+    let orderChanged = false;
+    const rootRowOrder: typeof state.rootRowOrder = [];
+    for (const row of state.rootRowOrder) {
+      if (row.kind === "agent-orchestrator") {
+        orderChanged = true;
+        continue;
+      }
+      if (row.kind === "project") {
+        orderChanged = true;
+        rootRowOrder.push({ ...row, kind: "workspace-group" });
+        continue;
+      }
+      rootRowOrder.push(row);
+    }
+    if (orderChanged) {
       changed = true;
-      return { ...row, kind: "workspace-group" };
-    });
-    if (rootRowOrder.some((r, i) => r !== state.rootRowOrder![i])) {
       next = { ...next, rootRowOrder };
     }
   }

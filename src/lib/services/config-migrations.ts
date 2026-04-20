@@ -13,6 +13,7 @@
  * still upgrade cleanly.
  */
 import type { GnarTermConfig } from "../config";
+import { migrateV2WorkspaceGroupsUnification } from "./migrations/v2-workspace-groups-unification";
 
 export interface ConfigMigration {
   /** Target schemaVersion this migration produces. Strictly increasing. */
@@ -22,8 +23,12 @@ export interface ConfigMigration {
   /**
    * Apply the transform. Must not mutate `config` in place — return the
    * next shape. Must be idempotent in practice (applied once per bump).
+   * May be async — v2+ migrations perform file I/O (moving markdown
+   * files, writing to `~/.config/gnar-term/global-agents.md`) because
+   * user data on disk has to land in the new layout for the migrated
+   * config shape to mean anything.
    */
-  up: (config: GnarTermConfig) => GnarTermConfig;
+  up: (config: GnarTermConfig) => GnarTermConfig | Promise<GnarTermConfig>;
 }
 
 /**
@@ -76,6 +81,12 @@ const MIGRATIONS: ConfigMigration[] = [
       return next as GnarTermConfig;
     },
   },
+  {
+    version: 2,
+    description:
+      "collapse agentOrchestrators into Agentic Dashboard contribution + Global Agentic Dashboard markdown",
+    up: (config) => migrateV2WorkspaceGroupsUnification(config),
+  },
 ];
 
 /**
@@ -109,9 +120,9 @@ export interface ConfigMigrationResult {
  * or pre-scaffold config) — those still get a stamp so subsequent loads
  * skip this branch.
  */
-export function runConfigMigrations(
+export async function runConfigMigrations(
   config: GnarTermConfig,
-): ConfigMigrationResult {
+): Promise<ConfigMigrationResult> {
   const startVersion = config.schemaVersion ?? 0;
   const hadVersion = typeof config.schemaVersion === "number";
 
@@ -120,7 +131,7 @@ export function runConfigMigrations(
 
   for (const migration of MIGRATIONS) {
     if (migration.version > startVersion) {
-      current = migration.up(current);
+      current = await migration.up(current);
       current = { ...current, schemaVersion: migration.version };
       applied.push(migration.version);
     }

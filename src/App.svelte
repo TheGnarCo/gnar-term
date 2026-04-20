@@ -527,11 +527,11 @@
       source: "core",
       handler: (ctx) => {
         const name = `Workspace ${get(workspaces).length + 1}`;
-        if (ctx.projectId && ctx.projectPath) {
+        if (ctx.groupId && ctx.projectPath) {
           void createWorkspaceFromDef({
             name,
             cwd: ctx.projectPath as string,
-            metadata: { projectId: ctx.projectId },
+            metadata: { groupId: ctx.groupId },
             layout: { pane: { surfaces: [{ type: "terminal" }] } },
           });
         } else {

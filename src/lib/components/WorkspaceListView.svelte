@@ -159,7 +159,7 @@
     const ws = $workspaces[globalIdx];
     if (!ws) return;
     const canPromote = get(commandStore).some(
-      (c) => c.id === "promote-workspace-to-project",
+      (c) => c.id === "promote-workspace-to-group",
     );
 
     // Scope "Close Other" to this list when a filterIds is in effect
@@ -186,11 +186,11 @@
         ? [
             { label: "", action: () => {}, separator: true } as MenuItem,
             {
-              label: "Promote to Project...",
+              label: "Promote to Workspace Group...",
               action: () => {
                 switchWorkspace(globalIdx);
                 const cmd = get(commandStore).find(
-                  (c) => c.id === "promote-workspace-to-project",
+                  (c) => c.id === "promote-workspace-to-group",
                 );
                 if (cmd) void cmd.action();
               },

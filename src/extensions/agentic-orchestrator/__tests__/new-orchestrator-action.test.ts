@@ -170,7 +170,7 @@ describe("agentic-orchestrator new-orchestrator action: handler", () => {
     expect(o.name).toBe("My Orch");
     expect(o.baseDir).toBe("/picked/base");
     expect(o.color).toBe("blue");
-    expect(o.parentProjectId).toBeUndefined();
+    expect(o.parentGroupId).toBeUndefined();
     expect(o.dashboardWorkspaceId).toBe("ws-new");
 
     // createOrchestrator creates the Dashboard workspace.
@@ -195,7 +195,7 @@ describe("agentic-orchestrator new-orchestrator action: handler", () => {
 
     const handler = getHandler();
     await handler({
-      projectId: "proj-42",
+      groupId: "proj-42",
       projectPath: "/work/proj",
       projectColor: "blue",
       isGit: true,
@@ -210,7 +210,7 @@ describe("agentic-orchestrator new-orchestrator action: handler", () => {
     expect(o.name).toBe("Agents");
     expect(o.baseDir).toBe("/work/proj");
     expect(o.color).toBe("blue");
-    expect(o.parentProjectId).toBe("proj-42");
+    expect(o.parentGroupId).toBe("proj-42");
     expect(o.path).toBe(`/work/proj/.gnar-term/orchestrators/${o.id}.md`);
   });
 
@@ -220,12 +220,12 @@ describe("agentic-orchestrator new-orchestrator action: handler", () => {
 
     const handler = getHandler();
     await handler({
-      projectId: "proj-42",
+      groupId: "proj-42",
       projectPath: "/work/proj",
       projectColor: "blue",
     });
     await handler({
-      projectId: "proj-42",
+      groupId: "proj-42",
       projectPath: "/work/proj",
       projectColor: "blue",
     });

@@ -1,8 +1,8 @@
 /**
  * Tests for the contributor registrations made by agentic-orchestrator
  * during activation:
- *   - "project" parentType — returns orchestrators belonging to that
- *     project (filtered by parentProjectId), each as
+ *   - "workspace-group" parentType — returns orchestrators belonging
+ *     to that group (filtered by parentGroupId), each as
  *     { kind: "agent-orchestrator", id: orchestratorId }
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
@@ -148,7 +148,7 @@ describe("agentic-orchestrator child-row contributors", () => {
         color: "blue",
         path: "/abs/p1a.md",
         createdAt: "2026-01-01",
-        parentProjectId: "project-1",
+        parentGroupId: "project-1",
       },
     ];
     configRef.current = { agentOrchestrators: orchestrators };
@@ -159,12 +159,12 @@ describe("agentic-orchestrator child-row contributors", () => {
     );
     await activateExtension("agentic-orchestrator");
 
-    // Under the new model, nested orchestrators are represented inside a
-    // project's nested list by their own Dashboard workspace (which
-    // project-scope claims via metadata.projectId). The extension no
+    // Under the new model, nested orchestrators are represented inside
+    // a group's nested list by their own Dashboard workspace (which
+    // workspace-groups claims via metadata.groupId). The extension no
     // longer contributes a separate "agent-orchestrator" row under
-    // projects.
-    expect(getChildRowsFor("project", "project-1")).toEqual([]);
+    // workspace groups.
+    expect(getChildRowsFor("workspace-group", "project-1")).toEqual([]);
   });
 
   it('does not register an "orchestrator" child-row contributor for workspaces', async () => {

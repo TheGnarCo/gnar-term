@@ -95,7 +95,7 @@ describe("orchestrator-service", () => {
       expect(o.color).toBe("purple");
       expect(o.path).toBe("/tmp/x.md");
       expect(o.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
-      expect(o.parentProjectId).toBeUndefined();
+      expect(o.parentGroupId).toBeUndefined();
       expect(o.dashboardWorkspaceId).toBe("ws-new");
 
       expect(createWorkspaceFromDefMock).toHaveBeenCalledTimes(1);
@@ -144,10 +144,10 @@ describe("orchestrator-service", () => {
       const o = await createOrchestrator({
         name: "n",
         baseDir: "/work/proj",
-        parentProjectId: "proj-1",
+        parentGroupId: "proj-1",
       });
       expect(o.path).toBe(`/work/proj/.gnar-term/orchestrators/${o.id}.md`);
-      expect(o.parentProjectId).toBe("proj-1");
+      expect(o.parentGroupId).toBe("proj-1");
     });
   });
 
@@ -164,7 +164,7 @@ describe("orchestrator-service", () => {
   });
 
   describe("getOrchestratorsForProject", () => {
-    it("filters by parentProjectId; null returns root-level", async () => {
+    it("filters by parentGroupId; null returns root-level", async () => {
       let i = 0;
       createWorkspaceFromDefMock.mockImplementation(async () => `ws-${++i}`);
 
@@ -176,19 +176,19 @@ describe("orchestrator-service", () => {
       const nested1 = await createOrchestrator({
         name: "n1",
         baseDir: "/n",
-        parentProjectId: "proj-1",
+        parentGroupId: "proj-1",
         pathOverride: "/tmp/n1.md",
       });
       const nested2 = await createOrchestrator({
         name: "n2",
         baseDir: "/n",
-        parentProjectId: "proj-1",
+        parentGroupId: "proj-1",
         pathOverride: "/tmp/n2.md",
       });
       await createOrchestrator({
         name: "other",
         baseDir: "/o",
-        parentProjectId: "proj-2",
+        parentGroupId: "proj-2",
         pathOverride: "/tmp/o.md",
       });
 

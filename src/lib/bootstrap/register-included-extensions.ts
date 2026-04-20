@@ -65,7 +65,7 @@ export const INCLUDED_EXTENSIONS: readonly IncludedExtension[] = [
     registerAgenticOrchestratorExtension,
     "agentic-orchestrator",
   ],
-  [projectScopeManifest, registerProjectScopeExtension, "project-scope"],
+  [projectScopeManifest, registerProjectScopeExtension, "workspace-groups"],
   [diffViewerManifest, registerDiffViewerExtension, "diff-viewer"],
   [jrvsThemesManifest, registerJrvsThemesExtension, "jrvs-themes"],
   [

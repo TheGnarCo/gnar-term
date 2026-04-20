@@ -79,8 +79,8 @@
         repoPath: orchestrator.baseDir,
         branch: branchName,
         orchestratorId,
-        ...(orchestrator.parentProjectId
-          ? { projectId: orchestrator.parentProjectId }
+        ...(orchestrator.parentGroupId
+          ? { groupId: orchestrator.parentGroupId }
           : {}),
       });
       // Success — collapse the form back to the "+ New Task" button.

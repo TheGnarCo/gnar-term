@@ -1271,7 +1271,7 @@ registerTool({
 registerTool({
   name: "invoke_workspace_action",
   description:
-    "Invoke a workspace action by id (see list_workspace_actions). `context` is forwarded to the action's handler — core passes an empty object for top-level invocations; extensions that dispatch actions from their own UI may populate fields like `{ workspaceId, projectId, branch, isGit }`. Use the owning extension's docs to learn which fields it reads.",
+    "Invoke a workspace action by id (see list_workspace_actions). `context` is forwarded to the action's handler — core passes an empty object for top-level invocations; extensions that dispatch actions from their own UI may populate fields like `{ workspaceId, groupId, branch, isGit }`. Use the owning extension's docs to learn which fields it reads.",
   inputSchema: {
     type: "object",
     properties: {
@@ -1280,7 +1280,7 @@ registerTool({
         type: "object",
         additionalProperties: true,
         description:
-          "Free-form object forwarded to the handler. Typical fields: workspaceId, projectId, projectPath, branch, isGit. Shape depends on the owning extension.",
+          "Free-form object forwarded to the handler. Typical fields: workspaceId, groupId, projectPath, branch, isGit. Shape depends on the owning extension.",
       },
     },
     required: ["action_id"],

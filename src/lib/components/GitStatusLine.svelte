@@ -14,7 +14,7 @@
 
   $: currentWs = $workspaces.find((w) => w.id === workspaceId);
   $: workspaceMetadata = (currentWs?.metadata ?? {}) as Record<string, unknown>;
-  $: isNested = Boolean(workspaceMetadata.projectId);
+  $: isNested = Boolean(workspaceMetadata.groupId);
   $: isWorktree = Boolean(workspaceMetadata.worktreePath);
   $: worktreeBranch =
     typeof workspaceMetadata.branch === "string"

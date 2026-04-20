@@ -7,7 +7,7 @@ export const primarySidebarVisible = writable<boolean>(true);
 /**
  * Id of the primary-sidebar block currently hovered (mouseenter on its
  * drag-grip column). `__workspaces__` for the built-in Workspaces block,
- * the namespaced section id (e.g. `project-scope:projects`) otherwise,
+ * the namespaced section id (e.g. `workspace-groups:workspaceGroups`) otherwise,
  * `null` when no block is hovered. Section-header banners subscribe to
  * decide whether to paint the dark-dot frit over the rail-overlap zone.
  */
@@ -48,7 +48,7 @@ export const anyReorderActive = derived(
  */
 export const innerReorderActive = derived(
   reorderContext,
-  ($ctx) => $ctx?.kind === "workspace" || $ctx?.kind === "project",
+  ($ctx) => $ctx?.kind === "workspace" || $ctx?.kind === "workspace-group",
 );
 
 /**

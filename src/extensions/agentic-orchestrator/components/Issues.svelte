@@ -169,8 +169,8 @@
         repoPath,
         branch: `agent/${agent}/${issue.number}-${branchSlug}`,
         ...(orchestratorId ? { orchestratorId } : {}),
-        ...(orchestrator?.parentProjectId
-          ? { projectId: orchestrator.parentProjectId }
+        ...(orchestrator?.parentGroupId
+          ? { groupId: orchestrator.parentGroupId }
           : {}),
       });
     } catch (err) {

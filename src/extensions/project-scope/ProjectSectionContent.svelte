@@ -72,9 +72,9 @@
   const onProjectStateChanged = () => {
     stateVersion++;
   };
-  api.on("extension:project:state-changed", onProjectStateChanged);
+  api.on("extension:workspace-group:state-changed", onProjectStateChanged);
   onDestroy(() => {
-    api.off("extension:project:state-changed", onProjectStateChanged);
+    api.off("extension:workspace-group:state-changed", onProjectStateChanged);
   });
 
   // Re-read project data whenever workspaces change or project state is updated
@@ -88,11 +88,13 @@
 
   // Re-evaluate contributed children when contributors register/unregister.
   $: void $contributors;
-  $: childRows = project ? api.getChildRowsFor("project", project.id) : [];
+  $: childRows = project
+    ? api.getChildRowsFor("workspace-group", project.id)
+    : [];
 
   $: projectContext = project
     ? ({
-        projectId: project.id,
+        groupId: project.id,
         projectPath: project.path,
         projectName: project.name,
         isGit: project.isGit,
@@ -114,7 +116,10 @@
 
   async function handleRenameProject() {
     if (!project) return;
-    const next = await api.showInputPrompt("Rename project", project.name);
+    const next = await api.showInputPrompt(
+      "Rename workspace group",
+      project.name,
+    );
     const trimmed = next?.trim();
     if (!trimmed || trimmed === project.name) return;
     updateWorkspaceGroup(api, project.id, { name: trimmed });
@@ -152,13 +157,13 @@
       danger?: boolean;
     }> = [
       {
-        label: "Rename Project",
+        label: "Rename Workspace Group",
         action: () => {
           void handleRenameProject();
         },
       },
       {
-        label: "Open Project Dashboard",
+        label: "Open Dashboard",
         action: () => {
           if (project) void openProjectDashboard(project);
         },
@@ -181,7 +186,7 @@
     }
     items.push({ label: "", action: () => {}, separator: true });
     items.push({
-      label: "Delete Project",
+      label: "Delete Workspace Group",
       danger: true,
       action: handleDeleteProject,
     });
@@ -243,7 +248,7 @@
     const confirmed = await api.showConfirm(
       `Delete project "${project.name}"? Workspaces belonging to this project return to the root list; they are not closed.`,
       {
-        title: "Delete Project",
+        title: "Delete Workspace Group",
         confirmLabel: "Delete",
         cancelLabel: "Cancel",
       },
@@ -367,7 +372,7 @@
 
       <svelte:fragment slot="after-nested">
         <!-- Contributed child rows (e.g. agentic-orchestrator dashboards
-             tagged with parentProjectId === project.id). Each row
+             tagged with parentGroupId === project.id). Each row
              dispatches to whichever extension registered a renderer for
              its kind via registerRootRowRenderer. -->
         {#if childRows.length > 0}

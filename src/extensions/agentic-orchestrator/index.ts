@@ -186,14 +186,14 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
     });
 
     // Nested orchestrators no longer contribute a separate row under
-    // projects — their Dashboard workspace is claimed by project-scope
-    // (via metadata.projectId on the Dashboard) and renders as an
-    // agentic Dashboard tile inside the project's nested list. Spawned
-    // worktrees similarly bubble up via their metadata.projectId.
+    // workspace groups — their Dashboard workspace is claimed by
+    // workspace-groups (via metadata.groupId on the Dashboard) and
+    // renders as an agentic Dashboard tile inside the group's nested
+    // list. Spawned worktrees similarly bubble up via metadata.groupId.
 
     orchestratorUnsub = orchestratorsStore.subscribe((orchestrators) => {
       const rootIds = new Set(
-        orchestrators.filter((o) => !o.parentProjectId).map((o) => o.id),
+        orchestrators.filter((o) => !o.parentGroupId).map((o) => o.id),
       );
       for (const id of rootIds) {
         if (!publishedOrchestratorIds.has(id)) {
@@ -302,18 +302,17 @@ async function newOrchestratorFlow(
   api: ExtensionAPI,
   ctx: Record<string, unknown>,
 ): Promise<void> {
-  const projectId =
-    typeof ctx.projectId === "string" ? ctx.projectId : undefined;
+  const groupId = typeof ctx.groupId === "string" ? ctx.groupId : undefined;
   const projectPath =
     typeof ctx.projectPath === "string" ? ctx.projectPath : undefined;
   const projectColor =
     typeof ctx.projectColor === "string" ? ctx.projectColor : undefined;
 
-  // Nested: zero-prompt create. One-per-project — reuse the existing
-  // orchestrator if the project already has one.
-  if (projectId && projectPath) {
+  // Nested: zero-prompt create. One-per-group — reuse the existing
+  // orchestrator if the workspace group already has one.
+  if (groupId && projectPath) {
     const existing = getOrchestrators().find(
-      (o) => o.parentProjectId === projectId,
+      (o) => o.parentGroupId === groupId,
     );
     if (existing) {
       openOrchestratorDashboard(existing);
@@ -323,7 +322,7 @@ async function newOrchestratorFlow(
       name: "Agents",
       baseDir: projectPath,
       ...(projectColor ? { color: projectColor } : {}),
-      parentProjectId: projectId,
+      parentGroupId: groupId,
     });
     try {
       await writeOrchestratorDashboardTemplate(orchestrator);

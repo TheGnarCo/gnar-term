@@ -30,7 +30,53 @@ export interface ConfigMigration {
  * Registered migrations, ordered by `version` ascending. Append new
  * entries; never reorder or rewrite existing ones.
  */
-const MIGRATIONS: ConfigMigration[] = [];
+const MIGRATIONS: ConfigMigration[] = [
+  {
+    version: 1,
+    description:
+      "rename Projects → Workspace Groups (extension id + orchestrator parent field)",
+    up: (config) => {
+      const next: Record<string, unknown> = { ...config };
+
+      // Extension id rename: project-scope → workspace-groups. Preserve
+      // the extension's enabled/settings shape verbatim.
+      const exts = config.extensions;
+      if (exts && "project-scope" in exts) {
+        const { "project-scope": legacy, ...rest } = exts;
+        next.extensions = {
+          ...rest,
+          // If both keys coexist (shouldn't in practice), prefer the
+          // already-migrated entry — user may have hand-edited the new
+          // key before we first loaded the config.
+          "workspace-groups": rest["workspace-groups"] ?? legacy,
+        };
+      }
+
+      // Orchestrator field rename: parentProjectId → parentGroupId. The
+      // field was already renamed in-code by this release; this covers
+      // configs written by the previous release.
+      const orchestrators = config.agentOrchestrators;
+      if (Array.isArray(orchestrators)) {
+        next.agentOrchestrators = orchestrators.map((o) => {
+          const raw = o as unknown as Record<string, unknown>;
+          if (!("parentProjectId" in raw)) return o;
+          const { parentProjectId, ...rest } = raw;
+          // If a new field already exists, preserve it; otherwise adopt
+          // the legacy one. Empty/undefined legacy is dropped.
+          const preserved =
+            rest.parentGroupId ??
+            (parentProjectId === undefined ? undefined : parentProjectId);
+          return {
+            ...rest,
+            ...(preserved !== undefined ? { parentGroupId: preserved } : {}),
+          };
+        }) as typeof orchestrators;
+      }
+
+      return next as GnarTermConfig;
+    },
+  },
+];
 
 /**
  * Highest migration version known to this build. Configs that have run

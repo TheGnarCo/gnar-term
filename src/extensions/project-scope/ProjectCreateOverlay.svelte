@@ -21,7 +21,7 @@
 
   // Dialog visibility is driven by custom event from createProjectFlow
   let showDialog = false;
-  api.on("extension:project:dialog-toggle", (event) => {
+  api.on("extension:workspace-group:dialog-toggle", (event) => {
     const e = event as Record<string, unknown>;
     showDialog = (e.visible as boolean) ?? false;
   });

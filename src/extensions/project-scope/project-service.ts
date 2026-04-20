@@ -6,21 +6,16 @@
  * call these helpers instead of reaching into `api.state.set` directly
  * so that the read → mutate → emit sequence stays consistent (and
  * testable).
- *
- * Note: the state-slot key is still `"projects"` and the emitted event
- * is still `"extension:project:state-changed"` — those are wire formats
- * (persisted user data / subscriber contracts) and change together with
- * the schema migration in a later stage.
  */
 import type { ExtensionAPI } from "../api";
 import type { WorkspaceGroupEntry } from "./index";
 
-const PROJECTS_KEY = "projects";
-const PROJECT_ORDER_KEY = "projectOrder";
-const STATE_CHANGED_EVENT = "extension:project:state-changed";
+const WORKSPACE_GROUPS_KEY = "workspaceGroups";
+const WORKSPACE_GROUP_ORDER_KEY = "workspaceGroupOrder";
+const STATE_CHANGED_EVENT = "extension:workspace-group:state-changed";
 
 export function getWorkspaceGroups(api: ExtensionAPI): WorkspaceGroupEntry[] {
-  return api.state.get<WorkspaceGroupEntry[]>(PROJECTS_KEY) ?? [];
+  return api.state.get<WorkspaceGroupEntry[]>(WORKSPACE_GROUPS_KEY) ?? [];
 }
 
 export function getWorkspaceGroup(
@@ -35,7 +30,7 @@ function writeWorkspaceGroups(
   next: WorkspaceGroupEntry[],
   metadata: Record<string, unknown> = {},
 ): void {
-  api.state.set(PROJECTS_KEY, next);
+  api.state.set(WORKSPACE_GROUPS_KEY, next);
   api.emit(STATE_CHANGED_EVENT, metadata);
 }
 
@@ -44,11 +39,11 @@ export function addWorkspaceGroup(
   group: WorkspaceGroupEntry,
 ): void {
   writeWorkspaceGroups(api, [...getWorkspaceGroups(api), group], {
-    projectId: group.id,
+    groupId: group.id,
   });
   // Mirror the group into the core root-row list so it renders inside
   // the Workspaces section alongside unclaimed workspaces.
-  api.appendRootRow({ kind: "project", id: group.id });
+  api.appendRootRow({ kind: "workspace-group", id: group.id });
 }
 
 export function updateWorkspaceGroup(
@@ -59,17 +54,17 @@ export function updateWorkspaceGroup(
   const next = getWorkspaceGroups(api).map((g) =>
     g.id === id ? { ...g, ...patch } : g,
   );
-  writeWorkspaceGroups(api, next, { projectId: id });
+  writeWorkspaceGroups(api, next, { groupId: id });
 }
 
 export function deleteWorkspaceGroup(api: ExtensionAPI, id: string): void {
   const next = getWorkspaceGroups(api).filter((g) => g.id !== id);
-  writeWorkspaceGroups(api, next, { projectId: id });
-  api.removeRootRow({ kind: "project", id });
+  writeWorkspaceGroups(api, next, { groupId: id });
+  api.removeRootRow({ kind: "workspace-group", id });
 }
 
 export function setWorkspaceGroupOrder(api: ExtensionAPI, ids: string[]): void {
-  api.state.set(PROJECT_ORDER_KEY, ids);
+  api.state.set(WORKSPACE_GROUP_ORDER_KEY, ids);
   api.emit(STATE_CHANGED_EVENT, {});
 }
 
@@ -93,7 +88,7 @@ export function addWorkspaceToGroup(
     return g;
   });
   if (!changed) return false;
-  writeWorkspaceGroups(api, next, { projectId: groupId });
+  writeWorkspaceGroups(api, next, { groupId });
   return true;
 }
 
@@ -116,11 +111,11 @@ export function removeWorkspaceFromAllGroups(
 /**
  * Clears every group's workspaceIds. Used at activation time because
  * workspace IDs are regenerated each restart — the workspace:created
- * handler rebuilds the list from metadata.projectId as restores land.
+ * handler rebuilds the list from metadata.groupId as restores land.
  */
 export function clearWorkspaceIds(api: ExtensionAPI): void {
   const next = getWorkspaceGroups(api).map((g) => ({ ...g, workspaceIds: [] }));
-  api.state.set(PROJECTS_KEY, next);
+  api.state.set(WORKSPACE_GROUPS_KEY, next);
   // No emit — this fires during onActivate before subscribers exist, and
   // would just produce a spurious change event for the initial load.
 }

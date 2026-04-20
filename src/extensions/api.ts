@@ -833,24 +833,28 @@ export interface ExtensionAPI {
  *
  * - `kind: "workspace"` — a workspace row is being dragged. `scopeId` is the
  *   immediate container: `"__workspaces__"` when dragging from the unclaimed
- *   list, or a project id when dragging inside a project. `containerBlockId`
- *   is the top-level sidebar block the drag lives in.
- * - `kind: "project"` — a project row is being dragged inside the Projects
- *   block. `sourceProjectId` is the id of the dragged project.
+ *   list, or a group id when dragging inside a workspace group.
+ *   `containerBlockId` is the top-level sidebar block the drag lives in.
+ * - `kind: "workspace-group"` — a group row is being dragged inside the
+ *   Workspaces block. `sourceGroupId` is the id of the dragged group.
  * - `kind: "section"` — a top-level sidebar block is being dragged.
  *   `sourceBlockId` is the block id.
  */
 export type ReorderContext =
   | { kind: "workspace"; scopeId: string; containerBlockId: string }
-  | { kind: "project"; sourceProjectId: string; containerBlockId: string }
+  | {
+      kind: "workspace-group";
+      sourceGroupId: string;
+      containerBlockId: string;
+    }
   | { kind: "section"; sourceBlockId: string }
   | {
       // Root-level drag inside the Workspaces section — the unified
-      // lane that covers unclaimed workspaces + whole project blocks.
-      // `sourceKind` + `sourceId` identify the dragged row so sibling
-      // rows (of any kind) can resolve their overlay.
+      // lane that covers unclaimed workspaces + whole workspace-group
+      // blocks. `sourceKind` + `sourceId` identify the dragged row so
+      // sibling rows (of any kind) can resolve their overlay.
       kind: "rootRow";
-      sourceKind: "workspace" | "project" | string;
+      sourceKind: "workspace" | "workspace-group" | string;
       sourceId: string;
       containerBlockId: string;
     };
@@ -927,10 +931,10 @@ export interface MergeResult {
 export interface WorkspaceRef {
   id: string;
   name: string;
-  // Opaque per-workspace metadata set at creation time (e.g. projectId,
+  // Opaque per-workspace metadata set at creation time (e.g. groupId,
   // worktreePath, branch). Extensions use this to detect nesting — e.g.
-  // the core git status subtitle collapses when projectId is present
-  // because the Project banner already shows cwd+branch.
+  // the core git status subtitle collapses when groupId is present
+  // because the Workspace Group banner already shows cwd+branch.
   metadata?: Record<string, unknown>;
 }
 

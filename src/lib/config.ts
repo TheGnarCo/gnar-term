@@ -134,7 +134,7 @@ export interface AgentOrchestrator {
   /** Absolute path to the backing .md file. Resolved at create-time. */
   path: string;
   /** When set, the orchestrator is nested under a project; otherwise root-level. */
-  parentProjectId?: string;
+  parentGroupId?: string;
   /**
    * Id of the Dashboard workspace that hosts this orchestrator's
    * markdown Live Preview. Set when the Dashboard is created (eagerly,
@@ -322,12 +322,74 @@ let _appState: AppState = {};
 const _appStateStore = writable<AppState>({});
 export const appStateStore: Readable<AppState> = _appStateStore;
 
+/**
+ * Rewrite legacy "Projects" state shapes to the "Workspace Groups" shape:
+ *   - workspaces[].metadata.projectId → metadata.groupId
+ *   - rootRowOrder[].kind === "project" → "workspace-group"
+ *
+ * Runs on every load — idempotent when the shape is already migrated.
+ * Paired with the v1 migration in config-migrations.ts; both land in the
+ * same release so old configs on disk read as new shapes in memory
+ * without requiring a config.schemaVersion lookup.
+ */
+function migrateLegacyProjectShapes(state: AppState): {
+  migrated: AppState;
+  changed: boolean;
+} {
+  let changed = false;
+  let next: AppState = state;
+
+  if (Array.isArray(state.workspaces)) {
+    const workspaces = state.workspaces.map((ws) => {
+      const md = ws.metadata as Record<string, unknown> | undefined;
+      if (!md || !("projectId" in md)) return ws;
+      const { projectId, ...rest } = md;
+      changed = true;
+      return {
+        ...ws,
+        metadata: {
+          ...rest,
+          ...(rest.groupId !== undefined || projectId === undefined
+            ? {}
+            : { groupId: projectId }),
+        },
+      };
+    });
+    if (changed) next = { ...next, workspaces };
+  }
+
+  if (Array.isArray(state.rootRowOrder)) {
+    const rootRowOrder = state.rootRowOrder.map((row) => {
+      if (row.kind !== "project") return row;
+      changed = true;
+      return { ...row, kind: "workspace-group" };
+    });
+    if (rootRowOrder.some((r, i) => r !== state.rootRowOrder![i])) {
+      next = { ...next, rootRowOrder };
+    }
+  }
+
+  return { migrated: next, changed };
+}
+
 export async function loadState(): Promise<AppState> {
   const home = await getHome();
   const path = `${home}/.config/gnar-term/state.json`;
   try {
     const content = await invoke<string>("read_file", { path });
-    _appState = JSON.parse(content);
+    const parsed = JSON.parse(content) as AppState;
+    const { migrated, changed } = migrateLegacyProjectShapes(parsed);
+    _appState = migrated;
+    if (changed) {
+      try {
+        await invoke("write_file", {
+          path,
+          content: JSON.stringify(migrated, null, 2),
+        });
+      } catch (err) {
+        console.warn("[state] Failed to persist migrated state:", err);
+      }
+    }
   } catch {
     _appState = {};
   }

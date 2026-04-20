@@ -124,7 +124,7 @@ describe("workspace persistence", () => {
           pane: { id: "p1", surfaces: [], activeSurfaceId: null },
         },
         activePaneId: "p1",
-        metadata: { projectId: "proj-alpha", color: "blue" },
+        metadata: { groupId: "proj-alpha", color: "blue" },
       },
     ] as unknown as import("../lib/types").Workspace[]);
     activeWorkspaceIdx.set(0);
@@ -138,7 +138,7 @@ describe("workspace persistence", () => {
         name: "Project A",
         cwd: undefined,
         layout: { pane: { surfaces: [] } },
-        metadata: { projectId: "proj-alpha", color: "blue" },
+        metadata: { groupId: "proj-alpha", color: "blue" },
       },
     ]);
 

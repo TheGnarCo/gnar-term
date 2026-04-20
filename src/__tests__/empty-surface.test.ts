@@ -76,9 +76,9 @@ describe("EmptySurface renders and is wired up", () => {
     expect(EMPTY).toMatch(/EMPTY_SURFACE_COMMAND_IDS/);
   });
 
-  it("promoted-commands list includes create-project", () => {
+  it("promoted-commands list includes create-workspace-group", () => {
     const cmds = read("src/lib/services/empty-surface-commands.ts");
-    expect(cmds).toMatch(/project-scope:create-project/);
+    expect(cmds).toMatch(/workspace-groups:create-workspace-group/);
   });
 });
 

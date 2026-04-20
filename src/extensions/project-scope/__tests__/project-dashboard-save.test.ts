@@ -33,7 +33,7 @@ function makeApiStub(initial: WorkspaceGroupEntry[] = []): {
   readProjects: () => WorkspaceGroupEntry[];
 } {
   const store = new Map<string, unknown>();
-  store.set("projects", initial);
+  store.set("workspaceGroups", initial);
   const emit = vi.fn();
   const api = {
     state: {
@@ -50,7 +50,7 @@ function makeApiStub(initial: WorkspaceGroupEntry[] = []): {
   return {
     api,
     emit,
-    readProjects: () => store.get("projects") as WorkspaceGroupEntry[],
+    readProjects: () => store.get("workspaceGroups") as WorkspaceGroupEntry[],
   };
 }
 
@@ -59,9 +59,12 @@ describe("project-service mutations", () => {
     const { api, emit, readProjects } = makeApiStub([makeProject("p1", "old")]);
     updateWorkspaceGroup(api, "p1", { name: "new" });
     expect(readProjects()[0].name).toBe("new");
-    expect(emit).toHaveBeenCalledWith("extension:project:state-changed", {
-      projectId: "p1",
-    });
+    expect(emit).toHaveBeenCalledWith(
+      "extension:workspace-group:state-changed",
+      {
+        groupId: "p1",
+      },
+    );
   });
 
   it("deleteWorkspaceGroup drops the group and emits state-changed", () => {
@@ -71,15 +74,21 @@ describe("project-service mutations", () => {
     ]);
     deleteWorkspaceGroup(api, "p1");
     expect(readProjects().map((p) => p.id)).toEqual(["p2"]);
-    expect(emit).toHaveBeenCalledWith("extension:project:state-changed", {
-      projectId: "p1",
-    });
+    expect(emit).toHaveBeenCalledWith(
+      "extension:workspace-group:state-changed",
+      {
+        groupId: "p1",
+      },
+    );
   });
 
   it("setWorkspaceGroupOrder persists the order and emits state-changed", () => {
     const { api, emit } = makeApiStub();
     setWorkspaceGroupOrder(api, ["b", "a"]);
-    expect(api.state.get<string[]>("projectOrder")).toEqual(["b", "a"]);
-    expect(emit).toHaveBeenCalledWith("extension:project:state-changed", {});
+    expect(api.state.get<string[]>("workspaceGroupOrder")).toEqual(["b", "a"]);
+    expect(emit).toHaveBeenCalledWith(
+      "extension:workspace-group:state-changed",
+      {},
+    );
   });
 });

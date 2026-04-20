@@ -49,15 +49,15 @@
   // Dashboard workspaces can't accumulate surfaces — the preview cannot
   // be closed from the UI, so no regen affordance is needed either.
   //
-  // For non-Dashboard workspaces tied to a project (metadata.projectId),
-  // keep the project-scope regen affordance so users can re-spawn a
-  // project-dashboard preview surface after closing it.
+  // For non-Dashboard workspaces tied to a workspace group
+  // (metadata.groupId), keep the workspace-groups regen affordance so
+  // users can re-spawn a group-dashboard preview surface after closing it.
   $: workspaceMetadata = $workspaces.find((w) => w.id === workspaceId)
     ?.metadata as Record<string, unknown> | undefined;
   $: isDashboardWorkspace = workspaceMetadata?.isDashboard === true;
   $: regenCommandId =
-    !isDashboardWorkspace && typeof workspaceMetadata?.projectId === "string"
-      ? "project-scope:regenerate-active-project-dashboard"
+    !isDashboardWorkspace && typeof workspaceMetadata?.groupId === "string"
+      ? "workspace-groups:regenerate-active-group-dashboard"
       : undefined;
   $: regenCommand = regenCommandId
     ? $commandStore.find((c) => c.id === regenCommandId)

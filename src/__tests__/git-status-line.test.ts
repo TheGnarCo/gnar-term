@@ -55,7 +55,7 @@ describe("GitStatusLine nested rules", () => {
   });
 
   it("hides inline git-info for a normal nested workspace (no worktreePath)", () => {
-    const ws = makeWorkspace("ws-nested", { projectId: "p1" });
+    const ws = makeWorkspace("ws-nested", { groupId: "p1" });
     workspaces.set([ws]);
     setDirty(ws.id);
     const { container } = render(GitStatusLine, {
@@ -66,7 +66,7 @@ describe("GitStatusLine nested rules", () => {
 
   it("shows worktree branch + dirty for a worktree nested workspace", () => {
     const ws = makeWorkspace("ws-worktree", {
-      projectId: "p1",
+      groupId: "p1",
       worktreePath: "/work/wt",
       branch: "feat/x",
     });

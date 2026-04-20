@@ -206,8 +206,8 @@
         repoPath: orchestrator.baseDir,
         branch,
         orchestratorId: orchestrator.id,
-        ...(orchestrator.parentProjectId
-          ? { projectId: orchestrator.parentProjectId }
+        ...(orchestrator.parentGroupId
+          ? { groupId: orchestrator.parentGroupId }
           : {}),
       });
     } catch (err) {
@@ -283,8 +283,8 @@
         repoPath: orchestrator.baseDir,
         branch: `agent/${agent}/${issue.number}-${branchSlug}`,
         orchestratorId: orchestrator.id,
-        ...(orchestrator.parentProjectId
-          ? { projectId: orchestrator.parentProjectId }
+        ...(orchestrator.parentGroupId
+          ? { groupId: orchestrator.parentGroupId }
           : {}),
       });
     } catch (err) {

@@ -57,24 +57,24 @@ export function getOrchestrator(id: string): AgentOrchestrator | undefined {
 }
 
 /**
- * Filter orchestrators by parentProjectId. Pass `null` to get root-level
- * orchestrators (i.e. those with no parentProjectId).
+ * Filter orchestrators by parentGroupId. Pass `null` to get root-level
+ * orchestrators (i.e. those with no parentGroupId).
  */
 export function getOrchestratorsForProject(
-  projectId: string | null,
+  groupId: string | null,
 ): AgentOrchestrator[] {
   const all = getOrchestrators();
-  if (projectId === null) {
-    return all.filter((o) => !o.parentProjectId);
+  if (groupId === null) {
+    return all.filter((o) => !o.parentGroupId);
   }
-  return all.filter((o) => o.parentProjectId === projectId);
+  return all.filter((o) => o.parentGroupId === groupId);
 }
 
 export interface CreateOrchestratorInput {
   name: string;
   baseDir: string;
   color?: string;
-  parentProjectId?: string;
+  parentGroupId?: string;
   /** For tests — bypasses path derivation. */
   pathOverride?: string;
 }
@@ -87,9 +87,9 @@ async function persist(orchestrators: AgentOrchestrator[]): Promise<void> {
 async function derivePath(
   id: string,
   baseDir: string,
-  parentProjectId: string | undefined,
+  parentGroupId: string | undefined,
 ): Promise<string> {
-  if (parentProjectId) {
+  if (parentGroupId) {
     return `${baseDir}/.gnar-term/orchestrators/${id}.md`;
   }
   const home = await getHome();
@@ -101,19 +101,19 @@ async function derivePath(
  * new workspace id so the orchestrator record can link to it.
  *
  * The Dashboard is always named "Dashboard". When the orchestrator has a
- * `parentProjectId`, the Dashboard workspace is tagged with `projectId`
- * too so project-scope claims it and renders it inside the project's
+ * `parentGroupId`, the Dashboard workspace is tagged with `groupId` too
+ * so workspace-groups claims it and renders it inside the group's
  * nested list (as an agentic Dashboard tile).
  */
 export async function createOrchestratorDashboardWorkspace(
   orchestrator: AgentOrchestrator,
 ): Promise<string> {
-  // When nested under a project, the Dashboard tile renders in the
-  // project's list and needs to self-identify — use the orchestrator
+  // When nested under a workspace group, the Dashboard tile renders in
+  // the group's list and needs to self-identify — use the orchestrator
   // name. When root-level, the tile sits inside the orchestrator's own
   // nested list below its banner; the banner already carries the name,
   // so the tile uses the generic "Dashboard" label.
-  const wsName = orchestrator.parentProjectId ? orchestrator.name : "Dashboard";
+  const wsName = orchestrator.parentGroupId ? orchestrator.name : "Dashboard";
   return await createWorkspaceFromDef({
     name: wsName,
     layout: {
@@ -131,8 +131,8 @@ export async function createOrchestratorDashboardWorkspace(
     metadata: {
       [DASHBOARD_METADATA_KEY]: true,
       [ORCHESTRATOR_WORKSPACE_META_KEY]: orchestrator.id,
-      ...(orchestrator.parentProjectId
-        ? { projectId: orchestrator.parentProjectId }
+      ...(orchestrator.parentGroupId
+        ? { groupId: orchestrator.parentGroupId }
         : {}),
     },
   });
@@ -149,7 +149,7 @@ export async function createOrchestrator(
   const id = crypto.randomUUID();
   const path =
     input.pathOverride ??
-    (await derivePath(id, input.baseDir, input.parentProjectId));
+    (await derivePath(id, input.baseDir, input.parentGroupId));
 
   const base: AgentOrchestrator = {
     id,
@@ -158,9 +158,7 @@ export async function createOrchestrator(
     color: input.color ?? DEFAULT_COLOR,
     path,
     createdAt: new Date().toISOString(),
-    ...(input.parentProjectId
-      ? { parentProjectId: input.parentProjectId }
-      : {}),
+    ...(input.parentGroupId ? { parentGroupId: input.parentGroupId } : {}),
   };
 
   const dashboardWorkspaceId = await createOrchestratorDashboardWorkspace(base);

@@ -77,8 +77,8 @@ describe("Project Scope included extension", () => {
   });
 
   it("manifest has correct id, name, and included flag", () => {
-    expect(projectScopeManifest.id).toBe("project-scope");
-    expect(projectScopeManifest.name).toBe("Project Scope");
+    expect(projectScopeManifest.id).toBe("workspace-groups");
+    expect(projectScopeManifest.name).toBe("Workspace Groups");
     expect(projectScopeManifest.version).toBe("0.1.0");
     expect(projectScopeManifest.included).toBe(true);
   });
@@ -87,7 +87,7 @@ describe("Project Scope included extension", () => {
     // Projects are created via the Workspaces header "+ New" dropdown.
     const actions = projectScopeManifest.contributes?.workspaceActions;
     expect(actions).toHaveLength(1);
-    expect(actions![0].id).toBe("new-project");
+    expect(actions![0].id).toBe("new-workspace-group");
   });
 
   it("manifest does not declare a primary sidebar section", () => {
@@ -100,12 +100,12 @@ describe("Project Scope included extension", () => {
   it("manifest declares commands", () => {
     const commands = projectScopeManifest.contributes?.commands;
     expect(commands).toHaveLength(3);
-    expect(commands!.find((c) => c.id === "create-project")).toBeTruthy();
     expect(
-      commands!.find((c) => c.id === "open-project-dashboard"),
+      commands!.find((c) => c.id === "create-workspace-group"),
     ).toBeTruthy();
+    expect(commands!.find((c) => c.id === "open-group-dashboard")).toBeTruthy();
     expect(
-      commands!.find((c) => c.id === "promote-workspace-to-project"),
+      commands!.find((c) => c.id === "promote-workspace-to-group"),
     ).toBeTruthy();
   });
 
@@ -118,9 +118,11 @@ describe("Project Scope included extension", () => {
 
   it("registers 'new-project' as a workspace-zone action (surfaces in the Workspaces + New dropdown)", async () => {
     registerExtension(projectScopeManifest, registerProjectScopeExtension);
-    await activateExtension("project-scope");
+    await activateExtension("workspace-groups");
     const actions = get(workspaceActionStore);
-    const newProject = actions.find((a) => a.id.endsWith(":new-project"));
+    const newProject = actions.find((a) =>
+      a.id.endsWith(":new-workspace-group"),
+    );
     expect(newProject).toBeDefined();
     // zone defaults to "workspace" (dropdown), not "sidebar".
     expect(newProject?.zone).not.toBe("sidebar");
@@ -129,30 +131,30 @@ describe("Project Scope included extension", () => {
   it("registers no top-level primary sidebar section", async () => {
     // Projects now render inline inside the Workspaces section.
     registerExtension(projectScopeManifest, registerProjectScopeExtension);
-    await activateExtension("project-scope");
+    await activateExtension("workspace-groups");
     const sections = get(sidebarSectionStore);
     expect(sections).toHaveLength(0);
   });
 
   it("registers a 'project' root-row renderer", async () => {
     registerExtension(projectScopeManifest, registerProjectScopeExtension);
-    await activateExtension("project-scope");
+    await activateExtension("workspace-groups");
     const renderers = get(rootRowRendererStore);
-    const projectRenderer = renderers.find((r) => r.id === "project");
+    const projectRenderer = renderers.find((r) => r.id === "workspace-group");
     expect(projectRenderer).toBeDefined();
-    expect(projectRenderer?.source).toBe("project-scope");
+    expect(projectRenderer?.source).toBe("workspace-groups");
     expect(projectRenderer?.component).toBeDefined();
   });
 
   it("registers commands via API", async () => {
     registerExtension(projectScopeManifest, registerProjectScopeExtension);
-    await activateExtension("project-scope");
+    await activateExtension("workspace-groups");
     const cmds = get(commandStore);
     expect(
-      cmds.find((c) => c.id === "project-scope:create-project"),
+      cmds.find((c) => c.id === "workspace-groups:create-workspace-group"),
     ).toBeTruthy();
     expect(
-      cmds.find((c) => c.id === "project-scope:open-project-dashboard"),
+      cmds.find((c) => c.id === "workspace-groups:open-group-dashboard"),
     ).toBeTruthy();
   });
 });
@@ -193,7 +195,7 @@ describe("Project Scope dashboard switching", () => {
         type: "pane",
         pane: { id: "p", surfaces: [], activeSurfaceId: null },
       },
-      metadata: { isDashboard: true, projectId: "proj-1" },
+      metadata: { isDashboard: true, groupId: "proj-1" },
     };
     workspaces.set([dashboardWs]);
 
@@ -235,8 +237,8 @@ describe("Project Scope state management", () => {
       createdAt: new Date().toISOString(),
     };
 
-    api.state.set("projects", [entry]);
-    const projects = api.state.get<(typeof entry)[]>("projects");
+    api.state.set("workspaceGroups", [entry]);
+    const projects = api.state.get<(typeof entry)[]>("workspaceGroups");
     expect(projects).toHaveLength(1);
     expect(projects![0].name).toBe("My Project");
     expect(projects![0].path).toBe("/home/user/project");
@@ -257,24 +259,24 @@ describe("Project Scope state management", () => {
       createdAt: new Date().toISOString(),
     };
 
-    api.state.set("projects", [project]);
-    api.state.set("activeProjectId", "proj-1");
+    api.state.set("workspaceGroups", [project]);
+    api.state.set("activeGroupId", "proj-1");
 
     // Simulate the workspace:created handler logic
-    const activeProjectId = api.state.get<string | null>("activeProjectId");
+    const activeProjectId = api.state.get<string | null>("activeGroupId");
     expect(activeProjectId).toBe("proj-1");
 
     const workspaceId = "ws-abc";
-    const projects = api.state.get<(typeof project)[]>("projects") ?? [];
+    const projects = api.state.get<(typeof project)[]>("workspaceGroups") ?? [];
     const updated = projects.map((p) => {
       if (p.id === activeProjectId && !p.workspaceIds.includes(workspaceId)) {
         return { ...p, workspaceIds: [...p.workspaceIds, workspaceId] };
       }
       return p;
     });
-    api.state.set("projects", updated);
+    api.state.set("workspaceGroups", updated);
 
-    const result = api.state.get<(typeof project)[]>("projects");
+    const result = api.state.get<(typeof project)[]>("workspaceGroups");
     expect(result![0].workspaceIds).toEqual(["ws-abc"]);
   });
 
@@ -291,31 +293,31 @@ describe("Project Scope state management", () => {
       createdAt: new Date().toISOString(),
     };
 
-    api.state.set("projects", [project]);
+    api.state.set("workspaceGroups", [project]);
 
     // Simulate the workspace:closed handler logic
     const closedId = "ws-2";
-    const projects = api.state.get<(typeof project)[]>("projects") ?? [];
+    const projects = api.state.get<(typeof project)[]>("workspaceGroups") ?? [];
     const updated = projects.map((p) => ({
       ...p,
       workspaceIds: p.workspaceIds.filter((id) => id !== closedId),
     }));
-    api.state.set("projects", updated);
+    api.state.set("workspaceGroups", updated);
 
-    const result = api.state.get<(typeof project)[]>("projects");
+    const result = api.state.get<(typeof project)[]>("workspaceGroups");
     expect(result![0].workspaceIds).toEqual(["ws-1", "ws-3"]);
   });
 
   it("active project tracking stores and retrieves active project id", () => {
     const { api } = createExtensionAPI(projectScopeManifest);
 
-    expect(api.state.get<string | null>("activeProjectId")).toBeUndefined();
+    expect(api.state.get<string | null>("activeGroupId")).toBeUndefined();
 
-    api.state.set("activeProjectId", "proj-42");
-    expect(api.state.get<string | null>("activeProjectId")).toBe("proj-42");
+    api.state.set("activeGroupId", "proj-42");
+    expect(api.state.get<string | null>("activeGroupId")).toBe("proj-42");
 
-    api.state.set("activeProjectId", null);
-    expect(api.state.get<string | null>("activeProjectId")).toBeNull();
+    api.state.set("activeGroupId", null);
+    expect(api.state.get<string | null>("activeGroupId")).toBeNull();
   });
 
   it("no auto-association when no active project", () => {
@@ -331,14 +333,14 @@ describe("Project Scope state management", () => {
       createdAt: new Date().toISOString(),
     };
 
-    api.state.set("projects", [project]);
+    api.state.set("workspaceGroups", [project]);
     // activeProjectId is not set — undefined
 
-    const activeProjectId = api.state.get<string | null>("activeProjectId");
+    const activeProjectId = api.state.get<string | null>("activeGroupId");
     expect(activeProjectId).toBeUndefined();
 
     // The handler would return early, so no changes
-    const projects = api.state.get<(typeof project)[]>("projects");
+    const projects = api.state.get<(typeof project)[]>("workspaceGroups");
     expect(projects![0].workspaceIds).toEqual([]);
   });
 });

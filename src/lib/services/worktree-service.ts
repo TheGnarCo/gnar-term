@@ -70,7 +70,7 @@ export function _seedWorktreeEntries(entries: WorktreeWorkspaceEntry[]): void {
 
 interface CreateContext {
   projectPath?: unknown;
-  projectId?: unknown;
+  groupId?: unknown;
   parentOrchestratorId?: unknown;
 }
 
@@ -91,9 +91,9 @@ export async function createWorktreeWorkspace(
     branch: config.branch,
     base: config.base,
     worktreePath: config.worktreePath,
-    projectId:
-      ctx.projectId !== undefined && ctx.projectId !== null
-        ? String(ctx.projectId)
+    groupId:
+      ctx.groupId !== undefined && ctx.groupId !== null
+        ? String(ctx.groupId)
         : undefined,
     parentOrchestratorId:
       ctx.parentOrchestratorId !== undefined &&
@@ -121,7 +121,7 @@ export interface WorktreeWorkspaceConfig {
   branch: string;
   base: string;
   worktreePath: string;
-  projectId?: string;
+  groupId?: string;
   parentOrchestratorId?: string;
   /**
    * Optional startup command to run in the new workspace's terminal.
@@ -192,7 +192,7 @@ export async function createWorktreeWorkspaceFromConfig(
       branch: config.branch,
       baseBranch: config.base,
       repoPath: config.repoPath,
-      ...(config.projectId ? { projectId: config.projectId } : {}),
+      ...(config.groupId ? { groupId: config.groupId } : {}),
       ...(config.parentOrchestratorId
         ? { parentOrchestratorId: config.parentOrchestratorId }
         : {}),

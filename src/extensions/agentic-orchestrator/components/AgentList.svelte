@@ -20,7 +20,7 @@
   const api = getContext<ExtensionAPI>(EXTENSION_API_KEY);
   const theme = api.theme;
 
-  $: agents = scopedAgentsStore(dashboardId);
+  $: agents = scopedAgentsStore(api, dashboardId);
 </script>
 
 <div

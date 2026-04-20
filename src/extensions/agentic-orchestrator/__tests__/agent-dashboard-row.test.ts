@@ -64,7 +64,6 @@ vi.mock("../../../lib/stores/workspace", async () => {
 
 function makeApi(themeId: keyof typeof themes): ExtensionAPI {
   const stateMap = new Map<string, unknown>();
-  stateMap.set("detectedAgents", []);
   return {
     state: {
       get: <T>(key: string) => stateMap.get(key) as T | undefined,
@@ -73,6 +72,7 @@ function makeApi(themeId: keyof typeof themes): ExtensionAPI {
       },
     },
     theme: writable(themes[themeId]),
+    agents: writable([]),
     reorderContext: writable(null),
     childRowContributors: writable([]),
     getChildRowsFor: () => [],

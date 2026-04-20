@@ -20,7 +20,6 @@
     type ExtensionAPI,
     resolveProjectColor,
   } from "../api";
-  import type { DetectedAgent } from "./agent-registry";
   import {
     openDashboard,
     dashboardScopedAgents,
@@ -84,12 +83,10 @@
   $: subtitleFg =
     bannerFg === "#000" ? "rgba(0, 0, 0, 0.7)" : "rgba(255, 255, 255, 0.8)";
 
-  // Pull agents off api.state (a plain reactive Map) and compute the
-  // per-dashboard slice via the shared scoping helper. Refreshes on
-  // dashboardsStore change because we void it above.
-  $: agents = (api.state.get<DetectedAgent[]>("detectedAgents") ??
-    []) as DetectedAgent[];
-  $: scoped = dashboard ? dashboardScopedAgents(dashboard, agents) : [];
+  // Pull agents from the core detection registry via api.agents and
+  // compute the per-dashboard slice via the shared scoping helper.
+  const agentsStore = api.agents;
+  $: scoped = dashboard ? dashboardScopedAgents(dashboard, $agentsStore) : [];
   $: runningCount = scoped.filter((a) => a.status === "running").length;
   $: waitingCount = scoped.filter((a) => a.status === "waiting").length;
   $: dotStatus =

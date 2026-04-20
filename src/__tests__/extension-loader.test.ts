@@ -333,7 +333,7 @@ describe("ExtensionAPI event filtering", () => {
 
     // Spoofing another extension's event name must be blocked so the
     // manifest is a stable contract (ADR-002).
-    expect(() => api.emit("extension:harness:statusChanged", {})).toThrow(
+    expect(() => api.emit("extension:other:nonsense", {})).toThrow(
       /not declared/,
     );
   });

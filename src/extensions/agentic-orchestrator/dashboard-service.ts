@@ -30,7 +30,7 @@ import {
   isTerminalSurface,
   type Workspace,
 } from "../../lib/types";
-import type { DetectedAgent } from "./agent-registry";
+import type { AgentRef as DetectedAgent } from "../api";
 
 const _dashboards = writable<AgentDashboard[]>([]);
 export const dashboardsStore: Readable<AgentDashboard[]> = _dashboards;

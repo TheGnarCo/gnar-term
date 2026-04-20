@@ -45,8 +45,12 @@ describe("Sidebar Tab Badges", () => {
 });
 
 describe("Agentic Orchestrator badge integration", () => {
-  it("manifest subscribes to harness status events for badge updates", () => {
+  it("manifest subscribes to workspace:activated (dashboard preview re-spawn)", () => {
     const events = agenticOrchestratorManifest.contributes?.events;
-    expect(events).toContain("extension:harness:statusChanged");
+    // Detection + status-change handling moved to core (agent-detection-service).
+    // The extension no longer needs to subscribe to agent:statusChanged — it
+    // only listens for workspace:activated to re-spawn closed dashboard previews.
+    expect(events).toContain("workspace:activated");
+    expect(events).not.toContain("extension:harness:statusChanged");
   });
 });

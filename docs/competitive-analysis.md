@@ -28,16 +28,19 @@ Claude Code Desktop — both wrap a workspace UI around agentic workflows — bu
 ships a fixed UI for one vendor's agent, whereas gnar-term ships an open terminal that any CLI
 agent can run inside, plus an MCP surface those agents can drive.
 
-**gnar-term has a second axis that nobody else in the group has: the plugin axis.** It ships a
-first-party **`agentic-orchestrator`** extension whose goal is to deliver the orchestrator-first
-workflow — parallel agents, fleet dashboard, diff surface, issue-tracker ingestion — as an opt-in
-layer on top of the terminal-first core. The extension already ships passive detection, an
-**AgentDashboard** entity (project-scoped), a **New Agent Dashboard** workspace action, a
-global **Agents** secondary sidebar tab, a **TaskSpawner** widget that creates a worktree +
-launches an agent, an **Issues** widget with a one-click "spawn agent on this issue" flow,
-plus **Kanban / AgentList / AgentStatusRow / Columns** widgets usable from dashboard markdown
-via `gnar:<name>` directives. MCP `spawn_agent` accepts a `worktree` flag that routes through
-the same spawn pipeline — external agents and in-app widgets share one code path.
+**gnar-term has a second axis that nobody else in the group has: the plugin axis.** Passive
+agent detection — pattern matching, per-surface status tracker, agent registry, workspace
+indicators, tab dots — is a **core feature** (`src/lib/services/agent-detection-service.ts`).
+On top of that always-on substrate, the first-party **`agentic-orchestrator`** extension
+ships the orchestrator-first UI — an **AgentDashboard** entity (project-scoped), a **New
+Agent Dashboard** workspace action, a global **Agents** secondary sidebar tab, a
+**TaskSpawner** widget that creates a worktree + launches an agent, an **Issues** widget
+with a one-click "spawn agent on this issue" flow, plus **Kanban / AgentList /
+AgentStatusRow / Columns** widgets usable from dashboard markdown via `gnar:<name>`
+directives. MCP `spawn_agent` accepts a `worktree` flag that routes through the same spawn
+pipeline — external agents and in-app widgets share one code path. The extension consumes
+detection via `api.agents` (a `Readable<AgentRef[]>`) and the core `agent:statusChanged`
+event; it no longer owns the detection pipeline or requires the `observe` permission.
 
 The architecture has settled into a clear division of labor: **core owns the nouns, extensions
 own the buttons.** Worktree workspaces, the git/PR/CI status rail, the GitHub integration that
@@ -95,6 +98,17 @@ rendering. Distinguishing features:
   the workspace subtitle directly from a core git status service. Gracefully degrades when `gh` is
   missing (no PR badge instead of an error). Polling is faster for the active workspace than for
   background ones.
+- **Passive agent detection as a core noun**: `src/lib/services/agent-detection-service.ts`
+  bootstraps tracking for every pre-existing terminal surface across all workspaces and
+  panes, subscribes to `surface:created` / `:titleChanged` / `:closed` for new ones, matches
+  PTY titles + streaming output against a pattern list (Claude Code, Codex, Aider, Cursor,
+  GitHub Copilot + user-defined `config.agents.knownAgents`), and classifies each agent
+  into `running` / `waiting` / `idle` / `active` / `closed` via a per-surface status tracker
+  (OSC notifications, title changes, configurable `idleTimeout`). Writes workspace
+  indicators via the `_agent` status source, per-surface tab dots via the status registry,
+  marks waiting surfaces unread, and emits `agent:statusChanged` on the event bus.
+  Third-party extensions read the agent registry via `api.agents` and subscribe to the
+  event without pulling in the orchestrator plugin.
 - **MCP integration (optional, agentic orchestration)**: ships an MCP server over a Unix domain
   socket (chmod 600, same-user trust boundary). Default `mcp: "auto"` auto-detects Claude Code and
   auto-registers via `claude mcp add-json`. Exposes ~20 tools:
@@ -112,18 +126,16 @@ rendering. Distinguishing features:
   workspace actions, settings pages, plus `runCommand(commandId, args?)` so extensions can trigger
   any registered core command. Eight included extensions (all `included: true`, all disableable in
   Settings → Extensions) ship on the same API third parties use:
-  1. **`agentic-orchestrator`** — AI agent detector + dashboard host. Watches every terminal
-     across every workspace, matches PTY titles and streaming output against a pattern list
-     (Claude Code, Codex, Aider, Cursor, GitHub Copilot + user patterns via `knownAgents`), and
-     tracks each detected agent through `running` / `waiting` / `idle` / `closed` states.
-     Renders per-surface tab dots, per-workspace indicators, and marks surfaces with agents
-     waiting on human input as unread. Ships an **AgentDashboard** entity (project-scoped or
-     root, persisted), a **New Agent Dashboard** workspace action, a global **Agents**
-     secondary sidebar tab, a **TaskSpawner** widget, an **Issues** widget with one-click
-     issue→spawn, plus **Kanban / AgentList / AgentStatusRow / Columns** widgets surfaced as
-     markdown components. Spawns create a fresh worktree workspace tagged
-     `metadata.parentDashboardId`, and MCP `spawn_agent` accepts a `worktree` flag that routes
-     through the same pipeline.
+  1. **`agentic-orchestrator`** — AgentDashboard host + orchestrator UI. Ships an
+     **AgentDashboard** entity (project-scoped or root, persisted), a **New Agent Dashboard**
+     workspace action, a global **Agents** secondary sidebar tab, a **TaskSpawner** widget,
+     an **Issues** widget with one-click issue→spawn, plus **Kanban / AgentList /
+     AgentStatusRow / Columns** widgets surfaced as markdown components. Spawns create a
+     fresh worktree workspace tagged `metadata.parentDashboardId`, and MCP `spawn_agent`
+     accepts a `worktree` flag that routes through the same shared pipeline. Detection —
+     pattern matching, status tracker, agent registry, tab dots, workspace indicators — is
+     core, not this extension; widgets subscribe to `api.agents` and the core
+     `agent:statusChanged` event to render agent UI without owning detection.
   2. **`diff-viewer`** — diff surface + commands (uncommitted / staged / file diff / branch
      compare); subscribes to the core `worktree:merged` event to auto-refresh after a merge.
   3. **`file-browser`** — secondary sidebar tab showing the active terminal's directory tree.
@@ -349,17 +361,18 @@ those three moved into core — they were the primitives every other orchestrati
 depended on, and routing them through the extension barrier added coordination cost without buying
 genuine pluggability.
 
-**Passive agent detection is the next thing to move into core.** The extension currently owns
-both the detection pipeline (title/output pattern matching, OSC notification parsing, idle
-timeout, status tracker, agent registry) _and_ the orchestration UI (dashboards, widgets,
-spawn flow). Detection is agentic-orchestrator _context_ — the noun every downstream UI
-reads — and it belongs next to the terminal-service / git-status-service in core: always-on,
-enabled before any extension activates, consumable by third-party extensions via the same
-event bus. After the split, the extension shrinks to "the orchestrator UI" — dashboards,
-Kanban / Issues / TaskSpawner widgets, the spawn pipeline — and the agent registry becomes a
-core-owned store like the workspace store. That also unlocks future extensions (a slack-ping
-extension, an audit-log extension, a test-watchdog extension) that want to react to agent
-status without pulling in the full orchestrator plugin.
+**Passive agent detection now lives in core** (`agent-detection-service.ts`). The previous
+arrangement had the extension owning both the detection pipeline (title/output pattern
+matching, OSC notification parsing, idle timeout, status tracker, agent registry) _and_ the
+orchestration UI (dashboards, widgets, spawn flow). Detection is agentic-orchestrator
+_context_ — the noun every downstream UI reads — so it moved next to
+git-status-service / terminal-service: always-on, enabled before any extension activates,
+consumable by third-party extensions via `api.agents` (a `Readable<AgentRef[]>`) and the
+core `agent:statusChanged` event. The extension is now pure orchestrator UI — dashboards,
+Kanban / Issues / TaskSpawner widgets, the spawn pipeline — and the agent registry is a
+core-owned store like the workspace store. That also unlocks future extensions (a
+slack-ping extension, an audit-log extension, a test-watchdog extension) that want to react
+to agent status without pulling in the full orchestrator plugin.
 
 The current arrangement adds one more piece of nuance: **bundled extensions are control surfaces
 on top of core concepts.** `worktree-workspaces` doesn't own worktree workspaces — it owns the
@@ -495,23 +508,23 @@ two tables. Plugin-layer items don't require core changes; core-layer items do.
 
 **`agentic-orchestrator` extension roadmap (plugin-layer, opt-in)**
 
-| Capability                                            | Tool that has it                                        | Status                    | Notes                                                                                                                                                                |
-| ----------------------------------------------------- | ------------------------------------------------------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Passive agent detection + per-surface status dots     | cmux (via OSC)                                          | ✅ shipped · ⤴ core-bound | Currently lives in the extension; planned to move into core as a first-class noun (agent registry + status tracker). The extension will consume, not own, detection. |
-| Per-workspace git branch / PR / CI status in sidebar  | cmux, Claude Code Desktop, all orchestrators            | ✅ shipped                | Core (git status service writes the workspace subtitle).                                                                                                             |
-| Worktree workspaces as a first-class concept          | Conductor, Emdash, Baton, Superset, Claude Code Desktop | ✅ shipped                | Core (data model + lifecycle + archive/merge + sidebar railColor border + `worktree:merged` event).                                                                  |
-| Diff viewer surface                                   | Baton, Superset, Emdash, Claude Code Desktop            | ✅ shipped                | Bundled `diff-viewer` extension; subscribes to `worktree:merged`.                                                                                                    |
-| GitHub issues / PRs / commits sidebar                 | Baton, Superset, Claude Code Desktop (Connectors)       | ✅ shipped                | Bundled `github-sidebar` extension consumes `gh`; PR/CI badge already in core subtitle.                                                                              |
-| New-worktree workspace-action button                  | Conductor, Emdash, Baton, Superset, Claude Code Desktop | ✅ shipped                | Bundled `worktree-workspaces` extension; delegates to core `worktrees:create-workspace`.                                                                             |
-| Git worktree _per spawned agent_ (auto-orchestration) | Conductor, Emdash, Baton, Superset, Claude Code Desktop | ✅ shipped                | `spawn_agent` MCP tool + TaskSpawner widget + Issues-row spawn all call the shared `spawnAgentInWorktree` pipeline.                                                  |
-| AgentDashboard entity (project-scoped, persisted)     | Conductor, Emdash, Baton                                | ✅ shipped                | `dashboard-service.ts`. Rendered as a root row, nestable under a project, preview surface over a templated markdown file.                                            |
-| Kanban / fleet-overview sidebar tab                   | Conductor, Emdash, Baton                                | ✅ shipped                | Global "Agents" secondary sidebar tab + `gnar:kanban` markdown component scoped to a dashboard.                                                                      |
-| GitHub issue → agent spawn (one-click)                | Emdash, Baton, Claude Code Desktop                      | ✅ shipped                | `gnar:issues` markdown component renders `gh` issues with a split-button spawner.                                                                                    |
-| Issue-tracker ingestion (Linear / Jira / GitLab)      | Emdash, Baton, Claude Code Desktop                      | ❌ roadmap                | GitHub is covered. Linear/Jira/GitLab adapters + per-dashboard settings still to do.                                                                                 |
-| One-click PR open                                     | Baton, Superset, Emdash, Claude Code Desktop            | ❌ roadmap                | Workspace action shelling `gh pr create`. Low effort.                                                                                                                |
-| N-parallel same-task fan-out                          | Emdash                                                  | ❌ roadmap                | Dispatch one task to N agents in N worktrees side-by-side for comparison.                                                                                            |
-| Auto-fix failing CI / auto-merge on green             | Claude Code Desktop                                     | ❌ roadmap                | Depends on the PR-open flow + a poller on `gh pr checks`.                                                                                                            |
-| Diff-viewer inline comments + "Review code" action    | Claude Code Desktop                                     | ❌ roadmap                | Requires widening the existing `diff-viewer` extension.                                                                                                              |
+| Capability                                            | Tool that has it                                        | Status            | Notes                                                                                                                                                                 |
+| ----------------------------------------------------- | ------------------------------------------------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Passive agent detection + per-surface status dots     | cmux (via OSC)                                          | ✅ shipped (core) | Core service `agent-detection-service.ts` owns pattern matching, status tracker, agent registry, workspace indicators, tab dots. Extension consumes via `api.agents`. |
+| Per-workspace git branch / PR / CI status in sidebar  | cmux, Claude Code Desktop, all orchestrators            | ✅ shipped        | Core (git status service writes the workspace subtitle).                                                                                                              |
+| Worktree workspaces as a first-class concept          | Conductor, Emdash, Baton, Superset, Claude Code Desktop | ✅ shipped        | Core (data model + lifecycle + archive/merge + sidebar railColor border + `worktree:merged` event).                                                                   |
+| Diff viewer surface                                   | Baton, Superset, Emdash, Claude Code Desktop            | ✅ shipped        | Bundled `diff-viewer` extension; subscribes to `worktree:merged`.                                                                                                     |
+| GitHub issues / PRs / commits sidebar                 | Baton, Superset, Claude Code Desktop (Connectors)       | ✅ shipped        | Bundled `github-sidebar` extension consumes `gh`; PR/CI badge already in core subtitle.                                                                               |
+| New-worktree workspace-action button                  | Conductor, Emdash, Baton, Superset, Claude Code Desktop | ✅ shipped        | Bundled `worktree-workspaces` extension; delegates to core `worktrees:create-workspace`.                                                                              |
+| Git worktree _per spawned agent_ (auto-orchestration) | Conductor, Emdash, Baton, Superset, Claude Code Desktop | ✅ shipped        | `spawn_agent` MCP tool + TaskSpawner widget + Issues-row spawn all call the shared `spawnAgentInWorktree` pipeline.                                                   |
+| AgentDashboard entity (project-scoped, persisted)     | Conductor, Emdash, Baton                                | ✅ shipped        | `dashboard-service.ts`. Rendered as a root row, nestable under a project, preview surface over a templated markdown file.                                             |
+| Kanban / fleet-overview sidebar tab                   | Conductor, Emdash, Baton                                | ✅ shipped        | Global "Agents" secondary sidebar tab + `gnar:kanban` markdown component scoped to a dashboard.                                                                       |
+| GitHub issue → agent spawn (one-click)                | Emdash, Baton, Claude Code Desktop                      | ✅ shipped        | `gnar:issues` markdown component renders `gh` issues with a split-button spawner.                                                                                     |
+| Issue-tracker ingestion (Linear / Jira / GitLab)      | Emdash, Baton, Claude Code Desktop                      | ❌ roadmap        | GitHub is covered. Linear/Jira/GitLab adapters + per-dashboard settings still to do.                                                                                  |
+| One-click PR open                                     | Baton, Superset, Emdash, Claude Code Desktop            | ❌ roadmap        | Workspace action shelling `gh pr create`. Low effort.                                                                                                                 |
+| N-parallel same-task fan-out                          | Emdash                                                  | ❌ roadmap        | Dispatch one task to N agents in N worktrees side-by-side for comparison.                                                                                             |
+| Auto-fix failing CI / auto-merge on green             | Claude Code Desktop                                     | ❌ roadmap        | Depends on the PR-open flow + a poller on `gh pr checks`.                                                                                                             |
+| Diff-viewer inline comments + "Review code" action    | Claude Code Desktop                                     | ❌ roadmap        | Requires widening the existing `diff-viewer` extension.                                                                                                               |
 
 **Core-app gaps (would live outside the plugin)**
 

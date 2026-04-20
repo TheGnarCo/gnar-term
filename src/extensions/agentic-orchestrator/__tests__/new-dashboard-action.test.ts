@@ -89,7 +89,7 @@ import {
   getDashboards,
   buildDashboardMarkdown,
 } from "../dashboard-service";
-import { resetRegistry } from "../agent-registry";
+import { resetAgentDetectionForTests } from "../../../lib/services/agent-detection-service";
 
 const ACTION_ID = "agentic-orchestrator:new-dashboard";
 
@@ -120,7 +120,7 @@ beforeEach(async () => {
   await resetExtensions();
   resetWorkspaceActions();
   _resetDashboardService();
-  resetRegistry();
+  resetAgentDetectionForTests();
 
   // The action handler reads pickDirectory / showFormPrompt off the
   // ExtensionAPI instance handed to the extension. We stub them after

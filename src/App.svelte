@@ -48,6 +48,7 @@
   import { initWorktrees } from "./lib/bootstrap/init-worktrees";
   import { initGitStatus } from "./lib/bootstrap/init-git-status";
   import { initPreview } from "./lib/bootstrap/init-preview";
+  import { initAgentDetectionBootstrap } from "./lib/bootstrap/init-agent-detection";
   import {
     restoreWorkspaces,
     type CliArgs,
@@ -475,6 +476,7 @@
     initWorktrees();
     initGitStatus();
     initPreview();
+    initAgentDetectionBootstrap();
 
     // Register included extensions. Only activate if explicitly enabled
     // in config — a fresh install starts with no extensions active

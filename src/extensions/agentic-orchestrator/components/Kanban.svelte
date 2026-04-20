@@ -9,7 +9,6 @@
    */
   import { getContext } from "svelte";
   import { EXTENSION_API_KEY, type ExtensionAPI } from "../../api";
-  import type { DetectedAgent } from "../agent-registry";
   import {
     bucketForStatus,
     jumpToAgent,
@@ -17,6 +16,7 @@
     statusColor,
     timeAgo,
     workspaceNameFor,
+    type DetectedAgent,
     type KanbanColumn,
   } from "../widget-helpers";
 
@@ -32,7 +32,7 @@
   const api = getContext<ExtensionAPI>(EXTENSION_API_KEY);
   const theme = api.theme;
 
-  $: agents = scopedAgentsStore(dashboardId);
+  $: agents = scopedAgentsStore(api, dashboardId);
 
   // Bucket agents into the four columns. Re-derived on every store change.
   const COLUMN_DEFS: Array<{ id: KanbanColumn; label: string }> = [

@@ -29,7 +29,7 @@ import {
   sidebarTabStore,
   resetSidebarTabs,
 } from "../../../lib/services/sidebar-tab-registry";
-import { resetRegistry } from "../agent-registry";
+import { resetAgentDetectionForTests } from "../../../lib/services/agent-detection-service";
 
 const TAB_ID = "agentic-orchestrator:agents";
 
@@ -37,7 +37,7 @@ describe("agentic-orchestrator: global Agents tab (P11)", () => {
   beforeEach(async () => {
     await resetExtensions();
     resetSidebarTabs();
-    resetRegistry();
+    resetAgentDetectionForTests();
   });
 
   it("manifest declares the agents tab with id, label, and icon", () => {

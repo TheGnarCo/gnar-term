@@ -23,8 +23,11 @@ describe("Permission model", () => {
   });
 
   describe("observe permission", () => {
-    it("agentic-orchestrator has observe permission (no longer pty)", () => {
-      expect(agenticOrchestratorManifest.permissions).toContain("observe");
+    it("agentic-orchestrator no longer needs observe — detection is core-owned", () => {
+      // Passive agent detection moved into core (agent-detection-service).
+      // The extension is now pure UI + spawn glue, so the elevated
+      // observe permission is no longer required.
+      expect(agenticOrchestratorManifest.permissions).not.toContain("observe");
       expect(agenticOrchestratorManifest.permissions).not.toContain("pty");
     });
   });

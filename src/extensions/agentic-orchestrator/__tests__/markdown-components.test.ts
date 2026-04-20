@@ -91,11 +91,22 @@ import {
   listMarkdownComponents,
   resetMarkdownComponents,
 } from "../../../lib/services/markdown-component-registry";
-import {
-  registerAgent,
-  resetRegistry,
-  type DetectedAgent,
-} from "../agent-registry";
+import type { AgentRef as DetectedAgent } from "../../api";
+
+// Local writable that stands in for the core agentsStore during testing.
+// Each makeApi() reassigns a new one into this ref; registerAgent appends,
+// resetRegistry clears. Mimics the pre-move `agent-registry` surface so the
+// rest of the test bodies can stay unchanged.
+const _testAgentsRef: { store: ReturnType<typeof writable<DetectedAgent[]>> } =
+  {
+    store: writable<DetectedAgent[]>([]),
+  };
+function registerAgent(agent: DetectedAgent): void {
+  _testAgentsRef.store.update((list) => [...list, agent]);
+}
+function resetRegistry(): void {
+  _testAgentsRef.store.set([]);
+}
 import { createDashboard, _resetDashboardService } from "../dashboard-service";
 import ExtensionWrapper from "../../../lib/components/ExtensionWrapper.svelte";
 import Kanban from "../components/Kanban.svelte";
@@ -130,7 +141,7 @@ function makeApi(
   } = {},
 ): ExtensionAPI {
   const stateMap = new Map<string, unknown>();
-  stateMap.set("detectedAgents", options.agents ?? []);
+  _testAgentsRef.store = writable<DetectedAgent[]>(options.agents ?? []);
   return {
     state: {
       get: <T>(key: string) => stateMap.get(key) as T | undefined,
@@ -140,6 +151,7 @@ function makeApi(
     },
     theme: writable(themes["github-dark"]),
     workspaces: writable(options.workspaces ?? []),
+    agents: _testAgentsRef.store,
     invoke: options.invoke
       ? vi.fn(async (cmd: string, args?: unknown) => options.invoke!(cmd, args))
       : invokeSpy,
@@ -272,9 +284,7 @@ describe("Kanban widget", () => {
     // the registry. Since the widget reads agentsStore directly, we drive
     // it through registerAgent (which syncs the store).
     const api = makeApi();
-    // Hook agent-registry to this api so the store mirror works.
-    const { initRegistry } = await import("../agent-registry");
-    initRegistry(api);
+    // Detection moved to core; makeApi() wires api.agents to the test writable.
 
     // Match the dashboard scope by giving each agent a workspace whose
     // first terminal cwd is under /work/proj.
@@ -618,8 +628,6 @@ describe("AgentStatusRow widget", () => {
 
   it("renders the agent's status dot, name, and status label", async () => {
     const api = makeApi();
-    const { initRegistry } = await import("../agent-registry");
-    initRegistry(api);
     registerAgent(makeAgent({ agentId: "a-1", status: "running" }));
 
     const { container } = render(ExtensionWrapper, {
@@ -646,8 +654,6 @@ describe("AgentStatusRow widget", () => {
 
   it("clicking the row invokes switchWorkspace + focusSurface", async () => {
     const api = makeApi();
-    const { initRegistry } = await import("../agent-registry");
-    initRegistry(api);
     registerAgent(
       makeAgent({
         agentId: "a-click",
@@ -675,8 +681,6 @@ describe("AgentStatusRow widget", () => {
 
   it("renders a missing-state placeholder when the agentId is unknown", async () => {
     const api = makeApi();
-    const { initRegistry } = await import("../agent-registry");
-    initRegistry(api);
 
     const { container } = render(ExtensionWrapper, {
       props: {
@@ -709,8 +713,6 @@ describe("AgentList widget", () => {
 
   it("renders one AgentStatusRow per agent (global scope)", async () => {
     const api = makeApi();
-    const { initRegistry } = await import("../agent-registry");
-    initRegistry(api);
     registerAgent(makeAgent({ agentId: "a1", agentName: "Alpha" }));
     registerAgent(makeAgent({ agentId: "a2", agentName: "Bravo" }));
     registerAgent(makeAgent({ agentId: "a3", agentName: "Charlie" }));
@@ -734,8 +736,6 @@ describe("AgentList widget", () => {
 
   it("renders the empty-state when no agents are registered", async () => {
     const api = makeApi();
-    const { initRegistry } = await import("../agent-registry");
-    initRegistry(api);
 
     const { container } = render(ExtensionWrapper, {
       props: {

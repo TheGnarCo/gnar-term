@@ -6,10 +6,17 @@
  * stays focused on rendering.
  */
 import { derived, type Readable } from "svelte/store";
-import type { ExtensionAPI } from "../api";
-import type { DetectedAgent } from "./agent-registry";
-import { agentsStore } from "./agent-registry";
+import type { AgentRef, ExtensionAPI } from "../api";
 import { dashboardScopedAgents, getDashboard } from "./dashboard-service";
+
+/**
+ * Legacy alias preserved for the orchestrator's widget internals — the
+ * canonical public type is `AgentRef` from the extension API. Detection
+ * moved to core (src/lib/services/agent-detection-service.ts); widgets
+ * subscribe via `api.agents` rather than the previous extension-owned
+ * registry.
+ */
+export type DetectedAgent = AgentRef;
 
 /** Minimum interval between widget data refreshes (ms). */
 export const WIDGET_THROTTLE_MS = 200;
@@ -61,9 +68,10 @@ export function throttle<TArgs extends unknown[]>(
  * frame budget.
  */
 export function scopedAgentsStore(
+  api: ExtensionAPI,
   dashboardId: string | undefined,
 ): Readable<DetectedAgent[]> {
-  return derived(agentsStore, (agents) => {
+  return derived(api.agents, (agents) => {
     if (!dashboardId) return agents;
     const dashboard = getDashboard(dashboardId);
     if (!dashboard) return [];

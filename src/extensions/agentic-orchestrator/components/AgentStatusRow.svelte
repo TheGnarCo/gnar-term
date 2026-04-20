@@ -11,13 +11,12 @@
    */
   import { getContext } from "svelte";
   import { EXTENSION_API_KEY, type ExtensionAPI } from "../../api";
-  import type { DetectedAgent } from "../agent-registry";
-  import { agentsStore } from "../agent-registry";
   import {
     jumpToAgent,
     statusColor,
     timeAgo,
     workspaceNameFor,
+    type DetectedAgent,
   } from "../widget-helpers";
 
   /** Required when `agent` is not provided. */
@@ -29,8 +28,9 @@
 
   const api = getContext<ExtensionAPI>(EXTENSION_API_KEY);
   const theme = api.theme;
+  const agents = api.agents;
 
-  $: resolved = agent ?? $agentsStore.find((a) => a.agentId === agentId);
+  $: resolved = agent ?? $agents.find((a) => a.agentId === agentId);
   $: dotColor = resolved ? statusColor(resolved.status) : "#888";
   $: wsName = resolved ? workspaceNameFor(api, resolved.workspaceId) : "";
   $: age = resolved ? timeAgo(resolved.lastStatusChange) : "";

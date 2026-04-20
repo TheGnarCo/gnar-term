@@ -24,6 +24,7 @@ import {
 } from "@tauri-apps/plugin-notification";
 import { get } from "svelte/store";
 import { xtermTheme } from "./stores/theme";
+import { fontSize as fontSizeStore } from "./stores/font-size";
 import { workspaces, activeWorkspaceIdx } from "./stores/workspace";
 import { contextMenu, pendingAction } from "./stores/ui";
 import {
@@ -477,7 +478,7 @@ export async function createTerminalSurface(
 
   const terminal = new Terminal({
     cursorBlink: true,
-    fontSize: 14,
+    fontSize: get(fontSizeStore),
     fontFamily: resolvedFontFamily,
     theme: currentXtermTheme,
     allowProposedApi: true,

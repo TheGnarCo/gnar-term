@@ -3,6 +3,7 @@
   import { listen } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { theme, themes, xtermTheme } from "./lib/stores/theme";
+  import { fontSize, setFontSizeFromConfig } from "./lib/stores/font-size";
   import {
     isFullscreen,
     primarySidebarVisible,
@@ -474,6 +475,32 @@
     if (config.theme) {
       theme.set(config.theme);
     }
+    setFontSizeFromConfig(config.fontSize);
+
+    // After the config is applied, subscribe to font-size changes so any
+    // subsequent user-triggered zoom propagates to every live terminal,
+    // refits the pty, and persists. The first emission is the loaded
+    // value — apply but don't persist (prevents a write-on-startup).
+    let fontSizeInitialEmission = true;
+    fontSize.subscribe((size) => {
+      for (const ws of get(workspaces)) {
+        for (const s of getAllSurfaces(ws)) {
+          if (isTerminalSurface(s)) {
+            s.terminal.options.fontSize = size;
+            try {
+              s.fitAddon?.fit();
+            } catch {
+              // fit throws if the terminal isn't opened yet; ignored.
+            }
+          }
+        }
+      }
+      if (fontSizeInitialEmission) {
+        fontSizeInitialEmission = false;
+        return;
+      }
+      void saveConfig({ fontSize: size });
+    });
 
     // Wire core worktree handling before extensions register so any
     // extension subscribing to "worktree:merged" finds the emitter live.

@@ -24,14 +24,14 @@ describe("Dashboard Tab Registry", () => {
       id: "ext:worktrees",
       label: "Worktrees",
       component: {} as unknown,
-      source: "worktree-workspaces",
+      source: "worktrees",
     });
 
     const tabs = get(dashboardTabStore);
     expect(tabs).toHaveLength(1);
     expect(tabs[0].id).toBe("ext:worktrees");
     expect(tabs[0].label).toBe("Worktrees");
-    expect(tabs[0].source).toBe("worktree-workspaces");
+    expect(tabs[0].source).toBe("worktrees");
   });
 
   it("unregisters tabs by source", () => {

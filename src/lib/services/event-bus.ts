@@ -39,7 +39,15 @@ export type AppEvent =
       which: "primary" | "secondary";
       visible: boolean;
     }
-  | { type: "theme:changed"; id: string; previousId: string };
+  | { type: "theme:changed"; id: string; previousId: string }
+  | {
+      type: "worktree:merged";
+      worktreePath: string;
+      branch: string;
+      baseBranch: string;
+      repoPath: string;
+      workspaceId: string;
+    };
 
 export type AppEventType = AppEvent["type"];
 

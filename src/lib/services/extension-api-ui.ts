@@ -1,4 +1,7 @@
-import { registerCommand as registryRegisterCommand } from "./command-registry";
+import {
+  registerCommand as registryRegisterCommand,
+  runCommandById as registryRunCommandById,
+} from "./command-registry";
 import {
   registerSidebarTab,
   registerSidebarAction,
@@ -26,6 +29,8 @@ import {
   removeRootRow as storeRemoveRootRow,
 } from "../stores/root-row-order";
 import { registerTheme as registryRegisterTheme } from "./theme-registry";
+import { registerMarkdownComponent as registryRegisterMarkdownComponent } from "./markdown-component-registry";
+import { registerChildRowContributor } from "./child-row-contributor-registry";
 import { registerExtensionMcpTool } from "./mcp-server";
 import type { ThemeDef } from "../theme-data";
 import type { ExtensionManifest, ExtensionAPI } from "../extension-types";
@@ -47,8 +52,11 @@ export function createUIRegistrationAPI(
   | "unregisterOverlay"
   | "registerTheme"
   | "registerCommand"
+  | "runCommand"
   | "registerContextMenuItem"
   | "registerMcpTool"
+  | "registerMarkdownComponent"
+  | "registerChildRowContributor"
   | "registerDashboardTab"
   | "registerWorkspaceAction"
   | "getWorkspaceActions"
@@ -158,6 +166,10 @@ export function createUIRegistrationAPI(
       registryRegisterTheme(extId, id, theme as ThemeDef);
     },
 
+    runCommand(commandId: string, args?: unknown): boolean {
+      return registryRunCommandById(commandId, args);
+    },
+
     registerCommand(
       commandId: string,
       handler: () => void | Promise<void>,
@@ -193,6 +205,33 @@ export function createUIRegistrationAPI(
         options.inputSchema,
         options.handler,
       );
+    },
+
+    registerMarkdownComponent(
+      name: string,
+      component: unknown,
+      options?: { configSchema?: Record<string, unknown> },
+    ) {
+      // No id-prefix on the component name — markdown directives
+      // (`gnar:<name>`) stay short and stable. Source tracking still uses
+      // extId for cleanup.
+      registryRegisterMarkdownComponent({
+        name,
+        component,
+        source: extId,
+        configSchema: options?.configSchema,
+      });
+    },
+
+    registerChildRowContributor(
+      parentType: string,
+      contribute: (parentId: string) => Array<{ kind: string; id: string }>,
+    ) {
+      registerChildRowContributor({
+        parentType,
+        source: extId,
+        contribute,
+      });
     },
 
     registerContextMenuItem(

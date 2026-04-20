@@ -10,16 +10,16 @@ import {
 import { createTerminalSurface } from "../terminal-service";
 import {
   getAllPanes,
-  getAllSurfaces,
   uid,
   isTerminalSurface,
   isExtensionSurface,
   type Workspace,
   type Pane,
   type Surface,
+  type PreviewSurface,
 } from "../types";
 import { removePane } from "./pane-service";
-import { schedulePersist, createWorkspace } from "./workspace-service";
+import { schedulePersist } from "./workspace-service";
 import { safeFocus, getActiveCwd } from "./service-helpers";
 import { eventBus } from "./event-bus";
 
@@ -60,13 +60,17 @@ export function closeExtensionSurfaces(surfaceTypeIds: string[]): void {
 }
 
 export function closeSurfaceById(paneId: string, surfaceId: string) {
-  const ws = get(activeWorkspace);
-  if (!ws) return;
-  const pane = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
-  if (!pane) return;
-  const idx = pane.surfaces.findIndex((s) => s.id === surfaceId);
-  if (idx < 0) return;
-  removeSurface(ws, pane, idx);
+  // Search all workspaces — MCP can target a surface in a backgrounded
+  // workspace, and the App.svelte callsite passes a paneId we know lives
+  // in the active workspace, so an exhaustive scan covers both.
+  for (const ws of get(workspaces)) {
+    const pane = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
+    if (!pane) continue;
+    const idx = pane.surfaces.findIndex((s) => s.id === surfaceId);
+    if (idx < 0) return;
+    removeSurface(ws, pane, idx);
+    return;
+  }
 }
 
 function removeSurface(ws: Workspace, pane: Pane, surfaceIdx: number) {
@@ -84,23 +88,17 @@ function removeSurface(ws: Workspace, pane: Pane, surfaceIdx: number) {
   eventBus.emit({ type: "surface:closed", id: surfaceId, paneId });
 
   if (pane.surfaces.length === 0) {
-    removePane(ws, pane);
-    // After removing the pane, if the workspace is still alive but has
-    // no surfaces left anywhere (e.g. a split collapsed into an empty
-    // sibling), close the workspace too — the user just closed the
-    // last surface and should see the workspace go with it.
-    const list = get(workspaces);
-    if (list.includes(ws) && getAllSurfaces(ws).length === 0) {
-      const wsIdx = list.indexOf(ws);
-      const wsId = ws.id;
-      workspaces.update((l) => l.filter((w) => w.id !== ws.id));
-      eventBus.emit({ type: "workspace:closed", id: wsId });
-      if (get(workspaces).length === 0) {
-        void createWorkspace("Workspace 1");
-      } else {
-        activeWorkspaceIdx.set(Math.min(wsIdx, get(workspaces).length - 1));
-      }
+    // If this workspace has another pane (split view), collapse by
+    // removing the now-empty pane. Otherwise keep the workspace alive
+    // with an empty pane so the user lands on the empty-state view
+    // inside it instead of being bounced to another workspace.
+    const paneCount = getAllPanes(ws.splitRoot).length;
+    if (paneCount > 1) {
+      removePane(ws, pane);
+    } else {
+      pane.activeSurfaceId = null;
     }
+    workspaces.update((l) => [...l]);
   } else {
     pane.activeSurfaceId =
       pane.surfaces[Math.min(surfaceIdx, pane.surfaces.length - 1)]!.id;
@@ -303,4 +301,60 @@ export function focusSurfaceById(surfaceId: string): void {
 export function newSurfaceFromSidebar() {
   const pane = get(activePane);
   if (pane) void newSurface(pane.id);
+}
+
+/**
+ * Push a fresh PreviewSurface onto the pane identified by `paneId`,
+ * optionally focusing it. Returns the created surface or null if the pane
+ * could not be found.
+ *
+ * Searches all workspaces (not just the active one) — preview surfaces
+ * can be spawned from MCP / extensions, where the target workspace may
+ * differ from the user's focused one. Mirrors
+ * openExtensionSurfaceInPaneById's lookup.
+ */
+export function createPreviewSurfaceInPane(
+  paneId: string,
+  path: string,
+  options?: { focus?: boolean; title?: string },
+): PreviewSurface | null {
+  let owningWs: Workspace | undefined;
+  let pane: Pane | undefined;
+  for (const ws of get(workspaces)) {
+    const found = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
+    if (found) {
+      owningWs = ws;
+      pane = found;
+      break;
+    }
+  }
+  if (!pane || !owningWs) return null;
+
+  // Default the title to the file's basename when one isn't provided. Strip
+  // the .md extension if present for a cleaner tab label.
+  const basename = path.split("/").pop() || path;
+  const title = options?.title ?? basename.replace(/\.md$/, "");
+
+  const surface: PreviewSurface = {
+    kind: "preview",
+    id: uid(),
+    title,
+    path,
+    hasUnread: false,
+  };
+  pane.surfaces.push(surface);
+  if (options?.focus !== false) {
+    pane.activeSurfaceId = surface.id;
+  } else if (!pane.activeSurfaceId) {
+    pane.activeSurfaceId = surface.id;
+  }
+  workspaces.update((l) => [...l]);
+  eventBus.emit({
+    type: "surface:created",
+    id: surface.id,
+    paneId: pane.id,
+    kind: "preview",
+  });
+  schedulePersist();
+  return surface;
 }

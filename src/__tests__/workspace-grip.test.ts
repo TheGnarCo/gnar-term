@@ -101,3 +101,70 @@ describe("WorkspaceItem drag grip", () => {
     expect(onSelect).toHaveBeenCalled();
   });
 });
+
+describe("WorkspaceItem worktree border", () => {
+  afterEach(() => cleanup());
+
+  function makeWorktreeWorkspace(): Workspace {
+    return {
+      ...makeWorkspace(),
+      metadata: { worktreePath: "/tmp/some-worktree" },
+    };
+  }
+
+  it("renders a 1px border in railColor for worktree workspaces", () => {
+    const { container } = render(WorkspaceItem, {
+      props: {
+        workspace: makeWorktreeWorkspace(),
+        index: 0,
+        isActive: false,
+        onSelect: noop,
+        onClose: noop,
+        onRename: noop,
+        onContextMenu: noop,
+        onGripMouseDown: vi.fn(),
+        accentColor: "#ff00aa",
+      },
+    });
+    const row = container.querySelector("[data-drag-idx]") as HTMLElement;
+    expect(row.dataset.worktree).toBe("true");
+    expect(row.style.border).toContain("1px solid");
+    expect(row.style.border).toContain("rgb(255, 0, 170)");
+  });
+
+  it("falls back to theme.accent when no accentColor is passed", () => {
+    const { container } = render(WorkspaceItem, {
+      props: {
+        workspace: makeWorktreeWorkspace(),
+        index: 0,
+        isActive: false,
+        onSelect: noop,
+        onClose: noop,
+        onRename: noop,
+        onContextMenu: noop,
+        onGripMouseDown: vi.fn(),
+      },
+    });
+    const row = container.querySelector("[data-drag-idx]") as HTMLElement;
+    expect(row.style.border).toContain("1px solid");
+  });
+
+  it("renders no border for non-worktree workspaces", () => {
+    const { container } = render(WorkspaceItem, {
+      props: {
+        workspace: makeWorkspace(),
+        index: 0,
+        isActive: false,
+        onSelect: noop,
+        onClose: noop,
+        onRename: noop,
+        onContextMenu: noop,
+        onGripMouseDown: vi.fn(),
+        accentColor: "#ff00aa",
+      },
+    });
+    const row = container.querySelector("[data-drag-idx]") as HTMLElement;
+    expect(row.dataset.worktree).toBeUndefined();
+    expect(row.style.border).toBe("");
+  });
+});

@@ -128,7 +128,8 @@ export type AppEventType =
   | "surface:closed"
   | "surface:titleChanged"
   | "sidebar:toggled"
-  | "theme:changed";
+  | "theme:changed"
+  | "worktree:merged";
 
 /** Base shape for all events delivered to extension handlers. */
 export interface AppEvent {
@@ -273,6 +274,14 @@ export interface ExtensionTheme {
   sidebarBorder: string;
   tabBarBg: string;
   tabBarBorder: string;
+  /**
+   * Glyph used for AgentDashboard rows in the sidebar. Either an icon
+   * name (currently `lucide:layout-dashboard` is the only recognized
+   * name — the row falls back to an inline SVG when the name is
+   * unknown) or a literal emoji / single-grapheme string rendered as
+   * text. Personality themes set this to flair like "🪩".
+   */
+  dashboardIcon: string;
   ansi: {
     black: string;
     red: string;
@@ -403,6 +412,10 @@ export interface ExtensionAPI {
     handler: () => void | Promise<void>,
     options?: { title?: string; shortcut?: string },
   ): void;
+  /** Trigger a registered command by its full id (e.g. "worktrees:create-workspace").
+   *  Returns true when found and dispatched. Use this from an extension to invoke
+   *  a core command when the extension is just an alternate trigger surface. */
+  runCommand(commandId: string, args?: unknown): boolean;
   registerContextMenuItem(
     itemId: string,
     handler: (filePath: string) => void,
@@ -415,7 +428,7 @@ export interface ExtensionAPI {
    * extension registers domain-specific shortcuts here.
    *
    * The tool name is registered as-is (no extension-id prefix) so that
-   * contracts like `create_preview` stay stable for external agents.
+   * contracts stay stable for external agents.
    * Conflicts across extensions are the author's responsibility to avoid.
    *
    * Automatically unregistered on extension deactivate.
@@ -428,6 +441,76 @@ export interface ExtensionAPI {
       handler: (args: Record<string, unknown>) => unknown | Promise<unknown>;
     },
   ): void;
+
+  /**
+   * Register a live "markdown-component" that can be embedded inside a
+   * markdown preview. Markdown rendered through the core preview
+   * pipeline may contain fenced code blocks with the info string
+   * `gnar:<name>` — the renderer looks `<name>` up in this registry and
+   * mounts the registered Svelte component, passing the parsed YAML
+   * config as props.
+   *
+   * The component `name` is registered as-is (no extension-id prefix)
+   * so markdown directives stay short and stable. Conflicts across
+   * extensions resolve last-wins and are non-deterministic — namespace
+   * defensively (e.g. `mything-kanban` rather than `kanban`) when
+   * collisions are likely.
+   *
+   * `options.configSchema` is reserved for future MCP discoverability
+   * and isn't enforced at runtime.
+   *
+   * Automatically unregistered on extension deactivate.
+   */
+  registerMarkdownComponent(
+    name: string,
+    component: unknown,
+    options?: {
+      configSchema?: Record<string, unknown>;
+    },
+  ): void;
+
+  /**
+   * Contribute child rows to another extension's parent rows. The
+   * `parentType` matches the kind of a row registered via
+   * `registerRootRowRenderer` (e.g. "project", "dashboard"); given a
+   * specific parent's id, return the child row ids that should render
+   * underneath it. Each id is dispatched through the same
+   * root-row-renderer registry, so children inherit whatever the
+   * registered renderer for their kind already does.
+   *
+   * Use this when the lifecycle of the child rows lives in this
+   * extension but they should appear nested under a row owned by a
+   * different extension.
+   *
+   * Automatically unregistered on extension deactivate.
+   */
+  registerChildRowContributor(
+    parentType: string,
+    contribute: (parentId: string) => Array<{ kind: string; id: string }>,
+  ): void;
+
+  /**
+   * Enumerate every child row contributed for the given parent.
+   * Returns concatenated `{ kind, id }` descriptors from all
+   * contributors registered against `parentType`. The caller looks
+   * each kind up via `getRootRowRenderer()` and renders the component.
+   */
+  getChildRowsFor(
+    parentType: string,
+    parentId: string,
+  ): Array<{ kind: string; id: string }>;
+  /**
+   * Reactive store of every contributor — subscribe to re-enumerate
+   * when contributors register/unregister (e.g. when an extension
+   * activates after the parent row has already mounted).
+   */
+  childRowContributors: Readable<unknown[]>;
+  /**
+   * Look up a registered root-row renderer by kind. Used by parent
+   * rows to render contributed children (each child carries its own
+   * kind so the parent doesn't need to know about every renderer).
+   */
+  getRootRowRenderer(kind: string): { component: unknown } | undefined;
 
   // Workspace subtitle — components rendered below workspace name in sidebar
   /** Register a Svelte component to render below workspace names. Component receives { workspaceId } prop. */
@@ -484,6 +567,22 @@ export interface ExtensionAPI {
           label: string;
           defaultValue?: string;
           type: "info";
+        }
+      | {
+          key: string;
+          label: string;
+          defaultValue?: string;
+          type: "color";
+        }
+      | {
+          key: string;
+          label: string;
+          defaultValue?: string;
+          placeholder?: string;
+          type: "directory";
+          required?: boolean;
+          pickerTitle?: string;
+          readonly?: boolean;
         }
     >,
     options?: { submitLabel?: string },
@@ -563,6 +662,26 @@ export interface ExtensionAPI {
   // Context menus — show a menu with items from all extensions matching the target
   showFileContextMenu(x: number, y: number, filePath: string): void;
   showDirContextMenu(x: number, y: number, dirPath: string): void;
+
+  /**
+   * Open an ad-hoc context menu at the given viewport coordinates with
+   * a caller-provided list of items. Use this for right-click menus on
+   * extension-rendered rows (e.g. an agent dashboard row) when the menu
+   * is dynamic and can't be declared via `contextMenuItems` in the
+   * manifest. Each item's `action` is invoked on select.
+   */
+  showContextMenu(
+    x: number,
+    y: number,
+    items: Array<{
+      label: string;
+      action: () => void;
+      shortcut?: string;
+      separator?: boolean;
+      disabled?: boolean;
+      danger?: boolean;
+    }>,
+  ): void;
 
   // Clipboard
   readClipboard(): Promise<string>;
@@ -782,8 +901,8 @@ export interface WorkspaceRef {
   name: string;
   // Opaque per-workspace metadata set at creation time (e.g. projectId,
   // worktreePath, branch). Extensions use this to detect nesting — e.g.
-  // git-status collapses its subtitle when projectId is present because
-  // the Project banner already shows cwd+branch.
+  // the core git status subtitle collapses when projectId is present
+  // because the Project banner already shows cwd+branch.
   metadata?: Record<string, unknown>;
 }
 

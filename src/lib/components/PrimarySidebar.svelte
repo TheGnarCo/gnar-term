@@ -107,7 +107,10 @@
            Always 38px so the sidebar's "+ New" and zone actions stay
            reachable in every window mode, including native fullscreen
            where the OS title bar is gone. The window-drag attributes
-           are harmless no-ops when there's no window to drag. -->
+           are harmless no-ops when there's no window to drag.
+           overflow:visible is required so SplitButton's absolutely-
+           positioned dropdown can render below this 38px band without
+           being clipped. -->
       <div
         data-tauri-drag-region=""
         style="
@@ -115,7 +118,7 @@
           flex-shrink: 0;
           display: flex; align-items: center; justify-content: flex-end;
           padding: 0 6px; gap: 4px;
-          overflow: hidden;
+          overflow: visible;
           -webkit-app-region: drag;
         "
       >

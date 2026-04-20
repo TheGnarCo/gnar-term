@@ -19,7 +19,7 @@ import { getHome } from "./services/service-helpers";
 // --- Types (cmux-compatible + extensions) ---
 
 export interface SurfaceDef {
-  type?: "terminal" | "browser" | "extension";
+  type?: "terminal" | "browser" | "extension" | "preview";
   name?: string;
   command?: string;
   cwd?: string;
@@ -29,6 +29,8 @@ export interface SurfaceDef {
   extensionType?: string;
   /** Opaque props forwarded to the extension's surface component. */
   extensionProps?: Record<string, unknown>;
+  /** Absolute path to the backing file for preview surfaces. */
+  path?: string;
   focus?: boolean;
 }
 
@@ -71,6 +73,45 @@ export interface ExtensionConfig {
 
 export type McpSetting = "auto" | "on" | "off";
 
+export interface WorktreeWorkspaceEntry {
+  worktreePath: string;
+  branch: string;
+  baseBranch: string;
+  repoPath: string;
+  createdAt: string;
+  workspaceId?: string;
+}
+
+export interface WorktreesSettings {
+  branchPrefix?: string;
+  copyPatterns?: string;
+  setupScript?: string;
+  mergeStrategy?: "merge" | "squash" | "rebase";
+}
+
+export interface WorktreesConfig {
+  entries?: WorktreeWorkspaceEntry[];
+  settings?: WorktreesSettings;
+}
+
+/**
+ * Agentic Orchestrator dashboard — a markdown-backed agent workspace.
+ * Defined in core (config.ts) rather than in the extension because it is
+ * persisted user data (parallel to projects/worktrees) and other
+ * extensions may need to read it.
+ */
+export interface AgentDashboard {
+  id: string;
+  name: string;
+  baseDir: string;
+  color: string;
+  /** Absolute path to the backing .md file. Resolved at create-time. */
+  path: string;
+  /** When set, the dashboard is nested under a project; otherwise root-level. */
+  parentProjectId?: string;
+  createdAt: string;
+}
+
 export interface GnarTermConfig {
   // gnar-term extensions
   theme?: string;
@@ -79,6 +120,8 @@ export interface GnarTermConfig {
   opacity?: number;
   autoload?: string[]; // workspace command names to launch on startup
   extensions?: Record<string, ExtensionConfig>;
+  worktrees?: WorktreesConfig;
+  agentDashboards?: AgentDashboard[];
   /**
    * MCP integration module. Controls whether gnar-term exposes its MCP tools
    * to Claude Code (or any other MCP client) over a local Unix domain socket.

@@ -126,12 +126,19 @@
   $: hasUnread = allSurfaces.some((s) => s.hasUnread);
   $: latestNotification = allSurfaces.find((s) => s.notification)?.notification;
   $: isManaged = !!workspace.metadata?.worktreePath;
-  // Workspaces spawned by an agent orchestrator (nested under a
-  // project or at root) get a bot marker so they're visually
-  // distinguishable from plain project workspaces or worktrees.
-  $: isAgentSpawned =
-    typeof (workspace.metadata as Record<string, unknown> | undefined)
-      ?.parentOrchestratorId === "string";
+  // Workspaces spawned by a dashboard (Global Agentic or per-group)
+  // get a bot marker so they're visually distinguishable from plain
+  // group workspaces or worktrees. `metadata.spawnedBy` is the §3.2
+  // marker; `parentOrchestratorId` is the pre-migration field we still
+  // honor until Stage 8 rewrites legacy user data.
+  $: isAgentSpawned = (() => {
+    const md = workspace.metadata as Record<string, unknown> | undefined;
+    if (!md) return false;
+    return (
+      (typeof md.spawnedBy === "object" && md.spawnedBy !== null) ||
+      typeof md.parentOrchestratorId === "string"
+    );
+  })();
   $: railColor = accentColor ?? $theme.accent;
   // Legacy agent status — kept for backwards compatibility
   $: agentStatus = $agentStatusStore[workspace.id] || null;

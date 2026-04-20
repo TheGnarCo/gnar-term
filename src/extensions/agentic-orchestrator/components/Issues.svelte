@@ -1,34 +1,71 @@
 <script lang="ts">
   /**
    * Issues — renders `gh issue list` output inside a markdown doc.
-   *
-   * Config:
-   *   orchestratorId?: string   — scopes default repo to this dashboard's baseDir
-   *   repo?: string          — owner/name (falls back to gh inference from baseDir)
-   *   state?: "open" | "closed" | "all"  (default "open")
-   *   limit?: number         (default 25)
+   * Scope derives from the enclosing DashboardHostContext:
+   *   - group host → group.path backs the default repo + spawn target
+   *   - global host → caller must set `repoPath`; otherwise shown as error
+   *   - no host → form disabled
    *
    * Each row has a split button: default click spawns claude-code on the
    * issue (in a fresh worktree workspace tagged to the dashboard); the
    * caret opens an agent picker (codex / aider / custom).
+   *
+   * Config:
+   *   repoPath?: string      — override / required under global scope
+   *   repo?: string          — owner/name (falls back to gh inference from repoPath)
+   *   state?: "open" | "closed" | "all"  (default "open")
+   *   limit?: number         (default 25)
    */
   import { getContext, onDestroy, onMount } from "svelte";
   import { EXTENSION_API_KEY, type ExtensionAPI } from "../../api";
-  import { getOrchestrator } from "../orchestrator-service";
   import { GH_POLL_THROTTLE_MS, slugify, timeAgo } from "../widget-helpers";
   import {
     spawnAgentInWorktree,
     type SpawnAgentType,
+    type SpawnedByMarker,
   } from "../../../lib/services/spawn-helper";
   import {
     isGhAvailable,
     invalidateGhAvailability,
   } from "../../../lib/services/gh-availability";
+  import {
+    deriveDashboardScope,
+    getDashboardHost,
+  } from "../../../lib/contexts/dashboard-host";
+  import { getWorkspaceGroup } from "../../../lib/stores/workspace-groups";
 
-  export let orchestratorId: string | undefined = undefined;
+  export let repoPath: string | undefined = undefined;
   export let repo: string | undefined = undefined;
   export let state: "open" | "closed" | "all" = "open";
   export let limit: number = 25;
+
+  const host = getDashboardHost();
+  const scope = deriveDashboardScope(host);
+
+  interface ResolvedTarget {
+    repoPath: string | null;
+    spawnedBy?: SpawnedByMarker;
+    groupId?: string;
+  }
+
+  function resolveTarget(): ResolvedTarget {
+    if (scope.kind === "group") {
+      const group = getWorkspaceGroup(scope.groupId);
+      return group
+        ? {
+            repoPath: group.path,
+            spawnedBy: { kind: "group", groupId: scope.groupId },
+            groupId: scope.groupId,
+          }
+        : { repoPath: null };
+    }
+    if (scope.kind === "global") {
+      return repoPath
+        ? { repoPath, spawnedBy: { kind: "global" } }
+        : { repoPath: null };
+    }
+    return { repoPath: null };
+  }
 
   interface GhLabel {
     name: string;
@@ -75,16 +112,7 @@
   }
 
   function resolveRepoPath(): string | null {
-    if (orchestratorId) {
-      const d = getOrchestrator(orchestratorId);
-      if (d) return d.baseDir;
-    }
-    // No dashboard — rely on "repo" (owner/name) when provided. The gh
-    // command accepts repoPath as a directory; we pass "." as a fallback
-    // so gh can infer from cwd. When `repo` is an owner/name, we leave
-    // it to gh's --repo flag (not wired here; render error below).
-    if (repo) return null;
-    return null;
+    return resolveTarget().repoPath;
   }
 
   async function fetchIssues(options: { force?: boolean } = {}) {
@@ -98,9 +126,9 @@
       return;
     }
 
-    const repoPath = resolveRepoPath();
-    if (!repoPath && !repo) {
-      error = "No repo: provide orchestratorId or repo";
+    const resolvedRepoPath = resolveRepoPath();
+    if (!resolvedRepoPath && !repo) {
+      error = "No repo: widget needs a dashboard host or a `repo` config";
       return;
     }
 
@@ -118,7 +146,7 @@
     ghMissing = false;
     try {
       const result = await api.invoke<GhIssue[]>("gh_list_issues", {
-        repoPath: repoPath ?? ".",
+        repoPath: resolvedRepoPath ?? ".",
         state,
       });
       issues = Array.isArray(result) ? result.slice(0, limit) : [];
@@ -147,12 +175,9 @@
   }
 
   async function spawnForIssue(issue: GhIssue, agent: SpawnAgentType) {
-    const orchestrator = orchestratorId
-      ? getOrchestrator(orchestratorId)
-      : undefined;
-    const repoPath = orchestrator?.baseDir;
-    if (!repoPath) {
-      spawnError = "Cannot spawn: no orchestrator repo path resolved.";
+    const target = resolveTarget();
+    if (!target.repoPath) {
+      spawnError = "Cannot spawn: no dashboard host or repoPath resolved.";
       return;
     }
     spawnError = "";
@@ -166,12 +191,10 @@
         agent,
         ...(agent === "custom" ? { command: agent } : {}),
         taskContext,
-        repoPath,
+        repoPath: target.repoPath,
         branch: `agent/${agent}/${issue.number}-${branchSlug}`,
-        ...(orchestratorId ? { orchestratorId } : {}),
-        ...(orchestrator?.parentGroupId
-          ? { groupId: orchestrator.parentGroupId }
-          : {}),
+        ...(target.spawnedBy ? { spawnedBy: target.spawnedBy } : {}),
+        ...(target.groupId ? { groupId: target.groupId } : {}),
       });
     } catch (err) {
       spawnError = `Spawn failed: ${err instanceof Error ? err.message : String(err)}`;
@@ -213,7 +236,8 @@
 
 <div
   data-issues
-  data-dashboard-id={orchestratorId ?? ""}
+  data-scope-kind={scope.kind}
+  data-scope-group-id={scope.kind === "group" ? scope.groupId : ""}
   style="
     display: flex; flex-direction: column; gap: 6px;
     padding: 12px; border: 1px solid {$theme.border};

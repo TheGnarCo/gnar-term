@@ -43,58 +43,53 @@ describe("Extension barrier enforcement", () => {
     // worktree-service which lives in core for the same reason).
     // Keep this list small — each entry is a deliberate departure.
     const FILE_EXCEPTIONS: Record<string, string[]> = {
-      "agentic-orchestrator/orchestrator-service.ts": [
-        "../../lib/config",
-        "../../lib/services/service-helpers",
-        "../../lib/services/workspace-service",
-        "../../lib/stores/workspace",
-      ],
-      // P7: Issues + TaskSpawner widgets call the shared spawn-helper
+      // The Agentic Dashboard contribution's `create(group)` must
+      // materialize a dashboard workspace; reaching for
+      // createWorkspaceFromDef keeps the contribution on the same code
+      // path as core's built-in Group Dashboard.
+      "agentic-orchestrator/index.ts": ["../../lib/services/workspace-service"],
+      // Issues + TaskSpawner widgets call the shared spawn-helper
       // (core service that composes worktree-service + agent command
       // construction). The MCP `spawn_agent` tool calls the same helper
       // when its worktree flag is set — keeping the widgets and MCP on
-      // the same code path is the whole point of the helper, so the
-      // widgets get a deliberate barrier exception.
+      // the same code path is the whole point of the helper.
       "agentic-orchestrator/components/Issues.svelte": [
         "../../../lib/services/spawn-helper",
         // Shared gh-availability probe — cached across widgets so a user
         // with many dashboards doesn't fan out a dozen redundant
-        // `gh --version` calls on mount. Keeping the cache in core is the
-        // cleanest way to share it; a per-extension copy would drift.
+        // `gh --version` calls on mount.
         "../../../lib/services/gh-availability",
+        // Dashboard widgets derive scope from DashboardHostContext +
+        // group.path (spec §5.3). Same piercing as Kanban / AgentList.
+        "../../../lib/contexts/dashboard-host",
+        "../../../lib/stores/workspace-groups",
       ],
       "agentic-orchestrator/components/TaskSpawner.svelte": [
         "../../../lib/services/spawn-helper",
-        // Dashboard widgets (kanban, agent-list, task-spawner) derive
-        // their scope from the enclosing DashboardHostContext — a core
-        // contract every dashboard contribution consumes. The core-side
-        // stores are needed for group path + claimed-workspace filtering
-        // per spec §5.3. These piercings are load-bearing until Stage 7
-        // collapses the agentic extension to pure register calls.
         "../../../lib/contexts/dashboard-host",
         "../../../lib/stores/workspace-groups",
       ],
       "agentic-orchestrator/components/AgentList.svelte": [
         "../../../lib/contexts/dashboard-host",
       ],
-      "agentic-orchestrator/components/AgentListSidebarTab.svelte": [
-        "../../../lib/contexts/dashboard-host",
-      ],
       "agentic-orchestrator/components/Kanban.svelte": [
         "../../../lib/contexts/dashboard-host",
+      ],
+      // GlobalAgenticDashboardBody is the Global Agentic Dashboard
+      // pseudo-workspace's body; it installs a DashboardHostContext
+      // (global scope) and drives the same markdown-preview pipeline
+      // core uses for real dashboards. Stage 7 introduced this piercing
+      // when the pseudo-workspace replaced the orchestrator root row.
+      "agentic-orchestrator/components/GlobalAgenticDashboardBody.svelte": [
+        "../../../lib/contexts/dashboard-host",
+        "../../../lib/services/preview-surface-registry",
+        "../../../lib/services/preview-service",
       ],
       "agentic-orchestrator/widget-helpers.ts": [
         "../../lib/contexts/dashboard-host",
         "../../lib/stores/workspace",
         "../../lib/stores/workspace-groups",
         "../../lib/services/claimed-workspace-registry",
-      ],
-      // AgentOrchestratorRow's banner "+ New" surfaces task + issue spawn
-      // flows alongside TaskSpawner / Issues. Same allowlist applies —
-      // all three are orchestrator-spawn call sites for the core helper.
-      "agentic-orchestrator/AgentOrchestratorRow.svelte": [
-        "../../lib/services/spawn-helper",
-        "../../lib/services/gh-availability",
       ],
       // Columns layout widget looks up registered markdown components by
       // name so authors can place arbitrary `gnar:*` widgets in columns

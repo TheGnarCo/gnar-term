@@ -251,7 +251,7 @@
           {@const wsMeta = entry.ws.metadata as
             | Record<string, unknown>
             | undefined}
-          {@const isAgentic = typeof wsMeta?.orchestratorId === "string"}
+          {@const isAgentic = wsMeta?.dashboardContributionId === "agentic"}
           <!-- svelte-ignore a11y_click_events_have_key_events -->
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div

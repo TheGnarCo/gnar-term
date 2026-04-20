@@ -117,10 +117,6 @@ function registerAgent(agent: DetectedAgent): void {
 function resetRegistry(): void {
   _testAgentsRef.store.set([]);
 }
-import {
-  createOrchestrator,
-  _resetOrchestratorService,
-} from "../orchestrator-service";
 import { invalidateGhAvailability } from "../../../lib/services/gh-availability";
 import ExtensionWrapper from "../../../lib/components/ExtensionWrapper.svelte";
 import Kanban from "../components/Kanban.svelte";
@@ -130,7 +126,6 @@ import AgentStatusRow from "../components/AgentStatusRow.svelte";
 import TaskSpawner from "../components/TaskSpawner.svelte";
 import { themes } from "../../../lib/theme-data";
 import type { ExtensionAPI } from "../../../extensions/api";
-import type { AgentOrchestrator } from "../../../lib/config";
 
 const COMPONENT_NAMES = [
   "kanban",
@@ -192,7 +187,6 @@ describe("agentic-orchestrator markdown-components: registration", () => {
   beforeEach(async () => {
     await resetExtensions();
     resetMarkdownComponents();
-    _resetOrchestratorService();
     resetRegistry();
     configRef.current = {};
   });
@@ -258,7 +252,6 @@ describe("Kanban widget", () => {
   beforeEach(async () => {
     configRef.current = {};
     saveConfigMock.mockClear();
-    _resetOrchestratorService();
     resetRegistry();
     switchSpy.mockReset();
     focusSpy.mockReset();
@@ -437,23 +430,32 @@ describe("Kanban widget", () => {
 // --- Issues ---
 
 describe("Issues widget", () => {
-  let orchestrator: AgentOrchestrator;
+  const GROUP_ID = "grp-issues";
+  const GROUP_PATH = "/work/proj";
+  const groupHost = { metadata: { groupId: GROUP_ID } };
 
   beforeEach(async () => {
     configRef.current = {};
     saveConfigMock.mockClear();
-    _resetOrchestratorService();
     resetRegistry();
     // The gh-availability cache is module-level; clearing it between
     // tests prevents a previous test's gh_available mock from bleeding
     // into the next one.
     invalidateGhAvailability();
     tauriInvokeGhAvailable.current = true;
-    orchestrator = await createOrchestrator({
-      name: "Issues Dash",
-      baseDir: "/work/proj",
-      pathOverride: "/tmp/i.md",
-    });
+    const { setWorkspaceGroups, resetWorkspaceGroupsForTest } =
+      await import("../../../lib/stores/workspace-groups");
+    resetWorkspaceGroupsForTest();
+    setWorkspaceGroups([
+      {
+        id: GROUP_ID,
+        name: "Issues Dash",
+        path: GROUP_PATH,
+        color: "blue",
+        groupDashboardEnabled: true,
+        workspaceIds: [],
+      },
+    ]);
   });
 
   afterEach(() => {
@@ -492,7 +494,8 @@ describe("Issues widget", () => {
       props: {
         api,
         component: Issues,
-        props: { orchestratorId: orchestrator.id },
+        props: {},
+        host: groupHost,
       },
     });
 
@@ -541,7 +544,8 @@ describe("Issues widget", () => {
       props: {
         api,
         component: Issues,
-        props: { orchestratorId: orchestrator.id },
+        props: {},
+        host: groupHost,
       },
     });
 
@@ -561,8 +565,9 @@ describe("Issues widget", () => {
     const callArg = spawnAgentInWorktreeMock.mock.calls[0]?.[0];
     expect(callArg).toMatchObject({
       agent: "claude-code",
-      repoPath: "/work/proj",
-      orchestratorId: orchestrator.id,
+      repoPath: GROUP_PATH,
+      groupId: GROUP_ID,
+      spawnedBy: { kind: "group", groupId: GROUP_ID },
     });
     expect(callArg.taskContext).toContain("Issue #7");
     expect(callArg.taskContext).toContain("Make it faster");
@@ -593,7 +598,8 @@ describe("Issues widget", () => {
       props: {
         api,
         component: Issues,
-        props: { orchestratorId: orchestrator.id },
+        props: {},
+        host: groupHost,
       },
     });
 
@@ -630,7 +636,8 @@ describe("Issues widget", () => {
       props: {
         api,
         component: Issues,
-        props: { orchestratorId: orchestrator.id },
+        props: {},
+        host: groupHost,
       },
     });
 
@@ -655,7 +662,6 @@ describe("AgentStatusRow widget", () => {
   beforeEach(async () => {
     configRef.current = {};
     saveConfigMock.mockClear();
-    _resetOrchestratorService();
     resetRegistry();
     switchSpy.mockReset();
     focusSpy.mockReset();
@@ -742,7 +748,6 @@ describe("AgentList widget", () => {
   beforeEach(async () => {
     configRef.current = {};
     saveConfigMock.mockClear();
-    _resetOrchestratorService();
     resetRegistry();
   });
 
@@ -825,7 +830,6 @@ describe("TaskSpawner widget", () => {
     configRef.current = {};
     saveConfigMock.mockClear();
     spawnAgentInWorktreeMock.mockClear();
-    _resetOrchestratorService();
     resetRegistry();
     const { setWorkspaceGroups, resetWorkspaceGroupsForTest } =
       await import("../../../lib/stores/workspace-groups");

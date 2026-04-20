@@ -82,7 +82,7 @@ rendering. Distinguishing features:
 - **cmux-compatible config**: reads `cmux.json` / `~/.config/cmux/cmux.json` as-is. Settings schema
   is a superset — theme, `autoload`, surface types are additive.
 - **Command palette (⌘P)**: fuzzy-search commands, workspaces, themes, saved layouts.
-- **11 themes** (6 dark, 5 light, incl. custom ones like Molly / Molly Disco). Instant switch,
+- **Built-in themes** (dark + light, incl. custom ones like Molly / Molly Disco). Instant switch,
   persisted to `settings.json`.
 - **Binary-tree split panes**: each split chooses its own direction. Zoom (⇧⌘Enter), directional
   focus (⌥⌘↦), flash (⇧⌘H).
@@ -111,7 +111,7 @@ rendering. Distinguishing features:
   event without pulling in the orchestrator plugin.
 - **MCP integration (optional, agentic orchestration)**: ships an MCP server over a Unix domain
   socket (chmod 600, same-user trust boundary). Default `mcp: "auto"` auto-detects Claude Code and
-  auto-registers via `claude mcp add-json`. Exposes ~20 tools:
+  auto-registers via `claude mcp add-json`. Exposes an extensive tool surface spanning:
   - Session: `spawn_agent`, `list_sessions`, `get_session_info`, `kill_session`
   - Interaction: `send_prompt`, `send_keys`, `read_output`
   - Orchestration: `dispatch_tasks`
@@ -122,35 +122,36 @@ rendering. Distinguishing features:
   - Filesystem: `list_dir`, `read_file`, `file_exists`
   - Pane binding uses `GNAR_TERM_PANE_ID` / `GNAR_TERM_WORKSPACE_ID` env vars injected at PTY spawn
     — agents can never accidentally write into panes they don't own.
+- **Preview renderers (core)**: click any path in the terminal → opens a tab that renders
+  Markdown (GitHub CSS), PDF (pdf.js), CSV/TSV (sticky-header tables), images (incl.
+  HEIC/AVIF/SVG), video, JSON/YAML/TOML, log/config. Live-reloads on disk change. The
+  registry is extensible — extensions can contribute renderers for additional formats.
 - **Extension system**: sidebar tabs, surface types, commands, context menu items, overlays,
   workspace actions, settings pages, plus `runCommand(commandId, args?)` so extensions can trigger
-  any registered core command. Eight included extensions (all `included: true`, all disableable in
+  any registered core command. The bundled extensions (all `included: true`, all disableable in
   Settings → Extensions) ship on the same API third parties use:
-  1. **`agentic-orchestrator`** — AgentDashboard host + orchestrator UI. Ships an
-     **AgentDashboard** entity (project-scoped or root, persisted), a **New Agent Dashboard**
-     workspace action, a global **Agents** secondary sidebar tab, a **TaskSpawner** widget,
-     an **Issues** widget with one-click issue→spawn, plus **Kanban / AgentList /
-     AgentStatusRow / Columns** widgets surfaced as markdown components. Spawns create a
-     fresh worktree workspace tagged `metadata.parentDashboardId`, and MCP `spawn_agent`
-     accepts a `worktree` flag that routes through the same shared pipeline. Detection —
-     pattern matching, status tracker, agent registry, tab dots, workspace indicators — is
-     core, not this extension; widgets subscribe to `api.agents` and the core
-     `agent:statusChanged` event to render agent UI without owning detection.
-  2. **`diff-viewer`** — diff surface + commands (uncommitted / staged / file diff / branch
-     compare); subscribes to the core `worktree:merged` event to auto-refresh after a merge.
-  3. **`file-browser`** — secondary sidebar tab showing the active terminal's directory tree.
-  4. **`github-sidebar`** — secondary sidebar tab for GitHub issues / PRs / commits + a refresh
-     action and `refresh-github` command. Owns _only_ the tab; the workspace-subtitle PR/CI badge
-     is core and keeps working when this extension is disabled.
-  5. **`jrvs-themes`** — Kirby-inspired theme pack.
-  6. **`preview`** — file format renderers. Click any path in the terminal → opens a tab that
-     renders Markdown (GitHub CSS), PDF (pdf.js), CSV/TSV (sticky-header tables), images (incl.
-     HEIC/AVIF/SVG), video, JSON/YAML/TOML, log/config. Live-reloads on disk change.
-  7. **`project-scope`** — workspace grouping into named projects with per-project sidebar
-     sections and dashboard tabs.
-  8. **`worktree-workspaces`** — owns _only_ the "New Worktree" workspace-action button. Its
-     handler delegates to the core `worktrees:create-workspace` command via `runCommand`.
-     Disabling the extension hides the button; the create flow stays palette-accessible.
+  - **`agentic-orchestrator`** — AgentDashboard host + orchestrator UI. Ships an
+    **AgentDashboard** entity (project-scoped or root, persisted), a **New Agent Dashboard**
+    workspace action, a global **Agents** secondary sidebar tab, a **TaskSpawner** widget,
+    an **Issues** widget with one-click issue→spawn, plus **Kanban / AgentList /
+    AgentStatusRow / Columns** widgets surfaced as markdown components. Spawns create a
+    fresh worktree workspace tagged `metadata.parentDashboardId`, and MCP `spawn_agent`
+    accepts a `worktree` flag that routes through the same shared pipeline. Detection —
+    pattern matching, status tracker, agent registry, tab dots, workspace indicators — is
+    core, not this extension; widgets subscribe to `api.agents` and the core
+    `agent:statusChanged` event to render agent UI without owning detection.
+  - **`diff-viewer`** — diff surface + commands (uncommitted / staged / file diff / branch
+    compare); subscribes to the core `worktree:merged` event to auto-refresh after a merge.
+  - **`file-browser`** — secondary sidebar tab showing the active terminal's directory tree.
+  - **`github-sidebar`** — secondary sidebar tab for GitHub issues / PRs / commits + a refresh
+    action and `refresh-github` command. Owns _only_ the tab; the workspace-subtitle PR/CI badge
+    is core and keeps working when this extension is disabled.
+  - **`jrvs-themes`** — Kirby-inspired theme pack.
+  - **`project-scope`** — workspace grouping into named projects with per-project sidebar
+    sections and dashboard tabs.
+  - **`worktree-workspaces`** — owns _only_ the "New Worktree" workspace-action button. Its
+    handler delegates to the core `worktrees:create-workspace` command via `runCommand`.
+    Disabling the extension hides the button; the create flow stays palette-accessible.
 - License: **MIT**. Distribution: Homebrew cask, signed+notarized DMG (Apple Silicon + Intel),
   AppImage/deb/rpm.
 
@@ -168,7 +169,7 @@ rendering. Distinguishing features:
 | In-app browser             | Yes, scriptable                      | No (but file previews for MD/PDF/CSV/images/video)                          |
 | OSC 9/99/777 notifications | Yes, first-class                     | Terminal renders escape sequences but no in-app notification ring (gap)     |
 | Extension system           | No                                   | Yes (sidebar/surface/command/context menu/overlay/workspace/settings)       |
-| Themes                     | Inherits Ghostty config              | 11 built-in, switchable from palette                                        |
+| Themes                     | Inherits Ghostty config              | Built-in set, switchable from palette                                       |
 | Session restore            | Yes                                  | Partial (workspaces persist; scrollback doesn't)                            |
 | License                    | AGPL-3.0-or-later + commercial       | MIT                                                                         |
 
@@ -419,13 +420,13 @@ in detection's case, is slated to adopt).
 | File previews (MD/PDF/CSV/…)                     | ✅                                   | ❌                        | ❌            | ❌                     | ❌ (file viewer, not preview renderers) | ❌               | ✅ (preview pane: HTML/PDF/img)    |
 | Live app preview / dev-server browser            | ❌                                   | scriptable browser        | ❌            | ❌                     | ❌                                      | ❌               | ✅ (headless browser + autoVerify) |
 | Embedded scriptable browser                      | ❌                                   | ✅                        | ❌            | ❌                     | ❌                                      | ❌               | ✅ (preview pane)                  |
-| MCP server surface (host exposes tools)          | ✅ (~20 tools)                       | ❌                        | ❌            | ❌                     | ❌ (MCP _client_ setup)                 | ✅               | ❌ (host is MCP _client_ only)     |
+| MCP server surface (host exposes tools)          | ✅ (extensive)                       | ❌                        | ❌            | ❌                     | ❌ (MCP _client_ setup)                 | ✅               | ❌ (host is MCP _client_ only)     |
 | MCP client (consume external MCP servers)        | n/a                                  | n/a                       | ?             | ?                      | ✅                                      | ✅               | ✅ + Connectors GUI                |
 | Unix socket agent API                            | ✅                                   | ✅                        | ?             | ?                      | ?                                       | ?                | ❌                                 |
 | Agent → UI writes from inside terminal           | ✅ (pane-bound MCP)                  | ✅ (CLI)                  | ❌            | ❌                     | ❌                                      | ❌               | n/a (single agent)                 |
 | Extension / plugin system                        | ✅                                   | ❌                        | ❌            | ❌                     | ❌                                      | ❌               | ✅ (Plugins + Skills marketplace)  |
 | Command palette                                  | ✅                                   | ✅                        | ?             | ?                      | ?                                       | ?                | slash commands + plugin browser    |
-| Themes                                           | 11 built-in                          | Ghostty config            | ?             | ?                      | ?                                       | ?                | system-driven                      |
+| Themes                                           | Built-in set                         | Ghostty config            | ?             | ?                      | ?                                       | ?                | system-driven                      |
 | Remote SSH                                       | ❌                                   | ✅ (workspaces + browser) | ❌            | ✅                     | ❌                                      | ❌               | ✅ (Mac/Linux targets)             |
 | Cloud / remote execution                         | ❌                                   | ❌                        | ❌            | ❌                     | ❌                                      | ❌               | ✅ (Anthropic-hosted)              |
 | Scheduled agent runs                             | ❌                                   | ❌                        | ❌            | ❌                     | ❌                                      | ❌               | ✅ (Routines, research preview)    |
@@ -466,7 +467,7 @@ Notes on the partials:
    any CLI agent you can launch in a terminal — Claude Code, Codex, Aider, Cursor, Gemini, custom
    shell scripts — and the agentic-orchestrator's pattern list extends to whatever you add.
 4. **Your agents generate artifacts that need to be reviewed visually** — Markdown docs, PDFs,
-   CSVs, plots, design screenshots. gnar-term's bundled Preview extension renders 47 file types
+   CSVs, plots, design screenshots. gnar-term's core preview renderers cover a broad format set
    directly in a pane. Claude Code Desktop's preview pane covers HTML / PDF / images only;
    orchestrators mostly assume the artifact is "a diff" and route you to a diff viewer.
 5. **You want agents that can drive the workspace UI from inside the terminal they're running
@@ -566,15 +567,16 @@ two tables. Plugin-layer items don't require core changes; core-layer items do.
 
 > gnar-term is a cross-platform, MIT-licensed terminal workspace manager for developers running
 > AI coding agents. The core owns the nouns the workflow depends on: a great terminal, a command
-> palette, 11 themes, an MCP _server_ surface with deterministic pane binding so agents can drive
+> palette, a built-in theme set, preview renderers, an MCP _server_ surface with deterministic
+> pane binding so agents can drive
 > the UI from inside the terminal they're running in, worktree workspaces as a first-class
 > concept (data model + lifecycle + archive/merge + a distinctive sidebar border), and a
 > workspace status rail rendered directly by core (branch + ahead/behind + dirty + PR review +
 > CI status). User-facing buttons that surface those nouns — and all genuinely additive features
 > — ship as bundled extensions on the same API third-party authors use: `worktree-workspaces`
 > exposes the New Worktree action, `github-sidebar` exposes the issues/PRs/commits tab,
-> `diff-viewer` surfaces diffs, `preview` renders forty-plus file types, `file-browser`,
-> `project-scope`, `jrvs-themes`, and the `agentic-orchestrator` itself. Disabling any extension
+> `diff-viewer` surfaces diffs, `file-browser`, `project-scope`, `jrvs-themes`, and the
+> `agentic-orchestrator` itself. Disabling any extension
 > hides its UI without taking the underlying capability with it. The `agentic-orchestrator`
 > extension is the opt-in layer that wires those core primitives into orchestrator-first
 > functionality — parallel agents in isolated worktrees, diff surfaces, Kanban dashboards,

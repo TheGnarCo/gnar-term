@@ -5,7 +5,7 @@ Tauri v2 terminal workspace manager. Rust backend (portable-pty), Svelte fronten
 ## Build & Test
 
 ```bash
-npm test                    # vitest unit tests (293 tests)
+npm test                    # vitest unit tests
 npm run build               # full tauri build (frontend + Rust)
 cargo check                 # quick Rust compilation check
 ```

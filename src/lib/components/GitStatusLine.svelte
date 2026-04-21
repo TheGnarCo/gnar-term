@@ -60,8 +60,12 @@
   }
 
   $: topRowHasContent = Boolean(cwdItem || branchItem);
-  $: bottomRowHasContent = Boolean(prItem || dirtyItem);
-  $: nestedRowHasContent = Boolean(worktreeBranch || dirtyItem);
+  // Inactive rows collapse to the top line (cwd + branch); PR and dirty
+  // details only render for the active workspace so the sidebar stays
+  // scannable.
+  $: bottomRowHasContent = isActiveWorkspace && Boolean(prItem || dirtyItem);
+  $: nestedRowHasContent =
+    Boolean(worktreeBranch) || (isActiveWorkspace && Boolean(dirtyItem));
 </script>
 
 {#if isNested}
@@ -79,13 +83,13 @@
           title={`worktree branch: ${worktreeBranch}`}>⌥ {worktreeBranch}</span
         >
       {/if}
-      {#if worktreeBranch && dirtyItem}
+      {#if worktreeBranch && dirtyItem && isActiveWorkspace}
         <span
           aria-hidden="true"
           style="font-size: 10px; color: {fgMuted}; opacity: 0.4;">|</span
         >
       {/if}
-      {#if dirtyItem}
+      {#if dirtyItem && isActiveWorkspace}
         {#if dirtyItem.action && isActiveWorkspace}
           <!-- svelte-ignore a11y_click_events_have_key_events -->
           <!-- svelte-ignore a11y_no_static_element_interactions -->

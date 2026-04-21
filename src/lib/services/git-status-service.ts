@@ -9,13 +9,14 @@
  * new directory immediately.
  */
 import { invoke } from "@tauri-apps/api/core";
+import { get } from "svelte/store";
 import {
   setStatusItem,
   clearStatusItem,
   clearAllStatusForSourceAndWorkspace,
 } from "./status-registry";
 import { workspaces, activeWorkspace } from "../stores/workspace";
-import { getActiveCwd } from "./service-helpers";
+import { getActiveCwd, getWorkspaceCwd } from "./service-helpers";
 
 export const GIT_STATUS_SOURCE = "git";
 
@@ -429,12 +430,14 @@ function stopAllPolling(): void {
 async function ensurePolling(wsId: string): Promise<void> {
   if (workspaceCwds.has(wsId)) return;
 
-  const expectedActive = activeWorkspaceId;
-  if (expectedActive !== wsId) return;
-
-  const cwd = await getActiveCwd();
+  // Active workspace can use the cheaper live-surface lookup; other
+  // workspaces walk their own split tree so newly-created-but-inactive
+  // rows don't wait for the user to activate them before status fills.
+  const cwd =
+    activeWorkspaceId === wsId
+      ? await getActiveCwd()
+      : await getWorkspaceCwd(wsId);
   if (!cwd) return;
-  if (activeWorkspaceId !== expectedActive) return;
   if (workspaceCwds.has(wsId)) return;
   startPolling(wsId, cwd);
 }
@@ -446,6 +449,13 @@ export function startGitStatusService(): void {
       void ensurePolling(activeWorkspaceId);
     }
   });
+
+  // Bootstrap: kick polling for every workspace already in the store —
+  // restored sessions don't fire `workspace:created`, so without this
+  // pass only the active workspace would populate status on startup.
+  for (const ws of get(workspaces)) {
+    void ensurePolling(ws.id);
+  }
 
   unsubWorkspaces = workspaces.subscribe(() => {
     if (!activeWorkspaceId) return;

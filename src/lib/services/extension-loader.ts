@@ -60,6 +60,24 @@ export function getExtensionApiById(
   return extensionApis.get(extensionId);
 }
 
+/**
+ * Register an ExtensionAPI for a core subsystem that doesn't live in
+ * the extension layer but needs to mount components through
+ * `ExtensionWrapper` (e.g. Workspace Groups — Stage 5 moved the CRUD
+ * into core, but row renderers still flow through the ExtensionWrapper
+ * path to inherit the shared Svelte context).
+ *
+ * Unlike `registerExtension`, this does not add to the `_extensions`
+ * store and does not wire an activation lifecycle; it only registers
+ * the api object so `getExtensionApiById(id)` returns something usable.
+ * Re-registering the same id is a no-op.
+ */
+export function registerCoreExtensionAPI(manifest: ExtensionManifest): void {
+  if (extensionApis.has(manifest.id)) return;
+  const { api } = _createExtensionAPI(manifest, getMaps());
+  extensionApis.set(manifest.id, api);
+}
+
 // --- Shared mutable state maps (passed to extension-api.ts helpers) ---
 
 const extensionStateMap = new Map<string, Map<string, unknown>>();

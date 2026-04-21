@@ -56,6 +56,7 @@
   import { initGitStatus } from "./lib/bootstrap/init-git-status";
   import { initPreview } from "./lib/bootstrap/init-preview";
   import { initAgentDetectionBootstrap } from "./lib/bootstrap/init-agent-detection";
+  import { initCoreExtensionAPI } from "./lib/bootstrap/init-core-extension-api";
   import { initWorkspaceGroups } from "./lib/bootstrap/init-workspace-groups";
   import { flushWorkspaceGroups } from "./lib/stores/workspace-groups";
   import {
@@ -507,6 +508,12 @@
       }
       void saveConfig({ fontSize: size });
     });
+
+    // Register the shared "core" ExtensionAPI before any core
+    // subsystem contributes a UI renderer — ExtensionWrapper uses this
+    // to inject `api.theme` / `api.invoke` into components mounted
+    // under source="core".
+    initCoreExtensionAPI();
 
     // Wire core worktree handling before extensions register so any
     // extension subscribing to "worktree:merged" finds the emitter live.

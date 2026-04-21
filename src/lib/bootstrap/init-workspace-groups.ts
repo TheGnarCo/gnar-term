@@ -47,7 +47,16 @@ import { invoke } from "@tauri-apps/api/core";
 import { getActiveCwd } from "../services/service-helpers";
 import { createWorkspaceFromDef } from "../services/workspace-service";
 
-const SOURCE = "workspace-groups";
+/**
+ * Stage 5 moved Workspace Groups out of the extension layer and into
+ * core, alongside Workspaces. Registry contributions (commands,
+ * workspace actions, root-row renderers, dashboard contributions) stamp
+ * their origin under the shared `"core"` source so extensions that
+ * unregister themselves by source can't sweep core contributions, and
+ * so `ExtensionWrapper` can look up a single shared `"core"` API when
+ * mounting core-owned components.
+ */
+const SOURCE = "core";
 
 function generateId(): string {
   return crypto.randomUUID();

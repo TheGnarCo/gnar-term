@@ -329,16 +329,6 @@
                 startRootRowDrag(e, entry.idx),
             }}
           />
-        {:else}
-          <!-- Core-sourced renderers (e.g. "workspace-groups" after
-               Stage 5 moved it out of the extension layer) have no
-               ExtensionAPI to inject. Mount the component directly so
-               the row still renders. -->
-          <svelte:component
-            this={entry.rendererComponent as import("svelte").Component}
-            id={entry.row.id}
-            onGripMouseDown={(e: MouseEvent) => startRootRowDrag(e, entry.idx)}
-          />
         {/if}
       {/if}
 

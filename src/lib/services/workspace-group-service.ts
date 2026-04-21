@@ -255,7 +255,7 @@ export function reclaimWorkspacesAcrossGroups(): void {
     if (typeof groupId !== "string") continue;
     if (!groupIds.has(groupId)) continue;
     addWorkspaceToGroup(groupId, ws.id);
-    claimWorkspace(ws.id, "workspace-groups");
+    claimWorkspace(ws.id, "core");
   }
 }
 

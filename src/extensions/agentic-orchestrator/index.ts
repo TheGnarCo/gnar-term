@@ -100,7 +100,7 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
 
     api.registerPseudoWorkspace({
       id: "agentic.global",
-      label: "Global Agents",
+      label: "Agents",
       position: "root-top",
       icon: BotIcon,
       render: GlobalAgenticDashboardBody,

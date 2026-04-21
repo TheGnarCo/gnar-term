@@ -37,6 +37,12 @@
   } from "../services/child-row-contributor-registry";
   import { getRootRowRenderer } from "../services/root-row-renderer-registry";
   import {
+    dashboardContributionStore,
+    canAddContributionToGroup,
+    type DashboardContribution,
+  } from "../services/dashboard-contribution-registry";
+  import { workspaces as workspacesStore } from "../stores/workspace";
+  import {
     showInputPrompt,
     showConfirmPrompt,
     contextMenu,
@@ -118,6 +124,45 @@
   $: coreAction = actions.find((a) => a.id === "core:new-workspace");
   $: otherActions = actions.filter((a) => a.id !== "core:new-workspace");
 
+  // Dashboard contributions that aren't yet present on this group and
+  // haven't hit their per-group cap. Surfaced in the group's banner
+  // context menu so users can add e.g. an Agentic Dashboard when the
+  // agentic extension is enabled.
+  $: addableContributions = (() => {
+    const currentGroup = group;
+    if (!currentGroup) return [] as DashboardContribution[];
+    const ws = $workspacesStore;
+    return $dashboardContributionStore.filter((c) => {
+      // Core's built-in Group Dashboard auto-materializes with the
+      // group; it shouldn't appear as a menu item.
+      if (c.id === "group") return false;
+      if (c.isAvailableFor && !c.isAvailableFor(currentGroup)) return false;
+      const countForGroup = ws.filter((w) => {
+        const md = w.metadata as Record<string, unknown> | undefined;
+        return (
+          md?.isDashboard === true &&
+          md?.groupId === currentGroup.id &&
+          md?.dashboardContributionId === c.id
+        );
+      }).length;
+      return canAddContributionToGroup(currentGroup, c.id, countForGroup);
+    });
+  })();
+
+  async function handleAddDashboardContribution(
+    contribution: DashboardContribution,
+  ): Promise<void> {
+    if (!group) return;
+    try {
+      await contribution.create(group);
+    } catch (err) {
+      console.error(
+        `[workspace-groups] Failed to add dashboard contribution "${contribution.id}":`,
+        err,
+      );
+    }
+  }
+
   async function handleRenameGroup() {
     if (!group) return;
     const next = await showInputPrompt("Rename workspace group", group.name);
@@ -167,6 +212,15 @@
         label: a.label,
         action: () => void a.handler(groupContext!),
       });
+    }
+    if (addableContributions.length > 0) {
+      items.push({ label: "", action: () => {}, separator: true });
+      for (const c of addableContributions) {
+        items.push({
+          label: c.actionLabel,
+          action: () => void handleAddDashboardContribution(c),
+        });
+      }
     }
     items.push({ label: "", action: () => {}, separator: true });
     items.push({

@@ -49,7 +49,7 @@ describe("agentic extension — Global Agentic Dashboard pseudo-workspace", () =
     const pseudo = getPseudoWorkspace("agentic.global");
     expect(pseudo).toBeDefined();
     expect(pseudo?.position).toBe("root-top");
-    expect(pseudo?.label).toBe("Global Agents");
+    expect(pseudo?.label).toBe("Agents");
     expect(pseudo?.source).toBe("agentic-orchestrator");
     expect(pseudo?.metadata).toMatchObject({
       isGlobalAgenticDashboard: true,

@@ -16,7 +16,10 @@
    */
   import { theme } from "../stores/theme";
   import { reorderContext } from "../stores/ui";
-  import { activePseudoWorkspaceId } from "../stores/workspace";
+  import {
+    activePseudoWorkspaceId,
+    activeWorkspaceIdx,
+  } from "../stores/workspace";
   import DragGrip from "./DragGrip.svelte";
   import type { Component } from "svelte";
   import type { PseudoWorkspace } from "../services/pseudo-workspace-registry";
@@ -30,6 +33,11 @@
   const bannerBackground = "var(--pseudo-row-bg, rgba(255, 255, 255, 0.08))";
 
   function activate(): void {
+    // Pseudo-workspaces are mutually exclusive with real workspaces —
+    // clearing `activeWorkspaceIdx` keeps sidebar `isActive` styling on
+    // WorkspaceItem rows in sync (the previously-active workspace no
+    // longer renders as selected when the Agents row is picked up).
+    activeWorkspaceIdx.set(-1);
     activePseudoWorkspaceId.set(pseudo.id);
   }
 

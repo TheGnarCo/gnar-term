@@ -216,21 +216,24 @@ function agenticDashboardMarkdownPath(group: WorkspaceGroupRef): string {
  * Default template for a fresh Agentic Dashboard. Widgets pull scope
  * from the enclosing DashboardHostContext, so no props are needed — the
  * host workspace's `metadata.groupId` drives filtering + spawn target.
+ *
+ * The group-level Agentic Dashboard intentionally omits the `agent-list`
+ * widget: the Kanban already enumerates agents in scope and the group's
+ * nested workspace list in the sidebar shows the same set of
+ * agent-spawned rows with live status chips. A duplicate "Active Agents"
+ * section crowds the group dashboard without adding signal. The Global
+ * Agentic Dashboard still uses agent-list because it has no sidebar
+ * counterpart.
  */
 function agenticDashboardTemplate(group: WorkspaceGroupRef): string {
   return `# ${group.name} Agents
 
-Active agents working inside \`${group.path}\`.
+Spawn and monitor agents working inside \`${group.path}\`.
 
 \`\`\`gnar:kanban
 \`\`\`
 
-\`\`\`gnar:columns
-children:
-  - name: task-spawner
-    config: {}
-  - name: agent-list
-    config: {}
+\`\`\`gnar:task-spawner
 \`\`\`
 `;
 }

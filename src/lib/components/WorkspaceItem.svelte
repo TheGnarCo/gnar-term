@@ -131,6 +131,12 @@
   // group workspaces or worktrees. `metadata.spawnedBy` is the §3.2
   // marker; `parentOrchestratorId` is the pre-migration field we still
   // honor until Stage 8 rewrites legacy user data.
+  // Dashboards are singleton surfaces bound to their group; suppress
+  // close / rename / right-click affordances so the user interacts
+  // with them only via the group's tile.
+  $: isDashboardWs =
+    (workspace.metadata as Record<string, unknown> | undefined)?.isDashboard ===
+    true;
   $: isAgentSpawned = (() => {
     const md = workspace.metadata as Record<string, unknown> | undefined;
     if (!md) return false;
@@ -214,7 +220,11 @@
     {isManaged ? `border: 1px solid ${railColor};` : ''}
     {isActive ? `box-shadow: 0 0 0 1.5px ${$theme.fg};` : ''}
   "
-  on:contextmenu|preventDefault={(e) => onContextMenu(e.clientX, e.clientY)}
+  on:contextmenu|preventDefault={(e) => {
+    // Dashboards are non-interactive surfaces; right-click is a no-op.
+    if (isDashboardWs) return;
+    onContextMenu(e.clientX, e.clientY);
+  }}
   on:mouseenter={() => (hovered = true)}
   on:mouseleave={() => {
     hovered = false;
@@ -489,20 +499,22 @@
        centered against the full row regardless of how many subtitle or
        notification rows stack below the title. The content column
        reserves 24px on the right to keep text from crashing into it. -->
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <span
-    title="Close Workspace (⇧⌘W)"
-    style="
-      position: absolute;
-      top: 50%; right: 6px;
-      transform: translateY(-50%);
-      color: {closeHovered ? $theme.danger : $theme.fgDim};
-      font-size: 14px; cursor: pointer;
-      opacity: {hovered ? '1' : '0'}; transition: opacity 0.15s;
-      padding: 0 2px;
-    "
-    on:click|stopPropagation={onClose}
-    on:mouseenter={() => (closeHovered = true)}
-    on:mouseleave={() => (closeHovered = false)}>×</span
-  >
+  {#if !isDashboardWs}
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <span
+      title="Close Workspace (⇧⌘W)"
+      style="
+        position: absolute;
+        top: 50%; right: 6px;
+        transform: translateY(-50%);
+        color: {closeHovered ? $theme.danger : $theme.fgDim};
+        font-size: 14px; cursor: pointer;
+        opacity: {hovered ? '1' : '0'}; transition: opacity 0.15s;
+        padding: 0 2px;
+      "
+      on:click|stopPropagation={onClose}
+      on:mouseenter={() => (closeHovered = true)}
+      on:mouseleave={() => (closeHovered = false)}>×</span
+    >
+  {/if}
 </div>

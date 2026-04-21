@@ -70,14 +70,15 @@
   export let containerBlockId: string | null = null;
 
   /**
-   * Human-readable name of the scope this list lives in — e.g. the
-   * project name for workspaces nested under a project. Surfaces in the
-   * context menu's "Close Other Workspaces in <label>…" item so the
-   * action's blast radius is obvious at a glance. Leave undefined and
-   * the menu falls back to the global "Close Other Workspaces" label
-   * with no scoping.
+   * Human-readable name of the scope this list lives in. The "Close
+   * Other Workspaces" menu item was removed, so the label is currently
+   * unused inside WorkspaceListView — retained on the prop surface so
+   * callers (ContainerRow) don't have to rewire when a future action
+   * needs the label.
    */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   export let containerLabel: string | undefined = undefined;
+  void containerLabel;
 
   $: allEntries = $workspaces
     .map((ws, idx) => ({ ws, idx }))
@@ -158,30 +159,28 @@
   function showNestedContextMenu(x: number, y: number, globalIdx: number) {
     const ws = $workspaces[globalIdx];
     if (!ws) return;
-    const canPromote = get(commandStore).some(
-      (c) => c.id === "promote-workspace-to-group",
-    );
-
-    // Scope "Close Other" to this list when a filterIds is in effect
-    // (i.e. we're rendered under a project/dashboard). Without a filter
-    // the list is the global root, so "Close Other" closes every other
-    // workspace in the app. With one, it only closes the visible peers
-    // so the user doesn't accidentally nuke other projects' workspaces.
-    const siblingIds = filterIds
-      ? Array.from(filterIds).filter((id) => id !== ws.id)
-      : $workspaces
-          .map((w, i) => (i === globalIdx ? null : w.id))
-          .filter((id): id is string => !!id);
-    const closeOtherLabel = containerLabel
-      ? `Close Other Workspaces in ${containerLabel}`
-      : "Close Other Workspaces";
+    const wsMeta = ws.metadata as Record<string, unknown> | undefined;
+    const isDashboard = wsMeta?.isDashboard === true;
+    const isInsideGroup = typeof wsMeta?.groupId === "string";
+    // Dashboards are singleton workspace surfaces closed with the group;
+    // they don't support rename or promotion. Workspaces already nested
+    // inside a group can't be promoted again — groups don't nest.
+    const canPromote =
+      !isDashboard &&
+      !isInsideGroup &&
+      get(commandStore).some((c) => c.id === "promote-workspace-to-group");
+    const canRename = !isDashboard;
 
     const items: MenuItem[] = [
-      {
-        label: "Rename Workspace",
-        shortcut: "⇧⌘R",
-        action: () => itemRefs[ws.id]?.startRename(),
-      },
+      ...(canRename
+        ? [
+            {
+              label: "Rename Workspace",
+              shortcut: "⇧⌘R",
+              action: () => itemRefs[ws.id]?.startRename(),
+            } as MenuItem,
+          ]
+        : []),
       ...(canPromote
         ? [
             { label: "", action: () => {}, separator: true } as MenuItem,
@@ -199,25 +198,10 @@
         : []),
       { label: "", action: () => {}, separator: true },
       {
-        label: closeOtherLabel,
-        disabled: siblingIds.length === 0,
-        action: () => {
-          // Walk back-to-front so indices stay valid as we splice. Map
-          // siblingIds → current indices just before closing; the list
-          // doesn't mutate mid-loop in a way that invalidates the stable
-          // id snapshot we captured above.
-          const targets = siblingIds
-            .map((id) => $workspaces.findIndex((w) => w.id === id))
-            .filter((i) => i >= 0)
-            .sort((a, b) => b - a);
-          for (const i of targets) closeWorkspace(i);
-        },
-      },
-      {
         label: "Close Workspace",
         shortcut: "⇧⌘W",
         danger: true,
-        disabled: $workspaces.length <= 1,
+        disabled: $workspaces.length <= 1 || isDashboard,
         action: () => closeWorkspace(globalIdx),
       },
     ];
@@ -261,8 +245,9 @@
             data-active={isActive ? "true" : undefined}
             title={entry.ws.name}
             on:click={() => switchWorkspace(entry.idx)}
-            on:contextmenu|preventDefault={(e) =>
-              showNestedContextMenu(e.clientX, e.clientY, entry.idx)}
+            on:contextmenu|preventDefault={() => {
+              // Dashboards are non-interactive surfaces; right-click is a no-op.
+            }}
             style="
               background: {dashAccent}; color: {dashFg};
               opacity: {isActive ? 1 : 0.55};

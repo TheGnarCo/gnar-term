@@ -79,14 +79,29 @@ export async function restoreWorkspaces(
     // exists. Without this, restarting after a group deletion leaves a
     // ghost dashboard in the main view that the user can't navigate
     // away from via the sidebar.
+    //
+    // Additionally dedupe dashboards: each `(groupId, dashboardContributionId)`
+    // pair should materialize exactly one dashboard workspace.
+    // Pre-fix releases spawned a new Dashboard on every launch because
+    // workspace ids regenerated, so persisted state can carry
+    // duplicates — keep the first occurrence and drop the rest.
     const knownGroupIds = new Set(getWorkspaceGroups().map((g) => g.id));
+    const seenDashboards = new Set<string>();
     const filteredDefs = state.workspaces.filter((wsDef) => {
       const md = wsDef.metadata as Record<string, unknown> | undefined;
       const isDashboard = md?.isDashboard === true;
       const ownerGroupId = md?.groupId;
       if (!isDashboard) return true;
       if (typeof ownerGroupId !== "string") return true;
-      return knownGroupIds.has(ownerGroupId);
+      if (!knownGroupIds.has(ownerGroupId)) return false;
+      const contributionId =
+        typeof md?.dashboardContributionId === "string"
+          ? md.dashboardContributionId
+          : "group";
+      const dedupeKey = `${ownerGroupId}:${contributionId}`;
+      if (seenDashboards.has(dedupeKey)) return false;
+      seenDashboards.add(dedupeKey);
+      return true;
     });
     for (const wsDef of filteredDefs) {
       await createWorkspaceFromDef(wsDef, { restoring: true });

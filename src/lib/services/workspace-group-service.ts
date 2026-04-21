@@ -219,19 +219,59 @@ export async function closeGroupDashboardWorkspace(
   if (wsIdx >= 0) closeWorkspace(wsIdx);
 }
 
+/** True when the workspace is a Group Dashboard owned by `groupId`. */
+function isGroupDashboardFor(
+  ws: { metadata?: unknown },
+  groupId: string,
+): boolean {
+  const md = ws.metadata as Record<string, unknown> | undefined;
+  if (!md) return false;
+  const contribution = md.dashboardContributionId;
+  const hasContributionMarker =
+    contribution === undefined || contribution === "group";
+  return (
+    md.isDashboard === true && md.groupId === groupId && hasContributionMarker
+  );
+}
+
 /**
  * Called on app startup (after workspaces are restored) — ensures every
- * group has an accessible Dashboard workspace. New groups get one from
- * the create flow; this reconciliation catches anything that was lost
- * (first launch after Stage 5, corruption). Fires asynchronously; UI
- * handles missing workspaces gracefully until it completes.
+ * group has exactly one Group Dashboard workspace. Prior releases
+ * matched the dashboard via `group.dashboardWorkspaceId`; workspace
+ * ids were unstable across restarts, so on every reload the lookup
+ * missed and a fresh dashboard was spawned. The cleanup runs in three
+ * passes:
+ *
+ *   1. Adopt the first workspace matching `metadata.isDashboard ===
+ *      true && metadata.groupId === group.id` (with no contribution id,
+ *      or an explicit `"group"` id) — rebinding the group's
+ *      `dashboardWorkspaceId` to that workspace.
+ *   2. Close every extra Group Dashboard for the same group (users end
+ *      up with these when pre-fix state carried duplicates).
+ *   3. Only when no dashboard exists at all, create a fresh one.
+ *
+ * The loop is sequential because `closeWorkspace` mutates the
+ * workspaces store and ripples to `$activeWorkspaceIdx`.
  */
 export async function reconcileGroupDashboards(): Promise<void> {
   for (const group of getWorkspaceGroups()) {
-    const hasWs =
-      !!group.dashboardWorkspaceId &&
-      get(workspaces).some((w) => w.id === group.dashboardWorkspaceId);
-    if (hasWs) continue;
+    const matches = get(workspaces).filter((w) =>
+      isGroupDashboardFor(w, group.id),
+    );
+
+    if (matches.length === 0) {
+      // Fall through to the creation path below.
+    } else {
+      const [keep, ...extras] = matches;
+      if (keep && keep.id !== group.dashboardWorkspaceId) {
+        updateWorkspaceGroup(group.id, { dashboardWorkspaceId: keep.id });
+      }
+      for (const dup of extras) {
+        const idx = get(workspaces).findIndex((w) => w.id === dup.id);
+        if (idx >= 0) closeWorkspace(idx);
+      }
+      continue;
+    }
     try {
       const dashboardWorkspaceId = await createGroupDashboardWorkspace(group);
       updateWorkspaceGroup(group.id, { dashboardWorkspaceId });

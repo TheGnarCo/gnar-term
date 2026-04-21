@@ -213,12 +213,25 @@
 
   function showWorkspaceContextMenu(x: number, y: number, globalIdx: number) {
     const workspaceCount = $workspaces.length;
+    const ws = $workspaces[globalIdx];
+    const wsMeta = ws?.metadata as Record<string, unknown> | undefined;
+    const isDashboard = wsMeta?.isDashboard === true;
+    const isInsideGroup = typeof wsMeta?.groupId === "string";
+    // Dashboards are singleton workspace surfaces closed with the group;
+    // they don't support rename or promotion. Workspaces already nested
+    // inside a group can't be promoted again — groups don't nest.
+    const canRename = !isDashboard;
+    const canPromoteThis = canPromote && !isDashboard && !isInsideGroup;
     const items: MenuItem[] = [
-      {
-        label: "Rename Workspace",
-        shortcut: "⇧⌘R",
-        action: () => startRename(globalIdx),
-      },
+      ...(canRename
+        ? [
+            {
+              label: "Rename Workspace",
+              shortcut: "⇧⌘R",
+              action: () => startRename(globalIdx),
+            } as MenuItem,
+          ]
+        : []),
       {
         label: "New Surface",
         shortcut: "⌘T",
@@ -227,7 +240,7 @@
           onNewSurface();
         },
       },
-      ...(canPromote
+      ...(canPromoteThis
         ? [
             { label: "", action: () => {}, separator: true } as MenuItem,
             {
@@ -238,21 +251,10 @@
         : []),
       { label: "", action: () => {}, separator: true },
       {
-        label: "Close Other Workspaces",
-        disabled: workspaceCount <= 1,
-        action: () => {
-          // Close all other workspaces by global idx, walking back-to-front
-          // so indices stay valid as we splice.
-          for (let i = $workspaces.length - 1; i >= 0; i--) {
-            if (i !== globalIdx) onCloseWorkspace(i);
-          }
-        },
-      },
-      {
         label: "Close Workspace",
         shortcut: "⇧⌘W",
         danger: true,
-        disabled: workspaceCount <= 1,
+        disabled: workspaceCount <= 1 || isDashboard,
         action: () => onCloseWorkspace(globalIdx),
       },
     ];

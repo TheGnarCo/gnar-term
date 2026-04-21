@@ -256,6 +256,54 @@ describe("markdown previewer — markdown-component handling", () => {
     resetPreviewSurfaceRegistry();
   });
 
+  it("resolves DashboardHostContext when the preview-surface element is detached from the DOM (regression: openPreview renders before attach)", async () => {
+    // Widgets inside an agentic dashboard used to mount with a null
+    // DashboardHost because PreviewSurface calls `openPreview` before
+    // it appendChild's the returned element — so the previewer's
+    // `closest("[data-preview-surface-id]")` walked to nothing.
+    // preview-service now stamps the attribute on the rendered element
+    // itself, so the lookup works even while detached.
+    const HostStub = (
+      await import("./markdown-previewer-host-stub-widget.svelte")
+    ).default;
+    const { registerPreviewSurface, resetPreviewSurfaceRegistry } =
+      await import("../lib/services/preview-surface-registry");
+    resetPreviewSurfaceRegistry();
+
+    registerMarkdownComponent({
+      name: "host-stub",
+      component: HostStub,
+      source: "test",
+    });
+
+    const previewer = findPreviewer("notes.md")!;
+    // Detached element carrying the surface marker directly — mirrors
+    // the shape preview-service.openPreview now produces.
+    const detached = document.createElement("div");
+    detached.setAttribute("data-preview-surface-id", "surf-detached-1");
+    // Intentionally DO NOT appendChild.
+    registerPreviewSurface({
+      surfaceId: "surf-detached-1",
+      path: "/abs/x.md",
+      paneId: "pane-detached-1",
+      workspaceId: "ws-detached-1",
+      hostMetadata: { groupId: "group-detached", isDashboard: true },
+    });
+
+    previewer.render(
+      ["```gnar:host-stub", "```"].join("\n"),
+      "/abs/x.md",
+      detached,
+      ctx,
+    );
+
+    const stub = detached.querySelector("[data-host-stub-widget]");
+    expect(stub?.getAttribute("data-host-present")).toBe("yes");
+    expect(stub?.getAttribute("data-host-group-id")).toBe("group-detached");
+
+    resetPreviewSurfaceRegistry();
+  });
+
   it("provides a null DashboardHostContext when widget is mounted outside any preview surface", async () => {
     const HostStub = (
       await import("./markdown-previewer-host-stub-widget.svelte")

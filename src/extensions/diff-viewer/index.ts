@@ -69,8 +69,14 @@ export function registerDiffViewerExtension(api: ExtensionAPI): void {
     api.registerCommand("show-uncommitted", async () => {
       const cwd = await api.getActiveCwd();
       if (!cwd) return;
+      // `git diff HEAD` includes staged + unstaged changes. Plain
+      // `git diff` only shows unstaged, which disagreed with the
+      // sidebar's "N modified" count (from `git status`) whenever the
+      // user had `git add`-ed any of the modified files — the Diff
+      // surface would render "No changes" despite the banner count.
       api.openSurface("diff", "Uncommitted Changes", {
         repoPath: cwd,
+        baseBranch: "HEAD",
       });
     });
 

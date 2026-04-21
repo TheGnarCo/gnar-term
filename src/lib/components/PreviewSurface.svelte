@@ -56,7 +56,7 @@
     }
 
     try {
-      const result = await openPreview(surface.path);
+      const result = await openPreview(surface.path, { surfaceId: surface.id });
       element = result.element;
       watchId = result.watchId;
       dispose = result.dispose;

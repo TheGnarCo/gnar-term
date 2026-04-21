@@ -80,7 +80,10 @@ export function refreshPreviewStyles(): void {
   injectStyles();
 }
 
-export async function openPreview(filePath: string): Promise<PreviewResult> {
+export async function openPreview(
+  filePath: string,
+  options?: { surfaceId?: string },
+): Promise<PreviewResult> {
   const ext = getExtension(filePath);
   const previewer = findPreviewer(filePath);
 
@@ -102,6 +105,17 @@ export async function openPreview(filePath: string): Promise<PreviewResult> {
     display: block; min-height: 0;
   `;
   element.className = "preview-surface";
+  // Stamp the surface id on the element itself so widgets mounted during
+  // the previewer's synchronous render — while `element` is still detached
+  // from the PreviewSurface container — can resolve their DashboardHost
+  // via `closest("[data-preview-surface-id]")`. Without this stamp the
+  // markdown previewer's dashboard-host lookup returns null on first
+  // render (the container-level attribute is out of reach), and
+  // scope-derived widgets like TaskSpawner stay in their "no scope"
+  // disabled state.
+  if (options?.surfaceId) {
+    element.setAttribute("data-preview-surface-id", options.surfaceId);
+  }
 
   injectStyles();
 

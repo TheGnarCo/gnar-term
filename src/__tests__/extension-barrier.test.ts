@@ -43,6 +43,10 @@ describe("Extension barrier enforcement", () => {
     // worktree-service which lives in core for the same reason).
     // Keep this list small — each entry is a deliberate departure.
     const FILE_EXCEPTIONS: Record<string, string[]> = {
+      // The Diff Dashboard contribution's `create(group)` materializes
+      // a dashboard workspace via createWorkspaceFromDef — mirrors the
+      // agentic-orchestrator piercing below.
+      "diff-viewer/index.ts": ["../../lib/services/workspace-service"],
       // The Agentic Dashboard contribution's `create(group)` must
       // materialize a dashboard workspace; reaching for
       // createWorkspaceFromDef keeps the contribution on the same code

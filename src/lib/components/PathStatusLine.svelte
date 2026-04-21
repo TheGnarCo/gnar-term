@@ -4,16 +4,15 @@
    * container banners (projects + agent dashboards). Renders two lines:
    *
    *   1. the last two path segments (e.g. `Code/my-repo`)
-   *   2. git branch + open PR numbers + dirty-count, when the path is a
-   *      git repo or has either signal
+   *   2. git branch + open PR numbers when the path is a git repo
    *
    * Generic over the target — callers pass an object with `{ id, path,
    * isGit }`. The id drives caching so switching between projects /
    * dashboards reseeds the poll loop.
    *
-   * Extracted from project-scope's ProjectStatusLine so agentic-
-   * orchestrator can reuse the same renderer for dashboard banners
-   * without cross-extension imports.
+   * The uncommitted-changes badge previously lived here; it moved to
+   * the per-group Diff dashboard contribution so "open the diff" is
+   * consistently a dashboard-tile click.
    */
   import { onDestroy, getContext } from "svelte";
   import { EXTENSION_API_KEY, type ExtensionAPI } from "../../extensions/api";
@@ -34,50 +33,10 @@
   $: themeMuted = ($theme["fgMuted"] ?? $theme.fgDim) as string;
   $: fgMuted = fgColor ?? themeMuted;
 
-  // Dirty-count colour adapts to the subtitle foreground:
-  //   - light fg (e.g. white on a dark banner) → lighter amber
-  //   - dark fg (e.g. black on a yellow banner) → darker amber so the
-  //     text doesn't disappear against a warm-coloured background
-  // When no banner context is passed (project-scope default — theme
-  // fgMuted), fall back to the light amber. The heuristic: strip rgba/#
-  // and compare average channel brightness.
-  function isDarkForeground(fg: string | undefined): boolean {
-    if (!fg) return false;
-    const m = fg.match(/#([0-9a-f]{3,6})/i);
-    if (m && m[1]) {
-      const raw = m[1];
-      const hex =
-        raw.length === 3
-          ? raw
-              .split("")
-              .map((c) => c + c)
-              .join("")
-          : raw;
-      const r = parseInt(hex.substring(0, 2), 16);
-      const g = parseInt(hex.substring(2, 4), 16);
-      const b = parseInt(hex.substring(4, 6), 16);
-      return (0.299 * r + 0.587 * g + 0.114 * b) / 255 < 0.5;
-    }
-    const rgb = fg.match(/(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})/);
-    if (rgb && rgb[1] && rgb[2] && rgb[3]) {
-      const r = Number(rgb[1]);
-      const g = Number(rgb[2]);
-      const b = Number(rgb[3]);
-      return (0.299 * r + 0.587 * g + 0.114 * b) / 255 < 0.5;
-    }
-    return false;
-  }
-  $: dirtyColor = isDarkForeground(fgColor) ? "#7a4a00" : "#e8b73a";
-
   interface BranchInfo {
     name: string;
     is_current: boolean;
     is_remote: boolean;
-  }
-  interface FileStatus {
-    path: string;
-    status: string;
-    staged: string;
   }
   interface GhPr {
     number: number;
@@ -89,60 +48,9 @@
   }
 
   let branch: string | null = null;
-  let dirtyCount = 0;
-  let dirtyLabel = "";
-  let dirtyTooltip = "";
   let prs: GhPr[] = [];
   let branchError = false;
   let lastTargetId: string | null = null;
-
-  /**
-   * Collapse the FileStatus porcelain output into a git-shorthand label
-   * (e.g. "M5 A2 D1 ?3"). Mirrors formatDirtyShorthand in git-status-
-   * service — inlined here because PathStatusLine polls `git_status`
-   * directly and doesn't share state with that service.
-   */
-  function collapseDirty(files: FileStatus[]): {
-    label: string;
-    tooltip: string;
-  } {
-    let modified = 0;
-    let added = 0;
-    let deleted = 0;
-    let renamed = 0;
-    let untracked = 0;
-    for (const f of files) {
-      const cols = `${f.staged ?? ""}${f.status ?? ""}`;
-      if (cols.includes("?")) untracked++;
-      else if (/[RC]/.test(cols)) renamed++;
-      else if (cols.includes("A")) added++;
-      else if (cols.includes("D")) deleted++;
-      else if (cols.includes("M") || cols.includes("T")) modified++;
-    }
-    const labelParts: string[] = [];
-    const tipParts: string[] = [];
-    if (modified > 0) {
-      labelParts.push(`M${modified}`);
-      tipParts.push(`${modified} modified`);
-    }
-    if (added > 0) {
-      labelParts.push(`A${added}`);
-      tipParts.push(`${added} added`);
-    }
-    if (deleted > 0) {
-      labelParts.push(`D${deleted}`);
-      tipParts.push(`${deleted} deleted`);
-    }
-    if (renamed > 0) {
-      labelParts.push(`R${renamed}`);
-      tipParts.push(`${renamed} renamed`);
-    }
-    if (untracked > 0) {
-      labelParts.push(`?${untracked}`);
-      tipParts.push(`${untracked} untracked`);
-    }
-    return { label: labelParts.join(" "), tooltip: tipParts.join(", ") };
-  }
 
   const REFRESH_MS = 45_000;
 
@@ -158,22 +66,6 @@
     } catch {
       branch = null;
       branchError = true;
-    }
-  }
-
-  async function refreshDirty(): Promise<void> {
-    try {
-      const status = await api.invoke<FileStatus[]>("git_status", {
-        repoPath: target.path,
-      });
-      dirtyCount = status.length;
-      const collapsed = collapseDirty(status);
-      dirtyLabel = collapsed.label;
-      dirtyTooltip = collapsed.tooltip;
-    } catch {
-      dirtyCount = 0;
-      dirtyLabel = "";
-      dirtyTooltip = "";
     }
   }
 
@@ -194,7 +86,6 @@
 
   function refreshAll(): void {
     void refreshBranch();
-    void refreshDirty();
     void refreshPrs();
   }
 
@@ -219,38 +110,11 @@
   } else {
     stop();
     branch = null;
-    dirtyCount = 0;
-    dirtyLabel = "";
-    dirtyTooltip = "";
     prs = [];
     lastTargetId = null;
   }
 
   onDestroy(() => stop());
-
-  function handleDirtyClick() {
-    // Container banners have no single "current pane" to drop the diff
-    // into, so we spawn a fresh workspace named "Diff" and nest it under
-    // this container (via metadata.groupId). App.svelte's status-action
-    // listener routes `open-surface-in-new-workspace` through
-    // createWorkspaceFromDef; per-workspace GitStatusLine rows keep
-    // using plain `open-surface` which opens in the active pane of
-    // their owning workspace.
-    const event = new CustomEvent("status-action", {
-      detail: {
-        command: "open-surface-in-new-workspace",
-        args: [
-          "Diff",
-          "diff-viewer:diff",
-          "Uncommitted Changes",
-          { repoPath: target.path },
-          { metadata: { groupId: target.id } },
-        ],
-      },
-      bubbles: true,
-    });
-    document.dispatchEvent(event);
-  }
 
   function handlePrClick(url: string) {
     const event = new CustomEvent("status-action", {
@@ -280,8 +144,8 @@
     >
   </div>
 
-  <!-- Git row: branch + PRs + dirty count. Only when git and signals exist. -->
-  {#if target.isGit || prs.length > 0 || dirtyCount > 0}
+  <!-- Git row: branch + PRs. Only rendered when git and signals exist. -->
+  {#if target.isGit || prs.length > 0}
     <div
       style="padding: 0 12px 2px 8px; display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; line-height: 1.2; flex-wrap: wrap;"
     >
@@ -318,23 +182,6 @@
             >
           {/if}
         {/each}
-      {/if}
-      {#if dirtyCount > 0}
-        {#if target.isGit || prs.length > 0}
-          <span
-            aria-hidden="true"
-            style="font-size: 10px; color: {fgMuted}; opacity: 0.4; flex-shrink: 0;"
-            >|</span
-          >
-        {/if}
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <span
-          style="font-size: 10px; color: {dirtyColor}; white-space: nowrap; flex-shrink: 0; cursor: pointer; text-decoration: underline;"
-          title={dirtyTooltip || "Open uncommitted changes"}
-          on:click|stopPropagation={() => handleDirtyClick()}
-          >{dirtyLabel || `${dirtyCount}`}</span
-        >
       {/if}
     </div>
   {/if}

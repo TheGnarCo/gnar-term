@@ -4,9 +4,15 @@
  * Registers a "diff" surface type for rendering unified git diffs,
  * plus commands for showing uncommitted changes and comparing branches.
  */
-import type { ExtensionManifest, ExtensionAPI } from "../api";
+import type {
+  ExtensionManifest,
+  ExtensionAPI,
+  WorkspaceGroupRef,
+} from "../api";
 import DiffSurface from "./DiffSurface.svelte";
 import ChangesTab from "./ChangesTab.svelte";
+import DiffIcon from "./DiffIcon.svelte";
+import { createWorkspaceFromDef } from "../../lib/services/workspace-service";
 
 export const diffViewerManifest: ExtensionManifest = {
   id: "diff-viewer",
@@ -125,6 +131,20 @@ export function registerDiffViewerExtension(api: ExtensionAPI): void {
       });
     });
 
+    // Diff dashboard contribution — lets a Workspace Group opt in to a
+    // dedicated Diff dashboard tile (gear sibling). The tile's workspace
+    // hosts a single diff-viewer:diff surface for the group's repo; no
+    // split / new-surface affordances because the pane is a Dashboard.
+    api.registerDashboardContribution({
+      id: "diff",
+      label: "Diff",
+      actionLabel: "Add Diff Dashboard",
+      capPerGroup: 1,
+      icon: DiffIcon,
+      paneConstraints: { singleSurface: true },
+      create: (group) => createDiffDashboardWorkspace(group),
+    });
+
     // Changes sidebar tab
     api.registerSecondarySidebarTab("changes", ChangesTab);
 
@@ -143,5 +163,38 @@ export function registerDiffViewerExtension(api: ExtensionAPI): void {
       api.badgeSidebarTab("changes", true);
       api.activateSidebarTab("changes");
     });
+  });
+}
+
+/**
+ * Materialize a Diff dashboard workspace for `group`. The workspace
+ * owns a single `diff-viewer:diff` surface pointed at the group's
+ * repository; the `Uncommitted Changes` name mirrors the surface the
+ * old container-banner diff link used to spawn. Surface props match
+ * the `show-uncommitted` command so the rendered diff is identical.
+ */
+async function createDiffDashboardWorkspace(
+  group: WorkspaceGroupRef,
+): Promise<string> {
+  return await createWorkspaceFromDef({
+    name: "Diff",
+    layout: {
+      pane: {
+        surfaces: [
+          {
+            type: "extension",
+            extensionType: "diff-viewer:diff",
+            extensionProps: { repoPath: group.path, baseBranch: "HEAD" },
+            name: "Uncommitted Changes",
+            focus: true,
+          },
+        ],
+      },
+    },
+    metadata: {
+      isDashboard: true,
+      groupId: group.id,
+      dashboardContributionId: "diff",
+    },
   });
 }

@@ -65,6 +65,35 @@ describe("dashboard tile — icon only", () => {
     expect(tile?.querySelector(".dashboard-tile-label")).toBeNull();
   });
 
+  it("pins the Settings tile to the end of the dashboard grid", () => {
+    const group = makeDashboardWs("ws-group", "Overview", "group");
+    const settings = makeDashboardWs("ws-settings", "Settings", "settings");
+    const diff = makeDashboardWs("ws-diff", "Diff", "diff");
+    const agentic = makeDashboardWs("ws-agentic", "Agents", "agentic");
+
+    // Order in the store: settings first, group second, then diff, then
+    // agentic — so the sort has work to do: settings must move last.
+    workspaces.set([settings, group, diff, agentic]);
+
+    const { container } = render(WorkspaceListView, {
+      props: {
+        filterIds: new Set([settings.id, group.id, diff.id, agentic.id]),
+        accentColor: "#ff00aa",
+        scopeId: "g1",
+      },
+    });
+
+    const tiles = Array.from(
+      container.querySelectorAll<HTMLElement>("[data-dashboard-item]"),
+    );
+    const contribs = tiles.map((t) =>
+      t.getAttribute("data-dashboard-contribution"),
+    );
+    expect(contribs[contribs.length - 1]).toBe("settings");
+    // Other contributions keep their relative order.
+    expect(contribs.slice(0, -1)).toEqual(["group", "diff", "agentic"]);
+  });
+
   it("preserves the workspace name in the tile's title attribute", () => {
     const ws = makeDashboardWs("ws-2", "My Group Dashboard", "group");
     workspaces.set([ws]);

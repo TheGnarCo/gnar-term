@@ -96,7 +96,22 @@
     );
   }
 
-  $: dashboardEntries = allEntries.filter(({ ws }) => isDashboardWs(ws));
+  // Settings always pins to the END of the dashboard grid so it's a
+  // stable "last tile" regardless of which other dashboards are
+  // enabled for this group. Everything else keeps registration /
+  // creation order.
+  function isSettingsDashboard(ws: import("../types").Workspace): boolean {
+    const md = ws.metadata as Record<string, unknown> | undefined;
+    return md?.dashboardContributionId === "settings";
+  }
+  $: dashboardEntries = allEntries
+    .filter(({ ws }) => isDashboardWs(ws))
+    .sort((a, b) => {
+      const aSettings = isSettingsDashboard(a.ws);
+      const bSettings = isSettingsDashboard(b.ws);
+      if (aSettings === bSettings) return 0;
+      return aSettings ? 1 : -1;
+    });
   $: entries = allEntries.filter(({ ws }) => !isDashboardWs(ws));
 
   let sourceIdx: number | null = null;

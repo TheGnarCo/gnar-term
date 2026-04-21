@@ -94,6 +94,13 @@ import { sidebarSectionStore } from "./sidebar-section-registry";
 import { overlayStore } from "./overlay-registry";
 import { workspaceSubtitleStore } from "./workspace-subtitle-registry";
 import { dashboardTabStore } from "./dashboard-tab-registry";
+import {
+  canAddContributionToGroup,
+  dashboardContributionStore,
+  getDashboardContribution,
+} from "./dashboard-contribution-registry";
+import { closeDashboardForGroup } from "./workspace-group-service";
+import { getWorkspaceGroup } from "../stores/workspace-groups";
 import { getWorkspaceStatus } from "./status-registry";
 import { getMcpSetting } from "../config";
 import { spawnAgentInWorktree } from "./spawn-helper";
@@ -1442,6 +1449,137 @@ registerTool({
       source: t.source,
     }));
     return { tabs };
+  },
+});
+
+// ---- Dashboard contributions (per-group add / remove / list) ----
+//
+// Each Workspace Group has a list of Dashboards available to it —
+// the registered DashboardContributions. Some are auto-provisioned
+// (core Overview, core Settings, agentic when enabled); the rest are
+// user-toggleable. MCP drives the same surface the Settings dashboard
+// exposes: list contributions + current active state, add a dashboard
+// workspace, or remove one (autoProvision rejects removal).
+
+registerTool({
+  name: "list_dashboard_contributions",
+  description:
+    "List every registered Dashboard contribution. When `group_id` is provided, each row also carries `active` (whether the group has a dashboard workspace for this contribution) and `workspace_id` when active. `autoProvision` contributions cannot be added or removed; the Settings dashboard toggle surfaces this via `locked_reason`.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      group_id: {
+        type: "string",
+        description: "Optional. When set, annotate each row with active state.",
+      },
+    },
+  },
+  handler: (args) => {
+    const p = args as { group_id?: string };
+    const contribs = get(dashboardContributionStore);
+    const group = p.group_id ? getWorkspaceGroup(p.group_id) : undefined;
+    if (p.group_id && !group) {
+      throw new Error(`Unknown workspace group: ${p.group_id}`);
+    }
+    const wsList = group ? get(workspaces) : [];
+    return {
+      contributions: contribs.map((c) => {
+        const base = {
+          id: c.id,
+          source: c.source,
+          label: c.label,
+          action_label: c.actionLabel,
+          cap_per_group: c.capPerGroup,
+          auto_provision: c.autoProvision === true,
+          locked_reason: c.lockedReason,
+        };
+        if (!group) return base;
+        const wsForContrib = wsList.find((w) => {
+          const md = w.metadata as Record<string, unknown> | undefined;
+          return (
+            md?.isDashboard === true &&
+            md?.groupId === group.id &&
+            md?.dashboardContributionId === c.id
+          );
+        });
+        return {
+          ...base,
+          active: Boolean(wsForContrib),
+          workspace_id: wsForContrib?.id,
+        };
+      }),
+    };
+  },
+});
+
+registerTool({
+  name: "add_dashboard_to_group",
+  description:
+    "Materialize a dashboard workspace for a Workspace Group by running the contribution's create hook. Errors when the contribution is autoProvision (those materialize automatically and cannot be added manually), already at its per-group cap, unknown, or gated out by the contribution's availability predicate. Returns the new workspace id.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      group_id: { type: "string" },
+      contribution_id: { type: "string" },
+    },
+    required: ["group_id", "contribution_id"],
+  },
+  handler: async (args) => {
+    const p = args as { group_id: string; contribution_id: string };
+    const group = getWorkspaceGroup(p.group_id);
+    if (!group) throw new Error(`Unknown workspace group: ${p.group_id}`);
+    const contribution = getDashboardContribution(p.contribution_id);
+    if (!contribution) {
+      throw new Error(`Unknown dashboard contribution: ${p.contribution_id}`);
+    }
+    if (contribution.autoProvision) {
+      throw new Error(
+        `Dashboard contribution "${p.contribution_id}" is autoProvision — it materializes automatically and cannot be added manually.`,
+      );
+    }
+    const currentCount = get(workspaces).filter((w) => {
+      const md = w.metadata as Record<string, unknown> | undefined;
+      return (
+        md?.isDashboard === true &&
+        md?.groupId === group.id &&
+        md?.dashboardContributionId === contribution.id
+      );
+    }).length;
+    if (!canAddContributionToGroup(group, contribution.id, currentCount)) {
+      throw new Error(
+        `Cannot add "${p.contribution_id}" to group "${p.group_id}" (at cap or gated by availability).`,
+      );
+    }
+    const workspaceId = await contribution.create(group);
+    return { workspace_id: workspaceId };
+  },
+});
+
+registerTool({
+  name: "remove_dashboard_from_group",
+  description:
+    "Close the dashboard workspace for `{group_id, contribution_id}`. Errors when the contribution is autoProvision (core Overview, core Settings, and the Agentic dashboard cannot be removed this way). Returns `{ removed: true }` on success, `{ removed: false }` when no such workspace existed.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      group_id: { type: "string" },
+      contribution_id: { type: "string" },
+    },
+    required: ["group_id", "contribution_id"],
+  },
+  handler: (args) => {
+    const p = args as { group_id: string; contribution_id: string };
+    const contribution = getDashboardContribution(p.contribution_id);
+    if (!contribution) {
+      throw new Error(`Unknown dashboard contribution: ${p.contribution_id}`);
+    }
+    if (contribution.autoProvision) {
+      throw new Error(
+        `Dashboard contribution "${p.contribution_id}" is autoProvision — locked on this group.`,
+      );
+    }
+    const removed = closeDashboardForGroup(p.group_id, p.contribution_id);
+    return { removed };
   },
 });
 

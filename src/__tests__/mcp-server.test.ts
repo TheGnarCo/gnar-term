@@ -107,6 +107,7 @@ describe("MCP server JSON-RPC", () => {
     expect(names).toEqual(
       [
         "activate_sidebar_tab",
+        "add_dashboard_to_group",
         "close_preview",
         "create_preview_file",
         "dispatch_tasks",
@@ -122,6 +123,7 @@ describe("MCP server JSON-RPC", () => {
         "kill_session",
         "list_commands",
         "list_context_menu_items",
+        "list_dashboard_contributions",
         "list_dashboard_tabs",
         "list_dir",
         "list_markdown_components",
@@ -139,6 +141,7 @@ describe("MCP server JSON-RPC", () => {
         "poll_events",
         "read_file",
         "read_output",
+        "remove_dashboard_from_group",
         "remove_sidebar_section",
         "render_sidebar",
         "send_keys",
@@ -147,7 +150,7 @@ describe("MCP server JSON-RPC", () => {
         "spawn_preview",
       ].sort(),
     );
-    expect(names).toHaveLength(39);
+    expect(names).toHaveLength(42);
     for (const t of tools) {
       expect(t).toHaveProperty("inputSchema");
     }
@@ -1218,8 +1221,8 @@ describe("tool metadata", () => {
     }
   });
 
-  it("tool count matches spec (39)", () => {
-    expect(_getToolsForTest()).toHaveLength(39);
+  it("tool count matches spec (42)", () => {
+    expect(_getToolsForTest()).toHaveLength(42);
   });
 });
 

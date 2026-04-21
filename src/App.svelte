@@ -50,6 +50,7 @@
     extensionErrorStore,
     reportExtensionError,
     flushAllExtensionState,
+    activateExtension,
   } from "./lib/services/extension-loader";
   import { loadExternalExtensions } from "./lib/services/extension-management";
   import { registerIncludedExtensions } from "./lib/bootstrap/register-included-extensions";
@@ -638,7 +639,31 @@
           string,
           Record<string, unknown> | undefined,
         ];
-        openExtensionSurfaceInPane(surfaceTypeId, title, props);
+        // Namespaced surface ids are "<extension-id>:<surface-id>" — core
+        // consumers emit links to extension-provided surfaces (e.g. the
+        // git-status dirty pill opens the diff-viewer's "Uncommitted
+        // Changes" surface). Ensure the providing extension is
+        // activated so its `registerSurfaceType` has registered the
+        // component by the time PaneView renders. Idempotent for
+        // already-enabled extensions; bails silently if the surface
+        // id isn't namespaced or the extension isn't known.
+        const colonIdx = surfaceTypeId.indexOf(":");
+        const providerId =
+          colonIdx > 0 ? surfaceTypeId.slice(0, colonIdx) : null;
+        const open = () =>
+          openExtensionSurfaceInPane(surfaceTypeId, title, props);
+        if (providerId) {
+          void activateExtension(providerId)
+            .catch((err) => {
+              console.warn(
+                `[status-action] activate "${providerId}" failed:`,
+                err,
+              );
+            })
+            .finally(open);
+        } else {
+          open();
+        }
       }
     }) as EventListener);
 

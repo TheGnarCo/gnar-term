@@ -93,8 +93,13 @@ describe("Extension barrier enforcement", () => {
         "../../../lib/services/preview-surface-registry",
         "../../../lib/services/preview-service",
         // Reads `config.agenticGlobal.markdownPath` to honor the user's
-        // configured Global Agentic Dashboard markdown location.
+        // configured Global Agentic Dashboard markdown location, and
+        // saves `pseudoWorkspaceColors` back from the Settings tab.
         "../../../lib/config",
+        // Settings tab renders the color picker against the shared
+        // theme + PROJECT_COLOR_SLOTS palette.
+        "../../../lib/stores/theme",
+        "../../../lib/theme-data",
       ],
       "agentic-orchestrator/widget-helpers.ts": [
         "../../lib/contexts/dashboard-host",

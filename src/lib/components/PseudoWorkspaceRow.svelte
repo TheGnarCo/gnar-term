@@ -23,6 +23,9 @@
   import DragGrip from "./DragGrip.svelte";
   import type { Component } from "svelte";
   import type { PseudoWorkspace } from "../services/pseudo-workspace-registry";
+  import { configStore } from "../config";
+  import { resolveProjectColor } from "../theme-data";
+  import { contrastColor } from "../utils/contrast";
 
   export let pseudo: PseudoWorkspace;
   export let onGripMouseDown: ((e: MouseEvent) => void) | undefined = undefined;
@@ -30,7 +33,12 @@
   let gripHovered = false;
   let bannerHovered = false;
 
-  const bannerBackground = "var(--pseudo-row-bg, rgba(255, 255, 255, 0.08))";
+  // Resolve the pseudo-workspace color from config. Fallback to the
+  // theme accent so rows always render with a solid banner regardless
+  // of configuration.
+  $: configuredSlot = $configStore.pseudoWorkspaceColors?.[pseudo.id];
+  $: bannerBackground = resolveProjectColor(configuredSlot ?? "purple", $theme);
+  $: bannerForeground = contrastColor(bannerBackground);
 
   function activate(): void {
     // Pseudo-workspaces are mutually exclusive with real workspaces —
@@ -72,8 +80,8 @@
         visible={gripHovered && $reorderContext === null}
         onMouseDown={onGripMouseDown}
         ariaLabel="Drag to reorder"
-        railColor={$theme.bgSurface}
-        dotColor={$theme.fgDim}
+        railColor={bannerBackground}
+        dotColor={bannerForeground}
         railOpacity={1}
         alwaysShowDots={true}
       />
@@ -96,29 +104,29 @@
         padding: 4px 6px;
         min-height: 40px;
         background: {bannerBackground};
-        color: {$theme.fg};
-        border-radius: 0 6px 6px 0;
+        color: {bannerForeground};
+        border-radius: 6px;
         cursor: pointer;
         outline: {isActive ? `1.5px solid ${$theme.fg}` : 'none'};
         outline-offset: -1.5px;
         transition: background 0.15s;
-        filter: {bannerHovered && !isActive ? 'brightness(1.2)' : 'none'};
+        filter: {bannerHovered && !isActive ? 'brightness(1.1)' : 'none'};
       "
     >
       <div
-        style="padding-left: 8px; display: flex; align-items: center; gap: 8px; min-height: 32px; min-width: 0;"
+        style="padding: 0 8px; display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 32px; min-width: 0;"
       >
         {#if pseudo.icon}
           <span
             data-pseudo-workspace-icon
-            style="display: inline-flex; flex-shrink: 0; width: 18px; height: 18px; align-items: center; justify-content: center; color: {$theme.fg};"
+            style="display: inline-flex; flex-shrink: 0; width: 18px; height: 18px; align-items: center; justify-content: center; color: {bannerForeground};"
           >
             <svelte:component this={pseudo.icon as Component} />
           </span>
         {/if}
         <span
           data-pseudo-workspace-label
-          style="font-weight: 500; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+          style="font-weight: 500; font-size: 13px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
         >
           {pseudo.label}
         </span>

@@ -1513,6 +1513,7 @@ pub fn run() {
             git_worktree::remove_worktree,
             git_worktree::list_branches,
             git_info::git_status,
+            git_info::git_remote_url,
             gh_commands::gh_list_prs,
             gh_commands::gh_list_issues,
             gh_commands::gh_available

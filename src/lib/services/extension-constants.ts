@@ -64,6 +64,8 @@ export const EXTENSION_ALLOWED_COMMANDS: Set<string> = new Set([
   "git_status",
   "git_diff",
   "git_merge",
+  "git_remote_url",
+  "list_branches",
 ]);
 
 // PTY commands — only available to extensions with "pty" permission

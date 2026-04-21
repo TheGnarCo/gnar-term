@@ -188,6 +188,14 @@ export interface GnarTermConfig {
     markdownPath?: string;
   };
   /**
+   * Per-pseudo-workspace color overrides, keyed by pseudo id
+   * (e.g. `"agentic.global"`). Values are slot names from
+   * `PROJECT_COLOR_SLOTS` (same palette Workspace Groups use) or any
+   * `#RRGGBB` literal. Consumed by `PseudoWorkspaceRow` to paint the
+   * banner; absent entries fall back to a theme-neutral default.
+   */
+  pseudoWorkspaceColors?: Record<string, string>;
+  /**
    * MCP integration module. Controls whether gnar-term exposes its MCP tools
    * to Claude Code (or any other MCP client) over a local Unix domain socket.
    *

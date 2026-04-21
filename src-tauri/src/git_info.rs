@@ -61,6 +61,20 @@ pub async fn git_status(repo_path: String) -> Result<Vec<FileStatus>, String> {
     Ok(parse_status_output(&output))
 }
 
+/// Return the origin remote URL for `repo_path`, or an empty string
+/// when the repo has no `origin` remote configured. Callers use this
+/// to derive the repository's GitHub web URL for dashboard links.
+#[tauri::command]
+pub async fn git_remote_url(repo_path: String) -> Result<String, String> {
+    validate_repo(&repo_path)?;
+    match run_git(&repo_path, &["config", "--get", "remote.origin.url"]) {
+        Ok(out) => Ok(out.trim().to_string()),
+        // Git exits non-zero when the config key is missing; treat that
+        // as "no remote" rather than an error to the caller.
+        Err(_) => Ok(String::new()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -122,6 +122,8 @@ title: Active Agents
   "
 >
   <div
+    role="tablist"
+    aria-label="Global Agentic Dashboard sections"
     data-global-agentic-dashboard-tabs
     style="
       flex-shrink: 0;
@@ -133,6 +135,11 @@ title: Active Agents
     {#each [{ id: "overview" as const, label: "Overview" }, { id: "settings" as const, label: "Settings" }] as tab (tab.id)}
       {@const isActive = activeTab === tab.id}
       <button
+        role="tab"
+        id="global-agentic-dashboard-tab-{tab.id}"
+        aria-selected={isActive}
+        aria-controls="global-agentic-dashboard-panel-{tab.id}"
+        tabindex={isActive ? 0 : -1}
         data-global-agentic-dashboard-tab={tab.id}
         data-active={isActive ? "true" : undefined}
         on:click={() => (activeTab = tab.id)}
@@ -156,6 +163,10 @@ title: Active Agents
        switches. `display: none` hides it when Settings is active. -->
   <div
     bind:this={container}
+    role="tabpanel"
+    id="global-agentic-dashboard-panel-overview"
+    aria-labelledby="global-agentic-dashboard-tab-overview"
+    aria-hidden={activeTab !== "overview"}
     data-preview-surface-id={surfaceId}
     data-global-agentic-dashboard-overview
     style="
@@ -176,6 +187,9 @@ title: Active Agents
 
   {#if activeTab === "settings"}
     <div
+      role="tabpanel"
+      id="global-agentic-dashboard-panel-settings"
+      aria-labelledby="global-agentic-dashboard-tab-settings"
       data-global-agentic-dashboard-settings
       style="
         flex: 1; min-width: 0; min-height: 0; overflow: auto;

@@ -70,6 +70,7 @@
   >
     <span
       data-status-dot
+      aria-hidden="true"
       style="
         width: 8px; height: 8px; border-radius: 50%;
         background: {dotColor}; flex-shrink: 0;

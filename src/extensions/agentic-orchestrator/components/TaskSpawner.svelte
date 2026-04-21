@@ -166,6 +166,7 @@
         data-task-spawner-task
         bind:value={task}
         placeholder="What should the agent do?"
+        aria-label="Task description"
         rows="3"
         style="
           width: 100%; box-sizing: border-box;
@@ -186,6 +187,11 @@
         >
           <button
             data-task-spawner-agent
+            type="button"
+            on:click={() => (dropdownOpen = !dropdownOpen)}
+            aria-label="Current agent: {agentLabel}. Activate to choose a different agent."
+            aria-haspopup="menu"
+            aria-expanded={dropdownOpen}
             style="
               background: transparent; color: {$theme.fg};
               border: 1px solid {$theme.border}; border-right: none;
@@ -198,6 +204,9 @@
           <button
             data-task-spawner-agent-caret
             on:click={() => (dropdownOpen = !dropdownOpen)}
+            aria-label="Choose agent"
+            aria-haspopup="menu"
+            aria-expanded={dropdownOpen}
             title="Choose agent"
             style="
               background: {dropdownOpen ? $theme.bgHighlight : 'transparent'};
@@ -252,6 +261,7 @@
           type="text"
           bind:value={branch}
           placeholder={branchPlaceholder}
+          aria-label="Branch name"
           style="
             flex: 1; min-width: 0;
             background: {$theme.bg}; color: {$theme.fg};

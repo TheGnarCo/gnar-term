@@ -391,6 +391,9 @@
             data-issue-spawn-caret
             on:click={() => toggleSpawnMenu(issue.number)}
             disabled={spawningRow === issue.number}
+            aria-label="Choose agent"
+            aria-haspopup="menu"
+            aria-expanded={openSpawnMenu === issue.number}
             title="Choose agent"
             style="
               background: {openSpawnMenu === issue.number

@@ -22,6 +22,7 @@
     openPreview,
     type PreviewResult,
   } from "../../../lib/services/preview-service";
+  import { getConfig } from "../../../lib/config";
 
   /** Default Global Agentic Dashboard template — widgets derive scope
    *  from the enclosing DashboardHostContext. */
@@ -49,14 +50,19 @@ title: Active Agents
   let result: PreviewResult | null = null;
 
   async function ensureMarkdownPath(): Promise<string> {
+    const configured = getConfig().agenticGlobal?.markdownPath?.trim();
     const home = await invoke<string>("get_home").catch(() => "");
-    const root = home ? `${home}/.config/gnar-term` : ".config/gnar-term";
-    const path = `${root}/global-agents.md`;
+    const defaultRoot = home
+      ? `${home}/.config/gnar-term`
+      : ".config/gnar-term";
+    const defaultPath = `${defaultRoot}/global-agents.md`;
+    const path = configured && configured.length > 0 ? configured : defaultPath;
     const exists = await invoke<boolean>("file_exists", { path }).catch(
       () => false,
     );
     if (!exists) {
-      await invoke("ensure_dir", { path: root }).catch(() => {});
+      const dir = path.replace(/\/[^/]+$/, "");
+      await invoke("ensure_dir", { path: dir }).catch(() => {});
       await invoke("write_file", {
         path,
         content: DEFAULT_TEMPLATE,

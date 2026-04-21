@@ -47,7 +47,15 @@ describe("Extension barrier enforcement", () => {
       // materialize a dashboard workspace; reaching for
       // createWorkspaceFromDef keeps the contribution on the same code
       // path as core's built-in Group Dashboard.
-      "agentic-orchestrator/index.ts": ["../../lib/services/workspace-service"],
+      "agentic-orchestrator/index.ts": [
+        "../../lib/services/workspace-service",
+        // The extension mirrors its declared `globalAgentsMarkdownPath`
+        // setting into `config.agenticGlobal.markdownPath` so the
+        // Global Agentic Dashboard body + Stage-8 migration share one
+        // canonical location. Reaching the config helpers directly is
+        // the simplest sync path.
+        "../../lib/config",
+      ],
       // Issues + TaskSpawner widgets call the shared spawn-helper
       // (core service that composes worktree-service + agent command
       // construction). The MCP `spawn_agent` tool calls the same helper
@@ -84,6 +92,9 @@ describe("Extension barrier enforcement", () => {
         "../../../lib/contexts/dashboard-host",
         "../../../lib/services/preview-surface-registry",
         "../../../lib/services/preview-service",
+        // Reads `config.agenticGlobal.markdownPath` to honor the user's
+        // configured Global Agentic Dashboard markdown location.
+        "../../../lib/config",
       ],
       "agentic-orchestrator/widget-helpers.ts": [
         "../../lib/contexts/dashboard-host",

@@ -110,7 +110,32 @@ export function groupDashboardPath(groupPath: string): string {
 }
 
 function buildGroupDashboardMarkdown(group: WorkspaceGroupEntry): string {
-  return `# ${group.name}\n\nProject at \`${group.path}\`.\n\n## Active Agents\n\n\`\`\`gnar:agent-list\n\`\`\`\n`;
+  // The Group Dashboard is the generic, agent-agnostic landing page for
+  // a Workspace Group. Per the spec / user intent it surfaces work-
+  // tracker links (diffs, open PRs) rather than agent telemetry — that
+  // lives on the optional Agentic Dashboard contribution.
+  //
+  // `gnar:issues` is registered by the agentic extension; when the
+  // extension is disabled the markdown previewer renders it as an
+  // "Unknown widget" fallback, which degrades gracefully without
+  // breaking the Dashboard for users who don't want agents.
+  return `# ${group.name}
+
+Project at \`${group.path}\`.
+
+## Open Issues & PRs
+
+\`\`\`gnar:issues
+state: open
+limit: 25
+\`\`\`
+
+## Quick Links
+
+- [Browse on GitHub](https://github.com)
+- Run \`gh pr list\` in any workspace terminal for the current PR queue
+- Use **Promote to Workspace Group** on any workspace to nest it here
+`;
 }
 
 async function writeGroupDashboardTemplate(

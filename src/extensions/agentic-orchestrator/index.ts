@@ -21,6 +21,7 @@ import type {
   WorkspaceGroupRef,
 } from "../api";
 import { createWorkspaceFromDef } from "../../lib/services/workspace-service";
+import { getConfig, saveConfig } from "../../lib/config";
 import BotIcon from "./icons/BotIcon.svelte";
 import GlobalAgenticDashboardBody from "./components/GlobalAgenticDashboardBody.svelte";
 import Kanban from "./components/Kanban.svelte";
@@ -41,13 +42,54 @@ export const agenticOrchestratorManifest: ExtensionManifest = {
   entry: "./index.ts",
   included: true,
   permissions: [],
-  contributes: {},
+  contributes: {
+    settings: {
+      fields: {
+        globalAgentsMarkdownPath: {
+          type: "string",
+          title: "Global Agents markdown path",
+          description:
+            "Backing markdown file for the Global Agentic Dashboard pseudo-workspace. Leave blank to fall back to ~/.config/gnar-term/global-agents.md.",
+          default: "",
+        },
+      },
+    },
+  },
 };
 
 // --- Registration ---
 
 export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
+  let settingsUnsub: (() => void) | null = null;
+
   api.onActivate(() => {
+    // Mirror the declared `globalAgentsMarkdownPath` setting into
+    // `config.agenticGlobal.markdownPath` so the pseudo-workspace body
+    // and core consumers can read a single canonical location (spec
+    // §3.1). The setting acts as the editable surface; the config field
+    // is the read-side contract.
+    settingsUnsub = api.settings.subscribe((s) => {
+      const raw = s?.globalAgentsMarkdownPath;
+      const candidate = typeof raw === "string" ? raw.trim() : "";
+      const current = getConfig().agenticGlobal?.markdownPath ?? "";
+      if (candidate === current) return;
+      const next = candidate
+        ? {
+            agenticGlobal: {
+              ...(getConfig().agenticGlobal ?? {}),
+              markdownPath: candidate,
+            },
+          }
+        : {
+            agenticGlobal: Object.fromEntries(
+              Object.entries(getConfig().agenticGlobal ?? {}).filter(
+                ([k]) => k !== "markdownPath",
+              ),
+            ),
+          };
+      void saveConfig(next);
+    });
+
     api.registerDashboardContribution({
       id: "agentic",
       label: "Agentic Dashboard",
@@ -151,8 +193,12 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
     });
   });
 
-  // No onDeactivate body — every `register*` call auto-unregisters via
-  // the core extension loader's per-source cleanup hooks.
+  api.onDeactivate(() => {
+    if (settingsUnsub) {
+      settingsUnsub();
+      settingsUnsub = null;
+    }
+  });
 }
 
 // --- Internal helpers ---

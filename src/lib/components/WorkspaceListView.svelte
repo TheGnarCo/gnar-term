@@ -22,11 +22,12 @@
   import { get } from "svelte/store";
   import WorkspaceItem from "./WorkspaceItem.svelte";
   import DropGhost from "./DropGhost.svelte";
+  import DashboardTileIcon from "./DashboardTileIcon.svelte";
   import GridIcon from "../icons/GridIcon.svelte";
   import { contrastColor } from "../utils/contrast";
   import { contextMenu, showConfirmPrompt } from "../stores/ui";
   import { commandStore } from "../services/command-registry";
-  import type { Component } from "svelte";
+  import { workspaceGroupsStore } from "../stores/workspace-groups";
   import type { MenuItem } from "../context-menu-types";
   import { getDashboardContribution } from "../services/dashboard-contribution-registry";
 
@@ -302,7 +303,14 @@
           {@const contribution = contribId
             ? getDashboardContribution(contribId)
             : undefined}
-          {@const IconComp = (contribution?.icon ?? GridIcon) as Component}
+          {@const IconComp = contribution?.icon ?? GridIcon}
+          {@const tileGroupId =
+            typeof wsMeta?.groupId === "string"
+              ? (wsMeta.groupId as string)
+              : undefined}
+          {@const tileGroupPath = tileGroupId
+            ? $workspaceGroupsStore.find((g) => g.id === tileGroupId)?.path
+            : undefined}
           <!-- svelte-ignore a11y_click_events_have_key_events -->
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div
@@ -322,17 +330,12 @@
               {isActive ? `box-shadow: 0 0 0 1.5px ${dashAccent};` : ''}
             "
           >
-            <span
-              class="dashboard-tile-icon"
-              aria-hidden="true"
-              style="color: {dashAccent};"
-            >
-              <svelte:component
-                this={IconComp}
-                size={14}
-                color="currentColor"
-              />
-            </span>
+            <DashboardTileIcon
+              iconComponent={IconComp}
+              baseColor={dashAccent}
+              contributionId={contribId}
+              groupPath={tileGroupPath}
+            />
           </div>
         {/each}
       </div>
@@ -448,14 +451,6 @@
   }
   .dashboard-tile:hover {
     filter: brightness(1.1);
-  }
-  .dashboard-tile-icon {
-    flex-shrink: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 14px;
-    height: 14px;
   }
   /* 8px left + top margin on the nested list so the workspace rails
      sit visually inset from the parent project's rail and the first

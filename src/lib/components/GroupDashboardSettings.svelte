@@ -58,17 +58,25 @@
     (c) => c.id !== "settings",
   );
 
-  function isActive(contribution: DashboardContribution): boolean {
-    if (!group) return false;
-    return $workspaces.some((w) => {
-      const md = w.metadata as Record<string, unknown> | undefined;
-      return (
-        md?.isDashboard === true &&
-        md?.groupId === group!.id &&
-        md?.dashboardContributionId === contribution.id
-      );
-    });
-  }
+  // Precompute the set of active contribution ids for this group as a
+  // reactive derivation. `{@const active = activeIds.has(c.id)}` in the
+  // template picks up changes to `$workspaces` immediately — calling a
+  // helper that reads `$workspaces` internally does NOT re-run on store
+  // updates in Svelte 5 (only the direct reference does).
+  $: activeContributionIds = new Set<string>(
+    group
+      ? $workspaces
+          .filter((w) => {
+            const md = w.metadata as Record<string, unknown> | undefined;
+            return md?.isDashboard === true && md?.groupId === group!.id;
+          })
+          .map(
+            (w) =>
+              (w.metadata as Record<string, unknown>).dashboardContributionId,
+          )
+          .filter((v): v is string => typeof v === "string")
+      : [],
+  );
 
   async function toggleDashboard(
     contribution: DashboardContribution,
@@ -172,7 +180,7 @@
         style="display: flex; flex-direction: column; gap: 6px; margin-top: 4px;"
       >
         {#each dashboardRows as contribution (contribution.id)}
-          {@const active = isActive(contribution)}
+          {@const active = activeContributionIds.has(contribution.id)}
           {@const locked = contribution.autoProvision === true}
           {@const IconComp = (contribution.icon ?? GridIcon) as Component}
           <!-- svelte-ignore a11y_click_events_have_key_events -->

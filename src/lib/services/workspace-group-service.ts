@@ -22,6 +22,7 @@ import {
 } from "../stores/workspace-groups";
 import { createWorkspaceFromDef, closeWorkspace } from "./workspace-service";
 import { eventBus } from "./event-bus";
+import { getAllPanes } from "../types";
 import {
   getDashboardContribution,
   getDashboardContributions,
@@ -252,7 +253,68 @@ export async function createGroupDashboardWorkspace(
     metadata: {
       isDashboard: true,
       groupId: group.id,
+      dashboardContributionId: "group",
     },
+  });
+}
+
+/**
+ * Backfill `metadata.dashboardContributionId` on legacy dashboard
+ * workspaces that were created before the field existed. Without the
+ * stamp, `hasDashboardWorkspace` (strict-match) misses the workspace
+ * and `provisionAutoDashboardsForGroup` spawns a duplicate every
+ * startup.
+ *
+ * Inference rules (preview-surface path-based):
+ *   - backs the group's `project-dashboard.md` → `"group"`
+ *   - backs the group's `.gnar-term/agentic-dashboard.md` → `"agentic"`
+ *
+ * Runs in a single workspaces.update so subscribers see one state
+ * transition. Idempotent: any workspace whose stamp is already set is
+ * left alone.
+ */
+function backfillDashboardContributionIds(): void {
+  const groups = getWorkspaceGroups();
+  if (groups.length === 0) return;
+  const groupById = new Map<string, WorkspaceGroupEntry>();
+  for (const g of groups) groupById.set(g.id, g);
+
+  let mutated = false;
+  workspaces.update((list) => {
+    const next = list.map((ws) => {
+      const md = ws.metadata as Record<string, unknown> | undefined;
+      if (md?.isDashboard !== true) return ws;
+      if (typeof md?.dashboardContributionId === "string") return ws;
+      const groupId = md?.groupId;
+      if (typeof groupId !== "string") return ws;
+      const group = groupById.get(groupId);
+      if (!group) return ws;
+
+      const previewPaths = getAllPanes(ws.splitRoot)
+        .flatMap((p) => p.surfaces)
+        .filter(
+          (s): s is { kind: "preview"; path: string } & typeof s =>
+            s.kind === "preview",
+        )
+        .map((s) => s.path);
+
+      let inferred: string | null = null;
+      const groupPath = groupDashboardPath(group.path);
+      const agenticPath = `${group.path.replace(/\/+$/, "")}/.gnar-term/agentic-dashboard.md`;
+      if (previewPaths.includes(groupPath)) inferred = "group";
+      else if (previewPaths.includes(agenticPath)) inferred = "agentic";
+      if (!inferred) return ws;
+
+      mutated = true;
+      return {
+        ...ws,
+        metadata: {
+          ...(ws.metadata ?? {}),
+          dashboardContributionId: inferred,
+        },
+      };
+    });
+    return mutated ? next : list;
   });
 }
 
@@ -439,6 +501,12 @@ function isGroupDashboardFor(
  * workspaces store and ripples to `$activeWorkspaceIdx`.
  */
 export async function reconcileGroupDashboards(): Promise<void> {
+  // Backfill `dashboardContributionId` on restored legacy dashboards
+  // so autoProvision's strict contribId match doesn't spawn duplicates.
+  // Safe to call unconditionally — idempotent, early-returns when
+  // nothing is inferable.
+  backfillDashboardContributionIds();
+
   for (const group of getWorkspaceGroups()) {
     // One-shot cleanup: strip the legacy `## Active Agents` section
     // from the group's Overview markdown if it's still there. Runs

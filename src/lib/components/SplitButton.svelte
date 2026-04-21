@@ -16,9 +16,10 @@
   export let theme: Readable<Record<string, string>>;
   export let fullWidth: boolean = false;
   /**
-   * When true and `dropdownItems` is empty, reserve the caret-column
-   * width so the button lines up with sibling split-buttons that do
-   * have a dropdown. Keeps visual rhythm across the sidebar.
+   * When true and the dropdown caret isn't rendered (0 or 1 items),
+   * reserve the caret-column width so the button lines up with sibling
+   * split-buttons that do have a dropdown. Keeps visual rhythm across
+   * the sidebar.
    */
   export let reserveCaret: boolean = false;
 
@@ -77,10 +78,10 @@
       background: transparent;
       color: {$theme.fgDim};
       border: 1px solid {$theme.border};
-      {dropdownItems.length > 0
+      {dropdownItems.length > 1
       ? 'border-right: none; border-radius: 4px 0 0 4px;'
       : 'border-radius: 4px;'}
-      padding: 3px {dropdownItems.length === 0 && reserveCaret
+      padding: 3px {dropdownItems.length <= 1 && reserveCaret
       ? '28px'
       : '8px'} 3px 8px;
       font-size: 11px;
@@ -103,7 +104,7 @@
   </button>
 
   <!-- Dropdown caret (only if there are items) -->
-  {#if dropdownItems.length > 0}
+  {#if dropdownItems.length > 1}
     <button
       title="More actions"
       on:click={toggleDropdown}

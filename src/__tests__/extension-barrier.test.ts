@@ -59,6 +59,14 @@ describe("Extension barrier enforcement", () => {
         // canonical location. Reaching the config helpers directly is
         // the simplest sync path.
         "../../lib/config",
+        // Auto-provision: on activate, back-fill the Agentic Dashboard
+        // for every existing workspace group; on deactivate, close the
+        // provisioned dashboards. No public ExtensionAPI surface exposes
+        // the group list / dashboard tear-down, so the extension pierces
+        // core — same shape as the existing `createWorkspaceFromDef`
+        // piercing above.
+        "../../lib/services/workspace-group-service",
+        "../../lib/stores/workspace-groups",
       ],
       // Issues + TaskSpawner widgets call the shared spawn-helper
       // (core service that composes worktree-service + agent command

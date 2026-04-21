@@ -21,6 +21,11 @@ import type {
   WorkspaceGroupRef,
 } from "../api";
 import { createWorkspaceFromDef } from "../../lib/services/workspace-service";
+import {
+  closeAutoDashboardsBySource,
+  provisionAutoDashboardsForGroup,
+} from "../../lib/services/workspace-group-service";
+import { getWorkspaceGroups } from "../../lib/stores/workspace-groups";
 import { getConfig, saveConfig } from "../../lib/config";
 import BotIcon from "./icons/BotIcon.svelte";
 import GlobalAgenticDashboardBody from "./components/GlobalAgenticDashboardBody.svelte";
@@ -95,8 +100,23 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
       label: "Agentic Dashboard",
       actionLabel: "Add Agentic Dashboard",
       capPerGroup: 1,
+      autoProvision: true,
+      icon: BotIcon,
+      lockedReason: "Required by Agentic extension",
       create: (group) => createAgenticDashboardWorkspace(api, group),
     });
+
+    // Back-fill the Agentic Dashboard for every existing group. Fresh
+    // groups hit provisionAutoDashboardsForGroup through the normal
+    // create flow, but groups that existed before the extension was
+    // enabled would otherwise stay without an agentic tile until app
+    // restart. Run in the background — the extension is fully usable
+    // while the provisioning sweeps through.
+    void (async () => {
+      for (const group of getWorkspaceGroups()) {
+        await provisionAutoDashboardsForGroup(group);
+      }
+    })();
 
     api.registerPseudoWorkspace({
       id: "agentic.global",
@@ -198,6 +218,11 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
       settingsUnsub();
       settingsUnsub = null;
     }
+    // Close the per-group Agentic Dashboard workspaces the extension
+    // auto-provisioned. Runs before the extension's contributions are
+    // unregistered (deactivateExtension order), so the registry still
+    // advertises the agentic contribution's source here.
+    closeAutoDashboardsBySource("agentic-orchestrator");
   });
 }
 

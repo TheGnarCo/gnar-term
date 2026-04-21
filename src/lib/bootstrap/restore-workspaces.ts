@@ -11,6 +11,7 @@
  */
 import { get } from "svelte/store";
 import { workspaces } from "../stores/workspace";
+import { getWorkspaceGroups } from "../stores/workspace-groups";
 import { loadState, type GnarTermConfig, type WorkspaceDef } from "../config";
 import {
   createWorkspace,
@@ -74,12 +75,48 @@ export async function restoreWorkspaces(
   if (Array.isArray(state.workspaces)) {
     // Clear any existing workspaces to prevent doubling on re-mount
     workspaces.set([]);
-    for (const wsDef of state.workspaces) {
+    // Drop orphan Dashboard workspaces whose owning group no longer
+    // exists. Without this, restarting after a group deletion leaves a
+    // ghost dashboard in the main view that the user can't navigate
+    // away from via the sidebar.
+    const knownGroupIds = new Set(getWorkspaceGroups().map((g) => g.id));
+    const filteredDefs = state.workspaces.filter((wsDef) => {
+      const md = wsDef.metadata as Record<string, unknown> | undefined;
+      const isDashboard = md?.isDashboard === true;
+      const ownerGroupId = md?.groupId;
+      if (!isDashboard) return true;
+      if (typeof ownerGroupId !== "string") return true;
+      return knownGroupIds.has(ownerGroupId);
+    });
+    for (const wsDef of filteredDefs) {
       await createWorkspaceFromDef(wsDef, { restoring: true });
     }
-    if (state.workspaces.length > 0) {
-      const idx = state.activeWorkspaceIdx ?? 0;
-      switchWorkspace(Math.min(idx, state.workspaces.length - 1));
+    // Restored workspaces whose `metadata.isDashboard === true` are
+    // group/pseudo dashboards — accessed through their group's tile,
+    // not as a primary active surface. If the only restored workspaces
+    // are dashboards, leave `activeWorkspaceIdx = -1` so the main view
+    // renders the EmptySurface. Otherwise pick the persisted active
+    // index unless it points at a dashboard, in which case fall through
+    // to the first non-dashboard workspace.
+    const restored = get(workspaces);
+    if (restored.length > 0) {
+      const isDashboard = (idx: number): boolean => {
+        const md = restored[idx]?.metadata as
+          | Record<string, unknown>
+          | undefined;
+        return md?.isDashboard === true;
+      };
+      const persistedIdx = state.activeWorkspaceIdx ?? 0;
+      const clampedIdx = Math.min(persistedIdx, restored.length - 1);
+      let targetIdx = -1;
+      if (clampedIdx >= 0 && !isDashboard(clampedIdx)) {
+        targetIdx = clampedIdx;
+      } else {
+        targetIdx = restored.findIndex((_, i) => !isDashboard(i));
+      }
+      if (targetIdx >= 0) {
+        switchWorkspace(targetIdx);
+      }
     }
     // An explicit empty array (user closed everything) is a valid
     // restored state — the Empty Surface will render.

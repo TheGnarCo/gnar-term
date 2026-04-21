@@ -718,7 +718,7 @@
         </div>
       {/each}
 
-      {#if $workspaces.length === 0 && $activePseudoWorkspaceId === null}
+      {#if ($workspaces.length === 0 || $activeWorkspaceIdx < 0) && $activePseudoWorkspaceId === null}
         <EmptySurface />
       {/if}
 

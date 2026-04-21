@@ -64,13 +64,14 @@ describe("EmptySurface renders and is wired up", () => {
   const APP = read("src/App.svelte");
   const EMPTY = read("src/lib/components/EmptySurface.svelte");
 
-  it("App.svelte imports and renders EmptySurface when workspaces is empty", () => {
+  it("App.svelte imports and renders EmptySurface when no workspace is active", () => {
     expect(APP).toMatch(/import EmptySurface from/);
-    // Stage 7 added a pseudo-workspace gate too; match the base predicate
-    // without locking down the rest of the condition.
-    expect(APP).toMatch(
-      /\{#if\s+\$workspaces\.length\s*===\s*0[^}]*\}\s*<EmptySurface/,
-    );
+    // Stage 7 added a pseudo-workspace gate; the orphan-dashboard fix
+    // added an `activeWorkspaceIdx < 0` clause so the empty surface
+    // also renders when every restored workspace is a dashboard.
+    expect(APP).toMatch(/\$workspaces\.length\s*===\s*0/);
+    expect(APP).toMatch(/\$activeWorkspaceIdx\s*<\s*0/);
+    expect(APP).toMatch(/<EmptySurface\s*\/>/);
   });
 
   it("EmptySurface sources buttons from workspaceActionStore and promoted commands", () => {

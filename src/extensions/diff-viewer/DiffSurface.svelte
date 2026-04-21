@@ -10,6 +10,13 @@
   export let compareBranch: string | undefined = undefined;
   export let repoPath: string | undefined = undefined;
   export let staged: boolean | undefined = undefined;
+  /**
+   * Pane-level visibility flag forwarded by `PaneView`. Sibling surfaces in
+   * the same pane stay mounted at once; each surface hides itself when it
+   * isn't the active one. Defaults to true so standalone renders (tests,
+   * future embeddings) don't collapse.
+   */
+  export let visible: boolean = true;
 
   const api = getContext<ExtensionAPI>(EXTENSION_API_KEY);
   const theme = api.theme;
@@ -110,7 +117,12 @@
   });
 </script>
 
-<div class="diff-surface" style:background={$theme.bg} style:color={$theme.fg}>
+<div
+  class="diff-surface"
+  style:background={$theme.bg}
+  style:color={$theme.fg}
+  style:display={visible ? "block" : "none"}
+>
   {#if loading}
     <div class="diff-message" style:color={$theme.fgDim}>Loading diff...</div>
   {:else if error}
@@ -184,8 +196,13 @@
 
 <style>
   .diff-surface {
-    width: 100%;
-    height: 100%;
+    /* Match TerminalSurface / PreviewSurface: occupy the remaining pane
+       height via flex sizing (the pane is flex-direction: column).
+       height: 100% alone collapses to 0 inside a flex child without a
+       grow hint, which showed up as a fully blank surface. */
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
     overflow-y: auto;
     font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
     font-size: 12px;

@@ -15,6 +15,16 @@
 import type { GnarTermConfig } from "../config";
 import { migrateV2WorkspaceGroupsUnification } from "./migrations/v2-workspace-groups-unification";
 
+/**
+ * Structural shape for legacy fields that have been removed from the
+ * public `GnarTermConfig` but can still appear on persisted configs
+ * from older releases. Migrations reach for these through a cast; no
+ * runtime code outside the migration pipeline should depend on them.
+ */
+interface LegacyConfigShape extends GnarTermConfig {
+  agentOrchestrators?: Array<Record<string, unknown>>;
+}
+
 export interface ConfigMigration {
   /** Target schemaVersion this migration produces. Strictly increasing. */
   version: number;
@@ -60,12 +70,11 @@ const MIGRATIONS: ConfigMigration[] = [
       // Orchestrator field rename: parentProjectId → parentGroupId. The
       // field was already renamed in-code by this release; this covers
       // configs written by the previous release.
-      const orchestrators = config.agentOrchestrators;
+      const orchestrators = (config as LegacyConfigShape).agentOrchestrators;
       if (Array.isArray(orchestrators)) {
         next.agentOrchestrators = orchestrators.map((o) => {
-          const raw = o as unknown as Record<string, unknown>;
-          if (!("parentProjectId" in raw)) return o;
-          const { parentProjectId, ...rest } = raw;
+          if (!("parentProjectId" in o)) return o;
+          const { parentProjectId, ...rest } = o;
           // If a new field already exists, preserve it; otherwise adopt
           // the legacy one. Empty/undefined legacy is dropped.
           const preserved =
@@ -75,7 +84,7 @@ const MIGRATIONS: ConfigMigration[] = [
             ...rest,
             ...(preserved !== undefined ? { parentGroupId: preserved } : {}),
           };
-        }) as typeof orchestrators;
+        });
       }
 
       return next as GnarTermConfig;

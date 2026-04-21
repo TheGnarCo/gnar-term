@@ -43,11 +43,48 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 import type { GnarTermConfig } from "../lib/config";
-import { runConfigMigrations } from "../lib/services/config-migrations";
+import {
+  runConfigMigrations,
+  type ConfigMigrationResult,
+} from "../lib/services/config-migrations";
 
-type LegacyOrchestrator = NonNullable<
-  GnarTermConfig["agentOrchestrators"]
->[number];
+/**
+ * Structural shape of the legacy orchestrator record — the
+ * `AgentOrchestrator` type was removed from the public config surface
+ * when v2 shipped; tests describe the shape locally so fixtures remain
+ * typed without revenge-importing the deprecated type.
+ */
+interface LegacyOrchestrator {
+  id: string;
+  name: string;
+  baseDir: string;
+  color: string;
+  path: string;
+  createdAt: string;
+  parentGroupId?: string;
+  dashboardWorkspaceId?: string;
+}
+
+interface LegacyConfigInput extends GnarTermConfig {
+  agentOrchestrators?: LegacyOrchestrator[];
+}
+
+interface LegacyMigrationResult extends ConfigMigrationResult {
+  migrated: LegacyConfigInput;
+}
+
+/**
+ * Test helper: wrap `runConfigMigrations` so fixtures can pass the
+ * legacy `agentOrchestrators` field (public type no longer exposes it)
+ * and assertions can read back the removed field to verify the
+ * migration dropped it.
+ */
+async function migrate(
+  input: LegacyConfigInput,
+): Promise<LegacyMigrationResult> {
+  const result = await runConfigMigrations(input as GnarTermConfig);
+  return result as LegacyMigrationResult;
+}
 
 function makeOrchestrator(
   overrides: Partial<LegacyOrchestrator> & { id: string; path: string },
@@ -84,7 +121,7 @@ describe("config v2 migration — agent orchestrators → dashboards", () => {
   });
 
   it("is a no-op on configs without agentOrchestrators (schemaVersion still bumps)", async () => {
-    const { migrated, applied } = await runConfigMigrations({
+    const { migrated, applied } = await migrate({
       schemaVersion: 1,
     });
     expect(applied).toEqual([2]);
@@ -93,7 +130,7 @@ describe("config v2 migration — agent orchestrators → dashboards", () => {
   });
 
   it("drops agentOrchestrators when the array is empty", async () => {
-    const { migrated } = await runConfigMigrations({
+    const { migrated } = await migrate({
       schemaVersion: 1,
       agentOrchestrators: [],
     });
@@ -105,7 +142,7 @@ describe("config v2 migration — agent orchestrators → dashboards", () => {
     seedWorkspaceGroupsState([{ id: "grp-a", path: "/work/projA" }]);
     fs.set("/tmp/one.md", "# Orch One\ncontent\n");
 
-    const { migrated } = await runConfigMigrations({
+    const { migrated } = await migrate({
       schemaVersion: 1,
       agentOrchestrators: [
         makeOrchestrator({
@@ -126,7 +163,7 @@ describe("config v2 migration — agent orchestrators → dashboards", () => {
     fs.set("/tmp/keep.md", "# Keep\n");
     fs.set("/tmp/drop.md", "# Drop\n");
 
-    const { migrated } = await runConfigMigrations({
+    const { migrated } = await migrate({
       schemaVersion: 1,
       agentOrchestrators: [
         makeOrchestrator({
@@ -157,7 +194,7 @@ describe("config v2 migration — agent orchestrators → dashboards", () => {
       "# User wrote this already\n",
     );
 
-    await runConfigMigrations({
+    await migrate({
       schemaVersion: 1,
       agentOrchestrators: [
         makeOrchestrator({
@@ -176,7 +213,7 @@ describe("config v2 migration — agent orchestrators → dashboards", () => {
   it("rootless orchestrator → writes markdown to ~/.config/gnar-term/global-agents.md and stamps agenticGlobal.markdownPath", async () => {
     fs.set("/tmp/root.md", "# Global source\n");
 
-    const { migrated } = await runConfigMigrations({
+    const { migrated } = await migrate({
       schemaVersion: 1,
       agentOrchestrators: [
         makeOrchestrator({ id: "o-root", path: "/tmp/root.md" }),
@@ -193,7 +230,7 @@ describe("config v2 migration — agent orchestrators → dashboards", () => {
     fs.set("/tmp/keep-root.md", "# Keep global\n");
     fs.set("/tmp/drop-root.md", "# Drop\n");
 
-    const { migrated } = await runConfigMigrations({
+    const { migrated } = await migrate({
       schemaVersion: 1,
       agentOrchestrators: [
         makeOrchestrator({ id: "o-keep", path: "/tmp/keep-root.md" }),
@@ -218,7 +255,7 @@ describe("config v2 migration — agent orchestrators → dashboards", () => {
     fs.set("/tmp/b.md", "# B\n");
     fs.set("/tmp/root.md", "# Root\n");
 
-    const { migrated } = await runConfigMigrations({
+    const { migrated } = await migrate({
       schemaVersion: 1,
       agentOrchestrators: [
         makeOrchestrator({
@@ -248,7 +285,7 @@ describe("config v2 migration — agent orchestrators → dashboards", () => {
     seedWorkspaceGroupsState([]);
     fs.set("/tmp/orphan.md", "# Orphan\n");
 
-    const { migrated, applied } = await runConfigMigrations({
+    const { migrated, applied } = await migrate({
       schemaVersion: 1,
       agentOrchestrators: [
         makeOrchestrator({
@@ -272,7 +309,7 @@ describe("config v2 migration — agent orchestrators → dashboards", () => {
     );
     fs.set("/tmp/a.md", "# A\n");
 
-    const { migrated } = await runConfigMigrations({
+    const { migrated } = await migrate({
       schemaVersion: 1,
       agentOrchestrators: [
         makeOrchestrator({

@@ -148,34 +148,6 @@ export interface WorkspaceGroupEntry {
   dashboardWorkspaceId?: string;
 }
 
-/**
- * @deprecated Stage 7 collapsed AgentOrchestrator into the Agentic
- * Dashboard contribution + Global Agentic Dashboard pseudo-workspace;
- * Stage 8's v2 migration drains `config.agentOrchestrators` into
- * markdown files on disk. The type + field stay on the public
- * `GnarTermConfig` surface only so the migration has typed access to
- * legacy input. No runtime code outside the migration pipeline should
- * read or write either.
- */
-export interface AgentOrchestrator {
-  id: string;
-  name: string;
-  baseDir: string;
-  color: string;
-  /** Absolute path to the backing .md file. Resolved at create-time. */
-  path: string;
-  /** When set, the orchestrator is nested under a project; otherwise root-level. */
-  parentGroupId?: string;
-  /**
-   * Id of the Dashboard workspace that hosts this orchestrator's
-   * markdown Live Preview. Set when the Dashboard is created (eagerly,
-   * alongside the orchestrator). Resolved from the workspaces store by
-   * consumers.
-   */
-  dashboardWorkspaceId?: string;
-  createdAt: string;
-}
-
 export interface GnarTermConfig {
   /**
    * Monotonic schema version for on-disk config shape. Loaders call
@@ -196,8 +168,6 @@ export interface GnarTermConfig {
   extensions?: Record<string, ExtensionConfig>;
   worktrees?: WorktreesConfig;
   agents?: AgentsConfig;
-  /** @deprecated Migration-only — see {@link AgentOrchestrator}. */
-  agentOrchestrators?: AgentOrchestrator[];
   /**
    * Global Agentic Dashboard configuration — the singleton
    * pseudo-workspace pinned at the top of the root sidebar. `markdownPath`

@@ -31,6 +31,16 @@ import { getHome } from "../service-helpers";
 import type { GnarTermConfig } from "../../config";
 
 /**
+ * Shape of the config-as-written-by-older-releases that this migration
+ * consumes. `agentOrchestrators` is removed from the public
+ * `GnarTermConfig` type; migrations reach for the legacy field via
+ * this structural cast.
+ */
+interface LegacyConfigShape extends GnarTermConfig {
+  agentOrchestrators?: LegacyOrchestrator[];
+}
+
+/**
  * Structural description of a workspace group — mirrors the
  * `WorkspaceGroupEntry` in core but kept here to avoid a runtime import
  * dependency on the public config type. The migration only needs
@@ -159,10 +169,10 @@ function groupByParent(orchestrators: LegacyOrchestrator[]): {
 export async function migrateV2WorkspaceGroupsUnification(
   config: GnarTermConfig,
 ): Promise<GnarTermConfig> {
-  const orchestrators =
-    (config.agentOrchestrators as LegacyOrchestrator[] | undefined) ?? [];
+  const legacyConfig = config as LegacyConfigShape;
+  const orchestrators = legacyConfig.agentOrchestrators ?? [];
   if (orchestrators.length === 0) {
-    const { agentOrchestrators: _drop, ...rest } = config;
+    const { agentOrchestrators: _drop, ...rest } = legacyConfig;
     void _drop;
     return rest as GnarTermConfig;
   }
@@ -217,7 +227,7 @@ export async function migrateV2WorkspaceGroupsUnification(
     }
   }
 
-  const { agentOrchestrators: _removed, ...rest } = config;
+  const { agentOrchestrators: _removed, ...rest } = legacyConfig;
   void _removed;
   const next: GnarTermConfig = {
     ...(rest as GnarTermConfig),

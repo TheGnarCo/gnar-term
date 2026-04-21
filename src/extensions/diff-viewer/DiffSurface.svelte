@@ -72,6 +72,70 @@
     return result;
   }
 
+  /**
+   * List the repo's untracked files via porcelain and synthesize diff
+   * entries that render each as a "new file" body. Tauri has no raw
+   * "read untracked as diff" command, so we use git_status to get the
+   * paths and read_file to pull the content — clamped to 2KB per file
+   * so huge untracked blobs don't wedge the viewer.
+   */
+  const UNTRACKED_PREVIEW_BYTES = 2048;
+  async function collectUntrackedAsDiff(repo: string): Promise<DiffFile[]> {
+    try {
+      const list = await api.invoke<
+        Array<{ path: string; status: string; staged: string }>
+      >("git_status", { repoPath: repo });
+      const untracked = list.filter(
+        (f) => (f.status ?? "") + (f.staged ?? "") === "??",
+      );
+      const out: DiffFile[] = [];
+      for (const f of untracked) {
+        let text = "";
+        try {
+          text = await api.invoke<string>("read_file", {
+            path: `${repo}/${f.path}`,
+          });
+          if (text.length > UNTRACKED_PREVIEW_BYTES) {
+            text = text.slice(0, UNTRACKED_PREVIEW_BYTES) + "\n… (truncated)";
+          }
+        } catch {
+          text = "(unreadable)";
+        }
+        const lines: DiffLine[] = [
+          {
+            type: "header",
+            content: `@@ -0,0 +1,${text.split("\n").length} @@`,
+          },
+          ...text.split("\n").map((line, i) => ({
+            type: "add" as const,
+            content: line,
+            newLineNum: i + 1,
+          })),
+        ];
+        out.push({
+          oldPath: "/dev/null",
+          newPath: f.path,
+          hunks: [
+            {
+              header: `@@ -0,0 +1,${lines.length - 1} @@`,
+              oldStart: 0,
+              oldCount: 0,
+              newStart: 1,
+              newCount: lines.length - 1,
+              lines,
+            },
+          ],
+          isNew: true,
+          isDeleted: false,
+          isBinary: false,
+        });
+      }
+      return out;
+    } catch {
+      return [];
+    }
+  }
+
   function lineClass(type: DiffLine["type"]): string {
     switch (type) {
       case "add":
@@ -100,8 +164,26 @@
       if (compareBranch) args.head = compareBranch;
       if (staged) args.staged = true;
 
+      // Default to "everything uncommitted" when the caller supplied no
+      // comparison — plain `git diff` only surfaces unstaged edits, so a
+      // tree whose changes are all staged (or untracked) showed up as
+      // "No changes" here even though `git status` listed them. Passing
+      // base=HEAD folds staged + unstaged into a single diff.
+      if (!filePath && !baseBranch && !compareBranch && !staged && !args.base) {
+        args.base = "HEAD";
+      }
+
       const rawDiff = await api.invoke<string>("git_diff", args);
-      const parsed = parseDiff(rawDiff);
+      let parsed = parseDiff(rawDiff);
+
+      // Untracked files still aren't part of a `git diff HEAD` because
+      // git has no pre-image to diff against. Fold them in as
+      // synthetic "new file" hunks so the Uncommitted Changes surface
+      // actually shows every dirty file the sidebar counted.
+      if (!filePath && !baseBranch && !compareBranch && !staged) {
+        const untracked = await collectUntrackedAsDiff(repo);
+        if (untracked.length > 0) parsed = [...parsed, ...untracked];
+      }
 
       if (countTotalLines(parsed) > MAX_LINES) {
         files = truncateFiles(parsed);

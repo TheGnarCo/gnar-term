@@ -90,9 +90,59 @@
 
   let branch: string | null = null;
   let dirtyCount = 0;
+  let dirtyLabel = "";
+  let dirtyTooltip = "";
   let prs: GhPr[] = [];
   let branchError = false;
   let lastTargetId: string | null = null;
+
+  /**
+   * Collapse the FileStatus porcelain output into a git-shorthand label
+   * (e.g. "M5 A2 D1 ?3"). Mirrors formatDirtyShorthand in git-status-
+   * service — inlined here because PathStatusLine polls `git_status`
+   * directly and doesn't share state with that service.
+   */
+  function collapseDirty(files: FileStatus[]): {
+    label: string;
+    tooltip: string;
+  } {
+    let modified = 0;
+    let added = 0;
+    let deleted = 0;
+    let renamed = 0;
+    let untracked = 0;
+    for (const f of files) {
+      const cols = `${f.staged ?? ""}${f.status ?? ""}`;
+      if (cols.includes("?")) untracked++;
+      else if (/[RC]/.test(cols)) renamed++;
+      else if (cols.includes("A")) added++;
+      else if (cols.includes("D")) deleted++;
+      else if (cols.includes("M") || cols.includes("T")) modified++;
+    }
+    const labelParts: string[] = [];
+    const tipParts: string[] = [];
+    if (modified > 0) {
+      labelParts.push(`M${modified}`);
+      tipParts.push(`${modified} modified`);
+    }
+    if (added > 0) {
+      labelParts.push(`A${added}`);
+      tipParts.push(`${added} added`);
+    }
+    if (deleted > 0) {
+      labelParts.push(`D${deleted}`);
+      tipParts.push(`${deleted} deleted`);
+    }
+    if (renamed > 0) {
+      labelParts.push(`R${renamed}`);
+      tipParts.push(`${renamed} renamed`);
+    }
+    if (untracked > 0) {
+      labelParts.push(`?${untracked}`);
+      tipParts.push(`${untracked} untracked`);
+    }
+    return { label: labelParts.join(" "), tooltip: tipParts.join(", ") };
+  }
 
   const REFRESH_MS = 45_000;
 
@@ -117,8 +167,13 @@
         repoPath: target.path,
       });
       dirtyCount = status.length;
+      const collapsed = collapseDirty(status);
+      dirtyLabel = collapsed.label;
+      dirtyTooltip = collapsed.tooltip;
     } catch {
       dirtyCount = 0;
+      dirtyLabel = "";
+      dirtyTooltip = "";
     }
   }
 
@@ -165,6 +220,8 @@
     stop();
     branch = null;
     dirtyCount = 0;
+    dirtyLabel = "";
+    dirtyTooltip = "";
     prs = [];
     lastTargetId = null;
   }
@@ -274,9 +331,9 @@
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <span
           style="font-size: 10px; color: {dirtyColor}; white-space: nowrap; flex-shrink: 0; cursor: pointer; text-decoration: underline;"
-          title="Open uncommitted changes"
+          title={dirtyTooltip || "Open uncommitted changes"}
           on:click|stopPropagation={() => handleDirtyClick()}
-          >{dirtyCount}·modified</span
+          >{dirtyLabel || `${dirtyCount}`}</span
         >
       {/if}
     </div>

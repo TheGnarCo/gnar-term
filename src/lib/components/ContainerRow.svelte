@@ -92,8 +92,13 @@
   export let workspaceListViewComponent: Component | unknown | undefined =
     undefined;
 
-  let gripHovered = false;
   let bannerHovered = false;
+  /**
+   * Row-level hover covers the rail + banner + nested list. Drives the
+   * DragGrip expansion so the rail widens whenever the cursor enters any
+   * part of the row (not only the grip column).
+   */
+  let rowHovered = false;
 
   $: WorkspaceListViewResolved = (workspaceListViewComponent ??
     DefaultWorkspaceListView) as Component;
@@ -193,16 +198,18 @@
        (matching the inactive dashboard-tile stroke) wraps only the
        banner row; the nested workspace list renders below the border
        so children carry their own chrome. -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     data-container-row={testId ?? ""}
     data-container-mode="root"
     style="display: flex; position: relative; align-items: stretch;"
+    on:mouseenter={() => (rowHovered = true)}
+    on:mouseleave={() => (rowHovered = false)}
+    on:mousedown={(e) => onGripMouseDown?.(e)}
   >
     {#if onGripMouseDown}
       <div
         data-container-rail
-        on:mouseenter={() => (gripHovered = true)}
-        on:mouseleave={() => (gripHovered = false)}
         style="
           flex-shrink: 0;
           align-self: stretch;
@@ -211,10 +218,12 @@
         "
         role="presentation"
       >
+        <!-- Drag-start handler lives on the outer flex container so
+             hovering the banner / nested list also expands the grip
+             and mousedowns anywhere initiate the reorder. -->
         <DragGrip
           theme={$theme}
-          visible={gripHovered && $reorderContext === null}
-          onMouseDown={onGripMouseDown}
+          visible={rowHovered && $reorderContext === null}
           ariaLabel={gripAriaLabel}
           railColor={color}
           dotColor="#000"
@@ -261,7 +270,7 @@
         on:mouseenter={() => (bannerHovered = true)}
         on:mouseleave={() => (bannerHovered = false)}
       >
-        {#if onGripMouseDown && !gripHovered}
+        {#if onGripMouseDown && !rowHovered}
           <!-- Rail-edge fade: a small dot-pattern section at the banner's
                left edge that continues the rail into the banner body and
                fades out. Mirrors WorkspaceItem's drag-edge fade. Hidden

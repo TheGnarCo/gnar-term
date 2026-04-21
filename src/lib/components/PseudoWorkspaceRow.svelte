@@ -29,8 +29,10 @@
   export let pseudo: PseudoWorkspace;
   export let onGripMouseDown: ((e: MouseEvent) => void) | undefined = undefined;
 
-  let gripHovered = false;
   let bannerHovered = false;
+  /** Row-level hover drives the grip expansion — any section of the
+   *  row counts, not just the grip column. */
+  let rowHovered = false;
 
   // Resolve the pseudo-workspace color from config. Fallback to the
   // theme accent so rows always render with a solid banner regardless
@@ -57,26 +59,30 @@
   $: isActive = $activePseudoWorkspaceId === pseudo.id;
 </script>
 
+<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   data-pseudo-workspace-row={pseudo.id}
   data-pseudo-position={pseudo.position}
   data-active={isActive ? "true" : undefined}
   style="display: flex; position: relative;"
+  on:mouseenter={() => (rowHovered = true)}
+  on:mouseleave={() => (rowHovered = false)}
+  on:mousedown={(e) => onGripMouseDown?.(e)}
 >
   {#if onGripMouseDown}
     <div
-      on:mouseenter={() => (gripHovered = true)}
-      on:mouseleave={() => (gripHovered = false)}
       style="
         flex-shrink: 0; align-self: stretch; display: flex;
         background: transparent;
       "
       role="presentation"
     >
+      <!-- Drag-start handler lives on the outer row div so hovering
+           the banner / body expands the grip and mousedowns anywhere
+           initiate reorder. -->
       <DragGrip
         theme={$theme}
-        visible={gripHovered && $reorderContext === null}
-        onMouseDown={onGripMouseDown}
+        visible={rowHovered && $reorderContext === null}
         ariaLabel="Drag to reorder"
         railColor={$theme.border ?? "transparent"}
         dotColor={$theme.fgDim ?? $theme.fg}

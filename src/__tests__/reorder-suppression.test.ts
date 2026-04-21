@@ -30,10 +30,12 @@ describe("grip visibility suppression", () => {
   it("WorkspaceItem keeps its own grip collapsed when any reorder is active unless the item is the drag source", () => {
     // WorkspaceItem still owns a grip when rendered INSIDE a project
     // (WorkspaceListView); at the root level it's rendered without
-    // one (WorkspaceListBlock draws the grip externally).
+    // one (WorkspaceListBlock draws the grip externally). The visible
+    // gate tracks row-level hover so hovering any part of the row
+    // (not just the grip column) expands it.
     expect(WORKSPACE_ITEM).toContain("anyReorderActive");
     expect(WORKSPACE_ITEM).toMatch(
-      /visible=\{\s*dragActive\s*\|\|\s*\(\s*gripHovered\s*&&\s*!\s*\$anyReorderActive\s*\)\s*\}/,
+      /visible=\{\s*dragActive\s*\|\|\s*\(\s*hovered\s*&&\s*!\s*\$anyReorderActive\s*\)\s*\}/,
     );
   });
 

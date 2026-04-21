@@ -66,13 +66,39 @@ describe("WorkspaceItem drag grip", () => {
     expect(onGripMouseDown).toHaveBeenCalledTimes(1);
   });
 
+  it("expands the grip on row-level hover (not just grip-column hover)", async () => {
+    const { container } = render(WorkspaceItem, {
+      props: {
+        workspace: makeWorkspace(),
+        index: 0,
+        isActive: false,
+        onSelect: noop,
+        onClose: noop,
+        onRename: noop,
+        onContextMenu: noop,
+        onGripMouseDown: vi.fn(),
+      },
+    });
+    const row = container.querySelector("[data-drag-idx]") as HTMLElement;
+    const grip = container.querySelector(
+      '[role="button"][aria-label*="rag" i]',
+    ) as HTMLElement;
+    // Baseline: the grip is in its collapsed 10px width until hover.
+    expect(grip.style.width).toBe("10px");
+    // Hover the row body (not the grip itself) — the grip should expand.
+    await fireEvent.mouseEnter(row);
+    expect(grip.style.width).toBe("20px");
+    await fireEvent.mouseLeave(row);
+    expect(grip.style.width).toBe("10px");
+  });
+
   it("rounds only the right corners so the rail renders as a straight vertical bar on the left", () => {
     expect(WORKSPACE_ITEM_SOURCE).toMatch(/border-radius:\s*0\s+6px\s+6px\s+0/);
     // Negative: the old uniform radius is gone.
     expect(WORKSPACE_ITEM_SOURCE).not.toMatch(/border-radius:\s*6px\s*;/);
   });
 
-  it("does NOT invoke onGripMouseDown when row body is pressed", async () => {
+  it("invokes onGripMouseDown when ANY part of the row body is pressed (row-level drag-origin)", async () => {
     const onGripMouseDown = vi.fn();
     const onSelect = vi.fn();
     const { container } = render(WorkspaceItem, {
@@ -89,11 +115,10 @@ describe("WorkspaceItem drag grip", () => {
     });
     const row = container.querySelector("[data-drag-idx]") as HTMLElement;
     await fireEvent.mouseDown(row);
-    // Mousedown on body bubbles, but the grip handler should not fire
-    expect(onGripMouseDown).not.toHaveBeenCalled();
-    // Click on the inner content div (not the grip column, not the
-    // absolute-positioned close button, not the fade overlay) still
-    // selects. The content div is the last div child of the row.
+    // Row-level mousedown is the drag-start surface now; a tap (mousedown
+    // below createDragReorder's 5px threshold) still lets click fire on
+    // the inner content div so selection works for single clicks.
+    expect(onGripMouseDown).toHaveBeenCalledTimes(1);
     const contentDiv = container.querySelector(
       "[data-drag-idx] > div:last-of-type",
     ) as HTMLElement;

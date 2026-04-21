@@ -117,7 +117,6 @@
   export let hideStatusBadges: boolean = false;
 
   let hovered = false;
-  let gripHovered = false;
   let closeHovered = false;
   let nameEl: HTMLSpanElement;
   let _renaming = false;
@@ -234,31 +233,24 @@
   on:mouseenter={() => (hovered = true)}
   on:mouseleave={() => {
     hovered = false;
-    gripHovered = false;
     closeHovered = false;
   }}
+  on:mousedown={(e) => onGripMouseDown?.(e)}
 >
   {#if onGripMouseDown}
-    <!-- Wrapper scopes grip-expansion hover to the grip column only.
-         Row-level hover (for close button etc.) stays separate. No
-         background on the wrapper — the rail reads as its dot
-         pattern, not a solid colored block. -->
-    <div
-      on:mouseenter={() => (gripHovered = true)}
-      on:mouseleave={() => (gripHovered = false)}
-      style="flex-shrink: 0; align-self: stretch; display: flex;"
-    >
-      <DragGrip
-        theme={$theme}
-        visible={dragActive || (gripHovered && !$anyReorderActive)}
-        onMouseDown={onGripMouseDown}
-        ariaLabel="Drag workspace to reorder"
-        {railColor}
-        railOpacity={1}
-        alwaysShowDots={true}
-        fadeRight={!(dragActive || (gripHovered && !$anyReorderActive))}
-      />
-    </div>
+    <!-- Grip column. The drag-start handler lives on the outer row
+         div (above) so hovering anywhere on the row expands the grip
+         and mousedowns on the body itself initiate the reorder —
+         createDragReorder's 5px threshold keeps taps as selects. -->
+    <DragGrip
+      theme={$theme}
+      visible={dragActive || (hovered && !$anyReorderActive)}
+      ariaLabel="Drag workspace to reorder"
+      {railColor}
+      railOpacity={1}
+      alwaysShowDots={true}
+      fadeRight={!(dragActive || (hovered && !$anyReorderActive))}
+    />
     <!-- Drag-edge fade: continues the rail's dot pattern from the
          very left of the row into the row body for ~14px, dropping
          off fast. Matches the project banner's fade treatment so

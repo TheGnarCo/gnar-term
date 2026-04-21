@@ -3,7 +3,13 @@
 
   export let theme: ThemeDef;
   export let visible: boolean = false;
-  export let onMouseDown: (e: MouseEvent) => void;
+  /**
+   * Optional mousedown binding. Consumers now typically attach the drag
+   * start handler at the row level (so hovering the row expands the
+   * grip and mousedowns on the body also initiate reorder). The prop
+   * stays optional for callers that still want a grip-only binding.
+   */
+  export let onMouseDown: ((e: MouseEvent) => void) | undefined = undefined;
   export let ariaLabel: string = "Drag to reorder";
   /** Color of the rail and dot texture. Defaults to theme.fgDim (grey). */
   export let railColor: string | undefined = undefined;
@@ -51,7 +57,7 @@
   tabindex="-1"
   aria-label={ariaLabel}
   class="drag-grip"
-  on:mousedown={onMouseDown}
+  on:mousedown={onMouseDown ?? (() => {})}
   style="
     flex-shrink: 0;
     align-self: stretch;

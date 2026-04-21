@@ -179,6 +179,47 @@ async function writeGroupDashboardTemplate(
 }
 
 /**
+ * Remove the legacy `## Active Agents` section (heading + adjacent
+ * `gnar:agent-list` fenced code block) from group Overview markdown.
+ *
+ * Older templates emitted this section into every group's
+ * `project-dashboard.md`; once the Agentic Dashboard became its own
+ * tile the widget's presence on the Overview was redundant. The
+ * template stopped emitting it, but existing user files kept the
+ * stale block. This runs once per reconciliation pass — idempotent by
+ * design (match-or-skip, never appends).
+ *
+ * The matcher is strict: heading "## Active Agents" followed by
+ * whitespace and a `gnar:agent-list` fenced code block. If the user
+ * has added custom content under the heading, no match occurs and the
+ * file is left alone.
+ */
+function stripActiveAgentsSection(markdown: string): string | null {
+  const pattern =
+    /\n*##\s+Active Agents\s*\n+```gnar:agent-list\n[^`]*```\s*\n?/;
+  if (!pattern.test(markdown)) return null;
+  return markdown.replace(pattern, "\n");
+}
+
+async function scrubGroupDashboardActiveAgents(path: string): Promise<void> {
+  try {
+    const exists = await invoke<boolean>("file_exists", { path }).catch(
+      () => false,
+    );
+    if (!exists) return;
+    const content = await invoke<string>("read_file", { path });
+    const next = stripActiveAgentsSection(content);
+    if (next === null) return;
+    await invoke("write_file", { path, content: next });
+  } catch (err) {
+    console.warn(
+      `[workspace-groups] Failed to scrub Active Agents from "${path}":`,
+      err,
+    );
+  }
+}
+
+/**
  * Create the Dashboard workspace for a group: a constrained workspace
  * (metadata.isDashboard = true) hosting a single Live Preview of the
  * group's markdown file. Returns the new workspace id so the group
@@ -399,6 +440,12 @@ function isGroupDashboardFor(
  */
 export async function reconcileGroupDashboards(): Promise<void> {
   for (const group of getWorkspaceGroups()) {
+    // One-shot cleanup: strip the legacy `## Active Agents` section
+    // from the group's Overview markdown if it's still there. Runs
+    // before we materialize / rebind the dashboard workspace so the
+    // first render already reflects the cleaned file.
+    await scrubGroupDashboardActiveAgents(groupDashboardPath(group.path));
+
     const matches = get(workspaces).filter((w) =>
       isGroupDashboardFor(w, group.id),
     );

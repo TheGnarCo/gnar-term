@@ -203,13 +203,13 @@
     data-container-row={testId ?? ""}
     data-container-mode="root"
     style="display: flex; position: relative; align-items: stretch;"
-    on:mouseenter={() => (rowHovered = true)}
-    on:mouseleave={() => (rowHovered = false)}
-    on:mousedown={(e) => onGripMouseDown?.(e)}
   >
     {#if onGripMouseDown}
       <div
         data-container-rail
+        on:mouseenter={() => (rowHovered = true)}
+        on:mouseleave={() => (rowHovered = false)}
+        on:mousedown={(e) => onGripMouseDown?.(e)}
         style="
           flex-shrink: 0;
           align-self: stretch;
@@ -218,9 +218,10 @@
         "
         role="presentation"
       >
-        <!-- Drag-start handler lives on the outer flex container so
-             hovering the banner / nested list also expands the grip
-             and mousedowns anywhere initiate the reorder. -->
+        <!-- Drag-start handler is wired to the rail + banner only —
+             nested workspaces own their own drag within the nested
+             zone, so mousedowns there must NOT bubble up into a
+             container-row reorder. -->
         <DragGrip
           theme={$theme}
           visible={rowHovered && $reorderContext === null}
@@ -267,8 +268,15 @@
         "
         on:contextmenu={onBannerContextMenu}
         on:click={onBannerClick}
-        on:mouseenter={() => (bannerHovered = true)}
-        on:mouseleave={() => (bannerHovered = false)}
+        on:mousedown={(e) => onGripMouseDown?.(e)}
+        on:mouseenter={() => {
+          bannerHovered = true;
+          rowHovered = true;
+        }}
+        on:mouseleave={() => {
+          bannerHovered = false;
+          rowHovered = false;
+        }}
       >
         {#if onGripMouseDown && !rowHovered}
           <!-- Rail-edge fade: a small dot-pattern section at the banner's

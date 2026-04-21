@@ -19,17 +19,15 @@
    */
   import { getContext } from "svelte";
   import { EXTENSION_API_KEY, type ExtensionAPI } from "../../api";
-  import { slugify } from "../widget-helpers";
+  import { resolveSpawnTarget, scopeAttrs, slugify } from "../widget-helpers";
   import {
     spawnAgentInWorktree,
     type SpawnAgentType,
-    type SpawnedByMarker,
   } from "../../../lib/services/spawn-helper";
   import {
     deriveDashboardScope,
     getDashboardHost,
   } from "../../../lib/contexts/dashboard-host";
-  import { getWorkspaceGroup } from "../../../lib/stores/workspace-groups";
 
   /** Required when the enclosing host is global (no group.path to infer). */
   export let repoPath: string | undefined = undefined;
@@ -55,29 +53,8 @@
     { id: "custom", label: "Custom..." },
   ];
 
-  function resolveSpawnTarget():
-    | { repoPath: string; spawnedBy: SpawnedByMarker; groupId?: string }
-    | { error: string } {
-    if (scope.kind === "group") {
-      const group = getWorkspaceGroup(scope.groupId);
-      if (!group) return { error: "Workspace Group not found" };
-      return {
-        repoPath: group.path,
-        spawnedBy: { kind: "group", groupId: scope.groupId },
-        groupId: scope.groupId,
-      };
-    }
-    if (scope.kind === "global") {
-      if (!repoPath || !repoPath.trim()) {
-        return { error: "Global TaskSpawner requires a repoPath config" };
-      }
-      return { repoPath, spawnedBy: { kind: "global" } };
-    }
-    return { error: "TaskSpawner requires a dashboard host scope" };
-  }
-
-  $: target = resolveSpawnTarget();
-  $: hasTarget = !("error" in target);
+  $: target = resolveSpawnTarget(scope, repoPath);
+  $: hasTarget = target.ok;
   $: branchPlaceholder = task ? slugify(task) : "task-branch";
   $: canSpawn = task.trim().length > 0 && hasTarget && !spawning;
 
@@ -96,7 +73,7 @@
 
   async function spawn() {
     if (!canSpawn) return;
-    if ("error" in target) {
+    if (!target.ok) {
       spawnError = target.error;
       return;
     }
@@ -137,8 +114,7 @@
 
 <div
   data-task-spawner
-  data-scope-kind={scope.kind}
-  data-scope-group-id={scope.kind === "group" ? scope.groupId : ""}
+  {...scopeAttrs(scope)}
   style="
     display: flex; flex-direction: column; gap: 8px;
     padding: 12px; border: 1px solid {$theme.border};

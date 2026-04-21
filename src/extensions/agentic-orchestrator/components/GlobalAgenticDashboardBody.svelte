@@ -205,12 +205,16 @@ title: Active Agents
         </p>
         <div
           data-color-picker
+          role="radiogroup"
           style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px;"
         >
           {#each PROJECT_COLOR_SLOTS as slot (slot)}
             {@const hex = resolveProjectColor(slot, $theme)}
             {@const isSelected = slot === currentColorSlot}
             <button
+              type="button"
+              role="radio"
+              aria-checked={isSelected}
               data-color-slot={slot}
               data-selected={isSelected ? "true" : undefined}
               title={slot}

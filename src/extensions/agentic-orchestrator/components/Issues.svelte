@@ -18,11 +18,16 @@
    */
   import { getContext, onDestroy, onMount } from "svelte";
   import { EXTENSION_API_KEY, type ExtensionAPI } from "../../api";
-  import { GH_POLL_THROTTLE_MS, slugify, timeAgo } from "../widget-helpers";
+  import {
+    GH_POLL_THROTTLE_MS,
+    resolveSpawnTarget,
+    scopeAttrs,
+    slugify,
+    timeAgo,
+  } from "../widget-helpers";
   import {
     spawnAgentInWorktree,
     type SpawnAgentType,
-    type SpawnedByMarker,
   } from "../../../lib/services/spawn-helper";
   import {
     isGhAvailable,
@@ -32,7 +37,6 @@
     deriveDashboardScope,
     getDashboardHost,
   } from "../../../lib/contexts/dashboard-host";
-  import { getWorkspaceGroup } from "../../../lib/stores/workspace-groups";
 
   export let repoPath: string | undefined = undefined;
   export let repo: string | undefined = undefined;
@@ -42,29 +46,8 @@
   const host = getDashboardHost();
   const scope = deriveDashboardScope(host);
 
-  interface ResolvedTarget {
-    repoPath: string | null;
-    spawnedBy?: SpawnedByMarker;
-    groupId?: string;
-  }
-
-  function resolveTarget(): ResolvedTarget {
-    if (scope.kind === "group") {
-      const group = getWorkspaceGroup(scope.groupId);
-      return group
-        ? {
-            repoPath: group.path,
-            spawnedBy: { kind: "group", groupId: scope.groupId },
-            groupId: scope.groupId,
-          }
-        : { repoPath: null };
-    }
-    if (scope.kind === "global") {
-      return repoPath
-        ? { repoPath, spawnedBy: { kind: "global" } }
-        : { repoPath: null };
-    }
-    return { repoPath: null };
+  function resolveTarget() {
+    return resolveSpawnTarget(scope, repoPath);
   }
 
   interface GhLabel {
@@ -112,7 +95,8 @@
   }
 
   function resolveRepoPath(): string | null {
-    return resolveTarget().repoPath;
+    const t = resolveTarget();
+    return t.ok ? t.repoPath : null;
   }
 
   async function fetchIssues(options: { force?: boolean } = {}) {
@@ -176,8 +160,8 @@
 
   async function spawnForIssue(issue: GhIssue, agent: SpawnAgentType) {
     const target = resolveTarget();
-    if (!target.repoPath) {
-      spawnError = "Cannot spawn: no dashboard host or repoPath resolved.";
+    if (!target.ok) {
+      spawnError = `Cannot spawn: ${target.error}`;
       return;
     }
     spawnError = "";
@@ -193,7 +177,7 @@
         taskContext,
         repoPath: target.repoPath,
         branch: `agent/${agent}/${issue.number}-${branchSlug}`,
-        ...(target.spawnedBy ? { spawnedBy: target.spawnedBy } : {}),
+        spawnedBy: target.spawnedBy,
         ...(target.groupId ? { groupId: target.groupId } : {}),
       });
     } catch (err) {
@@ -236,8 +220,7 @@
 
 <div
   data-issues
-  data-scope-kind={scope.kind}
-  data-scope-group-id={scope.kind === "group" ? scope.groupId : ""}
+  {...scopeAttrs(scope)}
   style="
     display: flex; flex-direction: column; gap: 6px;
     padding: 12px; border: 1px solid {$theme.border};

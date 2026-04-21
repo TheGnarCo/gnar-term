@@ -11,7 +11,7 @@
   import { getContext } from "svelte";
   import { EXTENSION_API_KEY, type ExtensionAPI } from "../../api";
   import AgentStatusRow from "./AgentStatusRow.svelte";
-  import { hostScopedAgentsStore } from "../widget-helpers";
+  import { hostScopedAgentsStore, scopeAttrs } from "../widget-helpers";
   import {
     getDashboardHost,
     deriveDashboardScope,
@@ -29,8 +29,7 @@
 
 <div
   data-agent-list
-  data-scope-kind={scope.kind}
-  data-scope-group-id={scope.kind === "group" ? scope.groupId : ""}
+  {...scopeAttrs(scope)}
   style="
     display: flex; flex-direction: column; gap: 6px;
     padding: 12px; border: 1px solid {$theme.border};

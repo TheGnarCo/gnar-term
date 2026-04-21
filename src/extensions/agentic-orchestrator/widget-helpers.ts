@@ -10,10 +10,15 @@ import type { AgentRef, ExtensionAPI } from "../api";
 import {
   deriveDashboardScope,
   type DashboardHostContext,
+  type DashboardScope,
 } from "../../lib/contexts/dashboard-host";
 import { workspaces } from "../../lib/stores/workspace";
-import { workspaceGroupsStore } from "../../lib/stores/workspace-groups";
+import {
+  getWorkspaceGroup,
+  workspaceGroupsStore,
+} from "../../lib/stores/workspace-groups";
 import { claimedWorkspaceIds } from "../../lib/services/claimed-workspace-registry";
+import type { SpawnedByMarker } from "../../lib/services/spawn-helper";
 import { getAllSurfaces, isTerminalSurface } from "../../lib/types";
 
 /** Minimum interval between widget data refreshes (ms). */
@@ -207,4 +212,57 @@ export function slugify(input: string): string {
     .replace(/^-+|-+$/g, "")
     .slice(0, 60);
   return slug.length > 0 ? slug : "task";
+}
+
+/**
+ * Resolved target for a dashboard-hosted spawn action (TaskSpawner,
+ * Issues). Shared by widgets so the scope→repoPath/spawnedBy mapping
+ * stays consistent.
+ */
+export type SpawnTarget =
+  | {
+      ok: true;
+      repoPath: string;
+      spawnedBy: SpawnedByMarker;
+      groupId?: string;
+    }
+  | { ok: false; error: string };
+
+export function resolveSpawnTarget(
+  scope: DashboardScope,
+  repoPathProp: string | undefined,
+): SpawnTarget {
+  if (scope.kind === "group") {
+    const group = getWorkspaceGroup(scope.groupId);
+    if (!group) return { ok: false, error: "Workspace Group not found" };
+    return {
+      ok: true,
+      repoPath: group.path,
+      spawnedBy: { kind: "group", groupId: scope.groupId },
+      groupId: scope.groupId,
+    };
+  }
+  if (scope.kind === "global") {
+    if (!repoPathProp || !repoPathProp.trim()) {
+      return { ok: false, error: "Global scope requires a repoPath config" };
+    }
+    return {
+      ok: true,
+      repoPath: repoPathProp,
+      spawnedBy: { kind: "global" },
+    };
+  }
+  return { ok: false, error: "Dashboard host scope is required" };
+}
+
+/**
+ * Common `data-scope-*` attribute pair for dashboard widget roots.
+ * Keeps test selectors consistent across AgentList / Kanban / Issues /
+ * TaskSpawner; spread onto the widget's root element.
+ */
+export function scopeAttrs(scope: DashboardScope): Record<string, string> {
+  return {
+    "data-scope-kind": scope.kind,
+    "data-scope-group-id": scope.kind === "group" ? scope.groupId : "",
+  };
 }

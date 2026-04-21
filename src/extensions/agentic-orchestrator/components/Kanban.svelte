@@ -15,6 +15,7 @@
     bucketForStatus,
     hostScopedAgentsStore,
     jumpToAgent,
+    scopeAttrs,
     statusColor,
     timeAgo,
     workspaceNameFor,
@@ -62,8 +63,7 @@
 
 <div
   data-kanban
-  data-scope-kind={scope.kind}
-  data-scope-group-id={scope.kind === "group" ? scope.groupId : ""}
+  {...scopeAttrs(scope)}
   style="
     display: flex; flex-direction: column; gap: 8px;
     padding: 12px; border: 1px solid {$theme.border};

@@ -22,6 +22,10 @@ import {
 } from "../stores/workspace-groups";
 import { createWorkspaceFromDef, closeWorkspace } from "./workspace-service";
 import { eventBus } from "./event-bus";
+import {
+  getDashboardContribution,
+  getDashboardContributions,
+} from "./dashboard-contribution-registry";
 
 export const WORKSPACE_GROUP_STATE_CHANGED =
   "extension:workspace-group:state-changed";
@@ -212,6 +216,126 @@ export async function createGroupDashboardWorkspace(
 }
 
 /**
+ * Materialize the Settings dashboard workspace for a group — a
+ * constrained dashboard (metadata.isDashboard = true,
+ * dashboardContributionId = "settings") whose body PaneView renders as
+ * the shared `<GroupDashboardSettings>` component. The workspace carries
+ * a single empty preview surface so it satisfies the workspace schema;
+ * PaneView intercepts and replaces the surface render for settings
+ * contributions.
+ */
+export async function createSettingsDashboardWorkspace(
+  group: WorkspaceGroupEntry,
+): Promise<string> {
+  return await createWorkspaceFromDef({
+    name: "Settings",
+    layout: {
+      pane: {
+        surfaces: [],
+      },
+    },
+    metadata: {
+      isDashboard: true,
+      groupId: group.id,
+      dashboardContributionId: "settings",
+    },
+  });
+}
+
+/**
+ * Returns true when a workspace exists in the store for the given
+ * group + contribution pair. Used by the auto-provision loop to decide
+ * whether to skip contribution.create().
+ */
+function hasDashboardWorkspace(groupId: string, contribId: string): boolean {
+  return get(workspaces).some((w) => {
+    const md = w.metadata as Record<string, unknown> | undefined;
+    return (
+      md?.isDashboard === true &&
+      md?.groupId === groupId &&
+      md?.dashboardContributionId === contribId
+    );
+  });
+}
+
+/**
+ * Provision every registered `autoProvision` dashboard contribution for
+ * `group`. Called after a group is created and on startup
+ * reconciliation so auto-provision contributions (settings, agentic)
+ * always have their workspace available. Idempotent — a contribution
+ * already backed by a workspace is skipped.
+ */
+export async function provisionAutoDashboardsForGroup(
+  group: WorkspaceGroupEntry,
+): Promise<void> {
+  for (const c of getDashboardContributions()) {
+    if (!c.autoProvision) continue;
+    if (hasDashboardWorkspace(group.id, c.id)) continue;
+    try {
+      await c.create(group);
+    } catch (err) {
+      console.warn(
+        `[workspace-groups] auto-provision failed for "${c.id}":`,
+        err,
+      );
+    }
+  }
+}
+
+/**
+ * Close every workspace whose `dashboardContributionId` belongs to a
+ * contribution registered by `source` and marked autoProvision. Used on
+ * extension deactivate so auto-provisioned dashboards disappear
+ * alongside their owning extension.
+ */
+export function closeAutoDashboardsBySource(source: string): void {
+  const autoIds = new Set(
+    getDashboardContributions()
+      .filter((c) => c.source === source && c.autoProvision)
+      .map((c) => c.id),
+  );
+  if (autoIds.size === 0) return;
+  const matchIds = get(workspaces)
+    .filter((w) => {
+      const md = w.metadata as Record<string, unknown> | undefined;
+      if (md?.isDashboard !== true) return false;
+      const contrib = md?.dashboardContributionId;
+      return typeof contrib === "string" && autoIds.has(contrib);
+    })
+    .map((w) => w.id);
+  for (const wsId of matchIds) {
+    const idx = get(workspaces).findIndex((w) => w.id === wsId);
+    if (idx >= 0) closeWorkspace(idx);
+  }
+}
+
+/**
+ * Locate the dashboard workspace for `groupId` + `contributionId` and
+ * close it. Used by the Settings toggle UI and by MCP to remove a
+ * dashboard contribution from a group.
+ */
+export function closeDashboardForGroup(
+  groupId: string,
+  contributionId: string,
+): boolean {
+  const match = get(workspaces).find((w) => {
+    const md = w.metadata as Record<string, unknown> | undefined;
+    return (
+      md?.isDashboard === true &&
+      md?.groupId === groupId &&
+      md?.dashboardContributionId === contributionId
+    );
+  });
+  if (!match) return false;
+  const contribution = getDashboardContribution(contributionId);
+  if (contribution?.autoProvision) return false;
+  const idx = get(workspaces).findIndex((w) => w.id === match.id);
+  if (idx < 0) return false;
+  closeWorkspace(idx);
+  return true;
+}
+
+/**
  * Switch to a group's Dashboard workspace. The Dashboard is created
  * eagerly on group creation, so this is a pure activation call.
  * Returns true on success.
@@ -279,9 +403,7 @@ export async function reconcileGroupDashboards(): Promise<void> {
       isGroupDashboardFor(w, group.id),
     );
 
-    if (matches.length === 0) {
-      // Fall through to the creation path below.
-    } else {
+    if (matches.length > 0) {
       const [keep, ...extras] = matches;
       if (keep && keep.id !== group.dashboardWorkspaceId) {
         updateWorkspaceGroup(group.id, { dashboardWorkspaceId: keep.id });
@@ -290,11 +412,21 @@ export async function reconcileGroupDashboards(): Promise<void> {
         const idx = get(workspaces).findIndex((w) => w.id === dup.id);
         if (idx >= 0) closeWorkspace(idx);
       }
-      continue;
     }
+
+    // Back-fill any autoProvision contribution (including `"group"` if
+    // it is still missing after the dedupe pass, plus `"settings"` and
+    // extension-owned autoProvision contributions).
     try {
-      const dashboardWorkspaceId = await createGroupDashboardWorkspace(group);
-      updateWorkspaceGroup(group.id, { dashboardWorkspaceId });
+      await provisionAutoDashboardsForGroup(group);
+      // Rebind `dashboardWorkspaceId` if the group contribution was
+      // just created by provision.
+      const overview = get(workspaces).find((w) =>
+        isGroupDashboardFor(w, group.id),
+      );
+      if (overview && overview.id !== group.dashboardWorkspaceId) {
+        updateWorkspaceGroup(group.id, { dashboardWorkspaceId: overview.id });
+      }
     } catch (err) {
       console.warn("[workspace-groups] Dashboard reconciliation failed:", err);
     }

@@ -986,6 +986,30 @@ export interface DashboardContributionInput {
    * this group's "Add Dashboard" menu.
    */
   isAvailableFor?: (group: WorkspaceGroupRef) => boolean;
+  /**
+   * Optional icon component rendered on the dashboard tile. Tiles are
+   * icon-only; the workspace name is surfaced as the tile's `title`.
+   */
+  icon?: unknown;
+  /**
+   * When true, the contribution materializes on every workspace group
+   * (at group creation and startup reconciliation) and cannot be
+   * removed. Also hides the contribution from "Add Dashboard" menus
+   * and suppresses the per-tile Delete action.
+   */
+  autoProvision?: boolean;
+  /**
+   * Hints for how PaneView should render the dashboard workspace.
+   * `singleSurface: true` documents that the contribution's workspace
+   * is a tab-less / split-less single-surface pane.
+   */
+  paneConstraints?: { singleSurface?: boolean };
+  /**
+   * Human-readable reason the contribution's toggle is locked in the
+   * Settings dashboard's per-group toggle list. Typically set
+   * alongside `autoProvision: true`.
+   */
+  lockedReason?: string;
 }
 
 /**

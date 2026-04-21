@@ -146,9 +146,11 @@
     if (!currentGroup) return [] as DashboardContribution[];
     const ws = $workspacesStore;
     return $dashboardContributionStore.filter((c) => {
-      // Core's built-in Group Dashboard auto-materializes with the
-      // group; it shouldn't appear as a menu item.
-      if (c.id === "group") return false;
+      // autoProvision contributions materialize automatically and
+      // cannot be removed — they should not appear in the "Add
+      // Dashboard" menu. Covers core Overview, core Settings, and
+      // Agentic (when the extension is enabled).
+      if (c.autoProvision) return false;
       if (c.isAvailableFor && !c.isAvailableFor(currentGroup)) return false;
       const countForGroup = ws.filter((w) => {
         const md = w.metadata as Record<string, unknown> | undefined;

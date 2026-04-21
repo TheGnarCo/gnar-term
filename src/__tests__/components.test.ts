@@ -1031,17 +1031,20 @@ describe("PaneView", () => {
     expect(screen.getByText("Pane Tab")).toBeTruthy();
   });
 
-  it("renders Overview/Settings tab strip for a Group Dashboard workspace", () => {
-    // Regression: Group Dashboards previously rendered only the preview
-    // surface with no way to edit the group's color/name without going
-    // back to the sidebar context menu. PaneView now detects
-    // metadata.isDashboard + metadata.groupId and exposes a tab strip.
+  it("does not render an Overview/Settings tab strip over Group Dashboards", () => {
+    // The Settings dashboard is now its own contribution (gear icon,
+    // auto-provisioned). PaneView no longer wraps the Group Dashboard
+    // preview in an Overview/Settings tab strip.
     const ws: Workspace = {
       id: "ws-dash",
       name: "Dashboard",
       splitRoot: { type: "pane", pane: makePane("p1") },
       activePaneId: "p1",
-      metadata: { isDashboard: true, groupId: "g1" },
+      metadata: {
+        isDashboard: true,
+        groupId: "g1",
+        dashboardContributionId: "group",
+      },
     };
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
@@ -1061,22 +1064,23 @@ describe("PaneView", () => {
         onFocusPane: noop,
       },
     });
-    const tabs = container.querySelector("[data-group-dashboard-tabs]");
-    expect(tabs).not.toBeNull();
-    expect(
-      container.querySelector('[data-group-dashboard-tab="overview"]'),
-    ).not.toBeNull();
-    expect(
-      container.querySelector('[data-group-dashboard-tab="settings"]'),
-    ).not.toBeNull();
+    expect(container.querySelector("[data-group-dashboard-tabs]")).toBeNull();
+    expect(container.querySelector("[data-group-dashboard-tab]")).toBeNull();
   });
 
-  it("does not render Group Dashboard tabs for non-dashboard workspaces", () => {
+  it("renders GroupDashboardSettings for a settings-contribution workspace", () => {
+    // Settings contribution → PaneView swaps the surface list for the
+    // shared settings body.
     const ws: Workspace = {
-      id: "ws-regular",
-      name: "Regular",
+      id: "ws-settings",
+      name: "Settings",
       splitRoot: { type: "pane", pane: makePane("p1") },
       activePaneId: "p1",
+      metadata: {
+        isDashboard: true,
+        groupId: "g1",
+        dashboardContributionId: "settings",
+      },
     };
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
@@ -1096,6 +1100,9 @@ describe("PaneView", () => {
         onFocusPane: noop,
       },
     });
+    // GroupDashboardSettings renders a settings panel keyed by groupId.
+    // Absent a matching group in the store it renders nothing, but the
+    // render branch is still reached — no tab strip appears either way.
     expect(container.querySelector("[data-group-dashboard-tabs]")).toBeNull();
   });
 

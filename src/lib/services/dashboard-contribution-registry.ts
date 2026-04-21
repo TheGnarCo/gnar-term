@@ -64,6 +64,35 @@ export interface DashboardContribution {
    * user has toggled `groupDashboardEnabled` off.
    */
   isAvailableFor?: (group: WorkspaceGroupEntry) => boolean;
+  /**
+   * Optional icon component rendered on the dashboard tile. When
+   * omitted, WorkspaceListView falls back to a generic grid glyph.
+   * Tiles are icon-only (no label) — the workspace name is surfaced
+   * as the tile's `title` attribute.
+   */
+  icon?: unknown;
+  /**
+   * When true, the contribution materializes automatically for every
+   * workspace group (on group creation and startup reconciliation) and
+   * cannot be removed by the user. `autoProvision` also hides the
+   * contribution from "Add Dashboard" menus and suppresses the
+   * per-tile Delete action.
+   */
+  autoProvision?: boolean;
+  /**
+   * Hints for how PaneView should render the dashboard workspace.
+   * `singleSurface: true` marks the pane as tab-less / split-less —
+   * the existing `metadata.isDashboard` check already hides TabBar,
+   * so this flag is informational today but documents contributions
+   * whose surface type does not accumulate.
+   */
+  paneConstraints?: { singleSurface?: boolean };
+  /**
+   * Human-readable reason the toggle is locked, surfaced in the
+   * Settings dashboard's per-group toggle list. Typically set
+   * alongside `autoProvision: true`.
+   */
+  lockedReason?: string;
 }
 
 const registry = createRegistry<DashboardContribution>();

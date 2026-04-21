@@ -22,9 +22,11 @@
   import { get } from "svelte/store";
   import WorkspaceItem from "./WorkspaceItem.svelte";
   import DropGhost from "./DropGhost.svelte";
+  import GridIcon from "../icons/GridIcon.svelte";
   import { contrastColor } from "../utils/contrast";
   import { contextMenu, showConfirmPrompt } from "../stores/ui";
   import { commandStore } from "../services/command-registry";
+  import type { Component } from "svelte";
   import type { MenuItem } from "../context-menu-types";
   import { getDashboardContribution } from "../services/dashboard-contribution-registry";
 
@@ -156,13 +158,13 @@
   // service. Kept local to WorkspaceListView so this shared component
   // doesn't need parent callbacks for each item.
   /**
-   * Right-click menu for a dashboard tile. Extension-provided dashboards
-   * (e.g. agentic) can be deleted from here — closing the workspace
-   * lifts the per-group cap so "Add <Dashboard>" reappears in the
-   * group's "+ New" dropdown; the backing markdown file stays on disk
-   * so existing content survives a re-add. Core's built-in "group"
-   * dashboard is excluded because it's referenced by
-   * `group.dashboardWorkspaceId` and auto-materializes with the group.
+   * Right-click menu for a dashboard tile. Optional extension-provided
+   * contributions (those without `autoProvision`) expose a Delete
+   * action — closing the workspace lifts the per-group cap so "Add
+   * <Dashboard>" reappears in the group's "+ New" dropdown; any
+   * backing markdown stays on disk so a re-add doesn't lose edits.
+   * `autoProvision` contributions (core Overview, core Settings,
+   * Agentic) are locked — no menu items, so no context menu shown.
    */
   function showDashboardContextMenu(
     x: number,
@@ -174,9 +176,9 @@
     const wsMeta = ws.metadata as Record<string, unknown> | undefined;
     const contribId = wsMeta?.dashboardContributionId;
     if (typeof contribId !== "string") return;
-    if (contribId === "group") return;
     const contribution = getDashboardContribution(contribId);
     if (!contribution) return;
+    if (contribution.autoProvision) return;
     const items: MenuItem[] = [
       {
         label: `Delete ${contribution.label}`,
@@ -261,10 +263,9 @@
     {#if dashboardEntries.length > 0}
       {@const count = dashboardEntries.length}
       {@const cols = Math.min(count, 3)}
-      {@const isNested = !!accentColor}
       <!-- Dashboards share a grid container so they fill available width.
-           Up to 3 per row; extras wrap. A container query collapses tiles
-           to icon-only when there's genuinely no room for labels. -->
+           Up to 3 per row; extras wrap. Tiles are icon-only; the
+           workspace name lives in the `title` attribute for hover. -->
       <div
         class="dashboard-grid"
         data-dashboard-count={count}
@@ -277,13 +278,20 @@
           {@const wsMeta = entry.ws.metadata as
             | Record<string, unknown>
             | undefined}
-          {@const isAgentic = wsMeta?.dashboardContributionId === "agentic"}
+          {@const contribId =
+            typeof wsMeta?.dashboardContributionId === "string"
+              ? (wsMeta.dashboardContributionId as string)
+              : undefined}
+          {@const contribution = contribId
+            ? getDashboardContribution(contribId)
+            : undefined}
+          {@const IconComp = (contribution?.icon ?? GridIcon) as Component}
           <!-- svelte-ignore a11y_click_events_have_key_events -->
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div
             class="dashboard-tile"
             data-dashboard-item={entry.ws.id}
-            data-dashboard-agentic={isAgentic ? "true" : undefined}
+            data-dashboard-contribution={contribId}
             data-active={isActive ? "true" : undefined}
             title={entry.ws.name}
             on:click={() => switchWorkspace(entry.idx)}
@@ -297,54 +305,17 @@
               {isActive ? `box-shadow: 0 0 0 1.5px ${dashAccent};` : ''}
             "
           >
-            {#if isNested}
-              <span
-                class="dashboard-tile-icon"
-                aria-hidden="true"
-                style="color: {dashAccent};"
-              >
-                {#if isAgentic}
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <title>{entry.ws.name}</title>
-                    <path d="M12 8V4H8" />
-                    <rect width="16" height="12" x="4" y="8" rx="2" />
-                    <path d="M2 14h2" />
-                    <path d="M20 14h2" />
-                    <path d="M15 13v2" />
-                    <path d="M9 13v2" />
-                  </svg>
-                {:else}
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <title>{entry.ws.name}</title>
-                    <rect x="3" y="3" width="7" height="9" />
-                    <rect x="14" y="3" width="7" height="5" />
-                    <rect x="14" y="12" width="7" height="9" />
-                    <rect x="3" y="16" width="7" height="5" />
-                  </svg>
-                {/if}
-              </span>
-            {/if}
-            <span class="dashboard-tile-label">{entry.ws.name}</span>
+            <span
+              class="dashboard-tile-icon"
+              aria-hidden="true"
+              style="color: {dashAccent};"
+            >
+              <svelte:component
+                this={IconComp}
+                size={14}
+                color="currentColor"
+              />
+            </span>
           </div>
         {/each}
       </div>
@@ -460,29 +431,6 @@
     justify-content: center;
     width: 14px;
     height: 14px;
-  }
-  .dashboard-tile-label {
-    min-width: 0;
-    font-size: 13px;
-    font-weight: 600;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    text-align: center;
-  }
-
-  /* When the grid is too narrow to fit labels meaningfully, collapse
-     to icon-only. Gated on `data-multi` (set when there are 2+ tiles)
-     — a lone dashboard keeps its label even in narrow sidebars.
-     Threshold tightened to 140px so the label only hides in very
-     cramped widths. */
-  @container (max-width: 140px) {
-    .dashboard-grid[data-multi="true"] .dashboard-tile {
-      padding: 6px;
-    }
-    .dashboard-grid[data-multi="true"] .dashboard-tile-label {
-      display: none;
-    }
   }
   /* 8px left + top margin on the nested list so the workspace rails
      sit visually inset from the parent project's rail and the first

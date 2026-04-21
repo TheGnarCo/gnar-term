@@ -28,7 +28,9 @@ import {
   addWorkspaceToGroup,
   claimWorkspace,
   createGroupDashboardWorkspace,
+  createSettingsDashboardWorkspace,
   openGroupDashboard,
+  provisionAutoDashboardsForGroup,
   reclaimWorkspacesAcrossGroups,
   reconcileGroupDashboards,
   removeWorkspaceFromAllGroups,
@@ -38,6 +40,8 @@ import {
 import { resolveProjectColor } from "../theme-data";
 import { theme } from "../stores/theme";
 import WorkspaceGroupRowBody from "../components/WorkspaceGroupRowBody.svelte";
+import GearIcon from "../icons/GearIcon.svelte";
+import GridIcon from "../icons/GridIcon.svelte";
 import type { WorkspaceGroupEntry } from "../config";
 import {
   pendingCreateResolver,
@@ -126,15 +130,28 @@ async function createWorkspaceGroupFlow(prefill?: {
 
   addWorkspaceGroup(group);
 
-  // Eagerly spawn the group's Dashboard workspace. The workspace:created
-  // listener claims it (metadata.groupId set), so it appears as the
-  // first tile in the group's nested list.
+  // Auto-provision every autoProvision dashboard contribution for the
+  // new group (group Overview, Settings, and any extension-owned
+  // autoProvision contributions like Agentic). The Overview dashboard
+  // is tracked via `group.dashboardWorkspaceId` so `openGroupDashboard`
+  // can activate it directly; the helper returns its id when the
+  // contribution's source is core + id is "group".
   try {
-    const dashboardWorkspaceId = await createGroupDashboardWorkspace(group);
-    updateWorkspaceGroup(id, { dashboardWorkspaceId });
+    await provisionAutoDashboardsForGroup(group);
+    const overview = get(workspaces).find((w) => {
+      const md = w.metadata as Record<string, unknown> | undefined;
+      return (
+        md?.isDashboard === true &&
+        md?.groupId === group.id &&
+        md?.dashboardContributionId === "group"
+      );
+    });
+    if (overview) {
+      updateWorkspaceGroup(id, { dashboardWorkspaceId: overview.id });
+    }
   } catch (err) {
     console.error(
-      `[workspace-groups] Failed to create Dashboard workspace: ${
+      `[workspace-groups] Failed to auto-provision dashboards: ${
         err instanceof Error ? err.message : String(err)
       }`,
     );
@@ -309,18 +326,37 @@ export async function initWorkspaceGroups(): Promise<void> {
   });
 
   // Core-internal "Group Dashboard" contribution — id `group`,
-  // capPerGroup 1. Materializes the eager Dashboard workspace the
-  // group creates at construction time. Registered here so the
-  // contribution registry is populated before any Stage 6+ consumer
-  // reads from it.
+  // capPerGroup 1, autoProvision. Materializes the per-group Overview
+  // workspace. `lockedReason` surfaces in the Settings dashboard's
+  // toggle list explaining why the toggle is fixed-on.
   registerDashboardContribution({
     id: "group",
     source: "core",
     label: "Group Dashboard",
     actionLabel: "Add Group Dashboard",
     capPerGroup: 1,
+    autoProvision: true,
+    icon: GridIcon,
+    lockedReason: "Required (Overview)",
     create: async (group: WorkspaceGroupEntry) =>
       await createGroupDashboardWorkspace(group),
+  });
+
+  // Core-internal "Settings" contribution — id `settings`,
+  // autoProvision. Hosts the per-group dashboard toggles + name /
+  // color picker. PaneView renders GroupDashboardSettings in place of
+  // the surface list for workspaces carrying this contribution id.
+  registerDashboardContribution({
+    id: "settings",
+    source: "core",
+    label: "Settings",
+    actionLabel: "Add Settings Dashboard",
+    capPerGroup: 1,
+    autoProvision: true,
+    icon: GearIcon,
+    lockedReason: "Required (Settings)",
+    create: async (group: WorkspaceGroupEntry) =>
+      await createSettingsDashboardWorkspace(group),
   });
 
   eventBus.on("workspace:created", onWorkspaceCreated);

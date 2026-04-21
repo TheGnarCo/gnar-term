@@ -262,10 +262,12 @@
   <div class="workspace-list-view">
     {#if dashboardEntries.length > 0}
       {@const count = dashboardEntries.length}
-      {@const cols = Math.min(count, 3)}
+      {@const cols = Math.min(count, 4)}
       <!-- Dashboards share a grid container so they fill available width.
-           Up to 3 per row; extras wrap. Tiles are icon-only; the
-           workspace name lives in the `title` attribute for hover. -->
+           Up to 4 per row; extras wrap. When the sidebar is very thin
+           (≤140px) a container query collapses to 2 per row so icons
+           don't get squished. Tiles are icon-only; the workspace name
+           lives in the `title` attribute for hover. -->
       <div
         class="dashboard-grid"
         data-dashboard-count={count}
@@ -396,15 +398,23 @@
     margin-top: 8px;
   }
 
-  /* Dashboard grid — up to 3 equal-width tiles per row; extras wrap.
-     `container-type: inline-size` lets us collapse to icon-only when
-     the grid container is too narrow to fit labels. */
+  /* Dashboard grid — up to 4 equal-width tiles per row; extras wrap.
+     `container-type: inline-size` lets the narrow-width override below
+     force tiles onto additional rows so icons don't get squished. */
   .dashboard-grid {
     display: grid;
-    grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr));
+    grid-template-columns: repeat(var(--cols, 4), minmax(0, 1fr));
     gap: 8px;
     margin-right: 8px;
     container-type: inline-size;
+  }
+
+  /* Very narrow sidebar — cap at 2 per row regardless of how many
+     dashboards exist, so every icon stays readable. */
+  @container (max-width: 140px) {
+    .dashboard-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
   }
   .dashboard-tile {
     display: flex;

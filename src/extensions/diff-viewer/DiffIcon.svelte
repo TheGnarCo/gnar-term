@@ -1,7 +1,8 @@
 <script lang="ts">
   /**
-   * Diff icon — tile glyph for the per-group Diff dashboard.
-   * Two offset bars suggest a before/after diff view.
+   * Diff icon — lucide `diff` glyph. A plus symbol (added lines) above
+   * a minus bar (removed lines) inside a square — the canonical
+   * git-diff iconography used across Lucide, Heroicons, and Primer.
    */
   export let size: number = 14;
   export let color: string = "currentColor";
@@ -18,9 +19,7 @@
   stroke-linecap="round"
   stroke-linejoin="round"
 >
-  <path d="M12 3v18" />
-  <path d="m3 7 3-4 3 4" />
-  <path d="M6 3v14" />
-  <path d="m21 17-3 4-3-4" />
-  <path d="M18 7v14" />
+  <path d="M12 3v14" />
+  <path d="M5 10h14" />
+  <path d="M5 21h14" />
 </svg>

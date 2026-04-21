@@ -172,16 +172,22 @@
   onDestroy(() => stop());
 
   function handleDirtyClick() {
-    // Open the diff-viewer surface scoped to this target's repo path.
-    // App.svelte's "status-action" listener routes this through
-    // openExtensionSurfaceInPane.
+    // Container banners have no single "current pane" to drop the diff
+    // into, so we spawn a fresh workspace named "Diff" and nest it under
+    // this container (via metadata.groupId). App.svelte's status-action
+    // listener routes `open-surface-in-new-workspace` through
+    // createWorkspaceFromDef; per-workspace GitStatusLine rows keep
+    // using plain `open-surface` which opens in the active pane of
+    // their owning workspace.
     const event = new CustomEvent("status-action", {
       detail: {
-        command: "open-surface",
+        command: "open-surface-in-new-workspace",
         args: [
+          "Diff",
           "diff-viewer:diff",
           "Uncommitted Changes",
           { repoPath: target.path },
+          { metadata: { groupId: target.id } },
         ],
       },
       bubbles: true,

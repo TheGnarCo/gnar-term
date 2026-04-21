@@ -343,13 +343,13 @@ async function refreshGitStatus(
       tooltip: dirtyTooltip(info),
       variant: "warning",
       action: {
-        // Opens a brand-new workspace named "Diff" containing the diff
-        // viewer surface, rather than pushing the surface into the
-        // currently-active pane. Keeps the user's foreground context
-        // intact and lets them close the diff when they're done.
-        command: "open-surface-in-new-workspace",
+        // Per-workspace pill: open the diff viewer in the currently-
+        // active pane of the workspace the pill belongs to. The
+        // container-row pill (see PathStatusLine) routes through
+        // `open-surface-in-new-workspace` instead because a container
+        // has no single "current pane" to drop a surface into.
+        command: "open-surface",
         args: [
-          "Diff",
           "diff-viewer:diff",
           "Uncommitted Changes",
           { repoPath: gitRoot },

@@ -671,15 +671,21 @@
         action.command === "open-surface-in-new-workspace" &&
         action.args
       ) {
-        const [wsName, surfaceTypeId, title, props] = action.args as [
+        const [wsName, surfaceTypeId, title, props, options] = action.args as [
           string,
           string,
           string,
           Record<string, unknown> | undefined,
+          { metadata?: Record<string, unknown> } | undefined,
         ];
         const open = () =>
           void createWorkspaceFromDef({
             name: wsName,
+            // Optional metadata forwards to the new workspace — e.g.
+            // container-row dirty clicks pass `{ groupId: <container-id> }`
+            // so the fresh "Diff" workspace nests inside its originating
+            // group instead of materializing at the sidebar root.
+            ...(options?.metadata ? { metadata: options.metadata } : {}),
             layout: {
               pane: {
                 surfaces: [

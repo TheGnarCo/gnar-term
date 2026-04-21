@@ -519,6 +519,7 @@ describe("workspace-service", () => {
       expect(saveState).toHaveBeenCalledWith({
         workspaces: [
           {
+            id: ws.id,
             name: "My WS",
             cwd: undefined,
             layout: expect.objectContaining({ pane: expect.any(Object) }),

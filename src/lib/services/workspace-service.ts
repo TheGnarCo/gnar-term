@@ -40,6 +40,10 @@ const PERSIST_DELAY = 2000;
 export async function persistWorkspaces(): Promise<void> {
   const wsList = get(workspaces);
   const serialized = wsList.map((ws) => ({
+    // Persist the id so `rootRowOrder` (keyed by `{kind, id}`) survives
+    // a restart — without this every workspace id regenerates on
+    // `createWorkspaceFromDef` and any user-dragged order is lost.
+    id: ws.id,
     name: ws.name,
     cwd: undefined as string | undefined,
     layout: serializeLayout(ws.splitRoot),
@@ -186,7 +190,9 @@ export async function createWorkspaceFromDef(
   }
 
   const ws: Workspace = {
-    id: uid(),
+    // Reuse the persisted id when restoring so rootRowOrder survives
+    // a restart; mint a fresh one for first-launch creation.
+    id: def.id ?? uid(),
     name: wsName,
     splitRoot,
     activePaneId: getAllPanes(splitRoot)[0]?.id ?? null,

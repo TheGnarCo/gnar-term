@@ -49,6 +49,14 @@ export interface SplitDef {
 export type LayoutNode = { pane: PaneDef } | SplitDef;
 
 export interface WorkspaceDef {
+  /**
+   * Stable identifier. Optional on fresh creation — `createWorkspaceFromDef`
+   * mints a new id when absent. Populated by `persistWorkspaces` so that
+   * on restart the same id is reused, letting `rootRowOrder` (which keys
+   * rows by `{kind, id}`) survive the round-trip and preserve user-
+   * dragged sort order.
+   */
+  id?: string;
   name?: string;
   cwd?: string;
   color?: string;

@@ -283,6 +283,16 @@
         void a.handler(groupContext!);
       },
     })),
+    // Dashboard contributions that haven't hit their per-group cap —
+    // e.g. "Add Agentic Dashboard" shows up here when the agentic
+    // extension is enabled and the group doesn't already have one.
+    // The computed list above (addableContributions) already filters
+    // out contributions at cap, so no extra gate is needed.
+    ...addableContributions.map((c) => ({
+      id: `contrib:${c.id}`,
+      label: c.actionLabel,
+      handler: () => void handleAddDashboardContribution(c),
+    })),
   ];
 
   // Close X on the group container row — destructive; deletes the

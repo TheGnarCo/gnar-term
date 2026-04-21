@@ -100,7 +100,7 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
 
     api.registerPseudoWorkspace({
       id: "agentic.global",
-      label: "Agents",
+      label: "Agents dashboard",
       position: "root-top",
       icon: BotIcon,
       render: GlobalAgenticDashboardBody,
@@ -259,14 +259,14 @@ async function createAgenticDashboardWorkspace(
     });
   }
   return await createWorkspaceFromDef({
-    name: `${group.name} Agents`,
+    name: "Agents",
     layout: {
       pane: {
         surfaces: [
           {
             type: "preview",
             path: markdownPath,
-            name: `${group.name} Agents`,
+            name: "Agents",
             focus: true,
           },
         ],

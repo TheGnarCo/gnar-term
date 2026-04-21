@@ -25,7 +25,6 @@
   import type { PseudoWorkspace } from "../services/pseudo-workspace-registry";
   import { configStore } from "../config";
   import { resolveProjectColor } from "../theme-data";
-  import { contrastColor } from "../utils/contrast";
 
   export let pseudo: PseudoWorkspace;
   export let onGripMouseDown: ((e: MouseEvent) => void) | undefined = undefined;
@@ -38,7 +37,6 @@
   // of configuration.
   $: configuredSlot = $configStore.pseudoWorkspaceColors?.[pseudo.id];
   $: bannerBackground = resolveProjectColor(configuredSlot ?? "purple", $theme);
-  $: bannerForeground = contrastColor(bannerBackground);
 
   function activate(): void {
     // Pseudo-workspaces are mutually exclusive with real workspaces —
@@ -71,7 +69,7 @@
       on:mouseleave={() => (gripHovered = false)}
       style="
         flex-shrink: 0; align-self: stretch; display: flex;
-        background: {bannerBackground};
+        background: transparent;
       "
       role="presentation"
     >
@@ -80,8 +78,8 @@
         visible={gripHovered && $reorderContext === null}
         onMouseDown={onGripMouseDown}
         ariaLabel="Drag to reorder"
-        railColor={bannerBackground}
-        dotColor={bannerForeground}
+        railColor={$theme.border ?? "transparent"}
+        dotColor={$theme.fgDim ?? $theme.fg}
         railOpacity={1}
         alwaysShowDots={true}
       />
@@ -103,14 +101,23 @@
         position: relative;
         padding: 4px 6px;
         min-height: 40px;
-        background: {bannerBackground};
-        color: {bannerForeground};
+        background: {isActive
+        ? ($theme.bgActive ??
+          $theme.bgHighlight ??
+          $theme.bgSurface ??
+          'transparent')
+        : bannerHovered
+          ? ($theme.bgHighlight ?? $theme.bgSurface ?? 'transparent')
+          : ($theme.bgSurface ?? 'transparent')};
+        color: {$theme.fg};
+        border: 1px solid {isActive
+        ? 'transparent'
+        : ($theme.border ?? 'transparent')};
         border-radius: 6px;
         cursor: pointer;
-        outline: {isActive ? `1.5px solid ${$theme.fg}` : 'none'};
+        outline: {isActive ? `1.5px solid ${bannerBackground}` : 'none'};
         outline-offset: -1.5px;
         transition: background 0.15s;
-        filter: {bannerHovered && !isActive ? 'brightness(1.1)' : 'none'};
       "
     >
       <div
@@ -119,7 +126,7 @@
         {#if pseudo.icon}
           <span
             data-pseudo-workspace-icon
-            style="display: inline-flex; flex-shrink: 0; width: 18px; height: 18px; align-items: center; justify-content: center; color: {bannerForeground};"
+            style="display: inline-flex; flex-shrink: 0; width: 18px; height: 18px; align-items: center; justify-content: center; color: {bannerBackground};"
           >
             <svelte:component this={pseudo.icon as Component} />
           </span>

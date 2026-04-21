@@ -105,7 +105,7 @@ describe("agentic extension — Dashboard contribution registration", () => {
       layout: { pane: { surfaces: Array<{ type: string; path: string }> } };
       metadata: Record<string, unknown>;
     };
-    expect(def.name).toContain("Example");
+    expect(def.name).toBe("Agents");
     expect(def.layout.pane.surfaces[0]?.type).toBe("preview");
     expect(def.layout.pane.surfaces[0]?.path).toBe(
       "/work/proj/.gnar-term/agentic-dashboard.md",

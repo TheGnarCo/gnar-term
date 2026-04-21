@@ -13,6 +13,8 @@ import { SearchAddon } from "@xterm/addon-search";
 import { invoke, Channel } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { appendMcpOutput } from "./services/mcp-output-buffer";
+import { eventBus } from "./services/event-bus";
+import { notifyOutputObservers } from "./services/surface-output-observer";
 import {
   readText as clipboardRead,
   writeText as clipboardWrite,
@@ -189,8 +191,16 @@ export function handlePtyChunk(ptyId: number, bytes: Uint8Array): void {
   }
 
   appendMcpOutput(ptyId, bytes);
+  // Fan out to surface output observers (passive agent detection, etc.).
+  // notifyOutputObservers is a no-op when no observer is registered for
+  // the pty. Non-streaming decode — all agent-detection consumers match
+  // on ASCII (pattern names, OSC numbers), and a single shared stream
+  // decoder would corrupt state across interleaved ptys.
+  notifyOutputObservers(ptyId, ptyTextDecoder.decode(bytes));
   scheduleFlush(ptyId);
 }
+
+const ptyTextDecoder = new TextDecoder("utf-8", { fatal: false });
 
 function flushPtyBuffer(ptyId: number) {
   ptyFlushScheduled.delete(ptyId);
@@ -403,17 +413,40 @@ export async function setupListeners() {
     // Filter out escape-sequence fragments that may slip through
     if (!title || /[\x00-\x1f\x7f]/.test(title) || /^\d+[;\d:\/]*$/.test(title))
       return;
+    let changed: { id: string; oldTitle: string; newTitle: string } | null =
+      null;
     workspaces.update((wsList) => {
       for (const ws of wsList) {
         for (const s of getAllSurfaces(ws)) {
           if (isTerminalSurface(s) && s.ptyId === pty_id) {
-            s.title = title;
+            if (s.title !== title) {
+              changed = { id: s.id, oldTitle: s.title, newTitle: title };
+              s.title = title;
+            }
             return wsList;
           }
         }
       }
       return wsList;
     });
+    // Emit AFTER the store update so downstream listeners (passive agent
+    // detection, status trackers) see the new title on the surface when
+    // they look it up. Listeners exist in the event-bus type surface
+    // but were previously never fired, so title-based agent attach
+    // (Claude titling itself "Claude Code", etc.) never triggered.
+    if (changed) {
+      const c = changed as {
+        id: string;
+        oldTitle: string;
+        newTitle: string;
+      };
+      eventBus.emit({
+        type: "surface:titleChanged",
+        id: c.id,
+        oldTitle: c.oldTitle,
+        newTitle: c.newTitle,
+      });
+    }
   });
 }
 
@@ -932,6 +965,10 @@ export async function connectPty(
     });
     surface.ptyId = ptyId;
     resolvedPtyId = ptyId;
+    // Broadcast once the real ptyId is known so services like passive
+    // agent detection can wire an output observer against it — the
+    // earlier surface:created event carries the placeholder ptyId of -1.
+    eventBus.emit({ type: "surface:ptyReady", id: surface.id, ptyId });
     for (const bytes of pending) handlePtyChunk(ptyId, bytes);
     pending.length = 0;
     deferred?.resolve(ptyId);

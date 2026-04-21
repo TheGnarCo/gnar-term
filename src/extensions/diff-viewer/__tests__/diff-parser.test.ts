@@ -248,4 +248,40 @@ describe("parseDiff", () => {
     expect(lines[2].content).toBe('const y = "quotes \\"escaped\\"";');
     expect(lines[3].content).toBe('const y = "quotes \\"new\\"";');
   });
+
+  it("strips i/ and w/ prefixes when diff.mnemonicPrefix is enabled", () => {
+    const raw = [
+      "diff --git i/src/foo.ts w/src/foo.ts",
+      "index abc..def 100644",
+      "--- i/src/foo.ts",
+      "+++ w/src/foo.ts",
+      "@@ -1,2 +1,3 @@",
+      " keep",
+      "-old",
+      "+new",
+      "+added",
+    ].join("\n");
+
+    const result = parseDiff(raw);
+    expect(result).toHaveLength(1);
+    expect(result[0].oldPath).toBe("src/foo.ts");
+    expect(result[0].newPath).toBe("src/foo.ts");
+    expect(result[0].hunks).toHaveLength(1);
+  });
+
+  it("strips c/ and o/ mnemonic prefixes for cached/other diffs", () => {
+    const raw = [
+      "diff --git c/src/bar.ts w/src/bar.ts",
+      "--- c/src/bar.ts",
+      "+++ w/src/bar.ts",
+      "@@ -1 +1 @@",
+      "-a",
+      "+b",
+    ].join("\n");
+
+    const result = parseDiff(raw);
+    expect(result).toHaveLength(1);
+    expect(result[0].oldPath).toBe("src/bar.ts");
+    expect(result[0].newPath).toBe("src/bar.ts");
+  });
 });

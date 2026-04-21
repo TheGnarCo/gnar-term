@@ -8,6 +8,7 @@ import { get } from "svelte/store";
 import {
   addWorkspaceGroup,
   addWorkspaceToGroup,
+  closeWorkspacesInGroup,
   deleteWorkspaceGroup,
   getWorkspaceGroup,
   getWorkspaceGroups,
@@ -21,6 +22,8 @@ import {
 } from "../../stores/workspace-groups";
 import { eventBus } from "../event-bus";
 import { rootRowOrder } from "../../stores/root-row-order";
+import { workspaces, activeWorkspaceIdx } from "../../stores/workspace";
+import type { Workspace } from "../../types";
 import type { WorkspaceGroupEntry } from "../../config";
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -94,6 +97,58 @@ describe("workspace-group-service", () => {
 
     expect(getWorkspaceGroup("g1")?.workspaceIds).toEqual([]);
     expect(getWorkspaceGroup("g2")?.workspaceIds).toEqual([]);
+  });
+
+  describe("closeWorkspacesInGroup", () => {
+    function makeWs(id: string, groupId?: string): Workspace {
+      return {
+        id,
+        name: id,
+        splitRoot: {
+          type: "pane",
+          pane: { id: `${id}-p`, surfaces: [], activeSurfaceId: null },
+        },
+        activePaneId: `${id}-p`,
+        ...(groupId ? { metadata: { groupId } } : {}),
+      } as Workspace;
+    }
+
+    beforeEach(() => {
+      workspaces.set([]);
+      activeWorkspaceIdx.set(-1);
+    });
+
+    it("closes every workspace tagged with the group id", () => {
+      workspaces.set([
+        makeWs("ws-a", "g1"),
+        makeWs("ws-b", "g1"),
+        makeWs("ws-other", "g2"),
+        makeWs("ws-root"),
+      ]);
+
+      closeWorkspacesInGroup("g1");
+
+      const remainingIds = get(workspaces).map((w) => w.id);
+      expect(remainingIds).toEqual(["ws-other", "ws-root"]);
+    });
+
+    it("is a no-op when no workspaces belong to the group", () => {
+      workspaces.set([makeWs("ws-root"), makeWs("ws-other", "g2")]);
+      closeWorkspacesInGroup("g1");
+      expect(get(workspaces).map((w) => w.id)).toEqual(["ws-root", "ws-other"]);
+    });
+
+    it("also closes the group's Dashboard workspace (same groupId metadata)", () => {
+      const dashboard = {
+        ...makeWs("ws-dashboard", "g1"),
+        metadata: { groupId: "g1", isDashboard: true },
+      } as Workspace;
+      workspaces.set([dashboard, makeWs("ws-nested", "g1")]);
+
+      closeWorkspacesInGroup("g1");
+
+      expect(get(workspaces)).toHaveLength(0);
+    });
   });
 
   it("emits WORKSPACE_GROUP_STATE_CHANGED on mutations", () => {

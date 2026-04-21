@@ -11,7 +11,7 @@
   // the core store is Readable<ThemeDef>, structurally compatible but
   // not assignable without a cast.
   const themeView = theme as unknown as Readable<Record<string, string>>;
-  import { workspaces } from "../stores/workspace";
+  import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
   import { eventBus, type ExtensionEvent } from "../services/event-bus";
   import type { WorkspaceGroupEntry } from "../config";
   import {
@@ -21,7 +21,7 @@
   import {
     deleteWorkspaceGroup,
     updateWorkspaceGroup,
-    closeGroupDashboardWorkspace,
+    closeWorkspacesInGroup,
     groupDashboardPath,
     openGroupDashboard,
     WORKSPACE_GROUP_STATE_CHANGED,
@@ -36,6 +36,7 @@
     getChildRowsFor,
   } from "../services/child-row-contributor-registry";
   import { getRootRowRenderer } from "../services/root-row-renderer-registry";
+  import { switchWorkspace } from "../services/workspace-service";
   import {
     dashboardContributionStore,
     canAddContributionToGroup,
@@ -101,6 +102,18 @@
   }
 
   $: filterIds = group ? new Set(group.workspaceIds) : new Set<string>();
+
+  // True when the currently active workspace belongs to this group —
+  // checked via `metadata.groupId` so the match covers both the
+  // Dashboard workspace and ordinary nested children, regardless of
+  // whether `group.workspaceIds` has been rebuilt yet. Drives the
+  // group banner's active-border treatment.
+  $: hasActiveChild = (() => {
+    const activeWs = $workspaces[$activeWorkspaceIdx];
+    if (!activeWs || !group) return false;
+    const md = activeWs.metadata as Record<string, unknown> | undefined;
+    return md?.groupId === group.id;
+  })();
 
   // Re-evaluate contributed children when contributors register/unregister.
   $: void $childRowContributorStore;
@@ -173,8 +186,24 @@
 
   async function handleDeleteGroup() {
     if (!group) return;
-    await closeGroupDashboardWorkspace(group);
+    closeWorkspacesInGroup(group.id);
     deleteWorkspaceGroup(group.id);
+  }
+
+  // Banner left-click: activate the group's Dashboard if one is bound,
+  // otherwise activate the group's first nested workspace (resolved by
+  // scanning workspace metadata — `group.workspaceIds` is sometimes
+  // empty until `reclaimWorkspacesAcrossGroups` rebuilds it). If a
+  // nested workspace is already active this is a no-op — the user
+  // already has the group "open", so re-selecting would be noise.
+  function handleBannerClick() {
+    if (!group || hasActiveChild) return;
+    if (openGroupDashboard(group)) return;
+    const nestedIdx = $workspaces.findIndex((w) => {
+      const md = w.metadata as Record<string, unknown> | undefined;
+      return md?.groupId === group!.id;
+    });
+    if (nestedIdx >= 0) switchWorkspace(nestedIdx);
   }
 
   function handleBannerContextMenu(e: MouseEvent) {
@@ -235,8 +264,7 @@
 
   $: groupHex = group ? resolveProjectColor(group.color, $theme) : "";
   $: headerFg = group ? contrastColor(groupHex) : $theme.fg;
-  $: subtitleFg =
-    headerFg === "#000" ? "rgba(0, 0, 0, 0.7)" : "rgba(255, 255, 255, 0.8)";
+  $: subtitleFg = $theme.fgMuted ?? $theme.fgDim ?? $theme.fg;
 
   $: splitDropdownItems = [
     {
@@ -258,12 +286,21 @@
   ];
 
   // Close X on the group container row — destructive; deletes the
-  // group entity. Confirms first. Nested workspaces return to the
-  // root-level list; they are not closed.
+  // group entity AND every workspace nested under it (including the
+  // Dashboard). Confirms first.
   async function handleClose() {
-    if (!group) return;
+    const g = group;
+    if (!g) return;
+    const nestedCount = $workspacesStore.filter((w) => {
+      const md = w.metadata as Record<string, unknown> | undefined;
+      return md?.groupId === g.id;
+    }).length;
+    const nestedLine =
+      nestedCount > 0
+        ? ` ${nestedCount} nested workspace${nestedCount === 1 ? "" : "s"} (including the Dashboard) will also be closed.`
+        : "";
     const confirmed = await showConfirmPrompt(
-      `Delete workspace group "${group.name}"? Workspaces belonging to this group return to the root list; they are not closed.`,
+      `Delete workspace group "${g.name}"?${nestedLine}`,
       {
         title: "Delete Workspace Group",
         confirmLabel: "Delete",
@@ -305,13 +342,14 @@
   >
     <ContainerRow
       color={groupHex}
-      foreground={headerFg}
       {onGripMouseDown}
       gripAriaLabel="Drag workspace group to reorder"
       onBannerContextMenu={handleBannerContextMenu}
+      onBannerClick={handleBannerClick}
       onClose={handleClose}
       closeTitle="Delete workspace group"
       {filterIds}
+      {hasActiveChild}
       dashboardHintFor={hintForGroupDashboardHost}
       scopeId={group.id}
       {containerBlockId}
@@ -320,29 +358,35 @@
       workspaceListViewComponent={WorkspaceListView}
     >
       <span
+        data-container-row-title
         style="
           flex: 1; min-width: 0;
-          font-size: 13px; font-weight: 600; color: {headerFg};
+          font-size: 13px; font-weight: 600; color: {$theme.fg};
           overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+          user-select: none;
+          pointer-events: none;
         ">{group.name}</span
       >
 
-      <svelte:fragment slot="banner-end">
+      <svelte:fragment slot="banner-end" let:bannerHovered>
         {#if coreAction}
           <!-- svelte-ignore a11y_click_events_have_key_events -->
           <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <!-- `+ New` split button. Background uses the group's own
+               color so the chip stays visually tied to the container,
+               and flips to a stronger variant on banner hover so it
+               remains distinct against the banner's hover background. -->
           <span
             class="project-new-chip"
             on:click|stopPropagation
             style="
               flex-shrink: 0; border-radius: 6px; overflow: visible;
-              background: {headerFg === '#000'
-              ? 'rgba(0, 0, 0, 0.12)'
-              : 'rgba(0, 0, 0, 0.22)'};
+              background: {bannerHovered
+              ? groupHex
+              : `color-mix(in srgb, ${groupHex} 70%, transparent)`};
               --project-btn-fg: {headerFg};
-              --project-btn-hover-bg: {headerFg === '#000'
-              ? 'rgba(0, 0, 0, 0.22)'
-              : 'rgba(0, 0, 0, 0.36)'};
+              --project-btn-hover-bg: {groupHex};
+              transition: background 0.15s;
             "
           >
             <SplitButton

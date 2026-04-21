@@ -75,6 +75,49 @@ pub async fn git_remote_url(repo_path: String) -> Result<String, String> {
     }
 }
 
+/// Return the raw unified-diff text for a repository. All filter args
+/// are optional and compose:
+///   - `staged = true`         → `git diff --staged`
+///   - `base` set, `head` set  → `git diff base..head` (triple-dot
+///                                not used; branches-at-tip, not
+///                                merge-base)
+///   - `base` set only         → `git diff base`
+///   - `file` set              → appends `-- <file>` so the diff
+///                                scopes to that path
+///   - none of the above       → `git diff` (unstaged working-tree
+///                                changes)
+/// Callers in `diff-viewer` rely on the raw unified output and parse
+/// it themselves; no formatting flags are added here.
+#[tauri::command]
+pub async fn git_diff(
+    repo_path: String,
+    file: Option<String>,
+    base: Option<String>,
+    head: Option<String>,
+    staged: Option<bool>,
+) -> Result<String, String> {
+    validate_repo(&repo_path)?;
+    let mut args: Vec<String> = vec!["diff".to_string()];
+    if staged.unwrap_or(false) {
+        args.push("--staged".to_string());
+    }
+    match (base.as_deref(), head.as_deref()) {
+        (Some(b), Some(h)) => args.push(format!("{b}..{h}")),
+        (Some(b), None) => args.push(b.to_string()),
+        _ => {}
+    }
+    if let Some(f) = file {
+        args.push("--".to_string());
+        args.push(f);
+    }
+    let args_ref: Vec<&str> = args.iter().map(String::as_str).collect();
+    // `git diff` exits non-zero when the requested ref/path is bogus
+    // but also when there are conflicts; the former is a genuine
+    // error, the latter still produces useful stdout. We surface any
+    // non-zero exit as an error so the extension can toast it.
+    run_git(&repo_path, &args_ref)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

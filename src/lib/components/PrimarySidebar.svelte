@@ -147,7 +147,10 @@
             class="top-row-new-chip"
             style="
               flex-shrink: 0; border-radius: 6px; overflow: visible;
-              background: rgba(0, 0, 0, 0.3);
+              background: {$theme.bgHighlight ??
+              $theme.bgFloat ??
+              'rgba(0, 0, 0, 0.3)'};
+              box-shadow: inset 0 0 0 1px {$theme.border ?? 'transparent'};
               --section-btn-fg: {$theme.fg};
               -webkit-app-region: no-drag;
             "

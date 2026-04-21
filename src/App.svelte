@@ -14,6 +14,7 @@
     settingsPage,
     pendingAction,
     showInputPrompt,
+    showConfirmPrompt,
   } from "./lib/stores/ui";
   import {
     workspaces,
@@ -251,6 +252,34 @@
       title: "Close Workspace",
       shortcut: isMac ? `${shiftModLabel}W` : `${shiftModLabel}Q`,
       action: () => closeWorkspace($activeWorkspaceIdx),
+      source: "core",
+    },
+    {
+      // Palette-only escape hatch for nuking stale state — e.g. orphaned
+      // workspaces left behind by group deletion on older builds.
+      // Intentionally no shortcut (destructive, rarely wanted).
+      id: "core.close-all-workspaces",
+      title: "Close All Workspaces",
+      action: () => {
+        void (async () => {
+          const count = $workspaces.length;
+          if (count === 0) return;
+          const confirmed = await showConfirmPrompt(
+            `Close all ${count} workspace${count === 1 ? "" : "s"}? This will dispose every terminal and cannot be undone.`,
+            {
+              title: "Close All Workspaces",
+              confirmLabel: "Close All",
+              cancelLabel: "Cancel",
+            },
+          );
+          if (!confirmed) return;
+          // closeWorkspace mutates the store and shifts indices, so
+          // always pop index 0 until the list is empty.
+          while (get(workspaces).length > 0) {
+            closeWorkspace(0);
+          }
+        })();
+      },
       source: "core",
     },
     {

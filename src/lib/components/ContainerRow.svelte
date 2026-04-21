@@ -24,8 +24,6 @@
 
   /** Banner + rail color. Required. */
   export let color: string;
-  /** Contrast foreground — caller resolves via its own contrastColor(). */
-  export let foreground: string = "#fff";
   /**
    * When set, render the nested variant: banner only (no grip), painted
    * with `color` as background. Used when this container is nested
@@ -42,6 +40,13 @@
   /** Banner body right-click — ignored if undefined. */
   export let onBannerContextMenu: ((e: MouseEvent) => void) | undefined =
     undefined;
+  /**
+   * Banner body left-click — fires for clicks anywhere in the banner
+   * row (including the git-status subtitle area). Interactive children
+   * inside the banner (close X, SplitButton chips, PR/diff links) call
+   * `stopPropagation` so they don't bubble into this handler.
+   */
+  export let onBannerClick: (() => void) | undefined = undefined;
   /**
    * When provided, render a close affordance ("X") on the banner's right
    * edge. Click fires `onClose`. In workspace-backed mode, callers wire
@@ -61,6 +66,13 @@
     | undefined = undefined;
   /** Forwarded: suppress per-row status badges when the container aggregates. */
   export let hideStatusBadges: boolean = false;
+  /**
+   * When true, a nested workspace inside this container is the active
+   * workspace. The banner swaps its idle `$theme.border` stroke for the
+   * container's `color` so the active state ties the group banner to
+   * its active child visually.
+   */
+  export let hasActiveChild: boolean = false;
   /** Drag scope id (container id). */
   export let scopeId: string;
   /** Sidebar block id the container belongs to (for drag context). */
@@ -88,7 +100,8 @@
 </script>
 
 {#if parentColor}
-  <!-- Nested-inside-parent variant — banner only, right-edge accent. -->
+  <!-- Nested-inside-parent variant — banner only, with a left-edge
+       colored accent replacing the old full-bleed colored background. -->
   <div
     data-container-row={testId ?? ""}
     data-container-mode="nested"
@@ -105,7 +118,9 @@
         overflow: hidden;
         min-height: 40px;
         cursor: default;
-        background: {color}; color: {foreground};
+        background: transparent;
+        color: {$theme.fg};
+        border-left: 3px solid {color};
       "
       on:contextmenu={onBannerContextMenu}
       on:mouseenter={() => (bannerHovered = true)}
@@ -140,7 +155,7 @@
             position: absolute;
             top: 50%; right: 6px;
             transform: translateY(-50%);
-            color: {foreground};
+            color: {$theme.fg};
             font-size: 14px;
             cursor: pointer;
             opacity: {bannerHovered ? '1' : '0'};
@@ -172,18 +187,26 @@
     <slot name="after-nested" />
   </div>
 {:else}
-  <!-- Root variant — grip on the left shares color with banner. -->
+  <!-- Root variant — the colored grip column lives at the outer flex
+       level so it stretches the full group height (a continuous rail
+       connecting the banner to the nested children). A light border
+       (matching the inactive dashboard-tile stroke) wraps only the
+       banner row; the nested workspace list renders below the border
+       so children carry their own chrome. -->
   <div
     data-container-row={testId ?? ""}
     data-container-mode="root"
-    style="display: flex; position: relative;"
+    style="display: flex; position: relative; align-items: stretch;"
   >
     {#if onGripMouseDown}
       <div
+        data-container-rail
         on:mouseenter={() => (gripHovered = true)}
         on:mouseleave={() => (gripHovered = false)}
         style="
-          flex-shrink: 0; align-self: stretch; display: flex;
+          flex-shrink: 0;
+          align-self: stretch;
+          display: flex;
           background: {color};
         "
         role="presentation"
@@ -200,7 +223,12 @@
         />
       </div>
     {/if}
-    <div style="flex: 1; min-width: 0; margin-right: 8px;">
+    <div
+      style="
+        flex: 1;
+        min-width: 0;
+      "
+    >
       <!-- svelte-ignore a11y_click_events_have_key_events -->
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div
@@ -209,14 +237,63 @@
           position: relative;
           padding: 4px 6px;
           min-height: 40px;
-          background: {color}; color: {foreground};
+          margin-right: 8px;
+          background: {bannerHovered
+          ? ($theme.bgHighlight ?? 'transparent')
+          : ($theme.bgSurface ?? 'transparent')};
+          color: {$theme.fg};
+          border-top: 1px solid {hasActiveChild
+          ? color
+          : ($theme.border ?? 'transparent')};
+          border-right: 1px solid {hasActiveChild
+          ? color
+          : ($theme.border ?? 'transparent')};
+          border-bottom: 1px solid {hasActiveChild
+          ? color
+          : ($theme.border ?? 'transparent')};
+          border-left: none;
           border-radius: 0 6px 6px 0;
-          cursor: default;
+          cursor: {onBannerClick && !hasActiveChild ? 'pointer' : 'default'};
+          transition: background 0.15s;
         "
         on:contextmenu={onBannerContextMenu}
+        on:click={onBannerClick}
         on:mouseenter={() => (bannerHovered = true)}
         on:mouseleave={() => (bannerHovered = false)}
       >
+        {#if onGripMouseDown && !gripHovered}
+          <!-- Rail-edge fade: a small dot-pattern section at the banner's
+               left edge that continues the rail into the banner body and
+               fades out. Mirrors WorkspaceItem's drag-edge fade. Hidden
+               while the rail is expanded — at that point the rail itself
+               covers this region. -->
+          <div
+            aria-hidden="true"
+            style="
+              position: absolute;
+              top: 0; bottom: 0;
+              left: 0; width: 14px;
+              pointer-events: none;
+              background-color: {color};
+              background-image:
+                radial-gradient(circle, #000 1.1px, transparent 1.6px),
+                radial-gradient(circle, #000 1.1px, transparent 1.6px);
+              background-size: 5px 5px;
+              background-position: 0 0, 2.5px 2.5px;
+              background-repeat: repeat;
+              -webkit-mask-image: linear-gradient(
+                to right,
+                rgba(0, 0, 0, 1) 0%,
+                rgba(0, 0, 0, 0) 45%
+              );
+              mask-image: linear-gradient(
+                to right,
+                rgba(0, 0, 0, 1) 0%,
+                rgba(0, 0, 0, 0) 45%
+              );
+            "
+          ></div>
+        {/if}
         <div
           data-container-banner-body
           style="padding-left: 8px; display: flex; flex-direction: column; gap: 2px; min-height: 32px; justify-content: center;"
@@ -224,11 +301,11 @@
           <div
             style="display: flex; align-items: center; gap: 8px; min-width: 0;"
           >
-            <slot name="icon" />
-            <slot />
-            <slot name="banner-end" />
+            <slot name="icon" {bannerHovered} />
+            <slot {bannerHovered} />
+            <slot name="banner-end" {bannerHovered} />
           </div>
-          <slot name="banner-subtitle" />
+          <slot name="banner-subtitle" {bannerHovered} />
         </div>
         {#if onClose}
           <!-- Close X — absolute-positioned so it never pushes banner
@@ -246,7 +323,7 @@
               position: absolute;
               top: 50%; right: 6px;
               transform: translateY(-50%);
-              color: {foreground};
+              color: {$theme.fg};
               font-size: 14px;
               cursor: pointer;
               opacity: {bannerHovered ? '1' : '0'};

@@ -38,8 +38,12 @@ import {
   addOutputObserver,
   removeOutputObserver,
 } from "./surface-output-observer";
-import { setAgentStatus, clearAgentStatus } from "../stores/agent-status";
-import { setStatusItem, clearStatusItem } from "./status-registry";
+import {
+  setStatusItem,
+  clearStatusItem,
+  clearAllStatusForSourceAndWorkspace,
+} from "./status-registry";
+import { statusRegistry } from "./status-registry";
 import { markSurfaceUnreadById } from "./surface-service";
 import { workspaces } from "../stores/workspace";
 import { getAllPanes, isTerminalSurface } from "../types";
@@ -81,6 +85,11 @@ const DEFAULT_PATTERNS: AgentPattern[] = [
 
 const AGENT_SURFACE_ITEM_PREFIX = "surface:";
 const AGENT_STATUS_SOURCE = "_agent";
+
+// OSC notification sequences we treat as "agent waiting on user". OSC 0/2
+// (title) deliberately excluded — every title ping used to pin Claude in
+// "waiting" and kill the idle timer.
+const NOTIFICATION_OSC_RE = /\x1b\](?:9|99|777);/;
 
 // --- Reactive registry ---
 
@@ -220,6 +229,8 @@ function createStatusTracker(
 interface TrackedSurface {
   surfaceId: string;
   ptyId: number | null;
+  /** pty id the current observer is bound to; lets wireObserver detect a rewire. */
+  wiredPtyId: number | null;
   agentId: string | null;
   agentPattern: AgentPattern | null;
   tracker: StatusTracker | null;
@@ -238,12 +249,12 @@ function publishStatus(
   }
 
   if (workspaceId) {
-    if (status === "closed") {
-      clearAgentStatus(workspaceId);
-    } else {
-      setAgentStatus(workspaceId, status);
-    }
-
+    // One registry item per tracked surface. aggregateAgentBadges was
+    // previously seeing two items per attached agent (a per-surface
+    // entry plus a workspace-level "default" entry) because we also
+    // called setAgentStatus here — the tooltip read "2 idle" for a
+    // single agent. Extensions that need to set workspace-level agent
+    // status continue to go through the agent-status public API.
     const itemId = `${AGENT_SURFACE_ITEM_PREFIX}${tracked.surfaceId}`;
     if (status === "closed") {
       clearStatusItem(AGENT_STATUS_SOURCE, workspaceId, itemId);
@@ -363,13 +374,27 @@ function attachAgent(
   tracked.agentId = agentId;
   tracked.agentPattern = pattern;
   tracked.tracker = tracker;
+
+  // The tracker starts at "idle" but only fires onStatusChange on
+  // transitions, so publish the initial idle state explicitly. Without
+  // this, a freshly-attached (or restored-at-startup) agent has no
+  // status-registry item until its first output/title change, and the
+  // sidebar workspace chip is missing during that window.
+  publishStatus(tracked, workspaceId, "idle");
 }
 
 function detachAgent(tracked: TrackedSurface): void {
   if (!tracked.agentId) return;
 
   const agent = _agents.find((a) => a.agentId === tracked.agentId);
-  const workspaceId = agent?.workspaceId ?? "";
+  // Re-resolve at detach time in case the surface was attached before
+  // its owning workspace was known (workspaceId=""), or moved between
+  // workspaces after attach — otherwise the per-surface registry item
+  // would leak with no way to clear it.
+  const workspaceId =
+    agent?.workspaceId && agent.workspaceId !== ""
+      ? agent.workspaceId
+      : resolveWorkspaceIdForSurface(tracked.surfaceId);
 
   publishStatus(tracked, workspaceId, "closed");
 
@@ -409,9 +434,14 @@ export function initAgentDetection(): void {
   const attachToSurface = (surfaceId: string, initialTitle: string): void => {
     if (trackedSurfaces.has(surfaceId)) return;
 
+    const resolvedPty = resolvePtyIdForSurface(surfaceId);
+    // A terminal surface emits `surface:created` with ptyId = -1 — the
+    // real id is only assigned once connectPty resolves. Treat -1 as
+    // "not ready yet" and defer observer wiring to surface:ptyReady.
     const tracked: TrackedSurface = {
       surfaceId,
-      ptyId: resolvePtyIdForSurface(surfaceId),
+      ptyId: resolvedPty !== null && resolvedPty >= 0 ? resolvedPty : null,
+      wiredPtyId: null,
       agentId: null,
       agentPattern: null,
       tracker: null,
@@ -425,37 +455,59 @@ export function initAgentDetection(): void {
     }
 
     if (tracked.ptyId !== null) {
-      const observer = (data: string) => {
-        try {
-          if (tracked.tracker) {
-            if (tracked.agentPattern?.oscDetectable && data.includes("\x1b]")) {
-              tracked.tracker.onNotification(data);
-            } else {
-              tracked.tracker.onOutput();
-            }
+      wireObserver(tracked);
+    }
+  };
+
+  const wireObserver = (tracked: TrackedSurface): void => {
+    if (tracked.ptyId === null) return;
+    // If an observer was already wired but the pty id changed (e.g. a
+    // surface:ptyReady fired twice because spawn retried), tear the old
+    // one down so we don't leak an observer pointed at a stale pty.
+    if (tracked.unsubscribeOutput) {
+      if (tracked.wiredPtyId === tracked.ptyId) return;
+      tracked.unsubscribeOutput();
+      tracked.unsubscribeOutput = null;
+    }
+    const ptyId = tracked.ptyId;
+    const observer = (data: string) => {
+      try {
+        if (tracked.tracker) {
+          // Only real notification OSCs (9 / 99 / 777) flip the
+          // tracker to "waiting". A bare `ESC ]` match is too broad —
+          // every OSC 0/2 title update hit it, which pinned OSC-mode
+          // agents (e.g. Claude) in "waiting" forever because
+          // onNotification also clears the idle timer.
+          if (
+            tracked.agentPattern?.oscDetectable &&
+            NOTIFICATION_OSC_RE.test(data)
+          ) {
+            tracked.tracker.onNotification(data);
           } else {
-            const match = matchesPattern(data, patterns);
-            if (match) attachAgent(tracked, match, idleTimeoutMs);
+            tracked.tracker.onOutput();
           }
-        } catch (err) {
-          console.error(
-            "[agent-detection] output observer error",
-            tracked.surfaceId,
-            err,
-          );
-          if (tracked.agentId) {
-            try {
-              detachAgent(tracked);
-            } catch {
-              /* already reported */
-            }
+        } else {
+          const match = matchesPattern(data, patterns);
+          if (match) attachAgent(tracked, match, idleTimeoutMs);
+        }
+      } catch (err) {
+        console.error(
+          "[agent-detection] output observer error",
+          tracked.surfaceId,
+          err,
+        );
+        if (tracked.agentId) {
+          try {
+            detachAgent(tracked);
+          } catch {
+            /* already reported */
           }
         }
-      };
-      addOutputObserver(tracked.ptyId, observer);
-      const ptyId = tracked.ptyId;
-      tracked.unsubscribeOutput = () => removeOutputObserver(ptyId, observer);
-    }
+      }
+    };
+    addOutputObserver(ptyId, observer);
+    tracked.wiredPtyId = ptyId;
+    tracked.unsubscribeOutput = () => removeOutputObserver(ptyId, observer);
   };
 
   const detachFromSurface = (surfaceId: string): void => {
@@ -497,13 +549,37 @@ export function initAgentDetection(): void {
   const handleClosed = (event: { type: "surface:closed"; id: string }) => {
     detachFromSurface(event.id);
   };
+  const handlePtyReady = (event: {
+    type: "surface:ptyReady";
+    id: string;
+    ptyId: number;
+  }) => {
+    // surface:created fires with a placeholder ptyId = -1 (the PTY
+    // isn't spawned until after the xterm is fit-sized), so the
+    // observer was previously pointed at a non-existent pty id and
+    // never received data. Once the real id lands, backfill it and
+    // wire the observer now.
+    let tracked = trackedSurfaces.get(event.id);
+    if (!tracked) {
+      // Missed surface:created (e.g. init raced with a restore) —
+      // attach now with an empty title and fall through to observer
+      // wiring.
+      attachToSurface(event.id, "");
+      tracked = trackedSurfaces.get(event.id);
+      if (!tracked) return;
+    }
+    tracked.ptyId = event.ptyId;
+    wireObserver(tracked);
+  };
 
   eventBus.on("surface:created", handleCreated);
   eventBus.on("surface:titleChanged", handleTitle);
   eventBus.on("surface:closed", handleClosed);
+  eventBus.on("surface:ptyReady", handlePtyReady);
   cleanups.push(() => eventBus.off("surface:created", handleCreated));
   cleanups.push(() => eventBus.off("surface:titleChanged", handleTitle));
   cleanups.push(() => eventBus.off("surface:closed", handleClosed));
+  cleanups.push(() => eventBus.off("surface:ptyReady", handlePtyReady));
 
   // Bootstrap every pre-existing terminal surface — surface:created only
   // fires for surfaces created AFTER this listener attached, so restored
@@ -521,8 +597,26 @@ export function initAgentDetection(): void {
       trackedSurfaces.clear();
       for (const cleanup of cleanups) cleanup();
       cleanups.length = 0;
+      // Belt-and-suspenders: detachAgent already clears per-surface
+      // items via publishStatus("closed"), but if a tracker lost its
+      // workspace id and the fallback re-resolve failed (surface
+      // already removed from the store), nothing cleared it. Sweep any
+      // remaining `_agent` items so a subsequent init starts clean.
+      sweepAgentRegistry();
     },
   };
+}
+
+function sweepAgentRegistry(): void {
+  const items = get(statusRegistry.store);
+  for (const item of items) {
+    if (item.source === AGENT_STATUS_SOURCE) {
+      clearAllStatusForSourceAndWorkspace(
+        AGENT_STATUS_SOURCE,
+        item.workspaceId,
+      );
+    }
+  }
 }
 
 /** Stop the service. Tears down observers and clears the registry. */
@@ -530,6 +624,11 @@ export function destroyAgentDetection(): void {
   if (_current) {
     _current.destroy();
     _current = null;
+  } else {
+    // Still sweep — destroyAgentDetection is called from test hooks and
+    // during app shutdown with no live _current. Ensures the registry
+    // is clean even if the service wasn't active.
+    sweepAgentRegistry();
   }
   _agents = [];
   syncStore();

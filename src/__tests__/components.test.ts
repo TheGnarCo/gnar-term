@@ -810,6 +810,62 @@ describe("WorkspaceItem", () => {
     expect(screen.getByText("Build complete")).toBeTruthy();
   });
 
+  it("renders a presence-only chip when an agent is attached but idle", async () => {
+    // Regression: launching claude in a workspace should immediately
+    // show an identifier chip — even before the tracker transitions to
+    // running/waiting. aggregateAgentBadges consumes process items from
+    // the status registry; a muted item means "agent live, no active
+    // work" and must render a visible dot.
+    const { setStatusItem, clearAllStatusForWorkspace } =
+      await import("../lib/services/status-registry");
+    const ws = makeWorkspace("ws-agent", "Agent WS");
+    setStatusItem("_agent", ws.id, "surface:s1", {
+      category: "process",
+      priority: 0,
+      label: "idle",
+      variant: "muted",
+      metadata: { surfaceId: "s1" },
+    });
+    const { container } = render(WorkspaceItem, {
+      props: {
+        workspace: ws,
+        index: 0,
+        isActive: false,
+        onSelect: noop,
+        onClose: noop,
+        onRename: noop,
+        onContextMenu: noop,
+      },
+    });
+    expect(
+      container.querySelector("[data-agent-presence-chip]"),
+    ).not.toBeNull();
+    clearAllStatusForWorkspace(ws.id);
+  });
+
+  it("suppresses the notification row when nested inside a workspace group", () => {
+    // Regression: nested workspaces render under a group's colored
+    // banner that already rolls up status; the long blue notification
+    // row duplicates chrome and crowds the nested layout, so it's
+    // suppressed when metadata.groupId is set.
+    const surface = makeSurface("s1", { notification: "Build complete" });
+    const pane = makePane("p1", [surface]);
+    const ws = makeWorkspace("ws1", "Nested WS", pane);
+    ws.metadata = { groupId: "g1" };
+    render(WorkspaceItem, {
+      props: {
+        workspace: ws,
+        index: 0,
+        isActive: true,
+        onSelect: noop,
+        onClose: noop,
+        onRename: noop,
+        onContextMenu: noop,
+      },
+    });
+    expect(screen.queryByText("Build complete")).toBeNull();
+  });
+
   it("is reorderable via mouse drag", () => {
     const { container } = renderWorkspaceItem();
     const el = container.querySelector("[data-drag-idx]");
@@ -973,6 +1029,74 @@ describe("PaneView", () => {
       },
     });
     expect(screen.getByText("Pane Tab")).toBeTruthy();
+  });
+
+  it("renders Overview/Settings tab strip for a Group Dashboard workspace", () => {
+    // Regression: Group Dashboards previously rendered only the preview
+    // surface with no way to edit the group's color/name without going
+    // back to the sidebar context menu. PaneView now detects
+    // metadata.isDashboard + metadata.groupId and exposes a tab strip.
+    const ws: Workspace = {
+      id: "ws-dash",
+      name: "Dashboard",
+      splitRoot: { type: "pane", pane: makePane("p1") },
+      activePaneId: "p1",
+      metadata: { isDashboard: true, groupId: "g1" },
+    };
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+    const pane = ws.splitRoot.type === "pane" ? ws.splitRoot.pane : null;
+    if (!pane) throw new Error("expected single-pane workspace");
+    const { container } = render(PaneView, {
+      props: {
+        pane,
+        workspaceId: ws.id,
+        onSelectSurface: noop,
+        onCloseSurface: noop,
+        onNewSurface: noop,
+        onSelectSurfaceType: noop,
+        onSplitRight: noop,
+        onSplitDown: noop,
+        onClosePane: noop,
+        onFocusPane: noop,
+      },
+    });
+    const tabs = container.querySelector("[data-group-dashboard-tabs]");
+    expect(tabs).not.toBeNull();
+    expect(
+      container.querySelector('[data-group-dashboard-tab="overview"]'),
+    ).not.toBeNull();
+    expect(
+      container.querySelector('[data-group-dashboard-tab="settings"]'),
+    ).not.toBeNull();
+  });
+
+  it("does not render Group Dashboard tabs for non-dashboard workspaces", () => {
+    const ws: Workspace = {
+      id: "ws-regular",
+      name: "Regular",
+      splitRoot: { type: "pane", pane: makePane("p1") },
+      activePaneId: "p1",
+    };
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+    const pane = ws.splitRoot.type === "pane" ? ws.splitRoot.pane : null;
+    if (!pane) throw new Error("expected single-pane workspace");
+    const { container } = render(PaneView, {
+      props: {
+        pane,
+        workspaceId: ws.id,
+        onSelectSurface: noop,
+        onCloseSurface: noop,
+        onNewSurface: noop,
+        onSelectSurfaceType: noop,
+        onSplitRight: noop,
+        onSplitDown: noop,
+        onClosePane: noop,
+        onFocusPane: noop,
+      },
+    });
+    expect(container.querySelector("[data-group-dashboard-tabs]")).toBeNull();
   });
 
   it("renders the + button via the embedded TabBar", () => {

@@ -1176,6 +1176,25 @@ describe("surface-service", () => {
         pane2.id,
       );
     });
+
+    it("closes the workspace when the last surface of the only pane is closed", () => {
+      const s = mockTerminalSurface();
+      const pane = makePane([s]);
+      pane.activeSurfaceId = s.id;
+      const ws = makeWorkspace({
+        splitRoot: { type: "pane", pane },
+        activePaneId: pane.id,
+      });
+      const other = makeWorkspace({ id: "ws-other" });
+      workspaces.set([ws, other]);
+      activeWorkspaceIdx.set(0);
+
+      closeActiveSurface();
+
+      const list = get(workspaces);
+      expect(list).toHaveLength(1);
+      expect(list[0]!.id).toBe("ws-other");
+    });
   });
 
   describe("openExtensionSurfaceInPane", () => {

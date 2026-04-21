@@ -9,7 +9,6 @@
    * within a filtered view, that translates to moving a workspace relative to
    * its visible peers.
    */
-  import { flip } from "svelte/animate";
   import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
   import { theme } from "../stores/theme";
   import { reorderContext, anyReorderActive } from "../stores/ui";
@@ -76,7 +75,6 @@
    * callers (ContainerRow) don't have to rewire when a future action
    * needs the label.
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   export let containerLabel: string | undefined = undefined;
   void containerLabel;
 
@@ -226,11 +224,11 @@
       <div
         class="dashboard-grid"
         data-dashboard-count={count}
+        data-multi={count > 1 ? "true" : undefined}
         style="--cols: {cols};"
       >
         {#each dashboardEntries as entry (entry.ws.id)}
           {@const dashAccent = accentColor ?? $theme.accent}
-          {@const dashFg = contrastColor(dashAccent)}
           {@const isActive = entry.idx === $activeWorkspaceIdx}
           {@const wsMeta = entry.ws.metadata as
             | Record<string, unknown>
@@ -249,13 +247,19 @@
               // Dashboards are non-interactive surfaces; right-click is a no-op.
             }}
             style="
-              background: {dashAccent}; color: {dashFg};
-              opacity: {isActive ? 1 : 0.55};
-              {isActive ? `box-shadow: 0 0 0 1.5px ${$theme.fg};` : ''}
+              background: {$theme.bgSurface ?? 'transparent'};
+              color: {$theme.fg};
+              border: 1px solid {$theme.border ?? 'transparent'};
+              opacity: {isActive ? 1 : 0.75};
+              {isActive ? `box-shadow: 0 0 0 1.5px ${dashAccent};` : ''}
             "
           >
             {#if isNested}
-              <span class="dashboard-tile-icon" aria-hidden="true">
+              <span
+                class="dashboard-tile-icon"
+                aria-hidden="true"
+                style="color: {dashAccent};"
+              >
                 {#if isAgentic}
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -305,11 +309,7 @@
     {#each entries as entry (entry.ws.id)}
       {@const isSrc = active && sourceIdx === entry.idx}
       {@const isSibling = active && sourceIdx !== entry.idx}
-      <div
-        class="workspace-list-row"
-        animate:flip={{ duration: 200 }}
-        data-ws-view-drag-idx={entry.idx}
-      >
+      <div class="workspace-list-row" data-ws-view-drag-idx={entry.idx}>
         {#if indicator?.idx === entry.idx && indicator.edge === "before"}
           <DropGhost
             theme={$theme}
@@ -371,17 +371,15 @@
 {/if}
 
 <style>
-  /* Gap between adjacent workspace rows so the rail reads as a stack
-     of discrete workspace tiles rather than one unbroken column.
-     Matched by WorkspaceListBlock's .root-row + rule so root and
-     nested workspace lists have identical vertical rhythm. */
+  /* Uniform 8px rhythm across the nested column: banner→dashboard,
+     dashboard→first-workspace, and workspace→workspace all use the
+     same gap so the rail reads as an evenly-spaced stack. Matched by
+     WorkspaceListBlock's .root-row + rule for root-level rhythm. */
   .workspace-list-row + .workspace-list-row {
-    margin-top: 6px;
+    margin-top: 8px;
   }
-  /* Dashboard block → workspace list: 10px gap so the dashboard region
-     reads as a separate block from the workspace list below. */
   .dashboard-grid + .workspace-list-row {
-    margin-top: 10px;
+    margin-top: 8px;
   }
 
   /* Dashboard grid — up to 3 equal-width tiles per row; extras wrap.
@@ -431,14 +429,15 @@
   }
 
   /* When the grid is too narrow to fit labels meaningfully, collapse
-     to icon-only. Threshold is ~220px which, with 3 columns + gaps,
-     puts each tile at ~65px — below that the label ellipsizes to
-     almost nothing anyway. */
-  @container (max-width: 220px) {
-    .dashboard-tile {
+     to icon-only. Gated on `data-multi` (set when there are 2+ tiles)
+     — a lone dashboard keeps its label even in narrow sidebars.
+     Threshold tightened to 140px so the label only hides in very
+     cramped widths. */
+  @container (max-width: 140px) {
+    .dashboard-grid[data-multi="true"] .dashboard-tile {
       padding: 6px;
     }
-    .dashboard-tile-label {
+    .dashboard-grid[data-multi="true"] .dashboard-tile-label {
       display: none;
     }
   }

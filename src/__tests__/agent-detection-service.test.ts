@@ -25,6 +25,7 @@ import { eventBus, type AppEvent } from "../lib/services/event-bus";
 import { workspaces } from "../lib/stores/workspace";
 import { agentStatusStore } from "../lib/stores/agent-status";
 import { statusRegistry } from "../lib/services/status-registry";
+import { notifyOutputObservers } from "../lib/services/surface-output-observer";
 
 const consoleErrorSpy = vi
   .spyOn(console, "error")
@@ -297,6 +298,46 @@ describe("agent-detection-service — status publishing", () => {
     expect(get(agentStatusStore).w1).toBeUndefined();
   });
 
+  it("writes exactly one status-registry item per attached agent", () => {
+    // Regression: we used to call setAgentStatus(workspaceId, status)
+    // AND setStatusItem per-surface. Both landed in the registry under
+    // source=_agent, category=process, so aggregateAgentBadges counted
+    // one attached agent as two and the WorkspaceItem tooltip read
+    // "2 idle" for a lone agent. Verify we now write a single entry.
+    workspaces.set([
+      makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 21 }]),
+    ]);
+    initAgentDetection();
+    const items = get(statusRegistry.store).filter(
+      (i) => i.source === "_agent" && i.workspaceId === "w1",
+    );
+    expect(items).toHaveLength(1);
+    expect(items[0]?.metadata?.surfaceId).toBe("s1");
+  });
+
+  it("publishes a muted (idle) status item immediately on attach", () => {
+    // Regression: the status tracker starts at "idle" but only emits
+    // transitions, so the initial idle state used to leave the
+    // status-registry empty — the sidebar workspace chip would then be
+    // missing until the first output/title change. Verify that a
+    // freshly attached agent has a muted status item written.
+    workspaces.set([
+      makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 20 }]),
+    ]);
+    initAgentDetection();
+
+    const items = get(statusRegistry.store);
+    const surfaceItem = items.find(
+      (i) =>
+        i.source === "_agent" &&
+        i.workspaceId === "w1" &&
+        i.metadata?.surfaceId === "s1",
+    );
+    expect(surfaceItem).toBeDefined();
+    expect(surfaceItem?.label).toBe("idle");
+    expect(surfaceItem?.variant).toBe("muted");
+  });
+
   it("writes a per-surface status item keyed by `surface:<id>`", () => {
     workspaces.set([
       makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 12 }]),
@@ -320,6 +361,147 @@ describe("agent-detection-service — status publishing", () => {
     expect(surfaceItem).toBeDefined();
     expect(surfaceItem?.label).toBe("running");
     expect(surfaceItem?.variant).toBe("success");
+  });
+});
+
+describe("agent-detection-service — OSC output classification", () => {
+  it("treats title OSC (0/2) as output, not as notification", () => {
+    // Regression: the observer used to treat any `ESC ]` byte as an
+    // OSC notification, which meant every OSC 0/2 title ping pinned
+    // OSC-mode agents in "waiting" forever. Claude Code updates its
+    // title frequently, so users saw the idle/running state stuck.
+    workspaces.set([
+      makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 30 }]),
+    ]);
+    initAgentDetection();
+
+    // Simulate Claude emitting a title sequence. Must NOT transition to
+    // "waiting" (which would also cancel the idle timer).
+    notifyOutputObservers(30, "\x1b]2;✻ Claude Code\x07");
+
+    const items = get(statusRegistry.store);
+    const surfaceItem = items.find(
+      (i) => i.metadata?.surfaceId === "s1" && i.source === "_agent",
+    );
+    // "running" (osc mode) or the initial "idle" is fine — both are
+    // not "waiting", which is what the regression produced.
+    expect(surfaceItem?.label).not.toBe("waiting");
+  });
+
+  it("treats OSC 9 as notification (transitions to waiting)", () => {
+    workspaces.set([
+      makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 31 }]),
+    ]);
+    initAgentDetection();
+
+    notifyOutputObservers(31, "\x1b]9;Claude Code: response ready\x07");
+
+    const items = get(statusRegistry.store);
+    const surfaceItem = items.find(
+      (i) => i.metadata?.surfaceId === "s1" && i.source === "_agent",
+    );
+    expect(surfaceItem?.label).toBe("waiting");
+    expect(surfaceItem?.variant).toBe("warning");
+  });
+
+  it("wires the observer only once the PTY id is real", () => {
+    // Regression: surface:created fires with ptyId = -1 (the real id
+    // is assigned later by connectPty). Observers registered against
+    // -1 never receive data, so launching claude in a fresh surface
+    // never produced a chip. Agent detection now waits for
+    // surface:ptyReady before wiring the observer — simulate that
+    // flow and make sure output routed to the real ptyId attaches.
+    workspaces.set([
+      makeWorkspace("w1", [{ id: "s1", title: "Shell 1", ptyId: -1 }]),
+    ]);
+    initAgentDetection();
+
+    // Early output (no observer wired yet — placeholder ptyId) must
+    // not attach an agent.
+    notifyOutputObservers(40, "Claude Code starting…");
+    expect(getAgents()).toHaveLength(0);
+
+    // PTY becomes ready. Backfill the workspace state so the
+    // agent-detection cache can resolve it, then emit the event.
+    workspaces.update((list) => {
+      const ws = list[0];
+      if (!ws) return list;
+      for (const p of [ws.splitRoot].flatMap((r) =>
+        r.type === "pane" ? [r.pane] : [],
+      )) {
+        for (const s of p.surfaces) {
+          if (s.id === "s1" && "ptyId" in s) {
+            (s as { ptyId: number }).ptyId = 40;
+          }
+        }
+      }
+      return list;
+    });
+    eventBus.emit({ type: "surface:ptyReady", id: "s1", ptyId: 40 });
+
+    // Now output routed to the real ptyId should match + attach.
+    notifyOutputObservers(40, "Claude Code v2 Opus 4.7");
+    expect(getAgents()).toHaveLength(1);
+    expect(getAgents()[0]?.agentName).toBe("Claude Code");
+  });
+
+  it("treats OSC 777 as notification", () => {
+    workspaces.set([
+      makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 32 }]),
+    ]);
+    initAgentDetection();
+
+    notifyOutputObservers(32, "\x1b]777;notify;Claude Code;done\x07");
+
+    const items = get(statusRegistry.store);
+    const surfaceItem = items.find(
+      (i) => i.metadata?.surfaceId === "s1" && i.source === "_agent",
+    );
+    expect(surfaceItem?.label).toBe("waiting");
+  });
+});
+
+describe("agent-detection-service — lifecycle hygiene", () => {
+  it("sweeps _agent items from the registry on destroy", () => {
+    // Regression: destroyAgentDetection used to leave stale per-surface
+    // items in the registry if a tracker's workspace id fell out of
+    // sync. A subsequent init then inherited ghost chips. Confirm the
+    // destroy path clears every `_agent` item.
+    workspaces.set([
+      makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 50 }]),
+    ]);
+    initAgentDetection();
+    expect(
+      get(statusRegistry.store).filter((i) => i.source === "_agent").length,
+    ).toBeGreaterThan(0);
+
+    destroyAgentDetection();
+    const leftover = get(statusRegistry.store).filter(
+      (i) => i.source === "_agent",
+    );
+    expect(leftover).toEqual([]);
+  });
+
+  it("rewires the observer when surface:ptyReady fires with a new ptyId", () => {
+    // Regression guard: if spawn_pty resolves twice (retry), the
+    // second ptyReady carries a different ptyId. The observer must
+    // unbind from the stale id and re-bind to the new one — otherwise
+    // output on the live pty is silently dropped.
+    workspaces.set([
+      makeWorkspace("w1", [{ id: "s1", title: "Shell 1", ptyId: -1 }]),
+    ]);
+    initAgentDetection();
+    eventBus.emit({ type: "surface:ptyReady", id: "s1", ptyId: 100 });
+    // First id is stale — data on it must not attach after rewire.
+    eventBus.emit({ type: "surface:ptyReady", id: "s1", ptyId: 101 });
+
+    // Old pty id should no longer route to the observer.
+    notifyOutputObservers(100, "Claude Code on stale pty");
+    expect(getAgents()).toHaveLength(0);
+
+    // New pty id routes correctly.
+    notifyOutputObservers(101, "Claude Code on live pty");
+    expect(getAgents()).toHaveLength(1);
   });
 });
 

@@ -46,9 +46,12 @@ function parseHunkHeader(line: string): Omit<DiffHunk, "lines"> | null {
 }
 
 function stripPath(raw: string): string {
-  // "a/src/foo.ts" -> "src/foo.ts", "/dev/null" stays as-is
+  // "a/src/foo.ts" -> "src/foo.ts", "/dev/null" stays as-is.
+  // Also handles `i/`/`w/` (index/work-tree) prefixes when the user has
+  // `diff.mnemonicPrefix = true` configured, and `c/`/`o/` for the less
+  // common cached/other mnemonic pairs.
   if (raw === "/dev/null") return raw;
-  return raw.replace(/^[ab]\//, "");
+  return raw.replace(/^[abiwco]\//, "");
 }
 
 export function parseDiff(rawDiff: string): DiffFile[] {
@@ -173,12 +176,16 @@ export function parseDiff(rawDiff: string): DiffFile[] {
 }
 
 /**
- * Find the split point between the two paths in "a/path b/path".
- * Git paths can contain spaces, so we look for " b/" as the separator.
+ * Find the split point between the two paths in "<prefix>/path <prefix>/path".
+ * Git paths can contain spaces, so we look for the second-prefix separator.
+ * Standard diffs use `a/` / `b/`; `diff.mnemonicPrefix = true` swaps to
+ * `i/`/`w/`, `c/`/`w/`, or `o/`/`w/` depending on the operation.
  */
 function findGitDiffPathSplit(combined: string): number {
-  const idx = combined.indexOf(" b/");
-  if (idx !== -1) return idx;
+  for (const marker of [" b/", " w/", " c/", " o/", " i/"]) {
+    const idx = combined.indexOf(marker);
+    if (idx !== -1) return idx;
+  }
   // Fallback for /dev/null cases
   const nullIdx = combined.indexOf(" /dev/null");
   if (nullIdx !== -1) return nullIdx;

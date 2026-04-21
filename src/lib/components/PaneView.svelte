@@ -6,6 +6,7 @@
   import TabBar from "./TabBar.svelte";
   import TerminalSurface from "./TerminalSurface.svelte";
   import PreviewSurface from "./PreviewSurface.svelte";
+  import GroupDashboardSettings from "./GroupDashboardSettings.svelte";
   import RestoreCommandPrompt from "./RestoreCommandPrompt.svelte";
   import EmptySurface from "./EmptySurface.svelte";
   import type { Component } from "svelte";
@@ -55,6 +56,18 @@
   $: workspaceMetadata = $workspaces.find((w) => w.id === workspaceId)
     ?.metadata as Record<string, unknown> | undefined;
   $: isDashboardWorkspace = workspaceMetadata?.isDashboard === true;
+  // A Group Dashboard workspace is a Dashboard workspace (metadata.isDashboard)
+  // that belongs to a Workspace Group (metadata.groupId). Group Dashboards
+  // get an Overview/Settings tab strip over the single preview surface —
+  // Settings lets the user edit the group's name + banner color without
+  // reaching for the sidebar context menu. Global Agentic Dashboard already
+  // has its own Settings via GlobalAgenticDashboardBody, so we scope this
+  // path to real (group-backed) dashboard workspaces only.
+  $: groupDashboardId =
+    isDashboardWorkspace && typeof workspaceMetadata?.groupId === "string"
+      ? (workspaceMetadata.groupId as string)
+      : null;
+  let groupDashboardTab: "overview" | "settings" = "overview";
   $: regenCommandId =
     !isDashboardWorkspace && typeof workspaceMetadata?.groupId === "string"
       ? "workspace-groups:regenerate-active-group-dashboard"
@@ -167,6 +180,36 @@
       {onRegenDashboard}
       {regenDashboardTitle}
     />
+  {:else if groupDashboardId}
+    <div
+      data-group-dashboard-tabs
+      style="
+        flex-shrink: 0;
+        display: flex; align-items: stretch; gap: 4px;
+        padding: 0 12px; border-bottom: 1px solid {$theme.border};
+        background: {$theme.bgSurface};
+      "
+    >
+      {#each [{ id: "overview" as const, label: "Overview" }, { id: "settings" as const, label: "Settings" }] as tab (tab.id)}
+        {@const isActive = groupDashboardTab === tab.id}
+        <button
+          data-group-dashboard-tab={tab.id}
+          data-active={isActive ? "true" : undefined}
+          on:click={() => (groupDashboardTab = tab.id)}
+          style="
+            padding: 8px 16px;
+            background: transparent;
+            color: {isActive ? $theme.fg : $theme.fgDim};
+            border: none;
+            border-bottom: 2px solid {isActive ? $theme.accent : 'transparent'};
+            font-size: 13px; font-weight: {isActive ? 600 : 500};
+            cursor: pointer;
+          "
+        >
+          {tab.label}
+        </button>
+      {/each}
+    </div>
   {/if}
 
   {#each pane.surfaces.filter((s) => s.id === pane.activeSurfaceId && isTerminalSurface(s)) as activeTerm (activeTerm.id)}
@@ -229,9 +272,17 @@
         {/if}
       {/each}
     {:else if isPreviewSurface(surface)}
-      <PreviewSurface {surface} visible={surface.id === pane.activeSurfaceId} />
+      <PreviewSurface
+        {surface}
+        visible={surface.id === pane.activeSurfaceId &&
+          (!groupDashboardId || groupDashboardTab === "overview")}
+      />
     {/if}
   {/each}
+
+  {#if groupDashboardId && groupDashboardTab === "settings"}
+    <GroupDashboardSettings groupId={groupDashboardId} />
+  {/if}
 </div>
 
 <style>

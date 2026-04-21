@@ -18,7 +18,6 @@
    * workspace list) are unchanged and still live inside
    * WorkspaceListView.
    */
-  import { flip } from "svelte/animate";
   import { derived, get } from "svelte/store";
   import { theme } from "../stores/theme";
   import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
@@ -281,7 +280,7 @@
     entry.row.kind === "workspace" && ws
       ? ws.name
       : (entry.rendererLabel ?? "")}
-  <div class="root-row" animate:flip={{ duration: 200 }}>
+  <div class="root-row">
     {#if insertIndicator?.idx === entry.idx && insertIndicator.edge === "before"}
       <DropGhost
         theme={$theme}
@@ -368,10 +367,9 @@
 
 <style>
   /* Inter-row gap — matches the nested workspace inter-row gap
-     (see WorkspaceListView's .workspace-list-row + rule). Bumped
-     from 2px so root workspaces breathe visually the same way
-     nested ones do. */
+     (see WorkspaceListView's .workspace-list-row + rule) so root and
+     nested lists share the same 8px vertical rhythm. */
   .root-row + .root-row {
-    margin-top: 6px;
+    margin-top: 8px;
   }
 </style>

@@ -197,6 +197,23 @@ fn classify_osc(raw: &str) -> OscAction {
         return OscAction::Ignore;
     }
 
+    // OSC 777's xterm/urxvt-style notification payload is
+    // `notify;<title>;<body>` — Claude Code uses this. Parsing it here
+    // keeps the raw "notify;Claude Code;…" string out of the UI so the
+    // workspace row shows "Claude Code: <body>" instead.
+    if let Some(rest) = text.strip_prefix("notify;") {
+        let (title, body) = rest.split_once(';').unwrap_or((rest, ""));
+        let title = title.trim();
+        let body = body.trim();
+        let formatted = match (title.is_empty(), body.is_empty()) {
+            (true, true) => return OscAction::Ignore,
+            (false, true) => title.to_string(),
+            (true, false) => body.to_string(),
+            (false, false) => format!("{title}: {body}"),
+        };
+        return OscAction::Notification(formatted);
+    }
+
     OscAction::Notification(text.to_string())
 }
 
@@ -1514,6 +1531,7 @@ pub fn run() {
             git_worktree::list_branches,
             git_info::git_status,
             git_info::git_remote_url,
+            git_info::git_diff,
             gh_commands::gh_list_prs,
             gh_commands::gh_list_issues,
             gh_commands::gh_available
@@ -2708,10 +2726,32 @@ mod tests {
     }
 
     #[test]
-    fn osc777_plain_text_is_notification() {
+    fn osc777_notify_payload_is_humanized() {
+        // OSC 777 xterm/urxvt notify format: notify;<title>;<body>
+        // We format as "<title>: <body>" so the UI doesn't surface the
+        // raw "notify;…" prefix (regression: Claude Code emits this and
+        // the sidebar was showing the raw payload).
         assert_eq!(
             classify_osc("777;notify;Title;Body text"),
-            OscAction::Notification("notify;Title;Body text".into())
+            OscAction::Notification("Title: Body text".into())
+        );
+    }
+
+    #[test]
+    fn osc777_notify_title_only() {
+        assert_eq!(
+            classify_osc("777;notify;Claude Code;"),
+            OscAction::Notification("Claude Code".into())
+        );
+    }
+
+    #[test]
+    fn osc777_non_notify_payload_passes_through() {
+        // Non-notify OSC 777 sub-actions keep their raw payload so we
+        // don't lose information when an agent uses a custom action.
+        assert_eq!(
+            classify_osc("777;other;Hello"),
+            OscAction::Notification("other;Hello".into())
         );
     }
 

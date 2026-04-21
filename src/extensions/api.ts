@@ -126,6 +126,7 @@ export type AppEventType =
   | "surface:created"
   | "surface:activated"
   | "surface:closed"
+  | "surface:ptyReady"
   | "surface:titleChanged"
   | "sidebar:toggled"
   | "theme:changed"

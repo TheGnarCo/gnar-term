@@ -102,7 +102,7 @@ describe("WorkspaceItem drag grip", () => {
   });
 });
 
-describe("WorkspaceItem worktree border", () => {
+describe("WorkspaceItem border", () => {
   afterEach(() => cleanup());
 
   function makeWorktreeWorkspace(): Workspace {
@@ -112,7 +112,7 @@ describe("WorkspaceItem worktree border", () => {
     };
   }
 
-  it("renders a 1px border in railColor for worktree workspaces", () => {
+  it("marks worktree workspaces with data-worktree=true", () => {
     const { container } = render(WorkspaceItem, {
       props: {
         workspace: makeWorktreeWorkspace(),
@@ -128,28 +128,28 @@ describe("WorkspaceItem worktree border", () => {
     });
     const row = container.querySelector("[data-drag-idx]") as HTMLElement;
     expect(row.dataset.worktree).toBe("true");
-    expect(row.style.border).toContain("1px solid");
-    expect(row.style.border).toContain("rgb(255, 0, 170)");
   });
 
-  it("falls back to theme.accent when no accentColor is passed", () => {
+  it("renders a 1px border in railColor for active workspaces", () => {
     const { container } = render(WorkspaceItem, {
       props: {
-        workspace: makeWorktreeWorkspace(),
+        workspace: makeWorkspace(),
         index: 0,
-        isActive: false,
+        isActive: true,
         onSelect: noop,
         onClose: noop,
         onRename: noop,
         onContextMenu: noop,
         onGripMouseDown: vi.fn(),
+        accentColor: "#ff00aa",
       },
     });
     const row = container.querySelector("[data-drag-idx]") as HTMLElement;
     expect(row.style.border).toContain("1px solid");
+    expect(row.style.border).toContain("rgb(255, 0, 170)");
   });
 
-  it("renders no border for non-worktree workspaces", () => {
+  it("renders a 1px inactive-theme border for inactive workspaces (worktree or not)", () => {
     const { container } = render(WorkspaceItem, {
       props: {
         workspace: makeWorkspace(),
@@ -165,6 +165,8 @@ describe("WorkspaceItem worktree border", () => {
     });
     const row = container.querySelector("[data-drag-idx]") as HTMLElement;
     expect(row.dataset.worktree).toBeUndefined();
-    expect(row.style.border).toBe("");
+    expect(row.style.border).toContain("1px solid");
+    // Inactive uses theme.border, NOT the accentColor.
+    expect(row.style.border).not.toContain("rgb(255, 0, 170)");
   });
 });

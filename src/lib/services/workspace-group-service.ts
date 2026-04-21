@@ -63,6 +63,26 @@ export function deleteWorkspaceGroup(id: string): void {
 }
 
 /**
+ * Close every workspace tagged with `metadata.groupId === id`. Deletion
+ * ripples through the workspaces store, so we resolve each workspace by
+ * id after recollecting the list. Dashboard workspaces for the group
+ * match the same predicate and are closed here too; callers should not
+ * close the dashboard separately.
+ */
+export function closeWorkspacesInGroup(id: string): void {
+  const matchIds = get(workspaces)
+    .filter((w) => {
+      const md = w.metadata as Record<string, unknown> | undefined;
+      return md?.groupId === id;
+    })
+    .map((w) => w.id);
+  for (const wsId of matchIds) {
+    const idx = get(workspaces).findIndex((w) => w.id === wsId);
+    if (idx >= 0) closeWorkspace(idx);
+  }
+}
+
+/**
  * Appends `workspaceId` to `groupId`'s workspaceIds if not already
  * present. No-op when the group is missing (e.g. was just deleted).
  * Returns true when a change was persisted.

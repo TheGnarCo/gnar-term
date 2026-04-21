@@ -137,6 +137,13 @@
   $: isDashboardWs =
     (workspace.metadata as Record<string, unknown> | undefined)?.isDashboard ===
     true;
+  // Nested workspaces live under a group's colored banner. The group
+  // banner itself already rolls up status (and the per-row chip handles
+  // agent state), so the long blue notification row duplicates chrome
+  // and crowds the nested layout — suppress it in that context.
+  $: isInsideGroup =
+    typeof (workspace.metadata as Record<string, unknown> | undefined)
+      ?.groupId === "string";
   $: isAgentSpawned = (() => {
     const md = workspace.metadata as Record<string, unknown> | undefined;
     if (!md) return false;
@@ -216,9 +223,8 @@
     ? $theme.bgActive
     : hovered
       ? $theme.bgHighlight
-      : 'transparent'};
-    {isManaged ? `border: 1px solid ${railColor};` : ''}
-    {isActive ? `box-shadow: 0 0 0 1.5px ${$theme.fg};` : ''}
+      : ($theme.bgSurface ?? 'transparent')};
+    border: 1px solid {isActive ? railColor : ($theme.border ?? 'transparent')};
   "
   on:contextmenu|preventDefault={(e) => {
     // Dashboards are non-interactive surfaces; right-click is a no-op.
@@ -250,7 +256,7 @@
         {railColor}
         railOpacity={1}
         alwaysShowDots={true}
-        fadeRight={true}
+        fadeRight={!(dragActive || (gripHovered && !$anyReorderActive))}
       />
     </div>
     <!-- Drag-edge fade: continues the rail's dot pattern from the
@@ -324,25 +330,34 @@
               <path d="M9 13v2" />
             </svg>
           </span>
-        {:else if isManaged}
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            style="flex-shrink: 0; color: {$theme.fgDim};"
+        {/if}
+        {#if isManaged}
+          <span
+            data-workspace-worktree-icon
+            title="Git worktree workspace"
+            style="
+              flex-shrink: 0; display: inline-flex; align-items: center;
+              justify-content: center; color: {$theme.fgDim};
+            "
           >
-            <title>Git worktree workspace</title>
-            <circle cx="4" cy="4" r="2" />
-            <circle cx="4" cy="12" r="2" />
-            <circle cx="12" cy="8" r="2" />
-            <path d="M4 6 L4 10" />
-            <path d="M6 4 C8 4 10 6 10 8" />
-          </svg>
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <title>Git worktree workspace</title>
+              <circle cx="4" cy="4" r="2" />
+              <circle cx="4" cy="12" r="2" />
+              <circle cx="12" cy="8" r="2" />
+              <path d="M4 6 L4 10" />
+              <path d="M6 4 C8 4 10 6 10 8" />
+            </svg>
+          </span>
         {/if}
         {#if dashboardHint}
           <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -410,6 +425,7 @@
       {#if !hideStatusBadges}
         {#if agentBadges.length > 0 && agentBadges[0]}
           {@const topBadge = agentBadges[0]}
+          {@const isIdle = topBadge.variant === "muted"}
           {@const statusLabel =
             topBadge.variant === "success"
               ? "running"
@@ -420,21 +436,43 @@
                   : topBadge.variant === "error"
                     ? "error"
                     : ""}
-          <span
-            title={agentBadges.map((b) => b.label).join(", ")}
-            style="
-              display: inline-flex; align-items: center; gap: 3px;
-              font-size: 10px; color: {topBadge.color};
-              background: color-mix(in srgb, {topBadge.color} 15%, transparent);
-              padding: 1px 6px; border-radius: 8px; flex-shrink: 0;
-            "
-          >
+          {@const chipColor = isIdle
+            ? ($theme.fgMuted ?? $theme.fgDim ?? topBadge.color)
+            : topBadge.color}
+          <!-- Muted variant (agent attached, no active work) renders a
+               dot-only "presence" chip so the user can see an agent is
+               live without the chip competing with other status. Active
+               states (running/waiting/error) keep the full labeled pill. -->
+          {#if isIdle}
             <span
-              style="width: 6px; height: 6px; border-radius: 50%; background: {topBadge.color};"
-            ></span>
-            {#if agentCount > 1}{agentCount}
-            {/if}{statusLabel}
-          </span>
+              data-agent-presence-chip
+              title={agentBadges.map((b) => b.label).join(", ")}
+              style="
+                display: inline-flex; align-items: center;
+                padding: 0 3px; flex-shrink: 0;
+              "
+            >
+              <span
+                style="width: 7px; height: 7px; border-radius: 50%; background: {chipColor}; box-shadow: 0 0 0 1px color-mix(in srgb, {chipColor} 35%, transparent);"
+              ></span>
+            </span>
+          {:else}
+            <span
+              title={agentBadges.map((b) => b.label).join(", ")}
+              style="
+                display: inline-flex; align-items: center; gap: 3px;
+                font-size: 10px; color: {chipColor};
+                background: color-mix(in srgb, {chipColor} 15%, transparent);
+                padding: 1px 6px; border-radius: 8px; flex-shrink: 0;
+              "
+            >
+              <span
+                style="width: 6px; height: 6px; border-radius: 50%; background: {chipColor};"
+              ></span>
+              {#if agentCount > 1}{agentCount}
+              {/if}{statusLabel}
+            </span>
+          {/if}
         {:else if agentDotColor}
           <span
             title="Agent: {agentStatus}"
@@ -487,7 +525,7 @@
       {/if}
     {/each}
 
-    {#if latestNotification && !hideStatusBadges}
+    {#if latestNotification && !hideStatusBadges && !isInsideGroup}
       <div
         style="padding: 2px 12px 6px 6px; font-size: 11px; color: {$theme.notify}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
       >

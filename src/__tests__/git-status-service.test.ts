@@ -17,6 +17,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 import {
   parseGitStatus,
   parsePrInfo,
+  formatDirtyShorthand,
   GIT_STATUS_SOURCE,
   _resetGitStatusService,
 } from "../lib/services/git-status-service";
@@ -112,6 +113,83 @@ describe("parseGitStatus", () => {
       untracked: 2,
       staged: 1,
     });
+  });
+
+  it("splits out added / deleted / renamed into their own per-op buckets", () => {
+    const raw = [
+      "## main...origin/main",
+      " M src/edit.ts",
+      "A  src/added.ts",
+      " D src/removed.ts",
+      "R  old.ts -> new.ts",
+      "?? u.ts",
+    ].join("\n");
+
+    const result = parseGitStatus(raw);
+    expect(result).toMatchObject({
+      modified: 2, // " M" (work-tree) + " D" (work-tree)
+      staged: 2, // "A " + "R "
+      added: 1,
+      deleted: 1,
+      renamed: 1,
+      untracked: 1,
+    });
+  });
+});
+
+describe("formatDirtyShorthand", () => {
+  it("renders non-zero buckets with git single-letter prefixes", () => {
+    const info = {
+      branch: "main",
+      isDetached: false,
+      modified: 5,
+      staged: 0,
+      added: 2,
+      deleted: 1,
+      renamed: 0,
+      untracked: 3,
+      ahead: 0,
+      behind: 0,
+    };
+    // M5 (5 modified - 2 added - 1 deleted - 0 renamed = 2 pure-M;
+    // parseGitStatus counts added/deleted IN the modified total for
+    // files with a worktree-status column, so the formatter subtracts
+    // them back out to avoid double-counting).
+    expect(formatDirtyShorthand(info)).toBe("M2 A2 D1 ?3");
+  });
+
+  it("returns empty string when the tree is clean", () => {
+    expect(
+      formatDirtyShorthand({
+        branch: "main",
+        isDetached: false,
+        modified: 0,
+        staged: 0,
+        added: 0,
+        deleted: 0,
+        renamed: 0,
+        untracked: 0,
+        ahead: 0,
+        behind: 0,
+      }),
+    ).toBe("");
+  });
+
+  it("skips zero buckets so a single-file change stays compact", () => {
+    expect(
+      formatDirtyShorthand({
+        branch: "main",
+        isDetached: false,
+        modified: 1,
+        staged: 0,
+        added: 0,
+        deleted: 0,
+        renamed: 0,
+        untracked: 0,
+        ahead: 0,
+        behind: 0,
+      }),
+    ).toBe("M1");
   });
 
   it("handles branch-only header (no tracking)", () => {

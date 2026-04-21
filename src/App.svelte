@@ -151,6 +151,31 @@
     }
   }
 
+  /**
+   * Activate the extension that registered `surfaceTypeId` (if any),
+   * then run `open`. Namespaced ids look like `"<extension-id>:<surface-id>"`;
+   * `activateExtension` is idempotent for already-enabled extensions
+   * and soft-fails so a broken extension surfaces its error rather
+   * than stranding the caller. Used by every `status-action` command
+   * that ends up rendering an extension-owned surface.
+   */
+  function ensureProviderAndThen(
+    surfaceTypeId: string,
+    open: () => void,
+  ): Promise<void> {
+    const colonIdx = surfaceTypeId.indexOf(":");
+    const providerId = colonIdx > 0 ? surfaceTypeId.slice(0, colonIdx) : null;
+    if (!providerId) {
+      open();
+      return Promise.resolve();
+    }
+    return activateExtension(providerId)
+      .catch((err) => {
+        console.warn(`[status-action] activate "${providerId}" failed:`, err);
+      })
+      .finally(open);
+  }
+
   function dismissToast(id: string) {
     const toast = activeToasts.find((t) => t.id === id);
     if (toast) clearTimeout(toast.timerId);
@@ -639,31 +664,37 @@
           string,
           Record<string, unknown> | undefined,
         ];
-        // Namespaced surface ids are "<extension-id>:<surface-id>" — core
-        // consumers emit links to extension-provided surfaces (e.g. the
-        // git-status dirty pill opens the diff-viewer's "Uncommitted
-        // Changes" surface). Ensure the providing extension is
-        // activated so its `registerSurfaceType` has registered the
-        // component by the time PaneView renders. Idempotent for
-        // already-enabled extensions; bails silently if the surface
-        // id isn't namespaced or the extension isn't known.
-        const colonIdx = surfaceTypeId.indexOf(":");
-        const providerId =
-          colonIdx > 0 ? surfaceTypeId.slice(0, colonIdx) : null;
         const open = () =>
           openExtensionSurfaceInPane(surfaceTypeId, title, props);
-        if (providerId) {
-          void activateExtension(providerId)
-            .catch((err) => {
-              console.warn(
-                `[status-action] activate "${providerId}" failed:`,
-                err,
-              );
-            })
-            .finally(open);
-        } else {
-          open();
-        }
+        void ensureProviderAndThen(surfaceTypeId, open);
+      } else if (
+        action.command === "open-surface-in-new-workspace" &&
+        action.args
+      ) {
+        const [wsName, surfaceTypeId, title, props] = action.args as [
+          string,
+          string,
+          string,
+          Record<string, unknown> | undefined,
+        ];
+        const open = () =>
+          void createWorkspaceFromDef({
+            name: wsName,
+            layout: {
+              pane: {
+                surfaces: [
+                  {
+                    type: "extension",
+                    extensionType: surfaceTypeId,
+                    name: title,
+                    extensionProps: props ?? {},
+                    focus: true,
+                  },
+                ],
+              },
+            },
+          });
+        void ensureProviderAndThen(surfaceTypeId, open);
       }
     }) as EventListener);
 

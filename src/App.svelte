@@ -20,7 +20,9 @@
     activeWorkspaceIdx,
     activePane,
     activeSurface,
+    activePseudoWorkspaceId,
   } from "./lib/stores/workspace";
+  import { pseudoWorkspaceStore } from "./lib/services/pseudo-workspace-registry";
   import {
     rootRowOrder,
     bootstrapRootRowOrder,
@@ -673,7 +675,8 @@
       {#each $workspaces as ws, i (ws.id)}
         <WorkspaceView
           workspace={ws}
-          visible={i === $activeWorkspaceIdx}
+          visible={i === $activeWorkspaceIdx &&
+            $activePseudoWorkspaceId === null}
           onSelectSurface={selectSurface}
           onCloseSurface={closeSurfaceById}
           onNewSurface={newSurface}
@@ -691,7 +694,24 @@
         />
       {/each}
 
-      {#if $workspaces.length === 0}
+      {#each $pseudoWorkspaceStore as pseudo (pseudo.id)}
+        <div
+          data-pseudo-workspace-view={pseudo.id}
+          style="
+            flex: 1; min-height: 0; min-width: 0; display: {pseudo.id ===
+          $activePseudoWorkspaceId
+            ? 'flex'
+            : 'none'};
+            flex-direction: column;
+          "
+        >
+          <svelte:component
+            this={pseudo.render as import("svelte").Component}
+          />
+        </div>
+      {/each}
+
+      {#if $workspaces.length === 0 && $activePseudoWorkspaceId === null}
         <EmptySurface />
       {/if}
 

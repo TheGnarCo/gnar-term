@@ -66,8 +66,10 @@ describe("EmptySurface renders and is wired up", () => {
 
   it("App.svelte imports and renders EmptySurface when workspaces is empty", () => {
     expect(APP).toMatch(/import EmptySurface from/);
+    // Stage 7 added a pseudo-workspace gate too; match the base predicate
+    // without locking down the rest of the condition.
     expect(APP).toMatch(
-      /\{#if\s+\$workspaces\.length\s*===\s*0\s*\}\s*<EmptySurface/,
+      /\{#if\s+\$workspaces\.length\s*===\s*0[^}]*\}\s*<EmptySurface/,
     );
   });
 

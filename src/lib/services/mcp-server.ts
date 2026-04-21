@@ -572,11 +572,6 @@ registerTool({
             description:
               "Source repo path. Required if not in a workspace context.",
           },
-          orchestratorId: {
-            type: "string",
-            description:
-              "When set, the new worktree workspace's metadata.parentOrchestratorId is set to this id (so it renders nested under the orchestrator row).",
-          },
           taskContext: {
             type: "string",
             description:
@@ -600,7 +595,6 @@ registerTool({
         branch?: string;
         base?: string;
         repoPath?: string;
-        orchestratorId?: string;
         taskContext?: string;
       };
     };
@@ -640,9 +634,6 @@ registerTool({
         repoPath,
         ...(p.worktree.branch ? { branch: p.worktree.branch } : {}),
         ...(p.worktree.base ? { base: p.worktree.base } : {}),
-        ...(p.worktree.orchestratorId
-          ? { orchestratorId: p.worktree.orchestratorId }
-          : {}),
       });
       ctx.lastSpawnedPaneId = result.pane_id;
       return result;

@@ -10,7 +10,7 @@
  *   - Computes the worktree path (sibling of the repo, hyphen-joined branch)
  *   - Calls createWorktreeWorkspaceFromConfig (which creates the worktree,
  *     applies copyPatterns/setupScript, creates the workspace with metadata
- *     including parentOrchestratorId, and returns the new workspace id)
+ *     including spawnedBy, and returns the new workspace id)
  *   - Sets the agent's startup command on the workspace's first terminal
  *     surface (already wired by createWorkspaceFromDef via WorkspaceDef.command)
  *
@@ -76,16 +76,10 @@ export interface SpawnAgentInWorktreeArgs {
   /** Base branch. Default: "main". */
   base?: string;
   /**
-   * When provided, the new workspace's metadata.parentOrchestratorId is
-   * set to this id. The agentic-orchestrator extension claims the
-   * workspace so it renders nested under the orchestrator row.
-   */
-  orchestratorId?: string;
-  /**
    * When provided, the new workspace's metadata.groupId is set to this
-   * id too — used when the spawning orchestrator lives under a workspace
-   * group, so workspace-groups claims the worktree into the group's
-   * nested list alongside other group workspaces.
+   * id — used when the spawning dashboard lives under a workspace group,
+   * so workspace-groups claims the worktree into the group's nested list
+   * alongside other group workspaces.
    */
   groupId?: string;
   /**
@@ -200,9 +194,6 @@ export async function spawnAgentInWorktree(
     base,
     worktreePath,
     startupCommand,
-    ...(args.orchestratorId
-      ? { parentOrchestratorId: args.orchestratorId }
-      : {}),
     ...(args.groupId ? { groupId: args.groupId } : {}),
     ...(args.spawnedBy ? { spawnedBy: args.spawnedBy } : {}),
   };

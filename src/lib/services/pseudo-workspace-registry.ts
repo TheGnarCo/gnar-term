@@ -5,10 +5,6 @@
  * (registered by the agentic extension), which appears at the top of
  * the root list, cannot be deleted or renamed, and renders a
  * configurable markdown body.
- *
- * Stage 4 deliverable: registry exists and is testable. No consumer
- * yet reads from it — Stage 6/7 adds the sidebar rendering path and
- * the agentic extension registers the Global Agentic Dashboard.
  */
 import { get, type Readable } from "svelte/store";
 import { createRegistry } from "./create-registry";

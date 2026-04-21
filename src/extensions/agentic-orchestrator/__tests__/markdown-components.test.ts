@@ -964,7 +964,6 @@ describe("TaskSpawner widget", () => {
       spawnedBy: { kind: "group", groupId: GROUP_ID },
       branch: "agent/claude-code/refactor-the-thing",
     });
-    expect(callArg.orchestratorId).toBeUndefined();
     // Form collapses on success.
     expect(container.querySelector("[data-task-spawner-form]")).toBeNull();
     expect(
@@ -1005,7 +1004,6 @@ describe("TaskSpawner widget", () => {
       spawnedBy: { kind: "global" },
     });
     expect(callArg.groupId).toBeUndefined();
-    expect(callArg.orchestratorId).toBeUndefined();
   });
 
   it("no host / scope=none → spawn button stays disabled even with task text", async () => {

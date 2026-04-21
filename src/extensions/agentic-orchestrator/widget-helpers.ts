@@ -16,15 +16,6 @@ import { workspaceGroupsStore } from "../../lib/stores/workspace-groups";
 import { claimedWorkspaceIds } from "../../lib/services/claimed-workspace-registry";
 import { getAllSurfaces, isTerminalSurface } from "../../lib/types";
 
-/**
- * Legacy alias preserved for the orchestrator's widget internals — the
- * canonical public type is `AgentRef` from the extension API. Detection
- * moved to core (src/lib/services/agent-detection-service.ts); widgets
- * subscribe via `api.agents` rather than the previous extension-owned
- * registry.
- */
-export type DetectedAgent = AgentRef;
-
 /** Minimum interval between widget data refreshes (ms). */
 export const WIDGET_THROTTLE_MS = 200;
 
@@ -80,10 +71,10 @@ export function throttle<TArgs extends unknown[]>(
 export function hostScopedAgentsStore(
   api: ExtensionAPI,
   host: DashboardHostContext | null,
-): Readable<DetectedAgent[]> {
+): Readable<AgentRef[]> {
   const scope = deriveDashboardScope(host);
   if (scope.kind === "none") {
-    return readable<DetectedAgent[]>([]);
+    return readable<AgentRef[]>([]);
   }
   if (scope.kind === "global") {
     return derived(api.agents, (agents) => agents);
@@ -121,7 +112,7 @@ export function hostScopedAgentsStore(
  * Jump to the surface owning the given agent. Switches workspaces and
  * focuses the pane so the user lands on the agent's terminal.
  */
-export function jumpToAgent(api: ExtensionAPI, agent: DetectedAgent): void {
+export function jumpToAgent(api: ExtensionAPI, agent: AgentRef): void {
   if (agent.workspaceId) {
     api.switchWorkspace(agent.workspaceId);
   }

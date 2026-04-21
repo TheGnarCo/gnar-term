@@ -43,10 +43,10 @@ export interface ThemeDef {
   tabBarBg: string;
   tabBarBorder: string;
   /**
-   * Glyph used for AgentOrchestrator rows in the sidebar. Either an icon
-   * name (currently only `lucide:layout-dashboard` is recognized — the
-   * row falls back to an inline SVG if the name is unknown) or a
-   * literal emoji / single-grapheme string rendered as text.
+   * Glyph used for dashboard rows in the sidebar. Either an icon name
+   * (currently only `lucide:layout-dashboard` is recognized — the row
+   * falls back to an inline SVG if the name is unknown) or a literal
+   * emoji / single-grapheme string rendered as text.
    */
   dashboardIcon: string;
   // ANSI colors

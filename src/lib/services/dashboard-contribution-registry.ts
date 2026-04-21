@@ -4,10 +4,6 @@
  * contribution knows how to create its own Dashboard workspace from a
  * group; the group's multi-dashboard grid renders the resulting
  * workspaces keyed off `metadata.dashboardContributionId`.
- *
- * Stage 4 deliverable: registry exists and is testable. No consumer
- * yet reads from it — Stage 5 hooks core's built-in Group Dashboard
- * contribution and Stage 7 wires the Agentic contribution.
  */
 import { get, type Readable } from "svelte/store";
 import { createRegistry } from "./create-registry";

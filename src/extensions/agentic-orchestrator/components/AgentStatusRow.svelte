@@ -6,23 +6,26 @@
    *
    * Used standalone (rare) and as the building block for AgentList and
    * Kanban cards. When `agent` is passed directly (parent already has
-   * the resolved DetectedAgent), no registry lookup happens; otherwise
+   * the resolved AgentRef), no registry lookup happens; otherwise
    * the row resolves itself from `agentId` against agentsStore.
    */
   import { getContext } from "svelte";
-  import { EXTENSION_API_KEY, type ExtensionAPI } from "../../api";
+  import {
+    EXTENSION_API_KEY,
+    type AgentRef,
+    type ExtensionAPI,
+  } from "../../api";
   import {
     jumpToAgent,
     statusColor,
     timeAgo,
     workspaceNameFor,
-    type DetectedAgent,
   } from "../widget-helpers";
 
   /** Required when `agent` is not provided. */
   export let agentId: string | undefined = undefined;
   /** Pre-resolved agent — bypasses the registry lookup. */
-  export let agent: DetectedAgent | undefined = undefined;
+  export let agent: AgentRef | undefined = undefined;
   /** Compact mode: hide workspace + age — used inside dense kanban cards. */
   export let compact: boolean = false;
 

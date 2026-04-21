@@ -9,7 +9,7 @@
  *   - Branch defaulting (agent/<agent>/<short-ts>)
  *   - Worktree path derivation (sibling of repo, hyphen-joined branch)
  *   - Startup command construction (quoted taskContext, custom passthrough)
- *   - parentOrchestratorId metadata propagation
+ *   - spawnedBy + groupId metadata propagation
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
@@ -130,7 +130,7 @@ describe("spawn-helper: spawnAgentInWorktree", () => {
     workspaces.set([]);
   });
 
-  it("creates a worktree workspace with parentOrchestratorId metadata + correct startup command", async () => {
+  it("creates a worktree workspace with spawnedBy metadata + correct startup command", async () => {
     const newWsId = "ws-new-1";
     createWorktreeWorkspaceFromConfigMock.mockImplementation(async () => {
       // Simulate worktree-service appending the workspace to the store.
@@ -144,7 +144,7 @@ describe("spawn-helper: spawnAgentInWorktree", () => {
       taskContext: "Fix the bug from issue #1",
       repoPath: "/work/proj",
       branch: "agent/claude-code/1-fix-bug",
-      orchestratorId: "orch-42",
+      spawnedBy: { kind: "global" },
     });
 
     expect(createWorktreeWorkspaceFromConfigMock).toHaveBeenCalledTimes(1);
@@ -154,7 +154,7 @@ describe("spawn-helper: spawnAgentInWorktree", () => {
       branch: "agent/claude-code/1-fix-bug",
       base: "main",
       worktreePath: "/work/proj-agent-claude-code-1-fix-bug",
-      parentOrchestratorId: "orch-42",
+      spawnedBy: { kind: "global" },
       startupCommand: 'claude "Fix the bug from issue #1"',
     });
 
@@ -211,7 +211,7 @@ describe("spawn-helper: spawnAgentInWorktree", () => {
     expect(cfg.startupCommand).toBe('my-tool --task "x"');
   });
 
-  it("omits parentOrchestratorId from config when orchestratorId is not provided", async () => {
+  it("omits spawnedBy from config when the caller does not provide it", async () => {
     const newWsId = "ws-new-4";
     createWorktreeWorkspaceFromConfigMock.mockImplementation(async () => {
       workspaces.set([seedWorkspaceAfterCreate(newWsId)]);
@@ -226,7 +226,7 @@ describe("spawn-helper: spawnAgentInWorktree", () => {
     });
 
     const cfg = createWorktreeWorkspaceFromConfigMock.mock.calls[0]?.[0];
-    expect(cfg.parentOrchestratorId).toBeUndefined();
+    expect(cfg.spawnedBy).toBeUndefined();
   });
 
   it("propagates spawnedBy={kind:'group', groupId} when a group-scoped caller passes it", async () => {

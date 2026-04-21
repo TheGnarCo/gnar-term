@@ -6,7 +6,11 @@
    * Scope follows widget-helpers' rules (global, group, or none).
    */
   import { getContext } from "svelte";
-  import { EXTENSION_API_KEY, type ExtensionAPI } from "../../api";
+  import {
+    EXTENSION_API_KEY,
+    type AgentRef,
+    type ExtensionAPI,
+  } from "../../api";
   import {
     bucketForStatus,
     hostScopedAgentsStore,
@@ -14,7 +18,6 @@
     statusColor,
     timeAgo,
     workspaceNameFor,
-    type DetectedAgent,
     type KanbanColumn,
   } from "../widget-helpers";
   import {
@@ -44,7 +47,7 @@
   ];
 
   $: buckets = (() => {
-    const out: Record<KanbanColumn, DetectedAgent[]> = {
+    const out: Record<KanbanColumn, AgentRef[]> = {
       running: [],
       waiting: [],
       idle: [],

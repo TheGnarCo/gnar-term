@@ -23,9 +23,10 @@
   import WorkspaceItem from "./WorkspaceItem.svelte";
   import DropGhost from "./DropGhost.svelte";
   import { contrastColor } from "../utils/contrast";
-  import { contextMenu } from "../stores/ui";
+  import { contextMenu, showConfirmPrompt } from "../stores/ui";
   import { commandStore } from "../services/command-registry";
   import type { MenuItem } from "../context-menu-types";
+  import { getDashboardContribution } from "../services/dashboard-contribution-registry";
 
   /** Set of workspace IDs to display. If undefined, shows all. */
   export let filterIds: Set<string> | undefined = undefined;
@@ -154,6 +155,49 @@
   // via the bound ref; everything else routes through the workspace
   // service. Kept local to WorkspaceListView so this shared component
   // doesn't need parent callbacks for each item.
+  /**
+   * Right-click menu for a dashboard tile. Extension-provided dashboards
+   * (e.g. agentic) can be deleted from here — closing the workspace
+   * lifts the per-group cap so "Add <Dashboard>" reappears in the
+   * group's "+ New" dropdown; the backing markdown file stays on disk
+   * so existing content survives a re-add. Core's built-in "group"
+   * dashboard is excluded because it's referenced by
+   * `group.dashboardWorkspaceId` and auto-materializes with the group.
+   */
+  function showDashboardContextMenu(
+    x: number,
+    y: number,
+    globalIdx: number,
+  ): void {
+    const ws = $workspaces[globalIdx];
+    if (!ws) return;
+    const wsMeta = ws.metadata as Record<string, unknown> | undefined;
+    const contribId = wsMeta?.dashboardContributionId;
+    if (typeof contribId !== "string") return;
+    if (contribId === "group") return;
+    const contribution = getDashboardContribution(contribId);
+    if (!contribution) return;
+    const items: MenuItem[] = [
+      {
+        label: `Delete ${contribution.label}`,
+        danger: true,
+        action: async () => {
+          const confirmed = await showConfirmPrompt(
+            `Delete "${ws.name}"? The backing markdown file stays on disk so you can re-add this dashboard later without losing your edits.`,
+            {
+              title: `Delete ${contribution.label}`,
+              confirmLabel: "Delete",
+              cancelLabel: "Cancel",
+            },
+          );
+          if (!confirmed) return;
+          closeWorkspace(globalIdx);
+        },
+      },
+    ];
+    contextMenu.set({ x, y, items });
+  }
+
   function showNestedContextMenu(x: number, y: number, globalIdx: number) {
     const ws = $workspaces[globalIdx];
     if (!ws) return;
@@ -243,9 +287,8 @@
             data-active={isActive ? "true" : undefined}
             title={entry.ws.name}
             on:click={() => switchWorkspace(entry.idx)}
-            on:contextmenu|preventDefault={() => {
-              // Dashboards are non-interactive surfaces; right-click is a no-op.
-            }}
+            on:contextmenu|preventDefault={(e) =>
+              showDashboardContextMenu(e.clientX, e.clientY, entry.idx)}
             style="
               background: {$theme.bgSurface ?? 'transparent'};
               color: {$theme.fg};

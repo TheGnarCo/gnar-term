@@ -28,6 +28,7 @@ vi.mock("../lib/config", () => ({
 vi.mock("../lib/services/service-helpers", () => ({
   safeFocus: vi.fn(),
   getActiveCwd: vi.fn().mockResolvedValue(undefined),
+  getCwdForSurface: vi.fn().mockResolvedValue(undefined),
 }));
 
 // --- Imports ---
@@ -53,6 +54,7 @@ import {
   closeWorkspace,
 } from "../lib/services/workspace-service";
 import { splitPane, focusPane, closePane } from "../lib/services/pane-service";
+import { getCwdForSurface } from "../lib/services/service-helpers";
 import {
   openExtensionSurfaceInPane,
   closeSurfaceById,
@@ -262,6 +264,43 @@ describe("Workflow: pane split and navigation", () => {
       expect(currentWs.splitRoot.direction).toBe("vertical");
       expect(currentWs.splitRoot.ratio).toBe(0.5);
     }
+  });
+
+  it("splitting an inactive pane inherits cwd from the source pane, not the focused pane", async () => {
+    // Regression: splitPane used to read cwd from the globally-active
+    // surface. When MCP or a command targets a non-focused pane, the new
+    // terminal inherited the wrong cwd. Fix routes cwd through the
+    // source pane's active surface.
+    const paneA = makePane([
+      mockTerminalSurface({ cwd: "/src/pane-a", ptyId: 10 }),
+    ]);
+    const paneB = makePane([
+      mockTerminalSurface({ cwd: "/src/pane-b", ptyId: 20 }),
+    ]);
+    const ws: Workspace = {
+      id: uid(),
+      name: "Cwd Source",
+      splitRoot: {
+        type: "split",
+        direction: "horizontal",
+        ratio: 0.5,
+        children: [
+          { type: "pane", pane: paneA },
+          { type: "pane", pane: paneB },
+        ],
+      },
+      activePaneId: paneB.id, // B is focused
+    };
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+
+    // Split A (the non-focused pane)
+    await splitPane(paneA.id, "horizontal");
+
+    // getCwdForSurface should have been called with A's surface, not B's
+    expect(getCwdForSurface).toHaveBeenCalledTimes(1);
+    const passed = vi.mocked(getCwdForSurface).mock.calls[0][0];
+    expect(passed?.id).toBe(paneA.surfaces[0].id);
   });
 });
 

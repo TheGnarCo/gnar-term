@@ -28,6 +28,7 @@ vi.mock("../lib/config", () => ({
 vi.mock("../lib/services/service-helpers", () => ({
   safeFocus: vi.fn(),
   getActiveCwd: vi.fn().mockResolvedValue(undefined),
+  getCwdForSurface: vi.fn().mockResolvedValue(undefined),
 }));
 
 // --- Imports ---

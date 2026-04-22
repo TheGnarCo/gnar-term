@@ -24,8 +24,8 @@ export default defineConfig({
         "src/lib/services/mcp-output-buffer.ts",
       ],
       thresholds: {
-        lines: 64,
-        branches: 50,
+        lines: 65,
+        branches: 80,
       },
     },
   },

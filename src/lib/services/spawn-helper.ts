@@ -18,11 +18,12 @@
  *   `agent/<agent>/<shortTimestamp>` — base32 unix-seconds
  *
  * Quote escaping for taskContext in the startup command:
- *   We pass the task as a single quoted argument, and escape inner double
- *   quotes by closing the quote, inserting `"`, and reopening:
- *     foo "bar" baz   →   "foo \"bar\" baz"
- *   Backslashes are doubled so the shell sees a literal backslash.
- *   Newlines are preserved (most shells accept them inside double quotes).
+ *   We use ANSI-C $'...' quoting so newlines become \n escape sequences.
+ *   This avoids literal newlines in the command string, which the PTY
+ *   line discipline would split into separate lines before the shell can
+ *   reassemble them in PS2 continuation mode.
+ *     foo 'bar' baz   →   $'foo \'bar\' baz'
+ *   Backslashes are doubled; single quotes are escaped with \'.
  *
  * For agent="custom" the caller supplies the literal command verbatim — we
  * do NOT quote-wrap or inject taskContext (the caller is responsible).
@@ -124,13 +125,18 @@ function deriveWorktreePath(repoPath: string, branch: string): string {
 
 /**
  * Quote a free-form task string for safe inclusion as a single shell
- * argument. Wraps in double quotes, escapes backslashes and inner double
- * quotes. Newlines are preserved as-is (the shell accepts them inside
- * double quotes; the agent receives the multi-line text).
+ * argument. Uses ANSI-C $'...' quoting so newlines are encoded as \n
+ * escape sequences — no literal newlines appear in the command string.
+ * This prevents the PTY line discipline from splitting the command at
+ * each newline before the shell can reassemble it in PS2 continuation mode.
  */
 export function quoteTaskForShell(input: string): string {
-  const escaped = input.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-  return `"${escaped}"`;
+  const escaped = input
+    .replace(/\\/g, "\\\\")
+    .replace(/'/g, "\\'")
+    .replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\r");
+  return `$'${escaped}'`;
 }
 
 export function buildStartupCommand(

@@ -139,7 +139,7 @@
     >
       <div
         style="padding: 0 8px; display: flex; align-items: center; justify-content: {pseudo.rowBody
-          ? 'flex-start'
+          ? 'space-evenly'
           : 'center'}; gap: 8px; min-height: 32px; min-width: 0;"
       >
         {#if pseudo.icon}
@@ -153,7 +153,7 @@
         {#if pseudo.rowBody && rowBodyApi}
           <div
             data-pseudo-workspace-row-body
-            style="flex: 1; min-width: 0; display: flex; align-items: center;"
+            style="display: flex; align-items: center;"
           >
             <ExtensionWrapper api={rowBodyApi} component={pseudo.rowBody} />
           </div>

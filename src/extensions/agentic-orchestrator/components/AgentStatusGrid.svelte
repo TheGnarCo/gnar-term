@@ -53,37 +53,37 @@
   aria-label="Agent status counts"
   style="
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 2px 6px;
-    flex: 1; min-width: 0;
+    grid-template-columns: repeat(2, auto);
+    gap: 3px;
   "
 >
   {#each CHIPS as chip (chip.id)}
     {@const color = statusColor(chip.id)}
     {@const n = counts[chip.id]}
-    <div
+    <span
       data-agent-status-chip={chip.id}
       data-agent-status-count={n}
       title={`${n} ${chip.label.toLowerCase()}`}
       style="
-        display: flex; align-items: center; gap: 6px;
-        font-size: 11px; line-height: 1.2;
-        color: currentColor;
-        opacity: {n > 0 ? 1 : 0.55};
-        min-width: 0;
+        display: inline-flex; align-items: center; gap: 3px;
+        font-size: 10px; line-height: 1;
+        color: {color};
+        background: color-mix(in srgb, {color} 15%, transparent);
+        padding: 2px 5px; border-radius: 8px;
+        font-variant-numeric: tabular-nums; font-weight: 600;
+        opacity: {n > 0 ? 1 : 0.45};
+        flex-shrink: 0;
       "
     >
       <span
         aria-hidden="true"
         style="
           flex-shrink: 0;
-          width: 8px; height: 8px; border-radius: 50%;
+          width: 6px; height: 6px; border-radius: 50%;
           background: {color};
         "
       ></span>
-      <span style="font-variant-numeric: tabular-nums; font-weight: 600;"
-        >{n}</span
-      >
-    </div>
+      {n}
+    </span>
   {/each}
 </div>

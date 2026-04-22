@@ -73,20 +73,24 @@ function seedWorkspaceAfterCreate(workspaceId: string): Workspace {
 }
 
 describe("spawn-helper: quoteTaskForShell", () => {
-  it("wraps simple text in double quotes", () => {
-    expect(quoteTaskForShell("hello world")).toBe('"hello world"');
+  it("wraps simple text in $'...' quotes", () => {
+    expect(quoteTaskForShell("hello world")).toBe("$'hello world'");
   });
 
-  it("escapes inner double quotes", () => {
-    expect(quoteTaskForShell('say "hi"')).toBe('"say \\"hi\\""');
+  it("escapes inner single quotes", () => {
+    expect(quoteTaskForShell("it's done")).toBe("$'it\\'s done'");
   });
 
   it("escapes backslashes", () => {
-    expect(quoteTaskForShell("path\\to\\thing")).toBe('"path\\\\to\\\\thing"');
+    expect(quoteTaskForShell("path\\to\\thing")).toBe("$'path\\\\to\\\\thing'");
   });
 
-  it("preserves newlines", () => {
-    expect(quoteTaskForShell("line1\nline2")).toBe('"line1\nline2"');
+  it("encodes newlines as \\n so no literal newlines appear in the command", () => {
+    expect(quoteTaskForShell("line1\nline2")).toBe("$'line1\\nline2'");
+  });
+
+  it("encodes carriage returns as \\r", () => {
+    expect(quoteTaskForShell("foo\rbar")).toBe("$'foo\\rbar'");
   });
 });
 
@@ -99,16 +103,16 @@ describe("spawn-helper: buildStartupCommand", () => {
     expect(buildStartupCommand("aider", "   ", undefined)).toBe("aider");
   });
 
-  it("appends quoted taskContext when provided", () => {
+  it("appends $'-quoted taskContext when provided", () => {
     expect(buildStartupCommand("claude-code", "fix the bug", undefined)).toBe(
-      'claude "fix the bug"',
+      "claude $'fix the bug'",
     );
   });
 
-  it("escapes inner double quotes in taskContext", () => {
+  it("escapes inner single quotes in taskContext", () => {
     expect(
-      buildStartupCommand("claude-code", 'add "feature X"', undefined),
-    ).toBe('claude "add \\"feature X\\""');
+      buildStartupCommand("claude-code", "add 'feature X'", undefined),
+    ).toBe("claude $'add \\'feature X\\''");
   });
 
   it("custom agent passes the command through verbatim", () => {
@@ -155,7 +159,7 @@ describe("spawn-helper: spawnAgentInWorktree", () => {
       base: "main",
       worktreePath: "/work/proj-agent-claude-code-1-fix-bug",
       spawnedBy: { kind: "global" },
-      startupCommand: 'claude "Fix the bug from issue #1"',
+      startupCommand: "claude $'Fix the bug from issue #1'",
     });
 
     expect(result).toEqual({

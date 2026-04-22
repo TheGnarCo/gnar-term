@@ -439,7 +439,7 @@
     </button>
   </div>
 
-  {#if !displayOnly && selectedIssues.size > 0}
+  {#if !displayOnly}
     <div
       data-issues-bulk-toolbar
       data-selection-count={selectedIssues.size}
@@ -457,14 +457,16 @@
         data-issues-spawn-all
         type="button"
         on:click={() => void spawnAllSelected()}
-        disabled={bulkSpawning}
+        disabled={bulkSpawning || selectedIssues.size === 0}
         title="Spawn one workspace per selected issue (claude-code)"
         style="
           background: transparent; color: {$theme.fg};
           border: 1px solid {$theme.border}; border-radius: 3px;
           padding: 2px 8px; font-size: 11px;
-          cursor: {bulkSpawning ? 'wait' : 'pointer'};
-          opacity: {bulkSpawning ? 0.6 : 1};
+          cursor: {bulkSpawning || selectedIssues.size === 0
+          ? 'not-allowed'
+          : 'pointer'};
+          opacity: {bulkSpawning || selectedIssues.size === 0 ? 0.4 : 1};
         "
       >
         {bulkSpawning ? "Spawning..." : "Spawn All"}
@@ -484,7 +486,7 @@
           cursor: {bulkSpawning || selectedIssues.size < 2
           ? 'not-allowed'
           : 'pointer'};
-          opacity: {bulkSpawning || selectedIssues.size < 2 ? 0.6 : 1};
+          opacity: {bulkSpawning || selectedIssues.size < 2 ? 0.4 : 1};
         "
       >
         Spawn Together
@@ -493,12 +495,15 @@
         data-issues-bulk-clear
         type="button"
         on:click={clearSelection}
-        disabled={bulkSpawning}
+        disabled={bulkSpawning || selectedIssues.size === 0}
         style="
           background: transparent; color: {$theme.fgDim};
           border: 1px solid {$theme.border}; border-radius: 3px;
           padding: 2px 8px; font-size: 11px;
-          cursor: {bulkSpawning ? 'wait' : 'pointer'};
+          cursor: {bulkSpawning || selectedIssues.size === 0
+          ? 'not-allowed'
+          : 'pointer'};
+          opacity: {bulkSpawning || selectedIssues.size === 0 ? 0.4 : 1};
         "
       >
         Clear
@@ -650,15 +655,19 @@
             <button
               data-issue-spawn
               on:click={() => spawnForIssue(issue, "claude-code")}
-              disabled={spawningRow === issue.number}
-              title="Spawn claude-code on this issue"
+              disabled={isSelected || spawningRow === issue.number}
+              title={isSelected
+                ? "Deselect to spawn individually"
+                : "Spawn claude-code on this issue"}
               style="
               background: transparent; color: {$theme.fg};
               border: 1px solid {$theme.border}; border-right: none;
               border-radius: 3px 0 0 3px;
               padding: 2px 8px; font-size: 10px;
-              cursor: {spawningRow === issue.number ? 'wait' : 'pointer'};
-              opacity: {spawningRow === issue.number ? 0.6 : 1};
+              cursor: {isSelected || spawningRow === issue.number
+                ? 'not-allowed'
+                : 'pointer'};
+              opacity: {isSelected || spawningRow === issue.number ? 0.4 : 1};
             "
             >
               {spawningRow === issue.number ? "Spawning..." : "Spawn"}
@@ -666,11 +675,13 @@
             <button
               data-issue-spawn-caret
               on:click={() => toggleSpawnMenu(issue.number)}
-              disabled={spawningRow === issue.number}
+              disabled={isSelected || spawningRow === issue.number}
               aria-label="Choose agent"
               aria-haspopup="menu"
               aria-expanded={openSpawnMenu === issue.number}
-              title="Choose agent"
+              title={isSelected
+                ? "Deselect to spawn individually"
+                : "Choose agent"}
               style="
               background: {openSpawnMenu === issue.number
                 ? $theme.bgHighlight
@@ -678,7 +689,10 @@
               color: {$theme.fgDim};
               border: 1px solid {$theme.border}; border-radius: 0 3px 3px 0;
               padding: 2px 6px; font-size: 10px;
-              cursor: {spawningRow === issue.number ? 'wait' : 'pointer'};
+              cursor: {isSelected || spawningRow === issue.number
+                ? 'not-allowed'
+                : 'pointer'};
+              opacity: {isSelected ? 0.4 : 1};
             "
             >
               ▾

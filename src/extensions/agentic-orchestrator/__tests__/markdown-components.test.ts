@@ -733,8 +733,14 @@ describe("Issues widget", () => {
     await tick();
     await tick();
 
-    // Toolbar absent until something is selected.
-    expect(container.querySelector("[data-issues-bulk-toolbar]")).toBeNull();
+    // Toolbar is always present; buttons are disabled until something is selected.
+    const toolbarBefore = container.querySelector("[data-issues-bulk-toolbar]");
+    expect(toolbarBefore).not.toBeNull();
+    expect(toolbarBefore?.getAttribute("data-selection-count")).toBe("0");
+    expect(
+      (container.querySelector("[data-issues-spawn-all]") as HTMLButtonElement)
+        ?.disabled,
+    ).toBe(true);
 
     const checks = container.querySelectorAll(
       "[data-issue-select]",

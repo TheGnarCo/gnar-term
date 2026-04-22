@@ -505,6 +505,38 @@ describe("agent-detection-service — lifecycle hygiene", () => {
   });
 });
 
+describe("agent-detection-service — workspace:closed cleanup", () => {
+  it("removes agents from a workspace when workspace:closed fires", () => {
+    // closeWorkspace() emits workspace:closed but NOT surface:closed for
+    // each terminal, so agents were lingering as idle after a workspace close.
+    workspaces.set([
+      makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 10 }]),
+    ]);
+    initAgentDetection();
+    expect(getAgents()).toHaveLength(1);
+    expect(getAgents()[0]!.workspaceId).toBe("w1");
+
+    eventBus.emit({ type: "workspace:closed", id: "w1" });
+
+    expect(getAgents()).toHaveLength(0);
+  });
+
+  it("does not affect agents in other workspaces when one closes", () => {
+    workspaces.set([
+      makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 11 }]),
+      makeWorkspace("w2", [{ id: "s2", title: "claude", ptyId: 12 }]),
+    ]);
+    initAgentDetection();
+    expect(getAgents()).toHaveLength(2);
+
+    eventBus.emit({ type: "workspace:closed", id: "w1" });
+
+    const remaining = getAgents();
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]!.workspaceId).toBe("w2");
+  });
+});
+
 describe("agent-detection-service — event bus contract", () => {
   it("agent:statusChanged is accepted by the bus with the declared payload", () => {
     let captured: AppEvent | null = null;

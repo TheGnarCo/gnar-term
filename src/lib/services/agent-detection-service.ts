@@ -549,6 +549,22 @@ export function initAgentDetection(): void {
   const handleClosed = (event: { type: "surface:closed"; id: string }) => {
     detachFromSurface(event.id);
   };
+  const handleWorkspaceClosed = (event: {
+    type: "workspace:closed";
+    id: string;
+  }) => {
+    // closeWorkspace() disposes surfaces and emits workspace:closed but does
+    // NOT fire surface:closed for each terminal, so handleClosed never runs
+    // for those surfaces. Sweep all tracked surfaces whose agent belongs to
+    // the closing workspace so they don't linger as "idle".
+    const toDetach: string[] = [];
+    for (const [surfaceId, tracked] of trackedSurfaces) {
+      if (!tracked.agentId) continue;
+      const agent = _agents.find((a) => a.agentId === tracked.agentId);
+      if (agent?.workspaceId === event.id) toDetach.push(surfaceId);
+    }
+    for (const surfaceId of toDetach) detachFromSurface(surfaceId);
+  };
   const handlePtyReady = (event: {
     type: "surface:ptyReady";
     id: string;
@@ -575,10 +591,12 @@ export function initAgentDetection(): void {
   eventBus.on("surface:created", handleCreated);
   eventBus.on("surface:titleChanged", handleTitle);
   eventBus.on("surface:closed", handleClosed);
+  eventBus.on("workspace:closed", handleWorkspaceClosed);
   eventBus.on("surface:ptyReady", handlePtyReady);
   cleanups.push(() => eventBus.off("surface:created", handleCreated));
   cleanups.push(() => eventBus.off("surface:titleChanged", handleTitle));
   cleanups.push(() => eventBus.off("surface:closed", handleClosed));
+  cleanups.push(() => eventBus.off("workspace:closed", handleWorkspaceClosed));
   cleanups.push(() => eventBus.off("surface:ptyReady", handlePtyReady));
 
   // Bootstrap every pre-existing terminal surface — surface:created only

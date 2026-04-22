@@ -92,6 +92,16 @@ describe("spawn-helper: quoteTaskForShell", () => {
   it("encodes carriage returns as \\r", () => {
     expect(quoteTaskForShell("foo\rbar")).toBe("$'foo\\rbar'");
   });
+
+  it("hex-escapes other control bytes so the shell sees no raw non-printable chars", () => {
+    expect(quoteTaskForShell("a\x01b")).toBe("$'a\\x01b'");
+    expect(quoteTaskForShell("a\x1fb")).toBe("$'a\\x1fb'");
+    expect(quoteTaskForShell("a\x7fb")).toBe("$'a\\x7fb'");
+  });
+
+  it("correctly orders replacements when control bytes mix with newlines", () => {
+    expect(quoteTaskForShell("foo\x01\nbar")).toBe("$'foo\\x01\\nbar'");
+  });
 });
 
 describe("spawn-helper: buildStartupCommand", () => {

@@ -202,7 +202,7 @@ function prettyCwd(cwd: string): string {
 async function refreshGitStatus(
   workspaceId: string,
   cwd: string,
-): Promise<void> {
+): Promise<string | null> {
   setItem(workspaceId, "cwd", {
     category: "info",
     priority: 5,
@@ -215,7 +215,7 @@ async function refreshGitStatus(
   if (!gitRoot) {
     clearItem(workspaceId, "branch");
     clearItem(workspaceId, "dirty");
-    return;
+    return null;
   }
 
   const raw = await runWithTimeout(
@@ -226,14 +226,14 @@ async function refreshGitStatus(
   if (!raw) {
     clearItem(workspaceId, "branch");
     clearItem(workspaceId, "dirty");
-    return;
+    return null;
   }
 
   const info = parseGitStatus(raw);
   if (!info) {
     clearItem(workspaceId, "branch");
     clearItem(workspaceId, "dirty");
-    return;
+    return null;
   }
 
   let branchLabel = info.branch;
@@ -289,6 +289,7 @@ async function refreshGitStatus(
   } else {
     clearItem(workspaceId, "dirty");
   }
+  return gitRoot;
 }
 
 function dirtyTooltip(info: GitInfo): string {
@@ -313,8 +314,9 @@ function startPolling(workspaceId: string, cwd: string): void {
   // and for environments where the watcher can't attach.
   const gitInterval = isActive ? 5_000 : 30_000;
 
-  void refreshGitStatus(workspaceId, cwd);
-  void attachIndexWatcher(workspaceId, cwd);
+  void refreshGitStatus(workspaceId, cwd).then((root) =>
+    attachIndexWatcher(workspaceId, cwd, root),
+  );
 
   const gitTimer = setInterval(() => {
     const latest = workspaceCwds.get(workspaceId);
@@ -336,9 +338,9 @@ const refreshDebounce = new Map<string, ReturnType<typeof setTimeout>>();
 async function attachIndexWatcher(
   workspaceId: string,
   cwd: string,
+  gitRoot: string | null,
 ): Promise<void> {
   try {
-    const gitRoot = await detectGitRoot(cwd);
     if (!gitRoot) return;
     const indexPath = `${gitRoot}/.git/index`;
     const existing = indexWatches.get(workspaceId);

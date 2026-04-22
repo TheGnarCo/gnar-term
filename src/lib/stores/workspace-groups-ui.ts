@@ -8,7 +8,7 @@
  */
 import { writable } from "svelte/store";
 
-export interface CreateDialogPrefill {
+interface CreateDialogPrefill {
   path: string;
   name?: string;
 }

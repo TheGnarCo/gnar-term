@@ -25,7 +25,7 @@ interface LegacyConfigShape extends GnarTermConfig {
   agentOrchestrators?: Array<Record<string, unknown>>;
 }
 
-export interface ConfigMigration {
+interface ConfigMigration {
   /** Target schemaVersion this migration produces. Strictly increasing. */
   version: number;
   /** Short human-readable description of what the migration changes. */

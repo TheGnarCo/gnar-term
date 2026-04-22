@@ -50,6 +50,12 @@
   import { contrastColor } from "../utils/contrast";
   import { getAllSurfaces, isPreviewSurface, type Workspace } from "../types";
 
+  function wsMeta(ws: {
+    metadata?: unknown;
+  }): Record<string, unknown> | undefined {
+    return ws.metadata as Record<string, unknown> | undefined;
+  }
+
   export let groupId: string;
   /**
    * The namespaced sidebar-block id that hosts this group — forwarded
@@ -110,8 +116,7 @@
   $: hasActiveChild = (() => {
     const activeWs = $workspaces[$activeWorkspaceIdx];
     if (!activeWs || !group) return false;
-    const md = activeWs.metadata as Record<string, unknown> | undefined;
-    return md?.groupId === group.id;
+    return wsMeta(activeWs)?.groupId === group.id;
   })();
 
   // Re-evaluate contributed children when contributors register/unregister.
@@ -160,7 +165,7 @@
       if (c.autoProvision) return false;
       if (c.isAvailableFor && !c.isAvailableFor(currentGroup)) return false;
       const countForGroup = ws.filter((w) => {
-        const md = w.metadata as Record<string, unknown> | undefined;
+        const md = wsMeta(w);
         return (
           md?.isDashboard === true &&
           md?.groupId === currentGroup.id &&
@@ -197,7 +202,7 @@
     const g = group;
     if (!g) return;
     const nestedCount = $workspaces.filter((w) => {
-      const md = w.metadata as Record<string, unknown> | undefined;
+      const md = wsMeta(w);
       return md?.groupId === g.id && !md?.isDashboard;
     }).length;
     const nestedLine =
@@ -223,8 +228,7 @@
     if (!group || hasActiveChild) return;
     if (openGroupDashboard(group)) return;
     const nestedIdx = $workspaces.findIndex((w) => {
-      const md = w.metadata as Record<string, unknown> | undefined;
-      return md?.groupId === group!.id;
+      return wsMeta(w)?.groupId === group!.id;
     });
     if (nestedIdx >= 0) switchWorkspace(nestedIdx);
   }

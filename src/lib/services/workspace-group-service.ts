@@ -10,7 +10,7 @@
  */
 import { invoke } from "@tauri-apps/api/core";
 import { get } from "svelte/store";
-import type { WorkspaceGroupEntry } from "../config";
+import type { SurfaceDef, WorkspaceGroupEntry } from "../config";
 import { appendRootRow, removeRootRow } from "../stores/root-row-order";
 import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
 import { claimWorkspace, unclaimWorkspace } from "./claimed-workspace-registry";
@@ -27,14 +27,10 @@ import {
   getDashboardContribution,
   getDashboardContributions,
 } from "./dashboard-contribution-registry";
+import { releaseGroupDirtyStore } from "./group-git-dirty-store";
 
 export const WORKSPACE_GROUP_STATE_CHANGED =
   "extension:workspace-group:state-changed";
-export const WORKSPACE_GROUP_DIALOG_TOGGLE =
-  "extension:workspace-group:dialog-toggle";
-
-export type WorkspaceGroupStateChangedEvent =
-  typeof WORKSPACE_GROUP_STATE_CHANGED;
 
 function emitStateChanged(metadata: Record<string, unknown> = {}): void {
   eventBus.emit({
@@ -61,9 +57,11 @@ export function updateWorkspaceGroup(
 }
 
 export function deleteWorkspaceGroup(id: string): void {
+  const group = getWorkspaceGroup(id);
   const next = getWorkspaceGroups().filter((g) => g.id !== id);
   setWorkspaceGroups(next);
   removeRootRow({ kind: "workspace-group", id });
+  if (group) releaseGroupDirtyStore(group.path);
   emitStateChanged({ groupId: id });
 }
 
@@ -245,6 +243,23 @@ async function scrubGroupDashboardActiveAgents(path: string): Promise<void> {
   }
 }
 
+function createDashboardWorkspaceFromDef(
+  group: WorkspaceGroupEntry,
+  name: string,
+  contribId: string,
+  surfaces: SurfaceDef[],
+): Promise<string> {
+  return createWorkspaceFromDef({
+    name,
+    layout: { pane: { surfaces } },
+    metadata: {
+      isDashboard: true,
+      groupId: group.id,
+      dashboardContributionId: contribId,
+    },
+  });
+}
+
 /**
  * Create the Dashboard workspace for a group: a constrained workspace
  * (metadata.isDashboard = true) hosting a single Live Preview of the
@@ -261,26 +276,9 @@ export async function createGroupDashboardWorkspace(
     // Best-effort write — the workspace can still be created; the
     // preview surface will surface the backing-file error if relevant.
   }
-  return await createWorkspaceFromDef({
-    name: "Dashboard",
-    layout: {
-      pane: {
-        surfaces: [
-          {
-            type: "preview",
-            path,
-            name: group.name,
-            focus: true,
-          },
-        ],
-      },
-    },
-    metadata: {
-      isDashboard: true,
-      groupId: group.id,
-      dashboardContributionId: "group",
-    },
-  });
+  return createDashboardWorkspaceFromDef(group, "Dashboard", "group", [
+    { type: "preview", path, name: group.name, focus: true },
+  ]);
 }
 
 /**
@@ -352,38 +350,39 @@ function backfillDashboardContributionIds(): void {
  * PaneView intercepts and replaces the surface render for settings
  * contributions.
  */
-export async function createSettingsDashboardWorkspace(
+export function createSettingsDashboardWorkspace(
   group: WorkspaceGroupEntry,
 ): Promise<string> {
-  return await createWorkspaceFromDef({
-    name: "Settings",
-    layout: {
-      pane: {
-        surfaces: [],
-      },
-    },
-    metadata: {
-      isDashboard: true,
-      groupId: group.id,
-      dashboardContributionId: "settings",
-    },
-  });
+  return createDashboardWorkspaceFromDef(group, "Settings", "settings", []);
 }
 
-/**
- * Returns true when a workspace exists in the store for the given
- * group + contribution pair. Used by the auto-provision loop to decide
- * whether to skip contribution.create().
- */
-function hasDashboardWorkspace(groupId: string, contribId: string): boolean {
-  return get(workspaces).some((w) => {
-    const md = w.metadata as Record<string, unknown> | undefined;
-    return (
-      md?.isDashboard === true &&
-      md?.groupId === groupId &&
-      md?.dashboardContributionId === contribId
-    );
-  });
+function isDashboardMatch(
+  metadata: unknown,
+  groupId: string,
+  contribId: string,
+): boolean {
+  const md = metadata as Record<string, unknown> | undefined;
+  return (
+    md?.isDashboard === true &&
+    md?.groupId === groupId &&
+    md?.dashboardContributionId === contribId
+  );
+}
+
+export function findDashboardWorkspace(groupId: string, contribId: string) {
+  return get(workspaces).find((w) =>
+    isDashboardMatch(w.metadata, groupId, contribId),
+  );
+}
+
+/** True when a workspace exists for the given group + contribution pair. */
+export function hasDashboardWorkspace(
+  groupId: string,
+  contribId: string,
+): boolean {
+  return get(workspaces).some((w) =>
+    isDashboardMatch(w.metadata, groupId, contribId),
+  );
 }
 
 /**
@@ -446,14 +445,7 @@ export function closeDashboardForGroup(
   groupId: string,
   contributionId: string,
 ): boolean {
-  const match = get(workspaces).find((w) => {
-    const md = w.metadata as Record<string, unknown> | undefined;
-    return (
-      md?.isDashboard === true &&
-      md?.groupId === groupId &&
-      md?.dashboardContributionId === contributionId
-    );
-  });
+  const match = findDashboardWorkspace(groupId, contributionId);
   if (!match) return false;
   const contribution = getDashboardContribution(contributionId);
   if (contribution?.autoProvision) return false;

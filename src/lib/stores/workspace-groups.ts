@@ -28,10 +28,8 @@ const _groups = writable<WorkspaceGroupEntry[]>([]);
 export const workspaceGroupsStore: Readable<WorkspaceGroupEntry[]> = _groups;
 
 const _groupOrder = writable<string[]>([]);
-export const workspaceGroupOrderStore: Readable<string[]> = _groupOrder;
 
 const _activeGroupId = writable<string | null>(null);
-export const activeGroupIdStore: Readable<string | null> = _activeGroupId;
 
 let _loaded = false;
 let _persistTimer: ReturnType<typeof setTimeout> | null = null;

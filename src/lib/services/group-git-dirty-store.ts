@@ -148,6 +148,11 @@ export function groupDirtyStore(path: string): Readable<GroupDirtyState> {
   return store;
 }
 
+/** Evict a path from the cache when its group is deleted. */
+export function releaseGroupDirtyStore(path: string): void {
+  cache.delete(path);
+}
+
 /** Test-only — drop cached stores so the next subscriber seeds a fresh poll. */
 export function _resetGroupDirtyStoreCache(): void {
   cache.clear();

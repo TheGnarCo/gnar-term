@@ -135,7 +135,11 @@ export function quoteTaskForShell(input: string): string {
     .replace(/\\/g, "\\\\")
     .replace(/'/g, "\\'")
     .replace(/\n/g, "\\n")
-    .replace(/\r/g, "\\r");
+    .replace(/\r/g, "\\r")
+    .replace(
+      /[\x00-\x1f\x7f]/g,
+      (c) => `\\x${c.charCodeAt(0).toString(16).padStart(2, "0")}`,
+    );
   return `$'${escaped}'`;
 }
 

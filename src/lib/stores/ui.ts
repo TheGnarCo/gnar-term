@@ -122,7 +122,7 @@ export function showInputPrompt(
  * Confirmation prompt — themed replacement for window.confirm() which
  * Tauri v2 blocks without the dialog plugin capability.
  */
-export interface ConfirmPromptState {
+interface ConfirmPromptState {
   message: string;
   title?: string;
   confirmLabel: string;

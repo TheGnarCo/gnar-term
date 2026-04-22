@@ -489,9 +489,9 @@ function registerTool(t: ToolDef) {
 
 /**
  * Register an MCP tool contributed by an extension. Extensions expand the
- * MCP surface with domain-specific tools they own. Tools registered here
- * are unregistered automatically when the extension deactivates via
- * unregisterMcpToolsBySource.
+ * MCP surface with domain-specific tools (e.g. the preview extension owns
+ * create_preview). Tools registered here are unregistered automatically
+ * when the extension deactivates via unregisterMcpToolsBySource.
  *
  * Exposed indirectly to extensions through the ExtensionAPI.registerMcpTool
  * method in extension-api-ui.ts — extensions do not import this directly.
@@ -975,16 +975,15 @@ registerTool({
 
 // ---- Generic surface-type discovery + open ----
 //
-// Extensions register surface types at runtime using an
-// `<extension-id>:<surface-id>` namespace. Agents can discover what's
-// available via list_surface_types and open any of them via open_surface.
-// MCP stays agnostic to which extensions exist — no extension id or
-// surface id is hard-coded here.
+// Extensions register surface types at runtime (preview:preview,
+// diff-viewer:diff, and any third-party extension). Agents can discover
+// what's available via list_surface_types and open any of them via
+// open_surface. MCP stays agnostic to which extensions exist.
 
 registerTool({
   name: "list_surface_types",
   description:
-    "List all registered extension surface types. Ids are namespaced as `<extension-id>:<surface-id>`. Returns `{ id, label, source }` for each. Built-in terminals are not included — use spawn_agent to create one.",
+    "List all registered extension surface types (e.g. preview:preview, diff-viewer:diff). Returns `{ id, label, source }` for each. Built-in terminals are not included — use spawn_agent to create one.",
   inputSchema: { type: "object", properties: {} },
   handler: () => {
     const types = get(surfaceTypeStore).map((t) => ({
@@ -1006,7 +1005,7 @@ registerTool({
       surface_type_id: {
         type: "string",
         description:
-          "Surface type id as returned by list_surface_types (format: `<extension-id>:<surface-id>`).",
+          "Surface type id as returned by list_surface_types (e.g. 'preview:preview').",
       },
       title: { type: "string" },
       props: {
@@ -1218,7 +1217,7 @@ registerTool({
 registerTool({
   name: "list_context_menu_items",
   description:
-    "List context-menu items contributed by extensions — file-typed actions gated by a glob `when` pattern. Pass `file_path` to filter to items whose `when` pattern matches that path. Returns `{ id, label, when, source }` for each. Use invoke_context_menu_item to trigger one.",
+    "List context-menu items contributed by extensions — file-typed actions like 'Open as Preview'. Pass `file_path` to filter to items whose `when` pattern matches that path. Returns `{ id, label, when, source }` for each. Use invoke_context_menu_item to trigger one.",
   inputSchema: {
     type: "object",
     properties: {

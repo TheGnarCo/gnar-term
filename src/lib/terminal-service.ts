@@ -466,8 +466,7 @@ export async function createTerminalSurface(
     opened: false,
   };
 
-  // Cmd+click file path detection — dispatches to context-menu handlers
-  // registered for the file's extension. No preview-specific code here.
+  // Cmd+click file path detection for preview
   terminal.registerLinkProvider({
     provideLinks: (lineNumber, callback) => {
       const line = terminal.buffer.active.getLine(lineNumber - 1);

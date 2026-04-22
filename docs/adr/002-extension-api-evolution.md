@@ -20,7 +20,7 @@ Agentic orchestration features now require extensions to do more: track state ac
 - Extensions must monitor multiple agent harnesses across workspaces and navigate between them
 - Agent presets require structured array data that the settings schema (string/number/boolean/select) cannot represent
 - Tab badges (unread indicators) are currently settable only by terminal-service in core — extensions cannot signal "attention needed"
-- Cross-extension coordination (orchestrator ↔ worktree-workspaces ↔ diff-viewer) needs a stable event contract
+- Cross-extension coordination (orchestrator ↔ managed-workspaces ↔ diff-viewer) needs a stable event contract
 - New git operations (merge, branch diff) and desktop notifications require Rust-side additions
 
 ## Considered Options

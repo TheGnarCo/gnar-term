@@ -2,7 +2,7 @@
  * Shared worktree helpers for included extensions.
  *
  * These helpers deduplicate the repo-validation → branch-prompt →
- * worktree-creation flow used by worktree-workspaces (and available to
+ * worktree-creation flow used by managed-workspaces (and available to
  * other extensions that need worktree operations). They use only the public ExtensionAPI surface.
  */
 import type { ExtensionAPI } from "../api";

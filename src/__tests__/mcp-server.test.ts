@@ -814,7 +814,7 @@ describe("MCP mirror tools — workspace actions", () => {
       icon: "git-branch",
       zone: "sidebar",
       handler: () => {},
-      source: "worktree-workspaces",
+      source: "managed-workspaces",
     });
     const r = await dispatch(
       rpc("tools/call", { name: "list_workspace_actions", arguments: {} }),
@@ -826,7 +826,7 @@ describe("MCP mirror tools — workspace actions", () => {
         icon: "git-branch",
         shortcut: undefined,
         zone: "sidebar",
-        source: "worktree-workspaces",
+        source: "managed-workspaces",
       },
     ]);
   });

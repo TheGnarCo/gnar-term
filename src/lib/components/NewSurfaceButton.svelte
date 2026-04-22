@@ -6,11 +6,13 @@
   export let onNewSurface: () => void;
   export let onSelectSurfaceType: (typeId: string) => void;
 
-  // Filter out surface types the contributing extension marked as
-  // hideFromNewSurface — e.g. types that need external context (a file
-  // path, a commit) and can't be opened from an empty click.
+  // Filter out surface types that shouldn't be directly openable
+  const HIDDEN_SURFACE_TYPES = ["preview", "diff"];
   $: visibleSurfaceTypes = $surfaceTypeStore.filter(
-    (s) => !s.hideFromNewSurface,
+    (s) =>
+      !HIDDEN_SURFACE_TYPES.some(
+        (h) => s.id.includes(h) || s.label.toLowerCase().includes(h),
+      ),
   );
 
   $: hasExtra = visibleSurfaceTypes.length > 0;

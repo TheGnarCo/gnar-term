@@ -19,16 +19,15 @@ import { getHome } from "./services/service-helpers";
 // --- Types (cmux-compatible + extensions) ---
 
 export interface SurfaceDef {
-  type?: "terminal" | "browser" | "extension";
+  type?: "terminal" | "browser" | "markdown" | "extension";
   name?: string;
   command?: string;
   cwd?: string;
   env?: Record<string, string>;
   url?: string; // browser only
-  /** Extension surface type id, e.g. "<extension-id>:<surface-id>". */
-  extensionType?: string;
-  /** Opaque props forwarded to the extension's surface component. */
-  extensionProps?: Record<string, unknown>;
+  path?: string; // markdown (legacy, maps to extension type "preview:preview")
+  extensionType?: string; // e.g. "preview:preview" — maps to surfaceTypeId
+  extensionProps?: Record<string, unknown>; // arbitrary props for the extension surface
   focus?: boolean;
 }
 

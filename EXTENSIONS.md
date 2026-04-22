@@ -1083,9 +1083,13 @@ Registers a surface type for file preview (Markdown, JSON, images, PDF, CSV, YAM
 
 Registers a secondary sidebar tab showing the directory tree of the active terminal's CWD. Adds four context menu items: "Edit" (opens in editor, all files), "Show in File Manager" (all files), "Open with Default App" (all files), and "Open as Workspace" (directories only). Also registers a `toggle-file-browser` command. Refreshes the file tree when the active workspace, pane, or surface changes.
 
-### Worktree Workspaces (`src/extensions/worktree-workspaces/`)
+### Profile Card (`src/extensions/profile-card/`)
 
-Git worktree-backed workspace lifecycle management. Provides "Create Worktree Workspace..." and "Archive Worktree..." commands. Creates git worktrees, optionally copies config files (via `copy_files`) and runs setup scripts (via `run_script`), then opens the worktree as a workspace. Archiving pushes the branch and removes the worktree. Configurable via settings: branch prefix, copy patterns, and setup script.
+Registers a primary sidebar section showing user profile info. Demonstrates an extension with a settings schema — exposes `name`, `description`, and `avatarUrl` fields that the user can configure in the Settings overlay.
+
+### Managed Workspaces (`src/extensions/managed-workspaces/`)
+
+Git worktree-backed workspace lifecycle management. Provides "Create Worktree Workspace..." and "Archive Managed Workspace..." commands. Creates git worktrees, optionally copies config files (via `copy_files`) and runs setup scripts (via `run_script`), then opens the worktree as a workspace. Archiving pushes the branch and removes the worktree. Configurable via settings: branch prefix, copy patterns, and setup script.
 
 ### Agentic Orchestrator (`src/extensions/agentic-orchestrator/`)
 
@@ -1234,7 +1238,8 @@ The nine included extensions in `src/extensions/` are real-world examples of eve
 | ----------------------- | ----------------------------------------------------------------------------------- |
 | `preview/`              | Surface type, context menu items, file handling                                     |
 | `file-browser/`         | Sidebar tab, sidebar action, context menus, workspace actions                       |
-| `worktree-workspaces/`  | Workspace actions, form prompts, Tauri commands, state persistence                  |
+| `profile-card/`         | Primary sidebar section, settings schema                                            |
+| `managed-workspaces/`   | Workspace actions, form prompts, Tauri commands, state persistence                  |
 | `agentic-orchestrator/` | Observe permission, custom events, status tracking                                  |
 | `github/`               | Sidebar tab, sidebar action, caching, multiple Tauri commands                       |
 | `diff-viewer/`          | Surface type, commands, context menus, cross-extension events, settings             |

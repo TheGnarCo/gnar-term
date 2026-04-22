@@ -12,7 +12,11 @@
    * aren't reorderable at the top level either.
    */
   import { theme } from "../stores/theme";
-  import { primarySidebarVisible, primarySidebarWidth } from "../stores/ui";
+  import {
+    primarySidebarVisible,
+    primarySidebarWidth,
+    isFullscreen,
+  } from "../stores/ui";
   import { dragResize } from "../actions/drag-resize";
   import type { Readable } from "svelte/store";
   import type { SplitButtonItem } from "./SplitButton.svelte";
@@ -104,18 +108,20 @@
       style="flex: 1; display: flex; flex-direction: column; overflow: hidden;"
     >
       <!-- Top row: traffic-light spacer + any sidebar-zone actions.
-           Always 38px so the sidebar's "+ New" and zone actions stay
-           reachable in every window mode, including native fullscreen
-           where the OS title bar is gone. The window-drag attributes
-           are harmless no-ops when there's no window to drag. -->
+           Always rendered (no conditional branch) so the sidebar's
+           DOM stays stable across fullscreen toggles. In fullscreen
+           the row collapses to height: 0 so content pushes up to the
+           top edge; the window-drag attributes are harmless no-ops
+           when there's no window to drag. -->
       <div
         data-tauri-drag-region=""
         style="
-          height: 38px;
+          height: {$isFullscreen ? '0' : '38px'};
           flex-shrink: 0;
           display: flex; align-items: center; justify-content: flex-end;
           padding: 0 6px; gap: 4px;
           overflow: hidden;
+          transition: height 0.12s ease-out;
           -webkit-app-region: drag;
         "
       >
@@ -169,8 +175,8 @@
         />
 
         <!-- Extension-registered sections (legacy registerPrimarySidebarSection
-             API). 16px gap above each so they breathe below the Workspaces
-             block. -->
+             API, e.g. profile-card). 16px gap above each so they
+             breathe below the Workspaces block. -->
         {#each $sidebarSectionStore as section (section.id)}
           <div aria-hidden="true" style="height: 16px;"></div>
           <SidebarSectionBlock

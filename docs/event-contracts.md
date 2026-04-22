@@ -26,11 +26,11 @@ Emitted by `agentic-orchestrator` when a harness surface changes status.
 
 **Status lifecycle:** `idle` (initial) → `running` (on output) → `waiting` (on OSC notification) → `idle` (on timeout) → `closed` (on surface destroy). Any status can transition to `closed`.
 
-**Subscribers:** `worktree-workspaces` (status dots on worktree entries), `diff-viewer` (Review Agent Changes visibility).
+**Subscribers:** `managed-workspaces` (status dots on worktree entries), `diff-viewer` (Review Agent Changes visibility).
 
 ## extension:worktree:merged
 
-Emitted by `worktree-workspaces` when a worktree branch is merged back to its base.
+Emitted by `managed-workspaces` when a worktree branch is merged back to its base.
 
 ```typescript
 {

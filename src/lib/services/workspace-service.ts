@@ -91,7 +91,23 @@ export async function createWorkspaceFromDef(def: WorkspaceDef) {
       const pane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
       for (const sDef of nodeDef.pane.surfaces) {
         const cwd = sDef.cwd || inheritedCwd;
-        if (sDef.type === "extension" && sDef.extensionType) {
+        if (sDef.type === "markdown" && sDef.path) {
+          // Legacy markdown type — creates a lazy preview surface.
+          // PreviewSurface.svelte renders from filePath on mount.
+          const surface = {
+            kind: "extension" as const,
+            id: uid(),
+            surfaceTypeId: "preview:preview",
+            title: sDef.name || sDef.path.split("/").pop() || "Preview",
+            hasUnread: false,
+            props: {
+              filePath: sDef.path,
+            },
+          };
+          pane.surfaces.push(surface);
+          if (!pane.activeSurfaceId || sDef.focus)
+            pane.activeSurfaceId = surface.id;
+        } else if (sDef.type === "extension" && sDef.extensionType) {
           // Generic extension surface from config
           const surface = {
             kind: "extension" as const,

@@ -3,10 +3,9 @@
  *
  * Settings file locations (in priority order):
  *   ./settings.json                     (per-project)
+ *   ~/.config/gnar-term/settings.json   (global)
  *   ./gnar-term.json                    (legacy per-project)
  *   ./cmux.json                         (per-project, cmux compat)
- *   ~/.config/gnar-term/settings.json   (global)
- *   ~/.config/gnar-term/gnar-term.json  (legacy global)
  *   ~/.config/cmux/cmux.json            (global, cmux compat)
  *
  * Runtime state:
@@ -206,13 +205,10 @@ export async function loadConfig(
 
   const home = await getHome();
 
-  // Try per-project config first (higher priority), then global.
-  // Legacy global `gnar-term.json` is still read so existing installs keep
-  // working after the rename to `settings.json`.
+  // Try per-project config first (higher priority), then global
   const paths = [
-    ...CONFIG_FILENAMES, // ./settings.json, ./gnar-term.json, ./cmux.json
+    ...CONFIG_FILENAMES, // ./gnar-term.json, ./cmux.json
     `${home}/.config/gnar-term/settings.json`,
-    `${home}/.config/gnar-term/gnar-term.json`,
     `${home}/.config/cmux/cmux.json`,
   ];
 

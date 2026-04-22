@@ -1,6 +1,0 @@
-src-tauri/
-dist/
-build/
-node_modules/
-*.lock
-docs/extensions/api-reference.md

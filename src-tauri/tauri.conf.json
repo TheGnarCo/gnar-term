@@ -24,22 +24,14 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: blob: data:; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost; media-src 'self' blob:; frame-src 'self' blob:",
+      "csp": null,
       "assetProtocol": {
         "enable": true,
-        "scope": ["$APPDIR/**"]
+        "scope": ["**"]
       }
     },
     "enableGTKAppId": false,
     "withGlobalTauri": false
-  },
-  "plugins": {
-    "updater": {
-      "endpoints": [
-        "https://github.com/thegnarco/gnar-term/releases/latest/download/latest.json"
-      ],
-      "pubkey": ""
-    }
   },
   "bundle": {
     "active": true,

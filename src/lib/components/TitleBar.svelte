@@ -1,12 +1,7 @@
 <script lang="ts">
   import { theme } from "../stores/theme";
-  import {
-    isFullscreen,
-    primarySidebarVisible,
-    secondarySidebarVisible,
-    settingsOpen,
-  } from "../stores/ui";
-  import { isMac, modLabel } from "../terminal-service";
+  import { primarySidebarVisible, secondarySidebarVisible } from "../stores/ui";
+  import { isMac } from "../terminal-service";
 
   let btnStyle = "";
   $: btnStyle = `
@@ -16,13 +11,7 @@
     padding: 0; -webkit-app-region: no-drag;
   `;
 
-  // macOS traffic lights (close/min/max) overlay the top-left of the window
-  // when `titleBarStyle: Overlay` is set. When the primary sidebar is visible,
-  // it sits to the left of the TitleBar and absorbs that space. When it's
-  // hidden (and we're not fullscreen), the TitleBar starts at x=0, so push
-  // its first button well past the traffic-light cluster.
-  $: leftPadding =
-    !$primarySidebarVisible && isMac && !$isFullscreen ? "84px" : "8px";
+  $: leftPadding = !$primarySidebarVisible && isMac ? "78px" : "8px";
 </script>
 
 <div
@@ -34,77 +23,25 @@
   "
 >
   <button
-    style="{btnStyle} color: {$primarySidebarVisible
-      ? $theme.fg
-      : $theme.fgDim};"
-    title="Toggle Primary Sidebar ({modLabel}B)"
-    on:click={() => primarySidebarVisible.update((v) => !v)}
+    style="{btnStyle} color: {$primarySidebarVisible ? $theme.fg : $theme.fgDim};"
+    title="Toggle Primary Sidebar (⌘B)"
+    on:click={() => primarySidebarVisible.update(v => !v)}
   >
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.5"
-      ><rect x="1" y="2" width="14" height="12" rx="1.5" /><line
-        x1="5.5"
-        y1="2"
-        x2="5.5"
-        y2="14"
-      /></svg
-    >
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="2" width="14" height="12" rx="1.5"/><line x1="5.5" y1="2" x2="5.5" y2="14"/></svg>
   </button>
 
-  <div
-    style="flex: 1; display: flex; justify-content: center; pointer-events: none;"
-  >
-    <span
-      style="
+  <div style="flex: 1; display: flex; justify-content: center; pointer-events: none;">
+    <span style="
       font-size: 11px; font-weight: 600; letter-spacing: 1.5px;
       color: {$theme.fgDim};
-    ">GNARTERM</span
-    >
+    ">GNARTERM</span>
   </div>
 
   <button
-    style="{btnStyle} color: {$settingsOpen ? $theme.fg : $theme.fgDim};"
-    title="Settings ({modLabel},)"
-    on:click={() => settingsOpen.update((v) => !v)}
-  >
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.5"
-      ><path
-        d="M6.8 1.5h2.4l.3 1.9.8.3 1.6-1 1.7 1.7-1 1.6.3.8 1.9.3v2.4l-1.9.3-.3.8 1 1.6-1.7 1.7-1.6-1-.8.3-.3 1.9H6.8l-.3-1.9-.8-.3-1.6 1-1.7-1.7 1-1.6-.3-.8-1.9-.3V6.8l1.9-.3.3-.8-1-1.6 1.7-1.7 1.6 1 .8-.3z"
-      /><circle cx="8" cy="8" r="2" /></svg
-    >
-  </button>
-
-  <button
-    style="{btnStyle} color: {$secondarySidebarVisible
-      ? $theme.fg
-      : $theme.fgDim};"
+    style="{btnStyle} color: {$secondarySidebarVisible ? $theme.fg : $theme.fgDim};"
     title="Toggle Secondary Sidebar"
-    on:click={() => secondarySidebarVisible.update((v) => !v)}
+    on:click={() => secondarySidebarVisible.update(v => !v)}
   >
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.5"
-      ><rect x="1" y="2" width="14" height="12" rx="1.5" /><line
-        x1="10.5"
-        y1="2"
-        x2="10.5"
-        y2="14"
-      /></svg
-    >
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="2" width="14" height="12" rx="1.5"/><line x1="10.5" y1="2" x2="10.5" y2="14"/></svg>
   </button>
 </div>

@@ -47,9 +47,7 @@
   >
     {#each $contextMenu.items as item}
       {#if item.separator}
-        <div
-          style="height: 1px; background: {$theme.border}; margin: 4px 8px;"
-        ></div>
+        <div style="height: 1px; background: {$theme.border}; margin: 4px 8px;"></div>
       {:else}
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -60,11 +58,7 @@
           style="
             padding: 6px 16px; cursor: {item.disabled ? 'default' : 'pointer'};
             display: flex; align-items: center; justify-content: space-between;
-            color: {item.disabled
-            ? $theme.fgDim
-            : item.danger
-              ? $theme.danger
-              : $theme.fg};
+            color: {item.disabled ? $theme.fgDim : item.danger ? $theme.danger : $theme.fg};
             opacity: {item.disabled ? '0.5' : '1'};
           "
           on:click|stopPropagation={() => {
@@ -77,9 +71,7 @@
             if (!item.disabled) {
               const el = e.currentTarget;
               if (el instanceof HTMLElement)
-                el.style.background = item.danger
-                  ? `color-mix(in srgb, ${$theme.danger} 20%, transparent)`
-                  : $theme.bgHighlight;
+                el.style.background = item.danger ? `color-mix(in srgb, ${$theme.danger} 20%, transparent)` : $theme.bgHighlight;
             }
           }}
           on:mouseleave={(e) => {
@@ -89,10 +81,7 @@
         >
           <span>{item.label}</span>
           {#if item.shortcut}
-            <span
-              style="font-size: 11px; color: {$theme.fgDim}; margin-left: 24px;"
-              >{item.shortcut}</span
-            >
+            <span style="font-size: 11px; color: {$theme.fgDim}; margin-left: 24px;">{item.shortcut}</span>
           {/if}
         </div>
       {/if}

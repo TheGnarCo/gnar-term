@@ -20,21 +20,12 @@
 
   function handleKeydown(e: KeyboardEvent) {
     e.stopPropagation();
-    if (e.key === "Enter") {
-      e.preventDefault();
-      submit();
-    }
-    if (e.key === "Escape") {
-      e.preventDefault();
-      cancel();
-    }
+    if (e.key === "Enter") { e.preventDefault(); submit(); }
+    if (e.key === "Escape") { e.preventDefault(); cancel(); }
   }
 
   $: if ($inputPrompt) {
-    void tick().then(() => {
-      inputEl?.focus();
-      inputEl?.select();
-    });
+    tick().then(() => { inputEl?.focus(); inputEl?.select(); });
   }
 </script>
 
@@ -43,7 +34,7 @@
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     style="
-      position: fixed; inset: 0; z-index: 10001;
+      position: fixed; inset: 0; z-index: 9999;
       background: rgba(0,0,0,0.5); display: flex;
       justify-content: center; padding-top: 120px;
     "
@@ -76,15 +67,15 @@
           style="
             padding: 6px 16px; border-radius: 6px; border: 1px solid {$theme.border};
             background: transparent; color: {$theme.fgMuted}; cursor: pointer; font-size: 13px;
-          ">Cancel</button
-        >
+          "
+        >Cancel</button>
         <button
           on:click={submit}
           style="
             padding: 6px 16px; border-radius: 6px; border: none;
             background: {$theme.accent}; color: white; cursor: pointer; font-size: 13px;
-          ">OK</button
-        >
+          "
+        >OK</button>
       </div>
     </div>
   </div>

@@ -1,68 +1,25 @@
-name: "Release"
+name: 'Release'
 
 on:
   workflow_dispatch:
   push:
     tags:
-      - "v*"
+      - 'v*'
 
 jobs:
-  verify:
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: lts/*
-          cache: "npm"
-
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install frontend dependencies
-        run: npm install
-
-      - name: Lint and typecheck
-        run: |
-          npm run lint
-          npx tsc --noEmit
-          npx svelte-check --tsconfig ./tsconfig.json --threshold error
-
-      - name: Tests
-        run: npm test
-
-      - name: Vite build
-        run: npx vite build
-
-      - name: Rust checks
-        working-directory: src-tauri
-        run: |
-          cargo fmt --check
-          cargo check
-          cargo clippy --all-targets -- -D warnings
-          cargo test
-
   publish-tauri:
-    needs: verify
     permissions:
       contents: write
     strategy:
       fail-fast: false
       matrix:
         include:
-          - platform: "macos-latest"
-            args: "--target aarch64-apple-darwin"
-          - platform: "macos-latest"
-            args: "--target x86_64-apple-darwin"
-          - platform: "ubuntu-22.04"
-            args: ""
+          - platform: 'macos-latest'
+            args: '--target aarch64-apple-darwin'
+          - platform: 'macos-latest'
+            args: '--target x86_64-apple-darwin'
+          - platform: 'ubuntu-22.04'
+            args: ''
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -78,7 +35,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: lts/*
-          cache: "npm"
+          cache: 'npm'
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -88,7 +45,7 @@ jobs:
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
-          workspaces: "./src-tauri -> target"
+          workspaces: './src-tauri -> target'
 
       - name: Get version from tag
         id: version
@@ -118,8 +75,9 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           tagName: v${{ steps.version.outputs.VERSION }}
-          releaseName: "GnarTerm v${{ steps.version.outputs.VERSION }}"
-          releaseBody: "Download the installer for your platform below."
+          releaseName: 'GnarTerm v${{ steps.version.outputs.VERSION }}'
+          releaseBody: 'Download the installer for your platform below.'
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }} --config {"version":"${{ steps.version.outputs.VERSION }}"}
+

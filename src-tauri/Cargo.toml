@@ -21,30 +21,9 @@ portable-pty = "0.8"
 clap = { version = "4", features = ["derive"] }
 tauri-plugin-clipboard-manager = "2"
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "net", "io-util", "io-std", "sync", "time"] }
-tauri-plugin-dialog = "2"
-tauri-plugin-notification = "2"
-tauri-plugin-updater = "2"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
-
-[lints.clippy]
-all = { level = "warn", priority = -1 }
-pedantic = { level = "warn", priority = -1 }
-# Pedantic lints that are too noisy or don't apply to this codebase
-module_name_repetitions = "allow"
-must_use_candidate = "allow"
-missing_errors_doc = "allow"
-missing_panics_doc = "allow"
-needless_pass_by_value = "allow"      # Tauri command handlers must take owned types
-too_many_lines = "allow"              # Complex setup functions are clearer as one block
-similar_names = "allow"               # e.g., pat_parts/path_parts
-items_after_statements = "allow"      # const declarations near their usage is clearer
-case_sensitive_file_extension_comparisons = "allow" # font detection already lowercases
-cast_possible_truncation = "allow"    # PTY pid casts are within safe range
-cast_possible_wrap = "allow"          # u32 -> i32 for pid is safe in practice
-cast_sign_loss = "allow"              # i32 -> u8 in test helpers
-match_same_arms = "allow"             # identical Ok(0)/Err(_) => break arms are idiomatic
 
 [features]
 default = ["custom-protocol"]

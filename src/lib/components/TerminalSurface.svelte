@@ -34,10 +34,8 @@
     dragOver = false;
     const files = e.dataTransfer?.files;
     if (!files || files.length === 0 || surface.ptyId < 0) return;
-    const paths = Array.from(files).map((f) =>
-      shellEscape((f as unknown as { path?: string }).path || f.name),
-    );
-    void invoke("write_pty", { ptyId: surface.ptyId, data: paths.join(" ") });
+    const paths = Array.from(files).map(f => shellEscape((f as any).path || f.name));
+    invoke("write_pty", { ptyId: surface.ptyId, data: paths.join(" ") });
   }
 
   onMount(async () => {
@@ -47,21 +45,16 @@
       surface.terminal.open(surface.termElement);
 
       await tick();
-      await new Promise((r) => requestAnimationFrame(r));
+      await new Promise(r => requestAnimationFrame(r));
 
-      try {
-        surface.fitAddon.fit();
-      } catch (e) {
-        console.warn("fitAddon.fit() failed on mount:", e);
-      }
-      await connectPty(surface, cwd, surface.env);
+      try { surface.fitAddon.fit(); } catch (e) { console.warn("fitAddon.fit() failed on mount:", e); }
+      await connectPty(surface, cwd);
 
       // Send startup command after PTY is connected (not on a timer)
       if (surface.startupCommand && surface.ptyId >= 0) {
-        invoke("write_pty", {
-          ptyId: surface.ptyId,
-          data: `${surface.startupCommand}\n`,
-        }).catch((e) => console.warn("Failed to send startup command:", e));
+        invoke("write_pty", { ptyId: surface.ptyId, data: `${surface.startupCommand}\n` }).catch((e) =>
+          console.warn("Failed to send startup command:", e)
+        );
         surface.startupCommand = undefined;
       }
 
@@ -92,15 +85,12 @@
     }
 
     // Tauri native file drop (more reliable than HTML5 on Linux WebKitGTK)
-    unlistenDragDrop = await listen<{
-      paths: string[];
-      position: { x: number; y: number };
-    }>("tauri://drag-drop", (event) => {
+    unlistenDragDrop = await listen<{ paths: string[]; position: { x: number; y: number } }>("tauri://drag-drop", (event) => {
       if (!visible || surface.ptyId < 0) return;
       const { paths } = event.payload;
       if (paths.length > 0) {
-        const escaped = paths.map((p) => shellEscape(p)).join(" ");
-        void invoke("write_pty", { ptyId: surface.ptyId, data: escaped });
+        const escaped = paths.map(p => shellEscape(p)).join(" ");
+        invoke("write_pty", { ptyId: surface.ptyId, data: escaped });
       }
     });
   });
@@ -114,9 +104,7 @@
       try {
         surface.fitAddon.fit();
         surface.terminal.scrollToBottom();
-      } catch (e) {
-        console.warn("fitAddon.fit() failed on visibility change:", e);
-      }
+      } catch (e) { console.warn("fitAddon.fit() failed on visibility change:", e); }
     });
   }
 </script>
@@ -127,9 +115,5 @@
   on:dragover={handleDragOver}
   on:dragleave={handleDragLeave}
   on:drop={handleDrop}
-  style="flex: 1; min-height: 0; min-width: 0; overflow: hidden; display: {visible
-    ? 'flex'
-    : 'none'}; flex-direction: column; {dragOver
-    ? `box-shadow: inset 0 0 0 2px ${$theme.accent}; border-radius: 4px;`
-    : ''}"
+  style="flex: 1; min-height: 0; min-width: 0; overflow: hidden; display: {visible ? 'flex' : 'none'}; flex-direction: column; {dragOver ? `box-shadow: inset 0 0 0 2px ${$theme.accent}; border-radius: 4px;` : ''}"
 ></div>

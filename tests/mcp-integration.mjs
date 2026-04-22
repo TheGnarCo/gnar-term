@@ -148,7 +148,7 @@ async function main() {
   // tools/list
   const list = await client.call("tools/list", {});
   assert(Array.isArray(list.tools), "tools/list returns array");
-  assert(list.tools.length === 27, `expected 27 tools, got ${list.tools.length}`);
+  assert(list.tools.length === 20, `expected 20 tools, got ${list.tools.length}`);
   const names = new Set(list.tools.map((t) => t.name));
   const required = [
     "spawn_agent",
@@ -161,14 +161,7 @@ async function main() {
     "dispatch_tasks",
     "render_sidebar",
     "remove_sidebar_section",
-    "list_surface_types",
-    "open_surface",
-    "list_commands",
-    "invoke_command",
-    "list_sidebar_tabs",
-    "activate_sidebar_tab",
-    "list_workspace_actions",
-    "invoke_workspace_action",
+    "create_preview",
     "get_agent_context",
     "get_active_workspace",
     "list_workspaces",

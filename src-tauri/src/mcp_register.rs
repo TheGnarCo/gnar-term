@@ -39,23 +39,22 @@ pub fn build_payload(binary_path: &str) -> String {
 /// Path to `~/.claude.json`.
 fn claude_config_path() -> Option<PathBuf> {
     let home = std::env::var_os("HOME")?;
-    Some(
-        [home.as_os_str(), std::ffi::OsStr::new(".claude.json")]
-            .iter()
-            .collect(),
-    )
+    Some([home.as_os_str(), std::ffi::OsStr::new(".claude.json")].iter().collect())
 }
 
 /// Check whether `~/.claude.json` already registers gnar-term at the given path.
 pub fn already_registered(binary_path: &str) -> bool {
-    let Some(path) = claude_config_path() else {
-        return false;
+    let path = match claude_config_path() {
+        Some(p) => p,
+        None => return false,
     };
-    let Ok(content) = std::fs::read_to_string(&path) else {
-        return false;
+    let content = match std::fs::read_to_string(&path) {
+        Ok(c) => c,
+        Err(_) => return false,
     };
-    let Ok(value) = serde_json::from_str::<serde_json::Value>(&content) else {
-        return false;
+    let value: serde_json::Value = match serde_json::from_str(&content) {
+        Ok(v) => v,
+        Err(_) => return false,
     };
     let command = value
         .get("mcpServers")
@@ -101,16 +100,20 @@ fn register_via_direct_write(binary_path: &str) -> Result<(), String> {
     if !servers.is_object() {
         *servers = serde_json::json!({});
     }
-    servers.as_object_mut().unwrap().insert(
-        "gnar-term".to_string(),
-        serde_json::json!({
-            "type": "stdio",
-            "command": binary_path,
-            "args": ["--mcp-stdio"],
-            "env": {}
-        }),
-    );
-    let serialized = serde_json::to_string_pretty(&root).map_err(|e| format!("serialize: {e}"))?;
+    servers
+        .as_object_mut()
+        .unwrap()
+        .insert(
+            "gnar-term".to_string(),
+            serde_json::json!({
+                "type": "stdio",
+                "command": binary_path,
+                "args": ["--mcp-stdio"],
+                "env": {}
+            }),
+        );
+    let serialized =
+        serde_json::to_string_pretty(&root).map_err(|e| format!("serialize: {e}"))?;
     let tmp = path.with_extension("json.tmp");
     std::fs::write(&tmp, serialized).map_err(|e| format!("write temp: {e}"))?;
     std::fs::rename(&tmp, &path).map_err(|e| format!("rename: {e}"))?;

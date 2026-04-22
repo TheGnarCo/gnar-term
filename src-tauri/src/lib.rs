@@ -1,3 +1,4 @@
+
 use clap::Parser;
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 use serde::Serialize;
@@ -8,16 +9,10 @@ use std::sync::{Arc, Mutex};
 use tauri::ipc::{Channel, InvokeResponseBody};
 use tauri::{AppHandle, Emitter};
 
-mod commands;
-mod file_utils;
-mod gh_commands;
-mod git_info;
-mod git_ops;
-mod git_worktree;
 pub mod mcp_bridge;
 pub mod mcp_register;
 
-/// CLI arguments for `GnarTerm`.
+/// CLI arguments for GnarTerm.
 #[derive(Parser, Debug, Clone, Default, Serialize)]
 #[command(name = "gnar-term", version, about = "Terminal workspace manager")]
 pub struct CliArgs {
@@ -46,23 +41,19 @@ pub struct CliArgs {
     pub config: Option<String>,
 }
 
-/// Flags accepted by `CliArgs` that take a value argument.
+/// Flags accepted by CliArgs that take a value argument.
 const VALUE_FLAGS: &[&str] = &[
-    "-d",
-    "--working-directory",
-    "-e",
-    "--command",
+    "-d", "--working-directory",
+    "-e", "--command",
     "--title",
-    "-w",
-    "--workspace",
-    "-c",
-    "--config",
+    "-w", "--workspace",
+    "-c", "--config",
 ];
 
-/// Flags accepted by `CliArgs` that are standalone (no value).
+/// Flags accepted by CliArgs that are standalone (no value).
 const STANDALONE_FLAGS: &[&str] = &["-h", "--help", "-V", "--version"];
 
-/// Filter argv to only args defined by `CliArgs`, dropping unknown flags
+/// Filter argv to only args defined by CliArgs, dropping unknown flags
 /// that leak from Cargo/Tauri during `tauri dev` (e.g. --color, --no-default-features).
 fn filter_known_args(args: impl Iterator<Item = String>) -> Vec<String> {
     let mut result = Vec::new();
@@ -102,10 +93,8 @@ fn filter_known_args(args: impl Iterator<Item = String>) -> Vec<String> {
             // Unknown flag — drop it, and also drop its value if the next
             // arg looks like a flag-value (not starting with '-' or '/~.').
             if let Some(next) = args.peek() {
-                if !next.starts_with('-')
-                    && !next.starts_with('/')
-                    && !next.starts_with('~')
-                    && !next.starts_with('.')
+                if !next.starts_with('-') && !next.starts_with('/')
+                    && !next.starts_with('~') && !next.starts_with('.')
                 {
                     args.next(); // consume the value too
                 }
@@ -117,9 +106,9 @@ fn filter_known_args(args: impl Iterator<Item = String>) -> Vec<String> {
 }
 
 fn expand_path(path: &str) -> String {
-    let expanded = if let Some(rest) = path.strip_prefix("~/") {
+    let expanded = if path.starts_with("~/") {
         let home = std::env::var("HOME").unwrap_or_default();
-        format!("{home}/{rest}")
+        format!("{}/{}", home, &path[2..])
     } else {
         path.to_string()
     };
@@ -161,7 +150,7 @@ enum OscAction {
 fn classify_osc(raw: &str) -> OscAction {
     // OSC 0 or OSC 2: set window title  (e.g. "0;my title")
     if raw.starts_with("0;") || raw.starts_with("2;") {
-        let title = raw.split_once(';').map_or("", |x| x.1).to_string();
+        let title = raw.splitn(2, ';').nth(1).unwrap_or("").to_string();
         return OscAction::Title(title);
     }
 
@@ -209,41 +198,27 @@ struct PauseFlag {
 
 impl PauseFlag {
     fn new() -> Self {
-        Self {
-            mu: std::sync::Mutex::new(false),
-            cv: std::sync::Condvar::new(),
-        }
+        Self { mu: std::sync::Mutex::new(false), cv: std::sync::Condvar::new() }
     }
     fn pause(&self) {
-        *self
-            .mu
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = true;
+        *self.mu.lock().unwrap_or_else(|e| e.into_inner()) = true;
     }
     fn resume(&self) {
-        *self
-            .mu
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = false;
+        *self.mu.lock().unwrap_or_else(|e| e.into_inner()) = false;
         self.cv.notify_one();
     }
     fn wait_if_paused(&self) {
-        let guard = self
-            .mu
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let guard = self.mu.lock().unwrap_or_else(|e| e.into_inner());
         // Block until paused == false (no CPU burn)
-        let _guard = self
-            .cv
-            .wait_while(guard, |paused| *paused)
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let _guard = self.cv.wait_while(guard, |paused| *paused)
+            .unwrap_or_else(|e| e.into_inner());
     }
 }
 
 struct PtyInstance {
     writer: Box<dyn Write + Send>,
     // master is kept alive to keep the PTY open
-    master_pty: Box<dyn MasterPty + Send>,
+    _master: Box<dyn MasterPty + Send>,
     child_pid: Option<u32>,
     paused: std::sync::Arc<PauseFlag>,
 }
@@ -280,9 +255,9 @@ fn get_cli_args(args: tauri::State<'_, CliArgs>) -> CliArgs {
 ///
 /// `on_output` is a Tauri v2 IPC Channel that carries raw PTY bytes to the
 /// webview. Using a per-pty Channel with `InvokeResponseBody::Raw` delivers
-/// bytes via the ipc custom-protocol path (`ArrayBuffer` in JS) instead of one
+/// bytes via the ipc custom-protocol path (ArrayBuffer in JS) instead of one
 /// `evaluateJavaScript` call per chunk, so bursty output no longer pegs the
-/// `WebContent` main thread on macOS.
+/// WebContent main thread on macOS.
 ///
 /// `extra_env` is an optional map of additional env vars merged into the
 /// child's environment after the shell-integration vars are set. Used to
@@ -324,7 +299,7 @@ async fn spawn_pty(
     // This makes zsh/bash report the working directory on every prompt
     // Shell integration: inject OSC 7 cwd reporting (cross-platform)
     let home = std::env::var("HOME").unwrap_or_default();
-    let integration_dir = format!("{home}/.config/gnar-term/shell");
+    let integration_dir = format!("{}/.config/gnar-term/shell", home);
     let _ = std::fs::create_dir_all(&integration_dir);
 
     // zsh: ZDOTDIR override
@@ -335,14 +310,14 @@ _gnarterm_report_cwd() { printf '\e]7;file://%s%s\a' "$(hostname)" "$PWD"; }
 precmd_functions+=(_gnarterm_report_cwd)
 chpwd_functions+=(_gnarterm_report_cwd)
 "#;
-    let _ = std::fs::write(format!("{integration_dir}/.zshenv"), zshenv);
+    let _ = std::fs::write(format!("{}/.zshenv", integration_dir), zshenv);
     let orig_zdotdir = std::env::var("ZDOTDIR").unwrap_or(home.clone());
     cmd.env("GNARTERM_ORIG_ZDOTDIR", &orig_zdotdir);
     cmd.env("ZDOTDIR", &integration_dir);
 
     // bash/fish: use GNARTERM_SHELL_INTEGRATION env var
     // Bash users can add to .bashrc: [ -n "$GNARTERM_SHELL_INTEGRATION" ] && source "$GNARTERM_SHELL_INTEGRATION"
-    let bash_integration = format!("{home}/.config/gnar-term/shell/bash-integration.sh");
+    let bash_integration = format!("{}/.config/gnar-term/shell/bash-integration.sh", home);
     let bash_content = r#"# GnarTerm bash integration
 _gnarterm_report_cwd() { printf '\e]7;file://%s%s\a' "$(hostname)" "$PWD"; }
 PROMPT_COMMAND="_gnarterm_report_cwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
@@ -370,8 +345,7 @@ PROMPT_COMMAND="_gnarterm_report_cwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
         }
     }
 
-    let child = pair
-        .slave
+    let child = pair.slave
         .spawn_command(cmd)
         .map_err(|e| format!("Failed to spawn shell: {e}"))?;
     let child_pid = child.process_id();
@@ -403,7 +377,7 @@ PROMPT_COMMAND="_gnarterm_report_cwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
             pty_id,
             PtyInstance {
                 writer,
-                master_pty: pair.master,
+                _master: pair.master,
                 child_pid,
                 paused: paused_clone,
             },
@@ -445,8 +419,10 @@ PROMPT_COMMAND="_gnarterm_report_cwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
                                     );
                                 }
                                 OscAction::Title(title) => {
-                                    let _ = app_handle
-                                        .emit("pty-title", PtyTitle { pty_id: id, title });
+                                    let _ = app_handle.emit(
+                                        "pty-title",
+                                        PtyTitle { pty_id: id, title },
+                                    );
                                 }
                                 OscAction::Ignore => {}
                             }
@@ -543,7 +519,7 @@ async fn resize_pty(
     let pty = ptys
         .get(&pty_id)
         .ok_or_else(|| format!("PTY {pty_id} not found"))?;
-    pty.master_pty
+    pty._master
         .resize(PtySize {
             rows,
             cols,
@@ -561,24 +537,17 @@ async fn kill_pty(state: tauri::State<'_, AppState>, pty_id: u32) -> Result<(), 
     if let Some(pty) = ptys.remove(&pty_id) {
         // Ensure the reader thread isn't blocked on the condvar
         pty.paused.resume();
-
+        
         if let Some(pid) = pty.child_pid {
             #[cfg(unix)]
             {
-                let pid_i32 =
-                    i32::try_from(pid).map_err(|_| format!("PID {pid} exceeds i32::MAX"))?;
-                unsafe {
-                    libc::kill(-pid_i32, libc::SIGKILL);
-                }
-                unsafe {
-                    libc::kill(pid_i32, libc::SIGKILL);
-                }
+                let pid_i32 = i32::try_from(pid).map_err(|_| format!("PID {} exceeds i32::MAX", pid))?;
+                unsafe { libc::kill(-pid_i32, libc::SIGKILL); }
+                unsafe { libc::kill(pid_i32, libc::SIGKILL); }
             }
             #[cfg(windows)]
             {
-                let _ = std::process::Command::new("taskkill")
-                    .args(["/F", "/T", "/PID", &pid.to_string()])
-                    .output();
+                let _ = std::process::Command::new("taskkill").args(["/F", "/T", "/PID", &pid.to_string()]).output();
             }
         }
         // Dropping pty closes the master fd which sends SIGHUP
@@ -655,7 +624,7 @@ async fn detect_font() -> Result<String, String> {
     let wez_path = format!("{home}/.wezterm.lua");
     if let Ok(content) = std::fs::read_to_string(&wez_path) {
         for line in content.lines() {
-            if line.contains("font_family") || line.contains("font =") {
+            if line.contains("font_family") || line.contains("font =" ) {
                 // Extract quoted string
                 if let Some(start) = line.find('"') {
                     if let Some(end) = line[start + 1..].find('"') {
@@ -713,7 +682,7 @@ async fn detect_font() -> Result<String, String> {
             let profile = String::from_utf8_lossy(&o.stdout).trim().to_string();
             if !profile.is_empty() {
                 let font_output = std::process::Command::new("defaults")
-                    .args(["read", "com.apple.Terminal", "Window Settings"])
+                    .args(["read", "com.apple.Terminal", &format!("Window Settings")])
                     .output();
                 if let Ok(fo) = font_output {
                     let text = String::from_utf8_lossy(&fo.stdout);
@@ -738,7 +707,7 @@ async fn detect_font() -> Result<String, String> {
             "/Library/Fonts".to_string(),
             "/System/Library/Fonts".to_string(),
         ];
-
+        
         // (File name substring, CSS font-family name)
         let preferred = [
             ("MesloLGS NF", "MesloLGS NF"),
@@ -783,10 +752,7 @@ async fn detect_font() -> Result<String, String> {
             "DejaVu Sans Mono",
         ];
 
-        if let Ok(output) = std::process::Command::new("fc-list")
-            .args([":spacing=100", "family"])
-            .output()
-        {
+        if let Ok(output) = std::process::Command::new("fc-list").args([":spacing=100", "family"]).output() {
             let text = String::from_utf8_lossy(&output.stdout).to_lowercase();
             for font_name in preferred {
                 if text.contains(&font_name.to_lowercase()) {
@@ -820,62 +786,36 @@ async fn resume_pty(state: tauri::State<'_, AppState>, pty_id: u32) -> Result<()
     Ok(())
 }
 
-/// String-prefix check for known-sensitive directories.
-///
-/// Does NOT resolve symlinks — callers that need symlink-safety should also
-/// pass the canonicalized path through this check (see `validate_read_path`).
-fn is_blocked_path(path_str: &str) -> bool {
+/// Block reads to sensitive directories (SSH keys, credentials, etc.)
+fn validate_read_path(path: &str) -> Result<std::path::PathBuf, String> {
+    let canonical = std::fs::canonicalize(path)
+        .map_err(|e| format!("Invalid path {}: {}", path, e))?;
+    let path_str = canonical.to_string_lossy();
+
     if let Ok(home) = std::env::var("HOME") {
-        let blocked = [
-            "/.ssh",
-            "/.gnupg",
-            "/.aws",
-            "/.kube",
-            "/.config/gcloud",
-            "/.docker",
-        ];
+        let blocked = ["/.ssh", "/.gnupg", "/.aws", "/.kube", "/.config/gcloud", "/.docker"];
         for prefix in blocked {
-            if path_str.starts_with(&format!("{home}{prefix}")) {
-                return true;
+            if path_str.starts_with(&format!("{}{}", home, prefix)) {
+                return Err(format!("Access denied: {}", path));
             }
         }
     }
-    path_str.starts_with("/etc/shadow") || path_str.starts_with("/etc/gshadow")
-}
-
-/// Block reads to sensitive directories (SSH keys, credentials, etc.)
-pub(crate) fn validate_read_path(path: &str) -> Result<std::path::PathBuf, String> {
-    // Catch unresolved paths that are literal hits (e.g. non-existent
-    // /Users/u/.ssh/id_rsa should fail closed even if canonicalize succeeds).
-    if is_blocked_path(path) {
-        return Err(format!("Access denied: {path}"));
-    }
-    let canonical = std::fs::canonicalize(path).map_err(|e| format!("Invalid path {path}: {e}"))?;
-    if is_blocked_path(&canonical.to_string_lossy()) {
-        return Err(format!("Access denied: {path}"));
+    if path_str.starts_with("/etc/shadow") || path_str.starts_with("/etc/gshadow") {
+        return Err(format!("Access denied: {}", path));
     }
     Ok(canonical)
 }
 
-/// Check if a file exists (lightweight — no read). Blocked paths report as
-/// non-existent to avoid leaking presence of files like `~/.ssh/id_rsa`.
+/// Check if a file exists (lightweight — no read)
 #[tauri::command]
 async fn file_exists(path: String) -> bool {
-    if is_blocked_path(&path) {
-        return false;
-    }
-    match std::fs::canonicalize(&path) {
-        Ok(canonical) => !is_blocked_path(&canonical.to_string_lossy()),
-        Err(_) => false,
-    }
+    std::path::Path::new(&path).exists()
 }
 
 /// List filenames in a directory (non-recursive, files only)
 #[tauri::command]
 async fn list_dir(path: String) -> Result<Vec<String>, String> {
-    let validated = validate_read_path(&path)?;
-    let entries =
-        std::fs::read_dir(&validated).map_err(|e| format!("Failed to read dir {path}: {e}"))?;
+    let entries = std::fs::read_dir(&path).map_err(|e| format!("Failed to read dir {}: {}", path, e))?;
     let mut names = Vec::new();
     for entry in entries.flatten() {
         if let Ok(ft) = entry.file_type() {
@@ -893,7 +833,7 @@ async fn list_dir(path: String) -> Result<Vec<String>, String> {
 #[tauri::command]
 async fn read_file(path: String) -> Result<String, String> {
     let validated = validate_read_path(&path)?;
-    std::fs::read_to_string(&validated).map_err(|e| format!("Failed to read {path}: {e}"))
+    std::fs::read_to_string(&validated).map_err(|e| format!("Failed to read {}: {}", path, e))
 }
 
 /// Directory entry metadata for the MCP `list_dir` tool.
@@ -913,10 +853,9 @@ async fn mcp_list_dir(
     path: String,
     include_hidden: Option<bool>,
 ) -> Result<Vec<McpDirEntry>, String> {
-    let validated = validate_read_path(&path)?;
     let include_hidden = include_hidden.unwrap_or(false);
-    let entries =
-        std::fs::read_dir(&validated).map_err(|e| format!("Failed to read dir {path}: {e}"))?;
+    let entries = std::fs::read_dir(&path)
+        .map_err(|e| format!("Failed to read dir {}: {}", path, e))?;
     let mut out = Vec::new();
     for entry in entries.flatten() {
         let name = match entry.file_name().to_str() {
@@ -926,8 +865,9 @@ async fn mcp_list_dir(
         if !include_hidden && name.starts_with('.') {
             continue;
         }
-        let Ok(metadata) = entry.metadata() else {
-            continue;
+        let metadata = match entry.metadata() {
+            Ok(m) => m,
+            Err(_) => continue,
         };
         let entry_path = entry.path().to_string_lossy().to_string();
         out.push(McpDirEntry {
@@ -946,23 +886,11 @@ async fn mcp_list_dir(
     Ok(out)
 }
 
-/// Return `(exists, is_dir)` for the MCP `file_exists` tool. Blocked paths
-/// report as non-existent (see `file_exists`).
+/// Return `(exists, is_dir)` for the MCP `file_exists` tool.
 #[tauri::command]
 async fn mcp_file_info(path: String) -> (bool, bool) {
-    if is_blocked_path(&path) {
-        return (false, false);
-    }
-    match std::fs::canonicalize(&path) {
-        Ok(canonical) => {
-            if is_blocked_path(&canonical.to_string_lossy()) {
-                return (false, false);
-            }
-            match std::fs::metadata(&canonical) {
-                Ok(m) => (true, m.is_dir()),
-                Err(_) => (false, false),
-            }
-        }
+    match std::fs::metadata(&path) {
+        Ok(m) => (true, m.is_dir()),
         Err(_) => (false, false),
     }
 }
@@ -971,84 +899,46 @@ async fn mcp_file_info(path: String) -> (bool, bool) {
 #[tauri::command]
 async fn read_file_base64(path: String) -> Result<String, String> {
     let validated = validate_read_path(&path)?;
-    let bytes = std::fs::read(&validated).map_err(|e| format!("Failed to read {path}: {e}"))?;
+    let bytes = std::fs::read(&validated).map_err(|e| format!("Failed to read {}: {}", path, e))?;
     Ok(b64_encode(&bytes))
 }
 
 fn b64_encode(data: &[u8]) -> String {
     const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut result = String::with_capacity(data.len().div_ceil(3) * 4);
+    let mut result = String::with_capacity((data.len() + 2) / 3 * 4);
     for chunk in data.chunks(3) {
-        let b0 = u32::from(chunk[0]);
-        let b1 = if chunk.len() > 1 {
-            u32::from(chunk[1])
-        } else {
-            0
-        };
-        let b2 = if chunk.len() > 2 {
-            u32::from(chunk[2])
-        } else {
-            0
-        };
+        let b0 = chunk[0] as u32;
+        let b1 = if chunk.len() > 1 { chunk[1] as u32 } else { 0 };
+        let b2 = if chunk.len() > 2 { chunk[2] as u32 } else { 0 };
         let triple = (b0 << 16) | (b1 << 8) | b2;
         result.push(CHARS[((triple >> 18) & 0x3F) as usize] as char);
         result.push(CHARS[((triple >> 12) & 0x3F) as usize] as char);
-        if chunk.len() > 1 {
-            result.push(CHARS[((triple >> 6) & 0x3F) as usize] as char);
-        } else {
-            result.push('=');
-        }
-        if chunk.len() > 2 {
-            result.push(CHARS[(triple & 0x3F) as usize] as char);
-        } else {
-            result.push('=');
-        }
+        if chunk.len() > 1 { result.push(CHARS[((triple >> 6) & 0x3F) as usize] as char); } else { result.push('='); }
+        if chunk.len() > 2 { result.push(CHARS[(triple & 0x3F) as usize] as char); } else { result.push('='); }
     }
     result
 }
 
 /// Validate that a write path is under ~/.config/gnar-term/
-pub(crate) fn validate_write_path(path: &str) -> Result<(), String> {
+fn validate_write_path(path: &str) -> Result<(), String> {
     let home = std::env::var("HOME").map_err(|_| "HOME not set".to_string())?;
-    let allowed = format!("{home}/.config/gnar-term");
+    let allowed = format!("{}/.config/gnar-term", home);
 
     // Manually resolve .. components to prevent traversal attacks on paths
     // that may not exist yet (canonicalize requires the path to exist).
     let mut resolved = Vec::new();
     for component in std::path::Path::new(path).components() {
         match component {
-            std::path::Component::ParentDir => {
-                resolved.pop();
-            }
+            std::path::Component::ParentDir => { resolved.pop(); }
             std::path::Component::CurDir => {}
             c => resolved.push(c),
         }
     }
     let norm_path: std::path::PathBuf = resolved.into_iter().collect();
-    let norm_allowed = std::path::Path::new(&allowed)
-        .components()
-        .collect::<std::path::PathBuf>();
+    let norm_allowed = std::path::Path::new(&allowed).components().collect::<std::path::PathBuf>();
 
     if !norm_path.starts_with(&norm_allowed) {
-        return Err(format!("Write denied: path must be under {allowed}"));
-    }
-
-    // Walk the deepest existing ancestor through canonicalize so a symlink
-    // inside the allowlist that points outside (e.g. ~/.config/gnar-term/x
-    // → ~/.ssh) cannot be used as a write target. If no ancestor exists
-    // yet, there's nothing to escape through.
-    let mut probe = norm_path.as_path();
-    while !probe.exists() {
-        match probe.parent() {
-            Some(p) => probe = p,
-            None => return Ok(()),
-        }
-    }
-    let canonical = std::fs::canonicalize(probe)
-        .map_err(|e| format!("Failed to canonicalize {}: {e}", probe.display()))?;
-    let canonical_allowed = std::fs::canonicalize(&norm_allowed).unwrap_or(norm_allowed);
-    if !canonical.starts_with(&canonical_allowed) {
-        return Err(format!("Write denied: path must be under {allowed}"));
+        return Err(format!("Write denied: path must be under {}", allowed));
     }
     Ok(())
 }
@@ -1057,14 +947,14 @@ pub(crate) fn validate_write_path(path: &str) -> Result<(), String> {
 #[tauri::command]
 async fn write_file(path: String, content: String) -> Result<(), String> {
     validate_write_path(&path)?;
-    std::fs::write(&path, &content).map_err(|e| format!("Failed to write {path}: {e}"))
+    std::fs::write(&path, &content).map_err(|e| format!("Failed to write {}: {}", path, e))
 }
 
 /// Ensure a directory exists
 #[tauri::command]
 async fn ensure_dir(path: String) -> Result<(), String> {
     validate_write_path(&path)?;
-    std::fs::create_dir_all(&path).map_err(|e| format!("Failed to create dir {path}: {e}"))
+    std::fs::create_dir_all(&path).map_err(|e| format!("Failed to create dir {}: {}", path, e))
 }
 
 /// Get the user's home directory
@@ -1076,31 +966,19 @@ async fn get_home() -> Result<String, String> {
 /// Show a file in the system file manager
 #[tauri::command]
 async fn show_in_file_manager(path: String) -> Result<(), String> {
-    let validated = validate_read_path(&path)?;
-    let validated_str = validated.to_string_lossy().to_string();
     #[cfg(target_os = "macos")]
     {
-        std::process::Command::new("open")
-            .args(["-R", &validated_str])
-            .spawn()
-            .map_err(|e| e.to_string())?;
+        std::process::Command::new("open").args(["-R", &path]).spawn().map_err(|e| e.to_string())?;
     }
     #[cfg(target_os = "linux")]
     {
-        let dir = validated
-            .parent()
-            .map_or(validated_str, |p| p.to_string_lossy().to_string());
-        std::process::Command::new("xdg-open")
-            .arg(&dir)
-            .spawn()
-            .map_err(|e| e.to_string())?;
+        let dir = std::path::Path::new(&path).parent().map(|p| p.to_string_lossy().to_string()).unwrap_or(path);
+        std::process::Command::new("xdg-open").arg(&dir).spawn().map_err(|e| e.to_string())?;
     }
     #[cfg(target_os = "windows")]
     {
-        std::process::Command::new("explorer")
-            .args(["/select,", &validated_str])
-            .spawn()
-            .map_err(|e| e.to_string())?;
+        let canonical = std::fs::canonicalize(&path).map_err(|e| format!("Invalid path: {}", e))?;
+        std::process::Command::new("explorer").args(["/select,", &canonical.to_string_lossy()]).spawn().map_err(|e| e.to_string())?;
     }
     Ok(())
 }
@@ -1108,50 +986,27 @@ async fn show_in_file_manager(path: String) -> Result<(), String> {
 /// Open a file with the default system app
 #[tauri::command]
 async fn open_with_default_app(path: String) -> Result<(), String> {
-    let validated = validate_read_path(&path)?;
-    let validated_str = validated.to_string_lossy().to_string();
     #[cfg(target_os = "macos")]
-    std::process::Command::new("open")
-        .arg(&validated_str)
-        .spawn()
-        .map_err(|e| e.to_string())?;
+    std::process::Command::new("open").arg(&path).spawn().map_err(|e| e.to_string())?;
     #[cfg(target_os = "linux")]
-    std::process::Command::new("xdg-open")
-        .arg(&validated_str)
-        .spawn()
-        .map_err(|e| e.to_string())?;
+    std::process::Command::new("xdg-open").arg(&path).spawn().map_err(|e| e.to_string())?;
     #[cfg(target_os = "windows")]
-    std::process::Command::new("explorer")
-        .arg(&validated_str)
-        .spawn()
-        .map_err(|e| e.to_string())?;
+    std::process::Command::new("explorer").arg(&path).spawn().map_err(|e| e.to_string())?;
     Ok(())
 }
 
 /// Watch a file for changes, emit events
 #[tauri::command]
-async fn watch_file(
-    app: AppHandle,
-    state: tauri::State<'_, AppState>,
-    path: String,
-) -> Result<u32, String> {
-    let validated = validate_read_path(&path)?;
-    let validated_str = validated.to_string_lossy().to_string();
-
+async fn watch_file(app: AppHandle, state: tauri::State<'_, AppState>, path: String) -> Result<u32, String> {
     let watch_id = NEXT_WATCH_ID.fetch_add(1, Ordering::Relaxed);
     let stop = Arc::new(AtomicBool::new(false));
     let stop_clone = stop.clone();
 
-    state
-        .watch_flags
-        .lock()
-        .map_err(|e| e.to_string())?
-        .insert(watch_id, stop);
+    state.watch_flags.lock().map_err(|e| e.to_string())?.insert(watch_id, stop);
 
-    const MAX_WATCH_FILE_SIZE: u64 = 512 * 1024;
-
+    let path_clone = path.clone();
     std::thread::spawn(move || {
-        let mut last_modified = std::fs::metadata(&validated_str)
+        let mut last_modified = std::fs::metadata(&path_clone)
             .and_then(|m| m.modified())
             .ok();
         loop {
@@ -1159,32 +1014,13 @@ async fn watch_file(
             if stop_clone.load(Ordering::Relaxed) {
                 break;
             }
-            let current = std::fs::metadata(&validated_str)
+            let current = std::fs::metadata(&path_clone)
                 .and_then(|m| m.modified())
                 .ok();
             if current != last_modified {
                 last_modified = current;
-                let size = std::fs::metadata(&validated_str).map_or(0, |m| m.len());
-                if size <= MAX_WATCH_FILE_SIZE {
-                    if let Ok(content) = std::fs::read_to_string(&validated_str) {
-                        let _ = app.emit(
-                            "file-changed",
-                            FileChanged {
-                                watch_id,
-                                path: validated_str.clone(),
-                                content,
-                            },
-                        );
-                    }
-                } else {
-                    let _ = app.emit(
-                        "file-changed",
-                        FileChanged {
-                            watch_id,
-                            path: validated_str.clone(),
-                            content: String::new(),
-                        },
-                    );
+                if let Ok(content) = std::fs::read_to_string(&path_clone) {
+                    let _ = app.emit("file-changed", FileChanged { watch_id, path: path_clone.clone(), content });
                 }
             }
         }
@@ -1211,10 +1047,7 @@ struct FileChanged {
 
 /// Get the child process PID for a PTY, if known.
 #[tauri::command]
-async fn get_pty_pid(
-    state: tauri::State<'_, AppState>,
-    pty_id: u32,
-) -> Result<Option<u32>, String> {
+async fn get_pty_pid(state: tauri::State<'_, AppState>, pty_id: u32) -> Result<Option<u32>, String> {
     let ptys = state.ptys.lock().map_err(|e| e.to_string())?;
     Ok(ptys.get(&pty_id).and_then(|p| p.child_pid))
 }
@@ -1239,12 +1072,7 @@ async fn get_pty_title(state: tauri::State<'_, AppState>, pty_id: u32) -> Result
                     if let Some(last) = procs.last() {
                         let name = last.rsplit('/').next().unwrap_or(last).trim();
                         // If it's not the shell itself, return process name
-                        if !name.is_empty()
-                            && name != "zsh"
-                            && name != "bash"
-                            && name != "fish"
-                            && name != "sh"
-                        {
+                        if !name.is_empty() && name != "zsh" && name != "bash" && name != "fish" && name != "sh" {
                             return Ok(name.to_string());
                         }
                     }
@@ -1271,11 +1099,8 @@ async fn get_pty_title(state: tauri::State<'_, AppState>, pty_id: u32) -> Result
             // Linux: read /proc foreground process
             #[cfg(target_os = "linux")]
             {
-                if let Ok(path) = std::fs::read_link(format!("/proc/{pid}/cwd")) {
-                    let base = path
-                        .file_name()
-                        .map(|n| n.to_string_lossy().to_string())
-                        .unwrap_or_default();
+                if let Ok(path) = std::fs::read_link(format!("/proc/{}/cwd", pid)) {
+                    let base = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
                     return Ok(base);
                 }
             }
@@ -1311,7 +1136,7 @@ async fn get_pty_cwd(state: tauri::State<'_, AppState>, pty_id: u32) -> Result<S
             // Linux: read /proc/<pid>/cwd
             #[cfg(target_os = "linux")]
             {
-                if let Ok(path) = std::fs::read_link(format!("/proc/{pid}/cwd")) {
+                if let Ok(path) = std::fs::read_link(format!("/proc/{}/cwd", pid)) {
                     return Ok(path.to_string_lossy().to_string());
                 }
             }
@@ -1323,14 +1148,6 @@ async fn get_pty_cwd(state: tauri::State<'_, AppState>, pty_id: u32) -> Result<S
 /// Find a file by name using platform-specific search
 #[tauri::command]
 async fn find_file(name: String) -> Result<String, String> {
-    // Reject path separators and leading hyphens to prevent flag injection in
-    // mdfind/locate/find and prevent path traversal disguised as a filename.
-    if name.is_empty() || name.starts_with('-') || name.contains('/') || name.contains('\\') {
-        return Err(
-            "Invalid file name: must not be empty, start with '-', or contain path separators"
-                .to_string(),
-        );
-    }
     // macOS: use Spotlight (mdfind) — fast indexed search
     #[cfg(target_os = "macos")]
     {
@@ -1340,7 +1157,7 @@ async fn find_file(name: String) -> Result<String, String> {
             .map_err(|e| format!("mdfind failed: {e}"))?;
         let stdout = String::from_utf8_lossy(&output.stdout);
         for line in stdout.lines() {
-            if line.starts_with('/') && line.ends_with(&name) && validate_read_path(line).is_ok() {
+            if line.starts_with('/') && line.ends_with(&name) {
                 return Ok(line.to_string());
             }
         }
@@ -1349,12 +1166,12 @@ async fn find_file(name: String) -> Result<String, String> {
     #[cfg(target_os = "linux")]
     {
         if let Ok(output) = std::process::Command::new("locate")
-            .args(["-l", "10", "-b", &name])
+            .args(["-l", "1", &name])
             .output()
         {
             let stdout = String::from_utf8_lossy(&output.stdout);
-            for line in stdout.lines() {
-                if line.starts_with('/') && validate_read_path(line).is_ok() {
+            if let Some(line) = stdout.lines().next() {
+                if line.starts_with('/') {
                     return Ok(line.to_string());
                 }
             }
@@ -1362,18 +1179,18 @@ async fn find_file(name: String) -> Result<String, String> {
         // Fall back to find in home directory
         let home = std::env::var("HOME").unwrap_or_default();
         if let Ok(output) = std::process::Command::new("find")
-            .args([&home, "-maxdepth", "4", "-name", &name, "-print"])
+            .args([&home, "-maxdepth", "4", "-name", &name, "-print", "-quit"])
             .output()
         {
             let stdout = String::from_utf8_lossy(&output.stdout);
-            for line in stdout.lines() {
-                if line.starts_with('/') && validate_read_path(line).is_ok() {
+            if let Some(line) = stdout.lines().next() {
+                if line.starts_with('/') {
                     return Ok(line.to_string());
                 }
             }
         }
     }
-    Err(format!("File not found: {name}"))
+    Err(format!("File not found: {}", name))
 }
 
 /// Read the `mcp` setting from `gnar-term.json`. Returns `"auto"` if no
@@ -1386,7 +1203,8 @@ fn read_mcp_setting() -> String {
         v.push(std::path::PathBuf::from("cmux.json"));
         if let Ok(home) = std::env::var("HOME") {
             v.push(std::path::PathBuf::from(format!(
-                "{home}/.config/gnar-term/gnar-term.json"
+                "{}/.config/gnar-term/gnar-term.json",
+                home
             )));
         }
         v
@@ -1438,44 +1256,7 @@ pub fn run() {
         })
         .manage(cli_args)
         .invoke_handler(tauri::generate_handler![
-            get_cli_args,
-            spawn_pty,
-            write_pty,
-            resize_pty,
-            kill_pty,
-            pause_pty,
-            resume_pty,
-            detect_font,
-            get_pty_cwd,
-            get_pty_pid,
-            get_pty_title,
-            file_exists,
-            list_dir,
-            read_file,
-            read_file_base64,
-            write_file,
-            ensure_dir,
-            get_home,
-            watch_file,
-            unwatch_file,
-            show_in_file_manager,
-            open_with_default_app,
-            find_file,
-            mcp_list_dir,
-            mcp_file_info,
-            commands::list_monospace_fonts,
-            commands::is_git_repo,
-            commands::list_gitignored,
-            commands::remove_dir,
-            file_utils::copy_files,
-            file_utils::run_script,
-            git_ops::push_branch,
-            git_ops::git_checkout,
-            git_worktree::create_worktree,
-            git_worktree::remove_worktree,
-            git_worktree::list_branches,
-            git_info::git_status,
-            gh_commands::gh_list_prs
+            get_cli_args, spawn_pty, write_pty, resize_pty, kill_pty, pause_pty, resume_pty, detect_font, get_pty_cwd, get_pty_pid, get_pty_title, file_exists, list_dir, read_file, read_file_base64, write_file, ensure_dir, get_home, watch_file, unwatch_file, show_in_file_manager, open_with_default_app, find_file, mcp_list_dir, mcp_file_info
         ])
         .setup(|app| {
             // Set window title from CLI --title flag
@@ -1493,13 +1274,9 @@ pub fn run() {
             // Code detection.
             if mcp_should_start() {
                 let bridge_state = mcp_bridge::BridgeState::new();
-                if let Err(e) = mcp_bridge::spawn(app.handle().clone(), bridge_state) {
-                    // Bridge failure is non-fatal for the GUI, but the
-                    // frontend needs to know so it can surface a toast
-                    // (notably: Windows UDS unsupported). The mcp module
-                    // logs details; here we just notify the frontend.
-                    use tauri::Emitter;
-                    let _ = app.emit("mcp-bridge-failed", e.clone());
+                if let Err(_e) = mcp_bridge::spawn(app.handle().clone(), bridge_state) {
+                    // Bridge failure is non-fatal; the module logs its own
+                    // error. We intentionally swallow it so the GUI stays up.
                 } else if let Ok(exe) = std::env::current_exe() {
                     let exe_str = exe.to_string_lossy().to_string();
                     std::thread::spawn(move || {
@@ -1512,26 +1289,20 @@ pub fn run() {
             // but Cmd+T/Cmd+W/Cmd+N are passed down to JS.
             #[cfg(target_os = "macos")]
             {
-                use tauri::menu::{Menu, PredefinedMenuItem, Submenu};
+                use tauri::menu::{Menu, Submenu, PredefinedMenuItem};
                 let handle = app.handle();
-
+                
                 // GnarTerm Menu
                 let hide = PredefinedMenuItem::hide(handle, None)?;
                 let hide_others = PredefinedMenuItem::hide_others(handle, None)?;
                 let show_all = PredefinedMenuItem::show_all(handle, None)?;
                 let quit = PredefinedMenuItem::quit(handle, None)?;
-
+                
                 let app_menu = Submenu::with_items(
                     handle,
                     "GnarTerm",
                     true,
-                    &[
-                        &hide,
-                        &hide_others,
-                        &show_all,
-                        &PredefinedMenuItem::separator(handle)?,
-                        &quit,
-                    ],
+                    &[&hide, &hide_others, &show_all, &PredefinedMenuItem::separator(handle)?, &quit],
                 )?;
 
                 // Edit Menu — Copy/Cut/Paste/Select All are PredefinedMenuItems
@@ -1543,116 +1314,45 @@ pub fn run() {
                 let paste = PredefinedMenuItem::paste(handle, None)?;
                 let select_all = PredefinedMenuItem::select_all(handle, None)?;
 
-                let edit_menu =
-                    Submenu::with_items(handle, "Edit", true, &[&cut, &copy, &paste, &select_all])?;
-
-                let cmd_palette = MenuItem::with_id(
+                let edit_menu = Submenu::with_items(
                     handle,
-                    "cmd-palette",
-                    "Command Palette...",
+                    "Edit",
                     true,
-                    Some("CmdOrCtrl+P"),
+                    &[&cut, &copy, &paste, &select_all],
                 )?;
-                let close_tab =
-                    MenuItem::with_id(handle, "close-tab", "Close Tab", true, Some("CmdOrCtrl+W"))?;
 
+                let cmd_palette = MenuItem::with_id(handle, "cmd-palette", "Command Palette...", true, Some("CmdOrCtrl+P"))?;
+                let close_tab = MenuItem::with_id(handle, "close-tab", "Close Tab", true, Some("CmdOrCtrl+W"))?;
+                
                 // View > Theme submenu
                 use tauri::menu::MenuItem;
-                let theme_github = MenuItem::with_id(
-                    handle,
-                    "theme-github-dark",
-                    "GitHub Dark",
-                    true,
-                    None::<&str>,
-                )?;
-                let theme_tokyo = MenuItem::with_id(
-                    handle,
-                    "theme-tokyo-night",
-                    "Tokyo Night",
-                    true,
-                    None::<&str>,
-                )?;
-                let theme_catppuccin = MenuItem::with_id(
-                    handle,
-                    "theme-catppuccin-mocha",
-                    "Catppuccin Mocha",
-                    true,
-                    None::<&str>,
-                )?;
-                let theme_dracula =
-                    MenuItem::with_id(handle, "theme-dracula", "Dracula", true, None::<&str>)?;
-                let theme_solarized = MenuItem::with_id(
-                    handle,
-                    "theme-solarized-dark",
-                    "Solarized Dark",
-                    true,
-                    None::<&str>,
-                )?;
-                let theme_onedark =
-                    MenuItem::with_id(handle, "theme-one-dark", "One Dark", true, None::<&str>)?;
+                let theme_github = MenuItem::with_id(handle, "theme-github-dark", "GitHub Dark", true, None::<&str>)?;
+                let theme_tokyo = MenuItem::with_id(handle, "theme-tokyo-night", "Tokyo Night", true, None::<&str>)?;
+                let theme_catppuccin = MenuItem::with_id(handle, "theme-catppuccin-mocha", "Catppuccin Mocha", true, None::<&str>)?;
+                let theme_dracula = MenuItem::with_id(handle, "theme-dracula", "Dracula", true, None::<&str>)?;
+                let theme_solarized = MenuItem::with_id(handle, "theme-solarized-dark", "Solarized Dark", true, None::<&str>)?;
+                let theme_onedark = MenuItem::with_id(handle, "theme-one-dark", "One Dark", true, None::<&str>)?;
 
                 let theme_sep = PredefinedMenuItem::separator(handle)?;
-                let theme_molly =
-                    MenuItem::with_id(handle, "theme-molly", "Molly", true, None::<&str>)?;
-                let theme_molly_disco = MenuItem::with_id(
-                    handle,
-                    "theme-molly-disco",
-                    "Molly Disco",
-                    true,
-                    None::<&str>,
-                )?;
-                let theme_github_light = MenuItem::with_id(
-                    handle,
-                    "theme-github-light",
-                    "GitHub Light",
-                    true,
-                    None::<&str>,
-                )?;
-                let theme_solarized_light = MenuItem::with_id(
-                    handle,
-                    "theme-solarized-light",
-                    "Solarized Light",
-                    true,
-                    None::<&str>,
-                )?;
-                let theme_catppuccin_latte = MenuItem::with_id(
-                    handle,
-                    "theme-catppuccin-latte",
-                    "Catppuccin Latte",
-                    true,
-                    None::<&str>,
-                )?;
+                let theme_molly = MenuItem::with_id(handle, "theme-molly", "Molly", true, None::<&str>)?;
+                let theme_molly_disco = MenuItem::with_id(handle, "theme-molly-disco", "Molly Disco", true, None::<&str>)?;
+                let theme_github_light = MenuItem::with_id(handle, "theme-github-light", "GitHub Light", true, None::<&str>)?;
+                let theme_solarized_light = MenuItem::with_id(handle, "theme-solarized-light", "Solarized Light", true, None::<&str>)?;
+                let theme_catppuccin_latte = MenuItem::with_id(handle, "theme-catppuccin-latte", "Catppuccin Latte", true, None::<&str>)?;
 
                 let theme_submenu = Submenu::with_items(
                     handle,
                     "Theme",
                     true,
-                    &[
-                        &theme_github,
-                        &theme_tokyo,
-                        &theme_catppuccin,
-                        &theme_dracula,
-                        &theme_solarized,
-                        &theme_onedark,
-                        &theme_sep,
-                        &theme_molly,
-                        &theme_molly_disco,
-                        &theme_github_light,
-                        &theme_solarized_light,
-                        &theme_catppuccin_latte,
-                    ],
+                    &[&theme_github, &theme_tokyo, &theme_catppuccin, &theme_dracula, &theme_solarized, &theme_onedark,
+                      &theme_sep, &theme_molly, &theme_molly_disco, &theme_github_light, &theme_solarized_light, &theme_catppuccin_latte],
                 )?;
 
                 let view_menu = Submenu::with_items(
                     handle,
                     "View",
                     true,
-                    &[
-                        &cmd_palette,
-                        &close_tab,
-                        &PredefinedMenuItem::separator(handle)?,
-                        &theme_submenu,
-                    ],
+                    &[&cmd_palette, &close_tab, &PredefinedMenuItem::separator(handle)?, &theme_submenu],
                 )?;
 
                 let menu = Menu::with_items(handle, &[&app_menu, &edit_menu, &view_menu])?;
@@ -1701,14 +1401,8 @@ mod tests {
         flag.resume();
 
         let elapsed = handle.join().unwrap();
-        assert!(
-            elapsed >= Duration::from_millis(40),
-            "Thread should have blocked ~50ms, got {elapsed:?}"
-        );
-        assert!(
-            elapsed < Duration::from_millis(500),
-            "Thread should resume quickly, got {elapsed:?}"
-        );
+        assert!(elapsed >= Duration::from_millis(40), "Thread should have blocked ~50ms, got {:?}", elapsed);
+        assert!(elapsed < Duration::from_millis(500), "Thread should resume quickly, got {:?}", elapsed);
     }
 
     #[test]
@@ -1716,25 +1410,17 @@ mod tests {
         let flag = PauseFlag::new();
         let start = Instant::now();
         flag.wait_if_paused();
-        assert!(
-            start.elapsed() < Duration::from_millis(5),
-            "Should not block"
-        );
+        assert!(start.elapsed() < Duration::from_millis(5), "Should not block");
     }
 
     /// Integration test: spawn a real PTY, run `ps aux`, read all output.
-    /// Verifies that the reader loop + `PauseFlag` + 4KB buffer works without
+    /// Verifies that the reader loop + PauseFlag + 4KB buffer works without
     /// hanging. This is the exact scenario that caused the freeze.
     #[test]
     fn pty_read_ps_aux_does_not_hang() {
         let pty_system = native_pty_system();
         let pair = pty_system
-            .openpty(PtySize {
-                rows: 24,
-                cols: 80,
-                pixel_width: 0,
-                pixel_height: 0,
-            })
+            .openpty(PtySize { rows: 24, cols: 80, pixel_width: 0, pixel_height: 0 })
             .expect("Failed to open PTY");
 
         let mut cmd = CommandBuilder::new("sh");
@@ -1744,10 +1430,7 @@ mod tests {
         let _child = pair.slave.spawn_command(cmd).expect("Failed to spawn");
         drop(pair.slave);
 
-        let mut reader = pair
-            .master
-            .try_clone_reader()
-            .expect("Failed to get reader");
+        let mut reader = pair.master.try_clone_reader().expect("Failed to get reader");
         let pause_flag = Arc::new(PauseFlag::new());
         let pause_clone = pause_flag.clone();
 
@@ -1791,11 +1474,8 @@ mod tests {
         // Verify we got real output
         assert!(total_bytes > 0, "Should have read some bytes from ps aux");
         let output_str = String::from_utf8_lossy(&output);
-        assert!(
-            output_str.contains("__DONE__"),
-            "Should have received all output (got {total_bytes} bytes)"
-        );
-        println!("[test] ps aux produced {total_bytes} bytes — read successfully without hanging");
+        assert!(output_str.contains("__DONE__"), "Should have received all output (got {} bytes)", total_bytes);
+        println!("[test] ps aux produced {} bytes — read successfully without hanging", total_bytes);
     }
 
     /// Stress test: spawn a PTY that dumps 1MB of output as fast as possible.
@@ -1806,12 +1486,7 @@ mod tests {
     fn pty_high_throughput_does_not_stall() {
         let pty_system = native_pty_system();
         let pair = pty_system
-            .openpty(PtySize {
-                rows: 24,
-                cols: 80,
-                pixel_width: 0,
-                pixel_height: 0,
-            })
+            .openpty(PtySize { rows: 24, cols: 80, pixel_width: 0, pixel_height: 0 })
             .expect("Failed to open PTY");
 
         // Generate ~500KB of output using yes (piped through head for determinism)
@@ -1822,10 +1497,7 @@ mod tests {
         let _child = pair.slave.spawn_command(cmd).expect("Failed to spawn");
         drop(pair.slave);
 
-        let mut reader = pair
-            .master
-            .try_clone_reader()
-            .expect("Failed to get reader");
+        let mut reader = pair.master.try_clone_reader().expect("Failed to get reader");
         let pause_flag = Arc::new(PauseFlag::new());
         let pause_clone = pause_flag.clone();
 
@@ -1866,17 +1538,12 @@ mod tests {
         let (total, tail) = reader_handle.join().expect("Reader thread panicked");
         let elapsed = start.elapsed();
 
-        assert!(
-            elapsed < Duration::from_secs(10),
-            "Should complete within 10s, took {elapsed:?}"
-        );
-        assert!(total > 50_000, "Should read at least 50KB, got {total}");
+        assert!(elapsed < Duration::from_secs(10), "Should complete within 10s, took {:?}", elapsed);
+        assert!(total > 50_000, "Should read at least 50KB, got {}", total);
         let tail_str = String::from_utf8_lossy(&tail);
-        assert!(
-            tail_str.contains("__HIGH_THROUGHPUT_DONE__"),
-            "Should receive completion marker (got {total} bytes total)"
-        );
-        println!("[test] High-throughput test: {total} bytes in {elapsed:?}");
+        assert!(tail_str.contains("__HIGH_THROUGHPUT_DONE__"),
+            "Should receive completion marker (got {} bytes total)", total);
+        println!("[test] High-throughput test: {} bytes in {:?}", total, elapsed);
     }
 
     // -----------------------------------------------------------------------
@@ -1887,27 +1554,22 @@ mod tests {
     fn validate_read_path_allows_normal_files() {
         // /etc/hosts exists on all unix systems and is not blocked
         let result = validate_read_path("/etc/hosts");
-        assert!(
-            result.is_ok(),
-            "Should allow reading /etc/hosts: {result:?}"
-        );
+        assert!(result.is_ok(), "Should allow reading /etc/hosts: {:?}", result);
     }
 
     #[test]
     fn validate_read_path_blocks_ssh_dir() {
-        let home = std::env::var("HOME").expect("HOME env var required for tests");
-        let ssh_key = format!("{home}/.ssh/id_rsa");
+        let home = std::env::var("HOME").unwrap();
+        let ssh_key = format!("{}/.ssh/id_rsa", home);
         let result = validate_read_path(&ssh_key);
-        // Rejected either because the file doesn't exist (canonicalize fails)
-        // or because the path is in the blocklist — both are safe outcomes on
-        // CI runners that don't have ~/.ssh populated.
         assert!(result.is_err(), "Should block reading ~/.ssh/id_rsa");
+        assert!(result.unwrap_err().contains("Access denied"));
     }
 
     #[test]
     fn validate_read_path_blocks_gnupg_dir() {
         let home = std::env::var("HOME").unwrap();
-        let gpg = format!("{home}/.gnupg/trustdb.gpg");
+        let gpg = format!("{}/.gnupg/trustdb.gpg", home);
         let result = validate_read_path(&gpg);
         // Rejected either because dir doesn't exist (canonicalize fails)
         // or because it's in the blocklist — both are safe outcomes
@@ -1917,7 +1579,7 @@ mod tests {
     #[test]
     fn validate_read_path_blocks_aws_credentials() {
         let home = std::env::var("HOME").unwrap();
-        let aws = format!("{home}/.aws/credentials");
+        let aws = format!("{}/.aws/credentials", home);
         let result = validate_read_path(&aws);
         assert!(result.is_err(), "Should block reading ~/.aws/credentials");
     }
@@ -1931,18 +1593,15 @@ mod tests {
     #[test]
     fn validate_write_path_allows_config_dir() {
         let home = std::env::var("HOME").unwrap();
-        let config = format!("{home}/.config/gnar-term/gnar-term.json");
+        let config = format!("{}/.config/gnar-term/gnar-term.json", home);
         let result = validate_write_path(&config);
-        assert!(
-            result.is_ok(),
-            "Should allow writing to ~/.config/gnar-term/: {result:?}"
-        );
+        assert!(result.is_ok(), "Should allow writing to ~/.config/gnar-term/: {:?}", result);
     }
 
     #[test]
     fn validate_write_path_blocks_home_dir() {
         let home = std::env::var("HOME").unwrap();
-        let path = format!("{home}/.bashrc");
+        let path = format!("{}/.bashrc", home);
         let result = validate_write_path(&path);
         assert!(result.is_err(), "Should block writing to ~/.bashrc");
         assert!(result.unwrap_err().contains("Write denied"));
@@ -1957,7 +1616,7 @@ mod tests {
     #[test]
     fn validate_write_path_blocks_traversal() {
         let home = std::env::var("HOME").unwrap();
-        let traversal = format!("{home}/.config/gnar-term/../../.bashrc");
+        let traversal = format!("{}/.config/gnar-term/../../.bashrc", home);
         let result = validate_write_path(&traversal);
         assert!(result.is_err(), "Should block path traversal via ../");
     }
@@ -1965,97 +1624,9 @@ mod tests {
     #[test]
     fn validate_write_path_allows_nested_config() {
         let home = std::env::var("HOME").unwrap();
-        let nested = format!("{home}/.config/gnar-term/themes/custom.json");
+        let nested = format!("{}/.config/gnar-term/themes/custom.json", home);
         let result = validate_write_path(&nested);
-        assert!(
-            result.is_ok(),
-            "Should allow nested paths under config dir: {result:?}"
-        );
-    }
-
-    // Regression: a symlink inside the allowlist that points outside must
-    // not allow writes to escape — the prior validator only resolved `..`
-    // manually and would happily accept a symlink target like ~/.ssh.
-    #[cfg(unix)]
-    #[test]
-    fn validate_write_path_rejects_symlink_escape() {
-        let home = std::env::var("HOME").unwrap();
-        let config_dir = format!("{home}/.config/gnar-term");
-        let _ = std::fs::create_dir_all(&config_dir);
-        let link = format!("{config_dir}/symlink-escape-test");
-        // Clean from any prior run
-        let _ = std::fs::remove_file(&link);
-        let target = "/tmp";
-        std::os::unix::fs::symlink(target, &link).expect("symlink");
-
-        let result = validate_write_path(&format!("{link}/pwned.txt"));
-        let _ = std::fs::remove_file(&link);
-        assert!(
-            result.is_err(),
-            "Should reject writes through an escaping symlink: {result:?}"
-        );
-    }
-
-    // -----------------------------------------------------------------------
-    // Regression: discovery commands must honor the blocklist (review #1, #2)
-    // -----------------------------------------------------------------------
-
-    #[tokio::test]
-    async fn file_exists_blocks_sensitive_paths() {
-        let home = std::env::var("HOME").unwrap();
-        let ssh = format!("{home}/.ssh/id_rsa");
-        assert!(
-            !file_exists(ssh).await,
-            "file_exists must not leak presence of ~/.ssh/id_rsa"
-        );
-    }
-
-    #[tokio::test]
-    async fn list_dir_blocks_sensitive_paths() {
-        let home = std::env::var("HOME").unwrap();
-        let ssh = format!("{home}/.ssh");
-        let result = list_dir(ssh).await;
-        assert!(result.is_err(), "list_dir must refuse ~/.ssh");
-    }
-
-    #[tokio::test]
-    async fn mcp_list_dir_blocks_sensitive_paths() {
-        let home = std::env::var("HOME").unwrap();
-        let ssh = format!("{home}/.ssh");
-        let result = mcp_list_dir(ssh, Some(true)).await;
-        assert!(result.is_err(), "mcp_list_dir must refuse ~/.ssh");
-    }
-
-    #[tokio::test]
-    async fn mcp_file_info_blocks_sensitive_paths() {
-        let home = std::env::var("HOME").unwrap();
-        let ssh = format!("{home}/.ssh/id_rsa");
-        let (exists, _) = mcp_file_info(ssh).await;
-        assert!(
-            !exists,
-            "mcp_file_info must not leak presence of ~/.ssh/id_rsa"
-        );
-    }
-
-    #[cfg(unix)]
-    #[tokio::test]
-    async fn file_exists_rejects_symlink_to_blocked_dir() {
-        // A symlink inside a normal dir that points at ~/.ssh must be blocked
-        // even though the link's own path is benign.
-        use std::fs;
-        let home = std::env::var("HOME").unwrap();
-        let blocked_target = format!("{home}/.ssh");
-        // Only meaningful when the target actually exists on this host.
-        if !std::path::Path::new(&blocked_target).exists() {
-            return;
-        }
-        let tmp = std::env::temp_dir().join("gnar_review_file_exists_test");
-        let _ = fs::remove_file(&tmp);
-        std::os::unix::fs::symlink(&blocked_target, &tmp).expect("failed to create test symlink");
-        let path_str = tmp.to_string_lossy().to_string();
-        let result = file_exists(path_str).await;
-        let _ = fs::remove_file(&tmp);
-        assert!(!result, "symlinks into ~/.ssh must be rejected");
+        assert!(result.is_ok(), "Should allow nested paths under config dir: {:?}", result);
     }
 
     // -----------------------------------------------------------------------
@@ -2141,12 +1712,7 @@ mod tests {
 
         let pty_system = native_pty_system();
         let pair = pty_system
-            .openpty(PtySize {
-                rows: 24,
-                cols: 80,
-                pixel_width: 0,
-                pixel_height: 0,
-            })
+            .openpty(PtySize { rows: 24, cols: 80, pixel_width: 0, pixel_height: 0 })
             .expect("Failed to open PTY");
 
         let mut cmd = CommandBuilder::new("sh");
@@ -2164,24 +1730,18 @@ mod tests {
         let paused = Arc::new(PauseFlag::new());
         {
             let mut ptys = state.ptys.lock().unwrap();
-            ptys.insert(
-                pty_id,
-                PtyInstance {
-                    writer,
-                    master_pty: pair.master,
-                    child_pid,
-                    paused,
-                },
-            );
+            ptys.insert(pty_id, PtyInstance {
+                writer,
+                _master: pair.master,
+                child_pid,
+                paused,
+            });
         }
 
         // Verify the PTY is tracked in the map
         let ptys = state.ptys.lock().unwrap();
         assert!(ptys.contains_key(&pty_id), "PTY should be in the state map");
-        assert!(
-            ptys.get(&pty_id).unwrap().child_pid.is_some(),
-            "PTY should have a child PID"
-        );
+        assert!(ptys.get(&pty_id).unwrap().child_pid.is_some(), "PTY should have a child PID");
     }
 
     // -----------------------------------------------------------------------
@@ -2192,12 +1752,7 @@ mod tests {
     fn pty_write_and_read_echo_output() {
         let pty_system = native_pty_system();
         let pair = pty_system
-            .openpty(PtySize {
-                rows: 24,
-                cols: 80,
-                pixel_width: 0,
-                pixel_height: 0,
-            })
+            .openpty(PtySize { rows: 24, cols: 80, pixel_width: 0, pixel_height: 0 })
             .expect("Failed to open PTY");
 
         let cmd = CommandBuilder::new("cat");
@@ -2205,10 +1760,7 @@ mod tests {
         drop(pair.slave);
 
         let mut writer = pair.master.take_writer().expect("Failed to get writer");
-        let mut reader = pair
-            .master
-            .try_clone_reader()
-            .expect("Failed to get reader");
+        let mut reader = pair.master.try_clone_reader().expect("Failed to get reader");
 
         // Write to the PTY
         writer.write_all(b"HELLO\n").expect("Failed to write");
@@ -2225,10 +1777,7 @@ mod tests {
             }
         }
         let output_str = String::from_utf8_lossy(&output);
-        assert!(
-            output_str.contains("HELLO"),
-            "Should see echoed input, got: {output_str}"
-        );
+        assert!(output_str.contains("HELLO"), "Should see echoed input, got: {}", output_str);
     }
 
     // -----------------------------------------------------------------------
@@ -2239,12 +1788,7 @@ mod tests {
     fn pty_resize_does_not_panic() {
         let pty_system = native_pty_system();
         let pair = pty_system
-            .openpty(PtySize {
-                rows: 24,
-                cols: 80,
-                pixel_width: 0,
-                pixel_height: 0,
-            })
+            .openpty(PtySize { rows: 24, cols: 80, pixel_width: 0, pixel_height: 0 })
             .expect("Failed to open PTY");
 
         let mut cmd = CommandBuilder::new("sh");
@@ -2269,11 +1813,7 @@ mod tests {
             pixel_width: 0,
             pixel_height: 0,
         });
-        assert!(
-            result.is_ok(),
-            "Resize to 1x1 should succeed: {:?}",
-            result.err()
-        );
+        assert!(result.is_ok(), "Resize to 1x1 should succeed: {:?}", result.err());
     }
 
     // -----------------------------------------------------------------------
@@ -2289,12 +1829,7 @@ mod tests {
 
         let pty_system = native_pty_system();
         let pair = pty_system
-            .openpty(PtySize {
-                rows: 24,
-                cols: 80,
-                pixel_width: 0,
-                pixel_height: 0,
-            })
+            .openpty(PtySize { rows: 24, cols: 80, pixel_width: 0, pixel_height: 0 })
             .expect("Failed to open PTY");
 
         let mut cmd = CommandBuilder::new("sh");
@@ -2310,15 +1845,12 @@ mod tests {
 
         {
             let mut ptys = state.ptys.lock().unwrap();
-            ptys.insert(
-                pty_id,
-                PtyInstance {
-                    writer,
-                    master_pty: pair.master,
-                    child_pid,
-                    paused: paused.clone(),
-                },
-            );
+            ptys.insert(pty_id, PtyInstance {
+                writer,
+                _master: pair.master,
+                child_pid,
+                paused: paused.clone(),
+            });
         }
 
         // Verify it's in the map
@@ -2340,10 +1872,8 @@ mod tests {
         }
 
         // Verify it's gone
-        assert!(
-            !state.ptys.lock().unwrap().contains_key(&pty_id),
-            "PTY should be removed from map after kill"
-        );
+        assert!(!state.ptys.lock().unwrap().contains_key(&pty_id),
+            "PTY should be removed from map after kill");
     }
 
     // -----------------------------------------------------------------------
@@ -2353,12 +1883,11 @@ mod tests {
     #[test]
     fn file_read_write_roundtrip() {
         let home = std::env::var("HOME").unwrap();
-        let config_dir = format!("{home}/.config/gnar-term/test-tmp");
+        let config_dir = format!("{}/.config/gnar-term/test-tmp", home);
         std::fs::create_dir_all(&config_dir).expect("Failed to create test dir");
 
-        let test_path = format!("{config_dir}/roundtrip_test.txt");
-        let content =
-            "Hello from GnarTerm integration test!\nLine 2\nLine 3 with unicode: \u{1F680}";
+        let test_path = format!("{}/roundtrip_test.txt", config_dir);
+        let content = "Hello from GnarTerm integration test!\nLine 2\nLine 3 with unicode: \u{1F680}";
 
         // Write via validate_write_path + fs::write (same as write_file command)
         validate_write_path(&test_path).expect("Write path should be valid");
@@ -2402,10 +1931,9 @@ mod tests {
                     break;
                 }
                 iterations += 1;
-                assert!(
-                    iterations <= 100,
-                    "Watcher thread did not stop within timeout"
-                );
+                if iterations > 100 {
+                    panic!("Watcher thread did not stop within timeout");
+                }
             }
         });
 
@@ -2419,15 +1947,11 @@ mod tests {
         }
 
         // Watcher thread should exit cleanly
-        watcher_handle
-            .join()
-            .expect("Watcher thread should stop without panic");
+        watcher_handle.join().expect("Watcher thread should stop without panic");
 
         // Flag should no longer be in the map
-        assert!(
-            !state.watch_flags.lock().unwrap().contains_key(&watch_id),
-            "Watch flag should be removed after unwatch"
-        );
+        assert!(!state.watch_flags.lock().unwrap().contains_key(&watch_id),
+            "Watch flag should be removed after unwatch");
     }
 
     // -----------------------------------------------------------------------
@@ -2469,10 +1993,7 @@ mod tests {
         let encoded = b64_encode(ansi_red);
         // Verify it's valid base64 and round-trips correctly
         assert!(!encoded.is_empty());
-        assert!(
-            encoded.len().is_multiple_of(4),
-            "Base64 output length should be multiple of 4"
-        );
+        assert!(encoded.len() % 4 == 0, "Base64 output length should be multiple of 4");
         // Known base64 for this sequence
         assert_eq!(encoded, "G1szMW1IZWxsbxtbMG0=");
     }
@@ -2483,10 +2004,7 @@ mod tests {
         let data: Vec<u8> = (0..=255).collect();
         let encoded = b64_encode(&data);
         assert!(!encoded.is_empty());
-        assert!(
-            encoded.len().is_multiple_of(4),
-            "Base64 output should be padded to multiple of 4"
-        );
+        assert!(encoded.len() % 4 == 0, "Base64 output should be padded to multiple of 4");
     }
 
     // -----------------------------------------------------------------------
@@ -2496,23 +2014,20 @@ mod tests {
     #[test]
     fn ensure_dir_creates_nested_directory() {
         let home = std::env::var("HOME").unwrap();
-        let test_dir = format!("{home}/.config/gnar-term/test-tmp/nested/deep/dir");
+        let test_dir = format!("{}/.config/gnar-term/test-tmp/nested/deep/dir", home);
 
         // Remove if leftover from a previous run
-        let _ = std::fs::remove_dir_all(format!("{home}/.config/gnar-term/test-tmp/nested"));
+        let _ = std::fs::remove_dir_all(format!("{}/.config/gnar-term/test-tmp/nested", home));
 
         // validate_write_path should allow it
         validate_write_path(&test_dir).expect("Path should be valid under config dir");
 
         // Create it (same logic as ensure_dir command)
         std::fs::create_dir_all(&test_dir).expect("Should create nested dirs");
-        assert!(
-            std::path::Path::new(&test_dir).is_dir(),
-            "Directory should exist"
-        );
+        assert!(std::path::Path::new(&test_dir).is_dir(), "Directory should exist");
 
         // Cleanup
-        let _ = std::fs::remove_dir_all(format!("{home}/.config/gnar-term/test-tmp/nested"));
+        let _ = std::fs::remove_dir_all(format!("{}/.config/gnar-term/test-tmp/nested", home));
     }
 
     // -----------------------------------------------------------------------
@@ -2532,12 +2047,7 @@ mod tests {
 
         let pty_system = native_pty_system();
         let pair = pty_system
-            .openpty(PtySize {
-                rows: 24,
-                cols: 80,
-                pixel_width: 0,
-                pixel_height: 0,
-            })
+            .openpty(PtySize { rows: 24, cols: 80, pixel_width: 0, pixel_height: 0 })
             .expect("Failed to open PTY");
 
         let mut cmd = CommandBuilder::new("sh");
@@ -2555,22 +2065,18 @@ mod tests {
         let paused = Arc::new(PauseFlag::new());
         {
             let mut ptys = state.ptys.lock().unwrap();
-            ptys.insert(
-                pty_id,
-                PtyInstance {
-                    writer,
-                    master_pty: pair.master,
-                    child_pid,
-                    paused,
-                },
-            );
+            ptys.insert(pty_id, PtyInstance {
+                writer,
+                _master: pair.master,
+                child_pid,
+                paused,
+            });
         }
 
         // Give the process a moment to start
         std::thread::sleep(Duration::from_millis(200));
 
         // Verify get_pty_cwd returns the correct directory
-        #[allow(unused_variables)] // `pid` is only read in the macOS cfg block
         if let Some(pid) = child_pid {
             #[cfg(target_os = "macos")]
             {
@@ -2591,7 +2097,8 @@ mod tests {
                 // /tmp is a symlink to /private/tmp on macOS
                 assert!(
                     found_cwd == "/tmp" || found_cwd == "/private/tmp",
-                    "CWD should be /tmp or /private/tmp, got: {found_cwd}"
+                    "CWD should be /tmp or /private/tmp, got: {}",
+                    found_cwd
                 );
             }
         } else {
@@ -2604,14 +2111,8 @@ mod tests {
         // Same logic as get_home command
         let home = std::env::var("HOME").expect("HOME should be set in test env");
         assert!(!home.is_empty(), "HOME should not be empty");
-        assert!(
-            home.starts_with('/'),
-            "HOME should be an absolute path, got: {home}"
-        );
-        assert!(
-            std::path::Path::new(&home).is_dir(),
-            "HOME should point to an existing directory"
-        );
+        assert!(home.starts_with('/'), "HOME should be an absolute path, got: {}", home);
+        assert!(std::path::Path::new(&home).is_dir(), "HOME should point to an existing directory");
     }
 
     // --- OSC classifier tests (issue #20) ---
@@ -2685,7 +2186,10 @@ mod tests {
     #[test]
     fn osc9_number_without_semicolon_is_notification() {
         // A payload like "9;42" — just a number, no sub-command semicolon
-        assert_eq!(classify_osc("9;42"), OscAction::Notification("42".into()));
+        assert_eq!(
+            classify_osc("9;42"),
+            OscAction::Notification("42".into())
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -2693,16 +2197,13 @@ mod tests {
     // -----------------------------------------------------------------------
 
     fn args(strs: &[&str]) -> Vec<String> {
-        strs.iter().map(std::string::ToString::to_string).collect()
+        strs.iter().map(|s| s.to_string()).collect()
     }
 
     #[test]
     fn filter_keeps_positional_path() {
         let input = args(&["gnar-term", "/home/user"]);
-        assert_eq!(
-            filter_known_args(input.into_iter()),
-            args(&["gnar-term", "/home/user"])
-        );
+        assert_eq!(filter_known_args(input.into_iter()), args(&["gnar-term", "/home/user"]));
     }
 
     #[test]
@@ -2739,12 +2240,7 @@ mod tests {
     #[test]
     fn filter_drops_unknown_flag_followed_by_another_flag() {
         // --color followed by --no-default-features — don't consume the next flag as a value.
-        let input = args(&[
-            "gnar-term",
-            "--color",
-            "--no-default-features",
-            "/home/user",
-        ]);
+        let input = args(&["gnar-term", "--color", "--no-default-features", "/home/user"]);
         assert_eq!(
             filter_known_args(input.into_iter()),
             args(&["gnar-term", "/home/user"])
@@ -2778,15 +2274,8 @@ mod tests {
     #[test]
     fn filter_mixed_known_unknown_and_positional() {
         let input = args(&[
-            "gnar-term",
-            "--color",
-            "-w",
-            "dev",
-            "--no-default-features",
-            "-e",
-            "bash",
-            "--unknown",
-            "~/Documents",
+            "gnar-term", "--color", "-w", "dev", "--no-default-features",
+            "-e", "bash", "--unknown", "~/Documents",
         ]);
         assert_eq!(
             filter_known_args(input.into_iter()),

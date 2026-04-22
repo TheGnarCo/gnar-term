@@ -1,289 +1,139 @@
 import { get } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
-import {
-  workspaces,
-  activeWorkspaceIdx,
-  activeWorkspace,
-  activeSurface,
-} from "../stores/workspace";
+import { workspaces, activeWorkspaceIdx, activeWorkspace, activeSurface } from "../stores/workspace";
 import { showInputPrompt } from "../stores/ui";
 import { createTerminalSurface } from "../terminal-service";
-import {
-  uid,
-  getAllPanes,
-  getAllSurfaces,
-  isTerminalSurface,
-  isExtensionSurface,
-  type Workspace,
-  type Pane,
-  type SplitNode,
-} from "../types";
-import {
-  saveConfig,
-  saveState,
-  getConfig,
-  type WorkspaceDef,
-  type LayoutNode,
-} from "../config";
+import { openPreview } from "../../preview/index";
+import { uid, getAllPanes, getAllSurfaces, isTerminalSurface, type Workspace, type Pane, type SplitNode } from "../types";
+import { saveConfig, getConfig, type WorkspaceDef, type LayoutNode } from "../config";
 import { safeFocus } from "./service-helpers";
-import { eventBus } from "./event-bus";
-import { appendRootRow, removeRootRow } from "../stores/root-row-order";
-
-// --- Workspace persistence (debounced save to state.json) ---
-
-let persistTimer: ReturnType<typeof setTimeout> | null = null;
-const PERSIST_DELAY = 2000;
-
-export async function persistWorkspaces(): Promise<void> {
-  const wsList = get(workspaces);
-  const serialized = wsList.map((ws) => ({
-    name: ws.name,
-    cwd: undefined as string | undefined,
-    layout: serializeLayout(ws.splitRoot),
-    ...(ws.metadata ? { metadata: ws.metadata } : {}),
-  }));
-  await saveState({
-    workspaces: serialized,
-    activeWorkspaceIdx: get(activeWorkspaceIdx),
-  });
-}
-
-export function schedulePersist(): void {
-  if (persistTimer) clearTimeout(persistTimer);
-  persistTimer = setTimeout(persistWorkspaces, PERSIST_DELAY);
-}
 
 export async function createWorkspace(name: string) {
   const pane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
   const ws: Workspace = {
-    id: uid(),
-    name,
+    id: uid(), name,
     splitRoot: { type: "pane", pane },
     activePaneId: pane.id,
   };
 
   const surface = await createTerminalSurface(pane);
 
-  workspaces.update((list) => [...list, ws]);
+  workspaces.update(list => [...list, ws]);
   activeWorkspaceIdx.set(get(workspaces).length - 1);
-  // Add to the root-row list. If an extension handler for
-  // workspace:created claims this workspace (e.g. project-scope
-  // inserting it under a project), claimWorkspace will remove it from
-  // the root list — so final state is consistent regardless of
-  // handler ordering.
-  appendRootRow({ kind: "workspace", id: ws.id });
-  eventBus.emit({ type: "workspace:created", id: ws.id, name });
-  void safeFocus(surface);
-  schedulePersist();
+  safeFocus(surface);
 }
 
 export async function createWorkspaceFromDef(def: WorkspaceDef) {
   const wsName = def.name || `Workspace ${get(workspaces).length + 1}`;
   const rootCwd = def.cwd;
-  const rootEnv = def.env;
 
-  async function buildTree(
-    nodeDef: LayoutNode,
-    inheritedCwd?: string,
-    inheritedEnv?: Record<string, string>,
-  ): Promise<SplitNode> {
+  async function buildTree(nodeDef: LayoutNode, inheritedCwd?: string): Promise<SplitNode> {
     if ("pane" in nodeDef) {
       const pane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
       for (const sDef of nodeDef.pane.surfaces) {
         const cwd = sDef.cwd || inheritedCwd;
         if (sDef.type === "markdown" && sDef.path) {
-          // Legacy markdown type — creates a lazy preview surface.
-          // PreviewSurface.svelte renders from filePath on mount.
+          const preview = await openPreview(sDef.path);
           const surface = {
-            kind: "extension" as const,
-            id: uid(),
-            surfaceTypeId: "preview:preview",
-            title: sDef.name || sDef.path.split("/").pop() || "Preview",
+            kind: "preview" as const,
+            id: preview.id, filePath: preview.filePath,
+            title: sDef.name || preview.title,
+            element: preview.element, watchId: preview.watchId,
             hasUnread: false,
-            props: {
-              filePath: sDef.path,
-            },
           };
           pane.surfaces.push(surface);
-          if (!pane.activeSurfaceId || sDef.focus)
-            pane.activeSurfaceId = surface.id;
-        } else if (sDef.type === "extension" && sDef.extensionType) {
-          // Generic extension surface from config
-          const surface = {
-            kind: "extension" as const,
-            id: uid(),
-            surfaceTypeId: sDef.extensionType,
-            title: sDef.name || sDef.extensionType,
-            hasUnread: false,
-            props: sDef.extensionProps || {},
-          };
-          pane.surfaces.push(surface);
-          if (!pane.activeSurfaceId || sDef.focus)
-            pane.activeSurfaceId = surface.id;
+          if (!pane.activeSurfaceId || sDef.focus) pane.activeSurfaceId = surface.id;
         } else {
-          const envMerged = { ...inheritedEnv, ...sDef.env };
-          const surface = await createTerminalSurface(
-            pane,
-            cwd,
-            Object.keys(envMerged).length > 0 ? envMerged : undefined,
-          );
+          const surface = await createTerminalSurface(pane, cwd);
           if (sDef.name) surface.title = sDef.name;
           if (sDef.command) surface.startupCommand = sDef.command;
           if (sDef.focus) pane.activeSurfaceId = surface.id;
         }
       }
       if (pane.surfaces.length === 0) {
-        await createTerminalSurface(pane, inheritedCwd, inheritedEnv);
+        await createTerminalSurface(pane, inheritedCwd);
       }
       return { type: "pane", pane };
     } else {
-      const left = await buildTree(
-        nodeDef.children[0],
-        inheritedCwd,
-        inheritedEnv,
-      );
-      const right = await buildTree(
-        nodeDef.children[1],
-        inheritedCwd,
-        inheritedEnv,
-      );
-      return {
-        type: "split",
-        direction: nodeDef.direction,
-        ratio: nodeDef.split || 0.5,
-        children: [left, right],
-      };
+      const left = await buildTree(nodeDef.children[0], inheritedCwd);
+      const right = await buildTree(nodeDef.children[1], inheritedCwd);
+      return { type: "split", direction: nodeDef.direction, ratio: nodeDef.split || 0.5, children: [left, right] };
     }
   }
 
   let splitRoot: SplitNode;
   if (def.layout) {
-    splitRoot = await buildTree(def.layout, rootCwd, rootEnv);
+    splitRoot = await buildTree(def.layout, rootCwd);
   } else {
     const pane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
-    await createTerminalSurface(pane, rootCwd, rootEnv);
+    await createTerminalSurface(pane, rootCwd);
     splitRoot = { type: "pane", pane };
   }
 
   const ws: Workspace = {
-    id: uid(),
-    name: wsName,
-    splitRoot,
+    id: uid(), name: wsName, splitRoot,
     activePaneId: getAllPanes(splitRoot)[0]?.id ?? null,
-    ...(def.metadata ? { metadata: def.metadata } : {}),
   };
 
-  workspaces.update((list) => [...list, ws]);
+  workspaces.update(list => [...list, ws]);
   activeWorkspaceIdx.set(get(workspaces).length - 1);
-  appendRootRow({ kind: "workspace", id: ws.id });
-  eventBus.emit({
-    type: "workspace:created",
-    id: ws.id,
-    name: wsName,
-    ...(ws.metadata ? { metadata: ws.metadata } : {}),
-  });
-  const ap = getAllPanes(splitRoot).find((p) => p.id === ws.activePaneId);
-  const as_ = ap?.surfaces.find((s) => s.id === ap.activeSurfaceId);
-  void safeFocus(as_);
-  schedulePersist();
+  const ap = getAllPanes(splitRoot).find(p => p.id === ws.activePaneId);
+  const as_ = ap?.surfaces.find(s => s.id === ap.activeSurfaceId);
+  safeFocus(as_);
 }
 
 export function switchWorkspace(idx: number) {
-  const wsList = get(workspaces);
-  if (idx < 0 || idx >= wsList.length) return;
-  const previousId =
-    get(activeWorkspaceIdx) >= 0
-      ? (wsList[get(activeWorkspaceIdx)]?.id ?? null)
-      : null;
+  if (idx < 0 || idx >= get(workspaces).length) return;
   activeWorkspaceIdx.set(idx);
-  eventBus.emit({
-    type: "workspace:activated",
-    id: wsList[idx]!.id,
-    previousId,
-  });
-  void safeFocus(get(activeSurface));
+  safeFocus(get(activeSurface));
 }
 
 export function closeWorkspace(idx: number) {
   const wsList = get(workspaces);
+  if (wsList.length <= 1) return;
   const ws = wsList[idx];
-  if (!ws) return;
   for (const pane of getAllPanes(ws.splitRoot)) {
     pane.resizeObserver?.disconnect();
   }
-  for (const surf of getAllSurfaces(ws)) {
-    if (isTerminalSurface(surf)) {
-      surf.terminal.dispose();
-      if (surf.ptyId >= 0) {
-        // PTY may already have exited — safe to ignore
-        invoke("kill_pty", { ptyId: surf.ptyId }).catch(() => {});
+  for (const s of getAllSurfaces(ws)) {
+    if (isTerminalSurface(s)) {
+      s.terminal.dispose();
+      if (s.ptyId >= 0) {
+        invoke("kill_pty", { ptyId: s.ptyId }).catch(() => {});
       }
     }
   }
-  const wsId = ws.id;
-  workspaces.update((list) => list.filter((_, i) => i !== idx));
-  activeWorkspaceIdx.set(
-    Math.min(get(activeWorkspaceIdx), get(workspaces).length - 1),
-  );
-  removeRootRow({ kind: "workspace", id: wsId });
-  eventBus.emit({ type: "workspace:closed", id: wsId });
-  schedulePersist();
+  workspaces.update(list => list.filter((_, i) => i !== idx));
+  activeWorkspaceIdx.set(Math.min(get(activeWorkspaceIdx), get(workspaces).length - 1));
 }
 
 export function renameWorkspace(idx: number, name: string) {
-  const oldName = get(workspaces)[idx]?.name ?? "";
-  const id = get(workspaces)[idx]?.id ?? "";
-  workspaces.update((list) => {
-    list[idx]!.name = name;
+  workspaces.update(list => {
+    list[idx].name = name;
     return [...list];
   });
-  eventBus.emit({ type: "workspace:renamed", id, oldName, newName: name });
-  schedulePersist();
 }
 
 export function reorderWorkspaces(fromIdx: number, toIdx: number) {
-  const activeId = get(workspaces)[get(activeWorkspaceIdx)]?.id;
-  workspaces.update((list) => {
-    const item = list.splice(fromIdx, 1)[0]!;
+  workspaces.update(list => {
+    const item = list.splice(fromIdx, 1)[0];
     const adjustedTo = fromIdx < toIdx ? toIdx - 1 : toIdx;
     list.splice(adjustedTo, 0, item);
     return [...list];
   });
-  if (activeId) {
-    const newIdx = get(workspaces).findIndex((ws) => ws.id === activeId);
-    if (newIdx >= 0) activeWorkspaceIdx.set(newIdx);
+  if (get(activeWorkspaceIdx) === fromIdx) {
+    activeWorkspaceIdx.set(fromIdx < toIdx ? toIdx - 1 : toIdx);
   }
-  schedulePersist();
 }
 
 export function serializeLayout(node: SplitNode): LayoutNode {
   if (node.type === "pane") {
-    const surfaces = node.pane.surfaces.map((s) => {
-      if (isTerminalSurface(s)) {
-        const def: Record<string, unknown> = { type: "terminal" };
-        if (s.title) def.name = s.title;
-        if (s.cwd) def.cwd = s.cwd;
-        if (s.id === node.pane.activeSurfaceId) def.focus = true;
-        return def;
-      }
-      // Extension surface
-      const def: Record<string, unknown> = { type: "extension" };
+    const surfaces = node.pane.surfaces.map(s => {
+      const def: any = { type: isTerminalSurface(s) ? "terminal" : "markdown" };
       if (s.title) def.name = s.title;
+      if (isTerminalSurface(s) && s.cwd) def.cwd = s.cwd;
       if (s.id === node.pane.activeSurfaceId) def.focus = true;
-      if (isExtensionSurface(s)) {
-        def.extensionType = s.surfaceTypeId;
-        if (s.props) {
-          // Strip non-serializable runtime values (DOM nodes, watch handles)
-          const {
-            element: _element,
-            watchId: _watchId,
-            ...serializableProps
-          } = s.props as Record<string, unknown>;
-          if (Object.keys(serializableProps).length > 0) {
-            def.extensionProps = serializableProps;
-          }
-        }
-      }
+      if (!isTerminalSurface(s) && "filePath" in s) def.path = s.filePath;
       return def;
     });
     return { pane: { surfaces } };
@@ -291,10 +141,7 @@ export function serializeLayout(node: SplitNode): LayoutNode {
   return {
     direction: node.direction,
     split: node.ratio,
-    children: [
-      serializeLayout(node.children[0]),
-      serializeLayout(node.children[1]),
-    ],
+    children: [serializeLayout(node.children[0]), serializeLayout(node.children[1])],
   };
 }
 
@@ -305,12 +152,11 @@ export async function saveCurrentWorkspace() {
   const name = await showInputPrompt("Workspace name", ws.name);
   if (!name) return;
   const layout = serializeLayout(ws.splitRoot);
-  const activeCwd =
-    surface && isTerminalSurface(surface) ? surface.cwd : undefined;
+  const activeCwd = surface && isTerminalSurface(surface) ? surface.cwd : undefined;
   const wsDef: WorkspaceDef = { name, cwd: activeCwd || "~", layout };
   const config = getConfig();
   const commands = config.commands || [];
-  const existing = commands.findIndex((c) => c.name === name);
+  const existing = commands.findIndex(c => c.name === name);
   const entry = { name, workspace: wsDef };
   if (existing >= 0) {
     commands[existing] = entry;

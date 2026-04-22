@@ -3,10 +3,9 @@
  * the correct DOM structure, text content, and attributes.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
-// get is available if needed for store testing
-import { readFileSync } from "fs";
-import type { Workspace, Pane, TerminalSurface } from "../lib/types";
+import { render, screen, cleanup } from "@testing-library/svelte";
+import { get } from "svelte/store";
+import type { Workspace, Pane, TerminalSurface, PreviewSurface, Surface, SplitNode } from "../lib/types";
 
 // ---------------------------------------------------------------------------
 // Mocks — must come before any component imports
@@ -105,36 +104,14 @@ import SecondarySidebar from "../lib/components/SecondarySidebar.svelte";
 import TerminalSurfaceComponent from "../lib/components/TerminalSurface.svelte";
 
 // Store imports
-import {
-  primarySidebarVisible,
-  secondarySidebarVisible,
-  commandPaletteOpen,
-  findBarVisible,
-  contextMenu,
-  isFullscreen,
-} from "../lib/stores/ui";
-import {
-  registerCommands,
-  unregisterBySource,
-} from "../lib/services/command-registry";
+import { primarySidebarVisible, secondarySidebarVisible, commandPaletteOpen, findBarVisible, contextMenu } from "../lib/stores/ui";
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
-import {
-  registerSidebarSection,
-  resetSidebarSections,
-} from "../lib/services/sidebar-section-registry";
-import {
-  registerWorkspaceAction,
-  resetWorkspaceActions,
-} from "../lib/services/workspace-action-registry";
 
 // ---------------------------------------------------------------------------
 // Test helpers
 // ---------------------------------------------------------------------------
 
-function makeSurface(
-  id: string,
-  overrides: Partial<TerminalSurface> = {},
-): TerminalSurface {
+function makeSurface(id: string, overrides: Partial<TerminalSurface> = {}): TerminalSurface {
   return {
     kind: "terminal",
     id,
@@ -154,13 +131,13 @@ function makeSurface(
       attachCustomKeyEventHandler: vi.fn(),
       registerLinkProvider: vi.fn(),
       getSelection: vi.fn(),
-    } as unknown as TerminalSurface["terminal"],
-    fitAddon: { fit: vi.fn() } as unknown as TerminalSurface["fitAddon"],
+    } as any,
+    fitAddon: { fit: vi.fn() } as any,
     searchAddon: {
       findNext: vi.fn(),
       findPrevious: vi.fn(),
       clearDecorations: vi.fn(),
-    } as unknown as TerminalSurface["searchAddon"],
+    } as any,
     termElement: document.createElement("div"),
     ptyId: 1,
     title: `Shell ${id}`,
@@ -204,7 +181,6 @@ beforeEach(() => {
   contextMenu.set(null);
   workspaces.set([]);
   activeWorkspaceIdx.set(-1);
-  unregisterBySource("test");
 });
 
 // ===========================================================================
@@ -230,18 +206,9 @@ describe("TitleBar", () => {
   });
 
   it("always renders both sidebar toggles", () => {
-    const { container } = render(TitleBar);
-    const primaryBtn = container.querySelector(
-      "button[title^='Toggle Primary Sidebar']",
-    );
-    expect(primaryBtn).toBeTruthy();
+    render(TitleBar);
+    expect(screen.getByTitle("Toggle Primary Sidebar (⌘B)")).toBeTruthy();
     expect(screen.getByTitle("Toggle Secondary Sidebar")).toBeTruthy();
-  });
-
-  it("renders settings button", () => {
-    const { container } = render(TitleBar);
-    const settingsBtn = container.querySelector("button[title*='Settings']");
-    expect(settingsBtn).toBeTruthy();
   });
 });
 
@@ -272,7 +239,7 @@ describe("SecondarySidebar", () => {
   it("shows empty state message when no tabs are registered", () => {
     secondarySidebarVisible.set(true);
     render(SecondarySidebar);
-    expect(screen.getByText("No tabs registered")).toBeTruthy();
+    expect(screen.getByText("No Secondary Sidebar Content")).toBeTruthy();
   });
 
   it("does not render toggle in header (lives in TitleBar)", () => {
@@ -323,13 +290,7 @@ describe("Tab", () => {
   it("renders the surface title", () => {
     const surface = makeSurface("t1", { title: "my-project" });
     render(Tab, {
-      props: {
-        surface,
-        index: 0,
-        isActive: false,
-        onSelect: noop,
-        onClose: noop,
-      },
+      props: { surface, index: 0, isActive: false, onSelect: noop, onClose: noop },
     });
     expect(screen.getByText("my-project")).toBeTruthy();
   });
@@ -337,13 +298,7 @@ describe("Tab", () => {
   it("falls back to Shell N when title is empty", () => {
     const surface = makeSurface("t1", { title: "" });
     render(Tab, {
-      props: {
-        surface,
-        index: 2,
-        isActive: false,
-        onSelect: noop,
-        onClose: noop,
-      },
+      props: { surface, index: 2, isActive: false, onSelect: noop, onClose: noop },
     });
     expect(screen.getByText("Shell 3")).toBeTruthy();
   });
@@ -351,13 +306,7 @@ describe("Tab", () => {
   it("shows unread dot element when surface has unread and is not active", () => {
     const surface = makeSurface("t1", { hasUnread: true });
     const { container } = render(Tab, {
-      props: {
-        surface,
-        index: 0,
-        isActive: false,
-        onSelect: noop,
-        onClose: noop,
-      },
+      props: { surface, index: 0, isActive: false, onSelect: noop, onClose: noop },
     });
     // When hasUnread && !isActive, the tab renders 3 spans: dot, title, close
     const spans = container.querySelectorAll(".tab span");
@@ -369,13 +318,7 @@ describe("Tab", () => {
   it("does not show unread dot when tab is active", () => {
     const surface = makeSurface("t1", { hasUnread: true });
     const { container } = render(Tab, {
-      props: {
-        surface,
-        index: 0,
-        isActive: true,
-        onSelect: noop,
-        onClose: noop,
-      },
+      props: { surface, index: 0, isActive: true, onSelect: noop, onClose: noop },
     });
     // When isActive, the unread dot is not rendered — only title and close spans
     const spans = container.querySelectorAll(".tab span");
@@ -385,13 +328,7 @@ describe("Tab", () => {
   it("renders close button (x symbol)", () => {
     const surface = makeSurface("t1");
     render(Tab, {
-      props: {
-        surface,
-        index: 0,
-        isActive: true,
-        onSelect: noop,
-        onClose: noop,
-      },
+      props: { surface, index: 0, isActive: true, onSelect: noop, onClose: noop },
     });
     expect(screen.getByText("×")).toBeTruthy();
   });
@@ -399,13 +336,7 @@ describe("Tab", () => {
   it("renders active tab with the tab class", () => {
     const surface = makeSurface("t1", { title: "active-tab" });
     const { container } = render(Tab, {
-      props: {
-        surface,
-        index: 0,
-        isActive: true,
-        onSelect: noop,
-        onClose: noop,
-      },
+      props: { surface, index: 0, isActive: true, onSelect: noop, onClose: noop },
     });
     const tab = container.querySelector(".tab") as HTMLElement;
     expect(tab).toBeTruthy();
@@ -416,13 +347,7 @@ describe("Tab", () => {
   it("inactive tab does not show unread dot when hasUnread is false", () => {
     const surface = makeSurface("t1", { hasUnread: false });
     const { container } = render(Tab, {
-      props: {
-        surface,
-        index: 0,
-        isActive: false,
-        onSelect: noop,
-        onClose: noop,
-      },
+      props: { surface, index: 0, isActive: false, onSelect: noop, onClose: noop },
     });
     // Without unread, only 2 spans: title and close
     const spans = container.querySelectorAll(".tab span");
@@ -445,7 +370,6 @@ describe("TabBar", () => {
         onSelectSurface: noop,
         onCloseSurface: noop,
         onNewSurface: noop,
-        onSelectSurfaceType: noop,
         onSplitRight: noop,
         onSplitDown: noop,
         onClosePane: noop,
@@ -463,12 +387,12 @@ describe("TabBar", () => {
         onSelectSurface: noop,
         onCloseSurface: noop,
         onNewSurface: noop,
-        onSelectSurfaceType: noop,
         onSplitRight: noop,
         onSplitDown: noop,
         onClosePane: noop,
       },
     });
+    expect(screen.getByTitle("New surface (⌘T)")).toBeTruthy();
     expect(screen.getByText("+")).toBeTruthy();
   });
 
@@ -480,7 +404,6 @@ describe("TabBar", () => {
         onSelectSurface: noop,
         onCloseSurface: noop,
         onNewSurface: noop,
-        onSelectSurfaceType: noop,
         onSplitRight: noop,
         onSplitDown: noop,
         onClosePane: noop,
@@ -497,7 +420,6 @@ describe("TabBar", () => {
         onSelectSurface: noop,
         onCloseSurface: noop,
         onNewSurface: noop,
-        onSelectSurfaceType: noop,
         onSplitRight: noop,
         onSplitDown: noop,
         onClosePane: noop,
@@ -514,7 +436,6 @@ describe("TabBar", () => {
         onSelectSurface: noop,
         onCloseSurface: noop,
         onNewSurface: noop,
-        onSelectSurfaceType: noop,
         onSplitRight: noop,
         onSplitDown: noop,
         onClosePane: noop,
@@ -571,9 +492,7 @@ describe("ContextMenu", () => {
     });
     const { container } = render(ContextMenu);
     // Separator is a div with height: 1px
-    const separators = container.querySelectorAll(
-      "#context-menu > div[style*='height: 1px']",
-    );
+    const separators = container.querySelectorAll("#context-menu > div[style*='height: 1px']");
     expect(separators.length).toBe(1);
   });
 
@@ -597,64 +516,55 @@ describe("ContextMenu", () => {
 describe("CommandPalette", () => {
   it("does not render when commandPaletteOpen is false", () => {
     commandPaletteOpen.set(false);
-    const { container } = render(CommandPalette);
+    const { container } = render(CommandPalette, {
+      props: {
+        commands: [{ name: "Test Command", action: noop }],
+      },
+    });
     expect(container.querySelector("#cmd-palette-overlay")).toBeNull();
   });
 
   it("renders overlay with input when open", () => {
     commandPaletteOpen.set(true);
-    render(CommandPalette);
+    render(CommandPalette, {
+      props: {
+        commands: [{ name: "New Terminal", action: noop }],
+      },
+    });
     expect(screen.getByPlaceholderText("Type a command...")).toBeTruthy();
   });
 
-  it("renders command list from registry", () => {
-    registerCommands([
-      {
-        id: "test.new-terminal",
-        title: "New Terminal",
-        action: noop,
-        shortcut: "⌘T",
-        source: "test",
-      },
-      {
-        id: "test.close-tab",
-        title: "Close Tab",
-        action: noop,
-        shortcut: "⌘W",
-        source: "test",
-      },
-      {
-        id: "test.toggle-sidebar",
-        title: "Toggle Sidebar",
-        action: noop,
-        source: "test",
-      },
-    ]);
+  it("renders command list", () => {
     commandPaletteOpen.set(true);
-    render(CommandPalette);
+    render(CommandPalette, {
+      props: {
+        commands: [
+          { name: "New Terminal", action: noop, shortcut: "⌘T" },
+          { name: "Close Tab", action: noop, shortcut: "⌘W" },
+          { name: "Toggle Sidebar", action: noop },
+        ],
+      },
+    });
     expect(screen.getByText("New Terminal")).toBeTruthy();
     expect(screen.getByText("Close Tab")).toBeTruthy();
     expect(screen.getByText("Toggle Sidebar")).toBeTruthy();
   });
 
   it("renders shortcuts for commands that have them", () => {
-    registerCommands([
-      {
-        id: "test.new-terminal",
-        title: "New Terminal",
-        action: noop,
-        shortcut: "⌘T",
-        source: "test",
-      },
-    ]);
     commandPaletteOpen.set(true);
-    render(CommandPalette);
+    render(CommandPalette, {
+      props: {
+        commands: [{ name: "New Terminal", action: noop, shortcut: "⌘T" }],
+      },
+    });
     expect(screen.getByText("⌘T")).toBeTruthy();
   });
 
   it("renders the overlay element", () => {
     commandPaletteOpen.set(true);
-    const { container } = render(CommandPalette);
+    const { container } = render(CommandPalette, {
+      props: { commands: [] },
+    });
     expect(container.querySelector("#cmd-palette-overlay")).toBeTruthy();
   });
 });
@@ -664,10 +574,7 @@ describe("CommandPalette", () => {
 // ===========================================================================
 
 describe("WorkspaceItem", () => {
-  function renderWorkspaceItem(
-    wsOverrides: Partial<Workspace> = {},
-    isActive = true,
-  ) {
+  function renderWorkspaceItem(wsOverrides: Partial<Workspace> = {}, isActive = true) {
     const ws = makeWorkspace("ws1", "My Workspace");
     Object.assign(ws, wsOverrides);
     return render(WorkspaceItem, {
@@ -679,6 +586,7 @@ describe("WorkspaceItem", () => {
         onClose: noop,
         onRename: noop,
         onContextMenu: noop,
+        onReorder: noop,
       },
     });
   }
@@ -712,6 +620,7 @@ describe("WorkspaceItem", () => {
         onClose: noop,
         onRename: noop,
         onContextMenu: noop,
+        onReorder: noop,
       },
     });
     // Count spans with unread vs without — the unread badge adds an extra empty span
@@ -731,13 +640,13 @@ describe("WorkspaceItem", () => {
         onClose: noop,
         onRename: noop,
         onContextMenu: noop,
+        onReorder: noop,
       },
     });
-    const spanCountWithoutUnread =
-      withoutUnread.querySelectorAll("span").length;
+    const spanCountWithoutUnread = withoutUnread.querySelectorAll("span").length;
 
-    // The unread variant should add spans for the chip (outer + inner dot)
-    expect(spanCountWithUnread).toBeGreaterThan(spanCountWithoutUnread);
+    // The unread variant should have one more span (the badge)
+    expect(spanCountWithUnread).toBe(spanCountWithoutUnread + 1);
   });
 
   it("does not show unread badge when no surfaces have unread", () => {
@@ -759,6 +668,7 @@ describe("WorkspaceItem", () => {
         onClose: noop,
         onRename: noop,
         onContextMenu: noop,
+        onReorder: noop,
       },
     });
     const spanCountWithBadge = withUnread.querySelectorAll("span").length;
@@ -767,7 +677,7 @@ describe("WorkspaceItem", () => {
     expect(spanCountBase).toBeLessThan(spanCountWithBadge);
   });
 
-  it("does not render surface/pane count metadata", () => {
+  it("renders metadata when multiple surfaces exist", () => {
     const s1 = makeSurface("s1");
     const s2 = makeSurface("s2");
     const pane: Pane = { id: "p1", surfaces: [s1, s2], activeSurfaceId: s1.id };
@@ -786,10 +696,11 @@ describe("WorkspaceItem", () => {
         onClose: noop,
         onRename: noop,
         onContextMenu: noop,
+        onReorder: noop,
       },
     });
-    // Surface/pane counts are intentionally not rendered
-    expect(screen.queryByText("2s")).toBeNull();
+    // Should show "2s" for 2 surfaces
+    expect(screen.getByText("2s")).toBeTruthy();
   });
 
   it("renders notification text when a surface has a notification", () => {
@@ -805,87 +716,16 @@ describe("WorkspaceItem", () => {
         onClose: noop,
         onRename: noop,
         onContextMenu: noop,
+        onReorder: noop,
       },
     });
     expect(screen.getByText("Build complete")).toBeTruthy();
   });
 
-  it("is reorderable via mouse drag", () => {
+  it("is draggable", () => {
     const { container } = renderWorkspaceItem();
-    const el = container.querySelector("[data-drag-idx]");
-    expect(el).toBeTruthy();
-  });
-
-  it("has data-drag-idx attribute for mouse-based reordering", () => {
-    const { container } = renderWorkspaceItem();
-    const el = container.querySelector("[data-drag-idx]");
-    expect(el).toBeTruthy();
-    expect(el?.getAttribute("data-drag-idx")).toBe("0");
-  });
-
-  it("uses mouse events for drag reorder (not HTML5 DnD)", () => {
-    const listBlockSource = readFileSync(
-      "src/lib/components/WorkspaceListBlock.svelte",
-      "utf-8",
-    );
-    // Mouse-based drag system (shared utility — HTML5 DnD is broken
-    // in Tauri WKWebView). Root-row drag now lives in
-    // WorkspaceListBlock; PrimarySidebar is a thin host.
-    expect(listBlockSource).toContain("createDragReorder");
-    expect(listBlockSource).toContain("insertIndicator");
-    expect(listBlockSource).toContain("dragActive");
-  });
-
-  it("applies accentColor as DragGrip railColor when provided", () => {
-    const ws = makeWorkspace("ws1", "Accent WS");
-    render(WorkspaceItem, {
-      props: {
-        workspace: ws,
-        index: 0,
-        isActive: false,
-        accentColor: "#e06c75",
-        onSelect: noop,
-        onClose: noop,
-        onRename: noop,
-        onContextMenu: noop,
-      },
-    });
-    // WorkspaceItem source should accept accentColor prop
-    const source = readFileSync(
-      "src/lib/components/WorkspaceItem.svelte",
-      "utf-8",
-    );
-    expect(source).toContain("export let accentColor");
-    expect(source).toContain("accentColor");
-    // railColor is derived as a template const from accentColor ??
-    // theme.accent and then passed to DragGrip (via shorthand) +
-    // reused by the drag-edge fade overlay.
-    expect(source).toMatch(
-      /railColor\s*=\s*accentColor\s*\?\?\s*\$theme\.accent/,
-    );
-  });
-
-  it("always renders the DragGrip dot pattern at full railColor (no solid-bg wrapper)", () => {
-    const source = readFileSync(
-      "src/lib/components/WorkspaceItem.svelte",
-      "utf-8",
-    );
-    // railColor uses accentColor falling back to theme.accent
-    expect(source).toContain("accentColor ?? $theme.accent");
-    // alwaysShowDots + full opacity so the dot pattern reads at rest
-    // without needing a colored wrapper bg (which would appear as a
-    // solid "border" block).
-    expect(source).toMatch(/alwaysShowDots=\{true\}/);
-    expect(source).toMatch(/railOpacity=\{1\}/);
-  });
-
-  it("passes accentColor through WorkspaceListView", () => {
-    const source = readFileSync(
-      "src/lib/components/WorkspaceListView.svelte",
-      "utf-8",
-    );
-    expect(source).toContain("export let accentColor");
-    expect(source).toContain("{accentColor}");
+    const draggable = container.querySelector("[draggable='true']");
+    expect(draggable).toBeTruthy();
   });
 });
 
@@ -903,7 +743,6 @@ describe("PaneView", () => {
         onSelectSurface: noop,
         onCloseSurface: noop,
         onNewSurface: noop,
-        onSelectSurfaceType: noop,
         onSplitRight: noop,
         onSplitDown: noop,
         onClosePane: noop,
@@ -921,14 +760,13 @@ describe("PaneView", () => {
         onSelectSurface: noop,
         onCloseSurface: noop,
         onNewSurface: noop,
-        onSelectSurfaceType: noop,
         onSplitRight: noop,
         onSplitDown: noop,
         onClosePane: noop,
         onFocusPane: noop,
       },
     });
-    expect(screen.getByText("+")).toBeTruthy();
+    expect(screen.getByTitle("New surface (⌘T)")).toBeTruthy();
   });
 
   it("renders split and close pane controls", () => {
@@ -939,7 +777,6 @@ describe("PaneView", () => {
         onSelectSurface: noop,
         onCloseSurface: noop,
         onNewSurface: noop,
-        onSelectSurfaceType: noop,
         onSplitRight: noop,
         onSplitDown: noop,
         onClosePane: noop,
@@ -958,17 +795,13 @@ describe("PaneView", () => {
 
 describe("PrimarySidebar", () => {
   const sidebarProps = {
+    onNewWorkspace: noop,
     onSwitchWorkspace: noop,
     onCloseWorkspace: noop,
     onRenameWorkspace: noop,
     onNewSurface: noop,
+    onReorderWorkspaces: noop,
   };
-
-  beforeEach(() => {
-    resetSidebarSections();
-    resetWorkspaceActions();
-    cleanup();
-  });
 
   it("renders when primarySidebarVisible is true", () => {
     primarySidebarVisible.set(true);
@@ -982,22 +815,10 @@ describe("PrimarySidebar", () => {
     expect(container.querySelector("#primary-sidebar")).toBeNull();
   });
 
-  it("renders split button for workspace actions in the top row (sidebar toggles live in TitleBar)", () => {
+  it("renders + button in header (sidebar toggles live in TitleBar)", () => {
     primarySidebarVisible.set(true);
-    registerWorkspaceAction({
-      id: "core:new-workspace",
-      label: "New Workspace",
-      icon: "plus",
-      shortcut: "Cmd+Shift+N",
-      source: "core",
-      handler: noop,
-    });
     render(PrimarySidebar, { props: sidebarProps });
-    // "+ New" now sits in the top (title) row alongside any sidebar-
-    // zone action buttons — the old "Workspaces" header row inside
-    // WorkspaceListBlock has been retired.
-    expect(screen.getByText("+ New")).toBeTruthy();
-    expect(screen.queryByText("Workspaces")).toBeNull();
+    expect(screen.getByTitle("New Workspace (⌘N)")).toBeTruthy();
     expect(screen.queryByTitle("Toggle Primary Sidebar (⌘B)")).toBeNull();
     expect(screen.queryByTitle("Toggle Secondary Sidebar")).toBeNull();
   });
@@ -1013,25 +834,11 @@ describe("PrimarySidebar", () => {
     expect(screen.getByText("Project Beta")).toBeTruthy();
   });
 
-  it("header has data-tauri-drag-region (when windowed, for traffic-light padding)", () => {
+  it("header has data-tauri-drag-region", () => {
     primarySidebarVisible.set(true);
-    isFullscreen.set(false);
     const { container } = render(PrimarySidebar, { props: sidebarProps });
     const dragRegions = container.querySelectorAll("[data-tauri-drag-region]");
     expect(dragRegions.length).toBeGreaterThan(0);
-  });
-
-  it("keeps the top drag region bar rendered in fullscreen so layout stays stable", () => {
-    // The primary sidebar's top row is always rendered — fullscreen toggle
-    // should not swap branches, otherwise blocks snap into a new position.
-    // In fullscreen the drag attributes are harmless no-ops (no window to
-    // drag); the 38px acts as stable top padding.
-    primarySidebarVisible.set(true);
-    isFullscreen.set(true);
-    const { container } = render(PrimarySidebar, { props: sidebarProps });
-    const dragRegions = container.querySelectorAll("[data-tauri-drag-region]");
-    expect(dragRegions.length).toBeGreaterThan(0);
-    isFullscreen.set(false);
   });
 
   it("renders correct number of workspace items", () => {
@@ -1045,119 +852,6 @@ describe("PrimarySidebar", () => {
     expect(screen.getByText("WS One")).toBeTruthy();
     expect(screen.getByText("WS Two")).toBeTruthy();
     expect(screen.getByText("WS Three")).toBeTruthy();
-  });
-
-  // Sections use collapsible:true so the content area doesn't render
-  // (avoids needing a real Svelte component in tests)
-  function makeSection(id: string, label: string, source: string) {
-    return { id, label, component: "mock", source, collapsible: true };
-  }
-
-  it("does NOT show a 'Re-order Sections' button (reorder is implicit via grip)", () => {
-    primarySidebarVisible.set(true);
-    registerWorkspaceAction({
-      id: "core:new-workspace",
-      label: "New Workspace",
-      icon: "plus",
-      source: "core",
-      handler: noop,
-    });
-    registerSidebarSection(makeSection("s1", "Section 1", "ext-a"));
-    registerSidebarSection(makeSection("s2", "Section 2", "ext-b"));
-
-    render(PrimarySidebar, { props: { ...sidebarProps } });
-    expect(screen.queryByTitle("Re-order Sections")).toBeNull();
-  });
-
-  it("does not show dropdown caret with no extension sections and no extra actions", () => {
-    primarySidebarVisible.set(true);
-    registerWorkspaceAction({
-      id: "core:new-workspace",
-      label: "New Workspace",
-      icon: "plus",
-      source: "core",
-      handler: noop,
-    });
-    render(PrimarySidebar, {
-      props: { ...sidebarProps },
-    });
-    // Only 1 button (main), no caret
-    const splitContainer = screen.getByText("+ New").closest("div")!;
-    const buttons = splitContainer.querySelectorAll("button");
-    expect(buttons.length).toBe(1);
-  });
-
-  it("renders extension-registered sidebar sections below the Workspaces block", () => {
-    // The Workspaces section is no longer user-reorderable post-B,
-    // and there are no block-level DragGrips at the top level.
-    // Sections still render, they just can't be dragged.
-    primarySidebarVisible.set(true);
-    registerWorkspaceAction({
-      id: "core:new-workspace",
-      label: "New Workspace",
-      icon: "plus",
-      source: "core",
-      handler: noop,
-    });
-    registerSidebarSection(makeSection("s1", "Section 1", "ext-a"));
-    registerSidebarSection(makeSection("s2", "Section 2", "ext-b"));
-
-    render(PrimarySidebar, { props: { ...sidebarProps } });
-    expect(screen.getByText("Section 1")).toBeTruthy();
-    expect(screen.getByText("Section 2")).toBeTruthy();
-  });
-
-  it("renders sidebar-zone actions as buttons in the top row", () => {
-    primarySidebarVisible.set(true);
-    registerWorkspaceAction({
-      id: "core:new-workspace",
-      label: "New Workspace",
-      icon: "plus",
-      source: "core",
-      handler: noop,
-    });
-    registerWorkspaceAction({
-      id: "ext:new-project",
-      label: "New Project",
-      icon: "folder-plus",
-      zone: "sidebar",
-      source: "ext",
-      handler: noop,
-    });
-    render(PrimarySidebar, { props: sidebarProps });
-    // Sidebar-zone action renders as a button in the top row
-    expect(screen.getByTitle("New Project")).toBeTruthy();
-    // Main split button reads "+ New" (lives in the same top row now).
-    expect(screen.getByText("+ New")).toBeTruthy();
-  });
-
-  it("dropdown includes default action when workspace-zone extensions exist", async () => {
-    primarySidebarVisible.set(true);
-    registerWorkspaceAction({
-      id: "core:new-workspace",
-      label: "New Workspace",
-      icon: "plus",
-      source: "core",
-      handler: noop,
-    });
-    registerWorkspaceAction({
-      id: "ext:new-worktree",
-      label: "New Worktree",
-      icon: "git-branch",
-      source: "ext",
-      handler: noop,
-    });
-    render(PrimarySidebar, { props: sidebarProps });
-    // Open the dropdown by clicking the caret next to the "+ New" main button.
-    // "New Workspace" is present only inside the dropdown menu items.
-    const mainBtn = screen.getByText("+ New");
-    const caretBtn = mainBtn
-      .closest("div")!
-      .querySelector("button:last-child") as HTMLElement;
-    await fireEvent.click(caretBtn);
-    // Dropdown includes both the default action and the extension action
-    expect(screen.getByText("New Workspace")).toBeTruthy();
-    expect(screen.getByText("New Worktree")).toBeTruthy();
   });
 });
 
@@ -1186,9 +880,7 @@ describe("TerminalSurface", () => {
   it("calls scrollToBottom after fit when pane becomes visible (#22)", async () => {
     const surface = makeSurface("scroll-test", { opened: true });
     // Start hidden
-    const { rerender } = render(TerminalSurfaceComponent, {
-      props: { surface, visible: false },
-    });
+    const { rerender } = render(TerminalSurfaceComponent, { props: { surface, visible: false } });
 
     // Reset mocks from any mount-time calls
     (surface.fitAddon.fit as ReturnType<typeof vi.fn>).mockClear();
@@ -1198,7 +890,7 @@ describe("TerminalSurface", () => {
     await rerender({ surface, visible: true });
 
     // The reactive block uses requestAnimationFrame, so flush it
-    await new Promise((r) => requestAnimationFrame(r));
+    await new Promise(r => requestAnimationFrame(r));
 
     expect(surface.fitAddon.fit).toHaveBeenCalled();
     expect(surface.terminal.scrollToBottom).toHaveBeenCalled();

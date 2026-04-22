@@ -47,18 +47,11 @@
     inputEl?.select();
   }
 
-  export function findNext() {
-    doSearch("next");
-  }
-  export function findPrev() {
-    doSearch("prev");
-  }
+  export function findNext() { doSearch("next"); }
+  export function findPrev() { doSearch("prev"); }
 
   $: if ($findBarVisible && inputEl) {
-    void tick().then(() => {
-      inputEl?.focus();
-      inputEl?.select();
-    });
+    tick().then(() => { inputEl?.focus(); inputEl?.select(); });
   }
 </script>
 
@@ -93,48 +86,21 @@
       on:click={() => doSearch("prev")}
       style="background: none; border: none; color: {$theme.fgMuted}; cursor: pointer; padding: 2px 4px; border-radius: 3px; display: flex; align-items: center;"
     >
-      <svg
-        width="14"
-        height="14"
-        viewBox="0 0 16 16"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"><polyline points="12,10 8,6 4,10" /></svg
-      >
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="12,10 8,6 4,10"/></svg>
     </button>
     <button
       title="Next match (⌘G)"
       on:click={() => doSearch("next")}
       style="background: none; border: none; color: {$theme.fgMuted}; cursor: pointer; padding: 2px 4px; border-radius: 3px; display: flex; align-items: center;"
     >
-      <svg
-        width="14"
-        height="14"
-        viewBox="0 0 16 16"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"><polyline points="4,6 8,10 12,6" /></svg
-      >
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,6 8,10 12,6"/></svg>
     </button>
     <button
       title="Close (Esc)"
       on:click={close}
       style="background: none; border: none; color: {$theme.fgMuted}; cursor: pointer; padding: 2px 4px; border-radius: 3px; display: flex; align-items: center;"
     >
-      <svg
-        width="14"
-        height="14"
-        viewBox="0 0 16 16"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        ><line x1="4" y1="4" x2="12" y2="12" /><line
-          x1="12"
-          y1="4"
-          x2="4"
-          y2="12"
-        /></svg
-      >
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg>
     </button>
   </div>
 {/if}

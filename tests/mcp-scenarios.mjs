@@ -575,13 +575,12 @@ await scenario(12, "Tool call against a dead session returns a clean error, no l
 });
 
 // ------------------------------------------------------------------
-// Scenario 13: tools/list snapshot — every documented tool is present.
-// The count grows whenever a contribution registry is mirrored into MCP;
-// assert on required names, not on an exact count.
+// Scenario 13: tools/list snapshot — exactly 20 tools.
 // ------------------------------------------------------------------
-await scenario(13, "tools/list contains every documented tool", async () => {
+await scenario(13, "tools/list returns the documented 20 tools", async () => {
   const r = await probe.send("tools/list", {});
   const tools = r.tools ?? [];
+  ok(tools.length === 20, `expected 20 tools, got ${tools.length}`);
   const required = [
     "spawn_agent",
     "list_sessions",
@@ -593,6 +592,7 @@ await scenario(13, "tools/list contains every documented tool", async () => {
     "dispatch_tasks",
     "render_sidebar",
     "remove_sidebar_section",
+    "create_preview",
     "get_agent_context",
     "get_active_workspace",
     "list_workspaces",
@@ -602,24 +602,11 @@ await scenario(13, "tools/list contains every documented tool", async () => {
     "list_dir",
     "read_file",
     "file_exists",
-    // extension-contribution mirrors
-    "list_surface_types",
-    "open_surface",
-    "list_commands",
-    "invoke_command",
-    "list_sidebar_tabs",
-    "activate_sidebar_tab",
-    "list_workspace_actions",
-    "invoke_workspace_action",
-    "list_sidebar_sections",
-    "list_overlays",
-    "list_workspace_subtitles",
-    "list_dashboard_tabs",
-    "get_status_for_workspace",
   ];
   const names = new Set(tools.map((t) => t.name));
-  const missing = required.filter((r) => !names.has(r));
-  ok(missing.length === 0, `every documented tool is present (missing=[${missing.join(",")}])`);
+  let missing = 0;
+  for (const r of required) if (!names.has(r)) missing++;
+  ok(missing === 0, `every documented tool is present (missing=${missing})`);
 });
 
 // ------------------------------------------------------------------

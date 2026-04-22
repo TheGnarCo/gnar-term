@@ -23,7 +23,6 @@ When posting in the `#pull-requests` Slack channel, prefix the message with the 
 - Every bug fix and feature must include regression tests
 - Use plan mode for audits, migrations, and multi-step tasks
 - Disable sandbox for SSH git ops (`git push/pull/fetch`) and `gh` commands
-- Commits on feature branches do not require explicit permission — when work on a feature branch is complete and tests pass, commit it. (Still never commit to main, never force-push, never merge PRs.)
 
 ### PR test plans
 
@@ -49,7 +48,6 @@ The Claude GitHub App is installed on this repo. `@claude` mentions in PRs trigg
 ## Commands
 
 Custom slash commands live in `.claude/commands/`:
-
 - `/create_new_release <version>` - tag and push a release
 
 ## Cross-Platform

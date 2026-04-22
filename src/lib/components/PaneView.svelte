@@ -3,39 +3,28 @@
   import { theme } from "../stores/theme";
   import TabBar from "./TabBar.svelte";
   import TerminalSurface from "./TerminalSurface.svelte";
-  import type { Component } from "svelte";
+  import PreviewSurface from "./PreviewSurface.svelte";
   import type { Pane } from "../types";
-  import { isTerminalSurface, isExtensionSurface } from "../types";
-  import { surfaceTypeStore } from "../services/surface-type-registry";
-  import { getExtensionApiById } from "../services/extension-loader";
-  import ExtensionWrapper from "./ExtensionWrapper.svelte";
+  import { isTerminalSurface, isPreviewSurface } from "../types";
 
   export let pane: Pane;
-  export let workspaceId: string = "";
   export let onSelectSurface: (surfaceId: string) => void;
   export let onCloseSurface: (surfaceId: string) => void;
   export let onNewSurface: () => void;
-  export let onSelectSurfaceType: (typeId: string) => void;
   export let onSplitRight: () => void;
   export let onSplitDown: () => void;
   export let onClosePane: () => void;
   export let onFocusPane: () => void;
-  export let onReorderTab:
-    | ((fromIdx: number, toIdx: number) => void)
-    | undefined = undefined;
+  export let onReorderTab: ((fromIdx: number, toIdx: number) => void) | undefined = undefined;
 
   let paneEl: HTMLElement;
   let resizeObserver: ResizeObserver;
   let resizeTimer: ReturnType<typeof setTimeout> | null = null;
 
   function fitActiveTerminal() {
-    const active = pane.surfaces.find((s) => s.id === pane.activeSurfaceId);
+    const active = pane.surfaces.find(s => s.id === pane.activeSurfaceId);
     if (active && isTerminalSurface(active)) {
-      try {
-        active.fitAddon.fit();
-      } catch (e) {
-        console.warn("fitAddon.fit() failed on resize:", e);
-      }
+      try { active.fitAddon.fit(); } catch (e) { console.warn("fitAddon.fit() failed on resize:", e); }
     }
   }
 
@@ -68,11 +57,9 @@
 >
   <TabBar
     {pane}
-    {workspaceId}
     {onSelectSurface}
     {onCloseSurface}
     {onNewSurface}
-    {onSelectSurfaceType}
     {onSplitRight}
     {onSplitDown}
     {onClosePane}
@@ -81,28 +68,9 @@
 
   {#each pane.surfaces as surface (surface.id)}
     {#if isTerminalSurface(surface)}
-      <TerminalSurface
-        {surface}
-        visible={surface.id === pane.activeSurfaceId}
-        cwd={surface.cwd}
-      />
-    {:else if isExtensionSurface(surface)}
-      {#each $surfaceTypeStore.filter((t) => t.id === surface.surfaceTypeId) as typeDef (typeDef.id)}
-        {@const surfaceApi = getExtensionApiById(typeDef.source)}
-        {#if surfaceApi}
-          <ExtensionWrapper
-            api={surfaceApi}
-            component={typeDef.component}
-            props={{ surface, visible: surface.id === pane.activeSurfaceId }}
-          />
-        {:else}
-          <svelte:component
-            this={typeDef.component as Component}
-            {surface}
-            visible={surface.id === pane.activeSurfaceId}
-          />
-        {/if}
-      {/each}
+      <TerminalSurface {surface} visible={surface.id === pane.activeSurfaceId} cwd={surface.cwd} />
+    {:else if isPreviewSurface(surface)}
+      <PreviewSurface {surface} visible={surface.id === pane.activeSurfaceId} />
     {/if}
   {/each}
 </div>

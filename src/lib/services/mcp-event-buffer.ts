@@ -9,18 +9,8 @@
  */
 
 export type McpEvent =
-  | {
-      type: "pane.focused";
-      cursor: number;
-      paneId: string;
-      workspaceId: string;
-    }
-  | {
-      type: "pane.created";
-      cursor: number;
-      paneId: string;
-      workspaceId: string;
-    }
+  | { type: "pane.focused"; cursor: number; paneId: string; workspaceId: string }
+  | { type: "pane.created"; cursor: number; paneId: string; workspaceId: string }
   | { type: "pane.closed"; cursor: number; paneId: string; workspaceId: string }
   | {
       type: "session.statusChanged";
@@ -69,15 +59,13 @@ export interface PollResult {
  * Read events strictly after `cursor`. If the caller's cursor is older than
  * the oldest buffered event, `truncated: true` is set.
  */
-export function pollEvents(
-  opts: { cursor?: number; max?: number } = {},
-): PollResult {
+export function pollEvents(opts: { cursor?: number; max?: number } = {}): PollResult {
   const max = Math.max(1, Math.min(opts.max ?? MAX_EVENTS, MAX_EVENTS));
   const latestEmitted = nextCursor - 1;
   if (buffer.length === 0) {
     return { events: [], cursor: latestEmitted };
   }
-  const oldest = buffer[0]!.cursor;
+  const oldest = buffer[0].cursor;
   const callerCursor = opts.cursor ?? 0;
   let truncated = false;
   let startIdx: number;
@@ -90,10 +78,7 @@ export function pollEvents(
     if (startIdx < 0) startIdx = buffer.length;
   }
   const slice = buffer.slice(startIdx, startIdx + max);
-  const resultCursor =
-    slice.length > 0
-      ? slice[slice.length - 1]!.cursor
-      : Math.max(callerCursor, latestEmitted);
+  const resultCursor = slice.length > 0 ? slice[slice.length - 1].cursor : Math.max(callerCursor, latestEmitted);
   return {
     events: slice,
     cursor: resultCursor,

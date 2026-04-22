@@ -16,11 +16,6 @@ export interface DragResizeOptions {
 
 export function dragResize(node: HTMLElement, options: DragResizeOptions) {
   let opts = options;
-  // Track the in-flight drag so `destroy()` can tear down window listeners
-  // if the host component unmounts mid-drag. Without this, `mousemove` and
-  // `mouseup` would stay bound to stale closures that reference a removed
-  // node.
-  let activeCleanup: (() => void) | null = null;
 
   function handleMousedown(e: MouseEvent) {
     if (opts.onStart) {
@@ -29,28 +24,18 @@ export function dragResize(node: HTMLElement, options: DragResizeOptions) {
     }
     e.preventDefault();
 
-    // Cancel any prior drag before starting a new one (defensive — mousedown
-    // shouldn't fire twice without a mouseup, but belt-and-braces).
-    activeCleanup?.();
-
     function onMove(ev: MouseEvent) {
       opts.onDrag(ev);
     }
 
-    function cleanup() {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-      activeCleanup = null;
-    }
-
     function onUp() {
       opts.onEnd?.();
-      cleanup();
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
     }
 
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
-    activeCleanup = cleanup;
   }
 
   node.addEventListener("mousedown", handleMousedown);
@@ -61,7 +46,6 @@ export function dragResize(node: HTMLElement, options: DragResizeOptions) {
     },
     destroy() {
       node.removeEventListener("mousedown", handleMousedown);
-      activeCleanup?.();
     },
   };
 }

@@ -3,30 +3,17 @@
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { get } from "svelte/store";
-import {
-  workspaces,
-  activeWorkspaceIdx,
-  activeWorkspace,
-  activePane,
-  activeSurface,
-} from "../lib/stores/workspace";
-import {
-  primarySidebarVisible,
-  secondarySidebarVisible,
-  commandPaletteOpen,
-  findBarVisible,
-  contextMenu,
-  settingsOpen,
-} from "../lib/stores/ui";
+import { workspaces, activeWorkspaceIdx, activeWorkspace, activePane, activeSurface } from "../lib/stores/workspace";
+import { primarySidebarVisible, secondarySidebarVisible, commandPaletteOpen, findBarVisible, contextMenu } from "../lib/stores/ui";
 import type { Workspace, Pane, TerminalSurface } from "../lib/types";
 
 function makeSurface(id: string): TerminalSurface {
   return {
     kind: "terminal",
     id,
-    terminal: {} as unknown as TerminalSurface["terminal"],
-    fitAddon: { fit: () => {} } as unknown as TerminalSurface["fitAddon"],
-    searchAddon: {} as unknown as TerminalSurface["searchAddon"],
+    terminal: {} as any,
+    fitAddon: { fit: () => {} } as any,
+    searchAddon: {} as any,
     termElement: document.createElement("div"),
     ptyId: 1,
     title: `Shell ${id}`,
@@ -103,7 +90,7 @@ describe("Workspace stores", () => {
 
     expect(get(activeWorkspace)?.name).toBe("Test");
 
-    workspaces.update((list) => {
+    workspaces.update(list => {
       list[0].name = "Updated";
       return [...list];
     });
@@ -166,25 +153,10 @@ describe("UI stores", () => {
   });
 
   it("sets context menu state", () => {
-    contextMenu.set({
-      x: 100,
-      y: 200,
-      items: [{ label: "Test", action: () => {} }],
-    });
+    contextMenu.set({ x: 100, y: 200, items: [{ label: "Test", action: () => {} }] });
     const state = get(contextMenu);
     expect(state?.x).toBe(100);
     expect(state?.y).toBe(200);
     expect(state?.items).toHaveLength(1);
-  });
-
-  it("settingsOpen defaults to false", () => {
-    expect(get(settingsOpen)).toBe(false);
-  });
-
-  it("toggles settingsOpen", () => {
-    settingsOpen.set(true);
-    expect(get(settingsOpen)).toBe(true);
-    settingsOpen.set(false);
-    expect(get(settingsOpen)).toBe(false);
   });
 });

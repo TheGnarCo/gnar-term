@@ -58,6 +58,17 @@ export interface DashboardContribution {
    */
   create: (group: WorkspaceGroupEntry) => Promise<string>;
   /**
+   * Optional "delete and regenerate" hook surfaced as a button next to
+   * the dashboard's row in Group Settings. Implementations typically
+   * force-rewrite their backing markdown so a stale user file picks up
+   * a newer seeded template. Contributions without backing state
+   * (e.g. Diff, Settings) omit this; the button does not render.
+   *
+   * The preview-surface file watcher reloads markdown on rewrite, so
+   * implementations rarely need to close / recreate the host workspace.
+   */
+  regenerate?: (group: WorkspaceGroupEntry) => Promise<void>;
+  /**
    * Optional availability gate. When returns false, the contribution
    * is hidden from the group's "Add Dashboard" menu — e.g. the core
    * Group Dashboard contribution uses this to hide itself when the

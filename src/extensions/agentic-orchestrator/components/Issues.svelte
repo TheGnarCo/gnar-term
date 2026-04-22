@@ -6,9 +6,22 @@
    *   - global host → caller must set `repoPath`; otherwise shown as error
    *   - no host → form disabled
    *
-   * Each row has a split button: default click spawns claude-code on the
-   * issue (in a fresh worktree workspace tagged to the dashboard); the
-   * caret opens an agent picker (codex / aider / custom).
+   * Per-row affordance is state-dependent:
+   *   - Issue already has an active workspace (matched by workspace
+   *     metadata.spawnedFromIssues) → renders a bot-icon button. Click
+   *     switches to that workspace.
+   *   - Issue is unhandled → renders a Spawn split-button (default
+   *     claude-code; caret picks codex / aider / custom) plus a
+   *     selection checkbox.
+   *
+   * Multi-select bulk actions:
+   *   - "Spawn All" — fan out one workspace per selected issue.
+   *   - "Spawn Together" — single workspace, single agent prompt, lists
+   *     every selected issue. Stamps `spawnedFromIssues` with all
+   *     numbers so the bot-icon attribution lights up for each.
+   *
+   * Refresh indicator: the header Refresh button is disabled and labelled
+   * "Refreshing..." while a fetch is in flight.
    *
    * Config:
    *   repoPath?: string      — override / required under global scope
@@ -37,11 +50,20 @@
     deriveDashboardScope,
     getDashboardHost,
   } from "../../../lib/contexts/dashboard-host";
+  import BotIcon from "../icons/BotIcon.svelte";
 
   export let repoPath: string | undefined = undefined;
   export let repo: string | undefined = undefined;
   export let state: "open" | "closed" | "all" = "open";
   export let limit: number = 25;
+  /**
+   * When true, the per-row Spawn split-button + selection checkbox +
+   * bulk toolbar are suppressed. The bot-icon "active workspace" link
+   * is still shown so the Overview dashboard can hint at attribution.
+   * Used by the Group Overview Dashboard, where the issue list is a
+   * passive browse panel and spawning lives on the Agent Dashboard.
+   */
+  export let displayOnly: boolean = false;
 
   const host = getDashboardHost();
   const scope = deriveDashboardScope(host);
@@ -78,7 +100,53 @@
   let openSpawnMenu: number | null = null;
   /** Per-row spawn-in-flight state. Keyed by issue number. */
   let spawningRow: number | null = null;
+  /** True while a bulk Spawn All / Spawn Together is running. */
+  let bulkSpawning = false;
   let spawnError = "";
+
+  /**
+   * Selected issue numbers. Drives the bulk-action toolbar and clears
+   * automatically after a successful Spawn All / Spawn Together. Issues
+   * that are already handled (have an active workspace) cannot be
+   * selected — the bot-icon replaces the checkbox in that case.
+   */
+  let selectedIssues = new Set<number>();
+
+  function toggleIssueSelection(issueNumber: number, next: boolean) {
+    const set = new Set(selectedIssues);
+    if (next) set.add(issueNumber);
+    else set.delete(issueNumber);
+    selectedIssues = set;
+  }
+
+  function clearSelection() {
+    selectedIssues = new Set();
+  }
+
+  /**
+   * Subscribe to the workspaces store so the per-row affordance updates
+   * live as agent workspaces are spawned / closed. Keyed lookup: issue
+   * number → first workspace whose `metadata.spawnedFromIssues` array
+   * includes that number.
+   */
+  const workspacesStore = api.workspaces;
+  $: handledIssues = (() => {
+    const map = new Map<number, string>();
+    for (const ws of $workspacesStore) {
+      const md = (ws as { metadata?: Record<string, unknown> }).metadata;
+      const numbers = md?.spawnedFromIssues;
+      if (!Array.isArray(numbers)) continue;
+      for (const n of numbers) {
+        if (typeof n === "number" && !map.has(n)) map.set(n, ws.id);
+      }
+    }
+    return map;
+  })();
+
+  function jumpToHandledWorkspace(issueNumber: number) {
+    const wsId = handledIssues.get(issueNumber);
+    if (wsId) api.switchWorkspace(wsId);
+  }
 
   const SPAWN_AGENTS: Array<{ id: SpawnAgentType; label: string }> = [
     { id: "claude-code", label: "Claude Code" },
@@ -179,11 +247,125 @@
         branch: `agent/${agent}/${issue.number}-${branchSlug}`,
         spawnedBy: target.spawnedBy,
         ...(target.groupId ? { groupId: target.groupId } : {}),
+        spawnedFromIssues: [issue.number],
       });
+      toggleIssueSelection(issue.number, false);
     } catch (err) {
       spawnError = `Spawn failed: ${err instanceof Error ? err.message : String(err)}`;
     } finally {
       spawningRow = null;
+    }
+  }
+
+  /**
+   * Spawn a separate worktree workspace per selected issue, in
+   * sequence. Sequential (not parallel) to avoid hammering git with
+   * concurrent worktree creates and to keep error attribution sharp —
+   * if one issue fails, later issues still spawn so the user gets
+   * partial progress instead of an all-or-nothing.
+   */
+  async function spawnAllSelected(agent: SpawnAgentType = "claude-code") {
+    if (selectedIssues.size === 0) return;
+    const target = resolveTarget();
+    if (!target.ok) {
+      spawnError = `Cannot spawn: ${target.error}`;
+      return;
+    }
+    spawnError = "";
+    bulkSpawning = true;
+    const failures: string[] = [];
+    try {
+      // Snapshot order matches the rendered list so the spawn cadence
+      // mirrors what the user sees.
+      const ordered = issues.filter((i) => selectedIssues.has(i.number));
+      for (const issue of ordered) {
+        try {
+          const taskContext = `Issue #${issue.number}: ${issue.title}\n${issue.url}`;
+          const branchSlug = slugify(issue.title).slice(0, 30) || "task";
+          await spawnAgentInWorktree({
+            name: `${agent}: #${issue.number} ${issue.title}`,
+            agent,
+            ...(agent === "custom" ? { command: agent } : {}),
+            taskContext,
+            repoPath: target.repoPath,
+            branch: `agent/${agent}/${issue.number}-${branchSlug}`,
+            spawnedBy: target.spawnedBy,
+            ...(target.groupId ? { groupId: target.groupId } : {}),
+            spawnedFromIssues: [issue.number],
+          });
+        } catch (err) {
+          failures.push(
+            `#${issue.number}: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      }
+      if (failures.length > 0) {
+        spawnError = `Spawn All: ${failures.length} of ${ordered.length} failed — ${failures.join("; ")}`;
+      } else {
+        clearSelection();
+      }
+    } finally {
+      bulkSpawning = false;
+    }
+  }
+
+  /**
+   * Spawn a single worktree workspace whose agent prompt enumerates
+   * every selected issue. Stamps `spawnedFromIssues` with all numbers
+   * so the bot-icon attribution lights up for each row, all pointing
+   * at the same workspace.
+   */
+  async function spawnTogetherSelected(agent: SpawnAgentType = "claude-code") {
+    if (selectedIssues.size === 0) return;
+    const target = resolveTarget();
+    if (!target.ok) {
+      spawnError = `Cannot spawn: ${target.error}`;
+      return;
+    }
+    const ordered = issues.filter((i) => selectedIssues.has(i.number));
+    if (ordered.length === 0) return;
+
+    spawnError = "";
+    bulkSpawning = true;
+    try {
+      const numbers = ordered.map((i) => i.number);
+      const lines = ordered.map(
+        (i) => `- Issue #${i.number}: ${i.title}\n  ${i.url}`,
+      );
+      const taskContext = [
+        `Multi-issue task — please address all of the following:`,
+        "",
+        ...lines,
+      ].join("\n");
+      const numbersForBranch = numbers.slice(0, 4).join("-");
+      const branchSuffix =
+        numbers.length > 4
+          ? `together-${numbersForBranch}-and-${numbers.length - 4}-more`
+          : `together-${numbersForBranch}`;
+      const displayNumbers = numbers
+        .slice(0, 3)
+        .map((n) => `#${n}`)
+        .join(" ");
+      const nameSuffix =
+        numbers.length > 3
+          ? `${displayNumbers} +${numbers.length - 3}`
+          : displayNumbers;
+      await spawnAgentInWorktree({
+        name: `${agent}: ${nameSuffix}`,
+        agent,
+        ...(agent === "custom" ? { command: agent } : {}),
+        taskContext,
+        repoPath: target.repoPath,
+        branch: `agent/${agent}/${branchSuffix}`,
+        spawnedBy: target.spawnedBy,
+        ...(target.groupId ? { groupId: target.groupId } : {}),
+        spawnedFromIssues: numbers,
+      });
+      clearSelection();
+    } catch (err) {
+      spawnError = `Spawn Together failed: ${err instanceof Error ? err.message : String(err)}`;
+    } finally {
+      bulkSpawning = false;
     }
   }
 
@@ -241,17 +423,88 @@
     >
     <button
       data-issues-refresh
+      data-refreshing={loading ? "true" : undefined}
       on:click={refresh}
-      title="Refresh"
+      disabled={loading}
+      title={loading ? "Refreshing..." : "Refresh"}
       style="
         background: transparent; color: {$theme.fgDim};
         border: 1px solid {$theme.border}; border-radius: 3px;
-        padding: 2px 6px; font-size: 10px; cursor: pointer;
+        padding: 2px 6px; font-size: 10px;
+        cursor: {loading ? 'wait' : 'pointer'};
+        opacity: {loading ? 0.6 : 1};
       "
     >
-      Refresh
+      {loading ? "Refreshing..." : "Refresh"}
     </button>
   </div>
+
+  {#if !displayOnly && selectedIssues.size > 0}
+    <div
+      data-issues-bulk-toolbar
+      data-selection-count={selectedIssues.size}
+      style="
+        display: flex; align-items: center; gap: 8px;
+        padding: 6px 8px; border-radius: 4px;
+        background: {$theme.bgHighlight ?? $theme.bgSurface};
+        border: 1px solid {$theme.border};
+      "
+    >
+      <span style="font-size: 11px; color: {$theme.fg}; flex: 1;">
+        {selectedIssues.size} selected
+      </span>
+      <button
+        data-issues-spawn-all
+        type="button"
+        on:click={() => void spawnAllSelected()}
+        disabled={bulkSpawning}
+        title="Spawn one workspace per selected issue (claude-code)"
+        style="
+          background: transparent; color: {$theme.fg};
+          border: 1px solid {$theme.border}; border-radius: 3px;
+          padding: 2px 8px; font-size: 11px;
+          cursor: {bulkSpawning ? 'wait' : 'pointer'};
+          opacity: {bulkSpawning ? 0.6 : 1};
+        "
+      >
+        {bulkSpawning ? "Spawning..." : "Spawn All"}
+      </button>
+      <button
+        data-issues-spawn-together
+        type="button"
+        on:click={() => void spawnTogetherSelected()}
+        disabled={bulkSpawning || selectedIssues.size < 2}
+        title={selectedIssues.size < 2
+          ? "Select 2 or more issues to spawn together"
+          : "Spawn one workspace whose prompt references all selected issues"}
+        style="
+          background: transparent; color: {$theme.fg};
+          border: 1px solid {$theme.border}; border-radius: 3px;
+          padding: 2px 8px; font-size: 11px;
+          cursor: {bulkSpawning || selectedIssues.size < 2
+          ? 'not-allowed'
+          : 'pointer'};
+          opacity: {bulkSpawning || selectedIssues.size < 2 ? 0.6 : 1};
+        "
+      >
+        Spawn Together
+      </button>
+      <button
+        data-issues-bulk-clear
+        type="button"
+        on:click={clearSelection}
+        disabled={bulkSpawning}
+        style="
+          background: transparent; color: {$theme.fgDim};
+          border: 1px solid {$theme.border}; border-radius: 3px;
+          padding: 2px 8px; font-size: 11px;
+          cursor: {bulkSpawning ? 'wait' : 'pointer'};
+        "
+      >
+        Clear
+      </button>
+    </div>
+  {/if}
 
   {#if loading && issues.length === 0}
     <div
@@ -308,9 +561,13 @@
     </div>
   {:else}
     {#each issues as issue (issue.number)}
+      {@const handledWorkspaceId = handledIssues.get(issue.number)}
+      {@const isHandled = Boolean(handledWorkspaceId)}
+      {@const isSelected = selectedIssues.has(issue.number)}
       <div
         data-issue-row
         data-issue-number={issue.number}
+        data-issue-handled={isHandled ? "true" : undefined}
         style="
           display: flex; align-items: center; gap: 8px;
           padding: 6px 8px;
@@ -319,6 +576,21 @@
           background: {$theme.bg};
         "
       >
+        {#if !displayOnly && !isHandled}
+          <input
+            data-issue-select
+            type="checkbox"
+            checked={isSelected}
+            on:change={(e) =>
+              toggleIssueSelection(
+                issue.number,
+                (e.currentTarget as HTMLInputElement).checked,
+              )}
+            disabled={bulkSpawning || spawningRow === issue.number}
+            aria-label={`Select issue #${issue.number}`}
+            style="flex-shrink: 0; cursor: pointer;"
+          />
+        {/if}
         <span style="color: {$theme.fgDim}; font-size: 11px; flex-shrink: 0;"
           >#{issue.number}</span
         >
@@ -350,16 +622,37 @@
           style="color: {$theme.fgDim}; font-size: 11px; flex-shrink: 0;"
           >{timeAgo(issue.created_at)}</span
         >
-        <div
-          data-issue-spawn-group
-          style="position: relative; display: inline-flex; align-items: stretch; flex-shrink: 0;"
-        >
+        {#if isHandled}
           <button
-            data-issue-spawn
-            on:click={() => spawnForIssue(issue, "claude-code")}
-            disabled={spawningRow === issue.number}
-            title="Spawn claude-code on this issue"
+            data-issue-jump
+            data-issue-handled-workspace={handledWorkspaceId}
+            type="button"
+            on:click={() => jumpToHandledWorkspace(issue.number)}
+            title="Jump to the agent workspace handling this issue"
+            aria-label={`Open active workspace for issue #${issue.number}`}
             style="
+              flex-shrink: 0;
+              display: inline-flex; align-items: center; justify-content: center;
+              width: 24px; height: 22px;
+              padding: 0; border-radius: 3px;
+              background: transparent; color: {$theme.fg};
+              border: 1px solid {$theme.border};
+              cursor: pointer;
+            "
+          >
+            <BotIcon size={14} />
+          </button>
+        {:else if !displayOnly}
+          <div
+            data-issue-spawn-group
+            style="position: relative; display: inline-flex; align-items: stretch; flex-shrink: 0;"
+          >
+            <button
+              data-issue-spawn
+              on:click={() => spawnForIssue(issue, "claude-code")}
+              disabled={spawningRow === issue.number}
+              title="Spawn claude-code on this issue"
+              style="
               background: transparent; color: {$theme.fg};
               border: 1px solid {$theme.border}; border-right: none;
               border-radius: 3px 0 0 3px;
@@ -367,70 +660,71 @@
               cursor: {spawningRow === issue.number ? 'wait' : 'pointer'};
               opacity: {spawningRow === issue.number ? 0.6 : 1};
             "
-          >
-            {spawningRow === issue.number ? "Spawning..." : "Spawn"}
-          </button>
-          <button
-            data-issue-spawn-caret
-            on:click={() => toggleSpawnMenu(issue.number)}
-            disabled={spawningRow === issue.number}
-            aria-label="Choose agent"
-            aria-haspopup="menu"
-            aria-expanded={openSpawnMenu === issue.number}
-            title="Choose agent"
-            style="
+            >
+              {spawningRow === issue.number ? "Spawning..." : "Spawn"}
+            </button>
+            <button
+              data-issue-spawn-caret
+              on:click={() => toggleSpawnMenu(issue.number)}
+              disabled={spawningRow === issue.number}
+              aria-label="Choose agent"
+              aria-haspopup="menu"
+              aria-expanded={openSpawnMenu === issue.number}
+              title="Choose agent"
+              style="
               background: {openSpawnMenu === issue.number
-              ? $theme.bgHighlight
-              : 'transparent'};
+                ? $theme.bgHighlight
+                : 'transparent'};
               color: {$theme.fgDim};
               border: 1px solid {$theme.border}; border-radius: 0 3px 3px 0;
               padding: 2px 6px; font-size: 10px;
               cursor: {spawningRow === issue.number ? 'wait' : 'pointer'};
             "
-          >
-            ▾
-          </button>
-          {#if openSpawnMenu === issue.number}
-            <div
-              data-issue-spawn-dropdown
-              style="
+            >
+              ▾
+            </button>
+            {#if openSpawnMenu === issue.number}
+              <div
+                data-issue-spawn-dropdown
+                style="
                 position: absolute; top: 100%; right: 0; margin-top: 2px;
                 background: {$theme.bgFloat ?? $theme.bgSurface};
                 border: 1px solid {$theme.border}; border-radius: 4px;
                 padding: 4px; min-width: 140px; z-index: 9999;
                 box-shadow: 0 4px 12px rgba(0,0,0,0.4);
               "
-            >
-              {#each SPAWN_AGENTS as opt (opt.id)}
-                <!-- svelte-ignore a11y_click_events_have_key_events -->
-                <!-- svelte-ignore a11y_no_static_element_interactions -->
-                <div
-                  data-issue-spawn-option={opt.id}
-                  on:click={() => spawnForIssue(issue, opt.id)}
-                  style="
+              >
+                {#each SPAWN_AGENTS as opt (opt.id)}
+                  <!-- svelte-ignore a11y_click_events_have_key_events -->
+                  <!-- svelte-ignore a11y_no_static_element_interactions -->
+                  <div
+                    data-issue-spawn-option={opt.id}
+                    on:click={() => spawnForIssue(issue, opt.id)}
+                    style="
                     padding: 4px 8px; cursor: pointer; font-size: 12px;
                     color: {$theme.fg}; border-radius: 3px;
                   "
-                  on:mouseenter={(e) => {
-                    const el = e.currentTarget;
-                    if (el instanceof HTMLElement)
-                      el.style.background = $theme.bgHighlight;
-                  }}
-                  on:mouseleave={(e) => {
-                    const el = e.currentTarget;
-                    if (el instanceof HTMLElement)
-                      el.style.background = "transparent";
-                  }}
-                >
-                  {opt.label}
-                </div>
-              {/each}
-            </div>
-          {/if}
-        </div>
+                    on:mouseenter={(e) => {
+                      const el = e.currentTarget;
+                      if (el instanceof HTMLElement)
+                        el.style.background = $theme.bgHighlight;
+                    }}
+                    on:mouseleave={(e) => {
+                      const el = e.currentTarget;
+                      if (el instanceof HTMLElement)
+                        el.style.background = "transparent";
+                    }}
+                  >
+                    {opt.label}
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          </div>
+        {/if}
       </div>
     {/each}
-    {#if spawnError}
+    {#if spawnError && !displayOnly}
       <div
         data-issues-spawn-error
         style="color: {$theme.danger}; font-size: 11px;"

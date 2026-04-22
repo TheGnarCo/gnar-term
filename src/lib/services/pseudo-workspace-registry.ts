@@ -68,6 +68,19 @@ export interface PseudoWorkspace {
    * path.
    */
   settings?: unknown;
+  /**
+   * Optional component rendered INSIDE the primary-sidebar root row,
+   * to the right of the icon, in place of the plain text label. Used
+   * by the Global Agentic Dashboard to render a live status-chip grid
+   * instead of the static "Agents dashboard" string. Mounted via
+   * ExtensionWrapper so it receives the registering extension's `api`
+   * (and can subscribe to `api.agents`, `api.workspaces`, etc.).
+   *
+   * The component is rendered inside a tight flex slot — keep its
+   * footprint small (40px-ish height, ~60% of the row's inner width).
+   * When omitted, the row renders `pseudo.label` as before.
+   */
+  rowBody?: unknown;
 }
 
 const registry = createRegistry<PseudoWorkspace>();

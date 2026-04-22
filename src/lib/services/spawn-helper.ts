@@ -88,6 +88,14 @@ export interface SpawnAgentInWorktreeArgs {
    * in the sidebar; shape supports later "jump to spawner" affordances.
    */
   spawnedBy?: SpawnedByMarker;
+  /**
+   * GitHub issue numbers this workspace is handling. Forwarded to
+   * `metadata.spawnedFromIssues` so the Issues widget can render a
+   * bot-icon button (jump to the active workspace) instead of the
+   * Spawn affordance for issues that already have an agent on them.
+   * "Spawn Together" multi-issue spawns write multiple numbers here.
+   */
+  spawnedFromIssues?: number[];
 }
 
 export interface SpawnAgentInWorktreeResult {
@@ -196,6 +204,9 @@ export async function spawnAgentInWorktree(
     startupCommand,
     ...(args.groupId ? { groupId: args.groupId } : {}),
     ...(args.spawnedBy ? { spawnedBy: args.spawnedBy } : {}),
+    ...(args.spawnedFromIssues && args.spawnedFromIssues.length > 0
+      ? { spawnedFromIssues: args.spawnedFromIssues }
+      : {}),
   };
 
   const { workspaceId } = await createWorktreeWorkspaceFromConfig(config);

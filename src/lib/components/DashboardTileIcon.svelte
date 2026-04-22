@@ -3,11 +3,14 @@
    * DashboardTileIcon — renders a dashboard contribution's icon with
    * an optional state-driven color override.
    *
-   * Today the only color override is for the `"diff"` contribution:
-   * when the group's working tree has uncommitted changes, the icon
-   * switches from the group accent color to an amber warning tone so
-   * the tile functions as a passive "changes to review" indicator.
-   * When clean, the icon reverts to the base accent.
+   * The `"diff"` contribution has its own color contract distinct from
+   * every other tile: it never paints with the group accent. Instead it
+   * is a binary indicator —
+   *   • dirty (uncommitted changes in the group's working tree) →
+   *     amber warning tone, signalling "changes to review"
+   *   • clean → muted/dim foreground, so the tile recedes when there's
+   *     nothing to look at
+   * Other contribution ids paint with `baseColor` as today.
    */
   import type { Component, ComponentType } from "svelte";
   import { readable, type Readable } from "svelte/store";
@@ -15,6 +18,7 @@
     groupDirtyStore,
     type GroupDirtyState,
   } from "../services/group-git-dirty-store";
+  import { theme } from "../stores/theme";
 
   export let iconComponent: Component | ComponentType | unknown;
   export let baseColor: string;
@@ -23,12 +27,19 @@
 
   const CLEAN_STATE: GroupDirtyState = { ready: true, hasChanges: false };
 
+  $: isDiff = contributionId === "diff";
+
   const dirtyStore: Readable<GroupDirtyState> =
     contributionId === "diff" && groupPath
       ? groupDirtyStore(groupPath)
       : readable(CLEAN_STATE);
 
-  $: color = $dirtyStore.hasChanges ? "#e8b73a" : baseColor;
+  $: dimColor = ($theme["fgDim"] ?? $theme.fgMuted ?? "#888") as string;
+  $: color = isDiff
+    ? $dirtyStore.hasChanges
+      ? "#e8b73a"
+      : dimColor
+    : baseColor;
 </script>
 
 <span

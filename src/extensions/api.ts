@@ -982,6 +982,14 @@ export interface DashboardContributionInput {
    */
   create: (group: WorkspaceGroupRef) => Promise<string>;
   /**
+   * Optional "delete and regenerate" hook surfaced as a button next to
+   * the dashboard's row in Group Settings. Implementations typically
+   * force-rewrite the dashboard's backing markdown so a stale user
+   * file picks up a newer seeded template. Contributions without
+   * backing state (e.g. Diff) omit this and the button does not render.
+   */
+  regenerate?: (group: WorkspaceGroupRef) => Promise<void>;
+  /**
    * Optional gate — when returns false, the contribution is hidden from
    * this group's "Add Dashboard" menu.
    */
@@ -1036,6 +1044,14 @@ export interface PseudoWorkspaceInput {
   metadata: Record<string, unknown>;
   /** Optional settings component surfaced in the extension's settings page. */
   settings?: unknown;
+  /**
+   * Optional component rendered INSIDE the primary-sidebar root row,
+   * to the right of `icon`, in place of the plain text label. Mounted
+   * with the registering extension's `api` provided via context so the
+   * widget can subscribe to live state (`api.agents`, etc.). Footprint
+   * should stay compact — the row banner is ~40px tall.
+   */
+  rowBody?: unknown;
 }
 
 // --- Workspace creation options ---

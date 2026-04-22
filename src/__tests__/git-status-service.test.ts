@@ -16,7 +16,6 @@ vi.mock("@tauri-apps/api/event", () => ({
 
 import {
   parseGitStatus,
-  parsePrInfo,
   formatDirtyShorthand,
   GIT_STATUS_SOURCE,
   _resetGitStatusService,
@@ -203,86 +202,6 @@ describe("formatDirtyShorthand", () => {
 
   it("returns null for empty input", () => {
     expect(parseGitStatus("")).toBeNull();
-  });
-});
-
-describe("parsePrInfo", () => {
-  it("parses approved PR with passing CI", () => {
-    const raw = JSON.stringify({
-      number: 42,
-      url: "https://github.com/org/repo/pull/42",
-      reviewDecision: "APPROVED",
-      statusCheckRollup: [
-        { state: "SUCCESS", conclusion: "SUCCESS" },
-        { state: "SUCCESS", conclusion: "SUCCESS" },
-      ],
-    });
-
-    const result = parsePrInfo(raw);
-    expect(result).toMatchObject({
-      number: 42,
-      reviewDecision: "approved",
-      ciStatus: "passing",
-    });
-  });
-
-  it("detects failing CI", () => {
-    const raw = JSON.stringify({
-      number: 38,
-      url: "https://github.com/org/repo/pull/38",
-      reviewDecision: "CHANGES_REQUESTED",
-      statusCheckRollup: [
-        { state: "SUCCESS", conclusion: "SUCCESS" },
-        { state: "FAILURE", conclusion: "FAILURE" },
-      ],
-    });
-
-    const result = parsePrInfo(raw);
-    expect(result).toMatchObject({
-      ciStatus: "failing",
-      reviewDecision: "changes requested",
-    });
-  });
-
-  it("detects pending CI", () => {
-    const raw = JSON.stringify({
-      number: 51,
-      url: "https://github.com/org/repo/pull/51",
-      reviewDecision: "APPROVED",
-      statusCheckRollup: [
-        { state: "SUCCESS", conclusion: "SUCCESS" },
-        { state: "PENDING" },
-      ],
-    });
-
-    const result = parsePrInfo(raw);
-    expect(result).toMatchObject({
-      ciStatus: "pending",
-      reviewDecision: "approved",
-    });
-  });
-
-  it("handles no status checks", () => {
-    const raw = JSON.stringify({
-      number: 80,
-      url: "https://github.com/org/repo/pull/80",
-      reviewDecision: "REVIEW_REQUIRED",
-      statusCheckRollup: [],
-    });
-
-    const result = parsePrInfo(raw);
-    expect(result).toMatchObject({
-      ciStatus: "none",
-      reviewDecision: "review requested",
-    });
-  });
-
-  it("returns null for invalid JSON", () => {
-    expect(parsePrInfo("not json")).toBeNull();
-  });
-
-  it("returns null for missing PR number", () => {
-    expect(parsePrInfo(JSON.stringify({ url: "test" }))).toBeNull();
   });
 });
 

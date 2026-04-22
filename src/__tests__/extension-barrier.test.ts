@@ -84,6 +84,13 @@ describe("Extension barrier enforcement", () => {
         "../../../lib/contexts/dashboard-host",
         "../../../lib/stores/workspace-groups",
       ],
+      // Prs is the read-only sibling of Issues — same gh-availability
+      // probe + DashboardHostContext piercings, but no spawn-helper
+      // since the widget never spawns workspaces.
+      "agentic-orchestrator/components/Prs.svelte": [
+        "../../../lib/services/gh-availability",
+        "../../../lib/contexts/dashboard-host",
+      ],
       "agentic-orchestrator/components/TaskSpawner.svelte": [
         "../../../lib/services/spawn-helper",
         "../../../lib/contexts/dashboard-host",

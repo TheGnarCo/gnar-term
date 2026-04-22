@@ -43,18 +43,10 @@
   /**
    * Banner body left-click — fires for clicks anywhere in the banner
    * row (including the git-status subtitle area). Interactive children
-   * inside the banner (close X, SplitButton chips, PR/diff links) call
+   * inside the banner (SplitButton chips, PR/diff links) call
    * `stopPropagation` so they don't bubble into this handler.
    */
   export let onBannerClick: (() => void) | undefined = undefined;
-  /**
-   * When provided, render a close affordance ("X") on the banner's right
-   * edge. Click fires `onClose`. In workspace-backed mode, callers wire
-   * this to `closeWorkspace(idx)` — the ContainerRow stays agnostic
-   * about what "close" means.
-   */
-  export let onClose: (() => void) | undefined = undefined;
-  export let closeTitle: string = "Close";
 
   /** Nested workspace list filter — ids to include. */
   export let filterIds: Set<string>;
@@ -144,32 +136,6 @@
         </div>
         <slot name="banner-subtitle" />
       </div>
-      {#if onClose}
-        <!-- Close X — absolute-positioned so it never pushes banner
-             content around. Matches WorkspaceItem's close affordance:
-             centered vertically against the full banner height,
-             opacity 0 at rest, fading in on banner hover. -->
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <span
-          data-container-banner-close
-          title={closeTitle}
-          role="button"
-          tabindex="0"
-          on:click|stopPropagation={onClose}
-          style="
-            position: absolute;
-            top: 50%; right: 6px;
-            transform: translateY(-50%);
-            color: {$theme.fg};
-            font-size: 14px;
-            cursor: pointer;
-            opacity: {bannerHovered ? '1' : '0'};
-            transition: opacity 0.15s;
-            padding: 0 2px;
-            z-index: 1;
-          ">×</span
-        >
-      {/if}
     </div>
     {#if filterIds.size > 0}
       <div
@@ -324,32 +290,6 @@
           </div>
           <slot name="banner-subtitle" {bannerHovered} />
         </div>
-        {#if onClose}
-          <!-- Close X — absolute-positioned so it never pushes banner
-               content around. Matches WorkspaceItem's close affordance:
-               centered vertically against the full banner height,
-               opacity 0 at rest, fading in on banner hover. -->
-          <!-- svelte-ignore a11y_click_events_have_key_events -->
-          <span
-            data-container-banner-close
-            title={closeTitle}
-            role="button"
-            tabindex="0"
-            on:click|stopPropagation={onClose}
-            style="
-              position: absolute;
-              top: 50%; right: 6px;
-              transform: translateY(-50%);
-              color: {$theme.fg};
-              font-size: 14px;
-              cursor: pointer;
-              opacity: {bannerHovered ? '1' : '0'};
-              transition: opacity 0.15s;
-              padding: 0 2px;
-              z-index: 1;
-            ">×</span
-          >
-        {/if}
       </div>
       {#if filterIds.size > 0}
         <div

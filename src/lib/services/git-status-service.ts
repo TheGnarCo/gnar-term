@@ -1,12 +1,17 @@
 /**
  * Git Status Service — polls each workspace's working directory for git
- * branch, dirty count, and PR/CI state and writes the results into the
- * status registry under source `"git"`.
+ * branch + dirty count and writes the results into the status registry
+ * under source `"git"`.
  *
- * Active workspaces poll fast (30s git / 60s PR), inactive ones slow
- * (150s / 300s). On `cd` the active workspace's cwd is re-resolved via
- * a debounced `workspaces` store subscription so the sidebar tracks the
- * new directory immediately.
+ * Active workspaces poll fast (5s), inactive ones slow (30s). On `cd`
+ * the active workspace's cwd is re-resolved via a debounced `workspaces`
+ * store subscription so the sidebar tracks the new directory
+ * immediately.
+ *
+ * PR/CI state was historically registered here under itemId `"pr"`; the
+ * pill was retired in favor of the Group Dashboards' `gnar:prs` widget,
+ * which renders the full open-PR list with row actions instead of a
+ * single per-workspace badge.
  */
 import { invoke } from "@tauri-apps/api/core";
 import { get } from "svelte/store";
@@ -37,13 +42,6 @@ export interface GitInfo {
   untracked: number;
   ahead: number;
   behind: number;
-}
-
-export interface PrInfo {
-  number: number;
-  url: string;
-  reviewDecision: string;
-  ciStatus: "passing" | "failing" | "pending" | "none";
 }
 
 interface ScriptResult {
@@ -155,78 +153,6 @@ export function formatDirtyShorthand(info: GitInfo): string {
   return parts.join(" ");
 }
 
-export function parsePrInfo(raw: string): PrInfo | null {
-  try {
-    const data = JSON.parse(raw);
-    if (!data.number) return null;
-
-    let ciStatus: PrInfo["ciStatus"] = "none";
-    const checks = data.statusCheckRollup;
-    if (Array.isArray(checks) && checks.length > 0) {
-      const hasFailure = checks.some(
-        (c: { state?: string; conclusion?: string }) =>
-          c.state === "FAILURE" ||
-          c.conclusion === "FAILURE" ||
-          c.state === "ERROR" ||
-          c.conclusion === "ERROR",
-      );
-      const hasPending = checks.some(
-        (c: { state?: string; conclusion?: string }) =>
-          c.state === "PENDING" || !c.conclusion,
-      );
-      if (hasFailure) ciStatus = "failing";
-      else if (hasPending) ciStatus = "pending";
-      else ciStatus = "passing";
-    }
-
-    let reviewDecision = "none";
-    if (data.reviewDecision === "APPROVED") reviewDecision = "approved";
-    else if (data.reviewDecision === "CHANGES_REQUESTED")
-      reviewDecision = "changes requested";
-    else if (data.reviewDecision === "REVIEW_REQUIRED")
-      reviewDecision = "review requested";
-
-    return {
-      number: data.number,
-      url: data.url,
-      reviewDecision,
-      ciStatus,
-    };
-  } catch {
-    return null;
-  }
-}
-
-function reviewVariant(
-  decision: string,
-): "success" | "warning" | "error" | "muted" {
-  switch (decision) {
-    case "approved":
-      return "success";
-    case "review requested":
-      return "warning";
-    case "changes requested":
-      return "error";
-    default:
-      return "muted";
-  }
-}
-
-function ciVariant(
-  status: PrInfo["ciStatus"],
-): "success" | "warning" | "error" | "muted" {
-  switch (status) {
-    case "passing":
-      return "success";
-    case "pending":
-      return "warning";
-    case "failing":
-      return "error";
-    default:
-      return "muted";
-  }
-}
-
 function setItem(
   workspaceId: string,
   itemId: string,
@@ -240,9 +166,7 @@ function clearItem(workspaceId: string, itemId: string): void {
 }
 
 const timers = new Map<string, ReturnType<typeof setInterval>>();
-const prCache = new Map<string, { branch: string; pr: PrInfo | null }>();
 const workspaceCwds = new Map<string, string>();
-const prDisplayed = new Set<string>();
 let activeWorkspaceId: string | null = null;
 let homeDir: string | null = null;
 let unsubActive: (() => void) | null = null;
@@ -290,9 +214,7 @@ async function refreshGitStatus(
 
   if (!gitRoot) {
     clearItem(workspaceId, "branch");
-    clearItem(workspaceId, "pr");
     clearItem(workspaceId, "dirty");
-    prDisplayed.delete(workspaceId);
     return;
   }
 
@@ -379,84 +301,6 @@ function dirtyTooltip(info: GitInfo): string {
   return parts.join(", ");
 }
 
-function registerPrItem(workspaceId: string, pr: PrInfo): void {
-  setItem(workspaceId, "pr", {
-    category: "git",
-    priority: 20,
-    label: `#${pr.number}`,
-    tooltip: `${pr.reviewDecision} · CI ${pr.ciStatus}`,
-    variant: ciVariant(pr.ciStatus),
-    action: { command: "open-url", args: [pr.url] },
-    metadata: {
-      prNumber: pr.number,
-      prUrl: pr.url,
-      ciStatus: pr.ciStatus,
-      reviewState: pr.reviewDecision,
-      reviewVariant: reviewVariant(pr.reviewDecision),
-    },
-  });
-}
-
-async function refreshPrStatus(
-  workspaceId: string,
-  cwd: string,
-): Promise<void> {
-  const gitRoot = await detectGitRoot(cwd);
-  if (!gitRoot) return;
-
-  const branchRaw = await runWithTimeout(
-    gitRoot,
-    "git rev-parse --abbrev-ref HEAD",
-    3000,
-  );
-  const branch = branchRaw?.trim();
-  if (!branch || branch === "HEAD") {
-    clearItem(workspaceId, "pr");
-    return;
-  }
-
-  const cached = prCache.get(workspaceId);
-  if (cached && cached.branch === branch && cached.pr) {
-    registerPrItem(workspaceId, cached.pr);
-    return;
-  }
-
-  if (!prDisplayed.has(workspaceId)) {
-    setItem(workspaceId, "pr", {
-      category: "git",
-      priority: 20,
-      label: "PR…",
-      tooltip: "Checking GitHub for pull request",
-      variant: "muted",
-    });
-    prDisplayed.add(workspaceId);
-  }
-
-  const raw = await runWithTimeout(
-    gitRoot,
-    `gh pr view --json number,url,reviewDecision,statusCheckRollup -- "${branch.replace(/"/g, '\\"')}"`,
-    10000,
-  );
-
-  if (!raw) {
-    clearItem(workspaceId, "pr");
-    prDisplayed.delete(workspaceId);
-    prCache.set(workspaceId, { branch, pr: null });
-    return;
-  }
-
-  const pr = parsePrInfo(raw);
-  prCache.set(workspaceId, { branch, pr });
-
-  if (pr) {
-    registerPrItem(workspaceId, pr);
-    prDisplayed.add(workspaceId);
-  } else {
-    clearItem(workspaceId, "pr");
-    prDisplayed.delete(workspaceId);
-  }
-}
-
 function startPolling(workspaceId: string, cwd: string): void {
   stopPolling(workspaceId);
   workspaceCwds.set(workspaceId, cwd);
@@ -468,23 +312,16 @@ function startPolling(workspaceId: string, cwd: string): void {
   // non-git edits (file-system changes from the user's editor, etc.)
   // and for environments where the watcher can't attach.
   const gitInterval = isActive ? 5_000 : 30_000;
-  const prInterval = isActive ? 60_000 : 300_000;
 
   void refreshGitStatus(workspaceId, cwd);
-  void refreshPrStatus(workspaceId, cwd);
   void attachIndexWatcher(workspaceId, cwd);
 
   const gitTimer = setInterval(() => {
     const latest = workspaceCwds.get(workspaceId);
     if (latest) void refreshGitStatus(workspaceId, latest);
   }, gitInterval);
-  const prTimer = setInterval(() => {
-    const latest = workspaceCwds.get(workspaceId);
-    if (latest) void refreshPrStatus(workspaceId, latest);
-  }, prInterval);
 
   timers.set(`${workspaceId}:git`, gitTimer);
-  timers.set(`${workspaceId}:pr`, prTimer);
 }
 
 /**
@@ -554,11 +391,8 @@ async function detachIndexWatcher(workspaceId: string): Promise<void> {
 
 function stopPolling(workspaceId: string): void {
   const gitTimer = timers.get(`${workspaceId}:git`);
-  const prTimer = timers.get(`${workspaceId}:pr`);
   if (gitTimer) clearInterval(gitTimer);
-  if (prTimer) clearInterval(prTimer);
   timers.delete(`${workspaceId}:git`);
-  timers.delete(`${workspaceId}:pr`);
   void detachIndexWatcher(workspaceId);
 }
 
@@ -614,7 +448,6 @@ export function startGitStatusService(): void {
         if (live === workspaceCwds.get(wsId)) return;
         workspaceCwds.set(wsId, live);
         void refreshGitStatus(wsId, live);
-        void refreshPrStatus(wsId, live);
       })();
     }, 500);
   });
@@ -625,7 +458,6 @@ export function handleWorkspaceActivated(wsId: string): void {
   const cachedCwd = workspaceCwds.get(wsId);
   if (cachedCwd) {
     void refreshGitStatus(wsId, cachedCwd);
-    void refreshPrStatus(wsId, cachedCwd);
   } else {
     void ensurePolling(wsId);
   }
@@ -640,9 +472,7 @@ export function handleWorkspaceClosed(wsId: string): void {
   if (!wsId) return;
   stopPolling(wsId);
   clearAllStatusForSourceAndWorkspace(GIT_STATUS_SOURCE, wsId);
-  prCache.delete(wsId);
   workspaceCwds.delete(wsId);
-  prDisplayed.delete(wsId);
 }
 
 /** Test-only reset. */
@@ -654,8 +484,6 @@ export function _resetGitStatusService(): void {
   unsubWorkspaces?.();
   unsubActive = null;
   unsubWorkspaces = null;
-  prCache.clear();
-  prDisplayed.clear();
   activeWorkspaceId = null;
   homeDir = null;
 }

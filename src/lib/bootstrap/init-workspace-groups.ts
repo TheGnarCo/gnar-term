@@ -33,6 +33,7 @@ import {
   provisionAutoDashboardsForGroup,
   reclaimWorkspacesAcrossGroups,
   reconcileGroupDashboards,
+  regenerateGroupDashboardTemplate,
   removeWorkspaceFromAllGroups,
   unclaimWorkspace,
   updateWorkspaceGroup,
@@ -340,6 +341,8 @@ export async function initWorkspaceGroups(): Promise<void> {
     lockedReason: "Required (Overview)",
     create: async (group: WorkspaceGroupEntry) =>
       await createGroupDashboardWorkspace(group),
+    regenerate: async (group: WorkspaceGroupEntry) =>
+      await regenerateGroupDashboardTemplate(group),
   });
 
   // Core-internal "Settings" contribution — id `settings`,

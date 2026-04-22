@@ -121,6 +121,7 @@ import { invalidateGhAvailability } from "../../../lib/services/gh-availability"
 import ExtensionWrapper from "../../../lib/components/ExtensionWrapper.svelte";
 import Kanban from "../components/Kanban.svelte";
 import Issues from "../components/Issues.svelte";
+import Prs from "../components/Prs.svelte";
 import AgentList from "../components/AgentList.svelte";
 import AgentStatusRow from "../components/AgentStatusRow.svelte";
 import TaskSpawner from "../components/TaskSpawner.svelte";
@@ -130,6 +131,7 @@ import type { ExtensionAPI } from "../../../extensions/api";
 const COMPONENT_NAMES = [
   "kanban",
   "issues",
+  "prs",
   "agent-list",
   "agent-status-row",
   "task-spawner",
@@ -653,6 +655,498 @@ describe("Issues widget", () => {
       "[data-issues-gh-missing-retry]",
     ) as HTMLButtonElement | null;
     expect(retry).not.toBeNull();
+  });
+
+  it("displayOnly suppresses the per-row Spawn split-button group", async () => {
+    const fakeIssues = [
+      {
+        number: 11,
+        title: "Read-only mount",
+        state: "open",
+        author: { login: "octocat" },
+        labels: [],
+        created_at: "2026-04-19T00:00:00.000Z",
+        url: "https://gh/11",
+      },
+    ];
+    const invokeFn = vi.fn(async (cmd: string) => {
+      if (cmd === "gh_available") return true;
+      if (cmd === "gh_list_issues") return fakeIssues;
+      return undefined;
+    });
+    const api = makeApi({ invoke: invokeFn });
+
+    const { container } = render(ExtensionWrapper, {
+      props: {
+        api,
+        component: Issues,
+        props: { displayOnly: true },
+        host: groupHost,
+      },
+    });
+
+    await new Promise((r) => setTimeout(r, 0));
+    await tick();
+    await tick();
+
+    expect(container.querySelectorAll("[data-issue-row]").length).toBe(1);
+    expect(container.querySelector("[data-issue-spawn-group]")).toBeNull();
+    expect(container.querySelector("[data-issue-spawn]")).toBeNull();
+    expect(container.querySelector("[data-issue-spawn-caret]")).toBeNull();
+    expect(container.querySelector("[data-issue-select]")).toBeNull();
+  });
+
+  it("checking 2+ issues shows the bulk toolbar; Spawn All fans out one call per selection", async () => {
+    spawnAgentInWorktreeMock.mockClear();
+    const fakeIssues = [
+      {
+        number: 21,
+        title: "First",
+        state: "open",
+        author: { login: "me" },
+        labels: [],
+        created_at: "2026-04-19T00:00:00.000Z",
+        url: "https://gh/21",
+      },
+      {
+        number: 22,
+        title: "Second",
+        state: "open",
+        author: { login: "me" },
+        labels: [],
+        created_at: "2026-04-19T00:00:00.000Z",
+        url: "https://gh/22",
+      },
+    ];
+    const invokeFn = vi.fn(async (cmd: string) => {
+      if (cmd === "gh_available") return true;
+      if (cmd === "gh_list_issues") return fakeIssues;
+      return undefined;
+    });
+    const api = makeApi({ invoke: invokeFn });
+
+    const { container } = render(ExtensionWrapper, {
+      props: { api, component: Issues, props: {}, host: groupHost },
+    });
+
+    await new Promise((r) => setTimeout(r, 0));
+    await tick();
+    await tick();
+
+    // Toolbar absent until something is selected.
+    expect(container.querySelector("[data-issues-bulk-toolbar]")).toBeNull();
+
+    const checks = container.querySelectorAll(
+      "[data-issue-select]",
+    ) as NodeListOf<HTMLInputElement>;
+    expect(checks.length).toBe(2);
+    await fireEvent.click(checks[0]!);
+    await fireEvent.click(checks[1]!);
+    await tick();
+
+    const toolbar = container.querySelector("[data-issues-bulk-toolbar]");
+    expect(toolbar).not.toBeNull();
+    expect(toolbar?.getAttribute("data-selection-count")).toBe("2");
+
+    const spawnAll = container.querySelector(
+      "[data-issues-spawn-all]",
+    ) as HTMLButtonElement;
+    expect(spawnAll).not.toBeNull();
+    await fireEvent.click(spawnAll);
+    await tick();
+    await tick();
+
+    expect(spawnAgentInWorktreeMock).toHaveBeenCalledTimes(2);
+    const calls = spawnAgentInWorktreeMock.mock.calls.map((c) => c[0]);
+    expect(calls[0]).toMatchObject({ spawnedFromIssues: [21] });
+    expect(calls[1]).toMatchObject({ spawnedFromIssues: [22] });
+  });
+
+  it("Spawn Together makes one call whose taskContext lists every selected issue and stamps all numbers", async () => {
+    spawnAgentInWorktreeMock.mockClear();
+    const fakeIssues = [
+      {
+        number: 31,
+        title: "Alpha",
+        state: "open",
+        author: { login: "me" },
+        labels: [],
+        created_at: "2026-04-19T00:00:00.000Z",
+        url: "https://gh/31",
+      },
+      {
+        number: 32,
+        title: "Beta",
+        state: "open",
+        author: { login: "me" },
+        labels: [],
+        created_at: "2026-04-19T00:00:00.000Z",
+        url: "https://gh/32",
+      },
+      {
+        number: 33,
+        title: "Gamma",
+        state: "open",
+        author: { login: "me" },
+        labels: [],
+        created_at: "2026-04-19T00:00:00.000Z",
+        url: "https://gh/33",
+      },
+    ];
+    const invokeFn = vi.fn(async (cmd: string) => {
+      if (cmd === "gh_available") return true;
+      if (cmd === "gh_list_issues") return fakeIssues;
+      return undefined;
+    });
+    const api = makeApi({ invoke: invokeFn });
+
+    const { container } = render(ExtensionWrapper, {
+      props: { api, component: Issues, props: {}, host: groupHost },
+    });
+
+    await new Promise((r) => setTimeout(r, 0));
+    await tick();
+    await tick();
+
+    const checks = container.querySelectorAll(
+      "[data-issue-select]",
+    ) as NodeListOf<HTMLInputElement>;
+    await fireEvent.click(checks[0]!);
+    await fireEvent.click(checks[2]!);
+    await tick();
+
+    const spawnTogether = container.querySelector(
+      "[data-issues-spawn-together]",
+    ) as HTMLButtonElement;
+    expect(spawnTogether).not.toBeNull();
+    expect(spawnTogether.disabled).toBe(false);
+    await fireEvent.click(spawnTogether);
+    await tick();
+    await tick();
+
+    expect(spawnAgentInWorktreeMock).toHaveBeenCalledTimes(1);
+    const arg = spawnAgentInWorktreeMock.mock.calls[0]?.[0];
+    expect(arg).toMatchObject({
+      spawnedFromIssues: [31, 33],
+      branch: "agent/claude-code/together-31-33",
+    });
+    expect(arg.taskContext).toContain("Issue #31");
+    expect(arg.taskContext).toContain("Issue #33");
+    expect(arg.taskContext).toContain("Multi-issue task");
+  });
+
+  it("Spawn Together is disabled with a single selection", async () => {
+    const fakeIssues = [
+      {
+        number: 41,
+        title: "Solo",
+        state: "open",
+        author: { login: "me" },
+        labels: [],
+        created_at: "2026-04-19T00:00:00.000Z",
+        url: "https://gh/41",
+      },
+    ];
+    const invokeFn = vi.fn(async (cmd: string) => {
+      if (cmd === "gh_available") return true;
+      if (cmd === "gh_list_issues") return fakeIssues;
+      return undefined;
+    });
+    const api = makeApi({ invoke: invokeFn });
+    const { container } = render(ExtensionWrapper, {
+      props: { api, component: Issues, props: {}, host: groupHost },
+    });
+
+    await new Promise((r) => setTimeout(r, 0));
+    await tick();
+    await tick();
+
+    const check = container.querySelector(
+      "[data-issue-select]",
+    ) as HTMLInputElement;
+    await fireEvent.click(check);
+    await tick();
+
+    const together = container.querySelector(
+      "[data-issues-spawn-together]",
+    ) as HTMLButtonElement;
+    expect(together.disabled).toBe(true);
+  });
+
+  it("renders a bot-icon jump button (no spawn group, no checkbox) when a workspace already handles the issue", async () => {
+    switchSpy.mockReset();
+    const fakeIssues = [
+      {
+        number: 51,
+        title: "Already in flight",
+        state: "open",
+        author: { login: "me" },
+        labels: [],
+        created_at: "2026-04-19T00:00:00.000Z",
+        url: "https://gh/51",
+      },
+    ];
+    const invokeFn = vi.fn(async (cmd: string) => {
+      if (cmd === "gh_available") return true;
+      if (cmd === "gh_list_issues") return fakeIssues;
+      return undefined;
+    });
+    const api = makeApi({
+      invoke: invokeFn,
+      workspaces: [
+        {
+          id: "ws-handler",
+          name: "agent: #51",
+          metadata: { spawnedFromIssues: [51] },
+        } as unknown as { id: string; name: string },
+      ],
+    });
+
+    const { container } = render(ExtensionWrapper, {
+      props: { api, component: Issues, props: {}, host: groupHost },
+    });
+
+    await new Promise((r) => setTimeout(r, 0));
+    await tick();
+    await tick();
+
+    expect(container.querySelector("[data-issue-spawn-group]")).toBeNull();
+    expect(container.querySelector("[data-issue-spawn]")).toBeNull();
+    expect(container.querySelector("[data-issue-select]")).toBeNull();
+
+    const jump = container.querySelector(
+      "[data-issue-jump]",
+    ) as HTMLButtonElement;
+    expect(jump).not.toBeNull();
+    expect(jump.getAttribute("data-issue-handled-workspace")).toBe(
+      "ws-handler",
+    );
+    await fireEvent.click(jump);
+    await tick();
+
+    expect(switchSpy).toHaveBeenCalledWith("ws-handler");
+  });
+
+  it("Refresh button shows 'Refreshing...' and is disabled while a fetch is in flight", async () => {
+    let resolveFetch: (value: unknown) => void = () => {};
+    const inFlight = new Promise((resolve) => {
+      resolveFetch = resolve;
+    });
+    const invokeFn = vi.fn(async (cmd: string) => {
+      if (cmd === "gh_available") return true;
+      if (cmd === "gh_list_issues") return inFlight;
+      return undefined;
+    });
+    const api = makeApi({ invoke: invokeFn });
+    const { container } = render(ExtensionWrapper, {
+      props: { api, component: Issues, props: {}, host: groupHost },
+    });
+
+    // First fetch fires on mount, then awaits the gh_available probe
+    // before setting `loading = true`. Pump several microtasks so the
+    // gh_available promise resolves and the reactive update lands.
+    for (let i = 0; i < 8; i++) {
+      await Promise.resolve();
+      await tick();
+    }
+
+    const btn = container.querySelector(
+      "[data-issues-refresh]",
+    ) as HTMLButtonElement;
+    expect(btn).not.toBeNull();
+    expect(btn.disabled).toBe(true);
+    expect(btn.getAttribute("data-refreshing")).toBe("true");
+    expect(btn.textContent?.trim()).toBe("Refreshing...");
+
+    resolveFetch([]);
+    for (let i = 0; i < 8; i++) {
+      await Promise.resolve();
+      await tick();
+    }
+
+    expect(btn.disabled).toBe(false);
+    expect(btn.getAttribute("data-refreshing")).toBeNull();
+    expect(btn.textContent?.trim()).toBe("Refresh");
+  });
+});
+
+// --- Prs ---
+
+describe("Prs widget", () => {
+  const GROUP_ID = "grp-prs";
+  const GROUP_PATH = "/work/proj";
+  const groupHost = { metadata: { groupId: GROUP_ID } };
+
+  beforeEach(async () => {
+    configRef.current = {};
+    saveConfigMock.mockClear();
+    resetRegistry();
+    invalidateGhAvailability();
+    tauriInvokeGhAvailable.current = true;
+    const { setWorkspaceGroups, resetWorkspaceGroupsForTest } =
+      await import("../../../lib/stores/workspace-groups");
+    resetWorkspaceGroupsForTest();
+    setWorkspaceGroups([
+      {
+        id: GROUP_ID,
+        name: "PRs Dash",
+        path: GROUP_PATH,
+        color: "blue",
+        groupDashboardEnabled: true,
+        workspaceIds: [],
+      },
+    ]);
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("renders rows for PRs returned by gh_list_prs and never shows a spawn button", async () => {
+    const fakePrs = [
+      {
+        number: 101,
+        title: "Add login flow",
+        state: "open",
+        url: "https://gh/pr/101",
+        headRefName: "feature/login",
+        isDraft: false,
+        author: { login: "octocat" },
+        createdAt: "2026-04-19T00:00:00.000Z",
+      },
+      {
+        number: 102,
+        title: "WIP refactor",
+        state: "open",
+        url: "https://gh/pr/102",
+        headRefName: "wip/refactor",
+        isDraft: true,
+        author: { login: "alxjrvs" },
+        createdAt: "2026-04-19T00:00:00.000Z",
+      },
+    ];
+    const invokeFn = vi.fn(async (cmd: string) => {
+      if (cmd === "gh_available") return true;
+      if (cmd === "gh_list_prs") return fakePrs;
+      return undefined;
+    });
+    const api = makeApi({ invoke: invokeFn });
+
+    const { container } = render(ExtensionWrapper, {
+      props: {
+        api,
+        component: Prs,
+        props: {},
+        host: groupHost,
+      },
+    });
+
+    await new Promise((r) => setTimeout(r, 0));
+    await tick();
+    await tick();
+
+    const rows = container.querySelectorAll("[data-pr-row]");
+    expect(rows.length).toBe(2);
+    expect(rows[0].getAttribute("data-pr-number")).toBe("101");
+    expect(container.querySelector("[data-pr-draft]")).not.toBeNull();
+    // Read-only widget — no spawn button under any selector pattern.
+    expect(container.querySelector("[data-pr-spawn]")).toBeNull();
+    expect(container.querySelector("[data-issue-spawn]")).toBeNull();
+  });
+
+  it("clicking a row invokes open_with_default_app with the PR url", async () => {
+    const fakePrs = [
+      {
+        number: 7,
+        title: "Open me",
+        state: "open",
+        url: "https://gh/pr/7",
+        headRefName: "branch-7",
+        isDraft: false,
+        author: { login: "me" },
+        createdAt: "2026-04-19T00:00:00.000Z",
+      },
+    ];
+    const invokeFn = vi.fn(async (cmd: string) => {
+      if (cmd === "gh_available") return true;
+      if (cmd === "gh_list_prs") return fakePrs;
+      return undefined;
+    });
+    const api = makeApi({ invoke: invokeFn });
+
+    const { container } = render(ExtensionWrapper, {
+      props: {
+        api,
+        component: Prs,
+        props: {},
+        host: groupHost,
+      },
+    });
+
+    await new Promise((r) => setTimeout(r, 0));
+    await tick();
+    await tick();
+
+    const row = container.querySelector("[data-pr-row]") as HTMLElement;
+    expect(row).not.toBeNull();
+    await fireEvent.click(row);
+    await tick();
+
+    expect(invokeFn).toHaveBeenCalledWith("open_with_default_app", {
+      path: "https://gh/pr/7",
+    });
+  });
+
+  it("renders the gh-missing panel when gh is not available", async () => {
+    tauriInvokeGhAvailable.current = false;
+    const invokeFn = vi.fn(async () => undefined);
+    const api = makeApi({ invoke: invokeFn });
+
+    const { container } = render(ExtensionWrapper, {
+      props: {
+        api,
+        component: Prs,
+        props: {},
+        host: groupHost,
+      },
+    });
+
+    await new Promise((r) => setTimeout(r, 0));
+    await tick();
+    await tick();
+
+    const missing = container.querySelector("[data-prs-gh-missing]");
+    expect(missing).not.toBeNull();
+    expect(missing?.textContent).toContain("GitHub CLI not available");
+    const retry = container.querySelector(
+      "[data-prs-gh-missing-retry]",
+    ) as HTMLButtonElement | null;
+    expect(retry).not.toBeNull();
+  });
+
+  it("renders the empty state when gh_list_prs returns no rows", async () => {
+    const invokeFn = vi.fn(async (cmd: string) => {
+      if (cmd === "gh_available") return true;
+      if (cmd === "gh_list_prs") return [];
+      return undefined;
+    });
+    const api = makeApi({ invoke: invokeFn });
+
+    const { container } = render(ExtensionWrapper, {
+      props: {
+        api,
+        component: Prs,
+        props: {},
+        host: groupHost,
+      },
+    });
+
+    await new Promise((r) => setTimeout(r, 0));
+    await tick();
+    await tick();
+
+    expect(container.querySelector("[data-prs-empty]")).not.toBeNull();
+    expect(container.querySelectorAll("[data-pr-row]").length).toBe(0);
   });
 });
 

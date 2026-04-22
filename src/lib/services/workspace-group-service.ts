@@ -136,46 +136,71 @@ export function groupDashboardPath(groupPath: string): string {
 
 function buildGroupDashboardMarkdown(group: WorkspaceGroupEntry): string {
   // The Group Dashboard is the generic, agent-agnostic landing page for
-  // a Workspace Group. Per the spec / user intent it surfaces work-
-  // tracker links (diffs, open PRs) rather than agent telemetry — that
-  // lives on the optional Agentic Dashboard contribution.
+  // a Workspace Group. It surfaces GitHub work-tracker context — open
+  // issues + open PRs — side by side, as a passive read-only browse
+  // panel. Spawn-on-issue lives on the per-group Agentic Dashboard tile
+  // (which mounts the same `gnar:issues` widget without `displayOnly`).
   //
-  // `gnar:issues` is registered by the agentic extension; when the
-  // extension is disabled the markdown previewer renders it as an
-  // "Unknown widget" fallback, which degrades gracefully without
-  // breaking the Dashboard for users who don't want agents.
+  // `gnar:columns`, `gnar:issues`, and `gnar:prs` are all registered by
+  // the agentic extension. When that extension is disabled the markdown
+  // previewer renders unknown widgets as a fallback, so the Dashboard
+  // degrades gracefully for users who don't want agents.
   return `# ${group.name}
 
 Project at \`${group.path}\`.
 
-## Open Issues & PRs
-
-\`\`\`gnar:issues
-state: open
-limit: 25
+\`\`\`gnar:columns
+children:
+  - name: issues
+    config:
+      state: open
+      displayOnly: true
+  - name: prs
+    config:
+      state: open
 \`\`\`
-
-## Quick Links
-
-- [Browse on GitHub](https://github.com)
-- Run \`gh pr list\` in any workspace terminal for the current PR queue
-- Use **Promote to Workspace Group** on any workspace to nest it here
 `;
 }
 
+/**
+ * Write the Group Overview Dashboard markdown template to `path`.
+ *
+ * `force: true` overwrites any existing file — used by the
+ * "Regenerate" action in Group Settings to refresh user-stale
+ * templates after the seeded layout changes. The default skips the
+ * write when a file is already present so first-create on an existing
+ * group never trampling user customizations.
+ */
 async function writeGroupDashboardTemplate(
   group: WorkspaceGroupEntry,
   path: string,
+  options: { force?: boolean } = {},
 ): Promise<void> {
-  const exists = await invoke<boolean>("file_exists", { path }).catch(
-    () => false,
-  );
-  if (exists) return;
+  if (!options.force) {
+    const exists = await invoke<boolean>("file_exists", { path }).catch(
+      () => false,
+    );
+    if (exists) return;
+  }
   const dir = path.replace(/\/[^/]+$/, "");
   await invoke("ensure_dir", { path: dir });
   await invoke("write_file", {
     path,
     content: buildGroupDashboardMarkdown(group),
+  });
+}
+
+/**
+ * Public regenerate hook for the Group Overview Dashboard
+ * contribution. Force-rewrites the markdown at `groupDashboardPath`;
+ * the preview surface watching that file picks up the change without
+ * needing the workspace to be closed/recreated.
+ */
+export async function regenerateGroupDashboardTemplate(
+  group: WorkspaceGroupEntry,
+): Promise<void> {
+  await writeGroupDashboardTemplate(group, groupDashboardPath(group.path), {
+    force: true,
   });
 }
 

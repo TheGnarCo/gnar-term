@@ -43,11 +43,7 @@
     type DashboardContribution,
   } from "../services/dashboard-contribution-registry";
   import { workspaces as workspacesStore } from "../stores/workspace";
-  import {
-    showInputPrompt,
-    showConfirmPrompt,
-    contextMenu,
-  } from "../stores/ui";
+  import { showInputPrompt, contextMenu } from "../stores/ui";
   import { contrastColor } from "../utils/contrast";
   import { getAllSurfaces, isPreviewSurface, type Workspace } from "../types";
 
@@ -297,32 +293,6 @@
     })),
   ];
 
-  // Close X on the group container row — destructive; deletes the
-  // group entity AND every workspace nested under it (including the
-  // Dashboard). Confirms first.
-  async function handleClose() {
-    const g = group;
-    if (!g) return;
-    const nestedCount = $workspacesStore.filter((w) => {
-      const md = w.metadata as Record<string, unknown> | undefined;
-      return md?.groupId === g.id;
-    }).length;
-    const nestedLine =
-      nestedCount > 0
-        ? ` ${nestedCount} nested workspace${nestedCount === 1 ? "" : "s"} (including the Dashboard) will also be closed.`
-        : "";
-    const confirmed = await showConfirmPrompt(
-      `Delete workspace group "${g.name}"?${nestedLine}`,
-      {
-        title: "Delete Workspace Group",
-        confirmLabel: "Delete",
-        cancelLabel: "Cancel",
-      },
-    );
-    if (!confirmed) return;
-    void handleDeleteGroup();
-  }
-
   // Dashboard-hint for nested workspaces: any workspace hosting a
   // preview surface pointed at the group's dashboard path gets a
   // dashboard icon.
@@ -358,8 +328,6 @@
       gripAriaLabel="Drag workspace group to reorder"
       onBannerContextMenu={handleBannerContextMenu}
       onBannerClick={handleBannerClick}
-      onClose={handleClose}
-      closeTitle="Delete workspace group"
       {filterIds}
       {hasActiveChild}
       dashboardHintFor={hintForGroupDashboardHost}

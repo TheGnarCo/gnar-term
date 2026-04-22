@@ -29,8 +29,10 @@ import { getWorkspaceGroups } from "../../lib/stores/workspace-groups";
 import { getConfig, saveConfig } from "../../lib/config";
 import BotIcon from "./icons/BotIcon.svelte";
 import GlobalAgenticDashboardBody from "./components/GlobalAgenticDashboardBody.svelte";
+import AgentStatusGrid from "./components/AgentStatusGrid.svelte";
 import Kanban from "./components/Kanban.svelte";
 import Issues from "./components/Issues.svelte";
+import Prs from "./components/Prs.svelte";
 import AgentList from "./components/AgentList.svelte";
 import AgentStatusRow from "./components/AgentStatusRow.svelte";
 import TaskSpawner from "./components/TaskSpawner.svelte";
@@ -104,6 +106,9 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
       icon: BotIcon,
       lockedReason: "Required by Agentic extension",
       create: (group) => createAgenticDashboardWorkspace(api, group),
+      regenerate: async (group) => {
+        await writeAgenticDashboardTemplate(api, group, { force: true });
+      },
     });
 
     // Back-fill the Agentic Dashboard for every existing group. Fresh
@@ -124,6 +129,12 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
       position: "root-top",
       icon: BotIcon,
       render: GlobalAgenticDashboardBody,
+      // Replace the static "Agents dashboard" label in the sidebar
+      // root row with a live 2x2 status-chip grid (Running / Waiting /
+      // Idle / Done) — same buckets as the Kanban widget so the
+      // sidebar summary always agrees with what the Agents dashboard
+      // body shows.
+      rowBody: AgentStatusGrid,
       metadata: { isGlobalAgenticDashboard: true },
     });
 
@@ -139,6 +150,34 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
       },
     });
     api.registerMarkdownComponent("issues", Issues, {
+      configSchema: {
+        type: "object",
+        properties: {
+          repoPath: {
+            type: "string",
+            description:
+              "Required when the enclosing dashboard host is global; ignored under a group host (uses group.path instead).",
+          },
+          repo: {
+            type: "string",
+            description: "owner/name (defaults to gh inference).",
+          },
+          state: {
+            type: "string",
+            enum: ["open", "closed", "all"],
+            default: "open",
+          },
+          limit: { type: "number", default: 25 },
+          displayOnly: {
+            type: "boolean",
+            default: false,
+            description:
+              "When true, hide the per-row Spawn split-button. Used by the Group Overview Dashboard, where the issue list is a passive read-only browse panel.",
+          },
+        },
+      },
+    });
+    api.registerMarkdownComponent("prs", Prs, {
       configSchema: {
         type: "object",
         properties: {
@@ -249,6 +288,11 @@ function agenticDashboardMarkdownPath(group: WorkspaceGroupRef): string {
  * section crowds the group dashboard without adding signal. The Global
  * Agentic Dashboard still uses agent-list because it has no sidebar
  * counterpart.
+ *
+ * The `gnar:issues` block at the bottom mounts the same widget the
+ * Group Overview Dashboard uses, but with the Spawn split-button
+ * active so each open issue can be turned into a worktree workspace
+ * (claude-code default; caret menu offers codex / aider / custom).
  */
 function agenticDashboardTemplate(group: WorkspaceGroupRef): string {
   return `# ${group.name} Agents
@@ -260,6 +304,12 @@ Spawn and monitor agents working inside \`${group.path}\`.
 
 \`\`\`gnar:task-spawner
 \`\`\`
+
+## Open Issues
+
+\`\`\`gnar:issues
+state: open
+\`\`\`
 `;
 }
 
@@ -270,22 +320,37 @@ Spawn and monitor agents working inside \`${group.path}\`.
  * + contribution id. Called by the DashboardContributionRegistry when a
  * user chooses "Add Agentic Dashboard" on a workspace group.
  */
+/**
+ * Write the Agentic Dashboard markdown template to its canonical path.
+ * `force: true` overwrites any existing file — used by the
+ * "Regenerate" action in Group Settings.
+ */
+async function writeAgenticDashboardTemplate(
+  api: ExtensionAPI,
+  group: WorkspaceGroupRef,
+  options: { force?: boolean } = {},
+): Promise<string> {
+  const markdownPath = agenticDashboardMarkdownPath(group);
+  if (!options.force) {
+    const exists = await api
+      .invoke<boolean>("file_exists", { path: markdownPath })
+      .catch(() => false);
+    if (exists) return markdownPath;
+  }
+  const dir = markdownPath.replace(/\/[^/]+$/, "");
+  await api.invoke("ensure_dir", { path: dir });
+  await api.invoke("write_file", {
+    path: markdownPath,
+    content: agenticDashboardTemplate(group),
+  });
+  return markdownPath;
+}
+
 async function createAgenticDashboardWorkspace(
   api: ExtensionAPI,
   group: WorkspaceGroupRef,
 ): Promise<string> {
-  const markdownPath = agenticDashboardMarkdownPath(group);
-  const exists = await api
-    .invoke<boolean>("file_exists", { path: markdownPath })
-    .catch(() => false);
-  if (!exists) {
-    const dir = markdownPath.replace(/\/[^/]+$/, "");
-    await api.invoke("ensure_dir", { path: dir });
-    await api.invoke("write_file", {
-      path: markdownPath,
-      content: agenticDashboardTemplate(group),
-    });
-  }
+  const markdownPath = await writeAgenticDashboardTemplate(api, group);
   return await createWorkspaceFromDef({
     name: "Agents",
     layout: {

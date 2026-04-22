@@ -23,10 +23,15 @@
     dashboardContributionStore,
     type DashboardContribution,
   } from "../services/dashboard-contribution-registry";
+  import { showConfirmPrompt } from "../stores/ui";
   import type { Component } from "svelte";
   import GridIcon from "../icons/GridIcon.svelte";
 
   export let groupId: string;
+
+  /** Per-row regenerate-in-flight flag. Keyed by contribution id. */
+  let regeneratingRow: string | null = null;
+  let regenerateError = "";
 
   $: group = $workspaceGroupsStore.find((g) => g.id === groupId);
   $: currentColorSlot = group?.color ?? "purple";
@@ -95,6 +100,43 @@
       }
     } else {
       closeDashboardForGroup(group.id, contribution.id);
+    }
+  }
+
+  /**
+   * Force-rewrite a dashboard's backing markdown from its current
+   * seeded template. Surfaced per-row in the Dashboards section for
+   * contributions that ship a `regenerate` callback. The dashboard's
+   * preview surface watches its file and reloads automatically — no
+   * workspace recreation needed. Confirmation gate is mandatory
+   * because user edits to the markdown are overwritten.
+   */
+  async function regenerateDashboard(
+    contribution: DashboardContribution,
+  ): Promise<void> {
+    if (!group) return;
+    if (!contribution.regenerate) return;
+    const confirmed = await showConfirmPrompt(
+      `Delete and regenerate the "${contribution.label}" dashboard for "${group.name}"? Any custom edits to its markdown will be lost.`,
+      {
+        title: `Regenerate ${contribution.label}`,
+        confirmLabel: "Regenerate",
+        cancelLabel: "Cancel",
+      },
+    );
+    if (!confirmed) return;
+    regeneratingRow = contribution.id;
+    regenerateError = "";
+    try {
+      await contribution.regenerate(group);
+    } catch (err) {
+      regenerateError = `Failed to regenerate "${contribution.label}": ${err instanceof Error ? err.message : String(err)}`;
+      console.error(
+        `[group-settings] regenerate("${contribution.id}") failed:`,
+        err,
+      );
+    } finally {
+      regeneratingRow = null;
     }
   }
 </script>
@@ -223,6 +265,30 @@
                 >{contribution.lockedReason ?? "Required"}</span
               >
             {/if}
+            {#if contribution.regenerate && (active || locked)}
+              <!-- svelte-ignore a11y_click_events_have_key_events -->
+              <button
+                data-dashboard-regenerate={contribution.id}
+                type="button"
+                on:click|preventDefault|stopPropagation={() =>
+                  void regenerateDashboard(contribution)}
+                disabled={regeneratingRow === contribution.id}
+                title={`Delete and regenerate "${contribution.label}" from its current template`}
+                style="
+                  background: transparent; color: {$theme.fgDim};
+                  border: 1px solid {$theme.border}; border-radius: 3px;
+                  padding: 2px 8px; font-size: 11px;
+                  cursor: {regeneratingRow === contribution.id
+                  ? 'wait'
+                  : 'pointer'};
+                  opacity: {regeneratingRow === contribution.id ? 0.6 : 1};
+                "
+              >
+                {regeneratingRow === contribution.id
+                  ? "Regenerating..."
+                  : "Regenerate"}
+              </button>
+            {/if}
             <input
               data-dashboard-toggle-input
               type="checkbox"
@@ -235,6 +301,14 @@
             />
           </label>
         {/each}
+        {#if regenerateError}
+          <div
+            data-dashboards-regenerate-error
+            style="color: {$theme.danger}; font-size: 11px; padding: 4px 0;"
+          >
+            {regenerateError}
+          </div>
+        {/if}
       </div>
     </section>
 

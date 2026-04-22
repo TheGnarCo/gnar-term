@@ -24,8 +24,21 @@ import { getAllSurfaces, isTerminalSurface } from "../../lib/types";
 /** Minimum interval between widget data refreshes (ms). */
 export const WIDGET_THROTTLE_MS = 200;
 
-/** Minimum interval between automatic gh polls (ms). */
-export const GH_POLL_THROTTLE_MS = 30_000;
+/**
+ * Minimum interval between automatic `gh_*` polls — also used as both
+ * the per-widget throttle window and the auto-poll setInterval cadence
+ * (Issues + Prs widgets). The user can always click "Refresh" for an
+ * immediate re-fetch (force=true bypasses this throttle).
+ *
+ * Sized to keep us comfortably under GitHub's rate limits even with
+ * many group dashboards mounted at once: with 5 group dashboards × 2
+ * widgets each, a 5-minute cycle is 120 calls/hour total — well under
+ * the 5000/hour authenticated REST limit and the GraphQL points cap.
+ * 30s polling (the previous value) put us at ~1200 calls/hour for the
+ * same configuration, which was tripping rate-limit errors in
+ * practice.
+ */
+export const GH_POLL_THROTTLE_MS = 300_000;
 
 /**
  * Wrap `fn` so it fires at most once per `intervalMs`. The first call

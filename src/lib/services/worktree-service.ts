@@ -129,6 +129,15 @@ export interface WorktreeWorkspaceConfig {
    * workspace. See spec §5.3.
    */
   spawnedBy?: { kind: "global" } | { kind: "group"; groupId: string };
+  /**
+   * GitHub issue numbers this workspace is handling. Stamped on the
+   * workspace as `metadata.spawnedFromIssues`. Drives the bot-icon /
+   * "jump to active workspace" affordance on the Issues widget so users
+   * can see at-a-glance which issues already have an agent assigned.
+   * Multi-issue spawns ("Spawn Together") write all the issue numbers
+   * into a single workspace's array.
+   */
+  spawnedFromIssues?: number[];
 }
 
 export async function createWorktreeWorkspaceFromConfig(
@@ -194,6 +203,9 @@ export async function createWorktreeWorkspaceFromConfig(
       repoPath: config.repoPath,
       ...(config.groupId ? { groupId: config.groupId } : {}),
       ...(config.spawnedBy ? { spawnedBy: config.spawnedBy } : {}),
+      ...(config.spawnedFromIssues && config.spawnedFromIssues.length > 0
+        ? { spawnedFromIssues: config.spawnedFromIssues }
+        : {}),
     },
     layout: {
       pane: {

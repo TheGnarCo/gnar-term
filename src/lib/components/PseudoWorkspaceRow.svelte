@@ -21,6 +21,8 @@
     activeWorkspaceIdx,
   } from "../stores/workspace";
   import DragGrip from "./DragGrip.svelte";
+  import ExtensionWrapper from "./ExtensionWrapper.svelte";
+  import { getExtensionApiById } from "../services/extension-loader";
   import type { Component } from "svelte";
   import type { PseudoWorkspace } from "../services/pseudo-workspace-registry";
   import { configStore } from "../config";
@@ -28,6 +30,15 @@
 
   export let pseudo: PseudoWorkspace;
   export let onGripMouseDown: ((e: MouseEvent) => void) | undefined = undefined;
+
+  // When the pseudo-workspace registers a `rowBody` component, render
+  // it via ExtensionWrapper so it receives the registering extension's
+  // `api` through context — same pattern SecondarySidebar/WorkspaceItem
+  // use for extension-supplied sidebar widgets. Falls back to the
+  // plain `pseudo.label` text when no rowBody is registered.
+  $: rowBodyApi = pseudo.rowBody
+    ? getExtensionApiById(pseudo.source)
+    : undefined;
 
   let bannerHovered = false;
   /** Row-level hover drives the grip expansion — any section of the
@@ -127,7 +138,9 @@
       "
     >
       <div
-        style="padding: 0 8px; display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 32px; min-width: 0;"
+        style="padding: 0 8px; display: flex; align-items: center; justify-content: {pseudo.rowBody
+          ? 'flex-start'
+          : 'center'}; gap: 8px; min-height: 32px; min-width: 0;"
       >
         {#if pseudo.icon}
           <span
@@ -137,12 +150,21 @@
             <svelte:component this={pseudo.icon as Component} />
           </span>
         {/if}
-        <span
-          data-pseudo-workspace-label
-          style="font-weight: 500; font-size: 13px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
-        >
-          {pseudo.label}
-        </span>
+        {#if pseudo.rowBody && rowBodyApi}
+          <div
+            data-pseudo-workspace-row-body
+            style="flex: 1; min-width: 0; display: flex; align-items: center;"
+          >
+            <ExtensionWrapper api={rowBodyApi} component={pseudo.rowBody} />
+          </div>
+        {:else}
+          <span
+            data-pseudo-workspace-label
+            style="font-weight: 500; font-size: 13px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+          >
+            {pseudo.label}
+          </span>
+        {/if}
       </div>
     </div>
   </div>

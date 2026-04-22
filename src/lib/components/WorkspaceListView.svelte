@@ -262,7 +262,14 @@
         shortcut: "⇧⌘W",
         danger: true,
         disabled: $workspaces.length <= 1 || isDashboard,
-        action: () => closeWorkspace(globalIdx),
+        action: async () => {
+          const confirmed = await showConfirmPrompt(
+            `Close "${ws.name}"? This will dispose the terminal.`,
+            { title: "Close Workspace", confirmLabel: "Close", danger: true },
+          );
+          if (!confirmed) return;
+          closeWorkspace(globalIdx);
+        },
       },
     ];
     contextMenu.set({ x, y, items });
@@ -365,7 +372,18 @@
             onSelect={() => {
               if (!active) switchWorkspace(entry.idx);
             }}
-            onClose={() => closeWorkspace(entry.idx)}
+            onClose={async () => {
+              const confirmed = await showConfirmPrompt(
+                `Close "${entry.ws.name}"? This will dispose the terminal.`,
+                {
+                  title: "Close Workspace",
+                  confirmLabel: "Close",
+                  danger: true,
+                },
+              );
+              if (!confirmed) return;
+              closeWorkspace(entry.idx);
+            }}
             onRename={(name) => renameWorkspace(entry.idx, name)}
             onContextMenu={(x, y) => showNestedContextMenu(x, y, entry.idx)}
             onGripMouseDown={(e) => startDrag(e, entry.idx)}

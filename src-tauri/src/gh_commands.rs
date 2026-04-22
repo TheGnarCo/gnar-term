@@ -2,6 +2,20 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::process::Command;
 
+fn shell_path() -> String {
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
+    if let Ok(out) = Command::new(&shell)
+        .args(["-l", "-c", "echo $PATH"])
+        .output()
+    {
+        let path = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if !path.is_empty() {
+            return path;
+        }
+    }
+    std::env::var("PATH").unwrap_or_default()
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GhAuthor {
     pub login: String,
@@ -53,6 +67,7 @@ fn validate_repo(repo_path: &str) -> Result<(), String> {
 fn check_gh_installed() -> Result<(), String> {
     Command::new("gh")
         .arg("--version")
+        .env("PATH", shell_path())
         .output()
         .map_err(|_| "GitHub CLI (gh) is not installed".to_string())?;
     Ok(())
@@ -64,6 +79,7 @@ fn run_gh_command(repo_path: &str, args: &[&str]) -> Result<String, String> {
 
     let output = Command::new("gh")
         .args(args)
+        .env("PATH", shell_path())
         .current_dir(repo_path)
         .output()
         .map_err(|e| format!("Failed to execute gh command: {e}"))?;
@@ -90,7 +106,11 @@ fn parse_issues(json: &str) -> Result<Vec<GhIssue>, String> {
 /// an actionable empty state instead of a terse error line.
 #[tauri::command]
 pub async fn gh_available() -> Result<bool, String> {
-    Ok(Command::new("gh").arg("--version").output().is_ok())
+    Ok(Command::new("gh")
+        .arg("--version")
+        .env("PATH", shell_path())
+        .output()
+        .is_ok())
 }
 
 #[tauri::command]

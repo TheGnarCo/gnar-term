@@ -277,7 +277,18 @@
       id: "core.close-workspace",
       title: "Close Workspace",
       shortcut: isMac ? `${shiftModLabel}W` : `${shiftModLabel}Q`,
-      action: () => closeWorkspace($activeWorkspaceIdx),
+      action: () => {
+        void (async () => {
+          const ws = $workspaces[$activeWorkspaceIdx];
+          if (!ws) return;
+          const confirmed = await showConfirmPrompt(
+            `Close "${ws.name}"? This will dispose the terminal.`,
+            { title: "Close Workspace", confirmLabel: "Close", danger: true },
+          );
+          if (!confirmed) return;
+          closeWorkspace($activeWorkspaceIdx);
+        })();
+      },
       source: "core",
     },
     {

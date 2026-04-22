@@ -8,6 +8,14 @@
   } from "../stores/ui";
   import { isMac, modLabel } from "../terminal-service";
 
+  const isDev = import.meta.env.DEV;
+  const DEV_BG = "#C8900A";
+  const DEV_FG = "#1C0F00";
+
+  $: bg = isDev ? DEV_BG : $theme.bg;
+  $: fg = isDev ? DEV_FG : $theme.fgDim;
+  $: fgActive = isDev ? DEV_FG : $theme.fg;
+
   let btnStyle = "";
   $: btnStyle = `
     background: none; border: none; cursor: pointer;
@@ -30,13 +38,11 @@
   style="
     height: 38px; flex-shrink: 0; display: flex; align-items: center;
     padding: 0 8px 0 {leftPadding}; -webkit-app-region: drag;
-    background: {$theme.bg}; border-bottom: 1px solid {$theme.border};
+    background: {bg}; border-bottom: 1px solid {isDev ? DEV_FG : $theme.border};
   "
 >
   <button
-    style="{btnStyle} color: {$primarySidebarVisible
-      ? $theme.fg
-      : $theme.fgDim};"
+    style="{btnStyle} color: {$primarySidebarVisible ? fgActive : fg};"
     title="Toggle Primary Sidebar ({modLabel}B)"
     on:click={() => primarySidebarVisible.update((v) => !v)}
   >
@@ -62,13 +68,13 @@
     <span
       style="
       font-size: 11px; font-weight: 600; letter-spacing: 1.5px;
-      color: {$theme.fgDim};
-    ">GNARTERM</span
+      color: {fg};
+    ">{isDev ? "GNARTERM (DEV VERSION)" : "GNARTERM"}</span
     >
   </div>
 
   <button
-    style="{btnStyle} color: {$settingsOpen ? $theme.fg : $theme.fgDim};"
+    style="{btnStyle} color: {$settingsOpen ? fgActive : fg};"
     title="Settings ({modLabel},)"
     on:click={() => settingsOpen.update((v) => !v)}
   >
@@ -86,9 +92,7 @@
   </button>
 
   <button
-    style="{btnStyle} color: {$secondarySidebarVisible
-      ? $theme.fg
-      : $theme.fgDim};"
+    style="{btnStyle} color: {$secondarySidebarVisible ? fgActive : fg};"
     title="Toggle Secondary Sidebar"
     on:click={() => secondarySidebarVisible.update((v) => !v)}
   >

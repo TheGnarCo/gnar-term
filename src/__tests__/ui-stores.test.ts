@@ -1,5 +1,5 @@
 /**
- * Tests for UI store prompt functions — showInputPrompt and showFormPrompt
+ * Tests for UI store prompt functions — showInputPrompt, showFormPrompt, showConfirmPrompt
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { get } from "svelte/store";
@@ -8,6 +8,8 @@ import {
   showInputPrompt,
   formPrompt,
   showFormPrompt,
+  confirmPrompt,
+  showConfirmPrompt,
   type FormField,
 } from "../lib/stores/ui";
 
@@ -93,5 +95,63 @@ describe("showFormPrompt", () => {
 
     const result = await promise;
     expect(result).toBeNull();
+  });
+});
+
+describe("showConfirmPrompt", () => {
+  beforeEach(() => {
+    confirmPrompt.set(null);
+  });
+
+  it("sets confirmPrompt store with message and resolve", () => {
+    showConfirmPrompt("Are you sure?");
+
+    const state = get(confirmPrompt);
+    expect(state).not.toBeNull();
+    expect(state!.message).toBe("Are you sure?");
+    expect(typeof state!.resolve).toBe("function");
+  });
+
+  it("uses default confirm/cancel labels when not specified", () => {
+    showConfirmPrompt("Are you sure?");
+
+    const state = get(confirmPrompt);
+    expect(state!.confirmLabel).toBe("Confirm");
+    expect(state!.cancelLabel).toBe("Cancel");
+  });
+
+  it("uses provided title and labels", () => {
+    showConfirmPrompt("Close this workspace?", {
+      title: "Close Workspace",
+      confirmLabel: "Close",
+      cancelLabel: "Keep Open",
+      danger: true,
+    });
+
+    const state = get(confirmPrompt);
+    expect(state!.title).toBe("Close Workspace");
+    expect(state!.confirmLabel).toBe("Close");
+    expect(state!.cancelLabel).toBe("Keep Open");
+    expect(state!.danger).toBe(true);
+  });
+
+  it("resolves with true when confirmed", async () => {
+    const promise = showConfirmPrompt("Are you sure?");
+
+    const state = get(confirmPrompt);
+    state!.resolve(true);
+
+    const result = await promise;
+    expect(result).toBe(true);
+  });
+
+  it("resolves with false when cancelled", async () => {
+    const promise = showConfirmPrompt("Are you sure?");
+
+    const state = get(confirmPrompt);
+    state!.resolve(false);
+
+    const result = await promise;
+    expect(result).toBe(false);
   });
 });

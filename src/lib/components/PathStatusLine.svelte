@@ -27,6 +27,7 @@
    * on any banner color. Defaults to theme.fgMuted otherwise.
    */
   export let fgColor: string | undefined = undefined;
+  export let iconColor: string | undefined = undefined;
 
   const api = getContext<ExtensionAPI>(EXTENSION_API_KEY);
   const theme = api.theme;
@@ -103,9 +104,22 @@
     style="padding: 2px 12px 0 8px; display: flex; align-items: center; min-width: 0; overflow: hidden; line-height: 1.2;"
   >
     <span
-      style="font-size: 10px; color: {fgMuted}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;"
-      title={target.path}>{prettyPath}</span
+      style="font-size: 10px; color: {fgMuted}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; display: inline-flex; align-items: center; gap: 3px;"
+      title={target.path}
     >
+      <svg
+        width="10"
+        height="10"
+        viewBox="0 0 16 16"
+        fill={iconColor ?? "currentColor"}
+        style="flex-shrink: 0; opacity: 0.7;"
+      >
+        <path
+          d="M1 3.5A1.5 1.5 0 0 1 2.5 2h2.764c.958 0 1.76.56 2.062 1.5H13.5A1.5 1.5 0 0 1 15 5v7.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5z"
+        />
+      </svg>
+      {prettyPath}
+    </span>
   </div>
 
   <!-- Git row: branch only. Only rendered when git. -->
@@ -114,10 +128,14 @@
       style="padding: 0 12px 2px 8px; display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; line-height: 1.2; flex-wrap: wrap;"
     >
       <span
-        style="font-size: 10px; color: {fgMuted}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0;"
+        style="font-size: 10px; color: {fgMuted}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; display: inline-flex; align-items: center; gap: 3px;"
         title={branchError
           ? "Failed to read branch"
-          : (branch ?? "detached HEAD")}>⎇ {branch ?? "…"}</span
+          : (branch ?? "detached HEAD")}
+        ><span
+          style="color: {iconColor ?? fgMuted}; opacity: 0.8; flex-shrink: 0;"
+          >⎇</span
+        >{branch ?? "…"}</span
       >
     </div>
   {/if}

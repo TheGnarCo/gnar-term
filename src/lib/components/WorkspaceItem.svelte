@@ -167,11 +167,6 @@
   $: processStatusStore = getWorkspaceStatusByCategory(workspace.id, "process");
   $: processItems = $processStatusStore;
   $: agentBadges = aggregateAgentBadges(processItems);
-  // Count per-surface agent items (items with metadata.surfaceId)
-  $: perSurfaceAgents = processItems.filter(
-    (item) => typeof item.metadata?.surfaceId === "string",
-  );
-  $: agentCount = perSurfaceAgents.length;
 
   $: subtitleComponents = $workspaceSubtitleStore;
 
@@ -467,12 +462,13 @@
         <ExtensionWrapper
           api={subApi}
           component={sub.component}
-          props={{ workspaceId: workspace.id }}
+          props={{ workspaceId: workspace.id, accentColor: railColor }}
         />
       {:else}
         <svelte:component
           this={sub.component as Component}
           workspaceId={workspace.id}
+          accentColor={railColor}
         />
       {/if}
     {/each}

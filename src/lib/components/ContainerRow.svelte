@@ -16,6 +16,7 @@
    *     the banner background and a small accent strip on the right.
    */
   import { type Component } from "svelte";
+  import { slide } from "svelte/transition";
   import { theme } from "../stores/theme";
   import { reorderContext } from "../stores/ui";
   import DragGrip from "./DragGrip.svelte";
@@ -91,6 +92,7 @@
    * part of the row (not only the grip column).
    */
   let rowHovered = false;
+  let collapsed = false;
 
   $: WorkspaceListViewResolved = (workspaceListViewComponent ??
     DefaultWorkspaceListView) as Component;
@@ -135,13 +137,40 @@
           <slot name="banner-end" />
         </div>
         <slot name="banner-subtitle" />
+        {#if filterIds.size > 0}
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div
+            role="button"
+            tabindex="0"
+            on:click|stopPropagation={() => (collapsed = !collapsed)}
+            on:keydown={(e) => e.key === "Enter" && (collapsed = !collapsed)}
+            title={collapsed ? "Expand" : "Collapse"}
+            style="display: flex; justify-content: center; align-items: center; padding: 2px 0 0; cursor: pointer; opacity: 0.4; -webkit-app-region: no-drag;"
+          >
+            <svg
+              width="12"
+              height="8"
+              viewBox="0 0 12 8"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              style="transition: transform 0.2s ease; transform: rotate({collapsed
+                ? 180
+                : 0}deg);"><polyline points="1,1 6,7 11,1" /></svg
+            >
+          </div>
+        {/if}
       </div>
     </div>
-    {#if filterIds.size > 0}
+    {#if !collapsed && filterIds.size > 0}
       <div
         data-container-nested={scopeId}
         data-nested-count={filterIds.size}
         style="display: flex; flex-direction: column;"
+        transition:slide={{ duration: 200 }}
       >
         <svelte:component
           this={WorkspaceListViewResolved}
@@ -289,13 +318,40 @@
             <slot name="banner-end" {bannerHovered} />
           </div>
           <slot name="banner-subtitle" {bannerHovered} />
+          {#if filterIds.size > 0}
+            <!-- svelte-ignore a11y_click_events_have_key_events -->
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div
+              role="button"
+              tabindex="0"
+              on:click|stopPropagation={() => (collapsed = !collapsed)}
+              on:keydown={(e) => e.key === "Enter" && (collapsed = !collapsed)}
+              title={collapsed ? "Expand" : "Collapse"}
+              style="display: flex; justify-content: center; align-items: center; padding: 2px 0 0; cursor: pointer; opacity: 0.4; -webkit-app-region: no-drag;"
+            >
+              <svg
+                width="12"
+                height="8"
+                viewBox="0 0 12 8"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                style="transition: transform 0.2s ease; transform: rotate({collapsed
+                  ? 180
+                  : 0}deg);"><polyline points="1,1 6,7 11,1" /></svg
+              >
+            </div>
+          {/if}
         </div>
       </div>
-      {#if filterIds.size > 0}
+      {#if !collapsed && filterIds.size > 0}
         <div
           data-container-nested={scopeId}
           data-nested-count={filterIds.size}
           style="display: flex; flex-direction: column;"
+          transition:slide={{ duration: 200 }}
         >
           <svelte:component
             this={WorkspaceListViewResolved}

@@ -71,36 +71,6 @@
   <div
     style="display: flex; align-items: center; gap: 2px; padding-right: 2px;"
   >
-    {#if onRegenDashboard}
-      <!-- Dashboard regen — visible on workspaces that host an agent or
-           project dashboard. Click re-spawns the dashboard preview in the
-           active pane. Uses the layout-dashboard glyph so users can
-           identify the affordance at a glance. -->
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <span
-        data-tabbar-regen-dashboard
-        title={regenDashboardTitle}
-        style="color: {$theme.fgDim}; cursor: pointer; width: 24px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center;"
-        on:click|stopPropagation={onRegenDashboard}
-      >
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <rect x="3" y="3" width="7" height="9" />
-          <rect x="14" y="3" width="7" height="5" />
-          <rect x="14" y="12" width="7" height="9" />
-          <rect x="3" y="16" width="7" height="5" />
-        </svg>
-      </span>
-    {/if}
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <span

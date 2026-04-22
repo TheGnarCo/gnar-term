@@ -3,6 +3,7 @@
   import { WebglAddon } from "@xterm/addon-webgl";
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
+  import { writeImage } from "@tauri-apps/plugin-clipboard-manager";
   import { connectPty } from "../terminal-service";
   import { theme } from "../stores/theme";
   import type { TerminalSurface as TermSurface } from "../types";
@@ -14,10 +15,57 @@
   let termEl: HTMLElement;
   let dragOver = false;
   let unlistenDragDrop: (() => void) | undefined;
+  let userScrolledUp = false;
+  let scrollDisposable: { dispose(): void } | undefined;
+
+  const IMAGE_EXTS = new Set([
+    "png",
+    "jpg",
+    "jpeg",
+    "gif",
+    "webp",
+    "bmp",
+    "svg",
+    "tiff",
+    "ico",
+    "avif",
+  ]);
+
+  function isImageFile(path: string): boolean {
+    const ext = path.split(".").pop()?.toLowerCase() ?? "";
+    return IMAGE_EXTS.has(ext);
+  }
 
   /** Shell-escape a file path by wrapping in single quotes. */
   function shellEscape(path: string): string {
     return "'" + path.replace(/'/g, "'\\''") + "'";
+  }
+
+  async function handleDropPaths(paths: string[]): Promise<void> {
+    if (!paths.length || surface.ptyId < 0) return;
+
+    const imagePaths: string[] = [];
+    const textParts: string[] = [];
+
+    for (const path of paths) {
+      if (isImageFile(path)) {
+        imagePaths.push(path);
+        textParts.push("@" + path);
+      } else {
+        textParts.push(shellEscape(path));
+      }
+    }
+
+    if (imagePaths.length > 0) {
+      writeImage(imagePaths[0]!).catch((e) =>
+        console.warn("Failed to write image to clipboard:", e),
+      );
+    }
+
+    void invoke("write_pty", {
+      ptyId: surface.ptyId,
+      data: textParts.join(" ") + " ",
+    });
   }
 
   function handleDragOver(e: DragEvent) {
@@ -34,10 +82,26 @@
     dragOver = false;
     const files = e.dataTransfer?.files;
     if (!files || files.length === 0 || surface.ptyId < 0) return;
-    const paths = Array.from(files).map((f) =>
-      shellEscape((f as unknown as { path?: string }).path || f.name),
+    const paths = Array.from(files).map(
+      (f) => (f as unknown as { path?: string }).path || f.name,
     );
-    void invoke("write_pty", { ptyId: surface.ptyId, data: paths.join(" ") });
+    void handleDropPaths(paths);
+  }
+
+  function jumpToBottom() {
+    surface.terminal.scrollToBottom();
+    userScrolledUp = false;
+  }
+
+  function registerScrollTracking() {
+    scrollDisposable?.dispose();
+    scrollDisposable = surface.terminal.onScroll((newScrollPos: number) => {
+      const maxScroll = Math.max(
+        0,
+        surface.terminal.buffer.active.length - surface.terminal.rows,
+      );
+      userScrolledUp = newScrollPos < maxScroll;
+    });
   }
 
   onMount(async () => {
@@ -91,22 +155,21 @@
       surface.opened = true;
     }
 
+    registerScrollTracking();
+
     // Tauri native file drop (more reliable than HTML5 on Linux WebKitGTK)
     unlistenDragDrop = await listen<{
       paths: string[];
       position: { x: number; y: number };
     }>("tauri://drag-drop", (event) => {
       if (!visible || surface.ptyId < 0) return;
-      const { paths } = event.payload;
-      if (paths.length > 0) {
-        const escaped = paths.map((p) => shellEscape(p)).join(" ");
-        void invoke("write_pty", { ptyId: surface.ptyId, data: escaped });
-      }
+      void handleDropPaths(event.payload.paths);
     });
   });
 
   onDestroy(() => {
     unlistenDragDrop?.();
+    scrollDisposable?.dispose();
   });
 
   $: if (visible && surface.opened && termEl) {
@@ -114,6 +177,7 @@
       try {
         surface.fitAddon.fit();
         surface.terminal.scrollToBottom();
+        userScrolledUp = false;
       } catch (e) {
         console.warn("fitAddon.fit() failed on visibility change:", e);
       }
@@ -123,13 +187,49 @@
 
 <!-- svelte-ignore a11y-no-static-element-interactions -->
 <div
-  bind:this={termEl}
-  on:dragover={handleDragOver}
-  on:dragleave={handleDragLeave}
-  on:drop={handleDrop}
-  style="flex: 1; min-height: 0; min-width: 0; overflow: hidden; display: {visible
+  style="position: relative; flex: 1; min-height: 0; min-width: 0; overflow: hidden; display: {visible
     ? 'flex'
-    : 'none'}; flex-direction: column; {dragOver
-    ? `box-shadow: inset 0 0 0 2px ${$theme.accent}; border-radius: 4px;`
-    : ''}"
-></div>
+    : 'none'}; flex-direction: column;"
+>
+  <div
+    bind:this={termEl}
+    on:dragover={handleDragOver}
+    on:dragleave={handleDragLeave}
+    on:drop={handleDrop}
+    style="flex: 1; min-height: 0; min-width: 0; overflow: hidden; {dragOver
+      ? `box-shadow: inset 0 0 0 2px ${$theme.accent}; border-radius: 4px;`
+      : ''}"
+  ></div>
+
+  {#if userScrolledUp}
+    <!-- svelte-ignore a11y-click-events-have-key-events -->
+    <span
+      data-jump-to-bottom
+      on:click={jumpToBottom}
+      title="Jump to bottom"
+      style="
+        position: absolute; top: 8px; right: 8px;
+        background: {$theme.bg}; color: {$theme.fgDim};
+        border: 1px solid {$theme.border}; border-radius: 4px;
+        padding: 3px 8px; font-size: 11px; cursor: pointer;
+        display: flex; align-items: center; gap: 4px;
+        opacity: 0.85; z-index: 10;
+      "
+    >
+      <svg
+        width="10"
+        height="10"
+        viewBox="0 0 10 10"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <line x1="5" y1="1" x2="5" y2="9" />
+        <polyline points="2,6 5,9 8,6" />
+      </svg>
+      Jump to bottom
+    </span>
+  {/if}
+</div>

@@ -43,7 +43,11 @@
     type DashboardContribution,
   } from "../services/dashboard-contribution-registry";
   import { workspaces as workspacesStore } from "../stores/workspace";
-  import { showInputPrompt, contextMenu } from "../stores/ui";
+  import {
+    showInputPrompt,
+    contextMenu,
+    showConfirmPrompt,
+  } from "../stores/ui";
   import { contrastColor } from "../utils/contrast";
   import { getAllSurfaces, isPreviewSurface, type Workspace } from "../types";
 
@@ -183,9 +187,23 @@
   }
 
   async function handleDeleteGroup() {
-    if (!group) return;
-    closeWorkspacesInGroup(group.id);
-    deleteWorkspaceGroup(group.id);
+    const g = group;
+    if (!g) return;
+    const nestedCount = $workspaces.filter((w) => {
+      const md = w.metadata as Record<string, unknown> | undefined;
+      return md?.groupId === g.id && !md?.isDashboard;
+    }).length;
+    const nestedLine =
+      nestedCount > 0
+        ? ` ${nestedCount} nested workspace${nestedCount === 1 ? "" : "s"} will also be closed.`
+        : "";
+    const confirmed = await showConfirmPrompt(
+      `Delete group "${g.name}"?${nestedLine}`,
+      { title: "Delete Workspace Group", confirmLabel: "Delete", danger: true },
+    );
+    if (!confirmed) return;
+    closeWorkspacesInGroup(g.id);
+    deleteWorkspaceGroup(g.id);
   }
 
   // Banner left-click: activate the group's Dashboard if one is bound,
@@ -388,6 +406,7 @@
               isGit: group.isGit,
             }}
             fgColor={subtitleFg}
+            iconColor={groupHex}
           />
         </div>
       </svelte:fragment>

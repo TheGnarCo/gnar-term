@@ -417,68 +417,28 @@
       {#if !hideStatusBadges}
         {#if agentBadges.length > 0 && agentBadges[0]}
           {@const topBadge = agentBadges[0]}
-          {@const isIdle = topBadge.variant === "muted"}
-          {@const statusLabel =
-            topBadge.variant === "success"
-              ? "running"
-              : topBadge.variant === "warning"
-                ? "waiting"
-                : topBadge.variant === "muted"
-                  ? "idle"
-                  : topBadge.variant === "error"
-                    ? "error"
-                    : ""}
-          {@const chipColor = isIdle
-            ? ($theme.fgMuted ?? $theme.fgDim ?? topBadge.color)
-            : topBadge.color}
-          <!-- Muted variant (agent attached, no active work) renders a
-               dot-only "presence" chip so the user can see an agent is
-               live without the chip competing with other status. Active
-               states (running/waiting/error) keep the full labeled pill. -->
-          {#if isIdle}
-            <span
-              data-agent-presence-chip
-              title={agentBadges.map((b) => b.label).join(", ")}
-              style="
-                display: inline-flex; align-items: center;
-                padding: 0 3px; flex-shrink: 0;
-              "
-            >
-              <span
-                style="width: 7px; height: 7px; border-radius: 50%; background: {chipColor}; box-shadow: 0 0 0 1px color-mix(in srgb, {chipColor} 35%, transparent);"
-              ></span>
-            </span>
-          {:else}
-            <span
-              title={agentBadges.map((b) => b.label).join(", ")}
-              style="
-                display: inline-flex; align-items: center; gap: 3px;
-                font-size: 10px; color: {chipColor};
-                background: color-mix(in srgb, {chipColor} 15%, transparent);
-                padding: 1px 6px; border-radius: 8px; flex-shrink: 0;
-              "
-            >
-              <span
-                style="width: 6px; height: 6px; border-radius: 50%; background: {chipColor};"
-              ></span>
-              {#if agentCount > 1}{agentCount}
-              {/if}{statusLabel}
-            </span>
-          {/if}
-        {:else if agentDotColor}
+          {@const chipColor =
+            topBadge.variant === "muted"
+              ? ($theme.fgMuted ?? $theme.fgDim ?? topBadge.color)
+              : topBadge.color}
           <span
-            title="Agent: {agentStatus}"
-            style="
-              display: inline-flex; align-items: center; gap: 3px;
-              font-size: 10px; color: {agentDotColor};
-              background: color-mix(in srgb, {agentDotColor} 15%, transparent);
-              padding: 1px 6px; border-radius: 8px; flex-shrink: 0;
-            "
+            data-agent-presence-chip
+            title={agentBadges.map((b) => b.label).join(", ")}
+            style="display: inline-flex; align-items: center; padding: 0 3px; flex-shrink: 0;"
           >
             <span
-              style="width: 6px; height: 6px; border-radius: 50%; background: {agentDotColor};"
+              style="width: 7px; height: 7px; border-radius: 50%; background: {chipColor}; box-shadow: 0 0 0 1px color-mix(in srgb, {chipColor} 35%, transparent);"
             ></span>
-            {agentStatus}
+          </span>
+        {:else if agentDotColor}
+          <span
+            data-agent-presence-chip
+            title="Agent: {agentStatus}"
+            style="display: inline-flex; align-items: center; padding: 0 3px; flex-shrink: 0;"
+          >
+            <span
+              style="width: 7px; height: 7px; border-radius: 50%; background: {agentDotColor}; box-shadow: 0 0 0 1px color-mix(in srgb, {agentDotColor} 35%, transparent);"
+            ></span>
           </span>
         {/if}
 

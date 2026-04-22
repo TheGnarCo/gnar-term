@@ -1548,6 +1548,24 @@ pub fn run() {
                 }
             }
 
+            // Swap to a yellow-tinted icon in dev builds so the dock clearly
+            // distinguishes dev from release instances.
+            #[cfg(all(debug_assertions, target_os = "macos"))]
+            {
+                use objc2::AnyThread;
+                use objc2::MainThreadMarker;
+                use objc2_app_kit::{NSApplication, NSImage};
+                use objc2_foundation::NSData;
+                let bytes: &[u8] = include_bytes!("../icons/dev/128x128@2x.png");
+                unsafe {
+                    let mtm = MainThreadMarker::new_unchecked();
+                    let data = NSData::with_bytes(bytes);
+                    if let Some(image) = NSImage::initWithData(NSImage::alloc(), &data) {
+                        NSApplication::sharedApplication(mtm).setApplicationIconImage(Some(&image));
+                    }
+                }
+            }
+
             // MCP bridge — opt-in, dormant unless enabled by setting + Claude
             // Code detection.
             if mcp_should_start() {

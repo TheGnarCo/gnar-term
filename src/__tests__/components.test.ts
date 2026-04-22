@@ -3,6 +3,7 @@
  * the correct DOM structure, text content, and attributes.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { tick } from "svelte";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 // get is available if needed for store testing
 import { readFileSync } from "fs";
@@ -21,6 +22,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
   readText: vi.fn().mockResolvedValue(""),
   writeText: vi.fn().mockResolvedValue(undefined),
+  writeImage: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("@xterm/xterm", () => ({
   Terminal: vi.fn().mockImplementation(() => ({
@@ -33,12 +35,14 @@ vi.mock("@xterm/xterm", () => ({
     onTitleChange: vi.fn(),
     loadAddon: vi.fn(),
     options: {},
-    buffer: { active: { getLine: vi.fn() } },
+    buffer: { active: { getLine: vi.fn(), length: 0 } },
+    rows: 24,
     parser: { registerOscHandler: vi.fn() },
     attachCustomKeyEventHandler: vi.fn(),
     registerLinkProvider: vi.fn(),
     getSelection: vi.fn(),
     scrollToBottom: vi.fn(),
+    onScroll: vi.fn().mockReturnValue({ dispose: vi.fn() }),
   })),
 }));
 vi.mock("@xterm/addon-fit", () => ({
@@ -149,11 +153,13 @@ function makeSurface(
       onTitleChange: vi.fn(),
       loadAddon: vi.fn(),
       options: {},
-      buffer: { active: { getLine: vi.fn() } },
+      buffer: { active: { getLine: vi.fn(), length: 0 } },
+      rows: 24,
       parser: { registerOscHandler: vi.fn() },
       attachCustomKeyEventHandler: vi.fn(),
       registerLinkProvider: vi.fn(),
       getSelection: vi.fn(),
+      onScroll: vi.fn().mockReturnValue({ dispose: vi.fn() }),
     } as unknown as TerminalSurface["terminal"],
     fitAddon: { fit: vi.fn() } as unknown as TerminalSurface["fitAddon"],
     searchAddon: {
@@ -214,7 +220,10 @@ beforeEach(() => {
 describe("TitleBar", () => {
   it("renders GNARTERM text", () => {
     render(TitleBar);
-    expect(screen.getByText("GNARTERM")).toBeTruthy();
+    const el =
+      screen.queryByText("GNARTERM") ??
+      screen.queryByText("GNARTERM (DEV VERSION)");
+    expect(el).toBeTruthy();
   });
 
   it("has data-tauri-drag-region attribute", () => {
@@ -1408,5 +1417,58 @@ describe("TerminalSurface", () => {
 
     expect(surface.fitAddon.fit).toHaveBeenCalled();
     expect(surface.terminal.scrollToBottom).toHaveBeenCalled();
+  });
+
+  it("shows jump-to-bottom button when terminal is scrolled up", async () => {
+    const surface = makeSurface("jump-btn-test", { opened: true });
+    let scrollCallback: ((pos: number) => void) | undefined;
+    (surface.terminal.onScroll as ReturnType<typeof vi.fn>).mockImplementation(
+      (cb: (pos: number) => void) => {
+        scrollCallback = cb;
+        return { dispose: vi.fn() };
+      },
+    );
+    (surface.terminal.buffer.active as Record<string, unknown>).length = 100;
+    (surface.terminal as Record<string, unknown>).rows = 24;
+
+    const { container } = render(TerminalSurfaceComponent, {
+      props: { surface, visible: true },
+    });
+
+    // Button not visible when at bottom
+    expect(container.querySelector("[data-jump-to-bottom]")).toBeNull();
+
+    // Simulate user scrolling up (pos 0 < 100-24=76)
+    scrollCallback?.(0);
+    await tick();
+
+    expect(container.querySelector("[data-jump-to-bottom]")).not.toBeNull();
+  });
+
+  it("hides jump-to-bottom button when user scrolls back to bottom", async () => {
+    const surface = makeSurface("jump-btn-hide-test", { opened: true });
+    let scrollCallback: ((pos: number) => void) | undefined;
+    (surface.terminal.onScroll as ReturnType<typeof vi.fn>).mockImplementation(
+      (cb: (pos: number) => void) => {
+        scrollCallback = cb;
+        return { dispose: vi.fn() };
+      },
+    );
+    (surface.terminal.buffer.active as Record<string, unknown>).length = 100;
+    (surface.terminal as Record<string, unknown>).rows = 24;
+
+    const { container } = render(TerminalSurfaceComponent, {
+      props: { surface, visible: true },
+    });
+
+    // Scroll up — button appears
+    scrollCallback?.(0);
+    await tick();
+    expect(container.querySelector("[data-jump-to-bottom]")).not.toBeNull();
+
+    // Scroll back to bottom (pos 76 = 100-24)
+    scrollCallback?.(76);
+    await tick();
+    expect(container.querySelector("[data-jump-to-bottom]")).toBeNull();
   });
 });

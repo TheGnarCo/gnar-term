@@ -28,7 +28,6 @@
     "git-branch": `<line x1="7" y1="2" x2="7" y2="10" /><line x1="3" y1="6" x2="11" y2="6" /><circle cx="12" cy="12" r="1.5" fill="currentColor" /><path d="M7 10 C7 12 10 12 12 12" fill="none" />`,
     "folder-plus": `<line x1="7" y1="3" x2="7" y2="11" /><line x1="3" y1="7" x2="11" y2="7" /><path d="M10 2 L12 2 L13 3 L15 3 L15 5 L10 5 Z" fill="currentColor" opacity="0.6" />`,
     reorder: `<polyline points="5,1 5,15" /><polyline points="3,3 5,1 7,3" /><polyline points="11,1 11,15" /><polyline points="9,13 11,15 13,13" />`,
-    "layout-dashboard": `<rect x="2" y="2" width="5" height="6" rx="1" /><rect x="9" y="2" width="5" height="3" rx="1" /><rect x="9" y="7" width="5" height="7" rx="1" /><rect x="2" y="10" width="5" height="4" rx="1" />`,
   };
 
   let dropdownOpen = false;

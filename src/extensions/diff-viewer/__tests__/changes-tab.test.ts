@@ -25,7 +25,7 @@ describe("Changes Tab manifest", () => {
 
   it("subscribes to worktree:merged event", () => {
     const events = diffViewerManifest.contributes?.events;
-    expect(events).toContain("worktree:merged");
+    expect(events).toContain("extension:worktree:merged");
   });
 });
 

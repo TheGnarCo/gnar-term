@@ -57,7 +57,7 @@ export const diffViewerManifest: ExtensionManifest = {
         },
       },
     },
-    events: ["workspace:activated", "worktree:merged"],
+    events: ["workspace:activated", "extension:worktree:merged"],
   },
 };
 
@@ -133,7 +133,7 @@ export function registerDiffViewerExtension(api: ExtensionAPI): void {
     );
 
     // Auto-open Changes tab when a worktree merge completes
-    api.on("worktree:merged", () => {
+    api.on("extension:worktree:merged", () => {
       api.badgeSidebarTab("changes", true);
       api.activateSidebarTab("changes");
     });

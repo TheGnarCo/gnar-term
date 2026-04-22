@@ -42,13 +42,6 @@ export interface ThemeDef {
   sidebarBorder: string;
   tabBarBg: string;
   tabBarBorder: string;
-  /**
-   * Glyph used for AgentDashboard rows in the sidebar. Either an icon
-   * name (currently only `lucide:layout-dashboard` is recognized — the
-   * row falls back to an inline SVG if the name is unknown) or a
-   * literal emoji / single-grapheme string rendered as text.
-   */
-  dashboardIcon: string;
   // ANSI colors
   ansi: {
     black: string;
@@ -100,7 +93,6 @@ const githubDark: ThemeDef = {
   sidebarBorder: "#21262d",
   tabBarBg: "#1c2128",
   tabBarBorder: "#21262d",
-  dashboardIcon: "lucide:layout-dashboard",
   ansi: {
     black: "#484f58",
     red: "#ff7b72",
@@ -149,7 +141,6 @@ const tokyoNight: ThemeDef = {
   sidebarBorder: "#1f2335",
   tabBarBg: "#1f2335",
   tabBarBorder: "#1f2335",
-  dashboardIcon: "lucide:layout-dashboard",
   ansi: {
     black: "#414868",
     red: "#f7768e",
@@ -198,7 +189,6 @@ const catppuccinMocha: ThemeDef = {
   sidebarBorder: "#1e1e2e",
   tabBarBg: "#24243e",
   tabBarBorder: "#1e1e2e",
-  dashboardIcon: "lucide:layout-dashboard",
   ansi: {
     black: "#45475a",
     red: "#f38ba8",
@@ -247,7 +237,6 @@ const draculaPro: ThemeDef = {
   sidebarBorder: "#282a36",
   tabBarBg: "#2d2f3d",
   tabBarBorder: "#282a36",
-  dashboardIcon: "lucide:layout-dashboard",
   ansi: {
     black: "#44475a",
     red: "#ff5555",
@@ -296,7 +285,6 @@ const solarizedDark: ThemeDef = {
   sidebarBorder: "#002b36",
   tabBarBg: "#073642",
   tabBarBorder: "#002b36",
-  dashboardIcon: "lucide:layout-dashboard",
   ansi: {
     black: "#073642",
     red: "#dc322f",
@@ -345,7 +333,6 @@ const oneDark: ThemeDef = {
   sidebarBorder: "#282c34",
   tabBarBg: "#2c313c",
   tabBarBorder: "#282c34",
-  dashboardIcon: "lucide:layout-dashboard",
   ansi: {
     black: "#3e4452",
     red: "#e06c75",
@@ -396,7 +383,6 @@ const molly: ThemeDef = {
   sidebarBorder: "#e0d9cf",
   tabBarBg: "#f0ece6",
   tabBarBorder: "#e0d9cf",
-  dashboardIcon: "lucide:layout-dashboard",
   ansi: {
     black: "#3b3228",
     red: "#c4453a",
@@ -445,7 +431,6 @@ const githubLight: ThemeDef = {
   sidebarBorder: "#d0d7de",
   tabBarBg: "#f6f8fa",
   tabBarBorder: "#d0d7de",
-  dashboardIcon: "lucide:layout-dashboard",
   ansi: {
     black: "#24292f",
     red: "#cf222e",
@@ -494,7 +479,6 @@ const solarizedLight: ThemeDef = {
   sidebarBorder: "#d3cbb7",
   tabBarBg: "#eee8d5",
   tabBarBorder: "#d3cbb7",
-  dashboardIcon: "lucide:layout-dashboard",
   ansi: {
     black: "#073642",
     red: "#dc322f",
@@ -543,7 +527,6 @@ const catppuccinLatte: ThemeDef = {
   sidebarBorder: "#ccd0da",
   tabBarBg: "#e6e9ef",
   tabBarBorder: "#ccd0da",
-  dashboardIcon: "lucide:layout-dashboard",
   ansi: {
     black: "#5c5f77",
     red: "#d20f39",
@@ -593,7 +576,6 @@ const mollyDisco: ThemeDef = {
   sidebarBorder: "#d4b0f0",
   tabBarBg: "#f0e6ff",
   tabBarBorder: "#d4b0f0",
-  dashboardIcon: "🪩",
   ansi: {
     black: "#2d1b4e", // deep purple
     red: "#e91e63", // hot pink

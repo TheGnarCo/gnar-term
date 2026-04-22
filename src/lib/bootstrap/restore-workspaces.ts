@@ -75,7 +75,7 @@ export async function restoreWorkspaces(
     // Clear any existing workspaces to prevent doubling on re-mount
     workspaces.set([]);
     for (const wsDef of state.workspaces) {
-      await createWorkspaceFromDef(wsDef, { restoring: true });
+      await createWorkspaceFromDef(wsDef);
     }
     if (state.workspaces.length > 0) {
       const idx = state.activeWorkspaceIdx ?? 0;

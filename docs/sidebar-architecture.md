@@ -19,7 +19,7 @@ The primary sidebar is a **vertically scrolling list of blocks**. New features a
 - Individual items inside a block (e.g., workspace rows, project rows) use the same hover-grip pattern and reorder only within their own container. Outer-block drag and inner-item drag never share state.
 - Drag-drop is implemented with mouse events, not HTML5 DnD (which is broken in Tauri WKWebView). Extensions use `api.createDragReorder({...})` and `api.getComponents().DragGrip` to add reorderable lists without importing core internals.
 - When windowed, the top row of the sidebar holds the traffic-light padding and acts as the window drag region. When fullscreen, this row collapses and content shifts to the top edge.
-- When adding a new section (e.g., a project section, an extension-supplied panel), append it below the current sections. Do not introduce tabs or horizontal navigation.
+- When adding a new section (e.g., a file browser, git status panel), append it below the current sections. Do not introduce tabs or horizontal navigation.
 
 ## Secondary Sidebar
 
@@ -46,9 +46,9 @@ Below the tab bar, the secondary sidebar has a **control row** — a 28px-tall a
 |   Workspace 1     | [shell 1] [shell 2] [+]      | [Tab A] [Tab B]   |
 |   Workspace 2     |                               | Control Row       |
 |                   |                               | [btn] [btn] [btn] |
-| Projects          | Terminal / Preview Content     |                   |
-|   Project A       |                               | Tab Content       |
-| (extension panel) |                               |                   |
+| (future sections) | Terminal / Preview Content     |                   |
+|   File Browser    |                               | Tab Content       |
+|   Git Status      |                               |                   |
 +------|------------+-------------------------------+------|------------+
      resize                                              resize
      handle                                              handle

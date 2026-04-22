@@ -22,12 +22,6 @@ export interface TerminalSurface {
   hasUnread: boolean;
   opened: boolean;
   startupCommand?: string;
-  // Persistent record of the command this pane was originally created with.
-  // Survives restore so we can re-prompt across sessions if the user defers.
-  definedCommand?: string;
-  // True only on a restored surface whose definedCommand has not yet been
-  // approved or dismissed. Drives both the bulk dialog and the inline banner.
-  pendingRestoreCommand?: boolean;
 }
 
 export interface ExtensionSurface {
@@ -41,19 +35,7 @@ export interface ExtensionSurface {
   dispose?: () => void;
 }
 
-export interface PreviewSurface {
-  kind: "preview";
-  id: string;
-  title: string;
-  // Absolute path to the backing file. The file is the persistent identity
-  // of a preview surface — open previews are deduped by path (e.g. by
-  // openDashboard), and the path round-trips through workspace persistence.
-  path: string;
-  hasUnread: boolean;
-  notification?: string;
-}
-
-export type Surface = TerminalSurface | ExtensionSurface | PreviewSurface;
+export type Surface = TerminalSurface | ExtensionSurface;
 
 export interface Pane {
   id: string;
@@ -96,10 +78,6 @@ export function isTerminalSurface(s: Surface): s is TerminalSurface {
 
 export function isExtensionSurface(s: Surface): s is ExtensionSurface {
   return s.kind === "extension";
-}
-
-export function isPreviewSurface(s: Surface): s is PreviewSurface {
-  return s.kind === "preview";
 }
 
 /** Find the parent split node containing a pane with the given ID. */

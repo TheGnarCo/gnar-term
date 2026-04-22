@@ -24,11 +24,6 @@ import {
 } from "./claimed-workspace-registry";
 import { dashboardTabStore } from "./dashboard-tab-registry";
 import {
-  childRowContributorStore,
-  getChildRowsFor,
-} from "./child-row-contributor-registry";
-import { rootRowRendererStore } from "./root-row-renderer-registry";
-import {
   EXTENSION_ALLOWED_COMMANDS,
   PTY_COMMANDS,
   SHELL_COMMANDS,
@@ -78,7 +73,7 @@ import {
   type DragReorderConfig,
   type DragReorderHandle,
 } from "../actions/drag-reorder";
-import { reorderContext, anyReorderActive, contextMenu } from "../stores/ui";
+import { reorderContext, anyReorderActive } from "../stores/ui";
 import { getActiveCwd } from "./service-helpers";
 import { workspaces } from "../stores/workspace";
 import { getAllSurfaces, isTerminalSurface } from "../types";
@@ -246,22 +241,6 @@ export function createExtensionAPI(
             defaultValue?: string;
             type: "info";
           }
-        | {
-            key: string;
-            label: string;
-            defaultValue?: string;
-            type: "color";
-          }
-        | {
-            key: string;
-            label: string;
-            defaultValue?: string;
-            placeholder?: string;
-            type: "directory";
-            required?: boolean;
-            pickerTitle?: string;
-            readonly?: boolean;
-          }
       >,
       options?: { submitLabel?: string },
     ) {
@@ -369,22 +348,6 @@ export function createExtensionAPI(
 
     showDirContextMenu(x: number, y: number, dirPath: string) {
       showContextMenuFor(x, y, dirPath, getContextMenuItemsForDir);
-    },
-
-    showContextMenu(
-      x: number,
-      y: number,
-      items: Array<{
-        label: string;
-        action: () => void;
-        shortcut?: string;
-        separator?: boolean;
-        disabled?: boolean;
-        danger?: boolean;
-      }>,
-    ) {
-      if (items.length === 0) return;
-      contextMenu.set({ x, y, items });
     },
 
     readClipboard() {
@@ -507,14 +470,6 @@ export function createExtensionAPI(
         component: t.component,
         props: t.props,
       }));
-    },
-    getChildRowsFor(parentType: string, parentId: string) {
-      return getChildRowsFor(parentType, parentId);
-    },
-    childRowContributors: childRowContributorStore,
-    getRootRowRenderer(kind: string) {
-      const r = get(rootRowRendererStore).find((x) => x.id === kind);
-      return r ? { component: r.component } : undefined;
     },
     convertFileSrc(path: string): string {
       return tauriConvertFileSrc(path);

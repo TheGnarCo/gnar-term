@@ -19,8 +19,6 @@ import { unregisterStatusBySource } from "./status-registry";
 import { unregisterWorkspaceSubtitlesBySource } from "./workspace-subtitle-registry";
 import { unregisterRootRowRenderersBySource } from "./root-row-renderer-registry";
 import { unregisterThemesBySource } from "./theme-registry";
-import { unregisterMarkdownComponentsBySource } from "./markdown-component-registry";
-import { unregisterChildRowContributorsBySource } from "./child-row-contributor-registry";
 import { unregisterMcpToolsBySource } from "./mcp-server";
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 
@@ -159,8 +157,6 @@ export const REGISTRY_CLEANUP_FNS: Array<(source: string) => void> = [
   unregisterWorkspaceSubtitlesBySource,
   unregisterRootRowRenderersBySource,
   unregisterThemesBySource,
-  unregisterMarkdownComponentsBySource,
-  unregisterChildRowContributorsBySource,
   unregisterMcpToolsBySource,
 ];
 

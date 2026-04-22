@@ -30,7 +30,7 @@ describe("Markdown preview XSS prevention", () => {
   it("imports DOMPurify in preview/markdown.ts", async () => {
     const fs = await import("fs");
     const source = fs.readFileSync(
-      "src/lib/preview/previewers/markdown.ts",
+      "src/extensions/preview/previewers/markdown.ts",
       "utf-8",
     );
     expect(source).toContain('import DOMPurify from "dompurify"');
@@ -47,7 +47,7 @@ describe("Image preview XSS prevention", () => {
   it("does not use innerHTML with user data", async () => {
     const fs = await import("fs");
     const source = fs.readFileSync(
-      "src/lib/preview/previewers/image.ts",
+      "src/extensions/preview/previewers/image.ts",
       "utf-8",
     );
     expect(source).not.toContain("innerHTML");
@@ -57,7 +57,7 @@ describe("Image preview XSS prevention", () => {
   it("sets src and alt via DOM properties", async () => {
     const fs = await import("fs");
     const source = fs.readFileSync(
-      "src/lib/preview/previewers/image.ts",
+      "src/extensions/preview/previewers/image.ts",
       "utf-8",
     );
     expect(source).toContain("img.src");
@@ -69,7 +69,7 @@ describe("Video preview XSS prevention", () => {
   it("does not use innerHTML with user data", async () => {
     const fs = await import("fs");
     const source = fs.readFileSync(
-      "src/lib/preview/previewers/video.ts",
+      "src/extensions/preview/previewers/video.ts",
       "utf-8",
     );
     expect(source).not.toContain("innerHTML");
@@ -79,7 +79,7 @@ describe("Video preview XSS prevention", () => {
   it("sets src via DOM property", async () => {
     const fs = await import("fs");
     const source = fs.readFileSync(
-      "src/lib/preview/previewers/video.ts",
+      "src/extensions/preview/previewers/video.ts",
       "utf-8",
     );
     expect(source).toContain("video.src");

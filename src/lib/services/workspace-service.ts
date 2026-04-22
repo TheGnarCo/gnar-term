@@ -14,11 +14,9 @@ import {
   getAllSurfaces,
   isTerminalSurface,
   isExtensionSurface,
-  isPreviewSurface,
   type Workspace,
   type Pane,
   type SplitNode,
-  type PreviewSurface,
 } from "../types";
 import {
   saveConfig,
@@ -67,6 +65,7 @@ export async function createWorkspace(name: string) {
   const surface = await createTerminalSurface(pane);
 
   workspaces.update((list) => [...list, ws]);
+  activeWorkspaceIdx.set(get(workspaces).length - 1);
   // Add to the root-row list. If an extension handler for
   // workspace:created claims this workspace (e.g. project-scope
   // inserting it under a project), claimWorkspace will remove it from
@@ -74,23 +73,14 @@ export async function createWorkspace(name: string) {
   // handler ordering.
   appendRootRow({ kind: "workspace", id: ws.id });
   eventBus.emit({ type: "workspace:created", id: ws.id, name });
-  // Route activation through switchWorkspace so any listener on
-  // workspace:activated (e.g. agentic-orchestrator re-spawning a
-  // dashboard preview surface, core focus bookkeeping) fires for
-  // fresh workspaces the same way it would for a user-driven switch.
-  switchWorkspace(get(workspaces).length - 1);
   void safeFocus(surface);
   schedulePersist();
 }
 
-export async function createWorkspaceFromDef(
-  def: WorkspaceDef,
-  options?: { restoring?: boolean },
-) {
+export async function createWorkspaceFromDef(def: WorkspaceDef) {
   const wsName = def.name || `Workspace ${get(workspaces).length + 1}`;
   const rootCwd = def.cwd;
   const rootEnv = def.env;
-  const restoring = options?.restoring === true;
 
   async function buildTree(
     nodeDef: LayoutNode,
@@ -114,21 +104,6 @@ export async function createWorkspaceFromDef(
           pane.surfaces.push(surface);
           if (!pane.activeSurfaceId || sDef.focus)
             pane.activeSurfaceId = surface.id;
-        } else if (sDef.type === "preview" && sDef.path) {
-          // Preview surface from config — backed by a file path. The
-          // markdown previewer is what renders markdown-component directives;
-          // any previewable file type works here.
-          const basename = sDef.path.split("/").pop() || sDef.path;
-          const surface: PreviewSurface = {
-            kind: "preview",
-            id: uid(),
-            title: sDef.name || basename.replace(/\.md$/, ""),
-            path: sDef.path,
-            hasUnread: false,
-          };
-          pane.surfaces.push(surface);
-          if (!pane.activeSurfaceId || sDef.focus)
-            pane.activeSurfaceId = surface.id;
         } else {
           const envMerged = { ...inheritedEnv, ...sDef.env };
           const surface = await createTerminalSurface(
@@ -137,17 +112,7 @@ export async function createWorkspaceFromDef(
             Object.keys(envMerged).length > 0 ? envMerged : undefined,
           );
           if (sDef.name) surface.title = sDef.name;
-          if (sDef.command) {
-            // Defined command is the persistent record; on restore we
-            // require user approval before running it, so we do NOT set
-            // startupCommand. Fresh creation runs the command immediately.
-            surface.definedCommand = sDef.command;
-            if (restoring) {
-              surface.pendingRestoreCommand = true;
-            } else {
-              surface.startupCommand = sDef.command;
-            }
-          }
+          if (sDef.command) surface.startupCommand = sDef.command;
           if (sDef.focus) pane.activeSurfaceId = surface.id;
         }
       }
@@ -193,6 +158,7 @@ export async function createWorkspaceFromDef(
   };
 
   workspaces.update((list) => [...list, ws]);
+  activeWorkspaceIdx.set(get(workspaces).length - 1);
   appendRootRow({ kind: "workspace", id: ws.id });
   eventBus.emit({
     type: "workspace:created",
@@ -200,18 +166,6 @@ export async function createWorkspaceFromDef(
     name: wsName,
     ...(ws.metadata ? { metadata: ws.metadata } : {}),
   });
-  // Route through switchWorkspace so workspace:activated listeners
-  // (e.g. agentic-orchestrator's dashboard workspace re-spawn hook)
-  // fire on creation — auto-switching to the fresh workspace matches
-  // the user-driven switch path. Session restore skips the auto-switch
-  // because it'll restore the persisted active idx once every workspace
-  // has been rebuilt, and we don't want N+1 activation events along
-  // the way.
-  if (!restoring) {
-    switchWorkspace(get(workspaces).length - 1);
-  } else {
-    activeWorkspaceIdx.set(get(workspaces).length - 1);
-  }
   const ap = getAllPanes(splitRoot).find((p) => p.id === ws.activePaneId);
   const as_ = ap?.surfaces.find((s) => s.id === ap.activeSurfaceId);
   void safeFocus(as_);
@@ -293,13 +247,6 @@ export function serializeLayout(node: SplitNode): LayoutNode {
         const def: Record<string, unknown> = { type: "terminal" };
         if (s.title) def.name = s.title;
         if (s.cwd) def.cwd = s.cwd;
-        if (s.definedCommand) def.command = s.definedCommand;
-        if (s.id === node.pane.activeSurfaceId) def.focus = true;
-        return def;
-      }
-      if (isPreviewSurface(s)) {
-        const def: Record<string, unknown> = { type: "preview", path: s.path };
-        if (s.title) def.name = s.title;
         if (s.id === node.pane.activeSurfaceId) def.focus = true;
         return def;
       }

@@ -74,14 +74,14 @@
     };
     void refresh();
   };
-  api.on("worktree:merged", handleMerge);
+  api.on("extension:worktree:merged", handleMerge);
 
   onMount(() => {
     void refresh();
   });
 
   onDestroy(() => {
-    api.off("worktree:merged", handleMerge);
+    api.off("extension:worktree:merged", handleMerge);
   });
 </script>
 

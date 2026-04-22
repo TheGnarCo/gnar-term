@@ -3,25 +3,16 @@
  *
  * Groups workspaces into projects. Each project registers its own
  * primary sidebar section, showing nested workspaces and contextual
- * workspace actions. Manages its own overlays (create dialog) via the
- * overlay registry — no core store dependencies.
- *
- * Project dashboards now render as PreviewSurfaces backed by a templated
- * markdown file at `<projectPath>/.gnar-term/project-dashboard.md`,
- * mirroring the AgentDashboard preview pattern (P9).
+ * workspace actions. Manages its own overlays (create dialog, dashboard)
+ * via the overlay registry — no core store dependencies.
  */
-import { invoke } from "@tauri-apps/api/core";
+import { writable } from "svelte/store";
 import type { ExtensionManifest, ExtensionAPI, AppEvent } from "../api";
 import { resolveProjectColor } from "../api";
 import { get } from "svelte/store";
 import ProjectRowBody from "./ProjectRowBody.svelte";
+import ProjectDashboardOverlay from "./ProjectDashboardOverlay.svelte";
 import ProjectCreateOverlay from "./ProjectCreateOverlay.svelte";
-import {
-  createPreviewSurfaceInPane,
-  focusSurfaceById,
-} from "../../lib/services/surface-service";
-import { findPreviewSurfaceByPath } from "../../lib/services/preview-surface-registry";
-import { activePane } from "../../lib/stores/workspace";
 import {
   getProjects,
   addProject,
@@ -29,6 +20,13 @@ import {
   removeWorkspaceFromAllProjects,
   clearWorkspaceIds,
 } from "./project-service";
+
+/**
+ * Reactive store for the currently-open dashboard project ID.
+ * Components subscribe to this for visibility — unlike api.state (a plain Map),
+ * this triggers Svelte reactivity on change.
+ */
+export const dashboardProjectId$ = writable<string | null>(null);
 
 export interface ProjectEntry {
   id: string;
@@ -42,83 +40,6 @@ export interface ProjectEntry {
 
 function generateId(): string {
   return crypto.randomUUID();
-}
-
-/**
- * Path of the markdown file backing a project's dashboard. Lives inside
- * the project's own `.gnar-term/` directory so multi-machine sync /
- * checkout follows the project itself.
- */
-function projectDashboardPath(projectPath: string): string {
-  return `${projectPath.replace(/\/+$/, "")}/.gnar-term/project-dashboard.md`;
-}
-
-/**
- * Templated markdown for a freshly-created project dashboard. Embeds
- * the gnar:agent-list widget without a `dashboardId` so it shows every
- * agent in the registry (the project's own scope is implicit through
- * the surface's location).
- */
-function buildProjectDashboardMarkdown(project: ProjectEntry): string {
-  return `# ${project.name}
-
-Project at \`${project.path}\`.
-
-## Active Agents
-
-\`\`\`gnar:agent-list
-\`\`\`
-`;
-}
-
-/**
- * Idempotent — write the templated project-dashboard markdown only when
- * the file is missing. User edits survive a re-open.
- */
-async function writeProjectDashboardTemplate(
-  project: ProjectEntry,
-  path: string,
-): Promise<void> {
-  const exists = await invoke<boolean>("file_exists", { path }).catch(
-    () => false,
-  );
-  if (exists) return;
-  const dir = path.replace(/\/[^/]+$/, "");
-  await invoke("ensure_dir", { path: dir });
-  await invoke("write_file", {
-    path,
-    content: buildProjectDashboardMarkdown(project),
-  });
-}
-
-/**
- * Open a project's markdown dashboard as a PreviewSurface. Mirrors
- * dashboard-service.openDashboard: dedupes by path (focuses an existing
- * preview anywhere in the app) and otherwise spawns a new preview into
- * the active pane. Returns true on success.
- */
-export async function openProjectDashboard(
-  project: ProjectEntry,
-): Promise<boolean> {
-  const path = projectDashboardPath(project.path);
-  try {
-    await writeProjectDashboardTemplate(project, path);
-  } catch {
-    // Best-effort write — proceed to open even if the seed fails so the
-    // user still sees something they can react to.
-  }
-  const existing = findPreviewSurfaceByPath(path);
-  if (existing) {
-    focusSurfaceById(existing.surfaceId);
-    return true;
-  }
-  const pane = get(activePane);
-  if (!pane) return false;
-  const surface = createPreviewSurfaceInPane(pane.id, path, {
-    focus: true,
-    title: project.name,
-  });
-  return surface !== null;
 }
 
 export const projectScopeManifest: ExtensionManifest = {
@@ -187,9 +108,8 @@ export function registerProjectScopeExtension(api: ExtensionAPI): void {
   };
 
   api.onActivate(() => {
-    // Register overlays — rendered generically by App.svelte. The
-    // dashboard now opens as a PreviewSurface (see openProjectDashboard);
-    // only the create-dialog still needs an overlay slot.
+    // Register overlays — rendered generically by App.svelte
+    api.registerOverlay("dashboard", ProjectDashboardOverlay);
     api.registerOverlay("create-dialog", ProjectCreateOverlay);
 
     /**
@@ -374,7 +294,7 @@ export function registerProjectScopeExtension(api: ExtensionAPI): void {
         : projects[0];
       if (!project) return;
 
-      void openProjectDashboard(project);
+      dashboardProjectId$.set(project.id);
     });
 
     api.on("workspace:created", onWorkspaceCreated);

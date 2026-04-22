@@ -1021,19 +1021,6 @@ describe("PrimarySidebar", () => {
     expect(dragRegions.length).toBeGreaterThan(0);
   });
 
-  it("top row uses overflow:visible so SplitButton dropdown is not clipped", () => {
-    // Regression: overflow:hidden on the 38px top row clipped the "+ New"
-    // dropdown, making it invisible when opened. Must stay overflow:visible
-    // so the absolutely-positioned menu can render below the row.
-    primarySidebarVisible.set(true);
-    const { container } = render(PrimarySidebar, { props: sidebarProps });
-    const dragRegion = container.querySelector(
-      "[data-tauri-drag-region]",
-    ) as HTMLElement | null;
-    expect(dragRegion).toBeTruthy();
-    expect(dragRegion!.getAttribute("style")).toMatch(/overflow:\s*visible/);
-  });
-
   it("keeps the top drag region bar rendered in fullscreen so layout stays stable", () => {
     // The primary sidebar's top row is always rendered — fullscreen toggle
     // should not swap branches, otherwise blocks snap into a new position.

@@ -15,15 +15,15 @@ describe("workspace-subtitle-registry", () => {
   it("registers a subtitle component", () => {
     const FakeComponent = {};
     registerWorkspaceSubtitle({
-      id: "ext:demo",
+      id: "ext:git-status",
       component: FakeComponent,
-      source: "demo",
+      source: "git-status",
       priority: 10,
     });
 
     const items = get(workspaceSubtitleStore);
     expect(items).toHaveLength(1);
-    expect(items[0].id).toBe("ext:demo");
+    expect(items[0].id).toBe("ext:git-status");
     expect(items[0].component).toBe(FakeComponent);
     expect(items[0].priority).toBe(10);
   });

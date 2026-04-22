@@ -436,7 +436,6 @@ import type { AppEventType } from "./api";
 | `surface:titleChanged` | `{ id, oldTitle, newTitle }`                                      |
 | `sidebar:toggled`      | `{ which, visible }`                                              |
 | `theme:changed`        | `{ id, previousId }`                                              |
-| `worktree:merged`      | `{ worktreePath, branch, baseBranch, repoPath, workspaceId }`     |
 
 ### Status Registry
 
@@ -463,9 +462,9 @@ import type { StatusItem, StatusItemInput } from "./api";
 
 | Status type | Producer           | Metadata keys                                                   |
 | ----------- | ------------------ | --------------------------------------------------------------- |
-| Branch      | core (git)         | `repoRoot`, `isDetached`                                        |
-| PR          | core (git)         | `prNumber`, `prUrl`, `ciStatus`, `reviewState`, `reviewVariant` |
-| Dirty       | core (git)         | `modified`, `untracked`, `staged`                               |
+| Branch      | git-status         | `repoRoot`, `isDetached`                                        |
+| PR          | git-status         | `prNumber`, `prUrl`, `ciStatus`, `reviewState`, `reviewVariant` |
+| Dirty       | git-status         | `modified`, `untracked`, `staged`                               |
 | Agent       | harness extensions | `agentId`, `paneId`                                             |
 
 ### Tauri Commands
@@ -839,7 +838,7 @@ api.onSurfaceOutput((surfaceId, data) => {
 
 `registerWorkspaceSubtitle(component: typeof SvelteComponent, priority?: number): void`
 
-Registers a Svelte component to render below the workspace name in the sidebar. Lower priority numbers render first (default: 50; can also be declared in `contributes.workspaceSubtitle.priority`). The component receives a `workspaceId` prop. The core git status service registers the built-in branch/PR/CI subtitle through this same registry.
+Registers a Svelte component to render below the workspace name in the sidebar. Lower priority numbers render first (default: 50; can also be declared in `contributes.workspaceSubtitle.priority`). The component receives a `workspaceId` prop. Used by git-status to show branch name and status indicators.
 
 ```typescript
 import BranchLabel from "./BranchLabel.svelte";
@@ -1074,27 +1073,39 @@ The extension API enforces multiple layers of sandboxing:
 
 ## Included Extensions
 
-GnarTerm ships with included extensions on top of three core surface kinds: terminal, extension, and preview. Preview is core (see `src/lib/services/preview-service.ts` and `src/lib/preview/previewers/`); markdown previews can embed `gnar:<name>` "markdown-component" directives that mount Svelte components registered via `api.registerMarkdownComponent`.
+GnarTerm ships with nine included extensions:
+
+### Preview (`src/extensions/preview/`)
+
+Registers a surface type for file preview (Markdown, JSON, images, PDF, CSV, YAML, video, text — 47 file types). Adds a "Preview File..." command and an "Open as Preview" context menu item.
 
 ### File Browser (`src/extensions/file-browser/`)
 
 Registers a secondary sidebar tab showing the directory tree of the active terminal's CWD. Adds four context menu items: "Edit" (opens in editor, all files), "Show in File Manager" (all files), "Open with Default App" (all files), and "Open as Workspace" (directories only). Also registers a `toggle-file-browser` command. Refreshes the file tree when the active workspace, pane, or surface changes.
 
+### Worktree Workspaces (`src/extensions/worktree-workspaces/`)
+
+Git worktree-backed workspace lifecycle management. Provides "Create Worktree Workspace..." and "Archive Worktree..." commands. Creates git worktrees, optionally copies config files (via `copy_files`) and runs setup scripts (via `run_script`), then opens the worktree as a workspace. Archiving pushes the branch and removes the worktree. Configurable via settings: branch prefix, copy patterns, and setup script.
+
 ### Agentic Orchestrator (`src/extensions/agentic-orchestrator/`)
 
 Passive AI agent detector with three-layer status tracking (OSC notifications → waiting, title pattern matching → running/idle, idle timeout → idle). Requires `"observe"` permission. Emits `extension:harness:statusChanged` events on status transitions.
 
+### GitHub (`src/extensions/github/`)
+
+Registers a secondary sidebar tab with three sections: Issues, Pull Requests, and Recent Commits. Fetches data via `gh_list_issues`, `gh_list_prs`, and `git_log` commands. Caches results per workspace. Requires the GitHub CLI (`gh`) for issues and PRs; git info works without it.
+
 ### Diff Viewer (`src/extensions/diff-viewer/`)
 
-Registers a surface type for viewing unified diffs with syntax highlighting. Provides commands for showing uncommitted changes, staged changes, file diffs, and branch comparisons. Adds context menu items for file-level diffs. Registers a "Changes" secondary sidebar tab that lists modified files in the active workspace. Listens for the core `worktree:merged` event to auto-refresh the changes view after merge operations. Configurable via settings: diff mode (unified/split), context lines, and whitespace handling.
+Registers a surface type for viewing unified diffs with syntax highlighting. Provides commands for showing uncommitted changes, staged changes, file diffs, and branch comparisons. Adds context menu items for file-level diffs. Registers a "Changes" secondary sidebar tab that lists modified files in the active workspace. Listens for `extension:worktree:merged` events to auto-refresh the changes view after merge operations. Configurable via settings: diff mode (unified/split), context lines, and whitespace handling.
+
+### Git Status (`src/extensions/git-status/`)
+
+Shows git branch, dirty state, PR review status, and CI check status in the workspace sidebar. Sources data by shelling out to `git` and `gh` CLI. Polls active workspace at 30s (git) / 60s (PR), inactive at 2.5min / 5min. Gracefully degrades when `git` or `gh` are unavailable. Requires `"shell"` permission.
 
 ### Project Scope (`src/extensions/project-scope/`)
 
 Groups workspaces into named projects. Each project appears as a primary sidebar section showing its nested workspaces with a color-coded indicator. Workspaces created while a project is active are auto-associated. Provides "Create Project..." and "Open Project Dashboard..." commands.
-
-### Jrvs Themes (`src/extensions/jrvs-themes/`)
-
-A pack of additional themes (Kirby-inspired). Registers theme entries that show up in the command palette and theme switcher. Pure registration — no UI surfaces.
 
 ---
 
@@ -1217,13 +1228,15 @@ package.json
 
 ### Reference: included extensions
 
-The six included extensions in `src/extensions/` are real-world examples of every extension pattern. Use them as reference when building your own:
+The nine included extensions in `src/extensions/` are real-world examples of every extension pattern. Use them as reference when building your own:
 
-| Extension               | Patterns demonstrated                                                                        |
-| ----------------------- | -------------------------------------------------------------------------------------------- |
-| `preview/`              | Surface type, context menu items, file handling                                              |
-| `file-browser/`         | Sidebar tab, sidebar action, context menus, workspace actions                                |
-| `agentic-orchestrator/` | Observe permission, custom events, status tracking                                           |
-| `diff-viewer/`          | Surface type, commands, context menus, core event subscription (`worktree:merged`), settings |
-| `project-scope/`        | Primary sidebar section, overlays, workspace claiming, dashboard tabs, color picker          |
-| `jrvs-themes/`          | Theme pack registration                                                                      |
+| Extension               | Patterns demonstrated                                                               |
+| ----------------------- | ----------------------------------------------------------------------------------- |
+| `preview/`              | Surface type, context menu items, file handling                                     |
+| `file-browser/`         | Sidebar tab, sidebar action, context menus, workspace actions                       |
+| `worktree-workspaces/`  | Workspace actions, form prompts, Tauri commands, state persistence                  |
+| `agentic-orchestrator/` | Observe permission, custom events, status tracking                                  |
+| `github/`               | Sidebar tab, sidebar action, caching, multiple Tauri commands                       |
+| `diff-viewer/`          | Surface type, commands, context menus, cross-extension events, settings             |
+| `project-scope/`        | Primary sidebar section, overlays, workspace claiming, dashboard tabs, color picker |
+| `git-status/`           | Status registry, workspace subtitles, shell permission, adaptive polling            |

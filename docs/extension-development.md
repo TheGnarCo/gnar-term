@@ -372,16 +372,18 @@ Use semver in your `extension.json`. GnarTerm reads the `version` field for disp
 
 ## Reference Examples
 
-The six included extensions in `src/extensions/` demonstrate every extension pattern. Browse them as reference:
+The nine included extensions in `src/extensions/` demonstrate every extension pattern. Browse them as reference:
 
-| Extension               | Key patterns                                                                                 |
-| ----------------------- | -------------------------------------------------------------------------------------------- |
-| `preview/`              | Surface type registration, context menu items, file type handling                            |
-| `file-browser/`         | Sidebar tab + actions, directory tree, context menus, workspace actions                      |
-| `agentic-orchestrator/` | Observe permission, custom events, status tracking                                           |
-| `diff-viewer/`          | Surface type, commands, context menus, core event subscription (`worktree:merged`), settings |
-| `project-scope/`        | Overlays, workspace claiming, dashboard tabs, color picker, event-driven auto-association    |
-| `jrvs-themes/`          | Theme pack registration                                                                      |
+| Extension               | Key patterns                                                                              |
+| ----------------------- | ----------------------------------------------------------------------------------------- |
+| `preview/`              | Surface type registration, context menu items, file type handling                         |
+| `file-browser/`         | Sidebar tab + actions, directory tree, context menus, workspace actions                   |
+| `worktree-workspaces/`  | Workspace actions, form prompts, Tauri invoke chains, state persistence                   |
+| `agentic-orchestrator/` | Observe permission, custom events, status tracking                                        |
+| `github/`               | Sidebar tab with refresh action, per-workspace caching, multiple Tauri commands           |
+| `diff-viewer/`          | Surface type, commands, context menus, cross-extension events, settings                   |
+| `project-scope/`        | Overlays, workspace claiming, dashboard tabs, color picker, event-driven auto-association |
+| `git-status/`           | Status registry, workspace subtitles, shell permission, adaptive polling                  |
 
 ### Included vs. External Extensions
 

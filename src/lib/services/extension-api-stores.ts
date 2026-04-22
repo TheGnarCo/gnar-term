@@ -11,7 +11,6 @@ import {
   hoveredSidebarBlockId,
   hoveredRootRowKey,
 } from "../stores/ui";
-import { agentsStore } from "./agent-detection-service";
 import type { ExtensionAPI } from "../extension-types";
 
 /** Read-only store wrappers that project internal state to safe public types. */
@@ -23,7 +22,6 @@ export function createStoreProjections(
   | "activeWorkspace"
   | "activePane"
   | "activeSurface"
-  | "agents"
   | "theme"
   | "reorderContext"
   | "hoveredSidebarBlockId"
@@ -98,7 +96,6 @@ export function createStoreProjections(
         );
       },
     } as ExtensionAPI["activeSurface"],
-    agents: readOnly(agentsStore) as unknown as ExtensionAPI["agents"],
     theme: readOnly(theme) as unknown as ExtensionAPI["theme"],
     reorderContext: readOnly(
       reorderContext,

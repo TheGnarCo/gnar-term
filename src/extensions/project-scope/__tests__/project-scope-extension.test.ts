@@ -6,44 +6,18 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { get } from "svelte/store";
 
-const { findByPathSpy, focusSpy, createSpy } = vi.hoisted(() => ({
-  findByPathSpy: vi.fn(),
-  focusSpy: vi.fn(),
-  createSpy: vi.fn(),
-}));
-
 vi.mock("@tauri-apps/api/core", () => ({
-  invoke: vi.fn(async (cmd: string) => {
-    if (cmd === "file_exists") return true; // skip seed write in tests
-    return undefined;
-  }),
+  invoke: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn().mockResolvedValue(vi.fn()),
 }));
-vi.mock("../../../lib/services/preview-surface-registry", () => ({
-  findPreviewSurfaceByPath: findByPathSpy,
-}));
-vi.mock("../../../lib/services/surface-service", async () => {
-  const actual = await vi.importActual<
-    typeof import("../../../lib/services/surface-service")
-  >("../../../lib/services/surface-service");
-  return {
-    ...actual,
-    focusSurfaceById: focusSpy,
-    createPreviewSurfaceInPane: createSpy,
-  };
-});
 
 import {
   projectScopeManifest,
   registerProjectScopeExtension,
-  openProjectDashboard,
-  type ProjectEntry,
+  dashboardProjectId$,
 } from "..";
-import { invoke } from "@tauri-apps/api/core";
-import { workspaces, activeWorkspaceIdx } from "../../../lib/stores/workspace";
-import type { Workspace } from "../../../lib/types";
 import {
   sidebarSectionStore,
   resetSidebarSections,
@@ -157,89 +131,23 @@ describe("Project Scope included extension", () => {
   });
 });
 
-describe("Project Scope dashboard preview", () => {
-  function makeProject(id: string, path: string, name = id): ProjectEntry {
-    return {
-      id,
-      name,
-      path,
-      color: "purple",
-      workspaceIds: [],
-      isGit: false,
-      createdAt: "2026-04-19T00:00:00.000Z",
-    };
-  }
-
-  function seedActivePane(paneId: string): void {
-    const ws: Workspace = {
-      id: "ws-active",
-      name: "Active",
-      activePaneId: paneId,
-      splitRoot: {
-        type: "pane",
-        pane: { id: paneId, surfaces: [], activeSurfaceId: null },
-      },
-    };
-    workspaces.set([ws]);
-    activeWorkspaceIdx.set(0);
-  }
-
+describe("Project Scope dashboard store", () => {
   beforeEach(async () => {
     await resetExtensions();
     resetCommands();
-    findByPathSpy.mockReset();
-    focusSpy.mockReset();
-    createSpy.mockReset();
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
-    (invoke as ReturnType<typeof vi.fn>).mockClear();
+    dashboardProjectId$.set(null);
   });
 
-  it("openProjectDashboard spawns a preview when no existing surface matches the path", async () => {
-    findByPathSpy.mockReturnValue(undefined);
-    createSpy.mockReturnValue({ id: "s-new" });
-    seedActivePane("pane-active");
-
-    const project = makeProject("proj-1", "/tmp/alpha", "Alpha");
-    const ok = await openProjectDashboard(project);
-
-    expect(ok).toBe(true);
-    expect(findByPathSpy).toHaveBeenCalledWith(
-      "/tmp/alpha/.gnar-term/project-dashboard.md",
-    );
-    expect(createSpy).toHaveBeenCalledWith(
-      "pane-active",
-      "/tmp/alpha/.gnar-term/project-dashboard.md",
-      expect.objectContaining({ focus: true, title: "Alpha" }),
-    );
-    expect(focusSpy).not.toHaveBeenCalled();
-  });
-
-  it("openProjectDashboard focuses an already-open preview instead of duplicating it", async () => {
-    findByPathSpy.mockReturnValue({
-      surfaceId: "s-existing",
-      path: "/tmp/alpha/.gnar-term/project-dashboard.md",
-      paneId: "pane-other",
-      workspaceId: "ws-other",
-    });
-    seedActivePane("pane-active");
-
-    const project = makeProject("proj-1", "/tmp/alpha", "Alpha");
-    const ok = await openProjectDashboard(project);
-
-    expect(ok).toBe(true);
-    expect(focusSpy).toHaveBeenCalledWith("s-existing");
-    expect(createSpy).not.toHaveBeenCalled();
-  });
-
-  it("open-project-dashboard command is registered and routes through openProjectDashboard", async () => {
+  it("open-project-dashboard command sets dashboardProjectId$ store", async () => {
     const { api } = createExtensionAPI(projectScopeManifest);
+
+    // Pre-populate state with a project
     api.state.set("projects", [
       {
         id: "proj-1",
         name: "Alpha",
         path: "/tmp/alpha",
-        color: "purple",
+        color: "#e06c75",
         workspaceIds: [],
         isGit: false,
         createdAt: new Date().toISOString(),
@@ -250,35 +158,25 @@ describe("Project Scope dashboard preview", () => {
     registerExtension(projectScopeManifest, registerProjectScopeExtension);
     await activateExtension("project-scope");
 
+    expect(get(dashboardProjectId$)).toBeNull();
+
+    // Execute the command
     const cmd = get(commandStore).find(
       (c) => c.id === "project-scope:open-project-dashboard",
     );
     expect(cmd).toBeTruthy();
-
-    // Synchronous call; openProjectDashboard kicks off async invokes but
-    // schedules findPreviewSurfaceByPath via the same microtask queue. We
-    // assert the lookup fired (which is what the command must do before
-    // it can decide between focus vs spawn), regardless of how far the
-    // async write chain progresses inside the same tick.
-    findByPathSpy.mockReset();
-    findByPathSpy.mockReturnValue({
-      surfaceId: "s-existing",
-      path: "/tmp/alpha/.gnar-term/project-dashboard.md",
-      paneId: "pane-active",
-      workspaceId: "ws-active",
-    });
-    seedActivePane("pane-active");
-
     cmd!.action();
 
-    // Drain the microtask queue: file_exists (mocked truthy) → no
-    // ensure_dir/write_file → findPreviewSurfaceByPath → focusSurfaceById.
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    // Store should now have the project id
+    expect(get(dashboardProjectId$)).toBe("proj-1");
+  });
 
-    expect(findByPathSpy).toHaveBeenCalledWith(
-      "/tmp/alpha/.gnar-term/project-dashboard.md",
-    );
-    expect(focusSpy).toHaveBeenCalledWith("s-existing");
+  it("setting dashboardProjectId$ to null hides dashboard", () => {
+    dashboardProjectId$.set("proj-1");
+    expect(get(dashboardProjectId$)).toBe("proj-1");
+
+    dashboardProjectId$.set(null);
+    expect(get(dashboardProjectId$)).toBeNull();
   });
 });
 

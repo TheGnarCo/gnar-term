@@ -78,7 +78,6 @@ const jrvsCosmic: ExtensionTheme = {
   sidebarBorder: "#3D1A70",
   tabBarBg: "#160030",
   tabBarBorder: "#3D1A70",
-  dashboardIcon: "lucide:layout-dashboard",
   ansi: {
     black: "#120022",
     red: KIRBY.red,
@@ -129,7 +128,6 @@ const jrvsCosmicLight: ExtensionTheme = {
   sidebarBorder: "#C9A88F",
   tabBarBg: "#F2E8D6",
   tabBarBorder: "#C9A88F",
-  dashboardIcon: "lucide:layout-dashboard",
   ansi: {
     black: "#1A0822",
     red: "#B80E16",
@@ -180,7 +178,6 @@ const jrvsBoomTube: ExtensionTheme = {
   sidebarBorder: "#3F1A00",
   tabBarBg: "#140A05",
   tabBarBorder: "#3F1A00",
-  dashboardIcon: "lucide:layout-dashboard",
   ansi: {
     black: "#1A0A05",
     red: "#CC1028",
@@ -231,7 +228,6 @@ const jrvsBoomTubeLight: ExtensionTheme = {
   sidebarBorder: "#D8A680",
   tabBarBg: "#FFE4CB",
   tabBarBorder: "#D8A680",
-  dashboardIcon: "lucide:layout-dashboard",
   ansi: {
     black: "#1A0A00",
     red: "#A50020",
@@ -282,7 +278,6 @@ const jrvsHighfather: ExtensionTheme = {
   sidebarBorder: "#4A4A6A",
   tabBarBg: "#262642",
   tabBarBorder: "#4A4A6A",
-  dashboardIcon: "lucide:layout-dashboard",
   ansi: {
     black: "#20203A",
     red: "#F59898",
@@ -333,7 +328,6 @@ const jrvsHighfatherLight: ExtensionTheme = {
   sidebarBorder: "#D8C480",
   tabBarBg: "#F3EFD6",
   tabBarBorder: "#D8C480",
-  dashboardIcon: "lucide:layout-dashboard",
   ansi: {
     black: "#1A1930",
     red: "#B03838",
@@ -384,7 +378,6 @@ const jrvsMetron: ExtensionTheme = {
   sidebarBorder: "#2A3A44",
   tabBarBg: "#162026",
   tabBarBorder: "#2A3A44",
-  dashboardIcon: "lucide:layout-dashboard",
   ansi: {
     black: "#10181E",
     red: "#C44A50",
@@ -435,7 +428,6 @@ const jrvsMetronLight: ExtensionTheme = {
   sidebarBorder: "#A8B4BE",
   tabBarBg: "#DBE2E8",
   tabBarBorder: "#A8B4BE",
-  dashboardIcon: "lucide:layout-dashboard",
   ansi: {
     black: "#12222A",
     red: "#A82830",

@@ -135,7 +135,6 @@ The event bus (`src/lib/services/event-bus.ts`) is not a registry but serves a c
 | `surface:titleChanged` | Surface title updated          |
 | `sidebar:toggled`      | Sidebar visibility changed     |
 | `theme:changed`        | Theme switched                 |
-| `worktree:merged`      | Worktree branch merged to base |
 
 Extensions subscribe via `api.on(type, handler)` and must declare events in their manifest's `contributes.events` array (deny-by-default).
 

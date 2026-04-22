@@ -125,8 +125,6 @@ export function showInputPrompt(
  *   - select:         dropdown of pre-defined options
  *   - info:           read-only label (useful for showing context like a
  *                     worktree path during a confirm dialog)
- *   - color:          swatch picker over PROJECT_COLOR_SLOTS (matches
- *                     the chrome used by project creation)
  */
 export type FormField =
   | {
@@ -148,27 +146,6 @@ export type FormField =
       label: string;
       defaultValue?: string;
       type: "info";
-    }
-  | {
-      key: string;
-      label: string;
-      defaultValue?: string;
-      type: "color";
-    }
-  | {
-      key: string;
-      label: string;
-      defaultValue?: string;
-      placeholder?: string;
-      type: "directory";
-      required?: boolean;
-      pickerTitle?: string;
-      /** When true, the Browse button is hidden — the value is shown
-       *  but not editable. Use when the caller has already resolved
-       *  the directory and the user shouldn't be able to repoint it
-       *  (e.g. a dashboard spawned inside a project inherits the
-       *  project's path). */
-      readonly?: boolean;
     };
 export interface FormPromptState {
   title: string;

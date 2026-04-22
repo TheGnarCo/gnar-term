@@ -1,8 +1,8 @@
 /**
  * Regression test: `startCwdPolling` must notify the `workspaces` store
  * whenever a surface's cwd changes, not only when the title also
- * changed. Without this, sidebar subscribers (e.g. the core git status
- * service) never see the user's `cd` and keep showing the original cwd.
+ * changed. Without this, sidebar subscribers (e.g. git-status) never
+ * see the user's `cd` and keep showing status for the original cwd.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { get } from "svelte/store";

@@ -354,35 +354,6 @@ describe("Workflow: extension surface lifecycle", () => {
     expect(updated.surfaces[0].kind).toBe("terminal");
     expect((updated.surfaces[1] as ExtensionSurface).title).toBe("Note B");
   });
-
-  it("closing the last surface keeps the workspace alive so the empty state can render", () => {
-    // Regression: prior behavior auto-closed the workspace when its
-    // last surface went away, bouncing the user to another workspace
-    // (or spawning a fresh "Workspace 1" if this was the only one).
-    // We now keep the workspace so PaneView can render EmptySurface
-    // inside it.
-    const ws = makeWorkspace({ name: "Lonely" });
-    const otherWs = makeWorkspace({ name: "Other" });
-    workspaces.set([ws, otherWs]);
-    activeWorkspaceIdx.set(0);
-
-    const pane = get(activePane)!;
-    const surface = pane.surfaces[0]!;
-    closeSurfaceById(pane.id, surface.id);
-
-    const list = get(workspaces);
-    expect(list).toHaveLength(2);
-    const updatedWs = list.find((w) => w.id === ws.id)!;
-    // Pane sticks around but goes empty — activeSurfaceId cleared so
-    // the empty-pane branch in PaneView renders.
-    expect(updatedWs.splitRoot.type).toBe("pane");
-    if (updatedWs.splitRoot.type === "pane") {
-      expect(updatedWs.splitRoot.pane.surfaces).toHaveLength(0);
-      expect(updatedWs.splitRoot.pane.activeSurfaceId).toBeNull();
-    }
-    // Active workspace doesn't flip to a different workspace.
-    expect(get(activeWorkspaceIdx)).toBe(0);
-  });
 });
 
 // ============================================================

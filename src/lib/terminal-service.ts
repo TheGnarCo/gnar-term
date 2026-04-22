@@ -17,11 +17,6 @@ import {
   readText as clipboardRead,
   writeText as clipboardWrite,
 } from "@tauri-apps/plugin-clipboard-manager";
-import {
-  isPermissionGranted as notifPermissionGranted,
-  requestPermission as notifRequestPermission,
-  sendNotification as notifSend,
-} from "@tauri-apps/plugin-notification";
 import { get } from "svelte/store";
 import { xtermTheme } from "./stores/theme";
 import { workspaces, activeWorkspaceIdx } from "./stores/workspace";
@@ -237,28 +232,6 @@ function flushPtyBuffer(ptyId: number) {
 
 // --- Event Listeners ---
 
-/**
- * Show a desktop notification (Tauri plugin). Lazily requests permission on
- * first use; silently no-ops if denied. Failures are swallowed — a missing
- * notification daemon (Linux) shouldn't crash the terminal pipeline.
- */
-async function sendDesktopNotification(
-  title: string,
-  body: string,
-): Promise<void> {
-  try {
-    let permitted = await notifPermissionGranted();
-    if (!permitted) {
-      const result = await notifRequestPermission();
-      permitted = result === "granted";
-    }
-    if (!permitted) return;
-    notifSend({ title, body });
-  } catch (err) {
-    console.warn("[terminal-service] desktop notification failed:", err);
-  }
-}
-
 export async function setupListeners() {
   // On Linux, prevent WebKitGTK from intercepting Ctrl+Shift+C/V before xterm.js
   if (!isMac) {
@@ -360,39 +333,18 @@ export async function setupListeners() {
       const { pty_id, text } = event.payload;
       // Filter out escape-sequence fragments that slipped through (e.g. "4;0;")
       if (/^\d+[;\d:\/]*$/.test(text) || !text.trim()) return;
-      let notifyWorkspaceName: string | null = null;
       workspaces.update((wsList) => {
-        const activeIdx = get(activeWorkspaceIdx);
-        const activeWs = wsList[activeIdx];
         for (const ws of wsList) {
           for (const s of getAllSurfaces(ws)) {
             if (isTerminalSurface(s) && s.ptyId === pty_id) {
               s.notification = text;
               s.hasUnread = true;
-              // Suppress desktop notification when the affected surface is
-              // the foreground surface in the foreground pane — the user
-              // is already looking at it.
-              const inActiveWs = ws.id === activeWs?.id;
-              const inActivePane = ws.activePaneId
-                ? getAllPanes(ws.splitRoot).some(
-                    (p) =>
-                      p.id === ws.activePaneId &&
-                      p.surfaces.some((ps) => ps.id === s.id) &&
-                      p.activeSurfaceId === s.id,
-                  )
-                : false;
-              if (!(inActiveWs && inActivePane)) {
-                notifyWorkspaceName = ws.name;
-              }
               return wsList;
             }
           }
         }
         return wsList;
       });
-      if (notifyWorkspaceName) {
-        void sendDesktopNotification(notifyWorkspaceName, text);
-      }
     },
   );
 
@@ -436,9 +388,9 @@ export function startCwdPolling() {
                   s.title = basename || "~";
                 }
                 // Notify subscribers on ANY cwd change, not only when
-                // the title also changed — otherwise sidebar consumers
-                // that react to cwd (e.g. the core git status service)
-                // stay stuck on the cwd they first observed.
+                // the title also changed — otherwise sidebar extensions
+                // that react to cwd (e.g. git-status) stay stuck on the
+                // cwd they first observed.
                 workspaces.update((l) => [...l]);
               }
             })
@@ -733,7 +685,7 @@ export async function createTerminalSurface(
       surface.title = basename || "~";
     }
     // Notify subscribers — direct mutation of surface.cwd is invisible to
-    // Svelte store subscribers (e.g. the sidebar git status line) without this.
+    // Svelte store subscribers (e.g. sidebar git-status) without this.
     workspaces.update((l) => [...l]);
     return true;
   });
@@ -824,40 +776,6 @@ export async function createTerminalSurface(
   pane.activeSurfaceId = surface.id;
 
   return surface;
-}
-
-/**
- * Approve a pending restored command for a surface — write it to the PTY and
- * clear the pending flag so the dialog/banner stop showing it. No-op if the
- * surface has nothing pending or the PTY isn't ready yet.
- */
-export async function runDefinedCommand(
-  surface: TerminalSurface,
-): Promise<void> {
-  if (!surface.definedCommand) return;
-  if (!surface.pendingRestoreCommand) return;
-  if (surface.ptyId < 0) return;
-  try {
-    await invoke("write_pty", {
-      ptyId: surface.ptyId,
-      data: `${surface.definedCommand}\n`,
-    });
-  } catch (err) {
-    console.warn("[terminal-service] runDefinedCommand failed:", err);
-    return;
-  }
-  surface.pendingRestoreCommand = false;
-  workspaces.update((l) => [...l]);
-}
-
-/**
- * Drop the pending-restore flag without running anything. Keeps definedCommand
- * intact so future sessions still know what this pane was for.
- */
-export function dismissDefinedCommand(surface: TerminalSurface): void {
-  if (!surface.pendingRestoreCommand) return;
-  surface.pendingRestoreCommand = false;
-  workspaces.update((l) => [...l]);
 }
 
 /** Find the workspace + pane currently containing a given surface. Used to

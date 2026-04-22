@@ -294,7 +294,7 @@
             title="Spawned by agent dashboard"
             style="
               flex-shrink: 0; display: inline-flex; align-items: center;
-              justify-content: center; color: {$theme.fgDim};
+              justify-content: center; color: {railColor};
             "
           >
             <svg
@@ -324,7 +324,7 @@
             title="Git worktree workspace"
             style="
               flex-shrink: 0; display: inline-flex; align-items: center;
-              justify-content: center; color: {$theme.fgDim};
+              justify-content: center; color: {railColor};
             "
           >
             <svg

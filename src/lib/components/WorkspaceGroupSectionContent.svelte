@@ -27,7 +27,6 @@
     WORKSPACE_GROUP_STATE_CHANGED,
   } from "../services/workspace-group-service";
   import {
-    getWorkspaceActions,
     workspaceActionStore,
     type WorkspaceActionContext,
   } from "../services/workspace-action-registry";
@@ -116,8 +115,13 @@
   })();
 
   // Re-evaluate contributed children when contributors register/unregister.
-  $: void $childRowContributorStore;
-  $: childRows = group ? getChildRowsFor("workspace-group", group.id) : [];
+  // The `$childRowContributorStore` reference is what makes this statement
+  // reactive — `getChildRowsFor` reads the store via `get()` and wouldn't
+  // otherwise pull Svelte into the dependency graph.
+  $: childRows =
+    group && $childRowContributorStore
+      ? getChildRowsFor("workspace-group", group.id)
+      : [];
 
   $: groupContext = group
     ? ({
@@ -129,9 +133,12 @@
       } satisfies WorkspaceActionContext)
     : undefined;
 
-  $: void $workspaceActionStore;
+  // `$workspaceActionStore` must be read inside this statement so the
+  // extension-registered actions (e.g. worktree-workspaces' "New Worktree")
+  // reach the `+ New` split-button dropdown when extensions activate after
+  // the component mounts.
   $: actions = groupContext
-    ? getWorkspaceActions().filter((a) => !a.when || a.when(groupContext!))
+    ? $workspaceActionStore.filter((a) => !a.when || a.when(groupContext!))
     : [];
 
   $: coreAction = actions.find((a) => a.id === "core:new-workspace");

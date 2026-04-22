@@ -107,6 +107,7 @@ import PaneView from "../lib/components/PaneView.svelte";
 import PrimarySidebar from "../lib/components/PrimarySidebar.svelte";
 import SecondarySidebar from "../lib/components/SecondarySidebar.svelte";
 import TerminalSurfaceComponent from "../lib/components/TerminalSurface.svelte";
+import WorkspaceGroupSectionHarness from "./workspace-group-section-harness.svelte";
 
 // Store imports
 import {
@@ -130,6 +131,8 @@ import {
   registerWorkspaceAction,
   resetWorkspaceActions,
 } from "../lib/services/workspace-action-registry";
+import { setWorkspaceGroups } from "../lib/stores/workspace-groups";
+import type { WorkspaceGroupEntry } from "../lib/config";
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -1372,6 +1375,69 @@ describe("PrimarySidebar", () => {
     await fireEvent.click(caretBtn);
     // Dropdown includes both the default action and the extension action
     expect(screen.getByText("New Workspace")).toBeTruthy();
+    expect(screen.getByText("New Worktree")).toBeTruthy();
+  });
+});
+
+// ===========================================================================
+// WorkspaceGroupSectionContent — per-group "+ New" split button
+// ===========================================================================
+
+describe("WorkspaceGroupSectionContent", () => {
+  beforeEach(() => {
+    resetWorkspaceActions();
+    setWorkspaceGroups([]);
+    cleanup();
+  });
+
+  it("picks up workspace actions registered AFTER the component mounts", async () => {
+    // Regression: `$: actions = getWorkspaceActions().filter(...)` used to
+    // read the store via `get()`, which doesn't create a Svelte dep. When
+    // extensions activated after the component mounted (e.g. the worktree-
+    // workspaces extension), the per-group "+ New" dropdown stayed stale
+    // until the next render nudge. Now the statement reads the store
+    // directly so extension-registered actions appear live.
+    registerWorkspaceAction({
+      id: "core:new-workspace",
+      label: "New Workspace",
+      icon: "plus",
+      source: "core",
+      handler: noop,
+    });
+    const group: WorkspaceGroupEntry = {
+      id: "grp-1",
+      name: "Test Group",
+      path: "/tmp/test-group",
+      color: "mint",
+      workspaceIds: [],
+      isGit: true,
+      createdAt: new Date().toISOString(),
+    };
+    setWorkspaceGroups([group]);
+
+    render(WorkspaceGroupSectionHarness, { props: { groupId: "grp-1" } });
+
+    // Pre-registration: only the "+ New" main button, no caret.
+    let splitContainer = screen.getByText("+ New").closest("div")!;
+    expect(splitContainer.querySelectorAll("button").length).toBe(1);
+
+    // Activate the worktree-workspaces-style action after mount.
+    registerWorkspaceAction({
+      id: "worktree-workspaces:create-worktree",
+      label: "New Worktree",
+      icon: "git-branch",
+      source: "worktree-workspaces",
+      handler: noop,
+      when: (ctx) => !ctx.groupId || ctx.isGit === true,
+    });
+    await tick();
+
+    // Caret now renders and the dropdown exposes the new action.
+    splitContainer = screen.getByText("+ New").closest("div")!;
+    const buttons = splitContainer.querySelectorAll("button");
+    expect(buttons.length).toBe(2);
+    const caretBtn = buttons[buttons.length - 1] as HTMLElement;
+    await fireEvent.click(caretBtn);
     expect(screen.getByText("New Worktree")).toBeTruthy();
   });
 });

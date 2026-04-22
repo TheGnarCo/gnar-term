@@ -40,7 +40,7 @@
     "@xterm/addon-web-links": "0.13.0-beta.197",
     "@xterm/addon-webgl": "0.20.0-beta.196",
     "@xterm/xterm": "6.1.0-beta.197",
-    "dompurify": "^3.4.0",
+    "dompurify": "^3.4.1",
     "github-markdown-css": "^5.8.1",
     "marked": "^18.0.2",
     "pdfjs-dist": "^5.6.205",

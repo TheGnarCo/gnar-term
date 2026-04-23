@@ -93,6 +93,11 @@
    */
   let rowHovered = false;
   let collapsed = false;
+  let prevFilterIds = filterIds;
+  $: if (filterIds !== prevFilterIds) {
+    if (filterIds.size > prevFilterIds.size && collapsed) collapsed = false;
+    prevFilterIds = filterIds;
+  }
 
   $: WorkspaceListViewResolved = (workspaceListViewComponent ??
     DefaultWorkspaceListView) as Component;

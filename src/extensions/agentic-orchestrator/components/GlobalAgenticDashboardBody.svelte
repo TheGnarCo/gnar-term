@@ -90,7 +90,7 @@ title: Active Agents
         workspaceId: "",
         hostMetadata,
       });
-      result = await openPreview(markdownPathResolved);
+      result = await openPreview(markdownPathResolved, { surfaceId });
       container.appendChild(result.element);
     } catch (err) {
       loadError = err instanceof Error ? err.message : String(err);

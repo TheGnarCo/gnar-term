@@ -167,6 +167,15 @@
   $: processStatusStore = getWorkspaceStatusByCategory(workspace.id, "process");
   $: processItems = $processStatusStore;
   $: agentBadges = aggregateAgentBadges(processItems);
+  $: agentChipColor = (() => {
+    if (agentBadges.length > 0 && agentBadges[0]) {
+      const top = agentBadges[0];
+      return top.variant === "muted"
+        ? ($theme.fgMuted ?? $theme.fgDim ?? top.color)
+        : top.color;
+    }
+    return agentDotColor;
+  })();
 
   $: activePaneInWs = getAllPanes(workspace.splitRoot).find(
     (p) => p.id === workspace.activePaneId,
@@ -432,7 +441,12 @@
               : topBadge.color}
           <span
             data-agent-presence-chip
-            title={agentBadges.map((b) => b.label).join(", ")}
+            title={[
+              agentBadges.map((b) => b.label).join(", "),
+              latestNotification,
+            ]
+              .filter(Boolean)
+              .join(" — ")}
             style="display: inline-flex; align-items: center; padding: 0 3px; flex-shrink: 0;"
           >
             <span
@@ -442,7 +456,9 @@
         {:else if agentDotColor}
           <span
             data-agent-presence-chip
-            title="Agent: {agentStatus}"
+            title={["Agent: " + agentStatus, latestNotification]
+              .filter(Boolean)
+              .join(" — ")}
             style="display: inline-flex; align-items: center; padding: 0 3px; flex-shrink: 0;"
           >
             <span
@@ -490,21 +506,23 @@
     {#if !hideStatusBadges && activeSurfaceForAgent?.title}
       <div
         data-harness-title-row
-        style="padding: 1px 6px 4px 10px; display: flex; align-items: center; gap: 4px;"
+        style="padding: 0 12px 4px 6px; display: flex; align-items: center; min-width: 0; overflow: hidden; line-height: 1.2;"
       >
         <span
-          style="flex-shrink: 0; color: {$theme.fgDim}; display: inline-flex; align-items: center;"
+          style="font-size: 10px; color: {$theme.fgDim}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; display: inline-flex; align-items: center; gap: 3px;"
+          title={activeSurfaceForAgent.title}
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            width="12"
-            height="12"
+            width="10"
+            height="10"
             viewBox="0 0 24 24"
             fill="none"
-            stroke="currentColor"
+            stroke={railColor}
             stroke-width="2"
             stroke-linecap="round"
             stroke-linejoin="round"
+            style="flex-shrink: 0; opacity: 0.7;"
           >
             <title>Active harness session</title>
             <path d="M12 8V4H8" />
@@ -514,16 +532,12 @@
             <path d="M15 13v2" />
             <path d="M9 13v2" />
           </svg>
-        </span>
-        <span
-          style="font-size: 11px; color: {$theme.fgDim}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
-        >
           {activeSurfaceForAgent.title}
         </span>
       </div>
     {/if}
 
-    {#if latestNotification && !hideStatusBadges && !isInsideGroup}
+    {#if latestNotification && !hideStatusBadges && !isInsideGroup && !agentChipColor}
       <div
         style="padding: 2px 12px 6px 6px; font-size: 11px; color: {$theme.notify}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
       >

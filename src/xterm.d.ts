@@ -7,3 +7,5 @@ declare module "@xterm/xterm" {
     };
   }
 }
+
+declare module "*.css";

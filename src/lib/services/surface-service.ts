@@ -1,30 +1,40 @@
 import { get } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
-import { workspaces, activeWorkspace, activePane, activeSurface } from "../stores/workspace";
+import {
+  workspaces,
+  activeWorkspace,
+  activePane,
+  activeSurface,
+} from "../stores/workspace";
 import { createTerminalSurface } from "../terminal-service";
-import { getAllPanes, isTerminalSurface, type Workspace, type Pane } from "../types";
+import {
+  getAllPanes,
+  isTerminalSurface,
+  type Workspace,
+  type Pane,
+} from "../types";
 import { openPreview } from "../../preview/index";
 import { removePane } from "./pane-service";
-import { safeFocus, getActiveCwd } from "./service-helpers";
+import { safeFocus, getCwdForSurface } from "./service-helpers";
 
 export function selectSurface(paneId: string, surfaceId: string) {
   const ws = get(activeWorkspace);
   if (!ws) return;
-  const pane = getAllPanes(ws.splitRoot).find(p => p.id === paneId);
+  const pane = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
   if (!pane) return;
   pane.activeSurfaceId = surfaceId;
-  const s = pane.surfaces.find(s => s.id === surfaceId);
+  const s = pane.surfaces.find((s) => s.id === surfaceId);
   if (s) s.hasUnread = false;
-  workspaces.update(l => [...l]);
+  workspaces.update((l) => [...l]);
   safeFocus(s);
 }
 
 export function closeSurfaceById(paneId: string, surfaceId: string) {
   const ws = get(activeWorkspace);
   if (!ws) return;
-  const pane = getAllPanes(ws.splitRoot).find(p => p.id === paneId);
+  const pane = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
   if (!pane) return;
-  const idx = pane.surfaces.findIndex(s => s.id === surfaceId);
+  const idx = pane.surfaces.findIndex((s) => s.id === surfaceId);
   if (idx < 0) return;
   removeSurface(ws, pane, idx);
 }
@@ -42,9 +52,10 @@ function removeSurface(ws: Workspace, pane: Pane, surfaceIdx: number) {
   if (pane.surfaces.length === 0) {
     removePane(ws, pane);
   } else {
-    pane.activeSurfaceId = pane.surfaces[Math.min(surfaceIdx, pane.surfaces.length - 1)].id;
-    workspaces.update(l => [...l]);
-    const s = pane.surfaces.find(s => s.id === pane.activeSurfaceId);
+    pane.activeSurfaceId =
+      pane.surfaces[Math.min(surfaceIdx, pane.surfaces.length - 1)].id;
+    workspaces.update((l) => [...l]);
+    const s = pane.surfaces.find((s) => s.id === pane.activeSurfaceId);
     safeFocus(s);
   }
 }
@@ -52,29 +63,49 @@ function removeSurface(ws: Workspace, pane: Pane, surfaceIdx: number) {
 export async function newSurface(paneId: string) {
   const ws = get(activeWorkspace);
   if (!ws) return;
-  const pane = getAllPanes(ws.splitRoot).find(p => p.id === paneId);
+  const pane = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
   if (!pane) return;
-  const cwd = await getActiveCwd();
+  const sourceSurface = pane.surfaces.find(
+    (s) => s.id === pane.activeSurfaceId,
+  );
+  const cwd = await getCwdForSurface(sourceSurface);
   const surface = await createTerminalSurface(pane, cwd);
-  workspaces.update(l => [...l]);
-  safeFocus(surface);
+  workspaces.update((l) => [...l]);
+  void safeFocus(surface);
+}
+
+export async function newSurfaceWithCommand(paneId: string, command: string) {
+  const ws = get(activeWorkspace);
+  if (!ws) return;
+  const pane = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
+  if (!pane) return;
+  const sourceSurface = pane.surfaces.find(
+    (s) => s.id === pane.activeSurfaceId,
+  );
+  const cwd = await getCwdForSurface(sourceSurface);
+  const surface = await createTerminalSurface(pane, cwd);
+  surface.title = command;
+  surface.startupCommand = command;
+  workspaces.update((l) => [...l]);
+  void safeFocus(surface);
 }
 
 export function nextSurface() {
   const pane = get(activePane);
   if (!pane || pane.surfaces.length <= 1) return;
-  const idx = pane.surfaces.findIndex(s => s.id === pane.activeSurfaceId);
+  const idx = pane.surfaces.findIndex((s) => s.id === pane.activeSurfaceId);
   pane.activeSurfaceId = pane.surfaces[(idx + 1) % pane.surfaces.length].id;
-  workspaces.update(l => [...l]);
+  workspaces.update((l) => [...l]);
   safeFocus(get(activeSurface));
 }
 
 export function prevSurface() {
   const pane = get(activePane);
   if (!pane || pane.surfaces.length <= 1) return;
-  const idx = pane.surfaces.findIndex(s => s.id === pane.activeSurfaceId);
-  pane.activeSurfaceId = pane.surfaces[(idx - 1 + pane.surfaces.length) % pane.surfaces.length].id;
-  workspaces.update(l => [...l]);
+  const idx = pane.surfaces.findIndex((s) => s.id === pane.activeSurfaceId);
+  pane.activeSurfaceId =
+    pane.surfaces[(idx - 1 + pane.surfaces.length) % pane.surfaces.length].id;
+  workspaces.update((l) => [...l]);
   safeFocus(get(activeSurface));
 }
 
@@ -84,7 +115,7 @@ export function selectSurfaceByNumber(num: number) {
   const idx = num === 9 ? pane.surfaces.length - 1 : num - 1;
   if (idx >= 0 && idx < pane.surfaces.length) {
     pane.activeSurfaceId = pane.surfaces[idx].id;
-    workspaces.update(l => [...l]);
+    workspaces.update((l) => [...l]);
     safeFocus(get(activeSurface));
   }
 }
@@ -93,7 +124,7 @@ export function closeActiveSurface() {
   const ws = get(activeWorkspace);
   const pane = get(activePane);
   if (!ws || !pane) return;
-  const idx = pane.surfaces.findIndex(s => s.id === pane.activeSurfaceId);
+  const idx = pane.surfaces.findIndex((s) => s.id === pane.activeSurfaceId);
   if (idx < 0) return;
   removeSurface(ws, pane, idx);
 }
@@ -114,7 +145,7 @@ export async function openPreviewInPane(filePath: string) {
   };
   pane.surfaces.push(surface);
   pane.activeSurfaceId = surface.id;
-  workspaces.update(l => [...l]);
+  workspaces.update((l) => [...l]);
 }
 
 export function newSurfaceFromSidebar() {

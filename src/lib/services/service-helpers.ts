@@ -10,14 +10,24 @@ export async function safeFocus(s: Surface | null | undefined) {
   s.terminal.focus();
 }
 
-export async function getActiveCwd(): Promise<string | undefined> {
-  const surface = get(activeSurface);
+export async function getCwdForSurface(
+  surface: Surface | null | undefined,
+): Promise<string | undefined> {
   if (!surface || !isTerminalSurface(surface)) return undefined;
   if (surface.cwd) return surface.cwd;
   if (surface.ptyId >= 0) {
     try {
-      return await invoke<string>("get_pty_cwd", { ptyId: surface.ptyId }) || undefined;
-    } catch { return undefined; }
+      return (
+        (await invoke<string>("get_pty_cwd", { ptyId: surface.ptyId })) ||
+        undefined
+      );
+    } catch {
+      return undefined;
+    }
   }
   return undefined;
+}
+
+export async function getActiveCwd(): Promise<string | undefined> {
+  return getCwdForSurface(get(activeSurface));
 }

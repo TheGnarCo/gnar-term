@@ -38,7 +38,10 @@
   let resizeObserver: ResizeObserver;
   let scrollState: Record<string, boolean> = {};
 
-  $: showJumpToBottom = scrollState[pane.activeSurfaceId] ?? false;
+  $: showJumpToBottom =
+    pane.activeSurfaceId != null
+      ? (scrollState[pane.activeSurfaceId] ?? false)
+      : false;
 
   function handleJumpToBottom() {
     const active = pane.surfaces.find((s) => s.id === pane.activeSurfaceId);

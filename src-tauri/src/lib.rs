@@ -1585,6 +1585,28 @@ pub fn run() {
                 }
             }
 
+            // Dev builds: set yellow icon and display name so Dock/app-switcher
+            // clearly distinguish dev from release. Deferred to main thread so
+            // it runs after Tauri's own post-setup icon/name initialization.
+            #[cfg(all(debug_assertions, target_os = "macos"))]
+            {
+                let handle = app.handle().clone();
+                let _ = handle.run_on_main_thread(|| {
+                    use objc2::{AnyThread, MainThreadMarker};
+                    use objc2_app_kit::{NSApplication, NSImage};
+                    use objc2_foundation::NSData;
+                    unsafe {
+                        let mtm = MainThreadMarker::new_unchecked();
+                        let bytes: &[u8] = include_bytes!("../icons/dev/128x128@2x.png");
+                        let data = NSData::with_bytes(bytes);
+                        if let Some(image) = NSImage::initWithData(NSImage::alloc(), &data) {
+                            NSApplication::sharedApplication(mtm)
+                                .setApplicationIconImage(Some(&image));
+                        }
+                    }
+                });
+            }
+
             // MCP bridge — opt-in, dormant unless enabled by setting + Claude
             // Code detection.
             if mcp_should_start() {

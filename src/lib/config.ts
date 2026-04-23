@@ -15,7 +15,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { writable, type Readable } from "svelte/store";
-import { getHome } from "./services/service-helpers";
+import { getHome, getConfigDir } from "./services/service-helpers";
 import { runConfigMigrations } from "./services/config-migrations";
 
 // --- Types (cmux-compatible + extensions) ---
@@ -274,15 +274,15 @@ export async function loadConfig(
     }
   }
 
-  const home = await getHome();
+  const [home, configDir] = await Promise.all([getHome(), getConfigDir()]);
 
   // Try per-project config first (higher priority), then global.
   // Legacy global `gnar-term.json` is still read so existing installs keep
   // working after the rename to `settings.json`.
   const paths = [
     ...CONFIG_FILENAMES, // ./settings.json, ./gnar-term.json, ./cmux.json
-    `${home}/.config/gnar-term/settings.json`,
-    `${home}/.config/gnar-term/gnar-term.json`,
+    `${configDir}/settings.json`,
+    `${configDir}/gnar-term.json`,
     `${home}/.config/cmux/cmux.json`,
   ];
 
@@ -299,7 +299,7 @@ export async function loadConfig(
 
   // No config found — use defaults
   _config = {};
-  _configPath = `${home}/.config/gnar-term/settings.json`;
+  _configPath = `${configDir}/settings.json`;
   _configStore.set(_config);
   return _config;
 }
@@ -309,12 +309,12 @@ export async function saveConfig(
 ): Promise<void> {
   _config = { ..._config, ...updates };
   _configStore.set(_config);
-  const home = await getHome();
-  const path = _configPath || `${home}/.config/gnar-term/settings.json`;
+  const configDir = await getConfigDir();
+  const path = _configPath || `${configDir}/settings.json`;
 
   // Ensure directory exists
   try {
-    await invoke("ensure_dir", { path: `${home}/.config/gnar-term` });
+    await invoke("ensure_dir", { path: configDir });
   } catch {}
 
   try {
@@ -470,8 +470,8 @@ export function migrateLegacyProjectShapes(state: AppState): {
 }
 
 export async function loadState(): Promise<AppState> {
-  const home = await getHome();
-  const path = `${home}/.config/gnar-term/state.json`;
+  const configDir = await getConfigDir();
+  const path = `${configDir}/state.json`;
   try {
     const content = await invoke<string>("read_file", { path });
     const parsed = JSON.parse(content) as AppState;
@@ -497,10 +497,10 @@ export async function loadState(): Promise<AppState> {
 export async function saveState(updates: Partial<AppState>): Promise<void> {
   _appState = { ..._appState, ...updates };
   _appStateStore.set(_appState);
-  const home = await getHome();
-  const path = `${home}/.config/gnar-term/state.json`;
+  const configDir = await getConfigDir();
+  const path = `${configDir}/state.json`;
   try {
-    await invoke("ensure_dir", { path: `${home}/.config/gnar-term` });
+    await invoke("ensure_dir", { path: configDir });
     await invoke("write_file", {
       path,
       content: JSON.stringify(_appState, null, 2),

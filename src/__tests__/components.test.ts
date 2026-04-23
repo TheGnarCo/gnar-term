@@ -1538,3 +1538,193 @@ describe("TerminalSurface", () => {
     expect(container.querySelector("[data-jump-to-bottom]")).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// WorkspaceItem — harness sub-row
+// ---------------------------------------------------------------------------
+
+describe("WorkspaceItem — harness sub-row", () => {
+  it("shows sub-row when the active surface has a detected agent", async () => {
+    const { setStatusItem, clearAllStatusForWorkspace } =
+      await import("../lib/services/status-registry");
+
+    const surface = makeSurface("s1", { title: "claude > fixing bug" });
+    const pane = makePane("p1", [surface]);
+    const ws = makeWorkspace("ws-harness", "Harness WS", pane);
+
+    setStatusItem("_agent", ws.id, "surface:s1", {
+      category: "process",
+      priority: 0,
+      label: "running",
+      variant: "success",
+      metadata: { surfaceId: "s1" },
+    });
+
+    const { container } = render(WorkspaceItem, {
+      props: {
+        workspace: ws,
+        index: 0,
+        isActive: true,
+        onSelect: noop,
+        onClose: noop,
+        onRename: noop,
+        onContextMenu: noop,
+      },
+    });
+
+    expect(container.querySelector("[data-harness-title-row]")).not.toBeNull();
+    expect(screen.getByText("claude > fixing bug")).toBeTruthy();
+    clearAllStatusForWorkspace(ws.id);
+  });
+
+  it("hides sub-row when agent is on a non-active surface", async () => {
+    const { setStatusItem, clearAllStatusForWorkspace } =
+      await import("../lib/services/status-registry");
+
+    const active = makeSurface("s-active", { title: "Shell" });
+    const other = makeSurface("s-agent", { title: "claude" });
+    const pane: Pane = {
+      id: "p1",
+      surfaces: [active, other],
+      activeSurfaceId: "s-active",
+    };
+    const ws: Workspace = {
+      id: "ws-hidden",
+      name: "Hidden",
+      splitRoot: { type: "pane", pane },
+      activePaneId: "p1",
+    };
+
+    setStatusItem("_agent", ws.id, "surface:s-agent", {
+      category: "process",
+      priority: 0,
+      label: "idle",
+      variant: "muted",
+      metadata: { surfaceId: "s-agent" },
+    });
+
+    const { container } = render(WorkspaceItem, {
+      props: {
+        workspace: ws,
+        index: 0,
+        isActive: true,
+        onSelect: noop,
+        onClose: noop,
+        onRename: noop,
+        onContextMenu: noop,
+      },
+    });
+
+    expect(container.querySelector("[data-harness-title-row]")).toBeNull();
+    clearAllStatusForWorkspace(ws.id);
+  });
+
+  it("hides sub-row when hideStatusBadges is true", async () => {
+    const { setStatusItem, clearAllStatusForWorkspace } =
+      await import("../lib/services/status-registry");
+
+    const surface = makeSurface("s1", { title: "claude" });
+    const pane = makePane("p1", [surface]);
+    const ws = makeWorkspace("ws-hidden2", "Hidden2", pane);
+
+    setStatusItem("_agent", ws.id, "surface:s1", {
+      category: "process",
+      priority: 0,
+      label: "idle",
+      variant: "muted",
+      metadata: { surfaceId: "s1" },
+    });
+
+    const { container } = render(WorkspaceItem, {
+      props: {
+        workspace: ws,
+        index: 0,
+        isActive: true,
+        hideStatusBadges: true,
+        onSelect: noop,
+        onClose: noop,
+        onRename: noop,
+        onContextMenu: noop,
+      },
+    });
+
+    expect(container.querySelector("[data-harness-title-row]")).toBeNull();
+    clearAllStatusForWorkspace(ws.id);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TerminalSurface — image drag-drop
+// ---------------------------------------------------------------------------
+
+describe("TerminalSurface — image drag-drop", () => {
+  it("sends \\x16 to PTY for image-only drop and writes image to clipboard", async () => {
+    const { invoke: mockInvokeCore } = await import("@tauri-apps/api/core");
+    const invokespy = vi.mocked(mockInvokeCore);
+    const { writeImage } = await import("@tauri-apps/plugin-clipboard-manager");
+    const writeImageSpy = vi.mocked(writeImage);
+
+    invokespy.mockClear();
+    writeImageSpy.mockClear();
+
+    const surface = makeSurface("s1", { ptyId: 42 });
+    render(TerminalSurfaceComponent, {
+      props: { surface, visible: true },
+    });
+
+    // Simulate Tauri native drag-drop event with an image path
+    const { listen } = await import("@tauri-apps/api/event");
+    const listenSpy = vi.mocked(listen);
+    const dragDropCallback = listenSpy.mock.calls
+      .flatMap((c) => (c[0] === "tauri://drag-drop" ? [c[1]] : []))
+      .at(-1) as ((e: { payload: { paths: string[] } }) => void) | undefined;
+
+    if (dragDropCallback) {
+      dragDropCallback({
+        payload: { paths: ["/tmp/screenshot.png"] },
+      });
+      await new Promise((r) => setTimeout(r, 10));
+
+      expect(writeImageSpy).toHaveBeenCalledWith("/tmp/screenshot.png");
+      const writePtyCall = invokespy.mock.calls.find(
+        (c) =>
+          c[0] === "write_pty" &&
+          (c[1] as Record<string, unknown>)?.data === "\x16",
+      );
+      expect(writePtyCall).toBeDefined();
+    }
+  });
+
+  it("sends shell-escaped path for non-image drop (unchanged behavior)", async () => {
+    const { invoke: mockInvokeCore } = await import("@tauri-apps/api/core");
+    const invokespy = vi.mocked(mockInvokeCore);
+    invokespy.mockClear();
+
+    const surface = makeSurface("s2", { ptyId: 43 });
+    render(TerminalSurfaceComponent, {
+      props: { surface, visible: true },
+    });
+
+    const { listen } = await import("@tauri-apps/api/event");
+    const listenSpy = vi.mocked(listen);
+    const dragDropCallback = listenSpy.mock.calls
+      .flatMap((c) => (c[0] === "tauri://drag-drop" ? [c[1]] : []))
+      .at(-1) as ((e: { payload: { paths: string[] } }) => void) | undefined;
+
+    if (dragDropCallback) {
+      dragDropCallback({
+        payload: { paths: ["/tmp/somefile.txt"] },
+      });
+      await new Promise((r) => setTimeout(r, 10));
+
+      const writePtyCall = invokespy.mock.calls.find(
+        (c) => c[0] === "write_pty",
+      );
+      expect(writePtyCall).toBeDefined();
+      const data = (writePtyCall![1] as Record<string, unknown>)
+        ?.data as string;
+      expect(data).toContain("somefile.txt");
+      expect(data).not.toBe("\x16");
+    }
+  });
+});

@@ -8,15 +8,15 @@
  * of truth. This service handles disk I/O for durability across restarts.
  */
 import { invoke } from "@tauri-apps/api/core";
-import { getHome } from "./service-helpers";
+import { getConfigDir } from "./service-helpers";
 
 // --- Public API ---
 
 export async function getExtensionStatePath(
   extensionId: string,
 ): Promise<string> {
-  const home = await getHome();
-  return `${home}/.config/gnar-term/extensions/${extensionId}/state.json`;
+  const configDir = await getConfigDir();
+  return `${configDir}/extensions/${extensionId}/state.json`;
 }
 
 /**
@@ -78,8 +78,8 @@ export async function loadExtensionState(
 }
 
 export async function deleteExtensionState(extensionId: string): Promise<void> {
-  const home = await getHome();
-  const dir = `${home}/.config/gnar-term/extensions/${extensionId}`;
+  const configDir = await getConfigDir();
+  const dir = `${configDir}/extensions/${extensionId}`;
   try {
     await invoke("remove_dir", { path: dir });
   } catch (err) {
@@ -94,8 +94,8 @@ export async function saveExtensionState(
   extensionId: string,
   state: Record<string, unknown>,
 ): Promise<void> {
-  const home = await getHome();
-  const dir = `${home}/.config/gnar-term/extensions/${extensionId}`;
+  const configDir = await getConfigDir();
+  const dir = `${configDir}/extensions/${extensionId}`;
   const path = `${dir}/state.json`;
   try {
     await invoke("ensure_dir", { path: dir });

@@ -11,7 +11,7 @@
   import DragGrip from "./DragGrip.svelte";
 
   $: isDisco = $theme.name === "Molly Disco";
-  import { getAllSurfaces } from "../types";
+  import { getAllSurfaces, getAllPanes } from "../types";
   import type { Workspace } from "../types";
 
   const discoEmojis = [
@@ -167,6 +167,20 @@
   $: processStatusStore = getWorkspaceStatusByCategory(workspace.id, "process");
   $: processItems = $processStatusStore;
   $: agentBadges = aggregateAgentBadges(processItems);
+
+  $: activePaneInWs = getAllPanes(workspace.splitRoot).find(
+    (p) => p.id === workspace.activePaneId,
+  );
+  $: activeSurfaceForAgent = (() => {
+    const sid = activePaneInWs?.activeSurfaceId;
+    if (!sid) return null;
+    const hasAgent = processItems.some(
+      (item) =>
+        (item.metadata as Record<string, unknown> | undefined)?.surfaceId ===
+        sid,
+    );
+    return hasAgent ? (allSurfaces.find((s) => s.id === sid) ?? null) : null;
+  })();
 
   $: subtitleComponents = $workspaceSubtitleStore;
 
@@ -472,6 +486,42 @@
         />
       {/if}
     {/each}
+
+    {#if !hideStatusBadges && activeSurfaceForAgent?.title}
+      <div
+        data-harness-title-row
+        style="padding: 1px 6px 4px 10px; display: flex; align-items: center; gap: 4px;"
+      >
+        <span
+          style="flex-shrink: 0; color: {$theme.fgDim}; display: inline-flex; align-items: center;"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <title>Active harness session</title>
+            <path d="M12 8V4H8" />
+            <rect width="16" height="12" x="4" y="8" rx="2" />
+            <path d="M2 14h2" />
+            <path d="M20 14h2" />
+            <path d="M15 13v2" />
+            <path d="M9 13v2" />
+          </svg>
+        </span>
+        <span
+          style="font-size: 11px; color: {$theme.fgDim}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+        >
+          {activeSurfaceForAgent.title}
+        </span>
+      </div>
+    {/if}
 
     {#if latestNotification && !hideStatusBadges && !isInsideGroup}
       <div

@@ -418,7 +418,7 @@ describe("agent-detection-service — OSC output classification", () => {
 
     // Early output (no observer wired yet — placeholder ptyId) must
     // not attach an agent.
-    notifyOutputObservers(40, "Claude Code starting…");
+    notifyOutputObservers(40, "some early output");
     expect(getAgents()).toHaveLength(0);
 
     // PTY becomes ready. Backfill the workspace state so the
@@ -439,8 +439,14 @@ describe("agent-detection-service — OSC output classification", () => {
     });
     eventBus.emit({ type: "surface:ptyReady", id: "s1", ptyId: 40 });
 
-    // Now output routed to the real ptyId should match + attach.
-    notifyOutputObservers(40, "Claude Code v2 Opus 4.7");
+    // Claude Code is OSC-detectable so title change (not raw output)
+    // is the detection signal. Emit a title change with "claude".
+    eventBus.emit({
+      type: "surface:titleChanged",
+      id: "s1",
+      oldTitle: "Shell 1",
+      newTitle: "claude",
+    });
     expect(getAgents()).toHaveLength(1);
     expect(getAgents()[0]?.agentName).toBe("Claude Code");
   });
@@ -496,11 +502,17 @@ describe("agent-detection-service — lifecycle hygiene", () => {
     eventBus.emit({ type: "surface:ptyReady", id: "s1", ptyId: 101 });
 
     // Old pty id should no longer route to the observer.
-    notifyOutputObservers(100, "Claude Code on stale pty");
+    notifyOutputObservers(100, "some output on stale pty");
     expect(getAgents()).toHaveLength(0);
 
-    // New pty id routes correctly.
-    notifyOutputObservers(101, "Claude Code on live pty");
+    // Title change on the live pty triggers detection (Claude Code is
+    // OSC-detectable — title is the authoritative signal, not output).
+    eventBus.emit({
+      type: "surface:titleChanged",
+      id: "s1",
+      oldTitle: "Shell 1",
+      newTitle: "claude",
+    });
     expect(getAgents()).toHaveLength(1);
   });
 });

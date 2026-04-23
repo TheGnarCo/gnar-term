@@ -234,14 +234,14 @@ describe("Config loads per-project files", () => {
     expect(source).toContain('"cmux.json"');
   });
 
-  it("loadConfig reads the legacy global ~/.config/gnar-term/gnar-term.json", async () => {
+  it("loadConfig probes the legacy gnar-term.json global config name", async () => {
     const fs = await import("fs");
     const source = fs.readFileSync("src/lib/config.ts", "utf-8");
     // Existing installs created the global settings file as gnar-term.json
     // before it was renamed to settings.json in the extension-core refactor.
     // The loader must still probe the old name so those users don't silently
     // lose their autoload workspace and commands on upgrade.
-    expect(source).toContain("${home}/.config/gnar-term/gnar-term.json");
+    expect(source).toContain("${configDir}/gnar-term.json");
   });
 });
 

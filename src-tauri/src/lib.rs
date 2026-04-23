@@ -341,7 +341,8 @@ async fn spawn_pty(
     // This makes zsh/bash report the working directory on every prompt
     // Shell integration: inject OSC 7 cwd reporting (cross-platform)
     let home = std::env::var("HOME").unwrap_or_default();
-    let integration_dir = format!("{home}/.config/gnar-term/shell");
+    let config_dir = global_config_dir().unwrap_or_else(|_| format!("{home}/.config/gnar-term"));
+    let integration_dir = format!("{config_dir}/shell");
     let _ = std::fs::create_dir_all(&integration_dir);
 
     // zsh: ZDOTDIR override
@@ -359,7 +360,7 @@ chpwd_functions+=(_gnarterm_report_cwd)
 
     // bash/fish: use GNARTERM_SHELL_INTEGRATION env var
     // Bash users can add to .bashrc: [ -n "$GNARTERM_SHELL_INTEGRATION" ] && source "$GNARTERM_SHELL_INTEGRATION"
-    let bash_integration = format!("{home}/.config/gnar-term/shell/bash-integration.sh");
+    let bash_integration = format!("{config_dir}/shell/bash-integration.sh");
     let bash_content = r#"# GnarTerm bash integration
 _gnarterm_report_cwd() { printf '\e]7;file://%s%s\a' "$(hostname)" "$PWD"; }
 PROMPT_COMMAND="_gnarterm_report_cwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
@@ -1031,7 +1032,10 @@ fn b64_encode(data: &[u8]) -> String {
 ///     multi-machine sync / checkout follows the project itself).
 pub(crate) fn validate_write_path(path: &str) -> Result<(), String> {
     let home = std::env::var("HOME").map_err(|_| "HOME not set".to_string())?;
+    // Allow both prod and dev config dirs so that the validation is not
+    // build-mode-dependent (tests always run in debug mode).
     let global_allowed = format!("{home}/.config/gnar-term");
+    let global_allowed_dev = format!("{home}/.config/gnar-term-dev");
 
     // Manually resolve .. components to prevent traversal attacks on paths
     // that may not exist yet (canonicalize requires the path to exist).
@@ -1049,13 +1053,17 @@ pub(crate) fn validate_write_path(path: &str) -> Result<(), String> {
     let norm_global_allowed = std::path::Path::new(&global_allowed)
         .components()
         .collect::<std::path::PathBuf>();
+    let norm_global_allowed_dev = std::path::Path::new(&global_allowed_dev)
+        .components()
+        .collect::<std::path::PathBuf>();
 
     // Does the normalized path contain a `.gnar-term` directory segment
     // anywhere in its ancestry? If so it's a project-local state file.
     let has_gnar_term_segment = norm_path
         .components()
         .any(|c| matches!(c, std::path::Component::Normal(s) if s == ".gnar-term"));
-    let under_global_allowed = norm_path.starts_with(&norm_global_allowed);
+    let under_global_allowed = norm_path.starts_with(&norm_global_allowed)
+        || norm_path.starts_with(&norm_global_allowed_dev);
 
     if !under_global_allowed && !has_gnar_term_segment {
         return Err(format!(
@@ -1077,9 +1085,11 @@ pub(crate) fn validate_write_path(path: &str) -> Result<(), String> {
     let canonical = std::fs::canonicalize(probe)
         .map_err(|e| format!("Failed to canonicalize {}: {e}", probe.display()))?;
     if under_global_allowed {
-        let canonical_allowed =
+        let canonical_prod =
             std::fs::canonicalize(&norm_global_allowed).unwrap_or(norm_global_allowed);
-        if !canonical.starts_with(&canonical_allowed) {
+        let canonical_dev =
+            std::fs::canonicalize(&norm_global_allowed_dev).unwrap_or(norm_global_allowed_dev);
+        if !canonical.starts_with(&canonical_prod) && !canonical.starts_with(&canonical_dev) {
             return Err(format!("Write denied: path must be under {global_allowed}"));
         }
         return Ok(());
@@ -1125,6 +1135,26 @@ async fn ensure_dir(path: String) -> Result<(), String> {
 #[tauri::command]
 async fn get_home() -> Result<String, String> {
     std::env::var("HOME").map_err(|_| "HOME not set".to_string())
+}
+
+/// Returns the global config directory, isolated per build type.
+/// Debug builds use `~/.config/gnar-term-dev` so the dev Tauri window
+/// does not share state with the production build.
+fn global_config_dir() -> Result<String, String> {
+    let home = std::env::var("HOME").map_err(|_| "HOME not set".to_string())?;
+    #[cfg(debug_assertions)]
+    {
+        Ok(format!("{home}/.config/gnar-term-dev"))
+    }
+    #[cfg(not(debug_assertions))]
+    {
+        Ok(format!("{home}/.config/gnar-term"))
+    }
+}
+
+#[tauri::command]
+async fn get_global_config_dir() -> Result<String, String> {
+    global_config_dir()
 }
 
 /// Show a file in the system file manager
@@ -1438,9 +1468,9 @@ fn read_mcp_setting() -> String {
         let mut v = Vec::new();
         v.push(std::path::PathBuf::from("gnar-term.json"));
         v.push(std::path::PathBuf::from("cmux.json"));
-        if let Ok(home) = std::env::var("HOME") {
+        if let Ok(config_dir) = global_config_dir() {
             v.push(std::path::PathBuf::from(format!(
-                "{home}/.config/gnar-term/gnar-term.json"
+                "{config_dir}/gnar-term.json"
             )));
         }
         v
@@ -1511,6 +1541,7 @@ pub fn run() {
             write_file,
             ensure_dir,
             get_home,
+            get_global_config_dir,
             watch_file,
             unwatch_file,
             show_in_file_manager,

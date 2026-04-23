@@ -12,6 +12,7 @@ import {
   deleteExtensionState,
   getExtensionStatePath,
 } from "../lib/services/extension-state";
+import { resetConfigDirForTests } from "../lib/services/service-helpers";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn().mockResolvedValue(undefined),
@@ -19,25 +20,29 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 const mockInvoke = vi.mocked(invoke);
 
+const CONFIG_DIR = "/home/user/.config/gnar-term";
+
 describe("extension-state", () => {
   beforeEach(() => {
+    resetConfigDirForTests();
     mockInvoke.mockReset();
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "get_global_config_dir") return CONFIG_DIR;
+      return undefined;
+    });
   });
 
   describe("getExtensionStatePath", () => {
     it("returns the correct path for an extension id", async () => {
-      mockInvoke.mockResolvedValueOnce("/home/user"); // get_home
       const path = await getExtensionStatePath("my-ext");
-      expect(path).toBe(
-        "/home/user/.config/gnar-term/extensions/my-ext/state.json",
-      );
+      expect(path).toBe(`${CONFIG_DIR}/extensions/my-ext/state.json`);
     });
   });
 
   describe("loadExtensionState", () => {
     it("reads and parses state from disk", async () => {
       mockInvoke.mockImplementation(async (cmd: string) => {
-        if (cmd === "get_home") return "/home/user";
+        if (cmd === "get_global_config_dir") return CONFIG_DIR;
         if (cmd === "read_file")
           return JSON.stringify({ count: 42, name: "test" });
         return undefined;
@@ -49,7 +54,7 @@ describe("extension-state", () => {
 
     it("returns empty object when file does not exist", async () => {
       mockInvoke.mockImplementation(async (cmd: string) => {
-        if (cmd === "get_home") return "/home/user";
+        if (cmd === "get_global_config_dir") return CONFIG_DIR;
         if (cmd === "read_file") throw new Error("file not found");
         return undefined;
       });
@@ -60,7 +65,7 @@ describe("extension-state", () => {
 
     it("returns empty object on invalid JSON", async () => {
       mockInvoke.mockImplementation(async (cmd: string) => {
-        if (cmd === "get_home") return "/home/user";
+        if (cmd === "get_global_config_dir") return CONFIG_DIR;
         if (cmd === "read_file") return "not valid json{{{";
         return undefined;
       });
@@ -72,14 +77,8 @@ describe("extension-state", () => {
 
   describe("saveExtensionState", () => {
     it("writes state to disk as JSON", async () => {
-      mockInvoke.mockImplementation(async (cmd: string) => {
-        if (cmd === "get_home") return "/home/user";
-        return undefined;
-      });
-
       await saveExtensionState("my-ext", { count: 42 });
 
-      // Should have called ensure_dir and write_file
       const ensureCall = mockInvoke.mock.calls.find(
         (c) => c[0] === "ensure_dir",
       );
@@ -89,12 +88,12 @@ describe("extension-state", () => {
 
       expect(ensureCall).toBeDefined();
       expect((ensureCall![1] as Record<string, unknown>).path).toBe(
-        "/home/user/.config/gnar-term/extensions/my-ext",
+        `${CONFIG_DIR}/extensions/my-ext`,
       );
 
       expect(writeCall).toBeDefined();
       expect((writeCall![1] as Record<string, unknown>).path).toBe(
-        "/home/user/.config/gnar-term/extensions/my-ext/state.json",
+        `${CONFIG_DIR}/extensions/my-ext/state.json`,
       );
       expect(
         JSON.parse((writeCall![1] as Record<string, unknown>).content),
@@ -103,7 +102,7 @@ describe("extension-state", () => {
 
     it("does not throw on write failure", async () => {
       mockInvoke.mockImplementation(async (cmd: string) => {
-        if (cmd === "get_home") return "/home/user";
+        if (cmd === "get_global_config_dir") return CONFIG_DIR;
         if (cmd === "write_file") throw new Error("disk full");
         return undefined;
       });
@@ -117,11 +116,6 @@ describe("extension-state", () => {
 
   describe("deleteExtensionState", () => {
     it("calls remove_dir with the correct path", async () => {
-      mockInvoke.mockImplementation(async (cmd: string) => {
-        if (cmd === "get_home") return "/home/user";
-        return undefined;
-      });
-
       await deleteExtensionState("my-ext");
 
       const removeCall = mockInvoke.mock.calls.find(
@@ -129,13 +123,13 @@ describe("extension-state", () => {
       );
       expect(removeCall).toBeDefined();
       expect((removeCall![1] as Record<string, unknown>).path).toBe(
-        "/home/user/.config/gnar-term/extensions/my-ext",
+        `${CONFIG_DIR}/extensions/my-ext`,
       );
     });
 
     it("does not throw on removal failure", async () => {
       mockInvoke.mockImplementation(async (cmd: string) => {
-        if (cmd === "get_home") return "/home/user";
+        if (cmd === "get_global_config_dir") return CONFIG_DIR;
         if (cmd === "remove_dir") throw new Error("permission denied");
         return undefined;
       });

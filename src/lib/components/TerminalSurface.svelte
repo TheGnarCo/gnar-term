@@ -50,7 +50,6 @@
     for (const path of paths) {
       if (isImageFile(path)) {
         imagePaths.push(path);
-        textParts.push("@" + path);
       } else {
         textParts.push(shellEscape(path));
       }
@@ -62,10 +61,17 @@
       );
     }
 
-    void invoke("write_pty", {
-      ptyId: surface.ptyId,
-      data: textParts.join(" ") + " ",
-    });
+    if (textParts.length > 0) {
+      void invoke("write_pty", {
+        ptyId: surface.ptyId,
+        data: textParts.join(" ") + " ",
+      });
+    } else if (imagePaths.length > 0) {
+      // Image is now in clipboard; send Ctrl+V so the terminal app
+      // reads it. Claude Code CLI interprets \x16 as a clipboard paste
+      // and shows [Image 1], matching manual Ctrl+V behavior.
+      void invoke("write_pty", { ptyId: surface.ptyId, data: "\x16" });
+    }
   }
 
   function handleDragOver(e: DragEvent) {

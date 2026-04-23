@@ -16,6 +16,24 @@ export async function getHome(): Promise<string> {
   return _home;
 }
 
+// Cached global config directory — gnar-term in release, gnar-term-dev in debug
+let _configDir = "";
+export async function getConfigDir(): Promise<string> {
+  if (_configDir) return _configDir;
+  try {
+    _configDir = await invoke<string>("get_global_config_dir");
+  } catch {
+    const home = await getHome();
+    _configDir = `${home}/.config/gnar-term`;
+  }
+  return _configDir;
+}
+
+/** For tests only — resets the module-level config dir cache. */
+export function resetConfigDirForTests(): void {
+  _configDir = "";
+}
+
 export async function safeFocus(s: Surface | null | undefined) {
   if (!s || !isTerminalSurface(s)) return;
   await tick();

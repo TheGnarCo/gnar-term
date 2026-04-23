@@ -487,7 +487,11 @@ export function initAgentDetection(): void {
             tracked.tracker.onOutput();
           }
         } else {
-          const match = matchesPattern(data, patterns);
+          // OSC-detectable agents (e.g. Claude Code) are identified by PTY
+          // title changes only — matching raw output causes false positives
+          // when compilation output contains the pattern string.
+          const nonOscPatterns = patterns.filter((p) => !p.oscDetectable);
+          const match = matchesPattern(data, nonOscPatterns);
           if (match) attachAgent(tracked, match, idleTimeoutMs);
         }
       } catch (err) {

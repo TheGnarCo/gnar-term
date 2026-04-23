@@ -552,16 +552,16 @@ need to restart Claude Code once; no manual `claude mcp add` is needed.
 
 ### The 20 tools
 
-| Category | Tools |
-|---|---|
-| Session management | `spawn_agent`, `list_sessions`, `get_session_info`, `kill_session` |
-| Interaction | `send_prompt`, `send_keys`, `read_output` |
-| Orchestration | `dispatch_tasks` |
-| UI writes | `render_sidebar`, `remove_sidebar_section`, `create_preview` |
-| Agent introspection | `get_agent_context` |
-| UI introspection | `get_active_workspace`, `list_workspaces`, `get_active_pane`, `list_panes` |
-| Lifecycle events | `poll_events` |
-| Filesystem | `list_dir`, `read_file`, `file_exists` |
+| Category            | Tools                                                                      |
+| ------------------- | -------------------------------------------------------------------------- |
+| Session management  | `spawn_agent`, `list_sessions`, `get_session_info`, `kill_session`         |
+| Interaction         | `send_prompt`, `send_keys`, `read_output`                                  |
+| Orchestration       | `dispatch_tasks`                                                           |
+| UI writes           | `render_sidebar`, `remove_sidebar_section`, `create_preview`               |
+| Agent introspection | `get_agent_context`                                                        |
+| UI introspection    | `get_active_workspace`, `list_workspaces`, `get_active_pane`, `list_panes` |
+| Lifecycle events    | `poll_events`                                                              |
+| Filesystem          | `list_dir`, `read_file`, `file_exists`                                     |
 
 See the Spacebase spec (doc id `jzvBxDRrkevx`) for full argument schemas
 and the wire-level contract, or read `src/lib/services/mcp-server.ts` for
@@ -626,7 +626,7 @@ npm install
 npm run dev
 ```
 
-PRs welcome. Check [ISSUES.md](./ISSUES.md) for known issues and planned enhancements.
+PRs welcome — target the `dev` branch. `dev` merges into `main` for releases. Check [ISSUES.md](./ISSUES.md) for known issues and planned enhancements.
 
 ## License
 

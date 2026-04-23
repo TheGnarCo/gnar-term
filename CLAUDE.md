@@ -18,12 +18,14 @@ When posting in the `#pull-requests` Slack channel, prefix the message with the 
 
 ## Branching & PRs
 
-- All work on feature branches, never commit directly to main
-- Always `git checkout main` before creating a new branch — never branch off other feature branches
+Branch strategy: `main` is the stable release branch; `dev` is the forward development branch. All PRs target `dev`. `dev` merges into `main` for releases.
+
+- All work on feature branches, never commit directly to `main` or `dev`
+- Always `git checkout dev` before creating a new branch — never branch off other feature branches
 - Every bug fix and feature must include regression tests
 - Use plan mode for audits, migrations, and multi-step tasks
 - Disable sandbox for SSH git ops (`git push/pull/fetch`) and `gh` commands
-- Commits on feature branches do not require explicit permission — when work on a feature branch is complete and tests pass, commit it. (Still never commit to main, never force-push, never merge PRs.)
+- Commits on feature branches do not require explicit permission — when work on a feature branch is complete and tests pass, commit it. (Still never commit to main or dev directly, never force-push, never merge PRs.)
 
 ### PR test plans
 

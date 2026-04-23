@@ -121,6 +121,7 @@ function getPatternRegex(pattern: AgentPattern): RegExp {
     const escaped = pattern.titlePatterns.map((p) =>
       p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
     );
+    // eslint-disable-next-line security/detect-non-literal-regexp
     regex = new RegExp(escaped.join("|"), "i");
     _patternRegexCache.set(pattern, regex);
   }

@@ -20,7 +20,7 @@ import {
 } from "../types";
 import { removePane } from "./pane-service";
 import { schedulePersist } from "./workspace-service";
-import { safeFocus, getActiveCwd } from "./service-helpers";
+import { safeFocus, getCwdForSurface } from "./service-helpers";
 import { eventBus } from "./event-bus";
 
 export function selectSurface(paneId: string, surfaceId: string) {
@@ -135,7 +135,10 @@ export async function newSurfaceWithCommand(paneId: string, command: string) {
   if (!ws) return;
   const pane = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
   if (!pane) return;
-  const cwd = await getActiveCwd();
+  const sourceSurface = pane.surfaces.find(
+    (s) => s.id === pane.activeSurfaceId,
+  );
+  const cwd = await getCwdForSurface(sourceSurface);
   const surface = await createTerminalSurface(pane, cwd);
   surface.title = command;
   surface.startupCommand = command;

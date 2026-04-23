@@ -173,16 +173,22 @@
     scrollDisposable?.dispose();
   });
 
-  $: if (visible && surface.opened && termEl) {
-    requestAnimationFrame(() => {
-      try {
-        surface.fitAddon.fit();
-        surface.terminal.scrollToBottom();
-        userScrolledUp = false;
-      } catch (e) {
-        console.warn("fitAddon.fit() failed on visibility change:", e);
-      }
-    });
+  let _prevVisible = false;
+  $: {
+    const justBecameVisible =
+      visible && !_prevVisible && surface.opened && termEl;
+    _prevVisible = visible;
+    if (justBecameVisible) {
+      requestAnimationFrame(() => {
+        try {
+          surface.fitAddon.fit();
+          surface.terminal.scrollToBottom();
+          userScrolledUp = false;
+        } catch (e) {
+          console.warn("fitAddon.fit() failed on visibility change:", e);
+        }
+      });
+    }
   }
 </script>
 

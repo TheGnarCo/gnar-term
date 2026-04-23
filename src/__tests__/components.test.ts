@@ -1521,6 +1521,27 @@ describe("TerminalSurface", () => {
     expect(surface.terminal.scrollToBottom).toHaveBeenCalled();
   });
 
+  it("does not call scrollToBottom on store-churn re-render while already visible", async () => {
+    const surface = makeSurface("no-churn-test", { opened: true });
+    // Start visible
+    const { rerender } = render(TerminalSurfaceComponent, {
+      props: { surface, visible: true },
+    });
+    await new Promise((r) => requestAnimationFrame(r));
+
+    // Reset mocks after initial mount + first visible render
+    (surface.fitAddon.fit as ReturnType<typeof vi.fn>).mockClear();
+    (surface.terminal.scrollToBottom as ReturnType<typeof vi.fn>).mockClear();
+
+    // Re-render with visible still true — simulates store churn (e.g. markSurfaceUnreadById)
+    await rerender({ surface, visible: true });
+    await new Promise((r) => requestAnimationFrame(r));
+
+    // Edge-triggered block must NOT fire — visible did not transition false→true
+    expect(surface.terminal.scrollToBottom).not.toHaveBeenCalled();
+    expect(surface.fitAddon.fit).not.toHaveBeenCalled();
+  });
+
   it("sets data-scrolled-up when terminal is scrolled up", async () => {
     const surface = makeSurface("jump-btn-test", { opened: true });
     let scrollCallback: ((pos: number) => void) | undefined;

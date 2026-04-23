@@ -308,18 +308,20 @@ describe("New tab inherits cwd from active surface", () => {
 // Structural invariant: verified via source scan because mounting the full
 // component tree requires Tauri runtime which isn't available in vitest.
 describe("No spurious fit/scrollToBottom on store updates", () => {
-  it("TerminalSurface does not call fit() reactively (PaneView ResizeObserver handles it)", async () => {
+  it("TerminalSurface reactive block is edge-triggered (only fires on false→true transition)", async () => {
     const fs = await import("fs");
     const source = fs.readFileSync(
       "src/lib/components/TerminalSurface.svelte",
       "utf-8",
     );
-    // Reactive fit() races with ResizeObserver and measures stale dimensions.
-    // Only the onMount fit (for initial open) should exist.
-    const afterOnMount = source.split("onMount")[1] || "";
-    const afterClosingBrace = afterOnMount.split("});")[1] || "";
-    // No reactive fit() outside of onMount
-    expect(afterClosingBrace).not.toMatch(/fitAddon\.fit\(\)/);
+    // The reactive block must guard with _prevVisible so it only fires when
+    // visible transitions false→true, not on every re-render where visible===true.
+    // Without this, store churn from markSurfaceUnreadById causes spurious
+    // scrollToBottom() calls that hijack the user's scroll position.
+    expect(source).toMatch(/_prevVisible/);
+    expect(source).toMatch(
+      /justBecameVisible\s*=\s*visible\s*&&\s*!_prevVisible/,
+    );
   });
 
   it("switchWorkspace does not directly call fit or scrollToBottom", async () => {

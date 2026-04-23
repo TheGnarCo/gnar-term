@@ -85,12 +85,13 @@ export function getWorkspacesInGroup(groupId: string): Workspace[] {
  * match the same predicate and are closed here too; callers should not
  * close the dashboard separately.
  */
+function closeWorkspaceById(wsId: string): void {
+  const idx = get(workspaces).findIndex((w) => w.id === wsId);
+  if (idx >= 0) closeWorkspace(idx);
+}
+
 export function closeWorkspacesInGroup(id: string): void {
-  const matchIds = getWorkspacesInGroup(id).map((w) => w.id);
-  for (const wsId of matchIds) {
-    const idx = get(workspaces).findIndex((w) => w.id === wsId);
-    if (idx >= 0) closeWorkspace(idx);
-  }
+  for (const ws of getWorkspacesInGroup(id)) closeWorkspaceById(ws.id);
 }
 
 /**
@@ -453,10 +454,7 @@ export function closeAutoDashboardsBySource(source: string): void {
       return typeof contrib === "string" && autoIds.has(contrib);
     })
     .map((w) => w.id);
-  for (const wsId of matchIds) {
-    const idx = get(workspaces).findIndex((w) => w.id === wsId);
-    if (idx >= 0) closeWorkspace(idx);
-  }
+  for (const wsId of matchIds) closeWorkspaceById(wsId);
 }
 
 /**
@@ -472,9 +470,7 @@ export function closeDashboardForGroup(
   if (!match) return false;
   const contribution = getDashboardContribution(contributionId);
   if (contribution?.autoProvision) return false;
-  const idx = get(workspaces).findIndex((w) => w.id === match.id);
-  if (idx < 0) return false;
-  closeWorkspace(idx);
+  closeWorkspaceById(match.id);
   return true;
 }
 
@@ -502,8 +498,7 @@ export async function closeGroupDashboardWorkspace(
 ): Promise<void> {
   const dashboardWsId = group.dashboardWorkspaceId;
   if (!dashboardWsId) return;
-  const wsIdx = get(workspaces).findIndex((w) => w.id === dashboardWsId);
-  if (wsIdx >= 0) closeWorkspace(wsIdx);
+  closeWorkspaceById(dashboardWsId);
 }
 
 /**
@@ -548,10 +543,7 @@ export async function reconcileGroupDashboards(): Promise<void> {
       if (keep && keep.id !== group.dashboardWorkspaceId) {
         updateWorkspaceGroup(group.id, { dashboardWorkspaceId: keep.id });
       }
-      for (const dup of extras) {
-        const idx = get(workspaces).findIndex((w) => w.id === dup.id);
-        if (idx >= 0) closeWorkspace(idx);
-      }
+      for (const dup of extras) closeWorkspaceById(dup.id);
     }
 
     // Back-fill any autoProvision contribution (including `"group"` if
@@ -580,15 +572,38 @@ export async function reconcileGroupDashboards(): Promise<void> {
  * we rebuild each group's workspaceIds list here.
  */
 export function reclaimWorkspacesAcrossGroups(): void {
-  const groupIds = new Set(getWorkspaceGroups().map((g) => g.id));
+  const groups = getWorkspaceGroups();
+  const groupIds = new Set(groups.map((g) => g.id));
+
+  // Collect workspace ids per group in a single pass to avoid one
+  // setWorkspaceGroups() call (and event emission) per workspace.
+  const newMembers = new Map<string, string[]>();
+  const toClaimIds: string[] = [];
   for (const ws of get(workspaces)) {
     const md = ws.metadata as Record<string, unknown> | undefined;
     const groupId = md?.groupId;
-    if (typeof groupId !== "string") continue;
-    if (!groupIds.has(groupId)) continue;
-    addWorkspaceToGroup(groupId, ws.id);
-    claimWorkspace(ws.id, "core");
+    if (typeof groupId !== "string" || !groupIds.has(groupId)) continue;
+    const members = newMembers.get(groupId) ?? [];
+    members.push(ws.id);
+    newMembers.set(groupId, members);
+    toClaimIds.push(ws.id);
   }
+
+  if (newMembers.size > 0) {
+    const next = groups.map((g) => {
+      const toAdd = newMembers.get(g.id) ?? [];
+      if (toAdd.length === 0) return g;
+      const existing = new Set(g.workspaceIds);
+      const fresh = toAdd.filter((id) => !existing.has(id));
+      return fresh.length > 0
+        ? { ...g, workspaceIds: [...g.workspaceIds, ...fresh] }
+        : g;
+    });
+    setWorkspaceGroups(next);
+    emitStateChanged({});
+  }
+
+  for (const wsId of toClaimIds) claimWorkspace(wsId, "core");
 }
 
 export {

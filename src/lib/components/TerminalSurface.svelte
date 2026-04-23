@@ -198,5 +198,4 @@
     : 'none'}; flex-direction: column; {dragOver
     ? `box-shadow: inset 0 0 0 2px ${$theme.accent}; border-radius: 4px;`
     : ''}"
->
-</div>
+></div>

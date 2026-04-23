@@ -224,8 +224,7 @@ describe("TitleBar", () => {
   it("renders GNARTERM text", () => {
     render(TitleBar);
     const el =
-      screen.queryByText("GNARTERM") ??
-      screen.queryByText("GNARTERM (DEV)");
+      screen.queryByText("GNARTERM") ?? screen.queryByText("GNARTERM (DEV)");
     expect(el).toBeTruthy();
   });
 

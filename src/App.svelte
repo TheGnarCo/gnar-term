@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { listen } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
+  import { ask } from "@tauri-apps/plugin-dialog";
   import { theme, themes, xtermTheme } from "./lib/stores/theme";
   import { fontSize, setFontSizeFromConfig } from "./lib/stores/font-size";
   import {
@@ -728,6 +729,11 @@
     // and project membership / debounced writes can be lost on quit.
     void appWindow.onCloseRequested(async (event) => {
       event.preventDefault();
+      const confirmed = await ask("Quit GnarTerm?", {
+        title: "Quit",
+        kind: "warning",
+      });
+      if (!confirmed) return;
       // Run all flushes defensively so one failure can't strand the others.
       const results = await Promise.allSettled([
         persistWorkspaces(),

@@ -113,13 +113,26 @@ export function getAgents(): DetectedAgent[] {
 
 // --- Pattern matching ---
 
+const _patternRegexCache = new WeakMap<AgentPattern, RegExp>();
+
+function getPatternRegex(pattern: AgentPattern): RegExp {
+  let regex = _patternRegexCache.get(pattern);
+  if (!regex) {
+    const escaped = pattern.titlePatterns.map((p) =>
+      p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+    );
+    regex = new RegExp(escaped.join("|"), "i");
+    _patternRegexCache.set(pattern, regex);
+  }
+  return regex;
+}
+
 function matchesPattern(
   text: string,
   patterns: AgentPattern[],
 ): AgentPattern | null {
-  const lower = text.toLowerCase();
   for (const pattern of patterns) {
-    if (pattern.titlePatterns.some((p) => lower.includes(p))) {
+    if (getPatternRegex(pattern).test(text)) {
       return pattern;
     }
   }

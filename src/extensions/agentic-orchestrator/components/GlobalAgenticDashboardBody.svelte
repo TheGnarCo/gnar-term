@@ -23,10 +23,12 @@
     type PreviewResult,
   } from "../../../lib/services/preview-service";
   import { getConfig, saveConfig, configStore } from "../../../lib/config";
+  import { showConfirmPrompt } from "../../../lib/stores/ui";
   import { theme } from "../../../lib/stores/theme";
   import {
     PROJECT_COLOR_SLOTS,
     resolveProjectColor,
+    type ProjectColorSlot,
   } from "../../../lib/theme-data";
 
   const DEFAULT_TEMPLATE = `# Agents
@@ -52,6 +54,8 @@ title: Active Agents
   let result: PreviewResult | null = null;
   let activeTab: "overview" | "settings" = "overview";
   let markdownPathResolved = "";
+  let regenerating = false;
+  let regenerateError = "";
 
   $: currentColorSlot =
     $configStore.pseudoWorkspaceColors?.[PSEUDO_ID] ?? "purple";
@@ -111,6 +115,70 @@ title: Active Agents
       pseudoWorkspaceColors: { ...existing, [PSEUDO_ID]: slot },
     });
   }
+
+  function handleTablistKeydown(event: KeyboardEvent): void {
+    const TABS: Array<"overview" | "settings"> = ["overview", "settings"];
+    const idx = TABS.indexOf(activeTab);
+    let nextIdx: number | null = null;
+    if (event.key === "ArrowRight") {
+      event.preventDefault();
+      nextIdx = (idx + 1) % TABS.length;
+    } else if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      nextIdx = (idx - 1 + TABS.length) % TABS.length;
+    }
+    if (nextIdx !== null) {
+      const nextTab = TABS[nextIdx]!;
+      activeTab = nextTab;
+      document
+        .getElementById(`global-agentic-dashboard-tab-${nextTab}`)
+        ?.focus();
+    }
+  }
+
+  async function handleColorKeydown(event: KeyboardEvent): Promise<void> {
+    const slots = PROJECT_COLOR_SLOTS;
+    const idx = slots.indexOf(currentColorSlot as ProjectColorSlot);
+    let nextIdx: number | null = null;
+    if (event.key === "ArrowRight") {
+      event.preventDefault();
+      nextIdx = (idx + 1) % slots.length;
+    } else if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      nextIdx = (idx - 1 + slots.length) % slots.length;
+    }
+    if (nextIdx !== null) {
+      const nextSlot = slots[nextIdx]!;
+      await selectColor(nextSlot);
+      document
+        .querySelector<HTMLElement>(`[data-color-slot="${nextSlot}"]`)
+        ?.focus();
+    }
+  }
+
+  async function regenerateDashboard(): Promise<void> {
+    const confirmed = await showConfirmPrompt(
+      "Regenerate the Global Agents dashboard? Any custom edits to its markdown will be lost.",
+      {
+        title: "Regenerate Dashboard",
+        confirmLabel: "Regenerate",
+        cancelLabel: "Cancel",
+      },
+    );
+    if (!confirmed) return;
+    regenerating = true;
+    regenerateError = "";
+    try {
+      await invoke("write_file", {
+        path: markdownPathResolved,
+        content: DEFAULT_TEMPLATE,
+      });
+    } catch (err) {
+      regenerateError = `Failed to regenerate: ${err instanceof Error ? err.message : String(err)}`;
+    } finally {
+      regenerating = false;
+    }
+  }
 </script>
 
 <div
@@ -125,6 +193,7 @@ title: Active Agents
     role="tablist"
     aria-label="Global Agentic Dashboard sections"
     data-global-agentic-dashboard-tabs
+    on:keydown={handleTablistKeydown}
     style="
       flex-shrink: 0;
       display: flex; align-items: stretch; gap: 4px;
@@ -206,6 +275,7 @@ title: Active Agents
         <div
           data-color-picker
           role="radiogroup"
+          on:keydown={handleColorKeydown}
           style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px;"
         >
           {#each PROJECT_COLOR_SLOTS as slot (slot)}
@@ -217,6 +287,7 @@ title: Active Agents
               aria-checked={isSelected}
               data-color-slot={slot}
               data-selected={isSelected ? "true" : undefined}
+              tabindex={isSelected ? 0 : -1}
               title={slot}
               on:click={() => void selectColor(slot)}
               style="
@@ -248,6 +319,42 @@ title: Active Agents
             border-radius: 4px; font-size: 12px;
           ">{markdownPathResolved || "(resolving…)"}</code
         >
+      </section>
+
+      <section style="display: flex; flex-direction: column; gap: 8px;">
+        <h3 style="margin: 0; font-size: 14px; font-weight: 600;">
+          Regenerate dashboard
+        </h3>
+        <p style="margin: 0; color: {$theme.fgDim}; font-size: 12px;">
+          Overwrite the backing markdown with the default template. Any custom
+          edits will be lost.
+        </p>
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <button
+          data-global-agentic-dashboard-regenerate
+          type="button"
+          on:click|preventDefault={() => void regenerateDashboard()}
+          disabled={regenerating}
+          title="Delete and regenerate the Global Agents dashboard from its default template"
+          style="
+            align-self: flex-start;
+            background: transparent; color: {$theme.fgDim};
+            border: 1px solid {$theme.border}; border-radius: 3px;
+            padding: 4px 12px; font-size: 12px;
+            cursor: {regenerating ? 'wait' : 'pointer'};
+            opacity: {regenerating ? 0.6 : 1};
+          "
+        >
+          {regenerating ? "Regenerating…" : "Regenerate Dashboard"}
+        </button>
+        {#if regenerateError}
+          <div
+            data-global-agentic-dashboard-regenerate-error
+            style="color: {$theme.danger}; font-size: 11px;"
+          >
+            {regenerateError}
+          </div>
+        {/if}
       </section>
     </div>
   {/if}

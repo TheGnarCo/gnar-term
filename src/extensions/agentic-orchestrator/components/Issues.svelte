@@ -699,6 +699,7 @@
             </button>
             {#if openSpawnMenu === issue.number}
               <div
+                role="menu"
                 data-issue-spawn-dropdown
                 style="
                 position: absolute; top: 100%; right: 0; margin-top: 2px;
@@ -709,11 +710,17 @@
               "
               >
                 {#each SPAWN_AGENTS as opt (opt.id)}
-                  <!-- svelte-ignore a11y_click_events_have_key_events -->
-                  <!-- svelte-ignore a11y_no_static_element_interactions -->
                   <div
+                    role="menuitem"
+                    tabindex="-1"
                     data-issue-spawn-option={opt.id}
                     on:click={() => spawnForIssue(issue, opt.id)}
+                    on:keydown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        void spawnForIssue(issue, opt.id);
+                      }
+                    }}
                     style="
                     padding: 4px 8px; cursor: pointer; font-size: 12px;
                     color: {$theme.fg}; border-radius: 3px;

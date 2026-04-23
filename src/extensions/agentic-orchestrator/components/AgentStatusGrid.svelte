@@ -63,6 +63,7 @@
     <span
       data-agent-status-chip={chip.id}
       data-agent-status-count={n}
+      aria-label={`${n} ${chip.label.toLowerCase()}`}
       title={`${n} ${chip.label.toLowerCase()}`}
       style="
         display: inline-flex; align-items: center; gap: 3px;

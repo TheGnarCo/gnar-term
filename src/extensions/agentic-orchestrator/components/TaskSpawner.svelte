@@ -195,6 +195,7 @@
           </button>
           {#if dropdownOpen}
             <div
+              role="menu"
               data-task-spawner-agent-dropdown
               style="
                 position: absolute; top: 100%; left: 0; margin-top: 2px;
@@ -205,11 +206,17 @@
               "
             >
               {#each AGENT_OPTIONS as opt (opt.id)}
-                <!-- svelte-ignore a11y_click_events_have_key_events -->
-                <!-- svelte-ignore a11y_no_static_element_interactions -->
                 <div
+                  role="menuitem"
+                  tabindex="-1"
                   data-task-spawner-agent-option={opt.id}
                   on:click={() => selectAgent(opt.id)}
+                  on:keydown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      selectAgent(opt.id);
+                    }
+                  }}
                   style="
                     padding: 4px 8px; cursor: pointer; font-size: 12px;
                     color: {$theme.fg}; border-radius: 3px;

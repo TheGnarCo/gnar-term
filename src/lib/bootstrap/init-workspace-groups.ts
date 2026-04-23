@@ -29,6 +29,7 @@ import {
   claimWorkspace,
   createGroupDashboardWorkspace,
   createSettingsDashboardWorkspace,
+  isDashboardWorkspace,
   openGroupDashboard,
   provisionAutoDashboardsForGroup,
   reclaimWorkspacesAcrossGroups,
@@ -139,14 +140,9 @@ async function createWorkspaceGroupFlow(prefill?: {
   // contribution's source is core + id is "group".
   try {
     await provisionAutoDashboardsForGroup(group);
-    const overview = get(workspaces).find((w) => {
-      const md = w.metadata as Record<string, unknown> | undefined;
-      return (
-        md?.isDashboard === true &&
-        md?.groupId === group.id &&
-        md?.dashboardContributionId === "group"
-      );
-    });
+    const overview = get(workspaces).find((w) =>
+      isDashboardWorkspace(w, group.id, "group"),
+    );
     if (overview) {
       updateWorkspaceGroup(id, { dashboardWorkspaceId: overview.id });
     }

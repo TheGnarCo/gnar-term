@@ -356,22 +356,37 @@ export function createSettingsDashboardWorkspace(
   return createDashboardWorkspaceFromDef(group, "Settings", "settings", []);
 }
 
-function isDashboardMatch(
-  metadata: unknown,
+/**
+ * Canonical predicate for group dashboard membership.
+ *
+ * - No `contribId` → matches any dashboard workspace for the group.
+ * - `contribId` provided, `allowLegacyUndefined = false` → strict exact
+ *   match (use for lookups where the contribution is known).
+ * - `contribId` provided, `allowLegacyUndefined = true` → matches exact
+ *   OR a workspace whose `dashboardContributionId` is still `undefined`
+ *   (pre-stamp legacy records). Use for the group-overview reconcile pass.
+ */
+export function isDashboardWorkspace(
+  ws: { metadata?: unknown },
   groupId: string,
-  contribId: string,
+  contribId?: string,
+  allowLegacyUndefined = false,
 ): boolean {
-  const md = metadata as Record<string, unknown> | undefined;
-  return (
-    md?.isDashboard === true &&
-    md?.groupId === groupId &&
-    md?.dashboardContributionId === contribId
-  );
+  const md = ws.metadata as Record<string, unknown> | undefined;
+  if (!md) return false;
+  if (md.isDashboard !== true) return false;
+  if (md.groupId !== groupId) return false;
+  if (contribId === undefined) return true;
+  const contribution = md.dashboardContributionId;
+  if (allowLegacyUndefined) {
+    return contribution === undefined || contribution === contribId;
+  }
+  return contribution === contribId;
 }
 
 export function findDashboardWorkspace(groupId: string, contribId: string) {
   return get(workspaces).find((w) =>
-    isDashboardMatch(w.metadata, groupId, contribId),
+    isDashboardWorkspace(w, groupId, contribId),
   );
 }
 
@@ -381,7 +396,7 @@ export function hasDashboardWorkspace(
   contribId: string,
 ): boolean {
   return get(workspaces).some((w) =>
-    isDashboardMatch(w.metadata, groupId, contribId),
+    isDashboardWorkspace(w, groupId, contribId),
   );
 }
 
@@ -483,21 +498,6 @@ export async function closeGroupDashboardWorkspace(
   if (wsIdx >= 0) closeWorkspace(wsIdx);
 }
 
-/** True when the workspace is a Group Dashboard owned by `groupId`. */
-function isGroupDashboardFor(
-  ws: { metadata?: unknown },
-  groupId: string,
-): boolean {
-  const md = ws.metadata as Record<string, unknown> | undefined;
-  if (!md) return false;
-  const contribution = md.dashboardContributionId;
-  const hasContributionMarker =
-    contribution === undefined || contribution === "group";
-  return (
-    md.isDashboard === true && md.groupId === groupId && hasContributionMarker
-  );
-}
-
 /**
  * Called on app startup (after workspaces are restored) — ensures every
  * group has exactly one Group Dashboard workspace. Prior releases
@@ -532,7 +532,7 @@ export async function reconcileGroupDashboards(): Promise<void> {
     await scrubGroupDashboardActiveAgents(groupDashboardPath(group.path));
 
     const matches = get(workspaces).filter((w) =>
-      isGroupDashboardFor(w, group.id),
+      isDashboardWorkspace(w, group.id, "group", true),
     );
 
     if (matches.length > 0) {
@@ -554,7 +554,7 @@ export async function reconcileGroupDashboards(): Promise<void> {
       // Rebind `dashboardWorkspaceId` if the group contribution was
       // just created by provision.
       const overview = get(workspaces).find((w) =>
-        isGroupDashboardFor(w, group.id),
+        isDashboardWorkspace(w, group.id, "group", true),
       );
       if (overview && overview.id !== group.dashboardWorkspaceId) {
         updateWorkspaceGroup(group.id, { dashboardWorkspaceId: overview.id });

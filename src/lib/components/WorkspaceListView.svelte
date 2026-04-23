@@ -26,6 +26,7 @@
   import GridIcon from "../icons/GridIcon.svelte";
   import { contrastColor } from "../utils/contrast";
   import { contextMenu, showConfirmPrompt } from "../stores/ui";
+  import { confirmAndCloseWorkspace } from "../services/worktree-service";
   import { commandStore } from "../services/command-registry";
   import { workspaceGroupsStore } from "../stores/workspace-groups";
   import type { MenuItem } from "../context-menu-types";
@@ -262,14 +263,7 @@
         shortcut: "⇧⌘W",
         danger: true,
         disabled: $workspaces.length <= 1 || isDashboard,
-        action: async () => {
-          const confirmed = await showConfirmPrompt(
-            `Close "${ws.name}"? This will dispose the terminal.`,
-            { title: "Close Workspace", confirmLabel: "Close", danger: true },
-          );
-          if (!confirmed) return;
-          closeWorkspace(globalIdx);
-        },
+        action: () => void confirmAndCloseWorkspace(ws, globalIdx),
       },
     ];
     contextMenu.set({ x, y, items });
@@ -372,18 +366,7 @@
             onSelect={() => {
               if (!active) switchWorkspace(entry.idx);
             }}
-            onClose={async () => {
-              const confirmed = await showConfirmPrompt(
-                `Close "${entry.ws.name}"? This will dispose the terminal.`,
-                {
-                  title: "Close Workspace",
-                  confirmLabel: "Close",
-                  danger: true,
-                },
-              );
-              if (!confirmed) return;
-              closeWorkspace(entry.idx);
-            }}
+            onClose={() => void confirmAndCloseWorkspace(entry.ws, entry.idx)}
             onRename={(name) => renameWorkspace(entry.idx, name)}
             onContextMenu={(x, y) => showNestedContextMenu(x, y, entry.idx)}
             onGripMouseDown={(e) => startDrag(e, entry.idx)}

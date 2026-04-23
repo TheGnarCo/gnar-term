@@ -51,7 +51,10 @@ import {
 } from "../stores/workspace-groups-ui";
 import { invoke } from "@tauri-apps/api/core";
 import { getActiveCwd } from "../services/service-helpers";
-import { createWorkspaceFromDef } from "../services/workspace-service";
+import {
+  createWorkspaceFromDef,
+  switchWorkspace,
+} from "../services/workspace-service";
 
 /**
  * Stage 5 moved Workspace Groups out of the extension layer and into
@@ -149,6 +152,38 @@ async function createWorkspaceGroupFlow(prefill?: {
   } catch (err) {
     console.error(
       `[workspace-groups] Failed to auto-provision dashboards: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+  }
+
+  // Spawn an initial regular workspace inside the new group and activate
+  // it. The workspace:created handler claims it into the group
+  // automatically when it sees metadata.groupId.
+  try {
+    const wsCount =
+      readGroups().find((g) => g.id === id)?.workspaceIds.length ?? 0;
+    await createWorkspaceFromDef({
+      name: `${result.name} Workspace ${wsCount + 1}`,
+      cwd: result.path,
+      metadata: { groupId: id },
+      layout: { pane: { surfaces: [{ type: "terminal" }] } },
+    });
+    const newWs = get(workspaces)
+      .slice()
+      .reverse()
+      .find(
+        (w) =>
+          (w.metadata as Record<string, unknown> | undefined)?.groupId === id &&
+          !(w.metadata as Record<string, unknown> | undefined)?.isDashboard,
+      );
+    if (newWs) {
+      const idx = get(workspaces).indexOf(newWs);
+      if (idx >= 0) switchWorkspace(idx);
+    }
+  } catch (err) {
+    console.error(
+      `[workspace-groups] Failed to spawn initial workspace: ${
         err instanceof Error ? err.message : String(err)
       }`,
     );

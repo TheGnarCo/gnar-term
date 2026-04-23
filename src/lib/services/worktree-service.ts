@@ -10,14 +10,18 @@ import {
   type WorktreeWorkspaceEntry,
   type WorktreesSettings,
 } from "../config";
-import { showInputPrompt, showFormPrompt } from "../stores/ui";
+import {
+  showInputPrompt,
+  showFormPrompt,
+  showConfirmPrompt,
+} from "../stores/ui";
 import { eventBus } from "./event-bus";
 import {
   resolveRepoPath,
   promptWorktreeConfig,
   createWorktree,
 } from "./worktree-helpers";
-import { createWorkspaceFromDef } from "./workspace-service";
+import { createWorkspaceFromDef, closeWorkspace } from "./workspace-service";
 import { workspaces } from "../stores/workspace";
 
 /** Result of a git_merge Tauri command invocation. */
@@ -28,6 +32,11 @@ interface MergeResult {
 }
 
 const _entries = writable<WorktreeWorkspaceEntry[]>([]);
+
+// Pre-confirmed worktree actions set by confirmAndCloseWorkspace so that
+// handleWorkspaceClosed can skip its own dialog when close was initiated
+// through the combined confirm UI.
+const pendingCloseActions = new Map<string, "keep" | "delete">();
 export const worktreeEntriesStore: Readable<WorktreeWorkspaceEntry[]> =
   _entries;
 
@@ -395,6 +404,56 @@ export function handleWorkspaceCreated(
 }
 
 /**
+ * Combined close confirmation for worktree workspaces. Shows a single dialog
+ * that collects both "confirm close" and "keep/delete worktree" in one step.
+ * For non-worktree workspaces falls back to the standard confirm prompt.
+ * Calls closeWorkspace(idx) on confirm.
+ */
+export async function confirmAndCloseWorkspace(
+  ws: { id: string; name: string },
+  idx: number,
+): Promise<boolean> {
+  const entry = getWorktreeEntries().find((e) => e.workspaceId === ws.id);
+  if (!entry) {
+    const confirmed = await showConfirmPrompt(
+      `Close "${ws.name}"? This will dispose the terminal.`,
+      { title: "Close Workspace", confirmLabel: "Close", danger: true },
+    );
+    if (!confirmed) return false;
+  } else {
+    const result = await showFormPrompt(
+      `Close "${ws.name}"`,
+      [
+        {
+          key: "path",
+          label: "Worktree location",
+          type: "info",
+          defaultValue: entry.worktreePath,
+        },
+        {
+          key: "action",
+          label: "What should happen to the worktree?",
+          type: "select",
+          defaultValue: "keep",
+          options: [
+            { label: "Keep worktree on disk", value: "keep" },
+            { label: "Delete worktree (git worktree remove)", value: "delete" },
+          ],
+        },
+      ],
+      { submitLabel: "Close Workspace" },
+    );
+    if (!result) return false;
+    pendingCloseActions.set(
+      ws.id,
+      result.action === "delete" ? "delete" : "keep",
+    );
+  }
+  closeWorkspace(idx);
+  return true;
+}
+
+/**
  * Handle workspace:closed — when a worktree-backed workspace closes, ask
  * the user whether to delete the underlying worktree on disk.
  */
@@ -403,36 +462,46 @@ export async function handleWorkspaceClosed(id: string): Promise<void> {
   const entry = entries.find((e) => e.workspaceId === id);
   if (!entry) return;
 
-  const result = await showFormPrompt(
-    `Worktree for "${entry.branch}"`,
-    [
-      {
-        key: "path",
-        label: "Worktree location",
-        type: "info",
-        defaultValue: entry.worktreePath,
-      },
-      {
-        key: "action",
-        label: "What should happen to the worktree?",
-        type: "select",
-        defaultValue: "keep",
-        options: [
-          { label: "Keep worktree on disk", value: "keep" },
-          {
-            label: "Delete worktree (git worktree remove)",
-            value: "delete",
-          },
-        ],
-      },
-    ],
-    { submitLabel: "Apply" },
-  );
+  // Use pre-confirmed action when close was initiated via confirmAndCloseWorkspace
+  const preAction = pendingCloseActions.get(id);
+  pendingCloseActions.delete(id);
+
+  let action: string;
+  if (preAction !== undefined) {
+    action = preAction;
+  } else {
+    const result = await showFormPrompt(
+      `Worktree for "${entry.branch}"`,
+      [
+        {
+          key: "path",
+          label: "Worktree location",
+          type: "info",
+          defaultValue: entry.worktreePath,
+        },
+        {
+          key: "action",
+          label: "What should happen to the worktree?",
+          type: "select",
+          defaultValue: "keep",
+          options: [
+            { label: "Keep worktree on disk", value: "keep" },
+            {
+              label: "Delete worktree (git worktree remove)",
+              value: "delete",
+            },
+          ],
+        },
+      ],
+      { submitLabel: "Apply" },
+    );
+    action = result?.action ?? "keep";
+  }
 
   const remaining = getWorktreeEntries().filter((e) => e.workspaceId !== id);
   await persistEntries(remaining);
 
-  if (result?.action !== "delete") return;
+  if (action !== "delete") return;
 
   try {
     await invoke("remove_worktree", {

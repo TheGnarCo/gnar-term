@@ -56,6 +56,7 @@
   import { loadExternalExtensions } from "./lib/services/extension-management";
   import { registerIncludedExtensions } from "./lib/bootstrap/register-included-extensions";
   import { initWorktrees } from "./lib/bootstrap/init-worktrees";
+  import { confirmAndCloseWorkspace } from "./lib/services/worktree-service";
   import { initGitStatus } from "./lib/bootstrap/init-git-status";
   import { initPreview } from "./lib/bootstrap/init-preview";
   import { initAgentDetectionBootstrap } from "./lib/bootstrap/init-agent-detection";
@@ -282,12 +283,7 @@
         void (async () => {
           const ws = $workspaces[$activeWorkspaceIdx];
           if (!ws) return;
-          const confirmed = await showConfirmPrompt(
-            `Close "${ws.name}"? This will dispose the terminal.`,
-            { title: "Close Workspace", confirmLabel: "Close", danger: true },
-          );
-          if (!confirmed) return;
-          closeWorkspace($activeWorkspaceIdx);
+          await confirmAndCloseWorkspace(ws, $activeWorkspaceIdx);
         })();
       },
       source: "core",

@@ -151,7 +151,17 @@
             on:click|stopPropagation={() => (collapsed = !collapsed)}
             on:keydown={(e) => e.key === "Enter" && (collapsed = !collapsed)}
             title={collapsed ? "Expand" : "Collapse"}
-            style="display: flex; justify-content: center; align-items: center; padding: 2px 0 0; cursor: pointer; opacity: 0.4; -webkit-app-region: no-drag;"
+            class="collapse-toggle"
+            style="
+              display: flex; justify-content: center; align-items: center;
+              padding: 6px 0; cursor: pointer;
+              border: 1px solid {$theme.border ?? 'transparent'};
+              border-radius: 4px;
+              background: transparent;
+              color: {$theme.fgMuted ?? $theme.fgDim ?? $theme.fg};
+              margin: 4px 0 2px;
+              -webkit-app-region: no-drag;
+            "
           >
             <svg
               width="12"
@@ -332,7 +342,17 @@
               on:click|stopPropagation={() => (collapsed = !collapsed)}
               on:keydown={(e) => e.key === "Enter" && (collapsed = !collapsed)}
               title={collapsed ? "Expand" : "Collapse"}
-              style="display: flex; justify-content: center; align-items: center; padding: 2px 0 0; cursor: pointer; opacity: 0.4; -webkit-app-region: no-drag;"
+              class="collapse-toggle"
+              style="
+                display: flex; justify-content: center; align-items: center;
+                padding: 6px 0; cursor: pointer;
+                border: 1px solid {$theme.border ?? 'transparent'};
+                border-radius: 4px;
+                background: transparent;
+                color: {$theme.fgMuted ?? $theme.fgDim ?? $theme.fg};
+                margin: 4px 0 2px;
+                -webkit-app-region: no-drag;
+              "
             >
               <svg
                 width="12"
@@ -374,3 +394,9 @@
     </div>
   </div>
 {/if}
+
+<style>
+  .collapse-toggle:hover {
+    background: rgba(255, 255, 255, 0.06) !important;
+  }
+</style>

@@ -1579,22 +1579,28 @@ pub fn run() {
                 }
             }
 
-            // Swap to a yellow-tinted icon in dev builds so the dock clearly
-            // distinguishes dev from release instances.
+            // Swap to a yellow-tinted icon in dev builds so the dock and
+            // app switcher clearly distinguish dev from release instances.
+            // Deferred via run_on_main_thread so the override runs after
+            // Tauri's post-setup initialization (which re-applies the
+            // bundle ICNS and would otherwise overwrite this icon).
             #[cfg(all(debug_assertions, target_os = "macos"))]
             {
-                use objc2::AnyThread;
-                use objc2::MainThreadMarker;
-                use objc2_app_kit::{NSApplication, NSImage};
-                use objc2_foundation::NSData;
-                let bytes: &[u8] = include_bytes!("../icons/dev/128x128@2x.png");
-                unsafe {
-                    let mtm = MainThreadMarker::new_unchecked();
-                    let data = NSData::with_bytes(bytes);
-                    if let Some(image) = NSImage::initWithData(NSImage::alloc(), &data) {
-                        NSApplication::sharedApplication(mtm).setApplicationIconImage(Some(&image));
+                let handle = app.handle().clone();
+                let _ = handle.run_on_main_thread(|| {
+                    use objc2::{AnyThread, MainThreadMarker};
+                    use objc2_app_kit::{NSApplication, NSImage};
+                    use objc2_foundation::NSData;
+                    let bytes: &[u8] = include_bytes!("../icons/dev/128x128@2x.png");
+                    unsafe {
+                        let mtm = MainThreadMarker::new_unchecked();
+                        let data = NSData::with_bytes(bytes);
+                        if let Some(image) = NSImage::initWithData(NSImage::alloc(), &data) {
+                            NSApplication::sharedApplication(mtm)
+                                .setApplicationIconImage(Some(&image));
+                        }
                     }
-                }
+                });
             }
 
             // MCP bridge — opt-in, dormant unless enabled by setting + Claude

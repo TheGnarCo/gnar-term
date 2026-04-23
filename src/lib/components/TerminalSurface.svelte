@@ -15,7 +15,7 @@
   let termEl: HTMLElement;
   let dragOver = false;
   let unlistenDragDrop: (() => void) | undefined;
-  let userScrolledUp = false;
+  export let userScrolledUp = false;
   let scrollDisposable: { dispose(): void } | undefined;
 
   const IMAGE_EXTS = new Set([
@@ -92,11 +92,6 @@
       (f) => (f as unknown as { path?: string }).path || f.name,
     );
     void handleDropPaths(paths);
-  }
-
-  function jumpToBottom() {
-    surface.terminal.scrollToBottom();
-    userScrolledUp = false;
   }
 
   function registerScrollTracking() {
@@ -194,6 +189,7 @@
 <!-- svelte-ignore a11y-no-static-element-interactions -->
 <div
   bind:this={termEl}
+  data-scrolled-up={userScrolledUp || undefined}
   on:dragover={handleDragOver}
   on:dragleave={handleDragLeave}
   on:drop={handleDrop}
@@ -203,35 +199,4 @@
     ? `box-shadow: inset 0 0 0 2px ${$theme.accent}; border-radius: 4px;`
     : ''}"
 >
-  {#if userScrolledUp}
-    <!-- svelte-ignore a11y-click-events-have-key-events -->
-    <span
-      data-jump-to-bottom
-      on:click={jumpToBottom}
-      title="Jump to bottom"
-      style="
-        position: absolute; top: 8px; right: 8px;
-        background: {$theme.bg}; color: {$theme.fgDim};
-        border: 1px solid {$theme.border}; border-radius: 4px;
-        padding: 3px 8px; font-size: 11px; cursor: pointer;
-        display: flex; align-items: center; gap: 4px;
-        opacity: 0.85; z-index: 10;
-      "
-    >
-      <svg
-        width="10"
-        height="10"
-        viewBox="0 0 10 10"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.5"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
-        <line x1="5" y1="1" x2="5" y2="9" />
-        <polyline points="2,6 5,9 8,6" />
-      </svg>
-      Jump to bottom
-    </span>
-  {/if}
 </div>

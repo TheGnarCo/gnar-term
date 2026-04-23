@@ -34,6 +34,25 @@ export function resetConfigDirForTests(): void {
   _configDir = "";
 }
 
+// Single source of truth for "is this a debug/dev build" — backed by
+// cfg!(debug_assertions) in Rust, which is true for both `tauri dev` and
+// `tauri build --debug`, and false for `tauri build` (release).
+let _isDebugBuild: boolean | undefined;
+export async function isDebugBuild(): Promise<boolean> {
+  if (_isDebugBuild !== undefined) return _isDebugBuild;
+  try {
+    _isDebugBuild = (await invoke<boolean>("is_debug_build")) === true;
+  } catch {
+    _isDebugBuild = false;
+  }
+  return _isDebugBuild;
+}
+
+/** For tests only — resets the module-level debug build cache. */
+export function resetIsDebugBuildForTests(): void {
+  _isDebugBuild = undefined;
+}
+
 export async function safeFocus(s: Surface | null | undefined) {
   if (!s || !isTerminalSurface(s)) return;
   await tick();

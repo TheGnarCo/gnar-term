@@ -225,7 +225,7 @@ describe("TitleBar", () => {
     render(TitleBar);
     const el =
       screen.queryByText("GNARTERM") ??
-      screen.queryByText("GNARTERM (DEV VERSION)");
+      screen.queryByText("GNARTERM (DEV)");
     expect(el).toBeTruthy();
   });
 
@@ -533,6 +533,43 @@ describe("TabBar", () => {
       },
     });
     expect(screen.getByTitle("Close Pane")).toBeTruthy();
+  });
+
+  it("shows jump-to-bottom button when showJumpToBottom is true", () => {
+    const pane = makePane("p1");
+    const { container } = render(TabBar, {
+      props: {
+        pane,
+        onSelectSurface: noop,
+        onCloseSurface: noop,
+        onNewSurface: noop,
+        onSelectSurfaceType: noop,
+        onSplitRight: noop,
+        onSplitDown: noop,
+        onClosePane: noop,
+        showJumpToBottom: true,
+        onJumpToBottom: noop,
+      },
+    });
+    expect(container.querySelector("[data-jump-to-bottom]")).not.toBeNull();
+  });
+
+  it("hides jump-to-bottom button when showJumpToBottom is false", () => {
+    const pane = makePane("p1");
+    const { container } = render(TabBar, {
+      props: {
+        pane,
+        onSelectSurface: noop,
+        onCloseSurface: noop,
+        onNewSurface: noop,
+        onSelectSurfaceType: noop,
+        onSplitRight: noop,
+        onSplitDown: noop,
+        onClosePane: noop,
+        showJumpToBottom: false,
+      },
+    });
+    expect(container.querySelector("[data-jump-to-bottom]")).toBeNull();
   });
 });
 
@@ -1485,7 +1522,7 @@ describe("TerminalSurface", () => {
     expect(surface.terminal.scrollToBottom).toHaveBeenCalled();
   });
 
-  it("shows jump-to-bottom button when terminal is scrolled up", async () => {
+  it("sets data-scrolled-up when terminal is scrolled up", async () => {
     const surface = makeSurface("jump-btn-test", { opened: true });
     let scrollCallback: ((pos: number) => void) | undefined;
     (surface.terminal.onScroll as ReturnType<typeof vi.fn>).mockImplementation(
@@ -1501,17 +1538,17 @@ describe("TerminalSurface", () => {
       props: { surface, visible: true },
     });
 
-    // Button not visible when at bottom
-    expect(container.querySelector("[data-jump-to-bottom]")).toBeNull();
+    // Not scrolled up at bottom
+    expect(container.querySelector("[data-scrolled-up]")).toBeNull();
 
     // Simulate user scrolling up (pos 0 < 100-24=76)
     scrollCallback?.(0);
     await tick();
 
-    expect(container.querySelector("[data-jump-to-bottom]")).not.toBeNull();
+    expect(container.querySelector("[data-scrolled-up]")).not.toBeNull();
   });
 
-  it("hides jump-to-bottom button when user scrolls back to bottom", async () => {
+  it("clears data-scrolled-up when user scrolls back to bottom", async () => {
     const surface = makeSurface("jump-btn-hide-test", { opened: true });
     let scrollCallback: ((pos: number) => void) | undefined;
     (surface.terminal.onScroll as ReturnType<typeof vi.fn>).mockImplementation(
@@ -1527,15 +1564,15 @@ describe("TerminalSurface", () => {
       props: { surface, visible: true },
     });
 
-    // Scroll up — button appears
+    // Scroll up
     scrollCallback?.(0);
     await tick();
-    expect(container.querySelector("[data-jump-to-bottom]")).not.toBeNull();
+    expect(container.querySelector("[data-scrolled-up]")).not.toBeNull();
 
     // Scroll back to bottom (pos 76 = 100-24)
     scrollCallback?.(76);
     await tick();
-    expect(container.querySelector("[data-jump-to-bottom]")).toBeNull();
+    expect(container.querySelector("[data-scrolled-up]")).toBeNull();
   });
 });
 

@@ -1157,6 +1157,11 @@ async fn get_global_config_dir() -> Result<String, String> {
     global_config_dir()
 }
 
+#[tauri::command]
+fn is_debug_build() -> bool {
+    cfg!(debug_assertions)
+}
+
 /// Show a file in the system file manager
 #[tauri::command]
 async fn show_in_file_manager(path: String) -> Result<(), String> {
@@ -1542,6 +1547,7 @@ pub fn run() {
             ensure_dir,
             get_home,
             get_global_config_dir,
+            is_debug_build,
             watch_file,
             unwatch_file,
             show_in_file_manager,
@@ -1577,30 +1583,6 @@ pub fn run() {
                         let _ = window.set_title(title);
                     }
                 }
-            }
-
-            // Swap to a yellow-tinted icon in dev builds so the dock and
-            // app switcher clearly distinguish dev from release instances.
-            // Deferred via run_on_main_thread so the override runs after
-            // Tauri's post-setup initialization (which re-applies the
-            // bundle ICNS and would otherwise overwrite this icon).
-            #[cfg(all(debug_assertions, target_os = "macos"))]
-            {
-                let handle = app.handle().clone();
-                let _ = handle.run_on_main_thread(|| {
-                    use objc2::{AnyThread, MainThreadMarker};
-                    use objc2_app_kit::{NSApplication, NSImage};
-                    use objc2_foundation::NSData;
-                    let bytes: &[u8] = include_bytes!("../icons/dev/128x128@2x.png");
-                    unsafe {
-                        let mtm = MainThreadMarker::new_unchecked();
-                        let data = NSData::with_bytes(bytes);
-                        if let Some(image) = NSImage::initWithData(NSImage::alloc(), &data) {
-                            NSApplication::sharedApplication(mtm)
-                                .setApplicationIconImage(Some(&image));
-                        }
-                    }
-                });
             }
 
             // MCP bridge — opt-in, dormant unless enabled by setting + Claude

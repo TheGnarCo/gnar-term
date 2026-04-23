@@ -230,9 +230,23 @@ function flushPtyBuffer(ptyId: number) {
   chunks.length = 0;
   ptyBufferBytes.set(ptyId, 0);
 
+  // Preserve the user's scroll position if they've scrolled up. xterm.js
+  // auto-scrolls to the bottom on every write(); capture the viewport before
+  // the write so we can roll it back in the callback.
+  const savedViewportY = surface.terminal.buffer.active.viewportY;
+  const maxScrollBefore = Math.max(
+    0,
+    surface.terminal.buffer.active.length - surface.terminal.rows,
+  );
+  const wasScrolledUp = savedViewportY < maxScrollBefore;
+
   // Single write to xterm.js per frame — the callback fires when xterm.js has
   // processed this batch, which is our signal that it's ready for more.
   surface.terminal.write(merged, () => {
+    if (wasScrolledUp) {
+      const newViewportY = surface.terminal.buffer.active.viewportY;
+      surface.terminal.scrollLines(savedViewportY - newViewportY);
+    }
     // If more data arrived while we were rendering, flush again next frame
     const buffered = ptyBufferBytes.get(ptyId) || 0;
     if (buffered > 0) {

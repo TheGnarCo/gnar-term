@@ -36,6 +36,16 @@
 
   let paneEl: HTMLElement;
   let resizeObserver: ResizeObserver;
+  let scrollState: Record<string, boolean> = {};
+
+  $: showJumpToBottom = scrollState[pane.activeSurfaceId] ?? false;
+
+  function handleJumpToBottom() {
+    const active = pane.surfaces.find((s) => s.id === pane.activeSurfaceId);
+    if (active && isTerminalSurface(active)) {
+      active.terminal.scrollToBottom();
+    }
+  }
   let resizeTimer: ReturnType<typeof setTimeout> | null = null;
 
   // --- Notification chrome (Option E hybrid) ---
@@ -177,6 +187,8 @@
       {onReorderTab}
       {onRegenDashboard}
       {regenDashboardTitle}
+      {showJumpToBottom}
+      onJumpToBottom={handleJumpToBottom}
     />
   {/if}
 
@@ -222,6 +234,7 @@
           {surface}
           visible={surface.id === pane.activeSurfaceId}
           cwd={surface.cwd}
+          bind:userScrolledUp={scrollState[surface.id]}
         />
       {:else if isExtensionSurface(surface)}
         {#each $surfaceTypeStore.filter((t) => t.id === surface.surfaceTypeId) as typeDef (typeDef.id)}

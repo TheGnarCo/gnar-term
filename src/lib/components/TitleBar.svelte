@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { theme } from "../stores/theme";
   import {
     isFullscreen,
@@ -7,8 +8,17 @@
     settingsOpen,
   } from "../stores/ui";
   import { isMac, modLabel } from "../terminal-service";
+  import { isDebugBuild } from "../services/service-helpers";
 
-  const isDev = import.meta.env.DEV;
+  // Single source of truth: cfg!(debug_assertions) from Rust, exposed via the
+  // is_debug_build command. True for `tauri dev` and `tauri build --debug`,
+  // false for `tauri build` (release). Seeded with import.meta.env.DEV to
+  // avoid a flash on the dev server while the async command resolves.
+  let isDev = import.meta.env.DEV;
+  onMount(async () => {
+    isDev = await isDebugBuild();
+  });
+
   const DEV_BG = "#C8900A";
   const DEV_FG = "#1C0F00";
 
@@ -69,7 +79,7 @@
       style="
       font-size: 11px; font-weight: 600; letter-spacing: 1.5px;
       color: {fg};
-    ">{isDev ? "GNARTERM (DEV VERSION)" : "GNARTERM"}</span
+    ">{isDev ? "GNARTERM (DEV)" : "GNARTERM"}</span
     >
   </div>
 

@@ -729,10 +729,15 @@
     // and project membership / debounced writes can be lost on quit.
     void appWindow.onCloseRequested(async (event) => {
       event.preventDefault();
-      const confirmed = await ask("Quit GnarTerm?", {
-        title: "Quit",
-        kind: "warning",
-      });
+      let confirmed = false;
+      try {
+        confirmed = await ask("Quit GnarTerm?", {
+          title: "Quit",
+          kind: "warning",
+        });
+      } catch {
+        return;
+      }
       if (!confirmed) return;
       // Run all flushes defensively so one failure can't strand the others.
       const results = await Promise.allSettled([

@@ -21,7 +21,12 @@
   import { derived, get } from "svelte/store";
   import { theme } from "../stores/theme";
   import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
-  import { contextMenu, reorderContext, anyReorderActive } from "../stores/ui";
+  import {
+    contextMenu,
+    reorderContext,
+    anyReorderActive,
+    showConfirmPrompt,
+  } from "../stores/ui";
   import {
     rootRowOrder,
     moveRootRow,
@@ -254,7 +259,14 @@
         shortcut: "⇧⌘W",
         danger: true,
         disabled: workspaceCount <= 1 || isDashboard,
-        action: () => onCloseWorkspace(globalIdx),
+        action: async () => {
+          const confirmed = await showConfirmPrompt(
+            `Close "${ws?.name}"? This will dispose the terminal.`,
+            { title: "Close Workspace", confirmLabel: "Close", danger: true },
+          );
+          if (!confirmed) return;
+          onCloseWorkspace(globalIdx);
+        },
       },
     ];
     contextMenu.set({ x, y, items });
@@ -313,7 +325,14 @@
           onSelect={() => {
             if (!dragActive) onSwitchWorkspace(globalIdx);
           }}
-          onClose={() => onCloseWorkspace(globalIdx)}
+          onClose={async () => {
+            const confirmed = await showConfirmPrompt(
+              `Close "${ws.name}"? This will dispose the terminal.`,
+              { title: "Close Workspace", confirmLabel: "Close", danger: true },
+            );
+            if (!confirmed) return;
+            onCloseWorkspace(globalIdx);
+          }}
           onRename={(name) => onRenameWorkspace(globalIdx, name)}
           onContextMenu={(x, y) => showWorkspaceContextMenu(x, y, globalIdx)}
           onGripMouseDown={(e) => startRootRowDrag(e, entry.idx)}

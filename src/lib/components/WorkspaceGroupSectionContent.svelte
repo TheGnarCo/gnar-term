@@ -473,4 +473,11 @@
   :global(.project-new-chip button:hover) {
     background: var(--project-btn-hover-bg) !important;
   }
+  :global(.project-new-chip button[data-dropdown-open]) {
+    background: color-mix(
+      in srgb,
+      var(--project-btn-hover-bg) 80%,
+      #000
+    ) !important;
+  }
 </style>

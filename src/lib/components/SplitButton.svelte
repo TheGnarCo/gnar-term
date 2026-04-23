@@ -108,6 +108,7 @@
     <button
       title="More actions"
       on:click={toggleDropdown}
+      data-dropdown-open={dropdownOpen ? "" : undefined}
       style="
         background: {dropdownOpen ? $theme.bgHighlight : 'transparent'};
         color: {$theme.fgDim};

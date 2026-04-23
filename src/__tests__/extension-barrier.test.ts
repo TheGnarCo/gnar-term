@@ -119,6 +119,9 @@ describe("Extension barrier enforcement", () => {
         // theme + PROJECT_COLOR_SLOTS palette.
         "../../../lib/stores/theme",
         "../../../lib/theme-data",
+        // Regenerate Dashboard button shows a confirmation prompt before
+        // overwriting user edits — same pattern as GroupDashboardSettings.
+        "../../../lib/stores/ui",
       ],
       "agentic-orchestrator/widget-helpers.ts": [
         "../../lib/contexts/dashboard-host",

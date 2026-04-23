@@ -20,7 +20,7 @@ import {
   type SplitNode,
 } from "../types";
 import { createWorkspace, schedulePersist } from "./workspace-service";
-import { safeFocus, getActiveCwd } from "./service-helpers";
+import { safeFocus, getCwdForSurface } from "./service-helpers";
 import { eventBus } from "./event-bus";
 
 /**
@@ -75,9 +75,16 @@ export async function splitPane(
   paneId: string,
   direction: "horizontal" | "vertical",
 ) {
+  const ws = get(activeWorkspace);
+  const sourcePane =
+    ws &&
+    (getAllPanes(ws.splitRoot).find((p) => p.id === paneId) ?? get(activePane));
+  const sourceSurface = sourcePane
+    ? sourcePane.surfaces.find((s) => s.id === sourcePane.activeSurfaceId)
+    : null;
   const result = splitPaneEmpty(paneId, direction);
   if (!result) return;
-  const cwd = await getActiveCwd();
+  const cwd = await getCwdForSurface(sourceSurface);
   const surface = await createTerminalSurface(result.newPane, cwd);
   workspaces.update((l) => [...l]);
   void safeFocus(surface);

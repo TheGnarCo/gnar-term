@@ -22,7 +22,7 @@ import {
 } from "../stores/workspace-groups";
 import { createWorkspaceFromDef, closeWorkspace } from "./workspace-service";
 import { eventBus } from "./event-bus";
-import { getAllPanes } from "../types";
+import { getAllPanes, type Workspace } from "../types";
 import {
   getDashboardContribution,
   getDashboardContributions,
@@ -66,6 +66,19 @@ export function deleteWorkspaceGroup(id: string): void {
 }
 
 /**
+ * All workspaces tagged with `metadata.groupId === groupId`. This is the
+ * canonical group-membership predicate for core operations (close sweeps,
+ * reclaim, reconcile). Extension-layer consumers that need a CWD-prefix
+ * fallback for unclaimed workspaces should compose with this result.
+ */
+export function getWorkspacesInGroup(groupId: string): Workspace[] {
+  return get(workspaces).filter((w) => {
+    const md = w.metadata as Record<string, unknown> | undefined;
+    return md?.groupId === groupId;
+  });
+}
+
+/**
  * Close every workspace tagged with `metadata.groupId === id`. Deletion
  * ripples through the workspaces store, so we resolve each workspace by
  * id after recollecting the list. Dashboard workspaces for the group
@@ -73,12 +86,7 @@ export function deleteWorkspaceGroup(id: string): void {
  * close the dashboard separately.
  */
 export function closeWorkspacesInGroup(id: string): void {
-  const matchIds = get(workspaces)
-    .filter((w) => {
-      const md = w.metadata as Record<string, unknown> | undefined;
-      return md?.groupId === id;
-    })
-    .map((w) => w.id);
+  const matchIds = getWorkspacesInGroup(id).map((w) => w.id);
   for (const wsId of matchIds) {
     const idx = get(workspaces).findIndex((w) => w.id === wsId);
     if (idx >= 0) closeWorkspace(idx);

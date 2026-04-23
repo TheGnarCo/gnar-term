@@ -98,11 +98,6 @@ export function setWorkspaceGroups(next: WorkspaceGroupEntry[]): void {
   schedulePersist();
 }
 
-export function setWorkspaceGroupOrder(ids: string[]): void {
-  _groupOrder.set(ids);
-  schedulePersist();
-}
-
 export function getActiveGroupId(): string | null {
   return get(_activeGroupId);
 }

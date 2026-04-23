@@ -193,20 +193,16 @@
 
 <!-- svelte-ignore a11y-no-static-element-interactions -->
 <div
+  bind:this={termEl}
+  on:dragover={handleDragOver}
+  on:dragleave={handleDragLeave}
+  on:drop={handleDrop}
   style="position: relative; flex: 1; min-height: 0; min-width: 0; overflow: hidden; display: {visible
     ? 'flex'
-    : 'none'}; flex-direction: column;"
+    : 'none'}; flex-direction: column; {dragOver
+    ? `box-shadow: inset 0 0 0 2px ${$theme.accent}; border-radius: 4px;`
+    : ''}"
 >
-  <div
-    bind:this={termEl}
-    on:dragover={handleDragOver}
-    on:dragleave={handleDragLeave}
-    on:drop={handleDrop}
-    style="flex: 1; min-height: 0; min-width: 0; overflow: hidden; {dragOver
-      ? `box-shadow: inset 0 0 0 2px ${$theme.accent}; border-radius: 4px;`
-      : ''}"
-  ></div>
-
   {#if userScrolledUp}
     <!-- svelte-ignore a11y-click-events-have-key-events -->
     <span

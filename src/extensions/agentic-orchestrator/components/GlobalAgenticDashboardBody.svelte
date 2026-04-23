@@ -192,6 +192,7 @@ title: Active Agents
   <div
     role="tablist"
     aria-label="Global Agentic Dashboard sections"
+    tabindex="-1"
     data-global-agentic-dashboard-tabs
     on:keydown={handleTablistKeydown}
     style="
@@ -275,6 +276,7 @@ title: Active Agents
         <div
           data-color-picker
           role="radiogroup"
+          tabindex="-1"
           on:keydown={handleColorKeydown}
           style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px;"
         >

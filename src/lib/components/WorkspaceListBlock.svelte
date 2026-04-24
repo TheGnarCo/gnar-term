@@ -43,6 +43,13 @@
   import type { Workspace } from "../types";
   import { commandStore } from "../services/command-registry";
   import { dashboardWorkspaceRegistry } from "../services/dashboard-workspace-service";
+  import { configStore } from "../config";
+  import { resolveGroupColor } from "../theme-data";
+
+  function resolvePseudoWorkspaceColor(pw: PseudoWorkspace): string {
+    const slot = $configStore.pseudoWorkspaceColors?.[pw.id] ?? "purple";
+    return resolveGroupColor(slot, $theme);
+  }
 
   export let onSwitchWorkspace: (idx: number) => void;
   export let onRenameWorkspace: (idx: number, name: string) => void;
@@ -211,6 +218,8 @@
       : undefined;
   $: sourceRowColor = (() => {
     if (sourceEntry?.rendererRailColor) return sourceEntry.rendererRailColor;
+    const pw = sourceEntry?.pseudoWorkspace;
+    if (pw) return resolvePseudoWorkspaceColor(pw);
     const ws = sourceEntry?.workspace;
     if (ws) {
       const dashId = (ws.metadata as Record<string, unknown> | undefined)
@@ -315,9 +324,12 @@
     : undefined}
   {@const rowColor =
     entry.rendererRailColor ??
-    (typeof _dashId === "string"
-      ? ($dashboardWorkspaceRegistry.get(_dashId)?.accentColor ?? $theme.accent)
-      : $theme.accent)}
+    (entry.pseudoWorkspace
+      ? resolvePseudoWorkspaceColor(entry.pseudoWorkspace)
+      : typeof _dashId === "string"
+        ? ($dashboardWorkspaceRegistry.get(_dashId)?.accentColor ??
+          $theme.accent)
+        : $theme.accent)}
   {@const rowFg = contrastColor(rowColor)}
   {@const rowLabel =
     entry.row.kind === "workspace" && ws

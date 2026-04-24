@@ -416,13 +416,13 @@ export async function confirmAndCloseWorkspace(
   const entry = getWorktreeEntries().find((e) => e.workspaceId === ws.id);
   if (!entry) {
     const isDashboard = typeof ws.metadata?.dashboardWorkspaceId === "string";
-    const confirmed = await showConfirmPrompt(
-      isDashboard
-        ? `Close "${ws.name}"?`
-        : `Close "${ws.name}"? This will dispose the terminal.`,
-      { title: "Close Workspace", confirmLabel: "Close", danger: true },
-    );
-    if (!confirmed) return false;
+    if (!isDashboard) {
+      const confirmed = await showConfirmPrompt(
+        `Close "${ws.name}"? This will dispose the terminal.`,
+        { title: "Close Workspace", confirmLabel: "Close", danger: true },
+      );
+      if (!confirmed) return false;
+    }
   } else {
     const result = await showFormPrompt(
       `Close "${ws.name}"`,

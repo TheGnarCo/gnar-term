@@ -157,7 +157,6 @@ describe("MCP server JSON-RPC", () => {
         "list_open_previews",
         "list_overlays",
         "list_panes",
-        "list_sessions",
         "list_sidebar_sections",
         "list_sidebar_tabs",
         "list_surface_types",
@@ -175,6 +174,7 @@ describe("MCP server JSON-RPC", () => {
         "send_prompt",
         "spawn_agent",
         "spawn_preview",
+        "split_pane",
       ].sort(),
     );
     expect(names).toHaveLength(43);
@@ -414,6 +414,45 @@ describe("MCP server JSON-RPC", () => {
     expect(result).toEqual({ agents: [] });
   });
 
+  it("split_pane creates a new pane in the target workspace and returns pane_id", async () => {
+    // makeWorkspace returns { ws, pane } — see the fixture helper at line ~99
+    const { ws, pane } = makeWorkspace("ws-split");
+    workspaces.set([ws]);
+    const ctx = _testContext({ paneId: pane.id, workspaceId: ws.id });
+
+    const resp = await dispatch(
+      rpc("tools/call", {
+        name: "split_pane",
+        arguments: { workspace_id: ws.id },
+      }),
+      ctx,
+    );
+
+    const result = (resp as any).result.structuredContent;
+    expect(result).toHaveProperty("pane_id");
+    expect(result.pane_id).not.toBe(pane.id); // new pane, different id
+    expect(result).toHaveProperty("workspace_id", ws.id);
+  });
+
+  it("split_pane throws when surface_type is preview but preview_path is missing", async () => {
+    const { ws, pane } = makeWorkspace("ws-split-err");
+    workspaces.set([ws]);
+    const ctx = _testContext({ paneId: pane.id, workspaceId: ws.id });
+
+    const resp = await dispatch(
+      rpc("tools/call", {
+        name: "split_pane",
+        arguments: { workspace_id: ws.id, surface_type: "preview" },
+      }),
+      ctx,
+    );
+
+    // Tool errors surface as result.isError=true or a top-level error
+    expect(
+      (resp as any).error?.message ?? (resp as any).result?.isError,
+    ).toBeTruthy();
+  });
+
   it("list_dir invokes mcp_list_dir with includeHidden alias", async () => {
     invokeMock.mockResolvedValueOnce([
       { name: "a.txt", path: "/tmp/a.txt", is_dir: false, size: 10 },
@@ -500,13 +539,10 @@ describe("MCP server JSON-RPC", () => {
     expect(result).toEqual({ panes: [] });
   });
 
-  it("list_sessions wraps the list in a record", async () => {
-    const r = await dispatch(
-      rpc("tools/call", { name: "list_sessions", arguments: {} }),
-    );
-    const result = (r as any).result.structuredContent;
-    expect(Array.isArray(result)).toBe(false);
-    expect(Array.isArray(result.sessions)).toBe(true);
+  it("list_sessions is not a registered tool (superseded by list_agents)", async () => {
+    const tools = _getToolsForTest();
+    const names = (tools as any[]).map((t) => t.name);
+    expect(names).not.toContain("list_sessions");
   });
 
   it("get_active_workspace returns nullable fields when no workspace is open", async () => {

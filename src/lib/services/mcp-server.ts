@@ -48,7 +48,6 @@ import { listen, emit } from "@tauri-apps/api/event";
 import { workspaces, activeWorkspace, activePane } from "../stores/workspace";
 import {
   getAllPanes,
-  getAllSurfaces,
   isTerminalSurface,
   uid,
   type Pane,
@@ -405,22 +404,6 @@ function removeSurfaceFromPane(paneId: string, surfaceId: string): void {
   });
 }
 
-function reapDeadSessions(): void {
-  const aliveSurfaceIds = new Set<string>();
-  for (const ws of get(workspaces)) {
-    for (const surface of getAllSurfaces(ws)) {
-      aliveSurfaceIds.add(surface.id);
-    }
-  }
-  for (const [id, session] of sessions) {
-    if (!aliveSurfaceIds.has(session.surfaceId)) {
-      unregisterMcpPty(session.ptyId);
-      ptyToSession.delete(session.ptyId);
-      sessions.delete(id);
-    }
-  }
-}
-
 // ---- Workspace introspection helpers ----
 
 function describeSurface(s: Surface) {
@@ -730,25 +713,6 @@ registerTool({
 });
 
 registerTool({
-  name: "list_sessions",
-  description: "List MCP-spawned sessions currently alive in gnar-term.",
-  inputSchema: { type: "object", properties: {} },
-  handler: () => {
-    reapDeadSessions();
-    const list = Array.from(sessions.values()).map((s) => ({
-      session_id: s.session_id,
-      name: s.name,
-      agent: s.agent,
-      pid: s.pid,
-      status: s.status,
-      cwd: s.cwd,
-      createdAt: s.createdAt,
-    }));
-    return { sessions: list };
-  },
-});
-
-registerTool({
   name: "list_agents",
   description:
     "List all detected AI agents currently running in gnar-term terminals — includes both MCP-spawned agents and native agents started by the user (e.g. by typing `claude`, `codex`, `aider`). Each entry contains agentId, agentName, surfaceId, workspaceId, status, createdAt, and lastStatusChange.",
@@ -764,6 +728,70 @@ registerTool({
       lastStatusChange: a.lastStatusChange,
     }));
     return { agents };
+  },
+});
+
+registerTool({
+  name: "split_pane",
+  description:
+    "Split a pane and open a surface in the new half. Defaults to a terminal split right. Returns the new pane_id.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      direction: {
+        type: "string",
+        enum: ["horizontal", "vertical"],
+        description:
+          "Split direction: 'horizontal' = side-by-side, 'vertical' = stacked. Default: 'horizontal'.",
+      },
+      surface_type: {
+        type: "string",
+        enum: ["terminal", "preview"],
+        description: "Surface to open in the new pane. Default: 'terminal'.",
+      },
+      preview_path: {
+        type: "string",
+        description:
+          "Absolute path to the file to preview. Required when surface_type is 'preview'.",
+      },
+      workspace_id: { type: "string" },
+      pane_id: { type: "string" },
+    },
+  },
+  handler: async (args, ctx) => {
+    const p = args as {
+      direction?: "horizontal" | "vertical";
+      surface_type?: "terminal" | "preview";
+      preview_path?: string;
+      workspace_id?: string;
+      pane_id?: string;
+    };
+    if (p.surface_type === "preview" && !p.preview_path) {
+      throw new Error(
+        "preview_path is required when surface_type is 'preview'",
+      );
+    }
+    const target = resolveTarget(p, ctx);
+    const hostPane = target.hostPane ?? pickHostPane(target.workspace);
+    const dir = p.direction === "vertical" ? "vertical" : "horizontal";
+    const newPane = splitPaneInWorkspace(target.workspace, hostPane, dir);
+    ctx.lastSpawnedPaneId = newPane.id;
+
+    if (p.surface_type === "preview") {
+      const surface = createPreviewSurfaceInPane(newPane.id, p.preview_path!, {
+        focus: true,
+      });
+      if (!surface) {
+        throw new Error(`Could not open preview in new pane ${newPane.id}`);
+      }
+    } else {
+      const surface = await createTerminalSurface(newPane);
+      newPane.activeSurfaceId = surface.id;
+      workspaces.update((l) => [...l]);
+      void safeFocus(surface);
+    }
+
+    return { pane_id: newPane.id, workspace_id: target.workspace.id };
   },
 });
 

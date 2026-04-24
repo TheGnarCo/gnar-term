@@ -49,6 +49,8 @@
   } from "../stores/ui";
   import { contrastColor } from "../utils/contrast";
   import { getAllSurfaces, isPreviewSurface, type Workspace } from "../types";
+  import { agentsStore } from "../services/agent-detection-service";
+  import { variantColor } from "../status-colors";
 
   function wsMeta(ws: {
     metadata?: unknown;
@@ -107,6 +109,20 @@
   }
 
   $: filterIds = group ? new Set(group.workspaceIds) : new Set<string>();
+
+  // Most-active bot status across all workspaces in this group.
+  // Used by the collapsed banner chip so collapsed groups surface bot presence.
+  $: groupAgents = $agentsStore.filter((a) => filterIds.has(a.workspaceId));
+  $: groupStatusColor = (() => {
+    if (groupAgents.length === 0) return null;
+    if (groupAgents.some((a) => a.status === "running"))
+      return variantColor("success");
+    if (groupAgents.some((a) => a.status === "waiting"))
+      return variantColor("warning");
+    if (groupAgents.some((a) => a.status === "idle"))
+      return variantColor("muted");
+    return null;
+  })();
 
   // True when the currently active workspace belongs to this group —
   // checked via `metadata.groupId` so the match covers both the
@@ -377,35 +393,50 @@
         ">{group.name}</span
       >
 
-      <svelte:fragment slot="banner-end" let:bannerHovered>
-        {#if coreAction}
-          <!-- svelte-ignore a11y_click_events_have_key_events -->
-          <!-- svelte-ignore a11y_no_static_element_interactions -->
-          <!-- `+ New` split button. Background uses the group's own
-               color so the chip stays visually tied to the container,
-               and flips to a stronger variant on banner hover so it
-               remains distinct against the banner's hover background. -->
-          <span
-            class="project-new-chip"
-            on:click|stopPropagation
-            style="
-              flex-shrink: 0; border-radius: 6px; overflow: visible;
-              background: {bannerHovered
-              ? groupHex
-              : `color-mix(in srgb, ${groupHex} 70%, transparent)`};
-              --project-btn-fg: {headerFg};
-              --project-btn-hover-bg: {groupHex};
-              transition: background 0.15s;
-            "
-          >
-            <SplitButton
-              label="+ New"
-              onMainClick={() => coreAction?.handler(groupContext ?? {})}
-              dropdownItems={splitDropdownItems}
-              theme={themeView}
-            />
-          </span>
-        {/if}
+      <svelte:fragment slot="banner-end" let:bannerHovered let:collapsed>
+        <div
+          style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0;"
+        >
+          {#if coreAction}
+            <!-- svelte-ignore a11y_click_events_have_key_events -->
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <!-- `+ New` split button. Background uses the group's own
+                 color so the chip stays visually tied to the container,
+                 and flips to a stronger variant on banner hover so it
+                 remains distinct against the banner's hover background. -->
+            <span
+              class="project-new-chip"
+              on:click|stopPropagation
+              style="
+                flex-shrink: 0; border-radius: 6px; overflow: visible;
+                background: {bannerHovered
+                ? groupHex
+                : `color-mix(in srgb, ${groupHex} 70%, transparent)`};
+                --project-btn-fg: {headerFg};
+                --project-btn-hover-bg: {groupHex};
+                transition: background 0.15s;
+              "
+            >
+              <SplitButton
+                label="+ New"
+                onMainClick={() => coreAction?.handler(groupContext ?? {})}
+                dropdownItems={splitDropdownItems}
+                theme={themeView}
+              />
+            </span>
+          {/if}
+          {#if collapsed && groupStatusColor}
+            <span
+              data-group-status-chip
+              title="Bot active in this group"
+              style="display: inline-flex; align-items: center; padding: 0 3px;"
+            >
+              <span
+                style="width: 7px; height: 7px; border-radius: 50%; background: {groupStatusColor}; box-shadow: 0 0 0 1px color-mix(in srgb, {groupStatusColor} 35%, transparent);"
+              ></span>
+            </span>
+          {/if}
+        </div>
       </svelte:fragment>
 
       <svelte:fragment slot="banner-subtitle">

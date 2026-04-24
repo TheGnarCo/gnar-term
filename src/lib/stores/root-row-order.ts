@@ -36,6 +36,14 @@ export function setRootRowOrder(next: RootRow[]): void {
   persist();
 }
 
+/** Insert a row at position 0 if not already present. */
+export function prependRootRow(row: RootRow): void {
+  const current = get(_rootRowOrder);
+  if (current.some((r) => r.kind === row.kind && r.id === row.id)) return;
+  _rootRowOrder.set([row, ...current]);
+  persist();
+}
+
 /** Append a row to the end if not already present. */
 export function appendRootRow(row: RootRow): void {
   const current = get(_rootRowOrder);

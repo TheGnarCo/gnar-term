@@ -776,6 +776,9 @@ registerTool({
     const dir = p.direction === "vertical" ? "vertical" : "horizontal";
     const newPane = splitPaneInWorkspace(target.workspace, hostPane, dir);
     ctx.lastSpawnedPaneId = newPane.id;
+    // split_pane is a lower-level primitive — it does not emit `pane.created`
+    // because it does not spawn a tracked agent session. (Compare open_surface,
+    // which also omits the event for the same reason.)
 
     if (p.surface_type === "preview") {
       const surface = createPreviewSurfaceInPane(newPane.id, p.preview_path!, {

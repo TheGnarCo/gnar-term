@@ -453,6 +453,65 @@ describe("MCP server JSON-RPC", () => {
     ).toBeTruthy();
   });
 
+  it("split_pane errors when workspace_id is unknown", async () => {
+    const { ws } = makeWorkspace("ws-split-known");
+    workspaces.set([ws]);
+    const ctx = _testContext({ workspaceId: ws.id });
+
+    const resp = await dispatch(
+      rpc("tools/call", {
+        name: "split_pane",
+        arguments: { workspace_id: "ws-does-not-exist" },
+      }),
+      ctx,
+    );
+
+    expect(
+      (resp as any).error?.message ?? (resp as any).result?.isError,
+    ).toBeTruthy();
+  });
+
+  it("split_pane errors when pane_id is unknown", async () => {
+    const { ws } = makeWorkspace("ws-split-known2");
+    workspaces.set([ws]);
+    const ctx = _testContext({ workspaceId: ws.id });
+
+    const resp = await dispatch(
+      rpc("tools/call", {
+        name: "split_pane",
+        arguments: { pane_id: "pane-does-not-exist" },
+      }),
+      ctx,
+    );
+
+    expect(
+      (resp as any).error?.message ?? (resp as any).result?.isError,
+    ).toBeTruthy();
+  });
+
+  it("split_pane with surface_type preview creates a new pane and opens a preview surface", async () => {
+    const { ws, pane } = makeWorkspace("ws-split-preview");
+    workspaces.set([ws]);
+    const ctx = _testContext({ paneId: pane.id, workspaceId: ws.id });
+
+    const resp = await dispatch(
+      rpc("tools/call", {
+        name: "split_pane",
+        arguments: {
+          workspace_id: ws.id,
+          surface_type: "preview",
+          preview_path: "/tmp/test.md",
+        },
+      }),
+      ctx,
+    );
+
+    const result = (resp as any).result.structuredContent;
+    expect(result).toHaveProperty("pane_id");
+    expect(result.pane_id).not.toBe(pane.id); // new pane, different id
+    expect(result).toHaveProperty("workspace_id", ws.id);
+  });
+
   it("list_dir invokes mcp_list_dir with includeHidden alias", async () => {
     invokeMock.mockResolvedValueOnce([
       { name: "a.txt", path: "/tmp/a.txt", is_dir: false, size: 10 },

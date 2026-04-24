@@ -167,15 +167,10 @@
   $: processStatusStore = getWorkspaceStatusByCategory(workspace.id, "process");
   $: processItems = $processStatusStore;
   $: agentBadges = aggregateAgentBadges(processItems);
-  $: agentChipColor = (() => {
-    if (agentBadges.length > 0 && agentBadges[0]) {
-      const top = agentBadges[0];
-      return top.variant === "muted"
-        ? ($theme.fgMuted ?? $theme.fgDim ?? top.color)
-        : top.color;
-    }
-    return agentDotColor;
-  })();
+  $: agentChipColor =
+    agentBadges.length > 0 && agentBadges[0]
+      ? agentBadges[0].color
+      : agentDotColor;
 
   $: activePaneInWs = getAllPanes(workspace.splitRoot).find(
     (p) => p.id === workspace.activePaneId,
@@ -434,23 +429,13 @@
 
       {#if !hideStatusBadges}
         {#if agentBadges.length > 0 && agentBadges[0]}
-          {@const topBadge = agentBadges[0]}
-          {@const chipColor =
-            topBadge.variant === "muted"
-              ? ($theme.fgMuted ?? $theme.fgDim ?? topBadge.color)
-              : topBadge.color}
           <span
             data-agent-presence-chip
-            title={[
-              agentBadges.map((b) => b.label).join(", "),
-              latestNotification,
-            ]
-              .filter(Boolean)
-              .join(" — ")}
+            title={[latestNotification].filter(Boolean).join(" — ")}
             style="display: inline-flex; align-items: center; padding: 0 3px; flex-shrink: 0;"
           >
             <span
-              style="width: 7px; height: 7px; border-radius: 50%; background: {chipColor}; box-shadow: 0 0 0 1px color-mix(in srgb, {chipColor} 35%, transparent);"
+              style="width: 7px; height: 7px; border-radius: 50%; background: {agentChipColor}; box-shadow: 0 0 0 1px color-mix(in srgb, {agentChipColor} 35%, transparent);"
             ></span>
           </span>
         {:else if agentDotColor}
@@ -470,17 +455,11 @@
         {#if hasUnread && !agentDotColor && agentBadges.length === 0}
           <span
             title="Workspace has new terminal activity"
-            style="
-              display: inline-flex; align-items: center; gap: 3px;
-              font-size: 10px; color: {$theme.notify};
-              background: color-mix(in srgb, {$theme.notify} 15%, transparent);
-              padding: 1px 6px; border-radius: 8px; flex-shrink: 0;
-            "
+            style="display: inline-flex; align-items: center; padding: 0 3px; flex-shrink: 0;"
           >
             <span
-              style="width: 6px; height: 6px; border-radius: 50%; background: {$theme.notify};"
+              style="width: 6px; height: 6px; border-radius: 50%; background: {$theme.notify}; box-shadow: 0 0 0 1px color-mix(in srgb, {$theme.notify} 35%, transparent);"
             ></span>
-            new
           </span>
         {/if}
       {/if}

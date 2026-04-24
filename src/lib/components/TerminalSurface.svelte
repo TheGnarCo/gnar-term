@@ -4,6 +4,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import { writeImage } from "@tauri-apps/plugin-clipboard-manager";
+  import { Image as TauriImage } from "@tauri-apps/api/image";
   import { connectPty } from "../terminal-service";
   import { theme } from "../stores/theme";
   import type { TerminalSurface as TermSurface } from "../types";
@@ -56,9 +57,13 @@
     }
 
     if (imagePaths.length > 0) {
-      writeImage(imagePaths[0]!).catch((e) =>
-        console.warn("Failed to write image to clipboard:", e),
-      );
+      try {
+        const img = await TauriImage.fromPath(imagePaths[0]!);
+        await writeImage(img);
+      } catch (e) {
+        console.warn("Failed to write image to clipboard:", e);
+        return;
+      }
     }
 
     if (textParts.length > 0) {
@@ -85,7 +90,8 @@
 
   async function handleDropImageData(file: File): Promise<void> {
     const buf = await file.arrayBuffer();
-    await writeImage(buf);
+    const img = await TauriImage.fromBytes(buf);
+    await writeImage(img);
     if (surface.ptyId >= 0)
       void invoke("write_pty", { ptyId: surface.ptyId, data: "\x16" });
   }
@@ -100,19 +106,11 @@
 
     const fileArray = Array.from(dt.files);
     if (fileArray.length > 0) {
-      const hasPaths = fileArray.some(
-        (f) => (f as unknown as { path?: string }).path,
-      );
-      if (hasPaths) {
-        void handleDropPaths(
-          fileArray.map(
-            (f) => (f as unknown as { path?: string }).path || f.name,
-          ),
-        );
+      // Path-bearing drops are owned by the tauri://drag-drop listener; skip here
+      // to avoid double-handling on macOS where both events fire for the same drop.
+      if (fileArray.some((f) => (f as unknown as { path?: string }).path))
         return;
-      }
-      // Files without paths: Mac screenshot thumbnails (NSFilePromise) land here.
-      // Read image data directly from the File object.
+      // Files without paths: browser image drags or unsettled NSFilePromises.
       const imageFile = fileArray.find((f) => f.type.startsWith("image/"));
       if (imageFile) {
         void handleDropImageData(imageFile).catch((err) =>

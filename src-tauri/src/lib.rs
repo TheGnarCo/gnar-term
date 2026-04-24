@@ -1124,6 +1124,266 @@ async fn write_file(path: String, content: String) -> Result<(), String> {
     std::fs::write(&path, &content).map_err(|e| format!("Failed to write {path}: {e}"))
 }
 
+/// Expand a leading `~/` into `$HOME/`. Does not touch paths that don't begin with `~/`.
+fn expand_home(path: &str) -> std::path::PathBuf {
+    if let Some(rest) = path.strip_prefix("~/") {
+        let home = std::env::var("HOME").unwrap_or_default();
+        std::path::PathBuf::from(home).join(rest)
+    } else {
+        std::path::PathBuf::from(path)
+    }
+}
+
+/// Normalize `..`/`.` components in a path without touching the filesystem.
+/// Matches the traversal-defense used by `validate_write_path`.
+fn normalize_components(path: &std::path::Path) -> std::path::PathBuf {
+    let mut resolved = Vec::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::ParentDir => {
+                resolved.pop();
+            }
+            std::path::Component::CurDir => {}
+            c => resolved.push(c),
+        }
+    }
+    resolved.into_iter().collect()
+}
+
+/// Does this normalized path have a literal `.claude` directory segment?
+/// Guards against lookalikes such as `.claude.evil`.
+fn has_claude_segment(path: &std::path::Path) -> bool {
+    path.components()
+        .any(|c| matches!(c, std::path::Component::Normal(s) if s == ".claude"))
+}
+
+/// Validate that a path resolves to somewhere inside a `.claude/` directory
+/// and doesn't escape via `..` or symlinks. Used for read/list/watch commands
+/// on Claude settings files, which the global blocklist would otherwise allow
+/// but which we want to scope to the settings surface only.
+pub(crate) fn validate_claude_read(path: &str) -> Result<std::path::PathBuf, String> {
+    let resolved = expand_home(path);
+    let normalized = normalize_components(&resolved);
+    if !has_claude_segment(&normalized) {
+        return Err(format!(
+            "Read denied: path must be under a .claude/ directory: {path}"
+        ));
+    }
+    // Canonicalize (if the file exists) so symlinks are followed to their
+    // real target, then reject only if the target is a sensitive system
+    // directory. A `~/.claude` that symlinks into a dotfiles repo is a
+    // legitimate setup, so `.claude` is not required to survive
+    // canonicalization.
+    let canonical =
+        std::fs::canonicalize(&normalized).map_err(|e| format!("Invalid path {path}: {e}"))?;
+    if is_blocked_path(&canonical.to_string_lossy()) {
+        return Err(format!(
+            "Read denied: resolved path escapes to a blocked directory: {path}"
+        ));
+    }
+    Ok(canonical)
+}
+
+/// Validate that a write target is inside a `.claude/` directory AND is one
+/// of the files/subdirs we explicitly allow writing to (settings.json,
+/// settings.local.json, or anything under skills/ or agents/). Handles paths
+/// whose target file does not yet exist by canonicalizing the deepest existing
+/// ancestor, matching the pattern used by `validate_write_path`.
+pub(crate) fn validate_claude_write(path: &str) -> Result<std::path::PathBuf, String> {
+    let resolved = expand_home(path);
+    let normalized = normalize_components(&resolved);
+    if !has_claude_segment(&normalized) {
+        return Err(format!(
+            "Write denied: path must be under a .claude/ directory: {path}"
+        ));
+    }
+
+    // Determine whether the target is one of the allowed settings files
+    // (`settings.json` / `settings.local.json`) or sits inside an allowed
+    // subdirectory (`skills/` or `agents/`) that itself is inside `.claude/`.
+    let filename = normalized
+        .file_name()
+        .and_then(|f| f.to_str())
+        .unwrap_or("");
+
+    // Walk the components once, tracking whether we've seen `.claude` yet;
+    // an `agents` or `skills` segment that appears AFTER `.claude` is allowed.
+    let mut seen_claude = false;
+    let mut under_allowed_subdir = false;
+    for component in normalized.components() {
+        if let std::path::Component::Normal(s) = component {
+            if seen_claude && (s == "skills" || s == "agents") {
+                under_allowed_subdir = true;
+                break;
+            }
+            if s == ".claude" {
+                seen_claude = true;
+            }
+        }
+    }
+
+    let allowed_filename = filename == "settings.json" || filename == "settings.local.json";
+    if !allowed_filename && !under_allowed_subdir {
+        return Err(format!(
+            "Write denied: only settings.json, settings.local.json, skills/, and agents/ are writable under .claude/: {path}"
+        ));
+    }
+
+    // Symlink-escape defense: canonicalize the deepest existing ancestor
+    // and ensure it doesn't resolve into a sensitive system directory.
+    // We deliberately do NOT require `.claude` to survive canonicalization —
+    // dotfile setups commonly symlink `~/.claude` (or `settings.json` inside
+    // it) into e.g. `~/dotFiles/dot-claude/` which is legitimate. The risk
+    // we're guarding against is a link that escapes to `~/.ssh`, `/etc`, etc.
+    let mut probe = normalized.as_path();
+    while !probe.exists() {
+        match probe.parent() {
+            Some(p) => probe = p,
+            None => return Ok(normalized),
+        }
+    }
+    let canonical = std::fs::canonicalize(probe)
+        .map_err(|e| format!("Failed to canonicalize {}: {e}", probe.display()))?;
+    if is_blocked_path(&canonical.to_string_lossy()) {
+        return Err(format!(
+            "Write denied: resolved path escapes to a blocked directory: {path}"
+        ));
+    }
+    Ok(normalized)
+}
+
+/// Read a Claude settings file. Separate from `read_file` so the frontend
+/// can access `~/.claude/` paths — `validate_read_path` blocks nothing inside
+/// `.claude/` today, but this dedicated command pairs with `write_claude_file`
+/// for symmetry and lets us tighten the policy independently if needed.
+#[tauri::command]
+async fn read_claude_file(path: String) -> Result<String, String> {
+    let resolved = validate_claude_read(&path)?;
+    std::fs::read_to_string(&resolved).map_err(|e| format!("Failed to read {path}: {e}"))
+}
+
+/// Write a Claude settings file. The general `write_file` command refuses
+/// paths outside `~/.config/gnar-term/` and `.gnar-term/`; this command
+/// opens up writes to the narrow set of Claude settings paths we edit.
+#[tauri::command]
+async fn write_claude_file(path: String, content: String) -> Result<(), String> {
+    let resolved = validate_claude_write(&path)?;
+    if let Some(parent) = resolved.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create directory {}: {e}", parent.display()))?;
+    }
+    std::fs::write(&resolved, content).map_err(|e| format!("Failed to write {path}: {e}"))
+}
+
+/// Directory entry returned by `list_claude_dir`.
+#[derive(Clone, Serialize)]
+struct ClaudeDirEntry {
+    name: String,
+    path: String,
+    is_dir: bool,
+}
+
+/// List the entries (files and subdirectories) inside a `.claude/` directory.
+#[tauri::command]
+async fn list_claude_dir(path: String) -> Result<Vec<ClaudeDirEntry>, String> {
+    let resolved = validate_claude_read(&path)?;
+    let entries =
+        std::fs::read_dir(&resolved).map_err(|e| format!("Failed to read dir {path}: {e}"))?;
+    let mut result = Vec::new();
+    for entry in entries.flatten() {
+        let Some(name) = entry.file_name().to_str().map(str::to_string) else {
+            continue;
+        };
+        let entry_path = entry.path().to_string_lossy().to_string();
+        let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+        result.push(ClaudeDirEntry {
+            name,
+            path: entry_path,
+            is_dir,
+        });
+    }
+    result.sort_by(|a, b| match (a.is_dir, b.is_dir) {
+        (true, false) => std::cmp::Ordering::Less,
+        (false, true) => std::cmp::Ordering::Greater,
+        _ => a.name.cmp(&b.name),
+    });
+    Ok(result)
+}
+
+/// Watch a Claude settings file for changes and emit `claude-file-changed`
+/// events. Mirrors `watch_file` (polling thread + `AtomicBool` stop flag
+/// stored in `AppState.watch_flags`) to keep a single watch-management
+/// pathway. Returns a watch id to pass to `unwatch_claude_file`.
+#[tauri::command]
+async fn watch_claude_file(
+    app: AppHandle,
+    state: tauri::State<'_, AppState>,
+    path: String,
+) -> Result<u32, String> {
+    let validated = validate_claude_read(&path)?;
+    let validated_str = validated.to_string_lossy().to_string();
+
+    let watch_id = NEXT_WATCH_ID.fetch_add(1, Ordering::Relaxed);
+    let stop = Arc::new(AtomicBool::new(false));
+    let stop_clone = stop.clone();
+
+    state
+        .watch_flags
+        .lock()
+        .map_err(|e| e.to_string())?
+        .insert(watch_id, stop);
+
+    // Settings files are small; cap the payload anyway to keep the event bus
+    // honest if something unexpected lands in `.claude/`.
+    const MAX_WATCH_FILE_SIZE: u64 = 512 * 1024;
+
+    std::thread::spawn(move || {
+        let mut last_modified = std::fs::metadata(&validated_str)
+            .and_then(|m| m.modified())
+            .ok();
+        loop {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            if stop_clone.load(Ordering::Relaxed) {
+                break;
+            }
+            let current = std::fs::metadata(&validated_str)
+                .and_then(|m| m.modified())
+                .ok();
+            if current != last_modified {
+                last_modified = current;
+                let size = std::fs::metadata(&validated_str).map_or(0, |m| m.len());
+                let content = if size <= MAX_WATCH_FILE_SIZE {
+                    std::fs::read_to_string(&validated_str).unwrap_or_default()
+                } else {
+                    String::new()
+                };
+                let _ = app.emit(
+                    "claude-file-changed",
+                    FileChanged {
+                        watch_id,
+                        path: validated_str.clone(),
+                        content,
+                    },
+                );
+            }
+        }
+    });
+    Ok(watch_id)
+}
+
+/// Stop a Claude file watcher started by `watch_claude_file`.
+#[tauri::command]
+async fn unwatch_claude_file(
+    state: tauri::State<'_, AppState>,
+    watch_id: u32,
+) -> Result<(), String> {
+    let mut flags = state.watch_flags.lock().map_err(|e| e.to_string())?;
+    if let Some(flag) = flags.remove(&watch_id) {
+        flag.store(true, Ordering::Relaxed);
+    }
+    Ok(())
+}
+
 /// Ensure a directory exists
 #[tauri::command]
 async fn ensure_dir(path: String) -> Result<(), String> {
@@ -1559,6 +1819,11 @@ pub fn run() {
             is_debug_build,
             watch_file,
             unwatch_file,
+            read_claude_file,
+            write_claude_file,
+            list_claude_dir,
+            watch_claude_file,
+            unwatch_claude_file,
             show_in_file_manager,
             open_with_default_app,
             open_url,
@@ -2125,6 +2390,180 @@ mod tests {
         assert!(
             result.is_err(),
             "Should reject look-alike dirs (.gnar-term.evil): {result:?}"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Claude settings: validate_claude_read / validate_claude_write
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn validate_claude_read_rejects_non_claude_path() {
+        let result = validate_claude_read("/etc/hosts");
+        assert!(
+            result.is_err(),
+            "Should reject non-.claude/ paths: {result:?}"
+        );
+    }
+
+    #[test]
+    fn validate_claude_read_rejects_traversal_escape() {
+        // A raw substring check for `/.claude/` would be happy with this
+        // and then `read_to_string` would resolve the `..` and escape.
+        let home = std::env::var("HOME").unwrap();
+        let evil = format!("{home}/.claude/../.ssh/id_rsa");
+        let result = validate_claude_read(&evil);
+        assert!(
+            result.is_err(),
+            "Should reject paths that traverse out of .claude/ via ..: {result:?}"
+        );
+    }
+
+    #[test]
+    fn validate_claude_read_rejects_lookalike_segment() {
+        // `.claude.evil` shares a prefix but is NOT `.claude`.
+        let path = "/tmp/evil/.claude.evil/secrets.json";
+        let result = validate_claude_read(path);
+        assert!(
+            result.is_err(),
+            "Should reject `.claude` lookalike directory names: {result:?}"
+        );
+    }
+
+    #[test]
+    fn validate_claude_write_allows_settings_json() {
+        let home = std::env::var("HOME").unwrap();
+        let path = format!("{home}/.claude/settings.json");
+        let result = validate_claude_write(&path);
+        assert!(
+            result.is_ok(),
+            "Should allow writing ~/.claude/settings.json: {result:?}"
+        );
+    }
+
+    #[test]
+    fn validate_claude_write_allows_settings_local_json() {
+        let home = std::env::var("HOME").unwrap();
+        let path = format!("{home}/.claude/settings.local.json");
+        let result = validate_claude_write(&path);
+        assert!(
+            result.is_ok(),
+            "Should allow writing ~/.claude/settings.local.json: {result:?}"
+        );
+    }
+
+    #[test]
+    fn validate_claude_write_allows_skills_subdir() {
+        let home = std::env::var("HOME").unwrap();
+        let path = format!("{home}/.claude/skills/my-skill/SKILL.md");
+        let result = validate_claude_write(&path);
+        assert!(
+            result.is_ok(),
+            "Should allow writing anywhere under ~/.claude/skills/: {result:?}"
+        );
+    }
+
+    #[test]
+    fn validate_claude_write_allows_agents_subdir() {
+        let home = std::env::var("HOME").unwrap();
+        let path = format!("{home}/.claude/agents/foo.json");
+        let result = validate_claude_write(&path);
+        assert!(
+            result.is_ok(),
+            "Should allow writing under ~/.claude/agents/: {result:?}"
+        );
+    }
+
+    #[test]
+    fn validate_claude_write_allows_project_scoped_claude_dir() {
+        // Project-scoped `.claude/settings.local.json` under any directory
+        // is allowed — the convention is `.claude` anywhere in the ancestry.
+        let path = "/tmp/some-project/.claude/settings.local.json";
+        let result = validate_claude_write(path);
+        assert!(
+            result.is_ok(),
+            "Should allow writes to project-scoped .claude/settings.local.json: {result:?}"
+        );
+    }
+
+    #[test]
+    fn validate_claude_write_rejects_other_claude_files() {
+        let home = std::env::var("HOME").unwrap();
+        let path = format!("{home}/.claude/hooks.json");
+        let result = validate_claude_write(&path);
+        assert!(
+            result.is_err(),
+            "Should reject arbitrary ~/.claude/*.json files: {result:?}"
+        );
+        let path2 = format!("{home}/.claude/secrets.json");
+        assert!(
+            validate_claude_write(&path2).is_err(),
+            "Should reject ~/.claude/secrets.json"
+        );
+    }
+
+    #[test]
+    fn validate_claude_write_rejects_non_claude_path() {
+        let home = std::env::var("HOME").unwrap();
+        let path = format!("{home}/.config/gnar-term/settings.json");
+        let result = validate_claude_write(&path);
+        assert!(
+            result.is_err(),
+            "Should reject non-.claude/ paths even when named settings.json: {result:?}"
+        );
+    }
+
+    #[test]
+    fn validate_claude_write_rejects_traversal() {
+        let home = std::env::var("HOME").unwrap();
+        // Traversal: starts inside .claude/ but climbs out.
+        let path = format!("{home}/.claude/../.bashrc");
+        let result = validate_claude_write(&path);
+        assert!(
+            result.is_err(),
+            "Should reject traversal out of .claude/: {result:?}"
+        );
+    }
+
+    #[test]
+    fn validate_claude_write_rejects_lookalike_segment() {
+        // `.claude.evil` must not satisfy the .claude segment check.
+        let path = "/tmp/evil/.claude.evil/settings.json";
+        let result = validate_claude_write(path);
+        assert!(
+            result.is_err(),
+            "Should reject `.claude` lookalike segments: {result:?}"
+        );
+    }
+
+    // Regression: a symlink inside ~/.claude/ that points into a blocked
+    // directory (e.g. ~/.ssh) must not let a write escape via canonicalization.
+    #[cfg(unix)]
+    #[test]
+    fn validate_claude_write_rejects_symlink_escape_to_blocked_dir() {
+        let home = std::env::var("HOME").unwrap();
+        let claude_dir = format!("{home}/.claude");
+        let _ = std::fs::create_dir_all(&claude_dir);
+        // Create ~/.ssh so canonicalize succeeds even on CI runners without
+        // one. The directory itself is enough — we don't need any keys.
+        let ssh_dir = format!("{home}/.ssh");
+        let _ = std::fs::create_dir_all(&ssh_dir);
+
+        let link_dir = format!("{claude_dir}/skills-escape-test-link");
+        let _ = std::fs::remove_file(&link_dir);
+        let _ = std::fs::remove_dir_all(&link_dir);
+        std::os::unix::fs::symlink(&ssh_dir, &link_dir).expect("symlink");
+
+        // Path shape satisfies the allowlist on paper
+        // (.claude/<link>/skills/x.json passes the `seen_claude` +
+        // `skills` component check), but the canonical form resolves into
+        // ~/.ssh which is_blocked_path will reject.
+        let evil = format!("{link_dir}/settings.json");
+        let result = validate_claude_write(&evil);
+        let _ = std::fs::remove_file(&link_dir);
+        assert!(
+            result.is_err(),
+            "Should reject writes whose canonical resolves into a blocked dir: {result:?}"
         );
     }
 

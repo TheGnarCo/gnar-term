@@ -115,7 +115,10 @@
             "
           ></span>
           <span>{col.label}</span>
-          <span style="margin-left: auto; color: {$theme.fgDim};"
+          <span
+            role="status"
+            aria-live="polite"
+            style="margin-left: auto; color: {$theme.fgDim};"
             >{buckets[col.id].length}</span
           >
         </div>

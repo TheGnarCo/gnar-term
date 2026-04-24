@@ -11,11 +11,34 @@
 
   export let currentSlot: string;
   export let onSelect: (slot: string) => void;
+
+  function handleKeydown(event: KeyboardEvent): void {
+    const idx = PROJECT_COLOR_SLOTS.indexOf(
+      currentSlot as (typeof PROJECT_COLOR_SLOTS)[number],
+    );
+    let nextIdx: number | null = null;
+    if (event.key === "ArrowRight") {
+      event.preventDefault();
+      nextIdx = (idx + 1) % PROJECT_COLOR_SLOTS.length;
+    } else if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      nextIdx =
+        (idx - 1 + PROJECT_COLOR_SLOTS.length) % PROJECT_COLOR_SLOTS.length;
+    }
+    if (nextIdx !== null) {
+      const nextSlot = PROJECT_COLOR_SLOTS[nextIdx]!;
+      onSelect(nextSlot);
+      document
+        .querySelector<HTMLElement>(`[data-color-slot="${nextSlot}"]`)
+        ?.focus();
+    }
+  }
 </script>
 
 <div
   data-color-picker
   role="radiogroup"
+  on:keydown={handleKeydown}
   style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px;"
 >
   {#each PROJECT_COLOR_SLOTS as slot (slot)}

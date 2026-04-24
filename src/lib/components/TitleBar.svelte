@@ -54,6 +54,7 @@
   <button
     style="{btnStyle} color: {$primarySidebarVisible ? fgActive : fg};"
     title="Toggle Primary Sidebar ({modLabel}B)"
+    aria-label="Toggle Primary Sidebar"
     on:click={() => primarySidebarVisible.update((v) => !v)}
   >
     <svg
@@ -86,6 +87,7 @@
   <button
     style="{btnStyle} color: {$settingsOpen ? fgActive : fg};"
     title="Settings ({modLabel},)"
+    aria-label="Settings"
     on:click={() => settingsOpen.update((v) => !v)}
   >
     <svg
@@ -104,6 +106,7 @@
   <button
     style="{btnStyle} color: {$secondarySidebarVisible ? fgActive : fg};"
     title="Toggle Secondary Sidebar"
+    aria-label="Toggle Secondary Sidebar"
     on:click={() => secondarySidebarVisible.update((v) => !v)}
   >
     <svg

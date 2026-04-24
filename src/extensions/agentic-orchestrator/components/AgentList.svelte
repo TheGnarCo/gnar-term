@@ -45,7 +45,9 @@
     "
   >
     <span>{title}</span>
-    <span style="margin-left: auto;">{$agents.length}</span>
+    <span role="status" aria-live="polite" style="margin-left: auto;"
+      >{$agents.length}</span
+    >
   </div>
 
   {#if $agents.length === 0}

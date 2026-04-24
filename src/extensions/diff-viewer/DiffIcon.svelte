@@ -18,6 +18,7 @@
   stroke-width="2"
   stroke-linecap="round"
   stroke-linejoin="round"
+  aria-hidden="true"
 >
   <path d="M12 3v14" />
   <path d="M5 10h14" />

@@ -1217,6 +1217,30 @@ async fn open_with_default_app(path: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Open a URL in the system default browser
+#[tauri::command]
+async fn open_url(url: String) -> Result<(), String> {
+    if !url.starts_with("https://") && !url.starts_with("http://") {
+        return Err(format!("Rejected non-http URL: {url}"));
+    }
+    #[cfg(target_os = "macos")]
+    std::process::Command::new("open")
+        .arg(&url)
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    #[cfg(target_os = "linux")]
+    std::process::Command::new("xdg-open")
+        .arg(&url)
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    #[cfg(target_os = "windows")]
+    std::process::Command::new("cmd")
+        .args(["/c", "start", "", &url])
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Watch a file for changes, emit events
 #[tauri::command]
 async fn watch_file(
@@ -1552,6 +1576,7 @@ pub fn run() {
             unwatch_file,
             show_in_file_manager,
             open_with_default_app,
+            open_url,
             find_file,
             mcp_list_dir,
             mcp_file_info,

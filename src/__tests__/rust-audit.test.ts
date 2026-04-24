@@ -57,6 +57,11 @@ describe("Rust backend audit", () => {
     expect(capabilities).toContain("clipboard-manager:allow-read-text");
     expect(capabilities).toContain("clipboard-manager:allow-write-text");
   });
+
+  it("registers open_url command", () => {
+    expect(RUST_SOURCE).toContain("async fn open_url(");
+    expect(RUST_SOURCE).toContain("open_url,");
+  });
 });
 
 describe("Frontend code quality", () => {

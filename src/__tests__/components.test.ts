@@ -1874,6 +1874,59 @@ describe("TerminalSurface — image drag-drop", () => {
   });
 });
 
+describe("PreviewSurface link interception", () => {
+  it("clicking an https anchor calls open_url and prevents navigation", async () => {
+    const { invoke: invokeFn } = await import("@tauri-apps/api/core");
+    const invokeMockFn = vi.mocked(invokeFn);
+    invokeMockFn.mockClear();
+
+    vi.mock("../lib/services/preview-service", () => ({
+      openPreview: vi.fn().mockResolvedValue({
+        element: document.createElement("div"),
+        watchId: 0,
+        dispose: vi.fn(),
+      }),
+    }));
+
+    vi.mock("../lib/services/preview-surface-registry", () => ({
+      registerPreviewSurface: vi.fn(),
+      unregisterPreviewSurface: vi.fn(),
+    }));
+
+    const { default: PreviewSurface } =
+      await import("../lib/components/PreviewSurface.svelte");
+    const surface = {
+      id: "ps-link-test",
+      kind: "preview" as const,
+      title: "Test",
+      path: "/tmp/test.md",
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { container } = render(PreviewSurface as any, {
+      props: { surface, visible: true },
+    });
+    await tick();
+
+    const previewRoot = container.querySelector("[data-preview-surface-id]")!;
+    const a = document.createElement("a");
+    a.href = "https://example.com";
+    previewRoot.appendChild(a);
+
+    const clickEvent = new MouseEvent("click", { bubbles: true });
+    let defaultPrevented = false;
+    clickEvent.preventDefault = () => {
+      defaultPrevented = true;
+    };
+    a.dispatchEvent(clickEvent);
+
+    expect(invokeMockFn).toHaveBeenCalledWith("open_url", {
+      url: "https://example.com",
+    });
+    expect(defaultPrevented).toBe(true);
+  });
+});
+
 describe("terminal link handling", () => {
   it("WebLinksAddon is constructed with a custom handler that invokes open_url", async () => {
     const { WebLinksAddon: WebLinksAddonMock } =

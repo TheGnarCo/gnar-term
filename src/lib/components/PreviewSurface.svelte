@@ -64,6 +64,15 @@
     } catch (err) {
       loadError = err instanceof Error ? err.message : String(err);
     }
+
+    container.addEventListener("click", (e) => {
+      const anchor = (e.target as Element).closest("a");
+      if (!anchor) return;
+      const href = anchor.getAttribute("href");
+      if (!href?.startsWith("http://") && !href?.startsWith("https://")) return;
+      e.preventDefault();
+      invoke("open_url", { url: href }).catch(() => {});
+    });
   });
 
   // Update preview colors when theme changes.

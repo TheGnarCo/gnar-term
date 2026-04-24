@@ -729,7 +729,6 @@
   <PrimarySidebar
     bind:this={sidebarComponent}
     onSwitchWorkspace={switchWorkspace}
-    onCloseWorkspace={closeWorkspace}
     onRenameWorkspace={renameWorkspace}
     onNewSurface={newSurfaceFromSidebar}
   />

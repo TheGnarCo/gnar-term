@@ -39,7 +39,6 @@
   let collapsedSections: Record<string, boolean> = {};
 
   export let onSwitchWorkspace: (idx: number) => void;
-  export let onCloseWorkspace: (idx: number) => void;
   export let onRenameWorkspace: (idx: number, name: string) => void;
   export let onNewSurface: () => void;
 
@@ -190,7 +189,6 @@
         <WorkspaceListBlock
           bind:this={workspaceListBlock}
           {onSwitchWorkspace}
-          {onCloseWorkspace}
           {onRenameWorkspace}
           {onNewSurface}
         />

@@ -1199,7 +1199,6 @@ describe("PaneView", () => {
 describe("PrimarySidebar", () => {
   const sidebarProps = {
     onSwitchWorkspace: noop,
-    onCloseWorkspace: noop,
     onRenameWorkspace: noop,
     onNewSurface: noop,
   };

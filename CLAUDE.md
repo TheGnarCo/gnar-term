@@ -22,6 +22,7 @@ Branch strategy: `main` is the stable release branch; `dev` is the forward devel
 
 - All work on feature branches, never commit directly to `main` or `dev`
 - Always `git checkout dev` before creating a new branch — never branch off other feature branches
+- When computing diffs, audits, or PR base refs, use `dev` as the base — not `main`
 - Every bug fix and feature must include regression tests
 - Use plan mode for audits, migrations, and multi-step tasks
 - Disable sandbox for SSH git ops (`git push/pull/fetch`) and `gh` commands

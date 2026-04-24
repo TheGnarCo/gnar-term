@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onDestroy, onMount, getContext } from "svelte";
-  import { writeText as clipboardWrite } from "@tauri-apps/plugin-clipboard-manager";
   import { EXTENSION_API_KEY, type ExtensionAPI } from "../api";
 
   const api = getContext<ExtensionAPI>(EXTENSION_API_KEY);
@@ -183,12 +182,8 @@
     void fetchData(true);
   }
 
-  async function copyToClipboard(url: string) {
-    try {
-      await clipboardWrite(url);
-    } catch {
-      // silently fail
-    }
+  function openInBrowser(url: string) {
+    void api.invoke("open_with_default_app", { path: url }).catch(() => {});
   }
 
   function formatDate(dateStr: string): string {
@@ -299,8 +294,8 @@
               display: flex; flex-direction: column; gap: 2px;
               font-size: 12px; text-align: left;
             "
-            title="Click to copy URL"
-            on:click={() => copyToClipboard(issue.url)}
+            title="Open in browser"
+            on:click={() => openInBrowser(issue.url)}
           >
             <div
               style="display: flex; align-items: baseline; gap: 4px; overflow: hidden;"
@@ -389,8 +384,8 @@
               font-size: 12px; text-align: left;
               {pr.is_draft ? 'font-style: italic;' : ''}
             "
-            title="Click to copy URL"
-            on:click={() => copyToClipboard(pr.url)}
+            title="Open in browser"
+            on:click={() => openInBrowser(pr.url)}
           >
             <div
               style="display: flex; align-items: baseline; gap: 4px; overflow: hidden;"

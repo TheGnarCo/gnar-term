@@ -369,6 +369,10 @@
     }
   }
 
+  function openIssue(url: string) {
+    void api.invoke("open_with_default_app", { path: url }).catch(() => {});
+  }
+
   function toggleSpawnMenu(issueNumber: number) {
     openSpawnMenu = openSpawnMenu === issueNumber ? null : issueNumber;
   }
@@ -627,6 +631,24 @@
           style="color: {$theme.fgDim}; font-size: 11px; flex-shrink: 0;"
           >{timeAgo(issue.created_at)}</span
         >
+        <button
+          data-issue-open-browser
+          type="button"
+          on:click={() => openIssue(issue.url)}
+          title="Open in browser"
+          aria-label={`Open issue #${issue.number} in browser`}
+          style="
+            flex-shrink: 0;
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 24px; height: 22px;
+            padding: 0; border-radius: 3px;
+            background: transparent; color: {$theme.fgDim};
+            border: 1px solid {$theme.border};
+            cursor: pointer; font-size: 12px;
+          "
+        >
+          ↗
+        </button>
         {#if isHandled}
           <button
             data-issue-jump

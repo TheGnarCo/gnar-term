@@ -37,6 +37,7 @@
 <div
   data-color-picker
   role="radiogroup"
+  tabindex="0"
   on:keydown={handleKeydown}
   style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px;"
 >

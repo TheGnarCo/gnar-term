@@ -65,11 +65,13 @@
 <div class="perms-section">
   <div class="perm-row">
     <label
+      for="perm-default-mode"
       style="color: {theme.fg}; font-size: 12px; font-weight: 500; min-width: 120px;"
     >
       Default mode
     </label>
     <select
+      id="perm-default-mode"
       value={defaultMode}
       style={inputStyle()}
       on:change={(e) => updatePerms({ defaultMode: e.currentTarget.value })}

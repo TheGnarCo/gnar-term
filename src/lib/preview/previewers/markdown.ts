@@ -1,6 +1,9 @@
 import { mount, unmount, type Component } from "svelte";
 import DOMPurify from "dompurify";
-import { registerPreviewer } from "../../services/preview-registry";
+import {
+  registerPreviewer,
+  type PreviewContext,
+} from "../../services/preview-registry";
 import { parseMarkdownChunks } from "../../markdown/render";
 import {
   getMarkdownComponent,
@@ -31,6 +34,8 @@ const elementUnsubs = new WeakMap<HTMLElement, () => void>();
 /** Most recently rendered content per element — used by the store-driven
  *  re-render to avoid re-reading from disk. */
 const elementContent = new WeakMap<HTMLElement, string>();
+const elementFilePaths = new WeakMap<HTMLElement, string>();
+const elementCtxs = new WeakMap<HTMLElement, PreviewContext>();
 
 /**
  * Look up the owning PreviewSurface for a widget mount target by walking
@@ -64,7 +69,12 @@ function disposeMounts(element: HTMLElement): void {
   elementMounts.set(element, []);
 }
 
-function renderChunks(content: string, element: HTMLElement): void {
+function renderChunks(
+  content: string,
+  element: HTMLElement,
+  filePath: string = "",
+  ctx?: PreviewContext,
+): void {
   disposeMounts(element);
   element.classList.add("markdown-body");
   element.replaceChildren();
@@ -84,6 +94,30 @@ function renderChunks(content: string, element: HTMLElement): void {
       // defense in depth so any future change to the upstream pipeline
       // can't smuggle script through here.
       div.innerHTML = DOMPurify.sanitize(chunk.html);
+      if (ctx && filePath) {
+        const dir = filePath.includes("//")
+          ? ""
+          : filePath.includes("/")
+            ? filePath.substring(0, filePath.lastIndexOf("/"))
+            : "";
+        for (const img of div.querySelectorAll("img")) {
+          const src = img.getAttribute("src");
+          if (
+            !src ||
+            src.startsWith("http://") ||
+            src.startsWith("https://") ||
+            src.startsWith("asset://") ||
+            src.startsWith("data:")
+          )
+            continue;
+          const resolved = src.startsWith("/")
+            ? src
+            : dir
+              ? `${dir}/${src}`
+              : src;
+          img.src = ctx.convertFileSrc(resolved);
+        }
+      }
       element.appendChild(div);
       continue;
     }
@@ -161,9 +195,11 @@ function renderChunks(content: string, element: HTMLElement): void {
 
 registerPreviewer({
   extensions: ["md", "markdown", "mdx"],
-  render(content, _filePath, element) {
+  render(content, filePath, element, ctx) {
     elementContent.set(element, content);
-    renderChunks(content, element);
+    elementFilePaths.set(element, filePath);
+    if (ctx) elementCtxs.set(element, ctx);
+    renderChunks(content, element, filePath, ctx);
 
     // Subscribe to markdown-component registry changes the first time we render
     // into this element. When a component registers/unregisters, re-render
@@ -177,8 +213,10 @@ registerPreviewer({
           return;
         }
         const last = elementContent.get(element);
+        const lastPath = elementFilePaths.get(element) ?? "";
+        const lastCtx = elementCtxs.get(element);
         if (typeof last === "string") {
-          renderChunks(last, element);
+          renderChunks(last, element, lastPath, lastCtx);
         }
       });
       elementUnsubs.set(element, unsub);

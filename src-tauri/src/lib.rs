@@ -1236,8 +1236,8 @@ async fn open_url(url: String) -> Result<(), String> {
         .spawn()
         .map_err(|e| e.to_string())?;
     #[cfg(target_os = "windows")]
-    std::process::Command::new("cmd")
-        .args(["/c", "start", "", &url])
+    std::process::Command::new("explorer.exe")
+        .arg(&url)
         .spawn()
         .map_err(|e| e.to_string())?;
     Ok(())
@@ -3001,11 +3001,16 @@ mod tests {
         assert!(result.is_err());
     }
 
-    #[test]
-    fn open_url_validation_accepts_https() {
-        // Validates the scheme check logic without spawning a browser
-        let url = "https://example.com".to_string();
-        let parsed = url::Url::parse(&url).unwrap();
-        assert!(parsed.scheme() == "https" || parsed.scheme() == "http");
+    #[tokio::test]
+    async fn open_url_rejects_non_http_scheme() {
+        // Covers ftp://, data:, javascript:, file:// etc.
+        for bad in &[
+            "ftp://example.com",
+            "data:text/html,x",
+            "javascript:alert(1)",
+        ] {
+            let result = open_url(bad.to_string()).await;
+            assert!(result.is_err(), "Expected error for {bad}");
+        }
     }
 }

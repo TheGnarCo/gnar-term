@@ -42,6 +42,7 @@
   import type { MenuItem } from "../context-menu-types";
   import type { Workspace } from "../types";
   import { commandStore } from "../services/command-registry";
+  import { dashboardWorkspaceRegistry } from "../services/dashboard-workspace-service";
 
   export let onSwitchWorkspace: (idx: number) => void;
   export let onRenameWorkspace: (idx: number, name: string) => void;
@@ -208,7 +209,20 @@
           (e) => e.row.kind === sourceRow!.kind && e.row.id === sourceRow!.id,
         )
       : undefined;
-  $: sourceRowColor = sourceEntry?.rendererRailColor ?? $theme.accent;
+  $: sourceRowColor = (() => {
+    if (sourceEntry?.rendererRailColor) return sourceEntry.rendererRailColor;
+    const ws = sourceEntry?.workspace;
+    if (ws) {
+      const dashId = (ws.metadata as Record<string, unknown> | undefined)
+        ?.dashboardWorkspaceId;
+      if (typeof dashId === "string") {
+        return (
+          $dashboardWorkspaceRegistry.get(dashId)?.accentColor ?? $theme.accent
+        );
+      }
+    }
+    return $theme.accent;
+  })();
   $: sourceRowLabel =
     sourceEntry?.pseudoWorkspace?.label ??
     sourceEntry?.rendererLabel ??
@@ -296,7 +310,14 @@
   {@const isSource = dragActive && dragSourceIdx === entry.idx}
   {@const isSibling = dragActive && dragSourceIdx !== entry.idx}
   {@const ws = entry.workspace}
-  {@const rowColor = entry.rendererRailColor ?? $theme.accent}
+  {@const _dashId = ws
+    ? (ws.metadata as Record<string, unknown> | undefined)?.dashboardWorkspaceId
+    : undefined}
+  {@const rowColor =
+    entry.rendererRailColor ??
+    (typeof _dashId === "string"
+      ? ($dashboardWorkspaceRegistry.get(_dashId)?.accentColor ?? $theme.accent)
+      : $theme.accent)}
   {@const rowFg = contrastColor(rowColor)}
   {@const rowLabel =
     entry.row.kind === "workspace" && ws

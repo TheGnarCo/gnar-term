@@ -1925,6 +1925,42 @@ describe("PreviewSurface link interception", () => {
     });
     expect(defaultPrevented).toBe(true);
   });
+
+  it("clicking a relative or anchor href does NOT call open_url", async () => {
+    const { invoke: invokeFn } = await import("@tauri-apps/api/core");
+    const invokeMockFn = vi.mocked(invokeFn);
+    invokeMockFn.mockClear();
+
+    // Re-use the same component render approach
+    const { default: PreviewSurface } =
+      await import("../lib/components/PreviewSurface.svelte");
+    const surface = {
+      id: "ps-link-test-neg",
+      kind: "preview" as const,
+      title: "Test",
+      path: "/tmp/test2.md",
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { container } = render(PreviewSurface as any, {
+      props: { surface, visible: true },
+    });
+    await tick();
+
+    const previewRoot = container.querySelector("[data-preview-surface-id]")!;
+
+    for (const href of ["#section", "./page.html", "mailto:x@y.com"]) {
+      const a = document.createElement("a");
+      a.setAttribute("href", href);
+      previewRoot.appendChild(a);
+      a.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      a.remove();
+    }
+
+    expect(invokeMockFn).not.toHaveBeenCalledWith(
+      "open_url",
+      expect.anything(),
+    );
+  });
 });
 
 describe("terminal link handling", () => {

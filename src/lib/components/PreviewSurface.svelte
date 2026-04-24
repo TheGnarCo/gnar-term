@@ -20,6 +20,7 @@
   let watchId = 0;
   let dispose: (() => void) | undefined;
   let loadError: string | null = null;
+  let clickHandler: ((e: MouseEvent) => void) | undefined;
 
   function locate(): {
     workspaceId: string;
@@ -61,18 +62,20 @@
       watchId = result.watchId;
       dispose = result.dispose;
       container.appendChild(element);
+
+      clickHandler = (e: MouseEvent) => {
+        const anchor = (e.target as Element).closest("a");
+        if (!anchor) return;
+        const href = anchor.getAttribute("href");
+        if (!href?.startsWith("http://") && !href?.startsWith("https://"))
+          return;
+        e.preventDefault();
+        invoke("open_url", { url: href }).catch(() => {});
+      };
+      container.addEventListener("click", clickHandler);
     } catch (err) {
       loadError = err instanceof Error ? err.message : String(err);
     }
-
-    container.addEventListener("click", (e) => {
-      const anchor = (e.target as Element).closest("a");
-      if (!anchor) return;
-      const href = anchor.getAttribute("href");
-      if (!href?.startsWith("http://") && !href?.startsWith("https://")) return;
-      e.preventDefault();
-      invoke("open_url", { url: href }).catch(() => {});
-    });
   });
 
   // Update preview colors when theme changes.
@@ -82,6 +85,7 @@
   }
 
   onDestroy(() => {
+    if (clickHandler) container?.removeEventListener("click", clickHandler);
     dispose?.();
     if (watchId > 0) {
       invoke("unwatch_file", { watchId }).catch(() => {});

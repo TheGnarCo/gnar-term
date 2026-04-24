@@ -151,14 +151,26 @@ describe("Extension barrier enforcement", () => {
       // eslint-disable-next-line security/detect-non-literal-fs-filename -- test reads extension source files to validate import boundaries
       const content = fs.readFileSync(file, "utf-8");
       const lines = content.split("\n");
+      let inTypeImport = false;
       for (const line of lines) {
+        const trimmed = line.trimStart();
+        // Allow type-only imports and type-only re-exports — neither emits a
+        // runtime dependency, so they don't pierce the barrier. Track multi-line
+        // `import type { ... }` blocks: if the statement doesn't close on the
+        // same line (no semicolon), set a flag and clear it on the closing line.
+        if (
+          trimmed.startsWith("import type") ||
+          trimmed.startsWith("export type")
+        ) {
+          if (!line.includes(";")) inTypeImport = true;
+          continue;
+        }
+        if (inTypeImport) {
+          if (line.includes(";")) inTypeImport = false;
+          continue;
+        }
         // Match any import from a ../../lib/ or ../../../lib/ path
         if (!line.match(/from\s+["'][^"']*\/lib\//)) continue;
-        // Allow type-only imports and type-only re-exports — neither
-        // emits a runtime dependency, so they don't pierce the barrier.
-        const trimmed = line.trimStart();
-        if (trimmed.startsWith("import type")) continue;
-        if (trimmed.startsWith("export type")) continue;
         // Allow specific utilities
         if (ALLOWED_IMPORTS.some((mod) => line.includes(mod))) continue;
         // Allow per-file exceptions

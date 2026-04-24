@@ -104,6 +104,7 @@ import { getWorkspaceGroup } from "../stores/workspace-groups";
 import { getWorkspaceStatus } from "./status-registry";
 import { getMcpSetting } from "../config";
 import { spawnAgentInWorktree } from "./spawn-helper";
+import { agentsStore } from "./agent-detection-service";
 
 // ---- Types ----
 
@@ -744,6 +745,25 @@ registerTool({
       createdAt: s.createdAt,
     }));
     return { sessions: list };
+  },
+});
+
+registerTool({
+  name: "list_agents",
+  description:
+    "List all detected AI agents currently running in gnar-term terminals — includes both MCP-spawned agents and native agents started by the user (e.g. by typing `claude`, `codex`, `aider`). Each entry contains agentId, agentName, surfaceId, workspaceId, status, createdAt, and lastStatusChange.",
+  inputSchema: { type: "object", properties: {} },
+  handler: () => {
+    const agents = get(agentsStore).map((a) => ({
+      agentId: a.agentId,
+      agentName: a.agentName,
+      surfaceId: a.surfaceId,
+      workspaceId: a.workspaceId,
+      status: a.status,
+      createdAt: a.createdAt,
+      lastStatusChange: a.lastStatusChange,
+    }));
+    return { agents };
   },
 });
 

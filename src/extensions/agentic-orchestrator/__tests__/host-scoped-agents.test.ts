@@ -216,4 +216,62 @@ describe("hostScopedAgentsStore", () => {
     await tick();
     expect(get(store)).toEqual([]);
   });
+
+  it("group scope → includes workspace in group.workspaceIds even when claimed and no metadata.groupId", async () => {
+    // Regression test: promote-to-group calls addWorkspaceToGroup + claimWorkspace
+    // but does NOT stamp metadata.groupId. Without criterion 2 in hostScopedAgentsStore,
+    // the claim guard ($claimedIds.has) would block the CWD fallback and the agent
+    // would be invisible in the group's Kanban dashboard.
+    workspaces.set([
+      seedWorkspace("ws-native", { cwd: "" }), // no cwd, no metadata.groupId
+    ]);
+    setWorkspaceGroups([
+      {
+        id: "grp-1",
+        name: "One",
+        path: "/work/one",
+        color: "blue",
+        groupDashboardEnabled: true,
+        workspaceIds: ["ws-native"], // explicitly listed in the group
+      },
+    ]);
+    // Simulate the claim that promote-to-group installs.
+    claimWorkspace("ws-native", "core");
+    const api = makeApi([
+      makeAgent({ agentId: "a-native", workspaceId: "ws-native" }),
+    ]);
+    const host: DashboardHostContext = { metadata: { groupId: "grp-1" } };
+    const store = hostScopedAgentsStore(api, host);
+    await tick();
+    expect(get(store).map((a) => a.agentId)).toEqual(["a-native"]);
+  });
+
+  it("group scope → workspace in group.workspaceIds for a different group is not included", async () => {
+    workspaces.set([seedWorkspace("ws-other", { cwd: "" })]);
+    setWorkspaceGroups([
+      {
+        id: "grp-1",
+        name: "One",
+        path: "/work/one",
+        color: "blue",
+        groupDashboardEnabled: true,
+        workspaceIds: [],
+      },
+      {
+        id: "grp-2",
+        name: "Two",
+        path: "/work/two",
+        color: "red",
+        groupDashboardEnabled: true,
+        workspaceIds: ["ws-other"],
+      },
+    ]);
+    const api = makeApi([
+      makeAgent({ agentId: "a-other", workspaceId: "ws-other" }),
+    ]);
+    const host: DashboardHostContext = { metadata: { groupId: "grp-1" } };
+    const store = hostScopedAgentsStore(api, host);
+    await tick();
+    expect(get(store)).toEqual([]);
+  });
 });

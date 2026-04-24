@@ -78,10 +78,17 @@ export function throttle<TArgs extends unknown[]>(
  * DashboardHostContext. Implements the §5.3 scope rules:
  *   - no host / "none" scope → empty list
  *   - "global" scope         → every detected agent
- *   - "group" scope          → agents whose workspace has
- *        `metadata.groupId === groupId`, OR whose first terminal CWD
- *        sits under the group's `path` AND the workspace is unclaimed
- *        (claimed workspaces already belong to another owner).
+ *   - "group" scope          → agents whose workspace satisfies any of:
+ *        1. `metadata.groupId === groupId` (set by workspace creation)
+ *        2. workspace id is in `group.workspaceIds` (set by drag-drop /
+ *           promote-to-group flows that don't stamp metadata.groupId)
+ *        3. workspace is unclaimed AND its first terminal CWD sits under
+ *           the group's `path` prefix (catches native agents in terminals
+ *           that were never explicitly added to the group)
+ *
+ * Criteria 1 and 2 are checked before the claimed-workspace guard because
+ * both represent explicit group membership — a workspace that belongs to
+ * this group should appear even if it has been claimed by "core".
  *
  * Prefix containment uses a trailing-slash suffix so `/work/one` never
  * captures `/work/one-other` by accident.
@@ -101,6 +108,7 @@ export function hostScopedAgentsStore(
     [api.agents, workspaces, workspaceGroupsStore, claimedWorkspaceIds],
     ([$agents, $workspaces, $groups, $claimedIds]) => {
       const group = $groups.find((g) => g.id === scope.groupId);
+      const groupMemberIds = new Set(group?.workspaceIds ?? []);
       const base = group?.path ? group.path.replace(/\/+$/, "") : "";
       const prefix = base ? `${base}/` : "";
       const wsById = new Map<string, (typeof $workspaces)[number]>();
@@ -109,7 +117,13 @@ export function hostScopedAgentsStore(
         const ws = wsById.get(a.workspaceId);
         if (!ws) return false;
         const md = ws.metadata as Record<string, unknown> | undefined;
+        // Criterion 1: workspace was created with this group's id in metadata.
         if (md?.groupId === scope.groupId) return true;
+        // Criterion 2: workspace is explicitly listed in group.workspaceIds
+        // (e.g. promoted via drag-drop without metadata.groupId being stamped).
+        if (groupMemberIds.has(ws.id)) return true;
+        // Criterion 3: CWD fallback — only for unclaimed workspaces so we
+        // don't double-count workspaces already owned by another group/owner.
         if (!base || $claimedIds.has(ws.id)) return false;
         for (const surface of getAllSurfaces(ws)) {
           if (

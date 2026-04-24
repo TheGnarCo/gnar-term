@@ -29,6 +29,31 @@ vi.mock("../lib/services/spawn-helper", () => ({
   spawnAgentInWorktree: spawnAgentInWorktreeMock,
 }));
 
+const { agentsStoreMock } = vi.hoisted(() => {
+  // vi.hoisted runs before imports, so we can't use the svelte/store `writable`
+  // imported at the top of this file. Instead we build a minimal readable-store
+  // shim: `get(agentsStore)` in mcp-server calls the store's `subscribe` once
+  // and reads the value, which is exactly what this shim supports.
+  let _value: unknown[] = [];
+  const agentsStoreMock = {
+    subscribe: (run: (v: unknown[]) => void) => {
+      run(_value);
+      return () => {};
+    },
+    _set: (v: unknown[]) => {
+      _value = v;
+    },
+    set: (v: unknown[]) => {
+      _value = v;
+    },
+  };
+  return { agentsStoreMock };
+});
+
+vi.mock("../lib/services/agent-detection-service", () => ({
+  agentsStore: agentsStoreMock,
+}));
+
 import {
   dispatch,
   _getToolsForTest,
@@ -90,6 +115,7 @@ describe("MCP server JSON-RPC", () => {
     _resetMcpServerForTest();
     workspaces.set([]);
     activeWorkspaceIdx.set(-1);
+    agentsStoreMock.set([]);
   });
 
   it("responds to initialize with server info and protocol version", async () => {
@@ -121,6 +147,7 @@ describe("MCP server JSON-RPC", () => {
         "invoke_context_menu_item",
         "invoke_workspace_action",
         "kill_session",
+        "list_agents",
         "list_commands",
         "list_context_menu_items",
         "list_dashboard_contributions",
@@ -150,7 +177,7 @@ describe("MCP server JSON-RPC", () => {
         "spawn_preview",
       ].sort(),
     );
-    expect(names).toHaveLength(42);
+    expect(names).toHaveLength(43);
     for (const t of tools) {
       expect(t).toHaveProperty("inputSchema");
     }
@@ -345,6 +372,46 @@ describe("MCP server JSON-RPC", () => {
     const result = (resp as any).result.structuredContent;
     expect(result).toHaveProperty("cursor");
     expect(Array.isArray(result.events)).toBe(true);
+  });
+
+  it("list_agents returns all detected agents including native (non-MCP-spawned) ones", async () => {
+    // Populate the store with a native agent (one the user started by typing
+    // `claude` in a terminal — not via spawn_agent). list_agents must see it.
+    agentsStoreMock.set([
+      {
+        agentId: "native-1",
+        agentName: "Claude Code",
+        surfaceId: "surf-1",
+        workspaceId: "ws-1",
+        status: "running",
+        createdAt: "2024-01-01T00:00:00.000Z",
+        lastStatusChange: "2024-01-01T00:01:00.000Z",
+      },
+    ]);
+
+    const resp = await dispatch(
+      rpc("tools/call", { name: "list_agents", arguments: {} }),
+    );
+    const agents = (resp as any).result.structuredContent.agents as unknown[];
+    expect(agents).toHaveLength(1);
+    expect(agents[0]).toEqual({
+      agentId: "native-1",
+      agentName: "Claude Code",
+      surfaceId: "surf-1",
+      workspaceId: "ws-1",
+      status: "running",
+      createdAt: "2024-01-01T00:00:00.000Z",
+      lastStatusChange: "2024-01-01T00:01:00.000Z",
+    });
+  });
+
+  it("list_agents returns an empty array when no agents are detected", async () => {
+    agentsStoreMock.set([]);
+    const resp = await dispatch(
+      rpc("tools/call", { name: "list_agents", arguments: {} }),
+    );
+    const result = (resp as any).result.structuredContent;
+    expect(result).toEqual({ agents: [] });
   });
 
   it("list_dir invokes mcp_list_dir with includeHidden alias", async () => {
@@ -1221,8 +1288,8 @@ describe("tool metadata", () => {
     }
   });
 
-  it("tool count matches spec (42)", () => {
-    expect(_getToolsForTest()).toHaveLength(42);
+  it("tool count matches spec (43)", () => {
+    expect(_getToolsForTest()).toHaveLength(43);
   });
 });
 

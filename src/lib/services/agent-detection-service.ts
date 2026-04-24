@@ -249,6 +249,7 @@ interface TrackedSurface {
   agentPattern: AgentPattern | null;
   tracker: StatusTracker | null;
   unsubscribeOutput: (() => void) | null;
+  preAgentTitle?: string;
 }
 
 // --- Status publishing helpers ---
@@ -354,7 +355,11 @@ function attachAgent(
   tracked: TrackedSurface,
   pattern: AgentPattern,
   idleTimeoutMs: number,
+  preTitle?: string,
 ): void {
+  if (preTitle !== undefined) {
+    tracked.preAgentTitle = preTitle;
+  }
   const agentId = generateAgentId();
   const mode: TrackerMode = pattern.oscDetectable ? "osc" : "title-only";
   const workspaceId = resolveWorkspaceIdForSurface(tracked.surfaceId);
@@ -416,9 +421,24 @@ function detachAgent(tracked: TrackedSurface): void {
   _agents = _agents.filter((a) => a.agentId !== tracked.agentId);
   syncStore();
 
+  if (tracked.preAgentTitle) {
+    const all = get(workspaces);
+    for (const ws of all) {
+      for (const pane of getAllPanes(ws.splitRoot)) {
+        for (const surface of pane.surfaces) {
+          if (surface.id === tracked.surfaceId && isTerminalSurface(surface)) {
+            surface.title = tracked.preAgentTitle;
+          }
+        }
+      }
+    }
+    workspaces.update((l) => [...l]);
+  }
+
   tracked.agentId = null;
   tracked.agentPattern = null;
   tracked.tracker = null;
+  tracked.preAgentTitle = undefined;
 }
 
 // --- Service lifecycle ---
@@ -506,7 +526,12 @@ export function initAgentDetection(): void {
           // when compilation output contains the pattern string.
           const nonOscPatterns = patterns.filter((p) => !p.oscDetectable);
           const match = matchesPattern(data, nonOscPatterns);
-          if (match) attachAgent(tracked, match, idleTimeoutMs);
+          if (match) {
+            const currentTitle =
+              allTerminalSurfaces().find((s) => s.id === tracked.surfaceId)
+                ?.title ?? "";
+            attachAgent(tracked, match, idleTimeoutMs, currentTitle);
+          }
         }
       } catch (err) {
         console.error(
@@ -557,7 +582,7 @@ export function initAgentDetection(): void {
     if (!tracked) return;
     const match = matchesPattern(event.newTitle, patterns);
     if (match && !tracked.agentId) {
-      attachAgent(tracked, match, idleTimeoutMs);
+      attachAgent(tracked, match, idleTimeoutMs, event.oldTitle);
     } else if (match && tracked.agentId) {
       tracked.tracker?.onTitleChange(event.newTitle);
     } else if (!match && tracked.agentId) {

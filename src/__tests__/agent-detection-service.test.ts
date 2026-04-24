@@ -549,6 +549,83 @@ describe("agent-detection-service — workspace:closed cleanup", () => {
   });
 });
 
+describe("agent-detection-service — title restoration on agent close", () => {
+  it("restores surface title to pre-agent name when title changes away from match", () => {
+    const ws = makeWorkspace("w1", [{ id: "s1", title: "zsh", ptyId: 50 }]);
+    workspaces.set([ws]);
+    initAgentDetection();
+    expect(getAgents()).toHaveLength(0);
+
+    const surface = ws.splitRoot.pane.surfaces[0]!;
+    surface.title = "claude";
+    workspaces.update((l) => [...l]);
+
+    eventBus.emit({
+      type: "surface:titleChanged",
+      id: "s1",
+      oldTitle: "zsh",
+      newTitle: "claude",
+    });
+    expect(getAgents()).toHaveLength(1);
+
+    surface.title = "zsh";
+    workspaces.update((l) => [...l]);
+    eventBus.emit({
+      type: "surface:titleChanged",
+      id: "s1",
+      oldTitle: "claude",
+      newTitle: "zsh",
+    });
+
+    expect(getAgents()).toHaveLength(0);
+    expect(surface.title).toBe("zsh");
+  });
+
+  it("restores surface title to pre-agent name when the surface is closed", () => {
+    const ws = makeWorkspace("w1", [{ id: "s1", title: "bash", ptyId: 51 }]);
+    workspaces.set([ws]);
+    initAgentDetection();
+
+    const surface = ws.splitRoot.pane.surfaces[0]!;
+    surface.title = "claude";
+    workspaces.update((l) => [...l]);
+    eventBus.emit({
+      type: "surface:titleChanged",
+      id: "s1",
+      oldTitle: "bash",
+      newTitle: "claude",
+    });
+    expect(getAgents()).toHaveLength(1);
+
+    surface.title = "Claude Code (thinking...)";
+    workspaces.update((l) => [...l]);
+
+    eventBus.emit({ type: "surface:closed", id: "s1", paneId: "p" });
+    expect(getAgents()).toHaveLength(0);
+    expect(surface.title).toBe("bash");
+  });
+
+  it("does not restore title when bootstrapped with agent title already active", () => {
+    const ws = makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 52 }]);
+    workspaces.set([ws]);
+    initAgentDetection();
+    expect(getAgents()).toHaveLength(1);
+
+    const surface = ws.splitRoot.pane.surfaces[0]!;
+    surface.title = "zsh";
+    workspaces.update((l) => [...l]);
+    eventBus.emit({
+      type: "surface:titleChanged",
+      id: "s1",
+      oldTitle: "claude",
+      newTitle: "zsh",
+    });
+
+    expect(getAgents()).toHaveLength(0);
+    expect(surface.title).toBe("zsh");
+  });
+});
+
 describe("agent-detection-service — event bus contract", () => {
   it("agent:statusChanged is accepted by the bus with the declared payload", () => {
     let captured: AppEvent | null = null;
@@ -566,5 +643,62 @@ describe("agent-detection-service — event bus contract", () => {
     eventBus.off("agent:statusChanged", handler);
     expect(captured).not.toBeNull();
     expect(captured!.type).toBe("agent:statusChanged");
+  });
+});
+
+describe("agent-detection-service — agentsStore reactive subscriber", () => {
+  it("agentsStore subscriber receives updated status when an agent transitions via title change", () => {
+    workspaces.set([
+      makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 99 }]),
+    ]);
+    initAgentDetection();
+
+    // Collect every value the store emits via subscribe (not getAgents snapshots).
+    const emissions: Array<{ status: string }[]> = [];
+    const unsub = agentsStore.subscribe((agents) => {
+      emissions.push(agents.map((a) => ({ status: a.status })));
+    });
+
+    eventBus.emit({
+      type: "surface:titleChanged",
+      id: "s1",
+      oldTitle: "claude",
+      newTitle: "claude working",
+    });
+
+    unsub();
+
+    // The subscriber must have fired at least twice: initial value + after status change.
+    expect(emissions.length).toBeGreaterThanOrEqual(2);
+    // The last emission reflects the new status.
+    const last = emissions[emissions.length - 1];
+    expect(last).toHaveLength(1);
+    expect(last![0]!.status).toBe("running");
+  });
+
+  it("agentsStore subscriber receives an updated list when a new agent is attached via title change", () => {
+    workspaces.set([
+      makeWorkspace("w1", [{ id: "s2", title: "zsh", ptyId: 100 }]),
+    ]);
+    initAgentDetection();
+
+    const emissions: number[] = [];
+    const unsub = agentsStore.subscribe((agents) => {
+      emissions.push(agents.length);
+    });
+
+    // Trigger attachment by title change.
+    eventBus.emit({
+      type: "surface:titleChanged",
+      id: "s2",
+      oldTitle: "zsh",
+      newTitle: "aider (working)",
+    });
+
+    unsub();
+
+    // Started at 0, then climbed to 1 after attachment.
+    expect(emissions).toContain(0);
+    expect(emissions[emissions.length - 1]).toBe(1);
   });
 });

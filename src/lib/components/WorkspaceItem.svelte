@@ -3,6 +3,7 @@
   import { theme } from "../stores/theme";
   import { anyReorderActive } from "../stores/ui";
   import { getWorkspaceStatusByCategory } from "../services/status-registry";
+  import { dashboardWorkspaceRegistry } from "../services/dashboard-workspace-service";
   import { aggregateAgentBadges } from "../status-colors";
   import { workspaceSubtitleStore } from "../services/workspace-subtitle-registry";
   import { getExtensionApiById } from "../services/extension-loader";
@@ -124,6 +125,14 @@
   $: hasUnread = allSurfaces.some((s) => s.hasUnread);
   $: latestNotification = allSurfaces.find((s) => s.notification)?.notification;
   $: isManaged = !!workspace.metadata?.worktreePath;
+  $: dashboardWorkspaceIcon =
+    typeof (workspace.metadata as Record<string, unknown> | undefined)
+      ?.dashboardWorkspaceId === "string"
+      ? ($dashboardWorkspaceRegistry.get(
+          (workspace.metadata as Record<string, unknown>)
+            .dashboardWorkspaceId as string,
+        )?.icon ?? null)
+      : null;
   // Workspaces spawned by a dashboard (Global Agentic or per-group)
   // get a bot marker so they're visually distinguishable from plain
   // group workspaces or worktrees. `metadata.spawnedBy` is the §3.2
@@ -380,6 +389,22 @@
               <rect x="14" y="12" width="7" height="9" />
               <rect x="3" y="16" width="7" height="5" />
             </svg>
+          </span>
+        {/if}
+        {#if dashboardWorkspaceIcon}
+          <span
+            style="
+              flex-shrink: 0; display: inline-flex; align-items: center;
+              justify-content: center; width: 14px; height: 14px;
+              color: {$theme.fgDim}; opacity: 0.7;
+            "
+            aria-hidden="true"
+          >
+            <svelte:component
+              this={dashboardWorkspaceIcon}
+              width={12}
+              height={12}
+            />
           </span>
         {/if}
         <span

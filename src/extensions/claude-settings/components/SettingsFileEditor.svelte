@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { getContext } from "svelte";
+  import { readable } from "svelte/store";
   import { EXTENSION_API_KEY, type ExtensionAPI } from "../../api";
   import {
     readClaudeFile,
@@ -25,8 +26,10 @@
   /** Base directory for dir-listing sections (skills, agents). Defaults to dirname of filePath. */
   export let baseDir: string = "";
 
-  const api = getContext<ExtensionAPI>(EXTENSION_API_KEY);
-  const themeStore = api.theme;
+  const api = getContext<ExtensionAPI | undefined>(EXTENSION_API_KEY);
+  const themeStore =
+    api?.theme ??
+    readable({ fg: "#ccc", fgDim: "#888", bg: "#1a1a1a", border: "#333" });
 
   $: t = {
     fg: $themeStore.fg,

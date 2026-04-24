@@ -1,5 +1,6 @@
 <script lang="ts">
   import { getContext } from "svelte";
+  import { readable } from "svelte/store";
   import { EXTENSION_API_KEY, type ExtensionAPI } from "../../api";
   import {
     getDashboardHost,
@@ -8,8 +9,10 @@
   import { getWorkspaceGroup } from "../../../lib/stores/workspace-groups";
   import SettingsFileEditor from "./SettingsFileEditor.svelte";
 
-  const api = getContext<ExtensionAPI>(EXTENSION_API_KEY);
-  const themeStore = api.theme;
+  const api = getContext<ExtensionAPI | undefined>(EXTENSION_API_KEY);
+  const themeStore =
+    api?.theme ??
+    readable({ fg: "#ccc", fgDim: "#888", bg: "#1a1a1a", border: "#333" });
 
   const host = getDashboardHost();
   const scope = deriveDashboardScope(host);
@@ -37,7 +40,11 @@
   class="widget"
   style="background: {t.bg}; color: {t.fg}; height: 100%; display: flex; flex-direction: column;"
 >
-  {#if !projectRoot}
+  {#if !api}
+    <div style="padding: 16px; color: {t.fgDim}; font-size: 12px;">
+      Extension context unavailable.
+    </div>
+  {:else if !projectRoot}
     <div style="padding: 16px; color: {t.fgDim}; font-size: 12px;">
       No workspace group associated with this dashboard.
     </div>

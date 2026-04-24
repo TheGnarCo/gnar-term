@@ -11,7 +11,7 @@ import {
 } from "../../lib/services/workspace-group-service";
 import { getWorkspaceGroups } from "../../lib/stores/workspace-groups";
 import { waitRestored } from "../../lib/bootstrap/restore-workspaces";
-import ClaudeIcon from "./icons/ClaudeIcon.svelte";
+import ClaudeMark from "./icons/ClaudeMark.svelte";
 import UserSettingsOverlay from "./components/UserSettingsOverlay.svelte";
 import ClaudeSettingsWidget from "./components/ClaudeSettingsWidget.svelte";
 
@@ -37,7 +37,7 @@ export function registerClaudeSettingsExtension(api: ExtensionAPI): void {
 
   api.onActivate(() => {
     api.registerTitleBarButton("claude-settings", {
-      icon: ClaudeIcon,
+      icon: ClaudeMark,
       title: "Claude Settings",
       isActive: userSettingsVisible,
       onClick: () => userSettingsVisible.update((v) => !v),
@@ -58,7 +58,7 @@ export function registerClaudeSettingsExtension(api: ExtensionAPI): void {
       actionLabel: "Add Claude Settings Dashboard",
       capPerGroup: 1,
       autoProvision: true,
-      icon: ClaudeIcon,
+      icon: ClaudeMark,
       lockedReason: "Required by Claude Settings extension",
       create: (group) => createClaudeSettingsDashboard(api, group),
     });

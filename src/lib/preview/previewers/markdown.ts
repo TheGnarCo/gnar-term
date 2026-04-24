@@ -169,6 +169,11 @@ function renderChunks(
       // widgets (source === "core") may not have an API entry; in that
       // case the Map is empty and the widget should degrade gracefully.
       const extApi = getExtensionApiById(widget.source);
+      if (!extApi && widget.source !== "core") {
+        console.warn(
+          `[markdown] API not found for widget "${chunk.name}" (source: "${widget.source}") — context will not be injected`,
+        );
+      }
       const context = new Map<unknown, unknown>();
       if (extApi) context.set(EXTENSION_API_KEY, extApi);
       // Inject DashboardHostContext when the widget's target element sits

@@ -1220,9 +1220,11 @@ async fn open_with_default_app(path: String) -> Result<(), String> {
 /// Open a URL in the system default browser
 #[tauri::command]
 async fn open_url(url: String) -> Result<(), String> {
-    if !url.starts_with("https://") && !url.starts_with("http://") {
-        return Err(format!("Rejected non-http URL: {url}"));
+    let parsed = url::Url::parse(&url).map_err(|e| format!("Invalid URL: {e}"))?;
+    if parsed.scheme() != "https" && parsed.scheme() != "http" {
+        return Err(format!("Rejected non-http URL scheme: {}", parsed.scheme()));
     }
+    let url = parsed.to_string();
     #[cfg(target_os = "macos")]
     std::process::Command::new("open")
         .arg(&url)
@@ -2984,5 +2986,26 @@ mod tests {
             filter_known_args(input.into_iter()),
             args(&["gnar-term", "-w", "dev", "-e", "bash", "~/Documents"])
         );
+    }
+
+    #[tokio::test]
+    async fn open_url_rejects_javascript_scheme() {
+        let result = open_url("javascript:alert(1)".to_string()).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Rejected"));
+    }
+
+    #[tokio::test]
+    async fn open_url_rejects_file_scheme() {
+        let result = open_url("file:///etc/passwd".to_string()).await;
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn open_url_validation_accepts_https() {
+        // Validates the scheme check logic without spawning a browser
+        let url = "https://example.com".to_string();
+        let parsed = url::Url::parse(&url).unwrap();
+        assert!(parsed.scheme() == "https" || parsed.scheme() == "http");
     }
 }

@@ -25,54 +25,53 @@ vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
   writeImage: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("@xterm/xterm", () => ({
-  Terminal: vi.fn().mockImplementation(() => ({
-    open: vi.fn(),
-    write: vi.fn(),
-    focus: vi.fn(),
-    dispose: vi.fn(),
-    onData: vi.fn(),
-    onResize: vi.fn(),
-    onTitleChange: vi.fn(),
-    loadAddon: vi.fn(),
-    options: {},
-    buffer: { active: { getLine: vi.fn(), length: 0 } },
-    rows: 24,
-    parser: { registerOscHandler: vi.fn() },
-    attachCustomKeyEventHandler: vi.fn(),
-    registerLinkProvider: vi.fn(),
-    getSelection: vi.fn(),
-    scrollToBottom: vi.fn(),
-    onScroll: vi.fn().mockReturnValue({ dispose: vi.fn() }),
-  })),
+  Terminal: vi.fn().mockImplementation(function () {
+    return {
+      open: vi.fn(),
+      write: vi.fn(),
+      focus: vi.fn(),
+      dispose: vi.fn(),
+      onData: vi.fn(),
+      onResize: vi.fn(),
+      onTitleChange: vi.fn(),
+      loadAddon: vi.fn(),
+      options: {},
+      buffer: { active: { getLine: vi.fn(), length: 0 } },
+      rows: 24,
+      parser: { registerOscHandler: vi.fn() },
+      attachCustomKeyEventHandler: vi.fn(),
+      registerLinkProvider: vi.fn(),
+      getSelection: vi.fn(),
+      scrollToBottom: vi.fn(),
+      onScroll: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+    };
+  }),
 }));
 vi.mock("@xterm/addon-fit", () => ({
-  FitAddon: vi.fn().mockImplementation(() => ({
-    fit: vi.fn(),
-    activate: vi.fn(),
-    dispose: vi.fn(),
-  })),
+  FitAddon: vi.fn().mockImplementation(function () {
+    return { fit: vi.fn(), activate: vi.fn(), dispose: vi.fn() };
+  }),
 }));
 vi.mock("@xterm/addon-webgl", () => ({
-  WebglAddon: vi.fn().mockImplementation(() => ({
-    activate: vi.fn(),
-    dispose: vi.fn(),
-    onContextLoss: vi.fn(),
-  })),
+  WebglAddon: vi.fn().mockImplementation(function () {
+    return { activate: vi.fn(), dispose: vi.fn(), onContextLoss: vi.fn() };
+  }),
 }));
 vi.mock("@xterm/addon-web-links", () => ({
-  WebLinksAddon: vi.fn().mockImplementation(() => ({
-    activate: vi.fn(),
-    dispose: vi.fn(),
-  })),
+  WebLinksAddon: vi.fn().mockImplementation(function () {
+    return { activate: vi.fn(), dispose: vi.fn() };
+  }),
 }));
 vi.mock("@xterm/addon-search", () => ({
-  SearchAddon: vi.fn().mockImplementation(() => ({
-    activate: vi.fn(),
-    dispose: vi.fn(),
-    findNext: vi.fn(),
-    findPrevious: vi.fn(),
-    clearDecorations: vi.fn(),
-  })),
+  SearchAddon: vi.fn().mockImplementation(function () {
+    return {
+      activate: vi.fn(),
+      dispose: vi.fn(),
+      findNext: vi.fn(),
+      findPrevious: vi.fn(),
+      clearDecorations: vi.fn(),
+    };
+  }),
 }));
 vi.mock("@xterm/xterm/css/xterm.css", () => ({}));
 
@@ -1871,6 +1870,41 @@ describe("TerminalSurface — image drag-drop", () => {
           (c[1] as Record<string, unknown>)?.data === "\x16",
       );
       expect(writePtyCall).toBeDefined();
+    });
+  });
+});
+
+describe("terminal link handling", () => {
+  it("WebLinksAddon is constructed with a custom handler that invokes open_url", async () => {
+    const { WebLinksAddon: WebLinksAddonMock } =
+      await import("@xterm/addon-web-links");
+    // WebLinksAddon constructor: new WebLinksAddon(handler?, options?)
+    const WebLinksAddonCtor = vi.mocked(
+      WebLinksAddonMock as unknown as new (
+        handler: (e: MouseEvent, url: string) => void,
+      ) => object,
+    );
+    const { invoke: invokeMock } = await import("@tauri-apps/api/core");
+    const invokeMockFn = vi.mocked(invokeMock);
+    invokeMockFn.mockClear();
+    WebLinksAddonCtor.mockClear();
+
+    const { createTerminalSurface } = await import("../lib/terminal-service");
+    const fakePane = { id: "p-link-test", surfaces: [], activeSurfaceId: null };
+    await createTerminalSurface(
+      fakePane as unknown as Parameters<typeof createTerminalSurface>[0],
+    );
+
+    expect(WebLinksAddonCtor).toHaveBeenCalledWith(expect.any(Function));
+
+    // Extract and invoke the handler directly (first positional argument)
+    const handler = WebLinksAddonCtor.mock.calls[
+      WebLinksAddonCtor.mock.calls.length - 1
+    ][0] as (e: MouseEvent, url: string) => void;
+    handler(new MouseEvent("click"), "https://example.com");
+
+    expect(invokeMockFn).toHaveBeenCalledWith("open_url", {
+      url: "https://example.com",
     });
   });
 });

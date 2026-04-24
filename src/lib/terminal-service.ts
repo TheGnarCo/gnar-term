@@ -540,7 +540,11 @@ export async function createTerminalSurface(
   const fitAddon = new FitAddon();
   const searchAddon = new SearchAddon();
   terminal.loadAddon(fitAddon);
-  terminal.loadAddon(new WebLinksAddon());
+  terminal.loadAddon(
+    new WebLinksAddon((_event: MouseEvent, url: string) => {
+      invoke("open_url", { url }).catch(() => {});
+    }),
+  );
   terminal.loadAddon(searchAddon);
 
   const termElement = document.createElement("div");

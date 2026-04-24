@@ -340,3 +340,20 @@ export async function resetExtensions(): Promise<void> {
   // Clear error reporting store
   _extensionErrors.set([]);
 }
+
+export function ensureProviderAndThen(
+  surfaceTypeId: string,
+  open: () => void,
+): Promise<void> {
+  const colonIdx = surfaceTypeId.indexOf(":");
+  const providerId = colonIdx > 0 ? surfaceTypeId.slice(0, colonIdx) : null;
+  if (!providerId) {
+    open();
+    return Promise.resolve();
+  }
+  return activateExtension(providerId)
+    .catch((err) => {
+      console.warn(`[status-action] activate "${providerId}" failed:`, err);
+    })
+    .finally(open);
+}

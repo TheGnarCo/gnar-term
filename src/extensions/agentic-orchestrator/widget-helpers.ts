@@ -5,7 +5,7 @@
  * resolution, jump-to-pane, and a few small utilities so each widget
  * stays focused on rendering.
  */
-import { derived, readable, type Readable } from "svelte/store";
+import { derived, readable, get, type Readable } from "svelte/store";
 import type { AgentRef, ExtensionAPI } from "../api";
 import {
   deriveDashboardScope,
@@ -18,11 +18,22 @@ import {
   workspaceGroupsStore,
 } from "../../lib/stores/workspace-groups";
 import { claimedWorkspaceIds } from "../../lib/services/claimed-workspace-registry";
-import type { SpawnedByMarker } from "../../lib/services/spawn-helper";
+import type {
+  SpawnedByMarker,
+  SpawnAgentType,
+} from "../../lib/services/spawn-helper";
 import { getAllSurfaces, isTerminalSurface } from "../../lib/types";
 
 /** Minimum interval between widget data refreshes (ms). */
 export const WIDGET_THROTTLE_MS = 200;
+
+export const SPAWN_AGENT_OPTIONS: Array<{ id: SpawnAgentType; label: string }> =
+  [
+    { id: "claude-code", label: "Claude Code" },
+    { id: "codex", label: "Codex" },
+    { id: "aider", label: "Aider" },
+    { id: "custom", label: "Custom..." },
+  ];
 
 /**
  * Minimum interval between automatic `gh_*` polls — also used as both
@@ -218,13 +229,8 @@ export function workspaceNameFor(
   workspaceId: string,
 ): string {
   if (!workspaceId) return "";
-  let name = workspaceId;
-  const unsub = api.workspaces.subscribe((list) => {
-    const ws = list.find((w) => w.id === workspaceId);
-    if (ws) name = ws.name;
-  });
-  unsub();
-  return name;
+  const ws = get(api.workspaces).find((w) => w.id === workspaceId);
+  return ws?.name ?? workspaceId;
 }
 
 /**

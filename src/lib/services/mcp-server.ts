@@ -98,7 +98,10 @@ import {
   dashboardContributionStore,
   getDashboardContribution,
 } from "./dashboard-contribution-registry";
-import { closeDashboardForGroup } from "./workspace-group-service";
+import {
+  closeDashboardForGroup,
+  isDashboardWorkspace,
+} from "./workspace-group-service";
 import { getWorkspaceGroup } from "../stores/workspace-groups";
 import { getWorkspaceStatus } from "./status-registry";
 import { getMcpSetting } from "../config";
@@ -1545,14 +1548,9 @@ registerTool({
           locked_reason: c.lockedReason,
         };
         if (!group) return base;
-        const wsForContrib = wsList.find((w) => {
-          const md = w.metadata as Record<string, unknown> | undefined;
-          return (
-            md?.isDashboard === true &&
-            md?.groupId === group.id &&
-            md?.dashboardContributionId === c.id
-          );
-        });
+        const wsForContrib = wsList.find((w) =>
+          isDashboardWorkspace(w, group.id, c.id),
+        );
         return {
           ...base,
           active: Boolean(wsForContrib),
@@ -1588,14 +1586,9 @@ registerTool({
         `Dashboard contribution "${p.contribution_id}" is autoProvision — it materializes automatically and cannot be added manually.`,
       );
     }
-    const currentCount = get(workspaces).filter((w) => {
-      const md = w.metadata as Record<string, unknown> | undefined;
-      return (
-        md?.isDashboard === true &&
-        md?.groupId === group.id &&
-        md?.dashboardContributionId === contribution.id
-      );
-    }).length;
+    const currentCount = get(workspaces).filter((w) =>
+      isDashboardWorkspace(w, group.id, contribution.id),
+    ).length;
     if (!canAddContributionToGroup(group, contribution.id, currentCount)) {
       throw new Error(
         `Cannot add "${p.contribution_id}" to group "${p.group_id}" (at cap or gated by availability).`,

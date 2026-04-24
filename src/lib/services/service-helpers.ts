@@ -2,7 +2,13 @@ import { tick } from "svelte";
 import { get } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
 import { activeSurface, workspaces } from "../stores/workspace";
-import { getAllPanes, isTerminalSurface, type Surface } from "../types";
+import {
+  getAllPanes,
+  getAllSurfaces,
+  isTerminalSurface,
+  type Surface,
+  type TerminalSurface,
+} from "../types";
 
 // Cached home directory — resolved once, reused everywhere
 let _home = "";
@@ -51,6 +57,14 @@ export async function isDebugBuild(): Promise<boolean> {
 /** For tests only — resets the module-level debug build cache. */
 export function resetIsDebugBuildForTests(): void {
   _isDebugBuild = undefined;
+}
+
+export function forEachTerminalSurface(fn: (s: TerminalSurface) => void): void {
+  for (const ws of get(workspaces)) {
+    for (const s of getAllSurfaces(ws)) {
+      if (isTerminalSurface(s)) fn(s);
+    }
+  }
 }
 
 export async function safeFocus(s: Surface | null | undefined) {

@@ -37,6 +37,7 @@
     scopeAttrs,
     slugify,
     timeAgo,
+    SPAWN_AGENT_OPTIONS,
   } from "../widget-helpers";
   import {
     spawnAgentInWorktree,
@@ -147,13 +148,6 @@
     const wsId = handledIssues.get(issueNumber);
     if (wsId) api.switchWorkspace(wsId);
   }
-
-  const SPAWN_AGENTS: Array<{ id: SpawnAgentType; label: string }> = [
-    { id: "claude-code", label: "Claude Code" },
-    { id: "codex", label: "Codex" },
-    { id: "aider", label: "Aider" },
-    { id: "custom", label: "Custom..." },
-  ];
 
   function isGhMissing(msg: string): boolean {
     return (
@@ -731,7 +725,7 @@
                 box-shadow: 0 4px 12px rgba(0,0,0,0.4);
               "
               >
-                {#each SPAWN_AGENTS as opt (opt.id)}
+                {#each SPAWN_AGENT_OPTIONS as opt (opt.id)}
                   <div
                     role="menuitem"
                     tabindex="-1"

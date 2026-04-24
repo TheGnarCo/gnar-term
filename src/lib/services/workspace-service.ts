@@ -7,7 +7,7 @@ import {
   activeSurface,
   activePseudoWorkspaceId,
 } from "../stores/workspace";
-import { showInputPrompt } from "../stores/ui";
+import { showInputPrompt, showConfirmPrompt } from "../stores/ui";
 import { createTerminalSurface } from "../terminal-service";
 import {
   uid,
@@ -366,4 +366,23 @@ export async function saveCurrentWorkspace() {
     commands.push(entry);
   }
   await saveConfig({ commands });
+}
+
+export async function closeAllWorkspaces(): Promise<void> {
+  const count = get(workspaces).length;
+  if (count === 0) return;
+  const confirmed = await showConfirmPrompt(
+    `Close all ${count} workspace${count === 1 ? "" : "s"}? This will dispose every terminal and cannot be undone.`,
+    {
+      title: "Close All Workspaces",
+      confirmLabel: "Close All",
+      cancelLabel: "Cancel",
+    },
+  );
+  if (!confirmed) return;
+  // closeWorkspace mutates the store and shifts indices, so always pop
+  // index 0 until the list is empty.
+  while (get(workspaces).length > 0) {
+    closeWorkspace(0);
+  }
 }

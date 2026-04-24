@@ -15,7 +15,6 @@
     settingsPage,
     pendingAction,
     showInputPrompt,
-    showConfirmPrompt,
   } from "./lib/stores/ui";
   import {
     workspaces,
@@ -40,7 +39,8 @@
     modLabel,
     shiftModLabel,
   } from "./lib/terminal-service";
-  import { getAllSurfaces, getAllPanes, isTerminalSurface } from "./lib/types";
+  import { getAllPanes, getAllSurfaces, isTerminalSurface } from "./lib/types";
+  import { forEachTerminalSurface } from "./lib/services/service-helpers";
   import { check } from "@tauri-apps/plugin-updater";
   import { relaunch } from "@tauri-apps/plugin-process";
   import { eventBus } from "./lib/services/event-bus";
@@ -51,7 +51,7 @@
     extensionErrorStore,
     reportExtensionError,
     flushAllExtensionState,
-    activateExtension,
+    ensureProviderAndThen,
   } from "./lib/services/extension-loader";
   import { loadExternalExtensions } from "./lib/services/extension-management";
   import { registerIncludedExtensions } from "./lib/bootstrap/register-included-extensions";
@@ -76,6 +76,7 @@
     createWorkspaceFromDef,
     switchWorkspace,
     closeWorkspace,
+    closeAllWorkspaces,
     renameWorkspace,
     saveCurrentWorkspace,
     persistWorkspaces,
@@ -155,31 +156,6 @@
     }
   }
 
-  /**
-   * Activate the extension that registered `surfaceTypeId` (if any),
-   * then run `open`. Namespaced ids look like `"<extension-id>:<surface-id>"`;
-   * `activateExtension` is idempotent for already-enabled extensions
-   * and soft-fails so a broken extension surfaces its error rather
-   * than stranding the caller. Used by every `status-action` command
-   * that ends up rendering an extension-owned surface.
-   */
-  function ensureProviderAndThen(
-    surfaceTypeId: string,
-    open: () => void,
-  ): Promise<void> {
-    const colonIdx = surfaceTypeId.indexOf(":");
-    const providerId = colonIdx > 0 ? surfaceTypeId.slice(0, colonIdx) : null;
-    if (!providerId) {
-      open();
-      return Promise.resolve();
-    }
-    return activateExtension(providerId)
-      .catch((err) => {
-        console.warn(`[status-action] activate "${providerId}" failed:`, err);
-      })
-      .finally(open);
-  }
-
   function dismissToast(id: string) {
     const toast = activeToasts.find((t) => t.id === id);
     if (toast) clearTimeout(toast.timerId);
@@ -193,11 +169,9 @@
   function applyTheme(id: string) {
     const previousId = get(theme.id);
     theme.set(id);
-    for (const ws of $workspaces) {
-      for (const s of getAllSurfaces(ws)) {
-        if (isTerminalSurface(s)) s.terminal.options.theme = $xtermTheme;
-      }
-    }
+    forEachTerminalSurface((s) => {
+      s.terminal.options.theme = $xtermTheme;
+    });
     eventBus.emit({ type: "theme:changed", id, previousId });
     void saveConfig({ theme: id });
   }
@@ -296,26 +270,7 @@
       // Intentionally no shortcut (destructive, rarely wanted).
       id: "core.close-all-workspaces",
       title: "Close All Workspaces",
-      action: () => {
-        void (async () => {
-          const count = $workspaces.length;
-          if (count === 0) return;
-          const confirmed = await showConfirmPrompt(
-            `Close all ${count} workspace${count === 1 ? "" : "s"}? This will dispose every terminal and cannot be undone.`,
-            {
-              title: "Close All Workspaces",
-              confirmLabel: "Close All",
-              cancelLabel: "Cancel",
-            },
-          );
-          if (!confirmed) return;
-          // closeWorkspace mutates the store and shifts indices, so
-          // always pop index 0 until the list is empty.
-          while (get(workspaces).length > 0) {
-            closeWorkspace(0);
-          }
-        })();
-      },
+      action: () => void closeAllWorkspaces(),
       source: "core",
     },
     {
@@ -555,18 +510,14 @@
     // value — apply but don't persist (prevents a write-on-startup).
     let fontSizeInitialEmission = true;
     fontSize.subscribe((size) => {
-      for (const ws of get(workspaces)) {
-        for (const s of getAllSurfaces(ws)) {
-          if (isTerminalSurface(s)) {
-            s.terminal.options.fontSize = size;
-            try {
-              s.fitAddon?.fit();
-            } catch {
-              // fit throws if the terminal isn't opened yet; ignored.
-            }
-          }
+      forEachTerminalSurface((s) => {
+        s.terminal.options.fontSize = size;
+        try {
+          s.fitAddon?.fit();
+        } catch {
+          // fit throws if the terminal isn't opened yet; ignored.
         }
-      }
+      });
       if (fontSizeInitialEmission) {
         fontSizeInitialEmission = false;
         return;

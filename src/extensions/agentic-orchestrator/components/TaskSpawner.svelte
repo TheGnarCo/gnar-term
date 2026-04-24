@@ -19,7 +19,12 @@
    */
   import { getContext } from "svelte";
   import { EXTENSION_API_KEY, type ExtensionAPI } from "../../api";
-  import { resolveSpawnTarget, scopeAttrs, slugify } from "../widget-helpers";
+  import {
+    resolveSpawnTarget,
+    scopeAttrs,
+    slugify,
+    SPAWN_AGENT_OPTIONS,
+  } from "../widget-helpers";
   import {
     spawnAgentInWorktree,
     type SpawnAgentType,
@@ -45,13 +50,6 @@
   let dropdownOpen = false;
   let spawning = false;
   let spawnError = "";
-
-  const AGENT_OPTIONS: Array<{ id: SpawnAgentType; label: string }> = [
-    { id: "claude-code", label: "Claude Code" },
-    { id: "codex", label: "Codex" },
-    { id: "aider", label: "Aider" },
-    { id: "custom", label: "Custom..." },
-  ];
 
   $: target = resolveSpawnTarget(scope, repoPath);
   $: hasTarget = target.ok;
@@ -109,7 +107,8 @@
     dropdownOpen = false;
   }
 
-  $: agentLabel = AGENT_OPTIONS.find((o) => o.id === agent)?.label ?? agent;
+  $: agentLabel =
+    SPAWN_AGENT_OPTIONS.find((o) => o.id === agent)?.label ?? agent;
 </script>
 
 <div
@@ -205,7 +204,7 @@
                 box-shadow: 0 4px 12px rgba(0,0,0,0.4);
               "
             >
-              {#each AGENT_OPTIONS as opt (opt.id)}
+              {#each SPAWN_AGENT_OPTIONS as opt (opt.id)}
                 <div
                   role="menuitem"
                   tabindex="-1"

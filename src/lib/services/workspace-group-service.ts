@@ -527,44 +527,49 @@ export async function reconcileGroupDashboards(): Promise<void> {
   // nothing is inferable.
   backfillDashboardContributionIds();
 
-  for (const group of getWorkspaceGroups()) {
-    // One-shot cleanup: strip the legacy `## Active Agents` section
-    // from the group's Overview markdown if it's still there. Runs
-    // before we materialize / rebind the dashboard workspace so the
-    // first render already reflects the cleaned file.
-    await scrubGroupDashboardActiveAgents(groupDashboardPath(group.path));
+  await Promise.allSettled(
+    getWorkspaceGroups().map(async (group) => {
+      // One-shot cleanup: strip the legacy `## Active Agents` section
+      // from the group's Overview markdown if it's still there. Runs
+      // before we materialize / rebind the dashboard workspace so the
+      // first render already reflects the cleaned file.
+      await scrubGroupDashboardActiveAgents(groupDashboardPath(group.path));
 
-    // Deduplicate every autoProvision contribution type — keeps the first
-    // match, closes the rest. Previously only "group" was covered; the
-    // startup race could leave duplicate "settings" or extension-owned
-    // dashboards (e.g. "agentic") that are now caught here too.
-    for (const c of getDashboardContributions()) {
-      if (!c.autoProvision) continue;
-      const dupeMatches = get(workspaces).filter((w) =>
-        isDashboardWorkspace(w, group.id, c.id, true),
-      );
-      if (dupeMatches.length <= 1) continue;
-      const [, ...extras] = dupeMatches;
-      for (const dup of extras) closeWorkspaceById(dup.id);
-    }
-
-    // Back-fill any autoProvision contribution (including `"group"` if
-    // it is still missing after the dedupe pass, plus `"settings"` and
-    // extension-owned autoProvision contributions).
-    try {
-      await provisionAutoDashboardsForGroup(group);
-      // Rebind `dashboardWorkspaceId` to the current "group" overview —
-      // either the one that survived dedupe or the one just provisioned.
-      const overview = get(workspaces).find((w) =>
-        isDashboardWorkspace(w, group.id, "group", true),
-      );
-      if (overview && overview.id !== group.dashboardWorkspaceId) {
-        updateWorkspaceGroup(group.id, { dashboardWorkspaceId: overview.id });
+      // Deduplicate every autoProvision contribution type — keeps the first
+      // match, closes the rest. Previously only "group" was covered; the
+      // startup race could leave duplicate "settings" or extension-owned
+      // dashboards (e.g. "agentic") that are now caught here too.
+      for (const c of getDashboardContributions()) {
+        if (!c.autoProvision) continue;
+        const dupeMatches = get(workspaces).filter((w) =>
+          isDashboardWorkspace(w, group.id, c.id, true),
+        );
+        if (dupeMatches.length <= 1) continue;
+        const [, ...extras] = dupeMatches;
+        for (const dup of extras) closeWorkspaceById(dup.id);
       }
-    } catch (err) {
-      console.warn("[workspace-groups] Dashboard reconciliation failed:", err);
-    }
-  }
+
+      // Back-fill any autoProvision contribution (including `"group"` if
+      // it is still missing after the dedupe pass, plus `"settings"` and
+      // extension-owned autoProvision contributions).
+      try {
+        await provisionAutoDashboardsForGroup(group);
+        // Rebind `dashboardWorkspaceId` to the current "group" overview —
+        // either the one that survived dedupe or the one just provisioned.
+        const overview = get(workspaces).find((w) =>
+          isDashboardWorkspace(w, group.id, "group", true),
+        );
+        if (overview && overview.id !== group.dashboardWorkspaceId) {
+          updateWorkspaceGroup(group.id, { dashboardWorkspaceId: overview.id });
+        }
+      } catch (err) {
+        console.warn(
+          "[workspace-groups] Dashboard reconciliation failed:",
+          err,
+        );
+      }
+    }),
+  );
 }
 
 /**

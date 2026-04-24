@@ -65,7 +65,6 @@ export const EXTENSION_ALLOWED_COMMANDS: Set<string> = new Set([
   "git_diff",
   "git_merge",
   "git_remote_url",
-  "list_branches",
 ]);
 
 // PTY commands — only available to extensions with "pty" permission
@@ -173,8 +172,6 @@ export const REGISTRY_CLEANUP_FNS: Array<(source: string) => void> = [
 
 // --- Valid event types (for manifest validation) ---
 
-// Typed as AppEventType[] so TypeScript catches drift — a new event added
-// to the bus but missing here will produce a compile error.
 const VALID_EVENT_LIST: AppEventType[] = [
   "workspace:created",
   "workspace:activated",
@@ -189,5 +186,8 @@ const VALID_EVENT_LIST: AppEventType[] = [
   "surface:titleChanged",
   "sidebar:toggled",
   "theme:changed",
+  "worktree:merged",
+  "agent:statusChanged",
+  "surface:ptyReady",
 ];
 export const VALID_EVENTS: Set<string> = new Set(VALID_EVENT_LIST);

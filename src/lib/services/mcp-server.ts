@@ -108,7 +108,7 @@ import { agentsStore } from "./agent-detection-service";
 // ---- Types ----
 
 type AgentType = "claude-code" | "codex" | "aider" | "custom";
-type SessionStatus = "starting" | "running" | "idle" | "exited";
+type SessionStatus = "starting" | "exited";
 
 interface McpSession {
   session_id: string;
@@ -465,7 +465,7 @@ function logDispatch(entry: DispatchLogEntry): void {
   );
 }
 
-export function getDispatchLog(): readonly DispatchLogEntry[] {
+export function _getDispatchLogForTest(): readonly DispatchLogEntry[] {
   return dispatchLog;
 }
 
@@ -2266,17 +2266,6 @@ export async function initMcpServer(): Promise<void> {
 
 export function _getToolsForTest(): ToolDef[] {
   return TOOLS;
-}
-
-export function _getSessionsForTest(): Map<string, McpSession> {
-  return sessions;
-}
-
-export function _getConnectionContextsForTest(): Map<
-  number,
-  ConnectionContext
-> {
-  return connectionContexts;
 }
 
 /** Build a connection context for tests. Pass binding=null for an unbound

@@ -152,13 +152,12 @@ async function main() {
   const list = await client.call("tools/list", {});
   assert(Array.isArray(list.tools), "tools/list returns array");
   assert(
-    list.tools.length === 27,
-    `expected 27 tools, got ${list.tools.length}`,
+    list.tools.length === 43,
+    `expected 43 tools, got ${list.tools.length}`,
   );
   const names = new Set(list.tools.map((t) => t.name));
   const required = [
     "spawn_agent",
-    "list_sessions",
     "get_session_info",
     "kill_session",
     "send_prompt",

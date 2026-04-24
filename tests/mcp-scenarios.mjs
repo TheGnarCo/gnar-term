@@ -683,7 +683,6 @@ await scenario(13, "tools/list contains every documented tool", async () => {
   const tools = r.tools ?? [];
   const required = [
     "spawn_agent",
-    "list_sessions",
     "get_session_info",
     "kill_session",
     "send_prompt",

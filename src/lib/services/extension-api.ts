@@ -46,6 +46,7 @@ import {
   closeExtensionSurfaces,
   markSurfaceUnreadById,
   focusSurfaceById,
+  openFileAsPreviewSplit,
 } from "./surface-service";
 import {
   secondarySidebarVisible,
@@ -303,6 +304,9 @@ export function createExtensionAPI(
     },
     openInEditor(filePath: string) {
       pendingAction.set({ type: "open-in-editor", filePath });
+    },
+    openPreviewSplit(filePath: string) {
+      openFileAsPreviewSplit(filePath);
     },
     openSurface(
       surfaceTypeId: string,

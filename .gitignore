@@ -26,3 +26,6 @@ docs/.jekyll-cache/
 
 # Claude Code runtime state
 .claude/scheduled_tasks.lock
+
+# gnar-term runtime state
+.gnar-term

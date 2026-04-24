@@ -18,6 +18,11 @@ export const fileBrowserManifest: ExtensionManifest = {
     secondarySidebarTabs: [{ id: "files", label: "Files", icon: "folder" }],
     commands: [{ id: "toggle-file-browser", title: "Toggle File Browser" }],
     contextMenuItems: [
+      {
+        id: "open-as-preview",
+        label: "Open as Preview",
+        when: "*.{md,markdown,mdx}",
+      },
       { id: "edit", label: "Edit", when: "*" },
       { id: "show-in-file-manager", label: "Show in File Manager", when: "*" },
       {
@@ -40,6 +45,10 @@ export function registerFileBrowserExtension(api: ExtensionAPI): void {
 
     api.registerCommand("toggle-file-browser", () => {
       api.toggleSecondarySidebar();
+    });
+
+    api.registerContextMenuItem("open-as-preview", (filePath) => {
+      api.openPreviewSplit(filePath);
     });
 
     api.registerContextMenuItem("edit", (filePath) => {

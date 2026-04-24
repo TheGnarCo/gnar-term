@@ -634,6 +634,8 @@ export interface ExtensionAPI {
   /** Release a claimed workspace back to the main list. */
   unclaimWorkspace(workspaceId: string): void;
   openInEditor(filePath: string): void;
+  /** Open a file as a preview surface in a new pane split to the right. Deduplicates by path. */
+  openPreviewSplit(filePath: string): void;
   openSurface(
     surfaceTypeId: string,
     title: string,

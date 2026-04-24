@@ -18,8 +18,9 @@ import {
   type Surface,
   type PreviewSurface,
 } from "../types";
-import { removePane } from "./pane-service";
+import { removePane, splitPaneEmpty } from "./pane-service";
 import { closeWorkspace, schedulePersist } from "./workspace-service";
+import { findPreviewSurfaceByPath } from "./preview-surface-registry";
 import { safeFocus, getActiveCwd } from "./service-helpers";
 import { eventBus } from "./event-bus";
 
@@ -361,4 +362,25 @@ export function createPreviewSurfaceInPane(
   });
   schedulePersist();
   return surface;
+}
+
+/**
+ * Open a file as a preview surface in a new pane split to the right of the
+ * currently active pane. If a preview for the same path is already open
+ * anywhere, focuses it instead (same dedup semantics as spawn_preview MCP).
+ */
+export function openFileAsPreviewSplit(filePath: string): void {
+  const existing = findPreviewSurfaceByPath(filePath);
+  if (existing) {
+    focusSurfaceById(existing.surfaceId);
+    return;
+  }
+
+  const pane = get(activePane);
+  if (!pane) return;
+
+  const result = splitPaneEmpty(pane.id, "horizontal");
+  if (!result) return;
+
+  createPreviewSurfaceInPane(result.newPane.id, filePath);
 }

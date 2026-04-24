@@ -38,12 +38,13 @@ vi.mock("@xterm/xterm", () => ({
     onTitleChange = vi.fn();
     loadAddon = vi.fn();
     options: Record<string, unknown> = {};
-    buffer = { active: { getLine: vi.fn() } };
+    buffer = { active: { getLine: vi.fn(), length: 0 } };
     parser = { registerOscHandler: vi.fn() };
     attachCustomKeyEventHandler = vi.fn();
     registerLinkProvider = vi.fn();
     getSelection = vi.fn().mockReturnValue("selected text");
     scrollToBottom = vi.fn();
+    onScroll = vi.fn().mockReturnValue({ dispose: vi.fn() });
   },
 }));
 vi.mock("@xterm/addon-fit", () => ({

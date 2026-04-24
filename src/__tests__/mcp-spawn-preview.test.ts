@@ -313,10 +313,13 @@ describe("MCP — close_preview", () => {
     );
     const closeResult = (closeResp as any).result.structuredContent;
     expect(closeResult).toEqual({ closed: true });
-    // The pane no longer holds the preview surface.
-    expect(getAllSurfaces(get(workspaces)[0]!).map((s) => s.id)).not.toContain(
-      surfaceId,
+    // The preview was the only surface in the only pane — closing it
+    // closed the whole workspace, so the surface id is no longer
+    // anywhere in the workspaces list.
+    const remaining = get(workspaces).flatMap((ws) =>
+      getAllSurfaces(ws).map((s) => s.id),
     );
+    expect(remaining).not.toContain(surfaceId);
   });
 
   it("returns { closed: false } for an unknown surface id", async () => {

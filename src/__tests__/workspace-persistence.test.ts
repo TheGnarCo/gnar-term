@@ -63,8 +63,18 @@ describe("workspace persistence", () => {
 
     expect(saveStateSpy).toHaveBeenCalledWith({
       workspaces: [
-        { name: "Dev", cwd: undefined, layout: { pane: { surfaces: [] } } },
-        { name: "Test", cwd: undefined, layout: { pane: { surfaces: [] } } },
+        {
+          id: "ws1",
+          name: "Dev",
+          cwd: undefined,
+          layout: { pane: { surfaces: [] } },
+        },
+        {
+          id: "ws2",
+          name: "Test",
+          cwd: undefined,
+          layout: { pane: { surfaces: [] } },
+        },
       ],
       activeWorkspaceIdx: 1,
     });
@@ -124,7 +134,7 @@ describe("workspace persistence", () => {
           pane: { id: "p1", surfaces: [], activeSurfaceId: null },
         },
         activePaneId: "p1",
-        metadata: { projectId: "proj-alpha", color: "blue" },
+        metadata: { groupId: "proj-alpha", color: "blue" },
       },
     ] as unknown as import("../lib/types").Workspace[]);
     activeWorkspaceIdx.set(0);
@@ -135,10 +145,11 @@ describe("workspace persistence", () => {
     const payload = saveStateSpy.mock.calls[0]![0];
     expect(payload.workspaces).toEqual([
       {
+        id: "ws-project",
         name: "Project A",
         cwd: undefined,
         layout: { pane: { surfaces: [] } },
-        metadata: { projectId: "proj-alpha", color: "blue" },
+        metadata: { groupId: "proj-alpha", color: "blue" },
       },
     ]);
 

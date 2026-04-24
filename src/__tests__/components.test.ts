@@ -3,6 +3,7 @@
  * the correct DOM structure, text content, and attributes.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { tick } from "svelte";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 // get is available if needed for store testing
 import { readFileSync } from "fs";
@@ -21,54 +22,56 @@ vi.mock("@tauri-apps/api/event", () => ({
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
   readText: vi.fn().mockResolvedValue(""),
   writeText: vi.fn().mockResolvedValue(undefined),
+  writeImage: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("@xterm/xterm", () => ({
-  Terminal: class {
-    open = vi.fn();
-    write = vi.fn();
-    focus = vi.fn();
-    dispose = vi.fn();
-    onData = vi.fn();
-    onResize = vi.fn();
-    onTitleChange = vi.fn();
-    loadAddon = vi.fn();
-    options: Record<string, unknown> = {};
-    buffer = { active: { getLine: vi.fn() } };
-    parser = { registerOscHandler: vi.fn() };
-    attachCustomKeyEventHandler = vi.fn();
-    registerLinkProvider = vi.fn();
-    getSelection = vi.fn();
-    scrollToBottom = vi.fn();
-  },
+  Terminal: vi.fn().mockImplementation(function () {
+    return {
+      open: vi.fn(),
+      write: vi.fn(),
+      focus: vi.fn(),
+      dispose: vi.fn(),
+      onData: vi.fn(),
+      onResize: vi.fn(),
+      onTitleChange: vi.fn(),
+      loadAddon: vi.fn(),
+      options: {},
+      buffer: { active: { getLine: vi.fn(), length: 0 } },
+      rows: 24,
+      parser: { registerOscHandler: vi.fn() },
+      attachCustomKeyEventHandler: vi.fn(),
+      registerLinkProvider: vi.fn(),
+      getSelection: vi.fn(),
+      scrollToBottom: vi.fn(),
+      onScroll: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+    };
+  }),
 }));
 vi.mock("@xterm/addon-fit", () => ({
-  FitAddon: class {
-    fit = vi.fn();
-    activate = vi.fn();
-    dispose = vi.fn();
-  },
+  FitAddon: vi.fn().mockImplementation(function () {
+    return { fit: vi.fn(), activate: vi.fn(), dispose: vi.fn() };
+  }),
 }));
 vi.mock("@xterm/addon-webgl", () => ({
-  WebglAddon: class {
-    activate = vi.fn();
-    dispose = vi.fn();
-    onContextLoss = vi.fn();
-  },
+  WebglAddon: vi.fn().mockImplementation(function () {
+    return { activate: vi.fn(), dispose: vi.fn(), onContextLoss: vi.fn() };
+  }),
 }));
 vi.mock("@xterm/addon-web-links", () => ({
-  WebLinksAddon: class {
-    activate = vi.fn();
-    dispose = vi.fn();
-  },
+  WebLinksAddon: vi.fn().mockImplementation(function () {
+    return { activate: vi.fn(), dispose: vi.fn() };
+  }),
 }));
 vi.mock("@xterm/addon-search", () => ({
-  SearchAddon: class {
-    activate = vi.fn();
-    dispose = vi.fn();
-    findNext = vi.fn();
-    findPrevious = vi.fn();
-    clearDecorations = vi.fn();
-  },
+  SearchAddon: vi.fn().mockImplementation(function () {
+    return {
+      activate: vi.fn(),
+      dispose: vi.fn(),
+      findNext: vi.fn(),
+      findPrevious: vi.fn(),
+      clearDecorations: vi.fn(),
+    };
+  }),
 }));
 vi.mock("@xterm/xterm/css/xterm.css", () => ({}));
 
@@ -103,6 +106,7 @@ import PaneView from "../lib/components/PaneView.svelte";
 import PrimarySidebar from "../lib/components/PrimarySidebar.svelte";
 import SecondarySidebar from "../lib/components/SecondarySidebar.svelte";
 import TerminalSurfaceComponent from "../lib/components/TerminalSurface.svelte";
+import WorkspaceGroupSectionHarness from "./workspace-group-section-harness.svelte";
 
 // Store imports
 import {
@@ -126,6 +130,8 @@ import {
   registerWorkspaceAction,
   resetWorkspaceActions,
 } from "../lib/services/workspace-action-registry";
+import { setWorkspaceGroups } from "../lib/stores/workspace-groups";
+import type { WorkspaceGroupEntry } from "../lib/config";
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -149,11 +155,13 @@ function makeSurface(
       onTitleChange: vi.fn(),
       loadAddon: vi.fn(),
       options: {},
-      buffer: { active: { getLine: vi.fn() } },
+      buffer: { active: { getLine: vi.fn(), length: 0 } },
+      rows: 24,
       parser: { registerOscHandler: vi.fn() },
       attachCustomKeyEventHandler: vi.fn(),
       registerLinkProvider: vi.fn(),
       getSelection: vi.fn(),
+      onScroll: vi.fn().mockReturnValue({ dispose: vi.fn() }),
     } as unknown as TerminalSurface["terminal"],
     fitAddon: { fit: vi.fn() } as unknown as TerminalSurface["fitAddon"],
     searchAddon: {
@@ -214,7 +222,9 @@ beforeEach(() => {
 describe("TitleBar", () => {
   it("renders GNARTERM text", () => {
     render(TitleBar);
-    expect(screen.getByText("GNARTERM")).toBeTruthy();
+    const el =
+      screen.queryByText("GNARTERM") ?? screen.queryByText("GNARTERM (DEV)");
+    expect(el).toBeTruthy();
   });
 
   it("has data-tauri-drag-region attribute", () => {
@@ -522,6 +532,43 @@ describe("TabBar", () => {
     });
     expect(screen.getByTitle("Close Pane")).toBeTruthy();
   });
+
+  it("shows jump-to-bottom button when showJumpToBottom is true", () => {
+    const pane = makePane("p1");
+    const { container } = render(TabBar, {
+      props: {
+        pane,
+        onSelectSurface: noop,
+        onCloseSurface: noop,
+        onNewSurface: noop,
+        onSelectSurfaceType: noop,
+        onSplitRight: noop,
+        onSplitDown: noop,
+        onClosePane: noop,
+        showJumpToBottom: true,
+        onJumpToBottom: noop,
+      },
+    });
+    expect(container.querySelector("[data-jump-to-bottom]")).not.toBeNull();
+  });
+
+  it("hides jump-to-bottom button when showJumpToBottom is false", () => {
+    const pane = makePane("p1");
+    const { container } = render(TabBar, {
+      props: {
+        pane,
+        onSelectSurface: noop,
+        onCloseSurface: noop,
+        onNewSurface: noop,
+        onSelectSurfaceType: noop,
+        onSplitRight: noop,
+        onSplitDown: noop,
+        onClosePane: noop,
+        showJumpToBottom: false,
+      },
+    });
+    expect(container.querySelector("[data-jump-to-bottom]")).toBeNull();
+  });
 });
 
 // ===========================================================================
@@ -810,6 +857,62 @@ describe("WorkspaceItem", () => {
     expect(screen.getByText("Build complete")).toBeTruthy();
   });
 
+  it("renders a presence-only chip when an agent is attached but idle", async () => {
+    // Regression: launching claude in a workspace should immediately
+    // show an identifier chip — even before the tracker transitions to
+    // running/waiting. aggregateAgentBadges consumes process items from
+    // the status registry; a muted item means "agent live, no active
+    // work" and must render a visible dot.
+    const { setStatusItem, clearAllStatusForWorkspace } =
+      await import("../lib/services/status-registry");
+    const ws = makeWorkspace("ws-agent", "Agent WS");
+    setStatusItem("_agent", ws.id, "surface:s1", {
+      category: "process",
+      priority: 0,
+      label: "idle",
+      variant: "muted",
+      metadata: { surfaceId: "s1" },
+    });
+    const { container } = render(WorkspaceItem, {
+      props: {
+        workspace: ws,
+        index: 0,
+        isActive: false,
+        onSelect: noop,
+        onClose: noop,
+        onRename: noop,
+        onContextMenu: noop,
+      },
+    });
+    expect(
+      container.querySelector("[data-agent-presence-chip]"),
+    ).not.toBeNull();
+    clearAllStatusForWorkspace(ws.id);
+  });
+
+  it("suppresses the notification row when nested inside a workspace group", () => {
+    // Regression: nested workspaces render under a group's colored
+    // banner that already rolls up status; the long blue notification
+    // row duplicates chrome and crowds the nested layout, so it's
+    // suppressed when metadata.groupId is set.
+    const surface = makeSurface("s1", { notification: "Build complete" });
+    const pane = makePane("p1", [surface]);
+    const ws = makeWorkspace("ws1", "Nested WS", pane);
+    ws.metadata = { groupId: "g1" };
+    render(WorkspaceItem, {
+      props: {
+        workspace: ws,
+        index: 0,
+        isActive: true,
+        onSelect: noop,
+        onClose: noop,
+        onRename: noop,
+        onContextMenu: noop,
+      },
+    });
+    expect(screen.queryByText("Build complete")).toBeNull();
+  });
+
   it("is reorderable via mouse drag", () => {
     const { container } = renderWorkspaceItem();
     const el = container.querySelector("[data-drag-idx]");
@@ -887,6 +990,68 @@ describe("WorkspaceItem", () => {
     expect(source).toContain("export let accentColor");
     expect(source).toContain("{accentColor}");
   });
+
+  it("does not render a dashboard icon when no dashboardHint is provided", () => {
+    const { container } = renderWorkspaceItem();
+    expect(
+      container.querySelector("[data-workspace-dashboard-icon]"),
+    ).toBeNull();
+  });
+
+  it("renders a clickable dashboard icon when dashboardHint is provided", async () => {
+    const hintOnClick = vi.fn();
+    const ws = makeWorkspace("ws-nested", "Nested WS");
+    const { container } = render(WorkspaceItem, {
+      props: {
+        workspace: ws,
+        index: 0,
+        isActive: false,
+        onSelect: noop,
+        onClose: noop,
+        onRename: noop,
+        onContextMenu: noop,
+        dashboardHint: {
+          id: "dash-1",
+          color: "#ff8800",
+          onClick: hintOnClick,
+        },
+      },
+    });
+    const icon = container.querySelector(
+      "[data-workspace-dashboard-icon]",
+    ) as HTMLElement | null;
+    expect(icon).not.toBeNull();
+    await fireEvent.click(icon!);
+    expect(hintOnClick).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not trigger workspace select when the dashboard icon is clicked", async () => {
+    const onSelect = vi.fn();
+    const hintOnClick = vi.fn();
+    const ws = makeWorkspace("ws-nested", "Nested WS");
+    const { container } = render(WorkspaceItem, {
+      props: {
+        workspace: ws,
+        index: 0,
+        isActive: false,
+        onSelect,
+        onClose: noop,
+        onRename: noop,
+        onContextMenu: noop,
+        dashboardHint: {
+          id: "dash-1",
+          color: "#ff8800",
+          onClick: hintOnClick,
+        },
+      },
+    });
+    const icon = container.querySelector(
+      "[data-workspace-dashboard-icon]",
+    ) as HTMLElement;
+    await fireEvent.click(icon);
+    expect(hintOnClick).toHaveBeenCalledTimes(1);
+    expect(onSelect).not.toHaveBeenCalled();
+  });
 });
 
 // ===========================================================================
@@ -911,6 +1076,81 @@ describe("PaneView", () => {
       },
     });
     expect(screen.getByText("Pane Tab")).toBeTruthy();
+  });
+
+  it("does not render an Overview/Settings tab strip over Group Dashboards", () => {
+    // The Settings dashboard is now its own contribution (gear icon,
+    // auto-provisioned). PaneView no longer wraps the Group Dashboard
+    // preview in an Overview/Settings tab strip.
+    const ws: Workspace = {
+      id: "ws-dash",
+      name: "Dashboard",
+      splitRoot: { type: "pane", pane: makePane("p1") },
+      activePaneId: "p1",
+      metadata: {
+        isDashboard: true,
+        groupId: "g1",
+        dashboardContributionId: "group",
+      },
+    };
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+    const pane = ws.splitRoot.type === "pane" ? ws.splitRoot.pane : null;
+    if (!pane) throw new Error("expected single-pane workspace");
+    const { container } = render(PaneView, {
+      props: {
+        pane,
+        workspaceId: ws.id,
+        onSelectSurface: noop,
+        onCloseSurface: noop,
+        onNewSurface: noop,
+        onSelectSurfaceType: noop,
+        onSplitRight: noop,
+        onSplitDown: noop,
+        onClosePane: noop,
+        onFocusPane: noop,
+      },
+    });
+    expect(container.querySelector("[data-group-dashboard-tabs]")).toBeNull();
+    expect(container.querySelector("[data-group-dashboard-tab]")).toBeNull();
+  });
+
+  it("renders GroupDashboardSettings for a settings-contribution workspace", () => {
+    // Settings contribution → PaneView swaps the surface list for the
+    // shared settings body.
+    const ws: Workspace = {
+      id: "ws-settings",
+      name: "Settings",
+      splitRoot: { type: "pane", pane: makePane("p1") },
+      activePaneId: "p1",
+      metadata: {
+        isDashboard: true,
+        groupId: "g1",
+        dashboardContributionId: "settings",
+      },
+    };
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+    const pane = ws.splitRoot.type === "pane" ? ws.splitRoot.pane : null;
+    if (!pane) throw new Error("expected single-pane workspace");
+    const { container } = render(PaneView, {
+      props: {
+        pane,
+        workspaceId: ws.id,
+        onSelectSurface: noop,
+        onCloseSurface: noop,
+        onNewSurface: noop,
+        onSelectSurfaceType: noop,
+        onSplitRight: noop,
+        onSplitDown: noop,
+        onClosePane: noop,
+        onFocusPane: noop,
+      },
+    });
+    // GroupDashboardSettings renders a settings panel keyed by groupId.
+    // Absent a matching group in the store it renders nothing, but the
+    // render branch is still reached — no tab strip appears either way.
+    expect(container.querySelector("[data-group-dashboard-tabs]")).toBeNull();
   });
 
   it("renders the + button via the embedded TabBar", () => {
@@ -959,7 +1199,6 @@ describe("PaneView", () => {
 describe("PrimarySidebar", () => {
   const sidebarProps = {
     onSwitchWorkspace: noop,
-    onCloseWorkspace: noop,
     onRenameWorkspace: noop,
     onNewSurface: noop,
   };
@@ -1174,6 +1413,69 @@ describe("PrimarySidebar", () => {
   });
 });
 
+// ===========================================================================
+// WorkspaceGroupSectionContent — per-group "+ New" split button
+// ===========================================================================
+
+describe("WorkspaceGroupSectionContent", () => {
+  beforeEach(() => {
+    resetWorkspaceActions();
+    setWorkspaceGroups([]);
+    cleanup();
+  });
+
+  it("picks up workspace actions registered AFTER the component mounts", async () => {
+    // Regression: `$: actions = getWorkspaceActions().filter(...)` used to
+    // read the store via `get()`, which doesn't create a Svelte dep. When
+    // extensions activated after the component mounted (e.g. the worktree-
+    // workspaces extension), the per-group "+ New" dropdown stayed stale
+    // until the next render nudge. Now the statement reads the store
+    // directly so extension-registered actions appear live.
+    registerWorkspaceAction({
+      id: "core:new-workspace",
+      label: "New Workspace",
+      icon: "plus",
+      source: "core",
+      handler: noop,
+    });
+    const group: WorkspaceGroupEntry = {
+      id: "grp-1",
+      name: "Test Group",
+      path: "/tmp/test-group",
+      color: "mint",
+      workspaceIds: [],
+      isGit: true,
+      createdAt: new Date().toISOString(),
+    };
+    setWorkspaceGroups([group]);
+
+    render(WorkspaceGroupSectionHarness, { props: { groupId: "grp-1" } });
+
+    // Pre-registration: only the "+ New" main button, no caret.
+    let splitContainer = screen.getByText("+ New").closest("div")!;
+    expect(splitContainer.querySelectorAll("button").length).toBe(1);
+
+    // Activate the worktree-workspaces-style action after mount.
+    registerWorkspaceAction({
+      id: "worktree-workspaces:create-worktree",
+      label: "New Worktree",
+      icon: "git-branch",
+      source: "worktree-workspaces",
+      handler: noop,
+      when: (ctx) => !ctx.groupId || ctx.isGit === true,
+    });
+    await tick();
+
+    // Caret now renders and the dropdown exposes the new action.
+    splitContainer = screen.getByText("+ New").closest("div")!;
+    const buttons = splitContainer.querySelectorAll("button");
+    expect(buttons.length).toBe(2);
+    const caretBtn = buttons[buttons.length - 1] as HTMLElement;
+    await fireEvent.click(caretBtn);
+    expect(screen.getByText("New Worktree")).toBeTruthy();
+  });
+});
+
 // ---------------------------------------------------------------------------
 // TerminalSurface
 // ---------------------------------------------------------------------------
@@ -1215,5 +1517,482 @@ describe("TerminalSurface", () => {
 
     expect(surface.fitAddon.fit).toHaveBeenCalled();
     expect(surface.terminal.scrollToBottom).toHaveBeenCalled();
+  });
+
+  it("does not call scrollToBottom on store-churn re-render while already visible", async () => {
+    const surface = makeSurface("no-churn-test", { opened: true });
+    // Start visible
+    const { rerender } = render(TerminalSurfaceComponent, {
+      props: { surface, visible: true },
+    });
+    await new Promise((r) => requestAnimationFrame(r));
+
+    // Reset mocks after initial mount + first visible render
+    (surface.fitAddon.fit as ReturnType<typeof vi.fn>).mockClear();
+    (surface.terminal.scrollToBottom as ReturnType<typeof vi.fn>).mockClear();
+
+    // Re-render with visible still true — simulates store churn (e.g. markSurfaceUnreadById)
+    await rerender({ surface, visible: true });
+    await new Promise((r) => requestAnimationFrame(r));
+
+    // Edge-triggered block must NOT fire — visible did not transition false→true
+    expect(surface.terminal.scrollToBottom).not.toHaveBeenCalled();
+    expect(surface.fitAddon.fit).not.toHaveBeenCalled();
+  });
+
+  it("sets data-scrolled-up when terminal is scrolled up", async () => {
+    const surface = makeSurface("jump-btn-test", { opened: true });
+    let scrollCallback: ((pos: number) => void) | undefined;
+    (surface.terminal.onScroll as ReturnType<typeof vi.fn>).mockImplementation(
+      (cb: (pos: number) => void) => {
+        scrollCallback = cb;
+        return { dispose: vi.fn() };
+      },
+    );
+    (surface.terminal.buffer.active as Record<string, unknown>).length = 100;
+    (surface.terminal as Record<string, unknown>).rows = 24;
+
+    const { container } = render(TerminalSurfaceComponent, {
+      props: { surface, visible: true },
+    });
+
+    // Not scrolled up at bottom
+    expect(container.querySelector("[data-scrolled-up]")).toBeNull();
+
+    // Simulate user scrolling up (pos 0 < 100-24=76)
+    scrollCallback?.(0);
+    await tick();
+
+    expect(container.querySelector("[data-scrolled-up]")).not.toBeNull();
+  });
+
+  it("clears data-scrolled-up when user scrolls back to bottom", async () => {
+    const surface = makeSurface("jump-btn-hide-test", { opened: true });
+    let scrollCallback: ((pos: number) => void) | undefined;
+    (surface.terminal.onScroll as ReturnType<typeof vi.fn>).mockImplementation(
+      (cb: (pos: number) => void) => {
+        scrollCallback = cb;
+        return { dispose: vi.fn() };
+      },
+    );
+    (surface.terminal.buffer.active as Record<string, unknown>).length = 100;
+    (surface.terminal as Record<string, unknown>).rows = 24;
+
+    const { container } = render(TerminalSurfaceComponent, {
+      props: { surface, visible: true },
+    });
+
+    // Scroll up
+    scrollCallback?.(0);
+    await tick();
+    expect(container.querySelector("[data-scrolled-up]")).not.toBeNull();
+
+    // Scroll back to bottom (pos 76 = 100-24)
+    scrollCallback?.(76);
+    await tick();
+    expect(container.querySelector("[data-scrolled-up]")).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// WorkspaceItem — harness sub-row
+// ---------------------------------------------------------------------------
+
+describe("WorkspaceItem — harness sub-row", () => {
+  it("shows sub-row when the active surface has a detected agent", async () => {
+    const { setStatusItem, clearAllStatusForWorkspace } =
+      await import("../lib/services/status-registry");
+
+    const surface = makeSurface("s1", { title: "claude > fixing bug" });
+    const pane = makePane("p1", [surface]);
+    const ws = makeWorkspace("ws-harness", "Harness WS", pane);
+
+    setStatusItem("_agent", ws.id, "surface:s1", {
+      category: "process",
+      priority: 0,
+      label: "running",
+      variant: "success",
+      metadata: { surfaceId: "s1" },
+    });
+
+    const { container } = render(WorkspaceItem, {
+      props: {
+        workspace: ws,
+        index: 0,
+        isActive: true,
+        onSelect: noop,
+        onClose: noop,
+        onRename: noop,
+        onContextMenu: noop,
+      },
+    });
+
+    expect(container.querySelector("[data-harness-title-row]")).not.toBeNull();
+    expect(screen.getByText("claude > fixing bug")).toBeTruthy();
+    clearAllStatusForWorkspace(ws.id);
+  });
+
+  it("hides sub-row when agent is on a non-active surface", async () => {
+    const { setStatusItem, clearAllStatusForWorkspace } =
+      await import("../lib/services/status-registry");
+
+    const active = makeSurface("s-active", { title: "Shell" });
+    const other = makeSurface("s-agent", { title: "claude" });
+    const pane: Pane = {
+      id: "p1",
+      surfaces: [active, other],
+      activeSurfaceId: "s-active",
+    };
+    const ws: Workspace = {
+      id: "ws-hidden",
+      name: "Hidden",
+      splitRoot: { type: "pane", pane },
+      activePaneId: "p1",
+    };
+
+    setStatusItem("_agent", ws.id, "surface:s-agent", {
+      category: "process",
+      priority: 0,
+      label: "idle",
+      variant: "muted",
+      metadata: { surfaceId: "s-agent" },
+    });
+
+    const { container } = render(WorkspaceItem, {
+      props: {
+        workspace: ws,
+        index: 0,
+        isActive: true,
+        onSelect: noop,
+        onClose: noop,
+        onRename: noop,
+        onContextMenu: noop,
+      },
+    });
+
+    expect(container.querySelector("[data-harness-title-row]")).toBeNull();
+    clearAllStatusForWorkspace(ws.id);
+  });
+
+  it("hides sub-row when hideStatusBadges is true", async () => {
+    const { setStatusItem, clearAllStatusForWorkspace } =
+      await import("../lib/services/status-registry");
+
+    const surface = makeSurface("s1", { title: "claude" });
+    const pane = makePane("p1", [surface]);
+    const ws = makeWorkspace("ws-hidden2", "Hidden2", pane);
+
+    setStatusItem("_agent", ws.id, "surface:s1", {
+      category: "process",
+      priority: 0,
+      label: "idle",
+      variant: "muted",
+      metadata: { surfaceId: "s1" },
+    });
+
+    const { container } = render(WorkspaceItem, {
+      props: {
+        workspace: ws,
+        index: 0,
+        isActive: true,
+        hideStatusBadges: true,
+        onSelect: noop,
+        onClose: noop,
+        onRename: noop,
+        onContextMenu: noop,
+      },
+    });
+
+    expect(container.querySelector("[data-harness-title-row]")).toBeNull();
+    clearAllStatusForWorkspace(ws.id);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TerminalSurface — image drag-drop
+// ---------------------------------------------------------------------------
+
+describe("TerminalSurface — image drag-drop", () => {
+  it("sends \\x16 to PTY for image-only drop and writes image to clipboard", async () => {
+    const { invoke: mockInvokeCore } = await import("@tauri-apps/api/core");
+    const invokespy = vi.mocked(mockInvokeCore);
+    const { writeImage } = await import("@tauri-apps/plugin-clipboard-manager");
+    const writeImageSpy = vi.mocked(writeImage);
+
+    invokespy.mockClear();
+    writeImageSpy.mockClear();
+
+    const surface = makeSurface("s1", { ptyId: 42 });
+    render(TerminalSurfaceComponent, {
+      props: { surface, visible: true },
+    });
+
+    // Simulate Tauri native drag-drop event with an image path
+    const { listen } = await import("@tauri-apps/api/event");
+    const listenSpy = vi.mocked(listen);
+    const dragDropCallback = listenSpy.mock.calls
+      .flatMap((c) => (c[0] === "tauri://drag-drop" ? [c[1]] : []))
+      .at(-1) as ((e: { payload: { paths: string[] } }) => void) | undefined;
+
+    if (dragDropCallback) {
+      dragDropCallback({
+        payload: { paths: ["/tmp/screenshot.png"] },
+      });
+      await new Promise((r) => setTimeout(r, 10));
+
+      expect(writeImageSpy).toHaveBeenCalledWith("/tmp/screenshot.png");
+      const writePtyCall = invokespy.mock.calls.find(
+        (c) =>
+          c[0] === "write_pty" &&
+          (c[1] as Record<string, unknown>)?.data === "\x16",
+      );
+      expect(writePtyCall).toBeDefined();
+    }
+  });
+
+  it("sends shell-escaped path for non-image drop (unchanged behavior)", async () => {
+    const { invoke: mockInvokeCore } = await import("@tauri-apps/api/core");
+    const invokespy = vi.mocked(mockInvokeCore);
+    invokespy.mockClear();
+
+    const surface = makeSurface("s2", { ptyId: 43 });
+    render(TerminalSurfaceComponent, {
+      props: { surface, visible: true },
+    });
+
+    const { listen } = await import("@tauri-apps/api/event");
+    const listenSpy = vi.mocked(listen);
+    const dragDropCallback = listenSpy.mock.calls
+      .flatMap((c) => (c[0] === "tauri://drag-drop" ? [c[1]] : []))
+      .at(-1) as ((e: { payload: { paths: string[] } }) => void) | undefined;
+
+    if (dragDropCallback) {
+      dragDropCallback({
+        payload: { paths: ["/tmp/somefile.txt"] },
+      });
+      await new Promise((r) => setTimeout(r, 10));
+
+      const writePtyCall = invokespy.mock.calls.find(
+        (c) => c[0] === "write_pty",
+      );
+      expect(writePtyCall).toBeDefined();
+      const data = (writePtyCall![1] as Record<string, unknown>)
+        ?.data as string;
+      expect(data).toContain("somefile.txt");
+      expect(data).not.toBe("\x16");
+    }
+  });
+
+  it("handles HTML5 drop of image file without .path (Mac screenshot thumbnail)", async () => {
+    const { invoke: mockInvokeCore } = await import("@tauri-apps/api/core");
+    const invokespy = vi.mocked(mockInvokeCore);
+    const { writeImage } = await import("@tauri-apps/plugin-clipboard-manager");
+    const writeImageSpy = vi.mocked(writeImage);
+
+    invokespy.mockClear();
+    writeImageSpy.mockClear();
+
+    const surface = makeSurface("s3", { ptyId: 44 });
+    const { container } = render(TerminalSurfaceComponent, {
+      props: { surface, visible: true },
+    });
+
+    // Simulate a File with image MIME type but no .path (promised file)
+    const imageBytes = new Uint8Array([137, 80, 78, 71]); // PNG magic bytes
+    const imageFile = new File([imageBytes], "Screenshot.png", {
+      type: "image/png",
+    });
+    // No .path property (unlike Tauri-extended File objects)
+
+    // JSDOM doesn't implement DragEvent; use a plain Event with dataTransfer injected
+    const dropEvent = new Event("drop", { bubbles: true, cancelable: true });
+    Object.defineProperty(dropEvent, "dataTransfer", {
+      value: { files: [imageFile], items: [] },
+    });
+
+    const termDiv = container.firstElementChild as HTMLElement;
+    termDiv.dispatchEvent(dropEvent);
+
+    await vi.waitFor(() => {
+      expect(writeImageSpy).toHaveBeenCalledWith(expect.any(ArrayBuffer));
+    });
+    await vi.waitFor(() => {
+      const writePtyCall = invokespy.mock.calls.find(
+        (c) =>
+          c[0] === "write_pty" &&
+          (c[1] as Record<string, unknown>)?.data === "\x16",
+      );
+      expect(writePtyCall).toBeDefined();
+    });
+  });
+
+  it("handles HTML5 drop via items when files is empty (some drag sources)", async () => {
+    const { invoke: mockInvokeCore } = await import("@tauri-apps/api/core");
+    const invokespy = vi.mocked(mockInvokeCore);
+    const { writeImage } = await import("@tauri-apps/plugin-clipboard-manager");
+    const writeImageSpy = vi.mocked(writeImage);
+
+    invokespy.mockClear();
+    writeImageSpy.mockClear();
+
+    const surface = makeSurface("s4", { ptyId: 45 });
+    const { container } = render(TerminalSurfaceComponent, {
+      props: { surface, visible: true },
+    });
+
+    const imageBytes = new Uint8Array([137, 80, 78, 71]);
+    const imageFile = new File([imageBytes], "screenshot.png", {
+      type: "image/png",
+    });
+
+    // JSDOM doesn't implement DragEvent; use a plain Event with dataTransfer injected
+    const dropEvent = new Event("drop", { bubbles: true, cancelable: true });
+    Object.defineProperty(dropEvent, "dataTransfer", {
+      value: {
+        files: [], // empty files list
+        items: [
+          { kind: "file", type: "image/png", getAsFile: () => imageFile },
+        ],
+      },
+    });
+
+    const termDiv = container.firstElementChild as HTMLElement;
+    termDiv.dispatchEvent(dropEvent);
+
+    await vi.waitFor(() => {
+      expect(writeImageSpy).toHaveBeenCalledWith(expect.any(ArrayBuffer));
+    });
+    await vi.waitFor(() => {
+      const writePtyCall = invokespy.mock.calls.find(
+        (c) =>
+          c[0] === "write_pty" &&
+          (c[1] as Record<string, unknown>)?.data === "\x16",
+      );
+      expect(writePtyCall).toBeDefined();
+    });
+  });
+});
+
+describe("PreviewSurface link interception", () => {
+  it("clicking an https anchor calls open_url and prevents navigation", async () => {
+    const { invoke: invokeFn } = await import("@tauri-apps/api/core");
+    const invokeMockFn = vi.mocked(invokeFn);
+    invokeMockFn.mockClear();
+
+    vi.mock("../lib/services/preview-service", () => ({
+      openPreview: vi.fn().mockResolvedValue({
+        element: document.createElement("div"),
+        watchId: 0,
+        dispose: vi.fn(),
+      }),
+    }));
+
+    vi.mock("../lib/services/preview-surface-registry", () => ({
+      registerPreviewSurface: vi.fn(),
+      unregisterPreviewSurface: vi.fn(),
+    }));
+
+    const { default: PreviewSurface } =
+      await import("../lib/components/PreviewSurface.svelte");
+    const surface = {
+      id: "ps-link-test",
+      kind: "preview" as const,
+      title: "Test",
+      path: "/tmp/test.md",
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { container } = render(PreviewSurface as any, {
+      props: { surface, visible: true },
+    });
+    await tick();
+
+    const previewRoot = container.querySelector("[data-preview-surface-id]")!;
+    const a = document.createElement("a");
+    a.href = "https://example.com";
+    previewRoot.appendChild(a);
+
+    const clickEvent = new MouseEvent("click", { bubbles: true });
+    let defaultPrevented = false;
+    clickEvent.preventDefault = () => {
+      defaultPrevented = true;
+    };
+    a.dispatchEvent(clickEvent);
+
+    expect(invokeMockFn).toHaveBeenCalledWith("open_url", {
+      url: "https://example.com",
+    });
+    expect(defaultPrevented).toBe(true);
+  });
+
+  it("clicking a relative or anchor href does NOT call open_url", async () => {
+    const { invoke: invokeFn } = await import("@tauri-apps/api/core");
+    const invokeMockFn = vi.mocked(invokeFn);
+    invokeMockFn.mockClear();
+
+    // Re-use the same component render approach
+    const { default: PreviewSurface } =
+      await import("../lib/components/PreviewSurface.svelte");
+    const surface = {
+      id: "ps-link-test-neg",
+      kind: "preview" as const,
+      title: "Test",
+      path: "/tmp/test2.md",
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { container } = render(PreviewSurface as any, {
+      props: { surface, visible: true },
+    });
+    await tick();
+
+    const previewRoot = container.querySelector("[data-preview-surface-id]")!;
+
+    for (const href of ["#section", "./page.html", "mailto:x@y.com"]) {
+      const a = document.createElement("a");
+      a.setAttribute("href", href);
+      previewRoot.appendChild(a);
+      a.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      a.remove();
+    }
+
+    expect(invokeMockFn).not.toHaveBeenCalledWith(
+      "open_url",
+      expect.anything(),
+    );
+  });
+});
+
+describe("terminal link handling", () => {
+  it("WebLinksAddon is constructed with a custom handler that invokes open_url", async () => {
+    const { WebLinksAddon: WebLinksAddonMock } =
+      await import("@xterm/addon-web-links");
+    // WebLinksAddon constructor: new WebLinksAddon(handler?, options?)
+    const WebLinksAddonCtor = vi.mocked(
+      WebLinksAddonMock as unknown as new (
+        handler: (e: MouseEvent, url: string) => void,
+      ) => object,
+    );
+    const { invoke: invokeMock } = await import("@tauri-apps/api/core");
+    const invokeMockFn = vi.mocked(invokeMock);
+    invokeMockFn.mockClear();
+    WebLinksAddonCtor.mockClear();
+
+    const { createTerminalSurface } = await import("../lib/terminal-service");
+    const fakePane = { id: "p-link-test", surfaces: [], activeSurfaceId: null };
+    await createTerminalSurface(
+      fakePane as unknown as Parameters<typeof createTerminalSurface>[0],
+    );
+
+    expect(WebLinksAddonCtor).toHaveBeenCalledWith(expect.any(Function));
+
+    // Extract and invoke the handler directly (first positional argument)
+    const handler = WebLinksAddonCtor.mock.calls[
+      WebLinksAddonCtor.mock.calls.length - 1
+    ][0] as (e: MouseEvent, url: string) => void;
+    handler(new MouseEvent("click"), "https://example.com");
+
+    expect(invokeMockFn).toHaveBeenCalledWith("open_url", {
+      url: "https://example.com",
+    });
   });
 });

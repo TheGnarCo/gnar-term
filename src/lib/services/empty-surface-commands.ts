@@ -7,7 +7,7 @@
  * entries safely reference extensions that may not be installed.
  */
 export const EMPTY_SURFACE_COMMAND_IDS: string[] = [
-  // project-scope:create-project removed: "New Project..." now
+  // workspace-groups:create-workspace-group removed: "New Project..." now
   // surfaces via the project-scope workspaceAction (rendered
   // automatically by EmptySurface alongside "New Workspace"), so
   // keeping the command id here would double-render it.

@@ -21,6 +21,8 @@ import { unregisterRootRowRenderersBySource } from "./root-row-renderer-registry
 import { unregisterThemesBySource } from "./theme-registry";
 import { unregisterMarkdownComponentsBySource } from "./markdown-component-registry";
 import { unregisterChildRowContributorsBySource } from "./child-row-contributor-registry";
+import { unregisterDashboardContributionsBySource } from "./dashboard-contribution-registry";
+import { unregisterPseudoWorkspacesBySource } from "./pseudo-workspace-registry";
 import { unregisterMcpToolsBySource } from "./mcp-server";
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 
@@ -41,6 +43,7 @@ export const EXTENSION_ALLOWED_COMMANDS: Set<string> = new Set([
   "unwatch_file",
   "show_in_file_manager",
   "open_with_default_app",
+  "open_url",
   "find_file",
   // Git worktree commands
   "create_worktree",
@@ -56,11 +59,13 @@ export const EXTENSION_ALLOWED_COMMANDS: Set<string> = new Set([
   // GitHub CLI commands
   "gh_list_issues",
   "gh_list_prs",
+  "gh_available",
   // Git info commands
   "git_log",
   "git_status",
   "git_diff",
   "git_merge",
+  "git_remote_url",
 ]);
 
 // PTY commands — only available to extensions with "pty" permission
@@ -161,13 +166,13 @@ export const REGISTRY_CLEANUP_FNS: Array<(source: string) => void> = [
   unregisterThemesBySource,
   unregisterMarkdownComponentsBySource,
   unregisterChildRowContributorsBySource,
+  unregisterDashboardContributionsBySource,
+  unregisterPseudoWorkspacesBySource,
   unregisterMcpToolsBySource,
 ];
 
 // --- Valid event types (for manifest validation) ---
 
-// Typed as AppEventType[] so TypeScript catches drift — a new event added
-// to the bus but missing here will produce a compile error.
 const VALID_EVENT_LIST: AppEventType[] = [
   "workspace:created",
   "workspace:activated",
@@ -182,5 +187,8 @@ const VALID_EVENT_LIST: AppEventType[] = [
   "surface:titleChanged",
   "sidebar:toggled",
   "theme:changed",
+  "worktree:merged",
+  "agent:statusChanged",
+  "surface:ptyReady",
 ];
 export const VALID_EVENTS: Set<string> = new Set(VALID_EVENT_LIST);

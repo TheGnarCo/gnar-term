@@ -68,6 +68,10 @@ export function clearPreviewers() {
   previewers.length = 0;
 }
 
+export function getPreviewers(): Previewer[] {
+  return [...previewers];
+}
+
 export function canPreview(filePath: string): boolean {
   const ext = getExtension(filePath);
   return previewers.some((p) => p.extensions.includes(ext));

@@ -6,8 +6,8 @@ const WORKSPACE_LIST_BLOCK = readFileSync(
   "utf-8",
 ).replace(/\s+/g, " ");
 
-const PROJECT_SECTION_CONTENT = readFileSync(
-  "src/extensions/project-scope/ProjectSectionContent.svelte",
+const GROUP_SECTION_CONTENT = readFileSync(
+  "src/lib/components/WorkspaceGroupSectionContent.svelte",
   "utf-8",
 ).replace(/\s+/g, " ");
 
@@ -51,43 +51,43 @@ describe("per-project overlay (via WorkspaceListBlock shell)", () => {
     expect(WORKSPACE_LIST_BLOCK).toMatch(/rendererLabel/);
   });
 
-  it("project-scope registers color + label resolvers on the row renderer", () => {
-    // project-scope provides the resolvers so core can paint the
-    // project's overlay and ghost without reaching into extension
-    // state directly.
-    const PROJECT_SCOPE = readFileSync(
-      "src/extensions/project-scope/index.ts",
+  it("core bootstrap registers color + label resolvers on the row renderer", () => {
+    // Core (bootstrap/init-workspace-groups.ts) provides the resolvers
+    // so core can paint the group's overlay and ghost without reaching
+    // into extension state directly.
+    const BOOTSTRAP = readFileSync(
+      "src/lib/bootstrap/init-workspace-groups.ts",
       "utf-8",
     );
-    expect(PROJECT_SCOPE).toMatch(/railColor:/);
-    expect(PROJECT_SCOPE).toMatch(/label:/);
-    expect(PROJECT_SCOPE).toMatch(/resolveProjectColor/);
+    expect(BOOTSTRAP).toMatch(/railColor:/);
+    expect(BOOTSTRAP).toMatch(/label:/);
+    expect(BOOTSTRAP).toMatch(/resolveProjectColor/);
   });
 
-  it("ProjectSectionContent accepts a unified overlay prop supporting strong + light", () => {
-    expect(PROJECT_SECTION_CONTENT).toMatch(/export let overlay/);
-    expect(PROJECT_SECTION_CONTENT).toMatch(/kind:\s*"strong"/);
-    expect(PROJECT_SECTION_CONTENT).toMatch(/kind:\s*"light"/);
+  it("WorkspaceGroupSectionContent accepts a unified overlay prop supporting strong + light", () => {
+    expect(GROUP_SECTION_CONTENT).toMatch(/export let overlay/);
+    expect(GROUP_SECTION_CONTENT).toMatch(/kind:\s*"strong"/);
+    expect(GROUP_SECTION_CONTENT).toMatch(/kind:\s*"light"/);
   });
 
-  it("ProjectSectionContent renders one overlay spanning the whole project block; label only for strong", () => {
-    expect(PROJECT_SECTION_CONTENT).toMatch(/\{#if overlay\}/);
-    expect(PROJECT_SECTION_CONTENT).toMatch(/overlay\.kind\s*===\s*"strong"/);
-    expect(PROJECT_SECTION_CONTENT).toMatch(/overlay\.label/);
+  it("WorkspaceGroupSectionContent renders one overlay spanning the whole group block; label only for strong", () => {
+    expect(GROUP_SECTION_CONTENT).toMatch(/\{#if overlay\}/);
+    expect(GROUP_SECTION_CONTENT).toMatch(/overlay\.kind\s*===\s*"strong"/);
+    expect(GROUP_SECTION_CONTENT).toMatch(/overlay\.label/);
   });
 
-  it("ProjectSectionContent paints the strong overlay with the project's own color", () => {
-    // Non-source projects during a project drag render a solid colored
-    // tile using the theme-resolved project color.
-    expect(PROJECT_SECTION_CONTENT).toMatch(
-      /overlay\.kind\s*===\s*["']strong["'][\s\S]*?projectHex/,
+  it("WorkspaceGroupSectionContent paints the strong overlay with the group's own color", () => {
+    // Non-source groups during a group drag render a solid colored
+    // tile using the theme-resolved group color.
+    expect(GROUP_SECTION_CONTENT).toMatch(
+      /overlay\.kind\s*===\s*["']strong["'][\s\S]*?groupHex/,
     );
-    expect(PROJECT_SECTION_CONTENT).toMatch(
-      /projectHex\s*=\s*[^\n]*resolveProjectColor\(project\.color,\s*\$theme\)/,
+    expect(GROUP_SECTION_CONTENT).toMatch(
+      /groupHex\s*=\s*[^\n]*resolveProjectColor\(group\.color,\s*\$theme\)/,
     );
   });
 
-  it("ProjectSectionContent uses the light dim (black-40) for the light variant", () => {
-    expect(PROJECT_SECTION_CONTENT).toMatch(/rgba\(0,\s*0,\s*0,\s*0\.4\)/);
+  it("WorkspaceGroupSectionContent uses the light dim (black-40) for the light variant", () => {
+    expect(GROUP_SECTION_CONTENT).toMatch(/rgba\(0,\s*0,\s*0,\s*0\.4\)/);
   });
 });

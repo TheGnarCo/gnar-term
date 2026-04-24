@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { theme } from "../stores/theme";
   import {
     isFullscreen,
@@ -7,6 +8,23 @@
     settingsOpen,
   } from "../stores/ui";
   import { isMac, modLabel } from "../terminal-service";
+  import { isDebugBuild } from "../services/service-helpers";
+
+  // Single source of truth: cfg!(debug_assertions) from Rust, exposed via the
+  // is_debug_build command. True for `tauri dev` and `tauri build --debug`,
+  // false for `tauri build` (release). Seeded with import.meta.env.DEV to
+  // avoid a flash on the dev server while the async command resolves.
+  let isDev = import.meta.env.DEV;
+  onMount(async () => {
+    isDev = await isDebugBuild();
+  });
+
+  const DEV_BG = "#C8900A";
+  const DEV_FG = "#1C0F00";
+
+  $: bg = isDev ? DEV_BG : $theme.bg;
+  $: fg = isDev ? DEV_FG : $theme.fgDim;
+  $: fgActive = isDev ? DEV_FG : $theme.fg;
 
   let btnStyle = "";
   $: btnStyle = `
@@ -30,14 +48,13 @@
   style="
     height: 38px; flex-shrink: 0; display: flex; align-items: center;
     padding: 0 8px 0 {leftPadding}; -webkit-app-region: drag;
-    background: {$theme.bg}; border-bottom: 1px solid {$theme.border};
+    background: {bg}; border-bottom: 1px solid {isDev ? DEV_FG : $theme.border};
   "
 >
   <button
-    style="{btnStyle} color: {$primarySidebarVisible
-      ? $theme.fg
-      : $theme.fgDim};"
+    style="{btnStyle} color: {$primarySidebarVisible ? fgActive : fg};"
     title="Toggle Primary Sidebar ({modLabel}B)"
+    aria-label="Toggle Primary Sidebar"
     on:click={() => primarySidebarVisible.update((v) => !v)}
   >
     <svg
@@ -62,14 +79,15 @@
     <span
       style="
       font-size: 11px; font-weight: 600; letter-spacing: 1.5px;
-      color: {$theme.fgDim};
-    ">GNARTERM</span
+      color: {fg};
+    ">{isDev ? "GNARTERM (DEV)" : "GNARTERM"}</span
     >
   </div>
 
   <button
-    style="{btnStyle} color: {$settingsOpen ? $theme.fg : $theme.fgDim};"
+    style="{btnStyle} color: {$settingsOpen ? fgActive : fg};"
     title="Settings ({modLabel},)"
+    aria-label="Settings"
     on:click={() => settingsOpen.update((v) => !v)}
   >
     <svg
@@ -86,10 +104,9 @@
   </button>
 
   <button
-    style="{btnStyle} color: {$secondarySidebarVisible
-      ? $theme.fg
-      : $theme.fgDim};"
+    style="{btnStyle} color: {$secondarySidebarVisible ? fgActive : fg};"
     title="Toggle Secondary Sidebar"
+    aria-label="Toggle Secondary Sidebar"
     on:click={() => secondarySidebarVisible.update((v) => !v)}
   >
     <svg

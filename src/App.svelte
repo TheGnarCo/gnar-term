@@ -2,7 +2,9 @@
   import { onMount } from "svelte";
   import { listen } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
+  import { ask } from "@tauri-apps/plugin-dialog";
   import { theme, themes, xtermTheme } from "./lib/stores/theme";
+  import { fontSize, setFontSizeFromConfig } from "./lib/stores/font-size";
   import {
     isFullscreen,
     primarySidebarVisible,
@@ -19,7 +21,13 @@
     activeWorkspaceIdx,
     activePane,
     activeSurface,
+    activePseudoWorkspaceId,
   } from "./lib/stores/workspace";
+  import { pseudoWorkspaceStore } from "./lib/services/pseudo-workspace-registry";
+  import {
+    rootRowOrder,
+    bootstrapRootRowOrder,
+  } from "./lib/stores/root-row-order";
   import { get } from "svelte/store";
   import { invoke } from "@tauri-apps/api/core";
   import { loadConfig, saveConfig, getWorkspaceCommands } from "./lib/config";
@@ -31,7 +39,8 @@
     modLabel,
     shiftModLabel,
   } from "./lib/terminal-service";
-  import { getAllSurfaces, getAllPanes, isTerminalSurface } from "./lib/types";
+  import { getAllPanes, getAllSurfaces, isTerminalSurface } from "./lib/types";
+  import { forEachTerminalSurface } from "./lib/services/service-helpers";
   import { check } from "@tauri-apps/plugin-updater";
   import { relaunch } from "@tauri-apps/plugin-process";
   import { eventBus } from "./lib/services/event-bus";
@@ -42,16 +51,24 @@
     extensionErrorStore,
     reportExtensionError,
     flushAllExtensionState,
+    ensureProviderAndThen,
   } from "./lib/services/extension-loader";
   import { loadExternalExtensions } from "./lib/services/extension-management";
   import { registerIncludedExtensions } from "./lib/bootstrap/register-included-extensions";
   import { initWorktrees } from "./lib/bootstrap/init-worktrees";
+  import { confirmAndCloseWorkspace } from "./lib/services/worktree-service";
   import { initGitStatus } from "./lib/bootstrap/init-git-status";
   import { initPreview } from "./lib/bootstrap/init-preview";
+  import { initAgentDetectionBootstrap } from "./lib/bootstrap/init-agent-detection";
+  import { initCoreExtensionAPI } from "./lib/bootstrap/init-core-extension-api";
+  import { initWorkspaceGroups } from "./lib/bootstrap/init-workspace-groups";
+  import { flushWorkspaceGroups } from "./lib/stores/workspace-groups";
   import {
     restoreWorkspaces,
+    markRestored,
     type CliArgs,
   } from "./lib/bootstrap/restore-workspaces";
+  import { reconcileGroupDashboards } from "./lib/services/workspace-group-service";
 
   // Services
   import {
@@ -59,6 +76,7 @@
     createWorkspaceFromDef,
     switchWorkspace,
     closeWorkspace,
+    closeAllWorkspaces,
     renameWorkspace,
     saveCurrentWorkspace,
     persistWorkspaces,
@@ -97,9 +115,11 @@
   import FindBar from "./lib/components/FindBar.svelte";
   import ContextMenu from "./lib/components/ContextMenu.svelte";
   import InputPrompt from "./lib/components/InputPrompt.svelte";
+  import ConfirmPrompt from "./lib/components/ConfirmPrompt.svelte";
   import FormPrompt from "./lib/components/FormPrompt.svelte";
   import SettingsOverlay from "./lib/components/SettingsOverlay.svelte";
   import RestoreCommandsOverlay from "./lib/components/RestoreCommandsOverlay.svelte";
+  import WorkspaceGroupCreateOverlay from "./lib/components/WorkspaceGroupCreateOverlay.svelte";
   import { overlayStore } from "./lib/services/overlay-registry";
   import { surfaceTypeStore } from "./lib/services/surface-type-registry";
   import ExtensionWrapper from "./lib/components/ExtensionWrapper.svelte";
@@ -149,11 +169,9 @@
   function applyTheme(id: string) {
     const previousId = get(theme.id);
     theme.set(id);
-    for (const ws of $workspaces) {
-      for (const s of getAllSurfaces(ws)) {
-        if (isTerminalSurface(s)) s.terminal.options.theme = $xtermTheme;
-      }
-    }
+    forEachTerminalSurface((s) => {
+      s.terminal.options.theme = $xtermTheme;
+    });
     eventBus.emit({ type: "theme:changed", id, previousId });
     void saveConfig({ theme: id });
   }
@@ -237,7 +255,22 @@
       id: "core.close-workspace",
       title: "Close Workspace",
       shortcut: isMac ? `${shiftModLabel}W` : `${shiftModLabel}Q`,
-      action: () => closeWorkspace($activeWorkspaceIdx),
+      action: () => {
+        void (async () => {
+          const ws = $workspaces[$activeWorkspaceIdx];
+          if (!ws) return;
+          await confirmAndCloseWorkspace(ws, $activeWorkspaceIdx);
+        })();
+      },
+      source: "core",
+    },
+    {
+      // Palette-only escape hatch for nuking stale state — e.g. orphaned
+      // workspaces left behind by group deletion on older builds.
+      // Intentionally no shortcut (destructive, rarely wanted).
+      id: "core.close-all-workspaces",
+      title: "Close All Workspaces",
+      action: () => void closeAllWorkspaces(),
       source: "core",
     },
     {
@@ -469,12 +502,46 @@
     if (config.theme) {
       theme.set(config.theme);
     }
+    setFontSizeFromConfig(config.fontSize);
+
+    // After the config is applied, subscribe to font-size changes so any
+    // subsequent user-triggered zoom propagates to every live terminal,
+    // refits the pty, and persists. The first emission is the loaded
+    // value — apply but don't persist (prevents a write-on-startup).
+    let fontSizeInitialEmission = true;
+    fontSize.subscribe((size) => {
+      forEachTerminalSurface((s) => {
+        s.terminal.options.fontSize = size;
+        try {
+          s.fitAddon?.fit();
+        } catch {
+          // fit throws if the terminal isn't opened yet; ignored.
+        }
+      });
+      if (fontSizeInitialEmission) {
+        fontSizeInitialEmission = false;
+        return;
+      }
+      void saveConfig({ fontSize: size });
+    });
+
+    // Register the shared "core" ExtensionAPI before any core
+    // subsystem contributes a UI renderer — ExtensionWrapper uses this
+    // to inject `api.theme` / `api.invoke` into components mounted
+    // under source="core".
+    initCoreExtensionAPI();
 
     // Wire core worktree handling before extensions register so any
     // extension subscribing to "worktree:merged" finds the emitter live.
     initWorktrees();
     initGitStatus();
     initPreview();
+    initAgentDetectionBootstrap();
+
+    // Workspace Groups (formerly the project-scope extension) —
+    // registered from core so the root-row renderer, commands, and
+    // Dashboard contribution are available before extensions activate.
+    await initWorkspaceGroups();
 
     // Register included extensions. Only activate if explicitly enabled
     // in config — a fresh install starts with no extensions active
@@ -493,11 +560,11 @@
       source: "core",
       handler: (ctx) => {
         const name = `Workspace ${get(workspaces).length + 1}`;
-        if (ctx.projectId && ctx.projectPath) {
+        if (ctx.groupId && ctx.projectPath) {
           void createWorkspaceFromDef({
             name,
             cwd: ctx.projectPath as string,
-            metadata: { projectId: ctx.projectId },
+            metadata: { groupId: ctx.groupId },
             layout: { pane: { surfaces: [{ type: "terminal" }] } },
           });
         } else {
@@ -507,6 +574,24 @@
     });
 
     await restoreWorkspaces(cliArgs, config);
+    // Signal that workspaces are in the store so deferred work (the
+    // agentic extension's provision loop, reconcileGroupDashboards) can
+    // safely read and write the workspaces store without racing restore.
+    markRestored();
+    void reconcileGroupDashboards();
+
+    // Rehydrate the persisted root-row order so drag-sorted layouts
+    // survive across restarts. Entities are all registered by this
+    // point — extensions (projects, agent dashboards) appended during
+    // activation, and restoreWorkspaces appended workspaces — so the
+    // known set is stable. bootstrapRootRowOrder re-sorts to match the
+    // persisted order and appends any brand-new entity at the end.
+    const currentOrder = get(rootRowOrder);
+    const extensionRows = currentOrder.filter((r) => r.kind !== "workspace");
+    bootstrapRootRowOrder(
+      get(workspaces).map((w) => w.id),
+      extensionRows,
+    );
 
     if (!restoreCommandsOverlayShown) {
       const hasPending = $workspaces.some((ws) =>
@@ -536,8 +621,8 @@
     document.addEventListener("status-action", ((e: CustomEvent) => {
       const action = e.detail as { command: string; args?: unknown[] };
       if (action.command === "open-url" && action.args?.[0]) {
-        void invoke("open_with_default_app", {
-          path: action.args[0] as string,
+        void invoke("open_url", {
+          url: action.args[0] as string,
         });
       } else if (action.command === "open-surface" && action.args) {
         const [surfaceTypeId, title, props] = action.args as [
@@ -545,7 +630,43 @@
           string,
           Record<string, unknown> | undefined,
         ];
-        openExtensionSurfaceInPane(surfaceTypeId, title, props);
+        const open = () =>
+          openExtensionSurfaceInPane(surfaceTypeId, title, props);
+        void ensureProviderAndThen(surfaceTypeId, open);
+      } else if (
+        action.command === "open-surface-in-new-workspace" &&
+        action.args
+      ) {
+        const [wsName, surfaceTypeId, title, props, options] = action.args as [
+          string,
+          string,
+          string,
+          Record<string, unknown> | undefined,
+          { metadata?: Record<string, unknown> } | undefined,
+        ];
+        const open = () =>
+          void createWorkspaceFromDef({
+            name: wsName,
+            // Optional metadata forwards to the new workspace — e.g.
+            // container-row dirty clicks pass `{ groupId: <container-id> }`
+            // so the fresh "Diff" workspace nests inside its originating
+            // group instead of materializing at the sidebar root.
+            ...(options?.metadata ? { metadata: options.metadata } : {}),
+            layout: {
+              pane: {
+                surfaces: [
+                  {
+                    type: "extension",
+                    extensionType: surfaceTypeId,
+                    name: title,
+                    extensionProps: props ?? {},
+                    focus: true,
+                  },
+                ],
+              },
+            },
+          });
+        void ensureProviderAndThen(surfaceTypeId, open);
       }
     }) as EventListener);
 
@@ -562,10 +683,21 @@
     // and project membership / debounced writes can be lost on quit.
     void appWindow.onCloseRequested(async (event) => {
       event.preventDefault();
-      // Run both flushes defensively so one failure can't strand the other.
+      let confirmed = false;
+      try {
+        confirmed = await ask("Quit GnarTerm?", {
+          title: "Quit",
+          kind: "warning",
+        });
+      } catch {
+        return;
+      }
+      if (!confirmed) return;
+      // Run all flushes defensively so one failure can't strand the others.
       const results = await Promise.allSettled([
         persistWorkspaces(),
         flushAllExtensionState(),
+        flushWorkspaceGroups(),
       ]);
       for (const r of results) {
         if (r.status === "rejected") {
@@ -597,7 +729,6 @@
   <PrimarySidebar
     bind:this={sidebarComponent}
     onSwitchWorkspace={switchWorkspace}
-    onCloseWorkspace={closeWorkspace}
     onRenameWorkspace={renameWorkspace}
     onNewSurface={newSurfaceFromSidebar}
   />
@@ -617,7 +748,8 @@
       {#each $workspaces as ws, i (ws.id)}
         <WorkspaceView
           workspace={ws}
-          visible={i === $activeWorkspaceIdx}
+          visible={i === $activeWorkspaceIdx &&
+            $activePseudoWorkspaceId === null}
           onSelectSurface={selectSurface}
           onCloseSurface={closeSurfaceById}
           onNewSurface={newSurface}
@@ -635,7 +767,24 @@
         />
       {/each}
 
-      {#if $workspaces.length === 0}
+      {#each $pseudoWorkspaceStore as pseudo (pseudo.id)}
+        <div
+          data-pseudo-workspace-view={pseudo.id}
+          style="
+            flex: 1; min-height: 0; min-width: 0; display: {pseudo.id ===
+          $activePseudoWorkspaceId
+            ? 'flex'
+            : 'none'};
+            flex-direction: column;
+          "
+        >
+          <svelte:component
+            this={pseudo.render as import("svelte").Component}
+          />
+        </div>
+      {/each}
+
+      {#if ($workspaces.length === 0 || $activeWorkspaceIdx < 0) && $activePseudoWorkspaceId === null}
         <EmptySurface />
       {/if}
 
@@ -649,8 +798,10 @@
 <CommandPalette />
 <ContextMenu />
 <InputPrompt />
+<ConfirmPrompt />
 <FormPrompt />
 <SettingsOverlay />
+<WorkspaceGroupCreateOverlay />
 {#if showRestoreCommandsOverlay}
   <RestoreCommandsOverlay
     onClose={() => (showRestoreCommandsOverlay = false)}

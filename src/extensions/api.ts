@@ -126,6 +126,7 @@ export type AppEventType =
   | "surface:created"
   | "surface:activated"
   | "surface:closed"
+  | "surface:ptyReady"
   | "surface:titleChanged"
   | "sidebar:toggled"
   | "theme:changed"
@@ -513,6 +514,31 @@ export interface ExtensionAPI {
    */
   getRootRowRenderer(kind: string): { component: unknown } | undefined;
 
+  /**
+   * Register a dashboard contribution — a "kind of dashboard" that can
+   * attach to a Workspace Group. Each group's context menu surfaces an
+   * "Add <actionLabel>" affordance per registered contribution whose
+   * `isAvailableFor` gate accepts the group and whose `capPerGroup`
+   * isn't already met. When invoked, core calls `create(group)` to
+   * materialize the dashboard workspace. Automatically unregistered on
+   * extension deactivate.
+   *
+   * Core's built-in Group Dashboard registers under `id: "group"`. The
+   * agentic extension registers under `id: "agentic"`. Dashboard tiles
+   * carry `metadata.dashboardContributionId = contribution.id` so the
+   * multi-dashboard grid can attribute them back to their contribution.
+   */
+  registerDashboardContribution(contribution: DashboardContributionInput): void;
+
+  /**
+   * Register a pseudo-workspace — a non-persisted, pinned entry that
+   * renders in the root sidebar list. Pseudo-workspaces cannot be
+   * deleted, renamed, or have panes/surfaces added through normal
+   * workspace controls. The canonical use is the Global Agentic
+   * Dashboard. Automatically unregistered on extension deactivate.
+   */
+  registerPseudoWorkspace(pw: PseudoWorkspaceInput): void;
+
   // Workspace subtitle — components rendered below workspace name in sidebar
   /** Register a Svelte component to render below workspace names. Component receives { workspaceId } prop. */
   registerWorkspaceSubtitle(component: unknown, priority?: number): void;
@@ -546,6 +572,15 @@ export interface ExtensionAPI {
   getActiveCwd(): Promise<string | undefined>;
   pickDirectory(title?: string): Promise<string | null>;
   showInputPrompt(label: string, defaultValue?: string): Promise<string | null>;
+  /**
+   * Ask the user to confirm a destructive action. Returns true when
+   * confirmed, false when cancelled. Use for close/delete affordances
+   * on container rows that remove user-visible state.
+   */
+  showConfirm(
+    message: string,
+    options?: { title?: string; confirmLabel?: string; cancelLabel?: string },
+  ): Promise<boolean>;
   showFormPrompt(
     title: string,
     fields: Array<
@@ -599,6 +634,8 @@ export interface ExtensionAPI {
   /** Release a claimed workspace back to the main list. */
   unclaimWorkspace(workspaceId: string): void;
   openInEditor(filePath: string): void;
+  /** Open a file as a preview surface in a new pane split to the right. Deduplicates by path. */
+  openPreviewSplit(filePath: string): void;
   openSurface(
     surfaceTypeId: string,
     title: string,
@@ -772,6 +809,14 @@ export interface ExtensionAPI {
    *   Props: `{ theme: Readable<ThemeDef>, value: string (bindable), colors?: string[] }`
    * - **DragGrip** — left-border drag handle that appears on hover
    *   Props: `{ theme, visible, onMouseDown, ariaLabel? }`
+   * - **ContainerRow** — shared banner + nested-list chrome for
+   *   "container workspaces" (projects, agent dashboards). Banner can
+   *   represent a first-class workspace by wiring onBannerClick/onClose
+   *   to switchWorkspace/closeWorkspace.
+   *   Props: `{ color, foreground, parentColor?, onGripMouseDown?,
+   *     onBannerClick?, onBannerContextMenu?, onClose?, filterIds,
+   *     dashboardHintFor?, hideStatusBadges?, scopeId, containerBlockId,
+   *     containerLabel }` + slots: icon / banner-end / banner-subtitle.
    */
   getComponents(): {
     WorkspaceListView: unknown;
@@ -779,6 +824,8 @@ export interface ExtensionAPI {
     ColorPicker: unknown;
     DragGrip: unknown;
     DropGhost: unknown;
+    ContainerRow: unknown;
+    PathStatusLine: unknown;
   };
 
   /**
@@ -814,24 +861,28 @@ export interface ExtensionAPI {
  *
  * - `kind: "workspace"` — a workspace row is being dragged. `scopeId` is the
  *   immediate container: `"__workspaces__"` when dragging from the unclaimed
- *   list, or a project id when dragging inside a project. `containerBlockId`
- *   is the top-level sidebar block the drag lives in.
- * - `kind: "project"` — a project row is being dragged inside the Projects
- *   block. `sourceProjectId` is the id of the dragged project.
+ *   list, or a group id when dragging inside a workspace group.
+ *   `containerBlockId` is the top-level sidebar block the drag lives in.
+ * - `kind: "workspace-group"` — a group row is being dragged inside the
+ *   Workspaces block. `sourceGroupId` is the id of the dragged group.
  * - `kind: "section"` — a top-level sidebar block is being dragged.
  *   `sourceBlockId` is the block id.
  */
 export type ReorderContext =
   | { kind: "workspace"; scopeId: string; containerBlockId: string }
-  | { kind: "project"; sourceProjectId: string; containerBlockId: string }
+  | {
+      kind: "workspace-group";
+      sourceGroupId: string;
+      containerBlockId: string;
+    }
   | { kind: "section"; sourceBlockId: string }
   | {
       // Root-level drag inside the Workspaces section — the unified
-      // lane that covers unclaimed workspaces + whole project blocks.
-      // `sourceKind` + `sourceId` identify the dragged row so sibling
-      // rows (of any kind) can resolve their overlay.
+      // lane that covers unclaimed workspaces + whole workspace-group
+      // blocks. `sourceKind` + `sourceId` identify the dragged row so
+      // sibling rows (of any kind) can resolve their overlay.
       kind: "rootRow";
-      sourceKind: "workspace" | "project" | string;
+      sourceKind: "workspace" | "workspace-group" | string;
       sourceId: string;
       containerBlockId: string;
     };
@@ -885,6 +936,126 @@ export interface WorkspaceActionInfo {
   when?: (ctx: WorkspaceActionContext) => boolean;
 }
 
+// --- Dashboard contributions / pseudo-workspaces ---
+//
+// Stage 4 surface. Extensions register a DashboardContributionInput or
+// PseudoWorkspaceInput via the corresponding ExtensionAPI method; core
+// attaches `source` and stores the full record in the registry.
+
+/**
+ * Minimum shape of a Workspace Group passed to contribution hooks. The
+ * canonical type lives in core (`src/lib/config.ts#WorkspaceGroupEntry`);
+ * the public API only exposes the fields contributions are allowed to
+ * read so core can evolve the stored record without breaking extensions.
+ */
+export interface WorkspaceGroupRef {
+  id: string;
+  name: string;
+  /** Root CWD — contributions typically place markdown under `<path>/.gnar-term/...`. */
+  path: string;
+  color: string;
+  isGit: boolean;
+}
+
+/**
+ * Arguments for `ExtensionAPI.registerDashboardContribution`. See the
+ * registry docs in `src/lib/services/dashboard-contribution-registry.ts`
+ * for lifecycle details.
+ */
+export interface DashboardContributionInput {
+  /**
+   * Stable identifier. Also stamped as `metadata.dashboardContributionId`
+   * on the created dashboard workspace so the grid can attribute tiles.
+   * Must be unique across all contributions.
+   */
+  id: string;
+  /** Tile label (e.g. "Agentic Dashboard"). */
+  label: string;
+  /** Context-menu verb (e.g. "Add Agentic Dashboard"). */
+  actionLabel: string;
+  /**
+   * Maximum coexisting dashboards of this kind per group. `1` is the
+   * canonical exclusive cap; `Number.POSITIVE_INFINITY` for unlimited.
+   */
+  capPerGroup: number;
+  /**
+   * Materialize the dashboard for the given group. Must resolve to the
+   * new workspace's id.
+   */
+  create: (group: WorkspaceGroupRef) => Promise<string>;
+  /**
+   * Optional "delete and regenerate" hook surfaced as a button next to
+   * the dashboard's row in Group Settings. Implementations typically
+   * force-rewrite the dashboard's backing markdown so a stale user
+   * file picks up a newer seeded template. Contributions without
+   * backing state (e.g. Diff) omit this and the button does not render.
+   */
+  regenerate?: (group: WorkspaceGroupRef) => Promise<void>;
+  /**
+   * Optional gate — when returns false, the contribution is hidden from
+   * this group's "Add Dashboard" menu.
+   */
+  isAvailableFor?: (group: WorkspaceGroupRef) => boolean;
+  /**
+   * Optional icon component rendered on the dashboard tile. Tiles are
+   * icon-only; the workspace name is surfaced as the tile's `title`.
+   */
+  icon?: unknown;
+  /**
+   * When true, the contribution materializes on every workspace group
+   * (at group creation and startup reconciliation) and cannot be
+   * removed. Also hides the contribution from "Add Dashboard" menus
+   * and suppresses the per-tile Delete action.
+   */
+  autoProvision?: boolean;
+  /**
+   * Hints for how PaneView should render the dashboard workspace.
+   * `singleSurface: true` documents that the contribution's workspace
+   * is a tab-less / split-less single-surface pane.
+   */
+  paneConstraints?: { singleSurface?: boolean };
+  /**
+   * Human-readable reason the contribution's toggle is locked in the
+   * Settings dashboard's per-group toggle list. Typically set
+   * alongside `autoProvision: true`.
+   */
+  lockedReason?: string;
+}
+
+/**
+ * Arguments for `ExtensionAPI.registerPseudoWorkspace`. See the registry
+ * docs in `src/lib/services/pseudo-workspace-registry.ts`.
+ */
+export interface PseudoWorkspaceInput {
+  /** Stable identifier. Convention: `<extensionId>.<name>`. */
+  id: string;
+  /** Human-readable label (a11y + context menus). */
+  label: string;
+  /** Pin position within the root list. */
+  position: "root-top" | "root-bottom";
+  /** Icon component rendered in the root-row entry. */
+  icon: unknown;
+  /** Body component rendered when the pseudo-workspace is active. */
+  render: unknown;
+  /**
+   * Synthetic workspace metadata made available to the body via
+   * `DashboardHostContext`. Mirror whatever a real dashboard workspace
+   * would carry for the same role (e.g.
+   * `{ isGlobalAgenticDashboard: true }`).
+   */
+  metadata: Record<string, unknown>;
+  /** Optional settings component surfaced in the extension's settings page. */
+  settings?: unknown;
+  /**
+   * Optional component rendered INSIDE the primary-sidebar root row,
+   * to the right of `icon`, in place of the plain text label. Mounted
+   * with the registering extension's `api` provided via context so the
+   * widget can subscribe to live state (`api.agents`, etc.). Footprint
+   * should stay compact — the row banner is ~40px tall.
+   */
+  rowBody?: unknown;
+}
+
 // --- Workspace creation options ---
 
 export interface CreateWorkspaceOptions {
@@ -908,10 +1079,10 @@ export interface MergeResult {
 export interface WorkspaceRef {
   id: string;
   name: string;
-  // Opaque per-workspace metadata set at creation time (e.g. projectId,
+  // Opaque per-workspace metadata set at creation time (e.g. groupId,
   // worktreePath, branch). Extensions use this to detect nesting — e.g.
-  // the core git status subtitle collapses when projectId is present
-  // because the Project banner already shows cwd+branch.
+  // the core git status subtitle collapses when groupId is present
+  // because the Workspace Group banner already shows cwd+branch.
   metadata?: Record<string, unknown>;
 }
 

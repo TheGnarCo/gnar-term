@@ -18,8 +18,9 @@ import {
   type Surface,
   type PreviewSurface,
 } from "../types";
-import { removePane } from "./pane-service";
-import { schedulePersist } from "./workspace-service";
+import { removePane, splitPaneEmpty } from "./pane-service";
+import { closeWorkspace, schedulePersist } from "./workspace-service";
+import { findPreviewSurfaceByPath } from "./preview-surface-registry";
 import { safeFocus, getCwdForSurface } from "./service-helpers";
 import { eventBus } from "./event-bus";
 
@@ -89,16 +90,20 @@ function removeSurface(ws: Workspace, pane: Pane, surfaceIdx: number) {
 
   if (pane.surfaces.length === 0) {
     // If this workspace has another pane (split view), collapse by
-    // removing the now-empty pane. Otherwise keep the workspace alive
-    // with an empty pane so the user lands on the empty-state view
-    // inside it instead of being bounced to another workspace.
+    // removing the now-empty pane. Otherwise the last surface in the
+    // workspace just closed — close the whole workspace so the user
+    // isn't left staring at an empty-state shell. Matches the
+    // pty-exit path in terminal-service.ts.
     const paneCount = getAllPanes(ws.splitRoot).length;
     if (paneCount > 1) {
       removePane(ws, pane);
+      workspaces.update((l) => [...l]);
     } else {
-      pane.activeSurfaceId = null;
+      pane.resizeObserver?.disconnect();
+      const wsIdx = get(workspaces).indexOf(ws);
+      if (wsIdx >= 0) closeWorkspace(wsIdx);
+      return;
     }
-    workspaces.update((l) => [...l]);
   } else {
     pane.activeSurfaceId =
       pane.surfaces[Math.min(surfaceIdx, pane.surfaces.length - 1)]!.id;
@@ -363,4 +368,25 @@ export function createPreviewSurfaceInPane(
   });
   schedulePersist();
   return surface;
+}
+
+/**
+ * Open a file as a preview surface in a new pane split to the right of the
+ * currently active pane. If a preview for the same path is already open
+ * anywhere, focuses it instead (same dedup semantics as spawn_preview MCP).
+ */
+export function openFileAsPreviewSplit(filePath: string): void {
+  const existing = findPreviewSurfaceByPath(filePath);
+  if (existing) {
+    focusSurfaceById(existing.surfaceId);
+    return;
+  }
+
+  const pane = get(activePane);
+  if (!pane) return;
+
+  const result = splitPaneEmpty(pane.id, "horizontal");
+  if (!result) return;
+
+  createPreviewSurfaceInPane(result.newPane.id, filePath);
 }

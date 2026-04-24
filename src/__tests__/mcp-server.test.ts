@@ -29,6 +29,31 @@ vi.mock("../lib/services/spawn-helper", () => ({
   spawnAgentInWorktree: spawnAgentInWorktreeMock,
 }));
 
+const { agentsStoreMock } = vi.hoisted(() => {
+  // vi.hoisted runs before imports, so we can't use the svelte/store `writable`
+  // imported at the top of this file. Instead we build a minimal readable-store
+  // shim: `get(agentsStore)` in mcp-server calls the store's `subscribe` once
+  // and reads the value, which is exactly what this shim supports.
+  let _value: unknown[] = [];
+  const agentsStoreMock = {
+    subscribe: (run: (v: unknown[]) => void) => {
+      run(_value);
+      return () => {};
+    },
+    _set: (v: unknown[]) => {
+      _value = v;
+    },
+    set: (v: unknown[]) => {
+      _value = v;
+    },
+  };
+  return { agentsStoreMock };
+});
+
+vi.mock("../lib/services/agent-detection-service", () => ({
+  agentsStore: agentsStoreMock,
+}));
+
 import {
   dispatch,
   _getToolsForTest,
@@ -90,6 +115,7 @@ describe("MCP server JSON-RPC", () => {
     _resetMcpServerForTest();
     workspaces.set([]);
     activeWorkspaceIdx.set(-1);
+    agentsStoreMock.set([]);
   });
 
   it("responds to initialize with server info and protocol version", async () => {
@@ -107,6 +133,7 @@ describe("MCP server JSON-RPC", () => {
     expect(names).toEqual(
       [
         "activate_sidebar_tab",
+        "add_dashboard_to_group",
         "close_preview",
         "create_preview_file",
         "dispatch_tasks",
@@ -120,15 +147,16 @@ describe("MCP server JSON-RPC", () => {
         "invoke_context_menu_item",
         "invoke_workspace_action",
         "kill_session",
+        "list_agents",
         "list_commands",
         "list_context_menu_items",
+        "list_dashboard_contributions",
         "list_dashboard_tabs",
         "list_dir",
         "list_markdown_components",
         "list_open_previews",
         "list_overlays",
         "list_panes",
-        "list_sessions",
         "list_sidebar_sections",
         "list_sidebar_tabs",
         "list_surface_types",
@@ -139,15 +167,17 @@ describe("MCP server JSON-RPC", () => {
         "poll_events",
         "read_file",
         "read_output",
+        "remove_dashboard_from_group",
         "remove_sidebar_section",
         "render_sidebar",
         "send_keys",
         "send_prompt",
         "spawn_agent",
         "spawn_preview",
+        "split_pane",
       ].sort(),
     );
-    expect(names).toHaveLength(39);
+    expect(names).toHaveLength(43);
     for (const t of tools) {
       expect(t).toHaveProperty("inputSchema");
     }
@@ -344,6 +374,144 @@ describe("MCP server JSON-RPC", () => {
     expect(Array.isArray(result.events)).toBe(true);
   });
 
+  it("list_agents returns all detected agents including native (non-MCP-spawned) ones", async () => {
+    // Populate the store with a native agent (one the user started by typing
+    // `claude` in a terminal — not via spawn_agent). list_agents must see it.
+    agentsStoreMock.set([
+      {
+        agentId: "native-1",
+        agentName: "Claude Code",
+        surfaceId: "surf-1",
+        workspaceId: "ws-1",
+        status: "running",
+        createdAt: "2024-01-01T00:00:00.000Z",
+        lastStatusChange: "2024-01-01T00:01:00.000Z",
+      },
+    ]);
+
+    const resp = await dispatch(
+      rpc("tools/call", { name: "list_agents", arguments: {} }),
+    );
+    const agents = (resp as any).result.structuredContent.agents as unknown[];
+    expect(agents).toHaveLength(1);
+    expect(agents[0]).toEqual({
+      agentId: "native-1",
+      agentName: "Claude Code",
+      surfaceId: "surf-1",
+      workspaceId: "ws-1",
+      status: "running",
+      createdAt: "2024-01-01T00:00:00.000Z",
+      lastStatusChange: "2024-01-01T00:01:00.000Z",
+    });
+  });
+
+  it("list_agents returns an empty array when no agents are detected", async () => {
+    agentsStoreMock.set([]);
+    const resp = await dispatch(
+      rpc("tools/call", { name: "list_agents", arguments: {} }),
+    );
+    const result = (resp as any).result.structuredContent;
+    expect(result).toEqual({ agents: [] });
+  });
+
+  it("split_pane creates a new pane in the target workspace and returns pane_id", async () => {
+    // makeWorkspace returns { ws, pane } — see the fixture helper at line ~99
+    const { ws, pane } = makeWorkspace("ws-split");
+    workspaces.set([ws]);
+    const ctx = _testContext({ paneId: pane.id, workspaceId: ws.id });
+
+    const resp = await dispatch(
+      rpc("tools/call", {
+        name: "split_pane",
+        arguments: { workspace_id: ws.id },
+      }),
+      ctx,
+    );
+
+    const result = (resp as any).result.structuredContent;
+    expect(result).toHaveProperty("pane_id");
+    expect(result.pane_id).not.toBe(pane.id); // new pane, different id
+    expect(result).toHaveProperty("workspace_id", ws.id);
+  });
+
+  it("split_pane throws when surface_type is preview but preview_path is missing", async () => {
+    const { ws, pane } = makeWorkspace("ws-split-err");
+    workspaces.set([ws]);
+    const ctx = _testContext({ paneId: pane.id, workspaceId: ws.id });
+
+    const resp = await dispatch(
+      rpc("tools/call", {
+        name: "split_pane",
+        arguments: { workspace_id: ws.id, surface_type: "preview" },
+      }),
+      ctx,
+    );
+
+    // Tool errors surface as result.isError=true or a top-level error
+    expect(
+      (resp as any).error?.message ?? (resp as any).result?.isError,
+    ).toBeTruthy();
+  });
+
+  it("split_pane errors when workspace_id is unknown", async () => {
+    const { ws } = makeWorkspace("ws-split-known");
+    workspaces.set([ws]);
+    const ctx = _testContext({ workspaceId: ws.id });
+
+    const resp = await dispatch(
+      rpc("tools/call", {
+        name: "split_pane",
+        arguments: { workspace_id: "ws-does-not-exist" },
+      }),
+      ctx,
+    );
+
+    expect(
+      (resp as any).error?.message ?? (resp as any).result?.isError,
+    ).toBeTruthy();
+  });
+
+  it("split_pane errors when pane_id is unknown", async () => {
+    const { ws } = makeWorkspace("ws-split-known2");
+    workspaces.set([ws]);
+    const ctx = _testContext({ workspaceId: ws.id });
+
+    const resp = await dispatch(
+      rpc("tools/call", {
+        name: "split_pane",
+        arguments: { pane_id: "pane-does-not-exist" },
+      }),
+      ctx,
+    );
+
+    expect(
+      (resp as any).error?.message ?? (resp as any).result?.isError,
+    ).toBeTruthy();
+  });
+
+  it("split_pane with surface_type preview creates a new pane and opens a preview surface", async () => {
+    const { ws, pane } = makeWorkspace("ws-split-preview");
+    workspaces.set([ws]);
+    const ctx = _testContext({ paneId: pane.id, workspaceId: ws.id });
+
+    const resp = await dispatch(
+      rpc("tools/call", {
+        name: "split_pane",
+        arguments: {
+          workspace_id: ws.id,
+          surface_type: "preview",
+          preview_path: "/tmp/test.md",
+        },
+      }),
+      ctx,
+    );
+
+    const result = (resp as any).result.structuredContent;
+    expect(result).toHaveProperty("pane_id");
+    expect(result.pane_id).not.toBe(pane.id); // new pane, different id
+    expect(result).toHaveProperty("workspace_id", ws.id);
+  });
+
   it("list_dir invokes mcp_list_dir with includeHidden alias", async () => {
     invokeMock.mockResolvedValueOnce([
       { name: "a.txt", path: "/tmp/a.txt", is_dir: false, size: 10 },
@@ -430,13 +598,10 @@ describe("MCP server JSON-RPC", () => {
     expect(result).toEqual({ panes: [] });
   });
 
-  it("list_sessions wraps the list in a record", async () => {
-    const r = await dispatch(
-      rpc("tools/call", { name: "list_sessions", arguments: {} }),
-    );
-    const result = (r as any).result.structuredContent;
-    expect(Array.isArray(result)).toBe(false);
-    expect(Array.isArray(result.sessions)).toBe(true);
+  it("list_sessions is not a registered tool (superseded by list_agents)", async () => {
+    const tools = _getToolsForTest();
+    const names = (tools as any[]).map((t) => t.name);
+    expect(names).not.toContain("list_sessions");
   });
 
   it("get_active_workspace returns nullable fields when no workspace is open", async () => {
@@ -1218,8 +1383,8 @@ describe("tool metadata", () => {
     }
   });
 
-  it("tool count matches spec (39)", () => {
-    expect(_getToolsForTest()).toHaveLength(39);
+  it("tool count matches spec (43)", () => {
+    expect(_getToolsForTest()).toHaveLength(43);
   });
 });
 
@@ -1256,7 +1421,6 @@ describe("MCP — spawn_agent worktree flag", () => {
             repoPath: "/work/proj",
             branch: "agent/claude-code/1-fix",
             taskContext: "Fix issue #1",
-            dashboardId: "dash-1",
           },
         },
       }),
@@ -1274,7 +1438,6 @@ describe("MCP — spawn_agent worktree flag", () => {
       repoPath: "/work/proj",
       branch: "agent/claude-code/1-fix",
       taskContext: "Fix issue #1",
-      dashboardId: "dash-1",
     });
 
     const result = (resp as any).result.structuredContent;

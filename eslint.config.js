@@ -11,12 +11,12 @@ export default tseslint.config(
       "src-tauri/",
       "node_modules/",
       "*.config.*",
-      // SettingsOverlay.svelte triggers a crash in @typescript-eslint/no-unused-vars
+      // These files trigger a crash in @typescript-eslint/no-unused-vars
       // (TypeError: Cannot read properties of undefined reading 'type') due to a bug
-      // in svelte-eslint-parser with complex reactive declarations. Ignored until the
-      // parser is fixed. Upstream: https://github.com/sveltejs/svelte-eslint-parser/issues
-      // TODO: Re-test after svelte-eslint-parser > 1.6.0 — remove exclusion if fixed.
+      // in svelte-eslint-parser with {@const} blocks in Svelte templates.
+      // TODO: Re-test after svelte-eslint-parser > 1.6.0 — remove exclusions if fixed.
       "src/lib/components/SettingsOverlay.svelte",
+      "src/lib/components/WorkspaceItem.svelte",
     ],
   },
 

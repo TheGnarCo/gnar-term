@@ -5,8 +5,9 @@ import {
   activeWorkspaceIdx,
   activeWorkspace,
   activeSurface,
+  activePseudoWorkspaceId,
 } from "../stores/workspace";
-import { showInputPrompt } from "../stores/ui";
+import { showInputPrompt, showConfirmPrompt } from "../stores/ui";
 import { createTerminalSurface } from "../terminal-service";
 import {
   uid,
@@ -39,6 +40,10 @@ const PERSIST_DELAY = 2000;
 export async function persistWorkspaces(): Promise<void> {
   const wsList = get(workspaces);
   const serialized = wsList.map((ws) => ({
+    // Persist the id so `rootRowOrder` (keyed by `{kind, id}`) survives
+    // a restart — without this every workspace id regenerates on
+    // `createWorkspaceFromDef` and any user-dragged order is lost.
+    id: ws.id,
     name: ws.name,
     cwd: undefined as string | undefined,
     layout: serializeLayout(ws.splitRoot),
@@ -86,7 +91,7 @@ export async function createWorkspace(name: string) {
 export async function createWorkspaceFromDef(
   def: WorkspaceDef,
   options?: { restoring?: boolean },
-) {
+): Promise<string> {
   const wsName = def.name || `Workspace ${get(workspaces).length + 1}`;
   const rootCwd = def.cwd;
   const rootEnv = def.env;
@@ -185,7 +190,9 @@ export async function createWorkspaceFromDef(
   }
 
   const ws: Workspace = {
-    id: uid(),
+    // Reuse the persisted id when restoring so rootRowOrder survives
+    // a restart; mint a fresh one for first-launch creation.
+    id: def.id ?? uid(),
     name: wsName,
     splitRoot,
     activePaneId: getAllPanes(splitRoot)[0]?.id ?? null,
@@ -216,6 +223,7 @@ export async function createWorkspaceFromDef(
   const as_ = ap?.surfaces.find((s) => s.id === ap.activeSurfaceId);
   void safeFocus(as_);
   schedulePersist();
+  return ws.id;
 }
 
 export function switchWorkspace(idx: number) {
@@ -225,6 +233,9 @@ export function switchWorkspace(idx: number) {
     get(activeWorkspaceIdx) >= 0
       ? (wsList[get(activeWorkspaceIdx)]?.id ?? null)
       : null;
+  // Activating a real workspace implicitly clears any active
+  // pseudo-workspace — the two modes are mutually exclusive surfaces.
+  activePseudoWorkspaceId.set(null);
   activeWorkspaceIdx.set(idx);
   eventBus.emit({
     type: "workspace:activated",
@@ -355,4 +366,23 @@ export async function saveCurrentWorkspace() {
     commands.push(entry);
   }
   await saveConfig({ commands });
+}
+
+export async function closeAllWorkspaces(): Promise<void> {
+  const count = get(workspaces).length;
+  if (count === 0) return;
+  const confirmed = await showConfirmPrompt(
+    `Close all ${count} workspace${count === 1 ? "" : "s"}? This will dispose every terminal and cannot be undone.`,
+    {
+      title: "Close All Workspaces",
+      confirmLabel: "Close All",
+      cancelLabel: "Cancel",
+    },
+  );
+  if (!confirmed) return;
+  // closeWorkspace mutates the store and shifts indices, so always pop
+  // index 0 until the list is empty.
+  while (get(workspaces).length > 0) {
+    closeWorkspace(0);
+  }
 }

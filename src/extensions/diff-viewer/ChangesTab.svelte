@@ -16,23 +16,29 @@
   let error = "";
   let lastMerge: { branch: string; baseBranch: string } | null = null;
 
-  const STATUS_ICONS: Record<string, string> = {
-    modified: "M",
-    added: "A",
-    deleted: "D",
-    renamed: "R",
-    copied: "C",
-    untracked: "?",
+  // Porcelain status chars (2-character code per git status --porcelain).
+  // `status` carries the unstaged column; `staged` carries the staged one.
+  // We read the unstaged char first and fall back to staged when unstaged
+  // is blank (e.g. purely-staged adds/modifies).
+  const STATUS_COLORS: Record<string, string> = {
+    M: "#e8b73a", // modified
+    A: "#4ec957", // added
+    D: "#f44", // deleted
+    R: "#6bf", // renamed
+    C: "#6bf", // copied
+    U: "#e8b73a", // updated-but-unmerged
+    "?": "#888", // untracked
   };
 
-  const STATUS_COLORS: Record<string, string> = {
-    modified: "#e8b73a",
-    added: "#4ec957",
-    deleted: "#f44",
-    renamed: "#6bf",
-    copied: "#6bf",
-    untracked: "#888",
-  };
+  function statusChar(f: FileStatus): string {
+    const unstaged = (f.status ?? "").trim();
+    if (unstaged) return unstaged;
+    return (f.staged ?? "").trim() || "?";
+  }
+
+  function statusColor(f: FileStatus): string {
+    return STATUS_COLORS[statusChar(f)] ?? $theme.fgDim;
+  }
 
   async function refresh() {
     const cwd = await api.getActiveCwd();
@@ -137,11 +143,11 @@
           <span
             style="
               font-family: monospace; font-size: 11px; font-weight: 600;
-              color: {STATUS_COLORS[file.status] || $theme.fgDim};
+              color: {statusColor(file)};
               width: 14px; text-align: center; flex-shrink: 0;
             "
           >
-            {STATUS_ICONS[file.status] || "?"}
+            {statusChar(file)}
           </span>
           <span
             style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"

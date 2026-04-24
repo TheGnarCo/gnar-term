@@ -197,6 +197,23 @@ fn classify_osc(raw: &str) -> OscAction {
         return OscAction::Ignore;
     }
 
+    // OSC 777's xterm/urxvt-style notification payload is
+    // `notify;<title>;<body>` — Claude Code uses this. Parsing it here
+    // keeps the raw "notify;Claude Code;…" string out of the UI so the
+    // workspace row shows "Claude Code: <body>" instead.
+    if let Some(rest) = text.strip_prefix("notify;") {
+        let (title, body) = rest.split_once(';').unwrap_or((rest, ""));
+        let title = title.trim();
+        let body = body.trim();
+        let formatted = match (title.is_empty(), body.is_empty()) {
+            (true, true) => return OscAction::Ignore,
+            (false, true) => title.to_string(),
+            (true, false) => body.to_string(),
+            (false, false) => format!("{title}: {body}"),
+        };
+        return OscAction::Notification(formatted);
+    }
+
     OscAction::Notification(text.to_string())
 }
 
@@ -324,7 +341,8 @@ async fn spawn_pty(
     // This makes zsh/bash report the working directory on every prompt
     // Shell integration: inject OSC 7 cwd reporting (cross-platform)
     let home = std::env::var("HOME").unwrap_or_default();
-    let integration_dir = format!("{home}/.config/gnar-term/shell");
+    let config_dir = global_config_dir().unwrap_or_else(|_| format!("{home}/.config/gnar-term"));
+    let integration_dir = format!("{config_dir}/shell");
     let _ = std::fs::create_dir_all(&integration_dir);
 
     // zsh: ZDOTDIR override
@@ -342,7 +360,7 @@ chpwd_functions+=(_gnarterm_report_cwd)
 
     // bash/fish: use GNARTERM_SHELL_INTEGRATION env var
     // Bash users can add to .bashrc: [ -n "$GNARTERM_SHELL_INTEGRATION" ] && source "$GNARTERM_SHELL_INTEGRATION"
-    let bash_integration = format!("{home}/.config/gnar-term/shell/bash-integration.sh");
+    let bash_integration = format!("{config_dir}/shell/bash-integration.sh");
     let bash_content = r#"# GnarTerm bash integration
 _gnarterm_report_cwd() { printf '\e]7;file://%s%s\a' "$(hostname)" "$PWD"; }
 PROMPT_COMMAND="_gnarterm_report_cwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
@@ -1007,10 +1025,17 @@ fn b64_encode(data: &[u8]) -> String {
     result
 }
 
-/// Validate that a write path is under ~/.config/gnar-term/
+/// Validate that a write path is within gnar-term's allowlist:
+///   - under `~/.config/gnar-term/` (global state), OR
+///   - under any `.gnar-term/` directory (project-local state — projects
+///     and project-nested dashboards persist their markdown there so
+///     multi-machine sync / checkout follows the project itself).
 pub(crate) fn validate_write_path(path: &str) -> Result<(), String> {
     let home = std::env::var("HOME").map_err(|_| "HOME not set".to_string())?;
-    let allowed = format!("{home}/.config/gnar-term");
+    // Allow both prod and dev config dirs so that the validation is not
+    // build-mode-dependent (tests always run in debug mode).
+    let global_allowed = format!("{home}/.config/gnar-term");
+    let global_allowed_dev = format!("{home}/.config/gnar-term-dev");
 
     // Manually resolve .. components to prevent traversal attacks on paths
     // that may not exist yet (canonicalize requires the path to exist).
@@ -1025,12 +1050,25 @@ pub(crate) fn validate_write_path(path: &str) -> Result<(), String> {
         }
     }
     let norm_path: std::path::PathBuf = resolved.into_iter().collect();
-    let norm_allowed = std::path::Path::new(&allowed)
+    let norm_global_allowed = std::path::Path::new(&global_allowed)
+        .components()
+        .collect::<std::path::PathBuf>();
+    let norm_global_allowed_dev = std::path::Path::new(&global_allowed_dev)
         .components()
         .collect::<std::path::PathBuf>();
 
-    if !norm_path.starts_with(&norm_allowed) {
-        return Err(format!("Write denied: path must be under {allowed}"));
+    // Does the normalized path contain a `.gnar-term` directory segment
+    // anywhere in its ancestry? If so it's a project-local state file.
+    let has_gnar_term_segment = norm_path
+        .components()
+        .any(|c| matches!(c, std::path::Component::Normal(s) if s == ".gnar-term"));
+    let under_global_allowed = norm_path.starts_with(&norm_global_allowed)
+        || norm_path.starts_with(&norm_global_allowed_dev);
+
+    if !under_global_allowed && !has_gnar_term_segment {
+        return Err(format!(
+            "Write denied: path must be under {global_allowed} or inside a .gnar-term/ directory"
+        ));
     }
 
     // Walk the deepest existing ancestor through canonicalize so a symlink
@@ -1046,9 +1084,35 @@ pub(crate) fn validate_write_path(path: &str) -> Result<(), String> {
     }
     let canonical = std::fs::canonicalize(probe)
         .map_err(|e| format!("Failed to canonicalize {}: {e}", probe.display()))?;
-    let canonical_allowed = std::fs::canonicalize(&norm_allowed).unwrap_or(norm_allowed);
-    if !canonical.starts_with(&canonical_allowed) {
-        return Err(format!("Write denied: path must be under {allowed}"));
+    if under_global_allowed {
+        let canonical_prod =
+            std::fs::canonicalize(&norm_global_allowed).unwrap_or(norm_global_allowed);
+        let canonical_dev =
+            std::fs::canonicalize(&norm_global_allowed_dev).unwrap_or(norm_global_allowed_dev);
+        if !canonical.starts_with(&canonical_prod) && !canonical.starts_with(&canonical_dev) {
+            return Err(format!("Write denied: path must be under {global_allowed}"));
+        }
+        return Ok(());
+    }
+    // project-local state: the declared path had a `.gnar-term` segment
+    // and we need to verify no symlink in its ancestry escapes out. If
+    // the deepest existing ancestor is ABOVE the `.gnar-term` segment,
+    // the `.gnar-term` directory doesn't exist yet — there's nothing for
+    // a symlink to redirect. Safe.
+    let probe_has_gnar_term = probe
+        .components()
+        .any(|c| matches!(c, std::path::Component::Normal(s) if s == ".gnar-term"));
+    if !probe_has_gnar_term {
+        return Ok(());
+    }
+    // `.gnar-term` exists somewhere in the ancestor chain. Verify its
+    // canonical still contains that segment (catches a
+    // `.gnar-term` → `~/.ssh` symlink that would resolve past the intent).
+    let canonical_has_gnar_term = canonical
+        .components()
+        .any(|c| matches!(c, std::path::Component::Normal(s) if s == ".gnar-term"));
+    if !canonical_has_gnar_term {
+        return Err("Write denied: resolved path escapes the .gnar-term/ allowlist".to_string());
     }
     Ok(())
 }
@@ -1073,6 +1137,31 @@ async fn get_home() -> Result<String, String> {
     std::env::var("HOME").map_err(|_| "HOME not set".to_string())
 }
 
+/// Returns the global config directory, isolated per build type.
+/// Debug builds use `~/.config/gnar-term-dev` so the dev Tauri window
+/// does not share state with the production build.
+fn global_config_dir() -> Result<String, String> {
+    let home = std::env::var("HOME").map_err(|_| "HOME not set".to_string())?;
+    #[cfg(debug_assertions)]
+    {
+        Ok(format!("{home}/.config/gnar-term-dev"))
+    }
+    #[cfg(not(debug_assertions))]
+    {
+        Ok(format!("{home}/.config/gnar-term"))
+    }
+}
+
+#[tauri::command]
+async fn get_global_config_dir() -> Result<String, String> {
+    global_config_dir()
+}
+
+#[tauri::command]
+fn is_debug_build() -> bool {
+    cfg!(debug_assertions)
+}
+
 /// Show a file in the system file manager
 #[tauri::command]
 async fn show_in_file_manager(path: String) -> Result<(), String> {
@@ -1095,13 +1184,6 @@ async fn show_in_file_manager(path: String) -> Result<(), String> {
             .spawn()
             .map_err(|e| e.to_string())?;
     }
-    #[cfg(target_os = "windows")]
-    {
-        std::process::Command::new("explorer")
-            .args(["/select,", &validated_str])
-            .spawn()
-            .map_err(|e| e.to_string())?;
-    }
     Ok(())
 }
 
@@ -1120,9 +1202,25 @@ async fn open_with_default_app(path: String) -> Result<(), String> {
         .arg(&validated_str)
         .spawn()
         .map_err(|e| e.to_string())?;
-    #[cfg(target_os = "windows")]
-    std::process::Command::new("explorer")
-        .arg(&validated_str)
+    Ok(())
+}
+
+/// Open a URL in the system default browser
+#[tauri::command]
+async fn open_url(url: String) -> Result<(), String> {
+    let parsed = url::Url::parse(&url).map_err(|e| format!("Invalid URL: {e}"))?;
+    if parsed.scheme() != "https" && parsed.scheme() != "http" {
+        return Err(format!("Rejected non-http URL scheme: {}", parsed.scheme()));
+    }
+    let url = parsed.to_string();
+    #[cfg(target_os = "macos")]
+    std::process::Command::new("open")
+        .arg(&url)
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    #[cfg(target_os = "linux")]
+    std::process::Command::new("xdg-open")
+        .arg(&url)
         .spawn()
         .map_err(|e| e.to_string())?;
     Ok(())
@@ -1384,9 +1482,9 @@ fn read_mcp_setting() -> String {
         let mut v = Vec::new();
         v.push(std::path::PathBuf::from("gnar-term.json"));
         v.push(std::path::PathBuf::from("cmux.json"));
-        if let Ok(home) = std::env::var("HOME") {
+        if let Ok(config_dir) = global_config_dir() {
             v.push(std::path::PathBuf::from(format!(
-                "{home}/.config/gnar-term/gnar-term.json"
+                "{config_dir}/gnar-term.json"
             )));
         }
         v
@@ -1457,10 +1555,13 @@ pub fn run() {
             write_file,
             ensure_dir,
             get_home,
+            get_global_config_dir,
+            is_debug_build,
             watch_file,
             unwatch_file,
             show_in_file_manager,
             open_with_default_app,
+            open_url,
             find_file,
             mcp_list_dir,
             mcp_file_info,
@@ -1476,7 +1577,11 @@ pub fn run() {
             git_worktree::remove_worktree,
             git_worktree::list_branches,
             git_info::git_status,
-            gh_commands::gh_list_prs
+            git_info::git_remote_url,
+            git_info::git_diff,
+            gh_commands::gh_list_prs,
+            gh_commands::gh_list_issues,
+            gh_commands::gh_available
         ])
         .setup(|app| {
             // Set window title from CLI --title flag
@@ -1488,6 +1593,28 @@ pub fn run() {
                         let _ = window.set_title(title);
                     }
                 }
+            }
+
+            // Dev builds: set yellow icon and display name so Dock/app-switcher
+            // clearly distinguish dev from release. Deferred to main thread so
+            // it runs after Tauri's own post-setup icon/name initialization.
+            #[cfg(all(debug_assertions, target_os = "macos"))]
+            {
+                let handle = app.handle().clone();
+                let _ = handle.run_on_main_thread(|| {
+                    use objc2::{AnyThread, MainThreadMarker};
+                    use objc2_app_kit::{NSApplication, NSImage};
+                    use objc2_foundation::NSData;
+                    unsafe {
+                        let mtm = MainThreadMarker::new_unchecked();
+                        let bytes: &[u8] = include_bytes!("../icons/dev/128x128@2x.png");
+                        let data = NSData::with_bytes(bytes);
+                        if let Some(image) = NSImage::initWithData(NSImage::alloc(), &data) {
+                            NSApplication::sharedApplication(mtm)
+                                .setApplicationIconImage(Some(&image));
+                        }
+                    }
+                });
             }
 
             // MCP bridge — opt-in, dormant unless enabled by setting + Claude
@@ -1971,6 +2098,33 @@ mod tests {
         assert!(
             result.is_ok(),
             "Should allow nested paths under config dir: {result:?}"
+        );
+    }
+
+    #[test]
+    fn validate_write_path_allows_project_local_dot_gnar_term() {
+        // Project-local state files (project dashboards, project-nested
+        // agent dashboards) live inside a `.gnar-term/` directory under
+        // the project's own path. This path shape is allowed even though
+        // it's not under ~/.config/gnar-term/.
+        let path = "/tmp/some-project/.gnar-term/project-dashboard.md";
+        let result = validate_write_path(path);
+        assert!(
+            result.is_ok(),
+            "Should allow writes under a project-local .gnar-term/ dir: {result:?}"
+        );
+    }
+
+    #[test]
+    fn validate_write_path_rejects_dot_gnar_term_lookalike() {
+        // `.gnar-term.evil` is NOT the .gnar-term segment; must still be
+        // blocked. Also tests that a path whose only "match" is a
+        // prefix-sharing filename fails.
+        let path = "/tmp/some-project/.gnar-term.evil/x.md";
+        let result = validate_write_path(path);
+        assert!(
+            result.is_err(),
+            "Should reject look-alike dirs (.gnar-term.evil): {result:?}"
         );
     }
 
@@ -2641,10 +2795,32 @@ mod tests {
     }
 
     #[test]
-    fn osc777_plain_text_is_notification() {
+    fn osc777_notify_payload_is_humanized() {
+        // OSC 777 xterm/urxvt notify format: notify;<title>;<body>
+        // We format as "<title>: <body>" so the UI doesn't surface the
+        // raw "notify;…" prefix (regression: Claude Code emits this and
+        // the sidebar was showing the raw payload).
         assert_eq!(
             classify_osc("777;notify;Title;Body text"),
-            OscAction::Notification("notify;Title;Body text".into())
+            OscAction::Notification("Title: Body text".into())
+        );
+    }
+
+    #[test]
+    fn osc777_notify_title_only() {
+        assert_eq!(
+            classify_osc("777;notify;Claude Code;"),
+            OscAction::Notification("Claude Code".into())
+        );
+    }
+
+    #[test]
+    fn osc777_non_notify_payload_passes_through() {
+        // Non-notify OSC 777 sub-actions keep their raw payload so we
+        // don't lose information when an agent uses a custom action.
+        assert_eq!(
+            classify_osc("777;other;Hello"),
+            OscAction::Notification("other;Hello".into())
         );
     }
 
@@ -2793,5 +2969,31 @@ mod tests {
             filter_known_args(input.into_iter()),
             args(&["gnar-term", "-w", "dev", "-e", "bash", "~/Documents"])
         );
+    }
+
+    #[tokio::test]
+    async fn open_url_rejects_javascript_scheme() {
+        let result = open_url("javascript:alert(1)".to_string()).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Rejected"));
+    }
+
+    #[tokio::test]
+    async fn open_url_rejects_file_scheme() {
+        let result = open_url("file:///etc/passwd".to_string()).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn open_url_rejects_non_http_scheme() {
+        // Covers ftp://, data:, javascript:, file:// etc.
+        for bad in &[
+            "ftp://example.com",
+            "data:text/html,x",
+            "javascript:alert(1)",
+        ] {
+            let result = open_url(bad.to_string()).await;
+            assert!(result.is_err(), "Expected error for {bad}");
+        }
     }
 }

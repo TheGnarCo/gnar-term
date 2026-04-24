@@ -1,4 +1,4 @@
-name: 'Update Homebrew Tap'
+name: "Update Homebrew Tap"
 
 on:
   workflow_run:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version (without v prefix, e.g. 0.2.3)'
+        description: "Release version (without v prefix, e.g. 0.2.3)"
         required: true
 
 jobs:

@@ -9,7 +9,6 @@
    * within a filtered view, that translates to moving a workspace relative to
    * its visible peers.
    */
-  import { flip } from "svelte/animate";
   import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
   import { theme } from "../stores/theme";
   import { reorderContext, anyReorderActive } from "../stores/ui";
@@ -23,16 +22,41 @@
   import { get } from "svelte/store";
   import WorkspaceItem from "./WorkspaceItem.svelte";
   import DropGhost from "./DropGhost.svelte";
+  import DashboardTileIcon from "./DashboardTileIcon.svelte";
+  import GridIcon from "../icons/GridIcon.svelte";
   import { contrastColor } from "../utils/contrast";
-  import { contextMenu } from "../stores/ui";
+  import { contextMenu, showConfirmPrompt } from "../stores/ui";
+  import { confirmAndCloseWorkspace } from "../services/worktree-service";
   import { commandStore } from "../services/command-registry";
+  import { workspaceGroupsStore } from "../stores/workspace-groups";
   import type { MenuItem } from "../context-menu-types";
+  import { getDashboardContribution } from "../services/dashboard-contribution-registry";
 
   /** Set of workspace IDs to display. If undefined, shows all. */
   export let filterIds: Set<string> | undefined = undefined;
 
   /** Project accent color passed to each WorkspaceItem for left-border coloring. */
   export let accentColor: string | undefined = undefined;
+
+  /**
+   * Optional per-workspace dashboard hint provider. When set, each rendered
+   * WorkspaceItem receives the result as its `dashboardHint` prop — a small
+   * clickable dashboard icon whose handler the caller owns. Used by
+   * AgentDashboardRow to navigate back to a nested workspace's owning
+   * dashboard without selecting the workspace.
+   */
+  export let dashboardHintFor:
+    | ((
+        ws: import("../types").Workspace,
+      ) => { id: string; color?: string; onClick: () => void } | undefined)
+    | undefined = undefined;
+  /**
+   * Forwarded to every WorkspaceItem. When true, per-row unread/agent
+   * badges and the latest-notification row are suppressed — the caller
+   * aggregates that status at the container level (e.g. AgentDashboardRow
+   * banner).
+   */
+  export let hideStatusBadges: boolean = false;
 
   /**
    * The immediate container ("scope") this list's workspaces live in — a
@@ -50,18 +74,47 @@
   export let containerBlockId: string | null = null;
 
   /**
-   * Human-readable name of the scope this list lives in — e.g. the
-   * project name for workspaces nested under a project. Surfaces in the
-   * context menu's "Close Other Workspaces in <label>…" item so the
-   * action's blast radius is obvious at a glance. Leave undefined and
-   * the menu falls back to the global "Close Other Workspaces" label
-   * with no scoping.
+   * Human-readable name of the scope this list lives in. The "Close
+   * Other Workspaces" menu item was removed, so the label is currently
+   * unused inside WorkspaceListView — retained on the prop surface so
+   * callers (ContainerRow) don't have to rewire when a future action
+   * needs the label.
    */
   export let containerLabel: string | undefined = undefined;
+  void containerLabel;
 
-  $: entries = $workspaces
+  $: allEntries = $workspaces
     .map((ws, idx) => ({ ws, idx }))
     .filter(({ ws }) => (filterIds ? filterIds.has(ws.id) : true));
+
+  // Dashboard workspaces (metadata.isDashboard) render first as a pinned,
+  // non-reorderable, full-color tile (no grip, no X, icon-only). Regular
+  // workspaces render below via the standard WorkspaceItem path, fully
+  // draggable among themselves. This mirrors the "Dashboard is the first
+  // item in the nested list" invariant.
+  function isDashboardWs(ws: import("../types").Workspace): boolean {
+    return (
+      (ws.metadata as Record<string, unknown> | undefined)?.isDashboard === true
+    );
+  }
+
+  // Settings always pins to the END of the dashboard grid so it's a
+  // stable "last tile" regardless of which other dashboards are
+  // enabled for this group. Everything else keeps registration /
+  // creation order.
+  function isSettingsDashboard(ws: import("../types").Workspace): boolean {
+    const md = ws.metadata as Record<string, unknown> | undefined;
+    return md?.dashboardContributionId === "settings";
+  }
+  $: dashboardEntries = allEntries
+    .filter(({ ws }) => isDashboardWs(ws))
+    .sort((a, b) => {
+      const aSettings = isSettingsDashboard(a.ws);
+      const bSettings = isSettingsDashboard(b.ws);
+      if (aSettings === bSettings) return 0;
+      return aSettings ? 1 : -1;
+    });
+  $: entries = allEntries.filter(({ ws }) => !isDashboardWs(ws));
 
   let sourceIdx: number | null = null;
   let indicator: { idx: number; edge: "before" | "after" } | null = null;
@@ -121,42 +174,83 @@
   // via the bound ref; everything else routes through the workspace
   // service. Kept local to WorkspaceListView so this shared component
   // doesn't need parent callbacks for each item.
+  /**
+   * Right-click menu for a dashboard tile. Optional extension-provided
+   * contributions (those without `autoProvision`) expose a Delete
+   * action — closing the workspace lifts the per-group cap so "Add
+   * <Dashboard>" reappears in the group's "+ New" dropdown; any
+   * backing markdown stays on disk so a re-add doesn't lose edits.
+   * `autoProvision` contributions (core Overview, core Settings,
+   * Agentic) are locked — no menu items, so no context menu shown.
+   */
+  function showDashboardContextMenu(
+    x: number,
+    y: number,
+    globalIdx: number,
+  ): void {
+    const ws = $workspaces[globalIdx];
+    if (!ws) return;
+    const wsMeta = ws.metadata as Record<string, unknown> | undefined;
+    const contribId = wsMeta?.dashboardContributionId;
+    if (typeof contribId !== "string") return;
+    const contribution = getDashboardContribution(contribId);
+    if (!contribution) return;
+    if (contribution.autoProvision) return;
+    const items: MenuItem[] = [
+      {
+        label: `Delete ${contribution.label}`,
+        danger: true,
+        action: async () => {
+          const confirmed = await showConfirmPrompt(
+            `Delete "${ws.name}"? The backing markdown file stays on disk so you can re-add this dashboard later without losing your edits.`,
+            {
+              title: `Delete ${contribution.label}`,
+              confirmLabel: "Delete",
+              cancelLabel: "Cancel",
+            },
+          );
+          if (!confirmed) return;
+          closeWorkspace(globalIdx);
+        },
+      },
+    ];
+    contextMenu.set({ x, y, items });
+  }
+
   function showNestedContextMenu(x: number, y: number, globalIdx: number) {
     const ws = $workspaces[globalIdx];
     if (!ws) return;
-    const canPromote = get(commandStore).some(
-      (c) => c.id === "promote-workspace-to-project",
-    );
-
-    // Scope "Close Other" to this list when a filterIds is in effect
-    // (i.e. we're rendered under a project/dashboard). Without a filter
-    // the list is the global root, so "Close Other" closes every other
-    // workspace in the app. With one, it only closes the visible peers
-    // so the user doesn't accidentally nuke other projects' workspaces.
-    const siblingIds = filterIds
-      ? Array.from(filterIds).filter((id) => id !== ws.id)
-      : $workspaces
-          .map((w, i) => (i === globalIdx ? null : w.id))
-          .filter((id): id is string => !!id);
-    const closeOtherLabel = containerLabel
-      ? `Close Other Workspaces in ${containerLabel}`
-      : "Close Other Workspaces";
+    const wsMeta = ws.metadata as Record<string, unknown> | undefined;
+    const isDashboard = wsMeta?.isDashboard === true;
+    const isInsideGroup = typeof wsMeta?.groupId === "string";
+    // Dashboards are singleton workspace surfaces closed with the group;
+    // they don't support rename or promotion. Workspaces already nested
+    // inside a group can't be promoted again — groups don't nest.
+    const canPromote =
+      !isDashboard &&
+      !isInsideGroup &&
+      get(commandStore).some((c) => c.id === "promote-workspace-to-group");
+    const canRename = !isDashboard;
 
     const items: MenuItem[] = [
-      {
-        label: "Rename Workspace",
-        shortcut: "⇧⌘R",
-        action: () => itemRefs[ws.id]?.startRename(),
-      },
+      ...(canRename
+        ? [
+            {
+              label: "Rename Workspace",
+              shortcut: "⇧⌘R",
+              action: () => itemRefs[ws.id]?.startRename(),
+            } as MenuItem,
+          ]
+        : []),
       ...(canPromote
         ? [
             { label: "", action: () => {}, separator: true } as MenuItem,
             {
-              label: "Promote to Project...",
+              label: "Promote to Workspace Group...",
               action: () => {
                 switchWorkspace(globalIdx);
                 const cmd = get(commandStore).find(
-                  (c) => c.id === "promote-workspace-to-project",
+                  (c) => c.id === "promote-workspace-to-group",
                 );
                 if (cmd) void cmd.action();
               },
@@ -165,48 +259,92 @@
         : []),
       { label: "", action: () => {}, separator: true },
       {
-        label: closeOtherLabel,
-        disabled: siblingIds.length === 0,
-        action: () => {
-          // Walk back-to-front so indices stay valid as we splice. Map
-          // siblingIds → current indices just before closing; the list
-          // doesn't mutate mid-loop in a way that invalidates the stable
-          // id snapshot we captured above.
-          const targets = siblingIds
-            .map((id) => $workspaces.findIndex((w) => w.id === id))
-            .filter((i) => i >= 0)
-            .sort((a, b) => b - a);
-          for (const i of targets) closeWorkspace(i);
-        },
-      },
-      {
         label: "Close Workspace",
         shortcut: "⇧⌘W",
         danger: true,
-        disabled: $workspaces.length <= 1,
-        action: () => closeWorkspace(globalIdx),
+        disabled: $workspaces.length <= 1 || isDashboard,
+        action: () => void confirmAndCloseWorkspace(ws, globalIdx),
       },
     ];
     contextMenu.set({ x, y, items });
   }
 </script>
 
-<!-- Skip the whole container when the filtered list is empty. The
-     class applies an 8px top+left inset so nested rows breathe below
-     the banner — rendering an empty container with that inset leaves
-     a visible "lip" on the parent's colored rail (project row with no
-     workspaces, dashboard row with no worktrees). Guarding here keeps
-     the rail flush. -->
-{#if entries.length > 0}
+<!-- Skip the whole container when both lists are empty. The class
+     applies an 8px top+left inset so nested rows breathe below the
+     banner — rendering an empty container with that inset leaves a
+     visible "lip" on the parent's rail. Guarding here keeps the rail
+     flush when a container has no nested content at all. -->
+{#if dashboardEntries.length > 0 || entries.length > 0}
   <div class="workspace-list-view">
+    {#if dashboardEntries.length > 0}
+      {@const count = dashboardEntries.length}
+      {@const cols = Math.min(count, 4)}
+      <!-- Dashboards share a grid container so they fill available width.
+           Up to 4 per row; extras wrap. When the sidebar is very thin
+           (≤140px) a container query collapses to 2 per row so icons
+           don't get squished. Tiles are icon-only; the workspace name
+           lives in the `title` attribute for hover. -->
+      <div
+        class="dashboard-grid"
+        data-dashboard-count={count}
+        data-multi={count > 1 ? "true" : undefined}
+        style="--cols: {cols};"
+      >
+        {#each dashboardEntries as entry (entry.ws.id)}
+          {@const dashAccent = accentColor ?? $theme.accent}
+          {@const isActive = entry.idx === $activeWorkspaceIdx}
+          {@const wsMeta = entry.ws.metadata as
+            | Record<string, unknown>
+            | undefined}
+          {@const contribId =
+            typeof wsMeta?.dashboardContributionId === "string"
+              ? (wsMeta.dashboardContributionId as string)
+              : undefined}
+          {@const contribution = contribId
+            ? getDashboardContribution(contribId)
+            : undefined}
+          {@const IconComp = contribution?.icon ?? GridIcon}
+          {@const tileGroupId =
+            typeof wsMeta?.groupId === "string"
+              ? (wsMeta.groupId as string)
+              : undefined}
+          {@const tileGroupPath = tileGroupId
+            ? $workspaceGroupsStore.find((g) => g.id === tileGroupId)?.path
+            : undefined}
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div
+            class="dashboard-tile"
+            data-dashboard-item={entry.ws.id}
+            data-dashboard-contribution={contribId}
+            data-active={isActive ? "true" : undefined}
+            title={entry.ws.name}
+            on:click={() => switchWorkspace(entry.idx)}
+            on:contextmenu|preventDefault={(e) =>
+              showDashboardContextMenu(e.clientX, e.clientY, entry.idx)}
+            style="
+              background: {$theme.bgSurface ?? 'transparent'};
+              color: {$theme.fg};
+              border: 1px solid {$theme.border ?? 'transparent'};
+              opacity: {isActive ? 1 : 0.75};
+              {isActive ? `box-shadow: 0 0 0 1.5px ${dashAccent};` : ''}
+            "
+          >
+            <DashboardTileIcon
+              iconComponent={IconComp}
+              baseColor={dashAccent}
+              contributionId={contribId}
+              groupPath={tileGroupPath}
+            />
+          </div>
+        {/each}
+      </div>
+    {/if}
     {#each entries as entry (entry.ws.id)}
       {@const isSrc = active && sourceIdx === entry.idx}
       {@const isSibling = active && sourceIdx !== entry.idx}
-      <div
-        class="workspace-list-row"
-        animate:flip={{ duration: 200 }}
-        data-ws-view-drag-idx={entry.idx}
-      >
+      <div class="workspace-list-row" data-ws-view-drag-idx={entry.idx}>
         {#if indicator?.idx === entry.idx && indicator.edge === "before"}
           <DropGhost
             theme={$theme}
@@ -223,10 +361,12 @@
             isActive={entry.idx === $activeWorkspaceIdx}
             dragActive={isSrc}
             {accentColor}
+            dashboardHint={dashboardHintFor?.(entry.ws)}
+            {hideStatusBadges}
             onSelect={() => {
               if (!active) switchWorkspace(entry.idx);
             }}
-            onClose={() => closeWorkspace(entry.idx)}
+            onClose={() => void confirmAndCloseWorkspace(entry.ws, entry.idx)}
             onRename={(name) => renameWorkspace(entry.idx, name)}
             onContextMenu={(x, y) => showNestedContextMenu(x, y, entry.idx)}
             onGripMouseDown={(e) => startDrag(e, entry.idx)}
@@ -266,12 +406,52 @@
 {/if}
 
 <style>
-  /* Gap between adjacent workspace rows so the rail reads as a stack
-     of discrete workspace tiles rather than one unbroken column.
-     Matched by WorkspaceListBlock's .root-row + rule so root and
-     nested workspace lists have identical vertical rhythm. */
+  /* Uniform 8px rhythm across the nested column: banner→dashboard,
+     dashboard→first-workspace, and workspace→workspace all use the
+     same gap so the rail reads as an evenly-spaced stack. Matched by
+     WorkspaceListBlock's .root-row + rule for root-level rhythm. */
   .workspace-list-row + .workspace-list-row {
-    margin-top: 6px;
+    margin-top: 8px;
+  }
+  .dashboard-grid + .workspace-list-row {
+    margin-top: 8px;
+  }
+
+  /* Dashboard grid — up to 4 equal-width tiles per row; extras wrap.
+     `container-type: inline-size` lets the narrow-width override below
+     force tiles onto additional rows so icons don't get squished. */
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(var(--cols, 4), minmax(0, 1fr));
+    gap: 8px;
+    margin-right: 8px;
+    container-type: inline-size;
+  }
+
+  /* Very narrow sidebar — cap at 2 per row regardless of how many
+     dashboards exist, so every icon stays readable. */
+  @container (max-width: 140px) {
+    .dashboard-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  .dashboard-tile {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 6px 8px;
+    min-height: 32px;
+    min-width: 0;
+    border-radius: 6px;
+    cursor: pointer;
+    transition:
+      opacity 0.12s,
+      box-shadow 0.12s,
+      filter 0.12s;
+  }
+  .dashboard-tile:hover {
+    filter: brightness(1.1);
   }
   /* 8px left + top margin on the nested list so the workspace rails
      sit visually inset from the parent project's rail and the first

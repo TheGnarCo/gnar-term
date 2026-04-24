@@ -59,7 +59,7 @@ describe("ExtensionAPI.registerChildRowContributor", () => {
     registerExtension(makeManifest({ id: "ext-a" }), (api) => {
       api.onActivate(() => {
         api.registerChildRowContributor("project", (projectId) => [
-          { kind: "agent-dashboard", id: `${projectId}-d` },
+          { kind: "agent-orchestrator", id: `${projectId}-d` },
         ]);
       });
     });
@@ -71,7 +71,7 @@ describe("ExtensionAPI.registerChildRowContributor", () => {
     expect(list[0].parentType).toBe("project");
 
     expect(getChildRowsFor("project", "p1")).toEqual([
-      { kind: "agent-dashboard", id: "p1-d" },
+      { kind: "agent-orchestrator", id: "p1-d" },
     ]);
   });
 

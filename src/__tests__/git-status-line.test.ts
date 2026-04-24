@@ -16,7 +16,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 }));
 
 import GitStatusLine from "../lib/components/GitStatusLine.svelte";
-import { workspaces } from "../lib/stores/workspace";
+import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
 import {
   setStatusItem,
   clearAllStatusForWorkspace,
@@ -45,18 +45,27 @@ function setDirty(workspaceId: string) {
   });
 }
 
+import { get } from "svelte/store";
+
+function activate(wsId: string) {
+  const idx = get(workspaces).findIndex((w) => w.id === wsId);
+  activeWorkspaceIdx.set(idx);
+}
+
 describe("GitStatusLine nested rules", () => {
   beforeEach(() => {
     cleanup();
     workspaces.set([]);
+    activeWorkspaceIdx.set(-1);
     clearAllStatusForWorkspace("ws-nested");
     clearAllStatusForWorkspace("ws-worktree");
     clearAllStatusForWorkspace("ws-root");
   });
 
   it("hides inline git-info for a normal nested workspace (no worktreePath)", () => {
-    const ws = makeWorkspace("ws-nested", { projectId: "p1" });
+    const ws = makeWorkspace("ws-nested", { groupId: "p1" });
     workspaces.set([ws]);
+    activate(ws.id);
     setDirty(ws.id);
     const { container } = render(GitStatusLine, {
       props: { workspaceId: ws.id },
@@ -64,13 +73,14 @@ describe("GitStatusLine nested rules", () => {
     expect(container.textContent).not.toMatch(/modified/);
   });
 
-  it("shows worktree branch + dirty for a worktree nested workspace", () => {
+  it("shows worktree branch + dirty for a worktree nested workspace when active", () => {
     const ws = makeWorkspace("ws-worktree", {
-      projectId: "p1",
+      groupId: "p1",
       worktreePath: "/work/wt",
       branch: "feat/x",
     });
     workspaces.set([ws]);
+    activate(ws.id);
     setDirty(ws.id);
     const { container } = render(GitStatusLine, {
       props: { workspaceId: ws.id },
@@ -79,13 +89,40 @@ describe("GitStatusLine nested rules", () => {
     expect(container.textContent).toMatch(/modified/);
   });
 
-  it("still renders full top/bottom rows for a root (non-nested) workspace", () => {
+  it("shows only the worktree branch (no dirty) when the workspace is inactive", () => {
+    const ws = makeWorkspace("ws-worktree", {
+      groupId: "p1",
+      worktreePath: "/work/wt",
+      branch: "feat/x",
+    });
+    workspaces.set([ws]);
+    // leave activeWorkspaceIdx = -1 → workspace is inactive
+    setDirty(ws.id);
+    const { container } = render(GitStatusLine, {
+      props: { workspaceId: ws.id },
+    });
+    expect(container.textContent).toMatch(/feat\/x/);
+    expect(container.textContent).not.toMatch(/modified/);
+  });
+
+  it("still renders full top/bottom rows for a root (non-nested) workspace when active", () => {
+    const ws = makeWorkspace("ws-root", {});
+    workspaces.set([ws]);
+    activate(ws.id);
+    setDirty(ws.id);
+    const { container } = render(GitStatusLine, {
+      props: { workspaceId: ws.id },
+    });
+    expect(container.textContent).toMatch(/modified/);
+  });
+
+  it("hides the dirty bottom row on a root workspace when inactive", () => {
     const ws = makeWorkspace("ws-root", {});
     workspaces.set([ws]);
     setDirty(ws.id);
     const { container } = render(GitStatusLine, {
       props: { workspaceId: ws.id },
     });
-    expect(container.textContent).toMatch(/modified/);
+    expect(container.textContent).not.toMatch(/modified/);
   });
 });

@@ -5,7 +5,7 @@ Tauri v2 terminal workspace manager. Rust backend (portable-pty), Svelte fronten
 ## Build & Test
 
 ```bash
-npm test                    # vitest unit tests (293 tests)
+npm test                    # vitest unit tests
 npm run build               # full tauri build (frontend + Rust)
 cargo check                 # quick Rust compilation check
 ```
@@ -18,12 +18,15 @@ When posting in the `#pull-requests` Slack channel, prefix the message with the 
 
 ## Branching & PRs
 
-- All work on feature branches, never commit directly to main
-- Always `git checkout main` before creating a new branch — never branch off other feature branches
+Branch strategy: `main` is the stable release branch; `dev` is the forward development branch. All PRs target `dev`. `dev` merges into `main` for releases.
+
+- All work on feature branches, never commit directly to `main` or `dev`
+- Always `git checkout dev` before creating a new branch — never branch off other feature branches
+- When computing diffs, audits, or PR base refs, use `dev` as the base — not `main`
 - Every bug fix and feature must include regression tests
 - Use plan mode for audits, migrations, and multi-step tasks
 - Disable sandbox for SSH git ops (`git push/pull/fetch`) and `gh` commands
-- Commits on feature branches do not require explicit permission — when work on a feature branch is complete and tests pass, commit it. (Still never commit to main, never force-push, never merge PRs.)
+- Commits on feature branches do not require explicit permission — when work on a feature branch is complete and tests pass, commit it. (Still never commit to main or dev directly, never force-push, never merge PRs.)
 
 ### PR test plans
 
@@ -40,7 +43,7 @@ git push origin v0.4.0
 
 CI derives version from the tag. Do NOT edit version files for releases.
 
-See `.github/workflows/release.yml` for the full pipeline (macOS, Linux, Windows builds + signing + Homebrew tap update).
+See `.github/workflows/release.yml` for the full pipeline (macOS, Linux builds + signing + Homebrew tap update).
 
 ## GitHub Actions
 
@@ -54,11 +57,11 @@ Custom slash commands live in `.claude/commands/`:
 
 ## Cross-Platform
 
-gnar-term runs on macOS, Linux, and Windows. When making changes:
+gnar-term runs on macOS and Linux. When making changes:
 
 - **Never fix Linux and break macOS (or vice versa).** Use platform detection (`isMac` from `terminal-service.ts`) to branch behavior, not platform-specific code that replaces the other platform's logic.
-- Keyboard shortcuts use Cmd on macOS, Ctrl on Linux/Windows. Both must work.
-- Test clipboard, keyboard shortcuts, and PTY behavior on all platforms when possible.
+- Keyboard shortcuts use Cmd on macOS, Ctrl on Linux. Both must work.
+- Test clipboard, keyboard shortcuts, and PTY behavior on both platforms when possible.
 - WebKitGTK (Linux webview) behaves differently from WKWebView (macOS) — watch for webview-level key interception differences.
 
 ## Testing Guidelines

@@ -2,9 +2,11 @@
   import { onMount, onDestroy } from "svelte";
   import { theme } from "../stores/theme";
   import { workspaces } from "../stores/workspace";
+  import { commandStore } from "../services/command-registry";
   import TabBar from "./TabBar.svelte";
   import TerminalSurface from "./TerminalSurface.svelte";
   import PreviewSurface from "./PreviewSurface.svelte";
+  import GroupDashboardSettings from "./GroupDashboardSettings.svelte";
   import RestoreCommandPrompt from "./RestoreCommandPrompt.svelte";
   import EmptySurface from "./EmptySurface.svelte";
   import type { Component } from "svelte";
@@ -34,6 +36,19 @@
 
   let paneEl: HTMLElement;
   let resizeObserver: ResizeObserver;
+  let scrollState: Record<string, boolean> = {};
+
+  $: showJumpToBottom =
+    pane.activeSurfaceId != null
+      ? (scrollState[pane.activeSurfaceId] ?? false)
+      : false;
+
+  function handleJumpToBottom() {
+    const active = pane.surfaces.find((s) => s.id === pane.activeSurfaceId);
+    if (active && isTerminalSurface(active)) {
+      active.terminal.scrollToBottom();
+    }
+  }
   let resizeTimer: ReturnType<typeof setTimeout> | null = null;
 
   // --- Notification chrome (Option E hybrid) ---
@@ -41,6 +56,42 @@
   // this pane has hasUnread; one swell animation when an unread first
   // arrives. Cleared when the pane focuses (handleFocus below).
   $: paneHasUnread = pane.surfaces.some((s) => s.hasUnread);
+
+  // When the workspace is a constrained Dashboard (metadata.isDashboard
+  // === true), hide the tab bar, split buttons, and new-surface
+  // affordances entirely. The single Live Preview surface fills the pane.
+  // Dashboard workspaces can't accumulate surfaces — the preview cannot
+  // be closed from the UI, so no regen affordance is needed either.
+  //
+  // For non-Dashboard workspaces tied to a workspace group
+  // (metadata.groupId), keep the workspace-groups regen affordance so
+  // users can re-spawn a group-dashboard preview surface after closing it.
+  $: workspaceMetadata = $workspaces.find((w) => w.id === workspaceId)
+    ?.metadata as Record<string, unknown> | undefined;
+  $: isDashboardWorkspace = workspaceMetadata?.isDashboard === true;
+  // When the dashboard workspace belongs to the core "settings"
+  // contribution, PaneView renders the shared GroupDashboardSettings
+  // component in place of the surface list. The workspace carries no
+  // preview surface — it exists purely as a routing record.
+  $: settingsDashboardGroupId =
+    isDashboardWorkspace &&
+    workspaceMetadata?.dashboardContributionId === "settings" &&
+    typeof workspaceMetadata?.groupId === "string"
+      ? (workspaceMetadata.groupId as string)
+      : null;
+  $: regenCommandId =
+    isDashboardWorkspace &&
+    !settingsDashboardGroupId &&
+    typeof workspaceMetadata?.groupId === "string"
+      ? "workspace-groups:regenerate-active-group-dashboard"
+      : undefined;
+  $: regenCommand = regenCommandId
+    ? $commandStore.find((c) => c.id === regenCommandId)
+    : undefined;
+  $: regenDashboardTitle = regenCommand?.title ?? "Regenerate Dashboard";
+  $: onRegenDashboard = regenCommand
+    ? () => void regenCommand.action()
+    : undefined;
 
   let arriving = false;
   let prevUnread = false;
@@ -127,18 +178,52 @@
   "
   on:mousedown={handleFocus}
 >
-  <TabBar
-    {pane}
-    {workspaceId}
-    {onSelectSurface}
-    {onCloseSurface}
-    {onNewSurface}
-    {onSelectSurfaceType}
-    {onSplitRight}
-    {onSplitDown}
-    {onClosePane}
-    {onReorderTab}
-  />
+  {#if !isDashboardWorkspace}
+    <TabBar
+      {pane}
+      {workspaceId}
+      {onSelectSurface}
+      {onCloseSurface}
+      {onNewSurface}
+      {onSelectSurfaceType}
+      {onSplitRight}
+      {onSplitDown}
+      {onClosePane}
+      {onReorderTab}
+      {showJumpToBottom}
+      onJumpToBottom={handleJumpToBottom}
+    />
+  {:else if onRegenDashboard}
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      style="
+        display: flex; align-items: center; justify-content: flex-end;
+        background: {$theme.tabBarBg}; border-bottom: 1px solid {$theme.tabBarBorder};
+        height: 28px; padding: 0 4px; flex-shrink: 0;
+      "
+    >
+      <span
+        title={regenDashboardTitle}
+        style="color: {$theme.fgDim}; cursor: pointer; width: 24px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center;"
+        on:click|stopPropagation={onRegenDashboard}
+      >
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 14 14"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          ><path d="M2 7a5 5 0 1 1 1.5 3.5" /><polyline
+            points="2 11 2 7 6 7"
+          /></svg
+        >
+      </span>
+    </div>
+  {/if}
 
   {#each pane.surfaces.filter((s) => s.id === pane.activeSurfaceId && isTerminalSurface(s)) as activeTerm (activeTerm.id)}
     {#if isTerminalSurface(activeTerm)}
@@ -163,41 +248,57 @@
     ></span>
   {/if}
 
-  {#if pane.surfaces.length === 0}
-    <!-- Empty pane view — the user just closed the last surface. Shows
-         the same EmptySurface UX the app uses when every workspace has
-         been closed, but scoped to this single empty pane. -->
-    <EmptySurface />
-  {/if}
-
-  {#each pane.surfaces as surface (surface.id)}
-    {#if isTerminalSurface(surface)}
-      <TerminalSurface
-        {surface}
-        visible={surface.id === pane.activeSurfaceId}
-        cwd={surface.cwd}
-      />
-    {:else if isExtensionSurface(surface)}
-      {#each $surfaceTypeStore.filter((t) => t.id === surface.surfaceTypeId) as typeDef (typeDef.id)}
-        {@const surfaceApi = getExtensionApiById(typeDef.source)}
-        {#if surfaceApi}
-          <ExtensionWrapper
-            api={surfaceApi}
-            component={typeDef.component}
-            props={{ surface, visible: surface.id === pane.activeSurfaceId }}
-          />
-        {:else}
-          <svelte:component
-            this={typeDef.component as Component}
-            {surface}
-            visible={surface.id === pane.activeSurfaceId}
-          />
-        {/if}
-      {/each}
-    {:else if isPreviewSurface(surface)}
-      <PreviewSurface {surface} visible={surface.id === pane.activeSurfaceId} />
+  {#if settingsDashboardGroupId}
+    <!-- Settings dashboard — PaneView renders the shared settings body
+         in place of any surface list. The workspace carries no preview
+         surface, so no other render branches fire. -->
+    <GroupDashboardSettings groupId={settingsDashboardGroupId} />
+  {:else}
+    {#if pane.surfaces.length === 0}
+      <!-- Empty pane view — the user just closed the last surface. Shows
+           the same EmptySurface UX the app uses when every workspace has
+           been closed, but scoped to this single empty pane. -->
+      <EmptySurface />
     {/if}
-  {/each}
+
+    {#each pane.surfaces as surface (surface.id)}
+      {#if isTerminalSurface(surface)}
+        <TerminalSurface
+          {surface}
+          visible={surface.id === pane.activeSurfaceId}
+          cwd={surface.cwd}
+          bind:userScrolledUp={scrollState[surface.id]}
+        />
+      {:else if isExtensionSurface(surface)}
+        {#each $surfaceTypeStore.filter((t) => t.id === surface.surfaceTypeId) as typeDef (typeDef.id)}
+          {@const surfaceApi = getExtensionApiById(typeDef.source)}
+          {#if surfaceApi}
+            <ExtensionWrapper
+              api={surfaceApi}
+              component={typeDef.component}
+              props={{
+                ...(surface.props ?? {}),
+                surface,
+                visible: surface.id === pane.activeSurfaceId,
+              }}
+            />
+          {:else}
+            <svelte:component
+              this={typeDef.component as Component}
+              {...surface.props ?? {}}
+              {surface}
+              visible={surface.id === pane.activeSurfaceId}
+            />
+          {/if}
+        {/each}
+      {:else if isPreviewSurface(surface)}
+        <PreviewSurface
+          {surface}
+          visible={surface.id === pane.activeSurfaceId}
+        />
+      {/if}
+    {/each}
+  {/if}
 </div>
 
 <style>

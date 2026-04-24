@@ -26,6 +26,8 @@
   export let onReorderTab:
     | ((fromIdx: number, toIdx: number) => void)
     | undefined = undefined;
+  export let showJumpToBottom: boolean = false;
+  export let onJumpToBottom: (() => void) | undefined = undefined;
 
   $: processStatusStore = workspaceId
     ? getWorkspaceStatusByCategory(workspaceId, "process")
@@ -61,6 +63,31 @@
   <div
     style="display: flex; align-items: center; gap: 2px; padding-right: 2px;"
   >
+    {#if showJumpToBottom && onJumpToBottom}
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <span
+        data-jump-to-bottom
+        title="Jump to bottom"
+        style="color: {$theme.fgDim}; cursor: pointer; height: 20px; border-radius: 4px; display: flex; align-items: center; gap: 4px; padding: 0 6px; font-size: 11px; border: 1px solid {$theme.border};"
+        on:click|stopPropagation={onJumpToBottom}
+      >
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 10 10"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <line x1="5" y1="1" x2="5" y2="9" />
+          <polyline points="2,6 5,9 8,6" />
+        </svg>
+        Jump to bottom
+      </span>
+    {/if}
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <span

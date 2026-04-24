@@ -13,6 +13,8 @@ import { SearchAddon } from "@xterm/addon-search";
 import { invoke, Channel } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { appendMcpOutput } from "./services/mcp-output-buffer";
+import { eventBus } from "./services/event-bus";
+import { notifyOutputObservers } from "./services/surface-output-observer";
 import {
   readText as clipboardRead,
   writeText as clipboardWrite,
@@ -24,6 +26,7 @@ import {
 } from "@tauri-apps/plugin-notification";
 import { get } from "svelte/store";
 import { xtermTheme } from "./stores/theme";
+import { fontSize as fontSizeStore } from "./stores/font-size";
 import { workspaces, activeWorkspaceIdx } from "./stores/workspace";
 import { contextMenu, pendingAction } from "./stores/ui";
 import {
@@ -188,8 +191,16 @@ export function handlePtyChunk(ptyId: number, bytes: Uint8Array): void {
   }
 
   appendMcpOutput(ptyId, bytes);
+  // Fan out to surface output observers (passive agent detection, etc.).
+  // notifyOutputObservers is a no-op when no observer is registered for
+  // the pty. Non-streaming decode — all agent-detection consumers match
+  // on ASCII (pattern names, OSC numbers), and a single shared stream
+  // decoder would corrupt state across interleaved ptys.
+  notifyOutputObservers(ptyId, ptyTextDecoder.decode(bytes));
   scheduleFlush(ptyId);
 }
+
+const ptyTextDecoder = new TextDecoder("utf-8", { fatal: false });
 
 function flushPtyBuffer(ptyId: number) {
   ptyFlushScheduled.delete(ptyId);
@@ -219,9 +230,23 @@ function flushPtyBuffer(ptyId: number) {
   chunks.length = 0;
   ptyBufferBytes.set(ptyId, 0);
 
+  // Preserve the user's scroll position if they've scrolled up. xterm.js
+  // auto-scrolls to the bottom on every write(); capture the viewport before
+  // the write so we can roll it back in the callback.
+  const savedViewportY = surface.terminal.buffer.active.viewportY;
+  const maxScrollBefore = Math.max(
+    0,
+    surface.terminal.buffer.active.length - surface.terminal.rows,
+  );
+  const wasScrolledUp = savedViewportY < maxScrollBefore;
+
   // Single write to xterm.js per frame — the callback fires when xterm.js has
   // processed this batch, which is our signal that it's ready for more.
   surface.terminal.write(merged, () => {
+    if (wasScrolledUp) {
+      const newViewportY = surface.terminal.buffer.active.viewportY;
+      surface.terminal.scrollLines(savedViewportY - newViewportY);
+    }
     // If more data arrived while we were rendering, flush again next frame
     const buffered = ptyBufferBytes.get(ptyId) || 0;
     if (buffered > 0) {
@@ -402,17 +427,40 @@ export async function setupListeners() {
     // Filter out escape-sequence fragments that may slip through
     if (!title || /[\x00-\x1f\x7f]/.test(title) || /^\d+[;\d:\/]*$/.test(title))
       return;
+    let changed: { id: string; oldTitle: string; newTitle: string } | null =
+      null;
     workspaces.update((wsList) => {
       for (const ws of wsList) {
         for (const s of getAllSurfaces(ws)) {
           if (isTerminalSurface(s) && s.ptyId === pty_id) {
-            s.title = title;
+            if (s.title !== title) {
+              changed = { id: s.id, oldTitle: s.title, newTitle: title };
+              s.title = title;
+            }
             return wsList;
           }
         }
       }
       return wsList;
     });
+    // Emit AFTER the store update so downstream listeners (passive agent
+    // detection, status trackers) see the new title on the surface when
+    // they look it up. Listeners exist in the event-bus type surface
+    // but were previously never fired, so title-based agent attach
+    // (Claude titling itself "Claude Code", etc.) never triggered.
+    if (changed) {
+      const c = changed as {
+        id: string;
+        oldTitle: string;
+        newTitle: string;
+      };
+      eventBus.emit({
+        type: "surface:titleChanged",
+        id: c.id,
+        oldTitle: c.oldTitle,
+        newTitle: c.newTitle,
+      });
+    }
   });
 }
 
@@ -477,7 +525,7 @@ export async function createTerminalSurface(
 
   const terminal = new Terminal({
     cursorBlink: true,
-    fontSize: 14,
+    fontSize: get(fontSizeStore),
     fontFamily: resolvedFontFamily,
     theme: currentXtermTheme,
     allowProposedApi: true,
@@ -492,7 +540,11 @@ export async function createTerminalSurface(
   const fitAddon = new FitAddon();
   const searchAddon = new SearchAddon();
   terminal.loadAddon(fitAddon);
-  terminal.loadAddon(new WebLinksAddon());
+  terminal.loadAddon(
+    new WebLinksAddon((_event: MouseEvent, url: string) => {
+      invoke("open_url", { url }).catch(() => {});
+    }),
+  );
   terminal.loadAddon(searchAddon);
 
   const termElement = document.createElement("div");
@@ -620,6 +672,21 @@ export async function createTerminalSurface(
     // Ctrl+D (EOF), Ctrl+W (delete word), Ctrl+K (kill line), etc.
     // Linux app shortcuts use Ctrl+Shift instead.
     if (isMac) {
+      // WKWebView fires a paste event for Ctrl+V (web-compat quirk). Intercept
+      // it and send \x16 explicitly so vim quoted-insert still works, but the
+      // browser paste path is suppressed.
+      if (
+        e.ctrlKey &&
+        !e.metaKey &&
+        !e.shiftKey &&
+        e.key.toLowerCase() === "v"
+      ) {
+        e.preventDefault();
+        if (surface.ptyId >= 0)
+          void invoke("write_pty", { ptyId: surface.ptyId, data: "\x16" });
+        return false;
+      }
+
       if (!e.metaKey) return true; // Only intercept Cmd shortcuts on macOS
 
       const k = e.key.toLowerCase();
@@ -931,6 +998,10 @@ export async function connectPty(
     });
     surface.ptyId = ptyId;
     resolvedPtyId = ptyId;
+    // Broadcast once the real ptyId is known so services like passive
+    // agent detection can wire an output observer against it — the
+    // earlier surface:created event carries the placeholder ptyId of -1.
+    eventBus.emit({ type: "surface:ptyReady", id: surface.id, ptyId });
     for (const bytes of pending) handlePtyChunk(ptyId, bytes);
     pending.length = 0;
     deferred?.resolve(ptyId);

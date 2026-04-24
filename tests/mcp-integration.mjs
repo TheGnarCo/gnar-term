@@ -141,18 +141,23 @@ async function main() {
     capabilities: {},
     clientInfo: { name: "gnar-term-harness", version: "0.0.0" },
   });
-  assert(typeof init === "object" && init !== null, "initialize returns object");
+  assert(
+    typeof init === "object" && init !== null,
+    "initialize returns object",
+  );
   assert(init.protocolVersion === "2025-11-25", "protocol version matches");
   assert(init.serverInfo?.name === "gnar-term", "server name is gnar-term");
 
   // tools/list
   const list = await client.call("tools/list", {});
   assert(Array.isArray(list.tools), "tools/list returns array");
-  assert(list.tools.length === 27, `expected 27 tools, got ${list.tools.length}`);
+  assert(
+    list.tools.length === 43,
+    `expected 43 tools, got ${list.tools.length}`,
+  );
   const names = new Set(list.tools.map((t) => t.name));
   const required = [
     "spawn_agent",
-    "list_sessions",
     "get_session_info",
     "kill_session",
     "send_prompt",
@@ -188,7 +193,10 @@ async function main() {
     name: "list_workspaces",
     arguments: {},
   });
-  assert(workspaces?.structuredContent !== undefined, "tools/call returns structuredContent");
+  assert(
+    workspaces?.structuredContent !== undefined,
+    "tools/call returns structuredContent",
+  );
   assert(
     Array.isArray(workspaces.structuredContent?.workspaces),
     "list_workspaces result has workspaces array",
@@ -212,7 +220,10 @@ async function main() {
     arguments: {},
   });
   const wsId = wsList?.structuredContent?.workspaces?.[0]?.id;
-  assert(typeof wsId === "string", "list_workspaces returned a workspace id for the harness");
+  assert(
+    typeof wsId === "string",
+    "list_workspaces returned a workspace id for the harness",
+  );
   const render = await client.call("tools/call", {
     name: "render_sidebar",
     arguments: {
@@ -229,7 +240,11 @@ async function main() {
   );
   const removed = await client.call("tools/call", {
     name: "remove_sidebar_section",
-    arguments: { side: "secondary", section_id: "harness-smoke", workspace_id: wsId },
+    arguments: {
+      side: "secondary",
+      section_id: "harness-smoke",
+      workspace_id: wsId,
+    },
   });
   assert(
     removed?.structuredContent?.ok === true,

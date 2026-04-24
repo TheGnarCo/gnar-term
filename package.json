@@ -8,8 +8,7 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "dev": "tauri dev",
-    "prebuild": "rm -f src-tauri/target/release/bundle/macos/*.dmg src-tauri/target/release/bundle/macos/rw.*.dmg src-tauri/target/release/bundle/dmg/*.dmg",
+    "dev": "tauri dev --config src-tauri/tauri.dev.conf.json",
     "build": "tauri build",
     "vite": "vite",
     "vite:build": "vite build",

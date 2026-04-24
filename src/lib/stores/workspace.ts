@@ -5,6 +5,17 @@ import { getAllPanes } from "../types";
 export const workspaces = writable<Workspace[]>([]);
 export const activeWorkspaceIdx = writable<number>(-1);
 
+/**
+ * Id of the currently-active pseudo-workspace (e.g. the Global Agentic
+ * Dashboard), or `null` when a real workspace is active. Pseudo-workspaces
+ * are registered via `registerPseudoWorkspace` and do not live in the
+ * `workspaces` array — they're rendered from the pseudo-workspace
+ * registry. Activation is mutually exclusive with `activeWorkspaceIdx`:
+ * setting this to a non-null id hides every real workspace view and
+ * mounts the pseudo's body instead.
+ */
+export const activePseudoWorkspaceId = writable<string | null>(null);
+
 export const activeWorkspace = derived(
   [workspaces, activeWorkspaceIdx],
   ([$ws, $idx]) => $ws[$idx] ?? null,

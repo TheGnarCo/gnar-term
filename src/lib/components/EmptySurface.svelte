@@ -9,7 +9,7 @@
    *   - `workspaceActionStore` (core + extension non-sidebar actions
    *     whose `when` filter accepts an empty context)
    *   - `commandStore` entries registered with the ids listed in
-   *     `empty-surface-commands.ts` (e.g. project-scope:create-project)
+   *     `empty-surface-commands.ts` (e.g. workspace-groups:create-workspace-group)
    *
    * The "Jump to existing" list pulls from `rootRowOrder` so projects +
    * workspace rows render in the same order the sidebar shows them.
@@ -45,6 +45,8 @@
     icon: string;
     run: () => void;
   }
+
+  // Dashboard-regen lives in PaneView's dashboard header strip, not here.
 
   $: buttons = [
     ...workspaceActions.map(
@@ -118,17 +120,17 @@
         seen.add(ws.id);
         continue;
       }
-      // Non-workspace row kinds (project, agent-dashboard…). Use their
-      // renderer-contributed label as a visual header, then fan out
-      // any workspaces tagged with the row's projectId.
+      // Non-workspace row kinds (workspace-group, agent-orchestrator…).
+      // Use their renderer-contributed label as a visual header, then
+      // fan out any workspaces tagged with the row's groupId.
       const rendererMeta = $rootRowRendererStore.find((r) => r.id === row.kind);
       const headerLabel = rendererMeta?.label?.(row.id);
-      if (headerLabel && row.kind === "project") {
+      if (headerLabel && row.kind === "workspace-group") {
         for (let i = 0; i < list.length; i++) {
           const ws = list[i]!;
           if (seen.has(ws.id)) continue;
           if (
-            (ws.metadata as Record<string, unknown> | undefined)?.projectId ===
+            (ws.metadata as Record<string, unknown> | undefined)?.groupId ===
             row.id
           ) {
             out.push({

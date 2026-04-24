@@ -34,12 +34,13 @@ vi.mock("@xterm/xterm", () => ({
     onTitleChange = vi.fn();
     loadAddon = vi.fn();
     options: Record<string, unknown> = {};
-    buffer = { active: { getLine: vi.fn() } };
+    buffer = { active: { getLine: vi.fn(), length: 0 } };
     parser = { registerOscHandler: vi.fn() };
     attachCustomKeyEventHandler = vi.fn();
     registerLinkProvider = vi.fn();
     getSelection = vi.fn().mockReturnValue("selected text");
     scrollToBottom = vi.fn();
+    onScroll = vi.fn().mockReturnValue({ dispose: vi.fn() });
   },
 }));
 vi.mock("@xterm/addon-fit", () => ({
@@ -194,6 +195,46 @@ describe("Paste — single write to PTY via Tauri clipboard plugin", () => {
           .mock.calls.filter(([cmd]) => cmd === "write_pty");
         expect(writeCalls).toHaveLength(0);
       });
+    });
+  });
+
+  describe("Ctrl+V on macOS — sends \\x16 to PTY, no clipboard paste", () => {
+    it.skipIf(!isMac)(
+      "calls preventDefault to suppress WKWebView paste event",
+      () => {
+        const event = new KeyboardEvent("keydown", {
+          key: "v",
+          ctrlKey: true,
+        });
+        const spy = vi.spyOn(event, "preventDefault");
+        keyHandler(event);
+        expect(spy).toHaveBeenCalled();
+      },
+    );
+
+    it.skipIf(!isMac)("sends \\x16 to PTY (not clipboard text)", async () => {
+      const event = new KeyboardEvent("keydown", {
+        key: "v",
+        ctrlKey: true,
+      });
+      keyHandler(event);
+
+      await vi.waitFor(() => {
+        expect(invoke).toHaveBeenCalledWith("write_pty", {
+          ptyId: 42,
+          data: "\x16",
+        });
+      });
+      // Must not have read the clipboard
+      expect(clipboardRead).not.toHaveBeenCalled();
+    });
+
+    it.skipIf(!isMac)("returns false to suppress xterm processing", () => {
+      const event = new KeyboardEvent("keydown", {
+        key: "v",
+        ctrlKey: true,
+      });
+      expect(keyHandler(event)).toBe(false);
     });
   });
 

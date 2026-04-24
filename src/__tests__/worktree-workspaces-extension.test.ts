@@ -73,8 +73,8 @@ describe("worktree-workspaces extension", () => {
       (a) => a.id === "worktree-workspaces:create-worktree",
     );
     expect(action!.when!({})).toBe(true);
-    expect(action!.when!({ projectId: "p-1", isGit: true })).toBe(true);
-    expect(action!.when!({ projectId: "p-1", isGit: false })).toBe(false);
+    expect(action!.when!({ groupId: "p-1", isGit: true })).toBe(true);
+    expect(action!.when!({ groupId: "p-1", isGit: false })).toBe(false);
   });
 
   it("handler triggers the core worktrees:create-workspace command, forwarding ctx", async () => {
@@ -92,7 +92,7 @@ describe("worktree-workspaces extension", () => {
     );
     await activateExtension("worktree-workspaces");
 
-    const ctx = { projectId: "p-1", projectPath: "/p", isGit: true };
+    const ctx = { groupId: "p-1", projectPath: "/p", isGit: true };
     const registered = get(workspaceActionStore).find(
       (a) => a.id === "worktree-workspaces:create-worktree",
     );

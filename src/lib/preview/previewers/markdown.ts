@@ -1,6 +1,9 @@
 import { mount, unmount, type Component } from "svelte";
 import DOMPurify from "dompurify";
-import { registerPreviewer } from "../../services/preview-registry";
+import {
+  registerPreviewer,
+  type PreviewContext,
+} from "../../services/preview-registry";
 import { parseMarkdownChunks } from "../../markdown/render";
 import {
   getMarkdownComponent,
@@ -8,6 +11,11 @@ import {
 } from "../../services/markdown-component-registry";
 import { getExtensionApiById } from "../../services/extension-loader";
 import { EXTENSION_API_KEY } from "../../extension-types";
+import {
+  DASHBOARD_HOST_KEY,
+  type DashboardHostContext,
+} from "../../contexts/dashboard-host";
+import { getPreviewSurfaceById } from "../../services/preview-surface-registry";
 import "github-markdown-css/github-markdown-dark.css";
 
 /**
@@ -26,6 +34,27 @@ const elementUnsubs = new WeakMap<HTMLElement, () => void>();
 /** Most recently rendered content per element — used by the store-driven
  *  re-render to avoid re-reading from disk. */
 const elementContent = new WeakMap<HTMLElement, string>();
+const elementFilePaths = new WeakMap<HTMLElement, string>();
+const elementCtxs = new WeakMap<HTMLElement, PreviewContext>();
+
+/**
+ * Look up the owning PreviewSurface for a widget mount target by walking
+ * ancestor elements for the `data-preview-surface-id` marker and matching
+ * it against the preview-surface registry. Returns null when the widget
+ * is mounted outside any surface (e.g. a markdown preview rendered in a
+ * test harness or a future embedder) so widgets can decide to render
+ * empty / error state.
+ */
+function resolveDashboardHost(
+  target: HTMLElement,
+): DashboardHostContext | null {
+  const surfaceEl = target.closest("[data-preview-surface-id]");
+  const surfaceId = surfaceEl?.getAttribute("data-preview-surface-id") ?? "";
+  if (!surfaceId) return null;
+  const entry = getPreviewSurfaceById(surfaceId);
+  if (!entry?.hostMetadata) return null;
+  return { metadata: entry.hostMetadata };
+}
 
 function disposeMounts(element: HTMLElement): void {
   const mounts = elementMounts.get(element);
@@ -40,7 +69,12 @@ function disposeMounts(element: HTMLElement): void {
   elementMounts.set(element, []);
 }
 
-function renderChunks(content: string, element: HTMLElement): void {
+function renderChunks(
+  content: string,
+  element: HTMLElement,
+  filePath: string = "",
+  ctx?: PreviewContext,
+): void {
   disposeMounts(element);
   element.classList.add("markdown-body");
   element.replaceChildren();
@@ -60,6 +94,28 @@ function renderChunks(content: string, element: HTMLElement): void {
       // defense in depth so any future change to the upstream pipeline
       // can't smuggle script through here.
       div.innerHTML = DOMPurify.sanitize(chunk.html);
+      if (ctx && filePath) {
+        const dir = filePath.includes("/")
+          ? filePath.substring(0, filePath.lastIndexOf("/"))
+          : "";
+        for (const img of div.querySelectorAll("img")) {
+          const src = img.getAttribute("src");
+          if (
+            !src ||
+            src.startsWith("http://") ||
+            src.startsWith("https://") ||
+            src.startsWith("asset://") ||
+            src.startsWith("data:")
+          )
+            continue;
+          const resolved = src.startsWith("/")
+            ? src
+            : dir
+              ? `${dir}/${src}`
+              : src;
+          img.src = ctx.convertFileSrc(resolved);
+        }
+      }
       element.appendChild(div);
       continue;
     }
@@ -115,6 +171,12 @@ function renderChunks(content: string, element: HTMLElement): void {
       const extApi = getExtensionApiById(widget.source);
       const context = new Map<unknown, unknown>();
       if (extApi) context.set(EXTENSION_API_KEY, extApi);
+      // Inject DashboardHostContext when the widget's target element sits
+      // inside a PreviewSurface. Dashboard widgets (agent-list, kanban,
+      // task-spawner) derive their scope from this context — see the
+      // spec's §5.3 widget-scope-derivation rules.
+      const dashboardHost = resolveDashboardHost(host);
+      if (dashboardHost) context.set(DASHBOARD_HOST_KEY, dashboardHost);
       const instance = mount(widget.component as Component, {
         target: host,
         props: chunk.config,
@@ -131,9 +193,11 @@ function renderChunks(content: string, element: HTMLElement): void {
 
 registerPreviewer({
   extensions: ["md", "markdown", "mdx"],
-  render(content, _filePath, element) {
+  render(content, filePath, element, ctx) {
     elementContent.set(element, content);
-    renderChunks(content, element);
+    elementFilePaths.set(element, filePath);
+    if (ctx) elementCtxs.set(element, ctx);
+    renderChunks(content, element, filePath, ctx);
 
     // Subscribe to markdown-component registry changes the first time we render
     // into this element. When a component registers/unregisters, re-render
@@ -147,8 +211,10 @@ registerPreviewer({
           return;
         }
         const last = elementContent.get(element);
+        const lastPath = elementFilePaths.get(element) ?? "";
+        const lastCtx = elementCtxs.get(element);
         if (typeof last === "string") {
-          renderChunks(last, element);
+          renderChunks(last, element, lastPath, lastCtx);
         }
       });
       elementUnsubs.set(element, unsub);

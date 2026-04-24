@@ -40,7 +40,7 @@ export function registerWorktreeWorkspacesExtension(api: ExtensionAPI): void {
         api.runCommand("worktrees:create-workspace", ctx);
       },
       when: (ctx) => {
-        if (!ctx.projectId) return true;
+        if (!ctx.groupId) return true;
         return ctx.isGit === true;
       },
     });

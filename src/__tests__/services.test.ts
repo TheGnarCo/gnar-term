@@ -520,6 +520,7 @@ describe("workspace-service", () => {
       expect(saveState).toHaveBeenCalledWith({
         workspaces: [
           {
+            id: ws.id,
             name: "My WS",
             cwd: undefined,
             layout: expect.objectContaining({ pane: expect.any(Object) }),
@@ -1175,6 +1176,25 @@ describe("surface-service", () => {
       expect((updated?.splitRoot as { type: "pane"; pane: Pane }).pane.id).toBe(
         pane2.id,
       );
+    });
+
+    it("closes the workspace when the last surface of the only pane is closed", () => {
+      const s = mockTerminalSurface();
+      const pane = makePane([s]);
+      pane.activeSurfaceId = s.id;
+      const ws = makeWorkspace({
+        splitRoot: { type: "pane", pane },
+        activePaneId: pane.id,
+      });
+      const other = makeWorkspace({ id: "ws-other" });
+      workspaces.set([ws, other]);
+      activeWorkspaceIdx.set(0);
+
+      closeActiveSurface();
+
+      const list = get(workspaces);
+      expect(list).toHaveLength(1);
+      expect(list[0]!.id).toBe("ws-other");
     });
   });
 

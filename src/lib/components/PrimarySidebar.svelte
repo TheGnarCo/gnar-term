@@ -19,7 +19,9 @@
   import { sidebarSectionStore } from "../services/sidebar-section-registry";
   import { workspaceActionStore } from "../services/workspace-action-registry";
   import { primarySections } from "../stores/mcp-sidebar";
+  import { pseudoWorkspaceStore } from "../services/pseudo-workspace-registry";
   import WorkspaceListBlock from "./WorkspaceListBlock.svelte";
+  import PseudoWorkspaceRow from "./PseudoWorkspaceRow.svelte";
   import SidebarSectionBlock from "./SidebarSectionBlock.svelte";
   import SidebarActionButton from "./SidebarActionButton.svelte";
   import McpSidebarSection from "./McpSidebarSection.svelte";
@@ -37,11 +39,21 @@
   let collapsedSections: Record<string, boolean> = {};
 
   export let onSwitchWorkspace: (idx: number) => void;
-  export let onCloseWorkspace: (idx: number) => void;
   export let onRenameWorkspace: (idx: number, name: string) => void;
   export let onNewSurface: () => void;
 
   let workspaceListBlock: WorkspaceListBlock;
+
+  // Pinned pseudo-workspaces (e.g. the Global Agentic Dashboard) render
+  // above/below the real-workspace list depending on their `position`.
+  // Registration order within a position band is preserved by the
+  // registry.
+  $: rootTopPseudoWorkspaces = $pseudoWorkspaceStore.filter(
+    (pw) => pw.position === "root-top",
+  );
+  $: rootBottomPseudoWorkspaces = $pseudoWorkspaceStore.filter(
+    (pw) => pw.position === "root-bottom",
+  );
 
   // "New Workspace" (core-registered) is always the primary action in
   // the Workspaces header "+ New" split-button. Additional workspace-
@@ -134,7 +146,10 @@
             class="top-row-new-chip"
             style="
               flex-shrink: 0; border-radius: 6px; overflow: visible;
-              background: rgba(0, 0, 0, 0.3);
+              background: {$theme.bgHighlight ??
+              $theme.bgFloat ??
+              'rgba(0, 0, 0, 0.3)'};
+              box-shadow: inset 0 0 0 1px {$theme.border ?? 'transparent'};
               --section-btn-fg: {$theme.fg};
               -webkit-app-region: no-drag;
             "
@@ -157,16 +172,23 @@
         {/each}
       </div>
 
-      <!-- Scrollable content: the Workspaces section, any
-           extension-registered SidebarSectionBlocks, and any MCP-
-           declared sections, in that order. 4px left inset gives a
-           dark strip between the sidebar's left edge and each row's
-           rail. -->
-      <div style="flex: 1; overflow-y: auto; padding: 0 0 0 4px;">
+      <!-- Scrollable content: root-top pseudo-workspaces, the Workspaces
+           section, any extension-registered SidebarSectionBlocks, any
+           MCP-declared sections, and root-bottom pseudo-workspaces —
+           in that order. 4px left inset gives a dark strip between the
+           sidebar's left edge and each row's rail. 8px top inset keeps
+           the first row's rounded corner from butting up against the
+           "+ New" chrome above. -->
+      <div style="flex: 1; overflow-y: auto; padding: 8px 0 0 4px;">
+        {#each rootTopPseudoWorkspaces as pseudo (pseudo.id)}
+          <div style="margin-bottom: 6px;">
+            <PseudoWorkspaceRow {pseudo} />
+          </div>
+        {/each}
+
         <WorkspaceListBlock
           bind:this={workspaceListBlock}
           {onSwitchWorkspace}
-          {onCloseWorkspace}
           {onRenameWorkspace}
           {onNewSurface}
         />
@@ -187,6 +209,12 @@
         <!-- MCP-declared sections (render_sidebar tool). -->
         {#each $primarySections as section (section.sectionId)}
           <McpSidebarSection {section} />
+        {/each}
+
+        {#each rootBottomPseudoWorkspaces as pseudo (pseudo.id)}
+          <div style="margin-top: 6px;">
+            <PseudoWorkspaceRow {pseudo} />
+          </div>
         {/each}
       </div>
     </div>

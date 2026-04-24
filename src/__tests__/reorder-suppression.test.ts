@@ -16,8 +16,8 @@ const WORKSPACE_LIST_VIEW = readFileSync(
   "utf-8",
 ).replace(/\s+/g, " ");
 
-const PROJECT_SECTION_CONTENT = readFileSync(
-  "src/extensions/project-scope/ProjectSectionContent.svelte",
+const GROUP_SECTION_CONTENT = readFileSync(
+  "src/lib/components/WorkspaceGroupSectionContent.svelte",
   "utf-8",
 ).replace(/\s+/g, " ");
 
@@ -30,10 +30,12 @@ describe("grip visibility suppression", () => {
   it("WorkspaceItem keeps its own grip collapsed when any reorder is active unless the item is the drag source", () => {
     // WorkspaceItem still owns a grip when rendered INSIDE a project
     // (WorkspaceListView); at the root level it's rendered without
-    // one (WorkspaceListBlock draws the grip externally).
+    // one (WorkspaceListBlock draws the grip externally). The visible
+    // gate tracks row-level hover so hovering any part of the row
+    // (not just the grip column) expands it.
     expect(WORKSPACE_ITEM).toContain("anyReorderActive");
     expect(WORKSPACE_ITEM).toMatch(
-      /visible=\{\s*dragActive\s*\|\|\s*\(\s*gripHovered\s*&&\s*!\s*\$anyReorderActive\s*\)\s*\}/,
+      /visible=\{\s*dragActive\s*\|\|\s*\(\s*hovered\s*&&\s*!\s*\$anyReorderActive\s*\)\s*\}/,
     );
   });
 
@@ -75,11 +77,11 @@ describe("reorderContext is published on every drag", () => {
     expect(WORKSPACE_LIST_VIEW).toMatch(/kind:\s*"workspace"/);
   });
 
-  it("ProjectSectionContent threads scopeId={project.id} and containerBlockId to WorkspaceListView", () => {
-    expect(PROJECT_SECTION_CONTENT).toMatch(/scopeId=\{\s*project\.id\s*\}/);
+  it("WorkspaceGroupSectionContent threads scopeId={group.id} and containerBlockId to WorkspaceListView", () => {
+    expect(GROUP_SECTION_CONTENT).toMatch(/scopeId=\{\s*group\.id\s*\}/);
     // containerBlockId is forwarded from the parent via the shorthand
     // attribute ({containerBlockId}) rather than hardcoded.
-    expect(PROJECT_SECTION_CONTENT).toMatch(/\{containerBlockId\}/);
+    expect(GROUP_SECTION_CONTENT).toMatch(/\{containerBlockId\}/);
   });
 });
 

@@ -163,7 +163,10 @@ describe("WorkspaceView renders all workspaces (not just active)", () => {
     const source = fs.readFileSync("src/App.svelte", "utf-8");
     // Must iterate ALL workspaces and show/hide with CSS
     expect(source).toContain("{#each $workspaces as ws, i (ws.id)}");
-    expect(source).toContain("visible={i === $activeWorkspaceIdx}");
+    // Stage 7 extends the visibility gate with the pseudo-workspace
+    // mutual-exclusion clause; match the base `i === $activeWorkspaceIdx`
+    // without locking down the rest of the expression.
+    expect(source).toMatch(/visible=\{i === \$activeWorkspaceIdx[^}]*\}/);
   });
 });
 
@@ -231,14 +234,14 @@ describe("Config loads per-project files", () => {
     expect(source).toContain('"cmux.json"');
   });
 
-  it("loadConfig reads the legacy global ~/.config/gnar-term/gnar-term.json", async () => {
+  it("loadConfig probes the legacy gnar-term.json global config name", async () => {
     const fs = await import("fs");
     const source = fs.readFileSync("src/lib/config.ts", "utf-8");
     // Existing installs created the global settings file as gnar-term.json
     // before it was renamed to settings.json in the extension-core refactor.
     // The loader must still probe the old name so those users don't silently
     // lose their autoload workspace and commands on upgrade.
-    expect(source).toContain("${home}/.config/gnar-term/gnar-term.json");
+    expect(source).toContain("${configDir}/gnar-term.json");
   });
 });
 
@@ -305,18 +308,20 @@ describe("New tab inherits cwd from active surface", () => {
 // Structural invariant: verified via source scan because mounting the full
 // component tree requires Tauri runtime which isn't available in vitest.
 describe("No spurious fit/scrollToBottom on store updates", () => {
-  it("TerminalSurface does not call fit() reactively (PaneView ResizeObserver handles it)", async () => {
+  it("TerminalSurface reactive block is edge-triggered (only fires on false→true transition)", async () => {
     const fs = await import("fs");
     const source = fs.readFileSync(
       "src/lib/components/TerminalSurface.svelte",
       "utf-8",
     );
-    // Reactive fit() races with ResizeObserver and measures stale dimensions.
-    // Only the onMount fit (for initial open) should exist.
-    const afterOnMount = source.split("onMount")[1] || "";
-    const afterClosingBrace = afterOnMount.split("});")[1] || "";
-    // No reactive fit() outside of onMount
-    expect(afterClosingBrace).not.toMatch(/fitAddon\.fit\(\)/);
+    // The reactive block must guard with _prevVisible so it only fires when
+    // visible transitions false→true, not on every re-render where visible===true.
+    // Without this, store churn from markSurfaceUnreadById causes spurious
+    // scrollToBottom() calls that hijack the user's scroll position.
+    expect(source).toMatch(/_prevVisible/);
+    expect(source).toMatch(
+      /justBecameVisible\s*=\s*visible\s*&&\s*!_prevVisible/,
+    );
   });
 
   it("switchWorkspace does not directly call fit or scrollToBottom", async () => {
@@ -613,6 +618,20 @@ describe("SplitNodeView has draggable dividers with ratio support", () => {
       "utf-8",
     );
     expect(source).toContain("Math.max(0.1, Math.min(0.9");
+  });
+
+  it("schedules persistence when drag ends so ratio survives restart", async () => {
+    const fs = await import("fs");
+    const source = fs.readFileSync(
+      "src/lib/components/SplitNodeView.svelte",
+      "utf-8",
+    );
+    expect(source).toContain(
+      'import { schedulePersist } from "../services/workspace-service"',
+    );
+    const onEndMatch = source.match(/onEnd:\s*\(\)\s*=>\s*\{([^}]+)\}/);
+    expect(onEndMatch).not.toBeNull();
+    expect(onEndMatch![1]).toContain("schedulePersist()");
   });
 
   it("uses correct cursor for horizontal vs vertical splits", async () => {

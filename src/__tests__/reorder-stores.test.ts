@@ -30,8 +30,12 @@ describe("reorder state stores", () => {
     expect(get(blockReorderActive)).toBe(false);
   });
 
-  it("project-kind context makes any + inner active, but not block", () => {
-    reorderContext.set({ kind: "project", sourceProjectId: "proj-1" });
+  it("workspace-group-kind context makes any + inner active, but not block", () => {
+    reorderContext.set({
+      kind: "workspace-group",
+      sourceGroupId: "group-1",
+      containerBlockId: "__workspaces__",
+    });
     expect(get(anyReorderActive)).toBe(true);
     expect(get(innerReorderActive)).toBe(true);
     expect(get(blockReorderActive)).toBe(false);

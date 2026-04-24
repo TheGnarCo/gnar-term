@@ -28,24 +28,24 @@ beforeEach(() => {
 describe("appendRootRow", () => {
   it("appends rows in insertion order", () => {
     appendRootRow({ kind: "workspace", id: "w1" });
-    appendRootRow({ kind: "project", id: "p1" });
+    appendRootRow({ kind: "workspace-group", id: "p1" });
     appendRootRow({ kind: "workspace", id: "w2" });
     expect(get(rootRowOrder)).toEqual([
       { kind: "workspace", id: "w1" },
-      { kind: "project", id: "p1" },
+      { kind: "workspace-group", id: "p1" },
       { kind: "workspace", id: "w2" },
     ]);
   });
 
   it("is idempotent on repeat inserts of the same row", () => {
-    appendRootRow({ kind: "project", id: "p1" });
-    appendRootRow({ kind: "project", id: "p1" });
+    appendRootRow({ kind: "workspace-group", id: "p1" });
+    appendRootRow({ kind: "workspace-group", id: "p1" });
     expect(get(rootRowOrder)).toHaveLength(1);
   });
 
   it("treats workspace:X and project:X as distinct rows", () => {
     appendRootRow({ kind: "workspace", id: "shared" });
-    appendRootRow({ kind: "project", id: "shared" });
+    appendRootRow({ kind: "workspace-group", id: "shared" });
     expect(get(rootRowOrder)).toHaveLength(2);
   });
 });
@@ -53,15 +53,15 @@ describe("appendRootRow", () => {
 describe("removeRootRow", () => {
   it("removes a specific {kind, id} pair", () => {
     appendRootRow({ kind: "workspace", id: "w1" });
-    appendRootRow({ kind: "project", id: "p1" });
+    appendRootRow({ kind: "workspace-group", id: "p1" });
     removeRootRow({ kind: "workspace", id: "w1" });
-    expect(get(rootRowOrder)).toEqual([{ kind: "project", id: "p1" }]);
+    expect(get(rootRowOrder)).toEqual([{ kind: "workspace-group", id: "p1" }]);
   });
 
   it("is a no-op when the row isn't present", () => {
-    appendRootRow({ kind: "project", id: "p1" });
+    appendRootRow({ kind: "workspace-group", id: "p1" });
     removeRootRow({ kind: "workspace", id: "missing" });
-    expect(get(rootRowOrder)).toEqual([{ kind: "project", id: "p1" }]);
+    expect(get(rootRowOrder)).toEqual([{ kind: "workspace-group", id: "p1" }]);
   });
 });
 
@@ -103,29 +103,29 @@ describe("bootstrapRootRowOrder", () => {
   it("preserves persisted order for known entities", () => {
     mockState = {
       rootRowOrder: [
-        { kind: "project", id: "p1" },
+        { kind: "workspace-group", id: "p1" },
         { kind: "workspace", id: "w1" },
-        { kind: "project", id: "p2" },
+        { kind: "workspace-group", id: "p2" },
       ],
     };
     bootstrapRootRowOrder(
       ["w1"],
       [
-        { kind: "project", id: "p1" },
-        { kind: "project", id: "p2" },
+        { kind: "workspace-group", id: "p1" },
+        { kind: "workspace-group", id: "p2" },
       ],
     );
     expect(get(rootRowOrder)).toEqual([
-      { kind: "project", id: "p1" },
+      { kind: "workspace-group", id: "p1" },
       { kind: "workspace", id: "w1" },
-      { kind: "project", id: "p2" },
+      { kind: "workspace-group", id: "p2" },
     ]);
   });
 
   it("drops entries whose referent no longer exists", () => {
     mockState = {
       rootRowOrder: [
-        { kind: "project", id: "p_gone" },
+        { kind: "workspace-group", id: "p_gone" },
         { kind: "workspace", id: "w1" },
       ],
     };
@@ -135,9 +135,12 @@ describe("bootstrapRootRowOrder", () => {
 
   it("appends newly-known entities (projects before unclaimed workspaces) for first-run installs", () => {
     mockState = {};
-    bootstrapRootRowOrder(["w1", "w2"], [{ kind: "project", id: "p1" }]);
+    bootstrapRootRowOrder(
+      ["w1", "w2"],
+      [{ kind: "workspace-group", id: "p1" }],
+    );
     expect(get(rootRowOrder)).toEqual([
-      { kind: "project", id: "p1" },
+      { kind: "workspace-group", id: "p1" },
       { kind: "workspace", id: "w1" },
       { kind: "workspace", id: "w2" },
     ]);
@@ -145,18 +148,18 @@ describe("bootstrapRootRowOrder", () => {
 
   it("appends partially-known entities at the end while preserving persisted order", () => {
     mockState = {
-      rootRowOrder: [{ kind: "project", id: "p1" }],
+      rootRowOrder: [{ kind: "workspace-group", id: "p1" }],
     };
     bootstrapRootRowOrder(
       ["w1"],
       [
-        { kind: "project", id: "p1" },
-        { kind: "project", id: "p_new" },
+        { kind: "workspace-group", id: "p1" },
+        { kind: "workspace-group", id: "p_new" },
       ],
     );
     expect(get(rootRowOrder)).toEqual([
-      { kind: "project", id: "p1" },
-      { kind: "project", id: "p_new" },
+      { kind: "workspace-group", id: "p1" },
+      { kind: "workspace-group", id: "p_new" },
       { kind: "workspace", id: "w1" },
     ]);
   });

@@ -10,7 +10,7 @@
  *   - Computes the worktree path (sibling of the repo, hyphen-joined branch)
  *   - Calls createWorktreeWorkspaceFromConfig (which creates the worktree,
  *     applies copyPatterns/setupScript, creates the workspace with metadata
- *     including parentDashboardId, and returns the new workspace id)
+ *     including spawnedBy, and returns the new workspace id)
  *   - Sets the agent's startup command on the workspace's first terminal
  *     surface (already wired by createWorkspaceFromDef via WorkspaceDef.command)
  *
@@ -18,11 +18,12 @@
  *   `agent/<agent>/<shortTimestamp>` — base32 unix-seconds
  *
  * Quote escaping for taskContext in the startup command:
- *   We pass the task as a single quoted argument, and escape inner double
- *   quotes by closing the quote, inserting `"`, and reopening:
- *     foo "bar" baz   →   "foo \"bar\" baz"
- *   Backslashes are doubled so the shell sees a literal backslash.
- *   Newlines are preserved (most shells accept them inside double quotes).
+ *   We use ANSI-C $'...' quoting so newlines become \n escape sequences.
+ *   This avoids literal newlines in the command string, which the PTY
+ *   line discipline would split into separate lines before the shell can
+ *   reassemble them in PS2 continuation mode.
+ *     foo 'bar' baz   →   $'foo \'bar\' baz'
+ *   Backslashes are doubled; single quotes are escaped with \'.
  *
  * For agent="custom" the caller supplies the literal command verbatim — we
  * do NOT quote-wrap or inject taskContext (the caller is responsible).
@@ -48,6 +49,15 @@ const AGENT_COMMANDS: Record<Exclude<SpawnAgentType, "custom">, string> = {
   aider: "aider",
 };
 
+/**
+ * Provenance marker attached to workspaces spawned from a dashboard.
+ * Mirrors `metadata.spawnedBy` on the created workspace and ultimately
+ * drives the bot-icon affordance in the sidebar. See spec §3.2 / §5.3.
+ */
+export type SpawnedByMarker =
+  | { kind: "global" }
+  | { kind: "group"; groupId: string };
+
 export interface SpawnAgentInWorktreeArgs {
   /** Display name for the spawned workspace. */
   name: string;
@@ -67,11 +77,26 @@ export interface SpawnAgentInWorktreeArgs {
   /** Base branch. Default: "main". */
   base?: string;
   /**
-   * When provided, the new workspace's metadata.parentDashboardId is set
-   * to this id. The agentic-orchestrator's child-row contributor reads
-   * this to nest the workspace under the dashboard row in the sidebar.
+   * When provided, the new workspace's metadata.groupId is set to this
+   * id — used when the spawning dashboard lives under a workspace group,
+   * so workspace-groups claims the worktree into the group's nested list
+   * alongside other group workspaces.
    */
-  dashboardId?: string;
+  groupId?: string;
+  /**
+   * Provenance marker — the new workspace's metadata.spawnedBy records
+   * which dashboard spawned it. Presence drives the bot-icon treatment
+   * in the sidebar; shape supports later "jump to spawner" affordances.
+   */
+  spawnedBy?: SpawnedByMarker;
+  /**
+   * GitHub issue numbers this workspace is handling. Forwarded to
+   * `metadata.spawnedFromIssues` so the Issues widget can render a
+   * bot-icon button (jump to the active workspace) instead of the
+   * Spawn affordance for issues that already have an agent on them.
+   * "Spawn Together" multi-issue spawns write multiple numbers here.
+   */
+  spawnedFromIssues?: number[];
 }
 
 export interface SpawnAgentInWorktreeResult {
@@ -100,13 +125,22 @@ function deriveWorktreePath(repoPath: string, branch: string): string {
 
 /**
  * Quote a free-form task string for safe inclusion as a single shell
- * argument. Wraps in double quotes, escapes backslashes and inner double
- * quotes. Newlines are preserved as-is (the shell accepts them inside
- * double quotes; the agent receives the multi-line text).
+ * argument. Uses ANSI-C $'...' quoting so newlines are encoded as \n
+ * escape sequences — no literal newlines appear in the command string.
+ * This prevents the PTY line discipline from splitting the command at
+ * each newline before the shell can reassemble it in PS2 continuation mode.
  */
 export function quoteTaskForShell(input: string): string {
-  const escaped = input.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-  return `"${escaped}"`;
+  const escaped = input
+    .replace(/\\/g, "\\\\")
+    .replace(/'/g, "\\'")
+    .replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\r")
+    .replace(
+      /[\x00-\x1f\x7f]/g,
+      (c) => `\\x${c.charCodeAt(0).toString(16).padStart(2, "0")}`,
+    );
+  return `$'${escaped}'`;
 }
 
 export function buildStartupCommand(
@@ -159,7 +193,7 @@ export async function spawnAgentInWorktree(
 ): Promise<SpawnAgentInWorktreeResult> {
   if (!args.repoPath || !args.repoPath.trim()) {
     throw new Error(
-      "spawnAgentInWorktree requires repoPath — caller must resolve from dashboard.baseDir or workspace cwd",
+      "spawnAgentInWorktree requires repoPath — caller must resolve from orchestrator.baseDir or workspace cwd",
     );
   }
 
@@ -178,7 +212,11 @@ export async function spawnAgentInWorktree(
     base,
     worktreePath,
     startupCommand,
-    ...(args.dashboardId ? { parentDashboardId: args.dashboardId } : {}),
+    ...(args.groupId ? { groupId: args.groupId } : {}),
+    ...(args.spawnedBy ? { spawnedBy: args.spawnedBy } : {}),
+    ...(args.spawnedFromIssues && args.spawnedFromIssues.length > 0
+      ? { spawnedFromIssues: args.spawnedFromIssues }
+      : {}),
   };
 
   const { workspaceId } = await createWorktreeWorkspaceFromConfig(config);

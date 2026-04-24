@@ -13,6 +13,7 @@
     "clipboard-manager:allow-read-text",
     "clipboard-manager:allow-write-text",
     "dialog:allow-open",
+    "dialog:allow-ask",
     "notification:default",
     "updater:default"
   ]

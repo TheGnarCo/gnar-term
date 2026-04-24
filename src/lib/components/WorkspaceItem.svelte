@@ -2,7 +2,6 @@
   import { tick, type Component } from "svelte";
   import { theme } from "../stores/theme";
   import { anyReorderActive } from "../stores/ui";
-  import { agentStatusStore } from "../stores/agent-status";
   import { getWorkspaceStatusByCategory } from "../services/status-registry";
   import { aggregateAgentBadges } from "../status-colors";
   import { workspaceSubtitleStore } from "../services/workspace-subtitle-registry";
@@ -11,7 +10,7 @@
   import DragGrip from "./DragGrip.svelte";
 
   $: isDisco = $theme.name === "Molly Disco";
-  import { getAllSurfaces } from "../types";
+  import { getAllSurfaces, getAllPanes } from "../types";
   import type { Workspace } from "../types";
 
   const discoEmojis = [
@@ -98,9 +97,25 @@
   export let onContextMenu: (x: number, y: number) => void;
   /** Project accent color — when set, overrides the default border-left styling. */
   export let accentColor: string | undefined = undefined;
+  /**
+   * Optional hint that this workspace belongs to a dashboard. Adds a small
+   * clickable icon inside the row that navigates to the owning dashboard
+   * without selecting the workspace itself.
+   */
+  export let dashboardHint:
+    | { id: string; color?: string; onClick: () => void }
+    | undefined = undefined;
+  /**
+   * Suppress per-workspace status chrome (unread, agent badges, latest
+   * notification). Used when the workspace is rendered inside a
+   * container that aggregates status itself — e.g. nested under an
+   * AgentDashboardRow whose banner already rolls up detected-agent
+   * activity. Projects leave this false so their nested workspaces
+   * keep showing their own status.
+   */
+  export let hideStatusBadges: boolean = false;
 
   let hovered = false;
-  let gripHovered = false;
   let closeHovered = false;
   let nameEl: HTMLSpanElement;
   let _renaming = false;
@@ -109,27 +124,52 @@
   $: hasUnread = allSurfaces.some((s) => s.hasUnread);
   $: latestNotification = allSurfaces.find((s) => s.notification)?.notification;
   $: isManaged = !!workspace.metadata?.worktreePath;
+  // Workspaces spawned by a dashboard (Global Agentic or per-group)
+  // get a bot marker so they're visually distinguishable from plain
+  // group workspaces or worktrees. `metadata.spawnedBy` is the §3.2
+  // marker; `parentOrchestratorId` is the pre-migration field we still
+  // honor until Stage 8 rewrites legacy user data.
+  // Dashboards are singleton surfaces bound to their group; suppress
+  // close / rename / right-click affordances so the user interacts
+  // with them only via the group's tile.
+  $: isDashboardWs =
+    (workspace.metadata as Record<string, unknown> | undefined)?.isDashboard ===
+    true;
+  // Nested workspaces live under a group's colored banner. The group
+  // banner itself already rolls up status (and the per-row chip handles
+  // agent state), so the long blue notification row duplicates chrome
+  // and crowds the nested layout — suppress it in that context.
+  $: isInsideGroup =
+    typeof (workspace.metadata as Record<string, unknown> | undefined)
+      ?.groupId === "string";
+  $: isAgentSpawned = (() => {
+    const md = workspace.metadata as Record<string, unknown> | undefined;
+    if (!md) return false;
+    return (
+      (typeof md.spawnedBy === "object" && md.spawnedBy !== null) ||
+      typeof md.parentOrchestratorId === "string"
+    );
+  })();
   $: railColor = accentColor ?? $theme.accent;
-  // Legacy agent status — kept for backwards compatibility
-  $: agentStatus = $agentStatusStore[workspace.id] || null;
-  $: agentDotColor =
-    agentStatus === "running"
-      ? "#4ec957"
-      : agentStatus === "waiting"
-        ? "#e8b73a"
-        : agentStatus === "idle"
-          ? "#888888"
-          : null;
-
   // Status registry subscriptions (process items for agent dots)
   $: processStatusStore = getWorkspaceStatusByCategory(workspace.id, "process");
   $: processItems = $processStatusStore;
   $: agentBadges = aggregateAgentBadges(processItems);
-  // Count per-surface agent items (items with metadata.surfaceId)
-  $: perSurfaceAgents = processItems.filter(
-    (item) => typeof item.metadata?.surfaceId === "string",
+  $: agentChipColor = agentBadges.length > 0 ? agentBadges[0]?.color : null;
+
+  $: activePaneInWs = getAllPanes(workspace.splitRoot).find(
+    (p) => p.id === workspace.activePaneId,
   );
-  $: agentCount = perSurfaceAgents.length;
+  $: activeSurfaceForAgent = (() => {
+    const sid = activePaneInWs?.activeSurfaceId;
+    if (!sid) return null;
+    const hasAgent = processItems.some(
+      (item) =>
+        (item.metadata as Record<string, unknown> | undefined)?.surfaceId ===
+        sid,
+    );
+    return hasAgent ? (allSurfaces.find((s) => s.id === sid) ?? null) : null;
+  })();
 
   $: subtitleComponents = $workspaceSubtitleStore;
 
@@ -180,38 +220,35 @@
     ? $theme.bgActive
     : hovered
       ? $theme.bgHighlight
-      : 'transparent'};
-    {isManaged ? `border: 1px solid ${railColor};` : ''}
+      : ($theme.bgSurface ?? 'transparent')};
+    border: 1px solid {isActive ? railColor : ($theme.border ?? 'transparent')};
   "
-  on:contextmenu|preventDefault={(e) => onContextMenu(e.clientX, e.clientY)}
+  on:contextmenu|preventDefault={(e) => {
+    // Dashboards are non-interactive surfaces; right-click is a no-op.
+    if (isDashboardWs) return;
+    onContextMenu(e.clientX, e.clientY);
+  }}
   on:mouseenter={() => (hovered = true)}
   on:mouseleave={() => {
     hovered = false;
-    gripHovered = false;
     closeHovered = false;
   }}
+  on:mousedown={(e) => onGripMouseDown?.(e)}
 >
   {#if onGripMouseDown}
-    <!-- Wrapper scopes grip-expansion hover to the grip column only.
-         Row-level hover (for close button etc.) stays separate. No
-         background on the wrapper — the rail reads as its dot
-         pattern, not a solid colored block. -->
-    <div
-      on:mouseenter={() => (gripHovered = true)}
-      on:mouseleave={() => (gripHovered = false)}
-      style="flex-shrink: 0; align-self: stretch; display: flex;"
-    >
-      <DragGrip
-        theme={$theme}
-        visible={dragActive || (gripHovered && !$anyReorderActive)}
-        onMouseDown={onGripMouseDown}
-        ariaLabel="Drag workspace to reorder"
-        {railColor}
-        railOpacity={1}
-        alwaysShowDots={true}
-        fadeRight={true}
-      />
-    </div>
+    <!-- Grip column. The drag-start handler lives on the outer row
+         div (above) so hovering anywhere on the row expands the grip
+         and mousedowns on the body itself initiate the reorder —
+         createDragReorder's 5px threshold keeps taps as selects. -->
+    <DragGrip
+      theme={$theme}
+      visible={dragActive || (hovered && !$anyReorderActive)}
+      ariaLabel="Drag workspace to reorder"
+      {railColor}
+      railOpacity={1}
+      alwaysShowDots={true}
+      fadeRight={!(dragActive || (hovered && !$anyReorderActive))}
+    />
     <!-- Drag-edge fade: continues the rail's dot pattern from the
          very left of the row into the row body for ~14px, dropping
          off fast. Matches the project banner's fade treatment so
@@ -254,25 +291,96 @@
       <div
         style="flex: 1; overflow: hidden; display: flex; align-items: center; gap: 4px;"
       >
-        {#if isManaged}
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            style="flex-shrink: 0; color: {$theme.fgDim};"
+        {#if isAgentSpawned}
+          <span
+            data-workspace-agent-icon
+            title="Spawned by agent dashboard"
+            style="
+              flex-shrink: 0; display: inline-flex; align-items: center;
+              justify-content: center; color: {railColor};
+            "
           >
-            <title>Git worktree workspace</title>
-            <circle cx="4" cy="4" r="2" />
-            <circle cx="4" cy="12" r="2" />
-            <circle cx="12" cy="8" r="2" />
-            <path d="M4 6 L4 10" />
-            <path d="M6 4 C8 4 10 6 10 8" />
-          </svg>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <title>Agent-spawned workspace</title>
+              <path d="M12 8V4H8" />
+              <rect width="16" height="12" x="4" y="8" rx="2" />
+              <path d="M2 14h2" />
+              <path d="M20 14h2" />
+              <path d="M15 13v2" />
+              <path d="M9 13v2" />
+            </svg>
+          </span>
+        {/if}
+        {#if isManaged}
+          <span
+            data-workspace-worktree-icon
+            title="Git worktree workspace"
+            style="
+              flex-shrink: 0; display: inline-flex; align-items: center;
+              justify-content: center; color: {railColor};
+            "
+          >
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <title>Git worktree workspace</title>
+              <circle cx="4" cy="4" r="2" />
+              <circle cx="4" cy="12" r="2" />
+              <circle cx="12" cy="8" r="2" />
+              <path d="M4 6 L4 10" />
+              <path d="M6 4 C8 4 10 6 10 8" />
+            </svg>
+          </span>
+        {/if}
+        {#if dashboardHint}
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <span
+            data-workspace-dashboard-icon
+            data-dashboard-id={dashboardHint.id}
+            title="Open owning dashboard"
+            on:click|stopPropagation={() => dashboardHint?.onClick()}
+            style="
+              flex-shrink: 0; display: inline-flex; align-items: center;
+              justify-content: center; width: 14px; height: 14px;
+              color: {dashboardHint.color ?? $theme.fgDim}; cursor: pointer;
+            "
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <title>Open dashboard</title>
+              <rect x="3" y="3" width="7" height="9" />
+              <rect x="14" y="3" width="7" height="5" />
+              <rect x="14" y="12" width="7" height="9" />
+              <rect x="3" y="16" width="7" height="5" />
+            </svg>
+          </span>
         {/if}
         <span
           bind:this={nameEl}
@@ -304,65 +412,29 @@
         >
       </div>
 
-      {#if agentBadges.length > 0 && agentBadges[0]}
-        {@const topBadge = agentBadges[0]}
-        {@const statusLabel =
-          topBadge.variant === "success"
-            ? "running"
-            : topBadge.variant === "warning"
-              ? "waiting"
-              : topBadge.variant === "muted"
-                ? "idle"
-                : topBadge.variant === "error"
-                  ? "error"
-                  : ""}
-        <span
-          title={agentBadges.map((b) => b.label).join(", ")}
-          style="
-            display: inline-flex; align-items: center; gap: 3px;
-            font-size: 10px; color: {topBadge.color};
-            background: color-mix(in srgb, {topBadge.color} 15%, transparent);
-            padding: 1px 6px; border-radius: 8px; flex-shrink: 0;
-          "
-        >
+      {#if !hideStatusBadges}
+        {#if agentBadges.length > 0 && agentBadges[0]}
           <span
-            style="width: 6px; height: 6px; border-radius: 50%; background: {topBadge.color};"
-          ></span>
-          {#if agentCount > 1}{agentCount}
-          {/if}{statusLabel}
-        </span>
-      {:else if agentDotColor}
-        <span
-          title="Agent: {agentStatus}"
-          style="
-            display: inline-flex; align-items: center; gap: 3px;
-            font-size: 10px; color: {agentDotColor};
-            background: color-mix(in srgb, {agentDotColor} 15%, transparent);
-            padding: 1px 6px; border-radius: 8px; flex-shrink: 0;
-          "
-        >
-          <span
-            style="width: 6px; height: 6px; border-radius: 50%; background: {agentDotColor};"
-          ></span>
-          {agentStatus}
-        </span>
-      {/if}
+            data-agent-presence-chip
+            title={[latestNotification].filter(Boolean).join(" — ")}
+            style="display: inline-flex; align-items: center; padding: 0 3px; flex-shrink: 0;"
+          >
+            <span
+              style="width: 7px; height: 7px; border-radius: 50%; background: {agentChipColor}; box-shadow: 0 0 0 1px color-mix(in srgb, {agentChipColor} 35%, transparent);"
+            ></span>
+          </span>
+        {/if}
 
-      {#if hasUnread && !agentDotColor && agentBadges.length === 0}
-        <span
-          title="Workspace has new terminal activity"
-          style="
-            display: inline-flex; align-items: center; gap: 3px;
-            font-size: 10px; color: {$theme.notify};
-            background: color-mix(in srgb, {$theme.notify} 15%, transparent);
-            padding: 1px 6px; border-radius: 8px; flex-shrink: 0;
-          "
-        >
+        {#if hasUnread && agentBadges.length === 0}
           <span
-            style="width: 6px; height: 6px; border-radius: 50%; background: {$theme.notify};"
-          ></span>
-          new
-        </span>
+            title="Workspace has new terminal activity"
+            style="display: inline-flex; align-items: center; padding: 0 3px; flex-shrink: 0;"
+          >
+            <span
+              style="width: 6px; height: 6px; border-radius: 50%; background: {$theme.notify}; box-shadow: 0 0 0 1px color-mix(in srgb, {$theme.notify} 35%, transparent);"
+            ></span>
+          </span>
+        {/if}
       {/if}
     </div>
 
@@ -372,17 +444,52 @@
         <ExtensionWrapper
           api={subApi}
           component={sub.component}
-          props={{ workspaceId: workspace.id }}
+          props={{ workspaceId: workspace.id, accentColor: railColor }}
         />
       {:else}
         <svelte:component
           this={sub.component as Component}
           workspaceId={workspace.id}
+          accentColor={railColor}
         />
       {/if}
     {/each}
 
-    {#if latestNotification}
+    {#if !hideStatusBadges && activeSurfaceForAgent?.title}
+      <div
+        data-harness-title-row
+        style="padding: 0 12px 4px 6px; display: flex; align-items: center; min-width: 0; overflow: hidden; line-height: 1.2;"
+      >
+        <span
+          style="font-size: 10px; color: {$theme.fgDim}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; display: inline-flex; align-items: center; gap: 3px;"
+          title={activeSurfaceForAgent.title}
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke={railColor}
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            style="flex-shrink: 0; opacity: 0.7;"
+          >
+            <title>Active harness session</title>
+            <path d="M12 8V4H8" />
+            <rect width="16" height="12" x="4" y="8" rx="2" />
+            <path d="M2 14h2" />
+            <path d="M20 14h2" />
+            <path d="M15 13v2" />
+            <path d="M9 13v2" />
+          </svg>
+          {activeSurfaceForAgent.title}
+        </span>
+      </div>
+    {/if}
+
+    {#if latestNotification && !hideStatusBadges && !isInsideGroup && !agentChipColor}
       <div
         style="padding: 2px 12px 6px 6px; font-size: 11px; color: {$theme.notify}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
       >
@@ -394,20 +501,22 @@
        centered against the full row regardless of how many subtitle or
        notification rows stack below the title. The content column
        reserves 24px on the right to keep text from crashing into it. -->
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <span
-    title="Close Workspace (⇧⌘W)"
-    style="
-      position: absolute;
-      top: 50%; right: 6px;
-      transform: translateY(-50%);
-      color: {closeHovered ? $theme.danger : $theme.fgDim};
-      font-size: 14px; cursor: pointer;
-      opacity: {hovered ? '1' : '0'}; transition: opacity 0.15s;
-      padding: 0 2px;
-    "
-    on:click|stopPropagation={onClose}
-    on:mouseenter={() => (closeHovered = true)}
-    on:mouseleave={() => (closeHovered = false)}>×</span
-  >
+  {#if !isDashboardWs}
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <span
+      title="Close Workspace (⇧⌘W)"
+      style="
+        position: absolute;
+        top: 50%; right: 6px;
+        transform: translateY(-50%);
+        color: {closeHovered ? $theme.danger : $theme.fgDim};
+        font-size: 14px; cursor: pointer;
+        opacity: {hovered ? '1' : '0'}; transition: opacity 0.15s;
+        padding: 0 2px;
+      "
+      on:click|stopPropagation={onClose}
+      on:mouseenter={() => (closeHovered = true)}
+      on:mouseleave={() => (closeHovered = false)}>×</span
+    >
+  {/if}
 </div>

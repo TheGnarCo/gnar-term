@@ -223,17 +223,21 @@ describe("createExtensionAPI", () => {
     ).toBeUndefined();
   });
 
-  it("getComponents returns WorkspaceListView, SplitButton, ColorPicker, DragGrip", () => {
+  it("getComponents returns WorkspaceListView, SplitButton, ColorPicker, DragGrip, DropGhost, ContainerRow, PathStatusLine", () => {
     const { api } = createExtensionAPI(manifest);
     const components = api.getComponents();
-    expect(components).toHaveProperty("WorkspaceListView");
-    expect(components).toHaveProperty("SplitButton");
-    expect(components).toHaveProperty("ColorPicker");
-    expect(components).toHaveProperty("DragGrip");
-    expect(components.WorkspaceListView).toBeTruthy();
-    expect(components.SplitButton).toBeTruthy();
-    expect(components.ColorPicker).toBeTruthy();
-    expect(components.DragGrip).toBeTruthy();
+    for (const k of [
+      "WorkspaceListView",
+      "SplitButton",
+      "ColorPicker",
+      "DragGrip",
+      "DropGhost",
+      "ContainerRow",
+      "PathStatusLine",
+    ]) {
+      expect(components).toHaveProperty(k);
+      expect(components[k as keyof typeof components]).toBeTruthy();
+    }
   });
 
   it("createDragReorder returns a handle with start() and getState()", () => {
@@ -333,7 +337,7 @@ describe("ExtensionAPI event filtering", () => {
 
     // Spoofing another extension's event name must be blocked so the
     // manifest is a stable contract (ADR-002).
-    expect(() => api.emit("extension:harness:statusChanged", {})).toThrow(
+    expect(() => api.emit("extension:other:nonsense", {})).toThrow(
       /not declared/,
     );
   });

@@ -31,7 +31,13 @@ import {
 import { registerTheme as registryRegisterTheme } from "./theme-registry";
 import { registerMarkdownComponent as registryRegisterMarkdownComponent } from "./markdown-component-registry";
 import { registerChildRowContributor } from "./child-row-contributor-registry";
+import { registerDashboardContribution as registryRegisterDashboardContribution } from "./dashboard-contribution-registry";
+import { registerPseudoWorkspace as registryRegisterPseudoWorkspace } from "./pseudo-workspace-registry";
 import { registerExtensionMcpTool } from "./mcp-server";
+import type {
+  DashboardContributionInput,
+  PseudoWorkspaceInput,
+} from "../../extensions/api";
 import type { ThemeDef } from "../theme-data";
 import type { ExtensionManifest, ExtensionAPI } from "../extension-types";
 
@@ -57,6 +63,8 @@ export function createUIRegistrationAPI(
   | "registerMcpTool"
   | "registerMarkdownComponent"
   | "registerChildRowContributor"
+  | "registerDashboardContribution"
+  | "registerPseudoWorkspace"
   | "registerDashboardTab"
   | "registerWorkspaceAction"
   | "getWorkspaceActions"
@@ -231,6 +239,20 @@ export function createUIRegistrationAPI(
         parentType,
         source: extId,
         contribute,
+      });
+    },
+
+    registerDashboardContribution(contribution: DashboardContributionInput) {
+      registryRegisterDashboardContribution({
+        ...contribution,
+        source: extId,
+      });
+    },
+
+    registerPseudoWorkspace(pw: PseudoWorkspaceInput) {
+      registryRegisterPseudoWorkspace({
+        ...pw,
+        source: extId,
       });
     },
 

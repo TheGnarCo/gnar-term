@@ -18,11 +18,11 @@
    * workspace list) are unchanged and still live inside
    * WorkspaceListView.
    */
-  import { flip } from "svelte/animate";
   import { derived, get } from "svelte/store";
   import { theme } from "../stores/theme";
   import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
   import { contextMenu, reorderContext, anyReorderActive } from "../stores/ui";
+  import { confirmAndCloseWorkspace } from "../services/worktree-service";
   import {
     rootRowOrder,
     moveRootRow,
@@ -41,7 +41,6 @@
   import { commandStore } from "../services/command-registry";
 
   export let onSwitchWorkspace: (idx: number) => void;
-  export let onCloseWorkspace: (idx: number) => void;
   export let onRenameWorkspace: (idx: number, name: string) => void;
   export let onNewSurface: () => void;
 
@@ -202,23 +201,36 @@
   function runPromoteToProject(globalIdx: number) {
     onSwitchWorkspace(globalIdx);
     const cmd = get(commandStore).find(
-      (c) => c.id === "promote-workspace-to-project",
+      (c) => c.id === "promote-workspace-to-group",
     );
     if (cmd) void cmd.action();
   }
 
   $: canPromote = $commandStore.some(
-    (c) => c.id === "promote-workspace-to-project",
+    (c) => c.id === "promote-workspace-to-group",
   );
 
   function showWorkspaceContextMenu(x: number, y: number, globalIdx: number) {
     const workspaceCount = $workspaces.length;
+    const ws = $workspaces[globalIdx];
+    const wsMeta = ws?.metadata as Record<string, unknown> | undefined;
+    const isDashboard = wsMeta?.isDashboard === true;
+    const isInsideGroup = typeof wsMeta?.groupId === "string";
+    // Dashboards are singleton workspace surfaces closed with the group;
+    // they don't support rename or promotion. Workspaces already nested
+    // inside a group can't be promoted again — groups don't nest.
+    const canRename = !isDashboard;
+    const canPromoteThis = canPromote && !isDashboard && !isInsideGroup;
     const items: MenuItem[] = [
-      {
-        label: "Rename Workspace",
-        shortcut: "⇧⌘R",
-        action: () => startRename(globalIdx),
-      },
+      ...(canRename
+        ? [
+            {
+              label: "Rename Workspace",
+              shortcut: "⇧⌘R",
+              action: () => startRename(globalIdx),
+            } as MenuItem,
+          ]
+        : []),
       {
         label: "New Surface",
         shortcut: "⌘T",
@@ -227,33 +239,24 @@
           onNewSurface();
         },
       },
-      ...(canPromote
+      ...(canPromoteThis
         ? [
             { label: "", action: () => {}, separator: true } as MenuItem,
             {
-              label: "Promote to Project...",
+              label: "Promote to Workspace Group...",
               action: () => runPromoteToProject(globalIdx),
             } as MenuItem,
           ]
         : []),
       { label: "", action: () => {}, separator: true },
       {
-        label: "Close Other Workspaces",
-        disabled: workspaceCount <= 1,
-        action: () => {
-          // Close all other workspaces by global idx, walking back-to-front
-          // so indices stay valid as we splice.
-          for (let i = $workspaces.length - 1; i >= 0; i--) {
-            if (i !== globalIdx) onCloseWorkspace(i);
-          }
-        },
-      },
-      {
         label: "Close Workspace",
         shortcut: "⇧⌘W",
         danger: true,
-        disabled: workspaceCount <= 1,
-        action: () => onCloseWorkspace(globalIdx),
+        disabled: workspaceCount <= 1 || isDashboard,
+        action: () => {
+          if (ws) void confirmAndCloseWorkspace(ws, globalIdx);
+        },
       },
     ];
     contextMenu.set({ x, y, items });
@@ -279,7 +282,7 @@
     entry.row.kind === "workspace" && ws
       ? ws.name
       : (entry.rendererLabel ?? "")}
-  <div class="root-row" animate:flip={{ duration: 200 }}>
+  <div class="root-row">
     {#if insertIndicator?.idx === entry.idx && insertIndicator.edge === "before"}
       <DropGhost
         theme={$theme}
@@ -312,7 +315,7 @@
           onSelect={() => {
             if (!dragActive) onSwitchWorkspace(globalIdx);
           }}
-          onClose={() => onCloseWorkspace(globalIdx)}
+          onClose={() => void confirmAndCloseWorkspace(ws, globalIdx)}
           onRename={(name) => onRenameWorkspace(globalIdx, name)}
           onContextMenu={(x, y) => showWorkspaceContextMenu(x, y, globalIdx)}
           onGripMouseDown={(e) => startRootRowDrag(e, entry.idx)}
@@ -366,10 +369,9 @@
 
 <style>
   /* Inter-row gap — matches the nested workspace inter-row gap
-     (see WorkspaceListView's .workspace-list-row + rule). Bumped
-     from 2px so root workspaces breathe visually the same way
-     nested ones do. */
+     (see WorkspaceListView's .workspace-list-row + rule) so root and
+     nested lists share the same 8px vertical rhythm. */
   .root-row + .root-row {
-    margin-top: 6px;
+    margin-top: 8px;
   }
 </style>

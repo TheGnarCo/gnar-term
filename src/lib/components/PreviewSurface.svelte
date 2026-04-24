@@ -20,12 +20,24 @@
   let watchId = 0;
   let dispose: (() => void) | undefined;
   let loadError: string | null = null;
+  let clickHandler: ((e: MouseEvent) => void) | undefined;
 
-  function locate(): { workspaceId: string; paneId: string } | null {
+  function locate(): {
+    workspaceId: string;
+    paneId: string;
+    hostMetadata?: Record<string, unknown>;
+  } | null {
     for (const ws of get(workspaces)) {
       for (const pane of getAllPanes(ws.splitRoot)) {
         if (pane.surfaces.some((s) => s.id === surface.id)) {
-          return { workspaceId: ws.id, paneId: pane.id };
+          const hostMetadata = ws.metadata as
+            | Record<string, unknown>
+            | undefined;
+          return {
+            workspaceId: ws.id,
+            paneId: pane.id,
+            ...(hostMetadata ? { hostMetadata } : {}),
+          };
         }
       }
     }
@@ -40,15 +52,27 @@
         path: surface.path,
         paneId: loc.paneId,
         workspaceId: loc.workspaceId,
+        ...(loc.hostMetadata ? { hostMetadata: loc.hostMetadata } : {}),
       });
     }
 
     try {
-      const result = await openPreview(surface.path);
+      const result = await openPreview(surface.path, { surfaceId: surface.id });
       element = result.element;
       watchId = result.watchId;
       dispose = result.dispose;
       container.appendChild(element);
+
+      clickHandler = (e: MouseEvent) => {
+        const anchor = (e.target as Element).closest("a");
+        if (!anchor) return;
+        const href = anchor.getAttribute("href");
+        if (!href?.startsWith("http://") && !href?.startsWith("https://"))
+          return;
+        e.preventDefault();
+        invoke("open_url", { url: href }).catch(() => {});
+      };
+      container.addEventListener("click", clickHandler);
     } catch (err) {
       loadError = err instanceof Error ? err.message : String(err);
     }
@@ -61,6 +85,7 @@
   }
 
   onDestroy(() => {
+    if (clickHandler) container?.removeEventListener("click", clickHandler);
     dispose?.();
     if (watchId > 0) {
       invoke("unwatch_file", { watchId }).catch(() => {});

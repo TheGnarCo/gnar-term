@@ -26,13 +26,20 @@ import {
   extensionStore,
   resetExtensions,
 } from "../lib/services/extension-loader";
+import { resetConfigDirForTests } from "../lib/services/service-helpers";
 import * as config from "../lib/config";
+
+const CONFIG_DIR = "/home/user/.config/gnar-term";
 
 describe("Extension management", () => {
   beforeEach(async () => {
+    resetConfigDirForTests();
     await resetExtensions();
     mockInvoke.mockReset();
-    mockInvoke.mockResolvedValue(undefined);
+    mockInvoke.mockImplementation((cmd: string) => {
+      if (cmd === "get_global_config_dir") return Promise.resolve(CONFIG_DIR);
+      return Promise.resolve(undefined);
+    });
   });
 
   describe("installExtensionFromPath", () => {
@@ -46,6 +53,7 @@ describe("Extension management", () => {
       mockInvoke.mockImplementation((cmd: string, args?: { path?: string }) => {
         if (cmd === "read_file" && args.path.endsWith("extension.json"))
           return Promise.resolve(manifest);
+        if (cmd === "get_global_config_dir") return Promise.resolve(CONFIG_DIR);
         if (cmd === "get_home") return Promise.resolve("/home/user");
         return Promise.resolve(undefined);
       });
@@ -58,6 +66,7 @@ describe("Extension management", () => {
     it("returns error for invalid manifest", async () => {
       mockInvoke.mockImplementation((cmd: string) => {
         if (cmd === "read_file") return Promise.resolve("{}");
+        if (cmd === "get_global_config_dir") return Promise.resolve(CONFIG_DIR);
         if (cmd === "get_home") return Promise.resolve("/home/user");
         return Promise.resolve(undefined);
       });
@@ -71,6 +80,7 @@ describe("Extension management", () => {
       mockInvoke.mockImplementation((cmd: string) => {
         if (cmd === "read_file")
           return Promise.reject(new Error("File not found"));
+        if (cmd === "get_global_config_dir") return Promise.resolve(CONFIG_DIR);
         if (cmd === "get_home") return Promise.resolve("/home/user");
         return Promise.resolve(undefined);
       });
@@ -90,6 +100,7 @@ describe("Extension management", () => {
       mockInvoke.mockImplementation((cmd: string, args?: { path?: string }) => {
         if (cmd === "read_file" && args.path.endsWith("extension.json"))
           return Promise.resolve(manifest);
+        if (cmd === "get_global_config_dir") return Promise.resolve(CONFIG_DIR);
         if (cmd === "get_home") return Promise.resolve("/home/user");
         return Promise.resolve(undefined);
       });
@@ -113,6 +124,7 @@ describe("Extension management", () => {
         if (cmd === "read_file" && args?.path?.endsWith("extension.json"))
           return Promise.resolve(manifest);
         if (cmd === "file_exists") return Promise.resolve(true);
+        if (cmd === "get_global_config_dir") return Promise.resolve(CONFIG_DIR);
         if (cmd === "get_home") return Promise.resolve("/home/user");
         return Promise.resolve(undefined);
       });
@@ -152,6 +164,7 @@ describe("Extension management", () => {
       mockInvoke.mockImplementation((cmd: string, args?: { path?: string }) => {
         if (cmd === "read_file" && args.path.endsWith("extension.json"))
           return Promise.resolve(manifest);
+        if (cmd === "get_global_config_dir") return Promise.resolve(CONFIG_DIR);
         if (cmd === "get_home") return Promise.resolve("/home/user");
         return Promise.resolve(undefined);
       });
@@ -185,6 +198,7 @@ describe("Extension management", () => {
       mockInvoke.mockImplementation((cmd: string, args?: { path?: string }) => {
         if (cmd === "read_file" && args.path.endsWith("extension.json"))
           return Promise.resolve(manifest);
+        if (cmd === "get_global_config_dir") return Promise.resolve(CONFIG_DIR);
         if (cmd === "get_home") return Promise.resolve("/home/user");
         return Promise.resolve(undefined);
       });
@@ -222,6 +236,7 @@ describe("Extension management", () => {
       mockInvoke.mockImplementation((cmd: string, args?: { path?: string }) => {
         if (cmd === "read_file" && args.path.endsWith("extension.json"))
           return Promise.resolve(manifest);
+        if (cmd === "get_global_config_dir") return Promise.resolve(CONFIG_DIR);
         if (cmd === "get_home") return Promise.resolve("/home/user");
         return Promise.resolve(undefined);
       });
@@ -231,6 +246,7 @@ describe("Extension management", () => {
       vi.spyOn(config, "saveConfig").mockResolvedValue(undefined);
       mockInvoke.mockClear();
       mockInvoke.mockImplementation((cmd: string) => {
+        if (cmd === "get_global_config_dir") return Promise.resolve(CONFIG_DIR);
         if (cmd === "get_home") return Promise.resolve("/home/user");
         return Promise.resolve(undefined);
       });
@@ -258,6 +274,7 @@ describe("Extension management", () => {
       mockInvoke.mockImplementation((cmd: string, args?: { path?: string }) => {
         if (cmd === "read_file" && args.path.endsWith("extension.json"))
           return Promise.resolve(manifest);
+        if (cmd === "get_global_config_dir") return Promise.resolve(CONFIG_DIR);
         if (cmd === "get_home") return Promise.resolve("/home/user");
         return Promise.resolve(undefined);
       });
@@ -279,6 +296,7 @@ describe("Extension management", () => {
       mockInvoke.mockImplementation((cmd: string, args?: { path?: string }) => {
         if (cmd === "read_file" && args?.path?.endsWith("extension.json"))
           return Promise.resolve(manifest);
+        if (cmd === "get_global_config_dir") return Promise.resolve(CONFIG_DIR);
         if (cmd === "get_home") return Promise.resolve("/home/user");
         return Promise.resolve(undefined);
       });
@@ -330,6 +348,7 @@ describe("Extension management", () => {
       mockInvoke.mockImplementation((cmd: string, args?: { path?: string }) => {
         if (cmd === "read_file" && args?.path?.includes("broken-ext"))
           return Promise.reject(new Error("disk read failed"));
+        if (cmd === "get_global_config_dir") return Promise.resolve(CONFIG_DIR);
         if (cmd === "get_home") return Promise.resolve("/home/user");
         return Promise.resolve(undefined);
       });
@@ -369,6 +388,7 @@ describe("Extension management", () => {
           if (args?.path?.endsWith("extension.json"))
             return Promise.resolve(goodManifest);
         }
+        if (cmd === "get_global_config_dir") return Promise.resolve(CONFIG_DIR);
         if (cmd === "get_home") return Promise.resolve("/home/user");
         return Promise.resolve(undefined);
       });
@@ -397,6 +417,7 @@ describe("Extension management", () => {
       mockInvoke.mockImplementation((cmd: string, args?: { path?: string }) => {
         if (cmd === "read_file" && args.path.endsWith("extension.json"))
           return Promise.resolve(manifest);
+        if (cmd === "get_global_config_dir") return Promise.resolve(CONFIG_DIR);
         if (cmd === "get_home") return Promise.resolve("/home/user");
         return Promise.resolve(undefined);
       });
@@ -474,6 +495,7 @@ describe("Extension management", () => {
       });
 
       mockInvoke.mockImplementation((cmd: string) => {
+        if (cmd === "get_global_config_dir") return Promise.resolve(CONFIG_DIR);
         if (cmd === "get_home") return Promise.resolve("/home/user");
         return Promise.resolve(undefined);
       });

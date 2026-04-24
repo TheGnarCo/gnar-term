@@ -23,3 +23,10 @@ docs/implement/
 # Jekyll build artifacts
 docs/_site/
 docs/.jekyll-cache/
+
+# Claude Code runtime state
+.claude/scheduled_tasks.lock
+.claude/worktrees/
+
+# gnar-term runtime state
+.gnar-term

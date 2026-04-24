@@ -117,8 +117,7 @@ export function agentDotColorForSurface(
 ): string | null {
   const item = processItems.find((i) => i.metadata?.surfaceId === surfaceId);
   if (!item) return null;
-  if (item.variant === "muted") return null; // idle — no dot
-  return variantColor(item.variant);
+  return variantColor(item.variant, "#888888");
 }
 
 /**

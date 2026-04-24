@@ -15,7 +15,8 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { writable, type Readable } from "svelte/store";
-import { getHome } from "./services/service-helpers";
+import { getHome, getConfigDir } from "./services/service-helpers";
+import { runConfigMigrations } from "./services/config-migrations";
 
 // --- Types (cmux-compatible + extensions) ---
 
@@ -48,6 +49,14 @@ export interface SplitDef {
 export type LayoutNode = { pane: PaneDef } | SplitDef;
 
 export interface WorkspaceDef {
+  /**
+   * Stable identifier. Optional on fresh creation — `createWorkspaceFromDef`
+   * mints a new id when absent. Populated by `persistWorkspaces` so that
+   * on restart the same id is reused, letting `rootRowOrder` (which keys
+   * rows by `{kind, id}`) survive the round-trip and preserve user-
+   * dragged sort order.
+   */
+  id?: string;
   name?: string;
   cwd?: string;
   color?: string;
@@ -117,24 +126,47 @@ export interface AgentsConfig {
 }
 
 /**
- * Agentic Orchestrator dashboard — a markdown-backed agent workspace.
- * Defined in core (config.ts) rather than in the extension because it is
- * persisted user data (parallel to projects/worktrees) and other
- * extensions may need to read it.
+ * Workspace Group — a named, colored, path-rooted grouping of
+ * workspaces. Workspaces whose CWD falls under `path` are auto-adopted
+ * (via `metadata.groupId`) and render nested inside the group's block
+ * in the Workspaces section.
+ *
+ * Defined in core (rather than in an extension) because it is persisted
+ * user data that multiple core services and extensions read. Stage 5
+ * relocates the backing CRUD service from project-scope to core; the
+ * type already lives here so dashboard-contribution consumers can depend
+ * on a stable core import path.
  */
-export interface AgentDashboard {
+export interface WorkspaceGroupEntry {
   id: string;
   name: string;
-  baseDir: string;
-  color: string;
-  /** Absolute path to the backing .md file. Resolved at create-time. */
+  /** Root CWD — auto-adoption uses this as a longest-prefix ancestor match. */
   path: string;
-  /** When set, the dashboard is nested under a project; otherwise root-level. */
-  parentProjectId?: string;
+  color: string;
+  /** Ids of workspaces currently claimed by this group. */
+  workspaceIds: string[];
+  /** True when `path` is the root of a git repo. Used by gates (e.g. worktree actions). */
+  isGit: boolean;
   createdAt: string;
+  /**
+   * Id of the Group Dashboard workspace hosting this group's markdown
+   * Live Preview. Eagerly created alongside the group. Resolved from
+   * the workspaces store by consumers.
+   */
+  dashboardWorkspaceId?: string;
 }
 
 export interface GnarTermConfig {
+  /**
+   * Monotonic schema version for on-disk config shape. Loaders call
+   * `runConfigMigrations` (src/lib/services/config-migrations.ts) after
+   * parsing; migrations advance this to the current target and the
+   * loader saves back when it changes.
+   *
+   * Absent on configs written before the migration scaffold landed —
+   * those are treated as version 0 and stamped on first load.
+   */
+  schemaVersion?: number;
   // gnar-term extensions
   theme?: string;
   fontSize?: number;
@@ -144,7 +176,25 @@ export interface GnarTermConfig {
   extensions?: Record<string, ExtensionConfig>;
   worktrees?: WorktreesConfig;
   agents?: AgentsConfig;
-  agentDashboards?: AgentDashboard[];
+  /**
+   * Global Agentic Dashboard configuration — the singleton
+   * pseudo-workspace pinned at the top of the root sidebar. `markdownPath`
+   * points at the backing markdown file the dashboard renders. Absent on
+   * fresh installs; the pseudo-workspace falls back to the default
+   * `~/.config/gnar-term/global-agents.md` path. Stage 8 migration stamps
+   * this field when converting a legacy rootless orchestrator.
+   */
+  agenticGlobal?: {
+    markdownPath?: string;
+  };
+  /**
+   * Per-pseudo-workspace color overrides, keyed by pseudo id
+   * (e.g. `"agentic.global"`). Values are slot names from
+   * `PROJECT_COLOR_SLOTS` (same palette Workspace Groups use) or any
+   * `#RRGGBB` literal. Consumed by `PseudoWorkspaceRow` to paint the
+   * banner; absent entries fall back to a theme-neutral default.
+   */
+  pseudoWorkspaceColors?: Record<string, string>;
   /**
    * MCP integration module. Controls whether gnar-term exposes its MCP tools
    * to Claude Code (or any other MCP client) over a local Unix domain socket.
@@ -188,6 +238,25 @@ let _configPath = "";
 const _configStore = writable<GnarTermConfig>({});
 export const configStore: Readable<GnarTermConfig> = _configStore;
 
+async function applyMigrationsAndPersist(
+  parsed: GnarTermConfig,
+  path: string,
+): Promise<GnarTermConfig> {
+  const { migrated, changed } = await runConfigMigrations(parsed);
+  if (!changed) return migrated;
+  try {
+    await invoke("write_file", {
+      path,
+      content: JSON.stringify(migrated, null, 2),
+    });
+  } catch (err) {
+    // Migration is in-memory-correct; disk persistence is best-effort.
+    // Next successful saveConfig will flush the new shape.
+    console.warn("[config] Failed to persist migrated config:", err);
+  }
+  return migrated;
+}
+
 export async function loadConfig(
   explicitPath?: string,
 ): Promise<GnarTermConfig> {
@@ -195,7 +264,8 @@ export async function loadConfig(
   if (explicitPath) {
     try {
       const content = await invoke<string>("read_file", { path: explicitPath });
-      _config = JSON.parse(content);
+      const parsed = JSON.parse(content) as GnarTermConfig;
+      _config = await applyMigrationsAndPersist(parsed, explicitPath);
       _configPath = explicitPath;
       _configStore.set(_config);
       return _config;
@@ -204,22 +274,23 @@ export async function loadConfig(
     }
   }
 
-  const home = await getHome();
+  const [home, configDir] = await Promise.all([getHome(), getConfigDir()]);
 
   // Try per-project config first (higher priority), then global.
   // Legacy global `gnar-term.json` is still read so existing installs keep
   // working after the rename to `settings.json`.
   const paths = [
     ...CONFIG_FILENAMES, // ./settings.json, ./gnar-term.json, ./cmux.json
-    `${home}/.config/gnar-term/settings.json`,
-    `${home}/.config/gnar-term/gnar-term.json`,
+    `${configDir}/settings.json`,
+    `${configDir}/gnar-term.json`,
     `${home}/.config/cmux/cmux.json`,
   ];
 
   for (const path of paths) {
     try {
       const content = await invoke<string>("read_file", { path });
-      _config = JSON.parse(content);
+      const parsed = JSON.parse(content) as GnarTermConfig;
+      _config = await applyMigrationsAndPersist(parsed, path);
       _configPath = path;
       _configStore.set(_config);
       return _config;
@@ -228,7 +299,7 @@ export async function loadConfig(
 
   // No config found — use defaults
   _config = {};
-  _configPath = `${home}/.config/gnar-term/settings.json`;
+  _configPath = `${configDir}/settings.json`;
   _configStore.set(_config);
   return _config;
 }
@@ -238,12 +309,12 @@ export async function saveConfig(
 ): Promise<void> {
   _config = { ..._config, ...updates };
   _configStore.set(_config);
-  const home = await getHome();
-  const path = _configPath || `${home}/.config/gnar-term/settings.json`;
+  const configDir = await getConfigDir();
+  const path = _configPath || `${configDir}/settings.json`;
 
   // Ensure directory exists
   try {
-    await invoke("ensure_dir", { path: `${home}/.config/gnar-term` });
+    await invoke("ensure_dir", { path: configDir });
   } catch {}
 
   try {
@@ -280,12 +351,142 @@ let _appState: AppState = {};
 const _appStateStore = writable<AppState>({});
 export const appStateStore: Readable<AppState> = _appStateStore;
 
+/**
+ * Rewrite legacy workspace-scoped state shapes to the new Workspace
+ * Groups + Dashboard Contributions layout:
+ *   - workspaces[].metadata.projectId → metadata.groupId
+ *   - workspaces[].metadata.parentOrchestratorId → metadata.spawnedBy
+ *   - workspaces[].metadata.orchestratorId (on dashboards) →
+ *       metadata.dashboardContributionId = "agentic"
+ *   - rootRowOrder[].kind === "project" → "workspace-group"
+ *   - rootRowOrder[].kind === "agent-orchestrator" → dropped (Stage 7
+ *     removed the orchestrator root-row)
+ *
+ * Runs on every load — idempotent when the shape is already migrated.
+ * Paired with the v1/v2 migrations in config-migrations.ts; both land
+ * in the same release so old state on disk reads as the new shape in
+ * memory without requiring an explicit schemaVersion lookup.
+ */
+export function migrateLegacyProjectShapes(state: AppState): {
+  migrated: AppState;
+  changed: boolean;
+} {
+  let changed = false;
+  let next: AppState = state;
+
+  if (Array.isArray(state.workspaces)) {
+    let workspacesChanged = false;
+    const workspaces = state.workspaces.map((ws) => {
+      const md = ws.metadata as Record<string, unknown> | undefined;
+      if (!md) return ws;
+
+      const needsProjectIdRewrite = "projectId" in md;
+      const needsSpawnedBy =
+        typeof md.parentOrchestratorId === "string" && !("spawnedBy" in md);
+      const needsLegacyDrop =
+        "parentOrchestratorId" in md || "orchestratorId" in md;
+      const needsContributionId =
+        md.isDashboard === true &&
+        typeof md.orchestratorId === "string" &&
+        !("dashboardContributionId" in md);
+
+      if (
+        !needsProjectIdRewrite &&
+        !needsSpawnedBy &&
+        !needsContributionId &&
+        !needsLegacyDrop
+      ) {
+        return ws;
+      }
+
+      const { projectId, parentOrchestratorId, orchestratorId, ...rest } =
+        md as Record<string, unknown> & {
+          projectId?: unknown;
+          parentOrchestratorId?: unknown;
+          orchestratorId?: unknown;
+        };
+      const nextMd: Record<string, unknown> = { ...rest };
+
+      if (needsProjectIdRewrite) {
+        if (
+          nextMd.groupId === undefined &&
+          projectId !== undefined &&
+          projectId !== null
+        ) {
+          nextMd.groupId = projectId;
+        }
+      }
+
+      if (needsSpawnedBy) {
+        const groupId =
+          typeof nextMd.groupId === "string" ? nextMd.groupId : undefined;
+        nextMd.spawnedBy = groupId
+          ? { kind: "group", groupId }
+          : { kind: "global" };
+      } else if (parentOrchestratorId !== undefined) {
+        // parentOrchestratorId present but spawnedBy already set — drop the
+        // legacy marker without synthesizing a replacement.
+      }
+
+      if (needsContributionId) {
+        nextMd.dashboardContributionId = "agentic";
+      } else if (orchestratorId !== undefined && md.isDashboard !== true) {
+        // Preserve stray orchestratorId on non-dashboard workspaces only if
+        // the caller didn't otherwise trigger a rewrite path — but since we
+        // decompose `md` above, drop it.
+      }
+
+      workspacesChanged = true;
+      return { ...ws, metadata: nextMd };
+    });
+    if (workspacesChanged) {
+      changed = true;
+      next = { ...next, workspaces };
+    }
+  }
+
+  if (Array.isArray(state.rootRowOrder)) {
+    let orderChanged = false;
+    const rootRowOrder: typeof state.rootRowOrder = [];
+    for (const row of state.rootRowOrder) {
+      if (row.kind === "agent-orchestrator") {
+        orderChanged = true;
+        continue;
+      }
+      if (row.kind === "project") {
+        orderChanged = true;
+        rootRowOrder.push({ ...row, kind: "workspace-group" });
+        continue;
+      }
+      rootRowOrder.push(row);
+    }
+    if (orderChanged) {
+      changed = true;
+      next = { ...next, rootRowOrder };
+    }
+  }
+
+  return { migrated: next, changed };
+}
+
 export async function loadState(): Promise<AppState> {
-  const home = await getHome();
-  const path = `${home}/.config/gnar-term/state.json`;
+  const configDir = await getConfigDir();
+  const path = `${configDir}/state.json`;
   try {
     const content = await invoke<string>("read_file", { path });
-    _appState = JSON.parse(content);
+    const parsed = JSON.parse(content) as AppState;
+    const { migrated, changed } = migrateLegacyProjectShapes(parsed);
+    _appState = migrated;
+    if (changed) {
+      try {
+        await invoke("write_file", {
+          path,
+          content: JSON.stringify(migrated, null, 2),
+        });
+      } catch (err) {
+        console.warn("[state] Failed to persist migrated state:", err);
+      }
+    }
   } catch {
     _appState = {};
   }
@@ -296,10 +497,10 @@ export async function loadState(): Promise<AppState> {
 export async function saveState(updates: Partial<AppState>): Promise<void> {
   _appState = { ..._appState, ...updates };
   _appStateStore.set(_appState);
-  const home = await getHome();
-  const path = `${home}/.config/gnar-term/state.json`;
+  const configDir = await getConfigDir();
+  const path = `${configDir}/state.json`;
   try {
-    await invoke("ensure_dir", { path: `${home}/.config/gnar-term` });
+    await invoke("ensure_dir", { path: configDir });
     await invoke("write_file", {
       path,
       content: JSON.stringify(_appState, null, 2),

@@ -29,6 +29,16 @@ export type AppEvent =
   | { type: "surface:activated"; id: string; paneId: string }
   | { type: "surface:closed"; id: string; paneId: string }
   | {
+      // Fires after a terminal surface has been assigned a real PTY id.
+      // `surface:created` fires earlier with a placeholder ptyId of -1
+      // (PTY spawns only after the terminal is fit-sized), so consumers
+      // that need the real id — like passive agent detection wiring an
+      // output observer — listen here instead.
+      type: "surface:ptyReady";
+      id: string;
+      ptyId: number;
+    }
+  | {
       type: "surface:titleChanged";
       id: string;
       oldTitle: string;

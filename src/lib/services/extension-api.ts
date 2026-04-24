@@ -46,14 +46,16 @@ import {
   closeExtensionSurfaces,
   markSurfaceUnreadById,
   focusSurfaceById,
+  openFileAsPreviewSplit,
 } from "./surface-service";
 import {
   secondarySidebarVisible,
   pendingAction,
   showInputPrompt as coreShowInputPrompt,
   showFormPrompt as coreShowFormPrompt,
+  showConfirmPrompt as coreShowConfirmPrompt,
 } from "../stores/ui";
-import { setAgentStatus, clearAgentStatus } from "../stores/agent-status";
+import { setStatusItem, clearStatusItem } from "./status-registry";
 import {
   invoke as tauriInvoke,
   convertFileSrc as tauriConvertFileSrc,
@@ -69,6 +71,8 @@ import {
   sendNotification as notifSend,
 } from "@tauri-apps/plugin-notification";
 import WorkspaceListView from "../components/WorkspaceListView.svelte";
+import ContainerRow from "../components/ContainerRow.svelte";
+import PathStatusLine from "../components/PathStatusLine.svelte";
 import SplitButton from "../components/SplitButton.svelte";
 import ColorPicker from "../components/ColorPicker.svelte";
 import DragGrip from "../components/DragGrip.svelte";
@@ -223,6 +227,19 @@ export function createExtensionAPI(
     showInputPrompt(label: string, defaultValue?: string) {
       return coreShowInputPrompt(label, defaultValue);
     },
+    showConfirm(
+      message: string,
+      options?: {
+        title?: string;
+        confirmLabel?: string;
+        cancelLabel?: string;
+      },
+    ): Promise<boolean> {
+      // Uses the themed ConfirmPrompt overlay (store-driven). Tauri v2
+      // blocks window.confirm() behind the dialog plugin capability,
+      // so we render our own modal instead.
+      return coreShowConfirmPrompt(message, options);
+    },
     showFormPrompt(
       title: string,
       fields: Array<
@@ -287,6 +304,9 @@ export function createExtensionAPI(
     },
     openInEditor(filePath: string) {
       pendingAction.set({ type: "open-in-editor", filePath });
+    },
+    openPreviewSplit(filePath: string) {
+      openFileAsPreviewSplit(filePath);
     },
     openSurface(
       surfaceTypeId: string,
@@ -357,9 +377,19 @@ export function createExtensionAPI(
     },
     setWorkspaceIndicator(workspaceId: string, status: string | null) {
       if (status === null) {
-        clearAgentStatus(workspaceId);
+        clearStatusItem("_agent", workspaceId, "default");
       } else {
-        setAgentStatus(workspaceId, status);
+        setStatusItem("_agent", workspaceId, "default", {
+          category: "process",
+          priority: 0,
+          label: status,
+          variant:
+            status === "running"
+              ? "success"
+              : status === "waiting"
+                ? "warning"
+                : "muted",
+        });
       }
     },
 
@@ -526,6 +556,8 @@ export function createExtensionAPI(
         ColorPicker,
         DragGrip,
         DropGhost,
+        ContainerRow,
+        PathStatusLine,
       };
     },
     createDragReorder(

@@ -23,9 +23,9 @@ import {
   registerFileBrowserExtension,
 } from "../../extensions/file-browser";
 import {
-  projectScopeManifest,
-  registerProjectScopeExtension,
-} from "../../extensions/project-scope";
+  agenticOrchestratorManifest,
+  registerAgenticOrchestratorExtension,
+} from "../../extensions/agentic-orchestrator";
 import {
   diffViewerManifest,
   registerDiffViewerExtension,
@@ -56,7 +56,11 @@ type IncludedExtension = readonly [
  */
 export const INCLUDED_EXTENSIONS: readonly IncludedExtension[] = [
   [fileBrowserManifest, registerFileBrowserExtension, "file-browser"],
-  [projectScopeManifest, registerProjectScopeExtension, "project-scope"],
+  [
+    agenticOrchestratorManifest,
+    registerAgenticOrchestratorExtension,
+    "agentic-orchestrator",
+  ],
   [diffViewerManifest, registerDiffViewerExtension, "diff-viewer"],
   [jrvsThemesManifest, registerJrvsThemesExtension, "jrvs-themes"],
   [

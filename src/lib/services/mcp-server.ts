@@ -48,7 +48,6 @@ import { listen, emit } from "@tauri-apps/api/event";
 import { workspaces, activeWorkspace, activePane } from "../stores/workspace";
 import {
   getAllPanes,
-  getAllSurfaces,
   isTerminalSurface,
   uid,
   type Pane,
@@ -94,14 +93,25 @@ import { sidebarSectionStore } from "./sidebar-section-registry";
 import { overlayStore } from "./overlay-registry";
 import { workspaceSubtitleStore } from "./workspace-subtitle-registry";
 import { dashboardTabStore } from "./dashboard-tab-registry";
+import {
+  canAddContributionToGroup,
+  dashboardContributionStore,
+  getDashboardContribution,
+} from "./dashboard-contribution-registry";
+import {
+  closeDashboardForGroup,
+  isDashboardWorkspace,
+} from "./workspace-group-service";
+import { getWorkspaceGroup } from "../stores/workspace-groups";
 import { getWorkspaceStatus } from "./status-registry";
 import { getMcpSetting } from "../config";
 import { spawnAgentInWorktree } from "./spawn-helper";
+import { agentsStore } from "./agent-detection-service";
 
 // ---- Types ----
 
 type AgentType = "claude-code" | "codex" | "aider" | "custom";
-type SessionStatus = "starting" | "running" | "idle" | "exited";
+type SessionStatus = "starting" | "exited";
 
 interface McpSession {
   session_id: string;
@@ -397,22 +407,6 @@ function removeSurfaceFromPane(paneId: string, surfaceId: string): void {
   });
 }
 
-function reapDeadSessions(): void {
-  const aliveSurfaceIds = new Set<string>();
-  for (const ws of get(workspaces)) {
-    for (const surface of getAllSurfaces(ws)) {
-      aliveSurfaceIds.add(surface.id);
-    }
-  }
-  for (const [id, session] of sessions) {
-    if (!aliveSurfaceIds.has(session.surfaceId)) {
-      unregisterMcpPty(session.ptyId);
-      ptyToSession.delete(session.ptyId);
-      sessions.delete(id);
-    }
-  }
-}
-
 // ---- Workspace introspection helpers ----
 
 function describeSurface(s: Surface) {
@@ -474,7 +468,7 @@ function logDispatch(entry: DispatchLogEntry): void {
   );
 }
 
-export function getDispatchLog(): readonly DispatchLogEntry[] {
+export function _getDispatchLogForTest(): readonly DispatchLogEntry[] {
   return dispatchLog;
 }
 
@@ -572,11 +566,6 @@ registerTool({
             description:
               "Source repo path. Required if not in a workspace context.",
           },
-          dashboardId: {
-            type: "string",
-            description:
-              "When set, the new worktree workspace's metadata.parentDashboardId is set to this id (so the contributor registry renders it under the dashboard row).",
-          },
           taskContext: {
             type: "string",
             description:
@@ -600,7 +589,6 @@ registerTool({
         branch?: string;
         base?: string;
         repoPath?: string;
-        dashboardId?: string;
         taskContext?: string;
       };
     };
@@ -640,9 +628,6 @@ registerTool({
         repoPath,
         ...(p.worktree.branch ? { branch: p.worktree.branch } : {}),
         ...(p.worktree.base ? { base: p.worktree.base } : {}),
-        ...(p.worktree.dashboardId
-          ? { dashboardId: p.worktree.dashboardId }
-          : {}),
       });
       ctx.lastSpawnedPaneId = result.pane_id;
       return result;
@@ -731,21 +716,88 @@ registerTool({
 });
 
 registerTool({
-  name: "list_sessions",
-  description: "List MCP-spawned sessions currently alive in gnar-term.",
+  name: "list_agents",
+  description:
+    "List all detected AI agents currently running in gnar-term terminals — includes both MCP-spawned agents and native agents started by the user (e.g. by typing `claude`, `codex`, `aider`). Each entry contains agentId, agentName, surfaceId, workspaceId, status, createdAt, and lastStatusChange.",
   inputSchema: { type: "object", properties: {} },
   handler: () => {
-    reapDeadSessions();
-    const list = Array.from(sessions.values()).map((s) => ({
-      session_id: s.session_id,
-      name: s.name,
-      agent: s.agent,
-      pid: s.pid,
-      status: s.status,
-      cwd: s.cwd,
-      createdAt: s.createdAt,
+    const agents = get(agentsStore).map((a) => ({
+      agentId: a.agentId,
+      agentName: a.agentName,
+      surfaceId: a.surfaceId,
+      workspaceId: a.workspaceId,
+      status: a.status,
+      createdAt: a.createdAt,
+      lastStatusChange: a.lastStatusChange,
     }));
-    return { sessions: list };
+    return { agents };
+  },
+});
+
+registerTool({
+  name: "split_pane",
+  description:
+    "Split a pane and open a surface in the new half. Defaults to a terminal split right. Returns the new pane_id.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      direction: {
+        type: "string",
+        enum: ["horizontal", "vertical"],
+        description:
+          "Split direction: 'horizontal' = side-by-side, 'vertical' = stacked. Default: 'horizontal'.",
+      },
+      surface_type: {
+        type: "string",
+        enum: ["terminal", "preview"],
+        description: "Surface to open in the new pane. Default: 'terminal'.",
+      },
+      preview_path: {
+        type: "string",
+        description:
+          "Absolute path to the file to preview. Required when surface_type is 'preview'.",
+      },
+      workspace_id: { type: "string" },
+      pane_id: { type: "string" },
+    },
+  },
+  handler: async (args, ctx) => {
+    const p = args as {
+      direction?: "horizontal" | "vertical";
+      surface_type?: "terminal" | "preview";
+      preview_path?: string;
+      workspace_id?: string;
+      pane_id?: string;
+    };
+    if (p.surface_type === "preview" && !p.preview_path) {
+      throw new Error(
+        "preview_path is required when surface_type is 'preview'",
+      );
+    }
+    const target = resolveTarget(p, ctx);
+    const hostPane = target.hostPane ?? pickHostPane(target.workspace);
+    const dir = p.direction === "vertical" ? "vertical" : "horizontal";
+    const newPane = splitPaneInWorkspace(target.workspace, hostPane, dir);
+    ctx.lastSpawnedPaneId = newPane.id;
+    // split_pane is a lower-level primitive — it does not emit `pane.created`
+    // because it does not spawn a tracked agent session. (Compare open_surface,
+    // which also omits the event for the same reason.)
+
+    if (p.surface_type === "preview") {
+      const surface = createPreviewSurfaceInPane(newPane.id, p.preview_path!, {
+        focus: true,
+      });
+      if (!surface) {
+        throw new Error(`Could not open preview in new pane ${newPane.id}`);
+      }
+    } else {
+      const surface = await createTerminalSurface(newPane);
+      newPane.activeSurfaceId = surface.id;
+      workspaces.update((l) => [...l]);
+      void safeFocus(surface);
+    }
+
+    return { pane_id: newPane.id, workspace_id: target.workspace.id };
   },
 });
 
@@ -1271,7 +1323,7 @@ registerTool({
 registerTool({
   name: "invoke_workspace_action",
   description:
-    "Invoke a workspace action by id (see list_workspace_actions). `context` is forwarded to the action's handler — core passes an empty object for top-level invocations; extensions that dispatch actions from their own UI may populate fields like `{ workspaceId, projectId, branch, isGit }`. Use the owning extension's docs to learn which fields it reads.",
+    "Invoke a workspace action by id (see list_workspace_actions). `context` is forwarded to the action's handler — core passes an empty object for top-level invocations; extensions that dispatch actions from their own UI may populate fields like `{ workspaceId, groupId, branch, isGit }`. Use the owning extension's docs to learn which fields it reads.",
   inputSchema: {
     type: "object",
     properties: {
@@ -1280,7 +1332,7 @@ registerTool({
         type: "object",
         additionalProperties: true,
         description:
-          "Free-form object forwarded to the handler. Typical fields: workspaceId, projectId, projectPath, branch, isGit. Shape depends on the owning extension.",
+          "Free-form object forwarded to the handler. Typical fields: workspaceId, groupId, projectPath, branch, isGit. Shape depends on the owning extension.",
       },
     },
     required: ["action_id"],
@@ -1451,6 +1503,127 @@ registerTool({
       source: t.source,
     }));
     return { tabs };
+  },
+});
+
+// ---- Dashboard contributions (per-group add / remove / list) ----
+//
+// Each Workspace Group has a list of Dashboards available to it —
+// the registered DashboardContributions. Some are auto-provisioned
+// (core Overview, core Settings, agentic when enabled); the rest are
+// user-toggleable. MCP drives the same surface the Settings dashboard
+// exposes: list contributions + current active state, add a dashboard
+// workspace, or remove one (autoProvision rejects removal).
+
+registerTool({
+  name: "list_dashboard_contributions",
+  description:
+    "List every registered Dashboard contribution. When `group_id` is provided, each row also carries `active` (whether the group has a dashboard workspace for this contribution) and `workspace_id` when active. `autoProvision` contributions cannot be added or removed; the Settings dashboard toggle surfaces this via `locked_reason`.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      group_id: {
+        type: "string",
+        description: "Optional. When set, annotate each row with active state.",
+      },
+    },
+  },
+  handler: (args) => {
+    const p = args as { group_id?: string };
+    const contribs = get(dashboardContributionStore);
+    const group = p.group_id ? getWorkspaceGroup(p.group_id) : undefined;
+    if (p.group_id && !group) {
+      throw new Error(`Unknown workspace group: ${p.group_id}`);
+    }
+    const wsList = group ? get(workspaces) : [];
+    return {
+      contributions: contribs.map((c) => {
+        const base = {
+          id: c.id,
+          source: c.source,
+          label: c.label,
+          action_label: c.actionLabel,
+          cap_per_group: c.capPerGroup,
+          auto_provision: c.autoProvision === true,
+          locked_reason: c.lockedReason,
+        };
+        if (!group) return base;
+        const wsForContrib = wsList.find((w) =>
+          isDashboardWorkspace(w, group.id, c.id),
+        );
+        return {
+          ...base,
+          active: Boolean(wsForContrib),
+          workspace_id: wsForContrib?.id,
+        };
+      }),
+    };
+  },
+});
+
+registerTool({
+  name: "add_dashboard_to_group",
+  description:
+    "Materialize a dashboard workspace for a Workspace Group by running the contribution's create hook. Errors when the contribution is autoProvision (those materialize automatically and cannot be added manually), already at its per-group cap, unknown, or gated out by the contribution's availability predicate. Returns the new workspace id.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      group_id: { type: "string" },
+      contribution_id: { type: "string" },
+    },
+    required: ["group_id", "contribution_id"],
+  },
+  handler: async (args) => {
+    const p = args as { group_id: string; contribution_id: string };
+    const group = getWorkspaceGroup(p.group_id);
+    if (!group) throw new Error(`Unknown workspace group: ${p.group_id}`);
+    const contribution = getDashboardContribution(p.contribution_id);
+    if (!contribution) {
+      throw new Error(`Unknown dashboard contribution: ${p.contribution_id}`);
+    }
+    if (contribution.autoProvision) {
+      throw new Error(
+        `Dashboard contribution "${p.contribution_id}" is autoProvision — it materializes automatically and cannot be added manually.`,
+      );
+    }
+    const currentCount = get(workspaces).filter((w) =>
+      isDashboardWorkspace(w, group.id, contribution.id),
+    ).length;
+    if (!canAddContributionToGroup(group, contribution.id, currentCount)) {
+      throw new Error(
+        `Cannot add "${p.contribution_id}" to group "${p.group_id}" (at cap or gated by availability).`,
+      );
+    }
+    const workspaceId = await contribution.create(group);
+    return { workspace_id: workspaceId };
+  },
+});
+
+registerTool({
+  name: "remove_dashboard_from_group",
+  description:
+    "Close the dashboard workspace for `{group_id, contribution_id}`. Errors when the contribution is autoProvision (core Overview, core Settings, and the Agentic dashboard cannot be removed this way). Returns `{ removed: true }` on success, `{ removed: false }` when no such workspace existed.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      group_id: { type: "string" },
+      contribution_id: { type: "string" },
+    },
+    required: ["group_id", "contribution_id"],
+  },
+  handler: (args) => {
+    const p = args as { group_id: string; contribution_id: string };
+    const contribution = getDashboardContribution(p.contribution_id);
+    if (!contribution) {
+      throw new Error(`Unknown dashboard contribution: ${p.contribution_id}`);
+    }
+    if (contribution.autoProvision) {
+      throw new Error(
+        `Dashboard contribution "${p.contribution_id}" is autoProvision — locked on this group.`,
+      );
+    }
+    const removed = closeDashboardForGroup(p.group_id, p.contribution_id);
+    return { removed };
   },
 });
 
@@ -1821,6 +1994,8 @@ const UI_MUTATING_TOOLS = new Set([
   "spawn_preview",
   "create_preview_file",
   "close_preview",
+  "add_dashboard_to_group",
+  "remove_dashboard_from_group",
 ]);
 
 export async function dispatch(
@@ -2084,17 +2259,6 @@ export async function initMcpServer(): Promise<void> {
 
 export function _getToolsForTest(): ToolDef[] {
   return TOOLS;
-}
-
-export function _getSessionsForTest(): Map<string, McpSession> {
-  return sessions;
-}
-
-export function _getConnectionContextsForTest(): Map<
-  number,
-  ConnectionContext
-> {
-  return connectionContexts;
 }
 
 /** Build a connection context for tests. Pass binding=null for an unbound

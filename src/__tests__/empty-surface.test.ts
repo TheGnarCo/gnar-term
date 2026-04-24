@@ -64,11 +64,14 @@ describe("EmptySurface renders and is wired up", () => {
   const APP = read("src/App.svelte");
   const EMPTY = read("src/lib/components/EmptySurface.svelte");
 
-  it("App.svelte imports and renders EmptySurface when workspaces is empty", () => {
+  it("App.svelte imports and renders EmptySurface when no workspace is active", () => {
     expect(APP).toMatch(/import EmptySurface from/);
-    expect(APP).toMatch(
-      /\{#if\s+\$workspaces\.length\s*===\s*0\s*\}\s*<EmptySurface/,
-    );
+    // Stage 7 added a pseudo-workspace gate; the orphan-dashboard fix
+    // added an `activeWorkspaceIdx < 0` clause so the empty surface
+    // also renders when every restored workspace is a dashboard.
+    expect(APP).toMatch(/\$workspaces\.length\s*===\s*0/);
+    expect(APP).toMatch(/\$activeWorkspaceIdx\s*<\s*0/);
+    expect(APP).toMatch(/<EmptySurface\s*\/>/);
   });
 
   it("EmptySurface sources buttons from workspaceActionStore and promoted commands", () => {
@@ -76,9 +79,9 @@ describe("EmptySurface renders and is wired up", () => {
     expect(EMPTY).toMatch(/EMPTY_SURFACE_COMMAND_IDS/);
   });
 
-  it("promoted-commands list includes create-project", () => {
+  it("promoted-commands list includes create-workspace-group", () => {
     const cmds = read("src/lib/services/empty-surface-commands.ts");
-    expect(cmds).toMatch(/project-scope:create-project/);
+    expect(cmds).toMatch(/workspace-groups:create-workspace-group/);
   });
 });
 

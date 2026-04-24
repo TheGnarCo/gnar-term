@@ -410,13 +410,16 @@ export function handleWorkspaceCreated(
  * Calls closeWorkspace(idx) on confirm.
  */
 export async function confirmAndCloseWorkspace(
-  ws: { id: string; name: string },
+  ws: { id: string; name: string; metadata?: Record<string, unknown> },
   idx: number,
 ): Promise<boolean> {
   const entry = getWorktreeEntries().find((e) => e.workspaceId === ws.id);
   if (!entry) {
+    const isDashboard = typeof ws.metadata?.dashboardWorkspaceId === "string";
     const confirmed = await showConfirmPrompt(
-      `Close "${ws.name}"? This will dispose the terminal.`,
+      isDashboard
+        ? `Close "${ws.name}"?`
+        : `Close "${ws.name}"? This will dispose the terminal.`,
       { title: "Close Workspace", confirmLabel: "Close", danger: true },
     );
     if (!confirmed) return false;

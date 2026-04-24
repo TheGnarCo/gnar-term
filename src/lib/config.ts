@@ -133,7 +133,7 @@ export interface AgentsConfig {
  *
  * Defined in core (rather than in an extension) because it is persisted
  * user data that multiple core services and extensions read. Stage 5
- * relocates the backing CRUD service from project-scope to core; the
+ * relocates the backing CRUD service from the old extension to core; the
  * type already lives here so dashboard-contribution consumers can depend
  * on a stable core import path.
  */
@@ -190,7 +190,7 @@ export interface GnarTermConfig {
   /**
    * Per-pseudo-workspace color overrides, keyed by pseudo id
    * (e.g. `"agentic.global"`). Values are slot names from
-   * `PROJECT_COLOR_SLOTS` (same palette Workspace Groups use) or any
+   * `GROUP_COLOR_SLOTS` (same palette Workspace Groups use) or any
    * `#RRGGBB` literal. Consumed by `PseudoWorkspaceRow` to paint the
    * banner; absent entries fall back to a theme-neutral default.
    */
@@ -218,7 +218,7 @@ export interface AppState {
   workspaces?: (WorkspaceDef & { name: string })[];
   activeWorkspaceIdx?: number;
   // Interleaved ordering for the Workspaces section: unclaimed
-  // workspaces and whole project blocks sit in a single list the user
+  // workspaces and workspace group blocks sit in a single list the user
   // can drag across freely. See stores/root-row-order.ts.
   rootRowOrder?: { kind: string; id: string }[];
 }

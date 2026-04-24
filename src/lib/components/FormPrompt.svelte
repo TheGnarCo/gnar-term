@@ -5,7 +5,7 @@
   import { theme } from "../stores/theme";
   import { formPrompt } from "../stores/ui";
   import ColorPicker from "./ColorPicker.svelte";
-  import { PROJECT_COLOR_SLOTS, resolveProjectColor } from "../theme-data";
+  import { GROUP_COLOR_SLOTS, resolveGroupColor } from "../theme-data";
 
   // ColorPicker's prop shape keys the theme as a flat record; the core
   // theme store is Readable<ThemeDef>, which is structurally compatible
@@ -164,8 +164,8 @@
           {:else if field.type === "color"}
             <ColorPicker
               bind:value={values[field.key] as string}
-              colors={[...PROJECT_COLOR_SLOTS]}
-              resolveColor={(c) => resolveProjectColor(c, $theme)}
+              colors={[...GROUP_COLOR_SLOTS]}
+              resolveColor={(c) => resolveGroupColor(c, $theme)}
               theme={themeView}
             />
           {:else if field.type === "directory"}

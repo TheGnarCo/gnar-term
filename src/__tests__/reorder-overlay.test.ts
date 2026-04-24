@@ -61,7 +61,7 @@ describe("per-project overlay (via WorkspaceListBlock shell)", () => {
     );
     expect(BOOTSTRAP).toMatch(/railColor:/);
     expect(BOOTSTRAP).toMatch(/label:/);
-    expect(BOOTSTRAP).toMatch(/resolveProjectColor/);
+    expect(BOOTSTRAP).toMatch(/resolveGroupColor/);
   });
 
   it("WorkspaceGroupSectionContent accepts a unified overlay prop supporting strong + light", () => {
@@ -83,7 +83,7 @@ describe("per-project overlay (via WorkspaceListBlock shell)", () => {
       /overlay\.kind\s*===\s*["']strong["'][\s\S]*?groupHex/,
     );
     expect(GROUP_SECTION_CONTENT).toMatch(
-      /groupHex\s*=\s*[^\n]*resolveProjectColor\(group\.color,\s*\$theme\)/,
+      /groupHex\s*=\s*[^\n]*resolveGroupColor\(group\.color,\s*\$theme\)/,
     );
   });
 

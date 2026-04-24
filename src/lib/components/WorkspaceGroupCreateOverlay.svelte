@@ -4,7 +4,7 @@
   import { open as dialogOpen } from "@tauri-apps/plugin-dialog";
   import ColorPicker from "./ColorPicker.svelte";
   import { theme } from "../stores/theme";
-  import { PROJECT_COLOR_SLOTS, resolveProjectColor } from "../theme-data";
+  import { GROUP_COLOR_SLOTS, resolveGroupColor } from "../theme-data";
   import {
     pendingCreateResolver,
     createDialogPrefill,
@@ -18,9 +18,8 @@
 
   function randomColor(): string {
     return (
-      PROJECT_COLOR_SLOTS[
-        Math.floor(Math.random() * PROJECT_COLOR_SLOTS.length)
-      ] ?? "#4a90e2"
+      GROUP_COLOR_SLOTS[Math.floor(Math.random() * GROUP_COLOR_SLOTS.length)] ??
+      "#4a90e2"
     );
   }
 
@@ -57,7 +56,7 @@
   async function browse() {
     const selected = await dialogOpen({
       directory: true,
-      title: "Select Project Root",
+      title: "Select Group Folder",
     });
     if (typeof selected !== "string") return;
     path = selected;
@@ -80,7 +79,7 @@
 
   function submit() {
     if (!path) {
-      error = "Please select a project folder.";
+      error = "Please select a group folder.";
       return;
     }
     if (!name.trim()) {
@@ -188,7 +187,7 @@
           type="text"
           bind:value={name}
           on:input={handleNameInput}
-          placeholder="my-project"
+          placeholder="my-group"
           style="
             padding: 8px 12px; background: {$theme.bg};
             border: 1px solid {$theme.borderActive}; border-radius: 6px;
@@ -204,8 +203,8 @@
         >
         <ColorPicker
           bind:value={color}
-          colors={[...PROJECT_COLOR_SLOTS]}
-          resolveColor={(c: string) => resolveProjectColor(c, $theme)}
+          colors={[...GROUP_COLOR_SLOTS]}
+          resolveColor={(c: string) => resolveGroupColor(c, $theme)}
           theme={themeView}
         />
       </div>

@@ -1,32 +1,31 @@
 <script lang="ts">
   /**
    * ColorSlotPicker — a small color-swatch grid for picking one of the
-   * named `PROJECT_COLOR_SLOTS` tones. Used by settings panels that let
+   * named `GROUP_COLOR_SLOTS` tones. Used by settings panels that let
    * the user tint a sidebar row (workspace group banner, Global Agentic
    * Dashboard, etc.). The picker is purely presentational; the caller
    * supplies the current selection and handles persistence via `onSelect`.
    */
   import { theme } from "../stores/theme";
-  import { PROJECT_COLOR_SLOTS, resolveProjectColor } from "../theme-data";
+  import { GROUP_COLOR_SLOTS, resolveGroupColor } from "../theme-data";
 
   export let currentSlot: string;
   export let onSelect: (slot: string) => void;
 
   function handleKeydown(event: KeyboardEvent): void {
-    const idx = PROJECT_COLOR_SLOTS.indexOf(
-      currentSlot as (typeof PROJECT_COLOR_SLOTS)[number],
+    const idx = GROUP_COLOR_SLOTS.indexOf(
+      currentSlot as (typeof GROUP_COLOR_SLOTS)[number],
     );
     let nextIdx: number | null = null;
     if (event.key === "ArrowRight") {
       event.preventDefault();
-      nextIdx = (idx + 1) % PROJECT_COLOR_SLOTS.length;
+      nextIdx = (idx + 1) % GROUP_COLOR_SLOTS.length;
     } else if (event.key === "ArrowLeft") {
       event.preventDefault();
-      nextIdx =
-        (idx - 1 + PROJECT_COLOR_SLOTS.length) % PROJECT_COLOR_SLOTS.length;
+      nextIdx = (idx - 1 + GROUP_COLOR_SLOTS.length) % GROUP_COLOR_SLOTS.length;
     }
     if (nextIdx !== null) {
-      const nextSlot = PROJECT_COLOR_SLOTS[nextIdx]!;
+      const nextSlot = GROUP_COLOR_SLOTS[nextIdx]!;
       onSelect(nextSlot);
       document
         .querySelector<HTMLElement>(`[data-color-slot="${nextSlot}"]`)
@@ -41,8 +40,8 @@
   on:keydown={handleKeydown}
   style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px;"
 >
-  {#each PROJECT_COLOR_SLOTS as slot (slot)}
-    {@const hex = resolveProjectColor(slot, $theme)}
+  {#each GROUP_COLOR_SLOTS as slot (slot)}
+    {@const hex = resolveGroupColor(slot, $theme)}
     {@const isSelected = slot === currentSlot}
     <button
       type="button"

@@ -95,12 +95,7 @@ export async function getActiveCwd(): Promise<string | undefined> {
   return getCwdForSurface(get(activeSurface));
 }
 
-/**
- * Resolve a specific workspace's cwd from its first terminal surface,
- * without requiring the workspace to be active. Used by services that
- * want to track every workspace (e.g. git-status polling) rather than
- * only the active one.
- */
+// Like getActiveCwd but targets any workspace by ID, not just the active one.
 export async function getWorkspaceCwd(
   workspaceId: string,
 ): Promise<string | undefined> {
@@ -108,16 +103,8 @@ export async function getWorkspaceCwd(
   if (!ws) return undefined;
   for (const pane of getAllPanes(ws.splitRoot)) {
     for (const s of pane.surfaces) {
-      if (!isTerminalSurface(s)) continue;
-      if (s.cwd) return s.cwd;
-      if (s.ptyId >= 0) {
-        try {
-          const live = await invoke<string>("get_pty_cwd", { ptyId: s.ptyId });
-          if (live) return live;
-        } catch {
-          /* fall through */
-        }
-      }
+      const cwd = await getCwdForSurface(s);
+      if (cwd) return cwd;
     }
   }
   return undefined;

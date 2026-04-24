@@ -92,7 +92,7 @@ describe("worktree-workspaces extension", () => {
     );
     await activateExtension("worktree-workspaces");
 
-    const ctx = { groupId: "p-1", projectPath: "/p", isGit: true };
+    const ctx = { groupId: "p-1", groupPath: "/p", isGit: true };
     const registered = get(workspaceActionStore).find(
       (a) => a.id === "worktree-workspaces:create-worktree",
     );

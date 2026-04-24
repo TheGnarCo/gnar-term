@@ -26,9 +26,9 @@
   import { showConfirmPrompt } from "../../../lib/stores/ui";
   import { theme } from "../../../lib/stores/theme";
   import {
-    PROJECT_COLOR_SLOTS,
-    resolveProjectColor,
-    type ProjectColorSlot,
+    GROUP_COLOR_SLOTS,
+    resolveGroupColor,
+    type GroupColorSlot,
   } from "../../../lib/theme-data";
 
   const DEFAULT_TEMPLATE = `# Agents
@@ -137,8 +137,8 @@ title: Active Agents
   }
 
   async function handleColorKeydown(event: KeyboardEvent): Promise<void> {
-    const slots = PROJECT_COLOR_SLOTS;
-    const idx = slots.indexOf(currentColorSlot as ProjectColorSlot);
+    const slots = GROUP_COLOR_SLOTS;
+    const idx = slots.indexOf(currentColorSlot as GroupColorSlot);
     let nextIdx: number | null = null;
     if (event.key === "ArrowRight") {
       event.preventDefault();
@@ -280,8 +280,8 @@ title: Active Agents
           on:keydown={handleColorKeydown}
           style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px;"
         >
-          {#each PROJECT_COLOR_SLOTS as slot (slot)}
-            {@const hex = resolveProjectColor(slot, $theme)}
+          {#each GROUP_COLOR_SLOTS as slot (slot)}
+            {@const hex = resolveGroupColor(slot, $theme)}
             {@const isSelected = slot === currentColorSlot}
             <button
               type="button"

@@ -5,7 +5,7 @@
   import PathStatusLine from "./PathStatusLine.svelte";
   import SplitButton from "./SplitButton.svelte";
   import WorkspaceListView from "./WorkspaceListView.svelte";
-  import { resolveProjectColor } from "../theme-data";
+  import { resolveGroupColor } from "../theme-data";
   import { theme } from "../stores/theme";
   // SplitButton's prop types theme as Readable<Record<string, string>>;
   // the core store is Readable<ThemeDef>, structurally compatible but
@@ -131,10 +131,10 @@
   $: groupContext = group
     ? ({
         groupId: group.id,
-        projectPath: group.path,
-        projectName: group.name,
+        groupPath: group.path,
+        groupName: group.name,
         isGit: group.isGit,
-        projectColor: group.color,
+        groupColor: group.color,
       } satisfies WorkspaceActionContext)
     : undefined;
 
@@ -289,7 +289,7 @@
     contextMenu.set({ x: e.clientX, y: e.clientY, items });
   }
 
-  $: groupHex = group ? resolveProjectColor(group.color, $theme) : "";
+  $: groupHex = group ? resolveGroupColor(group.color, $theme) : "";
   $: headerFg = group ? contrastColor(groupHex) : $theme.fg;
   $: subtitleFg = $theme.fgMuted ?? $theme.fgDim ?? $theme.fg;
 

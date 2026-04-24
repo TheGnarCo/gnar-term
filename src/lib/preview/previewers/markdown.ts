@@ -95,11 +95,9 @@ function renderChunks(
       // can't smuggle script through here.
       div.innerHTML = DOMPurify.sanitize(chunk.html);
       if (ctx && filePath) {
-        const dir = filePath.includes("//")
-          ? ""
-          : filePath.includes("/")
-            ? filePath.substring(0, filePath.lastIndexOf("/"))
-            : "";
+        const dir = filePath.includes("/")
+          ? filePath.substring(0, filePath.lastIndexOf("/"))
+          : "";
         for (const img of div.querySelectorAll("img")) {
           const src = img.getAttribute("src");
           if (

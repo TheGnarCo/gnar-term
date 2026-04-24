@@ -170,6 +170,11 @@ function loadIdleTimeoutMs(): number {
 const RUNNING_TITLE_PATTERNS = ["thinking", "working"];
 const IDLE_TITLE_PATTERNS = ["ready", "done"];
 
+// How long a non-matching title must persist before we detach the agent.
+// Prevents momentary title flickers (e.g. Claude cycling through internal
+// states) from clearing the workspace dot.
+const TITLE_DETACH_DEBOUNCE_MS = 4_000;
+
 function matchesAny(text: string, patterns: string[]): boolean {
   const lower = text.toLowerCase();
   return patterns.some((p) => lower.includes(p));
@@ -250,6 +255,8 @@ interface TrackedSurface {
   tracker: StatusTracker | null;
   unsubscribeOutput: (() => void) | null;
   preAgentTitle?: string;
+  /** Pending debounced detach timer — cancelled if title re-matches before it fires. */
+  detachTimer: ReturnType<typeof setTimeout> | null;
 }
 
 // --- Status publishing helpers ---
@@ -480,6 +487,7 @@ export function initAgentDetection(): void {
       agentPattern: null,
       tracker: null,
       unsubscribeOutput: null,
+      detachTimer: null,
     };
     trackedSurfaces.set(surfaceId, tracked);
 
@@ -556,6 +564,10 @@ export function initAgentDetection(): void {
   const detachFromSurface = (surfaceId: string): void => {
     const tracked = trackedSurfaces.get(surfaceId);
     if (!tracked) return;
+    if (tracked.detachTimer !== null) {
+      clearTimeout(tracked.detachTimer);
+      tracked.detachTimer = null;
+    }
     if (tracked.agentId) detachAgent(tracked);
     if (tracked.unsubscribeOutput) tracked.unsubscribeOutput();
     trackedSurfaces.delete(surfaceId);
@@ -582,11 +594,24 @@ export function initAgentDetection(): void {
     if (!tracked) return;
     const match = matchesPattern(event.newTitle, patterns);
     if (match && !tracked.agentId) {
+      if (tracked.detachTimer !== null) {
+        clearTimeout(tracked.detachTimer);
+        tracked.detachTimer = null;
+      }
       attachAgent(tracked, match, idleTimeoutMs, event.oldTitle);
     } else if (match && tracked.agentId) {
+      if (tracked.detachTimer !== null) {
+        clearTimeout(tracked.detachTimer);
+        tracked.detachTimer = null;
+      }
       tracked.tracker?.onTitleChange(event.newTitle);
     } else if (!match && tracked.agentId) {
-      detachAgent(tracked);
+      if (tracked.detachTimer === null) {
+        tracked.detachTimer = setTimeout(() => {
+          tracked.detachTimer = null;
+          detachAgent(tracked);
+        }, TITLE_DETACH_DEBOUNCE_MS);
+      }
     }
   };
   const handleClosed = (event: { type: "surface:closed"; id: string }) => {
@@ -652,6 +677,10 @@ export function initAgentDetection(): void {
   _current = {
     destroy() {
       for (const tracked of trackedSurfaces.values()) {
+        if (tracked.detachTimer !== null) {
+          clearTimeout(tracked.detachTimer);
+          tracked.detachTimer = null;
+        }
         if (tracked.agentId) detachAgent(tracked);
         if (tracked.unsubscribeOutput) tracked.unsubscribeOutput();
       }

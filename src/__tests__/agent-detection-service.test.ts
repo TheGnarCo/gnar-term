@@ -189,20 +189,65 @@ describe("agent-detection-service — title transitions", () => {
     expect(agents[0]?.agentName).toBe("Claude Code");
   });
 
-  it("detaches when the title changes away from a matching pattern", () => {
-    workspaces.set([
-      makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 6 }]),
-    ]);
-    initAgentDetection();
-    expect(getAgents()).toHaveLength(1);
+  it("detaches when the title changes away from a matching pattern (after debounce)", () => {
+    vi.useFakeTimers();
+    try {
+      workspaces.set([
+        makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 6 }]),
+      ]);
+      initAgentDetection();
+      expect(getAgents()).toHaveLength(1);
 
-    eventBus.emit({
-      type: "surface:titleChanged",
-      id: "s1",
-      oldTitle: "claude",
-      newTitle: "zsh",
-    });
-    expect(getAgents()).toHaveLength(0);
+      eventBus.emit({
+        type: "surface:titleChanged",
+        id: "s1",
+        oldTitle: "claude",
+        newTitle: "zsh",
+      });
+      // Still attached immediately after the title change
+      expect(getAgents()).toHaveLength(1);
+
+      // Advance past the debounce window — now detaches
+      vi.advanceTimersByTime(5_000);
+      expect(getAgents()).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not detach when title briefly loses match then recovers (flicker)", () => {
+    vi.useFakeTimers();
+    try {
+      workspaces.set([
+        makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 6 }]),
+      ]);
+      initAgentDetection();
+      expect(getAgents()).toHaveLength(1);
+
+      // Title flickers away from "claude"
+      eventBus.emit({
+        type: "surface:titleChanged",
+        id: "s1",
+        oldTitle: "claude",
+        newTitle: "zsh",
+      });
+      expect(getAgents()).toHaveLength(1);
+
+      // Title comes back with "claude" within the debounce window
+      vi.advanceTimersByTime(1_000);
+      eventBus.emit({
+        type: "surface:titleChanged",
+        id: "s1",
+        oldTitle: "zsh",
+        newTitle: "claude thinking",
+      });
+
+      // Advance well past the original debounce — agent must still be attached
+      vi.advanceTimersByTime(5_000);
+      expect(getAgents()).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("forwards title changes to the tracker while the agent stays matched", () => {
@@ -560,35 +605,41 @@ describe("agent-detection-service — workspace:closed cleanup", () => {
 });
 
 describe("agent-detection-service — title restoration on agent close", () => {
-  it("restores surface title to pre-agent name when title changes away from match", () => {
-    const ws = makeWorkspace("w1", [{ id: "s1", title: "zsh", ptyId: 50 }]);
-    workspaces.set([ws]);
-    initAgentDetection();
-    expect(getAgents()).toHaveLength(0);
+  it("restores surface title to pre-agent name when title changes away from match (after debounce)", () => {
+    vi.useFakeTimers();
+    try {
+      const ws = makeWorkspace("w1", [{ id: "s1", title: "zsh", ptyId: 50 }]);
+      workspaces.set([ws]);
+      initAgentDetection();
+      expect(getAgents()).toHaveLength(0);
 
-    const surface = ws.splitRoot.pane.surfaces[0]!;
-    surface.title = "claude";
-    workspaces.update((l) => [...l]);
+      const surface = ws.splitRoot.pane.surfaces[0]!;
+      surface.title = "claude";
+      workspaces.update((l) => [...l]);
 
-    eventBus.emit({
-      type: "surface:titleChanged",
-      id: "s1",
-      oldTitle: "zsh",
-      newTitle: "claude",
-    });
-    expect(getAgents()).toHaveLength(1);
+      eventBus.emit({
+        type: "surface:titleChanged",
+        id: "s1",
+        oldTitle: "zsh",
+        newTitle: "claude",
+      });
+      expect(getAgents()).toHaveLength(1);
 
-    surface.title = "zsh";
-    workspaces.update((l) => [...l]);
-    eventBus.emit({
-      type: "surface:titleChanged",
-      id: "s1",
-      oldTitle: "claude",
-      newTitle: "zsh",
-    });
+      surface.title = "zsh";
+      workspaces.update((l) => [...l]);
+      eventBus.emit({
+        type: "surface:titleChanged",
+        id: "s1",
+        oldTitle: "claude",
+        newTitle: "zsh",
+      });
 
-    expect(getAgents()).toHaveLength(0);
-    expect(surface.title).toBe("zsh");
+      vi.advanceTimersByTime(5_000);
+      expect(getAgents()).toHaveLength(0);
+      expect(surface.title).toBe("zsh");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("restores surface title to pre-agent name when the surface is closed", () => {
@@ -615,24 +666,32 @@ describe("agent-detection-service — title restoration on agent close", () => {
     expect(surface.title).toBe("bash");
   });
 
-  it("does not restore title when bootstrapped with agent title already active", () => {
-    const ws = makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 52 }]);
-    workspaces.set([ws]);
-    initAgentDetection();
-    expect(getAgents()).toHaveLength(1);
+  it("does not restore title when bootstrapped with agent title already active (after debounce)", () => {
+    vi.useFakeTimers();
+    try {
+      const ws = makeWorkspace("w1", [
+        { id: "s1", title: "claude", ptyId: 52 },
+      ]);
+      workspaces.set([ws]);
+      initAgentDetection();
+      expect(getAgents()).toHaveLength(1);
 
-    const surface = ws.splitRoot.pane.surfaces[0]!;
-    surface.title = "zsh";
-    workspaces.update((l) => [...l]);
-    eventBus.emit({
-      type: "surface:titleChanged",
-      id: "s1",
-      oldTitle: "claude",
-      newTitle: "zsh",
-    });
+      const surface = ws.splitRoot.pane.surfaces[0]!;
+      surface.title = "zsh";
+      workspaces.update((l) => [...l]);
+      eventBus.emit({
+        type: "surface:titleChanged",
+        id: "s1",
+        oldTitle: "claude",
+        newTitle: "zsh",
+      });
 
-    expect(getAgents()).toHaveLength(0);
-    expect(surface.title).toBe("zsh");
+      vi.advanceTimersByTime(5_000);
+      expect(getAgents()).toHaveLength(0);
+      expect(surface.title).toBe("zsh");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

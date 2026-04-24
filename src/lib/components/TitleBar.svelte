@@ -9,6 +9,8 @@
   } from "../stores/ui";
   import { isMac, modLabel } from "../terminal-service";
   import { isDebugBuild } from "../services/service-helpers";
+  import { titleBarButtonStore } from "../services/titlebar-button-registry";
+  import TitleBarContributedButton from "./TitleBarContributedButton.svelte";
 
   // Single source of truth: cfg!(debug_assertions) from Rust, exposed via the
   // is_debug_build command. True for `tauri dev` and `tauri build --debug`,
@@ -102,6 +104,10 @@
       /><circle cx="8" cy="8" r="2" /></svg
     >
   </button>
+
+  {#each $titleBarButtonStore as btn (btn.id)}
+    <TitleBarContributedButton button={btn} {btnStyle} {fg} {fgActive} />
+  {/each}
 
   <button
     style="{btnStyle} color: {$secondarySidebarVisible ? fgActive : fg};"

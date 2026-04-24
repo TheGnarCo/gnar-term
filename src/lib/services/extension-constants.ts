@@ -8,6 +8,7 @@
 import { type AppEventType } from "./event-bus";
 import { unregisterBySource } from "./command-registry";
 import { unregisterSidebarTabsBySource } from "./sidebar-tab-registry";
+import { unregisterTitleBarButtonsBySource } from "./titlebar-button-registry";
 import { unregisterSidebarSectionsBySource } from "./sidebar-section-registry";
 import { unregisterSurfaceTypesBySource } from "./surface-type-registry";
 import { unregisterContextMenuItemsBySource } from "./context-menu-item-registry";
@@ -66,6 +67,12 @@ export const EXTENSION_ALLOWED_COMMANDS: Set<string> = new Set([
   "git_diff",
   "git_merge",
   "git_remote_url",
+  // Claude settings commands
+  "read_claude_file",
+  "write_claude_file",
+  "list_claude_dir",
+  "watch_claude_file",
+  "unwatch_claude_file",
 ]);
 
 // PTY commands — only available to extensions with "pty" permission
@@ -153,6 +160,7 @@ export function isBlockedAppPath(path: string): boolean {
 export const REGISTRY_CLEANUP_FNS: Array<(source: string) => void> = [
   unregisterBySource,
   unregisterSidebarTabsBySource,
+  unregisterTitleBarButtonsBySource,
   unregisterSidebarSectionsBySource,
   unregisterSurfaceTypesBySource,
   unregisterContextMenuItemsBySource,

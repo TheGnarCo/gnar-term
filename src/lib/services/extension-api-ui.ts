@@ -6,6 +6,7 @@ import {
   registerSidebarTab,
   registerSidebarAction,
 } from "./sidebar-tab-registry";
+import { registerTitleBarButton as registryRegisterTitleBarButton } from "./titlebar-button-registry";
 import { registerSidebarSection } from "./sidebar-section-registry";
 import { registerSurfaceType as registryRegisterSurfaceType } from "./surface-type-registry";
 import {
@@ -47,6 +48,7 @@ export function createUIRegistrationAPI(
   manifest: ExtensionManifest,
 ): Pick<
   ExtensionAPI,
+  | "registerTitleBarButton"
   | "registerSecondarySidebarTab"
   | "registerSecondarySidebarAction"
   | "registerPrimarySidebarSection"
@@ -71,6 +73,25 @@ export function createUIRegistrationAPI(
   | "registerWorkspaceSubtitle"
 > {
   return {
+    registerTitleBarButton(
+      buttonId: string,
+      options: {
+        icon: unknown;
+        title: string;
+        isActive?: import("svelte/store").Readable<boolean>;
+        onClick: () => void;
+      },
+    ) {
+      registryRegisterTitleBarButton({
+        id: `${extId}:${buttonId}`,
+        source: extId,
+        icon: options.icon,
+        title: options.title,
+        isActive: options.isActive,
+        onClick: options.onClick,
+      });
+    },
+
     registerSecondarySidebarTab(tabId: string, component: unknown) {
       const declared = manifest.contributes?.secondarySidebarTabs?.find(
         (t) => t.id === tabId,

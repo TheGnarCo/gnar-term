@@ -328,6 +328,19 @@ export interface ExtensionAPI {
   emit(event: `extension:${string}`, payload?: Record<string, unknown>): void;
 
   // UI registration — core owns chrome, extension provides content
+  /**
+   * Contribute a button to the TitleBar, rendered between the Settings button
+   * and the Secondary Sidebar toggle. `isActive` controls the active highlight color.
+   */
+  registerTitleBarButton(
+    buttonId: string,
+    options: {
+      icon: unknown;
+      title: string;
+      isActive?: Readable<boolean>;
+      onClick: () => void;
+    },
+  ): void;
   registerSecondarySidebarTab(tabId: string, component: unknown): void;
   registerSecondarySidebarAction(
     tabId: string,

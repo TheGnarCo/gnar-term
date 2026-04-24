@@ -144,6 +144,7 @@
   $: isDashboardWs =
     (workspace.metadata as Record<string, unknown> | undefined)?.isDashboard ===
     true;
+  $: isDashboardWorkspaceRow = dashboardWorkspaceIcon !== null;
   // Nested workspaces live under a group's colored banner. The group
   // banner itself already rolls up status (and the per-row chip handles
   // agent state), so the long blue notification row duplicates chrome
@@ -463,7 +464,7 @@
       {/if}
     </div>
 
-    {#each subtitleComponents as sub (sub.id)}
+    {#each isDashboardWorkspaceRow ? [] : subtitleComponents as sub (sub.id)}
       {@const subApi = getExtensionApiById(sub.source)}
       {#if subApi}
         <ExtensionWrapper
@@ -526,7 +527,7 @@
        centered against the full row regardless of how many subtitle or
        notification rows stack below the title. The content column
        reserves 24px on the right to keep text from crashing into it. -->
-  {#if !isDashboardWs}
+  {#if !isDashboardWs || isDashboardWorkspaceRow}
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <span
       title="Close Workspace (⇧⌘W)"

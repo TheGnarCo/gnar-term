@@ -1332,7 +1332,7 @@ registerTool({
         type: "object",
         additionalProperties: true,
         description:
-          "Free-form object forwarded to the handler. Typical fields: workspaceId, groupId, projectPath, branch, isGit. Shape depends on the owning extension.",
+          "Free-form object forwarded to the handler. Typical fields: workspaceId, groupId, groupPath, branch, isGit. Shape depends on the owning extension.",
       },
     },
     required: ["action_id"],

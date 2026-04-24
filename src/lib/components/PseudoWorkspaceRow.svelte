@@ -26,7 +26,7 @@
   import type { Component } from "svelte";
   import type { PseudoWorkspace } from "../services/pseudo-workspace-registry";
   import { configStore } from "../config";
-  import { resolveProjectColor } from "../theme-data";
+  import { resolveGroupColor } from "../theme-data";
 
   export let pseudo: PseudoWorkspace;
   export let onGripMouseDown: ((e: MouseEvent) => void) | undefined = undefined;
@@ -49,7 +49,7 @@
   // theme accent so rows always render with a solid banner regardless
   // of configuration.
   $: configuredSlot = $configStore.pseudoWorkspaceColors?.[pseudo.id];
-  $: bannerBackground = resolveProjectColor(configuredSlot ?? "purple", $theme);
+  $: bannerBackground = resolveGroupColor(configuredSlot ?? "purple", $theme);
 
   function activate(): void {
     // Pseudo-workspaces are mutually exclusive with real workspaces —

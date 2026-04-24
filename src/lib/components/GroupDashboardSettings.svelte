@@ -11,7 +11,7 @@
    *   - Markdown source — read-only path to the Overview preview file
    */
   import { theme } from "../stores/theme";
-  import { PROJECT_COLOR_SLOTS, resolveProjectColor } from "../theme-data";
+  import { GROUP_COLOR_SLOTS, resolveGroupColor } from "../theme-data";
   import { workspaceGroupsStore } from "../stores/workspace-groups";
   import {
     groupDashboardPath,
@@ -188,8 +188,8 @@
         data-color-picker
         style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px;"
       >
-        {#each PROJECT_COLOR_SLOTS as slot (slot)}
-          {@const hex = resolveProjectColor(slot, $theme)}
+        {#each GROUP_COLOR_SLOTS as slot (slot)}
+          {@const hex = resolveGroupColor(slot, $theme)}
           {@const isSelected = slot === currentColorSlot}
           <button
             data-color-slot={slot}

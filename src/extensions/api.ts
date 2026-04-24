@@ -11,16 +11,16 @@
  */
 import type { Readable } from "svelte/store";
 
-// --- Project color slots (shared across extensions + core) ---
+// --- Group color slots (shared across extensions + core) ---
 //
-// Semantic palette for extensions that want theme-following color pickers
-// (project-scope and similar). Each slot maps onto the active theme's
-// ansi palette via getProjectColors(), so a stored slot name resolves to
+// Semantic palette for workspace groups and extensions that want
+// theme-following color pickers. Each slot maps onto the active theme's
+// ansi palette via getGroupColors(), so a stored slot name resolves to
 // different hex values as the user switches themes. Custom hex strings
-// (anything starting with "#") pass through resolveProjectColor()
+// (anything starting with "#") pass through resolveGroupColor()
 // unchanged — users who type their own color keep it verbatim.
 
-export const PROJECT_COLOR_SLOTS = [
+export const GROUP_COLOR_SLOTS = [
   "red",
   "pink",
   "green",
@@ -35,14 +35,14 @@ export const PROJECT_COLOR_SLOTS = [
   "teal",
 ] as const;
 
-export type ProjectColorSlot = (typeof PROJECT_COLOR_SLOTS)[number];
+export type GroupColorSlot = (typeof GROUP_COLOR_SLOTS)[number];
 
 /**
  * Minimum theme shape required for slot resolution — only the ansi
  * block. Both core's ThemeDef and the extension-facing ExtensionTheme
  * satisfy this interface.
  */
-export interface ProjectColorTheme {
+export interface GroupColorTheme {
   ansi: {
     red: string;
     brightRed: string;
@@ -59,9 +59,9 @@ export interface ProjectColorTheme {
   };
 }
 
-export function getProjectColors(
-  theme: ProjectColorTheme,
-): Record<ProjectColorSlot, string> {
+export function getGroupColors(
+  theme: GroupColorTheme,
+): Record<GroupColorSlot, string> {
   return {
     red: theme.ansi.red,
     pink: theme.ansi.brightRed,
@@ -83,13 +83,13 @@ export function getProjectColors(
  * theme; custom hex strings (starting with `#`) pass through unchanged.
  * Unknown strings return as-is.
  */
-export function resolveProjectColor(
+export function resolveGroupColor(
   color: string,
-  theme: ProjectColorTheme,
+  theme: GroupColorTheme,
 ): string {
   if (color.startsWith("#")) return color;
-  const colors = getProjectColors(theme);
-  return colors[color as ProjectColorSlot] ?? color;
+  const colors = getGroupColors(theme);
+  return colors[color as GroupColorSlot] ?? color;
 }
 
 // --- Status types (inlined so api.ts stays self-contained) ---
@@ -346,12 +346,12 @@ export interface ExtensionAPI {
   ): void;
   /**
    * Register a renderer for a non-workspace row kind inside the
-   * Workspaces section's interleaved list (projects today, other
-   * kinds later). The component receives `{ id: string }` as a prop
-   * and is responsible for its own drag-hover feedback.
+   * Workspaces section's interleaved list (workspace groups today,
+   * other kinds later). The component receives `{ id: string }` as a
+   * prop and is responsible for its own drag-hover feedback.
    *
    * `options.railColor`, when provided, lets core paint the DragGrip
-   * rail in a per-row color (e.g. the project's color). Returning
+   * rail in a per-row color (e.g. the group's color). Returning
    * undefined for a given id falls back to the theme accent.
    */
   registerRootRowRenderer(
@@ -366,7 +366,7 @@ export interface ExtensionAPI {
    * Append a row to the end of the Workspaces section's root-row
    * list. Idempotent — repeat calls for the same {kind, id} are
    * no-ops. Extensions call this when they create an entity that
-   * should render at the root level (e.g. project-scope on project
+   * should render at the root level (e.g. workspace-group on group
    * create).
    */
   appendRootRow(row: { kind: string; id: string }): void;
@@ -474,7 +474,7 @@ export interface ExtensionAPI {
   /**
    * Contribute child rows to another extension's parent rows. The
    * `parentType` matches the kind of a row registered via
-   * `registerRootRowRenderer` (e.g. "project", "dashboard"); given a
+   * `registerRootRowRenderer` (e.g. "workspace-group", "dashboard"); given a
    * specific parent's id, return the child row ids that should render
    * underneath it. Each id is dispatched through the same
    * root-row-renderer registry, so children inherit whatever the
@@ -782,7 +782,7 @@ export interface ExtensionAPI {
   hoveredSidebarBlockId: Readable<string | null>;
   /**
    * Key of the Workspaces-section root row currently hovered over its
-   * grip column, encoded as `"kind:id"` (e.g. `"project:p-42"`), or
+   * grip column, encoded as `"kind:id"` (e.g. `"workspace-group:g-42"`), or
    * null when no row is hovered. Renderers registered via
    * `registerRootRowRenderer` use this to derive their own
    * expansion/frit state in sync with the core-owned grip.
@@ -810,7 +810,7 @@ export interface ExtensionAPI {
    * - **DragGrip** — left-border drag handle that appears on hover
    *   Props: `{ theme, visible, onMouseDown, ariaLabel? }`
    * - **ContainerRow** — shared banner + nested-list chrome for
-   *   "container workspaces" (projects, agent dashboards). Banner can
+   *   "container workspaces" (workspace groups, agent dashboards). Banner can
    *   represent a first-class workspace by wiring onBannerClick/onClose
    *   to switchWorkspace/closeWorkspace.
    *   Props: `{ color, foreground, parentColor?, onGripMouseDown?,
@@ -846,7 +846,7 @@ export interface ExtensionAPI {
        * Called on every drag state change. Return the ReorderContext to
        * publish to the global reorder-context store (or null when the drag
        * ends). The sidebar reads this store to render per-level dims and
-       * labels on every block, project, and workspace.
+       * labels on every block, group, and workspace.
        *
        * Required for `scope: "inner"` drags that should participate in the
        * global overlay system.
@@ -918,7 +918,7 @@ export interface DragReorderHandle {
  * Context passed to workspace action handlers and `when` filters.
  *
  * Core passes an empty context `{}` for top-level actions. Extensions
- * may populate additional fields (e.g., project or git metadata) when
+ * may populate additional fields (e.g., group or git metadata) when
  * invoking actions from their own UI. Use optional chaining to access
  * extension-provided fields safely.
  */

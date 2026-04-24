@@ -38,7 +38,7 @@ import {
   unclaimWorkspace,
   updateWorkspaceGroup,
 } from "../services/workspace-group-service";
-import { resolveProjectColor } from "../theme-data";
+import { resolveGroupColor } from "../theme-data";
 import { theme } from "../stores/theme";
 import WorkspaceGroupRowBody from "../components/WorkspaceGroupRowBody.svelte";
 import GearIcon from "../icons/GearIcon.svelte";
@@ -279,7 +279,7 @@ export async function initWorkspaceGroups(): Promise<void> {
     railColor: (id: string) => {
       const group = readGroups().find((g) => g.id === id);
       if (!group) return undefined;
-      return resolveProjectColor(group.color, get(theme));
+      return resolveGroupColor(group.color, get(theme));
     },
     label: (id: string) => readGroups().find((g) => g.id === id)?.name,
   });

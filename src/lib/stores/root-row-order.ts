@@ -2,20 +2,20 @@
  * Root-row ordering for the Workspaces section.
  *
  * The Workspaces section renders a single interleaved list of root
- * rows: unclaimed workspaces (kind: "workspace") and whole project
- * blocks (kind: "project"). Each row is identified by {kind, id}.
+ * rows: unclaimed workspaces (kind: "workspace") and workspace group
+ * blocks (kind: "workspace-group"). Each row is identified by {kind, id}.
  * Users can drag freely across this list — a workspace can sit
- * between two projects, a project between two workspaces.
+ * between two groups, a group between two workspaces.
  *
  * This module owns:
  *   - the ordered list (persisted across restarts)
  *   - a derived view that filters out rows whose referent no longer
- *     exists (deleted project, workspace that got claimed by a
- *     project, etc.) and appends newly-created entities in insertion
+ *     exists (deleted group, workspace that got claimed by a
+ *     group, etc.) and appends newly-created entities in insertion
  *     order
  *   - mutation helpers for append / remove / move
  *
- * Renderers for non-workspace kinds (projects, future extension
+ * Renderers for non-workspace kinds (workspace groups, future extension
  * kinds) are contributed through `registerRootRowRenderer` on the
  * extension API — WorkspaceListBlock looks them up by kind.
  */
@@ -71,9 +71,8 @@ export function moveRootRow(from: number, to: number): void {
  * that aren't yet listed (appended to the end) and dropping any entries
  * whose referent is unknown.
  *
- * `knownWorkspaceIds` comes from the workspaces store; `knownProjectRows`
- * from project-scope (via its registered bootstrap hook — see
- * registerRootRowBootstrapContributor).
+ * `knownWorkspaceIds` comes from the workspaces store; `extensionRows`
+ * from registered extensions (via registerRootRowBootstrapContributor).
  */
 export function bootstrapRootRowOrder(
   knownWorkspaceIds: string[],
@@ -83,7 +82,7 @@ export function bootstrapRootRowOrder(
   const key = (r: RootRow) => `${r.kind}:${r.id}`;
 
   // Build the full known set — anything persisted that isn't in it is
-  // stale (workspace deleted, project removed) and gets dropped.
+  // stale (workspace deleted, group removed) and gets dropped.
   const known = new Set<string>();
   for (const id of knownWorkspaceIds) known.add(key({ kind: "workspace", id }));
   for (const r of extensionRows) known.add(key(r));
@@ -100,8 +99,8 @@ export function bootstrapRootRowOrder(
   }
 
   // Append entities that weren't in the persisted order —
-  // extension-contributed rows first (projects), then unclaimed
-  // workspaces. Matches the legacy "projects above workspaces" default
+  // extension-contributed rows first (groups), then unclaimed
+  // workspaces. Matches the legacy "groups above workspaces" default
   // on first-run installs.
   for (const r of extensionRows) {
     const k = key(r);

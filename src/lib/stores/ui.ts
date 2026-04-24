@@ -15,8 +15,8 @@ export const hoveredSidebarBlockId = writable<string | null>(null);
 
 /**
  * Key of the root row currently hovered inside the Workspaces section
- * — encoded as `"kind:id"` (e.g. `"project:p-42"`, `"workspace:w-7"`),
- * or null when no row is hovered. Row renderers (ProjectRowBody,
+ * — encoded as `"kind:id"` (e.g. `"workspace-group:g-42"`, `"workspace:w-7"`),
+ * or null when no row is hovered. Row renderers (WorkspaceGroupRowBody,
  * WorkspaceItem-in-root mode) subscribe to decide whether their rail
  * is in the expanded hover state.
  */
@@ -160,8 +160,8 @@ export function showConfirmPrompt(
  *   - select:         dropdown of pre-defined options
  *   - info:           read-only label (useful for showing context like a
  *                     worktree path during a confirm dialog)
- *   - color:          swatch picker over PROJECT_COLOR_SLOTS (matches
- *                     the chrome used by project creation)
+ *   - color:          swatch picker over GROUP_COLOR_SLOTS (matches
+ *                     the chrome used by group creation)
  */
 export type FormField =
   | {
@@ -201,8 +201,8 @@ export type FormField =
       /** When true, the Browse button is hidden — the value is shown
        *  but not editable. Use when the caller has already resolved
        *  the directory and the user shouldn't be able to repoint it
-       *  (e.g. a dashboard spawned inside a project inherits the
-       *  project's path). */
+       *  (e.g. a dashboard spawned inside a group inherits the
+       *  group's path). */
       readonly?: boolean;
     };
 export interface FormPromptState {

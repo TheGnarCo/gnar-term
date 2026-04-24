@@ -1,30 +1,30 @@
 /**
- * Tests for the PROJECT_COLORS palette.
+ * Tests for the GROUP_COLORS palette.
  */
 import { describe, it, expect } from "vitest";
 import {
-  PROJECT_COLOR_SLOTS,
-  getProjectColors,
-  resolveProjectColor,
+  GROUP_COLOR_SLOTS,
+  getGroupColors,
+  resolveGroupColor,
   themes,
 } from "../lib/theme-data";
 
-describe("PROJECT_COLOR_SLOTS", () => {
+describe("GROUP_COLOR_SLOTS", () => {
   it("has 12 slots", () => {
-    expect(PROJECT_COLOR_SLOTS).toHaveLength(12);
+    expect(GROUP_COLOR_SLOTS).toHaveLength(12);
   });
 
   it("has no duplicate slots", () => {
-    const unique = new Set(PROJECT_COLOR_SLOTS);
-    expect(unique.size).toBe(PROJECT_COLOR_SLOTS.length);
+    const unique = new Set(GROUP_COLOR_SLOTS);
+    expect(unique.size).toBe(GROUP_COLOR_SLOTS.length);
   });
 });
 
-describe("project color resolution", () => {
+describe("group color resolution", () => {
   it("resolves every slot to a hex in every theme", () => {
     for (const theme of Object.values(themes)) {
-      const colors = getProjectColors(theme);
-      for (const slot of PROJECT_COLOR_SLOTS) {
+      const colors = getGroupColors(theme);
+      for (const slot of GROUP_COLOR_SLOTS) {
         expect(colors[slot]).toMatch(/^#[0-9a-fA-F]{3,6}$/);
       }
     }
@@ -32,12 +32,12 @@ describe("project color resolution", () => {
 
   it("passes hex values through unchanged", () => {
     const theme = themes["one-dark"];
-    expect(resolveProjectColor("#abcdef", theme)).toBe("#abcdef");
+    expect(resolveGroupColor("#abcdef", theme)).toBe("#abcdef");
   });
 
   it("returns theme-specific values for the same slot across themes", () => {
-    const dark = resolveProjectColor("red", themes["github-dark"]);
-    const solarized = resolveProjectColor("red", themes["solarized-dark"]);
+    const dark = resolveGroupColor("red", themes["github-dark"]);
+    const solarized = resolveGroupColor("red", themes["solarized-dark"]);
     // Slot name identical but resolved hex differs per theme.
     expect(dark).not.toBe("red");
     expect(solarized).not.toBe("red");

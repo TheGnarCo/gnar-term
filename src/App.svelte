@@ -560,10 +560,10 @@
       source: "core",
       handler: (ctx) => {
         const name = `Workspace ${get(workspaces).length + 1}`;
-        if (ctx.groupId && ctx.projectPath) {
+        if (ctx.groupId && ctx.groupPath) {
           void createWorkspaceFromDef({
             name,
-            cwd: ctx.projectPath as string,
+            cwd: ctx.groupPath as string,
             metadata: { groupId: ctx.groupId },
             layout: { pane: { surfaces: [{ type: "terminal" }] } },
           });

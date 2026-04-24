@@ -121,7 +121,7 @@ describe("Extension barrier enforcement", () => {
         // saves `pseudoWorkspaceColors` back from the Settings tab.
         "../../../lib/config",
         // Settings tab renders the color picker against the shared
-        // theme + PROJECT_COLOR_SLOTS palette.
+        // theme + GROUP_COLOR_SLOTS palette.
         "../../../lib/stores/theme",
         "../../../lib/theme-data",
         // Regenerate Dashboard button shows a confirmation prompt before

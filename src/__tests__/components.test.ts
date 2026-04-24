@@ -5,7 +5,14 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, cleanup } from "@testing-library/svelte";
 import { get } from "svelte/store";
-import type { Workspace, Pane, TerminalSurface, PreviewSurface, Surface, SplitNode } from "../lib/types";
+import type {
+  Workspace,
+  Pane,
+  TerminalSurface,
+  PreviewSurface,
+  Surface,
+  SplitNode,
+} from "../lib/types";
 
 // ---------------------------------------------------------------------------
 // Mocks — must come before any component imports
@@ -22,52 +29,52 @@ vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
   writeText: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("@xterm/xterm", () => ({
-  Terminal: vi.fn().mockImplementation(() => ({
-    open: vi.fn(),
-    write: vi.fn(),
-    focus: vi.fn(),
-    dispose: vi.fn(),
-    onData: vi.fn(),
-    onResize: vi.fn(),
-    onTitleChange: vi.fn(),
-    loadAddon: vi.fn(),
-    options: {},
-    buffer: { active: { getLine: vi.fn() } },
-    parser: { registerOscHandler: vi.fn() },
-    attachCustomKeyEventHandler: vi.fn(),
-    registerLinkProvider: vi.fn(),
-    getSelection: vi.fn(),
-    scrollToBottom: vi.fn(),
-  })),
+  Terminal: class {
+    open = vi.fn();
+    write = vi.fn();
+    focus = vi.fn();
+    dispose = vi.fn();
+    onData = vi.fn();
+    onResize = vi.fn();
+    onTitleChange = vi.fn();
+    loadAddon = vi.fn();
+    options: Record<string, unknown> = {};
+    buffer = { active: { getLine: vi.fn() } };
+    parser = { registerOscHandler: vi.fn() };
+    attachCustomKeyEventHandler = vi.fn();
+    registerLinkProvider = vi.fn();
+    getSelection = vi.fn();
+    scrollToBottom = vi.fn();
+  },
 }));
 vi.mock("@xterm/addon-fit", () => ({
-  FitAddon: vi.fn().mockImplementation(() => ({
-    fit: vi.fn(),
-    activate: vi.fn(),
-    dispose: vi.fn(),
-  })),
+  FitAddon: class {
+    fit = vi.fn();
+    activate = vi.fn();
+    dispose = vi.fn();
+  },
 }));
 vi.mock("@xterm/addon-webgl", () => ({
-  WebglAddon: vi.fn().mockImplementation(() => ({
-    activate: vi.fn(),
-    dispose: vi.fn(),
-    onContextLoss: vi.fn(),
-  })),
+  WebglAddon: class {
+    activate = vi.fn();
+    dispose = vi.fn();
+    onContextLoss = vi.fn();
+  },
 }));
 vi.mock("@xterm/addon-web-links", () => ({
-  WebLinksAddon: vi.fn().mockImplementation(() => ({
-    activate: vi.fn(),
-    dispose: vi.fn(),
-  })),
+  WebLinksAddon: class {
+    activate = vi.fn();
+    dispose = vi.fn();
+  },
 }));
 vi.mock("@xterm/addon-search", () => ({
-  SearchAddon: vi.fn().mockImplementation(() => ({
-    activate: vi.fn(),
-    dispose: vi.fn(),
-    findNext: vi.fn(),
-    findPrevious: vi.fn(),
-    clearDecorations: vi.fn(),
-  })),
+  SearchAddon: class {
+    activate = vi.fn();
+    dispose = vi.fn();
+    findNext = vi.fn();
+    findPrevious = vi.fn();
+    clearDecorations = vi.fn();
+  },
 }));
 vi.mock("@xterm/xterm/css/xterm.css", () => ({}));
 
@@ -77,15 +84,14 @@ vi.stubGlobal("localStorage", {
   removeItem: vi.fn(),
 });
 
-// Mock ResizeObserver (not available in jsdom)
-vi.stubGlobal(
-  "ResizeObserver",
-  vi.fn().mockImplementation(() => ({
-    observe: vi.fn(),
-    unobserve: vi.fn(),
-    disconnect: vi.fn(),
-  })),
-);
+// Mock ResizeObserver (not available in jsdom). Svelte 5.55.4 treats
+// ResizeObserver as a constructor inside $effect — must be a class.
+class MockResizeObserver {
+  observe = vi.fn();
+  unobserve = vi.fn();
+  disconnect = vi.fn();
+}
+vi.stubGlobal("ResizeObserver", MockResizeObserver);
 
 // ---------------------------------------------------------------------------
 // Component imports (after mocks)
@@ -104,14 +110,23 @@ import SecondarySidebar from "../lib/components/SecondarySidebar.svelte";
 import TerminalSurfaceComponent from "../lib/components/TerminalSurface.svelte";
 
 // Store imports
-import { primarySidebarVisible, secondarySidebarVisible, commandPaletteOpen, findBarVisible, contextMenu } from "../lib/stores/ui";
+import {
+  primarySidebarVisible,
+  secondarySidebarVisible,
+  commandPaletteOpen,
+  findBarVisible,
+  contextMenu,
+} from "../lib/stores/ui";
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
 
 // ---------------------------------------------------------------------------
 // Test helpers
 // ---------------------------------------------------------------------------
 
-function makeSurface(id: string, overrides: Partial<TerminalSurface> = {}): TerminalSurface {
+function makeSurface(
+  id: string,
+  overrides: Partial<TerminalSurface> = {},
+): TerminalSurface {
   return {
     kind: "terminal",
     id,
@@ -290,7 +305,13 @@ describe("Tab", () => {
   it("renders the surface title", () => {
     const surface = makeSurface("t1", { title: "my-project" });
     render(Tab, {
-      props: { surface, index: 0, isActive: false, onSelect: noop, onClose: noop },
+      props: {
+        surface,
+        index: 0,
+        isActive: false,
+        onSelect: noop,
+        onClose: noop,
+      },
     });
     expect(screen.getByText("my-project")).toBeTruthy();
   });
@@ -298,7 +319,13 @@ describe("Tab", () => {
   it("falls back to Shell N when title is empty", () => {
     const surface = makeSurface("t1", { title: "" });
     render(Tab, {
-      props: { surface, index: 2, isActive: false, onSelect: noop, onClose: noop },
+      props: {
+        surface,
+        index: 2,
+        isActive: false,
+        onSelect: noop,
+        onClose: noop,
+      },
     });
     expect(screen.getByText("Shell 3")).toBeTruthy();
   });
@@ -306,7 +333,13 @@ describe("Tab", () => {
   it("shows unread dot element when surface has unread and is not active", () => {
     const surface = makeSurface("t1", { hasUnread: true });
     const { container } = render(Tab, {
-      props: { surface, index: 0, isActive: false, onSelect: noop, onClose: noop },
+      props: {
+        surface,
+        index: 0,
+        isActive: false,
+        onSelect: noop,
+        onClose: noop,
+      },
     });
     // When hasUnread && !isActive, the tab renders 3 spans: dot, title, close
     const spans = container.querySelectorAll(".tab span");
@@ -318,7 +351,13 @@ describe("Tab", () => {
   it("does not show unread dot when tab is active", () => {
     const surface = makeSurface("t1", { hasUnread: true });
     const { container } = render(Tab, {
-      props: { surface, index: 0, isActive: true, onSelect: noop, onClose: noop },
+      props: {
+        surface,
+        index: 0,
+        isActive: true,
+        onSelect: noop,
+        onClose: noop,
+      },
     });
     // When isActive, the unread dot is not rendered — only title and close spans
     const spans = container.querySelectorAll(".tab span");
@@ -328,7 +367,13 @@ describe("Tab", () => {
   it("renders close button (x symbol)", () => {
     const surface = makeSurface("t1");
     render(Tab, {
-      props: { surface, index: 0, isActive: true, onSelect: noop, onClose: noop },
+      props: {
+        surface,
+        index: 0,
+        isActive: true,
+        onSelect: noop,
+        onClose: noop,
+      },
     });
     expect(screen.getByText("×")).toBeTruthy();
   });
@@ -336,7 +381,13 @@ describe("Tab", () => {
   it("renders active tab with the tab class", () => {
     const surface = makeSurface("t1", { title: "active-tab" });
     const { container } = render(Tab, {
-      props: { surface, index: 0, isActive: true, onSelect: noop, onClose: noop },
+      props: {
+        surface,
+        index: 0,
+        isActive: true,
+        onSelect: noop,
+        onClose: noop,
+      },
     });
     const tab = container.querySelector(".tab") as HTMLElement;
     expect(tab).toBeTruthy();
@@ -347,7 +398,13 @@ describe("Tab", () => {
   it("inactive tab does not show unread dot when hasUnread is false", () => {
     const surface = makeSurface("t1", { hasUnread: false });
     const { container } = render(Tab, {
-      props: { surface, index: 0, isActive: false, onSelect: noop, onClose: noop },
+      props: {
+        surface,
+        index: 0,
+        isActive: false,
+        onSelect: noop,
+        onClose: noop,
+      },
     });
     // Without unread, only 2 spans: title and close
     const spans = container.querySelectorAll(".tab span");
@@ -492,7 +549,9 @@ describe("ContextMenu", () => {
     });
     const { container } = render(ContextMenu);
     // Separator is a div with height: 1px
-    const separators = container.querySelectorAll("#context-menu > div[style*='height: 1px']");
+    const separators = container.querySelectorAll(
+      "#context-menu > div[style*='height: 1px']",
+    );
     expect(separators.length).toBe(1);
   });
 
@@ -574,7 +633,10 @@ describe("CommandPalette", () => {
 // ===========================================================================
 
 describe("WorkspaceItem", () => {
-  function renderWorkspaceItem(wsOverrides: Partial<Workspace> = {}, isActive = true) {
+  function renderWorkspaceItem(
+    wsOverrides: Partial<Workspace> = {},
+    isActive = true,
+  ) {
     const ws = makeWorkspace("ws1", "My Workspace");
     Object.assign(ws, wsOverrides);
     return render(WorkspaceItem, {
@@ -643,7 +705,8 @@ describe("WorkspaceItem", () => {
         onReorder: noop,
       },
     });
-    const spanCountWithoutUnread = withoutUnread.querySelectorAll("span").length;
+    const spanCountWithoutUnread =
+      withoutUnread.querySelectorAll("span").length;
 
     // The unread variant should have one more span (the badge)
     expect(spanCountWithUnread).toBe(spanCountWithoutUnread + 1);
@@ -880,7 +943,9 @@ describe("TerminalSurface", () => {
   it("calls scrollToBottom after fit when pane becomes visible (#22)", async () => {
     const surface = makeSurface("scroll-test", { opened: true });
     // Start hidden
-    const { rerender } = render(TerminalSurfaceComponent, { props: { surface, visible: false } });
+    const { rerender } = render(TerminalSurfaceComponent, {
+      props: { surface, visible: false },
+    });
 
     // Reset mocks from any mount-time calls
     (surface.fitAddon.fit as ReturnType<typeof vi.fn>).mockClear();
@@ -890,7 +955,7 @@ describe("TerminalSurface", () => {
     await rerender({ surface, visible: true });
 
     // The reactive block uses requestAnimationFrame, so flush it
-    await new Promise(r => requestAnimationFrame(r));
+    await new Promise((r) => requestAnimationFrame(r));
 
     expect(surface.fitAddon.fit).toHaveBeenCalled();
     expect(surface.terminal.scrollToBottom).toHaveBeenCalled();

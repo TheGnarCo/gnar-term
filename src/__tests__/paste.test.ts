@@ -19,47 +19,57 @@ vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
   readText: vi.fn().mockResolvedValue("pasted text"),
   writeText: vi.fn().mockResolvedValue(undefined),
 }));
+// xterm + addon mocks must be real classes under Svelte 5.55.4 — see
+// linux-shortcuts.test.ts for the full rationale.
 vi.mock("@xterm/xterm", () => ({
-  Terminal: vi.fn().mockImplementation(() => ({
-    open: vi.fn(),
-    write: vi.fn(),
-    focus: vi.fn(),
-    dispose: vi.fn(),
-    cols: 80,
-    rows: 24,
-    onData: vi.fn(),
-    onResize: vi.fn(),
-    onTitleChange: vi.fn(),
-    loadAddon: vi.fn(),
-    options: {},
-    buffer: { active: { getLine: vi.fn() } },
-    parser: { registerOscHandler: vi.fn() },
-    attachCustomKeyEventHandler: vi.fn(),
-    registerLinkProvider: vi.fn(),
-    getSelection: vi.fn().mockReturnValue("selected text"),
-    scrollToBottom: vi.fn(),
-  })),
+  Terminal: class {
+    open = vi.fn();
+    write = vi.fn();
+    focus = vi.fn();
+    dispose = vi.fn();
+    cols = 80;
+    rows = 24;
+    onData = vi.fn();
+    onResize = vi.fn();
+    onTitleChange = vi.fn();
+    loadAddon = vi.fn();
+    options: Record<string, unknown> = {};
+    buffer = { active: { getLine: vi.fn() } };
+    parser = { registerOscHandler: vi.fn() };
+    attachCustomKeyEventHandler = vi.fn();
+    registerLinkProvider = vi.fn();
+    getSelection = vi.fn().mockReturnValue("selected text");
+    scrollToBottom = vi.fn();
+  },
 }));
 vi.mock("@xterm/addon-fit", () => ({
-  FitAddon: vi.fn().mockImplementation(() => ({
-    fit: vi.fn(), activate: vi.fn(), dispose: vi.fn(),
-  })),
+  FitAddon: class {
+    fit = vi.fn();
+    activate = vi.fn();
+    dispose = vi.fn();
+  },
 }));
 vi.mock("@xterm/addon-webgl", () => ({
-  WebglAddon: vi.fn().mockImplementation(() => ({
-    activate: vi.fn(), dispose: vi.fn(), onContextLoss: vi.fn(),
-  })),
+  WebglAddon: class {
+    activate = vi.fn();
+    dispose = vi.fn();
+    onContextLoss = vi.fn();
+  },
 }));
 vi.mock("@xterm/addon-web-links", () => ({
-  WebLinksAddon: vi.fn().mockImplementation(() => ({
-    activate: vi.fn(), dispose: vi.fn(),
-  })),
+  WebLinksAddon: class {
+    activate = vi.fn();
+    dispose = vi.fn();
+  },
 }));
 vi.mock("@xterm/addon-search", () => ({
-  SearchAddon: vi.fn().mockImplementation(() => ({
-    activate: vi.fn(), dispose: vi.fn(),
-    findNext: vi.fn(), findPrevious: vi.fn(), clearDecorations: vi.fn(),
-  })),
+  SearchAddon: class {
+    activate = vi.fn();
+    dispose = vi.fn();
+    findNext = vi.fn();
+    findPrevious = vi.fn();
+    clearDecorations = vi.fn();
+  },
 }));
 vi.mock("@xterm/xterm/css/xterm.css", () => ({}));
 
@@ -69,15 +79,18 @@ vi.stubGlobal("localStorage", {
   removeItem: vi.fn(),
 });
 
-vi.stubGlobal(
-  "ResizeObserver",
-  vi.fn().mockImplementation(() => ({
-    observe: vi.fn(), unobserve: vi.fn(), disconnect: vi.fn(),
-  })),
-);
+class MockResizeObserver {
+  observe = vi.fn();
+  unobserve = vi.fn();
+  disconnect = vi.fn();
+}
+vi.stubGlobal("ResizeObserver", MockResizeObserver);
 
 import { invoke } from "@tauri-apps/api/core";
-import { readText as clipboardRead, writeText as clipboardWrite } from "@tauri-apps/plugin-clipboard-manager";
+import {
+  readText as clipboardRead,
+  writeText as clipboardWrite,
+} from "@tauri-apps/plugin-clipboard-manager";
 import { createTerminalSurface, isMac } from "../lib/terminal-service";
 import type { Pane } from "../lib/types";
 import { uid } from "../lib/types";
@@ -95,89 +108,130 @@ describe("Paste — single write to PTY via Tauri clipboard plugin", () => {
 
   beforeEach(async () => {
     vi.mocked(invoke).mockReset();
-    vi.mocked(invoke).mockResolvedValue(undefined as any);
+    vi.mocked(invoke).mockResolvedValue(undefined);
     vi.mocked(clipboardRead).mockClear();
     vi.mocked(clipboardWrite).mockClear();
 
     const pane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
     surface = await createTerminalSurface(pane);
-    (surface as any).ptyId = 42;
+    (surface as unknown as { ptyId: number }).ptyId = 42;
 
-    const termMock = surface.terminal as any;
+    const termMock = surface.terminal as unknown as Record<
+      string,
+      ReturnType<typeof vi.fn>
+    >;
     keyHandler = termMock.attachCustomKeyEventHandler.mock.calls[0][0];
     onDataHandler = termMock.onData.mock.calls[0][0];
   });
 
   describe("Cmd/Ctrl+V paste", () => {
     it("calls preventDefault to block browser paste event (prevents double-write)", () => {
-      const event = new KeyboardEvent("keydown", { key: "v", ...copyPasteModifiers });
+      const event = new KeyboardEvent("keydown", {
+        key: "v",
+        ...copyPasteModifiers,
+      });
       const spy = vi.spyOn(event, "preventDefault");
       keyHandler(event);
       expect(spy).toHaveBeenCalled();
     });
 
     it("reads clipboard via Tauri plugin and writes to PTY exactly once", async () => {
-      const event = new KeyboardEvent("keydown", { key: "v", ...copyPasteModifiers });
+      const event = new KeyboardEvent("keydown", {
+        key: "v",
+        ...copyPasteModifiers,
+      });
       keyHandler(event);
 
       // clipboardRead is async — wait for it to resolve
       await vi.waitFor(() => {
-        expect(invoke).toHaveBeenCalledWith("write_pty", { ptyId: 42, data: "pasted text" });
+        expect(invoke).toHaveBeenCalledWith("write_pty", {
+          ptyId: 42,
+          data: "pasted text",
+        });
       });
 
-      const writeCalls = vi.mocked(invoke).mock.calls.filter(([cmd]) => cmd === "write_pty");
+      const writeCalls = vi
+        .mocked(invoke)
+        .mock.calls.filter(([cmd]) => cmd === "write_pty");
       expect(writeCalls).toHaveLength(1);
     });
 
     it("returns false to prevent xterm.js from also processing the keydown", () => {
-      const event = new KeyboardEvent("keydown", { key: "v", ...copyPasteModifiers });
+      const event = new KeyboardEvent("keydown", {
+        key: "v",
+        ...copyPasteModifiers,
+      });
       expect(keyHandler(event)).toBe(false);
     });
 
     it("does not write to PTY when clipboard is empty", async () => {
       vi.mocked(clipboardRead).mockResolvedValueOnce("");
-      const event = new KeyboardEvent("keydown", { key: "v", ...copyPasteModifiers });
+      const event = new KeyboardEvent("keydown", {
+        key: "v",
+        ...copyPasteModifiers,
+      });
       keyHandler(event);
 
-      // Give the promise time to resolve
-      await new Promise(r => setTimeout(r, 10));
-      const writeCalls = vi.mocked(invoke).mock.calls.filter(([cmd]) => cmd === "write_pty");
-      expect(writeCalls).toHaveLength(0);
+      await vi.waitFor(() => {
+        const writeCalls = vi
+          .mocked(invoke)
+          .mock.calls.filter(([cmd]) => cmd === "write_pty");
+        expect(writeCalls).toHaveLength(0);
+      });
     });
 
     it("does not write to PTY when ptyId is -1 (disconnected)", async () => {
-      (surface as any).ptyId = -1;
-      const event = new KeyboardEvent("keydown", { key: "v", ...copyPasteModifiers });
+      (surface as unknown as { ptyId: number }).ptyId = -1;
+      const event = new KeyboardEvent("keydown", {
+        key: "v",
+        ...copyPasteModifiers,
+      });
       keyHandler(event);
 
-      await new Promise(r => setTimeout(r, 10));
-      const writeCalls = vi.mocked(invoke).mock.calls.filter(([cmd]) => cmd === "write_pty");
-      expect(writeCalls).toHaveLength(0);
+      await vi.waitFor(() => {
+        const writeCalls = vi
+          .mocked(invoke)
+          .mock.calls.filter(([cmd]) => cmd === "write_pty");
+        expect(writeCalls).toHaveLength(0);
+      });
     });
   });
 
   describe("Ctrl+Shift+V paste (Linux)", () => {
     it("calls preventDefault and reads clipboard", async () => {
-      const event = new KeyboardEvent("keydown", { key: "v", ctrlKey: true, shiftKey: true });
+      const event = new KeyboardEvent("keydown", {
+        key: "v",
+        ctrlKey: true,
+        shiftKey: true,
+      });
       const spy = vi.spyOn(event, "preventDefault");
       keyHandler(event);
       expect(spy).toHaveBeenCalled();
 
       await vi.waitFor(() => {
-        expect(invoke).toHaveBeenCalledWith("write_pty", { ptyId: 42, data: "pasted text" });
+        expect(invoke).toHaveBeenCalledWith("write_pty", {
+          ptyId: 42,
+          data: "pasted text",
+        });
       });
     });
   });
 
   describe("Cmd/Ctrl+C copy", () => {
     it("writes selection to clipboard via Tauri plugin", () => {
-      const event = new KeyboardEvent("keydown", { key: "c", ...copyPasteModifiers });
+      const event = new KeyboardEvent("keydown", {
+        key: "c",
+        ...copyPasteModifiers,
+      });
       keyHandler(event);
       expect(clipboardWrite).toHaveBeenCalledWith("selected text");
     });
 
     it("returns false to prevent xterm.js from processing", () => {
-      const event = new KeyboardEvent("keydown", { key: "c", ...copyPasteModifiers });
+      const event = new KeyboardEvent("keydown", {
+        key: "c",
+        ...copyPasteModifiers,
+      });
       expect(keyHandler(event)).toBe(false);
     });
   });
@@ -185,11 +239,14 @@ describe("Paste — single write to PTY via Tauri clipboard plugin", () => {
   describe("Normal typing still works", () => {
     it("onData handler forwards typed characters to PTY", () => {
       onDataHandler("hello");
-      expect(invoke).toHaveBeenCalledWith("write_pty", { ptyId: 42, data: "hello" });
+      expect(invoke).toHaveBeenCalledWith("write_pty", {
+        ptyId: 42,
+        data: "hello",
+      });
     });
 
     it("onData handler does not forward when PTY disconnected", () => {
-      (surface as any).ptyId = -1;
+      (surface as unknown as { ptyId: number }).ptyId = -1;
       onDataHandler("hello");
       expect(invoke).not.toHaveBeenCalledWith("write_pty", expect.anything());
     });

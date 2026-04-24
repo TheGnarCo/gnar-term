@@ -10,9 +10,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn().mockResolvedValue(undefined),
-  Channel: vi.fn().mockImplementation(() => ({
-    onmessage: undefined,
-  })),
+  Channel: class {
+    onmessage: ((m: unknown) => void) | undefined = undefined;
+  },
 }));
 vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn().mockResolvedValue(vi.fn()),
@@ -21,47 +21,57 @@ vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
   readText: vi.fn().mockResolvedValue(""),
   writeText: vi.fn().mockResolvedValue(undefined),
 }));
+// xterm + addon mocks must be real classes under Svelte 5.55.4 — see
+// linux-shortcuts.test.ts for the full rationale.
 vi.mock("@xterm/xterm", () => ({
-  Terminal: vi.fn().mockImplementation(() => ({
-    open: vi.fn(),
-    write: vi.fn(),
-    focus: vi.fn(),
-    dispose: vi.fn(),
-    cols: 80,
-    rows: 24,
-    onData: vi.fn(),
-    onResize: vi.fn(),
-    onTitleChange: vi.fn(),
-    loadAddon: vi.fn(),
-    options: {},
-    buffer: { active: { getLine: vi.fn() } },
-    parser: { registerOscHandler: vi.fn() },
-    attachCustomKeyEventHandler: vi.fn(),
-    registerLinkProvider: vi.fn(),
-    getSelection: vi.fn(),
-    scrollToBottom: vi.fn(),
-  })),
+  Terminal: class {
+    open = vi.fn();
+    write = vi.fn();
+    focus = vi.fn();
+    dispose = vi.fn();
+    cols = 80;
+    rows = 24;
+    onData = vi.fn();
+    onResize = vi.fn();
+    onTitleChange = vi.fn();
+    loadAddon = vi.fn();
+    options: Record<string, unknown> = {};
+    buffer = { active: { getLine: vi.fn() } };
+    parser = { registerOscHandler: vi.fn() };
+    attachCustomKeyEventHandler = vi.fn();
+    registerLinkProvider = vi.fn();
+    getSelection = vi.fn();
+    scrollToBottom = vi.fn();
+  },
 }));
 vi.mock("@xterm/addon-fit", () => ({
-  FitAddon: vi.fn().mockImplementation(() => ({
-    fit: vi.fn(), activate: vi.fn(), dispose: vi.fn(),
-  })),
+  FitAddon: class {
+    fit = vi.fn();
+    activate = vi.fn();
+    dispose = vi.fn();
+  },
 }));
 vi.mock("@xterm/addon-webgl", () => ({
-  WebglAddon: vi.fn().mockImplementation(() => ({
-    activate: vi.fn(), dispose: vi.fn(), onContextLoss: vi.fn(),
-  })),
+  WebglAddon: class {
+    activate = vi.fn();
+    dispose = vi.fn();
+    onContextLoss = vi.fn();
+  },
 }));
 vi.mock("@xterm/addon-web-links", () => ({
-  WebLinksAddon: vi.fn().mockImplementation(() => ({
-    activate: vi.fn(), dispose: vi.fn(),
-  })),
+  WebLinksAddon: class {
+    activate = vi.fn();
+    dispose = vi.fn();
+  },
 }));
 vi.mock("@xterm/addon-search", () => ({
-  SearchAddon: vi.fn().mockImplementation(() => ({
-    activate: vi.fn(), dispose: vi.fn(),
-    findNext: vi.fn(), findPrevious: vi.fn(), clearDecorations: vi.fn(),
-  })),
+  SearchAddon: class {
+    activate = vi.fn();
+    dispose = vi.fn();
+    findNext = vi.fn();
+    findPrevious = vi.fn();
+    clearDecorations = vi.fn();
+  },
 }));
 vi.mock("@xterm/xterm/css/xterm.css", () => ({}));
 
@@ -70,12 +80,12 @@ vi.stubGlobal("localStorage", {
   setItem: vi.fn(),
   removeItem: vi.fn(),
 });
-vi.stubGlobal(
-  "ResizeObserver",
-  vi.fn().mockImplementation(() => ({
-    observe: vi.fn(), unobserve: vi.fn(), disconnect: vi.fn(),
-  })),
-);
+class MockResizeObserver {
+  observe = vi.fn();
+  unobserve = vi.fn();
+  disconnect = vi.fn();
+}
+vi.stubGlobal("ResizeObserver", MockResizeObserver);
 
 import { invoke } from "@tauri-apps/api/core";
 import { createTerminalSurface, connectPty } from "../lib/terminal-service";
@@ -85,7 +95,7 @@ import { uid } from "../lib/types";
 describe("Startup command contract", () => {
   beforeEach(() => {
     vi.mocked(invoke).mockReset();
-    vi.mocked(invoke).mockResolvedValue(undefined as any);
+    vi.mocked(invoke).mockResolvedValue(undefined);
   });
 
   it("createTerminalSurface produces a surface that accepts startupCommand", async () => {
@@ -104,7 +114,7 @@ describe("Startup command contract", () => {
     surface.startupCommand = "ls -la";
 
     // Simulate what TerminalSurface.svelte does: connectPty then check startupCommand
-    vi.mocked(invoke).mockResolvedValueOnce(99 as any); // spawn_pty returns ptyId
+    vi.mocked(invoke).mockResolvedValueOnce(99); // spawn_pty returns ptyId
     await connectPty(surface);
 
     // After connectPty, surface has a ptyId and startupCommand is still set
@@ -113,11 +123,17 @@ describe("Startup command contract", () => {
 
     // TerminalSurface.svelte would now send the command and clear it:
     if (surface.startupCommand && surface.ptyId >= 0) {
-      await invoke("write_pty", { ptyId: surface.ptyId, data: `${surface.startupCommand}\n` });
+      await invoke("write_pty", {
+        ptyId: surface.ptyId,
+        data: `${surface.startupCommand}\n`,
+      });
       surface.startupCommand = undefined;
     }
 
-    expect(invoke).toHaveBeenCalledWith("write_pty", { ptyId: 99, data: "ls -la\n" });
+    expect(invoke).toHaveBeenCalledWith("write_pty", {
+      ptyId: 99,
+      data: "ls -la\n",
+    });
     expect(surface.startupCommand).toBeUndefined();
   });
 
@@ -134,10 +150,15 @@ describe("Startup command contract", () => {
 
     // TerminalSurface.svelte checks ptyId >= 0 before sending
     if (surface.startupCommand && surface.ptyId >= 0) {
-      await invoke("write_pty", { ptyId: surface.ptyId, data: `${surface.startupCommand}\n` });
+      await invoke("write_pty", {
+        ptyId: surface.ptyId,
+        data: `${surface.startupCommand}\n`,
+      });
     }
 
-    const writeCalls = vi.mocked(invoke).mock.calls.filter(([cmd]) => cmd === "write_pty");
+    const writeCalls = vi
+      .mocked(invoke)
+      .mock.calls.filter(([cmd]) => cmd === "write_pty");
     expect(writeCalls).toHaveLength(0);
   });
 
@@ -146,15 +167,20 @@ describe("Startup command contract", () => {
     const surface = await createTerminalSurface(pane);
     // No startupCommand set
 
-    vi.mocked(invoke).mockResolvedValueOnce(50 as any);
+    vi.mocked(invoke).mockResolvedValueOnce(50);
     await connectPty(surface);
 
     // TerminalSurface.svelte checks startupCommand is truthy
     if (surface.startupCommand && surface.ptyId >= 0) {
-      await invoke("write_pty", { ptyId: surface.ptyId, data: `${surface.startupCommand}\n` });
+      await invoke("write_pty", {
+        ptyId: surface.ptyId,
+        data: `${surface.startupCommand}\n`,
+      });
     }
 
-    const writeCalls = vi.mocked(invoke).mock.calls.filter(([cmd]) => cmd === "write_pty");
+    const writeCalls = vi
+      .mocked(invoke)
+      .mock.calls.filter(([cmd]) => cmd === "write_pty");
     expect(writeCalls).toHaveLength(0);
   });
 });

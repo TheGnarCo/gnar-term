@@ -198,6 +198,46 @@ describe("Paste — single write to PTY via Tauri clipboard plugin", () => {
     });
   });
 
+  describe("Ctrl+V on macOS — sends \\x16 to PTY, no clipboard paste", () => {
+    it.skipIf(!isMac)(
+      "calls preventDefault to suppress WKWebView paste event",
+      () => {
+        const event = new KeyboardEvent("keydown", {
+          key: "v",
+          ctrlKey: true,
+        });
+        const spy = vi.spyOn(event, "preventDefault");
+        keyHandler(event);
+        expect(spy).toHaveBeenCalled();
+      },
+    );
+
+    it.skipIf(!isMac)("sends \\x16 to PTY (not clipboard text)", async () => {
+      const event = new KeyboardEvent("keydown", {
+        key: "v",
+        ctrlKey: true,
+      });
+      keyHandler(event);
+
+      await vi.waitFor(() => {
+        expect(invoke).toHaveBeenCalledWith("write_pty", {
+          ptyId: 42,
+          data: "\x16",
+        });
+      });
+      // Must not have read the clipboard
+      expect(clipboardRead).not.toHaveBeenCalled();
+    });
+
+    it.skipIf(!isMac)("returns false to suppress xterm processing", () => {
+      const event = new KeyboardEvent("keydown", {
+        key: "v",
+        ctrlKey: true,
+      });
+      expect(keyHandler(event)).toBe(false);
+    });
+  });
+
   describe("Ctrl+Shift+V paste (Linux)", () => {
     it("calls preventDefault and reads clipboard", async () => {
       const event = new KeyboardEvent("keydown", {

@@ -80,7 +80,9 @@
       ? (workspaceMetadata.groupId as string)
       : null;
   $: regenCommandId =
-    !isDashboardWorkspace && typeof workspaceMetadata?.groupId === "string"
+    isDashboardWorkspace &&
+    !settingsDashboardGroupId &&
+    typeof workspaceMetadata?.groupId === "string"
       ? "workspace-groups:regenerate-active-group-dashboard"
       : undefined;
   $: regenCommand = regenCommandId
@@ -188,11 +190,39 @@
       {onSplitDown}
       {onClosePane}
       {onReorderTab}
-      {onRegenDashboard}
-      {regenDashboardTitle}
       {showJumpToBottom}
       onJumpToBottom={handleJumpToBottom}
     />
+  {:else if onRegenDashboard}
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      style="
+        display: flex; align-items: center; justify-content: flex-end;
+        background: {$theme.tabBarBg}; border-bottom: 1px solid {$theme.tabBarBorder};
+        height: 28px; padding: 0 4px; flex-shrink: 0;
+      "
+    >
+      <span
+        title={regenDashboardTitle}
+        style="color: {$theme.fgDim}; cursor: pointer; width: 24px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center;"
+        on:click|stopPropagation={onRegenDashboard}
+      >
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 14 14"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          ><path d="M2 7a5 5 0 1 1 1.5 3.5" /><polyline
+            points="2 11 2 7 6 7"
+          /></svg
+        >
+      </span>
+    </div>
   {/if}
 
   {#each pane.surfaces.filter((s) => s.id === pane.activeSurfaceId && isTerminalSurface(s)) as activeTerm (activeTerm.id)}

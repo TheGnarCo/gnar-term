@@ -26,16 +26,6 @@
   export let onReorderTab:
     | ((fromIdx: number, toIdx: number) => void)
     | undefined = undefined;
-  /**
-   * Optional regenerate-dashboard action. When provided, renders a
-   * dashboard glyph in the right-side action cluster (before the split
-   * icons). Used by dashboard-hosting workspaces (agent dashboards +
-   * project dashboards) to let users re-spawn the dashboard preview
-   * surface after closing it. PaneView computes this callback based on
-   * the workspace's metadata.
-   */
-  export let onRegenDashboard: (() => void) | undefined = undefined;
-  export let regenDashboardTitle: string = "Regenerate Dashboard";
   export let showJumpToBottom: boolean = false;
   export let onJumpToBottom: (() => void) | undefined = undefined;
 
@@ -96,29 +86,6 @@
           <polyline points="2,6 5,9 8,6" />
         </svg>
         Jump to bottom
-      </span>
-    {/if}
-    {#if onRegenDashboard}
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <span
-        title={regenDashboardTitle}
-        style="color: {$theme.fgDim}; cursor: pointer; width: 24px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center;"
-        on:click|stopPropagation={onRegenDashboard}
-      >
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 14 14"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.5"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          ><path d="M2 7a5 5 0 1 1 1.5 3.5" /><polyline
-            points="2 11 2 7 6 7"
-          /></svg
-        >
       </span>
     {/if}
     <!-- svelte-ignore a11y_click_events_have_key_events -->

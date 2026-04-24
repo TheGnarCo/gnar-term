@@ -668,6 +668,21 @@ export async function createTerminalSurface(
     // Ctrl+D (EOF), Ctrl+W (delete word), Ctrl+K (kill line), etc.
     // Linux app shortcuts use Ctrl+Shift instead.
     if (isMac) {
+      // WKWebView fires a paste event for Ctrl+V (web-compat quirk). Intercept
+      // it and send \x16 explicitly so vim quoted-insert still works, but the
+      // browser paste path is suppressed.
+      if (
+        e.ctrlKey &&
+        !e.metaKey &&
+        !e.shiftKey &&
+        e.key.toLowerCase() === "v"
+      ) {
+        e.preventDefault();
+        if (surface.ptyId >= 0)
+          void invoke("write_pty", { ptyId: surface.ptyId, data: "\x16" });
+        return false;
+      }
+
       if (!e.metaKey) return true; // Only intercept Cmd shortcuts on macOS
 
       const k = e.key.toLowerCase();

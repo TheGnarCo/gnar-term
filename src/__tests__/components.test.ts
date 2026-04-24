@@ -1784,4 +1784,93 @@ describe("TerminalSurface — image drag-drop", () => {
       expect(data).not.toBe("\x16");
     }
   });
+
+  it("handles HTML5 drop of image file without .path (Mac screenshot thumbnail)", async () => {
+    const { invoke: mockInvokeCore } = await import("@tauri-apps/api/core");
+    const invokespy = vi.mocked(mockInvokeCore);
+    const { writeImage } = await import("@tauri-apps/plugin-clipboard-manager");
+    const writeImageSpy = vi.mocked(writeImage);
+
+    invokespy.mockClear();
+    writeImageSpy.mockClear();
+
+    const surface = makeSurface("s3", { ptyId: 44 });
+    const { container } = render(TerminalSurfaceComponent, {
+      props: { surface, visible: true },
+    });
+
+    // Simulate a File with image MIME type but no .path (promised file)
+    const imageBytes = new Uint8Array([137, 80, 78, 71]); // PNG magic bytes
+    const imageFile = new File([imageBytes], "Screenshot.png", {
+      type: "image/png",
+    });
+    // No .path property (unlike Tauri-extended File objects)
+
+    // JSDOM doesn't implement DragEvent; use a plain Event with dataTransfer injected
+    const dropEvent = new Event("drop", { bubbles: true, cancelable: true });
+    Object.defineProperty(dropEvent, "dataTransfer", {
+      value: { files: [imageFile], items: [] },
+    });
+
+    const termDiv = container.firstElementChild as HTMLElement;
+    termDiv.dispatchEvent(dropEvent);
+
+    await vi.waitFor(() => {
+      expect(writeImageSpy).toHaveBeenCalledWith(expect.any(ArrayBuffer));
+    });
+    await vi.waitFor(() => {
+      const writePtyCall = invokespy.mock.calls.find(
+        (c) =>
+          c[0] === "write_pty" &&
+          (c[1] as Record<string, unknown>)?.data === "\x16",
+      );
+      expect(writePtyCall).toBeDefined();
+    });
+  });
+
+  it("handles HTML5 drop via items when files is empty (some drag sources)", async () => {
+    const { invoke: mockInvokeCore } = await import("@tauri-apps/api/core");
+    const invokespy = vi.mocked(mockInvokeCore);
+    const { writeImage } = await import("@tauri-apps/plugin-clipboard-manager");
+    const writeImageSpy = vi.mocked(writeImage);
+
+    invokespy.mockClear();
+    writeImageSpy.mockClear();
+
+    const surface = makeSurface("s4", { ptyId: 45 });
+    const { container } = render(TerminalSurfaceComponent, {
+      props: { surface, visible: true },
+    });
+
+    const imageBytes = new Uint8Array([137, 80, 78, 71]);
+    const imageFile = new File([imageBytes], "screenshot.png", {
+      type: "image/png",
+    });
+
+    // JSDOM doesn't implement DragEvent; use a plain Event with dataTransfer injected
+    const dropEvent = new Event("drop", { bubbles: true, cancelable: true });
+    Object.defineProperty(dropEvent, "dataTransfer", {
+      value: {
+        files: [], // empty files list
+        items: [
+          { kind: "file", type: "image/png", getAsFile: () => imageFile },
+        ],
+      },
+    });
+
+    const termDiv = container.firstElementChild as HTMLElement;
+    termDiv.dispatchEvent(dropEvent);
+
+    await vi.waitFor(() => {
+      expect(writeImageSpy).toHaveBeenCalledWith(expect.any(ArrayBuffer));
+    });
+    await vi.waitFor(() => {
+      const writePtyCall = invokespy.mock.calls.find(
+        (c) =>
+          c[0] === "write_pty" &&
+          (c[1] as Record<string, unknown>)?.data === "\x16",
+      );
+      expect(writePtyCall).toBeDefined();
+    });
+  });
 });

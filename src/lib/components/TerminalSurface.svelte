@@ -83,15 +83,57 @@
     dragOver = false;
   }
 
+  async function handleDropImageData(file: File): Promise<void> {
+    const buf = await file.arrayBuffer();
+    await writeImage(buf);
+    if (surface.ptyId >= 0)
+      void invoke("write_pty", { ptyId: surface.ptyId, data: "\x16" });
+  }
+
   function handleDrop(e: DragEvent) {
     e.preventDefault();
     dragOver = false;
-    const files = e.dataTransfer?.files;
-    if (!files || files.length === 0 || surface.ptyId < 0) return;
-    const paths = Array.from(files).map(
-      (f) => (f as unknown as { path?: string }).path || f.name,
+    if (surface.ptyId < 0) return;
+
+    const dt = e.dataTransfer;
+    if (!dt) return;
+
+    const fileArray = Array.from(dt.files);
+    if (fileArray.length > 0) {
+      const hasPaths = fileArray.some(
+        (f) => (f as unknown as { path?: string }).path,
+      );
+      if (hasPaths) {
+        void handleDropPaths(
+          fileArray.map(
+            (f) => (f as unknown as { path?: string }).path || f.name,
+          ),
+        );
+        return;
+      }
+      // Files without paths: Mac screenshot thumbnails (NSFilePromise) land here.
+      // Read image data directly from the File object.
+      const imageFile = fileArray.find((f) => f.type.startsWith("image/"));
+      if (imageFile) {
+        void handleDropImageData(imageFile).catch((err) =>
+          console.warn("Failed to write dropped image:", err),
+        );
+        return;
+      }
+    }
+
+    // Last resort: items may carry data when files is empty (some drag sources)
+    const imageItem = Array.from(dt.items).find(
+      (item) => item.kind === "file" && item.type.startsWith("image/"),
     );
-    void handleDropPaths(paths);
+    if (imageItem) {
+      const file = imageItem.getAsFile();
+      if (file) {
+        void handleDropImageData(file).catch((err) =>
+          console.warn("Failed to write dropped image:", err),
+        );
+      }
+    }
   }
 
   function registerScrollTracking() {

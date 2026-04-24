@@ -23,7 +23,6 @@ import {
 } from "../lib/services/agent-detection-service";
 import { eventBus, type AppEvent } from "../lib/services/event-bus";
 import { workspaces } from "../lib/stores/workspace";
-import { agentStatusStore } from "../lib/stores/agent-status";
 import { statusRegistry } from "../lib/services/status-registry";
 import { notifyOutputObservers } from "../lib/services/surface-output-observer";
 
@@ -278,7 +277,10 @@ describe("agent-detection-service — status publishing", () => {
       newTitle: "claude working",
     });
 
-    expect(get(agentStatusStore).w1).toBe("running");
+    const item = get(statusRegistry.store).find(
+      (i) => i.source === "_agent" && i.workspaceId === "w1",
+    );
+    expect(item?.label).toBe("running");
   });
 
   it("clears the workspace indicator on detach", () => {
@@ -292,10 +294,18 @@ describe("agent-detection-service — status publishing", () => {
       oldTitle: "claude",
       newTitle: "claude working",
     });
-    expect(get(agentStatusStore).w1).toBe("running");
+    expect(
+      get(statusRegistry.store).find(
+        (i) => i.source === "_agent" && i.workspaceId === "w1",
+      )?.label,
+    ).toBe("running");
 
     eventBus.emit({ type: "surface:closed", id: "s1", paneId: "p" });
-    expect(get(agentStatusStore).w1).toBeUndefined();
+    expect(
+      get(statusRegistry.store).find(
+        (i) => i.source === "_agent" && i.workspaceId === "w1",
+      ),
+    ).toBeUndefined();
   });
 
   it("writes exactly one status-registry item per attached agent", () => {

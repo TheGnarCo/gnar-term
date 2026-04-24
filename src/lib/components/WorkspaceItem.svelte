@@ -2,7 +2,6 @@
   import { tick, type Component } from "svelte";
   import { theme } from "../stores/theme";
   import { anyReorderActive } from "../stores/ui";
-  import { agentStatusStore } from "../stores/agent-status";
   import { getWorkspaceStatusByCategory } from "../services/status-registry";
   import { aggregateAgentBadges } from "../status-colors";
   import { workspaceSubtitleStore } from "../services/workspace-subtitle-registry";
@@ -152,25 +151,11 @@
     );
   })();
   $: railColor = accentColor ?? $theme.accent;
-  // Legacy agent status — kept for backwards compatibility
-  $: agentStatus = $agentStatusStore[workspace.id] || null;
-  $: agentDotColor =
-    agentStatus === "running"
-      ? "#4ec957"
-      : agentStatus === "waiting"
-        ? "#e8b73a"
-        : agentStatus === "idle"
-          ? "#888888"
-          : null;
-
   // Status registry subscriptions (process items for agent dots)
   $: processStatusStore = getWorkspaceStatusByCategory(workspace.id, "process");
   $: processItems = $processStatusStore;
   $: agentBadges = aggregateAgentBadges(processItems);
-  $: agentChipColor =
-    agentBadges.length > 0 && agentBadges[0]
-      ? agentBadges[0].color
-      : agentDotColor;
+  $: agentChipColor = agentBadges.length > 0 ? agentBadges[0]?.color : null;
 
   $: activePaneInWs = getAllPanes(workspace.splitRoot).find(
     (p) => p.id === workspace.activePaneId,
@@ -438,21 +423,9 @@
               style="width: 7px; height: 7px; border-radius: 50%; background: {agentChipColor}; box-shadow: 0 0 0 1px color-mix(in srgb, {agentChipColor} 35%, transparent);"
             ></span>
           </span>
-        {:else if agentDotColor}
-          <span
-            data-agent-presence-chip
-            title={["Agent: " + agentStatus, latestNotification]
-              .filter(Boolean)
-              .join(" — ")}
-            style="display: inline-flex; align-items: center; padding: 0 3px; flex-shrink: 0;"
-          >
-            <span
-              style="width: 7px; height: 7px; border-radius: 50%; background: {agentDotColor}; box-shadow: 0 0 0 1px color-mix(in srgb, {agentDotColor} 35%, transparent);"
-            ></span>
-          </span>
         {/if}
 
-        {#if hasUnread && !agentDotColor && agentBadges.length === 0}
+        {#if hasUnread && agentBadges.length === 0}
           <span
             title="Workspace has new terminal activity"
             style="display: inline-flex; align-items: center; padding: 0 3px; flex-shrink: 0;"

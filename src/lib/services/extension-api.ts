@@ -55,7 +55,7 @@ import {
   showFormPrompt as coreShowFormPrompt,
   showConfirmPrompt as coreShowConfirmPrompt,
 } from "../stores/ui";
-import { setAgentStatus, clearAgentStatus } from "../stores/agent-status";
+import { setStatusItem, clearStatusItem } from "./status-registry";
 import {
   invoke as tauriInvoke,
   convertFileSrc as tauriConvertFileSrc,
@@ -377,9 +377,19 @@ export function createExtensionAPI(
     },
     setWorkspaceIndicator(workspaceId: string, status: string | null) {
       if (status === null) {
-        clearAgentStatus(workspaceId);
+        clearStatusItem("_agent", workspaceId, "default");
       } else {
-        setAgentStatus(workspaceId, status);
+        setStatusItem("_agent", workspaceId, "default", {
+          category: "process",
+          priority: 0,
+          label: status,
+          variant:
+            status === "running"
+              ? "success"
+              : status === "waiting"
+                ? "warning"
+                : "muted",
+        });
       }
     },
 

@@ -98,6 +98,7 @@ describe("spawnOrNavigate", () => {
     expect(createWorkspaceFromDef).toHaveBeenCalledWith(
       expect.objectContaining({
         name: "Foo",
+        layout: { pane: { surfaces: [] } },
         metadata: expect.objectContaining({
           dashboardWorkspaceId: "ext:foo",
           isDashboard: true,

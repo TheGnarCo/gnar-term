@@ -119,6 +119,7 @@ pub async fn git_diff(
     if staged.unwrap_or(false) {
         args.push("--staged".to_string());
     }
+    args.push("--end-of-options".to_string());
     match (base.as_deref(), head.as_deref()) {
         (Some(b), Some(h)) => args.push(format!("{b}..{h}")),
         (Some(b), None) => args.push(b.to_string()),

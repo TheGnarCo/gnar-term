@@ -370,7 +370,7 @@
   }
 
   function openIssue(url: string) {
-    void api.invoke("open_with_default_app", { path: url }).catch(() => {});
+    void api.invoke("open_url", { url }).catch(() => {});
   }
 
   function toggleSpawnMenu(issueNumber: number) {

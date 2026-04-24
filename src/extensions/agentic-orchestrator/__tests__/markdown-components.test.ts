@@ -1060,7 +1060,7 @@ describe("Prs widget", () => {
     expect(container.querySelector("[data-issue-spawn]")).toBeNull();
   });
 
-  it("clicking a row invokes open_with_default_app with the PR url", async () => {
+  it("clicking a row invokes open_url with the PR url", async () => {
     const fakePrs = [
       {
         number: 7,
@@ -1098,8 +1098,8 @@ describe("Prs widget", () => {
     await fireEvent.click(row);
     await tick();
 
-    expect(invokeFn).toHaveBeenCalledWith("open_with_default_app", {
-      path: "https://gh/pr/7",
+    expect(invokeFn).toHaveBeenCalledWith("open_url", {
+      url: "https://gh/pr/7",
     });
   });
 

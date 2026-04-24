@@ -670,8 +670,8 @@
     document.addEventListener("status-action", ((e: CustomEvent) => {
       const action = e.detail as { command: string; args?: unknown[] };
       if (action.command === "open-url" && action.args?.[0]) {
-        void invoke("open_with_default_app", {
-          path: action.args[0] as string,
+        void invoke("open_url", {
+          url: action.args[0] as string,
         });
       } else if (action.command === "open-surface" && action.args) {
         const [surfaceTypeId, title, props] = action.args as [

@@ -134,7 +134,7 @@
   }
 
   function openPr(url: string) {
-    void api.invoke("open_with_default_app", { path: url }).catch(() => {
+    void api.invoke("open_url", { url }).catch(() => {
       // No-op — the URL is in the row tooltip if the open fails.
     });
   }

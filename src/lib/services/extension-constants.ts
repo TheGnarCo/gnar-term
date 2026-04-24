@@ -43,6 +43,7 @@ export const EXTENSION_ALLOWED_COMMANDS: Set<string> = new Set([
   "unwatch_file",
   "show_in_file_manager",
   "open_with_default_app",
+  "open_url",
   "find_file",
   // Git worktree commands
   "create_worktree",

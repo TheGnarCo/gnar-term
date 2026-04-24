@@ -8,6 +8,8 @@ export interface DashboardWorkspaceEntry {
   label: string;
   icon: Component;
   component: Component;
+  /** Extension ID that registered this entry — used to provide API context when rendering. */
+  source?: string;
 }
 
 export const dashboardWorkspaceRegistry = writable<

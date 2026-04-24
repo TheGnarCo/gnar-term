@@ -5,8 +5,8 @@
     isFullscreen,
     primarySidebarVisible,
     secondarySidebarVisible,
-    settingsOpen,
   } from "../stores/ui";
+  import { spawnOrNavigate } from "../services/dashboard-workspace-service";
   import { isMac, modLabel } from "../terminal-service";
   import { isDebugBuild } from "../services/service-helpers";
   import { titleBarButtonStore } from "../services/titlebar-button-registry";
@@ -86,11 +86,15 @@
     >
   </div>
 
+  {#each $titleBarButtonStore as btn (btn.id)}
+    <TitleBarContributedButton button={btn} {btnStyle} {fg} {fgActive} />
+  {/each}
+
   <button
-    style="{btnStyle} color: {$settingsOpen ? fgActive : fg};"
+    style="{btnStyle} color: {fg};"
     title="Settings ({modLabel},)"
     aria-label="Settings"
-    on:click={() => settingsOpen.update((v) => !v)}
+    on:click={() => void spawnOrNavigate("gnar-term:settings")}
   >
     <svg
       width="16"
@@ -104,10 +108,6 @@
       /><circle cx="8" cy="8" r="2" /></svg
     >
   </button>
-
-  {#each $titleBarButtonStore as btn (btn.id)}
-    <TitleBarContributedButton button={btn} {btnStyle} {fg} {fgActive} />
-  {/each}
 
   <button
     style="{btnStyle} color: {$secondarySidebarVisible ? fgActive : fg};"

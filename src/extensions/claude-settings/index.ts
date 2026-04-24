@@ -1,4 +1,3 @@
-import { writable } from "svelte/store";
 import type {
   ExtensionManifest,
   ExtensionAPI,
@@ -12,7 +11,7 @@ import {
 import { getWorkspaceGroups } from "../../lib/stores/workspace-groups";
 import { waitRestored } from "../../lib/bootstrap/restore-workspaces";
 import ClaudeMark from "./icons/ClaudeMark.svelte";
-import UserSettingsOverlay from "./components/UserSettingsOverlay.svelte";
+import UserSettingsPanel from "./components/UserSettingsPanel.svelte";
 import ClaudeSettingsWidget from "./components/ClaudeSettingsWidget.svelte";
 
 // --- Manifest ---
@@ -32,19 +31,17 @@ export const claudeSettingsManifest: ExtensionManifest = {
 // --- Registration ---
 
 export function registerClaudeSettingsExtension(api: ExtensionAPI): void {
-  // Module-level store — shared between TitleBar button isActive and overlay props.
-  const userSettingsVisible = writable(false);
-
   api.onActivate(() => {
+    const openUserSettings = api.registerDashboardWorkspace("user-settings", {
+      label: "Claude Settings",
+      icon: ClaudeMark,
+      component: UserSettingsPanel,
+    });
+
     api.registerTitleBarButton("claude-settings", {
       icon: ClaudeMark,
       title: "Claude Settings",
-      isActive: userSettingsVisible,
-      onClick: () => userSettingsVisible.update((v) => !v),
-    });
-
-    api.registerOverlay("claude-settings:user-settings", UserSettingsOverlay, {
-      visibleStore: userSettingsVisible,
+      onClick: openUserSettings,
     });
 
     api.registerMarkdownComponent(
@@ -72,7 +69,6 @@ export function registerClaudeSettingsExtension(api: ExtensionAPI): void {
   });
 
   api.onDeactivate(() => {
-    userSettingsVisible.set(false);
     closeAutoDashboardsBySource("claude-settings");
   });
 }

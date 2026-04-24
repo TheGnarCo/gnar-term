@@ -90,7 +90,7 @@ import {
   getContextMenuItemsForFile,
 } from "./context-menu-item-registry";
 import { sidebarSectionStore } from "./sidebar-section-registry";
-import { overlayStore } from "./overlay-registry";
+import { dashboardWorkspaceRegistry } from "./dashboard-workspace-service";
 import { workspaceSubtitleStore } from "./workspace-subtitle-registry";
 import { dashboardTabStore } from "./dashboard-tab-registry";
 import {
@@ -1451,24 +1451,18 @@ registerTool({
   },
 });
 
-// ---- Overlays (mirror of overlayStore) ----
-//
-// Overlays are full-screen components registered by extensions
-// (dashboards, modal dialogs). Agents can list them; invoking is
-// intentionally not exposed — overlays are triggered via commands
-// or workspace actions the extension also registers.
+// ---- Dashboard Workspaces (mirror of dashboardWorkspaceRegistry) ----
 
 registerTool({
-  name: "list_overlays",
+  name: "list_dashboard_workspaces",
   description:
-    "List overlay components (dialogs, dashboards, modals) contributed by extensions. Returns `{ id, source }` for each. Overlays are opened via the extension's own command or action — use invoke_command/invoke_workspace_action with the owning extension's id.",
+    "List singleton Dashboard Workspaces registered by core and extensions. Returns `{ id, label, source }` for each. Use spawn_or_navigate (or the owning extension's TitleBar button / command) to open one.",
   inputSchema: { type: "object", properties: {} },
   handler: () => {
-    const overlays = get(overlayStore).map((o) => ({
-      id: o.id,
-      source: o.source,
-    }));
-    return { overlays };
+    const entries = Array.from(get(dashboardWorkspaceRegistry).values()).map(
+      (e) => ({ id: e.id, label: e.label, source: e.source }),
+    );
+    return { dashboardWorkspaces: entries };
   },
 });
 

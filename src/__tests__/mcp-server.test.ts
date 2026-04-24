@@ -155,7 +155,7 @@ describe("MCP server JSON-RPC", () => {
         "list_dir",
         "list_markdown_components",
         "list_open_previews",
-        "list_overlays",
+        "list_dashboard_workspaces",
         "list_panes",
         "list_sidebar_sections",
         "list_sidebar_tabs",
@@ -1234,24 +1234,26 @@ describe("MCP mirror tools — sidebar sections", () => {
   });
 });
 
-describe("MCP mirror tools — overlays", () => {
+describe("MCP mirror tools — dashboard workspaces", () => {
   beforeEach(async () => {
-    const mod = await import("../lib/services/overlay-registry");
-    mod.resetOverlays();
+    const mod = await import("../lib/services/dashboard-workspace-service");
+    mod.clearDashboardRegistry();
   });
 
-  it("list_overlays returns registered overlays", async () => {
-    const mod = await import("../lib/services/overlay-registry");
-    mod.registerOverlay({
-      id: "ext:dash",
-      component: {},
+  it("list_dashboard_workspaces returns registered entries", async () => {
+    const mod = await import("../lib/services/dashboard-workspace-service");
+    mod.registerDashboardWorkspaceType({
+      id: "ext:settings",
+      label: "Settings",
+      icon: {} as import("svelte").Component,
+      component: {} as import("svelte").Component,
       source: "ext",
     });
     const r = await dispatch(
-      rpc("tools/call", { name: "list_overlays", arguments: {} }),
+      rpc("tools/call", { name: "list_dashboard_workspaces", arguments: {} }),
     );
-    expect((r as any).result.structuredContent.overlays).toEqual([
-      { id: "ext:dash", source: "ext" },
+    expect((r as any).result.structuredContent.dashboardWorkspaces).toEqual([
+      { id: "ext:settings", label: "Settings", source: "ext" },
     ]);
   });
 });

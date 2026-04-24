@@ -257,7 +257,18 @@
   {/if}
 
   {#if dashboardWorkspaceEntry}
-    <svelte:component this={dashboardWorkspaceEntry.component} />
+    {@const entryApi = dashboardWorkspaceEntry.source
+      ? getExtensionApiById(dashboardWorkspaceEntry.source)
+      : null}
+    {#if entryApi}
+      <ExtensionWrapper
+        api={entryApi}
+        component={dashboardWorkspaceEntry.component}
+        props={{}}
+      />
+    {:else}
+      <svelte:component this={dashboardWorkspaceEntry.component} />
+    {/if}
   {:else if settingsDashboardGroupId}
     <!-- Settings dashboard — PaneView renders the shared settings body
          in place of any surface list. The workspace carries no preview

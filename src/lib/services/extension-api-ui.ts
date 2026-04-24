@@ -19,10 +19,6 @@ import {
   type WorkspaceActionContext,
 } from "./workspace-action-registry";
 import { registerDashboardTab as registryRegisterDashboardTab } from "./dashboard-tab-registry";
-import {
-  registerOverlay as registryRegisterOverlay,
-  unregisterOverlay as registryUnregisterOverlay,
-} from "./overlay-registry";
 import { registerWorkspaceSubtitle as registryRegisterWorkspaceSubtitle } from "./workspace-subtitle-registry";
 import { registerRootRowRenderer as registryRegisterRootRowRenderer } from "./root-row-renderer-registry";
 import {
@@ -34,6 +30,10 @@ import { registerMarkdownComponent as registryRegisterMarkdownComponent } from "
 import { registerChildRowContributor } from "./child-row-contributor-registry";
 import { registerDashboardContribution as registryRegisterDashboardContribution } from "./dashboard-contribution-registry";
 import { registerPseudoWorkspace as registryRegisterPseudoWorkspace } from "./pseudo-workspace-registry";
+import {
+  registerDashboardWorkspaceType,
+  spawnOrNavigate,
+} from "./dashboard-workspace-service";
 import { registerExtensionMcpTool } from "./mcp-server";
 import type {
   DashboardContributionInput,
@@ -56,8 +56,7 @@ export function createUIRegistrationAPI(
   | "appendRootRow"
   | "removeRootRow"
   | "registerSurfaceType"
-  | "registerOverlay"
-  | "unregisterOverlay"
+  | "registerDashboardWorkspace"
   | "registerTheme"
   | "registerCommand"
   | "runCommand"
@@ -170,21 +169,19 @@ export function createUIRegistrationAPI(
       });
     },
 
-    registerOverlay(
-      overlayId: string,
-      component: unknown,
-      props?: Record<string, unknown>,
-    ) {
-      registryRegisterOverlay({
-        id: `${extId}:${overlayId}`,
-        component,
+    registerDashboardWorkspace(
+      id: string,
+      options: { label: string; icon: unknown; component: unknown },
+    ): () => void {
+      const stableId = `${extId}:${id}`;
+      registerDashboardWorkspaceType({
+        id: stableId,
+        label: options.label,
+        icon: options.icon as import("svelte").Component,
+        component: options.component as import("svelte").Component,
         source: extId,
-        props,
       });
-    },
-
-    unregisterOverlay(overlayId: string) {
-      registryUnregisterOverlay(`${extId}:${overlayId}`);
+      return () => void spawnOrNavigate(stableId);
     },
 
     registerTheme(id: string, theme: unknown) {

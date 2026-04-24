@@ -60,14 +60,11 @@ export const blockReorderActive = derived(
   ($ctx) => $ctx?.kind === "section",
 );
 
-/** When set, the settings overlay opens to this page ("general", "extensions", "ext:<id>") */
-export const settingsPage = writable<string | null>(null);
 export const primarySidebarWidth = writable<number>(220);
 export const secondarySidebarVisible = writable<boolean>(false);
 export const secondarySidebarWidth = writable<number>(220);
 export const commandPaletteOpen = writable<boolean>(false);
 export const findBarVisible = writable<boolean>(false);
-export const settingsOpen = writable<boolean>(false);
 
 export interface ContextMenuState {
   x: number;

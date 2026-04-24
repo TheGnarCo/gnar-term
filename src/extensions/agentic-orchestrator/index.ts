@@ -26,6 +26,7 @@ import {
   provisionAutoDashboardsForGroup,
 } from "../../lib/services/workspace-group-service";
 import { getWorkspaceGroups } from "../../lib/stores/workspace-groups";
+import { waitRestored } from "../../lib/bootstrap/restore-workspaces";
 import { getConfig, saveConfig } from "../../lib/config";
 import BotIcon from "./icons/BotIcon.svelte";
 import GlobalAgenticDashboardBody from "./components/GlobalAgenticDashboardBody.svelte";
@@ -117,7 +118,12 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
     // enabled would otherwise stay without an agentic tile until app
     // restart. Run in the background — the extension is fully usable
     // while the provisioning sweeps through.
+    //
+    // waitRestored() is a no-op when the extension is enabled at runtime
+    // (markRestored already fired). At startup it defers until
+    // restoreWorkspaces completes so this loop never races the restore.
     void (async () => {
+      await waitRestored();
       for (const group of getWorkspaceGroups()) {
         await provisionAutoDashboardsForGroup(group);
       }

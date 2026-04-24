@@ -534,15 +534,17 @@ export async function reconcileGroupDashboards(): Promise<void> {
     // first render already reflects the cleaned file.
     await scrubGroupDashboardActiveAgents(groupDashboardPath(group.path));
 
-    const matches = get(workspaces).filter((w) =>
-      isDashboardWorkspace(w, group.id, "group", true),
-    );
-
-    if (matches.length > 0) {
-      const [keep, ...extras] = matches;
-      if (keep && keep.id !== group.dashboardWorkspaceId) {
-        updateWorkspaceGroup(group.id, { dashboardWorkspaceId: keep.id });
-      }
+    // Deduplicate every autoProvision contribution type — keeps the first
+    // match, closes the rest. Previously only "group" was covered; the
+    // startup race could leave duplicate "settings" or extension-owned
+    // dashboards (e.g. "agentic") that are now caught here too.
+    for (const c of getDashboardContributions()) {
+      if (!c.autoProvision) continue;
+      const dupeMatches = get(workspaces).filter((w) =>
+        isDashboardWorkspace(w, group.id, c.id, true),
+      );
+      if (dupeMatches.length <= 1) continue;
+      const [, ...extras] = dupeMatches;
       for (const dup of extras) closeWorkspaceById(dup.id);
     }
 
@@ -551,8 +553,8 @@ export async function reconcileGroupDashboards(): Promise<void> {
     // extension-owned autoProvision contributions).
     try {
       await provisionAutoDashboardsForGroup(group);
-      // Rebind `dashboardWorkspaceId` if the group contribution was
-      // just created by provision.
+      // Rebind `dashboardWorkspaceId` to the current "group" overview —
+      // either the one that survived dedupe or the one just provisioned.
       const overview = get(workspaces).find((w) =>
         isDashboardWorkspace(w, group.id, "group", true),
       );

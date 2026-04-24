@@ -67,6 +67,11 @@ describe("Extension barrier enforcement", () => {
         // piercing above.
         "../../lib/services/workspace-group-service",
         "../../lib/stores/workspace-groups",
+        // The back-fill provision loop must wait for workspaces to be
+        // restored before running (races the restore loop on startup).
+        // waitRestored() resolves immediately on runtime-enable, defers
+        // during startup — no ExtensionAPI hook exposes this signal.
+        "../../lib/bootstrap/restore-workspaces",
       ],
       // Issues + TaskSpawner widgets call the shared spawn-helper
       // (core service that composes worktree-service + agent command

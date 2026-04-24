@@ -65,8 +65,10 @@
   import { flushWorkspaceGroups } from "./lib/stores/workspace-groups";
   import {
     restoreWorkspaces,
+    markRestored,
     type CliArgs,
   } from "./lib/bootstrap/restore-workspaces";
+  import { reconcileGroupDashboards } from "./lib/services/workspace-group-service";
 
   // Services
   import {
@@ -621,6 +623,11 @@
     });
 
     await restoreWorkspaces(cliArgs, config);
+    // Signal that workspaces are in the store so deferred work (the
+    // agentic extension's provision loop, reconcileGroupDashboards) can
+    // safely read and write the workspaces store without racing restore.
+    markRestored();
+    void reconcileGroupDashboards();
 
     // Rehydrate the persisted root-row order so drag-sorted layouts
     // survive across restarts. Entities are all registered by this

@@ -40,9 +40,14 @@ import {
 } from "../../../lib/services/dashboard-contribution-registry";
 import { workspaces, activeWorkspaceIdx } from "../../../lib/stores/workspace";
 import { workspaceGroupsStore } from "../../../lib/stores/workspace-groups";
+import {
+  markRestored,
+  resetRestoreSignal,
+} from "../../../lib/bootstrap/restore-workspaces";
 
 describe("agentic auto-provision", () => {
   beforeEach(async () => {
+    resetRestoreSignal();
     await resetExtensions();
     resetDashboardContributions();
     workspaces.set([]);
@@ -84,6 +89,8 @@ describe("agentic auto-provision", () => {
         createdAt: "2026-04-21T00:00:00.000Z",
       },
     ]);
+    // Simulate workspaces already restored (runtime-enable path).
+    markRestored();
 
     registerExtension(
       agenticOrchestratorManifest,
@@ -119,6 +126,7 @@ describe("agentic auto-provision", () => {
         createdAt: "2026-04-21T00:00:00.000Z",
       },
     ]);
+    markRestored();
 
     registerExtension(
       agenticOrchestratorManifest,

@@ -33,7 +33,6 @@ import {
   openGroupDashboard,
   provisionAutoDashboardsForGroup,
   reclaimWorkspacesAcrossGroups,
-  reconcileGroupDashboards,
   regenerateGroupDashboardTemplate,
   removeWorkspaceFromAllGroups,
   unclaimWorkspace,
@@ -266,9 +265,6 @@ export async function initWorkspaceGroups(): Promise<void> {
   // workspace ids change on every restart, so the workspaceIds list is
   // rebuilt from metadata.groupId on each workspace.
   reclaimWorkspacesAcrossGroups();
-
-  // Fire asynchronously: reconcile missing Dashboard workspaces.
-  void reconcileGroupDashboards();
 
   registerPerGroupCommands();
 

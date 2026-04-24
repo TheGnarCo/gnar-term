@@ -19,6 +19,29 @@ import {
   switchWorkspace,
 } from "../services/workspace-service";
 
+// Restore-complete signal — lets async work (extension provision loops,
+// reconcileGroupDashboards) defer safely until workspaces are in the store.
+let _restored = false;
+const _waiters: Array<() => void> = [];
+
+export function markRestored(): void {
+  _restored = true;
+  for (const r of _waiters) r();
+  _waiters.length = 0;
+}
+
+/** Resolves immediately if workspaces are already restored; waits otherwise. */
+export function waitRestored(): Promise<void> {
+  if (_restored) return Promise.resolve();
+  return new Promise((r) => _waiters.push(r));
+}
+
+/** Reset for tests — allows signal to fire again in a fresh test context. */
+export function resetRestoreSignal(): void {
+  _restored = false;
+  _waiters.length = 0;
+}
+
 export interface CliArgs {
   path: string | null;
   working_directory: string | null;

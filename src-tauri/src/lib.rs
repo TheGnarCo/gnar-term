@@ -1184,13 +1184,6 @@ async fn show_in_file_manager(path: String) -> Result<(), String> {
             .spawn()
             .map_err(|e| e.to_string())?;
     }
-    #[cfg(target_os = "windows")]
-    {
-        std::process::Command::new("explorer")
-            .args(["/select,", &validated_str])
-            .spawn()
-            .map_err(|e| e.to_string())?;
-    }
     Ok(())
 }
 
@@ -1206,11 +1199,6 @@ async fn open_with_default_app(path: String) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
     #[cfg(target_os = "linux")]
     std::process::Command::new("xdg-open")
-        .arg(&validated_str)
-        .spawn()
-        .map_err(|e| e.to_string())?;
-    #[cfg(target_os = "windows")]
-    std::process::Command::new("explorer")
         .arg(&validated_str)
         .spawn()
         .map_err(|e| e.to_string())?;

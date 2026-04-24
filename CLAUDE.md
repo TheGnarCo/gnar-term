@@ -42,7 +42,7 @@ git push origin v0.4.0
 
 CI derives version from the tag. Do NOT edit version files for releases.
 
-See `.github/workflows/release.yml` for the full pipeline (macOS, Linux, Windows builds + signing + Homebrew tap update).
+See `.github/workflows/release.yml` for the full pipeline (macOS, Linux builds + signing + Homebrew tap update).
 
 ## GitHub Actions
 
@@ -56,11 +56,11 @@ Custom slash commands live in `.claude/commands/`:
 
 ## Cross-Platform
 
-gnar-term runs on macOS, Linux, and Windows. When making changes:
+gnar-term runs on macOS and Linux. When making changes:
 
 - **Never fix Linux and break macOS (or vice versa).** Use platform detection (`isMac` from `terminal-service.ts`) to branch behavior, not platform-specific code that replaces the other platform's logic.
-- Keyboard shortcuts use Cmd on macOS, Ctrl on Linux/Windows. Both must work.
-- Test clipboard, keyboard shortcuts, and PTY behavior on all platforms when possible.
+- Keyboard shortcuts use Cmd on macOS, Ctrl on Linux. Both must work.
+- Test clipboard, keyboard shortcuts, and PTY behavior on both platforms when possible.
 - WebKitGTK (Linux webview) behaves differently from WKWebView (macOS) — watch for webview-level key interception differences.
 
 ## Testing Guidelines

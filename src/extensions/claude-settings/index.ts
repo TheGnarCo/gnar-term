@@ -36,6 +36,7 @@ export function registerClaudeSettingsExtension(api: ExtensionAPI): void {
       label: "Claude Settings",
       icon: ClaudeMark,
       component: UserSettingsPanel,
+      accentColor: "#D97757",
     });
 
     api.registerTitleBarButton("claude-settings", {

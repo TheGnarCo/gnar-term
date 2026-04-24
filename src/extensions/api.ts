@@ -412,6 +412,7 @@ export interface ExtensionAPI {
       label: string;
       icon: unknown;
       component: unknown;
+      accentColor?: string;
     },
   ): () => void;
   /**

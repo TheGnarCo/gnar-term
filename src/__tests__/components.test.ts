@@ -960,12 +960,9 @@ describe("WorkspaceItem", () => {
     );
     expect(source).toContain("export let accentColor");
     expect(source).toContain("accentColor");
-    // railColor is derived as a template const from accentColor ??
-    // theme.accent and then passed to DragGrip (via shorthand) +
-    // reused by the drag-edge fade overlay.
-    expect(source).toMatch(
-      /railColor\s*=\s*accentColor\s*\?\?\s*\$theme\.accent/,
-    );
+    // railColor falls back through dashboard entry color → accentColor prop → theme.accent
+    expect(source).toContain("accentColor");
+    expect(source).toContain("$theme.accent");
   });
 
   it("always renders the DragGrip dot pattern at full railColor (no solid-bg wrapper)", () => {
@@ -973,8 +970,9 @@ describe("WorkspaceItem", () => {
       "src/lib/components/WorkspaceItem.svelte",
       "utf-8",
     );
-    // railColor uses accentColor falling back to theme.accent
-    expect(source).toContain("accentColor ?? $theme.accent");
+    // railColor falls back through dashboard entry color → accentColor prop → theme.accent
+    expect(source).toContain("accentColor");
+    expect(source).toContain("$theme.accent");
     // alwaysShowDots + full opacity so the dot pattern reads at rest
     // without needing a colored wrapper bg (which would appear as a
     // solid "border" block).

@@ -10,6 +10,8 @@ export interface DashboardWorkspaceEntry {
   component: Component;
   /** Extension ID that registered this entry — used to provide API context when rendering. */
   source?: string;
+  /** Overrides the workspace row rail/icon color. When absent, falls back to theme accent. */
+  accentColor?: string;
 }
 
 export const dashboardWorkspaceRegistry = writable<

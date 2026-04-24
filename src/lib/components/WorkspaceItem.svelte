@@ -125,14 +125,13 @@
   $: hasUnread = allSurfaces.some((s) => s.hasUnread);
   $: latestNotification = allSurfaces.find((s) => s.notification)?.notification;
   $: isManaged = !!workspace.metadata?.worktreePath;
-  $: dashboardWorkspaceIcon =
-    typeof (workspace.metadata as Record<string, unknown> | undefined)
-      ?.dashboardWorkspaceId === "string"
-      ? ($dashboardWorkspaceRegistry.get(
-          (workspace.metadata as Record<string, unknown>)
-            .dashboardWorkspaceId as string,
-        )?.icon ?? null)
-      : null;
+  $: dashboardWorkspaceEntry = (() => {
+    const id = (workspace.metadata as Record<string, unknown> | undefined)
+      ?.dashboardWorkspaceId;
+    if (typeof id !== "string") return null;
+    return $dashboardWorkspaceRegistry.get(id) ?? null;
+  })();
+  $: dashboardWorkspaceIcon = dashboardWorkspaceEntry?.icon ?? null;
   // Workspaces spawned by a dashboard (Global Agentic or per-group)
   // get a bot marker so they're visually distinguishable from plain
   // group workspaces or worktrees. `metadata.spawnedBy` is the §3.2
@@ -160,7 +159,10 @@
       typeof md.parentOrchestratorId === "string"
     );
   })();
-  $: railColor = accentColor ?? $theme.accent;
+  $: railColor =
+    (isDashboardWorkspaceRow && dashboardWorkspaceEntry?.accentColor) ||
+    accentColor ||
+    $theme.accent;
   // Status registry subscriptions (process items for agent dots)
   $: processStatusStore = getWorkspaceStatusByCategory(workspace.id, "process");
   $: processItems = $processStatusStore;
@@ -397,7 +399,7 @@
             style="
               flex-shrink: 0; display: inline-flex; align-items: center;
               justify-content: center; width: 14px; height: 14px;
-              color: {$theme.fgDim}; opacity: 0.7;
+              color: {railColor};
             "
             aria-hidden="true"
           >

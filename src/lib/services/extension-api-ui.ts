@@ -171,7 +171,12 @@ export function createUIRegistrationAPI(
 
     registerDashboardWorkspace(
       id: string,
-      options: { label: string; icon: unknown; component: unknown },
+      options: {
+        label: string;
+        icon: unknown;
+        component: unknown;
+        accentColor?: string;
+      },
     ): () => void {
       const stableId = `${extId}:${id}`;
       registerDashboardWorkspaceType({
@@ -180,6 +185,7 @@ export function createUIRegistrationAPI(
         icon: options.icon as import("svelte").Component,
         component: options.component as import("svelte").Component,
         source: extId,
+        accentColor: options.accentColor,
       });
       return () => void spawnOrNavigate(stableId);
     },

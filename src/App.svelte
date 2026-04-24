@@ -544,6 +544,7 @@
       label: "Settings",
       icon: GearIcon as unknown as Component,
       component: SettingsPanel as unknown as Component,
+      accentColor: "#8998A8",
     });
 
     // Register included extensions. Only activate if explicitly enabled

@@ -42,6 +42,10 @@ import {
   githubSidebarManifest,
   registerGitHubSidebarExtension,
 } from "../../extensions/github-sidebar";
+import {
+  claudeSettingsManifest,
+  registerClaudeSettingsExtension,
+} from "../../extensions/claude-settings";
 
 type IncludedExtension = readonly [
   ExtensionManifest,
@@ -69,6 +73,7 @@ export const INCLUDED_EXTENSIONS: readonly IncludedExtension[] = [
     "worktree-workspaces",
   ],
   [githubSidebarManifest, registerGitHubSidebarExtension, "github-sidebar"],
+  [claudeSettingsManifest, registerClaudeSettingsExtension, "claude-settings"],
 ] as const;
 
 export async function registerIncludedExtensions(

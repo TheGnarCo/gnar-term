@@ -11,7 +11,7 @@
     "skipLibCheck": true,
     "outDir": "dist",
     "rootDir": "src",
-    "types": ["svelte", "vitest/globals", "vite/client"]
+    "types": ["svelte", "vitest/globals", "vite/client", "node"]
   },
   "include": ["src"],
   "exclude": ["src/__tests__", "src/**/__tests__"]

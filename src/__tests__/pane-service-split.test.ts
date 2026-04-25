@@ -346,7 +346,9 @@ describe("splitPaneWithSurface — split-from-root", () => {
     expect(updatedWs.activePaneId).toBe(newPane.id);
   });
 
-  it("is a no-op when source and target are the same pane", () => {
+  it("splits the pane when source and target are the same pane", () => {
+    // Same-pane surface split: drag sA onto its own pane body to create
+    // a new adjacent pane. sA goes to the new pane, sB stays in the original.
     const sA = mockSurface({ title: "A" });
     const sB = mockSurface({ title: "B" });
     const pane = makePane([sA, sB]);
@@ -354,10 +356,15 @@ describe("splitPaneWithSurface — split-from-root", () => {
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
 
-    splitPaneWithSurface(sA.id, pane.id, pane.id);
+    splitPaneWithSurface(sA.id, pane.id, pane.id, "horizontal", false);
 
     const updatedWs = get(workspaces)[0]!;
-    expect(getAllPanes(updatedWs.splitRoot).length).toBe(1);
-    expect(pane.surfaces.map((s) => s.id)).toEqual([sA.id, sB.id]);
+    const panes = getAllPanes(updatedWs.splitRoot);
+    expect(panes.length).toBe(2);
+    // Original pane keeps sB; new pane receives sA.
+    const original = panes.find((p) => p.surfaces.some((s) => s.id === sB.id))!;
+    const newPane = panes.find((p) => p.surfaces.some((s) => s.id === sA.id))!;
+    expect(original.surfaces.map((s) => s.id)).toEqual([sB.id]);
+    expect(newPane.surfaces.map((s) => s.id)).toEqual([sA.id]);
   });
 });

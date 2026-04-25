@@ -20,6 +20,7 @@
   import { surfaceTypeStore } from "../services/surface-type-registry";
   import { getExtensionApiById } from "../services/extension-loader";
   import ExtensionWrapper from "./ExtensionWrapper.svelte";
+  import { tabDragState } from "../services/tab-drag";
 
   export let pane: Pane;
   export let workspaceId: string = "";
@@ -98,6 +99,12 @@
     ? () => void regenCommand.action()
     : undefined;
 
+  $: surfaceSplitZone =
+    $tabDragState?.dropTarget?.kind === "surface-split" &&
+    $tabDragState.dropTarget.paneId === pane.id
+      ? $tabDragState.dropTarget.zone
+      : null;
+
   let arriving = false;
   let prevUnread = false;
   let arriveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -166,6 +173,7 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   bind:this={paneEl}
+  data-pane-body={pane.id}
   data-unread={paneHasUnread ? "true" : undefined}
   data-arriving={arriving ? "true" : undefined}
   style="
@@ -250,6 +258,28 @@
         z-index: 5;
       "
     ></span>
+  {/if}
+
+  {#if surfaceSplitZone}
+    <div
+      aria-hidden="true"
+      style="
+        position: absolute; pointer-events: none; z-index: 100;
+        background: {$theme.accent}33; border: 2px solid {$theme.accent};
+        {surfaceSplitZone === 'top'
+        ? 'top: 28px; left: 0; right: 0; bottom: 50%;'
+        : ''}
+        {surfaceSplitZone === 'bottom'
+        ? 'top: 50%; left: 0; right: 0; bottom: 0;'
+        : ''}
+        {surfaceSplitZone === 'left'
+        ? 'top: 28px; left: 0; bottom: 0; right: 50%;'
+        : ''}
+        {surfaceSplitZone === 'right'
+        ? 'top: 28px; left: 50%; bottom: 0; right: 0;'
+        : ''}
+      "
+    ></div>
   {/if}
 
   {#if dashboardWorkspaceEntry}

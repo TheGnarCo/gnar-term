@@ -170,8 +170,8 @@ export function splitPaneWithSurface(
   sourcePaneId: string,
   targetPaneId: string,
   direction: "horizontal" | "vertical" = "horizontal",
+  before = false,
 ): void {
-  if (sourcePaneId === targetPaneId) return;
   const ws = get(activeWorkspace);
   if (!ws) return;
   const allPanes = getAllPanes(ws.splitRoot);
@@ -197,10 +197,15 @@ export function splitPaneWithSurface(
   const newSplit: SplitNode = {
     type: "split",
     direction,
-    children: [
-      { type: "pane", pane: targetPane },
-      { type: "pane", pane: newPane },
-    ],
+    children: before
+      ? [
+          { type: "pane", pane: newPane },
+          { type: "pane", pane: targetPane },
+        ]
+      : [
+          { type: "pane", pane: targetPane },
+          { type: "pane", pane: newPane },
+        ],
     ratio: 0.5,
   };
 
@@ -238,6 +243,44 @@ export function splitPaneWithSurface(
   }
 
   ws.activePaneId = newPane.id;
+  workspaces.update((l) => [...l]);
+  schedulePersist();
+}
+
+/**
+ * Move a surface from its source pane into an existing target pane's tab
+ * list. Source pane collapses if it becomes empty. Backs the tab-bar drop
+ * in drag-and-drop ("drag tab onto another pane's tab bar").
+ */
+export function mergeTabToPane(
+  surfaceId: string,
+  sourcePaneId: string,
+  targetPaneId: string,
+): void {
+  if (sourcePaneId === targetPaneId) return;
+  const ws = get(activeWorkspace);
+  if (!ws) return;
+  const allPanes = getAllPanes(ws.splitRoot);
+  const sourcePane = allPanes.find((p) => p.id === sourcePaneId);
+  const targetPane = allPanes.find((p) => p.id === targetPaneId);
+  if (!sourcePane || !targetPane) return;
+
+  const idx = sourcePane.surfaces.findIndex((s) => s.id === surfaceId);
+  if (idx === -1) return;
+  const [surface] = sourcePane.surfaces.splice(idx, 1);
+  if (!surface) return;
+  if (sourcePane.activeSurfaceId === surfaceId) {
+    sourcePane.activeSurfaceId = sourcePane.surfaces[0]?.id ?? null;
+  }
+  if (
+    sourcePane.surfaces.length === 0 &&
+    !(ws.splitRoot.type === "pane" && ws.splitRoot.pane.id === sourcePaneId)
+  ) {
+    collapseEmptyPaneInWorkspace(ws, sourcePaneId);
+  }
+  targetPane.surfaces.push(surface);
+  targetPane.activeSurfaceId = surface.id;
+  ws.activePaneId = targetPane.id;
   workspaces.update((l) => [...l]);
   schedulePersist();
 }

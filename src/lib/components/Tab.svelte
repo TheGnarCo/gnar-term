@@ -27,6 +27,7 @@
 <div
   class="tab"
   data-tab-idx={index}
+  data-tab-surface-id={surface.id}
   style="
     padding: 2px 10px; font-size: 11px; cursor: pointer;
     color: {isActive ? $theme.fg : $theme.fgMuted};

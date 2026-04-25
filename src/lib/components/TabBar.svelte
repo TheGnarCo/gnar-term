@@ -40,7 +40,7 @@
       ? drag.dropTarget.insertIdx
       : null;
   $: isSplitTarget =
-    drag?.dropTarget?.kind === "split" && drag.dropTarget.paneId === pane.id;
+    drag?.dropTarget?.kind === "merge" && drag.dropTarget.paneId === pane.id;
 </script>
 
 <div

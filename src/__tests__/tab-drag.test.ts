@@ -39,9 +39,11 @@ vi.mock("../lib/services/service-helpers", () => ({
   getCwdForSurface: vi.fn().mockResolvedValue(undefined),
 }));
 
-// Spy on pane-service.reorderTab so we can verify args without
-// running a real reorder.
+// Spy on pane-service functions so we can verify args without
+// running real mutations.
 const reorderTabSpy = vi.fn();
+const splitPaneWithSurfaceSpy = vi.fn();
+const mergeTabToPaneSpy = vi.fn();
 vi.mock("../lib/services/pane-service", async () => {
   const actual = await vi.importActual<
     typeof import("../lib/services/pane-service")
@@ -50,6 +52,11 @@ vi.mock("../lib/services/pane-service", async () => {
     ...actual,
     reorderTab: (...args: Parameters<typeof actual.reorderTab>) =>
       reorderTabSpy(...args),
+    splitPaneWithSurface: (
+      ...args: Parameters<typeof actual.splitPaneWithSurface>
+    ) => splitPaneWithSurfaceSpy(...args),
+    mergeTabToPane: (...args: Parameters<typeof actual.mergeTabToPane>) =>
+      mergeTabToPaneSpy(...args),
   };
 });
 
@@ -123,6 +130,8 @@ beforeEach(() => {
   workspaces.set([]);
   activeWorkspaceIdx.set(-1);
   reorderTabSpy.mockReset();
+  splitPaneWithSurfaceSpy.mockReset();
+  mergeTabToPaneSpy.mockReset();
   cancelTabDrag();
   while (document.body.firstChild) {
     document.body.removeChild(document.body.firstChild);
@@ -237,6 +246,40 @@ describe("tab-drag — commitTabDrop", () => {
     expect(reorderTabSpy).toHaveBeenCalledWith(pane.id, 0, 2);
   });
 
+  it("calls mergeTabToPane when dropping on another pane's tab bar", () => {
+    const sA = mockTerminalSurface({ title: "A" });
+    const paneA = makePane([sA]);
+    const paneB = makePane([mockTerminalSurface({ title: "B" })]);
+    const ws: import("../lib/types").Workspace = {
+      id: uid(),
+      name: "WS",
+      splitRoot: {
+        type: "split",
+        direction: "horizontal",
+        ratio: 0.5,
+        children: [
+          { type: "pane", pane: paneA },
+          { type: "pane", pane: paneB },
+        ],
+      },
+      activePaneId: paneA.id,
+    };
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+
+    __setTabDropTargetForTest({
+      surfaceId: sA.id,
+      sourcePaneId: paneA.id,
+      sourceWorkspaceId: ws.id,
+      position: { x: 0, y: 0 },
+      dropTarget: { kind: "merge", paneId: paneB.id },
+    });
+
+    commitTabDrop();
+    expect(mergeTabToPaneSpy).toHaveBeenCalledTimes(1);
+    expect(mergeTabToPaneSpy).toHaveBeenCalledWith(sA.id, paneA.id, paneB.id);
+  });
+
   it("clears tabDragState after commit", () => {
     const sA = mockTerminalSurface({ title: "A" });
     const pane = makePane([sA]);
@@ -254,5 +297,392 @@ describe("tab-drag — commitTabDrop", () => {
 
     commitTabDrop();
     expect(get(tabDragState)).toBeNull();
+  });
+
+  it("calls splitPaneWithSurface with horizontal/before=false for zone=right", () => {
+    const sA = mockTerminalSurface({ title: "A" });
+    const paneA = makePane([sA]);
+    const paneB = makePane([mockTerminalSurface({ title: "B" })]);
+    const ws: import("../lib/types").Workspace = {
+      id: uid(),
+      name: "WS",
+      splitRoot: {
+        type: "split",
+        direction: "horizontal",
+        ratio: 0.5,
+        children: [
+          { type: "pane", pane: paneA },
+          { type: "pane", pane: paneB },
+        ],
+      },
+      activePaneId: paneA.id,
+    };
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+
+    __setTabDropTargetForTest({
+      surfaceId: sA.id,
+      sourcePaneId: paneA.id,
+      sourceWorkspaceId: ws.id,
+      position: { x: 0, y: 0 },
+      dropTarget: { kind: "surface-split", paneId: paneB.id, zone: "right" },
+    });
+
+    commitTabDrop();
+    expect(splitPaneWithSurfaceSpy).toHaveBeenCalledWith(
+      sA.id,
+      paneA.id,
+      paneB.id,
+      "horizontal",
+      false,
+    );
+  });
+
+  it("calls splitPaneWithSurface with horizontal/before=true for zone=left", () => {
+    const sA = mockTerminalSurface({ title: "A" });
+    const paneA = makePane([sA]);
+    const paneB = makePane([mockTerminalSurface({ title: "B" })]);
+    const ws: import("../lib/types").Workspace = {
+      id: uid(),
+      name: "WS",
+      splitRoot: {
+        type: "split",
+        direction: "horizontal",
+        ratio: 0.5,
+        children: [
+          { type: "pane", pane: paneA },
+          { type: "pane", pane: paneB },
+        ],
+      },
+      activePaneId: paneA.id,
+    };
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+
+    __setTabDropTargetForTest({
+      surfaceId: sA.id,
+      sourcePaneId: paneA.id,
+      sourceWorkspaceId: ws.id,
+      position: { x: 0, y: 0 },
+      dropTarget: { kind: "surface-split", paneId: paneB.id, zone: "left" },
+    });
+
+    commitTabDrop();
+    expect(splitPaneWithSurfaceSpy).toHaveBeenCalledWith(
+      sA.id,
+      paneA.id,
+      paneB.id,
+      "horizontal",
+      true,
+    );
+  });
+
+  it("calls splitPaneWithSurface with vertical/before=false for zone=bottom", () => {
+    const sA = mockTerminalSurface({ title: "A" });
+    const paneA = makePane([sA]);
+    const paneB = makePane([mockTerminalSurface({ title: "B" })]);
+    const ws: import("../lib/types").Workspace = {
+      id: uid(),
+      name: "WS",
+      splitRoot: {
+        type: "split",
+        direction: "horizontal",
+        ratio: 0.5,
+        children: [
+          { type: "pane", pane: paneA },
+          { type: "pane", pane: paneB },
+        ],
+      },
+      activePaneId: paneA.id,
+    };
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+
+    __setTabDropTargetForTest({
+      surfaceId: sA.id,
+      sourcePaneId: paneA.id,
+      sourceWorkspaceId: ws.id,
+      position: { x: 0, y: 0 },
+      dropTarget: { kind: "surface-split", paneId: paneB.id, zone: "bottom" },
+    });
+
+    commitTabDrop();
+    expect(splitPaneWithSurfaceSpy).toHaveBeenCalledWith(
+      sA.id,
+      paneA.id,
+      paneB.id,
+      "vertical",
+      false,
+    );
+  });
+
+  it("calls splitPaneWithSurface with vertical/before=true for zone=top", () => {
+    const sA = mockTerminalSurface({ title: "A" });
+    const paneA = makePane([sA]);
+    const paneB = makePane([mockTerminalSurface({ title: "B" })]);
+    const ws: import("../lib/types").Workspace = {
+      id: uid(),
+      name: "WS",
+      splitRoot: {
+        type: "split",
+        direction: "horizontal",
+        ratio: 0.5,
+        children: [
+          { type: "pane", pane: paneA },
+          { type: "pane", pane: paneB },
+        ],
+      },
+      activePaneId: paneA.id,
+    };
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+
+    __setTabDropTargetForTest({
+      surfaceId: sA.id,
+      sourcePaneId: paneA.id,
+      sourceWorkspaceId: ws.id,
+      position: { x: 0, y: 0 },
+      dropTarget: { kind: "surface-split", paneId: paneB.id, zone: "top" },
+    });
+
+    commitTabDrop();
+    expect(splitPaneWithSurfaceSpy).toHaveBeenCalledWith(
+      sA.id,
+      paneA.id,
+      paneB.id,
+      "vertical",
+      true,
+    );
+  });
+});
+
+describe("tab-drag — tab hover activation", () => {
+  function buildTabElement(surfaceId: string, paneId: string): HTMLElement {
+    const tabBar = document.createElement("div");
+    tabBar.setAttribute("data-pane-id", paneId);
+
+    const tab = document.createElement("div");
+    tab.setAttribute("data-tab-surface-id", surfaceId);
+    tabBar.appendChild(tab);
+    document.body.appendChild(tabBar);
+    return tab;
+  }
+
+  it("activates a tab in another pane when dragging over it", () => {
+    const sA = mockTerminalSurface({ title: "A" });
+    const sB = mockTerminalSurface({ title: "B" });
+    const sC = mockTerminalSurface({ title: "C" });
+    const paneA = makePane([sA]);
+    const paneB = makePane([sB, sC]);
+    paneB.activeSurfaceId = sB.id;
+
+    const ws = {
+      id: uid(),
+      name: "WS",
+      splitRoot: {
+        type: "split" as const,
+        direction: "horizontal" as const,
+        ratio: 0.5,
+        children: [
+          { type: "pane" as const, pane: paneA },
+          { type: "pane" as const, pane: paneB },
+        ],
+      },
+      activePaneId: paneA.id,
+    };
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+
+    const tabEl = buildTabElement(sC.id, paneB.id);
+    document.elementFromPoint = vi.fn().mockReturnValue(tabEl);
+
+    const sourceEl = document.createElement("div");
+    document.body.appendChild(sourceEl);
+    const down = mouseEvent("mousedown", { clientX: 100, clientY: 100 });
+    Object.defineProperty(down, "currentTarget", { value: sourceEl });
+
+    startTabDrag(down, sA.id, paneA.id, ws.id);
+    window.dispatchEvent(
+      mouseEvent("mousemove", { clientX: 110, clientY: 110 }),
+    );
+
+    const updated = get(workspaces);
+    const updatedPaneB =
+      updated[0]!.splitRoot.type === "split"
+        ? updated[0]!.splitRoot.children[1]
+        : null;
+    const pane = updatedPaneB?.type === "pane" ? updatedPaneB.pane : null;
+    expect(pane?.activeSurfaceId).toBe(sC.id);
+  });
+
+  it("does not activate a tab in the same pane", () => {
+    const sA = mockTerminalSurface({ title: "A" });
+    const sB = mockTerminalSurface({ title: "B" });
+    const pane = makePane([sA, sB]);
+    pane.activeSurfaceId = sA.id;
+    const ws = makeWorkspace(pane);
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+
+    const tabEl = buildTabElement(sB.id, pane.id);
+    document.elementFromPoint = vi.fn().mockReturnValue(tabEl);
+
+    const sourceEl = document.createElement("div");
+    document.body.appendChild(sourceEl);
+    const down = mouseEvent("mousedown", { clientX: 100, clientY: 100 });
+    Object.defineProperty(down, "currentTarget", { value: sourceEl });
+
+    startTabDrag(down, sA.id, pane.id, ws.id);
+    window.dispatchEvent(
+      mouseEvent("mousemove", { clientX: 110, clientY: 110 }),
+    );
+
+    expect(
+      get(workspaces)[0]!.splitRoot.type === "pane"
+        ? (get(workspaces)[0]!.splitRoot as { pane: typeof pane }).pane
+            .activeSurfaceId
+        : null,
+    ).toBe(sA.id);
+  });
+});
+
+describe("tab-drag — surface body detection", () => {
+  it("detects surface-split on source pane when it has ≥2 surfaces", () => {
+    const sA = mockTerminalSurface({ title: "A" });
+    const sB = mockTerminalSurface({ title: "B" });
+    const pane = makePane([sA, sB]);
+    const ws = makeWorkspace(pane);
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+
+    const bodyEl = document.createElement("div");
+    bodyEl.setAttribute("data-pane-body", pane.id);
+    bodyEl.getBoundingClientRect = vi.fn().mockReturnValue({
+      left: 0,
+      right: 400,
+      top: 28,
+      bottom: 300,
+      width: 400,
+      height: 272,
+      x: 0,
+      y: 28,
+      toJSON: () => {},
+    });
+    document.body.appendChild(bodyEl);
+    document.elementFromPoint = vi.fn().mockReturnValue(null);
+
+    const sourceEl = document.createElement("div");
+    document.body.appendChild(sourceEl);
+    const down = mouseEvent("mousedown", { clientX: 0, clientY: 0 });
+    Object.defineProperty(down, "currentTarget", { value: sourceEl });
+
+    startTabDrag(down, sA.id, pane.id, ws.id);
+    // Drop into bottom half of the same pane's surface
+    window.dispatchEvent(
+      mouseEvent("mousemove", { clientX: 200, clientY: 250 }),
+    );
+
+    const state = get(tabDragState);
+    expect(state?.dropTarget?.kind).toBe("surface-split");
+    if (state?.dropTarget?.kind === "surface-split") {
+      expect(state.dropTarget.paneId).toBe(pane.id);
+    }
+  });
+
+  it("does not detect surface-split on source pane when it has only 1 surface", () => {
+    const sA = mockTerminalSurface({ title: "A" });
+    const pane = makePane([sA]);
+    const ws = makeWorkspace(pane);
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+
+    const bodyEl = document.createElement("div");
+    bodyEl.setAttribute("data-pane-body", pane.id);
+    bodyEl.getBoundingClientRect = vi.fn().mockReturnValue({
+      left: 0,
+      right: 400,
+      top: 28,
+      bottom: 300,
+      width: 400,
+      height: 272,
+      x: 0,
+      y: 28,
+      toJSON: () => {},
+    });
+    document.body.appendChild(bodyEl);
+    document.elementFromPoint = vi.fn().mockReturnValue(null);
+
+    const sourceEl = document.createElement("div");
+    document.body.appendChild(sourceEl);
+    const down = mouseEvent("mousedown", { clientX: 0, clientY: 0 });
+    Object.defineProperty(down, "currentTarget", { value: sourceEl });
+
+    startTabDrag(down, sA.id, pane.id, ws.id);
+    window.dispatchEvent(
+      mouseEvent("mousemove", { clientX: 200, clientY: 250 }),
+    );
+
+    const state = get(tabDragState);
+    expect(state?.dropTarget).toBeNull();
+  });
+
+  it("detects surface-split zone via bounding rect scan", () => {
+    const sA = mockTerminalSurface({ title: "A" });
+    const sB = mockTerminalSurface({ title: "B" });
+    const paneA = makePane([sA]);
+    const paneB = makePane([sB]);
+    const ws: import("../lib/types").Workspace = {
+      id: uid(),
+      name: "WS",
+      splitRoot: {
+        type: "split",
+        direction: "horizontal",
+        ratio: 0.5,
+        children: [
+          { type: "pane", pane: paneA },
+          { type: "pane", pane: paneB },
+        ],
+      },
+      activePaneId: paneA.id,
+    };
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+
+    // Set up a pane body element for paneB with known bounds.
+    const bodyEl = document.createElement("div");
+    bodyEl.setAttribute("data-pane-body", paneB.id);
+    bodyEl.getBoundingClientRect = vi.fn().mockReturnValue({
+      left: 200,
+      right: 400,
+      top: 100,
+      bottom: 300,
+      width: 200,
+      height: 200,
+      x: 200,
+      y: 100,
+      toJSON: () => {},
+    });
+    document.body.appendChild(bodyEl);
+
+    // elementFromPoint returns null so the tab-bar / sidebar checks all skip.
+    document.elementFromPoint = vi.fn().mockReturnValue(null);
+
+    const sourceEl = document.createElement("div");
+    document.body.appendChild(sourceEl);
+    const down = mouseEvent("mousedown", { clientX: 0, clientY: 0 });
+    Object.defineProperty(down, "currentTarget", { value: sourceEl });
+
+    startTabDrag(down, sA.id, paneA.id, ws.id);
+    // Move into paneB's right-zone: x=350 is 75% of width → "right"
+    window.dispatchEvent(
+      mouseEvent("mousemove", { clientX: 350, clientY: 200 }),
+    );
+
+    const state = get(tabDragState);
+    expect(state?.dropTarget?.kind).toBe("surface-split");
+    if (state?.dropTarget?.kind === "surface-split") {
+      expect(state.dropTarget.zone).toBe("right");
+      expect(state.dropTarget.paneId).toBe(paneB.id);
+    }
   });
 });

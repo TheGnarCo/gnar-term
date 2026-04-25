@@ -14,9 +14,11 @@
  */
 import { writable, get, type Readable } from "svelte/store";
 import { workspaces } from "../stores/workspace";
+import { theme } from "../stores/theme";
 import { getAllPanes, getAllSurfaces } from "../types";
 import {
   reorderTab,
+  mergeTabToPane,
   splitPaneWithSurface,
   moveSurfaceToWorkspace,
 } from "./pane-service";
@@ -24,7 +26,12 @@ import { createWorkspaceFromSurface } from "./workspace-service";
 
 export type TabDropTarget =
   | { kind: "reorder"; paneId: string; insertIdx: number }
-  | { kind: "split"; paneId: string }
+  | { kind: "merge"; paneId: string }
+  | {
+      kind: "surface-split";
+      paneId: string;
+      zone: "top" | "bottom" | "left" | "right";
+    }
   | { kind: "move-to-workspace"; workspaceId: string }
   | { kind: "new-workspace" }
   | null;
@@ -43,6 +50,44 @@ export const tabDragState: Readable<TabDragState | null> = {
 };
 
 let ghost: HTMLElement | null = null;
+let lastHoveredTabId: string | null = null;
+let activeCleanup: (() => void) | null = null;
+
+function activateHoveredTab(x: number, y: number, sourcePaneId: string): void {
+  const el = document.elementFromPoint(x, y);
+  if (!el) {
+    lastHoveredTabId = null;
+    return;
+  }
+  const tabEl = (el as Element).closest(
+    "[data-tab-surface-id]",
+  ) as HTMLElement | null;
+  if (!tabEl) {
+    lastHoveredTabId = null;
+    return;
+  }
+  const tabBarEl = tabEl.closest("[data-pane-id]") as HTMLElement | null;
+  if (!tabBarEl) {
+    lastHoveredTabId = null;
+    return;
+  }
+  const paneId = tabBarEl.getAttribute("data-pane-id");
+  const surfaceId = tabEl.getAttribute("data-tab-surface-id");
+  if (!paneId || !surfaceId || paneId === sourcePaneId) {
+    lastHoveredTabId = null;
+    return;
+  }
+  if (surfaceId === lastHoveredTabId) return;
+  lastHoveredTabId = surfaceId;
+  workspaces.update((wsList) =>
+    wsList.map((ws) => {
+      const pane = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
+      if (!pane || !pane.surfaces.find((s) => s.id === surfaceId)) return ws;
+      pane.activeSurfaceId = surfaceId;
+      return { ...ws };
+    }),
+  );
+}
 
 export function startTabDrag(
   e: MouseEvent,
@@ -67,14 +112,26 @@ export function startTabDrag(
         return;
       activated = true;
       if (sourceEl) {
+        const t = get(theme);
         ghost = sourceEl.cloneNode(true) as HTMLElement;
-        ghost.style.cssText = `
-          position: fixed; pointer-events: none; z-index: 9999; opacity: 0.8;
-          width: ${sourceEl.offsetWidth}px;
-          left: ${ev.clientX + 8}px; top: ${ev.clientY - 12}px;
-        `;
+        Object.assign(ghost.style, {
+          position: "fixed",
+          pointerEvents: "none",
+          zIndex: "9999",
+          opacity: "0.9",
+          width: `${sourceEl.offsetWidth}px`,
+          left: `${ev.clientX + 8}px`,
+          top: `${ev.clientY - 12}px`,
+          background: t.bgActive,
+          color: t.fg,
+          borderBottom: `2px solid ${t.accent}`,
+          borderRadius: "4px 4px 0 0",
+          boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+          cursor: "grabbing",
+        });
         document.body.appendChild(ghost);
       }
+      activateHoveredTab(ev.clientX, ev.clientY, paneId);
       _tabDragState.set({
         surfaceId,
         sourcePaneId: paneId,
@@ -92,6 +149,7 @@ export function startTabDrag(
         ghost.style.left = `${ev.clientX + 8}px`;
         ghost.style.top = `${ev.clientY - 12}px`;
       }
+      activateHoveredTab(ev.clientX, ev.clientY, paneId);
       _tabDragState.update((s) =>
         s
           ? {
@@ -131,6 +189,7 @@ export function startTabDrag(
     }
   }
 
+  activeCleanup = cleanup;
   window.addEventListener("mousemove", onMove);
   window.addEventListener("mouseup", onUp);
   window.addEventListener("keydown", onKey);
@@ -143,57 +202,100 @@ function detectDropTarget(
   sourceWorkspaceId: string,
 ): TabDropTarget {
   const el = document.elementFromPoint(x, y);
-  if (!el) return null;
 
-  // Tab bar (within-pane reorder or cross-pane split).
-  const tabBar = el.closest("[data-pane-id]") as HTMLElement | null;
-  if (tabBar) {
-    const paneId = tabBar.getAttribute("data-pane-id");
-    if (!paneId) return null;
-    if (paneId === sourcePaneId) {
-      const tabs = Array.from(
-        tabBar.querySelectorAll("[data-tab-idx]"),
-      ) as HTMLElement[];
-      let insertIdx = tabs.length;
-      for (const tab of tabs) {
-        const rect = tab.getBoundingClientRect();
-        if (x < rect.left + rect.width / 2) {
-          insertIdx = parseInt(tab.getAttribute("data-tab-idx") || "0", 10);
-          break;
+  // el-dependent checks (tab bar, sidebar, workspace row).
+  if (el) {
+    // Tab bar (within-pane reorder or cross-pane split).
+    const tabBar = el.closest("[data-pane-id]") as HTMLElement | null;
+    if (tabBar) {
+      const paneId = tabBar.getAttribute("data-pane-id");
+      if (!paneId) return null;
+      if (paneId === sourcePaneId) {
+        const tabs = Array.from(
+          tabBar.querySelectorAll("[data-tab-idx]"),
+        ) as HTMLElement[];
+        let insertIdx = tabs.length;
+        for (const tab of tabs) {
+          const rect = tab.getBoundingClientRect();
+          if (x < rect.left + rect.width / 2) {
+            insertIdx = parseInt(tab.getAttribute("data-tab-idx") || "0", 10);
+            break;
+          }
         }
+        return { kind: "reorder", paneId, insertIdx };
       }
-      return { kind: "reorder", paneId, insertIdx };
+      return { kind: "merge", paneId };
     }
-    return { kind: "split", paneId };
+
+    // Sidebar workspace row — move to that workspace (same group only).
+    const wsItem = el.closest("[data-workspace-id]") as HTMLElement | null;
+    if (wsItem) {
+      const wsId = wsItem.getAttribute("data-workspace-id");
+      if (!wsId || wsId === sourceWorkspaceId) return null;
+      const allWs = get(workspaces);
+      const srcWs = allWs.find((w) => w.id === sourceWorkspaceId);
+      const tgtWs = allWs.find((w) => w.id === wsId);
+      if (!srcWs || !tgtWs) return null;
+      const srcGroupId = (srcWs.metadata as Record<string, unknown> | undefined)
+        ?.groupId;
+      const tgtGroupId = (tgtWs.metadata as Record<string, unknown> | undefined)
+        ?.groupId;
+      if (srcGroupId !== tgtGroupId) return null;
+      return { kind: "move-to-workspace", workspaceId: wsId };
+    }
+
+    // Empty primary-sidebar area — drop to spawn a new workspace.
+    // Guarded: source must have >1 surface so we don't leave it empty.
+    const sidebar = el.closest("#primary-sidebar");
+    if (sidebar) {
+      const allWs = get(workspaces);
+      const srcWs = allWs.find((w) => w.id === sourceWorkspaceId);
+      if (srcWs && getAllSurfaces(srcWs).length > 1) {
+        return { kind: "new-workspace" };
+      }
+      return null;
+    }
   }
 
-  // Sidebar workspace row — move to that workspace (same group only).
-  const wsItem = el.closest("[data-workspace-id]") as HTMLElement | null;
-  if (wsItem) {
-    const wsId = wsItem.getAttribute("data-workspace-id");
-    if (!wsId || wsId === sourceWorkspaceId) return null;
-    const allWs = get(workspaces);
-    const srcWs = allWs.find((w) => w.id === sourceWorkspaceId);
-    const tgtWs = allWs.find((w) => w.id === wsId);
-    if (!srcWs || !tgtWs) return null;
-    const srcGroupId = (srcWs.metadata as Record<string, unknown> | undefined)
-      ?.groupId;
-    const tgtGroupId = (tgtWs.metadata as Record<string, unknown> | undefined)
-      ?.groupId;
-    if (srcGroupId !== tgtGroupId) return null;
-    return { kind: "move-to-workspace", workspaceId: wsId };
-  }
-
-  // Empty primary-sidebar area — drop to spawn a new workspace.
-  // Guarded: source must have >1 surface so we don't leave it empty.
-  const sidebar = el.closest("#primary-sidebar");
-  if (sidebar) {
-    const allWs = get(workspaces);
-    const srcWs = allWs.find((w) => w.id === sourceWorkspaceId);
-    if (srcWs && getAllSurfaces(srcWs).length > 1) {
-      return { kind: "new-workspace" };
+  // Pane surface body — directional split hint.
+  // Use a bounding-rect scan instead of closest() so the xterm canvas
+  // (which sits at the top of the z-stack) doesn't block detection.
+  const paneBodies = Array.from(
+    document.querySelectorAll("[data-pane-body]"),
+  ) as HTMLElement[];
+  for (const bodyEl of paneBodies) {
+    const paneId = bodyEl.getAttribute("data-pane-body");
+    if (!paneId) continue;
+    if (paneId === sourcePaneId) {
+      // Allow same-pane surface-split only when there are ≥2 surfaces to split from.
+      const allWs = get(workspaces);
+      const srcWs = allWs.find((w) => w.id === sourceWorkspaceId);
+      const srcPane =
+        srcWs &&
+        getAllPanes(srcWs.splitRoot).find((p) => p.id === sourcePaneId);
+      if (!srcPane || srcPane.surfaces.length <= 1) continue;
     }
-    return null;
+    const rect = bodyEl.getBoundingClientRect();
+    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom)
+      continue;
+    const tabBarEl = bodyEl.querySelector(
+      "[data-pane-id]",
+    ) as HTMLElement | null;
+    const tabBarH = tabBarEl ? tabBarEl.getBoundingClientRect().height : 0;
+    const surfaceTop = rect.top + tabBarH;
+    const surfaceH = rect.height - tabBarH;
+    if (surfaceH <= 0) continue;
+    const relX = (x - rect.left) / rect.width;
+    const relY = (y - surfaceTop) / surfaceH;
+    const zone =
+      Math.abs(relX - 0.5) > Math.abs(relY - 0.5)
+        ? relX < 0.5
+          ? "left"
+          : "right"
+        : relY < 0.5
+          ? "top"
+          : "bottom";
+    return { kind: "surface-split", paneId, zone };
   }
 
   return null;
@@ -202,6 +304,7 @@ function detectDropTarget(
 export function commitTabDrop(): void {
   const state = get(_tabDragState);
   _tabDragState.set(null);
+  lastHoveredTabId = null;
   if (!state || !state.dropTarget) return;
 
   const { surfaceId, sourcePaneId, sourceWorkspaceId, dropTarget } = state;
@@ -217,14 +320,26 @@ export function commitTabDrop(): void {
       if (!pane) return;
       const fromIdx = pane.surfaces.findIndex((s) => s.id === surfaceId);
       if (fromIdx === -1) return;
-      // reorderTab interprets toIdx as the "insert before original index"
-      // value and handles the splice adjustment internally — pass
-      // insertIdx straight through, no pre-adjustment.
       reorderTab(dropTarget.paneId, fromIdx, dropTarget.insertIdx);
       break;
     }
-    case "split": {
-      splitPaneWithSurface(surfaceId, sourcePaneId, dropTarget.paneId);
+    case "merge": {
+      mergeTabToPane(surfaceId, sourcePaneId, dropTarget.paneId);
+      break;
+    }
+    case "surface-split": {
+      const direction =
+        dropTarget.zone === "left" || dropTarget.zone === "right"
+          ? "horizontal"
+          : "vertical";
+      const before = dropTarget.zone === "left" || dropTarget.zone === "top";
+      splitPaneWithSurface(
+        surfaceId,
+        sourcePaneId,
+        dropTarget.paneId,
+        direction,
+        before,
+      );
       break;
     }
     case "move-to-workspace": {
@@ -242,6 +357,9 @@ export function commitTabDrop(): void {
 }
 
 export function cancelTabDrag(): void {
+  lastHoveredTabId = null;
+  activeCleanup?.();
+  activeCleanup = null;
   _tabDragState.set(null);
 }
 

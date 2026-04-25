@@ -9,6 +9,7 @@ export default defineConfig({
     environment: "jsdom",
     include: ["src/**/*.test.ts"],
     globals: true,
+    setupFiles: ["src/test-setup.ts"],
     onConsoleLog: (msg) => !msg.includes("HTMLCanvasElement"),
     coverage: {
       provider: "v8",

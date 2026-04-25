@@ -1295,7 +1295,7 @@ async fn list_claude_dir(path: String) -> Result<Vec<ClaudeDirEntry>, String> {
             continue;
         };
         let entry_path = entry.path().to_string_lossy().to_string();
-        let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+        let is_dir = entry.file_type().is_ok_and(|t| t.is_dir());
         result.push(ClaudeDirEntry {
             name,
             path: entry_path,

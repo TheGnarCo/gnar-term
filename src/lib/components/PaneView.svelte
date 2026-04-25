@@ -31,9 +31,6 @@
   export let onSplitDown: () => void;
   export let onClosePane: () => void;
   export let onFocusPane: () => void;
-  export let onReorderTab:
-    | ((fromIdx: number, toIdx: number) => void)
-    | undefined = undefined;
 
   let paneEl: HTMLElement;
   let resizeObserver: ResizeObserver;
@@ -197,7 +194,6 @@
       {onSplitRight}
       {onSplitDown}
       {onClosePane}
-      {onReorderTab}
       {showJumpToBottom}
       onJumpToBottom={handleJumpToBottom}
     />

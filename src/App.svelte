@@ -83,7 +83,6 @@
     splitPane,
     closePane,
     focusPane,
-    reorderTab,
     splitFromSidebar,
   } from "./lib/services/pane-service";
   import {
@@ -767,7 +766,6 @@
           onSplitDown={(paneId) => splitPane(paneId, "vertical")}
           onClosePane={closePane}
           onFocusPane={focusPane}
-          onReorderTab={reorderTab}
         />
       {/each}
 

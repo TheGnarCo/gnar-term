@@ -157,6 +157,7 @@ export function reorderTab(paneId: string, fromIdx: number, toIdx: number) {
   const adjustedTo = fromIdx < toIdx ? toIdx - 1 : toIdx;
   pane.surfaces.splice(adjustedTo, 0, item);
   workspaces.update((l) => [...l]);
+  schedulePersist();
 }
 
 export function focusDirection(dir: "left" | "right" | "up" | "down") {

@@ -29,6 +29,25 @@
   let truncated = false;
   let collapsedFiles: Set<number> = new Set();
 
+  $: totalAdded = files.reduce(
+    (acc, f) =>
+      acc +
+      f.hunks.reduce(
+        (a, h) => a + h.lines.filter((l) => l.type === "add").length,
+        0,
+      ),
+    0,
+  );
+  $: totalDeleted = files.reduce(
+    (acc, f) =>
+      acc +
+      f.hunks.reduce(
+        (a, h) => a + h.lines.filter((l) => l.type === "delete").length,
+        0,
+      ),
+    0,
+  );
+
   function toggleFile(index: number): void {
     if (collapsedFiles.has(index)) {
       collapsedFiles.delete(index);
@@ -212,6 +231,14 @@
   {:else if files.length === 0}
     <div class="diff-message" style:color={$theme.fgDim}>No changes</div>
   {:else}
+    <div
+      class="diff-summary"
+      style:color={$theme.fgDim}
+      style:border-color={$theme.border}
+    >
+      <span class="diff-summary-added">+{totalAdded}</span>
+      <span class="diff-summary-deleted">-{totalDeleted}</span>
+    </div>
     <div class="diff-content">
       {#each files as file, fileIdx}
         <div class="diff-file" style:border-color={$theme.border}>
@@ -295,6 +322,23 @@
     padding: 24px;
     text-align: center;
     font-size: 13px;
+  }
+
+  .diff-summary {
+    display: flex;
+    gap: 10px;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    border-bottom: 1px solid;
+  }
+
+  .diff-summary-added {
+    color: #4ec957;
+  }
+
+  .diff-summary-deleted {
+    color: #e85454;
   }
 
   .diff-content {

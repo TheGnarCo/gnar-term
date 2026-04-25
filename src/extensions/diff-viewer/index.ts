@@ -12,7 +12,18 @@ import type {
 import DiffSurface from "./DiffSurface.svelte";
 import ChangesTab from "./ChangesTab.svelte";
 import DiffIcon from "./DiffIcon.svelte";
+import DiffStatLine from "./DiffStatLine.svelte";
 import { createWorkspaceFromDef } from "../../lib/services/workspace-service";
+import {
+  provisionAutoDashboardsForGroup,
+  closeAutoDashboardsBySource,
+} from "../../lib/services/workspace-group-service";
+import { getWorkspaceGroups } from "../../lib/stores/workspace-groups";
+import { waitRestored } from "../../lib/bootstrap/restore-workspaces";
+import {
+  updateDiffStatsForWorkspace,
+  clearDiffStats,
+} from "./diff-stats-store";
 
 export const diffViewerManifest: ExtensionManifest = {
   id: "diff-viewer",
@@ -131,18 +142,42 @@ export function registerDiffViewerExtension(api: ExtensionAPI): void {
       });
     });
 
-    // Diff dashboard contribution — lets a Workspace Group opt in to a
-    // dedicated Diff dashboard tile (gear sibling). The tile's workspace
-    // hosts a single diff-viewer:diff surface for the group's repo; no
-    // split / new-surface affordances because the pane is a Dashboard.
+    // Diff dashboard contribution — auto-provisioned for every git group.
+    // The tile's workspace hosts a single diff-viewer:diff surface for
+    // the group's repo; no split / new-surface affordances.
     api.registerDashboardContribution({
       id: "diff",
       label: "Diff",
       actionLabel: "Add Diff Dashboard",
       capPerGroup: 1,
+      autoProvision: true,
+      lockedReason: "Required by Diff Viewer extension",
+      isAvailableFor: (group) => group.isGit,
       icon: DiffIcon,
       paneConstraints: { singleSurface: true },
       create: (group) => createDiffDashboardWorkspace(group),
+    });
+
+    // Back-fill the Diff Dashboard for every existing git group. Fresh
+    // groups hit provisionAutoDashboardsForGroup through the normal
+    // create flow. waitRestored() is a no-op when the extension is
+    // enabled at runtime (markRestored already fired).
+    void (async () => {
+      await waitRestored();
+      for (const group of getWorkspaceGroups()) {
+        await provisionAutoDashboardsForGroup(group);
+      }
+    })();
+
+    // Diff stats subtitle — renders +N -N below the branch line for
+    // every git workspace. Priority 15 places it directly after the
+    // GitStatusLine (priority 10).
+    api.registerWorkspaceSubtitle(DiffStatLine, 15);
+
+    // Refresh diff stats whenever a workspace is activated.
+    api.on("workspace:activated", async (event) => {
+      if (event.type !== "workspace:activated") return;
+      await updateDiffStatsForWorkspace(event.id as string);
     });
 
     // Changes sidebar tab
@@ -162,6 +197,11 @@ export function registerDiffViewerExtension(api: ExtensionAPI): void {
     api.on("worktree:merged", () => {
       api.badgeSidebarTab("changes", true);
       api.activateSidebarTab("changes");
+    });
+
+    api.onDeactivate(() => {
+      closeAutoDashboardsBySource("diff-viewer");
+      clearDiffStats();
     });
   });
 }

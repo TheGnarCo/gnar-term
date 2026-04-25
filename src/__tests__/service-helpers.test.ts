@@ -36,22 +36,6 @@ describe("getHome", () => {
   });
 
   async function loadModule() {
-    // Re-mock after resetModules
-    vi.mock("@tauri-apps/api/core", () => ({
-      invoke: vi.fn(),
-    }));
-    vi.mock("svelte", () => ({
-      tick: vi.fn(() => Promise.resolve()),
-    }));
-    vi.mock("../lib/stores/workspace", () => ({
-      activeSurface: writable(null),
-    }));
-    vi.mock("../lib/types", () => ({
-      isTerminalSurface: vi.fn(
-        (s: { kind?: string } | null) => s?.kind === "terminal",
-      ),
-    }));
-
     const mod = await import("../lib/services/service-helpers");
     const { invoke: freshInvoke } = await import("@tauri-apps/api/core");
     return { mod, invoke: vi.mocked(freshInvoke) };

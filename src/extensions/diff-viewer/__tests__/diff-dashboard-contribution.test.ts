@@ -49,7 +49,8 @@ describe("Diff dashboard contribution", () => {
     expect(diff?.source).toBe("diff-viewer");
     expect(diff?.capPerGroup).toBe(1);
     expect(diff?.paneConstraints?.singleSurface).toBe(true);
-    expect(diff?.autoProvision).toBeFalsy();
+    expect(diff?.autoProvision).toBe(true);
+    expect(diff?.lockedReason).toBeTruthy();
     expect(diff?.icon).toBeDefined();
   });
 

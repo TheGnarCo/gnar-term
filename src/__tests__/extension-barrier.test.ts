@@ -45,8 +45,27 @@ describe("Extension barrier enforcement", () => {
     const FILE_EXCEPTIONS: Record<string, string[]> = {
       // The Diff Dashboard contribution's `create(group)` materializes
       // a dashboard workspace via createWorkspaceFromDef — mirrors the
-      // agentic-orchestrator piercing below.
-      "diff-viewer/index.ts": ["../../lib/services/workspace-service"],
+      // agentic-orchestrator piercing below. The auto-provision backfill
+      // loop also pierces workspace-group-service, workspace-groups, and
+      // restore-workspaces (same pattern as agentic-orchestrator).
+      "diff-viewer/index.ts": [
+        "../../lib/services/workspace-service",
+        "../../lib/services/workspace-group-service",
+        "../../lib/stores/workspace-groups",
+        "../../lib/bootstrap/restore-workspaces",
+      ],
+      // diff-stats-store reads the workspaces store and workspace-groups
+      // to locate the git repo path for a given workspace id. The store
+      // is a core data access module that belongs in the extension layer
+      // by design (it owns diff stat computation for the diff-viewer).
+      "diff-viewer/diff-stats-store.ts": [
+        "../../lib/stores/workspace",
+        "../../lib/stores/workspace-groups",
+      ],
+      // DiffStatLine.svelte reads the theme store directly to style
+      // the +N -N diff counts — the same pattern used by other
+      // sidebar subtitle components (e.g. GitStatusLine).
+      "diff-viewer/DiffStatLine.svelte": ["../../lib/stores/theme"],
       // The Agentic Dashboard contribution's `create(group)` must
       // materialize a dashboard workspace; reaching for
       // createWorkspaceFromDef keeps the contribution on the same code

@@ -217,15 +217,6 @@
   export let dragActive = false;
   /** Mousedown handler fired when the drag grip is pressed. Drag origin, not row body. */
   export let onGripMouseDown: ((e: MouseEvent) => void) | undefined = undefined;
-
-  // Highlight when a tab-drag is currently aimed at this workspace.
-  // detectDropTarget pins move-to-workspace to the row via the
-  // data-workspace-id attribute; we mirror that match here so the row
-  // outlines while the cursor hovers.
-  import { tabDragState } from "../services/tab-drag";
-  $: isTabDropTarget =
-    $tabDragState?.dropTarget?.kind === "move-to-workspace" &&
-    $tabDragState.dropTarget.workspaceId === workspace.id;
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -243,12 +234,7 @@
     : hovered
       ? $theme.bgHighlight
       : ($theme.bgSurface ?? 'transparent')};
-    border: 1px solid {isTabDropTarget
-    ? $theme.accent
-    : isActive
-      ? railColor
-      : ($theme.border ?? 'transparent')};
-    {isTabDropTarget ? `box-shadow: 0 0 0 1px ${$theme.accent};` : ''}
+    border: 1px solid {isActive ? railColor : ($theme.border ?? 'transparent')};
   "
   on:contextmenu|preventDefault={(e) => {
     // Dashboards are non-interactive surfaces; right-click is a no-op.

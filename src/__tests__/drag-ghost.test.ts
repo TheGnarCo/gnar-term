@@ -156,9 +156,9 @@ describe("root-workspace drag paints strong overlay on sibling rows", () => {
   // colored tiles rather than a field of unchanged rows.
   const LIST_BLOCK = read("src/lib/components/WorkspaceListBlock.svelte");
 
-  it("derives isSibling from dragActive + non-source root-row idx", () => {
+  it("derives isSibling from effectiveActive + effectiveDragSourceIdx", () => {
     expect(LIST_BLOCK).toMatch(
-      /isSibling\s*=\s*dragActive\s*&&\s*dragSourceIdx\s*!==\s*entry\.idx/,
+      /isSibling\s*=\s*effectiveActive\s*&&\s*effectiveDragSourceIdx\s*!==\s*entry\.idx/,
     );
   });
 
@@ -182,7 +182,7 @@ describe("root-workspace drag paints strong overlay on sibling rows", () => {
     // row's name). The source row's label is derived from the root
     // row being dragged.
     expect(LIST_BLOCK).toMatch(/sourceRow\s*=/);
-    expect(LIST_BLOCK).toMatch(/label=\{sourceRowLabel\}/);
+    expect(LIST_BLOCK).toMatch(/label=\{effectiveSourceRowLabel\}/);
   });
 });
 

@@ -61,6 +61,16 @@ export function removeRootRow(row: RootRow): void {
   persist();
 }
 
+/** Insert a row at the given index. No-op if the row is already present. */
+export function insertRootRow(at: number, row: RootRow): void {
+  const current = get(_rootRowOrder);
+  if (current.some((r) => r.kind === row.kind && r.id === row.id)) return;
+  const next = [...current];
+  next.splice(Math.max(0, Math.min(next.length, at)), 0, row);
+  _rootRowOrder.set(next);
+  persist();
+}
+
 /** Move the row at `from` to position `to`. Indices are into the full list. */
 export function moveRootRow(from: number, to: number): void {
   const current = get(_rootRowOrder);

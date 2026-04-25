@@ -32,8 +32,15 @@ import {
 } from "../config";
 import { safeFocus } from "./service-helpers";
 import { eventBus } from "./event-bus";
-import { appendRootRow, removeRootRow } from "../stores/root-row-order";
-import { addWorkspaceToGroup } from "./workspace-group-service";
+import {
+  appendRootRow,
+  removeRootRow,
+  insertRootRow,
+} from "../stores/root-row-order";
+import {
+  addWorkspaceToGroup,
+  insertWorkspaceIntoGroup,
+} from "./workspace-group-service";
 
 // --- Workspace persistence (debounced save to state.json) ---
 
@@ -426,6 +433,9 @@ export function createWorkspaceFromSurface(
   surfaceId: string,
   sourcePaneId: string,
   sourceWorkspaceId: string,
+  insertOptions?:
+    | { kind: "root"; insertIdx: number }
+    | { kind: "group"; positionInGroup: number },
 ): void {
   const allWs = get(workspaces);
   const srcWs = allWs.find((w) => w.id === sourceWorkspaceId);
@@ -474,8 +484,22 @@ export function createWorkspaceFromSurface(
   };
 
   workspaces.update((list) => [...list, newWs]);
-  appendRootRow({ kind: "workspace", id: newWs.id });
-  if (srcGroupId) addWorkspaceToGroup(srcGroupId, newWs.id);
+  if (insertOptions?.kind === "root") {
+    insertRootRow(insertOptions.insertIdx, { kind: "workspace", id: newWs.id });
+  } else {
+    appendRootRow({ kind: "workspace", id: newWs.id });
+  }
+  if (srcGroupId) {
+    if (insertOptions?.kind === "group") {
+      insertWorkspaceIntoGroup(
+        srcGroupId,
+        newWs.id,
+        insertOptions.positionInGroup,
+      );
+    } else {
+      addWorkspaceToGroup(srcGroupId, newWs.id);
+    }
+  }
   schedulePersist();
 }
 

@@ -20,9 +20,10 @@ import {
   reorderTab,
   mergeTabToPane,
   splitPaneWithSurface,
-  moveSurfaceToWorkspace,
 } from "./pane-service";
 import { createWorkspaceFromSurface } from "./workspace-service";
+import { getWorkspaceGroups } from "../stores/workspace-groups";
+import { rootRowOrder } from "../stores/root-row-order";
 
 export type TabDropTarget =
   | { kind: "reorder"; paneId: string; insertIdx: number }
@@ -32,8 +33,13 @@ export type TabDropTarget =
       paneId: string;
       zone: "top" | "bottom" | "left" | "right";
     }
-  | { kind: "move-to-workspace"; workspaceId: string }
-  | { kind: "new-workspace" }
+  | { kind: "new-workspace"; insertIdx: number; insertEdge: "before" | "after" }
+  | {
+      kind: "new-workspace-in-group";
+      groupId: string;
+      insertGlobalIdx: number;
+      insertEdge: "before" | "after";
+    }
   | null;
 
 export interface TabDragState {
@@ -50,8 +56,13 @@ export const tabDragState: Readable<TabDragState | null> = {
 };
 
 let ghost: HTMLElement | null = null;
+let inSidebarMode = false;
 let lastHoveredTabId: string | null = null;
 let activeCleanup: (() => void) | null = null;
+
+function isSidebarDropTarget(dt: TabDropTarget): boolean {
+  return dt?.kind === "new-workspace" || dt?.kind === "new-workspace-in-group";
+}
 
 function activateHoveredTab(x: number, y: number, sourcePaneId: string): void {
   const el = document.elementFromPoint(x, y);
@@ -102,6 +113,7 @@ export function startTabDrag(
   const startY = e.clientY;
   const sourceEl = e.currentTarget as HTMLElement | null;
   let activated = false;
+  inSidebarMode = false;
 
   function onMove(ev: MouseEvent): void {
     if (!activated) {
@@ -132,17 +144,23 @@ export function startTabDrag(
         document.body.appendChild(ghost);
       }
       activateHoveredTab(ev.clientX, ev.clientY, paneId);
+      const newDrop = detectDropTarget(
+        ev.clientX,
+        ev.clientY,
+        paneId,
+        workspaceId,
+      );
+      const sidebar = isSidebarDropTarget(newDrop);
+      if (sidebar !== inSidebarMode) {
+        inSidebarMode = sidebar;
+        if (ghost) ghost.style.opacity = sidebar ? "0" : "0.9";
+      }
       _tabDragState.set({
         surfaceId,
         sourcePaneId: paneId,
         sourceWorkspaceId: workspaceId,
         position: { x: ev.clientX, y: ev.clientY },
-        dropTarget: detectDropTarget(
-          ev.clientX,
-          ev.clientY,
-          paneId,
-          workspaceId,
-        ),
+        dropTarget: newDrop,
       });
     } else {
       if (ghost) {
@@ -150,17 +168,23 @@ export function startTabDrag(
         ghost.style.top = `${ev.clientY - 12}px`;
       }
       activateHoveredTab(ev.clientX, ev.clientY, paneId);
+      const newDrop = detectDropTarget(
+        ev.clientX,
+        ev.clientY,
+        paneId,
+        workspaceId,
+      );
+      const sidebar = isSidebarDropTarget(newDrop);
+      if (sidebar !== inSidebarMode) {
+        inSidebarMode = sidebar;
+        if (ghost) ghost.style.opacity = sidebar ? "0" : "0.9";
+      }
       _tabDragState.update((s) =>
         s
           ? {
               ...s,
               position: { x: ev.clientX, y: ev.clientY },
-              dropTarget: detectDropTarget(
-                ev.clientX,
-                ev.clientY,
-                paneId,
-                workspaceId,
-              ),
+              dropTarget: newDrop,
             }
           : s,
       );
@@ -187,6 +211,7 @@ export function startTabDrag(
       ghost.remove();
       ghost = null;
     }
+    inSidebarMode = false;
   }
 
   activeCleanup = cleanup;
@@ -227,31 +252,80 @@ function detectDropTarget(
       return { kind: "merge", paneId };
     }
 
-    // Sidebar workspace row — move to that workspace (same group only).
-    const wsItem = el.closest("[data-workspace-id]") as HTMLElement | null;
-    if (wsItem) {
-      const wsId = wsItem.getAttribute("data-workspace-id");
-      if (!wsId || wsId === sourceWorkspaceId) return null;
-      const allWs = get(workspaces);
-      const srcWs = allWs.find((w) => w.id === sourceWorkspaceId);
-      const tgtWs = allWs.find((w) => w.id === wsId);
-      if (!srcWs || !tgtWs) return null;
-      const srcGroupId = (srcWs.metadata as Record<string, unknown> | undefined)
-        ?.groupId;
-      const tgtGroupId = (tgtWs.metadata as Record<string, unknown> | undefined)
-        ?.groupId;
-      if (srcGroupId !== tgtGroupId) return null;
-      return { kind: "move-to-workspace", workspaceId: wsId };
+    // Group workspace row (nested inside a container — must check BEFORE
+    // root-row because nested rows sit inside root-row wrappers in the DOM).
+    const wsViewRowEl = el.closest(
+      "[data-ws-view-drag-idx]",
+    ) as HTMLElement | null;
+    if (wsViewRowEl) {
+      const containerEl = wsViewRowEl.closest(
+        "[data-container-nested]",
+      ) as HTMLElement | null;
+      const groupId =
+        containerEl?.getAttribute("data-container-nested") ?? null;
+      if (groupId) {
+        const srcWs = get(workspaces).find((w) => w.id === sourceWorkspaceId);
+        const srcGroupId = (
+          srcWs?.metadata as Record<string, unknown> | undefined
+        )?.groupId as string | undefined;
+        if (srcGroupId !== groupId) return null;
+        if (srcWs && getAllSurfaces(srcWs).length > 1) {
+          const globalIdx = parseInt(
+            wsViewRowEl.getAttribute("data-ws-view-drag-idx") || "0",
+            10,
+          );
+          const rect = wsViewRowEl.getBoundingClientRect();
+          const insertEdge: "before" | "after" =
+            y < rect.top + rect.height / 2 ? "before" : "after";
+          return {
+            kind: "new-workspace-in-group",
+            groupId,
+            insertGlobalIdx: globalIdx,
+            insertEdge,
+          };
+        }
+        return null;
+      }
     }
 
-    // Empty primary-sidebar area — drop to spawn a new workspace.
-    // Guarded: source must have >1 surface so we don't leave it empty.
+    // Root row (workspace or container block).
+    const rootRowEl = el.closest("[data-root-row-idx]") as HTMLElement | null;
+    if (rootRowEl) {
+      const srcWs = get(workspaces).find((w) => w.id === sourceWorkspaceId);
+      const srcGroupId = (
+        srcWs?.metadata as Record<string, unknown> | undefined
+      )?.groupId as string | undefined;
+      if (srcGroupId) return null;
+      const rowIdx = parseInt(
+        rootRowEl.getAttribute("data-root-row-idx") || "0",
+        10,
+      );
+      const rect = rootRowEl.getBoundingClientRect();
+      const insertEdge: "before" | "after" =
+        y < rect.top + rect.height / 2 ? "before" : "after";
+      if (srcWs && getAllSurfaces(srcWs).length > 1) {
+        return { kind: "new-workspace", insertIdx: rowIdx, insertEdge };
+      }
+      return null;
+    }
+
+    // Empty primary-sidebar area — drop to spawn a new workspace appended
+    // at the end of the root row order.
     const sidebar = el.closest("#primary-sidebar");
     if (sidebar) {
-      const allWs = get(workspaces);
-      const srcWs = allWs.find((w) => w.id === sourceWorkspaceId);
+      const srcWs = get(workspaces).find((w) => w.id === sourceWorkspaceId);
+      const srcGroupId = (
+        srcWs?.metadata as Record<string, unknown> | undefined
+      )?.groupId as string | undefined;
+      if (srcGroupId) return null;
       if (srcWs && getAllSurfaces(srcWs).length > 1) {
-        return { kind: "new-workspace" };
+        const order = get(rootRowOrder);
+        const lastIdx = Math.max(0, order.length - 1);
+        return {
+          kind: "new-workspace",
+          insertIdx: lastIdx,
+          insertEdge: "after",
+        };
       }
       return null;
     }
@@ -342,12 +416,36 @@ export function commitTabDrop(): void {
       );
       break;
     }
-    case "move-to-workspace": {
-      moveSurfaceToWorkspace(surfaceId, sourcePaneId, dropTarget.workspaceId);
+    case "new-workspace": {
+      const insertAt =
+        dropTarget.insertEdge === "before"
+          ? dropTarget.insertIdx
+          : dropTarget.insertIdx + 1;
+      createWorkspaceFromSurface(surfaceId, sourcePaneId, sourceWorkspaceId, {
+        kind: "root",
+        insertIdx: insertAt,
+      });
       break;
     }
-    case "new-workspace": {
-      createWorkspaceFromSurface(surfaceId, sourcePaneId, sourceWorkspaceId);
+    case "new-workspace-in-group": {
+      const allWs = get(workspaces);
+      const tgtWs = allWs[dropTarget.insertGlobalIdx];
+      if (!tgtWs) break;
+      const group = getWorkspaceGroups().find(
+        (g) => g.id === dropTarget.groupId,
+      );
+      if (!group) break;
+      const posInGroup = group.workspaceIds.indexOf(tgtWs.id);
+      const insertPos =
+        dropTarget.insertEdge === "before"
+          ? Math.max(0, posInGroup)
+          : posInGroup === -1
+            ? group.workspaceIds.length
+            : posInGroup + 1;
+      createWorkspaceFromSurface(surfaceId, sourcePaneId, sourceWorkspaceId, {
+        kind: "group",
+        positionInGroup: insertPos,
+      });
       break;
     }
     default:

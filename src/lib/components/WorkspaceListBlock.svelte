@@ -40,8 +40,9 @@
   import { getExtensionApiById } from "../services/extension-loader";
   import { contrastColor } from "../utils/contrast";
   import type { MenuItem } from "../context-menu-types";
-  import type { Workspace } from "../types";
+  import { getAllSurfaces, type Workspace } from "../types";
   import { commandStore } from "../services/command-registry";
+  import { tabDragState } from "../services/tab-drag";
   import { dashboardWorkspaceRegistry } from "../services/dashboard-workspace-service";
   import { configStore } from "../config";
   import { resolveGroupColor } from "../theme-data";
@@ -238,6 +239,38 @@
     sourceEntry?.workspace?.name ??
     "";
 
+  // --- Tab-drag overlay state ---
+  // When a tab is being dragged over the root row list, synthesize the same
+  // effective drag variables that the native workspace reorder uses, so the
+  // sibling overlay and DropGhost indicators render identically.
+  $: tabDrag = $tabDragState;
+  $: tabDragToRoot =
+    tabDrag?.dropTarget?.kind === "new-workspace" ? tabDrag.dropTarget : null;
+  $: effectiveActive = dragActive || tabDragToRoot !== null;
+  // null source idx → every row's idx !== null → all rows show sibling overlay
+  $: effectiveDragSourceIdx = dragActive
+    ? dragSourceIdx
+    : (null as number | null);
+  $: effectiveInsertIndicator = dragActive
+    ? insertIndicator
+    : tabDragToRoot !== null
+      ? { idx: tabDragToRoot.insertIdx, edge: tabDragToRoot.insertEdge }
+      : (null as { idx: number; edge: "before" | "after" } | null);
+  $: effectiveDragSourceHeight = dragActive ? dragSourceHeight : 32;
+  $: tabDragSurfaceTitle = (() => {
+    if (!tabDrag) return "";
+    const srcWs = $workspaces.find((w) => w.id === tabDrag!.sourceWorkspaceId);
+    if (!srcWs) return "New Workspace";
+    return (
+      getAllSurfaces(srcWs).find((s) => s.id === tabDrag!.surfaceId)?.title ||
+      "New Workspace"
+    );
+  })();
+  $: effectiveSourceRowLabel = dragActive
+    ? sourceRowLabel
+    : tabDragSurfaceTitle;
+  $: effectiveSourceRowColor = dragActive ? sourceRowColor : $theme.accent;
+
   // --- Workspace row context menu (previously in WorkspaceListBlock's
   // showWorkspaceContextMenu; unchanged modulo re-scoping to rendered
   // root rows). ---
@@ -317,7 +350,7 @@
      strong overlay with the row's own color + name centered. -->
 {#each renderedRows as entry (entry.key)}
   {@const isSource = dragActive && dragSourceIdx === entry.idx}
-  {@const isSibling = dragActive && dragSourceIdx !== entry.idx}
+  {@const isSibling = effectiveActive && effectiveDragSourceIdx !== entry.idx}
   {@const ws = entry.workspace}
   {@const _dashId = ws
     ? (ws.metadata as Record<string, unknown> | undefined)?.dashboardWorkspaceId
@@ -338,12 +371,12 @@
         ? entry.pseudoWorkspace.label
         : (entry.rendererLabel ?? "")}
   <div class="root-row">
-    {#if insertIndicator?.idx === entry.idx && insertIndicator.edge === "before"}
+    {#if effectiveInsertIndicator?.idx === entry.idx && effectiveInsertIndicator.edge === "before"}
       <DropGhost
         theme={$theme}
-        height={dragSourceHeight}
-        accent={sourceRowColor}
-        label={sourceRowLabel}
+        height={effectiveDragSourceHeight}
+        accent={effectiveSourceRowColor}
+        label={effectiveSourceRowLabel}
       />
     {/if}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -416,12 +449,12 @@
         </div>
       {/if}
     </div>
-    {#if insertIndicator?.idx === entry.idx && insertIndicator.edge === "after"}
+    {#if effectiveInsertIndicator?.idx === entry.idx && effectiveInsertIndicator.edge === "after"}
       <DropGhost
         theme={$theme}
-        height={dragSourceHeight}
-        accent={sourceRowColor}
-        label={sourceRowLabel}
+        height={effectiveDragSourceHeight}
+        accent={effectiveSourceRowColor}
+        label={effectiveSourceRowLabel}
       />
     {/if}
   </div>

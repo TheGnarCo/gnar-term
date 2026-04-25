@@ -43,15 +43,3 @@ Core event emitted by the worktree service when a worktree branch is merged back
 ```
 
 **Subscribers:** `diff-viewer` (auto-open merge diff summary).
-
-## extension:project:dashboard-opened
-
-Emitted by `project-scope` when a project dashboard overlay is opened.
-
-```typescript
-{
-  projectId: string; // ID of the project whose dashboard was opened
-}
-```
-
-**Subscribers:** None currently — available for extensions that want to react to dashboard visibility (e.g., refreshing project-specific data).

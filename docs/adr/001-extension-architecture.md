@@ -190,9 +190,9 @@ Events:
 
 - Workspace: `created`, `activated`, `closed`, `renamed`
 - Pane: `split`, `closed`, `focused`
-- Surface: `created`, `activated`, `closed`, `titleChanged`
+- Surface: `created`, `activated`, `closed`, `titleChanged`, `ptyReady`
 - UI: `sidebar:toggled`, `theme:changed`
-- Project: `project:dashboard-opened`
+- Agent: `agent:statusChanged`
 
 ### Settings overlay
 
@@ -204,16 +204,17 @@ The Extensions page lists all extensions with enable/disable toggles and install
 
 ### Included extensions (v1 — delivered)
 
-| Extension            | Type                      | Description                                                              |
-| -------------------- | ------------------------- | ------------------------------------------------------------------------ |
-| Preview              | Surface type              | File preview (47 file types) — extracted from core                       |
-| File Browser         | Secondary sidebar tab     | Directory tree with context menu actions                                 |
-| Worktree Workspaces  | Commands + state          | Git worktree-backed workspace lifecycle (create, archive)                |
-| Agentic Orchestrator | Passive AI agent detector | Passive AI agent detector with status tracking (requires "observe" perm) |
-| GitHub               | Secondary sidebar tab     | Issues, PRs, and commits via `gh` CLI                                    |
-| Project Scope        | Primary sidebar section   | Group workspaces into color-coded projects with dashboards               |
-| Diff Viewer          | Surface type              | Side-by-side and unified diff display for git changes                    |
-| Git Status           | Status registry           | Git branch, PR review, and dirty state in the sidebar                    |
+| Extension            | Type                   | Description                                                                                     |
+| -------------------- | ---------------------- | ----------------------------------------------------------------------------------------------- |
+| Preview              | Surface type           | File preview (47 file types) — extracted from core                                              |
+| File Browser         | Secondary sidebar tab  | Directory tree with context menu actions                                                        |
+| Worktree Workspaces  | Commands + state       | Git worktree-backed workspace lifecycle (create, archive)                                       |
+| Agentic Orchestrator | Dashboard contribution | Per-group Agentic Dashboard + Global Agentic pseudo-workspace; passive agent detection via core |
+| GitHub               | Secondary sidebar tab  | Issues, PRs, and commits via `gh` CLI                                                           |
+| Diff Viewer          | Surface type           | Side-by-side and unified diff display for git changes                                           |
+| Git Status           | Status registry        | Git branch, PR review, and dirty state in the sidebar                                           |
+
+> **Note:** Project Scope was removed in ADR-004. Workspace Groups (its successor) live in core as a first-class primitive.
 
 ## Alternatives considered
 

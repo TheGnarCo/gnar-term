@@ -62,7 +62,7 @@ The `source` field on every item enables automatic cleanup. When an extension is
 | **Sidebar Sections**   | `sidebar-section-registry.ts`   | `sidebarSectionStore`  | Primary sidebar sections (id, label, component, order)    |
 | **Surface Types**      | `surface-type-registry.ts`      | `surfaceTypeStore`     | Renderable pane content types (id, label, component)      |
 | **Overlays**           | `overlay-registry.ts`           | `overlayStore`         | Full-screen/modal overlays (id, component, props)         |
-| **Dashboard Tabs**     | `dashboard-tab-registry.ts`     | `dashboardTabStore`    | Project dashboard tabs (id, label, component)             |
+| **Dashboard Tabs**     | `dashboard-tab-registry.ts`     | `dashboardTabStore`    | Group dashboard tabs (id, label, component)               |
 | **Context Menu Items** | `context-menu-item-registry.ts` | `contextMenuItemStore` | Right-click menu items (id, label, when pattern, handler) |
 
 ### Behavioral Registries
@@ -74,12 +74,18 @@ The `source` field on every item enables automatic cleanup. When an extension is
 
 ### Special-Purpose Registries
 
-| Registry               | File                             | Store Export                   | What It Holds                                                          |
-| ---------------------- | -------------------------------- | ------------------------------ | ---------------------------------------------------------------------- |
-| **Claimed Workspaces** | `claimed-workspace-registry.ts`  | `claimedWorkspaceIds`          | Workspace IDs "owned" by extensions (hidden from main list)            |
-| **Event Bus**          | `event-bus.ts`                   | N/A (pub-sub, not store-based) | Typed lifecycle event subscriptions                                    |
-| **Workspace Subtitle** | `workspace-subtitle-registry.ts` | N/A                            | Components rendered below workspace names in the sidebar               |
-| **Status**             | `status-registry.ts`             | N/A                            | Workspace status items shown in the status line and sidebar indicators |
+| Registry                    | File                                 | Store Export                   | What It Holds                                                                              |
+| --------------------------- | ------------------------------------ | ------------------------------ | ------------------------------------------------------------------------------------------ |
+| **Claimed Workspaces**      | `claimed-workspace-registry.ts`      | `claimedWorkspaceIds`          | Workspace IDs "owned" by extensions (hidden from main list)                                |
+| **Event Bus**               | `event-bus.ts`                       | N/A (pub-sub, not store-based) | Typed lifecycle event subscriptions                                                        |
+| **Workspace Subtitle**      | `workspace-subtitle-registry.ts`     | N/A                            | Components rendered below workspace names in the sidebar                                   |
+| **Status**                  | `status-registry.ts`                 | N/A                            | Workspace status items shown in the status line and sidebar indicators                     |
+| **Dashboard Contributions** | `dashboard-contribution-registry.ts` | `dashboardContributionStore`   | Kinds of dashboard that can attach to a Workspace Group (e.g., group, agentic)             |
+| **Pseudo-Workspaces**       | `pseudo-workspace-registry.ts`       | `pseudoWorkspaceStore`         | Pinned synthetic workspaces (non-persisted, non-deletable; e.g., Global Agentic Dashboard) |
+| **Root Row Renderers**      | `root-row-renderer-registry.ts`      | N/A                            | Svelte components that render non-workspace rows (groups, dashboards) in the sidebar list  |
+| **TitleBar Buttons**        | `titlebar-button-registry.ts`        | `titleBarButtonStore`          | Extension-supplied icon buttons rendered in the TitleBar                                   |
+| **Markdown Components**     | `markdown-component-registry.ts`     | N/A                            | Live Svelte widgets embeddable inside markdown previews via `gnar:<name>` fences           |
+| **Child Row Contributors**  | `child-row-contributor-registry.ts`  | N/A                            | Extensions that contribute child rows to another extension's parent rows                   |
 
 ## Data Flow Example
 
@@ -120,22 +126,24 @@ If you need a new extension contribution type:
 
 The event bus (`src/lib/services/event-bus.ts`) is not a registry but serves a complementary role. While registries handle **UI contributions**, the event bus handles **lifecycle notifications**:
 
-| Event                  | Emitted When                   |
-| ---------------------- | ------------------------------ |
-| `workspace:created`    | New workspace added            |
-| `workspace:activated`  | User switches workspace        |
-| `workspace:closed`     | Workspace removed              |
-| `workspace:renamed`    | Workspace name changed         |
-| `pane:split`           | Pane split into two            |
-| `pane:closed`          | Pane removed from layout       |
-| `pane:focused`         | Active pane changes            |
-| `surface:created`      | New surface added to pane      |
-| `surface:activated`    | Active surface changes in pane |
-| `surface:closed`       | Surface removed from pane      |
-| `surface:titleChanged` | Surface title updated          |
-| `sidebar:toggled`      | Sidebar visibility changed     |
-| `theme:changed`        | Theme switched                 |
-| `worktree:merged`      | Worktree branch merged to base |
+| Event                  | Emitted When                                                       |
+| ---------------------- | ------------------------------------------------------------------ |
+| `workspace:created`    | New workspace added                                                |
+| `workspace:activated`  | User switches workspace                                            |
+| `workspace:closed`     | Workspace removed                                                  |
+| `workspace:renamed`    | Workspace name changed                                             |
+| `pane:split`           | Pane split into two                                                |
+| `pane:closed`          | Pane removed from layout                                           |
+| `pane:focused`         | Active pane changes                                                |
+| `surface:created`      | New surface added to pane                                          |
+| `surface:activated`    | Active surface changes in pane                                     |
+| `surface:closed`       | Surface removed from pane                                          |
+| `surface:titleChanged` | Surface title updated                                              |
+| `sidebar:toggled`      | Sidebar visibility changed                                         |
+| `theme:changed`        | Theme switched                                                     |
+| `worktree:merged`      | Worktree branch merged to base                                     |
+| `surface:ptyReady`     | PTY assigned to a terminal surface (fires after `surface:created`) |
+| `agent:statusChanged`  | Detected AI agent transitions state (running/waiting/idle/closed)  |
 
 Extensions subscribe via `api.on(type, handler)` and must declare events in their manifest's `contributes.events` array (deny-by-default).
 

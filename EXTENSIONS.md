@@ -352,34 +352,25 @@ api.registerWorkspaceAction("create-worktree", {
   label: "New Worktree",
   icon: "git-branch",
   handler: async (ctx) => {
-    // ctx.projectId, ctx.projectPath, ctx.projectName, ctx.isGit available
     const name = await api.showInputPrompt("Branch name?");
     if (name) {
       /* create worktree */
     }
   },
-  when: (ctx) => !!ctx.projectPath, // Only show for project workspaces
 });
 
 // Sidebar-zone action (appears in top bar)
-api.registerWorkspaceAction("create-project", {
-  label: "New Project",
+api.registerWorkspaceAction("create-group", {
+  label: "New Group",
   icon: "folder-plus",
   zone: "sidebar",
   handler: async () => {
-    /* create project flow */
+    /* create workspace group flow */
   },
 });
 ```
 
-The `WorkspaceActionContext` passed to handlers and `when` filters contains:
-
-| Field         | Type       | Description                            |
-| ------------- | ---------- | -------------------------------------- |
-| `projectId`   | `string?`  | ID of the project context (if any)     |
-| `projectPath` | `string?`  | Root directory of the project          |
-| `projectName` | `string?`  | Display name of the project            |
-| `isGit`       | `boolean?` | Whether the project path is a git repo |
+`WorkspaceActionContext` is an open `{ [key: string]: unknown }` map. Core passes `{}` for top-level actions. Extensions may inject their own fields (e.g., `groupId`, `groupPath`) when invoking actions from their own UI — use optional chaining to access extension-provided fields safely.
 
 Core passes an empty context `{}` for top-level actions (e.g., sidebar-zone actions that aren't scoped to a specific workspace). Extensions may populate context fields for actions they register.
 
@@ -714,7 +705,7 @@ await api.sendNotification("Build complete"); // Title only
 await api.sendNotification("Tests passed", "All 847 tests green"); // Title + body
 
 // Surfaces
-api.openSurface("dashboard:dashboard", "My Dashboard", { projectId: "abc" }); // Open an extension surface
+api.openSurface("dashboard:dashboard", "My Dashboard", { groupId: "g-1" }); // Open an extension surface
 
 // User input
 const cwd = await api.getActiveCwd(); // CWD of focused terminal
@@ -1088,10 +1079,6 @@ Passive AI agent detector with three-layer status tracking (OSC notifications �
 
 Registers a surface type for viewing unified diffs with syntax highlighting. Provides commands for showing uncommitted changes, staged changes, file diffs, and branch comparisons. Adds context menu items for file-level diffs. Registers a "Changes" secondary sidebar tab that lists modified files in the active workspace. Listens for the core `worktree:merged` event to auto-refresh the changes view after merge operations. Configurable via settings: diff mode (unified/split), context lines, and whitespace handling.
 
-### Project Scope (`src/extensions/project-scope/`)
-
-Groups workspaces into named projects. Each project appears as a primary sidebar section showing its nested workspaces with a color-coded indicator. Workspaces created while a project is active are auto-associated. Provides "Create Project..." and "Open Project Dashboard..." commands.
-
 ### Jrvs Themes (`src/extensions/jrvs-themes/`)
 
 A pack of additional themes (Kirby-inspired). Registers theme entries that show up in the command palette and theme switcher. Pure registration — no UI surfaces.
@@ -1217,13 +1204,13 @@ package.json
 
 ### Reference: included extensions
 
-The six included extensions in `src/extensions/` are real-world examples of every extension pattern. Use them as reference when building your own:
+The included extensions in `src/extensions/` are real-world examples of every extension pattern. Use them as reference when building your own:
 
 | Extension               | Patterns demonstrated                                                                        |
 | ----------------------- | -------------------------------------------------------------------------------------------- |
 | `preview/`              | Surface type, context menu items, file handling                                              |
 | `file-browser/`         | Sidebar tab, sidebar action, context menus, workspace actions                                |
-| `agentic-orchestrator/` | Observe permission, custom events, status tracking                                           |
+| `agentic-orchestrator/` | Dashboard contributions, pseudo-workspaces, observe permission, custom events                |
 | `diff-viewer/`          | Surface type, commands, context menus, core event subscription (`worktree:merged`), settings |
-| `project-scope/`        | Primary sidebar section, overlays, workspace claiming, dashboard tabs, color picker          |
+| `worktree-workspaces/`  | Commands, workspace lifecycle, workspace claiming, git integration                           |
 | `jrvs-themes/`          | Theme pack registration                                                                      |

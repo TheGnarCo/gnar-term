@@ -14,12 +14,12 @@ For term definitions, see the [app-wide glossary](glossary.md).
 
 The primary sidebar is a **vertically scrolling list of blocks**. New features add sections beneath the existing ones.
 
-- Each block (the **Workspaces** block, the **Projects** block, any extension section block) has its own collapsible region within the single scrolling column.
+- Each block (the **Workspaces** block, the **Workspace Groups** block, any extension section block) has its own collapsible region within the single scrolling column.
 - Blocks can be reordered by hovering to reveal a drag grip on the block's left border and dragging it. There is no explicit "reorder mode" — dragging the grip is the only entry point, and releasing or pressing Escape exits it.
-- Individual items inside a block (e.g., workspace rows, project rows) use the same hover-grip pattern and reorder only within their own container. Outer-block drag and inner-item drag never share state.
+- Individual items inside a block (e.g., workspace rows, group rows) use the same hover-grip pattern and reorder only within their own container. Outer-block drag and inner-item drag never share state.
 - Drag-drop is implemented with mouse events, not HTML5 DnD (which is broken in Tauri WKWebView). Extensions use `api.createDragReorder({...})` and `api.getComponents().DragGrip` to add reorderable lists without importing core internals.
 - When windowed, the top row of the sidebar holds the traffic-light padding and acts as the window drag region. When fullscreen, this row collapses and content shifts to the top edge.
-- When adding a new section (e.g., a project section, an extension-supplied panel), append it below the current sections. Do not introduce tabs or horizontal navigation.
+- When adding a new section (e.g., a workspace group section, an extension-supplied panel), append it below the current sections. Do not introduce tabs or horizontal navigation.
 
 ## Secondary Sidebar
 
@@ -46,8 +46,8 @@ Below the tab bar, the secondary sidebar has a **control row** — a 28px-tall a
 |   Workspace 1     | [shell 1] [shell 2] [+]      | [Tab A] [Tab B]   |
 |   Workspace 2     |                               | Control Row       |
 |                   |                               | [btn] [btn] [btn] |
-| Projects          | Terminal / Preview Content     |                   |
-|   Project A       |                               | Tab Content       |
+| Groups            | Terminal / Preview Content     |                   |
+|   Group A         |                               | Tab Content       |
 | (extension panel) |                               |                   |
 +------|------------+-------------------------------+------|------------+
      resize                                              resize
@@ -65,7 +65,7 @@ The asymmetry is intentional:
 
 Sidebar toggle buttons always live in the **TitleBar** — the primary toggle on the left, the secondary toggle on the right. They are always visible regardless of sidebar state. The button color is bright when its sidebar is open, dim when closed.
 
-The **+ New Workspace** button lives at the top of the Workspaces block; **+ New Project** lives at the top of the Projects block. Both are always visible when their block is present.
+The **+ New Workspace** button lives at the top of the Workspaces block; **+ New Group** lives at the top of the Workspace Groups block. Both are always visible when their block is present.
 
 ## Extending the Sidebars
 

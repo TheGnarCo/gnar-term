@@ -91,14 +91,14 @@ api.onActivate(() => {
     label: "Quick Terminal",
     icon: "terminal",
     handler: async (ctx) => {
-      await api.createWorkspace("Quick", ctx.projectPath);
+      await api.createWorkspace("Quick", ctx.groupPath as string);
     },
-    when: (ctx) => !!ctx.projectPath, // Only show in project sections
+    when: (ctx) => !!ctx.groupPath, // Only show in group sections
   });
 
   // Appears as a button in the sidebar top bar
-  api.registerWorkspaceAction("new-project", {
-    label: "New Project",
+  api.registerWorkspaceAction("new-group", {
+    label: "New Group",
     icon: "folder-plus",
     zone: "sidebar",
     handler: async () => {

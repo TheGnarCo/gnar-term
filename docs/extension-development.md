@@ -372,15 +372,15 @@ Use semver in your `extension.json`. GnarTerm reads the `version` field for disp
 
 ## Reference Examples
 
-The six included extensions in `src/extensions/` demonstrate every extension pattern. Browse them as reference:
+The included extensions in `src/extensions/` demonstrate every extension pattern. Browse them as reference:
 
 | Extension               | Key patterns                                                                                 |
 | ----------------------- | -------------------------------------------------------------------------------------------- |
 | `preview/`              | Surface type registration, context menu items, file type handling                            |
 | `file-browser/`         | Sidebar tab + actions, directory tree, context menus, workspace actions                      |
-| `agentic-orchestrator/` | Observe permission, custom events, status tracking                                           |
+| `agentic-orchestrator/` | Dashboard contributions, pseudo-workspaces, observe permission, custom events                |
 | `diff-viewer/`          | Surface type, commands, context menus, core event subscription (`worktree:merged`), settings |
-| `project-scope/`        | Overlays, workspace claiming, dashboard tabs, color picker, event-driven auto-association    |
+| `worktree-workspaces/`  | Commands, workspace lifecycle, workspace claiming, git integration                           |
 | `jrvs-themes/`          | Theme pack registration                                                                      |
 
 ### Included vs. External Extensions

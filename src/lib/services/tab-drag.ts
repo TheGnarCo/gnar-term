@@ -56,13 +56,8 @@ export const tabDragState: Readable<TabDragState | null> = {
 };
 
 let ghost: HTMLElement | null = null;
-let inSidebarMode = false;
 let lastHoveredTabId: string | null = null;
 let activeCleanup: (() => void) | null = null;
-
-function isSidebarDropTarget(dt: TabDropTarget): boolean {
-  return dt?.kind === "new-workspace" || dt?.kind === "new-workspace-in-group";
-}
 
 function activateHoveredTab(x: number, y: number, sourcePaneId: string): void {
   const el = document.elementFromPoint(x, y);
@@ -113,7 +108,6 @@ export function startTabDrag(
   const startY = e.clientY;
   const sourceEl = e.currentTarget as HTMLElement | null;
   let activated = false;
-  inSidebarMode = false;
 
   function onMove(ev: MouseEvent): void {
     if (!activated) {
@@ -150,11 +144,6 @@ export function startTabDrag(
         paneId,
         workspaceId,
       );
-      const sidebar = isSidebarDropTarget(newDrop);
-      if (sidebar !== inSidebarMode) {
-        inSidebarMode = sidebar;
-        if (ghost) ghost.style.opacity = sidebar ? "0" : "0.9";
-      }
       _tabDragState.set({
         surfaceId,
         sourcePaneId: paneId,
@@ -174,11 +163,6 @@ export function startTabDrag(
         paneId,
         workspaceId,
       );
-      const sidebar = isSidebarDropTarget(newDrop);
-      if (sidebar !== inSidebarMode) {
-        inSidebarMode = sidebar;
-        if (ghost) ghost.style.opacity = sidebar ? "0" : "0.9";
-      }
       _tabDragState.update((s) =>
         s
           ? {
@@ -211,7 +195,6 @@ export function startTabDrag(
       ghost.remove();
       ghost = null;
     }
-    inSidebarMode = false;
   }
 
   activeCleanup = cleanup;
@@ -268,23 +251,33 @@ function detectDropTarget(
         const srcGroupId = (
           srcWs?.metadata as Record<string, unknown> | undefined
         )?.groupId as string | undefined;
-        if (srcGroupId !== groupId) return null;
-        if (srcWs && getAllSurfaces(srcWs).length > 1) {
-          const globalIdx = parseInt(
-            wsViewRowEl.getAttribute("data-ws-view-drag-idx") || "0",
-            10,
-          );
-          const rect = wsViewRowEl.getBoundingClientRect();
-          const insertEdge: "before" | "after" =
-            y < rect.top + rect.height / 2 ? "before" : "after";
-          return {
-            kind: "new-workspace-in-group",
-            groupId,
-            insertGlobalIdx: globalIdx,
-            insertEdge,
-          };
+        if (srcGroupId !== groupId) {
+          // Grouped tab over a different group → hard no-op (can't cross groups).
+          // Root tab over any group → fall through the whole wsViewRowEl block
+          // so root-row detection picks up the ContainerRow's
+          // data-root-row-container ancestor and renders the group as a solid
+          // sibling overlay with an adjacent insert indicator.
+          if (srcGroupId) return null;
+          // else: root tab → fall through
+        } else {
+          // Same group — offer a positional insert.
+          if (srcWs && getAllSurfaces(srcWs).length > 1) {
+            const globalIdx = parseInt(
+              wsViewRowEl.getAttribute("data-ws-view-drag-idx") || "0",
+              10,
+            );
+            const rect = wsViewRowEl.getBoundingClientRect();
+            const insertEdge: "before" | "after" =
+              y < rect.top + rect.height / 2 ? "before" : "after";
+            return {
+              kind: "new-workspace-in-group",
+              groupId,
+              insertGlobalIdx: globalIdx,
+              insertEdge,
+            };
+          }
+          return null;
         }
-        return null;
       }
     }
 

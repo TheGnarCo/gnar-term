@@ -43,6 +43,12 @@
   import { getAllSurfaces, type Workspace } from "../types";
   import { commandStore } from "../services/command-registry";
   import { tabDragState } from "../services/tab-drag";
+  import {
+    detectWorkspacePaneDrop,
+    setWorkspaceDragState,
+    type WorkspacePaneDropTarget,
+  } from "../services/workspace-drag";
+  import { expandWorkspaceIntoPanes } from "../services/pane-service";
   import { dashboardWorkspaceRegistry } from "../services/dashboard-workspace-service";
   import { configStore } from "../config";
   import { resolveGroupColor } from "../theme-data";
@@ -167,6 +173,9 @@
   let dragActive = false;
   let dragSourceHeight = 0;
 
+  // Workspace-to-pane drop state: updated on every mousemove during a root drag.
+  let currentPaneTarget: WorkspacePaneDropTarget = null;
+
   const rootDrag = createDragReorder({
     dataAttr: "root-row-idx",
     containerSelector: "#primary-sidebar",
@@ -176,12 +185,89 @@
     }),
     canStart: () => !$anyReorderActive,
     onDrop: (from, to) => moveRootRow(from, to),
+    onMove: (x, y, ghostEl) => {
+      const fromIdx = rootDrag.getState().sourceIdx;
+      if (fromIdx === null) return;
+      const srcRow = $rootRowOrder[fromIdx];
+      if (srcRow?.kind !== "workspace") {
+        currentPaneTarget = null;
+        setWorkspaceDragState(null);
+        return;
+      }
+      currentPaneTarget = detectWorkspacePaneDrop(x, y, srcRow.id);
+      setWorkspaceDragState(
+        currentPaneTarget !== null
+          ? { workspaceId: srcRow.id, dropTarget: currentPaneTarget }
+          : null,
+      );
+      // Mutate the ghost to show deny state when incompatible group
+      if (ghostEl) {
+        const existing = ghostEl.querySelector(
+          ".ws-drag-deny",
+        ) as HTMLElement | null;
+        if (currentPaneTarget?.kind === "deny") {
+          if (!existing) {
+            const el = document.createElement("div");
+            el.className = "ws-drag-deny";
+            Object.assign(el.style, {
+              position: "absolute",
+              inset: "0",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "rgba(200,30,30,0.75)",
+              borderRadius: "4px",
+              fontSize: "16px",
+              color: "white",
+              fontWeight: "bold",
+              pointerEvents: "none",
+            });
+            el.textContent = "✕";
+            ghostEl.appendChild(el);
+          }
+          document.body.style.cursor = "not-allowed";
+        } else {
+          existing?.remove();
+          document.body.style.cursor = "grabbing";
+        }
+      }
+    },
+    onDragCommit: (fromIdx) => {
+      const paneTarget = currentPaneTarget;
+      currentPaneTarget = null;
+      setWorkspaceDragState(null);
+      if (paneTarget?.kind === "pane-split") {
+        const srcRow = $rootRowOrder[fromIdx];
+        if (srcRow?.kind === "workspace") {
+          const direction =
+            paneTarget.zone === "left" || paneTarget.zone === "right"
+              ? "horizontal"
+              : "vertical";
+          const before =
+            paneTarget.zone === "left" || paneTarget.zone === "top";
+          expandWorkspaceIntoPanes(
+            srcRow.id,
+            paneTarget.paneId,
+            direction,
+            before,
+          );
+        }
+      }
+      // Suppress sidebar reorder for any pane target (split OR deny) so
+      // the workspace doesn't get accidentally reordered on a failed drop.
+      return paneTarget !== null;
+    },
     onStateChange: () => {
       const s = rootDrag.getState();
       dragSourceIdx = s.sourceIdx;
       insertIndicator = s.indicator;
       dragActive = s.active;
       dragSourceHeight = s.sourceHeight;
+      if (!s.active) {
+        // Clean up workspace drag state when drag ends
+        currentPaneTarget = null;
+        setWorkspaceDragState(null);
+      }
       if (s.active && s.sourceIdx !== null) {
         const src = $rootRowOrder[s.sourceIdx];
         reorderContext.set(

@@ -35,6 +35,7 @@ vi.mock("../lib/services/service-helpers", () => ({
 }));
 
 const appendRootRowSpy = vi.fn();
+const removeRootRowSpy = vi.fn();
 vi.mock("../lib/stores/root-row-order", async () => {
   const actual = await vi.importActual<
     typeof import("../lib/stores/root-row-order")
@@ -45,10 +46,15 @@ vi.mock("../lib/stores/root-row-order", async () => {
       appendRootRowSpy(...args);
       return actual.appendRootRow(...args);
     },
+    removeRootRow: (...args: Parameters<typeof actual.removeRootRow>) => {
+      removeRootRowSpy(...args);
+      return actual.removeRootRow(...args);
+    },
   };
 });
 
 const addWorkspaceToGroupSpy = vi.fn().mockReturnValue(true);
+const removeWorkspaceFromAllGroupsSpy = vi.fn();
 vi.mock("../lib/services/workspace-group-service", async () => {
   const actual = await vi.importActual<
     typeof import("../lib/services/workspace-group-service")
@@ -58,8 +64,20 @@ vi.mock("../lib/services/workspace-group-service", async () => {
     addWorkspaceToGroup: (
       ...args: Parameters<typeof actual.addWorkspaceToGroup>
     ) => addWorkspaceToGroupSpy(...args),
+    removeWorkspaceFromAllGroups: (
+      ...args: Parameters<typeof actual.removeWorkspaceFromAllGroups>
+    ) => removeWorkspaceFromAllGroupsSpy(...args),
   };
 });
+
+const gitStatusWorkspaceClosedSpy = vi.fn();
+vi.mock("../lib/services/git-status-service", () => ({
+  handleWorkspaceClosed: (...args: unknown[]) =>
+    gitStatusWorkspaceClosedSpy(...args),
+  GIT_STATUS_SOURCE: "git",
+  stopPolling: vi.fn(),
+  clearAllStatusForSourceAndWorkspace: vi.fn(),
+}));
 
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
 import {
@@ -71,7 +89,10 @@ import {
   type TerminalSurface,
 } from "../lib/types";
 import { createWorkspaceFromSurface } from "../lib/services/workspace-service";
-import { moveSurfaceToWorkspace } from "../lib/services/pane-service";
+import {
+  moveSurfaceToWorkspace,
+  expandWorkspaceIntoPanes,
+} from "../lib/services/pane-service";
 import { saveState } from "../lib/config";
 
 function mockSurface(
@@ -121,7 +142,10 @@ beforeEach(() => {
   activeWorkspaceIdx.set(-1);
   vi.clearAllMocks();
   appendRootRowSpy.mockClear();
+  removeRootRowSpy.mockClear();
   addWorkspaceToGroupSpy.mockClear();
+  removeWorkspaceFromAllGroupsSpy.mockClear();
+  gitStatusWorkspaceClosedSpy.mockClear();
   vi.useFakeTimers();
 });
 
@@ -328,5 +352,196 @@ describe("moveSurfaceToWorkspace", () => {
     moveSurfaceToWorkspace(sA.id, sourcePane.id, targetWs.id);
     vi.advanceTimersByTime(2000);
     expect(saveState).toHaveBeenCalled();
+  });
+});
+
+describe("expandWorkspaceIntoPanes", () => {
+  it("each surface of source workspace becomes its own pane in target workspace", () => {
+    const sA = mockSurface({ title: "A" });
+    const sB = mockSurface({ title: "B" });
+    const sC = mockSurface({ title: "C" });
+    const srcPane = makePane([sA, sB]);
+    const tgtPane = makePane([sC]);
+    const srcWs = makeWorkspace({ type: "pane", pane: srcPane });
+    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    workspaces.set([srcWs, tgtWs]);
+    activeWorkspaceIdx.set(1);
+
+    expandWorkspaceIntoPanes(srcWs.id, tgtPane.id, "horizontal", false);
+
+    const updated = get(workspaces);
+    // Source workspace removed
+    expect(updated.find((w) => w.id === srcWs.id)).toBeUndefined();
+    // Target workspace now has 3 panes: original + one per source surface
+    const tgtPanes = getAllPanes(tgtWs.splitRoot);
+    expect(tgtPanes.length).toBe(3);
+    // Original target pane is still present
+    expect(tgtPanes.some((p) => p.id === tgtPane.id)).toBe(true);
+    // Each source surface lives in its own pane
+    const allSurfaces = tgtPanes.flatMap((p) => p.surfaces);
+    expect(allSurfaces.map((s) => s.id)).toContain(sA.id);
+    expect(allSurfaces.map((s) => s.id)).toContain(sB.id);
+    expect(allSurfaces.every((s) => s !== undefined)).toBe(true);
+    // Each pane has exactly one surface
+    expect(tgtPanes.every((p) => p.surfaces.length === 1)).toBe(true);
+  });
+
+  it("source workspace is removed from the workspaces store", () => {
+    const sA = mockSurface({ title: "A" });
+    const sB = mockSurface({ title: "B" });
+    const srcPane = makePane([sA]);
+    const tgtPane = makePane([sB]);
+    const srcWs = makeWorkspace({ type: "pane", pane: srcPane });
+    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    workspaces.set([srcWs, tgtWs]);
+    activeWorkspaceIdx.set(0);
+
+    expandWorkspaceIntoPanes(srcWs.id, tgtPane.id, "horizontal", false);
+
+    expect(get(workspaces).find((w) => w.id === srcWs.id)).toBeUndefined();
+    expect(get(workspaces).find((w) => w.id === tgtWs.id)).toBeDefined();
+  });
+
+  it("calls removeRootRow for the source workspace", () => {
+    const sA = mockSurface({ title: "A" });
+    const sB = mockSurface({ title: "B" });
+    const srcPane = makePane([sA]);
+    const tgtPane = makePane([sB]);
+    const srcWs = makeWorkspace({ type: "pane", pane: srcPane });
+    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    workspaces.set([srcWs, tgtWs]);
+    activeWorkspaceIdx.set(0);
+
+    expandWorkspaceIntoPanes(srcWs.id, tgtPane.id, "horizontal", false);
+
+    expect(removeRootRowSpy).toHaveBeenCalledWith({
+      kind: "workspace",
+      id: srcWs.id,
+    });
+  });
+
+  it("calls removeWorkspaceFromAllGroups for the source workspace", () => {
+    const sA = mockSurface({ title: "A" });
+    const sB = mockSurface({ title: "B" });
+    const srcPane = makePane([sA]);
+    const tgtPane = makePane([sB]);
+    const srcWs = makeWorkspace({ type: "pane", pane: srcPane });
+    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    workspaces.set([srcWs, tgtWs]);
+    activeWorkspaceIdx.set(0);
+
+    expandWorkspaceIntoPanes(srcWs.id, tgtPane.id, "horizontal", false);
+
+    expect(removeWorkspaceFromAllGroupsSpy).toHaveBeenCalledWith(srcWs.id);
+  });
+
+  it("does not call dispose on moved terminals", () => {
+    const sA = mockSurface({ title: "A" });
+    const sB = mockSurface({ title: "B" });
+    const srcPane = makePane([sA]);
+    const tgtPane = makePane([sB]);
+    const srcWs = makeWorkspace({ type: "pane", pane: srcPane });
+    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    workspaces.set([srcWs, tgtWs]);
+    activeWorkspaceIdx.set(0);
+
+    expandWorkspaceIntoPanes(srcWs.id, tgtPane.id, "horizontal", false);
+
+    expect(sA.terminal.dispose).not.toHaveBeenCalled();
+  });
+
+  it("splits 'before' when before=true (left/top zone)", () => {
+    const sA = mockSurface({ title: "A" });
+    const sB = mockSurface({ title: "B" });
+    const srcPane = makePane([sA]);
+    const tgtPane = makePane([sB]);
+    const srcWs = makeWorkspace({ type: "pane", pane: srcPane });
+    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    workspaces.set([srcWs, tgtWs]);
+    activeWorkspaceIdx.set(0);
+
+    expandWorkspaceIntoPanes(srcWs.id, tgtPane.id, "horizontal", true);
+
+    // With before=true: new pane is the left child, target pane is the right child
+    const root = tgtWs.splitRoot;
+    expect(root.type).toBe("split");
+    if (root.type === "split") {
+      // The new pane (with sA) should be at index 0 (before=true → left child)
+      const leftPane =
+        root.children[0]!.type === "pane" ? root.children[0]!.pane : null;
+      expect(leftPane?.surfaces[0]?.id).toBe(sA.id);
+      const rightPane =
+        root.children[1]!.type === "pane" ? root.children[1]!.pane : null;
+      expect(rightPane?.id).toBe(tgtPane.id);
+    }
+  });
+
+  it("is a no-op when source and target are the same workspace", () => {
+    const sA = mockSurface({ title: "A" });
+    const sB = mockSurface({ title: "B" });
+    const pane = makePane([sA, sB]);
+    const ws = makeWorkspace({ type: "pane", pane });
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+
+    expandWorkspaceIntoPanes(ws.id, pane.id, "horizontal", false);
+
+    expect(get(workspaces).length).toBe(1);
+  });
+
+  it("is a no-op when target pane is not found in any workspace", () => {
+    const sA = mockSurface({ title: "A" });
+    const sB = mockSurface({ title: "B" });
+    const srcPane = makePane([sA]);
+    const tgtPane = makePane([sB]);
+    const srcWs = makeWorkspace({ type: "pane", pane: srcPane });
+    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    workspaces.set([srcWs, tgtWs]);
+    activeWorkspaceIdx.set(0);
+
+    expandWorkspaceIntoPanes(
+      srcWs.id,
+      "nonexistent-pane-id",
+      "horizontal",
+      false,
+    );
+
+    expect(get(workspaces).length).toBe(2);
+  });
+
+  it("schedules a persist", () => {
+    const sA = mockSurface({ title: "A" });
+    const sB = mockSurface({ title: "B" });
+    const srcPane = makePane([sA]);
+    const tgtPane = makePane([sB]);
+    const srcWs = makeWorkspace({ type: "pane", pane: srcPane });
+    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    workspaces.set([srcWs, tgtWs]);
+    activeWorkspaceIdx.set(0);
+
+    expandWorkspaceIntoPanes(srcWs.id, tgtPane.id, "horizontal", false);
+    vi.advanceTimersByTime(2000);
+    expect(saveState).toHaveBeenCalled();
+  });
+
+  it("sets active pane to last-created pane after expansion", () => {
+    const sA = mockSurface({ title: "A" });
+    const sB = mockSurface({ title: "B" });
+    const sC = mockSurface({ title: "C" });
+    const srcPane = makePane([sA, sB]);
+    const tgtPane = makePane([sC]);
+    const srcWs = makeWorkspace({ type: "pane", pane: srcPane });
+    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    workspaces.set([srcWs, tgtWs]);
+    activeWorkspaceIdx.set(1);
+
+    expandWorkspaceIntoPanes(srcWs.id, tgtPane.id, "horizontal", false);
+
+    // activePaneId should point to the last newly-created pane (sB's pane)
+    const tgtPanes = getAllPanes(tgtWs.splitRoot);
+    const activePaneId = tgtWs.activePaneId;
+    const activePane = tgtPanes.find((p) => p.id === activePaneId);
+    expect(activePane).toBeDefined();
+    expect(activePane?.surfaces[0]?.id).toBe(sB.id);
   });
 });

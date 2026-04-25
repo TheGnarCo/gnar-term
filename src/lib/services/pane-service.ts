@@ -12,6 +12,7 @@ import { createTerminalSurface } from "../terminal-service";
 import {
   uid,
   getAllPanes,
+  getAllSurfaces,
   isTerminalSurface,
   findParentSplit,
   replaceNodeInTree,
@@ -24,6 +25,9 @@ import {
   schedulePersist,
   collapseEmptyPaneInWorkspace,
 } from "./workspace-service";
+import { removeRootRow } from "../stores/root-row-order";
+import { removeWorkspaceFromAllGroups } from "./workspace-group-service";
+import { handleWorkspaceClosed as gitStatusWorkspaceClosed } from "./git-status-service";
 import { safeFocus, getCwdForSurface } from "./service-helpers";
 import { eventBus } from "./event-bus";
 
@@ -332,6 +336,94 @@ export function flashFocusedPane() {
 export function splitFromSidebar(direction: "horizontal" | "vertical") {
   const pane = get(activePane);
   if (pane) void splitPane(pane.id, direction);
+}
+
+/**
+ * Expand a sidebar workspace into the target workspace by splitting each of
+ * its surfaces into its own pane next to `targetPaneId`. Surfaces are chained:
+ * the first surface splits from targetPane; each subsequent surface splits from
+ * the previously-created pane, producing a right-leaning binary split tree.
+ *
+ * The source workspace is removed without disposing its terminals (they move
+ * into tgtWs). Group membership and rootRowOrder are cleaned up directly so
+ * the worktree handler's "keep or delete?" dialog is NOT triggered — the
+ * surfaces are still live.
+ */
+export function expandWorkspaceIntoPanes(
+  srcWorkspaceId: string,
+  targetPaneId: string,
+  direction: "horizontal" | "vertical",
+  before: boolean,
+): void {
+  const allWs = get(workspaces);
+  const srcWs = allWs.find((ws) => ws.id === srcWorkspaceId);
+  const tgtWs = allWs.find((ws) =>
+    getAllPanes(ws.splitRoot).some((p) => p.id === targetPaneId),
+  );
+  if (!srcWs || !tgtWs || srcWs === tgtWs) return;
+
+  // Collect all surfaces from source workspace in pane order
+  const allSurfaces = getAllSurfaces(srcWs);
+  if (allSurfaces.length === 0) return;
+
+  // Chain splits: each new pane becomes the anchor for the next
+  let anchorPaneId = targetPaneId;
+
+  for (const surface of allSurfaces) {
+    const newPane: Pane = {
+      id: uid(),
+      surfaces: [surface],
+      activeSurfaceId: surface.id,
+    };
+
+    const anchorPane = getAllPanes(tgtWs.splitRoot).find(
+      (p) => p.id === anchorPaneId,
+    );
+    if (!anchorPane) continue;
+
+    const newSplit: SplitNode = {
+      type: "split",
+      direction,
+      children: before
+        ? [
+            { type: "pane", pane: newPane },
+            { type: "pane", pane: anchorPane },
+          ]
+        : [
+            { type: "pane", pane: anchorPane },
+            { type: "pane", pane: newPane },
+          ],
+      ratio: 0.5,
+    };
+
+    if (
+      tgtWs.splitRoot.type === "pane" &&
+      tgtWs.splitRoot.pane.id === anchorPaneId
+    ) {
+      tgtWs.splitRoot = newSplit;
+    } else {
+      const parentInfo = findParentSplit(tgtWs.splitRoot, anchorPaneId);
+      if (parentInfo && parentInfo.parent.type === "split") {
+        parentInfo.parent.children[parentInfo.index] = newSplit;
+      }
+    }
+
+    anchorPaneId = newPane.id;
+  }
+
+  tgtWs.activePaneId = anchorPaneId;
+
+  // Remove source workspace without disposing terminals (surfaces already moved).
+  // Clean up directly instead of emitting workspace:closed to avoid triggering
+  // the worktree handler's interactive "keep or delete?" dialog.
+  workspaces.update((list) => list.filter((ws) => ws.id !== srcWorkspaceId));
+  activeWorkspaceIdx.set(
+    Math.min(get(activeWorkspaceIdx), get(workspaces).length - 1),
+  );
+  removeRootRow({ kind: "workspace", id: srcWorkspaceId });
+  removeWorkspaceFromAllGroups(srcWorkspaceId);
+  gitStatusWorkspaceClosed(srcWorkspaceId);
+  schedulePersist();
 }
 
 /**

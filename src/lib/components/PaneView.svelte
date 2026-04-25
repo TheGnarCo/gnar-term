@@ -21,6 +21,7 @@
   import { getExtensionApiById } from "../services/extension-loader";
   import ExtensionWrapper from "./ExtensionWrapper.svelte";
   import { tabDragState } from "../services/tab-drag";
+  import { workspaceDragState } from "../services/workspace-drag";
 
   export let pane: Pane;
   export let workspaceId: string = "";
@@ -103,7 +104,10 @@
     $tabDragState?.dropTarget?.kind === "surface-split" &&
     $tabDragState.dropTarget.paneId === pane.id
       ? $tabDragState.dropTarget.zone
-      : null;
+      : $workspaceDragState?.dropTarget?.kind === "pane-split" &&
+          $workspaceDragState.dropTarget.paneId === pane.id
+        ? $workspaceDragState.dropTarget.zone
+        : null;
 
   let arriving = false;
   let prevUnread = false;

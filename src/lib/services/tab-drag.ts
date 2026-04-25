@@ -15,7 +15,7 @@
 import { writable, get, type Readable } from "svelte/store";
 import { workspaces } from "../stores/workspace";
 import { getAllPanes, getAllSurfaces } from "../types";
-import { reorderTab } from "./pane-service";
+import { reorderTab, splitPaneWithSurface } from "./pane-service";
 
 export type TabDropTarget =
   | { kind: "reorder"; paneId: string; insertIdx: number }
@@ -218,10 +218,14 @@ export function commitTabDrop(): void {
       reorderTab(dropTarget.paneId, fromIdx, dropTarget.insertIdx);
       break;
     }
-    // Story 2/3 dispatches added when those services land.
+    case "split": {
+      splitPaneWithSurface(surfaceId, sourcePaneId, dropTarget.paneId);
+      break;
+    }
+    // Story 3 dispatches (move-to-workspace, new-workspace) added when
+    // those services land.
     default:
       // Unknown / not-yet-handled drop kinds are silent no-ops.
-      void sourcePaneId;
       break;
   }
 }

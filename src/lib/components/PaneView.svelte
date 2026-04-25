@@ -7,6 +7,7 @@
   import TerminalSurface from "./TerminalSurface.svelte";
   import PreviewSurface from "./PreviewSurface.svelte";
   import GroupDashboardSettings from "./GroupDashboardSettings.svelte";
+  import { dashboardWorkspaceRegistry } from "../services/dashboard-workspace-service";
   import RestoreCommandPrompt from "./RestoreCommandPrompt.svelte";
   import EmptySurface from "./EmptySurface.svelte";
   import type { Component } from "svelte";
@@ -78,6 +79,13 @@
     workspaceMetadata?.dashboardContributionId === "settings" &&
     typeof workspaceMetadata?.groupId === "string"
       ? (workspaceMetadata.groupId as string)
+      : null;
+  $: dashboardWorkspaceEntry =
+    isDashboardWorkspace &&
+    typeof workspaceMetadata?.dashboardWorkspaceId === "string"
+      ? ($dashboardWorkspaceRegistry.get(
+          workspaceMetadata.dashboardWorkspaceId,
+        ) ?? null)
       : null;
   $: regenCommandId =
     isDashboardWorkspace &&
@@ -248,7 +256,20 @@
     ></span>
   {/if}
 
-  {#if settingsDashboardGroupId}
+  {#if dashboardWorkspaceEntry}
+    {@const entryApi = dashboardWorkspaceEntry.source
+      ? getExtensionApiById(dashboardWorkspaceEntry.source)
+      : null}
+    {#if entryApi}
+      <ExtensionWrapper
+        api={entryApi}
+        component={dashboardWorkspaceEntry.component}
+        props={{}}
+      />
+    {:else}
+      <svelte:component this={dashboardWorkspaceEntry.component} />
+    {/if}
+  {:else if settingsDashboardGroupId}
     <!-- Settings dashboard — PaneView renders the shared settings body
          in place of any surface list. The workspace carries no preview
          surface, so no other render branches fire. -->

@@ -3,6 +3,7 @@
   import { theme } from "../stores/theme";
   import { anyReorderActive } from "../stores/ui";
   import { getWorkspaceStatusByCategory } from "../services/status-registry";
+  import { dashboardWorkspaceRegistry } from "../services/dashboard-workspace-service";
   import { aggregateAgentBadges } from "../status-colors";
   import { workspaceSubtitleStore } from "../services/workspace-subtitle-registry";
   import { getExtensionApiById } from "../services/extension-loader";
@@ -124,6 +125,13 @@
   $: hasUnread = allSurfaces.some((s) => s.hasUnread);
   $: latestNotification = allSurfaces.find((s) => s.notification)?.notification;
   $: isManaged = !!workspace.metadata?.worktreePath;
+  $: dashboardWorkspaceEntry = (() => {
+    const id = (workspace.metadata as Record<string, unknown> | undefined)
+      ?.dashboardWorkspaceId;
+    if (typeof id !== "string") return null;
+    return $dashboardWorkspaceRegistry.get(id) ?? null;
+  })();
+  $: dashboardWorkspaceIcon = dashboardWorkspaceEntry?.icon ?? null;
   // Workspaces spawned by a dashboard (Global Agentic or per-group)
   // get a bot marker so they're visually distinguishable from plain
   // group workspaces or worktrees. `metadata.spawnedBy` is the §3.2
@@ -135,6 +143,7 @@
   $: isDashboardWs =
     (workspace.metadata as Record<string, unknown> | undefined)?.isDashboard ===
     true;
+  $: isDashboardWorkspaceRow = dashboardWorkspaceIcon !== null;
   // Nested workspaces live under a group's colored banner. The group
   // banner itself already rolls up status (and the per-row chip handles
   // agent state), so the long blue notification row duplicates chrome
@@ -150,7 +159,10 @@
       typeof md.parentOrchestratorId === "string"
     );
   })();
-  $: railColor = accentColor ?? $theme.accent;
+  $: railColor =
+    (isDashboardWorkspaceRow && dashboardWorkspaceEntry?.accentColor) ||
+    accentColor ||
+    $theme.accent;
   // Status registry subscriptions (process items for agent dots)
   $: processStatusStore = getWorkspaceStatusByCategory(workspace.id, "process");
   $: processItems = $processStatusStore;
@@ -382,6 +394,22 @@
             </svg>
           </span>
         {/if}
+        {#if dashboardWorkspaceIcon}
+          <span
+            style="
+              flex-shrink: 0; display: inline-flex; align-items: center;
+              justify-content: center; width: 14px; height: 14px;
+              color: {railColor};
+            "
+            aria-hidden="true"
+          >
+            <svelte:component
+              this={dashboardWorkspaceIcon}
+              width={12}
+              height={12}
+            />
+          </span>
+        {/if}
         <span
           bind:this={nameEl}
           style="
@@ -438,7 +466,7 @@
       {/if}
     </div>
 
-    {#each subtitleComponents as sub (sub.id)}
+    {#each isDashboardWorkspaceRow ? [] : subtitleComponents as sub (sub.id)}
       {@const subApi = getExtensionApiById(sub.source)}
       {#if subApi}
         <ExtensionWrapper
@@ -501,7 +529,7 @@
        centered against the full row regardless of how many subtitle or
        notification rows stack below the title. The content column
        reserves 24px on the right to keep text from crashing into it. -->
-  {#if !isDashboardWs}
+  {#if !isDashboardWs || isDashboardWorkspaceRow}
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <span
       title="Close Workspace (⇧⌘W)"

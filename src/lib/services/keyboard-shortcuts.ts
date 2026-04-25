@@ -14,7 +14,6 @@ import {
   commandPaletteOpen,
   findBarVisible,
   primarySidebarVisible,
-  settingsOpen,
 } from "../stores/ui";
 import { workspaces, activeSurface } from "../stores/workspace";
 import { isTerminalSurface } from "../types";
@@ -193,11 +192,6 @@ export function handleAppKeydown(
     }
   }
 
-  if (e.key === "Escape" && get(settingsOpen)) {
-    e.preventDefault();
-    settingsOpen.set(false);
-    return;
-  }
   if (e.key === "Escape" && get(findBarVisible)) {
     e.preventDefault();
     findBarVisible.set(false);

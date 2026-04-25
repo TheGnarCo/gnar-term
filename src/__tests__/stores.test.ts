@@ -16,7 +16,6 @@ import {
   commandPaletteOpen,
   findBarVisible,
   contextMenu,
-  settingsOpen,
 } from "../lib/stores/ui";
 import type { Workspace, Pane, TerminalSurface } from "../lib/types";
 
@@ -175,16 +174,5 @@ describe("UI stores", () => {
     expect(state?.x).toBe(100);
     expect(state?.y).toBe(200);
     expect(state?.items).toHaveLength(1);
-  });
-
-  it("settingsOpen defaults to false", () => {
-    expect(get(settingsOpen)).toBe(false);
-  });
-
-  it("toggles settingsOpen", () => {
-    settingsOpen.set(true);
-    expect(get(settingsOpen)).toBe(true);
-    settingsOpen.set(false);
-    expect(get(settingsOpen)).toBe(false);
   });
 });

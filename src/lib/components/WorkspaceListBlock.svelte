@@ -5,12 +5,10 @@
    * row with a core-drawn grip column on the left.
    *
    * Row kinds:
-   *   - "workspace"  → unclaimed workspace, rendered via WorkspaceItem
-   *                    (with onGripMouseDown OMITTED — this block draws
-   *                    the grip externally so every root row has a
-   *                    uniform rail regardless of kind).
-   *   - other        → looked up from rootRowRendererStore (projects
-   *                    register "project" as a renderer on activate).
+   *   - "workspace"        → unclaimed workspace, rendered via WorkspaceItem
+   *   - "pseudo-workspace" → pinned extension row rendered via PseudoWorkspaceRow
+   *   - other              → looked up from rootRowRendererStore (projects
+   *                          register "project" as a renderer on activate).
    *
    * This block OWNS the drag pipeline for the root list. Renderers
    * inherit drag behavior — they do not spin up their own reorder
@@ -30,8 +28,13 @@
   } from "../stores/root-row-order";
   import { rootRowRendererStore } from "../services/root-row-renderer-registry";
   import { claimedWorkspaceIds } from "../services/claimed-workspace-registry";
+  import {
+    pseudoWorkspaceStore,
+    type PseudoWorkspace,
+  } from "../services/pseudo-workspace-registry";
   import { createDragReorder } from "../actions/drag-reorder";
   import WorkspaceItem from "./WorkspaceItem.svelte";
+  import PseudoWorkspaceRow from "./PseudoWorkspaceRow.svelte";
   import DropGhost from "./DropGhost.svelte";
   import ExtensionWrapper from "./ExtensionWrapper.svelte";
   import { getExtensionApiById } from "../services/extension-loader";
@@ -39,6 +42,14 @@
   import type { MenuItem } from "../context-menu-types";
   import type { Workspace } from "../types";
   import { commandStore } from "../services/command-registry";
+  import { dashboardWorkspaceRegistry } from "../services/dashboard-workspace-service";
+  import { configStore } from "../config";
+  import { resolveGroupColor } from "../theme-data";
+
+  function resolvePseudoWorkspaceColor(pw: PseudoWorkspace): string {
+    const slot = $configStore.pseudoWorkspaceColors?.[pw.id] ?? "purple";
+    return resolveGroupColor(slot, $theme);
+  }
 
   export let onSwitchWorkspace: (idx: number) => void;
   export let onRenameWorkspace: (idx: number, name: string) => void;
@@ -71,14 +82,21 @@
     rendererSource?: string;
     rendererRailColor?: string;
     rendererLabel?: string;
+    pseudoWorkspace?: PseudoWorkspace;
   };
   // Use `derived()` (not a `$:` IIFE) so Svelte's store-subscription
   // plumbing tracks the sources explicitly. An earlier attempt wrapped
   // the computation in a `$:` IIFE and the dependencies weren't
   // detected reliably across HMR.
   const renderedRowsStore = derived(
-    [workspaces, rootRowOrder, rootRowRendererStore, claimedWorkspaceIds],
-    ([$ws, $order, $renderers, $claimed]) => {
+    [
+      workspaces,
+      rootRowOrder,
+      rootRowRendererStore,
+      claimedWorkspaceIds,
+      pseudoWorkspaceStore,
+    ],
+    ([$ws, $order, $renderers, $claimed, $pseudoWs]) => {
       const rows: RenderedRow[] = [];
       const byId = new Map(
         $ws
@@ -86,6 +104,7 @@
           .map((ws) => [ws.id, ws] as const),
       );
       const renderers = new Map($renderers.map((r) => [r.id, r] as const));
+      const pseudoById = new Map($pseudoWs.map((pw) => [pw.id, pw] as const));
       const renderedWsIds = new Set<string>();
       $order.forEach((row, idx) => {
         const key = `${row.kind}:${row.id}`;
@@ -94,6 +113,12 @@
           if (!ws) return;
           rows.push({ row, idx, key, workspace: ws });
           renderedWsIds.add(ws.id);
+          return;
+        }
+        if (row.kind === "pseudo-workspace") {
+          const pw = pseudoById.get(row.id);
+          if (!pw) return;
+          rows.push({ row, idx, key, pseudoWorkspace: pw });
           return;
         }
         const r = renderers.get(row.kind);
@@ -191,9 +216,27 @@
           (e) => e.row.kind === sourceRow!.kind && e.row.id === sourceRow!.id,
         )
       : undefined;
-  $: sourceRowColor = sourceEntry?.rendererRailColor ?? $theme.accent;
+  $: sourceRowColor = (() => {
+    if (sourceEntry?.rendererRailColor) return sourceEntry.rendererRailColor;
+    const pw = sourceEntry?.pseudoWorkspace;
+    if (pw) return resolvePseudoWorkspaceColor(pw);
+    const ws = sourceEntry?.workspace;
+    if (ws) {
+      const dashId = (ws.metadata as Record<string, unknown> | undefined)
+        ?.dashboardWorkspaceId;
+      if (typeof dashId === "string") {
+        return (
+          $dashboardWorkspaceRegistry.get(dashId)?.accentColor ?? $theme.accent
+        );
+      }
+    }
+    return $theme.accent;
+  })();
   $: sourceRowLabel =
-    sourceEntry?.rendererLabel ?? sourceEntry?.workspace?.name ?? "";
+    sourceEntry?.pseudoWorkspace?.label ??
+    sourceEntry?.rendererLabel ??
+    sourceEntry?.workspace?.name ??
+    "";
 
   // --- Workspace row context menu (previously in WorkspaceListBlock's
   // showWorkspaceContextMenu; unchanged modulo re-scoping to rendered
@@ -276,12 +319,24 @@
   {@const isSource = dragActive && dragSourceIdx === entry.idx}
   {@const isSibling = dragActive && dragSourceIdx !== entry.idx}
   {@const ws = entry.workspace}
-  {@const rowColor = entry.rendererRailColor ?? $theme.accent}
+  {@const _dashId = ws
+    ? (ws.metadata as Record<string, unknown> | undefined)?.dashboardWorkspaceId
+    : undefined}
+  {@const rowColor =
+    entry.rendererRailColor ??
+    (entry.pseudoWorkspace
+      ? resolvePseudoWorkspaceColor(entry.pseudoWorkspace)
+      : typeof _dashId === "string"
+        ? ($dashboardWorkspaceRegistry.get(_dashId)?.accentColor ??
+          $theme.accent)
+        : $theme.accent)}
   {@const rowFg = contrastColor(rowColor)}
   {@const rowLabel =
     entry.row.kind === "workspace" && ws
       ? ws.name
-      : (entry.rendererLabel ?? "")}
+      : entry.row.kind === "pseudo-workspace" && entry.pseudoWorkspace
+        ? entry.pseudoWorkspace.label
+        : (entry.rendererLabel ?? "")}
   <div class="root-row">
     {#if insertIndicator?.idx === entry.idx && insertIndicator.edge === "before"}
       <DropGhost
@@ -318,6 +373,11 @@
           onClose={() => void confirmAndCloseWorkspace(ws, globalIdx)}
           onRename={(name) => onRenameWorkspace(globalIdx, name)}
           onContextMenu={(x, y) => showWorkspaceContextMenu(x, y, globalIdx)}
+          onGripMouseDown={(e) => startRootRowDrag(e, entry.idx)}
+        />
+      {:else if entry.row.kind === "pseudo-workspace" && entry.pseudoWorkspace}
+        <PseudoWorkspaceRow
+          pseudo={entry.pseudoWorkspace}
           onGripMouseDown={(e) => startRootRowDrag(e, entry.idx)}
         />
       {:else if entry.rendererComponent && entry.rendererSource}

@@ -330,7 +330,7 @@
           >
             <slot name="icon" {bannerHovered} />
             <slot {bannerHovered} />
-            <slot name="banner-end" {bannerHovered} />
+            <slot name="banner-end" {bannerHovered} {collapsed} />
           </div>
           <slot name="banner-subtitle" {bannerHovered} />
           {#if filterIds.size > 0}

@@ -8,6 +8,11 @@
  */
 import { get, type Readable } from "svelte/store";
 import { createRegistry } from "./create-registry";
+import {
+  prependRootRow,
+  appendRootRow,
+  removeRootRow,
+} from "../stores/root-row-order";
 
 /**
  * A virtual "workspace" pinned at a fixed position in the root list.
@@ -86,9 +91,31 @@ export interface PseudoWorkspace {
 const registry = createRegistry<PseudoWorkspace>();
 
 export const pseudoWorkspaceStore: Readable<PseudoWorkspace[]> = registry.store;
-export const registerPseudoWorkspace = registry.register;
-export const unregisterPseudoWorkspace = registry.unregister;
-export const unregisterPseudoWorkspacesBySource = registry.unregisterBySource;
+
+export function registerPseudoWorkspace(pw: PseudoWorkspace): void {
+  registry.register(pw);
+  if (pw.position === "root-top") {
+    prependRootRow({ kind: "pseudo-workspace", id: pw.id });
+  } else {
+    appendRootRow({ kind: "pseudo-workspace", id: pw.id });
+  }
+}
+
+export function unregisterPseudoWorkspace(id: string): void {
+  registry.unregister(id);
+  removeRootRow({ kind: "pseudo-workspace", id });
+}
+
+export function unregisterPseudoWorkspacesBySource(source: string): void {
+  const toRemove = get(pseudoWorkspaceStore).filter(
+    (pw) => pw.source === source,
+  );
+  registry.unregisterBySource(source);
+  for (const pw of toRemove) {
+    removeRootRow({ kind: "pseudo-workspace", id: pw.id });
+  }
+}
+
 export const getPseudoWorkspace = registry.get;
 export const resetPseudoWorkspaces = registry.reset;
 

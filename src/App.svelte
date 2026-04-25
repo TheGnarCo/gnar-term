@@ -11,8 +11,6 @@
     secondarySidebarVisible,
     commandPaletteOpen,
     findBarVisible,
-    settingsOpen,
-    settingsPage,
     pendingAction,
     showInputPrompt,
   } from "./lib/stores/ui";
@@ -117,13 +115,16 @@
   import InputPrompt from "./lib/components/InputPrompt.svelte";
   import ConfirmPrompt from "./lib/components/ConfirmPrompt.svelte";
   import FormPrompt from "./lib/components/FormPrompt.svelte";
-  import SettingsOverlay from "./lib/components/SettingsOverlay.svelte";
   import RestoreCommandsOverlay from "./lib/components/RestoreCommandsOverlay.svelte";
   import WorkspaceGroupCreateOverlay from "./lib/components/WorkspaceGroupCreateOverlay.svelte";
-  import { overlayStore } from "./lib/services/overlay-registry";
   import { surfaceTypeStore } from "./lib/services/surface-type-registry";
-  import ExtensionWrapper from "./lib/components/ExtensionWrapper.svelte";
-  import { getExtensionApiById } from "./lib/services/extension-loader";
+  import {
+    registerDashboardWorkspaceType,
+    spawnOrNavigate,
+  } from "./lib/services/dashboard-workspace-service";
+  import SettingsPanel from "./lib/components/SettingsPanel.svelte";
+  import GearIcon from "./lib/icons/GearIcon.svelte";
+  import type { Component } from "svelte";
 
   const TOAST_DURATION_MS = 5000;
 
@@ -160,8 +161,7 @@
     const toast = activeToasts.find((t) => t.id === id);
     if (toast) clearTimeout(toast.timerId);
     activeToasts = activeToasts.filter((t) => t.id !== id);
-    settingsPage.set("extensions");
-    settingsOpen.set(true);
+    void spawnOrNavigate("gnar-term:settings");
   }
 
   // ---- Theme ----
@@ -311,7 +311,7 @@
       id: "core.open-settings",
       title: "Open Settings",
       shortcut: isMac ? "⌘," : "Ctrl+,",
-      action: () => settingsOpen.update((v) => !v),
+      action: () => void spawnOrNavigate("gnar-term:settings"),
       source: "core",
     },
     {
@@ -389,10 +389,7 @@
     {
       id: "core.view-extensions",
       title: "Extensions: View Installed",
-      action: () => {
-        settingsPage.set("extensions");
-        settingsOpen.set(true);
-      },
+      action: () => void spawnOrNavigate("gnar-term:settings"),
       source: "core",
     },
     ...$extensionStore
@@ -404,10 +401,7 @@
       .map((ext) => ({
         id: `core.ext-settings-${ext.manifest.id}`,
         title: `Settings: ${ext.manifest.name}`,
-        action: () => {
-          settingsPage.set(`ext:${ext.manifest.id}`);
-          settingsOpen.set(true);
-        },
+        action: () => void spawnOrNavigate("gnar-term:settings"),
         source: "core",
       })),
   ]);
@@ -542,6 +536,16 @@
     // registered from core so the root-row renderer, commands, and
     // Dashboard contribution are available before extensions activate.
     await initWorkspaceGroups();
+
+    // Register the core settings Dashboard Workspace before extensions so the
+    // gear button is wired before any extension activates.
+    registerDashboardWorkspaceType({
+      id: "gnar-term:settings",
+      label: "Settings",
+      icon: GearIcon as unknown as Component,
+      component: SettingsPanel as unknown as Component,
+      accentColor: "#8998A8",
+    });
 
     // Register included extensions. Only activate if explicitly enabled
     // in config — a fresh install starts with no extensions active
@@ -800,23 +804,12 @@
 <InputPrompt />
 <ConfirmPrompt />
 <FormPrompt />
-<SettingsOverlay />
 <WorkspaceGroupCreateOverlay />
 {#if showRestoreCommandsOverlay}
   <RestoreCommandsOverlay
     onClose={() => (showRestoreCommandsOverlay = false)}
   />
 {/if}
-{#each $overlayStore as overlay (overlay.id)}
-  {@const overlayApi = getExtensionApiById(overlay.source)}
-  {#if overlayApi}
-    <ExtensionWrapper
-      api={overlayApi}
-      component={overlay.component}
-      props={overlay.props ?? {}}
-    />
-  {/if}
-{/each}
 
 <style>
   .extension-toast-container {

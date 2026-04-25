@@ -31,6 +31,7 @@
   import { workspaceGroupsStore } from "../stores/workspace-groups";
   import type { MenuItem } from "../context-menu-types";
   import { getDashboardContribution } from "../services/dashboard-contribution-registry";
+  import { dashboardWorkspaceRegistry } from "../services/dashboard-workspace-service";
 
   /** Set of workspace IDs to display. If undefined, shows all. */
   export let filterIds: Set<string> | undefined = undefined;
@@ -165,6 +166,14 @@
       : null;
   $: railColor = accentColor ?? $theme.accent;
   $: overlayFg = contrastColor(railColor);
+  $: dropAccent = (() => {
+    const id = (sourceWs?.metadata as Record<string, unknown> | undefined)
+      ?.dashboardWorkspaceId;
+    if (typeof id === "string") {
+      return $dashboardWorkspaceRegistry.get(id)?.accentColor ?? railColor;
+    }
+    return railColor;
+  })();
 
   let itemRefs: Record<string, WorkspaceItem> = {};
 
@@ -349,7 +358,7 @@
           <DropGhost
             theme={$theme}
             height={sourceHeight}
-            accent={railColor}
+            accent={dropAccent}
             label={sourceWs?.name}
           />
         {/if}
@@ -396,7 +405,7 @@
           <DropGhost
             theme={$theme}
             height={sourceHeight}
-            accent={railColor}
+            accent={dropAccent}
             label={sourceWs?.name}
           />
         {/if}

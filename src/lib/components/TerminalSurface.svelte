@@ -56,9 +56,12 @@
     }
 
     if (imagePaths.length > 0) {
-      writeImage(imagePaths[0]!).catch((e) =>
-        console.warn("Failed to write image to clipboard:", e),
-      );
+      try {
+        await writeImage(imagePaths[0]!);
+      } catch (e) {
+        console.warn("Failed to write image to clipboard:", e);
+        return;
+      }
     }
 
     if (textParts.length > 0) {
@@ -100,19 +103,11 @@
 
     const fileArray = Array.from(dt.files);
     if (fileArray.length > 0) {
-      const hasPaths = fileArray.some(
-        (f) => (f as unknown as { path?: string }).path,
-      );
-      if (hasPaths) {
-        void handleDropPaths(
-          fileArray.map(
-            (f) => (f as unknown as { path?: string }).path || f.name,
-          ),
-        );
+      // Path-bearing drops are owned by the tauri://drag-drop listener; skip here
+      // to avoid double-handling on macOS where both events fire for the same drop.
+      if (fileArray.some((f) => (f as unknown as { path?: string }).path))
         return;
-      }
-      // Files without paths: Mac screenshot thumbnails (NSFilePromise) land here.
-      // Read image data directly from the File object.
+      // Files without paths: browser image drags or unsettled NSFilePromises.
       const imageFile = fileArray.find((f) => f.type.startsWith("image/"));
       if (imageFile) {
         void handleDropImageData(imageFile).catch((err) =>

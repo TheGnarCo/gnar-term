@@ -328,6 +328,19 @@ export interface ExtensionAPI {
   emit(event: `extension:${string}`, payload?: Record<string, unknown>): void;
 
   // UI registration — core owns chrome, extension provides content
+  /**
+   * Contribute a button to the TitleBar, rendered between the Settings button
+   * and the Secondary Sidebar toggle. `isActive` controls the active highlight color.
+   */
+  registerTitleBarButton(
+    buttonId: string,
+    options: {
+      icon: unknown;
+      title: string;
+      isActive?: Readable<boolean>;
+      onClick: () => void;
+    },
+  ): void;
   registerSecondarySidebarTab(tabId: string, component: unknown): void;
   registerSecondarySidebarAction(
     tabId: string,
@@ -387,14 +400,21 @@ export interface ExtensionAPI {
     component: unknown,
     options?: { hideFromNewSurface?: boolean },
   ): void;
-  /** Register an overlay component (dialog, dashboard, modal) rendered above the main UI. */
-  registerOverlay(
-    overlayId: string,
-    component: unknown,
-    props?: Record<string, unknown>,
-  ): void;
-  /** Unregister a previously registered overlay. */
-  unregisterOverlay(overlayId: string): void;
+  /**
+   * Register a singleton Dashboard Workspace. Returns a `spawnOrNavigate`
+   * function — call it (e.g. from a TitleBar button onClick) to open the
+   * workspace or switch to it if already open. The workspace is draggable,
+   * closeable, and persists across restarts.
+   */
+  registerDashboardWorkspace(
+    id: string,
+    options: {
+      label: string;
+      icon: unknown;
+      component: unknown;
+      accentColor?: string;
+    },
+  ): () => void;
   /**
    * Contribute a theme to the app-wide theme picker. `id` is the value
    * saved in user settings; `theme` is a full ThemeDef-shaped object

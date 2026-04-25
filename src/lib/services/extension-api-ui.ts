@@ -6,6 +6,7 @@ import {
   registerSidebarTab,
   registerSidebarAction,
 } from "./sidebar-tab-registry";
+import { registerTitleBarButton as registryRegisterTitleBarButton } from "./titlebar-button-registry";
 import { registerSidebarSection } from "./sidebar-section-registry";
 import { registerSurfaceType as registryRegisterSurfaceType } from "./surface-type-registry";
 import {
@@ -18,10 +19,6 @@ import {
   type WorkspaceActionContext,
 } from "./workspace-action-registry";
 import { registerDashboardTab as registryRegisterDashboardTab } from "./dashboard-tab-registry";
-import {
-  registerOverlay as registryRegisterOverlay,
-  unregisterOverlay as registryUnregisterOverlay,
-} from "./overlay-registry";
 import { registerWorkspaceSubtitle as registryRegisterWorkspaceSubtitle } from "./workspace-subtitle-registry";
 import { registerRootRowRenderer as registryRegisterRootRowRenderer } from "./root-row-renderer-registry";
 import {
@@ -33,6 +30,10 @@ import { registerMarkdownComponent as registryRegisterMarkdownComponent } from "
 import { registerChildRowContributor } from "./child-row-contributor-registry";
 import { registerDashboardContribution as registryRegisterDashboardContribution } from "./dashboard-contribution-registry";
 import { registerPseudoWorkspace as registryRegisterPseudoWorkspace } from "./pseudo-workspace-registry";
+import {
+  registerDashboardWorkspaceType,
+  spawnOrNavigate,
+} from "./dashboard-workspace-service";
 import { registerExtensionMcpTool } from "./mcp-server";
 import type {
   DashboardContributionInput,
@@ -47,6 +48,7 @@ export function createUIRegistrationAPI(
   manifest: ExtensionManifest,
 ): Pick<
   ExtensionAPI,
+  | "registerTitleBarButton"
   | "registerSecondarySidebarTab"
   | "registerSecondarySidebarAction"
   | "registerPrimarySidebarSection"
@@ -54,8 +56,7 @@ export function createUIRegistrationAPI(
   | "appendRootRow"
   | "removeRootRow"
   | "registerSurfaceType"
-  | "registerOverlay"
-  | "unregisterOverlay"
+  | "registerDashboardWorkspace"
   | "registerTheme"
   | "registerCommand"
   | "runCommand"
@@ -71,6 +72,25 @@ export function createUIRegistrationAPI(
   | "registerWorkspaceSubtitle"
 > {
   return {
+    registerTitleBarButton(
+      buttonId: string,
+      options: {
+        icon: unknown;
+        title: string;
+        isActive?: import("svelte/store").Readable<boolean>;
+        onClick: () => void;
+      },
+    ) {
+      registryRegisterTitleBarButton({
+        id: `${extId}:${buttonId}`,
+        source: extId,
+        icon: options.icon,
+        title: options.title,
+        isActive: options.isActive,
+        onClick: options.onClick,
+      });
+    },
+
     registerSecondarySidebarTab(tabId: string, component: unknown) {
       const declared = manifest.contributes?.secondarySidebarTabs?.find(
         (t) => t.id === tabId,
@@ -149,21 +169,25 @@ export function createUIRegistrationAPI(
       });
     },
 
-    registerOverlay(
-      overlayId: string,
-      component: unknown,
-      props?: Record<string, unknown>,
-    ) {
-      registryRegisterOverlay({
-        id: `${extId}:${overlayId}`,
-        component,
+    registerDashboardWorkspace(
+      id: string,
+      options: {
+        label: string;
+        icon: unknown;
+        component: unknown;
+        accentColor?: string;
+      },
+    ): () => void {
+      const stableId = `${extId}:${id}`;
+      registerDashboardWorkspaceType({
+        id: stableId,
+        label: options.label,
+        icon: options.icon as import("svelte").Component,
+        component: options.component as import("svelte").Component,
         source: extId,
-        props,
+        accentColor: options.accentColor,
       });
-    },
-
-    unregisterOverlay(overlayId: string) {
-      registryUnregisterOverlay(`${extId}:${overlayId}`);
+      return () => void spawnOrNavigate(stableId);
     },
 
     registerTheme(id: string, theme: unknown) {

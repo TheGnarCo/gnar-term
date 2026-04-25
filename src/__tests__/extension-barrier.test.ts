@@ -134,6 +134,38 @@ describe("Extension barrier enforcement", () => {
         "../../lib/stores/workspace-groups",
         "../../lib/services/claimed-workspace-registry",
       ],
+      // claude-settings/index.ts mirrors the agentic-orchestrator piercing
+      // pattern: createWorkspaceFromDef to materialize the group dashboard,
+      // workspace-group-service + workspace-groups for auto-provision on
+      // activate, and restore-workspaces to defer the back-fill loop until
+      // workspaces are restored.
+      "claude-settings/index.ts": [
+        "../../lib/services/workspace-service",
+        "../../lib/services/workspace-group-service",
+        "../../lib/stores/workspace-groups",
+        "../../lib/bootstrap/restore-workspaces",
+      ],
+      // ClaudeSettingsWidget reads dashboard scope via DashboardHostContext
+      // and group.path via workspace-groups — same piercing as Kanban.
+      "claude-settings/components/ClaudeSettingsWidget.svelte": [
+        "../../../lib/contexts/dashboard-host",
+        "../../../lib/stores/workspace-groups",
+      ],
+      // SettingsFileEditor imports from the extension's own lib/ directory —
+      // these are intra-extension imports, not core piercings. The test regex
+      // matches any /lib/ segment, so we explicitly allow the extension-local paths.
+      "claude-settings/components/SettingsFileEditor.svelte": [
+        "../lib/claude-settings-service",
+        "../lib/settings-schema",
+      ],
+      // DirListingSection and OtherSection are subdirectory components — their
+      // ../../lib/ path refers to the extension's own lib/, not core lib/.
+      "claude-settings/components/sections/DirListingSection.svelte": [
+        "../../lib/claude-settings-service",
+      ],
+      "claude-settings/components/sections/OtherSection.svelte": [
+        "../../lib/settings-schema",
+      ],
       // Columns layout widget looks up registered markdown components by
       // name so authors can place arbitrary `gnar:*` widgets in columns
       // from the dashboard template. Reaching the core registry is the

@@ -5,10 +5,12 @@
     isFullscreen,
     primarySidebarVisible,
     secondarySidebarVisible,
-    settingsOpen,
   } from "../stores/ui";
+  import { spawnOrNavigate } from "../services/dashboard-workspace-service";
   import { isMac, modLabel } from "../terminal-service";
   import { isDebugBuild } from "../services/service-helpers";
+  import { titleBarButtonStore } from "../services/titlebar-button-registry";
+  import TitleBarContributedButton from "./TitleBarContributedButton.svelte";
 
   // Single source of truth: cfg!(debug_assertions) from Rust, exposed via the
   // is_debug_build command. True for `tauri dev` and `tauri build --debug`,
@@ -84,11 +86,15 @@
     >
   </div>
 
+  {#each $titleBarButtonStore as btn (btn.id)}
+    <TitleBarContributedButton button={btn} {btnStyle} {fg} {fgActive} />
+  {/each}
+
   <button
-    style="{btnStyle} color: {$settingsOpen ? fgActive : fg};"
+    style="{btnStyle} color: {fg};"
     title="Settings ({modLabel},)"
     aria-label="Settings"
-    on:click={() => settingsOpen.update((v) => !v)}
+    on:click={() => void spawnOrNavigate("gnar-term:settings")}
   >
     <svg
       width="16"

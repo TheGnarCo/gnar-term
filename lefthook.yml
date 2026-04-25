@@ -21,3 +21,8 @@ pre-commit:
       exclude: "docs/extensions/api-reference.md"
       run: npx prettier --check {staged_files}
       stage_fixed: true
+
+pre-push:
+  commands:
+    test:
+      run: npm test

@@ -4,7 +4,6 @@
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import { writeImage } from "@tauri-apps/plugin-clipboard-manager";
-  import { Image as TauriImage } from "@tauri-apps/api/image";
   import { connectPty } from "../terminal-service";
   import { theme } from "../stores/theme";
   import type { TerminalSurface as TermSurface } from "../types";
@@ -58,8 +57,7 @@
 
     if (imagePaths.length > 0) {
       try {
-        const img = await TauriImage.fromPath(imagePaths[0]!);
-        await writeImage(img);
+        await writeImage(imagePaths[0]!);
       } catch (e) {
         console.warn("Failed to write image to clipboard:", e);
         return;
@@ -90,8 +88,7 @@
 
   async function handleDropImageData(file: File): Promise<void> {
     const buf = await file.arrayBuffer();
-    const img = await TauriImage.fromBytes(buf);
-    await writeImage(img);
+    await writeImage(buf);
     if (surface.ptyId >= 0)
       void invoke("write_pty", { ptyId: surface.ptyId, data: "\x16" });
   }

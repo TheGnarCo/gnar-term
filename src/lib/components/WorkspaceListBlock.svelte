@@ -370,7 +370,7 @@
       : entry.row.kind === "pseudo-workspace" && entry.pseudoWorkspace
         ? entry.pseudoWorkspace.label
         : (entry.rendererLabel ?? "")}
-  <div class="root-row">
+  <div class="root-row" data-root-row-container={entry.idx}>
     {#if effectiveInsertIndicator?.idx === entry.idx && effectiveInsertIndicator.edge === "before"}
       <DropGhost
         theme={$theme}

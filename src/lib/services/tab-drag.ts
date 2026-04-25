@@ -289,7 +289,24 @@ function detectDropTarget(
     }
 
     // Root row (workspace or container block).
-    const rootRowEl = el.closest("[data-root-row-idx]") as HTMLElement | null;
+    // Direct hit on the inner content div — works for most cursor positions.
+    let rootRowEl = el.closest("[data-root-row-idx]") as HTMLElement | null;
+    // Fallback: cursor may land on a DropGhost rendered inside the row's
+    // outer container div (.root-row[data-root-row-container]).  The DropGhost
+    // is a sibling of the [data-root-row-idx] inner div, so closest() from the
+    // DropGhost never reaches [data-root-row-idx].  The container attribute
+    // exposes the correct row index and lets us find the inner div for an
+    // accurate bounding-rect edge calculation.
+    if (!rootRowEl) {
+      const containerEl = (el as Element).closest(
+        "[data-root-row-container]",
+      ) as HTMLElement | null;
+      if (containerEl) {
+        rootRowEl = containerEl.querySelector(
+          "[data-root-row-idx]",
+        ) as HTMLElement | null;
+      }
+    }
     if (rootRowEl) {
       const srcWs = get(workspaces).find((w) => w.id === sourceWorkspaceId);
       const srcGroupId = (

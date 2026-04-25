@@ -74,6 +74,17 @@ vi.mock("@xterm/addon-search", () => ({
   }),
 }));
 vi.mock("@xterm/xterm/css/xterm.css", () => ({}));
+vi.mock("../lib/services/preview-service", () => ({
+  openPreview: vi.fn().mockResolvedValue({
+    element: document.createElement("div"),
+    watchId: 0,
+    dispose: vi.fn(),
+  }),
+}));
+vi.mock("../lib/services/preview-surface-registry", () => ({
+  registerPreviewSurface: vi.fn(),
+  unregisterPreviewSurface: vi.fn(),
+}));
 
 vi.stubGlobal("localStorage", {
   getItem: vi.fn().mockReturnValue(null),
@@ -1876,19 +1887,6 @@ describe("PreviewSurface link interception", () => {
     const { invoke: invokeFn } = await import("@tauri-apps/api/core");
     const invokeMockFn = vi.mocked(invokeFn);
     invokeMockFn.mockClear();
-
-    vi.mock("../lib/services/preview-service", () => ({
-      openPreview: vi.fn().mockResolvedValue({
-        element: document.createElement("div"),
-        watchId: 0,
-        dispose: vi.fn(),
-      }),
-    }));
-
-    vi.mock("../lib/services/preview-surface-registry", () => ({
-      registerPreviewSurface: vi.fn(),
-      unregisterPreviewSurface: vi.fn(),
-    }));
 
     const { default: PreviewSurface } =
       await import("../lib/components/PreviewSurface.svelte");

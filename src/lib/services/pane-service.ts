@@ -19,7 +19,11 @@ import {
   type Pane,
   type SplitNode,
 } from "../types";
-import { createWorkspace, schedulePersist } from "./workspace-service";
+import {
+  createWorkspace,
+  schedulePersist,
+  collapseEmptyPaneInWorkspace,
+} from "./workspace-service";
 import { safeFocus, getCwdForSurface } from "./service-helpers";
 import { eventBus } from "./event-bus";
 
@@ -285,4 +289,64 @@ export function flashFocusedPane() {
 export function splitFromSidebar(direction: "horizontal" | "vertical") {
   const pane = get(activePane);
   if (pane) void splitPane(pane.id, direction);
+}
+
+/**
+ * Move a single surface out of its source pane (in any workspace) into
+ * the active pane of `targetWorkspaceId`. Backs the sidebar-drop drag
+ * gesture: drag a tab onto a different workspace's row to relocate the
+ * surface there.
+ *
+ * - source pane goes empty → it collapses out of the source
+ *   workspace's split tree (terminal NOT disposed)
+ * - target falls back to the first pane when the workspace has no
+ *   `activePaneId` set
+ * - schedules a state persist so the move survives a restart
+ *
+ * Note: unlike `splitPaneWithSurface` this finds the source workspace
+ * by walking every workspace for a pane match, since the source might
+ * not be the active workspace.
+ */
+export function moveSurfaceToWorkspace(
+  surfaceId: string,
+  sourcePaneId: string,
+  targetWorkspaceId: string,
+): void {
+  const allWs = get(workspaces);
+  const srcWs = allWs.find((ws) =>
+    getAllPanes(ws.splitRoot).some((p) => p.id === sourcePaneId),
+  );
+  const tgtWs = allWs.find((ws) => ws.id === targetWorkspaceId);
+  if (!srcWs || !tgtWs || srcWs === tgtWs) return;
+
+  const sourcePane = getAllPanes(srcWs.splitRoot).find(
+    (p) => p.id === sourcePaneId,
+  );
+  if (!sourcePane) return;
+  const idx = sourcePane.surfaces.findIndex((s) => s.id === surfaceId);
+  if (idx === -1) return;
+  const [surface] = sourcePane.surfaces.splice(idx, 1);
+  if (!surface) return;
+  if (sourcePane.activeSurfaceId === surfaceId) {
+    sourcePane.activeSurfaceId = sourcePane.surfaces[0]?.id ?? null;
+  }
+  if (
+    sourcePane.surfaces.length === 0 &&
+    !(
+      srcWs.splitRoot.type === "pane" &&
+      srcWs.splitRoot.pane.id === sourcePaneId
+    )
+  ) {
+    collapseEmptyPaneInWorkspace(srcWs, sourcePaneId);
+  }
+
+  const tgtAllPanes = getAllPanes(tgtWs.splitRoot);
+  const targetPane =
+    tgtAllPanes.find((p) => p.id === tgtWs.activePaneId) ?? tgtAllPanes[0];
+  if (!targetPane) return;
+  targetPane.surfaces.push(surface);
+  targetPane.activeSurfaceId = surface.id;
+
+  workspaces.update((l) => [...l]);
+  schedulePersist();
 }

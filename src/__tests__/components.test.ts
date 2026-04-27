@@ -1985,7 +1985,8 @@ describe("terminal link handling", () => {
     );
 
     const termInstance = TerminalCtor.mock.instances.at(-1)!;
-    expect(termInstance.registerLinkProvider).toHaveBeenCalledTimes(1);
+    // 2 calls: URL provider (index 0, added by Task 5) + file-path provider (index 1, existing)
+    expect(termInstance.registerLinkProvider).toHaveBeenCalledTimes(2);
 
     const provider = termInstance.registerLinkProvider.mock.calls[0][0] as {
       provideLinks: (

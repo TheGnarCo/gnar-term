@@ -8,6 +8,7 @@
 </script>
 
 <script lang="ts">
+  import { tick } from "svelte";
   import type { Readable } from "svelte/store";
 
   export let label: string;
@@ -34,6 +35,14 @@
 
   let dropdownOpen = false;
   let containerEl: HTMLDivElement;
+  let caretEl: HTMLButtonElement;
+  let itemEls: (HTMLButtonElement | undefined)[] = [];
+
+  $: if (dropdownOpen) void tick().then(() => focusableItems()[0]?.focus());
+
+  function focusableItems(): HTMLButtonElement[] {
+    return itemEls.filter((el): el is HTMLButtonElement => el != null);
+  }
 
   function toggleDropdown() {
     dropdownOpen = !dropdownOpen;
@@ -55,8 +64,24 @@
   }
 
   function handleKeydown(e: KeyboardEvent) {
-    if (e.key === "Escape" && dropdownOpen) {
+    if (!dropdownOpen) return;
+    if (e.key === "Escape") {
       dropdownOpen = false;
+      caretEl?.focus();
+      return;
+    }
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      const items = focusableItems();
+      if (items.length === 0) return;
+      const focused = items.indexOf(
+        document.activeElement as HTMLButtonElement,
+      );
+      if (e.key === "ArrowDown") {
+        items[(focused + 1) % items.length]?.focus();
+      } else {
+        items[(focused - 1 + items.length) % items.length]?.focus();
+      }
     }
   }
 </script>
@@ -106,7 +131,10 @@
   <!-- Dropdown caret (only if there are items) -->
   {#if dropdownItems.length > 1}
     <button
-      title="More actions"
+      bind:this={caretEl}
+      aria-label="More actions"
+      aria-expanded={dropdownOpen}
+      aria-haspopup="menu"
       on:click={toggleDropdown}
       data-dropdown-open={dropdownOpen ? "" : undefined}
       style="
@@ -145,6 +173,7 @@
     <!-- Dropdown menu -->
     {#if dropdownOpen}
       <div
+        role="menu"
         style="
           position: absolute;
           top: 100%;
@@ -159,24 +188,30 @@
           min-width: 180px;
         "
       >
-        {#each dropdownItems as item (item.id)}
+        {#each dropdownItems as item, i (item.id)}
           {#if item.id === "__separator__"}
             <div
+              role="separator"
               style="height: 1px; background: {$theme.border}; margin: 4px 8px;"
             ></div>
           {:else}
-            <!-- svelte-ignore a11y_click_events_have_key_events -->
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <div
+            <button
+              bind:this={itemEls[i]}
+              role="menuitem"
+              tabindex="-1"
               style="
+                width: 100%;
                 padding: 5px 10px;
+                border: none;
                 border-radius: 4px;
+                background: transparent;
                 cursor: pointer;
                 display: flex;
                 align-items: center;
                 gap: 8px;
                 font-size: 12px;
                 color: {$theme.fg};
+                text-align: left;
               "
               on:click={() => handleItemClick(item)}
               on:mouseenter={(e) => {
@@ -206,7 +241,7 @@
                 </svg>
               {/if}
               <span>{item.label}</span>
-            </div>
+            </button>
           {/if}
         {/each}
       </div>

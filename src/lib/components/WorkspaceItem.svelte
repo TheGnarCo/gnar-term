@@ -13,6 +13,7 @@
   $: isDisco = $theme.name === "Molly Disco";
   import { getAllSurfaces, getAllPanes } from "../types";
   import type { Workspace } from "../types";
+  import { workspaceSurfaceMap } from "../services/workspace-service";
 
   const discoEmojis = [
     "✨",
@@ -121,7 +122,8 @@
   let nameEl: HTMLSpanElement;
   let _renaming = false;
 
-  $: allSurfaces = getAllSurfaces(workspace);
+  $: allSurfaces =
+    $workspaceSurfaceMap.get(workspace.id) ?? getAllSurfaces(workspace);
   $: hasUnread = allSurfaces.some((s) => s.hasUnread);
   $: latestNotification = allSurfaces.find((s) => s.notification)?.notification;
   $: isManaged = !!workspace.metadata?.worktreePath;

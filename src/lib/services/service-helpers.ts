@@ -67,6 +67,49 @@ export function forEachTerminalSurface(fn: (s: TerminalSurface) => void): void {
   }
 }
 
+// --- Surface/PTY lookup index ---
+// Rebuilt on every workspaces store update so hot-path callers get O(1) lookups
+// instead of O(W×S) nested scans. Only valid outside of workspaces.update()
+// callbacks — reads from the index during an update see the pre-update state.
+
+const _ptyIndex = new Map<number, TerminalSurface>(); // ptyId → terminal surface
+const _surfaceWsIndex = new Map<string, string>(); // surfaceId → workspaceId
+const _surfacePtyIndex = new Map<string, number>(); // surfaceId → ptyId
+
+workspaces.subscribe(($ws) => {
+  _ptyIndex.clear();
+  _surfaceWsIndex.clear();
+  _surfacePtyIndex.clear();
+  for (const ws of $ws) {
+    if (!ws?.splitRoot) continue;
+    for (const pane of getAllPanes(ws.splitRoot)) {
+      for (const surface of pane.surfaces) {
+        _surfaceWsIndex.set(surface.id, ws.id);
+        if (isTerminalSurface(surface)) {
+          if (surface.ptyId >= 0) _ptyIndex.set(surface.ptyId, surface);
+          _surfacePtyIndex.set(surface.id, surface.ptyId);
+        }
+      }
+    }
+  }
+});
+
+export function lookupTerminalByPtyId(
+  ptyId: number,
+): TerminalSurface | undefined {
+  return _ptyIndex.get(ptyId);
+}
+
+export function lookupSurfaceWorkspaceId(
+  surfaceId: string,
+): string | undefined {
+  return _surfaceWsIndex.get(surfaceId);
+}
+
+export function lookupPtyIdForSurface(surfaceId: string): number | undefined {
+  return _surfacePtyIndex.get(surfaceId);
+}
+
 export async function safeFocus(s: Surface | null | undefined) {
   if (!s || !isTerminalSurface(s)) return;
   await tick();

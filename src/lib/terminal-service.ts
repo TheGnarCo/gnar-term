@@ -19,6 +19,7 @@ import {
   readText as clipboardRead,
   writeText as clipboardWrite,
 } from "@tauri-apps/plugin-clipboard-manager";
+import { lookupTerminalByPtyId } from "./services/service-helpers";
 import {
   isPermissionGranted as notifPermissionGranted,
   requestPermission as notifRequestPermission,
@@ -156,13 +157,7 @@ const BUFFER_HIGH_WATER = 128 * 1024; // 128KB
 const BUFFER_LOW_WATER = 32 * 1024; // 32KB
 
 function findSurfaceByPty(ptyId: number): TerminalSurface | null {
-  const wsList = get(workspaces);
-  for (const ws of wsList) {
-    for (const s of getAllSurfaces(ws)) {
-      if (isTerminalSurface(s) && s.ptyId === ptyId) return s;
-    }
-  }
-  return null;
+  return lookupTerminalByPtyId(ptyId) ?? null;
 }
 
 function scheduleFlush(ptyId: number) {

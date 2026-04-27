@@ -26,7 +26,7 @@ const noop = () => {};
 describe("WorkspaceItem drag grip", () => {
   afterEach(() => cleanup());
 
-  it("renders a DragGrip with drag aria-label", () => {
+  it("renders a DragGrip", () => {
     const { container } = render(WorkspaceItem, {
       props: {
         workspace: makeWorkspace(),
@@ -39,9 +39,7 @@ describe("WorkspaceItem drag grip", () => {
         onGripMouseDown: vi.fn(),
       },
     });
-    const grip = container.querySelector(
-      '[role="button"][aria-label*="rag" i]',
-    );
+    const grip = container.querySelector(".drag-grip");
     expect(grip).not.toBeNull();
   });
 
@@ -59,9 +57,7 @@ describe("WorkspaceItem drag grip", () => {
         onGripMouseDown,
       },
     });
-    const grip = container.querySelector(
-      '[role="button"][aria-label*="rag" i]',
-    ) as HTMLElement;
+    const grip = container.querySelector(".drag-grip") as HTMLElement;
     await fireEvent.mouseDown(grip);
     expect(onGripMouseDown).toHaveBeenCalledTimes(1);
   });
@@ -80,9 +76,7 @@ describe("WorkspaceItem drag grip", () => {
       },
     });
     const row = container.querySelector("[data-drag-idx]") as HTMLElement;
-    const grip = container.querySelector(
-      '[role="button"][aria-label*="rag" i]',
-    ) as HTMLElement;
+    const grip = container.querySelector(".drag-grip") as HTMLElement;
     // Baseline: the grip is in its collapsed 10px width until hover.
     expect(grip.style.width).toBe("10px");
     // Hover the row body (not the grip itself) — the grip should expand.

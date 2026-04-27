@@ -21,6 +21,7 @@
       <div class="field-control">
         {#if field.type === "enum" && field.options}
           <select
+            aria-label={field.label}
             value={String(get(field.key) ?? "")}
             style="background: {theme.bg}; color: {theme.fg}; border: 1px solid {theme.border}; border-radius: 4px; padding: 2px 6px; font-size: 12px;"
             on:change={(e) => onChange(field.key, e.currentTarget.value)}
@@ -32,12 +33,14 @@
         {:else if field.type === "boolean"}
           <input
             type="checkbox"
+            aria-label={field.label}
             checked={Boolean(get(field.key))}
             on:change={(e) => onChange(field.key, e.currentTarget.checked)}
           />
         {:else}
           <input
             type="text"
+            aria-label={field.label}
             value={String(get(field.key) ?? "")}
             style="background: {theme.bg}; color: {theme.fg}; border: 1px solid {theme.border}; border-radius: 4px; padding: 2px 6px; font-size: 12px; width: 180px;"
             on:change={(e) => onChange(field.key, e.currentTarget.value)}

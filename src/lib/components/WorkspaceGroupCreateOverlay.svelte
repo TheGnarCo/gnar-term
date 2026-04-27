@@ -198,15 +198,19 @@
       </div>
 
       <div style="display: flex; flex-direction: column; gap: 4px;">
-        <span style="font-size: 12px; color: {$theme.fgDim}; font-weight: 500;"
+        <span
+          id="color-label"
+          style="font-size: 12px; color: {$theme.fgDim}; font-weight: 500;"
           >Color</span
         >
-        <ColorPicker
-          bind:value={color}
-          colors={[...GROUP_COLOR_SLOTS]}
-          resolveColor={(c: string) => resolveGroupColor(c, $theme)}
-          theme={themeView}
-        />
+        <div aria-labelledby="color-label" role="radiogroup">
+          <ColorPicker
+            bind:value={color}
+            colors={[...GROUP_COLOR_SLOTS]}
+            resolveColor={(c: string) => resolveGroupColor(c, $theme)}
+            theme={themeView}
+          />
+        </div>
       </div>
 
       <div

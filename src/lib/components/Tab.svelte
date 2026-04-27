@@ -143,7 +143,8 @@
       <path d="M9 13v2" />
     </svg>
     <span
-      title={agentStatus ?? "agent"}
+      role="img"
+      aria-label={agentStatus ?? "agent"}
       class:pulse={isWaiting}
       style="
         width: {isWaiting ? 8 : 7}px; height: {isWaiting ? 8 : 7}px;
@@ -152,6 +153,7 @@
     ></span>
   {:else if surface.hasUnread && !isActive}
     <span
+      aria-label="Unread activity"
       style="width: 5px; height: 5px; border-radius: 50%; background: {$theme.notify}; flex-shrink: 0;"
     ></span>
   {/if}

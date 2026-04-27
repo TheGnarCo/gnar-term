@@ -256,7 +256,6 @@
     <DragGrip
       theme={$theme}
       visible={dragActive || (hovered && !$anyReorderActive)}
-      ariaLabel="Drag workspace to reorder"
       {railColor}
       railOpacity={1}
       alwaysShowDots={true}

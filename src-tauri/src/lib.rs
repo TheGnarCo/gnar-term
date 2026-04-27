@@ -155,6 +155,22 @@ enum OscAction {
     Ignore,
 }
 
+/// Sanitize a notification text string received from PTY output.
+///
+/// Strips C0/C1 control characters (U+0000–U+001F, U+007F, U+0080–U+009F)
+/// and limits the result to 500 characters to prevent malicious PTY output
+/// from injecting control sequences into system notifications.
+fn sanitize_notification(text: &str) -> String {
+    text.chars()
+        .filter(|&c| {
+            let n = c as u32;
+            // Exclude C0 (0x00–0x1F), DEL (0x7F), and C1 (0x80–0x9F)
+            !(n <= 0x1F || n == 0x7F || (0x80..=0x9F).contains(&n))
+        })
+        .take(500)
+        .collect()
+}
+
 /// Classify a raw OSC payload (the bytes between `ESC]` and `BEL`/`ST`).
 ///
 /// Returns an `OscAction` describing what the sequence means.
@@ -211,10 +227,10 @@ fn classify_osc(raw: &str) -> OscAction {
             (true, false) => body.to_string(),
             (false, false) => format!("{title}: {body}"),
         };
-        return OscAction::Notification(formatted);
+        return OscAction::Notification(sanitize_notification(&formatted));
     }
 
-    OscAction::Notification(text.to_string())
+    OscAction::Notification(sanitize_notification(text))
 }
 
 /// Shared pause state — uses a Condvar so the reader thread blocks efficiently
@@ -3304,6 +3320,53 @@ mod tests {
     fn osc9_number_without_semicolon_is_notification() {
         // A payload like "9;42" — just a number, no sub-command semicolon
         assert_eq!(classify_osc("9;42"), OscAction::Notification("42".into()));
+    }
+
+    // --- sanitize_notification tests (F17) ---
+
+    #[test]
+    fn sanitize_strips_c0_control_characters() {
+        // NUL, BEL, ESC, etc. should be removed
+        let input = "hello\x00world\x07\x1b[31m";
+        assert_eq!(sanitize_notification(input), "helloworld[31m");
+    }
+
+    #[test]
+    fn sanitize_strips_del_and_c1_controls() {
+        let input = "foo\x7fbar\u{0080}\u{009f}baz";
+        assert_eq!(sanitize_notification(input), "foobarbaz");
+    }
+
+    #[test]
+    fn sanitize_truncates_to_500_chars() {
+        let long = "a".repeat(600);
+        let result = sanitize_notification(&long);
+        assert_eq!(result.len(), 500);
+    }
+
+    #[test]
+    fn sanitize_preserves_normal_unicode() {
+        let input = "Build complete \u{2705}";
+        assert_eq!(sanitize_notification(input), input);
+    }
+
+    #[test]
+    fn osc9_notification_strips_control_chars() {
+        // A PTY payload containing an embedded ESC sequence should be sanitized
+        assert_eq!(
+            classify_osc("9;Hello\x1b[1mWorld"),
+            OscAction::Notification("Hello[1mWorld".into())
+        );
+    }
+
+    #[test]
+    fn osc_notification_truncated_at_500_chars() {
+        let long_payload = format!("9;{}", "x".repeat(600));
+        if let OscAction::Notification(text) = classify_osc(&long_payload) {
+            assert_eq!(text.len(), 500);
+        } else {
+            panic!("Expected Notification variant");
+        }
     }
 
     // -----------------------------------------------------------------------

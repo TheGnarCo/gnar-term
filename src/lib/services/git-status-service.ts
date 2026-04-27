@@ -334,6 +334,7 @@ function startPolling(workspaceId: string, cwd: string): void {
  * files). Failures fall back to the polling timer.
  */
 const indexWatches = new Map<string, number>();
+const indexUnlistens = new Map<string, () => void>();
 const refreshDebounce = new Map<string, ReturnType<typeof setTimeout>>();
 async function attachIndexWatcher(
   workspaceId: string,
@@ -359,19 +360,23 @@ async function attachIndexWatcher(
     // for the pattern. Debounce so a burst of writes (git add .) only
     // fires one refresh.
     const { listen } = await import("@tauri-apps/api/event");
-    await listen<{ watchId: number }>("file_changed", (event) => {
-      if (event.payload?.watchId !== watchId) return;
-      const pending = refreshDebounce.get(workspaceId);
-      if (pending) clearTimeout(pending);
-      refreshDebounce.set(
-        workspaceId,
-        setTimeout(() => {
-          refreshDebounce.delete(workspaceId);
-          const latest = workspaceCwds.get(workspaceId);
-          if (latest) void refreshGitStatus(workspaceId, latest);
-        }, 150),
-      );
-    });
+    const unlisten = await listen<{ watchId: number }>(
+      "file_changed",
+      (event) => {
+        if (event.payload?.watchId !== watchId) return;
+        const pending = refreshDebounce.get(workspaceId);
+        if (pending) clearTimeout(pending);
+        refreshDebounce.set(
+          workspaceId,
+          setTimeout(() => {
+            refreshDebounce.delete(workspaceId);
+            const latest = workspaceCwds.get(workspaceId);
+            if (latest) void refreshGitStatus(workspaceId, latest);
+          }, 150),
+        );
+      },
+    );
+    indexUnlistens.set(workspaceId, unlisten);
   } catch {
     // Best-effort — the polling timer is still in place.
   }
@@ -381,6 +386,11 @@ async function detachIndexWatcher(workspaceId: string): Promise<void> {
   const watchId = indexWatches.get(workspaceId);
   if (watchId === undefined) return;
   indexWatches.delete(workspaceId);
+  const unlisten = indexUnlistens.get(workspaceId);
+  if (unlisten) {
+    unlisten();
+    indexUnlistens.delete(workspaceId);
+  }
   const pending = refreshDebounce.get(workspaceId);
   if (pending) clearTimeout(pending);
   refreshDebounce.delete(workspaceId);

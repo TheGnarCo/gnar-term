@@ -93,6 +93,27 @@ pub async fn git_remote_url(repo_path: String) -> Result<String, String> {
     }
 }
 
+/// Validate a git ref string against a strict allowlist of characters.
+///
+/// Accepts only alphanumeric characters plus hyphen, underscore, dot,
+/// slash, and `@` — the characters that appear in valid git ref names,
+/// branch names, and commit SHAs. Rejects anything else to prevent
+/// ref-parsing edge cases from reaching git.
+fn validate_git_ref(r: &str) -> Result<(), String> {
+    if r.is_empty() {
+        return Err("git ref must not be empty".to_string());
+    }
+    let invalid: Vec<char> = r
+        .chars()
+        .filter(|c| !matches!(c, 'A'..='Z' | 'a'..='z' | '0'..='9' | '-' | '_' | '.' | '/' | '@' | '{' | '}'))
+        .collect();
+    if invalid.is_empty() {
+        Ok(())
+    } else {
+        Err(format!("git ref contains invalid characters: {invalid:?}"))
+    }
+}
+
 /// Return the raw unified-diff text for a repository. All filter args
 /// are optional and compose:
 ///   - `staged = true`         → `git diff --staged`
@@ -120,6 +141,12 @@ pub async fn git_diff(
         args.push("--staged".to_string());
     }
     args.push("--end-of-options".to_string());
+    if let Some(b) = base.as_deref() {
+        validate_git_ref(b)?;
+    }
+    if let Some(h) = head.as_deref() {
+        validate_git_ref(h)?;
+    }
     match (base.as_deref(), head.as_deref()) {
         (Some(b), Some(h)) => args.push(format!("{b}..{h}")),
         (Some(b), None) => args.push(b.to_string()),
@@ -191,5 +218,36 @@ mod tests {
     fn strip_userinfo_leaves_plain_https_unchanged() {
         let url = "https://github.com/org/repo";
         assert_eq!(strip_userinfo(url), url);
+    }
+
+    // --- validate_git_ref tests (F33) ---
+
+    #[test]
+    fn git_ref_accepts_branch_names() {
+        assert!(validate_git_ref("main").is_ok());
+        assert!(validate_git_ref("feature/my-branch").is_ok());
+        assert!(validate_git_ref("v1.2.3").is_ok());
+        assert!(validate_git_ref("HEAD@{1}").is_ok());
+        assert!(validate_git_ref("abc1234def5678").is_ok());
+    }
+
+    #[test]
+    fn git_ref_rejects_empty_string() {
+        assert!(validate_git_ref("").is_err());
+    }
+
+    #[test]
+    fn git_ref_rejects_shell_special_chars() {
+        assert!(validate_git_ref("main;rm -rf /").is_err());
+        assert!(validate_git_ref("$(evil)").is_err());
+        assert!(validate_git_ref("main\x00evil").is_err());
+        assert!(validate_git_ref("branch name").is_err()); // space
+    }
+
+    #[test]
+    fn git_ref_rejects_tilde_and_caret() {
+        // ~ and ^ have special meaning to git's rev-parse and are not in the allowlist
+        assert!(validate_git_ref("HEAD~1").is_err());
+        assert!(validate_git_ref("HEAD^").is_err());
     }
 }

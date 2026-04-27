@@ -10,7 +10,6 @@
    * stays optional for callers that still want a grip-only binding.
    */
   export let onMouseDown: ((e: MouseEvent) => void) | undefined = undefined;
-  export let ariaLabel: string = "Drag to reorder";
   /** Color of the rail and dot texture. Defaults to theme.fgDim (grey). */
   export let railColor: string | undefined = undefined;
   /** Opacity of the always-on rail when not hovered. 1.0 for active items, 0.35 for inactive. */
@@ -51,11 +50,8 @@
   $: fritBackgroundRepeat = "repeat";
 </script>
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
-  role="button"
-  tabindex="-1"
-  aria-label={ariaLabel}
+  aria-hidden="true"
   class="drag-grip"
   on:mousedown={onMouseDown ?? (() => {})}
   style="

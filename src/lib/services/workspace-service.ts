@@ -16,6 +16,8 @@ import {
   isTerminalSurface,
   isExtensionSurface,
   isPreviewSurface,
+  findParentSplit,
+  replaceNodeInTree,
   type Workspace,
   type Pane,
   type SplitNode,
@@ -30,7 +32,15 @@ import {
 } from "../config";
 import { safeFocus } from "./service-helpers";
 import { eventBus } from "./event-bus";
-import { appendRootRow, removeRootRow } from "../stores/root-row-order";
+import {
+  appendRootRow,
+  removeRootRow,
+  insertRootRow,
+} from "../stores/root-row-order";
+import {
+  addWorkspaceToGroup,
+  insertWorkspaceIntoGroup,
+} from "./workspace-group-service";
 
 // --- Workspace persistence (debounced save to state.json) ---
 
@@ -386,3 +396,114 @@ export async function closeAllWorkspaces(): Promise<void> {
     closeWorkspace(0);
   }
 }
+
+/**
+ * Collapse an empty pane out of a workspace's split tree. Mirrors the
+ * structural piece of `removePane` (in pane-service) without the
+ * resize-observer / event-bus / focus side-effects — used by tab-drag
+ * services after they move a surface out of a pane that becomes empty.
+ *
+ * Caller must guarantee `paneId` is NOT the splitRoot pane (a single
+ * empty pane at the root has no sibling to collapse into and is the
+ * caller's responsibility to handle).
+ */
+function collapseEmptyPaneInWorkspace(ws: Workspace, paneId: string): void {
+  const parentInfo = findParentSplit(ws.splitRoot, paneId);
+  if (!parentInfo || parentInfo.parent.type !== "split") return;
+  const sibling = parentInfo.parent.children[parentInfo.index === 0 ? 1 : 0]!;
+  if (ws.splitRoot === parentInfo.parent) {
+    ws.splitRoot = sibling;
+  } else {
+    replaceNodeInTree(ws.splitRoot, parentInfo.parent, sibling);
+  }
+}
+
+/**
+ * Spawn a new workspace whose splitRoot is a single pane carrying the
+ * dragged surface. Inherits the source workspace's groupId so a tab
+ * dropped from a grouped workspace into the sidebar lands as a
+ * sibling within the same group.
+ *
+ * Refuses to leave the source empty: when the source workspace has only
+ * one surface total, this is a no-op (the caller — tab-drag — also
+ * guards against this when computing the drop target, but the service
+ * enforces the invariant in case callers skip the check).
+ */
+export function createWorkspaceFromSurface(
+  surfaceId: string,
+  sourcePaneId: string,
+  sourceWorkspaceId: string,
+  insertOptions?:
+    | { kind: "root"; insertIdx: number }
+    | { kind: "group"; positionInGroup: number },
+): void {
+  const allWs = get(workspaces);
+  const srcWs = allWs.find((w) => w.id === sourceWorkspaceId);
+  if (!srcWs) return;
+  if (getAllSurfaces(srcWs).length < 2) return;
+
+  const sourcePane = getAllPanes(srcWs.splitRoot).find(
+    (p) => p.id === sourcePaneId,
+  );
+  if (!sourcePane) return;
+  const surfaceIdx = sourcePane.surfaces.findIndex((s) => s.id === surfaceId);
+  if (surfaceIdx === -1) return;
+  const [surface] = sourcePane.surfaces.splice(surfaceIdx, 1);
+  if (!surface) return;
+
+  if (sourcePane.activeSurfaceId === surfaceId) {
+    sourcePane.activeSurfaceId = sourcePane.surfaces[0]?.id ?? null;
+  }
+
+  // If the source pane is now empty (and isn't the workspace's root),
+  // fold it out of the split tree. The workspace itself survives —
+  // we already enforced >1 surface above.
+  if (
+    sourcePane.surfaces.length === 0 &&
+    !(
+      srcWs.splitRoot.type === "pane" &&
+      srcWs.splitRoot.pane.id === sourcePaneId
+    )
+  ) {
+    collapseEmptyPaneInWorkspace(srcWs, sourcePaneId);
+  }
+
+  const newPane: Pane = {
+    id: uid(),
+    surfaces: [surface],
+    activeSurfaceId: surface.id,
+  };
+  const srcGroupId = (srcWs.metadata as Record<string, unknown> | undefined)
+    ?.groupId as string | undefined;
+  const newWs: Workspace = {
+    id: uid(),
+    name: surface.title || "New Workspace",
+    splitRoot: { type: "pane", pane: newPane },
+    activePaneId: newPane.id,
+    ...(srcGroupId ? { metadata: { groupId: srcGroupId } } : {}),
+  };
+
+  workspaces.update((list) => [...list, newWs]);
+  if (insertOptions?.kind === "root") {
+    insertRootRow(insertOptions.insertIdx, { kind: "workspace", id: newWs.id });
+  } else {
+    appendRootRow({ kind: "workspace", id: newWs.id });
+  }
+  if (srcGroupId) {
+    if (insertOptions?.kind === "group") {
+      insertWorkspaceIntoGroup(
+        srcGroupId,
+        newWs.id,
+        insertOptions.positionInGroup,
+      );
+    } else {
+      addWorkspaceToGroup(srcGroupId, newWs.id);
+    }
+  }
+  schedulePersist();
+}
+
+// Re-exported so pane-service (which lives next to it) can collapse a
+// pane after moving a surface across workspaces without duplicating
+// the helper.
+export { collapseEmptyPaneInWorkspace };

@@ -27,6 +27,20 @@ export interface DragReorderConfig {
    * stuck until the next mouse event.
    */
   onStateChange?: () => void;
+  /**
+   * Optional callback fired on every mousemove while a drag is active.
+   * Receives the cursor position and current ghost element so callers can
+   * compute alternate drop targets (e.g. pane bodies) and mutate the ghost
+   * to reflect allow/deny state.
+   */
+  onMove?: (x: number, y: number, ghostEl: HTMLElement | null) => void;
+  /**
+   * Optional callback fired at the start of every drag-end (mouseup),
+   * regardless of whether from === to. Return true to suppress the normal
+   * reorder onDrop call — use this when the drag resolved to an alternate
+   * drop target (e.g. a pane body rather than a sidebar row).
+   */
+  onDragCommit?: (fromIdx: number) => boolean;
 }
 
 export interface DragReorderState {
@@ -71,6 +85,7 @@ export function createDragReorder(
       ghostEl.style.left = e.clientX + 8 + "px";
       ghostEl.style.top = e.clientY - 12 + "px";
     }
+    config.onMove?.(e.clientX, e.clientY, ghostEl);
     const prev = indicator;
 
     // Gather visible items in THIS drop zone, scoped to the specific
@@ -145,7 +160,11 @@ export function createDragReorder(
   function onDragEnd() {
     const from = sourceIdx;
     const dropIndicator = indicator;
-    if (from !== null && dropIndicator) {
+    let suppressReorder = false;
+    if (from !== null && config.onDragCommit) {
+      suppressReorder = config.onDragCommit(from);
+    }
+    if (!suppressReorder && from !== null && dropIndicator) {
       let to = dropIndicator.idx;
       if (dropIndicator.edge === "after") to += 1;
       if (from !== to) {

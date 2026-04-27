@@ -375,13 +375,20 @@ describe("Flash focused pane", () => {
 // Structural invariant: verified via source scan because mounting the full
 // component tree requires Tauri runtime which isn't available in vitest.
 describe("Tab drag reorder within pane", () => {
-  it("Tab.svelte has drag handlers", async () => {
+  it("Tab.svelte wires startTabDrag on mousedown", async () => {
+    // HTML5 DnD is unreliable in Tauri WKWebView, so tabs use the
+    // mouse-based drag service shared with the sidebar's reorder code
+    // (drag-reorder.ts). Source-scan rather than mount because mounting
+    // the full component tree requires the Tauri runtime.
     const fs = await import("fs");
     const source = fs.readFileSync("src/lib/components/Tab.svelte", "utf-8");
-    expect(source).toContain('draggable="true"');
-    expect(source).toContain("on:dragstart=");
-    expect(source).toContain("on:drop=");
-    expect(source).toContain("onReorder");
+    expect(source).toContain("startTabDrag");
+    expect(source).toContain("on:mousedown");
+    expect(source).toContain("data-tab-idx");
+    // Old HTML5 DnD attributes must be gone — they triggered the
+    // WKWebView misbehavior we're working around.
+    expect(source).not.toContain('draggable="true"');
+    expect(source).not.toContain("on:dragstart");
   });
 
   it("pane-service has reorderTab", async () => {

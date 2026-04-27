@@ -680,6 +680,25 @@ describe("pane-service", () => {
       const titles = pane.surfaces.map((s) => (s as TerminalSurface).title);
       expect(titles).toEqual(["C", "A", "B"]);
     });
+
+    it("schedules a persist after reordering", () => {
+      const s1 = mockTerminalSurface({ title: "A" });
+      const s2 = mockTerminalSurface({ title: "B" });
+      const s3 = mockTerminalSurface({ title: "C" });
+      const pane = makePane([s1, s2, s3]);
+      const ws = makeWorkspace({
+        splitRoot: { type: "pane", pane },
+        activePaneId: pane.id,
+      });
+      workspaces.set([ws]);
+      activeWorkspaceIdx.set(0);
+
+      reorderTab(pane.id, 0, 2);
+      // schedulePersist debounces to saveState; advance the timer to
+      // assert the save actually fires.
+      vi.advanceTimersByTime(2000);
+      expect(saveState).toHaveBeenCalled();
+    });
   });
 
   describe("focusDirection", () => {

@@ -11,6 +11,8 @@
    */
   import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
   import { theme } from "../stores/theme";
+  import { getAllSurfaces } from "../types";
+  import { tabDragState } from "../services/tab-drag";
   import { reorderContext, anyReorderActive } from "../stores/ui";
   import { createDragReorder } from "../actions/drag-reorder";
   import {
@@ -174,6 +176,34 @@
     }
     return railColor;
   })();
+
+  // --- Tab-drag overlay state ---
+  $: tabDrag = $tabDragState;
+  $: tabDragToGroup =
+    tabDrag?.dropTarget?.kind === "new-workspace-in-group" &&
+    tabDrag.dropTarget.groupId === scopeId
+      ? tabDrag.dropTarget
+      : null;
+  $: effectiveActive = active || tabDragToGroup !== null;
+  // null source idx → every row's idx !== null → all rows show sibling overlay
+  $: effectiveSourceIdx = active ? sourceIdx : (null as number | null);
+  $: effectiveIndicator = active
+    ? indicator
+    : tabDragToGroup !== null
+      ? { idx: tabDragToGroup.insertGlobalIdx, edge: tabDragToGroup.insertEdge }
+      : (null as { idx: number; edge: "before" | "after" } | null);
+  $: effectiveSourceHeight = active ? sourceHeight : 32;
+  $: tabDragSurfaceLabel = (() => {
+    if (!tabDrag || !tabDragToGroup) return "";
+    const srcWs = $workspaces.find((w) => w.id === tabDrag!.sourceWorkspaceId);
+    if (!srcWs) return "New Workspace";
+    return (
+      getAllSurfaces(srcWs).find((s) => s.id === tabDrag!.surfaceId)?.title ||
+      "New Workspace"
+    );
+  })();
+  $: effectiveDropLabel = active ? sourceWs?.name : tabDragSurfaceLabel;
+  $: effectiveDropAccent = active ? dropAccent : railColor;
 
   let itemRefs: Record<string, WorkspaceItem> = {};
 
@@ -352,14 +382,14 @@
     {/if}
     {#each entries as entry (entry.ws.id)}
       {@const isSrc = active && sourceIdx === entry.idx}
-      {@const isSibling = active && sourceIdx !== entry.idx}
+      {@const isSibling = effectiveActive && effectiveSourceIdx !== entry.idx}
       <div class="workspace-list-row" data-ws-view-drag-idx={entry.idx}>
-        {#if indicator?.idx === entry.idx && indicator.edge === "before"}
+        {#if effectiveIndicator?.idx === entry.idx && effectiveIndicator.edge === "before"}
           <DropGhost
             theme={$theme}
-            height={sourceHeight}
-            accent={dropAccent}
-            label={sourceWs?.name}
+            height={effectiveSourceHeight}
+            accent={effectiveDropAccent}
+            label={effectiveDropLabel}
           />
         {/if}
         <div style="position: relative;">
@@ -401,12 +431,12 @@
             </div>
           {/if}
         </div>
-        {#if indicator?.idx === entry.idx && indicator.edge === "after"}
+        {#if effectiveIndicator?.idx === entry.idx && effectiveIndicator.edge === "after"}
           <DropGhost
             theme={$theme}
-            height={sourceHeight}
-            accent={dropAccent}
-            label={sourceWs?.name}
+            height={effectiveSourceHeight}
+            accent={effectiveDropAccent}
+            label={effectiveDropLabel}
           />
         {/if}
       </div>

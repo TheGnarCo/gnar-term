@@ -225,3 +225,5 @@ export function showFormPrompt(
     });
   });
 }
+
+export const renamingSurfaceId = writable<string | null>(null);

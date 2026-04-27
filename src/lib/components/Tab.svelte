@@ -1,7 +1,10 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import { theme } from "../stores/theme";
   import type { Surface } from "../types";
   import { startTabDrag } from "../services/tab-drag";
+  import { renamingSurfaceId } from "../stores/ui";
+  import { renameSurface } from "../services/surface-service";
 
   export let surface: Surface;
   export let index: number;
@@ -20,6 +23,77 @@
 
   let hovered = false;
   let closeHovered = false;
+  let nameEl: HTMLSpanElement | null = null;
+  let _renaming = false;
+
+  $: {
+    if ($renamingSurfaceId === surface.id && !_renaming) {
+      void startRenameMode();
+    } else if ($renamingSurfaceId !== surface.id && _renaming) {
+      cancelRename();
+    }
+  }
+
+  async function startRenameMode() {
+    _renaming = true;
+    await tick();
+    if (!nameEl) return;
+    nameEl.textContent = surface.title;
+    nameEl.contentEditable = "true";
+    nameEl.style.background = $theme.bgSurface;
+    nameEl.style.border = `1px solid ${$theme.borderActive}`;
+    nameEl.style.borderRadius = "3px";
+    nameEl.style.padding = "0 3px";
+    nameEl.style.outline = "none";
+    nameEl.focus();
+    const range = document.createRange();
+    range.selectNodeContents(nameEl);
+    const sel = window.getSelection();
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+  }
+
+  function finishRename() {
+    if (!nameEl || !_renaming) return;
+    nameEl.contentEditable = "false";
+    nameEl.style.background = "transparent";
+    nameEl.style.border = "none";
+    nameEl.style.borderRadius = "";
+    nameEl.style.padding = "";
+    nameEl.style.outline = "";
+    const newTitle = nameEl.textContent?.trim() ?? "";
+    if (newTitle && newTitle !== surface.title) {
+      renameSurface(surface.id, newTitle);
+    } else {
+      nameEl.textContent = surface.title || `Shell ${index + 1}`;
+    }
+    _renaming = false;
+    renamingSurfaceId.set(null);
+  }
+
+  function cancelRename() {
+    if (!nameEl || !_renaming) return;
+    nameEl.contentEditable = "false";
+    nameEl.style.background = "transparent";
+    nameEl.style.border = "none";
+    nameEl.style.borderRadius = "";
+    nameEl.style.padding = "";
+    nameEl.style.outline = "";
+    nameEl.textContent = surface.title || `Shell ${index + 1}`;
+    _renaming = false;
+    renamingSurfaceId.set(null);
+  }
+
+  function handleNameKeydown(e: KeyboardEvent) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      nameEl?.blur();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      if (nameEl) nameEl.textContent = surface.title;
+      nameEl?.blur();
+    }
+  }
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -43,7 +117,9 @@
   on:click={onSelect}
   on:mouseenter={() => (hovered = true)}
   on:mouseleave={() => (hovered = false)}
-  on:mousedown={(e) => startTabDrag(e, surface.id, paneId, workspaceId)}
+  on:mousedown={(e) => {
+    if (!_renaming) startTabDrag(e, surface.id, paneId, workspaceId);
+  }}
 >
   {#if agentDotColor}
     <svg
@@ -79,13 +155,18 @@
       style="width: 5px; height: 5px; border-radius: 50%; background: {$theme.notify}; flex-shrink: 0;"
     ></span>
   {/if}
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
   <span
+    bind:this={nameEl}
     style="
       overflow: hidden; text-overflow: ellipsis;
       {isWaiting ? `color: ${agentDotColor}; font-weight: 600;` : ''}
     "
+    on:blur={finishRename}
+    on:keydown={handleNameKeydown}
+    on:dblclick|stopPropagation={() => renamingSurfaceId.set(surface.id)}
   >
-    {surface.title || `Shell ${index + 1}`}
+    {#if !_renaming}{surface.title || `Shell ${index + 1}`}{/if}
   </span>
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->

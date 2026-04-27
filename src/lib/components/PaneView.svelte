@@ -33,6 +33,7 @@
   export let onSplitDown: () => void;
   export let onClosePane: () => void;
   export let onFocusPane: () => void;
+  export let isActive: boolean = false;
 
   let paneEl: HTMLElement;
   let resizeObserver: ResizeObserver;
@@ -186,7 +187,11 @@
     position: relative;
     --notify: {$theme.notify};
     --notify-glow: {$theme.notifyGlow};
-    border: 1px solid {paneHasUnread ? $theme.notify : $theme.border};
+    border: 1px solid {paneHasUnread
+    ? $theme.notify
+    : isActive
+      ? $theme.accent
+      : $theme.border};
     border-radius: 4px; overflow: hidden;
     {paneHasUnread
     ? `box-shadow: 0 0 0 1px ${$theme.notifyGlow}, 0 0 14px 1px ${$theme.notifyGlow};`

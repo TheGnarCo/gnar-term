@@ -119,6 +119,36 @@ export function addWorkspaceToGroup(
 }
 
 /**
+ * Inserts `workspaceId` into `groupId`'s workspaceIds at `positionInGroup`.
+ * No-op when the group is missing or already contains the workspace.
+ * Returns true when a change was persisted.
+ */
+export function insertWorkspaceIntoGroup(
+  groupId: string,
+  workspaceId: string,
+  positionInGroup: number,
+): boolean {
+  const groups = getWorkspaceGroups();
+  let changed = false;
+  const next = groups.map((g) => {
+    if (g.id !== groupId) return g;
+    if (g.workspaceIds.includes(workspaceId)) return g;
+    changed = true;
+    const ids = [...g.workspaceIds];
+    ids.splice(
+      Math.max(0, Math.min(ids.length, positionInGroup)),
+      0,
+      workspaceId,
+    );
+    return { ...g, workspaceIds: ids };
+  });
+  if (!changed) return false;
+  setWorkspaceGroups(next);
+  emitStateChanged({ groupId });
+  return true;
+}
+
+/**
  * Strips `workspaceId` from every group's workspaceIds. Used when a
  * workspace is closed — the group membership is inferred from workspace
  * metadata, so removing from all is cheap and idempotent.

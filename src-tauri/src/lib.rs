@@ -350,8 +350,10 @@ async fn spawn_pty(
 [ -f "$GNARTERM_ORIG_ZDOTDIR/.zshenv" ] && source "$GNARTERM_ORIG_ZDOTDIR/.zshenv"
 export ZDOTDIR="$GNARTERM_ORIG_ZDOTDIR"
 _gnarterm_report_cwd() { printf '\e]7;file://%s%s\a' "$(hostname)" "$PWD"; }
+_gnarterm_cmd_running() { printf '\e]0;Running: %s\a' "$1"; }
 precmd_functions+=(_gnarterm_report_cwd)
 chpwd_functions+=(_gnarterm_report_cwd)
+preexec_functions+=(_gnarterm_cmd_running)
 "#;
     let _ = std::fs::write(format!("{integration_dir}/.zshenv"), zshenv);
     let orig_zdotdir = std::env::var("ZDOTDIR").unwrap_or(home.clone());

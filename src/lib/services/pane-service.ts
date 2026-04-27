@@ -12,6 +12,7 @@ import { createTerminalSurface } from "../terminal-service";
 import {
   uid,
   getAllPanes,
+  getAllSurfaces,
   isTerminalSurface,
   findParentSplit,
   replaceNodeInTree,
@@ -19,7 +20,14 @@ import {
   type Pane,
   type SplitNode,
 } from "../types";
-import { createWorkspace, schedulePersist } from "./workspace-service";
+import {
+  createWorkspace,
+  schedulePersist,
+  collapseEmptyPaneInWorkspace,
+} from "./workspace-service";
+import { removeRootRow } from "../stores/root-row-order";
+import { removeWorkspaceFromAllGroups } from "./workspace-group-service";
+import { handleWorkspaceClosed as gitStatusWorkspaceClosed } from "./git-status-service";
 import { safeFocus, getCwdForSurface } from "./service-helpers";
 import { eventBus } from "./event-bus";
 
@@ -148,6 +156,139 @@ export function focusPane(paneId: string) {
   eventBus.emit({ type: "pane:focused", id: paneId, previousId });
 }
 
+/**
+ * Move a single surface out of its source pane into a brand-new pane
+ * that sits next to `targetPaneId` in the split tree. Backs the
+ * cross-pane drop in tab drag-and-drop ("drag tab onto another pane").
+ *
+ * - source pane goes empty → it collapses out of the split tree
+ *   (terminal/surface NOT disposed; it lives on in the new pane)
+ * - target pane is the splitRoot → the wrapping split becomes the root
+ * - target pane is nested → its slot in the parent split is replaced
+ *
+ * No-op when source === target, when either pane can't be found, or
+ * when the surface isn't in the source pane.
+ */
+export function splitPaneWithSurface(
+  surfaceId: string,
+  sourcePaneId: string,
+  targetPaneId: string,
+  direction: "horizontal" | "vertical" = "horizontal",
+  before = false,
+): void {
+  const ws = get(activeWorkspace);
+  if (!ws) return;
+  const allPanes = getAllPanes(ws.splitRoot);
+  const sourcePane = allPanes.find((p) => p.id === sourcePaneId);
+  const targetPane = allPanes.find((p) => p.id === targetPaneId);
+  if (!sourcePane || !targetPane) return;
+
+  const surfaceIdx = sourcePane.surfaces.findIndex((s) => s.id === surfaceId);
+  if (surfaceIdx === -1) return;
+  const [surface] = sourcePane.surfaces.splice(surfaceIdx, 1);
+  if (!surface) return;
+
+  if (sourcePane.activeSurfaceId === surfaceId) {
+    sourcePane.activeSurfaceId = sourcePane.surfaces[0]?.id ?? null;
+  }
+
+  const newPane: Pane = {
+    id: uid(),
+    surfaces: [surface],
+    activeSurfaceId: surface.id,
+  };
+
+  const newSplit: SplitNode = {
+    type: "split",
+    direction,
+    children: before
+      ? [
+          { type: "pane", pane: newPane },
+          { type: "pane", pane: targetPane },
+        ]
+      : [
+          { type: "pane", pane: targetPane },
+          { type: "pane", pane: newPane },
+        ],
+    ratio: 0.5,
+  };
+
+  if (ws.splitRoot.type === "pane" && ws.splitRoot.pane.id === targetPaneId) {
+    ws.splitRoot = newSplit;
+  } else {
+    const parentInfo = findParentSplit(ws.splitRoot, targetPaneId);
+    if (parentInfo && parentInfo.parent.type === "split") {
+      parentInfo.parent.children[parentInfo.index] = newSplit;
+    }
+  }
+
+  // Collapse the source pane if the move emptied it. The surface is
+  // already moved into the new pane, so we explicitly skip terminal
+  // disposal (unlike removePane → closePane which kills the PTY).
+  if (sourcePane.surfaces.length === 0) {
+    if (ws.splitRoot.type === "pane" && ws.splitRoot.pane.id === sourcePaneId) {
+      // Source was the root and is now empty — but we just made the
+      // new split (containing target + new pane) the new root above
+      // when target === root, which excludes this branch. Reaching
+      // here means source was root AND target was nested, which is
+      // structurally impossible in a binary split tree. Bail safely.
+      return;
+    }
+    const srcParentInfo = findParentSplit(ws.splitRoot, sourcePaneId);
+    if (srcParentInfo && srcParentInfo.parent.type === "split") {
+      const sibling =
+        srcParentInfo.parent.children[srcParentInfo.index === 0 ? 1 : 0]!;
+      if (ws.splitRoot === srcParentInfo.parent) {
+        ws.splitRoot = sibling;
+      } else {
+        replaceNodeInTree(ws.splitRoot, srcParentInfo.parent, sibling);
+      }
+    }
+  }
+
+  ws.activePaneId = newPane.id;
+  workspaces.update((l) => [...l]);
+  schedulePersist();
+}
+
+/**
+ * Move a surface from its source pane into an existing target pane's tab
+ * list. Source pane collapses if it becomes empty. Backs the tab-bar drop
+ * in drag-and-drop ("drag tab onto another pane's tab bar").
+ */
+export function mergeTabToPane(
+  surfaceId: string,
+  sourcePaneId: string,
+  targetPaneId: string,
+): void {
+  if (sourcePaneId === targetPaneId) return;
+  const ws = get(activeWorkspace);
+  if (!ws) return;
+  const allPanes = getAllPanes(ws.splitRoot);
+  const sourcePane = allPanes.find((p) => p.id === sourcePaneId);
+  const targetPane = allPanes.find((p) => p.id === targetPaneId);
+  if (!sourcePane || !targetPane) return;
+
+  const idx = sourcePane.surfaces.findIndex((s) => s.id === surfaceId);
+  if (idx === -1) return;
+  const [surface] = sourcePane.surfaces.splice(idx, 1);
+  if (!surface) return;
+  if (sourcePane.activeSurfaceId === surfaceId) {
+    sourcePane.activeSurfaceId = sourcePane.surfaces[0]?.id ?? null;
+  }
+  if (
+    sourcePane.surfaces.length === 0 &&
+    !(ws.splitRoot.type === "pane" && ws.splitRoot.pane.id === sourcePaneId)
+  ) {
+    collapseEmptyPaneInWorkspace(ws, sourcePaneId);
+  }
+  targetPane.surfaces.push(surface);
+  targetPane.activeSurfaceId = surface.id;
+  ws.activePaneId = targetPane.id;
+  workspaces.update((l) => [...l]);
+  schedulePersist();
+}
+
 export function reorderTab(paneId: string, fromIdx: number, toIdx: number) {
   const ws = get(activeWorkspace);
   if (!ws) return;
@@ -157,6 +298,7 @@ export function reorderTab(paneId: string, fromIdx: number, toIdx: number) {
   const adjustedTo = fromIdx < toIdx ? toIdx - 1 : toIdx;
   pane.surfaces.splice(adjustedTo, 0, item);
   workspaces.update((l) => [...l]);
+  schedulePersist();
 }
 
 export function focusDirection(dir: "left" | "right" | "up" | "down") {
@@ -194,4 +336,152 @@ export function flashFocusedPane() {
 export function splitFromSidebar(direction: "horizontal" | "vertical") {
   const pane = get(activePane);
   if (pane) void splitPane(pane.id, direction);
+}
+
+/**
+ * Expand a sidebar workspace into the target workspace by splitting each of
+ * its surfaces into its own pane next to `targetPaneId`. Surfaces are chained:
+ * the first surface splits from targetPane; each subsequent surface splits from
+ * the previously-created pane, producing a right-leaning binary split tree.
+ *
+ * The source workspace is removed without disposing its terminals (they move
+ * into tgtWs). Group membership and rootRowOrder are cleaned up directly so
+ * the worktree handler's "keep or delete?" dialog is NOT triggered — the
+ * surfaces are still live.
+ */
+export function expandWorkspaceIntoPanes(
+  srcWorkspaceId: string,
+  targetPaneId: string,
+  direction: "horizontal" | "vertical",
+  before: boolean,
+): void {
+  const allWs = get(workspaces);
+  const srcWs = allWs.find((ws) => ws.id === srcWorkspaceId);
+  const tgtWs = allWs.find((ws) =>
+    getAllPanes(ws.splitRoot).some((p) => p.id === targetPaneId),
+  );
+  if (!srcWs || !tgtWs || srcWs === tgtWs) return;
+
+  // Collect all surfaces from source workspace in pane order
+  const allSurfaces = getAllSurfaces(srcWs);
+  if (allSurfaces.length === 0) return;
+
+  // Chain splits: each new pane becomes the anchor for the next
+  let anchorPaneId = targetPaneId;
+
+  for (const surface of allSurfaces) {
+    const newPane: Pane = {
+      id: uid(),
+      surfaces: [surface],
+      activeSurfaceId: surface.id,
+    };
+
+    const anchorPane = getAllPanes(tgtWs.splitRoot).find(
+      (p) => p.id === anchorPaneId,
+    );
+    if (!anchorPane) continue;
+
+    const newSplit: SplitNode = {
+      type: "split",
+      direction,
+      children: before
+        ? [
+            { type: "pane", pane: newPane },
+            { type: "pane", pane: anchorPane },
+          ]
+        : [
+            { type: "pane", pane: anchorPane },
+            { type: "pane", pane: newPane },
+          ],
+      ratio: 0.5,
+    };
+
+    if (
+      tgtWs.splitRoot.type === "pane" &&
+      tgtWs.splitRoot.pane.id === anchorPaneId
+    ) {
+      tgtWs.splitRoot = newSplit;
+    } else {
+      const parentInfo = findParentSplit(tgtWs.splitRoot, anchorPaneId);
+      if (parentInfo && parentInfo.parent.type === "split") {
+        parentInfo.parent.children[parentInfo.index] = newSplit;
+      }
+    }
+
+    anchorPaneId = newPane.id;
+  }
+
+  tgtWs.activePaneId = anchorPaneId;
+
+  // Remove source workspace without disposing terminals (surfaces already moved).
+  // Clean up directly instead of emitting workspace:closed to avoid triggering
+  // the worktree handler's interactive "keep or delete?" dialog.
+  workspaces.update((list) => list.filter((ws) => ws.id !== srcWorkspaceId));
+  activeWorkspaceIdx.set(
+    Math.min(get(activeWorkspaceIdx), get(workspaces).length - 1),
+  );
+  removeRootRow({ kind: "workspace", id: srcWorkspaceId });
+  removeWorkspaceFromAllGroups(srcWorkspaceId);
+  gitStatusWorkspaceClosed(srcWorkspaceId);
+  schedulePersist();
+}
+
+/**
+ * Move a single surface out of its source pane (in any workspace) into
+ * the active pane of `targetWorkspaceId`. Backs the sidebar-drop drag
+ * gesture: drag a tab onto a different workspace's row to relocate the
+ * surface there.
+ *
+ * - source pane goes empty → it collapses out of the source
+ *   workspace's split tree (terminal NOT disposed)
+ * - target falls back to the first pane when the workspace has no
+ *   `activePaneId` set
+ * - schedules a state persist so the move survives a restart
+ *
+ * Note: unlike `splitPaneWithSurface` this finds the source workspace
+ * by walking every workspace for a pane match, since the source might
+ * not be the active workspace.
+ */
+export function moveSurfaceToWorkspace(
+  surfaceId: string,
+  sourcePaneId: string,
+  targetWorkspaceId: string,
+): void {
+  const allWs = get(workspaces);
+  const srcWs = allWs.find((ws) =>
+    getAllPanes(ws.splitRoot).some((p) => p.id === sourcePaneId),
+  );
+  const tgtWs = allWs.find((ws) => ws.id === targetWorkspaceId);
+  if (!srcWs || !tgtWs || srcWs === tgtWs) return;
+
+  const sourcePane = getAllPanes(srcWs.splitRoot).find(
+    (p) => p.id === sourcePaneId,
+  );
+  if (!sourcePane) return;
+  const idx = sourcePane.surfaces.findIndex((s) => s.id === surfaceId);
+  if (idx === -1) return;
+  const [surface] = sourcePane.surfaces.splice(idx, 1);
+  if (!surface) return;
+  if (sourcePane.activeSurfaceId === surfaceId) {
+    sourcePane.activeSurfaceId = sourcePane.surfaces[0]?.id ?? null;
+  }
+  if (
+    sourcePane.surfaces.length === 0 &&
+    !(
+      srcWs.splitRoot.type === "pane" &&
+      srcWs.splitRoot.pane.id === sourcePaneId
+    )
+  ) {
+    collapseEmptyPaneInWorkspace(srcWs, sourcePaneId);
+  }
+
+  const tgtAllPanes = getAllPanes(tgtWs.splitRoot);
+  const targetPane =
+    tgtAllPanes.find((p) => p.id === tgtWs.activePaneId) ?? tgtAllPanes[0];
+  if (!targetPane) return;
+  targetPane.surfaces.push(surface);
+  targetPane.activeSurfaceId = surface.id;
+
+  workspaces.update((l) => [...l]);
+  schedulePersist();
 }

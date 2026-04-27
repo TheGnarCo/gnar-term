@@ -421,12 +421,7 @@ export async function setupListeners() {
     },
   );
 
-  // OSC 0/2: shell sets window title (shows process name or custom title)
-  await listen<{ pty_id: number; title: string }>("pty-title", (event) => {
-    const { pty_id, title } = event.payload;
-    // Filter out escape-sequence fragments that may slip through
-    if (!title || /[\x00-\x1f\x7f]/.test(title) || /^\d+[;\d:\/]*$/.test(title))
-      return;
+  function applyPtyTitle(pty_id: number, title: string) {
     let changed: { id: string; oldTitle: string; newTitle: string } | null =
       null;
     workspaces.update((wsList) => {
@@ -445,15 +440,9 @@ export async function setupListeners() {
     });
     // Emit AFTER the store update so downstream listeners (passive agent
     // detection, status trackers) see the new title on the surface when
-    // they look it up. Listeners exist in the event-bus type surface
-    // but were previously never fired, so title-based agent attach
-    // (Claude titling itself "Claude Code", etc.) never triggered.
+    // they look it up.
     if (changed) {
-      const c = changed as {
-        id: string;
-        oldTitle: string;
-        newTitle: string;
-      };
+      const c = changed as { id: string; oldTitle: string; newTitle: string };
       eventBus.emit({
         type: "surface:titleChanged",
         id: c.id,
@@ -461,8 +450,41 @@ export async function setupListeners() {
         newTitle: c.newTitle,
       });
     }
+  }
+
+  // OSC 0/2: shell sets window title (shows process name or custom title)
+  await listen<{ pty_id: number; title: string }>("pty-title", (event) => {
+    const { pty_id, title } = event.payload;
+    // Filter out escape-sequence fragments that may slip through
+    if (!title || /[\x00-\x1f\x7f]/.test(title) || /^\d+[;\d:\/]*$/.test(title))
+      return;
+
+    // Cancel any pending delayed title for this pty
+    const existing = pendingRunningTitles.get(pty_id);
+    if (existing) {
+      clearTimeout(existing);
+      pendingRunningTitles.delete(pty_id);
+    }
+
+    if (title.startsWith("Running: ")) {
+      // Delay "Running:" titles so quick commands never appear in the tab.
+      // precmd fires OSC 7 before this timer if the command exits fast,
+      // which cancels the timer via the OSC 7 handler.
+      const timer = setTimeout(() => {
+        pendingRunningTitles.delete(pty_id);
+        applyPtyTitle(pty_id, title);
+      }, 500);
+      pendingRunningTitles.set(pty_id, timer);
+    } else {
+      applyPtyTitle(pty_id, title);
+    }
   });
 }
+
+// --- Running Title Delay ---
+// "Running: cmd" titles are delayed 500ms so quick commands don't flicker.
+// Cancelled if precmd fires (via OSC 7) before the timer expires.
+const pendingRunningTitles = new Map<number, ReturnType<typeof setTimeout>>();
 
 // --- CWD Polling Fallback ---
 // For shells that don't emit OSC 7, poll get_pty_cwd periodically
@@ -792,9 +814,19 @@ export async function createTerminalSurface(
     if (cwd === surface.cwd) return true;
     surface.cwd = cwd;
     const basename = cwd.split("/").pop() || cwd;
+
+    // precmd fires OSC 7 when a command finishes — cancel any pending
+    // "Running:" title so quick commands never appear in the tab.
+    const pending = pendingRunningTitles.get(surface.ptyId);
+    if (pending) {
+      clearTimeout(pending);
+      pendingRunningTitles.delete(surface.ptyId);
+    }
+
     if (
       !surface.title ||
       surface.title.startsWith("Shell ") ||
+      surface.title.startsWith("Running: ") ||
       !surface.title.includes(" ")
     ) {
       surface.title = basename || "~";

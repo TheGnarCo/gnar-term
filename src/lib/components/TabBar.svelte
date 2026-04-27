@@ -11,6 +11,7 @@
   import type { StatusItem } from "../types/status";
   import type { Readable } from "svelte/store";
   import { readable } from "svelte/store";
+  import { tabDragState } from "../services/tab-drag";
 
   const emptyStore: Readable<StatusItem[]> = readable([]);
 
@@ -23,9 +24,6 @@
   export let onSplitRight: () => void;
   export let onSplitDown: () => void;
   export let onClosePane: () => void;
-  export let onReorderTab:
-    | ((fromIdx: number, toIdx: number) => void)
-    | undefined = undefined;
   export let showJumpToBottom: boolean = false;
   export let onJumpToBottom: (() => void) | undefined = undefined;
 
@@ -33,28 +31,61 @@
     ? getWorkspaceStatusByCategory(workspaceId, "process")
     : emptyStore;
   $: processItems = $processStatusStore;
+
+  // Live tab-drag state — drives the within-pane reorder insert
+  // indicator and the cross-pane split outline.
+  $: drag = $tabDragState;
+  $: reorderInsertIdx =
+    drag?.dropTarget?.kind === "reorder" && drag.dropTarget.paneId === pane.id
+      ? drag.dropTarget.insertIdx
+      : null;
+  $: isSplitTarget =
+    drag?.dropTarget?.kind === "merge" && drag.dropTarget.paneId === pane.id;
 </script>
 
 <div
+  data-pane-id={pane.id}
   style="
-    display: flex; align-items: center; gap: 1px;
+    display: flex; align-items: center; gap: 1px; position: relative;
     background: {$theme.tabBarBg}; border-bottom: 1px solid {$theme.tabBarBorder};
     height: 28px; padding: 0 4px; flex-shrink: 0; overflow-x: auto;
     scrollbar-width: none;
+    {isSplitTarget
+    ? `outline: 2px solid ${$theme.accent}; outline-offset: -2px;`
+    : ''}
   "
 >
   {#each pane.surfaces as surface, i (surface.id)}
+    {#if reorderInsertIdx === i}
+      <span
+        aria-hidden="true"
+        style="
+          width: 2px; align-self: stretch; background: {$theme.accent};
+          flex-shrink: 0; border-radius: 1px;
+        "
+      ></span>
+    {/if}
     <Tab
       {surface}
       index={i}
       isActive={surface.id === pane.activeSurfaceId}
+      paneId={pane.id}
+      {workspaceId}
       onSelect={() => onSelectSurface(surface.id)}
       onClose={() => onCloseSurface(surface.id)}
-      onReorder={onReorderTab}
       agentDotColor={agentDotColorForSurface(processItems, surface.id)}
       agentStatus={agentStatusForSurface(processItems, surface.id)}
     />
   {/each}
+  {#if reorderInsertIdx === pane.surfaces.length}
+    <span
+      aria-hidden="true"
+      style="
+        width: 2px; align-self: stretch; background: {$theme.accent};
+        flex-shrink: 0; border-radius: 1px;
+      "
+    ></span>
+  {/if}
 
   <NewSurfaceButton {onNewSurface} {onSelectSurfaceType} />
 

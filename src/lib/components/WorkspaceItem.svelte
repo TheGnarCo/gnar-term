@@ -223,6 +223,7 @@
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <div
   data-drag-idx={index}
+  data-workspace-id={workspace.id}
   data-worktree={isManaged ? "true" : undefined}
   style="
     display: {dragActive ? 'none' : 'flex'};

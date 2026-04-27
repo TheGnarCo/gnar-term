@@ -17,7 +17,7 @@ describe("root-row overlay (WorkspaceListBlock)", () => {
     // root level; sibling rows paint an opaque tile with the row's
     // own label centered.
     expect(WORKSPACE_LIST_BLOCK).toMatch(
-      /isSibling\s*=\s*dragActive\s*&&\s*dragSourceIdx\s*!==\s*entry\.idx/,
+      /isSibling\s*=\s*effectiveActive\s*&&\s*effectiveDragSourceIdx\s*!==\s*entry\.idx/,
     );
     expect(WORKSPACE_LIST_BLOCK).toMatch(/\{#if isSibling\}/);
     expect(WORKSPACE_LIST_BLOCK).toMatch(/position:\s*absolute;\s*inset:\s*0/);

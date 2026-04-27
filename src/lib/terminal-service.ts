@@ -7,8 +7,8 @@
  */
 
 import { Terminal } from "@xterm/xterm";
+import type { ILink } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
-import { WebLinksAddon } from "@xterm/addon-web-links";
 import { SearchAddon } from "@xterm/addon-search";
 import { invoke, Channel } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -562,12 +562,39 @@ export async function createTerminalSurface(
   const fitAddon = new FitAddon();
   const searchAddon = new SearchAddon();
   terminal.loadAddon(fitAddon);
-  terminal.loadAddon(
-    new WebLinksAddon((_event: MouseEvent, url: string) => {
-      invoke("open_url", { url }).catch(() => {});
-    }),
-  );
   terminal.loadAddon(searchAddon);
+
+  const urlRegex = /https?:\/\/[^\s"'<>()[\]{}]+/g;
+  terminal.registerLinkProvider({
+    provideLinks(lineNumber, callback) {
+      const line = terminal.buffer.active.getLine(lineNumber);
+      if (!line) {
+        callback(undefined);
+        return;
+      }
+      const text = line.translateToString(true);
+      const links: ILink[] = [];
+      urlRegex.lastIndex = 0;
+      let m: RegExpExecArray | null;
+      while ((m = urlRegex.exec(text)) !== null) {
+        const url = m[0]!;
+        const startX = m.index + 1;
+        const endX = m.index + url.length;
+        links.push({
+          range: {
+            start: { x: startX, y: lineNumber },
+            end: { x: endX, y: lineNumber },
+          },
+          text: url,
+          decorations: { pointerCursor: true, underline: true },
+          activate(_event: MouseEvent, text: string) {
+            invoke("open_url", { url: text }).catch(() => {});
+          },
+        });
+      }
+      callback(links.length > 0 ? links : undefined);
+    },
+  });
 
   const termElement = document.createElement("div");
   termElement.style.cssText =

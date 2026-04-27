@@ -206,4 +206,82 @@ describe("PaneView notification chrome", () => {
     expect(onFocusPane).toHaveBeenCalledTimes(1);
     expect(surface.hasUnread).toBe(false);
   });
+
+  it("renders accent border when isActive is true and no surface has hasUnread", () => {
+    const surface = makeTerminalSurface("s1", false);
+    const pane = makePane([surface]);
+    setupWorkspace(pane);
+
+    const { container } = render(PaneView, {
+      props: {
+        pane,
+        workspaceId: "ws1",
+        isActive: true,
+        onSelectSurface: noop,
+        onCloseSurface: noop,
+        onNewSurface: noop,
+        onSelectSurfaceType: noop,
+        onSplitRight: noop,
+        onSplitDown: noop,
+        onClosePane: noop,
+        onFocusPane: noop,
+      },
+    });
+
+    const root = container.firstChild as HTMLElement;
+    // github-dark theme accent = #58a6ff = rgb(88, 166, 255)
+    expect(root.style.border).toContain("rgb(88, 166, 255)");
+  });
+
+  it("renders default border when isActive is false and no surface has hasUnread", () => {
+    const surface = makeTerminalSurface("s1", false);
+    const pane = makePane([surface]);
+    setupWorkspace(pane);
+
+    const { container } = render(PaneView, {
+      props: {
+        pane,
+        workspaceId: "ws1",
+        isActive: false,
+        onSelectSurface: noop,
+        onCloseSurface: noop,
+        onNewSurface: noop,
+        onSelectSurfaceType: noop,
+        onSplitRight: noop,
+        onSplitDown: noop,
+        onClosePane: noop,
+        onFocusPane: noop,
+      },
+    });
+
+    const root = container.firstChild as HTMLElement;
+    expect(root.style.border).not.toContain("rgb(88, 166, 255)");
+  });
+
+  it("renders notify border (unread wins) when isActive is true and a surface has hasUnread", () => {
+    const surface = makeTerminalSurface("s1", true);
+    const pane = makePane([surface]);
+    setupWorkspace(pane);
+
+    const { container } = render(PaneView, {
+      props: {
+        pane,
+        workspaceId: "ws1",
+        isActive: true,
+        onSelectSurface: noop,
+        onCloseSurface: noop,
+        onNewSurface: noop,
+        onSelectSurfaceType: noop,
+        onSplitRight: noop,
+        onSplitDown: noop,
+        onClosePane: noop,
+        onFocusPane: noop,
+      },
+    });
+
+    const root = container.firstChild as HTMLElement;
+    expect(root.dataset.unread).toBe("true");
+    // notify wins over accent — data-unread present means notify branch taken
+    expect(root.style.border).toContain("rgb(88, 166, 255)");
+  });
 });

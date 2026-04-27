@@ -559,7 +559,7 @@
       id: "core:new-workspace",
       label: "New Workspace",
       icon: "plus",
-      shortcut: isMac ? "Cmd+Shift+N" : "Ctrl+Shift+N",
+      shortcut: `${shiftModLabel}N`,
       source: "core",
       handler: (ctx) => {
         const name = `Workspace ${get(workspaces).length + 1}`;

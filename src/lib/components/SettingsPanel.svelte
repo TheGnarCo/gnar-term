@@ -13,7 +13,12 @@
   } from "../services/extension-management";
   import { showInputPrompt } from "../stores/ui";
   import { invoke } from "@tauri-apps/api/core";
+  import { getVersion } from "@tauri-apps/api/app";
+  import { isDebugBuild } from "../services/service-helpers";
   import type { ExtensionSettingsField } from "../extension-types";
+
+  let appVersion = "";
+  let isDev = import.meta.env.DEV;
 
   import SettingsGeneralTab from "./SettingsGeneralTab.svelte";
   import SettingsExtensionsTab from "./SettingsExtensionsTab.svelte";
@@ -49,11 +54,12 @@
       });
   }
 
-  onMount(() => {
+  onMount(async () => {
     loadSettings();
     pendingExtToggle = {};
     pendingExtSettings = {};
     showUnsavedWarning = false;
+    [appVersion, isDev] = await Promise.all([getVersion(), isDebugBuild()]);
   });
 
   let dirty = false;
@@ -336,13 +342,24 @@
       {/if}
     </div>
 
-    <!-- Bottom bar with Apply -->
+    <!-- Bottom bar with version info + Apply -->
     <div
       style="
         padding: 10px 20px; border-top: 1px solid {$theme.border};
-        display: flex; justify-content: flex-end; flex-shrink: 0;
+        display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;
       "
     >
+      <div style="display: flex; align-items: center; gap: 8px;">
+        {#if appVersion}
+          <span style="font-size: 11px; color: {$theme.fgDim};">v{appVersion}</span>
+          <span style="
+            font-size: 10px; font-weight: 600; letter-spacing: 0.5px;
+            padding: 2px 6px; border-radius: 4px;
+            background: {isDev ? 'rgba(200,144,10,0.15)' : $theme.bgSurface};
+            color: {isDev ? '#C8900A' : $theme.fgDim};
+          ">{isDev ? "DEV" : "PROD"}</span>
+        {/if}
+      </div>
       <button
         data-action="apply-settings"
         disabled={!dirty}

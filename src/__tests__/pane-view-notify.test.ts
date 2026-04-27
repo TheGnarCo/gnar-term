@@ -231,6 +231,11 @@ describe("PaneView notification chrome", () => {
     const root = container.firstChild as HTMLElement;
     // github-dark theme accent = #58a6ff = rgb(88, 166, 255)
     expect(root.style.border).toContain("rgb(88, 166, 255)");
+    // No corner pip or glow when only isActive (no unread)
+    expect(
+      container.querySelector('[title="New activity in this pane"]'),
+    ).toBeNull();
+    expect(root.style.boxShadow).toBeFalsy();
   });
 
   it("renders default border when isActive is false and no surface has hasUnread", () => {
@@ -283,5 +288,11 @@ describe("PaneView notification chrome", () => {
     expect(root.dataset.unread).toBe("true");
     // notify wins over accent — data-unread present means notify branch taken
     expect(root.style.border).toContain("rgb(88, 166, 255)");
+    // Corner pip is only rendered when paneHasUnread is true — confirms the notify
+    // branch (not the accent branch) determined the border color.
+    const pip = container.querySelector('[title="New activity in this pane"]');
+    expect(pip).not.toBeNull();
+    // Box-shadow glow is also only set when paneHasUnread is true.
+    expect(root.style.boxShadow).toBeTruthy();
   });
 });

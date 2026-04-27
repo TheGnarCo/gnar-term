@@ -510,9 +510,9 @@ export function createWorkspaceFromSurface(
 export { collapseEmptyPaneInWorkspace };
 
 // Derived store: one flat Map<workspaceId, Surface[]> rebuilt per workspace
-// update. WorkspaceItem rows subscribe via $workspaceSurfaceMap.get(id) so a
-// PTY title change in workspace A does not trigger O(R) getAllSurfaces calls
-// across all R sidebar rows — each row pays only a Map.get() lookup.
+// update. WorkspaceItem rows still re-run their reactive statement on every
+// workspaces emission, but each pays only a Map.get() O(1) lookup instead of
+// calling getAllSurfaces independently — O(W×S) once vs O(R×W×S) before.
 export const workspaceSurfaceMap: Readable<
   Map<string, ReturnType<typeof getAllSurfaces>>
 > = derived(workspaces, ($ws) => {

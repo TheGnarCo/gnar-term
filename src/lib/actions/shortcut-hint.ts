@@ -38,6 +38,7 @@ export function shortcutHint(
     `;
     document.body.appendChild(badge);
     window.addEventListener("resize", reposition);
+    window.addEventListener("scroll", reposition, true);
   }
 
   function hideBadge() {
@@ -45,6 +46,7 @@ export function shortcutHint(
       badge.remove();
       badge = null;
       window.removeEventListener("resize", reposition);
+      window.removeEventListener("scroll", reposition, true);
     }
   }
 

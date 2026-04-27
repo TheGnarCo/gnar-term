@@ -351,13 +351,17 @@
     >
       <div style="display: flex; align-items: center; gap: 8px;">
         {#if appVersion}
-          <span style="font-size: 11px; color: {$theme.fgDim};">v{appVersion}</span>
-          <span style="
+          <span style="font-size: 11px; color: {$theme.fgDim};"
+            >v{appVersion}</span
+          >
+          <span
+            style="
             font-size: 10px; font-weight: 600; letter-spacing: 0.5px;
             padding: 2px 6px; border-radius: 4px;
             background: {isDev ? 'rgba(200,144,10,0.15)' : $theme.bgSurface};
             color: {isDev ? '#C8900A' : $theme.fgDim};
-          ">{isDev ? "DEV" : "PROD"}</span>
+          ">{isDev ? "DEV" : "PROD"}</span
+          >
         {/if}
       </div>
       <button

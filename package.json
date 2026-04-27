@@ -1,6 +1,6 @@
 {
   "name": "gnar-term",
-  "version": "0.3.1",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "description": "Terminal workspace manager for AI coding agents",

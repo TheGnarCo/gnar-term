@@ -286,13 +286,11 @@ describe("PaneView notification chrome", () => {
 
     const root = container.firstChild as HTMLElement;
     expect(root.dataset.unread).toBe("true");
-    // notify wins over accent — data-unread present means notify branch taken
     expect(root.style.border).toContain("rgb(88, 166, 255)");
-    // Corner pip is only rendered when paneHasUnread is true — confirms the notify
-    // branch (not the accent branch) determined the border color.
+    // pip + glow are only rendered when paneHasUnread is true — proving the notify
+    // ternary branch was taken, not the isActive accent branch.
     const pip = container.querySelector('[title="New activity in this pane"]');
     expect(pip).not.toBeNull();
-    // Box-shadow glow is also only set when paneHasUnread is true.
     expect(root.style.boxShadow).toBeTruthy();
   });
 });

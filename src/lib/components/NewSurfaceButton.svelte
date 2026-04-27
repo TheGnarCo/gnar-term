@@ -2,7 +2,8 @@
   import { tick } from "svelte";
   import { theme } from "../stores/theme";
   import { surfaceTypeStore } from "../services/surface-type-registry";
-  import { modLabel } from "../terminal-service";
+  import { isMac, modLabel, shiftModLabel } from "../terminal-service";
+  import { shortcutHint } from "../actions/shortcut-hint";
 
   export let onNewSurface: () => void;
   export let onSelectSurfaceType: (typeId: string) => void;
@@ -96,6 +97,7 @@
       border-bottom: 2px solid {plusHovered ? $theme.accent : 'transparent'};
       transition: color 0.1s, border-color 0.1s;
     "
+    use:shortcutHint={isMac ? `${modLabel}T` : `${shiftModLabel}T`}
     on:click={onNewSurface}
     on:mouseenter={() => (plusHovered = true)}
     on:mouseleave={() => (plusHovered = false)}>+</span

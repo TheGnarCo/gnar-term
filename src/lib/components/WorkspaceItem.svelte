@@ -9,6 +9,8 @@
   import { getExtensionApiById } from "../services/extension-loader";
   import ExtensionWrapper from "./ExtensionWrapper.svelte";
   import DragGrip from "./DragGrip.svelte";
+  import { modLabel } from "../terminal-service";
+  import { shortcutHint } from "../actions/shortcut-hint";
 
   $: isDisco = $theme.name === "Molly Disco";
   import { getAllSurfaces, getAllPanes } from "../types";
@@ -227,6 +229,7 @@
   data-drag-idx={index}
   data-workspace-id={workspace.id}
   data-worktree={isManaged ? "true" : undefined}
+  use:shortcutHint={index < 9 ? `${modLabel}${index + 1}` : undefined}
   style="
     display: {dragActive ? 'none' : 'flex'};
     position: relative;

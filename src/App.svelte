@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import { listen } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { ask } from "@tauri-apps/plugin-dialog";
@@ -101,6 +101,7 @@
   import { registerWorkspaceAction } from "./lib/services/workspace-action-registry";
   import { initMcpServer } from "./lib/services/mcp-server";
   import { handleAppKeydown } from "./lib/services/keyboard-shortcuts";
+  import { initShortcutHints } from "./lib/stores/shortcut-hints";
 
   // Components
   import PrimarySidebar from "./lib/components/PrimarySidebar.svelte";
@@ -469,7 +470,11 @@
   }
 
   // ---- Initialization ----
+  let _cleanupShortcutHints: (() => void) | null = null;
+  onDestroy(() => _cleanupShortcutHints?.());
+
   onMount(async () => {
+    _cleanupShortcutHints = initShortcutHints();
     await fontReady;
     void setupListeners();
     startCwdPolling();

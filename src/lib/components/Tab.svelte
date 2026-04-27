@@ -1,6 +1,8 @@
 <script lang="ts">
   import { tick } from "svelte";
   import { theme } from "../stores/theme";
+  import { isMac } from "../terminal-service";
+  import { shortcutHint } from "../actions/shortcut-hint";
   import type { Surface } from "../types";
   import { startTabDrag } from "../services/tab-drag";
   import { renamingSurfaceId } from "../stores/ui";
@@ -102,6 +104,7 @@
   class="tab"
   data-tab-idx={index}
   data-tab-surface-id={surface.id}
+  use:shortcutHint={isMac && index < 9 ? `Ctrl+${index + 1}` : undefined}
   style="
     padding: 2px 10px; font-size: 11px; cursor: pointer;
     color: {isActive ? $theme.fg : $theme.fgMuted};

@@ -89,7 +89,7 @@
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <span
-    title="New terminal ({modLabel}T)"
+    title="New terminal ({isMac ? modLabel : shiftModLabel}T)"
     style="
       color: {plusHovered ? $theme.fg : $theme.fgDim};
       cursor: pointer; font-size: 14px;

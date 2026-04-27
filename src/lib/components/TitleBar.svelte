@@ -56,7 +56,7 @@
 >
   <button
     style="{btnStyle} color: {$primarySidebarVisible ? fgActive : fg};"
-    title="Toggle Primary Sidebar ({modLabel}B)"
+    title="Toggle Primary Sidebar ({isMac ? modLabel : shiftModLabel}B)"
     aria-label="Toggle Primary Sidebar"
     use:shortcutHint={isMac ? `${modLabel}B` : `${shiftModLabel}B`}
     on:click={() => primarySidebarVisible.update((v) => !v)}

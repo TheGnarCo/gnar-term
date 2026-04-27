@@ -66,6 +66,8 @@ export function shortcutHint(
       if (badge) {
         if (newLabel) badge.textContent = newLabel;
         else hideBadge();
+      } else if (newLabel && get(shortcutHintsActive)) {
+        showBadge();
       }
     },
     destroy() {

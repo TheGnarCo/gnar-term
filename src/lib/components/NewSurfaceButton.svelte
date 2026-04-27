@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import { theme } from "../stores/theme";
   import { surfaceTypeStore } from "../services/surface-type-registry";
   import { modLabel } from "../terminal-service";
@@ -20,9 +21,16 @@
   let plusHovered = false;
   let chevronHovered = false;
 
-  let chevronEl: HTMLSpanElement;
+  let chevronEl: HTMLButtonElement;
   let dropdownX = 0;
   let dropdownY = 0;
+  let itemEls: (HTMLButtonElement | undefined)[] = [];
+
+  $: if (dropdownOpen) void tick().then(() => focusableItems()[0]?.focus());
+
+  function focusableItems(): HTMLButtonElement[] {
+    return itemEls.filter((el): el is HTMLButtonElement => el != null);
+  }
 
   function toggleDropdown() {
     if (!dropdownOpen && chevronEl) {
@@ -49,8 +57,24 @@
   }
 
   function handleKeydown(e: KeyboardEvent) {
-    if (e.key === "Escape" && dropdownOpen) {
+    if (!dropdownOpen) return;
+    if (e.key === "Escape") {
       dropdownOpen = false;
+      chevronEl?.focus();
+      return;
+    }
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      const items = focusableItems();
+      if (items.length === 0) return;
+      const focused = items.indexOf(
+        document.activeElement as HTMLButtonElement,
+      );
+      if (e.key === "ArrowDown") {
+        items[(focused + 1) % items.length]?.focus();
+      } else {
+        items[(focused - 1 + items.length) % items.length]?.focus();
+      }
     }
   }
 </script>
@@ -78,12 +102,13 @@
   >
 
   {#if hasExtra}
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <span
+    <button
       bind:this={chevronEl}
-      title="New surface type..."
+      aria-label="New surface type..."
+      aria-expanded={dropdownOpen}
+      aria-haspopup="menu"
       style="
+        background: transparent; border: none;
         color: {chevronHovered || dropdownOpen ? $theme.fg : $theme.fgDim};
         cursor: pointer; font-size: 16px;
         padding: 2px 4px 2px 1px; line-height: 1;
@@ -94,11 +119,12 @@
       "
       on:click={toggleDropdown}
       on:mouseenter={() => (chevronHovered = true)}
-      on:mouseleave={() => (chevronHovered = false)}>&#9662;</span
+      on:mouseleave={() => (chevronHovered = false)}>&#9662;</button
     >
 
     {#if dropdownOpen}
       <div
+        role="menu"
         style="
           position: fixed; top: {dropdownY}px; left: {dropdownX}px;
           background: {$theme.bgFloat}; border: 1px solid {$theme.border};
@@ -107,11 +133,15 @@
           z-index: 9999; min-width: 160px;
         "
       >
-        <!-- Terminal -->
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div
-          style="padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; color: {$theme.fg};"
+        <button
+          bind:this={itemEls[0]}
+          role="menuitem"
+          tabindex="-1"
+          style="
+            width: 100%; padding: 5px 10px; border: none; border-radius: 4px;
+            background: transparent; cursor: pointer;
+            font-size: 12px; color: {$theme.fg}; text-align: left;
+          "
           on:click={() => {
             dropdownOpen = false;
             onNewSurface();
@@ -127,17 +157,23 @@
           }}
         >
           Terminal
-        </div>
+        </button>
 
         {#if visibleSurfaceTypes.length > 0}
           <div
+            role="separator"
             style="height: 1px; background: {$theme.border}; margin: 4px 8px;"
           ></div>
-          {#each visibleSurfaceTypes as surfaceType (surfaceType.id)}
-            <!-- svelte-ignore a11y_click_events_have_key_events -->
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <div
-              style="padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; color: {$theme.fg};"
+          {#each visibleSurfaceTypes as surfaceType, i (surfaceType.id)}
+            <button
+              bind:this={itemEls[i + 1]}
+              role="menuitem"
+              tabindex="-1"
+              style="
+                width: 100%; padding: 5px 10px; border: none; border-radius: 4px;
+                background: transparent; cursor: pointer;
+                font-size: 12px; color: {$theme.fg}; text-align: left;
+              "
               on:click={() => handleItemClick(surfaceType.id)}
               on:mouseenter={(e) => {
                 const el = e.currentTarget;
@@ -151,7 +187,7 @@
               }}
             >
               {surfaceType.label}
-            </div>
+            </button>
           {/each}
         {/if}
       </div>

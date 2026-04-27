@@ -206,4 +206,91 @@ describe("PaneView notification chrome", () => {
     expect(onFocusPane).toHaveBeenCalledTimes(1);
     expect(surface.hasUnread).toBe(false);
   });
+
+  it("renders accent border when isActive is true and no surface has hasUnread", () => {
+    const surface = makeTerminalSurface("s1", false);
+    const pane = makePane([surface]);
+    setupWorkspace(pane);
+
+    const { container } = render(PaneView, {
+      props: {
+        pane,
+        workspaceId: "ws1",
+        isActive: true,
+        onSelectSurface: noop,
+        onCloseSurface: noop,
+        onNewSurface: noop,
+        onSelectSurfaceType: noop,
+        onSplitRight: noop,
+        onSplitDown: noop,
+        onClosePane: noop,
+        onFocusPane: noop,
+      },
+    });
+
+    const root = container.firstChild as HTMLElement;
+    // github-dark theme accent = #58a6ff = rgb(88, 166, 255)
+    expect(root.style.border).toContain("rgb(88, 166, 255)");
+    // No corner pip or glow when only isActive (no unread)
+    expect(
+      container.querySelector('[title="New activity in this pane"]'),
+    ).toBeNull();
+    expect(root.style.boxShadow).toBeFalsy();
+  });
+
+  it("renders default border when isActive is false and no surface has hasUnread", () => {
+    const surface = makeTerminalSurface("s1", false);
+    const pane = makePane([surface]);
+    setupWorkspace(pane);
+
+    const { container } = render(PaneView, {
+      props: {
+        pane,
+        workspaceId: "ws1",
+        isActive: false,
+        onSelectSurface: noop,
+        onCloseSurface: noop,
+        onNewSurface: noop,
+        onSelectSurfaceType: noop,
+        onSplitRight: noop,
+        onSplitDown: noop,
+        onClosePane: noop,
+        onFocusPane: noop,
+      },
+    });
+
+    const root = container.firstChild as HTMLElement;
+    expect(root.style.border).not.toContain("rgb(88, 166, 255)");
+  });
+
+  it("renders notify border (unread wins) when isActive is true and a surface has hasUnread", () => {
+    const surface = makeTerminalSurface("s1", true);
+    const pane = makePane([surface]);
+    setupWorkspace(pane);
+
+    const { container } = render(PaneView, {
+      props: {
+        pane,
+        workspaceId: "ws1",
+        isActive: true,
+        onSelectSurface: noop,
+        onCloseSurface: noop,
+        onNewSurface: noop,
+        onSelectSurfaceType: noop,
+        onSplitRight: noop,
+        onSplitDown: noop,
+        onClosePane: noop,
+        onFocusPane: noop,
+      },
+    });
+
+    const root = container.firstChild as HTMLElement;
+    expect(root.dataset.unread).toBe("true");
+    expect(root.style.border).toContain("rgb(88, 166, 255)");
+    // pip + glow are only rendered when paneHasUnread is true — proving the notify
+    // ternary branch was taken, not the isActive accent branch.
+    const pip = container.querySelector('[title="New activity in this pane"]');
+    expect(pip).not.toBeNull();
+    expect(root.style.boxShadow).toBeTruthy();
+  });
 });

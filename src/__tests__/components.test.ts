@@ -1959,36 +1959,71 @@ describe("PreviewSurface link interception", () => {
 });
 
 describe("terminal link handling", () => {
-  it("WebLinksAddon is constructed with a custom handler that invokes open_url", async () => {
-    const { WebLinksAddon: WebLinksAddonMock } =
-      await import("@xterm/addon-web-links");
-    // WebLinksAddon constructor: new WebLinksAddon(handler?, options?)
-    const WebLinksAddonCtor = vi.mocked(
-      WebLinksAddonMock as unknown as new (
-        handler: (e: MouseEvent, url: string) => void,
-      ) => object,
-    );
+  it("registerLinkProvider is called and link activate invokes open_url", async () => {
     const { invoke: invokeMock } = await import("@tauri-apps/api/core");
     const invokeMockFn = vi.mocked(invokeMock);
     invokeMockFn.mockClear();
-    WebLinksAddonCtor.mockClear();
+
+    const { Terminal: TerminalMock } = await import("@xterm/xterm");
+    // TerminalMock is the mock constructor; instances track calls on the instance
+    const TerminalCtor = vi.mocked(
+      TerminalMock as unknown as new (...args: unknown[]) => {
+        registerLinkProvider: ReturnType<typeof vi.fn>;
+        loadAddon: ReturnType<typeof vi.fn>;
+        buffer: { active: { getLine: ReturnType<typeof vi.fn> } };
+      },
+    );
 
     const { createTerminalSurface } = await import("../lib/terminal-service");
-    const fakePane = { id: "p-link-test", surfaces: [], activeSurfaceId: null };
+    const fakePane = {
+      id: "p-link-plain-click",
+      surfaces: [],
+      activeSurfaceId: null,
+    };
     await createTerminalSurface(
       fakePane as unknown as Parameters<typeof createTerminalSurface>[0],
     );
 
-    expect(WebLinksAddonCtor).toHaveBeenCalledWith(expect.any(Function));
+    const termInstance = TerminalCtor.mock.instances.at(-1)!;
+    // 2 calls: URL provider (index 0, added by Task 5) + file-path provider (index 1, existing)
+    expect(termInstance.registerLinkProvider).toHaveBeenCalledTimes(2);
 
-    // Extract and invoke the handler directly (first positional argument)
-    const handler = WebLinksAddonCtor.mock.calls[
-      WebLinksAddonCtor.mock.calls.length - 1
-    ][0] as (e: MouseEvent, url: string) => void;
-    handler(new MouseEvent("click"), "https://example.com");
+    const provider = termInstance.registerLinkProvider.mock.calls[0][0] as {
+      provideLinks: (
+        line: number,
+        cb: (
+          links:
+            | Array<{ activate: (e: MouseEvent, text: string) => void }>
+            | undefined,
+        ) => void,
+      ) => void;
+    };
 
+    // Wire up the mock terminal's buffer so provideLinks can scan a real line
+    const mockLine = {
+      translateToString: vi
+        .fn()
+        .mockReturnValue("visit https://example.com/path for info"),
+    };
+    termInstance.buffer = {
+      active: { getLine: vi.fn().mockReturnValue(mockLine) },
+    };
+
+    let capturedLinks:
+      | Array<{ activate: (e: MouseEvent, text: string) => void }>
+      | undefined;
+    provider.provideLinks(1, (links) => {
+      capturedLinks = links;
+    });
+
+    expect(capturedLinks).toBeDefined();
+    expect(capturedLinks!.length).toBeGreaterThan(0);
+    capturedLinks![0].activate(
+      new MouseEvent("click"),
+      "https://example.com/path",
+    );
     expect(invokeMockFn).toHaveBeenCalledWith("open_url", {
-      url: "https://example.com",
+      url: "https://example.com/path",
     });
   });
 });

@@ -572,6 +572,63 @@ describe("agent-detection-service — lifecycle hygiene", () => {
   });
 });
 
+describe("agent-detection-service — late workspace load (startup race)", () => {
+  it("attaches agent when workspaces load after surface:created and surface:ptyReady", () => {
+    // Simulates the startup race: Tauri emits surface events before the
+    // workspace store is populated, so allTerminalSurfaces() returned []
+    // and the surface was tracked with no agent. When the workspace loads
+    // later, the agent should now be detected.
+    initAgentDetection();
+
+    eventBus.emit({
+      type: "surface:created",
+      id: "s1",
+      paneId: "p",
+      kind: "terminal",
+    });
+    eventBus.emit({ type: "surface:ptyReady", id: "s1", ptyId: 60 });
+    expect(getAgents()).toHaveLength(0);
+
+    workspaces.set([
+      makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 60 }]),
+    ]);
+
+    expect(getAgents()).toHaveLength(1);
+    expect(getAgents()[0]?.workspaceId).toBe("w1");
+    const item = get(statusRegistry.store).find(
+      (i) => i.source === "_agent" && i.metadata?.surfaceId === "s1",
+    );
+    expect(item).toBeDefined();
+    expect(item?.label).toBe("idle");
+  });
+
+  it("publishes waiting status after workspace loads late then OSC fires", () => {
+    // The dot must show when Claude uses AskUserQuestion after workspaces
+    // were loaded post-surface-events — this was the reported "no dot" bug.
+    initAgentDetection();
+    eventBus.emit({
+      type: "surface:created",
+      id: "s1",
+      paneId: "p",
+      kind: "terminal",
+    });
+    eventBus.emit({ type: "surface:ptyReady", id: "s1", ptyId: 61 });
+
+    workspaces.set([
+      makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 61 }]),
+    ]);
+    expect(getAgents()).toHaveLength(1);
+
+    notifyOutputObservers(61, "\x1b]9;waiting for response\x07");
+
+    const item = get(statusRegistry.store).find(
+      (i) => i.source === "_agent" && i.metadata?.surfaceId === "s1",
+    );
+    expect(item?.label).toBe("waiting");
+    expect(item?.variant).toBe("warning");
+  });
+});
+
 describe("agent-detection-service — workspace:closed cleanup", () => {
   it("removes agents from a workspace when workspace:closed fires", () => {
     // closeWorkspace() emits workspace:closed but NOT surface:closed for

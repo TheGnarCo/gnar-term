@@ -255,6 +255,10 @@ interface TrackedSurface {
   tracker: StatusTracker | null;
   unsubscribeOutput: (() => void) | null;
   preAgentTitle?: string;
+  /** Most recent title seen for this surface — used by the workspace
+   *  subscription to derive a pre-agent title when attaching after a
+   *  late workspace load. */
+  lastKnownTitle?: string;
   /** Pending debounced detach timer — cancelled if title re-matches before it fires. */
   detachTimer: ReturnType<typeof setTimeout> | null;
 }
@@ -487,6 +491,7 @@ export function initAgentDetection(): void {
       agentPattern: null,
       tracker: null,
       unsubscribeOutput: null,
+      lastKnownTitle: initialTitle || undefined,
       detachTimer: null,
     };
     trackedSurfaces.set(surfaceId, tracked);
@@ -613,6 +618,7 @@ export function initAgentDetection(): void {
         }, TITLE_DETACH_DEBOUNCE_MS);
       }
     }
+    tracked.lastKnownTitle = event.newTitle;
   };
   const handleClosed = (event: { type: "surface:closed"; id: string }) => {
     detachFromSurface(event.id);
@@ -646,9 +652,12 @@ export function initAgentDetection(): void {
     let tracked = trackedSurfaces.get(event.id);
     if (!tracked) {
       // Missed surface:created (e.g. init raced with a restore) —
-      // attach now with an empty title and fall through to observer
-      // wiring.
-      attachToSurface(event.id, "");
+      // attach now using the current title from the workspace store
+      // (may be empty if workspaces haven't loaded yet) and fall
+      // through to observer wiring.
+      const currentTitleForPty =
+        allTerminalSurfaces().find((s) => s.id === event.id)?.title ?? "";
+      attachToSurface(event.id, currentTitleForPty);
       tracked = trackedSurfaces.get(event.id);
       if (!tracked) return;
     }
@@ -673,6 +682,34 @@ export function initAgentDetection(): void {
   for (const info of allTerminalSurfaces()) {
     attachToSurface(info.id, info.title);
   }
+
+  // Re-detect agents when the workspace store is populated or updated.
+  // Handles the startup race where surface events (surface:created,
+  // surface:ptyReady) arrive before workspaces finish loading — at that
+  // point allTerminalSurfaces() returned [] so surfaces were tracked
+  // without agents. When workspaces load, this subscription re-checks
+  // unattached surfaces against their now-known titles.
+  const unsubWorkspaces = workspaces.subscribe(() => {
+    for (const [, tracked] of trackedSurfaces) {
+      if (tracked.agentId) continue;
+      const currentTitle =
+        allTerminalSurfaces().find((s) => s.id === tracked.surfaceId)?.title ??
+        "";
+      if (!currentTitle) continue;
+      const match = matchesPattern(currentTitle, patterns);
+      if (match) {
+        // If lastKnownTitle predates the agent pattern match, use it as the
+        // pre-agent title so detachAgent can restore it on exit.
+        const preTitle =
+          tracked.lastKnownTitle &&
+          !matchesPattern(tracked.lastKnownTitle, patterns)
+            ? tracked.lastKnownTitle
+            : undefined;
+        attachAgent(tracked, match, idleTimeoutMs, preTitle);
+      }
+    }
+  });
+  cleanups.push(unsubWorkspaces);
 
   _current = {
     destroy() {

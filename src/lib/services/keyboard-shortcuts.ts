@@ -29,6 +29,7 @@ import { executeByShortcut } from "./command-registry";
 import { executeWorkspaceActionByShortcut } from "./workspace-action-registry";
 import { isMac } from "../terminal-service";
 import { zoomIn, zoomOut, resetFontSize } from "../stores/font-size";
+import { renameActiveSurface } from "./surface-service";
 
 /**
  * Context required by shortcuts that have to reach into component
@@ -65,6 +66,7 @@ export function handleAppKeydown(
       },
       p: () => commandPaletteOpen.update((v) => !v),
       f: () => findBarVisible.update((v) => !v),
+      r: () => renameActiveSurface(),
       g: () => {
         findBarVisible.set(true);
         ctx.findNext();

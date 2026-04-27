@@ -7,6 +7,7 @@ import {
   activePane,
   activeSurface,
 } from "../stores/workspace";
+import { renamingSurfaceId } from "../stores/ui";
 import { createTerminalSurface } from "../terminal-service";
 import {
   getAllPanes,
@@ -389,4 +390,24 @@ export function openFileAsPreviewSplit(filePath: string): void {
   if (!result) return;
 
   createPreviewSurfaceInPane(result.newPane.id, filePath);
+}
+
+export function renameActiveSurface(): void {
+  const s = get(activeSurface);
+  if (s) renamingSurfaceId.set(s.id);
+}
+
+export function renameSurface(surfaceId: string, title: string): void {
+  workspaces.update((wsList) => {
+    for (const ws of wsList) {
+      for (const pane of getAllPanes(ws.splitRoot)) {
+        const s = pane.surfaces.find((s) => s.id === surfaceId);
+        if (s) {
+          s.title = title;
+          return [...wsList];
+        }
+      }
+    }
+    return wsList;
+  });
 }

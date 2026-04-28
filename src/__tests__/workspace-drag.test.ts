@@ -55,6 +55,7 @@ vi.mock("../lib/stores/root-row-order", async () => {
 
 const addWorkspaceToGroupSpy = vi.fn().mockReturnValue(true);
 const removeWorkspaceFromAllGroupsSpy = vi.fn();
+const insertWorkspaceIntoGroupSpy = vi.fn();
 vi.mock("../lib/services/workspace-group-service", async () => {
   const actual = await vi.importActual<
     typeof import("../lib/services/workspace-group-service")
@@ -67,6 +68,9 @@ vi.mock("../lib/services/workspace-group-service", async () => {
     removeWorkspaceFromAllGroups: (
       ...args: Parameters<typeof actual.removeWorkspaceFromAllGroups>
     ) => removeWorkspaceFromAllGroupsSpy(...args),
+    insertWorkspaceIntoGroup: (
+      ...args: Parameters<typeof actual.insertWorkspaceIntoGroup>
+    ) => insertWorkspaceIntoGroupSpy(...args),
   };
 });
 
@@ -92,6 +96,7 @@ import { createWorkspaceFromSurface } from "../lib/services/workspace-service";
 import {
   moveSurfaceToWorkspace,
   expandWorkspaceIntoPanes,
+  mergeWorkspaceIntoPane,
 } from "../lib/services/pane-service";
 import { saveState } from "../lib/config";
 
@@ -145,6 +150,7 @@ beforeEach(() => {
   removeRootRowSpy.mockClear();
   addWorkspaceToGroupSpy.mockClear();
   removeWorkspaceFromAllGroupsSpy.mockClear();
+  insertWorkspaceIntoGroupSpy.mockClear();
   gitStatusWorkspaceClosedSpy.mockClear();
   vi.useFakeTimers();
 });
@@ -543,5 +549,277 @@ describe("expandWorkspaceIntoPanes", () => {
     const activePane = tgtPanes.find((p) => p.id === activePaneId);
     expect(activePane).toBeDefined();
     expect(activePane?.surfaces[0]?.id).toBe(sB.id);
+  });
+});
+
+describe("mergeWorkspaceIntoPane", () => {
+  it("appends all source surfaces to the target pane", () => {
+    const sA = mockSurface({ title: "A" });
+    const sB = mockSurface({ title: "B" });
+    const sC = mockSurface({ title: "C" });
+    const srcPane = makePane([sA, sB]);
+    const tgtPane = makePane([sC]);
+    const srcWs = makeWorkspace({ type: "pane", pane: srcPane });
+    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    workspaces.set([srcWs, tgtWs]);
+    activeWorkspaceIdx.set(1);
+
+    mergeWorkspaceIntoPane(srcWs.id, tgtPane.id);
+
+    expect(tgtPane.surfaces.map((s) => s.id)).toEqual([sC.id, sA.id, sB.id]);
+  });
+
+  it("sets activeSurfaceId to the last appended surface", () => {
+    const sA = mockSurface({ title: "A" });
+    const sB = mockSurface({ title: "B" });
+    const sC = mockSurface({ title: "C" });
+    const srcPane = makePane([sA, sB]);
+    const tgtPane = makePane([sC]);
+    const srcWs = makeWorkspace({ type: "pane", pane: srcPane });
+    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    workspaces.set([srcWs, tgtWs]);
+    activeWorkspaceIdx.set(1);
+
+    mergeWorkspaceIntoPane(srcWs.id, tgtPane.id);
+
+    expect(tgtPane.activeSurfaceId).toBe(sB.id);
+  });
+
+  it("sets activePaneId on the target workspace to targetPane", () => {
+    const sA = mockSurface({ title: "A" });
+    const sB = mockSurface({ title: "B" });
+    const srcPane = makePane([sA]);
+    const tgtPane = makePane([sB]);
+    const srcWs = makeWorkspace({ type: "pane", pane: srcPane });
+    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    workspaces.set([srcWs, tgtWs]);
+    activeWorkspaceIdx.set(1);
+
+    mergeWorkspaceIntoPane(srcWs.id, tgtPane.id);
+
+    expect(tgtWs.activePaneId).toBe(tgtPane.id);
+  });
+
+  it("removes the source workspace from the workspaces store", () => {
+    const sA = mockSurface({ title: "A" });
+    const sB = mockSurface({ title: "B" });
+    const srcPane = makePane([sA]);
+    const tgtPane = makePane([sB]);
+    const srcWs = makeWorkspace({ type: "pane", pane: srcPane });
+    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    workspaces.set([srcWs, tgtWs]);
+    activeWorkspaceIdx.set(1);
+
+    mergeWorkspaceIntoPane(srcWs.id, tgtPane.id);
+
+    expect(get(workspaces).find((w) => w.id === srcWs.id)).toBeUndefined();
+    expect(get(workspaces).find((w) => w.id === tgtWs.id)).toBeDefined();
+  });
+
+  it("calls removeRootRow for the source workspace", () => {
+    const sA = mockSurface({ title: "A" });
+    const sB = mockSurface({ title: "B" });
+    const srcPane = makePane([sA]);
+    const tgtPane = makePane([sB]);
+    const srcWs = makeWorkspace({ type: "pane", pane: srcPane });
+    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    workspaces.set([srcWs, tgtWs]);
+    activeWorkspaceIdx.set(1);
+
+    mergeWorkspaceIntoPane(srcWs.id, tgtPane.id);
+
+    expect(removeRootRowSpy).toHaveBeenCalledWith({
+      kind: "workspace",
+      id: srcWs.id,
+    });
+  });
+
+  it("calls removeWorkspaceFromAllGroups for the source workspace", () => {
+    const sA = mockSurface({ title: "A" });
+    const sB = mockSurface({ title: "B" });
+    const srcPane = makePane([sA]);
+    const tgtPane = makePane([sB]);
+    const srcWs = makeWorkspace({ type: "pane", pane: srcPane });
+    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    workspaces.set([srcWs, tgtWs]);
+    activeWorkspaceIdx.set(1);
+
+    mergeWorkspaceIntoPane(srcWs.id, tgtPane.id);
+
+    expect(removeWorkspaceFromAllGroupsSpy).toHaveBeenCalledWith(srcWs.id);
+  });
+
+  it("does not dispose terminals — surfaces move live", () => {
+    const sA = mockSurface({ title: "A" });
+    const sB = mockSurface({ title: "B" });
+    const srcPane = makePane([sA]);
+    const tgtPane = makePane([sB]);
+    const srcWs = makeWorkspace({ type: "pane", pane: srcPane });
+    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    workspaces.set([srcWs, tgtWs]);
+    activeWorkspaceIdx.set(1);
+
+    mergeWorkspaceIntoPane(srcWs.id, tgtPane.id);
+
+    expect(sA.terminal.dispose).not.toHaveBeenCalled();
+  });
+
+  it("is a no-op when src and target are the same workspace", () => {
+    const sA = mockSurface({ title: "A" });
+    const sB = mockSurface({ title: "B" });
+    const pane = makePane([sA, sB]);
+    const ws = makeWorkspace({ type: "pane", pane });
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+
+    mergeWorkspaceIntoPane(ws.id, pane.id);
+
+    expect(get(workspaces).length).toBe(1);
+    expect(pane.surfaces.length).toBe(2);
+  });
+
+  it("flattens surfaces from a multi-pane source workspace", () => {
+    const sA = mockSurface({ title: "A" });
+    const sB = mockSurface({ title: "B" });
+    const sC = mockSurface({ title: "C" });
+    const srcPane1 = makePane([sA]);
+    const srcPane2 = makePane([sB]);
+    const srcRoot: SplitNode = {
+      type: "split",
+      direction: "horizontal",
+      ratio: 0.5,
+      children: [
+        { type: "pane", pane: srcPane1 },
+        { type: "pane", pane: srcPane2 },
+      ],
+    };
+    const srcWs = makeWorkspace(srcRoot);
+    const tgtPane = makePane([sC]);
+    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    workspaces.set([srcWs, tgtWs]);
+    activeWorkspaceIdx.set(1);
+
+    mergeWorkspaceIntoPane(srcWs.id, tgtPane.id);
+
+    expect(tgtPane.surfaces.map((s) => s.id)).toEqual([sC.id, sA.id, sB.id]);
+    expect(get(workspaces).length).toBe(1);
+  });
+
+  it("schedules a persist", () => {
+    const sA = mockSurface({ title: "A" });
+    const sB = mockSurface({ title: "B" });
+    const srcPane = makePane([sA]);
+    const tgtPane = makePane([sB]);
+    const srcWs = makeWorkspace({ type: "pane", pane: srcPane });
+    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    workspaces.set([srcWs, tgtWs]);
+    activeWorkspaceIdx.set(1);
+
+    mergeWorkspaceIntoPane(srcWs.id, tgtPane.id);
+    vi.advanceTimersByTime(2000);
+    expect(saveState).toHaveBeenCalled();
+  });
+});
+
+describe("createWorkspaceFromSurface — targetGroupId", () => {
+  it("sets groupId metadata using targetGroupId when srcWs has no groupId", () => {
+    const sA = mockSurface({ title: "A" });
+    const sB = mockSurface({ title: "B" });
+    const pane = makePane([sA, sB]);
+    const ws = makeWorkspace({ type: "pane", pane }); // no groupId
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+
+    createWorkspaceFromSurface(sA.id, pane.id, ws.id, {
+      kind: "group",
+      positionInGroup: 0,
+      targetGroupId: "target-group-1",
+    });
+
+    const updated = get(workspaces);
+    const newWs = updated.find((w) => w.id !== ws.id)!;
+    expect((newWs.metadata as Record<string, unknown>)?.groupId).toBe(
+      "target-group-1",
+    );
+  });
+
+  it("calls insertWorkspaceIntoGroup with targetGroupId when srcWs has no groupId", () => {
+    const sA = mockSurface({ title: "A" });
+    const sB = mockSurface({ title: "B" });
+    const pane = makePane([sA, sB]);
+    const ws = makeWorkspace({ type: "pane", pane }); // no groupId
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+
+    createWorkspaceFromSurface(sA.id, pane.id, ws.id, {
+      kind: "group",
+      positionInGroup: 2,
+      targetGroupId: "target-group-1",
+    });
+
+    const updated = get(workspaces);
+    const newWs = updated.find((w) => w.id !== ws.id)!;
+    expect(insertWorkspaceIntoGroupSpy).toHaveBeenCalledWith(
+      "target-group-1",
+      newWs.id,
+      2,
+    );
+  });
+
+  it("preserves existing behavior when srcGroupId is set and targetGroupId is absent", () => {
+    const sA = mockSurface({ title: "A" });
+    const sB = mockSurface({ title: "B" });
+    const pane = makePane([sA, sB]);
+    const ws = makeWorkspace(
+      { type: "pane", pane },
+      { metadata: { groupId: "src-group" } },
+    );
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+
+    createWorkspaceFromSurface(sA.id, pane.id, ws.id, {
+      kind: "group",
+      positionInGroup: 0,
+    });
+
+    const updated = get(workspaces);
+    const newWs = updated.find((w) => w.id !== ws.id)!;
+    expect((newWs.metadata as Record<string, unknown>)?.groupId).toBe(
+      "src-group",
+    );
+    expect(insertWorkspaceIntoGroupSpy).toHaveBeenCalledWith(
+      "src-group",
+      newWs.id,
+      0,
+    );
+  });
+
+  it("targetGroupId takes precedence over srcGroupId when both are set", () => {
+    const sA = mockSurface({ title: "A" });
+    const sB = mockSurface({ title: "B" });
+    const pane = makePane([sA, sB]);
+    const ws = makeWorkspace(
+      { type: "pane", pane },
+      { metadata: { groupId: "src-group" } }, // srcGroupId is set
+    );
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+
+    createWorkspaceFromSurface(sA.id, pane.id, ws.id, {
+      kind: "group",
+      positionInGroup: 0,
+      targetGroupId: "target-group-override",
+    });
+
+    const updated = get(workspaces);
+    const newWs = updated.find((w) => w.id !== ws.id)!;
+    expect((newWs.metadata as Record<string, unknown>)?.groupId).toBe(
+      "target-group-override",
+    );
+    expect(insertWorkspaceIntoGroupSpy).toHaveBeenCalledWith(
+      "target-group-override",
+      newWs.id,
+      0,
+    );
   });
 });

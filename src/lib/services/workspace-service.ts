@@ -436,7 +436,7 @@ export function createWorkspaceFromSurface(
   sourceWorkspaceId: string,
   insertOptions?:
     | { kind: "root"; insertIdx: number }
-    | { kind: "group"; positionInGroup: number },
+    | { kind: "group"; positionInGroup: number; targetGroupId?: string },
 ): void {
   const allWs = get(workspaces);
   const srcWs = allWs.find((w) => w.id === sourceWorkspaceId);
@@ -476,12 +476,15 @@ export function createWorkspaceFromSurface(
   };
   const srcGroupId = (srcWs.metadata as Record<string, unknown> | undefined)
     ?.groupId as string | undefined;
+  const effectiveGroupId =
+    (insertOptions?.kind === "group" && insertOptions.targetGroupId) ||
+    srcGroupId;
   const newWs: Workspace = {
     id: uid(),
     name: surface.title || "New Workspace",
     splitRoot: { type: "pane", pane: newPane },
     activePaneId: newPane.id,
-    ...(srcGroupId ? { metadata: { groupId: srcGroupId } } : {}),
+    ...(effectiveGroupId ? { metadata: { groupId: effectiveGroupId } } : {}),
   };
 
   workspaces.update((list) => [...list, newWs]);
@@ -490,15 +493,15 @@ export function createWorkspaceFromSurface(
   } else {
     appendRootRow({ kind: "workspace", id: newWs.id });
   }
-  if (srcGroupId) {
+  if (effectiveGroupId) {
     if (insertOptions?.kind === "group") {
       insertWorkspaceIntoGroup(
-        srcGroupId,
+        effectiveGroupId,
         newWs.id,
         insertOptions.positionInGroup,
       );
     } else {
-      addWorkspaceToGroup(srcGroupId, newWs.id);
+      addWorkspaceToGroup(effectiveGroupId, newWs.id);
     }
   }
   schedulePersist();

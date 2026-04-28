@@ -526,6 +526,9 @@ export async function setupListeners() {
       }
       return wsList;
     });
+    // Emit AFTER the store update so downstream listeners (passive agent
+    // detection, status trackers) see the new title on the surface when
+    // they look it up.
     if (changed) {
       const c = changed as { id: string; oldTitle: string; newTitle: string };
       eventBus.emit({

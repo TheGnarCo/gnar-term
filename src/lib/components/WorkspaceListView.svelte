@@ -16,6 +16,16 @@
   import { reorderContext, anyReorderActive } from "../stores/ui";
   import { createDragReorder } from "../actions/drag-reorder";
   import {
+    detectWorkspacePaneDrop,
+    detectTabBarDropForWorkspace,
+    setWorkspaceDragState,
+    type WorkspacePaneDropTarget,
+  } from "../services/workspace-drag";
+  import {
+    expandWorkspaceIntoPanes,
+    mergeWorkspaceIntoPane,
+  } from "../services/pane-service";
+  import {
     switchWorkspace,
     closeWorkspace,
     renameWorkspace,
@@ -123,6 +133,7 @@
   let indicator: { idx: number; edge: "before" | "after" } | null = null;
   let active = false;
   let sourceHeight = 0;
+  let currentPaneTarget: WorkspacePaneDropTarget = null;
 
   const reorder = createDragReorder({
     dataAttr: "ws-view-drag-idx",
@@ -136,6 +147,67 @@
       // `from` and `to` are global workspace indices (encoded in the data
       // attribute below). reorderWorkspaces operates on the global list.
       reorderWorkspaces(from, to);
+    },
+    onMove: (x, y, ghostEl) => {
+      if (sourceIdx === null) return;
+      const srcWsId = $workspaces[sourceIdx]?.id;
+      if (!srcWsId) return;
+      // Tab bar takes precedence over pane body.
+      const tabTarget = detectTabBarDropForWorkspace(x, y, srcWsId);
+      currentPaneTarget = tabTarget ?? detectWorkspacePaneDrop(x, y, srcWsId);
+      setWorkspaceDragState(
+        currentPaneTarget !== null
+          ? { workspaceId: srcWsId, dropTarget: currentPaneTarget }
+          : null,
+      );
+      if (ghostEl) {
+        const existing = ghostEl.querySelector(
+          ".ws-drag-deny",
+        ) as HTMLElement | null;
+        if (currentPaneTarget?.kind === "deny") {
+          if (!existing) {
+            const el = document.createElement("div");
+            el.className = "ws-drag-deny";
+            Object.assign(el.style, {
+              position: "absolute",
+              inset: "0",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "rgba(200,30,30,0.75)",
+              borderRadius: "4px",
+              fontSize: "16px",
+              color: "white",
+              fontWeight: "bold",
+              pointerEvents: "none",
+            });
+            el.textContent = "✕";
+            ghostEl.appendChild(el);
+          }
+          document.body.style.cursor = "not-allowed";
+        } else {
+          existing?.remove();
+          document.body.style.cursor = "grabbing";
+        }
+      }
+    },
+    onDragCommit: (fromIdx) => {
+      const paneTarget = currentPaneTarget;
+      currentPaneTarget = null;
+      setWorkspaceDragState(null);
+      const srcWsId = $workspaces[fromIdx]?.id;
+      if (paneTarget?.kind === "pane-split" && srcWsId) {
+        const direction =
+          paneTarget.zone === "left" || paneTarget.zone === "right"
+            ? "horizontal"
+            : "vertical";
+        const before = paneTarget.zone === "left" || paneTarget.zone === "top";
+        expandWorkspaceIntoPanes(srcWsId, paneTarget.paneId, direction, before);
+      } else if (paneTarget?.kind === "tab-merge" && srcWsId) {
+        mergeWorkspaceIntoPane(srcWsId, paneTarget.paneId);
+      }
+      // Return true to suppress sidebar reorder when a pane target was active.
+      return paneTarget !== null;
     },
     onStateChange: () => {
       const s = reorder.getState();
@@ -151,6 +223,10 @@
         });
       } else {
         reorderContext.set(null);
+      }
+      if (!s.active) {
+        currentPaneTarget = null;
+        setWorkspaceDragState(null);
       }
     },
   });

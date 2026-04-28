@@ -86,6 +86,11 @@ export interface PseudoWorkspace {
    * When omitted, the row renders `pseudo.label` as before.
    */
   rowBody?: unknown;
+  /**
+   * Called after `unregisterPseudoWorkspace` removes the entry; use this to
+   * register a reopen affordance or persist the closed state.
+   */
+  onClose?: () => void;
 }
 
 const registry = createRegistry<PseudoWorkspace>();

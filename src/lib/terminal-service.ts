@@ -11,7 +11,7 @@ import type { ILink } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
 import { invoke, Channel } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { appendMcpOutput } from "./services/mcp-output-buffer";
 import { eventBus } from "./services/event-bus";
 import { notifyOutputObservers } from "./services/surface-output-observer";
@@ -282,130 +282,106 @@ async function sendDesktopNotification(
   }
 }
 
+// Module-level storage for active Tauri event unlisteners and the keydown handler
+// reference. Populated by setupListeners(), drained by teardownListeners().
+const _unlisteners: UnlistenFn[] = [];
+let _keydownHandler: ((e: KeyboardEvent) => void) | null = null;
+
+export async function teardownListeners(): Promise<void> {
+  for (const unlisten of _unlisteners) {
+    unlisten();
+  }
+  _unlisteners.length = 0;
+  if (_keydownHandler) {
+    window.removeEventListener("keydown", _keydownHandler, { capture: true });
+    _keydownHandler = null;
+  }
+}
+
 export async function setupListeners() {
   // On Linux, prevent WebKitGTK from intercepting Ctrl+Shift+C/V before xterm.js
   if (!isMac) {
-    window.addEventListener(
-      "keydown",
-      (e) => {
-        if (
-          e.ctrlKey &&
-          e.shiftKey &&
-          (e.key === "C" || e.key === "c" || e.key === "V" || e.key === "v")
-        ) {
-          e.preventDefault();
-        }
-      },
-      { capture: true },
-    );
+    _keydownHandler = (e: KeyboardEvent) => {
+      if (
+        e.ctrlKey &&
+        e.shiftKey &&
+        (e.key === "C" || e.key === "c" || e.key === "V" || e.key === "v")
+      ) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener("keydown", _keydownHandler, { capture: true });
   }
-  await listen<{ pty_id: number }>("pty-exit", (event) => {
-    const { pty_id } = event.payload;
-    // pty-exit arrives via emit while chunks arrive via Channel — different
-    // transports, so a trailing chunk may already be in the per-pty buffer.
-    // Flush it synchronously to the surface's terminal before we tear down
-    // flow-control state and remove the surface from the workspace tree.
-    const chunks = ptyBuffers.get(pty_id);
-    const bytesBuffered = ptyBufferBytes.get(pty_id) || 0;
-    if (chunks && chunks.length > 0 && bytesBuffered > 0) {
-      const surface = findSurfaceByPty(pty_id);
-      if (surface) {
-        const merged = new Uint8Array(bytesBuffered);
-        let offset = 0;
-        for (const chunk of chunks) {
-          merged.set(chunk, offset);
-          offset += chunk.length;
-        }
-        surface.terminal.write(merged);
-      }
-    }
-    ptyBuffers.delete(pty_id);
-    ptyBufferBytes.delete(pty_id);
-    ptyFlushScheduled.delete(pty_id);
-    ptyPaused.delete(pty_id);
-
-    // Remove the surface from its pane, and collapse empty panes
-    workspaces.update((wsList) => {
-      for (const ws of wsList) {
-        for (const pane of getAllPanes(ws.splitRoot)) {
-          const idx = pane.surfaces.findIndex(
-            (s) => isTerminalSurface(s) && s.ptyId === pty_id,
-          );
-          if (idx >= 0) {
-            pane.surfaces.splice(idx, 1);
-            if (pane.surfaces.length > 0) {
-              pane.activeSurfaceId =
-                pane.surfaces[Math.min(idx, pane.surfaces.length - 1)]!.id;
-            } else {
-              // Pane is empty — collapse it from the split tree
-              pane.activeSurfaceId = null;
-              pane.resizeObserver?.disconnect();
-              if (
-                ws.splitRoot.type === "pane" &&
-                ws.splitRoot.pane.id === pane.id
-              ) {
-                // This was the only pane in the workspace — remove the
-                // workspace. Users are allowed to close all workspaces;
-                // App.svelte renders an Empty Surface when the list is
-                // empty, so we don't auto-create a default.
-                const wsIdx = wsList.indexOf(ws);
-                wsList.splice(wsIdx, 1);
-                const currentIdx = get(activeWorkspaceIdx);
-                if (currentIdx >= wsList.length) {
-                  activeWorkspaceIdx.set(wsList.length - 1);
-                }
-                return wsList;
-              }
-              // Find parent split and collapse it
-              const parentInfo = findParentSplit(ws.splitRoot, pane.id);
-              if (parentInfo && parentInfo.parent.type === "split") {
-                const sibling =
-                  parentInfo.parent.children[parentInfo.index === 0 ? 1 : 0];
-                if (ws.splitRoot === parentInfo.parent) {
-                  ws.splitRoot = sibling;
-                } else {
-                  replaceNodeInTree(ws.splitRoot, parentInfo.parent, sibling);
-                }
-                ws.activePaneId = getAllPanes(ws.splitRoot)[0]?.id ?? null;
-              }
-            }
-            return wsList;
+  _unlisteners.push(
+    await listen<{ pty_id: number }>("pty-exit", (event) => {
+      const { pty_id } = event.payload;
+      // pty-exit arrives via emit while chunks arrive via Channel — different
+      // transports, so a trailing chunk may already be in the per-pty buffer.
+      // Flush it synchronously to the surface's terminal before we tear down
+      // flow-control state and remove the surface from the workspace tree.
+      const chunks = ptyBuffers.get(pty_id);
+      const bytesBuffered = ptyBufferBytes.get(pty_id) || 0;
+      if (chunks && chunks.length > 0 && bytesBuffered > 0) {
+        const surface = findSurfaceByPty(pty_id);
+        if (surface) {
+          const merged = new Uint8Array(bytesBuffered);
+          let offset = 0;
+          for (const chunk of chunks) {
+            merged.set(chunk, offset);
+            offset += chunk.length;
           }
+          surface.terminal.write(merged);
         }
       }
-      return wsList;
-    });
-  });
+      ptyBuffers.delete(pty_id);
+      ptyBufferBytes.delete(pty_id);
+      ptyFlushScheduled.delete(pty_id);
+      ptyPaused.delete(pty_id);
 
-  await listen<{ pty_id: number; text: string }>(
-    "pty-notification",
-    (event) => {
-      const { pty_id, text } = event.payload;
-      // Filter out escape-sequence fragments that slipped through (e.g. "4;0;")
-      if (/^\d+[;\d:\/]*$/.test(text) || !text.trim()) return;
-      let notifyWorkspaceName: string | null = null;
+      // Remove the surface from its pane, and collapse empty panes
       workspaces.update((wsList) => {
-        const activeIdx = get(activeWorkspaceIdx);
-        const activeWs = wsList[activeIdx];
         for (const ws of wsList) {
-          for (const s of getAllSurfaces(ws)) {
-            if (isTerminalSurface(s) && s.ptyId === pty_id) {
-              s.notification = text;
-              s.hasUnread = true;
-              // Suppress desktop notification when the affected surface is
-              // the foreground surface in the foreground pane — the user
-              // is already looking at it.
-              const inActiveWs = ws.id === activeWs?.id;
-              const inActivePane = ws.activePaneId
-                ? getAllPanes(ws.splitRoot).some(
-                    (p) =>
-                      p.id === ws.activePaneId &&
-                      p.surfaces.some((ps) => ps.id === s.id) &&
-                      p.activeSurfaceId === s.id,
-                  )
-                : false;
-              if (!(inActiveWs && inActivePane)) {
-                notifyWorkspaceName = ws.name;
+          for (const pane of getAllPanes(ws.splitRoot)) {
+            const idx = pane.surfaces.findIndex(
+              (s) => isTerminalSurface(s) && s.ptyId === pty_id,
+            );
+            if (idx >= 0) {
+              pane.surfaces.splice(idx, 1);
+              if (pane.surfaces.length > 0) {
+                pane.activeSurfaceId =
+                  pane.surfaces[Math.min(idx, pane.surfaces.length - 1)]!.id;
+              } else {
+                // Pane is empty — collapse it from the split tree
+                pane.activeSurfaceId = null;
+                pane.resizeObserver?.disconnect();
+                if (
+                  ws.splitRoot.type === "pane" &&
+                  ws.splitRoot.pane.id === pane.id
+                ) {
+                  // This was the only pane in the workspace — remove the
+                  // workspace. Users are allowed to close all workspaces;
+                  // App.svelte renders an Empty Surface when the list is
+                  // empty, so we don't auto-create a default.
+                  const wsIdx = wsList.indexOf(ws);
+                  wsList.splice(wsIdx, 1);
+                  const currentIdx = get(activeWorkspaceIdx);
+                  if (currentIdx >= wsList.length) {
+                    activeWorkspaceIdx.set(wsList.length - 1);
+                  }
+                  return wsList;
+                }
+                // Find parent split and collapse it
+                const parentInfo = findParentSplit(ws.splitRoot, pane.id);
+                if (parentInfo && parentInfo.parent.type === "split") {
+                  const sibling =
+                    parentInfo.parent.children[parentInfo.index === 0 ? 1 : 0];
+                  if (ws.splitRoot === parentInfo.parent) {
+                    ws.splitRoot = sibling;
+                  } else {
+                    replaceNodeInTree(ws.splitRoot, parentInfo.parent, sibling);
+                  }
+                  ws.activePaneId = getAllPanes(ws.splitRoot)[0]?.id ?? null;
+                }
               }
               return wsList;
             }
@@ -413,10 +389,51 @@ export async function setupListeners() {
         }
         return wsList;
       });
-      if (notifyWorkspaceName) {
-        void sendDesktopNotification(notifyWorkspaceName, text);
-      }
-    },
+    }),
+  );
+
+  _unlisteners.push(
+    await listen<{ pty_id: number; text: string }>(
+      "pty-notification",
+      (event) => {
+        const { pty_id, text } = event.payload;
+        // Filter out escape-sequence fragments that slipped through (e.g. "4;0;")
+        if (/^\d+[;\d:\/]*$/.test(text) || !text.trim()) return;
+        let notifyWorkspaceName: string | null = null;
+        workspaces.update((wsList) => {
+          const activeIdx = get(activeWorkspaceIdx);
+          const activeWs = wsList[activeIdx];
+          for (const ws of wsList) {
+            for (const s of getAllSurfaces(ws)) {
+              if (isTerminalSurface(s) && s.ptyId === pty_id) {
+                s.notification = text;
+                s.hasUnread = true;
+                // Suppress desktop notification when the affected surface is
+                // the foreground surface in the foreground pane — the user
+                // is already looking at it.
+                const inActiveWs = ws.id === activeWs?.id;
+                const inActivePane = ws.activePaneId
+                  ? getAllPanes(ws.splitRoot).some(
+                      (p) =>
+                        p.id === ws.activePaneId &&
+                        p.surfaces.some((ps) => ps.id === s.id) &&
+                        p.activeSurfaceId === s.id,
+                    )
+                  : false;
+                if (!(inActiveWs && inActivePane)) {
+                  notifyWorkspaceName = ws.name;
+                }
+                return wsList;
+              }
+            }
+          }
+          return wsList;
+        });
+        if (notifyWorkspaceName) {
+          void sendDesktopNotification(notifyWorkspaceName, text);
+        }
+      },
+    ),
   );
 
   function applyPtyTitle(pty_id: number, title: string) {
@@ -436,9 +453,6 @@ export async function setupListeners() {
       }
       return wsList;
     });
-    // Emit AFTER the store update so downstream listeners (passive agent
-    // detection, status trackers) see the new title on the surface when
-    // they look it up.
     if (changed) {
       const c = changed as { id: string; oldTitle: string; newTitle: string };
       eventBus.emit({
@@ -451,32 +465,35 @@ export async function setupListeners() {
   }
 
   // OSC 0/2: shell sets window title (shows process name or custom title)
-  await listen<{ pty_id: number; title: string }>("pty-title", (event) => {
-    const { pty_id, title } = event.payload;
-    // Filter out escape-sequence fragments that may slip through
-    if (!title || /[\x00-\x1f\x7f]/.test(title) || /^\d+[;\d:\/]*$/.test(title))
-      return;
+  _unlisteners.push(
+    await listen<{ pty_id: number; title: string }>("pty-title", (event) => {
+      const { pty_id, title } = event.payload;
+      // Filter out escape-sequence fragments that may slip through
+      if (
+        !title ||
+        /[\x00-\x1f\x7f]/.test(title) ||
+        /^\d+[;\d:\/]*$/.test(title)
+      )
+        return;
 
-    // Cancel any pending delayed title for this pty
-    const existing = pendingRunningTitles.get(pty_id);
-    if (existing) {
-      clearTimeout(existing);
-      pendingRunningTitles.delete(pty_id);
-    }
-
-    if (title.startsWith("Running: ")) {
-      // Delay "Running:" titles so quick commands never appear in the tab.
-      // precmd fires OSC 7 before this timer if the command exits fast,
-      // which cancels the timer via the OSC 7 handler.
-      const timer = setTimeout(() => {
+      // Cancel any pending delayed title for this pty
+      const existing = pendingRunningTitles.get(pty_id);
+      if (existing) {
+        clearTimeout(existing);
         pendingRunningTitles.delete(pty_id);
+      }
+
+      if (title.startsWith("Running: ")) {
+        const timer = setTimeout(() => {
+          pendingRunningTitles.delete(pty_id);
+          applyPtyTitle(pty_id, title);
+        }, 500);
+        pendingRunningTitles.set(pty_id, timer);
+      } else {
         applyPtyTitle(pty_id, title);
-      }, 500);
-      pendingRunningTitles.set(pty_id, timer);
-    } else {
-      applyPtyTitle(pty_id, title);
-    }
-  });
+      }
+    }),
+  );
 }
 
 // --- Running Title Delay ---

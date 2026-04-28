@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { get } from "svelte/store";
 
 vi.mock("../lib/config", () => ({
@@ -16,7 +16,7 @@ import {
   removeFromArchive,
   initArchiveFromState,
 } from "../lib/stores/archive";
-import { getState } from "../lib/config";
+import { getState, saveState } from "../lib/config";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -98,5 +98,85 @@ describe("initArchiveFromState", () => {
     initArchiveFromState();
     expect(get(archivedOrder)).toEqual([{ kind: "workspace", id: "ws-2" }]);
     expect(get(archivedDefs).workspaces["ws-2"]).toBeDefined();
+  });
+
+  it("filters out malformed rows from persisted archivedOrder", () => {
+    vi.mocked(getState).mockReturnValueOnce({
+      archivedOrder: [
+        { kind: "workspace", id: "ok" },
+        { kind: "workspace", id: 42 }, // bad id
+        { kind: "bogus", id: "x" }, // bad kind
+        null,
+        "string",
+        { kind: "workspace-group", id: "ok-group" },
+      ] as unknown as { kind: string; id: string }[],
+      archivedDefs: { workspaces: {}, groups: {} },
+    } as ReturnType<typeof getState>);
+    initArchiveFromState();
+    expect(get(archivedOrder)).toEqual([
+      { kind: "workspace", id: "ok" },
+      { kind: "workspace-group", id: "ok-group" },
+    ]);
+  });
+});
+
+describe("persist", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("calls saveState after the debounce window when an item is added", async () => {
+    const def = { id: "ws-1", name: "W", layout: { pane: { surfaces: [] } } };
+    addToArchive({ kind: "workspace", id: "ws-1" }, { def });
+
+    // not yet — debounce hasn't fired
+    expect(saveState).not.toHaveBeenCalled();
+
+    await vi.runAllTimersAsync();
+
+    expect(saveState).toHaveBeenCalledTimes(1);
+    expect(saveState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        archivedOrder: expect.any(Array),
+        archivedDefs: expect.any(Object),
+      }),
+    );
+    const call = vi.mocked(saveState).mock.calls[0]?.[0] as {
+      archivedOrder: { kind: string; id: string }[];
+    };
+    expect(call.archivedOrder).toEqual([{ kind: "workspace", id: "ws-1" }]);
+  });
+
+  it("calls saveState after debounce when an item is removed", async () => {
+    const def = { id: "ws-1", name: "W", layout: { pane: { surfaces: [] } } };
+    addToArchive({ kind: "workspace", id: "ws-1" }, { def });
+    await vi.runAllTimersAsync();
+    vi.mocked(saveState).mockClear();
+
+    removeFromArchive({ kind: "workspace", id: "ws-1" });
+    expect(saveState).not.toHaveBeenCalled();
+
+    await vi.runAllTimersAsync();
+
+    expect(saveState).toHaveBeenCalledTimes(1);
+    const call = vi.mocked(saveState).mock.calls[0]?.[0] as {
+      archivedOrder: unknown[];
+    };
+    expect(call.archivedOrder).toEqual([]);
+  });
+
+  it("debounces — multiple rapid changes coalesce into one saveState call", async () => {
+    const def = { id: "ws-1", name: "W", layout: { pane: { surfaces: [] } } };
+    const def2 = { id: "ws-2", name: "W2", layout: { pane: { surfaces: [] } } };
+    addToArchive({ kind: "workspace", id: "ws-1" }, { def });
+    addToArchive({ kind: "workspace", id: "ws-2" }, { def: def2 });
+    removeFromArchive({ kind: "workspace", id: "ws-1" });
+
+    await vi.runAllTimersAsync();
+
+    expect(saveState).toHaveBeenCalledTimes(1);
   });
 });

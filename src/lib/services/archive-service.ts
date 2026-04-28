@@ -25,6 +25,11 @@ import {
   archivedDefs,
 } from "../stores/archive";
 
+function isDashboardWorkspace(ws: Workspace): boolean {
+  const md = ws.metadata as Record<string, unknown> | undefined;
+  return md?.isDashboard === true;
+}
+
 function countRunningPtys(ws: Workspace): number {
   return getAllSurfaces(ws).filter((s) => isTerminalSurface(s) && s.ptyId >= 0)
     .length;
@@ -61,10 +66,7 @@ export async function archiveGroup(groupId: string): Promise<boolean> {
   if (!group) return false;
 
   const allInGroup = getWorkspacesInGroup(groupId);
-  const nonDashboard = allInGroup.filter((ws) => {
-    const md = ws.metadata as Record<string, unknown> | undefined;
-    return md?.isDashboard !== true;
-  });
+  const nonDashboard = allInGroup.filter((ws) => !isDashboardWorkspace(ws));
 
   const runningCount = nonDashboard.reduce(
     (sum, ws) => sum + countRunningPtys(ws),
@@ -99,19 +101,25 @@ export async function unarchiveWorkspace(wsId: string): Promise<void> {
   const defs = get(archivedDefs);
   const entry = defs.workspaces[wsId];
   if (!entry) return;
-  removeFromArchive({ kind: "workspace", id: wsId });
+  // Create first; only drop the archive entry once we know the restore
+  // succeeded, so a failure leaves the user able to retry.
   await createWorkspaceFromDef(entry.def, { restoring: true });
+  removeFromArchive({ kind: "workspace", id: wsId });
 }
 
 export async function unarchiveGroup(groupId: string): Promise<void> {
   const defs = get(archivedDefs);
   const entry = defs.groups[groupId];
   if (!entry) return;
-  removeFromArchive({ kind: "workspace-group", id: groupId });
+  // Container (group + root row) must be in place before we restore
+  // workspaces into it, but `removeFromArchive` is held until every
+  // async restore step has resolved — if any throws, the archive entry
+  // survives so the user can retry.
   setWorkspaceGroups([...getWorkspaceGroups(), entry.group]);
   appendRootRow({ kind: "workspace-group", id: groupId });
   for (const def of entry.workspaceDefs) {
     await createWorkspaceFromDef(def, { restoring: true });
   }
   await provisionAutoDashboardsForGroup(entry.group);
+  removeFromArchive({ kind: "workspace-group", id: groupId });
 }

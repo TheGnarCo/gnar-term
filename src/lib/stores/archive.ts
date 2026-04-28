@@ -29,10 +29,22 @@ export const archivedOrder = _archivedOrder;
 const _archivedDefs = writable<ArchivedDefsMap>({ workspaces: {}, groups: {} });
 export const archivedDefs = _archivedDefs;
 
+function isArchivedRow(v: unknown): v is ArchivedRow {
+  return (
+    typeof v === "object" &&
+    v !== null &&
+    "kind" in v &&
+    "id" in v &&
+    typeof (v as ArchivedRow).id === "string" &&
+    ((v as ArchivedRow).kind === "workspace" ||
+      (v as ArchivedRow).kind === "workspace-group")
+  );
+}
+
 export function initArchiveFromState(): void {
   const state = getState();
   const order = Array.isArray(state.archivedOrder)
-    ? (state.archivedOrder as ArchivedRow[])
+    ? state.archivedOrder.filter(isArchivedRow)
     : [];
   const defs = (state.archivedDefs ?? {
     workspaces: {},
@@ -42,6 +54,14 @@ export function initArchiveFromState(): void {
   _archivedDefs.set(defs);
 }
 
+export function addToArchive(
+  row: { kind: "workspace"; id: string },
+  entry: ArchivedWorkspaceDef,
+): void;
+export function addToArchive(
+  row: { kind: "workspace-group"; id: string },
+  entry: ArchivedGroupDef,
+): void;
 export function addToArchive(row: ArchivedRow, entry: ArchivedDefEntry): void {
   _archivedOrder.update((list) => {
     if (list.some((r) => r.kind === row.kind && r.id === row.id)) return list;
@@ -86,9 +106,11 @@ let _persistTimer: ReturnType<typeof setTimeout> | null = null;
 function persist(): void {
   if (_persistTimer) clearTimeout(_persistTimer);
   _persistTimer = setTimeout(() => {
-    void saveState({
+    saveState({
       archivedOrder: get(_archivedOrder),
       archivedDefs: get(_archivedDefs),
-    });
+    }).catch((err) =>
+      console.error("[archive] failed to persist archive state:", err),
+    );
   }, 500);
 }

@@ -272,6 +272,11 @@ export function closeWorkspace(idx: number) {
       }
     }
   }
+  // Clear zoom if the workspace being closed contains the currently-zoomed surface
+  const zoomed = get(zoomedSurfaceId);
+  if (zoomed && getAllSurfaces(ws).some((s) => s.id === zoomed)) {
+    zoomedSurfaceId.set(null);
+  }
   const wsId = ws.id;
   workspaces.update((list) => list.filter((_, i) => i !== idx));
   activeWorkspaceIdx.set(

@@ -258,7 +258,7 @@
       title="New activity in this pane"
       style="
         position: absolute;
-        top: 6px; right: 6px;
+        top: 34px; right: 6px;
         width: 7px; height: 7px;
         border-radius: 50%;
         background: {$theme.notify};

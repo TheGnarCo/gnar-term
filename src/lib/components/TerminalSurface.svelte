@@ -6,6 +6,10 @@
   import { writeImage } from "@tauri-apps/plugin-clipboard-manager";
   import { connectPty } from "../terminal-service";
   import { theme } from "../stores/theme";
+  import {
+    findSurfaceLocation,
+    closeSurfaceById,
+  } from "../services/surface-service";
   import type { TerminalSurface as TermSurface } from "../types";
 
   export let surface: TermSurface;
@@ -17,6 +21,7 @@
   let unlistenDragDrop: (() => void) | undefined;
   export let userScrolledUp = false;
   let scrollDisposable: { dispose(): void } | undefined;
+  let errorMessage: string | undefined = undefined;
 
   const IMAGE_EXTS = new Set([
     "png",
@@ -158,6 +163,22 @@
       }
       await connectPty(surface, cwd, surface.env);
 
+      // If the PTY failed to spawn, show an error in the pane and remove the
+      // dead surface so it is not persisted to config on restart.
+      // The 2-second delay is intentional UX: give the user time to read the
+      // error before the pane closes (not a timing-race workaround).
+      if (surface.spawnError) {
+        errorMessage = surface.spawnError;
+        const surfaceId = surface.id;
+        setTimeout(() => {
+          const loc = findSurfaceLocation(surfaceId);
+          if (loc) {
+            closeSurfaceById(loc.pane.id, surfaceId);
+          }
+        }, 2000);
+        return;
+      }
+
       // Send startup command after PTY is connected (not on a timer)
       if (surface.startupCommand && surface.ptyId >= 0) {
         invoke("write_pty", {
@@ -242,3 +263,30 @@
     ? `box-shadow: inset 0 0 0 2px ${$theme.accent}; border-radius: 4px;`
     : ''}"
 ></div>
+
+{#if errorMessage && visible}
+  <div
+    style="
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: {$theme.termBg};
+      color: {$theme.danger};
+      font-family: monospace;
+      font-size: 13px;
+      padding: 24px;
+      gap: 8px;
+      z-index: 10;
+    "
+  >
+    <span style="font-size: 20px;">✖</span>
+    <span style="font-weight: bold;">Failed to start terminal</span>
+    <span
+      style="color: {$theme.fgMuted}; word-break: break-word; text-align: center;"
+      >{errorMessage}</span
+    >
+  </div>
+{/if}

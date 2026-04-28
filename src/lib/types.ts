@@ -28,6 +28,9 @@ export interface TerminalSurface {
   // True only on a restored surface whose definedCommand has not yet been
   // approved or dismissed. Drives both the bulk dialog and the inline banner.
   pendingRestoreCommand?: boolean;
+  // Set by connectPty on spawn failure; consumed by TerminalSurface.svelte to
+  // show an error message and remove the dead surface from its pane.
+  spawnError?: string;
 }
 
 export interface ExtensionSurface {

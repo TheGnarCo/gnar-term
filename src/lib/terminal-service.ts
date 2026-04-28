@@ -1081,6 +1081,7 @@ export async function connectPty(
   } catch (err) {
     console.error("Failed to spawn PTY:", err);
     surface.ptyId = -1;
+    surface.spawnError = err instanceof Error ? err.message : String(err);
     deferred?.reject(err instanceof Error ? err : new Error(String(err)));
     ptyReady.delete(surface.id);
   }

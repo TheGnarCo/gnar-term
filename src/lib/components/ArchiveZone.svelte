@@ -155,7 +155,7 @@
     flex-shrink: 0;
   }
 
-  .archive-zone[data-drag-over] {
+  .archive-zone:global([data-drag-over]) {
     outline: 1px solid rgba(255, 255, 255, 0.3);
     outline-offset: -1px;
   }

@@ -26,7 +26,7 @@ vi.mock("../lib/types", () => ({
 
 import { invoke } from "@tauri-apps/api/core";
 import { tick } from "svelte";
-import { activeSurface } from "../lib/stores/workspace";
+import { activeSurface, workspaces } from "../lib/stores/workspace";
 
 const mockedInvoke = vi.mocked(invoke);
 const mockedTick = vi.mocked(tick);
@@ -200,5 +200,46 @@ describe("getActiveCwd", () => {
     const { getActiveCwd } = await import("../lib/services/service-helpers");
     const result = await getActiveCwd();
     expect(result).toBeUndefined();
+  });
+});
+
+describe("registerPtyForSurface", () => {
+  it("makes lookupTerminalByPtyId find a surface whose ptyId was mutated after the store last emitted", async () => {
+    // Simulate what connectPty does: surface is created with ptyId=-1,
+    // store emits (index built with ptyId=-1, not inserted into _ptyIndex),
+    // then spawn_pty resolves and surface.ptyId is mutated directly.
+    // Without registerPtyForSurface the index stays stale and lookup returns undefined.
+    const { default: getAllPanesMock, isTerminalSurface: isTermMock } =
+      await import("../lib/types").then((m) => ({ default: m, ...m }));
+    void getAllPanesMock;
+    void isTermMock;
+
+    const surface = {
+      kind: "terminal",
+      id: "surface-reg-test",
+      ptyId: -1,
+      terminal: { focus: vi.fn() },
+    } as unknown as Surface;
+
+    workspaces.set([]);
+
+    const {
+      lookupTerminalByPtyId,
+      lookupPtyIdForSurface,
+      registerPtyForSurface,
+    } = await import("../lib/services/service-helpers");
+
+    // Before registration: index has no entry for ptyId 42
+    expect(lookupTerminalByPtyId(42)).toBeUndefined();
+
+    // Simulate connectPty: mutate ptyId then register
+    (surface as unknown as { ptyId: number }).ptyId = 42;
+    registerPtyForSurface(
+      42,
+      surface as unknown as import("../lib/types").TerminalSurface,
+    );
+
+    expect(lookupTerminalByPtyId(42)).toBe(surface);
+    expect(lookupPtyIdForSurface("surface-reg-test")).toBe(42);
   });
 });

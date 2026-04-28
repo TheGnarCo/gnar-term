@@ -121,6 +121,19 @@ export function findParentSplit(
   );
 }
 
+/** Return true if any pane within the subtree contains a surface with the given ID. */
+export function nodeContainsSurface(
+  node: SplitNode,
+  surfaceId: string,
+): boolean {
+  if (node.type === "pane")
+    return node.pane.surfaces.some((s) => s.id === surfaceId);
+  return (
+    nodeContainsSurface(node.children[0], surfaceId) ||
+    nodeContainsSurface(node.children[1], surfaceId)
+  );
+}
+
 /** Replace a target node in the split tree with a replacement. Returns true if found. */
 export function replaceNodeInTree(
   root: SplitNode,

@@ -15,7 +15,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { appendMcpOutput } from "./services/mcp-output-buffer";
 import { eventBus } from "./services/event-bus";
 import { notifyOutputObservers } from "./services/surface-output-observer";
-import { getConfig } from "./config";
+import { getConfig, saveConfig } from "./config";
 import {
   readText as clipboardRead,
   writeText as clipboardWrite,
@@ -1094,5 +1094,31 @@ export async function connectPty(
     surface.spawnError = err instanceof Error ? err.message : String(err);
     deferred?.reject(err instanceof Error ? err : new Error(String(err)));
     ptyReady.delete(surface.id);
+  }
+}
+
+const FONT_SIZE_MIN = 8;
+const FONT_SIZE_MAX = 32;
+
+export function adjustFontSize(delta: number): void {
+  const current = getConfig().fontSize ?? 14;
+  const next = Math.max(
+    FONT_SIZE_MIN,
+    Math.min(FONT_SIZE_MAX, current + delta),
+  );
+  if (next === current) return;
+  void saveConfig({ fontSize: next });
+  const wsList = get(workspaces);
+  for (const ws of wsList) {
+    for (const s of getAllSurfaces(ws)) {
+      if (isTerminalSurface(s)) {
+        s.terminal.options.fontSize = next;
+        try {
+          s.fitAddon.fit();
+        } catch {
+          // May fail if terminal is not attached to DOM yet
+        }
+      }
+    }
   }
 }

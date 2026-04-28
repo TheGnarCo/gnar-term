@@ -6,6 +6,7 @@ import {
   activeWorkspace,
   activePane,
   activeSurface,
+  zoomedSurfaceId,
 } from "../stores/workspace";
 import { theme } from "../stores/theme";
 import { createTerminalSurface } from "../terminal-service";
@@ -30,6 +31,19 @@ import { removeWorkspaceFromAllGroups } from "./workspace-group-service";
 import { handleWorkspaceClosed as gitStatusWorkspaceClosed } from "./git-status-service";
 import { safeFocus, getCwdForSurface } from "./service-helpers";
 import { eventBus } from "./event-bus";
+
+export { zoomedSurfaceId };
+
+/**
+ * Toggle zoom for the given surface. If the surface is already zoomed,
+ * restores the normal split layout. If a different surface is zoomed (or
+ * none), zooms to the given surface.
+ */
+export function togglePaneZoom(surfaceId: string): void {
+  zoomedSurfaceId.update((current) =>
+    current === surfaceId ? null : surfaceId,
+  );
+}
 
 /**
  * Split the given pane (or the active pane if none found) without attaching

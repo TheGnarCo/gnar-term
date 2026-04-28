@@ -7,6 +7,7 @@ import {
   activeWorkspace,
   activeSurface,
   activePseudoWorkspaceId,
+  zoomedSurfaceId,
 } from "../stores/workspace";
 import { showInputPrompt, showConfirmPrompt } from "../stores/ui";
 import { createTerminalSurface } from "../terminal-service";
@@ -244,9 +245,8 @@ export function switchWorkspace(idx: number) {
     get(activeWorkspaceIdx) >= 0
       ? (wsList[get(activeWorkspaceIdx)]?.id ?? null)
       : null;
-  // Activating a real workspace implicitly clears any active
-  // pseudo-workspace — the two modes are mutually exclusive surfaces.
   activePseudoWorkspaceId.set(null);
+  zoomedSurfaceId.set(null);
   activeWorkspaceIdx.set(idx);
   eventBus.emit({
     type: "workspace:activated",

@@ -248,6 +248,87 @@ describe("copy-on-select wires onSelectionChange to clipboard write", () => {
     expect(clipboardWrites).toContain("selected text");
   });
 
+  it("does NOT write to clipboard when hasSelection() returns false", async () => {
+    let selectionChangeHandler: (() => void) | null = null;
+
+    vi.doMock("@xterm/xterm", () => ({
+      Terminal: class {
+        open = vi.fn();
+        write = vi.fn();
+        focus = vi.fn();
+        dispose = vi.fn();
+        cols = 80;
+        rows = 24;
+        onData = vi.fn();
+        onResize = vi.fn();
+        onTitleChange = vi.fn();
+        onSelectionChange = vi.fn().mockImplementation((cb: () => void) => {
+          selectionChangeHandler = cb;
+        });
+        loadAddon = vi.fn();
+        options: Record<string, unknown> = {};
+        buffer = { active: { getLine: vi.fn() } };
+        parser = { registerOscHandler: vi.fn() };
+        attachCustomKeyEventHandler = vi.fn();
+        registerLinkProvider = vi.fn();
+        getSelection = vi.fn().mockReturnValue("");
+        hasSelection = vi.fn().mockReturnValue(false); // empty selection
+        scrollToBottom = vi.fn();
+        clear = vi.fn();
+      },
+    }));
+    vi.doMock("@xterm/addon-fit", () => ({
+      FitAddon: class {
+        fit = vi.fn();
+        activate = vi.fn();
+        dispose = vi.fn();
+      },
+    }));
+    vi.doMock("@xterm/addon-web-links", () => ({
+      WebLinksAddon: class {
+        activate = vi.fn();
+        dispose = vi.fn();
+      },
+    }));
+    vi.doMock("@xterm/addon-search", () => ({
+      SearchAddon: class {
+        activate = vi.fn();
+        dispose = vi.fn();
+        findNext = vi.fn();
+        findPrevious = vi.fn();
+        clearDecorations = vi.fn();
+      },
+    }));
+    vi.doMock("@xterm/xterm/css/xterm.css", () => ({}));
+
+    const writeTextMock = vi.fn().mockResolvedValue(undefined);
+    vi.doMock("@tauri-apps/plugin-clipboard-manager", () => ({
+      readText: vi.fn().mockResolvedValue(""),
+      writeText: writeTextMock,
+    }));
+
+    vi.doMock("../lib/config", async (importOriginal) => {
+      const original = await importOriginal<typeof import("../lib/config")>();
+      return { ...original, getConfig: vi.fn().mockReturnValue({}) };
+    });
+
+    mockIPC((cmd) => {
+      if (cmd === "spawn_pty") return 1;
+      return undefined;
+    });
+
+    const { createTerminalSurface } = await import("../lib/terminal-service");
+    const pane = { id: "p5", surfaces: [], activeSurfaceId: null };
+    await createTerminalSurface(pane as never);
+
+    expect(selectionChangeHandler).not.toBeNull();
+    selectionChangeHandler!();
+
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(writeTextMock).not.toHaveBeenCalled();
+  });
+
   it("registers onSelectionChange handler during surface creation", async () => {
     vi.doMock("../lib/config", async (importOriginal) => {
       const original = await importOriginal<typeof import("../lib/config")>();

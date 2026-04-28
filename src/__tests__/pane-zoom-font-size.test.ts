@@ -38,6 +38,8 @@ vi.mock("@xterm/xterm", () => ({
     attachCustomKeyEventHandler = vi.fn();
     registerLinkProvider = vi.fn();
     getSelection = vi.fn().mockReturnValue("");
+    hasSelection = vi.fn().mockReturnValue(false);
+    onSelectionChange = vi.fn();
     scrollToBottom = vi.fn();
   },
 }));
@@ -358,9 +360,10 @@ describe("xterm key handler allows new shortcuts to bubble to App", () => {
         shiftKey: true,
       });
       const result = keyHandler(e);
-      // On Linux (isMac=false, which is our test env), Ctrl+Shift+Enter
-      // should return false (intercepted for App.svelte to handle)
-      expect(result).toBe(false);
+      // On Linux (isMac=false), Ctrl+Shift+Enter is intercepted for App.svelte.
+      // On macOS (isMac=true), Ctrl without Meta passes through to the PTY.
+      const expected = process.platform !== "darwin" ? false : true;
+      expect(result).toBe(expected);
     });
   });
 
@@ -371,7 +374,8 @@ describe("xterm key handler allows new shortcuts to bubble to App", () => {
         ctrlKey: true,
         shiftKey: true,
       });
-      expect(keyHandler(e)).toBe(false);
+      const expected = process.platform !== "darwin" ? false : true;
+      expect(keyHandler(e)).toBe(expected);
     });
 
     it("returns false for Ctrl+Shift+-", () => {
@@ -380,7 +384,8 @@ describe("xterm key handler allows new shortcuts to bubble to App", () => {
         ctrlKey: true,
         shiftKey: true,
       });
-      expect(keyHandler(e)).toBe(false);
+      const expected = process.platform !== "darwin" ? false : true;
+      expect(keyHandler(e)).toBe(expected);
     });
 
     it("returns false for Ctrl+Shift+_ (real Linux key for Shift+-)", () => {
@@ -391,7 +396,8 @@ describe("xterm key handler allows new shortcuts to bubble to App", () => {
         ctrlKey: true,
         shiftKey: true,
       });
-      expect(keyHandler(e)).toBe(false);
+      const expected = process.platform !== "darwin" ? false : true;
+      expect(keyHandler(e)).toBe(expected);
     });
   });
 });

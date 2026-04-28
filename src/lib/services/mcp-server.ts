@@ -2311,6 +2311,10 @@ export function _resolveTargetForTest(
   return resolveTarget(args, ctx);
 }
 
+export function _getSessionsForTest(): Map<string, McpSession> {
+  return sessions;
+}
+
 export function _resetMcpServerForTest(): void {
   sessions.clear();
   ptyToSession.clear();

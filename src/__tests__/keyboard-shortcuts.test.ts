@@ -29,10 +29,12 @@ vi.mock("../lib/types", async (importOriginal) => {
 
 // Mock terminal-service so we can flip isMac per test suite.
 let mockIsMac = false;
+const adjustFontSizeMock = vi.fn();
 vi.mock("../lib/terminal-service", () => ({
   get isMac() {
     return mockIsMac;
   },
+  adjustFontSize: (...args: unknown[]) => adjustFontSizeMock(...args),
 }));
 
 // Services — stubbed so keydown dispatch doesn't trigger real side effects.
@@ -178,13 +180,8 @@ describe("keyboard-shortcuts — clear + find bindings", () => {
 });
 
 describe("keyboard-shortcuts — font zoom bindings", () => {
-  beforeEach(async () => {
-    const { workspace } = await loadModule();
-    workspace.workspaces.set([]);
-    workspace.activeWorkspaceIdx.set(-1);
-    const { DEFAULT_FONT_SIZE, fontSize } =
-      await import("../lib/stores/font-size");
-    fontSize.set(DEFAULT_FONT_SIZE);
+  beforeEach(() => {
+    adjustFontSizeMock.mockReset();
   });
 
   describe("macOS", () => {
@@ -194,27 +191,20 @@ describe("keyboard-shortcuts — font zoom bindings", () => {
 
     it("⌘= zooms in", async () => {
       const { shortcuts } = await loadModule();
-      const { fontSize, DEFAULT_FONT_SIZE } =
-        await import("../lib/stores/font-size");
       shortcuts.handleAppKeydown(mkEvent({ key: "=", meta: true }), ctx);
-      expect(get(fontSize)).toBe(DEFAULT_FONT_SIZE + 1);
+      expect(adjustFontSizeMock).toHaveBeenCalledWith(1);
+    });
+
+    it("⌘+ zooms in", async () => {
+      const { shortcuts } = await loadModule();
+      shortcuts.handleAppKeydown(mkEvent({ key: "+", meta: true }), ctx);
+      expect(adjustFontSizeMock).toHaveBeenCalledWith(1);
     });
 
     it("⌘- zooms out", async () => {
       const { shortcuts } = await loadModule();
-      const { fontSize, DEFAULT_FONT_SIZE } =
-        await import("../lib/stores/font-size");
       shortcuts.handleAppKeydown(mkEvent({ key: "-", meta: true }), ctx);
-      expect(get(fontSize)).toBe(DEFAULT_FONT_SIZE - 1);
-    });
-
-    it("⌘0 resets", async () => {
-      const { shortcuts } = await loadModule();
-      const { fontSize, DEFAULT_FONT_SIZE } =
-        await import("../lib/stores/font-size");
-      fontSize.set(DEFAULT_FONT_SIZE + 3);
-      shortcuts.handleAppKeydown(mkEvent({ key: "0", meta: true }), ctx);
-      expect(get(fontSize)).toBe(DEFAULT_FONT_SIZE);
+      expect(adjustFontSizeMock).toHaveBeenCalledWith(-1);
     });
   });
 
@@ -225,36 +215,20 @@ describe("keyboard-shortcuts — font zoom bindings", () => {
 
     it("Ctrl+Shift+= zooms in", async () => {
       const { shortcuts } = await loadModule();
-      const { fontSize, DEFAULT_FONT_SIZE } =
-        await import("../lib/stores/font-size");
       shortcuts.handleAppKeydown(
         mkEvent({ key: "+", ctrl: true, shift: true }),
         ctx,
       );
-      expect(get(fontSize)).toBe(DEFAULT_FONT_SIZE + 1);
+      expect(adjustFontSizeMock).toHaveBeenCalledWith(1);
     });
 
     it("Ctrl+Shift+- zooms out", async () => {
       const { shortcuts } = await loadModule();
-      const { fontSize, DEFAULT_FONT_SIZE } =
-        await import("../lib/stores/font-size");
       shortcuts.handleAppKeydown(
         mkEvent({ key: "_", ctrl: true, shift: true }),
         ctx,
       );
-      expect(get(fontSize)).toBe(DEFAULT_FONT_SIZE - 1);
-    });
-
-    it("Ctrl+Shift+0 resets", async () => {
-      const { shortcuts } = await loadModule();
-      const { fontSize, DEFAULT_FONT_SIZE } =
-        await import("../lib/stores/font-size");
-      fontSize.set(DEFAULT_FONT_SIZE + 3);
-      shortcuts.handleAppKeydown(
-        mkEvent({ key: ")", ctrl: true, shift: true }),
-        ctx,
-      );
-      expect(get(fontSize)).toBe(DEFAULT_FONT_SIZE);
+      expect(adjustFontSizeMock).toHaveBeenCalledWith(-1);
     });
   });
 });

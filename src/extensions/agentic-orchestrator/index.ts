@@ -49,7 +49,7 @@ export const agenticOrchestratorManifest: ExtensionManifest = {
     "Agentic Dashboard contribution (per-group, cap 1) + Global Agentic pseudo-workspace. Consumes core's passive detection via api.agents.",
   entry: "./index.ts",
   included: true,
-  permissions: [],
+  permissions: ["filesystem"],
   contributes: {
     settings: {
       fields: {

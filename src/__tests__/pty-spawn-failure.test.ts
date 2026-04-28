@@ -41,6 +41,8 @@ vi.mock("@xterm/xterm", () => ({
     attachCustomKeyEventHandler = vi.fn();
     registerLinkProvider = vi.fn();
     getSelection = vi.fn();
+    hasSelection = vi.fn().mockReturnValue(false);
+    onSelectionChange = vi.fn();
     scrollToBottom = vi.fn();
     clear = vi.fn();
   },
@@ -84,6 +86,8 @@ vi.mock("../lib/services/service-helpers", () => ({
   safeFocus: vi.fn(),
   getActiveCwd: vi.fn().mockResolvedValue(undefined),
   getCwdForSurface: vi.fn().mockResolvedValue(undefined),
+  registerPtyForSurface: vi.fn(),
+  lookupTerminalByPtyId: vi.fn().mockReturnValue(null),
 }));
 
 vi.stubGlobal("localStorage", {

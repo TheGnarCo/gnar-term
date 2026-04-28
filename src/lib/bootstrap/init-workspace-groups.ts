@@ -43,6 +43,8 @@ import { theme } from "../stores/theme";
 import WorkspaceGroupRowBody from "../components/WorkspaceGroupRowBody.svelte";
 import GearIcon from "../icons/GearIcon.svelte";
 import GridIcon from "../icons/GridIcon.svelte";
+import WorkspacesWidget from "../components/WorkspacesWidget.svelte";
+import { registerMarkdownComponent } from "../services/markdown-component-registry";
 import type { WorkspaceGroupEntry } from "../config";
 import {
   pendingCreateResolver,
@@ -391,4 +393,10 @@ export async function initWorkspaceGroups(): Promise<void> {
 
   eventBus.on("workspace:created", onWorkspaceCreated);
   eventBus.on("workspace:closed", onWorkspaceClosed);
+
+  registerMarkdownComponent({
+    name: "workspaces",
+    component: WorkspacesWidget,
+    source: SOURCE,
+  });
 }

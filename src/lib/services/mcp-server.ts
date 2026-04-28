@@ -57,7 +57,11 @@ import {
   type Workspace,
 } from "../types";
 import { findParentSplit } from "../types";
-import { createTerminalSurface, waitForPtyReady } from "../terminal-service";
+import {
+  createTerminalSurface,
+  waitForPtyReady,
+  onFirstPtyOutput,
+} from "../terminal-service";
 import { safeFocus } from "./service-helpers";
 import {
   registerMcpPty,
@@ -124,6 +128,8 @@ interface McpSession {
   paneId: string;
   surfaceId: string;
   ptyId: number;
+  /** Cleanup for the first-PTY-output listener (if task is still pending). */
+  unlisten?: () => void;
 }
 
 interface JsonRpcRequest {
@@ -697,9 +703,26 @@ registerTool({
     });
 
     if (p.task) {
-      setTimeout(() => {
-        invoke("write_pty", { ptyId, data: p.task + "\r" }).catch(() => {});
-      }, 3000);
+      const task = p.task;
+      let safetyTimer: ReturnType<typeof setTimeout> | null = null;
+      const unlisten = onFirstPtyOutput(ptyId, () => {
+        if (safetyTimer !== null) {
+          clearTimeout(safetyTimer);
+          safetyTimer = null;
+        }
+        session.unlisten = undefined;
+        invoke("write_pty", { ptyId, data: task + "\r" }).catch(() => {});
+      });
+      session.unlisten = unlisten;
+      // Safety fallback: if no output arrives within 30s, cancel and warn.
+      safetyTimer = setTimeout(() => {
+        safetyTimer = null;
+        unlisten();
+        if (session.unlisten) session.unlisten = undefined;
+        console.warn(
+          `[mcp] spawn_agent: no PTY output within 30s for session ${session.session_id} — task not written`,
+        );
+      }, 30000);
     }
 
     return {
@@ -844,6 +867,11 @@ registerTool({
     const { session_id } = args as { session_id: string };
     const session = sessions.get(session_id);
     if (!session) throw new Error(`session ${session_id} not found`);
+    // Cancel any pending first-output task listener before killing.
+    if (session.unlisten) {
+      session.unlisten();
+      session.unlisten = undefined;
+    }
     try {
       await invoke("kill_pty", { ptyId: session.ptyId });
     } catch (err) {

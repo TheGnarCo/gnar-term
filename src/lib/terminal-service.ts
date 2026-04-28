@@ -169,11 +169,82 @@ function scheduleFlush(ptyId: number) {
   requestAnimationFrame(() => flushPtyBuffer(ptyId));
 }
 
+// --- First-PTY-output hooks ---
+
+/** Set of ptyIds that have ever emitted at least one byte of output.
+ *  Used by onFirstPtyOutput to fire the callback immediately when the
+ *  pty is already known to have produced output (avoids a lost-callback
+ *  race when output arrives during connectPty's pending-bytes replay). */
+const ptyHasOutput = new Set<number>();
+
+/** Per-pty set of first-output listener callbacks. Drained on first chunk. */
+const firstOutputListeners = new Map<number, Set<() => void>>();
+
+/**
+ * Register a one-shot callback that fires the first time output arrives
+ * for `ptyId`. If this pty has already emitted output the callback is
+ * scheduled immediately via queueMicrotask.
+ *
+ * Returns an unsubscribe function. Calling it cancels the callback if it
+ * has not fired yet; safe to call multiple times.
+ */
+export function onFirstPtyOutput(
+  ptyId: number,
+  callback: () => void,
+): () => void {
+  if (ptyHasOutput.has(ptyId)) {
+    // Already seen output — fire immediately but asynchronously.
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) callback();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }
+
+  let listeners = firstOutputListeners.get(ptyId);
+  if (!listeners) {
+    listeners = new Set();
+    firstOutputListeners.set(ptyId, listeners);
+  }
+  listeners.add(callback);
+
+  return () => {
+    const set = firstOutputListeners.get(ptyId);
+    if (set) {
+      set.delete(callback);
+      if (set.size === 0) firstOutputListeners.delete(ptyId);
+    }
+  };
+}
+
+/** Drain any registered first-output listeners for `ptyId`. Called from
+ *  handlePtyChunk on the first chunk. */
+function drainFirstOutputListeners(ptyId: number): void {
+  const listeners = firstOutputListeners.get(ptyId);
+  if (!listeners) return;
+  firstOutputListeners.delete(ptyId);
+  for (const cb of listeners) {
+    try {
+      cb();
+    } catch {
+      /* ignore listener errors */
+    }
+  }
+}
+
 /** Append a raw PTY chunk to the per-pty buffer, tee it to the MCP buffer
  *  if one is registered, and schedule an rAF flush to xterm.js. Exported for
  *  tests; in production this is called from the Channel onmessage handler
  *  created in connectPty(). */
 export function handlePtyChunk(ptyId: number, bytes: Uint8Array): void {
+  // Fire first-output listeners on the very first chunk.
+  if (!ptyHasOutput.has(ptyId)) {
+    ptyHasOutput.add(ptyId);
+    drainFirstOutputListeners(ptyId);
+  }
+
   let chunks = ptyBuffers.get(ptyId);
   if (!chunks) {
     chunks = [];
@@ -337,6 +408,8 @@ export async function setupListeners() {
       ptyBufferBytes.delete(pty_id);
       ptyFlushScheduled.delete(pty_id);
       ptyPaused.delete(pty_id);
+      ptyHasOutput.delete(pty_id);
+      firstOutputListeners.delete(pty_id);
 
       // Remove the surface from its pane, and collapse empty panes
       workspaces.update((wsList) => {

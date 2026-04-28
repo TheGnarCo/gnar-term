@@ -24,6 +24,7 @@
   import SidebarActionButton from "./SidebarActionButton.svelte";
   import McpSidebarSection from "./McpSidebarSection.svelte";
   import SplitButton from "./SplitButton.svelte";
+  import ArchiveZone from "./ArchiveZone.svelte";
 
   const iconSvgMap: Record<string, string> = {
     plus: `<line x1="8" y1="3" x2="8" y2="13" /><line x1="3" y1="8" x2="13" y2="8" />`,
@@ -191,6 +192,8 @@
           <McpSidebarSection {section} />
         {/each}
       </div>
+
+      <ArchiveZone />
     </div>
     <div
       class="sidebar-resize-handle"

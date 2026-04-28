@@ -55,6 +55,7 @@ vi.mock("../lib/stores/root-row-order", async () => {
 
 const addWorkspaceToGroupSpy = vi.fn().mockReturnValue(true);
 const removeWorkspaceFromAllGroupsSpy = vi.fn();
+const insertWorkspaceIntoGroupSpy = vi.fn();
 vi.mock("../lib/services/workspace-group-service", async () => {
   const actual = await vi.importActual<
     typeof import("../lib/services/workspace-group-service")
@@ -67,6 +68,9 @@ vi.mock("../lib/services/workspace-group-service", async () => {
     removeWorkspaceFromAllGroups: (
       ...args: Parameters<typeof actual.removeWorkspaceFromAllGroups>
     ) => removeWorkspaceFromAllGroupsSpy(...args),
+    insertWorkspaceIntoGroup: (
+      ...args: Parameters<typeof actual.insertWorkspaceIntoGroup>
+    ) => insertWorkspaceIntoGroupSpy(...args),
   };
 });
 
@@ -146,6 +150,7 @@ beforeEach(() => {
   removeRootRowSpy.mockClear();
   addWorkspaceToGroupSpy.mockClear();
   removeWorkspaceFromAllGroupsSpy.mockClear();
+  insertWorkspaceIntoGroupSpy.mockClear();
   gitStatusWorkspaceClosedSpy.mockClear();
   vi.useFakeTimers();
 });
@@ -713,5 +718,79 @@ describe("mergeWorkspaceIntoPane", () => {
     mergeWorkspaceIntoPane(srcWs.id, tgtPane.id);
     vi.advanceTimersByTime(2000);
     expect(saveState).toHaveBeenCalled();
+  });
+});
+
+describe("createWorkspaceFromSurface — targetGroupId", () => {
+  it("sets groupId metadata using targetGroupId when srcWs has no groupId", () => {
+    const sA = mockSurface({ title: "A" });
+    const sB = mockSurface({ title: "B" });
+    const pane = makePane([sA, sB]);
+    const ws = makeWorkspace({ type: "pane", pane }); // no groupId
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+
+    createWorkspaceFromSurface(sA.id, pane.id, ws.id, {
+      kind: "group",
+      positionInGroup: 0,
+      targetGroupId: "target-group-1",
+    });
+
+    const updated = get(workspaces);
+    const newWs = updated.find((w) => w.id !== ws.id)!;
+    expect((newWs.metadata as Record<string, unknown>)?.groupId).toBe(
+      "target-group-1",
+    );
+  });
+
+  it("calls insertWorkspaceIntoGroup with targetGroupId when srcWs has no groupId", () => {
+    const sA = mockSurface({ title: "A" });
+    const sB = mockSurface({ title: "B" });
+    const pane = makePane([sA, sB]);
+    const ws = makeWorkspace({ type: "pane", pane }); // no groupId
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+
+    createWorkspaceFromSurface(sA.id, pane.id, ws.id, {
+      kind: "group",
+      positionInGroup: 2,
+      targetGroupId: "target-group-1",
+    });
+
+    const updated = get(workspaces);
+    const newWs = updated.find((w) => w.id !== ws.id)!;
+    expect(insertWorkspaceIntoGroupSpy).toHaveBeenCalledWith(
+      "target-group-1",
+      newWs.id,
+      2,
+    );
+  });
+
+  it("preserves existing behavior when srcGroupId is set and targetGroupId is absent", () => {
+    const sA = mockSurface({ title: "A" });
+    const sB = mockSurface({ title: "B" });
+    const pane = makePane([sA, sB]);
+    const ws = makeWorkspace(
+      { type: "pane", pane },
+      { metadata: { groupId: "src-group" } },
+    );
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+
+    createWorkspaceFromSurface(sA.id, pane.id, ws.id, {
+      kind: "group",
+      positionInGroup: 0,
+    });
+
+    const updated = get(workspaces);
+    const newWs = updated.find((w) => w.id !== ws.id)!;
+    expect((newWs.metadata as Record<string, unknown>)?.groupId).toBe(
+      "src-group",
+    );
+    expect(insertWorkspaceIntoGroupSpy).toHaveBeenCalledWith(
+      "src-group",
+      newWs.id,
+      0,
+    );
   });
 });

@@ -42,6 +42,8 @@ vi.mock("@xterm/xterm", () => ({
       attachCustomKeyEventHandler: vi.fn(),
       registerLinkProvider: vi.fn(),
       getSelection: vi.fn(),
+      hasSelection: vi.fn().mockReturnValue(false),
+      onSelectionChange: vi.fn(),
       scrollToBottom: vi.fn(),
       onScroll: vi.fn().mockReturnValue({ dispose: vi.fn() }),
     };
@@ -172,6 +174,8 @@ function makeSurface(
       attachCustomKeyEventHandler: vi.fn(),
       registerLinkProvider: vi.fn(),
       getSelection: vi.fn(),
+      hasSelection: vi.fn().mockReturnValue(false),
+      onSelectionChange: vi.fn(),
       onScroll: vi.fn().mockReturnValue({ dispose: vi.fn() }),
     } as unknown as TerminalSurface["terminal"],
     fitAddon: { fit: vi.fn() } as unknown as TerminalSurface["fitAddon"],

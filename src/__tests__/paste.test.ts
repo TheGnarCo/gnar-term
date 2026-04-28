@@ -40,6 +40,8 @@ vi.mock("@xterm/xterm", () => ({
     attachCustomKeyEventHandler = vi.fn();
     registerLinkProvider = vi.fn();
     getSelection = vi.fn().mockReturnValue("selected text");
+    hasSelection = vi.fn().mockReturnValue(false);
+    onSelectionChange = vi.fn();
     scrollToBottom = vi.fn();
     onScroll = vi.fn().mockReturnValue({ dispose: vi.fn() });
   },

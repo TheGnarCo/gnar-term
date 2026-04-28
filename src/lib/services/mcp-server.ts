@@ -1201,7 +1201,7 @@ registerTool({
 registerTool({
   name: "spawn_preview",
   description:
-    "Open a file as a preview surface in a pane. Markdown files render with gnar:<name> markdown-components as live widgets. If a preview surface for the same path is already open anywhere in the app, focuses it instead of opening a duplicate. Returns the new (or existing) surface id.",
+    "Open a file as a preview surface in a pane. Markdown files render with gnar:<name> markdown-components as live widgets. If a preview surface for the same path is already open anywhere in the app, focuses it instead of opening a duplicate. Returns the new (or existing) surface id. IMPORTANT: the file must already exist on disk before calling this — call write_file first, or use create_preview_file which does both atomically.",
   inputSchema: {
     type: "object",
     properties: {
@@ -1266,7 +1266,7 @@ registerTool({
 registerTool({
   name: "create_preview_file",
   description:
-    "Write a file with the given content and immediately open it as a preview surface. Convenience for agents producing rich reports — equivalent to write_file followed by spawn_preview, with the same dedupe-by-path behavior.",
+    "Write a file with the given content and immediately open it as a preview surface. Writes the file first, then opens the preview — never the other way around. Equivalent to write_file followed by spawn_preview, with the same dedupe-by-path behavior. For ad-hoc documents (notes, reports, one-off previews), default the path to docs/gnar-term/<name>.md unless the user specifies otherwise.",
   inputSchema: {
     type: "object",
     properties: {

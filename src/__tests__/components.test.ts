@@ -82,6 +82,7 @@ vi.mock("../lib/services/preview-service", () => ({
     watchId: 0,
     dispose: vi.fn(),
   }),
+  refreshPreviewElement: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("../lib/services/preview-surface-registry", () => ({
   registerPreviewSurface: vi.fn(),

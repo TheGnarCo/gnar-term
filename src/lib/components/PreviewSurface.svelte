@@ -6,7 +6,10 @@
   import type { PreviewSurface } from "../types";
   import { getAllPanes } from "../types";
   import { workspaces } from "../stores/workspace";
-  import { openPreview } from "../services/preview-service";
+  import {
+    openPreview,
+    refreshPreviewElement,
+  } from "../services/preview-service";
   import {
     registerPreviewSurface,
     unregisterPreviewSurface,
@@ -14,6 +17,7 @@
 
   export let surface: PreviewSurface;
   export let visible: boolean;
+  export let refreshTrigger: number = 0;
 
   let container: HTMLElement;
   let element: HTMLElement | null = null;
@@ -77,6 +81,10 @@
       loadError = err instanceof Error ? err.message : String(err);
     }
   });
+
+  $: if (refreshTrigger > 0 && element) {
+    void refreshPreviewElement(surface.path, element);
+  }
 
   // Update preview colors when theme changes.
   $: if (element) {

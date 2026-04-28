@@ -172,7 +172,9 @@
     on:keydown={handleNameKeydown}
     on:dblclick|stopPropagation={() => renamingSurfaceId.set(surface.id)}
   >
-    {#if !_renaming}{surface.title || `Shell ${index + 1}`}{/if}
+    {#if !_renaming}{surface.kind === "preview"
+        ? `${surface.title || "Preview"} (MD Preview)`
+        : surface.title || `Shell ${index + 1}`}{/if}
   </span>
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->

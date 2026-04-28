@@ -296,10 +296,12 @@ export async function migrateGroupDashboardWidgets(
     if (!exists) return;
     const content = await invoke<string>("read_file", { path });
     if (content.includes("gnar:workspaces")) return;
-    await invoke("write_file", {
-      path,
-      content: buildGroupDashboardMarkdown(group),
-    });
+    const marker = "```gnar:columns";
+    const insert = "```gnar:workspaces\n```\n\n";
+    const migrated = content.includes(marker)
+      ? content.replace(marker, insert + marker)
+      : insert + content;
+    await invoke("write_file", { path, content: migrated });
   } catch (err) {
     console.warn(
       `[workspace-groups] Failed to migrate workspaces widget into "${path}":`,

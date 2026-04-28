@@ -176,9 +176,10 @@ describe("MCP server JSON-RPC", () => {
         "spawn_agent",
         "spawn_preview",
         "split_pane",
+        "write_file",
       ].sort(),
     );
-    expect(names).toHaveLength(43);
+    expect(names).toHaveLength(44);
     for (const t of tools) {
       expect(t).toHaveProperty("inputSchema");
     }
@@ -1386,8 +1387,8 @@ describe("tool metadata", () => {
     }
   });
 
-  it("tool count matches spec (43)", () => {
-    expect(_getToolsForTest()).toHaveLength(43);
+  it("tool count matches spec (44)", () => {
+    expect(_getToolsForTest()).toHaveLength(44);
   });
 });
 

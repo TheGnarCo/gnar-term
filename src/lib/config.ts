@@ -172,6 +172,8 @@ export interface GnarTermConfig {
   fontSize?: number;
   fontFamily?: string;
   opacity?: number;
+  scrollback?: number;
+  shell?: string;
   autoload?: string[]; // workspace command names to launch on startup
   extensions?: Record<string, ExtensionConfig>;
   worktrees?: WorktreesConfig;

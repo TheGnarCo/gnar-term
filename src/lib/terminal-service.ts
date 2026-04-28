@@ -15,6 +15,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { appendMcpOutput } from "./services/mcp-output-buffer";
 import { eventBus } from "./services/event-bus";
 import { notifyOutputObservers } from "./services/surface-output-observer";
+import { getConfig } from "./config";
 import {
   readText as clipboardRead,
   writeText as clipboardWrite,
@@ -559,6 +560,7 @@ export async function createTerminalSurface(
   const ptyId = -1; // PTY spawned later via connectPty() after fit()
 
   const currentXtermTheme = get(xtermTheme);
+  const config = getConfig();
 
   const terminal = new Terminal({
     cursorBlink: true,
@@ -566,7 +568,7 @@ export async function createTerminalSurface(
     fontFamily: resolvedFontFamily,
     theme: currentXtermTheme,
     allowProposedApi: true,
-    scrollback: 5000,
+    scrollback: config.scrollback ?? 10000,
     smoothScrollDuration: 0,
     fastScrollModifier: "alt",
     vtExtensions: {
@@ -836,6 +838,12 @@ export async function createTerminalSurface(
     if (surface.ptyId >= 0)
       void invoke("resize_pty", { ptyId: surface.ptyId, cols, rows });
   });
+  terminal.onSelectionChange(() => {
+    if (terminal.hasSelection()) {
+      const text = terminal.getSelection();
+      if (text) void clipboardWrite(text);
+    }
+  });
   // NOTE: We intentionally do NOT use terminal.onTitleChange() here.
   // xterm.js fires it with raw/partial escape sequence fragments (OSC 7 cwd data,
   // bracketed paste mode, etc.) concatenated into the title string. Instead, the
@@ -1058,6 +1066,7 @@ export async function connectPty(
     extraEnv.GNAR_TERM_WORKSPACE_ID = ctx.workspaceId;
   }
 
+  const shellConfig = getConfig().shell || undefined;
   const deferred = ptyReady.get(surface.id);
   try {
     const ptyId = await invoke<number>("spawn_pty", {
@@ -1066,6 +1075,7 @@ export async function connectPty(
       cwd: effectiveCwd,
       onOutput,
       extraEnv,
+      shell: shellConfig ?? null,
     });
     surface.ptyId = ptyId;
     registerPtyForSurface(ptyId, surface);

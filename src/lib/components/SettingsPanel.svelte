@@ -33,6 +33,8 @@
   let fontSize = 14;
   let fontFamily = "";
   let opacity = 1.0;
+  let scrollback = 10000;
+  let shell = "";
   let availableFonts: string[] = [];
   let fontLoadError = "";
 
@@ -42,6 +44,8 @@
     fontSize = cfg.fontSize || 14;
     fontFamily = cfg.fontFamily || "";
     opacity = cfg.opacity ?? 1.0;
+    scrollback = cfg.scrollback ?? 10000;
+    shell = cfg.shell ?? "";
     fontLoadError = "";
     invoke<string[]>("list_monospace_fonts")
       .then((fonts) => {
@@ -122,6 +126,16 @@
     dirty = true;
   }
 
+  function handleScrollbackChange(value: number) {
+    scrollback = value;
+    dirty = true;
+  }
+
+  function handleShellChange(value: string) {
+    shell = value;
+    dirty = true;
+  }
+
   async function applySettings() {
     theme.set(currentTheme);
     void saveConfig({
@@ -129,6 +143,8 @@
       fontSize,
       fontFamily,
       opacity,
+      scrollback,
+      shell: shell || undefined,
     });
 
     const cfg = getConfig();
@@ -312,12 +328,16 @@
           {fontSize}
           {fontFamily}
           {opacity}
+          {scrollback}
+          {shell}
           {availableFonts}
           {fontLoadError}
           onThemeChange={handleThemeChange}
           onFontSizeChange={handleFontSizeChange}
           onFontFamilyChange={handleFontFamilyChange}
           onOpacityChange={handleOpacityChange}
+          onScrollbackChange={handleScrollbackChange}
+          onShellChange={handleShellChange}
         />
       {:else if activePage === "extensions"}
         <SettingsExtensionsTab

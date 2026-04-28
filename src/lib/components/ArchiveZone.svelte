@@ -1,0 +1,230 @@
+<!-- src/lib/components/ArchiveZone.svelte -->
+<script lang="ts">
+  import { contextMenu } from "../stores/ui";
+  import {
+    archivedOrder,
+    archivedDefs,
+    type ArchivedRow,
+  } from "../stores/archive";
+  import {
+    unarchiveWorkspace,
+    unarchiveGroup,
+  } from "../services/archive-service";
+
+  let expanded = false;
+
+  $: totalCount = $archivedOrder.length;
+
+  function toggle() {
+    expanded = !expanded;
+  }
+
+  function getName(row: ArchivedRow): string {
+    if (row.kind === "workspace") {
+      return $archivedDefs.workspaces[row.id]?.def.name ?? row.id;
+    }
+    return $archivedDefs.groups[row.id]?.group.name ?? row.id;
+  }
+
+  function getGroupWorkspaceCount(id: string): number {
+    return $archivedDefs.groups[id]?.workspaceDefs.length ?? 0;
+  }
+
+  function showItemContextMenu(x: number, y: number, row: ArchivedRow) {
+    contextMenu.set({
+      x,
+      y,
+      items: [
+        {
+          label: "Unarchive",
+          action: () => {
+            if (row.kind === "workspace") void unarchiveWorkspace(row.id);
+            else void unarchiveGroup(row.id);
+          },
+        },
+      ],
+    });
+  }
+
+  // Drag-out state
+  let draggingRow: ArchivedRow | null = null;
+  let ghostEl: HTMLElement | null = null;
+
+  function startItemDrag(e: MouseEvent, row: ArchivedRow) {
+    if (e.button !== 0) return;
+    draggingRow = row;
+
+    ghostEl = document.createElement("div");
+    ghostEl.textContent = getName(row);
+    Object.assign(ghostEl.style, {
+      position: "fixed",
+      pointerEvents: "none",
+      background: "rgba(30,30,30,0.9)",
+      border: "1px solid rgba(255,255,255,0.15)",
+      borderRadius: "4px",
+      padding: "4px 10px",
+      fontSize: "12px",
+      color: "#aaa",
+      fontStyle: "italic",
+      zIndex: "9999",
+      left: `${e.clientX + 8}px`,
+      top: `${e.clientY - 12}px`,
+    });
+    document.body.appendChild(ghostEl);
+
+    window.addEventListener("mousemove", onDragMove);
+    window.addEventListener("mouseup", onDragEnd);
+    e.preventDefault();
+  }
+
+  function onDragMove(e: MouseEvent) {
+    if (!ghostEl) return;
+    ghostEl.style.left = `${e.clientX + 8}px`;
+    ghostEl.style.top = `${e.clientY - 12}px`;
+  }
+
+  function onDragEnd(e: MouseEvent) {
+    window.removeEventListener("mousemove", onDragMove);
+    window.removeEventListener("mouseup", onDragEnd);
+    ghostEl?.remove();
+    ghostEl = null;
+
+    if (!draggingRow) return;
+    const row = draggingRow;
+    draggingRow = null;
+
+    const archiveEl = document.querySelector("[data-archive-zone]");
+    if (archiveEl) {
+      const rect = archiveEl.getBoundingClientRect();
+      const overZone =
+        e.clientX >= rect.left &&
+        e.clientX <= rect.right &&
+        e.clientY >= rect.top &&
+        e.clientY <= rect.bottom;
+      if (!overZone) {
+        if (row.kind === "workspace") void unarchiveWorkspace(row.id);
+        else void unarchiveGroup(row.id);
+      }
+    }
+  }
+</script>
+
+<div data-archive-zone class="archive-zone">
+  <button
+    type="button"
+    on:click={toggle}
+    class="archive-header"
+    class:has-items={totalCount > 0}
+  >
+    <span aria-hidden="true">{expanded ? "▼" : "▶"}</span>
+    <span>Archive</span>
+    {#if totalCount > 0}
+      <span class="badge">{totalCount}</span>
+    {/if}
+  </button>
+
+  {#if expanded}
+    <div class="archive-list">
+      {#if totalCount === 0}
+        <div class="empty-hint">drag here to archive</div>
+      {:else}
+        {#each $archivedOrder as row (`${row.kind}:${row.id}`)}
+          <!-- svelte-ignore a11y-no-static-element-interactions -->
+          <div
+            class="archive-item"
+            on:contextmenu|preventDefault={(e) =>
+              showItemContextMenu(e.clientX, e.clientY, row)}
+            on:mousedown={(e) => startItemDrag(e, row)}
+          >
+            <span class="item-name">{getName(row)}</span>
+            {#if row.kind === "workspace-group"}
+              <span class="group-count"
+                >{getGroupWorkspaceCount(row.id)} workspaces</span
+              >
+            {/if}
+          </div>
+        {/each}
+      {/if}
+    </div>
+  {/if}
+</div>
+
+<style>
+  .archive-zone {
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    flex-shrink: 0;
+  }
+
+  .archive-zone[data-drag-over] {
+    outline: 1px solid rgba(255, 255, 255, 0.3);
+    outline-offset: -1px;
+  }
+
+  .archive-header {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 10px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: rgba(255, 255, 255, 0.35);
+  }
+
+  .archive-header.has-items {
+    color: rgba(255, 255, 255, 0.55);
+  }
+
+  .badge {
+    margin-left: auto;
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.35);
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-size: 10px;
+  }
+
+  .archive-list {
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    max-height: 160px;
+    overflow-y: auto;
+  }
+
+  .empty-hint {
+    padding: 6px 10px 8px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.2);
+    font-style: italic;
+    text-align: center;
+  }
+
+  .archive-item {
+    padding: 4px 10px 4px 18px;
+    font-size: 12px;
+    font-style: italic;
+    color: rgba(255, 255, 255, 0.35);
+    display: flex;
+    align-items: center;
+    user-select: none;
+    cursor: grab;
+  }
+
+  .item-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+
+  .group-count {
+    margin-left: auto;
+    flex-shrink: 0;
+    padding-left: 8px;
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.2);
+  }
+</style>

@@ -12,6 +12,7 @@
   import type { Readable } from "svelte/store";
   import { readable } from "svelte/store";
   import { tabDragState } from "../services/tab-drag";
+  import { workspaceDragState } from "../services/workspace-drag";
 
   const emptyStore: Readable<StatusItem[]> = readable([]);
 
@@ -41,6 +42,9 @@
       : null;
   $: isSplitTarget =
     drag?.dropTarget?.kind === "merge" && drag.dropTarget.paneId === pane.id;
+  $: isWorkspaceMergeTarget =
+    $workspaceDragState?.dropTarget?.kind === "tab-merge" &&
+    $workspaceDragState.dropTarget.paneId === pane.id;
 </script>
 
 <div
@@ -50,7 +54,7 @@
     background: {$theme.tabBarBg}; border-bottom: 1px solid {$theme.tabBarBorder};
     height: 28px; padding: 0 4px; flex-shrink: 0; overflow-x: auto;
     scrollbar-width: none;
-    {isSplitTarget
+    {isSplitTarget || isWorkspaceMergeTarget
     ? `outline: 2px solid ${$theme.accent}; outline-offset: -2px;`
     : ''}
   "

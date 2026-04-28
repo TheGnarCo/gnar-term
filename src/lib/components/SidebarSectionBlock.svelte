@@ -37,8 +37,8 @@
       margin-left: {expanded ? '-20px' : '-10px'};
       padding: 6px 12px 6px {expanded ? '20px' : '10px'};
       background: {$shortcutHintsActive
-        ? ($theme.fgDim ?? 'rgba(120,120,120,0.9)')
-        : `color-mix(in srgb, ${$theme.fgDim} 50%, ${$theme.sidebarBg ?? 'transparent'})`};
+      ? ($theme.fgDim ?? 'rgba(120,120,120,0.9)')
+      : `color-mix(in srgb, ${$theme.fgDim} 50%, ${$theme.sidebarBg ?? 'transparent'})`};
       transition: margin-left 0.12s ease-out, padding-left 0.12s ease-out, background 0.12s ease-out;
       pointer-events: none;
     "

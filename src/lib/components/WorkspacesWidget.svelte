@@ -18,7 +18,7 @@
   $: groupId = scope.kind === "group" ? scope.groupId : null;
 
   $: group = groupId
-    ? $workspaceGroupsStore.find((g) => g.id === groupId) ?? null
+    ? ($workspaceGroupsStore.find((g) => g.id === groupId) ?? null)
     : null;
 
   $: groupWs = groupId
@@ -30,9 +30,7 @@
 
   $: dashboardCards = groupWs.filter((ws) => {
     const md = ws.metadata as Record<string, unknown> | undefined;
-    return (
-      md?.isDashboard === true && md?.dashboardContributionId !== "group"
-    );
+    return md?.isDashboard === true && md?.dashboardContributionId !== "group";
   });
 
   $: workspaceRows = groupWs.filter((ws) => {
@@ -100,7 +98,8 @@
             <DashboardTileIcon
               iconComponent={info.icon}
               baseColor={groupColor}
-              contributionId={(ws.metadata as Record<string, unknown>)?.dashboardContributionId as string | undefined}
+              contributionId={(ws.metadata as Record<string, unknown>)
+                ?.dashboardContributionId as string | undefined}
               groupPath={info.groupPath}
             />
             <span class="dashboard-card-label">{info.label}</span>
@@ -121,9 +120,7 @@
             on:click={() => navigate(ws.id)}
             style="color: {$theme.fg};"
           >
-            <span
-              class="workspace-dot"
-              style="background: {groupColor};"
+            <span class="workspace-dot" style="background: {groupColor};"
             ></span>
             <span class="workspace-name">{ws.name}</span>
           </div>

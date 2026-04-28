@@ -30,7 +30,10 @@ function makeWorkspace(
   return {
     id,
     name,
-    splitRoot: { type: "pane", pane: { id: `${id}-pane`, surfaces: [], activeSurfaceId: null } },
+    splitRoot: {
+      type: "pane",
+      pane: { id: `${id}-pane`, surfaces: [], activeSurfaceId: null },
+    },
     activePaneId: null,
     metadata,
   };

@@ -140,40 +140,13 @@
           <slot name="banner-end" />
         </div>
         <slot name="banner-subtitle" />
-        {#if filterIds.size > 0}
-          <!-- svelte-ignore a11y_click_events_have_key_events -->
-          <!-- svelte-ignore a11y_no_static_element_interactions -->
-          <div
-            role="button"
-            tabindex="0"
-            on:click|stopPropagation={() => (collapsed = !collapsed)}
-            on:keydown={(e) => e.key === "Enter" && (collapsed = !collapsed)}
-            title={collapsed ? "Expand" : "Collapse"}
-            class="collapse-toggle"
-            style="
-              display: flex; justify-content: center; align-items: center;
-              padding: 6px 0; cursor: pointer;
-              border: 1px solid {$theme.border ?? 'transparent'};
-              border-radius: 4px;
-              background: transparent;
-              color: {$theme.fgMuted ?? $theme.fgDim ?? $theme.fg};
-              margin: 4px 0 2px;
-              -webkit-app-region: no-drag;
-            "
-          >
-            <svg
-              width="12"
-              height="8"
-              viewBox="0 0 12 8"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              style="transition: transform 0.2s ease; transform: rotate({collapsed
-                ? 180
-                : 0}deg);"><polyline points="1,1 6,7 11,1" /></svg
-            >
+        {#if $$slots["btn-row"]}
+          <div class="container-btn-row">
+            <slot
+              name="btn-row"
+              {collapsed}
+              toggle={() => (collapsed = !collapsed)}
+            />
           </div>
         {/if}
       </div>
@@ -330,40 +303,13 @@
             <slot name="banner-end" {bannerHovered} {collapsed} />
           </div>
           <slot name="banner-subtitle" {bannerHovered} />
-          {#if filterIds.size > 0}
-            <!-- svelte-ignore a11y_click_events_have_key_events -->
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <div
-              role="button"
-              tabindex="0"
-              on:click|stopPropagation={() => (collapsed = !collapsed)}
-              on:keydown={(e) => e.key === "Enter" && (collapsed = !collapsed)}
-              title={collapsed ? "Expand" : "Collapse"}
-              class="collapse-toggle"
-              style="
-                display: flex; justify-content: center; align-items: center;
-                padding: 6px 0; cursor: pointer;
-                border: 1px solid {$theme.border ?? 'transparent'};
-                border-radius: 4px;
-                background: transparent;
-                color: {$theme.fgMuted ?? $theme.fgDim ?? $theme.fg};
-                margin: 4px 0 2px;
-                -webkit-app-region: no-drag;
-              "
-            >
-              <svg
-                width="12"
-                height="8"
-                viewBox="0 0 12 8"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                style="transition: transform 0.2s ease; transform: rotate({collapsed
-                  ? 180
-                  : 0}deg);"><polyline points="1,1 6,7 11,1" /></svg
-              >
+          {#if $$slots["btn-row"]}
+            <div class="container-btn-row">
+              <slot
+                name="btn-row"
+                {collapsed}
+                toggle={() => (collapsed = !collapsed)}
+              />
             </div>
           {/if}
         </div>
@@ -393,7 +339,10 @@
 {/if}
 
 <style>
-  .collapse-toggle:hover {
-    background: rgba(255, 255, 255, 0.06) !important;
+  .container-btn-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: 4px 0 2px;
   }
 </style>

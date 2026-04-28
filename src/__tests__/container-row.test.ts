@@ -38,7 +38,7 @@ Element.prototype.animate = vi.fn().mockImplementation(() => {
   };
 });
 
-import ContainerRow from "../lib/components/ContainerRow.svelte";
+import ContainerRowWithSlot from "./container-row-with-slot.svelte";
 import WorkspaceListViewStub from "./workspace-list-view-stub.svelte";
 
 const baseProps = {
@@ -52,11 +52,11 @@ describe("ContainerRow collapse/expand", () => {
   afterEach(() => cleanup());
 
   it("is expanded by default and collapses on chevron click", async () => {
-    const { container } = render(ContainerRow, { props: baseProps });
+    const { container } = render(ContainerRowWithSlot, { props: baseProps });
 
     expect(container.querySelector("[data-container-nested]")).not.toBeNull();
 
-    const chevron = container.querySelector('[role="button"]') as HTMLElement;
+    const chevron = container.querySelector("button") as HTMLElement;
     await fireEvent.click(chevron);
     await tick();
 
@@ -64,9 +64,11 @@ describe("ContainerRow collapse/expand", () => {
   });
 
   it("auto-expands when a workspace is added while collapsed", async () => {
-    const { container, rerender } = render(ContainerRow, { props: baseProps });
+    const { container, rerender } = render(ContainerRowWithSlot, {
+      props: baseProps,
+    });
 
-    const chevron = container.querySelector('[role="button"]') as HTMLElement;
+    const chevron = container.querySelector("button") as HTMLElement;
     await fireEvent.click(chevron);
     await tick();
     expect(container.querySelector("[data-container-nested]")).toBeNull();
@@ -78,11 +80,11 @@ describe("ContainerRow collapse/expand", () => {
   });
 
   it("stays collapsed when filterIds shrinks or stays the same size", async () => {
-    const { container, rerender } = render(ContainerRow, {
+    const { container, rerender } = render(ContainerRowWithSlot, {
       props: { ...baseProps, filterIds: new Set(["ws-1", "ws-2"]) },
     });
 
-    const chevron = container.querySelector('[role="button"]') as HTMLElement;
+    const chevron = container.querySelector("button") as HTMLElement;
     await fireEvent.click(chevron);
     await tick();
     expect(container.querySelector("[data-container-nested]")).toBeNull();

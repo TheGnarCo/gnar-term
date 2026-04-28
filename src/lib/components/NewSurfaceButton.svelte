@@ -97,7 +97,10 @@
       border-bottom: 2px solid {plusHovered ? $theme.accent : 'transparent'};
       transition: color 0.1s, border-color 0.1s;
     "
-    use:shortcutHint={isMac ? `${modLabel}T` : `${shiftModLabel}T`}
+    use:shortcutHint={{
+      label: isMac ? `${modLabel}T` : `${shiftModLabel}T`,
+      placement: "below",
+    }}
     on:click={onNewSurface}
     on:mouseenter={() => (plusHovered = true)}
     on:mouseleave={() => (plusHovered = false)}>+</span

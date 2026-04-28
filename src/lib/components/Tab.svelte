@@ -7,6 +7,7 @@
   import { startTabDrag } from "../services/tab-drag";
   import { renamingSurfaceId } from "../stores/ui";
   import { renameSurface } from "../services/surface-service";
+  import { shortcutHintsActive } from "../stores/shortcut-hints";
 
   export let surface: Surface;
   export let index: number;
@@ -177,12 +178,15 @@
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <span
     style="
-      color: {closeHovered
-      ? $theme.danger
-      : $theme.fgDim}; font-size: 13px; cursor: pointer;
-      margin-left: 4px; visibility: {isActive || hovered
+      color: {closeHovered ? $theme.danger : $theme.fgDim};
+      font-size: {$shortcutHintsActive ? '16px' : '13px'};
+      cursor: pointer;
+      margin-left: 4px;
+      padding: {$shortcutHintsActive ? '0 3px' : '0'};
+      visibility: {isActive || hovered || $shortcutHintsActive
       ? 'visible'
       : 'hidden'};
+      transition: font-size 0.1s, padding 0.1s;
     "
     on:click|stopPropagation={onClose}
     on:mouseenter={() => (closeHovered = true)}

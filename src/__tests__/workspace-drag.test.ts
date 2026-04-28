@@ -793,4 +793,33 @@ describe("createWorkspaceFromSurface — targetGroupId", () => {
       0,
     );
   });
+
+  it("targetGroupId takes precedence over srcGroupId when both are set", () => {
+    const sA = mockSurface({ title: "A" });
+    const sB = mockSurface({ title: "B" });
+    const pane = makePane([sA, sB]);
+    const ws = makeWorkspace(
+      { type: "pane", pane },
+      { metadata: { groupId: "src-group" } }, // srcGroupId is set
+    );
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+
+    createWorkspaceFromSurface(sA.id, pane.id, ws.id, {
+      kind: "group",
+      positionInGroup: 0,
+      targetGroupId: "target-group-override",
+    });
+
+    const updated = get(workspaces);
+    const newWs = updated.find((w) => w.id !== ws.id)!;
+    expect((newWs.metadata as Record<string, unknown>)?.groupId).toBe(
+      "target-group-override",
+    );
+    expect(insertWorkspaceIntoGroupSpy).toHaveBeenCalledWith(
+      "target-group-override",
+      newWs.id,
+      0,
+    );
+  });
 });

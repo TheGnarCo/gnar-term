@@ -285,6 +285,29 @@ async function scrubGroupDashboardActiveAgents(path: string): Promise<void> {
   }
 }
 
+export async function migrateGroupDashboardWidgets(
+  group: WorkspaceGroupEntry,
+  path: string,
+): Promise<void> {
+  try {
+    const exists = await invoke<boolean>("file_exists", { path }).catch(
+      () => false,
+    );
+    if (!exists) return;
+    const content = await invoke<string>("read_file", { path });
+    if (content.includes("gnar:workspaces")) return;
+    await invoke("write_file", {
+      path,
+      content: buildGroupDashboardMarkdown(group),
+    });
+  } catch (err) {
+    console.warn(
+      `[workspace-groups] Failed to migrate workspaces widget into "${path}":`,
+      err,
+    );
+  }
+}
+
 function createDashboardWorkspaceFromDef(
   group: WorkspaceGroupEntry,
   name: string,
@@ -567,6 +590,7 @@ export async function reconcileGroupDashboards(): Promise<void> {
       // before we materialize / rebind the dashboard workspace so the
       // first render already reflects the cleaned file.
       await scrubGroupDashboardActiveAgents(groupDashboardPath(group.path));
+      await migrateGroupDashboardWidgets(group, groupDashboardPath(group.path));
 
       // Deduplicate every autoProvision contribution type — keeps the first
       // match, closes the rest. Previously only "group" was covered; the

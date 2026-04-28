@@ -8,6 +8,7 @@ export type WorkspacePaneDropTarget =
       paneId: string;
       zone: "top" | "bottom" | "left" | "right";
     }
+  | { kind: "tab-merge"; paneId: string }
   | { kind: "deny" }
   | null;
 
@@ -84,4 +85,39 @@ export function detectWorkspacePaneDrop(
   }
 
   return null;
+}
+
+export function detectTabBarDropForWorkspace(
+  x: number,
+  y: number,
+  srcWorkspaceId: string,
+): WorkspacePaneDropTarget {
+  const allWs = get(workspaces);
+  const srcWs = allWs.find((ws) => ws.id === srcWorkspaceId);
+  const srcGroupId = (srcWs?.metadata as Record<string, unknown> | undefined)
+    ?.groupId as string | undefined;
+
+  const elAtCursor = document.elementFromPoint(x, y);
+  if (!elAtCursor) return null;
+
+  const tabBarEl = (elAtCursor as Element).closest(
+    "[data-pane-id]",
+  ) as HTMLElement | null;
+  if (!tabBarEl) return null;
+
+  const paneId = tabBarEl.getAttribute("data-pane-id");
+  if (!paneId) return null;
+
+  const tgtWs = allWs.find((ws) =>
+    getAllPanes(ws.splitRoot).some((p) => p.id === paneId),
+  );
+  if (!tgtWs || tgtWs.id === srcWorkspaceId) return null;
+
+  const tgtGroupId = (tgtWs.metadata as Record<string, unknown> | undefined)
+    ?.groupId as string | undefined;
+  if (srcGroupId !== tgtGroupId) {
+    return { kind: "deny" };
+  }
+
+  return { kind: "tab-merge", paneId };
 }

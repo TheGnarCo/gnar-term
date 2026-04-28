@@ -54,6 +54,7 @@
   import { dashboardWorkspaceRegistry } from "../services/dashboard-workspace-service";
   import { configStore } from "../config";
   import { resolveGroupColor } from "../theme-data";
+  import { archiveWorkspace, archiveGroup } from "../services/archive-service";
 
   function resolvePseudoWorkspaceColor(pw: PseudoWorkspace): string {
     const slot = $configStore.pseudoWorkspaceColors?.[pw.id] ?? "purple";
@@ -178,6 +179,9 @@
   // Workspace-to-pane drop state: updated on every mousemove during a root drag.
   let currentPaneTarget: WorkspacePaneDropTarget = null;
 
+  // Archive zone drag state: true when the dragged row is hovering over [data-archive-zone].
+  let overArchiveZone = false;
+
   const rootDrag = createDragReorder({
     dataAttr: "root-row-idx",
     containerSelector: "#primary-sidebar",
@@ -190,6 +194,24 @@
     onMove: (x, y, ghostEl) => {
       const fromIdx = rootDrag.getState().sourceIdx;
       if (fromIdx === null) return;
+      // Archive zone detection runs for all row kinds (workspace AND workspace-group).
+      const archiveEl = document.querySelector("[data-archive-zone]");
+      if (archiveEl) {
+        const rect = archiveEl.getBoundingClientRect();
+        const over =
+          x >= rect.left &&
+          x <= rect.right &&
+          y >= rect.top &&
+          y <= rect.bottom;
+        if (over !== overArchiveZone) {
+          overArchiveZone = over;
+          if (over) {
+            archiveEl.setAttribute("data-drag-over", "true");
+          } else {
+            archiveEl.removeAttribute("data-drag-over");
+          }
+        }
+      }
       const srcRow = $rootRowOrder[fromIdx];
       if (srcRow?.kind !== "workspace") {
         currentPaneTarget = null;
@@ -235,6 +257,19 @@
       }
     },
     onDragCommit: (fromIdx) => {
+      if (overArchiveZone) {
+        overArchiveZone = false;
+        document
+          .querySelector("[data-archive-zone]")
+          ?.removeAttribute("data-drag-over");
+        currentPaneTarget = null;
+        setWorkspaceDragState(null);
+        const srcRow = $rootRowOrder[fromIdx];
+        if (srcRow?.kind === "workspace") void archiveWorkspace(srcRow.id);
+        else if (srcRow?.kind === "workspace-group")
+          void archiveGroup(srcRow.id);
+        return true; // suppress normal rootRowOrder reorder
+      }
       const paneTarget = currentPaneTarget;
       currentPaneTarget = null;
       setWorkspaceDragState(null);
@@ -269,6 +304,10 @@
         // Clean up workspace drag state when drag ends
         currentPaneTarget = null;
         setWorkspaceDragState(null);
+        overArchiveZone = false;
+        document
+          .querySelector("[data-archive-zone]")
+          ?.removeAttribute("data-drag-over");
       }
       if (s.active && s.sourceIdx !== null) {
         const src = $rootRowOrder[s.sourceIdx];
@@ -385,6 +424,7 @@
     // inside a group can't be promoted again — groups don't nest.
     const canRename = !isDashboard;
     const canPromoteThis = canPromote && !isDashboard && !isInsideGroup;
+    const canArchive = !isDashboard;
     const items: MenuItem[] = [
       ...(canRename
         ? [
@@ -413,6 +453,16 @@
           ]
         : []),
       { label: "", action: () => {}, separator: true },
+      ...(canArchive
+        ? [
+            {
+              label: "Archive",
+              action: () => {
+                if (ws) void archiveWorkspace(ws.id);
+              },
+            } as MenuItem,
+          ]
+        : []),
       {
         label: "Close Workspace",
         shortcut: "⇧⌘W",

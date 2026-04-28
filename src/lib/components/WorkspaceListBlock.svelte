@@ -39,6 +39,8 @@
   import ExtensionWrapper from "./ExtensionWrapper.svelte";
   import { getExtensionApiById } from "../services/extension-loader";
   import { contrastColor } from "../utils/contrast";
+  import { shortcutHint } from "../actions/shortcut-hint";
+  import { modLabel } from "../terminal-service";
   import type { MenuItem } from "../context-menu-types";
   import { getAllSurfaces, type Workspace } from "../types";
   import { commandStore } from "../services/command-registry";
@@ -484,6 +486,7 @@
           bind:this={workspaceItems[ws.id]}
           workspace={ws}
           index={globalIdx}
+          shortcutIdx={entry.idx}
           isActive={globalIdx === $activeWorkspaceIdx}
           dragActive={isSource}
           onSelect={() => {
@@ -497,20 +500,27 @@
       {:else if entry.row.kind === "pseudo-workspace" && entry.pseudoWorkspace}
         <PseudoWorkspaceRow
           pseudo={entry.pseudoWorkspace}
+          shortcutIdx={entry.idx}
           onGripMouseDown={(e) => startRootRowDrag(e, entry.idx)}
         />
       {:else if entry.rendererComponent && entry.rendererSource}
         {@const extApi = getExtensionApiById(entry.rendererSource)}
         {#if extApi}
-          <ExtensionWrapper
-            api={extApi}
-            component={entry.rendererComponent}
-            props={{
-              id: entry.row.id,
-              onGripMouseDown: (e: MouseEvent) =>
-                startRootRowDrag(e, entry.idx),
-            }}
-          />
+          <div
+            use:shortcutHint={entry.idx < 9
+              ? `${modLabel}${entry.idx + 1}`
+              : undefined}
+          >
+            <ExtensionWrapper
+              api={extApi}
+              component={entry.rendererComponent}
+              props={{
+                id: entry.row.id,
+                onGripMouseDown: (e: MouseEvent) =>
+                  startRootRowDrag(e, entry.idx),
+              }}
+            />
+          </div>
         {/if}
       {/if}
 

@@ -24,9 +24,14 @@
   import type { PseudoWorkspace } from "../services/pseudo-workspace-registry";
   import { configStore } from "../config";
   import { resolveGroupColor } from "../theme-data";
+  import { shortcutHint } from "../actions/shortcut-hint";
+  import { shortcutHintsActive } from "../stores/shortcut-hints";
+  import { modLabel } from "../terminal-service";
 
   export let pseudo: PseudoWorkspace;
   export let onGripMouseDown: ((e: MouseEvent) => void) | undefined = undefined;
+  /** Sidebar position index for the ⌘N shortcut hint. */
+  export let shortcutIdx: number | undefined = undefined;
 
   $: rowBodyApi = pseudo.rowBody
     ? getExtensionApiById(pseudo.source)
@@ -50,7 +55,8 @@
   }
 
   $: isActive = $activePseudoWorkspaceId === pseudo.id;
-  $: gripVisible = rowHovered && $reorderContext === null;
+  $: gripVisible =
+    $shortcutHintsActive || (rowHovered && $reorderContext === null);
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -61,6 +67,9 @@
   role="button"
   tabindex="0"
   aria-label={pseudo.label}
+  use:shortcutHint={shortcutIdx !== undefined && shortcutIdx < 9
+    ? `${modLabel}${shortcutIdx + 1}`
+    : undefined}
   style="
     display: flex;
     position: relative;

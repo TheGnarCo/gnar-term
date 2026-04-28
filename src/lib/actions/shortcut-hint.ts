@@ -23,8 +23,8 @@ export function shortcutHint(
       z-index: 99999;
       pointer-events: none;
       left: ${rect.left + rect.width / 2}px;
-      top: ${rect.bottom + 4}px;
-      transform: translateX(-50%);
+      top: ${rect.top + rect.height / 2}px;
+      transform: translate(-50%, -50%);
       background: ${t.accent};
       color: ${t.bg};
       font-size: 10px;
@@ -54,7 +54,7 @@ export function shortcutHint(
     if (!badge) return;
     const rect = node.getBoundingClientRect();
     badge.style.left = `${rect.left + rect.width / 2}px`;
-    badge.style.top = `${rect.bottom + 4}px`;
+    badge.style.top = `${rect.top + rect.height / 2}px`;
   }
 
   const unsub = shortcutHintsActive.subscribe((active) => {

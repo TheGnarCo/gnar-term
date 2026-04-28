@@ -35,7 +35,7 @@ describe("grip visibility suppression", () => {
     // (not just the grip column) expands it.
     expect(WORKSPACE_ITEM).toContain("anyReorderActive");
     expect(WORKSPACE_ITEM).toMatch(
-      /visible=\{\s*dragActive\s*\|\|\s*\(\s*hovered\s*&&\s*!\s*\$anyReorderActive\s*\)\s*\}/,
+      /visible=\{\s*dragActive\s*\|\|\s*\$shortcutHintsActive\s*\|\|\s*\(\s*hovered\s*&&\s*!\s*\$anyReorderActive\s*\)\s*\}/,
     );
   });
 

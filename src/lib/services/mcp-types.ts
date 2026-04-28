@@ -1,5 +1,9 @@
 // Shared types for the MCP server and its tool modules.
 
+/** Partial binding that accumulates over the connection lifecycle.
+ *  `paneId` and `workspaceId` are set on the initial connection bind.
+ *  `clientPid` arrives separately via the identify/pid event.
+ *  Individual fields are `null` until their respective events fire. */
 export interface ConnectionBinding {
   paneId: string | null;
   workspaceId: string | null;

@@ -643,7 +643,12 @@ registerTool({
           safetyTimer = null;
         }
         session.unlisten = undefined;
-        invoke("write_pty", { ptyId, data: task + "\r" }).catch(() => {});
+        invoke("write_pty", { ptyId, data: task + "\r" }).catch((err) =>
+          console.warn(
+            `[mcp] spawn_agent: task write failed for session ${session.session_id}:`,
+            err,
+          ),
+        );
       });
       session.unlisten = unlisten;
       // Safety fallback: if no output arrives within 30s, cancel and warn.
@@ -905,7 +910,7 @@ registerTool({
 registerTool({
   name: "dispatch_tasks",
   description:
-    "Spawn multiple agent sessions in parallel. Each task resolves its target independently — pass workspace_id/pane_id per task to override the connection binding.",
+    "Spawn multiple agent sessions sequentially. Each spawn inherits the pane context of the previous one via lastSpawnedPaneId to keep the split tree shallow. Pass workspace_id/pane_id per task to override the connection binding.",
   inputSchema: {
     type: "object",
     properties: {

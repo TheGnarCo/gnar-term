@@ -3,7 +3,18 @@
  * correctly given different dashboard host contexts and workspace stores.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, cleanup } from "@testing-library/svelte";
+import { render, cleanup, fireEvent } from "@testing-library/svelte";
+
+const { switchWorkspaceMock } = vi.hoisted(() => ({
+  switchWorkspaceMock: vi.fn(),
+}));
+vi.mock("../lib/services/workspace-service", () => ({
+  switchWorkspace: switchWorkspaceMock,
+  createWorkspace: vi.fn(),
+  schedulePersist: vi.fn(),
+  closeWorkspace: vi.fn(),
+  renameWorkspace: vi.fn(),
+}));
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn().mockResolvedValue(undefined),
@@ -186,5 +197,45 @@ describe("WorkspacesWidget", () => {
     const rows = container.querySelectorAll("[data-workspace-row]");
     expect(rows).toHaveLength(1);
     expect(rows[0]!.getAttribute("data-ws-name")).toBe("G1 Workspace");
+  });
+});
+
+describe("WorkspacesWidget click-to-navigate", () => {
+  beforeEach(() => {
+    cleanup();
+    switchWorkspaceMock.mockClear();
+    workspaces.set([]);
+    resetWorkspaceGroupsForTest();
+  });
+
+  it("clicking a workspace row calls switchWorkspace with its index", async () => {
+    setWorkspaceGroups([
+      {
+        id: "g1",
+        name: "My Group",
+        path: "/tmp/g1",
+        color: "blue",
+        workspaceIds: [],
+        isGit: false,
+        createdAt: "2026-01-01T00:00:00.000Z",
+      },
+    ]);
+    workspaces.set([
+      makeWorkspace("ws-alpha", "Alpha Workspace", { groupId: "g1" }),
+      makeWorkspace("ws-beta", "Beta Workspace", { groupId: "g1" }),
+    ]);
+
+    const { container } = render(WorkspacesWidget, {
+      context: new Map([[DASHBOARD_HOST_KEY, { metadata: { groupId: "g1" } }]]),
+    });
+
+    const rows = container.querySelectorAll("[data-workspace-row]");
+    expect(rows).toHaveLength(2);
+
+    // Click the second workspace row (index 1 in the workspaces store)
+    await fireEvent.click(rows[1]!);
+
+    expect(switchWorkspaceMock).toHaveBeenCalledTimes(1);
+    expect(switchWorkspaceMock).toHaveBeenCalledWith(1);
   });
 });

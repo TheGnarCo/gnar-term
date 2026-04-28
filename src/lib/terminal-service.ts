@@ -282,8 +282,17 @@ function flushPtyBuffer(ptyId: number) {
     ptyBuffers.delete(ptyId);
     ptyBufferBytes.delete(ptyId);
     if (ptyPaused.has(ptyId)) {
-      ptyPaused.delete(ptyId);
-      invoke("resume_pty", { ptyId }).catch(() => {});
+      invoke("resume_pty", { ptyId })
+        .then(() => {
+          ptyPaused.delete(ptyId);
+        })
+        .catch((err) => {
+          console.error(
+            "[terminal-service] resume_pty failed, terminal may hang:",
+            err,
+          );
+          ptyPaused.delete(ptyId);
+        });
     }
     return;
   }
@@ -323,8 +332,17 @@ function flushPtyBuffer(ptyId: number) {
     }
     // Resume PTY reader if we drained below low water mark
     if (ptyPaused.has(ptyId) && buffered < BUFFER_LOW_WATER) {
-      ptyPaused.delete(ptyId);
-      invoke("resume_pty", { ptyId }).catch(() => {});
+      invoke("resume_pty", { ptyId })
+        .then(() => {
+          ptyPaused.delete(ptyId);
+        })
+        .catch((err) => {
+          console.error(
+            "[terminal-service] resume_pty failed, terminal may hang:",
+            err,
+          );
+          ptyPaused.delete(ptyId);
+        });
     }
   });
 }
@@ -680,7 +698,9 @@ export async function createTerminalSurface(
           text: url,
           decorations: { pointerCursor: true, underline: true },
           activate(_event: MouseEvent, text: string) {
-            invoke("open_url", { url: text }).catch(() => {});
+            invoke("open_url", { url: text }).catch((err) =>
+              console.warn("[terminal-service] open_url failed:", err),
+            );
           },
         });
       }
@@ -767,12 +787,16 @@ export async function createTerminalSurface(
             },
           };
         }),
-      ).then((results) => {
-        const links = results.filter(
-          (r): r is NonNullable<typeof r> => r !== null,
-        );
-        callback(links.length > 0 ? links : undefined);
-      });
+      )
+        .then((results) => {
+          const links = results.filter(
+            (r): r is NonNullable<typeof r> => r !== null,
+          );
+          callback(links.length > 0 ? links : undefined);
+        })
+        .catch(() => {
+          callback(undefined);
+        });
     },
   });
 
@@ -801,9 +825,11 @@ export async function createTerminalSurface(
       (e.key === "V" || e.key === "v")
     ) {
       e.preventDefault();
-      void clipboardRead().then((text) => {
-        if (text && surface.ptyId >= 0) terminal.paste(text);
-      });
+      void clipboardRead()
+        .then((text) => {
+          if (text && surface.ptyId >= 0) terminal.paste(text);
+        })
+        .catch((err) => console.warn("Clipboard read failed:", err));
       return false;
     }
 
@@ -852,7 +878,7 @@ export async function createTerminalSurface(
 
       // Cmd+key (no alt) — let App.svelte handle
       if (!alt && !shift) {
-        if (["n", "t", "d", "w", "b", "p", "k", "f", "g"].includes(k))
+        if (["n", "t", "d", "w", "b", "p", "k", "f", "g", "r"].includes(k))
           return false;
         if (k >= "1" && k <= "9") return false;
         // Cmd+= / Cmd++ / Cmd+- for font size

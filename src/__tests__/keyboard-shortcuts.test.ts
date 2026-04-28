@@ -45,11 +45,13 @@ vi.mock("../lib/services/pane-service", () => ({
   flashFocusedPane: vi.fn(),
   focusDirection: vi.fn(),
 }));
+const renameActiveSurfaceMock = vi.fn();
 vi.mock("../lib/services/surface-service", () => ({
   newSurfaceFromSidebar: vi.fn(),
   nextSurface: vi.fn(),
   prevSurface: vi.fn(),
   selectSurfaceByNumber: vi.fn(),
+  renameActiveSurface: (...args: unknown[]) => renameActiveSurfaceMock(...args),
 }));
 vi.mock("../lib/services/command-registry", () => ({
   executeByShortcut: vi.fn().mockReturnValue(false),
@@ -135,6 +137,13 @@ describe("keyboard-shortcuts — clear + find bindings", () => {
       ui.findBarVisible.set(false);
       shortcuts.handleAppKeydown(mkEvent({ key: "f", meta: true }), ctx);
       expect(get(ui.findBarVisible)).toBe(true);
+    });
+
+    it("⌘R calls renameActiveSurface", async () => {
+      const { shortcuts } = await loadModule();
+      renameActiveSurfaceMock.mockClear();
+      shortcuts.handleAppKeydown(mkEvent({ key: "r", meta: true }), ctx);
+      expect(renameActiveSurfaceMock).toHaveBeenCalledOnce();
     });
 
     it("Ctrl+Shift+K does NOT clear on macOS (mac uses bare ⌘K)", async () => {

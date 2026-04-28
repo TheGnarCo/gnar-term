@@ -18,7 +18,11 @@ import {
 import { workspaces, activeSurface } from "../stores/workspace";
 import { isTerminalSurface } from "../types";
 import { createWorkspace } from "./workspace-service";
-import { flashFocusedPane, focusDirection } from "./pane-service";
+import {
+  flashFocusedPane,
+  focusDirection,
+  togglePaneZoom,
+} from "./pane-service";
 import {
   newSurfaceFromSidebar,
   nextSurface,
@@ -27,8 +31,7 @@ import {
 } from "./surface-service";
 import { executeByShortcut } from "./command-registry";
 import { executeWorkspaceActionByShortcut } from "./workspace-action-registry";
-import { isMac } from "../terminal-service";
-import { zoomIn, zoomOut, resetFontSize } from "../stores/font-size";
+import { isMac, adjustFontSize } from "../terminal-service";
 import { renameActiveSurface } from "./surface-service";
 
 /**
@@ -71,10 +74,9 @@ export function handleAppKeydown(
         findBarVisible.set(true);
         ctx.findNext();
       },
-      "=": zoomIn,
-      "+": zoomIn,
-      "-": zoomOut,
-      "0": resetFontSize,
+      "=": () => adjustFontSize(1),
+      "+": () => adjustFontSize(1),
+      "-": () => adjustFontSize(-1),
     };
     const handler = cmdShortcuts[e.key];
     if (handler) {
@@ -109,9 +111,15 @@ export function handleAppKeydown(
       commandPaletteOpen.update((v) => !v);
       return;
     }
-    // Non-mac only: Ctrl+Shift+K/F/= /-/0 mirror the mac Cmd bindings
-    // above. Terminal convention on Linux/Windows reserves bare Ctrl
-    // for shell signals, so in-terminal actions use Ctrl+Shift.
+    // Shift+Cmd+Enter (mac) / Ctrl+Shift+Enter (Linux) — toggle pane zoom
+    if (k === "enter") {
+      e.preventDefault();
+      const s = get(activeSurface);
+      if (s) togglePaneZoom(s.id);
+      return;
+    }
+    // Non-mac only: Ctrl+Shift+K/F mirror the mac Cmd bindings above.
+    // Font size uses Ctrl+Shift+=/- for Linux/Windows.
     if (!isMac) {
       if (k === "k") {
         e.preventDefault();
@@ -124,19 +132,15 @@ export function handleAppKeydown(
         findBarVisible.update((v) => !v);
         return;
       }
-      if (e.key === "+" || e.key === "=") {
+      if (k === "=" || k === "+") {
         e.preventDefault();
-        zoomIn();
+        adjustFontSize(1);
         return;
       }
-      if (e.key === "_" || e.key === "-") {
+      // Ctrl+Shift+- on Linux produces e.key === "_" (shifted minus)
+      if (k === "-" || k === "_") {
         e.preventDefault();
-        zoomOut();
-        return;
-      }
-      if (e.key === ")" || e.key === "0") {
-        e.preventDefault();
-        resetFontSize();
+        adjustFontSize(-1);
         return;
       }
     }

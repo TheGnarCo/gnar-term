@@ -31,7 +31,6 @@ import {
 } from "@tauri-apps/plugin-notification";
 import { get } from "svelte/store";
 import { xtermTheme } from "./stores/theme";
-import { fontSize as fontSizeStore } from "./stores/font-size";
 import { workspaces, activeWorkspaceIdx } from "./stores/workspace";
 import { contextMenu, pendingAction } from "./stores/ui";
 import {
@@ -564,7 +563,7 @@ export async function createTerminalSurface(
 
   const terminal = new Terminal({
     cursorBlink: true,
-    fontSize: get(fontSizeStore),
+    fontSize: getConfig().fontSize ?? 14,
     fontFamily: resolvedFontFamily,
     theme: currentXtermTheme,
     allowProposedApi: true,
@@ -780,6 +779,8 @@ export async function createTerminalSurface(
         if (["n", "t", "d", "w", "b", "p", "k", "f", "g"].includes(k))
           return false;
         if (k >= "1" && k <= "9") return false;
+        // Cmd+= / Cmd++ / Cmd+- for font size
+        if (k === "=" || k === "+" || k === "-") return false;
       }
       // Shift+Cmd+key
       if (shift && !alt) {
@@ -824,6 +825,9 @@ export async function createTerminalSurface(
           return false;
         if (k === "enter") return false;
         if (k === "[" || k === "]") return false;
+        // Ctrl+Shift+=  / Ctrl+Shift+- for font size.
+        // On Linux, Shift+= produces "+" and Shift+- produces "_".
+        if (k === "=" || k === "+" || k === "-" || k === "_") return false;
       }
     }
 
@@ -996,6 +1000,38 @@ export async function runDefinedCommand(
   workspaces.update((l) => [...l]);
 }
 
+const FONT_SIZE_MIN = 8;
+const FONT_SIZE_MAX = 32;
+
+/**
+ * Increase or decrease the terminal font size for all currently-mounted
+ * terminal surfaces. Persists the new size to config so it survives restarts.
+ * Also calls fitAddon.fit() on each terminal to recompute cols/rows for the
+ * new character cell size.
+ */
+export function adjustFontSize(delta: number): void {
+  const current = getConfig().fontSize ?? 14;
+  const next = Math.max(
+    FONT_SIZE_MIN,
+    Math.min(FONT_SIZE_MAX, current + delta),
+  );
+  if (next === current) return;
+  void saveConfig({ fontSize: next });
+  const wsList = get(workspaces);
+  for (const ws of wsList) {
+    for (const s of getAllSurfaces(ws)) {
+      if (isTerminalSurface(s)) {
+        s.terminal.options.fontSize = next;
+        try {
+          s.fitAddon.fit();
+        } catch {
+          // May fail if terminal is not attached to DOM yet — safe to ignore
+        }
+      }
+    }
+  }
+}
+
 /**
  * Drop the pending-restore flag without running anything. Keeps definedCommand
  * intact so future sessions still know what this pane was for.
@@ -1094,31 +1130,5 @@ export async function connectPty(
     surface.spawnError = err instanceof Error ? err.message : String(err);
     deferred?.reject(err instanceof Error ? err : new Error(String(err)));
     ptyReady.delete(surface.id);
-  }
-}
-
-const FONT_SIZE_MIN = 8;
-const FONT_SIZE_MAX = 32;
-
-export function adjustFontSize(delta: number): void {
-  const current = getConfig().fontSize ?? 14;
-  const next = Math.max(
-    FONT_SIZE_MIN,
-    Math.min(FONT_SIZE_MAX, current + delta),
-  );
-  if (next === current) return;
-  void saveConfig({ fontSize: next });
-  const wsList = get(workspaces);
-  for (const ws of wsList) {
-    for (const s of getAllSurfaces(ws)) {
-      if (isTerminalSurface(s)) {
-        s.terminal.options.fontSize = next;
-        try {
-          s.fitAddon.fit();
-        } catch {
-          // May fail if terminal is not attached to DOM yet
-        }
-      }
-    }
   }
 }

@@ -612,8 +612,9 @@ describe("SplitNodeView has draggable dividers with ratio support", () => {
       "src/lib/components/SplitNodeView.svelte",
       "utf-8",
     );
-    expect(source).toContain("flex: {node.ratio}");
-    expect(source).toMatch(/flex:\s*\{1\s*-\s*node\.ratio\}/);
+    // node.ratio is used in the flex expression (may be inside a ternary for zoom)
+    expect(source).toContain("node.ratio");
+    expect(source).toContain("1 - node.ratio");
     // Should NOT have hardcoded flex: 1 for split children
     expect(source).not.toMatch(/style="flex: 1;[^"]*">\s*<SplitNodeView/);
   });

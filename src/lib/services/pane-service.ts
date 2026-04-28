@@ -462,7 +462,9 @@ export function mergeWorkspaceIntoPane(
   }
   tgtWs.activePaneId = targetPane.id;
 
-  workspaces.update((list) => list.filter((ws) => ws.id !== srcWorkspaceId));
+  workspaces.update((list) => [
+    ...list.filter((ws) => ws.id !== srcWorkspaceId),
+  ]);
   activeWorkspaceIdx.set(
     Math.min(get(activeWorkspaceIdx), get(workspaces).length - 1),
   );

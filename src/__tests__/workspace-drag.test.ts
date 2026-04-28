@@ -92,6 +92,7 @@ import { createWorkspaceFromSurface } from "../lib/services/workspace-service";
 import {
   moveSurfaceToWorkspace,
   expandWorkspaceIntoPanes,
+  mergeWorkspaceIntoPane,
 } from "../lib/services/pane-service";
 import { saveState } from "../lib/config";
 
@@ -543,5 +544,174 @@ describe("expandWorkspaceIntoPanes", () => {
     const activePane = tgtPanes.find((p) => p.id === activePaneId);
     expect(activePane).toBeDefined();
     expect(activePane?.surfaces[0]?.id).toBe(sB.id);
+  });
+});
+
+describe("mergeWorkspaceIntoPane", () => {
+  it("appends all source surfaces to the target pane", () => {
+    const sA = mockSurface({ title: "A" });
+    const sB = mockSurface({ title: "B" });
+    const sC = mockSurface({ title: "C" });
+    const srcPane = makePane([sA, sB]);
+    const tgtPane = makePane([sC]);
+    const srcWs = makeWorkspace({ type: "pane", pane: srcPane });
+    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    workspaces.set([srcWs, tgtWs]);
+    activeWorkspaceIdx.set(1);
+
+    mergeWorkspaceIntoPane(srcWs.id, tgtPane.id);
+
+    expect(tgtPane.surfaces.map((s) => s.id)).toEqual([sC.id, sA.id, sB.id]);
+  });
+
+  it("sets activeSurfaceId to the last appended surface", () => {
+    const sA = mockSurface({ title: "A" });
+    const sB = mockSurface({ title: "B" });
+    const sC = mockSurface({ title: "C" });
+    const srcPane = makePane([sA, sB]);
+    const tgtPane = makePane([sC]);
+    const srcWs = makeWorkspace({ type: "pane", pane: srcPane });
+    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    workspaces.set([srcWs, tgtWs]);
+    activeWorkspaceIdx.set(1);
+
+    mergeWorkspaceIntoPane(srcWs.id, tgtPane.id);
+
+    expect(tgtPane.activeSurfaceId).toBe(sB.id);
+  });
+
+  it("sets activePaneId on the target workspace to targetPane", () => {
+    const sA = mockSurface({ title: "A" });
+    const sB = mockSurface({ title: "B" });
+    const srcPane = makePane([sA]);
+    const tgtPane = makePane([sB]);
+    const srcWs = makeWorkspace({ type: "pane", pane: srcPane });
+    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    workspaces.set([srcWs, tgtWs]);
+    activeWorkspaceIdx.set(1);
+
+    mergeWorkspaceIntoPane(srcWs.id, tgtPane.id);
+
+    expect(tgtWs.activePaneId).toBe(tgtPane.id);
+  });
+
+  it("removes the source workspace from the workspaces store", () => {
+    const sA = mockSurface({ title: "A" });
+    const sB = mockSurface({ title: "B" });
+    const srcPane = makePane([sA]);
+    const tgtPane = makePane([sB]);
+    const srcWs = makeWorkspace({ type: "pane", pane: srcPane });
+    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    workspaces.set([srcWs, tgtWs]);
+    activeWorkspaceIdx.set(1);
+
+    mergeWorkspaceIntoPane(srcWs.id, tgtPane.id);
+
+    expect(get(workspaces).find((w) => w.id === srcWs.id)).toBeUndefined();
+    expect(get(workspaces).find((w) => w.id === tgtWs.id)).toBeDefined();
+  });
+
+  it("calls removeRootRow for the source workspace", () => {
+    const sA = mockSurface({ title: "A" });
+    const sB = mockSurface({ title: "B" });
+    const srcPane = makePane([sA]);
+    const tgtPane = makePane([sB]);
+    const srcWs = makeWorkspace({ type: "pane", pane: srcPane });
+    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    workspaces.set([srcWs, tgtWs]);
+    activeWorkspaceIdx.set(1);
+
+    mergeWorkspaceIntoPane(srcWs.id, tgtPane.id);
+
+    expect(removeRootRowSpy).toHaveBeenCalledWith({
+      kind: "workspace",
+      id: srcWs.id,
+    });
+  });
+
+  it("calls removeWorkspaceFromAllGroups for the source workspace", () => {
+    const sA = mockSurface({ title: "A" });
+    const sB = mockSurface({ title: "B" });
+    const srcPane = makePane([sA]);
+    const tgtPane = makePane([sB]);
+    const srcWs = makeWorkspace({ type: "pane", pane: srcPane });
+    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    workspaces.set([srcWs, tgtWs]);
+    activeWorkspaceIdx.set(1);
+
+    mergeWorkspaceIntoPane(srcWs.id, tgtPane.id);
+
+    expect(removeWorkspaceFromAllGroupsSpy).toHaveBeenCalledWith(srcWs.id);
+  });
+
+  it("does not dispose terminals — surfaces move live", () => {
+    const sA = mockSurface({ title: "A" });
+    const sB = mockSurface({ title: "B" });
+    const srcPane = makePane([sA]);
+    const tgtPane = makePane([sB]);
+    const srcWs = makeWorkspace({ type: "pane", pane: srcPane });
+    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    workspaces.set([srcWs, tgtWs]);
+    activeWorkspaceIdx.set(1);
+
+    mergeWorkspaceIntoPane(srcWs.id, tgtPane.id);
+
+    expect(sA.terminal.dispose).not.toHaveBeenCalled();
+  });
+
+  it("is a no-op when src and target are the same workspace", () => {
+    const sA = mockSurface({ title: "A" });
+    const sB = mockSurface({ title: "B" });
+    const pane = makePane([sA, sB]);
+    const ws = makeWorkspace({ type: "pane", pane });
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+
+    mergeWorkspaceIntoPane(ws.id, pane.id);
+
+    expect(get(workspaces).length).toBe(1);
+    expect(pane.surfaces.length).toBe(2);
+  });
+
+  it("flattens surfaces from a multi-pane source workspace", () => {
+    const sA = mockSurface({ title: "A" });
+    const sB = mockSurface({ title: "B" });
+    const sC = mockSurface({ title: "C" });
+    const srcPane1 = makePane([sA]);
+    const srcPane2 = makePane([sB]);
+    const srcRoot: SplitNode = {
+      type: "split",
+      direction: "horizontal",
+      ratio: 0.5,
+      children: [
+        { type: "pane", pane: srcPane1 },
+        { type: "pane", pane: srcPane2 },
+      ],
+    };
+    const srcWs = makeWorkspace(srcRoot);
+    const tgtPane = makePane([sC]);
+    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    workspaces.set([srcWs, tgtWs]);
+    activeWorkspaceIdx.set(1);
+
+    mergeWorkspaceIntoPane(srcWs.id, tgtPane.id);
+
+    expect(tgtPane.surfaces.map((s) => s.id)).toEqual([sC.id, sA.id, sB.id]);
+    expect(get(workspaces).length).toBe(1);
+  });
+
+  it("schedules a persist", () => {
+    const sA = mockSurface({ title: "A" });
+    const sB = mockSurface({ title: "B" });
+    const srcPane = makePane([sA]);
+    const tgtPane = makePane([sB]);
+    const srcWs = makeWorkspace({ type: "pane", pane: srcPane });
+    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    workspaces.set([srcWs, tgtWs]);
+    activeWorkspaceIdx.set(1);
+
+    mergeWorkspaceIntoPane(srcWs.id, tgtPane.id);
+    vi.advanceTimersByTime(2000);
+    expect(saveState).toHaveBeenCalled();
   });
 });

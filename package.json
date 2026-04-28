@@ -27,7 +27,7 @@
     "prepare": "lefthook install"
   },
   "dependencies": {
-    "@embedpdf/snippet": "^2.12.1",
+    "@embedpdf/snippet": "^2.14.1",
     "@sveltejs/vite-plugin-svelte": "^7.0.0",
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-clipboard-manager": "^2.3.2",

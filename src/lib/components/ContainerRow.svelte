@@ -259,13 +259,13 @@
           ? ($theme.bgHighlight ?? 'transparent')
           : ($theme.bgSurface ?? 'transparent')};
           color: {$theme.fg};
-          border-top: 1px solid {hasActiveChild
+          border-top: 1px solid {hasActiveChild && collapsed
           ? color
           : ($theme.border ?? 'transparent')};
-          border-right: 1px solid {hasActiveChild
+          border-right: 1px solid {hasActiveChild && collapsed
           ? color
           : ($theme.border ?? 'transparent')};
-          border-bottom: 1px solid {hasActiveChild
+          border-bottom: 1px solid {hasActiveChild && collapsed
           ? color
           : ($theme.border ?? 'transparent')};
           border-left: none;

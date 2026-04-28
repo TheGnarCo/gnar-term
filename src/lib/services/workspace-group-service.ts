@@ -186,6 +186,9 @@ function buildGroupDashboardMarkdown(group: WorkspaceGroupEntry): string {
 
 Project at \`${group.path}\`.
 
+\`\`\`gnar:workspaces
+\`\`\`
+
 \`\`\`gnar:columns
 children:
   - name: issues

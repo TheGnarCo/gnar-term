@@ -36,6 +36,7 @@
     <div class="env-row">
       <code class="env-key" style="color: {theme.fg};">{key}</code>
       <input
+        aria-label={`Value for ${key}`}
         value={val}
         style={inputStyle("flex: 1;")}
         on:change={(e) => updateValue(key, e.currentTarget.value)}
@@ -51,12 +52,14 @@
 
   <div class="add-row">
     <input
+      aria-label="New environment variable key"
       bind:value={newKey}
       placeholder="KEY"
       style={inputStyle("width: 140px;")}
       on:keydown={(e) => e.key === "Enter" && addEntry()}
     />
     <input
+      aria-label="New environment variable value"
       bind:value={newVal}
       placeholder="value"
       style={inputStyle("flex: 1;")}

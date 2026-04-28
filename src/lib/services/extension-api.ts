@@ -83,7 +83,7 @@ import {
   type DragReorderHandle,
 } from "../actions/drag-reorder";
 import { reorderContext, anyReorderActive, contextMenu } from "../stores/ui";
-import { getActiveCwd } from "./service-helpers";
+import { getActiveCwd, lookupSurfaceWorkspaceId } from "./service-helpers";
 import { workspaces } from "../stores/workspace";
 import { getAllSurfaces, isTerminalSurface } from "../types";
 import type { ExtensionManifest, ExtensionAPI } from "../extension-types";
@@ -337,12 +337,7 @@ export function createExtensionAPI(
       focusSurfaceById(surfaceId);
     },
     getWorkspaceIdForSurface(surfaceId: string): string | null {
-      for (const ws of get(workspaces)) {
-        for (const surf of getAllSurfaces(ws)) {
-          if (surf.id === surfaceId) return ws.id;
-        }
-      }
-      return null;
+      return lookupSurfaceWorkspaceId(surfaceId) ?? null;
     },
     reportError(message: string): void {
       reportExtensionError(extId, message);

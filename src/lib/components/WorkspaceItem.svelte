@@ -9,10 +9,13 @@
   import { getExtensionApiById } from "../services/extension-loader";
   import ExtensionWrapper from "./ExtensionWrapper.svelte";
   import DragGrip from "./DragGrip.svelte";
+  import { modLabel } from "../terminal-service";
+  import { shortcutHint } from "../actions/shortcut-hint";
 
   $: isDisco = $theme.name === "Molly Disco";
   import { getAllSurfaces, getAllPanes } from "../types";
   import type { Workspace } from "../types";
+  import { workspaceSurfaceMap } from "../services/workspace-service";
 
   const discoEmojis = [
     "✨",
@@ -121,7 +124,8 @@
   let nameEl: HTMLSpanElement;
   let _renaming = false;
 
-  $: allSurfaces = getAllSurfaces(workspace);
+  $: allSurfaces =
+    $workspaceSurfaceMap.get(workspace.id) ?? getAllSurfaces(workspace);
   $: hasUnread = allSurfaces.some((s) => s.hasUnread);
   $: latestNotification = allSurfaces.find((s) => s.notification)?.notification;
   $: isManaged = !!workspace.metadata?.worktreePath;
@@ -225,6 +229,7 @@
   data-drag-idx={index}
   data-workspace-id={workspace.id}
   data-worktree={isManaged ? "true" : undefined}
+  use:shortcutHint={index < 9 ? `${modLabel}${index + 1}` : undefined}
   style="
     display: {dragActive ? 'none' : 'flex'};
     position: relative;
@@ -256,7 +261,6 @@
     <DragGrip
       theme={$theme}
       visible={dragActive || (hovered && !$anyReorderActive)}
-      ariaLabel="Drag workspace to reorder"
       {railColor}
       railOpacity={1}
       alwaysShowDots={true}

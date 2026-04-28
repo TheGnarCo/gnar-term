@@ -47,6 +47,10 @@ import { statusRegistry } from "./status-registry";
 import { markSurfaceUnreadById } from "./surface-service";
 import { workspaces } from "../stores/workspace";
 import { getAllPanes, isTerminalSurface } from "../types";
+import {
+  lookupSurfaceWorkspaceId,
+  lookupPtyIdForSurface,
+} from "./service-helpers";
 
 // --- Public types ---
 
@@ -312,29 +316,12 @@ function publishStatus(
 // --- Workspace resolution ---
 
 function resolveWorkspaceIdForSurface(surfaceId: string): string {
-  const all = get(workspaces);
-  for (const ws of all) {
-    for (const pane of getAllPanes(ws.splitRoot)) {
-      for (const surface of pane.surfaces) {
-        if (surface.id === surfaceId) return ws.id;
-      }
-    }
-  }
-  return "";
+  return lookupSurfaceWorkspaceId(surfaceId) ?? "";
 }
 
 function resolvePtyIdForSurface(surfaceId: string): number | null {
-  const all = get(workspaces);
-  for (const ws of all) {
-    for (const pane of getAllPanes(ws.splitRoot)) {
-      for (const surface of pane.surfaces) {
-        if (surface.id === surfaceId && isTerminalSurface(surface)) {
-          return surface.ptyId ?? null;
-        }
-      }
-    }
-  }
-  return null;
+  const ptyId = lookupPtyIdForSurface(surfaceId);
+  return ptyId !== undefined ? ptyId : null;
 }
 
 function allTerminalSurfaces(): Array<{

@@ -256,6 +256,7 @@
 
     {#each corePages as page}
       <button
+        aria-current={activePage === page.id ? "page" : undefined}
         style="
           display: block; width: calc(100% - 16px); margin: 0 8px;
           padding: 6px 12px; border: none; border-radius: 6px;
@@ -283,6 +284,7 @@
       </div>
       {#each extensionPages as page}
         <button
+          aria-current={activePage === page.id ? "page" : undefined}
           style="
             display: block; width: calc(100% - 16px); margin: 0 8px;
             padding: 6px 12px; border: none; border-radius: 6px;

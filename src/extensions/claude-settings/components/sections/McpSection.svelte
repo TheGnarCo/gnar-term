@@ -63,12 +63,14 @@
         <button
           class="remove-btn"
           style="color: {theme.fgDim};"
+          aria-label={`Remove ${name} from enabled servers`}
           on:click={() => removeEnabled(name)}>×</button
         >
       </div>
     {/each}
     <div class="add-row">
       <input
+        aria-label="New enabled server name"
         bind:value={newEnabled}
         placeholder="server-name"
         style={inputStyle("flex: 1;")}
@@ -89,12 +91,14 @@
         <button
           class="remove-btn"
           style="color: {theme.fgDim};"
+          aria-label={`Remove ${name} from disabled servers`}
           on:click={() => removeDisabled(name)}>×</button
         >
       </div>
     {/each}
     <div class="add-row">
       <input
+        aria-label="New disabled server name"
         bind:value={newDisabled}
         placeholder="server-name"
         style={inputStyle("flex: 1;")}

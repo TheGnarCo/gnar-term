@@ -7,7 +7,8 @@
     secondarySidebarVisible,
   } from "../stores/ui";
   import { spawnOrNavigate } from "../services/dashboard-workspace-service";
-  import { isMac, modLabel } from "../terminal-service";
+  import { isMac, modLabel, shiftModLabel } from "../terminal-service";
+  import { shortcutHint } from "../actions/shortcut-hint";
   import { isDebugBuild } from "../services/service-helpers";
   import { titleBarButtonStore } from "../services/titlebar-button-registry";
   import TitleBarContributedButton from "./TitleBarContributedButton.svelte";
@@ -55,8 +56,9 @@
 >
   <button
     style="{btnStyle} color: {$primarySidebarVisible ? fgActive : fg};"
-    title="Toggle Primary Sidebar ({modLabel}B)"
+    title="Toggle Primary Sidebar ({isMac ? modLabel : shiftModLabel}B)"
     aria-label="Toggle Primary Sidebar"
+    use:shortcutHint={isMac ? `${modLabel}B` : `${shiftModLabel}B`}
     on:click={() => primarySidebarVisible.update((v) => !v)}
   >
     <svg
@@ -94,6 +96,7 @@
     style="{btnStyle} color: {fg};"
     title="Settings ({modLabel},)"
     aria-label="Settings"
+    use:shortcutHint={isMac ? "⌘," : "Ctrl+,"}
     on:click={() => void spawnOrNavigate("gnar-term:settings")}
   >
     <svg

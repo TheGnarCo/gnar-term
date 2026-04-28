@@ -1,6 +1,8 @@
 <script lang="ts">
   import { tick } from "svelte";
   import { theme } from "../stores/theme";
+  import { isMac } from "../terminal-service";
+  import { shortcutHint } from "../actions/shortcut-hint";
   import type { Surface } from "../types";
   import { startTabDrag } from "../services/tab-drag";
   import { renamingSurfaceId } from "../stores/ui";
@@ -102,6 +104,7 @@
   class="tab"
   data-tab-idx={index}
   data-tab-surface-id={surface.id}
+  use:shortcutHint={isMac && index < 9 ? `Ctrl+${index + 1}` : undefined}
   style="
     padding: 2px 10px; font-size: 11px; cursor: pointer;
     color: {isActive ? $theme.fg : $theme.fgMuted};
@@ -143,7 +146,8 @@
       <path d="M9 13v2" />
     </svg>
     <span
-      title={agentStatus ?? "agent"}
+      role="img"
+      aria-label={agentStatus ?? "agent"}
       class:pulse={isWaiting}
       style="
         width: {isWaiting ? 8 : 7}px; height: {isWaiting ? 8 : 7}px;
@@ -152,6 +156,7 @@
     ></span>
   {:else if surface.hasUnread && !isActive}
     <span
+      aria-label="Unread activity"
       style="width: 5px; height: 5px; border-radius: 50%; background: {$theme.notify}; flex-shrink: 0;"
     ></span>
   {/if}

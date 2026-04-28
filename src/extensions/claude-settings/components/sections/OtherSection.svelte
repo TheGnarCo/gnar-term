@@ -29,6 +29,7 @@
         <code class="other-key" style="color: {theme.fg};">{key}</code>
         <textarea
           rows={typeof val === "object" && val !== null ? 3 : 1}
+          aria-label={`Value for ${key}`}
           style="background: {theme.bg}; color: {theme.fg}; border: 1px solid {theme.border}; border-radius: 4px; padding: 3px 8px; font-size: 11px; font-family: monospace; flex: 1; resize: vertical;"
           on:change={(e) => updateOther(key, e.currentTarget.value)}
           >{JSON.stringify(val, null, 2)}</textarea

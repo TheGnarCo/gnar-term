@@ -26,6 +26,7 @@
     openGroupDashboard,
     WORKSPACE_GROUP_STATE_CHANGED,
   } from "../services/workspace-group-service";
+  import { archiveGroup } from "../services/archive-service";
   import {
     workspaceActionStore,
     type WorkspaceActionContext,
@@ -295,6 +296,12 @@
       }
     }
     items.push({ label: "", action: () => {}, separator: true });
+    items.push({
+      label: "Archive Group",
+      action: () => {
+        if (group) void archiveGroup(group.id);
+      },
+    });
     items.push({
       label: "Delete Workspace Group",
       danger: true,

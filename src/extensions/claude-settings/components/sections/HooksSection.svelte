@@ -121,6 +121,7 @@
           >
             <input
               bind:value={newCommands[event]}
+              aria-label={`Command for ${event} hook`}
               placeholder="command to run"
               style={inputStyle("flex: 1;")}
               on:keydown={(e) => {

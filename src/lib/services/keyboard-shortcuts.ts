@@ -86,7 +86,7 @@ export function handleAppKeydown(
 
   // Shortcuts that reference component bindings or aren't in the
   // command palette. Use Cmd (mac) or Ctrl+Shift (other).
-  if ((isMac ? e.metaKey : ctrl && shift) && shift && !alt) {
+  if ((isMac ? e.metaKey : ctrl) && shift && !alt) {
     const k = e.key.toLowerCase();
     if (k === "h") {
       e.preventDefault();

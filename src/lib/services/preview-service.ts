@@ -14,6 +14,7 @@ import { get } from "svelte/store";
 import { theme } from "../stores/theme";
 import {
   findPreviewer,
+  getExtension,
   type PreviewContext,
   type PreviewResult,
 } from "./preview-registry";
@@ -41,11 +42,6 @@ const BINARY_EXTS = new Set([
   "m4v",
   "ogv",
 ]);
-
-function getExtension(path: string): string {
-  const parts = path.split(".");
-  return parts.length > 1 ? parts.pop()!.toLowerCase() : "";
-}
 
 function buildPreviewContext(): PreviewContext {
   const themeValue = get(theme);

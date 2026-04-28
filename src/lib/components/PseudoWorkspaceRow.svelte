@@ -87,7 +87,6 @@
     <DragGrip
       theme={$theme}
       visible={gripVisible}
-      ariaLabel="Drag to reorder"
       railColor={bannerBackground}
       railOpacity={1}
       alwaysShowDots={true}

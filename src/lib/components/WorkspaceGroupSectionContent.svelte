@@ -370,7 +370,6 @@
     <ContainerRow
       color={groupHex}
       {onGripMouseDown}
-      gripAriaLabel="Drag workspace group to reorder"
       onBannerContextMenu={handleBannerContextMenu}
       onBannerClick={handleBannerClick}
       {filterIds}

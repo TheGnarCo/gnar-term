@@ -1,4 +1,5 @@
-import { get } from "svelte/store";
+import { get, derived } from "svelte/store";
+import type { Readable } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
 import {
   workspaces,
@@ -507,3 +508,15 @@ export function createWorkspaceFromSurface(
 // pane after moving a surface across workspaces without duplicating
 // the helper.
 export { collapseEmptyPaneInWorkspace };
+
+// Derived store: one flat Map<workspaceId, Surface[]> rebuilt per workspace
+// update. WorkspaceItem rows still re-run their reactive statement on every
+// workspaces emission, but each pays only a Map.get() O(1) lookup instead of
+// calling getAllSurfaces independently — O(W×S) once vs O(R×W×S) before.
+export const workspaceSurfaceMap: Readable<
+  Map<string, ReturnType<typeof getAllSurfaces>>
+> = derived(workspaces, ($ws) => {
+  const m = new Map<string, ReturnType<typeof getAllSurfaces>>();
+  for (const ws of $ws) m.set(ws.id, getAllSurfaces(ws));
+  return m;
+});

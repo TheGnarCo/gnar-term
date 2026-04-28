@@ -27,14 +27,15 @@ describe("DragGrip", () => {
     cleanup();
   });
 
-  it("renders with role=button and accessible label", () => {
+  it("is aria-hidden (pointer-only decoration, not keyboard interactive)", () => {
     const onMouseDown = vi.fn();
     const { container } = render(DragGrip, {
       props: { theme: stubTheme, visible: true, onMouseDown },
     });
-    const grip = container.querySelector('[role="button"]');
+    const grip = container.querySelector(".drag-grip");
     expect(grip).not.toBeNull();
-    expect(grip?.getAttribute("aria-label")).toMatch(/drag/i);
+    expect(grip?.getAttribute("aria-hidden")).toBe("true");
+    expect(grip?.getAttribute("role")).toBeNull();
   });
 
   it("calls onMouseDown when pressed", async () => {
@@ -42,7 +43,7 @@ describe("DragGrip", () => {
     const { container } = render(DragGrip, {
       props: { theme: stubTheme, visible: true, onMouseDown },
     });
-    const grip = container.querySelector('[role="button"]') as HTMLElement;
+    const grip = container.querySelector(".drag-grip") as HTMLElement;
     await fireEvent.mouseDown(grip);
     expect(onMouseDown).toHaveBeenCalledTimes(1);
   });

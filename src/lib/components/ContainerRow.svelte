@@ -36,8 +36,6 @@
    * In nested variant (parentColor set) the grip is not rendered.
    */
   export let onGripMouseDown: ((e: MouseEvent) => void) | undefined = undefined;
-  export let gripAriaLabel: string = "Drag to reorder";
-
   /** Banner body right-click — ignored if undefined. */
   export let onBannerContextMenu: ((e: MouseEvent) => void) | undefined =
     undefined;
@@ -235,7 +233,6 @@
         <DragGrip
           theme={$theme}
           visible={rowHovered && $reorderContext === null}
-          ariaLabel={gripAriaLabel}
           railColor={color}
           dotColor="#000"
           railOpacity={1}

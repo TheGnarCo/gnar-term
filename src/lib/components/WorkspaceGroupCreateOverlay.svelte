@@ -16,6 +16,8 @@
   // assignable without a cast.
   const themeView = theme as unknown as Readable<Record<string, string>>;
 
+  const colorLabelId = `wg-color-label-${Math.random().toString(36).slice(2)}`;
+
   function randomColor(): string {
     return (
       GROUP_COLOR_SLOTS[Math.floor(Math.random() * GROUP_COLOR_SLOTS.length)] ??
@@ -198,15 +200,19 @@
       </div>
 
       <div style="display: flex; flex-direction: column; gap: 4px;">
-        <span style="font-size: 12px; color: {$theme.fgDim}; font-weight: 500;"
+        <span
+          id={colorLabelId}
+          style="font-size: 12px; color: {$theme.fgDim}; font-weight: 500;"
           >Color</span
         >
-        <ColorPicker
-          bind:value={color}
-          colors={[...GROUP_COLOR_SLOTS]}
-          resolveColor={(c: string) => resolveGroupColor(c, $theme)}
-          theme={themeView}
-        />
+        <div aria-labelledby={colorLabelId} role="radiogroup">
+          <ColorPicker
+            bind:value={color}
+            colors={[...GROUP_COLOR_SLOTS]}
+            resolveColor={(c: string) => resolveGroupColor(c, $theme)}
+            theme={themeView}
+          />
+        </div>
       </div>
 
       <div

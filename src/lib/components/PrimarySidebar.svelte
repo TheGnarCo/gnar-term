@@ -194,6 +194,9 @@
     </div>
     <div
       class="sidebar-resize-handle"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize sidebar"
       style="
       width: 4px; cursor: col-resize; flex-shrink: 0;
       background: {dragging ? $theme.accent : $theme.sidebarBorder};

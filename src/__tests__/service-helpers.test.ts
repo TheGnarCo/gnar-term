@@ -16,10 +16,12 @@ vi.mock("svelte", () => ({
 
 vi.mock("../lib/stores/workspace", () => ({
   activeSurface: writable(null),
+  workspaces: writable([]),
 }));
 
 vi.mock("../lib/types", () => ({
   isTerminalSurface: vi.fn((s) => s?.kind === "terminal"),
+  getAllPanes: vi.fn(() => []),
 }));
 
 import { invoke } from "@tauri-apps/api/core";

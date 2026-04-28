@@ -29,6 +29,7 @@ vi.mock("@xterm/xterm", () => ({
   Terminal: class {
     open = vi.fn();
     write = vi.fn();
+    paste = vi.fn();
     focus = vi.fn();
     dispose = vi.fn();
     cols = 80;

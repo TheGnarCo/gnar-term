@@ -708,8 +708,7 @@ export async function createTerminalSurface(
     ) {
       e.preventDefault();
       void clipboardRead().then((text) => {
-        if (text && surface.ptyId >= 0)
-          void invoke("write_pty", { ptyId: surface.ptyId, data: text });
+        if (text && surface.ptyId >= 0) terminal.paste(text);
       });
       return false;
     }
@@ -751,8 +750,7 @@ export async function createTerminalSurface(
         e.preventDefault();
         void clipboardRead()
           .then((text) => {
-            if (text && surface.ptyId >= 0)
-              void invoke("write_pty", { ptyId: surface.ptyId, data: text });
+            if (text && surface.ptyId >= 0) terminal.paste(text);
           })
           .catch((err) => console.warn("Clipboard read failed:", err));
         return false;
@@ -883,8 +881,7 @@ export async function createTerminalSurface(
       shortcut: isMac ? "⌘V" : "Ctrl+Shift+V",
       action: () =>
         void clipboardRead().then((t) => {
-          if (t && surface.ptyId >= 0)
-            void invoke("write_pty", { ptyId: surface.ptyId, data: t });
+          if (t && surface.ptyId >= 0) terminal.paste(t);
         }),
     });
 

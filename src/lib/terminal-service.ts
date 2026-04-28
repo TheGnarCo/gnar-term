@@ -19,7 +19,10 @@ import {
   readText as clipboardRead,
   writeText as clipboardWrite,
 } from "@tauri-apps/plugin-clipboard-manager";
-import { lookupTerminalByPtyId } from "./services/service-helpers";
+import {
+  lookupTerminalByPtyId,
+  registerPtyForSurface,
+} from "./services/service-helpers";
 import {
   isPermissionGranted as notifPermissionGranted,
   requestPermission as notifRequestPermission,
@@ -1051,6 +1054,7 @@ export async function connectPty(
       extraEnv,
     });
     surface.ptyId = ptyId;
+    registerPtyForSurface(ptyId, surface);
     resolvedPtyId = ptyId;
     // Broadcast once the real ptyId is known so services like passive
     // agent detection can wire an output observer against it — the

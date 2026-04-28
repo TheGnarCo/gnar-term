@@ -110,6 +110,16 @@ export function lookupPtyIdForSurface(surfaceId: string): number | undefined {
   return _surfacePtyIndex.get(surfaceId);
 }
 
+// Called immediately after connectPty assigns a real ptyId so the index
+// reflects the new id without waiting for a workspaces store emission.
+export function registerPtyForSurface(
+  ptyId: number,
+  surface: TerminalSurface,
+): void {
+  _ptyIndex.set(ptyId, surface);
+  _surfacePtyIndex.set(surface.id, ptyId);
+}
+
 export async function safeFocus(s: Surface | null | undefined) {
   if (!s || !isTerminalSurface(s)) return;
   await tick();

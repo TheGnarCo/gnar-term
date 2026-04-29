@@ -111,8 +111,11 @@
     "
     on:mousedown|self={cancel}
   >
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="form-prompt-title"
+      tabindex="-1"
       style="
         width: 460px; height: fit-content; background: {$theme.bgFloat};
         border: 1px solid {$theme.border}; border-radius: 12px;
@@ -121,7 +124,10 @@
       "
       on:keydown={handleKeydown}
     >
-      <div style="font-size: 14px; font-weight: 600; color: {$theme.fg};">
+      <div
+        id="form-prompt-title"
+        style="font-size: 14px; font-weight: 600; color: {$theme.fg};"
+      >
         {$formPrompt.title}
       </div>
 

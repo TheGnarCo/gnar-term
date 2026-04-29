@@ -44,12 +44,18 @@
 </script>
 
 {#if resolved}
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
+    role="button"
+    tabindex="0"
     data-agent-status-row
     data-agent-id={resolved.agentId}
     on:click={handleClick}
+    on:keydown={(e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        handleClick();
+      }
+    }}
     style="
       display: flex; align-items: center; gap: 8px;
       padding: 6px 10px; cursor: pointer;

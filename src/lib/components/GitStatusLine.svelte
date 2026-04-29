@@ -92,16 +92,15 @@
       {/if}
       {#if dirtyItem && isActiveWorkspace}
         {#if dirtyItem.action && isActiveWorkspace}
-          <!-- svelte-ignore a11y_click_events_have_key_events -->
-          <!-- svelte-ignore a11y_no_static_element_interactions -->
-          <span
+          <button
             style="font-size: 10px; color: {variantColor(
               dirtyItem.variant,
               fgMuted,
-            )}; text-decoration: underline; cursor: pointer; white-space: nowrap;"
+            )}; text-decoration: underline; cursor: pointer; white-space: nowrap; background: none; border: none; padding: 0; font-family: inherit;"
             title={dirtyItem.tooltip || dirtyItem.label}
+            aria-label={dirtyItem.tooltip || dirtyItem.label}
             on:click|stopPropagation={() => handleAction(dirtyItem.action)}
-            >{dirtyItem.label}</span
+            >{dirtyItem.label}</button
           >
         {:else}
           <span
@@ -168,14 +167,13 @@
             ? prCiVariant(prItem)
             : (prItem.variant ?? "muted")}
           {#if prItem.action && isActiveWorkspace}
-            <!-- svelte-ignore a11y_click_events_have_key_events -->
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <span
+            <button
               style="font-size: 10px; color: {variantColor(
                 variant,
                 fgMuted,
-              )}; text-decoration: underline; cursor: pointer; white-space: nowrap; display: inline-flex; gap: 4px; align-items: center;"
+              )}; text-decoration: underline; cursor: pointer; white-space: nowrap; display: inline-flex; gap: 4px; align-items: center; background: none; border: none; padding: 0; font-family: inherit;"
               title={prItem.tooltip || prItem.label}
+              aria-label={prItem.tooltip || prItem.label}
               on:click|stopPropagation={() => handleAction(prItem.action)}
             >
               {prItem.metadata?.prNumber
@@ -186,7 +184,7 @@
                   >[{prItem.metadata.reviewState}]</span
                 >
               {/if}
-            </span>
+            </button>
           {:else}
             <span
               style="font-size: 10px; color: {variantColor(
@@ -215,16 +213,15 @@
         {/if}
         {#if dirtyItem}
           {#if dirtyItem.action && isActiveWorkspace}
-            <!-- svelte-ignore a11y_click_events_have_key_events -->
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <span
+            <button
               style="font-size: 10px; color: {variantColor(
                 dirtyItem.variant,
                 fgMuted,
-              )}; text-decoration: underline; cursor: pointer; white-space: nowrap;"
+              )}; text-decoration: underline; cursor: pointer; white-space: nowrap; background: none; border: none; padding: 0; font-family: inherit;"
               title={dirtyItem.tooltip || dirtyItem.label}
+              aria-label={dirtyItem.tooltip || dirtyItem.label}
               on:click|stopPropagation={() => handleAction(dirtyItem.action)}
-              >{dirtyItem.label}</span
+              >{dirtyItem.label}</button
             >
           {:else}
             <span

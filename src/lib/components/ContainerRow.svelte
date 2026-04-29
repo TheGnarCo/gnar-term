@@ -23,7 +23,6 @@
   import DragGrip from "./DragGrip.svelte";
   import DefaultWorkspaceListView from "./WorkspaceListView.svelte";
   import type { Workspace } from "../types";
-  import { tooltip } from "../actions/tooltip";
   import { wsMeta } from "../services/service-helpers";
 
   /** Banner + rail color. Required. */
@@ -89,7 +88,6 @@
     undefined;
 
   let bannerHovered = false;
-  let closeHovered = false;
   let mouseOverContainer = false;
   let containerLeaveTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -245,6 +243,8 @@
           railOpacity={1}
           alwaysShowDots={true}
           fadeRight={!rowHovered}
+          {onClose}
+          closeTooltip="Delete Workspace Group"
         />
         {#if hasActiveChild && collapsed}
           <div
@@ -331,34 +331,6 @@
             </div>
           {/if}
         </div>
-        {#if onClose}
-          <!-- svelte-ignore a11y_click_events_have_key_events -->
-          <!-- svelte-ignore a11y_no_static_element_interactions -->
-          <span
-            use:tooltip={"Delete Workspace Group"}
-            style="
-              position: absolute;
-              top: 50%; right: 6px;
-              transform: translateY(-50%);
-              color: {closeHovered ? $theme.danger : $theme.fgDim};
-              background: {closeHovered
-              ? ($theme.bgHighlight ?? 'rgba(255,255,255,0.06)')
-              : 'transparent'};
-              border: 1px solid {$theme.border ?? 'transparent'};
-              border-radius: 4px;
-              font-size: 11px;
-              cursor: pointer;
-              padding: 2px 5px;
-              line-height: 1;
-              opacity: {bannerHovered ? '1' : '0'};
-              -webkit-app-region: no-drag;
-              transition: opacity 0.15s, background 0.1s, color 0.1s;
-            "
-            on:click|stopPropagation={onClose}
-            on:mouseenter={() => (closeHovered = true)}
-            on:mouseleave={() => (closeHovered = false)}>×</span
-          >
-        {/if}
       </div>
       {#if !collapsed && nonDashboardCount > 0}
         <div

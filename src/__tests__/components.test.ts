@@ -1051,14 +1051,24 @@ describe("WorkspaceItem", () => {
     expect(screen.getByText("My Workspace")).toBeTruthy();
   });
 
-  it("renders close button", () => {
-    renderWorkspaceItem();
-    expect(screen.getByText("×")).toBeTruthy();
-  });
-
-  it("renders close button with x symbol", () => {
-    renderWorkspaceItem();
-    // The close button renders the multiplication sign
+  it("renders close button in DragGrip when grip is expanded", async () => {
+    const ws = makeWorkspace("ws1", "My Workspace");
+    const { container } = render(WorkspaceItem, {
+      props: {
+        workspace: ws,
+        index: 0,
+        isActive: true,
+        onSelect: noop,
+        onClose: noop,
+        onRename: noop,
+        onContextMenu: noop,
+        onGripMouseDown: noop,
+      },
+    });
+    // Hover the row — this makes the grip visible, which shows the × chip
+    const row = container.firstElementChild as HTMLElement;
+    await fireEvent.mouseEnter(row);
+    await tick();
     expect(screen.getByText("×")).toBeTruthy();
   });
 
@@ -1941,8 +1951,9 @@ describe("WorkspaceItem — harness sub-row", () => {
       },
     });
 
-    expect(container.querySelector("[data-harness-title-row]")).not.toBeNull();
-    expect(screen.getByText("claude > fixing bug")).toBeTruthy();
+    const harnessEl = container.querySelector("[data-harness-title-row]");
+    expect(harnessEl).not.toBeNull();
+    expect(harnessEl?.getAttribute("title")).toBe("claude > fixing bug");
     clearAllStatusForWorkspace(ws.id);
   });
 

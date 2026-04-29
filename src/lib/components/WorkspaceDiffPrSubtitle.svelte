@@ -164,14 +164,18 @@
         <svg
           width="10"
           height="10"
-          viewBox="0 0 16 16"
-          fill={iconFg}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={iconFg}
+          stroke-width="3"
+          stroke-linecap="round"
+          stroke-linejoin="round"
           style="flex-shrink: 0; opacity: 0.7;"
           aria-hidden="true"
         >
-          <path
-            d="M8 3.5a.5.5 0 0 1 .5.5v3.5H12a.5.5 0 0 1 0 1H8.5V12a.5.5 0 0 1-1 0V8.5H4a.5.5 0 0 1 0-1h3.5V4a.5.5 0 0 1 .5-.5zM3 11.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5z"
-          />
+          <path d="M12 3v14" />
+          <path d="M5 10h14" />
+          <path d="M5 21h14" />
         </svg>
         {#if diffSegments.length > 0}
           {#each diffSegments as seg}
@@ -200,14 +204,19 @@
         <svg
           width="10"
           height="10"
-          viewBox="0 0 16 16"
-          fill={isDraft ? fgMuted : iconFg}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={iconFg}
+          stroke-width="3"
+          stroke-linecap="round"
+          stroke-linejoin="round"
           style="flex-shrink: 0; opacity: 0.7;"
           aria-hidden="true"
         >
-          <path
-            d="M1.5 3.25a2.25 2.25 0 1 1 3 2.122v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.25 2.25 0 0 1 1.5 3.25Zm5.677-.177L9.573.677A.25.25 0 0 1 10 .854V2.5h1A2.5 2.5 0 0 1 13.5 5v5.628a2.251 2.251 0 1 1-1.5 0V5a1 1 0 0 0-1-1h-1v1.646a.25.25 0 0 1-.427.177L7.177 3.427a.25.25 0 0 1 0-.354Z"
-          />
+          <circle cx="18" cy="18" r="3" />
+          <circle cx="6" cy="6" r="3" />
+          <path d="M13 6h3a2 2 0 0 1 2 2v7" />
+          <line x1="6" x2="6" y1="9" y2="21" />
         </svg>
         <span
           style="font-size: 10px; color: {prColor}; white-space: nowrap; flex-shrink: 0; text-decoration: underline;"

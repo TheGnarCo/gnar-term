@@ -12,7 +12,6 @@
   import { modLabel } from "../terminal-service";
   import { shortcutHint } from "../actions/shortcut-hint";
   import { shortcutHintsActive } from "../stores/shortcut-hints";
-  import { tooltip } from "../actions/tooltip";
   import { discoEmojiFor, discoColorFor } from "../utils/disco-decoration";
 
   $: isDisco = $theme.name === "Molly Disco";
@@ -49,7 +48,6 @@
   export let hideStatusBadges: boolean = false;
 
   let hovered = false;
-  let closeHovered = false;
   let nameEl: HTMLSpanElement;
   let _renaming = false;
 
@@ -181,7 +179,6 @@
   on:mouseenter={() => (hovered = true)}
   on:mouseleave={() => {
     hovered = false;
-    closeHovered = false;
   }}
   on:mousedown={(e) => onGripMouseDown?.(e)}
 >
@@ -203,6 +200,8 @@
         $shortcutHintsActive ||
         (hovered && !$anyReorderActive)
       )}
+      onClose={!isDashboardWs || isDashboardWorkspaceRow ? onClose : undefined}
+      closeTooltip="Close Workspace (⇧⌘W)"
     />
     <!-- Drag-edge fade: continues the rail's dot pattern from the
          very left of the row into the row body for ~14px, dropping
@@ -251,7 +250,7 @@
     style="flex: 1; min-width: 0;"
   >
     <div
-      style="padding: 4px 6px; display: flex; align-items: center; gap: 8px;"
+      style="padding: 4px 24px 4px 6px; display: flex; align-items: center; gap: 8px;"
     >
       <div
         style="flex: 1; overflow: hidden; display: flex; align-items: center; gap: 4px;"
@@ -439,39 +438,43 @@
     {/each}
 
     {#if !hideStatusBadges && activeAgentItem && activeAgentItem.label !== "closed"}
-      <div
+      <span
         data-harness-title-row
-        style="padding: 0 12px 4px 6px; display: flex; align-items: center; min-width: 0; overflow: hidden; line-height: 1.2;"
+        title={activeAgentItem.label === "idle"
+          ? "idle"
+          : (activeSurfaceForAgent?.title ?? activeAgentItem.label)}
+        aria-hidden="true"
+        style="
+          position: absolute;
+          top: 50%; right: 6px;
+          transform: translateY(-50%);
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          pointer-events: none;
+        "
       >
-        <span
-          style="font-size: 10px; color: {$theme.fgDim}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; display: inline-flex; align-items: center; gap: 3px;"
-          title={activeSurfaceForAgent?.title ?? activeAgentItem.label}
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="10"
+          height="10"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={railColor}
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          style="opacity: 0.7;"
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="10"
-            height="10"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke={railColor}
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            style="flex-shrink: 0; opacity: 0.7;"
-          >
-            <title>Active harness session</title>
-            <path d="M12 8V4H8" />
-            <rect width="16" height="12" x="4" y="8" rx="2" />
-            <path d="M2 14h2" />
-            <path d="M20 14h2" />
-            <path d="M15 13v2" />
-            <path d="M9 13v2" />
-          </svg>
-          {activeAgentItem.label === "idle"
-            ? "idle"
-            : (activeSurfaceForAgent?.title ?? activeAgentItem.label)}
-        </span>
-      </div>
+          <title>Active harness session</title>
+          <path d="M12 8V4H8" />
+          <rect width="16" height="12" x="4" y="8" rx="2" />
+          <path d="M2 14h2" />
+          <path d="M20 14h2" />
+          <path d="M15 13v2" />
+          <path d="M9 13v2" />
+        </svg>
+      </span>
     {/if}
 
     {#if latestNotification && !hideStatusBadges && !isInsideGroup && !agentChipColor}
@@ -482,35 +485,4 @@
       </div>
     {/if}
   </div>
-  <!-- Close button: absolutely positioned so it stays vertically
-       centered against the full row regardless of how many subtitle or
-       notification rows stack below the title. The content column
-       reserves 24px on the right to keep text from crashing into it. -->
-  {#if !isDashboardWs || isDashboardWorkspaceRow}
-    <button
-      use:tooltip={"Close Workspace (⇧⌘W)"}
-      aria-label="Close workspace"
-      style="
-        position: absolute;
-        top: 50%; right: 6px;
-        transform: translateY(-50%);
-        color: {closeHovered ? $theme.danger : $theme.fgDim};
-        background: {closeHovered
-        ? ($theme.bgHighlight ?? 'rgba(255,255,255,0.06)')
-        : 'transparent'};
-        border: 1px solid {$theme.border ?? 'transparent'};
-        border-radius: 4px;
-        font-size: 11px;
-        cursor: pointer;
-        padding: 2px 5px;
-        line-height: 1;
-        opacity: {hovered ? '1' : '0'};
-        -webkit-app-region: no-drag;
-        transition: opacity 0.15s, background 0.1s, color 0.1s;
-      "
-      on:click|stopPropagation={onClose}
-      on:mouseenter={() => (closeHovered = true)}
-      on:mouseleave={() => (closeHovered = false)}>×</button
-    >
-  {/if}
 </div>

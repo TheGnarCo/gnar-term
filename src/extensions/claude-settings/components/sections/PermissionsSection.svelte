@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { inputStyle } from "../../utils/section-styles";
+
   export let settings: Record<string, unknown>;
   export let onChange: (key: string, value: unknown) => void;
   export let theme: {
@@ -58,8 +60,7 @@
     updatePerms({ deny: denyList.filter((e) => e !== entry) });
   }
 
-  const inputStyle = (extra = "") =>
-    `background: ${theme.bg}; color: ${theme.fg}; border: 1px solid ${theme.border}; border-radius: 4px; padding: 3px 8px; font-size: 12px; font-family: monospace; ${extra}`;
+  $: getInputStyle = inputStyle(theme);
 </script>
 
 <div class="perms-section">
@@ -73,7 +74,7 @@
     <select
       id="perm-default-mode"
       value={defaultMode}
-      style={inputStyle()}
+      style={getInputStyle()}
       on:change={(e) => updatePerms({ defaultMode: e.currentTarget.value })}
     >
       {#each MODES as m}
@@ -101,7 +102,7 @@
       <input
         bind:value={newAllow}
         placeholder="Bash(npm *) or Read(~/src/**)"
-        style={inputStyle("flex: 1;")}
+        style={getInputStyle("flex: 1;")}
         on:keydown={(e) => e.key === "Enter" && addAllow()}
       />
       <button
@@ -132,7 +133,7 @@
       <input
         bind:value={newDeny}
         placeholder="Bash(curl *) or Read(./.env)"
-        style={inputStyle("flex: 1;")}
+        style={getInputStyle("flex: 1;")}
         on:keydown={(e) => e.key === "Enter" && addDeny()}
       />
       <button

@@ -97,12 +97,24 @@
       nameEl?.blur();
     }
   }
+
+  function handleTabKeydown(e: KeyboardEvent) {
+    // Only handle when the tab div itself is the event target — not child
+    // buttons (close button) or the contenteditable rename span.
+    if (e.target !== e.currentTarget) return;
+    if (_renaming) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onSelect();
+    }
+  }
 </script>
 
-<!-- svelte-ignore a11y_click_events_have_key_events -->
-<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   class="tab"
+  role="tab"
+  tabindex="0"
+  aria-selected={isActive}
   data-tab-idx={index}
   data-tab-surface-id={surface.id}
   use:shortcutHint={isMac && index < 9 ? `Ctrl+${index + 1}` : undefined}
@@ -119,6 +131,7 @@
     display: flex; align-items: center; gap: 4px;
   "
   on:click={onSelect}
+  on:keydown={handleTabKeydown}
   on:mouseenter={() => (hovered = true)}
   on:mouseleave={() => (hovered = false)}
   on:mousedown={(e) => {
@@ -176,23 +189,24 @@
         ? `${surface.title || "Preview"} (MD Preview)`
         : surface.title || `Shell ${index + 1}`}{/if}
   </span>
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <span
+  <button
+    aria-label="Close tab"
     style="
+      background: none; border: none; padding: {$shortcutHintsActive
+      ? '0 3px'
+      : '0'};
+      font: inherit; cursor: pointer; margin-left: 4px;
       color: {closeHovered ? $theme.danger : $theme.fgDim};
       font-size: {$shortcutHintsActive ? '16px' : '13px'};
-      cursor: pointer;
-      margin-left: 4px;
-      padding: {$shortcutHintsActive ? '0 3px' : '0'};
       visibility: {isActive || hovered || $shortcutHintsActive
       ? 'visible'
       : 'hidden'};
       transition: font-size 0.1s, padding 0.1s;
+      line-height: 1;
     "
     on:click|stopPropagation={onClose}
     on:mouseenter={() => (closeHovered = true)}
-    on:mouseleave={() => (closeHovered = false)}>×</span
+    on:mouseleave={() => (closeHovered = false)}>×</button
   >
 </div>
 

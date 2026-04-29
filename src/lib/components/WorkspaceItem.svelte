@@ -12,6 +12,7 @@
   import { modLabel } from "../terminal-service";
   import { shortcutHint } from "../actions/shortcut-hint";
   import { shortcutHintsActive } from "../stores/shortcut-hints";
+  import { tooltip } from "../actions/tooltip";
 
   $: isDisco = $theme.name === "Molly Disco";
   import { getAllSurfaces, getAllPanes } from "../types";
@@ -312,7 +313,7 @@
   {/if}
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div on:click={onSelect} style="flex: 1; min-width: 0; padding-right: 24px;">
+  <div on:click={onSelect} style="flex: 1; min-width: 0;">
     <div
       style="padding: 4px 6px; display: flex; align-items: center; gap: 8px;"
     >
@@ -548,15 +549,24 @@
   {#if !isDashboardWs || isDashboardWorkspaceRow}
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <span
-      title="Close Workspace (⇧⌘W)"
+      use:tooltip={"Close Workspace (⇧⌘W)"}
       style="
         position: absolute;
         top: 50%; right: 6px;
         transform: translateY(-50%);
         color: {closeHovered ? $theme.danger : $theme.fgDim};
-        font-size: 14px; cursor: pointer;
-        opacity: {hovered ? '1' : '0'}; transition: opacity 0.15s;
-        padding: 0 2px;
+        background: {closeHovered
+        ? ($theme.bgHighlight ?? 'rgba(255,255,255,0.06)')
+        : 'transparent'};
+        border: 1px solid {$theme.border ?? 'transparent'};
+        border-radius: 4px;
+        font-size: 11px;
+        cursor: pointer;
+        padding: 2px 5px;
+        line-height: 1;
+        opacity: {hovered ? '1' : '0'};
+        -webkit-app-region: no-drag;
+        transition: opacity 0.15s, background 0.1s, color 0.1s;
       "
       on:click|stopPropagation={onClose}
       on:mouseenter={() => (closeHovered = true)}

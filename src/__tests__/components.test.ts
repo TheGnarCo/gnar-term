@@ -834,9 +834,9 @@ describe("WorkspaceItem", () => {
     expect(screen.getByText("My Workspace")).toBeTruthy();
   });
 
-  it("renders close button with correct title", () => {
+  it("renders close button", () => {
     renderWorkspaceItem();
-    expect(screen.getByTitle("Close Workspace (⇧⌘W)")).toBeTruthy();
+    expect(screen.getByText("×")).toBeTruthy();
   });
 
   it("renders close button with x symbol", () => {

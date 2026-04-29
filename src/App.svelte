@@ -74,7 +74,6 @@
     createWorkspace,
     createWorkspaceFromDef,
     switchWorkspace,
-    closeWorkspace,
     closeAllWorkspaces,
     renameWorkspace,
     saveCurrentWorkspace,
@@ -480,7 +479,8 @@
       if (idx >= 0) switchWorkspace(idx);
     } else if (action.type === "close-workspace") {
       const idx = $workspaces.findIndex((w) => w.id === action.workspaceId);
-      if (idx >= 0) closeWorkspace(idx);
+      const ws = $workspaces[idx];
+      if (idx >= 0 && ws) void confirmAndCloseWorkspace(ws, idx);
     }
   }
 

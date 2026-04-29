@@ -96,6 +96,24 @@ describe("App.svelte structure verification", () => {
     expect(termAreaMatch![1]).toContain("overflow: hidden");
     expect(termAreaMatch![1]).toContain("min-height: 0");
   });
+
+  it("close-workspace pendingAction routes through confirmAndCloseWorkspace, not bare closeWorkspace", async () => {
+    const fs = await import("fs");
+    const source = fs.readFileSync("src/App.svelte", "utf-8");
+    // The pendingAction handler for close-workspace must call confirmAndCloseWorkspace
+    // so the user sees the worktree keep/delete dialog (or a plain confirm prompt)
+    // rather than an immediate silent close.
+    expect(source).toMatch(
+      /action\.type === "close-workspace"[\s\S]{0,200}confirmAndCloseWorkspace/,
+    );
+    // Bare closeWorkspace(idx) must NOT appear inside the close-workspace branch.
+    // Extract just that branch and assert it contains no direct closeWorkspace call.
+    const branchMatch = source.match(
+      /action\.type === "close-workspace"([\s\S]*?)(?=\} else if|$)/,
+    );
+    expect(branchMatch).not.toBeNull();
+    expect(branchMatch![1]).not.toMatch(/\bcloseWorkspace\(idx\)/);
+  });
 });
 
 // Structural invariant: verified via source scan because mounting the full

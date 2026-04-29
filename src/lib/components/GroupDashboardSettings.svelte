@@ -11,7 +11,7 @@
    *   - Markdown source — read-only path to the Overview preview file
    */
   import { theme } from "../stores/theme";
-  import { GROUP_COLOR_SLOTS, resolveGroupColor } from "../theme-data";
+  import ColorSlotPicker from "./ColorSlotPicker.svelte";
   import { workspaceGroupsStore } from "../stores/workspace-groups";
   import {
     groupDashboardPath,
@@ -184,29 +184,7 @@
       <p style="margin: 0; color: {$theme.fgDim}; font-size: 12px;">
         Pick a color for this group's sidebar banner and rail.
       </p>
-      <div
-        data-color-picker
-        style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px;"
-      >
-        {#each GROUP_COLOR_SLOTS as slot (slot)}
-          {@const hex = resolveGroupColor(slot, $theme)}
-          {@const isSelected = slot === currentColorSlot}
-          <button
-            data-color-slot={slot}
-            data-selected={isSelected ? "true" : undefined}
-            title={slot}
-            on:click={() => selectColor(slot)}
-            style="
-              width: 32px; height: 32px; border-radius: 6px;
-              background: {hex};
-              border: 2px solid {isSelected ? $theme.fg : 'transparent'};
-              cursor: pointer;
-              padding: 0;
-            "
-            aria-label={`Select ${slot}`}
-          ></button>
-        {/each}
-      </div>
+      <ColorSlotPicker currentSlot={currentColorSlot} onSelect={selectColor} />
     </section>
 
     <section

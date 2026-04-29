@@ -59,6 +59,7 @@
   import { getAllSurfaces, isPreviewSurface, type Workspace } from "../types";
   import { agentsStore } from "../services/agent-detection-service";
   import { variantColor } from "../status-colors";
+  import { tooltip } from "../actions/tooltip";
 
   function wsMeta(ws: {
     metadata?: unknown;
@@ -436,6 +437,7 @@
       {onGripMouseDown}
       onBannerContextMenu={handleBannerContextMenu}
       onBannerClick={handleBannerClick}
+      onClose={handleDeleteGroup}
       {filterIds}
       {hasActiveChild}
       dashboardHintFor={hintForGroupDashboardHost}
@@ -458,15 +460,23 @@
 
       <svelte:fragment slot="banner-end" let:bannerHovered let:collapsed>
         <div
-          style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0;"
+          style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;"
         >
+          {#if collapsed && groupStatusColor}
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <span
+              data-group-status-chip
+              use:tooltip={"Bot active in this group"}
+              style="display: inline-flex; align-items: center; padding: 0 3px;"
+            >
+              <span
+                style="width: 7px; height: 7px; border-radius: 50%; background: {groupStatusColor}; box-shadow: 0 0 0 1px color-mix(in srgb, {groupStatusColor} 35%, transparent);"
+              ></span>
+            </span>
+          {/if}
           {#if coreAction}
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <!-- `+ New` split button. Background uses the group's own
-                 color so the chip stays visually tied to the container,
-                 and flips to a stronger variant on banner hover so it
-                 remains distinct against the banner's hover background. -->
             <span
               class="project-new-chip"
               on:click|stopPropagation
@@ -488,17 +498,6 @@
               />
             </span>
           {/if}
-          {#if collapsed && groupStatusColor}
-            <span
-              data-group-status-chip
-              title="Bot active in this group"
-              style="display: inline-flex; align-items: center; padding: 0 3px;"
-            >
-              <span
-                style="width: 7px; height: 7px; border-radius: 50%; background: {groupStatusColor}; box-shadow: 0 0 0 1px color-mix(in srgb, {groupStatusColor} 35%, transparent);"
-              ></span>
-            </span>
-          {/if}
         </div>
       </svelte:fragment>
 
@@ -516,7 +515,7 @@
         </div>
       </svelte:fragment>
 
-      <svelte:fragment slot="btn-row" let:collapsed let:toggle>
+      <svelte:fragment slot="btn-row" let:collapsed let:toggle let:showToggle>
         {#each dashboardWorkspaces as entry (entry.ws.id)}
           {@const md = entry.ws.metadata as Record<string, unknown> | undefined}
           {@const contribId =
@@ -552,7 +551,7 @@
             />
           </button>
         {/each}
-        {#if filterIds.size > 0}
+        {#if showToggle}
           <!-- svelte-ignore a11y_consider_explicit_label -->
           <button
             class="dash-btn"

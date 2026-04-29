@@ -23,6 +23,7 @@
   import DragGrip from "./DragGrip.svelte";
   import DefaultWorkspaceListView from "./WorkspaceListView.svelte";
   import type { Workspace } from "../types";
+  import { tooltip } from "../actions/tooltip";
 
   /** Banner + rail color. Required. */
   export let color: string;
@@ -47,6 +48,8 @@
    * `stopPropagation` so they don't bubble into this handler.
    */
   export let onBannerClick: (() => void) | undefined = undefined;
+  /** Optional close/delete handler. When provided, a × button appears on banner hover. */
+  export let onClose: (() => void) | undefined = undefined;
 
   /** Nested workspace list filter — ids to include. */
   export let filterIds: Set<string>;
@@ -85,6 +88,7 @@
     undefined;
 
   let bannerHovered = false;
+  let closeHovered = false;
   let mouseOverContainer = false;
   let containerLeaveTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -170,12 +174,13 @@
           <slot name="banner-end" />
         </div>
         <slot name="banner-subtitle" />
-        {#if $$slots["btn-row"] && nonDashboardCount > 0}
+        {#if $$slots["btn-row"]}
           <div class="container-btn-row">
             <slot
               name="btn-row"
               {collapsed}
               toggle={() => (collapsed = !collapsed)}
+              showToggle={nonDashboardCount > 0}
             />
           </div>
         {/if}
@@ -305,7 +310,7 @@
       >
         <div
           data-container-banner-body
-          style="padding-left: 8px; display: flex; flex-direction: column; gap: 2px; min-height: 32px; justify-content: center;"
+          style="padding-left: 8px; padding-right: 0; display: flex; flex-direction: column; gap: 2px; min-height: 32px; justify-content: center;"
         >
           <div
             style="display: flex; align-items: center; gap: 8px; min-width: 0;"
@@ -315,16 +320,45 @@
             <slot name="banner-end" {bannerHovered} {collapsed} />
           </div>
           <slot name="banner-subtitle" {bannerHovered} />
-          {#if $$slots["btn-row"] && nonDashboardCount > 0}
+          {#if $$slots["btn-row"]}
             <div class="container-btn-row">
               <slot
                 name="btn-row"
                 {collapsed}
                 toggle={() => (collapsed = !collapsed)}
+                showToggle={nonDashboardCount > 0}
               />
             </div>
           {/if}
         </div>
+        {#if onClose}
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <span
+            use:tooltip={"Delete Workspace Group"}
+            style="
+              position: absolute;
+              top: 50%; right: 6px;
+              transform: translateY(-50%);
+              color: {closeHovered ? $theme.danger : $theme.fgDim};
+              background: {closeHovered
+              ? ($theme.bgHighlight ?? 'rgba(255,255,255,0.06)')
+              : 'transparent'};
+              border: 1px solid {$theme.border ?? 'transparent'};
+              border-radius: 4px;
+              font-size: 11px;
+              cursor: pointer;
+              padding: 2px 5px;
+              line-height: 1;
+              opacity: {bannerHovered ? '1' : '0'};
+              -webkit-app-region: no-drag;
+              transition: opacity 0.15s, background 0.1s, color 0.1s;
+            "
+            on:click|stopPropagation={onClose}
+            on:mouseenter={() => (closeHovered = true)}
+            on:mouseleave={() => (closeHovered = false)}>×</span
+          >
+        {/if}
       </div>
       {#if !collapsed && nonDashboardCount > 0}
         <div

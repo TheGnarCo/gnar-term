@@ -845,7 +845,7 @@ function createKeyHandler(
       if (!alt && !shift) {
         if (["n", "t", "d", "w", "b", "p", "k", "f", "g", "r"].includes(k))
           return false;
-        if (k >= "1" && k <= "9") return false;
+        if (k === "0" || (k >= "1" && k <= "9")) return false;
         if (k === "=" || k === "+" || k === "-") return false;
       }
       if (shift && !alt) {
@@ -881,6 +881,7 @@ function createKeyHandler(
           ].includes(k)
         )
           return false;
+        if (k === "0") return false;
         if (k === "enter") return false;
         if (k === "[" || k === "]") return false;
         if (k === "=" || k === "+" || k === "-" || k === "_") return false;
@@ -1117,6 +1118,7 @@ export async function runDefinedCommand(
 
 const FONT_SIZE_MIN = 8;
 const FONT_SIZE_MAX = 32;
+const FONT_SIZE_DEFAULT = 14;
 
 /**
  * Increase or decrease the terminal font size for all currently-mounted
@@ -1125,7 +1127,7 @@ const FONT_SIZE_MAX = 32;
  * new character cell size.
  */
 export function adjustFontSize(delta: number): void {
-  const current = getConfig().fontSize ?? 14;
+  const current = getConfig().fontSize ?? FONT_SIZE_DEFAULT;
   const next = Math.max(
     FONT_SIZE_MIN,
     Math.min(FONT_SIZE_MAX, current + delta),
@@ -1145,6 +1147,11 @@ export function adjustFontSize(delta: number): void {
       }
     }
   }
+}
+
+export function resetFontSize(): void {
+  const current = getConfig().fontSize ?? FONT_SIZE_DEFAULT;
+  adjustFontSize(FONT_SIZE_DEFAULT - current);
 }
 
 /**

@@ -101,7 +101,7 @@
 {#if showFirstRow}
   <!-- Path row -->
   <div
-    style="padding: 2px 12px 0 8px; display: flex; align-items: center; min-width: 0; overflow: hidden; line-height: 1.2;"
+    style="padding: 2px 12px 0 0; display: flex; align-items: center; min-width: 0; overflow: hidden; line-height: 1.2;"
   >
     <span
       style="font-size: 10px; color: {fgMuted}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; display: inline-flex; align-items: center; gap: 3px;"
@@ -125,7 +125,7 @@
   <!-- Git row: branch only. Only rendered when git. -->
   {#if target.isGit}
     <div
-      style="padding: 0 12px 2px 8px; display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; line-height: 1.2; flex-wrap: wrap;"
+      style="padding: 0 12px 2px 0; display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; line-height: 1.2; flex-wrap: wrap;"
     >
       <span
         style="font-size: 10px; color: {fgMuted}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; display: inline-flex; align-items: center; gap: 3px;"

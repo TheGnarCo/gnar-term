@@ -70,6 +70,10 @@
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     id="cmd-palette-overlay"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Command palette"
+    tabindex="-1"
     style="
       position: fixed; inset: 0; z-index: 9998;
       background: rgba(0,0,0,0.5); display: flex;
@@ -90,6 +94,12 @@
         bind:this={inputEl}
         type="text"
         placeholder="Type a command..."
+        aria-label="Command search"
+        aria-autocomplete="list"
+        aria-controls="cmd-palette-listbox"
+        aria-activedescendant={filtered.length
+          ? `cmd-option-${selectedIdx}`
+          : undefined}
         bind:value={query}
         on:input={() => {
           selectedIdx = 0;
@@ -100,11 +110,19 @@
           font-size: 15px; outline: none; font-family: inherit;
         "
       />
-      <div style="flex: 1; overflow-y: auto; padding: 4px 0;">
+      <div
+        id="cmd-palette-listbox"
+        role="listbox"
+        aria-label="Commands"
+        style="flex: 1; overflow-y: auto; padding: 4px 0;"
+      >
         {#each filtered as cmd, i}
           <!-- svelte-ignore a11y_click_events_have_key_events -->
-          <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div
+            id="cmd-option-{i}"
+            role="option"
+            tabindex="-1"
+            aria-selected={i === selectedIdx}
             style="
               padding: 8px 18px; cursor: pointer; display: flex;
               align-items: center; justify-content: space-between;

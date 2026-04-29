@@ -166,7 +166,7 @@
            4px left inset gives a dark strip between the sidebar's left edge
            and each row's rail. 8px top inset keeps the first row's rounded
            corner from butting up against the "+ New" chrome above. -->
-      <div style="flex: 1; overflow-y: auto; padding: 8px 0 0 4px;">
+      <div style="flex: 1; overflow-y: auto; padding: 8px 0 8px 4px;">
         <WorkspaceListBlock
           bind:this={workspaceListBlock}
           {onSwitchWorkspace}

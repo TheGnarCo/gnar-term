@@ -1,6 +1,10 @@
 <!-- src/lib/components/ArchiveZone.svelte -->
 <script lang="ts">
-  import { contextMenu, anyReorderActive } from "../stores/ui";
+  import {
+    contextMenu,
+    anyReorderActive,
+    showConfirmPrompt,
+  } from "../stores/ui";
   import { theme } from "../stores/theme";
   import {
     archivedOrder,
@@ -52,6 +56,20 @@
     return $archivedDefs.groups[id]?.workspaceDefs.length ?? 0;
   }
 
+  async function confirmAndUnarchive(row: ArchivedRow) {
+    const name = getName(row);
+    const isGroup = row.kind === "workspace-group";
+    const message = isGroup
+      ? `Unarchive "${name}" and restore its workspaces?`
+      : `Unarchive "${name}"?`;
+    const confirmed = await showConfirmPrompt(message, {
+      confirmLabel: "Unarchive",
+    });
+    if (!confirmed) return;
+    if (row.kind === "workspace") void unarchiveWorkspace(row.id);
+    else void unarchiveGroup(row.id);
+  }
+
   function showItemContextMenu(x: number, y: number, row: ArchivedRow) {
     contextMenu.set({
       x,
@@ -59,10 +77,7 @@
       items: [
         {
           label: "Unarchive",
-          action: () => {
-            if (row.kind === "workspace") void unarchiveWorkspace(row.id);
-            else void unarchiveGroup(row.id);
-          },
+          action: () => void confirmAndUnarchive(row),
         },
       ],
     });
@@ -168,10 +183,9 @@
               railOpacity={0.35}
               fadeRight={true}
             />
-            <span class="item-name">{getName(row)}</span>
             {#if row.kind === "workspace-group"}
-              <span class="group-count"
-                >{getGroupWorkspaceCount(row.id)} workspaces</span
+              <span class="item-name"
+                >Group ({getGroupWorkspaceCount(row.id)})</span
               >
             {/if}
           </div>
@@ -197,6 +211,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    text-align: center;
     background: rgba(55, 55, 55, 0.93);
     color: rgba(255, 255, 255, 0.7);
     font-size: 13px;
@@ -265,13 +280,5 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     min-width: 0;
-  }
-
-  .group-count {
-    margin-left: auto;
-    flex-shrink: 0;
-    padding-left: 8px;
-    font-size: 10px;
-    color: rgba(255, 255, 255, 0.2);
   }
 </style>

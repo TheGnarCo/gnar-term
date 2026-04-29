@@ -37,7 +37,7 @@ import {
 } from "./surface-service";
 import { executeByShortcut } from "./command-registry";
 import { executeWorkspaceActionByShortcut } from "./workspace-action-registry";
-import { isMac, adjustFontSize } from "../terminal-service";
+import { isMac, adjustFontSize, resetFontSize } from "../terminal-service";
 import { renameActiveSurface } from "./surface-service";
 
 /**
@@ -83,6 +83,7 @@ export function handleAppKeydown(
       "=": () => adjustFontSize(1),
       "+": () => adjustFontSize(1),
       "-": () => adjustFontSize(-1),
+      "0": () => resetFontSize(),
     };
     const handler = cmdShortcuts[e.key];
     if (handler) {
@@ -166,6 +167,11 @@ export function handleAppKeydown(
       if (k === "-" || k === "_") {
         e.preventDefault();
         adjustFontSize(-1);
+        return;
+      }
+      if (k === "0") {
+        e.preventDefault();
+        resetFontSize();
         return;
       }
     }

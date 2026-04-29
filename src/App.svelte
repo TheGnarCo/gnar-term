@@ -37,6 +37,7 @@
     modLabel,
     shiftModLabel,
     adjustFontSize,
+    resetFontSize,
   } from "./lib/terminal-service";
   import { getAllPanes, getAllSurfaces, isTerminalSurface } from "./lib/types";
   import { forEachTerminalSurface } from "./lib/services/service-helpers";
@@ -318,7 +319,7 @@
     {
       id: "core.clear-scrollback",
       title: "Clear Scrollback",
-      shortcut: `${shiftModLabel}K`,
+      shortcut: isMac ? `${modLabel}K` : `${shiftModLabel}K`,
       action: () => {
         const s = $activeSurface;
         if (s && isTerminalSurface(s)) s.terminal.clear();
@@ -354,6 +355,13 @@
       title: "Decrease Font Size",
       shortcut: isMac ? `${modLabel}-` : `Ctrl+Shift+-`,
       action: () => adjustFontSize(-1),
+      source: "core",
+    },
+    {
+      id: "core.reset-font-size",
+      title: "Reset Font Size",
+      shortcut: isMac ? `${modLabel}0` : `Ctrl+Shift+0`,
+      action: () => resetFontSize(),
       source: "core",
     },
     ...$workspaces.map((ws, i) => ({

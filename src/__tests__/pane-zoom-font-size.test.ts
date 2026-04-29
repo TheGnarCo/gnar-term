@@ -127,7 +127,7 @@ import { uid } from "../lib/types";
 import type { Pane, TerminalSurface, Workspace } from "../lib/types";
 import { togglePaneZoom } from "../lib/services/pane-service";
 import { switchWorkspace } from "../lib/services/workspace-service";
-import { adjustFontSize } from "../lib/terminal-service";
+import { adjustFontSize, resetFontSize } from "../lib/terminal-service";
 import { saveConfig } from "../lib/config";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
@@ -302,6 +302,26 @@ describe("adjustFontSize", () => {
   it("does nothing when delta would not change the clamped value", () => {
     _mockFontSize = 32;
     adjustFontSize(1);
+    expect(saveConfig).not.toHaveBeenCalled();
+  });
+});
+
+describe("resetFontSize", () => {
+  it("resets font size to default (14) from a larger value", () => {
+    _mockFontSize = 20;
+    resetFontSize();
+    expect(saveConfig).toHaveBeenCalledWith({ fontSize: 14 });
+  });
+
+  it("resets font size to default (14) from a smaller value", () => {
+    _mockFontSize = 10;
+    resetFontSize();
+    expect(saveConfig).toHaveBeenCalledWith({ fontSize: 14 });
+  });
+
+  it("does nothing when font size is already at default", () => {
+    _mockFontSize = 14;
+    resetFontSize();
     expect(saveConfig).not.toHaveBeenCalled();
   });
 });

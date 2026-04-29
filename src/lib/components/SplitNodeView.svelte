@@ -21,6 +21,8 @@
 
   let dragging = false;
   let dragRect: DOMRect | null = null;
+  let localRatio = 0.5;
+  $: localRatio = node.type === "split" ? node.ratio : 0.5;
 
   $: splitDragOptions = {
     onStart: (e: MouseEvent) => {
@@ -36,7 +38,8 @@
       const pos = isVertical
         ? (ev.clientY - dragRect.top) / dragRect.height
         : (ev.clientX - dragRect.left) / dragRect.width;
-      node.ratio = Math.max(0.1, Math.min(0.9, pos));
+      localRatio = Math.max(0.1, Math.min(0.9, pos));
+      node.ratio = localRatio;
     },
     onEnd: () => {
       dragging = false;
@@ -77,7 +80,7 @@
   >
     <div
       style="
-        flex: {zoomActive ? (child0HasZoom ? 1 : 0) : node.ratio};
+        flex: {zoomActive ? (child0HasZoom ? 1 : 0) : localRatio};
         display: {zoomActive && !child0HasZoom ? 'none' : 'flex'};
         min-width: 0; min-height: 0;
       "
@@ -111,7 +114,7 @@
     {/if}
     <div
       style="
-        flex: {zoomActive ? (child1HasZoom ? 1 : 0) : 1 - node.ratio};
+        flex: {zoomActive ? (child1HasZoom ? 1 : 0) : 1 - localRatio};
         display: {zoomActive && !child1HasZoom ? 'none' : 'flex'};
         min-width: 0; min-height: 0;
       "

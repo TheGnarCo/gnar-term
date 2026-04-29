@@ -624,15 +624,17 @@ describe("SplitNodeView has draggable dividers with ratio support", () => {
     expect(source).toContain("use:dragResize");
   });
 
-  it("uses ratio for flex sizing instead of hardcoded flex: 1", async () => {
+  it("uses localRatio for flex sizing instead of hardcoded flex: 1", async () => {
     const fs = await import("fs");
     const source = fs.readFileSync(
       "src/lib/components/SplitNodeView.svelte",
       "utf-8",
     );
-    // node.ratio is used in the flex expression (may be inside a ternary for zoom)
-    expect(source).toContain("node.ratio");
-    expect(source).toContain("1 - node.ratio");
+    // localRatio (synced from node.ratio) is used in the flex expression for reactivity
+    expect(source).toContain("localRatio");
+    expect(source).toContain("1 - localRatio");
+    // node.ratio is still assigned during drag to keep the data model in sync
+    expect(source).toContain("node.ratio = localRatio");
     // Should NOT have hardcoded flex: 1 for split children
     expect(source).not.toMatch(/style="flex: 1;[^"]*">\s*<SplitNodeView/);
   });

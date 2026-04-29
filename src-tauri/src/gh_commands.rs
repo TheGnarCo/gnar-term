@@ -131,6 +131,108 @@ fn build_list_args<'a>(
     Ok(args)
 }
 
+/// Minimal PR data returned by `gh_view_pr` — fields needed for a
+/// compact statusline. Does not include author/labels/timestamps.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GhPrView {
+    pub number: u32,
+    pub title: String,
+    pub state: String,
+    pub url: String,
+    pub head_ref_name: String,
+    pub is_draft: bool,
+    /// Derived from statusCheckRollup: "SUCCESS" | "FAILURE" | "PENDING" | "NONE"
+    pub ci_status: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CheckStatus {
+    conclusion: Option<String>,
+    status: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RawPrView {
+    number: u32,
+    title: String,
+    state: String,
+    url: String,
+    head_ref_name: String,
+    is_draft: bool,
+    #[serde(default)]
+    status_check_rollup: Vec<CheckStatus>,
+}
+
+fn derive_ci_status(checks: &[CheckStatus]) -> String {
+    if checks.is_empty() {
+        return "NONE".to_string();
+    }
+    let has_failure = checks.iter().any(|c| {
+        matches!(
+            c.conclusion.as_deref(),
+            Some("FAILURE" | "CANCELLED" | "TIMED_OUT" | "ACTION_REQUIRED" | "STARTUP_FAILURE")
+        )
+    });
+    if has_failure {
+        return "FAILURE".to_string();
+    }
+    let has_pending = checks.iter().any(|c| {
+        matches!(
+            c.status.as_deref(),
+            Some("IN_PROGRESS" | "QUEUED" | "WAITING" | "PENDING")
+        ) || c.conclusion.is_none()
+    });
+    if has_pending {
+        return "PENDING".to_string();
+    }
+    "SUCCESS".to_string()
+}
+
+fn parse_pr_view(json: &str) -> Result<GhPrView, String> {
+    let raw: RawPrView =
+        serde_json::from_str(json).map_err(|e| format!("Failed to parse PR JSON: {e}"))?;
+    Ok(GhPrView {
+        number: raw.number,
+        title: raw.title,
+        state: raw.state,
+        url: raw.url,
+        head_ref_name: raw.head_ref_name,
+        is_draft: raw.is_draft,
+        ci_status: derive_ci_status(&raw.status_check_rollup),
+    })
+}
+
+/// Return the open PR for the current branch in `repo_path`, or `None`
+/// when there is no PR. Non-zero exit from `gh` is treated as "no PR"
+/// rather than an error — this is the normal case for branches that
+/// haven't been pushed as a PR yet.
+#[tauri::command]
+pub async fn gh_view_pr(repo_path: String) -> Result<Option<GhPrView>, String> {
+    validate_repo(&repo_path)?;
+    let output = Command::new("gh")
+        .args([
+            "pr",
+            "view",
+            "--json",
+            "number,title,state,url,isDraft,headRefName,statusCheckRollup",
+        ])
+        .env("PATH", shell_path())
+        .current_dir(&repo_path)
+        .output()
+        .map_err(|e| format!("Failed to execute gh command: {e}"))?;
+
+    if !output.status.success() {
+        return Ok(None);
+    }
+
+    let json = String::from_utf8(output.stdout)
+        .map_err(|e| format!("Failed to parse gh output as UTF-8: {e}"))?;
+    Ok(Some(parse_pr_view(&json)?))
+}
+
 /// Probe whether the `gh` binary is available on PATH. Used by
 /// `gh-availability.ts` on the frontend to skip doomed invokes and render
 /// an actionable empty state instead of a terse error line.
@@ -224,5 +326,102 @@ mod tests {
     #[test]
     fn build_list_args_rejects_invalid_state() {
         assert!(build_list_args("issue", "number", Some("merged")).is_err());
+    }
+
+    #[test]
+    fn parse_pr_view_valid_json() {
+        let json = r#"{
+            "number": 42,
+            "title": "feat: add diff statusline",
+            "state": "OPEN",
+            "url": "https://github.com/org/repo/pull/42",
+            "headRefName": "feat/diff-statusline",
+            "isDraft": false
+        }"#;
+        let pr = parse_pr_view(json).unwrap();
+        assert_eq!(pr.number, 42);
+        assert_eq!(pr.title, "feat: add diff statusline");
+        assert_eq!(pr.state, "OPEN");
+        assert!(!pr.is_draft);
+        assert_eq!(pr.head_ref_name, "feat/diff-statusline");
+        assert_eq!(pr.ci_status, "NONE");
+    }
+
+    #[test]
+    fn parse_pr_view_draft() {
+        let json = r#"{
+            "number": 7,
+            "title": "WIP",
+            "state": "OPEN",
+            "url": "https://github.com/org/repo/pull/7",
+            "headRefName": "wip/branch",
+            "isDraft": true
+        }"#;
+        let pr = parse_pr_view(json).unwrap();
+        assert!(pr.is_draft);
+    }
+
+    #[test]
+    fn parse_pr_view_ci_status_passing() {
+        let json = r#"{
+            "number": 10,
+            "title": "ci test",
+            "state": "OPEN",
+            "url": "https://github.com/org/repo/pull/10",
+            "headRefName": "ci-branch",
+            "isDraft": false,
+            "statusCheckRollup": [
+                {"conclusion": "SUCCESS", "status": "COMPLETED"},
+                {"conclusion": "SKIPPED", "status": "COMPLETED"}
+            ]
+        }"#;
+        let pr = parse_pr_view(json).unwrap();
+        assert_eq!(pr.ci_status, "SUCCESS");
+    }
+
+    #[test]
+    fn parse_pr_view_ci_status_failing() {
+        let json = r#"{
+            "number": 11,
+            "title": "broken",
+            "state": "OPEN",
+            "url": "https://github.com/org/repo/pull/11",
+            "headRefName": "broken",
+            "isDraft": false,
+            "statusCheckRollup": [
+                {"conclusion": "SUCCESS", "status": "COMPLETED"},
+                {"conclusion": "FAILURE", "status": "COMPLETED"}
+            ]
+        }"#;
+        let pr = parse_pr_view(json).unwrap();
+        assert_eq!(pr.ci_status, "FAILURE");
+    }
+
+    #[test]
+    fn parse_pr_view_ci_status_pending() {
+        let json = r#"{
+            "number": 12,
+            "title": "pending",
+            "state": "OPEN",
+            "url": "https://github.com/org/repo/pull/12",
+            "headRefName": "pending",
+            "isDraft": false,
+            "statusCheckRollup": [
+                {"conclusion": null, "status": "IN_PROGRESS"}
+            ]
+        }"#;
+        let pr = parse_pr_view(json).unwrap();
+        assert_eq!(pr.ci_status, "PENDING");
+    }
+
+    #[test]
+    fn parse_pr_view_malformed_json_returns_error() {
+        assert!(parse_pr_view("not json").is_err());
+    }
+
+    #[test]
+    fn parse_pr_view_missing_field_returns_error() {
+        let json = r#"{"number": 1, "title": "test"}"#;
+        assert!(parse_pr_view(json).is_err());
     }
 }

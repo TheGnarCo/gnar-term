@@ -13,6 +13,7 @@ import {
   handleWorkspaceClosed,
 } from "../services/git-status-service";
 import GitStatusLine from "../components/GitStatusLine.svelte";
+import WorkspaceDiffPrSubtitle from "../components/WorkspaceDiffPrSubtitle.svelte";
 
 export function initGitStatus(): void {
   registerWorkspaceSubtitle({
@@ -20,6 +21,13 @@ export function initGitStatus(): void {
     source: GIT_STATUS_SOURCE,
     component: GitStatusLine,
     priority: 10,
+  });
+
+  registerWorkspaceSubtitle({
+    id: `${GIT_STATUS_SOURCE}:diff-pr-subtitle`,
+    source: GIT_STATUS_SOURCE,
+    component: WorkspaceDiffPrSubtitle,
+    priority: 20,
   });
 
   startGitStatusService();

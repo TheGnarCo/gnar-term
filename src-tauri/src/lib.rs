@@ -1939,6 +1939,7 @@ pub fn run() {
             gh_commands::gh_list_prs,
             gh_commands::gh_list_issues,
             gh_commands::gh_available,
+            gh_commands::gh_view_pr,
             git_status_ops::git_rev_parse_toplevel,
             git_status_ops::git_status_short
         ])

@@ -604,6 +604,19 @@ const pendingRunningTitles = new Map<number, ReturnType<typeof setTimeout>>();
 // Uses get_all_pty_cwds to batch all PTYs into a single IPC round-trip,
 // then applies a single workspaces.update() only when at least one cwd changed.
 let cwdPollTimer: ReturnType<typeof setInterval> | null = null;
+let cwdChangeHook: (() => void) | null = null;
+
+export function registerCwdChangeHook(cb: () => void): void {
+  cwdChangeHook = cb;
+}
+
+export function _stopCwdPolling(): void {
+  if (cwdPollTimer) {
+    clearInterval(cwdPollTimer);
+    cwdPollTimer = null;
+  }
+  cwdChangeHook = null;
+}
 
 export function startCwdPolling() {
   if (cwdPollTimer) return;
@@ -631,6 +644,7 @@ export function startCwdPolling() {
         // all subscribers on any .update() invocation regardless.
         if (anyChanged) {
           workspaces.update((l) => l);
+          cwdChangeHook?.();
         }
       })
       .catch(() => {});
@@ -923,6 +937,7 @@ function createOsc7Handler(
       surface.title = basename || "~";
     }
     workspaces.update((l) => [...l]);
+    cwdChangeHook?.();
     return true;
   };
 }

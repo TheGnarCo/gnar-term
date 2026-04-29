@@ -22,7 +22,11 @@ vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
 
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
 import type { Workspace } from "../lib/types";
-import { startCwdPolling } from "../lib/terminal-service";
+import {
+  startCwdPolling,
+  registerCwdChangeHook,
+  _stopCwdPolling,
+} from "../lib/terminal-service";
 
 function makeWs(id: string, surfaceId: string, cwd: string): Workspace {
   return {
@@ -57,6 +61,7 @@ describe("startCwdPolling notifies the workspaces store on cwd change", () => {
   });
 
   afterEach(() => {
+    _stopCwdPolling();
     vi.useRealTimers();
     workspaces.set([]);
     activeWorkspaceIdx.set(-1);
@@ -104,5 +109,28 @@ describe("startCwdPolling notifies the workspaces store on cwd change", () => {
     expect(surface.title).toBe("custom-title");
 
     unsub();
+  });
+
+  it("fires the registered cwd change hook when cwd changes", async () => {
+    const ws = makeWs("A", "surf-A", "/repos/project-A");
+    workspaces.set([ws]);
+
+    let ptyCwd = "/repos/project-A";
+    const tauri = await import("@tauri-apps/api/core");
+    vi.mocked(tauri.invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_all_pty_cwds") return { "1": ptyCwd };
+      return undefined;
+    });
+
+    const hookCalls: string[] = [];
+    registerCwdChangeHook(() => hookCalls.push("fired"));
+
+    startCwdPolling();
+    ptyCwd = "/repos/project-B";
+
+    await vi.advanceTimersByTimeAsync(5100);
+    for (let i = 0; i < 50; i++) await Promise.resolve();
+
+    expect(hookCalls.length).toBeGreaterThan(0);
   });
 });

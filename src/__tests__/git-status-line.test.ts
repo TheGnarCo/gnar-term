@@ -105,7 +105,7 @@ describe("GitStatusLine nested rules", () => {
     expect(container.textContent).not.toMatch(/modified/);
   });
 
-  it("still renders full top/bottom rows for a root (non-nested) workspace when active", () => {
+  it("does not render dirty label for a root workspace — WorkspaceDiffPrSubtitle owns that row", () => {
     const ws = makeWorkspace("ws-root", {});
     workspaces.set([ws]);
     activate(ws.id);
@@ -113,16 +113,7 @@ describe("GitStatusLine nested rules", () => {
     const { container } = render(GitStatusLine, {
       props: { workspaceId: ws.id },
     });
-    expect(container.textContent).toMatch(/modified/);
-  });
-
-  it("hides the dirty bottom row on a root workspace when inactive", () => {
-    const ws = makeWorkspace("ws-root", {});
-    workspaces.set([ws]);
-    setDirty(ws.id);
-    const { container } = render(GitStatusLine, {
-      props: { workspaceId: ws.id },
-    });
+    // Dirty display moved to WorkspaceDiffPrSubtitle; GitStatusLine only shows cwd/branch.
     expect(container.textContent).not.toMatch(/modified/);
   });
 });

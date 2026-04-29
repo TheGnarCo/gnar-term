@@ -33,6 +33,7 @@
     setupListeners,
     fontReady,
     startCwdPolling,
+    registerCwdChangeHook,
     isMac,
     modLabel,
     shiftModLabel,
@@ -79,6 +80,7 @@
     renameWorkspace,
     saveCurrentWorkspace,
     persistWorkspaces,
+    schedulePersist,
   } from "./lib/services/workspace-service";
   import {
     splitPane,
@@ -512,6 +514,7 @@
     await fontReady;
     void setupListeners();
     startCwdPolling();
+    registerCwdChangeHook(schedulePersist);
     initMcpServer().catch((err) => {
       // Surface frontend-side init failures through the extension error
       // toast rather than a silent console.warn.

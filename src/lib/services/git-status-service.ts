@@ -21,7 +21,8 @@ import {
   clearAllStatusForSourceAndWorkspace,
 } from "./status-registry";
 import { workspaces, activeWorkspace } from "../stores/workspace";
-import { getActiveCwd, getWorkspaceCwd } from "./service-helpers";
+import { getActiveCwd, getWorkspaceCwd, wsMeta } from "./service-helpers";
+import { getWorkspaceGroup } from "../stores/workspace-groups";
 
 export const GIT_STATUS_SOURCE = "git";
 
@@ -423,10 +424,24 @@ async function ensurePolling(wsId: string): Promise<void> {
   // Active workspace can use the cheaper live-surface lookup; other
   // workspaces walk their own split tree so newly-created-but-inactive
   // rows don't wait for the user to activate them before status fills.
-  const cwd =
+  let cwd =
     activeWorkspaceId === wsId
       ? await getActiveCwd()
       : await getWorkspaceCwd(wsId);
+
+  if (!cwd) {
+    // Nested workspaces that haven't been activated yet have no pty CWD.
+    // Fall back to the group's root path so their diff status still
+    // shows the project's dirty state until they're first opened.
+    const ws = get(workspaces).find((w) => w.id === wsId);
+    if (ws) {
+      const groupId = wsMeta(ws).groupId;
+      if (typeof groupId === "string") {
+        cwd = getWorkspaceGroup(groupId)?.path;
+      }
+    }
+  }
+
   if (!cwd) return;
   if (workspaceCwds.has(wsId)) return;
   startPolling(wsId, cwd);
@@ -447,7 +462,15 @@ export function startGitStatusService(): void {
     void ensurePolling(ws.id);
   }
 
-  unsubWorkspaces = workspaces.subscribe(() => {
+  unsubWorkspaces = workspaces.subscribe((wsList) => {
+    // Kick off polling for any workspace whose pty CWD just became available
+    // (covers the case where the pty starts after the service was initialised).
+    for (const ws of wsList) {
+      if (!workspaceCwds.has(ws.id)) {
+        void ensurePolling(ws.id);
+      }
+    }
+
     if (!activeWorkspaceId) return;
     const cached = workspaceCwds.get(activeWorkspaceId);
     if (!cached) return;

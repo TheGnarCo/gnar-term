@@ -61,10 +61,7 @@
   $: gripVisible =
     $shortcutHintsActive || (rowHovered && $reorderContext === null);
 
-  let closeHovered = false;
-
-  function handleClose(e: MouseEvent): void {
-    e.stopPropagation();
+  function handleClose(): void {
     unregisterPseudoWorkspace(pseudo.id);
     pseudo.onClose?.();
   }
@@ -111,6 +108,8 @@
       railOpacity={1}
       alwaysShowDots={true}
       fadeRight={!gripVisible}
+      onClose={pseudo.onClose ? handleClose : undefined}
+      closeTooltip={"Close " + pseudo.label}
     />
     <div
       aria-hidden="true"
@@ -178,25 +177,4 @@
       </span>
     {/if}
   </div>
-  {#if pseudo.onClose && rowHovered}
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div
-      data-pseudo-workspace-close
-      on:click={handleClose}
-      on:mouseenter={() => (closeHovered = true)}
-      on:mouseleave={() => (closeHovered = false)}
-      style="
-        display: flex; align-items: center; justify-content: center;
-        width: 20px; flex-shrink: 0;
-        color: {closeHovered ? $theme.danger : $theme.fgDim};
-        font-size: 11px;
-      "
-      title="Close {pseudo.label}"
-      role="button"
-      tabindex="-1"
-    >
-      ×
-    </div>
-  {/if}
 </div>

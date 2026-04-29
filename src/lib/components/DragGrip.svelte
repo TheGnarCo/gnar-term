@@ -32,6 +32,13 @@
    * unfaded so the pattern runs the full rail height cleanly.
    */
   export let fadeRight: boolean = false;
+  /** When provided, renders a × chip at the top of the grip whenever the grip is expanded. */
+  export let onClose: (() => void) | undefined = undefined;
+  /** Tooltip text for the close button. */
+  export let closeTooltip: string | undefined = undefined;
+
+  let closeButtonHovered = false;
+  $: showClose = onClose != null && visible;
 
   $: effectiveColor = railColor ?? theme.fgDim;
   $: effectiveDotColor = dotColor ?? effectiveColor;
@@ -99,5 +106,34 @@
         mask-image: {fadeRight ? fadeMask : 'none'};
       "
     ></div>
+  {/if}
+  {#if showClose}
+    <button
+      title={closeTooltip}
+      aria-label={closeTooltip ?? "Close"}
+      style="
+        position: absolute;
+        top: 4px; left: 1px; right: 1px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: {closeButtonHovered ? theme.danger : effectiveColor};
+        background: {closeButtonHovered
+        ? (theme.bgHighlight ?? 'rgba(255,255,255,0.08)')
+        : (theme.bgSurface ?? theme.bg)};
+        border: 1px solid {closeButtonHovered ? theme.danger : effectiveColor};
+        border-radius: 4px;
+        font-size: 11px;
+        cursor: pointer;
+        padding: 2px 0;
+        line-height: 1;
+        -webkit-app-region: no-drag;
+        transition: background 0.1s, color 0.1s, border-color 0.1s;
+      "
+      on:mousedown|stopPropagation
+      on:click|stopPropagation={onClose}
+      on:mouseenter={() => (closeButtonHovered = true)}
+      on:mouseleave={() => (closeButtonHovered = false)}>×</button
+    >
   {/if}
 </div>

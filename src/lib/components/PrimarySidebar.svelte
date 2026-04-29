@@ -13,7 +13,6 @@
    */
   import { theme } from "../stores/theme";
   import { primarySidebarVisible, primarySidebarWidth } from "../stores/ui";
-  import { dragResize } from "../actions/drag-resize";
   import type { Readable } from "svelte/store";
   import type { SplitButtonItem } from "./SplitButton.svelte";
   import { sidebarSectionStore } from "../services/sidebar-section-registry";
@@ -25,6 +24,7 @@
   import McpSidebarSection from "./McpSidebarSection.svelte";
   import SplitButton from "./SplitButton.svelte";
   import ArchiveZone from "./ArchiveZone.svelte";
+  import SidebarResizeHandle from "./SidebarResizeHandle.svelte";
 
   const iconSvgMap: Record<string, string> = {
     plus: `<line x1="8" y1="3" x2="8" y2="13" /><line x1="3" y1="8" x2="13" y2="8" />`,
@@ -85,8 +85,6 @@
   export function startRename(idx: number) {
     workspaceListBlock?.startRename(idx);
   }
-
-  let dragging = false;
 </script>
 
 {#if $primarySidebarVisible}
@@ -195,38 +193,18 @@
 
       <ArchiveZone />
     </div>
-    <div
-      class="sidebar-resize-handle"
-      role="separator"
-      aria-orientation="vertical"
-      aria-label="Resize sidebar"
-      style="
-      width: 4px; cursor: col-resize; flex-shrink: 0;
-      background: {dragging ? $theme.accent : $theme.sidebarBorder};
-      transition: background 0.15s;
-    "
-      use:dragResize={{
-        onDrag: (ev) => {
-          const maxWidth = window.innerWidth * 0.33;
-          primarySidebarWidth.set(
-            Math.max(140, Math.min(maxWidth, ev.clientX)),
-          );
-        },
-        onStart: () => {
-          dragging = true;
-        },
-        onEnd: () => {
-          dragging = false;
-        },
+    <SidebarResizeHandle
+      direction="right"
+      theme={$theme}
+      onDrag={(clientX) => {
+        const maxWidth = window.innerWidth * 0.33;
+        primarySidebarWidth.set(Math.max(140, Math.min(maxWidth, clientX)));
       }}
-    ></div>
+    />
   </div>
 {/if}
 
 <style>
-  .sidebar-resize-handle:hover {
-    filter: brightness(1.3);
-  }
   /* Top-row "+ New" chip — suppress SplitButton's own border/color so
      the chip wash defines its look, and tint the hover bg to match
      the rest of the top-row buttons. --section-btn-fg is set inline

@@ -196,8 +196,12 @@
     {/if}
 
     {#if showPr && pr}
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div
-        style="display: flex; align-items: center; gap: 3px; min-width: 0; overflow: hidden;"
+        style="display: flex; align-items: center; gap: 3px; min-width: 0; overflow: hidden; cursor: pointer;"
+        title="#{pr.number} {pr.title}{isDraft ? ' (draft)' : ''}"
+        on:click={() => pr && invoke("open_url", { url: pr.url })}
       >
         <!-- Pull request icon -->
         <svg
@@ -209,17 +213,15 @@
           aria-hidden="true"
         >
           <path
-            d="M1.5 3.25a2.25 2.25 0 1 1 3 2.122v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.25 2.25 0 0 1 1.5 3.25Zm5.677-.177L9.573.677A.25.25 0 0 1 10 .854V2.5h1A2.5 2.5 0 0 1 13.5 5v5.628a2.251 2.251 0 1 1-1.5 0V5a1 1 0 0 0-1-1h-1v1.646a.25.25 0 0 1-.427.177L7.177 3.427a.25.25 0 0 1 0-.354Z"
+            d="M1.5 3.25a2.25 2.25 0 1 1 3 2.122v5.628a2.251 2.251 0 1 1-1.5 0V5.372A2.25 2.25 0 0 1 1.5 3.25Zm5.677-.177L9.573.677A.25.25 0 0 1 10 .854V2.5h1A2.5 2.5 0 0 1 13.5 5v5.628a2.251 2.251 0 1 1-1.5 0V5a1 1 0 0 0-1-1h-1v1.646a.25.25 0 0 1-.427.177L7.177 3.427a.25.25 0 0 1 0-.354Z"
           />
         </svg>
         <span
           style="font-size: 10px; color: {isDraft
             ? fgMuted
-            : '#4ec957'}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;"
-          title="#{pr.number} {pr.title}{isDraft ? ' (draft)' : ''}"
+            : '#4ec957'}; white-space: nowrap; flex-shrink: 0;"
         >
           #{pr.number}{isDraft ? " draft" : ""}
-          <span style="opacity: 0.75;">{pr.title}</span>
         </span>
       </div>
     {/if}

@@ -103,6 +103,17 @@
     );
     return hasAgent ? (allSurfaces.find((s) => s.id === sid) ?? null) : null;
   })();
+  $: activeAgentItem = (() => {
+    const sid = activePaneInWs?.activeSurfaceId;
+    if (!sid) return null;
+    return (
+      processItems.find(
+        (item) =>
+          (item.metadata as Record<string, unknown> | undefined)?.surfaceId ===
+          sid,
+      ) ?? null
+    );
+  })();
 
   $: subtitleComponents = $workspaceSubtitleStore;
 
@@ -427,19 +438,19 @@
       {/if}
     {/each}
 
-    {#if !hideStatusBadges && activeSurfaceForAgent?.title}
+    {#if !hideStatusBadges && activeAgentItem && activeAgentItem.label !== "closed"}
       <div
         data-harness-title-row
         style="padding: 0 12px 4px 6px; display: flex; align-items: center; min-width: 0; overflow: hidden; line-height: 1.2;"
       >
         <span
           style="font-size: 10px; color: {$theme.fgDim}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; display: inline-flex; align-items: center; gap: 3px;"
-          title={activeSurfaceForAgent.title}
+          title={activeSurfaceForAgent?.title ?? activeAgentItem.label}
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            width="12"
-            height="12"
+            width="10"
+            height="10"
             viewBox="0 0 24 24"
             fill="none"
             stroke={railColor}
@@ -456,7 +467,9 @@
             <path d="M15 13v2" />
             <path d="M9 13v2" />
           </svg>
-          {activeSurfaceForAgent.title}
+          {activeAgentItem.label === "idle"
+            ? "idle"
+            : (activeSurfaceForAgent?.title ?? activeAgentItem.label)}
         </span>
       </div>
     {/if}

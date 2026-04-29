@@ -1,6 +1,6 @@
 <!-- src/lib/components/ArchiveZone.svelte -->
 <script lang="ts">
-  import { contextMenu } from "../stores/ui";
+  import { contextMenu, anyReorderActive } from "../stores/ui";
   import { theme } from "../stores/theme";
   import {
     archivedOrder,
@@ -27,6 +27,12 @@
   }
   function onKeyUp(e: KeyboardEvent) {
     if (e.key === "Meta") archiveZoneEl?.removeAttribute("data-drag-preview");
+  }
+
+  $: if (archiveZoneEl) {
+    if ($anyReorderActive)
+      archiveZoneEl.setAttribute("data-drag-active", "true");
+    else archiveZoneEl.removeAttribute("data-drag-active");
   }
 
   $: totalCount = $archivedOrder.length;
@@ -183,7 +189,8 @@
   }
 
   .archive-zone:global([data-drag-over])::after,
-  .archive-zone:global([data-drag-preview])::after {
+  .archive-zone:global([data-drag-preview])::after,
+  .archive-zone:global([data-drag-active])::after {
     content: "Archive";
     position: absolute;
     inset: 0;

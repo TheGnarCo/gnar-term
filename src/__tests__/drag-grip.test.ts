@@ -55,11 +55,9 @@ const SOURCE = readFileSync(
 ).replace(/\s+/g, " ");
 
 describe("DragGrip visual states", () => {
-  it("collapsed state has a 10px hit area and a 6px rail; expands to 20px on hover", () => {
-    // Grip width toggles on visible: 20px expanded / 10px at rest.
-    expect(SOURCE).toMatch(
-      /width:\s*\{\s*visible\s*\?\s*'20px'\s*:\s*'10px'\s*\}/,
-    );
+  it("has a fixed 14px hit area that never expands, with a 6px rail stripe", () => {
+    // Grip width is constant — no hover expansion to avoid content shift.
+    expect(SOURCE).toMatch(/width:\s*14px/);
     // Rail stripe is a constant 6px (scaled with the container width).
     expect(SOURCE).toMatch(/width:\s*6px/);
   });

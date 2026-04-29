@@ -62,7 +62,7 @@ describe("WorkspaceItem drag grip", () => {
     expect(onGripMouseDown).toHaveBeenCalledTimes(1);
   });
 
-  it("expands the grip on row-level hover (not just grip-column hover)", async () => {
+  it("keeps grip at fixed 14px on row-level hover (no expansion)", async () => {
     const { container } = render(WorkspaceItem, {
       props: {
         workspace: makeWorkspace(),
@@ -77,13 +77,12 @@ describe("WorkspaceItem drag grip", () => {
     });
     const row = container.querySelector("[data-drag-idx]") as HTMLElement;
     const grip = container.querySelector(".drag-grip") as HTMLElement;
-    // Baseline: the grip is in its collapsed 10px width until hover.
-    expect(grip.style.width).toBe("10px");
-    // Hover the row body (not the grip itself) — the grip should expand.
+    // Grip is a fixed 14px — no expansion on hover to avoid content shift.
+    expect(grip.style.width).toBe("14px");
     await fireEvent.mouseEnter(row);
-    expect(grip.style.width).toBe("20px");
+    expect(grip.style.width).toBe("14px");
     await fireEvent.mouseLeave(row);
-    expect(grip.style.width).toBe("10px");
+    expect(grip.style.width).toBe("14px");
   });
 
   it("rounds only the right corners so the rail renders as a straight vertical bar on the left", () => {

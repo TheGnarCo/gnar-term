@@ -68,8 +68,10 @@ describe("startCwdPolling notifies the workspaces store on cwd change", () => {
 
     let ptyCwd = "/repos/project-A";
     const tauri = await import("@tauri-apps/api/core");
+    // The polling loop now calls get_all_pty_cwds (single batch IPC call).
+    // Return a Record<string, string> keyed by ptyId (as string).
     vi.mocked(tauri.invoke).mockImplementation(async (cmd: string) => {
-      if (cmd === "get_pty_cwd") return ptyCwd;
+      if (cmd === "get_all_pty_cwds") return { "1": ptyCwd };
       return undefined;
     });
 

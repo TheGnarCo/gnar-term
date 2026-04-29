@@ -18,6 +18,7 @@
   import { type Component } from "svelte";
   import { slide } from "svelte/transition";
   import { theme } from "../stores/theme";
+  import { reorderContext } from "../stores/ui";
   import DragGrip from "./DragGrip.svelte";
   import DefaultWorkspaceListView from "./WorkspaceListView.svelte";
   import type { Workspace } from "../types";
@@ -83,6 +84,25 @@
     undefined;
 
   let bannerHovered = false;
+  let mouseOverContainer = false;
+  let containerLeaveTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function handleContainerEnter() {
+    if (containerLeaveTimer !== null) {
+      clearTimeout(containerLeaveTimer);
+      containerLeaveTimer = null;
+    }
+    mouseOverContainer = true;
+  }
+
+  function handleContainerLeave() {
+    containerLeaveTimer = setTimeout(() => {
+      mouseOverContainer = false;
+      containerLeaveTimer = null;
+    }, 80);
+  }
+
+  $: rowHovered = mouseOverContainer;
   $: railBorderColor =
     hasActiveChild && collapsed ? color : ($theme.border ?? "transparent");
   let collapsed = false;
@@ -183,6 +203,8 @@
     {#if onGripMouseDown}
       <div
         data-container-rail
+        on:mouseenter={handleContainerEnter}
+        on:mouseleave={handleContainerLeave}
         on:mousedown={(e) => onGripMouseDown?.(e)}
         style="
           flex-shrink: 0;
@@ -200,11 +222,11 @@
       >
         <DragGrip
           theme={$theme}
-          visible={false}
+          visible={rowHovered && $reorderContext === null}
           railColor={color}
           railOpacity={1}
           alwaysShowDots={true}
-          fadeRight={true}
+          fadeRight={!rowHovered}
         />
         {#if hasActiveChild && collapsed}
           <div
@@ -257,8 +279,14 @@
         on:contextmenu={onBannerContextMenu}
         on:click={onBannerClick}
         on:mousedown={(e) => onGripMouseDown?.(e)}
-        on:mouseenter={() => (bannerHovered = true)}
-        on:mouseleave={() => (bannerHovered = false)}
+        on:mouseenter={() => {
+          bannerHovered = true;
+          handleContainerEnter();
+        }}
+        on:mouseleave={() => {
+          bannerHovered = false;
+          handleContainerLeave();
+        }}
       >
         <div
           data-container-banner-body

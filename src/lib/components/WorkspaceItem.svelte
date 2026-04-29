@@ -232,8 +232,8 @@
   data-drag-idx={index}
   data-workspace-id={workspace.id}
   data-worktree={isManaged ? "true" : undefined}
-  use:shortcutHint={(shortcutIdx ?? index) < 9
-    ? `${modLabel}${(shortcutIdx ?? index) + 1}`
+  use:shortcutHint={shortcutIdx !== undefined && shortcutIdx < 9
+    ? `${modLabel}${shortcutIdx + 1}`
     : undefined}
   style="
     display: {dragActive ? 'none' : 'flex'};

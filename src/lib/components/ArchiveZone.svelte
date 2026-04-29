@@ -205,8 +205,10 @@
             />
             {#if row.kind === "workspace-group"}
               <span class="item-name"
-                >Group ({getGroupWorkspaceCount(row.id)})</span
+                >{getName(row)} ({getGroupWorkspaceCount(row.id)})</span
               >
+            {:else}
+              <span class="item-name">{getName(row)}</span>
             {/if}
           </div>
         {/each}
@@ -274,6 +276,7 @@
     border-top: 1px solid rgba(255, 255, 255, 0.06);
     max-height: 160px;
     overflow-y: auto;
+    padding-bottom: 8px;
   }
 
   .empty-hint {

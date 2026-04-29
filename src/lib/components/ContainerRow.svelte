@@ -293,7 +293,7 @@
           : ($theme.border ?? 'transparent')};
           border-left: none;
           border-radius: 0 6px 6px 0;
-          cursor: {onBannerClick && !hasActiveChild ? 'pointer' : 'default'};
+          cursor: pointer;
           transition: background 0.15s;
         "
         on:contextmenu={onBannerContextMenu}
@@ -310,7 +310,9 @@
       >
         <div
           data-container-banner-body
-          style="padding-left: 8px; padding-right: 0; display: flex; flex-direction: column; gap: 2px; min-height: 32px; justify-content: center;"
+          style="padding-left: {rowHovered
+            ? '8px'
+            : '6px'}; padding-right: 0; display: flex; flex-direction: column; gap: 2px; min-height: 32px; justify-content: center; transition: padding-left 0.12s ease-out;"
         >
           <div
             style="display: flex; align-items: center; gap: 8px; min-width: 0;"
@@ -364,7 +366,9 @@
         <div
           data-container-nested={scopeId}
           data-nested-count={nonDashboardCount}
-          style="display: flex; flex-direction: column;"
+          style="display: flex; flex-direction: column; margin-left: {rowHovered
+            ? '0'
+            : '-2px'}; transition: margin-left 0.12s ease-out;"
           transition:slide={{ duration: 200 }}
         >
           <svelte:component
@@ -390,5 +394,8 @@
     flex-wrap: wrap;
     gap: 4px;
     margin: 4px 0 2px;
+  }
+  :global([data-container-mode="root"] button) {
+    cursor: pointer;
   }
 </style>

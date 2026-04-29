@@ -323,6 +323,11 @@
   $: groupHex = group ? resolveGroupColor(group.color, $theme) : "";
   $: headerFg = group ? contrastColor(groupHex) : $theme.fg;
   $: subtitleFg = $theme.fgMuted ?? $theme.fgDim ?? $theme.fg;
+  $: dimIconColor = ($theme.fgDim ?? $theme.fgMuted ?? "#888") as string;
+
+  let hoveredDashId: string | null = null;
+  let caretHovered = false;
+  let newChipHovered = false;
 
   $: dashboardWorkspaces = (() => {
     const gId = group?.id;
@@ -451,14 +456,16 @@
         data-container-row-title
         style="
           flex: 1; min-width: 0;
-          font-size: 13px; font-weight: 600; color: {$theme.fg};
+          font-size: 13px; font-weight: 600; color: {hasActiveChild
+          ? $theme.fg
+          : ($theme.fgMuted ?? $theme.fg)};
           overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
           user-select: none;
           pointer-events: none;
         ">{group.name}</span
       >
 
-      <svelte:fragment slot="banner-end" let:bannerHovered let:collapsed>
+      <svelte:fragment slot="banner-end" let:collapsed>
         <div
           style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;"
         >
@@ -480,9 +487,11 @@
             <span
               class="project-new-chip"
               on:click|stopPropagation
+              on:mouseenter={() => (newChipHovered = true)}
+              on:mouseleave={() => (newChipHovered = false)}
               style="
                 flex-shrink: 0; border-radius: 6px; overflow: visible;
-                background: {bannerHovered
+                background: {newChipHovered
                 ? groupHex
                 : `color-mix(in srgb, ${groupHex} 70%, transparent)`};
                 --project-btn-fg: {headerFg};
@@ -495,6 +504,7 @@
                 onMainClick={() => coreAction?.handler(groupContext ?? {})}
                 dropdownItems={splitDropdownItems}
                 theme={themeView}
+                suppressButtonHoverBg={true}
               />
             </span>
           {/if}
@@ -537,6 +547,8 @@
             on:click|stopPropagation={() => switchWorkspace(entry.idx)}
             on:contextmenu|preventDefault|stopPropagation={(e) =>
               showDashboardContextMenu(e.clientX, e.clientY, entry.idx)}
+            on:mouseenter={() => (hoveredDashId = entry.ws.id)}
+            on:mouseleave={() => (hoveredDashId = null)}
             style="
               background: {$theme.bgSurface ?? 'transparent'};
               border: 1px solid {$theme.border ?? 'transparent'};
@@ -548,6 +560,8 @@
               baseColor={groupHex}
               contributionId={contribId}
               groupPath={group?.path}
+              {isActive}
+              isHovered={hoveredDashId === entry.ws.id}
             />
           </button>
         {/each}
@@ -556,6 +570,8 @@
           <button
             class="dash-btn"
             on:click|stopPropagation={toggle}
+            on:mouseenter={() => (caretHovered = true)}
+            on:mouseleave={() => (caretHovered = false)}
             title={collapsed ? "Expand" : "Collapse"}
             style="background: {$theme.bgSurface ??
               'transparent'}; border: 1px solid {$theme.border ??
@@ -566,7 +582,7 @@
               height="8"
               viewBox="0 0 12 8"
               fill="none"
-              stroke="currentColor"
+              stroke={caretHovered ? groupHex : dimIconColor}
               stroke-width="1.5"
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -640,11 +656,9 @@
     filter: brightness(1.1);
   }
   :global(.project-new-chip button) {
-    border-color: transparent !important;
+    border: none !important;
+    outline: none !important;
     color: var(--project-btn-fg) !important;
-  }
-  :global(.project-new-chip button:hover) {
-    background: var(--project-btn-hover-bg) !important;
   }
   :global(.project-new-chip button[data-dropdown-open]) {
     background: color-mix(

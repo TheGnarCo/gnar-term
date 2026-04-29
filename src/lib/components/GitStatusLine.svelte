@@ -103,7 +103,7 @@
   {/if}
 {:else if topRowHasContent}
   <div
-    style="padding: 0 12px 6px 6px; display: flex; flex-direction: column; gap: 2px; overflow: hidden; line-height: 1.2;"
+    style="padding: 0 12px 2px 6px; display: flex; flex-direction: column; gap: 2px; overflow: hidden; line-height: 1.2;"
   >
     {#if cwdItem}
       <div style="display: flex; align-items: center; min-width: 0;">

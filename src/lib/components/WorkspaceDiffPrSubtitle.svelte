@@ -41,6 +41,43 @@
   $: diffLabel = dirtyItem?.label ?? "";
   $: showDiff = diffLabel.length > 0;
 
+  interface DirtyCounts {
+    modified: number;
+    added: number;
+    deleted: number;
+    renamed: number;
+    untracked: number;
+    staged: number;
+  }
+
+  $: counts = (dirtyItem?.metadata as DirtyCounts | undefined) ?? null;
+  $: modifiedOnly = counts
+    ? Math.max(
+        0,
+        counts.modified +
+          counts.staged -
+          counts.added -
+          counts.deleted -
+          counts.renamed,
+      )
+    : 0;
+  $: diffSegments = counts
+    ? [
+        modifiedOnly > 0
+          ? { label: `~${modifiedOnly}`, color: "#e8b73a" }
+          : null,
+        counts.added > 0
+          ? { label: `+${counts.added}`, color: "#4ec957" }
+          : null,
+        counts.deleted > 0
+          ? { label: `-${counts.deleted}`, color: "#e85454" }
+          : null,
+        counts.untracked > 0
+          ? { label: `?${counts.untracked}`, color: fgMuted }
+          : null,
+      ].filter(Boolean)
+    : [];
+
   interface GhPrView {
     number: number;
     title: string;
@@ -102,26 +139,22 @@
   >
     {#if showDiff}
       <div
-        style="display: flex; align-items: center; gap: 3px; min-width: 0; overflow: hidden;"
+        style="display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden;"
+        title={dirtyItem?.tooltip ?? diffLabel}
       >
-        <svg
-          width="10"
-          height="10"
-          viewBox="0 0 16 16"
-          fill={iconFg}
-          style="flex-shrink: 0; opacity: 0.7;"
-          aria-hidden="true"
-        >
-          <path
-            d="M8 3.5a.5.5 0 0 1 .5.5v3.5H12a.5.5 0 0 1 0 1H8.5V12a.5.5 0 0 1-1 0V8.5H4a.5.5 0 0 1 0-1h3.5V4a.5.5 0 0 1 .5-.5zM3 11.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5z"
-          />
-        </svg>
-        <span
-          style="font-size: 10px; color: #e8b73a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
-          title={dirtyItem?.tooltip ?? diffLabel}
-        >
-          {diffLabel}
-        </span>
+        {#if diffSegments.length > 0}
+          {#each diffSegments as seg}
+            <span
+              style="font-size: 10px; color: {seg?.color}; white-space: nowrap; flex-shrink: 0;"
+              >{seg?.label}</span
+            >
+          {/each}
+        {:else}
+          <span
+            style="font-size: 10px; color: #e8b73a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
+            >{diffLabel}</span
+          >
+        {/if}
       </div>
     {/if}
 

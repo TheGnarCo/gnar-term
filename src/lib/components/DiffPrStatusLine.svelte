@@ -12,10 +12,8 @@
    */
   import { onDestroy, getContext } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
-  import {
-    parseGitStatus,
-    formatDirtyShorthand,
-  } from "../services/git-status-service";
+  import { parseGitStatus } from "../services/git-status-service";
+  import type { GitInfo } from "../services/git-status-service";
   import { EXTENSION_API_KEY, type ExtensionAPI } from "../../extensions/api";
 
   export let id: string;
@@ -44,7 +42,7 @@
     isDraft: boolean;
   }
 
-  let diffLabel = "";
+  let gitInfo: GitInfo | null = null;
   let pr: GhPrView | null = null;
   let lastId: string | null = null;
   let diffTimer: ReturnType<typeof setInterval> | null = null;
@@ -71,7 +69,7 @@
       gitRoot = await detectRoot();
     }
     if (!gitRoot) {
-      diffLabel = "";
+      gitInfo = null;
       return;
     }
     try {
@@ -79,13 +77,12 @@
         cwd: gitRoot,
       });
       if (!result || result.exit_code !== 0) {
-        diffLabel = "";
+        gitInfo = null;
         return;
       }
-      const info = parseGitStatus(result.stdout);
-      diffLabel = info ? formatDirtyShorthand(info) : "";
+      gitInfo = parseGitStatus(result.stdout) ?? null;
     } catch {
-      diffLabel = "";
+      gitInfo = null;
     }
   }
 
@@ -131,14 +128,40 @@
   $: if (isGit && id !== lastId) start(id);
   $: if (!isGit) {
     stop();
-    diffLabel = "";
+    gitInfo = null;
     pr = null;
     lastId = null;
   }
 
   onDestroy(() => stop());
 
-  $: showDiff = diffLabel.length > 0;
+  $: modifiedOnly = gitInfo
+    ? Math.max(
+        0,
+        gitInfo.modified +
+          gitInfo.staged -
+          gitInfo.added -
+          gitInfo.deleted -
+          gitInfo.renamed,
+      )
+    : 0;
+  $: diffSegments = gitInfo
+    ? [
+        modifiedOnly > 0
+          ? { label: `~${modifiedOnly}`, color: "#e8b73a" }
+          : null,
+        gitInfo.added > 0
+          ? { label: `+${gitInfo.added}`, color: "#4ec957" }
+          : null,
+        gitInfo.deleted > 0
+          ? { label: `-${gitInfo.deleted}`, color: "#e85454" }
+          : null,
+        gitInfo.untracked > 0
+          ? { label: `?${gitInfo.untracked}`, color: fgMuted }
+          : null,
+      ].filter(Boolean)
+    : [];
+  $: showDiff = diffSegments.length > 0;
   $: showPr = pr !== null && (pr.state === "OPEN" || pr.state === "open");
   $: isDraft = pr?.isDraft ?? false;
 </script>
@@ -149,27 +172,14 @@
   >
     {#if showDiff}
       <div
-        style="display: flex; align-items: center; gap: 3px; min-width: 0; overflow: hidden;"
+        style="display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden;"
       >
-        <!-- Diff icon: two stacked horizontal bars with +/- markers -->
-        <svg
-          width="10"
-          height="10"
-          viewBox="0 0 16 16"
-          fill={iconFg}
-          style="flex-shrink: 0; opacity: 0.7;"
-          aria-hidden="true"
-        >
-          <path
-            d="M8 3.5a.5.5 0 0 1 .5.5v3.5H12a.5.5 0 0 1 0 1H8.5V12a.5.5 0 0 1-1 0V8.5H4a.5.5 0 0 1 0-1h3.5V4a.5.5 0 0 1 .5-.5zM3 11.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5z"
-          />
-        </svg>
-        <span
-          style="font-size: 10px; color: #e8b73a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
-          title={diffLabel}
-        >
-          {diffLabel}
-        </span>
+        {#each diffSegments as seg}
+          <span
+            style="font-size: 10px; color: {seg?.color}; white-space: nowrap; flex-shrink: 0;"
+            >{seg?.label}</span
+          >
+        {/each}
       </div>
     {/if}
 

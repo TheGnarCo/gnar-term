@@ -142,6 +142,18 @@
         style="display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden;"
         title={dirtyItem?.tooltip ?? diffLabel}
       >
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 16 16"
+          fill={fgMuted}
+          style="flex-shrink: 0; opacity: 0.6;"
+          aria-hidden="true"
+        >
+          <path
+            d="M8 3.5a.5.5 0 0 1 .5.5v3.5H12a.5.5 0 0 1 0 1H8.5V12a.5.5 0 0 1-1 0V8.5H4a.5.5 0 0 1 0-1h3.5V4a.5.5 0 0 1 .5-.5zM3 11.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5z"
+          />
+        </svg>
         {#if diffSegments.length > 0}
           {#each diffSegments as seg}
             <span

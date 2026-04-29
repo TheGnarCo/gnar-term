@@ -462,7 +462,15 @@ export function startGitStatusService(): void {
     void ensurePolling(ws.id);
   }
 
-  unsubWorkspaces = workspaces.subscribe(() => {
+  unsubWorkspaces = workspaces.subscribe((wsList) => {
+    // Kick off polling for any workspace whose pty CWD just became available
+    // (covers the case where the pty starts after the service was initialised).
+    for (const ws of wsList) {
+      if (!workspaceCwds.has(ws.id)) {
+        void ensurePolling(ws.id);
+      }
+    }
+
     if (!activeWorkspaceId) return;
     const cached = workspaceCwds.get(activeWorkspaceId);
     if (!cached) return;

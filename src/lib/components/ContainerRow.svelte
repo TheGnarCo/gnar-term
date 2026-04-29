@@ -18,7 +18,6 @@
   import { type Component } from "svelte";
   import { slide } from "svelte/transition";
   import { theme } from "../stores/theme";
-  import { reorderContext } from "../stores/ui";
   import DragGrip from "./DragGrip.svelte";
   import DefaultWorkspaceListView from "./WorkspaceListView.svelte";
   import type { Workspace } from "../types";
@@ -84,26 +83,6 @@
     undefined;
 
   let bannerHovered = false;
-  let mouseOverContainer = false;
-  let containerLeaveTimer: ReturnType<typeof setTimeout> | null = null;
-
-  function handleContainerEnter() {
-    if (containerLeaveTimer !== null) {
-      clearTimeout(containerLeaveTimer);
-      containerLeaveTimer = null;
-    }
-    mouseOverContainer = true;
-  }
-
-  function handleContainerLeave() {
-    // Short delay so sibling transitions (rail ↔ banner) don't flicker.
-    containerLeaveTimer = setTimeout(() => {
-      mouseOverContainer = false;
-      containerLeaveTimer = null;
-    }, 80);
-  }
-
-  $: rowHovered = mouseOverContainer;
   $: railBorderColor =
     hasActiveChild && collapsed ? color : ($theme.border ?? "transparent");
   let collapsed = false;
@@ -204,8 +183,6 @@
     {#if onGripMouseDown}
       <div
         data-container-rail
-        on:mouseenter={handleContainerEnter}
-        on:mouseleave={handleContainerLeave}
         on:mousedown={(e) => onGripMouseDown?.(e)}
         style="
           flex-shrink: 0;
@@ -220,15 +197,13 @@
         "
         role="presentation"
       >
-        <!-- Dots always visible; fade right in idle state to match
-             workspace item rail style. Full opacity when hovered/dragging. -->
         <DragGrip
           theme={$theme}
-          visible={rowHovered && $reorderContext === null}
+          visible={false}
           railColor={color}
           railOpacity={1}
           alwaysShowDots={true}
-          fadeRight={!rowHovered}
+          fadeRight={true}
         />
         {#if hasActiveChild && collapsed}
           <div
@@ -244,39 +219,6 @@
           ></div>
         {/if}
       </div>
-    {/if}
-    {#if onGripMouseDown && !rowHovered}
-      <!-- Rail-edge fade: same treatment as WorkspaceItem. Positioned on
-           the outer row so it overlaps the DragGrip area (x=0–10) and
-           bleeds 4px into the content, giving the same rapid opacity
-           dropoff that workspace item rails show. Hidden while expanded
-           so the full-opacity grip isn't dimmed during drag. -->
-      <div
-        aria-hidden="true"
-        style="
-          position: absolute;
-          top: 0; bottom: 0; left: 0; width: 14px;
-          pointer-events: none;
-          background-image:
-            radial-gradient(circle, {color} 1.1px, transparent 1.6px),
-            radial-gradient(circle, {color} 1.1px, transparent 1.6px);
-          background-size: 5px 5px;
-          background-position: 0 0, 2.5px 2.5px;
-          background-repeat: repeat;
-          -webkit-mask-image: linear-gradient(
-            to right,
-            rgba(0, 0, 0, 1) 0%,
-            rgba(0, 0, 0, 0.3) 20%,
-            rgba(0, 0, 0, 0) 70%
-          );
-          mask-image: linear-gradient(
-            to right,
-            rgba(0, 0, 0, 1) 0%,
-            rgba(0, 0, 0, 0.3) 20%,
-            rgba(0, 0, 0, 0) 70%
-          );
-        "
-      ></div>
     {/if}
     <div
       style="
@@ -314,14 +256,8 @@
         on:contextmenu={onBannerContextMenu}
         on:click={onBannerClick}
         on:mousedown={(e) => onGripMouseDown?.(e)}
-        on:mouseenter={() => {
-          bannerHovered = true;
-          handleContainerEnter();
-        }}
-        on:mouseleave={() => {
-          bannerHovered = false;
-          handleContainerLeave();
-        }}
+        on:mouseenter={() => (bannerHovered = true)}
+        on:mouseleave={() => (bannerHovered = false)}
       >
         <div
           data-container-banner-body

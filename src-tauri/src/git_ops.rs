@@ -1,3 +1,4 @@
+use crate::git_helpers::validate_git_ref;
 use std::path::Path;
 use std::process::Command;
 
@@ -40,13 +41,19 @@ pub async fn push_branch(
 ) -> Result<(), String> {
     validate_repo(&repo_path)?;
     let remote_name = remote.unwrap_or_else(|| "origin".to_string());
-    run_git(&repo_path, &["push", &remote_name, &branch])?;
+    validate_git_ref(&remote_name)?;
+    validate_git_ref(&branch)?;
+    run_git(&repo_path, &["push", "--", &remote_name, &branch])?;
     Ok(())
 }
 
 #[tauri::command]
 pub async fn git_checkout(repo_path: String, branch: String) -> Result<(), String> {
     validate_repo(&repo_path)?;
+    validate_git_ref(&branch)?;
+    // Note: `git checkout -- <branch>` treats <branch> as a pathspec.
+    // We omit `--` here; validate_git_ref already rejects leading-dash names
+    // that would be misinterpreted as flags.
     run_git(&repo_path, &["checkout", &branch])?;
     Ok(())
 }
@@ -128,6 +135,60 @@ mod tests {
         .await;
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("does not exist"));
+    }
+
+    // F02 regression: injection via leading-dash branch/remote names
+    #[tokio::test]
+    async fn test_push_branch_rejects_injection_branch() {
+        let repo = setup_test_repo();
+        let result = push_branch(
+            repo.to_str().unwrap().to_string(),
+            "--upload-pack=malicious-cmd".to_string(),
+            None,
+        )
+        .await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            err.contains("must not start with '-'"),
+            "expected injection rejection, got: {err}"
+        );
+        cleanup_test_repo(&repo);
+    }
+
+    #[tokio::test]
+    async fn test_push_branch_rejects_injection_remote() {
+        let repo = setup_test_repo();
+        let result = push_branch(
+            repo.to_str().unwrap().to_string(),
+            "main".to_string(),
+            Some("--exec=evil".to_string()),
+        )
+        .await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            err.contains("must not start with '-'"),
+            "expected injection rejection, got: {err}"
+        );
+        cleanup_test_repo(&repo);
+    }
+
+    #[tokio::test]
+    async fn test_git_checkout_rejects_injection() {
+        let repo = setup_test_repo();
+        let result = git_checkout(
+            repo.to_str().unwrap().to_string(),
+            "--upload-pack=malicious-cmd".to_string(),
+        )
+        .await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            err.contains("must not start with '-'"),
+            "expected injection rejection, got: {err}"
+        );
+        cleanup_test_repo(&repo);
     }
 
     #[tokio::test]

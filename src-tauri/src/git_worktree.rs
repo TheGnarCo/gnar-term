@@ -1,5 +1,6 @@
+use crate::git_helpers::validate_git_ref;
 use serde::Serialize;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 #[derive(Clone, Debug, Serialize, PartialEq)]
@@ -7,6 +8,43 @@ pub struct BranchInfo {
     pub name: String,
     pub is_current: bool,
     pub is_remote: bool,
+}
+
+/// Validate a worktree path to prevent path traversal outside the home directory.
+///
+/// For paths that already exist, canonicalize directly. For new worktree paths
+/// (`create_worktree`), canonicalize the parent directory and join the basename.
+/// Either way, require the resolved path to be inside the user's home directory.
+fn validate_worktree_path(worktree_path: &str) -> Result<PathBuf, String> {
+    let home = std::env::var("HOME").map_err(|_| "HOME not set".to_string())?;
+    let home_path =
+        std::fs::canonicalize(&home).map_err(|e| format!("failed to resolve HOME: {e}"))?;
+
+    let path = Path::new(worktree_path);
+
+    let canonical = if path.exists() {
+        std::fs::canonicalize(path)
+            .map_err(|e| format!("failed to resolve worktree path {worktree_path}: {e}"))?
+    } else {
+        // Path doesn't exist yet (create_worktree target). Resolve parent.
+        let parent = path
+            .parent()
+            .ok_or_else(|| format!("worktree path has no parent: {worktree_path}"))?;
+        let basename = path
+            .file_name()
+            .ok_or_else(|| format!("worktree path has no filename: {worktree_path}"))?;
+        let resolved_parent = std::fs::canonicalize(parent)
+            .map_err(|e| format!("failed to resolve parent of worktree path: {e}"))?;
+        resolved_parent.join(basename)
+    };
+
+    if !canonical.starts_with(&home_path) {
+        return Err(format!(
+            "worktree path must be within home directory: {worktree_path}"
+        ));
+    }
+
+    Ok(canonical)
 }
 
 fn validate_repo(repo_path: &str) -> Result<(), String> {
@@ -79,9 +117,15 @@ pub async fn create_worktree(
     worktree_path: String,
 ) -> Result<(), String> {
     validate_repo(&repo_path)?;
+    validate_git_ref(&branch)?;
+    validate_git_ref(&base)?;
+    let safe_path = validate_worktree_path(&worktree_path)?;
+    let safe_path_str = safe_path
+        .to_str()
+        .ok_or_else(|| "worktree path contains invalid UTF-8".to_string())?;
     run_git(
         &repo_path,
-        &["worktree", "add", "-b", &branch, &worktree_path, &base],
+        &["worktree", "add", "-b", &branch, "--", safe_path_str, &base],
     )?;
     Ok(())
 }
@@ -89,9 +133,13 @@ pub async fn create_worktree(
 #[tauri::command]
 pub async fn remove_worktree(repo_path: String, worktree_path: String) -> Result<(), String> {
     validate_repo(&repo_path)?;
+    let safe_path = validate_worktree_path(&worktree_path)?;
+    let safe_path_str = safe_path
+        .to_str()
+        .ok_or_else(|| "worktree path contains invalid UTF-8".to_string())?;
     run_git(
         &repo_path,
-        &["worktree", "remove", "--force", &worktree_path],
+        &["worktree", "remove", "--force", "--", safe_path_str],
     )?;
     Ok(())
 }
@@ -144,5 +192,48 @@ mod tests {
         assert_eq!(result.len(), 2);
         assert_eq!(result[0].name, "main");
         assert_eq!(result[1].name, "origin/main");
+    }
+
+    // F03 regressions: argument injection via branch/base names
+    #[tokio::test]
+    async fn create_worktree_rejects_injection_branch() {
+        let result = create_worktree(
+            env!("CARGO_MANIFEST_DIR").to_string(),
+            "--upload-pack=evil".to_string(),
+            "main".to_string(),
+            "/tmp/wt-test".to_string(),
+        )
+        .await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            err.contains("must not start with '-'"),
+            "expected injection rejection, got: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn create_worktree_rejects_injection_base() {
+        let result = create_worktree(
+            env!("CARGO_MANIFEST_DIR").to_string(),
+            "feature/x".to_string(),
+            "--exec=evil".to_string(),
+            "/tmp/wt-test".to_string(),
+        )
+        .await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            err.contains("must not start with '-'"),
+            "expected injection rejection, got: {err}"
+        );
+    }
+
+    // F03: worktree path must be within home directory
+    #[test]
+    fn validate_worktree_path_rejects_outside_home() {
+        // /etc is never inside HOME
+        let result = validate_worktree_path("/etc/passwd");
+        assert!(result.is_err());
     }
 }

@@ -255,27 +255,57 @@ async fn handle_connection(stream: tokio::net::UnixStream, app: AppHandle, state
 
     // Read loop: one line per JSON-RPC message; emit as Tauri event with
     // connection_id metadata so the webview can route it.
+    //
+    // F16: Use a manually size-capped read loop instead of read_line() to
+    // prevent OOM when a client sends a line with no newline or an extremely
+    // long line. Cap is 16 MiB.
+    const MAX_LINE_BYTES: usize = 16 * 1024 * 1024;
     let mut reader = BufReader::new(read_half);
-    let mut buf = String::new();
-    loop {
+    let mut buf = Vec::with_capacity(4096);
+    'read: loop {
         buf.clear();
-        match reader.read_line(&mut buf).await {
-            Ok(0) => break, // EOF
-            Ok(_) => {
-                let trimmed = buf.trim_end_matches(['\r', '\n']).to_string();
-                if trimmed.is_empty() {
-                    continue;
-                }
-                // Build the envelope: { connection_id, payload }
-                // Use serde_json to be robust against arbitrary payload contents.
-                let envelope = serde_json::json!({
-                    "connection_id": connection_id,
-                    "payload": trimmed,
-                });
-                let _ = app.emit(REQUEST_EVENT, envelope.to_string());
+        loop {
+            let Ok(available) = reader.fill_buf().await else {
+                break 'read;
+            };
+            if available.is_empty() {
+                // EOF
+                break 'read;
             }
-            Err(_) => break,
+            // Find newline in the currently-buffered slice.
+            let newline_pos = available.iter().position(|&b| b == b'\n');
+            let consume_len = newline_pos.map_or(available.len(), |p| p + 1);
+            let would_exceed = buf.len() + consume_len > MAX_LINE_BYTES;
+            if would_exceed {
+                // Line too long — send JSON-RPC parse error and close.
+                let err_msg =
+                    "{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32700,\"message\":\"Parse error: line too long\"},\"id\":null}\n";
+                state.send_to(connection_id, err_msg.trim_end_matches('\n').to_string());
+                break 'read;
+            }
+            buf.extend_from_slice(&available[..consume_len]);
+            reader.consume(consume_len);
+            if newline_pos.is_some() {
+                break; // full line accumulated
+            }
+            // No newline yet — loop to fill more
         }
+        if buf.is_empty() {
+            break;
+        }
+        let trimmed = String::from_utf8_lossy(&buf)
+            .trim_end_matches(['\r', '\n'])
+            .to_string();
+        if trimmed.is_empty() {
+            continue;
+        }
+        // Build the envelope: { connection_id, payload }
+        // Use serde_json to be robust against arbitrary payload contents.
+        let envelope = serde_json::json!({
+            "connection_id": connection_id,
+            "payload": trimmed,
+        });
+        let _ = app.emit(REQUEST_EVENT, envelope.to_string());
     }
 
     // Connection closed. Notify webview, free per-connection state, drain.

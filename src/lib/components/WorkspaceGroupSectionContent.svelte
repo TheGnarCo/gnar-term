@@ -26,6 +26,7 @@
     openGroupDashboard,
     WORKSPACE_GROUP_STATE_CHANGED,
   } from "../services/workspace-group-service";
+  import { archiveGroup } from "../services/archive-service";
   import {
     workspaceActionStore,
     type WorkspaceActionContext,
@@ -35,12 +36,19 @@
     getChildRowsFor,
   } from "../services/child-row-contributor-registry";
   import { getRootRowRenderer } from "../services/root-row-renderer-registry";
-  import { switchWorkspace } from "../services/workspace-service";
+  import {
+    switchWorkspace,
+    closeWorkspace,
+  } from "../services/workspace-service";
   import {
     dashboardContributionStore,
     canAddContributionToGroup,
+    getDashboardContribution,
     type DashboardContribution,
   } from "../services/dashboard-contribution-registry";
+  import DashboardTileIcon from "./DashboardTileIcon.svelte";
+  import GridIcon from "../icons/GridIcon.svelte";
+  import type { MenuItem } from "../context-menu-types";
   import { workspaces as workspacesStore } from "../stores/workspace";
   import {
     showInputPrompt,
@@ -51,6 +59,7 @@
   import { getAllSurfaces, isPreviewSurface, type Workspace } from "../types";
   import { agentsStore } from "../services/agent-detection-service";
   import { variantColor } from "../status-colors";
+  import { tooltip } from "../actions/tooltip";
 
   function wsMeta(ws: {
     metadata?: unknown;
@@ -296,6 +305,12 @@
     }
     items.push({ label: "", action: () => {}, separator: true });
     items.push({
+      label: "Archive Group",
+      action: () => {
+        if (group) void archiveGroup(group.id);
+      },
+    });
+    items.push({
       label: "Delete Workspace Group",
       danger: true,
       action: () => {
@@ -308,6 +323,56 @@
   $: groupHex = group ? resolveGroupColor(group.color, $theme) : "";
   $: headerFg = group ? contrastColor(groupHex) : $theme.fg;
   $: subtitleFg = $theme.fgMuted ?? $theme.fgDim ?? $theme.fg;
+
+  $: dashboardWorkspaces = (() => {
+    const gId = group?.id;
+    if (!gId) return [] as Array<{ ws: Workspace; idx: number }>;
+    return $workspaces
+      .map((ws, idx) => ({ ws, idx }))
+      .filter(({ ws }) => {
+        const md = wsMeta(ws);
+        return md?.isDashboard === true && md?.groupId === gId;
+      })
+      .sort((a, b) => {
+        const aS = wsMeta(a.ws)?.dashboardContributionId === "settings";
+        const bS = wsMeta(b.ws)?.dashboardContributionId === "settings";
+        if (aS === bS) return 0;
+        return aS ? 1 : -1;
+      });
+  })();
+
+  function showDashboardContextMenu(
+    x: number,
+    y: number,
+    globalIdx: number,
+  ): void {
+    const ws = $workspaces[globalIdx];
+    if (!ws) return;
+    const md = wsMeta(ws);
+    const contribId = md?.dashboardContributionId;
+    if (typeof contribId !== "string") return;
+    const contribution = getDashboardContribution(contribId);
+    if (!contribution || contribution.autoProvision) return;
+    const items: MenuItem[] = [
+      {
+        label: `Delete ${contribution.label}`,
+        danger: true,
+        action: async () => {
+          const confirmed = await showConfirmPrompt(
+            `Delete "${ws.name}"? The backing markdown file stays on disk so you can re-add this dashboard later without losing your edits.`,
+            {
+              title: `Delete ${contribution.label}`,
+              confirmLabel: "Delete",
+              cancelLabel: "Cancel",
+            },
+          );
+          if (!confirmed) return;
+          closeWorkspace(globalIdx);
+        },
+      },
+    ];
+    contextMenu.set({ x, y, items });
+  }
 
   $: splitDropdownItems = [
     {
@@ -372,6 +437,7 @@
       {onGripMouseDown}
       onBannerContextMenu={handleBannerContextMenu}
       onBannerClick={handleBannerClick}
+      onClose={handleDeleteGroup}
       {filterIds}
       {hasActiveChild}
       dashboardHintFor={hintForGroupDashboardHost}
@@ -394,15 +460,23 @@
 
       <svelte:fragment slot="banner-end" let:bannerHovered let:collapsed>
         <div
-          style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0;"
+          style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;"
         >
+          {#if collapsed && groupStatusColor}
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <span
+              data-group-status-chip
+              use:tooltip={"Bot active in this group"}
+              style="display: inline-flex; align-items: center; padding: 0 3px;"
+            >
+              <span
+                style="width: 7px; height: 7px; border-radius: 50%; background: {groupStatusColor}; box-shadow: 0 0 0 1px color-mix(in srgb, {groupStatusColor} 35%, transparent);"
+              ></span>
+            </span>
+          {/if}
           {#if coreAction}
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <!-- `+ New` split button. Background uses the group's own
-                 color so the chip stays visually tied to the container,
-                 and flips to a stronger variant on banner hover so it
-                 remains distinct against the banner's hover background. -->
             <span
               class="project-new-chip"
               on:click|stopPropagation
@@ -424,17 +498,6 @@
               />
             </span>
           {/if}
-          {#if collapsed && groupStatusColor}
-            <span
-              data-group-status-chip
-              title="Bot active in this group"
-              style="display: inline-flex; align-items: center; padding: 0 3px;"
-            >
-              <span
-                style="width: 7px; height: 7px; border-radius: 50%; background: {groupStatusColor}; box-shadow: 0 0 0 1px color-mix(in srgb, {groupStatusColor} 35%, transparent);"
-              ></span>
-            </span>
-          {/if}
         </div>
       </svelte:fragment>
 
@@ -450,6 +513,71 @@
             iconColor={groupHex}
           />
         </div>
+      </svelte:fragment>
+
+      <svelte:fragment slot="btn-row" let:collapsed let:toggle let:showToggle>
+        {#each dashboardWorkspaces as entry (entry.ws.id)}
+          {@const md = entry.ws.metadata as Record<string, unknown> | undefined}
+          {@const contribId =
+            typeof md?.dashboardContributionId === "string"
+              ? (md.dashboardContributionId as string)
+              : undefined}
+          {@const contribution = contribId
+            ? getDashboardContribution(contribId)
+            : undefined}
+          {@const IconComp = contribution?.icon ?? GridIcon}
+          {@const isActive = entry.idx === $activeWorkspaceIdx}
+          <!-- svelte-ignore a11y_consider_explicit_label -->
+          <button
+            class="dash-btn"
+            data-dashboard-item={entry.ws.id}
+            data-dashboard-contribution={contribId}
+            data-active={isActive ? "true" : undefined}
+            title={entry.ws.name}
+            on:click|stopPropagation={() => switchWorkspace(entry.idx)}
+            on:contextmenu|preventDefault|stopPropagation={(e) =>
+              showDashboardContextMenu(e.clientX, e.clientY, entry.idx)}
+            style="
+              background: {$theme.bgSurface ?? 'transparent'};
+              border: 1px solid {$theme.border ?? 'transparent'};
+              {isActive ? `box-shadow: 0 0 0 1.5px ${groupHex};` : ''}
+            "
+          >
+            <DashboardTileIcon
+              iconComponent={IconComp}
+              baseColor={groupHex}
+              contributionId={contribId}
+              groupPath={group?.path}
+            />
+          </button>
+        {/each}
+        {#if showToggle}
+          <!-- svelte-ignore a11y_consider_explicit_label -->
+          <button
+            class="dash-btn"
+            on:click|stopPropagation={toggle}
+            title={collapsed ? "Expand" : "Collapse"}
+            style="background: {$theme.bgSurface ??
+              'transparent'}; border: 1px solid {$theme.border ??
+              'transparent'};"
+          >
+            <svg
+              width="12"
+              height="8"
+              viewBox="0 0 12 8"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              style="transition: transform 0.2s ease; transform: rotate({collapsed
+                ? 180
+                : 0}deg);"
+            >
+              <polyline points="1,1 6,7 11,1" />
+            </svg>
+          </button>
+        {/if}
       </svelte:fragment>
 
       <svelte:fragment slot="after-nested">
@@ -496,6 +624,21 @@
 {/if}
 
 <style>
+  .dash-btn {
+    flex: 1 1 calc(25% - 3px);
+    min-width: 32px;
+    height: 30px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: inherit;
+    -webkit-app-region: no-drag;
+  }
+  .dash-btn:hover {
+    filter: brightness(1.1);
+  }
   :global(.project-new-chip button) {
     border-color: transparent !important;
     color: var(--project-btn-fg) !important;

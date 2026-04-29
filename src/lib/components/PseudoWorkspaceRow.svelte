@@ -3,13 +3,13 @@
    * PseudoWorkspaceRow — root-row chrome for entries registered via
    * `registerPseudoWorkspace`. Mirrors WorkspaceItem's left-rail look
    * so the Global Agentic Dashboard sits visually alongside dashboard
-   * workspace rows (Claude Code, Settings), with two deliberate
-   * differences:
+   * workspace rows (Claude Code, Settings), with one deliberate
+   * difference: no name label when a `rowBody` is registered — the
+   * rowBody (e.g. AgentStatusGrid chips) occupies the title slot.
    *
-   *   1. No close affordance — pseudo-workspaces are pinned, never
-   *      removable through the sidebar UI (spec §5.2 / §6).
-   *   2. No name label when a `rowBody` is registered — the rowBody
-   *      (e.g. AgentStatusGrid chips) occupies the title slot.
+   * When `pseudo.onClose` is defined the row renders a hover-revealed ×
+   * button at its right edge. Clicking it unregisters the entry and
+   * calls onClose() so the registrar can wire up a reopen affordance.
    */
   import { theme } from "../stores/theme";
   import { reorderContext } from "../stores/ui";
@@ -21,12 +21,20 @@
   import ExtensionWrapper from "./ExtensionWrapper.svelte";
   import { getExtensionApiById } from "../services/extension-loader";
   import type { Component } from "svelte";
-  import type { PseudoWorkspace } from "../services/pseudo-workspace-registry";
+  import {
+    type PseudoWorkspace,
+    unregisterPseudoWorkspace,
+  } from "../services/pseudo-workspace-registry";
   import { configStore } from "../config";
   import { resolveGroupColor } from "../theme-data";
+  import { shortcutHint } from "../actions/shortcut-hint";
+  import { shortcutHintsActive } from "../stores/shortcut-hints";
+  import { modLabel } from "../terminal-service";
 
   export let pseudo: PseudoWorkspace;
   export let onGripMouseDown: ((e: MouseEvent) => void) | undefined = undefined;
+  /** Sidebar position index for the ⌘N shortcut hint. */
+  export let shortcutIdx: number | undefined = undefined;
 
   $: rowBodyApi = pseudo.rowBody
     ? getExtensionApiById(pseudo.source)
@@ -50,7 +58,16 @@
   }
 
   $: isActive = $activePseudoWorkspaceId === pseudo.id;
-  $: gripVisible = rowHovered && $reorderContext === null;
+  $: gripVisible =
+    $shortcutHintsActive || (rowHovered && $reorderContext === null);
+
+  let closeHovered = false;
+
+  function handleClose(e: MouseEvent): void {
+    e.stopPropagation();
+    unregisterPseudoWorkspace(pseudo.id);
+    pseudo.onClose?.();
+  }
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -61,6 +78,9 @@
   role="button"
   tabindex="0"
   aria-label={pseudo.label}
+  use:shortcutHint={shortcutIdx !== undefined && shortcutIdx < 9
+    ? `${modLabel}${shortcutIdx + 1}`
+    : undefined}
   style="
     display: flex;
     position: relative;
@@ -158,4 +178,25 @@
       </span>
     {/if}
   </div>
+  {#if pseudo.onClose && rowHovered}
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      data-pseudo-workspace-close
+      on:click={handleClose}
+      on:mouseenter={() => (closeHovered = true)}
+      on:mouseleave={() => (closeHovered = false)}
+      style="
+        display: flex; align-items: center; justify-content: center;
+        width: 20px; flex-shrink: 0;
+        color: {closeHovered ? $theme.danger : $theme.fgDim};
+        font-size: 11px;
+      "
+      title="Close {pseudo.label}"
+      role="button"
+      tabindex="-1"
+    >
+      ×
+    </div>
+  {/if}
 </div>

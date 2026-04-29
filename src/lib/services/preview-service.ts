@@ -207,4 +207,22 @@ export function renderContentToElement(
   return element;
 }
 
+export async function refreshPreviewElement(
+  filePath: string,
+  element: HTMLElement,
+): Promise<void> {
+  const previewer = findPreviewer(filePath);
+  if (!previewer) return;
+  const isBinary = BINARY_EXTS.has(getExtension(filePath));
+  if (isBinary) return;
+
+  let content = "";
+  try {
+    content = await tauriInvoke<string>("read_file", { path: filePath });
+  } catch (err) {
+    content = `Error reading file: ${err}`;
+  }
+  previewer.render(content, filePath, element, buildPreviewContext());
+}
+
 export { type PreviewResult } from "./preview-registry";

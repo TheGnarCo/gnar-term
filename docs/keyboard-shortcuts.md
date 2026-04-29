@@ -43,7 +43,11 @@ All shortcuts use `Cmd` on macOS and `Ctrl` on Linux unless noted otherwise.
 
 ## General
 
-| Shortcut | Action           |
-| :------- | :--------------- |
-| `Cmd+P`  | Command palette  |
-| `Cmd+K`  | Clear scrollback |
+| Shortcut          | Action                      |
+| :---------------- | :-------------------------- |
+| `Cmd+P`           | Command palette             |
+| `Cmd+K`           | Clear scrollback            |
+| `Cmd+=` / `Cmd++` | Increase terminal font size |
+| `Cmd+-`           | Decrease terminal font size |
+
+Linux variants use `Ctrl+Shift+=` / `Ctrl+Shift+-` for font size (plain `Ctrl+=`/`Ctrl+-` would be intercepted by the terminal).

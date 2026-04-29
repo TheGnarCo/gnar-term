@@ -36,6 +36,7 @@
     isMac,
     modLabel,
     shiftModLabel,
+    adjustFontSize,
   } from "./lib/terminal-service";
   import { getAllPanes, getAllSurfaces, isTerminalSurface } from "./lib/types";
   import { forEachTerminalSurface } from "./lib/services/service-helpers";
@@ -84,6 +85,7 @@
     closePane,
     focusPane,
     splitFromSidebar,
+    togglePaneZoom,
   } from "./lib/services/pane-service";
   import {
     selectSurface,
@@ -329,6 +331,30 @@
       title: "Jump to Next Unread Notification",
       shortcut: `${shiftModLabel}U`,
       action: () => jumpToNextUnread(),
+      source: "core",
+    },
+    {
+      id: "core.toggle-pane-zoom",
+      title: "Toggle Pane Zoom",
+      shortcut: `${shiftModLabel}Enter`,
+      action: () => {
+        const s = $activeSurface;
+        if (s) togglePaneZoom(s.id);
+      },
+      source: "core",
+    },
+    {
+      id: "core.increase-font-size",
+      title: "Increase Font Size",
+      shortcut: isMac ? `${modLabel}=` : `Ctrl+Shift+=`,
+      action: () => adjustFontSize(1),
+      source: "core",
+    },
+    {
+      id: "core.decrease-font-size",
+      title: "Decrease Font Size",
+      shortcut: isMac ? `${modLabel}-` : `Ctrl+Shift+-`,
+      action: () => adjustFontSize(-1),
       source: "core",
     },
     ...$workspaces.map((ws, i) => ({

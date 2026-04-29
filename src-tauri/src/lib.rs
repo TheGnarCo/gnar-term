@@ -322,6 +322,7 @@ fn get_cli_args(args: tauri::State<'_, CliArgs>) -> CliArgs {
 /// inject `GNAR_TERM_PANE_ID` and `GNAR_TERM_WORKSPACE_ID` so MCP agents
 /// running inside a pane can advertise their host context to the GUI.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 async fn spawn_pty(
     app: AppHandle,
     state: tauri::State<'_, AppState>,
@@ -330,6 +331,7 @@ async fn spawn_pty(
     cwd: Option<String>,
     on_output: Channel<InvokeResponseBody>,
     extra_env: Option<HashMap<String, String>>,
+    shell: Option<String>,
 ) -> Result<u32, String> {
     let pty_system = native_pty_system();
 
@@ -344,8 +346,11 @@ async fn spawn_pty(
 
     let pty_id = NEXT_PTY_ID.fetch_add(1, Ordering::Relaxed);
 
-    // Spawn shell
-    let mut cmd = CommandBuilder::new_default_prog();
+    // Spawn shell — use config-provided shell if set, otherwise system default ($SHELL)
+    let mut cmd = match shell {
+        Some(ref s) if !s.is_empty() => CommandBuilder::new(s),
+        _ => CommandBuilder::new_default_prog(),
+    };
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
     // Report as ghostty so CLI apps (e.g. Claude Code) enable the kitty

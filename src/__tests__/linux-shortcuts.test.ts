@@ -29,6 +29,7 @@ vi.mock("@xterm/xterm", () => ({
   Terminal: class {
     open = vi.fn();
     write = vi.fn();
+    paste = vi.fn();
     focus = vi.fn();
     dispose = vi.fn();
     cols = 80;
@@ -43,6 +44,8 @@ vi.mock("@xterm/xterm", () => ({
     attachCustomKeyEventHandler = vi.fn();
     registerLinkProvider = vi.fn();
     getSelection = vi.fn().mockReturnValue("selected text");
+    hasSelection = vi.fn().mockReturnValue(false);
+    onSelectionChange = vi.fn();
     scrollToBottom = vi.fn();
     onScroll = vi.fn().mockReturnValue({ dispose: vi.fn() });
   },

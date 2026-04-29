@@ -13,6 +13,7 @@ import { get } from "svelte/store";
 import { workspaces } from "../stores/workspace";
 import { getWorkspaceGroups } from "../stores/workspace-groups";
 import { loadState, type GnarTermConfig, type WorkspaceDef } from "../config";
+import { initArchiveFromState } from "../stores/archive";
 import {
   createWorkspace,
   createWorkspaceFromDef,
@@ -95,6 +96,7 @@ export async function restoreWorkspaces(
 
   // Try to restore persisted workspaces from state.json
   const state = await loadState();
+  initArchiveFromState();
   if (Array.isArray(state.workspaces)) {
     // Clear any existing workspaces to prevent doubling on re-mount
     workspaces.set([]);

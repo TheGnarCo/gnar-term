@@ -58,7 +58,10 @@
     style="{btnStyle} color: {$primarySidebarVisible ? fgActive : fg};"
     title="Toggle Primary Sidebar ({isMac ? modLabel : shiftModLabel}B)"
     aria-label="Toggle Primary Sidebar"
-    use:shortcutHint={isMac ? `${modLabel}B` : `${shiftModLabel}B`}
+    use:shortcutHint={{
+      label: isMac ? `${modLabel}B` : `${shiftModLabel}B`,
+      placement: "below",
+    }}
     on:click={() => primarySidebarVisible.update((v) => !v)}
   >
     <svg
@@ -96,7 +99,7 @@
     style="{btnStyle} color: {fg};"
     title="Settings ({modLabel},)"
     aria-label="Settings"
-    use:shortcutHint={isMac ? "⌘," : "Ctrl+,"}
+    use:shortcutHint={{ label: isMac ? "⌘," : "Ctrl+,", placement: "below" }}
     on:click={() => void spawnOrNavigate("gnar-term:settings")}
   >
     <svg

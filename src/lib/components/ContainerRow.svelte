@@ -19,9 +19,11 @@
   import { slide } from "svelte/transition";
   import { theme } from "../stores/theme";
   import { reorderContext } from "../stores/ui";
+  import { workspaces } from "../stores/workspace";
   import DragGrip from "./DragGrip.svelte";
   import DefaultWorkspaceListView from "./WorkspaceListView.svelte";
   import type { Workspace } from "../types";
+  import { tooltip } from "../actions/tooltip";
 
   /** Banner + rail color. Required. */
   export let color: string;
@@ -46,6 +48,8 @@
    * `stopPropagation` so they don't bubble into this handler.
    */
   export let onBannerClick: (() => void) | undefined = undefined;
+  /** Optional close/delete handler. When provided, a × button appears on banner hover. */
+  export let onClose: (() => void) | undefined = undefined;
 
   /** Nested workspace list filter — ids to include. */
   export let filterIds: Set<string>;
@@ -84,17 +88,47 @@
     undefined;
 
   let bannerHovered = false;
-  /**
-   * Row-level hover covers the rail + banner + nested list. Drives the
-   * DragGrip expansion so the rail widens whenever the cursor enters any
-   * part of the row (not only the grip column).
-   */
-  let rowHovered = false;
+  let closeHovered = false;
+  let mouseOverContainer = false;
+  let containerLeaveTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function handleContainerEnter() {
+    if (containerLeaveTimer !== null) {
+      clearTimeout(containerLeaveTimer);
+      containerLeaveTimer = null;
+    }
+    mouseOverContainer = true;
+  }
+
+  function handleContainerLeave() {
+    containerLeaveTimer = setTimeout(() => {
+      mouseOverContainer = false;
+      containerLeaveTimer = null;
+    }, 80);
+  }
+
+  $: rowHovered = mouseOverContainer;
+  $: railBorderColor =
+    hasActiveChild && collapsed ? color : ($theme.border ?? "transparent");
+
+  // Non-dashboard count: dashboards don't count as real nested workspaces for
+  // the purposes of showing the toggle button and auto-expand/collapse.
+  $: nonDashboardCount = $workspaces.filter(
+    (ws) =>
+      filterIds.has(ws.id) &&
+      (ws.metadata as Record<string, unknown> | undefined)?.isDashboard !==
+        true,
+  ).length;
+
   let collapsed = false;
-  let prevFilterIds = filterIds;
-  $: if (filterIds !== prevFilterIds) {
-    if (filterIds.size > prevFilterIds.size && collapsed) collapsed = false;
-    prevFilterIds = filterIds;
+  let prevNonDashboardCount = -1;
+  $: {
+    const count = nonDashboardCount;
+    if (prevNonDashboardCount >= 0) {
+      if (count > prevNonDashboardCount) collapsed = false;
+      else if (count === 0) collapsed = true;
+    }
+    prevNonDashboardCount = count;
   }
 
   $: WorkspaceListViewResolved = (workspaceListViewComponent ??
@@ -140,48 +174,22 @@
           <slot name="banner-end" />
         </div>
         <slot name="banner-subtitle" />
-        {#if filterIds.size > 0}
-          <!-- svelte-ignore a11y_click_events_have_key_events -->
-          <!-- svelte-ignore a11y_no_static_element_interactions -->
-          <div
-            role="button"
-            tabindex="0"
-            on:click|stopPropagation={() => (collapsed = !collapsed)}
-            on:keydown={(e) => e.key === "Enter" && (collapsed = !collapsed)}
-            title={collapsed ? "Expand" : "Collapse"}
-            class="collapse-toggle"
-            style="
-              display: flex; justify-content: center; align-items: center;
-              padding: 6px 0; cursor: pointer;
-              border: 1px solid {$theme.border ?? 'transparent'};
-              border-radius: 4px;
-              background: transparent;
-              color: {$theme.fgMuted ?? $theme.fgDim ?? $theme.fg};
-              margin: 4px 0 2px;
-              -webkit-app-region: no-drag;
-            "
-          >
-            <svg
-              width="12"
-              height="8"
-              viewBox="0 0 12 8"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              style="transition: transform 0.2s ease; transform: rotate({collapsed
-                ? 180
-                : 0}deg);"><polyline points="1,1 6,7 11,1" /></svg
-            >
+        {#if $$slots["btn-row"]}
+          <div class="container-btn-row">
+            <slot
+              name="btn-row"
+              {collapsed}
+              toggle={() => (collapsed = !collapsed)}
+              showToggle={nonDashboardCount > 0}
+            />
           </div>
         {/if}
       </div>
     </div>
-    {#if !collapsed && filterIds.size > 0}
+    {#if !collapsed && nonDashboardCount > 0}
       <div
         data-container-nested={scopeId}
-        data-nested-count={filterIds.size}
+        data-nested-count={nonDashboardCount}
         style="display: flex; flex-direction: column;"
         transition:slide={{ duration: 200 }}
       >
@@ -215,29 +223,44 @@
     {#if onGripMouseDown}
       <div
         data-container-rail
-        on:mouseenter={() => (rowHovered = true)}
-        on:mouseleave={() => (rowHovered = false)}
+        on:mouseenter={handleContainerEnter}
+        on:mouseleave={handleContainerLeave}
         on:mousedown={(e) => onGripMouseDown?.(e)}
         style="
           flex-shrink: 0;
           align-self: stretch;
           display: flex;
-          background: {color};
+          position: relative;
+          box-sizing: border-box;
+          border-left: 1px solid {railBorderColor};
+          border-top: 1px solid {railBorderColor};
+          border-bottom: 1px solid {collapsed
+          ? railBorderColor
+          : 'transparent'};
         "
         role="presentation"
       >
-        <!-- Drag-start handler is wired to the rail + banner only —
-             nested workspaces own their own drag within the nested
-             zone, so mousedowns there must NOT bubble up into a
-             container-row reorder. -->
         <DragGrip
           theme={$theme}
           visible={rowHovered && $reorderContext === null}
           railColor={color}
-          dotColor="#000"
           railOpacity={1}
           alwaysShowDots={true}
+          fadeRight={!rowHovered}
         />
+        {#if hasActiveChild && collapsed}
+          <div
+            aria-hidden="true"
+            style="
+              position: absolute;
+              top: 0; left: 0; bottom: 0;
+              width: 1px;
+              background: {color};
+              pointer-events: none;
+              z-index: 4;
+            "
+          ></div>
+        {/if}
       </div>
     {/if}
     <div
@@ -259,13 +282,13 @@
           ? ($theme.bgHighlight ?? 'transparent')
           : ($theme.bgSurface ?? 'transparent')};
           color: {$theme.fg};
-          border-top: 1px solid {hasActiveChild
+          border-top: 1px solid {hasActiveChild && collapsed
           ? color
           : ($theme.border ?? 'transparent')};
-          border-right: 1px solid {hasActiveChild
+          border-right: 1px solid {hasActiveChild && collapsed
           ? color
           : ($theme.border ?? 'transparent')};
-          border-bottom: 1px solid {hasActiveChild
+          border-bottom: 1px solid {hasActiveChild && collapsed
           ? color
           : ($theme.border ?? 'transparent')};
           border-left: none;
@@ -278,49 +301,16 @@
         on:mousedown={(e) => onGripMouseDown?.(e)}
         on:mouseenter={() => {
           bannerHovered = true;
-          rowHovered = true;
+          handleContainerEnter();
         }}
         on:mouseleave={() => {
           bannerHovered = false;
-          rowHovered = false;
+          handleContainerLeave();
         }}
       >
-        {#if onGripMouseDown && !rowHovered}
-          <!-- Rail-edge fade: a small dot-pattern section at the banner's
-               left edge that continues the rail into the banner body and
-               fades out. Mirrors WorkspaceItem's drag-edge fade. Hidden
-               while the rail is expanded — at that point the rail itself
-               covers this region. -->
-          <div
-            aria-hidden="true"
-            style="
-              position: absolute;
-              top: 0; bottom: 0;
-              left: 0; width: 14px;
-              pointer-events: none;
-              background-color: {color};
-              background-image:
-                radial-gradient(circle, #000 1.1px, transparent 1.6px),
-                radial-gradient(circle, #000 1.1px, transparent 1.6px);
-              background-size: 5px 5px;
-              background-position: 0 0, 2.5px 2.5px;
-              background-repeat: repeat;
-              -webkit-mask-image: linear-gradient(
-                to right,
-                rgba(0, 0, 0, 1) 0%,
-                rgba(0, 0, 0, 0) 45%
-              );
-              mask-image: linear-gradient(
-                to right,
-                rgba(0, 0, 0, 1) 0%,
-                rgba(0, 0, 0, 0) 45%
-              );
-            "
-          ></div>
-        {/if}
         <div
           data-container-banner-body
-          style="padding-left: 8px; display: flex; flex-direction: column; gap: 2px; min-height: 32px; justify-content: center;"
+          style="padding-left: 8px; padding-right: 0; display: flex; flex-direction: column; gap: 2px; min-height: 32px; justify-content: center;"
         >
           <div
             style="display: flex; align-items: center; gap: 8px; min-width: 0;"
@@ -330,48 +320,50 @@
             <slot name="banner-end" {bannerHovered} {collapsed} />
           </div>
           <slot name="banner-subtitle" {bannerHovered} />
-          {#if filterIds.size > 0}
-            <!-- svelte-ignore a11y_click_events_have_key_events -->
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <div
-              role="button"
-              tabindex="0"
-              on:click|stopPropagation={() => (collapsed = !collapsed)}
-              on:keydown={(e) => e.key === "Enter" && (collapsed = !collapsed)}
-              title={collapsed ? "Expand" : "Collapse"}
-              class="collapse-toggle"
-              style="
-                display: flex; justify-content: center; align-items: center;
-                padding: 6px 0; cursor: pointer;
-                border: 1px solid {$theme.border ?? 'transparent'};
-                border-radius: 4px;
-                background: transparent;
-                color: {$theme.fgMuted ?? $theme.fgDim ?? $theme.fg};
-                margin: 4px 0 2px;
-                -webkit-app-region: no-drag;
-              "
-            >
-              <svg
-                width="12"
-                height="8"
-                viewBox="0 0 12 8"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                style="transition: transform 0.2s ease; transform: rotate({collapsed
-                  ? 180
-                  : 0}deg);"><polyline points="1,1 6,7 11,1" /></svg
-              >
+          {#if $$slots["btn-row"]}
+            <div class="container-btn-row">
+              <slot
+                name="btn-row"
+                {collapsed}
+                toggle={() => (collapsed = !collapsed)}
+                showToggle={nonDashboardCount > 0}
+              />
             </div>
           {/if}
         </div>
+        {#if onClose}
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <span
+            use:tooltip={"Delete Workspace Group"}
+            style="
+              position: absolute;
+              top: 50%; right: 6px;
+              transform: translateY(-50%);
+              color: {closeHovered ? $theme.danger : $theme.fgDim};
+              background: {closeHovered
+              ? ($theme.bgHighlight ?? 'rgba(255,255,255,0.06)')
+              : 'transparent'};
+              border: 1px solid {$theme.border ?? 'transparent'};
+              border-radius: 4px;
+              font-size: 11px;
+              cursor: pointer;
+              padding: 2px 5px;
+              line-height: 1;
+              opacity: {bannerHovered ? '1' : '0'};
+              -webkit-app-region: no-drag;
+              transition: opacity 0.15s, background 0.1s, color 0.1s;
+            "
+            on:click|stopPropagation={onClose}
+            on:mouseenter={() => (closeHovered = true)}
+            on:mouseleave={() => (closeHovered = false)}>×</span
+          >
+        {/if}
       </div>
-      {#if !collapsed && filterIds.size > 0}
+      {#if !collapsed && nonDashboardCount > 0}
         <div
           data-container-nested={scopeId}
-          data-nested-count={filterIds.size}
+          data-nested-count={nonDashboardCount}
           style="display: flex; flex-direction: column;"
           transition:slide={{ duration: 200 }}
         >
@@ -393,7 +385,10 @@
 {/if}
 
 <style>
-  .collapse-toggle:hover {
-    background: rgba(255, 255, 255, 0.06) !important;
+  .container-btn-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: 4px 0 2px;
   }
 </style>

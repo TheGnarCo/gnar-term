@@ -15,6 +15,7 @@ import {
 } from "./context-menu-item-registry";
 import {
   registerWorkspaceAction as registryRegisterWorkspaceAction,
+  unregisterWorkspaceAction as registryUnregisterWorkspaceAction,
   getWorkspaceActions as registryGetWorkspaceActions,
   type WorkspaceActionContext,
 } from "./workspace-action-registry";
@@ -68,6 +69,7 @@ export function createUIRegistrationAPI(
   | "registerPseudoWorkspace"
   | "registerDashboardTab"
   | "registerWorkspaceAction"
+  | "unregisterWorkspaceAction"
   | "getWorkspaceActions"
   | "registerWorkspaceSubtitle"
 > {
@@ -363,6 +365,10 @@ export function createUIRegistrationAPI(
         handler: a.handler,
         when: a.when,
       }));
+    },
+
+    unregisterWorkspaceAction(actionId: string) {
+      registryUnregisterWorkspaceAction(`${extId}:${actionId}`);
     },
 
     registerWorkspaceSubtitle(component: unknown, priority?: number) {

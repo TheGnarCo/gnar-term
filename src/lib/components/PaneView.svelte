@@ -38,6 +38,16 @@
   let paneEl: HTMLElement;
   let resizeObserver: ResizeObserver;
   let scrollState: Record<string, boolean> = {};
+  let previewRefreshKeys: Record<string, number> = {};
+
+  function handleRefreshPreview() {
+    const activeId = pane.activeSurfaceId;
+    if (!activeId) return;
+    previewRefreshKeys = {
+      ...previewRefreshKeys,
+      [activeId]: (previewRefreshKeys[activeId] ?? 0) + 1,
+    };
+  }
 
   $: showJumpToBottom =
     pane.activeSurfaceId != null
@@ -213,6 +223,7 @@
       {onClosePane}
       {showJumpToBottom}
       onJumpToBottom={handleJumpToBottom}
+      onRefreshPreview={handleRefreshPreview}
     />
   {:else if onRegenDashboard}
     <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -258,7 +269,7 @@
       title="New activity in this pane"
       style="
         position: absolute;
-        top: 6px; right: 6px;
+        top: 34px; right: 6px;
         width: 7px; height: 7px;
         border-radius: 50%;
         background: {$theme.notify};
@@ -351,6 +362,7 @@
         <PreviewSurface
           {surface}
           visible={surface.id === pane.activeSurfaceId}
+          refreshTrigger={previewRefreshKeys[surface.id] ?? 0}
         />
       {/if}
     {/each}

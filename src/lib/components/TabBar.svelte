@@ -12,6 +12,7 @@
   import type { Readable } from "svelte/store";
   import { readable } from "svelte/store";
   import { tabDragState } from "../services/tab-drag";
+  import { workspaceDragState } from "../services/workspace-drag";
 
   const emptyStore: Readable<StatusItem[]> = readable([]);
 
@@ -26,6 +27,11 @@
   export let onClosePane: () => void;
   export let showJumpToBottom: boolean = false;
   export let onJumpToBottom: (() => void) | undefined = undefined;
+  export let onRefreshPreview: (() => void) | undefined = undefined;
+
+  $: activeIsPreview =
+    pane.surfaces.find((s) => s.id === pane.activeSurfaceId)?.kind ===
+    "preview";
 
   $: processStatusStore = workspaceId
     ? getWorkspaceStatusByCategory(workspaceId, "process")
@@ -41,6 +47,9 @@
       : null;
   $: isSplitTarget =
     drag?.dropTarget?.kind === "merge" && drag.dropTarget.paneId === pane.id;
+  $: isWorkspaceMergeTarget =
+    $workspaceDragState?.dropTarget?.kind === "tab-merge" &&
+    $workspaceDragState.dropTarget.paneId === pane.id;
 </script>
 
 <div
@@ -50,7 +59,7 @@
     background: {$theme.tabBarBg}; border-bottom: 1px solid {$theme.tabBarBorder};
     height: 28px; padding: 0 4px; flex-shrink: 0; overflow-x: auto;
     scrollbar-width: none;
-    {isSplitTarget
+    {isSplitTarget || isWorkspaceMergeTarget
     ? `outline: 2px solid ${$theme.accent}; outline-offset: -2px;`
     : ''}
   "
@@ -117,6 +126,29 @@
           <polyline points="2,6 5,9 8,6" />
         </svg>
         Jump to bottom
+      </span>
+    {/if}
+    {#if activeIsPreview && onRefreshPreview}
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <span
+        title="Refresh Preview"
+        style="color: {$theme.fgDim}; cursor: pointer; width: 24px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center;"
+        on:click|stopPropagation={onRefreshPreview}
+      >
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 14 14"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          ><path d="M2 7a5 5 0 1 1 1.5 3.5" /><polyline
+            points="2 11 2 7 6 7"
+          /></svg
+        >
       </span>
     {/if}
     <!-- svelte-ignore a11y_click_events_have_key_events -->

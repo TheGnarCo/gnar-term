@@ -7,6 +7,7 @@
  * `registerMcpPty()` are buffered — plain user-spawned terminals pay nothing.
  */
 const MAX_LINES_DEFAULT = 5000;
+const decoder = new TextDecoder();
 const ANSI_REGEX =
   // eslint-disable-next-line security/detect-unsafe-regex
   /[\u001B\u009B][[\]()#;?]*(?:(?:(?:(?:;[-a-zA-Z0-9/#&.:=?%@~_]+)*|[a-zA-Z0-9]+(?:;[-a-zA-Z0-9/#&.:=?%@~_]*)*)?\u0007)|(?:(?:\d{1,4}(?:;\d{0,4})*)?[\dA-PR-TZcf-nq-uy=><~]))/g;
@@ -129,9 +130,6 @@ export function getMcpBuffer(ptyId: number): McpOutputBuffer | undefined {
 export function appendMcpOutput(ptyId: number, bytes: Uint8Array): void {
   const buffer = buffers.get(ptyId);
   if (!buffer) return;
-  let text = "";
-  for (let i = 0; i < bytes.length; i++) {
-    text += String.fromCharCode(bytes[i]!);
-  }
+  const text = decoder.decode(bytes);
   buffer.append(text);
 }

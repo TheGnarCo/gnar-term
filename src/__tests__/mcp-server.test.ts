@@ -57,6 +57,7 @@ vi.mock("../lib/services/agent-detection-service", () => ({
 import {
   dispatch,
   _getToolsForTest,
+  _getSessionsForTest,
   _testContext,
   _resolveTargetForTest,
   _resetMcpServerForTest,
@@ -175,9 +176,10 @@ describe("MCP server JSON-RPC", () => {
         "spawn_agent",
         "spawn_preview",
         "split_pane",
+        "write_file",
       ].sort(),
     );
-    expect(names).toHaveLength(43);
+    expect(names).toHaveLength(44);
     for (const t of tools) {
       expect(t).toHaveProperty("inputSchema");
     }
@@ -1385,8 +1387,8 @@ describe("tool metadata", () => {
     }
   });
 
-  it("tool count matches spec (43)", () => {
-    expect(_getToolsForTest()).toHaveLength(43);
+  it("tool count matches spec (44)", () => {
+    expect(_getToolsForTest()).toHaveLength(44);
   });
 });
 
@@ -1556,5 +1558,78 @@ describe("MCP — spawn_agent worktree flag", () => {
       ctx,
     );
     expect(spawnAgentInWorktreeMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("kill_session — unlisten cleanup", () => {
+  beforeEach(() => {
+    invokeMock.mockReset();
+    _resetMcpServerForTest();
+    workspaces.set([]);
+    activeWorkspaceIdx.set(-1);
+  });
+
+  it("calls the pending unlisten when kill_session is invoked", async () => {
+    // Inject a synthetic session with an unlisten function directly.
+    const sessions = _getSessionsForTest();
+    const unlisten = vi.fn();
+    const session = {
+      session_id: "mcp-test-kill-1",
+      name: "test-agent",
+      agent: "claude-code" as const,
+      pid: undefined,
+      status: "starting" as const,
+      cwd: "/tmp",
+      createdAt: new Date().toISOString(),
+      paneId: "pane-1",
+      surfaceId: "surf-1",
+      ptyId: 99,
+      unlisten,
+    };
+    sessions.set(session.session_id, session);
+
+    // Mock kill_pty to succeed and removeSurfaceFromPane is a no-op (no real DOM).
+    invokeMock.mockResolvedValue(undefined);
+
+    const resp = await dispatch(
+      rpc("tools/call", {
+        name: "kill_session",
+        arguments: { session_id: "mcp-test-kill-1" },
+      }),
+    );
+
+    expect((resp as any).result.structuredContent).toEqual({ ok: true });
+    expect(unlisten).toHaveBeenCalledTimes(1);
+    // Session must be cleaned up.
+    expect(sessions.has("mcp-test-kill-1")).toBe(false);
+  });
+
+  it("does not throw when kill_session is called with no pending unlisten", async () => {
+    const sessions = _getSessionsForTest();
+    const session = {
+      session_id: "mcp-test-kill-2",
+      name: "test-agent",
+      agent: "claude-code" as const,
+      pid: undefined,
+      status: "running" as const,
+      cwd: "/tmp",
+      createdAt: new Date().toISOString(),
+      paneId: "pane-2",
+      surfaceId: "surf-2",
+      ptyId: 100,
+      // No unlisten field — task already fired or never registered.
+    };
+    sessions.set(session.session_id, session);
+    invokeMock.mockResolvedValue(undefined);
+
+    const resp = await dispatch(
+      rpc("tools/call", {
+        name: "kill_session",
+        arguments: { session_id: "mcp-test-kill-2" },
+      }),
+    );
+
+    expect((resp as any).result.structuredContent).toEqual({ ok: true });
+    expect(sessions.has("mcp-test-kill-2")).toBe(false);
   });
 });

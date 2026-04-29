@@ -27,6 +27,7 @@ const registry = createRegistry<WorkspaceAction>();
 
 export const workspaceActionStore = registry.store;
 export const registerWorkspaceAction = registry.register;
+export const unregisterWorkspaceAction = registry.unregister;
 export const unregisterWorkspaceActionsBySource = registry.unregisterBySource;
 export const resetWorkspaceActions = registry.reset;
 

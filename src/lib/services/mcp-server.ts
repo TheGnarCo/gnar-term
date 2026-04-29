@@ -52,19 +52,22 @@ import {
   uid,
   type Pane,
   type SplitNode,
-  type Surface,
   type TerminalSurface,
   type Workspace,
 } from "../types";
 import { findParentSplit } from "../types";
-import { createTerminalSurface, waitForPtyReady } from "../terminal-service";
+import {
+  createTerminalSurface,
+  waitForPtyReady,
+  onFirstPtyOutput,
+} from "../terminal-service";
 import { safeFocus } from "./service-helpers";
 import {
   registerMcpPty,
   unregisterMcpPty,
   getMcpBuffer,
 } from "./mcp-output-buffer";
-import { pushEvent, pollEvents } from "./mcp-event-buffer";
+import { pushEvent } from "./mcp-event-buffer";
 import {
   upsertSection,
   removeSection,
@@ -80,33 +83,19 @@ import {
   findPreviewSurfaceByPath,
   listPreviewSurfaces,
 } from "./preview-surface-registry";
-import { listMarkdownComponents } from "./markdown-component-registry";
 import { surfaceTypeStore } from "./surface-type-registry";
-import { commandStore } from "./command-registry";
-import { sidebarTabStore, activateSidebarTab } from "./sidebar-tab-registry";
-import { workspaceActionStore } from "./workspace-action-registry";
-import {
-  contextMenuItemStore,
-  getContextMenuItemsForFile,
-} from "./context-menu-item-registry";
-import { sidebarSectionStore } from "./sidebar-section-registry";
-import { dashboardWorkspaceRegistry } from "./dashboard-workspace-service";
-import { workspaceSubtitleStore } from "./workspace-subtitle-registry";
-import { dashboardTabStore } from "./dashboard-tab-registry";
-import {
-  canAddContributionToGroup,
-  dashboardContributionStore,
-  getDashboardContribution,
-} from "./dashboard-contribution-registry";
-import {
-  closeDashboardForGroup,
-  isDashboardWorkspace,
-} from "./workspace-group-service";
-import { getWorkspaceGroup } from "../stores/workspace-groups";
 import { getWorkspaceStatus } from "./status-registry";
 import { getMcpSetting } from "../config";
 import { spawnAgentInWorktree } from "./spawn-helper";
-import { agentsStore } from "./agent-detection-service";
+import {
+  type ConnectionBinding,
+  type ConnectionContext,
+  type ToolDef,
+} from "./mcp-types";
+export type { ConnectionBinding, ConnectionContext, ToolDef };
+import { filesystemTools } from "./mcp-tools/filesystem";
+import { registryMirrorTools } from "./mcp-tools/registry-mirrors";
+import { introspectionTools } from "./mcp-tools/introspection";
 
 // ---- Types ----
 
@@ -124,6 +113,8 @@ interface McpSession {
   paneId: string;
   surfaceId: string;
   ptyId: number;
+  /** Cleanup for the first-PTY-output listener (if task is still pending). */
+  unlisten?: () => void;
 }
 
 interface JsonRpcRequest {
@@ -146,23 +137,6 @@ interface JsonRpcError {
 }
 
 type JsonRpcResponse = JsonRpcSuccess | JsonRpcError;
-
-/** Per-connection state recorded from the `$/gnar-term/hello` handshake. */
-export interface ConnectionBinding {
-  paneId: string | null;
-  workspaceId: string | null;
-  clientPid: number | null;
-}
-
-export interface ConnectionContext {
-  connectionId: number;
-  binding: ConnectionBinding | null;
-  /** Most-recent pane this connection spawned into. Used as the split host for
-   *  the *next* spawn so rapid-fire `dispatch_tasks` produces a shallow
-   *  right-chain instead of an N-deep left spine around the binding pane —
-   *  the latter exploded `findParentSplit` + DOM render cost into O(N²). */
-  lastSpawnedPaneId: string | null;
-}
 
 /** Sentinel for callers that have no transport context (test code calling
  *  dispatch directly, etc). Tools that require binding will error with the
@@ -407,29 +381,6 @@ function removeSurfaceFromPane(paneId: string, surfaceId: string): void {
   });
 }
 
-// ---- Workspace introspection helpers ----
-
-function describeSurface(s: Surface) {
-  return { id: s.id, kind: s.kind, title: s.title };
-}
-
-function describePane(pane: Pane, workspaceId: string) {
-  const activeSurface = pane.surfaces.find(
-    (s) => s.id === pane.activeSurfaceId,
-  );
-  let cwd = "";
-  if (activeSurface && isTerminalSurface(activeSurface)) {
-    cwd = activeSurface.cwd ?? "";
-  }
-  return {
-    id: pane.id,
-    workspaceId,
-    cwd,
-    activeSurfaceId: pane.activeSurfaceId,
-    surfaces: pane.surfaces.map(describeSurface),
-  };
-}
-
 // ---- Observability: dispatch log ----
 
 interface DispatchLogEntry {
@@ -473,18 +424,6 @@ export function _getDispatchLogForTest(): readonly DispatchLogEntry[] {
 }
 
 // ---- Tool definitions ----
-
-interface ToolDef {
-  name: string;
-  description: string;
-  inputSchema: Record<string, unknown>;
-  handler: (
-    args: Record<string, unknown>,
-    ctx: ConnectionContext,
-  ) => Promise<unknown> | unknown;
-  /** Extension id that contributed this tool; undefined for core tools. */
-  source?: string;
-}
 
 const TOOLS: ToolDef[] = [];
 
@@ -596,8 +535,7 @@ registerTool({
     // --- Worktree path: spawn into a brand-new worktree workspace.
     if (p.worktree) {
       // Resolve repoPath from arg, else from the binding workspace's first
-      // terminal cwd. Lazy-import the helper so the MCP module isn't a
-      // hard dep on the agentic-orchestrator extension at module load.
+      // terminal cwd.
       let repoPath = p.worktree.repoPath?.trim() ?? "";
       if (!repoPath) {
         try {
@@ -697,9 +635,31 @@ registerTool({
     });
 
     if (p.task) {
-      setTimeout(() => {
-        invoke("write_pty", { ptyId, data: p.task + "\r" }).catch(() => {});
-      }, 3000);
+      const task = p.task;
+      let safetyTimer: ReturnType<typeof setTimeout> | null = null;
+      const unlisten = onFirstPtyOutput(ptyId, () => {
+        if (safetyTimer !== null) {
+          clearTimeout(safetyTimer);
+          safetyTimer = null;
+        }
+        session.unlisten = undefined;
+        invoke("write_pty", { ptyId, data: task + "\r" }).catch((err) =>
+          console.warn(
+            `[mcp] spawn_agent: task write failed for session ${session.session_id}:`,
+            err,
+          ),
+        );
+      });
+      session.unlisten = unlisten;
+      // Safety fallback: if no output arrives within 30s, cancel and warn.
+      safetyTimer = setTimeout(() => {
+        safetyTimer = null;
+        unlisten();
+        if (session.unlisten) session.unlisten = undefined;
+        console.warn(
+          `[mcp] spawn_agent: no PTY output within 30s for session ${session.session_id} — task not written`,
+        );
+      }, 30000);
     }
 
     return {
@@ -712,25 +672,6 @@ registerTool({
       pane_id: newPane.id,
       workspace_id: target.workspace.id,
     };
-  },
-});
-
-registerTool({
-  name: "list_agents",
-  description:
-    "List all detected AI agents currently running in gnar-term terminals — includes both MCP-spawned agents and native agents started by the user (e.g. by typing `claude`, `codex`, `aider`). Each entry contains agentId, agentName, surfaceId, workspaceId, status, createdAt, and lastStatusChange.",
-  inputSchema: { type: "object", properties: {} },
-  handler: () => {
-    const agents = get(agentsStore).map((a) => ({
-      agentId: a.agentId,
-      agentName: a.agentName,
-      surfaceId: a.surfaceId,
-      workspaceId: a.workspaceId,
-      status: a.status,
-      createdAt: a.createdAt,
-      lastStatusChange: a.lastStatusChange,
-    }));
-    return { agents };
   },
 });
 
@@ -844,6 +785,11 @@ registerTool({
     const { session_id } = args as { session_id: string };
     const session = sessions.get(session_id);
     if (!session) throw new Error(`session ${session_id} not found`);
+    // Cancel any pending first-output task listener before killing.
+    if (session.unlisten) {
+      session.unlisten();
+      session.unlisten = undefined;
+    }
     try {
       await invoke("kill_pty", { ptyId: session.ptyId });
     } catch (err) {
@@ -964,7 +910,7 @@ registerTool({
 registerTool({
   name: "dispatch_tasks",
   description:
-    "Spawn multiple agent sessions in parallel. Each task resolves its target independently — pass workspace_id/pane_id per task to override the connection binding.",
+    "Spawn multiple agent sessions sequentially. Each spawn inherits the pane context of the previous one via lastSpawnedPaneId to keep the split tree shallow. Pass workspace_id/pane_id per task to override the connection binding.",
   inputSchema: {
     type: "object",
     properties: {
@@ -1127,21 +1073,6 @@ registerTool({
 // surface id is hard-coded here.
 
 registerTool({
-  name: "list_surface_types",
-  description:
-    "List all registered extension surface types. Ids are namespaced as `<extension-id>:<surface-id>`. Returns `{ id, label, source }` for each. Built-in terminals are not included — use spawn_agent to create one.",
-  inputSchema: { type: "object", properties: {} },
-  handler: () => {
-    const types = get(surfaceTypeStore).map((t) => ({
-      id: t.id,
-      label: t.label,
-      source: t.source,
-    }));
-    return { types };
-  },
-});
-
-registerTool({
   name: "open_surface",
   description:
     "Open any registered extension surface type in a pane. Call list_surface_types first to see which ids exist; props are forwarded to the owning extension's surface component unchanged — consult that extension for the expected prop shape. Targets the agent's host workspace by default; pass workspace_id/pane_id to override.",
@@ -1219,408 +1150,6 @@ registerTool({
   },
 });
 
-// ---- Commands (mirror of commandStore) ----
-
-registerTool({
-  name: "list_commands",
-  description:
-    "List every command registered in the command palette — core seed commands and anything contributed by an extension. Returns `{ id, title, shortcut?, source }` for each.",
-  inputSchema: { type: "object", properties: {} },
-  handler: () => {
-    const commands = get(commandStore).map((c) => ({
-      id: c.id,
-      title: c.title,
-      shortcut: c.shortcut,
-      source: c.source,
-    }));
-    return { commands };
-  },
-});
-
-registerTool({
-  name: "invoke_command",
-  description:
-    "Invoke a command by id (see list_commands). The command's action runs in the webview and takes no arguments; some commands may open interactive prompts (text input, directory picker) — agents should expect those to block until the user responds.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      command_id: { type: "string" },
-    },
-    required: ["command_id"],
-  },
-  handler: async (args) => {
-    const p = args as { command_id: string };
-    const cmd = get(commandStore).find((c) => c.id === p.command_id);
-    if (!cmd) {
-      throw new Error(
-        `Unknown command: ${p.command_id}. Call list_commands to see what's available.`,
-      );
-    }
-    await cmd.action();
-    return { ok: true };
-  },
-});
-
-// ---- Sidebar tabs (mirror of sidebarTabStore) ----
-
-registerTool({
-  name: "list_sidebar_tabs",
-  description:
-    "List secondary-sidebar tabs contributed by extensions. Returns `{ id, label, source }` for each. Use activate_sidebar_tab to switch to one.",
-  inputSchema: { type: "object", properties: {} },
-  handler: () => {
-    const tabs = get(sidebarTabStore).map((t) => ({
-      id: t.id,
-      label: t.label,
-      source: t.source,
-    }));
-    return { tabs };
-  },
-});
-
-registerTool({
-  name: "activate_sidebar_tab",
-  description:
-    "Switch the secondary sidebar to a registered tab by id (see list_sidebar_tabs).",
-  inputSchema: {
-    type: "object",
-    properties: { tab_id: { type: "string" } },
-    required: ["tab_id"],
-  },
-  handler: (args) => {
-    const p = args as { tab_id: string };
-    const tab = get(sidebarTabStore).find((t) => t.id === p.tab_id);
-    if (!tab) {
-      throw new Error(
-        `Unknown sidebar tab: ${p.tab_id}. Call list_sidebar_tabs to see what's registered.`,
-      );
-    }
-    activateSidebarTab(p.tab_id);
-    return { ok: true };
-  },
-});
-
-// ---- Workspace actions (mirror of workspaceActionStore) ----
-
-registerTool({
-  name: "list_workspace_actions",
-  description:
-    "List workspace actions — buttons extensions add to the workspace header or top bar. Returns `{ id, label, icon, shortcut?, zone, source }` for each. Use invoke_workspace_action to trigger one.",
-  inputSchema: { type: "object", properties: {} },
-  handler: () => {
-    const actions = get(workspaceActionStore).map((a) => ({
-      id: a.id,
-      label: a.label,
-      icon: a.icon,
-      shortcut: a.shortcut,
-      zone: a.zone ?? "workspace",
-      source: a.source,
-    }));
-    return { actions };
-  },
-});
-
-registerTool({
-  name: "invoke_workspace_action",
-  description:
-    "Invoke a workspace action by id (see list_workspace_actions). `context` is forwarded to the action's handler — core passes an empty object for top-level invocations; extensions that dispatch actions from their own UI may populate fields like `{ workspaceId, groupId, branch, isGit }`. Use the owning extension's docs to learn which fields it reads.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      action_id: { type: "string" },
-      context: {
-        type: "object",
-        additionalProperties: true,
-        description:
-          "Free-form object forwarded to the handler. Typical fields: workspaceId, groupId, groupPath, branch, isGit. Shape depends on the owning extension.",
-      },
-    },
-    required: ["action_id"],
-  },
-  handler: async (args) => {
-    const p = args as {
-      action_id: string;
-      context?: Record<string, unknown>;
-    };
-    const action = get(workspaceActionStore).find((a) => a.id === p.action_id);
-    if (!action) {
-      throw new Error(
-        `Unknown workspace action: ${p.action_id}. Call list_workspace_actions to see what's registered.`,
-      );
-    }
-    await action.handler(p.context ?? {});
-    return { ok: true };
-  },
-});
-
-// ---- Context menu items (mirror of contextMenuItemStore) ----
-//
-// Extensions register handlers for files by `when` glob pattern (e.g.
-// "*.{md,json}"). Agents can either list everything an extension
-// contributes, or filter by a concrete file path to discover which
-// handlers would fire for that file.
-
-registerTool({
-  name: "list_context_menu_items",
-  description:
-    "List context-menu items contributed by extensions — file-typed actions gated by a glob `when` pattern. Pass `file_path` to filter to items whose `when` pattern matches that path. Returns `{ id, label, when, source }` for each. Use invoke_context_menu_item to trigger one.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      file_path: {
-        type: "string",
-        description:
-          "Optional. When provided, only items whose `when` pattern matches the file's extension are returned.",
-      },
-    },
-  },
-  handler: (args) => {
-    const p = (args ?? {}) as { file_path?: string };
-    const all = get(contextMenuItemStore);
-    const filtered = p.file_path
-      ? getContextMenuItemsForFile(p.file_path)
-      : all;
-    return {
-      items: filtered.map((i) => ({
-        id: i.id,
-        label: i.label,
-        when: i.when,
-        source: i.source,
-      })),
-    };
-  },
-});
-
-registerTool({
-  name: "invoke_context_menu_item",
-  description:
-    "Invoke a context-menu item against a concrete file path. Errors if the item's `when` pattern does not match the file. Use list_context_menu_items with `file_path` to find matching items first.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      item_id: { type: "string" },
-      file_path: { type: "string" },
-    },
-    required: ["item_id", "file_path"],
-  },
-  handler: async (args) => {
-    const p = args as { item_id: string; file_path: string };
-    const item = get(contextMenuItemStore).find((i) => i.id === p.item_id);
-    if (!item) {
-      throw new Error(
-        `Unknown context menu item: ${p.item_id}. Call list_context_menu_items to see what's registered.`,
-      );
-    }
-    const [exists] = await invoke<[boolean, boolean]>("mcp_file_info", {
-      path: p.file_path,
-    });
-    if (!exists) {
-      throw new Error(
-        `File path not accessible (missing or blocked by read allowlist): ${p.file_path}`,
-      );
-    }
-    const matching = getContextMenuItemsForFile(p.file_path);
-    if (!matching.some((i) => i.id === p.item_id)) {
-      throw new Error(
-        `Context menu item ${p.item_id} (when=${item.when}) does not match file path ${p.file_path}.`,
-      );
-    }
-    await item.handler(p.file_path);
-    return { ok: true };
-  },
-});
-
-// ---- Sidebar sections (mirror of sidebarSectionStore) ----
-//
-// Extensions register collapsible sections in the primary sidebar.
-// These are UI-only; there is no "invoke" action, but agents can list
-// them to see what's contributed (e.g. a harness status panel).
-
-registerTool({
-  name: "list_sidebar_sections",
-  description:
-    "List primary-sidebar sections contributed by extensions — sticky panels below Workspaces. Returns `{ id, label, source }` for each. Sections are rendered by core; no invoke tool exists because interaction happens inside the section's own component.",
-  inputSchema: { type: "object", properties: {} },
-  handler: () => {
-    const sections = get(sidebarSectionStore).map((s) => ({
-      id: s.id,
-      label: s.label,
-      source: s.source,
-    }));
-    return { sections };
-  },
-});
-
-// ---- Dashboard Workspaces (mirror of dashboardWorkspaceRegistry) ----
-
-registerTool({
-  name: "list_dashboard_workspaces",
-  description:
-    "List singleton Dashboard Workspaces registered by core and extensions. Returns `{ id, label, source }` for each. Use spawn_or_navigate (or the owning extension's TitleBar button / command) to open one.",
-  inputSchema: { type: "object", properties: {} },
-  handler: () => {
-    const entries = Array.from(get(dashboardWorkspaceRegistry).values()).map(
-      (e) => ({ id: e.id, label: e.label, source: e.source }),
-    );
-    return { dashboardWorkspaces: entries };
-  },
-});
-
-// ---- Workspace subtitles (mirror of workspaceSubtitleStore) ----
-
-registerTool({
-  name: "list_workspace_subtitles",
-  description:
-    "List workspace-subtitle contributors — components extensions render below workspace names in the sidebar (e.g. git branch label). Returns `{ id, source, priority }` for each, sorted by priority ascending (lower renders first).",
-  inputSchema: { type: "object", properties: {} },
-  handler: () => {
-    const entries = get(workspaceSubtitleStore).map((s) => ({
-      id: s.id,
-      source: s.source,
-      priority: s.priority,
-    }));
-    return { subtitles: entries };
-  },
-});
-
-// ---- Dashboard tabs (mirror of dashboardTabStore) ----
-
-registerTool({
-  name: "list_dashboard_tabs",
-  description:
-    "List extension-contributed tabs for the dashboard overlay. Returns `{ id, label, source }` for each.",
-  inputSchema: { type: "object", properties: {} },
-  handler: () => {
-    const tabs = get(dashboardTabStore).map((t) => ({
-      id: t.id,
-      label: t.label,
-      source: t.source,
-    }));
-    return { tabs };
-  },
-});
-
-// ---- Dashboard contributions (per-group add / remove / list) ----
-//
-// Each Workspace Group has a list of Dashboards available to it —
-// the registered DashboardContributions. Some are auto-provisioned
-// (core Overview, core Settings, agentic when enabled); the rest are
-// user-toggleable. MCP drives the same surface the Settings dashboard
-// exposes: list contributions + current active state, add a dashboard
-// workspace, or remove one (autoProvision rejects removal).
-
-registerTool({
-  name: "list_dashboard_contributions",
-  description:
-    "List every registered Dashboard contribution. When `group_id` is provided, each row also carries `active` (whether the group has a dashboard workspace for this contribution) and `workspace_id` when active. `autoProvision` contributions cannot be added or removed; the Settings dashboard toggle surfaces this via `locked_reason`.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      group_id: {
-        type: "string",
-        description: "Optional. When set, annotate each row with active state.",
-      },
-    },
-  },
-  handler: (args) => {
-    const p = args as { group_id?: string };
-    const contribs = get(dashboardContributionStore);
-    const group = p.group_id ? getWorkspaceGroup(p.group_id) : undefined;
-    if (p.group_id && !group) {
-      throw new Error(`Unknown workspace group: ${p.group_id}`);
-    }
-    const wsList = group ? get(workspaces) : [];
-    return {
-      contributions: contribs.map((c) => {
-        const base = {
-          id: c.id,
-          source: c.source,
-          label: c.label,
-          action_label: c.actionLabel,
-          cap_per_group: c.capPerGroup,
-          auto_provision: c.autoProvision === true,
-          locked_reason: c.lockedReason,
-        };
-        if (!group) return base;
-        const wsForContrib = wsList.find((w) =>
-          isDashboardWorkspace(w, group.id, c.id),
-        );
-        return {
-          ...base,
-          active: Boolean(wsForContrib),
-          workspace_id: wsForContrib?.id,
-        };
-      }),
-    };
-  },
-});
-
-registerTool({
-  name: "add_dashboard_to_group",
-  description:
-    "Materialize a dashboard workspace for a Workspace Group by running the contribution's create hook. Errors when the contribution is autoProvision (those materialize automatically and cannot be added manually), already at its per-group cap, unknown, or gated out by the contribution's availability predicate. Returns the new workspace id.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      group_id: { type: "string" },
-      contribution_id: { type: "string" },
-    },
-    required: ["group_id", "contribution_id"],
-  },
-  handler: async (args) => {
-    const p = args as { group_id: string; contribution_id: string };
-    const group = getWorkspaceGroup(p.group_id);
-    if (!group) throw new Error(`Unknown workspace group: ${p.group_id}`);
-    const contribution = getDashboardContribution(p.contribution_id);
-    if (!contribution) {
-      throw new Error(`Unknown dashboard contribution: ${p.contribution_id}`);
-    }
-    if (contribution.autoProvision) {
-      throw new Error(
-        `Dashboard contribution "${p.contribution_id}" is autoProvision — it materializes automatically and cannot be added manually.`,
-      );
-    }
-    const currentCount = get(workspaces).filter((w) =>
-      isDashboardWorkspace(w, group.id, contribution.id),
-    ).length;
-    if (!canAddContributionToGroup(group, contribution.id, currentCount)) {
-      throw new Error(
-        `Cannot add "${p.contribution_id}" to group "${p.group_id}" (at cap or gated by availability).`,
-      );
-    }
-    const workspaceId = await contribution.create(group);
-    return { workspace_id: workspaceId };
-  },
-});
-
-registerTool({
-  name: "remove_dashboard_from_group",
-  description:
-    "Close the dashboard workspace for `{group_id, contribution_id}`. Errors when the contribution is autoProvision (core Overview, core Settings, and the Agentic dashboard cannot be removed this way). Returns `{ removed: true }` on success, `{ removed: false }` when no such workspace existed.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      group_id: { type: "string" },
-      contribution_id: { type: "string" },
-    },
-    required: ["group_id", "contribution_id"],
-  },
-  handler: (args) => {
-    const p = args as { group_id: string; contribution_id: string };
-    const contribution = getDashboardContribution(p.contribution_id);
-    if (!contribution) {
-      throw new Error(`Unknown dashboard contribution: ${p.contribution_id}`);
-    }
-    if (contribution.autoProvision) {
-      throw new Error(
-        `Dashboard contribution "${p.contribution_id}" is autoProvision — locked on this group.`,
-      );
-    }
-    const removed = closeDashboardForGroup(p.group_id, p.contribution_id);
-    return { removed };
-  },
-});
-
 // ---- Status items (mirror of statusRegistry, scoped per workspace) ----
 
 registerTool({
@@ -1672,7 +1201,7 @@ registerTool({
 registerTool({
   name: "spawn_preview",
   description:
-    "Open a file as a preview surface in a pane. Markdown files render with gnar:<name> markdown-components as live widgets. If a preview surface for the same path is already open anywhere in the app, focuses it instead of opening a duplicate. Returns the new (or existing) surface id.",
+    "Open a file as a preview surface in a pane. Markdown files render with gnar:<name> markdown-components as live widgets. If a preview surface for the same path is already open anywhere in the app, focuses it instead of opening a duplicate. Returns the new (or existing) surface id. IMPORTANT: the file must already exist on disk before calling this — call write_file first, or use create_preview_file which does both atomically.",
   inputSchema: {
     type: "object",
     properties: {
@@ -1737,7 +1266,7 @@ registerTool({
 registerTool({
   name: "create_preview_file",
   description:
-    "Write a file with the given content and immediately open it as a preview surface. Convenience for agents producing rich reports — equivalent to write_file followed by spawn_preview, with the same dedupe-by-path behavior.",
+    "Write a file with the given content and immediately open it as a preview surface. Writes the file first, then opens the preview — never the other way around. Equivalent to write_file followed by spawn_preview, with the same dedupe-by-path behavior. For ad-hoc documents (notes, reports, one-off previews), default the path to docs/gnar-term/<name>.md unless the user specifies otherwise.",
   inputSchema: {
     type: "object",
     properties: {
@@ -1772,37 +1301,6 @@ registerTool({
 });
 
 registerTool({
-  name: "list_open_previews",
-  description:
-    "List all currently open preview surfaces. Returns `{ surface_id, path, pane_id, workspace_id }` for each.",
-  inputSchema: { type: "object", properties: {} },
-  handler: () => {
-    const previews = listPreviewSurfaces().map((e) => ({
-      surface_id: e.surfaceId,
-      path: e.path,
-      pane_id: e.paneId,
-      workspace_id: e.workspaceId,
-    }));
-    return { previews };
-  },
-});
-
-registerTool({
-  name: "list_markdown_components",
-  description:
-    "List all registered markdown components — the things `gnar:<name>` markdown directives can reference. Returns `{ name, source, configSchema? }` for each.",
-  inputSchema: { type: "object", properties: {} },
-  handler: () => {
-    const components = listMarkdownComponents().map((c) => ({
-      name: c.name,
-      source: c.source,
-      configSchema: c.configSchema,
-    }));
-    return { components };
-  },
-});
-
-registerTool({
   name: "close_preview",
   description:
     "Close an open preview surface by id. Looks the surface up in the preview-surface registry and removes it from its host pane (collapsing the pane / closing the workspace if it becomes empty, same as a user-driven tab close). Safe to call for an unknown id — returns `{ closed: false }`.",
@@ -1827,150 +1325,15 @@ registerTool({
   },
 });
 
-// ---- UI introspection (observers; report user GUI focus) ----
+// ---- Push extracted tool groups into TOOLS ----
 
-registerTool({
-  name: "get_active_workspace",
-  description:
-    "Return the workspace the user is currently focused on. Reports user GUI focus, NOT the agent's binding — agents should use get_agent_context for routing. Fields are null when no workspace is open.",
-  inputSchema: { type: "object", properties: {} },
-  handler: () => {
-    const ws = get(activeWorkspace);
-    return {
-      id: ws?.id ?? null,
-      name: ws?.name ?? null,
-      activePaneId: ws?.activePaneId ?? null,
-    };
-  },
-});
-
-registerTool({
-  name: "list_workspaces",
-  description: "List all open workspaces.",
-  inputSchema: { type: "object", properties: {} },
-  handler: () => {
-    const list = get(workspaces).map((ws) => ({
-      id: ws.id,
-      name: ws.name,
-      activePaneId: ws.activePaneId,
-    }));
-    return { workspaces: list };
-  },
-});
-
-registerTool({
-  name: "get_active_pane",
-  description:
-    "Return the user-focused pane and its surfaces. Reports user GUI focus, NOT the agent's binding. `pane` is null when no pane is focused.",
-  inputSchema: { type: "object", properties: {} },
-  handler: () => {
-    const ws = get(activeWorkspace);
-    const pane = get(activePane);
-    if (!ws || !pane) return { pane: null };
-    return { pane: describePane(pane, ws.id) };
-  },
-});
-
-registerTool({
-  name: "list_panes",
-  description: "List panes in a workspace (defaults to the active workspace).",
-  inputSchema: {
-    type: "object",
-    properties: { workspace_id: { type: "string" } },
-  },
-  handler: (args) => {
-    const p = args as { workspace_id?: string };
-    const target = p.workspace_id
-      ? get(workspaces).find((w) => w.id === p.workspace_id)
-      : get(activeWorkspace);
-    if (!target) return { panes: [] };
-    const list = getAllPanes(target.splitRoot).map((pane) =>
-      describePane(pane, target.id),
-    );
-    return { panes: list };
-  },
-});
-
-// ---- Lifecycle events ----
-
-registerTool({
-  name: "poll_events",
-  description: "Poll the 500-entry lifecycle event ring buffer.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      cursor: { type: "number" },
-      max: { type: "number" },
-    },
-  },
-  handler: (args) => {
-    const p = args as { cursor?: number; max?: number };
-    return pollEvents({ cursor: p.cursor, max: p.max });
-  },
-});
-
-// ---- Filesystem ----
-
-registerTool({
-  name: "list_dir",
-  description:
-    "List a directory. Returns entries with name, path, is_dir, size.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      path: { type: "string" },
-      include_hidden: { type: "boolean" },
-    },
-    required: ["path"],
-  },
-  handler: async (args) => {
-    const p = args as { path: string; include_hidden?: boolean };
-    const entries = await invoke<
-      Array<{ name: string; path: string; is_dir: boolean; size: number }>
-    >("mcp_list_dir", { path: p.path, includeHidden: p.include_hidden });
-    return { entries };
-  },
-});
-
-registerTool({
-  name: "read_file",
-  description:
-    "Read a UTF-8 file and return its contents. Non-UTF-8 content is an error.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      path: { type: "string" },
-      max_bytes: { type: "number" },
-    },
-    required: ["path"],
-  },
-  handler: async (args) => {
-    const p = args as { path: string; max_bytes?: number };
-    const content = await invoke<string>("read_file", { path: p.path });
-    if (p.max_bytes && content.length > p.max_bytes) {
-      return { content: content.slice(0, p.max_bytes), truncated: true };
-    }
-    return { content, truncated: false };
-  },
-});
-
-registerTool({
-  name: "file_exists",
-  description:
-    "Check whether a path exists. Returns exists and (if it does) is_dir.",
-  inputSchema: {
-    type: "object",
-    properties: { path: { type: "string" } },
-    required: ["path"],
-  },
-  handler: async (args) => {
-    const p = args as { path: string };
-    const [exists, isDir] = await invoke<[boolean, boolean]>("mcp_file_info", {
-      path: p.path,
-    });
-    return exists ? { exists: true, is_dir: isDir } : { exists: false };
-  },
-});
+for (const t of [
+  ...filesystemTools,
+  ...registryMirrorTools,
+  ...introspectionTools,
+]) {
+  TOOLS.push(t);
+}
 
 // ---- JSON-RPC dispatch ----
 
@@ -2281,6 +1644,10 @@ export function _resolveTargetForTest(
   ctx: ConnectionContext,
 ): ResolvedTarget {
   return resolveTarget(args, ctx);
+}
+
+export function _getSessionsForTest(): Map<string, McpSession> {
+  return sessions;
 }
 
 export function _resetMcpServerForTest(): void {

@@ -6,7 +6,11 @@
   import type { PreviewSurface } from "../types";
   import { getAllPanes } from "../types";
   import { workspaces } from "../stores/workspace";
-  import { openPreview } from "../services/preview-service";
+  import {
+    openPreview,
+    refreshPreviewElement,
+  } from "../services/preview-service";
+  import { openFileAsPreviewSplit } from "../services/surface-service";
   import {
     registerPreviewSurface,
     unregisterPreviewSurface,
@@ -14,6 +18,7 @@
 
   export let surface: PreviewSurface;
   export let visible: boolean;
+  export let refreshTrigger: number = 0;
 
   let container: HTMLElement;
   let element: HTMLElement | null = null;
@@ -67,16 +72,39 @@
         const anchor = (e.target as Element).closest("a");
         if (!anchor) return;
         const href = anchor.getAttribute("href");
-        if (!href?.startsWith("http://") && !href?.startsWith("https://"))
+        if (!href) return;
+
+        if (href.startsWith("http://") || href.startsWith("https://")) {
+          e.preventDefault();
+          invoke("open_url", { url: href }).catch(() => {});
           return;
-        e.preventDefault();
-        invoke("open_url", { url: href }).catch(() => {});
+        }
+
+        // Relative links to previewable files — resolve against current file's dir
+        const filePart = href.split("?")[0]!.split("#")[0]!;
+        if (/\.(md|markdown|mdx)$/i.test(filePart)) {
+          e.preventDefault();
+          const dir = surface.path.includes("/")
+            ? surface.path.substring(0, surface.path.lastIndexOf("/"))
+            : "";
+          const parts = [...dir.split("/"), ...filePart.split("/")];
+          const resolved: string[] = [];
+          for (const p of parts) {
+            if (p === "..") resolved.pop();
+            else if (p && p !== ".") resolved.push(p);
+          }
+          openFileAsPreviewSplit("/" + resolved.join("/"));
+        }
       };
       container.addEventListener("click", clickHandler);
     } catch (err) {
       loadError = err instanceof Error ? err.message : String(err);
     }
   });
+
+  $: if (refreshTrigger > 0 && element) {
+    void refreshPreviewElement(surface.path, element);
+  }
 
   // Update preview colors when theme changes.
   $: if (element) {

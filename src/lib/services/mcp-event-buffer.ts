@@ -8,6 +8,8 @@
  * `{ truncated: true }` alongside whatever is still available.
  */
 
+import { RingBuffer } from "../utils/ring-buffer";
+
 export type McpEvent =
   | {
       type: "pane.focused";
@@ -47,15 +49,12 @@ export type McpEventInput = McpEvent extends infer E
 
 const MAX_EVENTS = 500;
 
-let buffer: McpEvent[] = [];
+let _ring = new RingBuffer<McpEvent>(MAX_EVENTS);
 let nextCursor = 1;
 
 export function pushEvent(event: McpEventInput): McpEvent {
   const stamped = { ...event, cursor: nextCursor++ } as McpEvent;
-  buffer.push(stamped);
-  if (buffer.length > MAX_EVENTS) {
-    buffer.shift();
-  }
+  _ring.push(stamped);
   return stamped;
 }
 
@@ -74,6 +73,7 @@ export function pollEvents(
 ): PollResult {
   const max = Math.max(1, Math.min(opts.max ?? MAX_EVENTS, MAX_EVENTS));
   const latestEmitted = nextCursor - 1;
+  const buffer = _ring.toArray();
   if (buffer.length === 0) {
     return { events: [], cursor: latestEmitted };
   }
@@ -103,10 +103,10 @@ export function pollEvents(
 
 /** Test hook — reset the buffer between tests. */
 export function _resetEventBufferForTest(): void {
-  buffer = [];
+  _ring = new RingBuffer<McpEvent>(MAX_EVENTS);
   nextCursor = 1;
 }
 
 export function getEventBufferSizeForTest(): number {
-  return buffer.length;
+  return _ring.length;
 }

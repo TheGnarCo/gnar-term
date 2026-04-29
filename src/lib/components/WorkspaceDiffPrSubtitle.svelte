@@ -146,8 +146,8 @@
           width="10"
           height="10"
           viewBox="0 0 16 16"
-          fill={fgMuted}
-          style="flex-shrink: 0; opacity: 0.6;"
+          fill={iconFg}
+          style="flex-shrink: 0; opacity: 0.7;"
           aria-hidden="true"
         >
           <path

@@ -104,6 +104,8 @@
   }
 
   $: rowHovered = mouseOverContainer;
+  $: railBorderColor =
+    hasActiveChild && collapsed ? color : ($theme.border ?? "transparent");
   let collapsed = false;
   let prevFilterIds = filterIds;
   $: if (filterIds !== prevFilterIds) {
@@ -205,7 +207,17 @@
         on:mouseenter={handleContainerEnter}
         on:mouseleave={handleContainerLeave}
         on:mousedown={(e) => onGripMouseDown?.(e)}
-        style="flex-shrink: 0; align-self: stretch; display: flex;"
+        style="
+          flex-shrink: 0;
+          align-self: stretch;
+          display: flex;
+          position: relative;
+          box-sizing: border-box;
+          border-top: 1px solid {railBorderColor};
+          border-bottom: 1px solid {collapsed
+          ? railBorderColor
+          : 'transparent'};
+        "
         role="presentation"
       >
         <!-- Dots always visible; fade right in idle state to match
@@ -218,6 +230,19 @@
           alwaysShowDots={true}
           fadeRight={!rowHovered}
         />
+        {#if hasActiveChild && collapsed}
+          <div
+            aria-hidden="true"
+            style="
+              position: absolute;
+              top: 0; left: 0; bottom: 0;
+              width: 1px;
+              background: {color};
+              pointer-events: none;
+              z-index: 4;
+            "
+          ></div>
+        {/if}
       </div>
     {/if}
     {#if onGripMouseDown && !rowHovered}

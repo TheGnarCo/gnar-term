@@ -85,6 +85,54 @@ export function throttle<TArgs extends unknown[]>(
 }
 
 /**
+ * Shared module-level derived store: maps each groupId to the set of
+ * workspace IDs that belong to it under the §5.3 criteria (metadata,
+ * explicit membership, and CWD-prefix fallback for unclaimed workspaces).
+ *
+ * Computed once whenever workspaces / groups / claimed-ids change — all
+ * mounted dashboard widgets share this single computation instead of each
+ * widget independently re-walking every workspace's surfaces on every
+ * emission (F32 perf fix).
+ */
+const _groupWorkspaceIndex = derived(
+  [workspaces, workspaceGroupsStore, claimedWorkspaceIds],
+  ([$workspaces, $groups, $claimedIds]): Map<string, Set<string>> => {
+    const index = new Map<string, Set<string>>();
+    for (const group of $groups) {
+      const base = group.path ? group.path.replace(/\/+$/, "") : "";
+      const prefix = base ? `${base}/` : "";
+      const members = new Set<string>(group.workspaceIds ?? []);
+      for (const ws of $workspaces) {
+        const md = ws.metadata as Record<string, unknown> | undefined;
+        // Criterion 1: workspace was created with this group's id in metadata.
+        if (md?.groupId === group.id) {
+          members.add(ws.id);
+          continue;
+        }
+        // Criterion 2: workspace is explicitly listed in group.workspaceIds
+        // — already in `members` from the initial Set construction above.
+        if (members.has(ws.id)) continue;
+        // Criterion 3: CWD fallback — only for unclaimed workspaces so we
+        // don't double-count workspaces already owned by another group/owner.
+        if (!base || $claimedIds.has(ws.id)) continue;
+        for (const surface of getAllSurfaces(ws)) {
+          if (
+            isTerminalSurface(surface) &&
+            surface.cwd &&
+            (surface.cwd === base || surface.cwd.startsWith(prefix))
+          ) {
+            members.add(ws.id);
+            break;
+          }
+        }
+      }
+      index.set(group.id, members);
+    }
+    return index;
+  },
+);
+
+/**
  * Reactive store of the agents in scope for a widget mounted inside a
  * DashboardHostContext. Implements the §5.3 scope rules:
  *   - no host / "none" scope → empty list
@@ -115,40 +163,14 @@ export function hostScopedAgentsStore(
   if (scope.kind === "global") {
     return derived(api.agents, (agents) => agents);
   }
-  return derived(
-    [api.agents, workspaces, workspaceGroupsStore, claimedWorkspaceIds],
-    ([$agents, $workspaces, $groups, $claimedIds]) => {
-      const group = $groups.find((g) => g.id === scope.groupId);
-      const groupMemberIds = new Set(group?.workspaceIds ?? []);
-      const base = group?.path ? group.path.replace(/\/+$/, "") : "";
-      const prefix = base ? `${base}/` : "";
-      const wsById = new Map<string, (typeof $workspaces)[number]>();
-      for (const ws of $workspaces) wsById.set(ws.id, ws);
-      return $agents.filter((a) => {
-        const ws = wsById.get(a.workspaceId);
-        if (!ws) return false;
-        const md = ws.metadata as Record<string, unknown> | undefined;
-        // Criterion 1: workspace was created with this group's id in metadata.
-        if (md?.groupId === scope.groupId) return true;
-        // Criterion 2: workspace is explicitly listed in group.workspaceIds
-        // (e.g. promoted via drag-drop without metadata.groupId being stamped).
-        if (groupMemberIds.has(ws.id)) return true;
-        // Criterion 3: CWD fallback — only for unclaimed workspaces so we
-        // don't double-count workspaces already owned by another group/owner.
-        if (!base || $claimedIds.has(ws.id)) return false;
-        for (const surface of getAllSurfaces(ws)) {
-          if (
-            isTerminalSurface(surface) &&
-            surface.cwd &&
-            (surface.cwd === base || surface.cwd.startsWith(prefix))
-          ) {
-            return true;
-          }
-        }
-        return false;
-      });
-    },
-  );
+  // "group" scope: each widget's derived store filters api.agents using the
+  // shared _groupWorkspaceIndex (O(1) lookup per agent) rather than walking
+  // all workspaces × surfaces independently.
+  return derived([api.agents, _groupWorkspaceIndex], ([$agents, $index]) => {
+    const members = $index.get(scope.groupId);
+    if (!members) return [];
+    return $agents.filter((a) => members.has(a.workspaceId));
+  });
 }
 
 /**

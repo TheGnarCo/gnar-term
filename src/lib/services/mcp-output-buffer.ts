@@ -6,6 +6,8 @@
  * `read_output` calls can query. Only ptyIds explicitly registered via
  * `registerMcpPty()` are buffered — plain user-spawned terminals pay nothing.
  */
+import { RingBuffer } from "../utils/ring-buffer";
+
 const MAX_LINES_DEFAULT = 5000;
 const decoder = new TextDecoder();
 const ANSI_REGEX =
@@ -23,12 +25,20 @@ export interface ReadResult {
 }
 
 export class McpOutputBuffer {
-  private lines: string[] = [""];
-  private cursor = 0;
+  /**
+   * Completed lines only — capacity is (maxLines - 1) so that the total
+   * of completed lines + one partial line never exceeds maxLines.
+   */
+  private _ring: RingBuffer<string>;
+  /** The current in-progress (not yet newline-terminated) line. */
+  private _partial = "";
+  private _cursor = 0;
   private readonly maxLines: number;
 
   constructor(maxLines: number = MAX_LINES_DEFAULT) {
     this.maxLines = maxLines;
+    // Reserve one slot for the partial line so total stored ≤ maxLines.
+    this._ring = new RingBuffer<string>(Math.max(1, maxLines - 1));
   }
 
   append(text: string): void {
@@ -41,14 +51,13 @@ export class McpOutputBuffer {
     // parts[0] extends the current partial line; each subsequent entry is a
     // new line. The trailing empty string (when text ends with \n) is the
     // start of a new empty partial line.
-    this.lines[this.lines.length - 1] =
-      (this.lines[this.lines.length - 1] ?? "") + (parts[0] ?? "");
+    this._partial = (this._partial ?? "") + (parts[0] ?? "");
     for (let i = 1; i < parts.length; i++) {
-      this.cursor += 1;
-      this.lines.push(parts[i] ?? "");
-      if (this.lines.length > this.maxLines) {
-        this.lines.shift();
-      }
+      this._cursor += 1;
+      // Push the completed partial line into the ring. O(1) — evicts the
+      // oldest completed line when full instead of O(N) shift.
+      this._ring.push(this._partial);
+      this._partial = parts[i] ?? "";
     }
   }
 
@@ -65,38 +74,40 @@ export class McpOutputBuffer {
     strip_ansi?: boolean;
   }): ReadResult {
     const strip = opts.strip_ansi !== false;
-    // `lines` includes the trailing partial line as the last entry, so index
-    // math treats the buffer as containing (this.cursor - this.lines.length + 1)
-    // through `this.cursor` inclusive, where the last entry is index `cursor`.
-    const oldestIdx = this.cursor - (this.lines.length - 1);
+    // Build the full logical view: completed lines in the ring + partial tail.
+    // The partial line sits at cursor index `_cursor`; the oldest completed
+    // line in the ring is at cursor index `_cursor - ring.length`.
+    const completed = this._ring.toArray();
+    const logical = [...completed, this._partial];
+    const oldestIdx = this._cursor - this._ring.length;
     let slice: string[];
     if (opts.cursor !== undefined) {
-      if (opts.cursor >= this.cursor) {
+      if (opts.cursor >= this._cursor) {
         slice = [];
       } else if (opts.cursor < oldestIdx - 1) {
-        slice = [...this.lines];
+        slice = logical;
       } else {
         const offset = opts.cursor - oldestIdx + 1;
-        slice = this.lines.slice(offset);
+        slice = logical.slice(offset);
       }
     } else {
       const n = opts.lines ?? 50;
-      slice = this.lines.slice(-n);
+      slice = logical.slice(-n);
     }
     const out = strip ? slice.map(stripAnsi) : slice;
     return {
       output: out.join("\n"),
-      cursor: this.cursor,
-      total_lines: this.cursor + 1,
+      cursor: this._cursor,
+      total_lines: this._cursor + 1,
     };
   }
 
   getCursor(): number {
-    return this.cursor;
+    return this._cursor;
   }
 
   getLastLine(): string {
-    return this.lines[this.lines.length - 1] ?? "";
+    return this._partial;
   }
 }
 

@@ -1,50 +1,48 @@
-import { writable, get } from "svelte/store";
+import { derived, get, type Readable } from "svelte/store";
 import type { Component } from "svelte";
 import { workspaces } from "../stores/workspace";
 import { createWorkspaceFromDef, switchWorkspace } from "./workspace-service";
+import { createRegistry } from "./create-registry";
 
-export interface DashboardWorkspaceEntry {
+interface DashboardWorkspaceEntry {
   id: string;
   label: string;
   icon: Component;
   component: Component;
   /** Extension ID that registered this entry — used to provide API context when rendering. */
-  source?: string;
+  source: string;
   /** Overrides the workspace row rail/icon color. When absent, falls back to theme accent. */
   accentColor?: string;
 }
 
-export const dashboardWorkspaceRegistry = writable<
+const registry = createRegistry<DashboardWorkspaceEntry>();
+
+/** Readable Map store — consumers can use `$dashboardWorkspaceRegistry.get(id)`. */
+export const dashboardWorkspaceRegistry: Readable<
   Map<string, DashboardWorkspaceEntry>
->(new Map());
+> = derived(registry.store, ($entries) => {
+  const m = new Map<string, DashboardWorkspaceEntry>();
+  for (const e of $entries) m.set(e.id, e);
+  return m;
+});
 
 export function registerDashboardWorkspaceType(
-  entry: DashboardWorkspaceEntry,
+  entry: Omit<DashboardWorkspaceEntry, "source"> & { source?: string },
 ): void {
-  dashboardWorkspaceRegistry.update((m) => {
-    const next = new Map(m);
-    next.set(entry.id, entry);
-    return next;
-  });
+  registry.register({ source: "", ...entry });
 }
 
 export function unregisterDashboardWorkspaceType(id: string): void {
-  dashboardWorkspaceRegistry.update((m) => {
-    const next = new Map(m);
-    next.delete(id);
-    return next;
-  });
+  registry.unregister(id);
 }
 
-export function getDashboardEntry(
-  id: string,
-): DashboardWorkspaceEntry | undefined {
-  return get(dashboardWorkspaceRegistry).get(id);
+function getDashboardEntry(id: string): DashboardWorkspaceEntry | undefined {
+  return registry.get(id);
 }
 
 // Exported for tests only — resets the registry to empty.
 export function clearDashboardRegistry(): void {
-  dashboardWorkspaceRegistry.set(new Map());
+  registry.reset();
 }
 
 export async function spawnOrNavigate(id: string): Promise<void> {

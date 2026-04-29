@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { inputStyle } from "../../utils/section-styles";
+
   export let settings: Record<string, unknown>;
   export let onChange: (key: string, value: unknown) => void;
   export let theme: { fg: string; fgDim: string; bg: string; border: string };
@@ -27,8 +29,7 @@
     onChange("env", { ...envMap, [key]: val });
   }
 
-  const inputStyle = (extra = "") =>
-    `background: ${theme.bg}; color: ${theme.fg}; border: 1px solid ${theme.border}; border-radius: 4px; padding: 3px 8px; font-size: 12px; font-family: monospace; ${extra}`;
+  $: getInputStyle = inputStyle(theme);
 </script>
 
 <div class="env-section">
@@ -38,7 +39,7 @@
       <input
         aria-label={`Value for ${key}`}
         value={val}
-        style={inputStyle("flex: 1;")}
+        style={getInputStyle("flex: 1;")}
         on:change={(e) => updateValue(key, e.currentTarget.value)}
       />
       <button
@@ -55,14 +56,14 @@
       aria-label="New environment variable key"
       bind:value={newKey}
       placeholder="KEY"
-      style={inputStyle("width: 140px;")}
+      style={getInputStyle("width: 140px;")}
       on:keydown={(e) => e.key === "Enter" && addEntry()}
     />
     <input
       aria-label="New environment variable value"
       bind:value={newVal}
       placeholder="value"
-      style={inputStyle("flex: 1;")}
+      style={getInputStyle("flex: 1;")}
       on:keydown={(e) => e.key === "Enter" && addEntry()}
     />
     <button

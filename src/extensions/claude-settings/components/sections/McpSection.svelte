@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { inputStyle } from "../../utils/section-styles";
+
   export let settings: Record<string, unknown>;
   export let onChange: (key: string, value: unknown) => void;
   export let theme: { fg: string; fgDim: string; bg: string; border: string };
@@ -40,8 +42,7 @@
     );
   }
 
-  const inputStyle = (extra = "") =>
-    `background: ${theme.bg}; color: ${theme.fg}; border: 1px solid ${theme.border}; border-radius: 4px; padding: 3px 8px; font-size: 12px; font-family: monospace; ${extra}`;
+  $: getInputStyle = inputStyle(theme);
 </script>
 
 <div class="mcp-section">
@@ -73,7 +74,7 @@
         aria-label="New enabled server name"
         bind:value={newEnabled}
         placeholder="server-name"
-        style={inputStyle("flex: 1;")}
+        style={getInputStyle("flex: 1;")}
         on:keydown={(e) => e.key === "Enter" && addEnabled()}
       />
       <button
@@ -101,7 +102,7 @@
         aria-label="New disabled server name"
         bind:value={newDisabled}
         placeholder="server-name"
-        style={inputStyle("flex: 1;")}
+        style={getInputStyle("flex: 1;")}
         on:keydown={(e) => e.key === "Enter" && addDisabled()}
       />
       <button

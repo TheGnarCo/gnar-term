@@ -3,6 +3,7 @@
   import type { Readable } from "svelte/store";
   import ContainerRow from "./ContainerRow.svelte";
   import PathStatusLine from "./PathStatusLine.svelte";
+  import DiffPrStatusLine from "./DiffPrStatusLine.svelte";
   import SplitButton from "./SplitButton.svelte";
   import WorkspaceListView from "./WorkspaceListView.svelte";
   import { resolveGroupColor } from "../theme-data";
@@ -514,6 +515,13 @@
               path: group.path,
               isGit: group.isGit,
             }}
+            fgColor={subtitleFg}
+            iconColor={groupHex}
+          />
+          <DiffPrStatusLine
+            id={group.id}
+            path={group.path}
+            isGit={group.isGit}
             fgColor={subtitleFg}
             iconColor={groupHex}
           />

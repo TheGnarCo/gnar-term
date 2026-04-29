@@ -222,13 +222,22 @@ describe("initGitStatus()", () => {
     statusRegistry.reset();
   });
 
-  it("registers the workspace subtitle component", () => {
+  it("registers the GitStatusLine subtitle at priority 10", () => {
     initGitStatus();
     const subtitle = get(workspaceSubtitleStore).find(
-      (s) => s.source === GIT_STATUS_SOURCE,
+      (s) => s.id === `${GIT_STATUS_SOURCE}:subtitle`,
     );
     expect(subtitle).toBeTruthy();
     expect(subtitle!.priority).toBe(10);
+  });
+
+  it("registers the WorkspaceDiffPrSubtitle at priority 20", () => {
+    initGitStatus();
+    const subtitle = get(workspaceSubtitleStore).find(
+      (s) => s.id === `${GIT_STATUS_SOURCE}:diff-pr-subtitle`,
+    );
+    expect(subtitle).toBeTruthy();
+    expect(subtitle!.priority).toBe(20);
   });
 
   it("clears workspace status on workspace:closed", async () => {

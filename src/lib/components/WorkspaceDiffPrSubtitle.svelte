@@ -1,0 +1,156 @@
+<script lang="ts">
+  /**
+   * WorkspaceDiffPrSubtitle — compact diff + PR statusline for individual
+   * workspace rows. Registered via workspace-subtitle-registry at priority 20.
+   *
+   * Diff data comes from the git-status-service status registry (already
+   * polled) — no duplicate git polling. PR is fetched directly via
+   * `gh_view_pr` on a 60s timer, keyed on the repo root from the branch
+   * item's metadata.
+   *
+   * Renders the same two rows as DiffPrStatusLine but driven by the
+   * status registry instead of self-contained polling.
+   */
+  import { onDestroy } from "svelte";
+  import { invoke } from "@tauri-apps/api/core";
+  import { theme } from "../stores/theme";
+  import { getWorkspaceStatusByCategory } from "../services/status-registry";
+  import { GIT_STATUS_SOURCE } from "../services/git-status-service";
+  import type { StatusItem } from "../types/status";
+
+  export let workspaceId: string;
+  export let accentColor: string | undefined = undefined;
+
+  $: fgMuted = ($theme["fgMuted"] ?? $theme.fgDim) as string;
+  $: iconFg = accentColor ?? fgMuted;
+
+  $: gitStatusStore = getWorkspaceStatusByCategory(workspaceId, "git");
+  $: gitItems = $gitStatusStore;
+  $: branchItem = gitItems.find(
+    (i: StatusItem) =>
+      i.source === GIT_STATUS_SOURCE && i.id.endsWith(":branch"),
+  );
+  $: dirtyItem = gitItems.find(
+    (i: StatusItem) =>
+      i.source === GIT_STATUS_SOURCE && i.id.endsWith(":dirty"),
+  );
+
+  $: repoRoot = (branchItem?.metadata as Record<string, unknown> | undefined)
+    ?.repoRoot as string | undefined;
+
+  $: diffLabel = dirtyItem?.label ?? "";
+  $: showDiff = diffLabel.length > 0;
+
+  interface GhPrView {
+    number: number;
+    title: string;
+    state: string;
+    url: string;
+    headRefName: string;
+    isDraft: boolean;
+  }
+
+  let pr: GhPrView | null = null;
+  let prTimer: ReturnType<typeof setInterval> | null = null;
+  let lastRepoRoot: string | null = null;
+
+  const PR_REFRESH_MS = 60_000;
+
+  async function refreshPr(root: string): Promise<void> {
+    try {
+      const result = await invoke<GhPrView | null>("gh_view_pr", {
+        repoPath: root,
+      });
+      pr = result ?? null;
+    } catch {
+      pr = null;
+    }
+  }
+
+  function startPrPolling(root: string): void {
+    if (prTimer) clearInterval(prTimer);
+    lastRepoRoot = root;
+    void refreshPr(root);
+    prTimer = setInterval(() => void refreshPr(root), PR_REFRESH_MS);
+  }
+
+  function stopPrPolling(): void {
+    if (prTimer) {
+      clearInterval(prTimer);
+      prTimer = null;
+    }
+  }
+
+  $: if (repoRoot && repoRoot !== lastRepoRoot) {
+    startPrPolling(repoRoot);
+  }
+  $: if (!repoRoot && lastRepoRoot) {
+    stopPrPolling();
+    pr = null;
+    lastRepoRoot = null;
+  }
+
+  onDestroy(() => stopPrPolling());
+
+  $: showPr = pr !== null && (pr.state === "OPEN" || pr.state === "open");
+  $: isDraft = pr?.isDraft ?? false;
+</script>
+
+{#if showDiff || showPr}
+  <div
+    style="display: flex; flex-direction: column; gap: 1px; padding: 0 12px 4px 6px; overflow: hidden;"
+  >
+    {#if showDiff}
+      <div
+        style="display: flex; align-items: center; gap: 3px; min-width: 0; overflow: hidden;"
+      >
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 16 16"
+          fill={iconFg}
+          style="flex-shrink: 0; opacity: 0.7;"
+          aria-hidden="true"
+        >
+          <path
+            d="M8 3.5a.5.5 0 0 1 .5.5v3.5H12a.5.5 0 0 1 0 1H8.5V12a.5.5 0 0 1-1 0V8.5H4a.5.5 0 0 1 0-1h3.5V4a.5.5 0 0 1 .5-.5zM3 11.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5z"
+          />
+        </svg>
+        <span
+          style="font-size: 10px; color: #e8b73a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
+          title={dirtyItem?.tooltip ?? diffLabel}
+        >
+          {diffLabel}
+        </span>
+      </div>
+    {/if}
+
+    {#if showPr && pr}
+      <div
+        style="display: flex; align-items: center; gap: 3px; min-width: 0; overflow: hidden;"
+      >
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 16 16"
+          fill={isDraft ? fgMuted : iconFg}
+          style="flex-shrink: 0; opacity: 0.7;"
+          aria-hidden="true"
+        >
+          <path
+            d="M1.5 3.25a2.25 2.25 0 1 1 3 2.122v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.25 2.25 0 0 1 1.5 3.25Zm5.677-.177L9.573.677A.25.25 0 0 1 10 .854V2.5h1A2.5 2.5 0 0 1 13.5 5v5.628a2.251 2.251 0 1 1-1.5 0V5a1 1 0 0 0-1-1h-1v1.646a.25.25 0 0 1-.427.177L7.177 3.427a.25.25 0 0 1 0-.354Z"
+          />
+        </svg>
+        <span
+          style="font-size: 10px; color: {isDraft
+            ? fgMuted
+            : '#4ec957'}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;"
+          title="#{pr.number} {pr.title}{isDraft ? ' (draft)' : ''}"
+        >
+          #{pr.number}{isDraft ? " draft" : ""}
+          <span style="opacity: 0.75;">{pr.title}</span>
+        </span>
+      </div>
+    {/if}
+  </div>
+{/if}

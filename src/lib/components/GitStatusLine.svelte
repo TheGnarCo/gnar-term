@@ -22,8 +22,7 @@
 
   $: cwdItem = items.find((i) => i.id.endsWith(":cwd"));
   $: branchItem = items.find((i) => i.id.endsWith(":branch"));
-  $: prItem = items.find((i) => i.id.endsWith(":pr"));
-  $: dirtyItem = items.find((i) => i.id.endsWith(":dirty"));
+  $: worktreeDirtyItem = items.find((i) => i.id.endsWith(":dirty"));
 
   let fgMuted: string;
   $: fgMuted = ($theme["fgMuted"] ?? $theme.fgDim) as string;
@@ -49,22 +48,10 @@
     document.dispatchEvent(event);
   }
 
-  function prCiVariant(
-    item: StatusItem,
-  ): "success" | "warning" | "error" | "muted" {
-    const ci = item.metadata?.ciStatus;
-    if (ci === "passing") return "success";
-    if (ci === "failing") return "error";
-    return "muted";
-  }
-
   $: topRowHasContent = Boolean(cwdItem || branchItem);
-  // Inactive rows collapse to the top line (cwd + branch); PR and dirty
-  // details only render for the active workspace so the sidebar stays
-  // scannable.
-  $: bottomRowHasContent = isActiveWorkspace && Boolean(prItem || dirtyItem);
   $: nestedRowHasContent =
-    Boolean(worktreeBranch) || (isActiveWorkspace && Boolean(dirtyItem));
+    Boolean(worktreeBranch) ||
+    (isActiveWorkspace && Boolean(worktreeDirtyItem));
 </script>
 
 {#if isNested}
@@ -82,37 +69,39 @@
           title={`worktree branch: ${worktreeBranch}`}>⌥ {worktreeBranch}</span
         >
       {/if}
-      {#if worktreeBranch && dirtyItem && isActiveWorkspace}
+      {#if worktreeBranch && worktreeDirtyItem && isActiveWorkspace}
         <span
           aria-hidden="true"
           style="font-size: 10px; color: {fgMuted}; opacity: 0.4;">|</span
         >
       {/if}
-      {#if dirtyItem && isActiveWorkspace}
-        {#if dirtyItem.action && isActiveWorkspace}
+      {#if worktreeDirtyItem && isActiveWorkspace}
+        {#if worktreeDirtyItem.action && isActiveWorkspace}
           <button
             style="font-size: 10px; color: {variantColor(
-              dirtyItem.variant,
+              worktreeDirtyItem.variant,
               fgMuted,
             )}; text-decoration: underline; cursor: pointer; white-space: nowrap; background: none; border: none; padding: 0; font-family: inherit;"
-            title={dirtyItem.tooltip || dirtyItem.label}
-            aria-label={dirtyItem.tooltip || dirtyItem.label}
-            on:click|stopPropagation={() => handleAction(dirtyItem.action)}
-            >{dirtyItem.label}</button
+            title={worktreeDirtyItem.tooltip || worktreeDirtyItem.label}
+            aria-label={worktreeDirtyItem.tooltip || worktreeDirtyItem.label}
+            on:click|stopPropagation={() =>
+              handleAction(worktreeDirtyItem.action)}
+            >{worktreeDirtyItem.label}</button
           >
         {:else}
           <span
             style="font-size: 10px; color: {variantColor(
-              dirtyItem.variant,
+              worktreeDirtyItem.variant,
               fgMuted,
             )}; white-space: nowrap;"
-            title={dirtyItem.tooltip || dirtyItem.label}>{dirtyItem.label}</span
+            title={worktreeDirtyItem.tooltip || worktreeDirtyItem.label}
+            >{worktreeDirtyItem.label}</span
           >
         {/if}
       {/if}
     </div>
   {/if}
-{:else if topRowHasContent || bottomRowHasContent}
+{:else if topRowHasContent}
   <div
     style="padding: 0 12px 6px 6px; display: flex; flex-direction: column; gap: 2px; overflow: hidden; line-height: 1.2;"
   >
@@ -155,83 +144,6 @@
           >
           {branchItem.label}
         </span>
-      </div>
-    {/if}
-
-    {#if bottomRowHasContent}
-      <div style="display: flex; align-items: center; gap: 6px; min-width: 0;">
-        {#if prItem}
-          {@const variant = prItem.metadata?.prNumber
-            ? prCiVariant(prItem)
-            : (prItem.variant ?? "muted")}
-          {#if prItem.action && isActiveWorkspace}
-            <button
-              style="font-size: 10px; color: {variantColor(
-                variant,
-                fgMuted,
-              )}; text-decoration: underline; cursor: pointer; white-space: nowrap; display: inline-flex; gap: 4px; align-items: center; background: none; border: none; padding: 0; font-family: inherit;"
-              title={prItem.tooltip || prItem.label}
-              aria-label={prItem.tooltip || prItem.label}
-              on:click|stopPropagation={() => handleAction(prItem.action)}
-            >
-              {prItem.metadata?.prNumber
-                ? `PR #${prItem.metadata.prNumber}`
-                : prItem.label}
-              {#if prItem.metadata?.reviewState}
-                <span style="opacity: 0.7;"
-                  >[{prItem.metadata.reviewState}]</span
-                >
-              {/if}
-            </button>
-          {:else}
-            <span
-              style="font-size: 10px; color: {variantColor(
-                variant,
-                fgMuted,
-              )}; white-space: nowrap; display: inline-flex; gap: 4px; align-items: center;"
-              title={prItem.tooltip || prItem.label}
-            >
-              {prItem.metadata?.prNumber
-                ? `PR #${prItem.metadata.prNumber}`
-                : prItem.label}
-              {#if prItem.metadata?.reviewState}
-                <span style="opacity: 0.7;"
-                  >[{prItem.metadata.reviewState}]</span
-                >
-              {/if}
-            </span>
-          {/if}
-        {/if}
-        {#if prItem && dirtyItem}
-          <span
-            aria-hidden="true"
-            style="font-size: 10px; color: {fgMuted}; opacity: 0.4; flex-shrink: 0;"
-            >|</span
-          >
-        {/if}
-        {#if dirtyItem}
-          {#if dirtyItem.action && isActiveWorkspace}
-            <button
-              style="font-size: 10px; color: {variantColor(
-                dirtyItem.variant,
-                fgMuted,
-              )}; text-decoration: underline; cursor: pointer; white-space: nowrap; background: none; border: none; padding: 0; font-family: inherit;"
-              title={dirtyItem.tooltip || dirtyItem.label}
-              aria-label={dirtyItem.tooltip || dirtyItem.label}
-              on:click|stopPropagation={() => handleAction(dirtyItem.action)}
-              >{dirtyItem.label}</button
-            >
-          {:else}
-            <span
-              style="font-size: 10px; color: {variantColor(
-                dirtyItem.variant,
-                fgMuted,
-              )}; white-space: nowrap;"
-              title={dirtyItem.tooltip || dirtyItem.label}
-              >{dirtyItem.label}</span
-            >
-          {/if}
-        {/if}
       </div>
     {/if}
   </div>

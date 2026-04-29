@@ -479,8 +479,7 @@ export function createWorkspaceFromSurface(
     surfaces: [surface],
     activeSurfaceId: surface.id,
   };
-  const srcGroupId = (srcWs.metadata as Record<string, unknown> | undefined)
-    ?.groupId as string | undefined;
+  const srcGroupId = srcWs?.metadata?.groupId;
   const effectiveGroupId =
     (insertOptions?.kind === "group" && insertOptions.targetGroupId) ||
     srcGroupId;

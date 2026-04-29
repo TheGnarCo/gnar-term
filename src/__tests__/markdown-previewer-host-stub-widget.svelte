@@ -7,7 +7,7 @@
   const host = getDashboardHost();
   const groupId =
     host && typeof host.metadata.groupId === "string"
-      ? (host.metadata.groupId as string)
+      ? host.metadata.groupId
       : "";
   const isGlobal =
     host?.metadata.isGlobalAgenticDashboard === true ? "yes" : "no";

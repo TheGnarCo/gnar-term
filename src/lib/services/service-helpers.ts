@@ -8,7 +8,17 @@ import {
   isTerminalSurface,
   type Surface,
   type TerminalSurface,
+  type Workspace,
+  type WorkspaceMetadata,
 } from "../types";
+
+/**
+ * Returns the typed metadata for a workspace, falling back to an empty object.
+ * Use this instead of `ws.metadata as any` or unsafe casts.
+ */
+export function wsMeta(ws: Workspace): WorkspaceMetadata {
+  return ws.metadata ?? {};
+}
 
 // Cached home directory — resolved once, reused everywhere
 let _home = "";

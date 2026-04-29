@@ -598,7 +598,7 @@
           void createWorkspaceFromDef({
             name,
             cwd: ctx.groupPath as string,
-            metadata: { groupId: ctx.groupId },
+            metadata: { groupId: ctx.groupId as string },
             layout: { pane: { surfaces: [{ type: "terminal" }] } },
           });
         } else {

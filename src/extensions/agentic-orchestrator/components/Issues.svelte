@@ -134,8 +134,7 @@
   $: handledIssues = (() => {
     const map = new Map<number, string>();
     for (const ws of $workspacesStore) {
-      const md = (ws as { metadata?: Record<string, unknown> }).metadata;
-      const numbers = md?.spawnedFromIssues;
+      const numbers = ws.metadata?.spawnedFromIssues;
       if (!Array.isArray(numbers)) continue;
       for (const n of numbers) {
         if (typeof n === "number" && !map.has(n)) map.set(n, ws.id);

@@ -71,13 +71,11 @@ describe("Diff dashboard contribution", () => {
     });
 
     const all = get(workspaces);
-    const created = all.find((w) => {
-      const md = w.metadata as Record<string, unknown> | undefined;
-      return md?.dashboardContributionId === "diff";
-    });
+    const created = all.find(
+      (w) => w.metadata?.dashboardContributionId === "diff",
+    );
     expect(created).toBeTruthy();
-    const md = created!.metadata as Record<string, unknown>;
-    expect(md.isDashboard).toBe(true);
-    expect(md.groupId).toBe("g1");
+    expect(created!.metadata?.isDashboard).toBe(true);
+    expect(created!.metadata?.groupId).toBe("g1");
   });
 });

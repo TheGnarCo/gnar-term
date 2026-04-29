@@ -26,6 +26,7 @@
   import { showConfirmPrompt } from "../stores/ui";
   import type { Component } from "svelte";
   import GridIcon from "../icons/GridIcon.svelte";
+  import { wsMeta } from "../services/service-helpers";
 
   export let groupId: string;
 
@@ -72,13 +73,10 @@
     group
       ? $workspaces
           .filter((w) => {
-            const md = w.metadata as Record<string, unknown> | undefined;
-            return md?.isDashboard === true && md?.groupId === group!.id;
+            const md = wsMeta(w);
+            return md.isDashboard === true && md.groupId === group!.id;
           })
-          .map(
-            (w) =>
-              (w.metadata as Record<string, unknown>).dashboardContributionId,
-          )
+          .map((w) => wsMeta(w).dashboardContributionId)
           .filter((v): v is string => typeof v === "string")
       : [],
   );

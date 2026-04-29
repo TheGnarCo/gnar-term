@@ -113,7 +113,7 @@ export async function restoreWorkspaces(
     const knownGroupIds = new Set(getWorkspaceGroups().map((g) => g.id));
     const seenDashboards = new Set<string>();
     const filteredDefs = state.workspaces.filter((wsDef) => {
-      const md = wsDef.metadata as Record<string, unknown> | undefined;
+      const md = wsDef.metadata;
       const isDashboard = md?.isDashboard === true;
       const ownerGroupId = md?.groupId;
       if (!isDashboard) return true;
@@ -141,10 +141,7 @@ export async function restoreWorkspaces(
     const restored = get(workspaces);
     if (restored.length > 0) {
       const isDashboard = (idx: number): boolean => {
-        const md = restored[idx]?.metadata as
-          | Record<string, unknown>
-          | undefined;
-        return md?.isDashboard === true;
+        return restored[idx]?.metadata?.isDashboard === true;
       };
       const persistedIdx = state.activeWorkspaceIdx ?? 0;
       const clampedIdx = Math.min(persistedIdx, restored.length - 1);

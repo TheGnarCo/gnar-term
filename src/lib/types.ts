@@ -75,12 +75,62 @@ export type SplitNode =
       ratio: number;
     };
 
+/**
+ * Typed metadata carried by a Workspace. All known keys are optional.
+ * The index signature preserves compatibility with extension-API sites that
+ * accept Record<string,unknown> and with serialised state that may carry
+ * legacy or unknown keys.
+ */
+export interface WorkspaceMetadata {
+  // --- Index signature: extensions may store arbitrary keys ---
+  [key: string]: unknown;
+  // --- Worktree fields ---
+  /** Set on worktree-backed workspaces; absolute path to the worktree directory. */
+  worktreePath?: string;
+  /** Git branch name for worktree workspaces. */
+  branch?: string;
+  /** Base branch the worktree was created from. */
+  baseBranch?: string;
+  /** Absolute path to the source repo for worktree workspaces. */
+  repoPath?: string;
+  // --- Project-scope extension ---
+  /** Project id used by the project-scope extension to claim the workspace. */
+  projectId?: string;
+  // --- Dashboard / group fields ---
+  /** Marks a workspace as a dashboard (used by workspace-group and related services). */
+  isDashboard?: boolean;
+  /** Group id this workspace belongs to (workspace-group-service). */
+  groupId?: string;
+  /** Id of the group's current dashboard workspace (workspace-group-service). */
+  dashboardWorkspaceId?: string;
+  /**
+   * Contribution id for the dashboard type: "group" | "agentic" | "settings" | string.
+   * Backfilled by workspace-group-service for legacy workspaces.
+   */
+  dashboardContributionId?: string;
+  /** True on the global agentic pseudo-workspace (agentic-orchestrator). */
+  isGlobalAgenticDashboard?: boolean;
+  // --- Agentic orchestrator / spawn-helper ---
+  /** Id of the dashboard workspace that spawned this workspace. */
+  parentDashboardId?: string;
+  /**
+   * Provenance marker set by spawn-helper. Records which dashboard spawned
+   * this workspace so the sidebar can show a bot-icon affordance.
+   */
+  spawnedBy?: { kind: "global" } | { kind: "group"; groupId: string };
+  /**
+   * GitHub issue numbers this workspace is handling (agentic-orchestrator).
+   * Written by createWorktreeWorkspaceFromConfig.
+   */
+  spawnedFromIssues?: number[];
+}
+
 export interface Workspace {
   id: string;
   name: string;
   splitRoot: SplitNode;
   activePaneId: string | null;
-  metadata?: Record<string, unknown>;
+  metadata?: WorkspaceMetadata;
 }
 
 // Helper functions for tree traversal

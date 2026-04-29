@@ -24,6 +24,7 @@
   import { rootRowRendererStore } from "../services/root-row-renderer-registry";
   import { switchWorkspace } from "../services/workspace-service";
   import { newSurface } from "../services/surface-service";
+  import { wsMeta } from "../services/service-helpers";
 
   const iconSvgMap: Record<string, string> = {
     plus: `<line x1="8" y1="3" x2="8" y2="13" /><line x1="3" y1="8" x2="13" y2="8" />`,
@@ -129,10 +130,7 @@
         for (let i = 0; i < list.length; i++) {
           const ws = list[i]!;
           if (seen.has(ws.id)) continue;
-          if (
-            (ws.metadata as Record<string, unknown> | undefined)?.groupId ===
-            row.id
-          ) {
+          if (wsMeta(ws).groupId === row.id) {
             out.push({
               kind: "workspace",
               workspaceId: ws.id,

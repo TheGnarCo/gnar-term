@@ -35,9 +35,7 @@
     for (const ws of get(workspaces)) {
       for (const pane of getAllPanes(ws.splitRoot)) {
         if (pane.surfaces.some((s) => s.id === surface.id)) {
-          const hostMetadata = ws.metadata as
-            | Record<string, unknown>
-            | undefined;
+          const hostMetadata = ws.metadata;
           return {
             workspaceId: ws.id,
             paneId: pane.id,

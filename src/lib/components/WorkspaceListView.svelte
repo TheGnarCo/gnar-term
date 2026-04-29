@@ -23,6 +23,8 @@
     detectWorkspacePaneDrop,
     detectTabBarDropForWorkspace,
     setWorkspaceDragState,
+    createDragDenyOverlay,
+    removeDragDenyOverlay,
     type WorkspacePaneDropTarget,
   } from "../services/workspace-drag";
   import {
@@ -41,8 +43,8 @@
   import { contextMenu } from "../stores/ui";
   import { confirmAndCloseWorkspace } from "../services/worktree-service";
   import { commandStore } from "../services/command-registry";
-  import type { MenuItem } from "../context-menu-types";
   import { dashboardWorkspaceRegistry } from "../services/dashboard-workspace-service";
+  import { buildWorkspaceContextMenuItems } from "../utils/workspace-context-menu";
 
   /** Set of workspace IDs to display. If undefined, shows all. */
   export let filterIds: Set<string> | undefined = undefined;
@@ -137,33 +139,10 @@
           : null,
       );
       if (ghostEl) {
-        const existing = ghostEl.querySelector(
-          ".ws-drag-deny",
-        ) as HTMLElement | null;
         if (currentPaneTarget?.kind === "deny") {
-          if (!existing) {
-            const el = document.createElement("div");
-            el.className = "ws-drag-deny";
-            Object.assign(el.style, {
-              position: "absolute",
-              inset: "0",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: "rgba(200,30,30,0.75)",
-              borderRadius: "4px",
-              fontSize: "16px",
-              color: "white",
-              fontWeight: "bold",
-              pointerEvents: "none",
-            });
-            el.textContent = "✕";
-            ghostEl.appendChild(el);
-          }
-          document.body.style.cursor = "not-allowed";
+          createDragDenyOverlay(ghostEl);
         } else {
-          existing?.remove();
-          document.body.style.cursor = "grabbing";
+          removeDragDenyOverlay(ghostEl);
         }
       }
     },
@@ -260,60 +239,35 @@
   let itemRefs: Record<string, WorkspaceItem> = {};
 
   // Nested workspaces share the same context menu surface as the root
-  // workspace list: Rename / New Surface / (Promote) / Close Other /
-  // Close. Rename drives the underlying WorkspaceItem's inline rename
-  // via the bound ref; everything else routes through the workspace
-  // service. Kept local to WorkspaceListView so this shared component
-  // doesn't need parent callbacks for each item.
+  // workspace list: Rename / (Promote) / Close. Rename drives the
+  // underlying WorkspaceItem's inline rename via the bound ref; everything
+  // else routes through the workspace service. Kept local to
+  // WorkspaceListView so this shared component doesn't need parent
+  // callbacks for each item.
   function showNestedContextMenu(x: number, y: number, globalIdx: number) {
     const ws = $workspaces[globalIdx];
     if (!ws) return;
     const wsMeta = ws.metadata as Record<string, unknown> | undefined;
     const isDashboard = wsMeta?.isDashboard === true;
     const isInsideGroup = typeof wsMeta?.groupId === "string";
-    // Dashboards are singleton workspace surfaces closed with the group;
-    // they don't support rename or promotion. Workspaces already nested
-    // inside a group can't be promoted again — groups don't nest.
-    const canPromote =
-      !isDashboard &&
-      !isInsideGroup &&
-      get(commandStore).some((c) => c.id === "promote-workspace-to-group");
-    const canRename = !isDashboard;
-
-    const items: MenuItem[] = [
-      ...(canRename
-        ? [
-            {
-              label: "Rename Workspace",
-              shortcut: "⇧⌘R",
-              action: () => itemRefs[ws.id]?.startRename(),
-            } as MenuItem,
-          ]
-        : []),
-      ...(canPromote
-        ? [
-            { label: "", action: () => {}, separator: true } as MenuItem,
-            {
-              label: "Promote to Workspace Group...",
-              action: () => {
-                switchWorkspace(globalIdx);
-                const cmd = get(commandStore).find(
-                  (c) => c.id === "promote-workspace-to-group",
-                );
-                if (cmd) void cmd.action();
-              },
-            } as MenuItem,
-          ]
-        : []),
-      { label: "", action: () => {}, separator: true },
-      {
-        label: "Close Workspace",
-        shortcut: "⇧⌘W",
-        danger: true,
-        disabled: $workspaces.length <= 1 || isDashboard,
-        action: () => void confirmAndCloseWorkspace(ws, globalIdx),
+    const canPromoteCommand = get(commandStore).some(
+      (c) => c.id === "promote-workspace-to-group",
+    );
+    const items = buildWorkspaceContextMenuItems({
+      isDashboard,
+      isInsideGroup,
+      canPromoteCommand,
+      workspaceCount: $workspaces.length,
+      onRename: () => itemRefs[ws.id]?.startRename(),
+      onPromote: () => {
+        switchWorkspace(globalIdx);
+        const cmd = get(commandStore).find(
+          (c) => c.id === "promote-workspace-to-group",
+        );
+        if (cmd) void cmd.action();
       },
-    ];
+      onClose: () => void confirmAndCloseWorkspace(ws, globalIdx),
+    });
     contextMenu.set({ x, y, items });
   }
 </script>

@@ -468,9 +468,9 @@ describe("Tab", () => {
         onClose: noop,
       },
     });
-    // When hasUnread && !isActive, the tab renders 3 spans: dot, title, close
+    // When hasUnread && !isActive, the tab renders 2 spans (dot + title) and 1 close button
     const spans = container.querySelectorAll(".tab span");
-    expect(spans.length).toBe(3);
+    expect(spans.length).toBe(2);
     // The first span is the unread dot (empty text content)
     expect(spans[0].textContent).toBe("");
   });
@@ -486,9 +486,9 @@ describe("Tab", () => {
         onClose: noop,
       },
     });
-    // When isActive, the unread dot is not rendered — only title and close spans
+    // When isActive, the unread dot is not rendered — only title span + close button
     const spans = container.querySelectorAll(".tab span");
-    expect(spans.length).toBe(2);
+    expect(spans.length).toBe(1);
   });
 
   it("renders close button (x symbol)", () => {
@@ -533,9 +533,9 @@ describe("Tab", () => {
         onClose: noop,
       },
     });
-    // Without unread, only 2 spans: title and close
+    // Without unread, only 1 span (title) + close button (not a span)
     const spans = container.querySelectorAll(".tab span");
-    expect(spans.length).toBe(2);
+    expect(spans.length).toBe(1);
   });
 });
 

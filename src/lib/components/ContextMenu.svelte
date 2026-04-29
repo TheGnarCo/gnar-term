@@ -1,6 +1,9 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import { contextMenu } from "../stores/ui";
   import { theme } from "../stores/theme";
+
+  let menuEl: HTMLElement | null = null;
 
   function close() {
     contextMenu.set(null);
@@ -29,6 +32,47 @@
       clampPosition($contextMenu.x, $contextMenu.y, el);
     }
   }
+
+  function getMenuItems(): HTMLElement[] {
+    if (!menuEl) return [];
+    return Array.from(
+      menuEl.querySelectorAll<HTMLElement>(
+        '[role="menuitem"]:not([aria-disabled="true"])',
+      ),
+    );
+  }
+
+  function focusItem(el: HTMLElement) {
+    el.focus();
+  }
+
+  function handleMenuKeydown(e: KeyboardEvent) {
+    const items = getMenuItems();
+    if (!items.length) return;
+    const focused = document.activeElement as HTMLElement;
+    const idx = items.indexOf(focused);
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      const next = idx < items.length - 1 ? idx + 1 : 0;
+      focusItem(items[next]!);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      const prev = idx > 0 ? idx - 1 : items.length - 1;
+      focusItem(items[prev]!);
+    } else if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      if (focused && items.includes(focused)) focused.click();
+    }
+  }
+
+  // Focus first item when menu opens
+  $: if ($contextMenu) {
+    void tick().then(() => {
+      const items = getMenuItems();
+      if (items[0]) focusItem(items[0]);
+    });
+  }
 </script>
 
 <svelte:window on:mousedown={handleMousedown} on:keydown={handleKeydown} />
@@ -36,7 +80,11 @@
 {#if $contextMenu}
   <div
     id="context-menu"
+    role="menu"
+    tabindex="-1"
+    bind:this={menuEl}
     use:positionMenu
+    on:keydown={handleMenuKeydown}
     style="
       position: fixed; z-index: 9999;
       background: {$theme.bgFloat}; border: 1px solid {$theme.border};
@@ -48,12 +96,15 @@
     {#each $contextMenu.items as item}
       {#if item.separator}
         <div
+          role="separator"
           style="height: 1px; background: {$theme.border}; margin: 4px 8px;"
         ></div>
       {:else}
         <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div
+          role="menuitem"
+          tabindex="-1"
+          aria-disabled={item.disabled ? "true" : undefined}
           class="menu-row"
           class:disabled={item.disabled}
           class:danger={item.danger}

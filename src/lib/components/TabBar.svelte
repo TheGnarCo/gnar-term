@@ -53,6 +53,7 @@
 </script>
 
 <div
+  role="tablist"
   data-pane-id={pane.id}
   style="
     display: flex; align-items: center; gap: 1px; position: relative;
@@ -104,12 +105,11 @@
     style="display: flex; align-items: center; gap: 2px; padding-right: 2px;"
   >
     {#if showJumpToBottom && onJumpToBottom}
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <span
+      <button
         data-jump-to-bottom
+        aria-label="Jump to bottom"
         title="Jump to bottom"
-        style="color: {$theme.fgDim}; cursor: pointer; height: 20px; border-radius: 4px; display: flex; align-items: center; gap: 4px; padding: 0 6px; font-size: 11px; border: 1px solid {$theme.border};"
+        style="background: none; border: 1px solid {$theme.border}; padding: 0 6px; font: inherit; color: {$theme.fgDim}; cursor: pointer; height: 20px; border-radius: 4px; display: flex; align-items: center; gap: 4px; font-size: 11px;"
         on:click|stopPropagation={onJumpToBottom}
       >
         <svg
@@ -121,19 +121,19 @@
           stroke-width="1.5"
           stroke-linecap="round"
           stroke-linejoin="round"
+          aria-hidden="true"
         >
           <line x1="5" y1="1" x2="5" y2="9" />
           <polyline points="2,6 5,9 8,6" />
         </svg>
         Jump to bottom
-      </span>
+      </button>
     {/if}
     {#if activeIsPreview && onRefreshPreview}
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <span
+      <button
+        aria-label="Refresh Preview"
         title="Refresh Preview"
-        style="color: {$theme.fgDim}; cursor: pointer; width: 24px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center;"
+        style="background: none; border: none; padding: 0; font: inherit; color: {$theme.fgDim}; cursor: pointer; width: 24px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center;"
         on:click|stopPropagation={onRefreshPreview}
       >
         <svg
@@ -145,17 +145,17 @@
           stroke-width="1.5"
           stroke-linecap="round"
           stroke-linejoin="round"
+          aria-hidden="true"
           ><path d="M2 7a5 5 0 1 1 1.5 3.5" /><polyline
             points="2 11 2 7 6 7"
           /></svg
         >
-      </span>
+      </button>
     {/if}
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <span
+    <button
+      aria-label="Split Right (⌘D)"
       title="Split Right (⌘D)"
-      style="color: {$theme.fgDim}; cursor: pointer; width: 24px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center;"
+      style="background: none; border: none; padding: 0; font: inherit; color: {$theme.fgDim}; cursor: pointer; width: 24px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center;"
       on:click|stopPropagation={onSplitRight}
     >
       <svg
@@ -165,6 +165,7 @@
         fill="none"
         stroke="currentColor"
         stroke-width="1.5"
+        aria-hidden="true"
         ><rect x="1" y="1" width="12" height="12" rx="1" /><line
           x1="7"
           y1="1"
@@ -172,12 +173,11 @@
           y2="13"
         /></svg
       >
-    </span>
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <span
+    </button>
+    <button
+      aria-label="Split Down (⇧⌘D)"
       title="Split Down (⇧⌘D)"
-      style="color: {$theme.fgDim}; cursor: pointer; width: 24px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center;"
+      style="background: none; border: none; padding: 0; font: inherit; color: {$theme.fgDim}; cursor: pointer; width: 24px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center;"
       on:click|stopPropagation={onSplitDown}
     >
       <svg
@@ -187,6 +187,7 @@
         fill="none"
         stroke="currentColor"
         stroke-width="1.5"
+        aria-hidden="true"
         ><rect x="1" y="1" width="12" height="12" rx="1" /><line
           x1="1"
           y1="7"
@@ -194,12 +195,11 @@
           y2="7"
         /></svg
       >
-    </span>
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <span
+    </button>
+    <button
+      aria-label="Close Pane"
       title="Close Pane"
-      style="color: {$theme.fgDim}; cursor: pointer; width: 24px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center;"
+      style="background: none; border: none; padding: 0; font: inherit; color: {$theme.fgDim}; cursor: pointer; width: 24px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center;"
       on:click|stopPropagation={onClosePane}
     >
       <svg
@@ -210,6 +210,7 @@
         stroke="currentColor"
         stroke-width="1.5"
         stroke-linecap="round"
+        aria-hidden="true"
         ><line x1="2" y1="2" x2="10" y2="10" /><line
           x1="10"
           y1="2"
@@ -217,6 +218,6 @@
           y2="10"
         /></svg
       >
-    </span>
+    </button>
   </div>
 </div>

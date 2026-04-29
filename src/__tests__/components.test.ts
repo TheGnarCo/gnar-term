@@ -537,6 +537,83 @@ describe("Tab", () => {
     const spans = container.querySelectorAll(".tab span");
     expect(spans.length).toBe(1);
   });
+
+  // ---- a11y regression tests (F06) ----------------------------------------
+
+  it("tab div has role=tab and aria-selected", () => {
+    const surface = makeSurface("t1");
+    const { container } = render(Tab, {
+      props: {
+        surface,
+        index: 0,
+        isActive: true,
+        onSelect: noop,
+        onClose: noop,
+      },
+    });
+    const tab = container.querySelector(".tab") as HTMLElement;
+    expect(tab.getAttribute("role")).toBe("tab");
+    expect(tab.getAttribute("aria-selected")).toBe("true");
+    expect(tab.getAttribute("tabindex")).toBe("0");
+  });
+
+  it("Enter key on the tab div calls onSelect", async () => {
+    const surface = makeSurface("t1");
+    const onSelect = vi.fn();
+    const { container } = render(Tab, {
+      props: { surface, index: 0, isActive: false, onSelect, onClose: noop },
+    });
+    const tab = container.querySelector(".tab") as HTMLElement;
+    fireEvent.keyDown(tab, { key: "Enter", target: tab, currentTarget: tab });
+    expect(onSelect).toHaveBeenCalledOnce();
+  });
+
+  it("Space key on the tab div calls onSelect", async () => {
+    const surface = makeSurface("t1");
+    const onSelect = vi.fn();
+    const { container } = render(Tab, {
+      props: { surface, index: 0, isActive: false, onSelect, onClose: noop },
+    });
+    const tab = container.querySelector(".tab") as HTMLElement;
+    fireEvent.keyDown(tab, { key: " ", target: tab, currentTarget: tab });
+    expect(onSelect).toHaveBeenCalledOnce();
+  });
+
+  it("Enter on close button does not call onSelect (bubbling guard)", async () => {
+    const surface = makeSurface("t1");
+    const onSelect = vi.fn();
+    const onClose = vi.fn();
+    const { container } = render(Tab, {
+      props: { surface, index: 0, isActive: true, onSelect, onClose },
+    });
+    const closeBtn = container.querySelector(
+      "button[aria-label='Close tab']",
+    ) as HTMLElement;
+    // Dispatch keydown directly on the close button — it bubbles to the tab
+    // div, but handleTabKeydown should ignore it (target !== currentTarget).
+    closeBtn.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+    );
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("close button has aria-label and is a button element", () => {
+    const surface = makeSurface("t1");
+    const { container } = render(Tab, {
+      props: {
+        surface,
+        index: 0,
+        isActive: true,
+        onSelect: noop,
+        onClose: noop,
+      },
+    });
+    const closeBtn = container.querySelector(
+      "button[aria-label='Close tab']",
+    ) as HTMLButtonElement;
+    expect(closeBtn).toBeTruthy();
+    expect(closeBtn.tagName).toBe("BUTTON");
+  });
 });
 
 // ===========================================================================
@@ -734,6 +811,96 @@ describe("ContextMenu", () => {
     expect(row).toBeTruthy();
     expect(row.style.opacity).toBe("0.5");
   });
+
+  // ---- a11y regression tests (F11) ----------------------------------------
+
+  it("menu container has role=menu", () => {
+    contextMenu.set({ x: 0, y: 0, items: [{ label: "Item", action: noop }] });
+    const { container } = render(ContextMenu);
+    const menu = container.querySelector("#context-menu") as HTMLElement;
+    expect(menu.getAttribute("role")).toBe("menu");
+  });
+
+  it("menu items have role=menuitem and tabindex=-1", () => {
+    contextMenu.set({
+      x: 0,
+      y: 0,
+      items: [
+        { label: "Copy", action: noop },
+        { label: "Paste", action: noop },
+      ],
+    });
+    const { container } = render(ContextMenu);
+    const items = container.querySelectorAll('[role="menuitem"]');
+    expect(items.length).toBe(2);
+    items.forEach((item) => {
+      expect((item as HTMLElement).getAttribute("tabindex")).toBe("-1");
+    });
+  });
+
+  it("separator element has role=separator", () => {
+    contextMenu.set({
+      x: 0,
+      y: 0,
+      items: [
+        { label: "Copy", action: noop },
+        { label: "", action: noop, separator: true },
+        { label: "Paste", action: noop },
+      ],
+    });
+    const { container } = render(ContextMenu);
+    const sep = container.querySelector('[role="separator"]');
+    expect(sep).toBeTruthy();
+  });
+
+  it("ArrowDown/ArrowUp keyboard navigation is wired on the menu container", () => {
+    contextMenu.set({
+      x: 0,
+      y: 0,
+      items: [
+        { label: "First", action: noop },
+        { label: "Second", action: noop },
+        { label: "Third", action: noop },
+      ],
+    });
+    const { container } = render(ContextMenu);
+    const menu = container.querySelector("#context-menu") as HTMLElement;
+    const items = Array.from(
+      container.querySelectorAll<HTMLElement>('[role="menuitem"]'),
+    );
+
+    // Spy on focus for each item and track calls.
+    // Use a mutable "current active" so the handler's document.activeElement
+    // lookup reflects which item was last focused.
+    let activeItem: HTMLElement | null = null;
+    const activeElementSpy = vi
+      .spyOn(document, "activeElement", "get")
+      .mockImplementation(() => activeItem);
+
+    const focusCalls: HTMLElement[] = [];
+    items.forEach((item) => {
+      vi.spyOn(item, "focus").mockImplementation(() => {
+        activeItem = item;
+        focusCalls.push(item);
+      });
+    });
+
+    // ArrowDown from first item should focus second
+    activeItem = items[0]!;
+    menu.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
+    );
+    expect(focusCalls.at(-1)).toBe(items[1]);
+
+    // ArrowUp from second item should focus first
+    activeItem = items[1]!;
+    menu.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }),
+    );
+    expect(focusCalls.at(-1)).toBe(items[0]);
+
+    activeElementSpy.mockRestore();
+  });
 });
 
 // ===========================================================================
@@ -802,6 +969,56 @@ describe("CommandPalette", () => {
     commandPaletteOpen.set(true);
     const { container } = render(CommandPalette);
     expect(container.querySelector("#cmd-palette-overlay")).toBeTruthy();
+  });
+
+  // ---- a11y regression tests (F07) ----------------------------------------
+
+  it("overlay has role=dialog and aria-modal", () => {
+    commandPaletteOpen.set(true);
+    const { container } = render(CommandPalette);
+    const overlay = container.querySelector(
+      "#cmd-palette-overlay",
+    ) as HTMLElement;
+    expect(overlay.getAttribute("role")).toBe("dialog");
+    expect(overlay.getAttribute("aria-modal")).toBe("true");
+  });
+
+  it("input has aria-label", () => {
+    commandPaletteOpen.set(true);
+    const { container } = render(CommandPalette);
+    const input = container.querySelector("input") as HTMLInputElement;
+    expect(input.getAttribute("aria-label")).toBe("Command search");
+  });
+
+  it("results container has role=listbox", () => {
+    commandPaletteOpen.set(true);
+    const { container } = render(CommandPalette);
+    const listbox = container.querySelector('[role="listbox"]');
+    expect(listbox).toBeTruthy();
+  });
+
+  it("each command row has role=option and aria-selected", () => {
+    registerCommands([
+      { id: "test.cmd-a", title: "Cmd A", action: noop, source: "test" },
+      { id: "test.cmd-b", title: "Cmd B", action: noop, source: "test" },
+    ]);
+    commandPaletteOpen.set(true);
+    const { container } = render(CommandPalette);
+    const options = container.querySelectorAll('[role="option"]');
+    expect(options.length).toBe(2);
+    // First option is selected by default (selectedIdx = 0)
+    expect(options[0]!.getAttribute("aria-selected")).toBe("true");
+    expect(options[1]!.getAttribute("aria-selected")).toBe("false");
+  });
+
+  it("input aria-activedescendant points to selected option", () => {
+    registerCommands([
+      { id: "test.cmd-a", title: "Cmd A", action: noop, source: "test" },
+    ]);
+    commandPaletteOpen.set(true);
+    const { container } = render(CommandPalette);
+    const input = container.querySelector("input") as HTMLInputElement;
+    expect(input.getAttribute("aria-activedescendant")).toBe("cmd-option-0");
   });
 });
 

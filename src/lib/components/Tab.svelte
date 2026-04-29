@@ -99,7 +99,9 @@
   }
 
   function handleTabKeydown(e: KeyboardEvent) {
-    // Don't intercept keys while the inline rename input is active
+    // Only handle when the tab div itself is the event target — not child
+    // buttons (close button) or the contenteditable rename span.
+    if (e.target !== e.currentTarget) return;
     if (_renaming) return;
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();

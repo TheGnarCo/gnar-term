@@ -62,31 +62,44 @@
     ></div>
     <!-- Title row: 8px left padding creates the same gap other rows use
          between the rail's right edge and their leading content. -->
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div
-      style="
-        font-size: 10px; font-weight: 600;
-        letter-spacing: 0.5px; text-transform: uppercase;
-        color: {$theme.fg};
-        cursor: {section.collapsible !== false ? 'pointer' : 'default'};
-        display: flex; align-items: center; gap: 4px;
-        padding-left: 8px;
-        pointer-events: auto;
-      "
-      on:click={() => {
-        if (section.collapsible !== false) onToggleCollapse();
-      }}
-    >
-      {#if section.collapsible !== false}
+    {#if section.collapsible !== false}
+      <button
+        style="
+          font-size: 10px; font-weight: 600;
+          letter-spacing: 0.5px; text-transform: uppercase;
+          color: {$theme.fg};
+          cursor: pointer;
+          display: flex; align-items: center; gap: 4px;
+          padding-left: 8px;
+          pointer-events: auto;
+          background: none; border: none; font-family: inherit; width: 100%; text-align: left;
+        "
+        aria-expanded={!collapsed}
+        on:click={onToggleCollapse}
+      >
         <span
+          aria-hidden="true"
           style="font-size: 8px; transform: rotate({collapsed
             ? '-90deg'
             : '0'}); transition: transform 0.15s;">&#9660;</span
         >
-      {/if}
-      {section.label}
-    </div>
+        {section.label}
+      </button>
+    {:else}
+      <div
+        style="
+          font-size: 10px; font-weight: 600;
+          letter-spacing: 0.5px; text-transform: uppercase;
+          color: {$theme.fg};
+          cursor: default;
+          display: flex; align-items: center; gap: 4px;
+          padding-left: 8px;
+          pointer-events: auto;
+        "
+      >
+        {section.label}
+      </div>
+    {/if}
   </div>
 {/if}
 {#if section.collapsible === false || !collapsed}

@@ -93,12 +93,18 @@
     <div style="display: flex; flex-direction: column; gap: 4px;">
       {#each entries as entry (entry.worktreePath)}
         {@const hasWorkspace = !!entry.workspaceId}
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div
           data-worktree-row
           data-branch={entry.branch}
+          role={hasWorkspace ? "button" : undefined}
+          tabindex={hasWorkspace ? 0 : undefined}
           on:click={() => jumpToWorktree(entry.workspaceId)}
+          on:keydown={(e) => {
+            if (hasWorkspace && (e.key === "Enter" || e.key === " ")) {
+              e.preventDefault();
+              jumpToWorktree(entry.workspaceId);
+            }
+          }}
           style="
             display: flex; align-items: center; gap: 10px;
             padding: 6px 8px; border-radius: 4px;

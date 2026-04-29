@@ -111,10 +111,12 @@
     />
     <button
       title="Previous match (⇧⌘G)"
+      aria-label="Previous match (⇧⌘G)"
       on:click={() => doSearch("prev")}
       style="background: none; border: none; color: {$theme.fgMuted}; cursor: pointer; padding: 2px 4px; border-radius: 3px; display: flex; align-items: center;"
     >
       <svg
+        aria-hidden="true"
         width="14"
         height="14"
         viewBox="0 0 16 16"
@@ -125,10 +127,12 @@
     </button>
     <button
       title="Next match (⌘G)"
+      aria-label="Next match (⌘G)"
       on:click={() => doSearch("next")}
       style="background: none; border: none; color: {$theme.fgMuted}; cursor: pointer; padding: 2px 4px; border-radius: 3px; display: flex; align-items: center;"
     >
       <svg
+        aria-hidden="true"
         width="14"
         height="14"
         viewBox="0 0 16 16"
@@ -139,6 +143,8 @@
     </button>
     <button
       title="Use regular expression"
+      aria-label="Use regular expression"
+      aria-pressed={regexEnabled}
       on:click={toggleRegex}
       style="background: {regexEnabled
         ? $theme.bg
@@ -151,6 +157,8 @@
     >
     <button
       title="Match case"
+      aria-label="Match case"
+      aria-pressed={caseSensitive}
       on:click={toggleCase}
       style="background: {caseSensitive
         ? $theme.bg
@@ -163,6 +171,8 @@
     >
     <button
       title="Match whole word"
+      aria-label="Match whole word"
+      aria-pressed={wholeWord}
       on:click={toggleWord}
       style="background: {wholeWord ? $theme.bg : 'none'}; border: {wholeWord
         ? `1px solid ${$theme.border}`
@@ -173,10 +183,12 @@
     >
     <button
       title="Close (Esc)"
+      aria-label="Close (Esc)"
       on:click={close}
       style="background: none; border: none; color: {$theme.fgMuted}; cursor: pointer; padding: 2px 4px; border-radius: 3px; display: flex; align-items: center;"
     >
       <svg
+        aria-hidden="true"
         width="14"
         height="14"
         viewBox="0 0 16 16"

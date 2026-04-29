@@ -219,6 +219,7 @@
             class="diff-file-header"
             style:background="{$theme.border}44"
             style:color={$theme.fg}
+            aria-expanded={!collapsedFiles.has(fileIdx)}
             on:click={() => toggleFile(fileIdx)}
           >
             <span class="collapse-indicator"

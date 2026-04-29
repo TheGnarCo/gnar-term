@@ -86,11 +86,11 @@
   bind:this={containerEl}
   style="display: inline-flex; align-items: center; position: relative;"
 >
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <span
+  <button
+    aria-label="New terminal ({isMac ? modLabel : shiftModLabel}T)"
     title="New terminal ({isMac ? modLabel : shiftModLabel}T)"
     style="
+      background: none; border: none;
       color: {plusHovered ? $theme.fg : $theme.fgDim};
       cursor: pointer; font-size: 14px;
       padding: 2px {hasExtra ? '3px' : '6px'};
@@ -103,7 +103,7 @@
     }}
     on:click={onNewSurface}
     on:mouseenter={() => (plusHovered = true)}
-    on:mouseleave={() => (plusHovered = false)}>+</span
+    on:mouseleave={() => (plusHovered = false)}>+</button
   >
 
   {#if hasExtra}

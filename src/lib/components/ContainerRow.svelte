@@ -220,6 +220,39 @@
         />
       </div>
     {/if}
+    {#if onGripMouseDown && !rowHovered}
+      <!-- Rail-edge fade: same treatment as WorkspaceItem. Positioned on
+           the outer row so it overlaps the DragGrip area (x=0–10) and
+           bleeds 4px into the content, giving the same rapid opacity
+           dropoff that workspace item rails show. Hidden while expanded
+           so the full-opacity grip isn't dimmed during drag. -->
+      <div
+        aria-hidden="true"
+        style="
+          position: absolute;
+          top: 0; bottom: 0; left: 0; width: 14px;
+          pointer-events: none;
+          background-image:
+            radial-gradient(circle, {color} 1.1px, transparent 1.6px),
+            radial-gradient(circle, {color} 1.1px, transparent 1.6px);
+          background-size: 5px 5px;
+          background-position: 0 0, 2.5px 2.5px;
+          background-repeat: repeat;
+          -webkit-mask-image: linear-gradient(
+            to right,
+            rgba(0, 0, 0, 1) 0%,
+            rgba(0, 0, 0, 0.3) 20%,
+            rgba(0, 0, 0, 0) 70%
+          );
+          mask-image: linear-gradient(
+            to right,
+            rgba(0, 0, 0, 1) 0%,
+            rgba(0, 0, 0, 0.3) 20%,
+            rgba(0, 0, 0, 0) 70%
+          );
+        "
+      ></div>
+    {/if}
     <div
       style="
         flex: 1;
@@ -241,13 +274,13 @@
           color: {$theme.fg};
           border-top: 1px solid {hasActiveChild && collapsed
           ? color
-          : 'transparent'};
+          : ($theme.border ?? 'transparent')};
           border-right: 1px solid {hasActiveChild && collapsed
           ? color
-          : 'transparent'};
+          : ($theme.border ?? 'transparent')};
           border-bottom: 1px solid {hasActiveChild && collapsed
           ? color
-          : 'transparent'};
+          : ($theme.border ?? 'transparent')};
           border-left: none;
           border-radius: 0 6px 6px 0;
           cursor: {onBannerClick && !hasActiveChild ? 'pointer' : 'default'};

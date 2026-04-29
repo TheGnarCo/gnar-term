@@ -677,11 +677,16 @@ export function initAgentDetection(): void {
   // without agents. When workspaces load, this subscription re-checks
   // unattached surfaces against their now-known titles.
   const unsubWorkspaces = workspaces.subscribe(() => {
+    // Build the surface-title lookup once per emission rather than calling
+    // allTerminalSurfaces() for each unattached surface (O(W×P×S) vs.
+    // O(tracked × W×P×S) per emission — F12 perf fix).
+    const surfaceTitleById = new Map<string, string>();
+    for (const s of allTerminalSurfaces()) {
+      surfaceTitleById.set(s.id, s.title);
+    }
     for (const [, tracked] of trackedSurfaces) {
       if (tracked.agentId) continue;
-      const currentTitle =
-        allTerminalSurfaces().find((s) => s.id === tracked.surfaceId)?.title ??
-        "";
+      const currentTitle = surfaceTitleById.get(tracked.surfaceId) ?? "";
       if (!currentTitle) continue;
       const match = matchesPattern(currentTitle, patterns);
       if (match) {

@@ -6,6 +6,7 @@
   "description": "Terminal workspace manager for AI coding agents",
   "scripts": {
     "dev": "tauri dev",
+    "prebuild": "rm -f src-tauri/target/release/bundle/macos/*.dmg src-tauri/target/release/bundle/macos/rw.*.dmg src-tauri/target/release/bundle/dmg/*.dmg",
     "build": "tauri build",
     "vite": "vite",
     "vite:build": "vite build",

@@ -1887,9 +1887,7 @@ pub fn run() {
             gh_commands::gh_list_issues,
             gh_commands::gh_available,
             git_status_ops::git_rev_parse_toplevel,
-            git_status_ops::git_status_short,
-            git_status_ops::git_rev_parse_head,
-            git_status_ops::gh_pr_view
+            git_status_ops::git_status_short
         ])
         .setup(|app| {
             // Set window title from CLI --title flag

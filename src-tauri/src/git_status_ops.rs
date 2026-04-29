@@ -56,36 +56,6 @@ pub async fn git_status_short(cwd: String) -> Result<ScriptOutput, String> {
     run_argv(&cwd, "git", &["status", "--porcelain=v1", "-b"])
 }
 
-/// `git rev-parse --abbrev-ref HEAD` — resolve the current branch name.
-///
-/// Returns "HEAD" when in detached-HEAD state.
-#[tauri::command]
-pub async fn git_rev_parse_head(cwd: String) -> Result<ScriptOutput, String> {
-    validate_cwd(&cwd)?;
-    run_argv(&cwd, "git", &["rev-parse", "--abbrev-ref", "HEAD"])
-}
-
-/// `gh pr view --json ... -- <branch>` — fetch PR metadata for a branch.
-///
-/// The branch name is passed as a separate argv element so it is never
-/// interpreted by a shell.  Returns non-zero `exit_code` when no PR exists.
-#[tauri::command]
-pub async fn gh_pr_view(repo_path: String, branch: String) -> Result<ScriptOutput, String> {
-    validate_cwd(&repo_path)?;
-    run_argv(
-        &repo_path,
-        "gh",
-        &[
-            "pr",
-            "view",
-            "--json",
-            "number,url,reviewDecision,statusCheckRollup",
-            "--",
-            &branch,
-        ],
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -193,28 +163,5 @@ mod tests {
         assert_eq!(result.exit_code, 0);
         assert!(result.stdout.contains("dirty.txt"));
         cleanup(&repo);
-    }
-
-    #[tokio::test]
-    async fn git_rev_parse_head_returns_branch() {
-        let repo = setup_test_repo();
-        let result = git_rev_parse_head(repo.to_str().unwrap().to_string())
-            .await
-            .unwrap();
-        assert_eq!(result.exit_code, 0);
-        let branch = result.stdout.trim();
-        // Should be a branch name (not empty, not a raw SHA)
-        assert!(!branch.is_empty());
-        cleanup(&repo);
-    }
-
-    #[tokio::test]
-    async fn gh_pr_view_nonexistent_cwd() {
-        let result = gh_pr_view(
-            "/tmp/no-such-repo-gnarterm-gso".to_string(),
-            "main".to_string(),
-        )
-        .await;
-        assert!(result.is_err());
     }
 }

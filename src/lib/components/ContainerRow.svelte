@@ -208,16 +208,15 @@
         style="flex-shrink: 0; align-self: stretch; display: flex;"
         role="presentation"
       >
-        <!-- Dots always show (alwaysShowDots=true) so the colored frit is
-             visible in all idle states. The banner-edge-fade div provides
-             the rightward bleed into the banner body — no fadeRight here. -->
+        <!-- Dots always visible; fade right in idle state to match
+             workspace item rail style. Full opacity when hovered/dragging. -->
         <DragGrip
           theme={$theme}
           visible={rowHovered && $reorderContext === null}
           railColor={color}
           railOpacity={1}
           alwaysShowDots={true}
-          fadeRight={false}
+          fadeRight={!rowHovered}
         />
       </div>
     {/if}
@@ -266,38 +265,6 @@
           handleContainerLeave();
         }}
       >
-        {#if onGripMouseDown && !rowHovered}
-          <!-- Rail-edge fade: a small dot-pattern section at the banner's
-               left edge that continues the rail into the banner body and
-               fades out. Mirrors WorkspaceItem's drag-edge fade. Hidden
-               while the rail is expanded — at that point the rail itself
-               covers this region. -->
-          <div
-            aria-hidden="true"
-            style="
-              position: absolute;
-              top: 0; bottom: 0;
-              left: 0; width: 14px;
-              pointer-events: none;
-              background-image:
-                radial-gradient(circle, {color} 1.1px, transparent 1.6px),
-                radial-gradient(circle, {color} 1.1px, transparent 1.6px);
-              background-size: 5px 5px;
-              background-position: 0 0, 2.5px 2.5px;
-              background-repeat: repeat;
-              -webkit-mask-image: linear-gradient(
-                to right,
-                rgba(0, 0, 0, 1) 0%,
-                rgba(0, 0, 0, 0) 45%
-              );
-              mask-image: linear-gradient(
-                to right,
-                rgba(0, 0, 0, 1) 0%,
-                rgba(0, 0, 0, 0) 45%
-              );
-            "
-          ></div>
-        {/if}
         <div
           data-container-banner-body
           style="padding-left: 8px; display: flex; flex-direction: column; gap: 2px; min-height: 32px; justify-content: center;"

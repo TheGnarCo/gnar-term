@@ -108,7 +108,8 @@
   let collapsed = false;
   let prevFilterIds = filterIds;
   $: if (filterIds !== prevFilterIds) {
-    if (filterIds.size > prevFilterIds.size && collapsed) collapsed = false;
+    if (filterIds.size > prevFilterIds.size) collapsed = false;
+    else if (filterIds.size === 0) collapsed = true;
     prevFilterIds = filterIds;
   }
 
@@ -155,7 +156,7 @@
           <slot name="banner-end" />
         </div>
         <slot name="banner-subtitle" />
-        {#if $$slots["btn-row"]}
+        {#if $$slots["btn-row"] && filterIds.size > 0}
           <div class="container-btn-row">
             <slot
               name="btn-row"
@@ -300,7 +301,7 @@
             <slot name="banner-end" {bannerHovered} {collapsed} />
           </div>
           <slot name="banner-subtitle" {bannerHovered} />
-          {#if $$slots["btn-row"]}
+          {#if $$slots["btn-row"] && filterIds.size > 0}
             <div class="container-btn-row">
               <slot
                 name="btn-row"

@@ -22,7 +22,8 @@ import {
 } from "../stores/workspace-groups";
 import { createWorkspaceFromDef, closeWorkspace } from "./workspace-service";
 import { eventBus } from "./event-bus";
-import { getAllPanes, type Workspace } from "../types";
+import { getAllPanes, type Workspace, type WorkspaceMetadata } from "../types";
+import { wsMeta } from "./service-helpers";
 import {
   getDashboardContribution,
   getDashboardContributions,
@@ -72,10 +73,7 @@ export function deleteWorkspaceGroup(id: string): void {
  * fallback for unclaimed workspaces should compose with this result.
  */
 export function getWorkspacesInGroup(groupId: string): Workspace[] {
-  return get(workspaces).filter((w) => {
-    const md = w.metadata as Record<string, unknown> | undefined;
-    return md?.groupId === groupId;
-  });
+  return get(workspaces).filter((w) => wsMeta(w).groupId === groupId);
 }
 
 /**
@@ -372,10 +370,10 @@ function backfillDashboardContributionIds(): void {
   let mutated = false;
   workspaces.update((list) => {
     const next = list.map((ws) => {
-      const md = ws.metadata as Record<string, unknown> | undefined;
-      if (md?.isDashboard !== true) return ws;
-      if (typeof md?.dashboardContributionId === "string") return ws;
-      const groupId = md?.groupId;
+      const md = wsMeta(ws);
+      if (md.isDashboard !== true) return ws;
+      if (typeof md.dashboardContributionId === "string") return ws;
+      const groupId = md.groupId;
       if (typeof groupId !== "string") return ws;
       const group = groupById.get(groupId);
       if (!group) return ws;
@@ -434,12 +432,12 @@ export function createSettingsDashboardWorkspace(
  *   (pre-stamp legacy records). Use for the group-overview reconcile pass.
  */
 export function isDashboardWorkspace(
-  ws: { metadata?: unknown },
+  ws: { metadata?: WorkspaceMetadata },
   groupId: string,
   contribId?: string,
   allowLegacyUndefined = false,
 ): boolean {
-  const md = ws.metadata as Record<string, unknown> | undefined;
+  const md = ws.metadata;
   if (!md) return false;
   if (md.isDashboard !== true) return false;
   if (md.groupId !== groupId) return false;
@@ -506,9 +504,9 @@ export function closeAutoDashboardsBySource(source: string): void {
   if (autoIds.size === 0) return;
   const matchIds = get(workspaces)
     .filter((w) => {
-      const md = w.metadata as Record<string, unknown> | undefined;
-      if (md?.isDashboard !== true) return false;
-      const contrib = md?.dashboardContributionId;
+      const md = wsMeta(w);
+      if (md.isDashboard !== true) return false;
+      const contrib = md.dashboardContributionId;
       return typeof contrib === "string" && autoIds.has(contrib);
     })
     .map((w) => w.id);
@@ -646,8 +644,7 @@ export function reclaimWorkspacesAcrossGroups(): void {
   const newMembers = new Map<string, string[]>();
   const toClaimIds: string[] = [];
   for (const ws of get(workspaces)) {
-    const md = ws.metadata as Record<string, unknown> | undefined;
-    const groupId = md?.groupId;
+    const groupId = wsMeta(ws).groupId;
     if (typeof groupId !== "string" || !groupIds.has(groupId)) continue;
     const members = newMembers.get(groupId) ?? [];
     members.push(ws.id);

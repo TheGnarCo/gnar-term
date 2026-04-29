@@ -49,7 +49,10 @@ export function initWorktrees(): void {
 
   eventBus.on("workspace:created", (event: AppEvent) => {
     if (event.type !== "workspace:created") return;
-    handleWorkspaceCreated(event.id, event.metadata);
+    handleWorkspaceCreated(
+      event.id,
+      event.metadata as import("../types").WorkspaceMetadata | undefined,
+    );
   });
 
   eventBus.on("workspace:closed", (event: AppEvent) => {

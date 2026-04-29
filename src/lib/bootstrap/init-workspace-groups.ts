@@ -51,7 +51,8 @@ import {
   createDialogPrefill,
 } from "../stores/workspace-groups-ui";
 import { invoke } from "@tauri-apps/api/core";
-import { getActiveCwd } from "../services/service-helpers";
+import { getActiveCwd, wsMeta } from "../services/service-helpers";
+import type { WorkspaceMetadata } from "../types";
 import {
   createWorkspaceFromDef,
   switchWorkspace,
@@ -74,8 +75,8 @@ function generateId(): string {
 
 function onWorkspaceCreated(event: AppEvent): void {
   if (event.type !== "workspace:created") return;
-  const metadata = event.metadata as Record<string, unknown> | undefined;
-  const targetGroupId = metadata?.groupId as string | undefined;
+  const metadata = event.metadata as WorkspaceMetadata | undefined;
+  const targetGroupId = metadata?.groupId;
   if (!targetGroupId) return;
   addWorkspaceToGroup(targetGroupId, event.id);
   claimWorkspace(event.id, SOURCE);
@@ -173,11 +174,7 @@ async function createWorkspaceGroupFlow(prefill?: {
     const newWs = get(workspaces)
       .slice()
       .reverse()
-      .find(
-        (w) =>
-          (w.metadata as Record<string, unknown> | undefined)?.groupId === id &&
-          !(w.metadata as Record<string, unknown> | undefined)?.isDashboard,
-      );
+      .find((w) => wsMeta(w).groupId === id && !wsMeta(w).isDashboard);
     if (newWs) {
       const idx = get(workspaces).indexOf(newWs);
       if (idx >= 0) switchWorkspace(idx);
@@ -347,8 +344,7 @@ export async function initWorkspaceGroups(): Promise<void> {
       const list = get(workspaces);
       const idx = get(activeWorkspaceIdx);
       const ws = typeof idx === "number" ? list[idx] : undefined;
-      const md = ws?.metadata as Record<string, unknown> | undefined;
-      const groupId = md?.groupId;
+      const groupId = ws ? wsMeta(ws).groupId : undefined;
       if (typeof groupId !== "string") return;
       const group = readGroups().find((g) => g.id === groupId);
       if (group) void openGroupDashboard(group);

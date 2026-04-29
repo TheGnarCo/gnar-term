@@ -7,6 +7,7 @@ import {
   closeWorkspace,
   createWorkspaceFromDef,
 } from "./workspace-service";
+import { wsMeta } from "./service-helpers";
 import {
   getWorkspacesInGroup,
   closeWorkspacesInGroup,
@@ -26,8 +27,7 @@ import {
 } from "../stores/archive";
 
 function isDashboardWorkspace(ws: Workspace): boolean {
-  const md = ws.metadata as Record<string, unknown> | undefined;
-  return md?.isDashboard === true;
+  return wsMeta(ws).isDashboard === true;
 }
 
 function countRunningPtys(ws: Workspace): number {

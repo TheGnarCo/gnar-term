@@ -392,7 +392,7 @@ export async function mergeAndArchiveWorktreeWorkspace(): Promise<void> {
  */
 export function handleWorkspaceCreated(
   id: string,
-  metadata: Record<string, unknown> | undefined,
+  metadata: import("../types").WorkspaceMetadata | undefined,
 ): void {
   const worktreePath = metadata?.worktreePath;
   if (typeof worktreePath !== "string") return;

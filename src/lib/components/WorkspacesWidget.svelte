@@ -11,6 +11,7 @@
   import { theme } from "../stores/theme";
   import DashboardTileIcon from "./DashboardTileIcon.svelte";
   import GridIcon from "../icons/GridIcon.svelte";
+  import { wsMeta } from "../services/service-helpers";
 
   const host = getDashboardHost();
   const scope = deriveDashboardScope(host);
@@ -22,21 +23,15 @@
     : null;
 
   $: groupWs = groupId
-    ? $workspaces.filter((ws) => {
-        const md = ws.metadata as Record<string, unknown> | undefined;
-        return md?.groupId === groupId;
-      })
+    ? $workspaces.filter((ws) => wsMeta(ws).groupId === groupId)
     : [];
 
   $: dashboardCards = groupWs.filter((ws) => {
-    const md = ws.metadata as Record<string, unknown> | undefined;
-    return md?.isDashboard === true && md?.dashboardContributionId !== "group";
+    const md = wsMeta(ws);
+    return md.isDashboard === true && md.dashboardContributionId !== "group";
   });
 
-  $: workspaceRows = groupWs.filter((ws) => {
-    const md = ws.metadata as Record<string, unknown> | undefined;
-    return !md?.isDashboard;
-  });
+  $: workspaceRows = groupWs.filter((ws) => !wsMeta(ws).isDashboard);
 
   $: groupColor = group
     ? resolveGroupColor(group.color, $theme)
@@ -52,18 +47,12 @@
     label: string;
     groupPath: string | undefined;
   } {
-    const md = ws.metadata as Record<string, unknown> | undefined;
-    const contribId =
-      typeof md?.dashboardContributionId === "string"
-        ? md.dashboardContributionId
-        : undefined;
-    const contribution = contribId
-      ? getDashboardContribution(contribId)
+    const md = wsMeta(ws);
+    const contribution = md.dashboardContributionId
+      ? getDashboardContribution(md.dashboardContributionId)
       : undefined;
-    const tileGroupId =
-      typeof md?.groupId === "string" ? md.groupId : undefined;
-    const tileGroupPath = tileGroupId
-      ? $workspaceGroupsStore.find((g) => g.id === tileGroupId)?.path
+    const tileGroupPath = md.groupId
+      ? $workspaceGroupsStore.find((g) => g.id === md.groupId)?.path
       : undefined;
     return {
       icon: contribution?.icon ?? GridIcon,
@@ -98,8 +87,7 @@
             <DashboardTileIcon
               iconComponent={info.icon}
               baseColor={groupColor}
-              contributionId={(ws.metadata as Record<string, unknown>)
-                ?.dashboardContributionId as string | undefined}
+              contributionId={wsMeta(ws).dashboardContributionId}
               groupPath={info.groupPath}
             />
             <span class="dashboard-card-label">{info.label}</span>

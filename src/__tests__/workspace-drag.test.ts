@@ -195,9 +195,7 @@ describe("createWorkspaceFromSurface", () => {
 
     const updated = get(workspaces);
     const newWs = updated[1]!;
-    expect((newWs.metadata as Record<string, unknown>)?.groupId).toBe(
-      "group-1",
-    );
+    expect(newWs.metadata?.groupId).toBe("group-1");
     expect(addWorkspaceToGroupSpy).toHaveBeenCalledWith("group-1", newWs.id);
   });
 
@@ -213,9 +211,7 @@ describe("createWorkspaceFromSurface", () => {
 
     const updated = get(workspaces);
     const newWs = updated[1]!;
-    expect(
-      (newWs.metadata as Record<string, unknown>)?.groupId,
-    ).toBeUndefined();
+    expect(newWs.metadata?.groupId).toBeUndefined();
     expect(addWorkspaceToGroupSpy).not.toHaveBeenCalled();
   });
 
@@ -738,9 +734,7 @@ describe("createWorkspaceFromSurface — targetGroupId", () => {
 
     const updated = get(workspaces);
     const newWs = updated.find((w) => w.id !== ws.id)!;
-    expect((newWs.metadata as Record<string, unknown>)?.groupId).toBe(
-      "target-group-1",
-    );
+    expect(newWs.metadata?.groupId).toBe("target-group-1");
   });
 
   it("calls insertWorkspaceIntoGroup with targetGroupId when srcWs has no groupId", () => {
@@ -784,9 +778,7 @@ describe("createWorkspaceFromSurface — targetGroupId", () => {
 
     const updated = get(workspaces);
     const newWs = updated.find((w) => w.id !== ws.id)!;
-    expect((newWs.metadata as Record<string, unknown>)?.groupId).toBe(
-      "src-group",
-    );
+    expect(newWs.metadata?.groupId).toBe("src-group");
     expect(insertWorkspaceIntoGroupSpy).toHaveBeenCalledWith(
       "src-group",
       newWs.id,
@@ -813,9 +805,7 @@ describe("createWorkspaceFromSurface — targetGroupId", () => {
 
     const updated = get(workspaces);
     const newWs = updated.find((w) => w.id !== ws.id)!;
-    expect((newWs.metadata as Record<string, unknown>)?.groupId).toBe(
-      "target-group-override",
-    );
+    expect(newWs.metadata?.groupId).toBe("target-group-override");
     expect(insertWorkspaceIntoGroupSpy).toHaveBeenCalledWith(
       "target-group-override",
       newWs.id,

@@ -19,6 +19,7 @@
   import { getAllSurfaces, getAllPanes } from "../types";
   import type { Workspace } from "../types";
   import { workspaceSurfaceMap } from "../services/workspace-service";
+  import { wsMeta } from "../services/service-helpers";
 
   export let workspace: Workspace;
   export let index: number;
@@ -58,8 +59,7 @@
   $: latestNotification = allSurfaces.find((s) => s.notification)?.notification;
   $: isManaged = !!workspace.metadata?.worktreePath;
   $: dashboardWorkspaceEntry = (() => {
-    const id = (workspace.metadata as Record<string, unknown> | undefined)
-      ?.dashboardWorkspaceId;
+    const id = wsMeta(workspace).dashboardWorkspaceId;
     if (typeof id !== "string") return null;
     return $dashboardWorkspaceRegistry.get(id) ?? null;
   })();
@@ -72,25 +72,14 @@
   // Dashboards are singleton surfaces bound to their group; suppress
   // close / rename / right-click affordances so the user interacts
   // with them only via the group's tile.
-  $: isDashboardWs =
-    (workspace.metadata as Record<string, unknown> | undefined)?.isDashboard ===
-    true;
+  $: isDashboardWs = wsMeta(workspace).isDashboard === true;
   $: isDashboardWorkspaceRow = dashboardWorkspaceIcon !== null;
   // Nested workspaces live under a group's colored banner. The group
   // banner itself already rolls up status (and the per-row chip handles
   // agent state), so the long blue notification row duplicates chrome
   // and crowds the nested layout — suppress it in that context.
-  $: isInsideGroup =
-    typeof (workspace.metadata as Record<string, unknown> | undefined)
-      ?.groupId === "string";
-  $: isAgentSpawned = (() => {
-    const md = workspace.metadata as Record<string, unknown> | undefined;
-    if (!md) return false;
-    return (
-      (typeof md.spawnedBy === "object" && md.spawnedBy !== null) ||
-      typeof md.parentOrchestratorId === "string"
-    );
-  })();
+  $: isInsideGroup = typeof wsMeta(workspace).groupId === "string";
+  $: isAgentSpawned = wsMeta(workspace).spawnedBy != null;
   $: railColor =
     (isDashboardWorkspaceRow && dashboardWorkspaceEntry?.accentColor) ||
     accentColor ||

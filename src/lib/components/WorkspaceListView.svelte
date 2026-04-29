@@ -45,6 +45,7 @@
   import { commandStore } from "../services/command-registry";
   import { dashboardWorkspaceRegistry } from "../services/dashboard-workspace-service";
   import { buildWorkspaceContextMenuItems } from "../utils/workspace-context-menu";
+  import { wsMeta } from "../services/service-helpers";
 
   /** Set of workspace IDs to display. If undefined, shows all. */
   export let filterIds: Set<string> | undefined = undefined;
@@ -101,11 +102,7 @@
     .map((ws, idx) => ({ ws, idx }))
     .filter(({ ws }) => (filterIds ? filterIds.has(ws.id) : true));
 
-  $: entries = allEntries.filter(
-    ({ ws }) =>
-      (ws.metadata as Record<string, unknown> | undefined)?.isDashboard !==
-      true,
-  );
+  $: entries = allEntries.filter(({ ws }) => wsMeta(ws).isDashboard !== true);
 
   let sourceIdx: number | null = null;
   let indicator: { idx: number; edge: "before" | "after" } | null = null;
@@ -200,8 +197,7 @@
   $: railColor = accentColor ?? $theme.accent;
   $: overlayFg = contrastColor(railColor);
   $: dropAccent = (() => {
-    const id = (sourceWs?.metadata as Record<string, unknown> | undefined)
-      ?.dashboardWorkspaceId;
+    const id = sourceWs ? wsMeta(sourceWs).dashboardWorkspaceId : undefined;
     if (typeof id === "string") {
       return $dashboardWorkspaceRegistry.get(id)?.accentColor ?? railColor;
     }
@@ -247,9 +243,9 @@
   function showNestedContextMenu(x: number, y: number, globalIdx: number) {
     const ws = $workspaces[globalIdx];
     if (!ws) return;
-    const wsMeta = ws.metadata as Record<string, unknown> | undefined;
-    const isDashboard = wsMeta?.isDashboard === true;
-    const isInsideGroup = typeof wsMeta?.groupId === "string";
+    const md = wsMeta(ws);
+    const isDashboard = md.isDashboard === true;
+    const isInsideGroup = typeof md.groupId === "string";
     const canPromoteCommand = get(commandStore).some(
       (c) => c.id === "promote-workspace-to-group",
     );

@@ -51,7 +51,7 @@ export async function spawnOrNavigate(id: string): Promise<void> {
 
   const wsList = get(workspaces);
   const existingIdx = wsList.findIndex(
-    (w) => (w.metadata as Record<string, unknown>)?.dashboardWorkspaceId === id,
+    (w) => w.metadata?.dashboardWorkspaceId === id,
   );
 
   if (existingIdx >= 0) {

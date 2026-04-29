@@ -69,7 +69,7 @@ describe("dashboardContributionId backfill", () => {
 
     await reconcileGroupDashboards();
 
-    const md = get(workspaces)[0]!.metadata as Record<string, unknown>;
+    const md = get(workspaces)[0]!.metadata;
     expect(md.dashboardContributionId).toBe("group");
   });
 
@@ -101,7 +101,7 @@ describe("dashboardContributionId backfill", () => {
 
     await reconcileGroupDashboards();
 
-    const md = get(workspaces)[0]!.metadata as Record<string, unknown>;
+    const md = get(workspaces)[0]!.metadata;
     expect(md.dashboardContributionId).toBe("agentic");
   });
 
@@ -137,7 +137,7 @@ describe("dashboardContributionId backfill", () => {
 
     await reconcileGroupDashboards();
 
-    const md = get(workspaces)[0]!.metadata as Record<string, unknown>;
+    const md = get(workspaces)[0]!.metadata;
     expect(md.dashboardContributionId).toBe("group");
   });
 });

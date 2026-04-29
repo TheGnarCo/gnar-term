@@ -22,6 +22,7 @@
   import ExtensionWrapper from "./ExtensionWrapper.svelte";
   import { tabDragState } from "../services/tab-drag";
   import { workspaceDragState } from "../services/workspace-drag";
+  import { wsMeta } from "../services/service-helpers";
 
   export let pane: Pane;
   export let workspaceId: string = "";
@@ -77,8 +78,10 @@
   // For non-Dashboard workspaces tied to a workspace group
   // (metadata.groupId), keep the workspace-groups regen affordance so
   // users can re-spawn a group-dashboard preview surface after closing it.
-  $: workspaceMetadata = $workspaces.find((w) => w.id === workspaceId)
-    ?.metadata as Record<string, unknown> | undefined;
+  $: workspaceMetadata = (() => {
+    const ws = $workspaces.find((w) => w.id === workspaceId);
+    return ws ? wsMeta(ws) : undefined;
+  })();
   $: isDashboardWorkspace = workspaceMetadata?.isDashboard === true;
   // When the dashboard workspace belongs to the core "settings"
   // contribution, PaneView renders the shared GroupDashboardSettings
@@ -88,7 +91,7 @@
     isDashboardWorkspace &&
     workspaceMetadata?.dashboardContributionId === "settings" &&
     typeof workspaceMetadata?.groupId === "string"
-      ? (workspaceMetadata.groupId as string)
+      ? workspaceMetadata.groupId
       : null;
   $: dashboardWorkspaceEntry =
     isDashboardWorkspace &&

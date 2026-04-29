@@ -1,6 +1,7 @@
 <!-- src/lib/components/ArchiveZone.svelte -->
 <script lang="ts">
   import { contextMenu } from "../stores/ui";
+  import { theme } from "../stores/theme";
   import {
     archivedOrder,
     archivedDefs,
@@ -10,8 +11,23 @@
     unarchiveWorkspace,
     unarchiveGroup,
   } from "../services/archive-service";
+  import DragGrip from "./DragGrip.svelte";
 
   let expanded = false;
+  let archiveZoneEl: HTMLElement | null = null;
+  let hoveredRowKey: string | null = null;
+
+  function rowKey(row: ArchivedRow): string {
+    return `${row.kind}:${row.id}`;
+  }
+
+  function onKeyDown(e: KeyboardEvent) {
+    if (e.key === "Meta")
+      archiveZoneEl?.setAttribute("data-drag-preview", "true");
+  }
+  function onKeyUp(e: KeyboardEvent) {
+    if (e.key === "Meta") archiveZoneEl?.removeAttribute("data-drag-preview");
+  }
 
   $: totalCount = $archivedOrder.length;
 
@@ -109,7 +125,9 @@
   }
 </script>
 
-<div data-archive-zone class="archive-zone">
+<svelte:window on:keydown={onKeyDown} on:keyup={onKeyUp} />
+
+<div data-archive-zone class="archive-zone" bind:this={archiveZoneEl}>
   <button
     type="button"
     on:click={toggle}
@@ -132,10 +150,18 @@
           <!-- svelte-ignore a11y-no-static-element-interactions -->
           <div
             class="archive-item"
+            on:mouseenter={() => (hoveredRowKey = rowKey(row))}
+            on:mouseleave={() => (hoveredRowKey = null)}
             on:contextmenu|preventDefault={(e) =>
               showItemContextMenu(e.clientX, e.clientY, row)}
             on:mousedown={(e) => startItemDrag(e, row)}
           >
+            <DragGrip
+              theme={$theme}
+              visible={hoveredRowKey === rowKey(row)}
+              railOpacity={0.35}
+              fadeRight={true}
+            />
             <span class="item-name">{getName(row)}</span>
             {#if row.kind === "workspace-group"}
               <span class="group-count"
@@ -153,11 +179,25 @@
   .archive-zone {
     border-top: 1px solid rgba(255, 255, 255, 0.08);
     flex-shrink: 0;
+    position: relative;
   }
 
-  .archive-zone:global([data-drag-over]) {
-    outline: 1px solid rgba(255, 255, 255, 0.3);
-    outline-offset: -1px;
+  .archive-zone:global([data-drag-over])::after,
+  .archive-zone:global([data-drag-preview])::after {
+    content: "Archive";
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(55, 55, 55, 0.93);
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    z-index: 10;
+    pointer-events: none;
+    border-radius: 4px;
   }
 
   .archive-header {
@@ -203,14 +243,14 @@
   }
 
   .archive-item {
-    padding: 4px 10px 4px 18px;
+    padding: 4px 10px 4px 0;
     font-size: 12px;
-    font-style: italic;
-    color: rgba(255, 255, 255, 0.35);
+    color: rgba(255, 255, 255, 0.45);
     display: flex;
     align-items: center;
     user-select: none;
     cursor: grab;
+    gap: 4px;
   }
 
   .item-name {

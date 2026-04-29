@@ -10,6 +10,7 @@
     openPreview,
     refreshPreviewElement,
   } from "../services/preview-service";
+  import { openFileAsPreviewSplit } from "../services/surface-service";
   import {
     registerPreviewSurface,
     unregisterPreviewSurface,
@@ -71,10 +72,29 @@
         const anchor = (e.target as Element).closest("a");
         if (!anchor) return;
         const href = anchor.getAttribute("href");
-        if (!href?.startsWith("http://") && !href?.startsWith("https://"))
+        if (!href) return;
+
+        if (href.startsWith("http://") || href.startsWith("https://")) {
+          e.preventDefault();
+          invoke("open_url", { url: href }).catch(() => {});
           return;
-        e.preventDefault();
-        invoke("open_url", { url: href }).catch(() => {});
+        }
+
+        // Relative links to previewable files — resolve against current file's dir
+        const filePart = href.split("?")[0]!.split("#")[0]!;
+        if (/\.(md|markdown|mdx)$/i.test(filePart)) {
+          e.preventDefault();
+          const dir = surface.path.includes("/")
+            ? surface.path.substring(0, surface.path.lastIndexOf("/"))
+            : "";
+          const parts = [...dir.split("/"), ...filePart.split("/")];
+          const resolved: string[] = [];
+          for (const p of parts) {
+            if (p === "..") resolved.pop();
+            else if (p && p !== ".") resolved.push(p);
+          }
+          openFileAsPreviewSplit("/" + resolved.join("/"));
+        }
       };
       container.addEventListener("click", clickHandler);
     } catch (err) {

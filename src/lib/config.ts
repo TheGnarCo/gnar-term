@@ -17,6 +17,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { writable, type Readable } from "svelte/store";
 import { getHome, getConfigDir } from "./services/service-helpers";
 import { runConfigMigrations } from "./services/config-migrations";
+import type { WorkspaceMetadata } from "./types";
 
 // --- Types (cmux-compatible + extensions) ---
 
@@ -61,7 +62,7 @@ export interface WorkspaceDef {
   cwd?: string;
   color?: string;
   env?: Record<string, string>;
-  metadata?: Record<string, unknown>;
+  metadata?: WorkspaceMetadata;
   layout?: LayoutNode;
 }
 
@@ -391,7 +392,12 @@ export function migrateLegacyProjectShapes(state: AppState): {
   if (Array.isArray(state.workspaces)) {
     let workspacesChanged = false;
     const workspaces = state.workspaces.map((ws) => {
-      const md = ws.metadata as Record<string, unknown> | undefined;
+      // Migration reads persisted state which may carry legacy keys not in
+      // WorkspaceMetadata (parentOrchestratorId, orchestratorId, spawnedBy).
+      // Cast to a wider type so we can inspect and drop them.
+      const md = ws.metadata as
+        | (WorkspaceMetadata & Record<string, unknown>)
+        | undefined;
       if (!md) return ws;
 
       const needsProjectIdRewrite = "projectId" in md;

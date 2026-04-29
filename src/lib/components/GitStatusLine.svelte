@@ -3,6 +3,7 @@
   import { activeWorkspace, workspaces } from "../stores/workspace";
   import { getWorkspaceStatus } from "../services/status-registry";
   import { GIT_STATUS_SOURCE } from "../services/git-status-service";
+  import { wsMeta } from "../services/service-helpers";
   import type { StatusItem } from "../types/status";
 
   export let workspaceId: string;
@@ -14,13 +15,10 @@
   $: items = $statusStore.filter((item) => item.source === GIT_STATUS_SOURCE);
 
   $: currentWs = $workspaces.find((w) => w.id === workspaceId);
-  $: workspaceMetadata = (currentWs?.metadata ?? {}) as Record<string, unknown>;
+  $: workspaceMetadata = currentWs ? wsMeta(currentWs) : {};
   $: isNested = Boolean(workspaceMetadata.groupId);
   $: isWorktree = Boolean(workspaceMetadata.worktreePath);
-  $: worktreeBranch =
-    typeof workspaceMetadata.branch === "string"
-      ? (workspaceMetadata.branch as string)
-      : undefined;
+  $: worktreeBranch = workspaceMetadata.branch;
 
   $: cwdItem = items.find((i) => i.id.endsWith(":cwd"));
   $: branchItem = items.find((i) => i.id.endsWith(":branch"));

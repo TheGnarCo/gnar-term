@@ -248,9 +248,7 @@ function detectDropTarget(
         containerEl?.getAttribute("data-container-nested") ?? null;
       if (groupId) {
         const srcWs = get(workspaces).find((w) => w.id === sourceWorkspaceId);
-        const srcGroupId = (
-          srcWs?.metadata as Record<string, unknown> | undefined
-        )?.groupId as string | undefined;
+        const srcGroupId = srcWs?.metadata?.groupId;
         if (srcGroupId !== groupId) {
           if (srcGroupId) return null; // grouped tab over different group → deny
           // Root tab over a group's nested workspace → create a nested workspace
@@ -314,9 +312,7 @@ function detectDropTarget(
     }
     if (rootRowEl) {
       const srcWs = get(workspaces).find((w) => w.id === sourceWorkspaceId);
-      const srcGroupId = (
-        srcWs?.metadata as Record<string, unknown> | undefined
-      )?.groupId as string | undefined;
+      const srcGroupId = srcWs?.metadata?.groupId;
       if (srcGroupId) return null;
       const rowIdx = parseInt(
         rootRowEl.getAttribute("data-root-row-idx") || "0",
@@ -336,9 +332,7 @@ function detectDropTarget(
     const sidebar = el.closest("#primary-sidebar");
     if (sidebar) {
       const srcWs = get(workspaces).find((w) => w.id === sourceWorkspaceId);
-      const srcGroupId = (
-        srcWs?.metadata as Record<string, unknown> | undefined
-      )?.groupId as string | undefined;
+      const srcGroupId = srcWs?.metadata?.groupId;
       if (srcGroupId) return null;
       if (srcWs && getAllSurfaces(srcWs).length > 1) {
         const order = get(rootRowOrder);

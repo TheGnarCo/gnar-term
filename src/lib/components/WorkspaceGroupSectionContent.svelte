@@ -60,12 +60,7 @@
   import { agentsStore } from "../services/agent-detection-service";
   import { variantColor } from "../status-colors";
   import { tooltip } from "../actions/tooltip";
-
-  function wsMeta(ws: {
-    metadata?: unknown;
-  }): Record<string, unknown> | undefined {
-    return ws.metadata as Record<string, unknown> | undefined;
-  }
+  import { wsMeta } from "../services/service-helpers";
 
   export let groupId: string;
   /**
@@ -527,11 +522,8 @@
 
       <svelte:fragment slot="btn-row" let:collapsed let:toggle let:showToggle>
         {#each dashboardWorkspaces as entry (entry.ws.id)}
-          {@const md = entry.ws.metadata as Record<string, unknown> | undefined}
-          {@const contribId =
-            typeof md?.dashboardContributionId === "string"
-              ? (md.dashboardContributionId as string)
-              : undefined}
+          {@const md = wsMeta(entry.ws)}
+          {@const contribId = md.dashboardContributionId}
           {@const contribution = contribId
             ? getDashboardContribution(contribId)
             : undefined}

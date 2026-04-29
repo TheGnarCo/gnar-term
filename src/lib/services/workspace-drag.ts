@@ -1,7 +1,7 @@
 import { writable, get, type Readable } from "svelte/store";
 import { workspaces } from "../stores/workspace";
 import { getAllPanes } from "../types";
-
+import { wsMeta } from "./service-helpers";
 export type WorkspacePaneDropTarget =
   | {
       kind: "pane-split";
@@ -33,8 +33,7 @@ export function detectWorkspacePaneDrop(
 ): WorkspacePaneDropTarget {
   const allWs = get(workspaces);
   const srcWs = allWs.find((ws) => ws.id === srcWorkspaceId);
-  const srcGroupId = (srcWs?.metadata as Record<string, unknown> | undefined)
-    ?.groupId as string | undefined;
+  const srcGroupId = srcWs ? wsMeta(srcWs).groupId : undefined;
 
   const paneBodies = Array.from(
     document.querySelectorAll("[data-pane-body]"),
@@ -54,8 +53,7 @@ export function detectWorkspacePaneDrop(
     );
     if (!tgtWs || tgtWs.id === srcWorkspaceId) continue;
 
-    const tgtGroupId = (tgtWs.metadata as Record<string, unknown> | undefined)
-      ?.groupId as string | undefined;
+    const tgtGroupId = wsMeta(tgtWs).groupId;
 
     // Group compatibility: root → root only; grouped → same group only
     if (srcGroupId !== tgtGroupId) {
@@ -128,8 +126,7 @@ export function detectTabBarDropForWorkspace(
 ): WorkspacePaneDropTarget {
   const allWs = get(workspaces);
   const srcWs = allWs.find((ws) => ws.id === srcWorkspaceId);
-  const srcGroupId = (srcWs?.metadata as Record<string, unknown> | undefined)
-    ?.groupId as string | undefined;
+  const srcGroupId = srcWs ? wsMeta(srcWs).groupId : undefined;
 
   const elAtCursor = document.elementFromPoint(x, y);
   if (!elAtCursor) return null;
@@ -147,8 +144,7 @@ export function detectTabBarDropForWorkspace(
   );
   if (!tgtWs || tgtWs.id === srcWorkspaceId) return null;
 
-  const tgtGroupId = (tgtWs.metadata as Record<string, unknown> | undefined)
-    ?.groupId as string | undefined;
+  const tgtGroupId = wsMeta(tgtWs).groupId;
   if (srcGroupId !== tgtGroupId) {
     return { kind: "deny" };
   }

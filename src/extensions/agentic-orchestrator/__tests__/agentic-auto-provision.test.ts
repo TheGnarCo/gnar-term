@@ -103,12 +103,16 @@ describe("agentic auto-provision", () => {
 
     const all = get(workspaces);
     const forG1 = all.find((w) => {
-      const md = w.metadata as Record<string, unknown> | undefined;
-      return md?.dashboardContributionId === "agentic" && md?.groupId === "g1";
+      return (
+        w.metadata?.dashboardContributionId === "agentic" &&
+        w.metadata?.groupId === "g1"
+      );
     });
     const forG2 = all.find((w) => {
-      const md = w.metadata as Record<string, unknown> | undefined;
-      return md?.dashboardContributionId === "agentic" && md?.groupId === "g2";
+      return (
+        w.metadata?.dashboardContributionId === "agentic" &&
+        w.metadata?.groupId === "g2"
+      );
     });
     expect(forG1).toBeTruthy();
     expect(forG2).toBeTruthy();
@@ -138,8 +142,7 @@ describe("agentic auto-provision", () => {
     // Sanity: the workspace was created.
     expect(
       get(workspaces).some((w) => {
-        const md = w.metadata as Record<string, unknown> | undefined;
-        return md?.dashboardContributionId === "agentic";
+        return w.metadata?.dashboardContributionId === "agentic";
       }),
     ).toBe(true);
 
@@ -147,8 +150,7 @@ describe("agentic auto-provision", () => {
 
     expect(
       get(workspaces).some((w) => {
-        const md = w.metadata as Record<string, unknown> | undefined;
-        return md?.dashboardContributionId === "agentic";
+        return w.metadata?.dashboardContributionId === "agentic";
       }),
     ).toBe(false);
   });

@@ -62,6 +62,7 @@
   import { resolveGroupColor } from "../theme-data";
   import { archiveWorkspace, archiveGroup } from "../services/archive-service";
   import { buildWorkspaceContextMenuItems } from "../utils/workspace-context-menu";
+  import { wsMeta } from "../services/service-helpers";
 
   function resolvePseudoWorkspaceColor(pw: PseudoWorkspace): string {
     const slot = $configStore.pseudoWorkspaceColors?.[pw.id] ?? "purple";
@@ -334,8 +335,7 @@
     if (pw) return resolvePseudoWorkspaceColor(pw);
     const ws = sourceEntry?.workspace;
     if (ws) {
-      const dashId = (ws.metadata as Record<string, unknown> | undefined)
-        ?.dashboardWorkspaceId;
+      const dashId = wsMeta(ws).dashboardWorkspaceId;
       if (typeof dashId === "string") {
         return (
           $dashboardWorkspaceRegistry.get(dashId)?.accentColor ?? $theme.accent
@@ -401,9 +401,9 @@
   function showWorkspaceContextMenu(x: number, y: number, globalIdx: number) {
     const ws = $workspaces[globalIdx];
     if (!ws) return;
-    const wsMeta = ws.metadata as Record<string, unknown> | undefined;
-    const isDashboard = wsMeta?.isDashboard === true;
-    const isInsideGroup = typeof wsMeta?.groupId === "string";
+    const md = wsMeta(ws);
+    const isDashboard = md?.isDashboard === true;
+    const isInsideGroup = typeof md?.groupId === "string";
     const items = buildWorkspaceContextMenuItems({
       isDashboard,
       isInsideGroup,
@@ -435,9 +435,7 @@
   {@const isSource = dragActive && dragSourceIdx === entry.idx}
   {@const isSibling = effectiveActive && effectiveDragSourceIdx !== entry.idx}
   {@const ws = entry.workspace}
-  {@const _dashId = ws
-    ? (ws.metadata as Record<string, unknown> | undefined)?.dashboardWorkspaceId
-    : undefined}
+  {@const _dashId = ws ? wsMeta(ws).dashboardWorkspaceId : undefined}
   {@const rowColor =
     entry.rendererRailColor ??
     (entry.pseudoWorkspace

@@ -78,9 +78,9 @@ describe("reconcileGroupDashboards — dedupe all contribution types", () => {
     await reconcileGroupDashboards();
 
     const remaining = get(workspaces).filter((w) => {
-      const md = w.metadata as Record<string, unknown> | undefined;
       return (
-        md?.dashboardContributionId === "settings" && md?.groupId === GROUP.id
+        w.metadata?.dashboardContributionId === "settings" &&
+        w.metadata?.groupId === GROUP.id
       );
     });
     expect(remaining).toHaveLength(1);
@@ -104,9 +104,9 @@ describe("reconcileGroupDashboards — dedupe all contribution types", () => {
     await reconcileGroupDashboards();
 
     const remaining = get(workspaces).filter((w) => {
-      const md = w.metadata as Record<string, unknown> | undefined;
       return (
-        md?.dashboardContributionId === "agentic" && md?.groupId === GROUP.id
+        w.metadata?.dashboardContributionId === "agentic" &&
+        w.metadata?.groupId === GROUP.id
       );
     });
     expect(remaining).toHaveLength(1);
@@ -142,9 +142,9 @@ describe("reconcileGroupDashboards — dedupe all contribution types", () => {
     const all = get(workspaces);
     for (const contribId of ["group", "settings", "agentic"]) {
       const matches = all.filter((w) => {
-        const md = w.metadata as Record<string, unknown> | undefined;
         return (
-          md?.dashboardContributionId === contribId && md?.groupId === GROUP.id
+          w.metadata?.dashboardContributionId === contribId &&
+          w.metadata?.groupId === GROUP.id
         );
       });
       expect(

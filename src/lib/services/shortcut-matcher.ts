@@ -9,7 +9,7 @@
  *   "Ctrl+Shift+P" — word format; tokens "ctrl", "shift", "alt", "meta"/"cmd"
  */
 
-export interface KeyDescriptor {
+interface KeyDescriptor {
   key: string;
   meta: boolean;
   ctrl: boolean;
@@ -17,7 +17,7 @@ export interface KeyDescriptor {
   alt: boolean;
 }
 
-export function parseShortcut(shortcut: string): KeyDescriptor | null {
+function parseShortcut(shortcut: string): KeyDescriptor | null {
   if (!shortcut) return null;
 
   let meta = false;

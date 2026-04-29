@@ -84,12 +84,26 @@
     undefined;
 
   let bannerHovered = false;
-  /**
-   * Row-level hover covers the rail + banner + nested list. Drives the
-   * DragGrip expansion so the rail widens whenever the cursor enters any
-   * part of the row (not only the grip column).
-   */
-  let rowHovered = false;
+  let mouseOverContainer = false;
+  let containerLeaveTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function handleContainerEnter() {
+    if (containerLeaveTimer !== null) {
+      clearTimeout(containerLeaveTimer);
+      containerLeaveTimer = null;
+    }
+    mouseOverContainer = true;
+  }
+
+  function handleContainerLeave() {
+    // Short delay so sibling transitions (rail ↔ banner) don't flicker.
+    containerLeaveTimer = setTimeout(() => {
+      mouseOverContainer = false;
+      containerLeaveTimer = null;
+    }, 80);
+  }
+
+  $: rowHovered = mouseOverContainer;
   let collapsed = false;
   let prevFilterIds = filterIds;
   $: if (filterIds !== prevFilterIds) {
@@ -188,28 +202,28 @@
     {#if onGripMouseDown}
       <div
         data-container-rail
-        on:mouseenter={() => (rowHovered = true)}
-        on:mouseleave={() => (rowHovered = false)}
+        on:mouseenter={handleContainerEnter}
+        on:mouseleave={handleContainerLeave}
         on:mousedown={(e) => onGripMouseDown?.(e)}
         style="
           flex-shrink: 0;
           align-self: stretch;
           display: flex;
-          background: {color};
+          opacity: {collapsed || rowHovered ? 1 : 0};
+          transition: opacity 0.15s;
         "
         role="presentation"
       >
-        <!-- Drag-start handler is wired to the rail + banner only —
-             nested workspaces own their own drag within the nested
-             zone, so mousedowns there must NOT bubble up into a
-             container-row reorder. -->
+        <!-- When expanded the rail is a transparent drag-handle spacer;
+             the workspace item DragGrips below carry the visual frit.
+             Dots show only when collapsed or hovered. -->
         <DragGrip
           theme={$theme}
           visible={rowHovered && $reorderContext === null}
           railColor={color}
-          dotColor="#000"
           railOpacity={1}
-          alwaysShowDots={true}
+          alwaysShowDots={collapsed}
+          fadeRight={!rowHovered && collapsed}
         />
       </div>
     {/if}
@@ -234,7 +248,7 @@
           color: {$theme.fg};
           border-top: 1px solid {hasActiveChild && collapsed
           ? color
-          : ($theme.border ?? 'transparent')};
+          : 'transparent'};
           border-right: 1px solid {hasActiveChild && collapsed
           ? color
           : ($theme.border ?? 'transparent')};
@@ -251,11 +265,11 @@
         on:mousedown={(e) => onGripMouseDown?.(e)}
         on:mouseenter={() => {
           bannerHovered = true;
-          rowHovered = true;
+          handleContainerEnter();
         }}
         on:mouseleave={() => {
           bannerHovered = false;
-          rowHovered = false;
+          handleContainerLeave();
         }}
       >
         {#if onGripMouseDown && !rowHovered}
@@ -271,10 +285,9 @@
               top: 0; bottom: 0;
               left: 0; width: 14px;
               pointer-events: none;
-              background-color: {color};
               background-image:
-                radial-gradient(circle, #000 1.1px, transparent 1.6px),
-                radial-gradient(circle, #000 1.1px, transparent 1.6px);
+                radial-gradient(circle, {color} 1.1px, transparent 1.6px),
+                radial-gradient(circle, {color} 1.1px, transparent 1.6px);
               background-size: 5px 5px;
               background-position: 0 0, 2.5px 2.5px;
               background-repeat: repeat;

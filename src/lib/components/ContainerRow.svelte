@@ -205,25 +205,19 @@
         on:mouseenter={handleContainerEnter}
         on:mouseleave={handleContainerLeave}
         on:mousedown={(e) => onGripMouseDown?.(e)}
-        style="
-          flex-shrink: 0;
-          align-self: stretch;
-          display: flex;
-          opacity: {collapsed || rowHovered ? 1 : 0};
-          transition: opacity 0.15s;
-        "
+        style="flex-shrink: 0; align-self: stretch; display: flex;"
         role="presentation"
       >
-        <!-- When expanded the rail is a transparent drag-handle spacer;
-             the workspace item DragGrips below carry the visual frit.
-             Dots show only when collapsed or hovered. -->
+        <!-- Dots always show (alwaysShowDots=true) so the colored frit is
+             visible in all idle states. The banner-edge-fade div provides
+             the rightward bleed into the banner body — no fadeRight here. -->
         <DragGrip
           theme={$theme}
           visible={rowHovered && $reorderContext === null}
           railColor={color}
           railOpacity={1}
-          alwaysShowDots={collapsed}
-          fadeRight={!rowHovered && collapsed}
+          alwaysShowDots={true}
+          fadeRight={false}
         />
       </div>
     {/if}
@@ -251,10 +245,10 @@
           : 'transparent'};
           border-right: 1px solid {hasActiveChild && collapsed
           ? color
-          : ($theme.border ?? 'transparent')};
+          : 'transparent'};
           border-bottom: 1px solid {hasActiveChild && collapsed
           ? color
-          : ($theme.border ?? 'transparent')};
+          : 'transparent'};
           border-left: none;
           border-radius: 0 6px 6px 0;
           cursor: {onBannerClick && !hasActiveChild ? 'pointer' : 'default'};

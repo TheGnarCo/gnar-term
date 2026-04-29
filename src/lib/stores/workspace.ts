@@ -16,6 +16,13 @@ export const activeWorkspaceIdx = writable<number>(-1);
  */
 export const activePseudoWorkspaceId = writable<string | null>(null);
 
+/**
+ * When non-null, holds the surface ID of the pane that is "zoomed" to fill
+ * the full workspace area. All other panes are hidden (but kept mounted) so
+ * terminal state is preserved. Cleared on workspace switch.
+ */
+export const zoomedSurfaceId = writable<string | null>(null);
+
 export const activeWorkspace = derived(
   [workspaces, activeWorkspaceIdx],
   ([$ws, $idx]) => $ws[$idx] ?? null,

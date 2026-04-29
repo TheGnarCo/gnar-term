@@ -1312,6 +1312,79 @@ describe("ExtensionAPI invoke allowlist", () => {
   });
 });
 
+// --- filesystem permission gate ---
+
+describe("ExtensionAPI filesystem permission gate", () => {
+  beforeEach(async () => {
+    await resetExtensions();
+  });
+
+  it("rejects write_file without filesystem permission", async () => {
+    const manifest = makeManifest();
+    const { api } = createExtensionAPI(manifest);
+    await expect(
+      api.invoke("write_file", { path: "/tmp/evil.sh", content: "rm -rf ~" }),
+    ).rejects.toThrow(/not allowed/);
+  });
+
+  it("rejects ensure_dir without filesystem permission", async () => {
+    const manifest = makeManifest();
+    const { api } = createExtensionAPI(manifest);
+    await expect(
+      api.invoke("ensure_dir", { path: "/tmp/evil" }),
+    ).rejects.toThrow(/not allowed/);
+  });
+
+  it("rejects remove_dir without filesystem permission", async () => {
+    const manifest = makeManifest();
+    const { api } = createExtensionAPI(manifest);
+    await expect(
+      api.invoke("remove_dir", { path: "/tmp/evil" }),
+    ).rejects.toThrow(/not allowed/);
+  });
+
+  it("allows write_file with filesystem permission", async () => {
+    const manifest = makeManifest({ permissions: ["filesystem"] });
+    const { api } = createExtensionAPI(manifest);
+    // Passes allowlist; Tauri layer rejects in tests — that's expected
+    await expect(
+      api.invoke("write_file", { path: "/tmp/ok.txt", content: "hello" }),
+    ).rejects.not.toThrow(/not allowed/);
+  });
+
+  it("allows ensure_dir with filesystem permission", async () => {
+    const manifest = makeManifest({ permissions: ["filesystem"] });
+    const { api } = createExtensionAPI(manifest);
+    await expect(
+      api.invoke("ensure_dir", { path: "/tmp/ok" }),
+    ).rejects.not.toThrow(/not allowed/);
+  });
+
+  it("allows remove_dir with filesystem permission", async () => {
+    const manifest = makeManifest({ permissions: ["filesystem"] });
+    const { api } = createExtensionAPI(manifest);
+    await expect(
+      api.invoke("remove_dir", { path: "/tmp/ok" }),
+    ).rejects.not.toThrow(/not allowed/);
+  });
+
+  it("allows copy_files with filesystem permission", async () => {
+    const manifest = makeManifest({ permissions: ["filesystem"] });
+    const { api } = createExtensionAPI(manifest);
+    await expect(
+      api.invoke("copy_files", { src: "/tmp/a", dst: "/tmp/b" }),
+    ).rejects.not.toThrow(/not allowed/);
+  });
+
+  it("rejects copy_files without filesystem permission", async () => {
+    const manifest = makeManifest();
+    const { api } = createExtensionAPI(manifest);
+    await expect(
+      api.invoke("copy_files", { src: "/tmp/a", dst: "/tmp/b" }),
+    ).rejects.toThrow(/not allowed/);
+  });
+});
+
 // --- Manifest entry path validation ---
 
 describe("validateManifest entry path validation", () => {

@@ -42,6 +42,8 @@ vi.mock("@xterm/xterm", () => ({
       attachCustomKeyEventHandler: vi.fn(),
       registerLinkProvider: vi.fn(),
       getSelection: vi.fn(),
+      hasSelection: vi.fn().mockReturnValue(false),
+      onSelectionChange: vi.fn(),
       scrollToBottom: vi.fn(),
       onScroll: vi.fn().mockReturnValue({ dispose: vi.fn() }),
     };
@@ -80,6 +82,7 @@ vi.mock("../lib/services/preview-service", () => ({
     watchId: 0,
     dispose: vi.fn(),
   }),
+  refreshPreviewElement: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("../lib/services/preview-surface-registry", () => ({
   registerPreviewSurface: vi.fn(),
@@ -172,6 +175,8 @@ function makeSurface(
       attachCustomKeyEventHandler: vi.fn(),
       registerLinkProvider: vi.fn(),
       getSelection: vi.fn(),
+      hasSelection: vi.fn().mockReturnValue(false),
+      onSelectionChange: vi.fn(),
       onScroll: vi.fn().mockReturnValue({ dispose: vi.fn() }),
     } as unknown as TerminalSurface["terminal"],
     fitAddon: { fit: vi.fn() } as unknown as TerminalSurface["fitAddon"],
@@ -333,6 +338,89 @@ describe("FindBar", () => {
     render(FindBar);
     const input = screen.getByPlaceholderText("Find...") as HTMLInputElement;
     expect(input.type).toBe("text");
+  });
+
+  it("renders regex, case, and whole-word toggle buttons", () => {
+    findBarVisible.set(true);
+    render(FindBar);
+    expect(screen.getByTitle("Use regular expression")).toBeTruthy();
+    expect(screen.getByTitle("Match case")).toBeTruthy();
+    expect(screen.getByTitle("Match whole word")).toBeTruthy();
+  });
+
+  it("passes regex:true to findNext when regex toggle is enabled", async () => {
+    const surface = makeSurface("s1");
+    const ws = makeWorkspace("w1", "test", makePane("p1", [surface]));
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+    findBarVisible.set(true);
+    render(FindBar);
+
+    const input = screen.getByPlaceholderText("Find...") as HTMLInputElement;
+    await fireEvent.input(input, { target: { value: "hello" } });
+
+    const regexBtn = screen.getByTitle("Use regular expression");
+    await fireEvent.click(regexBtn);
+
+    const findNextSpy = surface.searchAddon.findNext as ReturnType<
+      typeof vi.fn
+    >;
+    const lastCall = findNextSpy.mock.calls[findNextSpy.mock.calls.length - 1];
+    expect(lastCall[1]).toMatchObject({
+      regex: true,
+      caseSensitive: false,
+      wholeWord: false,
+    });
+  });
+
+  it("passes caseSensitive:true to findNext when case toggle is enabled", async () => {
+    const surface = makeSurface("s2");
+    const ws = makeWorkspace("w2", "test", makePane("p2", [surface]));
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+    findBarVisible.set(true);
+    render(FindBar);
+
+    const input = screen.getByPlaceholderText("Find...") as HTMLInputElement;
+    await fireEvent.input(input, { target: { value: "hello" } });
+
+    const caseBtn = screen.getByTitle("Match case");
+    await fireEvent.click(caseBtn);
+
+    const findNextSpy = surface.searchAddon.findNext as ReturnType<
+      typeof vi.fn
+    >;
+    const lastCall = findNextSpy.mock.calls[findNextSpy.mock.calls.length - 1];
+    expect(lastCall[1]).toMatchObject({
+      regex: false,
+      caseSensitive: true,
+      wholeWord: false,
+    });
+  });
+
+  it("passes wholeWord:true to findNext when whole-word toggle is enabled", async () => {
+    const surface = makeSurface("s3");
+    const ws = makeWorkspace("w3", "test", makePane("p3", [surface]));
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+    findBarVisible.set(true);
+    render(FindBar);
+
+    const input = screen.getByPlaceholderText("Find...") as HTMLInputElement;
+    await fireEvent.input(input, { target: { value: "hello" } });
+
+    const wordBtn = screen.getByTitle("Match whole word");
+    await fireEvent.click(wordBtn);
+
+    const findNextSpy = surface.searchAddon.findNext as ReturnType<
+      typeof vi.fn
+    >;
+    const lastCall = findNextSpy.mock.calls[findNextSpy.mock.calls.length - 1];
+    expect(lastCall[1]).toMatchObject({
+      regex: false,
+      caseSensitive: false,
+      wholeWord: true,
+    });
   });
 });
 
@@ -746,9 +834,9 @@ describe("WorkspaceItem", () => {
     expect(screen.getByText("My Workspace")).toBeTruthy();
   });
 
-  it("renders close button with correct title", () => {
+  it("renders close button", () => {
     renderWorkspaceItem();
-    expect(screen.getByTitle("Close Workspace (⇧⌘W)")).toBeTruthy();
+    expect(screen.getByText("×")).toBeTruthy();
   });
 
   it("renders close button with x symbol", () => {

@@ -533,7 +533,11 @@ describe("tab-drag — commitTabDrop", () => {
       sA.id,
       pane.id,
       ws.id,
-      { kind: "group", positionInGroup: 0 },
+      expect.objectContaining({
+        kind: "group",
+        positionInGroup: 0,
+        targetGroupId: "grp1",
+      }),
     );
   });
 
@@ -575,7 +579,11 @@ describe("tab-drag — commitTabDrop", () => {
       sA.id,
       pane.id,
       ws.id,
-      { kind: "group", positionInGroup: 1 },
+      expect.objectContaining({
+        kind: "group",
+        positionInGroup: 1,
+        targetGroupId: "grp1",
+      }),
     );
   });
 
@@ -847,5 +855,98 @@ describe("tab-drag — surface body detection", () => {
       expect(state.dropTarget.zone).toBe("right");
       expect(state.dropTarget.paneId).toBe(paneB.id);
     }
+  });
+});
+
+describe("tab-drag — detectDropTarget: root tab over nested workspace row", () => {
+  it("returns new-workspace-in-group when cursor is over a row inside a group container", () => {
+    const sA = mockTerminalSurface({ title: "A" });
+    const sB = mockTerminalSurface({ title: "B" });
+    const srcPane = makePane([sA, sB]);
+    const srcWs = makeWorkspace(srcPane); // no groupId — root workspace
+
+    const nestedPane = makePane([mockTerminalSurface({ title: "C" })]);
+    const nestedWs: Workspace = {
+      id: uid(),
+      name: "nested",
+      splitRoot: { type: "pane", pane: nestedPane },
+      activePaneId: nestedPane.id,
+      metadata: { groupId: "grp-1" },
+    };
+    workspaces.set([srcWs, nestedWs]);
+    activeWorkspaceIdx.set(0);
+
+    // Build DOM: container with data-container-nested, containing a workspace row
+    const container = document.createElement("div");
+    container.setAttribute("data-container-nested", "grp-1");
+    const row = document.createElement("div");
+    row.setAttribute("data-ws-view-drag-idx", "1");
+    row.getBoundingClientRect = () =>
+      ({
+        top: 100,
+        bottom: 140,
+        height: 40,
+        left: 0,
+        right: 200,
+        width: 200,
+      }) as DOMRect;
+    container.appendChild(row);
+    document.body.appendChild(container);
+
+    document.elementFromPoint = vi.fn().mockReturnValue(row);
+
+    const sourceEl = document.createElement("div");
+    document.body.appendChild(sourceEl);
+    const down = mouseEvent("mousedown", { clientX: 50, clientY: 120 });
+    Object.defineProperty(down, "currentTarget", { value: sourceEl });
+    startTabDrag(down, sA.id, srcPane.id, srcWs.id);
+    // Move >5px to activate the drag state machine
+    window.dispatchEvent(
+      mouseEvent("mousemove", { clientX: 60, clientY: 120 }),
+    );
+
+    const state = get(tabDragState);
+    expect(state?.dropTarget?.kind).toBe("new-workspace-in-group");
+    if (state?.dropTarget?.kind === "new-workspace-in-group") {
+      expect(state.dropTarget.groupId).toBe("grp-1");
+    }
+  });
+});
+
+describe("tab-drag — commitTabDrop: new-workspace-in-group passes targetGroupId", () => {
+  it("calls createWorkspaceFromSurface with targetGroupId matching the drop group", () => {
+    const sA = mockTerminalSurface({ title: "A" });
+    const sB = mockTerminalSurface({ title: "B" });
+    const pane = makePane([sA, sB]);
+    const ws = makeWorkspace(pane); // root workspace — no groupId
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+
+    // Mock getWorkspaceGroups to return a group with the workspace
+    vi.mocked(getWorkspaceGroups).mockReturnValue([
+      { id: "grp-1", workspaceIds: [ws.id], name: "Group 1" },
+    ]);
+
+    __setTabDropTargetForTest({
+      surfaceId: sA.id,
+      sourcePaneId: pane.id,
+      sourceWorkspaceId: ws.id,
+      position: { x: 0, y: 0 },
+      dropTarget: {
+        kind: "new-workspace-in-group",
+        groupId: "grp-1",
+        insertGlobalIdx: 0,
+        insertEdge: "after",
+      },
+    });
+
+    commitTabDrop();
+
+    expect(createWorkspaceFromSurfaceSpy).toHaveBeenCalledWith(
+      sA.id,
+      pane.id,
+      ws.id,
+      expect.objectContaining({ targetGroupId: "grp-1" }),
+    );
   });
 });

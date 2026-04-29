@@ -1,6 +1,8 @@
 <script lang="ts">
   import type { SplitNode, Workspace } from "../types";
+  import { nodeContainsSurface } from "../types";
   import { theme } from "../stores/theme";
+  import { zoomedSurfaceId } from "../stores/workspace";
   import { dragResize } from "../actions/drag-resize";
   import { schedulePersist } from "../services/workspace-service";
   import PaneView from "./PaneView.svelte";
@@ -59,6 +61,14 @@
     onFocusPane={() => onFocusPane(node.pane.id)}
   />
 {:else}
+  {@const zoomed = $zoomedSurfaceId}
+  {@const child0HasZoom = zoomed
+    ? nodeContainsSurface(node.children[0], zoomed)
+    : false}
+  {@const child1HasZoom = zoomed
+    ? nodeContainsSurface(node.children[1], zoomed)
+    : false}
+  {@const zoomActive = child0HasZoom || child1HasZoom}
   <div
     style="
     display: flex; flex: 1; min-width: 0; min-height: 0; gap: 0;
@@ -66,7 +76,11 @@
   "
   >
     <div
-      style="flex: {node.ratio}; display: flex; min-width: 0; min-height: 0;"
+      style="
+        flex: {zoomActive ? (child0HasZoom ? 1 : 0) : node.ratio};
+        display: {zoomActive && !child0HasZoom ? 'none' : 'flex'};
+        min-width: 0; min-height: 0;
+      "
     >
       <SplitNodeView
         node={node.children[0]}
@@ -81,21 +95,26 @@
         {onFocusPane}
       />
     </div>
+    {#if !zoomActive}
+      <div
+        class="split-divider"
+        style="
+          {node.direction === 'vertical'
+          ? 'height: 6px; cursor: row-resize;'
+          : 'width: 6px; cursor: col-resize;'}
+          background: {dragging ? $theme.accent : $theme.border};
+          flex-shrink: 0;
+          transition: background 0.15s;
+        "
+        use:dragResize={splitDragOptions}
+      ></div>
+    {/if}
     <div
-      class="split-divider"
       style="
-        {node.direction === 'vertical'
-        ? 'height: 6px; cursor: row-resize;'
-        : 'width: 6px; cursor: col-resize;'}
-        background: {dragging ? $theme.accent : $theme.border};
-        flex-shrink: 0;
-        transition: background 0.15s;
+        flex: {zoomActive ? (child1HasZoom ? 1 : 0) : 1 - node.ratio};
+        display: {zoomActive && !child1HasZoom ? 'none' : 'flex'};
+        min-width: 0; min-height: 0;
       "
-      use:dragResize={splitDragOptions}
-    ></div>
-    <div
-      style="flex: {1 -
-        node.ratio}; display: flex; min-width: 0; min-height: 0;"
     >
       <SplitNodeView
         node={node.children[1]}

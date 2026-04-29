@@ -3,8 +3,14 @@
  * The Tauri event listener path is exercised by integration tests; here we
  * focus on the pure in-memory buffering/append/read logic.
  */
-import { describe, it, expect } from "vitest";
-import { McpOutputBuffer } from "../lib/services/mcp-output-buffer";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import {
+  McpOutputBuffer,
+  appendMcpOutput,
+  getMcpBuffer,
+  registerMcpPty,
+  unregisterMcpPty,
+} from "../lib/services/mcp-output-buffer";
 
 describe("McpOutputBuffer", () => {
   it("starts empty with cursor at 0 and one empty partial line", () => {
@@ -90,5 +96,35 @@ describe("McpOutputBuffer", () => {
     expect(withAnsi.output).toContain("\x1b[");
     const stripped = b.read({});
     expect(stripped.output).not.toContain("\x1b[");
+  });
+});
+
+describe("appendMcpOutput", () => {
+  const TEST_PTY_ID = 9999;
+
+  beforeEach(() => {
+    registerMcpPty(TEST_PTY_ID);
+  });
+
+  afterEach(() => {
+    unregisterMcpPty(TEST_PTY_ID);
+  });
+
+  it("correctly decodes multi-byte UTF-8 sequences (Japanese)", () => {
+    const original = "こんにちは";
+    const bytes = new TextEncoder().encode(original);
+    appendMcpOutput(TEST_PTY_ID, bytes);
+    const buffer = getMcpBuffer(TEST_PTY_ID);
+    expect(buffer).toBeDefined();
+    expect(buffer!.getLastLine()).toBe(original);
+  });
+
+  it("correctly decodes emoji (4-byte UTF-8)", () => {
+    const original = "🎉";
+    const bytes = new TextEncoder().encode(original);
+    appendMcpOutput(TEST_PTY_ID, bytes);
+    const buffer = getMcpBuffer(TEST_PTY_ID);
+    expect(buffer).toBeDefined();
+    expect(buffer!.getLastLine()).toBe(original);
   });
 });

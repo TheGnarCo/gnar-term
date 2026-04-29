@@ -49,7 +49,7 @@ export const agenticOrchestratorManifest: ExtensionManifest = {
     "Agentic Dashboard contribution (per-group, cap 1) + Global Agentic pseudo-workspace. Consumes core's passive detection via api.agents.",
   entry: "./index.ts",
   included: true,
-  permissions: [],
+  permissions: ["filesystem"],
   contributes: {
     settings: {
       fields: {
@@ -129,20 +129,43 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
       }
     })();
 
-    api.registerPseudoWorkspace({
-      id: "agentic.global",
-      label: "Agents dashboard",
-      position: "root-top",
-      icon: BotIcon,
-      render: GlobalAgenticDashboardBody,
-      // Replace the static "Agents dashboard" label in the sidebar
-      // root row with a live 2x2 status-chip grid (Running / Waiting /
-      // Idle / Done) — same buckets as the Kanban widget so the
-      // sidebar summary always agrees with what the Agents dashboard
-      // body shows.
-      rowBody: AgentStatusGrid,
-      metadata: { isGlobalAgenticDashboard: true },
-    });
+    const CLOSED_KEY = "globalDashboardClosed";
+
+    function registerReopenAction(): void {
+      api.registerWorkspaceAction("reopen-global-dashboard", {
+        label: "Agents Dashboard",
+        zone: "workspace",
+        handler: () => {
+          void api.state.set(CLOSED_KEY, false);
+          api.unregisterWorkspaceAction("reopen-global-dashboard");
+          registerGlobalDashboard();
+        },
+      });
+    }
+
+    function registerGlobalDashboard(): void {
+      api.registerPseudoWorkspace({
+        id: "agentic.global",
+        label: "Agents dashboard",
+        position: "root-top",
+        icon: BotIcon,
+        render: GlobalAgenticDashboardBody,
+        rowBody: AgentStatusGrid,
+        metadata: { isGlobalAgenticDashboard: true },
+        onClose() {
+          void api.state.set(CLOSED_KEY, true);
+          api.unregisterWorkspaceAction("reopen-global-dashboard");
+          registerReopenAction();
+        },
+      });
+    }
+
+    const wasClosed = api.state.get<boolean>(CLOSED_KEY);
+    if (wasClosed) {
+      registerReopenAction();
+    } else {
+      registerGlobalDashboard();
+    }
 
     api.registerMarkdownComponent("kanban", Kanban, {
       configSchema: {

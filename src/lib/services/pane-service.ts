@@ -6,6 +6,7 @@ import {
   activeWorkspace,
   activePane,
   activeSurface,
+  zoomedSurfaceId,
 } from "../stores/workspace";
 import { theme } from "../stores/theme";
 import { createTerminalSurface } from "../terminal-service";
@@ -30,6 +31,19 @@ import { removeWorkspaceFromAllGroups } from "./workspace-group-service";
 import { handleWorkspaceClosed as gitStatusWorkspaceClosed } from "./git-status-service";
 import { safeFocus, getCwdForSurface } from "./service-helpers";
 import { eventBus } from "./event-bus";
+
+export { zoomedSurfaceId };
+
+/**
+ * Toggle zoom for the given surface. If the surface is already zoomed,
+ * restores the normal split layout. If a different surface is zoomed (or
+ * none), zooms to the given surface.
+ */
+export function togglePaneZoom(surfaceId: string): void {
+  zoomedSurfaceId.update((current) =>
+    current === surfaceId ? null : surfaceId,
+  );
+}
 
 /**
  * Split the given pane (or the active pane if none found) without attaching
@@ -420,6 +434,54 @@ export function expandWorkspaceIntoPanes(
   // Clean up directly instead of emitting workspace:closed to avoid triggering
   // the worktree handler's interactive "keep or delete?" dialog.
   workspaces.update((list) => list.filter((ws) => ws.id !== srcWorkspaceId));
+  activeWorkspaceIdx.set(
+    Math.min(get(activeWorkspaceIdx), get(workspaces).length - 1),
+  );
+  removeRootRow({ kind: "workspace", id: srcWorkspaceId });
+  removeWorkspaceFromAllGroups(srcWorkspaceId);
+  gitStatusWorkspaceClosed(srcWorkspaceId);
+  schedulePersist();
+}
+
+/**
+ * Collapse all surfaces from a source workspace into a single target pane as
+ * tabs. This is the inverse of `expandWorkspaceIntoPanes`: instead of
+ * splitting a workspace into many panes, it merges all surfaces from
+ * `srcWorkspaceId` into `targetPaneId` in the target workspace.
+ *
+ * The source workspace is removed without disposing terminals (surfaces move
+ * live). Group membership and rootRowOrder are cleaned up directly so the
+ * worktree handler's "keep or delete?" dialog is NOT triggered.
+ */
+export function mergeWorkspaceIntoPane(
+  srcWorkspaceId: string,
+  targetPaneId: string,
+): void {
+  const allWs = get(workspaces);
+  const srcWs = allWs.find((ws) => ws.id === srcWorkspaceId);
+  const tgtWs = allWs.find((ws) =>
+    getAllPanes(ws.splitRoot).some((p) => p.id === targetPaneId),
+  );
+  if (!srcWs || !tgtWs || srcWs === tgtWs) return;
+
+  const targetPane = getAllPanes(tgtWs.splitRoot).find(
+    (p) => p.id === targetPaneId,
+  );
+  if (!targetPane) return;
+
+  const allSurfaces = getAllSurfaces(srcWs);
+  if (allSurfaces.length === 0) return;
+
+  targetPane.surfaces.push(...allSurfaces);
+  const lastSurface = allSurfaces[allSurfaces.length - 1];
+  if (lastSurface) {
+    targetPane.activeSurfaceId = lastSurface.id;
+  }
+  tgtWs.activePaneId = targetPane.id;
+
+  workspaces.update((list) => [
+    ...list.filter((ws) => ws.id !== srcWorkspaceId),
+  ]);
   activeWorkspaceIdx.set(
     Math.min(get(activeWorkspaceIdx), get(workspaces).length - 1),
   );

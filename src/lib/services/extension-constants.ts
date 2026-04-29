@@ -33,9 +33,6 @@ export const EXTENSION_ALLOWED_COMMANDS: Set<string> = new Set([
   "list_dir",
   "read_file",
   "read_file_base64",
-  "write_file",
-  "ensure_dir",
-  "remove_dir",
   "get_home",
   "is_git_repo",
   "list_gitignored",
@@ -55,7 +52,7 @@ export const EXTENSION_ALLOWED_COMMANDS: Set<string> = new Set([
   "push_branch",
   "delete_branch",
   "git_checkout",
-  // (copy_files moved to FILESYSTEM_COMMANDS — requires "filesystem" permission)
+  // (copy_files, write_file, ensure_dir, remove_dir → FILESYSTEM_COMMANDS; require "filesystem" permission)
   // GitHub CLI commands
   "gh_list_issues",
   "gh_list_prs",
@@ -92,8 +89,14 @@ export const PTY_COMMANDS: Set<string> = new Set([
 export const SHELL_COMMANDS: Set<string> = new Set(["run_script"]);
 
 // Filesystem commands — only available to extensions with "filesystem" permission
-// Separated from the base allowlist because copy_files operates on arbitrary paths.
-export const FILESYSTEM_COMMANDS: Set<string> = new Set(["copy_files"]);
+// write_file, ensure_dir, and remove_dir are gated here (not in the base
+// allowlist) because they can modify arbitrary paths in the user's home dir.
+export const FILESYSTEM_COMMANDS: Set<string> = new Set([
+  "copy_files",
+  "write_file",
+  "ensure_dir",
+  "remove_dir",
+]);
 
 // Observe permission — allows read-only access to terminal PTY output.
 // Does not grant PTY write access. Used by extensions that detect process

@@ -580,6 +580,7 @@ export interface ExtensionAPI {
     },
   ): void;
   getWorkspaceActions(): WorkspaceActionInfo[];
+  unregisterWorkspaceAction(id: string): void;
 
   // Tauri command invocation — use this instead of @tauri-apps/api/core
   invoke<T = unknown>(
@@ -1074,6 +1075,8 @@ export interface PseudoWorkspaceInput {
    * should stay compact — the row banner is ~40px tall.
    */
   rowBody?: unknown;
+  /** Called after the row is removed; register a reopen action or persist closed state. */
+  onClose?: () => void;
 }
 
 // --- Workspace creation options ---

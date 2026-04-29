@@ -7,6 +7,7 @@ import {
   activeWorkspace,
   activeSurface,
   activePseudoWorkspaceId,
+  zoomedSurfaceId,
 } from "../stores/workspace";
 import { showInputPrompt, showConfirmPrompt } from "../stores/ui";
 import { createTerminalSurface } from "../terminal-service";
@@ -244,9 +245,8 @@ export function switchWorkspace(idx: number) {
     get(activeWorkspaceIdx) >= 0
       ? (wsList[get(activeWorkspaceIdx)]?.id ?? null)
       : null;
-  // Activating a real workspace implicitly clears any active
-  // pseudo-workspace — the two modes are mutually exclusive surfaces.
   activePseudoWorkspaceId.set(null);
+  zoomedSurfaceId.set(null);
   activeWorkspaceIdx.set(idx);
   eventBus.emit({
     type: "workspace:activated",
@@ -271,6 +271,11 @@ export function closeWorkspace(idx: number) {
         invoke("kill_pty", { ptyId: surf.ptyId }).catch(() => {});
       }
     }
+  }
+  // Clear zoom if the workspace being closed contains the currently-zoomed surface
+  const zoomed = get(zoomedSurfaceId);
+  if (zoomed && getAllSurfaces(ws).some((s) => s.id === zoomed)) {
+    zoomedSurfaceId.set(null);
   }
   const wsId = ws.id;
   workspaces.update((list) => list.filter((_, i) => i !== idx));
@@ -436,7 +441,7 @@ export function createWorkspaceFromSurface(
   sourceWorkspaceId: string,
   insertOptions?:
     | { kind: "root"; insertIdx: number }
-    | { kind: "group"; positionInGroup: number },
+    | { kind: "group"; positionInGroup: number; targetGroupId?: string },
 ): void {
   const allWs = get(workspaces);
   const srcWs = allWs.find((w) => w.id === sourceWorkspaceId);
@@ -476,12 +481,15 @@ export function createWorkspaceFromSurface(
   };
   const srcGroupId = (srcWs.metadata as Record<string, unknown> | undefined)
     ?.groupId as string | undefined;
+  const effectiveGroupId =
+    (insertOptions?.kind === "group" && insertOptions.targetGroupId) ||
+    srcGroupId;
   const newWs: Workspace = {
     id: uid(),
     name: surface.title || "New Workspace",
     splitRoot: { type: "pane", pane: newPane },
     activePaneId: newPane.id,
-    ...(srcGroupId ? { metadata: { groupId: srcGroupId } } : {}),
+    ...(effectiveGroupId ? { metadata: { groupId: effectiveGroupId } } : {}),
   };
 
   workspaces.update((list) => [...list, newWs]);
@@ -490,15 +498,15 @@ export function createWorkspaceFromSurface(
   } else {
     appendRootRow({ kind: "workspace", id: newWs.id });
   }
-  if (srcGroupId) {
+  if (effectiveGroupId) {
     if (insertOptions?.kind === "group") {
       insertWorkspaceIntoGroup(
-        srcGroupId,
+        effectiveGroupId,
         newWs.id,
         insertOptions.positionInGroup,
       );
     } else {
-      addWorkspaceToGroup(srcGroupId, newWs.id);
+      addWorkspaceToGroup(effectiveGroupId, newWs.id);
     }
   }
   schedulePersist();

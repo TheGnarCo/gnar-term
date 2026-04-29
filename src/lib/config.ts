@@ -172,6 +172,8 @@ export interface GnarTermConfig {
   fontSize?: number;
   fontFamily?: string;
   opacity?: number;
+  scrollback?: number;
+  shell?: string;
   autoload?: string[]; // workspace command names to launch on startup
   extensions?: Record<string, ExtensionConfig>;
   worktrees?: WorktreesConfig;
@@ -221,6 +223,18 @@ export interface AppState {
   // workspaces and workspace group blocks sit in a single list the user
   // can drag across freely. See stores/root-row-order.ts.
   rootRowOrder?: { kind: string; id: string }[];
+  // Archived (suspended) workspaces and groups. See stores/archive.ts.
+  archivedOrder?: { kind: string; id: string }[];
+  archivedDefs?: {
+    workspaces: Record<string, { def: WorkspaceDef & { name: string } }>;
+    groups: Record<
+      string,
+      {
+        group: WorkspaceGroupEntry;
+        workspaceDefs: (WorkspaceDef & { name: string })[];
+      }
+    >;
+  };
 }
 
 // --- Config file paths ---

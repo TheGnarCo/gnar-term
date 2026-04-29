@@ -9,9 +9,9 @@ import { agenticOrchestratorManifest } from "../extensions/agentic-orchestrator/
 
 describe("Permission model", () => {
   describe("filesystem permission", () => {
-    it("agentic-orchestrator does NOT declare filesystem permission", () => {
+    it("agentic-orchestrator declares filesystem permission (needs write_file + ensure_dir)", () => {
       const perms = agenticOrchestratorManifest.permissions || [];
-      expect(perms).not.toContain("filesystem");
+      expect(perms).toContain("filesystem");
     });
   });
 

@@ -252,13 +252,25 @@ function detectDropTarget(
           srcWs?.metadata as Record<string, unknown> | undefined
         )?.groupId as string | undefined;
         if (srcGroupId !== groupId) {
-          // Grouped tab over a different group → hard no-op (can't cross groups).
-          // Root tab over any group → fall through the whole wsViewRowEl block
-          // so root-row detection picks up the ContainerRow's
-          // data-root-row-container ancestor and renders the group as a solid
-          // sibling overlay with an adjacent insert indicator.
-          if (srcGroupId) return null;
-          // else: root tab → fall through
+          if (srcGroupId) return null; // grouped tab over different group → deny
+          // Root tab over a group's nested workspace → create a nested workspace
+          // in that group rather than falling through to root-row detection.
+          if (srcWs && getAllSurfaces(srcWs).length > 1) {
+            const globalIdx = parseInt(
+              wsViewRowEl.getAttribute("data-ws-view-drag-idx") || "0",
+              10,
+            );
+            const rect = wsViewRowEl.getBoundingClientRect();
+            const insertEdge: "before" | "after" =
+              y < rect.top + rect.height / 2 ? "before" : "after";
+            return {
+              kind: "new-workspace-in-group",
+              groupId,
+              insertGlobalIdx: globalIdx,
+              insertEdge,
+            };
+          }
+          return null;
         } else {
           // Same group — offer a positional insert.
           if (srcWs && getAllSurfaces(srcWs).length > 1) {
@@ -455,6 +467,7 @@ export function commitTabDrop(): void {
       createWorkspaceFromSurface(surfaceId, sourcePaneId, sourceWorkspaceId, {
         kind: "group",
         positionInGroup: insertPos,
+        targetGroupId: dropTarget.groupId,
       });
       break;
     }

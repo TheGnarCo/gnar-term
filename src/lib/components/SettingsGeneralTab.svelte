@@ -5,6 +5,8 @@
   export let fontSize: number;
   export let fontFamily: string;
   export let opacity: number;
+  export let scrollback: number;
+  export let shell: string;
   export let availableFonts: string[];
   export let fontLoadError: string;
 
@@ -12,6 +14,8 @@
   export let onFontSizeChange: (value: number) => void;
   export let onFontFamilyChange: (value: string) => void;
   export let onOpacityChange: (value: number) => void;
+  export let onScrollbackChange: (value: number) => void;
+  export let onShellChange: (value: string) => void;
 </script>
 
 <div data-page="general">
@@ -106,6 +110,49 @@
         value={opacity}
         on:input={(e) => onOpacityChange(parseFloat(e.currentTarget.value))}
         style="width: 200px;"
+      />
+    </label>
+
+    <!-- Scrollback lines -->
+    <label style="display: flex; flex-direction: column; gap: 4px;">
+      <span style="font-size: 11px; color: {$theme.fgDim}; font-weight: 500;"
+        >Scrollback lines</span
+      >
+      <input
+        data-field="scrollback"
+        type="number"
+        min="1000"
+        max="100000"
+        step="1000"
+        value={scrollback}
+        on:change={(e) => {
+          const val = parseInt(e.currentTarget.value);
+          if (!isNaN(val) && val >= 1000) onScrollbackChange(val);
+        }}
+        style="
+        padding: 6px 8px; border-radius: 6px; width: 100px;
+        background: {$theme.bgSurface}; color: {$theme.fg};
+        border: 1px solid {$theme.border}; font-size: 12px;
+      "
+      />
+    </label>
+
+    <!-- Default shell -->
+    <label style="display: flex; flex-direction: column; gap: 4px;">
+      <span style="font-size: 11px; color: {$theme.fgDim}; font-weight: 500;"
+        >Default shell</span
+      >
+      <input
+        data-field="shell"
+        type="text"
+        placeholder="$SHELL"
+        value={shell}
+        on:change={(e) => onShellChange(e.currentTarget.value)}
+        style="
+        padding: 6px 8px; border-radius: 6px; width: 220px;
+        background: {$theme.bgSurface}; color: {$theme.fg};
+        border: 1px solid {$theme.border}; font-size: 12px;
+      "
       />
     </label>
   </div>

@@ -2,29 +2,61 @@ import { get } from "svelte/store";
 import { shortcutHintsActive } from "../stores/shortcut-hints";
 import { theme } from "../stores/theme";
 
-export function shortcutHint(
-  node: HTMLElement,
-  label: string | null | undefined,
-) {
+export type ShortcutHintParam =
+  | string
+  | null
+  | undefined
+  | { label: string | null | undefined; placement: "right" | "below" };
+
+function parseParam(param: ShortcutHintParam): {
+  label: string | null | undefined;
+  placement: "right" | "below";
+} {
+  if (param && typeof param === "object") {
+    return { label: param.label, placement: param.placement };
+  }
+  return { label: param as string | null | undefined, placement: "right" };
+}
+
+function computePosition(
+  rect: DOMRect,
+  placement: "right" | "below",
+): { left: string; top: string; transform: string } {
+  if (placement === "below") {
+    return {
+      left: `${rect.left + rect.width / 2}px`,
+      top: `${rect.bottom + 4}px`,
+      transform: "translateX(-50%)",
+    };
+  }
+  return {
+    left: `${rect.right - 6}px`,
+    top: `${rect.top + rect.height / 2}px`,
+    transform: "translate(-100%, -50%)",
+  };
+}
+
+export function shortcutHint(node: HTMLElement, param: ShortcutHintParam) {
   let badge: HTMLDivElement | null = null;
-  let currentLabel = label;
+  let parsed = parseParam(param);
 
   function showBadge() {
-    if (!currentLabel || badge) return;
+    if (!parsed.label || badge) return;
     const rect = node.getBoundingClientRect();
     if (rect.width === 0 && rect.height === 0) return;
 
     const t = get(theme);
+    const pos = computePosition(rect, parsed.placement);
     badge = document.createElement("div");
-    badge.textContent = currentLabel;
+    badge.textContent = parsed.label;
     badge.setAttribute("aria-hidden", "true");
     badge.style.cssText = `
       position: fixed;
       z-index: 99999;
       pointer-events: none;
-      left: ${rect.left + rect.width / 2}px;
-      top: ${rect.bottom + 4}px;
-      transform: translateX(-50%);
+      left: ${pos.left};
+      top: ${pos.top};
+      transform: ${pos.transform};
       background: ${t.accent};
       color: ${t.bg};
       font-size: 10px;
@@ -53,8 +85,9 @@ export function shortcutHint(
   function reposition() {
     if (!badge) return;
     const rect = node.getBoundingClientRect();
-    badge.style.left = `${rect.left + rect.width / 2}px`;
-    badge.style.top = `${rect.bottom + 4}px`;
+    const pos = computePosition(rect, parsed.placement);
+    badge.style.left = pos.left;
+    badge.style.top = pos.top;
   }
 
   const unsub = shortcutHintsActive.subscribe((active) => {
@@ -63,12 +96,12 @@ export function shortcutHint(
   });
 
   return {
-    update(newLabel: string | null | undefined) {
-      currentLabel = newLabel;
+    update(newParam: ShortcutHintParam) {
+      parsed = parseParam(newParam);
       if (badge) {
-        if (newLabel) badge.textContent = newLabel;
+        if (parsed.label) badge.textContent = parsed.label;
         else hideBadge();
-      } else if (newLabel && get(shortcutHintsActive)) {
+      } else if (parsed.label && get(shortcutHintsActive)) {
         showBadge();
       }
     },

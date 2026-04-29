@@ -11,10 +11,11 @@ import type { ILink } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
 import { invoke, Channel } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { appendMcpOutput } from "./services/mcp-output-buffer";
 import { eventBus } from "./services/event-bus";
 import { notifyOutputObservers } from "./services/surface-output-observer";
+import { getConfig, saveConfig } from "./config";
 import {
   readText as clipboardRead,
   writeText as clipboardWrite,
@@ -30,7 +31,6 @@ import {
 } from "@tauri-apps/plugin-notification";
 import { get } from "svelte/store";
 import { xtermTheme } from "./stores/theme";
-import { fontSize as fontSizeStore } from "./stores/font-size";
 import { workspaces, activeWorkspaceIdx } from "./stores/workspace";
 import { contextMenu, pendingAction } from "./stores/ui";
 import {
@@ -169,11 +169,82 @@ function scheduleFlush(ptyId: number) {
   requestAnimationFrame(() => flushPtyBuffer(ptyId));
 }
 
+// --- First-PTY-output hooks ---
+
+/** Set of ptyIds that have ever emitted at least one byte of output.
+ *  Used by onFirstPtyOutput to fire the callback immediately when the
+ *  pty is already known to have produced output (avoids a lost-callback
+ *  race when output arrives during connectPty's pending-bytes replay). */
+const ptyHasOutput = new Set<number>();
+
+/** Per-pty set of first-output listener callbacks. Drained on first chunk. */
+const firstOutputListeners = new Map<number, Set<() => void>>();
+
+/**
+ * Register a one-shot callback that fires the first time output arrives
+ * for `ptyId`. If this pty has already emitted output the callback is
+ * scheduled immediately via queueMicrotask.
+ *
+ * Returns an unsubscribe function. Calling it cancels the callback if it
+ * has not fired yet; safe to call multiple times.
+ */
+export function onFirstPtyOutput(
+  ptyId: number,
+  callback: () => void,
+): () => void {
+  if (ptyHasOutput.has(ptyId)) {
+    // Already seen output — fire immediately but asynchronously.
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) callback();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }
+
+  let listeners = firstOutputListeners.get(ptyId);
+  if (!listeners) {
+    listeners = new Set();
+    firstOutputListeners.set(ptyId, listeners);
+  }
+  listeners.add(callback);
+
+  return () => {
+    const set = firstOutputListeners.get(ptyId);
+    if (set) {
+      set.delete(callback);
+      if (set.size === 0) firstOutputListeners.delete(ptyId);
+    }
+  };
+}
+
+/** Drain any registered first-output listeners for `ptyId`. Called from
+ *  handlePtyChunk on the first chunk. */
+function drainFirstOutputListeners(ptyId: number): void {
+  const listeners = firstOutputListeners.get(ptyId);
+  if (!listeners) return;
+  firstOutputListeners.delete(ptyId);
+  for (const cb of listeners) {
+    try {
+      cb();
+    } catch {
+      /* ignore listener errors */
+    }
+  }
+}
+
 /** Append a raw PTY chunk to the per-pty buffer, tee it to the MCP buffer
  *  if one is registered, and schedule an rAF flush to xterm.js. Exported for
  *  tests; in production this is called from the Channel onmessage handler
  *  created in connectPty(). */
 export function handlePtyChunk(ptyId: number, bytes: Uint8Array): void {
+  // Fire first-output listeners on the very first chunk.
+  if (!ptyHasOutput.has(ptyId)) {
+    ptyHasOutput.add(ptyId);
+    drainFirstOutputListeners(ptyId);
+  }
+
   let chunks = ptyBuffers.get(ptyId);
   if (!chunks) {
     chunks = [];
@@ -211,8 +282,17 @@ function flushPtyBuffer(ptyId: number) {
     ptyBuffers.delete(ptyId);
     ptyBufferBytes.delete(ptyId);
     if (ptyPaused.has(ptyId)) {
-      ptyPaused.delete(ptyId);
-      invoke("resume_pty", { ptyId }).catch(() => {});
+      invoke("resume_pty", { ptyId })
+        .then(() => {
+          ptyPaused.delete(ptyId);
+        })
+        .catch((err) => {
+          console.error(
+            "[terminal-service] resume_pty failed, terminal may hang:",
+            err,
+          );
+          ptyPaused.delete(ptyId);
+        });
     }
     return;
   }
@@ -252,8 +332,17 @@ function flushPtyBuffer(ptyId: number) {
     }
     // Resume PTY reader if we drained below low water mark
     if (ptyPaused.has(ptyId) && buffered < BUFFER_LOW_WATER) {
-      ptyPaused.delete(ptyId);
-      invoke("resume_pty", { ptyId }).catch(() => {});
+      invoke("resume_pty", { ptyId })
+        .then(() => {
+          ptyPaused.delete(ptyId);
+        })
+        .catch((err) => {
+          console.error(
+            "[terminal-service] resume_pty failed, terminal may hang:",
+            err,
+          );
+          ptyPaused.delete(ptyId);
+        });
     }
   });
 }
@@ -282,130 +371,108 @@ async function sendDesktopNotification(
   }
 }
 
+// Module-level storage for active Tauri event unlisteners and the keydown handler
+// reference. Populated by setupListeners(), drained by teardownListeners().
+const _unlisteners: UnlistenFn[] = [];
+let _keydownHandler: ((e: KeyboardEvent) => void) | null = null;
+
+export async function teardownListeners(): Promise<void> {
+  for (const unlisten of _unlisteners) {
+    unlisten();
+  }
+  _unlisteners.length = 0;
+  if (_keydownHandler) {
+    window.removeEventListener("keydown", _keydownHandler, { capture: true });
+    _keydownHandler = null;
+  }
+}
+
 export async function setupListeners() {
   // On Linux, prevent WebKitGTK from intercepting Ctrl+Shift+C/V before xterm.js
   if (!isMac) {
-    window.addEventListener(
-      "keydown",
-      (e) => {
-        if (
-          e.ctrlKey &&
-          e.shiftKey &&
-          (e.key === "C" || e.key === "c" || e.key === "V" || e.key === "v")
-        ) {
-          e.preventDefault();
-        }
-      },
-      { capture: true },
-    );
+    _keydownHandler = (e: KeyboardEvent) => {
+      if (
+        e.ctrlKey &&
+        e.shiftKey &&
+        (e.key === "C" || e.key === "c" || e.key === "V" || e.key === "v")
+      ) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener("keydown", _keydownHandler, { capture: true });
   }
-  await listen<{ pty_id: number }>("pty-exit", (event) => {
-    const { pty_id } = event.payload;
-    // pty-exit arrives via emit while chunks arrive via Channel — different
-    // transports, so a trailing chunk may already be in the per-pty buffer.
-    // Flush it synchronously to the surface's terminal before we tear down
-    // flow-control state and remove the surface from the workspace tree.
-    const chunks = ptyBuffers.get(pty_id);
-    const bytesBuffered = ptyBufferBytes.get(pty_id) || 0;
-    if (chunks && chunks.length > 0 && bytesBuffered > 0) {
-      const surface = findSurfaceByPty(pty_id);
-      if (surface) {
-        const merged = new Uint8Array(bytesBuffered);
-        let offset = 0;
-        for (const chunk of chunks) {
-          merged.set(chunk, offset);
-          offset += chunk.length;
-        }
-        surface.terminal.write(merged);
-      }
-    }
-    ptyBuffers.delete(pty_id);
-    ptyBufferBytes.delete(pty_id);
-    ptyFlushScheduled.delete(pty_id);
-    ptyPaused.delete(pty_id);
-
-    // Remove the surface from its pane, and collapse empty panes
-    workspaces.update((wsList) => {
-      for (const ws of wsList) {
-        for (const pane of getAllPanes(ws.splitRoot)) {
-          const idx = pane.surfaces.findIndex(
-            (s) => isTerminalSurface(s) && s.ptyId === pty_id,
-          );
-          if (idx >= 0) {
-            pane.surfaces.splice(idx, 1);
-            if (pane.surfaces.length > 0) {
-              pane.activeSurfaceId =
-                pane.surfaces[Math.min(idx, pane.surfaces.length - 1)]!.id;
-            } else {
-              // Pane is empty — collapse it from the split tree
-              pane.activeSurfaceId = null;
-              pane.resizeObserver?.disconnect();
-              if (
-                ws.splitRoot.type === "pane" &&
-                ws.splitRoot.pane.id === pane.id
-              ) {
-                // This was the only pane in the workspace — remove the
-                // workspace. Users are allowed to close all workspaces;
-                // App.svelte renders an Empty Surface when the list is
-                // empty, so we don't auto-create a default.
-                const wsIdx = wsList.indexOf(ws);
-                wsList.splice(wsIdx, 1);
-                const currentIdx = get(activeWorkspaceIdx);
-                if (currentIdx >= wsList.length) {
-                  activeWorkspaceIdx.set(wsList.length - 1);
-                }
-                return wsList;
-              }
-              // Find parent split and collapse it
-              const parentInfo = findParentSplit(ws.splitRoot, pane.id);
-              if (parentInfo && parentInfo.parent.type === "split") {
-                const sibling =
-                  parentInfo.parent.children[parentInfo.index === 0 ? 1 : 0];
-                if (ws.splitRoot === parentInfo.parent) {
-                  ws.splitRoot = sibling;
-                } else {
-                  replaceNodeInTree(ws.splitRoot, parentInfo.parent, sibling);
-                }
-                ws.activePaneId = getAllPanes(ws.splitRoot)[0]?.id ?? null;
-              }
-            }
-            return wsList;
+  _unlisteners.push(
+    await listen<{ pty_id: number }>("pty-exit", (event) => {
+      const { pty_id } = event.payload;
+      // pty-exit arrives via emit while chunks arrive via Channel — different
+      // transports, so a trailing chunk may already be in the per-pty buffer.
+      // Flush it synchronously to the surface's terminal before we tear down
+      // flow-control state and remove the surface from the workspace tree.
+      const chunks = ptyBuffers.get(pty_id);
+      const bytesBuffered = ptyBufferBytes.get(pty_id) || 0;
+      if (chunks && chunks.length > 0 && bytesBuffered > 0) {
+        const surface = findSurfaceByPty(pty_id);
+        if (surface) {
+          const merged = new Uint8Array(bytesBuffered);
+          let offset = 0;
+          for (const chunk of chunks) {
+            merged.set(chunk, offset);
+            offset += chunk.length;
           }
+          surface.terminal.write(merged);
         }
       }
-      return wsList;
-    });
-  });
+      ptyBuffers.delete(pty_id);
+      ptyBufferBytes.delete(pty_id);
+      ptyFlushScheduled.delete(pty_id);
+      ptyPaused.delete(pty_id);
+      ptyHasOutput.delete(pty_id);
+      firstOutputListeners.delete(pty_id);
 
-  await listen<{ pty_id: number; text: string }>(
-    "pty-notification",
-    (event) => {
-      const { pty_id, text } = event.payload;
-      // Filter out escape-sequence fragments that slipped through (e.g. "4;0;")
-      if (/^\d+[;\d:\/]*$/.test(text) || !text.trim()) return;
-      let notifyWorkspaceName: string | null = null;
+      // Remove the surface from its pane, and collapse empty panes
       workspaces.update((wsList) => {
-        const activeIdx = get(activeWorkspaceIdx);
-        const activeWs = wsList[activeIdx];
         for (const ws of wsList) {
-          for (const s of getAllSurfaces(ws)) {
-            if (isTerminalSurface(s) && s.ptyId === pty_id) {
-              s.notification = text;
-              s.hasUnread = true;
-              // Suppress desktop notification when the affected surface is
-              // the foreground surface in the foreground pane — the user
-              // is already looking at it.
-              const inActiveWs = ws.id === activeWs?.id;
-              const inActivePane = ws.activePaneId
-                ? getAllPanes(ws.splitRoot).some(
-                    (p) =>
-                      p.id === ws.activePaneId &&
-                      p.surfaces.some((ps) => ps.id === s.id) &&
-                      p.activeSurfaceId === s.id,
-                  )
-                : false;
-              if (!(inActiveWs && inActivePane)) {
-                notifyWorkspaceName = ws.name;
+          for (const pane of getAllPanes(ws.splitRoot)) {
+            const idx = pane.surfaces.findIndex(
+              (s) => isTerminalSurface(s) && s.ptyId === pty_id,
+            );
+            if (idx >= 0) {
+              pane.surfaces.splice(idx, 1);
+              if (pane.surfaces.length > 0) {
+                pane.activeSurfaceId =
+                  pane.surfaces[Math.min(idx, pane.surfaces.length - 1)]!.id;
+              } else {
+                // Pane is empty — collapse it from the split tree
+                pane.activeSurfaceId = null;
+                pane.resizeObserver?.disconnect();
+                if (
+                  ws.splitRoot.type === "pane" &&
+                  ws.splitRoot.pane.id === pane.id
+                ) {
+                  // This was the only pane in the workspace — remove the
+                  // workspace. Users are allowed to close all workspaces;
+                  // App.svelte renders an Empty Surface when the list is
+                  // empty, so we don't auto-create a default.
+                  const wsIdx = wsList.indexOf(ws);
+                  wsList.splice(wsIdx, 1);
+                  const currentIdx = get(activeWorkspaceIdx);
+                  if (currentIdx >= wsList.length) {
+                    activeWorkspaceIdx.set(wsList.length - 1);
+                  }
+                  return wsList;
+                }
+                // Find parent split and collapse it
+                const parentInfo = findParentSplit(ws.splitRoot, pane.id);
+                if (parentInfo && parentInfo.parent.type === "split") {
+                  const sibling =
+                    parentInfo.parent.children[parentInfo.index === 0 ? 1 : 0];
+                  if (ws.splitRoot === parentInfo.parent) {
+                    ws.splitRoot = sibling;
+                  } else {
+                    replaceNodeInTree(ws.splitRoot, parentInfo.parent, sibling);
+                  }
+                  ws.activePaneId = getAllPanes(ws.splitRoot)[0]?.id ?? null;
+                }
               }
               return wsList;
             }
@@ -413,10 +480,51 @@ export async function setupListeners() {
         }
         return wsList;
       });
-      if (notifyWorkspaceName) {
-        void sendDesktopNotification(notifyWorkspaceName, text);
-      }
-    },
+    }),
+  );
+
+  _unlisteners.push(
+    await listen<{ pty_id: number; text: string }>(
+      "pty-notification",
+      (event) => {
+        const { pty_id, text } = event.payload;
+        // Filter out escape-sequence fragments that slipped through (e.g. "4;0;")
+        if (/^\d+[;\d:\/]*$/.test(text) || !text.trim()) return;
+        let notifyWorkspaceName: string | null = null;
+        workspaces.update((wsList) => {
+          const activeIdx = get(activeWorkspaceIdx);
+          const activeWs = wsList[activeIdx];
+          for (const ws of wsList) {
+            for (const s of getAllSurfaces(ws)) {
+              if (isTerminalSurface(s) && s.ptyId === pty_id) {
+                s.notification = text;
+                s.hasUnread = true;
+                // Suppress desktop notification when the affected surface is
+                // the foreground surface in the foreground pane — the user
+                // is already looking at it.
+                const inActiveWs = ws.id === activeWs?.id;
+                const inActivePane = ws.activePaneId
+                  ? getAllPanes(ws.splitRoot).some(
+                      (p) =>
+                        p.id === ws.activePaneId &&
+                        p.surfaces.some((ps) => ps.id === s.id) &&
+                        p.activeSurfaceId === s.id,
+                    )
+                  : false;
+                if (!(inActiveWs && inActivePane)) {
+                  notifyWorkspaceName = ws.name;
+                }
+                return wsList;
+              }
+            }
+          }
+          return wsList;
+        });
+        if (notifyWorkspaceName) {
+          void sendDesktopNotification(notifyWorkspaceName, text);
+        }
+      },
+    ),
   );
 
   function applyPtyTitle(pty_id: number, title: string) {
@@ -451,32 +559,35 @@ export async function setupListeners() {
   }
 
   // OSC 0/2: shell sets window title (shows process name or custom title)
-  await listen<{ pty_id: number; title: string }>("pty-title", (event) => {
-    const { pty_id, title } = event.payload;
-    // Filter out escape-sequence fragments that may slip through
-    if (!title || /[\x00-\x1f\x7f]/.test(title) || /^\d+[;\d:\/]*$/.test(title))
-      return;
+  _unlisteners.push(
+    await listen<{ pty_id: number; title: string }>("pty-title", (event) => {
+      const { pty_id, title } = event.payload;
+      // Filter out escape-sequence fragments that may slip through
+      if (
+        !title ||
+        /[\x00-\x1f\x7f]/.test(title) ||
+        /^\d+[;\d:\/]*$/.test(title)
+      )
+        return;
 
-    // Cancel any pending delayed title for this pty
-    const existing = pendingRunningTitles.get(pty_id);
-    if (existing) {
-      clearTimeout(existing);
-      pendingRunningTitles.delete(pty_id);
-    }
-
-    if (title.startsWith("Running: ")) {
-      // Delay "Running:" titles so quick commands never appear in the tab.
-      // precmd fires OSC 7 before this timer if the command exits fast,
-      // which cancels the timer via the OSC 7 handler.
-      const timer = setTimeout(() => {
+      // Cancel any pending delayed title for this pty
+      const existing = pendingRunningTitles.get(pty_id);
+      if (existing) {
+        clearTimeout(existing);
         pendingRunningTitles.delete(pty_id);
+      }
+
+      if (title.startsWith("Running: ")) {
+        const timer = setTimeout(() => {
+          pendingRunningTitles.delete(pty_id);
+          applyPtyTitle(pty_id, title);
+        }, 500);
+        pendingRunningTitles.set(pty_id, timer);
+      } else {
         applyPtyTitle(pty_id, title);
-      }, 500);
-      pendingRunningTitles.set(pty_id, timer);
-    } else {
-      applyPtyTitle(pty_id, title);
-    }
-  });
+      }
+    }),
+  );
 }
 
 // --- Running Title Delay ---
@@ -542,14 +653,15 @@ export async function createTerminalSurface(
   const ptyId = -1; // PTY spawned later via connectPty() after fit()
 
   const currentXtermTheme = get(xtermTheme);
+  const config = getConfig();
 
   const terminal = new Terminal({
     cursorBlink: true,
-    fontSize: get(fontSizeStore),
+    fontSize: getConfig().fontSize ?? 14,
     fontFamily: resolvedFontFamily,
     theme: currentXtermTheme,
     allowProposedApi: true,
-    scrollback: 5000,
+    scrollback: config.scrollback ?? 10000,
     smoothScrollDuration: 0,
     fastScrollModifier: "alt",
     vtExtensions: {
@@ -586,7 +698,9 @@ export async function createTerminalSurface(
           text: url,
           decorations: { pointerCursor: true, underline: true },
           activate(_event: MouseEvent, text: string) {
-            invoke("open_url", { url: text }).catch(() => {});
+            invoke("open_url", { url: text }).catch((err) =>
+              console.warn("[terminal-service] open_url failed:", err),
+            );
           },
         });
       }
@@ -673,12 +787,16 @@ export async function createTerminalSurface(
             },
           };
         }),
-      ).then((results) => {
-        const links = results.filter(
-          (r): r is NonNullable<typeof r> => r !== null,
-        );
-        callback(links.length > 0 ? links : undefined);
-      });
+      )
+        .then((results) => {
+          const links = results.filter(
+            (r): r is NonNullable<typeof r> => r !== null,
+          );
+          callback(links.length > 0 ? links : undefined);
+        })
+        .catch(() => {
+          callback(undefined);
+        });
     },
   });
 
@@ -707,10 +825,11 @@ export async function createTerminalSurface(
       (e.key === "V" || e.key === "v")
     ) {
       e.preventDefault();
-      void clipboardRead().then((text) => {
-        if (text && surface.ptyId >= 0)
-          void invoke("write_pty", { ptyId: surface.ptyId, data: text });
-      });
+      void clipboardRead()
+        .then((text) => {
+          if (text && surface.ptyId >= 0) terminal.paste(text);
+        })
+        .catch((err) => console.warn("Clipboard read failed:", err));
       return false;
     }
 
@@ -751,8 +870,7 @@ export async function createTerminalSurface(
         e.preventDefault();
         void clipboardRead()
           .then((text) => {
-            if (text && surface.ptyId >= 0)
-              void invoke("write_pty", { ptyId: surface.ptyId, data: text });
+            if (text && surface.ptyId >= 0) terminal.paste(text);
           })
           .catch((err) => console.warn("Clipboard read failed:", err));
         return false;
@@ -760,9 +878,11 @@ export async function createTerminalSurface(
 
       // Cmd+key (no alt) — let App.svelte handle
       if (!alt && !shift) {
-        if (["n", "t", "d", "w", "b", "p", "k", "f", "g"].includes(k))
+        if (["n", "t", "d", "w", "b", "p", "k", "f", "g", "r"].includes(k))
           return false;
         if (k >= "1" && k <= "9") return false;
+        // Cmd+= / Cmd++ / Cmd+- for font size
+        if (k === "=" || k === "+" || k === "-") return false;
       }
       // Shift+Cmd+key
       if (shift && !alt) {
@@ -807,6 +927,9 @@ export async function createTerminalSurface(
           return false;
         if (k === "enter") return false;
         if (k === "[" || k === "]") return false;
+        // Ctrl+Shift+=  / Ctrl+Shift+- for font size.
+        // On Linux, Shift+= produces "+" and Shift+- produces "_".
+        if (k === "=" || k === "+" || k === "-" || k === "_") return false;
       }
     }
 
@@ -820,6 +943,12 @@ export async function createTerminalSurface(
   terminal.onResize(({ cols, rows }) => {
     if (surface.ptyId >= 0)
       void invoke("resize_pty", { ptyId: surface.ptyId, cols, rows });
+  });
+  terminal.onSelectionChange(() => {
+    if (terminal.hasSelection()) {
+      const text = terminal.getSelection();
+      if (text) void clipboardWrite(text);
+    }
   });
   // NOTE: We intentionally do NOT use terminal.onTitleChange() here.
   // xterm.js fires it with raw/partial escape sequence fragments (OSC 7 cwd data,
@@ -883,8 +1012,7 @@ export async function createTerminalSurface(
       shortcut: isMac ? "⌘V" : "Ctrl+Shift+V",
       action: () =>
         void clipboardRead().then((t) => {
-          if (t && surface.ptyId >= 0)
-            void invoke("write_pty", { ptyId: surface.ptyId, data: t });
+          if (t && surface.ptyId >= 0) terminal.paste(t);
         }),
     });
 
@@ -974,6 +1102,38 @@ export async function runDefinedCommand(
   workspaces.update((l) => [...l]);
 }
 
+const FONT_SIZE_MIN = 8;
+const FONT_SIZE_MAX = 32;
+
+/**
+ * Increase or decrease the terminal font size for all currently-mounted
+ * terminal surfaces. Persists the new size to config so it survives restarts.
+ * Also calls fitAddon.fit() on each terminal to recompute cols/rows for the
+ * new character cell size.
+ */
+export function adjustFontSize(delta: number): void {
+  const current = getConfig().fontSize ?? 14;
+  const next = Math.max(
+    FONT_SIZE_MIN,
+    Math.min(FONT_SIZE_MAX, current + delta),
+  );
+  if (next === current) return;
+  void saveConfig({ fontSize: next });
+  const wsList = get(workspaces);
+  for (const ws of wsList) {
+    for (const s of getAllSurfaces(ws)) {
+      if (isTerminalSurface(s)) {
+        s.terminal.options.fontSize = next;
+        try {
+          s.fitAddon.fit();
+        } catch {
+          // May fail if terminal is not attached to DOM yet — safe to ignore
+        }
+      }
+    }
+  }
+}
+
 /**
  * Drop the pending-restore flag without running anything. Keeps definedCommand
  * intact so future sessions still know what this pane was for.
@@ -1044,6 +1204,7 @@ export async function connectPty(
     extraEnv.GNAR_TERM_WORKSPACE_ID = ctx.workspaceId;
   }
 
+  const shellConfig = getConfig().shell || undefined;
   const deferred = ptyReady.get(surface.id);
   try {
     const ptyId = await invoke<number>("spawn_pty", {
@@ -1052,6 +1213,7 @@ export async function connectPty(
       cwd: effectiveCwd,
       onOutput,
       extraEnv,
+      shell: shellConfig ?? null,
     });
     surface.ptyId = ptyId;
     registerPtyForSurface(ptyId, surface);
@@ -1067,6 +1229,7 @@ export async function connectPty(
   } catch (err) {
     console.error("Failed to spawn PTY:", err);
     surface.ptyId = -1;
+    surface.spawnError = err instanceof Error ? err.message : String(err);
     deferred?.reject(err instanceof Error ? err : new Error(String(err)));
     ptyReady.delete(surface.id);
   }

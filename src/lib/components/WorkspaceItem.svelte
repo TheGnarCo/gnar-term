@@ -11,6 +11,8 @@
   import DragGrip from "./DragGrip.svelte";
   import { modLabel } from "../terminal-service";
   import { shortcutHint } from "../actions/shortcut-hint";
+  import { shortcutHintsActive } from "../stores/shortcut-hints";
+  import { tooltip } from "../actions/tooltip";
 
   $: isDisco = $theme.name === "Molly Disco";
   import { getAllSurfaces, getAllPanes } from "../types";
@@ -221,6 +223,8 @@
   export let dragActive = false;
   /** Mousedown handler fired when the drag grip is pressed. Drag origin, not row body. */
   export let onGripMouseDown: ((e: MouseEvent) => void) | undefined = undefined;
+  /** Sidebar position index for the ⌘N shortcut hint. When provided, overrides index-based hint. */
+  export let shortcutIdx: number | undefined = undefined;
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -229,7 +233,9 @@
   data-drag-idx={index}
   data-workspace-id={workspace.id}
   data-worktree={isManaged ? "true" : undefined}
-  use:shortcutHint={index < 9 ? `${modLabel}${index + 1}` : undefined}
+  use:shortcutHint={shortcutIdx !== undefined && shortcutIdx < 9
+    ? `${modLabel}${shortcutIdx + 1}`
+    : undefined}
   style="
     display: {dragActive ? 'none' : 'flex'};
     position: relative;
@@ -260,11 +266,17 @@
          createDragReorder's 5px threshold keeps taps as selects. -->
     <DragGrip
       theme={$theme}
-      visible={dragActive || (hovered && !$anyReorderActive)}
+      visible={dragActive ||
+        $shortcutHintsActive ||
+        (hovered && !$anyReorderActive)}
       {railColor}
       railOpacity={1}
       alwaysShowDots={true}
-      fadeRight={!(dragActive || (hovered && !$anyReorderActive))}
+      fadeRight={!(
+        dragActive ||
+        $shortcutHintsActive ||
+        (hovered && !$anyReorderActive)
+      )}
     />
     <!-- Drag-edge fade: continues the rail's dot pattern from the
          very left of the row into the row body for ~14px, dropping
@@ -301,7 +313,7 @@
   {/if}
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div on:click={onSelect} style="flex: 1; min-width: 0; padding-right: 24px;">
+  <div on:click={onSelect} style="flex: 1; min-width: 0;">
     <div
       style="padding: 4px 6px; display: flex; align-items: center; gap: 8px;"
     >
@@ -537,15 +549,24 @@
   {#if !isDashboardWs || isDashboardWorkspaceRow}
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <span
-      title="Close Workspace (⇧⌘W)"
+      use:tooltip={"Close Workspace (⇧⌘W)"}
       style="
         position: absolute;
         top: 50%; right: 6px;
         transform: translateY(-50%);
         color: {closeHovered ? $theme.danger : $theme.fgDim};
-        font-size: 14px; cursor: pointer;
-        opacity: {hovered ? '1' : '0'}; transition: opacity 0.15s;
-        padding: 0 2px;
+        background: {closeHovered
+        ? ($theme.bgHighlight ?? 'rgba(255,255,255,0.06)')
+        : 'transparent'};
+        border: 1px solid {$theme.border ?? 'transparent'};
+        border-radius: 4px;
+        font-size: 11px;
+        cursor: pointer;
+        padding: 2px 5px;
+        line-height: 1;
+        opacity: {hovered ? '1' : '0'};
+        -webkit-app-region: no-drag;
+        transition: opacity 0.15s, background 0.1s, color 0.1s;
       "
       on:click|stopPropagation={onClose}
       on:mouseenter={() => (closeHovered = true)}

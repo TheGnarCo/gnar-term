@@ -7,6 +7,9 @@
 
   let inputEl: HTMLInputElement;
   let query = "";
+  let regexEnabled = false;
+  let caseSensitive = false;
+  let wholeWord = false;
 
   function getSearchAddon() {
     const s = $activeSurface;
@@ -17,15 +20,33 @@
   function doSearch(direction: "next" | "prev") {
     const addon = getSearchAddon();
     if (!addon || !query) return;
-    const opts = { regex: false, caseSensitive: false, wholeWord: false };
+    const opts = { regex: regexEnabled, caseSensitive, wholeWord };
     if (direction === "next") addon.findNext(query, opts);
     else addon.findPrevious(query, opts);
+  }
+
+  function toggleRegex() {
+    regexEnabled = !regexEnabled;
+    doSearch("next");
+  }
+
+  function toggleCase() {
+    caseSensitive = !caseSensitive;
+    doSearch("next");
+  }
+
+  function toggleWord() {
+    wholeWord = !wholeWord;
+    doSearch("next");
   }
 
   function close() {
     const addon = getSearchAddon();
     if (addon) addon.clearDecorations();
     findBarVisible.set(false);
+    regexEnabled = false;
+    caseSensitive = false;
+    wholeWord = false;
     const s = $activeSurface;
     if (s && isTerminalSurface(s)) s.terminal.focus();
   }
@@ -116,6 +137,40 @@
         stroke-width="2"><polyline points="4,6 8,10 12,6" /></svg
       >
     </button>
+    <button
+      title="Use regular expression"
+      on:click={toggleRegex}
+      style="background: {regexEnabled
+        ? $theme.bg
+        : 'none'}; border: {regexEnabled
+        ? `1px solid ${$theme.border}`
+        : 'none'}; color: {regexEnabled
+        ? $theme.fg
+        : $theme.fgMuted}; cursor: pointer; padding: 2px 6px; border-radius: 3px; font-size: 12px; font-family: monospace; line-height: 1;"
+      >.*</button
+    >
+    <button
+      title="Match case"
+      on:click={toggleCase}
+      style="background: {caseSensitive
+        ? $theme.bg
+        : 'none'}; border: {caseSensitive
+        ? `1px solid ${$theme.border}`
+        : 'none'}; color: {caseSensitive
+        ? $theme.fg
+        : $theme.fgMuted}; cursor: pointer; padding: 2px 6px; border-radius: 3px; font-size: 12px; font-family: monospace; line-height: 1;"
+      >Aa</button
+    >
+    <button
+      title="Match whole word"
+      on:click={toggleWord}
+      style="background: {wholeWord ? $theme.bg : 'none'}; border: {wholeWord
+        ? `1px solid ${$theme.border}`
+        : 'none'}; color: {wholeWord
+        ? $theme.fg
+        : $theme.fgMuted}; cursor: pointer; padding: 2px 6px; border-radius: 3px; font-size: 12px; font-family: monospace; line-height: 1;"
+      >[W]</button
+    >
     <button
       title="Close (Esc)"
       on:click={close}

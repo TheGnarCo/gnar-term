@@ -24,6 +24,7 @@
   import SidebarActionButton from "./SidebarActionButton.svelte";
   import McpSidebarSection from "./McpSidebarSection.svelte";
   import SplitButton from "./SplitButton.svelte";
+  import ArchiveZone from "./ArchiveZone.svelte";
 
   const iconSvgMap: Record<string, string> = {
     plus: `<line x1="8" y1="3" x2="8" y2="13" /><line x1="3" y1="8" x2="13" y2="8" />`,
@@ -165,7 +166,7 @@
            4px left inset gives a dark strip between the sidebar's left edge
            and each row's rail. 8px top inset keeps the first row's rounded
            corner from butting up against the "+ New" chrome above. -->
-      <div style="flex: 1; overflow-y: auto; padding: 8px 0 0 4px;">
+      <div style="flex: 1; overflow-y: auto; padding: 8px 0 8px 4px;">
         <WorkspaceListBlock
           bind:this={workspaceListBlock}
           {onSwitchWorkspace}
@@ -191,6 +192,8 @@
           <McpSidebarSection {section} />
         {/each}
       </div>
+
+      <ArchiveZone />
     </div>
     <div
       class="sidebar-resize-handle"

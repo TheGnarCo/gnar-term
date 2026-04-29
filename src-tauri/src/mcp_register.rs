@@ -8,6 +8,7 @@
 //!
 //! All failures are logged to stderr and swallowed — they never crash the GUI.
 
+use serde::Serialize;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -28,12 +29,28 @@ pub fn detect_claude_code() -> bool {
     false
 }
 
+/// Typed struct for the JSON payload `claude mcp add-json` expects.
+///
+/// Using `serde_json` serialization instead of string interpolation prevents
+/// injection via control characters (newlines, nulls, etc.) in `command`.
+#[derive(Serialize)]
+struct McpPayload<'a> {
+    #[serde(rename = "type")]
+    kind: &'a str,
+    command: &'a str,
+    args: &'a [&'a str],
+    env: serde_json::Map<String, serde_json::Value>,
+}
+
 /// Build the JSON payload `claude mcp add-json` expects.
 pub fn build_payload(binary_path: &str) -> String {
-    format!(
-        "{{\"type\":\"stdio\",\"command\":\"{}\",\"args\":[\"--mcp-stdio\"],\"env\":{{}}}}",
-        binary_path.replace('\\', "\\\\").replace('"', "\\\"")
-    )
+    let payload = McpPayload {
+        kind: "stdio",
+        command: binary_path,
+        args: &["--mcp-stdio"],
+        env: serde_json::Map::new(),
+    };
+    serde_json::to_string(&payload).expect("McpPayload serialization is infallible")
 }
 
 /// Path to `~/.claude.json`.
@@ -82,9 +99,47 @@ fn register_via_cli(binary_path: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Reject write if `path` is a symlink (`symlink_metadata` succeeds and reports `is_symlink`).
+/// A missing file is not a symlink — that is fine.
+fn reject_if_symlink(path: &std::path::Path) -> Result<(), String> {
+    match std::fs::symlink_metadata(path) {
+        Ok(meta) if meta.file_type().is_symlink() => Err(format!(
+            "refusing to write: {} is a symlink",
+            path.display()
+        )),
+        _ => Ok(()), // either no entry yet, or a regular file — both fine
+    }
+}
+
+/// Verify that `path`'s resolved parent directory is inside the user's home dir.
+fn assert_parent_within_home(path: &std::path::Path) -> Result<(), String> {
+    let home = std::env::var("HOME").map_err(|_| "HOME not set".to_string())?;
+    let home_canonical =
+        std::fs::canonicalize(&home).map_err(|e| format!("failed to resolve HOME: {e}"))?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| format!("path has no parent: {}", path.display()))?;
+    let parent_canonical =
+        std::fs::canonicalize(parent).map_err(|e| format!("failed to resolve parent dir: {e}"))?;
+    if !parent_canonical.starts_with(&home_canonical) {
+        return Err(format!(
+            "refusing to write: {} is outside home directory",
+            path.display()
+        ));
+    }
+    Ok(())
+}
+
 /// Fallback: atomic direct write to `~/.claude.json`.
 fn register_via_direct_write(binary_path: &str) -> Result<(), String> {
     let path = claude_config_path().ok_or_else(|| "HOME not set".to_string())?;
+    let tmp = path.with_extension("json.tmp");
+
+    // F15: reject symlinks and paths outside home before any write.
+    reject_if_symlink(&path)?;
+    reject_if_symlink(&tmp)?;
+    assert_parent_within_home(&path)?;
+
     let existing: serde_json::Value = match std::fs::read_to_string(&path) {
         Ok(s) => serde_json::from_str(&s).unwrap_or(serde_json::json!({})),
         Err(_) => serde_json::json!({}),
@@ -111,7 +166,6 @@ fn register_via_direct_write(binary_path: &str) -> Result<(), String> {
         }),
     );
     let serialized = serde_json::to_string_pretty(&root).map_err(|e| format!("serialize: {e}"))?;
-    let tmp = path.with_extension("json.tmp");
     std::fs::write(&tmp, serialized).map_err(|e| format!("write temp: {e}"))?;
     std::fs::rename(&tmp, &path).map_err(|e| format!("rename: {e}"))?;
     Ok(())
@@ -153,5 +207,52 @@ mod tests {
         let p = build_payload(r"C:\Program Files\gnar-term\gnar-term.exe");
         let v: serde_json::Value = serde_json::from_str(&p).unwrap();
         assert_eq!(v["command"], r"C:\Program Files\gnar-term\gnar-term.exe");
+    }
+
+    // F36: serde_json serialization must survive control characters in the path
+    #[test]
+    fn payload_survives_newline_in_path() {
+        let p = build_payload("/usr/bin/evil\ninjected-key: injected-value");
+        let v: serde_json::Value = serde_json::from_str(&p).expect("must be valid JSON");
+        // The entire path including newline must be the command value — no injection
+        assert_eq!(v["command"], "/usr/bin/evil\ninjected-key: injected-value");
+        assert_eq!(v["type"], "stdio");
+    }
+
+    #[test]
+    fn payload_survives_null_byte_in_path() {
+        let p = build_payload("/usr/bin/foo\0bar");
+        let v: serde_json::Value = serde_json::from_str(&p).expect("must be valid JSON");
+        assert!(v["command"].as_str().unwrap().contains('\0'));
+    }
+
+    #[test]
+    fn payload_survives_quote_in_path() {
+        let p = build_payload(r#"/usr/bin/evil"}},"admin":true,"x""#);
+        let v: serde_json::Value = serde_json::from_str(&p).expect("must be valid JSON");
+        assert!(v["command"].as_str().unwrap().contains('"'));
+        // No extra keys at root from injection
+        assert!(v.get("admin").is_none());
+    }
+
+    // F15: reject_if_symlink returns Err for a real symlink
+    #[cfg(unix)]
+    #[test]
+    fn reject_if_symlink_rejects_symlinks() {
+        let dir = std::env::temp_dir().join(format!("mcp-reg-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let real = dir.join("real.json");
+        let link = dir.join("link.json");
+        std::fs::write(&real, "{}").unwrap();
+        let _ = std::fs::remove_file(&link);
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        assert!(
+            reject_if_symlink(&link).is_err(),
+            "symlink must be rejected"
+        );
+        // Non-existent and regular files are fine
+        assert!(reject_if_symlink(&dir.join("nonexistent.json")).is_ok());
+        assert!(reject_if_symlink(&real).is_ok());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

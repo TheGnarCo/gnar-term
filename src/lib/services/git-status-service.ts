@@ -51,13 +51,12 @@ interface ScriptResult {
 }
 
 async function runWithTimeout(
-  cwd: string,
-  command: string,
+  invocation: Promise<ScriptResult>,
   timeoutMs: number = 10000,
 ): Promise<string | null> {
   try {
     const result = await Promise.race([
-      invoke<ScriptResult>("run_script", { cwd, command }),
+      invocation,
       new Promise<null>((_, reject) =>
         setTimeout(() => reject(new Error("timeout")), timeoutMs),
       ),
@@ -175,15 +174,18 @@ let cwdChangeTimer: ReturnType<typeof setTimeout> | null = null;
 
 async function getHomeDir(): Promise<string | null> {
   if (homeDir) return homeDir;
-  const result = await runWithTimeout("/tmp", "echo $HOME", 2000);
-  homeDir = result?.trim() || null;
+  try {
+    const result = await invoke<string>("get_home");
+    homeDir = result?.trim() || null;
+  } catch {
+    homeDir = null;
+  }
   return homeDir;
 }
 
 async function detectGitRoot(cwd: string): Promise<string | null> {
   const result = await runWithTimeout(
-    cwd,
-    "git rev-parse --show-toplevel",
+    invoke<ScriptResult>("git_rev_parse_toplevel", { cwd }),
     5000,
   );
   const root = result?.trim() || null;
@@ -219,8 +221,7 @@ async function refreshGitStatus(
   }
 
   const raw = await runWithTimeout(
-    gitRoot,
-    "git status --porcelain=v1 -b",
+    invoke<ScriptResult>("git_status_short", { cwd: gitRoot }),
     5000,
   );
   if (!raw) {

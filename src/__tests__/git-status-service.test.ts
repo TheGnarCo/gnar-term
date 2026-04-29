@@ -238,24 +238,17 @@ describe("initGitStatus()", () => {
 
     const tauri = await import("@tauri-apps/api/core");
     const invokeMock = vi.mocked(tauri.invoke);
-    invokeMock.mockImplementation(async (cmd: string, args?: unknown) => {
+    invokeMock.mockImplementation(async (cmd: string, _args?: unknown) => {
       if (cmd === "get_pty_cwd") return "/repos/project-A";
-      if (cmd === "run_script") {
-        const a = args as { command?: string };
-        if (a?.command?.includes("echo $HOME"))
-          return { stdout: "/Users/x\n", stderr: "", exit_code: 0 };
-        if (a?.command?.includes("rev-parse --show-toplevel"))
-          return { stdout: "/repos/project-A\n", stderr: "", exit_code: 0 };
-        if (a?.command?.includes("status --porcelain=v1 -b"))
-          return {
-            stdout: "## branch-A...origin/main\n M file.ts\n",
-            stderr: "",
-            exit_code: 0,
-          };
-        if (a?.command?.includes("rev-parse --abbrev-ref HEAD"))
-          return { stdout: "branch-A\n", stderr: "", exit_code: 0 };
-        return { stdout: "", stderr: "", exit_code: 1 };
-      }
+      if (cmd === "get_home") return "/Users/x";
+      if (cmd === "git_rev_parse_toplevel")
+        return { stdout: "/repos/project-A\n", stderr: "", exit_code: 0 };
+      if (cmd === "git_status_short")
+        return {
+          stdout: "## branch-A...origin/main\n M file.ts\n",
+          stderr: "",
+          exit_code: 0,
+        };
       return undefined;
     });
 
@@ -305,25 +298,18 @@ describe("git status service: ensurePolling CWD-race resilience", () => {
         const a = args as { ptyId?: number };
         return a.ptyId === 1 ? "/repos/project-A" : "/repos/project-B";
       }
-      if (cmd === "run_script") {
-        const a = args as { cwd?: string; command?: string };
-        if (a.command?.includes("echo $HOME"))
-          return { stdout: "/Users/x\n", stderr: "", exit_code: 0 };
-        if (a.command?.includes("rev-parse --show-toplevel"))
-          return { stdout: `${a.cwd}\n`, stderr: "", exit_code: 0 };
-        if (a.command?.includes("status --porcelain=v1 -b")) {
-          const branch = a.cwd?.includes("project-A") ? "branch-A" : "branch-B";
-          return {
-            stdout: `## ${branch}...origin/main\n`,
-            stderr: "",
-            exit_code: 0,
-          };
-        }
-        if (a.command?.includes("rev-parse --abbrev-ref HEAD")) {
-          const branch = a.cwd?.includes("project-A") ? "branch-A" : "branch-B";
-          return { stdout: `${branch}\n`, stderr: "", exit_code: 0 };
-        }
-        return { stdout: "", stderr: "", exit_code: 1 };
+      if (cmd === "git_rev_parse_toplevel") {
+        const a = args as { cwd?: string };
+        return { stdout: `${a.cwd}\n`, stderr: "", exit_code: 0 };
+      }
+      if (cmd === "git_status_short") {
+        const a = args as { cwd?: string };
+        const branch = a.cwd?.includes("project-A") ? "branch-A" : "branch-B";
+        return {
+          stdout: `## ${branch}...origin/main\n`,
+          stderr: "",
+          exit_code: 0,
+        };
       }
       return undefined;
     });
@@ -381,36 +367,29 @@ describe("git status service: refreshes when the active workspace's cwd changes"
     activeWorkspaceIdx.set(0);
 
     let ptyCwd = "/repos/project-A";
-    const runScriptCalls: Array<{ cwd?: string; command?: string }> = [];
+    const statusShortCalls: Array<{ cwd?: string }> = [];
     const tauri = await import("@tauri-apps/api/core");
     const invokeMock = vi.mocked(tauri.invoke);
     invokeMock.mockImplementation(async (cmd: string, args?: unknown) => {
       if (cmd === "get_home") return "/Users/x";
       if (cmd === "get_pty_cwd") return ptyCwd;
-      if (cmd === "run_script") {
-        const a = args as { cwd?: string; command?: string };
-        runScriptCalls.push({ cwd: a.cwd, command: a.command });
-        if (a.command?.includes("echo $HOME"))
-          return { stdout: "/Users/x\n", stderr: "", exit_code: 0 };
-        if (a.command?.includes("rev-parse --show-toplevel"))
-          return { stdout: `${a.cwd}\n`, stderr: "", exit_code: 0 };
-        if (a.command?.includes("status --porcelain=v1 -b")) {
-          const branch = a.cwd?.includes("project-A")
-            ? "branch-A"
-            : a.cwd?.includes("project-B")
-              ? "branch-B"
-              : "branch-unknown";
-          return {
-            stdout: `## ${branch}...origin/main\n`,
-            stderr: "",
-            exit_code: 0,
-          };
-        }
-        if (a.command?.includes("rev-parse --abbrev-ref HEAD")) {
-          const branch = a.cwd?.includes("project-A") ? "branch-A" : "branch-B";
-          return { stdout: `${branch}\n`, stderr: "", exit_code: 0 };
-        }
-        return { stdout: "", stderr: "", exit_code: 1 };
+      if (cmd === "git_rev_parse_toplevel") {
+        const a = args as { cwd?: string };
+        return { stdout: `${a.cwd}\n`, stderr: "", exit_code: 0 };
+      }
+      if (cmd === "git_status_short") {
+        const a = args as { cwd?: string };
+        statusShortCalls.push({ cwd: a.cwd });
+        const branch = a.cwd?.includes("project-A")
+          ? "branch-A"
+          : a.cwd?.includes("project-B")
+            ? "branch-B"
+            : "branch-unknown";
+        return {
+          stdout: `## ${branch}...origin/main\n`,
+          stderr: "",
+          exit_code: 0,
+        };
       }
       return undefined;
     });
@@ -420,8 +399,8 @@ describe("git status service: refreshes when the active workspace's cwd changes"
     eventBus.emit({ type: "workspace:activated", id: "A", previousId: null });
     await drain(100);
 
-    const initialStatus = runScriptCalls.find((c) =>
-      c.command?.includes("status --porcelain=v1 -b"),
+    const initialStatus = statusShortCalls.find((c) =>
+      c.cwd?.includes("project-A"),
     );
     expect(initialStatus?.cwd).toContain("project-A");
     const initialItems = get(statusRegistry.store);
@@ -439,10 +418,8 @@ describe("git status service: refreshes when the active workspace's cwd changes"
     await vi.advanceTimersByTimeAsync(600);
     await drain(100);
 
-    const statusRunsAgainstB = runScriptCalls.filter(
-      (c) =>
-        c.command?.includes("status --porcelain=v1 -b") &&
-        c.cwd?.includes("project-B"),
+    const statusRunsAgainstB = statusShortCalls.filter((c) =>
+      c.cwd?.includes("project-B"),
     );
     expect(statusRunsAgainstB.length).toBeGreaterThan(0);
 
@@ -498,43 +475,18 @@ describe("git status service: stale-data clear (H4)", () => {
       ] as unknown as Workspace[]);
       activeWorkspaceIdx.set(0);
 
-      const okResponses: Record<
-        string,
-        { stdout: string; stderr: string; exit_code: number } | null
-      > = {
-        "echo $HOME": { stdout: "/Users/x\n", stderr: "", exit_code: 0 },
-        "rev-parse --show-toplevel": {
-          stdout: "/tmp/repo\n",
-          stderr: "",
-          exit_code: 0,
-        },
-        "status --porcelain=v1 -b": {
-          stdout: "## main...origin/main\n M file.ts\n",
-          stderr: "",
-          exit_code: 0,
-        },
-        "rev-parse --abbrev-ref HEAD": {
-          stdout: "main\n",
-          stderr: "",
-          exit_code: 0,
-        },
-        "gh pr view": { stdout: "{}", stderr: "", exit_code: 1 },
-      };
-
       const tauri = await import("@tauri-apps/api/core");
       const invokeMock = vi.mocked(tauri.invoke);
-      invokeMock.mockImplementation(async (cmd: string, args?: unknown) => {
+      invokeMock.mockImplementation(async (cmd: string, _args?: unknown) => {
         if (cmd === "get_home") return "/Users/x";
-        if (cmd === "run_script") {
-          const a = args as { command?: string };
-          const key = Object.keys(okResponses).find((k) =>
-            a?.command?.includes(k),
-          );
-          if (!key) return null;
-          const val = okResponses[key];
-          if (val === null) throw new Error("failure");
-          return val;
-        }
+        if (cmd === "git_rev_parse_toplevel")
+          return { stdout: "/tmp/repo\n", stderr: "", exit_code: 0 };
+        if (cmd === "git_status_short")
+          return {
+            stdout: "## main...origin/main\n M file.ts\n",
+            stderr: "",
+            exit_code: 0,
+          };
         return undefined;
       });
 
@@ -566,19 +518,13 @@ describe("git status service: stale-data clear (H4)", () => {
         ),
       ).toBe(true);
 
-      invokeMock.mockImplementation(async (cmd: string, args?: unknown) => {
+      // Second pass: git_rev_parse_toplevel still succeeds (same root) but
+      // git_status_short now fails — branch+dirty items should be cleared.
+      invokeMock.mockImplementation(async (cmd: string, _args?: unknown) => {
         if (cmd === "get_home") return "/Users/x";
-        if (cmd === "run_script") {
-          const a = args as { command?: string };
-          if (a?.command?.includes("rev-parse --show-toplevel")) {
-            return {
-              stdout: "/tmp/repo\n",
-              stderr: "",
-              exit_code: 0,
-            };
-          }
-          return null;
-        }
+        if (cmd === "git_rev_parse_toplevel")
+          return { stdout: "/tmp/repo\n", stderr: "", exit_code: 0 };
+        // git_status_short intentionally absent — returns undefined → null in runWithTimeout
         return undefined;
       });
 

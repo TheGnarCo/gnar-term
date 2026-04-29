@@ -14,6 +14,7 @@ mod gh_commands;
 pub mod git_helpers;
 mod git_info;
 mod git_ops;
+mod git_status_ops;
 mod git_worktree;
 pub mod mcp_bridge;
 pub mod mcp_register;
@@ -1884,7 +1885,9 @@ pub fn run() {
             git_info::git_diff,
             gh_commands::gh_list_prs,
             gh_commands::gh_list_issues,
-            gh_commands::gh_available
+            gh_commands::gh_available,
+            git_status_ops::git_rev_parse_toplevel,
+            git_status_ops::git_status_short
         ])
         .setup(|app| {
             // Set window title from CLI --title flag

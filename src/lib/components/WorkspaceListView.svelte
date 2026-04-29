@@ -13,7 +13,11 @@
   import { theme } from "../stores/theme";
   import { getAllSurfaces } from "../types";
   import { tabDragState } from "../services/tab-drag";
-  import { reorderContext, anyReorderActive } from "../stores/ui";
+  import {
+    reorderContext,
+    anyReorderActive,
+    metaPreviewActive,
+  } from "../stores/ui";
   import { createDragReorder } from "../actions/drag-reorder";
   import {
     detectWorkspacePaneDrop,
@@ -232,7 +236,7 @@
     tabDrag.dropTarget.groupId === scopeId
       ? tabDrag.dropTarget
       : null;
-  $: effectiveActive = active || tabDragToGroup !== null;
+  $: effectiveActive = active || tabDragToGroup !== null || $metaPreviewActive;
   // null source idx → every row's idx !== null → all rows show sibling overlay
   $: effectiveSourceIdx = active ? sourceIdx : (null as number | null);
   $: effectiveIndicator = active

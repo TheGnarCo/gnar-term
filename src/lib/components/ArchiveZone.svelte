@@ -3,6 +3,7 @@
   import {
     contextMenu,
     anyReorderActive,
+    metaPreviewActive,
     showConfirmPrompt,
   } from "../stores/ui";
   import { theme } from "../stores/theme";
@@ -26,11 +27,20 @@
   }
 
   function onKeyDown(e: KeyboardEvent) {
-    if (e.key === "Meta")
+    if (e.key === "Meta") {
       archiveZoneEl?.setAttribute("data-drag-preview", "true");
+      metaPreviewActive.set(true);
+    }
   }
   function onKeyUp(e: KeyboardEvent) {
-    if (e.key === "Meta") archiveZoneEl?.removeAttribute("data-drag-preview");
+    if (e.key === "Meta") {
+      archiveZoneEl?.removeAttribute("data-drag-preview");
+      metaPreviewActive.set(false);
+    }
+  }
+  function onBlur() {
+    archiveZoneEl?.removeAttribute("data-drag-preview");
+    metaPreviewActive.set(false);
   }
 
   $: if (archiveZoneEl) {
@@ -146,7 +156,7 @@
   }
 </script>
 
-<svelte:window on:keydown={onKeyDown} on:keyup={onKeyUp} />
+<svelte:window on:keydown={onKeyDown} on:keyup={onKeyUp} on:blur={onBlur} />
 
 <div data-archive-zone class="archive-zone" bind:this={archiveZoneEl}>
   <button

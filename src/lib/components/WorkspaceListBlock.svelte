@@ -19,7 +19,12 @@
   import { derived, get } from "svelte/store";
   import { theme } from "../stores/theme";
   import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
-  import { contextMenu, reorderContext, anyReorderActive } from "../stores/ui";
+  import {
+    contextMenu,
+    reorderContext,
+    anyReorderActive,
+    metaPreviewActive,
+  } from "../stores/ui";
   import { confirmAndCloseWorkspace } from "../services/worktree-service";
   import {
     rootRowOrder,
@@ -373,7 +378,8 @@
   $: tabDrag = $tabDragState;
   $: tabDragToRoot =
     tabDrag?.dropTarget?.kind === "new-workspace" ? tabDrag.dropTarget : null;
-  $: effectiveActive = dragActive || tabDragToRoot !== null;
+  $: effectiveActive =
+    dragActive || tabDragToRoot !== null || $metaPreviewActive;
   // null source idx → every row's idx !== null → all rows show sibling overlay
   $: effectiveDragSourceIdx = dragActive
     ? dragSourceIdx

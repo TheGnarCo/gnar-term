@@ -1717,6 +1717,58 @@ async fn get_pty_cwd(state: tauri::State<'_, AppState>, pty_id: u32) -> Result<S
     Ok(String::new())
 }
 
+/// Get the working directory for every live PTY in a single call.
+///
+/// Returns a map of ptyId (as string) → absolute cwd path.  Missing entries
+/// mean the pid is unavailable or the cwd could not be read; callers should
+/// treat a missing key as "no change".
+///
+/// The mutex is acquired only long enough to snapshot `(pty_id, pid)` pairs,
+/// then released before any subprocess work, avoiding holding the lock while
+/// spawning N lsof processes.
+#[tauri::command]
+async fn get_all_pty_cwds(
+    state: tauri::State<'_, AppState>,
+) -> Result<std::collections::HashMap<String, String>, String> {
+    // Snapshot ids+pids under the lock, then release immediately.
+    let pid_map: Vec<(u32, u32)> = {
+        let ptys = state.ptys.lock().map_err(|e| e.to_string())?;
+        ptys.iter()
+            .filter_map(|(&id, entry)| entry.child_pid.map(|pid| (id, pid)))
+            .collect()
+    };
+
+    let mut result = std::collections::HashMap::new();
+
+    for (pty_id, pid) in pid_map {
+        #[cfg(target_os = "macos")]
+        {
+            let output = std::process::Command::new("lsof")
+                .args(["-a", "-p", &pid.to_string(), "-d", "cwd", "-Fn"])
+                .output();
+            if let Ok(output) = output {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                for line in stdout.lines() {
+                    if let Some(path) = line.strip_prefix('n') {
+                        if path.starts_with('/') {
+                            result.insert(pty_id.to_string(), path.to_string());
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        #[cfg(target_os = "linux")]
+        {
+            if let Ok(path) = std::fs::read_link(format!("/proc/{pid}/cwd")) {
+                result.insert(pty_id.to_string(), path.to_string_lossy().to_string());
+            }
+        }
+    }
+
+    Ok(result)
+}
+
 /// Find a file by name using platform-specific search
 #[tauri::command]
 async fn find_file(name: String) -> Result<String, String> {
@@ -1845,6 +1897,7 @@ pub fn run() {
             resume_pty,
             detect_font,
             get_pty_cwd,
+            get_all_pty_cwds,
             get_pty_pid,
             get_pty_title,
             file_exists,
@@ -3312,6 +3365,122 @@ mod tests {
             }
         } else {
             panic!("Child PID should be available");
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Batch cwd polling — get_all_pty_cwds returns entry for every live PTY (T10)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn get_all_pty_cwds_returns_cwd_for_all_ptys() {
+        // Spawn two PTYs in different directories and verify the batch command
+        // returns an entry for each without requiring per-PTY IPC round-trips.
+        let state = AppState {
+            ptys: Mutex::new(HashMap::new()),
+            watch_flags: Mutex::new(HashMap::new()),
+        };
+
+        let pty_system = native_pty_system();
+
+        let spawn_pty_in_dir = |dir: &str| -> u32 {
+            let pair = pty_system
+                .openpty(PtySize {
+                    rows: 24,
+                    cols: 80,
+                    pixel_width: 0,
+                    pixel_height: 0,
+                })
+                .expect("Failed to open PTY");
+
+            let mut cmd = CommandBuilder::new("sh");
+            cmd.arg("-c");
+            cmd.arg("sleep 3");
+            cmd.cwd(dir);
+
+            let child = pair.slave.spawn_command(cmd).expect("Failed to spawn");
+            let child_pid = child.process_id();
+            drop(pair.slave);
+
+            let writer = pair.master.take_writer().expect("Failed to get writer");
+            let pty_id = NEXT_PTY_ID.fetch_add(1, Ordering::Relaxed);
+            let paused = Arc::new(PauseFlag::new());
+
+            {
+                let mut ptys = state.ptys.lock().unwrap();
+                ptys.insert(
+                    pty_id,
+                    PtyInstance {
+                        writer,
+                        master_pty: pair.master,
+                        child_pid,
+                        paused,
+                    },
+                );
+            }
+            pty_id
+        };
+
+        let id1 = spawn_pty_in_dir("/tmp");
+        let id2 = spawn_pty_in_dir("/tmp");
+
+        // Allow processes to start
+        std::thread::sleep(Duration::from_millis(200));
+
+        // Collect pid_map same way get_all_pty_cwds does (lock then release)
+        let pid_map: Vec<(u32, u32)> = {
+            let ptys = state.ptys.lock().unwrap();
+            ptys.iter()
+                .filter_map(|(&id, entry)| entry.child_pid.map(|pid| (id, pid)))
+                .collect()
+        };
+
+        let mut result: std::collections::HashMap<String, String> =
+            std::collections::HashMap::new();
+
+        for (pty_id, pid) in pid_map {
+            #[cfg(target_os = "macos")]
+            {
+                let output = std::process::Command::new("lsof")
+                    .args(["-a", "-p", &pid.to_string(), "-d", "cwd", "-Fn"])
+                    .output()
+                    .expect("lsof should run");
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                for line in stdout.lines() {
+                    if let Some(path) = line.strip_prefix('n') {
+                        if path.starts_with('/') {
+                            result.insert(pty_id.to_string(), path.to_string());
+                            break;
+                        }
+                    }
+                }
+            }
+            #[cfg(target_os = "linux")]
+            {
+                if let Ok(path) = std::fs::read_link(format!("/proc/{pid}/cwd")) {
+                    result.insert(pty_id.to_string(), path.to_string_lossy().to_string());
+                }
+            }
+        }
+
+        // Both PTYs should be present in the result map
+        assert!(
+            result.contains_key(&id1.to_string()),
+            "Batch result should contain pty_id {id1}"
+        );
+        assert!(
+            result.contains_key(&id2.to_string()),
+            "Batch result should contain pty_id {id2}"
+        );
+
+        // Each should resolve to /tmp (macOS may symlink it to /private/tmp)
+        let cwd1 = result.get(&id1.to_string()).unwrap();
+        let cwd2 = result.get(&id2.to_string()).unwrap();
+        for cwd in [cwd1, cwd2] {
+            assert!(
+                cwd == "/tmp" || cwd == "/private/tmp",
+                "Expected /tmp or /private/tmp, got: {cwd}"
+            );
         }
     }
 

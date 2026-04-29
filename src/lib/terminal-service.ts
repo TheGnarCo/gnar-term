@@ -596,35 +596,40 @@ export async function setupListeners() {
 const pendingRunningTitles = new Map<number, ReturnType<typeof setTimeout>>();
 
 // --- CWD Polling Fallback ---
-// For shells that don't emit OSC 7, poll get_pty_cwd periodically
+// For shells that don't emit OSC 7, poll get_pty_cwd periodically.
+// Uses get_all_pty_cwds to batch all PTYs into a single IPC round-trip,
+// then applies a single workspaces.update() only when at least one cwd changed.
 let cwdPollTimer: ReturnType<typeof setInterval> | null = null;
 
 export function startCwdPolling() {
   if (cwdPollTimer) return;
   cwdPollTimer = setInterval(() => {
-    const wsList = get(workspaces);
-    for (const ws of wsList) {
-      for (const s of getAllSurfaces(ws)) {
-        if (isTerminalSurface(s) && s.ptyId >= 0) {
-          invoke<string>("get_pty_cwd", { ptyId: s.ptyId })
-            .then((cwd) => {
-              if (cwd && cwd !== s.cwd) {
-                s.cwd = cwd;
-                const basename = cwd.split("/").pop() || cwd;
-                if (!s.title || s.title.startsWith("Shell ")) {
-                  s.title = basename || "~";
-                }
-                // Notify subscribers on ANY cwd change, not only when
-                // the title also changed — otherwise sidebar consumers
-                // that react to cwd (e.g. the core git status service)
-                // stay stuck on the cwd they first observed.
-                workspaces.update((l) => [...l]);
+    invoke<Record<string, string>>("get_all_pty_cwds")
+      .then((cwdMap) => {
+        const wsList = get(workspaces);
+        let anyChanged = false;
+        for (const ws of wsList) {
+          for (const s of getAllSurfaces(ws)) {
+            if (!isTerminalSurface(s) || s.ptyId < 0) continue;
+            const cwd = cwdMap[String(s.ptyId)];
+            if (cwd && cwd !== s.cwd) {
+              s.cwd = cwd;
+              const basename = cwd.split("/").pop() || cwd;
+              if (!s.title || s.title.startsWith("Shell ")) {
+                s.title = basename || "~";
               }
-            })
-            .catch(() => {});
+              anyChanged = true;
+            }
+          }
         }
-      }
-    }
+        // Notify subscribers once per tick only if something actually changed.
+        // Returning the same array reference (l) is sufficient — Svelte calls
+        // all subscribers on any .update() invocation regardless.
+        if (anyChanged) {
+          workspaces.update((l) => l);
+        }
+      })
+      .catch(() => {});
   }, 5000); // Poll every 5 seconds
 }
 

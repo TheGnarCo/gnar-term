@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { inputStyle } from "../../utils/section-styles";
+
   export let settings: Record<string, unknown>;
   export let onChange: (key: string, value: unknown) => void;
   export let theme: { fg: string; fgDim: string; bg: string; border: string };
@@ -63,8 +65,7 @@
 
   let newCommands: Record<string, string> = {};
 
-  const inputStyle = (extra = "") =>
-    `background: ${theme.bg}; color: ${theme.fg}; border: 1px solid ${theme.border}; border-radius: 4px; padding: 3px 8px; font-size: 11px; font-family: monospace; ${extra}`;
+  $: getInputStyle = inputStyle(theme, 11);
 </script>
 
 <div class="hooks-section">
@@ -123,7 +124,7 @@
               bind:value={newCommands[event]}
               aria-label={`Command for ${event} hook`}
               placeholder="command to run"
-              style={inputStyle("flex: 1;")}
+              style={getInputStyle("flex: 1;")}
               on:keydown={(e) => {
                 if (e.key === "Enter") {
                   addHook(event, newCommands[event] ?? "");

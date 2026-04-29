@@ -13,86 +13,12 @@
   import { shortcutHint } from "../actions/shortcut-hint";
   import { shortcutHintsActive } from "../stores/shortcut-hints";
   import { tooltip } from "../actions/tooltip";
+  import { discoEmojiFor, discoColorFor } from "../utils/disco-decoration";
 
   $: isDisco = $theme.name === "Molly Disco";
   import { getAllSurfaces, getAllPanes } from "../types";
   import type { Workspace } from "../types";
   import { workspaceSurfaceMap } from "../services/workspace-service";
-
-  const discoEmojis = [
-    "✨",
-    "🦄",
-    "🌈",
-    "💜",
-    "🪩",
-    "⚡",
-    "💫",
-    "🔮",
-    "🎀",
-    "💎",
-    "🌸",
-    "🍭",
-    "🫧",
-    "💗",
-    "🦋",
-    "🎠",
-    "🧚",
-    "💖",
-    "🌺",
-    "🎵",
-    "🩵",
-    "🪻",
-    "🎪",
-    "🧸",
-    "🌟",
-    "💐",
-    "🩷",
-    "🏄",
-    "🐬",
-    "🌊",
-    "🎨",
-    "🧜",
-    "🫶",
-    "💕",
-    "🌙",
-    "🐾",
-    "🍬",
-    "🎶",
-    "🌻",
-    "🐱",
-    "💝",
-    "🎈",
-    "🪼",
-    "🦩",
-    "🫀",
-    "🧁",
-    "🍩",
-    "🎯",
-  ];
-  const discoColors = [
-    "#e91e63",
-    "#c026d3",
-    "#2979ff",
-    "#00bfa5",
-    "#ff4081",
-    "#e040fb",
-    "#448aff",
-    "#1de9b6",
-    "#ff9100",
-    "#18ffff",
-  ];
-
-  // Stable emoji per workspace based on id hash
-  function discoEmojiFor(id: string): string {
-    let h = 0;
-    for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
-    return discoEmojis[Math.abs(h) % discoEmojis.length] ?? "";
-  }
-  function discoColorFor(id: string): string {
-    let h = 0;
-    for (let i = 0; i < id.length; i++) h = (h * 37 + id.charCodeAt(i)) | 0;
-    return discoColors[Math.abs(h) % discoColors.length] ?? "";
-  }
 
   export let workspace: Workspace;
   export let index: number;
@@ -311,9 +237,19 @@
       "
     ></div>
   {/if}
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div on:click={onSelect} style="flex: 1; min-width: 0;">
+  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+  <div
+    role="button"
+    tabindex="0"
+    on:click={onSelect}
+    on:keydown={(e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        onSelect();
+      }
+    }}
+    style="flex: 1; min-width: 0;"
+  >
     <div
       style="padding: 4px 6px; display: flex; align-items: center; gap: 8px;"
     >
@@ -379,17 +315,16 @@
           </span>
         {/if}
         {#if dashboardHint}
-          <!-- svelte-ignore a11y_click_events_have_key_events -->
-          <!-- svelte-ignore a11y_no_static_element_interactions -->
-          <span
+          <button
             data-workspace-dashboard-icon
             data-dashboard-id={dashboardHint.id}
-            title="Open owning dashboard"
+            aria-label="Open owning dashboard"
             on:click|stopPropagation={() => dashboardHint?.onClick()}
             style="
               flex-shrink: 0; display: inline-flex; align-items: center;
               justify-content: center; width: 14px; height: 14px;
               color: {dashboardHint.color ?? $theme.fgDim}; cursor: pointer;
+              background: none; border: none; padding: 0;
             "
           >
             <svg
@@ -409,7 +344,7 @@
               <rect x="14" y="12" width="7" height="9" />
               <rect x="3" y="16" width="7" height="5" />
             </svg>
-          </span>
+          </button>
         {/if}
         {#if dashboardWorkspaceIcon}
           <span
@@ -459,12 +394,15 @@
 
       {#if !hideStatusBadges}
         {#if agentBadges.length > 0 && agentBadges[0]}
+          {@const chipTitle = [latestNotification].filter(Boolean).join(" — ")}
           <span
             data-agent-presence-chip
-            title={[latestNotification].filter(Boolean).join(" — ")}
+            title={chipTitle}
+            aria-label={chipTitle || "Agent active"}
             style="display: inline-flex; align-items: center; padding: 0 3px; flex-shrink: 0;"
           >
             <span
+              aria-hidden="true"
               style="width: 7px; height: 7px; border-radius: 50%; background: {agentChipColor}; box-shadow: 0 0 0 1px color-mix(in srgb, {agentChipColor} 35%, transparent);"
             ></span>
           </span>
@@ -547,9 +485,9 @@
        notification rows stack below the title. The content column
        reserves 24px on the right to keep text from crashing into it. -->
   {#if !isDashboardWs || isDashboardWorkspaceRow}
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <span
+    <button
       use:tooltip={"Close Workspace (⇧⌘W)"}
+      aria-label="Close workspace"
       style="
         position: absolute;
         top: 50%; right: 6px;
@@ -570,7 +508,7 @@
       "
       on:click|stopPropagation={onClose}
       on:mouseenter={() => (closeHovered = true)}
-      on:mouseleave={() => (closeHovered = false)}>×</span
+      on:mouseleave={() => (closeHovered = false)}>×</button
     >
   {/if}
 </div>

@@ -21,7 +21,6 @@ import {
   registerDashboardWorkspaceType,
   unregisterDashboardWorkspaceType,
   spawnOrNavigate,
-  getDashboardEntry,
   dashboardWorkspaceRegistry,
   clearDashboardRegistry,
 } from "../lib/services/dashboard-workspace-service";
@@ -63,16 +62,16 @@ describe("unregisterDashboardWorkspaceType", () => {
   });
 });
 
-describe("getDashboardEntry", () => {
+describe("getDashboardEntry (via dashboardWorkspaceRegistry)", () => {
   beforeEach(() => clearDashboardRegistry());
 
   it("returns undefined for unknown id", () => {
-    expect(getDashboardEntry("ext:unknown")).toBeUndefined();
+    expect(get(dashboardWorkspaceRegistry).get("ext:unknown")).toBeUndefined();
   });
 
   it("returns entry after registration", () => {
     registerDashboardWorkspaceType(makeEntry("ext:foo"));
-    expect(getDashboardEntry("ext:foo")?.label).toBe("Foo");
+    expect(get(dashboardWorkspaceRegistry).get("ext:foo")?.label).toBe("Foo");
   });
 });
 

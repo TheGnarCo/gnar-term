@@ -87,6 +87,40 @@ export function detectWorkspacePaneDrop(
   return null;
 }
 
+/**
+ * Create (or retrieve) the `.ws-drag-deny` overlay element inside a drag
+ * ghost element. Appended once and reused; call `removeDragDenyOverlay` when
+ * the deny condition clears.
+ */
+export function createDragDenyOverlay(ghostEl: HTMLElement): void {
+  const existing = ghostEl.querySelector(".ws-drag-deny") as HTMLElement | null;
+  if (!existing) {
+    const el = document.createElement("div");
+    el.className = "ws-drag-deny";
+    Object.assign(el.style, {
+      position: "absolute",
+      inset: "0",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "rgba(200,30,30,0.75)",
+      borderRadius: "4px",
+      fontSize: "16px",
+      color: "white",
+      fontWeight: "bold",
+      pointerEvents: "none",
+    });
+    el.textContent = "✕";
+    ghostEl.appendChild(el);
+  }
+  document.body.style.cursor = "not-allowed";
+}
+
+export function removeDragDenyOverlay(ghostEl: HTMLElement): void {
+  ghostEl.querySelector(".ws-drag-deny")?.remove();
+  document.body.style.cursor = "grabbing";
+}
+
 export function detectTabBarDropForWorkspace(
   x: number,
   y: number,

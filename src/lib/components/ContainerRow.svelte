@@ -19,6 +19,7 @@
   import { slide } from "svelte/transition";
   import { theme } from "../stores/theme";
   import { reorderContext } from "../stores/ui";
+  import { workspaces } from "../stores/workspace";
   import DragGrip from "./DragGrip.svelte";
   import DefaultWorkspaceListView from "./WorkspaceListView.svelte";
   import type { Workspace } from "../types";
@@ -105,12 +106,25 @@
   $: rowHovered = mouseOverContainer;
   $: railBorderColor =
     hasActiveChild && collapsed ? color : ($theme.border ?? "transparent");
+
+  // Non-dashboard count: dashboards don't count as real nested workspaces for
+  // the purposes of showing the toggle button and auto-expand/collapse.
+  $: nonDashboardCount = $workspaces.filter(
+    (ws) =>
+      filterIds.has(ws.id) &&
+      (ws.metadata as Record<string, unknown> | undefined)?.isDashboard !==
+        true,
+  ).length;
+
   let collapsed = false;
-  let prevFilterIds = filterIds;
-  $: if (filterIds !== prevFilterIds) {
-    if (filterIds.size > prevFilterIds.size) collapsed = false;
-    else if (filterIds.size === 0) collapsed = true;
-    prevFilterIds = filterIds;
+  let prevNonDashboardCount = -1;
+  $: {
+    const count = nonDashboardCount;
+    if (prevNonDashboardCount >= 0) {
+      if (count > prevNonDashboardCount) collapsed = false;
+      else if (count === 0) collapsed = true;
+    }
+    prevNonDashboardCount = count;
   }
 
   $: WorkspaceListViewResolved = (workspaceListViewComponent ??
@@ -156,7 +170,7 @@
           <slot name="banner-end" />
         </div>
         <slot name="banner-subtitle" />
-        {#if $$slots["btn-row"] && filterIds.size > 0}
+        {#if $$slots["btn-row"] && nonDashboardCount > 0}
           <div class="container-btn-row">
             <slot
               name="btn-row"
@@ -167,10 +181,10 @@
         {/if}
       </div>
     </div>
-    {#if !collapsed && filterIds.size > 0}
+    {#if !collapsed && nonDashboardCount > 0}
       <div
         data-container-nested={scopeId}
-        data-nested-count={filterIds.size}
+        data-nested-count={nonDashboardCount}
         style="display: flex; flex-direction: column;"
         transition:slide={{ duration: 200 }}
       >
@@ -301,7 +315,7 @@
             <slot name="banner-end" {bannerHovered} {collapsed} />
           </div>
           <slot name="banner-subtitle" {bannerHovered} />
-          {#if $$slots["btn-row"] && filterIds.size > 0}
+          {#if $$slots["btn-row"] && nonDashboardCount > 0}
             <div class="container-btn-row">
               <slot
                 name="btn-row"
@@ -312,10 +326,10 @@
           {/if}
         </div>
       </div>
-      {#if !collapsed && filterIds.size > 0}
+      {#if !collapsed && nonDashboardCount > 0}
         <div
           data-container-nested={scopeId}
-          data-nested-count={filterIds.size}
+          data-nested-count={nonDashboardCount}
           style="display: flex; flex-direction: column;"
           transition:slide={{ duration: 200 }}
         >

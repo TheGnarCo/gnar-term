@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { tick } from "svelte";
 import { render, cleanup, fireEvent } from "@testing-library/svelte";
 
@@ -40,6 +40,12 @@ Element.prototype.animate = vi.fn().mockImplementation(() => {
 
 import ContainerRowWithSlot from "./container-row-with-slot.svelte";
 import WorkspaceListViewStub from "./workspace-list-view-stub.svelte";
+import { workspaces } from "../lib/stores/workspace";
+
+// Seed the workspaces store so nonDashboardCount reflects filterIds correctly.
+function makeWs(id: string) {
+  return { id, name: id, panes: [], metadata: {} };
+}
 
 const baseProps = {
   color: "#4a90d9",
@@ -49,7 +55,11 @@ const baseProps = {
 };
 
 describe("ContainerRow collapse/expand", () => {
-  afterEach(() => cleanup());
+  beforeEach(() => workspaces.set([makeWs("ws-1"), makeWs("ws-2")] as never[]));
+  afterEach(() => {
+    workspaces.set([]);
+    cleanup();
+  });
 
   it("is expanded by default and collapses on chevron click", async () => {
     const { container } = render(ContainerRowWithSlot, { props: baseProps });

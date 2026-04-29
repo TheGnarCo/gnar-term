@@ -2,7 +2,6 @@
   import type { Component } from "svelte";
   import { theme } from "../stores/theme";
   import { secondarySidebarVisible, secondarySidebarWidth } from "../stores/ui";
-  import { dragResize } from "../actions/drag-resize";
   import {
     sidebarTabStore,
     sidebarActionStore,
@@ -14,8 +13,8 @@
   import { secondarySections } from "../stores/mcp-sidebar";
   import ExtensionWrapper from "./ExtensionWrapper.svelte";
   import McpSidebarSection from "./McpSidebarSection.svelte";
+  import SidebarResizeHandle from "./SidebarResizeHandle.svelte";
 
-  let dragging = false;
   let activeTabId: string | null = null;
 
   // Auto-select first tab when tabs change
@@ -59,33 +58,22 @@
       flex-shrink: 0;
     "
   >
-    <div
-      class="sidebar-resize-handle"
-      style="
-      width: 4px; cursor: col-resize; flex-shrink: 0;
-      background: {dragging ? $theme.accent : $theme.sidebarBorder};
-      transition: background 0.15s;
-    "
-      use:dragResize={{
-        onDrag: (ev) => {
-          const maxWidth = window.innerWidth * 0.33;
-          secondarySidebarWidth.set(
-            Math.max(140, Math.min(maxWidth, window.innerWidth - ev.clientX)),
-          );
-        },
-        onStart: () => {
-          dragging = true;
-        },
-        onEnd: () => {
-          dragging = false;
-        },
+    <SidebarResizeHandle
+      direction="left"
+      theme={$theme}
+      onDrag={(clientX) => {
+        const maxWidth = window.innerWidth * 0.33;
+        secondarySidebarWidth.set(
+          Math.max(140, Math.min(maxWidth, window.innerWidth - clientX)),
+        );
       }}
-    ></div>
+    />
     <div
       style="flex: 1; display: flex; flex-direction: column; overflow: hidden;"
     >
       <!-- Top row: tab bar -->
       <div
+        role="tablist"
         data-tauri-drag-region=""
         style="
         height: 38px; display: flex; align-items: center;
@@ -97,6 +85,9 @@
       >
         {#each $sidebarTabStore as tab (tab.id)}
           <button
+            role="tab"
+            aria-selected={activeTabId === tab.id}
+            aria-controls="secondary-sidebar-tab-panel-{tab.id}"
             style="
             background: none; border: none; cursor: pointer;
             padding: 4px 10px; border-radius: 4px; font-size: 11px;
@@ -150,6 +141,11 @@
 
       <!-- Content area -->
       <div
+        role="tabpanel"
+        id={activeTab
+          ? `secondary-sidebar-tab-panel-${activeTab.id}`
+          : undefined}
+        aria-labelledby={activeTab ? activeTab.id : undefined}
         style="flex: 1; overflow-y: auto; display: flex; flex-direction: column;"
       >
         {#if activeTab}
@@ -179,9 +175,3 @@
     </div>
   </div>
 {/if}
-
-<style>
-  .sidebar-resize-handle:hover {
-    filter: brightness(1.3);
-  }
-</style>

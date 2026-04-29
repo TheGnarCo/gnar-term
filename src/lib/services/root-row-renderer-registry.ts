@@ -36,7 +36,5 @@ const registry = createRegistry<RootRowRenderer>();
 
 export const rootRowRendererStore = registry.store;
 export const registerRootRowRenderer = registry.register;
-export const unregisterRootRowRenderer = registry.unregister;
 export const unregisterRootRowRenderersBySource = registry.unregisterBySource;
 export const getRootRowRenderer = registry.get;
-export const resetRootRowRenderers = registry.reset;

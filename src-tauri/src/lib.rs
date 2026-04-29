@@ -11,6 +11,7 @@ use tauri::{AppHandle, Emitter};
 mod commands;
 mod file_utils;
 mod gh_commands;
+pub mod git_helpers;
 mod git_info;
 mod git_ops;
 mod git_worktree;
@@ -874,6 +875,16 @@ fn is_blocked_path(path_str: &str) -> bool {
             "/.kube",
             "/.config/gcloud",
             "/.docker",
+            // F31: additional sensitive credential/history locations
+            "/.netrc",
+            "/.git-credentials",
+            "/.npmrc",
+            "/.pypirc",
+            "/.bash_history",
+            "/.zsh_history",
+            "/.fish/",
+            // macOS keychain directory
+            "/Library/Keychains",
         ];
         for prefix in blocked {
             if path_str.starts_with(&format!("{home}{prefix}")) {
@@ -881,7 +892,11 @@ fn is_blocked_path(path_str: &str) -> bool {
             }
         }
     }
-    path_str.starts_with("/etc/shadow") || path_str.starts_with("/etc/gshadow")
+    path_str.starts_with("/etc/shadow")
+        || path_str.starts_with("/etc/gshadow")
+        // System keychains (macOS)
+        || path_str.starts_with("/Library/Keychains")
+        || path_str.starts_with("/System/Library/Keychains")
 }
 
 /// Block reads to sensitive directories (SSH keys, credentials, etc.)
@@ -2342,6 +2357,87 @@ mod tests {
     fn validate_read_path_rejects_nonexistent_file() {
         let result = validate_read_path("/nonexistent/path/to/file.txt");
         assert!(result.is_err(), "Should reject nonexistent paths");
+    }
+
+    // F31: extended blocklist regression tests
+    #[test]
+    fn validate_read_path_blocks_netrc() {
+        let home = std::env::var("HOME").unwrap();
+        let p = format!("{home}/.netrc");
+        assert!(validate_read_path(&p).is_err(), "Should block ~/.netrc");
+    }
+
+    #[test]
+    fn validate_read_path_blocks_git_credentials() {
+        let home = std::env::var("HOME").unwrap();
+        let p = format!("{home}/.git-credentials");
+        assert!(
+            validate_read_path(&p).is_err(),
+            "Should block ~/.git-credentials"
+        );
+    }
+
+    #[test]
+    fn validate_read_path_blocks_npmrc() {
+        let home = std::env::var("HOME").unwrap();
+        let p = format!("{home}/.npmrc");
+        assert!(validate_read_path(&p).is_err(), "Should block ~/.npmrc");
+    }
+
+    #[test]
+    fn validate_read_path_blocks_pypirc() {
+        let home = std::env::var("HOME").unwrap();
+        let p = format!("{home}/.pypirc");
+        assert!(validate_read_path(&p).is_err(), "Should block ~/.pypirc");
+    }
+
+    #[test]
+    fn validate_read_path_blocks_bash_history() {
+        let home = std::env::var("HOME").unwrap();
+        let p = format!("{home}/.bash_history");
+        assert!(
+            validate_read_path(&p).is_err(),
+            "Should block ~/.bash_history"
+        );
+    }
+
+    #[test]
+    fn validate_read_path_blocks_zsh_history() {
+        let home = std::env::var("HOME").unwrap();
+        let p = format!("{home}/.zsh_history");
+        assert!(
+            validate_read_path(&p).is_err(),
+            "Should block ~/.zsh_history"
+        );
+    }
+
+    #[test]
+    fn validate_read_path_blocks_fish_history() {
+        let home = std::env::var("HOME").unwrap();
+        // fish stores history in ~/.config/fish/ and ~/.local/share/fish/
+        // The blocklist covers ~/.fish/ — test the direct prefix
+        let p = format!("{home}/.fish/fish_history");
+        assert!(validate_read_path(&p).is_err(), "Should block ~/.fish/");
+    }
+
+    #[test]
+    fn validate_read_path_blocks_home_library_keychains() {
+        let home = std::env::var("HOME").unwrap();
+        let p = format!("{home}/Library/Keychains/login.keychain-db");
+        assert!(
+            validate_read_path(&p).is_err(),
+            "Should block ~/Library/Keychains"
+        );
+    }
+
+    #[test]
+    fn validate_read_path_blocks_system_library_keychains() {
+        // /Library/Keychains is system keychain (macOS). Blocked regardless of HOME.
+        let result = validate_read_path("/Library/Keychains/System.keychain");
+        assert!(
+            result.is_err(),
+            "Should block /Library/Keychains on macOS systems"
+        );
     }
 
     #[test]

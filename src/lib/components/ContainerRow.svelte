@@ -308,9 +308,7 @@
       >
         <div
           data-container-banner-body
-          style="padding-left: {rowHovered
-            ? '8px'
-            : '6px'}; padding-right: 0; display: flex; flex-direction: column; gap: 2px; min-height: 32px; justify-content: center; transition: padding-left 0.12s ease-out;"
+          style="padding-left: 6px; padding-right: 0; display: flex; flex-direction: column; gap: 2px; min-height: 32px; justify-content: center;"
         >
           <div
             style="display: flex; align-items: center; gap: 8px; min-width: 0;"
@@ -336,9 +334,7 @@
         <div
           data-container-nested={scopeId}
           data-nested-count={nonDashboardCount}
-          style="display: flex; flex-direction: column; margin-left: {rowHovered
-            ? '0'
-            : '-2px'}; transition: margin-left 0.12s ease-out;"
+          style="display: flex; flex-direction: column;"
           transition:slide={{ duration: 200 }}
         >
           <svelte:component

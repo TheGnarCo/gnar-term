@@ -72,6 +72,7 @@
       role="dialog"
       aria-modal="true"
       aria-label={$inputPrompt.placeholder}
+      tabindex="-1"
       style="
         width: 460px; height: fit-content; background: {$theme.bgFloat};
         border: 1px solid {$theme.border}; border-radius: 12px;

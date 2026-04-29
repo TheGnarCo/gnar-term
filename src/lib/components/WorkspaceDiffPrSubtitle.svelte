@@ -197,7 +197,7 @@
       <!-- svelte-ignore a11y_click_events_have_key_events -->
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div
-        style="display: flex; align-items: center; gap: 3px; min-width: 0; overflow: hidden; cursor: pointer;"
+        style="display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; cursor: pointer;"
         title="#{pr.number} {pr.title}{isDraft ? ' (draft)' : ''}"
         on:click={() => pr && invoke("open_url", { url: pr.url })}
       >

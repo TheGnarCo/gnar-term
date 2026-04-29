@@ -149,6 +149,16 @@
   }[] = [];
   const shownErrorIds = new Set<string>();
 
+  // Close the primary sidebar when the last workspace is removed.
+  let _prevWorkspaceCount = 0;
+  $: {
+    const count = $workspaces.length;
+    if (_prevWorkspaceCount > 0 && count === 0) {
+      primarySidebarVisible.set(false);
+    }
+    _prevWorkspaceCount = count;
+  }
+
   $: {
     for (const err of $extensionErrorStore) {
       if (!shownErrorIds.has(err.id)) {

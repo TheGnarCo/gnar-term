@@ -41,18 +41,21 @@
   }
 </script>
 
-<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <div
   bind:this={handleEl}
   class="sidebar-resize-handle sidebar-resize-handle--{direction}"
-  role="separator"
-  aria-orientation="vertical"
+  role="slider"
+  aria-orientation="horizontal"
   aria-label="Resize sidebar"
+  aria-valuenow="0"
+  aria-valuemin="0"
+  aria-valuemax="100"
   tabindex="0"
   style="
     width: 4px; cursor: col-resize; flex-shrink: 0;
     background: {dragging ? theme.accent : theme.sidebarBorder};
-    transition: background 0.15s;
+    opacity: {dragging ? 1 : 0.3};
+    transition: opacity 0.2s ease;
   "
   use:dragResize={{
     onDrag: (ev) => onDrag(ev.clientX),
@@ -69,7 +72,7 @@
 <style>
   .sidebar-resize-handle:hover,
   .sidebar-resize-handle:focus-visible {
-    filter: brightness(1.3);
+    opacity: 1 !important;
     outline: none;
   }
 </style>

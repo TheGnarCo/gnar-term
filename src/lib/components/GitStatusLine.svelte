@@ -111,7 +111,7 @@
           style="font-size: 10px; color: {variantColor(
             cwdItem.variant,
             fgMuted,
-          )}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; display: inline-flex; align-items: center; gap: 3px;"
+          )}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; display: inline-flex; align-items: center; gap: 4px;"
           title={cwdItem.tooltip || cwdItem.label}
         >
           <svg
@@ -135,7 +135,7 @@
           style="font-size: 10px; color: {variantColor(
             branchItem.variant,
             fgMuted,
-          )}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; display: inline-flex; align-items: center; gap: 3px;"
+          )}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; display: inline-flex; align-items: center; gap: 4px;"
           title={branchItem.tooltip || branchItem.label}
         >
           <span

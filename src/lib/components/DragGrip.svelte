@@ -46,9 +46,8 @@
   $: showRailStripe = !showDots;
 
   // Frit pattern stays identical across rest and hover states — same
-  // dot size, softness, color, and opacity. Only the rail's WIDTH
-  // changes on hover, so "expanded" reads as the same knurl extended
-  // wider, not a beefier/brighter variant.
+  // dot size, softness, color, and geometry. The fade mask is removed
+  // on hover (via fadeRight prop) without shifting content.
   const dotRadius = "1.1px";
   const dotFade = "1.6px";
   $: fritBackgroundImage = `radial-gradient(circle, ${effectiveDotColor} ${dotRadius}, transparent ${dotFade}), radial-gradient(circle, ${effectiveDotColor} ${dotRadius}, transparent ${dotFade})`;
@@ -65,9 +64,8 @@
     flex-shrink: 0;
     align-self: stretch;
     position: relative;
-    width: {visible ? '20px' : '10px'};
+    width: 14px;
     cursor: {visible ? 'grab' : 'default'};
-    transition: width 0.12s ease-out;
     overflow: hidden;
   "
 >
@@ -114,6 +112,7 @@
       style="
         position: absolute;
         top: 4px; left: 1px; right: 1px;
+        height: 14px;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -122,10 +121,10 @@
         ? (theme.bgHighlight ?? 'rgba(255,255,255,0.08)')
         : (theme.bgSurface ?? theme.bg)};
         border: 1px solid {closeButtonHovered ? theme.danger : effectiveColor};
-        border-radius: 4px;
-        font-size: 11px;
+        border-radius: 3px;
+        font-size: 10px;
         cursor: pointer;
-        padding: 2px 0;
+        padding: 0;
         line-height: 1;
         -webkit-app-region: no-drag;
         transition: background 0.1s, color 0.1s, border-color 0.1s;

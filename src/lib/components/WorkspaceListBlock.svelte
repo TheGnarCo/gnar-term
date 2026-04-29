@@ -549,6 +549,24 @@
   </div>
 {/each}
 
+{#if renderedRows.length === 0}
+  <div
+    style="
+      display: flex; align-items: center;
+      margin: 0 8px 0 0; border-radius: 0 6px 6px 0;
+      border: 1px dashed {$theme.border};
+      opacity: 0.45;
+    "
+  >
+    <div style="width: 14px; flex-shrink: 0;"></div>
+    <div
+      style="flex: 1; padding: 8px 6px; color: {$theme.fgDim}; font-size: 12px;"
+    >
+      No workspaces
+    </div>
+  </div>
+{/if}
+
 <style>
   /* Inter-row gap — matches the nested workspace inter-row gap
      (see WorkspaceListView's .workspace-list-row + rule) so root and

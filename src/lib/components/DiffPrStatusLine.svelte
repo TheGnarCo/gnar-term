@@ -40,6 +40,14 @@
     url: string;
     headRefName: string;
     isDraft: boolean;
+    ciStatus: string;
+  }
+
+  function ciColor(status: string, fallback: string): string {
+    if (status === "SUCCESS") return "#4ec957";
+    if (status === "FAILURE") return "#e85454";
+    if (status === "PENDING") return "#e8b73a";
+    return fallback;
   }
 
   let gitInfo: GitInfo | null = null;
@@ -50,7 +58,7 @@
   let gitRoot: string | null = null;
 
   const DIFF_REFRESH_MS = 30_000;
-  const PR_REFRESH_MS = 60_000;
+  const PR_REFRESH_MS = 5_000;
 
   async function detectRoot(): Promise<string | null> {
     try {
@@ -164,6 +172,11 @@
   $: showDiff = diffSegments.length > 0;
   $: showPr = pr !== null && (pr.state === "OPEN" || pr.state === "open");
   $: isDraft = pr?.isDraft ?? false;
+  $: prColor = pr
+    ? isDraft
+      ? fgMuted
+      : ciColor(pr.ciStatus, "#4ec957")
+    : fgMuted;
 </script>
 
 {#if showDiff || showPr}
@@ -217,9 +230,7 @@
           />
         </svg>
         <span
-          style="font-size: 10px; color: {isDraft
-            ? fgMuted
-            : '#4ec957'}; white-space: nowrap; flex-shrink: 0;"
+          style="font-size: 10px; color: {prColor}; white-space: nowrap; flex-shrink: 0; text-decoration: underline;"
         >
           #{pr.number}{isDraft ? " draft" : ""}
         </span>

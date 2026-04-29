@@ -142,10 +142,67 @@ pub struct GhPrView {
     pub url: String,
     pub head_ref_name: String,
     pub is_draft: bool,
+    /// Derived from statusCheckRollup: "SUCCESS" | "FAILURE" | "PENDING" | "NONE"
+    pub ci_status: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CheckStatus {
+    conclusion: Option<String>,
+    status: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RawPrView {
+    number: u32,
+    title: String,
+    state: String,
+    url: String,
+    head_ref_name: String,
+    is_draft: bool,
+    #[serde(default)]
+    status_check_rollup: Vec<CheckStatus>,
+}
+
+fn derive_ci_status(checks: &[CheckStatus]) -> String {
+    if checks.is_empty() {
+        return "NONE".to_string();
+    }
+    let has_failure = checks.iter().any(|c| {
+        matches!(
+            c.conclusion.as_deref(),
+            Some("FAILURE" | "CANCELLED" | "TIMED_OUT" | "ACTION_REQUIRED" | "STARTUP_FAILURE")
+        )
+    });
+    if has_failure {
+        return "FAILURE".to_string();
+    }
+    let has_pending = checks.iter().any(|c| {
+        matches!(
+            c.status.as_deref(),
+            Some("IN_PROGRESS" | "QUEUED" | "WAITING" | "PENDING")
+        ) || c.conclusion.is_none()
+    });
+    if has_pending {
+        return "PENDING".to_string();
+    }
+    "SUCCESS".to_string()
 }
 
 fn parse_pr_view(json: &str) -> Result<GhPrView, String> {
-    serde_json::from_str(json).map_err(|e| format!("Failed to parse PR JSON: {e}"))
+    let raw: RawPrView =
+        serde_json::from_str(json).map_err(|e| format!("Failed to parse PR JSON: {e}"))?;
+    Ok(GhPrView {
+        number: raw.number,
+        title: raw.title,
+        state: raw.state,
+        url: raw.url,
+        head_ref_name: raw.head_ref_name,
+        is_draft: raw.is_draft,
+        ci_status: derive_ci_status(&raw.status_check_rollup),
+    })
 }
 
 /// Return the open PR for the current branch in `repo_path`, or `None`
@@ -160,7 +217,7 @@ pub async fn gh_view_pr(repo_path: String) -> Result<Option<GhPrView>, String> {
             "pr",
             "view",
             "--json",
-            "number,title,state,url,isDraft,headRefName",
+            "number,title,state,url,isDraft,headRefName,statusCheckRollup",
         ])
         .env("PATH", shell_path())
         .current_dir(&repo_path)
@@ -287,6 +344,7 @@ mod tests {
         assert_eq!(pr.state, "OPEN");
         assert!(!pr.is_draft);
         assert_eq!(pr.head_ref_name, "feat/diff-statusline");
+        assert_eq!(pr.ci_status, "NONE");
     }
 
     #[test]
@@ -301,6 +359,59 @@ mod tests {
         }"#;
         let pr = parse_pr_view(json).unwrap();
         assert!(pr.is_draft);
+    }
+
+    #[test]
+    fn parse_pr_view_ci_status_passing() {
+        let json = r#"{
+            "number": 10,
+            "title": "ci test",
+            "state": "OPEN",
+            "url": "https://github.com/org/repo/pull/10",
+            "headRefName": "ci-branch",
+            "isDraft": false,
+            "statusCheckRollup": [
+                {"conclusion": "SUCCESS", "status": "COMPLETED"},
+                {"conclusion": "SKIPPED", "status": "COMPLETED"}
+            ]
+        }"#;
+        let pr = parse_pr_view(json).unwrap();
+        assert_eq!(pr.ci_status, "SUCCESS");
+    }
+
+    #[test]
+    fn parse_pr_view_ci_status_failing() {
+        let json = r#"{
+            "number": 11,
+            "title": "broken",
+            "state": "OPEN",
+            "url": "https://github.com/org/repo/pull/11",
+            "headRefName": "broken",
+            "isDraft": false,
+            "statusCheckRollup": [
+                {"conclusion": "SUCCESS", "status": "COMPLETED"},
+                {"conclusion": "FAILURE", "status": "COMPLETED"}
+            ]
+        }"#;
+        let pr = parse_pr_view(json).unwrap();
+        assert_eq!(pr.ci_status, "FAILURE");
+    }
+
+    #[test]
+    fn parse_pr_view_ci_status_pending() {
+        let json = r#"{
+            "number": 12,
+            "title": "pending",
+            "state": "OPEN",
+            "url": "https://github.com/org/repo/pull/12",
+            "headRefName": "pending",
+            "isDraft": false,
+            "statusCheckRollup": [
+                {"conclusion": null, "status": "IN_PROGRESS"}
+            ]
+        }"#;
+        let pr = parse_pr_view(json).unwrap();
+        assert_eq!(pr.ci_status, "PENDING");
     }
 
     #[test]

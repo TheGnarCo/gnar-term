@@ -14,12 +14,17 @@
   import { onDestroy } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { theme } from "../stores/theme";
+  import { workspaces } from "../stores/workspace";
   import { getWorkspaceStatusByCategory } from "../services/status-registry";
   import { GIT_STATUS_SOURCE } from "../services/git-status-service";
+  import { wsMeta } from "../services/service-helpers";
   import type { StatusItem } from "../types/status";
 
   export let workspaceId: string;
   export let accentColor: string | undefined = undefined;
+
+  $: currentWs = $workspaces.find((w) => w.id === workspaceId);
+  $: isNested = Boolean(currentWs && wsMeta(currentWs).groupId);
 
   $: fgMuted = ($theme["fgMuted"] ?? $theme.fgDim) as string;
   $: iconFg = accentColor ?? fgMuted;
@@ -85,13 +90,21 @@
     url: string;
     headRefName: string;
     isDraft: boolean;
+    ciStatus: string;
+  }
+
+  function ciColor(status: string, fallback: string): string {
+    if (status === "SUCCESS") return "#4ec957";
+    if (status === "FAILURE") return "#e85454";
+    if (status === "PENDING") return "#e8b73a";
+    return fallback;
   }
 
   let pr: GhPrView | null = null;
   let prTimer: ReturnType<typeof setInterval> | null = null;
   let lastRepoRoot: string | null = null;
 
-  const PR_REFRESH_MS = 60_000;
+  const PR_REFRESH_MS = 5_000;
 
   async function refreshPr(root: string): Promise<void> {
     try {
@@ -129,8 +142,14 @@
 
   onDestroy(() => stopPrPolling());
 
-  $: showPr = pr !== null && (pr.state === "OPEN" || pr.state === "open");
+  $: showPr =
+    !isNested && pr !== null && (pr.state === "OPEN" || pr.state === "open");
   $: isDraft = pr?.isDraft ?? false;
+  $: prColor = pr
+    ? isDraft
+      ? fgMuted
+      : ciColor(pr.ciStatus, "#4ec957")
+    : fgMuted;
 </script>
 
 {#if showDiff || showPr}
@@ -191,9 +210,7 @@
           />
         </svg>
         <span
-          style="font-size: 10px; color: {isDraft
-            ? fgMuted
-            : '#4ec957'}; white-space: nowrap; flex-shrink: 0;"
+          style="font-size: 10px; color: {prColor}; white-space: nowrap; flex-shrink: 0; text-decoration: underline;"
         >
           #{pr.number}{isDraft ? " draft" : ""}
         </span>

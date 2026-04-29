@@ -1,0 +1,90 @@
+name: "Nightly"
+
+# Builds GnarTerm from the `dev` branch and publishes a rolling
+# `nightly` prerelease (Apple Silicon only). Scheduled workflows must
+# live on the default branch to fire, so this workflow stays on `main`
+# and explicitly checks out `dev` to build.
+
+on:
+  schedule:
+    - cron: "0 8 * * *" # 08:00 UTC = 01:00 PT / 04:00 ET
+  workflow_dispatch:
+
+concurrency:
+  group: nightly
+  cancel-in-progress: true
+
+jobs:
+  build-nightly:
+    permissions:
+      contents: write
+    runs-on: macos-latest
+    steps:
+      - name: Checkout dev branch
+        uses: actions/checkout@v6
+        with:
+          ref: dev
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+          cache: "npm"
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Compute nightly version
+        id: version
+        shell: bash
+        run: |
+          BASE=$(grep '^version' src-tauri/Cargo.toml | head -1 | sed -E 's/version = "(.*)"/\1/')
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          DATE=$(date -u +%Y%m%d)
+          VERSION="${BASE}-nightly.${DATE}.${SHORT_SHA}"
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Nightly version: $VERSION"
+
+      - name: Set version in Cargo.toml
+        shell: bash
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          sed -i.bak "s/^version = \".*\"/version = \"$VERSION\"/" src-tauri/Cargo.toml && rm -f src-tauri/Cargo.toml.bak
+
+      - name: Install frontend dependencies
+        run: npm install
+
+      - name: Delete previous nightly release and tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          gh release delete nightly --yes --cleanup-tag || true
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          tagName: nightly
+          releaseName: "GnarTerm Nightly (${{ steps.version.outputs.VERSION }})"
+          releaseBody: |
+            Automated nightly build from the `dev` branch. Unstable — for testing only.
+
+            Built from commit ${{ github.sha }}.
+          releaseDraft: false
+          prerelease: true
+          args: --target aarch64-apple-darwin --config {"version":"${{ steps.version.outputs.VERSION }}"}

@@ -26,21 +26,31 @@
     return `${row.kind}:${row.id}`;
   }
 
+  let metaPreviewTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function activateMetaPreview() {
+    archiveZoneEl?.setAttribute("data-drag-preview", "true");
+    metaPreviewActive.set(true);
+  }
+  function deactivateMetaPreview() {
+    if (metaPreviewTimer !== null) {
+      clearTimeout(metaPreviewTimer);
+      metaPreviewTimer = null;
+    }
+    archiveZoneEl?.removeAttribute("data-drag-preview");
+    metaPreviewActive.set(false);
+  }
+
   function onKeyDown(e: KeyboardEvent) {
-    if (e.key === "Meta") {
-      archiveZoneEl?.setAttribute("data-drag-preview", "true");
-      metaPreviewActive.set(true);
+    if (e.key === "Meta" && metaPreviewTimer === null) {
+      metaPreviewTimer = setTimeout(activateMetaPreview, 600);
     }
   }
   function onKeyUp(e: KeyboardEvent) {
-    if (e.key === "Meta") {
-      archiveZoneEl?.removeAttribute("data-drag-preview");
-      metaPreviewActive.set(false);
-    }
+    if (e.key === "Meta") deactivateMetaPreview();
   }
   function onBlur() {
-    archiveZoneEl?.removeAttribute("data-drag-preview");
-    metaPreviewActive.set(false);
+    deactivateMetaPreview();
   }
 
   $: if (archiveZoneEl) {

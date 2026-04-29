@@ -175,7 +175,20 @@
     class="archive-header"
     class:has-items={totalCount > 0}
   >
-    <span aria-hidden="true">{expanded ? "▼" : "▶"}</span>
+    <svg
+      aria-hidden="true"
+      width="12"
+      height="8"
+      viewBox="0 0 12 8"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.5"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      style="transition: transform 0.2s ease; transform: rotate({expanded
+        ? 0
+        : 180}deg);"><polyline points="1,1 6,7 11,1" /></svg
+    >
     <span>Archive</span>
     {#if totalCount > 0}
       <span class="badge">{totalCount}</span>

@@ -1,16 +1,12 @@
 <script lang="ts">
   /**
    * DashboardTileIcon — renders a dashboard contribution's icon with
-   * an optional state-driven color override.
+   * state-driven color.
    *
-   * The `"diff"` contribution has its own color contract distinct from
-   * every other tile: it never paints with the group accent. Instead it
-   * is a binary indicator —
-   *   • dirty (uncommitted changes in the group's working tree) →
-   *     amber warning tone, signalling "changes to review"
-   *   • clean → muted/dim foreground, so the tile recedes when there's
-   *     nothing to look at
-   * Other contribution ids paint with `baseColor` as today.
+   * Color rules (in priority order):
+   *   1. diff + dirty      → amber warning tone ("changes to review")
+   *   2. isActive/isHovered → baseColor (group accent)
+   *   3. otherwise         → dimColor (uniform inactive appearance)
    */
   import type { Component, ComponentType } from "svelte";
   import { readable, type Readable } from "svelte/store";
@@ -24,6 +20,8 @@
   export let baseColor: string;
   export let contributionId: string | undefined;
   export let groupPath: string | undefined;
+  export let isActive: boolean = false;
+  export let isHovered: boolean = false;
 
   const CLEAN_STATE: GroupDirtyState = { ready: true, hasChanges: false };
 
@@ -35,11 +33,12 @@
       : readable(CLEAN_STATE);
 
   $: dimColor = ($theme["fgDim"] ?? $theme.fgMuted ?? "#888") as string;
-  $: color = isDiff
-    ? $dirtyStore.hasChanges
+  $: color =
+    isDiff && $dirtyStore.hasChanges
       ? "#e8b73a"
-      : dimColor
-    : baseColor;
+      : isActive || isHovered
+        ? baseColor
+        : dimColor;
 </script>
 
 <span

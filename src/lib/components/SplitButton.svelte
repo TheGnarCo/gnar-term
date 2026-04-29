@@ -23,6 +23,11 @@
    * the sidebar.
    */
   export let reserveCaret: boolean = false;
+  /**
+   * When true, the JS hover handler does not set a background on the
+   * button — the parent container owns the hover visual instead.
+   */
+  export let suppressButtonHoverBg: boolean = false;
 
   // SVG icon fragments for dropdown items (16x16 viewBox)
   const iconSvgMap: Record<string, string> = {
@@ -117,7 +122,7 @@
     "
     on:mouseenter={(e) => {
       const el = e.currentTarget;
-      if (el instanceof HTMLElement)
+      if (el instanceof HTMLElement && !suppressButtonHoverBg)
         el.style.background = $theme.bgHighlight ?? "";
     }}
     on:mouseleave={(e) => {

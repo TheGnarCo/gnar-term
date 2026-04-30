@@ -46,12 +46,9 @@ import GridIcon from "../icons/GridIcon.svelte";
 import WorkspacesWidget from "../components/WorkspacesWidget.svelte";
 import { registerMarkdownComponent } from "../services/markdown-component-registry";
 import type { WorkspaceGroupEntry } from "../config";
-import {
-  pendingCreateResolver,
-  createDialogPrefill,
-} from "../stores/workspace-groups-ui";
-import { invoke } from "@tauri-apps/api/core";
 import { getActiveCwd, wsMeta } from "../services/service-helpers";
+import { showInputPrompt } from "../stores/ui";
+import { GROUP_COLOR_SLOTS } from "../../extensions/api";
 import type { WorkspaceMetadata } from "../types";
 import {
   createWorkspaceFromDef,
@@ -89,60 +86,33 @@ function onWorkspaceClosed(event: AppEvent): void {
 }
 
 /**
- * Open the create dialog and wait for the user to submit or cancel.
- * Resolves to the dialog's values on submit, null on cancel.
- */
-function openCreateDialog(prefill?: {
-  path: string;
-  name?: string;
-}): Promise<{ name: string; path: string; color: string } | null> {
-  createDialogPrefill.set(prefill ?? null);
-  return new Promise((resolve) => {
-    pendingCreateResolver.set((result) => {
-      pendingCreateResolver.set(null);
-      resolve(result);
-    });
-  });
-}
-
-/**
- * Drive the full create flow: open the dialog, persist the group, and
- * spawn the group's Dashboard workspace. Returns the new group id on
- * success, null on cancel.
+ * Drive the full create flow: immediately create the group with defaults,
+ * provision dashboards, create a primary workspace, then prompt for a name
+ * inline. Returns the new group id on success, null on cancel.
  */
 async function createWorkspaceGroupFlow(prefill?: {
   path: string;
   name?: string;
 }): Promise<string | null> {
-  const result = await openCreateDialog(prefill);
-  if (!result) return null;
-
-  let isGit = false;
-  try {
-    isGit = await invoke<boolean>("is_git_repo", { path: result.path });
-  } catch {
-    // Not a git repo or path doesn't exist
-  }
-
   const id = generateId();
+  const defaultName = "New Workspace";
+  const usedColors = readGroups().map((g) => g.color);
+  const colorIdx = usedColors.length % GROUP_COLOR_SLOTS.length;
+  const color = GROUP_COLOR_SLOTS[colorIdx] ?? GROUP_COLOR_SLOTS[0];
+
   const group: WorkspaceGroupEntry = {
     id,
-    name: result.name,
-    path: result.path,
-    color: result.color,
+    name: prefill?.name ?? defaultName,
+    path: prefill?.path ?? "",
+    color,
     workspaceIds: [],
-    isGit,
+    isGit: false,
     createdAt: new Date().toISOString(),
   };
 
   addWorkspaceGroup(group);
 
-  // Auto-provision every autoProvision dashboard contribution for the
-  // new group (group Overview, Settings, and any extension-owned
-  // autoProvision contributions like Agentic). The Overview dashboard
-  // is tracked via `group.dashboardWorkspaceId` so `openGroupDashboard`
-  // can activate it directly; the helper returns its id when the
-  // contribution's source is core + id is "group".
+  // Provision dashboards immediately so Settings is available for path/color.
   try {
     await provisionAutoDashboardsForGroup(group);
     const overview = get(workspaces).find((w) =>
@@ -152,22 +122,14 @@ async function createWorkspaceGroupFlow(prefill?: {
       updateWorkspaceGroup(id, { dashboardWorkspaceId: overview.id });
     }
   } catch (err) {
-    console.error(
-      `[workspace-groups] Failed to auto-provision dashboards: ${
-        err instanceof Error ? err.message : String(err)
-      }`,
-    );
+    console.error(`[workspace-groups] Dashboard provision failed: ${err}`);
   }
 
-  // Spawn an initial regular workspace inside the new group and activate
-  // it. The workspace:created handler claims it into the group
-  // automatically when it sees metadata.groupId.
+  // Create the primary workspace and stamp it as primary.
   try {
-    const wsCount =
-      readGroups().find((g) => g.id === id)?.workspaceIds.length ?? 0;
     await createWorkspaceFromDef({
-      name: `${result.name} Workspace ${wsCount + 1}`,
-      cwd: result.path,
+      name: group.name,
+      cwd: group.path || undefined,
       metadata: { groupId: id },
       layout: { pane: { surfaces: [{ type: "terminal" }] } },
     });
@@ -176,18 +138,30 @@ async function createWorkspaceGroupFlow(prefill?: {
       .reverse()
       .find((w) => wsMeta(w).groupId === id && !wsMeta(w).isDashboard);
     if (newWs) {
+      updateWorkspaceGroup(id, { primaryWorkspaceId: newWs.id });
       const idx = get(workspaces).indexOf(newWs);
       if (idx >= 0) switchWorkspace(idx);
     }
   } catch (err) {
     console.error(
-      `[workspace-groups] Failed to spawn initial workspace: ${
-        err instanceof Error ? err.message : String(err)
-      }`,
+      `[workspace-groups] Primary workspace creation failed: ${err}`,
     );
   }
 
   setActiveGroupId(id);
+
+  // Prompt for a name inline.
+  if (!prefill?.name) {
+    try {
+      const newName = await showInputPrompt("Name this workspace", defaultName);
+      if (newName?.trim()) {
+        updateWorkspaceGroup(id, { name: newName.trim() });
+      }
+    } catch {
+      // User cancelled — keep the default name.
+    }
+  }
+
   return id;
 }
 

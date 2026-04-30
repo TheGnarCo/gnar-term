@@ -45,7 +45,7 @@ import GearIcon from "../icons/GearIcon.svelte";
 import GridIcon from "../icons/GridIcon.svelte";
 import WorkspacesWidget from "../components/WorkspacesWidget.svelte";
 import { registerMarkdownComponent } from "../services/markdown-component-registry";
-import type { WorkspaceGroupEntry } from "../config";
+import type { WorkspaceEntry } from "../config";
 import {
   pendingCreateResolver,
   createDialogPrefill,
@@ -125,7 +125,7 @@ async function createWorkspaceGroupFlow(prefill?: {
   }
 
   const id = generateId();
-  const group: WorkspaceGroupEntry = {
+  const group: WorkspaceEntry = {
     id,
     name: result.name,
     path: result.path,
@@ -303,7 +303,7 @@ export async function initWorkspaceGroups(): Promise<void> {
 
   // Formerly owned by the worktree-workspaces extension. Registered here
   // so the action is available in context menus on git-backed groups. The
-  // ⎇ Branch button in WorkspaceGroupSectionContent calls the command
+  // ⎇ Branch button in WorkspaceSectionContent calls the command
   // directly; this action surfaces it in the workspace action registry.
   registerWorkspaceAction({
     id: "core:create-worktree",
@@ -380,9 +380,9 @@ export async function initWorkspaceGroups(): Promise<void> {
     autoProvision: true,
     icon: GridIcon,
     lockedReason: "Required (Overview)",
-    create: async (group: WorkspaceGroupEntry) =>
+    create: async (group: WorkspaceEntry) =>
       await createGroupDashboardWorkspace(group),
-    regenerate: async (group: WorkspaceGroupEntry) =>
+    regenerate: async (group: WorkspaceEntry) =>
       await regenerateGroupDashboardTemplate(group),
   });
 
@@ -399,7 +399,7 @@ export async function initWorkspaceGroups(): Promise<void> {
     autoProvision: true,
     icon: GearIcon,
     lockedReason: "Required (Settings)",
-    create: async (group: WorkspaceGroupEntry) =>
+    create: async (group: WorkspaceEntry) =>
       await createSettingsDashboardWorkspace(group),
   });
 

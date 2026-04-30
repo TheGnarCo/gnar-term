@@ -24,7 +24,7 @@ import { eventBus } from "../event-bus";
 import { rootRowOrder } from "../../stores/root-row-order";
 import { workspaces, activeWorkspaceIdx } from "../../stores/workspace";
 import type { Workspace } from "../../types";
-import type { WorkspaceGroupEntry } from "../../config";
+import type { WorkspaceEntry } from "../../config";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn().mockResolvedValue(undefined),
@@ -32,8 +32,8 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 function makeGroup(
   id: string,
-  overrides: Partial<WorkspaceGroupEntry> = {},
-): WorkspaceGroupEntry {
+  overrides: Partial<WorkspaceEntry> = {},
+): WorkspaceEntry {
   return {
     id,
     name: `Group ${id}`,

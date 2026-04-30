@@ -10,7 +10,7 @@
  */
 import { invoke } from "@tauri-apps/api/core";
 import { get } from "svelte/store";
-import type { SurfaceDef, WorkspaceGroupEntry } from "../config";
+import type { SurfaceDef, WorkspaceEntry } from "../config";
 import { GROUP_COLOR_SLOTS } from "../../extensions/api";
 import { appendRootRow, removeRootRow } from "../stores/root-row-order";
 import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
@@ -41,7 +41,7 @@ function emitStateChanged(metadata: Record<string, unknown> = {}): void {
   });
 }
 
-export function addWorkspaceGroup(group: WorkspaceGroupEntry): void {
+export function addWorkspaceGroup(group: WorkspaceEntry): void {
   setWorkspaceGroups([...getWorkspaceGroups(), group]);
   appendRootRow({ kind: "workspace-group", id: group.id });
   emitStateChanged({ groupId: group.id });
@@ -49,7 +49,7 @@ export function addWorkspaceGroup(group: WorkspaceGroupEntry): void {
 
 export function updateWorkspaceGroup(
   id: string,
-  patch: Partial<Omit<WorkspaceGroupEntry, "id">>,
+  patch: Partial<Omit<WorkspaceEntry, "id">>,
 ): void {
   const next = getWorkspaceGroups().map((g) =>
     g.id === id ? { ...g, ...patch } : g,
@@ -90,7 +90,7 @@ export function deleteWorkspaceGroup(id: string): void {
  * reclaim, reconcile). Extension-layer consumers that need a CWD-prefix
  * fallback for unclaimed workspaces should compose with this result.
  */
-export function getWorkspacesInGroup(groupId: string): Workspace[] {
+export function getWorktreeWorkspaces(groupId: string): Workspace[] {
   return get(workspaces).filter((w) => wsMeta(w).groupId === groupId);
 }
 
@@ -107,7 +107,7 @@ function closeWorkspaceById(wsId: string): void {
 }
 
 export function closeWorkspacesInGroup(id: string): void {
-  for (const ws of getWorkspacesInGroup(id)) closeWorkspaceById(ws.id);
+  for (const ws of getWorktreeWorkspaces(id)) closeWorkspaceById(ws.id);
 }
 
 /**
@@ -203,7 +203,7 @@ export function groupDashboardPath(groupPath: string): string {
   return `${groupPath.replace(/\/+$/, "")}/.gnar-term/project-dashboard.md`;
 }
 
-function buildGroupDashboardMarkdown(group: WorkspaceGroupEntry): string {
+function buildGroupDashboardMarkdown(group: WorkspaceEntry): string {
   // The Group Dashboard is the generic, agent-agnostic landing page for
   // a Workspace Group. It surfaces GitHub work-tracker context — open
   // issues + open PRs — side by side, as a passive read-only browse
@@ -244,7 +244,7 @@ children:
  * group never trampling user customizations.
  */
 async function writeGroupDashboardTemplate(
-  group: WorkspaceGroupEntry,
+  group: WorkspaceEntry,
   path: string,
   options: { force?: boolean } = {},
 ): Promise<void> {
@@ -269,7 +269,7 @@ async function writeGroupDashboardTemplate(
  * needing the workspace to be closed/recreated.
  */
 export async function regenerateGroupDashboardTemplate(
-  group: WorkspaceGroupEntry,
+  group: WorkspaceEntry,
 ): Promise<void> {
   await writeGroupDashboardTemplate(group, groupDashboardPath(group.path), {
     force: true,
@@ -318,7 +318,7 @@ async function scrubGroupDashboardActiveAgents(path: string): Promise<void> {
 }
 
 export async function migrateGroupDashboardWidgets(
-  group: WorkspaceGroupEntry,
+  group: WorkspaceEntry,
   path: string,
 ): Promise<void> {
   try {
@@ -343,7 +343,7 @@ export async function migrateGroupDashboardWidgets(
 }
 
 function createDashboardWorkspaceFromDef(
-  group: WorkspaceGroupEntry,
+  group: WorkspaceEntry,
   name: string,
   contribId: string,
   surfaces: SurfaceDef[],
@@ -366,7 +366,7 @@ function createDashboardWorkspaceFromDef(
  * record can link to it.
  */
 export async function createGroupDashboardWorkspace(
-  group: WorkspaceGroupEntry,
+  group: WorkspaceEntry,
 ): Promise<string> {
   const path = groupDashboardPath(group.path);
   try {
@@ -398,7 +398,7 @@ export async function createGroupDashboardWorkspace(
 function backfillDashboardContributionIds(): void {
   const groups = getWorkspaceGroups();
   if (groups.length === 0) return;
-  const groupById = new Map<string, WorkspaceGroupEntry>();
+  const groupById = new Map<string, WorkspaceEntry>();
   for (const g of groups) groupById.set(g.id, g);
 
   let mutated = false;
@@ -450,7 +450,7 @@ function backfillDashboardContributionIds(): void {
  * contributions.
  */
 export function createSettingsDashboardWorkspace(
-  group: WorkspaceGroupEntry,
+  group: WorkspaceEntry,
 ): Promise<string> {
   return createDashboardWorkspaceFromDef(group, "Settings", "settings", []);
 }
@@ -507,7 +507,7 @@ export function hasDashboardWorkspace(
  * already backed by a workspace is skipped.
  */
 export async function provisionAutoDashboardsForGroup(
-  group: WorkspaceGroupEntry,
+  group: WorkspaceEntry,
 ): Promise<void> {
   for (const c of getDashboardContributions()) {
     if (!c.autoProvision) continue;
@@ -569,7 +569,7 @@ export function closeDashboardForGroup(
  * eagerly on group creation, so this is a pure activation call.
  * Returns true on success.
  */
-export function openGroupDashboard(group: WorkspaceGroupEntry): boolean {
+export function openGroupDashboard(group: WorkspaceEntry): boolean {
   const targetId = group.dashboardWorkspaceId;
   if (!targetId) return false;
   const idx = get(workspaces).findIndex((w) => w.id === targetId);
@@ -584,7 +584,7 @@ export function openGroupDashboard(group: WorkspaceGroupEntry): boolean {
  * alongside the group record.
  */
 export async function closeGroupDashboardWorkspace(
-  group: WorkspaceGroupEntry,
+  group: WorkspaceEntry,
 ): Promise<void> {
   const dashboardWsId = group.dashboardWorkspaceId;
   if (!dashboardWsId) return;
@@ -718,7 +718,7 @@ export async function reconcilePrimaryWorkspaces(): Promise<void> {
   // Pass 1 — backfill existing groups.
   for (const group of getWorkspaceGroups()) {
     if (group.primaryWorkspaceId) continue;
-    const members = getWorkspacesInGroup(group.id);
+    const members = getWorktreeWorkspaces(group.id);
     const primary = members.find(
       (w) => !wsMeta(w).worktreePath && !wsMeta(w).isDashboard,
     );
@@ -748,7 +748,7 @@ export async function reconcilePrimaryWorkspaces(): Promise<void> {
     usedColors.push(color);
 
     const id = crypto.randomUUID();
-    const group: WorkspaceGroupEntry = {
+    const group: WorkspaceEntry = {
       id,
       name: ws.name,
       path: ((md as Record<string, unknown>).cwd as string) ?? "",

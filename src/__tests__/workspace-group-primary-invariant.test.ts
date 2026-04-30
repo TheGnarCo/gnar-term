@@ -7,7 +7,7 @@ vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn().mockResolvedValue(vi.fn()),
 }));
 
-import type { WorkspaceGroupEntry } from "../lib/config";
+import type { WorkspaceEntry } from "../lib/config";
 import { addWorkspaceToGroup } from "../lib/services/workspace-group-service";
 import {
   getWorkspaceGroups,
@@ -15,9 +15,9 @@ import {
 } from "../lib/stores/workspace-groups";
 import { workspaces } from "../lib/stores/workspace";
 
-describe("WorkspaceGroupEntry.primaryWorkspaceId", () => {
+describe("WorkspaceEntry.primaryWorkspaceId", () => {
   it("accepts a group with primaryWorkspaceId set", () => {
-    const group: WorkspaceGroupEntry = {
+    const group: WorkspaceEntry = {
       id: "g1",
       name: "Test",
       path: "/tmp/test",
@@ -31,7 +31,7 @@ describe("WorkspaceGroupEntry.primaryWorkspaceId", () => {
   });
 
   it("accepts a group without primaryWorkspaceId (legacy shape)", () => {
-    const group: WorkspaceGroupEntry = {
+    const group: WorkspaceEntry = {
       id: "g1",
       name: "Test",
       path: "/tmp/test",

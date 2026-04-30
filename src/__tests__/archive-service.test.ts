@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   getWorkspaceGroup: vi.fn(() => undefined as unknown),
   getWorkspaceGroups: vi.fn(() => [] as unknown[]),
   setWorkspaceGroups: vi.fn(),
-  getWorkspacesInGroup: vi.fn(() => [] as unknown[]),
+  getWorktreeWorkspaces: vi.fn(() => [] as unknown[]),
   closeWorkspacesInGroup: vi.fn(),
   provisionAutoDashboardsForGroup: vi.fn(() => Promise.resolve()),
   removeRootRow: vi.fn(),
@@ -51,7 +51,7 @@ vi.mock("../lib/stores/workspace-groups", () => ({
 }));
 
 vi.mock("../lib/services/workspace-group-service", () => ({
-  getWorkspacesInGroup: mocks.getWorkspacesInGroup,
+  getWorktreeWorkspaces: mocks.getWorktreeWorkspaces,
   closeWorkspacesInGroup: mocks.closeWorkspacesInGroup,
   provisionAutoDashboardsForGroup: mocks.provisionAutoDashboardsForGroup,
 }));
@@ -102,7 +102,7 @@ beforeEach(() => {
   );
   mocks.getWorkspaceGroup.mockReturnValue(undefined);
   mocks.getWorkspaceGroups.mockReturnValue([]);
-  mocks.getWorkspacesInGroup.mockReturnValue([]);
+  mocks.getWorktreeWorkspaces.mockReturnValue([]);
   mocks.provisionAutoDashboardsForGroup.mockImplementation(() =>
     Promise.resolve(),
   );
@@ -279,7 +279,7 @@ describe("archiveGroup", () => {
     mocks.getWorkspaceGroups.mockReturnValue([group]);
     // Only the dashboard has a running PTY — counting it would prompt;
     // skipping it should not.
-    mocks.getWorkspacesInGroup.mockReturnValueOnce([dashboardWs]);
+    mocks.getWorktreeWorkspaces.mockReturnValueOnce([dashboardWs]);
 
     const result = await archiveGroup("g-1");
 
@@ -293,7 +293,7 @@ describe("archiveGroup", () => {
     const ws2 = makeRunningTerminalWs("ws-2", "W2", -1);
     mocks.getWorkspaceGroup.mockReturnValueOnce(group);
     mocks.getWorkspaceGroups.mockReturnValue([group, { id: "other" }]);
-    mocks.getWorkspacesInGroup.mockReturnValueOnce([ws1, ws2]);
+    mocks.getWorktreeWorkspaces.mockReturnValueOnce([ws1, ws2]);
 
     const result = await archiveGroup("g-1");
 
@@ -318,7 +318,7 @@ describe("archiveGroup", () => {
     const group = makeGroup();
     const wsRunning = makeRunningTerminalWs("ws-1", "W1", 42);
     mocks.getWorkspaceGroup.mockReturnValueOnce(group);
-    mocks.getWorkspacesInGroup.mockReturnValueOnce([wsRunning]);
+    mocks.getWorktreeWorkspaces.mockReturnValueOnce([wsRunning]);
     mocks.showConfirmPrompt.mockResolvedValueOnce(false);
 
     const result = await archiveGroup("g-1");
@@ -338,7 +338,7 @@ describe("archiveGroup", () => {
     };
     mocks.getWorkspaceGroup.mockReturnValueOnce(group);
     mocks.getWorkspaceGroups.mockReturnValue([group]);
-    mocks.getWorkspacesInGroup.mockReturnValueOnce([ws1, dashboardWs]);
+    mocks.getWorktreeWorkspaces.mockReturnValueOnce([ws1, dashboardWs]);
 
     await archiveGroup("g-1");
 

@@ -7,7 +7,7 @@ const WORKSPACE_LIST_BLOCK = readFileSync(
 ).replace(/\s+/g, " ");
 
 const GROUP_SECTION_CONTENT = readFileSync(
-  "src/lib/components/WorkspaceGroupSectionContent.svelte",
+  "src/lib/components/WorkspaceSectionContent.svelte",
   "utf-8",
 ).replace(/\s+/g, " ");
 
@@ -64,19 +64,19 @@ describe("per-project overlay (via WorkspaceListBlock shell)", () => {
     expect(BOOTSTRAP).toMatch(/resolveGroupColor/);
   });
 
-  it("WorkspaceGroupSectionContent accepts a unified overlay prop supporting strong + light", () => {
+  it("WorkspaceSectionContent accepts a unified overlay prop supporting strong + light", () => {
     expect(GROUP_SECTION_CONTENT).toMatch(/export let overlay/);
     expect(GROUP_SECTION_CONTENT).toMatch(/kind:\s*"strong"/);
     expect(GROUP_SECTION_CONTENT).toMatch(/kind:\s*"light"/);
   });
 
-  it("WorkspaceGroupSectionContent renders one overlay spanning the whole group block; label only for strong", () => {
+  it("WorkspaceSectionContent renders one overlay spanning the whole group block; label only for strong", () => {
     expect(GROUP_SECTION_CONTENT).toMatch(/\{#if overlay\}/);
     expect(GROUP_SECTION_CONTENT).toMatch(/overlay\.kind\s*===\s*"strong"/);
     expect(GROUP_SECTION_CONTENT).toMatch(/overlay\.label/);
   });
 
-  it("WorkspaceGroupSectionContent paints the strong overlay with the group's own color", () => {
+  it("WorkspaceSectionContent paints the strong overlay with the group's own color", () => {
     // Non-source groups during a group drag render a solid colored
     // tile using the theme-resolved group color.
     expect(GROUP_SECTION_CONTENT).toMatch(
@@ -87,7 +87,7 @@ describe("per-project overlay (via WorkspaceListBlock shell)", () => {
     );
   });
 
-  it("WorkspaceGroupSectionContent uses the light dim (black-40) for the light variant", () => {
+  it("WorkspaceSectionContent uses the light dim (black-40) for the light variant", () => {
     expect(GROUP_SECTION_CONTENT).toMatch(/rgba\(0,\s*0,\s*0,\s*0\.4\)/);
   });
 });

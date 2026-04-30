@@ -1,6 +1,6 @@
 /**
  * Workspace Groups store — core's reactive source of truth for the
- * persisted WorkspaceGroupEntry list. Previously owned by the
+ * persisted WorkspaceEntry list. Previously owned by the
  * project-scope extension; relocated to core in Stage 5 so commands,
  * overlays, and row renderers that manipulate groups no longer depend
  * on the extension API layer.
@@ -12,7 +12,7 @@
  * existing path so no user data migrates in this stage.
  */
 import { get, writable, type Readable } from "svelte/store";
-import type { WorkspaceGroupEntry } from "../config";
+import type { WorkspaceEntry } from "../config";
 import {
   loadExtensionState,
   saveExtensionState,
@@ -24,8 +24,8 @@ const WORKSPACE_GROUP_ORDER_KEY = "workspaceGroupOrder";
 const ACTIVE_GROUP_ID_KEY = "activeGroupId";
 const PERSIST_DEBOUNCE_MS = 300;
 
-const _groups = writable<WorkspaceGroupEntry[]>([]);
-export const workspaceGroupsStore: Readable<WorkspaceGroupEntry[]> = _groups;
+const _groups = writable<WorkspaceEntry[]>([]);
+export const workspaceGroupsStore: Readable<WorkspaceEntry[]> = _groups;
 
 const _groupOrder = writable<string[]>([]);
 
@@ -60,7 +60,7 @@ export async function loadWorkspaceGroups(): Promise<void> {
   _loaded = true;
   const state = await loadExtensionState(STATE_ID);
   const groups = Array.isArray(state[WORKSPACE_GROUPS_KEY])
-    ? (state[WORKSPACE_GROUPS_KEY] as WorkspaceGroupEntry[])
+    ? (state[WORKSPACE_GROUPS_KEY] as WorkspaceEntry[])
     : [];
   const order = Array.isArray(state[WORKSPACE_GROUP_ORDER_KEY])
     ? (state[WORKSPACE_GROUP_ORDER_KEY] as string[])
@@ -85,15 +85,15 @@ export async function flushWorkspaceGroups(): Promise<void> {
   if (_loaded) await persistNow();
 }
 
-export function getWorkspaceGroups(): WorkspaceGroupEntry[] {
+export function getWorkspaceGroups(): WorkspaceEntry[] {
   return get(_groups);
 }
 
-export function getWorkspaceGroup(id: string): WorkspaceGroupEntry | undefined {
+export function getWorkspaceGroup(id: string): WorkspaceEntry | undefined {
   return getWorkspaceGroups().find((g) => g.id === id);
 }
 
-export function setWorkspaceGroups(next: WorkspaceGroupEntry[]): void {
+export function setWorkspaceGroups(next: WorkspaceEntry[]): void {
   _groups.set(next);
   schedulePersist();
 }

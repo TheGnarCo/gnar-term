@@ -7,7 +7,7 @@
  */
 import { get, type Readable } from "svelte/store";
 import { createRegistry } from "./create-registry";
-import type { WorkspaceGroupEntry } from "../config";
+import type { WorkspaceEntry } from "../config";
 
 /**
  * A kind of dashboard that can attach to a Workspace Group. The
@@ -56,7 +56,7 @@ export interface DashboardContribution {
    * = contribution.id` on the created workspace so the grid can
    * attribute tiles back to their contribution.
    */
-  create: (group: WorkspaceGroupEntry) => Promise<string>;
+  create: (group: WorkspaceEntry) => Promise<string>;
   /**
    * Optional "delete and regenerate" hook surfaced as a button next to
    * the dashboard's row in Group Settings. Implementations typically
@@ -67,14 +67,14 @@ export interface DashboardContribution {
    * The preview-surface file watcher reloads markdown on rewrite, so
    * implementations rarely need to close / recreate the host workspace.
    */
-  regenerate?: (group: WorkspaceGroupEntry) => Promise<void>;
+  regenerate?: (group: WorkspaceEntry) => Promise<void>;
   /**
    * Optional availability gate. When returns false, the contribution
    * is hidden from the group's "Add Dashboard" menu — e.g. the core
    * Group Dashboard contribution uses this to hide itself when the
    * user has toggled `groupDashboardEnabled` off.
    */
-  isAvailableFor?: (group: WorkspaceGroupEntry) => boolean;
+  isAvailableFor?: (group: WorkspaceEntry) => boolean;
   /**
    * Optional icon component rendered on the dashboard tile. When
    * omitted, WorkspaceListView falls back to a generic grid glyph.
@@ -128,7 +128,7 @@ export function getDashboardContributions(): DashboardContribution[] {
  * that return false. Stable registration order is preserved.
  */
 export function getDashboardContributionsForGroup(
-  group: WorkspaceGroupEntry,
+  group: WorkspaceEntry,
 ): DashboardContribution[] {
   return getDashboardContributions().filter(
     (c) => c.isAvailableFor?.(group) ?? true,
@@ -146,7 +146,7 @@ export function getDashboardContributionsForGroup(
  * availability gate denies the group, or `currentCount >= capPerGroup`.
  */
 export function canAddContributionToGroup(
-  group: WorkspaceGroupEntry,
+  group: WorkspaceEntry,
   contributionId: string,
   currentCount: number,
 ): boolean {

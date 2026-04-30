@@ -9,7 +9,7 @@ import {
 } from "./workspace-service";
 import { wsMeta } from "./service-helpers";
 import {
-  getWorkspacesInGroup,
+  getWorktreeWorkspaces,
   closeWorkspacesInGroup,
   provisionAutoDashboardsForGroup,
 } from "./workspace-group-service";
@@ -66,7 +66,7 @@ export async function archiveGroup(groupId: string): Promise<boolean> {
   if (!group) return false;
   if (group.locked) return false;
 
-  const allInGroup = getWorkspacesInGroup(groupId);
+  const allInGroup = getWorktreeWorkspaces(groupId);
   const nonDashboard = allInGroup.filter((ws) => !isDashboardWorkspace(ws));
 
   const runningCount = nonDashboard.reduce(

@@ -965,7 +965,7 @@ export interface WorkspaceActionInfo {
 
 /**
  * Minimum shape of a Workspace Group passed to contribution hooks. The
- * canonical type lives in core (`src/lib/config.ts#WorkspaceGroupEntry`);
+ * canonical type lives in core (`src/lib/config.ts#WorkspaceEntry`);
  * the public API only exposes the fields contributions are allowed to
  * read so core can evolve the stored record without breaking extensions.
  */

@@ -23,11 +23,9 @@ import {
   setWorkspaceGroups,
 } from "../lib/stores/workspace-groups";
 import { reconcilePrimaryWorkspaces } from "../lib/services/workspace-group-service";
-import type { WorkspaceGroupEntry } from "../lib/config";
+import type { WorkspaceEntry } from "../lib/config";
 
-function makeGroup(
-  overrides: Partial<WorkspaceGroupEntry> = {},
-): WorkspaceGroupEntry {
+function makeGroup(overrides: Partial<WorkspaceEntry> = {}): WorkspaceEntry {
   return {
     id: "g1",
     name: "Group 1",

@@ -1,5 +1,5 @@
 /**
- * Dashboard buttons in WorkspaceGroupSectionContent's btn-row slot render
+ * Dashboard buttons in WorkspaceSectionContent's btn-row slot render
  * icon-only: no text label, workspace name lives in the `title` attribute.
  * Regression for the redesign that moved dashboard tiles from
  * WorkspaceListView's grid into the ContainerRow btn-row slot.
@@ -8,7 +8,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
 
 const GROUP_SECTION = readFileSync(
-  "src/lib/components/WorkspaceGroupSectionContent.svelte",
+  "src/lib/components/WorkspaceSectionContent.svelte",
   "utf-8",
 ).replace(/\s+/g, " ");
 

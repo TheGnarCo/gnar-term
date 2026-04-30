@@ -139,7 +139,7 @@ export interface AgentsConfig {
  * type already lives here so dashboard-contribution consumers can depend
  * on a stable core import path.
  */
-export interface WorkspaceGroupEntry {
+export interface WorkspaceEntry {
   id: string;
   name: string;
   /** Root CWD — auto-adoption uses this as a longest-prefix ancestor match. */
@@ -242,7 +242,7 @@ export interface AppState {
     groups: Record<
       string,
       {
-        group: WorkspaceGroupEntry;
+        group: WorkspaceEntry;
         workspaceDefs: (WorkspaceDef & { name: string })[];
       }
     >;

@@ -371,6 +371,7 @@
   let caretHovered = false;
   let closeHovered = false;
   let lockHovered = false;
+  let dashboardCloseHovered: string | null = null;
 
   $: dashboardWorkspaces = (() => {
     const gId = group?.id;
@@ -592,33 +593,85 @@
             : undefined}
           {@const IconComp = contribution?.icon ?? GridIcon}
           {@const isActive = entry.idx === $activeWorkspaceIdx}
-          <!-- svelte-ignore a11y_consider_explicit_label -->
-          <button
-            class="dash-btn"
-            data-dashboard-item={entry.ws.id}
-            data-dashboard-contribution={contribId}
-            data-active={isActive ? "true" : undefined}
-            title={entry.ws.name}
-            on:click|stopPropagation={() => switchWorkspace(entry.idx)}
-            on:contextmenu|preventDefault|stopPropagation={(e) =>
-              showDashboardContextMenu(e.clientX, e.clientY, entry.idx)}
+          {@const canDelete = contribution && !contribution.autoProvision}
+          <div
+            class="dashboard-tiles"
+            style="position: relative;"
             on:mouseenter={() => (hoveredDashId = entry.ws.id)}
-            on:mouseleave={() => (hoveredDashId = null)}
-            style="
-              background: {$theme.bgSurface ?? 'transparent'};
-              border: 1px solid {$theme.border ?? 'transparent'};
-              {isActive ? `box-shadow: 0 0 0 1.5px ${groupHex};` : ''}
-            "
+            on:mouseleave={() => {
+              hoveredDashId = null;
+              dashboardCloseHovered = null;
+            }}
           >
-            <DashboardTileIcon
-              iconComponent={IconComp}
-              baseColor={groupHex}
-              contributionId={contribId}
-              groupPath={group?.path}
-              {isActive}
-              isHovered={hoveredDashId === entry.ws.id}
-            />
-          </button>
+            <!-- svelte-ignore a11y_consider_explicit_label -->
+            <button
+              class="dash-btn"
+              data-dashboard-item={entry.ws.id}
+              data-dashboard-contribution={contribId}
+              data-active={isActive ? "true" : undefined}
+              title={entry.ws.name}
+              on:click|stopPropagation={() => switchWorkspace(entry.idx)}
+              on:contextmenu|preventDefault|stopPropagation={(e) =>
+                showDashboardContextMenu(e.clientX, e.clientY, entry.idx)}
+              style="
+                position: absolute;
+                top: 0; left: 0; right: 0; bottom: 0;
+                background: {$theme.bgSurface ?? 'transparent'};
+                border: 1px solid {$theme.border ?? 'transparent'};
+                {isActive ? `box-shadow: 0 0 0 1.5px ${groupHex};` : ''}
+              "
+            >
+              <DashboardTileIcon
+                iconComponent={IconComp}
+                baseColor={groupHex}
+                contributionId={contribId}
+                groupPath={group?.path}
+                {isActive}
+                isHovered={hoveredDashId === entry.ws.id}
+              />
+            </button>
+            {#if canDelete && hoveredDashId === entry.ws.id}
+              <button
+                title={`Delete ${contribution.label}`}
+                aria-label={`Delete ${contribution.label}`}
+                on:click|stopPropagation={async () => {
+                  const confirmed = await showConfirmPrompt(
+                    `Delete "${entry.ws.name}"? The backing markdown file stays on disk so you can re-add this dashboard later without losing your edits.`,
+                    {
+                      title: `Delete ${contribution.label}`,
+                      confirmLabel: "Delete",
+                      cancelLabel: "Cancel",
+                    },
+                  );
+                  if (!confirmed) return;
+                  closeWorkspace(entry.idx);
+                }}
+                on:mouseenter={() => (dashboardCloseHovered = entry.ws.id)}
+                on:mouseleave={() => (dashboardCloseHovered = null)}
+                style="
+                  position: absolute;
+                  top: 50%; right: 6px;
+                  transform: translateY(-50%);
+                  display: flex; align-items: center; justify-content: center;
+                  width: 14px; height: 14px;
+                  color: {dashboardCloseHovered === entry.ws.id
+                  ? $theme.danger
+                  : $theme.fgDim};
+                  background: {$theme.bgSurface ?? $theme.bg};
+                  border: 1px solid {dashboardCloseHovered === entry.ws.id
+                  ? $theme.danger
+                  : $theme.fgDim};
+                  border-radius: 3px;
+                  cursor: pointer;
+                  padding: 0;
+                  font-size: 8px; line-height: 1;
+                  transition: color 0.1s, border-color 0.1s;
+                  -webkit-app-region: no-drag;
+                  z-index: 1;
+                ">×</button
+              >
+            {/if}
+          </div>
         {/each}
         {#if groupContext && group?.isGit}
           <!-- svelte-ignore a11y_consider_explicit_label -->
@@ -719,9 +772,6 @@
 
 <style>
   .dash-btn {
-    flex: 1 1 calc(25% - 3px);
-    min-width: 32px;
-    height: 30px;
     border-radius: 6px;
     cursor: pointer;
     display: flex;
@@ -732,5 +782,10 @@
   }
   .dash-btn:hover {
     filter: brightness(1.1);
+  }
+  .dashboard-tiles {
+    flex: 1 1 calc(25% - 3px);
+    min-width: 32px;
+    height: 30px;
   }
 </style>

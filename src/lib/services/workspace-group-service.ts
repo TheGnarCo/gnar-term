@@ -779,6 +779,17 @@ export async function reconcilePrimaryWorkspaces(): Promise<void> {
     claimWorkspace(ws.id, "core");
     knownGroupIds.add(id);
   }
+
+  // Pass 3 — claim all workspaces that have metadata.groupId pointing to
+  // valid groups. This rehydrates the in-memory claim registry from
+  // persisted metadata on restart.
+  const validGroupIds = new Set(getWorkspaceGroups().map((g) => g.id));
+  for (const ws of get(workspaces)) {
+    const md = wsMeta(ws);
+    if (md.groupId && validGroupIds.has(md.groupId)) {
+      claimWorkspace(ws.id, "core");
+    }
+  }
 }
 
 export {

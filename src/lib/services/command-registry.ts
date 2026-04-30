@@ -29,7 +29,7 @@ export function registerCommands(cmds: Command[]): void {
   }
 }
 
-/** Execute a registered command by id. Returns false if not found. */
+/** Execute a registered command by id. Returns false if the id is not found. */
 export function runCommandById(id: string, args?: unknown): boolean {
   const cmd = get(commandStore).find((c) => c.id === id);
   if (!cmd) return false;

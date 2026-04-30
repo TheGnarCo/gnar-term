@@ -93,7 +93,7 @@
       style="
         position: absolute;
         left: 0; top: 0; bottom: 0;
-        width: 4.5px;
+        width: 5px;
         background: {effectiveColor};
         opacity: {railOpacity};
       "

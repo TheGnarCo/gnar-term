@@ -145,21 +145,6 @@
     return null;
   })();
 
-  // Agent status for the primary workspace only — shown as a status dot
-  // on the container row header.
-  $: primaryWsAgentStatus = (() => {
-    if (!primaryWs) return null;
-    const agent = $agentsStore.find((a) => a.workspaceId === primaryWs!.id);
-    if (!agent) return null;
-    if (agent.status === "running" || agent.status === "active")
-      return { label: "running", color: variantColor("success") };
-    if (agent.status === "waiting")
-      return { label: "waiting", color: variantColor("warning") };
-    if (agent.status === "idle")
-      return { label: "idle", color: variantColor("muted") };
-    return null;
-  })();
-
   // True when the currently active workspace belongs to this group —
   // checked via `metadata.groupId` so the match covers both the
   // Dashboard workspace and ordinary nested children, regardless of
@@ -469,28 +454,6 @@
       workspaceListViewComponent={WorkspaceListView}
       locked={isGroupLocked}
     >
-      {#if primaryWsAgentStatus}
-        <span
-          style="
-            display: inline-block;
-            width: 7px; height: 7px; border-radius: 50%;
-            background: {primaryWsAgentStatus.color};
-            flex-shrink: 0;
-            margin-right: 4px;
-          "
-          title={primaryWsAgentStatus.label}
-        ></span>
-      {:else if primaryWs}
-        <span
-          style="
-            display: inline-block;
-            width: 7px; height: 7px; border-radius: 50%;
-            background: {$theme.fg ? $theme.fg + '22' : '#ffffff22'};
-            flex-shrink: 0;
-            margin-right: 4px;
-          "
-        ></span>
-      {/if}
       <span
         data-container-row-title
         style="

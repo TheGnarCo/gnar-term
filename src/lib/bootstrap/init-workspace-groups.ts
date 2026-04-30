@@ -176,6 +176,7 @@ async function createWorkspaceGroupFlow(prefill?: {
       .reverse()
       .find((w) => wsMeta(w).groupId === id && !wsMeta(w).isDashboard);
     if (newWs) {
+      updateWorkspaceGroup(id, { primaryWorkspaceId: newWs.id });
       const idx = get(workspaces).indexOf(newWs);
       if (idx >= 0) switchWorkspace(idx);
     }

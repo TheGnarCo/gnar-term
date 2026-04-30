@@ -112,8 +112,11 @@ describe("drag source hides + ghost shows at target", () => {
   const LIST_VIEW = read("src/lib/components/WorkspaceListView.svelte");
 
   it("WorkspaceItem hides its row (display: none) while dragActive", () => {
-    expect(WORKSPACE_ITEM).toMatch(
-      /display:\s*\{\s*dragActive\s*\?\s*'none'\s*:\s*'flex'\s*\}/,
+    const SIDEBAR_ELEM = read(
+      "src/lib/components/PrimarySidebarElement.svelte",
+    );
+    expect(SIDEBAR_ELEM).toMatch(
+      /display:\s*\{\s*isDragging\s*\?\s*'none'\s*:\s*'flex'\s*\}/,
     );
     // The old opacity-dim approach is gone.
     expect(WORKSPACE_ITEM).not.toMatch(

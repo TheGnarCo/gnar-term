@@ -8,7 +8,7 @@
   import { workspaceSubtitleStore } from "../services/workspace-subtitle-registry";
   import { getExtensionApiById } from "../services/extension-loader";
   import ExtensionWrapper from "./ExtensionWrapper.svelte";
-  import DragGrip from "./DragGrip.svelte";
+  import PrimarySidebarElement from "./PrimarySidebarElement.svelte";
   import { modLabel } from "../terminal-service";
   import { shortcutHintsActive } from "../stores/shortcut-hints";
   import { discoEmojiFor, discoColorFor } from "../utils/disco-decoration";
@@ -46,9 +46,6 @@
    */
   export let hideStatusBadges: boolean = false;
 
-  let hovered = false;
-  let closeHovered = false;
-  let lockHovered = false;
   let nameEl: HTMLSpanElement;
   let _renaming = false;
 
@@ -130,94 +127,31 @@
   export let shortcutIdx: number | undefined = undefined;
 </script>
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<!-- svelte-ignore a11y_click_events_have_key_events -->
-<div
-  data-drag-idx={index}
-  data-workspace-id={workspace.id}
-  data-worktree={isManaged ? "true" : undefined}
-  style="
-    display: {dragActive ? 'none' : 'flex'};
-    position: relative;
-    margin: 0 8px 0 0; border-radius: 0 6px 6px 0; overflow: hidden; cursor: pointer;
-    background: {isActive
-    ? $theme.bgActive
-    : hovered
-      ? $theme.bgHighlight
-      : ($theme.bgSurface ?? 'transparent')};
-    border: 1px solid {isActive ? railColor : ($theme.border ?? 'transparent')};
-  "
-  on:contextmenu|preventDefault={(e) => {
+<PrimarySidebarElement
+  kind="workspace"
+  name={workspace.name}
+  {isActive}
+  {isLocked}
+  isDragging={dragActive}
+  canDrag={!!onGripMouseDown}
+  canClose={!isDashboardWs || isDashboardWorkspaceRow}
+  color={railColor}
+  dataDragIdx={index}
+  dataWorkspaceId={workspace.id}
+  dataWorktree={isManaged ? "true" : undefined}
+  {onGripMouseDown}
+  {onClose}
+  onContextMenu={(e) => {
     // Dashboards are non-interactive surfaces; right-click is a no-op.
     if (isDashboardWs) return;
     onContextMenu(e.clientX, e.clientY);
   }}
-  on:mouseenter={() => (hovered = true)}
-  on:mouseleave={() => {
-    hovered = false;
-  }}
-  on:mousedown={(e) => {
-    // Locked workspaces refuse drag-start at the row body. The grip
-    // column still receives the mousedown (its native cursor is
-    // not-allowed) so callers see consistent input but cannot
-    // initiate a reorder.
-    if (isLocked) return;
-    onGripMouseDown?.(e);
-  }}
 >
-  {#if onGripMouseDown}
-    <!-- Grip column. The drag-start handler lives on the outer row
-         div (above) so hovering anywhere on the row expands the grip
-         and mousedowns on the body itself initiate the reorder —
-         createDragReorder's 5px threshold keeps taps as selects. -->
-    <DragGrip
-      theme={$theme}
-      visible={dragActive || (hovered && !$anyReorderActive)}
-      {railColor}
-      railOpacity={1}
-      alwaysShowDots={true}
-      fadeRight={!(dragActive || (hovered && !$anyReorderActive))}
-      shortcutLabel={shortcutIdx !== undefined && shortcutIdx < 9
-        ? `${modLabel}${shortcutIdx + 1}`
-        : undefined}
-    />
-    <!-- Drag-edge fade: continues the rail's dot pattern from the
-         very left of the row into the row body for ~14px, dropping
-         off fast. Matches the project banner's fade treatment so
-         the rail → row-body transition reads as a gradient rather
-         than a hard edge. Independent of expansion state. -->
-    <div
-      aria-hidden="true"
-      style="
-        position: absolute;
-        top: 0; bottom: 0;
-        left: 0; width: 14px;
-        pointer-events: none;
-        background-image:
-          radial-gradient(circle, {railColor} 1.1px, transparent 1.6px),
-          radial-gradient(circle, {railColor} 1.1px, transparent 1.6px);
-        background-size: 5px 5px;
-        background-position: 0 0, 2.5px 2.5px;
-        background-repeat: repeat;
-        -webkit-mask-image: linear-gradient(
-          to right,
-          rgba(0, 0, 0, 1) 0%,
-          rgba(0, 0, 0, 0.3) 20%,
-          rgba(0, 0, 0, 0) 70%
-        );
-        mask-image: linear-gradient(
-          to right,
-          rgba(0, 0, 0, 1) 0%,
-          rgba(0, 0, 0, 0.3) 20%,
-          rgba(0, 0, 0, 0) 70%
-        );
-      "
-    ></div>
-  {/if}
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <div
     role="button"
     tabindex="0"
+    data-workspace-content
     on:click={onSelect}
     on:keydown={(e) => {
       if (e.key === "Enter" || e.key === " ") {
@@ -441,62 +375,4 @@
       </div>
     {/if}
   </div>
-  <!-- Right-side close / lock control — always visible, styled on hover -->
-  {#if !isDashboardWs || isDashboardWorkspaceRow}
-    {#if isLocked}
-      <div
-        aria-hidden="true"
-        title="Workspace locked"
-        style="
-          position: absolute; top: 50%; right: 6px;
-          transform: translateY(-50%);
-          display: flex; align-items: center; justify-content: center;
-          width: 14px; height: 14px;
-          color: {lockHovered ? $theme.fg : railColor};
-          background: {$theme.bgSurface ?? $theme.bg};
-          border: 1px solid {lockHovered ? $theme.fg : railColor};
-          border-radius: 3px;
-          pointer-events: none;
-        "
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="9"
-          height="9"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2.5"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <title>Workspace locked</title>
-          <rect width="14" height="10" x="5" y="11" rx="2" />
-          <path d="M8 11V7a4 4 0 0 1 8 0v4" />
-        </svg>
-      </div>
-    {:else}
-      <button
-        title="Close Workspace (⇧⌘W)"
-        aria-label="Close Workspace"
-        style="
-          position: absolute; top: 50%; right: 6px;
-          transform: translateY(-50%);
-          display: flex; align-items: center; justify-content: center;
-          width: 14px; height: 14px;
-          color: {closeHovered ? $theme.danger : railColor};
-          background: {$theme.bgSurface ?? $theme.bg};
-          border: 1px solid {closeHovered ? $theme.danger : railColor};
-          border-radius: 3px; cursor: pointer; padding: 0;
-          font-size: 10px; line-height: 1;
-          transition: color 0.1s, border-color 0.1s;
-          -webkit-app-region: no-drag;
-        "
-        on:mousedown|stopPropagation
-        on:click|stopPropagation={onClose}
-        on:mouseenter={() => (closeHovered = true)}
-        on:mouseleave={() => (closeHovered = false)}>×</button
-      >
-    {/if}
-  {/if}
-</div>
+</PrimarySidebarElement>

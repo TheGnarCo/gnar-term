@@ -4,11 +4,6 @@ import { readFileSync } from "fs";
 import WorkspaceItem from "../lib/components/WorkspaceItem.svelte";
 import type { Workspace } from "../lib/types";
 
-const WORKSPACE_ITEM_SOURCE = readFileSync(
-  "src/lib/components/WorkspaceItem.svelte",
-  "utf-8",
-).replace(/\s+/g, " ");
-
 function makeWorkspace(): Workspace {
   return {
     id: "ws1",
@@ -86,9 +81,13 @@ describe("WorkspaceItem drag grip", () => {
   });
 
   it("rounds only the right corners so the rail renders as a straight vertical bar on the left", () => {
-    expect(WORKSPACE_ITEM_SOURCE).toMatch(/border-radius:\s*0\s+6px\s+6px\s+0/);
-    // Negative: the old uniform radius is gone.
-    expect(WORKSPACE_ITEM_SOURCE).not.toMatch(/border-radius:\s*6px\s*;/);
+    const SIDEBAR_ELEM_SOURCE = readFileSync(
+      "src/lib/components/PrimarySidebarElement.svelte",
+      "utf-8",
+    ).replace(/\s+/g, " ");
+    expect(SIDEBAR_ELEM_SOURCE).toMatch(
+      /border-radius:\s*\{kind === 'group' \|\| kind === 'workspace'\s*\?\s*'0 6px 6px 0'/,
+    );
   });
 
   it("invokes onGripMouseDown when ANY part of the row body is pressed (row-level drag-origin)", async () => {
@@ -113,7 +112,7 @@ describe("WorkspaceItem drag grip", () => {
     // the inner content div so selection works for single clicks.
     expect(onGripMouseDown).toHaveBeenCalledTimes(1);
     const contentDiv = container.querySelector(
-      "[data-drag-idx] > div:last-of-type",
+      "[data-workspace-content]",
     ) as HTMLElement;
     await fireEvent.click(contentDiv);
     expect(onSelect).toHaveBeenCalled();

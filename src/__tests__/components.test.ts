@@ -1292,18 +1292,23 @@ describe("WorkspaceItem", () => {
   });
 
   it("always renders the DragGrip dot pattern at full railColor (no solid-bg wrapper)", () => {
-    const source = readFileSync(
-      "src/lib/components/WorkspaceItem.svelte",
+    const sidebarSource = readFileSync(
+      "src/lib/components/PrimarySidebarElement.svelte",
       "utf-8",
     );
-    // railColor falls back through dashboard entry color → accentColor prop → theme.accent
-    expect(source).toContain("accentColor");
-    expect(source).toContain("$theme.accent");
     // alwaysShowDots + full opacity so the dot pattern reads at rest
     // without needing a colored wrapper bg (which would appear as a
     // solid "border" block).
-    expect(source).toMatch(/alwaysShowDots=\{true\}/);
-    expect(source).toMatch(/railOpacity=\{1\}/);
+    expect(sidebarSource).toMatch(/alwaysShowDots=\{true\}/);
+    expect(sidebarSource).toMatch(/railOpacity=\{1\}/);
+
+    // WorkspaceItem uses railColor which falls back through:
+    // dashboard entry color → accentColor prop → theme.accent
+    const workspaceSource = readFileSync(
+      "src/lib/components/WorkspaceItem.svelte",
+      "utf-8",
+    );
+    expect(workspaceSource).toContain("railColor");
   });
 
   it("passes accentColor through WorkspaceListView", () => {

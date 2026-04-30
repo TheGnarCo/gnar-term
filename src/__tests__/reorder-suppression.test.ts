@@ -1,11 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
 
-const WORKSPACE_ITEM = readFileSync(
-  "src/lib/components/WorkspaceItem.svelte",
-  "utf-8",
-).replace(/\s+/g, " ");
-
 const WORKSPACE_LIST_BLOCK = readFileSync(
   "src/lib/components/WorkspaceListBlock.svelte",
   "utf-8",
@@ -28,16 +23,16 @@ const EXTENSION_API = readFileSync(
 
 describe("grip visibility suppression", () => {
   it("WorkspaceItem keeps its own grip collapsed when any reorder is active unless the item is the drag source", () => {
-    // WorkspaceItem still owns a grip when rendered INSIDE a project
-    // (WorkspaceListView); at the root level it's rendered without
-    // one (WorkspaceListBlock draws the grip externally). The visible
+    // PrimarySidebarElement now owns the grip for WorkspaceItem. The visible
     // gate tracks row-level hover so hovering any part of the row
     // (not just the grip column) expands it.
-    // shortcutHintsActive is intentionally excluded — meta-hold shows
-    // the tooltip chip without triggering the solid-background drag state.
-    expect(WORKSPACE_ITEM).toContain("anyReorderActive");
-    expect(WORKSPACE_ITEM).toMatch(
-      /visible=\{\s*dragActive\s*\|\|\s*\(\s*hovered\s*&&\s*!\s*\$anyReorderActive\s*\)\s*\}/,
+    const SIDEBAR_ELEM = readFileSync(
+      "src/lib/components/PrimarySidebarElement.svelte",
+      "utf-8",
+    ).replace(/\s+/g, " ");
+    expect(SIDEBAR_ELEM).toContain("anyReorderActive");
+    expect(SIDEBAR_ELEM).toMatch(
+      /visible=\{\s*isDragging\s*\|\|\s*\(\s*canDrag\s*&&\s*isHovered\s*&&\s*!\s*\$anyReorderActive\s*\)\s*\}/,
     );
   });
 

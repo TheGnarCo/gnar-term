@@ -1762,20 +1762,19 @@ describe("WorkspaceGroupSectionContent", () => {
     // ⎇ Branch renders even without any workspace actions registered.
     expect(screen.getByText("⎇ Branch")).toBeTruthy();
 
-    // Registering an extension action after mount doesn't change the button.
+    // Registering the core create-worktree action after mount doesn't change the button.
     registerWorkspaceAction({
-      id: "worktree-workspaces:create-worktree",
-      label: "New Worktree",
+      id: "core:create-worktree",
+      label: "⎇ Branch",
       icon: "git-branch",
-      source: "worktree-workspaces",
+      source: "core",
       handler: noop,
-      when: (ctx) => !ctx.groupId || ctx.isGit === true,
+      when: (ctx) => !!ctx.groupId && ctx.isGit === true,
     });
     await tick();
 
-    // Still just one ⎇ Branch button — no dropdown or extra buttons.
+    // Still just one ⎇ Branch button — the action doesn't add a second one.
     expect(screen.getByText("⎇ Branch")).toBeTruthy();
-    expect(screen.queryByText("New Worktree")).toBeNull();
   });
 });
 

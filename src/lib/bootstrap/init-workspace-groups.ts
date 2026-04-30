@@ -10,7 +10,7 @@
  * behavior).
  */
 import { get } from "svelte/store";
-import { registerCommand } from "../services/command-registry";
+import { registerCommand, runCommandById } from "../services/command-registry";
 import { registerWorkspaceAction } from "../services/workspace-action-registry";
 import { registerRootRowRenderer } from "../services/root-row-renderer-registry";
 import { registerDashboardContribution } from "../services/dashboard-contribution-registry";
@@ -298,6 +298,21 @@ export async function initWorkspaceGroups(): Promise<void> {
     when: (ctx) => !ctx?.groupId,
     handler: () => {
       void createWorkspaceGroupFlow();
+    },
+  });
+
+  // Formerly owned by the worktree-workspaces extension. Registered here
+  // so the action is available in context menus on git-backed groups. The
+  // ⎇ Branch button in WorkspaceGroupSectionContent calls the command
+  // directly; this action surfaces it in the workspace action registry.
+  registerWorkspaceAction({
+    id: "core:create-worktree",
+    label: "⎇ Branch",
+    icon: "git-branch",
+    source: SOURCE,
+    when: (ctx) => !!ctx?.groupId && ctx.isGit === true,
+    handler: (ctx) => {
+      runCommandById("worktrees:create-workspace", ctx);
     },
   });
 

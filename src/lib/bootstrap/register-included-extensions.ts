@@ -35,10 +35,6 @@ import {
   registerJrvsThemesExtension,
 } from "../../extensions/jrvs-themes";
 import {
-  worktreeWorkspacesManifest,
-  registerWorktreeWorkspacesExtension,
-} from "../../extensions/worktree-workspaces";
-import {
   githubSidebarManifest,
   registerGitHubSidebarExtension,
 } from "../../extensions/github-sidebar";
@@ -67,11 +63,6 @@ export const INCLUDED_EXTENSIONS: readonly IncludedExtension[] = [
   ],
   [diffViewerManifest, registerDiffViewerExtension, "diff-viewer"],
   [jrvsThemesManifest, registerJrvsThemesExtension, "jrvs-themes"],
-  [
-    worktreeWorkspacesManifest,
-    registerWorktreeWorkspacesExtension,
-    "worktree-workspaces",
-  ],
   [githubSidebarManifest, registerGitHubSidebarExtension, "github-sidebar"],
   [claudeSettingsManifest, registerClaudeSettingsExtension, "claude-settings"],
 ] as const;

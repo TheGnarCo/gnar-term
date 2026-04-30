@@ -2,9 +2,8 @@
  * Worktree bootstrap — owns the worktree-backed workspace concept.
  * Registers the create / archive / merge-archive commands and subscribes
  * to workspace lifecycle events so worktree-backed workspaces stay in
- * sync with core state. The user-facing "New Worktree" workspace-action
- * button lives in the worktree-workspaces extension and triggers the
- * `worktrees:create-workspace` command via api.runCommand.
+ * sync with core state. The ⎇ Branch button and `core:create-worktree`
+ * workspace action are registered in init-workspace-groups.
  */
 import { eventBus, type AppEvent } from "../services/event-bus";
 import { registerCommand } from "../services/command-registry";

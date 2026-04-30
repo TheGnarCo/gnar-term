@@ -58,7 +58,7 @@ describe("initWorktrees()", () => {
     expect(cmd!.source).toBe("worktrees");
   });
 
-  it("does NOT register the workspace action — that lives in the worktree-workspaces extension", () => {
+  it("does NOT register the workspace action — that is handled by init-workspace-groups", () => {
     initWorktrees();
     const action = get(workspaceActionStore).find(
       (a) => a.id === "core:create-worktree-workspace",

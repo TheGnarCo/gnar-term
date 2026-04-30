@@ -403,10 +403,7 @@ function __gnarterm_report_cwd --on-event fish_prompt\n\
         fish_content,
     );
     let fish_conf_d = format!("{home}/.config/fish/conf.d");
-    if std::fs::metadata(&fish_conf_d)
-        .map(|m| m.is_dir())
-        .unwrap_or(false)
-    {
+    if std::fs::metadata(&fish_conf_d).is_ok_and(|m| m.is_dir()) {
         let _ = std::fs::write(format!("{fish_conf_d}/gnarterm.fish"), fish_content);
     }
 

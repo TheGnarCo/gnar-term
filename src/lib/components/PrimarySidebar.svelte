@@ -13,8 +13,6 @@
    */
   import { theme } from "../stores/theme";
   import { primarySidebarVisible, primarySidebarWidth } from "../stores/ui";
-  import type { Readable } from "svelte/store";
-  import type { SplitButtonItem } from "./SplitButton.svelte";
   import { sidebarSectionStore } from "../services/sidebar-section-registry";
   import { workspaceActionStore } from "../services/workspace-action-registry";
   import { primarySections } from "../stores/mcp-sidebar";
@@ -22,7 +20,6 @@
   import SidebarSectionBlock from "./SidebarSectionBlock.svelte";
   import SidebarActionButton from "./SidebarActionButton.svelte";
   import McpSidebarSection from "./McpSidebarSection.svelte";
-  import SplitButton from "./SplitButton.svelte";
   import ArchiveZone from "./ArchiveZone.svelte";
   import SidebarResizeHandle from "./SidebarResizeHandle.svelte";
 
@@ -43,44 +40,14 @@
 
   let workspaceListBlock: WorkspaceListBlock;
 
-  // "New Workspace" (core-registered) is always the primary action in
-  // the Workspaces header "+ New" split-button. Additional workspace-
-  // zone actions (e.g. project-scope's "New Project") surface in the
-  // dropdown below it.
+  // "New Workspace" (core-registered) is the primary action in the
+  // Workspaces header "+ New" button.
   $: coreAction = $workspaceActionStore.find(
     (a) => a.id === "core:new-workspace",
-  );
-  $: workspaceZoneActions = $workspaceActionStore.filter(
-    (a) =>
-      a.id !== "core:new-workspace" &&
-      a.zone !== "sidebar" &&
-      (!a.when || a.when({})),
   );
   $: sidebarZoneActions = $workspaceActionStore.filter(
     (a) => a.zone === "sidebar" && (!a.when || a.when({})),
   );
-
-  $: splitDropdownItems = (() => {
-    if (workspaceZoneActions.length === 0) return [];
-    const items: SplitButtonItem[] = [];
-    if (coreAction) {
-      items.push({
-        id: coreAction.id,
-        label: coreAction.label,
-        icon: coreAction.icon,
-        handler: () => coreAction!.handler({}),
-      });
-    }
-    for (const a of workspaceZoneActions) {
-      items.push({
-        id: a.id,
-        label: a.label,
-        icon: a.icon,
-        handler: () => a.handler({}),
-      });
-    }
-    return items;
-  })();
 
   export function startRename(idx: number) {
     workspaceListBlock?.startRename(idx);
@@ -105,10 +72,7 @@
            Always 38px so the sidebar's "+ New" and zone actions stay
            reachable in every window mode, including native fullscreen
            where the OS title bar is gone. The window-drag attributes
-           are harmless no-ops when there's no window to drag.
-           overflow:visible is required so SplitButton's absolutely-
-           positioned dropdown can render below this 38px band without
-           being clipped. -->
+           are harmless no-ops when there's no window to drag. -->
       <div
         data-tauri-drag-region=""
         style="
@@ -121,13 +85,6 @@
         "
       >
         {#if coreAction}
-          <!-- "+ New" split-button lives here (previously inside the
-               Workspaces header). Chip styling mirrors the old header
-               chip so New Workspace stays the primary action with the
-               dropdown holding extension contributions like New
-               Project. The -webkit-app-region: no-drag on buttons
-               inside the chip keeps them clickable even though the
-               parent row is a window drag region. -->
           <span
             class="top-row-new-chip"
             style="
@@ -140,12 +97,17 @@
               -webkit-app-region: no-drag;
             "
           >
-            <SplitButton
-              label="+ New"
-              onMainClick={() => coreAction?.handler({})}
-              dropdownItems={splitDropdownItems}
-              theme={theme as unknown as Readable<Record<string, string>>}
-            />
+            <button
+              style="
+                -webkit-app-region: no-drag;
+                background: transparent; border: none;
+                color: {$theme.fg}; cursor: pointer;
+                font-size: 12px; padding: 4px 10px;
+              "
+              on:click={() => coreAction?.handler({})}
+            >
+              + New
+            </button>
           </span>
         {/if}
         {#each sidebarZoneActions as action (action.id)}
@@ -205,15 +167,8 @@
 {/if}
 
 <style>
-  /* Top-row "+ New" chip — suppress SplitButton's own border/color so
-     the chip wash defines its look, and tint the hover bg to match
-     the rest of the top-row buttons. --section-btn-fg is set inline
-     so the button text reads as $theme.fg. */
-  :global(.top-row-new-chip button) {
-    border-color: transparent !important;
-    color: var(--section-btn-fg) !important;
-  }
-  :global(.top-row-new-chip button:hover) {
+  /* Top-row "+ New" chip — hover tint matches the rest of the top-row buttons. */
+  .top-row-new-chip button:hover {
     background: rgba(255, 255, 255, 0.08) !important;
   }
 </style>

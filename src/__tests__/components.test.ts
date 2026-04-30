@@ -1707,7 +1707,7 @@ describe("PrimarySidebar", () => {
     expect(screen.getByText("+ New")).toBeTruthy();
   });
 
-  it("dropdown includes default action when workspace-zone extensions exist", async () => {
+  it("plain + New button still renders when workspace-zone extensions exist", async () => {
     primarySidebarVisible.set(true);
     registerWorkspaceAction({
       id: "core:new-workspace",
@@ -1724,21 +1724,16 @@ describe("PrimarySidebar", () => {
       handler: noop,
     });
     render(PrimarySidebar, { props: sidebarProps });
-    // Open the dropdown by clicking the caret next to the "+ New" main button.
-    // "New Workspace" is present only inside the dropdown menu items.
-    const mainBtn = screen.getByText("+ New");
-    const caretBtn = mainBtn
-      .closest("div")!
-      .querySelector("button:last-child") as HTMLElement;
-    await fireEvent.click(caretBtn);
-    // Dropdown includes both the default action and the extension action
-    expect(screen.getByText("New Workspace")).toBeTruthy();
-    expect(screen.getByText("New Worktree")).toBeTruthy();
+    // The sidebar now has a plain "+ New" button (no dropdown).
+    // Non-sidebar-zone extension actions are no longer shown in the top row.
+    expect(screen.getByText("+ New")).toBeTruthy();
+    // No "New Worktree" text in the sidebar top row — only sidebar-zone actions render there.
+    expect(screen.queryByText("New Worktree")).toBeNull();
   });
 });
 
 // ===========================================================================
-// WorkspaceGroupSectionContent — per-group "+ New" split button
+// WorkspaceGroupSectionContent — per-group ⎇ Branch button
 // ===========================================================================
 
 describe("WorkspaceGroupSectionContent", () => {
@@ -1748,20 +1743,9 @@ describe("WorkspaceGroupSectionContent", () => {
     cleanup();
   });
 
-  it("picks up workspace actions registered AFTER the component mounts", async () => {
-    // Regression: `$: actions = getWorkspaceActions().filter(...)` used to
-    // read the store via `get()`, which doesn't create a Svelte dep. When
-    // extensions activated after the component mounted (e.g. the worktree-
-    // workspaces extension), the per-group "+ New" dropdown stayed stale
-    // until the next render nudge. Now the statement reads the store
-    // directly so extension-registered actions appear live.
-    registerWorkspaceAction({
-      id: "core:new-workspace",
-      label: "New Workspace",
-      icon: "plus",
-      source: "core",
-      handler: noop,
-    });
+  it("renders ⎇ Branch button for every group regardless of extension actions", async () => {
+    // The ⎇ Branch button replaces the old SplitButton. It shows unconditionally
+    // for every group with a groupContext (i.e. any existing group entry).
     const group: WorkspaceGroupEntry = {
       id: "grp-1",
       name: "Test Group",
@@ -1775,11 +1759,10 @@ describe("WorkspaceGroupSectionContent", () => {
 
     render(WorkspaceGroupSectionHarness, { props: { groupId: "grp-1" } });
 
-    // Pre-registration: only the "+ New" main button, no caret.
-    let splitContainer = screen.getByText("+ New").closest("div")!;
-    expect(splitContainer.querySelectorAll("button").length).toBe(1);
+    // ⎇ Branch renders even without any workspace actions registered.
+    expect(screen.getByText("⎇ Branch")).toBeTruthy();
 
-    // Activate the worktree-workspaces-style action after mount.
+    // Registering an extension action after mount doesn't change the button.
     registerWorkspaceAction({
       id: "worktree-workspaces:create-worktree",
       label: "New Worktree",
@@ -1790,13 +1773,9 @@ describe("WorkspaceGroupSectionContent", () => {
     });
     await tick();
 
-    // Caret now renders and the dropdown exposes the new action.
-    splitContainer = screen.getByText("+ New").closest("div")!;
-    const buttons = splitContainer.querySelectorAll("button");
-    expect(buttons.length).toBe(2);
-    const caretBtn = buttons[buttons.length - 1] as HTMLElement;
-    await fireEvent.click(caretBtn);
-    expect(screen.getByText("New Worktree")).toBeTruthy();
+    // Still just one ⎇ Branch button — no dropdown or extra buttons.
+    expect(screen.getByText("⎇ Branch")).toBeTruthy();
+    expect(screen.queryByText("New Worktree")).toBeNull();
   });
 });
 

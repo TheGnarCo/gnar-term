@@ -1,16 +1,11 @@
 <script lang="ts">
   import { onDestroy, type Component } from "svelte";
-  import type { Readable } from "svelte/store";
   import ContainerRow from "./ContainerRow.svelte";
   import PathStatusLine from "./PathStatusLine.svelte";
-  import SplitButton from "./SplitButton.svelte";
   import WorkspaceListView from "./WorkspaceListView.svelte";
   import { resolveGroupColor } from "../theme-data";
   import { theme } from "../stores/theme";
-  // SplitButton's prop types theme as Readable<Record<string, string>>;
-  // the core store is Readable<ThemeDef>, structurally compatible but
-  // not assignable without a cast.
-  const themeView = theme as unknown as Readable<Record<string, string>>;
+  import { runCommandById } from "../services/command-registry";
   import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
   import { eventBus, type ExtensionEvent } from "../services/event-bus";
   import type { WorkspaceGroupEntry } from "../config";
@@ -198,9 +193,8 @@
   $: isGroupLocked = group?.locked === true;
 
   // `$workspaceActionStore` must be read inside this statement so the
-  // extension-registered actions (e.g. worktree-workspaces' "New Worktree")
-  // reach the `+ New` split-button dropdown when extensions activate after
-  // the component mounts.
+  // extension-registered actions reach the context menu when extensions
+  // activate after the component mounts.
   $: actions = groupContext
     ? $workspaceActionStore.filter((a) => !a.when || a.when(groupContext!))
     : [];
@@ -430,35 +424,6 @@
     contextMenu.set({ x, y, items });
   }
 
-  $: splitDropdownItems = [
-    {
-      id: "new-workspace",
-      label: "New Workspace",
-      icon: "plus",
-      handler: () => {
-        if (coreAction && groupContext) void coreAction.handler(groupContext);
-      },
-    },
-    ...otherActions.map((a) => ({
-      id: a.id,
-      label: a.label,
-      icon: a.icon,
-      handler: () => {
-        void a.handler(groupContext!);
-      },
-    })),
-    // Dashboard contributions that haven't hit their per-group cap —
-    // e.g. "Add Agentic Dashboard" shows up here when the agentic
-    // extension is enabled and the group doesn't already have one.
-    // The computed list above (addableContributions) already filters
-    // out contributions at cap, so no extra gate is needed.
-    ...addableContributions.map((c) => ({
-      id: `contrib:${c.id}`,
-      label: c.actionLabel,
-      handler: () => void handleAddDashboardContribution(c),
-    })),
-  ];
-
   // Dashboard-hint for nested workspaces: any workspace hosting a
   // preview surface pointed at the group's dashboard path gets a
   // dashboard icon.
@@ -543,12 +508,13 @@
         <div
           style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;"
         >
-          {#if coreAction}
+          {#if groupContext}
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <span
-              class="project-new-chip"
-              on:click|stopPropagation
+              class="branch-btn-wrap"
+              on:click|stopPropagation={() =>
+                runCommandById("worktrees:create-workspace", groupContext)}
               on:mouseenter={() => (newChipHovered = true)}
               on:mouseleave={() => (newChipHovered = false)}
               style="
@@ -556,18 +522,16 @@
                 background: {newChipHovered
                 ? groupHex
                 : `color-mix(in srgb, ${groupHex} 70%, transparent)`};
-                --project-btn-fg: {headerFg};
-                --project-btn-hover-bg: {groupHex};
+                padding: 2px 8px;
+                font-size: 11px;
+                color: {headerFg};
+                cursor: pointer;
+                user-select: none;
+                -webkit-app-region: no-drag;
                 transition: background 0.15s;
               "
             >
-              <SplitButton
-                label="+ New"
-                onMainClick={() => coreAction?.handler(groupContext ?? {})}
-                dropdownItems={splitDropdownItems}
-                theme={themeView}
-                suppressButtonHoverBg={true}
-              />
+              ⎇ Branch
             </span>
           {/if}
         </div>
@@ -746,16 +710,8 @@
   .dash-btn:hover {
     filter: brightness(1.1);
   }
-  :global(.project-new-chip button) {
-    border: none !important;
-    outline: none !important;
-    color: var(--project-btn-fg) !important;
-  }
-  :global(.project-new-chip button[data-dropdown-open]) {
-    background: color-mix(
-      in srgb,
-      var(--project-btn-hover-bg) 80%,
-      #000
-    ) !important;
+  .branch-btn-wrap {
+    display: inline-flex;
+    align-items: center;
   }
 </style>

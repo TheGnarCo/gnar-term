@@ -723,6 +723,9 @@ export async function reconcilePrimaryWorkspaces(): Promise<void> {
     const md = wsMeta(ws);
     if (md.groupId && knownGroupIds.has(md.groupId)) continue;
     if (md.isDashboard) continue;
+    // Orphan worktree workspaces (group deleted, worktreePath still set) are
+    // not primary candidates — skip them rather than wrapping them alone.
+    if (md.worktreePath) continue;
 
     const colorIdx = usedColors.length % GROUP_COLOR_SLOTS.length;
     const color: string = GROUP_COLOR_SLOTS[colorIdx] ?? GROUP_COLOR_SLOTS[0];
@@ -732,7 +735,7 @@ export async function reconcilePrimaryWorkspaces(): Promise<void> {
     const group: WorkspaceGroupEntry = {
       id,
       name: ws.name,
-      path: ((md as Record<string, unknown>).cwd as string | undefined) ?? "",
+      path: ((md as Record<string, unknown>).cwd as string) ?? "",
       color,
       workspaceIds: [ws.id],
       primaryWorkspaceId: ws.id,
@@ -749,6 +752,8 @@ export async function reconcilePrimaryWorkspaces(): Promise<void> {
       ),
     );
     addWorkspaceGroup(group);
+    // onWorkspaceCreated already fired before reconcile runs, so claim here.
+    claimWorkspace(ws.id, "core");
     knownGroupIds.add(id);
   }
 }

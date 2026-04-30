@@ -151,4 +151,54 @@ describe("reconcilePrimaryWorkspaces", () => {
 
     expect(getWorkspaceGroups()).toHaveLength(1);
   });
+
+  it("does not wrap orphan worktree workspaces (standalone with worktreePath set)", async () => {
+    workspaces.set([
+      makeWorkspace("wt-orphan", {
+        metadata: { worktreePath: "/tmp/wt-orphan" },
+      }),
+    ]);
+
+    await reconcilePrimaryWorkspaces();
+
+    expect(getWorkspaceGroups()).toHaveLength(0);
+  });
+
+  it("wraps a workspace with an orphaned (unknown) groupId into a new group", async () => {
+    workspaces.set([
+      makeWorkspace("ws-orphan-group", {
+        metadata: { groupId: "deleted-group-id" },
+      }),
+    ]);
+
+    await reconcilePrimaryWorkspaces();
+
+    const groups = getWorkspaceGroups();
+    expect(groups).toHaveLength(1);
+    expect(groups[0].primaryWorkspaceId).toBe("ws-orphan-group");
+
+    const ws = get(workspaces).find((w) => w.id === "ws-orphan-group");
+    expect((ws?.metadata as Record<string, unknown>)?.groupId).toBe(
+      groups[0].id,
+    );
+  });
+
+  it("leaves primaryWorkspaceId unset on a group with only ineligible members (all worktrees)", async () => {
+    const group = makeGroup({ id: "g1", workspaceIds: ["wt-1", "wt-2"] });
+    setWorkspaceGroups([group]);
+    workspaces.set([
+      makeWorkspace("wt-1", {
+        metadata: { groupId: "g1", worktreePath: "/tmp/wt1" },
+      }),
+      makeWorkspace("wt-2", {
+        metadata: { groupId: "g1", worktreePath: "/tmp/wt2" },
+      }),
+    ]);
+
+    await reconcilePrimaryWorkspaces();
+
+    const updated = getWorkspaceGroups().find((g) => g.id === "g1");
+    expect(updated?.primaryWorkspaceId).toBeUndefined();
+    expect(getWorkspaceGroups()).toHaveLength(1);
+  });
 });

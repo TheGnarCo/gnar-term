@@ -64,6 +64,7 @@
   import { buildWorkspaceContextMenuItems } from "../utils/workspace-context-menu";
   import { wsMeta } from "../services/service-helpers";
   import { toggleWorkspaceLock } from "../services/workspace-service";
+  import { getWorkspaceGroup } from "../stores/workspace-groups";
 
   function resolvePseudoWorkspaceColor(pw: PseudoWorkspace): string {
     const slot = $configStore.pseudoWorkspaceColors?.[pw.id] ?? "purple";
@@ -314,14 +315,13 @@
   });
 
   function startRootRowDrag(e: MouseEvent, rowIdx: number) {
-    // Refuse to start a drag when the source row is a locked workspace.
-    // canStart on createDragReorder is invoked before sourceIdx is
-    // populated, so we gate at the call site where we already know which
-    // row the user pressed.
     const srcRow = $rootRowOrder[rowIdx];
     if (srcRow?.kind === "workspace") {
       const ws = $workspaces.find((w) => w.id === srcRow.id);
       if (ws && wsMeta(ws).locked === true) return;
+    } else if (srcRow?.kind === "workspace-group") {
+      const group = getWorkspaceGroup(srcRow.id);
+      if (group?.locked === true) return;
     }
     rootDrag.start(e, rowIdx);
   }

@@ -60,6 +60,13 @@ describe("canStart gating", () => {
       /canStart:\s*\(\)\s*=>\s*!\s*\$anyReorderActive/,
     );
   });
+
+  it("WorkspaceListBlock gates startRootRowDrag for locked workspace-groups", () => {
+    expect(WORKSPACE_LIST_BLOCK).toContain(
+      'srcRow?.kind === "workspace-group"',
+    );
+    expect(WORKSPACE_LIST_BLOCK).toContain("group?.locked === true");
+  });
 });
 
 describe("reorderContext is published on every drag", () => {

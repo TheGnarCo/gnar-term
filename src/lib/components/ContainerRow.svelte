@@ -110,8 +110,9 @@
   }
 
   $: rowHovered = mouseOverContainer;
-  $: railBorderColor =
-    hasActiveChild && collapsed ? color : ($theme.border ?? "transparent");
+  $: railBorderColor = hasActiveChild
+    ? color
+    : ($theme.border ?? "transparent");
 
   // Non-dashboard count: dashboards don't count as real nested workspaces for
   // the purposes of showing the toggle button and auto-expand/collapse.
@@ -239,7 +240,7 @@
           visible={rowHovered && $reorderContext === null}
           railColor={color}
           railOpacity={1}
-          alwaysShowDots={true}
+          alwaysShowDots={!locked}
           fadeRight={!rowHovered}
           onClose={locked ? undefined : onClose}
           closeTooltip="Delete Workspace Group"
@@ -279,13 +280,13 @@
           ? ($theme.bgHighlight ?? 'transparent')
           : ($theme.bgSurface ?? 'transparent')};
           color: {$theme.fg};
-          border-top: 1px solid {hasActiveChild && collapsed
+          border-top: 1px solid {hasActiveChild
           ? color
           : ($theme.border ?? 'transparent')};
-          border-right: 1px solid {hasActiveChild && collapsed
+          border-right: 1px solid {hasActiveChild
           ? color
           : ($theme.border ?? 'transparent')};
-          border-bottom: 1px solid {hasActiveChild && collapsed
+          border-bottom: 1px solid {hasActiveChild
           ? color
           : ($theme.border ?? 'transparent')};
           border-left: none;

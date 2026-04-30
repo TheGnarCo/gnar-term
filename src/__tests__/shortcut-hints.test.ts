@@ -54,14 +54,14 @@ describe("shortcut-hints store", () => {
     expect(get(shortcutHintsActive)).toBe(false);
   });
 
-  it("becomes true after holding modifier for 1s", async () => {
+  it("becomes true after holding modifier for 1.5s", async () => {
     const { shortcutHintsActive, initShortcutHints } = await load();
     initShortcutHints();
 
     fire("keydown", { key: "Meta" });
     expect(get(shortcutHintsActive)).toBe(false);
 
-    vi.advanceTimersByTime(1000);
+    vi.advanceTimersByTime(1500);
     expect(get(shortcutHintsActive)).toBe(true);
   });
 
@@ -94,7 +94,7 @@ describe("shortcut-hints store", () => {
     initShortcutHints();
 
     fire("keydown", { key: "Meta" });
-    vi.advanceTimersByTime(1000);
+    vi.advanceTimersByTime(1500);
     expect(get(shortcutHintsActive)).toBe(true);
 
     fire("keyup", { key: "Meta" });
@@ -106,7 +106,7 @@ describe("shortcut-hints store", () => {
     initShortcutHints();
 
     fire("keydown", { key: "Meta" });
-    vi.advanceTimersByTime(1000);
+    vi.advanceTimersByTime(1500);
     expect(get(shortcutHintsActive)).toBe(true);
 
     fire("blur");
@@ -118,11 +118,11 @@ describe("shortcut-hints store", () => {
     initShortcutHints();
 
     fire("keydown", { key: "Meta" });
-    vi.advanceTimersByTime(500);
+    vi.advanceTimersByTime(750);
     // Simulated key-repeat should be ignored
     fire("keydown", { key: "Meta", repeat: true });
     fire("keydown", { key: "Meta", repeat: true });
-    vi.advanceTimersByTime(500);
+    vi.advanceTimersByTime(750);
 
     expect(get(shortcutHintsActive)).toBe(true);
   });
@@ -132,7 +132,7 @@ describe("shortcut-hints store", () => {
     const cleanup = initShortcutHints();
 
     fire("keydown", { key: "Meta" });
-    vi.advanceTimersByTime(1000);
+    vi.advanceTimersByTime(1500);
     expect(get(shortcutHintsActive)).toBe(true);
 
     cleanup();

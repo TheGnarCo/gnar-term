@@ -501,7 +501,7 @@
           <div
             data-group-bot-status-row
             aria-hidden="true"
-            style="padding: 0 8px 4px 8px; font-size: 11px; color: {groupBotStatus.color}; display: flex; align-items: center; gap: 4px; overflow: hidden; opacity: 0.85;"
+            style="padding: 0 8px 4px 0; font-size: 11px; color: {groupBotStatus.color}; display: flex; align-items: center; gap: 4px; overflow: hidden; opacity: 0.85;"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"

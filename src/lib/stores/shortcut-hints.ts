@@ -26,7 +26,7 @@ export function initShortcutHints(): () => void {
         timer = setTimeout(() => {
           timer = null;
           _active.set(true);
-        }, 1000);
+        }, 1500);
       }
     } else {
       clearTimer();

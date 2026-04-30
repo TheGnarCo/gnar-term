@@ -67,6 +67,13 @@
   $: fritBackgroundSize = "5px 5px";
   $: fritBackgroundPosition = "0 0, 2.5px 2.5px";
   $: fritBackgroundRepeat = "repeat";
+
+  // Same L→R fade mask used by the dot pattern's fadeRight mode. Applied to
+  // close/lock icons so they blend into the grip texture rather than standing
+  // out as solid boxes. Removed when the grip is actively hovered (visible).
+  const iconFadeMask =
+    "linear-gradient(to right, rgba(0,0,0,1) 0%, rgba(0,0,0,0.5) 60%, rgba(0,0,0,0) 100%)";
+  $: iconMask = visible ? "none" : iconFadeMask;
 </script>
 
 <div
@@ -163,8 +170,9 @@
         padding: 0;
         line-height: 1;
         -webkit-app-region: no-drag;
-        opacity: {visible ? 1 : 0.35};
-        transition: background 0.1s, color 0.1s, border-color 0.1s, opacity 0.15s;
+        -webkit-mask-image: {iconMask};
+        mask-image: {iconMask};
+        transition: background 0.1s, color 0.1s, border-color 0.1s;
       "
       on:mousedown|stopPropagation
       on:click|stopPropagation={onClose}
@@ -192,8 +200,8 @@
         border: 1px solid {effectiveColor};
         border-radius: 3px;
         pointer-events: none;
-        opacity: {visible ? 1 : 0.35};
-        transition: opacity 0.15s;
+        -webkit-mask-image: {iconMask};
+        mask-image: {iconMask};
       "
     >
       <svg

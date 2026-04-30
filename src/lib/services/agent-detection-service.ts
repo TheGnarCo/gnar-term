@@ -365,13 +365,21 @@ function attachAgent(
   const tracker = createStatusTracker(
     idleTimeoutMs,
     (status) => {
+      // Re-resolve at transition time so agents attached before their
+      // workspace was loaded (e.g. title change during startup race) still
+      // write status items once the workspace becomes known.
+      const effectiveWorkspaceId =
+        resolveWorkspaceIdForSurface(tracked.surfaceId) || workspaceId;
       const agent = _agents.find((a) => a.agentId === agentId);
       if (agent) {
         agent.status = status;
         agent.lastStatusChange = new Date().toISOString();
+        if (effectiveWorkspaceId && !agent.workspaceId) {
+          agent.workspaceId = effectiveWorkspaceId;
+        }
         syncStore();
       }
-      publishStatus(tracked, workspaceId, status);
+      publishStatus(tracked, effectiveWorkspaceId, status);
     },
     mode,
   );
@@ -692,7 +700,21 @@ export function initAgentDetection(): void {
       surfaceTitleById.set(s.id, s.title);
     }
     for (const [, tracked] of trackedSurfaces) {
-      if (tracked.agentId) continue;
+      if (tracked.agentId) {
+        // Backfill the status item for agents attached before their workspace
+        // was known — the initial publishStatus("idle") wrote nothing because
+        // workspaceId was empty at that time.
+        const agent = _agents.find((a) => a.agentId === tracked.agentId);
+        if (agent && !agent.workspaceId) {
+          const resolved = resolveWorkspaceIdForSurface(tracked.surfaceId);
+          if (resolved) {
+            agent.workspaceId = resolved;
+            syncStore();
+            publishStatus(tracked, resolved, agent.status);
+          }
+        }
+        continue;
+      }
       const currentTitle = surfaceTitleById.get(tracked.surfaceId) ?? "";
       if (!currentTitle) continue;
       const match = matchesPattern(currentTitle, patterns);

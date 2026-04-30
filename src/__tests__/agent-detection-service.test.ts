@@ -602,6 +602,53 @@ describe("agent-detection-service — late workspace load (startup race)", () =>
     expect(item?.label).toBe("idle");
   });
 
+  it("backfills idle status item when title changes to match before workspace loads", () => {
+    // Regression: surface:titleChanged fires with "claude" before workspaces
+    // load. attachAgent() captures workspaceId = "" so the initial
+    // publishStatus("idle") writes nothing. The workspace subscription skipped
+    // already-attached agents, so the status item was NEVER written.
+    initAgentDetection();
+
+    eventBus.emit({
+      type: "surface:created",
+      id: "s1",
+      paneId: "p",
+      kind: "terminal",
+    });
+    eventBus.emit({ type: "surface:ptyReady", id: "s1", ptyId: 62 });
+
+    // Title changes to "claude" while workspaces aren't loaded yet —
+    // agent attaches but has no workspace → status item cannot be written.
+    eventBus.emit({
+      type: "surface:titleChanged",
+      id: "s1",
+      oldTitle: "",
+      newTitle: "claude",
+    });
+    expect(getAgents()).toHaveLength(1);
+    expect(getAgents()[0]?.workspaceId).toBe("");
+
+    // No status item yet — workspaceId was empty.
+    expect(
+      get(statusRegistry.store).find(
+        (i) => i.source === "_agent" && i.metadata?.surfaceId === "s1",
+      ),
+    ).toBeUndefined();
+
+    // Workspace loads — subscription should backfill the idle status item.
+    workspaces.set([
+      makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 62 }]),
+    ]);
+
+    const item = get(statusRegistry.store).find(
+      (i) => i.source === "_agent" && i.metadata?.surfaceId === "s1",
+    );
+    expect(item).toBeDefined();
+    expect(item?.label).toBe("idle");
+    expect(item?.variant).toBe("muted");
+    expect(getAgents()[0]?.workspaceId).toBe("w1");
+  });
+
   it("publishes waiting status after workspace loads late then OSC fires", () => {
     // The dot must show when Claude uses AskUserQuestion after workspaces
     // were loaded post-surface-events — this was the reported "no dot" bug.

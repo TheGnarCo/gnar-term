@@ -70,7 +70,10 @@
     markRestored,
     type CliArgs,
   } from "./lib/bootstrap/restore-workspaces";
-  import { reconcileGroupDashboards } from "./lib/services/workspace-group-service";
+  import {
+    reconcileGroupDashboards,
+    reconcilePrimaryWorkspaces,
+  } from "./lib/services/workspace-group-service";
 
   // Services
   import {
@@ -643,6 +646,9 @@
     // agentic extension's provision loop, reconcileGroupDashboards) can
     // safely read and write the workspaces store without racing restore.
     markRestored();
+    // Backfill primaryWorkspaceId and wrap standalone workspaces now that
+    // the workspaces store is populated.
+    await reconcilePrimaryWorkspaces();
     void reconcileGroupDashboards();
 
     // Rehydrate the persisted root-row order so drag-sorted layouts

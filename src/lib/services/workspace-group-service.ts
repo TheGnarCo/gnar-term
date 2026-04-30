@@ -11,6 +11,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { get } from "svelte/store";
 import type { SurfaceDef, WorkspaceGroupEntry } from "../config";
+import { GROUP_COLOR_SLOTS } from "../../extensions/api";
 import { appendRootRow, removeRootRow } from "../stores/root-row-order";
 import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
 import { claimWorkspace, unclaimWorkspace } from "./claimed-workspace-registry";
@@ -684,6 +685,72 @@ export function reclaimWorkspacesAcrossGroups(): void {
   }
 
   for (const wsId of toClaimIds) claimWorkspace(wsId, "core");
+}
+
+/**
+ * Startup reconciliation — called after workspaces are restored.
+ *
+ * Pass 1: For every group lacking `primaryWorkspaceId`, select the first
+ * member workspace that is neither a dashboard nor a worktree.
+ *
+ * Pass 2: Wrap every standalone workspace (no metadata.groupId, not a
+ * dashboard) into a fresh group with that workspace as its primary.
+ *
+ * Idempotent — groups that already have `primaryWorkspaceId` are skipped.
+ */
+export async function reconcilePrimaryWorkspaces(): Promise<void> {
+  // Pass 1 — backfill existing groups.
+  for (const group of getWorkspaceGroups()) {
+    if (group.primaryWorkspaceId) continue;
+    const members = getWorkspacesInGroup(group.id);
+    const primary = members.find(
+      (w) => !wsMeta(w).worktreePath && !wsMeta(w).isDashboard,
+    );
+    if (primary) {
+      updateWorkspaceGroup(group.id, { primaryWorkspaceId: primary.id });
+    }
+    // Groups with no eligible primary are left without one — the next
+    // group creation flow will set it.
+  }
+
+  // Pass 2 — wrap standalone workspaces.
+  const knownGroupIds = new Set(getWorkspaceGroups().map((g) => g.id));
+  // Snapshot before we start mutating so the loop is stable.
+  const snapshot = get(workspaces);
+  const usedColors = getWorkspaceGroups().map((g) => g.color);
+
+  for (const ws of snapshot) {
+    const md = wsMeta(ws);
+    if (md.groupId && knownGroupIds.has(md.groupId)) continue;
+    if (md.isDashboard) continue;
+
+    const colorIdx = usedColors.length % GROUP_COLOR_SLOTS.length;
+    const color: string = GROUP_COLOR_SLOTS[colorIdx] ?? GROUP_COLOR_SLOTS[0];
+    usedColors.push(color);
+
+    const id = crypto.randomUUID();
+    const group: WorkspaceGroupEntry = {
+      id,
+      name: ws.name,
+      path: ((md as Record<string, unknown>).cwd as string | undefined) ?? "",
+      color,
+      workspaceIds: [ws.id],
+      primaryWorkspaceId: ws.id,
+      isGit: false,
+      createdAt: new Date().toISOString(),
+    };
+
+    // Stamp the workspace with its new group.
+    workspaces.update((list) =>
+      list.map((w) =>
+        w.id === ws.id
+          ? { ...w, metadata: { ...(w.metadata ?? {}), groupId: id } }
+          : w,
+      ),
+    );
+    addWorkspaceGroup(group);
+    knownGroupIds.add(id);
+  }
 }
 
 export {

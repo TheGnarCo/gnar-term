@@ -89,7 +89,7 @@
     cursor: pointer;
     background: {isActive
     ? $theme.bgActive
-    : isHovered && !isCompact
+    : isHovered
       ? $theme.bgHighlight
       : ($theme.bgSurface ?? 'transparent')};
     border: 1px solid {isActive

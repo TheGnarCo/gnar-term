@@ -105,7 +105,10 @@
     newSurfaceWithCommand,
     newSurfaceFromSidebar,
   } from "./lib/services/surface-service";
-  import { registerCommands } from "./lib/services/command-registry";
+  import {
+    registerCommands,
+    runCommandById,
+  } from "./lib/services/command-registry";
   import { registerWorkspaceAction } from "./lib/services/workspace-action-registry";
   import { initMcpServer } from "./lib/services/mcp-server";
   import { handleAppKeydown } from "./lib/services/keyboard-shortcuts";
@@ -627,8 +630,8 @@
       shortcut: `${shiftModLabel}N`,
       source: "core",
       handler: (ctx) => {
-        const name = `Workspace ${get(workspaces).length + 1}`;
         if (ctx.groupId && ctx.groupPath) {
+          const name = `Workspace ${get(workspaces).length + 1}`;
           void createWorkspaceFromDef({
             name,
             cwd: ctx.groupPath as string,
@@ -636,7 +639,7 @@
             layout: { pane: { surfaces: [{ type: "terminal" }] } },
           });
         } else {
-          void createWorkspace(name);
+          runCommandById("create-workspace-group");
         }
       },
     });

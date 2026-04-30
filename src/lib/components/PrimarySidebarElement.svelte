@@ -59,6 +59,7 @@
   export let dataWorktree: string | undefined = undefined;
 
   let isHovered = false;
+  let isButtonHovered = false;
 
   $: effectiveColor = color || $theme.accent;
   $: showClose =
@@ -169,13 +170,13 @@
         transform: translateY(-50%);
         display: flex; align-items: center; justify-content: center;
         width: 14px; height: 14px;
-        color: {isHovered
+        color: {isButtonHovered
         ? isLocked
           ? $theme.fg
           : $theme.danger
         : effectiveColor};
         background: {$theme.bgSurface ?? $theme.bg};
-        border: 1px solid {isHovered
+        border: 1px solid {isButtonHovered
         ? isLocked
           ? $theme.fg
           : $theme.danger
@@ -187,6 +188,8 @@
         flex-shrink: 0;
       "
       on:mousedown|stopPropagation
+      on:mouseenter={() => (isButtonHovered = true)}
+      on:mouseleave={() => (isButtonHovered = false)}
       on:click|stopPropagation={onClose}
     >
       {isLocked ? "🔒" : "×"}

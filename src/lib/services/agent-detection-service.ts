@@ -201,7 +201,7 @@ function createStatusTracker(
   let idleTimer: ReturnType<typeof setTimeout> | undefined;
 
   function setStatus(next: HarnessStatus): void {
-    if (next !== status) {
+    if (next === "waiting" || next !== status) {
       status = next;
       onStatusChange(status);
     }
@@ -294,7 +294,7 @@ function publishStatus(
         priority: 0,
         label: status,
         variant:
-          status === "running"
+          status === "running" || status === "active"
             ? "success"
             : status === "waiting"
               ? "warning"
@@ -504,7 +504,14 @@ export function initAgentDetection(): void {
       tracked.unsubscribeOutput = null;
     }
     const ptyId = tracked.ptyId;
+    // OSC sequences can arrive split across chunk boundaries (e.g. `\x1b]`
+    // in one chunk, `9;...` in the next). Carry the last 8 bytes of the
+    // previous chunk so the regex sees a complete preamble even when split.
+    let oscTailBuffer = "";
+    const OSC_PREAMBLE_MAX = 8;
     const observer = (data: string) => {
+      const probe = oscTailBuffer + data;
+      oscTailBuffer = probe.slice(-OSC_PREAMBLE_MAX);
       try {
         if (tracked.tracker) {
           // Only real notification OSCs (9 / 99 / 777) flip the
@@ -514,7 +521,7 @@ export function initAgentDetection(): void {
           // onNotification also clears the idle timer.
           if (
             tracked.agentPattern?.oscDetectable &&
-            NOTIFICATION_OSC_RE.test(data)
+            NOTIFICATION_OSC_RE.test(probe)
           ) {
             tracked.tracker.onNotification(data);
           } else {

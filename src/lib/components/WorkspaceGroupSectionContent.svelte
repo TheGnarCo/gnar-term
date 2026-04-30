@@ -118,7 +118,9 @@
   $: groupAgents = $agentsStore.filter((a) => filterIds.has(a.workspaceId));
   $: groupBotStatus = (() => {
     if (groupAgents.length === 0) return null;
-    const running = groupAgents.filter((a) => a.status === "running").length;
+    const running = groupAgents.filter(
+      (a) => a.status === "running" || a.status === "active",
+    ).length;
     const waiting = groupAgents.filter((a) => a.status === "waiting").length;
     const idle = groupAgents.filter((a) => a.status === "idle").length;
     if (running > 0)

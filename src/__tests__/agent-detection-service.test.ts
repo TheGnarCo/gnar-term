@@ -828,3 +828,80 @@ describe("agent-detection-service — agentsStore reactive subscriber", () => {
     expect(emissions[emissions.length - 1]).toBe(1);
   });
 });
+
+describe("agent-detection-service — active status (non-OSC agents)", () => {
+  it("title-only agents emit 'active' status on output, not 'running'", () => {
+    workspaces.set([
+      makeWorkspace("w1", [{ id: "s1", title: "aider", ptyId: 110 }]),
+    ]);
+    initAgentDetection();
+    expect(getAgents()[0]?.status).toBe("idle");
+
+    notifyOutputObservers(110, "some output");
+
+    expect(getAgents()[0]?.status).toBe("active");
+  });
+
+  it("'active' status writes a success variant to the registry (not muted)", () => {
+    workspaces.set([
+      makeWorkspace("w1", [{ id: "s1", title: "aider", ptyId: 111 }]),
+    ]);
+    initAgentDetection();
+    notifyOutputObservers(111, "some output");
+
+    const item = get(statusRegistry.store).find(
+      (i) => i.source === "_agent" && i.metadata?.surfaceId === "s1",
+    );
+    expect(item?.label).toBe("active");
+    expect(item?.variant).toBe("success");
+  });
+});
+
+describe("agent-detection-service — repeat waiting notification", () => {
+  it("fires onStatusChange on every OSC notification even when already waiting", () => {
+    // Regression: setStatus() dedup was silently swallowing the second
+    // notification while already in "waiting" state, so markSurfaceUnreadById
+    // (and the unread badge) never re-triggered for a second prompt.
+    workspaces.set([
+      makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 120 }]),
+    ]);
+    initAgentDetection();
+
+    const events: string[] = [];
+    const handler = (e: { type: string; status: string }) =>
+      events.push(e.status);
+    eventBus.on(
+      "agent:statusChanged",
+      handler as Parameters<typeof eventBus.on>[1],
+    );
+
+    notifyOutputObservers(120, "\x1b]9;first prompt\x07");
+    notifyOutputObservers(120, "\x1b]9;second prompt\x07");
+
+    eventBus.off(
+      "agent:statusChanged",
+      handler as Parameters<typeof eventBus.off>[1],
+    );
+
+    const waitingCount = events.filter((s) => s === "waiting").length;
+    expect(waitingCount).toBe(2);
+  });
+});
+
+describe("agent-detection-service — split-chunk OSC detection", () => {
+  it("detects an OSC 9 notification split across two PTY chunks", () => {
+    workspaces.set([
+      makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 130 }]),
+    ]);
+    initAgentDetection();
+
+    // First chunk ends mid-preamble; second chunk completes it.
+    notifyOutputObservers(130, "\x1b]");
+    notifyOutputObservers(130, "9;Claude Code: response ready\x07");
+
+    const item = get(statusRegistry.store).find(
+      (i) => i.source === "_agent" && i.metadata?.surfaceId === "s1",
+    );
+    expect(item?.label).toBe("waiting");
+  });
+});

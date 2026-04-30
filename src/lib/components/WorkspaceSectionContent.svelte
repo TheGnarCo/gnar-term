@@ -476,68 +476,62 @@
         ">{group.name}</span
       >
 
-      <svelte:fragment slot="banner-end" let:bannerHovered>
-        {#if bannerHovered}
-          {#if isGroupLocked}
-            <button
-              title="Unlock Workspace Group"
-              aria-label="Unlock Workspace Group"
-              style="
-                display: flex; align-items: center; justify-content: center;
-                width: 20px; height: 20px; flex-shrink: 0;
-                color: {lockHovered ? $theme.fg : groupHex};
-                background: {lockHovered
-                ? ($theme.bgHighlight ?? 'rgba(255,255,255,0.08)')
-                : ($theme.bgSurface ?? $theme.bg)};
-                border: 1px solid {lockHovered ? $theme.fg : groupHex};
-                border-radius: 4px; cursor: pointer; padding: 0;
-                transition: background 0.1s, color 0.1s, border-color 0.1s;
-                -webkit-app-region: no-drag;
-              "
-              on:mousedown|stopPropagation
-              on:click|stopPropagation={() => void handleUnlockGroup()}
-              on:mouseenter={() => (lockHovered = true)}
-              on:mouseleave={() => (lockHovered = false)}
+      <svelte:fragment slot="banner-end">
+        {#if isGroupLocked}
+          <button
+            title="Unlock Workspace Group"
+            aria-label="Unlock Workspace Group"
+            style="
+              display: flex; align-items: center; justify-content: center;
+              width: 14px; height: 14px; flex-shrink: 0;
+              color: {lockHovered ? $theme.fg : groupHex};
+              background: {$theme.bgSurface ?? $theme.bg};
+              border: 1px solid {lockHovered ? $theme.fg : groupHex};
+              border-radius: 3px; cursor: pointer; padding: 0;
+              transition: color 0.1s, border-color 0.1s;
+              -webkit-app-region: no-drag;
+            "
+            on:mousedown|stopPropagation
+            on:click|stopPropagation={() => void handleUnlockGroup()}
+            on:mouseenter={() => (lockHovered = true)}
+            on:mouseleave={() => (lockHovered = false)}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="9"
+              height="9"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="10"
-                height="10"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <title>Workspace Group locked</title>
-                <rect width="14" height="10" x="5" y="11" rx="2" />
-                <path d="M8 11V7a4 4 0 0 1 8 0v4" />
-              </svg>
-            </button>
-          {:else}
-            <button
-              title="Delete Workspace Group"
-              aria-label="Delete Workspace Group"
-              style="
-                display: flex; align-items: center; justify-content: center;
-                width: 20px; height: 20px; flex-shrink: 0;
-                color: {closeHovered ? $theme.danger : groupHex};
-                background: {closeHovered
-                ? ($theme.bgHighlight ?? 'rgba(255,255,255,0.08)')
-                : ($theme.bgSurface ?? $theme.bg)};
-                border: 1px solid {closeHovered ? $theme.danger : groupHex};
-                border-radius: 4px; cursor: pointer; padding: 0;
-                font-size: 14px; line-height: 1;
-                transition: background 0.1s, color 0.1s, border-color 0.1s;
-                -webkit-app-region: no-drag;
-              "
-              on:mousedown|stopPropagation
-              on:click|stopPropagation={() => void handleDeleteGroup()}
-              on:mouseenter={() => (closeHovered = true)}
-              on:mouseleave={() => (closeHovered = false)}>×</button
-            >
-          {/if}
+              <title>Workspace Group locked</title>
+              <rect width="14" height="10" x="5" y="11" rx="2" />
+              <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+            </svg>
+          </button>
+        {:else}
+          <button
+            title="Delete Workspace Group"
+            aria-label="Delete Workspace Group"
+            style="
+              display: flex; align-items: center; justify-content: center;
+              width: 14px; height: 14px; flex-shrink: 0;
+              color: {closeHovered ? $theme.danger : groupHex};
+              background: {$theme.bgSurface ?? $theme.bg};
+              border: 1px solid {closeHovered ? $theme.danger : groupHex};
+              border-radius: 3px; cursor: pointer; padding: 0;
+              font-size: 10px; line-height: 1;
+              transition: color 0.1s, border-color 0.1s;
+              -webkit-app-region: no-drag;
+            "
+            on:mousedown|stopPropagation
+            on:click|stopPropagation={() => void handleDeleteGroup()}
+            on:mouseenter={() => (closeHovered = true)}
+            on:mouseleave={() => (closeHovered = false)}>×</button
+          >
         {/if}
       </svelte:fragment>
 

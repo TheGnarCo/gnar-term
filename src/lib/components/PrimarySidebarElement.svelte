@@ -114,7 +114,7 @@
     visible={isDragging || (canDrag && isHovered && !$anyReorderActive)}
     railColor={effectiveColor}
     railOpacity={1}
-    alwaysShowDots={true}
+    alwaysShowDots={!isLocked}
     fadeRight={!isGroup}
   />
   {#if isGroup}

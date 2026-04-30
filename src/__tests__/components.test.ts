@@ -1296,10 +1296,10 @@ describe("WorkspaceItem", () => {
       "src/lib/components/PrimarySidebarElement.svelte",
       "utf-8",
     );
-    // alwaysShowDots + full opacity so the dot pattern reads at rest
+    // alwaysShowDots={!isLocked} + full opacity so the dot pattern reads at rest
     // without needing a colored wrapper bg (which would appear as a
-    // solid "border" block).
-    expect(sidebarSource).toMatch(/alwaysShowDots=\{true\}/);
+    // solid "border" block). Locked items show solid rail instead.
+    expect(sidebarSource).toMatch(/alwaysShowDots=\{!isLocked\}/);
     expect(sidebarSource).toMatch(/railOpacity=\{1\}/);
 
     // WorkspaceItem uses railColor which falls back through:

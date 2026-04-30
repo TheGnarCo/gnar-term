@@ -1183,12 +1183,12 @@ describe("WorkspaceItem", () => {
     expect(screen.getByText("Build complete")).toBeTruthy();
   });
 
-  it("renders a presence-only chip when an agent is attached but idle", async () => {
+  it("renders a status row when an agent is attached but idle", async () => {
     // Regression: launching claude in a workspace should immediately
-    // show an identifier chip — even before the tracker transitions to
+    // show a status row — even before the tracker transitions to
     // running/waiting. aggregateAgentBadges consumes process items from
     // the status registry; a muted item means "agent live, no active
-    // work" and must render a visible dot.
+    // work" and must render a visible row.
     const { setStatusItem, clearAllStatusForWorkspace } =
       await import("../lib/services/status-registry");
     const ws = makeWorkspace("ws-agent", "Agent WS");
@@ -1210,9 +1210,9 @@ describe("WorkspaceItem", () => {
         onContextMenu: noop,
       },
     });
-    expect(
-      container.querySelector("[data-agent-presence-chip]"),
-    ).not.toBeNull();
+    const row = container.querySelector("[data-harness-title-row]");
+    expect(row).not.toBeNull();
+    expect(row?.getAttribute("title")).toBe("1 idle");
     clearAllStatusForWorkspace(ws.id);
   });
 
@@ -1953,11 +1953,11 @@ describe("WorkspaceItem — harness sub-row", () => {
 
     const harnessEl = container.querySelector("[data-harness-title-row]");
     expect(harnessEl).not.toBeNull();
-    expect(harnessEl?.getAttribute("title")).toBe("claude > fixing bug");
+    expect(harnessEl?.getAttribute("title")).toBe("1 running");
     clearAllStatusForWorkspace(ws.id);
   });
 
-  it("hides sub-row when agent is on a non-active surface", async () => {
+  it("shows sub-row when agent is on a non-active surface", async () => {
     const { setStatusItem, clearAllStatusForWorkspace } =
       await import("../lib/services/status-registry");
 
@@ -1995,7 +1995,9 @@ describe("WorkspaceItem — harness sub-row", () => {
       },
     });
 
-    expect(container.querySelector("[data-harness-title-row]")).toBeNull();
+    const harnessEl = container.querySelector("[data-harness-title-row]");
+    expect(harnessEl).not.toBeNull();
+    expect(harnessEl?.getAttribute("title")).toBe("1 idle");
     clearAllStatusForWorkspace(ws.id);
   });
 
@@ -2301,10 +2303,10 @@ describe("terminal link handling", () => {
     );
 
     const termInstance = TerminalCtor.mock.instances.at(-1)!;
-    // 2 calls: URL provider (index 0, added by Task 5) + file-path provider (index 1, existing)
-    expect(termInstance.registerLinkProvider).toHaveBeenCalledTimes(2);
+    // 3 calls: OSC 8 provider (index 0) + URL provider (index 1) + file-path provider (index 2)
+    expect(termInstance.registerLinkProvider).toHaveBeenCalledTimes(3);
 
-    const provider = termInstance.registerLinkProvider.mock.calls[0][0] as {
+    const provider = termInstance.registerLinkProvider.mock.calls[1][0] as {
       provideLinks: (
         line: number,
         cb: (

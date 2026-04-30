@@ -50,6 +50,8 @@
   export let onBannerClick: (() => void) | undefined = undefined;
   /** Optional close/delete handler. When provided, a × button appears on banner hover. */
   export let onClose: (() => void) | undefined = undefined;
+  /** When true, shows a lock chip on the grip instead of the close button. */
+  export let locked: boolean = false;
 
   /** Nested workspace list filter — ids to include. */
   export let filterIds: Set<string>;
@@ -243,8 +245,9 @@
           railOpacity={1}
           alwaysShowDots={true}
           fadeRight={!rowHovered}
-          {onClose}
+          onClose={locked ? undefined : onClose}
           closeTooltip="Delete Workspace Group"
+          {locked}
         />
         {#if hasActiveChild && collapsed}
           <div

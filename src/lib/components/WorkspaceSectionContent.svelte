@@ -595,8 +595,12 @@
           {@const isActive = entry.idx === $activeWorkspaceIdx}
           {@const canDelete = contribution && !contribution.autoProvision}
           <div
-            class="dashboard-tiles"
-            style="position: relative;"
+            style="
+              position: relative;
+              flex: 1 1 calc(25% - 3px);
+              min-width: 32px;
+              height: 30px;
+            "
             on:mouseenter={() => (hoveredDashId = entry.ws.id)}
             on:mouseleave={() => {
               hoveredDashId = null;
@@ -772,6 +776,9 @@
 
 <style>
   .dash-btn {
+    flex: 1 1 calc(25% - 3px);
+    min-width: 32px;
+    height: 30px;
     border-radius: 6px;
     cursor: pointer;
     display: flex;
@@ -782,10 +789,5 @@
   }
   .dash-btn:hover {
     filter: brightness(1.1);
-  }
-  .dashboard-tiles {
-    flex: 1 1 calc(25% - 3px);
-    min-width: 32px;
-    height: 30px;
   }
 </style>

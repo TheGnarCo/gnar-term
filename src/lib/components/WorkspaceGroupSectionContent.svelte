@@ -25,6 +25,7 @@
     groupDashboardPath,
     openGroupDashboard,
     WORKSPACE_GROUP_STATE_CHANGED,
+    toggleWorkspaceGroupLock,
   } from "../services/workspace-group-service";
   import { archiveGroup } from "../services/archive-service";
   import {
@@ -159,6 +160,8 @@
       } satisfies WorkspaceActionContext)
     : undefined;
 
+  $: isGroupLocked = group?.locked === true;
+
   // `$workspaceActionStore` must be read inside this statement so the
   // extension-registered actions (e.g. worktree-workspaces' "New Worktree")
   // reach the `+ New` split-button dropdown when extensions activate after
@@ -264,6 +267,7 @@
       shortcut?: string;
       separator?: boolean;
       danger?: boolean;
+      disabled?: boolean;
     }> = [
       {
         label: "Rename Workspace Group",
@@ -301,7 +305,14 @@
     }
     items.push({ label: "", action: () => {}, separator: true });
     items.push({
+      label: isGroupLocked ? "Unlock Workspace Group" : "Lock Workspace Group",
+      action: () => {
+        if (group) toggleWorkspaceGroupLock(group.id);
+      },
+    });
+    items.push({
       label: "Archive Group",
+      disabled: isGroupLocked,
       action: () => {
         if (group) void archiveGroup(group.id);
       },
@@ -309,6 +320,7 @@
     items.push({
       label: "Delete Workspace Group",
       danger: true,
+      disabled: isGroupLocked,
       action: () => {
         void handleDeleteGroup();
       },
@@ -447,6 +459,7 @@
       containerLabel={group.name}
       testId={group.id}
       workspaceListViewComponent={WorkspaceListView}
+      locked={isGroupLocked}
     >
       <span
         data-container-row-title

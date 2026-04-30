@@ -185,7 +185,7 @@
       <div
         data-container-nested={scopeId}
         data-nested-count={nonDashboardCount}
-        style="display: flex; flex-direction: column;"
+        style="display: flex; flex-direction: column; padding-left: 6px;"
         transition:slide={{ duration: 200 }}
       >
         <svelte:component

@@ -50,7 +50,7 @@
   let closeButtonHovered = false;
   // shortcutLabel takes priority over close/lock when meta-hold is active.
   $: showShortcut = !!shortcutLabel && $shortcutHintsActive;
-  $: showClose = onClose != null && visible && !locked && !showShortcut;
+  $: showClose = onClose != null && !locked && !showShortcut;
   $: showLock = locked && !showShortcut;
 
   $: effectiveColor = railColor ?? theme.fgDim;
@@ -163,7 +163,8 @@
         padding: 0;
         line-height: 1;
         -webkit-app-region: no-drag;
-        transition: background 0.1s, color 0.1s, border-color 0.1s;
+        opacity: {visible ? 1 : 0.35};
+        transition: background 0.1s, color 0.1s, border-color 0.1s, opacity 0.15s;
       "
       on:mousedown|stopPropagation
       on:click|stopPropagation={onClose}
@@ -191,6 +192,8 @@
         border: 1px solid {effectiveColor};
         border-radius: 3px;
         pointer-events: none;
+        opacity: {visible ? 1 : 0.35};
+        transition: opacity 0.15s;
       "
     >
       <svg

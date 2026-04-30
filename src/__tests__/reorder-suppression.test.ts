@@ -33,9 +33,11 @@ describe("grip visibility suppression", () => {
     // one (WorkspaceListBlock draws the grip externally). The visible
     // gate tracks row-level hover so hovering any part of the row
     // (not just the grip column) expands it.
+    // shortcutHintsActive is intentionally excluded — meta-hold shows
+    // the tooltip chip without triggering the solid-background drag state.
     expect(WORKSPACE_ITEM).toContain("anyReorderActive");
     expect(WORKSPACE_ITEM).toMatch(
-      /visible=\{\s*dragActive\s*\|\|\s*\$shortcutHintsActive\s*\|\|\s*\(\s*hovered\s*&&\s*!\s*\$anyReorderActive\s*\)\s*\}/,
+      /visible=\{\s*dragActive\s*\|\|\s*\(\s*hovered\s*&&\s*!\s*\$anyReorderActive\s*\)\s*\}/,
     );
   });
 

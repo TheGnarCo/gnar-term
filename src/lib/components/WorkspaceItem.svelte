@@ -170,17 +170,11 @@
          createDragReorder's 5px threshold keeps taps as selects. -->
     <DragGrip
       theme={$theme}
-      visible={dragActive ||
-        $shortcutHintsActive ||
-        (hovered && !$anyReorderActive)}
+      visible={dragActive || (hovered && !$anyReorderActive)}
       {railColor}
       railOpacity={1}
       alwaysShowDots={true}
-      fadeRight={!(
-        dragActive ||
-        $shortcutHintsActive ||
-        (hovered && !$anyReorderActive)
-      )}
+      fadeRight={!(dragActive || (hovered && !$anyReorderActive))}
       locked={isLocked}
       onClose={!isDashboardWs || isDashboardWorkspaceRow ? onClose : undefined}
       closeTooltip="Close Workspace (⇧⌘W)"

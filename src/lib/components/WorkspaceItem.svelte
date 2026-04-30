@@ -15,7 +15,7 @@
   import { discoEmojiFor, discoColorFor } from "../utils/disco-decoration";
 
   $: isDisco = $theme.name === "Molly Disco";
-  import { getAllSurfaces, getAllPanes } from "../types";
+  import { getAllSurfaces } from "../types";
   import type { Workspace } from "../types";
   import { workspaceSurfaceMap } from "../services/workspace-service";
   import { wsMeta } from "../services/service-helpers";
@@ -86,32 +86,6 @@
   $: processStatusStore = getWorkspaceStatusByCategory(workspace.id, "process");
   $: processItems = $processStatusStore;
   $: agentBadges = aggregateAgentBadges(processItems);
-  $: agentChipColor = agentBadges.length > 0 ? agentBadges[0]?.color : null;
-
-  $: activePaneInWs = getAllPanes(workspace.splitRoot).find(
-    (p) => p.id === workspace.activePaneId,
-  );
-  $: activeSurfaceForAgent = (() => {
-    const sid = activePaneInWs?.activeSurfaceId;
-    if (!sid) return null;
-    const hasAgent = processItems.some(
-      (item) =>
-        (item.metadata as Record<string, unknown> | undefined)?.surfaceId ===
-        sid,
-    );
-    return hasAgent ? (allSurfaces.find((s) => s.id === sid) ?? null) : null;
-  })();
-  $: activeAgentItem = (() => {
-    const sid = activePaneInWs?.activeSurfaceId;
-    if (!sid) return null;
-    return (
-      processItems.find(
-        (item) =>
-          (item.metadata as Record<string, unknown> | undefined)?.surfaceId ===
-          sid,
-      ) ?? null
-    );
-  })();
 
   $: subtitleComponents = $workspaceSubtitleStore;
 
@@ -391,34 +365,52 @@
         >
       </div>
 
-      {#if !hideStatusBadges}
-        {#if agentBadges.length > 0 && agentBadges[0]}
-          {@const chipTitle = [latestNotification].filter(Boolean).join(" — ")}
+      {#if !hideStatusBadges && hasUnread && agentBadges.length === 0}
+        <span
+          title="Workspace has new terminal activity"
+          style="display: inline-flex; align-items: center; padding: 0 3px; flex-shrink: 0;"
+        >
           <span
-            data-agent-presence-chip
-            title={chipTitle}
-            aria-label={chipTitle || "Agent active"}
-            style="display: inline-flex; align-items: center; padding: 0 3px; flex-shrink: 0;"
-          >
-            <span
-              aria-hidden="true"
-              style="width: 7px; height: 7px; border-radius: 50%; background: {agentChipColor}; box-shadow: 0 0 0 1px color-mix(in srgb, {agentChipColor} 35%, transparent);"
-            ></span>
-          </span>
-        {/if}
-
-        {#if hasUnread && agentBadges.length === 0}
-          <span
-            title="Workspace has new terminal activity"
-            style="display: inline-flex; align-items: center; padding: 0 3px; flex-shrink: 0;"
-          >
-            <span
-              style="width: 6px; height: 6px; border-radius: 50%; background: {$theme.notify}; box-shadow: 0 0 0 1px color-mix(in srgb, {$theme.notify} 35%, transparent);"
-            ></span>
-          </span>
-        {/if}
+            style="width: 6px; height: 6px; border-radius: 50%; background: {$theme.notify}; box-shadow: 0 0 0 1px color-mix(in srgb, {$theme.notify} 35%, transparent);"
+          ></span>
+        </span>
       {/if}
     </div>
+
+    {#if !hideStatusBadges && agentBadges.length > 0 && agentBadges[0]}
+      {@const badge = agentBadges[0]}
+      <div
+        data-harness-title-row
+        title={badge.label}
+        aria-hidden="true"
+        style="padding: 0 12px 4px 6px; font-size: 11px; color: {badge.color}; display: flex; align-items: center; gap: 4px; overflow: hidden; opacity: 0.85;"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="10"
+          height="10"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          style="flex-shrink: 0;"
+        >
+          <title>Active harness session</title>
+          <path d="M12 8V4H8" />
+          <rect width="16" height="12" x="4" y="8" rx="2" />
+          <path d="M2 14h2" />
+          <path d="M20 14h2" />
+          <path d="M15 13v2" />
+          <path d="M9 13v2" />
+        </svg>
+        <span
+          style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+          >{badge.label}</span
+        >
+      </div>
+    {/if}
 
     {#each isDashboardWorkspaceRow ? [] : subtitleComponents as sub (sub.id)}
       {@const subApi = getExtensionApiById(sub.source)}
@@ -437,47 +429,7 @@
       {/if}
     {/each}
 
-    {#if !hideStatusBadges && activeAgentItem && activeAgentItem.label !== "closed"}
-      <span
-        data-harness-title-row
-        title={activeAgentItem.label === "idle"
-          ? "idle"
-          : (activeSurfaceForAgent?.title ?? activeAgentItem.label)}
-        aria-hidden="true"
-        style="
-          position: absolute;
-          top: 50%; right: 6px;
-          transform: translateY(-50%);
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          pointer-events: none;
-        "
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="10"
-          height="10"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke={railColor}
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          style="opacity: 0.7;"
-        >
-          <title>Active harness session</title>
-          <path d="M12 8V4H8" />
-          <rect width="16" height="12" x="4" y="8" rx="2" />
-          <path d="M2 14h2" />
-          <path d="M20 14h2" />
-          <path d="M15 13v2" />
-          <path d="M9 13v2" />
-        </svg>
-      </span>
-    {/if}
-
-    {#if latestNotification && !hideStatusBadges && !isInsideGroup && !agentChipColor}
+    {#if latestNotification && !hideStatusBadges && !isInsideGroup && agentBadges.length === 0}
       <div
         style="padding: 2px 12px 6px 6px; font-size: 11px; color: {$theme.notify}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
       >

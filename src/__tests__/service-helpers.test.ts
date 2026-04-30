@@ -21,6 +21,7 @@ vi.mock("../lib/stores/workspace", () => ({
 
 vi.mock("../lib/types", () => ({
   isTerminalSurface: vi.fn((s) => s?.kind === "terminal"),
+  isPreviewSurface: vi.fn((s) => s?.kind === "preview"),
   getAllPanes: vi.fn(() => []),
 }));
 

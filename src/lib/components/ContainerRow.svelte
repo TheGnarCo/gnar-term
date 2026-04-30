@@ -169,7 +169,7 @@
           <slot />
           <slot name="banner-end" />
         </div>
-        <slot name="banner-subtitle" />
+        <slot name="banner-subtitle" {collapsed} />
         {#if $$slots["btn-row"]}
           <div class="container-btn-row">
             <slot
@@ -317,7 +317,7 @@
             <slot {bannerHovered} />
             <slot name="banner-end" {bannerHovered} {collapsed} />
           </div>
-          <slot name="banner-subtitle" {bannerHovered} />
+          <slot name="banner-subtitle" {bannerHovered} {collapsed} />
           {#if $$slots["btn-row"]}
             <div class="container-btn-row">
               <slot

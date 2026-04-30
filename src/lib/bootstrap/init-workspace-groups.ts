@@ -88,6 +88,23 @@ function onWorkspaceClosed(event: AppEvent): void {
   unclaimWorkspace(event.id);
 }
 
+function onWorkspaceActivated(event: AppEvent): void {
+  if (event.type !== "workspace:activated") return;
+  const ws = get(workspaces).find((w) => w.id === event.id);
+  if (!ws) return;
+  const groupId = wsMeta(ws).groupId;
+  if (typeof groupId !== "string") return;
+  const group = readGroups().find((g) => g.id === groupId);
+  if (!group) return;
+  void invoke<boolean>("is_git_repo", { path: group.path })
+    .then((isGit) => {
+      if (isGit !== group.isGit) {
+        updateWorkspaceGroup(groupId, { isGit });
+      }
+    })
+    .catch(() => {});
+}
+
 /**
  * Open the create dialog and wait for the user to submit or cancel.
  * Resolves to the dialog's values on submit, null on cancel.
@@ -405,6 +422,7 @@ export async function initWorkspaceGroups(): Promise<void> {
 
   eventBus.on("workspace:created", onWorkspaceCreated);
   eventBus.on("workspace:closed", onWorkspaceClosed);
+  eventBus.on("workspace:activated", onWorkspaceActivated);
 
   registerMarkdownComponent({
     name: "workspaces",

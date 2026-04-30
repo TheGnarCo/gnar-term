@@ -114,21 +114,37 @@ export function closeWorkspacesInGroup(id: string): void {
  * Appends `workspaceId` to `groupId`'s workspaceIds if not already
  * present. No-op when the group is missing (e.g. was just deleted).
  * Returns true when a change was persisted.
+ *
+ * Enforces the single-primary invariant: throws if adding a non-worktree,
+ * non-dashboard workspace to a group that already has a primaryWorkspaceId.
  */
 export function addWorkspaceToGroup(
   groupId: string,
   workspaceId: string,
 ): boolean {
   const groups = getWorkspaceGroups();
-  let changed = false;
+  const group = groups.find((g) => g.id === groupId);
+  if (!group) return false;
+  if (group.workspaceIds.includes(workspaceId)) return false;
+
+  // Enforce single-primary invariant.
+  const incomingWs = get(workspaces).find((w) => w.id === workspaceId);
+  if (incomingWs) {
+    const md = wsMeta(incomingWs);
+    if (!md.worktreePath && !md.isDashboard && group.primaryWorkspaceId) {
+      throw new Error(
+        `Group "${groupId}" already has a primary workspace "${group.primaryWorkspaceId}". ` +
+          `Cannot add a second non-worktree workspace "${workspaceId}".`,
+      );
+    }
+  }
+
   const next = groups.map((g) => {
-    if (g.id === groupId && !g.workspaceIds.includes(workspaceId)) {
-      changed = true;
+    if (g.id === groupId) {
       return { ...g, workspaceIds: [...g.workspaceIds, workspaceId] };
     }
     return g;
   });
-  if (!changed) return false;
   setWorkspaceGroups(next);
   emitStateChanged({ groupId });
   return true;

@@ -542,8 +542,8 @@
               display: flex; align-items: center; justify-content: center;
               width: 14px; height: 14px; flex-shrink: 0;
               color: {closeHovered ? $theme.danger : groupHex};
-              background: {$theme.bgSurface ?? $theme.bg};
-              border: 1px solid {closeHovered ? $theme.danger : groupHex};
+              background: transparent;
+              border: none;
               border-radius: 3px; cursor: pointer; padding: 0;
               font-size: 10px; line-height: 1;
               transition: color 0.1s, border-color 0.1s;

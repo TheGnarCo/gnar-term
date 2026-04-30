@@ -10,6 +10,8 @@
   import { theme } from "../stores/theme";
   import { anyReorderActive } from "../stores/ui";
   import DragGrip from "./DragGrip.svelte";
+  import CloseIcon from "../icons/CloseIcon.svelte";
+  import LockIcon from "../icons/LockIcon.svelte";
 
   /** Whether this is a group (renders gradient pattern) */
   export let isGroup: boolean = false;
@@ -177,7 +179,7 @@
         background: transparent;
         border: none;
         border-radius: 3px; cursor: pointer; padding: 0;
-        font-size: 10px; line-height: 1;
+        line-height: 1;
         transition: color 0.1s, border-color 0.1s;
         -webkit-app-region: no-drag;
         flex-shrink: 0;
@@ -187,7 +189,11 @@
       on:mouseleave={() => (isButtonHovered = false)}
       on:click|stopPropagation={onClose}
     >
-      {isLocked ? "🔒" : "×"}
+      {#if isLocked}
+        <LockIcon width="9" height="9" />
+      {:else}
+        <CloseIcon width="9" height="9" />
+      {/if}
     </button>
   {/if}
 </div>

@@ -1065,11 +1065,11 @@ describe("WorkspaceItem", () => {
         onGripMouseDown: noop,
       },
     });
-    // Hover the row — this makes the grip visible, which shows the × chip
+    // Hover the row — this makes the grip visible, which shows the close button
     const row = container.firstElementChild as HTMLElement;
     await fireEvent.mouseEnter(row);
     await tick();
-    expect(screen.getByText("×")).toBeTruthy();
+    expect(screen.getByLabelText("Close My Workspace")).toBeTruthy();
   });
 
   it("shows unread badge when surfaces have unread data", () => {

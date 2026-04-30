@@ -47,6 +47,8 @@
   import DashboardTileIcon from "./DashboardTileIcon.svelte";
   import GridIcon from "../icons/GridIcon.svelte";
   import GitBranchIcon from "../icons/GitBranchIcon.svelte";
+  import CloseIcon from "../icons/CloseIcon.svelte";
+  import LockIcon from "../icons/LockIcon.svelte";
   import type { MenuItem } from "../context-menu-types";
   import { workspaces as workspacesStore } from "../stores/workspace";
   import {
@@ -507,8 +509,8 @@
               display: flex; align-items: center; justify-content: center;
               width: 14px; height: 14px; flex-shrink: 0;
               color: {lockHovered ? $theme.fg : groupHex};
-              background: {$theme.bgSurface ?? $theme.bg};
-              border: 1px solid {lockHovered ? $theme.fg : groupHex};
+              background: transparent;
+              border: none;
               border-radius: 3px; cursor: pointer; padding: 0;
               transition: color 0.1s, border-color 0.1s;
               -webkit-app-region: no-drag;
@@ -518,21 +520,7 @@
             on:mouseenter={() => (lockHovered = true)}
             on:mouseleave={() => (lockHovered = false)}
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="9"
-              height="9"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <title>Workspace Group locked</title>
-              <rect width="14" height="10" x="5" y="11" rx="2" />
-              <path d="M8 11V7a4 4 0 0 1 8 0v4" />
-            </svg>
+            <LockIcon width="9" height="9" />
           </button>
         {:else}
           <button
@@ -545,15 +533,17 @@
               background: transparent;
               border: none;
               border-radius: 3px; cursor: pointer; padding: 0;
-              font-size: 10px; line-height: 1;
+              line-height: 1;
               transition: color 0.1s, border-color 0.1s;
               -webkit-app-region: no-drag;
             "
             on:mousedown|stopPropagation
             on:click|stopPropagation={() => void handleDeleteGroup()}
             on:mouseenter={() => (closeHovered = true)}
-            on:mouseleave={() => (closeHovered = false)}>×</button
+            on:mouseleave={() => (closeHovered = false)}
           >
+            <CloseIcon width="9" height="9" />
+          </button>
         {/if}
       </svelte:fragment>
 

@@ -1,6 +1,8 @@
 <script lang="ts">
   import type { ThemeDef } from "../theme-data";
   import { shortcutHintsActive } from "../stores/shortcut-hints";
+  import CloseIcon from "../icons/CloseIcon.svelte";
+  import LockIcon from "../icons/LockIcon.svelte";
 
   export let theme: ThemeDef;
   export let visible: boolean = false;
@@ -156,7 +158,6 @@
         background: transparent;
         border: none;
         border-radius: 3px;
-        font-size: 10px;
         cursor: pointer;
         padding: 0;
         line-height: 1;
@@ -166,8 +167,10 @@
       on:mousedown|stopPropagation
       on:click|stopPropagation={onClose}
       on:mouseenter={() => (closeButtonHovered = true)}
-      on:mouseleave={() => (closeButtonHovered = false)}>×</button
+      on:mouseleave={() => (closeButtonHovered = false)}
     >
+      <CloseIcon width="9" height="9" />
+    </button>
   {/if}
   {#if showLock}
     <!-- Lock chip: visual-only indicator that the workspace is locked.
@@ -191,21 +194,7 @@
         pointer-events: none;
       "
     >
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="9"
-        height="9"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2.5"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
-        <title>Workspace locked</title>
-        <rect width="14" height="10" x="5" y="11" rx="2" />
-        <path d="M8 11V7a4 4 0 0 1 8 0v4" />
-      </svg>
+      <LockIcon width="9" height="9" />
     </div>
   {/if}
 </div>

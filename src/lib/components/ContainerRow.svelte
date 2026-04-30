@@ -143,7 +143,9 @@
     style="position: relative;"
   >
     <PrimarySidebarElement
-      kind="group"
+      isGroup={true}
+      alwaysShowClose={false}
+      isCompact={false}
       name={containerLabel}
       isActive={false}
       isLocked={locked}

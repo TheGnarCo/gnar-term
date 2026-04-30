@@ -11,8 +11,14 @@
   import { anyReorderActive } from "../stores/ui";
   import DragGrip from "./DragGrip.svelte";
 
-  /** Element type: determines sizing, layout, and styling */
-  export let kind: "workspace" | "group" | "dashboard" = "workspace";
+  /** Whether this is a group (renders gradient pattern) */
+  export let isGroup: boolean = false;
+
+  /** Whether close button shows always (not just on hover) */
+  export let alwaysShowClose: boolean = false;
+
+  /** Whether to use compact sizing (smaller height/padding) */
+  export let isCompact: boolean = false;
 
   /** Display name/label */
   export let name: string = "";
@@ -58,16 +64,16 @@
   $: showClose =
     canClose &&
     !isDragging &&
-    kind !== "group" &&
+    !isGroup &&
     !isLocked &&
-    (kind === "dashboard" || isHovered);
-  $: showLock = isLocked && isHovered && !isDragging && kind !== "group";
+    (alwaysShowClose || isHovered);
+  $: showLock = isLocked && isHovered && !isDragging && !isGroup;
 </script>
 
 <div
   role="button"
   tabindex="0"
-  data-sidebar-element={kind}
+  data-sidebar-element={isGroup ? "group" : "workspace"}
   data-active={isActive ? "true" : undefined}
   data-drag-idx={dataDragIdx}
   data-workspace-id={dataWorkspaceId}
@@ -75,18 +81,14 @@
   style="
     display: {isDragging ? 'none' : 'flex'};
     position: relative;
-    height: {kind === 'dashboard' ? '30px' : '32px'};
-    margin: {kind !== 'dashboard' ? '0 8px 0 0' : '0 8px 0 0'};
-    border-radius: {kind === 'group' ||
-  kind === 'workspace' ||
-  kind === 'dashboard'
-    ? '0 6px 6px 0'
-    : '0'};
+    height: {isCompact ? '30px' : '32px'};
+    margin: 0 8px 0 0;
+    border-radius: 0 6px 6px 0;
     overflow: hidden;
     cursor: pointer;
     background: {isActive
     ? $theme.bgActive
-    : isHovered && kind !== 'dashboard'
+    : isHovered && !isCompact
       ? $theme.bgHighlight
       : ($theme.bgSurface ?? 'transparent')};
     border: 1px solid {isActive
@@ -106,45 +108,43 @@
   on:mouseleave={() => (isHovered = false)}
   on:mousedown={onGripMouseDown}
 >
-  {#if kind === "workspace" || kind === "group" || kind === "dashboard"}
-    <DragGrip
-      theme={$theme}
-      visible={isDragging || (canDrag && isHovered && !$anyReorderActive)}
-      railColor={effectiveColor}
-      railOpacity={1}
-      alwaysShowDots={true}
-      fadeRight={kind === "workspace" || kind === "dashboard"}
-    />
-    {#if kind === "group"}
-      <!-- Group banner rail gradient -->
-      <div
-        aria-hidden="true"
-        style="
-          position: absolute;
-          top: 0; bottom: 0;
-          left: 0; width: 14px;
-          pointer-events: none;
-          background-image:
-            radial-gradient(circle, {effectiveColor} 1.1px, transparent 1.6px),
-            radial-gradient(circle, {effectiveColor} 1.1px, transparent 1.6px);
-          background-size: 5px 5px;
-          background-position: 0 0, 2.5px 2.5px;
-          background-repeat: repeat;
-          -webkit-mask-image: linear-gradient(
-            to right,
-            rgba(0, 0, 0, 1) 0%,
-            rgba(0, 0, 0, 0.3) 20%,
-            rgba(0, 0, 0, 0) 70%
-          );
-          mask-image: linear-gradient(
-            to right,
-            rgba(0, 0, 0, 1) 0%,
-            rgba(0, 0, 0, 0.3) 20%,
-            rgba(0, 0, 0, 0) 70%
-          );
-        "
-      ></div>
-    {/if}
+  <DragGrip
+    theme={$theme}
+    visible={isDragging || (canDrag && isHovered && !$anyReorderActive)}
+    railColor={effectiveColor}
+    railOpacity={1}
+    alwaysShowDots={true}
+    fadeRight={!isGroup}
+  />
+  {#if isGroup}
+    <!-- Group banner rail gradient -->
+    <div
+      aria-hidden="true"
+      style="
+        position: absolute;
+        top: 0; bottom: 0;
+        left: 0; width: 14px;
+        pointer-events: none;
+        background-image:
+          radial-gradient(circle, {effectiveColor} 1.1px, transparent 1.6px),
+          radial-gradient(circle, {effectiveColor} 1.1px, transparent 1.6px);
+        background-size: 5px 5px;
+        background-position: 0 0, 2.5px 2.5px;
+        background-repeat: repeat;
+        -webkit-mask-image: linear-gradient(
+          to right,
+          rgba(0, 0, 0, 1) 0%,
+          rgba(0, 0, 0, 0.3) 20%,
+          rgba(0, 0, 0, 0) 70%
+        );
+        mask-image: linear-gradient(
+          to right,
+          rgba(0, 0, 0, 1) 0%,
+          rgba(0, 0, 0, 0.3) 20%,
+          rgba(0, 0, 0, 0) 70%
+        );
+      "
+    ></div>
   {/if}
 
   <!-- Content slot: icon, label, status, etc. -->
@@ -152,7 +152,7 @@
     style="
       flex: 1; min-width: 0;
       display: flex; align-items: center; gap: 8px;
-      padding: {kind === 'dashboard' ? '0 8px' : '4px 6px'};
+      padding: {isCompact ? '0 8px' : '4px 6px'};
       min-height: 100%;
     "
   >

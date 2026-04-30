@@ -128,7 +128,9 @@
 </script>
 
 <PrimarySidebarElement
-  kind={isDashboardWs ? "dashboard" : "workspace"}
+  isGroup={false}
+  alwaysShowClose={isDashboardWs}
+  isCompact={isDashboardWs}
   name={workspace.name}
   {isActive}
   {isLocked}

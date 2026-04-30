@@ -85,9 +85,7 @@ describe("WorkspaceItem drag grip", () => {
       "src/lib/components/PrimarySidebarElement.svelte",
       "utf-8",
     ).replace(/\s+/g, " ");
-    expect(SIDEBAR_ELEM_SOURCE).toMatch(
-      /border-radius:\s*\{kind === 'group' \|\| kind === 'workspace' \|\| kind === 'dashboard'\s*\?\s*'0 6px 6px 0'/,
-    );
+    expect(SIDEBAR_ELEM_SOURCE).toMatch(/border-radius:\s*0 6px 6px 0/);
   });
 
   it("invokes onGripMouseDown when ANY part of the row body is pressed (row-level drag-origin)", async () => {

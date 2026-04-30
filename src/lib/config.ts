@@ -147,6 +147,12 @@ export interface WorkspaceGroupEntry {
   color: string;
   /** Ids of workspaces currently claimed by this group. */
   workspaceIds: string[];
+  /**
+   * Id of the one non-worktree, non-dashboard workspace in this group.
+   * Set at group creation and backfilled by reconcilePrimaryWorkspaces()
+   * on first startup after migration. Never reassigned.
+   */
+  primaryWorkspaceId?: string;
   /** True when `path` is the root of a git repo. Used by gates (e.g. worktree actions). */
   isGit: boolean;
   createdAt: string;

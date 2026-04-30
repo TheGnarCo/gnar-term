@@ -57,8 +57,25 @@ export function updateWorkspaceGroup(
   emitStateChanged({ groupId: id });
 }
 
+/**
+ * Toggle the `locked` flag on a workspace group. Locked groups have
+ * their drag-reorder, delete, and archive affordances suppressed.
+ * No-op if no group with the given id exists.
+ */
+export function toggleWorkspaceGroupLock(id: string): void {
+  const groups = getWorkspaceGroups();
+  const idx = groups.findIndex((g) => g.id === id);
+  if (idx === -1) return;
+  const next = groups.map((g) =>
+    g.id === id ? { ...g, locked: !g.locked } : g,
+  );
+  setWorkspaceGroups(next);
+  emitStateChanged({ groupId: id });
+}
+
 export function deleteWorkspaceGroup(id: string): void {
   const group = getWorkspaceGroup(id);
+  if (group?.locked) return;
   const next = getWorkspaceGroups().filter((g) => g.id !== id);
   setWorkspaceGroups(next);
   removeRootRow({ kind: "workspace-group", id });

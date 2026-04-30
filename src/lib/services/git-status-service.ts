@@ -240,6 +240,8 @@ function applyGitStatusResults(
     metadata: {
       repoRoot: gitRoot,
       isDetached: info.isDetached,
+      ahead: info.ahead,
+      behind: info.behind,
     },
   });
 

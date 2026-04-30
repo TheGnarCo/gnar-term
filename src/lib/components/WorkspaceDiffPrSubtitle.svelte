@@ -40,8 +40,17 @@
       i.source === GIT_STATUS_SOURCE && i.id.endsWith(":dirty"),
   );
 
-  $: repoRoot = (branchItem?.metadata as Record<string, unknown> | undefined)
-    ?.repoRoot as string | undefined;
+  interface BranchMeta {
+    repoRoot?: string;
+    isDetached?: boolean;
+    ahead?: number;
+    behind?: number;
+  }
+  $: branchMeta = branchItem?.metadata as BranchMeta | undefined;
+  $: repoRoot = branchMeta?.repoRoot;
+  $: ahead = branchMeta?.ahead ?? 0;
+  $: behind = branchMeta?.behind ?? 0;
+  $: showRemote = ahead > 0 || behind > 0;
 
   $: diffLabel = dirtyItem?.label ?? "";
   $: showDiff = diffLabel.length > 0;
@@ -152,7 +161,7 @@
     : fgMuted;
 </script>
 
-{#if showDiff || showPr}
+{#if showDiff || showPr || showRemote}
   <div
     style="display: flex; flex-direction: column; gap: 1px; padding: 0 12px 4px 6px; overflow: hidden;"
   >
@@ -223,6 +232,45 @@
         >
           #{pr.number}{isDraft ? " draft" : ""}
         </span>
+      </div>
+    {/if}
+
+    {#if showRemote}
+      <div
+        style="display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden;"
+        title="{ahead > 0 ? `${ahead} ahead` : ''}{ahead > 0 && behind > 0
+          ? ', '
+          : ''}{behind > 0 ? `${behind} behind` : ''} of remote"
+      >
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={iconFg}
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          style="flex-shrink: 0; opacity: 0.7;"
+          aria-hidden="true"
+        >
+          <line x1="8" y1="20" x2="8" y2="6" />
+          <polyline points="4 10 8 6 12 10" />
+          <line x1="16" y1="4" x2="16" y2="18" />
+          <polyline points="12 14 16 18 20 14" />
+        </svg>
+        {#if ahead > 0}
+          <span
+            style="font-size: 10px; color: #4ec957; white-space: nowrap; flex-shrink: 0;"
+            >↑{ahead}</span
+          >
+        {/if}
+        {#if behind > 0}
+          <span
+            style="font-size: 10px; color: #e8b73a; white-space: nowrap; flex-shrink: 0;"
+            >↓{behind}</span
+          >
+        {/if}
       </div>
     {/if}
   </div>

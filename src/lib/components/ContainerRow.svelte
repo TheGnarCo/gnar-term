@@ -20,6 +20,7 @@
   import { theme } from "../stores/theme";
   import { reorderContext } from "../stores/ui";
   import { workspaces } from "../stores/workspace";
+  import PrimarySidebarElement from "./PrimarySidebarElement.svelte";
   import DragGrip from "./DragGrip.svelte";
   import DefaultWorkspaceListView from "./WorkspaceListView.svelte";
   import type { Workspace } from "../types";
@@ -134,35 +135,28 @@
 </script>
 
 {#if parentColor}
-  <!-- Nested-inside-parent variant — banner only, with a left-edge
-       colored accent replacing the old full-bleed colored background. -->
+  <!-- Nested-inside-parent variant — banner only, with left-edge
+       colored accent. Uses PrimarySidebarElement for unified styling. -->
   <div
     data-container-row={testId ?? ""}
     data-container-mode="nested"
     style="position: relative;"
   >
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div
-      data-container-banner
-      style="
-        position: relative;
-        margin: 0 8px 0 0;
-        border-radius: 0 6px 6px 0;
-        overflow: hidden;
-        min-height: 40px;
-        cursor: default;
-        background: transparent;
-        color: {$theme.fg};
-        border-left: 3px solid {color};
-      "
-      on:contextmenu={onBannerContextMenu}
-      on:mouseenter={() => (bannerHovered = true)}
-      on:mouseleave={() => (bannerHovered = false)}
+    <PrimarySidebarElement
+      kind="group"
+      name={containerLabel}
+      isActive={false}
+      isLocked={locked}
+      isDragging={false}
+      canDrag={false}
+      canClose={!!onClose}
+      {color}
+      {onClose}
+      onContextMenu={onBannerContextMenu}
     >
       <div
         data-container-banner-body
-        style="padding: 4px 8px; display: flex; flex-direction: column; gap: 2px; min-height: 32px; justify-content: center;"
+        style="padding: 4px 8px; display: flex; flex-direction: column; gap: 2px; min-height: 32px; justify-content: center; flex: 1; min-width: 0;"
       >
         <div
           style="display: flex; align-items: center; gap: 8px; min-width: 0;"
@@ -183,7 +177,7 @@
           </div>
         {/if}
       </div>
-    </div>
+    </PrimarySidebarElement>
     {#if !collapsed && nonDashboardCount > 0}
       <div
         data-container-nested={scopeId}

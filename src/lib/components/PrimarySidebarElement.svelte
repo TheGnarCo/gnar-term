@@ -56,7 +56,11 @@
 
   $: effectiveColor = color || $theme.accent;
   $: showClose =
-    canClose && isHovered && !isDragging && kind !== "group" && !isLocked;
+    canClose &&
+    !isDragging &&
+    kind !== "group" &&
+    !isLocked &&
+    (kind === "dashboard" || isHovered);
   $: showLock = isLocked && isHovered && !isDragging && kind !== "group";
 </script>
 

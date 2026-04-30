@@ -24,7 +24,7 @@
     "test:watch": "NODE_OPTIONS=--no-warnings vitest",
     "test:coverage": "NODE_OPTIONS=--no-warnings vitest run --coverage",
     "verify": "npm run lint && npm run typecheck && npm run check && npm test && npm run vite:build",
-    "prepare": "lefthook install"
+    "prepare": "lefthook install --reset-hooks-path"
   },
   "dependencies": {
     "@embedpdf/snippet": "^2.12.1",

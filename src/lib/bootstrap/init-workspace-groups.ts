@@ -301,23 +301,6 @@ export async function initWorkspaceGroups(): Promise<void> {
     label: (id: string) => readGroups().find((g) => g.id === id)?.name,
   });
 
-  // Workspace action — appears in the Workspaces header "+ New"
-  // split-button dropdown alongside "New Workspace".
-  registerWorkspaceAction({
-    id: "new-workspace-group",
-    label: "New Workspace Group...",
-    icon: "folder-plus",
-    source: SOURCE,
-    // Workspace Groups nest workspaces, not other groups. Hide the
-    // action from any context that carries a groupId (e.g. a group's
-    // banner context menu, a group-nested "+ New" dropdown) so users
-    // can't try to create a group inside a group.
-    when: (ctx) => !ctx?.groupId,
-    handler: () => {
-      void createWorkspaceGroupFlow();
-    },
-  });
-
   // Formerly owned by the worktree-workspaces extension. Registered here
   // so the action is available in context menus on git-backed groups. The
   // ⎇ Branch button in WorkspaceSectionContent calls the command

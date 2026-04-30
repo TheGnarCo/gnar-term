@@ -63,9 +63,6 @@ export function splitPaneEmpty(
     getAllPanes(ws.splitRoot).find((p) => p.id === paneId) ?? get(activePane);
   if (!activeP) return null;
 
-  const sourceSurface = activeP.surfaces.find(
-    (s) => s.id === activeP.activeSurfaceId,
-  );
   const newPane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
   const newSplit: SplitNode = {
     type: "split",

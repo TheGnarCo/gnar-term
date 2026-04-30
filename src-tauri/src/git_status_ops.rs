@@ -5,6 +5,7 @@
 /// via `sh -c` with unsanitised path arguments.
 ///
 /// Each command builds an argv array directly — no shell interpreter involved.
+use std::collections::HashMap;
 use std::path::Path;
 use std::process::Command;
 
@@ -54,6 +55,34 @@ pub async fn git_rev_parse_toplevel(cwd: String) -> Result<ScriptOutput, String>
 pub async fn git_status_short(cwd: String) -> Result<ScriptOutput, String> {
     validate_cwd(&cwd)?;
     run_argv(&cwd, "git", &["status", "--porcelain=v1", "-b"])
+}
+
+/// Batch variant — runs `git status --porcelain=v1 -b` for every path in
+/// `cwds` concurrently (one `spawn_blocking` task per path). Paths that
+/// fail validation or whose git command fails are silently omitted from the
+/// returned map so callers can treat a missing key as "no result".
+#[tauri::command]
+pub async fn git_status_short_batch(
+    cwds: Vec<String>,
+) -> Result<HashMap<String, ScriptOutput>, String> {
+    let handles: Vec<_> = cwds
+        .into_iter()
+        .map(|cwd| {
+            tokio::task::spawn_blocking(move || -> Option<(String, ScriptOutput)> {
+                validate_cwd(&cwd).ok()?;
+                let output = run_argv(&cwd, "git", &["status", "--porcelain=v1", "-b"]).ok()?;
+                Some((cwd, output))
+            })
+        })
+        .collect();
+
+    let mut results = HashMap::new();
+    for handle in handles {
+        if let Ok(Some((cwd, output))) = handle.await {
+            results.insert(cwd, output);
+        }
+    }
+    Ok(results)
 }
 
 #[cfg(test)]

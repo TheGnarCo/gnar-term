@@ -537,7 +537,7 @@ describe("git status service: stale-data clear (H4)", () => {
         return undefined;
       });
 
-      await vi.advanceTimersByTimeAsync(30_100);
+      await vi.advanceTimersByTimeAsync(20_100);
       await drain(20);
 
       const itemsAfterFail = get(statusRegistry.store);

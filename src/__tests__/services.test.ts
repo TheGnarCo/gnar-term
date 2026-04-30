@@ -57,6 +57,7 @@ import {
   serializeLayout,
   persistWorkspaces,
   schedulePersist,
+  toggleWorkspaceLock,
 } from "../lib/services/workspace-service";
 
 import {
@@ -383,6 +384,65 @@ describe("workspace-service", () => {
       const names = get(workspaces).map((w) => w.name);
       expect(names).toEqual(["C", "A", "B"]);
       expect(get(activeWorkspaceIdx)).toBe(0);
+    });
+  });
+
+  describe("toggleWorkspaceLock", () => {
+    it("sets metadata.locked to true on first toggle", () => {
+      const ws = makeWorkspace({ name: "WS" });
+      workspaces.set([ws]);
+
+      toggleWorkspaceLock(ws.id);
+
+      expect(get(workspaces)[0].metadata?.locked).toBe(true);
+    });
+
+    it("clears metadata.locked back to false on second toggle", () => {
+      const ws = makeWorkspace({
+        name: "WS",
+        metadata: { locked: true },
+      });
+      workspaces.set([ws]);
+
+      toggleWorkspaceLock(ws.id);
+
+      expect(get(workspaces)[0].metadata?.locked).toBe(false);
+    });
+
+    it("preserves other metadata fields when toggling", () => {
+      const ws = makeWorkspace({
+        name: "WS",
+        metadata: { worktreePath: "/tmp/wt", branch: "feat/x" },
+      });
+      workspaces.set([ws]);
+
+      toggleWorkspaceLock(ws.id);
+
+      const md = get(workspaces)[0].metadata;
+      expect(md?.locked).toBe(true);
+      expect(md?.worktreePath).toBe("/tmp/wt");
+      expect(md?.branch).toBe("feat/x");
+    });
+
+    it("only mutates the matching workspace", () => {
+      const ws1 = makeWorkspace({ name: "A" });
+      const ws2 = makeWorkspace({ name: "B" });
+      workspaces.set([ws1, ws2]);
+
+      toggleWorkspaceLock(ws2.id);
+
+      expect(get(workspaces)[0].metadata?.locked).toBeUndefined();
+      expect(get(workspaces)[1].metadata?.locked).toBe(true);
+    });
+
+    it("is a no-op for an unknown workspace id", () => {
+      const ws = makeWorkspace({ name: "WS" });
+      workspaces.set([ws]);
+      const before = get(workspaces)[0];
+
+      toggleWorkspaceLock("does-not-exist");
+
+      expect(get(workspaces)[0]).toBe(before);
     });
   });
 

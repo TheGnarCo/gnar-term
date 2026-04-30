@@ -35,6 +35,7 @@
     switchWorkspace,
     renameWorkspace,
     reorderWorkspaces,
+    toggleWorkspaceLock,
   } from "../services/workspace-service";
   import { get } from "svelte/store";
   import WorkspaceItem from "./WorkspaceItem.svelte";
@@ -184,6 +185,10 @@
   });
 
   function startDrag(e: MouseEvent, globalIdx: number) {
+    // Locked workspaces refuse drag-start. canStart in createDragReorder
+    // fires before sourceIdx is populated, so we gate here instead.
+    const ws = $workspaces[globalIdx];
+    if (ws && wsMeta(ws).locked === true) return;
     reorder.start(e, globalIdx);
   }
 
@@ -246,6 +251,7 @@
     const md = wsMeta(ws);
     const isDashboard = md.isDashboard === true;
     const isInsideGroup = typeof md.groupId === "string";
+    const isLocked = md.locked === true;
     const canPromoteCommand = get(commandStore).some(
       (c) => c.id === "promote-workspace-to-group",
     );
@@ -254,6 +260,7 @@
       isInsideGroup,
       canPromoteCommand,
       workspaceCount: $workspaces.length,
+      isLocked,
       onRename: () => itemRefs[ws.id]?.startRename(),
       onPromote: () => {
         switchWorkspace(globalIdx);
@@ -262,6 +269,7 @@
         );
         if (cmd) void cmd.action();
       },
+      onToggleLock: () => toggleWorkspaceLock(ws.id),
       onClose: () => void confirmAndCloseWorkspace(ws, globalIdx),
     });
     contextMenu.set({ x, y, items });

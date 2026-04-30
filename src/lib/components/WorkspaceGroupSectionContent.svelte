@@ -60,7 +60,6 @@
   import { getAllSurfaces, isPreviewSurface, type Workspace } from "../types";
   import { agentsStore } from "../services/agent-detection-service";
   import { variantColor } from "../status-colors";
-  import { tooltip } from "../actions/tooltip";
   import { wsMeta } from "../services/service-helpers";
 
   export let groupId: string;
@@ -116,16 +115,18 @@
   $: filterIds = group ? new Set(group.workspaceIds) : new Set<string>();
 
   // Most-active bot status across all workspaces in this group.
-  // Used by the collapsed banner chip so collapsed groups surface bot presence.
   $: groupAgents = $agentsStore.filter((a) => filterIds.has(a.workspaceId));
-  $: groupStatusColor = (() => {
+  $: groupBotStatus = (() => {
     if (groupAgents.length === 0) return null;
-    if (groupAgents.some((a) => a.status === "running"))
-      return variantColor("success");
-    if (groupAgents.some((a) => a.status === "waiting"))
-      return variantColor("warning");
-    if (groupAgents.some((a) => a.status === "idle"))
-      return variantColor("muted");
+    const running = groupAgents.filter((a) => a.status === "running").length;
+    const waiting = groupAgents.filter((a) => a.status === "waiting").length;
+    const idle = groupAgents.filter((a) => a.status === "idle").length;
+    if (running > 0)
+      return { label: `${running} running`, color: variantColor("success") };
+    if (waiting > 0)
+      return { label: `${waiting} waiting`, color: variantColor("warning") };
+    if (idle > 0)
+      return { label: `${idle} idle`, color: variantColor("muted") };
     return null;
   })();
 
@@ -461,22 +462,10 @@
         ">{group.name}</span
       >
 
-      <svelte:fragment slot="banner-end" let:collapsed>
+      <svelte:fragment slot="banner-end">
         <div
           style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;"
         >
-          {#if collapsed && groupStatusColor}
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <span
-              data-group-status-chip
-              use:tooltip={"Bot active in this group"}
-              style="display: inline-flex; align-items: center; padding: 0 3px;"
-            >
-              <span
-                style="width: 7px; height: 7px; border-radius: 50%; background: {groupStatusColor}; box-shadow: 0 0 0 1px color-mix(in srgb, {groupStatusColor} 35%, transparent);"
-              ></span>
-            </span>
-          {/if}
           {#if coreAction}
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -507,7 +496,39 @@
         </div>
       </svelte:fragment>
 
-      <svelte:fragment slot="banner-subtitle">
+      <svelte:fragment slot="banner-subtitle" let:collapsed>
+        {#if collapsed && groupBotStatus}
+          <div
+            data-group-bot-status-row
+            aria-hidden="true"
+            style="padding: 0 8px 4px 8px; font-size: 11px; color: {groupBotStatus.color}; display: flex; align-items: center; gap: 4px; overflow: hidden; opacity: 0.85;"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="10"
+              height="10"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              style="flex-shrink: 0;"
+            >
+              <title>Bot active in group</title>
+              <path d="M12 8V4H8" />
+              <rect width="16" height="12" x="4" y="8" rx="2" />
+              <path d="M2 14h2" />
+              <path d="M20 14h2" />
+              <path d="M15 13v2" />
+              <path d="M9 13v2" />
+            </svg>
+            <span
+              style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+              >{groupBotStatus.label}</span
+            >
+          </div>
+        {/if}
         <div style="pointer-events: auto;">
           <PathStatusLine
             target={{

@@ -42,7 +42,7 @@
  * If you catch yourself writing a tool named after a specific extension,
  * stop — that's the old pattern.
  */
-import { get } from "svelte/store";
+import { get, writable } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, emit } from "@tauri-apps/api/event";
 import { workspaces, activeWorkspace, activePane } from "../stores/workspace";
@@ -98,6 +98,10 @@ import { registryMirrorTools } from "./mcp-tools/registry-mirrors";
 import { introspectionTools } from "./mcp-tools/introspection";
 
 // ---- Types ----
+
+export type McpStatus = "live" | "error" | "disabled" | "pending";
+const _mcpStatus = writable<McpStatus>("pending");
+export const mcpStatus = { subscribe: _mcpStatus.subscribe };
 
 type AgentType = "claude-code" | "codex" | "aider" | "custom";
 type SessionStatus = "starting" | "exited";
@@ -1525,7 +1529,10 @@ export async function initMcpServer(): Promise<void> {
   initialized = true;
 
   const setting = getMcpSetting();
-  if (setting === "off") return;
+  if (setting === "off") {
+    _mcpStatus.set("disabled");
+    return;
+  }
 
   // Bridge pty-exit to session status updates.
   await listen<{ pty_id: number }>("pty-exit", (event) => {
@@ -1587,6 +1594,8 @@ export async function initMcpServer(): Promise<void> {
     }
     connectionContexts.delete(envelope.connection_id);
   });
+
+  _mcpStatus.set("live");
 
   // Lifecycle events for user GUI focus changes (observers).
   let lastWorkspaceId: string | null = null;

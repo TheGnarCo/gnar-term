@@ -23,10 +23,32 @@
   import SettingsGeneralTab from "./SettingsGeneralTab.svelte";
   import SettingsExtensionsTab from "./SettingsExtensionsTab.svelte";
   import SettingsExtensionPage from "./SettingsExtensionPage.svelte";
+  import SettingsThemesTab from "./SettingsThemesTab.svelte";
+  import { mcpStatus, type McpStatus } from "../services/mcp-server";
+  import { tooltip } from "../actions/tooltip";
+
+  const MCP_STATUS_COLOR: Record<McpStatus, string> = {
+    live: "#4caf50",
+    error: "#f44336",
+    disabled: "var(--theme-fg-dim, #888)",
+    pending: "var(--theme-fg-dim, #888)",
+  };
+  const MCP_STATUS_LABEL: Record<McpStatus, string> = {
+    live: "Live",
+    error: "Error",
+    disabled: "Disabled",
+    pending: "Starting…",
+  };
+  const MCP_STATUS_TOOLTIP: Record<McpStatus, string> = {
+    live: "MCP bridge is running — AI agents can connect",
+    error: "MCP bridge failed to start — AI agents cannot connect",
+    disabled: "MCP is disabled in settings",
+    pending: "MCP bridge is initializing",
+  };
 
   let installError = "";
 
-  type SettingsPage = "general" | "extensions" | `ext:${string}`;
+  type SettingsPage = "general" | "extensions" | "themes" | `ext:${string}`;
   let activePage: SettingsPage = "general";
 
   let currentTheme = "";
@@ -214,6 +236,7 @@
 
   const corePages: Array<{ id: SettingsPage; label: string }> = [
     { id: "general", label: "General" },
+    { id: "themes", label: "Themes" },
     { id: "extensions", label: "Extensions" },
   ];
 
@@ -314,6 +337,38 @@
         >
       {/each}
     {/if}
+
+    <!-- Push MCP indicator to bottom of nav -->
+    <div style="flex: 1;" aria-hidden="true"></div>
+
+    <!-- MCP status indicator -->
+    <div
+      data-mcp-status-indicator
+      use:tooltip={MCP_STATUS_TOOLTIP[$mcpStatus]}
+      style="
+        padding: 10px 16px 8px;
+        display: flex; align-items: center; gap: 6px;
+        border-top: 1px solid {$theme.border};
+        cursor: default;
+      "
+    >
+      <span
+        aria-hidden="true"
+        style="
+          flex-shrink: 0;
+          width: 7px; height: 7px; border-radius: 50%;
+          background: {MCP_STATUS_COLOR[$mcpStatus]};
+          {$mcpStatus === 'live'
+          ? `box-shadow: 0 0 0 2px color-mix(in srgb, ${MCP_STATUS_COLOR[$mcpStatus]} 30%, transparent);`
+          : ''}
+        "
+      ></span>
+      <span
+        style="font-size: 11px; color: {$theme.fgDim}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+      >
+        MCP · {MCP_STATUS_LABEL[$mcpStatus]}
+      </span>
+    </div>
   </nav>
 
   <!-- Right column: content + footer -->
@@ -339,6 +394,8 @@
           onScrollbackChange={handleScrollbackChange}
           onShellChange={handleShellChange}
         />
+      {:else if activePage === "themes"}
+        <SettingsThemesTab />
       {:else if activePage === "extensions"}
         <SettingsExtensionsTab
           {effectiveEnabled}

@@ -383,7 +383,7 @@ preexec_functions+=(_gnarterm_cmd_running)
     cmd.env("GNARTERM_ORIG_ZDOTDIR", &orig_zdotdir);
     cmd.env("ZDOTDIR", &integration_dir);
 
-    // bash/fish: use GNARTERM_SHELL_INTEGRATION env var
+    // bash: use GNARTERM_SHELL_INTEGRATION env var
     // Bash users can add to .bashrc: [ -n "$GNARTERM_SHELL_INTEGRATION" ] && source "$GNARTERM_SHELL_INTEGRATION"
     let bash_integration = format!("{config_dir}/shell/bash-integration.sh");
     let bash_content = r#"# GnarTerm bash integration
@@ -392,6 +392,20 @@ PROMPT_COMMAND="_gnarterm_report_cwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
 "#;
     let _ = std::fs::write(&bash_integration, bash_content);
     cmd.env("GNARTERM_SHELL_INTEGRATION", &bash_integration);
+
+    // fish: write to conf.d for zero-config auto-sourcing (same as starship, zoxide, etc.)
+    // Also write to gnar-term's shell dir as a reference copy.
+    let fish_content = "# GnarTerm fish integration — auto-sourced from conf.d\n\
+function __gnarterm_report_cwd --on-event fish_prompt\n\
+    printf '\\e]7;file://%s%s\\a' (hostname) $PWD\nend\n";
+    let _ = std::fs::write(
+        format!("{integration_dir}/fish-integration.fish"),
+        fish_content,
+    );
+    let fish_conf_d = format!("{home}/.config/fish/conf.d");
+    if std::fs::metadata(&fish_conf_d).is_ok_and(|m| m.is_dir()) {
+        let _ = std::fs::write(format!("{fish_conf_d}/gnarterm.fish"), fish_content);
+    }
 
     // Pass through EDITOR/VISUAL so git commit, crontab, etc. open the right editor
     if let Ok(editor) = std::env::var("EDITOR") {
@@ -1941,7 +1955,8 @@ pub fn run() {
             gh_commands::gh_available,
             gh_commands::gh_view_pr,
             git_status_ops::git_rev_parse_toplevel,
-            git_status_ops::git_status_short
+            git_status_ops::git_status_short,
+            git_status_ops::git_status_short_batch
         ])
         .setup(|app| {
             // Set window title from CLI --title flag

@@ -7,7 +7,7 @@
  */
 
 import { Terminal } from "@xterm/xterm";
-import type { ILink } from "@xterm/xterm";
+import type { ILinkProvider, ILink } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
 import { invoke, Channel } from "@tauri-apps/api/core";
@@ -105,6 +105,78 @@ export function waitForPtyReady(
 /** Shortcut label helpers for platform-appropriate display. */
 export const modLabel = isMac ? "⌘" : "Ctrl+";
 export const shiftModLabel = isMac ? "⇧⌘" : "Ctrl+Shift+";
+
+/**
+ * OSC 8 hyperlink provider — surfaces clickable links emitted via the
+ * `\e]8;;URI\aTEXT\e]8;;\a` escape sequence.
+ *
+ * xterm.js parses OSC 8 internally and tags cells with a `linkId`; the
+ * URI is stored in `_core._oscLinkService`. There is no public API for
+ * this yet, so we read it the same way `@xterm/addon-web-links` peers
+ * into core state. Activation defers to the Tauri `open_url` command,
+ * matching how the WebLinksAddon and filepath provider open targets.
+ *
+ * Range coordinates are 1-based to match xterm.js link convention
+ * (see existing filepath provider in createTerminalSurface).
+ */
+export function createOsc8LinkProvider(terminal: Terminal): ILinkProvider {
+  return {
+    provideLinks(bufferY, callback) {
+      const line = terminal.buffer.active.getLine(bufferY - 1);
+      if (!line) {
+        callback(undefined);
+        return;
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const oscLinks = (terminal as any)._core?._oscLinkService;
+      if (!oscLinks) {
+        callback(undefined);
+        return;
+      }
+
+      const links: ILink[] = [];
+      let spanStart: number | null = null;
+      let spanLinkId = 0;
+      const cols = line.length;
+
+      // Walk one past the end so a span ending on the final column is flushed.
+      for (let x = 0; x <= cols; x++) {
+        const cell = x < cols ? line.getCell(x) : null;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const linkId: number = (cell as any)?.getLinkId?.() ?? 0;
+        if (linkId !== spanLinkId) {
+          if (spanLinkId !== 0 && spanStart !== null) {
+            const data =
+              typeof oscLinks.getLinkData === "function"
+                ? oscLinks.getLinkData(spanLinkId)
+                : typeof oscLinks.dataByLinkId === "function"
+                  ? oscLinks.dataByLinkId(spanLinkId)
+                  : undefined;
+            const uri: string | undefined = data?.uri ?? data?.url;
+            if (uri) {
+              const start = spanStart;
+              const end = x;
+              links.push({
+                text: line.translateToString(true, start, end),
+                range: {
+                  start: { x: start + 1, y: bufferY },
+                  end: { x: end, y: bufferY },
+                },
+                activate: () => {
+                  void invoke("open_url", { url: uri });
+                },
+              });
+            }
+          }
+          spanStart = linkId !== 0 ? x : null;
+          spanLinkId = linkId;
+        }
+      }
+
+      callback(links.length > 0 ? links : undefined);
+    },
+  };
+}
 
 /** Resolve a link path to an absolute filesystem path. Expands ~ and prepends cwd for relative paths. */
 export async function resolveFilePath(
@@ -1045,6 +1117,7 @@ export async function createTerminalSurface(
   terminal.loadAddon(fitAddon);
   terminal.loadAddon(searchAddon);
 
+  terminal.registerLinkProvider(createOsc8LinkProvider(terminal));
   terminal.registerLinkProvider(createUrlLinkProvider(terminal));
 
   const termElement = document.createElement("div");

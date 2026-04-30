@@ -5,6 +5,7 @@ import { activeSurface, workspaces } from "../stores/workspace";
 import {
   getAllPanes,
   getAllSurfaces,
+  isPreviewSurface,
   isTerminalSurface,
   type Surface,
   type TerminalSurface,
@@ -139,7 +140,12 @@ export async function safeFocus(s: Surface | null | undefined) {
 export async function getCwdForSurface(
   surface: Surface | null | undefined,
 ): Promise<string | undefined> {
-  if (!surface || !isTerminalSurface(surface)) return undefined;
+  if (!surface) return undefined;
+  if (isPreviewSurface(surface)) {
+    const lastSlash = surface.path.lastIndexOf("/");
+    return lastSlash > 0 ? surface.path.slice(0, lastSlash) : "/";
+  }
+  if (!isTerminalSurface(surface)) return undefined;
   if (surface.cwd) return surface.cwd;
   if (surface.ptyId >= 0) {
     try {

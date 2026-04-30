@@ -18,6 +18,7 @@ bun.lock
 *.pfx
 docs/superpowers/
 docs/implement/
+docs/gnar-term/
 .superpowers/
 
 # Jekyll build artifacts

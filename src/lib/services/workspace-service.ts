@@ -298,6 +298,27 @@ export function renameWorkspace(idx: number, name: string) {
   schedulePersist();
 }
 
+/**
+ * Toggle the `locked` flag on a workspace's metadata. Locked workspaces
+ * have their drag-reorder and close affordances suppressed in the UI.
+ * No-op if no workspace with the given id exists.
+ */
+export function toggleWorkspaceLock(workspaceId: string): void {
+  let changed = false;
+  workspaces.update((list) =>
+    list.map((ws) => {
+      if (ws.id !== workspaceId) return ws;
+      changed = true;
+      const nextLocked = !ws.metadata?.locked;
+      return {
+        ...ws,
+        metadata: { ...ws.metadata, locked: nextLocked },
+      };
+    }),
+  );
+  if (changed) schedulePersist();
+}
+
 export function reorderWorkspaces(fromIdx: number, toIdx: number) {
   const activeId = get(workspaces)[get(activeWorkspaceIdx)]?.id;
   workspaces.update((list) => {

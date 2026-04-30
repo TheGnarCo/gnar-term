@@ -26,6 +26,7 @@
     rootRowOrder,
     bootstrapRootRowOrder,
   } from "./lib/stores/root-row-order";
+  import { claimedWorkspaceIds } from "./lib/services/claimed-workspace-registry";
   import { get } from "svelte/store";
   import { invoke } from "@tauri-apps/api/core";
   import { loadConfig, saveConfig, getWorkspaceCommands } from "./lib/config";
@@ -662,8 +663,11 @@
     // persisted order and appends any brand-new entity at the end.
     const currentOrder = get(rootRowOrder);
     const extensionRows = currentOrder.filter((r) => r.kind !== "workspace");
+    const claimed = get(claimedWorkspaceIds);
     bootstrapRootRowOrder(
-      get(workspaces).map((w) => w.id),
+      get(workspaces)
+        .filter((w) => !claimed.has(w.id))
+        .map((w) => w.id),
       extensionRows,
     );
 

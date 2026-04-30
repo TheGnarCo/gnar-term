@@ -128,13 +128,13 @@
 </script>
 
 <PrimarySidebarElement
-  kind="workspace"
+  kind={isDashboardWs ? "dashboard" : "workspace"}
   name={workspace.name}
   {isActive}
   {isLocked}
   isDragging={dragActive}
   canDrag={!!onGripMouseDown}
-  canClose={!isDashboardWs || isDashboardWorkspaceRow}
+  canClose={true}
   color={railColor}
   dataDragIdx={index}
   dataWorkspaceId={workspace.id}

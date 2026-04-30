@@ -44,6 +44,7 @@
   } from "../services/dashboard-contribution-registry";
   import DashboardTileIcon from "./DashboardTileIcon.svelte";
   import GridIcon from "../icons/GridIcon.svelte";
+  import GitBranchIcon from "../icons/GitBranchIcon.svelte";
   import type { MenuItem } from "../context-menu-types";
   import { workspaces as workspacesStore } from "../stores/workspace";
   import {
@@ -366,6 +367,7 @@
   $: dimIconColor = ($theme.fgDim ?? $theme.fgMuted ?? "#888") as string;
 
   let hoveredDashId: string | null = null;
+  let branchChipHovered = false;
   let caretHovered = false;
   let closeHovered = false;
   let lockHovered = false;
@@ -625,31 +627,20 @@
             title="⎇ Branch"
             on:click|stopPropagation={() =>
               runCommandById("worktrees:create-workspace", groupContext)}
+            on:mouseenter={() => (branchChipHovered = true)}
+            on:mouseleave={() => (branchChipHovered = false)}
             style="background: {$theme.bgSurface ??
               'transparent'}; border: 1px solid {$theme.border ??
               'transparent'};"
           >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <line x1="7" y1="2" x2="7" y2="10" />
-              <line x1="3" y1="6" x2="11" y2="6" />
-              <circle
-                cx="12"
-                cy="12"
-                r="1.5"
-                fill="currentColor"
-                stroke="none"
-              />
-              <path d="M7 10 C7 12 10 12 12 12" fill="none" />
-            </svg>
+            <DashboardTileIcon
+              iconComponent={GitBranchIcon}
+              baseColor={groupHex}
+              contributionId={undefined}
+              groupPath={undefined}
+              isActive={false}
+              isHovered={branchChipHovered}
+            />
           </button>
         {/if}
         {#if showToggle}

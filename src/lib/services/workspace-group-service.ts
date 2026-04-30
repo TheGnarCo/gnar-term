@@ -21,7 +21,11 @@ import {
   setActiveGroupId,
   setWorkspaceGroups,
 } from "../stores/workspace-groups";
-import { createWorkspaceFromDef, closeWorkspace } from "./workspace-service";
+import {
+  createWorkspaceFromDef,
+  closeWorkspace,
+  schedulePersist,
+} from "./workspace-service";
 import { eventBus } from "./event-bus";
 import { getAllPanes, type Workspace, type WorkspaceMetadata } from "../types";
 import { wsMeta } from "./service-helpers";
@@ -759,7 +763,9 @@ export async function reconcilePrimaryWorkspaces(): Promise<void> {
       createdAt: new Date().toISOString(),
     };
 
-    // Stamp the workspace with its new group.
+    // Stamp the workspace with its new group and persist so the groupId
+    // survives a restart — without this the workspace comes back as
+    // standalone, fails the claim check, and gets wrapped again.
     workspaces.update((list) =>
       list.map((w) =>
         w.id === ws.id
@@ -767,6 +773,7 @@ export async function reconcilePrimaryWorkspaces(): Promise<void> {
           : w,
       ),
     );
+    schedulePersist();
     addWorkspaceGroup(group);
     // onWorkspaceCreated already fired before reconcile runs, so claim here.
     claimWorkspace(ws.id, "core");

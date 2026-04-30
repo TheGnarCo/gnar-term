@@ -47,6 +47,8 @@
   export let hideStatusBadges: boolean = false;
 
   let hovered = false;
+  let closeHovered = false;
+  let lockHovered = false;
   let nameEl: HTMLSpanElement;
   let _renaming = false;
 
@@ -175,9 +177,6 @@
       railOpacity={1}
       alwaysShowDots={true}
       fadeRight={!(dragActive || (hovered && !$anyReorderActive))}
-      locked={isLocked}
-      onClose={!isDashboardWs || isDashboardWorkspaceRow ? onClose : undefined}
-      closeTooltip="Close Workspace (⇧⌘W)"
       shortcutLabel={shortcutIdx !== undefined && shortcutIdx < 9
         ? `${modLabel}${shortcutIdx + 1}`
         : undefined}
@@ -442,4 +441,62 @@
       </div>
     {/if}
   </div>
+  <!-- Right-side close / lock control — always visible, styled on hover -->
+  {#if !isDashboardWs || isDashboardWorkspaceRow}
+    {#if isLocked}
+      <div
+        aria-hidden="true"
+        title="Workspace locked"
+        style="
+          position: absolute; top: 50%; right: 6px;
+          transform: translateY(-50%);
+          display: flex; align-items: center; justify-content: center;
+          width: 14px; height: 14px;
+          color: {lockHovered ? $theme.fg : railColor};
+          background: {$theme.bgSurface ?? $theme.bg};
+          border: 1px solid {lockHovered ? $theme.fg : railColor};
+          border-radius: 3px;
+          pointer-events: none;
+        "
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="9"
+          height="9"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <title>Workspace locked</title>
+          <rect width="14" height="10" x="5" y="11" rx="2" />
+          <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+        </svg>
+      </div>
+    {:else}
+      <button
+        title="Close Workspace (⇧⌘W)"
+        aria-label="Close Workspace"
+        style="
+          position: absolute; top: 50%; right: 6px;
+          transform: translateY(-50%);
+          display: flex; align-items: center; justify-content: center;
+          width: 14px; height: 14px;
+          color: {closeHovered ? $theme.danger : railColor};
+          background: {$theme.bgSurface ?? $theme.bg};
+          border: 1px solid {closeHovered ? $theme.danger : railColor};
+          border-radius: 3px; cursor: pointer; padding: 0;
+          font-size: 10px; line-height: 1;
+          transition: color 0.1s, border-color 0.1s;
+          -webkit-app-region: no-drag;
+        "
+        on:mousedown|stopPropagation
+        on:click|stopPropagation={onClose}
+        on:mouseenter={() => (closeHovered = true)}
+        on:mouseleave={() => (closeHovered = false)}>×</button
+      >
+    {/if}
+  {/if}
 </div>

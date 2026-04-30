@@ -156,6 +156,8 @@ export interface WorkspaceGroupEntry {
    * the workspaces store by consumers.
    */
   dashboardWorkspaceId?: string;
+  /** When true, the group cannot be drag-reordered or deleted/archived. */
+  locked?: boolean;
 }
 
 export interface GnarTermConfig {

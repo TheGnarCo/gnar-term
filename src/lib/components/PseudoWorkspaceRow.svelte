@@ -28,7 +28,6 @@
   import { configStore } from "../config";
   import { resolveGroupColor } from "../theme-data";
   import { shortcutHint } from "../actions/shortcut-hint";
-  import { shortcutHintsActive } from "../stores/shortcut-hints";
   import { modLabel } from "../terminal-service";
 
   export let pseudo: PseudoWorkspace;
@@ -58,8 +57,7 @@
   }
 
   $: isActive = $activePseudoWorkspaceId === pseudo.id;
-  $: gripVisible =
-    $shortcutHintsActive || (rowHovered && $reorderContext === null);
+  $: gripVisible = rowHovered && $reorderContext === null;
 
   function handleClose(): void {
     unregisterPseudoWorkspace(pseudo.id);

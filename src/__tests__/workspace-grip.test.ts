@@ -86,7 +86,7 @@ describe("WorkspaceItem drag grip", () => {
       "utf-8",
     ).replace(/\s+/g, " ");
     expect(SIDEBAR_ELEM_SOURCE).toMatch(
-      /border-radius:\s*\{kind === 'group' \|\| kind === 'workspace'\s*\?\s*'0 6px 6px 0'/,
+      /border-radius:\s*\{kind === 'group' \|\| kind === 'workspace' \|\| kind === 'dashboard'\s*\?\s*'0 6px 6px 0'/,
     );
   });
 

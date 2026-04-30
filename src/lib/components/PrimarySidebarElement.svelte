@@ -76,12 +76,12 @@
     display: {isDragging ? 'none' : 'flex'};
     position: relative;
     height: {kind === 'dashboard' ? '30px' : '32px'};
-    margin: {kind !== 'dashboard' ? '0 8px 0 0' : '0'};
-    border-radius: {kind === 'group' || kind === 'workspace'
+    margin: {kind !== 'dashboard' ? '0 8px 0 0' : '0 8px 0 0'};
+    border-radius: {kind === 'group' ||
+  kind === 'workspace' ||
+  kind === 'dashboard'
     ? '0 6px 6px 0'
-    : kind === 'dashboard'
-      ? '6px'
-      : '0'};
+    : '0'};
     overflow: hidden;
     cursor: pointer;
     background: {isActive
@@ -106,14 +106,14 @@
   on:mouseleave={() => (isHovered = false)}
   on:mousedown={onGripMouseDown}
 >
-  {#if kind === "workspace" || kind === "group"}
+  {#if kind === "workspace" || kind === "group" || kind === "dashboard"}
     <DragGrip
       theme={$theme}
       visible={isDragging || (canDrag && isHovered && !$anyReorderActive)}
       railColor={effectiveColor}
       railOpacity={1}
       alwaysShowDots={true}
-      fadeRight={kind === "workspace"}
+      fadeRight={kind === "workspace" || kind === "dashboard"}
     />
     {#if kind === "group"}
       <!-- Group banner rail gradient -->

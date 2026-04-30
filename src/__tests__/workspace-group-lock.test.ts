@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { readFileSync } from "fs";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn().mockResolvedValue(undefined),
@@ -116,5 +117,13 @@ describe("deleteWorkspaceGroup — lock gate", () => {
     deleteWorkspaceGroup("g1");
     expect(getWorkspaceGroups()).toHaveLength(1);
     expect(removeRootRow).not.toHaveBeenCalled();
+  });
+});
+
+describe("archiveGroup — lock gate (source audit)", () => {
+  it("returns early when group is locked", () => {
+    const src = readFileSync("src/lib/services/archive-service.ts", "utf-8");
+    // Verify the lock gate appears in the archiveGroup function body
+    expect(src).toContain("if (group.locked) return false");
   });
 });

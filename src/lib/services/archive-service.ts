@@ -64,6 +64,7 @@ export async function archiveWorkspace(wsId: string): Promise<boolean> {
 export async function archiveGroup(groupId: string): Promise<boolean> {
   const group = getWorkspaceGroup(groupId);
   if (!group) return false;
+  if (group.locked) return false;
 
   const allInGroup = getWorkspacesInGroup(groupId);
   const nonDashboard = allInGroup.filter((ws) => !isDashboardWorkspace(ws));

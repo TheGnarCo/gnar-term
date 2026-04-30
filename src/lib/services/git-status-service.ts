@@ -3,10 +3,11 @@
  * branch + dirty count and writes the results into the status registry
  * under source `"git"`.
  *
- * Active workspaces poll fast (5s), inactive ones slow (30s). On `cd`
- * the active workspace's cwd is re-resolved via a debounced `workspaces`
- * store subscription so the sidebar tracks the new directory
- * immediately.
+ * All workspaces share a single 20s batch timer that calls
+ * `git_status_short_batch` with every cached git root in one IPC round
+ * trip. On activation/CWD-change an immediate individual refresh still
+ * runs so status updates feel instant. `.git/index` file-watching gives
+ * sub-second reactivity for actual git ops.
  *
  * PR/CI state was historically registered here under itemId `"pr"`; the
  * pill was retired in favor of the Group Dashboards' `gnar:prs` widget,
@@ -165,8 +166,12 @@ function clearItem(workspaceId: string, itemId: string): void {
   clearStatusItem(GIT_STATUS_SOURCE, workspaceId, itemId);
 }
 
-const timers = new Map<string, ReturnType<typeof setInterval>>();
+const GIT_POLL_MS = 20_000;
+
 const workspaceCwds = new Map<string, string>();
+/** Cached git root per workspace — populated by `refreshGitStatus`, consumed by `batchRefreshAll`. */
+const workspaceGitRoots = new Map<string, string>();
+let sharedBatchTimer: ReturnType<typeof setInterval> | null = null;
 let activeWorkspaceId: string | null = null;
 let homeDir: string | null = null;
 let unsubActive: (() => void) | null = null;
@@ -202,40 +207,22 @@ function prettyCwd(cwd: string): string {
   return cwd.replace(/^\/Users\/[^/]+/, "~").replace(/^\/home\/[^/]+/, "~");
 }
 
-async function refreshGitStatus(
+function applyGitStatusResults(
   workspaceId: string,
-  cwd: string,
-): Promise<string | null> {
-  setItem(workspaceId, "cwd", {
-    category: "info",
-    priority: 5,
-    label: prettyCwd(cwd),
-    variant: "muted",
-  });
-
-  const gitRoot = await detectGitRoot(cwd);
-
-  if (!gitRoot) {
-    clearItem(workspaceId, "branch");
-    clearItem(workspaceId, "dirty");
-    return null;
-  }
-
-  const raw = await runWithTimeout(
-    invoke<ScriptResult>("git_status_short", { cwd: gitRoot }),
-    5000,
-  );
+  gitRoot: string,
+  raw: string | null,
+): void {
   if (!raw) {
     clearItem(workspaceId, "branch");
     clearItem(workspaceId, "dirty");
-    return null;
+    return;
   }
 
   const info = parseGitStatus(raw);
   if (!info) {
     clearItem(workspaceId, "branch");
     clearItem(workspaceId, "dirty");
-    return null;
+    return;
   }
 
   let branchLabel = info.branch;
@@ -262,16 +249,9 @@ async function refreshGitStatus(
       category: "git",
       priority: 30,
       label: shorthand,
-      // Tooltip expands the shorthand in plain English so users who
-      // haven't memorized porcelain codes can still read the summary.
       tooltip: dirtyTooltip(info),
       variant: "warning",
       action: {
-        // Per-workspace pill: open the diff viewer in the currently-
-        // active pane of the workspace the pill belongs to. The
-        // container-row pill (see PathStatusLine) routes through
-        // `open-surface-in-new-workspace` instead because a container
-        // has no single "current pane" to drop a surface into.
         command: "open-surface",
         args: [
           "diff-viewer:diff",
@@ -291,6 +271,35 @@ async function refreshGitStatus(
   } else {
     clearItem(workspaceId, "dirty");
   }
+}
+
+async function refreshGitStatus(
+  workspaceId: string,
+  cwd: string,
+): Promise<string | null> {
+  setItem(workspaceId, "cwd", {
+    category: "info",
+    priority: 5,
+    label: prettyCwd(cwd),
+    variant: "muted",
+  });
+
+  const gitRoot = await detectGitRoot(cwd);
+
+  if (!gitRoot) {
+    clearItem(workspaceId, "branch");
+    clearItem(workspaceId, "dirty");
+    workspaceGitRoots.delete(workspaceId);
+    return null;
+  }
+
+  workspaceGitRoots.set(workspaceId, gitRoot);
+
+  const raw = await runWithTimeout(
+    invoke<ScriptResult>("git_status_short", { cwd: gitRoot }),
+    5000,
+  );
+  applyGitStatusResults(workspaceId, gitRoot, raw);
   return gitRoot;
 }
 
@@ -308,24 +317,15 @@ function startPolling(workspaceId: string, cwd: string): void {
   stopPolling(workspaceId);
   workspaceCwds.set(workspaceId, cwd);
 
-  const isActive = workspaceId === activeWorkspaceId;
-  // Faster cadence (5s / 30s) so the dirty shorthand tracks edits
-  // closely. `.git/index` file-watching backs this up for sub-second
-  // reactivity on actual git ops — the timer is the fallback for
-  // non-git edits (file-system changes from the user's editor, etc.)
-  // and for environments where the watcher can't attach.
-  const gitInterval = isActive ? 5_000 : 30_000;
-
+  // Immediate individual refresh to populate status and discover the git root.
+  // Subsequent periodic refreshes run via the shared batch timer.
   void refreshGitStatus(workspaceId, cwd).then((root) =>
     attachIndexWatcher(workspaceId, cwd, root),
   );
 
-  const gitTimer = setInterval(() => {
-    const latest = workspaceCwds.get(workspaceId);
-    if (latest) void refreshGitStatus(workspaceId, latest);
-  }, gitInterval);
-
-  timers.set(`${workspaceId}:git`, gitTimer);
+  if (!sharedBatchTimer) {
+    sharedBatchTimer = setInterval(() => void batchRefreshAll(), GIT_POLL_MS);
+  }
 }
 
 /**
@@ -404,18 +404,49 @@ async function detachIndexWatcher(workspaceId: string): Promise<void> {
 }
 
 function stopPolling(workspaceId: string): void {
-  const gitTimer = timers.get(`${workspaceId}:git`);
-  if (gitTimer) clearInterval(gitTimer);
-  timers.delete(`${workspaceId}:git`);
+  workspaceGitRoots.delete(workspaceId);
   void detachIndexWatcher(workspaceId);
 }
 
 function stopAllPolling(): void {
-  for (const timer of timers.values()) {
-    clearInterval(timer);
+  if (sharedBatchTimer) {
+    clearInterval(sharedBatchTimer);
+    sharedBatchTimer = null;
   }
-  timers.clear();
   workspaceCwds.clear();
+  workspaceGitRoots.clear();
+}
+
+async function batchRefreshAll(): Promise<void> {
+  const rootToWorkspaces = new Map<string, string[]>();
+  for (const [wsId, root] of workspaceGitRoots) {
+    const list = rootToWorkspaces.get(root) ?? [];
+    list.push(wsId);
+    rootToWorkspaces.set(root, list);
+  }
+  if (rootToWorkspaces.size === 0) return;
+
+  const cwds = [...rootToWorkspaces.keys()];
+  let batchResults: Record<string, ScriptResult> | null = null;
+  try {
+    batchResults = await Promise.race([
+      invoke<Record<string, ScriptResult>>("git_status_short_batch", { cwds }),
+      new Promise<null>((_, reject) =>
+        setTimeout(() => reject(new Error("timeout")), 15_000),
+      ),
+    ]);
+  } catch {
+    batchResults = null;
+  }
+
+  for (const [root, wsIds] of rootToWorkspaces) {
+    const result = batchResults?.[root];
+    const raw = result?.exit_code === 0 ? result.stdout : null;
+    for (const wsId of wsIds) {
+      if (!workspaceGitRoots.has(wsId)) continue;
+      applyGitStatusResults(wsId, root, raw);
+    }
+  }
 }
 
 async function ensurePolling(wsId: string): Promise<void> {
@@ -509,6 +540,10 @@ export function handleWorkspaceClosed(wsId: string): void {
   stopPolling(wsId);
   clearAllStatusForSourceAndWorkspace(GIT_STATUS_SOURCE, wsId);
   workspaceCwds.delete(wsId);
+  if (workspaceCwds.size === 0 && sharedBatchTimer) {
+    clearInterval(sharedBatchTimer);
+    sharedBatchTimer = null;
+  }
 }
 
 /** Test-only reset. */

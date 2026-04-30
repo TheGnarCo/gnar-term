@@ -47,7 +47,7 @@ interface FileChangedPayload {
 }
 
 const DEFAULT: GroupDirtyState = { ready: false, hasChanges: false };
-const POLL_MS = 5_000;
+const POLL_MS = 20_000;
 const WATCHER_DEBOUNCE_MS = 150;
 
 const cache = new Map<string, Readable<GroupDirtyState>>();

@@ -36,9 +36,19 @@
   export let onClose: (() => void) | undefined = undefined;
   /** Tooltip text for the close button. */
   export let closeTooltip: string | undefined = undefined;
+  /**
+   * When true, the grip displays a lock icon at the top instead of a
+   * close button, the cursor stops indicating "grab", and the
+   * onMouseDown handler still fires (callers gate drag-start
+   * separately so the row can still be selected).
+   */
+  export let locked: boolean = false;
 
   let closeButtonHovered = false;
-  $: showClose = onClose != null && visible;
+  // Lock icon hides the close affordance entirely. The lock chip itself
+  // is non-interactive — toggling lock is a context-menu action.
+  $: showClose = onClose != null && visible && !locked;
+  $: showLock = locked;
 
   $: effectiveColor = railColor ?? theme.fgDim;
   $: effectiveDotColor = dotColor ?? effectiveColor;
@@ -65,7 +75,7 @@
     align-self: stretch;
     position: relative;
     width: 14px;
-    cursor: {visible ? 'grab' : 'default'};
+    cursor: {locked ? 'not-allowed' : visible ? 'grab' : 'default'};
     overflow: hidden;
   "
 >
@@ -134,5 +144,44 @@
       on:mouseenter={() => (closeButtonHovered = true)}
       on:mouseleave={() => (closeButtonHovered = false)}>×</button
     >
+  {/if}
+  {#if showLock}
+    <!-- Lock chip: visual-only indicator that the workspace is locked.
+         Renders in the same slot the close button would occupy so the
+         row chrome stays consistent. Pointer events are disabled —
+         the lock state is toggled from the context menu. -->
+    <div
+      aria-hidden="true"
+      title="Workspace locked"
+      style="
+        position: absolute;
+        top: 4px; left: 1px; right: 1px;
+        height: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: {effectiveColor};
+        background: {theme.bgSurface ?? theme.bg};
+        border: 1px solid {effectiveColor};
+        border-radius: 3px;
+        pointer-events: none;
+      "
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="9"
+        height="9"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <title>Workspace locked</title>
+        <rect width="14" height="10" x="5" y="11" rx="2" />
+        <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+      </svg>
+    </div>
   {/if}
 </div>

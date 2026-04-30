@@ -413,6 +413,10 @@ export async function confirmAndCloseWorkspace(
   ws: { id: string; name: string; metadata?: Record<string, unknown> },
   idx: number,
 ): Promise<boolean> {
+  // Service-level lock guard: the right-click menu disables Close when a
+  // workspace is locked, but ⇧⌘W and the command palette dispatch directly
+  // here. Gating at the service ensures every caller honors the lock.
+  if (ws.metadata?.locked === true) return false;
   const entry = getWorktreeEntries().find((e) => e.workspaceId === ws.id);
   if (!entry) {
     const isDashboard = typeof ws.metadata?.dashboardWorkspaceId === "string";

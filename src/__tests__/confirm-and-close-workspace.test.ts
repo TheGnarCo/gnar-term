@@ -125,6 +125,41 @@ describe("confirmAndCloseWorkspace", () => {
     expect(mockCloseWorkspace).toHaveBeenCalledWith(3);
   });
 
+  it("refuses to close a locked workspace without prompting", async () => {
+    const ws = {
+      id: "ws-locked",
+      name: "Locked Workspace",
+      metadata: { locked: true },
+    };
+    const result = await confirmAndCloseWorkspace(ws, 0);
+    expect(result).toBe(false);
+    expect(mockShowConfirmPrompt).not.toHaveBeenCalled();
+    expect(mockShowFormPrompt).not.toHaveBeenCalled();
+    expect(mockCloseWorkspace).not.toHaveBeenCalled();
+  });
+
+  it("refuses to close a locked worktree workspace without showing the form", async () => {
+    _seedWorktreeEntries([
+      {
+        worktreePath: "/repo/feat",
+        branch: "feat",
+        baseBranch: "main",
+        repoPath: "/repo",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        workspaceId: "ws-wt-locked",
+      },
+    ]);
+    const ws = {
+      id: "ws-wt-locked",
+      name: "Worktree feat",
+      metadata: { locked: true },
+    };
+    const result = await confirmAndCloseWorkspace(ws, 0);
+    expect(result).toBe(false);
+    expect(mockShowFormPrompt).not.toHaveBeenCalled();
+    expect(mockCloseWorkspace).not.toHaveBeenCalled();
+  });
+
   it("does NOT close when user cancels the worktree form", async () => {
     _seedWorktreeEntries([
       {

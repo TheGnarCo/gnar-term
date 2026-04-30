@@ -72,6 +72,10 @@
   // with them only via the group's tile.
   $: isDashboardWs = wsMeta(workspace).isDashboard === true;
   $: isDashboardWorkspaceRow = dashboardWorkspaceIcon !== null;
+  // Locked workspaces: drag-start is suppressed at the row level,
+  // close affordance is hidden in the grip, and the rail shows a
+  // lock chip in place of the close button.
+  $: isLocked = wsMeta(workspace).locked === true;
   // Nested workspaces live under a group's colored banner. The group
   // banner itself already rolls up status (and the per-row chip handles
   // agent state), so the long blue notification row duplicates chrome
@@ -154,7 +158,14 @@
   on:mouseleave={() => {
     hovered = false;
   }}
-  on:mousedown={(e) => onGripMouseDown?.(e)}
+  on:mousedown={(e) => {
+    // Locked workspaces refuse drag-start at the row body. The grip
+    // column still receives the mousedown (its native cursor is
+    // not-allowed) so callers see consistent input but cannot
+    // initiate a reorder.
+    if (isLocked) return;
+    onGripMouseDown?.(e);
+  }}
 >
   {#if onGripMouseDown}
     <!-- Grip column. The drag-start handler lives on the outer row
@@ -174,6 +185,7 @@
         $shortcutHintsActive ||
         (hovered && !$anyReorderActive)
       )}
+      locked={isLocked}
       onClose={!isDashboardWs || isDashboardWorkspaceRow ? onClose : undefined}
       closeTooltip="Close Workspace (⇧⌘W)"
     />

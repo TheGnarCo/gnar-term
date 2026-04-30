@@ -123,6 +123,13 @@ export interface WorkspaceMetadata {
    * Written by createWorktreeWorkspaceFromConfig.
    */
   spawnedFromIssues?: number[];
+  // --- User locking ---
+  /**
+   * When true, the workspace is "locked" — it cannot be closed via the
+   * Close affordances and is not draggable for reorder. Toggled by the
+   * "Lock Workspace" / "Unlock Workspace" context-menu item.
+   */
+  locked?: boolean;
 }
 
 export interface Workspace {

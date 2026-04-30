@@ -19,6 +19,11 @@ export interface WorkspaceContextMenuOptions {
   canPromoteCommand: boolean;
   /** Total number of workspaces in the list — used to disable "Close Workspace". */
   workspaceCount: number;
+  /**
+   * True when the workspace is currently locked (metadata.locked === true).
+   * Drives the Lock/Unlock label and disables Close while locked.
+   */
+  isLocked?: boolean;
 
   // --- action callbacks ---
   onRename?: () => void;
@@ -26,6 +31,11 @@ export interface WorkspaceContextMenuOptions {
   onNewSurface?: () => void;
   onPromote?: () => void;
   onArchive?: () => void;
+  /**
+   * Called when the user toggles "Lock Workspace" / "Unlock Workspace".
+   * Omit to exclude the item entirely (e.g. for dashboards).
+   */
+  onToggleLock?: () => void;
   onClose: () => void;
 }
 
@@ -37,8 +47,10 @@ export interface WorkspaceContextMenuOptions {
  *   - "Rename Workspace"             — omitted for dashboards
  *   - "New Surface"                  — included only when `onNewSurface` is provided
  *   - separator + "Promote…"         — omitted for dashboards / grouped workspaces
- *   - separator + "Archive"          — omitted for dashboards
- *   - "Close Workspace"              — always present; disabled for dashboards or when count ≤ 1
+ *   - separator + "Lock/Unlock…"     — omitted for dashboards or when no `onToggleLock`
+ *   - "Archive"                      — omitted for dashboards; disabled while locked
+ *   - "Close Workspace"              — always present; disabled for dashboards, when
+ *                                       count ≤ 1, or while locked
  */
 export function buildWorkspaceContextMenuItems(
   opts: WorkspaceContextMenuOptions,
@@ -48,10 +60,12 @@ export function buildWorkspaceContextMenuItems(
     isInsideGroup,
     canPromoteCommand,
     workspaceCount,
+    isLocked = false,
     onRename,
     onNewSurface,
     onPromote,
     onArchive,
+    onToggleLock,
     onClose,
   } = opts;
 
@@ -87,9 +101,17 @@ export function buildWorkspaceContextMenuItems(
 
   items.push({ label: "", action: () => {}, separator: true });
 
+  if (!isDashboard && onToggleLock) {
+    items.push({
+      label: isLocked ? "Unlock Workspace" : "Lock Workspace",
+      action: onToggleLock,
+    });
+  }
+
   if (canArchive && onArchive) {
     items.push({
       label: "Archive",
+      disabled: isLocked,
       action: onArchive,
     });
   }
@@ -98,7 +120,7 @@ export function buildWorkspaceContextMenuItems(
     label: "Close Workspace",
     shortcut: "⇧⌘W",
     danger: true,
-    disabled: workspaceCount <= 1 || isDashboard,
+    disabled: workspaceCount <= 1 || isDashboard || isLocked,
     action: onClose,
   });
 

@@ -1,5 +1,5 @@
 <h1 align="center">🤙 gnar-term</h1>
-<p align="center">A cross-platform terminal workspace manager with built-in file previews, themes, and cmux-compatible config</p>
+<p align="center">A cross-platform terminal workspace manager with built-in file previews, themes, and cmux-compatible config.</p>
 
 <p align="center">
   <a href="https://github.com/TheGnarCo/gnar-term/releases/latest"><img src="https://img.shields.io/badge/Download-Latest%20Release-blue?style=for-the-badge" alt="Download" /></a>

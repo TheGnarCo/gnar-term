@@ -106,8 +106,6 @@
       railOpacity={1}
       alwaysShowDots={true}
       fadeRight={!gripVisible}
-      onClose={pseudo.onClose ? handleClose : undefined}
-      closeTooltip={"Close " + pseudo.label}
     />
     <div
       aria-hidden="true"
@@ -175,4 +173,28 @@
       </span>
     {/if}
   </div>
+  {#if pseudo.onClose}
+    <!-- Close button positioned at right edge, matching WorkspaceItem style -->
+    <button
+      title={"Close " + pseudo.label}
+      aria-label={"Close " + pseudo.label}
+      style="
+        position: absolute; top: 50%; right: 6px;
+        transform: translateY(-50%);
+        display: flex; align-items: center; justify-content: center;
+        width: 14px; height: 14px;
+        color: {rowHovered ? $theme.danger : bannerBackground};
+        background: {$theme.bgSurface ?? $theme.bg};
+        border: 1px solid {rowHovered ? $theme.danger : bannerBackground};
+        border-radius: 3px; cursor: pointer; padding: 0;
+        font-size: 10px; line-height: 1;
+        transition: color 0.1s, border-color 0.1s;
+        -webkit-app-region: no-drag;
+      "
+      on:mousedown|stopPropagation
+      on:click|stopPropagation={handleClose}
+      on:mouseenter={() => (rowHovered = true)}
+      on:mouseleave={() => (rowHovered = false)}>×</button
+    >
+  {/if}
 </div>

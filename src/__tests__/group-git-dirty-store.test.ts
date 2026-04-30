@@ -198,7 +198,7 @@ describe("groupDirtyStore", () => {
     stop();
   });
 
-  it("polls every 5s as a working-tree fallback", async () => {
+  it("polls on a timer as a working-tree fallback", async () => {
     let calls = 0;
     invokeMock.mockImplementation((cmd: string, args: { command?: string }) => {
       if (cmd === "run_script" && args.command === "git diff HEAD --quiet") {
@@ -219,11 +219,11 @@ describe("groupDirtyStore", () => {
     await flush();
     expect(calls).toBe(1);
 
-    await vi.advanceTimersByTimeAsync(5_000);
+    await vi.advanceTimersByTimeAsync(20_000);
     await flush();
     expect(calls).toBe(2);
 
-    await vi.advanceTimersByTimeAsync(5_000);
+    await vi.advanceTimersByTimeAsync(20_000);
     await flush();
     expect(calls).toBe(3);
     stop();

@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { ThemeDef } from "../theme-data";
+  import { shortcutHintsActive } from "../stores/shortcut-hints";
 
   export let theme: ThemeDef;
   export let visible: boolean = false;
@@ -43,12 +44,14 @@
    * separately so the row can still be selected).
    */
   export let locked: boolean = false;
+  /** When set, renders this label in the close/lock slot during meta-hold (shortcutHintsActive). */
+  export let shortcutLabel: string | undefined = undefined;
 
   let closeButtonHovered = false;
-  // Lock icon hides the close affordance entirely. The lock chip itself
-  // is non-interactive — toggling lock is a context-menu action.
-  $: showClose = onClose != null && visible && !locked;
-  $: showLock = locked;
+  // shortcutLabel takes priority over close/lock when meta-hold is active.
+  $: showShortcut = !!shortcutLabel && $shortcutHintsActive;
+  $: showClose = onClose != null && visible && !locked && !showShortcut;
+  $: showLock = locked && !showShortcut;
 
   $: effectiveColor = railColor ?? theme.fgDim;
   $: effectiveDotColor = dotColor ?? effectiveColor;
@@ -114,6 +117,29 @@
         mask-image: {fadeRight ? fadeMask : 'none'};
       "
     ></div>
+  {/if}
+  {#if showShortcut}
+    <div
+      aria-hidden="true"
+      style="
+        position: absolute;
+        top: 4px; left: 1px; right: 1px;
+        height: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: {theme.accent};
+        color: {theme.bg};
+        border-radius: 3px;
+        font-size: 9px;
+        font-weight: 700;
+        pointer-events: none;
+        white-space: nowrap;
+        overflow: hidden;
+      "
+    >
+      {shortcutLabel}
+    </div>
   {/if}
   {#if showClose}
     <button

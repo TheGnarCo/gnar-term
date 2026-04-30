@@ -10,7 +10,6 @@
   import ExtensionWrapper from "./ExtensionWrapper.svelte";
   import DragGrip from "./DragGrip.svelte";
   import { modLabel } from "../terminal-service";
-  import { shortcutHint } from "../actions/shortcut-hint";
   import { shortcutHintsActive } from "../stores/shortcut-hints";
   import { discoEmojiFor, discoColorFor } from "../utils/disco-decoration";
 
@@ -135,9 +134,6 @@
   data-drag-idx={index}
   data-workspace-id={workspace.id}
   data-worktree={isManaged ? "true" : undefined}
-  use:shortcutHint={shortcutIdx !== undefined && shortcutIdx < 9
-    ? `${modLabel}${shortcutIdx + 1}`
-    : undefined}
   style="
     display: {dragActive ? 'none' : 'flex'};
     position: relative;
@@ -188,6 +184,9 @@
       locked={isLocked}
       onClose={!isDashboardWs || isDashboardWorkspaceRow ? onClose : undefined}
       closeTooltip="Close Workspace (⇧⌘W)"
+      shortcutLabel={shortcutIdx !== undefined && shortcutIdx < 9
+        ? `${modLabel}${shortcutIdx + 1}`
+        : undefined}
     />
     <!-- Drag-edge fade: continues the rail's dot pattern from the
          very left of the row into the row body for ~14px, dropping

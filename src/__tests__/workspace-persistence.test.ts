@@ -189,7 +189,6 @@ describe("workspace persistence", () => {
         surfaces: [
           {
             type: "terminal",
-            name: "my-shell",
             cwd: "/home/user",
             focus: true,
           },

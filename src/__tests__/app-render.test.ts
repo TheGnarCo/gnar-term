@@ -501,7 +501,7 @@ describe("Workspace save/restore", () => {
       .pane;
     expect(pane.surfaces).toHaveLength(1);
     expect(pane.surfaces[0].type).toBe("terminal");
-    expect(pane.surfaces[0].name).toBe("zsh");
+    expect(pane.surfaces[0].name).toBeUndefined();
     expect(pane.surfaces[0].cwd).toBe("/home/user");
     expect(pane.surfaces[0].focus).toBe(true);
 

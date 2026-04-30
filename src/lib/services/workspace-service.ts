@@ -339,7 +339,6 @@ export function serializeLayout(node: SplitNode): LayoutNode {
     const surfaces = node.pane.surfaces.map((s) => {
       if (isTerminalSurface(s)) {
         const def: Record<string, unknown> = { type: "terminal" };
-        if (s.title) def.name = s.title;
         if (s.cwd) def.cwd = s.cwd;
         if (s.definedCommand) def.command = s.definedCommand;
         if (s.id === node.pane.activeSurfaceId) def.focus = true;

@@ -457,9 +457,7 @@ describe("workspace-service", () => {
 
       expect(result).toEqual({
         pane: {
-          surfaces: [
-            { type: "terminal", name: "zsh", cwd: "/home", focus: true },
-          ],
+          surfaces: [{ type: "terminal", cwd: "/home", focus: true }],
         },
       });
     });
@@ -537,8 +535,12 @@ describe("workspace-service", () => {
         direction: "horizontal",
         split: 0.6,
         children: [
-          { pane: { surfaces: [expect.objectContaining({ name: "left" })] } },
-          { pane: { surfaces: [expect.objectContaining({ name: "right" })] } },
+          {
+            pane: { surfaces: [expect.objectContaining({ type: "terminal" })] },
+          },
+          {
+            pane: { surfaces: [expect.objectContaining({ type: "terminal" })] },
+          },
         ],
       });
     });

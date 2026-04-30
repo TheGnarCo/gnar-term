@@ -51,7 +51,6 @@ describe("serializeLayout — definedCommand round-trip", () => {
         surfaces: [
           {
             type: "terminal",
-            name: "shell",
             cwd: "/tmp",
             command: "npm run dev",
             focus: true,
@@ -76,7 +75,6 @@ describe("serializeLayout — definedCommand round-trip", () => {
         surfaces: [
           {
             type: "terminal",
-            name: "shell",
             cwd: "/tmp",
             focus: true,
           },

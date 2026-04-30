@@ -6,6 +6,13 @@ src-tauri/target/
 *.swp
 *.swo
 
+# Local tooling artifacts
+.claude/worktrees/
+coverage/
+docs/gnar-term/
+docs/implement/
+docs/superpowers/
+
 # Secrets / credentials
 .env*
 *.p12

@@ -8,8 +8,68 @@
   import { getAllPanes, getAllSurfaces } from "../types";
   import type { MenuItem } from "../context-menu-types";
 
-  const discoEmojis = ["✨","🦄","🌈","💜","🪩","⚡","💫","🔮","🎀","💎","🌸","🍭","🫧","💗","🦋","🎠","🧚","💖","🌺","🎵","🩵","🪻","🎪","🧸","🌟","💐","🩷","🏄","🐬","🌊","🎨","🧜","🫶","💕","🌙","🐾","🍬","🎶","🌻","🐱","💝","🎈","🪼","🦩","🫀","🧁","🍩","🎯"];
-  const discoColors = ["#e91e63","#c026d3","#2979ff","#00bfa5","#ff4081","#e040fb","#448aff","#1de9b6","#ff9100","#18ffff"];
+  const discoEmojis = [
+    "✨",
+    "🦄",
+    "🌈",
+    "💜",
+    "🪩",
+    "⚡",
+    "💫",
+    "🔮",
+    "🎀",
+    "💎",
+    "🌸",
+    "🍭",
+    "🫧",
+    "💗",
+    "🦋",
+    "🎠",
+    "🧚",
+    "💖",
+    "🌺",
+    "🎵",
+    "🩵",
+    "🪻",
+    "🎪",
+    "🧸",
+    "🌟",
+    "💐",
+    "🩷",
+    "🏄",
+    "🐬",
+    "🌊",
+    "🎨",
+    "🧜",
+    "🫶",
+    "💕",
+    "🌙",
+    "🐾",
+    "🍬",
+    "🎶",
+    "🌻",
+    "🐱",
+    "💝",
+    "🎈",
+    "🪼",
+    "🦩",
+    "🫀",
+    "🧁",
+    "🍩",
+    "🎯",
+  ];
+  const discoColors = [
+    "#e91e63",
+    "#c026d3",
+    "#2979ff",
+    "#00bfa5",
+    "#ff4081",
+    "#e040fb",
+    "#448aff",
+    "#1de9b6",
+    "#ff9100",
+    "#18ffff",
+  ];
 
   // Stable emoji per workspace based on id hash
   function discoEmojiFor(id: string): string {
@@ -39,10 +99,10 @@
   let dragOver = false;
 
   $: allSurfaces = getAllSurfaces(workspace);
-  $: hasUnread = allSurfaces.some(s => s.hasUnread);
+  $: hasUnread = allSurfaces.some((s) => s.hasUnread);
   $: paneCount = getAllPanes(workspace.splitRoot).length;
   $: surfaceCount = allSurfaces.length;
-  $: latestNotification = allSurfaces.find(s => s.notification)?.notification;
+  $: latestNotification = allSurfaces.find((s) => s.notification)?.notification;
   $: metaParts = [
     ...(paneCount > 1 ? [`${paneCount}p`] : []),
     ...(surfaceCount > 1 ? [`${surfaceCount}s`] : []),
@@ -95,14 +155,20 @@
 <div
   draggable="true"
   style="
-    margin: {dragOver ? '24px' : '2px'} 8px 2px 8px; border-radius: 6px; overflow: hidden;
-    background: {isActive ? $theme.bgActive : hovered ? $theme.bgHighlight : 'transparent'};
+    margin: {dragOver
+    ? '24px'
+    : '2px'} 8px 2px 8px; border-radius: 6px; overflow: hidden;
+    background: {isActive
+    ? $theme.bgActive
+    : hovered
+      ? $theme.bgHighlight
+      : 'transparent'};
     border-left: 3px solid {isActive ? $theme.accent : 'transparent'};
     transition: margin 0.15s, opacity 0.15s;
   "
   on:dragstart={handleDragStart}
-  on:dragover|preventDefault={() => dragOver = true}
-  on:dragleave={() => dragOver = false}
+  on:dragover|preventDefault={() => (dragOver = true)}
+  on:dragleave={() => (dragOver = false)}
   on:drop={handleDrop}
 >
   <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -110,53 +176,77 @@
     style="padding: 8px 12px; cursor: pointer; display: flex; align-items: center; gap: 8px;"
     on:click={onSelect}
     on:contextmenu|preventDefault={(e) => onContextMenu(e.clientX, e.clientY)}
-    on:mouseenter={() => hovered = true}
-    on:mouseleave={() => { hovered = false; closeHovered = false; }}
+    on:mouseenter={() => (hovered = true)}
+    on:mouseleave={() => {
+      hovered = false;
+      closeHovered = false;
+    }}
   >
     <div style="flex: 1; overflow: hidden; display: flex; align-items: center;">
       <span
         bind:this={nameEl}
         style="
           font-weight: {isActive ? '600' : '400'};
-          color: {isDisco ? discoColorFor(workspace.id) : isActive ? $theme.fg : $theme.fgMuted};
+          color: {isDisco
+          ? discoColorFor(workspace.id)
+          : isActive
+            ? $theme.fg
+            : $theme.fgMuted};
           font-size: 13px; overflow: hidden;
           text-overflow: ellipsis; white-space: nowrap;
           outline: none; padding: 2px 4px; margin-left: -4px; border-radius: 4px;
         "
         on:blur={finishRename}
         on:keydown={(e) => {
-          if (e.key === "Enter") { e.preventDefault(); nameEl.blur(); }
-          if (e.key === "Escape") { e.preventDefault(); nameEl.textContent = workspace.name; nameEl.blur(); }
+          if (e.key === "Enter") {
+            e.preventDefault();
+            nameEl.blur();
+          }
+          if (e.key === "Escape") {
+            e.preventDefault();
+            nameEl.textContent = workspace.name;
+            nameEl.blur();
+          }
         }}
-      >{#if isDisco}{discoEmojiFor(workspace.id)} {/if}{workspace.name}</span>
+        >{#if isDisco}{discoEmojiFor(workspace.id)}
+        {/if}{workspace.name}</span
+      >
     </div>
 
     {#if metaParts.length > 0}
-      <span style="font-size: 10px; color: {$theme.fgDim}; background: {$theme.bgSurface}; padding: 1px 5px; border-radius: 8px;">
+      <span
+        style="font-size: 10px; color: {$theme.fgDim}; background: {$theme.bgSurface}; padding: 1px 5px; border-radius: 8px;"
+      >
         {metaParts.join(" ")}
       </span>
     {/if}
 
     {#if hasUnread}
-      <span style="width: 8px; height: 8px; border-radius: 50%; background: {$theme.notify}; flex-shrink: 0;"></span>
+      <span
+        style="width: 8px; height: 8px; border-radius: 50%; background: {$theme.notify}; flex-shrink: 0;"
+      ></span>
     {/if}
 
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <span
       title="Close Workspace (⇧⌘W)"
       style="
-        color: {closeHovered ? $theme.danger : $theme.fgDim}; font-size: 14px; cursor: pointer;
+        color: {closeHovered
+        ? $theme.danger
+        : $theme.fgDim}; font-size: 14px; cursor: pointer;
         opacity: {hovered ? '1' : '0'}; transition: opacity 0.15s;
         padding: 0 2px; flex-shrink: 0;
       "
       on:click|stopPropagation={onClose}
-      on:mouseenter={() => closeHovered = true}
-      on:mouseleave={() => closeHovered = false}
-    >×</span>
+      on:mouseenter={() => (closeHovered = true)}
+      on:mouseleave={() => (closeHovered = false)}>×</span
+    >
   </div>
 
   {#if latestNotification}
-    <div style="padding: 2px 12px 6px; font-size: 11px; color: {$theme.notify}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+    <div
+      style="padding: 2px 12px 6px; font-size: 11px; color: {$theme.notify}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+    >
       {latestNotification}
     </div>
   {/if}

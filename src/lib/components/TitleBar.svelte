@@ -23,25 +23,59 @@
   "
 >
   <button
-    style="{btnStyle} color: {$primarySidebarVisible ? $theme.fg : $theme.fgDim};"
+    style="{btnStyle} color: {$primarySidebarVisible
+      ? $theme.fg
+      : $theme.fgDim};"
     title="Toggle Primary Sidebar (⌘B)"
-    on:click={() => primarySidebarVisible.update(v => !v)}
+    on:click={() => primarySidebarVisible.update((v) => !v)}
   >
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="2" width="14" height="12" rx="1.5"/><line x1="5.5" y1="2" x2="5.5" y2="14"/></svg>
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.5"
+      ><rect x="1" y="2" width="14" height="12" rx="1.5" /><line
+        x1="5.5"
+        y1="2"
+        x2="5.5"
+        y2="14"
+      /></svg
+    >
   </button>
 
-  <div style="flex: 1; display: flex; justify-content: center; pointer-events: none;">
-    <span style="
+  <div
+    style="flex: 1; display: flex; justify-content: center; pointer-events: none;"
+  >
+    <span
+      style="
       font-size: 11px; font-weight: 600; letter-spacing: 1.5px;
       color: {$theme.fgDim};
-    ">GNARTERM</span>
+    ">GNARTERM</span
+    >
   </div>
 
   <button
-    style="{btnStyle} color: {$secondarySidebarVisible ? $theme.fg : $theme.fgDim};"
+    style="{btnStyle} color: {$secondarySidebarVisible
+      ? $theme.fg
+      : $theme.fgDim};"
     title="Toggle Secondary Sidebar"
-    on:click={() => secondarySidebarVisible.update(v => !v)}
+    on:click={() => secondarySidebarVisible.update((v) => !v)}
   >
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="2" width="14" height="12" rx="1.5"/><line x1="10.5" y1="2" x2="10.5" y2="14"/></svg>
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.5"
+      ><rect x="1" y="2" width="14" height="12" rx="1.5" /><line
+        x1="10.5"
+        y1="2"
+        x2="10.5"
+        y2="14"
+      /></svg
+    >
   </button>
 </div>

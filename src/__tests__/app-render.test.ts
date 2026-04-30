@@ -32,7 +32,9 @@ describe("App.svelte structure verification", () => {
     // createTerminalSurface already pushes to pane.surfaces
     // App.svelte should NOT have pane.surfaces.push(surface) after calling it
     const lines = source.split("\n");
-    const createCalls = lines.filter(l => l.includes("createTerminalSurface"));
+    const createCalls = lines.filter((l) =>
+      l.includes("createTerminalSurface"),
+    );
     // Check that createTerminalSurface calls are NOT followed by a push on the next few lines
     for (let i = 0; i < lines.length; i++) {
       if (lines[i].includes("createTerminalSurface")) {
@@ -59,9 +61,11 @@ describe("App.svelte structure verification", () => {
   it("terminal area has overflow: hidden for viewport containment", async () => {
     const fs = await import("fs");
     const source = fs.readFileSync("src/App.svelte", "utf-8");
-    expect(source).toContain("id=\"terminal-area\"");
+    expect(source).toContain('id="terminal-area"');
     // The terminal-area must have overflow hidden to prevent viewport overflow
-    const termAreaMatch = source.match(/id="terminal-area"[^>]*style="([^"]*)"/);
+    const termAreaMatch = source.match(
+      /id="terminal-area"[^>]*style="([^"]*)"/,
+    );
     expect(termAreaMatch).not.toBeNull();
     expect(termAreaMatch![1]).toContain("overflow: hidden");
     expect(termAreaMatch![1]).toContain("min-height: 0");
@@ -71,7 +75,10 @@ describe("App.svelte structure verification", () => {
 describe("TerminalSurface component structure", () => {
   it("opens terminal via surface.termElement in onMount (context menu lives there)", async () => {
     const fs = await import("fs");
-    const source = fs.readFileSync("src/lib/components/TerminalSurface.svelte", "utf-8");
+    const source = fs.readFileSync(
+      "src/lib/components/TerminalSurface.svelte",
+      "utf-8",
+    );
     expect(source).toContain("onMount");
     // Must open into surface.termElement (not termEl) so context menu listeners fire correctly
     expect(source).toContain("surface.terminal.open(surface.termElement)");
@@ -89,7 +96,10 @@ describe("TerminalSurface component structure", () => {
 
   it("uses display: none for hidden surfaces (not conditional rendering)", async () => {
     const fs = await import("fs");
-    const source = fs.readFileSync("src/lib/components/TerminalSurface.svelte", "utf-8");
+    const source = fs.readFileSync(
+      "src/lib/components/TerminalSurface.svelte",
+      "utf-8",
+    );
     // Must use CSS visibility, NOT {#if visible} which would destroy the terminal
     expect(source).toContain("display: {visible");
     expect(source).not.toContain("{#if visible}");
@@ -130,7 +140,9 @@ describe("pty-exit workspace recovery", () => {
     const fs = await import("fs");
     const source = fs.readFileSync("src/lib/terminal-service.ts", "utf-8");
     // After splicing a workspace from the list, activeWorkspaceIdx must be clamped
-    expect(source).toContain("activeWorkspaceIdx.set(Math.max(0, wsList.length - 1))");
+    expect(source).toContain(
+      "activeWorkspaceIdx.set(Math.max(0, wsList.length - 1))",
+    );
   });
 
   it("creates default workspace when all workspaces are removed", async () => {
@@ -151,7 +163,10 @@ describe("pty-exit workspace recovery", () => {
 describe("Preview scrolling works", () => {
   it("PreviewSurface container allows scrolling (not overflow: hidden)", async () => {
     const fs = await import("fs");
-    const source = fs.readFileSync("src/lib/components/PreviewSurface.svelte", "utf-8");
+    const source = fs.readFileSync(
+      "src/lib/components/PreviewSurface.svelte",
+      "utf-8",
+    );
     // Container must allow vertical scrolling
     expect(source).toContain("overflow-y: auto");
     // Must NOT have overflow: hidden which would clip scrollable content
@@ -178,14 +193,19 @@ describe("Config loads per-project files", () => {
 describe("Workspace from config definition", () => {
   it("createWorkspaceFromDef is implemented in workspace-service", async () => {
     const fs = await import("fs");
-    const source = fs.readFileSync("src/lib/services/workspace-service.ts", "utf-8");
+    const source = fs.readFileSync(
+      "src/lib/services/workspace-service.ts",
+      "utf-8",
+    );
     expect(source).toContain("async function createWorkspaceFromDef");
   });
 
   it("command palette wires workspace commands to createWorkspaceFromDef", async () => {
     const fs = await import("fs");
     const source = fs.readFileSync("src/App.svelte", "utf-8");
-    expect(source).toContain("cmd.workspace) createWorkspaceFromDef(cmd.workspace)");
+    expect(source).toContain(
+      "cmd.workspace) createWorkspaceFromDef(cmd.workspace)",
+    );
   });
 
   it("autoloads workspaces from config on startup", async () => {
@@ -199,11 +219,14 @@ describe("Workspace from config definition", () => {
 
   it("handles layout with splits and surface definitions", async () => {
     const fs = await import("fs");
-    const source = fs.readFileSync("src/lib/services/workspace-service.ts", "utf-8");
+    const source = fs.readFileSync(
+      "src/lib/services/workspace-service.ts",
+      "utf-8",
+    );
     expect(source).toContain("buildTree(nodeDef.children[0]");
     expect(source).toContain("buildTree(nodeDef.children[1]");
     expect(source).toContain("sDef.command");
-    expect(source).toContain('startupCommand');
+    expect(source).toContain("startupCommand");
     expect(source).toContain('sDef.type === "markdown"');
   });
 });
@@ -218,7 +241,10 @@ describe("New tab inherits cwd from active surface", () => {
 
   it("getActiveCwd reads cwd from active surface", async () => {
     const fs = await import("fs");
-    const source = fs.readFileSync("src/lib/services/service-helpers.ts", "utf-8");
+    const source = fs.readFileSync(
+      "src/lib/services/service-helpers.ts",
+      "utf-8",
+    );
     expect(source).toContain("surface.cwd");
   });
 });
@@ -226,7 +252,10 @@ describe("New tab inherits cwd from active surface", () => {
 describe("No spurious fit/scrollToBottom on store updates", () => {
   it("TerminalSurface does not call fit() reactively (PaneView ResizeObserver handles it)", async () => {
     const fs = await import("fs");
-    const source = fs.readFileSync("src/lib/components/TerminalSurface.svelte", "utf-8");
+    const source = fs.readFileSync(
+      "src/lib/components/TerminalSurface.svelte",
+      "utf-8",
+    );
     // Reactive fit() races with ResizeObserver and measures stale dimensions.
     // Only the onMount fit (for initial open) should exist.
     const afterOnMount = source.split("onMount")[1] || "";
@@ -237,15 +266,16 @@ describe("No spurious fit/scrollToBottom on store updates", () => {
 
   it("switchWorkspace does not directly call fit or scrollToBottom", async () => {
     const fs = await import("fs");
-    const source = fs.readFileSync("src/lib/services/workspace-service.ts", "utf-8");
+    const source = fs.readFileSync(
+      "src/lib/services/workspace-service.ts",
+      "utf-8",
+    );
     const start = source.indexOf("function switchWorkspace");
     const end = source.indexOf("\nexport function ", start + 1);
     const fn = source.slice(start, end);
     expect(fn).not.toMatch(/\.fitAddon\.fit\(\)/);
     expect(fn).not.toMatch(/\.scrollToBottom\(\)/);
   });
-
-
 });
 
 describe("Flash focused pane", () => {
@@ -264,7 +294,10 @@ describe("Flash focused pane", () => {
 
   it("PaneView stores element ref on pane", async () => {
     const fs = await import("fs");
-    const source = fs.readFileSync("src/lib/components/PaneView.svelte", "utf-8");
+    const source = fs.readFileSync(
+      "src/lib/components/PaneView.svelte",
+      "utf-8",
+    );
     expect(source).toContain("pane.element = paneEl");
   });
 });
@@ -290,7 +323,10 @@ describe("Tab drag reorder within pane", () => {
 describe("Theme reactivity for previews", () => {
   it("PreviewSurface updates colors on theme change", async () => {
     const fs = await import("fs");
-    const source = fs.readFileSync("src/lib/components/PreviewSurface.svelte", "utf-8");
+    const source = fs.readFileSync(
+      "src/lib/components/PreviewSurface.svelte",
+      "utf-8",
+    );
     expect(source).toContain("$theme.bg");
     expect(source).toContain("$theme.fg");
     expect(source).toContain("surface.element.style.background");
@@ -327,16 +363,22 @@ describe("CWD polling fallback", () => {
 describe("Workspace save/restore", () => {
   it("serializeLayout produces config-compatible output", async () => {
     const fs = await import("fs");
-    const source = fs.readFileSync("src/lib/services/workspace-service.ts", "utf-8");
+    const source = fs.readFileSync(
+      "src/lib/services/workspace-service.ts",
+      "utf-8",
+    );
     expect(source).toContain("function serializeLayout");
-    expect(source).toContain("node.type === \"pane\"");
+    expect(source).toContain('node.type === "pane"');
     expect(source).toContain("node.direction");
     expect(source).toContain("node.ratio");
   });
 
   it("saveCurrentWorkspace saves to config commands", async () => {
     const fs = await import("fs");
-    const source = fs.readFileSync("src/lib/services/workspace-service.ts", "utf-8");
+    const source = fs.readFileSync(
+      "src/lib/services/workspace-service.ts",
+      "utf-8",
+    );
     expect(source).toContain("async function saveCurrentWorkspace");
     expect(source).toContain("saveConfig({ commands }");
   });
@@ -390,7 +432,7 @@ describe("Keyboard shortcuts completeness", () => {
     const fs = await import("fs");
     const source = fs.readFileSync("src/App.svelte", "utf-8");
     // Must have Cmd+K handler that calls terminal.clear()
-    expect(source).toMatch(/e\.key === "k".*terminal\.clear\(\)/);
+    expect(source).toMatch(/e\.key === "k"[\s\S]*?terminal\.clear\(\)/);
   });
 
   it("Cmd+G dispatches to FindBar findNext", async () => {
@@ -410,7 +452,10 @@ describe("Keyboard shortcuts completeness", () => {
 
   it("FindBar exports findNext and findPrev methods", async () => {
     const fs = await import("fs");
-    const source = fs.readFileSync("src/lib/components/FindBar.svelte", "utf-8");
+    const source = fs.readFileSync(
+      "src/lib/components/FindBar.svelte",
+      "utf-8",
+    );
     expect(source).toContain("export function findNext()");
     expect(source).toContain("export function findPrev()");
   });
@@ -419,29 +464,41 @@ describe("Keyboard shortcuts completeness", () => {
 describe("SplitNodeView has draggable dividers with ratio support", () => {
   it("renders divider element between split children", async () => {
     const fs = await import("fs");
-    const source = fs.readFileSync("src/lib/components/SplitNodeView.svelte", "utf-8");
+    const source = fs.readFileSync(
+      "src/lib/components/SplitNodeView.svelte",
+      "utf-8",
+    );
     expect(source).toContain("split-divider");
     expect(source).toContain("use:dragResize");
   });
 
   it("uses ratio for flex sizing instead of hardcoded flex: 1", async () => {
     const fs = await import("fs");
-    const source = fs.readFileSync("src/lib/components/SplitNodeView.svelte", "utf-8");
-    expect(source).toContain("flex: {node.ratio}");
-    expect(source).toContain("flex: {1 - node.ratio}");
+    const source = fs.readFileSync(
+      "src/lib/components/SplitNodeView.svelte",
+      "utf-8",
+    );
+    expect(source).toMatch(/flex:\s*\{node\.ratio\}/);
+    expect(source).toMatch(/flex:\s*\{1\s*-\s*node\.ratio\}/);
     // Should NOT have hardcoded flex: 1 for split children
     expect(source).not.toMatch(/style="flex: 1;[^"]*">\s*<SplitNodeView/);
   });
 
   it("clamps ratio between 0.1 and 0.9 during drag", async () => {
     const fs = await import("fs");
-    const source = fs.readFileSync("src/lib/components/SplitNodeView.svelte", "utf-8");
+    const source = fs.readFileSync(
+      "src/lib/components/SplitNodeView.svelte",
+      "utf-8",
+    );
     expect(source).toContain("Math.max(0.1, Math.min(0.9");
   });
 
   it("uses correct cursor for horizontal vs vertical splits", async () => {
     const fs = await import("fs");
-    const source = fs.readFileSync("src/lib/components/SplitNodeView.svelte", "utf-8");
+    const source = fs.readFileSync(
+      "src/lib/components/SplitNodeView.svelte",
+      "utf-8",
+    );
     expect(source).toContain("cursor: row-resize");
     expect(source).toContain("cursor: col-resize");
   });
@@ -450,14 +507,20 @@ describe("SplitNodeView has draggable dividers with ratio support", () => {
 describe("PaneView has ResizeObserver for terminal fitting", () => {
   it("creates ResizeObserver in onMount", async () => {
     const fs = await import("fs");
-    const source = fs.readFileSync("src/lib/components/PaneView.svelte", "utf-8");
+    const source = fs.readFileSync(
+      "src/lib/components/PaneView.svelte",
+      "utf-8",
+    );
     expect(source).toContain("new ResizeObserver");
     expect(source).toContain("resizeObserver.observe");
   });
 
   it("debounces resize events to avoid excessive fitAddon.fit() calls", async () => {
     const fs = await import("fs");
-    const source = fs.readFileSync("src/lib/components/PaneView.svelte", "utf-8");
+    const source = fs.readFileSync(
+      "src/lib/components/PaneView.svelte",
+      "utf-8",
+    );
     // Must have a debounce timer, not call fit() directly in the observer
     expect(source).toContain("setTimeout");
     expect(source).toContain("clearTimeout");
@@ -466,7 +529,10 @@ describe("PaneView has ResizeObserver for terminal fitting", () => {
 
   it("disconnects ResizeObserver and clears timer on destroy", async () => {
     const fs = await import("fs");
-    const source = fs.readFileSync("src/lib/components/PaneView.svelte", "utf-8");
+    const source = fs.readFileSync(
+      "src/lib/components/PaneView.svelte",
+      "utf-8",
+    );
     expect(source).toContain("onDestroy");
     expect(source).toContain("resizeObserver?.disconnect()");
     expect(source).toContain("clearTimeout(resizeTimer)");

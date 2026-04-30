@@ -39,6 +39,10 @@ pub struct CliArgs {
     /// Path to config file
     #[arg(short = 'c', long)]
     pub config: Option<String>,
+
+    /// Open a preview surface for a file path or URL (file://, http://, https://)
+    #[arg(long)]
+    pub preview: Option<String>,
 }
 
 /// Flags accepted by CliArgs that take a value argument.
@@ -48,6 +52,7 @@ const VALUE_FLAGS: &[&str] = &[
     "--title",
     "-w", "--workspace",
     "-c", "--config",
+    "--preview",
 ];
 
 /// Flags accepted by CliArgs that are standalone (no value).
@@ -2281,5 +2286,36 @@ mod tests {
             filter_known_args(input.into_iter()),
             args(&["gnar-term", "-w", "dev", "-e", "bash", "~/Documents"])
         );
+    }
+
+    #[test]
+    fn filter_keeps_preview_with_path() {
+        let input = args(&["gnar-term", "--preview", "/tmp/foo.md"]);
+        assert_eq!(filter_known_args(input.clone().into_iter()), input);
+    }
+
+    #[test]
+    fn filter_keeps_preview_with_url() {
+        let input = args(&["gnar-term", "--preview", "https://example.com/foo.md"]);
+        assert_eq!(filter_known_args(input.clone().into_iter()), input);
+    }
+
+    #[test]
+    fn filter_keeps_preview_equals_form() {
+        let input = args(&["gnar-term", "--preview=spacebase://abc123"]);
+        assert_eq!(filter_known_args(input.clone().into_iter()), input);
+    }
+
+    #[test]
+    fn cli_args_parse_preview_flag() {
+        let parsed = CliArgs::parse_from(args(&["gnar-term", "--preview", "/tmp/foo.md"]));
+        assert_eq!(parsed.preview.as_deref(), Some("/tmp/foo.md"));
+        assert!(parsed.path.is_none());
+    }
+
+    #[test]
+    fn cli_args_parse_preview_url() {
+        let parsed = CliArgs::parse_from(args(&["gnar-term", "--preview", "https://example.com/x.md"]));
+        assert_eq!(parsed.preview.as_deref(), Some("https://example.com/x.md"));
     }
 }

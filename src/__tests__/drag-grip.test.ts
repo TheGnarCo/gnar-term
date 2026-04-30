@@ -55,22 +55,22 @@ const SOURCE = readFileSync(
 ).replace(/\s+/g, " ");
 
 describe("DragGrip visual states", () => {
-  it("has a fixed 14px hit area that never expands, with a 6px rail stripe", () => {
+  it("has a fixed 14px hit area that never expands, with a 4.5px rail stripe", () => {
     // Grip width is constant — no hover expansion to avoid content shift.
     expect(SOURCE).toMatch(/width:\s*14px/);
-    // Rail stripe is a constant 6px (scaled with the container width).
-    expect(SOURCE).toMatch(/width:\s*6px/);
+    // Rail stripe is a constant 4.5px (75% of original 6px width).
+    expect(SOURCE).toMatch(/width:\s*4\.5px/);
   });
 
-  it("suppresses the rail stripe whenever the dot pattern is rendered", () => {
-    // Rail stripe and dots are mutually exclusive — showRailStripe derives
-    // from !showDots so they never stack on top of each other.
-    expect(SOURCE).toMatch(/showRailStripe\s*=\s*!showDots/);
+  it("shows solid stripe on hover, suppressing dots", () => {
+    // On hover (visible), show solid stripe. When not visible but alwaysShowDots
+    // is true, show dots instead. Never both at the same time.
+    expect(SOURCE).toMatch(/showRailStripe\s*=\s*visible/);
     expect(SOURCE).toMatch(/\{#if showRailStripe\}/);
   });
 
-  it("renders a uniform diamond-grip dot pattern when visible or alwaysShowDots", () => {
-    expect(SOURCE).toMatch(/showDots\s*=\s*visible\s*\|\|\s*alwaysShowDots/);
+  it("renders a uniform diamond-grip dot pattern when not hovered and alwaysShowDots is true", () => {
+    expect(SOURCE).toMatch(/showDots\s*=\s*!visible\s*&&\s*alwaysShowDots/);
     expect(SOURCE).toMatch(/\{#if showDots\}/);
     // Both rest and expanded states use the same 2-gradient diamond-grip
     // tile (dots at (0,0) and (2.5, 2.5)). Only the radius + fade change.

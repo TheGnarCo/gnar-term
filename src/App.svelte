@@ -167,10 +167,10 @@
     })),
     { name: "Save Current Workspace...", action: () => saveCurrentWorkspace() },
     {
-      name: `Preview File...`,
+      name: `Preview...`,
       action: async () => {
-        const path = await showInputPrompt("Path to file");
-        if (path) openPreviewInPane(path);
+        const target = await showInputPrompt("File path or URL");
+        if (target) openPreviewInPane(target);
       },
     },
     ...getWorkspaceCommands().map((cmd) => ({
@@ -407,6 +407,7 @@
     title: string | null;
     workspace: string | null;
     config: string | null;
+    preview: string | null;
   }
 
   // ---- Initialization ----
@@ -470,6 +471,10 @@
       if (!autoloaded) {
         await createWorkspace("Workspace 1");
       }
+    }
+
+    if (cliArgs.preview) {
+      pendingAction.set({ type: "open-preview", payload: cliArgs.preview });
     }
 
     listen<string>("menu-theme", (event) => {

@@ -114,6 +114,24 @@
 
   $: filterIds = group ? new Set(group.workspaceIds) : new Set<string>();
 
+  // The primary workspace drives the container row's status dot. It is
+  // excluded from the nested list — clicking the row activates it directly.
+  $: primaryWs = group?.primaryWorkspaceId
+    ? $workspaces.find((w) => w.id === group!.primaryWorkspaceId)
+    : undefined;
+
+  // Nested list shows worktree workspaces only (excludes primary and dashboards).
+  $: nestedIds = group
+    ? new Set(
+        group.workspaceIds.filter((id) => {
+          const ws = $workspaces.find((w) => w.id === id);
+          if (!ws) return false;
+          const md = wsMeta(ws);
+          return !md.isDashboard && id !== group!.primaryWorkspaceId;
+        }),
+      )
+    : new Set<string>();
+
   // Most-active bot status across all workspaces in this group.
   $: groupAgents = $agentsStore.filter((a) => filterIds.has(a.workspaceId));
   $: groupBotStatus = (() => {
@@ -129,6 +147,21 @@
       return { label: `${waiting} waiting`, color: variantColor("warning") };
     if (idle > 0)
       return { label: `${idle} idle`, color: variantColor("muted") };
+    return null;
+  })();
+
+  // Agent status for the primary workspace only — shown as a status dot
+  // on the container row header.
+  $: primaryWsAgentStatus = (() => {
+    if (!primaryWs) return null;
+    const agent = $agentsStore.find((a) => a.workspaceId === primaryWs!.id);
+    if (!agent) return null;
+    if (agent.status === "running" || agent.status === "active")
+      return { label: "running", color: variantColor("success") };
+    if (agent.status === "waiting")
+      return { label: "waiting", color: variantColor("warning") };
+    if (agent.status === "idle")
+      return { label: "idle", color: variantColor("muted") };
     return null;
   })();
 
@@ -252,6 +285,14 @@
   // already has the group "open", so re-selecting would be noise.
   function handleBannerClick() {
     if (!group || hasActiveChild) return;
+    // Prefer the primary workspace; fall back to the dashboard then first nested.
+    if (primaryWs) {
+      const idx = $workspaces.indexOf(primaryWs);
+      if (idx >= 0) {
+        switchWorkspace(idx);
+        return;
+      }
+    }
     if (openGroupDashboard(group)) return;
     const nestedIdx = $workspaces.findIndex((w) => {
       return wsMeta(w)?.groupId === group!.id;
@@ -453,7 +494,7 @@
       onBannerContextMenu={handleBannerContextMenu}
       onBannerClick={handleBannerClick}
       onClose={handleDeleteGroup}
-      {filterIds}
+      filterIds={nestedIds}
       {hasActiveChild}
       dashboardHintFor={hintForGroupDashboardHost}
       scopeId={group.id}
@@ -463,6 +504,28 @@
       workspaceListViewComponent={WorkspaceListView}
       locked={isGroupLocked}
     >
+      {#if primaryWsAgentStatus}
+        <span
+          style="
+            display: inline-block;
+            width: 7px; height: 7px; border-radius: 50%;
+            background: {primaryWsAgentStatus.color};
+            flex-shrink: 0;
+            margin-right: 4px;
+          "
+          title={primaryWsAgentStatus.label}
+        ></span>
+      {:else if primaryWs}
+        <span
+          style="
+            display: inline-block;
+            width: 7px; height: 7px; border-radius: 50%;
+            background: {$theme.fg ? $theme.fg + '22' : '#ffffff22'};
+            flex-shrink: 0;
+            margin-right: 4px;
+          "
+        ></span>
+      {/if}
       <span
         data-container-row-title
         style="

@@ -21,6 +21,7 @@
     openGroupDashboard,
     WORKSPACE_GROUP_STATE_CHANGED,
     toggleWorkspaceGroupLock,
+    claimWorkspace,
   } from "../services/workspace-group-service";
   import { archiveGroup } from "../services/archive-service";
   import {
@@ -35,6 +36,7 @@
   import {
     switchWorkspace,
     closeWorkspace,
+    createWorkspaceFromDef,
   } from "../services/workspace-service";
   import {
     dashboardContributionStore,
@@ -273,13 +275,30 @@
   // empty until `reclaimWorkspacesAcrossGroups` rebuilds it). If a
   // nested workspace is already active this is a no-op — the user
   // already has the group "open", so re-selecting would be noise.
-  function handleBannerClick() {
+  async function handleBannerClick() {
     if (!group || hasActiveChild) return;
     // Prefer the primary workspace; fall back to the dashboard then first nested.
     if (primaryWs) {
       const idx = $workspaces.indexOf(primaryWs);
       if (idx >= 0) {
         switchWorkspace(idx);
+        return;
+      }
+    } else if (group.primaryWorkspaceId) {
+      // Primary workspace is missing (was deleted) — recreate it
+      const newWsId = await createWorkspaceFromDef({
+        name: group.name,
+        cwd: group.path,
+        metadata: { groupId: group.id },
+      });
+      if (newWsId) {
+        updateWorkspaceGroup(group.id, { primaryWorkspaceId: newWsId });
+        claimWorkspace(newWsId, "core");
+        // Re-fetch the workspace list to get the new workspace
+        const newIdx = $workspaces.findIndex((w) => w.id === newWsId);
+        if (newIdx >= 0) {
+          switchWorkspace(newIdx);
+        }
         return;
       }
     }
@@ -594,6 +613,7 @@
           {@const IconComp = contribution?.icon ?? GridIcon}
           {@const isActive = entry.idx === $activeWorkspaceIdx}
           {@const canDelete = contribution && !contribution.autoProvision}
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div
             style="
               position: relative;

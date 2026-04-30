@@ -2323,8 +2323,9 @@ describe("terminal link handling", () => {
         .fn()
         .mockReturnValue("visit https://example.com/path for info"),
     };
+    const getLineMock = vi.fn().mockReturnValue(mockLine);
     termInstance.buffer = {
-      active: { getLine: vi.fn().mockReturnValue(mockLine) },
+      active: { getLine: getLineMock },
     };
 
     let capturedLinks:
@@ -2334,6 +2335,8 @@ describe("terminal link handling", () => {
       capturedLinks = links;
     });
 
+    // lineNumber from xterm is 1-indexed; getLine() is 0-indexed — must subtract 1
+    expect(getLineMock).toHaveBeenCalledWith(0);
     expect(capturedLinks).toBeDefined();
     expect(capturedLinks!.length).toBeGreaterThan(0);
     capturedLinks![0].activate(

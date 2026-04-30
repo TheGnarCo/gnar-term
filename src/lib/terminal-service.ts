@@ -749,7 +749,7 @@ function createUrlLinkProvider(terminal: Terminal) {
       lineNumber: number,
       callback: (links: ILink[] | undefined) => void,
     ) {
-      const line = terminal.buffer.active.getLine(lineNumber);
+      const line = terminal.buffer.active.getLine(lineNumber - 1);
       if (!line) {
         callback(undefined);
         return;

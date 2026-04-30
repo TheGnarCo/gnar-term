@@ -22,8 +22,6 @@ describe("WorkspaceGroupEntry.primaryWorkspaceId", () => {
       createdAt: "2026-04-30T00:00:00.000Z",
     };
     expect(group.primaryWorkspaceId).toBe("ws-1");
-    // Type check: verify the field exists in the type definition
-    const _: string | undefined = group.primaryWorkspaceId;
   });
 
   it("accepts a group without primaryWorkspaceId (legacy shape)", () => {
@@ -37,7 +35,5 @@ describe("WorkspaceGroupEntry.primaryWorkspaceId", () => {
       createdAt: "2026-04-30T00:00:00.000Z",
     };
     expect(group.primaryWorkspaceId).toBeUndefined();
-    // Type check: verify the field is optional
-    const _: string | undefined = group.primaryWorkspaceId;
   });
 });

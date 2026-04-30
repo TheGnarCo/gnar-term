@@ -792,6 +792,33 @@ export async function reconcilePrimaryWorkspaces(): Promise<void> {
   }
 }
 
+/**
+ * When a primary workspace is deleted, recreate it to maintain the invariant
+ * that every group has exactly one non-worktree workspace.
+ */
+export function setupPrimaryWorkspaceAutoRecreation(): void {
+  eventBus.on("workspace:closed", async (event) => {
+    if (event.type !== "workspace:closed") return;
+    const closedId = event.id;
+    const group = getWorkspaceGroups().find(
+      (g) => g.primaryWorkspaceId === closedId,
+    );
+    if (!group) return; // Not a primary workspace
+
+    // Recreate the primary workspace with the same name
+    const newWsId = await createWorkspaceFromDef({
+      name: group.name,
+      cwd: group.path,
+      metadata: { groupId: group.id },
+    });
+    if (newWsId) {
+      // Update the group's primary to the new workspace
+      updateWorkspaceGroup(group.id, { primaryWorkspaceId: newWsId });
+      claimWorkspace(newWsId, "core");
+    }
+  });
+}
+
 export {
   getWorkspaceGroup,
   getWorkspaceGroups,

@@ -74,6 +74,7 @@
   import {
     reconcileGroupDashboards,
     reconcilePrimaryWorkspaces,
+    setupPrimaryWorkspaceAutoRecreation,
   } from "./lib/services/workspace-group-service";
 
   // Services
@@ -653,6 +654,7 @@
     // Backfill primaryWorkspaceId and wrap standalone workspaces now that
     // the workspaces store is populated.
     await reconcilePrimaryWorkspaces();
+    setupPrimaryWorkspaceAutoRecreation();
     void reconcileGroupDashboards();
 
     // Rehydrate the persisted root-row order so drag-sorted layouts

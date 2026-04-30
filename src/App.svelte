@@ -29,6 +29,7 @@
   import { get } from "svelte/store";
   import { invoke } from "@tauri-apps/api/core";
   import { loadConfig, saveConfig, getWorkspaceCommands } from "./lib/config";
+  import { registerTheme } from "./lib/services/theme-registry";
   import {
     setupListeners,
     fontReady,
@@ -544,6 +545,15 @@
     // Load config before extensions so getSetting() works in onActivate
     const cliArgs = await invoke<CliArgs>("get_cli_args");
     const config = await loadConfig(cliArgs.config || undefined);
+    if (config.userThemes) {
+      for (const [id, t] of Object.entries(config.userThemes)) {
+        try {
+          registerTheme("user", id, t);
+        } catch (err) {
+          console.warn(`[theme] Failed to register user theme "${id}":`, err);
+        }
+      }
+    }
     if (config.theme) {
       theme.set(config.theme);
     }

@@ -23,6 +23,7 @@
   import SettingsGeneralTab from "./SettingsGeneralTab.svelte";
   import SettingsExtensionsTab from "./SettingsExtensionsTab.svelte";
   import SettingsExtensionPage from "./SettingsExtensionPage.svelte";
+  import SettingsThemesTab from "./SettingsThemesTab.svelte";
   import { mcpStatus, type McpStatus } from "../services/mcp-server";
   import { tooltip } from "../actions/tooltip";
 
@@ -47,7 +48,7 @@
 
   let installError = "";
 
-  type SettingsPage = "general" | "extensions" | `ext:${string}`;
+  type SettingsPage = "general" | "extensions" | "themes" | `ext:${string}`;
   let activePage: SettingsPage = "general";
 
   let currentTheme = "";
@@ -235,6 +236,7 @@
 
   const corePages: Array<{ id: SettingsPage; label: string }> = [
     { id: "general", label: "General" },
+    { id: "themes", label: "Themes" },
     { id: "extensions", label: "Extensions" },
   ];
 
@@ -392,6 +394,8 @@
           onScrollbackChange={handleScrollbackChange}
           onShellChange={handleShellChange}
         />
+      {:else if activePage === "themes"}
+        <SettingsThemesTab />
       {:else if activePage === "extensions"}
         <SettingsExtensionsTab
           {effectiveEnabled}

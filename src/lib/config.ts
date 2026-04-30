@@ -18,6 +18,7 @@ import { writable, type Readable } from "svelte/store";
 import { getHome, getConfigDir } from "./services/service-helpers";
 import { runConfigMigrations } from "./services/config-migrations";
 import type { WorkspaceMetadata } from "./types";
+import type { ThemeDef } from "./theme-data";
 
 // --- Types (cmux-compatible + extensions) ---
 
@@ -210,6 +211,8 @@ export interface GnarTermConfig {
    *   own config are touched.
    */
   mcp?: McpSetting;
+  /** User-imported themes keyed by id. Registered at boot in App.svelte. */
+  userThemes?: Record<string, ThemeDef>;
   // cmux-compatible
   commands?: CommandDef[];
 }

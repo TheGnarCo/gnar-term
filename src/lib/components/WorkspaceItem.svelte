@@ -45,6 +45,8 @@
    * keep showing their own status.
    */
   export let hideStatusBadges: boolean = false;
+  /** When true, this workspace is nested inside a container group and should always show the close button. */
+  export let isNested: boolean = false;
 
   let nameEl: HTMLSpanElement;
   let _renaming = false;
@@ -129,7 +131,7 @@
 
 <PrimarySidebarElement
   isGroup={false}
-  alwaysShowClose={isDashboardWs}
+  alwaysShowClose={isDashboardWs || isNested}
   isCompact={isDashboardWs}
   name={workspace.name}
   {isActive}

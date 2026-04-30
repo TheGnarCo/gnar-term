@@ -101,6 +101,8 @@
 
   $: entries = allEntries.filter(({ ws }) => wsMeta(ws).isDashboard !== true);
 
+  $: isNested = scopeId !== null;
+
   let sourceIdx: number | null = null;
   let indicator: { idx: number; edge: "before" | "after" } | null = null;
   let active = false;
@@ -301,6 +303,7 @@
             {accentColor}
             dashboardHint={dashboardHintFor?.(entry.ws)}
             {hideStatusBadges}
+            {isNested}
             onSelect={() => {
               if (!active) switchWorkspace(entry.idx);
             }}

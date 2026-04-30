@@ -239,7 +239,6 @@
           railColor={color}
           railOpacity={1}
           alwaysShowDots={!locked}
-          fadeRight={!rowHovered}
           onClose={locked ? undefined : onClose}
           closeTooltip="Delete Workspace Group"
           {locked}

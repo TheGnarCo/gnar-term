@@ -214,7 +214,6 @@
               theme={$theme}
               visible={hoveredRowKey === rowKey(row)}
               railOpacity={0.35}
-              fadeRight={true}
             />
             {#if row.kind === "workspace-group"}
               <span class="item-name"

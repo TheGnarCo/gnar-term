@@ -105,7 +105,6 @@
       railColor={bannerBackground}
       railOpacity={1}
       alwaysShowDots={true}
-      fadeRight={!gripVisible}
     />
     <div
       aria-hidden="true"

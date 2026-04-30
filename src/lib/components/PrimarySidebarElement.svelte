@@ -115,7 +115,6 @@
     railColor={effectiveColor}
     railOpacity={1}
     alwaysShowDots={!isLocked}
-    fadeRight={!isGroup}
   />
   {#if isGroup}
     <!-- Group banner rail gradient -->
@@ -175,12 +174,8 @@
           ? $theme.fg
           : $theme.danger
         : effectiveColor};
-        background: {$theme.bgSurface ?? $theme.bg};
-        border: 1px solid {isButtonHovered
-        ? isLocked
-          ? $theme.fg
-          : $theme.danger
-        : effectiveColor};
+        background: transparent;
+        border: none;
         border-radius: 3px; cursor: pointer; padding: 0;
         font-size: 10px; line-height: 1;
         transition: color 0.1s, border-color 0.1s;

@@ -236,6 +236,16 @@
     updateWorkspaceGroup(group.id, { name: trimmed });
   }
 
+  async function handleUnlockGroup() {
+    if (!group) return;
+    const confirmed = await showConfirmPrompt(
+      `Unlock workspace group "${group.name}"?`,
+      { title: "Unlock Workspace Group", confirmLabel: "Unlock" },
+    );
+    if (!confirmed) return;
+    toggleWorkspaceGroupLock(group.id);
+  }
+
   async function handleDeleteGroup() {
     const g = group;
     if (!g) return;
@@ -357,7 +367,8 @@
 
   let hoveredDashId: string | null = null;
   let caretHovered = false;
-  let newChipHovered = false;
+  let closeHovered = false;
+  let lockHovered = false;
 
   $: dashboardWorkspaces = (() => {
     const gId = group?.id;
@@ -443,7 +454,6 @@
       {onGripMouseDown}
       onBannerContextMenu={handleBannerContextMenu}
       onBannerClick={handleBannerClick}
-      onClose={handleDeleteGroup}
       filterIds={nestedIds}
       {hasActiveChild}
       dashboardHintFor={hintForGroupDashboardHost}
@@ -452,7 +462,6 @@
       containerLabel={group.name}
       testId={group.id}
       workspaceListViewComponent={WorkspaceListView}
-      locked={isGroupLocked}
     >
       <span
         data-container-row-title
@@ -467,37 +476,69 @@
         ">{group.name}</span
       >
 
-      <svelte:fragment slot="banner-end">
-        <div
-          style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;"
-        >
-          {#if groupContext && group?.isGit}
-            <!-- svelte-ignore a11y_click_events_have_key_events -->
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <span
-              class="branch-btn-wrap"
-              on:click|stopPropagation={() =>
-                runCommandById("worktrees:create-workspace", groupContext)}
-              on:mouseenter={() => (newChipHovered = true)}
-              on:mouseleave={() => (newChipHovered = false)}
+      <svelte:fragment slot="banner-end" let:bannerHovered>
+        {#if bannerHovered}
+          {#if isGroupLocked}
+            <button
+              title="Unlock Workspace Group"
+              aria-label="Unlock Workspace Group"
               style="
-                flex-shrink: 0; border-radius: 6px; overflow: visible;
-                background: {newChipHovered
-                ? groupHex
-                : `color-mix(in srgb, ${groupHex} 70%, transparent)`};
-                padding: 2px 8px;
-                font-size: 11px;
-                color: {headerFg};
-                cursor: pointer;
-                user-select: none;
+                display: flex; align-items: center; justify-content: center;
+                width: 20px; height: 20px; flex-shrink: 0;
+                color: {lockHovered ? $theme.fg : groupHex};
+                background: {lockHovered
+                ? ($theme.bgHighlight ?? 'rgba(255,255,255,0.08)')
+                : ($theme.bgSurface ?? $theme.bg)};
+                border: 1px solid {lockHovered ? $theme.fg : groupHex};
+                border-radius: 4px; cursor: pointer; padding: 0;
+                transition: background 0.1s, color 0.1s, border-color 0.1s;
                 -webkit-app-region: no-drag;
-                transition: background 0.15s;
               "
+              on:mousedown|stopPropagation
+              on:click|stopPropagation={() => void handleUnlockGroup()}
+              on:mouseenter={() => (lockHovered = true)}
+              on:mouseleave={() => (lockHovered = false)}
             >
-              ⎇ Branch
-            </span>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="10"
+                height="10"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <title>Workspace Group locked</title>
+                <rect width="14" height="10" x="5" y="11" rx="2" />
+                <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+              </svg>
+            </button>
+          {:else}
+            <button
+              title="Delete Workspace Group"
+              aria-label="Delete Workspace Group"
+              style="
+                display: flex; align-items: center; justify-content: center;
+                width: 20px; height: 20px; flex-shrink: 0;
+                color: {closeHovered ? $theme.danger : groupHex};
+                background: {closeHovered
+                ? ($theme.bgHighlight ?? 'rgba(255,255,255,0.08)')
+                : ($theme.bgSurface ?? $theme.bg)};
+                border: 1px solid {closeHovered ? $theme.danger : groupHex};
+                border-radius: 4px; cursor: pointer; padding: 0;
+                font-size: 14px; line-height: 1;
+                transition: background 0.1s, color 0.1s, border-color 0.1s;
+                -webkit-app-region: no-drag;
+              "
+              on:mousedown|stopPropagation
+              on:click|stopPropagation={() => void handleDeleteGroup()}
+              on:mouseenter={() => (closeHovered = true)}
+              on:mouseleave={() => (closeHovered = false)}>×</button
+            >
           {/if}
-        </div>
+        {/if}
       </svelte:fragment>
 
       <svelte:fragment slot="banner-subtitle" let:collapsed>
@@ -583,6 +624,40 @@
             />
           </button>
         {/each}
+        {#if groupContext && group?.isGit}
+          <!-- svelte-ignore a11y_consider_explicit_label -->
+          <button
+            class="dash-btn"
+            title="⎇ Branch"
+            on:click|stopPropagation={() =>
+              runCommandById("worktrees:create-workspace", groupContext)}
+            style="background: {$theme.bgSurface ??
+              'transparent'}; border: 1px solid {$theme.border ??
+              'transparent'};"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <line x1="7" y1="2" x2="7" y2="10" />
+              <line x1="3" y1="6" x2="11" y2="6" />
+              <circle
+                cx="12"
+                cy="12"
+                r="1.5"
+                fill="currentColor"
+                stroke="none"
+              />
+              <path d="M7 10 C7 12 10 12 12 12" fill="none" />
+            </svg>
+          </button>
+        {/if}
         {#if showToggle}
           <!-- svelte-ignore a11y_consider_explicit_label -->
           <button
@@ -672,9 +747,5 @@
   }
   .dash-btn:hover {
     filter: brightness(1.1);
-  }
-  .branch-btn-wrap {
-    display: inline-flex;
-    align-items: center;
   }
 </style>

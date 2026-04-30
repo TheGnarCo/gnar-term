@@ -1759,10 +1759,10 @@ describe("WorkspaceSectionContent", () => {
 
     render(WorkspaceGroupSectionHarness, { props: { groupId: "grp-1" } });
 
-    // ⎇ Branch renders even without any workspace actions registered.
-    expect(screen.getByText("⎇ Branch")).toBeTruthy();
+    // ⎇ Branch chip renders (icon-only) even without any workspace actions registered.
+    expect(screen.getByTitle("⎇ Branch")).toBeTruthy();
 
-    // Registering the core create-worktree action after mount doesn't change the button.
+    // Registering the core create-worktree action after mount doesn't add a second button.
     registerWorkspaceAction({
       id: "core:create-worktree",
       label: "⎇ Branch",
@@ -1773,8 +1773,8 @@ describe("WorkspaceSectionContent", () => {
     });
     await tick();
 
-    // Still just one ⎇ Branch button — the action doesn't add a second one.
-    expect(screen.getByText("⎇ Branch")).toBeTruthy();
+    // Still just one ⎇ Branch chip — the action doesn't add a second one.
+    expect(screen.getByTitle("⎇ Branch")).toBeTruthy();
   });
 });
 

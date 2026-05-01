@@ -92,9 +92,10 @@
 
   let bannerHovered = false;
   let mouseOverContainer = false;
+  let railHovered = false;
   let containerLeaveTimer: ReturnType<typeof setTimeout> | null = null;
 
-  function handleContainerEnter() {
+  function handleContainerEnter(): void {
     if (containerLeaveTimer !== null) {
       clearTimeout(containerLeaveTimer);
       containerLeaveTimer = null;
@@ -102,11 +103,21 @@
     mouseOverContainer = true;
   }
 
-  function handleContainerLeave() {
+  function handleContainerLeave(): void {
     containerLeaveTimer = setTimeout(() => {
       mouseOverContainer = false;
       containerLeaveTimer = null;
     }, 80);
+  }
+
+  function handleRailEnter(): void {
+    handleContainerEnter();
+    railHovered = true;
+  }
+
+  function handleRailLeave(): void {
+    handleContainerLeave();
+    railHovered = false;
   }
 
   $: rowHovered = mouseOverContainer;
@@ -216,8 +227,8 @@
     {#if onGripMouseDown}
       <div
         data-container-rail
-        on:mouseenter={handleContainerEnter}
-        on:mouseleave={handleContainerLeave}
+        on:mouseenter={handleRailEnter}
+        on:mouseleave={handleRailLeave}
         on:mousedown={(e) => onGripMouseDown?.(e)}
         style="
           flex-shrink: 0;
@@ -233,7 +244,7 @@
       >
         <DragGrip
           theme={$theme}
-          visible={rowHovered && $reorderContext === null}
+          visible={railHovered && $reorderContext === null}
           railColor={color}
           railOpacity={1}
           alwaysShowDots={!locked}

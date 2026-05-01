@@ -92,7 +92,7 @@ describe("pseudo-workspace registry", () => {
       expect(getRootBottomPseudoWorkspaces()).toEqual([bottom]);
     });
 
-    it("both buckets are empty when no pseudo-workspaces are registered", () => {
+    it("both buckets are empty when no pseudo-nestedWorkspaces are registered", () => {
       expect(getRootTopPseudoWorkspaces()).toEqual([]);
       expect(getRootBottomPseudoWorkspaces()).toEqual([]);
     });

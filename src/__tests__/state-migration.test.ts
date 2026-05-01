@@ -23,7 +23,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 import { migrateLegacyProjectShapes } from "../lib/config";
 import type { AppState } from "../lib/config";
 
-type WorkspaceLike = NonNullable<AppState["workspaces"]>[number];
+type WorkspaceLike = NonNullable<AppState["nestedWorkspaces"]>[number];
 
 function makeWs(
   id: string,
@@ -50,26 +50,28 @@ describe("migrateLegacyProjectShapes — workspace metadata", () => {
 
   it("rewrites projectId → groupId when groupId absent", () => {
     const { migrated, changed } = migrateLegacyProjectShapes({
-      workspaces: [makeWs("w1", { projectId: "grp-a" })],
+      nestedWorkspaces: [makeWs("w1", { projectId: "grp-a" })],
     });
     expect(changed).toBe(true);
-    expect(migrated.workspaces![0]!.metadata).toEqual({ groupId: "grp-a" });
+    expect(migrated.nestedWorkspaces![0]!.metadata).toEqual({
+      groupId: "grp-a",
+    });
   });
 
   it("prefers existing groupId when both projectId and groupId present", () => {
     const { migrated } = migrateLegacyProjectShapes({
-      workspaces: [
+      nestedWorkspaces: [
         makeWs("w1", { projectId: "old", groupId: "already-migrated" }),
       ],
     });
-    expect(migrated.workspaces![0]!.metadata).toEqual({
+    expect(migrated.nestedWorkspaces![0]!.metadata).toEqual({
       groupId: "already-migrated",
     });
   });
 
   it("rewrites parentOrchestratorId → spawnedBy with kind='group' when groupId known", () => {
     const { migrated, changed } = migrateLegacyProjectShapes({
-      workspaces: [
+      nestedWorkspaces: [
         makeWs("w1", {
           groupId: "grp-a",
           parentOrchestratorId: "orch-legacy",
@@ -77,7 +79,7 @@ describe("migrateLegacyProjectShapes — workspace metadata", () => {
       ],
     });
     expect(changed).toBe(true);
-    expect(migrated.workspaces![0]!.metadata).toEqual({
+    expect(migrated.nestedWorkspaces![0]!.metadata).toEqual({
       groupId: "grp-a",
       spawnedBy: { kind: "group", groupId: "grp-a" },
     });
@@ -85,36 +87,36 @@ describe("migrateLegacyProjectShapes — workspace metadata", () => {
 
   it("rewrites parentOrchestratorId → spawnedBy with kind='global' when no groupId", () => {
     const { migrated } = migrateLegacyProjectShapes({
-      workspaces: [makeWs("w1", { parentOrchestratorId: "orch-root" })],
+      nestedWorkspaces: [makeWs("w1", { parentOrchestratorId: "orch-root" })],
     });
-    expect(migrated.workspaces![0]!.metadata).toEqual({
+    expect(migrated.nestedWorkspaces![0]!.metadata).toEqual({
       spawnedBy: { kind: "global" },
     });
   });
 
   it("rewrites legacy orchestratorId + isDashboard → dashboardContributionId='agentic'", () => {
     const { migrated } = migrateLegacyProjectShapes({
-      workspaces: [
+      nestedWorkspaces: [
         makeWs("w1", {
           isDashboard: true,
           orchestratorId: "orch-legacy",
         }),
       ],
     });
-    expect(migrated.workspaces![0]!.metadata).toMatchObject({
+    expect(migrated.nestedWorkspaces![0]!.metadata).toMatchObject({
       isDashboard: true,
       dashboardContributionId: "agentic",
     });
     // orchestratorId is dropped after rewrite.
-    expect("orchestratorId" in (migrated.workspaces![0]!.metadata ?? {})).toBe(
-      false,
-    );
+    expect(
+      "orchestratorId" in (migrated.nestedWorkspaces![0]!.metadata ?? {}),
+    ).toBe(false);
   });
 
   it("preserves spawnedBy when it's already present and drops the legacy parentOrchestratorId", () => {
     const existing = { kind: "group" as const, groupId: "grp-a" };
     const { migrated } = migrateLegacyProjectShapes({
-      workspaces: [
+      nestedWorkspaces: [
         makeWs("w1", {
           groupId: "grp-a",
           parentOrchestratorId: "legacy",
@@ -122,7 +124,7 @@ describe("migrateLegacyProjectShapes — workspace metadata", () => {
         }),
       ],
     });
-    expect(migrated.workspaces![0]!.metadata).toEqual({
+    expect(migrated.nestedWorkspaces![0]!.metadata).toEqual({
       groupId: "grp-a",
       spawnedBy: existing,
     });
@@ -130,7 +132,7 @@ describe("migrateLegacyProjectShapes — workspace metadata", () => {
 
   it("migrated state is idempotent — re-running produces no changes", () => {
     const pass1 = migrateLegacyProjectShapes({
-      workspaces: [
+      nestedWorkspaces: [
         makeWs("w1", {
           projectId: "grp-a",
           parentOrchestratorId: "orch",

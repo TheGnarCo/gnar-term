@@ -18,7 +18,10 @@
    */
   import { derived, get } from "svelte/store";
   import { theme } from "../stores/theme";
-  import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
+  import {
+    nestedWorkspaces,
+    activeNestedWorkspaceIdx,
+  } from "../stores/workspace";
   import { contextMenu, reorderContext, anyReorderActive } from "../stores/ui";
   import { confirmAndCloseWorkspace } from "../services/worktree-service";
   import {
@@ -74,7 +77,7 @@
   // handler can trigger inline rename on a specific workspace index.
   let workspaceItems: Record<string, WorkspaceItem> = {};
   export function startRename(globalIdx: number) {
-    const ws = $workspaces[globalIdx];
+    const ws = $nestedWorkspaces[globalIdx];
     const item = ws ? workspaceItems[ws.id] : undefined;
     if (item) item.startRename();
   }
@@ -86,7 +89,7 @@
   // their workspace or project. Workspaces present in the store but
   // NOT in rootRowOrder are auto-appended at render time: this covers
   // first-run installs (empty persisted order), direct
-  // `workspaces.set` in tests, and any path that skips the service
+  // `nestedWorkspaces.set` in tests, and any path that skips the service
   // helpers.
   type RenderedRow = {
     row: RootRow;
@@ -105,7 +108,7 @@
   // detected reliably across HMR.
   const renderedRowsStore = derived(
     [
-      workspaces,
+      nestedWorkspaces,
       rootRowOrder,
       rootRowRendererStore,
       claimedWorkspaceIds,
@@ -150,7 +153,7 @@
       });
       // Fallback — any unclaimed workspace in the store that isn't
       // already rendered gets appended at the end. Covers first-run
-      // installs (empty persisted order), direct `workspaces.set` in
+      // installs (empty persisted order), direct `nestedWorkspaces.set` in
       // tests, and stale rootRowOrder entries whose workspace ids were
       // regenerated across sessions.
       if (renderedWsIds.size < byId.size) {
@@ -312,7 +315,7 @@
   function startRootRowDrag(e: MouseEvent, rowIdx: number) {
     const srcRow = $rootRowOrder[rowIdx];
     if (srcRow?.kind === "workspace") {
-      const ws = $workspaces.find((w) => w.id === srcRow.id);
+      const ws = $nestedWorkspaces.find((w) => w.id === srcRow.id);
       if (ws && wsMeta(ws).locked === true) return;
     } else if (srcRow?.kind === "workspace-group") {
       const group = getWorkspaceGroup(srcRow.id);
@@ -323,7 +326,7 @@
 
   // Source row metadata used for the DropGhost label/color so the
   // drop slot reads as the dragged row's own tile. Looks up the
-  // row's rendered metadata from renderedRows so workspaces use the
+  // row's rendered metadata from renderedRows so nestedWorkspaces use the
   // theme accent / workspace name, and projects use the project's
   // color + name via the registered railColor/label resolvers.
   $: sourceRow =
@@ -375,7 +378,9 @@
   $: effectiveDragSourceHeight = dragActive ? dragSourceHeight : 32;
   $: tabDragSurfaceTitle = (() => {
     if (!tabDrag) return "";
-    const srcWs = $workspaces.find((w) => w.id === tabDrag!.sourceWorkspaceId);
+    const srcWs = $nestedWorkspaces.find(
+      (w) => w.id === tabDrag!.sourceWorkspaceId,
+    );
     if (!srcWs) return "New Workspace";
     return (
       getAllSurfaces(srcWs).find((s) => s.id === tabDrag!.surfaceId)?.title ||
@@ -403,7 +408,7 @@
   );
 
   function showWorkspaceContextMenu(x: number, y: number, globalIdx: number) {
-    const ws = $workspaces[globalIdx];
+    const ws = $nestedWorkspaces[globalIdx];
     if (!ws) return;
     const md = wsMeta(ws);
     const isDashboard = md?.isDashboard === true;
@@ -413,7 +418,7 @@
       isDashboard,
       isInsideGroup,
       canPromoteCommand: canPromote,
-      workspaceCount: $workspaces.length,
+      workspaceCount: $nestedWorkspaces.length,
       isLocked,
       onRename: () => startRename(globalIdx),
       onNewSurface: () => {
@@ -434,7 +439,7 @@
      moved up into PrimarySidebar's top row so it aligns with the
      other title-row buttons. -->
 
-<!-- Root rows: workspaces and whole project blocks interleaved per
+<!-- Root rows: nestedWorkspaces and whole project blocks interleaved per
      $rootRowOrder. Each row is shelled with a core-drawn DragGrip
      (left) + content (right). Non-source rows during a drag get a
      strong overlay with the row's own color + name centered. -->
@@ -481,13 +486,13 @@
            nested-workspace style). Core still owns the drag pipeline
            — the renderer's grip just calls back into startRootRowDrag. -->
       {#if entry.row.kind === "workspace" && ws}
-        {@const globalIdx = $workspaces.indexOf(ws)}
+        {@const globalIdx = $nestedWorkspaces.indexOf(ws)}
         <WorkspaceItem
           bind:this={workspaceItems[ws.id]}
           workspace={ws}
           index={globalIdx}
           shortcutIdx={entry.idx}
-          isActive={globalIdx === $activeWorkspaceIdx}
+          isActive={globalIdx === $activeNestedWorkspaceIdx}
           dragActive={isSource}
           onSelect={() => {
             if (!dragActive) onSwitchWorkspace(globalIdx);
@@ -548,7 +553,7 @@
     <div
       style="flex: 1; padding: 8px 6px; color: {$theme.fgDim}; font-size: 12px;"
     >
-      No workspaces
+      No nestedWorkspaces
     </div>
   </div>
 {/if}

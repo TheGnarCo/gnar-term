@@ -135,7 +135,10 @@ import {
   registerCommands,
   unregisterBySource,
 } from "../lib/services/command-registry";
-import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
+import {
+  nestedWorkspaces,
+  activeNestedWorkspaceIdx,
+} from "../lib/stores/workspace";
 import {
   registerSidebarSection,
   resetSidebarSections,
@@ -226,8 +229,8 @@ beforeEach(() => {
   commandPaletteOpen.set(false);
   findBarVisible.set(false);
   contextMenu.set(null);
-  workspaces.set([]);
-  activeWorkspaceIdx.set(-1);
+  nestedWorkspaces.set([]);
+  activeNestedWorkspaceIdx.set(-1);
   unregisterBySource("test");
 });
 
@@ -351,8 +354,8 @@ describe("FindBar", () => {
   it("passes regex:true to findNext when regex toggle is enabled", async () => {
     const surface = makeSurface("s1");
     const ws = makeWorkspace("w1", "test", makePane("p1", [surface]));
-    workspaces.set([ws]);
-    activeWorkspaceIdx.set(0);
+    nestedWorkspaces.set([ws]);
+    activeNestedWorkspaceIdx.set(0);
     findBarVisible.set(true);
     render(FindBar);
 
@@ -376,8 +379,8 @@ describe("FindBar", () => {
   it("passes caseSensitive:true to findNext when case toggle is enabled", async () => {
     const surface = makeSurface("s2");
     const ws = makeWorkspace("w2", "test", makePane("p2", [surface]));
-    workspaces.set([ws]);
-    activeWorkspaceIdx.set(0);
+    nestedWorkspaces.set([ws]);
+    activeNestedWorkspaceIdx.set(0);
     findBarVisible.set(true);
     render(FindBar);
 
@@ -401,8 +404,8 @@ describe("FindBar", () => {
   it("passes wholeWord:true to findNext when whole-word toggle is enabled", async () => {
     const surface = makeSurface("s3");
     const ws = makeWorkspace("w3", "test", makePane("p3", [surface]));
-    workspaces.set([ws]);
-    activeWorkspaceIdx.set(0);
+    nestedWorkspaces.set([ws]);
+    activeNestedWorkspaceIdx.set(0);
     findBarVisible.set(true);
     render(FindBar);
 
@@ -1217,7 +1220,7 @@ describe("WorkspaceItem", () => {
   });
 
   it("suppresses the notification row when nested inside a workspace group", () => {
-    // Regression: nested workspaces render under a group's colored
+    // Regression: nested nestedWorkspaces render under a group's colored
     // banner that already rolls up status; the long blue notification
     // row duplicates chrome and crowds the nested layout, so it's
     // suppressed when metadata.groupId is set.
@@ -1422,8 +1425,8 @@ describe("PaneView", () => {
         dashboardContributionId: "group",
       },
     };
-    workspaces.set([ws]);
-    activeWorkspaceIdx.set(0);
+    nestedWorkspaces.set([ws]);
+    activeNestedWorkspaceIdx.set(0);
     const pane = ws.splitRoot.type === "pane" ? ws.splitRoot.pane : null;
     if (!pane) throw new Error("expected single-pane workspace");
     const { container } = render(PaneView, {
@@ -1458,8 +1461,8 @@ describe("PaneView", () => {
         dashboardContributionId: "settings",
       },
     };
-    workspaces.set([ws]);
-    activeWorkspaceIdx.set(0);
+    nestedWorkspaces.set([ws]);
+    activeNestedWorkspaceIdx.set(0);
     const pane = ws.splitRoot.type === "pane" ? ws.splitRoot.pane : null;
     if (!pane) throw new Error("expected single-pane workspace");
     const { container } = render(PaneView, {
@@ -1574,8 +1577,8 @@ describe("PrimarySidebar", () => {
     primarySidebarVisible.set(true);
     const ws1 = makeWorkspace("ws1", "Project Alpha");
     const ws2 = makeWorkspace("ws2", "Project Beta");
-    workspaces.set([ws1, ws2]);
-    activeWorkspaceIdx.set(0);
+    nestedWorkspaces.set([ws1, ws2]);
+    activeNestedWorkspaceIdx.set(0);
     render(PrimarySidebar, { props: sidebarProps });
     expect(screen.getByText("Project Alpha")).toBeTruthy();
     expect(screen.getByText("Project Beta")).toBeTruthy();
@@ -1620,8 +1623,8 @@ describe("PrimarySidebar", () => {
     const ws1 = makeWorkspace("ws1", "WS One");
     const ws2 = makeWorkspace("ws2", "WS Two");
     const ws3 = makeWorkspace("ws3", "WS Three");
-    workspaces.set([ws1, ws2, ws3]);
-    activeWorkspaceIdx.set(1);
+    nestedWorkspaces.set([ws1, ws2, ws3]);
+    activeNestedWorkspaceIdx.set(1);
     render(PrimarySidebar, { props: sidebarProps });
     expect(screen.getByText("WS One")).toBeTruthy();
     expect(screen.getByText("WS Two")).toBeTruthy();

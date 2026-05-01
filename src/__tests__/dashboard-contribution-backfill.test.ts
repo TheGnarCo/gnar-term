@@ -1,5 +1,5 @@
 /**
- * Legacy dashboard workspaces (created before
+ * Legacy dashboard nestedWorkspaces (created before
  * `metadata.dashboardContributionId` existed) get their contribId
  * backfilled on reconcile by inspecting the preview surface's backing
  * path. Without this, autoProvision's strict contribId match would
@@ -17,7 +17,10 @@ vi.mock("@tauri-apps/api/event", () => ({
 }));
 
 import { reconcileGroupDashboards } from "../lib/services/workspace-group-service";
-import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
+import {
+  nestedWorkspaces,
+  activeNestedWorkspaceIdx,
+} from "../lib/stores/workspace";
 import { workspaceGroupsStore } from "../lib/stores/workspace-groups";
 
 const GROUP = {
@@ -36,13 +39,13 @@ describe("dashboardContributionId backfill", () => {
     invokeMock.mockReset();
     // No file writes during reconcile — stay on happy paths.
     invokeMock.mockImplementation(async () => undefined);
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
+    nestedWorkspaces.set([]);
+    activeNestedWorkspaceIdx.set(-1);
     workspaceGroupsStore.set([GROUP]);
   });
 
   it("stamps 'group' on a legacy Overview dashboard (preview → project-dashboard.md)", async () => {
-    workspaces.set([
+    nestedWorkspaces.set([
       {
         id: "ws-legacy-group",
         name: "Dashboard",
@@ -69,12 +72,12 @@ describe("dashboardContributionId backfill", () => {
 
     await reconcileGroupDashboards();
 
-    const md = get(workspaces)[0]!.metadata;
+    const md = get(nestedWorkspaces)[0]!.metadata;
     expect(md.dashboardContributionId).toBe("group");
   });
 
   it("stamps 'agentic' on a legacy Agentic dashboard (preview → agentic-dashboard.md)", async () => {
-    workspaces.set([
+    nestedWorkspaces.set([
       {
         id: "ws-legacy-agentic",
         name: "Agents",
@@ -101,12 +104,12 @@ describe("dashboardContributionId backfill", () => {
 
     await reconcileGroupDashboards();
 
-    const md = get(workspaces)[0]!.metadata;
+    const md = get(nestedWorkspaces)[0]!.metadata;
     expect(md.dashboardContributionId).toBe("agentic");
   });
 
-  it("leaves already-stamped workspaces alone", async () => {
-    workspaces.set([
+  it("leaves already-stamped nestedWorkspaces alone", async () => {
+    nestedWorkspaces.set([
       {
         id: "ws-stamped",
         name: "Dashboard",
@@ -137,7 +140,7 @@ describe("dashboardContributionId backfill", () => {
 
     await reconcileGroupDashboards();
 
-    const md = get(workspaces)[0]!.metadata;
+    const md = get(nestedWorkspaces)[0]!.metadata;
     expect(md.dashboardContributionId).toBe("group");
   });
 });

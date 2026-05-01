@@ -1,7 +1,7 @@
 import { tick } from "svelte";
 import { get } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
-import { activeSurface, workspaces } from "../stores/workspace";
+import { activeSurface, nestedWorkspaces } from "../stores/workspace";
 import {
   getAllPanes,
   getAllSurfaces,
@@ -71,7 +71,7 @@ export function resetIsDebugBuildForTests(): void {
 }
 
 export function forEachTerminalSurface(fn: (s: TerminalSurface) => void): void {
-  for (const ws of get(workspaces)) {
+  for (const ws of get(nestedWorkspaces)) {
     for (const s of getAllSurfaces(ws)) {
       if (isTerminalSurface(s)) fn(s);
     }
@@ -79,15 +79,15 @@ export function forEachTerminalSurface(fn: (s: TerminalSurface) => void): void {
 }
 
 // --- Surface/PTY lookup index ---
-// Rebuilt on every workspaces store update so hot-path callers get O(1) lookups
-// instead of O(W×S) nested scans. Only valid outside of workspaces.update()
+// Rebuilt on every nestedWorkspaces store update so hot-path callers get O(1) lookups
+// instead of O(W×S) nested scans. Only valid outside of nestedWorkspaces.update()
 // callbacks — reads from the index during an update see the pre-update state.
 
 const _ptyIndex = new Map<number, TerminalSurface>(); // ptyId → terminal surface
 const _surfaceWsIndex = new Map<string, string>(); // surfaceId → workspaceId
 const _surfacePtyIndex = new Map<string, number>(); // surfaceId → ptyId
 
-workspaces.subscribe(($ws) => {
+nestedWorkspaces.subscribe(($ws) => {
   _ptyIndex.clear();
   _surfaceWsIndex.clear();
   _surfacePtyIndex.clear();
@@ -122,7 +122,7 @@ export function lookupPtyIdForSurface(surfaceId: string): number | undefined {
 }
 
 // Called immediately after connectPty assigns a real ptyId so the index
-// reflects the new id without waiting for a workspaces store emission.
+// reflects the new id without waiting for a nestedWorkspaces store emission.
 export function registerPtyForSurface(
   ptyId: number,
   surface: TerminalSurface,
@@ -168,7 +168,7 @@ export async function getActiveCwd(): Promise<string | undefined> {
 export async function getWorkspaceCwd(
   workspaceId: string,
 ): Promise<string | undefined> {
-  const ws = get(workspaces).find((w) => w.id === workspaceId);
+  const ws = get(nestedWorkspaces).find((w) => w.id === workspaceId);
   if (!ws) return undefined;
   for (const pane of getAllPanes(ws.splitRoot)) {
     for (const s of pane.surfaces) {

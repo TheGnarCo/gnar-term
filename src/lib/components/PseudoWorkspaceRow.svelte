@@ -15,7 +15,7 @@
   import { reorderContext } from "../stores/ui";
   import {
     activePseudoWorkspaceId,
-    activeWorkspaceIdx,
+    activeNestedWorkspaceIdx,
   } from "../stores/workspace";
   import DragGrip from "./DragGrip.svelte";
   import SidebarChipButton from "./SidebarChipButton.svelte";
@@ -46,7 +46,7 @@
   $: bannerBackground = resolveGroupColor(configuredSlot ?? "purple", $theme);
 
   function activate(): void {
-    activeWorkspaceIdx.set(-1);
+    activeNestedWorkspaceIdx.set(-1);
     activePseudoWorkspaceId.set(pseudo.id);
   }
 

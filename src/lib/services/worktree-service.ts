@@ -22,7 +22,7 @@ import {
   createWorktree,
 } from "./worktree-helpers";
 import { createWorkspaceFromDef, closeWorkspace } from "./workspace-service";
-import { workspaces } from "../stores/workspace";
+import { nestedWorkspaces } from "../stores/workspace";
 
 /** Result of a git_merge Tauri command invocation. */
 interface MergeResult {
@@ -106,7 +106,7 @@ export async function createWorktreeWorkspace(
 /**
  * Non-interactive worktree-workspace creation. Caller supplies a fully
  * resolved config (branch/base/paths). Used by the agent spawn-helper —
- * which needs to spin up worktree workspaces without going through the
+ * which needs to spin up worktree nestedWorkspaces without going through the
  * showFormPrompt UI flow.
  *
  * Honors the same settings.copyPatterns / settings.setupScript pipeline
@@ -114,7 +114,7 @@ export async function createWorktreeWorkspace(
  * created the worktree.
  *
  * Returns the workspace id of the newly-created workspace (read from the
- * workspaces store immediately after createWorkspaceFromDef returns).
+ * nestedWorkspaces store immediately after createWorkspaceFromDef returns).
  */
 export interface WorktreeWorkspaceConfig {
   repoPath: string;
@@ -199,7 +199,7 @@ export async function createWorktreeWorkspaceFromConfig(
     `Worktree ${getWorktreeEntries().length + 1}`;
   // Snapshot workspace ids before createWorkspaceFromDef — diff after
   // the call to find the newly-created workspace's id.
-  const prevIds = new Set(get(workspaces).map((w) => w.id));
+  const prevIds = new Set(get(nestedWorkspaces).map((w) => w.id));
 
   await createWorkspaceFromDef({
     name: wsName,
@@ -232,7 +232,7 @@ export async function createWorktreeWorkspaceFromConfig(
 
   // Resolve the new workspace's id (the one not in prevIds).
   let workspaceId = "";
-  for (const ws of get(workspaces)) {
+  for (const ws of get(nestedWorkspaces)) {
     if (!prevIds.has(ws.id)) {
       workspaceId = ws.id;
     }
@@ -404,9 +404,9 @@ export function handleWorkspaceCreated(
 }
 
 /**
- * Combined close confirmation for worktree workspaces. Shows a single dialog
+ * Combined close confirmation for worktree nestedWorkspaces. Shows a single dialog
  * that collects both "confirm close" and "keep/delete worktree" in one step.
- * For non-worktree workspaces falls back to the standard confirm prompt.
+ * For non-worktree nestedWorkspaces falls back to the standard confirm prompt.
  * Calls closeWorkspace(idx) on confirm.
  */
 export async function confirmAndCloseWorkspace(

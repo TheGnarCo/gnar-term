@@ -13,7 +13,10 @@ vi.mock("../lib/terminal-service", () => ({
   isMac: false,
 }));
 
-import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
+import {
+  nestedWorkspaces,
+  activeNestedWorkspaceIdx,
+} from "../lib/stores/workspace";
 import { renamingSurfaceId } from "../lib/stores/ui";
 import {
   renameActiveSurface,
@@ -47,8 +50,8 @@ function makeWorkspace(surfaceId: string, title = "Tab"): NestedWorkspace {
 
 describe("renameActiveSurface()", () => {
   beforeEach(() => {
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
+    nestedWorkspaces.set([]);
+    activeNestedWorkspaceIdx.set(-1);
     renamingSurfaceId.set(null);
   });
 
@@ -58,8 +61,8 @@ describe("renameActiveSurface()", () => {
   });
 
   it("sets renamingSurfaceId to the active surface id", () => {
-    workspaces.set([makeWorkspace("s-42")]);
-    activeWorkspaceIdx.set(0);
+    nestedWorkspaces.set([makeWorkspace("s-42")]);
+    activeNestedWorkspaceIdx.set(0);
     renameActiveSurface();
     expect(get(renamingSurfaceId)).toBe("s-42");
   });
@@ -67,26 +70,26 @@ describe("renameActiveSurface()", () => {
 
 describe("renameSurface()", () => {
   beforeEach(() => {
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
+    nestedWorkspaces.set([]);
+    activeNestedWorkspaceIdx.set(-1);
   });
 
   it("updates the surface title", () => {
-    workspaces.set([makeWorkspace("s-42", "Original")]);
+    nestedWorkspaces.set([makeWorkspace("s-42", "Original")]);
     renameSurface("s-42", "Renamed");
     const pane =
-      get(workspaces)[0].splitRoot.type === "pane"
-        ? get(workspaces)[0].splitRoot.pane
+      get(nestedWorkspaces)[0].splitRoot.type === "pane"
+        ? get(nestedWorkspaces)[0].splitRoot.pane
         : null;
     expect(pane?.surfaces[0].title).toBe("Renamed");
   });
 
   it("is a no-op for unknown surface id", () => {
-    workspaces.set([makeWorkspace("s-42", "Original")]);
+    nestedWorkspaces.set([makeWorkspace("s-42", "Original")]);
     renameSurface("unknown", "Changed");
     const pane =
-      get(workspaces)[0].splitRoot.type === "pane"
-        ? get(workspaces)[0].splitRoot.pane
+      get(nestedWorkspaces)[0].splitRoot.type === "pane"
+        ? get(nestedWorkspaces)[0].splitRoot.pane
         : null;
     expect(pane?.surfaces[0].title).toBe("Original");
   });

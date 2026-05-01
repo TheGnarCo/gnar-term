@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { workspaces } from "../stores/workspace";
+  import { nestedWorkspaces } from "../stores/workspace";
   import { workspaceGroupsStore } from "../stores/workspace-groups";
   import { getDashboardContribution } from "../services/dashboard-contribution-registry";
   import {
@@ -23,7 +23,7 @@
     : null;
 
   $: groupWs = groupId
-    ? $workspaces.filter((ws) => wsMeta(ws).groupId === groupId)
+    ? $nestedWorkspaces.filter((ws) => wsMeta(ws).groupId === groupId)
     : [];
 
   $: dashboardCards = groupWs.filter((ws) => {
@@ -38,7 +38,7 @@
     : ($theme.accent ?? "#888");
 
   function navigate(wsId: string): void {
-    const idx = $workspaces.findIndex((ws) => ws.id === wsId);
+    const idx = $nestedWorkspaces.findIndex((ws) => ws.id === wsId);
     if (idx >= 0) switchWorkspace(idx);
   }
 
@@ -65,7 +65,7 @@
 </script>
 
 {#if groupId && hasContent}
-  <div class="workspaces-widget" data-workspaces-widget>
+  <div class="nestedWorkspaces-widget" data-nestedWorkspaces-widget>
     {#if dashboardCards.length > 0}
       <div class="dashboard-cards" data-dashboard-cards>
         {#each dashboardCards as ws (ws.id)}
@@ -119,7 +119,7 @@
 {/if}
 
 <style>
-  .workspaces-widget {
+  .nestedWorkspaces-widget {
     display: flex;
     flex-direction: column;
     gap: 12px;

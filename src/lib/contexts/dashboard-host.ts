@@ -1,9 +1,9 @@
 /**
  * DashboardHostContext — a uniform surface exposed to every dashboard
- * body (real dashboard workspaces + pseudo-workspaces) so embedded
+ * body (real dashboard nestedWorkspaces + pseudo-nestedWorkspaces) so embedded
  * widgets derive their scope from a single shape.
  *
- * Real dashboard workspaces expose their own `workspace.metadata` via
+ * Real dashboard nestedWorkspaces expose their own `workspace.metadata` via
  * this context. The Global Agentic Dashboard pseudo-workspace provides
  * a synthetic context with `metadata = { isGlobalAgenticDashboard: true }`.
  * Widgets (`gnar:agent-list`, `gnar:kanban`, `gnar:task-spawner`) read

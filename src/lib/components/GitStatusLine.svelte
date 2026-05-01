@@ -1,6 +1,6 @@
 <script lang="ts">
   import { theme } from "../stores/theme";
-  import { activeWorkspace, workspaces } from "../stores/workspace";
+  import { activeWorkspace, nestedWorkspaces } from "../stores/workspace";
   import { getWorkspaceStatus } from "../services/status-registry";
   import { GIT_STATUS_SOURCE } from "../services/git-status-service";
   import { wsMeta } from "../services/service-helpers";
@@ -14,7 +14,7 @@
   $: statusStore = getWorkspaceStatus(workspaceId);
   $: items = $statusStore.filter((item) => item.source === GIT_STATUS_SOURCE);
 
-  $: currentWs = $workspaces.find((w) => w.id === workspaceId);
+  $: currentWs = $nestedWorkspaces.find((w) => w.id === workspaceId);
   $: workspaceMetadata = currentWs ? wsMeta(currentWs) : {};
   $: isNested = Boolean(workspaceMetadata.groupId);
   $: isWorktree = Boolean(workspaceMetadata.worktreePath);
@@ -52,8 +52,8 @@
 </script>
 
 {#if isNested}
-  <!-- Nested workspaces show git branch info (matching container row style).
-       Worktree workspaces show only their own branch, not the parent repo's branch. -->
+  <!-- Nested nestedWorkspaces show git branch info (matching container row style).
+       Worktree nestedWorkspaces show only their own branch, not the parent repo's branch. -->
   {#if !isWorktree && branchItem}
     <div
       style="display: flex; align-items: center; gap: 4px; overflow: hidden; line-height: 1.2;"

@@ -25,7 +25,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 }));
 
 import WorkspacesWidget from "../lib/components/WorkspacesWidget.svelte";
-import { workspaces } from "../lib/stores/workspace";
+import { nestedWorkspaces } from "../lib/stores/workspace";
 import {
   setWorkspaceGroups,
   resetWorkspaceGroupsForTest,
@@ -52,14 +52,16 @@ function makeWorkspace(
 
 beforeEach(() => {
   cleanup();
-  workspaces.set([]);
+  nestedWorkspaces.set([]);
   resetWorkspaceGroupsForTest();
 });
 
 describe("WorkspacesWidget", () => {
   it("renders nothing when there is no dashboard host context", () => {
     const { container } = render(WorkspacesWidget);
-    expect(container.querySelector("[data-workspaces-widget]")).toBeNull();
+    expect(
+      container.querySelector("[data-nestedWorkspaces-widget]"),
+    ).toBeNull();
   });
 
   it("renders nothing when the group only has a group-overview dashboard", () => {
@@ -74,7 +76,7 @@ describe("WorkspacesWidget", () => {
         createdAt: "2026-01-01T00:00:00.000Z",
       },
     ]);
-    workspaces.set([
+    nestedWorkspaces.set([
       makeWorkspace("ws-overview", "Group Overview", {
         groupId: "g1",
         isDashboard: true,
@@ -102,7 +104,7 @@ describe("WorkspacesWidget", () => {
         createdAt: "2026-01-01T00:00:00.000Z",
       },
     ]);
-    workspaces.set([
+    nestedWorkspaces.set([
       makeWorkspace("ws-overview", "Group Overview", {
         groupId: "g1",
         isDashboard: true,
@@ -147,7 +149,7 @@ describe("WorkspacesWidget", () => {
         createdAt: "2026-01-01T00:00:00.000Z",
       },
     ]);
-    workspaces.set([
+    nestedWorkspaces.set([
       makeWorkspace("ws-alpha", "Alpha NestedWorkspace", { groupId: "g1" }),
       makeWorkspace("ws-beta", "Beta NestedWorkspace", { groupId: "g1" }),
     ]);
@@ -164,7 +166,7 @@ describe("WorkspacesWidget", () => {
     expect(names).toContain("Beta NestedWorkspace");
   });
 
-  it("excludes workspaces from other groups", () => {
+  it("excludes nestedWorkspaces from other groups", () => {
     setWorkspaceGroups([
       {
         id: "g1",
@@ -185,7 +187,7 @@ describe("WorkspacesWidget", () => {
         createdAt: "2026-01-01T00:00:00.000Z",
       },
     ]);
-    workspaces.set([
+    nestedWorkspaces.set([
       makeWorkspace("ws-g1", "G1 NestedWorkspace", { groupId: "g1" }),
       makeWorkspace("ws-g2", "G2 NestedWorkspace", { groupId: "g2" }),
     ]);
@@ -204,7 +206,7 @@ describe("WorkspacesWidget click-to-navigate", () => {
   beforeEach(() => {
     cleanup();
     switchWorkspaceMock.mockClear();
-    workspaces.set([]);
+    nestedWorkspaces.set([]);
     resetWorkspaceGroupsForTest();
   });
 
@@ -220,7 +222,7 @@ describe("WorkspacesWidget click-to-navigate", () => {
         createdAt: "2026-01-01T00:00:00.000Z",
       },
     ]);
-    workspaces.set([
+    nestedWorkspaces.set([
       makeWorkspace("ws-alpha", "Alpha NestedWorkspace", { groupId: "g1" }),
       makeWorkspace("ws-beta", "Beta NestedWorkspace", { groupId: "g1" }),
     ]);
@@ -232,7 +234,7 @@ describe("WorkspacesWidget click-to-navigate", () => {
     const rows = container.querySelectorAll("[data-workspace-row]");
     expect(rows).toHaveLength(2);
 
-    // Click the second workspace row (index 1 in the workspaces store)
+    // Click the second workspace row (index 1 in the nestedWorkspaces store)
     await fireEvent.click(rows[1]!);
 
     expect(switchWorkspaceMock).toHaveBeenCalledTimes(1);

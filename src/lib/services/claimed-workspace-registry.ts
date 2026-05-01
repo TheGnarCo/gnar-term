@@ -35,11 +35,11 @@ export function claimWorkspace(workspaceId: string, source: string): void {
 export function unclaimWorkspace(workspaceId: string): void {
   registry.unregister(workspaceId);
   // NestedWorkspace is back at the root — restore it to the root-row list
-  // (append to the end matches the legacy behavior for fresh workspaces).
+  // (append to the end matches the legacy behavior for fresh nestedWorkspaces).
   appendRootRow({ kind: "workspace", id: workspaceId });
 }
 
-/** Unclaim all workspaces owned by a given source extension. */
+/** Unclaim all nestedWorkspaces owned by a given source extension. */
 export function unclaimBySource(source: string): void {
   // Collect ids before unregistering so we can mirror each into the
   // root-row list (no way to get them back once registry.unregisterBySource

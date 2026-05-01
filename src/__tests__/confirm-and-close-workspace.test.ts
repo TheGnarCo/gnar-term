@@ -3,10 +3,10 @@
  * the X button, ⇧⌘W, and the extension API's close-workspace pendingAction.
  *
  * Verifies that:
- *   - Regular workspaces show a confirm prompt before closing
+ *   - Regular nestedWorkspaces show a confirm prompt before closing
  *   - Cancelling the prompt does NOT close the workspace
- *   - Dashboard workspaces close without a prompt
- *   - Worktree workspaces show the keep/delete form prompt
+ *   - Dashboard nestedWorkspaces close without a prompt
+ *   - Worktree nestedWorkspaces show the keep/delete form prompt
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 

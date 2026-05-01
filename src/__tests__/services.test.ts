@@ -1,7 +1,7 @@
 /**
  * Tests for workspace-service, pane-service, and surface-service.
  *
- * These tests exercise the store-based functions by setting up workspaces
+ * These tests exercise the store-based functions by setting up nestedWorkspaces
  * directly in stores and calling service functions, then asserting on
  * store state and emitted events.
  */
@@ -34,8 +34,8 @@ vi.mock("../lib/services/service-helpers", () => ({
 // --- Imports ---
 
 import {
-  workspaces,
-  activeWorkspaceIdx,
+  nestedWorkspaces,
+  activeNestedWorkspaceIdx,
   activeWorkspace,
 } from "../lib/stores/workspace";
 import type {
@@ -158,8 +158,8 @@ function collectEvents(fn: () => void): AppEvent[] {
 // --- Setup / Teardown ---
 
 beforeEach(() => {
-  workspaces.set([]);
-  activeWorkspaceIdx.set(-1);
+  nestedWorkspaces.set([]);
+  activeNestedWorkspaceIdx.set(-1);
   vi.clearAllMocks();
   vi.useFakeTimers();
 });
@@ -174,22 +174,22 @@ afterEach(() => {
 
 describe("workspace-service", () => {
   describe("switchWorkspace", () => {
-    it("sets activeWorkspaceIdx to the given index", () => {
+    it("sets activeNestedWorkspaceIdx to the given index", () => {
       const ws1 = makeWorkspace({ name: "WS1" });
       const ws2 = makeWorkspace({ name: "WS2" });
-      workspaces.set([ws1, ws2]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws1, ws2]);
+      activeNestedWorkspaceIdx.set(0);
 
       switchWorkspace(1);
 
-      expect(get(activeWorkspaceIdx)).toBe(1);
+      expect(get(activeNestedWorkspaceIdx)).toBe(1);
     });
 
     it("emits workspace:activated with correct ids", () => {
       const ws1 = makeWorkspace({ name: "WS1" });
       const ws2 = makeWorkspace({ name: "WS2" });
-      workspaces.set([ws1, ws2]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws1, ws2]);
+      activeNestedWorkspaceIdx.set(0);
 
       const events = collectEvents(() => switchWorkspace(1));
 
@@ -203,28 +203,28 @@ describe("workspace-service", () => {
 
     it("is a no-op for negative index", () => {
       const ws = makeWorkspace();
-      workspaces.set([ws]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws]);
+      activeNestedWorkspaceIdx.set(0);
 
       switchWorkspace(-1);
 
-      expect(get(activeWorkspaceIdx)).toBe(0);
+      expect(get(activeNestedWorkspaceIdx)).toBe(0);
     });
 
     it("is a no-op for index beyond workspace count", () => {
       const ws = makeWorkspace();
-      workspaces.set([ws]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws]);
+      activeNestedWorkspaceIdx.set(0);
 
       switchWorkspace(5);
 
-      expect(get(activeWorkspaceIdx)).toBe(0);
+      expect(get(activeNestedWorkspaceIdx)).toBe(0);
     });
 
     it("reports previousId as null when no workspace was active", () => {
       const ws = makeWorkspace();
-      workspaces.set([ws]);
-      activeWorkspaceIdx.set(-1);
+      nestedWorkspaces.set([ws]);
+      activeNestedWorkspaceIdx.set(-1);
 
       const events = collectEvents(() => switchWorkspace(0));
 
@@ -239,36 +239,36 @@ describe("workspace-service", () => {
     it("removes the workspace at the given index", () => {
       const ws1 = makeWorkspace({ name: "WS1" });
       const ws2 = makeWorkspace({ name: "WS2" });
-      workspaces.set([ws1, ws2]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws1, ws2]);
+      activeNestedWorkspaceIdx.set(0);
 
       closeWorkspace(0);
 
-      const list = get(workspaces);
+      const list = get(nestedWorkspaces);
       expect(list).toHaveLength(1);
       expect(list[0].id).toBe(ws2.id);
     });
 
     it("allows closing the last workspace (Empty Surface takes over)", () => {
       const ws = makeWorkspace();
-      workspaces.set([ws]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws]);
+      activeNestedWorkspaceIdx.set(0);
 
       closeWorkspace(0);
 
-      expect(get(workspaces)).toHaveLength(0);
-      expect(get(activeWorkspaceIdx)).toBe(-1);
+      expect(get(nestedWorkspaces)).toHaveLength(0);
+      expect(get(activeNestedWorkspaceIdx)).toBe(-1);
     });
 
-    it("clamps activeWorkspaceIdx when closing the last item in the list", () => {
+    it("clamps activeNestedWorkspaceIdx when closing the last item in the list", () => {
       const ws1 = makeWorkspace({ name: "WS1" });
       const ws2 = makeWorkspace({ name: "WS2" });
-      workspaces.set([ws1, ws2]);
-      activeWorkspaceIdx.set(1);
+      nestedWorkspaces.set([ws1, ws2]);
+      activeNestedWorkspaceIdx.set(1);
 
       closeWorkspace(1);
 
-      expect(get(activeWorkspaceIdx)).toBe(0);
+      expect(get(activeNestedWorkspaceIdx)).toBe(0);
     });
 
     it("disposes terminal surfaces and kills PTYs", () => {
@@ -279,8 +279,8 @@ describe("workspace-service", () => {
         activePaneId: pane.id,
       });
       const ws2 = makeWorkspace({ name: "WS2" });
-      workspaces.set([ws1, ws2]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws1, ws2]);
+      activeNestedWorkspaceIdx.set(0);
 
       closeWorkspace(0);
 
@@ -297,8 +297,8 @@ describe("workspace-service", () => {
         activePaneId: pane.id,
       });
       const ws2 = makeWorkspace({ name: "WS2" });
-      workspaces.set([ws1, ws2]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws1, ws2]);
+      activeNestedWorkspaceIdx.set(0);
 
       closeWorkspace(0);
 
@@ -308,8 +308,8 @@ describe("workspace-service", () => {
     it("emits workspace:closed", () => {
       const ws1 = makeWorkspace({ name: "WS1" });
       const ws2 = makeWorkspace({ name: "WS2" });
-      workspaces.set([ws1, ws2]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws1, ws2]);
+      activeNestedWorkspaceIdx.set(0);
 
       const events = collectEvents(() => closeWorkspace(0));
 
@@ -322,18 +322,18 @@ describe("workspace-service", () => {
   describe("renameWorkspace", () => {
     it("updates the workspace name", () => {
       const ws = makeWorkspace({ name: "Old Name" });
-      workspaces.set([ws]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws]);
+      activeNestedWorkspaceIdx.set(0);
 
       renameWorkspace(0, "New Name");
 
-      expect(get(workspaces)[0].name).toBe("New Name");
+      expect(get(nestedWorkspaces)[0].name).toBe("New Name");
     });
 
     it("emits workspace:renamed with old and new names", () => {
       const ws = makeWorkspace({ name: "Alpha" });
-      workspaces.set([ws]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws]);
+      activeNestedWorkspaceIdx.set(0);
 
       const events = collectEvents(() => renameWorkspace(0, "Beta"));
 
@@ -351,12 +351,12 @@ describe("workspace-service", () => {
       const ws1 = makeWorkspace({ name: "A" });
       const ws2 = makeWorkspace({ name: "B" });
       const ws3 = makeWorkspace({ name: "C" });
-      workspaces.set([ws1, ws2, ws3]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws1, ws2, ws3]);
+      activeNestedWorkspaceIdx.set(0);
 
       reorderWorkspaces(0, 2);
 
-      const names = get(workspaces).map((w) => w.name);
+      const names = get(nestedWorkspaces).map((w) => w.name);
       expect(names).toEqual(["B", "A", "C"]);
     });
 
@@ -364,13 +364,13 @@ describe("workspace-service", () => {
       const ws1 = makeWorkspace({ name: "A" });
       const ws2 = makeWorkspace({ name: "B" });
       const ws3 = makeWorkspace({ name: "C" });
-      workspaces.set([ws1, ws2, ws3]);
-      activeWorkspaceIdx.set(0); // "A" is active
+      nestedWorkspaces.set([ws1, ws2, ws3]);
+      activeNestedWorkspaceIdx.set(0); // "A" is active
 
       reorderWorkspaces(0, 2); // "A" moves to index 1
 
       // Active should follow ws1
-      expect(get(activeWorkspaceIdx)).toBe(1);
+      expect(get(activeNestedWorkspaceIdx)).toBe(1);
       expect(get(activeWorkspace)?.id).toBe(ws1.id);
     });
 
@@ -378,25 +378,25 @@ describe("workspace-service", () => {
       const ws1 = makeWorkspace({ name: "A" });
       const ws2 = makeWorkspace({ name: "B" });
       const ws3 = makeWorkspace({ name: "C" });
-      workspaces.set([ws1, ws2, ws3]);
-      activeWorkspaceIdx.set(2); // "C" is active
+      nestedWorkspaces.set([ws1, ws2, ws3]);
+      activeNestedWorkspaceIdx.set(2); // "C" is active
 
       reorderWorkspaces(2, 0);
 
-      const names = get(workspaces).map((w) => w.name);
+      const names = get(nestedWorkspaces).map((w) => w.name);
       expect(names).toEqual(["C", "A", "B"]);
-      expect(get(activeWorkspaceIdx)).toBe(0);
+      expect(get(activeNestedWorkspaceIdx)).toBe(0);
     });
   });
 
   describe("toggleWorkspaceLock", () => {
     it("sets metadata.locked to true on first toggle", () => {
       const ws = makeWorkspace({ name: "WS" });
-      workspaces.set([ws]);
+      nestedWorkspaces.set([ws]);
 
       toggleWorkspaceLock(ws.id);
 
-      expect(get(workspaces)[0].metadata?.locked).toBe(true);
+      expect(get(nestedWorkspaces)[0].metadata?.locked).toBe(true);
     });
 
     it("clears metadata.locked back to false on second toggle", () => {
@@ -404,11 +404,11 @@ describe("workspace-service", () => {
         name: "WS",
         metadata: { locked: true },
       });
-      workspaces.set([ws]);
+      nestedWorkspaces.set([ws]);
 
       toggleWorkspaceLock(ws.id);
 
-      expect(get(workspaces)[0].metadata?.locked).toBe(false);
+      expect(get(nestedWorkspaces)[0].metadata?.locked).toBe(false);
     });
 
     it("preserves other metadata fields when toggling", () => {
@@ -416,11 +416,11 @@ describe("workspace-service", () => {
         name: "WS",
         metadata: { worktreePath: "/tmp/wt", branch: "feat/x" },
       });
-      workspaces.set([ws]);
+      nestedWorkspaces.set([ws]);
 
       toggleWorkspaceLock(ws.id);
 
-      const md = get(workspaces)[0].metadata;
+      const md = get(nestedWorkspaces)[0].metadata;
       expect(md?.locked).toBe(true);
       expect(md?.worktreePath).toBe("/tmp/wt");
       expect(md?.branch).toBe("feat/x");
@@ -429,22 +429,22 @@ describe("workspace-service", () => {
     it("only mutates the matching workspace", () => {
       const ws1 = makeWorkspace({ name: "A" });
       const ws2 = makeWorkspace({ name: "B" });
-      workspaces.set([ws1, ws2]);
+      nestedWorkspaces.set([ws1, ws2]);
 
       toggleWorkspaceLock(ws2.id);
 
-      expect(get(workspaces)[0].metadata?.locked).toBeUndefined();
-      expect(get(workspaces)[1].metadata?.locked).toBe(true);
+      expect(get(nestedWorkspaces)[0].metadata?.locked).toBeUndefined();
+      expect(get(nestedWorkspaces)[1].metadata?.locked).toBe(true);
     });
 
     it("is a no-op for an unknown workspace id", () => {
       const ws = makeWorkspace({ name: "WS" });
-      workspaces.set([ws]);
-      const before = get(workspaces)[0];
+      nestedWorkspaces.set([ws]);
+      const before = get(nestedWorkspaces)[0];
 
       toggleWorkspaceLock("does-not-exist");
 
-      expect(get(workspaces)[0]).toBe(before);
+      expect(get(nestedWorkspaces)[0]).toBe(before);
     });
   });
 
@@ -568,7 +568,7 @@ describe("workspace-service", () => {
   });
 
   describe("persistWorkspaces", () => {
-    it("calls saveState with serialized workspaces", () => {
+    it("calls saveState with serialized nestedWorkspaces", () => {
       const s = mockTerminalSurface({ title: "zsh" });
       const pane = makePane([s]);
       const ws = makeWorkspace({
@@ -576,13 +576,13 @@ describe("workspace-service", () => {
         splitRoot: { type: "pane", pane },
         activePaneId: pane.id,
       });
-      workspaces.set([ws]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws]);
+      activeNestedWorkspaceIdx.set(0);
 
       persistWorkspaces();
 
       expect(saveState).toHaveBeenCalledWith({
-        workspaces: [
+        nestedWorkspaces: [
           {
             id: ws.id,
             name: "My WS",
@@ -590,7 +590,7 @@ describe("workspace-service", () => {
             layout: expect.objectContaining({ pane: expect.any(Object) }),
           },
         ],
-        activeWorkspaceIdx: 0,
+        activeNestedWorkspaceIdx: 0,
       });
     });
   });
@@ -603,8 +603,8 @@ describe("workspace-service", () => {
         splitRoot: { type: "pane", pane },
         activePaneId: pane.id,
       });
-      workspaces.set([ws]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws]);
+      activeNestedWorkspaceIdx.set(0);
 
       schedulePersist();
       schedulePersist();
@@ -641,8 +641,8 @@ describe("pane-service", () => {
         },
         activePaneId: pane1.id,
       });
-      workspaces.set([ws]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws]);
+      activeNestedWorkspaceIdx.set(0);
 
       focusPane(pane2.id);
 
@@ -664,8 +664,8 @@ describe("pane-service", () => {
         },
         activePaneId: pane1.id,
       });
-      workspaces.set([ws]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws]);
+      activeNestedWorkspaceIdx.set(0);
 
       const events = collectEvents(() => focusPane(pane2.id));
 
@@ -682,8 +682,8 @@ describe("pane-service", () => {
         splitRoot: { type: "pane", pane },
         activePaneId: pane.id,
       });
-      workspaces.set([ws]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws]);
+      activeNestedWorkspaceIdx.set(0);
 
       const events = collectEvents(() => focusPane(pane.id));
 
@@ -701,8 +701,8 @@ describe("pane-service", () => {
         splitRoot: { type: "pane", pane },
         activePaneId: pane.id,
       });
-      workspaces.set([ws]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws]);
+      activeNestedWorkspaceIdx.set(0);
 
       reorderTab(pane.id, 0, 2);
 
@@ -718,8 +718,8 @@ describe("pane-service", () => {
         splitRoot: { type: "pane", pane },
         activePaneId: pane.id,
       });
-      workspaces.set([ws]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws]);
+      activeNestedWorkspaceIdx.set(0);
 
       reorderTab(pane.id, 0, 0);
 
@@ -736,8 +736,8 @@ describe("pane-service", () => {
         splitRoot: { type: "pane", pane },
         activePaneId: pane.id,
       });
-      workspaces.set([ws]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws]);
+      activeNestedWorkspaceIdx.set(0);
 
       reorderTab(pane.id, 2, 0);
 
@@ -754,8 +754,8 @@ describe("pane-service", () => {
         splitRoot: { type: "pane", pane },
         activePaneId: pane.id,
       });
-      workspaces.set([ws]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws]);
+      activeNestedWorkspaceIdx.set(0);
 
       reorderTab(pane.id, 0, 2);
       // schedulePersist debounces to saveState; advance the timer to
@@ -795,8 +795,8 @@ describe("pane-service", () => {
 
     it("moves focus to the next pane on right/down", () => {
       const { ws, pane2 } = makeSplitWorkspace();
-      workspaces.set([ws]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws]);
+      activeNestedWorkspaceIdx.set(0);
 
       focusDirection("right");
 
@@ -806,8 +806,8 @@ describe("pane-service", () => {
     it("moves focus to the previous pane on left/up", () => {
       const { ws, pane1, pane2 } = makeSplitWorkspace();
       ws.activePaneId = pane2.id;
-      workspaces.set([ws]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws]);
+      activeNestedWorkspaceIdx.set(0);
 
       focusDirection("left");
 
@@ -817,8 +817,8 @@ describe("pane-service", () => {
     it("wraps around from last to first pane", () => {
       const { ws, pane1, pane3 } = makeSplitWorkspace();
       ws.activePaneId = pane3.id;
-      workspaces.set([ws]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws]);
+      activeNestedWorkspaceIdx.set(0);
 
       focusDirection("right");
 
@@ -828,8 +828,8 @@ describe("pane-service", () => {
     it("wraps around from first to last pane", () => {
       const { ws, pane1, pane3 } = makeSplitWorkspace();
       ws.activePaneId = pane1.id;
-      workspaces.set([ws]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws]);
+      activeNestedWorkspaceIdx.set(0);
 
       focusDirection("up");
 
@@ -842,8 +842,8 @@ describe("pane-service", () => {
         splitRoot: { type: "pane", pane },
         activePaneId: pane.id,
       });
-      workspaces.set([ws]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws]);
+      activeNestedWorkspaceIdx.set(0);
 
       focusDirection("right");
 
@@ -867,8 +867,8 @@ describe("pane-service", () => {
         },
         activePaneId: pane1.id,
       });
-      workspaces.set([ws]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws]);
+      activeNestedWorkspaceIdx.set(0);
 
       removePane(ws, pane1);
 
@@ -894,8 +894,8 @@ describe("pane-service", () => {
         },
         activePaneId: pane1.id,
       });
-      workspaces.set([ws]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws]);
+      activeNestedWorkspaceIdx.set(0);
 
       const events = collectEvents(() => removePane(ws, pane1));
 
@@ -911,13 +911,13 @@ describe("pane-service", () => {
         activePaneId: pane.id,
       });
       const ws2 = makeWorkspace({ name: "WS2" });
-      workspaces.set([ws1, ws2]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws1, ws2]);
+      activeNestedWorkspaceIdx.set(0);
 
       removePane(ws1, pane);
 
       // ws1 should have been removed
-      const list = get(workspaces);
+      const list = get(nestedWorkspaces);
       expect(list.find((w) => w.id === ws1.id)).toBeUndefined();
     });
 
@@ -938,8 +938,8 @@ describe("pane-service", () => {
         },
         activePaneId: pane1.id,
       });
-      workspaces.set([ws]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws]);
+      activeNestedWorkspaceIdx.set(0);
 
       removePane(ws, pane1);
 
@@ -963,8 +963,8 @@ describe("surface-service", () => {
         splitRoot: { type: "pane", pane },
         activePaneId: pane.id,
       });
-      workspaces.set([ws]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws]);
+      activeNestedWorkspaceIdx.set(0);
 
       selectSurface(pane.id, s2.id);
 
@@ -980,8 +980,8 @@ describe("surface-service", () => {
         splitRoot: { type: "pane", pane },
         activePaneId: pane.id,
       });
-      workspaces.set([ws]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws]);
+      activeNestedWorkspaceIdx.set(0);
 
       selectSurface(pane.id, s2.id);
 
@@ -997,8 +997,8 @@ describe("surface-service", () => {
         splitRoot: { type: "pane", pane },
         activePaneId: pane.id,
       });
-      workspaces.set([ws]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws]);
+      activeNestedWorkspaceIdx.set(0);
 
       const events = collectEvents(() => selectSurface(pane.id, s2.id));
 
@@ -1021,8 +1021,8 @@ describe("surface-service", () => {
         splitRoot: { type: "pane", pane },
         activePaneId: pane.id,
       });
-      workspaces.set([ws]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws]);
+      activeNestedWorkspaceIdx.set(0);
 
       nextSurface();
 
@@ -1038,8 +1038,8 @@ describe("surface-service", () => {
         splitRoot: { type: "pane", pane },
         activePaneId: pane.id,
       });
-      workspaces.set([ws]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws]);
+      activeNestedWorkspaceIdx.set(0);
 
       nextSurface();
 
@@ -1053,8 +1053,8 @@ describe("surface-service", () => {
         splitRoot: { type: "pane", pane },
         activePaneId: pane.id,
       });
-      workspaces.set([ws]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws]);
+      activeNestedWorkspaceIdx.set(0);
 
       nextSurface();
 
@@ -1073,8 +1073,8 @@ describe("surface-service", () => {
         splitRoot: { type: "pane", pane },
         activePaneId: pane.id,
       });
-      workspaces.set([ws]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws]);
+      activeNestedWorkspaceIdx.set(0);
 
       prevSurface();
 
@@ -1090,8 +1090,8 @@ describe("surface-service", () => {
         splitRoot: { type: "pane", pane },
         activePaneId: pane.id,
       });
-      workspaces.set([ws]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws]);
+      activeNestedWorkspaceIdx.set(0);
 
       prevSurface();
 
@@ -1110,8 +1110,8 @@ describe("surface-service", () => {
         splitRoot: { type: "pane", pane },
         activePaneId: pane.id,
       });
-      workspaces.set([ws]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws]);
+      activeNestedWorkspaceIdx.set(0);
 
       selectSurfaceByNumber(2);
 
@@ -1128,8 +1128,8 @@ describe("surface-service", () => {
         splitRoot: { type: "pane", pane },
         activePaneId: pane.id,
       });
-      workspaces.set([ws]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws]);
+      activeNestedWorkspaceIdx.set(0);
 
       selectSurfaceByNumber(9);
 
@@ -1144,8 +1144,8 @@ describe("surface-service", () => {
         splitRoot: { type: "pane", pane },
         activePaneId: pane.id,
       });
-      workspaces.set([ws]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws]);
+      activeNestedWorkspaceIdx.set(0);
 
       selectSurfaceByNumber(5);
 
@@ -1163,8 +1163,8 @@ describe("surface-service", () => {
         splitRoot: { type: "pane", pane },
         activePaneId: pane.id,
       });
-      workspaces.set([ws]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws]);
+      activeNestedWorkspaceIdx.set(0);
 
       closeActiveSurface();
 
@@ -1181,8 +1181,8 @@ describe("surface-service", () => {
         splitRoot: { type: "pane", pane },
         activePaneId: pane.id,
       });
-      workspaces.set([ws]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws]);
+      activeNestedWorkspaceIdx.set(0);
 
       closeActiveSurface();
 
@@ -1199,8 +1199,8 @@ describe("surface-service", () => {
         splitRoot: { type: "pane", pane },
         activePaneId: pane.id,
       });
-      workspaces.set([ws]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws]);
+      activeNestedWorkspaceIdx.set(0);
 
       closeActiveSurface();
 
@@ -1216,8 +1216,8 @@ describe("surface-service", () => {
         splitRoot: { type: "pane", pane },
         activePaneId: pane.id,
       });
-      workspaces.set([ws]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws]);
+      activeNestedWorkspaceIdx.set(0);
 
       const events = collectEvents(() => closeActiveSurface());
 
@@ -1247,8 +1247,8 @@ describe("surface-service", () => {
         },
         activePaneId: pane1.id,
       });
-      workspaces.set([ws]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws]);
+      activeNestedWorkspaceIdx.set(0);
 
       closeActiveSurface();
 
@@ -1270,12 +1270,12 @@ describe("surface-service", () => {
         activePaneId: pane.id,
       });
       const other = makeWorkspace({ id: "ws-other" });
-      workspaces.set([ws, other]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws, other]);
+      activeNestedWorkspaceIdx.set(0);
 
       closeActiveSurface();
 
-      const list = get(workspaces);
+      const list = get(nestedWorkspaces);
       expect(list).toHaveLength(1);
       expect(list[0]!.id).toBe("ws-other");
     });
@@ -1289,8 +1289,8 @@ describe("surface-service", () => {
         splitRoot: { type: "pane", pane },
         activePaneId: pane.id,
       });
-      workspaces.set([ws]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws]);
+      activeNestedWorkspaceIdx.set(0);
 
       openExtensionSurfaceInPane("preview:preview", "README", {
         filePath: "/tmp/readme.md",
@@ -1313,8 +1313,8 @@ describe("surface-service", () => {
         splitRoot: { type: "pane", pane },
         activePaneId: pane.id,
       });
-      workspaces.set([ws]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws]);
+      activeNestedWorkspaceIdx.set(0);
 
       openExtensionSurfaceInPane("test:panel", "Test Panel");
 
@@ -1328,8 +1328,8 @@ describe("surface-service", () => {
         splitRoot: { type: "pane", pane },
         activePaneId: pane.id,
       });
-      workspaces.set([ws]);
-      activeWorkspaceIdx.set(0);
+      nestedWorkspaces.set([ws]);
+      activeNestedWorkspaceIdx.set(0);
 
       openExtensionSurfaceInPane("test:panel", "Test Panel");
 

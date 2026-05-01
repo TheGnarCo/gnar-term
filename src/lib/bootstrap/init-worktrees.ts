@@ -1,7 +1,7 @@
 /**
  * Worktree bootstrap — owns the worktree-backed workspace concept.
  * Registers the create / archive / merge-archive commands and subscribes
- * to workspace lifecycle events so worktree-backed workspaces stay in
+ * to workspace lifecycle events so worktree-backed nestedWorkspaces stay in
  * sync with core state. The ⎇ Branch button and `core:create-worktree`
  * workspace action are registered in init-workspace-groups.
  */

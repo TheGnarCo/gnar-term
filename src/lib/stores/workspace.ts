@@ -2,15 +2,15 @@ import { writable, derived } from "svelte/store";
 import type { NestedWorkspace } from "../types";
 import { getAllPanes } from "../types";
 
-export const workspaces = writable<NestedWorkspace[]>([]);
-export const activeWorkspaceIdx = writable<number>(-1);
+export const nestedWorkspaces = writable<NestedWorkspace[]>([]);
+export const activeNestedWorkspaceIdx = writable<number>(-1);
 
 /**
  * Id of the currently-active pseudo-workspace (e.g. the Global Agentic
- * Dashboard), or `null` when a real workspace is active. Pseudo-workspaces
+ * Dashboard), or `null` when a real workspace is active. Pseudo-nestedWorkspaces
  * are registered via `registerPseudoWorkspace` and do not live in the
- * `workspaces` array — they're rendered from the pseudo-workspace
- * registry. Activation is mutually exclusive with `activeWorkspaceIdx`:
+ * `nestedWorkspaces` array — they're rendered from the pseudo-workspace
+ * registry. Activation is mutually exclusive with `activeNestedWorkspaceIdx`:
  * setting this to a non-null id hides every real workspace view and
  * mounts the pseudo's body instead.
  */
@@ -24,7 +24,7 @@ export const activePseudoWorkspaceId = writable<string | null>(null);
 export const zoomedSurfaceId = writable<string | null>(null);
 
 export const activeWorkspace = derived(
-  [workspaces, activeWorkspaceIdx],
+  [nestedWorkspaces, activeNestedWorkspaceIdx],
   ([$ws, $idx]) => $ws[$idx] ?? null,
 );
 

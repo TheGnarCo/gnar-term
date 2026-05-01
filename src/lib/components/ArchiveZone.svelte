@@ -67,7 +67,7 @@
 
   function getName(row: ArchivedRow): string {
     if (row.kind === "workspace") {
-      return $archivedDefs.workspaces[row.id]?.def.name ?? row.id;
+      return $archivedDefs.nestedWorkspaces[row.id]?.def.name ?? row.id;
     }
     return $archivedDefs.groups[row.id]?.group.name ?? row.id;
   }
@@ -80,7 +80,7 @@
     const name = getName(row);
     const isGroup = row.kind === "workspace-group";
     const message = isGroup
-      ? `Unarchive "${name}" and restore its workspaces?`
+      ? `Unarchive "${name}" and restore its nestedWorkspaces?`
       : `Unarchive "${name}"?`;
     const confirmed = await showConfirmPrompt(message, {
       confirmLabel: "Unarchive",

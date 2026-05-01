@@ -19,14 +19,17 @@ export interface ArchivedGroupDef {
 export type ArchivedDefEntry = ArchivedWorkspaceDef | ArchivedGroupDef;
 
 export interface ArchivedDefsMap {
-  workspaces: Record<string, ArchivedWorkspaceDef>;
+  nestedWorkspaces: Record<string, ArchivedWorkspaceDef>;
   groups: Record<string, ArchivedGroupDef>;
 }
 
 const _archivedOrder = writable<ArchivedRow[]>([]);
 export const archivedOrder = _archivedOrder;
 
-const _archivedDefs = writable<ArchivedDefsMap>({ workspaces: {}, groups: {} });
+const _archivedDefs = writable<ArchivedDefsMap>({
+  nestedWorkspaces: {},
+  groups: {},
+});
 export const archivedDefs = _archivedDefs;
 
 function isArchivedRow(v: unknown): v is ArchivedRow {
@@ -47,7 +50,7 @@ export function initArchiveFromState(): void {
     ? state.archivedOrder.filter(isArchivedRow)
     : [];
   const defs = (state.archivedDefs ?? {
-    workspaces: {},
+    nestedWorkspaces: {},
     groups: {},
   }) as ArchivedDefsMap;
   _archivedOrder.set(order);
@@ -70,8 +73,8 @@ export function addToArchive(row: ArchivedRow, entry: ArchivedDefEntry): void {
   if (row.kind === "workspace") {
     _archivedDefs.update((defs) => ({
       ...defs,
-      workspaces: {
-        ...defs.workspaces,
+      nestedWorkspaces: {
+        ...defs.nestedWorkspaces,
         [row.id]: entry as ArchivedWorkspaceDef,
       },
     }));
@@ -90,8 +93,8 @@ export function removeFromArchive(row: ArchivedRow): void {
   );
   if (row.kind === "workspace") {
     _archivedDefs.update((defs) => {
-      const { [row.id]: _removed, ...rest } = defs.workspaces;
-      return { ...defs, workspaces: rest };
+      const { [row.id]: _removed, ...rest } = defs.nestedWorkspaces;
+      return { ...defs, nestedWorkspaces: rest };
     });
   } else {
     _archivedDefs.update((defs) => {

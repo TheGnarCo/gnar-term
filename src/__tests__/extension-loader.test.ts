@@ -206,7 +206,7 @@ describe("createExtensionAPI", () => {
     expect(api).toHaveProperty("registerPrimarySidebarSection");
     expect(api).toHaveProperty("registerSurfaceType");
     expect(api).toHaveProperty("state");
-    expect(api).toHaveProperty("workspaces");
+    expect(api).toHaveProperty("nestedWorkspaces");
     expect(api).toHaveProperty("activeWorkspace");
     expect(api).toHaveProperty("activePane");
     expect(api).toHaveProperty("activeSurface");
@@ -217,9 +217,9 @@ describe("createExtensionAPI", () => {
   it("exposes read-only Svelte stores", () => {
     const { api } = createExtensionAPI(manifest);
     // Readable stores have subscribe but not set
-    expect(typeof api.workspaces.subscribe).toBe("function");
+    expect(typeof api.nestedWorkspaces.subscribe).toBe("function");
     expect(
-      (api.workspaces as unknown as Record<string, unknown>).set,
+      (api.nestedWorkspaces as unknown as Record<string, unknown>).set,
     ).toBeUndefined();
   });
 
@@ -707,7 +707,8 @@ describe("Extension lifecycle", () => {
     await activateExtension("surface-orphan");
 
     // Simulate a workspace with an extension surface of this type
-    const { workspaces: wsStore } = await import("../lib/stores/workspace");
+    const { nestedWorkspaces: wsStore } =
+      await import("../lib/stores/workspace");
     wsStore.set([
       {
         id: "ws-1",
@@ -908,7 +909,7 @@ describe("Extension lifecycle", () => {
     expect(ext?.enabled).toBe(false);
   });
 
-  it("deactivateExtension unclaims workspaces claimed by the extension", async () => {
+  it("deactivateExtension unclaims nestedWorkspaces claimed by the extension", async () => {
     resetClaimedWorkspaces();
     const manifest = makeManifest({
       id: "claim-cleanup",
@@ -924,13 +925,13 @@ describe("Extension lifecycle", () => {
     });
     await activateExtension("claim-cleanup");
 
-    // Verify workspaces are claimed
+    // Verify nestedWorkspaces are claimed
     expect(get(claimedWorkspaceIds).has("ws-1")).toBe(true);
     expect(get(claimedWorkspaceIds).has("ws-2")).toBe(true);
 
     deactivateExtension("claim-cleanup");
 
-    // After deactivation, workspaces should be unclaimed
+    // After deactivation, nestedWorkspaces should be unclaimed
     expect(get(claimedWorkspaceIds).has("ws-1")).toBe(false);
     expect(get(claimedWorkspaceIds).has("ws-2")).toBe(false);
   });
@@ -1554,7 +1555,8 @@ describe("api.getWorkspaceIdForSurface", () => {
   });
 
   it("resolves the owning workspace for a surface regardless of which is active", async () => {
-    const { workspaces: wsStore } = await import("../lib/stores/workspace");
+    const { nestedWorkspaces: wsStore } =
+      await import("../lib/stores/workspace");
     wsStore.set([
       {
         id: "ws-A",
@@ -1614,7 +1616,8 @@ describe("api.getWorkspaceIdForSurface", () => {
   });
 
   it("getAllTerminalSurfaces returns terminals from every workspace and every pane", async () => {
-    const { workspaces: wsStore } = await import("../lib/stores/workspace");
+    const { nestedWorkspaces: wsStore } =
+      await import("../lib/stores/workspace");
     wsStore.set([
       {
         id: "ws-active",
@@ -1715,7 +1718,8 @@ describe("api.getWorkspaceIdForSurface", () => {
   });
 
   it("finds surfaces inside split panes, not just the active pane", async () => {
-    const { workspaces: wsStore } = await import("../lib/stores/workspace");
+    const { nestedWorkspaces: wsStore } =
+      await import("../lib/stores/workspace");
     wsStore.set([
       {
         id: "ws-split",

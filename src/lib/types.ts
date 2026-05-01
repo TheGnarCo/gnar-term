@@ -85,13 +85,13 @@ export interface NestedWorkspaceMetadata {
   // --- Index signature: extensions may store arbitrary keys ---
   [key: string]: unknown;
   // --- Worktree fields ---
-  /** Set on worktree-backed workspaces; absolute path to the worktree directory. */
+  /** Set on worktree-backed nestedWorkspaces; absolute path to the worktree directory. */
   worktreePath?: string;
-  /** Git branch name for worktree workspaces. */
+  /** Git branch name for worktree nestedWorkspaces. */
   branch?: string;
   /** Base branch the worktree was created from. */
   baseBranch?: string;
-  /** Absolute path to the source repo for worktree workspaces. */
+  /** Absolute path to the source repo for worktree nestedWorkspaces. */
   repoPath?: string;
   // --- Project-scope extension ---
   /** Project id used by the project-scope extension to claim the workspace. */
@@ -105,7 +105,7 @@ export interface NestedWorkspaceMetadata {
   dashboardWorkspaceId?: string;
   /**
    * Contribution id for the dashboard type: "group" | "agentic" | "settings" | string.
-   * Backfilled by workspace-group-service for legacy workspaces.
+   * Backfilled by workspace-group-service for legacy nestedWorkspaces.
    */
   dashboardContributionId?: string;
   /** True on the global agentic pseudo-workspace (agentic-orchestrator). */

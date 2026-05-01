@@ -5,7 +5,7 @@ import {
   type NestedWorkspace,
 } from "../types";
 import type { NestedWorkspaceDef } from "../config";
-import { workspaces } from "../stores/workspace";
+import { nestedWorkspaces } from "../stores/workspace";
 import {
   serializeLayout,
   closeWorkspace,
@@ -40,7 +40,7 @@ function countRunningPtys(ws: NestedWorkspace): number {
 }
 
 export async function archiveWorkspace(wsId: string): Promise<boolean> {
-  const ws = get(workspaces).find((w) => w.id === wsId);
+  const ws = get(nestedWorkspaces).find((w) => w.id === wsId);
   if (!ws) return false;
 
   const running = countRunningPtys(ws);
@@ -59,7 +59,7 @@ export async function archiveWorkspace(wsId: string): Promise<boolean> {
     ...(ws.metadata ? { metadata: ws.metadata } : {}),
   };
 
-  const idx = get(workspaces).findIndex((w) => w.id === wsId);
+  const idx = get(nestedWorkspaces).findIndex((w) => w.id === wsId);
   closeWorkspace(idx);
   addToArchive({ kind: "workspace", id: wsId }, { def });
   return true;
@@ -104,7 +104,7 @@ export async function archiveGroup(groupId: string): Promise<boolean> {
 
 export async function unarchiveWorkspace(wsId: string): Promise<void> {
   const defs = get(archivedDefs);
-  const entry = defs.workspaces[wsId];
+  const entry = defs.nestedWorkspaces[wsId];
   if (!entry) return;
   // Create first; only drop the archive entry once we know the restore
   // succeeded, so a failure leaves the user able to retry.
@@ -117,7 +117,7 @@ export async function unarchiveGroup(groupId: string): Promise<void> {
   const entry = defs.groups[groupId];
   if (!entry) return;
   // Container (group + root row) must be in place before we restore
-  // workspaces into it, but `removeFromArchive` is held until every
+  // nestedWorkspaces into it, but `removeFromArchive` is held until every
   // async restore step has resolved — if any throws, the archive entry
   // survives so the user can retry.
   setWorkspaceGroups([...getWorkspaceGroups(), entry.group]);

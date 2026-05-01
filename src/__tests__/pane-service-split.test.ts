@@ -38,7 +38,10 @@ vi.mock("../lib/services/service-helpers", () => ({
   getCwdForSurface: vi.fn().mockResolvedValue(undefined),
 }));
 
-import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
+import {
+  nestedWorkspaces,
+  activeNestedWorkspaceIdx,
+} from "../lib/stores/workspace";
 import {
   uid,
   getAllPanes,
@@ -89,8 +92,8 @@ function makeWorkspace(splitRoot: SplitNode): NestedWorkspace {
 }
 
 beforeEach(() => {
-  workspaces.set([]);
-  activeWorkspaceIdx.set(-1);
+  nestedWorkspaces.set([]);
+  activeNestedWorkspaceIdx.set(-1);
   vi.clearAllMocks();
   vi.useFakeTimers();
 });
@@ -119,15 +122,15 @@ describe("splitPaneWithSurface — split-from-root", () => {
       ],
     };
     const ws = makeWorkspace(root);
-    workspaces.set([ws]);
-    activeWorkspaceIdx.set(0);
+    nestedWorkspaces.set([ws]);
+    activeNestedWorkspaceIdx.set(0);
 
     splitPaneWithSurface(sA.id, sourcePane.id, targetPane.id, "horizontal");
 
     // Surface A removed from source, source still has B
     expect(sourcePane.surfaces.map((s) => s.id)).toEqual([sB.id]);
     // Target pane should now be wrapped in a split with the new pane
-    const updatedWs = get(workspaces)[0]!;
+    const updatedWs = get(nestedWorkspaces)[0]!;
     const panes = getAllPanes(updatedWs.splitRoot);
     // 3 panes total: source, target, and the new one carrying A
     expect(panes.length).toBe(3);
@@ -194,12 +197,12 @@ describe("splitPaneWithSurface — split-from-root", () => {
       ],
     };
     const ws = makeWorkspace(root);
-    workspaces.set([ws]);
-    activeWorkspaceIdx.set(0);
+    nestedWorkspaces.set([ws]);
+    activeNestedWorkspaceIdx.set(0);
 
     splitPaneWithSurface(sA.id, sourcePane.id, targetPane.id, "horizontal");
 
-    const updatedWs = get(workspaces)[0]!;
+    const updatedWs = get(nestedWorkspaces)[0]!;
     const panes = getAllPanes(updatedWs.splitRoot);
     const paneIds = panes.map((p) => p.id);
     // Source pane is gone, target pane survives, new pane exists.
@@ -230,12 +233,12 @@ describe("splitPaneWithSurface — split-from-root", () => {
       ],
     };
     const ws = makeWorkspace(root);
-    workspaces.set([ws]);
-    activeWorkspaceIdx.set(0);
+    nestedWorkspaces.set([ws]);
+    activeNestedWorkspaceIdx.set(0);
 
     splitPaneWithSurface(sA.id, sourcePane.id, targetPane.id);
 
-    const updatedWs = get(workspaces)[0]!;
+    const updatedWs = get(nestedWorkspaces)[0]!;
     const panes = getAllPanes(updatedWs.splitRoot);
     expect(panes.map((p) => p.id)).toContain(sourcePane.id);
     expect(sourcePane.surfaces.map((s) => s.id)).toEqual([sB.id]);
@@ -274,12 +277,12 @@ describe("splitPaneWithSurface — split-from-root", () => {
       children: [{ type: "pane", pane: sourcePane }, splitInner],
     };
     const ws = makeWorkspace(splitRoot);
-    workspaces.set([ws]);
-    activeWorkspaceIdx.set(0);
+    nestedWorkspaces.set([ws]);
+    activeNestedWorkspaceIdx.set(0);
 
     splitPaneWithSurface(sA.id, sourcePane.id, targetPane.id, "horizontal");
 
-    const updatedWs = get(workspaces)[0]!;
+    const updatedWs = get(nestedWorkspaces)[0]!;
     expect(updatedWs.splitRoot.type).toBe("split");
     const panes = getAllPanes(updatedWs.splitRoot);
     // 4 panes: source (still), target, otherPane, newPane carrying A.
@@ -310,8 +313,8 @@ describe("splitPaneWithSurface — split-from-root", () => {
       ],
     };
     const ws = makeWorkspace(root);
-    workspaces.set([ws]);
-    activeWorkspaceIdx.set(0);
+    nestedWorkspaces.set([ws]);
+    activeNestedWorkspaceIdx.set(0);
 
     splitPaneWithSurface(sA.id, sourcePane.id, targetPane.id);
     vi.advanceTimersByTime(2000);
@@ -334,12 +337,12 @@ describe("splitPaneWithSurface — split-from-root", () => {
       ],
     };
     const ws = makeWorkspace(root);
-    workspaces.set([ws]);
-    activeWorkspaceIdx.set(0);
+    nestedWorkspaces.set([ws]);
+    activeNestedWorkspaceIdx.set(0);
 
     splitPaneWithSurface(sA.id, sourcePane.id, targetPane.id);
 
-    const updatedWs = get(workspaces)[0]!;
+    const updatedWs = get(nestedWorkspaces)[0]!;
     const newPane = getAllPanes(updatedWs.splitRoot).find(
       (p) => p.id !== sourcePane.id && p.id !== targetPane.id,
     )!;
@@ -353,12 +356,12 @@ describe("splitPaneWithSurface — split-from-root", () => {
     const sB = mockSurface({ title: "B" });
     const pane = makePane([sA, sB]);
     const ws = makeWorkspace({ type: "pane", pane });
-    workspaces.set([ws]);
-    activeWorkspaceIdx.set(0);
+    nestedWorkspaces.set([ws]);
+    activeNestedWorkspaceIdx.set(0);
 
     splitPaneWithSurface(sA.id, pane.id, pane.id, "horizontal", false);
 
-    const updatedWs = get(workspaces)[0]!;
+    const updatedWs = get(nestedWorkspaces)[0]!;
     const panes = getAllPanes(updatedWs.splitRoot);
     expect(panes.length).toBe(2);
     // Original pane keeps sB; new pane receives sA.

@@ -31,7 +31,7 @@ import {
 } from "@tauri-apps/plugin-notification";
 import { get } from "svelte/store";
 import { xtermTheme } from "./stores/theme";
-import { workspaces, activeWorkspaceIdx } from "./stores/workspace";
+import { nestedWorkspaces, activeNestedWorkspaceIdx } from "./stores/workspace";
 import { contextMenu, pendingAction } from "./stores/ui";
 import {
   getRegisteredFileExtensions,
@@ -486,7 +486,7 @@ function handlePtyExit(pty_id: number): void {
   firstOutputListeners.delete(pty_id);
 
   // Remove the surface from its pane, and collapse empty panes
-  workspaces.update((wsList) => {
+  nestedWorkspaces.update((wsList) => {
     for (const ws of wsList) {
       for (const pane of getAllPanes(ws.splitRoot)) {
         const idx = pane.surfaces.findIndex(
@@ -506,14 +506,14 @@ function handlePtyExit(pty_id: number): void {
               ws.splitRoot.pane.id === pane.id
             ) {
               // This was the only pane in the workspace — remove the
-              // workspace. Users are allowed to close all workspaces;
+              // workspace. Users are allowed to close all nestedWorkspaces;
               // App.svelte renders an Empty Surface when the list is
               // empty, so we don't auto-create a default.
               const wsIdx = wsList.indexOf(ws);
               wsList.splice(wsIdx, 1);
-              const currentIdx = get(activeWorkspaceIdx);
+              const currentIdx = get(activeNestedWorkspaceIdx);
               if (currentIdx >= wsList.length) {
-                activeWorkspaceIdx.set(wsList.length - 1);
+                activeNestedWorkspaceIdx.set(wsList.length - 1);
               }
               return wsList;
             }
@@ -542,8 +542,8 @@ function handlePtyNotification(pty_id: number, text: string): void {
   // Filter out escape-sequence fragments that slipped through (e.g. "4;0;")
   if (/^\d+[;\d:\/]*$/.test(text) || !text.trim()) return;
   let notifyWorkspaceName: string | null = null;
-  workspaces.update((wsList) => {
-    const activeIdx = get(activeWorkspaceIdx);
+  nestedWorkspaces.update((wsList) => {
+    const activeIdx = get(activeNestedWorkspaceIdx);
     const activeWs = wsList[activeIdx];
     for (const ws of wsList) {
       for (const s of getAllSurfaces(ws)) {
@@ -578,7 +578,7 @@ function handlePtyNotification(pty_id: number, text: string): void {
 
 function applyPtyTitle(pty_id: number, title: string) {
   let changed: { id: string; oldTitle: string; newTitle: string } | null = null;
-  workspaces.update((wsList) => {
+  nestedWorkspaces.update((wsList) => {
     for (const ws of wsList) {
       for (const s of getAllSurfaces(ws)) {
         if (isTerminalSurface(s) && s.ptyId === pty_id) {
@@ -674,7 +674,7 @@ const pendingRunningTitles = new Map<number, ReturnType<typeof setTimeout>>();
 // --- CWD Polling Fallback ---
 // For shells that don't emit OSC 7, poll get_pty_cwd periodically.
 // Uses get_all_pty_cwds to batch all PTYs into a single IPC round-trip,
-// then applies a single workspaces.update() only when at least one cwd changed.
+// then applies a single nestedWorkspaces.update() only when at least one cwd changed.
 let cwdPollTimer: ReturnType<typeof setInterval> | null = null;
 let cwdChangeHook: (() => void) | null = null;
 
@@ -695,7 +695,7 @@ export function startCwdPolling() {
   cwdPollTimer = setInterval(() => {
     invoke<Record<string, string>>("get_all_pty_cwds")
       .then((cwdMap) => {
-        const wsList = get(workspaces);
+        const wsList = get(nestedWorkspaces);
         let anyChanged = false;
         for (const ws of wsList) {
           for (const s of getAllSurfaces(ws)) {
@@ -715,7 +715,7 @@ export function startCwdPolling() {
         // Returning the same array reference (l) is sufficient — Svelte calls
         // all subscribers on any .update() invocation regardless.
         if (anyChanged) {
-          workspaces.update((l) => l);
+          nestedWorkspaces.update((l) => l);
           cwdChangeHook?.();
         }
       })
@@ -734,8 +734,8 @@ export async function createDefaultWorkspace() {
     activePaneId: pane.id,
   };
   await createTerminalSurface(pane);
-  workspaces.update((list) => [...list, ws]);
-  activeWorkspaceIdx.set(0);
+  nestedWorkspaces.update((list) => [...list, ws]);
+  activeNestedWorkspaceIdx.set(0);
 }
 
 // --- Surface Creation helpers ---
@@ -1008,7 +1008,7 @@ function createOsc7Handler(
     ) {
       surface.title = basename || "~";
     }
-    workspaces.update((l) => [...l]);
+    nestedWorkspaces.update((l) => [...l]);
     cwdChangeHook?.();
     return true;
   };
@@ -1201,7 +1201,7 @@ export async function runDefinedCommand(
     return;
   }
   surface.pendingRestoreCommand = false;
-  workspaces.update((l) => [...l]);
+  nestedWorkspaces.update((l) => [...l]);
 }
 
 const FONT_SIZE_MIN = 8;
@@ -1222,7 +1222,7 @@ export function adjustFontSize(delta: number): void {
   );
   if (next === current) return;
   void saveConfig({ fontSize: next });
-  const wsList = get(workspaces);
+  const wsList = get(nestedWorkspaces);
   for (const ws of wsList) {
     for (const s of getAllSurfaces(ws)) {
       if (isTerminalSurface(s)) {
@@ -1249,7 +1249,7 @@ export function resetFontSize(): void {
 export function dismissDefinedCommand(surface: TerminalSurface): void {
   if (!surface.pendingRestoreCommand) return;
   surface.pendingRestoreCommand = false;
-  workspaces.update((l) => [...l]);
+  nestedWorkspaces.update((l) => [...l]);
 }
 
 /** Find the workspace + pane currently containing a given surface. Used to
@@ -1261,7 +1261,7 @@ export function dismissDefinedCommand(surface: TerminalSurface): void {
 function findContextForSurface(
   surfaceId: string,
 ): { paneId: string; workspaceId: string } | null {
-  for (const ws of get(workspaces)) {
+  for (const ws of get(nestedWorkspaces)) {
     for (const pane of getAllPanes(ws.splitRoot)) {
       if (pane.surfaces.some((s) => s.id === surfaceId)) {
         return { paneId: pane.id, workspaceId: ws.id };

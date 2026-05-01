@@ -15,7 +15,10 @@ vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn().mockResolvedValue(vi.fn()),
 }));
 
-import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
+import {
+  nestedWorkspaces,
+  activeNestedWorkspaceIdx,
+} from "../lib/stores/workspace";
 import {
   registerDashboardContribution,
   resetDashboardContributions,
@@ -37,8 +40,8 @@ function makeGroup(id: string): Workspace {
 
 describe("provisionAutoDashboardsForGroup", () => {
   beforeEach(() => {
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
+    nestedWorkspaces.set([]);
+    activeNestedWorkspaceIdx.set(-1);
     resetDashboardContributions();
   });
 
@@ -100,8 +103,8 @@ describe("provisionAutoDashboardsForGroup", () => {
     });
 
     const group = makeGroup("g1");
-    // Seed the workspaces store with an existing dashboard for "a".
-    workspaces.set([
+    // Seed the nestedWorkspaces store with an existing dashboard for "a".
+    nestedWorkspaces.set([
       {
         id: "ws-existing",
         name: "A",
@@ -117,14 +120,14 @@ describe("provisionAutoDashboardsForGroup", () => {
     await provisionAutoDashboardsForGroup(group);
 
     expect(aCreate).not.toHaveBeenCalled();
-    // Sanity: no new workspaces added.
-    expect(get(workspaces)).toHaveLength(1);
+    // Sanity: no new nestedWorkspaces added.
+    expect(get(nestedWorkspaces)).toHaveLength(1);
   });
 
   it("is idempotent — calling twice does not double-materialize", async () => {
     const bCreate = vi.fn(async () => {
       // Simulate create by pushing a workspace into the store.
-      workspaces.update((ws) => [
+      nestedWorkspaces.update((ws) => [
         ...ws,
         {
           id: `ws-${ws.length + 1}`,

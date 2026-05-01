@@ -2,10 +2,10 @@
  * Root-row ordering for the Workspaces section.
  *
  * The Workspaces section renders a single interleaved list of root
- * rows: unclaimed workspaces (kind: "workspace") and workspace group
+ * rows: unclaimed nestedWorkspaces (kind: "workspace") and workspace group
  * blocks (kind: "workspace-group"). Each row is identified by {kind, id}.
  * Users can drag freely across this list — a workspace can sit
- * between two groups, a group between two workspaces.
+ * between two groups, a group between two nestedWorkspaces.
  *
  * This module owns:
  *   - the ordered list (persisted across restarts)
@@ -89,7 +89,7 @@ export function moveRootRow(from: number, to: number): void {
  * that aren't yet listed (appended to the end) and dropping any entries
  * whose referent is unknown.
  *
- * `knownWorkspaceIds` comes from the workspaces store; `extensionRows`
+ * `knownWorkspaceIds` comes from the nestedWorkspaces store; `extensionRows`
  * from registered extensions (via registerRootRowBootstrapContributor).
  */
 export function bootstrapRootRowOrder(
@@ -118,7 +118,7 @@ export function bootstrapRootRowOrder(
 
   // Append entities that weren't in the persisted order —
   // extension-contributed rows first (groups), then unclaimed
-  // workspaces. Matches the legacy "groups above workspaces" default
+  // nestedWorkspaces. Matches the legacy "groups above nestedWorkspaces" default
   // on first-run installs.
   for (const r of extensionRows) {
     const k = key(r);

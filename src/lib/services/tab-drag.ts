@@ -13,7 +13,7 @@
  * split and sidebar moves added in later stories).
  */
 import { writable, get, type Readable } from "svelte/store";
-import { workspaces } from "../stores/workspace";
+import { nestedWorkspaces } from "../stores/workspace";
 import { theme } from "../stores/theme";
 import { getAllPanes, getAllSurfaces } from "../types";
 import {
@@ -85,7 +85,7 @@ function activateHoveredTab(x: number, y: number, sourcePaneId: string): void {
   }
   if (surfaceId === lastHoveredTabId) return;
   lastHoveredTabId = surfaceId;
-  workspaces.update((wsList) =>
+  nestedWorkspaces.update((wsList) =>
     wsList.map((ws) => {
       const pane = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
       if (!pane || !pane.surfaces.find((s) => s.id === surfaceId)) return ws;
@@ -247,7 +247,9 @@ function detectDropTarget(
       const groupId =
         containerEl?.getAttribute("data-container-nested") ?? null;
       if (groupId) {
-        const srcWs = get(workspaces).find((w) => w.id === sourceWorkspaceId);
+        const srcWs = get(nestedWorkspaces).find(
+          (w) => w.id === sourceWorkspaceId,
+        );
         const srcGroupId = srcWs?.metadata?.groupId;
         if (srcGroupId !== groupId) {
           if (srcGroupId) return null; // grouped tab over different group → deny
@@ -311,7 +313,9 @@ function detectDropTarget(
       }
     }
     if (rootRowEl) {
-      const srcWs = get(workspaces).find((w) => w.id === sourceWorkspaceId);
+      const srcWs = get(nestedWorkspaces).find(
+        (w) => w.id === sourceWorkspaceId,
+      );
       const srcGroupId = srcWs?.metadata?.groupId;
       if (srcGroupId) return null;
       const rowIdx = parseInt(
@@ -331,7 +335,9 @@ function detectDropTarget(
     // at the end of the root row order.
     const sidebar = el.closest("#primary-sidebar");
     if (sidebar) {
-      const srcWs = get(workspaces).find((w) => w.id === sourceWorkspaceId);
+      const srcWs = get(nestedWorkspaces).find(
+        (w) => w.id === sourceWorkspaceId,
+      );
       const srcGroupId = srcWs?.metadata?.groupId;
       if (srcGroupId) return null;
       if (srcWs && getAllSurfaces(srcWs).length > 1) {
@@ -358,7 +364,7 @@ function detectDropTarget(
     if (!paneId) continue;
     if (paneId === sourcePaneId) {
       // Allow same-pane surface-split only when there are ≥2 surfaces to split from.
-      const allWs = get(workspaces);
+      const allWs = get(nestedWorkspaces);
       const srcWs = allWs.find((w) => w.id === sourceWorkspaceId);
       const srcPane =
         srcWs &&
@@ -401,7 +407,7 @@ export function commitTabDrop(): void {
 
   switch (dropTarget.kind) {
     case "reorder": {
-      const allWs = get(workspaces);
+      const allWs = get(nestedWorkspaces);
       const srcWs = allWs.find((w) => w.id === sourceWorkspaceId);
       if (!srcWs) return;
       const pane = getAllPanes(srcWs.splitRoot).find(
@@ -444,7 +450,7 @@ export function commitTabDrop(): void {
       break;
     }
     case "new-workspace-in-group": {
-      const allWs = get(workspaces);
+      const allWs = get(nestedWorkspaces);
       const tgtWs = allWs[dropTarget.insertGlobalIdx];
       if (!tgtWs) break;
       const group = getWorkspaceGroups().find(

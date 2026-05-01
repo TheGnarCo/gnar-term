@@ -6,7 +6,7 @@
    *
    * Post Phase-B: the Workspaces section is fixed at the top and is
    * no longer user-draggable. Projects have folded into that section
-   * as siblings of unclaimed workspaces; the unified root-row drag
+   * as siblings of unclaimed nestedWorkspaces; the unified root-row drag
    * pipeline lives inside WorkspaceListBlock. Extension-registered
    * sections still render below it in their declared order but
    * aren't reorderable at the top level either.

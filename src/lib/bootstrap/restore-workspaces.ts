@@ -5,12 +5,12 @@
  *   1. --workspace <name> — open a named workspace from config.commands
  *   2. --path / --working-directory / --command — synthesize a one-off
  *      workspace around the CLI args
- *   3. persisted state.json — restore the last session's workspaces
+ *   3. persisted state.json — restore the last session's nestedWorkspaces
  *   4. config.autoload — open every named workspace listed
  *   5. fall back to a single default "NestedWorkspace 1"
  */
 import { get } from "svelte/store";
-import { workspaces } from "../stores/workspace";
+import { nestedWorkspaces } from "../stores/workspace";
 import { getWorkspaceGroups } from "../stores/workspace-groups";
 import {
   loadState,
@@ -25,7 +25,7 @@ import {
 } from "../services/workspace-service";
 
 // Restore-complete signal — lets async work (extension provision loops,
-// reconcileGroupDashboards) defer safely until workspaces are in the store.
+// reconcileGroupDashboards) defer safely until nestedWorkspaces are in the store.
 let _restored = false;
 const _waiters: Array<() => void> = [];
 
@@ -35,7 +35,7 @@ export function markRestored(): void {
   _waiters.length = 0;
 }
 
-/** Resolves immediately if workspaces are already restored; waits otherwise. */
+/** Resolves immediately if nestedWorkspaces are already restored; waits otherwise. */
 export function waitRestored(): Promise<void> {
   if (_restored) return Promise.resolve();
   return new Promise((r) => _waiters.push(r));
@@ -99,13 +99,13 @@ export async function restoreWorkspaces(
     return;
   }
 
-  // Try to restore persisted workspaces from state.json
+  // Try to restore persisted nestedWorkspaces from state.json
   const state = await loadState();
   initArchiveFromState();
-  if (Array.isArray(state.workspaces)) {
-    // Clear any existing workspaces to prevent doubling on re-mount
-    workspaces.set([]);
-    // Drop orphan Dashboard workspaces whose owning group no longer
+  if (Array.isArray(state.nestedWorkspaces)) {
+    // Clear any existing nestedWorkspaces to prevent doubling on re-mount
+    nestedWorkspaces.set([]);
+    // Drop orphan Dashboard nestedWorkspaces whose owning group no longer
     // exists. Without this, restarting after a group deletion leaves a
     // ghost dashboard in the main view that the user can't navigate
     // away from via the sidebar.
@@ -117,7 +117,7 @@ export async function restoreWorkspaces(
     // duplicates — keep the first occurrence and drop the rest.
     const knownGroupIds = new Set(getWorkspaceGroups().map((g) => g.id));
     const seenDashboards = new Set<string>();
-    const filteredDefs = state.workspaces.filter((wsDef) => {
+    const filteredDefs = state.nestedWorkspaces.filter((wsDef) => {
       const md = wsDef.metadata;
       const isDashboard = md?.isDashboard === true;
       const ownerGroupId = md?.groupId;
@@ -136,19 +136,19 @@ export async function restoreWorkspaces(
     for (const wsDef of filteredDefs) {
       await createWorkspaceFromDef(wsDef, { restoring: true });
     }
-    // Restored workspaces whose `metadata.isDashboard === true` are
+    // Restored nestedWorkspaces whose `metadata.isDashboard === true` are
     // group/pseudo dashboards — accessed through their group's tile,
-    // not as a primary active surface. If the only restored workspaces
-    // are dashboards, leave `activeWorkspaceIdx = -1` so the main view
+    // not as a primary active surface. If the only restored nestedWorkspaces
+    // are dashboards, leave `activeNestedWorkspaceIdx = -1` so the main view
     // renders the EmptySurface. Otherwise pick the persisted active
     // index unless it points at a dashboard, in which case fall through
     // to the first non-dashboard workspace.
-    const restored = get(workspaces);
+    const restored = get(nestedWorkspaces);
     if (restored.length > 0) {
       const isDashboard = (idx: number): boolean => {
         return restored[idx]?.metadata?.isDashboard === true;
       };
-      const persistedIdx = state.activeWorkspaceIdx ?? 0;
+      const persistedIdx = state.activeNestedWorkspaceIdx ?? 0;
       const clampedIdx = Math.min(persistedIdx, restored.length - 1);
       let targetIdx = -1;
       if (clampedIdx >= 0 && !isDashboard(clampedIdx)) {
@@ -176,7 +176,7 @@ export async function restoreWorkspaces(
       }
     }
   }
-  if (!autoloaded && get(workspaces).length === 0) {
+  if (!autoloaded && get(nestedWorkspaces).length === 0) {
     await createWorkspace("NestedWorkspace 1");
   }
 }

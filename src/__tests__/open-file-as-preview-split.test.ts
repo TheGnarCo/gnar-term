@@ -20,7 +20,10 @@ vi.mock("../lib/terminal-service", () => ({
 }));
 
 import { openFileAsPreviewSplit } from "../lib/services/surface-service";
-import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
+import {
+  nestedWorkspaces,
+  activeNestedWorkspaceIdx,
+} from "../lib/stores/workspace";
 import { isPreviewSurface, getAllSurfaces, getAllPanes } from "../lib/types";
 import type { NestedWorkspace, Pane } from "../lib/types";
 import {
@@ -47,25 +50,25 @@ function makeWorkspace(id: string): { ws: NestedWorkspace; pane: Pane } {
 
 describe("openFileAsPreviewSplit", () => {
   beforeEach(() => {
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
+    nestedWorkspaces.set([]);
+    activeNestedWorkspaceIdx.set(-1);
     resetPreviewSurfaceRegistry();
   });
 
   it("splits horizontally and places a preview surface in the new pane", () => {
     const { ws, pane } = makeWorkspace("ws-1");
-    workspaces.set([ws]);
-    activeWorkspaceIdx.set(0);
+    nestedWorkspaces.set([ws]);
+    activeNestedWorkspaceIdx.set(0);
 
     openFileAsPreviewSplit("/docs/README.md");
 
-    const allPanes = getAllPanes(get(workspaces)[0]!.splitRoot);
+    const allPanes = getAllPanes(get(nestedWorkspaces)[0]!.splitRoot);
     expect(allPanes).toHaveLength(2);
 
     const newPane = allPanes.find((p) => p.id !== pane.id)!;
     expect(newPane).toBeTruthy();
 
-    const surfaces = getAllSurfaces(get(workspaces)[0]!);
+    const surfaces = getAllSurfaces(get(nestedWorkspaces)[0]!);
     expect(surfaces).toHaveLength(1);
     const surface = surfaces[0]!;
     expect(isPreviewSurface(surface)).toBe(true);
@@ -76,12 +79,12 @@ describe("openFileAsPreviewSplit", () => {
 
   it("uses a horizontal split so the preview appears side-by-side", () => {
     const { ws } = makeWorkspace("ws-1");
-    workspaces.set([ws]);
-    activeWorkspaceIdx.set(0);
+    nestedWorkspaces.set([ws]);
+    activeNestedWorkspaceIdx.set(0);
 
     openFileAsPreviewSplit("/docs/README.md");
 
-    const splitRoot = get(workspaces)[0]!.splitRoot;
+    const splitRoot = get(nestedWorkspaces)[0]!.splitRoot;
     expect(splitRoot.type).toBe("split");
     if (splitRoot.type === "split") {
       expect(splitRoot.direction).toBe("horizontal");
@@ -90,8 +93,8 @@ describe("openFileAsPreviewSplit", () => {
 
   it("focuses an existing preview instead of opening a duplicate", () => {
     const { ws, pane } = makeWorkspace("ws-1");
-    workspaces.set([ws]);
-    activeWorkspaceIdx.set(0);
+    nestedWorkspaces.set([ws]);
+    activeNestedWorkspaceIdx.set(0);
 
     registerPreviewSurface({
       surfaceId: "existing-surface",
@@ -103,17 +106,17 @@ describe("openFileAsPreviewSplit", () => {
     openFileAsPreviewSplit("/docs/README.md");
 
     // No split should have occurred — still only one pane.
-    const allPanes = getAllPanes(get(workspaces)[0]!.splitRoot);
+    const allPanes = getAllPanes(get(nestedWorkspaces)[0]!.splitRoot);
     expect(allPanes).toHaveLength(1);
 
     // No new surface placed.
-    expect(getAllSurfaces(get(workspaces)[0]!)).toHaveLength(0);
+    expect(getAllSurfaces(get(nestedWorkspaces)[0]!)).toHaveLength(0);
   });
 
   it("does nothing when there is no active workspace", () => {
     openFileAsPreviewSplit("/docs/README.md");
     // No crash, no state change.
-    expect(get(workspaces)).toHaveLength(0);
+    expect(get(nestedWorkspaces)).toHaveLength(0);
   });
 });
 

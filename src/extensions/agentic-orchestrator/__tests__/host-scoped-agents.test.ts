@@ -25,7 +25,7 @@ vi.mock("../../../lib/services/extension-state", () => ({
 import type { AgentRef as DetectedAgent } from "../../api";
 import type { ExtensionAPI } from "../../api";
 import { hostScopedAgentsStore } from "../widget-helpers";
-import { workspaces } from "../../../lib/stores/workspace";
+import { nestedWorkspaces } from "../../../lib/stores/workspace";
 import {
   claimWorkspace,
   resetClaimedWorkspaces,
@@ -86,7 +86,7 @@ function seedWorkspace(
 
 describe("hostScopedAgentsStore", () => {
   beforeEach(() => {
-    workspaces.set([]);
+    nestedWorkspaces.set([]);
     resetClaimedWorkspaces();
     resetWorkspaceGroupsForTest();
   });
@@ -121,7 +121,7 @@ describe("hostScopedAgentsStore", () => {
   });
 
   it("group scope → agents whose workspace metadata.groupId matches", async () => {
-    workspaces.set([
+    nestedWorkspaces.set([
       seedWorkspace("ws-in", { metadata: { groupId: "grp-1" } }),
       seedWorkspace("ws-out", { metadata: { groupId: "grp-2" } }),
       seedWorkspace("ws-none", {}),
@@ -147,8 +147,8 @@ describe("hostScopedAgentsStore", () => {
     expect(get(store).map((a) => a.agentId)).toEqual(["a-in"]);
   });
 
-  it("group scope → includes unclaimed workspaces whose CWD falls under group.path", async () => {
-    workspaces.set([
+  it("group scope → includes unclaimed nestedWorkspaces whose CWD falls under group.path", async () => {
+    nestedWorkspaces.set([
       seedWorkspace("ws-under", { cwd: "/work/one/sub" }),
       seedWorkspace("ws-elsewhere", { cwd: "/other/path" }),
     ]);
@@ -172,8 +172,8 @@ describe("hostScopedAgentsStore", () => {
     expect(get(store).map((a) => a.agentId)).toEqual(["a-under"]);
   });
 
-  it("group scope → excludes claimed workspaces even when CWD matches (they belong to another owner)", async () => {
-    workspaces.set([seedWorkspace("ws-under", { cwd: "/work/one/sub" })]);
+  it("group scope → excludes claimed nestedWorkspaces even when CWD matches (they belong to another owner)", async () => {
+    nestedWorkspaces.set([seedWorkspace("ws-under", { cwd: "/work/one/sub" })]);
     setWorkspaceGroups([
       {
         id: "grp-1",
@@ -195,7 +195,7 @@ describe("hostScopedAgentsStore", () => {
   });
 
   it("group scope → prefix-only match: sibling paths don't leak in", async () => {
-    workspaces.set([
+    nestedWorkspaces.set([
       seedWorkspace("ws-sibling", { cwd: "/work/one-other/sub" }),
     ]);
     setWorkspaceGroups([
@@ -222,7 +222,7 @@ describe("hostScopedAgentsStore", () => {
     // but does NOT stamp metadata.groupId. Without criterion 2 in hostScopedAgentsStore,
     // the claim guard ($claimedIds.has) would block the CWD fallback and the agent
     // would be invisible in the group's Kanban dashboard.
-    workspaces.set([
+    nestedWorkspaces.set([
       seedWorkspace("ws-native", { cwd: "" }), // no cwd, no metadata.groupId
     ]);
     setWorkspaceGroups([
@@ -247,7 +247,7 @@ describe("hostScopedAgentsStore", () => {
   });
 
   it("group scope → workspace in group.workspaceIds for a different group is not included", async () => {
-    workspaces.set([seedWorkspace("ws-other", { cwd: "" })]);
+    nestedWorkspaces.set([seedWorkspace("ws-other", { cwd: "" })]);
     setWorkspaceGroups([
       {
         id: "grp-1",

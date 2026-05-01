@@ -3,7 +3,7 @@
  * "kinds of dashboard" that can be added to a Workspace. Each
  * contribution knows how to create its own Dashboard workspace from a
  * group; the group's multi-dashboard grid renders the resulting
- * workspaces keyed off `metadata.dashboardContributionId`.
+ * nestedWorkspaces keyed off `metadata.dashboardContributionId`.
  */
 import { get, type Readable } from "svelte/store";
 import { createRegistry } from "./create-registry";
@@ -138,9 +138,9 @@ export function getDashboardContributionsForGroup(
 /**
  * True when the group can still accept another dashboard of kind
  * `contributionId`. `currentCount` is the caller's tally of existing
- * dashboard workspaces in the group whose
+ * dashboard nestedWorkspaces in the group whose
  * `metadata.dashboardContributionId === contributionId` — the registry
- * does not track workspaces itself, so the caller owns the count.
+ * does not track nestedWorkspaces itself, so the caller owns the count.
  *
  * Returns false when: the contribution isn't registered, the
  * availability gate denies the group, or `currentCount >= capPerGroup`.

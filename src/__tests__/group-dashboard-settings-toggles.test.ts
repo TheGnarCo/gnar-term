@@ -16,7 +16,10 @@ vi.mock("@tauri-apps/api/event", () => ({
 }));
 
 import GroupDashboardSettings from "../lib/components/GroupDashboardSettings.svelte";
-import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
+import {
+  nestedWorkspaces,
+  activeNestedWorkspaceIdx,
+} from "../lib/stores/workspace";
 import { workspaceGroupsStore } from "../lib/stores/workspace-groups";
 import {
   registerDashboardContribution,
@@ -36,8 +39,8 @@ const GROUP = {
 describe("GroupDashboardSettings — Dashboards toggles", () => {
   beforeEach(() => {
     cleanup();
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
+    nestedWorkspaces.set([]);
+    activeNestedWorkspaceIdx.set(-1);
     workspaceGroupsStore.set([GROUP]);
     resetDashboardContributions();
   });
@@ -120,7 +123,7 @@ describe("GroupDashboardSettings — Dashboards toggles", () => {
       create: vi.fn(async () => "ws-diff"),
     });
     // Seed an active diff workspace for this group.
-    workspaces.set([
+    nestedWorkspaces.set([
       {
         id: "ws-diff-1",
         name: "Diff",

@@ -17,7 +17,7 @@ export interface WorkspaceContextMenuOptions {
   isInsideGroup: boolean;
   /** True when the promote-workspace-to-group command is registered. */
   canPromoteCommand: boolean;
-  /** Total number of workspaces in the list — used to disable "Close Workspace". */
+  /** Total number of nestedWorkspaces in the list — used to disable "Close Workspace". */
   workspaceCount: number;
   /**
    * True when the workspace is currently locked (metadata.locked === true).
@@ -46,7 +46,7 @@ export interface WorkspaceContextMenuOptions {
  * Item presence:
  *   - "Rename Workspace"             — omitted for dashboards
  *   - "New Surface"                  — included only when `onNewSurface` is provided
- *   - separator + "Promote…"         — omitted for dashboards / grouped workspaces
+ *   - separator + "Promote…"         — omitted for dashboards / grouped nestedWorkspaces
  *   - separator + "Lock/Unlock…"     — omitted for dashboards or when no `onToggleLock`
  *   - "Archive"                      — omitted for dashboards; disabled while locked
  *   - "Close Workspace"              — always present; disabled for dashboards, when

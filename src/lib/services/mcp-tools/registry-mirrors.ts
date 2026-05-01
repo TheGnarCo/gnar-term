@@ -1,6 +1,6 @@
 import { get } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
-import { workspaces } from "../../stores/workspace";
+import { nestedWorkspaces } from "../../stores/workspace";
 import { surfaceTypeStore } from "../surface-type-registry";
 import { commandStore } from "../command-registry";
 import { sidebarTabStore, activateSidebarTab } from "../sidebar-tab-registry";
@@ -327,7 +327,7 @@ export const registryMirrorTools: ToolDef[] = [
       if (p.group_id && !group) {
         throw new Error(`Unknown workspace group: ${p.group_id}`);
       }
-      const wsList = group ? get(workspaces) : [];
+      const wsList = group ? get(nestedWorkspaces) : [];
       return {
         contributions: contribs.map((c) => {
           const base = {
@@ -377,7 +377,7 @@ export const registryMirrorTools: ToolDef[] = [
           `Dashboard contribution "${p.contribution_id}" is autoProvision — it materializes automatically and cannot be added manually.`,
         );
       }
-      const currentCount = get(workspaces).filter((w) =>
+      const currentCount = get(nestedWorkspaces).filter((w) =>
         isDashboardWorkspace(w, group.id, contribution.id),
       ).length;
       if (!canAddContributionToGroup(group, contribution.id, currentCount)) {

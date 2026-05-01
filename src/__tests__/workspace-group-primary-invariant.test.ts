@@ -13,7 +13,7 @@ import {
   getWorkspaceGroups,
   setWorkspaceGroups,
 } from "../lib/stores/workspace-groups";
-import { workspaces } from "../lib/stores/workspace";
+import { nestedWorkspaces } from "../lib/stores/workspace";
 
 describe("Workspace.primaryWorkspaceId", () => {
   it("accepts a group with primaryWorkspaceId set", () => {
@@ -46,7 +46,7 @@ describe("Workspace.primaryWorkspaceId", () => {
 
 describe("addWorkspaceToGroup — primary invariant", () => {
   beforeEach(() => {
-    workspaces.set([]);
+    nestedWorkspaces.set([]);
     setWorkspaceGroups([
       {
         id: "g1",
@@ -59,7 +59,7 @@ describe("addWorkspaceToGroup — primary invariant", () => {
         createdAt: "2026-04-30T00:00:00.000Z",
       },
     ]);
-    workspaces.set([
+    nestedWorkspaces.set([
       {
         id: "ws-primary",
         name: "Primary",
@@ -83,7 +83,7 @@ describe("addWorkspaceToGroup — primary invariant", () => {
   });
 
   it("throws when adding a second non-worktree workspace to a group that has a primary", () => {
-    workspaces.update((list) => [
+    nestedWorkspaces.update((list) => [
       ...list,
       {
         id: "ws-second",

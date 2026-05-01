@@ -552,7 +552,7 @@ export interface ExtensionAPI {
 
   /**
    * Register a pseudo-workspace — a non-persisted, pinned entry that
-   * renders in the root sidebar list. Pseudo-workspaces cannot be
+   * renders in the root sidebar list. Pseudo-nestedWorkspaces cannot be
    * deleted, renamed, or have panes/surfaces added through normal
    * workspace controls. The canonical use is the Global Agentic
    * Dashboard. Automatically unregistered on extension deactivate.
@@ -682,7 +682,7 @@ export interface ExtensionAPI {
    */
   reportError(message: string): void;
   /**
-   * Enumerate every terminal surface across all workspaces and all panes
+   * Enumerate every terminal surface across all nestedWorkspaces and all panes
    * (active or background, split or single). Used by extensions that need
    * to bootstrap tracking for surfaces that existed before activation —
    * surface:created only fires for surfaces created AFTER the listener was
@@ -778,7 +778,7 @@ export interface ExtensionAPI {
   getSettings(): Record<string, unknown>;
 
   // Read-only core state (Svelte readable stores)
-  workspaces: Readable<NestedWorkspaceRef[]>;
+  nestedWorkspaces: Readable<NestedWorkspaceRef[]>;
   activeWorkspace: Readable<NestedWorkspaceRef | null>;
   activePane: Readable<PaneRef | null>;
   activeSurface: Readable<SurfaceRef | null>;
@@ -831,7 +831,7 @@ export interface ExtensionAPI {
    * - **DragGrip** — left-border drag handle that appears on hover
    *   Props: `{ theme, visible, onMouseDown, ariaLabel? }`
    * - **ContainerRow** — shared banner + nested-list chrome for
-   *   "container workspaces" (workspace groups, agent dashboards). Banner can
+   *   "container nestedWorkspaces" (workspace groups, agent dashboards). Banner can
    *   represent a first-class workspace by wiring onBannerClick/onClose
    *   to switchWorkspace/closeWorkspace.
    *   Props: `{ color, foreground, parentColor?, onGripMouseDown?,
@@ -899,7 +899,7 @@ export type ReorderContext =
   | { kind: "section"; sourceBlockId: string }
   | {
       // Root-level drag inside the Workspaces section — the unified
-      // lane that covers unclaimed workspaces + whole workspace-group
+      // lane that covers unclaimed nestedWorkspaces + whole workspace-group
       // blocks. `sourceKind` + `sourceId` identify the dragged row so
       // sibling rows (of any kind) can resolve their overlay.
       kind: "rootRow";
@@ -957,7 +957,7 @@ export interface WorkspaceActionInfo {
   when?: (ctx: WorkspaceActionContext) => boolean;
 }
 
-// --- Dashboard contributions / pseudo-workspaces ---
+// --- Dashboard contributions / pseudo-nestedWorkspaces ---
 //
 // Stage 4 surface. Extensions register a DashboardContributionInput or
 // PseudoWorkspaceInput via the corresponding ExtensionAPI method; core

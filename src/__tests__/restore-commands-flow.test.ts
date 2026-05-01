@@ -99,7 +99,10 @@ import {
   runDefinedCommand,
   dismissDefinedCommand,
 } from "../lib/terminal-service";
-import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
+import {
+  nestedWorkspaces,
+  activeNestedWorkspaceIdx,
+} from "../lib/stores/workspace";
 import {
   getAllPanes,
   isTerminalSurface,
@@ -127,14 +130,14 @@ beforeEach(() => {
     if (cmd === "spawn_pty") return Promise.resolve(nextPty++);
     return Promise.resolve(undefined as unknown);
   });
-  workspaces.set([]);
-  activeWorkspaceIdx.set(-1);
+  nestedWorkspaces.set([]);
+  activeNestedWorkspaceIdx.set(-1);
 });
 
 afterEach(() => {
   cleanup();
-  workspaces.set([]);
-  activeWorkspaceIdx.set(-1);
+  nestedWorkspaces.set([]);
+  activeNestedWorkspaceIdx.set(-1);
 });
 
 describe("createWorkspaceFromDef — restore vs fresh", () => {
@@ -152,7 +155,7 @@ describe("createWorkspaceFromDef — restore vs fresh", () => {
       },
       { restoring: true },
     );
-    const ws = get(workspaces)[0]!;
+    const ws = get(nestedWorkspaces)[0]!;
     const s = firstTerminalSurface(ws);
     expect(s.definedCommand).toBe("npm run dev");
     expect(s.pendingRestoreCommand).toBe(true);
@@ -168,7 +171,7 @@ describe("createWorkspaceFromDef — restore vs fresh", () => {
         },
       },
     });
-    const ws = get(workspaces)[0]!;
+    const ws = get(nestedWorkspaces)[0]!;
     const s = firstTerminalSurface(ws);
     expect(s.definedCommand).toBe("ls -la");
     expect(s.startupCommand).toBe("ls -la");
@@ -187,7 +190,7 @@ describe("createWorkspaceFromDef — restore vs fresh", () => {
       },
       { restoring: true },
     );
-    const ws = get(workspaces)[0]!;
+    const ws = get(nestedWorkspaces)[0]!;
     const layout = serializeLayout(ws.splitRoot) as {
       pane: { surfaces: Array<Record<string, unknown>> };
     };
@@ -222,7 +225,7 @@ describe("runDefinedCommand / dismissDefinedCommand", () => {
       surfaces: [surface],
       activeSurfaceId: surface.id,
     };
-    workspaces.set([
+    nestedWorkspaces.set([
       {
         id: "ws1",
         name: "ws",
@@ -353,7 +356,7 @@ describe("RestoreCommandsOverlay", () => {
       definedCommand: "npm test",
       pendingRestoreCommand: true,
     };
-    workspaces.set([
+    nestedWorkspaces.set([
       {
         id: "ws1",
         name: "Alpha",

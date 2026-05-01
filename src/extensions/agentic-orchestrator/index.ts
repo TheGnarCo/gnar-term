@@ -282,7 +282,7 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
       settingsUnsub();
       settingsUnsub = null;
     }
-    // Close the per-group Agentic Dashboard workspaces the extension
+    // Close the per-group Agentic Dashboard nestedWorkspaces the extension
     // auto-provisioned. Runs before the extension's contributions are
     // unregistered (deactivateExtension order), so the registry still
     // advertises the agentic contribution's source here.

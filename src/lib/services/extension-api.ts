@@ -84,7 +84,7 @@ import {
 } from "../actions/drag-reorder";
 import { reorderContext, anyReorderActive, contextMenu } from "../stores/ui";
 import { getActiveCwd, lookupSurfaceWorkspaceId } from "./service-helpers";
-import { workspaces } from "../stores/workspace";
+import { nestedWorkspaces } from "../stores/workspace";
 import { getAllSurfaces, isTerminalSurface } from "../types";
 import type { ExtensionManifest, ExtensionAPI } from "../extension-types";
 import type { AppEvent } from "./event-bus";
@@ -344,7 +344,7 @@ export function createExtensionAPI(
     },
     getAllTerminalSurfaces() {
       const out: Array<{ id: string; workspaceId: string; title: string }> = [];
-      for (const ws of get(workspaces)) {
+      for (const ws of get(nestedWorkspaces)) {
         for (const surf of getAllSurfaces(ws)) {
           if (isTerminalSurface(surf)) {
             out.push({
@@ -440,14 +440,14 @@ export function createExtensionAPI(
         return () => {};
       }
 
-      // Resolve surfaceId → ptyId by scanning all workspaces.
+      // Resolve surfaceId → ptyId by scanning all nestedWorkspaces.
       // The PTY may not be connected yet (ptyId = -1) when surface:created
-      // fires, so we subscribe to the workspaces store and wait for it.
+      // fires, so we subscribe to the nestedWorkspaces store and wait for it.
       let observedPtyId: number | null = null;
       let cleaned = false;
 
       function resolvePty(): number | null {
-        const allWs = get(workspaces);
+        const allWs = get(nestedWorkspaces);
         for (const ws of allWs) {
           for (const surf of getAllSurfaces(ws)) {
             if (
@@ -476,7 +476,7 @@ export function createExtensionAPI(
       // If not resolved yet, watch for PTY connection
       const unsub =
         immediate === null
-          ? workspaces.subscribe(() => {
+          ? nestedWorkspaces.subscribe(() => {
               if (cleaned || observedPtyId !== null) return;
               const ptyId = resolvePty();
               if (ptyId !== null) {

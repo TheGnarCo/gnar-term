@@ -234,7 +234,7 @@ describe("Merge & Archive Worktree (core service)", () => {
     expect(get(worktreeEntriesStore)).toHaveLength(1);
   });
 
-  it("returns early when no managed workspaces exist", async () => {
+  it("returns early when no managed nestedWorkspaces exist", async () => {
     _seedWorktreeEntries([]);
 
     await mergeAndArchiveWorktreeWorkspace();

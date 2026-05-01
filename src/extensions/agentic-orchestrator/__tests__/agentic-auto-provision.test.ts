@@ -1,7 +1,7 @@
 /**
  * Agentic auto-provision (Story 4): on activate, every existing
  * workspace group gets an Agentic Dashboard workspace; on deactivate,
- * the provisioned workspaces are closed.
+ * the provisioned nestedWorkspaces are closed.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { get } from "svelte/store";
@@ -38,7 +38,10 @@ import {
   getDashboardContribution,
   resetDashboardContributions,
 } from "../../../lib/services/dashboard-contribution-registry";
-import { workspaces, activeWorkspaceIdx } from "../../../lib/stores/workspace";
+import {
+  nestedWorkspaces,
+  activeNestedWorkspaceIdx,
+} from "../../../lib/stores/workspace";
 import { workspaceGroupsStore } from "../../../lib/stores/workspace-groups";
 import {
   markRestored,
@@ -50,8 +53,8 @@ describe("agentic auto-provision", () => {
     resetRestoreSignal();
     await resetExtensions();
     resetDashboardContributions();
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
+    nestedWorkspaces.set([]);
+    activeNestedWorkspaceIdx.set(-1);
     workspaceGroupsStore.set([]);
   });
 
@@ -89,7 +92,7 @@ describe("agentic auto-provision", () => {
         createdAt: "2026-04-21T00:00:00.000Z",
       },
     ]);
-    // Simulate workspaces already restored (runtime-enable path).
+    // Simulate nestedWorkspaces already restored (runtime-enable path).
     markRestored();
 
     registerExtension(
@@ -101,7 +104,7 @@ describe("agentic auto-provision", () => {
     // Activation schedules a background provision pass — let microtasks drain.
     await new Promise((r) => setTimeout(r, 50));
 
-    const all = get(workspaces);
+    const all = get(nestedWorkspaces);
     const forG1 = all.find((w) => {
       return (
         w.metadata?.dashboardContributionId === "agentic" &&
@@ -141,7 +144,7 @@ describe("agentic auto-provision", () => {
 
     // Sanity: the workspace was created.
     expect(
-      get(workspaces).some((w) => {
+      get(nestedWorkspaces).some((w) => {
         return w.metadata?.dashboardContributionId === "agentic";
       }),
     ).toBe(true);
@@ -149,7 +152,7 @@ describe("agentic auto-provision", () => {
     deactivateExtension("agentic-orchestrator");
 
     expect(
-      get(workspaces).some((w) => {
+      get(nestedWorkspaces).some((w) => {
         return w.metadata?.dashboardContributionId === "agentic";
       }),
     ).toBe(false);

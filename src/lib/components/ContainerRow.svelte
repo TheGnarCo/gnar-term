@@ -1,6 +1,6 @@
 <script lang="ts">
   /**
-   * ContainerRow — shared root-row chrome for "container workspaces" in
+   * ContainerRow — shared root-row chrome for "container nestedWorkspaces" in
    * the Workspaces sidebar section (projects, agent orchestrators).
    *
    * The banner is **inert**: callers cannot register a click handler.
@@ -18,7 +18,7 @@
   import { type Component } from "svelte";
   import { slide } from "svelte/transition";
   import { theme } from "../stores/theme";
-  import { workspaces } from "../stores/workspace";
+  import { nestedWorkspaces } from "../stores/workspace";
   import PrimarySidebarElement from "./PrimarySidebarElement.svelte";
   import SidebarRail from "./SidebarRail.svelte";
   import DefaultWorkspaceListView from "./WorkspaceListView.svelte";
@@ -91,9 +91,9 @@
 
   let bannerHovered = false;
 
-  // Non-dashboard count: dashboards don't count as real nested workspaces for
+  // Non-dashboard count: dashboards don't count as real nested nestedWorkspaces for
   // the purposes of showing the toggle button and auto-expand/collapse.
-  $: nonDashboardCount = $workspaces.filter(
+  $: nonDashboardCount = $nestedWorkspaces.filter(
     (ws) => filterIds.has(ws.id) && wsMeta(ws).isDashboard !== true,
   ).length;
 

@@ -125,12 +125,12 @@
   }
 
   /**
-   * Subscribe to the workspaces store so the per-row affordance updates
-   * live as agent workspaces are spawned / closed. Keyed lookup: issue
+   * Subscribe to the nestedWorkspaces store so the per-row affordance updates
+   * live as agent nestedWorkspaces are spawned / closed. Keyed lookup: issue
    * number → first workspace whose `metadata.spawnedFromIssues` array
    * includes that number.
    */
-  const workspacesStore = api.workspaces;
+  const workspacesStore = api.nestedWorkspaces;
   $: handledIssues = (() => {
     const map = new Map<number, string>();
     for (const ws of $workspacesStore) {

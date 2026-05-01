@@ -41,7 +41,7 @@
    * notification). Used when the workspace is rendered inside a
    * container that aggregates status itself — e.g. nested under an
    * AgentDashboardRow whose banner already rolls up detected-agent
-   * activity. Projects leave this false so their nested workspaces
+   * activity. Projects leave this false so their nested nestedWorkspaces
    * keep showing their own status.
    */
   export let hideStatusBadges: boolean = false;
@@ -74,7 +74,7 @@
   $: dashboardWorkspaceIcon = dashboardWorkspaceEntry?.icon ?? null;
   // Workspaces spawned by a dashboard (Global Agentic or per-group)
   // get a bot marker so they're visually distinguishable from plain
-  // group workspaces or worktrees. `metadata.spawnedBy` is the §3.2
+  // group nestedWorkspaces or worktrees. `metadata.spawnedBy` is the §3.2
   // marker; `parentOrchestratorId` is the pre-migration field we still
   // honor until Stage 8 rewrites legacy user data.
   // Dashboards are singleton surfaces bound to their group; suppress
@@ -82,11 +82,11 @@
   // with them only via the group's tile.
   $: isDashboardWs = wsMeta(workspace).isDashboard === true;
   $: isDashboardWorkspaceRow = dashboardWorkspaceIcon !== null;
-  // Locked workspaces: drag-start is suppressed at the row level,
+  // Locked nestedWorkspaces: drag-start is suppressed at the row level,
   // close affordance is hidden in the grip, and the rail shows a
   // lock chip in place of the close button.
   $: isLocked = wsMeta(workspace).locked === true;
-  // Nested workspaces live under a group's colored banner. The group
+  // Nested nestedWorkspaces live under a group's colored banner. The group
   // banner itself already rolls up status (and the per-row chip handles
   // agent state), so the long blue notification row duplicates chrome
   // and crowds the nested layout — suppress it in that context.

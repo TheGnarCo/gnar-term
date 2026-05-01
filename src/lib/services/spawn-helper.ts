@@ -33,7 +33,7 @@ import {
   createWorktreeWorkspaceFromConfig,
   type WorktreeWorkspaceConfig,
 } from "./worktree-service";
-import { workspaces } from "../stores/workspace";
+import { nestedWorkspaces } from "../stores/workspace";
 import {
   getAllPanes,
   isTerminalSurface,
@@ -50,7 +50,7 @@ const AGENT_COMMANDS: Record<Exclude<SpawnAgentType, "custom">, string> = {
 };
 
 /**
- * Provenance marker attached to workspaces spawned from a dashboard.
+ * Provenance marker attached to nestedWorkspaces spawned from a dashboard.
  * Mirrors `metadata.spawnedBy` on the created workspace and ultimately
  * drives the bot-icon affordance in the sidebar. See spec §3.2 / §5.3.
  */
@@ -80,7 +80,7 @@ export interface SpawnAgentInWorktreeArgs {
    * When provided, the new workspace's metadata.groupId is set to this
    * id — used when the spawning dashboard lives under a workspace group,
    * so workspace-groups claims the worktree into the group's nested list
-   * alongside other group workspaces.
+   * alongside other group nestedWorkspaces.
    */
   groupId?: string;
   /**
@@ -166,7 +166,7 @@ export function buildStartupCommand(
 }
 
 function findWorkspace(workspaceId: string): NestedWorkspace | undefined {
-  return get(workspaces).find((w) => w.id === workspaceId);
+  return get(nestedWorkspaces).find((w) => w.id === workspaceId);
 }
 
 function firstPaneAndTerminal(
@@ -248,7 +248,7 @@ export async function spawnAgentInWorktree(
       s.title = args.name;
     }
   }
-  workspaces.update((l) => [...l]);
+  nestedWorkspaces.update((l) => [...l]);
 
   return {
     surface_id: placement.surfaceId,

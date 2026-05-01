@@ -9,7 +9,10 @@ import {
   secondarySections,
   _resetMcpSidebarForTest,
 } from "../lib/stores/mcp-sidebar";
-import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
+import {
+  nestedWorkspaces,
+  activeNestedWorkspaceIdx,
+} from "../lib/stores/workspace";
 import type { NestedWorkspace, Pane } from "../lib/types";
 
 function setActiveWorkspace(id: string): void {
@@ -20,15 +23,15 @@ function setActiveWorkspace(id: string): void {
     splitRoot: { type: "pane", pane },
     activePaneId: pane.id,
   };
-  workspaces.set([ws]);
-  activeWorkspaceIdx.set(0);
+  nestedWorkspaces.set([ws]);
+  activeNestedWorkspaceIdx.set(0);
 }
 
 describe("mcp-sidebar store (per-workspace)", () => {
   beforeEach(() => {
     _resetMcpSidebarForTest();
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
+    nestedWorkspaces.set([]);
+    activeNestedWorkspaceIdx.set(-1);
   });
 
   it("starts empty", () => {
@@ -112,7 +115,7 @@ describe("mcp-sidebar store (per-workspace)", () => {
   });
 
   it("scopes sections per workspace: a section in W2 is invisible from W1", () => {
-    // Two workspaces.
+    // Two nestedWorkspaces.
     const p1: Pane = { id: "p-1", surfaces: [], activeSurfaceId: null };
     const p2: Pane = { id: "p-2", surfaces: [], activeSurfaceId: null };
     const w1: NestedWorkspace = {
@@ -127,8 +130,8 @@ describe("mcp-sidebar store (per-workspace)", () => {
       splitRoot: { type: "pane", pane: p2 },
       activePaneId: p2.id,
     };
-    workspaces.set([w1, w2]);
-    activeWorkspaceIdx.set(0); // active = W1
+    nestedWorkspaces.set([w1, w2]);
+    activeNestedWorkspaceIdx.set(0); // active = W1
 
     upsertSection({
       side: "secondary",
@@ -150,7 +153,7 @@ describe("mcp-sidebar store (per-workspace)", () => {
     expect(get(secondarySections)[0].title).toBe("in W1");
 
     // Switch to W2 — only the W2 section should be visible.
-    activeWorkspaceIdx.set(1);
+    activeNestedWorkspaceIdx.set(1);
     expect(get(secondarySections)).toHaveLength(1);
     expect(get(secondarySections)[0].title).toBe("in W2");
   });

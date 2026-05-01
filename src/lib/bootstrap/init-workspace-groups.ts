@@ -5,7 +5,7 @@
  * let users create and manage Workspace Groups.
  *
  * Called after the core event bus, claimed-workspace registry, and
- * workspaces store are live, and after included extensions register
+ * nestedWorkspaces store are live, and after included extensions register
  * (so registration order matches the previous extension-activation
  * behavior).
  */
@@ -16,7 +16,10 @@ import { registerRootRowRenderer } from "../services/root-row-renderer-registry"
 import { registerDashboardContribution } from "../services/dashboard-contribution-registry";
 import { eventBus, type AppEvent } from "../services/event-bus";
 import { appendRootRow } from "../stores/root-row-order";
-import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
+import {
+  nestedWorkspaces,
+  activeNestedWorkspaceIdx,
+} from "../stores/workspace";
 import {
   loadWorkspaceGroups,
   getWorkspaceGroups as readGroups,
@@ -90,7 +93,7 @@ function onWorkspaceClosed(event: AppEvent): void {
 
 function onWorkspaceActivated(event: AppEvent): void {
   if (event.type !== "workspace:activated") return;
-  const ws = get(workspaces).find((w) => w.id === event.id);
+  const ws = get(nestedWorkspaces).find((w) => w.id === event.id);
   if (!ws) return;
   const groupId = wsMeta(ws).groupId;
   if (typeof groupId !== "string") return;
@@ -162,7 +165,7 @@ async function createWorkspaceGroupFlow(prefill?: {
   // contribution's source is core + id is "group".
   try {
     await provisionAutoDashboardsForGroup(group);
-    const overview = get(workspaces).find((w) =>
+    const overview = get(nestedWorkspaces).find((w) =>
       isDashboardWorkspace(w, group.id, "group"),
     );
     if (overview) {
@@ -188,13 +191,13 @@ async function createWorkspaceGroupFlow(prefill?: {
       metadata: { groupId: id },
       layout: { pane: { surfaces: [{ type: "terminal" }] } },
     });
-    const newWs = get(workspaces)
+    const newWs = get(nestedWorkspaces)
       .slice()
       .reverse()
       .find((w) => wsMeta(w).groupId === id && !wsMeta(w).isDashboard);
     if (newWs) {
       updateWorkspaceGroup(id, { primaryWorkspaceId: newWs.id });
-      const idx = get(workspaces).indexOf(newWs);
+      const idx = get(nestedWorkspaces).indexOf(newWs);
       if (idx >= 0) switchWorkspace(idx);
     }
   } catch (err) {
@@ -216,8 +219,8 @@ async function createWorkspaceGroupFlow(prefill?: {
  * into the created group.
  */
 async function promoteActiveWorkspaceToGroup(): Promise<void> {
-  const list = get(workspaces);
-  const idx = get(activeWorkspaceIdx);
+  const list = get(nestedWorkspaces);
+  const idx = get(activeNestedWorkspaceIdx);
   const activeWs = typeof idx === "number" ? list[idx] : undefined;
   if (!activeWs) return;
 
@@ -278,7 +281,7 @@ export async function initWorkspaceGroups(): Promise<void> {
     appendRootRow({ kind: "workspace-group", id: group.id });
   }
 
-  // Re-claim any restored workspaces that belong to a known group —
+  // Re-claim any restored nestedWorkspaces that belong to a known group —
   // workspace ids change on every restart, so the workspaceIds list is
   // rebuilt from metadata.groupId on each workspace.
   reclaimWorkspacesAcrossGroups();
@@ -301,7 +304,7 @@ export async function initWorkspaceGroups(): Promise<void> {
     label: (id: string) => readGroups().find((g) => g.id === id)?.name,
   });
 
-  // Formerly owned by the worktree-workspaces extension. Registered here
+  // Formerly owned by the worktree-nestedWorkspaces extension. Registered here
   // so the action is available in context menus on git-backed groups. The
   // ⎇ Branch button in WorkspaceSectionContent calls the command
   // directly; this action surfaces it in the workspace action registry.
@@ -351,14 +354,14 @@ export async function initWorkspaceGroups(): Promise<void> {
     },
   });
 
-  // Surfaced in PaneView's TabBar for workspaces belonging to a group.
+  // Surfaced in PaneView's TabBar for nestedWorkspaces belonging to a group.
   registerCommand({
     id: "workspace-groups:regenerate-active-group-dashboard",
     title: "Spawn Workspace Dashboard",
     source: SOURCE,
     action: () => {
-      const list = get(workspaces);
-      const idx = get(activeWorkspaceIdx);
+      const list = get(nestedWorkspaces);
+      const idx = get(activeNestedWorkspaceIdx);
       const ws = typeof idx === "number" ? list[idx] : undefined;
       const groupId = ws ? wsMeta(ws).groupId : undefined;
       if (typeof groupId !== "string") return;
@@ -389,7 +392,7 @@ export async function initWorkspaceGroups(): Promise<void> {
   // Core-internal "Settings" contribution — id `settings`,
   // autoProvision. Hosts the per-group dashboard toggles + name /
   // color picker. PaneView renders GroupDashboardSettings in place of
-  // the surface list for workspaces carrying this contribution id.
+  // the surface list for nestedWorkspaces carrying this contribution id.
   registerDashboardContribution({
     id: "settings",
     source: "core",

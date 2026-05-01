@@ -34,7 +34,7 @@ import {
   serializeLayout,
   createWorkspaceFromDef,
 } from "../lib/services/workspace-service";
-import { workspaces } from "../lib/stores/workspace";
+import { nestedWorkspaces } from "../lib/stores/workspace";
 import {
   isPreviewSurface,
   type NestedWorkspace,
@@ -89,7 +89,7 @@ describe("serializeLayout — preview surfaces", () => {
 
 describe("createWorkspaceFromDef — preview surfaces", () => {
   beforeEach(() => {
-    workspaces.set([]);
+    nestedWorkspaces.set([]);
   });
 
   it("rehydrates a {type: 'preview', path} surface def into a real PreviewSurface", async () => {
@@ -102,7 +102,7 @@ describe("createWorkspaceFromDef — preview surfaces", () => {
       },
     });
 
-    const list = get(workspaces);
+    const list = get(nestedWorkspaces);
     expect(list).toHaveLength(1);
     const ws = list[0] as NestedWorkspace;
     expect(ws.splitRoot.type).toBe("pane");
@@ -135,7 +135,7 @@ describe("createWorkspaceFromDef — preview surfaces", () => {
       },
     });
 
-    const ws = get(workspaces)[0]!;
+    const ws = get(nestedWorkspaces)[0]!;
     if (ws.splitRoot.type !== "pane") throw new Error("expected pane root");
     const preview = ws.splitRoot.pane.surfaces[0];
     if (!isPreviewSurface(preview)) throw new Error("expected preview surface");
@@ -159,7 +159,7 @@ describe("createWorkspaceFromDef — preview surfaces", () => {
 
     await createWorkspaceFromDef({ name: "Round-trip WS", layout });
 
-    const ws = get(workspaces)[0]!;
+    const ws = get(nestedWorkspaces)[0]!;
     if (ws.splitRoot.type !== "pane") throw new Error("expected pane root");
     const restored = ws.splitRoot.pane.surfaces[0];
     if (!isPreviewSurface(restored)) {

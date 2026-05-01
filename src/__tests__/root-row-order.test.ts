@@ -133,7 +133,7 @@ describe("bootstrapRootRowOrder", () => {
     expect(get(rootRowOrder)).toEqual([{ kind: "workspace", id: "w1" }]);
   });
 
-  it("appends newly-known entities (projects before unclaimed workspaces) for first-run installs", () => {
+  it("appends newly-known entities (projects before unclaimed nestedWorkspaces) for first-run installs", () => {
     mockState = {};
     bootstrapRootRowOrder(
       ["w1", "w2"],

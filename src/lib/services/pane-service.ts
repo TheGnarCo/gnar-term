@@ -1,8 +1,8 @@
 import { get } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
 import {
-  workspaces,
-  activeWorkspaceIdx,
+  nestedWorkspaces,
+  activeNestedWorkspaceIdx,
   activeWorkspace,
   activePane,
   activeSurface,
@@ -83,7 +83,7 @@ export function splitPaneEmpty(
     }
   }
   ws.activePaneId = newPane.id;
-  workspaces.update((l) => [...l]);
+  nestedWorkspaces.update((l) => [...l]);
   eventBus.emit({
     type: "pane:split",
     parentPaneId: activeP.id,
@@ -108,7 +108,7 @@ export async function splitPane(
   if (!result) return;
   const cwd = await getCwdForSurface(sourceSurface);
   const surface = await createTerminalSurface(result.newPane, cwd);
-  workspaces.update((l) => [...l]);
+  nestedWorkspaces.update((l) => [...l]);
   void safeFocus(surface);
   schedulePersist();
 }
@@ -118,14 +118,16 @@ export function removePane(ws: NestedWorkspace, pane: Pane) {
   const wsId = ws.id;
   pane.resizeObserver?.disconnect();
   if (ws.splitRoot.type === "pane" && ws.splitRoot.pane.id === pane.id) {
-    const wsList = get(workspaces);
+    const wsList = get(nestedWorkspaces);
     const wsIdx = wsList.indexOf(ws);
-    workspaces.update((list) => list.filter((w) => w.id !== ws.id));
+    nestedWorkspaces.update((list) => list.filter((w) => w.id !== ws.id));
     eventBus.emit({ type: "pane:closed", id: paneId, workspaceId: wsId });
-    if (get(workspaces).length === 0) {
+    if (get(nestedWorkspaces).length === 0) {
       void createWorkspace("NestedWorkspace 1");
     } else {
-      activeWorkspaceIdx.set(Math.min(wsIdx, get(workspaces).length - 1));
+      activeNestedWorkspaceIdx.set(
+        Math.min(wsIdx, get(nestedWorkspaces).length - 1),
+      );
     }
     return;
   }
@@ -139,7 +141,7 @@ export function removePane(ws: NestedWorkspace, pane: Pane) {
     }
     ws.activePaneId = getAllPanes(ws.splitRoot)[0]?.id ?? null;
   }
-  workspaces.update((l) => [...l]);
+  nestedWorkspaces.update((l) => [...l]);
   eventBus.emit({ type: "pane:closed", id: paneId, workspaceId: wsId });
   void safeFocus(get(activeSurface));
 }
@@ -166,7 +168,7 @@ export function focusPane(paneId: string) {
   if (!ws || ws.activePaneId === paneId) return;
   const previousId = ws.activePaneId;
   ws.activePaneId = paneId;
-  workspaces.update((l) => [...l]);
+  nestedWorkspaces.update((l) => [...l]);
   eventBus.emit({ type: "pane:focused", id: paneId, previousId });
 }
 
@@ -261,7 +263,7 @@ export function splitPaneWithSurface(
   }
 
   ws.activePaneId = newPane.id;
-  workspaces.update((l) => [...l]);
+  nestedWorkspaces.update((l) => [...l]);
   schedulePersist();
 }
 
@@ -299,7 +301,7 @@ export function mergeTabToPane(
   targetPane.surfaces.push(surface);
   targetPane.activeSurfaceId = surface.id;
   ws.activePaneId = targetPane.id;
-  workspaces.update((l) => [...l]);
+  nestedWorkspaces.update((l) => [...l]);
   schedulePersist();
 }
 
@@ -311,7 +313,7 @@ export function reorderTab(paneId: string, fromIdx: number, toIdx: number) {
   const item = pane.surfaces.splice(fromIdx, 1)[0]!;
   const adjustedTo = fromIdx < toIdx ? toIdx - 1 : toIdx;
   pane.surfaces.splice(adjustedTo, 0, item);
-  workspaces.update((l) => [...l]);
+  nestedWorkspaces.update((l) => [...l]);
   schedulePersist();
 }
 
@@ -327,7 +329,7 @@ export function focusDirection(dir: "left" | "right" | "up" | "down") {
       : (currentIdx - 1 + panes.length) % panes.length;
   const nextPane = panes[nextIdx]!;
   ws.activePaneId = nextPane.id;
-  workspaces.update((l) => [...l]);
+  nestedWorkspaces.update((l) => [...l]);
   const s = nextPane.surfaces.find((s) => s.id === nextPane.activeSurfaceId);
   void safeFocus(s);
 }
@@ -369,7 +371,7 @@ export function expandWorkspaceIntoPanes(
   direction: "horizontal" | "vertical",
   before: boolean,
 ): void {
-  const allWs = get(workspaces);
+  const allWs = get(nestedWorkspaces);
   const srcWs = allWs.find((ws) => ws.id === srcWorkspaceId);
   const tgtWs = allWs.find((ws) =>
     getAllPanes(ws.splitRoot).some((p) => p.id === targetPaneId),
@@ -430,9 +432,11 @@ export function expandWorkspaceIntoPanes(
   // Remove source workspace without disposing terminals (surfaces already moved).
   // Clean up directly instead of emitting workspace:closed to avoid triggering
   // the worktree handler's interactive "keep or delete?" dialog.
-  workspaces.update((list) => list.filter((ws) => ws.id !== srcWorkspaceId));
-  activeWorkspaceIdx.set(
-    Math.min(get(activeWorkspaceIdx), get(workspaces).length - 1),
+  nestedWorkspaces.update((list) =>
+    list.filter((ws) => ws.id !== srcWorkspaceId),
+  );
+  activeNestedWorkspaceIdx.set(
+    Math.min(get(activeNestedWorkspaceIdx), get(nestedWorkspaces).length - 1),
   );
   removeRootRow({ kind: "workspace", id: srcWorkspaceId });
   removeWorkspaceFromAllGroups(srcWorkspaceId);
@@ -454,7 +458,7 @@ export function mergeWorkspaceIntoPane(
   srcWorkspaceId: string,
   targetPaneId: string,
 ): void {
-  const allWs = get(workspaces);
+  const allWs = get(nestedWorkspaces);
   const srcWs = allWs.find((ws) => ws.id === srcWorkspaceId);
   const tgtWs = allWs.find((ws) =>
     getAllPanes(ws.splitRoot).some((p) => p.id === targetPaneId),
@@ -476,11 +480,11 @@ export function mergeWorkspaceIntoPane(
   }
   tgtWs.activePaneId = targetPane.id;
 
-  workspaces.update((list) => [
+  nestedWorkspaces.update((list) => [
     ...list.filter((ws) => ws.id !== srcWorkspaceId),
   ]);
-  activeWorkspaceIdx.set(
-    Math.min(get(activeWorkspaceIdx), get(workspaces).length - 1),
+  activeNestedWorkspaceIdx.set(
+    Math.min(get(activeNestedWorkspaceIdx), get(nestedWorkspaces).length - 1),
   );
   removeRootRow({ kind: "workspace", id: srcWorkspaceId });
   removeWorkspaceFromAllGroups(srcWorkspaceId);
@@ -509,7 +513,7 @@ export function moveSurfaceToWorkspace(
   sourcePaneId: string,
   targetWorkspaceId: string,
 ): void {
-  const allWs = get(workspaces);
+  const allWs = get(nestedWorkspaces);
   const srcWs = allWs.find((ws) =>
     getAllPanes(ws.splitRoot).some((p) => p.id === sourcePaneId),
   );
@@ -544,6 +548,6 @@ export function moveSurfaceToWorkspace(
   targetPane.surfaces.push(surface);
   targetPane.activeSurfaceId = surface.id;
 
-  workspaces.update((l) => [...l]);
+  nestedWorkspaces.update((l) => [...l]);
   schedulePersist();
 }

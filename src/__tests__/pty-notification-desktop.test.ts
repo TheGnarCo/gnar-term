@@ -35,7 +35,10 @@ vi.mock("@tauri-apps/plugin-notification", () => ({
 import * as eventModule from "@tauri-apps/api/event";
 import * as notifModule from "@tauri-apps/plugin-notification";
 import { setupListeners } from "../lib/terminal-service";
-import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
+import {
+  nestedWorkspaces,
+  activeNestedWorkspaceIdx,
+} from "../lib/stores/workspace";
 import type { NestedWorkspace, TerminalSurface } from "../lib/types";
 
 function makeTerminalSurface(id: string, ptyId: number): TerminalSurface {
@@ -84,8 +87,8 @@ describe("pty-notification → desktop notification", () => {
   beforeEach(async () => {
     vi.mocked(notifModule.sendNotification).mockClear();
     handlers.clear();
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
+    nestedWorkspaces.set([]);
+    activeNestedWorkspaceIdx.set(-1);
     await setupListeners();
   });
 
@@ -98,11 +101,11 @@ describe("pty-notification → desktop notification", () => {
   it("fires a desktop notification when the surface is in a non-active workspace", async () => {
     const fgSurface = makeTerminalSurface("fg", 1);
     const bgSurface = makeTerminalSurface("bg", 2);
-    workspaces.set([
+    nestedWorkspaces.set([
       makeWorkspaceWith("ws-fg", fgSurface),
       makeWorkspaceWith("ws-bg", bgSurface),
     ]);
-    activeWorkspaceIdx.set(0);
+    activeNestedWorkspaceIdx.set(0);
 
     dispatchPtyNotification(2, "build complete");
     // Allow the async fire-and-forget desktop notification path to settle
@@ -120,8 +123,8 @@ describe("pty-notification → desktop notification", () => {
 
   it("suppresses the desktop notification when the surface is the active surface in the active pane of the active workspace", async () => {
     const fgSurface = makeTerminalSurface("fg", 1);
-    workspaces.set([makeWorkspaceWith("ws-fg", fgSurface)]);
-    activeWorkspaceIdx.set(0);
+    nestedWorkspaces.set([makeWorkspaceWith("ws-fg", fgSurface)]);
+    activeNestedWorkspaceIdx.set(0);
 
     dispatchPtyNotification(1, "tests passed");
     await Promise.resolve();
@@ -136,8 +139,8 @@ describe("pty-notification → desktop notification", () => {
 
   it("ignores events that look like escape-sequence fragments", async () => {
     const surface = makeTerminalSurface("s", 1);
-    workspaces.set([makeWorkspaceWith("ws", surface)]);
-    activeWorkspaceIdx.set(0);
+    nestedWorkspaces.set([makeWorkspaceWith("ws", surface)]);
+    activeNestedWorkspaceIdx.set(0);
 
     dispatchPtyNotification(1, "4;0;");
     await Promise.resolve();

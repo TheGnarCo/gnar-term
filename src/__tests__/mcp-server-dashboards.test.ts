@@ -24,7 +24,10 @@ import {
   registerDashboardContribution,
   resetDashboardContributions,
 } from "../lib/services/dashboard-contribution-registry";
-import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
+import {
+  nestedWorkspaces,
+  activeNestedWorkspaceIdx,
+} from "../lib/stores/workspace";
 import { workspaceGroupsStore } from "../lib/stores/workspace-groups";
 
 function rpc(method: string, params?: unknown, id: number = 1) {
@@ -50,8 +53,8 @@ describe("MCP dashboard contribution tools", () => {
     invokeMock.mockReset();
     _resetMcpServerForTest();
     resetDashboardContributions();
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
+    nestedWorkspaces.set([]);
+    activeNestedWorkspaceIdx.set(-1);
     workspaceGroupsStore.set([]);
   });
 
@@ -108,7 +111,7 @@ describe("MCP dashboard contribution tools", () => {
         create: vi.fn(async () => "ws-diff"),
       });
       // Seed an active dashboard workspace for this contribution.
-      workspaces.set([
+      nestedWorkspaces.set([
         {
           id: "ws-abc",
           name: "Diff",

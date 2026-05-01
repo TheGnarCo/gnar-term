@@ -2,14 +2,14 @@
  * Empty Surface regression tests.
  *
  * Behavior covered:
- *   - Closing the last workspace is allowed; activeWorkspaceIdx falls
+ *   - Closing the last workspace is allowed; activeNestedWorkspaceIdx falls
  *     to -1 and no default workspace is auto-created.
- *   - The sidebar's WorkspaceListView no longer renders a "No workspaces"
+ *   - The sidebar's WorkspaceListView no longer renders a "No nestedWorkspaces"
  *     placeholder for empty projects or the unclaimed zone.
- *   - App.svelte renders an EmptySurface when $workspaces is empty.
+ *   - App.svelte renders an EmptySurface when $nestedWorkspaces is empty.
  *   - EmptySurface sources buttons from workspaceActionStore and from
  *     the EMPTY_SURFACE_COMMAND_IDS promotion list.
- *   - App startup honors a persisted `state.workspaces: []` as a valid
+ *   - App startup honors a persisted `state.nestedWorkspaces: []` as a valid
  *     restored empty state instead of auto-seeding "NestedWorkspace 1".
  */
 import { describe, it, expect } from "vitest";
@@ -22,8 +22,8 @@ function read(path: string): string {
 describe("sidebar: empty workspace zones render no placeholder", () => {
   const LIST_VIEW = read("src/lib/components/WorkspaceListView.svelte");
 
-  it("WorkspaceListView has no 'No workspaces' text", () => {
-    expect(LIST_VIEW).not.toMatch(/No workspaces/i);
+  it("WorkspaceListView has no 'No nestedWorkspaces' text", () => {
+    expect(LIST_VIEW).not.toMatch(/No nestedWorkspaces/i);
   });
 
   it("WorkspaceListView drops the `entries.length === 0` empty-state block", () => {
@@ -54,8 +54,8 @@ describe("workspace-service: closing the last workspace is allowed", () => {
     expect(SVC).not.toMatch(/length\s*<=\s*1/);
   });
 
-  it("clamps activeWorkspaceIdx to length - 1 (→ -1 when empty)", () => {
-    expect(SVC).toMatch(/activeWorkspaceIdx\.set\(\s*Math\.min\(/);
+  it("clamps activeNestedWorkspaceIdx to length - 1 (→ -1 when empty)", () => {
+    expect(SVC).toMatch(/activeNestedWorkspaceIdx\.set\(\s*Math\.min\(/);
     expect(SVC).not.toMatch(/Math\.max\(\s*0\s*,\s*wsList\.length\s*-\s*1/);
   });
 });
@@ -67,10 +67,10 @@ describe("EmptySurface renders and is wired up", () => {
   it("App.svelte imports and renders EmptySurface when no workspace is active", () => {
     expect(APP).toMatch(/import EmptySurface from/);
     // Stage 7 added a pseudo-workspace gate; the orphan-dashboard fix
-    // added an `activeWorkspaceIdx < 0` clause so the empty surface
+    // added an `activeNestedWorkspaceIdx < 0` clause so the empty surface
     // also renders when every restored workspace is a dashboard.
-    expect(APP).toMatch(/\$workspaces\.length\s*===\s*0/);
-    expect(APP).toMatch(/\$activeWorkspaceIdx\s*<\s*0/);
+    expect(APP).toMatch(/\$nestedWorkspaces\.length\s*===\s*0/);
+    expect(APP).toMatch(/\$activeNestedWorkspaceIdx\s*<\s*0/);
     expect(APP).toMatch(/<EmptySurface\s*\/>/);
   });
 
@@ -89,14 +89,14 @@ describe("App startup honors an explicit empty persisted state", () => {
   // Startup restoration lives in bootstrap/restore-workspaces.ts.
   const RESTORE = read("src/lib/bootstrap/restore-workspaces.ts");
 
-  it("treats state.workspaces = [] as a restored state (no auto-seeded NestedWorkspace 1)", () => {
+  it("treats state.nestedWorkspaces = [] as a restored state (no auto-seeded NestedWorkspace 1)", () => {
     // The restore condition must accept any Array, not require non-empty.
-    expect(RESTORE).toMatch(/Array\.isArray\(state\.workspaces\)/);
-    // The old "state.workspaces && state.workspaces.length > 0" gate
+    expect(RESTORE).toMatch(/Array\.isArray\(state\.nestedWorkspaces\)/);
+    // The old "state.nestedWorkspaces && state.nestedWorkspaces.length > 0" gate
     // would re-seed NestedWorkspace 1 on an empty persisted state.
     const oneLine = RESTORE.replace(/\s+/g, " ");
     expect(oneLine).not.toMatch(
-      /if\s*\(\s*state\.workspaces\s*&&\s*state\.workspaces\.length\s*>\s*0\s*\)/,
+      /if\s*\(\s*state\.nestedWorkspaces\s*&&\s*state\.nestedWorkspaces\.length\s*>\s*0\s*\)/,
     );
   });
 });

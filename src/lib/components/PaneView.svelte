@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { theme } from "../stores/theme";
-  import { workspaces } from "../stores/workspace";
+  import { nestedWorkspaces } from "../stores/workspace";
   import { commandStore } from "../services/command-registry";
   import TabBar from "./TabBar.svelte";
   import TerminalSurface from "./TerminalSurface.svelte";
@@ -72,14 +72,14 @@
   // When the workspace is a constrained Dashboard (metadata.isDashboard
   // === true), hide the tab bar, split buttons, and new-surface
   // affordances entirely. The single Live Preview surface fills the pane.
-  // Dashboard workspaces can't accumulate surfaces — the preview cannot
+  // Dashboard nestedWorkspaces can't accumulate surfaces — the preview cannot
   // be closed from the UI, so no regen affordance is needed either.
   //
-  // For non-Dashboard workspaces tied to a workspace group
+  // For non-Dashboard nestedWorkspaces tied to a workspace group
   // (metadata.groupId), keep the workspace-groups regen affordance so
   // users can re-spawn a group-dashboard preview surface after closing it.
   $: workspaceMetadata = (() => {
-    const ws = $workspaces.find((w) => w.id === workspaceId);
+    const ws = $nestedWorkspaces.find((w) => w.id === workspaceId);
     return ws ? wsMeta(ws) : undefined;
   })();
   $: isDashboardWorkspace = workspaceMetadata?.isDashboard === true;
@@ -139,7 +139,7 @@
 
   function clearUnreadInPane() {
     if (!paneHasUnread) return;
-    workspaces.update((wsList) => {
+    nestedWorkspaces.update((wsList) => {
       const ws = wsList.find((w) => w.id === workspaceId);
       if (!ws) return wsList;
       // Walk this pane's surfaces and clear hasUnread + notification text.

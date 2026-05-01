@@ -25,7 +25,10 @@ import {
   _testContext,
   _resetMcpServerForTest,
 } from "../lib/services/mcp-server";
-import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
+import {
+  nestedWorkspaces,
+  activeNestedWorkspaceIdx,
+} from "../lib/stores/workspace";
 import type { NestedWorkspace, Pane } from "../lib/types";
 import { isPreviewSurface, getAllSurfaces } from "../lib/types";
 import {
@@ -61,13 +64,13 @@ describe("MCP — spawn_preview", () => {
     _resetMcpServerForTest();
     resetPreviewSurfaceRegistry();
     resetMarkdownComponents();
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
+    nestedWorkspaces.set([]);
+    activeNestedWorkspaceIdx.set(-1);
   });
 
   it("opens a preview surface in the binding's host pane", async () => {
     const { ws, pane } = makeWorkspace("ws-1");
-    workspaces.set([ws]);
+    nestedWorkspaces.set([ws]);
     const ctx = _testContext({ paneId: pane.id, workspaceId: "ws-1" });
 
     const resp = await dispatch(
@@ -84,7 +87,7 @@ describe("MCP — spawn_preview", () => {
     expect(result.workspace_id).toBe("ws-1");
     expect(result.reused).toBe(false);
 
-    const surfaces = getAllSurfaces(get(workspaces)[0]!);
+    const surfaces = getAllSurfaces(get(nestedWorkspaces)[0]!);
     expect(surfaces).toHaveLength(1);
     const placed = surfaces[0]!;
     expect(isPreviewSurface(placed)).toBe(true);
@@ -95,7 +98,7 @@ describe("MCP — spawn_preview", () => {
 
   it("focuses an existing preview when the same path is already open", async () => {
     const { ws, pane } = makeWorkspace("ws-1");
-    workspaces.set([ws]);
+    nestedWorkspaces.set([ws]);
     // Simulate an already-mounted preview (PreviewSurface.svelte normally
     // registers itself on mount; tests bypass that).
     registerPreviewSurface({
@@ -118,13 +121,13 @@ describe("MCP — spawn_preview", () => {
     expect(result.surface_id).toBe("existing-surface");
     expect(result.reused).toBe(true);
     // No new surface placed in the workspace.
-    expect(getAllSurfaces(get(workspaces)[0]!)).toHaveLength(0);
+    expect(getAllSurfaces(get(nestedWorkspaces)[0]!)).toHaveLength(0);
   });
 
   it("explicit pane_id wins over the binding pane", async () => {
     const { ws: wsA, pane: paneA } = makeWorkspace("ws-A");
     const { ws: wsB, pane: paneB } = makeWorkspace("ws-B");
-    workspaces.set([wsA, wsB]);
+    nestedWorkspaces.set([wsA, wsB]);
     const ctx = _testContext({ paneId: paneA.id, workspaceId: "ws-A" });
 
     const resp = await dispatch(
@@ -145,8 +148,8 @@ describe("MCP — spawn_preview", () => {
 
   it("errors when unbound and no workspace_id/pane_id is passed", async () => {
     const { ws } = makeWorkspace("ws-1");
-    workspaces.set([ws]);
-    activeWorkspaceIdx.set(0);
+    nestedWorkspaces.set([ws]);
+    activeNestedWorkspaceIdx.set(0);
     const ctx = _testContext(null);
 
     const resp = await dispatch(
@@ -168,14 +171,14 @@ describe("MCP — create_preview_file", () => {
     _resetMcpServerForTest();
     resetPreviewSurfaceRegistry();
     resetMarkdownComponents();
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
+    nestedWorkspaces.set([]);
+    activeNestedWorkspaceIdx.set(-1);
   });
 
   it("invokes write_file then opens the preview", async () => {
     invokeMock.mockResolvedValue(undefined);
     const { ws, pane } = makeWorkspace("ws-1");
-    workspaces.set([ws]);
+    nestedWorkspaces.set([ws]);
     const ctx = _testContext({ paneId: pane.id, workspaceId: "ws-1" });
 
     const resp = await dispatch(
@@ -195,7 +198,7 @@ describe("MCP — create_preview_file", () => {
     expect(result.pane_id).toBe(pane.id);
     expect(result.workspace_id).toBe("ws-1");
 
-    const surfaces = getAllSurfaces(get(workspaces)[0]!);
+    const surfaces = getAllSurfaces(get(nestedWorkspaces)[0]!);
     expect(surfaces).toHaveLength(1);
     const placed = surfaces[0]!;
     if (isPreviewSurface(placed)) {
@@ -208,7 +211,7 @@ describe("MCP — create_preview_file", () => {
   it("propagates write_file errors without opening a surface", async () => {
     invokeMock.mockRejectedValueOnce(new Error("Write denied: blocked path"));
     const { ws, pane } = makeWorkspace("ws-1");
-    workspaces.set([ws]);
+    nestedWorkspaces.set([ws]);
     const ctx = _testContext({ paneId: pane.id, workspaceId: "ws-1" });
 
     const resp = await dispatch(
@@ -221,7 +224,7 @@ describe("MCP — create_preview_file", () => {
 
     expect((resp as any).error?.code).toBe(-32000);
     expect((resp as any).error?.message).toMatch(/Write denied/);
-    expect(getAllSurfaces(get(workspaces)[0]!)).toHaveLength(0);
+    expect(getAllSurfaces(get(nestedWorkspaces)[0]!)).toHaveLength(0);
   });
 });
 
@@ -278,13 +281,13 @@ describe("MCP — close_preview", () => {
     invokeMock.mockReset();
     _resetMcpServerForTest();
     resetPreviewSurfaceRegistry();
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
+    nestedWorkspaces.set([]);
+    activeNestedWorkspaceIdx.set(-1);
   });
 
   it("closes a preview surface registered with the registry", async () => {
     const { ws, pane } = makeWorkspace("ws-1");
-    workspaces.set([ws]);
+    nestedWorkspaces.set([ws]);
     const ctx = _testContext({ paneId: pane.id, workspaceId: "ws-1" });
 
     // Spawn a preview the normal way so it lands in the pane and registers.
@@ -318,8 +321,8 @@ describe("MCP — close_preview", () => {
     expect(closeResult).toEqual({ closed: true });
     // The preview was the only surface in the only pane — closing it
     // closed the whole workspace, so the surface id is no longer
-    // anywhere in the workspaces list.
-    const remaining = get(workspaces).flatMap((ws) =>
+    // anywhere in the nestedWorkspaces list.
+    const remaining = get(nestedWorkspaces).flatMap((ws) =>
       getAllSurfaces(ws).map((s) => s.id),
     );
     expect(remaining).not.toContain(surfaceId);

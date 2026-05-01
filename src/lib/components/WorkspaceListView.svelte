@@ -9,7 +9,10 @@
    * within a filtered view, that translates to moving a workspace relative to
    * its visible peers.
    */
-  import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
+  import {
+    nestedWorkspaces,
+    activeNestedWorkspaceIdx,
+  } from "../stores/workspace";
   import { theme } from "../stores/theme";
   import { getAllSurfaces } from "../types";
   import { tabDragState } from "../services/tab-drag";
@@ -71,7 +74,7 @@
   export let hideStatusBadges: boolean = false;
 
   /**
-   * The immediate container ("scope") this list's workspaces live in — a
+   * The immediate container ("scope") this list's nestedWorkspaces live in — a
    * project id when rendered inside a project scope, otherwise
    * "__workspaces__". Published to `reorderContext` as `scopeId` during a
    * drag so the sidebar's overlay layer knows which project is the source.
@@ -95,7 +98,7 @@
   export let containerLabel: string | undefined = undefined;
   void containerLabel;
 
-  $: allEntries = $workspaces
+  $: allEntries = $nestedWorkspaces
     .map((ws, idx) => ({ ws, idx }))
     .filter(({ ws }) => (filterIds ? filterIds.has(ws.id) : true));
 
@@ -124,7 +127,7 @@
     },
     onMove: (x, y, ghostEl) => {
       if (sourceIdx === null) return;
-      const srcWsId = $workspaces[sourceIdx]?.id;
+      const srcWsId = $nestedWorkspaces[sourceIdx]?.id;
       if (!srcWsId) return;
       // Tab bar takes precedence over pane body.
       const tabTarget = detectTabBarDropForWorkspace(x, y, srcWsId);
@@ -146,7 +149,7 @@
       const paneTarget = currentPaneTarget;
       currentPaneTarget = null;
       setWorkspaceDragState(null);
-      const srcWsId = $workspaces[fromIdx]?.id;
+      const srcWsId = $nestedWorkspaces[fromIdx]?.id;
       if (paneTarget?.kind === "pane-split" && srcWsId) {
         const direction =
           paneTarget.zone === "left" || paneTarget.zone === "right"
@@ -183,9 +186,9 @@
   });
 
   function startDrag(e: MouseEvent, globalIdx: number) {
-    // Locked workspaces refuse drag-start. canStart in createDragReorder
+    // Locked nestedWorkspaces refuse drag-start. canStart in createDragReorder
     // fires before sourceIdx is populated, so we gate here instead.
-    const ws = $workspaces[globalIdx];
+    const ws = $nestedWorkspaces[globalIdx];
     if (ws && wsMeta(ws).locked === true) return;
     reorder.start(e, globalIdx);
   }
@@ -195,7 +198,7 @@
   // (project + workspace rows show their own tile with name centered).
   $: sourceWs =
     active && sourceIdx !== null
-      ? ($workspaces.find((w, i) => i === sourceIdx) ?? null)
+      ? ($nestedWorkspaces.find((w, i) => i === sourceIdx) ?? null)
       : null;
   $: railColor = accentColor ?? $theme.accent;
   $: overlayFg = contrastColor(railColor);
@@ -225,7 +228,9 @@
   $: effectiveSourceHeight = active ? sourceHeight : 32;
   $: tabDragSurfaceLabel = (() => {
     if (!tabDrag || !tabDragToGroup) return "";
-    const srcWs = $workspaces.find((w) => w.id === tabDrag!.sourceWorkspaceId);
+    const srcWs = $nestedWorkspaces.find(
+      (w) => w.id === tabDrag!.sourceWorkspaceId,
+    );
     if (!srcWs) return "New Workspace";
     return (
       getAllSurfaces(srcWs).find((s) => s.id === tabDrag!.surfaceId)?.title ||
@@ -237,14 +242,14 @@
 
   let itemRefs: Record<string, WorkspaceItem> = {};
 
-  // Nested workspaces share the same context menu surface as the root
+  // Nested nestedWorkspaces share the same context menu surface as the root
   // workspace list: Rename / (Promote) / Close. Rename drives the
   // underlying WorkspaceItem's inline rename via the bound ref; everything
   // else routes through the workspace service. Kept local to
   // WorkspaceListView so this shared component doesn't need parent
   // callbacks for each item.
   function showNestedContextMenu(x: number, y: number, globalIdx: number) {
-    const ws = $workspaces[globalIdx];
+    const ws = $nestedWorkspaces[globalIdx];
     if (!ws) return;
     const md = wsMeta(ws);
     const isDashboard = md.isDashboard === true;
@@ -257,7 +262,7 @@
       isDashboard,
       isInsideGroup,
       canPromoteCommand,
-      workspaceCount: $workspaces.length,
+      workspaceCount: $nestedWorkspaces.length,
       isLocked,
       onRename: () => itemRefs[ws.id]?.startRename(),
       onPromote: () => {
@@ -298,7 +303,7 @@
             bind:this={itemRefs[entry.ws.id]}
             workspace={entry.ws}
             index={entry.idx}
-            isActive={entry.idx === $activeWorkspaceIdx}
+            isActive={entry.idx === $activeNestedWorkspaceIdx}
             dragActive={isSrc}
             {accentColor}
             dashboardHint={dashboardHintFor?.(entry.ws)}
@@ -355,7 +360,7 @@
   /* 8px left + top margin on the nested list so the workspace rails
      sit visually inset from the parent project's rail and the first
      nested row breathes below the project banner. WorkspaceItem
-     itself has no margin (root workspaces are flush); we apply the
+     itself has no margin (root nestedWorkspaces are flush); we apply the
      inset here so it only fires in the nested context. */
   .workspace-list-view {
     margin-left: 8px;

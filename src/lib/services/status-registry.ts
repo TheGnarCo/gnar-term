@@ -1,7 +1,7 @@
 /**
  * NestedWorkspace status registry — stores StatusItems contributed by extensions.
  *
- * One flat registry for all workspaces. UI components and extensions
+ * One flat registry for all nestedWorkspaces. UI components and extensions
  * consume workspace-filtered derived stores via getWorkspaceStatus().
  */
 import { derived, type Readable } from "svelte/store";

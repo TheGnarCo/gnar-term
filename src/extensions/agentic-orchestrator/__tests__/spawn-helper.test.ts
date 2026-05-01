@@ -28,7 +28,7 @@ vi.mock("../../../lib/services/worktree-service", () => ({
   createWorktreeWorkspaceFromConfig: createWorktreeWorkspaceFromConfigMock,
 }));
 
-import { workspaces } from "../../../lib/stores/workspace";
+import { nestedWorkspaces } from "../../../lib/stores/workspace";
 import type { NestedWorkspace } from "../../../lib/types";
 import {
   buildStartupCommand,
@@ -141,14 +141,14 @@ describe("spawn-helper: buildStartupCommand", () => {
 describe("spawn-helper: spawnAgentInWorktree", () => {
   beforeEach(() => {
     createWorktreeWorkspaceFromConfigMock.mockReset();
-    workspaces.set([]);
+    nestedWorkspaces.set([]);
   });
 
   it("creates a worktree workspace with spawnedBy metadata + correct startup command", async () => {
     const newWsId = "ws-new-1";
     createWorktreeWorkspaceFromConfigMock.mockImplementation(async () => {
       // Simulate worktree-service appending the workspace to the store.
-      workspaces.set([seedWorkspaceAfterCreate(newWsId)]);
+      nestedWorkspaces.set([seedWorkspaceAfterCreate(newWsId)]);
       return { workspaceId: newWsId };
     });
 
@@ -184,7 +184,7 @@ describe("spawn-helper: spawnAgentInWorktree", () => {
   it("defaults the branch when caller does not supply one", async () => {
     const newWsId = "ws-new-2";
     createWorktreeWorkspaceFromConfigMock.mockImplementation(async () => {
-      workspaces.set([seedWorkspaceAfterCreate(newWsId)]);
+      nestedWorkspaces.set([seedWorkspaceAfterCreate(newWsId)]);
       return { workspaceId: newWsId };
     });
 
@@ -206,7 +206,7 @@ describe("spawn-helper: spawnAgentInWorktree", () => {
   it("custom agent uses the provided command verbatim with no quoting", async () => {
     const newWsId = "ws-new-3";
     createWorktreeWorkspaceFromConfigMock.mockImplementation(async () => {
-      workspaces.set([seedWorkspaceAfterCreate(newWsId)]);
+      nestedWorkspaces.set([seedWorkspaceAfterCreate(newWsId)]);
       return { workspaceId: newWsId };
     });
 
@@ -228,7 +228,7 @@ describe("spawn-helper: spawnAgentInWorktree", () => {
   it("omits spawnedBy from config when the caller does not provide it", async () => {
     const newWsId = "ws-new-4";
     createWorktreeWorkspaceFromConfigMock.mockImplementation(async () => {
-      workspaces.set([seedWorkspaceAfterCreate(newWsId)]);
+      nestedWorkspaces.set([seedWorkspaceAfterCreate(newWsId)]);
       return { workspaceId: newWsId };
     });
 
@@ -246,7 +246,7 @@ describe("spawn-helper: spawnAgentInWorktree", () => {
   it("propagates spawnedBy={kind:'group', groupId} when a group-scoped caller passes it", async () => {
     const newWsId = "ws-new-5";
     createWorktreeWorkspaceFromConfigMock.mockImplementation(async () => {
-      workspaces.set([seedWorkspaceAfterCreate(newWsId)]);
+      nestedWorkspaces.set([seedWorkspaceAfterCreate(newWsId)]);
       return { workspaceId: newWsId };
     });
 
@@ -267,7 +267,7 @@ describe("spawn-helper: spawnAgentInWorktree", () => {
   it("propagates spawnedBy={kind:'global'} and omits groupId for global-scoped spawns", async () => {
     const newWsId = "ws-new-6";
     createWorktreeWorkspaceFromConfigMock.mockImplementation(async () => {
-      workspaces.set([seedWorkspaceAfterCreate(newWsId)]);
+      nestedWorkspaces.set([seedWorkspaceAfterCreate(newWsId)]);
       return { workspaceId: newWsId };
     });
 

@@ -16,13 +16,16 @@ vi.mock("@tauri-apps/api/event", () => ({
 
 import { reconcileGroupDashboards } from "../lib/services/workspace-group-service";
 import { workspaceGroupsStore } from "../lib/stores/workspace-groups";
-import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
+import {
+  nestedWorkspaces,
+  activeNestedWorkspaceIdx,
+} from "../lib/stores/workspace";
 
 describe("scrub Active Agents from group Overview", () => {
   beforeEach(() => {
     invokeMock.mockReset();
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
+    nestedWorkspaces.set([]);
+    activeNestedWorkspaceIdx.set(-1);
     workspaceGroupsStore.set([
       {
         id: "g1",

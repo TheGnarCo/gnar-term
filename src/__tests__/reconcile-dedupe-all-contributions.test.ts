@@ -2,7 +2,7 @@
  * reconcileGroupDashboards must deduplicate ALL autoProvision contribution
  * types (settings, agentic, …), not just "group". Duplicates arise from a
  * startup race where a provision loop creates fresh dashboards after
- * workspaces.set([]) clears the store but before restoreWorkspaces finishes.
+ * nestedWorkspaces.set([]) clears the store but before restoreWorkspaces finishes.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { get } from "svelte/store";
@@ -16,7 +16,10 @@ vi.mock("@tauri-apps/api/event", () => ({
 }));
 
 import { reconcileGroupDashboards } from "../lib/services/workspace-group-service";
-import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
+import {
+  nestedWorkspaces,
+  activeNestedWorkspaceIdx,
+} from "../lib/stores/workspace";
 import { workspaceGroupsStore } from "../lib/stores/workspace-groups";
 import {
   registerDashboardContribution,
@@ -54,8 +57,8 @@ describe("reconcileGroupDashboards — dedupe all contribution types", () => {
   beforeEach(() => {
     invokeMock.mockReset();
     invokeMock.mockImplementation(async () => undefined);
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
+    nestedWorkspaces.set([]);
+    activeNestedWorkspaceIdx.set(-1);
     workspaceGroupsStore.set([GROUP]);
     resetDashboardContributions();
   });
@@ -70,14 +73,14 @@ describe("reconcileGroupDashboards — dedupe all contribution types", () => {
       autoProvision: true,
       create: vi.fn(async () => "ws-new"),
     });
-    workspaces.set([
+    nestedWorkspaces.set([
       makeDashboard("settings-1", "settings"),
       makeDashboard("settings-2", "settings"),
     ]);
 
     await reconcileGroupDashboards();
 
-    const remaining = get(workspaces).filter((w) => {
+    const remaining = get(nestedWorkspaces).filter((w) => {
       return (
         w.metadata?.dashboardContributionId === "settings" &&
         w.metadata?.groupId === GROUP.id
@@ -96,14 +99,14 @@ describe("reconcileGroupDashboards — dedupe all contribution types", () => {
       autoProvision: true,
       create: vi.fn(async () => "ws-new"),
     });
-    workspaces.set([
+    nestedWorkspaces.set([
       makeDashboard("agentic-1", "agentic"),
       makeDashboard("agentic-2", "agentic"),
     ]);
 
     await reconcileGroupDashboards();
 
-    const remaining = get(workspaces).filter((w) => {
+    const remaining = get(nestedWorkspaces).filter((w) => {
       return (
         w.metadata?.dashboardContributionId === "agentic" &&
         w.metadata?.groupId === GROUP.id
@@ -128,7 +131,7 @@ describe("reconcileGroupDashboards — dedupe all contribution types", () => {
         create: vi.fn(async () => "ws-new"),
       });
     }
-    workspaces.set([
+    nestedWorkspaces.set([
       makeDashboard("group-1", "group"),
       makeDashboard("group-2", "group"),
       makeDashboard("settings-1", "settings"),
@@ -139,7 +142,7 @@ describe("reconcileGroupDashboards — dedupe all contribution types", () => {
 
     await reconcileGroupDashboards();
 
-    const all = get(workspaces);
+    const all = get(nestedWorkspaces);
     for (const contribId of ["group", "settings", "agentic"]) {
       const matches = all.filter((w) => {
         return (

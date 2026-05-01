@@ -3,7 +3,7 @@
    * EmptySurface — shown in the terminal area when no workspace is open,
    * or when the current workspace's active pane has zero surfaces (the
    * user just closed the last one). Provides quick actions plus a
-   * launcher into existing projects and workspaces.
+   * launcher into existing projects and nestedWorkspaces.
    *
    * Buttons are sourced from:
    *   - `workspaceActionStore` (core + extension non-sidebar actions
@@ -19,7 +19,10 @@
   import { workspaceActionStore } from "../services/workspace-action-registry";
   import { commandStore } from "../services/command-registry";
   import { EMPTY_SURFACE_COMMAND_IDS } from "../services/empty-surface-commands";
-  import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
+  import {
+    nestedWorkspaces,
+    activeNestedWorkspaceIdx,
+  } from "../stores/workspace";
   import { rootRowOrder } from "../stores/root-row-order";
   import { rootRowRendererStore } from "../services/root-row-renderer-registry";
   import { switchWorkspace } from "../services/workspace-service";
@@ -66,15 +69,15 @@
     ),
   ];
 
-  // --- Existing workspaces / projects / dashboards ---
+  // --- Existing nestedWorkspaces / projects / dashboards ---
   //
   // When the current empty pane lives inside a workspace, clicking its
   // own entry should spawn a terminal in the pane rather than switch
   // to itself (a no-op would feel broken). Every other click routes
   // to switchWorkspace / the row's renderer label for context.
-  $: currentWs = $workspaces[$activeWorkspaceIdx];
+  $: currentWs = $nestedWorkspaces[$activeNestedWorkspaceIdx];
   function activateWorkspaceAt(idx: number) {
-    if (idx === $activeWorkspaceIdx && currentWs) {
+    if (idx === $activeNestedWorkspaceIdx && currentWs) {
       // The click-target IS the current empty workspace — start a new
       // terminal surface in its active pane so the user transitions
       // from "empty" to "usable" without leaving context.
@@ -89,7 +92,7 @@
 
   // Build a "jump list" modeled after the sidebar rootRowOrder. Project
   // rows render as a header (click = switch to that project's first
-  // workspace); nested workspaces fan out below. Standalone workspaces
+  // workspace); nested nestedWorkspaces fan out below. Standalone nestedWorkspaces
   // render as leaf entries. Non-workspace/project rows (e.g. agent
   // dashboards) are rendered through their label resolver so they show
   // something, but lack an activation handler beyond switchWorkspace —
@@ -104,7 +107,7 @@
   }
 
   $: jumpRows = (() => {
-    const list = get(workspaces);
+    const list = get(nestedWorkspaces);
     const out: JumpRow[] = [];
     const seen = new Set<string>();
     for (const row of $rootRowOrder) {
@@ -123,7 +126,7 @@
       }
       // Non-workspace row kinds (workspace-group, agent-orchestrator…).
       // Use their renderer-contributed label as a visual header, then
-      // fan out any workspaces tagged with the row's groupId.
+      // fan out any nestedWorkspaces tagged with the row's groupId.
       const rendererMeta = $rootRowRendererStore.find((r) => r.id === row.kind);
       const headerLabel = rendererMeta?.label?.(row.id);
       if (headerLabel && row.kind === "workspace-group") {
@@ -143,7 +146,7 @@
         }
       }
     }
-    // Fallback pass — any workspaces not yet rendered (e.g. tagged to
+    // Fallback pass — any nestedWorkspaces not yet rendered (e.g. tagged to
     // a project whose root row isn't in the order). Keeps the launcher
     // exhaustive rather than silently hiding entries.
     for (let i = 0; i < list.length; i++) {
@@ -194,7 +197,7 @@
           >{currentWs.name}</strong
         >. Start something new, or jump to another workspace.
       {:else}
-        No workspaces are open. Create one to get started.
+        No nestedWorkspaces are open. Create one to get started.
       {/if}
     </div>
     {#if buttons.length > 0}
@@ -274,10 +277,10 @@
             style="
               display: flex; align-items: center; gap: 8px;
               padding: 8px 12px;
-              border: 1px solid {row.idx === $activeWorkspaceIdx
+              border: 1px solid {row.idx === $activeNestedWorkspaceIdx
               ? ($theme.borderActive ?? $theme.accent)
               : $theme.border};
-              background: {row.idx === $activeWorkspaceIdx
+              background: {row.idx === $activeNestedWorkspaceIdx
               ? $theme.bgHighlight
               : $theme.bgSurface};
               color: {$theme.fg};
@@ -299,7 +302,7 @@
                 {row.badge}
               </span>
             {/if}
-            {#if row.idx === $activeWorkspaceIdx}
+            {#if row.idx === $activeNestedWorkspaceIdx}
               <span style="font-size: 10px; color: {$theme.fgDim};">
                 current — starts a new terminal
               </span>

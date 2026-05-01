@@ -1,6 +1,6 @@
 import { get } from "svelte/store";
 import {
-  workspaces,
+  nestedWorkspaces,
   activeWorkspace,
   activePane,
 } from "../../stores/workspace";
@@ -73,15 +73,15 @@ export const introspectionTools: ToolDef[] = [
   },
   {
     name: "list_workspaces",
-    description: "List all open workspaces.",
+    description: "List all open nestedWorkspaces.",
     inputSchema: { type: "object", properties: {} },
     handler: () => {
-      const list = get(workspaces).map((ws) => ({
+      const list = get(nestedWorkspaces).map((ws) => ({
         id: ws.id,
         name: ws.name,
         activePaneId: ws.activePaneId,
       }));
-      return { workspaces: list };
+      return { nestedWorkspaces: list };
     },
   },
   {
@@ -107,7 +107,7 @@ export const introspectionTools: ToolDef[] = [
     handler: (args) => {
       const p = args as { workspace_id?: string };
       const target = p.workspace_id
-        ? get(workspaces).find((w) => w.id === p.workspace_id)
+        ? get(nestedWorkspaces).find((w) => w.id === p.workspace_id)
         : get(activeWorkspace);
       if (!target) return { panes: [] };
       const list = getAllPanes(target.splitRoot).map((pane) =>

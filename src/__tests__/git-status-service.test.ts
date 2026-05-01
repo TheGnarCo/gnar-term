@@ -27,7 +27,10 @@ import {
 } from "../lib/services/workspace-subtitle-registry";
 import { statusRegistry } from "../lib/services/status-registry";
 import { eventBus } from "../lib/services/event-bus";
-import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
+import {
+  nestedWorkspaces,
+  activeNestedWorkspaceIdx,
+} from "../lib/stores/workspace";
 import type { NestedWorkspace } from "../lib/types";
 
 function makeWs(id: string, surfaceId: string, cwd: string): NestedWorkspace {
@@ -209,16 +212,16 @@ describe("initGitStatus()", () => {
   beforeEach(() => {
     _resetGitStatusService();
     resetWorkspaceSubtitles();
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
+    nestedWorkspaces.set([]);
+    activeNestedWorkspaceIdx.set(-1);
     statusRegistry.reset();
   });
 
   afterEach(() => {
     _resetGitStatusService();
     resetWorkspaceSubtitles();
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
+    nestedWorkspaces.set([]);
+    activeNestedWorkspaceIdx.set(-1);
     statusRegistry.reset();
   });
 
@@ -242,8 +245,8 @@ describe("initGitStatus()", () => {
 
   it("clears workspace status on workspace:closed", async () => {
     initGitStatus();
-    workspaces.set([makeWs("A", "surf-A", "/repos/project-A")]);
-    activeWorkspaceIdx.set(0);
+    nestedWorkspaces.set([makeWs("A", "surf-A", "/repos/project-A")]);
+    activeNestedWorkspaceIdx.set(0);
 
     const tauri = await import("@tauri-apps/api/core");
     const invokeMock = vi.mocked(tauri.invoke);
@@ -280,24 +283,24 @@ describe("initGitStatus()", () => {
 describe("git status service: ensurePolling CWD-race resilience", () => {
   beforeEach(() => {
     _resetGitStatusService();
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
+    nestedWorkspaces.set([]);
+    activeNestedWorkspaceIdx.set(-1);
     statusRegistry.reset();
   });
 
   afterEach(() => {
     _resetGitStatusService();
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
+    nestedWorkspaces.set([]);
+    activeNestedWorkspaceIdx.set(-1);
     statusRegistry.reset();
   });
 
   it("does not cross-assign workspace A's cwd to workspace B on rapid activation switch", async () => {
-    workspaces.set([
+    nestedWorkspaces.set([
       makeWs("A", "surf-A", "/repos/project-A"),
       makeWs("B", "surf-B", "/repos/project-B"),
     ]);
-    activeWorkspaceIdx.set(0);
+    activeNestedWorkspaceIdx.set(0);
 
     const tauri = await import("@tauri-apps/api/core");
     const invokeMock = vi.mocked(tauri.invoke);
@@ -326,7 +329,7 @@ describe("git status service: ensurePolling CWD-race resilience", () => {
     initGitStatus();
 
     eventBus.emit({ type: "workspace:activated", id: "A", previousId: null });
-    activeWorkspaceIdx.set(1);
+    activeNestedWorkspaceIdx.set(1);
     eventBus.emit({ type: "workspace:activated", id: "B", previousId: "A" });
 
     await drain();
@@ -357,23 +360,23 @@ describe("git status service: refreshes when the active workspace's cwd changes"
   beforeEach(() => {
     vi.useFakeTimers();
     _resetGitStatusService();
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
+    nestedWorkspaces.set([]);
+    activeNestedWorkspaceIdx.set(-1);
     statusRegistry.reset();
   });
 
   afterEach(() => {
     vi.useRealTimers();
     _resetGitStatusService();
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
+    nestedWorkspaces.set([]);
+    activeNestedWorkspaceIdx.set(-1);
     statusRegistry.reset();
   });
 
   it("re-runs git status with the NEW cwd after the store fires an update", async () => {
     const ws = makeWs("A", "surf-A", "/repos/project-A");
-    workspaces.set([ws]);
-    activeWorkspaceIdx.set(0);
+    nestedWorkspaces.set([ws]);
+    activeNestedWorkspaceIdx.set(0);
 
     let ptyCwd = "/repos/project-A";
     const statusShortCalls: Array<{ cwd?: string }> = [];
@@ -422,7 +425,7 @@ describe("git status service: refreshes when the active workspace's cwd changes"
     ptyCwd = "/repos/project-B";
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (ws.splitRoot as any).pane.surfaces[0].cwd = "/repos/project-B";
-    workspaces.update((l) => [...l]);
+    nestedWorkspaces.update((l) => [...l]);
 
     await vi.advanceTimersByTimeAsync(600);
     await drain(100);
@@ -443,22 +446,22 @@ describe("git status service: refreshes when the active workspace's cwd changes"
 describe("git status service: stale-data clear (H4)", () => {
   beforeEach(() => {
     _resetGitStatusService();
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
+    nestedWorkspaces.set([]);
+    activeNestedWorkspaceIdx.set(-1);
     statusRegistry.reset();
   });
 
   afterEach(() => {
     _resetGitStatusService();
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
+    nestedWorkspaces.set([]);
+    activeNestedWorkspaceIdx.set(-1);
     statusRegistry.reset();
   });
 
   it("clears branch+dirty items when git status fails after a successful fetch", async () => {
     vi.useFakeTimers();
     try {
-      workspaces.set([
+      nestedWorkspaces.set([
         {
           id: "ws-fail",
           name: "Fail",
@@ -482,7 +485,7 @@ describe("git status service: stale-data clear (H4)", () => {
           },
         },
       ] as unknown as NestedWorkspace[]);
-      activeWorkspaceIdx.set(0);
+      activeNestedWorkspaceIdx.set(0);
 
       const tauri = await import("@tauri-apps/api/core");
       const invokeMock = vi.mocked(tauri.invoke);

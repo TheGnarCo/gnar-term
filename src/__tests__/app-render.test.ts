@@ -175,29 +175,29 @@ describe("pendingAction consumer", () => {
 
 // Structural invariant: verified via source scan because mounting the full
 // component tree requires Tauri runtime which isn't available in vitest.
-describe("WorkspaceView renders all workspaces (not just active)", () => {
+describe("WorkspaceView renders all nestedWorkspaces (not just active)", () => {
   it("uses each loop with display toggle, not conditional rendering", async () => {
     const fs = await import("fs");
     const source = fs.readFileSync("src/App.svelte", "utf-8");
-    // Must iterate ALL workspaces and show/hide with CSS
-    expect(source).toContain("{#each $workspaces as ws, i (ws.id)}");
+    // Must iterate ALL nestedWorkspaces and show/hide with CSS
+    expect(source).toContain("{#each $nestedWorkspaces as ws, i (ws.id)}");
     // Stage 7 extends the visibility gate with the pseudo-workspace
-    // mutual-exclusion clause; match the base `i === $activeWorkspaceIdx`
+    // mutual-exclusion clause; match the base `i === $activeNestedWorkspaceIdx`
     // without locking down the rest of the expression.
-    expect(source).toMatch(/visible=\{i === \$activeWorkspaceIdx[^}]*\}/);
+    expect(source).toMatch(/visible=\{i === \$activeNestedWorkspaceIdx[^}]*\}/);
   });
 });
 
 describe("pty-exit workspace recovery", () => {
-  it("clamps activeWorkspaceIdx after workspace removal", async () => {
+  it("clamps activeNestedWorkspaceIdx after workspace removal", async () => {
     // Structural invariant: verified via source scan because this logic
     // runs inside a Tauri event listener that can't be triggered in vitest.
     const fs = await import("fs");
     const source = fs.readFileSync("src/lib/terminal-service.ts", "utf-8");
-    // After splicing a workspace from the list, activeWorkspaceIdx must be
+    // After splicing a workspace from the list, activeNestedWorkspaceIdx must be
     // clamped to the new last index (or -1 when the list is empty, so the
     // Empty Surface takes over).
-    expect(source).toContain("activeWorkspaceIdx.set(wsList.length - 1)");
+    expect(source).toContain("activeNestedWorkspaceIdx.set(wsList.length - 1)");
   });
 
   it("does NOT auto-create a default workspace when all are closed (Empty Surface takes over)", async () => {
@@ -279,7 +279,7 @@ describe("NestedWorkspace from config definition", () => {
     );
   });
 
-  it("autoloads workspaces from config on startup", async () => {
+  it("autoloads nestedWorkspaces from config on startup", async () => {
     const fs = await import("fs");
     // Startup resolution lives in bootstrap/restore-workspaces.ts —
     // scan that module for the autoload branch.

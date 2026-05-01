@@ -22,7 +22,10 @@ import {
 } from "../../stores/workspace-groups";
 import { eventBus } from "../event-bus";
 import { rootRowOrder } from "../../stores/root-row-order";
-import { workspaces, activeWorkspaceIdx } from "../../stores/workspace";
+import {
+  nestedWorkspaces,
+  activeNestedWorkspaceIdx,
+} from "../../stores/workspace";
 import type { NestedWorkspace } from "../../types";
 import type { Workspace } from "../../config";
 
@@ -111,12 +114,12 @@ describe("workspace-group-service", () => {
     }
 
     beforeEach(() => {
-      workspaces.set([]);
-      activeWorkspaceIdx.set(-1);
+      nestedWorkspaces.set([]);
+      activeNestedWorkspaceIdx.set(-1);
     });
 
     it("closes every workspace tagged with the group id", () => {
-      workspaces.set([
+      nestedWorkspaces.set([
         makeWs("ws-a", "g1"),
         makeWs("ws-b", "g1"),
         makeWs("ws-other", "g2"),
@@ -125,14 +128,17 @@ describe("workspace-group-service", () => {
 
       closeWorkspacesInGroup("g1");
 
-      const remainingIds = get(workspaces).map((w) => w.id);
+      const remainingIds = get(nestedWorkspaces).map((w) => w.id);
       expect(remainingIds).toEqual(["ws-other", "ws-root"]);
     });
 
-    it("is a no-op when no workspaces belong to the group", () => {
-      workspaces.set([makeWs("ws-root"), makeWs("ws-other", "g2")]);
+    it("is a no-op when no nestedWorkspaces belong to the group", () => {
+      nestedWorkspaces.set([makeWs("ws-root"), makeWs("ws-other", "g2")]);
       closeWorkspacesInGroup("g1");
-      expect(get(workspaces).map((w) => w.id)).toEqual(["ws-root", "ws-other"]);
+      expect(get(nestedWorkspaces).map((w) => w.id)).toEqual([
+        "ws-root",
+        "ws-other",
+      ]);
     });
 
     it("also closes the group's Dashboard workspace (same groupId metadata)", () => {
@@ -140,11 +146,11 @@ describe("workspace-group-service", () => {
         ...makeWs("ws-dashboard", "g1"),
         metadata: { groupId: "g1", isDashboard: true },
       } as NestedWorkspace;
-      workspaces.set([dashboard, makeWs("ws-nested", "g1")]);
+      nestedWorkspaces.set([dashboard, makeWs("ws-nested", "g1")]);
 
       closeWorkspacesInGroup("g1");
 
-      expect(get(workspaces)).toHaveLength(0);
+      expect(get(nestedWorkspaces)).toHaveLength(0);
     });
   });
 

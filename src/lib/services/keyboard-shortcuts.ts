@@ -16,9 +16,9 @@ import {
   primarySidebarVisible,
 } from "../stores/ui";
 import {
-  workspaces,
+  nestedWorkspaces,
   activeSurface,
-  activeWorkspaceIdx,
+  activeNestedWorkspaceIdx,
   activePseudoWorkspaceId,
 } from "../stores/workspace";
 import { rootRowOrder } from "../stores/root-row-order";
@@ -66,7 +66,7 @@ export function handleAppKeydown(
   // command palette (the palette uses ⇧⌘ for most entries).
   if (isMac && e.metaKey && !shift && !alt) {
     const cmdShortcuts: Record<string, () => void> = {
-      n: () => createWorkspace(`Workspace ${get(workspaces).length + 1}`),
+      n: () => createWorkspace(`Workspace ${get(nestedWorkspaces).length + 1}`),
       t: () => newSurfaceFromSidebar(),
       b: () => primarySidebarVisible.update((v) => !v),
       k: () => {
@@ -99,13 +99,13 @@ export function handleAppKeydown(
       if (!row) return;
       e.preventDefault();
       if (row.kind === "workspace") {
-        const idx = get(workspaces).findIndex((ws) => ws.id === row.id);
+        const idx = get(nestedWorkspaces).findIndex((ws) => ws.id === row.id);
         if (idx >= 0) {
-          activeWorkspaceIdx.set(idx);
+          activeNestedWorkspaceIdx.set(idx);
           activePseudoWorkspaceId.set(null);
         }
       } else if (row.kind === "pseudo-workspace") {
-        activeWorkspaceIdx.set(-1);
+        activeNestedWorkspaceIdx.set(-1);
         activePseudoWorkspaceId.set(row.id);
       }
       return;

@@ -18,7 +18,7 @@
     updateWorkspaceGroup,
     closeDashboardForGroup,
   } from "../services/workspace-group-service";
-  import { workspaces } from "../stores/workspace";
+  import { nestedWorkspaces } from "../stores/workspace";
   import {
     dashboardContributionStore,
     type DashboardContribution,
@@ -66,12 +66,12 @@
 
   // Precompute the set of active contribution ids for this group as a
   // reactive derivation. `{@const active = activeIds.has(c.id)}` in the
-  // template picks up changes to `$workspaces` immediately — calling a
-  // helper that reads `$workspaces` internally does NOT re-run on store
+  // template picks up changes to `$nestedWorkspaces` immediately — calling a
+  // helper that reads `$nestedWorkspaces` internally does NOT re-run on store
   // updates in Svelte 5 (only the direct reference does).
   $: activeContributionIds = new Set<string>(
     group
-      ? $workspaces
+      ? $nestedWorkspaces
           .filter((w) => {
             const md = wsMeta(w);
             return md.isDashboard === true && md.groupId === group!.id;

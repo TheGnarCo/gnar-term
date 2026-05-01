@@ -18,7 +18,10 @@
     getDashboardHost,
   } from "../contexts/dashboard-host";
   import { worktreeEntriesStore } from "../services/worktree-service";
-  import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
+  import {
+    nestedWorkspaces,
+    activeNestedWorkspaceIdx,
+  } from "../stores/workspace";
 
   /** Explicit repo override under global scope. */
   export let repoPath: string | undefined = undefined;
@@ -52,8 +55,8 @@
 
   function jumpToWorktree(workspaceId: string | undefined): void {
     if (!workspaceId) return;
-    const idx = $workspaces.findIndex((w) => w.id === workspaceId);
-    if (idx >= 0) activeWorkspaceIdx.set(idx);
+    const idx = $nestedWorkspaces.findIndex((w) => w.id === workspaceId);
+    if (idx >= 0) activeNestedWorkspaceIdx.set(idx);
   }
 </script>
 

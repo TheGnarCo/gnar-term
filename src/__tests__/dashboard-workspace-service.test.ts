@@ -6,10 +6,10 @@ vi.mock("../lib/services/workspace-service", () => ({
   switchWorkspace: vi.fn(),
 }));
 
-// Minimal mock of the workspaces store — tests override subscribe per-test.
+// Minimal mock of the nestedWorkspaces store — tests override subscribe per-test.
 const mockWorkspacesValue: unknown[] = [];
 vi.mock("../lib/stores/workspace", () => ({
-  workspaces: {
+  nestedWorkspaces: {
     subscribe: vi.fn((cb: (v: unknown[]) => void) => {
       cb(mockWorkspacesValue);
       return () => {};
@@ -28,7 +28,7 @@ import {
   createWorkspaceFromDef,
   switchWorkspace,
 } from "../lib/services/workspace-service";
-import { workspaces } from "../lib/stores/workspace";
+import { nestedWorkspaces } from "../lib/stores/workspace";
 
 const MockIcon = {} as unknown as import("svelte").Component;
 const MockComponent = {} as unknown as import("svelte").Component;
@@ -88,7 +88,7 @@ describe("spawnOrNavigate", () => {
   });
 
   it("creates workspace when none exists", async () => {
-    vi.mocked(workspaces).subscribe = vi.fn((cb) => {
+    vi.mocked(nestedWorkspaces).subscribe = vi.fn((cb) => {
       cb([]);
       return () => {};
     });
@@ -108,7 +108,7 @@ describe("spawnOrNavigate", () => {
   });
 
   it("switches to existing workspace instead of creating", async () => {
-    vi.mocked(workspaces).subscribe = vi.fn((cb) => {
+    vi.mocked(nestedWorkspaces).subscribe = vi.fn((cb) => {
       cb([
         {
           id: "ws-1",

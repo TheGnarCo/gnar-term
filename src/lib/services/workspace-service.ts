@@ -2,8 +2,8 @@ import { get, derived } from "svelte/store";
 import type { Readable } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
 import {
-  workspaces,
-  activeWorkspaceIdx,
+  nestedWorkspaces,
+  activeNestedWorkspaceIdx,
   activeWorkspace,
   activeSurface,
   activePseudoWorkspaceId,
@@ -50,7 +50,7 @@ let persistTimer: ReturnType<typeof setTimeout> | null = null;
 const PERSIST_DELAY = 2000;
 
 export async function persistWorkspaces(): Promise<void> {
-  const wsList = get(workspaces);
+  const wsList = get(nestedWorkspaces);
   const serialized = wsList.map((ws) => ({
     // Persist the id so `rootRowOrder` (keyed by `{kind, id}`) survives
     // a restart — without this every workspace id regenerates on
@@ -62,8 +62,8 @@ export async function persistWorkspaces(): Promise<void> {
     ...(ws.metadata ? { metadata: ws.metadata } : {}),
   }));
   await saveState({
-    workspaces: serialized,
-    activeWorkspaceIdx: get(activeWorkspaceIdx),
+    nestedWorkspaces: serialized,
+    activeNestedWorkspaceIdx: get(activeNestedWorkspaceIdx),
   });
 }
 
@@ -83,7 +83,7 @@ export async function createWorkspace(name: string) {
 
   const surface = await createTerminalSurface(pane);
 
-  workspaces.update((list) => [...list, ws]);
+  nestedWorkspaces.update((list) => [...list, ws]);
   // Add to the root-row list. If an extension handler for
   // workspace:created claims this workspace (e.g. project-scope
   // inserting it under a project), claimWorkspace will remove it from
@@ -94,8 +94,8 @@ export async function createWorkspace(name: string) {
   // Route activation through switchWorkspace so any listener on
   // workspace:activated (e.g. agentic-orchestrator re-spawning a
   // dashboard preview surface, core focus bookkeeping) fires for
-  // fresh workspaces the same way it would for a user-driven switch.
-  switchWorkspace(get(workspaces).length - 1);
+  // fresh nestedWorkspaces the same way it would for a user-driven switch.
+  switchWorkspace(get(nestedWorkspaces).length - 1);
   void safeFocus(surface);
   schedulePersist();
 }
@@ -104,7 +104,7 @@ export async function createWorkspaceFromDef(
   def: NestedWorkspaceDef,
   options?: { restoring?: boolean },
 ): Promise<string> {
-  const wsName = def.name || `Workspace ${get(workspaces).length + 1}`;
+  const wsName = def.name || `Workspace ${get(nestedWorkspaces).length + 1}`;
   const rootCwd = def.cwd;
   const rootEnv = def.env;
   const restoring = options?.restoring === true;
@@ -211,7 +211,7 @@ export async function createWorkspaceFromDef(
     ...(def.metadata ? { metadata: def.metadata } : {}),
   };
 
-  workspaces.update((list) => [...list, ws]);
+  nestedWorkspaces.update((list) => [...list, ws]);
   appendRootRow({ kind: "workspace", id: ws.id });
   eventBus.emit({
     type: "workspace:created",
@@ -227,9 +227,9 @@ export async function createWorkspaceFromDef(
   // has been rebuilt, and we don't want N+1 activation events along
   // the way.
   if (!restoring) {
-    switchWorkspace(get(workspaces).length - 1);
+    switchWorkspace(get(nestedWorkspaces).length - 1);
   } else {
-    activeWorkspaceIdx.set(get(workspaces).length - 1);
+    activeNestedWorkspaceIdx.set(get(nestedWorkspaces).length - 1);
   }
   const ap = getAllPanes(splitRoot).find((p) => p.id === ws.activePaneId);
   const as_ = ap?.surfaces.find((s) => s.id === ap.activeSurfaceId);
@@ -239,15 +239,15 @@ export async function createWorkspaceFromDef(
 }
 
 export function switchWorkspace(idx: number) {
-  const wsList = get(workspaces);
+  const wsList = get(nestedWorkspaces);
   if (idx < 0 || idx >= wsList.length) return;
   const previousId =
-    get(activeWorkspaceIdx) >= 0
-      ? (wsList[get(activeWorkspaceIdx)]?.id ?? null)
+    get(activeNestedWorkspaceIdx) >= 0
+      ? (wsList[get(activeNestedWorkspaceIdx)]?.id ?? null)
       : null;
   activePseudoWorkspaceId.set(null);
   zoomedSurfaceId.set(null);
-  activeWorkspaceIdx.set(idx);
+  activeNestedWorkspaceIdx.set(idx);
   eventBus.emit({
     type: "workspace:activated",
     id: wsList[idx]!.id,
@@ -257,7 +257,7 @@ export function switchWorkspace(idx: number) {
 }
 
 export function closeWorkspace(idx: number) {
-  const wsList = get(workspaces);
+  const wsList = get(nestedWorkspaces);
   const ws = wsList[idx];
   if (!ws) return;
   for (const pane of getAllPanes(ws.splitRoot)) {
@@ -278,9 +278,9 @@ export function closeWorkspace(idx: number) {
     zoomedSurfaceId.set(null);
   }
   const wsId = ws.id;
-  workspaces.update((list) => list.filter((_, i) => i !== idx));
-  activeWorkspaceIdx.set(
-    Math.min(get(activeWorkspaceIdx), get(workspaces).length - 1),
+  nestedWorkspaces.update((list) => list.filter((_, i) => i !== idx));
+  activeNestedWorkspaceIdx.set(
+    Math.min(get(activeNestedWorkspaceIdx), get(nestedWorkspaces).length - 1),
   );
   removeRootRow({ kind: "workspace", id: wsId });
   eventBus.emit({ type: "workspace:closed", id: wsId });
@@ -288,9 +288,9 @@ export function closeWorkspace(idx: number) {
 }
 
 export function renameWorkspace(idx: number, name: string) {
-  const oldName = get(workspaces)[idx]?.name ?? "";
-  const id = get(workspaces)[idx]?.id ?? "";
-  workspaces.update((list) => {
+  const oldName = get(nestedWorkspaces)[idx]?.name ?? "";
+  const id = get(nestedWorkspaces)[idx]?.id ?? "";
+  nestedWorkspaces.update((list) => {
     list[idx]!.name = name;
     return [...list];
   });
@@ -299,13 +299,13 @@ export function renameWorkspace(idx: number, name: string) {
 }
 
 /**
- * Toggle the `locked` flag on a workspace's metadata. Locked workspaces
+ * Toggle the `locked` flag on a workspace's metadata. Locked nestedWorkspaces
  * have their drag-reorder and close affordances suppressed in the UI.
  * No-op if no workspace with the given id exists.
  */
 export function toggleWorkspaceLock(workspaceId: string): void {
   let changed = false;
-  workspaces.update((list) =>
+  nestedWorkspaces.update((list) =>
     list.map((ws) => {
       if (ws.id !== workspaceId) return ws;
       changed = true;
@@ -320,16 +320,16 @@ export function toggleWorkspaceLock(workspaceId: string): void {
 }
 
 export function reorderWorkspaces(fromIdx: number, toIdx: number) {
-  const activeId = get(workspaces)[get(activeWorkspaceIdx)]?.id;
-  workspaces.update((list) => {
+  const activeId = get(nestedWorkspaces)[get(activeNestedWorkspaceIdx)]?.id;
+  nestedWorkspaces.update((list) => {
     const item = list.splice(fromIdx, 1)[0]!;
     const adjustedTo = fromIdx < toIdx ? toIdx - 1 : toIdx;
     list.splice(adjustedTo, 0, item);
     return [...list];
   });
   if (activeId) {
-    const newIdx = get(workspaces).findIndex((ws) => ws.id === activeId);
-    if (newIdx >= 0) activeWorkspaceIdx.set(newIdx);
+    const newIdx = get(nestedWorkspaces).findIndex((ws) => ws.id === activeId);
+    if (newIdx >= 0) activeNestedWorkspaceIdx.set(newIdx);
   }
   schedulePersist();
 }
@@ -405,7 +405,7 @@ export async function saveCurrentWorkspace() {
 }
 
 export async function closeAllWorkspaces(): Promise<void> {
-  const count = get(workspaces).length;
+  const count = get(nestedWorkspaces).length;
   if (count === 0) return;
   const confirmed = await showConfirmPrompt(
     `Close all ${count} workspace${count === 1 ? "" : "s"}? This will dispose every terminal and cannot be undone.`,
@@ -418,7 +418,7 @@ export async function closeAllWorkspaces(): Promise<void> {
   if (!confirmed) return;
   // closeWorkspace mutates the store and shifts indices, so always pop
   // index 0 until the list is empty.
-  while (get(workspaces).length > 0) {
+  while (get(nestedWorkspaces).length > 0) {
     closeWorkspace(0);
   }
 }
@@ -466,7 +466,7 @@ export function createWorkspaceFromSurface(
     | { kind: "root"; insertIdx: number }
     | { kind: "group"; positionInGroup: number; targetGroupId?: string },
 ): void {
-  const allWs = get(workspaces);
+  const allWs = get(nestedWorkspaces);
   const srcWs = allWs.find((w) => w.id === sourceWorkspaceId);
   if (!srcWs) return;
   if (getAllSurfaces(srcWs).length < 2) return;
@@ -514,7 +514,7 @@ export function createWorkspaceFromSurface(
     ...(effectiveGroupId ? { metadata: { groupId: effectiveGroupId } } : {}),
   };
 
-  workspaces.update((list) => [...list, newWs]);
+  nestedWorkspaces.update((list) => [...list, newWs]);
   if (insertOptions?.kind === "root") {
     insertRootRow(insertOptions.insertIdx, { kind: "workspace", id: newWs.id });
   } else {
@@ -535,17 +535,17 @@ export function createWorkspaceFromSurface(
 }
 
 // Re-exported so pane-service (which lives next to it) can collapse a
-// pane after moving a surface across workspaces without duplicating
+// pane after moving a surface across nestedWorkspaces without duplicating
 // the helper.
 export { collapseEmptyPaneInWorkspace };
 
 // Derived store: one flat Map<workspaceId, Surface[]> rebuilt per workspace
 // update. WorkspaceItem rows still re-run their reactive statement on every
-// workspaces emission, but each pays only a Map.get() O(1) lookup instead of
+// nestedWorkspaces emission, but each pays only a Map.get() O(1) lookup instead of
 // calling getAllSurfaces independently — O(W×S) once vs O(R×W×S) before.
 export const workspaceSurfaceMap: Readable<
   Map<string, ReturnType<typeof getAllSurfaces>>
-> = derived(workspaces, ($ws) => {
+> = derived(nestedWorkspaces, ($ws) => {
   const m = new Map<string, ReturnType<typeof getAllSurfaces>>();
   for (const ws of $ws) m.set(ws.id, getAllSurfaces(ws));
   return m;

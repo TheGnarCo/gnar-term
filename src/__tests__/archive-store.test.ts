@@ -4,7 +4,7 @@ import { get } from "svelte/store";
 vi.mock("../lib/config", () => ({
   getState: vi.fn(() => ({
     archivedOrder: [],
-    archivedDefs: { workspaces: {}, groups: {} },
+    archivedDefs: { nestedWorkspaces: {}, groups: {} },
   })),
   saveState: vi.fn(() => Promise.resolve()),
 }));
@@ -32,7 +32,7 @@ describe("addToArchive", () => {
     };
     addToArchive({ kind: "workspace", id: "ws-1" }, { def });
     expect(get(archivedOrder)).toEqual([{ kind: "workspace", id: "ws-1" }]);
-    expect(get(archivedDefs).workspaces["ws-1"]).toEqual({ def });
+    expect(get(archivedDefs).nestedWorkspaces["ws-1"]).toEqual({ def });
   });
 
   it("adds a group entry to archivedOrder and archivedDefs", () => {
@@ -69,7 +69,7 @@ describe("removeFromArchive", () => {
     addToArchive({ kind: "workspace", id: "ws-1" }, { def });
     removeFromArchive({ kind: "workspace", id: "ws-1" });
     expect(get(archivedOrder)).toHaveLength(0);
-    expect(get(archivedDefs).workspaces["ws-1"]).toBeUndefined();
+    expect(get(archivedDefs).nestedWorkspaces["ws-1"]).toBeUndefined();
   });
 
   it("is a no-op for a missing entry", () => {
@@ -83,7 +83,7 @@ describe("initArchiveFromState", () => {
     vi.mocked(getState).mockReturnValueOnce({
       archivedOrder: [{ kind: "workspace", id: "ws-2" }],
       archivedDefs: {
-        workspaces: {
+        nestedWorkspaces: {
           "ws-2": {
             def: {
               id: "ws-2",
@@ -97,7 +97,7 @@ describe("initArchiveFromState", () => {
     } as ReturnType<typeof getState>);
     initArchiveFromState();
     expect(get(archivedOrder)).toEqual([{ kind: "workspace", id: "ws-2" }]);
-    expect(get(archivedDefs).workspaces["ws-2"]).toBeDefined();
+    expect(get(archivedDefs).nestedWorkspaces["ws-2"]).toBeDefined();
   });
 
   it("filters out malformed rows from persisted archivedOrder", () => {
@@ -110,7 +110,7 @@ describe("initArchiveFromState", () => {
         "string",
         { kind: "workspace-group", id: "ok-group" },
       ] as unknown as { kind: string; id: string }[],
-      archivedDefs: { workspaces: {}, groups: {} },
+      archivedDefs: { nestedWorkspaces: {}, groups: {} },
     } as ReturnType<typeof getState>);
     initArchiveFromState();
     expect(get(archivedOrder)).toEqual([

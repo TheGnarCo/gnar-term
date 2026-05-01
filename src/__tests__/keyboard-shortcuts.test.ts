@@ -96,7 +96,7 @@ describe("keyboard-shortcuts — clear + find bindings", () => {
     isTerminalSurfaceMock.mockReturnValue(true);
     const { workspace } = await loadModule();
     // Seed activeSurface with a fake terminal surface.
-    workspace.workspaces.set([
+    workspace.nestedWorkspaces.set([
       {
         id: "ws",
         name: "ws",
@@ -118,7 +118,7 @@ describe("keyboard-shortcuts — clear + find bindings", () => {
         activePaneId: "p",
       } as never,
     ]);
-    workspace.activeWorkspaceIdx.set(0);
+    workspace.activeNestedWorkspaceIdx.set(0);
   });
 
   describe("macOS platform", () => {

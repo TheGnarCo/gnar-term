@@ -1,7 +1,7 @@
 /**
- * GitStatusLine regression tests: ensure normal nested workspaces suppress
+ * GitStatusLine regression tests: ensure normal nested nestedWorkspaces suppress
  * their inline git-info row (the project row shows shared diff/branch
- * state). Worktree nested workspaces keep it — branch and dirty state
+ * state). Worktree nested nestedWorkspaces keep it — branch and dirty state
  * are per-worktree and not redundant with the project row.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
@@ -16,7 +16,10 @@ vi.mock("@tauri-apps/api/event", () => ({
 }));
 
 import GitStatusLine from "../lib/components/GitStatusLine.svelte";
-import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
+import {
+  nestedWorkspaces,
+  activeNestedWorkspaceIdx,
+} from "../lib/stores/workspace";
 import {
   setStatusItem,
   clearAllStatusForWorkspace,
@@ -48,15 +51,15 @@ function setDirty(workspaceId: string) {
 import { get } from "svelte/store";
 
 function activate(wsId: string) {
-  const idx = get(workspaces).findIndex((w) => w.id === wsId);
-  activeWorkspaceIdx.set(idx);
+  const idx = get(nestedWorkspaces).findIndex((w) => w.id === wsId);
+  activeNestedWorkspaceIdx.set(idx);
 }
 
 describe("GitStatusLine nested rules", () => {
   beforeEach(() => {
     cleanup();
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
+    nestedWorkspaces.set([]);
+    activeNestedWorkspaceIdx.set(-1);
     clearAllStatusForWorkspace("ws-nested");
     clearAllStatusForWorkspace("ws-worktree");
     clearAllStatusForWorkspace("ws-root");
@@ -64,7 +67,7 @@ describe("GitStatusLine nested rules", () => {
 
   it("hides inline git-info for a normal nested workspace (no worktreePath)", () => {
     const ws = makeWorkspace("ws-nested", { groupId: "p1" });
-    workspaces.set([ws]);
+    nestedWorkspaces.set([ws]);
     activate(ws.id);
     setDirty(ws.id);
     const { container } = render(GitStatusLine, {
@@ -79,7 +82,7 @@ describe("GitStatusLine nested rules", () => {
       worktreePath: "/work/wt",
       branch: "feat/x",
     });
-    workspaces.set([ws]);
+    nestedWorkspaces.set([ws]);
     activate(ws.id);
     setDirty(ws.id);
     const { container } = render(GitStatusLine, {
@@ -95,8 +98,8 @@ describe("GitStatusLine nested rules", () => {
       worktreePath: "/work/wt",
       branch: "feat/x",
     });
-    workspaces.set([ws]);
-    // leave activeWorkspaceIdx = -1 → workspace is inactive
+    nestedWorkspaces.set([ws]);
+    // leave activeNestedWorkspaceIdx = -1 → workspace is inactive
     setDirty(ws.id);
     const { container } = render(GitStatusLine, {
       props: { workspaceId: ws.id },
@@ -107,7 +110,7 @@ describe("GitStatusLine nested rules", () => {
 
   it("does not render dirty label for a root workspace — WorkspaceDiffPrSubtitle owns that row", () => {
     const ws = makeWorkspace("ws-root", {});
-    workspaces.set([ws]);
+    nestedWorkspaces.set([ws]);
     activate(ws.id);
     setDirty(ws.id);
     const { container } = render(GitStatusLine, {

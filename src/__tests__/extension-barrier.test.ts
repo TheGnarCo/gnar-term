@@ -67,7 +67,7 @@ describe("Extension barrier enforcement", () => {
         // piercing above.
         "../../lib/services/workspace-group-service",
         "../../lib/stores/workspace-groups",
-        // The back-fill provision loop must wait for workspaces to be
+        // The back-fill provision loop must wait for nestedWorkspaces to be
         // restored before running (races the restore loop on startup).
         // waitRestored() resolves immediately on runtime-enable, defers
         // during startup — no ExtensionAPI hook exposes this signal.
@@ -91,7 +91,7 @@ describe("Extension barrier enforcement", () => {
       ],
       // Prs is the read-only sibling of Issues — same gh-availability
       // probe + DashboardHostContext piercings, but no spawn-helper
-      // since the widget never spawns workspaces.
+      // since the widget never spawns nestedWorkspaces.
       "agentic-orchestrator/components/Prs.svelte": [
         "../../../lib/services/gh-availability",
         "../../../lib/contexts/dashboard-host",
@@ -137,8 +137,8 @@ describe("Extension barrier enforcement", () => {
       // claude-settings/index.ts mirrors the agentic-orchestrator piercing
       // pattern: createWorkspaceFromDef to materialize the group dashboard,
       // workspace-group-service + workspace-groups for auto-provision on
-      // activate, and restore-workspaces to defer the back-fill loop until
-      // workspaces are restored.
+      // activate, and restore-nestedWorkspaces to defer the back-fill loop until
+      // nestedWorkspaces are restored.
       "claude-settings/index.ts": [
         "../../lib/services/workspace-service",
         "../../lib/services/workspace-group-service",

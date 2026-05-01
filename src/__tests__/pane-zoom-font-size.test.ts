@@ -120,8 +120,8 @@ vi.stubGlobal("ResizeObserver", MockResizeObserver);
 
 import {
   zoomedSurfaceId,
-  workspaces,
-  activeWorkspaceIdx,
+  nestedWorkspaces,
+  activeNestedWorkspaceIdx,
 } from "../lib/stores/workspace";
 import { uid } from "../lib/types";
 import type { Pane, TerminalSurface, NestedWorkspace } from "../lib/types";
@@ -173,8 +173,8 @@ function makeWorkspace(pane: Pane): NestedWorkspace {
 // Reset stores and mock state before each test
 beforeEach(() => {
   zoomedSurfaceId.set(null);
-  workspaces.set([]);
-  activeWorkspaceIdx.set(-1);
+  nestedWorkspaces.set([]);
+  activeNestedWorkspaceIdx.set(-1);
   _mockFontSize = undefined;
   vi.clearAllMocks();
   // Re-apply the saveConfig side-effect after clearAllMocks
@@ -220,8 +220,8 @@ describe("switchWorkspace clears zoom", () => {
     const p2 = makePane([s2]);
     const ws1 = makeWorkspace(p1);
     const ws2 = makeWorkspace(p2);
-    workspaces.set([ws1, ws2]);
-    activeWorkspaceIdx.set(0);
+    nestedWorkspaces.set([ws1, ws2]);
+    activeNestedWorkspaceIdx.set(0);
 
     // Zoom a surface in workspace 0
     zoomedSurfaceId.set(s1.id);
@@ -270,8 +270,8 @@ describe("adjustFontSize", () => {
     const surf2 = mockTerminalSurface();
     const p = makePane([surf1, surf2]);
     const ws = makeWorkspace(p);
-    workspaces.set([ws]);
-    activeWorkspaceIdx.set(0);
+    nestedWorkspaces.set([ws]);
+    activeNestedWorkspaceIdx.set(0);
 
     adjustFontSize(2);
 
@@ -285,8 +285,8 @@ describe("adjustFontSize", () => {
     const fitSpy = vi.spyOn(surf.fitAddon, "fit");
     const p = makePane([surf]);
     const ws = makeWorkspace(p);
-    workspaces.set([ws]);
-    activeWorkspaceIdx.set(0);
+    nestedWorkspaces.set([ws]);
+    activeNestedWorkspaceIdx.set(0);
 
     adjustFontSize(1);
 

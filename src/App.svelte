@@ -15,8 +15,8 @@
     showInputPrompt,
   } from "./lib/stores/ui";
   import {
-    workspaces,
-    activeWorkspaceIdx,
+    nestedWorkspaces,
+    activeNestedWorkspaceIdx,
     activePane,
     activeSurface,
     activePseudoWorkspaceId,
@@ -146,7 +146,7 @@
 
   // Module-scoped within this component instance; gates the bulk
   // "Restore commands?" dialog so it only fires once per launch even if
-  // workspaces are re-restored later (rare, but possible via dev reload).
+  // nestedWorkspaces are re-restored later (rare, but possible via dev reload).
   let restoreCommandsOverlayShown = false;
   let showRestoreCommandsOverlay = false;
 
@@ -161,7 +161,7 @@
   // Close the primary sidebar when the last workspace is removed.
   let _prevWorkspaceCount = 0;
   $: {
-    const count = $workspaces.length;
+    const count = $nestedWorkspaces.length;
     if (_prevWorkspaceCount > 0 && count === 0) {
       primarySidebarVisible.set(false);
     }
@@ -204,13 +204,13 @@
   /**
    * Jump to the next surface with an unread notification. Search order is
    * deterministic — start at the active workspace's active pane and walk
-   * forward through workspaces / panes / surfaces, wrapping around. The
+   * forward through nestedWorkspaces / panes / surfaces, wrapping around. The
    * landed surface is marked read; other unreads stay until visited.
    */
   function jumpToNextUnread(): void {
-    const ws = $workspaces;
+    const ws = $nestedWorkspaces;
     if (ws.length === 0) return;
-    const startWsIdx = Math.max(0, $activeWorkspaceIdx);
+    const startWsIdx = Math.max(0, $activeNestedWorkspaceIdx);
     const len = ws.length;
     for (let i = 0; i < len; i++) {
       const wsIdx = (startWsIdx + i) % len;
@@ -220,10 +220,10 @@
       for (const p of panes) {
         const surface = p.surfaces.find((s) => s.hasUnread);
         if (!surface) continue;
-        if (wsIdx !== $activeWorkspaceIdx) switchWorkspace(wsIdx);
+        if (wsIdx !== $activeNestedWorkspaceIdx) switchWorkspace(wsIdx);
         focusPane(p.id);
         selectSurface(p.id, surface.id);
-        workspaces.update((wsList) => {
+        nestedWorkspaces.update((wsList) => {
           surface.hasUnread = false;
           surface.notification = undefined;
           return [...wsList];
@@ -240,7 +240,8 @@
       id: "core.new-workspace",
       title: "New Workspace",
       shortcut: `${shiftModLabel}N`,
-      action: () => createWorkspace(`Workspace ${$workspaces.length + 1}`),
+      action: () =>
+        createWorkspace(`Workspace ${$nestedWorkspaces.length + 1}`),
       source: "core",
     },
     {
@@ -280,16 +281,16 @@
       shortcut: isMac ? `${shiftModLabel}W` : `${shiftModLabel}Q`,
       action: () => {
         void (async () => {
-          const ws = $workspaces[$activeWorkspaceIdx];
+          const ws = $nestedWorkspaces[$activeNestedWorkspaceIdx];
           if (!ws) return;
-          await confirmAndCloseWorkspace(ws, $activeWorkspaceIdx);
+          await confirmAndCloseWorkspace(ws, $activeNestedWorkspaceIdx);
         })();
       },
       source: "core",
     },
     {
       // Palette-only escape hatch for nuking stale state — e.g. orphaned
-      // workspaces left behind by group deletion on older builds.
+      // nestedWorkspaces left behind by group deletion on older builds.
       // Intentionally no shortcut (destructive, rarely wanted).
       id: "core.close-all-workspaces",
       title: "Close All Workspaces",
@@ -385,7 +386,7 @@
       action: () => resetFontSize(),
       source: "core",
     },
-    ...$workspaces.map((ws, i) => ({
+    ...$nestedWorkspaces.map((ws, i) => ({
       id: `core.switch-workspace-${ws.id}`,
       title: `Switch to: ${ws.name}`,
       shortcut: i < 9 ? `${modLabel}${i + 1}` : undefined,
@@ -504,11 +505,15 @@
         action.props,
       );
     } else if (action.type === "switch-workspace") {
-      const idx = $workspaces.findIndex((w) => w.id === action.workspaceId);
+      const idx = $nestedWorkspaces.findIndex(
+        (w) => w.id === action.workspaceId,
+      );
       if (idx >= 0) switchWorkspace(idx);
     } else if (action.type === "close-workspace") {
-      const idx = $workspaces.findIndex((w) => w.id === action.workspaceId);
-      const ws = $workspaces[idx];
+      const idx = $nestedWorkspaces.findIndex(
+        (w) => w.id === action.workspaceId,
+      );
+      const ws = $nestedWorkspaces[idx];
       if (idx >= 0 && ws) void confirmAndCloseWorkspace(ws, idx);
     }
   }
@@ -518,7 +523,7 @@
   function handleKeydown(e: KeyboardEvent) {
     handleAppKeydown(e, {
       startRenameActiveWorkspace: () =>
-        sidebarComponent?.startRename($activeWorkspaceIdx),
+        sidebarComponent?.startRename($activeNestedWorkspaceIdx),
       findNext: () => findBarComponent?.findNext(),
       findPrev: () => findBarComponent?.findPrev(),
     });
@@ -633,7 +638,7 @@
       source: "core",
       handler: (ctx) => {
         if (ctx.groupId && ctx.groupPath) {
-          const name = `Workspace ${get(workspaces).length + 1}`;
+          const name = `Workspace ${get(nestedWorkspaces).length + 1}`;
           void createWorkspaceFromDef({
             name,
             cwd: ctx.groupPath as string,
@@ -647,12 +652,12 @@
     });
 
     await restoreWorkspaces(cliArgs, config);
-    // Signal that workspaces are in the store so deferred work (the
+    // Signal that nestedWorkspaces are in the store so deferred work (the
     // agentic extension's provision loop, reconcileGroupDashboards) can
-    // safely read and write the workspaces store without racing restore.
+    // safely read and write the nestedWorkspaces store without racing restore.
     markRestored();
-    // Backfill primaryWorkspaceId and wrap standalone workspaces now that
-    // the workspaces store is populated.
+    // Backfill primaryWorkspaceId and wrap standalone nestedWorkspaces now that
+    // the nestedWorkspaces store is populated.
     await reconcilePrimaryWorkspaces();
     setupPrimaryWorkspaceAutoRecreation();
     void reconcileGroupDashboards();
@@ -660,21 +665,21 @@
     // Rehydrate the persisted root-row order so drag-sorted layouts
     // survive across restarts. Entities are all registered by this
     // point — extensions (projects, agent dashboards) appended during
-    // activation, and restoreWorkspaces appended workspaces — so the
+    // activation, and restoreWorkspaces appended nestedWorkspaces — so the
     // known set is stable. bootstrapRootRowOrder re-sorts to match the
     // persisted order and appends any brand-new entity at the end.
     const currentOrder = get(rootRowOrder);
     const extensionRows = currentOrder.filter((r) => r.kind !== "workspace");
     const claimed = get(claimedWorkspaceIds);
     bootstrapRootRowOrder(
-      get(workspaces)
+      get(nestedWorkspaces)
         .filter((w) => !claimed.has(w.id))
         .map((w) => w.id),
       extensionRows,
     );
 
     if (!restoreCommandsOverlayShown) {
-      const hasPending = $workspaces.some((ws) =>
+      const hasPending = $nestedWorkspaces.some((ws) =>
         getAllSurfaces(ws).some(
           (s) => isTerminalSurface(s) && s.pendingRestoreCommand,
         ),
@@ -825,10 +830,10 @@
       id="terminal-area"
       style="flex: 1; display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; position: relative;"
     >
-      {#each $workspaces as ws, i (ws.id)}
+      {#each $nestedWorkspaces as ws, i (ws.id)}
         <WorkspaceView
           workspace={ws}
-          visible={i === $activeWorkspaceIdx &&
+          visible={i === $activeNestedWorkspaceIdx &&
             $activePseudoWorkspaceId === null}
           onSelectSurface={selectSurface}
           onCloseSurface={closeSurfaceById}
@@ -863,7 +868,7 @@
         </div>
       {/each}
 
-      {#if ($workspaces.length === 0 || $activeWorkspaceIdx < 0) && $activePseudoWorkspaceId === null}
+      {#if ($nestedWorkspaces.length === 0 || $activeNestedWorkspaceIdx < 0) && $activePseudoWorkspaceId === null}
         <EmptySurface />
       {/if}
 

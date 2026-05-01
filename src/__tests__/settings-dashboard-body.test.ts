@@ -23,7 +23,10 @@ globalThis.ResizeObserver =
   ResizeObserverStub as unknown as typeof ResizeObserver;
 
 import PaneView from "../lib/components/PaneView.svelte";
-import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
+import {
+  nestedWorkspaces,
+  activeNestedWorkspaceIdx,
+} from "../lib/stores/workspace";
 import { workspaceGroupsStore } from "../lib/stores/workspace-groups";
 import type { NestedWorkspace, Pane } from "../lib/types";
 
@@ -41,8 +44,8 @@ const noop = () => {};
 describe("PaneView — settings dashboard body", () => {
   beforeEach(() => {
     cleanup();
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
+    nestedWorkspaces.set([]);
+    activeNestedWorkspaceIdx.set(-1);
     workspaceGroupsStore.set([]);
   });
 
@@ -70,8 +73,8 @@ describe("PaneView — settings dashboard body", () => {
         dashboardContributionId: "settings",
       },
     } as unknown as NestedWorkspace;
-    workspaces.set([ws]);
-    activeWorkspaceIdx.set(0);
+    nestedWorkspaces.set([ws]);
+    activeNestedWorkspaceIdx.set(0);
 
     const pane = (ws.splitRoot as { type: "pane"; pane: Pane }).pane;
     const { container } = render(PaneView, {

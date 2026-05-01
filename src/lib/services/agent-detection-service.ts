@@ -9,7 +9,7 @@
  *
  * What it does:
  *   1. On init, bootstraps tracking for every pre-existing terminal
- *      surface across all workspaces and panes — then subscribes to
+ *      surface across all nestedWorkspaces and panes — then subscribes to
  *      surface:created / :titleChanged / :closed for new/changed/closed
  *      surfaces.
  *   2. Matches PTY titles and streaming output against a pattern list
@@ -45,7 +45,7 @@ import {
 } from "./status-registry";
 import { statusRegistry } from "./status-registry";
 import { markSurfaceUnreadById } from "./surface-service";
-import { workspaces } from "../stores/workspace";
+import { nestedWorkspaces } from "../stores/workspace";
 import { getAllPanes, isTerminalSurface } from "../types";
 import {
   lookupSurfaceWorkspaceId,
@@ -329,7 +329,7 @@ function allTerminalSurfaces(): Array<{
   title: string;
   workspaceId: string;
 }> {
-  const all = get(workspaces);
+  const all = get(nestedWorkspaces);
   const out: Array<{ id: string; title: string; workspaceId: string }> = [];
   for (const ws of all) {
     for (const pane of getAllPanes(ws.splitRoot)) {
@@ -414,7 +414,7 @@ function detachAgent(tracked: TrackedSurface): void {
   const agent = _agents.find((a) => a.agentId === tracked.agentId);
   // Re-resolve at detach time in case the surface was attached before
   // its owning workspace was known (workspaceId=""), or moved between
-  // workspaces after attach — otherwise the per-surface registry item
+  // nestedWorkspaces after attach — otherwise the per-surface registry item
   // would leak with no way to clear it.
   const workspaceId =
     agent?.workspaceId && agent.workspaceId !== ""
@@ -428,7 +428,7 @@ function detachAgent(tracked: TrackedSurface): void {
   syncStore();
 
   if (tracked.preAgentTitle) {
-    const all = get(workspaces);
+    const all = get(nestedWorkspaces);
     for (const ws of all) {
       for (const pane of getAllPanes(ws.splitRoot)) {
         for (const surface of pane.surfaces) {
@@ -438,7 +438,7 @@ function detachAgent(tracked: TrackedSurface): void {
         }
       }
     }
-    workspaces.update((l) => [...l]);
+    nestedWorkspaces.update((l) => [...l]);
   }
 
   tracked.agentId = null;
@@ -655,7 +655,7 @@ export function initAgentDetection(): void {
     if (!tracked) {
       // Missed surface:created (e.g. init raced with a restore) —
       // attach now using the current title from the workspace store
-      // (may be empty if workspaces haven't loaded yet) and fall
+      // (may be empty if nestedWorkspaces haven't loaded yet) and fall
       // through to observer wiring.
       const currentTitleForPty =
         allTerminalSurfaces().find((s) => s.id === event.id)?.title ?? "";
@@ -687,11 +687,11 @@ export function initAgentDetection(): void {
 
   // Re-detect agents when the workspace store is populated or updated.
   // Handles the startup race where surface events (surface:created,
-  // surface:ptyReady) arrive before workspaces finish loading — at that
+  // surface:ptyReady) arrive before nestedWorkspaces finish loading — at that
   // point allTerminalSurfaces() returned [] so surfaces were tracked
-  // without agents. When workspaces load, this subscription re-checks
+  // without agents. When nestedWorkspaces load, this subscription re-checks
   // unattached surfaces against their now-known titles.
-  const unsubWorkspaces = workspaces.subscribe(() => {
+  const unsubWorkspaces = nestedWorkspaces.subscribe(() => {
     // Build the surface-title lookup once per emission rather than calling
     // allTerminalSurfaces() for each unattached surface (O(W×P×S) vs.
     // O(tracked × W×P×S) per emission — F12 perf fix).

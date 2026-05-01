@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { get } from "svelte/store";
   import { theme } from "../stores/theme";
-  import { workspaces } from "../stores/workspace";
+  import { nestedWorkspaces } from "../stores/workspace";
   import {
     getAllPanes,
     isTerminalSurface,
@@ -28,7 +28,7 @@
 
   function collectRows(): Row[] {
     const out: Row[] = [];
-    for (const ws of get(workspaces)) {
+    for (const ws of get(nestedWorkspaces)) {
       for (const pane of getAllPanes(ws.splitRoot)) {
         for (const s of pane.surfaces) {
           if (

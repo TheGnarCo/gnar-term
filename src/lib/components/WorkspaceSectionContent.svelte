@@ -6,7 +6,10 @@
   import { resolveGroupColor } from "../theme-data";
   import { theme } from "../stores/theme";
   import { runCommandById } from "../services/command-registry";
-  import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
+  import {
+    nestedWorkspaces,
+    activeNestedWorkspaceIdx,
+  } from "../stores/workspace";
   import { eventBus, type ExtensionEvent } from "../services/event-bus";
   import type { Workspace } from "../config";
   import {
@@ -72,7 +75,7 @@
   /**
    * Group overlay directive, resolved by the parent from the current
    * reorder context. Covers the entire group block (header +
-   * workspaces) as one zone.
+   * nestedWorkspaces) as one zone.
    */
   export let overlay:
     | { kind: "strong"; label: string }
@@ -96,13 +99,13 @@
     );
   });
 
-  // Re-read whenever the groups list, the workspaces store, or state
+  // Re-read whenever the groups list, the nestedWorkspaces store, or state
   // version changes. The store subscription covers mutations through
   // setWorkspaceGroups; stateVersion is there for parity with other
   // extension-driven consumers that listen for the event directly.
   $: {
     void $workspaceGroupsStore;
-    void $workspaces;
+    void $nestedWorkspaces;
     void stateVersion;
     group = getWorkspaceGroup(groupId);
   }
@@ -112,14 +115,14 @@
   // The primary workspace drives the container row's status dot. It is
   // excluded from the nested list — clicking the row activates it directly.
   $: primaryWs = group?.primaryWorkspaceId
-    ? $workspaces.find((w) => w.id === group!.primaryWorkspaceId)
+    ? $nestedWorkspaces.find((w) => w.id === group!.primaryWorkspaceId)
     : undefined;
 
-  // Nested list shows worktree workspaces only (excludes primary and dashboards).
+  // Nested list shows worktree nestedWorkspaces only (excludes primary and dashboards).
   $: nestedIds = group
     ? new Set(
         group.workspaceIds.filter((id) => {
-          const ws = $workspaces.find((w) => w.id === id);
+          const ws = $nestedWorkspaces.find((w) => w.id === id);
           if (!ws) return false;
           const md = wsMeta(ws);
           return !md.isDashboard && id !== group!.primaryWorkspaceId;
@@ -127,7 +130,7 @@
       )
     : new Set<string>();
 
-  // Most-active bot status across all workspaces in this group.
+  // Most-active bot status across all nestedWorkspaces in this group.
   $: groupAgents = $agentsStore.filter((a) => filterIds.has(a.workspaceId));
   $: groupBotStatus = (() => {
     if (groupAgents.length === 0) return null;
@@ -150,7 +153,7 @@
   // is selected (not when a nested workspace is selected).
   $: isPrimaryActive = (() => {
     if (!primaryWs) return false;
-    return $activeWorkspaceIdx === $workspaces.indexOf(primaryWs);
+    return $activeNestedWorkspaceIdx === $nestedWorkspaces.indexOf(primaryWs);
   })();
 
   // Re-evaluate contributed children when contributors register/unregister.
@@ -195,7 +198,7 @@
   async function handleDeleteGroup() {
     const g = group;
     if (!g) return;
-    const nestedCount = $workspaces.filter((w) => {
+    const nestedCount = $nestedWorkspaces.filter((w) => {
       const md = wsMeta(w);
       return md?.groupId === g.id && !md?.isDashboard;
     }).length;
@@ -218,7 +221,7 @@
     if (!group || isPrimaryActive) return;
     // Prefer the primary workspace; fall back to the dashboard then first nested.
     if (primaryWs) {
-      const idx = $workspaces.indexOf(primaryWs);
+      const idx = $nestedWorkspaces.indexOf(primaryWs);
       if (idx >= 0) {
         switchWorkspace(idx);
         return;
@@ -234,7 +237,7 @@
         updateWorkspaceGroup(group.id, { primaryWorkspaceId: newWsId });
         claimWorkspace(newWsId, "core");
         // Re-fetch the workspace list to get the new workspace
-        const newIdx = $workspaces.findIndex((w) => w.id === newWsId);
+        const newIdx = $nestedWorkspaces.findIndex((w) => w.id === newWsId);
         if (newIdx >= 0) {
           switchWorkspace(newIdx);
         }
@@ -242,7 +245,7 @@
       }
     }
     if (openGroupDashboard(group)) return;
-    const nestedIdx = $workspaces.findIndex((w) => {
+    const nestedIdx = $nestedWorkspaces.findIndex((w) => {
       return wsMeta(w)?.groupId === group!.id;
     });
     if (nestedIdx >= 0) switchWorkspace(nestedIdx);
@@ -306,7 +309,7 @@
   $: dashboardWorkspaces = (() => {
     const gId = group?.id;
     if (!gId) return [] as Array<{ ws: NestedWorkspace; idx: number }>;
-    return $workspaces
+    return $nestedWorkspaces
       .map((ws, idx) => ({ ws, idx }))
       .filter(({ ws }) => {
         const md = wsMeta(ws);
@@ -325,7 +328,7 @@
     y: number,
     globalIdx: number,
   ): void {
-    const ws = $workspaces[globalIdx];
+    const ws = $nestedWorkspaces[globalIdx];
     if (!ws) return;
     const md = wsMeta(ws);
     const contribId = md?.dashboardContributionId;
@@ -353,7 +356,7 @@
     contextMenu.set({ x, y, items });
   }
 
-  // Dashboard-hint for nested workspaces: any workspace hosting a
+  // Dashboard-hint for nested nestedWorkspaces: any workspace hosting a
   // preview surface pointed at the group's dashboard path gets a
   // dashboard icon.
   function hintForGroupDashboardHost(ws: NestedWorkspace) {
@@ -481,7 +484,7 @@
             ? getDashboardContribution(contribId)
             : undefined}
           {@const IconComp = contribution?.icon ?? GridIcon}
-          {@const isActive = entry.idx === $activeWorkspaceIdx}
+          {@const isActive = entry.idx === $activeNestedWorkspaceIdx}
           {@const canDelete = contribution && !contribution.autoProvision}
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div

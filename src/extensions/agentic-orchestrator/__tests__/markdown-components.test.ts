@@ -147,7 +147,7 @@ const { switchSpy, focusSpy, invokeSpy } = vi.hoisted(() => ({
 function makeApi(
   options: {
     agents?: DetectedAgent[];
-    workspaces?: Array<{ id: string; name: string }>;
+    nestedWorkspaces?: Array<{ id: string; name: string }>;
     invoke?: (cmd: string, args?: unknown) => unknown;
   } = {},
 ): ExtensionAPI {
@@ -161,7 +161,7 @@ function makeApi(
       },
     },
     theme: writable(themes["github-dark"]),
-    workspaces: writable(options.workspaces ?? []),
+    nestedWorkspaces: writable(options.nestedWorkspaces ?? []),
     agents: _testAgentsRef.store,
     invoke: options.invoke
       ? vi.fn(async (cmd: string, args?: unknown) => options.invoke!(cmd, args))
@@ -292,9 +292,9 @@ describe("Kanban widget", () => {
     // Match the dashboard scope by giving each agent a workspace whose
     // first terminal cwd is under /work/proj.
     const wsStore = (await import("../../../lib/stores/workspace")) as {
-      workspaces: { set: (v: unknown) => void };
+      nestedWorkspaces: { set: (v: unknown) => void };
     };
-    wsStore.workspaces.set([
+    wsStore.nestedWorkspaces.set([
       {
         id: "ws-running",
         name: "Run",
@@ -385,7 +385,7 @@ describe("Kanban widget", () => {
       }),
     );
 
-    // Seed a workspace group whose path matches the workspaces' CWD so
+    // Seed a workspace group whose path matches the nestedWorkspaces' CWD so
     // the host-context-driven filter includes them as unclaimed CWD
     // matches — mirroring the group-scope rule in widget-helpers.
     const { setWorkspaceGroups, resetWorkspaceGroupsForTest } =
@@ -899,7 +899,7 @@ describe("Issues widget", () => {
     });
     const api = makeApi({
       invoke: invokeFn,
-      workspaces: [
+      nestedWorkspaces: [
         {
           id: "ws-handler",
           name: "agent: #51",

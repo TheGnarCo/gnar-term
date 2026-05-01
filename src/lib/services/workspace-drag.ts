@@ -1,5 +1,5 @@
 import { writable, get, type Readable } from "svelte/store";
-import { workspaces } from "../stores/workspace";
+import { nestedWorkspaces } from "../stores/workspace";
 import { getAllPanes } from "../types";
 import { wsMeta } from "./service-helpers";
 export type WorkspacePaneDropTarget =
@@ -31,7 +31,7 @@ export function detectWorkspacePaneDrop(
   y: number,
   srcWorkspaceId: string,
 ): WorkspacePaneDropTarget {
-  const allWs = get(workspaces);
+  const allWs = get(nestedWorkspaces);
   const srcWs = allWs.find((ws) => ws.id === srcWorkspaceId);
   const srcGroupId = srcWs ? wsMeta(srcWs).groupId : undefined;
 
@@ -124,7 +124,7 @@ export function detectTabBarDropForWorkspace(
   y: number,
   srcWorkspaceId: string,
 ): WorkspacePaneDropTarget {
-  const allWs = get(workspaces);
+  const allWs = get(nestedWorkspaces);
   const srcWs = allWs.find((ws) => ws.id === srcWorkspaceId);
   const srcGroupId = srcWs ? wsMeta(srcWs).groupId : undefined;
 

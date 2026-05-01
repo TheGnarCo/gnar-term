@@ -136,7 +136,7 @@ describe("WorkspaceItem border", () => {
     };
   }
 
-  it("marks worktree workspaces with data-worktree=true", () => {
+  it("marks worktree nestedWorkspaces with data-worktree=true", () => {
     const { container } = render(WorkspaceItem, {
       props: {
         workspace: makeWorktreeWorkspace(),
@@ -154,7 +154,7 @@ describe("WorkspaceItem border", () => {
     expect(row.dataset.worktree).toBe("true");
   });
 
-  it("renders a 1px border in railColor for active workspaces", () => {
+  it("renders a 1px border in railColor for active nestedWorkspaces", () => {
     const { container } = render(WorkspaceItem, {
       props: {
         workspace: makeWorkspace(),
@@ -173,7 +173,7 @@ describe("WorkspaceItem border", () => {
     expect(row.style.border).toContain("rgb(255, 0, 170)");
   });
 
-  it("renders a 1px inactive-theme border for inactive workspaces (worktree or not)", () => {
+  it("renders a 1px inactive-theme border for inactive nestedWorkspaces (worktree or not)", () => {
     const { container } = render(WorkspaceItem, {
       props: {
         workspace: makeWorkspace(),

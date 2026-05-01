@@ -129,7 +129,7 @@ export interface AgentsConfig {
 
 /**
  * Workspace — a named, colored, path-rooted grouping of
- * workspaces. Workspaces whose CWD falls under `path` are auto-adopted
+ * nestedWorkspaces. Workspaces whose CWD falls under `path` are auto-adopted
  * (via `metadata.groupId`) and render nested inside the group's block
  * in the Workspaces section.
  *
@@ -145,7 +145,7 @@ export interface Workspace {
   /** Root CWD — auto-adoption uses this as a longest-prefix ancestor match. */
   path: string;
   color: string;
-  /** Ids of workspaces currently claimed by this group. */
+  /** Ids of nestedWorkspaces currently claimed by this group. */
   workspaceIds: string[];
   /**
    * Id of the one non-worktree, non-dashboard workspace in this group.
@@ -159,7 +159,7 @@ export interface Workspace {
   /**
    * Id of the Group Dashboard workspace hosting this group's markdown
    * Live Preview. Eagerly created alongside the group. Resolved from
-   * the workspaces store by consumers.
+   * the nestedWorkspaces store by consumers.
    */
   dashboardWorkspaceId?: string;
   /** When true, the group cannot be drag-reordered or deleted/archived. */
@@ -229,16 +229,19 @@ export interface AppState {
   sidebarWidths?: { primary?: number; secondary?: number };
   sidebarVisible?: { primary?: boolean; secondary?: boolean };
   windowBounds?: { x?: number; y?: number; width?: number; height?: number };
-  workspaces?: (NestedWorkspaceDef & { name: string })[];
-  activeWorkspaceIdx?: number;
+  nestedWorkspaces?: (NestedWorkspaceDef & { name: string })[];
+  activeNestedWorkspaceIdx?: number;
   // Interleaved ordering for the Workspaces section: unclaimed
-  // workspaces and workspace group blocks sit in a single list the user
+  // nestedWorkspaces and workspace group blocks sit in a single list the user
   // can drag across freely. See stores/root-row-order.ts.
   rootRowOrder?: { kind: string; id: string }[];
-  // Archived (suspended) workspaces and groups. See stores/archive.ts.
+  // Archived (suspended) nestedWorkspaces and groups. See stores/archive.ts.
   archivedOrder?: { kind: string; id: string }[];
   archivedDefs?: {
-    workspaces: Record<string, { def: NestedWorkspaceDef & { name: string } }>;
+    nestedWorkspaces: Record<
+      string,
+      { def: NestedWorkspaceDef & { name: string } }
+    >;
     groups: Record<
       string,
       {
@@ -380,9 +383,9 @@ export const appStateStore: Readable<AppState> = _appStateStore;
 /**
  * Rewrite legacy workspace-scoped state shapes to the new NestedWorkspace
  * Groups + Dashboard Contributions layout:
- *   - workspaces[].metadata.projectId → metadata.groupId
- *   - workspaces[].metadata.parentOrchestratorId → metadata.spawnedBy
- *   - workspaces[].metadata.orchestratorId (on dashboards) →
+ *   - nestedWorkspaces[].metadata.projectId → metadata.groupId
+ *   - nestedWorkspaces[].metadata.parentOrchestratorId → metadata.spawnedBy
+ *   - nestedWorkspaces[].metadata.orchestratorId (on dashboards) →
  *       metadata.dashboardContributionId = "agentic"
  *   - rootRowOrder[].kind === "project" → "workspace-group"
  *   - rootRowOrder[].kind === "agent-orchestrator" → dropped (Stage 7
@@ -400,9 +403,9 @@ export function migrateLegacyProjectShapes(state: AppState): {
   let changed = false;
   let next: AppState = state;
 
-  if (Array.isArray(state.workspaces)) {
+  if (Array.isArray(state.nestedWorkspaces)) {
     let workspacesChanged = false;
-    const workspaces = state.workspaces.map((ws) => {
+    const nestedWorkspaces = state.nestedWorkspaces.map((ws) => {
       // Migration reads persisted state which may carry legacy keys not in
       // NestedWorkspaceMetadata (parentOrchestratorId, orchestratorId, spawnedBy).
       // Cast to a wider type so we can inspect and drop them.
@@ -462,7 +465,7 @@ export function migrateLegacyProjectShapes(state: AppState): {
       if (needsContributionId) {
         nextMd.dashboardContributionId = "agentic";
       } else if (orchestratorId !== undefined && md.isDashboard !== true) {
-        // Preserve stray orchestratorId on non-dashboard workspaces only if
+        // Preserve stray orchestratorId on non-dashboard nestedWorkspaces only if
         // the caller didn't otherwise trigger a rewrite path — but since we
         // decompose `md` above, drop it.
       }
@@ -472,7 +475,7 @@ export function migrateLegacyProjectShapes(state: AppState): {
     });
     if (workspacesChanged) {
       changed = true;
-      next = { ...next, workspaces };
+      next = { ...next, nestedWorkspaces };
     }
   }
 

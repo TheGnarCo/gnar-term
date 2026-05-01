@@ -365,7 +365,7 @@
 
     {#if shouldShowWorktreeStatus && !hideStatusBadges}
       <div
-        style="padding: 2px 24px 4px 2px; font-size: 11px; color: {$theme.fgMuted}; display: flex; align-items: center; gap: 4px; overflow: hidden;"
+        style="padding: 2px 24px 4px 2px; font-size: 11px; color: {railColor}; display: flex; align-items: center; gap: 4px; overflow: hidden;"
       >
         <svg
           width="10"
@@ -376,7 +376,7 @@
           stroke-width="1.5"
           stroke-linecap="round"
           stroke-linejoin="round"
-          style="flex-shrink: 0; color: {$theme.fgMuted};"
+          style="flex-shrink: 0; color: {railColor};"
         >
           <circle cx="4" cy="4" r="2" />
           <circle cx="4" cy="12" r="2" />

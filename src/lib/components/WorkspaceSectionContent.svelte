@@ -47,6 +47,7 @@
   import DashboardTileIcon from "./DashboardTileIcon.svelte";
   import GridIcon from "../icons/GridIcon.svelte";
   import GitBranchIcon from "../icons/GitBranchIcon.svelte";
+  import WorktreeIcon from "../icons/WorktreeIcon.svelte";
   import CloseIcon from "../icons/CloseIcon.svelte";
   import LockIcon from "../icons/LockIcon.svelte";
   import type { MenuItem } from "../context-menu-types";
@@ -684,7 +685,7 @@
           <!-- svelte-ignore a11y_consider_explicit_label -->
           <button
             class="dash-btn"
-            title="⎇ Branch"
+            title="New Worktree"
             on:click|stopPropagation={() =>
               runCommandById("worktrees:create-workspace", groupContext)}
             on:mouseenter={() => (branchChipHovered = true)}
@@ -694,7 +695,7 @@
               'transparent'};"
           >
             <DashboardTileIcon
-              iconComponent={GitBranchIcon}
+              iconComponent={WorktreeIcon}
               baseColor={groupHex}
               contributionId={undefined}
               groupPath={undefined}

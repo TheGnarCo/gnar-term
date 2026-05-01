@@ -1738,7 +1738,7 @@ describe("PrimarySidebar", () => {
 });
 
 // ===========================================================================
-// WorkspaceSectionContent — per-group ⎇ Branch button
+// WorkspaceSectionContent — per-group New Worktree button
 // ===========================================================================
 
 describe("WorkspaceSectionContent", () => {
@@ -1749,7 +1749,7 @@ describe("WorkspaceSectionContent", () => {
   });
 
   it("renders ⎇ Branch button for every group regardless of extension actions", async () => {
-    // The ⎇ Branch button replaces the old SplitButton. It shows unconditionally
+    // The New Worktree button shows unconditionally
     // for every group with a groupContext (i.e. any existing group entry).
     const group: WorkspaceEntry = {
       id: "grp-1",
@@ -1764,8 +1764,8 @@ describe("WorkspaceSectionContent", () => {
 
     render(WorkspaceGroupSectionHarness, { props: { groupId: "grp-1" } });
 
-    // ⎇ Branch chip renders (icon-only) even without any workspace actions registered.
-    expect(screen.getByTitle("⎇ Branch")).toBeTruthy();
+    // New Worktree button renders (icon-only) even without any workspace actions registered.
+    expect(screen.getByTitle("New Worktree")).toBeTruthy();
 
     // Registering the core create-worktree action after mount doesn't add a second button.
     registerWorkspaceAction({
@@ -1778,8 +1778,8 @@ describe("WorkspaceSectionContent", () => {
     });
     await tick();
 
-    // Still just one ⎇ Branch chip — the action doesn't add a second one.
-    expect(screen.getByTitle("⎇ Branch")).toBeTruthy();
+    // Still just one New Worktree button — the action doesn't add a second one.
+    expect(screen.getByTitle("New Worktree")).toBeTruthy();
   });
 });
 

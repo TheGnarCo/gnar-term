@@ -115,7 +115,7 @@
     canStart: () => !$anyReorderActive,
     ghostStyle: () => ({
       background: "transparent",
-      border: `2px solid ${$theme.border ?? "transparent"}`,
+      border: `1px solid ${$theme.border ?? "transparent"}`,
     }),
     onDrop: (from, to) => {
       // `from` and `to` are global workspace indices (encoded in the data

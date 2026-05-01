@@ -192,7 +192,7 @@
     containerSelector: "#primary-sidebar",
     ghostStyle: () => ({
       background: "transparent",
-      border: `2px solid ${$theme.border ?? "transparent"}`,
+      border: `1px solid ${$theme.border ?? "transparent"}`,
     }),
     canStart: () => !$anyReorderActive,
     onDrop: (from, to) => moveRootRow(from, to),

@@ -97,7 +97,7 @@ describe("DropGhost placeholder component", () => {
     // from non-source siblings during a drag. The floating cursor-
     // attached ghost stays normal-bordered.
     expect(DROP_GHOST).toMatch(/rgba\(40,\s*40,\s*40,\s*0\.[68]\)/);
-    expect(DROP_GHOST).toMatch(/2px\s+dashed\s+rgba\(255,\s*255,\s*255/);
+    expect(DROP_GHOST).toMatch(/1px\s+dashed\s+rgba\(255,\s*255,\s*255/);
     expect(DROP_GHOST).toMatch(/height:\s*\{\s*height\s*\}\s*px/);
   });
 

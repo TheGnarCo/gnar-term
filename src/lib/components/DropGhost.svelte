@@ -44,7 +44,7 @@
       font-size: 13px; font-weight: 600;
       box-sizing: border-box;
       pointer-events: none;
-      border: 2px dashed {accent ?? 'rgba(255, 255, 255, 0.85)'};
+      border: 1px dashed {accent ?? 'rgba(255, 255, 255, 0.85)'};
       border-radius: 0 6px 6px 0;
     "
     aria-hidden="true"
@@ -56,7 +56,7 @@
     style="
       height: {height}px;
       margin: 0 {inset}px 0 0;
-      border: 2px dashed rgba(255, 255, 255, 0.85);
+      border: 1px dashed rgba(255, 255, 255, 0.85);
       border-radius: 0 6px 6px 0;
       background: rgba(40, 40, 40, 0.6);
       box-sizing: border-box;

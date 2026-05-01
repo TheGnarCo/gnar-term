@@ -4,7 +4,7 @@ import { get } from "svelte/store";
 vi.mock("../lib/config", () => ({
   getState: vi.fn(() => ({
     archivedOrder: [],
-    archivedDefs: { nestedWorkspaces: {}, groups: {} },
+    archivedDefs: { workspaces: {} },
   })),
   saveState: vi.fn(() => Promise.resolve()),
 }));
@@ -23,100 +23,79 @@ beforeEach(() => {
   initArchiveFromState();
 });
 
-describe("addToArchive", () => {
-  it("adds a workspace entry to archivedOrder and archivedDefs", () => {
-    const def = {
-      id: "ws-1",
-      name: "My WS",
-      layout: { pane: { surfaces: [] } },
-    };
-    addToArchive({ kind: "workspace", id: "ws-1" }, { def });
-    expect(get(archivedOrder)).toEqual([{ kind: "workspace", id: "ws-1" }]);
-    expect(get(archivedDefs).nestedWorkspaces["ws-1"]).toEqual({ def });
-  });
+function makeWorkspace(overrides = {}) {
+  return {
+    id: "g-1",
+    name: "My Workspace",
+    path: "/foo",
+    color: "blue",
+    workspaceIds: [],
+    isGit: false,
+    createdAt: "2026-01-01",
+    ...overrides,
+  };
+}
 
-  it("adds a group entry to archivedOrder and archivedDefs", () => {
-    const group = {
-      id: "g-1",
-      name: "My Group",
-      path: "/foo",
-      color: "blue",
-      workspaceIds: [],
-      isGit: false,
-      createdAt: "2026-01-01",
-    };
-    addToArchive(
-      { kind: "workspace-group", id: "g-1" },
-      { group, workspaceDefs: [] },
-    );
-    expect(get(archivedOrder)).toEqual([
-      { kind: "workspace-group", id: "g-1" },
-    ]);
-    expect(get(archivedDefs).groups["g-1"]?.group).toEqual(group);
+describe("addToArchive", () => {
+  it("adds an entry to archivedOrder and archivedDefs", () => {
+    const workspace = makeWorkspace();
+    addToArchive("g-1", { workspace, nestedWorkspaceDefs: [] });
+    expect(get(archivedOrder)).toEqual(["g-1"]);
+    expect(get(archivedDefs).workspaces["g-1"]?.workspace).toEqual(workspace);
   });
 
   it("does not add duplicate entries", () => {
-    const def = { id: "ws-1", name: "W", layout: { pane: { surfaces: [] } } };
-    addToArchive({ kind: "workspace", id: "ws-1" }, { def });
-    addToArchive({ kind: "workspace", id: "ws-1" }, { def });
+    const workspace = makeWorkspace();
+    addToArchive("g-1", { workspace, nestedWorkspaceDefs: [] });
+    addToArchive("g-1", { workspace, nestedWorkspaceDefs: [] });
     expect(get(archivedOrder)).toHaveLength(1);
   });
 });
 
 describe("removeFromArchive", () => {
-  it("removes a workspace entry from order and defs", () => {
-    const def = { id: "ws-1", name: "W", layout: { pane: { surfaces: [] } } };
-    addToArchive({ kind: "workspace", id: "ws-1" }, { def });
-    removeFromArchive({ kind: "workspace", id: "ws-1" });
+  it("removes an entry from order and defs", () => {
+    const workspace = makeWorkspace();
+    addToArchive("g-1", { workspace, nestedWorkspaceDefs: [] });
+    removeFromArchive("g-1");
     expect(get(archivedOrder)).toHaveLength(0);
-    expect(get(archivedDefs).nestedWorkspaces["ws-1"]).toBeUndefined();
+    expect(get(archivedDefs).workspaces["g-1"]).toBeUndefined();
   });
 
   it("is a no-op for a missing entry", () => {
-    removeFromArchive({ kind: "workspace", id: "nonexistent" });
+    removeFromArchive("nonexistent");
     expect(get(archivedOrder)).toHaveLength(0);
   });
 });
 
 describe("initArchiveFromState", () => {
   it("seeds stores from persisted state", () => {
+    const workspace = makeWorkspace({ id: "g-2", name: "Old WS" });
     vi.mocked(getState).mockReturnValueOnce({
-      archivedOrder: [{ kind: "workspace", id: "ws-2" }],
+      archivedOrder: ["g-2"],
       archivedDefs: {
-        nestedWorkspaces: {
-          "ws-2": {
-            def: {
-              id: "ws-2",
-              name: "Old WS",
-              layout: { pane: { surfaces: [] } },
-            },
-          },
+        workspaces: {
+          "g-2": { workspace, nestedWorkspaceDefs: [] },
         },
-        groups: {},
       },
     } as ReturnType<typeof getState>);
     initArchiveFromState();
-    expect(get(archivedOrder)).toEqual([{ kind: "workspace", id: "ws-2" }]);
-    expect(get(archivedDefs).nestedWorkspaces["ws-2"]).toBeDefined();
+    expect(get(archivedOrder)).toEqual(["g-2"]);
+    expect(get(archivedDefs).workspaces["g-2"]).toBeDefined();
   });
 
   it("filters out malformed rows from persisted archivedOrder", () => {
     vi.mocked(getState).mockReturnValueOnce({
       archivedOrder: [
-        { kind: "workspace", id: "ok" },
-        { kind: "workspace", id: 42 }, // bad id
-        { kind: "bogus", id: "x" }, // bad kind
+        "ok",
+        42, // bad — not a string
         null,
-        "string",
-        { kind: "workspace-group", id: "ok-group" },
-      ] as unknown as { kind: string; id: string }[],
-      archivedDefs: { nestedWorkspaces: {}, groups: {} },
+        { kind: "workspace", id: "obj-not-string" },
+        "ok-2",
+      ] as unknown as string[],
+      archivedDefs: { workspaces: {} },
     } as ReturnType<typeof getState>);
     initArchiveFromState();
-    expect(get(archivedOrder)).toEqual([
-      { kind: "workspace", id: "ok" },
-      { kind: "workspace-group", id: "ok-group" },
-    ]);
+    expect(get(archivedOrder)).toEqual(["ok", "ok-2"]);
   });
 });
 
@@ -129,8 +108,8 @@ describe("persist", () => {
   });
 
   it("calls saveState after the debounce window when an item is added", async () => {
-    const def = { id: "ws-1", name: "W", layout: { pane: { surfaces: [] } } };
-    addToArchive({ kind: "workspace", id: "ws-1" }, { def });
+    const workspace = makeWorkspace();
+    addToArchive("g-1", { workspace, nestedWorkspaceDefs: [] });
 
     // not yet — debounce hasn't fired
     expect(saveState).not.toHaveBeenCalled();
@@ -145,18 +124,18 @@ describe("persist", () => {
       }),
     );
     const call = vi.mocked(saveState).mock.calls[0]?.[0] as {
-      archivedOrder: { kind: string; id: string }[];
+      archivedOrder: string[];
     };
-    expect(call.archivedOrder).toEqual([{ kind: "workspace", id: "ws-1" }]);
+    expect(call.archivedOrder).toEqual(["g-1"]);
   });
 
   it("calls saveState after debounce when an item is removed", async () => {
-    const def = { id: "ws-1", name: "W", layout: { pane: { surfaces: [] } } };
-    addToArchive({ kind: "workspace", id: "ws-1" }, { def });
+    const workspace = makeWorkspace();
+    addToArchive("g-1", { workspace, nestedWorkspaceDefs: [] });
     await vi.runAllTimersAsync();
     vi.mocked(saveState).mockClear();
 
-    removeFromArchive({ kind: "workspace", id: "ws-1" });
+    removeFromArchive("g-1");
     expect(saveState).not.toHaveBeenCalled();
 
     await vi.runAllTimersAsync();
@@ -169,11 +148,11 @@ describe("persist", () => {
   });
 
   it("debounces — multiple rapid changes coalesce into one saveState call", async () => {
-    const def = { id: "ws-1", name: "W", layout: { pane: { surfaces: [] } } };
-    const def2 = { id: "ws-2", name: "W2", layout: { pane: { surfaces: [] } } };
-    addToArchive({ kind: "workspace", id: "ws-1" }, { def });
-    addToArchive({ kind: "workspace", id: "ws-2" }, { def: def2 });
-    removeFromArchive({ kind: "workspace", id: "ws-1" });
+    const w1 = makeWorkspace({ id: "g-1" });
+    const w2 = makeWorkspace({ id: "g-2" });
+    addToArchive("g-1", { workspace: w1, nestedWorkspaceDefs: [] });
+    addToArchive("g-2", { workspace: w2, nestedWorkspaceDefs: [] });
+    removeFromArchive("g-1");
 
     await vi.runAllTimersAsync();
 

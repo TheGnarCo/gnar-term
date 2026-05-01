@@ -235,18 +235,14 @@ export interface AppState {
   // nestedWorkspaces and workspace group blocks sit in a single list the user
   // can drag across freely. See stores/root-row-order.ts.
   rootRowOrder?: { kind: string; id: string }[];
-  // Archived (suspended) nestedWorkspaces and groups. See stores/archive.ts.
-  archivedOrder?: { kind: string; id: string }[];
+  // Archived (suspended) workspaces. See stores/archive.ts.
+  archivedOrder?: string[];
   archivedDefs?: {
-    nestedWorkspaces: Record<
-      string,
-      { def: NestedWorkspaceDef & { name: string } }
-    >;
-    groups: Record<
+    workspaces: Record<
       string,
       {
-        group: Workspace;
-        workspaceDefs: (NestedWorkspaceDef & { name: string })[];
+        workspace: Workspace;
+        nestedWorkspaceDefs: (NestedWorkspaceDef & { name: string })[];
       }
     >;
   };

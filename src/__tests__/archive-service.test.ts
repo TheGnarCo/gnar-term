@@ -21,7 +21,7 @@ vi.mock("../lib/config", () => ({
   saveState: vi.fn(() => Promise.resolve()),
   getState: vi.fn(() => ({
     archivedOrder: [],
-    archivedDefs: { nestedWorkspaces: {}, groups: {} },
+    archivedDefs: { workspaces: {} },
   })),
 }));
 
@@ -178,14 +178,12 @@ describe("archiveWorkspace", () => {
       kind: "workspace-group",
       id: "g-1",
     });
-    expect(get(archivedOrder)).toEqual([
-      { kind: "workspace-group", id: "g-1" },
-    ]);
-    const stored = get(archivedDefs).groups["g-1"];
-    expect(stored?.group).toEqual(group);
-    expect(stored?.workspaceDefs).toHaveLength(2);
-    expect(stored?.workspaceDefs[0]?.name).toBe("W1");
-    expect(stored?.workspaceDefs[1]?.name).toBe("W2");
+    expect(get(archivedOrder)).toEqual(["g-1"]);
+    const stored = get(archivedDefs).workspaces["g-1"];
+    expect(stored?.workspace).toEqual(group);
+    expect(stored?.nestedWorkspaceDefs).toHaveLength(2);
+    expect(stored?.nestedWorkspaceDefs[0]?.name).toBe("W1");
+    expect(stored?.nestedWorkspaceDefs[1]?.name).toBe("W2");
   });
 
   it("returns false when the user cancels the confirm prompt", async () => {
@@ -216,9 +214,9 @@ describe("archiveWorkspace", () => {
 
     await archiveWorkspace("g-1");
 
-    const stored = get(archivedDefs).groups["g-1"];
-    expect(stored?.workspaceDefs).toHaveLength(1);
-    expect(stored?.workspaceDefs[0]?.id).toBe("ws-1");
+    const stored = get(archivedDefs).workspaces["g-1"];
+    expect(stored?.nestedWorkspaceDefs).toHaveLength(1);
+    expect(stored?.nestedWorkspaceDefs[0]?.id).toBe("ws-1");
   });
 });
 
@@ -235,10 +233,10 @@ describe("unarchiveWorkspace", () => {
     const group = makeGroup();
     const def1 = { id: "ws-1", name: "W1", layout: { pane: { surfaces: [] } } };
     const def2 = { id: "ws-2", name: "W2", layout: { pane: { surfaces: [] } } };
-    addToArchive(
-      { kind: "workspace-group", id: "g-1" },
-      { group, workspaceDefs: [def1, def2] },
-    );
+    addToArchive("g-1", {
+      workspace: group,
+      nestedWorkspaceDefs: [def1, def2],
+    });
     mocks.getWorkspaces.mockReturnValueOnce([{ id: "existing" }]);
 
     await unarchiveWorkspace("g-1");
@@ -272,7 +270,7 @@ describe("unarchiveWorkspace", () => {
 
     // archive entry cleared on success
     expect(get(archivedOrder)).toHaveLength(0);
-    expect(get(archivedDefs).groups["g-1"]).toBeUndefined();
+    expect(get(archivedDefs).workspaces["g-1"]).toBeUndefined();
   });
 
   it("does NOT remove the archive entry when createNestedWorkspaceFromDef rejects", async () => {
@@ -282,19 +280,17 @@ describe("unarchiveWorkspace", () => {
       name: "W1",
       layout: { pane: { surfaces: [] } },
     };
-    addToArchive(
-      { kind: "workspace-group", id: "g-1" },
-      { group, workspaceDefs: [def] },
-    );
+    addToArchive("g-1", {
+      workspace: group,
+      nestedWorkspaceDefs: [def],
+    });
     mocks.createNestedWorkspaceFromDef.mockRejectedValueOnce(new Error("nope"));
 
     await expect(unarchiveWorkspace("g-1")).rejects.toThrow("nope");
 
     // archive entry must survive so the user can retry
-    expect(get(archivedOrder)).toEqual([
-      { kind: "workspace-group", id: "g-1" },
-    ]);
-    expect(get(archivedDefs).groups["g-1"]).toBeDefined();
+    expect(get(archivedOrder)).toEqual(["g-1"]);
+    expect(get(archivedDefs).workspaces["g-1"]).toBeDefined();
     expect(mocks.provisionAutoDashboardsForWorkspace).not.toHaveBeenCalled();
   });
 });

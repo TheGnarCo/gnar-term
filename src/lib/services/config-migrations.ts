@@ -14,6 +14,7 @@
  */
 import type { GnarTermConfig } from "../config";
 import { migrateV2WorkspaceGroupsUnification } from "./migrations/v2-workspace-groups-unification";
+import { migrateV3ArchiveShape } from "./migrations/v3-archive-shape";
 
 /**
  * Structural shape for legacy fields that have been removed from the
@@ -95,6 +96,12 @@ const MIGRATIONS: ConfigMigration[] = [
     description:
       "collapse agentOrchestrators into Agentic Dashboard contribution + Global Agentic Dashboard markdown",
     up: (config) => migrateV2WorkspaceGroupsUnification(config),
+  },
+  {
+    version: 3,
+    description:
+      "flatten archive shape — drop kind discriminator on archivedOrder, rename archivedDefs.groups → archivedDefs.workspaces",
+    up: (config) => migrateV3ArchiveShape(config),
   },
 ];
 

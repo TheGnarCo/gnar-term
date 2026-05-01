@@ -33,9 +33,9 @@ describe("runConfigMigrations — production migration table", () => {
     const { migrated, changed, applied } = await runConfigMigrations({});
     expect(changed).toBe(true);
     // v1 rewrites the extensions map + orchestrator parent field; v2
-    // collapses agentOrchestrators into dashboards. Both run on an
-    // unstamped config and the final schemaVersion lands at v2.
-    expect(applied).toEqual([1, 2]);
+    // collapses agentOrchestrators into dashboards; v3 flattens the
+    // archive shape. All run on an unstamped config.
+    expect(applied).toEqual([1, 2, 3]);
     expect(migrated.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
   });
 

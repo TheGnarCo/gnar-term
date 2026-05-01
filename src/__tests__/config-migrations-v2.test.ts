@@ -124,8 +124,8 @@ describe("config v2 migration — agent orchestrators → dashboards", () => {
     const { migrated, applied } = await migrate({
       schemaVersion: 1,
     });
-    expect(applied).toEqual([2]);
-    expect(migrated.schemaVersion).toBe(2);
+    expect(applied).toEqual([2, 3]);
+    expect(migrated.schemaVersion).toBe(3);
     expect(migrated.agentOrchestrators).toBeUndefined();
   });
 
@@ -135,7 +135,7 @@ describe("config v2 migration — agent orchestrators → dashboards", () => {
       agentOrchestrators: [],
     });
     expect(migrated.agentOrchestrators).toBeUndefined();
-    expect(migrated.schemaVersion).toBe(2);
+    expect(migrated.schemaVersion).toBe(3);
   });
 
   it("nested orchestrator → writes markdown to <group.path>/.gnar-term/agentic-dashboard.md", async () => {
@@ -296,7 +296,7 @@ describe("config v2 migration — agent orchestrators → dashboards", () => {
       ],
     });
 
-    expect(applied).toEqual([2]);
+    expect(applied).toEqual([2, 3]);
     // Source file is left in place for manual rescue.
     expect(fs.get("/tmp/orphan.md")).toBe("# Orphan\n");
     expect(migrated.agentOrchestrators).toBeUndefined();

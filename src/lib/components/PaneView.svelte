@@ -6,7 +6,7 @@
   import TabBar from "./TabBar.svelte";
   import TerminalSurface from "./TerminalSurface.svelte";
   import PreviewSurface from "./PreviewSurface.svelte";
-  import GroupDashboardSettings from "./GroupDashboardSettings.svelte";
+  import WorkspaceDashboardSettings from "./WorkspaceDashboardSettings.svelte";
   import { dashboardWorkspaceRegistry } from "../services/dashboard-workspace-service";
   import RestoreCommandPrompt from "./RestoreCommandPrompt.svelte";
   import EmptySurface from "./EmptySurface.svelte";
@@ -84,7 +84,7 @@
   })();
   $: isDashboardWorkspace = workspaceMetadata?.isDashboard === true;
   // When the dashboard workspace belongs to the core "settings"
-  // contribution, PaneView renders the shared GroupDashboardSettings
+  // contribution, PaneView renders the shared WorkspaceDashboardSettings
   // component in place of the surface list. The workspace carries no
   // preview surface — it exists purely as a routing record.
   $: settingsDashboardGroupId =
@@ -322,7 +322,7 @@
     <!-- Settings dashboard — PaneView renders the shared settings body
          in place of any surface list. The workspace carries no preview
          surface, so no other render branches fire. -->
-    <GroupDashboardSettings parentWorkspaceId={settingsDashboardGroupId} />
+    <WorkspaceDashboardSettings parentWorkspaceId={settingsDashboardGroupId} />
   {:else}
     {#if pane.surfaces.length === 0}
       <!-- Empty pane view — the user just closed the last surface. Shows

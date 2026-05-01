@@ -14,7 +14,7 @@
   import ColorSlotPicker from "./ColorSlotPicker.svelte";
   import { workspacesStore } from "../stores/workspace-groups";
   import {
-    groupDashboardPath,
+    workspaceDashboardPath,
     updateWorkspace,
     closeDashboardForGroup,
   } from "../services/workspace-group-service";
@@ -36,7 +36,7 @@
 
   $: group = $workspacesStore.find((g) => g.id === parentWorkspaceId);
   $: currentColorSlot = group?.color ?? "purple";
-  $: markdownPath = group ? groupDashboardPath(group.path) : "";
+  $: markdownPath = group ? workspaceDashboardPath(group.path) : "";
 
   let nameDraft = "";
   let editingName = false;

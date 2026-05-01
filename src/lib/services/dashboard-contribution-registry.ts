@@ -72,7 +72,7 @@ export interface DashboardContribution {
    * Optional availability gate. When returns false, the contribution
    * is hidden from the group's "Add Dashboard" menu — e.g. the core
    * Group Dashboard contribution uses this to hide itself when the
-   * user has toggled `groupDashboardEnabled` off.
+   * user has toggled `workspaceDashboardEnabled` off.
    */
   isAvailableFor?: (group: Workspace) => boolean;
   /**

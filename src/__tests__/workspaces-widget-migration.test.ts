@@ -1,5 +1,5 @@
 /**
- * migrateGroupDashboardWidgets — rewrites project-dashboard.md files
+ * migrateWorkspaceDashboardWidgets — rewrites project-dashboard.md files
  * that predate the gnar:workspaces widget.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
@@ -13,7 +13,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 }));
 
 import { invoke } from "@tauri-apps/api/core";
-import { migrateGroupDashboardWidgets } from "../lib/services/workspace-group-service";
+import { migrateWorkspaceDashboardWidgets } from "../lib/services/workspace-group-service";
 import type { Workspace } from "../lib/config";
 
 function makeGroup(): Workspace {
@@ -28,7 +28,7 @@ function makeGroup(): Workspace {
   };
 }
 
-describe("migrateGroupDashboardWidgets", () => {
+describe("migrateWorkspaceDashboardWidgets", () => {
   beforeEach(() => {
     vi.resetAllMocks();
   });
@@ -44,7 +44,7 @@ describe("migrateGroupDashboardWidgets", () => {
       },
     );
 
-    await migrateGroupDashboardWidgets(
+    await migrateWorkspaceDashboardWidgets(
       makeGroup(),
       "/tmp/my-project/.gnar-term/project-dashboard.md",
     );
@@ -78,7 +78,7 @@ describe("migrateGroupDashboardWidgets", () => {
       },
     );
 
-    await migrateGroupDashboardWidgets(
+    await migrateWorkspaceDashboardWidgets(
       makeGroup(),
       "/tmp/my-project/.gnar-term/project-dashboard.md",
     );
@@ -97,7 +97,7 @@ describe("migrateGroupDashboardWidgets", () => {
       },
     );
 
-    await migrateGroupDashboardWidgets(
+    await migrateWorkspaceDashboardWidgets(
       makeGroup(),
       "/tmp/my-project/.gnar-term/project-dashboard.md",
     );

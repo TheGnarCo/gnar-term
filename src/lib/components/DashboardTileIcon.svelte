@@ -11,9 +11,9 @@
   import type { Component, ComponentType } from "svelte";
   import { readable, type Readable } from "svelte/store";
   import {
-    groupDirtyStore,
-    type GroupDirtyState,
-  } from "../services/group-git-dirty-store";
+    workspaceDirtyStore,
+    type WorkspaceDirtyState,
+  } from "../services/workspace-git-dirty-store";
   import { theme } from "../stores/theme";
 
   export let iconComponent: Component | ComponentType | unknown;
@@ -23,13 +23,13 @@
   export let isActive: boolean = false;
   export let isHovered: boolean = false;
 
-  const CLEAN_STATE: GroupDirtyState = { ready: true, hasChanges: false };
+  const CLEAN_STATE: WorkspaceDirtyState = { ready: true, hasChanges: false };
 
   $: isDiff = contributionId === "diff";
 
-  const dirtyStore: Readable<GroupDirtyState> =
+  const dirtyStore: Readable<WorkspaceDirtyState> =
     contributionId === "diff" && groupPath
-      ? groupDirtyStore(groupPath)
+      ? workspaceDirtyStore(groupPath)
       : readable(CLEAN_STATE);
 
   $: dimColor = ($theme["fgDim"] ?? $theme.fgMuted ?? "#888") as string;

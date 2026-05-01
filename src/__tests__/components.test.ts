@@ -1447,7 +1447,7 @@ describe("PaneView", () => {
     expect(container.querySelector("[data-group-dashboard-tab]")).toBeNull();
   });
 
-  it("renders GroupDashboardSettings for a settings-contribution workspace", () => {
+  it("renders WorkspaceDashboardSettings for a settings-contribution workspace", () => {
     // Settings contribution → PaneView swaps the surface list for the
     // shared settings body.
     const ws: NestedWorkspace = {
@@ -1479,7 +1479,7 @@ describe("PaneView", () => {
         onFocusPane: noop,
       },
     });
-    // GroupDashboardSettings renders a settings panel keyed by parentWorkspaceId.
+    // WorkspaceDashboardSettings renders a settings panel keyed by parentWorkspaceId.
     // Absent a matching group in the store it renders nothing, but the
     // render branch is still reached — no tab strip appears either way.
     expect(container.querySelector("[data-group-dashboard-tabs]")).toBeNull();

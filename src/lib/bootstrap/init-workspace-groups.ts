@@ -30,13 +30,13 @@ import {
   addWorkspace,
   addNestedWorkspaceToWorkspace,
   claimWorkspace,
-  createGroupDashboardWorkspace,
+  createWorkspaceDashboardNestedWorkspace,
   createSettingsDashboardWorkspace,
   isDashboardWorkspace,
   openWorkspaceDashboard,
   provisionAutoDashboardsForWorkspace,
   reclaimNestedWorkspacesAcrossWorkspaces,
-  regenerateGroupDashboardTemplate,
+  regenerateWorkspaceDashboardTemplate,
   removeNestedWorkspaceFromAllWorkspaces,
   unclaimWorkspace,
   updateWorkspace,
@@ -387,14 +387,14 @@ export async function initWorkspaces(): Promise<void> {
     icon: GridIcon,
     lockedReason: "Required (Overview)",
     create: async (group: Workspace) =>
-      await createGroupDashboardWorkspace(group),
+      await createWorkspaceDashboardNestedWorkspace(group),
     regenerate: async (group: Workspace) =>
-      await regenerateGroupDashboardTemplate(group),
+      await regenerateWorkspaceDashboardTemplate(group),
   });
 
   // Core-internal "Settings" contribution — id `settings`,
   // autoProvision. Hosts the per-group dashboard toggles + name /
-  // color picker. PaneView renders GroupDashboardSettings in place of
+  // color picker. PaneView renders WorkspaceDashboardSettings in place of
   // the surface list for nestedWorkspaces carrying this contribution id.
   registerDashboardContribution({
     id: "settings",

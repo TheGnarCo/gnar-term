@@ -17,7 +17,7 @@
     deleteWorkspace,
     updateWorkspace,
     closeNestedWorkspacesInWorkspace,
-    groupDashboardPath,
+    workspaceDashboardPath,
     openWorkspaceDashboard,
     WORKSPACE_GROUP_STATE_CHANGED,
     toggleWorkspaceLock,
@@ -356,9 +356,9 @@
   // Dashboard-hint for nested nestedWorkspaces: any workspace hosting a
   // preview surface pointed at the group's dashboard path gets a
   // dashboard icon.
-  function hintForGroupDashboardHost(ws: NestedWorkspace) {
+  function hintForWorkspaceDashboardHost(ws: NestedWorkspace) {
     if (!group) return undefined;
-    const path = groupDashboardPath(group.path);
+    const path = workspaceDashboardPath(group.path);
     const hosts = getAllSurfaces(ws).some(
       (s) => isPreviewSurface(s) && s.path === path,
     );
@@ -389,7 +389,7 @@
       onBannerClick={handleBannerClick}
       filterIds={nestedIds}
       hasActiveChild={isPrimaryActive}
-      dashboardHintFor={hintForGroupDashboardHost}
+      dashboardHintFor={hintForWorkspaceDashboardHost}
       scopeId={group.id}
       {containerBlockId}
       containerLabel={group.name}

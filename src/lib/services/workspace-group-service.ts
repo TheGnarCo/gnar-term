@@ -40,7 +40,7 @@ import {
   getDashboardContribution,
   getDashboardContributions,
 } from "./dashboard-contribution-registry";
-import { releaseGroupDirtyStore } from "./group-git-dirty-store";
+import { releaseWorkspaceDirtyStore } from "./workspace-git-dirty-store";
 
 export const WORKSPACE_GROUP_STATE_CHANGED =
   "extension:workspace-group:state-changed";
@@ -91,7 +91,7 @@ export function deleteWorkspace(id: string): void {
   const next = getWorkspaces().filter((g) => g.id !== id);
   setWorkspaces(next);
   removeRootRow({ kind: "workspace-group", id });
-  if (group) releaseGroupDirtyStore(group.path);
+  if (group) releaseWorkspaceDirtyStore(group.path);
   emitStateChanged({ parentWorkspaceId: id });
 }
 
@@ -219,11 +219,11 @@ export function removeNestedWorkspaceFromAllWorkspaces(
  * the group's own `.gnar-term/` directory so multi-machine sync /
  * checkout follows the group itself.
  */
-export function groupDashboardPath(groupPath: string): string {
+export function workspaceDashboardPath(groupPath: string): string {
   return `${groupPath.replace(/\/+$/, "")}/.gnar-term/project-dashboard.md`;
 }
 
-function buildGroupDashboardMarkdown(group: Workspace): string {
+function buildWorkspaceDashboardMarkdown(group: Workspace): string {
   // The Group Dashboard is the generic, agent-agnostic landing page for
   // a Workspace. It surfaces GitHub work-tracker context — open
   // issues + open PRs — side by side, as a passive read-only browse
@@ -263,7 +263,7 @@ children:
  * write when a file is already present so first-create on an existing
  * group never trampling user customizations.
  */
-async function writeGroupDashboardTemplate(
+async function writeWorkspaceDashboardTemplate(
   group: Workspace,
   path: string,
   options: { force?: boolean } = {},
@@ -278,22 +278,26 @@ async function writeGroupDashboardTemplate(
   await invoke("ensure_dir", { path: dir });
   await invoke("write_file", {
     path,
-    content: buildGroupDashboardMarkdown(group),
+    content: buildWorkspaceDashboardMarkdown(group),
   });
 }
 
 /**
  * Public regenerate hook for the Group Overview Dashboard
- * contribution. Force-rewrites the markdown at `groupDashboardPath`;
+ * contribution. Force-rewrites the markdown at `workspaceDashboardPath`;
  * the preview surface watching that file picks up the change without
  * needing the workspace to be closed/recreated.
  */
-export async function regenerateGroupDashboardTemplate(
+export async function regenerateWorkspaceDashboardTemplate(
   group: Workspace,
 ): Promise<void> {
-  await writeGroupDashboardTemplate(group, groupDashboardPath(group.path), {
-    force: true,
-  });
+  await writeWorkspaceDashboardTemplate(
+    group,
+    workspaceDashboardPath(group.path),
+    {
+      force: true,
+    },
+  );
 }
 
 /**
@@ -319,7 +323,9 @@ function stripActiveAgentsSection(markdown: string): string | null {
   return markdown.replace(pattern, "\n");
 }
 
-async function scrubGroupDashboardActiveAgents(path: string): Promise<void> {
+async function scrubWorkspaceDashboardActiveAgents(
+  path: string,
+): Promise<void> {
   try {
     const exists = await invoke<boolean>("file_exists", { path }).catch(
       () => false,
@@ -337,7 +343,7 @@ async function scrubGroupDashboardActiveAgents(path: string): Promise<void> {
   }
 }
 
-export async function migrateGroupDashboardWidgets(
+export async function migrateWorkspaceDashboardWidgets(
   group: Workspace,
   path: string,
 ): Promise<void> {
@@ -385,12 +391,12 @@ function createDashboardWorkspaceFromDef(
  * group's markdown file. Returns the new workspace id so the group
  * record can link to it.
  */
-export async function createGroupDashboardWorkspace(
+export async function createWorkspaceDashboardNestedWorkspace(
   group: Workspace,
 ): Promise<string> {
-  const path = groupDashboardPath(group.path);
+  const path = workspaceDashboardPath(group.path);
   try {
-    await writeGroupDashboardTemplate(group, path);
+    await writeWorkspaceDashboardTemplate(group, path);
   } catch {
     // Best-effort write — the workspace can still be created; the
     // preview surface will surface the backing-file error if relevant.
@@ -441,7 +447,7 @@ function backfillDashboardContributionIds(): void {
         .map((s) => s.path);
 
       let inferred: string | null = null;
-      const groupPath = groupDashboardPath(group.path);
+      const groupPath = workspaceDashboardPath(group.path);
       const agenticPath = `${group.path.replace(/\/+$/, "")}/.gnar-term/agentic-dashboard.md`;
       if (previewPaths.includes(groupPath)) inferred = "group";
       else if (previewPaths.includes(agenticPath)) inferred = "agentic";
@@ -464,7 +470,7 @@ function backfillDashboardContributionIds(): void {
  * Materialize the Settings dashboard workspace for a group — a
  * constrained dashboard (metadata.isDashboard = true,
  * dashboardContributionId = "settings") whose body PaneView renders as
- * the shared `<GroupDashboardSettings>` component. The workspace carries
+ * the shared `<WorkspaceDashboardSettings>` component. The workspace carries
  * a single empty preview surface so it satisfies the workspace schema;
  * PaneView intercepts and replaces the surface render for settings
  * contributions.
@@ -606,7 +612,7 @@ export function openWorkspaceDashboard(group: Workspace): boolean {
  * open. Used during group deletion so the workspace disappears
  * alongside the group record.
  */
-export async function closeGroupDashboardWorkspace(
+export async function closeWorkspaceDashboardNestedWorkspace(
   group: Workspace,
 ): Promise<void> {
   const dashboardWsId = group.dashboardNestedWorkspaceId;
@@ -646,8 +652,13 @@ export async function reconcileWorkspaceDashboards(): Promise<void> {
       // from the group's Overview markdown if it's still there. Runs
       // before we materialize / rebind the dashboard workspace so the
       // first render already reflects the cleaned file.
-      await scrubGroupDashboardActiveAgents(groupDashboardPath(group.path));
-      await migrateGroupDashboardWidgets(group, groupDashboardPath(group.path));
+      await scrubWorkspaceDashboardActiveAgents(
+        workspaceDashboardPath(group.path),
+      );
+      await migrateWorkspaceDashboardWidgets(
+        group,
+        workspaceDashboardPath(group.path),
+      );
 
       // Deduplicate every autoProvision contribution type — keeps the first
       // match, closes the rest. Previously only "group" was covered; the

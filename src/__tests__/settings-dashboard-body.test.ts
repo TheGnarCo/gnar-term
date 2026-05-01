@@ -1,5 +1,5 @@
 /**
- * PaneView renders the shared `GroupDashboardSettings` body (not a
+ * PaneView renders the shared `WorkspaceDashboardSettings` body (not a
  * preview surface, not a tab strip) for a workspace whose metadata
  * marks it as the "settings" dashboard contribution.
  */
@@ -49,7 +49,7 @@ describe("PaneView — settings dashboard body", () => {
     workspacesStore.set([]);
   });
 
-  it("renders GroupDashboardSettings for a settings contribution workspace", () => {
+  it("renders WorkspaceDashboardSettings for a settings contribution workspace", () => {
     workspacesStore.set([
       {
         id: "g1",

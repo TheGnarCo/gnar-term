@@ -132,7 +132,7 @@ describe("hostScopedAgentsStore", () => {
         name: "One",
         path: "/work/one",
         color: "blue",
-        groupDashboardEnabled: true,
+        workspaceDashboardEnabled: true,
         nestedWorkspaceIds: ["ws-in"],
       },
     ]);
@@ -160,7 +160,7 @@ describe("hostScopedAgentsStore", () => {
         name: "One",
         path: "/work/one",
         color: "blue",
-        groupDashboardEnabled: true,
+        workspaceDashboardEnabled: true,
         nestedWorkspaceIds: [],
       },
     ]);
@@ -184,7 +184,7 @@ describe("hostScopedAgentsStore", () => {
         name: "One",
         path: "/work/one",
         color: "blue",
-        groupDashboardEnabled: true,
+        workspaceDashboardEnabled: true,
         nestedWorkspaceIds: [],
       },
     ]);
@@ -210,7 +210,7 @@ describe("hostScopedAgentsStore", () => {
         name: "One",
         path: "/work/one",
         color: "blue",
-        groupDashboardEnabled: true,
+        workspaceDashboardEnabled: true,
         nestedWorkspaceIds: [],
       },
     ]);
@@ -239,7 +239,7 @@ describe("hostScopedAgentsStore", () => {
         name: "One",
         path: "/work/one",
         color: "blue",
-        groupDashboardEnabled: true,
+        workspaceDashboardEnabled: true,
         nestedWorkspaceIds: ["ws-native"], // explicitly listed in the group
       },
     ]);
@@ -264,7 +264,7 @@ describe("hostScopedAgentsStore", () => {
         name: "One",
         path: "/work/one",
         color: "blue",
-        groupDashboardEnabled: true,
+        workspaceDashboardEnabled: true,
         nestedWorkspaceIds: [],
       },
       {
@@ -272,7 +272,7 @@ describe("hostScopedAgentsStore", () => {
         name: "Two",
         path: "/work/two",
         color: "red",
-        groupDashboardEnabled: true,
+        workspaceDashboardEnabled: true,
         nestedWorkspaceIds: ["ws-other"],
       },
     ]);

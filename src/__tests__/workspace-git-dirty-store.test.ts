@@ -1,5 +1,5 @@
 /**
- * group-git-dirty-store: dirty signal must match what the diff
+ * workspace-git-dirty-store: dirty signal must match what the diff
  * dashboard actually renders, and must update live as the working
  * tree / git index change.
  */
@@ -16,10 +16,10 @@ vi.mock("@tauri-apps/api/event", () => ({
 }));
 
 import {
-  groupDirtyStore,
-  _resetGroupDirtyStoreCache,
-  type GroupDirtyState,
-} from "../lib/services/group-git-dirty-store";
+  workspaceDirtyStore,
+  _resetWorkspaceDirtyStoreCache,
+  type WorkspaceDirtyState,
+} from "../lib/services/workspace-git-dirty-store";
 
 interface ScriptResult {
   stdout: string;
@@ -30,10 +30,10 @@ type FileChangedHandler = (event: {
 }) => void;
 
 function captureSubscriber() {
-  const states: GroupDirtyState[] = [];
+  const states: WorkspaceDirtyState[] = [];
   return {
     states,
-    onValue: (v: GroupDirtyState) => void states.push(v),
+    onValue: (v: WorkspaceDirtyState) => void states.push(v),
   };
 }
 
@@ -46,14 +46,14 @@ beforeEach(() => {
   invokeMock.mockReset();
   listenMock.mockReset();
   listenMock.mockResolvedValue(() => {});
-  _resetGroupDirtyStoreCache();
+  _resetWorkspaceDirtyStoreCache();
 });
 
 afterEach(() => {
   vi.useRealTimers();
 });
 
-describe("groupDirtyStore", () => {
+describe("workspaceDirtyStore", () => {
   it("flags dirty when `git diff HEAD --quiet` exits 1", async () => {
     invokeMock.mockImplementation((cmd: string, args: { command?: string }) => {
       if (cmd === "run_script" && args.command === "git diff HEAD --quiet") {
@@ -70,7 +70,7 @@ describe("groupDirtyStore", () => {
     });
 
     const sub = captureSubscriber();
-    const stop = groupDirtyStore("/repo").subscribe(sub.onValue);
+    const stop = workspaceDirtyStore("/repo").subscribe(sub.onValue);
 
     await flush();
 
@@ -88,7 +88,7 @@ describe("groupDirtyStore", () => {
     });
 
     const sub = captureSubscriber();
-    const stop = groupDirtyStore("/clean").subscribe(sub.onValue);
+    const stop = workspaceDirtyStore("/clean").subscribe(sub.onValue);
     await flush();
 
     expect(sub.states.at(-1)).toEqual({ ready: true, hasChanges: false });
@@ -115,7 +115,7 @@ describe("groupDirtyStore", () => {
     });
 
     const sub = captureSubscriber();
-    const stop = groupDirtyStore("/untracked-only").subscribe(sub.onValue);
+    const stop = workspaceDirtyStore("/untracked-only").subscribe(sub.onValue);
     await flush();
 
     expect(sub.states.at(-1)?.hasChanges).toBe(false);
@@ -144,7 +144,7 @@ describe("groupDirtyStore", () => {
     });
 
     const sub = captureSubscriber();
-    const stop = groupDirtyStore("/live").subscribe(sub.onValue);
+    const stop = workspaceDirtyStore("/live").subscribe(sub.onValue);
     await flush();
     expect(sub.states.at(-1)?.hasChanges).toBe(false);
 
@@ -184,7 +184,7 @@ describe("groupDirtyStore", () => {
       return Promise.resolve(undefined);
     });
 
-    const stop = groupDirtyStore("/scoped").subscribe(() => {});
+    const stop = workspaceDirtyStore("/scoped").subscribe(() => {});
     await flush();
     const baseline = calls;
 
@@ -215,7 +215,7 @@ describe("groupDirtyStore", () => {
       return Promise.resolve(undefined);
     });
 
-    const stop = groupDirtyStore("/poll").subscribe(() => {});
+    const stop = workspaceDirtyStore("/poll").subscribe(() => {});
     await flush();
     expect(calls).toBe(1);
 
@@ -241,7 +241,7 @@ describe("groupDirtyStore", () => {
       return Promise.resolve(undefined);
     });
 
-    const stop = groupDirtyStore("/cleanup").subscribe(() => {});
+    const stop = workspaceDirtyStore("/cleanup").subscribe(() => {});
     await flush();
     invokeMock.mockClear();
     stop();

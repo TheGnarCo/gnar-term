@@ -16,8 +16,8 @@ vi.mock("../lib/services/claimed-workspace-registry", () => ({
   claimWorkspace: vi.fn(),
   unclaimWorkspace: vi.fn(),
 }));
-vi.mock("../lib/services/group-git-dirty-store", () => ({
-  releaseGroupDirtyStore: vi.fn(),
+vi.mock("../lib/services/workspace-git-dirty-store", () => ({
+  releaseWorkspaceDirtyStore: vi.fn(),
 }));
 vi.mock("../lib/services/workspace-service", () => ({
   createNestedWorkspaceFromDef: vi.fn(),

@@ -27,7 +27,7 @@ import { readable, type Readable } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
-export interface GroupDirtyState {
+export interface WorkspaceDirtyState {
   /** True after the first poll completes, regardless of result. */
   ready: boolean;
   /** True when `git diff HEAD --quiet` returned exit code 1. */
@@ -46,17 +46,19 @@ interface FileChangedPayload {
   content: string;
 }
 
-const DEFAULT: GroupDirtyState = { ready: false, hasChanges: false };
+const DEFAULT: WorkspaceDirtyState = { ready: false, hasChanges: false };
 const POLL_MS = 20_000;
 const WATCHER_DEBOUNCE_MS = 150;
 
-const cache = new Map<string, Readable<GroupDirtyState>>();
+const cache = new Map<string, Readable<WorkspaceDirtyState>>();
 
-export function groupDirtyStore(path: string): Readable<GroupDirtyState> {
+export function workspaceDirtyStore(
+  path: string,
+): Readable<WorkspaceDirtyState> {
   const existing = cache.get(path);
   if (existing) return existing;
 
-  const store = readable<GroupDirtyState>(DEFAULT, (set) => {
+  const store = readable<WorkspaceDirtyState>(DEFAULT, (set) => {
     let alive = true;
     let watchId: number | null = null;
     let unlisten: UnlistenFn | null = null;
@@ -149,11 +151,11 @@ export function groupDirtyStore(path: string): Readable<GroupDirtyState> {
 }
 
 /** Evict a path from the cache when its group is deleted. */
-export function releaseGroupDirtyStore(path: string): void {
+export function releaseWorkspaceDirtyStore(path: string): void {
   cache.delete(path);
 }
 
 /** Test-only — drop cached stores so the next subscriber seeds a fresh poll. */
-export function _resetGroupDirtyStoreCache(): void {
+export function _resetWorkspaceDirtyStoreCache(): void {
   cache.clear();
 }

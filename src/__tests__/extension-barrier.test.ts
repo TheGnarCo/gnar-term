@@ -125,7 +125,7 @@ describe("Extension barrier enforcement", () => {
         "../../../lib/stores/theme",
         "../../../lib/theme-data",
         // Regenerate Dashboard button shows a confirmation prompt before
-        // overwriting user edits — same pattern as GroupDashboardSettings.
+        // overwriting user edits — same pattern as WorkspaceDashboardSettings.
         "../../../lib/stores/ui",
       ],
       "agentic-orchestrator/widget-helpers.ts": [

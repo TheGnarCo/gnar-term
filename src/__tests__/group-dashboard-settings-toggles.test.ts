@@ -15,7 +15,7 @@ vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn().mockResolvedValue(vi.fn()),
 }));
 
-import GroupDashboardSettings from "../lib/components/GroupDashboardSettings.svelte";
+import WorkspaceDashboardSettings from "../lib/components/WorkspaceDashboardSettings.svelte";
 import {
   nestedWorkspaces,
   activeNestedWorkspaceIdx,
@@ -36,7 +36,7 @@ const GROUP = {
   createdAt: "2026-04-21T00:00:00.000Z",
 };
 
-describe("GroupDashboardSettings — Dashboards toggles", () => {
+describe("WorkspaceDashboardSettings — Dashboards toggles", () => {
   beforeEach(() => {
     cleanup();
     nestedWorkspaces.set([]);
@@ -74,7 +74,7 @@ describe("GroupDashboardSettings — Dashboards toggles", () => {
       create: vi.fn(async () => "ws-diff"),
     });
 
-    const { container } = render(GroupDashboardSettings, {
+    const { container } = render(WorkspaceDashboardSettings, {
       props: { parentWorkspaceId: GROUP.id },
     });
 
@@ -97,7 +97,7 @@ describe("GroupDashboardSettings — Dashboards toggles", () => {
       create: vi.fn(async () => "ws-grp"),
     });
 
-    const { container } = render(GroupDashboardSettings, {
+    const { container } = render(WorkspaceDashboardSettings, {
       props: { parentWorkspaceId: GROUP.id },
     });
 
@@ -136,7 +136,7 @@ describe("GroupDashboardSettings — Dashboards toggles", () => {
       } as never,
     ]);
 
-    const { container } = render(GroupDashboardSettings, {
+    const { container } = render(WorkspaceDashboardSettings, {
       props: { parentWorkspaceId: GROUP.id },
     });
 

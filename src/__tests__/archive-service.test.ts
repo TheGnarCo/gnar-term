@@ -178,6 +178,15 @@ describe("archiveWorkspace", () => {
       kind: "workspace",
       id: "g-1",
     });
+    // Order matters: the umbrella must be removed from the workspaces store
+    // BEFORE its nested workspaces close. The close path emits
+    // `workspace:closed`, which `setupPrimaryWorkspaceAutoRecreation` listens
+    // for; if the umbrella is still present it will spawn a phantom
+    // replacement nested workspace whose `parentWorkspaceId` then dangles.
+    const setOrder = mocks.setWorkspaces.mock.invocationCallOrder[0]!;
+    const closeOrder =
+      mocks.closeNestedWorkspacesInWorkspace.mock.invocationCallOrder[0]!;
+    expect(setOrder).toBeLessThan(closeOrder);
     expect(get(archivedOrder)).toEqual(["g-1"]);
     const stored = get(archivedDefs).workspaces["g-1"];
     expect(stored?.workspace).toEqual(workspace);

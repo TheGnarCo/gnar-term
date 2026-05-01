@@ -65,9 +65,17 @@ export async function archiveWorkspace(
     ...(ws.metadata ? { metadata: ws.metadata } : {}),
   }));
 
-  closeNestedWorkspacesInWorkspace(parentWorkspaceId);
+  // Remove the umbrella from the store BEFORE cascading the close. The
+  // close path emits `workspace:closed`, and
+  // `setupPrimaryWorkspaceAutoRecreation` looks the umbrella up by
+  // `primaryNestedWorkspaceId` to spawn a replacement. While the umbrella
+  // still sits in the store the listener creates a phantom nested
+  // workspace whose `parentWorkspaceId` then dangles after the umbrella
+  // is removed — on reload that orphan re-wraps into a fresh umbrella,
+  // so archives appear to leak ghost workspaces.
   setWorkspaces(getWorkspaces().filter((w) => w.id !== parentWorkspaceId));
   removeRootRow({ kind: "workspace", id: parentWorkspaceId });
+  closeNestedWorkspacesInWorkspace(parentWorkspaceId);
   addToArchive(parentWorkspaceId, {
     workspace,
     nestedWorkspaceDefs: workspaceDefs,

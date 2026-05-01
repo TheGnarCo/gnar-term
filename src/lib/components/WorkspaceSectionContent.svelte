@@ -216,8 +216,16 @@
       { title: "Delete Workspace", confirmLabel: "Delete", danger: true },
     );
     if (!confirmed) return;
-    closeNestedWorkspacesInWorkspace(w.id);
+    // Delete the umbrella BEFORE cascading the close. Closing a nested
+    // workspace fires `workspace:closed`, and `setupPrimaryWorkspaceAutoRecreation`
+    // looks the umbrella up by `primaryNestedWorkspaceId` to recreate a
+    // replacement primary. If the umbrella is still in the store at that
+    // point, the listener spawns a phantom nested workspace whose
+    // parentWorkspaceId then dangles when we delete the umbrella next —
+    // on reload the orphan gets re-wrapped into a fresh umbrella, so
+    // deletes appear to "come back".
     deleteWorkspace(w.id);
+    closeNestedWorkspacesInWorkspace(w.id);
   }
 
   // Banner left-click: activate the workspace's primary workspace if it's not

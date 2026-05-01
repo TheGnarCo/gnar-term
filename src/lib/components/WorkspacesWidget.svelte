@@ -23,18 +23,18 @@
     ? ($workspacesStore.find((g) => g.id === parentWorkspaceId) ?? null)
     : null;
 
-  $: groupWs = parentWorkspaceId
+  $: workspaceWs = parentWorkspaceId
     ? $nestedWorkspaces.filter(
         (ws) => wsMeta(ws).parentWorkspaceId === parentWorkspaceId,
       )
     : [];
 
-  $: dashboardCards = groupWs.filter((ws) => {
+  $: dashboardCards = workspaceWs.filter((ws) => {
     const md = wsMeta(ws);
     return md.isDashboard === true && md.dashboardContributionId !== "group";
   });
 
-  $: workspaceRows = groupWs.filter((ws) => !wsMeta(ws).isDashboard);
+  $: workspaceRows = workspaceWs.filter((ws) => !wsMeta(ws).isDashboard);
 
   $: workspaceColor = group
     ? resolveWorkspaceColor(group.color, $theme)

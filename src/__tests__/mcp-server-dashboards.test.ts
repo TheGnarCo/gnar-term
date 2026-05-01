@@ -1,8 +1,8 @@
 /**
  * MCP dashboard contribution tools:
  *   - list_dashboard_contributions
- *   - add_dashboard_to_group
- *   - remove_dashboard_from_group
+ *   - add_dashboard_to_workspace
+ *   - remove_dashboard_from_workspace
  *
  * The first mirrors the in-app Settings dashboard's toggle list; the
  * second/third drive the same toggle interaction from an agent.
@@ -34,7 +34,7 @@ function rpc(method: string, params?: unknown, id: number = 1) {
   return { jsonrpc: "2.0" as const, id, method, params };
 }
 
-function seedGroup(id: string) {
+function seedWorkspace(id: string) {
   workspacesStore.set([
     {
       id,
@@ -101,7 +101,7 @@ describe("MCP dashboard contribution tools", () => {
     });
 
     it("annotates active state when group_id is provided", async () => {
-      seedGroup("g1");
+      seedWorkspace("g1");
       registerDashboardContribution({
         id: "diff",
         source: "diff-viewer",
@@ -142,9 +142,9 @@ describe("MCP dashboard contribution tools", () => {
     });
   });
 
-  describe("add_dashboard_to_group", () => {
+  describe("add_dashboard_to_workspace", () => {
     it("invokes contribution.create and returns the new workspace id", async () => {
-      seedGroup("g1");
+      seedWorkspace("g1");
       const create = vi.fn(async () => "ws-new");
       registerDashboardContribution({
         id: "diff",
@@ -157,7 +157,7 @@ describe("MCP dashboard contribution tools", () => {
 
       const resp = await dispatch(
         rpc("tools/call", {
-          name: "add_dashboard_to_group",
+          name: "add_dashboard_to_workspace",
           arguments: { group_id: "g1", contribution_id: "diff" },
         }),
       );
@@ -168,7 +168,7 @@ describe("MCP dashboard contribution tools", () => {
     });
 
     it("rejects an autoProvision contribution", async () => {
-      seedGroup("g1");
+      seedWorkspace("g1");
       registerDashboardContribution({
         id: "agentic",
         source: "agentic-orchestrator",
@@ -181,7 +181,7 @@ describe("MCP dashboard contribution tools", () => {
 
       const resp = await dispatch(
         rpc("tools/call", {
-          name: "add_dashboard_to_group",
+          name: "add_dashboard_to_workspace",
           arguments: { group_id: "g1", contribution_id: "agentic" },
         }),
       );
@@ -198,18 +198,18 @@ describe("MCP dashboard contribution tools", () => {
         create: vi.fn(async () => "ws-new"),
       });
 
-      const respGroup = await dispatch(
+      const respWorkspace = await dispatch(
         rpc("tools/call", {
-          name: "add_dashboard_to_group",
+          name: "add_dashboard_to_workspace",
           arguments: { group_id: "nope", contribution_id: "diff" },
         }),
       );
-      expect((respGroup as any).error).toBeDefined();
+      expect((respWorkspace as any).error).toBeDefined();
 
-      seedGroup("g1");
+      seedWorkspace("g1");
       const respContrib = await dispatch(
         rpc("tools/call", {
-          name: "add_dashboard_to_group",
+          name: "add_dashboard_to_workspace",
           arguments: { group_id: "g1", contribution_id: "ghost" },
         }),
       );
@@ -217,9 +217,9 @@ describe("MCP dashboard contribution tools", () => {
     });
   });
 
-  describe("remove_dashboard_from_group", () => {
+  describe("remove_dashboard_from_workspace", () => {
     it("returns removed=false when no workspace exists for the pair", async () => {
-      seedGroup("g1");
+      seedWorkspace("g1");
       registerDashboardContribution({
         id: "diff",
         source: "diff-viewer",
@@ -231,7 +231,7 @@ describe("MCP dashboard contribution tools", () => {
 
       const resp = await dispatch(
         rpc("tools/call", {
-          name: "remove_dashboard_from_group",
+          name: "remove_dashboard_from_workspace",
           arguments: { group_id: "g1", contribution_id: "diff" },
         }),
       );
@@ -239,7 +239,7 @@ describe("MCP dashboard contribution tools", () => {
     });
 
     it("rejects an autoProvision contribution", async () => {
-      seedGroup("g1");
+      seedWorkspace("g1");
       registerDashboardContribution({
         id: "agentic",
         source: "agentic-orchestrator",
@@ -252,7 +252,7 @@ describe("MCP dashboard contribution tools", () => {
 
       const resp = await dispatch(
         rpc("tools/call", {
-          name: "remove_dashboard_from_group",
+          name: "remove_dashboard_from_workspace",
           arguments: { group_id: "g1", contribution_id: "agentic" },
         }),
       );

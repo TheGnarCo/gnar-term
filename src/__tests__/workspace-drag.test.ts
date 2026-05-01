@@ -53,9 +53,9 @@ vi.mock("../lib/stores/root-row-order", async () => {
   };
 });
 
-const addWorkspaceToGroupSpy = vi.fn().mockReturnValue(true);
-const removeWorkspaceFromAllGroupsSpy = vi.fn();
-const insertWorkspaceIntoGroupSpy = vi.fn();
+const addNestedWorkspaceToWorkspaceSpy = vi.fn().mockReturnValue(true);
+const removeNestedWorkspaceFromAllWorkspacesSpy = vi.fn();
+const insertNestedWorkspaceIntoWorkspaceSpy = vi.fn();
 vi.mock("../lib/services/workspace-service", async () => {
   const actual = await vi.importActual<
     typeof import("../lib/services/workspace-service")
@@ -64,13 +64,13 @@ vi.mock("../lib/services/workspace-service", async () => {
     ...actual,
     addNestedWorkspaceToWorkspace: (
       ...args: Parameters<typeof actual.addNestedWorkspaceToWorkspace>
-    ) => addWorkspaceToGroupSpy(...args),
+    ) => addNestedWorkspaceToWorkspaceSpy(...args),
     removeNestedWorkspaceFromAllWorkspaces: (
       ...args: Parameters<typeof actual.removeNestedWorkspaceFromAllWorkspaces>
-    ) => removeWorkspaceFromAllGroupsSpy(...args),
-    insertWorkspaceIntoGroup: (
-      ...args: Parameters<typeof actual.insertWorkspaceIntoGroup>
-    ) => insertWorkspaceIntoGroupSpy(...args),
+    ) => removeNestedWorkspaceFromAllWorkspacesSpy(...args),
+    insertNestedWorkspaceIntoWorkspace: (
+      ...args: Parameters<typeof actual.insertNestedWorkspaceIntoWorkspace>
+    ) => insertNestedWorkspaceIntoWorkspaceSpy(...args),
   };
 });
 
@@ -151,9 +151,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   appendRootRowSpy.mockClear();
   removeRootRowSpy.mockClear();
-  addWorkspaceToGroupSpy.mockClear();
-  removeWorkspaceFromAllGroupsSpy.mockClear();
-  insertWorkspaceIntoGroupSpy.mockClear();
+  addNestedWorkspaceToWorkspaceSpy.mockClear();
+  removeNestedWorkspaceFromAllWorkspacesSpy.mockClear();
+  insertNestedWorkspaceIntoWorkspaceSpy.mockClear();
   gitStatusWorkspaceClosedSpy.mockClear();
   vi.useFakeTimers();
 });
@@ -199,7 +199,10 @@ describe("createNestedWorkspaceFromSurface", () => {
     const updated = get(nestedWorkspaces);
     const newWs = updated[1]!;
     expect(newWs.metadata?.parentWorkspaceId).toBe("group-1");
-    expect(addWorkspaceToGroupSpy).toHaveBeenCalledWith("group-1", newWs.id);
+    expect(addNestedWorkspaceToWorkspaceSpy).toHaveBeenCalledWith(
+      "group-1",
+      newWs.id,
+    );
   });
 
   it("leaves new workspace ungrouped when source has no parentWorkspaceId", () => {
@@ -215,7 +218,7 @@ describe("createNestedWorkspaceFromSurface", () => {
     const updated = get(nestedWorkspaces);
     const newWs = updated[1]!;
     expect(newWs.metadata?.parentWorkspaceId).toBeUndefined();
-    expect(addWorkspaceToGroupSpy).not.toHaveBeenCalled();
+    expect(addNestedWorkspaceToWorkspaceSpy).not.toHaveBeenCalled();
   });
 
   it("is a no-op when source workspace has only 1 surface (guard)", () => {
@@ -439,7 +442,9 @@ describe("expandWorkspaceIntoPanes", () => {
 
     expandWorkspaceIntoPanes(srcWs.id, tgtPane.id, "horizontal", false);
 
-    expect(removeWorkspaceFromAllGroupsSpy).toHaveBeenCalledWith(srcWs.id);
+    expect(removeNestedWorkspaceFromAllWorkspacesSpy).toHaveBeenCalledWith(
+      srcWs.id,
+    );
   });
 
   it("does not call dispose on moved terminals", () => {
@@ -649,7 +654,9 @@ describe("mergeWorkspaceIntoPane", () => {
 
     mergeWorkspaceIntoPane(srcWs.id, tgtPane.id);
 
-    expect(removeWorkspaceFromAllGroupsSpy).toHaveBeenCalledWith(srcWs.id);
+    expect(removeNestedWorkspaceFromAllWorkspacesSpy).toHaveBeenCalledWith(
+      srcWs.id,
+    );
   });
 
   it("does not dispose terminals — surfaces move live", () => {
@@ -744,7 +751,7 @@ describe("createNestedWorkspaceFromSurface — targetWorkspaceId", () => {
     expect(newWs.metadata?.parentWorkspaceId).toBe("target-group-1");
   });
 
-  it("calls insertWorkspaceIntoGroup with targetWorkspaceId when srcWs has no parentWorkspaceId", () => {
+  it("calls insertNestedWorkspaceIntoWorkspace with targetWorkspaceId when srcWs has no parentWorkspaceId", () => {
     const sA = mockSurface({ title: "A" });
     const sB = mockSurface({ title: "B" });
     const pane = makePane([sA, sB]);
@@ -760,7 +767,7 @@ describe("createNestedWorkspaceFromSurface — targetWorkspaceId", () => {
 
     const updated = get(nestedWorkspaces);
     const newWs = updated.find((w) => w.id !== ws.id)!;
-    expect(insertWorkspaceIntoGroupSpy).toHaveBeenCalledWith(
+    expect(insertNestedWorkspaceIntoWorkspaceSpy).toHaveBeenCalledWith(
       "target-group-1",
       newWs.id,
       2,
@@ -786,7 +793,7 @@ describe("createNestedWorkspaceFromSurface — targetWorkspaceId", () => {
     const updated = get(nestedWorkspaces);
     const newWs = updated.find((w) => w.id !== ws.id)!;
     expect(newWs.metadata?.parentWorkspaceId).toBe("src-group");
-    expect(insertWorkspaceIntoGroupSpy).toHaveBeenCalledWith(
+    expect(insertNestedWorkspaceIntoWorkspaceSpy).toHaveBeenCalledWith(
       "src-group",
       newWs.id,
       0,
@@ -813,7 +820,7 @@ describe("createNestedWorkspaceFromSurface — targetWorkspaceId", () => {
     const updated = get(nestedWorkspaces);
     const newWs = updated.find((w) => w.id !== ws.id)!;
     expect(newWs.metadata?.parentWorkspaceId).toBe("target-group-override");
-    expect(insertWorkspaceIntoGroupSpy).toHaveBeenCalledWith(
+    expect(insertNestedWorkspaceIntoWorkspaceSpy).toHaveBeenCalledWith(
       "target-group-override",
       newWs.id,
       0,

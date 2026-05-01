@@ -140,7 +140,7 @@ describe("MCP server JSON-RPC", () => {
     expect(names).toEqual(
       [
         "activate_sidebar_tab",
-        "add_dashboard_to_group",
+        "add_dashboard_to_workspace",
         "close_preview",
         "create_preview_file",
         "dispatch_tasks",
@@ -174,7 +174,7 @@ describe("MCP server JSON-RPC", () => {
         "poll_events",
         "read_file",
         "read_output",
-        "remove_dashboard_from_group",
+        "remove_dashboard_from_workspace",
         "remove_sidebar_section",
         "render_sidebar",
         "send_keys",

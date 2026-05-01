@@ -21,7 +21,7 @@ import {
 const STATE_ID = "workspace-groups";
 const WORKSPACE_GROUPS_KEY = "workspaces";
 const WORKSPACE_GROUP_ORDER_KEY = "workspaceOrder";
-const ACTIVE_GROUP_ID_KEY = "activeGroupId";
+const ACTIVE_GROUP_ID_KEY = "activeWorkspaceId";
 const PERSIST_DEBOUNCE_MS = 300;
 
 interface LegacyWorkspaceShape extends Workspace {
@@ -54,10 +54,10 @@ function renameLegacyWorkspaceFields(g: Workspace): Workspace {
   };
 }
 
-const _groups = writable<Workspace[]>([]);
-export const workspacesStore: Readable<Workspace[]> = _groups;
+const _workspaces = writable<Workspace[]>([]);
+export const workspacesStore: Readable<Workspace[]> = _workspaces;
 
-const _groupOrder = writable<string[]>([]);
+const _workspaceOrder = writable<string[]>([]);
 
 const _activeWorkspaceId = writable<string | null>(null);
 
@@ -74,8 +74,8 @@ function schedulePersist(): void {
 
 async function persistNow(): Promise<void> {
   const payload: Record<string, unknown> = {
-    [WORKSPACE_GROUPS_KEY]: get(_groups),
-    [WORKSPACE_GROUP_ORDER_KEY]: get(_groupOrder),
+    [WORKSPACE_GROUPS_KEY]: get(_workspaces),
+    [WORKSPACE_GROUP_ORDER_KEY]: get(_workspaceOrder),
     [ACTIVE_GROUP_ID_KEY]: get(_activeWorkspaceId),
   };
   await saveExtensionState(STATE_ID, payload);
@@ -103,8 +103,8 @@ export async function loadWorkspaces(): Promise<void> {
   // the workspace:created listener rebuilds them from metadata.parentWorkspaceId.
   // Older persisted data used `primaryWorkspaceId`/`dashboardWorkspaceId`;
   // promote them to the new names so consumers see only the renamed fields.
-  _groups.set(groups.map(renameLegacyWorkspaceFields));
-  _groupOrder.set(order);
+  _workspaces.set(groups.map(renameLegacyWorkspaceFields));
+  _workspaceOrder.set(order);
   _activeWorkspaceId.set(active);
 }
 
@@ -118,7 +118,7 @@ export async function flushWorkspaces(): Promise<void> {
 }
 
 export function getWorkspaces(): Workspace[] {
-  return get(_groups);
+  return get(_workspaces);
 }
 
 export function getWorkspace(id: string): Workspace | undefined {
@@ -126,7 +126,7 @@ export function getWorkspace(id: string): Workspace | undefined {
 }
 
 export function setWorkspaces(next: Workspace[]): void {
-  _groups.set(next);
+  _workspaces.set(next);
   schedulePersist();
 }
 
@@ -145,8 +145,8 @@ export function resetWorkspacesForTest(): void {
     clearTimeout(_persistTimer);
     _persistTimer = null;
   }
-  _groups.set([]);
-  _groupOrder.set([]);
+  _workspaces.set([]);
+  _workspaceOrder.set([]);
   _activeWorkspaceId.set(null);
   _loaded = false;
 }

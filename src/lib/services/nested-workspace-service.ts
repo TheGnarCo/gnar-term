@@ -41,7 +41,7 @@ import {
 } from "../stores/root-row-order";
 import {
   addNestedWorkspaceToWorkspace,
-  insertWorkspaceIntoGroup,
+  insertNestedWorkspaceIntoWorkspace,
 } from "./workspace-service";
 
 // --- NestedWorkspace persistence (debounced save to state.json) ---
@@ -528,7 +528,7 @@ export function createNestedWorkspaceFromSurface(
   }
   if (effectiveWorkspaceId) {
     if (insertOptions?.kind === "group") {
-      insertWorkspaceIntoGroup(
+      insertNestedWorkspaceIntoWorkspace(
         effectiveWorkspaceId,
         newWs.id,
         insertOptions.positionInWorkspace,

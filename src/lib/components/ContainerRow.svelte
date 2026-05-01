@@ -121,7 +121,7 @@
     style="position: relative;"
   >
     <PrimarySidebarElement
-      isGroup={true}
+      isWorkspace={true}
       isCompact={false}
       name={containerLabel}
       isActive={false}

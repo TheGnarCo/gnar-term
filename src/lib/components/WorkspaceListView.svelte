@@ -214,22 +214,25 @@
 
   // --- Tab-drag overlay state ---
   $: tabDrag = $tabDragState;
-  $: tabDragToGroup =
+  $: tabDragToWorkspace =
     tabDrag?.dropTarget?.kind === "new-workspace-in-group" &&
     tabDrag.dropTarget.parentWorkspaceId === scopeId
       ? tabDrag.dropTarget
       : null;
-  $: effectiveActive = active || tabDragToGroup !== null;
+  $: effectiveActive = active || tabDragToWorkspace !== null;
   // null source idx → every row's idx !== null → all rows show sibling overlay
   $: effectiveSourceIdx = active ? sourceIdx : (null as number | null);
   $: effectiveIndicator = active
     ? indicator
-    : tabDragToGroup !== null
-      ? { idx: tabDragToGroup.insertGlobalIdx, edge: tabDragToGroup.insertEdge }
+    : tabDragToWorkspace !== null
+      ? {
+          idx: tabDragToWorkspace.insertGlobalIdx,
+          edge: tabDragToWorkspace.insertEdge,
+        }
       : (null as { idx: number; edge: "before" | "after" } | null);
   $: effectiveSourceHeight = active ? sourceHeight : 32;
   $: tabDragSurfaceLabel = (() => {
-    if (!tabDrag || !tabDragToGroup) return "";
+    if (!tabDrag || !tabDragToWorkspace) return "";
     const srcWs = $nestedWorkspaces.find(
       (w) => w.id === tabDrag!.sourceWorkspaceId,
     );

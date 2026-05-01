@@ -139,7 +139,7 @@
 </script>
 
 <PrimarySidebarElement
-  isGroup={false}
+  isWorkspace={false}
   isCompact={isDashboardWs}
   {isNested}
   name={workspace.name}

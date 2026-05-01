@@ -173,7 +173,7 @@ export function addNestedWorkspaceToWorkspace(
  * No-op when the group is missing or already contains the workspace.
  * Returns true when a change was persisted.
  */
-export function insertWorkspaceIntoGroup(
+export function insertNestedWorkspaceIntoWorkspace(
   parentWorkspaceId: string,
   workspaceId: string,
   positionInWorkspace: number,
@@ -581,7 +581,7 @@ export function closeAutoDashboardsBySource(source: string): void {
  * close it. Used by the Settings toggle UI and by MCP to remove a
  * dashboard contribution from a group.
  */
-export function closeDashboardForGroup(
+export function closeDashboardForWorkspace(
   parentWorkspaceId: string,
   contributionId: string,
 ): boolean {
@@ -707,7 +707,7 @@ export async function reconcileWorkspaceDashboards(): Promise<void> {
  */
 export function reclaimNestedWorkspacesAcrossWorkspaces(): void {
   const groups = getWorkspaces();
-  const groupIds = new Set(groups.map((g) => g.id));
+  const workspaceIds = new Set(groups.map((g) => g.id));
 
   // Collect workspace ids per group in a single pass to avoid one
   // setWorkspaces() call (and event emission) per workspace.
@@ -717,7 +717,7 @@ export function reclaimNestedWorkspacesAcrossWorkspaces(): void {
     const parentWorkspaceId = wsMeta(ws).parentWorkspaceId;
     if (
       typeof parentWorkspaceId !== "string" ||
-      !groupIds.has(parentWorkspaceId)
+      !workspaceIds.has(parentWorkspaceId)
     )
       continue;
     const members = newMembers.get(parentWorkspaceId) ?? [];

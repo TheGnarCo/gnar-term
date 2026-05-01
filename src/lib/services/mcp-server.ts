@@ -1359,8 +1359,8 @@ const UI_MUTATING_TOOLS = new Set([
   "spawn_preview",
   "create_preview_file",
   "close_preview",
-  "add_dashboard_to_group",
-  "remove_dashboard_from_group",
+  "add_dashboard_to_workspace",
+  "remove_dashboard_from_workspace",
 ]);
 
 export async function dispatch(

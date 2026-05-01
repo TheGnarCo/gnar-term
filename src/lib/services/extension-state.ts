@@ -35,7 +35,7 @@ const LEGACY_EXTENSION_MIGRATIONS: Record<
     keyRenames: {
       projects: "workspaces",
       projectOrder: "workspaceOrder",
-      activeProjectId: "activeGroupId",
+      activeProjectId: "activeWorkspaceId",
     },
   },
 };

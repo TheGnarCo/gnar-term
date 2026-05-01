@@ -91,7 +91,7 @@ export function throttle<TArgs extends unknown[]>(
  * widget independently re-walking every workspace's surfaces on every
  * emission (F32 perf fix).
  */
-const _groupWorkspaceIndex = derived(
+const _workspaceNestedWorkspaceIndex = derived(
   [nestedWorkspaces, workspacesStore, claimedWorkspaceIds],
   ([$nestedWorkspaces, $groups, $claimedIds]): Map<string, Set<string>> => {
     const index = new Map<string, Set<string>>();
@@ -161,13 +161,16 @@ export function hostScopedAgentsStore(
     return derived(api.agents, (agents) => agents);
   }
   // "group" scope: each widget's derived store filters api.agents using the
-  // shared _groupWorkspaceIndex (O(1) lookup per agent) rather than walking
+  // shared _workspaceNestedWorkspaceIndex (O(1) lookup per agent) rather than walking
   // all nestedWorkspaces × surfaces independently.
-  return derived([api.agents, _groupWorkspaceIndex], ([$agents, $index]) => {
-    const members = $index.get(scope.parentWorkspaceId);
-    if (!members) return [];
-    return $agents.filter((a) => members.has(a.workspaceId));
-  });
+  return derived(
+    [api.agents, _workspaceNestedWorkspaceIndex],
+    ([$agents, $index]) => {
+      const members = $index.get(scope.parentWorkspaceId);
+      if (!members) return [];
+      return $agents.filter((a) => members.has(a.workspaceId));
+    },
+  );
 }
 
 /**

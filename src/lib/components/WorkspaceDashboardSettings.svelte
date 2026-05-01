@@ -16,7 +16,7 @@
   import {
     workspaceDashboardPath,
     updateWorkspace,
-    closeDashboardForGroup,
+    closeDashboardForWorkspace,
   } from "../services/workspace-service";
   import { nestedWorkspaces } from "../stores/nested-workspace";
   import {
@@ -99,7 +99,7 @@
         );
       }
     } else {
-      closeDashboardForGroup(group.id, contribution.id);
+      closeDashboardForWorkspace(group.id, contribution.id);
     }
   }
 

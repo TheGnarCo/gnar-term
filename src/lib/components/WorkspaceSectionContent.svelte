@@ -168,7 +168,7 @@
     ? ({
         parentWorkspaceId: group.id,
         workspacePath: group.path,
-        groupName: group.name,
+        workspaceName: group.name,
         isGit: group.isGit,
         workspaceColor: group.color,
       } satisfies WorkspaceActionContext)

@@ -132,16 +132,16 @@ describe("dashboard-contribution registry", () => {
       registerDashboardContribution(
         makeContribution({ id: "gitOnly", isAvailableFor: gate }),
       );
-      const gitGroup = makeWorkspace({ id: "g-git", isGit: true });
-      const plainGroup = makeWorkspace({ id: "g-plain", isGit: false });
+      const gitWorkspace = makeWorkspace({ id: "g-git", isGit: true });
+      const plainWorkspace = makeWorkspace({ id: "g-plain", isGit: false });
       expect(
-        getDashboardContributionsForWorkspace(gitGroup).map((c) => c.id),
+        getDashboardContributionsForWorkspace(gitWorkspace).map((c) => c.id),
       ).toEqual(["gitOnly"]);
       expect(
-        getDashboardContributionsForWorkspace(plainGroup).map((c) => c.id),
+        getDashboardContributionsForWorkspace(plainWorkspace).map((c) => c.id),
       ).toEqual([]);
-      expect(gate).toHaveBeenCalledWith(gitGroup);
-      expect(gate).toHaveBeenCalledWith(plainGroup);
+      expect(gate).toHaveBeenCalledWith(gitWorkspace);
+      expect(gate).toHaveBeenCalledWith(plainWorkspace);
     });
   });
 

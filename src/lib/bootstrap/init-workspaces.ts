@@ -220,7 +220,7 @@ async function createWorkspaceFlow(prefill?: {
  * create dialog with path/name pre-filled, then moves the workspace
  * into the created group.
  */
-async function promoteActiveWorkspaceToGroup(): Promise<void> {
+async function promoteActiveNestedWorkspaceToWorkspace(): Promise<void> {
   const list = get(nestedWorkspaces);
   const idx = get(activeNestedWorkspaceIdx);
   const activeWs = typeof idx === "number" ? list[idx] : undefined;
@@ -254,7 +254,7 @@ async function promoteActiveWorkspaceToGroup(): Promise<void> {
  * Register one palette command per group — "<group>: New NestedWorkspace".
  * Re-run whenever groups change so added groups get their commands.
  */
-function registerPerGroupCommands(): void {
+function registerPerWorkspaceCommands(): void {
   for (const group of readGroups()) {
     registerCommand({
       id: `new-ws-${group.id}`,
@@ -289,7 +289,7 @@ export async function initWorkspaces(): Promise<void> {
   // rebuilt from metadata.parentWorkspaceId on each workspace.
   reclaimNestedWorkspacesAcrossWorkspaces();
 
-  registerPerGroupCommands();
+  registerPerWorkspaceCommands();
 
   // Root-row renderer for "workspace-group" kind. ContainerRow inside
   // the renderer owns the grip/banner/nested-list chrome; the rail
@@ -337,7 +337,7 @@ export async function initWorkspaces(): Promise<void> {
     title: "Promote NestedWorkspace to Workspace...",
     source: SOURCE,
     action: () => {
-      void promoteActiveWorkspaceToGroup();
+      void promoteActiveNestedWorkspaceToWorkspace();
     },
   });
 

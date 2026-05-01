@@ -19,7 +19,7 @@
   import { shortcutHint } from "../actions/shortcut-hint";
 
   /** Whether this is a group (renders gradient pattern) */
-  export let isGroup: boolean = false;
+  export let isWorkspace: boolean = false;
 
   /** Whether to use compact sizing (smaller height/padding) */
   export let isCompact: boolean = false;
@@ -68,14 +68,15 @@
   let isHovered = false;
 
   $: effectiveColor = color || $theme.accent;
-  $: showClose = canClose && !isDragging && !isGroup && !isLocked && isHovered;
-  $: showLock = isLocked && !isDragging && !isGroup;
+  $: showClose =
+    canClose && !isDragging && !isWorkspace && !isLocked && isHovered;
+  $: showLock = isLocked && !isDragging && !isWorkspace;
   $: verticalPadding = isCompact || isNested ? "0px" : "4px";
 </script>
 
 <div
   use:shortcutHint={shortcutLabel}
-  data-sidebar-element={isGroup ? "group" : "workspace"}
+  data-sidebar-element={isWorkspace ? "group" : "workspace"}
   data-active={isActive ? "true" : undefined}
   data-drag-idx={dataDragIdx}
   data-workspace-id={dataWorkspaceId}
@@ -111,7 +112,7 @@
     {isDragging}
     {onGripMouseDown}
   />
-  {#if isGroup}
+  {#if isWorkspace}
     <!-- Group banner rail gradient -->
     <div
       aria-hidden="true"

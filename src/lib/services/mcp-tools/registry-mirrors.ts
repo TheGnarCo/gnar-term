@@ -19,7 +19,7 @@ import {
   getDashboardContribution,
 } from "../dashboard-contribution-registry";
 import {
-  closeDashboardForGroup,
+  closeDashboardForWorkspace,
   isDashboardWorkspace,
 } from "../workspace-service";
 import { getWorkspace } from "../../stores/workspaces";
@@ -353,7 +353,7 @@ export const registryMirrorTools: ToolDef[] = [
     },
   },
   {
-    name: "add_dashboard_to_group",
+    name: "add_dashboard_to_workspace",
     description:
       "Materialize a dashboard workspace for a Workspace by running the contribution's create hook. Errors when the contribution is autoProvision (those materialize automatically and cannot be added manually), already at its per-group cap, unknown, or gated out by the contribution's availability predicate. Returns the new workspace id.",
     inputSchema: {
@@ -392,7 +392,7 @@ export const registryMirrorTools: ToolDef[] = [
     },
   },
   {
-    name: "remove_dashboard_from_group",
+    name: "remove_dashboard_from_workspace",
     description:
       "Close the dashboard workspace for `{group_id, contribution_id}`. Errors when the contribution is autoProvision (core Overview, core Settings, and the Agentic dashboard cannot be removed this way). Returns `{ removed: true }` on success, `{ removed: false }` when no such workspace existed.",
     inputSchema: {
@@ -414,7 +414,7 @@ export const registryMirrorTools: ToolDef[] = [
           `Dashboard contribution "${p.contribution_id}" is autoProvision — locked on this group.`,
         );
       }
-      const removed = closeDashboardForGroup(p.group_id, p.contribution_id);
+      const removed = closeDashboardForWorkspace(p.group_id, p.contribution_id);
       return { removed };
     },
   },

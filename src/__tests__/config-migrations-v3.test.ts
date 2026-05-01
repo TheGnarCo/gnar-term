@@ -76,12 +76,12 @@ describe("v3 archive-shape migration", () => {
   });
 
   it("preserves already-migrated workspaces entries when both keys coexist", () => {
-    const oldGroup = makeWorkspace({ id: "g-1", name: "Stale" });
+    const oldWorkspace = makeWorkspace({ id: "g-1", name: "Stale" });
     const newWs = makeWorkspace({ id: "g-1", name: "Fresh" });
     const def = { id: "ws-1", name: "WS", layout: { pane: { surfaces: [] } } };
     const input = {
       archivedDefs: {
-        groups: { "g-1": { group: oldGroup, workspaceDefs: [def] } },
+        groups: { "g-1": { group: oldWorkspace, workspaceDefs: [def] } },
         workspaces: { "g-1": { workspace: newWs, nestedWorkspaceDefs: [] } },
       },
     } as unknown as GnarTermConfig;
@@ -103,14 +103,14 @@ describe("v3 archive-shape migration", () => {
   });
 
   it("renames legacy primaryWorkspaceId/dashboardWorkspaceId on archived workspace", () => {
-    const legacyGroup = {
+    const legacyWorkspace = {
       ...makeWorkspace({ id: "g-1" }),
       primaryWorkspaceId: "ws-primary",
       dashboardWorkspaceId: "ws-dash",
     };
     const input = {
       archivedDefs: {
-        groups: { "g-1": { group: legacyGroup, workspaceDefs: [] } },
+        groups: { "g-1": { group: legacyWorkspace, workspaceDefs: [] } },
       },
     } as unknown as GnarTermConfig;
 

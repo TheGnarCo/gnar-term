@@ -55,11 +55,11 @@ const SOURCE = readFileSync(
 ).replace(/\s+/g, " ");
 
 describe("DragGrip visual states", () => {
-  it("has a fixed 14px hit area that never expands, with a 3px rail stripe", () => {
+  it("has a fixed 14px hit area that never expands, with a 10px rail stripe and hex pattern", () => {
     // Grip width is constant — no hover expansion to avoid content shift.
     expect(SOURCE).toMatch(/width:\s*14px/);
-    // Rail stripe is a constant 3px width.
-    expect(SOURCE).toMatch(/width:\s*3px/);
+    // Rail stripe and hex pattern are both 10px width.
+    expect(SOURCE).toMatch(/width:\s*10px/);
   });
 
   it("shows solid stripe on hover, suppressing dots", () => {

@@ -93,7 +93,7 @@
       style="
         position: absolute;
         left: 0; top: 0; bottom: 0;
-        width: 3px;
+        width: 10px;
         background: {effectiveColor};
         opacity: {railOpacity};
       "
@@ -108,7 +108,8 @@
     <div
       style="
         position: absolute;
-        inset: 0;
+        left: 0; top: 0; bottom: 0;
+        width: 10px;
         pointer-events: none;
         background-image: {fritBackgroundImage};
         background-size: {fritBackgroundSize};

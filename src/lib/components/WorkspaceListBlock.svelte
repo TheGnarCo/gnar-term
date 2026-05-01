@@ -191,8 +191,8 @@
     dataAttr: "root-row-idx",
     containerSelector: "#primary-sidebar",
     ghostStyle: () => ({
-      background: $theme.bgFloat ?? $theme.bgSurface ?? "#111",
-      border: `1px solid ${$theme.border ?? "transparent"}`,
+      background: "transparent",
+      border: `2px solid ${$theme.border ?? "transparent"}`,
     }),
     canStart: () => !$anyReorderActive,
     onDrop: (from, to) => moveRootRow(from, to),

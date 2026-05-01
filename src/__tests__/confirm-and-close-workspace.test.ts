@@ -68,14 +68,14 @@ describe("confirmAndCloseWorkspace", () => {
 
   it("shows a confirm prompt for a plain (non-worktree, non-dashboard) workspace", async () => {
     mockShowConfirmPrompt.mockResolvedValue(true);
-    const ws = { id: "ws-1", name: "My NestedWorkspace" };
+    const ws = { id: "ws-1", name: "My Workspace" };
     await confirmAndCloseWorkspace(ws, 0);
     expect(mockShowConfirmPrompt).toHaveBeenCalledOnce();
   });
 
   it("closes the workspace when the user confirms", async () => {
     mockShowConfirmPrompt.mockResolvedValue(true);
-    const ws = { id: "ws-1", name: "My NestedWorkspace" };
+    const ws = { id: "ws-1", name: "My Workspace" };
     const result = await confirmAndCloseWorkspace(ws, 2);
     expect(result).toBe(true);
     expect(mockCloseWorkspace).toHaveBeenCalledWith(2);
@@ -83,7 +83,7 @@ describe("confirmAndCloseWorkspace", () => {
 
   it("does NOT close when the user cancels the confirm prompt", async () => {
     mockShowConfirmPrompt.mockResolvedValue(false);
-    const ws = { id: "ws-1", name: "My NestedWorkspace" };
+    const ws = { id: "ws-1", name: "My Workspace" };
     const result = await confirmAndCloseWorkspace(ws, 0);
     expect(result).toBe(false);
     expect(mockCloseWorkspace).not.toHaveBeenCalled();
@@ -128,7 +128,7 @@ describe("confirmAndCloseWorkspace", () => {
   it("refuses to close a locked workspace without prompting", async () => {
     const ws = {
       id: "ws-locked",
-      name: "Locked NestedWorkspace",
+      name: "Locked Workspace",
       metadata: { locked: true },
     };
     const result = await confirmAndCloseWorkspace(ws, 0);

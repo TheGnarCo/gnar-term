@@ -186,7 +186,7 @@ async function createWorkspaceGroupFlow(prefill?: {
     const wsCount =
       readGroups().find((g) => g.id === id)?.workspaceIds.length ?? 0;
     await createWorkspaceFromDef({
-      name: `${result.name} NestedWorkspace ${wsCount + 1}`,
+      name: `${result.name} Workspace ${wsCount + 1}`,
       cwd: result.path,
       metadata: { groupId: id },
       layout: { pane: { surfaces: [{ type: "terminal" }] } },
@@ -262,7 +262,7 @@ function registerPerGroupCommands(): void {
         const count =
           readGroups().find((g) => g.id === group.id)?.workspaceIds.length ?? 0;
         void createWorkspaceFromDef({
-          name: `${group.name} NestedWorkspace ${count + 1}`,
+          name: `${group.name} Workspace ${count + 1}`,
           cwd: group.path,
           metadata: { groupId: group.id },
           layout: { pane: { surfaces: [{ type: "terminal" }] } },

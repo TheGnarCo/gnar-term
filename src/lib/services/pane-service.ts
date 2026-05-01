@@ -123,7 +123,7 @@ export function removePane(ws: NestedWorkspace, pane: Pane) {
     nestedWorkspaces.update((list) => list.filter((w) => w.id !== ws.id));
     eventBus.emit({ type: "pane:closed", id: paneId, workspaceId: wsId });
     if (get(nestedWorkspaces).length === 0) {
-      void createWorkspace("NestedWorkspace 1");
+      void createWorkspace("Workspace 1");
     } else {
       activeNestedWorkspaceIdx.set(
         Math.min(wsIdx, get(nestedWorkspaces).length - 1),

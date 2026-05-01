@@ -58,15 +58,15 @@ describe("NestedWorkspace stores", () => {
   });
 
   it("derives activeWorkspace from idx", () => {
-    const ws1 = makeWorkspace("ws1", "NestedWorkspace 1");
-    const ws2 = makeWorkspace("ws2", "NestedWorkspace 2");
+    const ws1 = makeWorkspace("ws1", "Workspace 1");
+    const ws2 = makeWorkspace("ws2", "Workspace 2");
     nestedWorkspaces.set([ws1, ws2]);
     activeNestedWorkspaceIdx.set(0);
 
-    expect(get(activeWorkspace)?.name).toBe("NestedWorkspace 1");
+    expect(get(activeWorkspace)?.name).toBe("Workspace 1");
 
     activeNestedWorkspaceIdx.set(1);
-    expect(get(activeWorkspace)?.name).toBe("NestedWorkspace 2");
+    expect(get(activeWorkspace)?.name).toBe("Workspace 2");
   });
 
   it("derives activePane from activeWorkspace", () => {

@@ -44,12 +44,12 @@ describe("App.svelte structure verification", () => {
     expect(source).toContain("await fontReady");
     expect(source).toContain("setupListeners()");
     // NestedWorkspace restoration moved to bootstrap/restore-workspaces.ts —
-    // the fallback "NestedWorkspace 1" seed now lives there.
+    // the fallback "Workspace 1" seed now lives there.
     const restore = fs.readFileSync(
       "src/lib/bootstrap/restore-workspaces.ts",
       "utf-8",
     );
-    expect(restore).toContain('createWorkspace("NestedWorkspace 1")');
+    expect(restore).toContain('createWorkspace("Workspace 1")');
   });
 
   it("does not duplicate surface push (createTerminalSurface handles it)", async () => {

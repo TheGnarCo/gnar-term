@@ -712,7 +712,7 @@ describe("Extension lifecycle", () => {
     wsStore.set([
       {
         id: "ws-1",
-        name: "Test NestedWorkspace",
+        name: "Test Workspace",
         activePaneId: "pane-1",
         splitRoot: {
           type: "pane",

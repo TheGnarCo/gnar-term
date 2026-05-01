@@ -729,7 +729,7 @@ export async function createDefaultWorkspace() {
   const pane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
   const ws: NestedWorkspace = {
     id: uid(),
-    name: "NestedWorkspace 1",
+    name: "Workspace 1",
     splitRoot: { type: "pane", pane },
     activePaneId: pane.id,
   };

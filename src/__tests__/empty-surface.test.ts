@@ -10,7 +10,7 @@
  *   - EmptySurface sources buttons from workspaceActionStore and from
  *     the EMPTY_SURFACE_COMMAND_IDS promotion list.
  *   - App startup honors a persisted `state.nestedWorkspaces: []` as a valid
- *     restored empty state instead of auto-seeding "NestedWorkspace 1".
+ *     restored empty state instead of auto-seeding "Workspace 1".
  */
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";

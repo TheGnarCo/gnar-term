@@ -7,7 +7,7 @@
  *      workspace around the CLI args
  *   3. persisted state.json — restore the last session's nestedWorkspaces
  *   4. config.autoload — open every named workspace listed
- *   5. fall back to a single default "NestedWorkspace 1"
+ *   5. fall back to a single default "Workspace 1"
  */
 import { get } from "svelte/store";
 import { nestedWorkspaces } from "../stores/workspace";
@@ -72,14 +72,13 @@ export async function restoreWorkspaces(
       console.warn(
         `[cli] NestedWorkspace "${cliArgs.workspace}" not found in config`,
       );
-      await createWorkspace(cliArgs.title || "NestedWorkspace 1");
+      await createWorkspace(cliArgs.title || "Workspace 1");
     }
     return;
   }
 
   if (cliCwd || cliArgs.command) {
-    const wsName =
-      cliArgs.title || cliCwd?.split("/").pop() || "NestedWorkspace 1";
+    const wsName = cliArgs.title || cliCwd?.split("/").pop() || "Workspace 1";
     const def: NestedWorkspaceDef = {
       name: wsName,
       cwd: cliCwd || undefined,
@@ -177,6 +176,6 @@ export async function restoreWorkspaces(
     }
   }
   if (!autoloaded && get(nestedWorkspaces).length === 0) {
-    await createWorkspace("NestedWorkspace 1");
+    await createWorkspace("Workspace 1");
   }
 }

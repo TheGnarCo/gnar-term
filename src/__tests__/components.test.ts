@@ -1034,7 +1034,7 @@ describe("WorkspaceItem", () => {
     wsOverrides: Partial<NestedWorkspace> = {},
     isActive = true,
   ) {
-    const ws = makeWorkspace("ws1", "My NestedWorkspace");
+    const ws = makeWorkspace("ws1", "My Workspace");
     Object.assign(ws, wsOverrides);
     return render(WorkspaceItem, {
       props: {
@@ -1051,11 +1051,11 @@ describe("WorkspaceItem", () => {
 
   it("renders the workspace name", () => {
     renderWorkspaceItem();
-    expect(screen.getByText("My NestedWorkspace")).toBeTruthy();
+    expect(screen.getByText("My Workspace")).toBeTruthy();
   });
 
   it("renders close button in DragGrip when grip is expanded", async () => {
-    const ws = makeWorkspace("ws1", "My NestedWorkspace");
+    const ws = makeWorkspace("ws1", "My Workspace");
     const { container } = render(WorkspaceItem, {
       props: {
         workspace: ws,
@@ -1072,7 +1072,7 @@ describe("WorkspaceItem", () => {
     const row = container.firstElementChild as HTMLElement;
     await fireEvent.mouseEnter(row);
     await tick();
-    expect(screen.getByLabelText("Close My NestedWorkspace")).toBeTruthy();
+    expect(screen.getByLabelText("Close My Workspace")).toBeTruthy();
   });
 
   it("shows unread badge when surfaces have unread data", () => {

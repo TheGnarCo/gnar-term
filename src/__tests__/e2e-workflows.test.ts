@@ -108,7 +108,7 @@ function makeWorkspace(
   const pane = makePane();
   return {
     id: uid(),
-    name: "NestedWorkspace 1",
+    name: "Workspace 1",
     splitRoot: { type: "pane", pane },
     activePaneId: pane.id,
     ...overrides,

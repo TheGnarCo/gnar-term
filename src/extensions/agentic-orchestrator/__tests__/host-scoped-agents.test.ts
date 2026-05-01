@@ -1,10 +1,10 @@
 /**
  * Tests for `hostScopedAgentsStore` — the scope-derivation helper that
  * powers the agent-list / kanban / task-spawner widgets. Mirrors the
- * spec §5.3 rules: global scope emits all agents; group scope emits
- * agents whose workspace has matching `metadata.parentWorkspaceId` OR whose raw
- * terminal CWD falls under the group's `path` and that haven't been
- * claimed yet; no-scope emits an empty list.
+ * spec §5.3 rules: global scope emits all agents; workspace scope emits
+ * agents whose nested workspace has matching `metadata.parentWorkspaceId`
+ * OR whose raw terminal CWD falls under the workspace's `path` and that
+ * haven't been claimed yet; no-scope emits an empty list.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { get, writable } from "svelte/store";
@@ -120,7 +120,7 @@ describe("hostScopedAgentsStore", () => {
     expect(ids).toEqual(["a1", "a2"]);
   });
 
-  it("group scope → agents whose workspace metadata.parentWorkspaceId matches", async () => {
+  it("workspace scope → agents whose workspace metadata.parentWorkspaceId matches", async () => {
     nestedWorkspaces.set([
       seedWorkspace("ws-in", { metadata: { parentWorkspaceId: "grp-1" } }),
       seedWorkspace("ws-out", { metadata: { parentWorkspaceId: "grp-2" } }),
@@ -149,7 +149,7 @@ describe("hostScopedAgentsStore", () => {
     expect(get(store).map((a) => a.agentId)).toEqual(["a-in"]);
   });
 
-  it("group scope → includes unclaimed nestedWorkspaces whose CWD falls under group.path", async () => {
+  it("workspace scope → includes unclaimed nestedWorkspaces whose CWD falls under workspace.path", async () => {
     nestedWorkspaces.set([
       seedWorkspace("ws-under", { cwd: "/work/one/sub" }),
       seedWorkspace("ws-elsewhere", { cwd: "/other/path" }),
@@ -176,7 +176,7 @@ describe("hostScopedAgentsStore", () => {
     expect(get(store).map((a) => a.agentId)).toEqual(["a-under"]);
   });
 
-  it("group scope → excludes claimed nestedWorkspaces even when CWD matches (they belong to another owner)", async () => {
+  it("workspace scope → excludes claimed nestedWorkspaces even when CWD matches (they belong to another owner)", async () => {
     nestedWorkspaces.set([seedWorkspace("ws-under", { cwd: "/work/one/sub" })]);
     setWorkspaces([
       {
@@ -200,7 +200,7 @@ describe("hostScopedAgentsStore", () => {
     expect(get(store)).toEqual([]);
   });
 
-  it("group scope → prefix-only match: sibling paths don't leak in", async () => {
+  it("workspace scope → prefix-only match: sibling paths don't leak in", async () => {
     nestedWorkspaces.set([
       seedWorkspace("ws-sibling", { cwd: "/work/one-other/sub" }),
     ]);
@@ -225,11 +225,11 @@ describe("hostScopedAgentsStore", () => {
     expect(get(store)).toEqual([]);
   });
 
-  it("group scope → includes workspace in group.nestedWorkspaceIds even when claimed and no metadata.parentWorkspaceId", async () => {
-    // Regression test: promote-to-group calls addNestedWorkspaceToWorkspace + claimWorkspace
+  it("workspace scope → includes workspace in workspace.nestedWorkspaceIds even when claimed and no metadata.parentWorkspaceId", async () => {
+    // Regression test: promote-to-workspace calls addNestedWorkspaceToWorkspace + claimWorkspace
     // but does NOT stamp metadata.parentWorkspaceId. Without criterion 2 in hostScopedAgentsStore,
     // the claim guard ($claimedIds.has) would block the CWD fallback and the agent
-    // would be invisible in the group's Kanban dashboard.
+    // would be invisible in the workspace's Kanban dashboard.
     nestedWorkspaces.set([
       seedWorkspace("ws-native", { cwd: "" }), // no cwd, no metadata.parentWorkspaceId
     ]);
@@ -240,10 +240,10 @@ describe("hostScopedAgentsStore", () => {
         path: "/work/one",
         color: "blue",
         workspaceDashboardEnabled: true,
-        nestedWorkspaceIds: ["ws-native"], // explicitly listed in the group
+        nestedWorkspaceIds: ["ws-native"], // explicitly listed in the workspace
       },
     ]);
-    // Simulate the claim that promote-to-group installs.
+    // Simulate the claim that promote-to-workspace installs.
     claimWorkspace("ws-native", "core");
     const api = makeApi([
       makeAgent({ agentId: "a-native", workspaceId: "ws-native" }),
@@ -256,7 +256,7 @@ describe("hostScopedAgentsStore", () => {
     expect(get(store).map((a) => a.agentId)).toEqual(["a-native"]);
   });
 
-  it("group scope → workspace in group.nestedWorkspaceIds for a different group is not included", async () => {
+  it("workspace scope → workspace in workspace.nestedWorkspaceIds for a different workspace is not included", async () => {
     nestedWorkspaces.set([seedWorkspace("ws-other", { cwd: "" })]);
     setWorkspaces([
       {

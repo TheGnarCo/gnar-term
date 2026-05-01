@@ -236,7 +236,7 @@ describe("markdown previewer — markdown-component handling", () => {
       path: "/abs/x.md",
       paneId: "pane-host-1",
       workspaceId: "ws-host-1",
-      hostMetadata: { parentWorkspaceId: "group-abc", isDashboard: true },
+      hostMetadata: { parentWorkspaceId: "workspace-abc", isDashboard: true },
     });
 
     previewer.render(
@@ -249,7 +249,9 @@ describe("markdown previewer — markdown-component handling", () => {
     const stub = surface.querySelector("[data-host-stub-widget]");
     expect(stub).not.toBeNull();
     expect(stub?.getAttribute("data-host-present")).toBe("yes");
-    expect(stub?.getAttribute("data-host-group-id")).toBe("group-abc");
+    expect(stub?.getAttribute("data-host-parent-workspace-id")).toBe(
+      "workspace-abc",
+    );
     expect(stub?.getAttribute("data-host-global")).toBe("no");
 
     document.body.removeChild(surface);
@@ -287,7 +289,10 @@ describe("markdown previewer — markdown-component handling", () => {
       path: "/abs/x.md",
       paneId: "pane-detached-1",
       workspaceId: "ws-detached-1",
-      hostMetadata: { parentWorkspaceId: "group-detached", isDashboard: true },
+      hostMetadata: {
+        parentWorkspaceId: "workspace-detached",
+        isDashboard: true,
+      },
     });
 
     previewer.render(
@@ -299,7 +304,9 @@ describe("markdown previewer — markdown-component handling", () => {
 
     const stub = detached.querySelector("[data-host-stub-widget]");
     expect(stub?.getAttribute("data-host-present")).toBe("yes");
-    expect(stub?.getAttribute("data-host-group-id")).toBe("group-detached");
+    expect(stub?.getAttribute("data-host-parent-workspace-id")).toBe(
+      "workspace-detached",
+    );
 
     resetPreviewSurfaceRegistry();
   });

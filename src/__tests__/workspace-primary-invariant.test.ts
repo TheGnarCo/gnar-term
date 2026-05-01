@@ -13,8 +13,8 @@ import { getWorkspaces, setWorkspaces } from "../lib/stores/workspaces";
 import { nestedWorkspaces } from "../lib/stores/nested-workspace";
 
 describe("Workspace.primaryNestedWorkspaceId", () => {
-  it("accepts a group with primaryNestedWorkspaceId set", () => {
-    const group: Workspace = {
+  it("accepts a workspace with primaryNestedWorkspaceId set", () => {
+    const workspace: Workspace = {
       id: "g1",
       name: "Test",
       path: "/tmp/test",
@@ -24,11 +24,11 @@ describe("Workspace.primaryNestedWorkspaceId", () => {
       isGit: false,
       createdAt: "2026-04-30T00:00:00.000Z",
     };
-    expect(group.primaryNestedWorkspaceId).toBe("ws-1");
+    expect(workspace.primaryNestedWorkspaceId).toBe("ws-1");
   });
 
-  it("accepts a group without primaryNestedWorkspaceId (legacy shape)", () => {
-    const group: Workspace = {
+  it("accepts a workspace without primaryNestedWorkspaceId (legacy shape)", () => {
+    const workspace: Workspace = {
       id: "g1",
       name: "Test",
       path: "/tmp/test",
@@ -37,7 +37,7 @@ describe("Workspace.primaryNestedWorkspaceId", () => {
       isGit: false,
       createdAt: "2026-04-30T00:00:00.000Z",
     };
-    expect(group.primaryNestedWorkspaceId).toBeUndefined();
+    expect(workspace.primaryNestedWorkspaceId).toBeUndefined();
   });
 });
 
@@ -72,14 +72,14 @@ describe("addNestedWorkspaceToWorkspace — primary invariant", () => {
     ]);
   });
 
-  it("allows adding a worktree workspace to a group that already has a primary", () => {
+  it("allows adding a worktree nested workspace to a workspace that already has a primary", () => {
     const changed = addNestedWorkspaceToWorkspace("g1", "ws-worktree");
     expect(changed).toBe(true);
-    const group = getWorkspaces().find((g) => g.id === "g1");
-    expect(group?.nestedWorkspaceIds).toContain("ws-worktree");
+    const workspace = getWorkspaces().find((g) => g.id === "g1");
+    expect(workspace?.nestedWorkspaceIds).toContain("ws-worktree");
   });
 
-  it("throws when adding a second non-worktree workspace to a group that has a primary", () => {
+  it("throws when adding a second non-worktree nested workspace to a workspace that has a primary", () => {
     nestedWorkspaces.update((list) => [
       ...list,
       {

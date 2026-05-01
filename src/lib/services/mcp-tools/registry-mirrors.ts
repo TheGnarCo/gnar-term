@@ -305,15 +305,15 @@ export const registryMirrorTools: ToolDef[] = [
     },
   },
 
-  // ---- Dashboard contributions (per-group add / remove / list) ----
+  // ---- Dashboard contributions (per-workspace add / remove / list) ----
   {
     name: "list_dashboard_contributions",
     description:
-      "List every registered Dashboard contribution. When `group_id` is provided, each row also carries `active` (whether the group has a dashboard workspace for this contribution) and `workspace_id` when active. `autoProvision` contributions cannot be added or removed; the Settings dashboard toggle surfaces this via `locked_reason`.",
+      "List every registered Dashboard contribution. When `workspace_id` is provided, each row also carries `active` (whether the workspace has a dashboard nested workspace for this contribution) and `nested_workspace_id` when active. `autoProvision` contributions cannot be added or removed; the Settings dashboard toggle surfaces this via `locked_reason`.",
     inputSchema: {
       type: "object",
       properties: {
-        group_id: {
+        workspace_id: {
           type: "string",
           description:
             "Optional. When set, annotate each row with active state.",
@@ -321,13 +321,15 @@ export const registryMirrorTools: ToolDef[] = [
       },
     },
     handler: (args) => {
-      const p = args as { group_id?: string };
+      const p = args as { workspace_id?: string };
       const contribs = get(dashboardContributionStore);
-      const group = p.group_id ? getWorkspace(p.group_id) : undefined;
-      if (p.group_id && !group) {
-        throw new Error(`Unknown workspace group: ${p.group_id}`);
+      const workspace = p.workspace_id
+        ? getWorkspace(p.workspace_id)
+        : undefined;
+      if (p.workspace_id && !workspace) {
+        throw new Error(`Unknown workspace: ${p.workspace_id}`);
       }
-      const wsList = group ? get(nestedWorkspaces) : [];
+      const wsList = workspace ? get(nestedWorkspaces) : [];
       return {
         contributions: contribs.map((c) => {
           const base = {
@@ -339,14 +341,14 @@ export const registryMirrorTools: ToolDef[] = [
             auto_provision: c.autoProvision === true,
             locked_reason: c.lockedReason,
           };
-          if (!group) return base;
+          if (!workspace) return base;
           const wsForContrib = wsList.find((w) =>
-            isDashboardWorkspace(w, group.id, c.id),
+            isDashboardWorkspace(w, workspace.id, c.id),
           );
           return {
             ...base,
             active: Boolean(wsForContrib),
-            workspace_id: wsForContrib?.id,
+            nested_workspace_id: wsForContrib?.id,
           };
         }),
       };
@@ -355,19 +357,19 @@ export const registryMirrorTools: ToolDef[] = [
   {
     name: "add_dashboard_to_workspace",
     description:
-      "Materialize a dashboard workspace for a Workspace by running the contribution's create hook. Errors when the contribution is autoProvision (those materialize automatically and cannot be added manually), already at its per-group cap, unknown, or gated out by the contribution's availability predicate. Returns the new workspace id.",
+      "Materialize a dashboard nested workspace for a Workspace by running the contribution's create hook. Errors when the contribution is autoProvision (those materialize automatically and cannot be added manually), already at its per-workspace cap, unknown, or gated out by the contribution's availability predicate. Returns the new nested workspace id.",
     inputSchema: {
       type: "object",
       properties: {
-        group_id: { type: "string" },
+        workspace_id: { type: "string" },
         contribution_id: { type: "string" },
       },
-      required: ["group_id", "contribution_id"],
+      required: ["workspace_id", "contribution_id"],
     },
     handler: async (args) => {
-      const p = args as { group_id: string; contribution_id: string };
-      const group = getWorkspace(p.group_id);
-      if (!group) throw new Error(`Unknown workspace group: ${p.group_id}`);
+      const p = args as { workspace_id: string; contribution_id: string };
+      const workspace = getWorkspace(p.workspace_id);
+      if (!workspace) throw new Error(`Unknown workspace: ${p.workspace_id}`);
       const contribution = getDashboardContribution(p.contribution_id);
       if (!contribution) {
         throw new Error(`Unknown dashboard contribution: ${p.contribution_id}`);
@@ -378,43 +380,46 @@ export const registryMirrorTools: ToolDef[] = [
         );
       }
       const currentCount = get(nestedWorkspaces).filter((w) =>
-        isDashboardWorkspace(w, group.id, contribution.id),
+        isDashboardWorkspace(w, workspace.id, contribution.id),
       ).length;
       if (
-        !canAddContributionToWorkspace(group, contribution.id, currentCount)
+        !canAddContributionToWorkspace(workspace, contribution.id, currentCount)
       ) {
         throw new Error(
-          `Cannot add "${p.contribution_id}" to group "${p.group_id}" (at cap or gated by availability).`,
+          `Cannot add "${p.contribution_id}" to workspace "${p.workspace_id}" (at cap or gated by availability).`,
         );
       }
-      const workspaceId = await contribution.create(group);
-      return { workspace_id: workspaceId };
+      const nestedWorkspaceId = await contribution.create(workspace);
+      return { nested_workspace_id: nestedWorkspaceId };
     },
   },
   {
     name: "remove_dashboard_from_workspace",
     description:
-      "Close the dashboard workspace for `{group_id, contribution_id}`. Errors when the contribution is autoProvision (core Overview, core Settings, and the Agentic dashboard cannot be removed this way). Returns `{ removed: true }` on success, `{ removed: false }` when no such workspace existed.",
+      "Close the dashboard nested workspace for `{workspace_id, contribution_id}`. Errors when the contribution is autoProvision (core Overview, core Settings, and the Agentic dashboard cannot be removed this way). Returns `{ removed: true }` on success, `{ removed: false }` when no such nested workspace existed.",
     inputSchema: {
       type: "object",
       properties: {
-        group_id: { type: "string" },
+        workspace_id: { type: "string" },
         contribution_id: { type: "string" },
       },
-      required: ["group_id", "contribution_id"],
+      required: ["workspace_id", "contribution_id"],
     },
     handler: (args) => {
-      const p = args as { group_id: string; contribution_id: string };
+      const p = args as { workspace_id: string; contribution_id: string };
       const contribution = getDashboardContribution(p.contribution_id);
       if (!contribution) {
         throw new Error(`Unknown dashboard contribution: ${p.contribution_id}`);
       }
       if (contribution.autoProvision) {
         throw new Error(
-          `Dashboard contribution "${p.contribution_id}" is autoProvision — locked on this group.`,
+          `Dashboard contribution "${p.contribution_id}" is autoProvision — locked on this workspace.`,
         );
       }
-      const removed = closeDashboardForWorkspace(p.group_id, p.contribution_id);
+      const removed = closeDashboardForWorkspace(
+        p.workspace_id,
+        p.contribution_id,
+      );
       return { removed };
     },
   },

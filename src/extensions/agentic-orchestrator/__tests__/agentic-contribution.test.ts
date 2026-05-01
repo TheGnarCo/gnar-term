@@ -80,7 +80,7 @@ describe("agentic extension — Dashboard contribution registration", () => {
     expect(getDashboardContribution("agentic")).toBeUndefined();
   });
 
-  it("create(group) materializes a dashboard workspace with agentic metadata", async () => {
+  it("create(workspace) materializes a dashboard nested workspace with agentic metadata", async () => {
     registerExtension(
       agenticOrchestratorManifest,
       registerAgenticOrchestratorExtension,

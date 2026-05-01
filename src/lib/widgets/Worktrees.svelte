@@ -6,7 +6,7 @@
    * affordance that switches to that worktree workspace.
    *
    * Scope comes from the enclosing `DashboardHostContext`:
-   *   - group scope  → filter to `group.path` as the repo
+   *   - workspace scope  → filter to `workspace.path` as the repo
    *   - global scope → filter to `repoPath` config when provided;
    *     otherwise show every persisted worktree
    *   - none         → widget is inert

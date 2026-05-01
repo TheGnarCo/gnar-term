@@ -1,5 +1,5 @@
 /**
- * Tests for the GROUP_COLORS palette.
+ * Tests for the WORKSPACE_COLOR_SLOTS palette.
  */
 import { describe, it, expect } from "vitest";
 import {
@@ -20,7 +20,7 @@ describe("WORKSPACE_COLOR_SLOTS", () => {
   });
 });
 
-describe("group color resolution", () => {
+describe("workspace color resolution", () => {
   it("resolves every slot to a hex in every theme", () => {
     for (const theme of Object.values(themes)) {
       const colors = getWorkspaceColors(theme);

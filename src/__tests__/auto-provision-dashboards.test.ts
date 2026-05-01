@@ -1,7 +1,7 @@
 /**
- * provisionAutoDashboardsForWorkspace — called on group create and on startup
+ * provisionAutoDashboardsForWorkspace — called on workspace create and on startup
  * reconciliation. Iterates every registered DashboardContribution with
- * `autoProvision: true` and invokes contribution.create(group) for any
+ * `autoProvision: true` and invokes contribution.create(workspace) for any
  * that isn't already backed by a workspace. Idempotent.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
@@ -29,7 +29,7 @@ import type { Workspace } from "../lib/config";
 function makeWorkspace(id: string): Workspace {
   return {
     id,
-    name: `Group ${id}`,
+    name: `Workspace `,
     path: `/tmp/${id}`,
     color: "purple",
     nestedWorkspaceIds: [],
@@ -75,11 +75,11 @@ describe("provisionAutoDashboardsForWorkspace", () => {
       create: vi.fn(async () => "ws-c"),
     });
 
-    const group = makeWorkspace("g1");
-    await provisionAutoDashboardsForWorkspace(group);
+    const workspace = makeWorkspace("g1");
+    await provisionAutoDashboardsForWorkspace(workspace);
 
-    expect(aCreate).toHaveBeenCalledWith(group);
-    expect(bCreate).toHaveBeenCalledWith(group);
+    expect(aCreate).toHaveBeenCalledWith(workspace);
+    expect(bCreate).toHaveBeenCalledWith(workspace);
     // Non-autoProvision contributions are NOT auto-materialized.
     expect(
       (
@@ -90,7 +90,7 @@ describe("provisionAutoDashboardsForWorkspace", () => {
     ).toBeUndefined();
   });
 
-  it("skips contributions whose dashboard workspace already exists for the group", async () => {
+  it("skips contributions whose dashboard workspace already exists for the workspace", async () => {
     const aCreate = vi.fn(async () => "ws-a");
     registerDashboardContribution({
       id: "a",
@@ -102,7 +102,7 @@ describe("provisionAutoDashboardsForWorkspace", () => {
       create: aCreate,
     });
 
-    const group = makeWorkspace("g1");
+    const workspace = makeWorkspace("g1");
     // Seed the nestedWorkspaces store with an existing dashboard for "a".
     nestedWorkspaces.set([
       {
@@ -111,13 +111,13 @@ describe("provisionAutoDashboardsForWorkspace", () => {
         layout: { pane: { id: "p", surfaces: [], activeIdx: 0 } },
         metadata: {
           isDashboard: true,
-          parentWorkspaceId: group.id,
+          parentWorkspaceId: workspace.id,
           dashboardContributionId: "a",
         },
       } as never,
     ]);
 
-    await provisionAutoDashboardsForWorkspace(group);
+    await provisionAutoDashboardsForWorkspace(workspace);
 
     expect(aCreate).not.toHaveBeenCalled();
     // Sanity: no new nestedWorkspaces added.
@@ -152,9 +152,9 @@ describe("provisionAutoDashboardsForWorkspace", () => {
       create: bCreate,
     });
 
-    const group = makeWorkspace("g1");
-    await provisionAutoDashboardsForWorkspace(group);
-    await provisionAutoDashboardsForWorkspace(group);
+    const workspace = makeWorkspace("g1");
+    await provisionAutoDashboardsForWorkspace(workspace);
+    await provisionAutoDashboardsForWorkspace(workspace);
 
     expect(bCreate).toHaveBeenCalledTimes(1);
   });

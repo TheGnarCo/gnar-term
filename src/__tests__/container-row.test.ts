@@ -50,7 +50,7 @@ function makeWs(id: string) {
 const baseProps = {
   color: "#4a90d9",
   filterIds: new Set(["ws-1"]),
-  scopeId: "group-1",
+  scopeId: "workspace-1",
   workspaceListViewComponent: WorkspaceListViewStub,
 };
 

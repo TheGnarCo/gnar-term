@@ -33,7 +33,7 @@ describe("reorder state stores", () => {
   it("workspace-kind context makes any + inner active, but not block", () => {
     reorderContext.set({
       kind: "workspace",
-      sourceWorkspaceId: "group-1",
+      sourceWorkspaceId: "workspace-1",
       containerBlockId: "__workspaces__",
     });
     expect(get(anyReorderActive)).toBe(true);

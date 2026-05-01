@@ -6,7 +6,7 @@
    * recognizable HTTP(S) URL.
    *
    * Scope comes from the enclosing `DashboardHostContext` (spec §5.3):
-   *   - group scope  → uses `group.path` as the repo to inspect
+   *   - workspace scope  → uses `workspace.path` as the repo to inspect
    *   - global scope → widget takes `repoPath` as an explicit config
    *   - none         → widget is inert
    */

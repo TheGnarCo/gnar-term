@@ -17,11 +17,11 @@
   const host = getDashboardHost();
   const scope = deriveDashboardScope(host);
 
-  $: group =
+  $: workspace =
     scope.kind === "workspace"
       ? getWorkspace(scope.parentWorkspaceId)
       : undefined;
-  $: projectRoot = group?.path ?? "";
+  $: projectRoot = workspace?.path ?? "";
 
   $: settingsPath = projectRoot ? `${projectRoot}/.claude/settings.json` : null;
   $: localSettingsPath = projectRoot
@@ -48,7 +48,7 @@
     </div>
   {:else if !projectRoot}
     <div style="padding: 16px; color: {t.fgDim}; font-size: 12px;">
-      No workspace group associated with this dashboard.
+      No workspace associated with this dashboard.
     </div>
   {:else}
     <!-- Tab bar -->

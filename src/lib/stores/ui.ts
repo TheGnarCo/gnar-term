@@ -161,7 +161,7 @@ export function showConfirmPrompt(
  *   - info:           read-only label (useful for showing context like a
  *                     worktree path during a confirm dialog)
  *   - color:          swatch picker over WORKSPACE_COLOR_SLOTS (matches
- *                     the chrome used by group creation)
+ *                     the chrome used by workspace creation)
  */
 export type FormField =
   | {
@@ -201,8 +201,8 @@ export type FormField =
       /** When true, the Browse button is hidden — the value is shown
        *  but not editable. Use when the caller has already resolved
        *  the directory and the user shouldn't be able to repoint it
-       *  (e.g. a dashboard spawned inside a group inherits the
-       *  group's path). */
+       *  (e.g. a dashboard spawned inside a workspace inherits the
+       *  workspace's path). */
       readonly?: boolean;
     };
 export interface FormPromptState {

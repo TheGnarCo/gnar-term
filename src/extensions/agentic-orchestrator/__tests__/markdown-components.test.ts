@@ -284,7 +284,7 @@ describe("Kanban widget", () => {
     expect(container.querySelectorAll("[data-kanban-empty]").length).toBe(4);
   });
 
-  it("buckets agents into the correct columns when scoped to a group host", async () => {
+  it("buckets agents into the correct columns when scoped to a workspace host", async () => {
     // Seed an api whose agentsStore receives the agents we register through
     // the registry. Since the widget reads agentsStore directly, we drive
     // it through registerAgent (which syncs the store).
@@ -387,9 +387,9 @@ describe("Kanban widget", () => {
       }),
     );
 
-    // Seed a workspace group whose path matches the nestedWorkspaces' CWD so
+    // Seed a workspace whose path matches the nestedWorkspaces' CWD so
     // the host-context-driven filter includes them as unclaimed CWD
-    // matches — mirroring the group-scope rule in widget-helpers.
+    // matches — mirroring the workspace-scope rule in widget-helpers.
     const { setWorkspaces, resetWorkspacesForTest } =
       await import("../../../lib/stores/workspaces");
     resetWorkspacesForTest();
@@ -434,9 +434,9 @@ describe("Kanban widget", () => {
 // --- Issues ---
 
 describe("Issues widget", () => {
-  const GROUP_ID = "grp-issues";
-  const GROUP_PATH = "/work/proj";
-  const workspaceHost = { metadata: { parentWorkspaceId: GROUP_ID } };
+  const WORKSPACE_ID = "grp-issues";
+  const WORKSPACE_PATH = "/work/proj";
+  const workspaceHost = { metadata: { parentWorkspaceId: WORKSPACE_ID } };
 
   beforeEach(async () => {
     configRef.current = {};
@@ -452,9 +452,9 @@ describe("Issues widget", () => {
     resetWorkspacesForTest();
     setWorkspaces([
       {
-        id: GROUP_ID,
+        id: WORKSPACE_ID,
         name: "Issues Dash",
-        path: GROUP_PATH,
+        path: WORKSPACE_PATH,
         color: "blue",
         workspaceDashboardEnabled: true,
         nestedWorkspaceIds: [],
@@ -569,9 +569,9 @@ describe("Issues widget", () => {
     const callArg = spawnAgentInWorktreeMock.mock.calls[0]?.[0];
     expect(callArg).toMatchObject({
       agent: "claude-code",
-      repoPath: GROUP_PATH,
-      parentWorkspaceId: GROUP_ID,
-      spawnedBy: { kind: "workspace", parentWorkspaceId: GROUP_ID },
+      repoPath: WORKSPACE_PATH,
+      parentWorkspaceId: WORKSPACE_ID,
+      spawnedBy: { kind: "workspace", parentWorkspaceId: WORKSPACE_ID },
     });
     expect(callArg.taskContext).toContain("Issue #7");
     expect(callArg.taskContext).toContain("Make it faster");
@@ -981,9 +981,9 @@ describe("Issues widget", () => {
 // --- Prs ---
 
 describe("Prs widget", () => {
-  const GROUP_ID = "grp-prs";
-  const GROUP_PATH = "/work/proj";
-  const workspaceHost = { metadata: { parentWorkspaceId: GROUP_ID } };
+  const WORKSPACE_ID = "grp-prs";
+  const WORKSPACE_PATH = "/work/proj";
+  const workspaceHost = { metadata: { parentWorkspaceId: WORKSPACE_ID } };
 
   beforeEach(async () => {
     configRef.current = {};
@@ -996,9 +996,9 @@ describe("Prs widget", () => {
     resetWorkspacesForTest();
     setWorkspaces([
       {
-        id: GROUP_ID,
+        id: WORKSPACE_ID,
         name: "PRs Dash",
-        path: GROUP_PATH,
+        path: WORKSPACE_PATH,
         color: "blue",
         workspaceDashboardEnabled: true,
         nestedWorkspaceIds: [],
@@ -1323,9 +1323,9 @@ describe("AgentList widget", () => {
 // --- TaskSpawner ---
 
 describe("TaskSpawner widget", () => {
-  const GROUP_ID = "grp-spawn";
-  const GROUP_PATH = "/work/proj";
-  const workspaceHost = { metadata: { parentWorkspaceId: GROUP_ID } };
+  const WORKSPACE_ID = "grp-spawn";
+  const WORKSPACE_PATH = "/work/proj";
+  const workspaceHost = { metadata: { parentWorkspaceId: WORKSPACE_ID } };
   const globalHost = { metadata: { isGlobalAgenticDashboard: true } };
 
   beforeEach(async () => {
@@ -1338,9 +1338,9 @@ describe("TaskSpawner widget", () => {
     resetWorkspacesForTest();
     setWorkspaces([
       {
-        id: GROUP_ID,
-        name: "Spawn Group",
-        path: GROUP_PATH,
+        id: WORKSPACE_ID,
+        name: "Spawn Workspace",
+        path: WORKSPACE_PATH,
         color: "blue",
         workspaceDashboardEnabled: true,
         nestedWorkspaceIds: [],
@@ -1426,7 +1426,7 @@ describe("TaskSpawner widget", () => {
     expect(spawnBtn.disabled).toBe(false);
   });
 
-  it("group scope → spawns with repoPath=group.path, parentWorkspaceId, spawnedBy={kind:'group'}", async () => {
+  it("workspace scope → spawns with repoPath=workspace.path, parentWorkspaceId, spawnedBy={kind:'workspace'}", async () => {
     const api = makeApi();
     const { container } = render(ExtensionWrapper, {
       props: {
@@ -1461,9 +1461,9 @@ describe("TaskSpawner widget", () => {
     expect(callArg).toMatchObject({
       agent: "claude-code",
       taskContext: "Refactor the thing",
-      repoPath: GROUP_PATH,
-      parentWorkspaceId: GROUP_ID,
-      spawnedBy: { kind: "workspace", parentWorkspaceId: GROUP_ID },
+      repoPath: WORKSPACE_PATH,
+      parentWorkspaceId: WORKSPACE_ID,
+      spawnedBy: { kind: "workspace", parentWorkspaceId: WORKSPACE_ID },
       branch: "agent/claude-code/refactor-the-thing",
     });
     // Form collapses on success.

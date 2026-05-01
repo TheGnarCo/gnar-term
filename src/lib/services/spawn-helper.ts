@@ -77,10 +77,10 @@ export interface SpawnAgentInWorktreeArgs {
   /** Base branch. Default: "main". */
   base?: string;
   /**
-   * When provided, the new workspace's metadata.parentWorkspaceId is set to this
-   * id — used when the spawning dashboard lives under a workspace group,
-   * so workspace-groups claims the worktree into the group's nested list
-   * alongside other group nestedWorkspaces.
+   * When provided, the new nested workspace's metadata.parentWorkspaceId is
+   * set to this id — used when the spawning dashboard lives under a
+   * Workspace, so the workspace claims the worktree into its nested list
+   * alongside other nested workspaces.
    */
   parentWorkspaceId?: string;
   /**

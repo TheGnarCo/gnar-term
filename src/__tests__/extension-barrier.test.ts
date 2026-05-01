@@ -43,14 +43,14 @@ describe("Extension barrier enforcement", () => {
     // worktree-service which lives in core for the same reason).
     // Keep this list small — each entry is a deliberate departure.
     const FILE_EXCEPTIONS: Record<string, string[]> = {
-      // The Diff Dashboard contribution's `create(group)` materializes
+      // The Diff Dashboard contribution's `create(workspace)` materializes
       // a dashboard workspace via createNestedWorkspaceFromDef — mirrors the
       // agentic-orchestrator piercing below.
       "diff-viewer/index.ts": ["../../lib/services/nested-workspace-service"],
-      // The Agentic Dashboard contribution's `create(group)` must
+      // The Agentic Dashboard contribution's `create(workspace)` must
       // materialize a dashboard workspace; reaching for
       // createNestedWorkspaceFromDef keeps the contribution on the same code
-      // path as core's built-in Group Dashboard.
+      // path as core's built-in Workspace Dashboard.
       "agentic-orchestrator/index.ts": [
         "../../lib/services/nested-workspace-service",
         // The extension mirrors its declared `globalAgentsMarkdownPath`
@@ -60,9 +60,9 @@ describe("Extension barrier enforcement", () => {
         // the simplest sync path.
         "../../lib/config",
         // Auto-provision: on activate, back-fill the Agentic Dashboard
-        // for every existing workspace group; on deactivate, close the
+        // for every existing workspace; on deactivate, close the
         // provisioned dashboards. No public ExtensionAPI surface exposes
-        // the group list / dashboard tear-down, so the extension pierces
+        // the workspace list / dashboard tear-down, so the extension pierces
         // core — same shape as the existing `createNestedWorkspaceFromDef`
         // piercing above.
         "../../lib/services/workspace-service",
@@ -85,7 +85,7 @@ describe("Extension barrier enforcement", () => {
         // `gh --version` calls on mount.
         "../../../lib/services/gh-availability",
         // Dashboard widgets derive scope from DashboardHostContext +
-        // group.path (spec §5.3). Same piercing as Kanban / AgentList.
+        // workspace.path (spec §5.3). Same piercing as Kanban / AgentList.
         "../../../lib/contexts/dashboard-host",
         "../../../lib/stores/workspaces",
       ],
@@ -135,8 +135,8 @@ describe("Extension barrier enforcement", () => {
         "../../lib/services/claimed-workspace-registry",
       ],
       // claude-settings/index.ts mirrors the agentic-orchestrator piercing
-      // pattern: createNestedWorkspaceFromDef to materialize the group dashboard,
-      // workspace-group-service + workspace-groups for auto-provision on
+      // pattern: createNestedWorkspaceFromDef to materialize the workspace dashboard,
+      // workspace-service + workspaces for auto-provision on
       // activate, and restore-nestedWorkspaces to defer the back-fill loop until
       // nestedWorkspaces are restored.
       "claude-settings/index.ts": [
@@ -146,7 +146,7 @@ describe("Extension barrier enforcement", () => {
         "../../lib/bootstrap/restore-workspaces",
       ],
       // ClaudeSettingsWidget reads dashboard scope via DashboardHostContext
-      // and group.path via workspace-groups — same piercing as Kanban.
+      // and workspace.path via workspaces — same piercing as Kanban.
       "claude-settings/components/ClaudeSettingsWidget.svelte": [
         "../../../lib/contexts/dashboard-host",
         "../../../lib/stores/workspaces",

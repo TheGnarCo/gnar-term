@@ -64,11 +64,11 @@ describe("WorkspacesWidget", () => {
     ).toBeNull();
   });
 
-  it("renders nothing when the group only has a group-overview dashboard", () => {
+  it("renders nothing when the workspace only has a workspace-overview dashboard", () => {
     setWorkspaces([
       {
         id: "g1",
-        name: "My Group",
+        name: "My Workspace",
         path: "/tmp/g1",
         color: "purple",
         nestedWorkspaceIds: [],
@@ -77,7 +77,7 @@ describe("WorkspacesWidget", () => {
       },
     ]);
     nestedWorkspaces.set([
-      makeNestedWorkspace("ws-overview", "Group Overview", {
+      makeNestedWorkspace("ws-overview", "Workspace Overview", {
         parentWorkspaceId: "g1",
         isDashboard: true,
         dashboardContributionId: "group",
@@ -94,11 +94,11 @@ describe("WorkspacesWidget", () => {
     expect(container.querySelector("[data-workspace-rows]")).toBeNull();
   });
 
-  it("renders non-group dashboard cards but excludes the group overview", () => {
+  it("renders non-overview dashboard cards but excludes the workspace overview", () => {
     setWorkspaces([
       {
         id: "g1",
-        name: "My Group",
+        name: "My Workspace",
         path: "/tmp/g1",
         color: "blue",
         nestedWorkspaceIds: [],
@@ -107,7 +107,7 @@ describe("WorkspacesWidget", () => {
       },
     ]);
     nestedWorkspaces.set([
-      makeNestedWorkspace("ws-overview", "Group Overview", {
+      makeNestedWorkspace("ws-overview", "Workspace Overview", {
         parentWorkspaceId: "g1",
         isDashboard: true,
         dashboardContributionId: "group",
@@ -145,7 +145,7 @@ describe("WorkspacesWidget", () => {
     setWorkspaces([
       {
         id: "g1",
-        name: "My Group",
+        name: "My Workspace",
         path: "/tmp/g1",
         color: "green",
         nestedWorkspaceIds: [],
@@ -176,11 +176,11 @@ describe("WorkspacesWidget", () => {
     expect(names).toContain("Beta NestedWorkspace");
   });
 
-  it("excludes nestedWorkspaces from other groups", () => {
+  it("excludes nestedWorkspaces from other workspaces", () => {
     setWorkspaces([
       {
         id: "g1",
-        name: "Group One",
+        name: "Workspace One",
         path: "/tmp/g1",
         color: "red",
         nestedWorkspaceIds: [],
@@ -189,7 +189,7 @@ describe("WorkspacesWidget", () => {
       },
       {
         id: "g2",
-        name: "Group Two",
+        name: "Workspace Two",
         path: "/tmp/g2",
         color: "blue",
         nestedWorkspaceIds: [],
@@ -230,7 +230,7 @@ describe("WorkspacesWidget click-to-navigate", () => {
     setWorkspaces([
       {
         id: "g1",
-        name: "My Group",
+        name: "My Workspace",
         path: "/tmp/g1",
         color: "blue",
         nestedWorkspaceIds: [],

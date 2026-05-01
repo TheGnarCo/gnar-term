@@ -6,7 +6,7 @@ const WORKSPACE_LIST_BLOCK = readFileSync(
   "utf-8",
 ).replace(/\s+/g, " ");
 
-const GROUP_SECTION_CONTENT = readFileSync(
+const SOURCE = readFileSync(
   "src/lib/components/WorkspaceSectionContent.svelte",
   "utf-8",
 ).replace(/\s+/g, " ");
@@ -52,7 +52,7 @@ describe("per-project overlay (via WorkspaceListBlock shell)", () => {
 
   it("core bootstrap registers color + label resolvers on the row renderer", () => {
     // Core (bootstrap/init-workspaces.ts) provides the resolvers
-    // so core can paint the group's overlay and ghost without reaching
+    // so core can paint the workspace's overlay and ghost without reaching
     // into extension state directly.
     const BOOTSTRAP = readFileSync(
       "src/lib/bootstrap/init-workspaces.ts",
@@ -64,29 +64,29 @@ describe("per-project overlay (via WorkspaceListBlock shell)", () => {
   });
 
   it("WorkspaceSectionContent accepts a unified overlay prop supporting strong + light", () => {
-    expect(GROUP_SECTION_CONTENT).toMatch(/export let overlay/);
-    expect(GROUP_SECTION_CONTENT).toMatch(/kind:\s*"strong"/);
-    expect(GROUP_SECTION_CONTENT).toMatch(/kind:\s*"light"/);
+    expect(SOURCE).toMatch(/export let overlay/);
+    expect(SOURCE).toMatch(/kind:\s*"strong"/);
+    expect(SOURCE).toMatch(/kind:\s*"light"/);
   });
 
-  it("WorkspaceSectionContent renders one overlay spanning the whole group block; label only for strong", () => {
-    expect(GROUP_SECTION_CONTENT).toMatch(/\{#if overlay\}/);
-    expect(GROUP_SECTION_CONTENT).toMatch(/overlay\.kind\s*===\s*"strong"/);
-    expect(GROUP_SECTION_CONTENT).toMatch(/overlay\.label/);
+  it("WorkspaceSectionContent renders one overlay spanning the whole workspace block; label only for strong", () => {
+    expect(SOURCE).toMatch(/\{#if overlay\}/);
+    expect(SOURCE).toMatch(/overlay\.kind\s*===\s*"strong"/);
+    expect(SOURCE).toMatch(/overlay\.label/);
   });
 
   it("WorkspaceSectionContent paints the strong overlay with the workspace's own color", () => {
     // Non-source workspaces during a workspace drag render a solid
     // colored tile using the theme-resolved workspace color.
-    expect(GROUP_SECTION_CONTENT).toMatch(
+    expect(SOURCE).toMatch(
       /overlay\.kind\s*===\s*["']strong["'][\s\S]*?workspaceHex/,
     );
-    expect(GROUP_SECTION_CONTENT).toMatch(
+    expect(SOURCE).toMatch(
       /workspaceHex\s*=\s*[^\n]*resolveWorkspaceColor\(workspace\.color,\s*\$theme\)/,
     );
   });
 
   it("WorkspaceSectionContent uses the light dim (black-40) for the light variant", () => {
-    expect(GROUP_SECTION_CONTENT).toMatch(/rgba\(0,\s*0,\s*0,\s*0\.4\)/);
+    expect(SOURCE).toMatch(/rgba\(0,\s*0,\s*0,\s*0\.4\)/);
   });
 });

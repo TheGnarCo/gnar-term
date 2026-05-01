@@ -340,7 +340,7 @@ async function scrubWorkspaceDashboardActiveAgents(
     await invoke("write_file", { path, content: next });
   } catch (err) {
     console.warn(
-      `[workspace-groups] Failed to scrub Active Agents from "${path}":`,
+      `[workspace-service] Failed to scrub Active Agents from "${path}":`,
       err,
     );
   }
@@ -365,7 +365,7 @@ export async function migrateWorkspaceDashboardWidgets(
     await invoke("write_file", { path, content: migrated });
   } catch (err) {
     console.warn(
-      `[workspace-groups] Failed to migrate nestedWorkspaces widget into "${path}":`,
+      `[workspace-service] Failed to migrate nestedWorkspaces widget into "${path}":`,
       err,
     );
   }
@@ -548,7 +548,7 @@ export async function provisionAutoDashboardsForWorkspace(
       await c.create(workspace);
     } catch (err) {
       console.warn(
-        `[workspace-groups] auto-provision failed for "${c.id}":`,
+        `[workspace-service] auto-provision failed for "${c.id}":`,
         err,
       );
     }
@@ -694,7 +694,7 @@ export async function reconcileWorkspaceDashboards(): Promise<void> {
         }
       } catch (err) {
         console.warn(
-          "[workspace-groups] Dashboard reconciliation failed:",
+          "[workspace-service] Dashboard reconciliation failed:",
           err,
         );
       }
@@ -768,8 +768,8 @@ export async function reconcilePrimaryWorkspaces(): Promise<void> {
     if (primary) {
       updateWorkspace(workspace.id, { primaryNestedWorkspaceId: primary.id });
     }
-    // Groups with no eligible primary are left without one — the next
-    // workspace creation flow will set it.
+    // Workspaces with no eligible primary are left without one — the next
+    // nested-workspace creation flow will set it.
   }
 
   // Pass 2 — wrap standalone nestedWorkspaces.

@@ -1,5 +1,5 @@
 /**
- * Story 5: Settings dashboard exposes a per-group toggle row for every
+ * Story 5: Settings dashboard exposes a per-workspace toggle row for every
  * registered contribution (except "settings" itself). autoProvision
  * rows render locked (disabled + lockedReason); user-opt-in rows
  * toggle the dashboard workspace on and off.
@@ -26,9 +26,9 @@ import {
   resetDashboardContributions,
 } from "../lib/services/dashboard-contribution-registry";
 
-const GROUP = {
+const WORKSPACE = {
   id: "g1",
-  name: "My Group",
+  name: "My Workspace",
   path: "/tmp/g1",
   color: "purple",
   nestedWorkspaceIds: [],
@@ -41,7 +41,7 @@ describe("WorkspaceDashboardSettings — Dashboards toggles", () => {
     cleanup();
     nestedWorkspaces.set([]);
     activeNestedWorkspaceIdx.set(-1);
-    workspacesStore.set([GROUP]);
+    workspacesStore.set([WORKSPACE]);
     resetDashboardContributions();
   });
 
@@ -49,8 +49,8 @@ describe("WorkspaceDashboardSettings — Dashboards toggles", () => {
     registerDashboardContribution({
       id: "group",
       source: "core",
-      label: "Group Dashboard",
-      actionLabel: "Add Group",
+      label: "Workspace Dashboard",
+      actionLabel: "Add Workspace Dashboard",
       capPerWorkspace: 1,
       autoProvision: true,
       lockedReason: "Required (Overview)",
@@ -75,7 +75,7 @@ describe("WorkspaceDashboardSettings — Dashboards toggles", () => {
     });
 
     const { container } = render(WorkspaceDashboardSettings, {
-      props: { parentWorkspaceId: GROUP.id },
+      props: { parentWorkspaceId: WORKSPACE.id },
     });
 
     const rows = container.querySelectorAll("[data-dashboard-toggle-row]");
@@ -89,8 +89,8 @@ describe("WorkspaceDashboardSettings — Dashboards toggles", () => {
     registerDashboardContribution({
       id: "group",
       source: "core",
-      label: "Group Dashboard",
-      actionLabel: "Add Group",
+      label: "Workspace Dashboard",
+      actionLabel: "Add Workspace Dashboard",
       capPerWorkspace: 1,
       autoProvision: true,
       lockedReason: "Required (Overview)",
@@ -98,7 +98,7 @@ describe("WorkspaceDashboardSettings — Dashboards toggles", () => {
     });
 
     const { container } = render(WorkspaceDashboardSettings, {
-      props: { parentWorkspaceId: GROUP.id },
+      props: { parentWorkspaceId: WORKSPACE.id },
     });
 
     const row = container.querySelector('[data-dashboard-toggle-row="group"]');
@@ -122,7 +122,7 @@ describe("WorkspaceDashboardSettings — Dashboards toggles", () => {
       capPerWorkspace: 1,
       create: vi.fn(async () => "ws-diff"),
     });
-    // Seed an active diff workspace for this group.
+    // Seed an active diff nested workspace for this workspace.
     nestedWorkspaces.set([
       {
         id: "ws-diff-1",
@@ -130,14 +130,14 @@ describe("WorkspaceDashboardSettings — Dashboards toggles", () => {
         layout: { pane: { id: "p", surfaces: [], activeIdx: 0 } },
         metadata: {
           isDashboard: true,
-          parentWorkspaceId: GROUP.id,
+          parentWorkspaceId: WORKSPACE.id,
           dashboardContributionId: "diff",
         },
       } as never,
     ]);
 
     const { container } = render(WorkspaceDashboardSettings, {
-      props: { parentWorkspaceId: GROUP.id },
+      props: { parentWorkspaceId: WORKSPACE.id },
     });
 
     const row = container.querySelector('[data-dashboard-toggle-row="diff"]');

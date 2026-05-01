@@ -16,6 +16,6 @@
 <div
   data-host-stub-widget
   data-host-present={host ? "yes" : "no"}
-  data-host-group-id={parentWorkspaceId}
+  data-host-parent-workspace-id={parentWorkspaceId}
   data-host-global={isGlobal}
 ></div>

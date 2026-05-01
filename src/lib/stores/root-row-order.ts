@@ -100,7 +100,7 @@ export function bootstrapRootRowOrder(
   const key = (r: RootRow) => `${r.kind}:${r.id}`;
 
   // Build the full known set — anything persisted that isn't in it is
-  // stale (workspace deleted, group removed) and gets dropped.
+  // stale (nested workspace deleted, workspace removed) and gets dropped.
   const known = new Set<string>();
   for (const id of knownWorkspaceIds)
     known.add(key({ kind: "nested-workspace", id }));
@@ -118,9 +118,9 @@ export function bootstrapRootRowOrder(
   }
 
   // Append entities that weren't in the persisted order —
-  // extension-contributed rows first (groups), then unclaimed
-  // nestedWorkspaces. Matches the legacy "groups above nestedWorkspaces" default
-  // on first-run installs.
+  // extension-contributed rows first (workspaces), then unclaimed
+  // nestedWorkspaces. Matches the legacy "workspaces above nested
+  // workspaces" default on first-run installs.
   for (const r of extensionRows) {
     const k = key(r);
     if (!seen.has(k)) {

@@ -50,9 +50,9 @@ describe("loadWorkspaces — legacy field rename", () => {
 
     await loadWorkspaces();
 
-    const groups = get(workspacesStore);
-    expect(groups).toHaveLength(1);
-    const g = groups[0] as Record<string, unknown>;
+    const workspaces = get(workspacesStore);
+    expect(workspaces).toHaveLength(1);
+    const g = workspaces[0] as Record<string, unknown>;
     expect(g.primaryNestedWorkspaceId).toBe("ws-primary");
     expect(g.dashboardNestedWorkspaceId).toBe("ws-dash");
     expect(g.primaryWorkspaceId).toBeUndefined();

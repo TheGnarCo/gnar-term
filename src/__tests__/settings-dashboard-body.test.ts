@@ -53,7 +53,7 @@ describe("PaneView — settings dashboard body", () => {
     workspacesStore.set([
       {
         id: "g1",
-        name: "My Group",
+        name: "My Workspace",
         path: "/tmp/g1",
         color: "purple",
         nestedWorkspaceIds: [],

@@ -1223,8 +1223,8 @@ describe("WorkspaceItem", () => {
     clearAllStatusForWorkspace(ws.id);
   });
 
-  it("suppresses the notification row when nested inside a workspace group", () => {
-    // Regression: nested nestedWorkspaces render under a group's colored
+  it("suppresses the notification row when nested inside a workspace", () => {
+    // Regression: nested nestedWorkspaces render under a workspace's colored
     // banner that already rolls up status; the long blue notification
     // row duplicates chrome and crowds the nested layout, so it's
     // suppressed when metadata.parentWorkspaceId is set.
@@ -1414,9 +1414,9 @@ describe("PaneView", () => {
     expect(screen.getByText("Pane Tab")).toBeTruthy();
   });
 
-  it("does not render an Overview/Settings tab strip over Group Dashboards", () => {
+  it("does not render an Overview/Settings tab strip over Workspace Dashboards", () => {
     // The Settings dashboard is now its own contribution (gear icon,
-    // auto-provisioned). PaneView no longer wraps the Group Dashboard
+    // auto-provisioned). PaneView no longer wraps the Workspace Dashboard
     // preview in an Overview/Settings tab strip.
     const ws: NestedWorkspace = {
       id: "ws-dash",
@@ -1447,8 +1447,12 @@ describe("PaneView", () => {
         onFocusPane: noop,
       },
     });
-    expect(container.querySelector("[data-group-dashboard-tabs]")).toBeNull();
-    expect(container.querySelector("[data-group-dashboard-tab]")).toBeNull();
+    expect(
+      container.querySelector("[data-workspace-dashboard-tabs]"),
+    ).toBeNull();
+    expect(
+      container.querySelector("[data-workspace-dashboard-tab]"),
+    ).toBeNull();
   });
 
   it("renders WorkspaceDashboardSettings for a settings-contribution workspace", () => {
@@ -1484,9 +1488,11 @@ describe("PaneView", () => {
       },
     });
     // WorkspaceDashboardSettings renders a settings panel keyed by parentWorkspaceId.
-    // Absent a matching group in the store it renders nothing, but the
+    // Absent a matching workspace in the store it renders nothing, but the
     // render branch is still reached — no tab strip appears either way.
-    expect(container.querySelector("[data-group-dashboard-tabs]")).toBeNull();
+    expect(
+      container.querySelector("[data-workspace-dashboard-tabs]"),
+    ).toBeNull();
   });
 
   it("renders the + button via the embedded TabBar", () => {
@@ -1745,7 +1751,7 @@ describe("PrimarySidebar", () => {
 });
 
 // ===========================================================================
-// WorkspaceSectionContent — per-group New Worktree button
+// WorkspaceSectionContent — per-workspace New Worktree button
 // ===========================================================================
 
 describe("WorkspaceSectionContent", () => {
@@ -1755,19 +1761,19 @@ describe("WorkspaceSectionContent", () => {
     cleanup();
   });
 
-  it("renders ⎇ Branch button for every group regardless of extension actions", async () => {
+  it("renders ⎇ Branch button for every workspace regardless of extension actions", async () => {
     // The New Worktree button shows unconditionally
-    // for every group with a workspaceContext (i.e. any existing group entry).
-    const group: Workspace = {
+    // for every workspace with a workspaceContext (i.e. any existing workspace entry).
+    const workspace: Workspace = {
       id: "grp-1",
-      name: "Test Group",
-      path: "/tmp/test-group",
+      name: "Test Workspace",
+      path: "/tmp/test-workspace",
       color: "mint",
       nestedWorkspaceIds: [],
       isGit: true,
       createdAt: new Date().toISOString(),
     };
-    setWorkspaces([group]);
+    setWorkspaces([workspace]);
 
     render(WorkspaceSectionHarness, {
       props: { parentWorkspaceId: "grp-1" },

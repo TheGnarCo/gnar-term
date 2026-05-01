@@ -133,7 +133,7 @@ export interface WorktreeWorkspaceConfig {
   startupCommand?: string;
   /**
    * Dashboard provenance — when the worktree is spawned from the Global
-   * Agentic Dashboard or an Agentic Dashboard contribution on a group,
+   * Agentic Dashboard or an Agentic Dashboard contribution on a workspace,
    * this records which. Surfaces as `metadata.spawnedBy` on the new
    * workspace. See spec §5.3.
    */

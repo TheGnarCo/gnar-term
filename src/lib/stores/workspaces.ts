@@ -1,15 +1,18 @@
 /**
- * Workspace Groups store — core's reactive source of truth for the
- * persisted Workspace list. Previously owned by the
- * project-scope extension; relocated to core in Stage 5 so commands,
- * overlays, and row renderers that manipulate groups no longer depend
- * on the extension API layer.
+ * Workspaces store — core's reactive source of truth for the persisted
+ * Workspace list. Previously owned by the project-scope extension;
+ * relocated to core in Stage 5 so commands, overlays, and row renderers
+ * that manipulate workspaces no longer depend on the extension API
+ * layer.
  *
  * Persistence reuses the existing per-extension JSON file at
  * `~/.config/gnar-term/extensions/workspace-groups/state.json` (loaded
- * via `loadExtensionState` / `saveExtensionState`). Stage 8 will move
- * the data into `GnarTermConfig`; until then we piggyback on the
- * existing path so no user data migrates in this stage.
+ * via `loadExtensionState` / `saveExtensionState`). The on-disk key
+ * (`"workspace-groups"`) is the persisted state id; renaming it would
+ * orphan user data, so it stays even though the type is now called
+ * Workspace internally. Stage 8 will move the data into
+ * `GnarTermConfig`; until then we piggyback on the existing path so no
+ * user data migrates in this stage.
  */
 import { get, writable, type Readable } from "svelte/store";
 import type { Workspace } from "../config";
@@ -19,9 +22,9 @@ import {
 } from "../services/extension-state";
 
 const STATE_ID = "workspace-groups";
-const WORKSPACE_GROUPS_KEY = "workspaces";
-const WORKSPACE_GROUP_ORDER_KEY = "workspaceOrder";
-const ACTIVE_GROUP_ID_KEY = "activeWorkspaceId";
+const WORKSPACES_KEY = "workspaces";
+const WORKSPACE_ORDER_KEY = "workspaceOrder";
+const ACTIVE_WORKSPACE_ID_KEY = "activeWorkspaceId";
 const PERSIST_DEBOUNCE_MS = 300;
 
 interface LegacyWorkspaceShape extends Workspace {
@@ -74,9 +77,9 @@ function schedulePersist(): void {
 
 async function persistNow(): Promise<void> {
   const payload: Record<string, unknown> = {
-    [WORKSPACE_GROUPS_KEY]: get(_workspaces),
-    [WORKSPACE_GROUP_ORDER_KEY]: get(_workspaceOrder),
-    [ACTIVE_GROUP_ID_KEY]: get(_activeWorkspaceId),
+    [WORKSPACES_KEY]: get(_workspaces),
+    [WORKSPACE_ORDER_KEY]: get(_workspaceOrder),
+    [ACTIVE_WORKSPACE_ID_KEY]: get(_activeWorkspaceId),
   };
   await saveExtensionState(STATE_ID, payload);
 }
@@ -89,21 +92,21 @@ export async function loadWorkspaces(): Promise<void> {
   if (_loaded) return;
   _loaded = true;
   const state = await loadExtensionState(STATE_ID);
-  const groups = Array.isArray(state[WORKSPACE_GROUPS_KEY])
-    ? (state[WORKSPACE_GROUPS_KEY] as Workspace[])
+  const workspaces = Array.isArray(state[WORKSPACES_KEY])
+    ? (state[WORKSPACES_KEY] as Workspace[])
     : [];
-  const order = Array.isArray(state[WORKSPACE_GROUP_ORDER_KEY])
-    ? (state[WORKSPACE_GROUP_ORDER_KEY] as string[])
+  const order = Array.isArray(state[WORKSPACE_ORDER_KEY])
+    ? (state[WORKSPACE_ORDER_KEY] as string[])
     : [];
   const active =
-    typeof state[ACTIVE_GROUP_ID_KEY] === "string"
-      ? (state[ACTIVE_GROUP_ID_KEY] as string)
+    typeof state[ACTIVE_WORKSPACE_ID_KEY] === "string"
+      ? (state[ACTIVE_WORKSPACE_ID_KEY] as string)
       : null;
   // NestedWorkspace ids are regenerated on each run, so drop any stale values;
   // the workspace:created listener rebuilds them from metadata.parentWorkspaceId.
   // Older persisted data used `primaryWorkspaceId`/`dashboardWorkspaceId`;
   // promote them to the new names so consumers see only the renamed fields.
-  _workspaces.set(groups.map(renameLegacyWorkspaceFields));
+  _workspaces.set(workspaces.map(renameLegacyWorkspaceFields));
   _workspaceOrder.set(order);
   _activeWorkspaceId.set(active);
 }

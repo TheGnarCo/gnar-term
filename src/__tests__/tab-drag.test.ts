@@ -498,7 +498,7 @@ describe("tab-drag — commitTabDrop", () => {
     );
   });
 
-  it("calls createNestedWorkspaceFromSurface with group positionInWorkspace for new-nested-workspace-in-workspace/before", () => {
+  it("calls createNestedWorkspaceFromSurface with workspace positionInWorkspace for new-nested-workspace-in-workspace/before", () => {
     const sA = mockTerminalSurface({ title: "A" });
     const sB = mockTerminalSurface({ title: "B" });
     const pane = makePane([sA, sB]);
@@ -544,7 +544,7 @@ describe("tab-drag — commitTabDrop", () => {
     );
   });
 
-  it("calls createNestedWorkspaceFromSurface with group positionInWorkspace for new-nested-workspace-in-workspace/after", () => {
+  it("calls createNestedWorkspaceFromSurface with workspace positionInWorkspace for new-nested-workspace-in-workspace/after", () => {
     const sA = mockTerminalSurface({ title: "A" });
     const sB = mockTerminalSurface({ title: "B" });
     const pane = makePane([sA, sB]);
@@ -862,7 +862,7 @@ describe("tab-drag — surface body detection", () => {
 });
 
 describe("tab-drag — detectDropTarget: root tab over nested workspace row", () => {
-  it("returns new-nested-workspace-in-workspace when cursor is over a row inside a group container", () => {
+  it("returns new-nested-workspace-in-workspace when cursor is over a row inside a workspace container", () => {
     const sA = mockTerminalSurface({ title: "A" });
     const sB = mockTerminalSurface({ title: "B" });
     const srcPane = makePane([sA, sB]);
@@ -917,7 +917,7 @@ describe("tab-drag — detectDropTarget: root tab over nested workspace row", ()
 });
 
 describe("tab-drag — commitTabDrop: new-nested-workspace-in-workspace passes targetWorkspaceId", () => {
-  it("calls createNestedWorkspaceFromSurface with targetWorkspaceId matching the drop group", () => {
+  it("calls createNestedWorkspaceFromSurface with targetWorkspaceId matching the drop workspace", () => {
     const sA = mockTerminalSurface({ title: "A" });
     const sB = mockTerminalSurface({ title: "B" });
     const pane = makePane([sA, sB]);
@@ -925,9 +925,9 @@ describe("tab-drag — commitTabDrop: new-nested-workspace-in-workspace passes t
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
-    // Mock getWorkspaces to return a group with the workspace
+    // Mock getWorkspaces to return a workspace with the nested workspace
     vi.mocked(getWorkspaces).mockReturnValue([
-      { id: "grp-1", nestedWorkspaceIds: [ws.id], name: "Group 1" },
+      { id: "grp-1", nestedWorkspaceIds: [ws.id], name: "Workspace 1" },
     ]);
 
     __setTabDropTargetForTest({

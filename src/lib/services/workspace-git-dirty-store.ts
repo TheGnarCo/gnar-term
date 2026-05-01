@@ -1,6 +1,6 @@
 /**
- * Group Git Dirty Store — reactive signal of "does the diff dashboard
- * for this group currently have anything to show?" per group path.
+ * Workspace Git Dirty Store — reactive signal of "does the diff dashboard
+ * for this workspace currently have anything to show?" per workspace path.
  *
  * Consumers: the Diff dashboard tile icon colors itself amber when
  * dirty, default-accent when clean.
@@ -150,7 +150,7 @@ export function workspaceDirtyStore(
   return store;
 }
 
-/** Evict a path from the cache when its group is deleted. */
+/** Evict a path from the cache when its workspace is deleted. */
 export function releaseWorkspaceDirtyStore(path: string): void {
   cache.delete(path);
 }

@@ -17,7 +17,7 @@ export const claudeSettingsManifest: ExtensionManifest = {
   name: "Claude Settings",
   version: "0.1.0",
   description:
-    "Interactive GUI for ~/.claude/settings.json. TitleBar button shows user-level settings overlay; auto-provisioned group dashboard shows project .claude/ settings with full editing support.",
+    "Interactive GUI for ~/.claude/settings.json. TitleBar button shows user-level settings overlay; auto-provisioned workspace dashboard shows project .claude/ settings with full editing support.",
   entry: "./index.ts",
   included: true,
   permissions: [],
@@ -54,13 +54,13 @@ export function registerClaudeSettingsExtension(api: ExtensionAPI): void {
       autoProvision: true,
       icon: ClaudeMark,
       lockedReason: "Required by Claude Settings extension",
-      create: (group) => createClaudeSettingsDashboard(api, group),
+      create: (workspace) => createClaudeSettingsDashboard(api, workspace),
     });
 
     void (async () => {
       await waitRestored();
-      for (const group of getWorkspaces()) {
-        await provisionAutoDashboardsForWorkspace(group);
+      for (const workspace of getWorkspaces()) {
+        await provisionAutoDashboardsForWorkspace(workspace);
       }
     })();
   });
@@ -72,16 +72,16 @@ export function registerClaudeSettingsExtension(api: ExtensionAPI): void {
 
 // --- Dashboard creation ---
 
-function claudeSettingsMarkdownPath(group: WorkspaceRef): string {
-  return `${group.path.replace(/\/+$/, "")}/.gnar-term/claude-settings.md`;
+function claudeSettingsMarkdownPath(workspace: WorkspaceRef): string {
+  return `${workspace.path.replace(/\/+$/, "")}/.gnar-term/claude-settings.md`;
 }
 
 async function writeClaudeSettingsTemplate(
   api: ExtensionAPI,
-  group: WorkspaceRef,
+  workspace: WorkspaceRef,
   options: { force?: boolean } = {},
 ): Promise<string> {
-  const mdPath = claudeSettingsMarkdownPath(group);
+  const mdPath = claudeSettingsMarkdownPath(workspace);
   if (!options.force) {
     const exists = await api
       .invoke<boolean>("file_exists", { path: mdPath })
@@ -99,9 +99,9 @@ async function writeClaudeSettingsTemplate(
 
 async function createClaudeSettingsDashboard(
   api: ExtensionAPI,
-  group: WorkspaceRef,
+  workspace: WorkspaceRef,
 ): Promise<string> {
-  const mdPath = await writeClaudeSettingsTemplate(api, group);
+  const mdPath = await writeClaudeSettingsTemplate(api, workspace);
   return createNestedWorkspaceFromDef({
     name: "Claude Settings",
     layout: {
@@ -118,7 +118,7 @@ async function createClaudeSettingsDashboard(
     },
     metadata: {
       isDashboard: true,
-      parentWorkspaceId: group.id,
+      parentWorkspaceId: workspace.id,
       dashboardContributionId: "claude-settings",
     },
   });

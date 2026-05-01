@@ -7,7 +7,7 @@
  * if it empties) and persist. createNestedWorkspaceFromSurface inherits the
  * source workspace's parentWorkspaceId, refuses to leave the source empty, and
  * registers the new workspace via appendRootRow + addNestedWorkspaceToWorkspace
- * (when the source belongs to a group).
+ * (when the source belongs to a workspace).
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { get } from "svelte/store";
@@ -189,7 +189,7 @@ describe("createNestedWorkspaceFromSurface", () => {
     const pane = makePane([sA, sB]);
     const ws = makeNestedWorkspace(
       { type: "pane", pane },
-      { metadata: { parentWorkspaceId: "group-1" } },
+      { metadata: { parentWorkspaceId: "workspace-1" } },
     );
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
@@ -198,14 +198,14 @@ describe("createNestedWorkspaceFromSurface", () => {
 
     const updated = get(nestedWorkspaces);
     const newWs = updated[1]!;
-    expect(newWs.metadata?.parentWorkspaceId).toBe("group-1");
+    expect(newWs.metadata?.parentWorkspaceId).toBe("workspace-1");
     expect(addNestedWorkspaceToWorkspaceSpy).toHaveBeenCalledWith(
-      "group-1",
+      "workspace-1",
       newWs.id,
     );
   });
 
-  it("leaves new workspace ungrouped when source has no parentWorkspaceId", () => {
+  it("leaves new workspace rootless when source has no parentWorkspaceId", () => {
     const sA = mockSurface({ title: "A" });
     const sB = mockSurface({ title: "B" });
     const pane = makePane([sA, sB]);
@@ -743,12 +743,12 @@ describe("createNestedWorkspaceFromSurface — targetWorkspaceId", () => {
     createNestedWorkspaceFromSurface(sA.id, pane.id, ws.id, {
       kind: "workspace",
       positionInWorkspace: 0,
-      targetWorkspaceId: "target-group-1",
+      targetWorkspaceId: "target-workspace-1",
     });
 
     const updated = get(nestedWorkspaces);
     const newWs = updated.find((w) => w.id !== ws.id)!;
-    expect(newWs.metadata?.parentWorkspaceId).toBe("target-group-1");
+    expect(newWs.metadata?.parentWorkspaceId).toBe("target-workspace-1");
   });
 
   it("calls insertNestedWorkspaceIntoWorkspace with targetWorkspaceId when srcWs has no parentWorkspaceId", () => {
@@ -762,13 +762,13 @@ describe("createNestedWorkspaceFromSurface — targetWorkspaceId", () => {
     createNestedWorkspaceFromSurface(sA.id, pane.id, ws.id, {
       kind: "workspace",
       positionInWorkspace: 2,
-      targetWorkspaceId: "target-group-1",
+      targetWorkspaceId: "target-workspace-1",
     });
 
     const updated = get(nestedWorkspaces);
     const newWs = updated.find((w) => w.id !== ws.id)!;
     expect(insertNestedWorkspaceIntoWorkspaceSpy).toHaveBeenCalledWith(
-      "target-group-1",
+      "target-workspace-1",
       newWs.id,
       2,
     );
@@ -780,7 +780,7 @@ describe("createNestedWorkspaceFromSurface — targetWorkspaceId", () => {
     const pane = makePane([sA, sB]);
     const ws = makeNestedWorkspace(
       { type: "pane", pane },
-      { metadata: { parentWorkspaceId: "src-group" } },
+      { metadata: { parentWorkspaceId: "src-workspace" } },
     );
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
@@ -792,9 +792,9 @@ describe("createNestedWorkspaceFromSurface — targetWorkspaceId", () => {
 
     const updated = get(nestedWorkspaces);
     const newWs = updated.find((w) => w.id !== ws.id)!;
-    expect(newWs.metadata?.parentWorkspaceId).toBe("src-group");
+    expect(newWs.metadata?.parentWorkspaceId).toBe("src-workspace");
     expect(insertNestedWorkspaceIntoWorkspaceSpy).toHaveBeenCalledWith(
-      "src-group",
+      "src-workspace",
       newWs.id,
       0,
     );
@@ -806,7 +806,7 @@ describe("createNestedWorkspaceFromSurface — targetWorkspaceId", () => {
     const pane = makePane([sA, sB]);
     const ws = makeNestedWorkspace(
       { type: "pane", pane },
-      { metadata: { parentWorkspaceId: "src-group" } }, // srcWorkspaceId is set
+      { metadata: { parentWorkspaceId: "src-workspace" } }, // srcWorkspaceId is set
     );
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
@@ -814,14 +814,14 @@ describe("createNestedWorkspaceFromSurface — targetWorkspaceId", () => {
     createNestedWorkspaceFromSurface(sA.id, pane.id, ws.id, {
       kind: "workspace",
       positionInWorkspace: 0,
-      targetWorkspaceId: "target-group-override",
+      targetWorkspaceId: "target-workspace-override",
     });
 
     const updated = get(nestedWorkspaces);
     const newWs = updated.find((w) => w.id !== ws.id)!;
-    expect(newWs.metadata?.parentWorkspaceId).toBe("target-group-override");
+    expect(newWs.metadata?.parentWorkspaceId).toBe("target-workspace-override");
     expect(insertNestedWorkspaceIntoWorkspaceSpy).toHaveBeenCalledWith(
-      "target-group-override",
+      "target-workspace-override",
       newWs.id,
       0,
     );

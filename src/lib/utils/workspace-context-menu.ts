@@ -13,7 +13,7 @@ import type { MenuItem } from "../context-menu-types";
 export interface WorkspaceContextMenuOptions {
   /** True when the workspace is a dashboard surface (rename/promote/archive disabled). */
   isDashboard: boolean;
-  /** True when the workspace is already nested inside a group (promote disabled). */
+  /** True when the nested workspace already lives inside a Workspace (promote disabled). */
   isInsideWorkspace: boolean;
   /** True when the promote-nested-workspace-to-workspace command is registered. */
   canPromoteCommand: boolean;
@@ -46,7 +46,7 @@ export interface WorkspaceContextMenuOptions {
  * Item presence:
  *   - "Rename Workspace"             — omitted for dashboards
  *   - "New Surface"                  — included only when `onNewSurface` is provided
- *   - separator + "Promote…"         — omitted for dashboards / grouped nestedWorkspaces
+ *   - separator + "Promote…"         — omitted for dashboards / nested workspaces inside a workspace
  *   - separator + "Lock/Unlock…"     — omitted for dashboards or when no `onToggleLock`
  *   - "Archive"                      — omitted for dashboards; disabled while locked
  *   - "Close Workspace"              — always present; disabled for dashboards, when

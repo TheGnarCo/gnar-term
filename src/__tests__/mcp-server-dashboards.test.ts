@@ -38,7 +38,7 @@ function seedWorkspace(id: string) {
   workspacesStore.set([
     {
       id,
-      name: `Group ${id}`,
+      name: `Workspace ${id}`,
       path: `/tmp/${id}`,
       color: "purple",
       nestedWorkspaceIds: [],
@@ -100,7 +100,7 @@ describe("MCP dashboard contribution tools", () => {
       expect(diff?.auto_provision).toBe(false);
     });
 
-    it("annotates active state when group_id is provided", async () => {
+    it("annotates active state when workspace_id is provided", async () => {
       seedWorkspace("g1");
       registerDashboardContribution({
         id: "diff",
@@ -127,23 +127,23 @@ describe("MCP dashboard contribution tools", () => {
       const resp = await dispatch(
         rpc("tools/call", {
           name: "list_dashboard_contributions",
-          arguments: { group_id: "g1" },
+          arguments: { workspace_id: "g1" },
         }),
       );
       const rows = (resp as any).result.structuredContent
         .contributions as Array<{
         id: string;
         active: boolean;
-        workspace_id?: string;
+        nested_workspace_id?: string;
       }>;
       const diff = rows.find((r) => r.id === "diff");
       expect(diff?.active).toBe(true);
-      expect(diff?.workspace_id).toBe("ws-abc");
+      expect(diff?.nested_workspace_id).toBe("ws-abc");
     });
   });
 
   describe("add_dashboard_to_workspace", () => {
-    it("invokes contribution.create and returns the new workspace id", async () => {
+    it("invokes contribution.create and returns the new nested workspace id", async () => {
       seedWorkspace("g1");
       const create = vi.fn(async () => "ws-new");
       registerDashboardContribution({
@@ -158,10 +158,10 @@ describe("MCP dashboard contribution tools", () => {
       const resp = await dispatch(
         rpc("tools/call", {
           name: "add_dashboard_to_workspace",
-          arguments: { group_id: "g1", contribution_id: "diff" },
+          arguments: { workspace_id: "g1", contribution_id: "diff" },
         }),
       );
-      expect((resp as any).result.structuredContent.workspace_id).toBe(
+      expect((resp as any).result.structuredContent.nested_workspace_id).toBe(
         "ws-new",
       );
       expect(create).toHaveBeenCalledTimes(1);
@@ -182,13 +182,13 @@ describe("MCP dashboard contribution tools", () => {
       const resp = await dispatch(
         rpc("tools/call", {
           name: "add_dashboard_to_workspace",
-          arguments: { group_id: "g1", contribution_id: "agentic" },
+          arguments: { workspace_id: "g1", contribution_id: "agentic" },
         }),
       );
       expect((resp as any).error).toBeDefined();
     });
 
-    it("rejects an unknown group or contribution", async () => {
+    it("rejects an unknown workspace or contribution", async () => {
       registerDashboardContribution({
         id: "diff",
         source: "diff-viewer",
@@ -201,7 +201,7 @@ describe("MCP dashboard contribution tools", () => {
       const respWorkspace = await dispatch(
         rpc("tools/call", {
           name: "add_dashboard_to_workspace",
-          arguments: { group_id: "nope", contribution_id: "diff" },
+          arguments: { workspace_id: "nope", contribution_id: "diff" },
         }),
       );
       expect((respWorkspace as any).error).toBeDefined();
@@ -210,7 +210,7 @@ describe("MCP dashboard contribution tools", () => {
       const respContrib = await dispatch(
         rpc("tools/call", {
           name: "add_dashboard_to_workspace",
-          arguments: { group_id: "g1", contribution_id: "ghost" },
+          arguments: { workspace_id: "g1", contribution_id: "ghost" },
         }),
       );
       expect((respContrib as any).error).toBeDefined();
@@ -232,7 +232,7 @@ describe("MCP dashboard contribution tools", () => {
       const resp = await dispatch(
         rpc("tools/call", {
           name: "remove_dashboard_from_workspace",
-          arguments: { group_id: "g1", contribution_id: "diff" },
+          arguments: { workspace_id: "g1", contribution_id: "diff" },
         }),
       );
       expect((resp as any).result.structuredContent.removed).toBe(false);
@@ -253,7 +253,7 @@ describe("MCP dashboard contribution tools", () => {
       const resp = await dispatch(
         rpc("tools/call", {
           name: "remove_dashboard_from_workspace",
-          arguments: { group_id: "g1", contribution_id: "agentic" },
+          arguments: { workspace_id: "g1", contribution_id: "agentic" },
         }),
       );
       expect((resp as any).error).toBeDefined();

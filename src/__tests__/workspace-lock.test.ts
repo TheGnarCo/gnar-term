@@ -38,7 +38,7 @@ import type { Workspace } from "../lib/config";
 function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
   return {
     id: "g1",
-    name: "Test Group",
+    name: "Test Workspace",
     path: "/tmp/g1",
     color: "purple",
     nestedWorkspaceIds: [],
@@ -76,14 +76,14 @@ describe("toggleWorkspaceLock", () => {
     expect(g.color).toBe("blue");
   });
 
-  it("only mutates the matching group", () => {
+  it("only mutates the matching workspace", () => {
     setWorkspaces([makeWorkspace({ id: "g1" }), makeWorkspace({ id: "g2" })]);
     toggleWorkspaceLock("g2");
     expect(getWorkspaces()[0].locked).toBeUndefined();
     expect(getWorkspaces()[1].locked).toBe(true);
   });
 
-  it("is a no-op for an unknown group id", () => {
+  it("is a no-op for an unknown workspace id", () => {
     const g = makeWorkspace({ id: "g1" });
     setWorkspaces([g]);
     toggleWorkspaceLock("does-not-exist");
@@ -97,7 +97,7 @@ describe("deleteWorkspace — lock gate", () => {
     vi.mocked(removeRootRow).mockClear();
   });
 
-  it("deletes an unlocked group normally", () => {
+  it("deletes an unlocked workspace normally", () => {
     setWorkspaces([makeWorkspace({ id: "g1" })]);
     deleteWorkspace("g1");
     expect(getWorkspaces()).toHaveLength(0);
@@ -107,7 +107,7 @@ describe("deleteWorkspace — lock gate", () => {
     });
   });
 
-  it("is a no-op when group is locked", () => {
+  it("is a no-op when workspace is locked", () => {
     setWorkspaces([makeWorkspace({ id: "g1", locked: true })]);
     deleteWorkspace("g1");
     expect(getWorkspaces()).toHaveLength(1);
@@ -116,7 +116,7 @@ describe("deleteWorkspace — lock gate", () => {
 });
 
 describe("archiveWorkspace — lock gate (source audit)", () => {
-  it("returns early when group is locked", () => {
+  it("returns early when workspace is locked", () => {
     const src = readFileSync("src/lib/services/archive-service.ts", "utf-8");
     // Verify the lock gate appears in the archiveWorkspace function body
     expect(src).toContain("if (workspace.locked) return false");

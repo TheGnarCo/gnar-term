@@ -55,7 +55,7 @@ export function detectWorkspacePaneDrop(
 
     const tgtWorkspaceId = wsMeta(tgtWs).parentWorkspaceId;
 
-    // Group compatibility: root → root only; grouped → same group only
+    // Workspace compatibility: rootless → rootless only; nested → same parent workspace only
     if (srcWorkspaceId !== tgtWorkspaceId) {
       return { kind: "deny" };
     }

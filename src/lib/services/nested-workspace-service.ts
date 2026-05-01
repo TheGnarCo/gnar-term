@@ -448,10 +448,10 @@ function collapseEmptyPaneInWorkspace(
 }
 
 /**
- * Spawn a new workspace whose splitRoot is a single pane carrying the
- * dragged surface. Inherits the source workspace's parentWorkspaceId so a tab
- * dropped from a grouped workspace into the sidebar lands as a
- * sibling within the same group.
+ * Spawn a new nested workspace whose splitRoot is a single pane carrying the
+ * dragged surface. Inherits the source nested workspace's parentWorkspaceId
+ * so a tab dropped from a nested-workspace inside a workspace lands as a
+ * sibling within the same parent workspace.
  *
  * Refuses to leave the source empty: when the source workspace has only
  * one surface total, this is a no-op (the caller — tab-drag — also

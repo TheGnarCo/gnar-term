@@ -290,7 +290,7 @@
     },
     {
       // Palette-only escape hatch for nuking stale state — e.g. orphaned
-      // nestedWorkspaces left behind by group deletion on older builds.
+      // nestedWorkspaces left behind by workspace deletion on older builds.
       // Intentionally no shortcut (destructive, rarely wanted).
       id: "core.close-all-workspaces",
       title: "Close All Workspaces",
@@ -606,7 +606,7 @@
     initPreview();
     initAgentDetectionBootstrap();
 
-    // Workspace Groups (formerly the project-scope extension) —
+    // Workspaces (formerly the project-scope extension) —
     // registered from core so the root-row renderer, commands, and
     // Dashboard contribution are available before extensions activate.
     await initWorkspaces();
@@ -734,8 +734,8 @@
             name: wsName,
             // Optional metadata forwards to the new workspace — e.g.
             // container-row dirty clicks pass `{ parentWorkspaceId: <container-id> }`
-            // so the fresh "Diff" workspace nests inside its originating
-            // group instead of materializing at the sidebar root.
+            // so the fresh "Diff" nested workspace nests inside its originating
+            // workspace instead of materializing at the sidebar root.
             ...(options?.metadata ? { metadata: options.metadata } : {}),
             layout: {
               pane: {

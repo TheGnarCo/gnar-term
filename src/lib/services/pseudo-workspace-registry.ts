@@ -41,7 +41,7 @@ export interface PseudoWorkspace {
   label: string;
   /**
    * Position within the root list:
-   *   - `"root-top"`: pinned above real nestedWorkspaces and groups.
+   *   - `"root-top"`: pinned above real nestedWorkspaces and workspaces.
    *   - `"root-bottom"`: pinned below every real row.
    * Order within a position bucket follows registration order.
    */

@@ -361,8 +361,8 @@ export function splitFromSidebar(direction: "horizontal" | "vertical") {
  * the previously-created pane, producing a right-leaning binary split tree.
  *
  * The source workspace is removed without disposing its terminals (they move
- * into tgtWs). Group membership and rootRowOrder are cleaned up directly so
- * the worktree handler's "keep or delete?" dialog is NOT triggered — the
+ * into tgtWs). Workspace membership and rootRowOrder are cleaned up directly
+ * so the worktree handler's "keep or delete?" dialog is NOT triggered — the
  * surfaces are still live.
  */
 export function expandWorkspaceIntoPanes(
@@ -451,8 +451,8 @@ export function expandWorkspaceIntoPanes(
  * `srcWorkspaceId` into `targetPaneId` in the target workspace.
  *
  * The source workspace is removed without disposing terminals (surfaces move
- * live). Group membership and rootRowOrder are cleaned up directly so the
- * worktree handler's "keep or delete?" dialog is NOT triggered.
+ * live). Workspace membership and rootRowOrder are cleaned up directly so
+ * the worktree handler's "keep or delete?" dialog is NOT triggered.
  */
 export function mergeWorkspaceIntoPane(
   srcWorkspaceId: string,

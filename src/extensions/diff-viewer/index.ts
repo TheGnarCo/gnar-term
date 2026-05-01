@@ -129,8 +129,8 @@ export function registerDiffViewerExtension(api: ExtensionAPI): void {
 
     // Diff dashboard contribution — lets a Workspace opt in to a
     // dedicated Diff dashboard tile (gear sibling). The tile's workspace
-    // hosts a single diff-viewer:diff surface for the group's repo; no
-    // split / new-surface affordances because the pane is a Dashboard.
+    // hosts a single diff-viewer:diff surface for the workspace's repo;
+    // no split / new-surface affordances because the pane is a Dashboard.
     api.registerDashboardContribution({
       id: "diff",
       label: "Diff",
@@ -138,7 +138,7 @@ export function registerDiffViewerExtension(api: ExtensionAPI): void {
       capPerWorkspace: 1,
       icon: DiffIcon,
       paneConstraints: { singleSurface: true },
-      create: (group) => createDiffDashboardWorkspace(group),
+      create: (workspace) => createDiffDashboardWorkspace(workspace),
     });
 
     // Changes sidebar tab
@@ -163,14 +163,14 @@ export function registerDiffViewerExtension(api: ExtensionAPI): void {
 }
 
 /**
- * Materialize a Diff dashboard workspace for `group`. The workspace
- * owns a single `diff-viewer:diff` surface pointed at the group's
+ * Materialize a Diff dashboard workspace for `workspace`. The dashboard
+ * owns a single `diff-viewer:diff` surface pointed at the workspace's
  * repository; the `Uncommitted Changes` name mirrors the surface the
  * old container-banner diff link used to spawn. Surface props match
  * the `show-uncommitted` command so the rendered diff is identical.
  */
 async function createDiffDashboardWorkspace(
-  group: WorkspaceRef,
+  workspace: WorkspaceRef,
 ): Promise<string> {
   return await createNestedWorkspaceFromDef({
     name: "Diff",
@@ -180,7 +180,7 @@ async function createDiffDashboardWorkspace(
           {
             type: "extension",
             extensionType: "diff-viewer:diff",
-            extensionProps: { repoPath: group.path, baseBranch: "HEAD" },
+            extensionProps: { repoPath: workspace.path, baseBranch: "HEAD" },
             name: "Uncommitted Changes",
             focus: true,
           },
@@ -189,7 +189,7 @@ async function createDiffDashboardWorkspace(
     },
     metadata: {
       isDashboard: true,
-      parentWorkspaceId: group.id,
+      parentWorkspaceId: workspace.id,
       dashboardContributionId: "diff",
     },
   });

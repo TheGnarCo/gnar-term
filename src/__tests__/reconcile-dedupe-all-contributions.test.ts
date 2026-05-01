@@ -26,10 +26,10 @@ import {
   resetDashboardContributions,
 } from "../lib/services/dashboard-contribution-registry";
 
-const GROUP = {
+const WORKSPACE = {
   id: "g1",
-  name: "TestGroup",
-  path: "/tmp/group1",
+  name: "TestWorkspace",
+  path: "/tmp/workspace1",
   color: "blue",
   nestedWorkspaceIds: [],
   isGit: false,
@@ -47,7 +47,7 @@ function makeDashboard(id: string, contribId: string): never {
     activePaneId: "p",
     metadata: {
       isDashboard: true,
-      parentWorkspaceId: GROUP.id,
+      parentWorkspaceId: WORKSPACE.id,
       dashboardContributionId: contribId,
     },
   } as never;
@@ -59,7 +59,7 @@ describe("reconcileWorkspaceDashboards — dedupe all contribution types", () =>
     invokeMock.mockImplementation(async () => undefined);
     nestedWorkspaces.set([]);
     activeNestedWorkspaceIdx.set(-1);
-    workspacesStore.set([GROUP]);
+    workspacesStore.set([WORKSPACE]);
     resetDashboardContributions();
   });
 
@@ -83,7 +83,7 @@ describe("reconcileWorkspaceDashboards — dedupe all contribution types", () =>
     const remaining = get(nestedWorkspaces).filter((w) => {
       return (
         w.metadata?.dashboardContributionId === "settings" &&
-        w.metadata?.parentWorkspaceId === GROUP.id
+        w.metadata?.parentWorkspaceId === WORKSPACE.id
       );
     });
     expect(remaining).toHaveLength(1);
@@ -109,7 +109,7 @@ describe("reconcileWorkspaceDashboards — dedupe all contribution types", () =>
     const remaining = get(nestedWorkspaces).filter((w) => {
       return (
         w.metadata?.dashboardContributionId === "agentic" &&
-        w.metadata?.parentWorkspaceId === GROUP.id
+        w.metadata?.parentWorkspaceId === WORKSPACE.id
       );
     });
     expect(remaining).toHaveLength(1);
@@ -147,7 +147,7 @@ describe("reconcileWorkspaceDashboards — dedupe all contribution types", () =>
       const matches = all.filter((w) => {
         return (
           w.metadata?.dashboardContributionId === contribId &&
-          w.metadata?.parentWorkspaceId === GROUP.id
+          w.metadata?.parentWorkspaceId === WORKSPACE.id
         );
       });
       expect(

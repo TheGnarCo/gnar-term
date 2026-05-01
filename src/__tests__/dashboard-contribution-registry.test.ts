@@ -23,7 +23,7 @@ import {
 function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
   return {
     id: "g1",
-    name: "Test Group",
+    name: "Test Workspace",
     path: "/tmp/g1",
     color: "blue",
     nestedWorkspaceIds: [],
@@ -121,13 +121,13 @@ describe("dashboard-contribution registry", () => {
       });
       registerDashboardContribution(always);
       registerDashboardContribution(never);
-      const group = makeWorkspace();
+      const workspace = makeWorkspace();
       expect(
-        getDashboardContributionsForWorkspace(group).map((c) => c.id),
+        getDashboardContributionsForWorkspace(workspace).map((c) => c.id),
       ).toEqual(["always"]);
     });
 
-    it("passes the group to each gate so contributions can branch on it", () => {
+    it("passes the workspace to each gate so contributions can branch on it", () => {
       const gate = vi.fn((g: Workspace) => g.isGit);
       registerDashboardContribution(
         makeContribution({ id: "gitOnly", isAvailableFor: gate }),
@@ -173,7 +173,7 @@ describe("dashboard-contribution registry", () => {
       );
     });
 
-    it("rejects adding when isAvailableFor denies the group, even under cap", () => {
+    it("rejects adding when isAvailableFor denies the workspace, even under cap", () => {
       registerDashboardContribution(
         makeContribution({
           capPerWorkspace: 1,

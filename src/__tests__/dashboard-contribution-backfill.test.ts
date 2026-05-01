@@ -23,15 +23,15 @@ import {
 } from "../lib/stores/nested-workspace";
 import { workspacesStore } from "../lib/stores/workspaces";
 
-const GROUP = {
+const WORKSPACE = {
   id: "g1",
   name: "Repo",
   path: "/tmp/repo",
   color: "purple",
-  nestedWorkspaceIds: ["ws-legacy-group", "ws-legacy-agentic"],
+  nestedWorkspaceIds: ["ws-legacy-overview", "ws-legacy-agentic"],
   isGit: false,
   createdAt: "2026-04-21T00:00:00.000Z",
-  dashboardNestedWorkspaceId: "ws-legacy-group",
+  dashboardNestedWorkspaceId: "ws-legacy-overview",
 };
 
 describe("dashboardContributionId backfill", () => {
@@ -41,13 +41,13 @@ describe("dashboardContributionId backfill", () => {
     invokeMock.mockImplementation(async () => undefined);
     nestedWorkspaces.set([]);
     activeNestedWorkspaceIdx.set(-1);
-    workspacesStore.set([GROUP]);
+    workspacesStore.set([WORKSPACE]);
   });
 
   it("stamps 'group' on a legacy Overview dashboard (preview → project-dashboard.md)", async () => {
     nestedWorkspaces.set([
       {
-        id: "ws-legacy-group",
+        id: "ws-legacy-overview",
         name: "Dashboard",
         splitRoot: {
           type: "pane",

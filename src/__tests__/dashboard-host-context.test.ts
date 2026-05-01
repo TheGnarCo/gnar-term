@@ -70,7 +70,7 @@ describe("deriveDashboardScope", () => {
 
   it("prioritizes the global flag over parentWorkspaceId when both are present (global is the stricter claim)", () => {
     // This is a defensive case — the two shouldn't coexist in practice,
-    // but if a Group Dashboard ever embeds global-scoped widgets, the
+    // but if a Workspace Dashboard ever embeds global-scoped widgets, the
     // global flag wins.
     expect(
       deriveDashboardScope(

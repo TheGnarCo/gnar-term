@@ -1,6 +1,6 @@
 /**
  * Agentic auto-provision (Story 4): on activate, every existing
- * workspace group gets an Agentic Dashboard workspace; on deactivate,
+ * workspace gets an Agentic Dashboard nested workspace; on deactivate,
  * the provisioned nestedWorkspaces are closed.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
@@ -71,7 +71,7 @@ describe("agentic auto-provision", () => {
     expect(contribution?.icon).toBeDefined();
   });
 
-  it("provisions the Agentic Dashboard for every existing group on activate", async () => {
+  it("provisions the Agentic Dashboard for every existing workspace on activate", async () => {
     workspacesStore.set([
       {
         id: "g1",

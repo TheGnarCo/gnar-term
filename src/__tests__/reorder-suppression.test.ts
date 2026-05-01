@@ -11,7 +11,7 @@ const WORKSPACE_LIST_VIEW = readFileSync(
   "utf-8",
 ).replace(/\s+/g, " ");
 
-const GROUP_SECTION_CONTENT = readFileSync(
+const SOURCE = readFileSync(
   "src/lib/components/WorkspaceSectionContent.svelte",
   "utf-8",
 ).replace(/\s+/g, " ");
@@ -81,10 +81,10 @@ describe("reorderContext is published on every drag", () => {
   });
 
   it("WorkspaceSectionContent threads scopeId={workspace.id} and containerBlockId to WorkspaceListView", () => {
-    expect(GROUP_SECTION_CONTENT).toMatch(/scopeId=\{\s*workspace\.id\s*\}/);
+    expect(SOURCE).toMatch(/scopeId=\{\s*workspace\.id\s*\}/);
     // containerBlockId is forwarded from the parent via the shorthand
     // attribute ({containerBlockId}) rather than hardcoded.
-    expect(GROUP_SECTION_CONTENT).toMatch(/\{containerBlockId\}/);
+    expect(SOURCE).toMatch(/\{containerBlockId\}/);
   });
 });
 

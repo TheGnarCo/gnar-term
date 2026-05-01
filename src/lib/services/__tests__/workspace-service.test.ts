@@ -39,7 +39,7 @@ function makeWorkspace(
 ): Workspace {
   return {
     id,
-    name: `Group ${id}`,
+    name: `Workspace ${id}`,
     path: `/tmp/${id}`,
     color: "slot-1",
     nestedWorkspaceIds: [],
@@ -49,15 +49,15 @@ function makeWorkspace(
   };
 }
 
-describe("workspace-group-service", () => {
+describe("workspace-service", () => {
   beforeEach(() => {
     resetWorkspacesForTest();
     rootRowOrder.set([]);
   });
 
-  it("addWorkspace persists the group and appends a root row", () => {
-    const group = makeWorkspace("g1");
-    addWorkspace(group);
+  it("addWorkspace persists the workspace and appends a root row", () => {
+    const workspace = makeWorkspace("g1");
+    addWorkspace(workspace);
 
     expect(getWorkspaces()).toHaveLength(1);
     expect(get(workspacesStore)[0].id).toBe("g1");
@@ -67,7 +67,7 @@ describe("workspace-group-service", () => {
     });
   });
 
-  it("updateWorkspace patches an existing group in place", () => {
+  it("updateWorkspace patches an existing workspace in place", () => {
     addWorkspace(makeWorkspace("g1"));
     updateWorkspace("g1", { name: "Renamed" });
     expect(getWorkspace("g1")?.name).toBe("Renamed");
@@ -90,7 +90,7 @@ describe("workspace-group-service", () => {
     expect(getWorkspace("g1")?.nestedWorkspaceIds).toEqual(["ws1"]);
   });
 
-  it("removeNestedWorkspaceFromAllWorkspaces strips the id across every group", () => {
+  it("removeNestedWorkspaceFromAllWorkspaces strips the id across every workspace", () => {
     addWorkspace(makeWorkspace("g1"));
     addWorkspace(makeWorkspace("g2"));
     addNestedWorkspaceToWorkspace("g1", "ws1");
@@ -121,7 +121,7 @@ describe("workspace-group-service", () => {
       activeNestedWorkspaceIdx.set(-1);
     });
 
-    it("closes every workspace tagged with the group id", () => {
+    it("closes every nested workspace tagged with the workspace id", () => {
       nestedWorkspaces.set([
         makeWs("ws-a", "g1"),
         makeWs("ws-b", "g1"),
@@ -135,7 +135,7 @@ describe("workspace-group-service", () => {
       expect(remainingIds).toEqual(["ws-other", "ws-root"]);
     });
 
-    it("is a no-op when no nestedWorkspaces belong to the group", () => {
+    it("is a no-op when no nestedWorkspaces belong to the workspace", () => {
       nestedWorkspaces.set([makeWs("ws-root"), makeWs("ws-other", "g2")]);
       closeNestedWorkspacesInWorkspace("g1");
       expect(get(nestedWorkspaces).map((w) => w.id)).toEqual([
@@ -144,7 +144,7 @@ describe("workspace-group-service", () => {
       ]);
     });
 
-    it("also closes the group's Dashboard workspace (same parentWorkspaceId metadata)", () => {
+    it("also closes the workspace's Dashboard nested workspace (same parentWorkspaceId metadata)", () => {
       const dashboard = {
         ...makeWs("ws-dashboard", "g1"),
         metadata: { parentWorkspaceId: "g1", isDashboard: true },

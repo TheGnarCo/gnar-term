@@ -10,7 +10,7 @@
  * sub-second reactivity for actual git ops.
  *
  * PR/CI state was historically registered here under itemId `"pr"`; the
- * pill was retired in favor of the Group Dashboards' `gnar:prs` widget,
+ * pill was retired in favor of the Workspace Dashboards' `gnar:prs` widget,
  * which renders the full open-PR list with row actions instead of a
  * single per-workspace badge.
  */
@@ -464,7 +464,7 @@ async function ensurePolling(wsId: string): Promise<void> {
 
   if (!cwd) {
     // Nested nestedWorkspaces that haven't been activated yet have no pty CWD.
-    // Fall back to the group's root path so their diff status still
+    // Fall back to the workspace's root path so their diff status still
     // shows the project's dirty state until they're first opened.
     const ws = get(nestedWorkspaces).find((w) => w.id === wsId);
     if (ws) {

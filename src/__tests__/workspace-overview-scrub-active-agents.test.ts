@@ -1,5 +1,5 @@
 /**
- * Legacy `## Active Agents` sections in group Overview markdown get
+ * Legacy `## Active Agents` sections in workspace Overview markdown get
  * stripped on reconcileWorkspaceDashboards. Older templates emitted this
  * redundantly with the Agentic Dashboard tile; the scrub runs once
  * per reconciliation pass and is idempotent.
@@ -21,7 +21,7 @@ import {
   activeNestedWorkspaceIdx,
 } from "../lib/stores/nested-workspace";
 
-describe("scrub Active Agents from group Overview", () => {
+describe("scrub Active Agents from workspace Overview", () => {
   beforeEach(() => {
     invokeMock.mockReset();
     nestedWorkspaces.set([]);

@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { get } from "svelte/store";
 
 const mocks = vi.hoisted(() => ({
-  closeWorkspace: vi.fn(),
-  createWorkspaceFromDef: vi.fn(() => Promise.resolve("new-ws-id")),
+  closeNestedWorkspace: vi.fn(),
+  createNestedWorkspaceFromDef: vi.fn(() => Promise.resolve("new-ws-id")),
   serializeLayout: vi.fn(() => ({ pane: { surfaces: [] } })),
   schedulePersist: vi.fn(),
   showConfirmPrompt: vi.fn(() => Promise.resolve(true)),
@@ -38,8 +38,8 @@ vi.mock("../lib/stores/workspace", async () => {
 });
 
 vi.mock("../lib/services/workspace-service", () => ({
-  closeWorkspace: mocks.closeWorkspace,
-  createWorkspaceFromDef: mocks.createWorkspaceFromDef,
+  closeNestedWorkspace: mocks.closeNestedWorkspace,
+  createNestedWorkspaceFromDef: mocks.createNestedWorkspaceFromDef,
   serializeLayout: mocks.serializeLayout,
   schedulePersist: mocks.schedulePersist,
 }));
@@ -83,7 +83,7 @@ beforeEach(() => {
   initArchiveFromState();
   nestedWorkspaces.set([]);
   mocks.showConfirmPrompt.mockImplementation(() => Promise.resolve(true));
-  mocks.createWorkspaceFromDef.mockImplementation(() =>
+  mocks.createNestedWorkspaceFromDef.mockImplementation(() =>
     Promise.resolve("new-ws-id"),
   );
   mocks.getWorkspace.mockReturnValue(undefined);
@@ -227,7 +227,7 @@ describe("unarchiveWorkspace", () => {
     await unarchiveWorkspace("g-missing");
     expect(mocks.setWorkspaces).not.toHaveBeenCalled();
     expect(mocks.appendRootRow).not.toHaveBeenCalled();
-    expect(mocks.createWorkspaceFromDef).not.toHaveBeenCalled();
+    expect(mocks.createNestedWorkspaceFromDef).not.toHaveBeenCalled();
     expect(mocks.provisionAutoDashboardsForWorkspace).not.toHaveBeenCalled();
   });
 
@@ -251,13 +251,21 @@ describe("unarchiveWorkspace", () => {
       kind: "workspace-group",
       id: "g-1",
     });
-    expect(mocks.createWorkspaceFromDef).toHaveBeenCalledTimes(2);
-    expect(mocks.createWorkspaceFromDef).toHaveBeenNthCalledWith(1, def1, {
-      restoring: true,
-    });
-    expect(mocks.createWorkspaceFromDef).toHaveBeenNthCalledWith(2, def2, {
-      restoring: true,
-    });
+    expect(mocks.createNestedWorkspaceFromDef).toHaveBeenCalledTimes(2);
+    expect(mocks.createNestedWorkspaceFromDef).toHaveBeenNthCalledWith(
+      1,
+      def1,
+      {
+        restoring: true,
+      },
+    );
+    expect(mocks.createNestedWorkspaceFromDef).toHaveBeenNthCalledWith(
+      2,
+      def2,
+      {
+        restoring: true,
+      },
+    );
     expect(mocks.provisionAutoDashboardsForWorkspace).toHaveBeenCalledWith(
       group,
     );
@@ -267,7 +275,7 @@ describe("unarchiveWorkspace", () => {
     expect(get(archivedDefs).groups["g-1"]).toBeUndefined();
   });
 
-  it("does NOT remove the archive entry when createWorkspaceFromDef rejects", async () => {
+  it("does NOT remove the archive entry when createNestedWorkspaceFromDef rejects", async () => {
     const group = makeGroup();
     const def = {
       id: "ws-1",
@@ -278,7 +286,7 @@ describe("unarchiveWorkspace", () => {
       { kind: "workspace-group", id: "g-1" },
       { group, workspaceDefs: [def] },
     );
-    mocks.createWorkspaceFromDef.mockRejectedValueOnce(new Error("nope"));
+    mocks.createNestedWorkspaceFromDef.mockRejectedValueOnce(new Error("nope"));
 
     await expect(unarchiveWorkspace("g-1")).rejects.toThrow("nope");
 

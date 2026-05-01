@@ -12,7 +12,7 @@
  *     applies copyPatterns/setupScript, creates the workspace with metadata
  *     including spawnedBy, and returns the new workspace id)
  *   - Sets the agent's startup command on the workspace's first terminal
- *     surface (already wired by createWorkspaceFromDef via NestedWorkspaceDef.command)
+ *     surface (already wired by createNestedWorkspaceFromDef via NestedWorkspaceDef.command)
  *
  * Branch defaulting (when caller doesn't pass a branch):
  *   `agent/<agent>/<shortTimestamp>` — base32 unix-seconds

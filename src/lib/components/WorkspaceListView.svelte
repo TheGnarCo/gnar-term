@@ -31,8 +31,8 @@
     mergeWorkspaceIntoPane,
   } from "../services/pane-service";
   import {
-    switchWorkspace,
-    renameWorkspace,
+    switchNestedWorkspace,
+    renameNestedWorkspace,
     reorderWorkspaces,
     toggleWorkspaceLock,
   } from "../services/workspace-service";
@@ -266,7 +266,7 @@
       isLocked,
       onRename: () => itemRefs[ws.id]?.startRename(),
       onPromote: () => {
-        switchWorkspace(globalIdx);
+        switchNestedWorkspace(globalIdx);
         const cmd = get(commandStore).find(
           (c) => c.id === "promote-workspace-to-group",
         );
@@ -310,10 +310,10 @@
             {hideStatusBadges}
             {isNested}
             onSelect={() => {
-              if (!active) switchWorkspace(entry.idx);
+              if (!active) switchNestedWorkspace(entry.idx);
             }}
             onClose={() => void confirmAndCloseWorkspace(entry.ws, entry.idx)}
-            onRename={(name) => renameWorkspace(entry.idx, name)}
+            onRename={(name) => renameNestedWorkspace(entry.idx, name)}
             onContextMenu={(x, y) => showNestedContextMenu(x, y, entry.idx)}
             onGripMouseDown={(e) => startDrag(e, entry.idx)}
           />

@@ -629,7 +629,7 @@ export function initAgentDetection(): void {
     type: "workspace:closed";
     id: string;
   }) => {
-    // closeWorkspace() disposes surfaces and emits workspace:closed but does
+    // closeNestedWorkspace() disposes surfaces and emits workspace:closed but does
     // NOT fire surface:closed for each terminal, so handleClosed never runs
     // for those surfaces. Sweep all tracked surfaces whose agent belongs to
     // the closing workspace so they don't linger as "idle".

@@ -31,9 +31,9 @@
   } from "../services/child-row-contributor-registry";
   import { getRootRowRenderer } from "../services/root-row-renderer-registry";
   import {
-    switchWorkspace,
-    closeWorkspace,
-    createWorkspaceFromDef,
+    switchNestedWorkspace,
+    closeNestedWorkspace,
+    createNestedWorkspaceFromDef,
   } from "../services/workspace-service";
   import { getDashboardContribution } from "../services/dashboard-contribution-registry";
   import DashboardTileIcon from "./DashboardTileIcon.svelte";
@@ -220,12 +220,12 @@
     if (primaryWs) {
       const idx = $nestedWorkspaces.indexOf(primaryWs);
       if (idx >= 0) {
-        switchWorkspace(idx);
+        switchNestedWorkspace(idx);
         return;
       }
     } else if (group.primaryWorkspaceId) {
       // Primary workspace is missing (was deleted) — recreate it
-      const newWsId = await createWorkspaceFromDef({
+      const newWsId = await createNestedWorkspaceFromDef({
         name: group.name,
         cwd: group.path,
         metadata: { groupId: group.id },
@@ -236,7 +236,7 @@
         // Re-fetch the workspace list to get the new workspace
         const newIdx = $nestedWorkspaces.findIndex((w) => w.id === newWsId);
         if (newIdx >= 0) {
-          switchWorkspace(newIdx);
+          switchNestedWorkspace(newIdx);
         }
         return;
       }
@@ -245,7 +245,7 @@
     const nestedIdx = $nestedWorkspaces.findIndex((w) => {
       return wsMeta(w)?.groupId === group!.id;
     });
-    if (nestedIdx >= 0) switchWorkspace(nestedIdx);
+    if (nestedIdx >= 0) switchNestedWorkspace(nestedIdx);
   }
 
   function handleBannerContextMenu(e: MouseEvent) {
@@ -346,7 +346,7 @@
             },
           );
           if (!confirmed) return;
-          closeWorkspace(globalIdx);
+          closeNestedWorkspace(globalIdx);
         },
       },
     ];
@@ -504,7 +504,7 @@
               data-dashboard-contribution={contribId}
               data-active={isActive ? "true" : undefined}
               title={entry.ws.name}
-              on:click|stopPropagation={() => switchWorkspace(entry.idx)}
+              on:click|stopPropagation={() => switchNestedWorkspace(entry.idx)}
               on:contextmenu|preventDefault|stopPropagation={(e) =>
                 showDashboardContextMenu(e.clientX, e.clientY, entry.idx)}
               style="
@@ -538,7 +538,7 @@
                     },
                   );
                   if (!confirmed) return;
-                  closeWorkspace(entry.idx);
+                  closeNestedWorkspace(entry.idx);
                 }}
                 on:mouseenter={() => (dashboardCloseHovered = entry.ws.id)}
                 on:mouseleave={() => (dashboardCloseHovered = null)}

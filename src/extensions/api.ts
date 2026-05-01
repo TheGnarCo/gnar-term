@@ -645,7 +645,7 @@ export interface ExtensionAPI {
     options?: { submitLabel?: string },
   ): Promise<Record<string, string> | null>;
   toggleSecondarySidebar(): void;
-  createWorkspace(
+  createNestedWorkspace(
     name: string,
     cwd: string,
     options?: CreateWorkspaceOptions,
@@ -664,8 +664,8 @@ export interface ExtensionAPI {
   ): void;
 
   // NestedWorkspace management — switch and close by ID
-  switchWorkspace(workspaceId: string): void;
-  closeWorkspace(workspaceId: string): void;
+  switchNestedWorkspace(workspaceId: string): void;
+  closeNestedWorkspace(workspaceId: string): void;
 
   /** Set hasUnread=true on a surface tab (e.g., to signal "agent waiting"). Cleared automatically when the surface is selected. */
   markSurfaceUnread(surfaceId: string): void;
@@ -833,7 +833,7 @@ export interface ExtensionAPI {
    * - **ContainerRow** — shared banner + nested-list chrome for
    *   "container nestedWorkspaces" (workspace groups, agent dashboards). Banner can
    *   represent a first-class workspace by wiring onBannerClick/onClose
-   *   to switchWorkspace/closeWorkspace.
+   *   to switchNestedWorkspace/closeNestedWorkspace.
    *   Props: `{ color, foreground, parentColor?, onGripMouseDown?,
    *     onBannerClick?, onBannerContextMenu?, onClose?, filterIds,
    *     dashboardHintFor?, hideStatusBadges?, scopeId, containerBlockId,

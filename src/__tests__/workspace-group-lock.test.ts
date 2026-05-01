@@ -20,8 +20,8 @@ vi.mock("../lib/services/group-git-dirty-store", () => ({
   releaseGroupDirtyStore: vi.fn(),
 }));
 vi.mock("../lib/services/workspace-service", () => ({
-  createWorkspaceFromDef: vi.fn(),
-  closeWorkspace: vi.fn(),
+  createNestedWorkspaceFromDef: vi.fn(),
+  closeNestedWorkspace: vi.fn(),
 }));
 vi.mock("../lib/services/event-bus", () => ({
   eventBus: { emit: vi.fn(), on: vi.fn(), off: vi.fn() },

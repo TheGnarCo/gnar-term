@@ -79,11 +79,11 @@
 
   // Services
   import {
-    createWorkspace,
-    createWorkspaceFromDef,
-    switchWorkspace,
+    createNestedWorkspace,
+    createNestedWorkspaceFromDef,
+    switchNestedWorkspace,
     closeAllWorkspaces,
-    renameWorkspace,
+    renameNestedWorkspace,
     saveCurrentWorkspace,
     persistWorkspaces,
     schedulePersist,
@@ -220,7 +220,7 @@
       for (const p of panes) {
         const surface = p.surfaces.find((s) => s.hasUnread);
         if (!surface) continue;
-        if (wsIdx !== $activeNestedWorkspaceIdx) switchWorkspace(wsIdx);
+        if (wsIdx !== $activeNestedWorkspaceIdx) switchNestedWorkspace(wsIdx);
         focusPane(p.id);
         selectSurface(p.id, surface.id);
         nestedWorkspaces.update((wsList) => {
@@ -241,7 +241,7 @@
       title: "New Workspace",
       shortcut: `${shiftModLabel}N`,
       action: () =>
-        createWorkspace(`Workspace ${$nestedWorkspaces.length + 1}`),
+        createNestedWorkspace(`Workspace ${$nestedWorkspaces.length + 1}`),
       source: "core",
     },
     {
@@ -390,7 +390,7 @@
       id: `core.switch-workspace-${ws.id}`,
       title: `Switch to: ${ws.name}`,
       shortcut: i < 9 ? `${modLabel}${i + 1}` : undefined,
-      action: () => switchWorkspace(i),
+      action: () => switchNestedWorkspace(i),
       source: "core",
     })),
     {
@@ -403,7 +403,7 @@
       id: `core.workspace-cmd-${cmd.name}`,
       title: cmd.name,
       action: () => {
-        if (cmd.workspace) void createWorkspaceFromDef(cmd.workspace);
+        if (cmd.workspace) void createNestedWorkspaceFromDef(cmd.workspace);
       },
       source: "core",
     })),
@@ -489,7 +489,7 @@
     } else if (action.type === "split-down") {
       splitFromSidebar("vertical");
     } else if (action.type === "create-workspace") {
-      void createWorkspaceFromDef({
+      void createNestedWorkspaceFromDef({
         name: action.name,
         cwd: action.cwd,
         env: action.options?.env,
@@ -508,7 +508,7 @@
       const idx = $nestedWorkspaces.findIndex(
         (w) => w.id === action.workspaceId,
       );
-      if (idx >= 0) switchWorkspace(idx);
+      if (idx >= 0) switchNestedWorkspace(idx);
     } else if (action.type === "close-workspace") {
       const idx = $nestedWorkspaces.findIndex(
         (w) => w.id === action.workspaceId,
@@ -639,7 +639,7 @@
       handler: (ctx) => {
         if (ctx.groupId && ctx.groupPath) {
           const name = `Workspace ${get(nestedWorkspaces).length + 1}`;
-          void createWorkspaceFromDef({
+          void createNestedWorkspaceFromDef({
             name,
             cwd: ctx.groupPath as string,
             metadata: { groupId: ctx.groupId as string },
@@ -730,7 +730,7 @@
           { metadata?: Record<string, unknown> } | undefined,
         ];
         const open = () =>
-          void createWorkspaceFromDef({
+          void createNestedWorkspaceFromDef({
             name: wsName,
             // Optional metadata forwards to the new workspace — e.g.
             // container-row dirty clicks pass `{ groupId: <container-id> }`
@@ -813,8 +813,8 @@
 <div id="app" style="display: flex; height: 100vh; overflow: hidden;">
   <PrimarySidebar
     bind:this={sidebarComponent}
-    onSwitchWorkspace={switchWorkspace}
-    onRenameWorkspace={renameWorkspace}
+    onSwitchWorkspace={switchNestedWorkspace}
+    onRenameWorkspace={renameNestedWorkspace}
     onNewSurface={newSurfaceFromSidebar}
   />
 

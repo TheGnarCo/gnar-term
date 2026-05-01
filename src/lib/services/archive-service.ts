@@ -4,7 +4,10 @@ import {
   isTerminalSurface,
   type NestedWorkspace,
 } from "../types";
-import { serializeLayout, createWorkspaceFromDef } from "./workspace-service";
+import {
+  serializeLayout,
+  createNestedWorkspaceFromDef,
+} from "./workspace-service";
 import { wsMeta } from "./service-helpers";
 import {
   getWorktreeWorkspaces,
@@ -81,7 +84,7 @@ export async function unarchiveWorkspace(groupId: string): Promise<void> {
   setWorkspaces([...getWorkspaces(), entry.group]);
   appendRootRow({ kind: "workspace-group", id: groupId });
   for (const def of entry.workspaceDefs) {
-    await createWorkspaceFromDef(def, { restoring: true });
+    await createNestedWorkspaceFromDef(def, { restoring: true });
   }
   await provisionAutoDashboardsForWorkspace(entry.group);
   removeFromArchive({ kind: "workspace-group", id: groupId });

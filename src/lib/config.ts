@@ -52,7 +52,7 @@ export type LayoutNode = { pane: PaneDef } | SplitDef;
 
 export interface NestedWorkspaceDef {
   /**
-   * Stable identifier. Optional on fresh creation — `createWorkspaceFromDef`
+   * Stable identifier. Optional on fresh creation — `createNestedWorkspaceFromDef`
    * mints a new id when absent. Populated by `persistWorkspaces` so that
    * on restart the same id is reused, letting `rootRowOrder` (which keys
    * rows by `{kind, id}`) survive the round-trip and preserve user-

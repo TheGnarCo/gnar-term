@@ -57,8 +57,8 @@ vi.mock("../../../lib/services/spawn-helper", () => ({
 }));
 
 vi.mock("../../../lib/services/workspace-service", () => ({
-  createWorkspaceFromDef: vi.fn().mockResolvedValue("ws-new"),
-  closeWorkspace: vi.fn(),
+  createNestedWorkspaceFromDef: vi.fn().mockResolvedValue("ws-new"),
+  closeNestedWorkspace: vi.fn(),
 }));
 
 const { configRef, saveConfigMock } = vi.hoisted(() => {
@@ -166,7 +166,7 @@ function makeApi(
     invoke: options.invoke
       ? vi.fn(async (cmd: string, args?: unknown) => options.invoke!(cmd, args))
       : invokeSpy,
-    switchWorkspace: switchSpy,
+    switchNestedWorkspace: switchSpy,
     focusSurface: focusSpy,
   } as unknown as ExtensionAPI;
 }
@@ -1197,7 +1197,7 @@ describe("AgentStatusRow widget", () => {
     ).toBe("running");
   });
 
-  it("clicking the row invokes switchWorkspace + focusSurface", async () => {
+  it("clicking the row invokes switchNestedWorkspace + focusSurface", async () => {
     const api = makeApi();
     registerAgent(
       makeAgent({

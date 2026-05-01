@@ -39,7 +39,7 @@ vi.mock("../lib/terminal-service", () => ({
 
 // Services — stubbed so keydown dispatch doesn't trigger real side effects.
 vi.mock("../lib/services/workspace-service", () => ({
-  createWorkspace: vi.fn(),
+  createNestedWorkspace: vi.fn(),
 }));
 vi.mock("../lib/services/pane-service", () => ({
   flashFocusedPane: vi.fn(),

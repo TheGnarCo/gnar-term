@@ -92,7 +92,7 @@ vi.stubGlobal("ResizeObserver", MockResizeObserver);
 
 import { invoke } from "@tauri-apps/api/core";
 import {
-  createWorkspaceFromDef,
+  createNestedWorkspaceFromDef,
   serializeLayout,
 } from "../lib/services/workspace-service";
 import {
@@ -140,9 +140,9 @@ afterEach(() => {
   activeNestedWorkspaceIdx.set(-1);
 });
 
-describe("createWorkspaceFromDef — restore vs fresh", () => {
+describe("createNestedWorkspaceFromDef — restore vs fresh", () => {
   it("restored surface gets definedCommand + pendingRestoreCommand, NOT startupCommand", async () => {
-    await createWorkspaceFromDef(
+    await createNestedWorkspaceFromDef(
       {
         name: "Restored",
         layout: {
@@ -163,7 +163,7 @@ describe("createWorkspaceFromDef — restore vs fresh", () => {
   });
 
   it("fresh-created surface with a command gets all three (definedCommand + startupCommand, NOT pending)", async () => {
-    await createWorkspaceFromDef({
+    await createNestedWorkspaceFromDef({
       name: "Fresh",
       layout: {
         pane: {
@@ -179,7 +179,7 @@ describe("createWorkspaceFromDef — restore vs fresh", () => {
   });
 
   it("round-trips: serialized output of a restored workspace still carries `command`", async () => {
-    await createWorkspaceFromDef(
+    await createNestedWorkspaceFromDef(
       {
         name: "Restored",
         layout: {

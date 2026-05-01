@@ -126,7 +126,7 @@ import {
 import { uid } from "../lib/types";
 import type { Pane, TerminalSurface, NestedWorkspace } from "../lib/types";
 import { togglePaneZoom } from "../lib/services/pane-service";
-import { switchWorkspace } from "../lib/services/workspace-service";
+import { switchNestedWorkspace } from "../lib/services/workspace-service";
 import { adjustFontSize, resetFontSize } from "../lib/terminal-service";
 import { saveConfig } from "../lib/config";
 import { Terminal } from "@xterm/xterm";
@@ -212,7 +212,7 @@ describe("togglePaneZoom", () => {
   });
 });
 
-describe("switchWorkspace clears zoom", () => {
+describe("switchNestedWorkspace clears zoom", () => {
   it("resets zoomedSurfaceId to null on workspace switch", () => {
     const s1 = mockTerminalSurface();
     const s2 = mockTerminalSurface();
@@ -228,7 +228,7 @@ describe("switchWorkspace clears zoom", () => {
     expect(get(zoomedSurfaceId)).toBe(s1.id);
 
     // Switch to workspace 1 — zoom should clear
-    switchWorkspace(1);
+    switchNestedWorkspace(1);
     expect(get(zoomedSurfaceId)).toBeNull();
   });
 });

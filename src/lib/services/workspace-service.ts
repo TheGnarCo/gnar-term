@@ -54,7 +54,7 @@ export async function persistWorkspaces(): Promise<void> {
   const serialized = wsList.map((ws) => ({
     // Persist the id so `rootRowOrder` (keyed by `{kind, id}`) survives
     // a restart — without this every workspace id regenerates on
-    // `createWorkspaceFromDef` and any user-dragged order is lost.
+    // `createNestedWorkspaceFromDef` and any user-dragged order is lost.
     id: ws.id,
     name: ws.name,
     cwd: undefined as string | undefined,
@@ -72,7 +72,7 @@ export function schedulePersist(): void {
   persistTimer = setTimeout(persistWorkspaces, PERSIST_DELAY);
 }
 
-export async function createWorkspace(name: string) {
+export async function createNestedWorkspace(name: string) {
   const pane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
   const ws: NestedWorkspace = {
     id: uid(),
@@ -91,16 +91,16 @@ export async function createWorkspace(name: string) {
   // handler ordering.
   appendRootRow({ kind: "workspace", id: ws.id });
   eventBus.emit({ type: "workspace:created", id: ws.id, name });
-  // Route activation through switchWorkspace so any listener on
+  // Route activation through switchNestedWorkspace so any listener on
   // workspace:activated (e.g. agentic-orchestrator re-spawning a
   // dashboard preview surface, core focus bookkeeping) fires for
   // fresh nestedWorkspaces the same way it would for a user-driven switch.
-  switchWorkspace(get(nestedWorkspaces).length - 1);
+  switchNestedWorkspace(get(nestedWorkspaces).length - 1);
   void safeFocus(surface);
   schedulePersist();
 }
 
-export async function createWorkspaceFromDef(
+export async function createNestedWorkspaceFromDef(
   def: NestedWorkspaceDef,
   options?: { restoring?: boolean },
 ): Promise<string> {
@@ -219,7 +219,7 @@ export async function createWorkspaceFromDef(
     name: wsName,
     ...(ws.metadata ? { metadata: ws.metadata } : {}),
   });
-  // Route through switchWorkspace so workspace:activated listeners
+  // Route through switchNestedWorkspace so workspace:activated listeners
   // (e.g. agentic-orchestrator's dashboard workspace re-spawn hook)
   // fire on creation — auto-switching to the fresh workspace matches
   // the user-driven switch path. Session restore skips the auto-switch
@@ -227,7 +227,7 @@ export async function createWorkspaceFromDef(
   // has been rebuilt, and we don't want N+1 activation events along
   // the way.
   if (!restoring) {
-    switchWorkspace(get(nestedWorkspaces).length - 1);
+    switchNestedWorkspace(get(nestedWorkspaces).length - 1);
   } else {
     activeNestedWorkspaceIdx.set(get(nestedWorkspaces).length - 1);
   }
@@ -238,7 +238,7 @@ export async function createWorkspaceFromDef(
   return ws.id;
 }
 
-export function switchWorkspace(idx: number) {
+export function switchNestedWorkspace(idx: number) {
   const wsList = get(nestedWorkspaces);
   if (idx < 0 || idx >= wsList.length) return;
   const previousId =
@@ -256,7 +256,7 @@ export function switchWorkspace(idx: number) {
   void safeFocus(get(activeSurface));
 }
 
-export function closeWorkspace(idx: number) {
+export function closeNestedWorkspace(idx: number) {
   const wsList = get(nestedWorkspaces);
   const ws = wsList[idx];
   if (!ws) return;
@@ -287,7 +287,7 @@ export function closeWorkspace(idx: number) {
   schedulePersist();
 }
 
-export function renameWorkspace(idx: number, name: string) {
+export function renameNestedWorkspace(idx: number, name: string) {
   const oldName = get(nestedWorkspaces)[idx]?.name ?? "";
   const id = get(nestedWorkspaces)[idx]?.id ?? "";
   nestedWorkspaces.update((list) => {
@@ -416,10 +416,10 @@ export async function closeAllWorkspaces(): Promise<void> {
     },
   );
   if (!confirmed) return;
-  // closeWorkspace mutates the store and shifts indices, so always pop
+  // closeNestedWorkspace mutates the store and shifts indices, so always pop
   // index 0 until the list is empty.
   while (get(nestedWorkspaces).length > 0) {
-    closeWorkspace(0);
+    closeNestedWorkspace(0);
   }
 }
 
@@ -458,7 +458,7 @@ function collapseEmptyPaneInWorkspace(
  * guards against this when computing the drop target, but the service
  * enforces the invariant in case callers skip the check).
  */
-export function createWorkspaceFromSurface(
+export function createNestedWorkspaceFromSurface(
   surfaceId: string,
   sourcePaneId: string,
   sourceWorkspaceId: string,

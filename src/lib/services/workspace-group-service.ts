@@ -25,8 +25,8 @@ import {
   setWorkspaces,
 } from "../stores/workspace-groups";
 import {
-  createWorkspaceFromDef,
-  closeWorkspace,
+  createNestedWorkspaceFromDef,
+  closeNestedWorkspace,
   schedulePersist,
 } from "./workspace-service";
 import { eventBus } from "./event-bus";
@@ -112,13 +112,13 @@ export function getWorktreeWorkspaces(groupId: string): NestedWorkspace[] {
  * match the same predicate and are closed here too; callers should not
  * close the dashboard separately.
  */
-function closeWorkspaceById(wsId: string): void {
+function closeNestedWorkspaceById(wsId: string): void {
   const idx = get(nestedWorkspaces).findIndex((w) => w.id === wsId);
-  if (idx >= 0) closeWorkspace(idx);
+  if (idx >= 0) closeNestedWorkspace(idx);
 }
 
 export function closeNestedWorkspacesInWorkspace(id: string): void {
-  for (const ws of getWorktreeWorkspaces(id)) closeWorkspaceById(ws.id);
+  for (const ws of getWorktreeWorkspaces(id)) closeNestedWorkspaceById(ws.id);
 }
 
 /**
@@ -361,7 +361,7 @@ function createDashboardWorkspaceFromDef(
   contribId: string,
   surfaces: SurfaceDef[],
 ): Promise<string> {
-  return createWorkspaceFromDef({
+  return createNestedWorkspaceFromDef({
     name,
     layout: { pane: { surfaces } },
     metadata: {
@@ -557,7 +557,7 @@ export function closeAutoDashboardsBySource(source: string): void {
       return typeof contrib === "string" && autoIds.has(contrib);
     })
     .map((w) => w.id);
-  for (const wsId of matchIds) closeWorkspaceById(wsId);
+  for (const wsId of matchIds) closeNestedWorkspaceById(wsId);
 }
 
 /**
@@ -573,7 +573,7 @@ export function closeDashboardForGroup(
   if (!match) return false;
   const contribution = getDashboardContribution(contributionId);
   if (contribution?.autoProvision) return false;
-  closeWorkspaceById(match.id);
+  closeNestedWorkspaceById(match.id);
   return true;
 }
 
@@ -601,7 +601,7 @@ export async function closeGroupDashboardWorkspace(
 ): Promise<void> {
   const dashboardWsId = group.dashboardWorkspaceId;
   if (!dashboardWsId) return;
-  closeWorkspaceById(dashboardWsId);
+  closeNestedWorkspaceById(dashboardWsId);
 }
 
 /**
@@ -620,7 +620,7 @@ export async function closeGroupDashboardWorkspace(
  *      up with these when pre-fix state carried duplicates).
  *   3. Only when no dashboard exists at all, create a fresh one.
  *
- * The loop is sequential because `closeWorkspace` mutates the
+ * The loop is sequential because `closeNestedWorkspace` mutates the
  * nestedWorkspaces store and ripples to `$activeNestedWorkspaceIdx`.
  */
 export async function reconcileWorkspaceDashboards(): Promise<void> {
@@ -650,7 +650,7 @@ export async function reconcileWorkspaceDashboards(): Promise<void> {
         );
         if (dupeMatches.length <= 1) continue;
         const [, ...extras] = dupeMatches;
-        for (const dup of extras) closeWorkspaceById(dup.id);
+        for (const dup of extras) closeNestedWorkspaceById(dup.id);
       }
 
       // Back-fill any autoProvision contribution (including `"group"` if
@@ -815,7 +815,7 @@ export function setupPrimaryWorkspaceAutoRecreation(): void {
     if (!group) return; // Not a primary workspace
 
     // Recreate the primary workspace with the same name
-    const newWsId = await createWorkspaceFromDef({
+    const newWsId = await createNestedWorkspaceFromDef({
       name: group.name,
       cwd: group.path,
       metadata: { groupId: group.id },

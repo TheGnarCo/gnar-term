@@ -179,7 +179,7 @@ export function hostScopedAgentsStore(
  */
 export function jumpToAgent(api: ExtensionAPI, agent: AgentRef): void {
   if (agent.workspaceId) {
-    api.switchWorkspace(agent.workspaceId);
+    api.switchNestedWorkspace(agent.workspaceId);
   }
   api.focusSurface(agent.surfaceId);
 }

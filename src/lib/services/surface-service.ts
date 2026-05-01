@@ -20,7 +20,7 @@ import {
   type PreviewSurface,
 } from "../types";
 import { removePane, splitPaneEmpty } from "./pane-service";
-import { closeWorkspace, schedulePersist } from "./workspace-service";
+import { closeNestedWorkspace, schedulePersist } from "./workspace-service";
 import { findPreviewSurfaceByPath } from "./preview-surface-registry";
 import { safeFocus, getCwdForSurface } from "./service-helpers";
 import { eventBus } from "./event-bus";
@@ -102,7 +102,7 @@ function removeSurface(ws: NestedWorkspace, pane: Pane, surfaceIdx: number) {
     } else {
       pane.resizeObserver?.disconnect();
       const wsIdx = get(nestedWorkspaces).indexOf(ws);
-      if (wsIdx >= 0) closeWorkspace(wsIdx);
+      if (wsIdx >= 0) closeNestedWorkspace(wsIdx);
       return;
     }
   } else {

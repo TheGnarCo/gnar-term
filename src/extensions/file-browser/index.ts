@@ -65,7 +65,7 @@ export function registerFileBrowserExtension(api: ExtensionAPI): void {
 
     api.registerContextMenuItem("open-as-workspace", (dirPath) => {
       const name = dirPath.split("/").pop() || dirPath;
-      api.createWorkspace(name, dirPath);
+      api.createNestedWorkspace(name, dirPath);
     });
   });
 }

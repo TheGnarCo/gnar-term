@@ -44,12 +44,12 @@ describe("Extension barrier enforcement", () => {
     // Keep this list small — each entry is a deliberate departure.
     const FILE_EXCEPTIONS: Record<string, string[]> = {
       // The Diff Dashboard contribution's `create(group)` materializes
-      // a dashboard workspace via createWorkspaceFromDef — mirrors the
+      // a dashboard workspace via createNestedWorkspaceFromDef — mirrors the
       // agentic-orchestrator piercing below.
       "diff-viewer/index.ts": ["../../lib/services/workspace-service"],
       // The Agentic Dashboard contribution's `create(group)` must
       // materialize a dashboard workspace; reaching for
-      // createWorkspaceFromDef keeps the contribution on the same code
+      // createNestedWorkspaceFromDef keeps the contribution on the same code
       // path as core's built-in Group Dashboard.
       "agentic-orchestrator/index.ts": [
         "../../lib/services/workspace-service",
@@ -63,7 +63,7 @@ describe("Extension barrier enforcement", () => {
         // for every existing workspace group; on deactivate, close the
         // provisioned dashboards. No public ExtensionAPI surface exposes
         // the group list / dashboard tear-down, so the extension pierces
-        // core — same shape as the existing `createWorkspaceFromDef`
+        // core — same shape as the existing `createNestedWorkspaceFromDef`
         // piercing above.
         "../../lib/services/workspace-group-service",
         "../../lib/stores/workspace-groups",
@@ -135,7 +135,7 @@ describe("Extension barrier enforcement", () => {
         "../../lib/services/claimed-workspace-registry",
       ],
       // claude-settings/index.ts mirrors the agentic-orchestrator piercing
-      // pattern: createWorkspaceFromDef to materialize the group dashboard,
+      // pattern: createNestedWorkspaceFromDef to materialize the group dashboard,
       // workspace-group-service + workspace-groups for auto-provision on
       // activate, and restore-nestedWorkspaces to defer the back-fill loop until
       // nestedWorkspaces are restored.

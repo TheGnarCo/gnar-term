@@ -28,8 +28,8 @@ const { createWorkspaceFromDefMock } = vi.hoisted(() => ({
   createWorkspaceFromDefMock: vi.fn(async () => "ws-agentic-new"),
 }));
 vi.mock("../../../lib/services/workspace-service", () => ({
-  createWorkspaceFromDef: createWorkspaceFromDefMock,
-  closeWorkspace: vi.fn(),
+  createNestedWorkspaceFromDef: createWorkspaceFromDefMock,
+  closeNestedWorkspace: vi.fn(),
 }));
 
 import {

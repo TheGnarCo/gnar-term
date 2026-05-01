@@ -8,7 +8,7 @@ import type { ExtensionManifest, ExtensionAPI, WorkspaceRef } from "../api";
 import DiffSurface from "./DiffSurface.svelte";
 import ChangesTab from "./ChangesTab.svelte";
 import DiffIcon from "./DiffIcon.svelte";
-import { createWorkspaceFromDef } from "../../lib/services/workspace-service";
+import { createNestedWorkspaceFromDef } from "../../lib/services/workspace-service";
 
 export const diffViewerManifest: ExtensionManifest = {
   id: "diff-viewer",
@@ -172,7 +172,7 @@ export function registerDiffViewerExtension(api: ExtensionAPI): void {
 async function createDiffDashboardWorkspace(
   group: WorkspaceRef,
 ): Promise<string> {
-  return await createWorkspaceFromDef({
+  return await createNestedWorkspaceFromDef({
     name: "Diff",
     layout: {
       pane: {

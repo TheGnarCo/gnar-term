@@ -49,7 +49,7 @@ describe("App.svelte structure verification", () => {
       "src/lib/bootstrap/restore-workspaces.ts",
       "utf-8",
     );
-    expect(restore).toContain('createWorkspace("Workspace 1")');
+    expect(restore).toContain('createNestedWorkspace("Workspace 1")');
   });
 
   it("does not duplicate surface push (createTerminalSurface handles it)", async () => {
@@ -97,7 +97,7 @@ describe("App.svelte structure verification", () => {
     expect(termAreaMatch![1]).toContain("min-height: 0");
   });
 
-  it("close-workspace pendingAction routes through confirmAndCloseWorkspace, not bare closeWorkspace", async () => {
+  it("close-workspace pendingAction routes through confirmAndCloseWorkspace, not bare closeNestedWorkspace", async () => {
     const fs = await import("fs");
     const source = fs.readFileSync("src/App.svelte", "utf-8");
     // The pendingAction handler for close-workspace must call confirmAndCloseWorkspace
@@ -106,8 +106,8 @@ describe("App.svelte structure verification", () => {
     expect(source).toMatch(
       /action\.type === "close-workspace"[\s\S]{0,200}confirmAndCloseWorkspace/,
     );
-    // Bare closeWorkspace(idx) must NOT appear inside the close-workspace branch.
-    // Extract just that branch and assert it contains no direct closeWorkspace call.
+    // Bare closeNestedWorkspace(idx) must NOT appear inside the close-workspace branch.
+    // Extract just that branch and assert it contains no direct closeNestedWorkspace call.
     const branchMatch = source.match(
       /action\.type === "close-workspace"([\s\S]*?)(?=\} else if|$)/,
     );
@@ -264,18 +264,18 @@ describe("Config loads per-project files", () => {
 });
 
 describe("NestedWorkspace from config definition", () => {
-  it("createWorkspaceFromDef is implemented in workspace-service", async () => {
+  it("createNestedWorkspaceFromDef is implemented in workspace-service", async () => {
     const ws = await import("../lib/services/workspace-service");
-    expect(typeof ws.createWorkspaceFromDef).toBe("function");
+    expect(typeof ws.createNestedWorkspaceFromDef).toBe("function");
   });
 
   // Structural invariant: verified via source scan because mounting the full
   // component tree requires Tauri runtime which isn't available in vitest.
-  it("command palette wires workspace commands to createWorkspaceFromDef", async () => {
+  it("command palette wires workspace commands to createNestedWorkspaceFromDef", async () => {
     const fs = await import("fs");
     const source = fs.readFileSync("src/App.svelte", "utf-8");
     expect(source).toContain(
-      "cmd.workspace) void createWorkspaceFromDef(cmd.workspace)",
+      "cmd.workspace) void createNestedWorkspaceFromDef(cmd.workspace)",
     );
   });
 
@@ -288,12 +288,12 @@ describe("NestedWorkspace from config definition", () => {
       "utf-8",
     );
     expect(source).toContain("config.autoload");
-    expect(source).toContain("createWorkspaceFromDef(cmd.workspace)");
+    expect(source).toContain("createNestedWorkspaceFromDef(cmd.workspace)");
     // Falls back to default workspace if nothing autoloaded
     expect(source).toContain("!autoloaded");
   });
 
-  // Structural invariant: verified via source scan because createWorkspaceFromDef
+  // Structural invariant: verified via source scan because createNestedWorkspaceFromDef
   // calls Tauri invoke internally, so it can't be run in vitest.
   it("handles layout with splits and surface definitions", async () => {
     const fs = await import("fs");
@@ -342,13 +342,13 @@ describe("No spurious fit/scrollToBottom on store updates", () => {
     );
   });
 
-  it("switchWorkspace does not directly call fit or scrollToBottom", async () => {
+  it("switchNestedWorkspace does not directly call fit or scrollToBottom", async () => {
     const fs = await import("fs");
     const source = fs.readFileSync(
       "src/lib/services/workspace-service.ts",
       "utf-8",
     );
-    const start = source.indexOf("function switchWorkspace");
+    const start = source.indexOf("function switchNestedWorkspace");
     const end = source.indexOf("\nexport function ", start + 1);
     const fn = source.slice(start, end);
     expect(fn).not.toMatch(/\.fitAddon\.fit\(\)/);

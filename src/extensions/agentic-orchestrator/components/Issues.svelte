@@ -145,7 +145,7 @@
 
   function jumpToHandledWorkspace(issueNumber: number) {
     const wsId = handledIssues.get(issueNumber);
-    if (wsId) api.switchWorkspace(wsId);
+    if (wsId) api.switchNestedWorkspace(wsId);
   }
 
   function isGhMissing(msg: string): boolean {

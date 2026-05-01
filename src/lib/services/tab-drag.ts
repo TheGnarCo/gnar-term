@@ -21,7 +21,7 @@ import {
   mergeTabToPane,
   splitPaneWithSurface,
 } from "./pane-service";
-import { createWorkspaceFromSurface } from "./workspace-service";
+import { createNestedWorkspaceFromSurface } from "./workspace-service";
 import { getWorkspaces } from "../stores/workspace-groups";
 import { rootRowOrder } from "../stores/root-row-order";
 
@@ -443,10 +443,15 @@ export function commitTabDrop(): void {
         dropTarget.insertEdge === "before"
           ? dropTarget.insertIdx
           : dropTarget.insertIdx + 1;
-      createWorkspaceFromSurface(surfaceId, sourcePaneId, sourceWorkspaceId, {
-        kind: "root",
-        insertIdx: insertAt,
-      });
+      createNestedWorkspaceFromSurface(
+        surfaceId,
+        sourcePaneId,
+        sourceWorkspaceId,
+        {
+          kind: "root",
+          insertIdx: insertAt,
+        },
+      );
       break;
     }
     case "new-workspace-in-group": {
@@ -462,11 +467,16 @@ export function commitTabDrop(): void {
           : posInGroup === -1
             ? group.workspaceIds.length
             : posInGroup + 1;
-      createWorkspaceFromSurface(surfaceId, sourcePaneId, sourceWorkspaceId, {
-        kind: "group",
-        positionInGroup: insertPos,
-        targetGroupId: dropTarget.groupId,
-      });
+      createNestedWorkspaceFromSurface(
+        surfaceId,
+        sourcePaneId,
+        sourceWorkspaceId,
+        {
+          kind: "group",
+          positionInGroup: insertPos,
+          targetGroupId: dropTarget.groupId,
+        },
+      );
       break;
     }
     default:

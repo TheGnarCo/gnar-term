@@ -5,15 +5,15 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, cleanup, fireEvent } from "@testing-library/svelte";
 
-const { switchWorkspaceMock } = vi.hoisted(() => ({
-  switchWorkspaceMock: vi.fn(),
+const { switchNestedWorkspaceMock } = vi.hoisted(() => ({
+  switchNestedWorkspaceMock: vi.fn(),
 }));
 vi.mock("../lib/services/workspace-service", () => ({
-  switchWorkspace: switchWorkspaceMock,
-  createWorkspace: vi.fn(),
+  switchNestedWorkspace: switchNestedWorkspaceMock,
+  createNestedWorkspace: vi.fn(),
   schedulePersist: vi.fn(),
-  closeWorkspace: vi.fn(),
-  renameWorkspace: vi.fn(),
+  closeNestedWorkspace: vi.fn(),
+  renameNestedWorkspace: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -205,12 +205,12 @@ describe("WorkspacesWidget", () => {
 describe("WorkspacesWidget click-to-navigate", () => {
   beforeEach(() => {
     cleanup();
-    switchWorkspaceMock.mockClear();
+    switchNestedWorkspaceMock.mockClear();
     nestedWorkspaces.set([]);
     resetWorkspacesForTest();
   });
 
-  it("clicking a workspace row calls switchWorkspace with its index", async () => {
+  it("clicking a workspace row calls switchNestedWorkspace with its index", async () => {
     setWorkspaces([
       {
         id: "g1",
@@ -237,7 +237,7 @@ describe("WorkspacesWidget click-to-navigate", () => {
     // Click the second workspace row (index 1 in the nestedWorkspaces store)
     await fireEvent.click(rows[1]!);
 
-    expect(switchWorkspaceMock).toHaveBeenCalledTimes(1);
-    expect(switchWorkspaceMock).toHaveBeenCalledWith(1);
+    expect(switchNestedWorkspaceMock).toHaveBeenCalledTimes(1);
+    expect(switchNestedWorkspaceMock).toHaveBeenCalledWith(1);
   });
 });

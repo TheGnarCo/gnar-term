@@ -678,7 +678,7 @@ describe("agent-detection-service — late workspace load (startup race)", () =>
 
 describe("agent-detection-service — workspace:closed cleanup", () => {
   it("removes agents from a workspace when workspace:closed fires", () => {
-    // closeWorkspace() emits workspace:closed but NOT surface:closed for
+    // closeNestedWorkspace() emits workspace:closed but NOT surface:closed for
     // each terminal, so agents were lingering as idle after a workspace close.
     nestedWorkspaces.set([
       makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 10 }]),

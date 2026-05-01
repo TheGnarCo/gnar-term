@@ -19,9 +19,9 @@ import {
 } from "../config";
 import { initArchiveFromState } from "../stores/archive";
 import {
-  createWorkspace,
-  createWorkspaceFromDef,
-  switchWorkspace,
+  createNestedWorkspace,
+  createNestedWorkspaceFromDef,
+  switchNestedWorkspace,
 } from "../services/workspace-service";
 
 // Restore-complete signal — lets async work (extension provision loops,
@@ -67,12 +67,12 @@ export async function restoreWorkspaces(
       (c) => c.name === cliArgs.workspace && c.workspace,
     );
     if (cmd?.workspace) {
-      await createWorkspaceFromDef(cmd.workspace);
+      await createNestedWorkspaceFromDef(cmd.workspace);
     } else {
       console.warn(
         `[cli] NestedWorkspace "${cliArgs.workspace}" not found in config`,
       );
-      await createWorkspace(cliArgs.title || "Workspace 1");
+      await createNestedWorkspace(cliArgs.title || "Workspace 1");
     }
     return;
   }
@@ -94,7 +94,7 @@ export async function restoreWorkspaces(
         },
       },
     };
-    await createWorkspaceFromDef(def);
+    await createNestedWorkspaceFromDef(def);
     return;
   }
 
@@ -133,7 +133,7 @@ export async function restoreWorkspaces(
       return true;
     });
     for (const wsDef of filteredDefs) {
-      await createWorkspaceFromDef(wsDef, { restoring: true });
+      await createNestedWorkspaceFromDef(wsDef, { restoring: true });
     }
     // Restored nestedWorkspaces whose `metadata.isDashboard === true` are
     // group/pseudo dashboards — accessed through their group's tile,
@@ -156,7 +156,7 @@ export async function restoreWorkspaces(
         targetIdx = restored.findIndex((_, i) => !isDashboard(i));
       }
       if (targetIdx >= 0) {
-        switchWorkspace(targetIdx);
+        switchNestedWorkspace(targetIdx);
       }
     }
     // An explicit empty array (user closed everything) is a valid
@@ -170,12 +170,12 @@ export async function restoreWorkspaces(
     for (const name of config.autoload) {
       const cmd = config.commands.find((c) => c.name === name && c.workspace);
       if (cmd?.workspace) {
-        await createWorkspaceFromDef(cmd.workspace);
+        await createNestedWorkspaceFromDef(cmd.workspace);
         autoloaded = true;
       }
     }
   }
   if (!autoloaded && get(nestedWorkspaces).length === 0) {
-    await createWorkspace("Workspace 1");
+    await createNestedWorkspace("Workspace 1");
   }
 }

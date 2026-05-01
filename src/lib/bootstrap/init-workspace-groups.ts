@@ -57,8 +57,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { getActiveCwd, wsMeta } from "../services/service-helpers";
 import type { NestedWorkspaceMetadata } from "../types";
 import {
-  createWorkspaceFromDef,
-  switchWorkspace,
+  createNestedWorkspaceFromDef,
+  switchNestedWorkspace,
 } from "../services/workspace-service";
 
 /**
@@ -185,7 +185,7 @@ async function createWorkspaceGroupFlow(prefill?: {
   try {
     const wsCount =
       readGroups().find((g) => g.id === id)?.workspaceIds.length ?? 0;
-    await createWorkspaceFromDef({
+    await createNestedWorkspaceFromDef({
       name: `${result.name} Workspace ${wsCount + 1}`,
       cwd: result.path,
       metadata: { groupId: id },
@@ -198,7 +198,7 @@ async function createWorkspaceGroupFlow(prefill?: {
     if (newWs) {
       updateWorkspace(id, { primaryWorkspaceId: newWs.id });
       const idx = get(nestedWorkspaces).indexOf(newWs);
-      if (idx >= 0) switchWorkspace(idx);
+      if (idx >= 0) switchNestedWorkspace(idx);
     }
   } catch (err) {
     console.error(
@@ -261,7 +261,7 @@ function registerPerGroupCommands(): void {
       action: () => {
         const count =
           readGroups().find((g) => g.id === group.id)?.workspaceIds.length ?? 0;
-        void createWorkspaceFromDef({
+        void createNestedWorkspaceFromDef({
           name: `${group.name} Workspace ${count + 1}`,
           cwd: group.path,
           metadata: { groupId: group.id },

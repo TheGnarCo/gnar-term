@@ -21,7 +21,10 @@ import {
   promptWorktreeConfig,
   createWorktree,
 } from "./worktree-helpers";
-import { createWorkspaceFromDef, closeWorkspace } from "./workspace-service";
+import {
+  createNestedWorkspaceFromDef,
+  closeNestedWorkspace,
+} from "./workspace-service";
 import { nestedWorkspaces } from "../stores/workspace";
 
 /** Result of a git_merge Tauri command invocation. */
@@ -114,7 +117,7 @@ export async function createWorktreeWorkspace(
  * created the worktree.
  *
  * Returns the workspace id of the newly-created workspace (read from the
- * nestedWorkspaces store immediately after createWorkspaceFromDef returns).
+ * nestedWorkspaces store immediately after createNestedWorkspaceFromDef returns).
  */
 export interface WorktreeWorkspaceConfig {
   repoPath: string;
@@ -197,11 +200,11 @@ export async function createWorktreeWorkspaceFromConfig(
   const wsName =
     config.worktreePath.replace(/\/$/, "").split("/").pop() ||
     `Worktree ${getWorktreeEntries().length + 1}`;
-  // Snapshot workspace ids before createWorkspaceFromDef — diff after
+  // Snapshot workspace ids before createNestedWorkspaceFromDef — diff after
   // the call to find the newly-created workspace's id.
   const prevIds = new Set(get(nestedWorkspaces).map((w) => w.id));
 
-  await createWorkspaceFromDef({
+  await createNestedWorkspaceFromDef({
     name: wsName,
     cwd: config.worktreePath,
     env: { GNARTERM_WORKTREE_ROOT: config.repoPath },
@@ -407,7 +410,7 @@ export function handleWorkspaceCreated(
  * Combined close confirmation for worktree nestedWorkspaces. Shows a single dialog
  * that collects both "confirm close" and "keep/delete worktree" in one step.
  * For non-worktree nestedWorkspaces falls back to the standard confirm prompt.
- * Calls closeWorkspace(idx) on confirm.
+ * Calls closeNestedWorkspace(idx) on confirm.
  */
 export async function confirmAndCloseWorkspace(
   ws: { id: string; name: string; metadata?: Record<string, unknown> },
@@ -456,7 +459,7 @@ export async function confirmAndCloseWorkspace(
       result.action === "delete" ? "delete" : "keep",
     );
   }
-  closeWorkspace(idx);
+  closeNestedWorkspace(idx);
   return true;
 }
 

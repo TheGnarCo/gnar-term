@@ -16,7 +16,7 @@
  *      `isGlobalAgenticDashboard: true` → global scope).
  */
 import type { ExtensionManifest, ExtensionAPI, WorkspaceRef } from "../api";
-import { createWorkspaceFromDef } from "../../lib/services/workspace-service";
+import { createNestedWorkspaceFromDef } from "../../lib/services/workspace-service";
 import {
   closeAutoDashboardsBySource,
   provisionAutoDashboardsForWorkspace,
@@ -376,7 +376,7 @@ async function createAgenticDashboardWorkspace(
   group: WorkspaceRef,
 ): Promise<string> {
   const markdownPath = await writeAgenticDashboardTemplate(api, group);
-  return await createWorkspaceFromDef({
+  return await createNestedWorkspaceFromDef({
     name: "Agents",
     layout: {
       pane: {

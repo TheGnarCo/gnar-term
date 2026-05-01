@@ -23,7 +23,7 @@ import {
 } from "../stores/workspace";
 import { rootRowOrder } from "../stores/root-row-order";
 import { isTerminalSurface } from "../types";
-import { createWorkspace } from "./workspace-service";
+import { createNestedWorkspace } from "./workspace-service";
 import {
   flashFocusedPane,
   focusDirection,
@@ -66,7 +66,8 @@ export function handleAppKeydown(
   // command palette (the palette uses ⇧⌘ for most entries).
   if (isMac && e.metaKey && !shift && !alt) {
     const cmdShortcuts: Record<string, () => void> = {
-      n: () => createWorkspace(`Workspace ${get(nestedWorkspaces).length + 1}`),
+      n: () =>
+        createNestedWorkspace(`Workspace ${get(nestedWorkspaces).length + 1}`),
       t: () => newSurfaceFromSidebar(),
       b: () => primarySidebarVisible.update((v) => !v),
       k: () => {

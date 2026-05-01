@@ -292,7 +292,7 @@ export function createExtensionAPI(
       secondarySidebarVisible.update((v) => !v);
     },
 
-    createWorkspace(
+    createNestedWorkspace(
       name: string,
       cwd: string,
       options?: {
@@ -323,10 +323,10 @@ export function createExtensionAPI(
         props,
       });
     },
-    switchWorkspace(workspaceId: string) {
+    switchNestedWorkspace(workspaceId: string) {
       pendingAction.set({ type: "switch-workspace", workspaceId });
     },
-    closeWorkspace(workspaceId: string) {
+    closeNestedWorkspace(workspaceId: string) {
       pendingAction.set({ type: "close-workspace", workspaceId });
     },
 

@@ -1,10 +1,10 @@
 /**
  * Tests for sidebar tab-drop services:
- *   - createWorkspaceFromSurface  → spawn a new workspace with the surface
+ *   - createNestedWorkspaceFromSurface  → spawn a new workspace with the surface
  *   - moveSurfaceToWorkspace      → move the surface into an existing workspace
  *
  * Both move the surface out of its source pane (collapsing the pane
- * if it empties) and persist. createWorkspaceFromSurface inherits the
+ * if it empties) and persist. createNestedWorkspaceFromSurface inherits the
  * source workspace's groupId, refuses to leave the source empty, and
  * registers the new workspace via appendRootRow + addNestedWorkspaceToWorkspace
  * (when the source belongs to a group).
@@ -95,7 +95,7 @@ import {
   type SplitNode,
   type TerminalSurface,
 } from "../lib/types";
-import { createWorkspaceFromSurface } from "../lib/services/workspace-service";
+import { createNestedWorkspaceFromSurface } from "../lib/services/workspace-service";
 import {
   moveSurfaceToWorkspace,
   expandWorkspaceIntoPanes,
@@ -162,7 +162,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe("createWorkspaceFromSurface", () => {
+describe("createNestedWorkspaceFromSurface", () => {
   it("creates a new workspace containing the dragged surface", () => {
     const sA = mockSurface({ title: "A" });
     const sB = mockSurface({ title: "B" });
@@ -171,7 +171,7 @@ describe("createWorkspaceFromSurface", () => {
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
-    createWorkspaceFromSurface(sA.id, pane.id, ws.id);
+    createNestedWorkspaceFromSurface(sA.id, pane.id, ws.id);
 
     const updated = get(nestedWorkspaces);
     expect(updated.length).toBe(2);
@@ -194,7 +194,7 @@ describe("createWorkspaceFromSurface", () => {
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
-    createWorkspaceFromSurface(sA.id, pane.id, ws.id);
+    createNestedWorkspaceFromSurface(sA.id, pane.id, ws.id);
 
     const updated = get(nestedWorkspaces);
     const newWs = updated[1]!;
@@ -210,7 +210,7 @@ describe("createWorkspaceFromSurface", () => {
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
-    createWorkspaceFromSurface(sA.id, pane.id, ws.id);
+    createNestedWorkspaceFromSurface(sA.id, pane.id, ws.id);
 
     const updated = get(nestedWorkspaces);
     const newWs = updated[1]!;
@@ -225,7 +225,7 @@ describe("createWorkspaceFromSurface", () => {
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
-    createWorkspaceFromSurface(sA.id, pane.id, ws.id);
+    createNestedWorkspaceFromSurface(sA.id, pane.id, ws.id);
 
     const updated = get(nestedWorkspaces);
     expect(updated.length).toBe(1);
@@ -252,7 +252,7 @@ describe("createWorkspaceFromSurface", () => {
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
-    createWorkspaceFromSurface(sA.id, sourcePane.id, ws.id);
+    createNestedWorkspaceFromSurface(sA.id, sourcePane.id, ws.id);
 
     // Source workspace's split collapses — only otherPane remains.
     const updated = get(nestedWorkspaces);
@@ -270,7 +270,7 @@ describe("createWorkspaceFromSurface", () => {
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
-    createWorkspaceFromSurface(sA.id, pane.id, ws.id);
+    createNestedWorkspaceFromSurface(sA.id, pane.id, ws.id);
 
     const updated = get(nestedWorkspaces);
     const newWs = updated[1]!;
@@ -288,7 +288,7 @@ describe("createWorkspaceFromSurface", () => {
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
-    createWorkspaceFromSurface(sA.id, pane.id, ws.id);
+    createNestedWorkspaceFromSurface(sA.id, pane.id, ws.id);
     vi.advanceTimersByTime(2000);
     expect(saveState).toHaveBeenCalled();
   });
@@ -724,7 +724,7 @@ describe("mergeWorkspaceIntoPane", () => {
   });
 });
 
-describe("createWorkspaceFromSurface — targetGroupId", () => {
+describe("createNestedWorkspaceFromSurface — targetGroupId", () => {
   it("sets groupId metadata using targetGroupId when srcWs has no groupId", () => {
     const sA = mockSurface({ title: "A" });
     const sB = mockSurface({ title: "B" });
@@ -733,7 +733,7 @@ describe("createWorkspaceFromSurface — targetGroupId", () => {
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
-    createWorkspaceFromSurface(sA.id, pane.id, ws.id, {
+    createNestedWorkspaceFromSurface(sA.id, pane.id, ws.id, {
       kind: "group",
       positionInGroup: 0,
       targetGroupId: "target-group-1",
@@ -752,7 +752,7 @@ describe("createWorkspaceFromSurface — targetGroupId", () => {
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
-    createWorkspaceFromSurface(sA.id, pane.id, ws.id, {
+    createNestedWorkspaceFromSurface(sA.id, pane.id, ws.id, {
       kind: "group",
       positionInGroup: 2,
       targetGroupId: "target-group-1",
@@ -778,7 +778,7 @@ describe("createWorkspaceFromSurface — targetGroupId", () => {
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
-    createWorkspaceFromSurface(sA.id, pane.id, ws.id, {
+    createNestedWorkspaceFromSurface(sA.id, pane.id, ws.id, {
       kind: "group",
       positionInGroup: 0,
     });
@@ -804,7 +804,7 @@ describe("createWorkspaceFromSurface — targetGroupId", () => {
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
-    createWorkspaceFromSurface(sA.id, pane.id, ws.id, {
+    createNestedWorkspaceFromSurface(sA.id, pane.id, ws.id, {
       kind: "group",
       positionInGroup: 0,
       targetGroupId: "target-group-override",

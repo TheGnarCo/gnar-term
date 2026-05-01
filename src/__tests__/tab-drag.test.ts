@@ -47,7 +47,7 @@ const mergeTabToPaneSpy = vi.fn();
 const createWorkspaceFromSurfaceSpy = vi.fn();
 
 vi.mock("../lib/services/workspace-service", () => ({
-  createWorkspaceFromSurface: (...args: unknown[]) =>
+  createNestedWorkspaceFromSurface: (...args: unknown[]) =>
     createWorkspaceFromSurfaceSpy(...args),
 }));
 
@@ -447,7 +447,7 @@ describe("tab-drag — commitTabDrop", () => {
     );
   });
 
-  it("calls createWorkspaceFromSurface with root insertIdx for new-workspace/before", () => {
+  it("calls createNestedWorkspaceFromSurface with root insertIdx for new-workspace/before", () => {
     const sA = mockTerminalSurface({ title: "A" });
     const sB = mockTerminalSurface({ title: "B" });
     const pane = makePane([sA, sB]);
@@ -498,7 +498,7 @@ describe("tab-drag — commitTabDrop", () => {
     );
   });
 
-  it("calls createWorkspaceFromSurface with group positionInGroup for new-workspace-in-group/before", () => {
+  it("calls createNestedWorkspaceFromSurface with group positionInGroup for new-workspace-in-group/before", () => {
     const sA = mockTerminalSurface({ title: "A" });
     const sB = mockTerminalSurface({ title: "B" });
     const pane = makePane([sA, sB]);
@@ -544,7 +544,7 @@ describe("tab-drag — commitTabDrop", () => {
     );
   });
 
-  it("calls createWorkspaceFromSurface with group positionInGroup for new-workspace-in-group/after", () => {
+  it("calls createNestedWorkspaceFromSurface with group positionInGroup for new-workspace-in-group/after", () => {
     const sA = mockTerminalSurface({ title: "A" });
     const sB = mockTerminalSurface({ title: "B" });
     const pane = makePane([sA, sB]);
@@ -917,7 +917,7 @@ describe("tab-drag — detectDropTarget: root tab over nested workspace row", ()
 });
 
 describe("tab-drag — commitTabDrop: new-workspace-in-group passes targetGroupId", () => {
-  it("calls createWorkspaceFromSurface with targetGroupId matching the drop group", () => {
+  it("calls createNestedWorkspaceFromSurface with targetGroupId matching the drop group", () => {
     const sA = mockTerminalSurface({ title: "A" });
     const sB = mockTerminalSurface({ title: "B" });
     const pane = makePane([sA, sB]);

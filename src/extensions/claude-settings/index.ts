@@ -1,5 +1,5 @@
 import type { ExtensionManifest, ExtensionAPI, WorkspaceRef } from "../api";
-import { createWorkspaceFromDef } from "../../lib/services/workspace-service";
+import { createNestedWorkspaceFromDef } from "../../lib/services/workspace-service";
 import {
   closeAutoDashboardsBySource,
   provisionAutoDashboardsForWorkspace,
@@ -102,7 +102,7 @@ async function createClaudeSettingsDashboard(
   group: WorkspaceRef,
 ): Promise<string> {
   const mdPath = await writeClaudeSettingsTemplate(api, group);
-  return createWorkspaceFromDef({
+  return createNestedWorkspaceFromDef({
     name: "Claude Settings",
     layout: {
       pane: {

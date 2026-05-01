@@ -25,7 +25,7 @@
   } from "../stores/workspace";
   import { rootRowOrder } from "../stores/root-row-order";
   import { rootRowRendererStore } from "../services/root-row-renderer-registry";
-  import { switchWorkspace } from "../services/workspace-service";
+  import { switchNestedWorkspace } from "../services/workspace-service";
   import { newSurface } from "../services/surface-service";
   import { wsMeta } from "../services/service-helpers";
 
@@ -74,7 +74,7 @@
   // When the current empty pane lives inside a workspace, clicking its
   // own entry should spawn a terminal in the pane rather than switch
   // to itself (a no-op would feel broken). Every other click routes
-  // to switchWorkspace / the row's renderer label for context.
+  // to switchNestedWorkspace / the row's renderer label for context.
   $: currentWs = $nestedWorkspaces[$activeNestedWorkspaceIdx];
   function activateWorkspaceAt(idx: number) {
     if (idx === $activeNestedWorkspaceIdx && currentWs) {
@@ -87,7 +87,7 @@
       }
       return;
     }
-    switchWorkspace(idx);
+    switchNestedWorkspace(idx);
   }
 
   // Build a "jump list" modeled after the sidebar rootRowOrder. Project
@@ -95,7 +95,7 @@
   // workspace); nested nestedWorkspaces fan out below. Standalone nestedWorkspaces
   // render as leaf entries. Non-workspace/project rows (e.g. agent
   // dashboards) are rendered through their label resolver so they show
-  // something, but lack an activation handler beyond switchWorkspace —
+  // something, but lack an activation handler beyond switchNestedWorkspace —
   // dashboards open as preview surfaces via their own row click, not
   // through this launcher.
   interface JumpRow {

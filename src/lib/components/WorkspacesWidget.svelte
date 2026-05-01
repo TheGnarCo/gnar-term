@@ -6,7 +6,7 @@
     getDashboardHost,
     deriveDashboardScope,
   } from "../contexts/dashboard-host";
-  import { switchWorkspace } from "../services/workspace-service";
+  import { switchNestedWorkspace } from "../services/workspace-service";
   import { resolveGroupColor } from "../theme-data";
   import { theme } from "../stores/theme";
   import DashboardTileIcon from "./DashboardTileIcon.svelte";
@@ -39,7 +39,7 @@
 
   function navigate(wsId: string): void {
     const idx = $nestedWorkspaces.findIndex((ws) => ws.id === wsId);
-    if (idx >= 0) switchWorkspace(idx);
+    if (idx >= 0) switchNestedWorkspace(idx);
   }
 
   function getContribInfo(ws: import("../types").NestedWorkspace): {

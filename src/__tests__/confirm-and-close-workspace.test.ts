@@ -39,7 +39,7 @@ vi.mock("../lib/services/workspace-service", async (importOriginal) => {
     await importOriginal<typeof import("../lib/services/workspace-service")>();
   return {
     ...actual,
-    closeWorkspace: (idx: number) => mockCloseWorkspace(idx),
+    closeNestedWorkspace: (idx: number) => mockCloseWorkspace(idx),
   };
 });
 

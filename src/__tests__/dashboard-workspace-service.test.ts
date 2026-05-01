@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { get } from "svelte/store";
 
 vi.mock("../lib/services/workspace-service", () => ({
-  createWorkspaceFromDef: vi.fn().mockResolvedValue("new-ws-id"),
-  switchWorkspace: vi.fn(),
+  createNestedWorkspaceFromDef: vi.fn().mockResolvedValue("new-ws-id"),
+  switchNestedWorkspace: vi.fn(),
 }));
 
 // Minimal mock of the nestedWorkspaces store — tests override subscribe per-test.
@@ -25,8 +25,8 @@ import {
   clearDashboardRegistry,
 } from "../lib/services/dashboard-workspace-service";
 import {
-  createWorkspaceFromDef,
-  switchWorkspace,
+  createNestedWorkspaceFromDef,
+  switchNestedWorkspace,
 } from "../lib/services/workspace-service";
 import { nestedWorkspaces } from "../lib/stores/workspace";
 
@@ -83,8 +83,8 @@ describe("spawnOrNavigate", () => {
 
   it("does nothing for unregistered id", async () => {
     await spawnOrNavigate("ext:nonexistent");
-    expect(createWorkspaceFromDef).not.toHaveBeenCalled();
-    expect(switchWorkspace).not.toHaveBeenCalled();
+    expect(createNestedWorkspaceFromDef).not.toHaveBeenCalled();
+    expect(switchNestedWorkspace).not.toHaveBeenCalled();
   });
 
   it("creates workspace when none exists", async () => {
@@ -94,7 +94,7 @@ describe("spawnOrNavigate", () => {
     });
     registerDashboardWorkspaceType(makeEntry("ext:foo"));
     await spawnOrNavigate("ext:foo");
-    expect(createWorkspaceFromDef).toHaveBeenCalledWith(
+    expect(createNestedWorkspaceFromDef).toHaveBeenCalledWith(
       expect.objectContaining({
         name: "Foo",
         layout: { pane: { surfaces: [] } },
@@ -104,7 +104,7 @@ describe("spawnOrNavigate", () => {
         }),
       }),
     );
-    expect(switchWorkspace).not.toHaveBeenCalled();
+    expect(switchNestedWorkspace).not.toHaveBeenCalled();
   });
 
   it("switches to existing workspace instead of creating", async () => {
@@ -119,7 +119,7 @@ describe("spawnOrNavigate", () => {
     });
     registerDashboardWorkspaceType(makeEntry("ext:foo"));
     await spawnOrNavigate("ext:foo");
-    expect(switchWorkspace).toHaveBeenCalledWith(0);
-    expect(createWorkspaceFromDef).not.toHaveBeenCalled();
+    expect(switchNestedWorkspace).toHaveBeenCalledWith(0);
+    expect(createNestedWorkspaceFromDef).not.toHaveBeenCalled();
   });
 });

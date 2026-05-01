@@ -50,9 +50,9 @@ import { eventBus } from "../lib/services/event-bus";
 import type { AppEvent } from "../lib/services/event-bus";
 
 import {
-  switchWorkspace,
-  closeWorkspace,
-  renameWorkspace,
+  switchNestedWorkspace,
+  closeNestedWorkspace,
+  renameNestedWorkspace,
   reorderWorkspaces,
   serializeLayout,
   persistWorkspaces,
@@ -173,14 +173,14 @@ afterEach(() => {
 // ============================================================
 
 describe("workspace-service", () => {
-  describe("switchWorkspace", () => {
+  describe("switchNestedWorkspace", () => {
     it("sets activeNestedWorkspaceIdx to the given index", () => {
       const ws1 = makeWorkspace({ name: "WS1" });
       const ws2 = makeWorkspace({ name: "WS2" });
       nestedWorkspaces.set([ws1, ws2]);
       activeNestedWorkspaceIdx.set(0);
 
-      switchWorkspace(1);
+      switchNestedWorkspace(1);
 
       expect(get(activeNestedWorkspaceIdx)).toBe(1);
     });
@@ -191,7 +191,7 @@ describe("workspace-service", () => {
       nestedWorkspaces.set([ws1, ws2]);
       activeNestedWorkspaceIdx.set(0);
 
-      const events = collectEvents(() => switchWorkspace(1));
+      const events = collectEvents(() => switchNestedWorkspace(1));
 
       expect(events).toHaveLength(1);
       expect(events[0]).toMatchObject({
@@ -206,7 +206,7 @@ describe("workspace-service", () => {
       nestedWorkspaces.set([ws]);
       activeNestedWorkspaceIdx.set(0);
 
-      switchWorkspace(-1);
+      switchNestedWorkspace(-1);
 
       expect(get(activeNestedWorkspaceIdx)).toBe(0);
     });
@@ -216,7 +216,7 @@ describe("workspace-service", () => {
       nestedWorkspaces.set([ws]);
       activeNestedWorkspaceIdx.set(0);
 
-      switchWorkspace(5);
+      switchNestedWorkspace(5);
 
       expect(get(activeNestedWorkspaceIdx)).toBe(0);
     });
@@ -226,7 +226,7 @@ describe("workspace-service", () => {
       nestedWorkspaces.set([ws]);
       activeNestedWorkspaceIdx.set(-1);
 
-      const events = collectEvents(() => switchWorkspace(0));
+      const events = collectEvents(() => switchNestedWorkspace(0));
 
       expect(events[0]).toMatchObject({
         type: "workspace:activated",
@@ -235,14 +235,14 @@ describe("workspace-service", () => {
     });
   });
 
-  describe("closeWorkspace", () => {
+  describe("closeNestedWorkspace", () => {
     it("removes the workspace at the given index", () => {
       const ws1 = makeWorkspace({ name: "WS1" });
       const ws2 = makeWorkspace({ name: "WS2" });
       nestedWorkspaces.set([ws1, ws2]);
       activeNestedWorkspaceIdx.set(0);
 
-      closeWorkspace(0);
+      closeNestedWorkspace(0);
 
       const list = get(nestedWorkspaces);
       expect(list).toHaveLength(1);
@@ -254,7 +254,7 @@ describe("workspace-service", () => {
       nestedWorkspaces.set([ws]);
       activeNestedWorkspaceIdx.set(0);
 
-      closeWorkspace(0);
+      closeNestedWorkspace(0);
 
       expect(get(nestedWorkspaces)).toHaveLength(0);
       expect(get(activeNestedWorkspaceIdx)).toBe(-1);
@@ -266,7 +266,7 @@ describe("workspace-service", () => {
       nestedWorkspaces.set([ws1, ws2]);
       activeNestedWorkspaceIdx.set(1);
 
-      closeWorkspace(1);
+      closeNestedWorkspace(1);
 
       expect(get(activeNestedWorkspaceIdx)).toBe(0);
     });
@@ -282,7 +282,7 @@ describe("workspace-service", () => {
       nestedWorkspaces.set([ws1, ws2]);
       activeNestedWorkspaceIdx.set(0);
 
-      closeWorkspace(0);
+      closeNestedWorkspace(0);
 
       expect(s.terminal.dispose).toHaveBeenCalled();
       expect(invoke).toHaveBeenCalledWith("kill_pty", { ptyId: 42 });
@@ -300,7 +300,7 @@ describe("workspace-service", () => {
       nestedWorkspaces.set([ws1, ws2]);
       activeNestedWorkspaceIdx.set(0);
 
-      closeWorkspace(0);
+      closeNestedWorkspace(0);
 
       expect(disconnect).toHaveBeenCalled();
     });
@@ -311,7 +311,7 @@ describe("workspace-service", () => {
       nestedWorkspaces.set([ws1, ws2]);
       activeNestedWorkspaceIdx.set(0);
 
-      const events = collectEvents(() => closeWorkspace(0));
+      const events = collectEvents(() => closeNestedWorkspace(0));
 
       expect(events).toContainEqual(
         expect.objectContaining({ type: "workspace:closed", id: ws1.id }),
@@ -319,13 +319,13 @@ describe("workspace-service", () => {
     });
   });
 
-  describe("renameWorkspace", () => {
+  describe("renameNestedWorkspace", () => {
     it("updates the workspace name", () => {
       const ws = makeWorkspace({ name: "Old Name" });
       nestedWorkspaces.set([ws]);
       activeNestedWorkspaceIdx.set(0);
 
-      renameWorkspace(0, "New Name");
+      renameNestedWorkspace(0, "New Name");
 
       expect(get(nestedWorkspaces)[0].name).toBe("New Name");
     });
@@ -335,7 +335,7 @@ describe("workspace-service", () => {
       nestedWorkspaces.set([ws]);
       activeNestedWorkspaceIdx.set(0);
 
-      const events = collectEvents(() => renameWorkspace(0, "Beta"));
+      const events = collectEvents(() => renameNestedWorkspace(0, "Beta"));
 
       expect(events[0]).toMatchObject({
         type: "workspace:renamed",

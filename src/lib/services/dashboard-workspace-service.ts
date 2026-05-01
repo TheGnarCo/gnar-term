@@ -1,7 +1,10 @@
 import { derived, get, type Readable } from "svelte/store";
 import type { Component } from "svelte";
 import { nestedWorkspaces } from "../stores/workspace";
-import { createWorkspaceFromDef, switchWorkspace } from "./workspace-service";
+import {
+  createNestedWorkspaceFromDef,
+  switchNestedWorkspace,
+} from "./workspace-service";
 import { createRegistry } from "./create-registry";
 
 interface DashboardWorkspaceEntry {
@@ -55,11 +58,11 @@ export async function spawnOrNavigate(id: string): Promise<void> {
   );
 
   if (existingIdx >= 0) {
-    switchWorkspace(existingIdx);
+    switchNestedWorkspace(existingIdx);
     return;
   }
 
-  await createWorkspaceFromDef({
+  await createNestedWorkspaceFromDef({
     name: entry.label,
     metadata: {
       isDashboard: true,

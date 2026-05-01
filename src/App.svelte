@@ -669,7 +669,14 @@
     // known set is stable. bootstrapRootRowOrder re-sorts to match the
     // persisted order and appends any brand-new entity at the end.
     const currentOrder = get(rootRowOrder);
-    const extensionRows = currentOrder.filter((r) => r.kind !== "workspace");
+    // Pass everything except nested-workspace rows through as
+    // extensionRows — those are passed via the first arg below. Pre-
+    // rename this filter read `kind !== "workspace"` because "workspace"
+    // used to mean nested-workspace; after the umbrella rename, that
+    // filter would silently drop persisted umbrella rows on reload.
+    const extensionRows = currentOrder.filter(
+      (r) => r.kind !== "nested-workspace",
+    );
     const claimed = get(claimedWorkspaceIds);
     bootstrapRootRowOrder(
       get(nestedWorkspaces)

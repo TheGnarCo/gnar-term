@@ -32,12 +32,9 @@ describe("sidebar: empty workspace zones render no placeholder", () => {
     expect(oneLine).not.toMatch(/\{#if\s+entries\.length\s*===\s*0\s*\}/);
   });
 
-  it("WorkspaceListBlock renders nothing for an empty rootRowOrder", () => {
-    // The dashed "No nestedWorkspaces" placeholder leaked the internal
-    // identifier into UI copy AND caused a brief flash on reload before
-    // hydration completed. The block must render no empty-state at all.
+  it("WorkspaceListBlock has no empty-state placeholder (truly empty when no rows)", () => {
     expect(LIST_BLOCK).not.toMatch(/No nestedWorkspaces/i);
-    expect(LIST_BLOCK).not.toMatch(/No workspaces/i);
+    expect(LIST_BLOCK).not.toMatch(/No workspaces/);
     const oneLine = LIST_BLOCK.replace(/\s+/g, " ");
     expect(oneLine).not.toMatch(/\{#if\s+renderedRows\.length\s*===\s*0\s*\}/);
   });

@@ -302,7 +302,6 @@
         "
         on:contextmenu={onBannerContextMenu}
         on:click={onBannerClick}
-        on:mousedown={(e) => onGripMouseDown?.(e)}
         on:mouseenter={() => {
           bannerHovered = true;
           handleContainerEnter();

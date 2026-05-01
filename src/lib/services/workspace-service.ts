@@ -52,10 +52,10 @@ function emitStateChanged(metadata: Record<string, unknown> = {}): void {
   });
 }
 
-export function addWorkspace(group: Workspace): void {
-  setWorkspaces([...getWorkspaces(), group]);
-  appendRootRow({ kind: "workspace", id: group.id });
-  emitStateChanged({ parentWorkspaceId: group.id });
+export function addWorkspace(workspace: Workspace): void {
+  setWorkspaces([...getWorkspaces(), workspace]);
+  appendRootRow({ kind: "workspace", id: workspace.id });
+  emitStateChanged({ parentWorkspaceId: workspace.id });
 }
 
 export function updateWorkspace(
@@ -70,15 +70,15 @@ export function updateWorkspace(
 }
 
 /**
- * Toggle the `locked` flag on a workspace group. Locked groups have
+ * Toggle the `locked` flag on a workspace. Locked workspaces have
  * their drag-reorder, delete, and archive affordances suppressed.
- * No-op if no group with the given id exists.
+ * No-op if no workspace with the given id exists.
  */
 export function toggleWorkspaceLock(id: string): void {
-  const groups = getWorkspaces();
-  const idx = groups.findIndex((g) => g.id === id);
+  const workspaces = getWorkspaces();
+  const idx = workspaces.findIndex((g) => g.id === id);
   if (idx === -1) return;
-  const next = groups.map((g) =>
+  const next = workspaces.map((g) =>
     g.id === id ? { ...g, locked: !g.locked } : g,
   );
   setWorkspaces(next);
@@ -86,18 +86,18 @@ export function toggleWorkspaceLock(id: string): void {
 }
 
 export function deleteWorkspace(id: string): void {
-  const group = getWorkspace(id);
-  if (group?.locked) return;
+  const workspace = getWorkspace(id);
+  if (workspace?.locked) return;
   const next = getWorkspaces().filter((g) => g.id !== id);
   setWorkspaces(next);
   removeRootRow({ kind: "workspace", id });
-  if (group) releaseWorkspaceDirtyStore(group.path);
+  if (workspace) releaseWorkspaceDirtyStore(workspace.path);
   emitStateChanged({ parentWorkspaceId: id });
 }
 
 /**
  * All nestedWorkspaces tagged with `metadata.parentWorkspaceId === parentWorkspaceId`. This is the
- * canonical group-membership predicate for core operations (close sweeps,
+ * canonical workspace-membership predicate for core operations (close sweeps,
  * reclaim, reconcile). Extension-layer consumers that need a CWD-prefix
  * fallback for unclaimed nestedWorkspaces should compose with this result.
  */
@@ -112,7 +112,7 @@ export function getWorktreeWorkspaces(
 /**
  * Close every workspace tagged with `metadata.parentWorkspaceId === id`. Deletion
  * ripples through the nestedWorkspaces store, so we resolve each workspace by
- * id after recollecting the list. Dashboard nestedWorkspaces for the group
+ * id after recollecting the list. Dashboard nestedWorkspaces for the workspace
  * match the same predicate and are closed here too; callers should not
  * close the dashboard separately.
  */
@@ -127,34 +127,38 @@ export function closeNestedWorkspacesInWorkspace(id: string): void {
 
 /**
  * Appends `workspaceId` to `parentWorkspaceId`'s nestedWorkspaceIds if not already
- * present. No-op when the group is missing (e.g. was just deleted).
+ * present. No-op when the workspace is missing (e.g. was just deleted).
  * Returns true when a change was persisted.
  *
  * Enforces the single-primary invariant: throws if adding a non-worktree,
- * non-dashboard workspace to a group that already has a primaryNestedWorkspaceId.
+ * non-dashboard workspace to a workspace that already has a primaryNestedWorkspaceId.
  */
 export function addNestedWorkspaceToWorkspace(
   parentWorkspaceId: string,
   workspaceId: string,
 ): boolean {
-  const groups = getWorkspaces();
-  const group = groups.find((g) => g.id === parentWorkspaceId);
-  if (!group) return false;
-  if (group.nestedWorkspaceIds.includes(workspaceId)) return false;
+  const workspaces = getWorkspaces();
+  const workspace = workspaces.find((g) => g.id === parentWorkspaceId);
+  if (!workspace) return false;
+  if (workspace.nestedWorkspaceIds.includes(workspaceId)) return false;
 
   // Enforce single-primary invariant.
   const incomingWs = get(nestedWorkspaces).find((w) => w.id === workspaceId);
   if (incomingWs) {
     const md = wsMeta(incomingWs);
-    if (!md.worktreePath && !md.isDashboard && group.primaryNestedWorkspaceId) {
+    if (
+      !md.worktreePath &&
+      !md.isDashboard &&
+      workspace.primaryNestedWorkspaceId
+    ) {
       throw new Error(
-        `Group "${parentWorkspaceId}" already has a primary workspace "${group.primaryNestedWorkspaceId}". ` +
+        `Workspace "${parentWorkspaceId}" already has a primary workspace "${workspace.primaryNestedWorkspaceId}". ` +
           `Cannot add a second non-worktree workspace "${workspaceId}".`,
       );
     }
   }
 
-  const next = groups.map((g) => {
+  const next = workspaces.map((g) => {
     if (g.id === parentWorkspaceId) {
       return {
         ...g,
@@ -170,7 +174,7 @@ export function addNestedWorkspaceToWorkspace(
 
 /**
  * Inserts `workspaceId` into `parentWorkspaceId`'s nestedWorkspaceIds at `positionInWorkspace`.
- * No-op when the group is missing or already contains the workspace.
+ * No-op when the workspace is missing or already contains the workspace.
  * Returns true when a change was persisted.
  */
 export function insertNestedWorkspaceIntoWorkspace(
@@ -178,9 +182,9 @@ export function insertNestedWorkspaceIntoWorkspace(
   workspaceId: string,
   positionInWorkspace: number,
 ): boolean {
-  const groups = getWorkspaces();
+  const workspaces = getWorkspaces();
   let changed = false;
-  const next = groups.map((g) => {
+  const next = workspaces.map((g) => {
     if (g.id !== parentWorkspaceId) return g;
     if (g.nestedWorkspaceIds.includes(workspaceId)) return g;
     changed = true;
@@ -199,8 +203,8 @@ export function insertNestedWorkspaceIntoWorkspace(
 }
 
 /**
- * Strips `workspaceId` from every group's nestedWorkspaceIds. Used when a
- * workspace is closed — the group membership is inferred from workspace
+ * Strips `workspaceId` from every workspace's nestedWorkspaceIds. Used when a
+ * workspace is closed — the workspace membership is inferred from workspace
  * metadata, so removing from all is cheap and idempotent.
  */
 export function removeNestedWorkspaceFromAllWorkspaces(
@@ -215,28 +219,28 @@ export function removeNestedWorkspaceFromAllWorkspaces(
 }
 
 /**
- * Path of the markdown file backing a group's Dashboard. Lives inside
- * the group's own `.gnar-term/` directory so multi-machine sync /
- * checkout follows the group itself.
+ * Path of the markdown file backing a workspace's Dashboard. Lives inside
+ * the workspace's own `.gnar-term/` directory so multi-machine sync /
+ * checkout follows the workspace itself.
  */
 export function workspaceDashboardPath(workspacePath: string): string {
   return `${workspacePath.replace(/\/+$/, "")}/.gnar-term/project-dashboard.md`;
 }
 
-function buildWorkspaceDashboardMarkdown(group: Workspace): string {
-  // The Group Dashboard is the generic, agent-agnostic landing page for
+function buildWorkspaceDashboardMarkdown(workspace: Workspace): string {
+  // The Workspace Dashboard is the generic, agent-agnostic landing page for
   // a Workspace. It surfaces GitHub work-tracker context — open
   // issues + open PRs — side by side, as a passive read-only browse
-  // panel. Spawn-on-issue lives on the per-group Agentic Dashboard tile
+  // panel. Spawn-on-issue lives on the per-workspace Agentic Dashboard tile
   // (which mounts the same `gnar:issues` widget without `displayOnly`).
   //
   // `gnar:columns`, `gnar:issues`, and `gnar:prs` are all registered by
   // the agentic extension. When that extension is disabled the markdown
   // previewer renders unknown widgets as a fallback, so the Dashboard
   // degrades gracefully for users who don't want agents.
-  return `# ${group.name}
+  return `# ${workspace.name}
 
-Project at \`${group.path}\`.
+Project at \`${workspace.path}\`.
 
 \`\`\`gnar:workspaces
 \`\`\`
@@ -255,16 +259,16 @@ children:
 }
 
 /**
- * Write the Group Overview Dashboard markdown template to `path`.
+ * Write the Workspace Overview Dashboard markdown template to `path`.
  *
  * `force: true` overwrites any existing file — used by the
- * "Regenerate" action in Group Settings to refresh user-stale
+ * "Regenerate" action in Workspace Settings to refresh user-stale
  * templates after the seeded layout changes. The default skips the
  * write when a file is already present so first-create on an existing
- * group never trampling user customizations.
+ * workspace never trampling user customizations.
  */
 async function writeWorkspaceDashboardTemplate(
-  group: Workspace,
+  workspace: Workspace,
   path: string,
   options: { force?: boolean } = {},
 ): Promise<void> {
@@ -278,22 +282,22 @@ async function writeWorkspaceDashboardTemplate(
   await invoke("ensure_dir", { path: dir });
   await invoke("write_file", {
     path,
-    content: buildWorkspaceDashboardMarkdown(group),
+    content: buildWorkspaceDashboardMarkdown(workspace),
   });
 }
 
 /**
- * Public regenerate hook for the Group Overview Dashboard
+ * Public regenerate hook for the Workspace Overview Dashboard
  * contribution. Force-rewrites the markdown at `workspaceDashboardPath`;
  * the preview surface watching that file picks up the change without
  * needing the workspace to be closed/recreated.
  */
 export async function regenerateWorkspaceDashboardTemplate(
-  group: Workspace,
+  workspace: Workspace,
 ): Promise<void> {
   await writeWorkspaceDashboardTemplate(
-    group,
-    workspaceDashboardPath(group.path),
+    workspace,
+    workspaceDashboardPath(workspace.path),
     {
       force: true,
     },
@@ -302,9 +306,9 @@ export async function regenerateWorkspaceDashboardTemplate(
 
 /**
  * Remove the legacy `## Active Agents` section (heading + adjacent
- * `gnar:agent-list` fenced code block) from group Overview markdown.
+ * `gnar:agent-list` fenced code block) from workspace Overview markdown.
  *
- * Older templates emitted this section into every group's
+ * Older templates emitted this section into every workspace's
  * `project-dashboard.md`; once the Agentic Dashboard became its own
  * tile the widget's presence on the Overview was redundant. The
  * template stopped emitting it, but existing user files kept the
@@ -344,7 +348,7 @@ async function scrubWorkspaceDashboardActiveAgents(
 }
 
 export async function migrateWorkspaceDashboardWidgets(
-  group: Workspace,
+  workspace: Workspace,
   path: string,
 ): Promise<void> {
   try {
@@ -369,7 +373,7 @@ export async function migrateWorkspaceDashboardWidgets(
 }
 
 function createDashboardWorkspaceFromDef(
-  group: Workspace,
+  workspace: Workspace,
   name: string,
   contribId: string,
   surfaces: SurfaceDef[],
@@ -379,30 +383,30 @@ function createDashboardWorkspaceFromDef(
     layout: { pane: { surfaces } },
     metadata: {
       isDashboard: true,
-      parentWorkspaceId: group.id,
+      parentWorkspaceId: workspace.id,
       dashboardContributionId: contribId,
     },
   });
 }
 
 /**
- * Create the Dashboard workspace for a group: a constrained workspace
+ * Create the Dashboard workspace for a workspace: a constrained workspace
  * (metadata.isDashboard = true) hosting a single Live Preview of the
- * group's markdown file. Returns the new workspace id so the group
+ * workspace's markdown file. Returns the new workspace id so the workspace
  * record can link to it.
  */
 export async function createWorkspaceDashboardNestedWorkspace(
-  group: Workspace,
+  workspace: Workspace,
 ): Promise<string> {
-  const path = workspaceDashboardPath(group.path);
+  const path = workspaceDashboardPath(workspace.path);
   try {
-    await writeWorkspaceDashboardTemplate(group, path);
+    await writeWorkspaceDashboardTemplate(workspace, path);
   } catch {
     // Best-effort write — the workspace can still be created; the
     // preview surface will surface the backing-file error if relevant.
   }
-  return createDashboardWorkspaceFromDef(group, "Dashboard", "group", [
-    { type: "preview", path, name: group.name, focus: true },
+  return createDashboardWorkspaceFromDef(workspace, "Dashboard", "group", [
+    { type: "preview", path, name: workspace.name, focus: true },
   ]);
 }
 
@@ -414,18 +418,18 @@ export async function createWorkspaceDashboardNestedWorkspace(
  * startup.
  *
  * Inference rules (preview-surface path-based):
- *   - backs the group's `project-dashboard.md` → `"group"`
- *   - backs the group's `.gnar-term/agentic-dashboard.md` → `"agentic"`
+ *   - backs the workspace's `project-dashboard.md` → `"group"`
+ *   - backs the workspace's `.gnar-term/agentic-dashboard.md` → `"agentic"`
  *
  * Runs in a single nestedWorkspaces.update so subscribers see one state
  * transition. Idempotent: any workspace whose stamp is already set is
  * left alone.
  */
 function backfillDashboardContributionIds(): void {
-  const groups = getWorkspaces();
-  if (groups.length === 0) return;
+  const workspaces = getWorkspaces();
+  if (workspaces.length === 0) return;
   const workspaceById = new Map<string, Workspace>();
-  for (const g of groups) workspaceById.set(g.id, g);
+  for (const g of workspaces) workspaceById.set(g.id, g);
 
   let mutated = false;
   nestedWorkspaces.update((list) => {
@@ -435,8 +439,8 @@ function backfillDashboardContributionIds(): void {
       if (typeof md.dashboardContributionId === "string") return ws;
       const parentWorkspaceId = md.parentWorkspaceId;
       if (typeof parentWorkspaceId !== "string") return ws;
-      const group = workspaceById.get(parentWorkspaceId);
-      if (!group) return ws;
+      const workspace = workspaceById.get(parentWorkspaceId);
+      if (!workspace) return ws;
 
       const previewPaths = getAllPanes(ws.splitRoot)
         .flatMap((p) => p.surfaces)
@@ -447,8 +451,8 @@ function backfillDashboardContributionIds(): void {
         .map((s) => s.path);
 
       let inferred: string | null = null;
-      const workspacePath = workspaceDashboardPath(group.path);
-      const agenticPath = `${group.path.replace(/\/+$/, "")}/.gnar-term/agentic-dashboard.md`;
+      const workspacePath = workspaceDashboardPath(workspace.path);
+      const agenticPath = `${workspace.path.replace(/\/+$/, "")}/.gnar-term/agentic-dashboard.md`;
       if (previewPaths.includes(workspacePath)) inferred = "group";
       else if (previewPaths.includes(agenticPath)) inferred = "agentic";
       if (!inferred) return ws;
@@ -467,7 +471,7 @@ function backfillDashboardContributionIds(): void {
 }
 
 /**
- * Materialize the Settings dashboard workspace for a group — a
+ * Materialize the Settings dashboard workspace for a workspace — a
  * constrained dashboard (metadata.isDashboard = true,
  * dashboardContributionId = "settings") whose body PaneView renders as
  * the shared `<WorkspaceDashboardSettings>` component. The workspace carries
@@ -476,20 +480,20 @@ function backfillDashboardContributionIds(): void {
  * contributions.
  */
 export function createSettingsDashboardWorkspace(
-  group: Workspace,
+  workspace: Workspace,
 ): Promise<string> {
-  return createDashboardWorkspaceFromDef(group, "Settings", "settings", []);
+  return createDashboardWorkspaceFromDef(workspace, "Settings", "settings", []);
 }
 
 /**
- * Canonical predicate for group dashboard membership.
+ * Canonical predicate for workspace dashboard membership.
  *
- * - No `contribId` → matches any dashboard workspace for the group.
+ * - No `contribId` → matches any dashboard workspace for the workspace.
  * - `contribId` provided, `allowLegacyUndefined = false` → strict exact
  *   match (use for lookups where the contribution is known).
  * - `contribId` provided, `allowLegacyUndefined = true` → matches exact
  *   OR a workspace whose `dashboardContributionId` is still `undefined`
- *   (pre-stamp legacy records). Use for the group-overview reconcile pass.
+ *   (pre-stamp legacy records). Use for the workspace-overview reconcile pass.
  */
 export function isDashboardWorkspace(
   ws: { metadata?: NestedWorkspaceMetadata },
@@ -518,7 +522,7 @@ export function findDashboardWorkspace(
   );
 }
 
-/** True when a workspace exists for the given group + contribution pair. */
+/** True when a workspace exists for the given workspace + contribution pair. */
 export function hasDashboardWorkspace(
   parentWorkspaceId: string,
   contribId: string,
@@ -530,19 +534,19 @@ export function hasDashboardWorkspace(
 
 /**
  * Provision every registered `autoProvision` dashboard contribution for
- * `group`. Called after a group is created and on startup
+ * `workspace`. Called after a workspace is created and on startup
  * reconciliation so auto-provision contributions (settings, agentic)
  * always have their workspace available. Idempotent — a contribution
  * already backed by a workspace is skipped.
  */
 export async function provisionAutoDashboardsForWorkspace(
-  group: Workspace,
+  workspace: Workspace,
 ): Promise<void> {
   for (const c of getDashboardContributions()) {
     if (!c.autoProvision) continue;
-    if (hasDashboardWorkspace(group.id, c.id)) continue;
+    if (hasDashboardWorkspace(workspace.id, c.id)) continue;
     try {
-      await c.create(group);
+      await c.create(workspace);
     } catch (err) {
       console.warn(
         `[workspace-groups] auto-provision failed for "${c.id}":`,
@@ -579,7 +583,7 @@ export function closeAutoDashboardsBySource(source: string): void {
 /**
  * Locate the dashboard workspace for `parentWorkspaceId` + `contributionId` and
  * close it. Used by the Settings toggle UI and by MCP to remove a
- * dashboard contribution from a group.
+ * dashboard contribution from a workspace.
  */
 export function closeDashboardForWorkspace(
   parentWorkspaceId: string,
@@ -594,12 +598,12 @@ export function closeDashboardForWorkspace(
 }
 
 /**
- * Switch to a group's Dashboard workspace. The Dashboard is created
- * eagerly on group creation, so this is a pure activation call.
+ * Switch to a workspace's Dashboard workspace. The Dashboard is created
+ * eagerly on workspace creation, so this is a pure activation call.
  * Returns true on success.
  */
-export function openWorkspaceDashboard(group: Workspace): boolean {
-  const targetId = group.dashboardNestedWorkspaceId;
+export function openWorkspaceDashboard(workspace: Workspace): boolean {
+  const targetId = workspace.dashboardNestedWorkspaceId;
   if (!targetId) return false;
   const idx = get(nestedWorkspaces).findIndex((w) => w.id === targetId);
   if (idx < 0) return false;
@@ -608,31 +612,31 @@ export function openWorkspaceDashboard(group: Workspace): boolean {
 }
 
 /**
- * Close the Dashboard workspace backing `group` if it is currently
- * open. Used during group deletion so the workspace disappears
- * alongside the group record.
+ * Close the Dashboard workspace backing `workspace` if it is currently
+ * open. Used during workspace deletion so the workspace disappears
+ * alongside the workspace record.
  */
 export async function closeWorkspaceDashboardNestedWorkspace(
-  group: Workspace,
+  workspace: Workspace,
 ): Promise<void> {
-  const dashboardWsId = group.dashboardNestedWorkspaceId;
+  const dashboardWsId = workspace.dashboardNestedWorkspaceId;
   if (!dashboardWsId) return;
   closeNestedWorkspaceById(dashboardWsId);
 }
 
 /**
  * Called on app startup (after nestedWorkspaces are restored) — ensures every
- * group has exactly one Group Dashboard workspace. Prior releases
- * matched the dashboard via `group.dashboardNestedWorkspaceId`; workspace
+ * workspace has exactly one Dashboard NestedWorkspace. Prior releases
+ * matched the dashboard via `workspace.dashboardNestedWorkspaceId`; nested workspace
  * ids were unstable across restarts, so on every reload the lookup
  * missed and a fresh dashboard was spawned. The cleanup runs in three
  * passes:
  *
  *   1. Adopt the first workspace matching `metadata.isDashboard ===
- *      true && metadata.parentWorkspaceId === group.id` (with no contribution id,
- *      or an explicit `"group"` id) — rebinding the group's
+ *      true && metadata.parentWorkspaceId === workspace.id` (with no contribution id,
+ *      or an explicit `"group"` id) — rebinding the workspace's
  *      `dashboardNestedWorkspaceId` to that workspace.
- *   2. Close every extra Group Dashboard for the same group (users end
+ *   2. Close every extra Workspace Dashboard for the same workspace (users end
  *      up with these when pre-fix state carried duplicates).
  *   3. Only when no dashboard exists at all, create a fresh one.
  *
@@ -647,17 +651,17 @@ export async function reconcileWorkspaceDashboards(): Promise<void> {
   backfillDashboardContributionIds();
 
   await Promise.allSettled(
-    getWorkspaces().map(async (group) => {
+    getWorkspaces().map(async (workspace) => {
       // One-shot cleanup: strip the legacy `## Active Agents` section
-      // from the group's Overview markdown if it's still there. Runs
+      // from the workspace's Overview markdown if it's still there. Runs
       // before we materialize / rebind the dashboard workspace so the
       // first render already reflects the cleaned file.
       await scrubWorkspaceDashboardActiveAgents(
-        workspaceDashboardPath(group.path),
+        workspaceDashboardPath(workspace.path),
       );
       await migrateWorkspaceDashboardWidgets(
-        group,
-        workspaceDashboardPath(group.path),
+        workspace,
+        workspaceDashboardPath(workspace.path),
       );
 
       // Deduplicate every autoProvision contribution type — keeps the first
@@ -667,7 +671,7 @@ export async function reconcileWorkspaceDashboards(): Promise<void> {
       for (const c of getDashboardContributions()) {
         if (!c.autoProvision) continue;
         const dupeMatches = get(nestedWorkspaces).filter((w) =>
-          isDashboardWorkspace(w, group.id, c.id, true),
+          isDashboardWorkspace(w, workspace.id, c.id, true),
         );
         if (dupeMatches.length <= 1) continue;
         const [, ...extras] = dupeMatches;
@@ -678,14 +682,14 @@ export async function reconcileWorkspaceDashboards(): Promise<void> {
       // it is still missing after the dedupe pass, plus `"settings"` and
       // extension-owned autoProvision contributions).
       try {
-        await provisionAutoDashboardsForWorkspace(group);
+        await provisionAutoDashboardsForWorkspace(workspace);
         // Rebind `dashboardNestedWorkspaceId` to the current "group" overview —
         // either the one that survived dedupe or the one just provisioned.
         const overview = get(nestedWorkspaces).find((w) =>
-          isDashboardWorkspace(w, group.id, "group", true),
+          isDashboardWorkspace(w, workspace.id, "group", true),
         );
-        if (overview && overview.id !== group.dashboardNestedWorkspaceId) {
-          updateWorkspace(group.id, {
+        if (overview && overview.id !== workspace.dashboardNestedWorkspaceId) {
+          updateWorkspace(workspace.id, {
             dashboardNestedWorkspaceId: overview.id,
           });
         }
@@ -701,15 +705,15 @@ export async function reconcileWorkspaceDashboards(): Promise<void> {
 
 /**
  * Re-claim nestedWorkspaces tagged with `metadata.parentWorkspaceId` that belong to a
- * known group. Called on app startup once groups are loaded and
+ * known workspace. Called on app startup once workspaces are loaded and
  * nestedWorkspaces are restored — restoration creates fresh workspace ids so
- * we rebuild each group's nestedWorkspaceIds list here.
+ * we rebuild each workspace's nestedWorkspaceIds list here.
  */
 export function reclaimNestedWorkspacesAcrossWorkspaces(): void {
-  const groups = getWorkspaces();
-  const workspaceIds = new Set(groups.map((g) => g.id));
+  const workspaces = getWorkspaces();
+  const workspaceIds = new Set(workspaces.map((g) => g.id));
 
-  // Collect workspace ids per group in a single pass to avoid one
+  // Collect workspace ids per workspace in a single pass to avoid one
   // setWorkspaces() call (and event emission) per workspace.
   const newMembers = new Map<string, string[]>();
   const toClaimIds: string[] = [];
@@ -727,7 +731,7 @@ export function reclaimNestedWorkspacesAcrossWorkspaces(): void {
   }
 
   if (newMembers.size > 0) {
-    const next = groups.map((g) => {
+    const next = workspaces.map((g) => {
       const toAdd = newMembers.get(g.id) ?? [];
       if (toAdd.length === 0) return g;
       const existing = new Set(g.nestedWorkspaceIds);
@@ -746,27 +750,27 @@ export function reclaimNestedWorkspacesAcrossWorkspaces(): void {
 /**
  * Startup reconciliation — called after nestedWorkspaces are restored.
  *
- * Pass 1: For every group lacking `primaryNestedWorkspaceId`, select the first
+ * Pass 1: For every workspace lacking `primaryNestedWorkspaceId`, select the first
  * member workspace that is neither a dashboard nor a worktree.
  *
  * Pass 2: Wrap every standalone workspace (no metadata.parentWorkspaceId, not a
- * dashboard) into a fresh group with that workspace as its primary.
+ * dashboard) into a fresh workspace with that workspace as its primary.
  *
- * Idempotent — groups that already have `primaryNestedWorkspaceId` are skipped.
+ * Idempotent — workspaces that already have `primaryNestedWorkspaceId` are skipped.
  */
 export async function reconcilePrimaryWorkspaces(): Promise<void> {
-  // Pass 1 — backfill existing groups.
-  for (const group of getWorkspaces()) {
-    if (group.primaryNestedWorkspaceId) continue;
-    const members = getWorktreeWorkspaces(group.id);
+  // Pass 1 — backfill existing workspaces.
+  for (const workspace of getWorkspaces()) {
+    if (workspace.primaryNestedWorkspaceId) continue;
+    const members = getWorktreeWorkspaces(workspace.id);
     const primary = members.find(
       (w) => !wsMeta(w).worktreePath && !wsMeta(w).isDashboard,
     );
     if (primary) {
-      updateWorkspace(group.id, { primaryNestedWorkspaceId: primary.id });
+      updateWorkspace(workspace.id, { primaryNestedWorkspaceId: primary.id });
     }
     // Groups with no eligible primary are left without one — the next
-    // group creation flow will set it.
+    // workspace creation flow will set it.
   }
 
   // Pass 2 — wrap standalone nestedWorkspaces.
@@ -780,7 +784,7 @@ export async function reconcilePrimaryWorkspaces(): Promise<void> {
     if (md.parentWorkspaceId && knownWorkspaceIds.has(md.parentWorkspaceId))
       continue;
     if (md.isDashboard) continue;
-    // Orphan worktree nestedWorkspaces (group deleted, worktreePath still set) are
+    // Orphan worktree nestedWorkspaces (workspace deleted, worktreePath still set) are
     // not primary candidates — skip them rather than wrapping them alone.
     if (md.worktreePath) continue;
 
@@ -789,7 +793,7 @@ export async function reconcilePrimaryWorkspaces(): Promise<void> {
     usedColors.push(color);
 
     const id = crypto.randomUUID();
-    const group: Workspace = {
+    const workspace: Workspace = {
       id,
       name: ws.name,
       path: ((md as Record<string, unknown>).cwd as string) ?? "",
@@ -800,7 +804,7 @@ export async function reconcilePrimaryWorkspaces(): Promise<void> {
       createdAt: new Date().toISOString(),
     };
 
-    // Stamp the workspace with its new group and persist so the parentWorkspaceId
+    // Stamp the workspace with its new workspace and persist so the parentWorkspaceId
     // survives a restart — without this the workspace comes back as
     // standalone, fails the claim check, and gets wrapped again.
     nestedWorkspaces.update((list) =>
@@ -811,14 +815,14 @@ export async function reconcilePrimaryWorkspaces(): Promise<void> {
       ),
     );
     schedulePersist();
-    addWorkspace(group);
+    addWorkspace(workspace);
     // onWorkspaceCreated already fired before reconcile runs, so claim here.
     claimWorkspace(ws.id, "core");
     knownWorkspaceIds.add(id);
   }
 
   // Pass 3 — claim all nestedWorkspaces that have metadata.parentWorkspaceId pointing to
-  // valid groups. This rehydrates the in-memory claim registry from
+  // valid workspaces. This rehydrates the in-memory claim registry from
   // persisted metadata on restart.
   const validWorkspaceIds = new Set(getWorkspaces().map((g) => g.id));
   for (const ws of get(nestedWorkspaces)) {
@@ -831,26 +835,26 @@ export async function reconcilePrimaryWorkspaces(): Promise<void> {
 
 /**
  * When a primary workspace is deleted, recreate it to maintain the invariant
- * that every group has exactly one non-worktree workspace.
+ * that every workspace has exactly one non-worktree workspace.
  */
 export function setupPrimaryWorkspaceAutoRecreation(): void {
   eventBus.on("workspace:closed", async (event) => {
     if (event.type !== "workspace:closed") return;
     const closedId = event.id;
-    const group = getWorkspaces().find(
+    const workspace = getWorkspaces().find(
       (g) => g.primaryNestedWorkspaceId === closedId,
     );
-    if (!group) return; // Not a primary workspace
+    if (!workspace) return; // Not a primary workspace
 
     // Recreate the primary workspace with the same name
     const newWsId = await createNestedWorkspaceFromDef({
-      name: group.name,
-      cwd: group.path,
-      metadata: { parentWorkspaceId: group.id },
+      name: workspace.name,
+      cwd: workspace.path,
+      metadata: { parentWorkspaceId: workspace.id },
     });
     if (newWsId) {
-      // Update the group's primary to the new workspace
-      updateWorkspace(group.id, { primaryNestedWorkspaceId: newWsId });
+      // Update the workspace's primary to the new workspace
+      updateWorkspace(workspace.id, { primaryNestedWorkspaceId: newWsId });
       claimWorkspace(newWsId, "core");
     }
   });

@@ -47,9 +47,9 @@ describe("deriveDashboardScope", () => {
     );
   });
 
-  it("detects a group host via a string parentWorkspaceId", () => {
+  it("detects a workspace-scoped host via a string parentWorkspaceId", () => {
     expect(deriveDashboardScope(host({ parentWorkspaceId: "g-42" }))).toEqual({
-      kind: "group",
+      kind: "workspace",
       parentWorkspaceId: "g-42",
     });
   });

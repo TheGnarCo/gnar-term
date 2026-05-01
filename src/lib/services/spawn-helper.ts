@@ -56,7 +56,7 @@ const AGENT_COMMANDS: Record<Exclude<SpawnAgentType, "custom">, string> = {
  */
 export type SpawnedByMarker =
   | { kind: "global" }
-  | { kind: "group"; parentWorkspaceId: string };
+  | { kind: "workspace"; parentWorkspaceId: string };
 
 export interface SpawnAgentInWorktreeArgs {
   /** Display name for the spawned workspace. */

@@ -243,7 +243,7 @@ describe("spawn-helper: spawnAgentInWorktree", () => {
     expect(cfg.spawnedBy).toBeUndefined();
   });
 
-  it("propagates spawnedBy={kind:'group', parentWorkspaceId} when a group-scoped caller passes it", async () => {
+  it("propagates spawnedBy={kind:'workspace', parentWorkspaceId} when a workspace-scoped caller passes it", async () => {
     const newWsId = "ws-new-5";
     createWorktreeWorkspaceFromConfigMock.mockImplementation(async () => {
       nestedWorkspaces.set([seedWorkspaceAfterCreate(newWsId)]);
@@ -256,12 +256,12 @@ describe("spawn-helper: spawnAgentInWorktree", () => {
       repoPath: "/work/proj",
       branch: "agent/claude-code/grp",
       parentWorkspaceId: "grp-1",
-      spawnedBy: { kind: "group", parentWorkspaceId: "grp-1" },
+      spawnedBy: { kind: "workspace", parentWorkspaceId: "grp-1" },
     });
 
     const cfg = createWorktreeWorkspaceFromConfigMock.mock.calls[0]?.[0];
     expect(cfg.spawnedBy).toEqual({
-      kind: "group",
+      kind: "workspace",
       parentWorkspaceId: "grp-1",
     });
     expect(cfg.parentWorkspaceId).toBe("grp-1");

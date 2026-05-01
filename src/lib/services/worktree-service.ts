@@ -137,7 +137,9 @@ export interface WorktreeWorkspaceConfig {
    * this records which. Surfaces as `metadata.spawnedBy` on the new
    * workspace. See spec §5.3.
    */
-  spawnedBy?: { kind: "global" } | { kind: "group"; parentWorkspaceId: string };
+  spawnedBy?:
+    | { kind: "global" }
+    | { kind: "workspace"; parentWorkspaceId: string };
   /**
    * GitHub issue numbers this workspace is handling. Stamped on the
    * workspace as `metadata.spawnedFromIssues`. Drives the bot-icon /

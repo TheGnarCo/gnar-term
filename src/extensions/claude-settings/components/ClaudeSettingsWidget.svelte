@@ -18,7 +18,9 @@
   const scope = deriveDashboardScope(host);
 
   $: group =
-    scope.kind === "group" ? getWorkspace(scope.parentWorkspaceId) : undefined;
+    scope.kind === "workspace"
+      ? getWorkspace(scope.parentWorkspaceId)
+      : undefined;
   $: projectRoot = group?.path ?? "";
 
   $: settingsPath = projectRoot ? `${projectRoot}/.claude/settings.json` : null;

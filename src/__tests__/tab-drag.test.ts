@@ -537,7 +537,7 @@ describe("tab-drag — commitTabDrop", () => {
       pane.id,
       ws.id,
       expect.objectContaining({
-        kind: "group",
+        kind: "workspace",
         positionInWorkspace: 0,
         targetWorkspaceId: "grp1",
       }),
@@ -583,7 +583,7 @@ describe("tab-drag — commitTabDrop", () => {
       pane.id,
       ws.id,
       expect.objectContaining({
-        kind: "group",
+        kind: "workspace",
         positionInWorkspace: 1,
         targetWorkspaceId: "grp1",
       }),

@@ -117,7 +117,9 @@ export interface NestedWorkspaceMetadata {
    * Provenance marker set by spawn-helper. Records which dashboard spawned
    * this workspace so the sidebar can show a bot-icon affordance.
    */
-  spawnedBy?: { kind: "global" } | { kind: "group"; parentWorkspaceId: string };
+  spawnedBy?:
+    | { kind: "global" }
+    | { kind: "workspace"; parentWorkspaceId: string };
   /**
    * GitHub issue numbers this workspace is handling (agentic-orchestrator).
    * Written by createWorktreeWorkspaceFromConfig.

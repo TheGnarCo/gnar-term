@@ -287,13 +287,16 @@ export function resolveSpawnTarget(
   scope: DashboardScope,
   repoPathProp: string | undefined,
 ): SpawnTarget {
-  if (scope.kind === "group") {
-    const group = getWorkspace(scope.parentWorkspaceId);
-    if (!group) return { ok: false, error: "Workspace Group not found" };
+  if (scope.kind === "workspace") {
+    const workspace = getWorkspace(scope.parentWorkspaceId);
+    if (!workspace) return { ok: false, error: "Workspace not found" };
     return {
       ok: true,
-      repoPath: group.path,
-      spawnedBy: { kind: "group", parentWorkspaceId: scope.parentWorkspaceId },
+      repoPath: workspace.path,
+      spawnedBy: {
+        kind: "workspace",
+        parentWorkspaceId: scope.parentWorkspaceId,
+      },
       parentWorkspaceId: scope.parentWorkspaceId,
     };
   }
@@ -318,7 +321,7 @@ export function resolveSpawnTarget(
 export function scopeAttrs(scope: DashboardScope): Record<string, string> {
   return {
     "data-scope-kind": scope.kind,
-    "data-scope-group-id":
-      scope.kind === "group" ? scope.parentWorkspaceId : "",
+    "data-scope-workspace-id":
+      scope.kind === "workspace" ? scope.parentWorkspaceId : "",
   };
 }

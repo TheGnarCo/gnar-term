@@ -419,12 +419,23 @@ export function migrateLegacyProjectShapes(state: AppState): {
         md.isDashboard === true &&
         typeof md.orchestratorId === "string" &&
         !("dashboardContributionId" in md);
+      // Pre-rename releases stamped spawnedBy with kind: "group". Newer
+      // releases use kind: "workspace" (matching the WorkspaceEntry → Workspace
+      // umbrella rename). Detect the legacy literal so we can rewrite it.
+      const existingSpawnedBy = (md as { spawnedBy?: { kind?: unknown } })
+        .spawnedBy;
+      const needsSpawnedByKindRewrite =
+        existingSpawnedBy !== undefined &&
+        existingSpawnedBy !== null &&
+        typeof existingSpawnedBy === "object" &&
+        (existingSpawnedBy as { kind?: unknown }).kind === "group";
 
       if (
         !needsProjectIdRewrite &&
         !needsSpawnedBy &&
         !needsContributionId &&
-        !needsLegacyDrop
+        !needsLegacyDrop &&
+        !needsSpawnedByKindRewrite
       ) {
         return ws;
       }
@@ -453,11 +464,25 @@ export function migrateLegacyProjectShapes(state: AppState): {
             ? nextMd.parentWorkspaceId
             : undefined;
         nextMd.spawnedBy = parentWorkspaceId
-          ? { kind: "group", parentWorkspaceId }
+          ? { kind: "workspace", parentWorkspaceId }
           : { kind: "global" };
       } else if (parentOrchestratorId !== undefined) {
         // parentOrchestratorId present but spawnedBy already set — drop the
         // legacy marker without synthesizing a replacement.
+      }
+
+      if (needsSpawnedByKindRewrite) {
+        const legacy = existingSpawnedBy as {
+          kind: "group";
+          parentWorkspaceId?: unknown;
+        };
+        const parentWorkspaceId =
+          typeof legacy.parentWorkspaceId === "string"
+            ? legacy.parentWorkspaceId
+            : undefined;
+        nextMd.spawnedBy = parentWorkspaceId
+          ? { kind: "workspace", parentWorkspaceId }
+          : { kind: "global" };
       }
 
       if (needsContributionId) {

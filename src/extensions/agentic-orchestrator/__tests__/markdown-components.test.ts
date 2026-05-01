@@ -571,7 +571,7 @@ describe("Issues widget", () => {
       agent: "claude-code",
       repoPath: GROUP_PATH,
       parentWorkspaceId: GROUP_ID,
-      spawnedBy: { kind: "group", parentWorkspaceId: GROUP_ID },
+      spawnedBy: { kind: "workspace", parentWorkspaceId: GROUP_ID },
     });
     expect(callArg.taskContext).toContain("Issue #7");
     expect(callArg.taskContext).toContain("Make it faster");
@@ -1463,7 +1463,7 @@ describe("TaskSpawner widget", () => {
       taskContext: "Refactor the thing",
       repoPath: GROUP_PATH,
       parentWorkspaceId: GROUP_ID,
-      spawnedBy: { kind: "group", parentWorkspaceId: GROUP_ID },
+      spawnedBy: { kind: "workspace", parentWorkspaceId: GROUP_ID },
       branch: "agent/claude-code/refactor-the-thing",
     });
     // Form collapses on success.

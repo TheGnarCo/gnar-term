@@ -50,7 +50,7 @@
   const scope = deriveDashboardScope(host);
 
   function resolveRepoPath(): string | null {
-    if (scope.kind === "group") {
+    if (scope.kind === "workspace") {
       const g = getWorkspace(scope.parentWorkspaceId);
       return g?.path ?? null;
     }

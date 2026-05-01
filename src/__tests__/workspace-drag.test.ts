@@ -741,7 +741,7 @@ describe("createNestedWorkspaceFromSurface — targetWorkspaceId", () => {
     activeNestedWorkspaceIdx.set(0);
 
     createNestedWorkspaceFromSurface(sA.id, pane.id, ws.id, {
-      kind: "group",
+      kind: "workspace",
       positionInWorkspace: 0,
       targetWorkspaceId: "target-group-1",
     });
@@ -760,7 +760,7 @@ describe("createNestedWorkspaceFromSurface — targetWorkspaceId", () => {
     activeNestedWorkspaceIdx.set(0);
 
     createNestedWorkspaceFromSurface(sA.id, pane.id, ws.id, {
-      kind: "group",
+      kind: "workspace",
       positionInWorkspace: 2,
       targetWorkspaceId: "target-group-1",
     });
@@ -786,7 +786,7 @@ describe("createNestedWorkspaceFromSurface — targetWorkspaceId", () => {
     activeNestedWorkspaceIdx.set(0);
 
     createNestedWorkspaceFromSurface(sA.id, pane.id, ws.id, {
-      kind: "group",
+      kind: "workspace",
       positionInWorkspace: 0,
     });
 
@@ -812,7 +812,7 @@ describe("createNestedWorkspaceFromSurface — targetWorkspaceId", () => {
     activeNestedWorkspaceIdx.set(0);
 
     createNestedWorkspaceFromSurface(sA.id, pane.id, ws.id, {
-      kind: "group",
+      kind: "workspace",
       positionInWorkspace: 0,
       targetWorkspaceId: "target-group-override",
     });

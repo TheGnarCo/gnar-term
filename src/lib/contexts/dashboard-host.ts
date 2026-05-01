@@ -12,7 +12,7 @@
  *
  * Scope derivation inside widgets:
  *   - `metadata.isGlobalAgenticDashboard === true` → { kind: "global" }
- *   - `metadata.parentWorkspaceId` present                   → { kind: "group", parentWorkspaceId }
+ *   - `metadata.parentWorkspaceId` present                   → { kind: "workspace", parentWorkspaceId }
  *   - Otherwise                                     → inert / error
  */
 import { getContext, setContext } from "svelte";
@@ -54,7 +54,7 @@ export function getDashboardHost(): DashboardHostContext | null {
 
 export type DashboardScope =
   | { kind: "global" }
-  | { kind: "group"; parentWorkspaceId: string }
+  | { kind: "workspace"; parentWorkspaceId: string }
   | { kind: "none" };
 
 /**
@@ -76,7 +76,7 @@ export function deriveDashboardScope(
   }
   const parentWorkspaceId = md.parentWorkspaceId;
   if (typeof parentWorkspaceId === "string" && parentWorkspaceId.length > 0) {
-    return { kind: "group", parentWorkspaceId };
+    return { kind: "workspace", parentWorkspaceId };
   }
   return { kind: "none" };
 }

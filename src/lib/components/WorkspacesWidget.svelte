@@ -17,7 +17,7 @@
   const scope = deriveDashboardScope(host);
 
   $: parentWorkspaceId =
-    scope.kind === "group" ? scope.parentWorkspaceId : null;
+    scope.kind === "workspace" ? scope.parentWorkspaceId : null;
 
   $: group = parentWorkspaceId
     ? ($workspacesStore.find((g) => g.id === parentWorkspaceId) ?? null)

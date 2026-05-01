@@ -465,7 +465,7 @@ export function createNestedWorkspaceFromSurface(
   insertOptions?:
     | { kind: "root"; insertIdx: number }
     | {
-        kind: "group";
+        kind: "workspace";
         positionInWorkspace: number;
         targetWorkspaceId?: string;
       },
@@ -508,7 +508,7 @@ export function createNestedWorkspaceFromSurface(
   };
   const srcWorkspaceId = srcWs?.metadata?.parentWorkspaceId;
   const effectiveWorkspaceId =
-    (insertOptions?.kind === "group" && insertOptions.targetWorkspaceId) ||
+    (insertOptions?.kind === "workspace" && insertOptions.targetWorkspaceId) ||
     srcWorkspaceId;
   const newWs: NestedWorkspace = {
     id: uid(),
@@ -527,7 +527,7 @@ export function createNestedWorkspaceFromSurface(
     appendRootRow({ kind: "workspace", id: newWs.id });
   }
   if (effectiveWorkspaceId) {
-    if (insertOptions?.kind === "group") {
+    if (insertOptions?.kind === "workspace") {
       insertNestedWorkspaceIntoWorkspace(
         effectiveWorkspaceId,
         newWs.id,

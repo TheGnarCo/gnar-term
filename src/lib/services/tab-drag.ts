@@ -474,7 +474,7 @@ export function commitTabDrop(): void {
         sourcePaneId,
         sourceWorkspaceId,
         {
-          kind: "group",
+          kind: "workspace",
           positionInWorkspace: insertPos,
           targetWorkspaceId: dropTarget.parentWorkspaceId,
         },

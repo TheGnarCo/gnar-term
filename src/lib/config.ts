@@ -128,9 +128,9 @@ export interface AgentsConfig {
 }
 
 /**
- * Workspace — a named, colored, path-rooted grouping of
- * nestedWorkspaces. Workspaces whose CWD falls under `path` are auto-adopted
- * (via `metadata.parentWorkspaceId`) and render nested inside the group's block
+ * Workspace — a named, colored, path-rooted parent of nestedWorkspaces.
+ * NestedWorkspaces whose CWD falls under `path` are auto-adopted
+ * (via `metadata.parentWorkspaceId`) and render under the workspace's block
  * in the Workspaces section.
  *
  * Defined in core (rather than in an extension) because it is persisted
@@ -145,11 +145,11 @@ export interface Workspace {
   /** Root CWD — auto-adoption uses this as a longest-prefix ancestor match. */
   path: string;
   color: string;
-  /** Ids of nestedWorkspaces currently claimed by this group. */
+  /** Ids of nestedWorkspaces currently claimed by this workspace. */
   nestedWorkspaceIds: string[];
   /**
-   * Id of the one non-worktree, non-dashboard workspace in this group.
-   * Set at group creation and backfilled by reconcilePrimaryWorkspaces()
+   * Id of the one non-worktree, non-dashboard nestedWorkspace in this workspace.
+   * Set at workspace creation and backfilled by reconcilePrimaryWorkspaces()
    * on first startup after migration. Never reassigned.
    */
   primaryNestedWorkspaceId?: string;
@@ -157,12 +157,12 @@ export interface Workspace {
   isGit: boolean;
   createdAt: string;
   /**
-   * Id of the Group Dashboard workspace hosting this group's markdown
-   * Live Preview. Eagerly created alongside the group. Resolved from
+   * Id of the Dashboard nestedWorkspace hosting this workspace's markdown
+   * Live Preview. Eagerly created alongside the workspace. Resolved from
    * the nestedWorkspaces store by consumers.
    */
   dashboardNestedWorkspaceId?: string;
-  /** When true, the group cannot be drag-reordered or deleted/archived. */
+  /** When true, the workspace cannot be drag-reordered or deleted/archived. */
   locked?: boolean;
 }
 
@@ -202,7 +202,7 @@ export interface GnarTermConfig {
   /**
    * Per-pseudo-workspace color overrides, keyed by pseudo id
    * (e.g. `"agentic.global"`). Values are slot names from
-   * `GROUP_COLOR_SLOTS` (same palette Workspace Groups use) or any
+   * `WORKSPACE_COLOR_SLOTS` (same palette Workspaces use) or any
    * `#RRGGBB` literal. Consumed by `PseudoWorkspaceRow` to paint the
    * banner; absent entries fall back to a theme-neutral default.
    */
@@ -232,7 +232,7 @@ export interface AppState {
   nestedWorkspaces?: (NestedWorkspaceDef & { name: string })[];
   activeNestedWorkspaceIdx?: number;
   // Interleaved ordering for the Workspaces section: unclaimed
-  // nestedWorkspaces and workspace group blocks sit in a single list the user
+  // nestedWorkspaces and workspace blocks sit in a single list the user
   // can drag across freely. See stores/root-row-order.ts.
   rootRowOrder?: { kind: string; id: string }[];
   // Archived (suspended) workspaces. See stores/archive.ts.

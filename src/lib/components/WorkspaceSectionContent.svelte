@@ -19,7 +19,7 @@
     closeNestedWorkspacesInWorkspace,
     workspaceDashboardPath,
     openWorkspaceDashboard,
-    WORKSPACE_GROUP_STATE_CHANGED,
+    WORKSPACE_STATE_CHANGED,
     toggleWorkspaceLock,
     claimWorkspace,
   } from "../services/workspace-service";
@@ -86,12 +86,12 @@
     stateVersion++;
   };
   eventBus.on(
-    WORKSPACE_GROUP_STATE_CHANGED,
+    WORKSPACE_STATE_CHANGED,
     onWorkspaceStateChanged as (e: ExtensionEvent) => void,
   );
   onDestroy(() => {
     eventBus.off(
-      WORKSPACE_GROUP_STATE_CHANGED,
+      WORKSPACE_STATE_CHANGED,
       onWorkspaceStateChanged as (e: ExtensionEvent) => void,
     );
   });

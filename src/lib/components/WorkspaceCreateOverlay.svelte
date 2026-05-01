@@ -4,7 +4,7 @@
   import { open as dialogOpen } from "@tauri-apps/plugin-dialog";
   import ColorPicker from "./ColorPicker.svelte";
   import { theme } from "../stores/theme";
-  import { GROUP_COLOR_SLOTS, resolveWorkspaceColor } from "../theme-data";
+  import { WORKSPACE_COLOR_SLOTS, resolveWorkspaceColor } from "../theme-data";
   import {
     pendingCreateResolver,
     createDialogPrefill,
@@ -20,8 +20,9 @@
 
   function randomColor(): string {
     return (
-      GROUP_COLOR_SLOTS[Math.floor(Math.random() * GROUP_COLOR_SLOTS.length)] ??
-      "#4a90e2"
+      WORKSPACE_COLOR_SLOTS[
+        Math.floor(Math.random() * WORKSPACE_COLOR_SLOTS.length)
+      ] ?? "#4a90e2"
     );
   }
 
@@ -208,7 +209,7 @@
         <div aria-labelledby={colorLabelId} role="radiogroup">
           <ColorPicker
             bind:value={color}
-            colors={[...GROUP_COLOR_SLOTS]}
+            colors={[...WORKSPACE_COLOR_SLOTS]}
             resolveColor={(c: string) => resolveWorkspaceColor(c, $theme)}
             theme={themeView}
           />

@@ -96,16 +96,18 @@ export interface NestedWorkspaceMetadata {
   // --- Project-scope extension ---
   /** Project id used by the project-scope extension to claim the workspace. */
   projectId?: string;
-  // --- Dashboard / group fields ---
-  /** Marks a workspace as a dashboard (used by workspace-group and related services). */
+  // --- Dashboard / workspace fields ---
+  /** Marks a nestedWorkspace as a dashboard (used by workspace-service and related services). */
   isDashboard?: boolean;
-  /** Group id this workspace belongs to (workspace-group-service). */
+  /** Parent workspace id this nestedWorkspace belongs to (workspace-service). */
   parentWorkspaceId?: string;
-  /** Id of the group's current dashboard workspace (workspace-group-service). */
+  /** Id of the parent workspace's current dashboard nestedWorkspace (workspace-service). */
   dashboardNestedWorkspaceId?: string;
   /**
    * Contribution id for the dashboard type: "group" | "agentic" | "settings" | string.
-   * Backfilled by workspace-group-service for legacy nestedWorkspaces.
+   * Backfilled by workspace-service for legacy nestedWorkspaces. The "group"
+   * literal is the stable contribution id for the parent-workspace overview,
+   * preserved across the Workspace→NestedWorkspace rename.
    */
   dashboardContributionId?: string;
   /** True on the global agentic pseudo-workspace (agentic-orchestrator). */

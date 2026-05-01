@@ -11,7 +11,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { get } from "svelte/store";
 import type { SurfaceDef, Workspace } from "../config";
-import { GROUP_COLOR_SLOTS } from "../../extensions/api";
+import { WORKSPACE_COLOR_SLOTS } from "../../extensions/api";
 import { appendRootRow, removeRootRow } from "../stores/root-row-order";
 import {
   nestedWorkspaces,
@@ -42,12 +42,11 @@ import {
 } from "./dashboard-contribution-registry";
 import { releaseWorkspaceDirtyStore } from "./workspace-git-dirty-store";
 
-export const WORKSPACE_GROUP_STATE_CHANGED =
-  "extension:workspace-group:state-changed";
+export const WORKSPACE_STATE_CHANGED = "extension:workspace:state-changed";
 
 function emitStateChanged(metadata: Record<string, unknown> = {}): void {
   eventBus.emit({
-    type: WORKSPACE_GROUP_STATE_CHANGED,
+    type: WORKSPACE_STATE_CHANGED,
     ...metadata,
   });
 }
@@ -788,8 +787,9 @@ export async function reconcilePrimaryWorkspaces(): Promise<void> {
     // not primary candidates — skip them rather than wrapping them alone.
     if (md.worktreePath) continue;
 
-    const colorIdx = usedColors.length % GROUP_COLOR_SLOTS.length;
-    const color: string = GROUP_COLOR_SLOTS[colorIdx] ?? GROUP_COLOR_SLOTS[0];
+    const colorIdx = usedColors.length % WORKSPACE_COLOR_SLOTS.length;
+    const color: string =
+      WORKSPACE_COLOR_SLOTS[colorIdx] ?? WORKSPACE_COLOR_SLOTS[0];
     usedColors.push(color);
 
     const id = crypto.randomUUID();

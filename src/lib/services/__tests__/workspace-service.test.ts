@@ -14,7 +14,7 @@ import {
   getWorkspaces,
   removeNestedWorkspaceFromAllWorkspaces,
   updateWorkspace,
-  WORKSPACE_GROUP_STATE_CHANGED,
+  WORKSPACE_STATE_CHANGED,
 } from "../workspace-service";
 import {
   resetWorkspacesForTest,
@@ -157,13 +157,13 @@ describe("workspace-group-service", () => {
     });
   });
 
-  it("emits WORKSPACE_GROUP_STATE_CHANGED on mutations", () => {
+  it("emits WORKSPACE_STATE_CHANGED on mutations", () => {
     const listener = vi.fn();
-    eventBus.on(WORKSPACE_GROUP_STATE_CHANGED, listener);
+    eventBus.on(WORKSPACE_STATE_CHANGED, listener);
     addWorkspace(makeWorkspace("g1"));
     updateWorkspace("g1", { name: "Renamed" });
     deleteWorkspace("g1");
-    eventBus.off(WORKSPACE_GROUP_STATE_CHANGED, listener);
+    eventBus.off(WORKSPACE_STATE_CHANGED, listener);
 
     // add + update + delete = 3 events
     expect(listener).toHaveBeenCalledTimes(3);

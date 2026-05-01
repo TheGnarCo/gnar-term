@@ -160,7 +160,7 @@ export function showConfirmPrompt(
  *   - select:         dropdown of pre-defined options
  *   - info:           read-only label (useful for showing context like a
  *                     worktree path during a confirm dialog)
- *   - color:          swatch picker over GROUP_COLOR_SLOTS (matches
+ *   - color:          swatch picker over WORKSPACE_COLOR_SLOTS (matches
  *                     the chrome used by group creation)
  */
 export type FormField =

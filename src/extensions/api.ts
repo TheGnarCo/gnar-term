@@ -20,7 +20,7 @@ import type { Readable } from "svelte/store";
 // (anything starting with "#") pass through resolveWorkspaceColor()
 // unchanged — users who type their own color keep it verbatim.
 
-export const GROUP_COLOR_SLOTS = [
+export const WORKSPACE_COLOR_SLOTS = [
   "red",
   "pink",
   "green",
@@ -35,7 +35,7 @@ export const GROUP_COLOR_SLOTS = [
   "teal",
 ] as const;
 
-export type WorkspaceColorSlot = (typeof GROUP_COLOR_SLOTS)[number];
+export type WorkspaceColorSlot = (typeof WORKSPACE_COLOR_SLOTS)[number];
 
 /**
  * Minimum theme shape required for slot resolution — only the ansi

@@ -28,7 +28,7 @@ import {
 import {
   nestedWorkspaces,
   activeNestedWorkspaceIdx,
-} from "../lib/stores/workspace";
+} from "../lib/stores/nested-workspace";
 import type { NestedWorkspace, Pane } from "../lib/types";
 import { isPreviewSurface, getAllSurfaces } from "../lib/types";
 import {

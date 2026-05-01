@@ -6,7 +6,7 @@ import {
   activeWorkspace,
   activePane,
   activeSurface,
-} from "../stores/workspace";
+} from "../stores/nested-workspace";
 import { renamingSurfaceId } from "../stores/ui";
 import { createTerminalSurface } from "../terminal-service";
 import {
@@ -20,7 +20,10 @@ import {
   type PreviewSurface,
 } from "../types";
 import { removePane, splitPaneEmpty } from "./pane-service";
-import { closeNestedWorkspace, schedulePersist } from "./workspace-service";
+import {
+  closeNestedWorkspace,
+  schedulePersist,
+} from "./nested-workspace-service";
 import { findPreviewSurfaceByPath } from "./preview-surface-registry";
 import { safeFocus, getCwdForSurface } from "./service-helpers";
 import { eventBus } from "./event-bus";

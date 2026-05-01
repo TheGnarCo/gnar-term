@@ -31,7 +31,10 @@ import {
 } from "@tauri-apps/plugin-notification";
 import { get } from "svelte/store";
 import { xtermTheme } from "./stores/theme";
-import { nestedWorkspaces, activeNestedWorkspaceIdx } from "./stores/workspace";
+import {
+  nestedWorkspaces,
+  activeNestedWorkspaceIdx,
+} from "./stores/nested-workspace";
 import { contextMenu, pendingAction } from "./stores/ui";
 import {
   getRegisteredFileExtensions,

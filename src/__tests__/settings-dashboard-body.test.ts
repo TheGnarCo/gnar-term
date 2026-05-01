@@ -26,8 +26,8 @@ import PaneView from "../lib/components/PaneView.svelte";
 import {
   nestedWorkspaces,
   activeNestedWorkspaceIdx,
-} from "../lib/stores/workspace";
-import { workspacesStore } from "../lib/stores/workspace-groups";
+} from "../lib/stores/nested-workspace";
+import { workspacesStore } from "../lib/stores/workspaces";
 import type { NestedWorkspace, Pane } from "../lib/types";
 
 function makePane(id: string): Pane {

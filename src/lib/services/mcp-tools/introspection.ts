@@ -3,7 +3,7 @@ import {
   nestedWorkspaces,
   activeWorkspace,
   activePane,
-} from "../../stores/workspace";
+} from "../../stores/nested-workspace";
 import {
   getAllPanes,
   isTerminalSurface,

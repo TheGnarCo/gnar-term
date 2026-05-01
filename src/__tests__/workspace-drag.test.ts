@@ -56,10 +56,10 @@ vi.mock("../lib/stores/root-row-order", async () => {
 const addWorkspaceToGroupSpy = vi.fn().mockReturnValue(true);
 const removeWorkspaceFromAllGroupsSpy = vi.fn();
 const insertWorkspaceIntoGroupSpy = vi.fn();
-vi.mock("../lib/services/workspace-group-service", async () => {
+vi.mock("../lib/services/workspace-service", async () => {
   const actual = await vi.importActual<
-    typeof import("../lib/services/workspace-group-service")
-  >("../lib/services/workspace-group-service");
+    typeof import("../lib/services/workspace-service")
+  >("../lib/services/workspace-service");
   return {
     ...actual,
     addNestedWorkspaceToWorkspace: (
@@ -86,7 +86,7 @@ vi.mock("../lib/services/git-status-service", () => ({
 import {
   nestedWorkspaces,
   activeNestedWorkspaceIdx,
-} from "../lib/stores/workspace";
+} from "../lib/stores/nested-workspace";
 import {
   uid,
   getAllPanes,
@@ -95,7 +95,7 @@ import {
   type SplitNode,
   type TerminalSurface,
 } from "../lib/types";
-import { createNestedWorkspaceFromSurface } from "../lib/services/workspace-service";
+import { createNestedWorkspaceFromSurface } from "../lib/services/nested-workspace-service";
 import {
   moveSurfaceToWorkspace,
   expandWorkspaceIntoPanes,

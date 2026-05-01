@@ -15,17 +15,17 @@ import {
   removeNestedWorkspaceFromAllWorkspaces,
   updateWorkspace,
   WORKSPACE_GROUP_STATE_CHANGED,
-} from "../workspace-group-service";
+} from "../workspace-service";
 import {
   resetWorkspacesForTest,
   workspacesStore,
-} from "../../stores/workspace-groups";
+} from "../../stores/workspaces";
 import { eventBus } from "../event-bus";
 import { rootRowOrder } from "../../stores/root-row-order";
 import {
   nestedWorkspaces,
   activeNestedWorkspaceIdx,
-} from "../../stores/workspace";
+} from "../../stores/nested-workspace";
 import type { NestedWorkspace } from "../../types";
 import type { Workspace } from "../../config";
 

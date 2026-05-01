@@ -21,7 +21,7 @@
   import {
     nestedWorkspaces,
     activeNestedWorkspaceIdx,
-  } from "../stores/workspace";
+  } from "../stores/nested-workspace";
   import { contextMenu, reorderContext, anyReorderActive } from "../stores/ui";
   import { confirmAndCloseWorkspace } from "../services/worktree-service";
   import {
@@ -61,8 +61,8 @@
   import { archiveWorkspace } from "../services/archive-service";
   import { buildWorkspaceContextMenuItems } from "../utils/workspace-context-menu";
   import { wsMeta } from "../services/service-helpers";
-  import { toggleWorkspaceLock } from "../services/workspace-service";
-  import { getWorkspace } from "../stores/workspace-groups";
+  import { toggleWorkspaceLock } from "../services/nested-workspace-service";
+  import { getWorkspace } from "../stores/workspaces";
 
   function resolvePseudoWorkspaceColor(pw: PseudoWorkspace): string {
     const slot = $configStore.pseudoWorkspaceColors?.[pw.id] ?? "purple";

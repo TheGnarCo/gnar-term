@@ -20,10 +20,10 @@ import {
   activeSurface,
   activeNestedWorkspaceIdx,
   activePseudoWorkspaceId,
-} from "../stores/workspace";
+} from "../stores/nested-workspace";
 import { rootRowOrder } from "../stores/root-row-order";
 import { isTerminalSurface } from "../types";
-import { createNestedWorkspace } from "./workspace-service";
+import { createNestedWorkspace } from "./nested-workspace-service";
 import {
   flashFocusedPane,
   focusDirection,

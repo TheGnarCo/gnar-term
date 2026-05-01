@@ -14,7 +14,7 @@ vi.mock("svelte", () => ({
   tick: vi.fn(() => Promise.resolve()),
 }));
 
-vi.mock("../lib/stores/workspace", () => ({
+vi.mock("../lib/stores/nested-workspace", () => ({
   activeSurface: writable(null),
   nestedWorkspaces: writable([]),
 }));
@@ -27,7 +27,10 @@ vi.mock("../lib/types", () => ({
 
 import { invoke } from "@tauri-apps/api/core";
 import { tick } from "svelte";
-import { activeSurface, nestedWorkspaces } from "../lib/stores/workspace";
+import {
+  activeSurface,
+  nestedWorkspaces,
+} from "../lib/stores/nested-workspace";
 
 const mockedInvoke = vi.mocked(invoke);
 const mockedTick = vi.mocked(tick);

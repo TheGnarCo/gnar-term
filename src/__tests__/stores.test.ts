@@ -9,7 +9,7 @@ import {
   activeWorkspace,
   activePane,
   activeSurface,
-} from "../lib/stores/workspace";
+} from "../lib/stores/nested-workspace";
 import {
   primarySidebarVisible,
   secondarySidebarVisible,

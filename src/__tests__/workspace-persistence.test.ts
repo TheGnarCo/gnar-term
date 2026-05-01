@@ -15,7 +15,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 import {
   nestedWorkspaces,
   activeNestedWorkspaceIdx,
-} from "../lib/stores/workspace";
+} from "../lib/stores/nested-workspace";
 
 describe("workspace persistence", () => {
   beforeEach(() => {
@@ -30,7 +30,7 @@ describe("workspace persistence", () => {
 
   it("persistWorkspaces serializes all nestedWorkspaces and calls saveState", async () => {
     const { persistWorkspaces } =
-      await import("../lib/services/workspace-service");
+      await import("../lib/services/nested-workspace-service");
     const config = await import("../lib/config");
     const saveStateSpy = vi
       .spyOn(config, "saveState")
@@ -87,7 +87,7 @@ describe("workspace persistence", () => {
 
   it("schedulePersist debounces multiple calls into one save", async () => {
     const { schedulePersist } =
-      await import("../lib/services/workspace-service");
+      await import("../lib/services/nested-workspace-service");
     const config = await import("../lib/config");
     const saveStateSpy = vi
       .spyOn(config, "saveState")
@@ -122,7 +122,7 @@ describe("workspace persistence", () => {
 
   it("persistWorkspaces round-trips workspace metadata (regression for 0b92007)", async () => {
     const { persistWorkspaces } =
-      await import("../lib/services/workspace-service");
+      await import("../lib/services/nested-workspace-service");
     const config = await import("../lib/config");
     const saveStateSpy = vi
       .spyOn(config, "saveState")
@@ -161,7 +161,7 @@ describe("workspace persistence", () => {
 
   it("serializeLayout captures terminal cwd and title", async () => {
     const { serializeLayout } =
-      await import("../lib/services/workspace-service");
+      await import("../lib/services/nested-workspace-service");
 
     const layout = serializeLayout({
       type: "pane",

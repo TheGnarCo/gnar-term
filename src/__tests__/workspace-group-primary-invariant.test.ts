@@ -8,9 +8,9 @@ vi.mock("@tauri-apps/api/event", () => ({
 }));
 
 import type { Workspace } from "../lib/config";
-import { addNestedWorkspaceToWorkspace } from "../lib/services/workspace-group-service";
-import { getWorkspaces, setWorkspaces } from "../lib/stores/workspace-groups";
-import { nestedWorkspaces } from "../lib/stores/workspace";
+import { addNestedWorkspaceToWorkspace } from "../lib/services/workspace-service";
+import { getWorkspaces, setWorkspaces } from "../lib/stores/workspaces";
+import { nestedWorkspaces } from "../lib/stores/nested-workspace";
 
 describe("Workspace.primaryNestedWorkspaceId", () => {
   it("accepts a group with primaryNestedWorkspaceId set", () => {

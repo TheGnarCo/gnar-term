@@ -12,13 +12,13 @@
    */
   import { theme } from "../stores/theme";
   import ColorSlotPicker from "./ColorSlotPicker.svelte";
-  import { workspacesStore } from "../stores/workspace-groups";
+  import { workspacesStore } from "../stores/workspaces";
   import {
     workspaceDashboardPath,
     updateWorkspace,
     closeDashboardForGroup,
-  } from "../services/workspace-group-service";
-  import { nestedWorkspaces } from "../stores/workspace";
+  } from "../services/workspace-service";
+  import { nestedWorkspaces } from "../stores/nested-workspace";
   import {
     dashboardContributionStore,
     type DashboardContribution,

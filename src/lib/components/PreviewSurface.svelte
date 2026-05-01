@@ -5,7 +5,7 @@
   import { theme } from "../stores/theme";
   import type { PreviewSurface } from "../types";
   import { getAllPanes } from "../types";
-  import { nestedWorkspaces } from "../stores/workspace";
+  import { nestedWorkspaces } from "../stores/nested-workspace";
   import {
     openPreview,
     refreshPreviewElement,

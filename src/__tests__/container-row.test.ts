@@ -40,7 +40,7 @@ Element.prototype.animate = vi.fn().mockImplementation(() => {
 
 import ContainerRowWithSlot from "./container-row-with-slot.svelte";
 import WorkspaceListViewStub from "./workspace-list-view-stub.svelte";
-import { nestedWorkspaces } from "../lib/stores/workspace";
+import { nestedWorkspaces } from "../lib/stores/nested-workspace";
 
 // Seed the nestedWorkspaces store so nonDashboardCount reflects filterIds correctly.
 function makeWs(id: string) {

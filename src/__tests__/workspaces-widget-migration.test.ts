@@ -13,7 +13,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 }));
 
 import { invoke } from "@tauri-apps/api/core";
-import { migrateWorkspaceDashboardWidgets } from "../lib/services/workspace-group-service";
+import { migrateWorkspaceDashboardWidgets } from "../lib/services/workspace-service";
 import type { Workspace } from "../lib/config";
 
 function makeWorkspace(): Workspace {

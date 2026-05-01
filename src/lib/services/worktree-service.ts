@@ -24,8 +24,8 @@ import {
 import {
   createNestedWorkspaceFromDef,
   closeNestedWorkspace,
-} from "./workspace-service";
-import { nestedWorkspaces } from "../stores/workspace";
+} from "./nested-workspace-service";
+import { nestedWorkspaces } from "../stores/nested-workspace";
 
 /** Result of a git_merge Tauri command invocation. */
 interface MergeResult {

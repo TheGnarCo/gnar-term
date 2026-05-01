@@ -16,7 +16,7 @@
   $: isDisco = $theme.name === "Molly Disco";
   import { getAllSurfaces } from "../types";
   import type { NestedWorkspace } from "../types";
-  import { workspaceSurfaceMap } from "../services/workspace-service";
+  import { workspaceSurfaceMap } from "../services/nested-workspace-service";
   import { wsMeta } from "../services/service-helpers";
 
   export let workspace: NestedWorkspace;

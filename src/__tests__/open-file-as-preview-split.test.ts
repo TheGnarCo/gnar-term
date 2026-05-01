@@ -23,7 +23,7 @@ import { openFileAsPreviewSplit } from "../lib/services/surface-service";
 import {
   nestedWorkspaces,
   activeNestedWorkspaceIdx,
-} from "../lib/stores/workspace";
+} from "../lib/stores/nested-workspace";
 import { isPreviewSurface, getAllSurfaces, getAllPanes } from "../lib/types";
 import type { NestedWorkspace, Pane } from "../lib/types";
 import {

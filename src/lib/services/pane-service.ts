@@ -7,7 +7,7 @@ import {
   activePane,
   activeSurface,
   zoomedSurfaceId,
-} from "../stores/workspace";
+} from "../stores/nested-workspace";
 import { theme } from "../stores/theme";
 import { createTerminalSurface } from "../terminal-service";
 import {
@@ -25,9 +25,9 @@ import {
   createNestedWorkspace,
   schedulePersist,
   collapseEmptyPaneInWorkspace,
-} from "./workspace-service";
+} from "./nested-workspace-service";
 import { removeRootRow } from "../stores/root-row-order";
-import { removeNestedWorkspaceFromAllWorkspaces } from "./workspace-group-service";
+import { removeNestedWorkspaceFromAllWorkspaces } from "./workspace-service";
 import { handleWorkspaceClosed as gitStatusWorkspaceClosed } from "./git-status-service";
 import { safeFocus, getCwdForSurface } from "./service-helpers";
 import { eventBus } from "./event-bus";

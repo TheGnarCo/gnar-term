@@ -1,5 +1,5 @@
 import { writable, get, type Readable } from "svelte/store";
-import { nestedWorkspaces } from "../stores/workspace";
+import { nestedWorkspaces } from "../stores/nested-workspace";
 import { getAllPanes } from "../types";
 import { wsMeta } from "./service-helpers";
 export type WorkspacePaneDropTarget =

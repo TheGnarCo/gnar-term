@@ -1,6 +1,9 @@
 <script lang="ts">
   import { theme } from "../stores/theme";
-  import { activeWorkspace, nestedWorkspaces } from "../stores/workspace";
+  import {
+    activeWorkspace,
+    nestedWorkspaces,
+  } from "../stores/nested-workspace";
   import { getWorkspaceStatus } from "../services/status-registry";
   import { GIT_STATUS_SOURCE } from "../services/git-status-service";
   import { wsMeta } from "../services/service-helpers";

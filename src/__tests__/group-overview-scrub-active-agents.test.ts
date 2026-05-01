@@ -14,12 +14,12 @@ vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn().mockResolvedValue(vi.fn()),
 }));
 
-import { reconcileWorkspaceDashboards } from "../lib/services/workspace-group-service";
-import { workspacesStore } from "../lib/stores/workspace-groups";
+import { reconcileWorkspaceDashboards } from "../lib/services/workspace-service";
+import { workspacesStore } from "../lib/stores/workspaces";
 import {
   nestedWorkspaces,
   activeNestedWorkspaceIdx,
-} from "../lib/stores/workspace";
+} from "../lib/stores/nested-workspace";
 
 describe("scrub Active Agents from group Overview", () => {
   beforeEach(() => {

@@ -84,7 +84,7 @@ import {
 } from "../actions/drag-reorder";
 import { reorderContext, anyReorderActive, contextMenu } from "../stores/ui";
 import { getActiveCwd, lookupSurfaceWorkspaceId } from "./service-helpers";
-import { nestedWorkspaces } from "../stores/workspace";
+import { nestedWorkspaces } from "../stores/nested-workspace";
 import { getAllSurfaces, isTerminalSurface } from "../types";
 import type { ExtensionManifest, ExtensionAPI } from "../extension-types";
 import type { AppEvent } from "./event-bus";

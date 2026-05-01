@@ -23,7 +23,7 @@ vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
 import {
   nestedWorkspaces,
   activeNestedWorkspaceIdx,
-} from "../lib/stores/workspace";
+} from "../lib/stores/nested-workspace";
 import type { NestedWorkspace } from "../lib/types";
 import {
   startCwdPolling,

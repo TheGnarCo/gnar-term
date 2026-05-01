@@ -7,18 +7,18 @@ import {
 import {
   serializeLayout,
   createNestedWorkspaceFromDef,
-} from "./workspace-service";
+} from "./nested-workspace-service";
 import { wsMeta } from "./service-helpers";
 import {
   getWorktreeWorkspaces,
   closeNestedWorkspacesInWorkspace,
   provisionAutoDashboardsForWorkspace,
-} from "./workspace-group-service";
+} from "./workspace-service";
 import {
   getWorkspace,
   getWorkspaces,
   setWorkspaces,
-} from "../stores/workspace-groups";
+} from "../stores/workspaces";
 import { removeRootRow, appendRootRow } from "../stores/root-row-order";
 import { showConfirmPrompt } from "../stores/ui";
 import {

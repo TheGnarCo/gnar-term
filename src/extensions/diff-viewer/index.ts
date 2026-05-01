@@ -8,7 +8,7 @@ import type { ExtensionManifest, ExtensionAPI, WorkspaceRef } from "../api";
 import DiffSurface from "./DiffSurface.svelte";
 import ChangesTab from "./ChangesTab.svelte";
 import DiffIcon from "./DiffIcon.svelte";
-import { createNestedWorkspaceFromDef } from "../../lib/services/workspace-service";
+import { createNestedWorkspaceFromDef } from "../../lib/services/nested-workspace-service";
 
 export const diffViewerManifest: ExtensionManifest = {
   id: "diff-viewer",

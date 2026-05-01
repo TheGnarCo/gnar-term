@@ -51,11 +51,11 @@ describe("per-project overlay (via WorkspaceListBlock shell)", () => {
   });
 
   it("core bootstrap registers color + label resolvers on the row renderer", () => {
-    // Core (bootstrap/init-workspace-groups.ts) provides the resolvers
+    // Core (bootstrap/init-workspaces.ts) provides the resolvers
     // so core can paint the group's overlay and ghost without reaching
     // into extension state directly.
     const BOOTSTRAP = readFileSync(
-      "src/lib/bootstrap/init-workspace-groups.ts",
+      "src/lib/bootstrap/init-workspaces.ts",
       "utf-8",
     );
     expect(BOOTSTRAP).toMatch(/railColor:/);

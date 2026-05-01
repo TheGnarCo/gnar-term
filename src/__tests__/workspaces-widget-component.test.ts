@@ -8,7 +8,7 @@ import { render, cleanup, fireEvent } from "@testing-library/svelte";
 const { switchNestedWorkspaceMock } = vi.hoisted(() => ({
   switchNestedWorkspaceMock: vi.fn(),
 }));
-vi.mock("../lib/services/workspace-service", () => ({
+vi.mock("../lib/services/nested-workspace-service", () => ({
   switchNestedWorkspace: switchNestedWorkspaceMock,
   createNestedWorkspace: vi.fn(),
   schedulePersist: vi.fn(),
@@ -25,11 +25,11 @@ vi.mock("@tauri-apps/api/event", () => ({
 }));
 
 import WorkspacesWidget from "../lib/components/WorkspacesWidget.svelte";
-import { nestedWorkspaces } from "../lib/stores/workspace";
+import { nestedWorkspaces } from "../lib/stores/nested-workspace";
 import {
   setWorkspaces,
   resetWorkspacesForTest,
-} from "../lib/stores/workspace-groups";
+} from "../lib/stores/workspaces";
 import { DASHBOARD_HOST_KEY } from "../lib/contexts/dashboard-host";
 import type { NestedWorkspace } from "../lib/types";
 

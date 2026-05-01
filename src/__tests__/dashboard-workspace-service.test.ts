@@ -1,14 +1,14 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { get } from "svelte/store";
 
-vi.mock("../lib/services/workspace-service", () => ({
+vi.mock("../lib/services/nested-workspace-service", () => ({
   createNestedWorkspaceFromDef: vi.fn().mockResolvedValue("new-ws-id"),
   switchNestedWorkspace: vi.fn(),
 }));
 
 // Minimal mock of the nestedWorkspaces store — tests override subscribe per-test.
 const mockWorkspacesValue: unknown[] = [];
-vi.mock("../lib/stores/workspace", () => ({
+vi.mock("../lib/stores/nested-workspace", () => ({
   nestedWorkspaces: {
     subscribe: vi.fn((cb: (v: unknown[]) => void) => {
       cb(mockWorkspacesValue);
@@ -27,8 +27,8 @@ import {
 import {
   createNestedWorkspaceFromDef,
   switchNestedWorkspace,
-} from "../lib/services/workspace-service";
-import { nestedWorkspaces } from "../lib/stores/workspace";
+} from "../lib/services/nested-workspace-service";
+import { nestedWorkspaces } from "../lib/stores/nested-workspace";
 
 const MockIcon = {} as unknown as import("svelte").Component;
 const MockComponent = {} as unknown as import("svelte").Component;

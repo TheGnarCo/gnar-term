@@ -28,7 +28,7 @@ vi.mock("../../../lib/services/worktree-service", () => ({
   createWorktreeWorkspaceFromConfig: createWorktreeWorkspaceFromConfigMock,
 }));
 
-import { nestedWorkspaces } from "../../../lib/stores/workspace";
+import { nestedWorkspaces } from "../../../lib/stores/nested-workspace";
 import type { NestedWorkspace } from "../../../lib/types";
 import {
   buildStartupCommand,

@@ -34,9 +34,11 @@ vi.mock("../lib/stores/ui", async (importOriginal) => {
 });
 
 const mockCloseWorkspace = vi.fn<(idx: number) => void>();
-vi.mock("../lib/services/workspace-service", async (importOriginal) => {
+vi.mock("../lib/services/nested-workspace-service", async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import("../lib/services/workspace-service")>();
+    await importOriginal<
+      typeof import("../lib/services/nested-workspace-service")
+    >();
   return {
     ...actual,
     closeNestedWorkspace: (idx: number) => mockCloseWorkspace(idx),

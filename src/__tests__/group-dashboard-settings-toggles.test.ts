@@ -19,8 +19,8 @@ import WorkspaceDashboardSettings from "../lib/components/WorkspaceDashboardSett
 import {
   nestedWorkspaces,
   activeNestedWorkspaceIdx,
-} from "../lib/stores/workspace";
-import { workspacesStore } from "../lib/stores/workspace-groups";
+} from "../lib/stores/nested-workspace";
+import { workspacesStore } from "../lib/stores/workspaces";
 import {
   registerDashboardContribution,
   resetDashboardContributions,

@@ -38,7 +38,7 @@ vi.mock("../lib/terminal-service", () => ({
 }));
 
 // Services — stubbed so keydown dispatch doesn't trigger real side effects.
-vi.mock("../lib/services/workspace-service", () => ({
+vi.mock("../lib/services/nested-workspace-service", () => ({
   createNestedWorkspace: vi.fn(),
 }));
 vi.mock("../lib/services/pane-service", () => ({
@@ -62,7 +62,7 @@ vi.mock("../lib/services/workspace-action-registry", () => ({
 
 async function loadModule() {
   const ui = await import("../lib/stores/ui");
-  const workspace = await import("../lib/stores/workspace");
+  const workspace = await import("../lib/stores/nested-workspace");
   const shortcuts = await import("../lib/services/keyboard-shortcuts");
   return { ui, workspace, shortcuts };
 }

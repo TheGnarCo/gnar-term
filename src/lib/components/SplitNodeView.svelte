@@ -2,9 +2,9 @@
   import type { SplitNode, NestedWorkspace } from "../types";
   import { nodeContainsSurface } from "../types";
   import { theme } from "../stores/theme";
-  import { zoomedSurfaceId } from "../stores/workspace";
+  import { zoomedSurfaceId } from "../stores/nested-workspace";
   import { dragResize } from "../actions/drag-resize";
-  import { schedulePersist } from "../services/workspace-service";
+  import { schedulePersist } from "../services/nested-workspace-service";
   import PaneView from "./PaneView.svelte";
   import SplitNodeView from "./SplitNodeView.svelte";
 

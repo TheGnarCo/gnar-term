@@ -708,7 +708,7 @@ describe("Extension lifecycle", () => {
 
     // Simulate a workspace with an extension surface of this type
     const { nestedWorkspaces: wsStore } =
-      await import("../lib/stores/workspace");
+      await import("../lib/stores/nested-workspace");
     wsStore.set([
       {
         id: "ws-1",
@@ -1556,7 +1556,7 @@ describe("api.getWorkspaceIdForSurface", () => {
 
   it("resolves the owning workspace for a surface regardless of which is active", async () => {
     const { nestedWorkspaces: wsStore } =
-      await import("../lib/stores/workspace");
+      await import("../lib/stores/nested-workspace");
     wsStore.set([
       {
         id: "ws-A",
@@ -1617,7 +1617,7 @@ describe("api.getWorkspaceIdForSurface", () => {
 
   it("getAllTerminalSurfaces returns terminals from every workspace and every pane", async () => {
     const { nestedWorkspaces: wsStore } =
-      await import("../lib/stores/workspace");
+      await import("../lib/stores/nested-workspace");
     wsStore.set([
       {
         id: "ws-active",
@@ -1719,7 +1719,7 @@ describe("api.getWorkspaceIdForSurface", () => {
 
   it("finds surfaces inside split panes, not just the active pane", async () => {
     const { nestedWorkspaces: wsStore } =
-      await import("../lib/stores/workspace");
+      await import("../lib/stores/nested-workspace");
     wsStore.set([
       {
         id: "ws-split",

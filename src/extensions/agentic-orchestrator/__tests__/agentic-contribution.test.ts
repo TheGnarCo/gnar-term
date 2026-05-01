@@ -27,7 +27,7 @@ vi.mock("../../../lib/services/extension-state", () => ({
 const { createWorkspaceFromDefMock } = vi.hoisted(() => ({
   createWorkspaceFromDefMock: vi.fn(async () => "ws-agentic-new"),
 }));
-vi.mock("../../../lib/services/workspace-service", () => ({
+vi.mock("../../../lib/services/nested-workspace-service", () => ({
   createNestedWorkspaceFromDef: createWorkspaceFromDefMock,
   closeNestedWorkspace: vi.fn(),
 }));

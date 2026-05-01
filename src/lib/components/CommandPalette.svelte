@@ -2,7 +2,7 @@
   import { tick } from "svelte";
   import { theme } from "../stores/theme";
   import { commandPaletteOpen } from "../stores/ui";
-  import { activeSurface } from "../stores/workspace";
+  import { activeSurface } from "../stores/nested-workspace";
   import { isTerminalSurface } from "../types";
   import { commandStore, type Command } from "../services/command-registry";
 

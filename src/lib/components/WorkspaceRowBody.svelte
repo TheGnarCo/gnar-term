@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
    * WorkspaceRowBody — root-row renderer registered under the
-   * "workspace-group" kind (see `bootstrap/init-workspace-groups.ts`).
+   * "workspace-group" kind (see `bootstrap/init-workspaces.ts`).
    * Thin pass-through to WorkspaceSectionContent — the shared
    * <ContainerRow> primitive (mounted inside the section content) owns
    * the grip + banner + nested-list chrome. This component exists as

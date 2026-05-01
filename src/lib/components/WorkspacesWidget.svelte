@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { nestedWorkspaces } from "../stores/workspace";
-  import { workspacesStore } from "../stores/workspace-groups";
+  import { nestedWorkspaces } from "../stores/nested-workspace";
+  import { workspacesStore } from "../stores/workspaces";
   import { getDashboardContribution } from "../services/dashboard-contribution-registry";
   import {
     getDashboardHost,
     deriveDashboardScope,
   } from "../contexts/dashboard-host";
-  import { switchNestedWorkspace } from "../services/workspace-service";
+  import { switchNestedWorkspace } from "../services/nested-workspace-service";
   import { resolveWorkspaceColor } from "../theme-data";
   import { theme } from "../stores/theme";
   import DashboardTileIcon from "./DashboardTileIcon.svelte";

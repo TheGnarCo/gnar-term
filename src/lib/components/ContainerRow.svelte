@@ -18,7 +18,7 @@
   import { type Component } from "svelte";
   import { slide } from "svelte/transition";
   import { theme } from "../stores/theme";
-  import { nestedWorkspaces } from "../stores/workspace";
+  import { nestedWorkspaces } from "../stores/nested-workspace";
   import PrimarySidebarElement from "./PrimarySidebarElement.svelte";
   import SidebarRail from "./SidebarRail.svelte";
   import DefaultWorkspaceListView from "./WorkspaceListView.svelte";

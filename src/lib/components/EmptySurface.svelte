@@ -22,10 +22,10 @@
   import {
     nestedWorkspaces,
     activeNestedWorkspaceIdx,
-  } from "../stores/workspace";
+  } from "../stores/nested-workspace";
   import { rootRowOrder } from "../stores/root-row-order";
   import { rootRowRendererStore } from "../services/root-row-renderer-registry";
-  import { switchNestedWorkspace } from "../services/workspace-service";
+  import { switchNestedWorkspace } from "../services/nested-workspace-service";
   import { newSurface } from "../services/surface-service";
   import { wsMeta } from "../services/service-helpers";
 

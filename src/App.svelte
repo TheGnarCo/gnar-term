@@ -20,7 +20,7 @@
     activePane,
     activeSurface,
     activePseudoWorkspaceId,
-  } from "./lib/stores/workspace";
+  } from "./lib/stores/nested-workspace";
   import { pseudoWorkspaceStore } from "./lib/services/pseudo-workspace-registry";
   import {
     rootRowOrder,
@@ -64,8 +64,8 @@
   import { initPreview } from "./lib/bootstrap/init-preview";
   import { initAgentDetectionBootstrap } from "./lib/bootstrap/init-agent-detection";
   import { initCoreExtensionAPI } from "./lib/bootstrap/init-core-extension-api";
-  import { initWorkspaces } from "./lib/bootstrap/init-workspace-groups";
-  import { flushWorkspaces } from "./lib/stores/workspace-groups";
+  import { initWorkspaces } from "./lib/bootstrap/init-workspaces";
+  import { flushWorkspaces } from "./lib/stores/workspaces";
   import {
     restoreWorkspaces,
     markRestored,
@@ -75,7 +75,7 @@
     reconcileWorkspaceDashboards,
     reconcilePrimaryWorkspaces,
     setupPrimaryWorkspaceAutoRecreation,
-  } from "./lib/services/workspace-group-service";
+  } from "./lib/services/workspace-service";
 
   // Services
   import {
@@ -87,7 +87,7 @@
     saveCurrentWorkspace,
     persistWorkspaces,
     schedulePersist,
-  } from "./lib/services/workspace-service";
+  } from "./lib/services/nested-workspace-service";
   import {
     splitPane,
     closePane,

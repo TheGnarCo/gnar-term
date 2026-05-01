@@ -9,10 +9,10 @@
   import {
     nestedWorkspaces,
     activeNestedWorkspaceIdx,
-  } from "../stores/workspace";
+  } from "../stores/nested-workspace";
   import { eventBus, type ExtensionEvent } from "../services/event-bus";
   import type { Workspace } from "../config";
-  import { workspacesStore, getWorkspace } from "../stores/workspace-groups";
+  import { workspacesStore, getWorkspace } from "../stores/workspaces";
   import {
     deleteWorkspace,
     updateWorkspace,
@@ -22,7 +22,7 @@
     WORKSPACE_GROUP_STATE_CHANGED,
     toggleWorkspaceLock,
     claimWorkspace,
-  } from "../services/workspace-group-service";
+  } from "../services/workspace-service";
   import { archiveWorkspace } from "../services/archive-service";
   import { type WorkspaceActionContext } from "../services/workspace-action-registry";
   import {
@@ -34,7 +34,7 @@
     switchNestedWorkspace,
     closeNestedWorkspace,
     createNestedWorkspaceFromDef,
-  } from "../services/workspace-service";
+  } from "../services/nested-workspace-service";
   import { getDashboardContribution } from "../services/dashboard-contribution-registry";
   import DashboardTileIcon from "./DashboardTileIcon.svelte";
   import SidebarChipButton from "./SidebarChipButton.svelte";

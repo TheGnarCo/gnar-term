@@ -1,6 +1,6 @@
 import { get } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
-import { nestedWorkspaces } from "../../stores/workspace";
+import { nestedWorkspaces } from "../../stores/nested-workspace";
 import { surfaceTypeStore } from "../surface-type-registry";
 import { commandStore } from "../command-registry";
 import { sidebarTabStore, activateSidebarTab } from "../sidebar-tab-registry";
@@ -21,8 +21,8 @@ import {
 import {
   closeDashboardForGroup,
   isDashboardWorkspace,
-} from "../workspace-group-service";
-import { getWorkspace } from "../../stores/workspace-groups";
+} from "../workspace-service";
+import { getWorkspace } from "../../stores/workspaces";
 import { listMarkdownComponents } from "../markdown-component-registry";
 import type { ToolDef } from "../mcp-types";
 

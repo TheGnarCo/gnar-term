@@ -56,7 +56,7 @@ vi.mock("../../../lib/services/spawn-helper", () => ({
   spawnAgentInWorktree: spawnAgentInWorktreeMock,
 }));
 
-vi.mock("../../../lib/services/workspace-service", () => ({
+vi.mock("../../../lib/services/nested-workspace-service", () => ({
   createNestedWorkspaceFromDef: vi.fn().mockResolvedValue("ws-new"),
   closeNestedWorkspace: vi.fn(),
 }));
@@ -80,9 +80,11 @@ vi.mock("../../../lib/config", async (importOriginal) => {
   };
 });
 
-vi.mock("../../../lib/stores/workspace", async (importOriginal) => {
+vi.mock("../../../lib/stores/nested-workspace", async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import("../../../lib/stores/workspace")>();
+    await importOriginal<
+      typeof import("../../../lib/stores/nested-workspace")
+    >();
   return actual;
 });
 
@@ -291,7 +293,7 @@ describe("Kanban widget", () => {
 
     // Match the dashboard scope by giving each agent a workspace whose
     // first terminal cwd is under /work/proj.
-    const wsStore = (await import("../../../lib/stores/workspace")) as {
+    const wsStore = (await import("../../../lib/stores/nested-workspace")) as {
       nestedWorkspaces: { set: (v: unknown) => void };
     };
     wsStore.nestedWorkspaces.set([
@@ -389,7 +391,7 @@ describe("Kanban widget", () => {
     // the host-context-driven filter includes them as unclaimed CWD
     // matches — mirroring the group-scope rule in widget-helpers.
     const { setWorkspaces, resetWorkspacesForTest } =
-      await import("../../../lib/stores/workspace-groups");
+      await import("../../../lib/stores/workspaces");
     resetWorkspacesForTest();
     setWorkspaces([
       {
@@ -446,7 +448,7 @@ describe("Issues widget", () => {
     invalidateGhAvailability();
     tauriInvokeGhAvailable.current = true;
     const { setWorkspaces, resetWorkspacesForTest } =
-      await import("../../../lib/stores/workspace-groups");
+      await import("../../../lib/stores/workspaces");
     resetWorkspacesForTest();
     setWorkspaces([
       {
@@ -990,7 +992,7 @@ describe("Prs widget", () => {
     invalidateGhAvailability();
     tauriInvokeGhAvailable.current = true;
     const { setWorkspaces, resetWorkspacesForTest } =
-      await import("../../../lib/stores/workspace-groups");
+      await import("../../../lib/stores/workspaces");
     resetWorkspacesForTest();
     setWorkspaces([
       {
@@ -1332,7 +1334,7 @@ describe("TaskSpawner widget", () => {
     spawnAgentInWorktreeMock.mockClear();
     resetRegistry();
     const { setWorkspaces, resetWorkspacesForTest } =
-      await import("../../../lib/stores/workspace-groups");
+      await import("../../../lib/stores/workspaces");
     resetWorkspacesForTest();
     setWorkspaces([
       {

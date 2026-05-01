@@ -94,7 +94,7 @@ import { invoke } from "@tauri-apps/api/core";
 import {
   createNestedWorkspaceFromDef,
   serializeLayout,
-} from "../lib/services/workspace-service";
+} from "../lib/services/nested-workspace-service";
 import {
   runDefinedCommand,
   dismissDefinedCommand,
@@ -102,7 +102,7 @@ import {
 import {
   nestedWorkspaces,
   activeNestedWorkspaceIdx,
-} from "../lib/stores/workspace";
+} from "../lib/stores/nested-workspace";
 import {
   getAllPanes,
   isTerminalSurface,

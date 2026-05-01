@@ -4,7 +4,7 @@ import {
   activeWorkspace,
   activePane,
   activeSurface,
-} from "../stores/workspace";
+} from "../stores/nested-workspace";
 import { theme } from "../stores/theme";
 import {
   reorderContext,

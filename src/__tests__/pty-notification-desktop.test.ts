@@ -38,7 +38,7 @@ import { setupListeners } from "../lib/terminal-service";
 import {
   nestedWorkspaces,
   activeNestedWorkspaceIdx,
-} from "../lib/stores/workspace";
+} from "../lib/stores/nested-workspace";
 import type { NestedWorkspace, TerminalSurface } from "../lib/types";
 
 function makeTerminalSurface(id: string, ptyId: number): TerminalSurface {

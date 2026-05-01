@@ -6,7 +6,7 @@
     getDashboardHost,
     deriveDashboardScope,
   } from "../../../lib/contexts/dashboard-host";
-  import { getWorkspace } from "../../../lib/stores/workspace-groups";
+  import { getWorkspace } from "../../../lib/stores/workspaces";
   import SettingsFileEditor from "./SettingsFileEditor.svelte";
 
   const api = getContext<ExtensionAPI | undefined>(EXTENSION_API_KEY);

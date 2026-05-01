@@ -21,7 +21,7 @@ import {
   loadWorkspaces,
   workspacesStore,
   resetWorkspacesForTest,
-} from "../lib/stores/workspace-groups";
+} from "../lib/stores/workspaces";
 
 beforeEach(() => {
   resetWorkspacesForTest();

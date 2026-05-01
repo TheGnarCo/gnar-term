@@ -15,12 +15,12 @@ vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn().mockResolvedValue(vi.fn()),
 }));
 
-import { reconcileWorkspaceDashboards } from "../lib/services/workspace-group-service";
+import { reconcileWorkspaceDashboards } from "../lib/services/workspace-service";
 import {
   nestedWorkspaces,
   activeNestedWorkspaceIdx,
-} from "../lib/stores/workspace";
-import { workspacesStore } from "../lib/stores/workspace-groups";
+} from "../lib/stores/nested-workspace";
+import { workspacesStore } from "../lib/stores/workspaces";
 import {
   registerDashboardContribution,
   resetDashboardContributions,

@@ -12,7 +12,7 @@
   import {
     nestedWorkspaces,
     activeNestedWorkspaceIdx,
-  } from "../stores/workspace";
+  } from "../stores/nested-workspace";
   import { theme } from "../stores/theme";
   import { getAllSurfaces } from "../types";
   import { tabDragState } from "../services/tab-drag";
@@ -35,7 +35,7 @@
     renameNestedWorkspace,
     reorderWorkspaces,
     toggleWorkspaceLock,
-  } from "../services/workspace-service";
+  } from "../services/nested-workspace-service";
   import { get } from "svelte/store";
   import WorkspaceItem from "./WorkspaceItem.svelte";
   import DropGhost from "./DropGhost.svelte";

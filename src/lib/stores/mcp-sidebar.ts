@@ -17,7 +17,7 @@
  * client polls for via `poll_events`.
  */
 import { writable, derived } from "svelte/store";
-import { activeWorkspace } from "./workspace";
+import { activeWorkspace } from "./nested-workspace";
 
 export interface SidebarItem {
   id: string;

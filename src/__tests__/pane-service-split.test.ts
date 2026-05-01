@@ -41,7 +41,7 @@ vi.mock("../lib/services/service-helpers", () => ({
 import {
   nestedWorkspaces,
   activeNestedWorkspaceIdx,
-} from "../lib/stores/workspace";
+} from "../lib/stores/nested-workspace";
 import {
   uid,
   getAllPanes,

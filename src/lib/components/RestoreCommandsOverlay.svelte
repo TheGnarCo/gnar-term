@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { get } from "svelte/store";
   import { theme } from "../stores/theme";
-  import { nestedWorkspaces } from "../stores/workspace";
+  import { nestedWorkspaces } from "../stores/nested-workspace";
   import {
     getAllPanes,
     isTerminalSurface,

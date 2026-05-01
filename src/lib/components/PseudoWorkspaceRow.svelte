@@ -16,7 +16,7 @@
   import {
     activePseudoWorkspaceId,
     activeNestedWorkspaceIdx,
-  } from "../stores/workspace";
+  } from "../stores/nested-workspace";
   import DragGrip from "./DragGrip.svelte";
   import SidebarChipButton from "./SidebarChipButton.svelte";
   import ExtensionWrapper from "./ExtensionWrapper.svelte";

@@ -18,12 +18,12 @@ vi.mock("@tauri-apps/api/event", () => ({
 import {
   nestedWorkspaces,
   activeNestedWorkspaceIdx,
-} from "../lib/stores/workspace";
+} from "../lib/stores/nested-workspace";
 import {
   registerDashboardContribution,
   resetDashboardContributions,
 } from "../lib/services/dashboard-contribution-registry";
-import { provisionAutoDashboardsForWorkspace } from "../lib/services/workspace-group-service";
+import { provisionAutoDashboardsForWorkspace } from "../lib/services/workspace-service";
 import type { Workspace } from "../lib/config";
 
 function makeWorkspace(id: string): Workspace {

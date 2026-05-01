@@ -265,7 +265,7 @@ describe("Config loads per-project files", () => {
 
 describe("NestedWorkspace from config definition", () => {
   it("createNestedWorkspaceFromDef is implemented in workspace-service", async () => {
-    const ws = await import("../lib/services/workspace-service");
+    const ws = await import("../lib/services/nested-workspace-service");
     expect(typeof ws.createNestedWorkspaceFromDef).toBe("function");
   });
 
@@ -298,7 +298,7 @@ describe("NestedWorkspace from config definition", () => {
   it("handles layout with splits and surface definitions", async () => {
     const fs = await import("fs");
     const source = fs.readFileSync(
-      "src/lib/services/workspace-service.ts",
+      "src/lib/services/nested-workspace-service.ts",
       "utf-8",
     );
     expect(source).toContain("nodeDef.children[0]");
@@ -345,7 +345,7 @@ describe("No spurious fit/scrollToBottom on store updates", () => {
   it("switchNestedWorkspace does not directly call fit or scrollToBottom", async () => {
     const fs = await import("fs");
     const source = fs.readFileSync(
-      "src/lib/services/workspace-service.ts",
+      "src/lib/services/nested-workspace-service.ts",
       "utf-8",
     );
     const start = source.indexOf("function switchNestedWorkspace");
@@ -470,7 +470,7 @@ describe("CWD polling fallback", () => {
 describe("NestedWorkspace save/restore", () => {
   it("serializeLayout produces config-compatible output", async () => {
     const { serializeLayout } =
-      await import("../lib/services/workspace-service");
+      await import("../lib/services/nested-workspace-service");
 
     // Test with a simple pane node
     const paneNode: import("../lib/types").SplitNode = {
@@ -519,7 +519,7 @@ describe("NestedWorkspace save/restore", () => {
   });
 
   it("saveCurrentWorkspace is exported from workspace-service", async () => {
-    const ws = await import("../lib/services/workspace-service");
+    const ws = await import("../lib/services/nested-workspace-service");
     expect(typeof ws.saveCurrentWorkspace).toBe("function");
   });
 
@@ -655,7 +655,7 @@ describe("SplitNodeView has draggable dividers with ratio support", () => {
       "utf-8",
     );
     expect(source).toContain(
-      'import { schedulePersist } from "../services/workspace-service"',
+      'import { schedulePersist } from "../services/nested-workspace-service"',
     );
     const onEndMatch = source.match(/onEnd:\s*\(\)\s*=>\s*\{([^}]+)\}/);
     expect(onEndMatch).not.toBeNull();

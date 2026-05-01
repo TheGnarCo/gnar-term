@@ -27,7 +27,7 @@ import {
 import {
   nestedWorkspaces,
   activeNestedWorkspaceIdx,
-} from "../../../lib/stores/workspace";
+} from "../../../lib/stores/nested-workspace";
 import { resetSurfaceTypes } from "../../../lib/services/surface-type-registry";
 import { resetCommands } from "../../../lib/services/command-registry";
 

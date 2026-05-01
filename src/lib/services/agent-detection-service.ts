@@ -45,7 +45,7 @@ import {
 } from "./status-registry";
 import { statusRegistry } from "./status-registry";
 import { markSurfaceUnreadById } from "./surface-service";
-import { nestedWorkspaces } from "../stores/workspace";
+import { nestedWorkspaces } from "../stores/nested-workspace";
 import { getAllPanes, isTerminalSurface } from "../types";
 import {
   lookupSurfaceWorkspaceId,

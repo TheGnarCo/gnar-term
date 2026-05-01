@@ -122,11 +122,11 @@ import {
   zoomedSurfaceId,
   nestedWorkspaces,
   activeNestedWorkspaceIdx,
-} from "../lib/stores/workspace";
+} from "../lib/stores/nested-workspace";
 import { uid } from "../lib/types";
 import type { Pane, TerminalSurface, NestedWorkspace } from "../lib/types";
 import { togglePaneZoom } from "../lib/services/pane-service";
-import { switchNestedWorkspace } from "../lib/services/workspace-service";
+import { switchNestedWorkspace } from "../lib/services/nested-workspace-service";
 import { adjustFontSize, resetFontSize } from "../lib/terminal-service";
 import { saveConfig } from "../lib/config";
 import { Terminal } from "@xterm/xterm";

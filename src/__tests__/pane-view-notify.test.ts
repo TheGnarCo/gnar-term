@@ -27,7 +27,7 @@ globalThis.ResizeObserver =
   ResizeObserverStub as unknown as typeof ResizeObserver;
 
 import PaneView from "../lib/components/PaneView.svelte";
-import { nestedWorkspaces } from "../lib/stores/workspace";
+import { nestedWorkspaces } from "../lib/stores/nested-workspace";
 import type { NestedWorkspace, Pane, TerminalSurface } from "../lib/types";
 
 function makeTerminalSurface(id: string, hasUnread: boolean): TerminalSurface {

@@ -46,13 +46,13 @@ describe("Extension barrier enforcement", () => {
       // The Diff Dashboard contribution's `create(group)` materializes
       // a dashboard workspace via createNestedWorkspaceFromDef — mirrors the
       // agentic-orchestrator piercing below.
-      "diff-viewer/index.ts": ["../../lib/services/workspace-service"],
+      "diff-viewer/index.ts": ["../../lib/services/nested-workspace-service"],
       // The Agentic Dashboard contribution's `create(group)` must
       // materialize a dashboard workspace; reaching for
       // createNestedWorkspaceFromDef keeps the contribution on the same code
       // path as core's built-in Group Dashboard.
       "agentic-orchestrator/index.ts": [
-        "../../lib/services/workspace-service",
+        "../../lib/services/nested-workspace-service",
         // The extension mirrors its declared `globalAgentsMarkdownPath`
         // setting into `config.agenticGlobal.markdownPath` so the
         // Global Agentic Dashboard body + Stage-8 migration share one
@@ -65,8 +65,8 @@ describe("Extension barrier enforcement", () => {
         // the group list / dashboard tear-down, so the extension pierces
         // core — same shape as the existing `createNestedWorkspaceFromDef`
         // piercing above.
-        "../../lib/services/workspace-group-service",
-        "../../lib/stores/workspace-groups",
+        "../../lib/services/workspace-service",
+        "../../lib/stores/workspaces",
         // The back-fill provision loop must wait for nestedWorkspaces to be
         // restored before running (races the restore loop on startup).
         // waitRestored() resolves immediately on runtime-enable, defers
@@ -87,7 +87,7 @@ describe("Extension barrier enforcement", () => {
         // Dashboard widgets derive scope from DashboardHostContext +
         // group.path (spec §5.3). Same piercing as Kanban / AgentList.
         "../../../lib/contexts/dashboard-host",
-        "../../../lib/stores/workspace-groups",
+        "../../../lib/stores/workspaces",
       ],
       // Prs is the read-only sibling of Issues — same gh-availability
       // probe + DashboardHostContext piercings, but no spawn-helper
@@ -99,7 +99,7 @@ describe("Extension barrier enforcement", () => {
       "agentic-orchestrator/components/TaskSpawner.svelte": [
         "../../../lib/services/spawn-helper",
         "../../../lib/contexts/dashboard-host",
-        "../../../lib/stores/workspace-groups",
+        "../../../lib/stores/workspaces",
       ],
       "agentic-orchestrator/components/AgentList.svelte": [
         "../../../lib/contexts/dashboard-host",
@@ -130,8 +130,8 @@ describe("Extension barrier enforcement", () => {
       ],
       "agentic-orchestrator/widget-helpers.ts": [
         "../../lib/contexts/dashboard-host",
-        "../../lib/stores/workspace",
-        "../../lib/stores/workspace-groups",
+        "../../lib/stores/nested-workspace",
+        "../../lib/stores/workspaces",
         "../../lib/services/claimed-workspace-registry",
       ],
       // claude-settings/index.ts mirrors the agentic-orchestrator piercing
@@ -140,16 +140,16 @@ describe("Extension barrier enforcement", () => {
       // activate, and restore-nestedWorkspaces to defer the back-fill loop until
       // nestedWorkspaces are restored.
       "claude-settings/index.ts": [
+        "../../lib/services/nested-workspace-service",
         "../../lib/services/workspace-service",
-        "../../lib/services/workspace-group-service",
-        "../../lib/stores/workspace-groups",
+        "../../lib/stores/workspaces",
         "../../lib/bootstrap/restore-workspaces",
       ],
       // ClaudeSettingsWidget reads dashboard scope via DashboardHostContext
       // and group.path via workspace-groups — same piercing as Kanban.
       "claude-settings/components/ClaudeSettingsWidget.svelte": [
         "../../../lib/contexts/dashboard-host",
-        "../../../lib/stores/workspace-groups",
+        "../../../lib/stores/workspaces",
       ],
       // SettingsFileEditor imports from the extension's own lib/ directory —
       // these are intra-extension imports, not core piercings. The test regex

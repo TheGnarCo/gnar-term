@@ -17,9 +17,9 @@ vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn().mockResolvedValue(vi.fn()),
 }));
 
-import { nestedWorkspaces } from "../lib/stores/workspace";
-import { getWorkspaces, setWorkspaces } from "../lib/stores/workspace-groups";
-import { reconcilePrimaryWorkspaces } from "../lib/services/workspace-group-service";
+import { nestedWorkspaces } from "../lib/stores/nested-workspace";
+import { getWorkspaces, setWorkspaces } from "../lib/stores/workspaces";
+import { reconcilePrimaryWorkspaces } from "../lib/services/workspace-service";
 import type { Workspace } from "../lib/config";
 
 function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {

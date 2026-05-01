@@ -19,7 +19,7 @@ import GitStatusLine from "../lib/components/GitStatusLine.svelte";
 import {
   nestedWorkspaces,
   activeNestedWorkspaceIdx,
-} from "../lib/stores/workspace";
+} from "../lib/stores/nested-workspace";
 import {
   setStatusItem,
   clearAllStatusForWorkspace,

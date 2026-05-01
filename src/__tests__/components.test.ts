@@ -138,7 +138,7 @@ import {
 import {
   nestedWorkspaces,
   activeNestedWorkspaceIdx,
-} from "../lib/stores/workspace";
+} from "../lib/stores/nested-workspace";
 import {
   registerSidebarSection,
   resetSidebarSections,
@@ -147,7 +147,7 @@ import {
   registerWorkspaceAction,
   resetWorkspaceActions,
 } from "../lib/services/workspace-action-registry";
-import { setWorkspaces } from "../lib/stores/workspace-groups";
+import { setWorkspaces } from "../lib/stores/workspaces";
 import type { Workspace } from "../lib/config";
 
 // ---------------------------------------------------------------------------

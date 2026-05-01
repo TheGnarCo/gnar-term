@@ -33,7 +33,7 @@ import {
   createWorktreeWorkspaceFromConfig,
   type WorktreeWorkspaceConfig,
 } from "./worktree-service";
-import { nestedWorkspaces } from "../stores/workspace";
+import { nestedWorkspaces } from "../stores/nested-workspace";
 import {
   getAllPanes,
   isTerminalSurface,

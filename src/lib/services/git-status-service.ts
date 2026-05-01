@@ -21,9 +21,9 @@ import {
   clearStatusItem,
   clearAllStatusForSourceAndWorkspace,
 } from "./status-registry";
-import { nestedWorkspaces, activeWorkspace } from "../stores/workspace";
+import { nestedWorkspaces, activeWorkspace } from "../stores/nested-workspace";
 import { getActiveCwd, getWorkspaceCwd, wsMeta } from "./service-helpers";
-import { getWorkspace } from "../stores/workspace-groups";
+import { getWorkspace } from "../stores/workspaces";
 
 export const GIT_STATUS_SOURCE = "git";
 

@@ -70,7 +70,7 @@ import { _resetEventBufferForTest } from "../lib/services/mcp-event-buffer";
 import {
   nestedWorkspaces,
   activeNestedWorkspaceIdx,
-} from "../lib/stores/workspace";
+} from "../lib/stores/nested-workspace";
 import type { NestedWorkspace, Pane } from "../lib/types";
 import { getAllSurfaces } from "../lib/types";
 import {

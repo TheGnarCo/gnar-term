@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { NestedWorkspace } from "../../../../lib/types";
-  import { nestedWorkspaces } from "../../../../lib/stores/workspace";
+  import { nestedWorkspaces } from "../../../../lib/stores/nested-workspace";
 
   export let filterIds: Set<string> | undefined = undefined;
   export let accentColor: string | undefined = undefined;

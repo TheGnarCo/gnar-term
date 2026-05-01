@@ -16,12 +16,12 @@
  *      `isGlobalAgenticDashboard: true` → global scope).
  */
 import type { ExtensionManifest, ExtensionAPI, WorkspaceRef } from "../api";
-import { createNestedWorkspaceFromDef } from "../../lib/services/workspace-service";
+import { createNestedWorkspaceFromDef } from "../../lib/services/nested-workspace-service";
 import {
   closeAutoDashboardsBySource,
   provisionAutoDashboardsForWorkspace,
-} from "../../lib/services/workspace-group-service";
-import { getWorkspaces } from "../../lib/stores/workspace-groups";
+} from "../../lib/services/workspace-service";
+import { getWorkspaces } from "../../lib/stores/workspaces";
 import { waitRestored } from "../../lib/bootstrap/restore-workspaces";
 import { getConfig, saveConfig } from "../../lib/config";
 import BotIcon from "./icons/BotIcon.svelte";

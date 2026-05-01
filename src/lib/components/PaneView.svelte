@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { theme } from "../stores/theme";
-  import { nestedWorkspaces } from "../stores/workspace";
+  import { nestedWorkspaces } from "../stores/nested-workspace";
   import { commandStore } from "../services/command-registry";
   import TabBar from "./TabBar.svelte";
   import TerminalSurface from "./TerminalSurface.svelte";

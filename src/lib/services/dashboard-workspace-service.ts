@@ -1,10 +1,10 @@
 import { derived, get, type Readable } from "svelte/store";
 import type { Component } from "svelte";
-import { nestedWorkspaces } from "../stores/workspace";
+import { nestedWorkspaces } from "../stores/nested-workspace";
 import {
   createNestedWorkspaceFromDef,
   switchNestedWorkspace,
-} from "./workspace-service";
+} from "./nested-workspace-service";
 import { createRegistry } from "./create-registry";
 
 interface DashboardWorkspaceEntry {

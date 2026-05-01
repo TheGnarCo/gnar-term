@@ -9,7 +9,7 @@
     pendingCreateResolver,
     createDialogPrefill,
     type CreateDialogResult,
-  } from "../stores/workspace-groups-ui";
+  } from "../stores/workspaces-ui";
 
   // ColorPicker types theme as Readable<Record<string, string>>; the
   // core store is Readable<ThemeDef>, structurally compatible but not

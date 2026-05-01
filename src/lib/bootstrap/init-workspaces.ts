@@ -19,13 +19,13 @@ import { appendRootRow } from "../stores/root-row-order";
 import {
   nestedWorkspaces,
   activeNestedWorkspaceIdx,
-} from "../stores/workspace";
+} from "../stores/nested-workspace";
 import {
   loadWorkspaces,
   getWorkspaces as readGroups,
   getActiveWorkspaceId,
   setActiveWorkspaceId,
-} from "../stores/workspace-groups";
+} from "../stores/workspaces";
 import {
   addWorkspace,
   addNestedWorkspaceToWorkspace,
@@ -40,7 +40,7 @@ import {
   removeNestedWorkspaceFromAllWorkspaces,
   unclaimWorkspace,
   updateWorkspace,
-} from "../services/workspace-group-service";
+} from "../services/workspace-service";
 import { resolveWorkspaceColor } from "../theme-data";
 import { theme } from "../stores/theme";
 import WorkspaceRowBody from "../components/WorkspaceRowBody.svelte";
@@ -52,14 +52,14 @@ import type { Workspace } from "../config";
 import {
   pendingCreateResolver,
   createDialogPrefill,
-} from "../stores/workspace-groups-ui";
+} from "../stores/workspaces-ui";
 import { invoke } from "@tauri-apps/api/core";
 import { getActiveCwd, wsMeta } from "../services/service-helpers";
 import type { NestedWorkspaceMetadata } from "../types";
 import {
   createNestedWorkspaceFromDef,
   switchNestedWorkspace,
-} from "../services/workspace-service";
+} from "../services/nested-workspace-service";
 
 /**
  * Stage 5 moved Workspace Groups out of the extension layer and into

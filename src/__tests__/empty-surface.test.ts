@@ -48,7 +48,7 @@ describe("terminal-service: pty close does not auto-seed a workspace", () => {
 });
 
 describe("workspace-service: closing the last workspace is allowed", () => {
-  const SVC = read("src/lib/services/workspace-service.ts");
+  const SVC = read("src/lib/services/nested-workspace-service.ts");
 
   it("closeNestedWorkspace no longer guards against wsList.length <= 1", () => {
     expect(SVC).not.toMatch(/length\s*<=\s*1/);

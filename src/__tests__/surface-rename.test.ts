@@ -16,7 +16,7 @@ vi.mock("../lib/terminal-service", () => ({
 import {
   nestedWorkspaces,
   activeNestedWorkspaceIdx,
-} from "../lib/stores/workspace";
+} from "../lib/stores/nested-workspace";
 import { renamingSurfaceId } from "../lib/stores/ui";
 import {
   renameActiveSurface,

@@ -25,7 +25,7 @@ vi.mock("../../../lib/services/extension-state", () => ({
 import type { AgentRef as DetectedAgent } from "../../api";
 import type { ExtensionAPI } from "../../api";
 import { hostScopedAgentsStore } from "../widget-helpers";
-import { nestedWorkspaces } from "../../../lib/stores/workspace";
+import { nestedWorkspaces } from "../../../lib/stores/nested-workspace";
 import {
   claimWorkspace,
   resetClaimedWorkspaces,
@@ -33,7 +33,7 @@ import {
 import {
   setWorkspaces,
   resetWorkspacesForTest,
-} from "../../../lib/stores/workspace-groups";
+} from "../../../lib/stores/workspaces";
 import type { DashboardHostContext } from "../../../lib/contexts/dashboard-host";
 
 function makeAgent(overrides: Partial<DetectedAgent> = {}): DetectedAgent {

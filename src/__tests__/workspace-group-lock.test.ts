@@ -19,7 +19,7 @@ vi.mock("../lib/services/claimed-workspace-registry", () => ({
 vi.mock("../lib/services/workspace-git-dirty-store", () => ({
   releaseWorkspaceDirtyStore: vi.fn(),
 }));
-vi.mock("../lib/services/workspace-service", () => ({
+vi.mock("../lib/services/nested-workspace-service", () => ({
   createNestedWorkspaceFromDef: vi.fn(),
   closeNestedWorkspace: vi.fn(),
 }));
@@ -27,11 +27,11 @@ vi.mock("../lib/services/event-bus", () => ({
   eventBus: { emit: vi.fn(), on: vi.fn(), off: vi.fn() },
 }));
 
-import { setWorkspaces, getWorkspaces } from "../lib/stores/workspace-groups";
+import { setWorkspaces, getWorkspaces } from "../lib/stores/workspaces";
 import {
   toggleWorkspaceLock,
   deleteWorkspace,
-} from "../lib/services/workspace-group-service";
+} from "../lib/services/workspace-service";
 import { removeRootRow } from "../lib/stores/root-row-order";
 import type { Workspace } from "../lib/config";
 

@@ -25,7 +25,7 @@ vi.mock("../lib/config", () => ({
   })),
 }));
 
-vi.mock("../lib/stores/workspace", async () => {
+vi.mock("../lib/stores/nested-workspace", async () => {
   const { writable } = await import("svelte/store");
   return {
     nestedWorkspaces: writable([]),
@@ -37,20 +37,20 @@ vi.mock("../lib/stores/workspace", async () => {
   };
 });
 
-vi.mock("../lib/services/workspace-service", () => ({
+vi.mock("../lib/services/nested-workspace-service", () => ({
   closeNestedWorkspace: mocks.closeNestedWorkspace,
   createNestedWorkspaceFromDef: mocks.createNestedWorkspaceFromDef,
   serializeLayout: mocks.serializeLayout,
   schedulePersist: mocks.schedulePersist,
 }));
 
-vi.mock("../lib/stores/workspace-groups", () => ({
+vi.mock("../lib/stores/workspaces", () => ({
   getWorkspace: mocks.getWorkspace,
   getWorkspaces: mocks.getWorkspaces,
   setWorkspaces: mocks.setWorkspaces,
 }));
 
-vi.mock("../lib/services/workspace-group-service", () => ({
+vi.mock("../lib/services/workspace-service", () => ({
   getWorktreeWorkspaces: mocks.getWorktreeWorkspaces,
   closeNestedWorkspacesInWorkspace: mocks.closeNestedWorkspacesInWorkspace,
   provisionAutoDashboardsForWorkspace:
@@ -66,7 +66,7 @@ vi.mock("../lib/stores/ui", () => ({
   showConfirmPrompt: mocks.showConfirmPrompt,
 }));
 
-import { nestedWorkspaces } from "../lib/stores/workspace";
+import { nestedWorkspaces } from "../lib/stores/nested-workspace";
 import {
   initArchiveFromState,
   archivedOrder,

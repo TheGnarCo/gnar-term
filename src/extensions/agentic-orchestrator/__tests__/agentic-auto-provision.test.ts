@@ -41,8 +41,8 @@ import {
 import {
   nestedWorkspaces,
   activeNestedWorkspaceIdx,
-} from "../../../lib/stores/workspace";
-import { workspacesStore } from "../../../lib/stores/workspace-groups";
+} from "../../../lib/stores/nested-workspace";
+import { workspacesStore } from "../../../lib/stores/workspaces";
 import {
   markRestored,
   resetRestoreSignal,

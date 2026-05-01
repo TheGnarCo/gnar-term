@@ -14,7 +14,7 @@
   import { onDestroy } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { theme } from "../stores/theme";
-  import { nestedWorkspaces } from "../stores/workspace";
+  import { nestedWorkspaces } from "../stores/nested-workspace";
   import { getWorkspaceStatusByCategory } from "../services/status-registry";
   import { GIT_STATUS_SOURCE } from "../services/git-status-service";
   import { wsMeta } from "../services/service-helpers";

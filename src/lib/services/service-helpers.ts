@@ -1,7 +1,7 @@
 import { tick } from "svelte";
 import { get } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
-import { activeSurface, nestedWorkspaces } from "../stores/workspace";
+import { activeSurface, nestedWorkspaces } from "../stores/nested-workspace";
 import {
   getAllPanes,
   getAllSurfaces,

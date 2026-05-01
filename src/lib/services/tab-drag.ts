@@ -13,7 +13,7 @@
  * split and sidebar moves added in later stories).
  */
 import { writable, get, type Readable } from "svelte/store";
-import { nestedWorkspaces } from "../stores/workspace";
+import { nestedWorkspaces } from "../stores/nested-workspace";
 import { theme } from "../stores/theme";
 import { getAllPanes, getAllSurfaces } from "../types";
 import {
@@ -21,8 +21,8 @@ import {
   mergeTabToPane,
   splitPaneWithSurface,
 } from "./pane-service";
-import { createNestedWorkspaceFromSurface } from "./workspace-service";
-import { getWorkspaces } from "../stores/workspace-groups";
+import { createNestedWorkspaceFromSurface } from "./nested-workspace-service";
+import { getWorkspaces } from "../stores/workspaces";
 import { rootRowOrder } from "../stores/root-row-order";
 
 export type TabDropTarget =

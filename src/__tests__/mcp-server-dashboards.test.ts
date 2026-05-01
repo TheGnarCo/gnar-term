@@ -27,8 +27,8 @@ import {
 import {
   nestedWorkspaces,
   activeNestedWorkspaceIdx,
-} from "../lib/stores/workspace";
-import { workspacesStore } from "../lib/stores/workspace-groups";
+} from "../lib/stores/nested-workspace";
+import { workspacesStore } from "../lib/stores/workspaces";
 
 function rpc(method: string, params?: unknown, id: number = 1) {
   return { jsonrpc: "2.0" as const, id, method, params };

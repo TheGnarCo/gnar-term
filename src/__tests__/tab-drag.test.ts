@@ -46,12 +46,12 @@ const splitPaneWithSurfaceSpy = vi.fn();
 const mergeTabToPaneSpy = vi.fn();
 const createWorkspaceFromSurfaceSpy = vi.fn();
 
-vi.mock("../lib/services/workspace-service", () => ({
+vi.mock("../lib/services/nested-workspace-service", () => ({
   createNestedWorkspaceFromSurface: (...args: unknown[]) =>
     createWorkspaceFromSurfaceSpy(...args),
 }));
 
-vi.mock("../lib/stores/workspace-groups", () => ({
+vi.mock("../lib/stores/workspaces", () => ({
   getWorkspaces: vi.fn().mockReturnValue([]),
   workspacesStore: { subscribe: vi.fn() },
   setActiveWorkspaceId: vi.fn(),
@@ -89,8 +89,8 @@ vi.mock("../lib/services/pane-service", async () => {
 import {
   nestedWorkspaces,
   activeNestedWorkspaceIdx,
-} from "../lib/stores/workspace";
-import { getWorkspaces } from "../lib/stores/workspace-groups";
+} from "../lib/stores/nested-workspace";
+import { getWorkspaces } from "../lib/stores/workspaces";
 import {
   uid,
   type NestedWorkspace,

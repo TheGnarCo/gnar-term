@@ -12,7 +12,7 @@
    *   - none         → widget is inert
    */
   import { theme } from "../stores/theme";
-  import { getWorkspace } from "../stores/workspace-groups";
+  import { getWorkspace } from "../stores/workspaces";
   import {
     deriveDashboardScope,
     getDashboardHost,
@@ -21,7 +21,7 @@
   import {
     nestedWorkspaces,
     activeNestedWorkspaceIdx,
-  } from "../stores/workspace";
+  } from "../stores/nested-workspace";
 
   /** Explicit repo override under global scope. */
   export let repoPath: string | undefined = undefined;

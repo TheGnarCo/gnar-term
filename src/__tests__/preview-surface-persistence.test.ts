@@ -33,8 +33,8 @@ vi.mock("../lib/terminal-service", () => ({
 import {
   serializeLayout,
   createNestedWorkspaceFromDef,
-} from "../lib/services/workspace-service";
-import { nestedWorkspaces } from "../lib/stores/workspace";
+} from "../lib/services/nested-workspace-service";
+import { nestedWorkspaces } from "../lib/stores/nested-workspace";
 import {
   isPreviewSurface,
   type NestedWorkspace,

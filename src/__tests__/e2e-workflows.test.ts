@@ -39,7 +39,7 @@ import {
   activeWorkspace,
   activePane,
   activeSurface,
-} from "../lib/stores/workspace";
+} from "../lib/stores/nested-workspace";
 import type {
   NestedWorkspace,
   Pane,
@@ -52,7 +52,7 @@ import {
   createNestedWorkspace,
   switchNestedWorkspace,
   closeNestedWorkspace,
-} from "../lib/services/workspace-service";
+} from "../lib/services/nested-workspace-service";
 import { splitPane, focusPane, closePane } from "../lib/services/pane-service";
 import { getCwdForSurface } from "../lib/services/service-helpers";
 import {

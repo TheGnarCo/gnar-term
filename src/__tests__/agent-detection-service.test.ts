@@ -9,7 +9,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { get } from "svelte/store";
 
-vi.mock("../lib/stores/workspace", async () => {
+vi.mock("../lib/stores/nested-workspace", async () => {
   const { writable: w } = await import("svelte/store");
   return { nestedWorkspaces: w([]) };
 });
@@ -22,7 +22,7 @@ import {
   resetAgentDetectionForTests,
 } from "../lib/services/agent-detection-service";
 import { eventBus, type AppEvent } from "../lib/services/event-bus";
-import { nestedWorkspaces } from "../lib/stores/workspace";
+import { nestedWorkspaces } from "../lib/stores/nested-workspace";
 import { statusRegistry } from "../lib/services/status-registry";
 import { notifyOutputObservers } from "../lib/services/surface-output-observer";
 

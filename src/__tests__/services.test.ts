@@ -37,7 +37,7 @@ import {
   nestedWorkspaces,
   activeNestedWorkspaceIdx,
   activeWorkspace,
-} from "../lib/stores/workspace";
+} from "../lib/stores/nested-workspace";
 import type {
   NestedWorkspace,
   Pane,
@@ -58,7 +58,7 @@ import {
   persistWorkspaces,
   schedulePersist,
   toggleWorkspaceLock,
-} from "../lib/services/workspace-service";
+} from "../lib/services/nested-workspace-service";
 
 import {
   focusPane,

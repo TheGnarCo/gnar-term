@@ -111,7 +111,7 @@ import {
 import {
   nestedWorkspaces,
   activeNestedWorkspaceIdx,
-} from "../lib/stores/workspace";
+} from "../lib/stores/nested-workspace";
 import type { Pane, NestedWorkspace } from "../lib/types";
 import { uid } from "../lib/types";
 

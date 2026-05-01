@@ -12,11 +12,8 @@ import {
   type DashboardHostContext,
   type DashboardScope,
 } from "../../lib/contexts/dashboard-host";
-import { nestedWorkspaces } from "../../lib/stores/workspace";
-import {
-  getWorkspace,
-  workspacesStore,
-} from "../../lib/stores/workspace-groups";
+import { nestedWorkspaces } from "../../lib/stores/nested-workspace";
+import { getWorkspace, workspacesStore } from "../../lib/stores/workspaces";
 import { claimedWorkspaceIds } from "../../lib/services/claimed-workspace-registry";
 import type {
   SpawnedByMarker,

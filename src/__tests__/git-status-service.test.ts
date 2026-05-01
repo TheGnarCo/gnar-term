@@ -30,7 +30,7 @@ import { eventBus } from "../lib/services/event-bus";
 import {
   nestedWorkspaces,
   activeNestedWorkspaceIdx,
-} from "../lib/stores/workspace";
+} from "../lib/stores/nested-workspace";
 import type { NestedWorkspace } from "../lib/types";
 
 function makeWs(id: string, surfaceId: string, cwd: string): NestedWorkspace {

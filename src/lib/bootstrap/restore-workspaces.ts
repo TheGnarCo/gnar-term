@@ -10,8 +10,8 @@
  *   5. fall back to a single default "Workspace 1"
  */
 import { get } from "svelte/store";
-import { nestedWorkspaces } from "../stores/workspace";
-import { getWorkspaces } from "../stores/workspace-groups";
+import { nestedWorkspaces } from "../stores/nested-workspace";
+import { getWorkspaces } from "../stores/workspaces";
 import {
   loadState,
   type GnarTermConfig,
@@ -22,7 +22,7 @@ import {
   createNestedWorkspace,
   createNestedWorkspaceFromDef,
   switchNestedWorkspace,
-} from "../services/workspace-service";
+} from "../services/nested-workspace-service";
 
 // Restore-complete signal — lets async work (extension provision loops,
 // reconcileWorkspaceDashboards) defer safely until nestedWorkspaces are in the store.

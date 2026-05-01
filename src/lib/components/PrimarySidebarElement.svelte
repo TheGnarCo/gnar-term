@@ -78,7 +78,7 @@
     !isGroup &&
     !isLocked &&
     (alwaysShowClose || isHovered);
-  $: showLock = isLocked && isHovered && !isDragging && !isGroup;
+  $: showLock = isLocked && !isDragging && !isGroup;
   $: verticalPadding = isNested ? "0px" : isCompact ? "0px" : "4px";
 </script>
 
@@ -199,7 +199,7 @@
         ? isLocked
           ? $theme.fg
           : $theme.danger
-        : effectiveColor};
+        : $theme.fgDim};
         background: transparent;
         border: none;
         border-radius: 3px; cursor: pointer; padding: 0;

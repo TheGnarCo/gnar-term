@@ -393,7 +393,7 @@
     {/if}
 
     {#if !isDashboardWorkspaceRow && subtitleComponents.length > 0}
-      <div style="padding-left: 2px;">
+      <div style="padding: 2px 24px 4px 2px;">
         {#each subtitleComponents as sub (sub.id)}
           {@const subApi = getExtensionApiById(sub.source)}
           {#if subApi}

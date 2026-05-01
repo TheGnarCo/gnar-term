@@ -18,10 +18,9 @@
   import { type Component } from "svelte";
   import { slide } from "svelte/transition";
   import { theme } from "../stores/theme";
-  import { reorderContext } from "../stores/ui";
   import { workspaces } from "../stores/workspace";
   import PrimarySidebarElement from "./PrimarySidebarElement.svelte";
-  import DragGrip from "./DragGrip.svelte";
+  import SidebarRail from "./SidebarRail.svelte";
   import DefaultWorkspaceListView from "./WorkspaceListView.svelte";
   import type { Workspace } from "../types";
   import { wsMeta } from "../services/service-helpers";
@@ -91,37 +90,6 @@
     undefined;
 
   let bannerHovered = false;
-  let mouseOverContainer = false;
-  let railHovered = false;
-  let containerLeaveTimer: ReturnType<typeof setTimeout> | null = null;
-
-  function handleContainerEnter(): void {
-    if (containerLeaveTimer !== null) {
-      clearTimeout(containerLeaveTimer);
-      containerLeaveTimer = null;
-    }
-    mouseOverContainer = true;
-  }
-
-  function handleContainerLeave(): void {
-    containerLeaveTimer = setTimeout(() => {
-      mouseOverContainer = false;
-      containerLeaveTimer = null;
-    }, 80);
-  }
-
-  function handleRailEnter(): void {
-    handleContainerEnter();
-    railHovered = true;
-  }
-
-  function handleRailLeave(): void {
-    handleContainerLeave();
-    railHovered = false;
-  }
-
-  $: rowHovered = mouseOverContainer;
-  $: railBorderColor = $theme.border ?? "transparent";
 
   // Non-dashboard count: dashboards don't count as real nested workspaces for
   // the purposes of showing the toggle button and auto-expand/collapse.
@@ -154,7 +122,6 @@
   >
     <PrimarySidebarElement
       isGroup={true}
-      alwaysShowClose={false}
       isCompact={false}
       name={containerLabel}
       isActive={false}
@@ -225,47 +192,16 @@
     style="display: flex; position: relative; align-items: stretch;"
   >
     {#if onGripMouseDown}
-      <div
-        data-container-rail
-        on:mouseenter={handleRailEnter}
-        on:mouseleave={handleRailLeave}
-        on:mousedown={(e) => onGripMouseDown?.(e)}
-        style="
-          flex-shrink: 0;
-          align-self: stretch;
-          display: flex;
-          position: relative;
-          box-sizing: border-box;
-          border-left: 1px solid {railBorderColor};
-          border-top: 1px solid {color};
-          border-bottom: 1px solid {color};
-        "
-        role="presentation"
-      >
-        <DragGrip
-          theme={$theme}
-          visible={railHovered && $reorderContext === null && !locked}
-          railColor={color}
-          railOpacity={1}
-          alwaysShowDots={!locked}
-          onClose={locked ? undefined : onClose}
-          closeTooltip="Delete Workspace Group"
-          {locked}
-        />
-        {#if hasActiveChild && collapsed}
-          <div
-            aria-hidden="true"
-            style="
-              position: absolute;
-              top: 0; left: 0; bottom: 0;
-              width: 1px;
-              background: {color};
-              pointer-events: none;
-              z-index: 4;
-            "
-          ></div>
-        {/if}
-      </div>
+      <SidebarRail
+        mode="container"
+        {color}
+        canDrag={true}
+        {locked}
+        hasActiveStripe={hasActiveChild && collapsed}
+        {onGripMouseDown}
+        {onClose}
+        closeTooltip="Delete Workspace Group"
+      />
     {/if}
     <div
       style="
@@ -302,14 +238,8 @@
         "
         on:contextmenu={onBannerContextMenu}
         on:click={onBannerClick}
-        on:mouseenter={() => {
-          bannerHovered = true;
-          handleContainerEnter();
-        }}
-        on:mouseleave={() => {
-          bannerHovered = false;
-          handleContainerLeave();
-        }}
+        on:mouseenter={() => (bannerHovered = true)}
+        on:mouseleave={() => (bannerHovered = false)}
       >
         <div
           data-container-banner-body

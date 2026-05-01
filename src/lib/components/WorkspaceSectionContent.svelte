@@ -24,10 +24,7 @@
     claimWorkspace,
   } from "../services/workspace-group-service";
   import { archiveGroup } from "../services/archive-service";
-  import {
-    workspaceActionStore,
-    type WorkspaceActionContext,
-  } from "../services/workspace-action-registry";
+  import { type WorkspaceActionContext } from "../services/workspace-action-registry";
   import {
     childRowContributorStore,
     getChildRowsFor,
@@ -38,20 +35,13 @@
     closeWorkspace,
     createWorkspaceFromDef,
   } from "../services/workspace-service";
-  import {
-    dashboardContributionStore,
-    canAddContributionToGroup,
-    getDashboardContribution,
-    type DashboardContribution,
-  } from "../services/dashboard-contribution-registry";
+  import { getDashboardContribution } from "../services/dashboard-contribution-registry";
   import DashboardTileIcon from "./DashboardTileIcon.svelte";
+  import SidebarChipButton from "./SidebarChipButton.svelte";
   import GridIcon from "../icons/GridIcon.svelte";
   import GitBranchIcon from "../icons/GitBranchIcon.svelte";
   import WorktreeIcon from "../icons/WorktreeIcon.svelte";
-  import CloseIcon from "../icons/CloseIcon.svelte";
-  import LockIcon from "../icons/LockIcon.svelte";
   import type { MenuItem } from "../context-menu-types";
-  import { workspaces as workspacesStore } from "../stores/workspace";
   import {
     showInputPrompt,
     contextMenu,
@@ -180,57 +170,6 @@
 
   $: isGroupLocked = group?.locked === true;
 
-  // `$workspaceActionStore` must be read inside this statement so the
-  // extension-registered actions reach the context menu when extensions
-  // activate after the component mounts.
-  $: actions = groupContext
-    ? $workspaceActionStore.filter((a) => !a.when || a.when(groupContext!))
-    : [];
-
-  $: coreAction = actions.find((a) => a.id === "core:new-workspace");
-  $: otherActions = actions.filter((a) => a.id !== "core:new-workspace");
-
-  // Dashboard contributions that aren't yet present on this group and
-  // haven't hit their per-group cap. Surfaced in the group's banner
-  // context menu so users can add e.g. an Agentic Dashboard when the
-  // agentic extension is enabled.
-  $: addableContributions = (() => {
-    const currentGroup = group;
-    if (!currentGroup) return [] as DashboardContribution[];
-    const ws = $workspacesStore;
-    return $dashboardContributionStore.filter((c) => {
-      // autoProvision contributions materialize automatically and
-      // cannot be removed — they should not appear in the "Add
-      // Dashboard" menu. Covers core Overview, core Settings, and
-      // Agentic (when the extension is enabled).
-      if (c.autoProvision) return false;
-      if (c.isAvailableFor && !c.isAvailableFor(currentGroup)) return false;
-      const countForGroup = ws.filter((w) => {
-        const md = wsMeta(w);
-        return (
-          md?.isDashboard === true &&
-          md?.groupId === currentGroup.id &&
-          md?.dashboardContributionId === c.id
-        );
-      }).length;
-      return canAddContributionToGroup(currentGroup, c.id, countForGroup);
-    });
-  })();
-
-  async function handleAddDashboardContribution(
-    contribution: DashboardContribution,
-  ): Promise<void> {
-    if (!group) return;
-    try {
-      await contribution.create(group);
-    } catch (err) {
-      console.error(
-        `[workspace-groups] Failed to add dashboard contribution "${contribution.id}":`,
-        err,
-      );
-    }
-  }
-
   async function handleRenameGroup() {
     if (!group) return;
     const next = await showInputPrompt("Rename workspace group", group.name);
@@ -309,64 +248,38 @@
     if (!group) return;
     e.preventDefault();
     e.stopPropagation();
-    const items: Array<{
-      label: string;
-      action: () => void;
-      shortcut?: string;
-      separator?: boolean;
-      danger?: boolean;
-      disabled?: boolean;
-    }> = [
+    const items: MenuItem[] = [
       {
-        label: "Rename Workspace Group",
+        label: "Rename Workspace",
         action: () => {
           void handleRenameGroup();
         },
       },
-      {
-        label: "Open Dashboard",
-        action: () => {
-          if (group) void openGroupDashboard(group);
-        },
-      },
     ];
-    if (coreAction && groupContext) {
+    if (group.isGit && groupContext) {
       items.push({
-        label: "New Workspace",
-        action: () => coreAction!.handler(groupContext!),
+        label: "New Worktree",
+        icon: GitBranchIcon as unknown as Component,
+        action: () =>
+          runCommandById("worktrees:create-workspace", groupContext),
       });
-    }
-    for (const a of otherActions) {
-      items.push({
-        label: a.label,
-        action: () => void a.handler(groupContext!),
-      });
-    }
-    if (addableContributions.length > 0) {
-      items.push({ label: "", action: () => {}, separator: true });
-      for (const c of addableContributions) {
-        items.push({
-          label: c.actionLabel,
-          action: () => void handleAddDashboardContribution(c),
-        });
-      }
     }
     items.push({ label: "", action: () => {}, separator: true });
     items.push({
-      label: isGroupLocked ? "Unlock Workspace Group" : "Lock Workspace Group",
+      label: isGroupLocked ? "Unlock Workspace" : "Lock Workspace",
       action: () => {
         if (group) toggleWorkspaceGroupLock(group.id);
       },
     });
     items.push({
-      label: "Archive Group",
+      label: "Archive Workspace",
       disabled: isGroupLocked,
       action: () => {
         if (group) void archiveGroup(group.id);
       },
     });
     items.push({
-      label: "Delete Workspace Group",
+      label: "Delete Workspace",
       danger: true,
       disabled: isGroupLocked,
       action: () => {
@@ -384,8 +297,6 @@
   let hoveredDashId: string | null = null;
   let branchChipHovered = false;
   let caretHovered = false;
-  let closeHovered = false;
-  let lockHovered = false;
   let dashboardCloseHovered: string | null = null;
 
   $: dashboardWorkspaces = (() => {
@@ -494,50 +405,21 @@
         ">{group.name}</span
       >
 
-      <svelte:fragment slot="banner-end">
+      <svelte:fragment slot="banner-end" let:bannerHovered>
         {#if isGroupLocked}
-          <button
-            title="Unlock Workspace Group"
-            aria-label="Unlock Workspace Group"
-            style="
-              display: flex; align-items: center; justify-content: center;
-              width: 14px; height: 14px; flex-shrink: 0;
-              color: {lockHovered ? $theme.fg : groupHex};
-              background: transparent;
-              border: none;
-              border-radius: 3px; cursor: pointer; padding: 0;
-              transition: color 0.1s, border-color 0.1s;
-              -webkit-app-region: no-drag;
-            "
-            on:mousedown|stopPropagation
-            on:click|stopPropagation={() => void handleUnlockGroup()}
-            on:mouseenter={() => (lockHovered = true)}
-            on:mouseleave={() => (lockHovered = false)}
-          >
-            <LockIcon width="9" height="9" />
-          </button>
-        {:else}
-          <button
-            title="Delete Workspace Group"
-            aria-label="Delete Workspace Group"
-            style="
-              display: flex; align-items: center; justify-content: center;
-              width: 14px; height: 14px; flex-shrink: 0;
-              color: {closeHovered ? $theme.danger : groupHex};
-              background: transparent;
-              border: none;
-              border-radius: 3px; cursor: pointer; padding: 0;
-              line-height: 1;
-              transition: color 0.1s, border-color 0.1s;
-              -webkit-app-region: no-drag;
-            "
-            on:mousedown|stopPropagation
-            on:click|stopPropagation={() => void handleDeleteGroup()}
-            on:mouseenter={() => (closeHovered = true)}
-            on:mouseleave={() => (closeHovered = false)}
-          >
-            <CloseIcon width="9" height="9" />
-          </button>
+          <SidebarChipButton
+            variant="lock"
+            title="Unlock Workspace"
+            idleColor={groupHex}
+            onClick={() => void handleUnlockGroup()}
+          />
+        {:else if bannerHovered}
+          <SidebarChipButton
+            variant="close"
+            title="Delete Workspace"
+            idleColor={groupHex}
+            onClick={() => void handleDeleteGroup()}
+          />
         {/if}
       </svelte:fragment>
 

@@ -93,6 +93,7 @@
     <div style="display: flex; flex-direction: column; gap: 4px;">
       {#each entries as entry (entry.worktreePath)}
         {@const hasWorkspace = !!entry.workspaceId}
+        <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
         <div
           data-worktree-row
           data-branch={entry.branch}

@@ -23,16 +23,17 @@ const EXTENSION_API = readFileSync(
 
 describe("grip visibility suppression", () => {
   it("WorkspaceItem keeps its own grip collapsed when any reorder is active unless the item is the drag source", () => {
-    // PrimarySidebarElement now owns the grip for WorkspaceItem. The visible
-    // gate tracks row-level hover so hovering any part of the row
-    // (not just the grip column) expands it.
-    const SIDEBAR_ELEM = readFileSync(
-      "src/lib/components/PrimarySidebarElement.svelte",
+    // SidebarRail owns the grip visibility logic for both row and
+    // container modes. The gate tracks rail-level hover and suppresses
+    // expansion while any reorder is in progress unless the row is the
+    // drag source (isDragging).
+    const RAIL = readFileSync(
+      "src/lib/components/SidebarRail.svelte",
       "utf-8",
     ).replace(/\s+/g, " ");
-    expect(SIDEBAR_ELEM).toContain("anyReorderActive");
-    expect(SIDEBAR_ELEM).toMatch(
-      /visible=\{\s*isDragging\s*\|\|\s*\(\s*canDrag\s*&&\s*railHovered\s*&&\s*!\s*\$anyReorderActive\s*&&\s*!\s*isLocked\s*\)\s*\}/,
+    expect(RAIL).toContain("anyReorderActive");
+    expect(RAIL).toMatch(
+      /isDragging\s*\|\|\s*\(\s*canDrag\s*&&\s*railHovered\s*&&\s*!\s*\$anyReorderActive\s*&&\s*!\s*locked\s*\)/,
     );
   });
 

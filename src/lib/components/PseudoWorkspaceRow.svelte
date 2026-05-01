@@ -18,7 +18,7 @@
     activeWorkspaceIdx,
   } from "../stores/workspace";
   import DragGrip from "./DragGrip.svelte";
-  import CloseIcon from "../icons/CloseIcon.svelte";
+  import SidebarChipButton from "./SidebarChipButton.svelte";
   import ExtensionWrapper from "./ExtensionWrapper.svelte";
   import { getExtensionApiById } from "../services/extension-loader";
   import type { Component } from "svelte";
@@ -173,30 +173,16 @@
       </span>
     {/if}
   </div>
-  {#if pseudo.onClose}
-    <!-- Close button positioned at right edge, matching WorkspaceItem style -->
-    <button
-      title={"Close " + pseudo.label}
-      aria-label={"Close " + pseudo.label}
-      style="
-        position: absolute; top: 50%; right: 6px;
-        transform: translateY(-50%);
-        display: flex; align-items: center; justify-content: center;
-        width: 14px; height: 14px;
-        color: {rowHovered ? $theme.danger : bannerBackground};
-        background: transparent;
-        border: none;
-        border-radius: 3px; cursor: pointer; padding: 0;
-        line-height: 1;
-        transition: color 0.1s, border-color 0.1s;
-        -webkit-app-region: no-drag;
-      "
-      on:mousedown|stopPropagation
-      on:click|stopPropagation={handleClose}
-      on:mouseenter={() => (rowHovered = true)}
-      on:mouseleave={() => (rowHovered = false)}
+  {#if pseudo.onClose && rowHovered}
+    <div
+      style="position: absolute; top: 50%; right: 6px; transform: translateY(-50%);"
     >
-      <CloseIcon width="9" height="9" />
-    </button>
+      <SidebarChipButton
+        variant="close"
+        title={"Close " + pseudo.label}
+        idleColor={bannerBackground}
+        onClick={handleClose}
+      />
+    </div>
   {/if}
 </div>

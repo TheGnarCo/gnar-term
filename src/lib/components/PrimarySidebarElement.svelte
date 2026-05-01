@@ -1,23 +1,25 @@
 <script lang="ts">
   /**
-   * PrimarySidebarElement — unified component for all primary sidebar rows:
-   * workspace rows (root and nested), group banners, and dashboard tiles.
-   * Encapsulates the chrome (drag grip, close/lock buttons, hover states)
-   * so styling and behavior remain consistent across the sidebar.
+   * PrimarySidebarElement — unified row chrome (drag grip, close/lock,
+   * hover/active states, optional group banner gradient) for the
+   * primary sidebar.
    *
-   * Used by WorkspaceItem, ContainerRow, and dashboard tile rendering.
+   * Used by WorkspaceItem (workspace rows, including dashboard rows) and
+   * by ContainerRow's nested-inside-parent variant. The root ContainerRow
+   * variant builds its own banner because its rail spans multiple rows;
+   * see that file for details.
+   *
+   * The wrapper itself is intentionally inert — callers that want a
+   * clickable row attach interactivity inside the slot. The wrapper only
+   * forwards context-menu events.
    */
   import { theme } from "../stores/theme";
-  import { anyReorderActive } from "../stores/ui";
-  import DragGrip from "./DragGrip.svelte";
-  import CloseIcon from "../icons/CloseIcon.svelte";
-  import LockIcon from "../icons/LockIcon.svelte";
+  import SidebarRail from "./SidebarRail.svelte";
+  import SidebarChipButton from "./SidebarChipButton.svelte";
+  import { shortcutHint } from "../actions/shortcut-hint";
 
   /** Whether this is a group (renders gradient pattern) */
   export let isGroup: boolean = false;
-
-  /** Whether close button shows always (not just on hover) */
-  export let alwaysShowClose: boolean = false;
 
   /** Whether to use compact sizing (smaller height/padding) */
   export let isCompact: boolean = false;
@@ -40,17 +42,11 @@
   /** Whether dragging is enabled for this element */
   export let canDrag: boolean = false;
 
-  /** Track hover state specifically on the rail/grip area */
-  export let railHovered: boolean = false;
-
   /** Whether the close button should be shown */
   export let canClose: boolean = false;
 
   /** Color for the left rail (workspace accent, group hex, etc.) */
   export let color: string = "";
-
-  /** For groups: whether any nested workspace is active */
-  export let hasActiveChild: boolean = false;
 
   /** Callback when drag grip is pressed */
   export let onGripMouseDown: ((e: MouseEvent) => void) | undefined = undefined;
@@ -66,25 +62,19 @@
   export let dataWorkspaceId: string | undefined = undefined;
   export let dataWorktree: string | undefined = undefined;
 
-  // hasActiveChild is used by ContainerRow, kept here for potential future use
+  /** Floating ⌘N hint label shown when shortcut hints are active. */
+  export let shortcutLabel: string | undefined = undefined;
 
   let isHovered = false;
-  let isButtonHovered = false;
 
   $: effectiveColor = color || $theme.accent;
-  $: showClose =
-    canClose &&
-    !isDragging &&
-    !isGroup &&
-    !isLocked &&
-    (alwaysShowClose || isHovered);
+  $: showClose = canClose && !isDragging && !isGroup && !isLocked && isHovered;
   $: showLock = isLocked && !isDragging && !isGroup;
-  $: verticalPadding = isNested ? "0px" : isCompact ? "0px" : "4px";
+  $: verticalPadding = isCompact || isNested ? "0px" : "4px";
 </script>
 
 <div
-  role="button"
-  tabindex="0"
+  use:shortcutHint={shortcutLabel}
   data-sidebar-element={isGroup ? "group" : "workspace"}
   data-active={isActive ? "true" : undefined}
   data-drag-idx={dataDragIdx}
@@ -108,40 +98,19 @@
     : ($theme.border ?? 'transparent')};
     transition: background 0.1s;
   "
-  on:click
-  on:keydown={(e) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      e.currentTarget.click();
-    }
-  }}
   on:contextmenu|preventDefault={onContextMenu}
   on:mouseenter={() => (isHovered = true)}
-  on:mouseleave={() => {
-    isHovered = false;
-    railHovered = false;
-  }}
+  on:mouseleave={() => (isHovered = false)}
+  role="presentation"
 >
-  <div
-    role="presentation"
-    style="display: flex; position: relative;"
-    on:mouseenter={() => (railHovered = true)}
-    on:mouseleave={() => (railHovered = false)}
-    on:mousedown={(e) => {
-      if (railHovered && onGripMouseDown) {
-        onGripMouseDown(e);
-      }
-    }}
-  >
-    <DragGrip
-      theme={$theme}
-      visible={isDragging ||
-        (canDrag && railHovered && !$anyReorderActive && !isLocked)}
-      railColor={effectiveColor}
-      railOpacity={1}
-      alwaysShowDots={!isLocked}
-    />
-  </div>
+  <SidebarRail
+    mode="row"
+    color={effectiveColor}
+    {canDrag}
+    locked={isLocked}
+    {isDragging}
+    {onGripMouseDown}
+  />
   {#if isGroup}
     <!-- Group banner rail gradient -->
     <div
@@ -185,50 +154,15 @@
     <slot />
   </div>
 
-  <!-- Close/Lock buttons (right side) -->
   {#if showClose || showLock}
-    <button
-      title={isLocked ? "Unlock Workspace" : `Close ${name}`}
-      aria-label={isLocked ? "Unlock Workspace" : `Close ${name}`}
-      style="
-        position: absolute; top: 50%; right: 6px;
-        transform: translateY(-50%);
-        display: flex; align-items: center; justify-content: center;
-        width: 14px; height: 14px;
-        color: {isButtonHovered
-        ? isLocked
-          ? $theme.fg
-          : $theme.danger
-        : $theme.fgDim};
-        background: transparent;
-        border: none;
-        border-radius: 3px; cursor: pointer; padding: 0;
-        line-height: 1;
-        transition: color 0.1s, border-color 0.1s;
-        -webkit-app-region: no-drag;
-        flex-shrink: 0;
-      "
-      on:mousedown|stopPropagation
-      on:mouseenter={() => (isButtonHovered = true)}
-      on:mouseleave={() => (isButtonHovered = false)}
-      on:click|stopPropagation={onClose}
+    <div
+      style="position: absolute; top: 50%; right: 6px; transform: translateY(-50%);"
     >
-      {#if isLocked}
-        <LockIcon width="9" height="9" />
-      {:else}
-        <CloseIcon width="9" height="9" />
-      {/if}
-    </button>
+      <SidebarChipButton
+        variant={isLocked ? "lock" : "close"}
+        title={isLocked ? "Unlock Workspace" : `Close ${name}`}
+        onClick={onClose}
+      />
+    </div>
   {/if}
 </div>
-
-<style>
-  div[role="button"] {
-    outline: none;
-  }
-
-  div[role="button"]:focus-visible {
-    outline: 2px solid var(--focus-color, currentColor);
-    outline-offset: -1px;
-  }
-</style>

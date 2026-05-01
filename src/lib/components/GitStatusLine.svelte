@@ -49,17 +49,14 @@
   }
 
   $: topRowHasContent = Boolean(cwdItem || branchItem);
-  $: nestedRowHasContent =
-    Boolean(worktreeBranch) ||
-    (isActiveWorkspace && Boolean(worktreeDirtyItem));
 </script>
 
 {#if isNested}
   <!-- Nested workspaces show git branch info (matching container row style).
-       Worktree workspaces with their own branch get an additional worktree-specific line. -->
-  {#if branchItem}
+       Worktree workspaces show only their own branch, not the parent repo's branch. -->
+  {#if !isWorktree && branchItem}
     <div
-      style="padding: 0 24px 2px 2px; display: flex; align-items: center; gap: 4px; overflow: hidden; line-height: 1.2;"
+      style="display: flex; align-items: center; gap: 4px; overflow: hidden; line-height: 1.2;"
     >
       <span
         style="font-size: 11px; color: {fgMuted}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-flex; align-items: center; gap: 4px;"
@@ -73,13 +70,18 @@
       </span>
     </div>
   {/if}
-  {#if isWorktree && nestedRowHasContent && worktreeBranch}
+  {#if isWorktree && worktreeBranch}
     <div
-      style="padding: 0 12px 6px 6px; display: flex; align-items: center; gap: 6px; overflow: hidden; line-height: 1.2;"
+      style="display: flex; align-items: center; gap: 4px; overflow: hidden; line-height: 1.2;"
     >
       <span
-        style="font-size: 10px; color: {fgMuted}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
-        title={`worktree branch: ${worktreeBranch}`}>⌥ {worktreeBranch}</span
+        style="font-size: 11px; color: {fgMuted}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-flex; align-items: center; gap: 4px;"
+        title={`worktree branch: ${worktreeBranch}`}
+        ><span
+          style="color: {accentColor ?? fgMuted}; opacity: 0.8; flex-shrink: 0;"
+          >⎇</span
+        >
+        {worktreeBranch}</span
       >
       {#if worktreeDirtyItem && isActiveWorkspace}
         <span

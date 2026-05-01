@@ -1292,15 +1292,15 @@ describe("WorkspaceItem", () => {
   });
 
   it("always renders the DragGrip dot pattern at full railColor (no solid-bg wrapper)", () => {
-    const sidebarSource = readFileSync(
-      "src/lib/components/PrimarySidebarElement.svelte",
+    const railSource = readFileSync(
+      "src/lib/components/SidebarRail.svelte",
       "utf-8",
     );
-    // alwaysShowDots={!isLocked} + full opacity so the dot pattern reads at rest
+    // alwaysShowDots={!locked} + full opacity so the dot pattern reads at rest
     // without needing a colored wrapper bg (which would appear as a
     // solid "border" block). Locked items show solid rail instead.
-    expect(sidebarSource).toMatch(/alwaysShowDots=\{!isLocked\}/);
-    expect(sidebarSource).toMatch(/railOpacity=\{1\}/);
+    expect(railSource).toMatch(/alwaysShowDots=\{!locked\}/);
+    expect(railSource).toMatch(/railOpacity=\{1\}/);
 
     // WorkspaceItem uses railColor which falls back through:
     // dashboard entry color → accentColor prop → theme.accent

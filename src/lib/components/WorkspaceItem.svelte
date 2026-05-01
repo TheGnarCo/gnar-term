@@ -9,8 +9,8 @@
   import { getExtensionApiById } from "../services/extension-loader";
   import ExtensionWrapper from "./ExtensionWrapper.svelte";
   import PrimarySidebarElement from "./PrimarySidebarElement.svelte";
+  import WorktreeIcon from "../icons/WorktreeIcon.svelte";
   import { modLabel } from "../terminal-service";
-  import { shortcutHintsActive } from "../stores/shortcut-hints";
   import { discoEmojiFor, discoColorFor } from "../utils/disco-decoration";
 
   $: isDisco = $theme.name === "Molly Disco";
@@ -47,6 +47,8 @@
   export let hideStatusBadges: boolean = false;
   /** When true, this workspace is nested inside a container group and should always show the close button. */
   export let isNested: boolean = false;
+  /** Sidebar position index for the ⌘N shortcut hint. */
+  export let shortcutIdx: number | undefined = undefined;
 
   let nameEl: HTMLSpanElement;
   let _renaming = false;
@@ -133,13 +135,10 @@
   export let dragActive = false;
   /** Mousedown handler fired when the drag grip is pressed. Drag origin, not row body. */
   export let onGripMouseDown: ((e: MouseEvent) => void) | undefined = undefined;
-  /** Sidebar position index for the ⌘N shortcut hint. When provided, overrides index-based hint. */
-  export let shortcutIdx: number | undefined = undefined;
 </script>
 
 <PrimarySidebarElement
   isGroup={false}
-  alwaysShowClose={isDashboardWs || isNested}
   isCompact={isDashboardWs}
   {isNested}
   name={workspace.name}
@@ -152,6 +151,9 @@
   dataDragIdx={index}
   dataWorkspaceId={workspace.id}
   dataWorktree={isManaged ? "true" : undefined}
+  shortcutLabel={shortcutIdx !== undefined && shortcutIdx < 9
+    ? `${modLabel}${shortcutIdx + 1}`
+    : undefined}
   {onGripMouseDown}
   {onClose}
   onContextMenu={(e) => {
@@ -210,7 +212,7 @@
             </svg>
           </span>
         {/if}
-        {#if isManaged}
+        {#if isManaged && !shouldShowWorktreeStatus}
           <span
             data-workspace-worktree-icon
             title="Git worktree workspace"
@@ -219,23 +221,7 @@
               justify-content: center; color: {railColor};
             "
           >
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <title>Git worktree workspace</title>
-              <circle cx="4" cy="4" r="2" />
-              <circle cx="4" cy="12" r="2" />
-              <circle cx="12" cy="8" r="2" />
-              <path d="M4 6 L4 10" />
-              <path d="M6 4 C8 4 10 6 10 8" />
-            </svg>
+            <WorktreeIcon size={12} />
           </span>
         {/if}
         {#if dashboardHint}
@@ -288,6 +274,10 @@
         {/if}
         <span
           bind:this={nameEl}
+          role="textbox"
+          aria-label="Workspace name"
+          aria-multiline="false"
+          tabindex="-1"
           style="
             font-weight: {isActive ? '600' : '400'};
             color: {isDisco
@@ -367,23 +357,9 @@
       <div
         style="padding: 0 24px 2px 2px; font-size: 11px; color: {$theme.fgMuted}; display: flex; align-items: center; gap: 4px; overflow: hidden;"
       >
-        <svg
-          width="10"
-          height="10"
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.5"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          style="flex-shrink: 0; color: {railColor};"
-        >
-          <circle cx="4" cy="4" r="2" />
-          <circle cx="4" cy="12" r="2" />
-          <circle cx="12" cy="8" r="2" />
-          <path d="M4 6 L4 10" />
-          <path d="M6 4 C8 4 10 6 10 8" />
-        </svg>
+        <span style="flex-shrink: 0; display: inline-flex; color: {railColor};">
+          <WorktreeIcon size={10} />
+        </span>
         <span
           style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
         >

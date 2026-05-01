@@ -55,10 +55,8 @@ const SOURCE = readFileSync(
 ).replace(/\s+/g, " ");
 
 describe("DragGrip visual states", () => {
-  it("has a fixed 14px hit area that never expands, with a 6px rail stripe and hex pattern", () => {
-    // Grip width is constant — no hover expansion to avoid content shift.
-    expect(SOURCE).toMatch(/width:\s*14px/);
-    // Rail stripe and hex pattern are both 6px width.
+  it("has a fixed 6px grip width matching the rail stripe and hex pattern", () => {
+    // Grip width is constant and matches the visual content width.
     expect(SOURCE).toMatch(/width:\s*6px/);
   });
 

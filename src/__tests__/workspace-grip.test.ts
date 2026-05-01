@@ -72,12 +72,12 @@ describe("WorkspaceItem drag grip", () => {
     });
     const row = container.querySelector("[data-drag-idx]") as HTMLElement;
     const grip = container.querySelector(".drag-grip") as HTMLElement;
-    // Grip is a fixed 14px — no expansion on hover to avoid content shift.
-    expect(grip.style.width).toBe("14px");
+    // Grip is a fixed 6px — no expansion on hover to avoid content shift.
+    expect(grip.style.width).toBe("6px");
     await fireEvent.mouseEnter(row);
-    expect(grip.style.width).toBe("14px");
+    expect(grip.style.width).toBe("6px");
     await fireEvent.mouseLeave(row);
-    expect(grip.style.width).toBe("14px");
+    expect(grip.style.width).toBe("6px");
   });
 
   it("rounds only the right corners so the rail renders as a straight vertical bar on the left", () => {

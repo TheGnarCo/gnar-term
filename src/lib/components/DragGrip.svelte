@@ -79,7 +79,7 @@
     flex-shrink: 0;
     align-self: stretch;
     position: relative;
-    width: 14px;
+    width: 6px;
     cursor: {locked ? 'not-allowed' : visible ? 'grab' : 'default'};
     overflow: hidden;
   "

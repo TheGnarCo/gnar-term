@@ -107,22 +107,22 @@
     group = getWorkspace(parentWorkspaceId);
   }
 
-  $: filterIds = group ? new Set(group.workspaceIds) : new Set<string>();
+  $: filterIds = group ? new Set(group.nestedWorkspaceIds) : new Set<string>();
 
   // The primary workspace drives the container row's status dot. It is
   // excluded from the nested list — clicking the row activates it directly.
-  $: primaryWs = group?.primaryWorkspaceId
-    ? $nestedWorkspaces.find((w) => w.id === group!.primaryWorkspaceId)
+  $: primaryWs = group?.primaryNestedWorkspaceId
+    ? $nestedWorkspaces.find((w) => w.id === group!.primaryNestedWorkspaceId)
     : undefined;
 
   // Nested list shows worktree nestedWorkspaces only (excludes primary and dashboards).
   $: nestedIds = group
     ? new Set(
-        group.workspaceIds.filter((id) => {
+        group.nestedWorkspaceIds.filter((id) => {
           const ws = $nestedWorkspaces.find((w) => w.id === id);
           if (!ws) return false;
           const md = wsMeta(ws);
-          return !md.isDashboard && id !== group!.primaryWorkspaceId;
+          return !md.isDashboard && id !== group!.primaryNestedWorkspaceId;
         }),
       )
     : new Set<string>();
@@ -223,7 +223,7 @@
         switchNestedWorkspace(idx);
         return;
       }
-    } else if (group.primaryWorkspaceId) {
+    } else if (group.primaryNestedWorkspaceId) {
       // Primary workspace is missing (was deleted) — recreate it
       const newWsId = await createNestedWorkspaceFromDef({
         name: group.name,
@@ -231,7 +231,7 @@
         metadata: { parentWorkspaceId: group.id },
       });
       if (newWsId) {
-        updateWorkspace(group.id, { primaryWorkspaceId: newWsId });
+        updateWorkspace(group.id, { primaryNestedWorkspaceId: newWsId });
         claimWorkspace(newWsId, "core");
         // Re-fetch the workspace list to get the new workspace
         const newIdx = $nestedWorkspaces.findIndex((w) => w.id === newWsId);

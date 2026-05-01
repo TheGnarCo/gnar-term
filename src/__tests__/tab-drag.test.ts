@@ -511,7 +511,7 @@ describe("tab-drag — commitTabDrop", () => {
     vi.mocked(getWorkspaces).mockReturnValue([
       {
         id: "grp1",
-        workspaceIds: [wsTarget.id, wsTarget2.id],
+        nestedWorkspaceIds: [wsTarget.id, wsTarget2.id],
         name: "G",
         path: "/",
       } as never,
@@ -557,7 +557,7 @@ describe("tab-drag — commitTabDrop", () => {
     vi.mocked(getWorkspaces).mockReturnValue([
       {
         id: "grp1",
-        workspaceIds: [wsTarget.id, wsTarget2.id],
+        nestedWorkspaceIds: [wsTarget.id, wsTarget2.id],
         name: "G",
         path: "/",
       } as never,
@@ -927,7 +927,7 @@ describe("tab-drag — commitTabDrop: new-workspace-in-group passes targetGroupI
 
     // Mock getWorkspaces to return a group with the workspace
     vi.mocked(getWorkspaces).mockReturnValue([
-      { id: "grp-1", workspaceIds: [ws.id], name: "Group 1" },
+      { id: "grp-1", nestedWorkspaceIds: [ws.id], name: "Group 1" },
     ]);
 
     __setTabDropTargetForTest({

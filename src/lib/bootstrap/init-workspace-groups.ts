@@ -150,7 +150,7 @@ async function createWorkspaceGroupFlow(prefill?: {
     name: result.name,
     path: result.path,
     color: result.color,
-    workspaceIds: [],
+    nestedWorkspaceIds: [],
     isGit,
     createdAt: new Date().toISOString(),
   };
@@ -160,7 +160,7 @@ async function createWorkspaceGroupFlow(prefill?: {
   // Auto-provision every autoProvision dashboard contribution for the
   // new group (group Overview, Settings, and any extension-owned
   // autoProvision contributions like Agentic). The Overview dashboard
-  // is tracked via `group.dashboardWorkspaceId` so `openWorkspaceDashboard`
+  // is tracked via `group.dashboardNestedWorkspaceId` so `openWorkspaceDashboard`
   // can activate it directly; the helper returns its id when the
   // contribution's source is core + id is "group".
   try {
@@ -169,7 +169,7 @@ async function createWorkspaceGroupFlow(prefill?: {
       isDashboardWorkspace(w, group.id, "group"),
     );
     if (overview) {
-      updateWorkspace(id, { dashboardWorkspaceId: overview.id });
+      updateWorkspace(id, { dashboardNestedWorkspaceId: overview.id });
     }
   } catch (err) {
     console.error(
@@ -184,7 +184,7 @@ async function createWorkspaceGroupFlow(prefill?: {
   // automatically when it sees metadata.parentWorkspaceId.
   try {
     const wsCount =
-      readGroups().find((g) => g.id === id)?.workspaceIds.length ?? 0;
+      readGroups().find((g) => g.id === id)?.nestedWorkspaceIds.length ?? 0;
     await createNestedWorkspaceFromDef({
       name: `${result.name} Workspace ${wsCount + 1}`,
       cwd: result.path,
@@ -198,7 +198,7 @@ async function createWorkspaceGroupFlow(prefill?: {
         (w) => wsMeta(w).parentWorkspaceId === id && !wsMeta(w).isDashboard,
       );
     if (newWs) {
-      updateWorkspace(id, { primaryWorkspaceId: newWs.id });
+      updateWorkspace(id, { primaryNestedWorkspaceId: newWs.id });
       const idx = get(nestedWorkspaces).indexOf(newWs);
       if (idx >= 0) switchNestedWorkspace(idx);
     }
@@ -262,7 +262,8 @@ function registerPerGroupCommands(): void {
       source: SOURCE,
       action: () => {
         const count =
-          readGroups().find((g) => g.id === group.id)?.workspaceIds.length ?? 0;
+          readGroups().find((g) => g.id === group.id)?.nestedWorkspaceIds
+            .length ?? 0;
         void createNestedWorkspaceFromDef({
           name: `${group.name} Workspace ${count + 1}`,
           cwd: group.path,
@@ -284,7 +285,7 @@ export async function initWorkspaceGroups(): Promise<void> {
   }
 
   // Re-claim any restored nestedWorkspaces that belong to a known group —
-  // workspace ids change on every restart, so the workspaceIds list is
+  // workspace ids change on every restart, so the nestedWorkspaceIds list is
   // rebuilt from metadata.parentWorkspaceId on each workspace.
   reclaimNestedWorkspacesAcrossWorkspaces();
 

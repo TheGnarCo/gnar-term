@@ -39,7 +39,7 @@ function makeGroup(id: string, overrides: Partial<Workspace> = {}): Workspace {
     name: `Group ${id}`,
     path: `/tmp/${id}`,
     color: "slot-1",
-    workspaceIds: [],
+    nestedWorkspaceIds: [],
     isGit: false,
     createdAt: "2026-04-20T00:00:00.000Z",
     ...overrides,
@@ -84,7 +84,7 @@ describe("workspace-group-service", () => {
     addWorkspace(makeGroup("g1"));
     expect(addNestedWorkspaceToWorkspace("g1", "ws1")).toBe(true);
     expect(addNestedWorkspaceToWorkspace("g1", "ws1")).toBe(false);
-    expect(getWorkspace("g1")?.workspaceIds).toEqual(["ws1"]);
+    expect(getWorkspace("g1")?.nestedWorkspaceIds).toEqual(["ws1"]);
   });
 
   it("removeNestedWorkspaceFromAllWorkspaces strips the id across every group", () => {
@@ -95,8 +95,8 @@ describe("workspace-group-service", () => {
 
     removeNestedWorkspaceFromAllWorkspaces("ws1");
 
-    expect(getWorkspace("g1")?.workspaceIds).toEqual([]);
-    expect(getWorkspace("g2")?.workspaceIds).toEqual([]);
+    expect(getWorkspace("g1")?.nestedWorkspaceIds).toEqual([]);
+    expect(getWorkspace("g2")?.nestedWorkspaceIds).toEqual([]);
   });
 
   describe("closeNestedWorkspacesInWorkspace", () => {

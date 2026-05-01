@@ -1759,7 +1759,7 @@ describe("WorkspaceSectionContent", () => {
       name: "Test Group",
       path: "/tmp/test-group",
       color: "mint",
-      workspaceIds: [],
+      nestedWorkspaceIds: [],
       isGit: true,
       createdAt: new Date().toISOString(),
     };

@@ -342,7 +342,7 @@
     if (pw) return resolvePseudoWorkspaceColor(pw);
     const ws = sourceEntry?.workspace;
     if (ws) {
-      const dashId = wsMeta(ws).dashboardWorkspaceId;
+      const dashId = wsMeta(ws).dashboardNestedWorkspaceId;
       if (typeof dashId === "string") {
         return (
           $dashboardWorkspaceRegistry.get(dashId)?.accentColor ?? $theme.accent
@@ -445,7 +445,7 @@
   {@const isSource = dragActive && dragSourceIdx === entry.idx}
   {@const _isSibling = effectiveActive && effectiveDragSourceIdx !== entry.idx}
   {@const ws = entry.workspace}
-  {@const _dashId = ws ? wsMeta(ws).dashboardWorkspaceId : undefined}
+  {@const _dashId = ws ? wsMeta(ws).dashboardNestedWorkspaceId : undefined}
   {@const rowColor =
     entry.rendererRailColor ??
     (entry.pseudoWorkspace

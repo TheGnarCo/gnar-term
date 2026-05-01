@@ -29,7 +29,7 @@ function makeWorkspace(overrides = {}) {
     name: "My Workspace",
     path: "/foo",
     color: "blue",
-    workspaceIds: [],
+    nestedWorkspaceIds: [],
     isGit: false,
     createdAt: "2026-01-01",
     ...overrides,

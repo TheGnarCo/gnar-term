@@ -100,7 +100,7 @@ function makeGroup(overrides = {}) {
     name: "My Group",
     path: "/foo",
     color: "blue",
-    workspaceIds: ["ws-1", "ws-2", "ws-dash"],
+    nestedWorkspaceIds: ["ws-1", "ws-2", "ws-dash"],
     isGit: false,
     createdAt: "2026-01-01",
     ...overrides,

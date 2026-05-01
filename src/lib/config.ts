@@ -146,13 +146,13 @@ export interface Workspace {
   path: string;
   color: string;
   /** Ids of nestedWorkspaces currently claimed by this group. */
-  workspaceIds: string[];
+  nestedWorkspaceIds: string[];
   /**
    * Id of the one non-worktree, non-dashboard workspace in this group.
    * Set at group creation and backfilled by reconcilePrimaryWorkspaces()
    * on first startup after migration. Never reassigned.
    */
-  primaryWorkspaceId?: string;
+  primaryNestedWorkspaceId?: string;
   /** True when `path` is the root of a git repo. Used by gates (e.g. worktree actions). */
   isGit: boolean;
   createdAt: string;
@@ -161,7 +161,7 @@ export interface Workspace {
    * Live Preview. Eagerly created alongside the group. Resolved from
    * the nestedWorkspaces store by consumers.
    */
-  dashboardWorkspaceId?: string;
+  dashboardNestedWorkspaceId?: string;
   /** When true, the group cannot be drag-reordered or deleted/archived. */
   locked?: boolean;
 }

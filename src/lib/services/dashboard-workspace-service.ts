@@ -54,7 +54,7 @@ export async function spawnOrNavigate(id: string): Promise<void> {
 
   const wsList = get(nestedWorkspaces);
   const existingIdx = wsList.findIndex(
-    (w) => w.metadata?.dashboardWorkspaceId === id,
+    (w) => w.metadata?.dashboardNestedWorkspaceId === id,
   );
 
   if (existingIdx >= 0) {
@@ -66,7 +66,7 @@ export async function spawnOrNavigate(id: string): Promise<void> {
     name: entry.label,
     metadata: {
       isDashboard: true,
-      dashboardWorkspaceId: id,
+      dashboardNestedWorkspaceId: id,
     },
     layout: { pane: { surfaces: [] } },
   });

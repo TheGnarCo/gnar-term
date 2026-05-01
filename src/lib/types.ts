@@ -102,7 +102,7 @@ export interface NestedWorkspaceMetadata {
   /** Group id this workspace belongs to (workspace-group-service). */
   parentWorkspaceId?: string;
   /** Id of the group's current dashboard workspace (workspace-group-service). */
-  dashboardWorkspaceId?: string;
+  dashboardNestedWorkspaceId?: string;
   /**
    * Contribution id for the dashboard type: "group" | "agentic" | "settings" | string.
    * Backfilled by workspace-group-service for legacy nestedWorkspaces.

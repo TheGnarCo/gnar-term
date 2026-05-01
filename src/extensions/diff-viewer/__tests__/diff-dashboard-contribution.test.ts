@@ -68,7 +68,7 @@ describe("Diff dashboard contribution", () => {
       name: "My Group",
       path: "/tmp/my-group",
       color: "blue",
-      workspaceIds: [],
+      nestedWorkspaceIds: [],
       isGit: true,
       createdAt: "2026-04-21T00:00:00.000Z",
     });

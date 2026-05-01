@@ -58,7 +58,7 @@ interface LegacyOrchestrator {
   color?: string;
   path: string;
   parentGroupId?: string;
-  dashboardWorkspaceId?: string;
+  dashboardNestedWorkspaceId?: string;
   createdAt?: string;
 }
 

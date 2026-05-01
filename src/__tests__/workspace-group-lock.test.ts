@@ -41,7 +41,7 @@ function makeGroup(overrides: Partial<Workspace> = {}): Workspace {
     name: "Test Group",
     path: "/tmp/g1",
     color: "purple",
-    workspaceIds: [],
+    nestedWorkspaceIds: [],
     isGit: false,
     createdAt: "2026-01-01T00:00:00.000Z",
     ...overrides,

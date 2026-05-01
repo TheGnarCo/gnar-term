@@ -32,10 +32,10 @@ describe("scrub Active Agents from group Overview", () => {
         name: "Agent Skills",
         path: "/tmp/agent-skills",
         color: "purple",
-        workspaceIds: [],
+        nestedWorkspaceIds: [],
         isGit: false,
         createdAt: "2026-04-21T00:00:00.000Z",
-        dashboardWorkspaceId: "ws-existing",
+        dashboardNestedWorkspaceId: "ws-existing",
       },
     ]);
   });

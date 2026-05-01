@@ -12,32 +12,32 @@ import { addNestedWorkspaceToWorkspace } from "../lib/services/workspace-group-s
 import { getWorkspaces, setWorkspaces } from "../lib/stores/workspace-groups";
 import { nestedWorkspaces } from "../lib/stores/workspace";
 
-describe("Workspace.primaryWorkspaceId", () => {
-  it("accepts a group with primaryWorkspaceId set", () => {
+describe("Workspace.primaryNestedWorkspaceId", () => {
+  it("accepts a group with primaryNestedWorkspaceId set", () => {
     const group: Workspace = {
       id: "g1",
       name: "Test",
       path: "/tmp/test",
       color: "blue",
-      workspaceIds: ["ws-1"],
-      primaryWorkspaceId: "ws-1",
+      nestedWorkspaceIds: ["ws-1"],
+      primaryNestedWorkspaceId: "ws-1",
       isGit: false,
       createdAt: "2026-04-30T00:00:00.000Z",
     };
-    expect(group.primaryWorkspaceId).toBe("ws-1");
+    expect(group.primaryNestedWorkspaceId).toBe("ws-1");
   });
 
-  it("accepts a group without primaryWorkspaceId (legacy shape)", () => {
+  it("accepts a group without primaryNestedWorkspaceId (legacy shape)", () => {
     const group: Workspace = {
       id: "g1",
       name: "Test",
       path: "/tmp/test",
       color: "blue",
-      workspaceIds: [],
+      nestedWorkspaceIds: [],
       isGit: false,
       createdAt: "2026-04-30T00:00:00.000Z",
     };
-    expect(group.primaryWorkspaceId).toBeUndefined();
+    expect(group.primaryNestedWorkspaceId).toBeUndefined();
   });
 });
 
@@ -50,8 +50,8 @@ describe("addNestedWorkspaceToWorkspace — primary invariant", () => {
         name: "G1",
         path: "/tmp/g1",
         color: "blue",
-        workspaceIds: ["ws-primary"],
-        primaryWorkspaceId: "ws-primary",
+        nestedWorkspaceIds: ["ws-primary"],
+        primaryNestedWorkspaceId: "ws-primary",
         isGit: false,
         createdAt: "2026-04-30T00:00:00.000Z",
       },
@@ -76,7 +76,7 @@ describe("addNestedWorkspaceToWorkspace — primary invariant", () => {
     const changed = addNestedWorkspaceToWorkspace("g1", "ws-worktree");
     expect(changed).toBe(true);
     const group = getWorkspaces().find((g) => g.id === "g1");
-    expect(group?.workspaceIds).toContain("ws-worktree");
+    expect(group?.nestedWorkspaceIds).toContain("ws-worktree");
   });
 
   it("throws when adding a second non-worktree workspace to a group that has a primary", () => {

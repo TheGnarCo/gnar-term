@@ -126,12 +126,12 @@ export function closeNestedWorkspacesInWorkspace(id: string): void {
 }
 
 /**
- * Appends `workspaceId` to `parentWorkspaceId`'s workspaceIds if not already
+ * Appends `workspaceId` to `parentWorkspaceId`'s nestedWorkspaceIds if not already
  * present. No-op when the group is missing (e.g. was just deleted).
  * Returns true when a change was persisted.
  *
  * Enforces the single-primary invariant: throws if adding a non-worktree,
- * non-dashboard workspace to a group that already has a primaryWorkspaceId.
+ * non-dashboard workspace to a group that already has a primaryNestedWorkspaceId.
  */
 export function addNestedWorkspaceToWorkspace(
   parentWorkspaceId: string,
@@ -140,15 +140,15 @@ export function addNestedWorkspaceToWorkspace(
   const groups = getWorkspaces();
   const group = groups.find((g) => g.id === parentWorkspaceId);
   if (!group) return false;
-  if (group.workspaceIds.includes(workspaceId)) return false;
+  if (group.nestedWorkspaceIds.includes(workspaceId)) return false;
 
   // Enforce single-primary invariant.
   const incomingWs = get(nestedWorkspaces).find((w) => w.id === workspaceId);
   if (incomingWs) {
     const md = wsMeta(incomingWs);
-    if (!md.worktreePath && !md.isDashboard && group.primaryWorkspaceId) {
+    if (!md.worktreePath && !md.isDashboard && group.primaryNestedWorkspaceId) {
       throw new Error(
-        `Group "${parentWorkspaceId}" already has a primary workspace "${group.primaryWorkspaceId}". ` +
+        `Group "${parentWorkspaceId}" already has a primary workspace "${group.primaryNestedWorkspaceId}". ` +
           `Cannot add a second non-worktree workspace "${workspaceId}".`,
       );
     }
@@ -156,7 +156,10 @@ export function addNestedWorkspaceToWorkspace(
 
   const next = groups.map((g) => {
     if (g.id === parentWorkspaceId) {
-      return { ...g, workspaceIds: [...g.workspaceIds, workspaceId] };
+      return {
+        ...g,
+        nestedWorkspaceIds: [...g.nestedWorkspaceIds, workspaceId],
+      };
     }
     return g;
   });
@@ -166,7 +169,7 @@ export function addNestedWorkspaceToWorkspace(
 }
 
 /**
- * Inserts `workspaceId` into `parentWorkspaceId`'s workspaceIds at `positionInGroup`.
+ * Inserts `workspaceId` into `parentWorkspaceId`'s nestedWorkspaceIds at `positionInGroup`.
  * No-op when the group is missing or already contains the workspace.
  * Returns true when a change was persisted.
  */
@@ -179,15 +182,15 @@ export function insertWorkspaceIntoGroup(
   let changed = false;
   const next = groups.map((g) => {
     if (g.id !== parentWorkspaceId) return g;
-    if (g.workspaceIds.includes(workspaceId)) return g;
+    if (g.nestedWorkspaceIds.includes(workspaceId)) return g;
     changed = true;
-    const ids = [...g.workspaceIds];
+    const ids = [...g.nestedWorkspaceIds];
     ids.splice(
       Math.max(0, Math.min(ids.length, positionInGroup)),
       0,
       workspaceId,
     );
-    return { ...g, workspaceIds: ids };
+    return { ...g, nestedWorkspaceIds: ids };
   });
   if (!changed) return false;
   setWorkspaces(next);
@@ -196,7 +199,7 @@ export function insertWorkspaceIntoGroup(
 }
 
 /**
- * Strips `workspaceId` from every group's workspaceIds. Used when a
+ * Strips `workspaceId` from every group's nestedWorkspaceIds. Used when a
  * workspace is closed — the group membership is inferred from workspace
  * metadata, so removing from all is cheap and idempotent.
  */
@@ -205,7 +208,7 @@ export function removeNestedWorkspaceFromAllWorkspaces(
 ): void {
   const next = getWorkspaces().map((g) => ({
     ...g,
-    workspaceIds: g.workspaceIds.filter((id) => id !== workspaceId),
+    nestedWorkspaceIds: g.nestedWorkspaceIds.filter((id) => id !== workspaceId),
   }));
   setWorkspaces(next);
   emitStateChanged({});
@@ -590,7 +593,7 @@ export function closeDashboardForGroup(
  * Returns true on success.
  */
 export function openWorkspaceDashboard(group: Workspace): boolean {
-  const targetId = group.dashboardWorkspaceId;
+  const targetId = group.dashboardNestedWorkspaceId;
   if (!targetId) return false;
   const idx = get(nestedWorkspaces).findIndex((w) => w.id === targetId);
   if (idx < 0) return false;
@@ -606,7 +609,7 @@ export function openWorkspaceDashboard(group: Workspace): boolean {
 export async function closeGroupDashboardWorkspace(
   group: Workspace,
 ): Promise<void> {
-  const dashboardWsId = group.dashboardWorkspaceId;
+  const dashboardWsId = group.dashboardNestedWorkspaceId;
   if (!dashboardWsId) return;
   closeNestedWorkspaceById(dashboardWsId);
 }
@@ -614,7 +617,7 @@ export async function closeGroupDashboardWorkspace(
 /**
  * Called on app startup (after nestedWorkspaces are restored) — ensures every
  * group has exactly one Group Dashboard workspace. Prior releases
- * matched the dashboard via `group.dashboardWorkspaceId`; workspace
+ * matched the dashboard via `group.dashboardNestedWorkspaceId`; workspace
  * ids were unstable across restarts, so on every reload the lookup
  * missed and a fresh dashboard was spawned. The cleanup runs in three
  * passes:
@@ -622,7 +625,7 @@ export async function closeGroupDashboardWorkspace(
  *   1. Adopt the first workspace matching `metadata.isDashboard ===
  *      true && metadata.parentWorkspaceId === group.id` (with no contribution id,
  *      or an explicit `"group"` id) — rebinding the group's
- *      `dashboardWorkspaceId` to that workspace.
+ *      `dashboardNestedWorkspaceId` to that workspace.
  *   2. Close every extra Group Dashboard for the same group (users end
  *      up with these when pre-fix state carried duplicates).
  *   3. Only when no dashboard exists at all, create a fresh one.
@@ -665,13 +668,15 @@ export async function reconcileWorkspaceDashboards(): Promise<void> {
       // extension-owned autoProvision contributions).
       try {
         await provisionAutoDashboardsForWorkspace(group);
-        // Rebind `dashboardWorkspaceId` to the current "group" overview —
+        // Rebind `dashboardNestedWorkspaceId` to the current "group" overview —
         // either the one that survived dedupe or the one just provisioned.
         const overview = get(nestedWorkspaces).find((w) =>
           isDashboardWorkspace(w, group.id, "group", true),
         );
-        if (overview && overview.id !== group.dashboardWorkspaceId) {
-          updateWorkspace(group.id, { dashboardWorkspaceId: overview.id });
+        if (overview && overview.id !== group.dashboardNestedWorkspaceId) {
+          updateWorkspace(group.id, {
+            dashboardNestedWorkspaceId: overview.id,
+          });
         }
       } catch (err) {
         console.warn(
@@ -687,7 +692,7 @@ export async function reconcileWorkspaceDashboards(): Promise<void> {
  * Re-claim nestedWorkspaces tagged with `metadata.parentWorkspaceId` that belong to a
  * known group. Called on app startup once groups are loaded and
  * nestedWorkspaces are restored — restoration creates fresh workspace ids so
- * we rebuild each group's workspaceIds list here.
+ * we rebuild each group's nestedWorkspaceIds list here.
  */
 export function reclaimNestedWorkspacesAcrossWorkspaces(): void {
   const groups = getWorkspaces();
@@ -714,10 +719,10 @@ export function reclaimNestedWorkspacesAcrossWorkspaces(): void {
     const next = groups.map((g) => {
       const toAdd = newMembers.get(g.id) ?? [];
       if (toAdd.length === 0) return g;
-      const existing = new Set(g.workspaceIds);
+      const existing = new Set(g.nestedWorkspaceIds);
       const fresh = toAdd.filter((id) => !existing.has(id));
       return fresh.length > 0
-        ? { ...g, workspaceIds: [...g.workspaceIds, ...fresh] }
+        ? { ...g, nestedWorkspaceIds: [...g.nestedWorkspaceIds, ...fresh] }
         : g;
     });
     setWorkspaces(next);
@@ -730,24 +735,24 @@ export function reclaimNestedWorkspacesAcrossWorkspaces(): void {
 /**
  * Startup reconciliation — called after nestedWorkspaces are restored.
  *
- * Pass 1: For every group lacking `primaryWorkspaceId`, select the first
+ * Pass 1: For every group lacking `primaryNestedWorkspaceId`, select the first
  * member workspace that is neither a dashboard nor a worktree.
  *
  * Pass 2: Wrap every standalone workspace (no metadata.parentWorkspaceId, not a
  * dashboard) into a fresh group with that workspace as its primary.
  *
- * Idempotent — groups that already have `primaryWorkspaceId` are skipped.
+ * Idempotent — groups that already have `primaryNestedWorkspaceId` are skipped.
  */
 export async function reconcilePrimaryWorkspaces(): Promise<void> {
   // Pass 1 — backfill existing groups.
   for (const group of getWorkspaces()) {
-    if (group.primaryWorkspaceId) continue;
+    if (group.primaryNestedWorkspaceId) continue;
     const members = getWorktreeWorkspaces(group.id);
     const primary = members.find(
       (w) => !wsMeta(w).worktreePath && !wsMeta(w).isDashboard,
     );
     if (primary) {
-      updateWorkspace(group.id, { primaryWorkspaceId: primary.id });
+      updateWorkspace(group.id, { primaryNestedWorkspaceId: primary.id });
     }
     // Groups with no eligible primary are left without one — the next
     // group creation flow will set it.
@@ -778,8 +783,8 @@ export async function reconcilePrimaryWorkspaces(): Promise<void> {
       name: ws.name,
       path: ((md as Record<string, unknown>).cwd as string) ?? "",
       color,
-      workspaceIds: [ws.id],
-      primaryWorkspaceId: ws.id,
+      nestedWorkspaceIds: [ws.id],
+      primaryNestedWorkspaceId: ws.id,
       isGit: false,
       createdAt: new Date().toISOString(),
     };
@@ -822,7 +827,7 @@ export function setupPrimaryWorkspaceAutoRecreation(): void {
     if (event.type !== "workspace:closed") return;
     const closedId = event.id;
     const group = getWorkspaces().find(
-      (g) => g.primaryWorkspaceId === closedId,
+      (g) => g.primaryNestedWorkspaceId === closedId,
     );
     if (!group) return; // Not a primary workspace
 
@@ -834,7 +839,7 @@ export function setupPrimaryWorkspaceAutoRecreation(): void {
     });
     if (newWsId) {
       // Update the group's primary to the new workspace
-      updateWorkspace(group.id, { primaryWorkspaceId: newWsId });
+      updateWorkspace(group.id, { primaryNestedWorkspaceId: newWsId });
       claimWorkspace(newWsId, "core");
     }
   });

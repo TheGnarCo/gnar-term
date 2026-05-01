@@ -101,7 +101,7 @@ const _groupWorkspaceIndex = derived(
     for (const group of $groups) {
       const base = group.path ? group.path.replace(/\/+$/, "") : "";
       const prefix = base ? `${base}/` : "";
-      const members = new Set<string>(group.workspaceIds ?? []);
+      const members = new Set<string>(group.nestedWorkspaceIds ?? []);
       for (const ws of $nestedWorkspaces) {
         const md = ws.metadata as Record<string, unknown> | undefined;
         // Criterion 1: workspace was created with this group's id in metadata.
@@ -109,7 +109,7 @@ const _groupWorkspaceIndex = derived(
           members.add(ws.id);
           continue;
         }
-        // Criterion 2: workspace is explicitly listed in group.workspaceIds
+        // Criterion 2: workspace is explicitly listed in group.nestedWorkspaceIds
         // — already in `members` from the initial Set construction above.
         if (members.has(ws.id)) continue;
         // Criterion 3: CWD fallback — only for unclaimed nestedWorkspaces so we
@@ -139,7 +139,7 @@ const _groupWorkspaceIndex = derived(
  *   - "global" scope         → every detected agent
  *   - "group" scope          → agents whose workspace satisfies any of:
  *        1. `metadata.parentWorkspaceId === parentWorkspaceId` (set by workspace creation)
- *        2. workspace id is in `group.workspaceIds` (set by drag-drop /
+ *        2. workspace id is in `group.nestedWorkspaceIds` (set by drag-drop /
  *           promote-to-group flows that don't stamp metadata.parentWorkspaceId)
  *        3. workspace is unclaimed AND its first terminal CWD sits under
  *           the group's `path` prefix (catches native agents in terminals

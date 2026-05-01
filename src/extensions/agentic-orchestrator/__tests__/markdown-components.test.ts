@@ -398,7 +398,7 @@ describe("Kanban widget", () => {
         path: "/work/proj",
         color: "blue",
         groupDashboardEnabled: true,
-        workspaceIds: [],
+        nestedWorkspaceIds: [],
       },
     ]);
 
@@ -455,7 +455,7 @@ describe("Issues widget", () => {
         path: GROUP_PATH,
         color: "blue",
         groupDashboardEnabled: true,
-        workspaceIds: [],
+        nestedWorkspaceIds: [],
       },
     ]);
   });
@@ -999,7 +999,7 @@ describe("Prs widget", () => {
         path: GROUP_PATH,
         color: "blue",
         groupDashboardEnabled: true,
-        workspaceIds: [],
+        nestedWorkspaceIds: [],
       },
     ]);
   });
@@ -1341,7 +1341,7 @@ describe("TaskSpawner widget", () => {
         path: GROUP_PATH,
         color: "blue",
         groupDashboardEnabled: true,
-        workspaceIds: [],
+        nestedWorkspaceIds: [],
       },
     ]);
   });

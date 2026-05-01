@@ -255,7 +255,7 @@ export function deactivateExtension(id: string): void {
 
 /**
  * Flush all pending debounced state writes to disk.
- * Call this on app close so state like project workspaceIds doesn't
+ * Call this on app close so state like project nestedWorkspaceIds doesn't
  * get lost within the 300ms debounce window.
  *
  * Writes run in parallel so one slow extension can't block the others,

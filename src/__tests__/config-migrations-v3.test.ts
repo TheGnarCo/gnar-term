@@ -14,7 +14,7 @@ function makeWorkspace(overrides: Record<string, unknown> = {}) {
     name: "Group One",
     path: "/work/one",
     color: "blue",
-    workspaceIds: [],
+    nestedWorkspaceIds: [],
     isGit: false,
     createdAt: "2026-01-01",
     ...overrides,
@@ -100,5 +100,39 @@ describe("v3 archive-shape migration", () => {
     const input: GnarTermConfig = { theme: "dark" };
     const out = migrateV3ArchiveShape(input);
     expect(out).toEqual({ theme: "dark" });
+  });
+
+  it("renames legacy primaryWorkspaceId/dashboardWorkspaceId on archived workspace", () => {
+    const legacyGroup = {
+      ...makeWorkspace({ id: "g-1" }),
+      primaryWorkspaceId: "ws-primary",
+      dashboardWorkspaceId: "ws-dash",
+    };
+    const input = {
+      archivedDefs: {
+        groups: { "g-1": { group: legacyGroup, workspaceDefs: [] } },
+      },
+    } as unknown as GnarTermConfig;
+
+    const out = migrateV3ArchiveShape(input);
+    const stored = (
+      out.archivedDefs as {
+        workspaces: Record<
+          string,
+          {
+            workspace: {
+              primaryNestedWorkspaceId?: string;
+              dashboardNestedWorkspaceId?: string;
+              primaryWorkspaceId?: string;
+              dashboardWorkspaceId?: string;
+            };
+          }
+        >;
+      }
+    ).workspaces["g-1"];
+    expect(stored?.workspace.primaryNestedWorkspaceId).toBe("ws-primary");
+    expect(stored?.workspace.dashboardNestedWorkspaceId).toBe("ws-dash");
+    expect(stored?.workspace.primaryWorkspaceId).toBeUndefined();
+    expect(stored?.workspace.dashboardWorkspaceId).toBeUndefined();
   });
 });

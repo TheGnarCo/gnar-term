@@ -22,7 +22,7 @@ function makeGroup(): Workspace {
     name: "My Project",
     path: "/tmp/my-project",
     color: "purple",
-    workspaceIds: [],
+    nestedWorkspaceIds: [],
     isGit: false,
     createdAt: "2026-04-28T00:00:00.000Z",
   };

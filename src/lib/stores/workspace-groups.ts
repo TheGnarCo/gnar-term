@@ -24,6 +24,36 @@ const WORKSPACE_GROUP_ORDER_KEY = "workspaceOrder";
 const ACTIVE_GROUP_ID_KEY = "activeGroupId";
 const PERSIST_DEBOUNCE_MS = 300;
 
+interface LegacyWorkspaceShape extends Workspace {
+  primaryWorkspaceId?: string;
+  dashboardWorkspaceId?: string;
+}
+
+function renameLegacyWorkspaceFields(g: Workspace): Workspace {
+  const legacy = g as LegacyWorkspaceShape;
+  const {
+    primaryWorkspaceId,
+    dashboardWorkspaceId,
+    primaryNestedWorkspaceId,
+    dashboardNestedWorkspaceId,
+    ...rest
+  } = legacy;
+  return {
+    ...rest,
+    nestedWorkspaceIds: [],
+    ...(primaryNestedWorkspaceId !== undefined
+      ? { primaryNestedWorkspaceId }
+      : primaryWorkspaceId !== undefined
+        ? { primaryNestedWorkspaceId: primaryWorkspaceId }
+        : {}),
+    ...(dashboardNestedWorkspaceId !== undefined
+      ? { dashboardNestedWorkspaceId }
+      : dashboardWorkspaceId !== undefined
+        ? { dashboardNestedWorkspaceId: dashboardWorkspaceId }
+        : {}),
+  };
+}
+
 const _groups = writable<Workspace[]>([]);
 export const workspacesStore: Readable<Workspace[]> = _groups;
 
@@ -71,7 +101,9 @@ export async function loadWorkspaces(): Promise<void> {
       : null;
   // NestedWorkspace ids are regenerated on each run, so drop any stale values;
   // the workspace:created listener rebuilds them from metadata.parentWorkspaceId.
-  _groups.set(groups.map((g) => ({ ...g, workspaceIds: [] })));
+  // Older persisted data used `primaryWorkspaceId`/`dashboardWorkspaceId`;
+  // promote them to the new names so consumers see only the renamed fields.
+  _groups.set(groups.map(renameLegacyWorkspaceFields));
   _groupOrder.set(order);
   _activeGroupId.set(active);
 }

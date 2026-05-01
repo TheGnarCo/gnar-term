@@ -93,7 +93,7 @@ describe("confirmAndCloseWorkspace", () => {
     const ws = {
       id: "ws-dash",
       name: "Dashboard",
-      metadata: { dashboardWorkspaceId: "some-id" },
+      metadata: { dashboardNestedWorkspaceId: "some-id" },
     };
     const result = await confirmAndCloseWorkspace(ws, 1);
     expect(result).toBe(true);

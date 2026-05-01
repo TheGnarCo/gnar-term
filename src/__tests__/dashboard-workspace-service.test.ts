@@ -99,7 +99,7 @@ describe("spawnOrNavigate", () => {
         name: "Foo",
         layout: { pane: { surfaces: [] } },
         metadata: expect.objectContaining({
-          dashboardWorkspaceId: "ext:foo",
+          dashboardNestedWorkspaceId: "ext:foo",
           isDashboard: true,
         }),
       }),
@@ -112,7 +112,10 @@ describe("spawnOrNavigate", () => {
       cb([
         {
           id: "ws-1",
-          metadata: { dashboardWorkspaceId: "ext:foo", isDashboard: true },
+          metadata: {
+            dashboardNestedWorkspaceId: "ext:foo",
+            isDashboard: true,
+          },
         },
       ]);
       return () => {};

@@ -656,7 +656,7 @@
     // agentic extension's provision loop, reconcileWorkspaceDashboards) can
     // safely read and write the nestedWorkspaces store without racing restore.
     markRestored();
-    // Backfill primaryWorkspaceId and wrap standalone nestedWorkspaces now that
+    // Backfill primaryNestedWorkspaceId and wrap standalone nestedWorkspaces now that
     // the nestedWorkspaces store is populated.
     await reconcilePrimaryWorkspaces();
     setupPrimaryWorkspaceAutoRecreation();

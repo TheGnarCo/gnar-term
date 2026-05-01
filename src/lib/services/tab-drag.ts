@@ -462,12 +462,12 @@ export function commitTabDrop(): void {
         (g) => g.id === dropTarget.parentWorkspaceId,
       );
       if (!group) break;
-      const posInGroup = group.workspaceIds.indexOf(tgtWs.id);
+      const posInGroup = group.nestedWorkspaceIds.indexOf(tgtWs.id);
       const insertPos =
         dropTarget.insertEdge === "before"
           ? Math.max(0, posInGroup)
           : posInGroup === -1
-            ? group.workspaceIds.length
+            ? group.nestedWorkspaceIds.length
             : posInGroup + 1;
       createNestedWorkspaceFromSurface(
         surfaceId,

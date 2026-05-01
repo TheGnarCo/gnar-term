@@ -133,7 +133,7 @@ describe("hostScopedAgentsStore", () => {
         path: "/work/one",
         color: "blue",
         groupDashboardEnabled: true,
-        workspaceIds: ["ws-in"],
+        nestedWorkspaceIds: ["ws-in"],
       },
     ]);
     const api = makeApi([
@@ -161,7 +161,7 @@ describe("hostScopedAgentsStore", () => {
         path: "/work/one",
         color: "blue",
         groupDashboardEnabled: true,
-        workspaceIds: [],
+        nestedWorkspaceIds: [],
       },
     ]);
     const api = makeApi([
@@ -185,7 +185,7 @@ describe("hostScopedAgentsStore", () => {
         path: "/work/one",
         color: "blue",
         groupDashboardEnabled: true,
-        workspaceIds: [],
+        nestedWorkspaceIds: [],
       },
     ]);
     claimWorkspace("ws-under", "someone-else");
@@ -211,7 +211,7 @@ describe("hostScopedAgentsStore", () => {
         path: "/work/one",
         color: "blue",
         groupDashboardEnabled: true,
-        workspaceIds: [],
+        nestedWorkspaceIds: [],
       },
     ]);
     const api = makeApi([
@@ -225,7 +225,7 @@ describe("hostScopedAgentsStore", () => {
     expect(get(store)).toEqual([]);
   });
 
-  it("group scope → includes workspace in group.workspaceIds even when claimed and no metadata.parentWorkspaceId", async () => {
+  it("group scope → includes workspace in group.nestedWorkspaceIds even when claimed and no metadata.parentWorkspaceId", async () => {
     // Regression test: promote-to-group calls addNestedWorkspaceToWorkspace + claimWorkspace
     // but does NOT stamp metadata.parentWorkspaceId. Without criterion 2 in hostScopedAgentsStore,
     // the claim guard ($claimedIds.has) would block the CWD fallback and the agent
@@ -240,7 +240,7 @@ describe("hostScopedAgentsStore", () => {
         path: "/work/one",
         color: "blue",
         groupDashboardEnabled: true,
-        workspaceIds: ["ws-native"], // explicitly listed in the group
+        nestedWorkspaceIds: ["ws-native"], // explicitly listed in the group
       },
     ]);
     // Simulate the claim that promote-to-group installs.
@@ -256,7 +256,7 @@ describe("hostScopedAgentsStore", () => {
     expect(get(store).map((a) => a.agentId)).toEqual(["a-native"]);
   });
 
-  it("group scope → workspace in group.workspaceIds for a different group is not included", async () => {
+  it("group scope → workspace in group.nestedWorkspaceIds for a different group is not included", async () => {
     nestedWorkspaces.set([seedWorkspace("ws-other", { cwd: "" })]);
     setWorkspaces([
       {
@@ -265,7 +265,7 @@ describe("hostScopedAgentsStore", () => {
         path: "/work/one",
         color: "blue",
         groupDashboardEnabled: true,
-        workspaceIds: [],
+        nestedWorkspaceIds: [],
       },
       {
         id: "grp-2",
@@ -273,7 +273,7 @@ describe("hostScopedAgentsStore", () => {
         path: "/work/two",
         color: "red",
         groupDashboardEnabled: true,
-        workspaceIds: ["ws-other"],
+        nestedWorkspaceIds: ["ws-other"],
       },
     ]);
     const api = makeApi([

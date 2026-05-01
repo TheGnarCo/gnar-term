@@ -31,7 +31,7 @@ const GROUP = {
   name: "TestGroup",
   path: "/tmp/group1",
   color: "blue",
-  workspaceIds: [],
+  nestedWorkspaceIds: [],
   isGit: false,
   createdAt: "2026-04-21T00:00:00.000Z",
 };

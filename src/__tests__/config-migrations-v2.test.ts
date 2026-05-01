@@ -62,7 +62,7 @@ interface LegacyOrchestrator {
   path: string;
   createdAt: string;
   parentGroupId?: string;
-  dashboardWorkspaceId?: string;
+  dashboardNestedWorkspaceId?: string;
 }
 
 interface LegacyConfigInput extends GnarTermConfig {
@@ -99,8 +99,8 @@ function makeOrchestrator(
     ...(overrides.parentGroupId
       ? { parentGroupId: overrides.parentGroupId }
       : {}),
-    ...(overrides.dashboardWorkspaceId
-      ? { dashboardWorkspaceId: overrides.dashboardWorkspaceId }
+    ...(overrides.dashboardNestedWorkspaceId
+      ? { dashboardNestedWorkspaceId: overrides.dashboardNestedWorkspaceId }
       : {}),
   };
 }

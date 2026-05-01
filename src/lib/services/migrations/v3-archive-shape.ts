@@ -1,7 +1,10 @@
 /**
  * v3 — collapse the archive store's `kind`-discriminated rows into a
- * flat list of workspace ids, and rename the inner `groups` field on
- * `archivedDefs` to `workspaces` (with renamed sub-fields).
+ * flat list of workspace ids, rename the inner `groups` field on
+ * `archivedDefs` to `workspaces` (with renamed sub-fields), and rename
+ * the legacy `Workspace` field names that still leaked through:
+ * `primaryWorkspaceId` → `primaryNestedWorkspaceId`,
+ * `dashboardWorkspaceId` → `dashboardNestedWorkspaceId`.
  *
  * Before: `archivedOrder: { kind: "workspace" | "workspace-group"; id }[]`
  *         `archivedDefs: { nestedWorkspaces: {...}; groups: {...} }`
@@ -23,9 +26,37 @@ interface LegacyRow {
   id: string;
 }
 
+interface LegacyWorkspaceShape extends Workspace {
+  primaryWorkspaceId?: string;
+  dashboardWorkspaceId?: string;
+}
+
 interface LegacyGroupEntry {
-  group: Workspace;
+  group: LegacyWorkspaceShape;
   workspaceDefs: (NestedWorkspaceDef & { name: string })[];
+}
+
+function renameWorkspaceFields(w: LegacyWorkspaceShape): Workspace {
+  const {
+    primaryWorkspaceId,
+    dashboardWorkspaceId,
+    primaryNestedWorkspaceId,
+    dashboardNestedWorkspaceId,
+    ...rest
+  } = w;
+  return {
+    ...rest,
+    ...(primaryNestedWorkspaceId !== undefined
+      ? { primaryNestedWorkspaceId }
+      : primaryWorkspaceId !== undefined
+        ? { primaryNestedWorkspaceId: primaryWorkspaceId }
+        : {}),
+    ...(dashboardNestedWorkspaceId !== undefined
+      ? { dashboardNestedWorkspaceId }
+      : dashboardWorkspaceId !== undefined
+        ? { dashboardNestedWorkspaceId: dashboardWorkspaceId }
+        : {}),
+  };
 }
 
 interface LegacyArchivedDefs {
@@ -92,7 +123,7 @@ export function migrateV3ArchiveShape(config: GnarTermConfig): GnarTermConfig {
       for (const [id, entry] of Object.entries(legacyDefs.groups)) {
         if (workspaces[id]) continue; // prefer already-migrated value
         workspaces[id] = {
-          workspace: entry.group,
+          workspace: renameWorkspaceFields(entry.group),
           nestedWorkspaceDefs: entry.workspaceDefs,
         };
       }

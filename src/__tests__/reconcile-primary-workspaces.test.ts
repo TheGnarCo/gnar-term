@@ -1,6 +1,6 @@
 /**
  * reconcilePrimaryWorkspaces — startup pass that:
- *   1. Backfills primaryWorkspaceId on groups that lack it.
+ *   1. Backfills primaryNestedWorkspaceId on groups that lack it.
  *   2. Wraps standalone (ungrouped) nestedWorkspaces into new groups.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
@@ -28,7 +28,7 @@ function makeGroup(overrides: Partial<Workspace> = {}): Workspace {
     name: "Group 1",
     path: "/tmp/g1",
     color: "blue",
-    workspaceIds: [],
+    nestedWorkspaceIds: [],
     isGit: false,
     createdAt: "2026-04-30T00:00:00.000Z",
     ...overrides,
@@ -51,8 +51,8 @@ describe("reconcilePrimaryWorkspaces", () => {
     setWorkspaces([]);
   });
 
-  it("backfills primaryWorkspaceId on a group that lacks it", async () => {
-    const group = makeGroup({ id: "g1", workspaceIds: ["ws-1"] });
+  it("backfills primaryNestedWorkspaceId on a group that lacks it", async () => {
+    const group = makeGroup({ id: "g1", nestedWorkspaceIds: ["ws-1"] });
     setWorkspaces([group]);
     nestedWorkspaces.set([
       makeWorkspace("ws-1", { metadata: { parentWorkspaceId: "g1" } }),
@@ -61,14 +61,14 @@ describe("reconcilePrimaryWorkspaces", () => {
     await reconcilePrimaryWorkspaces();
 
     const updated = getWorkspaces().find((g) => g.id === "g1");
-    expect(updated?.primaryWorkspaceId).toBe("ws-1");
+    expect(updated?.primaryNestedWorkspaceId).toBe("ws-1");
   });
 
-  it("skips groups that already have primaryWorkspaceId", async () => {
+  it("skips groups that already have primaryNestedWorkspaceId", async () => {
     const group = makeGroup({
       id: "g1",
-      workspaceIds: ["ws-1"],
-      primaryWorkspaceId: "ws-1",
+      nestedWorkspaceIds: ["ws-1"],
+      primaryNestedWorkspaceId: "ws-1",
     });
     setWorkspaces([group]);
     nestedWorkspaces.set([
@@ -78,13 +78,13 @@ describe("reconcilePrimaryWorkspaces", () => {
     await reconcilePrimaryWorkspaces();
 
     const updated = getWorkspaces().find((g) => g.id === "g1");
-    expect(updated?.primaryWorkspaceId).toBe("ws-1");
+    expect(updated?.primaryNestedWorkspaceId).toBe("ws-1");
     // No duplicate groups created
     expect(getWorkspaces()).toHaveLength(1);
   });
 
   it("skips worktree nestedWorkspaces when choosing primary", async () => {
-    const group = makeGroup({ id: "g1", workspaceIds: ["wt-1", "ws-2"] });
+    const group = makeGroup({ id: "g1", nestedWorkspaceIds: ["wt-1", "ws-2"] });
     setWorkspaces([group]);
     nestedWorkspaces.set([
       makeWorkspace("wt-1", {
@@ -96,11 +96,14 @@ describe("reconcilePrimaryWorkspaces", () => {
     await reconcilePrimaryWorkspaces();
 
     const updated = getWorkspaces().find((g) => g.id === "g1");
-    expect(updated?.primaryWorkspaceId).toBe("ws-2");
+    expect(updated?.primaryNestedWorkspaceId).toBe("ws-2");
   });
 
   it("skips dashboard nestedWorkspaces when choosing primary", async () => {
-    const group = makeGroup({ id: "g1", workspaceIds: ["dash-1", "ws-2"] });
+    const group = makeGroup({
+      id: "g1",
+      nestedWorkspaceIds: ["dash-1", "ws-2"],
+    });
     setWorkspaces([group]);
     nestedWorkspaces.set([
       makeWorkspace("dash-1", {
@@ -112,7 +115,7 @@ describe("reconcilePrimaryWorkspaces", () => {
     await reconcilePrimaryWorkspaces();
 
     const updated = getWorkspaces().find((g) => g.id === "g1");
-    expect(updated?.primaryWorkspaceId).toBe("ws-2");
+    expect(updated?.primaryNestedWorkspaceId).toBe("ws-2");
   });
 
   it("wraps a standalone workspace into a new group", async () => {
@@ -124,7 +127,7 @@ describe("reconcilePrimaryWorkspaces", () => {
 
     const groups = getWorkspaces();
     expect(groups).toHaveLength(1);
-    expect(groups[0].primaryWorkspaceId).toBe("ws-solo");
+    expect(groups[0].primaryNestedWorkspaceId).toBe("ws-solo");
     expect(groups[0].name).toBe("Solo");
 
     // NestedWorkspace is now stamped with parentWorkspaceId
@@ -178,7 +181,7 @@ describe("reconcilePrimaryWorkspaces", () => {
 
     const groups = getWorkspaces();
     expect(groups).toHaveLength(1);
-    expect(groups[0].primaryWorkspaceId).toBe("ws-orphan-group");
+    expect(groups[0].primaryNestedWorkspaceId).toBe("ws-orphan-group");
 
     const ws = get(nestedWorkspaces).find((w) => w.id === "ws-orphan-group");
     expect((ws?.metadata as Record<string, unknown>)?.parentWorkspaceId).toBe(
@@ -186,8 +189,8 @@ describe("reconcilePrimaryWorkspaces", () => {
     );
   });
 
-  it("leaves primaryWorkspaceId unset on a group with only ineligible members (all worktrees)", async () => {
-    const group = makeGroup({ id: "g1", workspaceIds: ["wt-1", "wt-2"] });
+  it("leaves primaryNestedWorkspaceId unset on a group with only ineligible members (all worktrees)", async () => {
+    const group = makeGroup({ id: "g1", nestedWorkspaceIds: ["wt-1", "wt-2"] });
     setWorkspaces([group]);
     nestedWorkspaces.set([
       makeWorkspace("wt-1", {
@@ -201,7 +204,7 @@ describe("reconcilePrimaryWorkspaces", () => {
     await reconcilePrimaryWorkspaces();
 
     const updated = getWorkspaces().find((g) => g.id === "g1");
-    expect(updated?.primaryWorkspaceId).toBeUndefined();
+    expect(updated?.primaryNestedWorkspaceId).toBeUndefined();
     expect(getWorkspaces()).toHaveLength(1);
   });
 });

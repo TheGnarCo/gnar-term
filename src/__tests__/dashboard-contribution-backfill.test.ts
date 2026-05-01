@@ -28,10 +28,10 @@ const GROUP = {
   name: "Repo",
   path: "/tmp/repo",
   color: "purple",
-  workspaceIds: ["ws-legacy-group", "ws-legacy-agentic"],
+  nestedWorkspaceIds: ["ws-legacy-group", "ws-legacy-agentic"],
   isGit: false,
   createdAt: "2026-04-21T00:00:00.000Z",
-  dashboardWorkspaceId: "ws-legacy-group",
+  dashboardNestedWorkspaceId: "ws-legacy-group",
 };
 
 describe("dashboardContributionId backfill", () => {

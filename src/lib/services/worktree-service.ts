@@ -196,7 +196,10 @@ export async function createWorktreeWorkspaceFromConfig(
     }
   }
 
-  const wsName = `Worktree ${getWorktreeEntries().length + 1}`;
+  // Derive workspace name from worktree path (e.g., ".worktrees/my-branch" → "my-branch")
+  const wsName =
+    config.worktreePath.replace(/\/$/, "").split("/").pop() ||
+    `Worktree ${getWorktreeEntries().length + 1}`;
   // Snapshot workspace ids before createWorkspaceFromDef — diff after
   // the call to find the newly-created workspace's id.
   const prevIds = new Set(get(workspaces).map((w) => w.id));

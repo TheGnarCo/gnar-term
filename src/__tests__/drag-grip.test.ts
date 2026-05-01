@@ -55,9 +55,9 @@ const SOURCE = readFileSync(
 ).replace(/\s+/g, " ");
 
 describe("DragGrip visual states", () => {
-  it("has a fixed 6px grip width matching the rail stripe and hex pattern", () => {
+  it("has a fixed 8px grip width matching the rail stripe and hex pattern", () => {
     // Grip width is constant and matches the visual content width.
-    expect(SOURCE).toMatch(/width:\s*6px/);
+    expect(SOURCE).toMatch(/width:\s*8px/);
   });
 
   it("shows solid stripe normally, suppressing dots", () => {

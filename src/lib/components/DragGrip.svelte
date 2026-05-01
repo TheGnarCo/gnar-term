@@ -79,7 +79,7 @@
     flex-shrink: 0;
     align-self: stretch;
     position: relative;
-    width: 6px;
+    width: 8px;
     cursor: {locked ? 'not-allowed' : visible ? 'grab' : 'default'};
     overflow: hidden;
   "
@@ -93,7 +93,7 @@
       style="
         position: absolute;
         left: 0; top: 0; bottom: 0;
-        width: 6px;
+        width: 8px;
         background: {effectiveColor};
         opacity: {railOpacity};
       "
@@ -109,7 +109,7 @@
       style="
         position: absolute;
         left: 0; top: 0; bottom: 0;
-        width: 6px;
+        width: 8px;
         pointer-events: none;
         background-image: {fritBackgroundImage};
         background-size: {fritBackgroundSize};

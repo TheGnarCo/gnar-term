@@ -110,9 +110,7 @@
   }
 
   $: rowHovered = mouseOverContainer;
-  $: railBorderColor = hasActiveChild
-    ? color
-    : ($theme.border ?? "transparent");
+  $: railBorderColor = $theme.border ?? "transparent";
 
   // Non-dashboard count: dashboards don't count as real nested workspaces for
   // the purposes of showing the toggle button and auto-expand/collapse.

@@ -8,7 +8,7 @@
   import { runCommandById } from "../services/command-registry";
   import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
   import { eventBus, type ExtensionEvent } from "../services/event-bus";
-  import type { WorkspaceEntry } from "../config";
+  import type { Workspace } from "../config";
   import {
     workspaceGroupsStore,
     getWorkspaceGroup,
@@ -79,7 +79,7 @@
     | { kind: "light" }
     | null = null;
 
-  let group: WorkspaceEntry | undefined;
+  let group: Workspace | undefined;
   let stateVersion = 0;
 
   const onGroupStateChanged = () => {

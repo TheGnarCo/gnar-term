@@ -778,8 +778,8 @@ export interface ExtensionAPI {
   getSettings(): Record<string, unknown>;
 
   // Read-only core state (Svelte readable stores)
-  workspaces: Readable<WorkspaceRef[]>;
-  activeWorkspace: Readable<WorkspaceRef | null>;
+  workspaces: Readable<NestedWorkspaceRef[]>;
+  activeWorkspace: Readable<NestedWorkspaceRef | null>;
   activePane: Readable<PaneRef | null>;
   activeSurface: Readable<SurfaceRef | null>;
   /**
@@ -965,11 +965,11 @@ export interface WorkspaceActionInfo {
 
 /**
  * Minimum shape of a Workspace passed to contribution hooks. The
- * canonical type lives in core (`src/lib/config.ts#WorkspaceEntry`);
+ * canonical type lives in core (`src/lib/config.ts#Workspace`);
  * the public API only exposes the fields contributions are allowed to
  * read so core can evolve the stored record without breaking extensions.
  */
-export interface WorkspaceGroupRef {
+export interface WorkspaceRef {
   id: string;
   name: string;
   /** Root CWD — contributions typically place markdown under `<path>/.gnar-term/...`. */
@@ -1003,7 +1003,7 @@ export interface DashboardContributionInput {
    * Materialize the dashboard for the given group. Must resolve to the
    * new workspace's id.
    */
-  create: (group: WorkspaceGroupRef) => Promise<string>;
+  create: (group: WorkspaceRef) => Promise<string>;
   /**
    * Optional "delete and regenerate" hook surfaced as a button next to
    * the dashboard's row in Group Settings. Implementations typically
@@ -1011,12 +1011,12 @@ export interface DashboardContributionInput {
    * file picks up a newer seeded template. Contributions without
    * backing state (e.g. Diff) omit this and the button does not render.
    */
-  regenerate?: (group: WorkspaceGroupRef) => Promise<void>;
+  regenerate?: (group: WorkspaceRef) => Promise<void>;
   /**
    * Optional gate — when returns false, the contribution is hidden from
    * this group's "Add Dashboard" menu.
    */
-  isAvailableFor?: (group: WorkspaceGroupRef) => boolean;
+  isAvailableFor?: (group: WorkspaceRef) => boolean;
   /**
    * Optional icon component rendered on the dashboard tile. Tiles are
    * icon-only; the workspace name is surfaced as the tile's `title`.
@@ -1099,7 +1099,7 @@ export interface MergeResult {
 
 // --- Public-facing core state types (stable subset for extensions) ---
 
-export interface WorkspaceRef {
+export interface NestedWorkspaceRef {
   id: string;
   name: string;
   // Opaque per-workspace metadata set at creation time (e.g. groupId,

@@ -24,16 +24,13 @@ import { eventBus } from "../event-bus";
 import { rootRowOrder } from "../../stores/root-row-order";
 import { workspaces, activeWorkspaceIdx } from "../../stores/workspace";
 import type { NestedWorkspace } from "../../types";
-import type { WorkspaceEntry } from "../../config";
+import type { Workspace } from "../../config";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn().mockResolvedValue(undefined),
 }));
 
-function makeGroup(
-  id: string,
-  overrides: Partial<WorkspaceEntry> = {},
-): WorkspaceEntry {
+function makeGroup(id: string, overrides: Partial<Workspace> = {}): Workspace {
   return {
     id,
     name: `Group ${id}`,

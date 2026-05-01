@@ -4,11 +4,7 @@
  * Registers a "diff" surface type for rendering unified git diffs,
  * plus commands for showing uncommitted changes and comparing branches.
  */
-import type {
-  ExtensionManifest,
-  ExtensionAPI,
-  WorkspaceGroupRef,
-} from "../api";
+import type { ExtensionManifest, ExtensionAPI, WorkspaceRef } from "../api";
 import DiffSurface from "./DiffSurface.svelte";
 import ChangesTab from "./ChangesTab.svelte";
 import DiffIcon from "./DiffIcon.svelte";
@@ -174,7 +170,7 @@ export function registerDiffViewerExtension(api: ExtensionAPI): void {
  * the `show-uncommitted` command so the rendered diff is identical.
  */
 async function createDiffDashboardWorkspace(
-  group: WorkspaceGroupRef,
+  group: WorkspaceRef,
 ): Promise<string> {
   return await createWorkspaceFromDef({
     name: "Diff",

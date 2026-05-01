@@ -145,7 +145,7 @@ import {
   resetWorkspaceActions,
 } from "../lib/services/workspace-action-registry";
 import { setWorkspaceGroups } from "../lib/stores/workspace-groups";
-import type { WorkspaceEntry } from "../lib/config";
+import type { Workspace } from "../lib/config";
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -1751,7 +1751,7 @@ describe("WorkspaceSectionContent", () => {
   it("renders ⎇ Branch button for every group regardless of extension actions", async () => {
     // The New Worktree button shows unconditionally
     // for every group with a groupContext (i.e. any existing group entry).
-    const group: WorkspaceEntry = {
+    const group: Workspace = {
       id: "grp-1",
       name: "Test Group",
       path: "/tmp/test-group",

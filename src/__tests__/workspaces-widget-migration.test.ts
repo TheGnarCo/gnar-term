@@ -14,9 +14,9 @@ vi.mock("@tauri-apps/api/event", () => ({
 
 import { invoke } from "@tauri-apps/api/core";
 import { migrateGroupDashboardWidgets } from "../lib/services/workspace-group-service";
-import type { WorkspaceEntry } from "../lib/config";
+import type { Workspace } from "../lib/config";
 
-function makeGroup(): WorkspaceEntry {
+function makeGroup(): Workspace {
   return {
     id: "g1",
     name: "My Project",

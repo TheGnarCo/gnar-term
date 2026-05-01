@@ -21,9 +21,9 @@ import {
   resetDashboardContributions,
 } from "../lib/services/dashboard-contribution-registry";
 import { provisionAutoDashboardsForGroup } from "../lib/services/workspace-group-service";
-import type { WorkspaceEntry } from "../lib/config";
+import type { Workspace } from "../lib/config";
 
-function makeGroup(id: string): WorkspaceEntry {
+function makeGroup(id: string): Workspace {
   return {
     id,
     name: `Group ${id}`,

@@ -1,5 +1,5 @@
 /**
- * Worktree Service — owns the WorktreeWorkspaceEntry list and the
+ * Worktree Service — owns the WorktreeWorkspace list and the
  * archive / merge-archive flows. Persists state to GnarTermConfig.worktrees.
  */
 import { get, writable, type Readable } from "svelte/store";
@@ -7,7 +7,7 @@ import { invoke } from "@tauri-apps/api/core";
 import {
   getConfig,
   saveConfig,
-  type WorktreeWorkspaceEntry,
+  type WorktreeWorkspace,
   type WorktreesSettings,
 } from "../config";
 import {
@@ -31,16 +31,15 @@ interface MergeResult {
   conflicts?: string[];
 }
 
-const _entries = writable<WorktreeWorkspaceEntry[]>([]);
+const _entries = writable<WorktreeWorkspace[]>([]);
 
 // Pre-confirmed worktree actions set by confirmAndCloseWorkspace so that
 // handleWorkspaceClosed can skip its own dialog when close was initiated
 // through the combined confirm UI.
 const pendingCloseActions = new Map<string, "keep" | "delete">();
-export const worktreeEntriesStore: Readable<WorktreeWorkspaceEntry[]> =
-  _entries;
+export const worktreeEntriesStore: Readable<WorktreeWorkspace[]> = _entries;
 
-export function getWorktreeEntries(): WorktreeWorkspaceEntry[] {
+export function getWorktreeEntries(): WorktreeWorkspace[] {
   return get(_entries);
 }
 
@@ -54,9 +53,7 @@ export function loadWorktreeEntries(): void {
   _entries.set([...entries]);
 }
 
-async function persistEntries(
-  entries: WorktreeWorkspaceEntry[],
-): Promise<void> {
+async function persistEntries(entries: WorktreeWorkspace[]): Promise<void> {
   _entries.set([...entries]);
   const cfg = getConfig();
   await saveConfig({
@@ -73,7 +70,7 @@ export function _resetWorktreeService(): void {
 }
 
 /** Test-only seed — bypasses persistence. */
-export function _seedWorktreeEntries(entries: WorktreeWorkspaceEntry[]): void {
+export function _seedWorktreeEntries(entries: WorktreeWorkspace[]): void {
   _entries.set([...entries]);
 }
 

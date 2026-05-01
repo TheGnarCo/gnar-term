@@ -10,7 +10,7 @@
  */
 import { invoke } from "@tauri-apps/api/core";
 import { get } from "svelte/store";
-import type { SurfaceDef, WorkspaceEntry } from "../config";
+import type { SurfaceDef, Workspace } from "../config";
 import { GROUP_COLOR_SLOTS } from "../../extensions/api";
 import { appendRootRow, removeRootRow } from "../stores/root-row-order";
 import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
@@ -49,7 +49,7 @@ function emitStateChanged(metadata: Record<string, unknown> = {}): void {
   });
 }
 
-export function addWorkspaceGroup(group: WorkspaceEntry): void {
+export function addWorkspaceGroup(group: Workspace): void {
   setWorkspaceGroups([...getWorkspaceGroups(), group]);
   appendRootRow({ kind: "workspace-group", id: group.id });
   emitStateChanged({ groupId: group.id });
@@ -57,7 +57,7 @@ export function addWorkspaceGroup(group: WorkspaceEntry): void {
 
 export function updateWorkspaceGroup(
   id: string,
-  patch: Partial<Omit<WorkspaceEntry, "id">>,
+  patch: Partial<Omit<Workspace, "id">>,
 ): void {
   const next = getWorkspaceGroups().map((g) =>
     g.id === id ? { ...g, ...patch } : g,
@@ -211,7 +211,7 @@ export function groupDashboardPath(groupPath: string): string {
   return `${groupPath.replace(/\/+$/, "")}/.gnar-term/project-dashboard.md`;
 }
 
-function buildGroupDashboardMarkdown(group: WorkspaceEntry): string {
+function buildGroupDashboardMarkdown(group: Workspace): string {
   // The Group Dashboard is the generic, agent-agnostic landing page for
   // a Workspace. It surfaces GitHub work-tracker context — open
   // issues + open PRs — side by side, as a passive read-only browse
@@ -252,7 +252,7 @@ children:
  * group never trampling user customizations.
  */
 async function writeGroupDashboardTemplate(
-  group: WorkspaceEntry,
+  group: Workspace,
   path: string,
   options: { force?: boolean } = {},
 ): Promise<void> {
@@ -277,7 +277,7 @@ async function writeGroupDashboardTemplate(
  * needing the workspace to be closed/recreated.
  */
 export async function regenerateGroupDashboardTemplate(
-  group: WorkspaceEntry,
+  group: Workspace,
 ): Promise<void> {
   await writeGroupDashboardTemplate(group, groupDashboardPath(group.path), {
     force: true,
@@ -326,7 +326,7 @@ async function scrubGroupDashboardActiveAgents(path: string): Promise<void> {
 }
 
 export async function migrateGroupDashboardWidgets(
-  group: WorkspaceEntry,
+  group: Workspace,
   path: string,
 ): Promise<void> {
   try {
@@ -351,7 +351,7 @@ export async function migrateGroupDashboardWidgets(
 }
 
 function createDashboardWorkspaceFromDef(
-  group: WorkspaceEntry,
+  group: Workspace,
   name: string,
   contribId: string,
   surfaces: SurfaceDef[],
@@ -374,7 +374,7 @@ function createDashboardWorkspaceFromDef(
  * record can link to it.
  */
 export async function createGroupDashboardWorkspace(
-  group: WorkspaceEntry,
+  group: Workspace,
 ): Promise<string> {
   const path = groupDashboardPath(group.path);
   try {
@@ -406,7 +406,7 @@ export async function createGroupDashboardWorkspace(
 function backfillDashboardContributionIds(): void {
   const groups = getWorkspaceGroups();
   if (groups.length === 0) return;
-  const groupById = new Map<string, WorkspaceEntry>();
+  const groupById = new Map<string, Workspace>();
   for (const g of groups) groupById.set(g.id, g);
 
   let mutated = false;
@@ -458,7 +458,7 @@ function backfillDashboardContributionIds(): void {
  * contributions.
  */
 export function createSettingsDashboardWorkspace(
-  group: WorkspaceEntry,
+  group: Workspace,
 ): Promise<string> {
   return createDashboardWorkspaceFromDef(group, "Settings", "settings", []);
 }
@@ -515,7 +515,7 @@ export function hasDashboardWorkspace(
  * already backed by a workspace is skipped.
  */
 export async function provisionAutoDashboardsForGroup(
-  group: WorkspaceEntry,
+  group: Workspace,
 ): Promise<void> {
   for (const c of getDashboardContributions()) {
     if (!c.autoProvision) continue;
@@ -577,7 +577,7 @@ export function closeDashboardForGroup(
  * eagerly on group creation, so this is a pure activation call.
  * Returns true on success.
  */
-export function openGroupDashboard(group: WorkspaceEntry): boolean {
+export function openGroupDashboard(group: Workspace): boolean {
   const targetId = group.dashboardWorkspaceId;
   if (!targetId) return false;
   const idx = get(workspaces).findIndex((w) => w.id === targetId);
@@ -592,7 +592,7 @@ export function openGroupDashboard(group: WorkspaceEntry): boolean {
  * alongside the group record.
  */
 export async function closeGroupDashboardWorkspace(
-  group: WorkspaceEntry,
+  group: Workspace,
 ): Promise<void> {
   const dashboardWsId = group.dashboardWorkspaceId;
   if (!dashboardWsId) return;
@@ -756,7 +756,7 @@ export async function reconcilePrimaryWorkspaces(): Promise<void> {
     usedColors.push(color);
 
     const id = crypto.randomUUID();
-    const group: WorkspaceEntry = {
+    const group: Workspace = {
       id,
       name: ws.name,
       path: ((md as Record<string, unknown>).cwd as string) ?? "",

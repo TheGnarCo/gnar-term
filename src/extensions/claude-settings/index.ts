@@ -1,8 +1,4 @@
-import type {
-  ExtensionManifest,
-  ExtensionAPI,
-  WorkspaceGroupRef,
-} from "../api";
+import type { ExtensionManifest, ExtensionAPI, WorkspaceRef } from "../api";
 import { createWorkspaceFromDef } from "../../lib/services/workspace-service";
 import {
   closeAutoDashboardsBySource,
@@ -76,13 +72,13 @@ export function registerClaudeSettingsExtension(api: ExtensionAPI): void {
 
 // --- Dashboard creation ---
 
-function claudeSettingsMarkdownPath(group: WorkspaceGroupRef): string {
+function claudeSettingsMarkdownPath(group: WorkspaceRef): string {
   return `${group.path.replace(/\/+$/, "")}/.gnar-term/claude-settings.md`;
 }
 
 async function writeClaudeSettingsTemplate(
   api: ExtensionAPI,
-  group: WorkspaceGroupRef,
+  group: WorkspaceRef,
   options: { force?: boolean } = {},
 ): Promise<string> {
   const mdPath = claudeSettingsMarkdownPath(group);
@@ -103,7 +99,7 @@ async function writeClaudeSettingsTemplate(
 
 async function createClaudeSettingsDashboard(
   api: ExtensionAPI,
-  group: WorkspaceGroupRef,
+  group: WorkspaceRef,
 ): Promise<string> {
   const mdPath = await writeClaudeSettingsTemplate(api, group);
   return createWorkspaceFromDef({

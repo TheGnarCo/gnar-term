@@ -42,7 +42,7 @@ interface LegacyConfigShape extends GnarTermConfig {
 
 /**
  * Structural description of a workspace group — mirrors the
- * `WorkspaceEntry` in core but kept here to avoid a runtime import
+ * `Workspace` in core but kept here to avoid a runtime import
  * dependency on the public config type. The migration only needs
  * `{ id, path }`.
  */

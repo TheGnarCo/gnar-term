@@ -85,7 +85,7 @@ export interface ExtensionConfig {
 
 export type McpSetting = "auto" | "on" | "off";
 
-export interface WorktreeWorkspaceEntry {
+export interface WorktreeWorkspace {
   worktreePath: string;
   branch: string;
   baseBranch: string;
@@ -102,7 +102,7 @@ export interface WorktreesSettings {
 }
 
 export interface WorktreesConfig {
-  entries?: WorktreeWorkspaceEntry[];
+  entries?: WorktreeWorkspace[];
   settings?: WorktreesSettings;
 }
 
@@ -139,7 +139,7 @@ export interface AgentsConfig {
  * type already lives here so dashboard-contribution consumers can depend
  * on a stable core import path.
  */
-export interface WorkspaceEntry {
+export interface Workspace {
   id: string;
   name: string;
   /** Root CWD — auto-adoption uses this as a longest-prefix ancestor match. */
@@ -242,7 +242,7 @@ export interface AppState {
     groups: Record<
       string,
       {
-        group: WorkspaceEntry;
+        group: Workspace;
         workspaceDefs: (NestedWorkspaceDef & { name: string })[];
       }
     >;

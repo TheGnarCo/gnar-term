@@ -15,11 +15,7 @@
  *   2. The `agentic.global` pseudo-workspace (synthetic metadata with
  *      `isGlobalAgenticDashboard: true` → global scope).
  */
-import type {
-  ExtensionManifest,
-  ExtensionAPI,
-  WorkspaceGroupRef,
-} from "../api";
+import type { ExtensionManifest, ExtensionAPI, WorkspaceRef } from "../api";
 import { createWorkspaceFromDef } from "../../lib/services/workspace-service";
 import {
   closeAutoDashboardsBySource,
@@ -301,7 +297,7 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
  * Colocated under the group's `.gnar-term/` directory so multi-machine
  * sync / checkout follows the group itself.
  */
-function agenticDashboardMarkdownPath(group: WorkspaceGroupRef): string {
+function agenticDashboardMarkdownPath(group: WorkspaceRef): string {
   return `${group.path.replace(/\/+$/, "")}/.gnar-term/agentic-dashboard.md`;
 }
 
@@ -323,7 +319,7 @@ function agenticDashboardMarkdownPath(group: WorkspaceGroupRef): string {
  * active so each open issue can be turned into a worktree workspace
  * (claude-code default; caret menu offers codex / aider / custom).
  */
-function agenticDashboardTemplate(group: WorkspaceGroupRef): string {
+function agenticDashboardTemplate(group: WorkspaceRef): string {
   return `# ${group.name} Agents
 
 Spawn and monitor agents working inside \`${group.path}\`.
@@ -356,7 +352,7 @@ state: open
  */
 async function writeAgenticDashboardTemplate(
   api: ExtensionAPI,
-  group: WorkspaceGroupRef,
+  group: WorkspaceRef,
   options: { force?: boolean } = {},
 ): Promise<string> {
   const markdownPath = agenticDashboardMarkdownPath(group);
@@ -377,7 +373,7 @@ async function writeAgenticDashboardTemplate(
 
 async function createAgenticDashboardWorkspace(
   api: ExtensionAPI,
-  group: WorkspaceGroupRef,
+  group: WorkspaceRef,
 ): Promise<string> {
   const markdownPath = await writeAgenticDashboardTemplate(api, group);
   return await createWorkspaceFromDef({

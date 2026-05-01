@@ -36,9 +36,9 @@ import {
   deleteWorkspaceGroup,
 } from "../lib/services/workspace-group-service";
 import { removeRootRow } from "../lib/stores/root-row-order";
-import type { WorkspaceEntry } from "../lib/config";
+import type { Workspace } from "../lib/config";
 
-function makeGroup(overrides: Partial<WorkspaceEntry> = {}): WorkspaceEntry {
+function makeGroup(overrides: Partial<Workspace> = {}): Workspace {
   return {
     id: "g1",
     name: "Test Group",

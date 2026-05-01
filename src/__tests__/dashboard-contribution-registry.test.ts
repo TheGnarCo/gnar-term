@@ -6,7 +6,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { get } from "svelte/store";
-import type { WorkspaceEntry } from "../lib/config";
+import type { Workspace } from "../lib/config";
 import {
   canAddContributionToGroup,
   dashboardContributionStore,
@@ -20,7 +20,7 @@ import {
   type DashboardContribution,
 } from "../lib/services/dashboard-contribution-registry";
 
-function makeGroup(overrides: Partial<WorkspaceEntry> = {}): WorkspaceEntry {
+function makeGroup(overrides: Partial<Workspace> = {}): Workspace {
   return {
     id: "g1",
     name: "Test Group",
@@ -125,7 +125,7 @@ describe("dashboard-contribution registry", () => {
     });
 
     it("passes the group to each gate so contributions can branch on it", () => {
-      const gate = vi.fn((g: WorkspaceEntry) => g.isGit);
+      const gate = vi.fn((g: Workspace) => g.isGit);
       registerDashboardContribution(
         makeContribution({ id: "gitOnly", isAvailableFor: gate }),
       );

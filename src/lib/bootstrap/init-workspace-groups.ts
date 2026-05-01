@@ -45,7 +45,7 @@ import GearIcon from "../icons/GearIcon.svelte";
 import GridIcon from "../icons/GridIcon.svelte";
 import WorkspacesWidget from "../components/WorkspacesWidget.svelte";
 import { registerMarkdownComponent } from "../services/markdown-component-registry";
-import type { WorkspaceEntry } from "../config";
+import type { Workspace } from "../config";
 import {
   pendingCreateResolver,
   createDialogPrefill,
@@ -142,7 +142,7 @@ async function createWorkspaceGroupFlow(prefill?: {
   }
 
   const id = generateId();
-  const group: WorkspaceEntry = {
+  const group: Workspace = {
     id,
     name: result.name,
     path: result.path,
@@ -380,9 +380,9 @@ export async function initWorkspaceGroups(): Promise<void> {
     autoProvision: true,
     icon: GridIcon,
     lockedReason: "Required (Overview)",
-    create: async (group: WorkspaceEntry) =>
+    create: async (group: Workspace) =>
       await createGroupDashboardWorkspace(group),
-    regenerate: async (group: WorkspaceEntry) =>
+    regenerate: async (group: Workspace) =>
       await regenerateGroupDashboardTemplate(group),
   });
 
@@ -399,7 +399,7 @@ export async function initWorkspaceGroups(): Promise<void> {
     autoProvision: true,
     icon: GearIcon,
     lockedReason: "Required (Settings)",
-    create: async (group: WorkspaceEntry) =>
+    create: async (group: Workspace) =>
       await createSettingsDashboardWorkspace(group),
   });
 

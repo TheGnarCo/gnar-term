@@ -1,8 +1,8 @@
 /**
  * Registers the shared `"core"` ExtensionAPI with the extension
- * loader. Stage 5 of the Workspace Groups unification relocated
- * subsystems (Workspaces, Workspace Groups, preview pipeline, etc.)
- * out of the extension layer and into core. Their UI contributions
+ * loader. Stage 5 of the Workspaces unification relocated subsystems
+ * (Workspaces, NestedWorkspaces, preview pipeline, etc.) out of the
+ * extension layer and into core. Their UI contributions
  * still flow through the extension-facing registries (root-row
  * renderers, markdown components, etc.) so a single code path handles
  * mounting regardless of origin — but they stamp their origin as
@@ -22,7 +22,7 @@ const CORE_MANIFEST: ExtensionManifest = {
   name: "gnar-term core",
   version: "0.0.0-core",
   description:
-    "Built-in core subsystems (Workspaces, Workspace Groups, preview, etc.). Not a real extension — registered so UI contributions keyed under source='core' resolve to an ExtensionAPI.",
+    "Built-in core subsystems (Workspaces, NestedWorkspaces, preview, etc.). Not a real extension — registered so UI contributions keyed under source='core' resolve to an ExtensionAPI.",
   entry: "core://gnar-term",
   included: true,
   permissions: [],

@@ -3,7 +3,7 @@
  * Registers the create / archive / merge-archive commands and subscribes
  * to workspace lifecycle events so worktree-backed nestedWorkspaces stay in
  * sync with core state. The ⎇ Branch button and `core:create-worktree`
- * workspace action are registered in init-workspace-groups.
+ * workspace action are registered in init-workspaces.
  */
 import { eventBus, type AppEvent } from "../services/event-bus";
 import { registerCommand } from "../services/command-registry";

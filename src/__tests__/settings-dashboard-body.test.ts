@@ -69,7 +69,7 @@ describe("PaneView — settings dashboard body", () => {
       activePaneId: "p1",
       metadata: {
         isDashboard: true,
-        groupId: "g1",
+        parentWorkspaceId: "g1",
         dashboardContributionId: "settings",
       },
     } as unknown as NestedWorkspace;

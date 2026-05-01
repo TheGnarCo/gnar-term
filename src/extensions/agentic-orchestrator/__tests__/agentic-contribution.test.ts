@@ -112,7 +112,7 @@ describe("agentic extension — Dashboard contribution registration", () => {
     );
     expect(def.metadata).toMatchObject({
       isDashboard: true,
-      groupId: "grp-1",
+      parentWorkspaceId: "grp-1",
       dashboardContributionId: "agentic",
     });
   });

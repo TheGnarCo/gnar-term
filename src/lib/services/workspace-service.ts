@@ -449,7 +449,7 @@ function collapseEmptyPaneInWorkspace(
 
 /**
  * Spawn a new workspace whose splitRoot is a single pane carrying the
- * dragged surface. Inherits the source workspace's groupId so a tab
+ * dragged surface. Inherits the source workspace's parentWorkspaceId so a tab
  * dropped from a grouped workspace into the sidebar lands as a
  * sibling within the same group.
  *
@@ -502,7 +502,7 @@ export function createNestedWorkspaceFromSurface(
     surfaces: [surface],
     activeSurfaceId: surface.id,
   };
-  const srcGroupId = srcWs?.metadata?.groupId;
+  const srcGroupId = srcWs?.metadata?.parentWorkspaceId;
   const effectiveGroupId =
     (insertOptions?.kind === "group" && insertOptions.targetGroupId) ||
     srcGroupId;
@@ -511,7 +511,9 @@ export function createNestedWorkspaceFromSurface(
     name: surface.title || "New Workspace",
     splitRoot: { type: "pane", pane: newPane },
     activePaneId: newPane.id,
-    ...(effectiveGroupId ? { metadata: { groupId: effectiveGroupId } } : {}),
+    ...(effectiveGroupId
+      ? { metadata: { parentWorkspaceId: effectiveGroupId } }
+      : {}),
   };
 
   nestedWorkspaces.update((list) => [...list, newWs]);

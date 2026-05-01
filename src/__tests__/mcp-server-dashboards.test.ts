@@ -118,7 +118,7 @@ describe("MCP dashboard contribution tools", () => {
           layout: { pane: { id: "p", surfaces: [], activeIdx: 0 } },
           metadata: {
             isDashboard: true,
-            groupId: "g1",
+            parentWorkspaceId: "g1",
             dashboardContributionId: "diff",
           },
         } as never,

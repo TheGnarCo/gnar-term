@@ -36,12 +36,14 @@ function countRunningPtys(ws: NestedWorkspace): number {
     .length;
 }
 
-export async function archiveWorkspace(groupId: string): Promise<boolean> {
-  const group = getWorkspace(groupId);
+export async function archiveWorkspace(
+  parentWorkspaceId: string,
+): Promise<boolean> {
+  const group = getWorkspace(parentWorkspaceId);
   if (!group) return false;
   if (group.locked) return false;
 
-  const allInGroup = getWorktreeWorkspaces(groupId);
+  const allInGroup = getWorktreeWorkspaces(parentWorkspaceId);
   const nonDashboard = allInGroup.filter((ws) => !isDashboardWorkspace(ws));
 
   const runningCount = nonDashboard.reduce(
@@ -63,29 +65,31 @@ export async function archiveWorkspace(groupId: string): Promise<boolean> {
     ...(ws.metadata ? { metadata: ws.metadata } : {}),
   }));
 
-  closeNestedWorkspacesInWorkspace(groupId);
-  setWorkspaces(getWorkspaces().filter((g) => g.id !== groupId));
-  removeRootRow({ kind: "workspace-group", id: groupId });
+  closeNestedWorkspacesInWorkspace(parentWorkspaceId);
+  setWorkspaces(getWorkspaces().filter((g) => g.id !== parentWorkspaceId));
+  removeRootRow({ kind: "workspace-group", id: parentWorkspaceId });
   addToArchive(
-    { kind: "workspace-group", id: groupId },
+    { kind: "workspace-group", id: parentWorkspaceId },
     { group, workspaceDefs },
   );
   return true;
 }
 
-export async function unarchiveWorkspace(groupId: string): Promise<void> {
+export async function unarchiveWorkspace(
+  parentWorkspaceId: string,
+): Promise<void> {
   const defs = get(archivedDefs);
-  const entry = defs.groups[groupId];
+  const entry = defs.groups[parentWorkspaceId];
   if (!entry) return;
   // Container (group + root row) must be in place before we restore
   // nestedWorkspaces into it, but `removeFromArchive` is held until every
   // async restore step has resolved — if any throws, the archive entry
   // survives so the user can retry.
   setWorkspaces([...getWorkspaces(), entry.group]);
-  appendRootRow({ kind: "workspace-group", id: groupId });
+  appendRootRow({ kind: "workspace-group", id: parentWorkspaceId });
   for (const def of entry.workspaceDefs) {
     await createNestedWorkspaceFromDef(def, { restoring: true });
   }
   await provisionAutoDashboardsForWorkspace(entry.group);
-  removeFromArchive({ kind: "workspace-group", id: groupId });
+  removeFromArchive({ kind: "workspace-group", id: parentWorkspaceId });
 }

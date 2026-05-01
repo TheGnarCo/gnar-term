@@ -76,7 +76,7 @@
   // be closed from the UI, so no regen affordance is needed either.
   //
   // For non-Dashboard nestedWorkspaces tied to a workspace group
-  // (metadata.groupId), keep the workspace-groups regen affordance so
+  // (metadata.parentWorkspaceId), keep the workspace-groups regen affordance so
   // users can re-spawn a group-dashboard preview surface after closing it.
   $: workspaceMetadata = (() => {
     const ws = $nestedWorkspaces.find((w) => w.id === workspaceId);
@@ -90,8 +90,8 @@
   $: settingsDashboardGroupId =
     isDashboardWorkspace &&
     workspaceMetadata?.dashboardContributionId === "settings" &&
-    typeof workspaceMetadata?.groupId === "string"
-      ? workspaceMetadata.groupId
+    typeof workspaceMetadata?.parentWorkspaceId === "string"
+      ? workspaceMetadata.parentWorkspaceId
       : null;
   $: dashboardWorkspaceEntry =
     isDashboardWorkspace &&
@@ -103,7 +103,7 @@
   $: regenCommandId =
     isDashboardWorkspace &&
     !settingsDashboardGroupId &&
-    typeof workspaceMetadata?.groupId === "string"
+    typeof workspaceMetadata?.parentWorkspaceId === "string"
       ? "workspace-groups:regenerate-active-group-dashboard"
       : undefined;
   $: regenCommand = regenCommandId
@@ -322,7 +322,7 @@
     <!-- Settings dashboard — PaneView renders the shared settings body
          in place of any surface list. The workspace carries no preview
          surface, so no other render branches fire. -->
-    <GroupDashboardSettings groupId={settingsDashboardGroupId} />
+    <GroupDashboardSettings parentWorkspaceId={settingsDashboardGroupId} />
   {:else}
     {#if pane.surfaces.length === 0}
       <!-- Empty pane view — the user just closed the last surface. Shows

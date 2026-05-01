@@ -1102,9 +1102,9 @@ export interface MergeResult {
 export interface NestedWorkspaceRef {
   id: string;
   name: string;
-  // Opaque per-workspace metadata set at creation time (e.g. groupId,
+  // Opaque per-workspace metadata set at creation time (e.g. parentWorkspaceId,
   // worktreePath, branch). Extensions use this to detect nesting — e.g.
-  // the core git status subtitle collapses when groupId is present
+  // the core git status subtitle collapses when parentWorkspaceId is present
   // because the Workspace banner already shows cwd+branch.
   metadata?: Record<string, unknown>;
 }

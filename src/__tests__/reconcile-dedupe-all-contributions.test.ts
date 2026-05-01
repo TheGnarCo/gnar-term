@@ -47,7 +47,7 @@ function makeDashboard(id: string, contribId: string): never {
     activePaneId: "p",
     metadata: {
       isDashboard: true,
-      groupId: GROUP.id,
+      parentWorkspaceId: GROUP.id,
       dashboardContributionId: contribId,
     },
   } as never;
@@ -83,7 +83,7 @@ describe("reconcileWorkspaceDashboards — dedupe all contribution types", () =>
     const remaining = get(nestedWorkspaces).filter((w) => {
       return (
         w.metadata?.dashboardContributionId === "settings" &&
-        w.metadata?.groupId === GROUP.id
+        w.metadata?.parentWorkspaceId === GROUP.id
       );
     });
     expect(remaining).toHaveLength(1);
@@ -109,7 +109,7 @@ describe("reconcileWorkspaceDashboards — dedupe all contribution types", () =>
     const remaining = get(nestedWorkspaces).filter((w) => {
       return (
         w.metadata?.dashboardContributionId === "agentic" &&
-        w.metadata?.groupId === GROUP.id
+        w.metadata?.parentWorkspaceId === GROUP.id
       );
     });
     expect(remaining).toHaveLength(1);
@@ -147,7 +147,7 @@ describe("reconcileWorkspaceDashboards — dedupe all contribution types", () =>
       const matches = all.filter((w) => {
         return (
           w.metadata?.dashboardContributionId === contribId &&
-          w.metadata?.groupId === GROUP.id
+          w.metadata?.parentWorkspaceId === GROUP.id
         );
       });
       expect(

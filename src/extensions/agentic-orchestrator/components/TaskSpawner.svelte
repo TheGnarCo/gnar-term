@@ -4,7 +4,7 @@
    *
    * The spawn target is derived from the enclosing DashboardHostContext:
    *   - "group" scope → repoPath = the group's path;
-   *     metadata.groupId + metadata.spawnedBy = { kind:'group', groupId }
+   *     metadata.parentWorkspaceId + metadata.spawnedBy = { kind:'group', parentWorkspaceId }
    *   - "global" scope → repoPath from the `repoPath` config prop (the
    *     Global Agentic Dashboard can't infer a repo on its own);
    *     metadata.spawnedBy = { kind:'global' }
@@ -91,7 +91,9 @@
         repoPath: target.repoPath,
         branch: branchName,
         spawnedBy: target.spawnedBy,
-        ...(target.groupId ? { groupId: target.groupId } : {}),
+        ...(target.parentWorkspaceId
+          ? { parentWorkspaceId: target.parentWorkspaceId }
+          : {}),
       });
       // Success — collapse the form back to the "+ New Task" button.
       cancel();

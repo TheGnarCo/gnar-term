@@ -79,7 +79,7 @@ function generateId(): string {
 function onWorkspaceCreated(event: AppEvent): void {
   if (event.type !== "workspace:created") return;
   const metadata = event.metadata as NestedWorkspaceMetadata | undefined;
-  const targetGroupId = metadata?.groupId;
+  const targetGroupId = metadata?.parentWorkspaceId;
   if (!targetGroupId) return;
   addNestedWorkspaceToWorkspace(targetGroupId, event.id);
   claimWorkspace(event.id, SOURCE);
@@ -95,14 +95,14 @@ function onWorkspaceActivated(event: AppEvent): void {
   if (event.type !== "workspace:activated") return;
   const ws = get(nestedWorkspaces).find((w) => w.id === event.id);
   if (!ws) return;
-  const groupId = wsMeta(ws).groupId;
-  if (typeof groupId !== "string") return;
-  const group = readGroups().find((g) => g.id === groupId);
+  const parentWorkspaceId = wsMeta(ws).parentWorkspaceId;
+  if (typeof parentWorkspaceId !== "string") return;
+  const group = readGroups().find((g) => g.id === parentWorkspaceId);
   if (!group) return;
   void invoke<boolean>("is_git_repo", { path: group.path })
     .then((isGit) => {
       if (isGit !== group.isGit) {
-        updateWorkspace(groupId, { isGit });
+        updateWorkspace(parentWorkspaceId, { isGit });
       }
     })
     .catch(() => {});
@@ -181,20 +181,22 @@ async function createWorkspaceGroupFlow(prefill?: {
 
   // Spawn an initial regular workspace inside the new group and activate
   // it. The workspace:created handler claims it into the group
-  // automatically when it sees metadata.groupId.
+  // automatically when it sees metadata.parentWorkspaceId.
   try {
     const wsCount =
       readGroups().find((g) => g.id === id)?.workspaceIds.length ?? 0;
     await createNestedWorkspaceFromDef({
       name: `${result.name} Workspace ${wsCount + 1}`,
       cwd: result.path,
-      metadata: { groupId: id },
+      metadata: { parentWorkspaceId: id },
       layout: { pane: { surfaces: [{ type: "terminal" }] } },
     });
     const newWs = get(nestedWorkspaces)
       .slice()
       .reverse()
-      .find((w) => wsMeta(w).groupId === id && !wsMeta(w).isDashboard);
+      .find(
+        (w) => wsMeta(w).parentWorkspaceId === id && !wsMeta(w).isDashboard,
+      );
     if (newWs) {
       updateWorkspace(id, { primaryWorkspaceId: newWs.id });
       const idx = get(nestedWorkspaces).indexOf(newWs);
@@ -264,7 +266,7 @@ function registerPerGroupCommands(): void {
         void createNestedWorkspaceFromDef({
           name: `${group.name} Workspace ${count + 1}`,
           cwd: group.path,
-          metadata: { groupId: group.id },
+          metadata: { parentWorkspaceId: group.id },
           layout: { pane: { surfaces: [{ type: "terminal" }] } },
         });
       },
@@ -283,7 +285,7 @@ export async function initWorkspaceGroups(): Promise<void> {
 
   // Re-claim any restored nestedWorkspaces that belong to a known group —
   // workspace ids change on every restart, so the workspaceIds list is
-  // rebuilt from metadata.groupId on each workspace.
+  // rebuilt from metadata.parentWorkspaceId on each workspace.
   reclaimNestedWorkspacesAcrossWorkspaces();
 
   registerPerGroupCommands();
@@ -313,7 +315,7 @@ export async function initWorkspaceGroups(): Promise<void> {
     label: "⎇ Branch",
     icon: "git-branch",
     source: SOURCE,
-    when: (ctx) => !!ctx?.groupId && ctx.isGit === true,
+    when: (ctx) => !!ctx?.parentWorkspaceId && ctx.isGit === true,
     handler: (ctx) => {
       runCommandById("worktrees:create-workspace", ctx);
     },
@@ -363,9 +365,9 @@ export async function initWorkspaceGroups(): Promise<void> {
       const list = get(nestedWorkspaces);
       const idx = get(activeNestedWorkspaceIdx);
       const ws = typeof idx === "number" ? list[idx] : undefined;
-      const groupId = ws ? wsMeta(ws).groupId : undefined;
-      if (typeof groupId !== "string") return;
-      const group = readGroups().find((g) => g.id === groupId);
+      const parentWorkspaceId = ws ? wsMeta(ws).parentWorkspaceId : undefined;
+      if (typeof parentWorkspaceId !== "string") return;
+      const group = readGroups().find((g) => g.id === parentWorkspaceId);
       if (group) void openWorkspaceDashboard(group);
     },
   });

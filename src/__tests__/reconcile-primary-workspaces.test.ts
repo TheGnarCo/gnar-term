@@ -55,7 +55,7 @@ describe("reconcilePrimaryWorkspaces", () => {
     const group = makeGroup({ id: "g1", workspaceIds: ["ws-1"] });
     setWorkspaces([group]);
     nestedWorkspaces.set([
-      makeWorkspace("ws-1", { metadata: { groupId: "g1" } }),
+      makeWorkspace("ws-1", { metadata: { parentWorkspaceId: "g1" } }),
     ]);
 
     await reconcilePrimaryWorkspaces();
@@ -72,7 +72,7 @@ describe("reconcilePrimaryWorkspaces", () => {
     });
     setWorkspaces([group]);
     nestedWorkspaces.set([
-      makeWorkspace("ws-1", { metadata: { groupId: "g1" } }),
+      makeWorkspace("ws-1", { metadata: { parentWorkspaceId: "g1" } }),
     ]);
 
     await reconcilePrimaryWorkspaces();
@@ -88,9 +88,9 @@ describe("reconcilePrimaryWorkspaces", () => {
     setWorkspaces([group]);
     nestedWorkspaces.set([
       makeWorkspace("wt-1", {
-        metadata: { groupId: "g1", worktreePath: "/tmp/wt1" },
+        metadata: { parentWorkspaceId: "g1", worktreePath: "/tmp/wt1" },
       }),
-      makeWorkspace("ws-2", { metadata: { groupId: "g1" } }),
+      makeWorkspace("ws-2", { metadata: { parentWorkspaceId: "g1" } }),
     ]);
 
     await reconcilePrimaryWorkspaces();
@@ -104,9 +104,9 @@ describe("reconcilePrimaryWorkspaces", () => {
     setWorkspaces([group]);
     nestedWorkspaces.set([
       makeWorkspace("dash-1", {
-        metadata: { groupId: "g1", isDashboard: true },
+        metadata: { parentWorkspaceId: "g1", isDashboard: true },
       }),
-      makeWorkspace("ws-2", { metadata: { groupId: "g1" } }),
+      makeWorkspace("ws-2", { metadata: { parentWorkspaceId: "g1" } }),
     ]);
 
     await reconcilePrimaryWorkspaces();
@@ -127,9 +127,9 @@ describe("reconcilePrimaryWorkspaces", () => {
     expect(groups[0].primaryWorkspaceId).toBe("ws-solo");
     expect(groups[0].name).toBe("Solo");
 
-    // NestedWorkspace is now stamped with groupId
+    // NestedWorkspace is now stamped with parentWorkspaceId
     const ws = get(nestedWorkspaces).find((w) => w.id === "ws-solo");
-    expect((ws?.metadata as Record<string, unknown>)?.groupId).toBe(
+    expect((ws?.metadata as Record<string, unknown>)?.parentWorkspaceId).toBe(
       groups[0].id,
     );
   });
@@ -167,10 +167,10 @@ describe("reconcilePrimaryWorkspaces", () => {
     expect(getWorkspaces()).toHaveLength(0);
   });
 
-  it("wraps a workspace with an orphaned (unknown) groupId into a new group", async () => {
+  it("wraps a workspace with an orphaned (unknown) parentWorkspaceId into a new group", async () => {
     nestedWorkspaces.set([
       makeWorkspace("ws-orphan-group", {
-        metadata: { groupId: "deleted-group-id" },
+        metadata: { parentWorkspaceId: "deleted-group-id" },
       }),
     ]);
 
@@ -181,7 +181,7 @@ describe("reconcilePrimaryWorkspaces", () => {
     expect(groups[0].primaryWorkspaceId).toBe("ws-orphan-group");
 
     const ws = get(nestedWorkspaces).find((w) => w.id === "ws-orphan-group");
-    expect((ws?.metadata as Record<string, unknown>)?.groupId).toBe(
+    expect((ws?.metadata as Record<string, unknown>)?.parentWorkspaceId).toBe(
       groups[0].id,
     );
   });
@@ -191,10 +191,10 @@ describe("reconcilePrimaryWorkspaces", () => {
     setWorkspaces([group]);
     nestedWorkspaces.set([
       makeWorkspace("wt-1", {
-        metadata: { groupId: "g1", worktreePath: "/tmp/wt1" },
+        metadata: { parentWorkspaceId: "g1", worktreePath: "/tmp/wt1" },
       }),
       makeWorkspace("wt-2", {
-        metadata: { groupId: "g1", worktreePath: "/tmp/wt2" },
+        metadata: { parentWorkspaceId: "g1", worktreePath: "/tmp/wt2" },
       }),
     ]);
 

@@ -111,7 +111,7 @@ describe("provisionAutoDashboardsForWorkspace", () => {
         layout: { pane: { id: "p", surfaces: [], activeIdx: 0 } },
         metadata: {
           isDashboard: true,
-          groupId: group.id,
+          parentWorkspaceId: group.id,
           dashboardContributionId: "a",
         },
       } as never,
@@ -135,7 +135,7 @@ describe("provisionAutoDashboardsForWorkspace", () => {
           layout: { pane: { id: "p", surfaces: [], activeIdx: 0 } },
           metadata: {
             isDashboard: true,
-            groupId: "g1",
+            parentWorkspaceId: "g1",
             dashboardContributionId: "b",
           },
         } as never,

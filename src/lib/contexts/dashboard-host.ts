@@ -12,7 +12,7 @@
  *
  * Scope derivation inside widgets:
  *   - `metadata.isGlobalAgenticDashboard === true` → { kind: "global" }
- *   - `metadata.groupId` present                   → { kind: "group", groupId }
+ *   - `metadata.parentWorkspaceId` present                   → { kind: "group", parentWorkspaceId }
  *   - Otherwise                                     → inert / error
  */
 import { getContext, setContext } from "svelte";
@@ -54,7 +54,7 @@ export function getDashboardHost(): DashboardHostContext | null {
 
 export type DashboardScope =
   | { kind: "global" }
-  | { kind: "group"; groupId: string }
+  | { kind: "group"; parentWorkspaceId: string }
   | { kind: "none" };
 
 /**
@@ -63,7 +63,7 @@ export type DashboardScope =
  * consistent across widget implementations.
  *
  * Returns `{ kind: "none" }` when neither `isGlobalAgenticDashboard`
- * nor a string `groupId` is present — callers should treat that as
+ * nor a string `parentWorkspaceId` is present — callers should treat that as
  * "host has no scope" (typically render empty).
  */
 export function deriveDashboardScope(
@@ -74,9 +74,9 @@ export function deriveDashboardScope(
   if (md.isGlobalAgenticDashboard === true) {
     return { kind: "global" };
   }
-  const groupId = md.groupId;
-  if (typeof groupId === "string" && groupId.length > 0) {
-    return { kind: "group", groupId };
+  const parentWorkspaceId = md.parentWorkspaceId;
+  if (typeof parentWorkspaceId === "string" && parentWorkspaceId.length > 0) {
+    return { kind: "group", parentWorkspaceId };
   }
   return { kind: "none" };
 }

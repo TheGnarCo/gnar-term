@@ -85,7 +85,7 @@ export function throttle<TArgs extends unknown[]>(
 }
 
 /**
- * Shared module-level derived store: maps each groupId to the set of
+ * Shared module-level derived store: maps each parentWorkspaceId to the set of
  * workspace IDs that belong to it under the §5.3 criteria (metadata,
  * explicit membership, and CWD-prefix fallback for unclaimed nestedWorkspaces).
  *
@@ -105,7 +105,7 @@ const _groupWorkspaceIndex = derived(
       for (const ws of $nestedWorkspaces) {
         const md = ws.metadata as Record<string, unknown> | undefined;
         // Criterion 1: workspace was created with this group's id in metadata.
-        if (md?.groupId === group.id) {
+        if (md?.parentWorkspaceId === group.id) {
           members.add(ws.id);
           continue;
         }
@@ -138,9 +138,9 @@ const _groupWorkspaceIndex = derived(
  *   - no host / "none" scope → empty list
  *   - "global" scope         → every detected agent
  *   - "group" scope          → agents whose workspace satisfies any of:
- *        1. `metadata.groupId === groupId` (set by workspace creation)
+ *        1. `metadata.parentWorkspaceId === parentWorkspaceId` (set by workspace creation)
  *        2. workspace id is in `group.workspaceIds` (set by drag-drop /
- *           promote-to-group flows that don't stamp metadata.groupId)
+ *           promote-to-group flows that don't stamp metadata.parentWorkspaceId)
  *        3. workspace is unclaimed AND its first terminal CWD sits under
  *           the group's `path` prefix (catches native agents in terminals
  *           that were never explicitly added to the group)
@@ -167,7 +167,7 @@ export function hostScopedAgentsStore(
   // shared _groupWorkspaceIndex (O(1) lookup per agent) rather than walking
   // all nestedWorkspaces × surfaces independently.
   return derived([api.agents, _groupWorkspaceIndex], ([$agents, $index]) => {
-    const members = $index.get(scope.groupId);
+    const members = $index.get(scope.parentWorkspaceId);
     if (!members) return [];
     return $agents.filter((a) => members.has(a.workspaceId));
   });
@@ -279,7 +279,7 @@ export type SpawnTarget =
       ok: true;
       repoPath: string;
       spawnedBy: SpawnedByMarker;
-      groupId?: string;
+      parentWorkspaceId?: string;
     }
   | { ok: false; error: string };
 
@@ -288,13 +288,13 @@ export function resolveSpawnTarget(
   repoPathProp: string | undefined,
 ): SpawnTarget {
   if (scope.kind === "group") {
-    const group = getWorkspace(scope.groupId);
+    const group = getWorkspace(scope.parentWorkspaceId);
     if (!group) return { ok: false, error: "Workspace Group not found" };
     return {
       ok: true,
       repoPath: group.path,
-      spawnedBy: { kind: "group", groupId: scope.groupId },
-      groupId: scope.groupId,
+      spawnedBy: { kind: "group", parentWorkspaceId: scope.parentWorkspaceId },
+      parentWorkspaceId: scope.parentWorkspaceId,
     };
   }
   if (scope.kind === "global") {
@@ -318,6 +318,7 @@ export function resolveSpawnTarget(
 export function scopeAttrs(scope: DashboardScope): Record<string, string> {
   return {
     "data-scope-kind": scope.kind,
-    "data-scope-group-id": scope.kind === "group" ? scope.groupId : "",
+    "data-scope-group-id":
+      scope.kind === "group" ? scope.parentWorkspaceId : "",
   };
 }

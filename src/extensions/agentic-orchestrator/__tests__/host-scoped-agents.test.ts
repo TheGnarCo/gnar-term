@@ -2,7 +2,7 @@
  * Tests for `hostScopedAgentsStore` — the scope-derivation helper that
  * powers the agent-list / kanban / task-spawner widgets. Mirrors the
  * spec §5.3 rules: global scope emits all agents; group scope emits
- * agents whose workspace has matching `metadata.groupId` OR whose raw
+ * agents whose workspace has matching `metadata.parentWorkspaceId` OR whose raw
  * terminal CWD falls under the group's `path` and that haven't been
  * claimed yet; no-scope emits an empty list.
  */
@@ -98,7 +98,7 @@ describe("hostScopedAgentsStore", () => {
     expect(get(store)).toEqual([]);
   });
 
-  it("scope 'none' (host with no groupId / no global marker) → empty list", async () => {
+  it("scope 'none' (host with no parentWorkspaceId / no global marker) → empty list", async () => {
     const api = makeApi([makeAgent()]);
     const host: DashboardHostContext = { metadata: {} };
     const store = hostScopedAgentsStore(api, host);
@@ -120,10 +120,10 @@ describe("hostScopedAgentsStore", () => {
     expect(ids).toEqual(["a1", "a2"]);
   });
 
-  it("group scope → agents whose workspace metadata.groupId matches", async () => {
+  it("group scope → agents whose workspace metadata.parentWorkspaceId matches", async () => {
     nestedWorkspaces.set([
-      seedWorkspace("ws-in", { metadata: { groupId: "grp-1" } }),
-      seedWorkspace("ws-out", { metadata: { groupId: "grp-2" } }),
+      seedWorkspace("ws-in", { metadata: { parentWorkspaceId: "grp-1" } }),
+      seedWorkspace("ws-out", { metadata: { parentWorkspaceId: "grp-2" } }),
       seedWorkspace("ws-none", {}),
     ]);
     setWorkspaces([
@@ -141,7 +141,9 @@ describe("hostScopedAgentsStore", () => {
       makeAgent({ agentId: "a-out", workspaceId: "ws-out" }),
       makeAgent({ agentId: "a-none", workspaceId: "ws-none" }),
     ]);
-    const host: DashboardHostContext = { metadata: { groupId: "grp-1" } };
+    const host: DashboardHostContext = {
+      metadata: { parentWorkspaceId: "grp-1" },
+    };
     const store = hostScopedAgentsStore(api, host);
     await tick();
     expect(get(store).map((a) => a.agentId)).toEqual(["a-in"]);
@@ -166,7 +168,9 @@ describe("hostScopedAgentsStore", () => {
       makeAgent({ agentId: "a-under", workspaceId: "ws-under" }),
       makeAgent({ agentId: "a-else", workspaceId: "ws-elsewhere" }),
     ]);
-    const host: DashboardHostContext = { metadata: { groupId: "grp-1" } };
+    const host: DashboardHostContext = {
+      metadata: { parentWorkspaceId: "grp-1" },
+    };
     const store = hostScopedAgentsStore(api, host);
     await tick();
     expect(get(store).map((a) => a.agentId)).toEqual(["a-under"]);
@@ -188,7 +192,9 @@ describe("hostScopedAgentsStore", () => {
     const api = makeApi([
       makeAgent({ agentId: "a-under", workspaceId: "ws-under" }),
     ]);
-    const host: DashboardHostContext = { metadata: { groupId: "grp-1" } };
+    const host: DashboardHostContext = {
+      metadata: { parentWorkspaceId: "grp-1" },
+    };
     const store = hostScopedAgentsStore(api, host);
     await tick();
     expect(get(store)).toEqual([]);
@@ -211,19 +217,21 @@ describe("hostScopedAgentsStore", () => {
     const api = makeApi([
       makeAgent({ agentId: "a-sib", workspaceId: "ws-sibling" }),
     ]);
-    const host: DashboardHostContext = { metadata: { groupId: "grp-1" } };
+    const host: DashboardHostContext = {
+      metadata: { parentWorkspaceId: "grp-1" },
+    };
     const store = hostScopedAgentsStore(api, host);
     await tick();
     expect(get(store)).toEqual([]);
   });
 
-  it("group scope → includes workspace in group.workspaceIds even when claimed and no metadata.groupId", async () => {
+  it("group scope → includes workspace in group.workspaceIds even when claimed and no metadata.parentWorkspaceId", async () => {
     // Regression test: promote-to-group calls addNestedWorkspaceToWorkspace + claimWorkspace
-    // but does NOT stamp metadata.groupId. Without criterion 2 in hostScopedAgentsStore,
+    // but does NOT stamp metadata.parentWorkspaceId. Without criterion 2 in hostScopedAgentsStore,
     // the claim guard ($claimedIds.has) would block the CWD fallback and the agent
     // would be invisible in the group's Kanban dashboard.
     nestedWorkspaces.set([
-      seedWorkspace("ws-native", { cwd: "" }), // no cwd, no metadata.groupId
+      seedWorkspace("ws-native", { cwd: "" }), // no cwd, no metadata.parentWorkspaceId
     ]);
     setWorkspaces([
       {
@@ -240,7 +248,9 @@ describe("hostScopedAgentsStore", () => {
     const api = makeApi([
       makeAgent({ agentId: "a-native", workspaceId: "ws-native" }),
     ]);
-    const host: DashboardHostContext = { metadata: { groupId: "grp-1" } };
+    const host: DashboardHostContext = {
+      metadata: { parentWorkspaceId: "grp-1" },
+    };
     const store = hostScopedAgentsStore(api, host);
     await tick();
     expect(get(store).map((a) => a.agentId)).toEqual(["a-native"]);
@@ -269,7 +279,9 @@ describe("hostScopedAgentsStore", () => {
     const api = makeApi([
       makeAgent({ agentId: "a-other", workspaceId: "ws-other" }),
     ]);
-    const host: DashboardHostContext = { metadata: { groupId: "grp-1" } };
+    const host: DashboardHostContext = {
+      metadata: { parentWorkspaceId: "grp-1" },
+    };
     const store = hostScopedAgentsStore(api, host);
     await tick();
     expect(get(store)).toEqual([]);

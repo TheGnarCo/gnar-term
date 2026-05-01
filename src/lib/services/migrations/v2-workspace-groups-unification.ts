@@ -184,13 +184,13 @@ export async function migrateV2WorkspaceGroupsUnification(
   const { nestedByGroup, rootless } = groupByParent(orchestrators);
 
   // Nested: first per group migrates; rest are logged + dropped.
-  for (const [groupId, list] of nestedByGroup) {
+  for (const [parentWorkspaceId, list] of nestedByGroup) {
     const [first, ...extras] = list;
     if (!first) continue;
-    const groupPath = groupPathById.get(groupId);
+    const groupPath = groupPathById.get(parentWorkspaceId);
     if (!groupPath) {
       console.warn(
-        `[migration v2] Group ${groupId} not found in extension state; ` +
+        `[migration v2] Group ${parentWorkspaceId} not found in extension state; ` +
           `keeping orchestrator markdown at ${first.path} for manual rescue.`,
       );
     } else {
@@ -200,7 +200,7 @@ export async function migrateV2WorkspaceGroupsUnification(
     if (extras.length > 0) {
       console.warn(
         `[migration v2] Dropping ${extras.length} extra nested orchestrator(s) ` +
-          `for group ${groupId}: ${extras.map((o) => o.id).join(", ")}. ` +
+          `for group ${parentWorkspaceId}: ${extras.map((o) => o.id).join(", ")}. ` +
           `Their markdown remains at its old path for manual rescue.`,
       );
     }

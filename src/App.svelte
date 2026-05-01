@@ -637,12 +637,12 @@
       shortcut: `${shiftModLabel}N`,
       source: "core",
       handler: (ctx) => {
-        if (ctx.groupId && ctx.groupPath) {
+        if (ctx.parentWorkspaceId && ctx.groupPath) {
           const name = `Workspace ${get(nestedWorkspaces).length + 1}`;
           void createNestedWorkspaceFromDef({
             name,
             cwd: ctx.groupPath as string,
-            metadata: { groupId: ctx.groupId as string },
+            metadata: { parentWorkspaceId: ctx.parentWorkspaceId as string },
             layout: { pane: { surfaces: [{ type: "terminal" }] } },
           });
         } else {
@@ -733,7 +733,7 @@
           void createNestedWorkspaceFromDef({
             name: wsName,
             // Optional metadata forwards to the new workspace — e.g.
-            // container-row dirty clicks pass `{ groupId: <container-id> }`
+            // container-row dirty clicks pass `{ parentWorkspaceId: <container-id> }`
             // so the fresh "Diff" workspace nests inside its originating
             // group instead of materializing at the sidebar root.
             ...(options?.metadata ? { metadata: options.metadata } : {}),

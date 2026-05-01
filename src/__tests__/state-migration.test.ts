@@ -1,7 +1,7 @@
 /**
  * Tests for the on-load AppState shape migration (paired with v1/v2
  * config migrations). Covers:
- *   - projectId → groupId on workspace metadata (Stage 2b)
+ *   - projectId → parentWorkspaceId on workspace metadata (Stage 2b)
  *   - parentOrchestratorId → spawnedBy (Stage 8)
  *   - orchestratorId + isDashboard → dashboardContributionId="agentic"
  *   - rootRowOrder of kind "project" → "workspace-group"
@@ -48,44 +48,47 @@ describe("migrateLegacyProjectShapes — workspace metadata", () => {
     expect(changed).toBe(false);
   });
 
-  it("rewrites projectId → groupId when groupId absent", () => {
+  it("rewrites projectId → parentWorkspaceId when parentWorkspaceId absent", () => {
     const { migrated, changed } = migrateLegacyProjectShapes({
       nestedWorkspaces: [makeWs("w1", { projectId: "grp-a" })],
     });
     expect(changed).toBe(true);
     expect(migrated.nestedWorkspaces![0]!.metadata).toEqual({
-      groupId: "grp-a",
+      parentWorkspaceId: "grp-a",
     });
   });
 
-  it("prefers existing groupId when both projectId and groupId present", () => {
+  it("prefers existing parentWorkspaceId when both projectId and parentWorkspaceId present", () => {
     const { migrated } = migrateLegacyProjectShapes({
       nestedWorkspaces: [
-        makeWs("w1", { projectId: "old", groupId: "already-migrated" }),
+        makeWs("w1", {
+          projectId: "old",
+          parentWorkspaceId: "already-migrated",
+        }),
       ],
     });
     expect(migrated.nestedWorkspaces![0]!.metadata).toEqual({
-      groupId: "already-migrated",
+      parentWorkspaceId: "already-migrated",
     });
   });
 
-  it("rewrites parentOrchestratorId → spawnedBy with kind='group' when groupId known", () => {
+  it("rewrites parentOrchestratorId → spawnedBy with kind='group' when parentWorkspaceId known", () => {
     const { migrated, changed } = migrateLegacyProjectShapes({
       nestedWorkspaces: [
         makeWs("w1", {
-          groupId: "grp-a",
+          parentWorkspaceId: "grp-a",
           parentOrchestratorId: "orch-legacy",
         }),
       ],
     });
     expect(changed).toBe(true);
     expect(migrated.nestedWorkspaces![0]!.metadata).toEqual({
-      groupId: "grp-a",
-      spawnedBy: { kind: "group", groupId: "grp-a" },
+      parentWorkspaceId: "grp-a",
+      spawnedBy: { kind: "group", parentWorkspaceId: "grp-a" },
     });
   });
 
-  it("rewrites parentOrchestratorId → spawnedBy with kind='global' when no groupId", () => {
+  it("rewrites parentOrchestratorId → spawnedBy with kind='global' when no parentWorkspaceId", () => {
     const { migrated } = migrateLegacyProjectShapes({
       nestedWorkspaces: [makeWs("w1", { parentOrchestratorId: "orch-root" })],
     });
@@ -114,18 +117,18 @@ describe("migrateLegacyProjectShapes — workspace metadata", () => {
   });
 
   it("preserves spawnedBy when it's already present and drops the legacy parentOrchestratorId", () => {
-    const existing = { kind: "group" as const, groupId: "grp-a" };
+    const existing = { kind: "group" as const, parentWorkspaceId: "grp-a" };
     const { migrated } = migrateLegacyProjectShapes({
       nestedWorkspaces: [
         makeWs("w1", {
-          groupId: "grp-a",
+          parentWorkspaceId: "grp-a",
           parentOrchestratorId: "legacy",
           spawnedBy: existing,
         }),
       ],
     });
     expect(migrated.nestedWorkspaces![0]!.metadata).toEqual({
-      groupId: "grp-a",
+      parentWorkspaceId: "grp-a",
       spawnedBy: existing,
     });
   });

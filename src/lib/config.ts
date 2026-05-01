@@ -130,7 +130,7 @@ export interface AgentsConfig {
 /**
  * Workspace — a named, colored, path-rooted grouping of
  * nestedWorkspaces. Workspaces whose CWD falls under `path` are auto-adopted
- * (via `metadata.groupId`) and render nested inside the group's block
+ * (via `metadata.parentWorkspaceId`) and render nested inside the group's block
  * in the Workspaces section.
  *
  * Defined in core (rather than in an extension) because it is persisted
@@ -383,7 +383,7 @@ export const appStateStore: Readable<AppState> = _appStateStore;
 /**
  * Rewrite legacy workspace-scoped state shapes to the new NestedWorkspace
  * Groups + Dashboard Contributions layout:
- *   - nestedWorkspaces[].metadata.projectId → metadata.groupId
+ *   - nestedWorkspaces[].metadata.projectId → metadata.parentWorkspaceId
  *   - nestedWorkspaces[].metadata.parentOrchestratorId → metadata.spawnedBy
  *   - nestedWorkspaces[].metadata.orchestratorId (on dashboards) →
  *       metadata.dashboardContributionId = "agentic"
@@ -443,19 +443,21 @@ export function migrateLegacyProjectShapes(state: AppState): {
 
       if (needsProjectIdRewrite) {
         if (
-          nextMd.groupId === undefined &&
+          nextMd.parentWorkspaceId === undefined &&
           projectId !== undefined &&
           projectId !== null
         ) {
-          nextMd.groupId = projectId;
+          nextMd.parentWorkspaceId = projectId;
         }
       }
 
       if (needsSpawnedBy) {
-        const groupId =
-          typeof nextMd.groupId === "string" ? nextMd.groupId : undefined;
-        nextMd.spawnedBy = groupId
-          ? { kind: "group", groupId }
+        const parentWorkspaceId =
+          typeof nextMd.parentWorkspaceId === "string"
+            ? nextMd.parentWorkspaceId
+            : undefined;
+        nextMd.spawnedBy = parentWorkspaceId
+          ? { kind: "group", parentWorkspaceId }
           : { kind: "global" };
       } else if (parentOrchestratorId !== undefined) {
         // parentOrchestratorId present but spawnedBy already set — drop the

@@ -33,7 +33,7 @@ export function detectWorkspacePaneDrop(
 ): WorkspacePaneDropTarget {
   const allWs = get(nestedWorkspaces);
   const srcWs = allWs.find((ws) => ws.id === srcWorkspaceId);
-  const srcGroupId = srcWs ? wsMeta(srcWs).groupId : undefined;
+  const srcGroupId = srcWs ? wsMeta(srcWs).parentWorkspaceId : undefined;
 
   const paneBodies = Array.from(
     document.querySelectorAll("[data-pane-body]"),
@@ -53,7 +53,7 @@ export function detectWorkspacePaneDrop(
     );
     if (!tgtWs || tgtWs.id === srcWorkspaceId) continue;
 
-    const tgtGroupId = wsMeta(tgtWs).groupId;
+    const tgtGroupId = wsMeta(tgtWs).parentWorkspaceId;
 
     // Group compatibility: root → root only; grouped → same group only
     if (srcGroupId !== tgtGroupId) {
@@ -126,7 +126,7 @@ export function detectTabBarDropForWorkspace(
 ): WorkspacePaneDropTarget {
   const allWs = get(nestedWorkspaces);
   const srcWs = allWs.find((ws) => ws.id === srcWorkspaceId);
-  const srcGroupId = srcWs ? wsMeta(srcWs).groupId : undefined;
+  const srcGroupId = srcWs ? wsMeta(srcWs).parentWorkspaceId : undefined;
 
   const elAtCursor = document.elementFromPoint(x, y);
   if (!elAtCursor) return null;
@@ -144,7 +144,7 @@ export function detectTabBarDropForWorkspace(
   );
   if (!tgtWs || tgtWs.id === srcWorkspaceId) return null;
 
-  const tgtGroupId = wsMeta(tgtWs).groupId;
+  const tgtGroupId = wsMeta(tgtWs).parentWorkspaceId;
   if (srcGroupId !== tgtGroupId) {
     return { kind: "deny" };
   }

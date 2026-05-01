@@ -11,7 +11,7 @@
  * pull their scope from the enclosing DashboardHostContext (spec §5.3);
  * this extension provides two such hosts:
  *   1. A dashboard workspace materialized by the `agentic` contribution
- *      on a group (`metadata.groupId` → group scope).
+ *      on a group (`metadata.parentWorkspaceId` → group scope).
  *   2. The `agentic.global` pseudo-workspace (synthetic metadata with
  *      `isGlobalAgenticDashboard: true` → global scope).
  */
@@ -304,7 +304,7 @@ function agenticDashboardMarkdownPath(group: WorkspaceRef): string {
 /**
  * Default template for a fresh Agentic Dashboard. Widgets pull scope
  * from the enclosing DashboardHostContext, so no props are needed — the
- * host workspace's `metadata.groupId` drives filtering + spawn target.
+ * host workspace's `metadata.parentWorkspaceId` drives filtering + spawn target.
  *
  * The group-level Agentic Dashboard intentionally omits the `agent-list`
  * widget: the Kanban already enumerates agents in scope and the group's
@@ -341,7 +341,7 @@ state: open
 /**
  * Materialize a group's Agentic Dashboard workspace. Writes the backing
  * markdown if missing (user edits survive re-create at the same path)
- * and creates a single-preview-surface workspace tagged with the groupId
+ * and creates a single-preview-surface workspace tagged with the parentWorkspaceId
  * + contribution id. Called by the DashboardContributionRegistry when a
  * user chooses "Add Agentic Dashboard" on a workspace group.
  */
@@ -392,7 +392,7 @@ async function createAgenticDashboardWorkspace(
     },
     metadata: {
       isDashboard: true,
-      groupId: group.id,
+      parentWorkspaceId: group.id,
       dashboardContributionId: "agentic",
     },
   });

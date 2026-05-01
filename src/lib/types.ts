@@ -100,7 +100,7 @@ export interface NestedWorkspaceMetadata {
   /** Marks a workspace as a dashboard (used by workspace-group and related services). */
   isDashboard?: boolean;
   /** Group id this workspace belongs to (workspace-group-service). */
-  groupId?: string;
+  parentWorkspaceId?: string;
   /** Id of the group's current dashboard workspace (workspace-group-service). */
   dashboardWorkspaceId?: string;
   /**
@@ -117,7 +117,7 @@ export interface NestedWorkspaceMetadata {
    * Provenance marker set by spawn-helper. Records which dashboard spawned
    * this workspace so the sidebar can show a bot-icon affordance.
    */
-  spawnedBy?: { kind: "global" } | { kind: "group"; groupId: string };
+  spawnedBy?: { kind: "global" } | { kind: "group"; parentWorkspaceId: string };
   /**
    * GitHub issue numbers this workspace is handling (agentic-orchestrator).
    * Written by createWorktreeWorkspaceFromConfig.

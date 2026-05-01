@@ -57,7 +57,7 @@
   import { variantColor } from "../status-colors";
   import { wsMeta } from "../services/service-helpers";
 
-  export let groupId: string;
+  export let parentWorkspaceId: string;
   /**
    * The namespaced sidebar-block id that hosts this group — forwarded
    * to the ContainerRow's nested WorkspaceListView so workspace-drag
@@ -104,7 +104,7 @@
     void $workspacesStore;
     void $nestedWorkspaces;
     void stateVersion;
-    group = getWorkspace(groupId);
+    group = getWorkspace(parentWorkspaceId);
   }
 
   $: filterIds = group ? new Set(group.workspaceIds) : new Set<string>();
@@ -164,7 +164,7 @@
 
   $: groupContext = group
     ? ({
-        groupId: group.id,
+        parentWorkspaceId: group.id,
         groupPath: group.path,
         groupName: group.name,
         isGit: group.isGit,
@@ -197,7 +197,7 @@
     if (!g) return;
     const nestedCount = $nestedWorkspaces.filter((w) => {
       const md = wsMeta(w);
-      return md?.groupId === g.id && !md?.isDashboard;
+      return md?.parentWorkspaceId === g.id && !md?.isDashboard;
     }).length;
     const nestedLine =
       nestedCount > 0
@@ -228,7 +228,7 @@
       const newWsId = await createNestedWorkspaceFromDef({
         name: group.name,
         cwd: group.path,
-        metadata: { groupId: group.id },
+        metadata: { parentWorkspaceId: group.id },
       });
       if (newWsId) {
         updateWorkspace(group.id, { primaryWorkspaceId: newWsId });
@@ -243,7 +243,7 @@
     }
     if (openWorkspaceDashboard(group)) return;
     const nestedIdx = $nestedWorkspaces.findIndex((w) => {
-      return wsMeta(w)?.groupId === group!.id;
+      return wsMeta(w)?.parentWorkspaceId === group!.id;
     });
     if (nestedIdx >= 0) switchNestedWorkspace(nestedIdx);
   }
@@ -310,7 +310,7 @@
       .map((ws, idx) => ({ ws, idx }))
       .filter(({ ws }) => {
         const md = wsMeta(ws);
-        return md?.isDashboard === true && md?.groupId === gId;
+        return md?.isDashboard === true && md?.parentWorkspaceId === gId;
       })
       .sort((a, b) => {
         const aS = wsMeta(a.ws)?.dashboardContributionId === "settings";

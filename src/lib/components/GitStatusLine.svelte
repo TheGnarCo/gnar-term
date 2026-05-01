@@ -16,7 +16,7 @@
 
   $: currentWs = $nestedWorkspaces.find((w) => w.id === workspaceId);
   $: workspaceMetadata = currentWs ? wsMeta(currentWs) : {};
-  $: isNested = Boolean(workspaceMetadata.groupId);
+  $: isNested = Boolean(workspaceMetadata.parentWorkspaceId);
   $: isWorktree = Boolean(workspaceMetadata.worktreePath);
   $: worktreeBranch = workspaceMetadata.branch;
 

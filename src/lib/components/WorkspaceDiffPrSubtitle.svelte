@@ -24,7 +24,7 @@
   export let accentColor: string | undefined = undefined;
 
   $: currentWs = $nestedWorkspaces.find((w) => w.id === workspaceId);
-  $: isNested = Boolean(currentWs && wsMeta(currentWs).groupId);
+  $: isNested = Boolean(currentWs && wsMeta(currentWs).parentWorkspaceId);
 
   $: fgMuted = ($theme["fgMuted"] ?? $theme.fgDim) as string;
   $: iconFg = accentColor ?? fgMuted;

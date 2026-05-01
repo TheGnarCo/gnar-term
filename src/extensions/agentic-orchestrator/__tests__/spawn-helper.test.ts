@@ -9,7 +9,7 @@
  *   - Branch defaulting (agent/<agent>/<short-ts>)
  *   - Worktree path derivation (sibling of repo, hyphen-joined branch)
  *   - Startup command construction (quoted taskContext, custom passthrough)
- *   - spawnedBy + groupId metadata propagation
+ *   - spawnedBy + parentWorkspaceId metadata propagation
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
@@ -243,7 +243,7 @@ describe("spawn-helper: spawnAgentInWorktree", () => {
     expect(cfg.spawnedBy).toBeUndefined();
   });
 
-  it("propagates spawnedBy={kind:'group', groupId} when a group-scoped caller passes it", async () => {
+  it("propagates spawnedBy={kind:'group', parentWorkspaceId} when a group-scoped caller passes it", async () => {
     const newWsId = "ws-new-5";
     createWorktreeWorkspaceFromConfigMock.mockImplementation(async () => {
       nestedWorkspaces.set([seedWorkspaceAfterCreate(newWsId)]);
@@ -255,16 +255,19 @@ describe("spawn-helper: spawnAgentInWorktree", () => {
       agent: "claude-code",
       repoPath: "/work/proj",
       branch: "agent/claude-code/grp",
-      groupId: "grp-1",
-      spawnedBy: { kind: "group", groupId: "grp-1" },
+      parentWorkspaceId: "grp-1",
+      spawnedBy: { kind: "group", parentWorkspaceId: "grp-1" },
     });
 
     const cfg = createWorktreeWorkspaceFromConfigMock.mock.calls[0]?.[0];
-    expect(cfg.spawnedBy).toEqual({ kind: "group", groupId: "grp-1" });
-    expect(cfg.groupId).toBe("grp-1");
+    expect(cfg.spawnedBy).toEqual({
+      kind: "group",
+      parentWorkspaceId: "grp-1",
+    });
+    expect(cfg.parentWorkspaceId).toBe("grp-1");
   });
 
-  it("propagates spawnedBy={kind:'global'} and omits groupId for global-scoped spawns", async () => {
+  it("propagates spawnedBy={kind:'global'} and omits parentWorkspaceId for global-scoped spawns", async () => {
     const newWsId = "ws-new-6";
     createWorktreeWorkspaceFromConfigMock.mockImplementation(async () => {
       nestedWorkspaces.set([seedWorkspaceAfterCreate(newWsId)]);
@@ -281,7 +284,7 @@ describe("spawn-helper: spawnAgentInWorktree", () => {
 
     const cfg = createWorktreeWorkspaceFromConfigMock.mock.calls[0]?.[0];
     expect(cfg.spawnedBy).toEqual({ kind: "global" });
-    expect(cfg.groupId).toBeUndefined();
+    expect(cfg.parentWorkspaceId).toBeUndefined();
   });
 
   it("throws when repoPath is missing", async () => {

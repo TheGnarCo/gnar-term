@@ -90,7 +90,7 @@
   // banner itself already rolls up status (and the per-row chip handles
   // agent state), so the long blue notification row duplicates chrome
   // and crowds the nested layout — suppress it in that context.
-  $: isInsideGroup = typeof wsMeta(workspace).groupId === "string";
+  $: isInsideGroup = typeof wsMeta(workspace).parentWorkspaceId === "string";
   $: isAgentSpawned = wsMeta(workspace).spawnedBy != null;
   $: railColor =
     (isDashboardWorkspaceRow && dashboardWorkspaceEntry?.accentColor) ||

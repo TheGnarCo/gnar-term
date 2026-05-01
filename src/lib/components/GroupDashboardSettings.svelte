@@ -28,13 +28,13 @@
   import GridIcon from "../icons/GridIcon.svelte";
   import { wsMeta } from "../services/service-helpers";
 
-  export let groupId: string;
+  export let parentWorkspaceId: string;
 
   /** Per-row regenerate-in-flight flag. Keyed by contribution id. */
   let regeneratingRow: string | null = null;
   let regenerateError = "";
 
-  $: group = $workspacesStore.find((g) => g.id === groupId);
+  $: group = $workspacesStore.find((g) => g.id === parentWorkspaceId);
   $: currentColorSlot = group?.color ?? "purple";
   $: markdownPath = group ? groupDashboardPath(group.path) : "";
 
@@ -74,7 +74,9 @@
       ? $nestedWorkspaces
           .filter((w) => {
             const md = wsMeta(w);
-            return md.isDashboard === true && md.groupId === group!.id;
+            return (
+              md.isDashboard === true && md.parentWorkspaceId === group!.id
+            );
           })
           .map((w) => wsMeta(w).dashboardContributionId)
           .filter((v): v is string => typeof v === "string")

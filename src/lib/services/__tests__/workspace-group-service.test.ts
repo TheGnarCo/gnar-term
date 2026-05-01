@@ -100,7 +100,7 @@ describe("workspace-group-service", () => {
   });
 
   describe("closeNestedWorkspacesInWorkspace", () => {
-    function makeWs(id: string, groupId?: string): NestedWorkspace {
+    function makeWs(id: string, parentWorkspaceId?: string): NestedWorkspace {
       return {
         id,
         name: id,
@@ -109,7 +109,7 @@ describe("workspace-group-service", () => {
           pane: { id: `${id}-p`, surfaces: [], activeSurfaceId: null },
         },
         activePaneId: `${id}-p`,
-        ...(groupId ? { metadata: { groupId } } : {}),
+        ...(parentWorkspaceId ? { metadata: { parentWorkspaceId } } : {}),
       } as NestedWorkspace;
     }
 
@@ -141,10 +141,10 @@ describe("workspace-group-service", () => {
       ]);
     });
 
-    it("also closes the group's Dashboard workspace (same groupId metadata)", () => {
+    it("also closes the group's Dashboard workspace (same parentWorkspaceId metadata)", () => {
       const dashboard = {
         ...makeWs("ws-dashboard", "g1"),
-        metadata: { groupId: "g1", isDashboard: true },
+        metadata: { parentWorkspaceId: "g1", isDashboard: true },
       } as NestedWorkspace;
       nestedWorkspaces.set([dashboard, makeWs("ws-nested", "g1")]);
 

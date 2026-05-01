@@ -78,14 +78,16 @@ describe("WorkspacesWidget", () => {
     ]);
     nestedWorkspaces.set([
       makeWorkspace("ws-overview", "Group Overview", {
-        groupId: "g1",
+        parentWorkspaceId: "g1",
         isDashboard: true,
         dashboardContributionId: "group",
       }),
     ]);
 
     const { container } = render(WorkspacesWidget, {
-      context: new Map([[DASHBOARD_HOST_KEY, { metadata: { groupId: "g1" } }]]),
+      context: new Map([
+        [DASHBOARD_HOST_KEY, { metadata: { parentWorkspaceId: "g1" } }],
+      ]),
     });
 
     expect(container.querySelector("[data-dashboard-cards]")).toBeNull();
@@ -106,24 +108,26 @@ describe("WorkspacesWidget", () => {
     ]);
     nestedWorkspaces.set([
       makeWorkspace("ws-overview", "Group Overview", {
-        groupId: "g1",
+        parentWorkspaceId: "g1",
         isDashboard: true,
         dashboardContributionId: "group",
       }),
       makeWorkspace("ws-settings", "Settings Dashboard", {
-        groupId: "g1",
+        parentWorkspaceId: "g1",
         isDashboard: true,
         dashboardContributionId: "settings",
       }),
       makeWorkspace("ws-agentic", "Agentic Dashboard", {
-        groupId: "g1",
+        parentWorkspaceId: "g1",
         isDashboard: true,
         dashboardContributionId: "agentic",
       }),
     ]);
 
     const { container } = render(WorkspacesWidget, {
-      context: new Map([[DASHBOARD_HOST_KEY, { metadata: { groupId: "g1" } }]]),
+      context: new Map([
+        [DASHBOARD_HOST_KEY, { metadata: { parentWorkspaceId: "g1" } }],
+      ]),
     });
 
     const cards = container.querySelectorAll("[data-dashboard-card]");
@@ -150,12 +154,18 @@ describe("WorkspacesWidget", () => {
       },
     ]);
     nestedWorkspaces.set([
-      makeWorkspace("ws-alpha", "Alpha NestedWorkspace", { groupId: "g1" }),
-      makeWorkspace("ws-beta", "Beta NestedWorkspace", { groupId: "g1" }),
+      makeWorkspace("ws-alpha", "Alpha NestedWorkspace", {
+        parentWorkspaceId: "g1",
+      }),
+      makeWorkspace("ws-beta", "Beta NestedWorkspace", {
+        parentWorkspaceId: "g1",
+      }),
     ]);
 
     const { container } = render(WorkspacesWidget, {
-      context: new Map([[DASHBOARD_HOST_KEY, { metadata: { groupId: "g1" } }]]),
+      context: new Map([
+        [DASHBOARD_HOST_KEY, { metadata: { parentWorkspaceId: "g1" } }],
+      ]),
     });
 
     const rows = container.querySelectorAll("[data-workspace-row]");
@@ -188,12 +198,14 @@ describe("WorkspacesWidget", () => {
       },
     ]);
     nestedWorkspaces.set([
-      makeWorkspace("ws-g1", "G1 NestedWorkspace", { groupId: "g1" }),
-      makeWorkspace("ws-g2", "G2 NestedWorkspace", { groupId: "g2" }),
+      makeWorkspace("ws-g1", "G1 NestedWorkspace", { parentWorkspaceId: "g1" }),
+      makeWorkspace("ws-g2", "G2 NestedWorkspace", { parentWorkspaceId: "g2" }),
     ]);
 
     const { container } = render(WorkspacesWidget, {
-      context: new Map([[DASHBOARD_HOST_KEY, { metadata: { groupId: "g1" } }]]),
+      context: new Map([
+        [DASHBOARD_HOST_KEY, { metadata: { parentWorkspaceId: "g1" } }],
+      ]),
     });
 
     const rows = container.querySelectorAll("[data-workspace-row]");
@@ -223,12 +235,18 @@ describe("WorkspacesWidget click-to-navigate", () => {
       },
     ]);
     nestedWorkspaces.set([
-      makeWorkspace("ws-alpha", "Alpha NestedWorkspace", { groupId: "g1" }),
-      makeWorkspace("ws-beta", "Beta NestedWorkspace", { groupId: "g1" }),
+      makeWorkspace("ws-alpha", "Alpha NestedWorkspace", {
+        parentWorkspaceId: "g1",
+      }),
+      makeWorkspace("ws-beta", "Beta NestedWorkspace", {
+        parentWorkspaceId: "g1",
+      }),
     ]);
 
     const { container } = render(WorkspacesWidget, {
-      context: new Map([[DASHBOARD_HOST_KEY, { metadata: { groupId: "g1" } }]]),
+      context: new Map([
+        [DASHBOARD_HOST_KEY, { metadata: { parentWorkspaceId: "g1" } }],
+      ]),
     });
 
     const rows = container.querySelectorAll("[data-workspace-row]");

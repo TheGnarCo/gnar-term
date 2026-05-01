@@ -109,7 +109,7 @@ export async function restoreWorkspaces(
     // ghost dashboard in the main view that the user can't navigate
     // away from via the sidebar.
     //
-    // Additionally dedupe dashboards: each `(groupId, dashboardContributionId)`
+    // Additionally dedupe dashboards: each `(parentWorkspaceId, dashboardContributionId)`
     // pair should materialize exactly one dashboard workspace.
     // Pre-fix releases spawned a new Dashboard on every launch because
     // workspace ids regenerated, so persisted state can carry
@@ -119,7 +119,7 @@ export async function restoreWorkspaces(
     const filteredDefs = state.nestedWorkspaces.filter((wsDef) => {
       const md = wsDef.metadata;
       const isDashboard = md?.isDashboard === true;
-      const ownerGroupId = md?.groupId;
+      const ownerGroupId = md?.parentWorkspaceId;
       if (!isDashboard) return true;
       if (typeof ownerGroupId !== "string") return true;
       if (!knownGroupIds.has(ownerGroupId)) return false;

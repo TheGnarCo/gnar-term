@@ -16,14 +16,17 @@
   const host = getDashboardHost();
   const scope = deriveDashboardScope(host);
 
-  $: groupId = scope.kind === "group" ? scope.groupId : null;
+  $: parentWorkspaceId =
+    scope.kind === "group" ? scope.parentWorkspaceId : null;
 
-  $: group = groupId
-    ? ($workspacesStore.find((g) => g.id === groupId) ?? null)
+  $: group = parentWorkspaceId
+    ? ($workspacesStore.find((g) => g.id === parentWorkspaceId) ?? null)
     : null;
 
-  $: groupWs = groupId
-    ? $nestedWorkspaces.filter((ws) => wsMeta(ws).groupId === groupId)
+  $: groupWs = parentWorkspaceId
+    ? $nestedWorkspaces.filter(
+        (ws) => wsMeta(ws).parentWorkspaceId === parentWorkspaceId,
+      )
     : [];
 
   $: dashboardCards = groupWs.filter((ws) => {
@@ -51,8 +54,8 @@
     const contribution = md.dashboardContributionId
       ? getDashboardContribution(md.dashboardContributionId)
       : undefined;
-    const tileGroupPath = md.groupId
-      ? $workspacesStore.find((g) => g.id === md.groupId)?.path
+    const tileGroupPath = md.parentWorkspaceId
+      ? $workspacesStore.find((g) => g.id === md.parentWorkspaceId)?.path
       : undefined;
     return {
       icon: contribution?.icon ?? GridIcon,
@@ -64,7 +67,7 @@
   $: hasContent = dashboardCards.length > 0 || workspaceRows.length > 0;
 </script>
 
-{#if groupId && hasContent}
+{#if parentWorkspaceId && hasContent}
   <div class="nestedWorkspaces-widget" data-nestedWorkspaces-widget>
     {#if dashboardCards.length > 0}
       <div class="dashboard-cards" data-dashboard-cards>

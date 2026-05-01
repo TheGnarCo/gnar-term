@@ -56,7 +56,7 @@ const AGENT_COMMANDS: Record<Exclude<SpawnAgentType, "custom">, string> = {
  */
 export type SpawnedByMarker =
   | { kind: "global" }
-  | { kind: "group"; groupId: string };
+  | { kind: "group"; parentWorkspaceId: string };
 
 export interface SpawnAgentInWorktreeArgs {
   /** Display name for the spawned workspace. */
@@ -77,12 +77,12 @@ export interface SpawnAgentInWorktreeArgs {
   /** Base branch. Default: "main". */
   base?: string;
   /**
-   * When provided, the new workspace's metadata.groupId is set to this
+   * When provided, the new workspace's metadata.parentWorkspaceId is set to this
    * id — used when the spawning dashboard lives under a workspace group,
    * so workspace-groups claims the worktree into the group's nested list
    * alongside other group nestedWorkspaces.
    */
-  groupId?: string;
+  parentWorkspaceId?: string;
   /**
    * Provenance marker — the new workspace's metadata.spawnedBy records
    * which dashboard spawned it. Presence drives the bot-icon treatment
@@ -212,7 +212,9 @@ export async function spawnAgentInWorktree(
     base,
     worktreePath,
     startupCommand,
-    ...(args.groupId ? { groupId: args.groupId } : {}),
+    ...(args.parentWorkspaceId
+      ? { parentWorkspaceId: args.parentWorkspaceId }
+      : {}),
     ...(args.spawnedBy ? { spawnedBy: args.spawnedBy } : {}),
     ...(args.spawnedFromIssues && args.spawnedFromIssues.length > 0
       ? { spawnedFromIssues: args.spawnedFromIssues }

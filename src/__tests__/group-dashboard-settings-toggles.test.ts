@@ -75,7 +75,7 @@ describe("GroupDashboardSettings — Dashboards toggles", () => {
     });
 
     const { container } = render(GroupDashboardSettings, {
-      props: { groupId: GROUP.id },
+      props: { parentWorkspaceId: GROUP.id },
     });
 
     const rows = container.querySelectorAll("[data-dashboard-toggle-row]");
@@ -98,7 +98,7 @@ describe("GroupDashboardSettings — Dashboards toggles", () => {
     });
 
     const { container } = render(GroupDashboardSettings, {
-      props: { groupId: GROUP.id },
+      props: { parentWorkspaceId: GROUP.id },
     });
 
     const row = container.querySelector('[data-dashboard-toggle-row="group"]');
@@ -130,14 +130,14 @@ describe("GroupDashboardSettings — Dashboards toggles", () => {
         layout: { pane: { id: "p", surfaces: [], activeIdx: 0 } },
         metadata: {
           isDashboard: true,
-          groupId: GROUP.id,
+          parentWorkspaceId: GROUP.id,
           dashboardContributionId: "diff",
         },
       } as never,
     ]);
 
     const { container } = render(GroupDashboardSettings, {
-      props: { groupId: GROUP.id },
+      props: { parentWorkspaceId: GROUP.id },
     });
 
     const row = container.querySelector('[data-dashboard-toggle-row="diff"]');

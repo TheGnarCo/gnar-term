@@ -239,7 +239,9 @@
         repoPath: target.repoPath,
         branch: `agent/${agent}/${issue.number}-${branchSlug}`,
         spawnedBy: target.spawnedBy,
-        ...(target.groupId ? { groupId: target.groupId } : {}),
+        ...(target.parentWorkspaceId
+          ? { parentWorkspaceId: target.parentWorkspaceId }
+          : {}),
         spawnedFromIssues: [issue.number],
       });
       toggleIssueSelection(issue.number, false);
@@ -283,7 +285,9 @@
             repoPath: target.repoPath,
             branch: `agent/${agent}/${issue.number}-${branchSlug}`,
             spawnedBy: target.spawnedBy,
-            ...(target.groupId ? { groupId: target.groupId } : {}),
+            ...(target.parentWorkspaceId
+              ? { parentWorkspaceId: target.parentWorkspaceId }
+              : {}),
             spawnedFromIssues: [issue.number],
           });
         } catch (err) {
@@ -351,7 +355,9 @@
         repoPath: target.repoPath,
         branch: `agent/${agent}/${branchSuffix}`,
         spawnedBy: target.spawnedBy,
-        ...(target.groupId ? { groupId: target.groupId } : {}),
+        ...(target.parentWorkspaceId
+          ? { parentWorkspaceId: target.parentWorkspaceId }
+          : {}),
         spawnedFromIssues: numbers,
       });
       clearSelection();

@@ -468,9 +468,9 @@ async function ensurePolling(wsId: string): Promise<void> {
     // shows the project's dirty state until they're first opened.
     const ws = get(nestedWorkspaces).find((w) => w.id === wsId);
     if (ws) {
-      const groupId = wsMeta(ws).groupId;
-      if (typeof groupId === "string") {
-        cwd = getWorkspace(groupId)?.path;
+      const parentWorkspaceId = wsMeta(ws).parentWorkspaceId;
+      if (typeof parentWorkspaceId === "string") {
+        cwd = getWorkspace(parentWorkspaceId)?.path;
       }
     }
   }

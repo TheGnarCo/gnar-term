@@ -31,7 +31,7 @@
 
   function resolveRepoPath(): string | null {
     if (scope.kind === "group") {
-      const g = getWorkspace(scope.groupId);
+      const g = getWorkspace(scope.parentWorkspaceId);
       return g?.path ?? null;
     }
     if (scope.kind === "global") {

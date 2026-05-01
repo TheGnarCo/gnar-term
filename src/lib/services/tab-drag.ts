@@ -36,7 +36,7 @@ export type TabDropTarget =
   | { kind: "new-workspace"; insertIdx: number; insertEdge: "before" | "after" }
   | {
       kind: "new-workspace-in-group";
-      groupId: string;
+      parentWorkspaceId: string;
       insertGlobalIdx: number;
       insertEdge: "before" | "after";
     }
@@ -244,14 +244,14 @@ function detectDropTarget(
       const containerEl = wsViewRowEl.closest(
         "[data-container-nested]",
       ) as HTMLElement | null;
-      const groupId =
+      const parentWorkspaceId =
         containerEl?.getAttribute("data-container-nested") ?? null;
-      if (groupId) {
+      if (parentWorkspaceId) {
         const srcWs = get(nestedWorkspaces).find(
           (w) => w.id === sourceWorkspaceId,
         );
-        const srcGroupId = srcWs?.metadata?.groupId;
-        if (srcGroupId !== groupId) {
+        const srcGroupId = srcWs?.metadata?.parentWorkspaceId;
+        if (srcGroupId !== parentWorkspaceId) {
           if (srcGroupId) return null; // grouped tab over different group → deny
           // Root tab over a group's nested workspace → create a nested workspace
           // in that group rather than falling through to root-row detection.
@@ -265,7 +265,7 @@ function detectDropTarget(
               y < rect.top + rect.height / 2 ? "before" : "after";
             return {
               kind: "new-workspace-in-group",
-              groupId,
+              parentWorkspaceId,
               insertGlobalIdx: globalIdx,
               insertEdge,
             };
@@ -283,7 +283,7 @@ function detectDropTarget(
               y < rect.top + rect.height / 2 ? "before" : "after";
             return {
               kind: "new-workspace-in-group",
-              groupId,
+              parentWorkspaceId,
               insertGlobalIdx: globalIdx,
               insertEdge,
             };
@@ -316,7 +316,7 @@ function detectDropTarget(
       const srcWs = get(nestedWorkspaces).find(
         (w) => w.id === sourceWorkspaceId,
       );
-      const srcGroupId = srcWs?.metadata?.groupId;
+      const srcGroupId = srcWs?.metadata?.parentWorkspaceId;
       if (srcGroupId) return null;
       const rowIdx = parseInt(
         rootRowEl.getAttribute("data-root-row-idx") || "0",
@@ -338,7 +338,7 @@ function detectDropTarget(
       const srcWs = get(nestedWorkspaces).find(
         (w) => w.id === sourceWorkspaceId,
       );
-      const srcGroupId = srcWs?.metadata?.groupId;
+      const srcGroupId = srcWs?.metadata?.parentWorkspaceId;
       if (srcGroupId) return null;
       if (srcWs && getAllSurfaces(srcWs).length > 1) {
         const order = get(rootRowOrder);
@@ -458,7 +458,9 @@ export function commitTabDrop(): void {
       const allWs = get(nestedWorkspaces);
       const tgtWs = allWs[dropTarget.insertGlobalIdx];
       if (!tgtWs) break;
-      const group = getWorkspaces().find((g) => g.id === dropTarget.groupId);
+      const group = getWorkspaces().find(
+        (g) => g.id === dropTarget.parentWorkspaceId,
+      );
       if (!group) break;
       const posInGroup = group.workspaceIds.indexOf(tgtWs.id);
       const insertPos =
@@ -474,7 +476,7 @@ export function commitTabDrop(): void {
         {
           kind: "group",
           positionInGroup: insertPos,
-          targetGroupId: dropTarget.groupId,
+          targetGroupId: dropTarget.parentWorkspaceId,
         },
       );
       break;

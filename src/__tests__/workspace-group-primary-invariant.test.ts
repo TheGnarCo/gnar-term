@@ -61,13 +61,13 @@ describe("addNestedWorkspaceToWorkspace — primary invariant", () => {
         id: "ws-primary",
         name: "Primary",
         layout: { pane: { id: "p", surfaces: [], activeIdx: 0 } },
-        metadata: { groupId: "g1" },
+        metadata: { parentWorkspaceId: "g1" },
       } as never,
       {
         id: "ws-worktree",
         name: "Worktree",
         layout: { pane: { id: "p2", surfaces: [], activeIdx: 0 } },
-        metadata: { groupId: "g1", worktreePath: "/tmp/wt" },
+        metadata: { parentWorkspaceId: "g1", worktreePath: "/tmp/wt" },
       } as never,
     ]);
   });
@@ -86,7 +86,7 @@ describe("addNestedWorkspaceToWorkspace — primary invariant", () => {
         id: "ws-second",
         name: "Second",
         layout: { pane: { id: "p3", surfaces: [], activeIdx: 0 } },
-        metadata: { groupId: "g1" },
+        metadata: { parentWorkspaceId: "g1" },
       } as never,
     ]);
     expect(() => addNestedWorkspaceToWorkspace("g1", "ws-second")).toThrow(

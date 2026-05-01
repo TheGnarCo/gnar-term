@@ -411,7 +411,7 @@
     if (!ws) return;
     const md = wsMeta(ws);
     const isDashboard = md?.isDashboard === true;
-    const isInsideGroup = typeof md?.groupId === "string";
+    const isInsideGroup = typeof md?.parentWorkspaceId === "string";
     const isLocked = md?.locked === true;
     const items = buildWorkspaceContextMenuItems({
       isDashboard,

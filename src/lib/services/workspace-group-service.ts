@@ -55,7 +55,7 @@ function emitStateChanged(metadata: Record<string, unknown> = {}): void {
 export function addWorkspace(group: Workspace): void {
   setWorkspaces([...getWorkspaces(), group]);
   appendRootRow({ kind: "workspace-group", id: group.id });
-  emitStateChanged({ groupId: group.id });
+  emitStateChanged({ parentWorkspaceId: group.id });
 }
 
 export function updateWorkspace(
@@ -66,7 +66,7 @@ export function updateWorkspace(
     g.id === id ? { ...g, ...patch } : g,
   );
   setWorkspaces(next);
-  emitStateChanged({ groupId: id });
+  emitStateChanged({ parentWorkspaceId: id });
 }
 
 /**
@@ -82,7 +82,7 @@ export function toggleWorkspaceLock(id: string): void {
     g.id === id ? { ...g, locked: !g.locked } : g,
   );
   setWorkspaces(next);
-  emitStateChanged({ groupId: id });
+  emitStateChanged({ parentWorkspaceId: id });
 }
 
 export function deleteWorkspace(id: string): void {
@@ -92,21 +92,25 @@ export function deleteWorkspace(id: string): void {
   setWorkspaces(next);
   removeRootRow({ kind: "workspace-group", id });
   if (group) releaseGroupDirtyStore(group.path);
-  emitStateChanged({ groupId: id });
+  emitStateChanged({ parentWorkspaceId: id });
 }
 
 /**
- * All nestedWorkspaces tagged with `metadata.groupId === groupId`. This is the
+ * All nestedWorkspaces tagged with `metadata.parentWorkspaceId === parentWorkspaceId`. This is the
  * canonical group-membership predicate for core operations (close sweeps,
  * reclaim, reconcile). Extension-layer consumers that need a CWD-prefix
  * fallback for unclaimed nestedWorkspaces should compose with this result.
  */
-export function getWorktreeWorkspaces(groupId: string): NestedWorkspace[] {
-  return get(nestedWorkspaces).filter((w) => wsMeta(w).groupId === groupId);
+export function getWorktreeWorkspaces(
+  parentWorkspaceId: string,
+): NestedWorkspace[] {
+  return get(nestedWorkspaces).filter(
+    (w) => wsMeta(w).parentWorkspaceId === parentWorkspaceId,
+  );
 }
 
 /**
- * Close every workspace tagged with `metadata.groupId === id`. Deletion
+ * Close every workspace tagged with `metadata.parentWorkspaceId === id`. Deletion
  * ripples through the nestedWorkspaces store, so we resolve each workspace by
  * id after recollecting the list. Dashboard nestedWorkspaces for the group
  * match the same predicate and are closed here too; callers should not
@@ -122,7 +126,7 @@ export function closeNestedWorkspacesInWorkspace(id: string): void {
 }
 
 /**
- * Appends `workspaceId` to `groupId`'s workspaceIds if not already
+ * Appends `workspaceId` to `parentWorkspaceId`'s workspaceIds if not already
  * present. No-op when the group is missing (e.g. was just deleted).
  * Returns true when a change was persisted.
  *
@@ -130,11 +134,11 @@ export function closeNestedWorkspacesInWorkspace(id: string): void {
  * non-dashboard workspace to a group that already has a primaryWorkspaceId.
  */
 export function addNestedWorkspaceToWorkspace(
-  groupId: string,
+  parentWorkspaceId: string,
   workspaceId: string,
 ): boolean {
   const groups = getWorkspaces();
-  const group = groups.find((g) => g.id === groupId);
+  const group = groups.find((g) => g.id === parentWorkspaceId);
   if (!group) return false;
   if (group.workspaceIds.includes(workspaceId)) return false;
 
@@ -144,37 +148,37 @@ export function addNestedWorkspaceToWorkspace(
     const md = wsMeta(incomingWs);
     if (!md.worktreePath && !md.isDashboard && group.primaryWorkspaceId) {
       throw new Error(
-        `Group "${groupId}" already has a primary workspace "${group.primaryWorkspaceId}". ` +
+        `Group "${parentWorkspaceId}" already has a primary workspace "${group.primaryWorkspaceId}". ` +
           `Cannot add a second non-worktree workspace "${workspaceId}".`,
       );
     }
   }
 
   const next = groups.map((g) => {
-    if (g.id === groupId) {
+    if (g.id === parentWorkspaceId) {
       return { ...g, workspaceIds: [...g.workspaceIds, workspaceId] };
     }
     return g;
   });
   setWorkspaces(next);
-  emitStateChanged({ groupId });
+  emitStateChanged({ parentWorkspaceId });
   return true;
 }
 
 /**
- * Inserts `workspaceId` into `groupId`'s workspaceIds at `positionInGroup`.
+ * Inserts `workspaceId` into `parentWorkspaceId`'s workspaceIds at `positionInGroup`.
  * No-op when the group is missing or already contains the workspace.
  * Returns true when a change was persisted.
  */
 export function insertWorkspaceIntoGroup(
-  groupId: string,
+  parentWorkspaceId: string,
   workspaceId: string,
   positionInGroup: number,
 ): boolean {
   const groups = getWorkspaces();
   let changed = false;
   const next = groups.map((g) => {
-    if (g.id !== groupId) return g;
+    if (g.id !== parentWorkspaceId) return g;
     if (g.workspaceIds.includes(workspaceId)) return g;
     changed = true;
     const ids = [...g.workspaceIds];
@@ -187,7 +191,7 @@ export function insertWorkspaceIntoGroup(
   });
   if (!changed) return false;
   setWorkspaces(next);
-  emitStateChanged({ groupId });
+  emitStateChanged({ parentWorkspaceId });
   return true;
 }
 
@@ -366,7 +370,7 @@ function createDashboardWorkspaceFromDef(
     layout: { pane: { surfaces } },
     metadata: {
       isDashboard: true,
-      groupId: group.id,
+      parentWorkspaceId: group.id,
       dashboardContributionId: contribId,
     },
   });
@@ -420,9 +424,9 @@ function backfillDashboardContributionIds(): void {
       const md = wsMeta(ws);
       if (md.isDashboard !== true) return ws;
       if (typeof md.dashboardContributionId === "string") return ws;
-      const groupId = md.groupId;
-      if (typeof groupId !== "string") return ws;
-      const group = groupById.get(groupId);
+      const parentWorkspaceId = md.parentWorkspaceId;
+      if (typeof parentWorkspaceId !== "string") return ws;
+      const group = groupById.get(parentWorkspaceId);
       if (!group) return ws;
 
       const previewPaths = getAllPanes(ws.splitRoot)
@@ -480,14 +484,14 @@ export function createSettingsDashboardWorkspace(
  */
 export function isDashboardWorkspace(
   ws: { metadata?: NestedWorkspaceMetadata },
-  groupId: string,
+  parentWorkspaceId: string,
   contribId?: string,
   allowLegacyUndefined = false,
 ): boolean {
   const md = ws.metadata;
   if (!md) return false;
   if (md.isDashboard !== true) return false;
-  if (md.groupId !== groupId) return false;
+  if (md.parentWorkspaceId !== parentWorkspaceId) return false;
   if (contribId === undefined) return true;
   const contribution = md.dashboardContributionId;
   if (allowLegacyUndefined) {
@@ -496,19 +500,22 @@ export function isDashboardWorkspace(
   return contribution === contribId;
 }
 
-export function findDashboardWorkspace(groupId: string, contribId: string) {
+export function findDashboardWorkspace(
+  parentWorkspaceId: string,
+  contribId: string,
+) {
   return get(nestedWorkspaces).find((w) =>
-    isDashboardWorkspace(w, groupId, contribId),
+    isDashboardWorkspace(w, parentWorkspaceId, contribId),
   );
 }
 
 /** True when a workspace exists for the given group + contribution pair. */
 export function hasDashboardWorkspace(
-  groupId: string,
+  parentWorkspaceId: string,
   contribId: string,
 ): boolean {
   return get(nestedWorkspaces).some((w) =>
-    isDashboardWorkspace(w, groupId, contribId),
+    isDashboardWorkspace(w, parentWorkspaceId, contribId),
   );
 }
 
@@ -561,15 +568,15 @@ export function closeAutoDashboardsBySource(source: string): void {
 }
 
 /**
- * Locate the dashboard workspace for `groupId` + `contributionId` and
+ * Locate the dashboard workspace for `parentWorkspaceId` + `contributionId` and
  * close it. Used by the Settings toggle UI and by MCP to remove a
  * dashboard contribution from a group.
  */
 export function closeDashboardForGroup(
-  groupId: string,
+  parentWorkspaceId: string,
   contributionId: string,
 ): boolean {
-  const match = findDashboardWorkspace(groupId, contributionId);
+  const match = findDashboardWorkspace(parentWorkspaceId, contributionId);
   if (!match) return false;
   const contribution = getDashboardContribution(contributionId);
   if (contribution?.autoProvision) return false;
@@ -613,7 +620,7 @@ export async function closeGroupDashboardWorkspace(
  * passes:
  *
  *   1. Adopt the first workspace matching `metadata.isDashboard ===
- *      true && metadata.groupId === group.id` (with no contribution id,
+ *      true && metadata.parentWorkspaceId === group.id` (with no contribution id,
  *      or an explicit `"group"` id) — rebinding the group's
  *      `dashboardWorkspaceId` to that workspace.
  *   2. Close every extra Group Dashboard for the same group (users end
@@ -677,7 +684,7 @@ export async function reconcileWorkspaceDashboards(): Promise<void> {
 }
 
 /**
- * Re-claim nestedWorkspaces tagged with `metadata.groupId` that belong to a
+ * Re-claim nestedWorkspaces tagged with `metadata.parentWorkspaceId` that belong to a
  * known group. Called on app startup once groups are loaded and
  * nestedWorkspaces are restored — restoration creates fresh workspace ids so
  * we rebuild each group's workspaceIds list here.
@@ -691,11 +698,15 @@ export function reclaimNestedWorkspacesAcrossWorkspaces(): void {
   const newMembers = new Map<string, string[]>();
   const toClaimIds: string[] = [];
   for (const ws of get(nestedWorkspaces)) {
-    const groupId = wsMeta(ws).groupId;
-    if (typeof groupId !== "string" || !groupIds.has(groupId)) continue;
-    const members = newMembers.get(groupId) ?? [];
+    const parentWorkspaceId = wsMeta(ws).parentWorkspaceId;
+    if (
+      typeof parentWorkspaceId !== "string" ||
+      !groupIds.has(parentWorkspaceId)
+    )
+      continue;
+    const members = newMembers.get(parentWorkspaceId) ?? [];
     members.push(ws.id);
-    newMembers.set(groupId, members);
+    newMembers.set(parentWorkspaceId, members);
     toClaimIds.push(ws.id);
   }
 
@@ -722,7 +733,7 @@ export function reclaimNestedWorkspacesAcrossWorkspaces(): void {
  * Pass 1: For every group lacking `primaryWorkspaceId`, select the first
  * member workspace that is neither a dashboard nor a worktree.
  *
- * Pass 2: Wrap every standalone workspace (no metadata.groupId, not a
+ * Pass 2: Wrap every standalone workspace (no metadata.parentWorkspaceId, not a
  * dashboard) into a fresh group with that workspace as its primary.
  *
  * Idempotent — groups that already have `primaryWorkspaceId` are skipped.
@@ -750,7 +761,8 @@ export async function reconcilePrimaryWorkspaces(): Promise<void> {
 
   for (const ws of snapshot) {
     const md = wsMeta(ws);
-    if (md.groupId && knownGroupIds.has(md.groupId)) continue;
+    if (md.parentWorkspaceId && knownGroupIds.has(md.parentWorkspaceId))
+      continue;
     if (md.isDashboard) continue;
     // Orphan worktree nestedWorkspaces (group deleted, worktreePath still set) are
     // not primary candidates — skip them rather than wrapping them alone.
@@ -772,13 +784,13 @@ export async function reconcilePrimaryWorkspaces(): Promise<void> {
       createdAt: new Date().toISOString(),
     };
 
-    // Stamp the workspace with its new group and persist so the groupId
+    // Stamp the workspace with its new group and persist so the parentWorkspaceId
     // survives a restart — without this the workspace comes back as
     // standalone, fails the claim check, and gets wrapped again.
     nestedWorkspaces.update((list) =>
       list.map((w) =>
         w.id === ws.id
-          ? { ...w, metadata: { ...(w.metadata ?? {}), groupId: id } }
+          ? { ...w, metadata: { ...(w.metadata ?? {}), parentWorkspaceId: id } }
           : w,
       ),
     );
@@ -789,13 +801,13 @@ export async function reconcilePrimaryWorkspaces(): Promise<void> {
     knownGroupIds.add(id);
   }
 
-  // Pass 3 — claim all nestedWorkspaces that have metadata.groupId pointing to
+  // Pass 3 — claim all nestedWorkspaces that have metadata.parentWorkspaceId pointing to
   // valid groups. This rehydrates the in-memory claim registry from
   // persisted metadata on restart.
   const validGroupIds = new Set(getWorkspaces().map((g) => g.id));
   for (const ws of get(nestedWorkspaces)) {
     const md = wsMeta(ws);
-    if (md.groupId && validGroupIds.has(md.groupId)) {
+    if (md.parentWorkspaceId && validGroupIds.has(md.parentWorkspaceId)) {
       claimWorkspace(ws.id, "core");
     }
   }
@@ -818,7 +830,7 @@ export function setupPrimaryWorkspaceAutoRecreation(): void {
     const newWsId = await createNestedWorkspaceFromDef({
       name: group.name,
       cwd: group.path,
-      metadata: { groupId: group.id },
+      metadata: { parentWorkspaceId: group.id },
     });
     if (newWsId) {
       // Update the group's primary to the new workspace

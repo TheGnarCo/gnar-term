@@ -1223,11 +1223,11 @@ describe("WorkspaceItem", () => {
     // Regression: nested nestedWorkspaces render under a group's colored
     // banner that already rolls up status; the long blue notification
     // row duplicates chrome and crowds the nested layout, so it's
-    // suppressed when metadata.groupId is set.
+    // suppressed when metadata.parentWorkspaceId is set.
     const surface = makeSurface("s1", { notification: "Build complete" });
     const pane = makePane("p1", [surface]);
     const ws = makeWorkspace("ws1", "Nested WS", pane);
-    ws.metadata = { groupId: "g1" };
+    ws.metadata = { parentWorkspaceId: "g1" };
     render(WorkspaceItem, {
       props: {
         workspace: ws,
@@ -1421,7 +1421,7 @@ describe("PaneView", () => {
       activePaneId: "p1",
       metadata: {
         isDashboard: true,
-        groupId: "g1",
+        parentWorkspaceId: "g1",
         dashboardContributionId: "group",
       },
     };
@@ -1457,7 +1457,7 @@ describe("PaneView", () => {
       activePaneId: "p1",
       metadata: {
         isDashboard: true,
-        groupId: "g1",
+        parentWorkspaceId: "g1",
         dashboardContributionId: "settings",
       },
     };
@@ -1479,7 +1479,7 @@ describe("PaneView", () => {
         onFocusPane: noop,
       },
     });
-    // GroupDashboardSettings renders a settings panel keyed by groupId.
+    // GroupDashboardSettings renders a settings panel keyed by parentWorkspaceId.
     // Absent a matching group in the store it renders nothing, but the
     // render branch is still reached — no tab strip appears either way.
     expect(container.querySelector("[data-group-dashboard-tabs]")).toBeNull();
@@ -1765,7 +1765,9 @@ describe("WorkspaceSectionContent", () => {
     };
     setWorkspaces([group]);
 
-    render(WorkspaceGroupSectionHarness, { props: { groupId: "grp-1" } });
+    render(WorkspaceGroupSectionHarness, {
+      props: { parentWorkspaceId: "grp-1" },
+    });
 
     // New Worktree button renders (icon-only) even without any workspace actions registered.
     expect(screen.getByTitle("New Worktree")).toBeTruthy();
@@ -1777,7 +1779,7 @@ describe("WorkspaceSectionContent", () => {
       icon: "git-branch",
       source: "core",
       handler: noop,
-      when: (ctx) => !!ctx.groupId && ctx.isGit === true,
+      when: (ctx) => !!ctx.parentWorkspaceId && ctx.isGit === true,
     });
     await tick();
 

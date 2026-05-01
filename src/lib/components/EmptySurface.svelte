@@ -111,7 +111,7 @@
     const out: JumpRow[] = [];
     const seen = new Set<string>();
     for (const row of $rootRowOrder) {
-      if (row.kind === "workspace") {
+      if (row.kind === "nested-workspace") {
         const idx = list.findIndex((w) => w.id === row.id);
         if (idx < 0) continue;
         const ws = list[idx]!;
@@ -124,12 +124,12 @@
         seen.add(ws.id);
         continue;
       }
-      // Non-workspace row kinds (workspace-group, agent-orchestrator…).
+      // Non-nested-workspace row kinds (workspace, agent-orchestrator…).
       // Use their renderer-contributed label as a visual header, then
       // fan out any nestedWorkspaces tagged with the row's parentWorkspaceId.
       const rendererMeta = $rootRowRendererStore.find((r) => r.id === row.kind);
       const headerLabel = rendererMeta?.label?.(row.id);
-      if (headerLabel && row.kind === "workspace-group") {
+      if (headerLabel && row.kind === "workspace") {
         for (let i = 0; i < list.length; i++) {
           const ws = list[i]!;
           if (seen.has(ws.id)) continue;

@@ -102,7 +102,7 @@ describe("deleteWorkspace — lock gate", () => {
     deleteWorkspace("g1");
     expect(getWorkspaces()).toHaveLength(0);
     expect(removeRootRow).toHaveBeenCalledWith({
-      kind: "workspace-group",
+      kind: "workspace",
       id: "g1",
     });
   });

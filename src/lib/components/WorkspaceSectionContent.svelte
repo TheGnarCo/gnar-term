@@ -161,7 +161,7 @@
   // otherwise pull Svelte into the dependency graph.
   $: childRows =
     group && $childRowContributorStore
-      ? getChildRowsFor("workspace-group", group.id)
+      ? getChildRowsFor("workspace", group.id)
       : [];
 
   $: workspaceContext = group

@@ -377,13 +377,17 @@ const _appStateStore = writable<AppState>({});
 export const appStateStore: Readable<AppState> = _appStateStore;
 
 /**
- * Rewrite legacy workspace-scoped state shapes to the new NestedWorkspace
- * Groups + Dashboard Contributions layout:
+ * Rewrite legacy workspace-scoped state shapes to the new
+ * Workspace + NestedWorkspace layout:
  *   - nestedWorkspaces[].metadata.projectId → metadata.parentWorkspaceId
  *   - nestedWorkspaces[].metadata.parentOrchestratorId → metadata.spawnedBy
  *   - nestedWorkspaces[].metadata.orchestratorId (on dashboards) →
  *       metadata.dashboardContributionId = "agentic"
- *   - rootRowOrder[].kind === "project" → "workspace-group"
+ *   - rootRowOrder[].kind === "project" → "workspace"
+ *   - rootRowOrder[].kind === "workspace-group" → "workspace"
+ *   - rootRowOrder[].kind === "workspace" + id matches a nested workspace
+ *       → "nested-workspace" (id-based disambiguation; surviving "workspace"
+ *       rows are umbrella workspace blocks)
  *   - rootRowOrder[].kind === "agent-orchestrator" → dropped (Stage 7
  *     removed the orchestrator root-row)
  *
@@ -504,15 +508,30 @@ export function migrateLegacyProjectShapes(state: AppState): {
 
   if (Array.isArray(state.rootRowOrder)) {
     let orderChanged = false;
+    // Build the set of nested-workspace ids from the (possibly already
+    // migrated) workspaces list so we can disambiguate legacy
+    // `kind: "workspace"` rows: rows whose id matches a nested workspace
+    // are renamed to `"nested-workspace"`; surviving `"workspace"` rows
+    // are umbrella workspace blocks that don't need a rewrite.
+    const nestedIds = new Set<string>(
+      (next.nestedWorkspaces ?? state.nestedWorkspaces ?? [])
+        .map((w) => w.id)
+        .filter((id): id is string => typeof id === "string"),
+    );
     const rootRowOrder: typeof state.rootRowOrder = [];
     for (const row of state.rootRowOrder) {
       if (row.kind === "agent-orchestrator") {
         orderChanged = true;
         continue;
       }
-      if (row.kind === "project") {
+      if (row.kind === "project" || row.kind === "workspace-group") {
         orderChanged = true;
-        rootRowOrder.push({ ...row, kind: "workspace-group" });
+        rootRowOrder.push({ ...row, kind: "workspace" });
+        continue;
+      }
+      if (row.kind === "workspace" && nestedIds.has(row.id)) {
+        orderChanged = true;
+        rootRowOrder.push({ ...row, kind: "nested-workspace" });
         continue;
       }
       rootRowOrder.push(row);

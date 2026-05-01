@@ -54,7 +54,7 @@ function emitStateChanged(metadata: Record<string, unknown> = {}): void {
 
 export function addWorkspace(group: Workspace): void {
   setWorkspaces([...getWorkspaces(), group]);
-  appendRootRow({ kind: "workspace-group", id: group.id });
+  appendRootRow({ kind: "workspace", id: group.id });
   emitStateChanged({ parentWorkspaceId: group.id });
 }
 
@@ -90,7 +90,7 @@ export function deleteWorkspace(id: string): void {
   if (group?.locked) return;
   const next = getWorkspaces().filter((g) => g.id !== id);
   setWorkspaces(next);
-  removeRootRow({ kind: "workspace-group", id });
+  removeRootRow({ kind: "workspace", id });
   if (group) releaseWorkspaceDirtyStore(group.path);
   emitStateChanged({ parentWorkspaceId: id });
 }

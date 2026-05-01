@@ -59,10 +59,8 @@ describe("canStart gating", () => {
     );
   });
 
-  it("WorkspaceListBlock gates startRootRowDrag for locked workspace-groups", () => {
-    expect(WORKSPACE_LIST_BLOCK).toContain(
-      'srcRow?.kind === "workspace-group"',
-    );
+  it("WorkspaceListBlock gates startRootRowDrag for locked workspaces", () => {
+    expect(WORKSPACE_LIST_BLOCK).toContain('srcRow?.kind === "workspace"');
     expect(WORKSPACE_LIST_BLOCK).toContain("group?.locked === true");
   });
 });
@@ -76,10 +74,10 @@ describe("reorderContext is published on every drag", () => {
     );
   });
 
-  it("WorkspaceListView accepts scopeId + containerBlockId props and publishes workspace-kind context", () => {
+  it("WorkspaceListView accepts scopeId + containerBlockId props and publishes nested-workspace-kind context", () => {
     expect(WORKSPACE_LIST_VIEW).toMatch(/export let scopeId/);
     expect(WORKSPACE_LIST_VIEW).toMatch(/export let containerBlockId/);
-    expect(WORKSPACE_LIST_VIEW).toMatch(/kind:\s*"workspace"/);
+    expect(WORKSPACE_LIST_VIEW).toMatch(/kind:\s*"nested-workspace"/);
   });
 
   it("WorkspaceSectionContent threads scopeId={group.id} and containerBlockId to WorkspaceListView", () => {

@@ -379,8 +379,7 @@ export interface ExtensionAPI {
    * Append a row to the end of the Workspaces section's root-row
    * list. Idempotent — repeat calls for the same {kind, id} are
    * no-ops. Extensions call this when they create an entity that
-   * should render at the root level (e.g. workspace-group on group
-   * create).
+   * should render at the root level (e.g. workspace on group create).
    */
   appendRootRow(row: { kind: string; id: string }): void;
   /**
@@ -494,7 +493,7 @@ export interface ExtensionAPI {
   /**
    * Contribute child rows to another extension's parent rows. The
    * `parentType` matches the kind of a row registered via
-   * `registerRootRowRenderer` (e.g. "workspace-group", "dashboard"); given a
+   * `registerRootRowRenderer` (e.g. "workspace", "dashboard"); given a
    * specific parent's id, return the child row ids that should render
    * underneath it. Each id is dispatched through the same
    * root-row-renderer registry, so children inherit whatever the
@@ -803,7 +802,7 @@ export interface ExtensionAPI {
   hoveredSidebarBlockId: Readable<string | null>;
   /**
    * Key of the Workspaces-section root row currently hovered over its
-   * grip column, encoded as `"kind:id"` (e.g. `"workspace-group:g-42"`), or
+   * grip column, encoded as `"kind:id"` (e.g. `"workspace:g-42"`), or
    * null when no row is hovered. Renderers registered via
    * `registerRootRowRenderer` use this to derive their own
    * expansion/frit state in sync with the core-owned grip.
@@ -880,30 +879,31 @@ export interface ExtensionAPI {
 /**
  * Describes the sidebar drag-reorder currently in progress.
  *
- * - `kind: "workspace"` — a workspace row is being dragged. `scopeId` is the
- *   immediate container: `"__workspaces__"` when dragging from the unclaimed
- *   list, or a group id when dragging inside a workspace group.
- *   `containerBlockId` is the top-level sidebar block the drag lives in.
- * - `kind: "workspace-group"` — a group row is being dragged inside the
- *   Workspaces block. `sourceWorkspaceId` is the id of the dragged group.
+ * - `kind: "nested-workspace"` — a nested workspace row is being dragged.
+ *   `scopeId` is the immediate container: `"__workspaces__"` when dragging
+ *   from the unclaimed list, or a workspace id when dragging inside a
+ *   workspace block. `containerBlockId` is the top-level sidebar block the
+ *   drag lives in.
+ * - `kind: "workspace"` — a workspace row is being dragged inside the
+ *   Workspaces block. `sourceWorkspaceId` is the id of the dragged workspace.
  * - `kind: "section"` — a top-level sidebar block is being dragged.
  *   `sourceBlockId` is the block id.
  */
 export type ReorderContext =
-  | { kind: "workspace"; scopeId: string; containerBlockId: string }
+  | { kind: "nested-workspace"; scopeId: string; containerBlockId: string }
   | {
-      kind: "workspace-group";
+      kind: "workspace";
       sourceWorkspaceId: string;
       containerBlockId: string;
     }
   | { kind: "section"; sourceBlockId: string }
   | {
       // Root-level drag inside the Workspaces section — the unified
-      // lane that covers unclaimed nestedWorkspaces + whole workspace-group
+      // lane that covers unclaimed nestedWorkspaces + whole workspace
       // blocks. `sourceKind` + `sourceId` identify the dragged row so
       // sibling rows (of any kind) can resolve their overlay.
       kind: "rootRow";
-      sourceKind: "workspace" | "workspace-group" | string;
+      sourceKind: "nested-workspace" | "workspace" | string;
       sourceId: string;
       containerBlockId: string;
     };

@@ -62,7 +62,7 @@ describe("workspace-group-service", () => {
     expect(getWorkspaces()).toHaveLength(1);
     expect(get(workspacesStore)[0].id).toBe("g1");
     expect(get(rootRowOrder)).toContainEqual({
-      kind: "workspace-group",
+      kind: "workspace",
       id: "g1",
     });
   });
@@ -78,7 +78,7 @@ describe("workspace-group-service", () => {
     deleteWorkspace("g1");
     expect(getWorkspaces()).toHaveLength(0);
     expect(get(rootRowOrder)).not.toContainEqual({
-      kind: "workspace-group",
+      kind: "workspace",
       id: "g1",
     });
   });

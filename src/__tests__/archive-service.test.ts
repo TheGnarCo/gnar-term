@@ -175,7 +175,7 @@ describe("archiveWorkspace", () => {
     expect(mocks.closeNestedWorkspacesInWorkspace).toHaveBeenCalledWith("g-1");
     expect(mocks.setWorkspaces).toHaveBeenCalledWith([{ id: "other" }]);
     expect(mocks.removeRootRow).toHaveBeenCalledWith({
-      kind: "workspace-group",
+      kind: "workspace",
       id: "g-1",
     });
     expect(get(archivedOrder)).toEqual(["g-1"]);
@@ -246,7 +246,7 @@ describe("unarchiveWorkspace", () => {
       group,
     ]);
     expect(mocks.appendRootRow).toHaveBeenCalledWith({
-      kind: "workspace-group",
+      kind: "workspace",
       id: "g-1",
     });
     expect(mocks.createNestedWorkspaceFromDef).toHaveBeenCalledTimes(2);

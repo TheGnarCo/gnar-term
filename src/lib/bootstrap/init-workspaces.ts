@@ -281,7 +281,7 @@ export async function initWorkspaces(): Promise<void> {
   // Seed rootRowOrder with each existing group. appendRootRow is
   // idempotent, so a persisted order is preserved.
   for (const group of readGroups()) {
-    appendRootRow({ kind: "workspace-group", id: group.id });
+    appendRootRow({ kind: "workspace", id: group.id });
   }
 
   // Re-claim any restored nestedWorkspaces that belong to a known group —
@@ -291,12 +291,12 @@ export async function initWorkspaces(): Promise<void> {
 
   registerPerWorkspaceCommands();
 
-  // Root-row renderer for "workspace-group" kind. ContainerRow inside
+  // Root-row renderer for "workspace" kind. ContainerRow inside
   // the renderer owns the grip/banner/nested-list chrome; the rail
   // color + label resolvers let the outer list paint the grip in the
   // group's color and show its name in the drag overlay.
   registerRootRowRenderer({
-    id: "workspace-group",
+    id: "workspace",
     source: SOURCE,
     component: WorkspaceRowBody,
     railColor: (id: string) => {

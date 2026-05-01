@@ -99,7 +99,7 @@ export function handleAppKeydown(
       const row = get(rootRowOrder)[n];
       if (!row) return;
       e.preventDefault();
-      if (row.kind === "workspace") {
+      if (row.kind === "nested-workspace") {
         const idx = get(nestedWorkspaces).findIndex((ws) => ws.id === row.id);
         if (idx >= 0) {
           activeNestedWorkspaceIdx.set(idx);

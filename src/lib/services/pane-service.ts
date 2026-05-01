@@ -438,7 +438,7 @@ export function expandWorkspaceIntoPanes(
   activeNestedWorkspaceIdx.set(
     Math.min(get(activeNestedWorkspaceIdx), get(nestedWorkspaces).length - 1),
   );
-  removeRootRow({ kind: "workspace", id: srcWorkspaceId });
+  removeRootRow({ kind: "nested-workspace", id: srcWorkspaceId });
   removeNestedWorkspaceFromAllWorkspaces(srcWorkspaceId);
   gitStatusWorkspaceClosed(srcWorkspaceId);
   schedulePersist();
@@ -486,7 +486,7 @@ export function mergeWorkspaceIntoPane(
   activeNestedWorkspaceIdx.set(
     Math.min(get(activeNestedWorkspaceIdx), get(nestedWorkspaces).length - 1),
   );
-  removeRootRow({ kind: "workspace", id: srcWorkspaceId });
+  removeRootRow({ kind: "nested-workspace", id: srcWorkspaceId });
   removeNestedWorkspaceFromAllWorkspaces(srcWorkspaceId);
   gitStatusWorkspaceClosed(srcWorkspaceId);
   schedulePersist();

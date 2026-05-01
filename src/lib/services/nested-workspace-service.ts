@@ -89,7 +89,7 @@ export async function createNestedWorkspace(name: string) {
   // inserting it under a project), claimWorkspace will remove it from
   // the root list — so final state is consistent regardless of
   // handler ordering.
-  appendRootRow({ kind: "workspace", id: ws.id });
+  appendRootRow({ kind: "nested-workspace", id: ws.id });
   eventBus.emit({ type: "workspace:created", id: ws.id, name });
   // Route activation through switchNestedWorkspace so any listener on
   // workspace:activated (e.g. agentic-orchestrator re-spawning a
@@ -212,7 +212,7 @@ export async function createNestedWorkspaceFromDef(
   };
 
   nestedWorkspaces.update((list) => [...list, ws]);
-  appendRootRow({ kind: "workspace", id: ws.id });
+  appendRootRow({ kind: "nested-workspace", id: ws.id });
   eventBus.emit({
     type: "workspace:created",
     id: ws.id,
@@ -282,7 +282,7 @@ export function closeNestedWorkspace(idx: number) {
   activeNestedWorkspaceIdx.set(
     Math.min(get(activeNestedWorkspaceIdx), get(nestedWorkspaces).length - 1),
   );
-  removeRootRow({ kind: "workspace", id: wsId });
+  removeRootRow({ kind: "nested-workspace", id: wsId });
   eventBus.emit({ type: "workspace:closed", id: wsId });
   schedulePersist();
 }
@@ -522,9 +522,12 @@ export function createNestedWorkspaceFromSurface(
 
   nestedWorkspaces.update((list) => [...list, newWs]);
   if (insertOptions?.kind === "root") {
-    insertRootRow(insertOptions.insertIdx, { kind: "workspace", id: newWs.id });
+    insertRootRow(insertOptions.insertIdx, {
+      kind: "nested-workspace",
+      id: newWs.id,
+    });
   } else {
-    appendRootRow({ kind: "workspace", id: newWs.id });
+    appendRootRow({ kind: "nested-workspace", id: newWs.id });
   }
   if (effectiveWorkspaceId) {
     if (insertOptions?.kind === "workspace") {

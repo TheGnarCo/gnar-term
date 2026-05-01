@@ -5,10 +5,10 @@
    * row with a core-drawn grip column on the left.
    *
    * Row kinds:
-   *   - "workspace"        → unclaimed workspace, rendered via WorkspaceItem
+   *   - "nested-workspace" → unclaimed nested workspace, rendered via WorkspaceItem
+   *   - "workspace"        → workspace block, rendered via the registered renderer
    *   - "pseudo-workspace" → pinned extension row rendered via PseudoWorkspaceRow
-   *   - other              → looked up from rootRowRendererStore (projects
-   *                          register "project" as a renderer on activate).
+   *   - other              → looked up from rootRowRendererStore.
    *
    * This block OWNS the drag pipeline for the root list. Renderers
    * inherit drag behavior — they do not spin up their own reorder
@@ -126,7 +126,7 @@
       const renderedWsIds = new Set<string>();
       $order.forEach((row, idx) => {
         const key = `${row.kind}:${row.id}`;
-        if (row.kind === "workspace") {
+        if (row.kind === "nested-workspace") {
           const ws = byId.get(row.id);
           if (!ws) return;
           rows.push({ row, idx, key, workspace: ws });
@@ -161,9 +161,9 @@
         for (const [id, ws] of byId) {
           if (renderedWsIds.has(id)) continue;
           rows.push({
-            row: { kind: "workspace", id },
+            row: { kind: "nested-workspace", id },
             idx: idx++,
-            key: `workspace:${id}`,
+            key: `nested-workspace:${id}`,
             workspace: ws,
           });
         }
@@ -202,7 +202,7 @@
     onMove: (x, y, ghostEl) => {
       const fromIdx = rootDrag.getState().sourceIdx;
       if (fromIdx === null) return;
-      // Archive zone detection runs for all row kinds (workspace AND workspace-group).
+      // Archive zone detection runs for all row kinds (nested-workspace AND workspace).
       const archiveEl = document.querySelector("[data-archive-zone]");
       if (archiveEl) {
         const rect = archiveEl.getBoundingClientRect();
@@ -221,7 +221,7 @@
         }
       }
       const srcRow = $rootRowOrder[fromIdx];
-      if (srcRow?.kind !== "workspace") {
+      if (srcRow?.kind !== "nested-workspace") {
         currentPaneTarget = null;
         setWorkspaceDragState(null);
         return;
@@ -250,8 +250,7 @@
         currentPaneTarget = null;
         setWorkspaceDragState(null);
         const srcRow = $rootRowOrder[fromIdx];
-        if (srcRow?.kind === "workspace-group")
-          void archiveWorkspace(srcRow.id);
+        if (srcRow?.kind === "workspace") void archiveWorkspace(srcRow.id);
         return true; // suppress normal rootRowOrder reorder
       }
       const paneTarget = currentPaneTarget;
@@ -259,7 +258,7 @@
       setWorkspaceDragState(null);
       if (paneTarget?.kind === "pane-split") {
         const srcRow = $rootRowOrder[fromIdx];
-        if (srcRow?.kind === "workspace") {
+        if (srcRow?.kind === "nested-workspace") {
           const direction =
             paneTarget.zone === "left" || paneTarget.zone === "right"
               ? "horizontal"
@@ -313,10 +312,10 @@
 
   function startRootRowDrag(e: MouseEvent, rowIdx: number) {
     const srcRow = $rootRowOrder[rowIdx];
-    if (srcRow?.kind === "workspace") {
+    if (srcRow?.kind === "nested-workspace") {
       const ws = $nestedWorkspaces.find((w) => w.id === srcRow.id);
       if (ws && wsMeta(ws).locked === true) return;
-    } else if (srcRow?.kind === "workspace-group") {
+    } else if (srcRow?.kind === "workspace") {
       const group = getWorkspace(srcRow.id);
       if (group?.locked === true) return;
     }
@@ -456,7 +455,7 @@
         : $theme.accent)}
   {@const _rowFg = contrastColor(rowColor)}
   {@const _rowLabel =
-    entry.row.kind === "workspace" && ws
+    entry.row.kind === "nested-workspace" && ws
       ? ws.name
       : entry.row.kind === "pseudo-workspace" && entry.pseudoWorkspace
         ? entry.pseudoWorkspace.label
@@ -483,7 +482,7 @@
            between active workspace bg and its rail, matching the
            nested-workspace style). Core still owns the drag pipeline
            — the renderer's grip just calls back into startRootRowDrag. -->
-      {#if entry.row.kind === "workspace" && ws}
+      {#if entry.row.kind === "nested-workspace" && ws}
         {@const globalIdx = $nestedWorkspaces.indexOf(ws)}
         <WorkspaceItem
           bind:this={workspaceItems[ws.id]}

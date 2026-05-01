@@ -29,14 +29,14 @@ export function claimWorkspace(workspaceId: string, source: string): void {
   // A claimed workspace is hosted inside its owner (e.g. a project
   // block), so it must disappear from the root-row list. No-op if it
   // wasn't there.
-  removeRootRow({ kind: "workspace", id: workspaceId });
+  removeRootRow({ kind: "nested-workspace", id: workspaceId });
 }
 
 export function unclaimWorkspace(workspaceId: string): void {
   registry.unregister(workspaceId);
   // NestedWorkspace is back at the root — restore it to the root-row list
   // (append to the end matches the legacy behavior for fresh nestedWorkspaces).
-  appendRootRow({ kind: "workspace", id: workspaceId });
+  appendRootRow({ kind: "nested-workspace", id: workspaceId });
 }
 
 /** Unclaim all nestedWorkspaces owned by a given source extension. */
@@ -50,7 +50,7 @@ export function unclaimBySource(source: string): void {
   });
   unsub();
   registry.unregisterBySource(source);
-  for (const id of ids) appendRootRow({ kind: "workspace", id });
+  for (const id of ids) appendRootRow({ kind: "nested-workspace", id });
 }
 
 export const resetClaimedWorkspaces = registry.reset;

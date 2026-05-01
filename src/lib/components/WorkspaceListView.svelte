@@ -171,7 +171,7 @@
       sourceHeight = s.sourceHeight;
       if (s.active && scopeId && containerBlockId) {
         reorderContext.set({
-          kind: "workspace",
+          kind: "nested-workspace",
           scopeId,
           containerBlockId,
         });

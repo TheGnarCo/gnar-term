@@ -4,7 +4,9 @@
  *   - projectId → parentWorkspaceId on workspace metadata (Stage 2b)
  *   - parentOrchestratorId → spawnedBy (Stage 8)
  *   - orchestratorId + isDashboard → dashboardContributionId="agentic"
- *   - rootRowOrder of kind "project" → "workspace-group"
+ *   - rootRowOrder of kind "project" → "workspace"
+ *   - rootRowOrder of kind "workspace-group" → "workspace"
+ *   - rootRowOrder of kind "workspace" with nested id → "nested-workspace"
  *   - rootRowOrder of kind "agent-orchestrator" → dropped
  *
  * Idempotency: the function runs on every load, so a migrated shape
@@ -177,6 +179,7 @@ describe("migrateLegacyProjectShapes — workspace metadata", () => {
       rootRowOrder: [
         { kind: "project", id: "grp-a" },
         { kind: "agent-orchestrator", id: "orch" },
+        { kind: "workspace", id: "w1" },
       ],
     });
     expect(pass1.changed).toBe(true);
@@ -186,8 +189,9 @@ describe("migrateLegacyProjectShapes — workspace metadata", () => {
 });
 
 describe("migrateLegacyProjectShapes — rootRowOrder", () => {
-  it("rewrites kind='project' → 'workspace-group'", () => {
+  it("rewrites kind='project' → 'workspace' (umbrella) and disambiguates legacy 'workspace' → 'nested-workspace' by id", () => {
     const { migrated, changed } = migrateLegacyProjectShapes({
+      nestedWorkspaces: [makeWs("w1", undefined)],
       rootRowOrder: [
         { kind: "project", id: "grp-a" },
         { kind: "workspace", id: "w1" },
@@ -195,19 +199,58 @@ describe("migrateLegacyProjectShapes — rootRowOrder", () => {
     });
     expect(changed).toBe(true);
     expect(migrated.rootRowOrder).toEqual([
-      { kind: "workspace-group", id: "grp-a" },
-      { kind: "workspace", id: "w1" },
+      { kind: "workspace", id: "grp-a" },
+      { kind: "nested-workspace", id: "w1" },
     ]);
+  });
+
+  it("rewrites kind='workspace-group' → 'workspace' (intermediate persisted shape)", () => {
+    const { migrated, changed } = migrateLegacyProjectShapes({
+      nestedWorkspaces: [makeWs("w1", undefined)],
+      rootRowOrder: [
+        { kind: "workspace-group", id: "grp-a" },
+        { kind: "workspace", id: "w1" },
+      ],
+    });
+    expect(changed).toBe(true);
+    expect(migrated.rootRowOrder).toEqual([
+      { kind: "workspace", id: "grp-a" },
+      { kind: "nested-workspace", id: "w1" },
+    ]);
+  });
+
+  it("leaves 'workspace' rows alone when their id is NOT a known nested workspace", () => {
+    // No nestedWorkspaces in state — the "workspace" row must be an
+    // umbrella block, so it stays as-is.
+    const { migrated, changed } = migrateLegacyProjectShapes({
+      rootRowOrder: [{ kind: "workspace", id: "grp-a" }],
+    });
+    expect(changed).toBe(false);
+    expect(migrated.rootRowOrder).toEqual([{ kind: "workspace", id: "grp-a" }]);
   });
 
   it("drops kind='agent-orchestrator' entries entirely", () => {
     const { migrated, changed } = migrateLegacyProjectShapes({
+      nestedWorkspaces: [makeWs("w1", undefined)],
       rootRowOrder: [
         { kind: "agent-orchestrator", id: "orch" },
         { kind: "workspace", id: "w1" },
       ],
     });
     expect(changed).toBe(true);
-    expect(migrated.rootRowOrder).toEqual([{ kind: "workspace", id: "w1" }]);
+    expect(migrated.rootRowOrder).toEqual([
+      { kind: "nested-workspace", id: "w1" },
+    ]);
+  });
+
+  it("is idempotent — already-renamed shape passes through unchanged", () => {
+    const { changed } = migrateLegacyProjectShapes({
+      nestedWorkspaces: [makeWs("w1", undefined)],
+      rootRowOrder: [
+        { kind: "workspace", id: "grp-a" },
+        { kind: "nested-workspace", id: "w1" },
+      ],
+    });
+    expect(changed).toBe(false);
   });
 });

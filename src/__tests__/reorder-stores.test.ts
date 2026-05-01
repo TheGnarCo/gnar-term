@@ -19,9 +19,9 @@ describe("reorder state stores", () => {
     expect(get(blockReorderActive)).toBe(false);
   });
 
-  it("workspace-kind context makes any + inner active, but not block", () => {
+  it("nested-workspace-kind context makes any + inner active, but not block", () => {
     reorderContext.set({
-      kind: "workspace",
+      kind: "nested-workspace",
       scopeId: "__workspaces__",
       containerBlockId: "__workspaces__",
     });
@@ -30,9 +30,9 @@ describe("reorder state stores", () => {
     expect(get(blockReorderActive)).toBe(false);
   });
 
-  it("workspace-group-kind context makes any + inner active, but not block", () => {
+  it("workspace-kind context makes any + inner active, but not block", () => {
     reorderContext.set({
-      kind: "workspace-group",
+      kind: "workspace",
       sourceWorkspaceId: "group-1",
       containerBlockId: "__workspaces__",
     });
@@ -48,15 +48,15 @@ describe("reorder state stores", () => {
     expect(get(blockReorderActive)).toBe(true);
   });
 
-  it("workspace context preserves scopeId + containerBlockId for overlay logic", () => {
+  it("nested-workspace context preserves scopeId + containerBlockId for overlay logic", () => {
     reorderContext.set({
-      kind: "workspace",
+      kind: "nested-workspace",
       scopeId: "project-abc",
       containerBlockId: "projects",
     });
     const ctx = get(reorderContext);
     expect(ctx).toEqual({
-      kind: "workspace",
+      kind: "nested-workspace",
       scopeId: "project-abc",
       containerBlockId: "projects",
     });

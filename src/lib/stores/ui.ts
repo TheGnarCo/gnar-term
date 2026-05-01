@@ -18,7 +18,7 @@ export const hoveredSidebarBlockId = writable<string | null>(null);
 
 /**
  * Key of the root row currently hovered inside the Workspaces section
- * — encoded as `"kind:id"` (e.g. `"workspace-group:g-42"`, `"workspace:w-7"`),
+ * — encoded as `"kind:id"` (e.g. `"workspace:g-42"`, `"nested-workspace:w-7"`),
  * or null when no row is hovered. Row renderers (WorkspaceRowBody,
  * WorkspaceItem-in-root mode) subscribe to decide whether their rail
  * is in the expanded hover state.
@@ -51,7 +51,7 @@ export const anyReorderActive = derived(
  */
 export const innerReorderActive = derived(
   reorderContext,
-  ($ctx) => $ctx?.kind === "workspace" || $ctx?.kind === "workspace-group",
+  ($ctx) => $ctx?.kind === "nested-workspace" || $ctx?.kind === "workspace",
 );
 
 /**

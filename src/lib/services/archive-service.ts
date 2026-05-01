@@ -67,7 +67,7 @@ export async function archiveWorkspace(
 
   closeNestedWorkspacesInWorkspace(parentWorkspaceId);
   setWorkspaces(getWorkspaces().filter((g) => g.id !== parentWorkspaceId));
-  removeRootRow({ kind: "workspace-group", id: parentWorkspaceId });
+  removeRootRow({ kind: "workspace", id: parentWorkspaceId });
   addToArchive(parentWorkspaceId, {
     workspace: group,
     nestedWorkspaceDefs: workspaceDefs,
@@ -86,7 +86,7 @@ export async function unarchiveWorkspace(
   // async restore step has resolved — if any throws, the archive entry
   // survives so the user can retry.
   setWorkspaces([...getWorkspaces(), entry.workspace]);
-  appendRootRow({ kind: "workspace-group", id: parentWorkspaceId });
+  appendRootRow({ kind: "workspace", id: parentWorkspaceId });
   for (const def of entry.nestedWorkspaceDefs) {
     await createNestedWorkspaceFromDef(def, { restoring: true });
   }

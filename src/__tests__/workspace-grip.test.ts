@@ -38,7 +38,7 @@ describe("WorkspaceItem drag grip", () => {
     expect(grip).not.toBeNull();
   });
 
-  it("invokes onGripMouseDown when the grip is pressed", async () => {
+  it("invokes onGripMouseDown when the grip is hovered and pressed", async () => {
     const onGripMouseDown = vi.fn();
     const { container } = render(WorkspaceItem, {
       props: {
@@ -52,8 +52,14 @@ describe("WorkspaceItem drag grip", () => {
         onGripMouseDown,
       },
     });
-    const grip = container.querySelector(".drag-grip") as HTMLElement;
-    await fireEvent.mouseDown(grip);
+    const row = container.querySelector("[data-drag-idx]") as HTMLElement;
+    const gripArea = row.querySelector(
+      "[data-sidebar-element] > div",
+    ) as HTMLElement;
+    // Trigger mouseenter on the grip area to set railHovered
+    await fireEvent.mouseEnter(gripArea);
+    // Fire mousedown on the grip area
+    await fireEvent.mouseDown(gripArea);
     expect(onGripMouseDown).toHaveBeenCalledTimes(1);
   });
 
@@ -88,7 +94,7 @@ describe("WorkspaceItem drag grip", () => {
     expect(SIDEBAR_ELEM_SOURCE).toMatch(/border-radius:\s*0 6px 6px 0/);
   });
 
-  it("invokes onGripMouseDown when ANY part of the row body is pressed (row-level drag-origin)", async () => {
+  it("invokes onGripMouseDown when the rail is hovered and row is pressed", async () => {
     const onGripMouseDown = vi.fn();
     const onSelect = vi.fn();
     const { container } = render(WorkspaceItem, {
@@ -104,10 +110,13 @@ describe("WorkspaceItem drag grip", () => {
       },
     });
     const row = container.querySelector("[data-drag-idx]") as HTMLElement;
-    await fireEvent.mouseDown(row);
-    // Row-level mousedown is the drag-start surface now; a tap (mousedown
-    // below createDragReorder's 5px threshold) still lets click fire on
-    // the inner content div so selection works for single clicks.
+    const gripArea = row.querySelector(
+      "[data-sidebar-element] > div",
+    ) as HTMLElement;
+    // Trigger mouseenter on the grip area to set railHovered
+    await fireEvent.mouseEnter(gripArea);
+    // Now mousedown on the grip area should trigger the callback
+    await fireEvent.mouseDown(gripArea);
     expect(onGripMouseDown).toHaveBeenCalledTimes(1);
     const contentDiv = container.querySelector(
       "[data-workspace-content]",

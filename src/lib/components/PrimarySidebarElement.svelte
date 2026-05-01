@@ -22,6 +22,9 @@
   /** Whether to use compact sizing (smaller height/padding) */
   export let isCompact: boolean = false;
 
+  /** Whether this is a nested item (reduces vertical padding) */
+  export let isNested: boolean = false;
+
   /** Display name/label */
   export let name: string = "";
 
@@ -36,6 +39,9 @@
 
   /** Whether dragging is enabled for this element */
   export let canDrag: boolean = false;
+
+  /** Track hover state specifically on the rail/grip area */
+  export let railHovered: boolean = false;
 
   /** Whether the close button should be shown */
   export let canClose: boolean = false;
@@ -60,6 +66,8 @@
   export let dataWorkspaceId: string | undefined = undefined;
   export let dataWorktree: string | undefined = undefined;
 
+  // hasActiveChild is used by ContainerRow, kept here for potential future use
+
   let isHovered = false;
   let isButtonHovered = false;
 
@@ -71,6 +79,7 @@
     !isLocked &&
     (alwaysShowClose || isHovered);
   $: showLock = isLocked && isHovered && !isDragging && !isGroup;
+  $: verticalPadding = isNested ? "0px" : isCompact ? "0px" : "4px";
 </script>
 
 <div
@@ -108,16 +117,30 @@
   }}
   on:contextmenu|preventDefault={onContextMenu}
   on:mouseenter={() => (isHovered = true)}
-  on:mouseleave={() => (isHovered = false)}
-  on:mousedown={onGripMouseDown}
+  on:mouseleave={() => {
+    isHovered = false;
+    railHovered = false;
+  }}
 >
-  <DragGrip
-    theme={$theme}
-    visible={isDragging || (canDrag && isHovered && !$anyReorderActive)}
-    railColor={effectiveColor}
-    railOpacity={1}
-    alwaysShowDots={!isLocked}
-  />
+  <div
+    role="presentation"
+    style="display: flex; position: relative;"
+    on:mouseenter={() => (railHovered = true)}
+    on:mouseleave={() => (railHovered = false)}
+    on:mousedown={(e) => {
+      if (railHovered && onGripMouseDown) {
+        onGripMouseDown(e);
+      }
+    }}
+  >
+    <DragGrip
+      theme={$theme}
+      visible={isDragging || (canDrag && railHovered && !$anyReorderActive)}
+      railColor={effectiveColor}
+      railOpacity={1}
+      alwaysShowDots={!isLocked}
+    />
+  </div>
   {#if isGroup}
     <!-- Group banner rail gradient -->
     <div
@@ -154,7 +177,7 @@
     style="
       flex: 1; min-width: 0;
       display: flex; align-items: center; gap: 8px;
-      padding: {isCompact ? '0 8px' : '4px 6px'};
+      padding: {verticalPadding} {isCompact ? '8px' : '6px'};
       min-height: 100%;
     "
   >

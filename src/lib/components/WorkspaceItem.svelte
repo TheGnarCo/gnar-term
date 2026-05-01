@@ -133,6 +133,7 @@
   isGroup={false}
   alwaysShowClose={isDashboardWs || isNested}
   isCompact={isDashboardWs}
+  {isNested}
   name={workspace.name}
   {isActive}
   {isLocked}

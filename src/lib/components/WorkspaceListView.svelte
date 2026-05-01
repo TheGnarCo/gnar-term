@@ -215,7 +215,7 @@
   // --- Tab-drag overlay state ---
   $: tabDrag = $tabDragState;
   $: tabDragToWorkspace =
-    tabDrag?.dropTarget?.kind === "new-workspace-in-group" &&
+    tabDrag?.dropTarget?.kind === "new-nested-workspace-in-workspace" &&
     tabDrag.dropTarget.parentWorkspaceId === scopeId
       ? tabDrag.dropTarget
       : null;

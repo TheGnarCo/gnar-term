@@ -498,7 +498,7 @@ describe("tab-drag — commitTabDrop", () => {
     );
   });
 
-  it("calls createNestedWorkspaceFromSurface with group positionInWorkspace for new-workspace-in-group/before", () => {
+  it("calls createNestedWorkspaceFromSurface with group positionInWorkspace for new-nested-workspace-in-workspace/before", () => {
     const sA = mockTerminalSurface({ title: "A" });
     const sB = mockTerminalSurface({ title: "B" });
     const pane = makePane([sA, sB]);
@@ -524,7 +524,7 @@ describe("tab-drag — commitTabDrop", () => {
       sourceWorkspaceId: ws.id,
       position: { x: 0, y: 0 },
       dropTarget: {
-        kind: "new-workspace-in-group",
+        kind: "new-nested-workspace-in-workspace",
         parentWorkspaceId: "grp1",
         insertGlobalIdx: 1,
         insertEdge: "before",
@@ -544,7 +544,7 @@ describe("tab-drag — commitTabDrop", () => {
     );
   });
 
-  it("calls createNestedWorkspaceFromSurface with group positionInWorkspace for new-workspace-in-group/after", () => {
+  it("calls createNestedWorkspaceFromSurface with group positionInWorkspace for new-nested-workspace-in-workspace/after", () => {
     const sA = mockTerminalSurface({ title: "A" });
     const sB = mockTerminalSurface({ title: "B" });
     const pane = makePane([sA, sB]);
@@ -570,7 +570,7 @@ describe("tab-drag — commitTabDrop", () => {
       sourceWorkspaceId: ws.id,
       position: { x: 0, y: 0 },
       dropTarget: {
-        kind: "new-workspace-in-group",
+        kind: "new-nested-workspace-in-workspace",
         parentWorkspaceId: "grp1",
         insertGlobalIdx: 1,
         insertEdge: "after",
@@ -862,7 +862,7 @@ describe("tab-drag — surface body detection", () => {
 });
 
 describe("tab-drag — detectDropTarget: root tab over nested workspace row", () => {
-  it("returns new-workspace-in-group when cursor is over a row inside a group container", () => {
+  it("returns new-nested-workspace-in-workspace when cursor is over a row inside a group container", () => {
     const sA = mockTerminalSurface({ title: "A" });
     const sB = mockTerminalSurface({ title: "B" });
     const srcPane = makePane([sA, sB]);
@@ -909,14 +909,14 @@ describe("tab-drag — detectDropTarget: root tab over nested workspace row", ()
     );
 
     const state = get(tabDragState);
-    expect(state?.dropTarget?.kind).toBe("new-workspace-in-group");
-    if (state?.dropTarget?.kind === "new-workspace-in-group") {
+    expect(state?.dropTarget?.kind).toBe("new-nested-workspace-in-workspace");
+    if (state?.dropTarget?.kind === "new-nested-workspace-in-workspace") {
       expect(state.dropTarget.parentWorkspaceId).toBe("grp-1");
     }
   });
 });
 
-describe("tab-drag — commitTabDrop: new-workspace-in-group passes targetWorkspaceId", () => {
+describe("tab-drag — commitTabDrop: new-nested-workspace-in-workspace passes targetWorkspaceId", () => {
   it("calls createNestedWorkspaceFromSurface with targetWorkspaceId matching the drop group", () => {
     const sA = mockTerminalSurface({ title: "A" });
     const sB = mockTerminalSurface({ title: "B" });
@@ -936,7 +936,7 @@ describe("tab-drag — commitTabDrop: new-workspace-in-group passes targetWorksp
       sourceWorkspaceId: ws.id,
       position: { x: 0, y: 0 },
       dropTarget: {
-        kind: "new-workspace-in-group",
+        kind: "new-nested-workspace-in-workspace",
         parentWorkspaceId: "grp-1",
         insertGlobalIdx: 0,
         insertEdge: "after",

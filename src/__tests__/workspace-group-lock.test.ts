@@ -119,6 +119,6 @@ describe("archiveWorkspace — lock gate (source audit)", () => {
   it("returns early when group is locked", () => {
     const src = readFileSync("src/lib/services/archive-service.ts", "utf-8");
     // Verify the lock gate appears in the archiveWorkspace function body
-    expect(src).toContain("if (group.locked) return false");
+    expect(src).toContain("if (workspace.locked) return false");
   });
 });

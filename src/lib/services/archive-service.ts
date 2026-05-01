@@ -39,9 +39,9 @@ function countRunningPtys(ws: NestedWorkspace): number {
 export async function archiveWorkspace(
   parentWorkspaceId: string,
 ): Promise<boolean> {
-  const group = getWorkspace(parentWorkspaceId);
-  if (!group) return false;
-  if (group.locked) return false;
+  const workspace = getWorkspace(parentWorkspaceId);
+  if (!workspace) return false;
+  if (workspace.locked) return false;
 
   const allInWorkspace = getWorktreeWorkspaces(parentWorkspaceId);
   const nonDashboard = allInWorkspace.filter((ws) => !isDashboardWorkspace(ws));
@@ -66,10 +66,10 @@ export async function archiveWorkspace(
   }));
 
   closeNestedWorkspacesInWorkspace(parentWorkspaceId);
-  setWorkspaces(getWorkspaces().filter((g) => g.id !== parentWorkspaceId));
+  setWorkspaces(getWorkspaces().filter((w) => w.id !== parentWorkspaceId));
   removeRootRow({ kind: "workspace", id: parentWorkspaceId });
   addToArchive(parentWorkspaceId, {
-    workspace: group,
+    workspace,
     nestedWorkspaceDefs: workspaceDefs,
   });
   return true;

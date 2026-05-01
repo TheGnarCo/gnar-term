@@ -11,9 +11,9 @@
  */
 import type { Readable } from "svelte/store";
 
-// --- Group color slots (shared across extensions + core) ---
+// --- Workspace color slots (shared across extensions + core) ---
 //
-// Semantic palette for workspace groups and extensions that want
+// Semantic palette for workspaces and extensions that want
 // theme-following color pickers. Each slot maps onto the active theme's
 // ansi palette via getWorkspaceColors(), so a stored slot name resolves to
 // different hex values as the user switches themes. Custom hex strings
@@ -358,13 +358,13 @@ export interface ExtensionAPI {
     },
   ): void;
   /**
-   * Register a renderer for a non-workspace row kind inside the
-   * Workspaces section's interleaved list (workspace groups today,
-   * other kinds later). The component receives `{ id: string }` as a
-   * prop and is responsible for its own drag-hover feedback.
+   * Register a renderer for a non-nested-workspace row kind inside the
+   * Workspaces section's interleaved list (workspaces today, other kinds
+   * later). The component receives `{ id: string }` as a prop and is
+   * responsible for its own drag-hover feedback.
    *
    * `options.railColor`, when provided, lets core paint the DragGrip
-   * rail in a per-row color (e.g. the group's color). Returning
+   * rail in a per-row color (e.g. the workspace's color). Returning
    * undefined for a given id falls back to the theme accent.
    */
   registerRootRowRenderer(
@@ -379,7 +379,7 @@ export interface ExtensionAPI {
    * Append a row to the end of the Workspaces section's root-row
    * list. Idempotent — repeat calls for the same {kind, id} are
    * no-ops. Extensions call this when they create an entity that
-   * should render at the root level (e.g. workspace on group create).
+   * should render at the root level (e.g. nested-workspace on workspace create).
    */
   appendRootRow(row: { kind: string; id: string }): void;
   /**
@@ -535,16 +535,18 @@ export interface ExtensionAPI {
 
   /**
    * Register a dashboard contribution — a "kind of dashboard" that can
-   * attach to a Workspace. Each group's context menu surfaces an
+   * attach to a Workspace. Each workspace's context menu surfaces an
    * "Add <actionLabel>" affordance per registered contribution whose
-   * `isAvailableFor` gate accepts the group and whose `capPerWorkspace`
-   * isn't already met. When invoked, core calls `create(group)` to
-   * materialize the dashboard workspace. Automatically unregistered on
-   * extension deactivate.
+   * `isAvailableFor` gate accepts the workspace and whose `capPerWorkspace`
+   * isn't already met. When invoked, core calls `create(workspace)` to
+   * materialize the dashboard nested-workspace. Automatically
+   * unregistered on extension deactivate.
    *
-   * Core's built-in Group Dashboard registers under `id: "group"`. The
-   * agentic extension registers under `id: "agentic"`. Dashboard tiles
-   * carry `metadata.dashboardContributionId = contribution.id` so the
+   * Core's built-in Workspace Dashboard registers under `id: "group"`
+   * (preserved across the Workspace→NestedWorkspace rename for
+   * persisted-data compatibility). The agentic extension registers under
+   * `id: "agentic"`. Dashboard tiles carry
+   * `metadata.dashboardContributionId = contribution.id` so the
    * multi-dashboard grid can attribute them back to their contribution.
    */
   registerDashboardContribution(contribution: DashboardContributionInput): void;
@@ -830,8 +832,8 @@ export interface ExtensionAPI {
    * - **DragGrip** — left-border drag handle that appears on hover
    *   Props: `{ theme, visible, onMouseDown, ariaLabel? }`
    * - **ContainerRow** — shared banner + nested-list chrome for
-   *   "container nestedWorkspaces" (workspace groups, agent dashboards). Banner can
-   *   represent a first-class workspace by wiring onBannerClick/onClose
+   *   "container nestedWorkspaces" (workspaces, agent dashboards). Banner can
+   *   represent a first-class nested-workspace by wiring onBannerClick/onClose
    *   to switchNestedWorkspace/closeNestedWorkspace.
    *   Props: `{ color, foreground, parentColor?, onGripMouseDown?,
    *     onBannerClick?, onBannerContextMenu?, onClose?, filterIds,
@@ -866,7 +868,7 @@ export interface ExtensionAPI {
        * Called on every drag state change. Return the ReorderContext to
        * publish to the global reorder-context store (or null when the drag
        * ends). The sidebar reads this store to render per-level dims and
-       * labels on every block, group, and workspace.
+       * labels on every block, workspace, and nested workspace.
        *
        * Required for `scope: "inner"` drags that should participate in the
        * global overlay system.
@@ -939,7 +941,7 @@ export interface DragReorderHandle {
  * Context passed to workspace action handlers and `when` filters.
  *
  * Core passes an empty context `{}` for top-level actions. Extensions
- * may populate additional fields (e.g., group or git metadata) when
+ * may populate additional fields (e.g., workspace or git metadata) when
  * invoking actions from their own UI. Use optional chaining to access
  * extension-provided fields safely.
  */
@@ -986,8 +988,8 @@ export interface WorkspaceRef {
 export interface DashboardContributionInput {
   /**
    * Stable identifier. Also stamped as `metadata.dashboardContributionId`
-   * on the created dashboard workspace so the grid can attribute tiles.
-   * Must be unique across all contributions.
+   * on the created dashboard nested-workspace so the grid can attribute
+   * tiles. Must be unique across all contributions.
    */
   id: string;
   /** Tile label (e.g. "Agentic Dashboard"). */
@@ -995,49 +997,49 @@ export interface DashboardContributionInput {
   /** Context-menu verb (e.g. "Add Agentic Dashboard"). */
   actionLabel: string;
   /**
-   * Maximum coexisting dashboards of this kind per group. `1` is the
+   * Maximum coexisting dashboards of this kind per workspace. `1` is the
    * canonical exclusive cap; `Number.POSITIVE_INFINITY` for unlimited.
    */
   capPerWorkspace: number;
   /**
-   * Materialize the dashboard for the given group. Must resolve to the
-   * new workspace's id.
+   * Materialize the dashboard for the given workspace. Must resolve to
+   * the new nested-workspace's id.
    */
-  create: (group: WorkspaceRef) => Promise<string>;
+  create: (workspace: WorkspaceRef) => Promise<string>;
   /**
    * Optional "delete and regenerate" hook surfaced as a button next to
-   * the dashboard's row in Group Settings. Implementations typically
+   * the dashboard's row in Workspace Settings. Implementations typically
    * force-rewrite the dashboard's backing markdown so a stale user
    * file picks up a newer seeded template. Contributions without
    * backing state (e.g. Diff) omit this and the button does not render.
    */
-  regenerate?: (group: WorkspaceRef) => Promise<void>;
+  regenerate?: (workspace: WorkspaceRef) => Promise<void>;
   /**
    * Optional gate — when returns false, the contribution is hidden from
-   * this group's "Add Dashboard" menu.
+   * this workspace's "Add Dashboard" menu.
    */
-  isAvailableFor?: (group: WorkspaceRef) => boolean;
+  isAvailableFor?: (workspace: WorkspaceRef) => boolean;
   /**
    * Optional icon component rendered on the dashboard tile. Tiles are
-   * icon-only; the workspace name is surfaced as the tile's `title`.
+   * icon-only; the nested-workspace name is surfaced as the tile's `title`.
    */
   icon?: unknown;
   /**
-   * When true, the contribution materializes on every workspace group
-   * (at group creation and startup reconciliation) and cannot be
+   * When true, the contribution materializes on every workspace
+   * (at workspace creation and startup reconciliation) and cannot be
    * removed. Also hides the contribution from "Add Dashboard" menus
    * and suppresses the per-tile Delete action.
    */
   autoProvision?: boolean;
   /**
-   * Hints for how PaneView should render the dashboard workspace.
-   * `singleSurface: true` documents that the contribution's workspace
-   * is a tab-less / split-less single-surface pane.
+   * Hints for how PaneView should render the dashboard nested-workspace.
+   * `singleSurface: true` documents that the contribution's
+   * nested-workspace is a tab-less / split-less single-surface pane.
    */
   paneConstraints?: { singleSurface?: boolean };
   /**
    * Human-readable reason the contribution's toggle is locked in the
-   * Settings dashboard's per-group toggle list. Typically set
+   * Settings dashboard's per-workspace toggle list. Typically set
    * alongside `autoProvision: true`.
    */
   lockedReason?: string;

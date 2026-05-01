@@ -2,7 +2,7 @@
   /**
    * Issues — renders `gh issue list` output inside a markdown doc.
    * Scope derives from the enclosing DashboardHostContext:
-   *   - group host → group.path backs the default repo + spawn target
+   *   - workspace host → workspace.path backs the default repo + spawn target
    *   - global host → caller must set `repoPath`; otherwise shown as error
    *   - no host → form disabled
    *
@@ -61,7 +61,7 @@
    * When true, the per-row Spawn split-button + selection checkbox +
    * bulk toolbar are suppressed. The bot-icon "active workspace" link
    * is still shown so the Overview dashboard can hint at attribution.
-   * Used by the Group Overview Dashboard, where the issue list is a
+   * Used by the Workspace Overview Dashboard, where the issue list is a
    * passive browse panel and spawning lives on the Agent Dashboard.
    */
   export let displayOnly: boolean = false;

@@ -1,6 +1,6 @@
 /**
  * Agentic Orchestrator — registers the Agentic Dashboard contribution
- * (per-group, capPerWorkspace=1) and the Global Agentic Dashboard
+ * (per-workspace, capPerWorkspace=1) and the Global Agentic Dashboard
  * pseudo-workspace, plus the markdown widgets they embed (kanban,
  * agent-list, task-spawner, issues, agent-status-row, columns).
  *
@@ -10,8 +10,8 @@
  * standalone root-level orchestrator row, no orchestrator CRUD. Widgets
  * pull their scope from the enclosing DashboardHostContext (spec §5.3);
  * this extension provides two such hosts:
- *   1. A dashboard workspace materialized by the `agentic` contribution
- *      on a group (`metadata.parentWorkspaceId` → group scope).
+ *   1. A dashboard nested-workspace materialized by the `agentic` contribution
+ *      on a workspace (`metadata.parentWorkspaceId` → workspace scope).
  *   2. The `agentic.global` pseudo-workspace (synthetic metadata with
  *      `isGlobalAgenticDashboard: true` → global scope).
  */
@@ -42,7 +42,7 @@ export const agenticOrchestratorManifest: ExtensionManifest = {
   name: "Agentic Orchestrator",
   version: "0.5.0",
   description:
-    "Agentic Dashboard contribution (per-group, cap 1) + Global Agentic pseudo-workspace. Consumes core's passive detection via api.agents.",
+    "Agentic Dashboard contribution (per-workspace, cap 1) + Global Agentic pseudo-workspace. Consumes core's passive detection via api.agents.",
   entry: "./index.ts",
   included: true,
   permissions: ["filesystem"],
@@ -102,15 +102,15 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
       autoProvision: true,
       icon: BotIcon,
       lockedReason: "Required by Agentic extension",
-      create: (group) => createAgenticDashboardWorkspace(api, group),
-      regenerate: async (group) => {
-        await writeAgenticDashboardTemplate(api, group, { force: true });
+      create: (workspace) => createAgenticDashboardWorkspace(api, workspace),
+      regenerate: async (workspace) => {
+        await writeAgenticDashboardTemplate(api, workspace, { force: true });
       },
     });
 
-    // Back-fill the Agentic Dashboard for every existing group. Fresh
-    // groups hit provisionAutoDashboardsForWorkspace through the normal
-    // create flow, but groups that existed before the extension was
+    // Back-fill the Agentic Dashboard for every existing workspace. Fresh
+    // workspaces hit provisionAutoDashboardsForWorkspace through the normal
+    // create flow, but workspaces that existed before the extension was
     // enabled would otherwise stay without an agentic tile until app
     // restart. Run in the background — the extension is fully usable
     // while the provisioning sweeps through.
@@ -120,8 +120,8 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
     // restoreWorkspaces completes so this loop never races the restore.
     void (async () => {
       await waitRestored();
-      for (const group of getWorkspaces()) {
-        await provisionAutoDashboardsForWorkspace(group);
+      for (const workspace of getWorkspaces()) {
+        await provisionAutoDashboardsForWorkspace(workspace);
       }
     })();
 
@@ -181,7 +181,7 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
           repoPath: {
             type: "string",
             description:
-              "Required when the enclosing dashboard host is global; ignored under a group host (uses group.path instead).",
+              "Required when the enclosing dashboard host is global; ignored under a workspace host (uses workspace.path instead).",
           },
           repo: {
             type: "string",
@@ -197,7 +197,7 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
             type: "boolean",
             default: false,
             description:
-              "When true, hide the per-row Spawn split-button. Used by the Group Overview Dashboard, where the issue list is a passive read-only browse panel.",
+              "When true, hide the per-row Spawn split-button. Used by the Workspace Overview Dashboard, where the issue list is a passive read-only browse panel.",
           },
         },
       },
@@ -209,7 +209,7 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
           repoPath: {
             type: "string",
             description:
-              "Required when the enclosing dashboard host is global; ignored under a group host (uses group.path instead).",
+              "Required when the enclosing dashboard host is global; ignored under a workspace host (uses workspace.path instead).",
           },
           repo: {
             type: "string",
@@ -269,7 +269,7 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
           repoPath: {
             type: "string",
             description:
-              "Required when the enclosing dashboard host is global; ignored under a group host (uses group.path instead).",
+              "Required when the enclosing dashboard host is global; ignored under a workspace host (uses workspace.path instead).",
           },
           defaultAgent: { type: "string", default: "claude-code" },
         },
@@ -282,7 +282,7 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
       settingsUnsub();
       settingsUnsub = null;
     }
-    // Close the per-group Agentic Dashboard nestedWorkspaces the extension
+    // Close the per-workspace Agentic Dashboard nestedWorkspaces the extension
     // auto-provisioned. Runs before the extension's contributions are
     // unregistered (deactivateExtension order), so the registry still
     // advertises the agentic contribution's source here.
@@ -293,36 +293,36 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
 // --- Internal helpers ---
 
 /**
- * Path of the markdown file backing a group's Agentic Dashboard.
- * Colocated under the group's `.gnar-term/` directory so multi-machine
- * sync / checkout follows the group itself.
+ * Path of the markdown file backing a workspace's Agentic Dashboard.
+ * Colocated under the workspace's `.gnar-term/` directory so multi-machine
+ * sync / checkout follows the workspace itself.
  */
-function agenticDashboardMarkdownPath(group: WorkspaceRef): string {
-  return `${group.path.replace(/\/+$/, "")}/.gnar-term/agentic-dashboard.md`;
+function agenticDashboardMarkdownPath(workspace: WorkspaceRef): string {
+  return `${workspace.path.replace(/\/+$/, "")}/.gnar-term/agentic-dashboard.md`;
 }
 
 /**
  * Default template for a fresh Agentic Dashboard. Widgets pull scope
  * from the enclosing DashboardHostContext, so no props are needed — the
- * host workspace's `metadata.parentWorkspaceId` drives filtering + spawn target.
+ * host nested workspace's `metadata.parentWorkspaceId` drives filtering + spawn target.
  *
- * The group-level Agentic Dashboard intentionally omits the `agent-list`
- * widget: the Kanban already enumerates agents in scope and the group's
+ * The workspace-level Agentic Dashboard intentionally omits the `agent-list`
+ * widget: the Kanban already enumerates agents in scope and the workspace's
  * nested workspace list in the sidebar shows the same set of
  * agent-spawned rows with live status chips. A duplicate "Active Agents"
- * section crowds the group dashboard without adding signal. The Global
+ * section crowds the workspace dashboard without adding signal. The Global
  * Agentic Dashboard still uses agent-list because it has no sidebar
  * counterpart.
  *
  * The `gnar:issues` block at the bottom mounts the same widget the
- * Group Overview Dashboard uses, but with the Spawn split-button
- * active so each open issue can be turned into a worktree workspace
+ * Workspace Overview Dashboard uses, but with the Spawn split-button
+ * active so each open issue can be turned into a worktree nested-workspace
  * (claude-code default; caret menu offers codex / aider / custom).
  */
-function agenticDashboardTemplate(group: WorkspaceRef): string {
-  return `# ${group.name} Agents
+function agenticDashboardTemplate(workspace: WorkspaceRef): string {
+  return `# ${workspace.name} Agents
 
-Spawn and monitor agents working inside \`${group.path}\`.
+Spawn and monitor agents working inside \`${workspace.path}\`.
 
 \`\`\`gnar:kanban
 \`\`\`
@@ -339,23 +339,24 @@ state: open
 }
 
 /**
- * Materialize a group's Agentic Dashboard workspace. Writes the backing
- * markdown if missing (user edits survive re-create at the same path)
- * and creates a single-preview-surface workspace tagged with the parentWorkspaceId
- * + contribution id. Called by the DashboardContributionRegistry when a
- * user chooses "Add Agentic Dashboard" on a workspace group.
+ * Materialize a workspace's Agentic Dashboard nested-workspace. Writes
+ * the backing markdown if missing (user edits survive re-create at the
+ * same path) and creates a single-preview-surface nested-workspace
+ * tagged with the parentWorkspaceId + contribution id. Called by the
+ * DashboardContributionRegistry when a user chooses "Add Agentic
+ * Dashboard" on a workspace.
  */
 /**
  * Write the Agentic Dashboard markdown template to its canonical path.
  * `force: true` overwrites any existing file — used by the
- * "Regenerate" action in Group Settings.
+ * "Regenerate" action in Workspace Settings.
  */
 async function writeAgenticDashboardTemplate(
   api: ExtensionAPI,
-  group: WorkspaceRef,
+  workspace: WorkspaceRef,
   options: { force?: boolean } = {},
 ): Promise<string> {
-  const markdownPath = agenticDashboardMarkdownPath(group);
+  const markdownPath = agenticDashboardMarkdownPath(workspace);
   if (!options.force) {
     const exists = await api
       .invoke<boolean>("file_exists", { path: markdownPath })
@@ -366,16 +367,16 @@ async function writeAgenticDashboardTemplate(
   await api.invoke("ensure_dir", { path: dir });
   await api.invoke("write_file", {
     path: markdownPath,
-    content: agenticDashboardTemplate(group),
+    content: agenticDashboardTemplate(workspace),
   });
   return markdownPath;
 }
 
 async function createAgenticDashboardWorkspace(
   api: ExtensionAPI,
-  group: WorkspaceRef,
+  workspace: WorkspaceRef,
 ): Promise<string> {
-  const markdownPath = await writeAgenticDashboardTemplate(api, group);
+  const markdownPath = await writeAgenticDashboardTemplate(api, workspace);
   return await createNestedWorkspaceFromDef({
     name: "Agents",
     layout: {
@@ -392,7 +393,7 @@ async function createAgenticDashboardWorkspace(
     },
     metadata: {
       isDashboard: true,
-      parentWorkspaceId: group.id,
+      parentWorkspaceId: workspace.id,
       dashboardContributionId: "agentic",
     },
   });

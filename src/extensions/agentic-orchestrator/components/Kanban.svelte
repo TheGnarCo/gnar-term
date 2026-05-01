@@ -3,7 +3,7 @@
    * Kanban — four-column status grid: Running / Waiting / Idle / Done.
    * Each column lists scoped agents as cards derived from the enclosing
    * `DashboardHostContext`. Click a card → jump to the owning surface.
-   * Scope follows widget-helpers' rules (global, group, or none).
+   * Scope follows widget-helpers' rules (global, workspace, or none).
    */
   import { getContext } from "svelte";
   import {

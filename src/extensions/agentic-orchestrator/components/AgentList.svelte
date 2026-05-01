@@ -2,8 +2,8 @@
   /**
    * AgentList — flat list of agents in scope derived from the enclosing
    * `DashboardHostContext`. Global hosts (e.g. the Global Agentic
-   * Dashboard) show every detected agent; group hosts show only the
-   * agents matching that group's rules (see widget-helpers §5.3).
+   * Dashboard) show every detected agent; workspace hosts show only the
+   * agents matching that workspace's rules (see widget-helpers §5.3).
    *
    * Each row delegates to AgentStatusRow so the visual contract stays
    * consistent across composers (Kanban cards reuse the same row).

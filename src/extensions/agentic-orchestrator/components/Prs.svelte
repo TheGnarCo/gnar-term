@@ -8,7 +8,7 @@
    * registry / Diff dashboard tile.
    *
    * Scope derives from the enclosing DashboardHostContext:
-   *   - group host → group.path backs the default repo
+   *   - workspace host → workspace.path backs the default repo
    *   - global host → caller must set `repoPath`; otherwise shown as error
    *
    * Config:

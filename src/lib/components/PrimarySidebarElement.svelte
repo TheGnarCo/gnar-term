@@ -1,13 +1,13 @@
 <script lang="ts">
   /**
    * PrimarySidebarElement — unified row chrome (drag grip, close/lock,
-   * hover/active states, optional group banner gradient) for the
+   * hover/active states, optional workspace banner gradient) for the
    * primary sidebar.
    *
-   * Used by WorkspaceItem (workspace rows, including dashboard rows) and
-   * by ContainerRow's nested-inside-parent variant. The root ContainerRow
-   * variant builds its own banner because its rail spans multiple rows;
-   * see that file for details.
+   * Used by WorkspaceItem (nested-workspace rows, including dashboard rows)
+   * and by ContainerRow's nested-inside-parent variant. The root
+   * ContainerRow variant builds its own banner because its rail spans
+   * multiple rows; see that file for details.
    *
    * The wrapper itself is intentionally inert — callers that want a
    * clickable row attach interactivity inside the slot. The wrapper only
@@ -18,7 +18,7 @@
   import SidebarChipButton from "./SidebarChipButton.svelte";
   import { shortcutHint } from "../actions/shortcut-hint";
 
-  /** Whether this is a group (renders gradient pattern) */
+  /** Whether this is a workspace (renders gradient pattern) */
   export let isWorkspace: boolean = false;
 
   /** Whether to use compact sizing (smaller height/padding) */
@@ -45,7 +45,7 @@
   /** Whether the close button should be shown */
   export let canClose: boolean = false;
 
-  /** Color for the left rail (workspace accent, group hex, etc.) */
+  /** Color for the left rail (nested-workspace accent, workspace hex, etc.) */
   export let color: string = "";
 
   /** Callback when drag grip is pressed */
@@ -76,7 +76,7 @@
 
 <div
   use:shortcutHint={shortcutLabel}
-  data-sidebar-element={isWorkspace ? "group" : "workspace"}
+  data-sidebar-element={isWorkspace ? "workspace" : "nested-workspace"}
   data-active={isActive ? "true" : undefined}
   data-drag-idx={dataDragIdx}
   data-workspace-id={dataWorkspaceId}
@@ -113,7 +113,7 @@
     {onGripMouseDown}
   />
   {#if isWorkspace}
-    <!-- Group banner rail gradient -->
+    <!-- Workspace banner rail gradient -->
     <div
       aria-hidden="true"
       style="

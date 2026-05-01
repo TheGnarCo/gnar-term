@@ -3,8 +3,8 @@
    * TaskSpawner — manual "+ New Task" affordance inside a dashboard.
    *
    * The spawn target is derived from the enclosing DashboardHostContext:
-   *   - "group" scope → repoPath = the group's path;
-   *     metadata.parentWorkspaceId + metadata.spawnedBy = { kind:'group', parentWorkspaceId }
+   *   - "workspace" scope → repoPath = the workspace's path;
+   *     metadata.parentWorkspaceId + metadata.spawnedBy = { kind:'workspace', parentWorkspaceId }
    *   - "global" scope → repoPath from the `repoPath` config prop (the
    *     Global Agentic Dashboard can't infer a repo on its own);
    *     metadata.spawnedBy = { kind:'global' }
@@ -14,7 +14,7 @@
    * (passed as a single quoted argument).
    *
    * Config:
-   *   repoPath?: string — required for global scope; ignored for group
+   *   repoPath?: string — required for global scope; ignored for workspace
    *   defaultAgent?: string — picker default (defaults to claude-code)
    */
   import { getContext } from "svelte";
@@ -34,7 +34,7 @@
     getDashboardHost,
   } from "../../../lib/contexts/dashboard-host";
 
-  /** Required when the enclosing host is global (no group.path to infer). */
+  /** Required when the enclosing host is global (no workspace.path to infer). */
   export let repoPath: string | undefined = undefined;
   export let defaultAgent: string = "claude-code";
 

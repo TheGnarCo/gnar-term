@@ -19,8 +19,8 @@
   $: parentWorkspaceId =
     scope.kind === "workspace" ? scope.parentWorkspaceId : null;
 
-  $: group = parentWorkspaceId
-    ? ($workspacesStore.find((g) => g.id === parentWorkspaceId) ?? null)
+  $: parentWorkspace = parentWorkspaceId
+    ? ($workspacesStore.find((w) => w.id === parentWorkspaceId) ?? null)
     : null;
 
   $: workspaceWs = parentWorkspaceId
@@ -36,8 +36,8 @@
 
   $: workspaceRows = workspaceWs.filter((ws) => !wsMeta(ws).isDashboard);
 
-  $: workspaceColor = group
-    ? resolveWorkspaceColor(group.color, $theme)
+  $: workspaceColor = parentWorkspace
+    ? resolveWorkspaceColor(parentWorkspace.color, $theme)
     : ($theme.accent ?? "#888");
 
   function navigate(wsId: string): void {
@@ -55,7 +55,7 @@
       ? getDashboardContribution(md.dashboardContributionId)
       : undefined;
     const tileWorkspacePath = md.parentWorkspaceId
-      ? $workspacesStore.find((g) => g.id === md.parentWorkspaceId)?.path
+      ? $workspacesStore.find((w) => w.id === md.parentWorkspaceId)?.path
       : undefined;
     return {
       icon: contribution?.icon ?? GridIcon,

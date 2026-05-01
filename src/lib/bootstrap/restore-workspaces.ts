@@ -104,8 +104,8 @@ export async function restoreWorkspaces(
   if (Array.isArray(state.nestedWorkspaces)) {
     // Clear any existing nestedWorkspaces to prevent doubling on re-mount
     nestedWorkspaces.set([]);
-    // Drop orphan Dashboard nestedWorkspaces whose owning group no longer
-    // exists. Without this, restarting after a group deletion leaves a
+    // Drop orphan Dashboard nestedWorkspaces whose owning workspace no longer
+    // exists. Without this, restarting after a workspace deletion leaves a
     // ghost dashboard in the main view that the user can't navigate
     // away from via the sidebar.
     //
@@ -136,7 +136,7 @@ export async function restoreWorkspaces(
       await createNestedWorkspaceFromDef(wsDef, { restoring: true });
     }
     // Restored nestedWorkspaces whose `metadata.isDashboard === true` are
-    // group/pseudo dashboards — accessed through their group's tile,
+    // workspace/pseudo dashboards — accessed through their workspace's tile,
     // not as a primary active surface. If the only restored nestedWorkspaces
     // are dashboards, leave `activeNestedWorkspaceIdx = -1` so the main view
     // renders the EmptySurface. Otherwise pick the persisted active

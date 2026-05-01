@@ -60,15 +60,15 @@ describe("DragGrip visual states", () => {
     expect(SOURCE).toMatch(/width:\s*6px/);
   });
 
-  it("shows solid stripe on hover, suppressing dots", () => {
-    // On hover (visible), show solid stripe. When not visible but alwaysShowDots
-    // is true, show dots instead. Never both at the same time.
-    expect(SOURCE).toMatch(/showRailStripe\s*=\s*visible/);
+  it("shows solid stripe normally, suppressing dots", () => {
+    // When not hovered (!visible), show solid stripe. When hovered (visible) and
+    // alwaysShowDots is true, show dots instead. Never both at the same time.
+    expect(SOURCE).toMatch(/showRailStripe\s*=\s*!visible/);
     expect(SOURCE).toMatch(/\{#if showRailStripe\}/);
   });
 
-  it("renders a uniform diamond-grip dot pattern when not hovered and alwaysShowDots is true", () => {
-    expect(SOURCE).toMatch(/showDots\s*=\s*!visible\s*&&\s*alwaysShowDots/);
+  it("renders a uniform diamond-grip dot pattern on hover when alwaysShowDots is true", () => {
+    expect(SOURCE).toMatch(/showDots\s*=\s*visible\s*&&\s*alwaysShowDots/);
     expect(SOURCE).toMatch(/\{#if showDots\}/);
     // Both rest and expanded states use the same 2-gradient diamond-grip
     // tile (dots at (0,0) and (2.5, 2.5)). Only the radius + fade change.

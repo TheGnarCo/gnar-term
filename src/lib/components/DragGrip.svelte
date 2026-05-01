@@ -57,8 +57,6 @@
 
   $: effectiveColor = railColor ?? theme.fgDim;
   $: effectiveDotColor = dotColor ?? effectiveColor;
-  $: showDots = !visible && alwaysShowDots;
-  $: showRailStripe = visible;
 
   // Frit pattern stays identical across rest and hover states — same
   // dot size, softness, color, and geometry. The fade mask is removed
@@ -69,6 +67,8 @@
   $: fritBackgroundSize = "5px 5px";
   $: fritBackgroundPosition = "0 0, 2.5px 2.5px";
   $: fritBackgroundRepeat = "repeat";
+  $: showDots = visible && alwaysShowDots;
+  $: showRailStripe = !visible;
 </script>
 
 <div

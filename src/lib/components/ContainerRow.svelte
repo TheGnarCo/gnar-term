@@ -183,7 +183,7 @@
       <div
         data-container-nested={scopeId}
         data-nested-count={nonDashboardCount}
-        style="display: flex; flex-direction: column; padding-left: 6px; padding-top: 8px; padding-bottom: 8px;"
+        style="display: flex; flex-direction: column; padding-left: 6px;"
         transition:slide={{ duration: 200 }}
       >
         <svelte:component
@@ -328,7 +328,7 @@
         <div
           data-container-nested={scopeId}
           data-nested-count={nonDashboardCount}
-          style="display: flex; flex-direction: column; margin-left: -2px; padding-top: 8px; padding-bottom: 8px;"
+          style="display: flex; flex-direction: column; margin-left: -2px;"
           transition:slide={{ duration: 200 }}
         >
           <svelte:component

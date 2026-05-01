@@ -33,6 +33,6 @@ describe("dashboard btn-row — icon only", () => {
   });
 
   it("applies active ring using group color", () => {
-    expect(GROUP_SECTION).toContain("box-shadow: 0 0 0 1.5px ${groupHex}");
+    expect(GROUP_SECTION).toContain("box-shadow: 0 0 0 1.5px ${workspaceHex}");
   });
 });

@@ -7,7 +7,7 @@
     deriveDashboardScope,
   } from "../contexts/dashboard-host";
   import { switchNestedWorkspace } from "../services/workspace-service";
-  import { resolveGroupColor } from "../theme-data";
+  import { resolveWorkspaceColor } from "../theme-data";
   import { theme } from "../stores/theme";
   import DashboardTileIcon from "./DashboardTileIcon.svelte";
   import GridIcon from "../icons/GridIcon.svelte";
@@ -36,8 +36,8 @@
 
   $: workspaceRows = groupWs.filter((ws) => !wsMeta(ws).isDashboard);
 
-  $: groupColor = group
-    ? resolveGroupColor(group.color, $theme)
+  $: workspaceColor = group
+    ? resolveWorkspaceColor(group.color, $theme)
     : ($theme.accent ?? "#888");
 
   function navigate(wsId: string): void {
@@ -89,7 +89,7 @@
           >
             <DashboardTileIcon
               iconComponent={info.icon}
-              baseColor={groupColor}
+              baseColor={workspaceColor}
               contributionId={wsMeta(ws).dashboardContributionId}
               groupPath={info.groupPath}
             />
@@ -111,7 +111,7 @@
             on:click={() => navigate(ws.id)}
             style="color: {$theme.fg};"
           >
-            <span class="workspace-dot" style="background: {groupColor};"
+            <span class="workspace-dot" style="background: {workspaceColor};"
             ></span>
             <span class="workspace-name">{ws.name}</span>
           </div>

@@ -4,8 +4,8 @@
 import { describe, it, expect } from "vitest";
 import {
   GROUP_COLOR_SLOTS,
-  getGroupColors,
-  resolveGroupColor,
+  getWorkspaceColors,
+  resolveWorkspaceColor,
   themes,
 } from "../lib/theme-data";
 
@@ -23,7 +23,7 @@ describe("GROUP_COLOR_SLOTS", () => {
 describe("group color resolution", () => {
   it("resolves every slot to a hex in every theme", () => {
     for (const theme of Object.values(themes)) {
-      const colors = getGroupColors(theme);
+      const colors = getWorkspaceColors(theme);
       for (const slot of GROUP_COLOR_SLOTS) {
         expect(colors[slot]).toMatch(/^#[0-9a-fA-F]{3,6}$/);
       }
@@ -32,12 +32,12 @@ describe("group color resolution", () => {
 
   it("passes hex values through unchanged", () => {
     const theme = themes["one-dark"];
-    expect(resolveGroupColor("#abcdef", theme)).toBe("#abcdef");
+    expect(resolveWorkspaceColor("#abcdef", theme)).toBe("#abcdef");
   });
 
   it("returns theme-specific values for the same slot across themes", () => {
-    const dark = resolveGroupColor("red", themes["github-dark"]);
-    const solarized = resolveGroupColor("red", themes["solarized-dark"]);
+    const dark = resolveWorkspaceColor("red", themes["github-dark"]);
+    const solarized = resolveWorkspaceColor("red", themes["solarized-dark"]);
     // Slot name identical but resolved hex differs per theme.
     expect(dark).not.toBe("red");
     expect(solarized).not.toBe("red");

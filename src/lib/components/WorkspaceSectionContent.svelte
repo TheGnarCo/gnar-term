@@ -3,7 +3,7 @@
   import ContainerRow from "./ContainerRow.svelte";
   import PathStatusLine from "./PathStatusLine.svelte";
   import WorkspaceListView from "./WorkspaceListView.svelte";
-  import { resolveGroupColor } from "../theme-data";
+  import { resolveWorkspaceColor } from "../theme-data";
   import { theme } from "../stores/theme";
   import { runCommandById } from "../services/command-registry";
   import {
@@ -168,7 +168,7 @@
         groupPath: group.path,
         groupName: group.name,
         isGit: group.isGit,
-        groupColor: group.color,
+        workspaceColor: group.color,
       } satisfies WorkspaceActionContext)
     : undefined;
 
@@ -293,8 +293,8 @@
     contextMenu.set({ x: e.clientX, y: e.clientY, items });
   }
 
-  $: groupHex = group ? resolveGroupColor(group.color, $theme) : "";
-  $: headerFg = group ? contrastColor(groupHex) : $theme.fg;
+  $: workspaceHex = group ? resolveWorkspaceColor(group.color, $theme) : "";
+  $: headerFg = group ? contrastColor(workspaceHex) : $theme.fg;
   $: subtitleFg = $theme.fgMuted ?? $theme.fgDim ?? $theme.fg;
   $: dimIconColor = ($theme.fgDim ?? $theme.fgMuted ?? "#888") as string;
 
@@ -365,7 +365,7 @@
     if (!hosts) return undefined;
     return {
       id: group.id,
-      color: groupHex,
+      color: workspaceHex,
       onClick: () => {
         if (group) void openWorkspaceDashboard(group);
       },
@@ -383,7 +383,7 @@
     "
   >
     <ContainerRow
-      color={groupHex}
+      color={workspaceHex}
       {onGripMouseDown}
       onBannerContextMenu={handleBannerContextMenu}
       onBannerClick={handleBannerClick}
@@ -414,14 +414,14 @@
           <SidebarChipButton
             variant="lock"
             title="Unlock Workspace"
-            idleColor={groupHex}
+            idleColor={workspaceHex}
             onClick={() => void handleUnlockGroup()}
           />
         {:else if bannerHovered}
           <SidebarChipButton
             variant="close"
             title="Delete Workspace"
-            idleColor={groupHex}
+            idleColor={workspaceHex}
             onClick={() => void handleDeleteGroup()}
           />
         {/if}
@@ -468,7 +468,7 @@
               isGit: group.isGit,
             }}
             fgColor={subtitleFg}
-            iconColor={groupHex}
+            iconColor={workspaceHex}
           />
         </div>
       </svelte:fragment>
@@ -512,12 +512,12 @@
                 top: 0; left: 0; right: 0; bottom: 0;
                 background: {$theme.bgSurface ?? 'transparent'};
                 border: 1px solid {$theme.border ?? 'transparent'};
-                {isActive ? `box-shadow: 0 0 0 1.5px ${groupHex};` : ''}
+                {isActive ? `box-shadow: 0 0 0 1.5px ${workspaceHex};` : ''}
               "
             >
               <DashboardTileIcon
                 iconComponent={IconComp}
-                baseColor={groupHex}
+                baseColor={workspaceHex}
                 contributionId={contribId}
                 groupPath={group?.path}
                 {isActive}
@@ -582,7 +582,7 @@
           >
             <DashboardTileIcon
               iconComponent={WorktreeIcon}
-              baseColor={groupHex}
+              baseColor={workspaceHex}
               contributionId={undefined}
               groupPath={undefined}
               isActive={false}
@@ -607,7 +607,7 @@
               height="8"
               viewBox="0 0 12 8"
               fill="none"
-              stroke={caretHovered ? groupHex : dimIconColor}
+              stroke={caretHovered ? workspaceHex : dimIconColor}
               stroke-width="1.5"
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -633,7 +633,7 @@
                 <svelte:component
                   this={renderer.component as Component}
                   id={row.id}
-                  parentColor={groupHex}
+                  parentColor={workspaceHex}
                 />
               {/if}
             {/each}
@@ -647,7 +647,7 @@
         style="
           position: absolute; top: 0; right: 0; bottom: 0; left: -10px;
           background: {overlay.kind === 'strong'
-          ? groupHex
+          ? workspaceHex
           : 'rgba(0, 0, 0, 0.4)'};
           pointer-events: none;
           display: flex; align-items: center; justify-content: center;

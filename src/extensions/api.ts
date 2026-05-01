@@ -15,9 +15,9 @@ import type { Readable } from "svelte/store";
 //
 // Semantic palette for workspace groups and extensions that want
 // theme-following color pickers. Each slot maps onto the active theme's
-// ansi palette via getGroupColors(), so a stored slot name resolves to
+// ansi palette via getWorkspaceColors(), so a stored slot name resolves to
 // different hex values as the user switches themes. Custom hex strings
-// (anything starting with "#") pass through resolveGroupColor()
+// (anything starting with "#") pass through resolveWorkspaceColor()
 // unchanged — users who type their own color keep it verbatim.
 
 export const GROUP_COLOR_SLOTS = [
@@ -35,14 +35,14 @@ export const GROUP_COLOR_SLOTS = [
   "teal",
 ] as const;
 
-export type GroupColorSlot = (typeof GROUP_COLOR_SLOTS)[number];
+export type WorkspaceColorSlot = (typeof GROUP_COLOR_SLOTS)[number];
 
 /**
  * Minimum theme shape required for slot resolution — only the ansi
  * block. Both core's ThemeDef and the extension-facing ExtensionTheme
  * satisfy this interface.
  */
-export interface GroupColorTheme {
+export interface WorkspaceColorTheme {
   ansi: {
     red: string;
     brightRed: string;
@@ -59,9 +59,9 @@ export interface GroupColorTheme {
   };
 }
 
-export function getGroupColors(
-  theme: GroupColorTheme,
-): Record<GroupColorSlot, string> {
+export function getWorkspaceColors(
+  theme: WorkspaceColorTheme,
+): Record<WorkspaceColorSlot, string> {
   return {
     red: theme.ansi.red,
     pink: theme.ansi.brightRed,
@@ -83,13 +83,13 @@ export function getGroupColors(
  * theme; custom hex strings (starting with `#`) pass through unchanged.
  * Unknown strings return as-is.
  */
-export function resolveGroupColor(
+export function resolveWorkspaceColor(
   color: string,
-  theme: GroupColorTheme,
+  theme: WorkspaceColorTheme,
 ): string {
   if (color.startsWith("#")) return color;
-  const colors = getGroupColors(theme);
-  return colors[color as GroupColorSlot] ?? color;
+  const colors = getWorkspaceColors(theme);
+  return colors[color as WorkspaceColorSlot] ?? color;
 }
 
 // --- Status types (inlined so api.ts stays self-contained) ---

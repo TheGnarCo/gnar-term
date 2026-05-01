@@ -7,7 +7,7 @@
    * supplies the current selection and handles persistence via `onSelect`.
    */
   import { theme } from "../stores/theme";
-  import { GROUP_COLOR_SLOTS, resolveGroupColor } from "../theme-data";
+  import { GROUP_COLOR_SLOTS, resolveWorkspaceColor } from "../theme-data";
 
   export let currentSlot: string;
   export let onSelect: (slot: string) => void;
@@ -42,7 +42,7 @@
   style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px;"
 >
   {#each GROUP_COLOR_SLOTS as slot (slot)}
-    {@const hex = resolveGroupColor(slot, $theme)}
+    {@const hex = resolveWorkspaceColor(slot, $theme)}
     {@const isSelected = slot === currentSlot}
     <button
       type="button"

@@ -4,7 +4,7 @@
   import { open as dialogOpen } from "@tauri-apps/plugin-dialog";
   import ColorPicker from "./ColorPicker.svelte";
   import { theme } from "../stores/theme";
-  import { GROUP_COLOR_SLOTS, resolveGroupColor } from "../theme-data";
+  import { GROUP_COLOR_SLOTS, resolveWorkspaceColor } from "../theme-data";
   import {
     pendingCreateResolver,
     createDialogPrefill,
@@ -209,7 +209,7 @@
           <ColorPicker
             bind:value={color}
             colors={[...GROUP_COLOR_SLOTS]}
-            resolveColor={(c: string) => resolveGroupColor(c, $theme)}
+            resolveColor={(c: string) => resolveWorkspaceColor(c, $theme)}
             theme={themeView}
           />
         </div>

@@ -27,8 +27,8 @@
   import { theme } from "../../../lib/stores/theme";
   import {
     GROUP_COLOR_SLOTS,
-    resolveGroupColor,
-    type GroupColorSlot,
+    resolveWorkspaceColor,
+    type WorkspaceColorSlot,
   } from "../../../lib/theme-data";
 
   const DEFAULT_TEMPLATE = `# Agents
@@ -138,7 +138,7 @@ title: Active Agents
 
   async function handleColorKeydown(event: KeyboardEvent): Promise<void> {
     const slots = GROUP_COLOR_SLOTS;
-    const idx = slots.indexOf(currentColorSlot as GroupColorSlot);
+    const idx = slots.indexOf(currentColorSlot as WorkspaceColorSlot);
     let nextIdx: number | null = null;
     if (event.key === "ArrowRight") {
       event.preventDefault();
@@ -281,7 +281,7 @@ title: Active Agents
           style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px;"
         >
           {#each GROUP_COLOR_SLOTS as slot (slot)}
-            {@const hex = resolveGroupColor(slot, $theme)}
+            {@const hex = resolveWorkspaceColor(slot, $theme)}
             {@const isSelected = slot === currentColorSlot}
             <button
               type="button"

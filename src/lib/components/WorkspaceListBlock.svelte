@@ -57,7 +57,7 @@
   import { expandWorkspaceIntoPanes } from "../services/pane-service";
   import { dashboardWorkspaceRegistry } from "../services/dashboard-workspace-service";
   import { configStore } from "../config";
-  import { resolveGroupColor } from "../theme-data";
+  import { resolveWorkspaceColor } from "../theme-data";
   import { archiveWorkspace } from "../services/archive-service";
   import { buildWorkspaceContextMenuItems } from "../utils/workspace-context-menu";
   import { wsMeta } from "../services/service-helpers";
@@ -66,7 +66,7 @@
 
   function resolvePseudoWorkspaceColor(pw: PseudoWorkspace): string {
     const slot = $configStore.pseudoWorkspaceColors?.[pw.id] ?? "purple";
-    return resolveGroupColor(slot, $theme);
+    return resolveWorkspaceColor(slot, $theme);
   }
 
   export let onSwitchWorkspace: (idx: number) => void;

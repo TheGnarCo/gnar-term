@@ -620,10 +620,10 @@ const mollyDisco: ThemeDef = {
 // tests can reach them through the theme-data module.
 export {
   GROUP_COLOR_SLOTS,
-  type GroupColorSlot,
-  type GroupColorTheme,
-  getGroupColors,
-  resolveGroupColor,
+  type WorkspaceColorSlot,
+  type WorkspaceColorTheme,
+  getWorkspaceColors,
+  resolveWorkspaceColor,
 } from "../extensions/api";
 
 export const themes: Record<string, ThemeDef> = {

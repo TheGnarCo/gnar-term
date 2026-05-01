@@ -27,7 +27,7 @@
     unregisterPseudoWorkspace,
   } from "../services/pseudo-workspace-registry";
   import { configStore } from "../config";
-  import { resolveGroupColor } from "../theme-data";
+  import { resolveWorkspaceColor } from "../theme-data";
   import { shortcutHint } from "../actions/shortcut-hint";
   import { modLabel } from "../terminal-service";
 
@@ -43,7 +43,10 @@
   let rowHovered = false;
 
   $: configuredSlot = $configStore.pseudoWorkspaceColors?.[pseudo.id];
-  $: bannerBackground = resolveGroupColor(configuredSlot ?? "purple", $theme);
+  $: bannerBackground = resolveWorkspaceColor(
+    configuredSlot ?? "purple",
+    $theme,
+  );
 
   function activate(): void {
     activeNestedWorkspaceIdx.set(-1);

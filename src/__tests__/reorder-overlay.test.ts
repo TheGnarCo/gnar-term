@@ -60,7 +60,7 @@ describe("per-project overlay (via WorkspaceListBlock shell)", () => {
     );
     expect(BOOTSTRAP).toMatch(/railColor:/);
     expect(BOOTSTRAP).toMatch(/label:/);
-    expect(BOOTSTRAP).toMatch(/resolveGroupColor/);
+    expect(BOOTSTRAP).toMatch(/resolveWorkspaceColor/);
   });
 
   it("WorkspaceSectionContent accepts a unified overlay prop supporting strong + light", () => {
@@ -79,10 +79,10 @@ describe("per-project overlay (via WorkspaceListBlock shell)", () => {
     // Non-source groups during a group drag render a solid colored
     // tile using the theme-resolved group color.
     expect(GROUP_SECTION_CONTENT).toMatch(
-      /overlay\.kind\s*===\s*["']strong["'][\s\S]*?groupHex/,
+      /overlay\.kind\s*===\s*["']strong["'][\s\S]*?workspaceHex/,
     );
     expect(GROUP_SECTION_CONTENT).toMatch(
-      /groupHex\s*=\s*[^\n]*resolveGroupColor\(group\.color,\s*\$theme\)/,
+      /workspaceHex\s*=\s*[^\n]*resolveWorkspaceColor\(group\.color,\s*\$theme\)/,
     );
   });
 

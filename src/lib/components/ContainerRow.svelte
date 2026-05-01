@@ -244,7 +244,7 @@
       >
         <DragGrip
           theme={$theme}
-          visible={railHovered && $reorderContext === null}
+          visible={railHovered && $reorderContext === null && !locked}
           railColor={color}
           railOpacity={1}
           alwaysShowDots={!locked}

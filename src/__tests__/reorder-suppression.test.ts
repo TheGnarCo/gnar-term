@@ -32,7 +32,7 @@ describe("grip visibility suppression", () => {
     ).replace(/\s+/g, " ");
     expect(SIDEBAR_ELEM).toContain("anyReorderActive");
     expect(SIDEBAR_ELEM).toMatch(
-      /visible=\{\s*isDragging\s*\|\|\s*\(\s*canDrag\s*&&\s*railHovered\s*&&\s*!\s*\$anyReorderActive\s*\)\s*\}/,
+      /visible=\{\s*isDragging\s*\|\|\s*\(\s*canDrag\s*&&\s*railHovered\s*&&\s*!\s*\$anyReorderActive\s*&&\s*!\s*isLocked\s*\)\s*\}/,
     );
   });
 

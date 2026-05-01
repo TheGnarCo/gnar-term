@@ -135,7 +135,8 @@
   >
     <DragGrip
       theme={$theme}
-      visible={isDragging || (canDrag && railHovered && !$anyReorderActive)}
+      visible={isDragging ||
+        (canDrag && railHovered && !$anyReorderActive && !isLocked)}
       railColor={effectiveColor}
       railOpacity={1}
       alwaysShowDots={!isLocked}

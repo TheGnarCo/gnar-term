@@ -37,8 +37,8 @@
   <div
     style="
       height: {height}px;
-      margin: 6px {inset}px 6px 0;
-      background: rgba(40, 40, 40, 0.35);
+      margin: 2px {inset}px 2px 0;
+      background: transparent;
       color: {accent ?? '#fff'};
       display: flex; align-items: center; justify-content: center;
       font-size: 13px; font-weight: 600;
@@ -55,7 +55,7 @@
   <div
     style="
       height: {height}px;
-      margin: 6px {inset}px 6px 0;
+      margin: 2px {inset}px 2px 0;
       border: 2px dashed rgba(255, 255, 255, 0.85);
       border-radius: 0 6px 6px 0;
       background: rgba(40, 40, 40, 0.6);

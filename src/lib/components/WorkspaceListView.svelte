@@ -114,8 +114,8 @@
     containerSelector: ".workspace-list-view",
     canStart: () => !$anyReorderActive,
     ghostStyle: () => ({
-      background: $theme.bgFloat ?? $theme.bgSurface ?? "#111",
-      border: `1px solid ${$theme.border ?? "transparent"}`,
+      background: "transparent",
+      border: `2px solid ${$theme.border ?? "transparent"}`,
     }),
     onDrop: (from, to) => {
       // `from` and `to` are global workspace indices (encoded in the data

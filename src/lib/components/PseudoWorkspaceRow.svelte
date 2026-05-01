@@ -140,7 +140,7 @@
   <div
     style="
       flex: 1; min-width: 0;
-      padding: 4px 6px;
+      padding: 4px 6px 4px 8px;
       display: flex; align-items: center; gap: 8px;
       min-height: 32px;
     "

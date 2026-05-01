@@ -56,6 +56,12 @@
   $: hasUnread = allSurfaces.some((s) => s.hasUnread);
   $: latestNotification = allSurfaces.find((s) => s.notification)?.notification;
   $: isManaged = !!workspace.metadata?.worktreePath;
+  $: worktreeDisplayPath = (() => {
+    const path = workspace.metadata?.worktreePath;
+    if (!path) return "";
+    const parts = path.split("/").filter((p) => p.length > 0);
+    return parts.slice(-2).join("/");
+  })();
   $: dashboardWorkspaceEntry = (() => {
     const id = wsMeta(workspace).dashboardWorkspaceId;
     if (typeof id !== "string") return null;
@@ -357,7 +363,7 @@
 
     {#if isManaged && !hideStatusBadges}
       <div
-        style="padding: 2px 12px 4px 6px; font-size: 11px; color: {$theme.fgMuted}; display: flex; align-items: center; gap: 4px; overflow: hidden;"
+        style="padding: 2px 24px 4px 2px; font-size: 11px; color: {$theme.fgMuted}; display: flex; align-items: center; gap: 4px; overflow: hidden;"
       >
         <svg
           width="10"
@@ -379,7 +385,7 @@
         <span
           style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
         >
-          {workspace.metadata?.worktreePath}
+          {worktreeDisplayPath}
         </span>
       </div>
     {/if}

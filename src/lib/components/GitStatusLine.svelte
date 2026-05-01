@@ -55,21 +55,33 @@
 </script>
 
 {#if isNested}
-  <!-- Normal nested workspaces share a repo with their project — their
-       branch/dirty state duplicates the ProjectStatusLine shown on the
-       project row. Only worktree workspaces (unique branch + tree) get
-       their own inline git info. -->
-  {#if isWorktree && nestedRowHasContent}
+  <!-- Nested workspaces show git branch info (matching container row style).
+       Worktree workspaces with their own branch get an additional worktree-specific line. -->
+  {#if branchItem}
+    <div
+      style="padding: 0 24px 2px 2px; display: flex; align-items: center; gap: 4px; overflow: hidden; line-height: 1.2;"
+    >
+      <span
+        style="font-size: 11px; color: {fgMuted}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-flex; align-items: center; gap: 4px;"
+        title={branchItem.tooltip || branchItem.label}
+      >
+        <span
+          style="color: {accentColor ?? fgMuted}; opacity: 0.8; flex-shrink: 0;"
+          >⎇</span
+        >
+        {branchItem.label}
+      </span>
+    </div>
+  {/if}
+  {#if isWorktree && nestedRowHasContent && worktreeBranch}
     <div
       style="padding: 0 12px 6px 6px; display: flex; align-items: center; gap: 6px; overflow: hidden; line-height: 1.2;"
     >
-      {#if worktreeBranch}
-        <span
-          style="font-size: 10px; color: {fgMuted}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
-          title={`worktree branch: ${worktreeBranch}`}>⌥ {worktreeBranch}</span
-        >
-      {/if}
-      {#if worktreeBranch && worktreeDirtyItem && isActiveWorkspace}
+      <span
+        style="font-size: 10px; color: {fgMuted}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
+        title={`worktree branch: ${worktreeBranch}`}>⌥ {worktreeBranch}</span
+      >
+      {#if worktreeDirtyItem && isActiveWorkspace}
         <span
           aria-hidden="true"
           style="font-size: 10px; color: {fgMuted}; opacity: 0.4;">|</span

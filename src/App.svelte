@@ -64,8 +64,8 @@
   import { initPreview } from "./lib/bootstrap/init-preview";
   import { initAgentDetectionBootstrap } from "./lib/bootstrap/init-agent-detection";
   import { initCoreExtensionAPI } from "./lib/bootstrap/init-core-extension-api";
-  import { initWorkspaceGroups } from "./lib/bootstrap/init-workspace-groups";
-  import { flushWorkspaceGroups } from "./lib/stores/workspace-groups";
+  import { initWorkspaces } from "./lib/bootstrap/init-workspace-groups";
+  import { flushWorkspaces } from "./lib/stores/workspace-groups";
   import {
     restoreWorkspaces,
     markRestored,
@@ -129,7 +129,7 @@
   import ConfirmPrompt from "./lib/components/ConfirmPrompt.svelte";
   import FormPrompt from "./lib/components/FormPrompt.svelte";
   import RestoreCommandsOverlay from "./lib/components/RestoreCommandsOverlay.svelte";
-  import WorkspaceGroupCreateOverlay from "./lib/components/WorkspaceGroupCreateOverlay.svelte";
+  import WorkspaceCreateOverlay from "./lib/components/WorkspaceCreateOverlay.svelte";
   import { surfaceTypeStore } from "./lib/services/surface-type-registry";
   import {
     registerDashboardWorkspaceType,
@@ -609,7 +609,7 @@
     // Workspace Groups (formerly the project-scope extension) —
     // registered from core so the root-row renderer, commands, and
     // Dashboard contribution are available before extensions activate.
-    await initWorkspaceGroups();
+    await initWorkspaces();
 
     // Register the core settings Dashboard Workspace before extensions so the
     // gear button is wired before any extension activates.
@@ -782,7 +782,7 @@
       const results = await Promise.allSettled([
         persistWorkspaces(),
         flushAllExtensionState(),
-        flushWorkspaceGroups(),
+        flushWorkspaces(),
       ]);
       for (const r of results) {
         if (r.status === "rejected") {
@@ -884,7 +884,7 @@
 <InputPrompt />
 <ConfirmPrompt />
 <FormPrompt />
-<WorkspaceGroupCreateOverlay />
+<WorkspaceCreateOverlay />
 {#if showRestoreCommandsOverlay}
   <RestoreCommandsOverlay
     onClose={() => (showRestoreCommandsOverlay = false)}

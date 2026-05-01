@@ -19,7 +19,7 @@ export const hoveredSidebarBlockId = writable<string | null>(null);
 /**
  * Key of the root row currently hovered inside the Workspaces section
  * — encoded as `"kind:id"` (e.g. `"workspace-group:g-42"`, `"workspace:w-7"`),
- * or null when no row is hovered. Row renderers (WorkspaceGroupRowBody,
+ * or null when no row is hovered. Row renderers (WorkspaceRowBody,
  * WorkspaceItem-in-root mode) subscribe to decide whether their rail
  * is in the expanded hover state.
  */

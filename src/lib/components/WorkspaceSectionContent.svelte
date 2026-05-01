@@ -65,7 +65,7 @@
    */
   export let containerBlockId: string = "";
   /**
-   * Forwarded from WorkspaceGroupRowBody — the drag grip is owned by
+   * Forwarded from WorkspaceRowBody — the drag grip is owned by
    * ContainerRow in root mode.
    */
   export let onGripMouseDown: ((e: MouseEvent) => void) | undefined = undefined;

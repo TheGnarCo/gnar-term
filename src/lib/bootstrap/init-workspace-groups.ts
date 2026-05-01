@@ -43,7 +43,7 @@ import {
 } from "../services/workspace-group-service";
 import { resolveWorkspaceColor } from "../theme-data";
 import { theme } from "../stores/theme";
-import WorkspaceGroupRowBody from "../components/WorkspaceGroupRowBody.svelte";
+import WorkspaceRowBody from "../components/WorkspaceRowBody.svelte";
 import GearIcon from "../icons/GearIcon.svelte";
 import GridIcon from "../icons/GridIcon.svelte";
 import WorkspacesWidget from "../components/WorkspacesWidget.svelte";
@@ -130,7 +130,7 @@ function openCreateDialog(prefill?: {
  * spawn the group's Dashboard workspace. Returns the new group id on
  * success, null on cancel.
  */
-async function createWorkspaceGroupFlow(prefill?: {
+async function createWorkspaceFlow(prefill?: {
   path: string;
   name?: string;
 }): Promise<string | null> {
@@ -238,7 +238,7 @@ async function promoteActiveWorkspaceToGroup(): Promise<void> {
 
   const derivedName = cwd.replace(/\/+$/, "").split("/").pop() || activeWs.name;
 
-  const newGroupId = await createWorkspaceGroupFlow({
+  const newGroupId = await createWorkspaceFlow({
     path: cwd,
     name: derivedName,
   });
@@ -275,7 +275,7 @@ function registerPerGroupCommands(): void {
   }
 }
 
-export async function initWorkspaceGroups(): Promise<void> {
+export async function initWorkspaces(): Promise<void> {
   await loadWorkspaces();
 
   // Seed rootRowOrder with each existing group. appendRootRow is
@@ -298,7 +298,7 @@ export async function initWorkspaceGroups(): Promise<void> {
   registerRootRowRenderer({
     id: "workspace-group",
     source: SOURCE,
-    component: WorkspaceGroupRowBody,
+    component: WorkspaceRowBody,
     railColor: (id: string) => {
       const group = readGroups().find((g) => g.id === id);
       if (!group) return undefined;
@@ -328,7 +328,7 @@ export async function initWorkspaceGroups(): Promise<void> {
     title: "Create Workspace...",
     source: SOURCE,
     action: () => {
-      void createWorkspaceGroupFlow();
+      void createWorkspaceFlow();
     },
   });
 

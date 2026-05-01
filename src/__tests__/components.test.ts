@@ -120,7 +120,7 @@ import PaneView from "../lib/components/PaneView.svelte";
 import PrimarySidebar from "../lib/components/PrimarySidebar.svelte";
 import SecondarySidebar from "../lib/components/SecondarySidebar.svelte";
 import TerminalSurfaceComponent from "../lib/components/TerminalSurface.svelte";
-import WorkspaceGroupSectionHarness from "./workspace-group-section-harness.svelte";
+import WorkspaceSectionHarness from "./workspace-section-harness.svelte";
 
 // Store imports
 import {
@@ -1765,7 +1765,7 @@ describe("WorkspaceSectionContent", () => {
     };
     setWorkspaces([group]);
 
-    render(WorkspaceGroupSectionHarness, {
+    render(WorkspaceSectionHarness, {
       props: { parentWorkspaceId: "grp-1" },
     });
 

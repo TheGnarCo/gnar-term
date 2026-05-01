@@ -1,6 +1,6 @@
 <script lang="ts">
   /**
-   * WorkspaceGroupRowBody — root-row renderer registered under the
+   * WorkspaceRowBody — root-row renderer registered under the
    * "workspace-group" kind (see `bootstrap/init-workspace-groups.ts`).
    * Thin pass-through to WorkspaceSectionContent — the shared
    * <ContainerRow> primitive (mounted inside the section content) owns

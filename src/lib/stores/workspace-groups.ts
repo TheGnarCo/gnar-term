@@ -109,7 +109,7 @@ export async function loadWorkspaces(): Promise<void> {
 }
 
 /** Flush pending writes — called from app close hooks. */
-export async function flushWorkspaceGroups(): Promise<void> {
+export async function flushWorkspaces(): Promise<void> {
   if (_persistTimer) {
     clearTimeout(_persistTimer);
     _persistTimer = null;

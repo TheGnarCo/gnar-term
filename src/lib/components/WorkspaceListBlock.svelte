@@ -440,7 +440,7 @@
      strong overlay with the row's own color + name centered. -->
 {#each renderedRows as entry (entry.key)}
   {@const isSource = dragActive && dragSourceIdx === entry.idx}
-  {@const isSibling = effectiveActive && effectiveDragSourceIdx !== entry.idx}
+  {@const _isSibling = effectiveActive && effectiveDragSourceIdx !== entry.idx}
   {@const ws = entry.workspace}
   {@const _dashId = ws ? wsMeta(ws).dashboardWorkspaceId : undefined}
   {@const rowColor =
@@ -451,8 +451,8 @@
         ? ($dashboardWorkspaceRegistry.get(_dashId)?.accentColor ??
           $theme.accent)
         : $theme.accent)}
-  {@const rowFg = contrastColor(rowColor)}
-  {@const rowLabel =
+  {@const _rowFg = contrastColor(rowColor)}
+  {@const _rowLabel =
     entry.row.kind === "workspace" && ws
       ? ws.name
       : entry.row.kind === "pseudo-workspace" && entry.pseudoWorkspace
@@ -522,27 +522,6 @@
             />
           </div>
         {/if}
-      {/if}
-
-      {#if isSibling}
-        <!-- Strong overlay on non-source root rows during a drag.
-             Shaped like a workspace row (rounded right + 8px trailing
-             margin) so the drop context reads as a stack of tiles
-             matching the row shape, not as a full-width wash. -->
-        <div
-          aria-hidden="true"
-          style="
-            position: absolute; inset: 0 8px 0 0;
-            background: {rowColor}; color: {rowFg};
-            display: flex; align-items: center; justify-content: center;
-            font-size: 13px; font-weight: 600;
-            pointer-events: none;
-            z-index: 3;
-            border-radius: 0 6px 6px 0;
-          "
-        >
-          {rowLabel}
-        </div>
       {/if}
     </div>
     {#if effectiveInsertIndicator?.idx === entry.idx && effectiveInsertIndicator.edge === "after"}

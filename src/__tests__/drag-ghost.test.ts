@@ -165,14 +165,11 @@ describe("root-workspace drag paints strong overlay on sibling rows", () => {
     );
   });
 
-  it("renders an absolute-positioned overlay over non-source rows", () => {
+  it("does not render an overlay over non-source rows (items stay normal)", () => {
     const oneLine = LIST_BLOCK.replace(/\s+/g, " ");
-    // Overlay branch is gated on isSibling and covers the whole row
-    // (inset: 0) with the row's color + contrast fg, pointer-events
-    // none so the drag itself stays responsive beneath.
-    expect(oneLine).toMatch(/\{#if isSibling\}/);
-    expect(oneLine).toMatch(/position:\s*absolute;\s*inset:\s*0/);
-    expect(oneLine).toMatch(/pointer-events:\s*none/);
+    // Overlay removed per UX: non-source rows should not change appearance
+    // during drag — only the drag ghost itself changes.
+    expect(oneLine).not.toMatch(/\{#if isSibling\}/);
   });
 
   it("uses contrastColor against the row color for the overlay text", () => {

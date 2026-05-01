@@ -12,15 +12,14 @@ const GROUP_SECTION_CONTENT = readFileSync(
 ).replace(/\s+/g, " ");
 
 describe("root-row overlay (WorkspaceListBlock)", () => {
-  it("paints an isSibling overlay on every non-source root row during a drag", () => {
-    // Unified drag now covers both workspace and project rows at the
-    // root level; sibling rows paint an opaque tile with the row's
-    // own label centered.
+  it("does not paint an isSibling overlay during drag (items keep normal appearance)", () => {
+    // Overlay removed per UX feedback: non-source rows should not
+    // change appearance during drag — only the drag ghost itself changes.
     expect(WORKSPACE_LIST_BLOCK).toMatch(
       /isSibling\s*=\s*effectiveActive\s*&&\s*effectiveDragSourceIdx\s*!==\s*entry\.idx/,
     );
-    expect(WORKSPACE_LIST_BLOCK).toMatch(/\{#if isSibling\}/);
-    expect(WORKSPACE_LIST_BLOCK).toMatch(/position:\s*absolute;\s*inset:\s*0/);
+    // isSibling variable still computed but not used for rendering
+    expect(WORKSPACE_LIST_BLOCK).not.toMatch(/\{#if isSibling\}/);
   });
 
   it("source row hides (display: none) instead of dimming", () => {

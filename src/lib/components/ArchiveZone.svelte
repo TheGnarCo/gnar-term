@@ -2,7 +2,6 @@
 <script lang="ts">
   import {
     contextMenu,
-    anyReorderActive,
     metaPreviewActive,
     showConfirmPrompt,
   } from "../stores/ui";
@@ -40,12 +39,6 @@
   }
   function onBlur() {
     deactivateMetaPreview();
-  }
-
-  $: if (archiveZoneEl) {
-    if ($anyReorderActive)
-      archiveZoneEl.setAttribute("data-drag-active", "true");
-    else archiveZoneEl.removeAttribute("data-drag-active");
   }
 
   $: totalCount = $archivedOrder.length;
@@ -208,9 +201,7 @@
     position: relative;
   }
 
-  .archive-zone:global([data-drag-over])::after,
-  .archive-zone:global([data-drag-preview])::after,
-  .archive-zone:global([data-drag-active])::after {
+  .archive-zone:global([data-drag-preview])::after {
     content: "Archive";
     position: absolute;
     inset: 0;

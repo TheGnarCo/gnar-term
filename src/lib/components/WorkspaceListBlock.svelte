@@ -202,23 +202,19 @@
     onMove: (x, y, ghostEl) => {
       const fromIdx = rootDrag.getState().sourceIdx;
       if (fromIdx === null) return;
-      // Archive zone detection runs for all row kinds (nested-workspace AND workspace).
+      // Archive zone hit-test runs for all row kinds (nested-workspace AND
+      // workspace). Tracks `overArchiveZone` so the drop commit can route to
+      // archiveWorkspace; no visual feedback is painted on the zone — UX
+      // calls for the archive section to keep its normal appearance during
+      // a drag.
       const archiveEl = document.querySelector("[data-archive-zone]");
       if (archiveEl) {
         const rect = archiveEl.getBoundingClientRect();
-        const over =
+        overArchiveZone =
           x >= rect.left &&
           x <= rect.right &&
           y >= rect.top &&
           y <= rect.bottom;
-        if (over !== overArchiveZone) {
-          overArchiveZone = over;
-          if (over) {
-            archiveEl.setAttribute("data-drag-over", "true");
-          } else {
-            archiveEl.removeAttribute("data-drag-over");
-          }
-        }
       }
       const srcRow = $rootRowOrder[fromIdx];
       if (srcRow?.kind !== "nested-workspace") {
@@ -244,9 +240,6 @@
     onDragCommit: (fromIdx) => {
       if (overArchiveZone) {
         overArchiveZone = false;
-        document
-          .querySelector("[data-archive-zone]")
-          ?.removeAttribute("data-drag-over");
         currentPaneTarget = null;
         setWorkspaceDragState(null);
         const srcRow = $rootRowOrder[fromIdx];
@@ -288,9 +281,6 @@
         currentPaneTarget = null;
         setWorkspaceDragState(null);
         overArchiveZone = false;
-        document
-          .querySelector("[data-archive-zone]")
-          ?.removeAttribute("data-drag-over");
       }
       if (s.active && s.sourceIdx !== null) {
         const src = $rootRowOrder[s.sourceIdx];
@@ -443,6 +433,12 @@
 {#each renderedRows as entry (entry.key)}
   {@const isSource = dragActive && dragSourceIdx === entry.idx}
   {@const _isSibling = effectiveActive && effectiveDragSourceIdx !== entry.idx}
+  {@const ghostBefore =
+    effectiveInsertIndicator?.idx === entry.idx &&
+    effectiveInsertIndicator.edge === "before"}
+  {@const ghostAfter =
+    effectiveInsertIndicator?.idx === entry.idx &&
+    effectiveInsertIndicator.edge === "after"}
   {@const ws = entry.workspace}
   {@const _dashId = ws ? wsMeta(ws).dashboardNestedWorkspaceId : undefined}
   {@const rowColor =
@@ -460,81 +456,89 @@
       : entry.row.kind === "pseudo-workspace" && entry.pseudoWorkspace
         ? entry.pseudoWorkspace.label
         : (entry.rendererLabel ?? "")}
-  <div class="root-row" data-root-row-container={entry.idx}>
-    {#if effectiveInsertIndicator?.idx === entry.idx && effectiveInsertIndicator.edge === "before"}
+  <!-- The DropGhost is a sibling .root-row, NOT a child of an existing
+       row. The source row is fully skipped from rendering (not just
+       inner display:none) — that lets the Ghost-row inherit the
+       source's "first/last row" status via the natural .root-row +
+       .root-row { margin-top: 8px } rule. Result: the ghost has the
+       same 8px gaps to its neighbors as a real row would, AND the
+       totals stay balanced (Ghost-row in slot K replaces source-row
+       in slot K, including its margin-top contribution). -->
+  {#if ghostBefore}
+    <div class="root-row">
       <DropGhost
         theme={$theme}
         height={effectiveDragSourceHeight}
         accent={effectiveSourceRowColor}
         label={effectiveSourceRowLabel}
       />
-    {/if}
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div
-      data-root-row-idx={entry.idx}
-      style="
-        display: {isSource ? 'none' : 'block'};
-        position: relative;
-      "
-    >
-      <!-- Row content — the renderer draws its OWN grip (via
-           onGripMouseDown) so the row looks self-contained (no gap
-           between active workspace bg and its rail, matching the
-           nested-workspace style). Core still owns the drag pipeline
-           — the renderer's grip just calls back into startRootRowDrag. -->
-      {#if entry.row.kind === "nested-workspace" && ws}
-        {@const globalIdx = $nestedWorkspaces.indexOf(ws)}
-        <WorkspaceItem
-          bind:this={workspaceItems[ws.id]}
-          workspace={ws}
-          index={globalIdx}
-          shortcutIdx={entry.idx}
-          isActive={globalIdx === $activeNestedWorkspaceIdx}
-          dragActive={isSource}
-          onSelect={() => {
-            if (!dragActive) onSwitchWorkspace(globalIdx);
-          }}
-          onClose={() => void confirmAndCloseWorkspace(ws, globalIdx)}
-          onRename={(name) => onRenameWorkspace(globalIdx, name)}
-          onContextMenu={(x, y) => showWorkspaceContextMenu(x, y, globalIdx)}
-          onGripMouseDown={(e) => startRootRowDrag(e, entry.idx)}
-        />
-      {:else if entry.row.kind === "pseudo-workspace" && entry.pseudoWorkspace}
-        <PseudoWorkspaceRow
-          pseudo={entry.pseudoWorkspace}
-          shortcutIdx={entry.idx}
-          onGripMouseDown={(e) => startRootRowDrag(e, entry.idx)}
-        />
-      {:else if entry.rendererComponent && entry.rendererSource}
-        {@const extApi = getExtensionApiById(entry.rendererSource)}
-        {#if extApi}
-          <div
-            use:shortcutHint={entry.idx < 9
-              ? `${modLabel}${entry.idx + 1}`
-              : undefined}
-          >
-            <ExtensionWrapper
-              api={extApi}
-              component={entry.rendererComponent}
-              props={{
-                id: entry.row.id,
-                onGripMouseDown: (e: MouseEvent) =>
-                  startRootRowDrag(e, entry.idx),
-              }}
-            />
-          </div>
-        {/if}
-      {/if}
     </div>
-    {#if effectiveInsertIndicator?.idx === entry.idx && effectiveInsertIndicator.edge === "after"}
+  {/if}
+  {#if !isSource}
+    <div class="root-row" data-root-row-container={entry.idx}>
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div data-root-row-idx={entry.idx} style="position: relative;">
+        <!-- Row content — the renderer draws its OWN grip (via
+             onGripMouseDown) so the row looks self-contained (no gap
+             between active workspace bg and its rail, matching the
+             nested-workspace style). Core still owns the drag pipeline
+             — the renderer's grip just calls back into startRootRowDrag. -->
+        {#if entry.row.kind === "nested-workspace" && ws}
+          {@const globalIdx = $nestedWorkspaces.indexOf(ws)}
+          <WorkspaceItem
+            bind:this={workspaceItems[ws.id]}
+            workspace={ws}
+            index={globalIdx}
+            shortcutIdx={entry.idx}
+            isActive={globalIdx === $activeNestedWorkspaceIdx}
+            dragActive={isSource}
+            onSelect={() => {
+              if (!dragActive) onSwitchWorkspace(globalIdx);
+            }}
+            onClose={() => void confirmAndCloseWorkspace(ws, globalIdx)}
+            onRename={(name) => onRenameWorkspace(globalIdx, name)}
+            onContextMenu={(x, y) => showWorkspaceContextMenu(x, y, globalIdx)}
+            onGripMouseDown={(e) => startRootRowDrag(e, entry.idx)}
+          />
+        {:else if entry.row.kind === "pseudo-workspace" && entry.pseudoWorkspace}
+          <PseudoWorkspaceRow
+            pseudo={entry.pseudoWorkspace}
+            shortcutIdx={entry.idx}
+            onGripMouseDown={(e) => startRootRowDrag(e, entry.idx)}
+          />
+        {:else if entry.rendererComponent && entry.rendererSource}
+          {@const extApi = getExtensionApiById(entry.rendererSource)}
+          {#if extApi}
+            <div
+              use:shortcutHint={entry.idx < 9
+                ? `${modLabel}${entry.idx + 1}`
+                : undefined}
+            >
+              <ExtensionWrapper
+                api={extApi}
+                component={entry.rendererComponent}
+                props={{
+                  id: entry.row.id,
+                  onGripMouseDown: (e: MouseEvent) =>
+                    startRootRowDrag(e, entry.idx),
+                }}
+              />
+            </div>
+          {/if}
+        {/if}
+      </div>
+    </div>
+  {/if}
+  {#if ghostAfter}
+    <div class="root-row">
       <DropGhost
         theme={$theme}
         height={effectiveDragSourceHeight}
         accent={effectiveSourceRowColor}
         label={effectiveSourceRowLabel}
       />
-    {/if}
-  </div>
+    </div>
+  {/if}
 {/each}
 
 <style>

@@ -22,8 +22,13 @@ describe("root-row overlay (WorkspaceListBlock)", () => {
     expect(WORKSPACE_LIST_BLOCK).not.toMatch(/\{#if isSibling\}/);
   });
 
-  it("source row hides (display: none) instead of dimming", () => {
-    expect(WORKSPACE_LIST_BLOCK).toMatch(
+  it("source row is fully skipped (not rendered) instead of dimming", () => {
+    // The dragged row's outer `.root-row` is fully omitted via
+    // `{#if !isSource}` — the DropGhost is rendered as its own
+    // `.root-row` sibling so it inherits first/last-row status from
+    // the natural `.root-row + .root-row { margin-top: 8px }` rule.
+    expect(WORKSPACE_LIST_BLOCK).toMatch(/\{#if !isSource\}/);
+    expect(WORKSPACE_LIST_BLOCK).not.toMatch(
       /display:\s*\{\s*isSource\s*\?\s*'none'\s*:\s*'block'\s*\}/,
     );
   });

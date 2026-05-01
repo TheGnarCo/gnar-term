@@ -104,6 +104,29 @@ describe("DropGhost placeholder component", () => {
   it("is pointer-events: none so it never intercepts the drop", () => {
     expect(DROP_GHOST).toMatch(/pointer-events:\s*none/);
   });
+
+  it("has zero top and bottom margin so the row container's gap is the only inter-row spacing", () => {
+    // The DropGhost is rendered INSIDE a row container that already
+    // owns the 8px inter-row gap (.root-row + .root-row,
+    // .workspace-list-row + .workspace-list-row). Adding a
+    // margin-top/bottom on the ghost would NOT collapse with the row
+    // gap on the bottom edge — it stacks, producing an 8px layout
+    // shift every time the indicator moves. Pinning margin: 0
+    // top/bottom keeps the ghost as a true height-replacement for
+    // the row's content.
+    const marginRules = DROP_GHOST.match(/margin:\s*[^;]+;/g) ?? [];
+    expect(marginRules.length).toBeGreaterThan(0);
+    for (const rule of marginRules) {
+      const values = rule
+        .replace(/margin:\s*/, "")
+        .replace(";", "")
+        .trim()
+        .split(/\s+/);
+      expect(values.length).toBe(4);
+      expect(values[0]).toBe("0");
+      expect(values[2]).toBe("0");
+    }
+  });
 });
 
 describe("drag source hides + ghost shows at target", () => {
@@ -124,12 +147,31 @@ describe("drag source hides + ghost shows at target", () => {
     );
   });
 
-  it("WorkspaceListBlock hides the dragged root row (display: none)", () => {
-    // Root-level rows (workspace or project) hide their content while
-    // being dragged; the DropGhost holds the slot.
+  it("WorkspaceListBlock skips rendering the dragged root row entirely", () => {
+    // Root-level rows hide while being dragged; the DropGhost holds the
+    // slot. The source row's outer `.root-row` is FULLY skipped (not
+    // just inner display:none) — that lets the Ghost-row inherit the
+    // source's first/last-row status via the natural
+    // `.root-row + .root-row { margin-top: 8px }` rule, so the Ghost
+    // has the same 8px gaps to its neighbors as a real row would.
+    const oneLine = LIST_BLOCK.replace(/\s+/g, " ");
+    expect(oneLine).toMatch(/\{#if\s+!isSource\}/);
+    expect(oneLine).not.toMatch(
+      /display:\s*\{\s*isSource\s*\?\s*'none'\s*:\s*'block'\s*\}/,
+    );
+  });
+
+  it("WorkspaceListBlock renders the DropGhost as its own .root-row sibling", () => {
+    // The DropGhost lives inside its OWN `.root-row` div, not nested
+    // inside an existing entry row. This is what makes the
+    // `.root-row + .root-row` margin rule paint a gap above and below
+    // the ghost during a drag.
     const oneLine = LIST_BLOCK.replace(/\s+/g, " ");
     expect(oneLine).toMatch(
-      /display:\s*\{\s*isSource\s*\?\s*'none'\s*:\s*'block'\s*\}/,
+      /\{#if\s+ghostBefore\}\s*<div\s+class="root-row">\s*<DropGhost/,
+    );
+    expect(oneLine).toMatch(
+      /\{#if\s+ghostAfter\}\s*<div\s+class="root-row">\s*<DropGhost/,
     );
   });
 

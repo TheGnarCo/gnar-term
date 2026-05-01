@@ -33,11 +33,19 @@
 {#if label}
   <!-- Drop target: visually distinct from the solid sibling tiles —
        translucent fill + prominent dashed border so it reads as
-       "the slot where the row will land" rather than a sibling. -->
+       "the slot where the row will land" rather than a sibling.
+
+       Top/bottom margins are intentionally 0. The DropGhost renders
+       INSIDE a row container that already provides the 8px inter-row
+       gap (.root-row + .root-row, .workspace-list-row +
+       .workspace-list-row). Adding margin-top/bottom here would NOT
+       collapse with the row gap on the bottom side, producing a
+       visible 8px layout shift every time the indicator moves. The
+       ghost is a drop-in height replacement for the row's content. -->
   <div
     style="
       height: {height}px;
-      margin: 8px {inset}px 8px 0;
+      margin: 0 {inset}px 0 0;
       background: transparent;
       color: {accent ?? '#fff'};
       display: flex; align-items: center; justify-content: center;
@@ -55,7 +63,7 @@
   <div
     style="
       height: {height}px;
-      margin: 8px {inset}px 8px 0;
+      margin: 0 {inset}px 0 0;
       border: 1px dashed rgba(255, 255, 255, 0.85);
       border-radius: 0 6px 6px 0;
       background: rgba(40, 40, 40, 0.6);

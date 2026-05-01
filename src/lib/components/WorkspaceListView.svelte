@@ -255,14 +255,14 @@
     if (!ws) return;
     const md = wsMeta(ws);
     const isDashboard = md.isDashboard === true;
-    const isInsideGroup = typeof md.parentWorkspaceId === "string";
+    const isInsideWorkspace = typeof md.parentWorkspaceId === "string";
     const isLocked = md.locked === true;
     const canPromoteCommand = get(commandStore).some(
       (c) => c.id === "promote-workspace-to-group",
     );
     const items = buildWorkspaceContextMenuItems({
       isDashboard,
-      isInsideGroup,
+      isInsideWorkspace,
       canPromoteCommand,
       workspaceCount: $nestedWorkspaces.length,
       isLocked,

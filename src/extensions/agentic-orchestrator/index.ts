@@ -1,6 +1,6 @@
 /**
  * Agentic Orchestrator — registers the Agentic Dashboard contribution
- * (per-group, capPerGroup=1) and the Global Agentic Dashboard
+ * (per-group, capPerWorkspace=1) and the Global Agentic Dashboard
  * pseudo-workspace, plus the markdown widgets they embed (kanban,
  * agent-list, task-spawner, issues, agent-status-row, columns).
  *
@@ -98,7 +98,7 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
       id: "agentic",
       label: "Agentic Dashboard",
       actionLabel: "Add Agentic Dashboard",
-      capPerGroup: 1,
+      capPerWorkspace: 1,
       autoProvision: true,
       icon: BotIcon,
       lockedReason: "Required by Agentic extension",

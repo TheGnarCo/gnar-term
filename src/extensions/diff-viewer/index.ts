@@ -135,7 +135,7 @@ export function registerDiffViewerExtension(api: ExtensionAPI): void {
       id: "diff",
       label: "Diff",
       actionLabel: "Add Diff Dashboard",
-      capPerGroup: 1,
+      capPerWorkspace: 1,
       icon: DiffIcon,
       paneConstraints: { singleSurface: true },
       create: (group) => createDiffDashboardWorkspace(group),

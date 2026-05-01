@@ -169,14 +169,14 @@ export function addNestedWorkspaceToWorkspace(
 }
 
 /**
- * Inserts `workspaceId` into `parentWorkspaceId`'s nestedWorkspaceIds at `positionInGroup`.
+ * Inserts `workspaceId` into `parentWorkspaceId`'s nestedWorkspaceIds at `positionInWorkspace`.
  * No-op when the group is missing or already contains the workspace.
  * Returns true when a change was persisted.
  */
 export function insertWorkspaceIntoGroup(
   parentWorkspaceId: string,
   workspaceId: string,
-  positionInGroup: number,
+  positionInWorkspace: number,
 ): boolean {
   const groups = getWorkspaces();
   let changed = false;
@@ -186,7 +186,7 @@ export function insertWorkspaceIntoGroup(
     changed = true;
     const ids = [...g.nestedWorkspaceIds];
     ids.splice(
-      Math.max(0, Math.min(ids.length, positionInGroup)),
+      Math.max(0, Math.min(ids.length, positionInWorkspace)),
       0,
       workspaceId,
     );
@@ -219,8 +219,8 @@ export function removeNestedWorkspaceFromAllWorkspaces(
  * the group's own `.gnar-term/` directory so multi-machine sync /
  * checkout follows the group itself.
  */
-export function workspaceDashboardPath(groupPath: string): string {
-  return `${groupPath.replace(/\/+$/, "")}/.gnar-term/project-dashboard.md`;
+export function workspaceDashboardPath(workspacePath: string): string {
+  return `${workspacePath.replace(/\/+$/, "")}/.gnar-term/project-dashboard.md`;
 }
 
 function buildWorkspaceDashboardMarkdown(group: Workspace): string {
@@ -424,8 +424,8 @@ export async function createWorkspaceDashboardNestedWorkspace(
 function backfillDashboardContributionIds(): void {
   const groups = getWorkspaces();
   if (groups.length === 0) return;
-  const groupById = new Map<string, Workspace>();
-  for (const g of groups) groupById.set(g.id, g);
+  const workspaceById = new Map<string, Workspace>();
+  for (const g of groups) workspaceById.set(g.id, g);
 
   let mutated = false;
   nestedWorkspaces.update((list) => {
@@ -435,7 +435,7 @@ function backfillDashboardContributionIds(): void {
       if (typeof md.dashboardContributionId === "string") return ws;
       const parentWorkspaceId = md.parentWorkspaceId;
       if (typeof parentWorkspaceId !== "string") return ws;
-      const group = groupById.get(parentWorkspaceId);
+      const group = workspaceById.get(parentWorkspaceId);
       if (!group) return ws;
 
       const previewPaths = getAllPanes(ws.splitRoot)
@@ -447,9 +447,9 @@ function backfillDashboardContributionIds(): void {
         .map((s) => s.path);
 
       let inferred: string | null = null;
-      const groupPath = workspaceDashboardPath(group.path);
+      const workspacePath = workspaceDashboardPath(group.path);
       const agenticPath = `${group.path.replace(/\/+$/, "")}/.gnar-term/agentic-dashboard.md`;
-      if (previewPaths.includes(groupPath)) inferred = "group";
+      if (previewPaths.includes(workspacePath)) inferred = "group";
       else if (previewPaths.includes(agenticPath)) inferred = "agentic";
       if (!inferred) return ws;
 
@@ -770,14 +770,14 @@ export async function reconcilePrimaryWorkspaces(): Promise<void> {
   }
 
   // Pass 2 — wrap standalone nestedWorkspaces.
-  const knownGroupIds = new Set(getWorkspaces().map((g) => g.id));
+  const knownWorkspaceIds = new Set(getWorkspaces().map((g) => g.id));
   // Snapshot before we start mutating so the loop is stable.
   const snapshot = get(nestedWorkspaces);
   const usedColors = getWorkspaces().map((g) => g.color);
 
   for (const ws of snapshot) {
     const md = wsMeta(ws);
-    if (md.parentWorkspaceId && knownGroupIds.has(md.parentWorkspaceId))
+    if (md.parentWorkspaceId && knownWorkspaceIds.has(md.parentWorkspaceId))
       continue;
     if (md.isDashboard) continue;
     // Orphan worktree nestedWorkspaces (group deleted, worktreePath still set) are
@@ -814,16 +814,16 @@ export async function reconcilePrimaryWorkspaces(): Promise<void> {
     addWorkspace(group);
     // onWorkspaceCreated already fired before reconcile runs, so claim here.
     claimWorkspace(ws.id, "core");
-    knownGroupIds.add(id);
+    knownWorkspaceIds.add(id);
   }
 
   // Pass 3 — claim all nestedWorkspaces that have metadata.parentWorkspaceId pointing to
   // valid groups. This rehydrates the in-memory claim registry from
   // persisted metadata on restart.
-  const validGroupIds = new Set(getWorkspaces().map((g) => g.id));
+  const validWorkspaceIds = new Set(getWorkspaces().map((g) => g.id));
   for (const ws of get(nestedWorkspaces)) {
     const md = wsMeta(ws);
-    if (md.parentWorkspaceId && validGroupIds.has(md.parentWorkspaceId)) {
+    if (md.parentWorkspaceId && validWorkspaceIds.has(md.parentWorkspaceId)) {
       claimWorkspace(ws.id, "core");
     }
   }

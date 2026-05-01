@@ -51,7 +51,7 @@ describe("WorkspaceDashboardSettings — Dashboards toggles", () => {
       source: "core",
       label: "Group Dashboard",
       actionLabel: "Add Group",
-      capPerGroup: 1,
+      capPerWorkspace: 1,
       autoProvision: true,
       lockedReason: "Required (Overview)",
       create: vi.fn(async () => "ws-grp"),
@@ -61,7 +61,7 @@ describe("WorkspaceDashboardSettings — Dashboards toggles", () => {
       source: "core",
       label: "Settings",
       actionLabel: "Add Settings",
-      capPerGroup: 1,
+      capPerWorkspace: 1,
       autoProvision: true,
       create: vi.fn(async () => "ws-st"),
     });
@@ -70,7 +70,7 @@ describe("WorkspaceDashboardSettings — Dashboards toggles", () => {
       source: "diff-viewer",
       label: "Diff",
       actionLabel: "Add Diff",
-      capPerGroup: 1,
+      capPerWorkspace: 1,
       create: vi.fn(async () => "ws-diff"),
     });
 
@@ -91,7 +91,7 @@ describe("WorkspaceDashboardSettings — Dashboards toggles", () => {
       source: "core",
       label: "Group Dashboard",
       actionLabel: "Add Group",
-      capPerGroup: 1,
+      capPerWorkspace: 1,
       autoProvision: true,
       lockedReason: "Required (Overview)",
       create: vi.fn(async () => "ws-grp"),
@@ -119,7 +119,7 @@ describe("WorkspaceDashboardSettings — Dashboards toggles", () => {
       source: "diff-viewer",
       label: "Diff",
       actionLabel: "Add Diff",
-      capPerGroup: 1,
+      capPerWorkspace: 1,
       create: vi.fn(async () => "ws-diff"),
     });
     // Seed an active diff workspace for this group.

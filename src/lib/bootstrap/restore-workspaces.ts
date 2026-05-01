@@ -114,20 +114,20 @@ export async function restoreWorkspaces(
     // Pre-fix releases spawned a new Dashboard on every launch because
     // workspace ids regenerated, so persisted state can carry
     // duplicates — keep the first occurrence and drop the rest.
-    const knownGroupIds = new Set(getWorkspaces().map((g) => g.id));
+    const knownWorkspaceIds = new Set(getWorkspaces().map((g) => g.id));
     const seenDashboards = new Set<string>();
     const filteredDefs = state.nestedWorkspaces.filter((wsDef) => {
       const md = wsDef.metadata;
       const isDashboard = md?.isDashboard === true;
-      const ownerGroupId = md?.parentWorkspaceId;
+      const ownerWorkspaceId = md?.parentWorkspaceId;
       if (!isDashboard) return true;
-      if (typeof ownerGroupId !== "string") return true;
-      if (!knownGroupIds.has(ownerGroupId)) return false;
+      if (typeof ownerWorkspaceId !== "string") return true;
+      if (!knownWorkspaceIds.has(ownerWorkspaceId)) return false;
       const contributionId =
         typeof md?.dashboardContributionId === "string"
           ? md.dashboardContributionId
           : "group";
-      const dedupeKey = `${ownerGroupId}:${contributionId}`;
+      const dedupeKey = `${ownerWorkspaceId}:${contributionId}`;
       if (seenDashboards.has(dedupeKey)) return false;
       seenDashboards.add(dedupeKey);
       return true;

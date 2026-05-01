@@ -87,7 +87,7 @@
   // contribution, PaneView renders the shared WorkspaceDashboardSettings
   // component in place of the surface list. The workspace carries no
   // preview surface — it exists purely as a routing record.
-  $: settingsDashboardGroupId =
+  $: settingsDashboardWorkspaceId =
     isDashboardWorkspace &&
     workspaceMetadata?.dashboardContributionId === "settings" &&
     typeof workspaceMetadata?.parentWorkspaceId === "string"
@@ -102,7 +102,7 @@
       : null;
   $: regenCommandId =
     isDashboardWorkspace &&
-    !settingsDashboardGroupId &&
+    !settingsDashboardWorkspaceId &&
     typeof workspaceMetadata?.parentWorkspaceId === "string"
       ? "workspace-groups:regenerate-active-group-dashboard"
       : undefined;
@@ -318,11 +318,13 @@
     {:else}
       <svelte:component this={dashboardWorkspaceEntry.component} />
     {/if}
-  {:else if settingsDashboardGroupId}
+  {:else if settingsDashboardWorkspaceId}
     <!-- Settings dashboard — PaneView renders the shared settings body
          in place of any surface list. The workspace carries no preview
          surface, so no other render branches fire. -->
-    <WorkspaceDashboardSettings parentWorkspaceId={settingsDashboardGroupId} />
+    <WorkspaceDashboardSettings
+      parentWorkspaceId={settingsDashboardWorkspaceId}
+    />
   {:else}
     {#if pane.surfaces.length === 0}
       <!-- Empty pane view — the user just closed the last surface. Shows

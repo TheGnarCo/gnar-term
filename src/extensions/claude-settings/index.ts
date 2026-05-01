@@ -50,7 +50,7 @@ export function registerClaudeSettingsExtension(api: ExtensionAPI): void {
       id: "claude-settings",
       label: "Claude Settings",
       actionLabel: "Add Claude Settings Dashboard",
-      capPerGroup: 1,
+      capPerWorkspace: 1,
       autoProvision: true,
       icon: ClaudeMark,
       lockedReason: "Required by Claude Settings extension",

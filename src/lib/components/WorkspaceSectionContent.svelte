@@ -82,17 +82,17 @@
   let group: Workspace | undefined;
   let stateVersion = 0;
 
-  const onGroupStateChanged = () => {
+  const onWorkspaceStateChanged = () => {
     stateVersion++;
   };
   eventBus.on(
     WORKSPACE_GROUP_STATE_CHANGED,
-    onGroupStateChanged as (e: ExtensionEvent) => void,
+    onWorkspaceStateChanged as (e: ExtensionEvent) => void,
   );
   onDestroy(() => {
     eventBus.off(
       WORKSPACE_GROUP_STATE_CHANGED,
-      onGroupStateChanged as (e: ExtensionEvent) => void,
+      onWorkspaceStateChanged as (e: ExtensionEvent) => void,
     );
   });
 
@@ -128,14 +128,16 @@
     : new Set<string>();
 
   // Most-active bot status across all nestedWorkspaces in this group.
-  $: groupAgents = $agentsStore.filter((a) => filterIds.has(a.workspaceId));
-  $: groupBotStatus = (() => {
-    if (groupAgents.length === 0) return null;
-    const running = groupAgents.filter(
+  $: workspaceAgents = $agentsStore.filter((a) => filterIds.has(a.workspaceId));
+  $: workspaceBotStatus = (() => {
+    if (workspaceAgents.length === 0) return null;
+    const running = workspaceAgents.filter(
       (a) => a.status === "running" || a.status === "active",
     ).length;
-    const waiting = groupAgents.filter((a) => a.status === "waiting").length;
-    const idle = groupAgents.filter((a) => a.status === "idle").length;
+    const waiting = workspaceAgents.filter(
+      (a) => a.status === "waiting",
+    ).length;
+    const idle = workspaceAgents.filter((a) => a.status === "idle").length;
     if (running > 0)
       return { label: `${running} running`, color: variantColor("success") };
     if (waiting > 0)
@@ -162,19 +164,19 @@
       ? getChildRowsFor("workspace-group", group.id)
       : [];
 
-  $: groupContext = group
+  $: workspaceContext = group
     ? ({
         parentWorkspaceId: group.id,
-        groupPath: group.path,
+        workspacePath: group.path,
         groupName: group.name,
         isGit: group.isGit,
         workspaceColor: group.color,
       } satisfies WorkspaceActionContext)
     : undefined;
 
-  $: isGroupLocked = group?.locked === true;
+  $: isWorkspaceLocked = group?.locked === true;
 
-  async function handleRenameGroup() {
+  async function handleRenameWorkspace() {
     if (!group) return;
     const next = await showInputPrompt("Rename workspace group", group.name);
     const trimmed = next?.trim();
@@ -182,7 +184,7 @@
     updateWorkspace(group.id, { name: trimmed });
   }
 
-  async function handleUnlockGroup() {
+  async function handleUnlockWorkspace() {
     if (!group) return;
     const confirmed = await showConfirmPrompt(
       `Unlock workspace group "${group.name}"?`,
@@ -192,7 +194,7 @@
     toggleWorkspaceLock(group.id);
   }
 
-  async function handleDeleteGroup() {
+  async function handleDeleteWorkspace() {
     const g = group;
     if (!g) return;
     const nestedCount = $nestedWorkspaces.filter((w) => {
@@ -256,28 +258,28 @@
       {
         label: "Rename Workspace",
         action: () => {
-          void handleRenameGroup();
+          void handleRenameWorkspace();
         },
       },
     ];
-    if (group.isGit && groupContext) {
+    if (group.isGit && workspaceContext) {
       items.push({
         label: "New Worktree",
         icon: GitBranchIcon as unknown as Component,
         action: () =>
-          runCommandById("worktrees:create-workspace", groupContext),
+          runCommandById("worktrees:create-workspace", workspaceContext),
       });
     }
     items.push({ label: "", action: () => {}, separator: true });
     items.push({
-      label: isGroupLocked ? "Unlock Workspace" : "Lock Workspace",
+      label: isWorkspaceLocked ? "Unlock Workspace" : "Lock Workspace",
       action: () => {
         if (group) toggleWorkspaceLock(group.id);
       },
     });
     items.push({
       label: "Archive Workspace",
-      disabled: isGroupLocked,
+      disabled: isWorkspaceLocked,
       action: () => {
         if (group) void archiveWorkspace(group.id);
       },
@@ -285,9 +287,9 @@
     items.push({
       label: "Delete Workspace",
       danger: true,
-      disabled: isGroupLocked,
+      disabled: isWorkspaceLocked,
       action: () => {
-        void handleDeleteGroup();
+        void handleDeleteWorkspace();
       },
     });
     contextMenu.set({ x: e.clientX, y: e.clientY, items });
@@ -410,29 +412,29 @@
       >
 
       <svelte:fragment slot="banner-end" let:bannerHovered>
-        {#if isGroupLocked}
+        {#if isWorkspaceLocked}
           <SidebarChipButton
             variant="lock"
             title="Unlock Workspace"
             idleColor={workspaceHex}
-            onClick={() => void handleUnlockGroup()}
+            onClick={() => void handleUnlockWorkspace()}
           />
         {:else if bannerHovered}
           <SidebarChipButton
             variant="close"
             title="Delete Workspace"
             idleColor={workspaceHex}
-            onClick={() => void handleDeleteGroup()}
+            onClick={() => void handleDeleteWorkspace()}
           />
         {/if}
       </svelte:fragment>
 
       <svelte:fragment slot="banner-subtitle" let:collapsed>
-        {#if collapsed && groupBotStatus}
+        {#if collapsed && workspaceBotStatus}
           <div
             data-group-bot-status-row
             aria-hidden="true"
-            style="padding: 0 8px 4px 0; font-size: 11px; color: {groupBotStatus.color}; display: flex; align-items: center; gap: 4px; overflow: hidden; opacity: 0.85;"
+            style="padding: 0 8px 4px 0; font-size: 11px; color: {workspaceBotStatus.color}; display: flex; align-items: center; gap: 4px; overflow: hidden; opacity: 0.85;"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -456,7 +458,7 @@
             </svg>
             <span
               style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
-              >{groupBotStatus.label}</span
+              >{workspaceBotStatus.label}</span
             >
           </div>
         {/if}
@@ -519,7 +521,7 @@
                 iconComponent={IconComp}
                 baseColor={workspaceHex}
                 contributionId={contribId}
-                groupPath={group?.path}
+                workspacePath={group?.path}
                 {isActive}
                 isHovered={hoveredDashId === entry.ws.id}
               />
@@ -567,13 +569,13 @@
             {/if}
           </div>
         {/each}
-        {#if groupContext && group?.isGit}
+        {#if workspaceContext && group?.isGit}
           <!-- svelte-ignore a11y_consider_explicit_label -->
           <button
             class="dash-btn"
             title="New Worktree"
             on:click|stopPropagation={() =>
-              runCommandById("worktrees:create-workspace", groupContext)}
+              runCommandById("worktrees:create-workspace", workspaceContext)}
             on:mouseenter={() => (branchChipHovered = true)}
             on:mouseleave={() => (branchChipHovered = false)}
             style="background: {$theme.bgSurface ??
@@ -584,7 +586,7 @@
               iconComponent={WorktreeIcon}
               baseColor={workspaceHex}
               contributionId={undefined}
-              groupPath={undefined}
+              workspacePath={undefined}
               isActive={false}
               isHovered={branchChipHovered}
             />

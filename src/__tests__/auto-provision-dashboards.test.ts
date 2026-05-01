@@ -53,7 +53,7 @@ describe("provisionAutoDashboardsForWorkspace", () => {
       source: "core",
       label: "A",
       actionLabel: "Add A",
-      capPerGroup: 1,
+      capPerWorkspace: 1,
       autoProvision: true,
       create: aCreate,
     });
@@ -62,7 +62,7 @@ describe("provisionAutoDashboardsForWorkspace", () => {
       source: "core",
       label: "B",
       actionLabel: "Add B",
-      capPerGroup: 1,
+      capPerWorkspace: 1,
       autoProvision: true,
       create: bCreate,
     });
@@ -71,7 +71,7 @@ describe("provisionAutoDashboardsForWorkspace", () => {
       source: "core",
       label: "C",
       actionLabel: "Add C",
-      capPerGroup: 1,
+      capPerWorkspace: 1,
       create: vi.fn(async () => "ws-c"),
     });
 
@@ -97,7 +97,7 @@ describe("provisionAutoDashboardsForWorkspace", () => {
       source: "core",
       label: "A",
       actionLabel: "Add A",
-      capPerGroup: 1,
+      capPerWorkspace: 1,
       autoProvision: true,
       create: aCreate,
     });
@@ -147,7 +147,7 @@ describe("provisionAutoDashboardsForWorkspace", () => {
       source: "core",
       label: "B",
       actionLabel: "Add B",
-      capPerGroup: 1,
+      capPerWorkspace: 1,
       autoProvision: true,
       create: bCreate,
     });

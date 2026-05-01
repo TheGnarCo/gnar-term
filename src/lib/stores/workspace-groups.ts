@@ -59,7 +59,7 @@ export const workspacesStore: Readable<Workspace[]> = _groups;
 
 const _groupOrder = writable<string[]>([]);
 
-const _activeGroupId = writable<string | null>(null);
+const _activeWorkspaceId = writable<string | null>(null);
 
 let _loaded = false;
 let _persistTimer: ReturnType<typeof setTimeout> | null = null;
@@ -76,7 +76,7 @@ async function persistNow(): Promise<void> {
   const payload: Record<string, unknown> = {
     [WORKSPACE_GROUPS_KEY]: get(_groups),
     [WORKSPACE_GROUP_ORDER_KEY]: get(_groupOrder),
-    [ACTIVE_GROUP_ID_KEY]: get(_activeGroupId),
+    [ACTIVE_GROUP_ID_KEY]: get(_activeWorkspaceId),
   };
   await saveExtensionState(STATE_ID, payload);
 }
@@ -105,7 +105,7 @@ export async function loadWorkspaces(): Promise<void> {
   // promote them to the new names so consumers see only the renamed fields.
   _groups.set(groups.map(renameLegacyWorkspaceFields));
   _groupOrder.set(order);
-  _activeGroupId.set(active);
+  _activeWorkspaceId.set(active);
 }
 
 /** Flush pending writes — called from app close hooks. */
@@ -131,11 +131,11 @@ export function setWorkspaces(next: Workspace[]): void {
 }
 
 export function getActiveWorkspaceId(): string | null {
-  return get(_activeGroupId);
+  return get(_activeWorkspaceId);
 }
 
 export function setActiveWorkspaceId(id: string | null): void {
-  _activeGroupId.set(id);
+  _activeWorkspaceId.set(id);
   schedulePersist();
 }
 
@@ -147,6 +147,6 @@ export function resetWorkspacesForTest(): void {
   }
   _groups.set([]);
   _groupOrder.set([]);
-  _activeGroupId.set(null);
+  _activeWorkspaceId.set(null);
   _loaded = false;
 }

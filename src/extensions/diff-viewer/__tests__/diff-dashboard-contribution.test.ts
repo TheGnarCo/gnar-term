@@ -50,7 +50,7 @@ describe("Diff dashboard contribution", () => {
     expect(diff).toBeTruthy();
     expect(diff?.label).toBe("Diff");
     expect(diff?.source).toBe("diff-viewer");
-    expect(diff?.capPerGroup).toBe(1);
+    expect(diff?.capPerWorkspace).toBe(1);
     expect(diff?.paneConstraints?.singleSurface).toBe(true);
     expect(diff?.autoProvision).toBeFalsy();
     expect(diff?.icon).toBeDefined();

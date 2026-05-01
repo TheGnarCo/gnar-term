@@ -90,7 +90,8 @@
   // banner itself already rolls up status (and the per-row chip handles
   // agent state), so the long blue notification row duplicates chrome
   // and crowds the nested layout — suppress it in that context.
-  $: isInsideGroup = typeof wsMeta(workspace).parentWorkspaceId === "string";
+  $: isInsideWorkspace =
+    typeof wsMeta(workspace).parentWorkspaceId === "string";
   $: isAgentSpawned = wsMeta(workspace).spawnedBy != null;
   $: railColor =
     (isDashboardWorkspaceRow && dashboardWorkspaceEntry?.accentColor) ||
@@ -391,7 +392,7 @@
       </div>
     {/if}
 
-    {#if latestNotification && !hideStatusBadges && !isInsideGroup && agentBadges.length === 0}
+    {#if latestNotification && !hideStatusBadges && !isInsideWorkspace && agentBadges.length === 0}
       <div
         style="padding: 2px 12px 6px 6px; font-size: 11px; color: {$theme.notify}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
       >

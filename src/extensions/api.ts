@@ -538,7 +538,7 @@ export interface ExtensionAPI {
    * Register a dashboard contribution — a "kind of dashboard" that can
    * attach to a Workspace. Each group's context menu surfaces an
    * "Add <actionLabel>" affordance per registered contribution whose
-   * `isAvailableFor` gate accepts the group and whose `capPerGroup`
+   * `isAvailableFor` gate accepts the group and whose `capPerWorkspace`
    * isn't already met. When invoked, core calls `create(group)` to
    * materialize the dashboard workspace. Automatically unregistered on
    * extension deactivate.
@@ -885,7 +885,7 @@ export interface ExtensionAPI {
  *   list, or a group id when dragging inside a workspace group.
  *   `containerBlockId` is the top-level sidebar block the drag lives in.
  * - `kind: "workspace-group"` — a group row is being dragged inside the
- *   Workspaces block. `sourceGroupId` is the id of the dragged group.
+ *   Workspaces block. `sourceWorkspaceId` is the id of the dragged group.
  * - `kind: "section"` — a top-level sidebar block is being dragged.
  *   `sourceBlockId` is the block id.
  */
@@ -893,7 +893,7 @@ export type ReorderContext =
   | { kind: "workspace"; scopeId: string; containerBlockId: string }
   | {
       kind: "workspace-group";
-      sourceGroupId: string;
+      sourceWorkspaceId: string;
       containerBlockId: string;
     }
   | { kind: "section"; sourceBlockId: string }
@@ -998,7 +998,7 @@ export interface DashboardContributionInput {
    * Maximum coexisting dashboards of this kind per group. `1` is the
    * canonical exclusive cap; `Number.POSITIVE_INFINITY` for unlimited.
    */
-  capPerGroup: number;
+  capPerWorkspace: number;
   /**
    * Materialize the dashboard for the given group. Must resolve to the
    * new workspace's id.

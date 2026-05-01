@@ -411,11 +411,11 @@
     if (!ws) return;
     const md = wsMeta(ws);
     const isDashboard = md?.isDashboard === true;
-    const isInsideGroup = typeof md?.parentWorkspaceId === "string";
+    const isInsideWorkspace = typeof md?.parentWorkspaceId === "string";
     const isLocked = md?.locked === true;
     const items = buildWorkspaceContextMenuItems({
       isDashboard,
-      isInsideGroup,
+      isInsideWorkspace,
       canPromoteCommand: canPromote,
       workspaceCount: $nestedWorkspaces.length,
       isLocked,

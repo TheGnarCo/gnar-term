@@ -43,8 +43,8 @@ export async function archiveWorkspace(
   if (!group) return false;
   if (group.locked) return false;
 
-  const allInGroup = getWorktreeWorkspaces(parentWorkspaceId);
-  const nonDashboard = allInGroup.filter((ws) => !isDashboardWorkspace(ws));
+  const allInWorkspace = getWorktreeWorkspaces(parentWorkspaceId);
+  const nonDashboard = allInWorkspace.filter((ws) => !isDashboardWorkspace(ws));
 
   const runningCount = nonDashboard.reduce(
     (sum, ws) => sum + countRunningPtys(ws),

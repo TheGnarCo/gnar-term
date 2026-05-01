@@ -78,7 +78,7 @@ export function _seedWorktreeEntries(entries: WorktreeWorkspace[]): void {
 }
 
 interface CreateContext {
-  groupPath?: unknown;
+  workspacePath?: unknown;
   parentWorkspaceId?: unknown;
 }
 
@@ -86,7 +86,7 @@ interface CreateContext {
 export async function createWorktreeWorkspace(
   ctx: CreateContext,
 ): Promise<void> {
-  const repoPath = await resolveRepoPath(ctx.groupPath);
+  const repoPath = await resolveRepoPath(ctx.workspacePath);
   if (!repoPath) return;
 
   const settings = getWorktreeSettings();

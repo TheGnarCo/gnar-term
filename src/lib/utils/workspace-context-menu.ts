@@ -14,7 +14,7 @@ export interface WorkspaceContextMenuOptions {
   /** True when the workspace is a dashboard surface (rename/promote/archive disabled). */
   isDashboard: boolean;
   /** True when the workspace is already nested inside a group (promote disabled). */
-  isInsideGroup: boolean;
+  isInsideWorkspace: boolean;
   /** True when the promote-workspace-to-group command is registered. */
   canPromoteCommand: boolean;
   /** Total number of nestedWorkspaces in the list — used to disable "Close Workspace". */
@@ -57,7 +57,7 @@ export function buildWorkspaceContextMenuItems(
 ): MenuItem[] {
   const {
     isDashboard,
-    isInsideGroup,
+    isInsideWorkspace,
     canPromoteCommand,
     workspaceCount,
     isLocked = false,
@@ -70,7 +70,7 @@ export function buildWorkspaceContextMenuItems(
   } = opts;
 
   const canRename = !isDashboard;
-  const canPromote = canPromoteCommand && !isDashboard && !isInsideGroup;
+  const canPromote = canPromoteCommand && !isDashboard && !isInsideWorkspace;
   const canArchive = !isDashboard;
 
   const items: MenuItem[] = [];

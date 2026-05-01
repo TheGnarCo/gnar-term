@@ -48,7 +48,7 @@ export interface DashboardContribution {
    * `Number.POSITIVE_INFINITY` allows unlimited. Enforced at
    * "Add <Dashboard>" time via `canAddContributionToWorkspace`.
    */
-  capPerGroup: number;
+  capPerWorkspace: number;
   /**
    * Materialize a dashboard workspace for `group`. Writes any backing
    * markdown, creates the workspace via core services, and returns the
@@ -143,7 +143,7 @@ export function getDashboardContributionsForWorkspace(
  * does not track nestedWorkspaces itself, so the caller owns the count.
  *
  * Returns false when: the contribution isn't registered, the
- * availability gate denies the group, or `currentCount >= capPerGroup`.
+ * availability gate denies the group, or `currentCount >= capPerWorkspace`.
  */
 export function canAddContributionToWorkspace(
   group: Workspace,
@@ -155,5 +155,5 @@ export function canAddContributionToWorkspace(
   if (contribution.isAvailableFor && !contribution.isAvailableFor(group)) {
     return false;
   }
-  return currentCount < contribution.capPerGroup;
+  return currentCount < contribution.capPerWorkspace;
 }

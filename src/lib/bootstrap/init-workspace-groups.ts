@@ -79,9 +79,9 @@ function generateId(): string {
 function onWorkspaceCreated(event: AppEvent): void {
   if (event.type !== "workspace:created") return;
   const metadata = event.metadata as NestedWorkspaceMetadata | undefined;
-  const targetGroupId = metadata?.parentWorkspaceId;
-  if (!targetGroupId) return;
-  addNestedWorkspaceToWorkspace(targetGroupId, event.id);
+  const targetWorkspaceId = metadata?.parentWorkspaceId;
+  if (!targetWorkspaceId) return;
+  addNestedWorkspaceToWorkspace(targetWorkspaceId, event.id);
   claimWorkspace(event.id, SOURCE);
 }
 
@@ -238,15 +238,15 @@ async function promoteActiveWorkspaceToGroup(): Promise<void> {
 
   const derivedName = cwd.replace(/\/+$/, "").split("/").pop() || activeWs.name;
 
-  const newGroupId = await createWorkspaceFlow({
+  const newWorkspaceId = await createWorkspaceFlow({
     path: cwd,
     name: derivedName,
   });
-  if (!newGroupId) return;
+  if (!newWorkspaceId) return;
 
   // Move the workspace into the new group. workspace:created already
   // fired at creation time, so replay the claim bookkeeping manually.
-  addNestedWorkspaceToWorkspace(newGroupId, activeWs.id);
+  addNestedWorkspaceToWorkspace(newWorkspaceId, activeWs.id);
   claimWorkspace(activeWs.id, SOURCE);
 }
 
@@ -374,7 +374,7 @@ export async function initWorkspaces(): Promise<void> {
   });
 
   // Core-internal "Group Dashboard" contribution — id `group`,
-  // capPerGroup 1, autoProvision. Materializes the per-group Overview
+  // capPerWorkspace 1, autoProvision. Materializes the per-group Overview
   // workspace. `lockedReason` surfaces in the Settings dashboard's
   // toggle list explaining why the toggle is fixed-on.
   registerDashboardContribution({
@@ -382,7 +382,7 @@ export async function initWorkspaces(): Promise<void> {
     source: "core",
     label: "Group Dashboard",
     actionLabel: "Add Group Dashboard",
-    capPerGroup: 1,
+    capPerWorkspace: 1,
     autoProvision: true,
     icon: GridIcon,
     lockedReason: "Required (Overview)",
@@ -401,7 +401,7 @@ export async function initWorkspaces(): Promise<void> {
     source: "core",
     label: "Settings",
     actionLabel: "Add Settings Dashboard",
-    capPerGroup: 1,
+    capPerWorkspace: 1,
     autoProvision: true,
     icon: GearIcon,
     lockedReason: "Required (Settings)",

@@ -150,7 +150,7 @@ export const registryMirrorTools: ToolDef[] = [
           type: "object",
           additionalProperties: true,
           description:
-            "Free-form object forwarded to the handler. Typical fields: workspaceId, parentWorkspaceId, groupPath, branch, isGit. Shape depends on the owning extension.",
+            "Free-form object forwarded to the handler. Typical fields: workspaceId, parentWorkspaceId, workspacePath, branch, isGit. Shape depends on the owning extension.",
         },
       },
       required: ["action_id"],
@@ -335,7 +335,7 @@ export const registryMirrorTools: ToolDef[] = [
             source: c.source,
             label: c.label,
             action_label: c.actionLabel,
-            cap_per_group: c.capPerGroup,
+            cap_per_workspace: c.capPerWorkspace,
             auto_provision: c.autoProvision === true,
             locked_reason: c.lockedReason,
           };

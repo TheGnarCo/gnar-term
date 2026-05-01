@@ -19,7 +19,7 @@
   export let iconComponent: Component | ComponentType | unknown;
   export let baseColor: string;
   export let contributionId: string | undefined;
-  export let groupPath: string | undefined;
+  export let workspacePath: string | undefined;
   export let isActive: boolean = false;
   export let isHovered: boolean = false;
 
@@ -28,8 +28,8 @@
   $: isDiff = contributionId === "diff";
 
   const dirtyStore: Readable<WorkspaceDirtyState> =
-    contributionId === "diff" && groupPath
-      ? workspaceDirtyStore(groupPath)
+    contributionId === "diff" && workspacePath
+      ? workspaceDirtyStore(workspacePath)
       : readable(CLEAN_STATE);
 
   $: dimColor = ($theme["fgDim"] ?? $theme.fgMuted ?? "#888") as string;

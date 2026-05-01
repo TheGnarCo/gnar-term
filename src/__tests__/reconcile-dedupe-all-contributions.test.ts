@@ -69,7 +69,7 @@ describe("reconcileWorkspaceDashboards — dedupe all contribution types", () =>
       source: "core",
       label: "Settings",
       actionLabel: "Add Settings",
-      capPerGroup: 1,
+      capPerWorkspace: 1,
       autoProvision: true,
       create: vi.fn(async () => "ws-new"),
     });
@@ -95,7 +95,7 @@ describe("reconcileWorkspaceDashboards — dedupe all contribution types", () =>
       source: "ext",
       label: "Agentic",
       actionLabel: "Add Agentic",
-      capPerGroup: 1,
+      capPerWorkspace: 1,
       autoProvision: true,
       create: vi.fn(async () => "ws-new"),
     });
@@ -126,7 +126,7 @@ describe("reconcileWorkspaceDashboards — dedupe all contribution types", () =>
         source,
         label: id,
         actionLabel: `Add ${id}`,
-        capPerGroup: 1,
+        capPerWorkspace: 1,
         autoProvision: true,
         create: vi.fn(async () => "ws-new"),
       });

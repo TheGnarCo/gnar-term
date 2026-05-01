@@ -41,7 +41,7 @@ function makeContribution(
     source: "test-ext",
     label: "Example Dashboard",
     actionLabel: "Add Example Dashboard",
-    capPerGroup: 1,
+    capPerWorkspace: 1,
     create: vi.fn(async () => "ws-new"),
     ...overrides,
   };
@@ -153,21 +153,21 @@ describe("dashboard-contribution registry", () => {
     });
 
     it("allows adding while under the cap", () => {
-      registerDashboardContribution(makeContribution({ capPerGroup: 1 }));
+      registerDashboardContribution(makeContribution({ capPerWorkspace: 1 }));
       expect(canAddContributionToWorkspace(makeGroup(), "example", 0)).toBe(
         true,
       );
     });
 
     it("rejects adding when the count equals the cap", () => {
-      registerDashboardContribution(makeContribution({ capPerGroup: 1 }));
+      registerDashboardContribution(makeContribution({ capPerWorkspace: 1 }));
       expect(canAddContributionToWorkspace(makeGroup(), "example", 1)).toBe(
         false,
       );
     });
 
     it("rejects adding when the count exceeds the cap", () => {
-      registerDashboardContribution(makeContribution({ capPerGroup: 2 }));
+      registerDashboardContribution(makeContribution({ capPerWorkspace: 2 }));
       expect(canAddContributionToWorkspace(makeGroup(), "example", 3)).toBe(
         false,
       );
@@ -176,7 +176,7 @@ describe("dashboard-contribution registry", () => {
     it("rejects adding when isAvailableFor denies the group, even under cap", () => {
       registerDashboardContribution(
         makeContribution({
-          capPerGroup: 1,
+          capPerWorkspace: 1,
           isAvailableFor: () => false,
         }),
       );
@@ -187,7 +187,7 @@ describe("dashboard-contribution registry", () => {
 
     it("honors Number.POSITIVE_INFINITY as effectively unlimited", () => {
       registerDashboardContribution(
-        makeContribution({ capPerGroup: Number.POSITIVE_INFINITY }),
+        makeContribution({ capPerWorkspace: Number.POSITIVE_INFINITY }),
       );
       expect(
         canAddContributionToWorkspace(makeGroup(), "example", 10_000),

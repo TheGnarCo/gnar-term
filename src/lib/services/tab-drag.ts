@@ -250,9 +250,9 @@ function detectDropTarget(
         const srcWs = get(nestedWorkspaces).find(
           (w) => w.id === sourceWorkspaceId,
         );
-        const srcGroupId = srcWs?.metadata?.parentWorkspaceId;
-        if (srcGroupId !== parentWorkspaceId) {
-          if (srcGroupId) return null; // grouped tab over different group → deny
+        const srcWorkspaceId = srcWs?.metadata?.parentWorkspaceId;
+        if (srcWorkspaceId !== parentWorkspaceId) {
+          if (srcWorkspaceId) return null; // grouped tab over different group → deny
           // Root tab over a group's nested workspace → create a nested workspace
           // in that group rather than falling through to root-row detection.
           if (srcWs && getAllSurfaces(srcWs).length > 1) {
@@ -316,8 +316,8 @@ function detectDropTarget(
       const srcWs = get(nestedWorkspaces).find(
         (w) => w.id === sourceWorkspaceId,
       );
-      const srcGroupId = srcWs?.metadata?.parentWorkspaceId;
-      if (srcGroupId) return null;
+      const srcWorkspaceId = srcWs?.metadata?.parentWorkspaceId;
+      if (srcWorkspaceId) return null;
       const rowIdx = parseInt(
         rootRowEl.getAttribute("data-root-row-idx") || "0",
         10,
@@ -338,8 +338,8 @@ function detectDropTarget(
       const srcWs = get(nestedWorkspaces).find(
         (w) => w.id === sourceWorkspaceId,
       );
-      const srcGroupId = srcWs?.metadata?.parentWorkspaceId;
-      if (srcGroupId) return null;
+      const srcWorkspaceId = srcWs?.metadata?.parentWorkspaceId;
+      if (srcWorkspaceId) return null;
       if (srcWs && getAllSurfaces(srcWs).length > 1) {
         const order = get(rootRowOrder);
         const lastIdx = Math.max(0, order.length - 1);
@@ -462,21 +462,21 @@ export function commitTabDrop(): void {
         (g) => g.id === dropTarget.parentWorkspaceId,
       );
       if (!group) break;
-      const posInGroup = group.nestedWorkspaceIds.indexOf(tgtWs.id);
+      const posInWorkspace = group.nestedWorkspaceIds.indexOf(tgtWs.id);
       const insertPos =
         dropTarget.insertEdge === "before"
-          ? Math.max(0, posInGroup)
-          : posInGroup === -1
+          ? Math.max(0, posInWorkspace)
+          : posInWorkspace === -1
             ? group.nestedWorkspaceIds.length
-            : posInGroup + 1;
+            : posInWorkspace + 1;
       createNestedWorkspaceFromSurface(
         surfaceId,
         sourcePaneId,
         sourceWorkspaceId,
         {
           kind: "group",
-          positionInGroup: insertPos,
-          targetGroupId: dropTarget.parentWorkspaceId,
+          positionInWorkspace: insertPos,
+          targetWorkspaceId: dropTarget.parentWorkspaceId,
         },
       );
       break;

@@ -637,11 +637,11 @@
       shortcut: `${shiftModLabel}N`,
       source: "core",
       handler: (ctx) => {
-        if (ctx.parentWorkspaceId && ctx.groupPath) {
+        if (ctx.parentWorkspaceId && ctx.workspacePath) {
           const name = `Workspace ${get(nestedWorkspaces).length + 1}`;
           void createNestedWorkspaceFromDef({
             name,
-            cwd: ctx.groupPath as string,
+            cwd: ctx.workspacePath as string,
             metadata: { parentWorkspaceId: ctx.parentWorkspaceId as string },
             layout: { pane: { surfaces: [{ type: "terminal" }] } },
           });

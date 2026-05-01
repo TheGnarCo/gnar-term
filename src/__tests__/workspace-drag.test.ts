@@ -724,8 +724,8 @@ describe("mergeWorkspaceIntoPane", () => {
   });
 });
 
-describe("createNestedWorkspaceFromSurface — targetGroupId", () => {
-  it("sets parentWorkspaceId metadata using targetGroupId when srcWs has no parentWorkspaceId", () => {
+describe("createNestedWorkspaceFromSurface — targetWorkspaceId", () => {
+  it("sets parentWorkspaceId metadata using targetWorkspaceId when srcWs has no parentWorkspaceId", () => {
     const sA = mockSurface({ title: "A" });
     const sB = mockSurface({ title: "B" });
     const pane = makePane([sA, sB]);
@@ -735,8 +735,8 @@ describe("createNestedWorkspaceFromSurface — targetGroupId", () => {
 
     createNestedWorkspaceFromSurface(sA.id, pane.id, ws.id, {
       kind: "group",
-      positionInGroup: 0,
-      targetGroupId: "target-group-1",
+      positionInWorkspace: 0,
+      targetWorkspaceId: "target-group-1",
     });
 
     const updated = get(nestedWorkspaces);
@@ -744,7 +744,7 @@ describe("createNestedWorkspaceFromSurface — targetGroupId", () => {
     expect(newWs.metadata?.parentWorkspaceId).toBe("target-group-1");
   });
 
-  it("calls insertWorkspaceIntoGroup with targetGroupId when srcWs has no parentWorkspaceId", () => {
+  it("calls insertWorkspaceIntoGroup with targetWorkspaceId when srcWs has no parentWorkspaceId", () => {
     const sA = mockSurface({ title: "A" });
     const sB = mockSurface({ title: "B" });
     const pane = makePane([sA, sB]);
@@ -754,8 +754,8 @@ describe("createNestedWorkspaceFromSurface — targetGroupId", () => {
 
     createNestedWorkspaceFromSurface(sA.id, pane.id, ws.id, {
       kind: "group",
-      positionInGroup: 2,
-      targetGroupId: "target-group-1",
+      positionInWorkspace: 2,
+      targetWorkspaceId: "target-group-1",
     });
 
     const updated = get(nestedWorkspaces);
@@ -767,7 +767,7 @@ describe("createNestedWorkspaceFromSurface — targetGroupId", () => {
     );
   });
 
-  it("preserves existing behavior when srcGroupId is set and targetGroupId is absent", () => {
+  it("preserves existing behavior when srcWorkspaceId is set and targetWorkspaceId is absent", () => {
     const sA = mockSurface({ title: "A" });
     const sB = mockSurface({ title: "B" });
     const pane = makePane([sA, sB]);
@@ -780,7 +780,7 @@ describe("createNestedWorkspaceFromSurface — targetGroupId", () => {
 
     createNestedWorkspaceFromSurface(sA.id, pane.id, ws.id, {
       kind: "group",
-      positionInGroup: 0,
+      positionInWorkspace: 0,
     });
 
     const updated = get(nestedWorkspaces);
@@ -793,21 +793,21 @@ describe("createNestedWorkspaceFromSurface — targetGroupId", () => {
     );
   });
 
-  it("targetGroupId takes precedence over srcGroupId when both are set", () => {
+  it("targetWorkspaceId takes precedence over srcWorkspaceId when both are set", () => {
     const sA = mockSurface({ title: "A" });
     const sB = mockSurface({ title: "B" });
     const pane = makePane([sA, sB]);
     const ws = makeWorkspace(
       { type: "pane", pane },
-      { metadata: { parentWorkspaceId: "src-group" } }, // srcGroupId is set
+      { metadata: { parentWorkspaceId: "src-group" } }, // srcWorkspaceId is set
     );
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
     createNestedWorkspaceFromSurface(sA.id, pane.id, ws.id, {
       kind: "group",
-      positionInGroup: 0,
-      targetGroupId: "target-group-override",
+      positionInWorkspace: 0,
+      targetWorkspaceId: "target-group-override",
     });
 
     const updated = get(nestedWorkspaces);

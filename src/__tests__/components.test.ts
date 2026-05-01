@@ -1753,7 +1753,7 @@ describe("WorkspaceSectionContent", () => {
 
   it("renders ⎇ Branch button for every group regardless of extension actions", async () => {
     // The New Worktree button shows unconditionally
-    // for every group with a groupContext (i.e. any existing group entry).
+    // for every group with a workspaceContext (i.e. any existing group entry).
     const group: Workspace = {
       id: "grp-1",
       name: "Test Group",

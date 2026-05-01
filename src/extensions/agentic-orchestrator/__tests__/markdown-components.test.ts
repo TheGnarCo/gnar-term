@@ -434,7 +434,7 @@ describe("Kanban widget", () => {
 describe("Issues widget", () => {
   const GROUP_ID = "grp-issues";
   const GROUP_PATH = "/work/proj";
-  const groupHost = { metadata: { parentWorkspaceId: GROUP_ID } };
+  const workspaceHost = { metadata: { parentWorkspaceId: GROUP_ID } };
 
   beforeEach(async () => {
     configRef.current = {};
@@ -497,7 +497,7 @@ describe("Issues widget", () => {
         api,
         component: Issues,
         props: {},
-        host: groupHost,
+        host: workspaceHost,
       },
     });
 
@@ -547,7 +547,7 @@ describe("Issues widget", () => {
         api,
         component: Issues,
         props: {},
-        host: groupHost,
+        host: workspaceHost,
       },
     });
 
@@ -601,7 +601,7 @@ describe("Issues widget", () => {
         api,
         component: Issues,
         props: {},
-        host: groupHost,
+        host: workspaceHost,
       },
     });
 
@@ -639,7 +639,7 @@ describe("Issues widget", () => {
         api,
         component: Issues,
         props: {},
-        host: groupHost,
+        host: workspaceHost,
       },
     });
 
@@ -681,7 +681,7 @@ describe("Issues widget", () => {
         api,
         component: Issues,
         props: { displayOnly: true },
-        host: groupHost,
+        host: workspaceHost,
       },
     });
 
@@ -726,7 +726,7 @@ describe("Issues widget", () => {
     const api = makeApi({ invoke: invokeFn });
 
     const { container } = render(ExtensionWrapper, {
-      props: { api, component: Issues, props: {}, host: groupHost },
+      props: { api, component: Issues, props: {}, host: workspaceHost },
     });
 
     await new Promise((r) => setTimeout(r, 0));
@@ -807,7 +807,7 @@ describe("Issues widget", () => {
     const api = makeApi({ invoke: invokeFn });
 
     const { container } = render(ExtensionWrapper, {
-      props: { api, component: Issues, props: {}, host: groupHost },
+      props: { api, component: Issues, props: {}, host: workspaceHost },
     });
 
     await new Promise((r) => setTimeout(r, 0));
@@ -860,7 +860,7 @@ describe("Issues widget", () => {
     });
     const api = makeApi({ invoke: invokeFn });
     const { container } = render(ExtensionWrapper, {
-      props: { api, component: Issues, props: {}, host: groupHost },
+      props: { api, component: Issues, props: {}, host: workspaceHost },
     });
 
     await new Promise((r) => setTimeout(r, 0));
@@ -909,7 +909,7 @@ describe("Issues widget", () => {
     });
 
     const { container } = render(ExtensionWrapper, {
-      props: { api, component: Issues, props: {}, host: groupHost },
+      props: { api, component: Issues, props: {}, host: workspaceHost },
     });
 
     await new Promise((r) => setTimeout(r, 0));
@@ -945,7 +945,7 @@ describe("Issues widget", () => {
     });
     const api = makeApi({ invoke: invokeFn });
     const { container } = render(ExtensionWrapper, {
-      props: { api, component: Issues, props: {}, host: groupHost },
+      props: { api, component: Issues, props: {}, host: workspaceHost },
     });
 
     // First fetch fires on mount, then awaits the gh_available probe
@@ -981,7 +981,7 @@ describe("Issues widget", () => {
 describe("Prs widget", () => {
   const GROUP_ID = "grp-prs";
   const GROUP_PATH = "/work/proj";
-  const groupHost = { metadata: { parentWorkspaceId: GROUP_ID } };
+  const workspaceHost = { metadata: { parentWorkspaceId: GROUP_ID } };
 
   beforeEach(async () => {
     configRef.current = {};
@@ -1043,7 +1043,7 @@ describe("Prs widget", () => {
         api,
         component: Prs,
         props: {},
-        host: groupHost,
+        host: workspaceHost,
       },
     });
 
@@ -1085,7 +1085,7 @@ describe("Prs widget", () => {
         api,
         component: Prs,
         props: {},
-        host: groupHost,
+        host: workspaceHost,
       },
     });
 
@@ -1113,7 +1113,7 @@ describe("Prs widget", () => {
         api,
         component: Prs,
         props: {},
-        host: groupHost,
+        host: workspaceHost,
       },
     });
 
@@ -1143,7 +1143,7 @@ describe("Prs widget", () => {
         api,
         component: Prs,
         props: {},
-        host: groupHost,
+        host: workspaceHost,
       },
     });
 
@@ -1323,7 +1323,7 @@ describe("AgentList widget", () => {
 describe("TaskSpawner widget", () => {
   const GROUP_ID = "grp-spawn";
   const GROUP_PATH = "/work/proj";
-  const groupHost = { metadata: { parentWorkspaceId: GROUP_ID } };
+  const workspaceHost = { metadata: { parentWorkspaceId: GROUP_ID } };
   const globalHost = { metadata: { isGlobalAgenticDashboard: true } };
 
   beforeEach(async () => {
@@ -1357,7 +1357,7 @@ describe("TaskSpawner widget", () => {
         api,
         component: TaskSpawner,
         props: {},
-        host: groupHost,
+        host: workspaceHost,
       },
     });
 
@@ -1382,7 +1382,7 @@ describe("TaskSpawner widget", () => {
         api,
         component: TaskSpawner,
         props: {},
-        host: groupHost,
+        host: workspaceHost,
       },
     });
 
@@ -1403,7 +1403,7 @@ describe("TaskSpawner widget", () => {
         api,
         component: TaskSpawner,
         props: {},
-        host: groupHost,
+        host: workspaceHost,
       },
     });
 
@@ -1431,7 +1431,7 @@ describe("TaskSpawner widget", () => {
         api,
         component: TaskSpawner,
         props: {},
-        host: groupHost,
+        host: workspaceHost,
       },
     });
 
@@ -1541,7 +1541,7 @@ describe("TaskSpawner widget", () => {
         api,
         component: TaskSpawner,
         props: {},
-        host: groupHost,
+        host: workspaceHost,
       },
     });
 
@@ -1571,7 +1571,7 @@ describe("TaskSpawner widget", () => {
         api,
         component: TaskSpawner,
         props: {},
-        host: groupHost,
+        host: workspaceHost,
       },
     });
 

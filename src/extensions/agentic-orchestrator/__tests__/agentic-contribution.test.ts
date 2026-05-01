@@ -54,7 +54,7 @@ describe("agentic extension — Dashboard contribution registration", () => {
     createWorkspaceFromDefMock.mockClear();
   });
 
-  it("registers an 'agentic' contribution with capPerGroup=1 on activate", async () => {
+  it("registers an 'agentic' contribution with capPerWorkspace=1 on activate", async () => {
     registerExtension(
       agenticOrchestratorManifest,
       registerAgenticOrchestratorExtension,
@@ -65,7 +65,7 @@ describe("agentic extension — Dashboard contribution registration", () => {
     expect(contribution).toBeDefined();
     expect(contribution?.label).toBe("Agentic Dashboard");
     expect(contribution?.actionLabel).toBe("Add Agentic Dashboard");
-    expect(contribution?.capPerGroup).toBe(1);
+    expect(contribution?.capPerWorkspace).toBe(1);
     expect(contribution?.source).toBe("agentic-orchestrator");
   });
 

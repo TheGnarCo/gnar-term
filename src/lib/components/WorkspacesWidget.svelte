@@ -48,19 +48,19 @@
   function getContribInfo(ws: import("../types").NestedWorkspace): {
     icon: unknown;
     label: string;
-    groupPath: string | undefined;
+    workspacePath: string | undefined;
   } {
     const md = wsMeta(ws);
     const contribution = md.dashboardContributionId
       ? getDashboardContribution(md.dashboardContributionId)
       : undefined;
-    const tileGroupPath = md.parentWorkspaceId
+    const tileWorkspacePath = md.parentWorkspaceId
       ? $workspacesStore.find((g) => g.id === md.parentWorkspaceId)?.path
       : undefined;
     return {
       icon: contribution?.icon ?? GridIcon,
       label: contribution?.label ?? ws.name,
-      groupPath: tileGroupPath,
+      workspacePath: tileWorkspacePath,
     };
   }
 
@@ -91,7 +91,7 @@
               iconComponent={info.icon}
               baseColor={workspaceColor}
               contributionId={wsMeta(ws).dashboardContributionId}
-              groupPath={info.groupPath}
+              workspacePath={info.workspacePath}
             />
             <span class="dashboard-card-label">{info.label}</span>
           </div>

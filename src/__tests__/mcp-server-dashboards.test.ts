@@ -65,7 +65,7 @@ describe("MCP dashboard contribution tools", () => {
         source: "core",
         label: "Overview",
         actionLabel: "Add Overview",
-        capPerGroup: 1,
+        capPerWorkspace: 1,
         autoProvision: true,
         lockedReason: "Required",
         create: vi.fn(async () => "ws-ov"),
@@ -75,7 +75,7 @@ describe("MCP dashboard contribution tools", () => {
         source: "diff-viewer",
         label: "Diff",
         actionLabel: "Add Diff Dashboard",
-        capPerGroup: 1,
+        capPerWorkspace: 1,
         create: vi.fn(async () => "ws-diff"),
       });
 
@@ -107,7 +107,7 @@ describe("MCP dashboard contribution tools", () => {
         source: "diff-viewer",
         label: "Diff",
         actionLabel: "Add Diff",
-        capPerGroup: 1,
+        capPerWorkspace: 1,
         create: vi.fn(async () => "ws-diff"),
       });
       // Seed an active dashboard workspace for this contribution.
@@ -151,7 +151,7 @@ describe("MCP dashboard contribution tools", () => {
         source: "diff-viewer",
         label: "Diff",
         actionLabel: "Add Diff",
-        capPerGroup: 1,
+        capPerWorkspace: 1,
         create,
       });
 
@@ -174,7 +174,7 @@ describe("MCP dashboard contribution tools", () => {
         source: "agentic-orchestrator",
         label: "Agentic",
         actionLabel: "Add Agentic",
-        capPerGroup: 1,
+        capPerWorkspace: 1,
         autoProvision: true,
         create: vi.fn(async () => "ws-never"),
       });
@@ -194,7 +194,7 @@ describe("MCP dashboard contribution tools", () => {
         source: "diff-viewer",
         label: "Diff",
         actionLabel: "Add Diff",
-        capPerGroup: 1,
+        capPerWorkspace: 1,
         create: vi.fn(async () => "ws-new"),
       });
 
@@ -225,7 +225,7 @@ describe("MCP dashboard contribution tools", () => {
         source: "diff-viewer",
         label: "Diff",
         actionLabel: "Add Diff",
-        capPerGroup: 1,
+        capPerWorkspace: 1,
         create: vi.fn(async () => "ws-new"),
       });
 
@@ -245,7 +245,7 @@ describe("MCP dashboard contribution tools", () => {
         source: "agentic-orchestrator",
         label: "Agentic",
         actionLabel: "Add Agentic",
-        capPerGroup: 1,
+        capPerWorkspace: 1,
         autoProvision: true,
         create: vi.fn(async () => "ws-x"),
       });

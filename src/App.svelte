@@ -646,7 +646,7 @@
             layout: { pane: { surfaces: [{ type: "terminal" }] } },
           });
         } else {
-          runCommandById("create-workspace-group");
+          runCommandById("create-workspace");
         }
       },
     });

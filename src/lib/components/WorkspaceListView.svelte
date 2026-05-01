@@ -261,7 +261,7 @@
     const isInsideWorkspace = typeof md.parentWorkspaceId === "string";
     const isLocked = md.locked === true;
     const canPromoteCommand = get(commandStore).some(
-      (c) => c.id === "promote-workspace-to-group",
+      (c) => c.id === "promote-nested-workspace-to-workspace",
     );
     const items = buildWorkspaceContextMenuItems({
       isDashboard,
@@ -273,7 +273,7 @@
       onPromote: () => {
         switchNestedWorkspace(globalIdx);
         const cmd = get(commandStore).find(
-          (c) => c.id === "promote-workspace-to-group",
+          (c) => c.id === "promote-nested-workspace-to-workspace",
         );
         if (cmd) void cmd.action();
       },

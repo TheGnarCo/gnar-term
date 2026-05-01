@@ -396,13 +396,13 @@
   function runPromoteToProject(globalIdx: number) {
     onSwitchWorkspace(globalIdx);
     const cmd = get(commandStore).find(
-      (c) => c.id === "promote-workspace-to-group",
+      (c) => c.id === "promote-nested-workspace-to-workspace",
     );
     if (cmd) void cmd.action();
   }
 
   $: canPromote = $commandStore.some(
-    (c) => c.id === "promote-workspace-to-group",
+    (c) => c.id === "promote-nested-workspace-to-workspace",
   );
 
   function showWorkspaceContextMenu(x: number, y: number, globalIdx: number) {

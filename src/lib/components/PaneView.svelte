@@ -104,7 +104,7 @@
     isDashboardWorkspace &&
     !settingsDashboardWorkspaceId &&
     typeof workspaceMetadata?.parentWorkspaceId === "string"
-      ? "workspace-groups:regenerate-active-group-dashboard"
+      ? "workspaces:regenerate-active-workspace-dashboard"
       : undefined;
   $: regenCommand = regenCommandId
     ? $commandStore.find((c) => c.id === regenCommandId)

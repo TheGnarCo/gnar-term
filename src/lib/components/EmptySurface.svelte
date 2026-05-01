@@ -9,7 +9,7 @@
    *   - `workspaceActionStore` (core + extension non-sidebar actions
    *     whose `when` filter accepts an empty context)
    *   - `commandStore` entries registered with the ids listed in
-   *     `empty-surface-commands.ts` (e.g. workspace-groups:create-workspace-group)
+   *     `empty-surface-commands.ts` (e.g. workspace-groups:create-workspace)
    *
    * The "Jump to existing" list pulls from `rootRowOrder` so projects +
    * workspace rows render in the same order the sidebar shows them.

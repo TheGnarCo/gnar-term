@@ -15,7 +15,7 @@ export interface WorkspaceContextMenuOptions {
   isDashboard: boolean;
   /** True when the workspace is already nested inside a group (promote disabled). */
   isInsideWorkspace: boolean;
-  /** True when the promote-workspace-to-group command is registered. */
+  /** True when the promote-nested-workspace-to-workspace command is registered. */
   canPromoteCommand: boolean;
   /** Total number of nestedWorkspaces in the list — used to disable "Close Workspace". */
   workspaceCount: number;

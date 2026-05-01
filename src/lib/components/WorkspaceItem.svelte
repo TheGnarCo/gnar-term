@@ -357,7 +357,7 @@
 
     {#if isManaged && !hideStatusBadges}
       <div
-        style="padding: 2px 12px 4px 6px; font-size: 11px; color: {railColor}; display: flex; align-items: center; gap: 4px; overflow: hidden; opacity: 0.85;"
+        style="padding: 2px 12px 4px 6px; font-size: 11px; color: {$theme.fgMuted}; display: flex; align-items: center; gap: 4px; overflow: hidden;"
       >
         <svg
           width="10"
@@ -368,7 +368,7 @@
           stroke-width="1.5"
           stroke-linecap="round"
           stroke-linejoin="round"
-          style="flex-shrink: 0;"
+          style="flex-shrink: 0; color: {$theme.fgMuted};"
         >
           <circle cx="4" cy="4" r="2" />
           <circle cx="4" cy="12" r="2" />
@@ -376,7 +376,11 @@
           <path d="M4 6 L4 10" />
           <path d="M6 4 C8 4 10 6 10 8" />
         </svg>
-        <span>Worktree</span>
+        <span
+          style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+        >
+          {workspace.metadata?.worktreePath}
+        </span>
       </div>
     {/if}
 

@@ -38,15 +38,12 @@
   import { getDashboardContribution } from "../services/dashboard-contribution-registry";
   import DashboardTileIcon from "./DashboardTileIcon.svelte";
   import SidebarChipButton from "./SidebarChipButton.svelte";
+  import RenameableLabel from "./RenameableLabel.svelte";
   import GridIcon from "../icons/GridIcon.svelte";
   import GitBranchIcon from "../icons/GitBranchIcon.svelte";
   import WorktreeIcon from "../icons/WorktreeIcon.svelte";
   import type { MenuItem } from "../context-menu-types";
-  import {
-    showInputPrompt,
-    contextMenu,
-    showConfirmPrompt,
-  } from "../stores/ui";
+  import { contextMenu, showConfirmPrompt } from "../stores/ui";
   import { contrastColor } from "../utils/contrast";
   import {
     getAllSurfaces,
@@ -180,12 +177,15 @@
 
   $: isWorkspaceLocked = workspace?.locked === true;
 
-  async function handleRenameWorkspace() {
+  let titleLabel: RenameableLabel;
+
+  function handleRenameWorkspace(): void {
+    void titleLabel?.startRename();
+  }
+
+  function commitRename(next: string): void {
     if (!workspace) return;
-    const next = await showInputPrompt("Rename workspace", workspace.name);
-    const trimmed = next?.trim();
-    if (!trimmed || trimmed === workspace.name) return;
-    updateWorkspace(workspace.id, { name: trimmed });
+    updateWorkspace(workspace.id, { name: next });
   }
 
   async function handleUnlockWorkspace() {
@@ -261,9 +261,7 @@
     const items: MenuItem[] = [
       {
         label: "Rename Workspace",
-        action: () => {
-          void handleRenameWorkspace();
-        },
+        action: handleRenameWorkspace,
       },
     ];
     if (workspace.isGit && workspaceContext) {
@@ -404,8 +402,11 @@
       testId={workspace.id}
       workspaceListViewComponent={WorkspaceListView}
     >
-      <span
-        data-container-row-title
+      <RenameableLabel
+        bind:this={titleLabel}
+        value={workspace.name}
+        onCommit={commitRename}
+        ariaLabel="Workspace name"
         style="
           flex: 1; min-width: 0;
           font-size: 13px; font-weight: 600; color: {isPrimaryActive
@@ -414,8 +415,9 @@
           overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
           user-select: none;
           pointer-events: none;
-        ">{workspace.name}</span
-      >
+          outline: none; padding: 2px 4px; margin-left: -4px; border-radius: 4px;
+        "
+      />
 
       <svelte:fragment slot="banner-end" let:bannerHovered>
         {#if isWorkspaceLocked}

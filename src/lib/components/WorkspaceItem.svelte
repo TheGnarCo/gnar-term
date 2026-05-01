@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick, type Component } from "svelte";
+  import { type Component } from "svelte";
   import { theme } from "../stores/theme";
   import { anyReorderActive } from "../stores/ui";
   import { getWorkspaceStatusByCategory } from "../services/status-registry";
@@ -9,6 +9,7 @@
   import { getExtensionApiById } from "../services/extension-loader";
   import ExtensionWrapper from "./ExtensionWrapper.svelte";
   import PrimarySidebarElement from "./PrimarySidebarElement.svelte";
+  import RenameableLabel from "./RenameableLabel.svelte";
   import WorktreeIcon from "../icons/WorktreeIcon.svelte";
   import { modLabel } from "../terminal-service";
   import { discoEmojiFor, discoColorFor } from "../utils/disco-decoration";
@@ -50,8 +51,7 @@
   /** Sidebar position index for the ⌘N shortcut hint. */
   export let shortcutIdx: number | undefined = undefined;
 
-  let nameEl: HTMLSpanElement;
-  let _renaming = false;
+  let labelComponent: RenameableLabel;
 
   $: allSurfaces =
     $workspaceSurfaceMap.get(workspace.id) ?? getAllSurfaces(workspace);
@@ -104,33 +104,8 @@
 
   $: subtitleComponents = $workspaceSubtitleStore;
 
-  export async function startRename() {
-    _renaming = true;
-    await tick();
-    if (!nameEl) return;
-    nameEl.contentEditable = "true";
-    nameEl.style.background = $theme.bgSurface;
-    nameEl.style.border = `1px solid ${$theme.borderActive}`;
-    nameEl.focus();
-    const range = document.createRange();
-    range.selectNodeContents(nameEl);
-    const sel = window.getSelection();
-    sel?.removeAllRanges();
-    sel?.addRange(range);
-  }
-
-  function finishRename() {
-    if (!nameEl) return;
-    nameEl.contentEditable = "false";
-    nameEl.style.background = "transparent";
-    nameEl.style.border = "none";
-    const newName = nameEl.textContent?.trim();
-    if (newName && newName !== workspace.name) {
-      onRename(newName);
-    } else {
-      nameEl.textContent = workspace.name;
-    }
-    _renaming = false;
+  export async function startRename(): Promise<void> {
+    await labelComponent?.startRename();
   }
 
   export let dragActive = false;
@@ -273,12 +248,16 @@
             />
           </span>
         {/if}
-        <span
-          bind:this={nameEl}
-          role="textbox"
-          aria-label="Workspace name"
-          aria-multiline="false"
-          tabindex="-1"
+        {#if isDisco}
+          <span aria-hidden="true" style="flex-shrink: 0;"
+            >{discoEmojiFor(workspace.id)}</span
+          >
+        {/if}
+        <RenameableLabel
+          bind:this={labelComponent}
+          value={workspace.name}
+          onCommit={onRename}
+          ariaLabel="Workspace name"
           style="
             font-weight: {isActive ? '600' : '400'};
             color: {isDisco
@@ -290,21 +269,7 @@
             text-overflow: ellipsis; white-space: nowrap;
             outline: none; padding: 2px 4px; margin-left: -4px; border-radius: 4px;
           "
-          on:blur={finishRename}
-          on:keydown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              nameEl.blur();
-            }
-            if (e.key === "Escape") {
-              e.preventDefault();
-              nameEl.textContent = workspace.name;
-              nameEl.blur();
-            }
-          }}
-          >{#if isDisco}{discoEmojiFor(workspace.id)}
-          {/if}{workspace.name}</span
-        >
+        />
       </div>
 
       {#if !hideStatusBadges && hasUnread && agentBadges.length === 0}

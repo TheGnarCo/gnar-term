@@ -150,15 +150,12 @@
     return null;
   })();
 
-  // True when the currently active workspace belongs to this group —
-  // checked via `metadata.groupId` so the match covers both the
-  // Dashboard workspace and ordinary nested children, regardless of
-  // whether `group.workspaceIds` has been rebuilt yet. Drives the
-  // group banner's active-border treatment.
-  $: hasActiveChild = (() => {
-    const activeWs = $workspaces[$activeWorkspaceIdx];
-    if (!activeWs || !group) return false;
-    return wsMeta(activeWs)?.groupId === group.id;
+  // True when the primary workspace of this group is currently active.
+  // Makes the container row border solid only when the primary workspace
+  // is selected (not when a nested workspace is selected).
+  $: isPrimaryActive = (() => {
+    if (!primaryWs) return false;
+    return $activeWorkspaceIdx === $workspaces.indexOf(primaryWs);
   })();
 
   // Re-evaluate contributed children when contributors register/unregister.
@@ -479,7 +476,7 @@
       onBannerContextMenu={handleBannerContextMenu}
       onBannerClick={handleBannerClick}
       filterIds={nestedIds}
-      {hasActiveChild}
+      hasActiveChild={isPrimaryActive}
       dashboardHintFor={hintForGroupDashboardHost}
       scopeId={group.id}
       {containerBlockId}
@@ -491,7 +488,7 @@
         data-container-row-title
         style="
           flex: 1; min-width: 0;
-          font-size: 13px; font-weight: 600; color: {hasActiveChild
+          font-size: 13px; font-weight: 600; color: {isPrimaryActive
           ? $theme.fg
           : ($theme.fgMuted ?? $theme.fg)};
           overflow: hidden; text-overflow: ellipsis; white-space: nowrap;

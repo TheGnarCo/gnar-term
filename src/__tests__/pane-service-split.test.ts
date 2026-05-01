@@ -42,7 +42,7 @@ import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
 import {
   uid,
   getAllPanes,
-  type Workspace,
+  type NestedWorkspace,
   type Pane,
   type SplitNode,
   type TerminalSurface,
@@ -79,7 +79,7 @@ function makePane(surfaces: TerminalSurface[]): Pane {
   };
 }
 
-function makeWorkspace(splitRoot: SplitNode): Workspace {
+function makeWorkspace(splitRoot: SplitNode): NestedWorkspace {
   return {
     id: uid(),
     name: "WS",
@@ -148,9 +148,9 @@ describe("splitPaneWithSurface — split-from-root", () => {
     const sC = mockSurface({ title: "C" });
     const sourcePane = makePane([sA, sB]);
     const targetPane = makePane([sC]);
-    // Workspace 1: target is its own root.
+    // NestedWorkspace 1: target is its own root.
     const targetWs = makeWorkspace({ type: "pane", pane: targetPane });
-    // Workspace 2: source — but splitPaneWithSurface only operates on
+    // NestedWorkspace 2: source — but splitPaneWithSurface only operates on
     // the active workspace via get(activeWorkspace). We need source
     // and target in the SAME workspace. Use a horizontal split as the
     // common parent so target is nested, then ALSO test the

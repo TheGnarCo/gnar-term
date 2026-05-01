@@ -17,7 +17,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { writable, type Readable } from "svelte/store";
 import { getHome, getConfigDir } from "./services/service-helpers";
 import { runConfigMigrations } from "./services/config-migrations";
-import type { WorkspaceMetadata } from "./types";
+import type { NestedWorkspaceMetadata } from "./types";
 import type { ThemeDef } from "./theme-data";
 
 // --- Types (cmux-compatible + extensions) ---
@@ -50,7 +50,7 @@ export interface SplitDef {
 
 export type LayoutNode = { pane: PaneDef } | SplitDef;
 
-export interface WorkspaceDef {
+export interface NestedWorkspaceDef {
   /**
    * Stable identifier. Optional on fresh creation — `createWorkspaceFromDef`
    * mints a new id when absent. Populated by `persistWorkspaces` so that
@@ -63,7 +63,7 @@ export interface WorkspaceDef {
   cwd?: string;
   color?: string;
   env?: Record<string, string>;
-  metadata?: WorkspaceMetadata;
+  metadata?: NestedWorkspaceMetadata;
   layout?: LayoutNode;
 }
 
@@ -74,7 +74,7 @@ export interface CommandDef {
   command?: string; // simple shell command
   confirm?: boolean;
   restart?: "ignore" | "recreate" | "confirm";
-  workspace?: WorkspaceDef; // workspace command
+  workspace?: NestedWorkspaceDef; // workspace command
 }
 
 export interface ExtensionConfig {
@@ -128,7 +128,7 @@ export interface AgentsConfig {
 }
 
 /**
- * Workspace Group — a named, colored, path-rooted grouping of
+ * Workspace — a named, colored, path-rooted grouping of
  * workspaces. Workspaces whose CWD falls under `path` are auto-adopted
  * (via `metadata.groupId`) and render nested inside the group's block
  * in the Workspaces section.
@@ -229,7 +229,7 @@ export interface AppState {
   sidebarWidths?: { primary?: number; secondary?: number };
   sidebarVisible?: { primary?: boolean; secondary?: boolean };
   windowBounds?: { x?: number; y?: number; width?: number; height?: number };
-  workspaces?: (WorkspaceDef & { name: string })[];
+  workspaces?: (NestedWorkspaceDef & { name: string })[];
   activeWorkspaceIdx?: number;
   // Interleaved ordering for the Workspaces section: unclaimed
   // workspaces and workspace group blocks sit in a single list the user
@@ -238,12 +238,12 @@ export interface AppState {
   // Archived (suspended) workspaces and groups. See stores/archive.ts.
   archivedOrder?: { kind: string; id: string }[];
   archivedDefs?: {
-    workspaces: Record<string, { def: WorkspaceDef & { name: string } }>;
+    workspaces: Record<string, { def: NestedWorkspaceDef & { name: string } }>;
     groups: Record<
       string,
       {
         group: WorkspaceEntry;
-        workspaceDefs: (WorkspaceDef & { name: string })[];
+        workspaceDefs: (NestedWorkspaceDef & { name: string })[];
       }
     >;
   };
@@ -378,7 +378,7 @@ const _appStateStore = writable<AppState>({});
 export const appStateStore: Readable<AppState> = _appStateStore;
 
 /**
- * Rewrite legacy workspace-scoped state shapes to the new Workspace
+ * Rewrite legacy workspace-scoped state shapes to the new NestedWorkspace
  * Groups + Dashboard Contributions layout:
  *   - workspaces[].metadata.projectId → metadata.groupId
  *   - workspaces[].metadata.parentOrchestratorId → metadata.spawnedBy
@@ -404,10 +404,10 @@ export function migrateLegacyProjectShapes(state: AppState): {
     let workspacesChanged = false;
     const workspaces = state.workspaces.map((ws) => {
       // Migration reads persisted state which may carry legacy keys not in
-      // WorkspaceMetadata (parentOrchestratorId, orchestratorId, spawnedBy).
+      // NestedWorkspaceMetadata (parentOrchestratorId, orchestratorId, spawnedBy).
       // Cast to a wider type so we can inspect and drop them.
       const md = ws.metadata as
-        | (WorkspaceMetadata & Record<string, unknown>)
+        | (NestedWorkspaceMetadata & Record<string, unknown>)
         | undefined;
       if (!md) return ws;
 

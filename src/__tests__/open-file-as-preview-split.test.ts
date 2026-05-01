@@ -22,7 +22,7 @@ vi.mock("../lib/terminal-service", () => ({
 import { openFileAsPreviewSplit } from "../lib/services/surface-service";
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
 import { isPreviewSurface, getAllSurfaces, getAllPanes } from "../lib/types";
-import type { Workspace, Pane } from "../lib/types";
+import type { NestedWorkspace, Pane } from "../lib/types";
 import {
   registerPreviewSurface,
   resetPreviewSurfaceRegistry,
@@ -34,9 +34,9 @@ import {
   getContextMenuItemsForFile,
 } from "../lib/services/context-menu-item-registry";
 
-function makeWorkspace(id: string): { ws: Workspace; pane: Pane } {
+function makeWorkspace(id: string): { ws: NestedWorkspace; pane: Pane } {
   const pane: Pane = { id: `${id}-pane`, surfaces: [], activeSurfaceId: null };
-  const ws: Workspace = {
+  const ws: NestedWorkspace = {
     id,
     name: id,
     splitRoot: { type: "pane", pane },

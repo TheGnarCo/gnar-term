@@ -2,9 +2,9 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, cleanup, fireEvent } from "@testing-library/svelte";
 import { readFileSync } from "fs";
 import WorkspaceItem from "../lib/components/WorkspaceItem.svelte";
-import type { Workspace } from "../lib/types";
+import type { NestedWorkspace } from "../lib/types";
 
-function makeWorkspace(): Workspace {
+function makeWorkspace(): NestedWorkspace {
   return {
     id: "ws1",
     name: "Test",
@@ -129,7 +129,7 @@ describe("WorkspaceItem drag grip", () => {
 describe("WorkspaceItem border", () => {
   afterEach(() => cleanup());
 
-  function makeWorktreeWorkspace(): Workspace {
+  function makeWorktreeWorkspace(): NestedWorkspace {
     return {
       ...makeWorkspace(),
       metadata: { worktreePath: "/tmp/some-worktree" },

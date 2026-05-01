@@ -76,12 +76,12 @@ export type SplitNode =
     };
 
 /**
- * Typed metadata carried by a Workspace. All known keys are optional.
+ * Typed metadata carried by a NestedWorkspace. All known keys are optional.
  * The index signature preserves compatibility with extension-API sites that
  * accept Record<string,unknown> and with serialised state that may carry
  * legacy or unknown keys.
  */
-export interface WorkspaceMetadata {
+export interface NestedWorkspaceMetadata {
   // --- Index signature: extensions may store arbitrary keys ---
   [key: string]: unknown;
   // --- Worktree fields ---
@@ -132,12 +132,12 @@ export interface WorkspaceMetadata {
   locked?: boolean;
 }
 
-export interface Workspace {
+export interface NestedWorkspace {
   id: string;
   name: string;
   splitRoot: SplitNode;
   activePaneId: string | null;
-  metadata?: WorkspaceMetadata;
+  metadata?: NestedWorkspaceMetadata;
 }
 
 // Helper functions for tree traversal
@@ -146,7 +146,7 @@ export function getAllPanes(node: SplitNode): Pane[] {
   return [...getAllPanes(node.children[0]), ...getAllPanes(node.children[1])];
 }
 
-export function getAllSurfaces(ws: Workspace): Surface[] {
+export function getAllSurfaces(ws: NestedWorkspace): Surface[] {
   return getAllPanes(ws.splitRoot).flatMap((p) => p.surfaces);
 }
 

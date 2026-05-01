@@ -36,7 +36,7 @@ import * as eventModule from "@tauri-apps/api/event";
 import * as notifModule from "@tauri-apps/plugin-notification";
 import { setupListeners } from "../lib/terminal-service";
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
-import type { Workspace, TerminalSurface } from "../lib/types";
+import type { NestedWorkspace, TerminalSurface } from "../lib/types";
 
 function makeTerminalSurface(id: string, ptyId: number): TerminalSurface {
   return {
@@ -58,7 +58,7 @@ function makeWorkspaceWith(
   id: string,
   surface: TerminalSurface,
   activeSurfaceId?: string,
-): Workspace {
+): NestedWorkspace {
   return {
     id,
     name: id,

@@ -14,7 +14,7 @@ import {
   uid,
   isTerminalSurface,
   isExtensionSurface,
-  type Workspace,
+  type NestedWorkspace,
   type Pane,
   type Surface,
   type PreviewSurface,
@@ -75,7 +75,7 @@ export function closeSurfaceById(paneId: string, surfaceId: string) {
   }
 }
 
-function removeSurface(ws: Workspace, pane: Pane, surfaceIdx: number) {
+function removeSurface(ws: NestedWorkspace, pane: Pane, surfaceIdx: number) {
   const surface = pane.surfaces[surfaceIdx]!;
   const surfaceId = surface.id;
   const paneId = pane.id;
@@ -257,7 +257,7 @@ export function openExtensionSurfaceInPaneById(
  */
 export function findSurfaceLocation(
   surfaceId: string,
-): { workspace: Workspace; pane: Pane; surface: Surface } | null {
+): { workspace: NestedWorkspace; pane: Pane; surface: Surface } | null {
   const wsList = get(workspaces);
   for (const ws of wsList) {
     for (const pane of getAllPanes(ws.splitRoot)) {
@@ -330,7 +330,7 @@ export function createPreviewSurfaceInPane(
   path: string,
   options?: { focus?: boolean; title?: string },
 ): PreviewSurface | null {
-  let owningWs: Workspace | undefined;
+  let owningWs: NestedWorkspace | undefined;
   let pane: Pane | undefined;
   for (const ws of get(workspaces)) {
     const found = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);

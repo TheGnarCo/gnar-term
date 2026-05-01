@@ -104,13 +104,13 @@ import {
   getAllPanes,
   isTerminalSurface,
   type TerminalSurface,
-  type Workspace,
+  type NestedWorkspace,
   type Pane,
 } from "../lib/types";
 import RestoreCommandPrompt from "../lib/components/RestoreCommandPrompt.svelte";
 import RestoreCommandsOverlay from "../lib/components/RestoreCommandsOverlay.svelte";
 
-function firstTerminalSurface(ws: Workspace): TerminalSurface {
+function firstTerminalSurface(ws: NestedWorkspace): TerminalSurface {
   for (const pane of getAllPanes(ws.splitRoot)) {
     for (const s of pane.surfaces) {
       if (isTerminalSurface(s)) return s;

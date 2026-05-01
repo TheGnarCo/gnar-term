@@ -7,12 +7,16 @@
  *      workspace around the CLI args
  *   3. persisted state.json — restore the last session's workspaces
  *   4. config.autoload — open every named workspace listed
- *   5. fall back to a single default "Workspace 1"
+ *   5. fall back to a single default "NestedWorkspace 1"
  */
 import { get } from "svelte/store";
 import { workspaces } from "../stores/workspace";
 import { getWorkspaceGroups } from "../stores/workspace-groups";
-import { loadState, type GnarTermConfig, type WorkspaceDef } from "../config";
+import {
+  loadState,
+  type GnarTermConfig,
+  type NestedWorkspaceDef,
+} from "../config";
 import { initArchiveFromState } from "../stores/archive";
 import {
   createWorkspace,
@@ -66,16 +70,17 @@ export async function restoreWorkspaces(
       await createWorkspaceFromDef(cmd.workspace);
     } else {
       console.warn(
-        `[cli] Workspace "${cliArgs.workspace}" not found in config`,
+        `[cli] NestedWorkspace "${cliArgs.workspace}" not found in config`,
       );
-      await createWorkspace(cliArgs.title || "Workspace 1");
+      await createWorkspace(cliArgs.title || "NestedWorkspace 1");
     }
     return;
   }
 
   if (cliCwd || cliArgs.command) {
-    const wsName = cliArgs.title || cliCwd?.split("/").pop() || "Workspace 1";
-    const def: WorkspaceDef = {
+    const wsName =
+      cliArgs.title || cliCwd?.split("/").pop() || "NestedWorkspace 1";
+    const def: NestedWorkspaceDef = {
       name: wsName,
       cwd: cliCwd || undefined,
       layout: {
@@ -172,6 +177,6 @@ export async function restoreWorkspaces(
     }
   }
   if (!autoloaded && get(workspaces).length === 0) {
-    await createWorkspace("Workspace 1");
+    await createWorkspace("NestedWorkspace 1");
   }
 }

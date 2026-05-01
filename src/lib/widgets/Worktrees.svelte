@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
    * `gnar:worktrees` — lists the open worktrees rooted at the
-   * Workspace Group's repo path. Each row surfaces the branch name,
+   * Workspace's repo path. Each row surfaces the branch name,
    * the base branch, and (when a workspace is bound) a click-to-jump
    * affordance that switches to that worktree workspace.
    *
@@ -80,7 +80,7 @@
 
   {#if scope.kind === "none"}
     <div data-worktrees-no-scope style="color: {$theme.fgDim};">
-      Mount inside a Workspace Group dashboard to see worktrees.
+      Mount inside a Workspace dashboard to see worktrees.
     </div>
   {:else if entries.length === 0}
     <div

@@ -94,7 +94,7 @@ export function buildWorkspaceContextMenuItems(
   if (canPromote && onPromote) {
     items.push({ label: "", action: () => {}, separator: true });
     items.push({
-      label: "Promote to Workspace Group...",
+      label: "Promote to Workspace...",
       action: onPromote,
     });
   }

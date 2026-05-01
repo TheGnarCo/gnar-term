@@ -124,7 +124,7 @@ describe("reconcilePrimaryWorkspaces", () => {
     expect(groups[0].primaryWorkspaceId).toBe("ws-solo");
     expect(groups[0].name).toBe("Solo");
 
-    // Workspace is now stamped with groupId
+    // NestedWorkspace is now stamped with groupId
     const ws = get(workspaces).find((w) => w.id === "ws-solo");
     expect((ws?.metadata as Record<string, unknown>)?.groupId).toBe(
       groups[0].id,

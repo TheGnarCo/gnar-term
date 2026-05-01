@@ -50,7 +50,7 @@ export function initWorktrees(): void {
     if (event.type !== "workspace:created") return;
     handleWorkspaceCreated(
       event.id,
-      event.metadata as import("../types").WorkspaceMetadata | undefined,
+      event.metadata as import("../types").NestedWorkspaceMetadata | undefined,
     );
   });
 

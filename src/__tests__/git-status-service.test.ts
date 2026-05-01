@@ -28,9 +28,9 @@ import {
 import { statusRegistry } from "../lib/services/status-registry";
 import { eventBus } from "../lib/services/event-bus";
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
-import type { Workspace } from "../lib/types";
+import type { NestedWorkspace } from "../lib/types";
 
-function makeWs(id: string, surfaceId: string, cwd: string): Workspace {
+function makeWs(id: string, surfaceId: string, cwd: string): NestedWorkspace {
   return {
     id,
     name: id,
@@ -52,7 +52,7 @@ function makeWs(id: string, surfaceId: string, cwd: string): Workspace {
         ],
       },
     },
-  } as unknown as Workspace;
+  } as unknown as NestedWorkspace;
 }
 
 async function drain(n = 50): Promise<void> {
@@ -481,7 +481,7 @@ describe("git status service: stale-data clear (H4)", () => {
             },
           },
         },
-      ] as unknown as Workspace[]);
+      ] as unknown as NestedWorkspace[]);
       activeWorkspaceIdx.set(0);
 
       const tauri = await import("@tauri-apps/api/core");

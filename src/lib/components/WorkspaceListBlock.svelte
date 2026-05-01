@@ -41,7 +41,7 @@
   import { contrastColor } from "../utils/contrast";
   import { shortcutHint } from "../actions/shortcut-hint";
   import { modLabel } from "../terminal-service";
-  import { getAllSurfaces, type Workspace } from "../types";
+  import { getAllSurfaces, type NestedWorkspace } from "../types";
   import { commandStore } from "../services/command-registry";
   import { tabDragState } from "../services/tab-drag";
   import {
@@ -92,7 +92,7 @@
     row: RootRow;
     idx: number;
     key: string;
-    workspace?: Workspace;
+    workspace?: NestedWorkspace;
     rendererComponent?: unknown;
     rendererSource?: string;
     rendererRailColor?: string;
@@ -181,7 +181,7 @@
   let dragActive = false;
   let dragSourceHeight = 0;
 
-  // Workspace-to-pane drop state: updated on every mousemove during a root drag.
+  // NestedWorkspace-to-pane drop state: updated on every mousemove during a root drag.
   let currentPaneTarget: WorkspacePaneDropTarget = null;
 
   // Archive zone drag state: true when the dragged row is hovering over [data-archive-zone].
@@ -387,7 +387,7 @@
     : tabDragSurfaceTitle;
   $: effectiveSourceRowColor = dragActive ? sourceRowColor : $theme.accent;
 
-  // --- Workspace row context menu (previously in WorkspaceListBlock's
+  // --- NestedWorkspace row context menu (previously in WorkspaceListBlock's
   // showWorkspaceContextMenu; unchanged modulo re-scoping to rendered
   // root rows). ---
   function runPromoteToProject(globalIdx: number) {

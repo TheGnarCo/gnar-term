@@ -120,7 +120,7 @@ export const registryMirrorTools: ToolDef[] = [
     },
   },
 
-  // ---- Workspace actions (mirror of workspaceActionStore) ----
+  // ---- NestedWorkspace actions (mirror of workspaceActionStore) ----
   {
     name: "list_workspace_actions",
     description:
@@ -273,7 +273,7 @@ export const registryMirrorTools: ToolDef[] = [
     },
   },
 
-  // ---- Workspace subtitles (mirror of workspaceSubtitleStore) ----
+  // ---- NestedWorkspace subtitles (mirror of workspaceSubtitleStore) ----
   {
     name: "list_workspace_subtitles",
     description:
@@ -355,7 +355,7 @@ export const registryMirrorTools: ToolDef[] = [
   {
     name: "add_dashboard_to_group",
     description:
-      "Materialize a dashboard workspace for a Workspace Group by running the contribution's create hook. Errors when the contribution is autoProvision (those materialize automatically and cannot be added manually), already at its per-group cap, unknown, or gated out by the contribution's availability predicate. Returns the new workspace id.",
+      "Materialize a dashboard workspace for a Workspace by running the contribution's create hook. Errors when the contribution is autoProvision (those materialize automatically and cannot be added manually), already at its per-group cap, unknown, or gated out by the contribution's availability predicate. Returns the new workspace id.",
     inputSchema: {
       type: "object",
       properties: {

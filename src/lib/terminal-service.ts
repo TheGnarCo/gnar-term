@@ -37,7 +37,7 @@ import {
   getRegisteredFileExtensions,
   getContextMenuItemsForFile,
 } from "./services/context-menu-item-registry";
-import type { TerminalSurface, Pane, Workspace } from "./types";
+import type { TerminalSurface, Pane, NestedWorkspace } from "./types";
 import {
   uid,
   getAllSurfaces,
@@ -723,13 +723,13 @@ export function startCwdPolling() {
   }, 5000); // Poll every 5 seconds
 }
 
-// --- Default Workspace Recovery ---
+// --- Default NestedWorkspace Recovery ---
 
 export async function createDefaultWorkspace() {
   const pane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
-  const ws: Workspace = {
+  const ws: NestedWorkspace = {
     id: uid(),
-    name: "Workspace 1",
+    name: "NestedWorkspace 1",
     splitRoot: { type: "pane", pane },
     activePaneId: pane.id,
   };

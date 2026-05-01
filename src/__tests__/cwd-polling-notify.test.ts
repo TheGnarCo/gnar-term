@@ -21,14 +21,14 @@ vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
 }));
 
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
-import type { Workspace } from "../lib/types";
+import type { NestedWorkspace } from "../lib/types";
 import {
   startCwdPolling,
   registerCwdChangeHook,
   _stopCwdPolling,
 } from "../lib/terminal-service";
 
-function makeWs(id: string, surfaceId: string, cwd: string): Workspace {
+function makeWs(id: string, surfaceId: string, cwd: string): NestedWorkspace {
   return {
     id,
     name: id,
@@ -50,7 +50,7 @@ function makeWs(id: string, surfaceId: string, cwd: string): Workspace {
         ],
       },
     },
-  } as unknown as Workspace;
+  } as unknown as NestedWorkspace;
 }
 
 describe("startCwdPolling notifies the workspaces store on cwd change", () => {

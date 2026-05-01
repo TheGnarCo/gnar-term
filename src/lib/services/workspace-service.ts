@@ -20,7 +20,7 @@ import {
   isPreviewSurface,
   findParentSplit,
   replaceNodeInTree,
-  type Workspace,
+  type NestedWorkspace,
   type Pane,
   type SplitNode,
   type PreviewSurface,
@@ -29,7 +29,7 @@ import {
   saveConfig,
   saveState,
   getConfig,
-  type WorkspaceDef,
+  type NestedWorkspaceDef,
   type LayoutNode,
 } from "../config";
 import { safeFocus } from "./service-helpers";
@@ -44,7 +44,7 @@ import {
   insertWorkspaceIntoGroup,
 } from "./workspace-group-service";
 
-// --- Workspace persistence (debounced save to state.json) ---
+// --- NestedWorkspace persistence (debounced save to state.json) ---
 
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
 const PERSIST_DELAY = 2000;
@@ -74,7 +74,7 @@ export function schedulePersist(): void {
 
 export async function createWorkspace(name: string) {
   const pane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
-  const ws: Workspace = {
+  const ws: NestedWorkspace = {
     id: uid(),
     name,
     splitRoot: { type: "pane", pane },
@@ -101,7 +101,7 @@ export async function createWorkspace(name: string) {
 }
 
 export async function createWorkspaceFromDef(
-  def: WorkspaceDef,
+  def: NestedWorkspaceDef,
   options?: { restoring?: boolean },
 ): Promise<string> {
   const wsName = def.name || `Workspace ${get(workspaces).length + 1}`;
@@ -201,7 +201,7 @@ export async function createWorkspaceFromDef(
     splitRoot = { type: "pane", pane };
   }
 
-  const ws: Workspace = {
+  const ws: NestedWorkspace = {
     // Reuse the persisted id when restoring so rootRowOrder survives
     // a restart; mint a fresh one for first-launch creation.
     id: def.id ?? uid(),
@@ -391,7 +391,7 @@ export async function saveCurrentWorkspace() {
   const layout = serializeLayout(ws.splitRoot);
   const activeCwd =
     surface && isTerminalSurface(surface) ? surface.cwd : undefined;
-  const wsDef: WorkspaceDef = { name, cwd: activeCwd || "~", layout };
+  const wsDef: NestedWorkspaceDef = { name, cwd: activeCwd || "~", layout };
   const config = getConfig();
   const commands = config.commands || [];
   const existing = commands.findIndex((c) => c.name === name);
@@ -433,7 +433,10 @@ export async function closeAllWorkspaces(): Promise<void> {
  * empty pane at the root has no sibling to collapse into and is the
  * caller's responsibility to handle).
  */
-function collapseEmptyPaneInWorkspace(ws: Workspace, paneId: string): void {
+function collapseEmptyPaneInWorkspace(
+  ws: NestedWorkspace,
+  paneId: string,
+): void {
   const parentInfo = findParentSplit(ws.splitRoot, paneId);
   if (!parentInfo || parentInfo.parent.type !== "split") return;
   const sibling = parentInfo.parent.children[parentInfo.index === 0 ? 1 : 0]!;
@@ -503,7 +506,7 @@ export function createWorkspaceFromSurface(
   const effectiveGroupId =
     (insertOptions?.kind === "group" && insertOptions.targetGroupId) ||
     srcGroupId;
-  const newWs: Workspace = {
+  const newWs: NestedWorkspace = {
     id: uid(),
     name: surface.title || "New Workspace",
     splitRoot: { type: "pane", pane: newPane },

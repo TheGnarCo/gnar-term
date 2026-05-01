@@ -136,7 +136,7 @@ describe("workspace persistence", () => {
         activePaneId: "p1",
         metadata: { groupId: "proj-alpha", color: "blue" },
       },
-    ] as unknown as import("../lib/types").Workspace[]);
+    ] as unknown as import("../lib/types").NestedWorkspace[]);
     activeWorkspaceIdx.set(0);
 
     await persistWorkspaces();

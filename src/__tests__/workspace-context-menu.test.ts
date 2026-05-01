@@ -23,7 +23,7 @@ describe("buildWorkspaceContextMenuItems — lock/unlock", () => {
     expect(labels).not.toContain("Unlock Workspace");
   });
 
-  it("renders 'Lock Workspace' when isLocked is false", () => {
+  it("renders 'Lock NestedWorkspace' when isLocked is false", () => {
     const onToggleLock = vi.fn();
     const items = buildWorkspaceContextMenuItems({
       ...baseOpts,
@@ -35,7 +35,7 @@ describe("buildWorkspaceContextMenuItems — lock/unlock", () => {
     expect(labels).not.toContain("Unlock Workspace");
   });
 
-  it("renders 'Unlock Workspace' when isLocked is true", () => {
+  it("renders 'Unlock NestedWorkspace' when isLocked is true", () => {
     const onToggleLock = vi.fn();
     const items = buildWorkspaceContextMenuItems({
       ...baseOpts,
@@ -60,7 +60,7 @@ describe("buildWorkspaceContextMenuItems — lock/unlock", () => {
     expect(onToggleLock).toHaveBeenCalledTimes(1);
   });
 
-  it("disables Close Workspace when the workspace is locked", () => {
+  it("disables Close NestedWorkspace when the workspace is locked", () => {
     const items = buildWorkspaceContextMenuItems({
       ...baseOpts,
       isLocked: true,

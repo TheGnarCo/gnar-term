@@ -1,6 +1,6 @@
 import { writable, get } from "svelte/store";
 import { saveState, getState } from "../config";
-import type { WorkspaceDef, WorkspaceEntry } from "../config";
+import type { NestedWorkspaceDef, WorkspaceEntry } from "../config";
 
 export interface ArchivedRow {
   kind: "workspace" | "workspace-group";
@@ -8,12 +8,12 @@ export interface ArchivedRow {
 }
 
 export interface ArchivedWorkspaceDef {
-  def: WorkspaceDef & { name: string };
+  def: NestedWorkspaceDef & { name: string };
 }
 
 export interface ArchivedGroupDef {
   group: WorkspaceEntry;
-  workspaceDefs: (WorkspaceDef & { name: string })[];
+  workspaceDefs: (NestedWorkspaceDef & { name: string })[];
 }
 
 export type ArchivedDefEntry = ArchivedWorkspaceDef | ArchivedGroupDef;

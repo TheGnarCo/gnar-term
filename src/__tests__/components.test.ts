@@ -7,7 +7,7 @@ import { tick } from "svelte";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 // get is available if needed for store testing
 import { readFileSync } from "fs";
-import type { Workspace, Pane, TerminalSurface } from "../lib/types";
+import type { NestedWorkspace, Pane, TerminalSurface } from "../lib/types";
 
 // ---------------------------------------------------------------------------
 // Mocks — must come before any component imports
@@ -203,7 +203,7 @@ function makePane(id: string, surfaces?: TerminalSurface[]): Pane {
   };
 }
 
-function makeWorkspace(id: string, name: string, pane?: Pane): Workspace {
+function makeWorkspace(id: string, name: string, pane?: Pane): NestedWorkspace {
   const p = pane ?? makePane(`${id}-p1`);
   return {
     id,
@@ -1028,10 +1028,10 @@ describe("CommandPalette", () => {
 
 describe("WorkspaceItem", () => {
   function renderWorkspaceItem(
-    wsOverrides: Partial<Workspace> = {},
+    wsOverrides: Partial<NestedWorkspace> = {},
     isActive = true,
   ) {
-    const ws = makeWorkspace("ws1", "My Workspace");
+    const ws = makeWorkspace("ws1", "My NestedWorkspace");
     Object.assign(ws, wsOverrides);
     return render(WorkspaceItem, {
       props: {
@@ -1048,11 +1048,11 @@ describe("WorkspaceItem", () => {
 
   it("renders the workspace name", () => {
     renderWorkspaceItem();
-    expect(screen.getByText("My Workspace")).toBeTruthy();
+    expect(screen.getByText("My NestedWorkspace")).toBeTruthy();
   });
 
   it("renders close button in DragGrip when grip is expanded", async () => {
-    const ws = makeWorkspace("ws1", "My Workspace");
+    const ws = makeWorkspace("ws1", "My NestedWorkspace");
     const { container } = render(WorkspaceItem, {
       props: {
         workspace: ws,
@@ -1069,7 +1069,7 @@ describe("WorkspaceItem", () => {
     const row = container.firstElementChild as HTMLElement;
     await fireEvent.mouseEnter(row);
     await tick();
-    expect(screen.getByLabelText("Close My Workspace")).toBeTruthy();
+    expect(screen.getByLabelText("Close My NestedWorkspace")).toBeTruthy();
   });
 
   it("shows unread badge when surfaces have unread data", () => {
@@ -1144,7 +1144,7 @@ describe("WorkspaceItem", () => {
     const s1 = makeSurface("s1");
     const s2 = makeSurface("s2");
     const pane: Pane = { id: "p1", surfaces: [s1, s2], activeSurfaceId: s1.id };
-    const ws: Workspace = {
+    const ws: NestedWorkspace = {
       id: "ws1",
       name: "Multi Surface",
       splitRoot: { type: "pane", pane },
@@ -1411,7 +1411,7 @@ describe("PaneView", () => {
     // The Settings dashboard is now its own contribution (gear icon,
     // auto-provisioned). PaneView no longer wraps the Group Dashboard
     // preview in an Overview/Settings tab strip.
-    const ws: Workspace = {
+    const ws: NestedWorkspace = {
       id: "ws-dash",
       name: "Dashboard",
       splitRoot: { type: "pane", pane: makePane("p1") },
@@ -1447,7 +1447,7 @@ describe("PaneView", () => {
   it("renders GroupDashboardSettings for a settings-contribution workspace", () => {
     // Settings contribution → PaneView swaps the surface list for the
     // shared settings body.
-    const ws: Workspace = {
+    const ws: NestedWorkspace = {
       id: "ws-settings",
       name: "Settings",
       splitRoot: { type: "pane", pane: makePane("p1") },
@@ -1951,7 +1951,7 @@ describe("WorkspaceItem — harness sub-row", () => {
       surfaces: [active, other],
       activeSurfaceId: "s-active",
     };
-    const ws: Workspace = {
+    const ws: NestedWorkspace = {
       id: "ws-hidden",
       name: "Hidden",
       splitRoot: { type: "pane", pane },

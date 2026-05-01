@@ -711,7 +711,7 @@ describe("Extension lifecycle", () => {
     wsStore.set([
       {
         id: "ws-1",
-        name: "Test Workspace",
+        name: "Test NestedWorkspace",
         activePaneId: "pane-1",
         splitRoot: {
           type: "pane",
@@ -735,7 +735,7 @@ describe("Extension lifecycle", () => {
           },
         },
       },
-    ] as unknown as import("../lib/types").Workspace[]);
+    ] as unknown as import("../lib/types").NestedWorkspace[]);
 
     deactivateExtension("surface-orphan");
 
@@ -1598,7 +1598,7 @@ describe("api.getWorkspaceIdForSurface", () => {
           },
         },
       },
-    ] as unknown as import("../lib/types").Workspace[]);
+    ] as unknown as import("../lib/types").NestedWorkspace[]);
 
     const { api } = createExtensionAPI(makeManifest({ id: "resolver-ext" }));
 
@@ -1688,7 +1688,7 @@ describe("api.getWorkspaceIdForSurface", () => {
           },
         },
       },
-    ] as unknown as import("../lib/types").Workspace[]);
+    ] as unknown as import("../lib/types").NestedWorkspace[]);
 
     const { api } = createExtensionAPI(makeManifest({ id: "bootstrap-ext" }));
     const surfaces = api.getAllTerminalSurfaces();
@@ -1761,7 +1761,7 @@ describe("api.getWorkspaceIdForSurface", () => {
           ],
         },
       },
-    ] as unknown as import("../lib/types").Workspace[]);
+    ] as unknown as import("../lib/types").NestedWorkspace[]);
 
     const { api } = createExtensionAPI(makeManifest({ id: "split-ext" }));
     expect(api.getWorkspaceIdForSurface("surf-right")).toBe("ws-split");

@@ -1,6 +1,6 @@
 <script lang="ts">
   /**
-   * Settings panel for a Workspace Group's Dashboard. Mirrors the
+   * Settings panel for a Workspace's Dashboard. Mirrors the
    * GlobalAgenticDashboardBody Settings section so users have one
    * consistent "dashboard → Settings" mental model:
    *

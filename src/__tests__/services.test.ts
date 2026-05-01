@@ -39,7 +39,7 @@ import {
   activeWorkspace,
 } from "../lib/stores/workspace";
 import type {
-  Workspace,
+  NestedWorkspace,
   Pane,
   TerminalSurface,
   ExtensionSurface,
@@ -129,11 +129,13 @@ function makePane(
   };
 }
 
-function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
+function makeWorkspace(
+  overrides: Partial<NestedWorkspace> = {},
+): NestedWorkspace {
   const pane = makePane();
   return {
     id: uid(),
-    name: "Workspace 1",
+    name: "NestedWorkspace 1",
     splitRoot: { type: "pane", pane },
     activePaneId: pane.id,
     ...overrides,

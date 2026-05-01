@@ -17,7 +17,7 @@ import {
   isTerminalSurface,
   findParentSplit,
   replaceNodeInTree,
-  type Workspace,
+  type NestedWorkspace,
   type Pane,
   type SplitNode,
 } from "../types";
@@ -113,7 +113,7 @@ export async function splitPane(
   schedulePersist();
 }
 
-export function removePane(ws: Workspace, pane: Pane) {
+export function removePane(ws: NestedWorkspace, pane: Pane) {
   const paneId = pane.id;
   const wsId = ws.id;
   pane.resizeObserver?.disconnect();
@@ -123,7 +123,7 @@ export function removePane(ws: Workspace, pane: Pane) {
     workspaces.update((list) => list.filter((w) => w.id !== ws.id));
     eventBus.emit({ type: "pane:closed", id: paneId, workspaceId: wsId });
     if (get(workspaces).length === 0) {
-      void createWorkspace("Workspace 1");
+      void createWorkspace("NestedWorkspace 1");
     } else {
       activeWorkspaceIdx.set(Math.min(wsIdx, get(workspaces).length - 1));
     }

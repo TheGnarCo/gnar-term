@@ -127,7 +127,7 @@ export interface WorktreeWorkspaceConfig {
   groupId?: string;
   /**
    * Optional startup command to run in the new workspace's terminal.
-   * Maps to surface.startupCommand via the WorkspaceDef layout — fires
+   * Maps to surface.startupCommand via the NestedWorkspaceDef layout — fires
    * once the PTY is ready (no setTimeout).
    */
   startupCommand?: string;
@@ -395,7 +395,7 @@ export async function mergeAndArchiveWorktreeWorkspace(): Promise<void> {
  */
 export function handleWorkspaceCreated(
   id: string,
-  metadata: import("../types").WorkspaceMetadata | undefined,
+  metadata: import("../types").NestedWorkspaceMetadata | undefined,
 ): void {
   const worktreePath = metadata?.worktreePath;
   if (typeof worktreePath !== "string") return;

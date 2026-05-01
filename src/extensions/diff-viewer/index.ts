@@ -131,7 +131,7 @@ export function registerDiffViewerExtension(api: ExtensionAPI): void {
       });
     });
 
-    // Diff dashboard contribution — lets a Workspace Group opt in to a
+    // Diff dashboard contribution — lets a Workspace opt in to a
     // dedicated Diff dashboard tile (gear sibling). The tile's workspace
     // hosts a single diff-viewer:diff surface for the group's repo; no
     // split / new-surface affordances because the pane is a Dashboard.

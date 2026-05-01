@@ -1,6 +1,10 @@
 import { get } from "svelte/store";
-import { getAllSurfaces, isTerminalSurface, type Workspace } from "../types";
-import type { WorkspaceDef } from "../config";
+import {
+  getAllSurfaces,
+  isTerminalSurface,
+  type NestedWorkspace,
+} from "../types";
+import type { NestedWorkspaceDef } from "../config";
 import { workspaces } from "../stores/workspace";
 import {
   serializeLayout,
@@ -26,11 +30,11 @@ import {
   archivedDefs,
 } from "../stores/archive";
 
-function isDashboardWorkspace(ws: Workspace): boolean {
+function isDashboardWorkspace(ws: NestedWorkspace): boolean {
   return wsMeta(ws).isDashboard === true;
 }
 
-function countRunningPtys(ws: Workspace): number {
+function countRunningPtys(ws: NestedWorkspace): number {
   return getAllSurfaces(ws).filter((s) => isTerminalSurface(s) && s.ptyId >= 0)
     .length;
 }
@@ -48,7 +52,7 @@ export async function archiveWorkspace(wsId: string): Promise<boolean> {
     if (!confirmed) return false;
   }
 
-  const def: WorkspaceDef & { name: string } = {
+  const def: NestedWorkspaceDef & { name: string } = {
     id: ws.id,
     name: ws.name,
     layout: serializeLayout(ws.splitRoot),

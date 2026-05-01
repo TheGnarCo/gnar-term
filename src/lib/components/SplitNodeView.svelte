@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { SplitNode, Workspace } from "../types";
+  import type { SplitNode, NestedWorkspace } from "../types";
   import { nodeContainsSurface } from "../types";
   import { theme } from "../stores/theme";
   import { zoomedSurfaceId } from "../stores/workspace";
@@ -9,7 +9,7 @@
   import SplitNodeView from "./SplitNodeView.svelte";
 
   export let node: SplitNode;
-  export let workspace: Workspace;
+  export let workspace: NestedWorkspace;
   export let onSelectSurface: (paneId: string, surfaceId: string) => void;
   export let onCloseSurface: (paneId: string, surfaceId: string) => void;
   export let onNewSurface: (paneId: string) => void;

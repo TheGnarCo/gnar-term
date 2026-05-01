@@ -41,7 +41,7 @@ import {
   activeSurface,
 } from "../lib/stores/workspace";
 import type {
-  Workspace,
+  NestedWorkspace,
   Pane,
   TerminalSurface,
   ExtensionSurface,
@@ -102,11 +102,13 @@ function makePane(
   };
 }
 
-function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
+function makeWorkspace(
+  overrides: Partial<NestedWorkspace> = {},
+): NestedWorkspace {
   const pane = makePane();
   return {
     id: uid(),
-    name: "Workspace 1",
+    name: "NestedWorkspace 1",
     splitRoot: { type: "pane", pane },
     activePaneId: pane.id,
     ...overrides,
@@ -141,7 +143,7 @@ afterEach(() => {
 });
 
 // ============================================================
-// 1. Workspace lifecycle
+// 1. NestedWorkspace lifecycle
 // ============================================================
 
 describe("Workflow: workspace lifecycle", () => {
@@ -278,7 +280,7 @@ describe("Workflow: pane split and navigation", () => {
     const paneB = makePane([
       mockTerminalSurface({ cwd: "/src/pane-b", ptyId: 20 }),
     ]);
-    const ws: Workspace = {
+    const ws: NestedWorkspace = {
       id: uid(),
       name: "Cwd Source",
       splitRoot: {
@@ -315,7 +317,7 @@ describe("Workflow: pane split and navigation", () => {
     const paneB = makePane([
       mockTerminalSurface({ cwd: "/src/pane-b", ptyId: 20 }),
     ]);
-    const ws: Workspace = {
+    const ws: NestedWorkspace = {
       id: uid(),
       name: "Cwd Source",
       splitRoot: {

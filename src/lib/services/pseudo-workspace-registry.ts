@@ -1,5 +1,5 @@
 /**
- * Pseudo-Workspace Registry — extensions register non-persisted, pinned
+ * Pseudo-NestedWorkspace Registry — extensions register non-persisted, pinned
  * entries that render in the root sidebar list alongside real
  * workspaces. The canonical use case is the Global Agentic Dashboard
  * (registered by the agentic extension), which appears at the top of

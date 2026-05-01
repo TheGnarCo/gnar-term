@@ -59,7 +59,7 @@
    */
   export let dashboardHintFor:
     | ((
-        ws: import("../types").Workspace,
+        ws: import("../types").NestedWorkspace,
       ) => { id: string; color?: string; onClick: () => void } | undefined)
     | undefined = undefined;
   /**

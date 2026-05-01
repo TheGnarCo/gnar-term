@@ -1,5 +1,5 @@
 /**
- * Unit tests for the core Workspace Group service — CRUD, membership,
+ * Unit tests for the core Workspace service — CRUD, membership,
  * and dashboard-close behavior. Persistence is mocked out via the
  * in-memory svelte store.
  */
@@ -23,7 +23,7 @@ import {
 import { eventBus } from "../event-bus";
 import { rootRowOrder } from "../../stores/root-row-order";
 import { workspaces, activeWorkspaceIdx } from "../../stores/workspace";
-import type { Workspace } from "../../types";
+import type { NestedWorkspace } from "../../types";
 import type { WorkspaceEntry } from "../../config";
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -100,7 +100,7 @@ describe("workspace-group-service", () => {
   });
 
   describe("closeWorkspacesInGroup", () => {
-    function makeWs(id: string, groupId?: string): Workspace {
+    function makeWs(id: string, groupId?: string): NestedWorkspace {
       return {
         id,
         name: id,
@@ -110,7 +110,7 @@ describe("workspace-group-service", () => {
         },
         activePaneId: `${id}-p`,
         ...(groupId ? { metadata: { groupId } } : {}),
-      } as Workspace;
+      } as NestedWorkspace;
     }
 
     beforeEach(() => {
@@ -142,7 +142,7 @@ describe("workspace-group-service", () => {
       const dashboard = {
         ...makeWs("ws-dashboard", "g1"),
         metadata: { groupId: "g1", isDashboard: true },
-      } as Workspace;
+      } as NestedWorkspace;
       workspaces.set([dashboard, makeWs("ws-nested", "g1")]);
 
       closeWorkspacesInGroup("g1");

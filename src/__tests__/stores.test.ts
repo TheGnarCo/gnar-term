@@ -17,7 +17,7 @@ import {
   findBarVisible,
   contextMenu,
 } from "../lib/stores/ui";
-import type { Workspace, Pane, TerminalSurface } from "../lib/types";
+import type { NestedWorkspace, Pane, TerminalSurface } from "../lib/types";
 
 function makeSurface(id: string): TerminalSurface {
   return {
@@ -34,7 +34,7 @@ function makeSurface(id: string): TerminalSurface {
   };
 }
 
-function makeWorkspace(id: string, name: string): Workspace {
+function makeWorkspace(id: string, name: string): NestedWorkspace {
   const s1 = makeSurface(`${id}-s1`);
   const pane: Pane = { id: `${id}-p1`, surfaces: [s1], activeSurfaceId: s1.id };
   return {
@@ -45,7 +45,7 @@ function makeWorkspace(id: string, name: string): Workspace {
   };
 }
 
-describe("Workspace stores", () => {
+describe("NestedWorkspace stores", () => {
   beforeEach(() => {
     workspaces.set([]);
     activeWorkspaceIdx.set(-1);
@@ -58,15 +58,15 @@ describe("Workspace stores", () => {
   });
 
   it("derives activeWorkspace from idx", () => {
-    const ws1 = makeWorkspace("ws1", "Workspace 1");
-    const ws2 = makeWorkspace("ws2", "Workspace 2");
+    const ws1 = makeWorkspace("ws1", "NestedWorkspace 1");
+    const ws2 = makeWorkspace("ws2", "NestedWorkspace 2");
     workspaces.set([ws1, ws2]);
     activeWorkspaceIdx.set(0);
 
-    expect(get(activeWorkspace)?.name).toBe("Workspace 1");
+    expect(get(activeWorkspace)?.name).toBe("NestedWorkspace 1");
 
     activeWorkspaceIdx.set(1);
-    expect(get(activeWorkspace)?.name).toBe("Workspace 2");
+    expect(get(activeWorkspace)?.name).toBe("NestedWorkspace 2");
   });
 
   it("derives activePane from activeWorkspace", () => {
@@ -114,7 +114,7 @@ describe("Workspace stores", () => {
     const s1 = makeSurface("s1");
     const s2 = makeSurface("s2");
     const pane: Pane = { id: "p1", surfaces: [s1, s2], activeSurfaceId: "s2" };
-    const ws: Workspace = {
+    const ws: NestedWorkspace = {
       id: "ws1",
       name: "Test",
       splitRoot: { type: "pane", pane },

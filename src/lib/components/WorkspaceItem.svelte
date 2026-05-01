@@ -15,11 +15,11 @@
 
   $: isDisco = $theme.name === "Molly Disco";
   import { getAllSurfaces } from "../types";
-  import type { Workspace } from "../types";
+  import type { NestedWorkspace } from "../types";
   import { workspaceSurfaceMap } from "../services/workspace-service";
   import { wsMeta } from "../services/service-helpers";
 
-  export let workspace: Workspace;
+  export let workspace: NestedWorkspace;
   export let index: number;
   export let isActive: boolean;
   export let onSelect: () => void;

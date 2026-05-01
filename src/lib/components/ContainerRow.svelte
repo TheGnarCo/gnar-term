@@ -22,7 +22,7 @@
   import PrimarySidebarElement from "./PrimarySidebarElement.svelte";
   import SidebarRail from "./SidebarRail.svelte";
   import DefaultWorkspaceListView from "./WorkspaceListView.svelte";
-  import type { Workspace } from "../types";
+  import type { NestedWorkspace } from "../types";
   import { wsMeta } from "../services/service-helpers";
 
   /** Banner + rail color. Required. */
@@ -58,7 +58,7 @@
   /** Dashboard-hint resolver forwarded to WorkspaceListView. */
   export let dashboardHintFor:
     | ((
-        ws: Workspace,
+        ws: NestedWorkspace,
       ) => { id: string; color?: string; onClick: () => void } | undefined)
     | undefined = undefined;
   /** Forwarded: suppress per-row status badges when the container aggregates. */
@@ -200,7 +200,7 @@
         hasActiveStripe={hasActiveChild && collapsed}
         {onGripMouseDown}
         {onClose}
-        closeTooltip="Delete Workspace Group"
+        closeTooltip="Delete Workspace"
       />
     {/if}
     <div

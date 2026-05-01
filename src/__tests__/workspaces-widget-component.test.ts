@@ -31,13 +31,13 @@ import {
   resetWorkspaceGroupsForTest,
 } from "../lib/stores/workspace-groups";
 import { DASHBOARD_HOST_KEY } from "../lib/contexts/dashboard-host";
-import type { Workspace } from "../lib/types";
+import type { NestedWorkspace } from "../lib/types";
 
 function makeWorkspace(
   id: string,
   name: string,
   metadata: Record<string, unknown> = {},
-): Workspace {
+): NestedWorkspace {
   return {
     id,
     name,
@@ -148,8 +148,8 @@ describe("WorkspacesWidget", () => {
       },
     ]);
     workspaces.set([
-      makeWorkspace("ws-alpha", "Alpha Workspace", { groupId: "g1" }),
-      makeWorkspace("ws-beta", "Beta Workspace", { groupId: "g1" }),
+      makeWorkspace("ws-alpha", "Alpha NestedWorkspace", { groupId: "g1" }),
+      makeWorkspace("ws-beta", "Beta NestedWorkspace", { groupId: "g1" }),
     ]);
 
     const { container } = render(WorkspacesWidget, {
@@ -160,8 +160,8 @@ describe("WorkspacesWidget", () => {
     expect(rows).toHaveLength(2);
 
     const names = Array.from(rows).map((r) => r.getAttribute("data-ws-name"));
-    expect(names).toContain("Alpha Workspace");
-    expect(names).toContain("Beta Workspace");
+    expect(names).toContain("Alpha NestedWorkspace");
+    expect(names).toContain("Beta NestedWorkspace");
   });
 
   it("excludes workspaces from other groups", () => {
@@ -186,8 +186,8 @@ describe("WorkspacesWidget", () => {
       },
     ]);
     workspaces.set([
-      makeWorkspace("ws-g1", "G1 Workspace", { groupId: "g1" }),
-      makeWorkspace("ws-g2", "G2 Workspace", { groupId: "g2" }),
+      makeWorkspace("ws-g1", "G1 NestedWorkspace", { groupId: "g1" }),
+      makeWorkspace("ws-g2", "G2 NestedWorkspace", { groupId: "g2" }),
     ]);
 
     const { container } = render(WorkspacesWidget, {
@@ -196,7 +196,7 @@ describe("WorkspacesWidget", () => {
 
     const rows = container.querySelectorAll("[data-workspace-row]");
     expect(rows).toHaveLength(1);
-    expect(rows[0]!.getAttribute("data-ws-name")).toBe("G1 Workspace");
+    expect(rows[0]!.getAttribute("data-ws-name")).toBe("G1 NestedWorkspace");
   });
 });
 
@@ -221,8 +221,8 @@ describe("WorkspacesWidget click-to-navigate", () => {
       },
     ]);
     workspaces.set([
-      makeWorkspace("ws-alpha", "Alpha Workspace", { groupId: "g1" }),
-      makeWorkspace("ws-beta", "Beta Workspace", { groupId: "g1" }),
+      makeWorkspace("ws-alpha", "Alpha NestedWorkspace", { groupId: "g1" }),
+      makeWorkspace("ws-beta", "Beta NestedWorkspace", { groupId: "g1" }),
     ]);
 
     const { container } = render(WorkspacesWidget, {

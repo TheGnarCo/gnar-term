@@ -130,7 +130,7 @@
       on:keydown={handleKeydown}
     >
       <div style="font-size: 14px; font-weight: 600; color: {$theme.fg};">
-        New Workspace Group
+        New Workspace
       </div>
 
       {#if error}

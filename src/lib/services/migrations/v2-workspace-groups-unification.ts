@@ -1,6 +1,6 @@
 /**
  * v2 Workspace Groups Unification migration — collapses the legacy
- * AgentOrchestrator entity into the new Workspace-Group-scoped Agentic
+ * AgentOrchestrator entity into the new NestedWorkspace-Group-scoped Agentic
  * Dashboard contribution and the singleton Global Agentic Dashboard.
  *
  * Runs once per config (schemaVersion 1 → 2). Reads the workspace-groups

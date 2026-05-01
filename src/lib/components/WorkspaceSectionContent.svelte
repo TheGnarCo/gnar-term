@@ -48,7 +48,11 @@
     showConfirmPrompt,
   } from "../stores/ui";
   import { contrastColor } from "../utils/contrast";
-  import { getAllSurfaces, isPreviewSurface, type Workspace } from "../types";
+  import {
+    getAllSurfaces,
+    isPreviewSurface,
+    type NestedWorkspace,
+  } from "../types";
   import { agentsStore } from "../services/agent-detection-service";
   import { variantColor } from "../status-colors";
   import { wsMeta } from "../services/service-helpers";
@@ -182,7 +186,7 @@
     if (!group) return;
     const confirmed = await showConfirmPrompt(
       `Unlock workspace group "${group.name}"?`,
-      { title: "Unlock Workspace Group", confirmLabel: "Unlock" },
+      { title: "Unlock Workspace", confirmLabel: "Unlock" },
     );
     if (!confirmed) return;
     toggleWorkspaceGroupLock(group.id);
@@ -201,7 +205,7 @@
         : "";
     const confirmed = await showConfirmPrompt(
       `Delete group "${g.name}"?${nestedLine}`,
-      { title: "Delete Workspace Group", confirmLabel: "Delete", danger: true },
+      { title: "Delete Workspace", confirmLabel: "Delete", danger: true },
     );
     if (!confirmed) return;
     closeWorkspacesInGroup(g.id);
@@ -301,7 +305,7 @@
 
   $: dashboardWorkspaces = (() => {
     const gId = group?.id;
-    if (!gId) return [] as Array<{ ws: Workspace; idx: number }>;
+    if (!gId) return [] as Array<{ ws: NestedWorkspace; idx: number }>;
     return $workspaces
       .map((ws, idx) => ({ ws, idx }))
       .filter(({ ws }) => {
@@ -352,7 +356,7 @@
   // Dashboard-hint for nested workspaces: any workspace hosting a
   // preview surface pointed at the group's dashboard path gets a
   // dashboard icon.
-  function hintForGroupDashboardHost(ws: Workspace) {
+  function hintForGroupDashboardHost(ws: NestedWorkspace) {
     if (!group) return undefined;
     const path = groupDashboardPath(group.path);
     const hosts = getAllSurfaces(ws).some(

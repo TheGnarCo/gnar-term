@@ -52,7 +52,7 @@ import {
 } from "../stores/workspace-groups-ui";
 import { invoke } from "@tauri-apps/api/core";
 import { getActiveCwd, wsMeta } from "../services/service-helpers";
-import type { WorkspaceMetadata } from "../types";
+import type { NestedWorkspaceMetadata } from "../types";
 import {
   createWorkspaceFromDef,
   switchWorkspace,
@@ -75,7 +75,7 @@ function generateId(): string {
 
 function onWorkspaceCreated(event: AppEvent): void {
   if (event.type !== "workspace:created") return;
-  const metadata = event.metadata as WorkspaceMetadata | undefined;
+  const metadata = event.metadata as NestedWorkspaceMetadata | undefined;
   const targetGroupId = metadata?.groupId;
   if (!targetGroupId) return;
   addWorkspaceToGroup(targetGroupId, event.id);
@@ -183,7 +183,7 @@ async function createWorkspaceGroupFlow(prefill?: {
     const wsCount =
       readGroups().find((g) => g.id === id)?.workspaceIds.length ?? 0;
     await createWorkspaceFromDef({
-      name: `${result.name} Workspace ${wsCount + 1}`,
+      name: `${result.name} NestedWorkspace ${wsCount + 1}`,
       cwd: result.path,
       metadata: { groupId: id },
       layout: { pane: { surfaces: [{ type: "terminal" }] } },
@@ -246,20 +246,20 @@ async function promoteActiveWorkspaceToGroup(): Promise<void> {
 }
 
 /**
- * Register one palette command per group — "<group>: New Workspace".
+ * Register one palette command per group — "<group>: New NestedWorkspace".
  * Re-run whenever groups change so added groups get their commands.
  */
 function registerPerGroupCommands(): void {
   for (const group of readGroups()) {
     registerCommand({
       id: `new-ws-${group.id}`,
-      title: `${group.name}: New Workspace`,
+      title: `${group.name}: New NestedWorkspace`,
       source: SOURCE,
       action: () => {
         const count =
           readGroups().find((g) => g.id === group.id)?.workspaceIds.length ?? 0;
         void createWorkspaceFromDef({
-          name: `${group.name} Workspace ${count + 1}`,
+          name: `${group.name} NestedWorkspace ${count + 1}`,
           cwd: group.path,
           metadata: { groupId: group.id },
           layout: { pane: { surfaces: [{ type: "terminal" }] } },
@@ -319,7 +319,7 @@ export async function initWorkspaceGroups(): Promise<void> {
   // Commands
   registerCommand({
     id: "create-workspace-group",
-    title: "Create Workspace Group...",
+    title: "Create Workspace...",
     source: SOURCE,
     action: () => {
       void createWorkspaceGroupFlow();
@@ -328,7 +328,7 @@ export async function initWorkspaceGroups(): Promise<void> {
 
   registerCommand({
     id: "promote-workspace-to-group",
-    title: "Promote Workspace to Workspace Group...",
+    title: "Promote NestedWorkspace to Workspace...",
     source: SOURCE,
     action: () => {
       void promoteActiveWorkspaceToGroup();
@@ -337,7 +337,7 @@ export async function initWorkspaceGroups(): Promise<void> {
 
   registerCommand({
     id: "open-group-dashboard",
-    title: "Open Workspace Group Dashboard...",
+    title: "Open Workspace Dashboard...",
     source: SOURCE,
     action: () => {
       const groups = readGroups();
@@ -354,7 +354,7 @@ export async function initWorkspaceGroups(): Promise<void> {
   // Surfaced in PaneView's TabBar for workspaces belonging to a group.
   registerCommand({
     id: "workspace-groups:regenerate-active-group-dashboard",
-    title: "Spawn Workspace Group Dashboard",
+    title: "Spawn Workspace Dashboard",
     source: SOURCE,
     action: () => {
       const list = get(workspaces);

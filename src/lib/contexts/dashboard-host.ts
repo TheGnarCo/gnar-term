@@ -16,7 +16,7 @@
  *   - Otherwise                                     → inert / error
  */
 import { getContext, setContext } from "svelte";
-import type { WorkspaceMetadata } from "../types";
+import type { NestedWorkspaceMetadata } from "../types";
 
 export interface DashboardHostContext {
   /**
@@ -24,7 +24,7 @@ export interface DashboardHostContext {
    * actual dashboard workspace, or the synthetic metadata the
    * pseudo-workspace registry carried for a virtual host.
    */
-  metadata: WorkspaceMetadata;
+  metadata: NestedWorkspaceMetadata;
 }
 
 /** Svelte context key. Scoped string to avoid collisions. */

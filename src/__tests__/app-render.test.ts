@@ -43,13 +43,13 @@ describe("App.svelte structure verification", () => {
     // Must await fontReady before creating workspace
     expect(source).toContain("await fontReady");
     expect(source).toContain("setupListeners()");
-    // Workspace restoration moved to bootstrap/restore-workspaces.ts —
-    // the fallback "Workspace 1" seed now lives there.
+    // NestedWorkspace restoration moved to bootstrap/restore-workspaces.ts —
+    // the fallback "NestedWorkspace 1" seed now lives there.
     const restore = fs.readFileSync(
       "src/lib/bootstrap/restore-workspaces.ts",
       "utf-8",
     );
-    expect(restore).toContain('createWorkspace("Workspace 1")');
+    expect(restore).toContain('createWorkspace("NestedWorkspace 1")');
   });
 
   it("does not duplicate surface push (createTerminalSurface handles it)", async () => {
@@ -263,7 +263,7 @@ describe("Config loads per-project files", () => {
   });
 });
 
-describe("Workspace from config definition", () => {
+describe("NestedWorkspace from config definition", () => {
   it("createWorkspaceFromDef is implemented in workspace-service", async () => {
     const ws = await import("../lib/services/workspace-service");
     expect(typeof ws.createWorkspaceFromDef).toBe("function");
@@ -467,7 +467,7 @@ describe("CWD polling fallback", () => {
   });
 });
 
-describe("Workspace save/restore", () => {
+describe("NestedWorkspace save/restore", () => {
   it("serializeLayout produces config-compatible output", async () => {
     const { serializeLayout } =
       await import("../lib/services/workspace-service");
@@ -525,7 +525,7 @@ describe("Workspace save/restore", () => {
 
   // Structural invariant: verified via source scan because mounting the full
   // component tree requires Tauri runtime which isn't available in vitest.
-  it("command palette has Save Current Workspace", async () => {
+  it("command palette has Save Current NestedWorkspace", async () => {
     const fs = await import("fs");
     const source = fs.readFileSync("src/App.svelte", "utf-8");
     expect(source).toContain('"Save Current Workspace..."');

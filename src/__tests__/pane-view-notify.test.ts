@@ -28,7 +28,7 @@ globalThis.ResizeObserver =
 
 import PaneView from "../lib/components/PaneView.svelte";
 import { workspaces } from "../lib/stores/workspace";
-import type { Workspace, Pane, TerminalSurface } from "../lib/types";
+import type { NestedWorkspace, Pane, TerminalSurface } from "../lib/types";
 
 function makeTerminalSurface(id: string, hasUnread: boolean): TerminalSurface {
   return {
@@ -66,8 +66,8 @@ function makePane(surfaces: TerminalSurface[]): Pane {
   };
 }
 
-function setupWorkspace(pane: Pane): Workspace {
-  const ws: Workspace = {
+function setupWorkspace(pane: Pane): NestedWorkspace {
+  const ws: NestedWorkspace = {
     id: "ws1",
     name: "Test",
     splitRoot: { type: "pane", pane },

@@ -16,7 +16,7 @@
   export let onClose: () => void;
   /** Pane that owns this tab — needed to identify drop targets. */
   export let paneId: string;
-  /** Workspace this tab lives in — needed for cross-workspace drops. */
+  /** NestedWorkspace this tab lives in — needed for cross-workspace drops. */
   export let workspaceId: string;
   /** Optional agent dot color. When non-null, renders a colored dot next to the tab title. */
   export let agentDotColor: string | null = null;

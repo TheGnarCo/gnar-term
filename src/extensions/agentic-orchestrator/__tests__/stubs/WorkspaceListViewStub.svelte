@@ -1,18 +1,18 @@
 <script lang="ts">
-  import type { Workspace } from "../../../../lib/types";
+  import type { NestedWorkspace } from "../../../../lib/types";
   import { workspaces } from "../../../../lib/stores/workspace";
 
   export let filterIds: Set<string> | undefined = undefined;
   export let accentColor: string | undefined = undefined;
   export let dashboardHintFor:
     | ((
-        ws: Workspace,
+        ws: NestedWorkspace,
       ) => { id: string; color?: string; onClick: () => void } | undefined)
     | undefined = undefined;
   export let hideStatusBadges: boolean = false;
 
   // Reflect the real WorkspaceListView contract: it reads the global
-  // workspaces store filtered by filterIds and passes full Workspace
+  // workspaces store filtered by filterIds and passes full NestedWorkspace
   // objects (including metadata) to its per-row hooks. The stub must do
   // the same, otherwise dashboardHintFor gets a stripped workspace with
   // no metadata and the hint resolves to undefined.
@@ -28,7 +28,7 @@
   data-hide-status-badges={hideStatusBadges ? "true" : "false"}
 >
   {#each rows as ws (ws.id)}
-    {@const hint = dashboardHintFor?.(ws as unknown as Workspace)}
+    {@const hint = dashboardHintFor?.(ws as unknown as NestedWorkspace)}
     <button
       type="button"
       data-stub-row={ws.id}

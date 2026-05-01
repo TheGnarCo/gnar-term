@@ -69,7 +69,7 @@ export async function loadWorkspaceGroups(): Promise<void> {
     typeof state[ACTIVE_GROUP_ID_KEY] === "string"
       ? (state[ACTIVE_GROUP_ID_KEY] as string)
       : null;
-  // Workspace ids are regenerated on each run, so drop any stale values;
+  // NestedWorkspace ids are regenerated on each run, so drop any stale values;
   // the workspace:created listener rebuilds them from metadata.groupId.
   _groups.set(groups.map((g) => ({ ...g, workspaceIds: [] })));
   _groupOrder.set(order);

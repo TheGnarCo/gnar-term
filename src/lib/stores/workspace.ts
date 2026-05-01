@@ -1,8 +1,8 @@
 import { writable, derived } from "svelte/store";
-import type { Workspace } from "../types";
+import type { NestedWorkspace } from "../types";
 import { getAllPanes } from "../types";
 
-export const workspaces = writable<Workspace[]>([]);
+export const workspaces = writable<NestedWorkspace[]>([]);
 export const activeWorkspaceIdx = writable<number>(-1);
 
 /**

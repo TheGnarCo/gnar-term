@@ -635,7 +635,7 @@ describe("agent-detection-service — late workspace load (startup race)", () =>
       ),
     ).toBeUndefined();
 
-    // Workspace loads — subscription should backfill the idle status item.
+    // NestedWorkspace loads — subscription should backfill the idle status item.
     workspaces.set([
       makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 62 }]),
     ]);

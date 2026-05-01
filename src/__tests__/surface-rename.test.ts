@@ -19,9 +19,9 @@ import {
   renameActiveSurface,
   renameSurface,
 } from "../lib/services/surface-service";
-import type { Workspace } from "../lib/types";
+import type { NestedWorkspace } from "../lib/types";
 
-function makeWorkspace(surfaceId: string, title = "Tab"): Workspace {
+function makeWorkspace(surfaceId: string, title = "Tab"): NestedWorkspace {
   return {
     id: "ws-1",
     name: "Test",

@@ -22,18 +22,18 @@ import {
   clearAllStatusForWorkspace,
 } from "../lib/services/status-registry";
 import { GIT_STATUS_SOURCE } from "../lib/services/git-status-service";
-import type { Workspace } from "../lib/types";
+import type { NestedWorkspace } from "../lib/types";
 
 function makeWorkspace(
   id: string,
   metadata: Record<string, unknown> = {},
-): Workspace {
+): NestedWorkspace {
   return {
     id,
     name: id,
     layout: { pane: { id: `${id}-pane`, surfaces: [], activeIdx: 0 } },
     metadata,
-  } as Workspace;
+  } as NestedWorkspace;
 }
 
 function setDirty(workspaceId: string) {

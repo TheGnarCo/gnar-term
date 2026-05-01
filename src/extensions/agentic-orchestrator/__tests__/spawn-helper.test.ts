@@ -29,15 +29,15 @@ vi.mock("../../../lib/services/worktree-service", () => ({
 }));
 
 import { workspaces } from "../../../lib/stores/workspace";
-import type { Workspace } from "../../../lib/types";
+import type { NestedWorkspace } from "../../../lib/types";
 import {
   buildStartupCommand,
   quoteTaskForShell,
   spawnAgentInWorktree,
 } from "../../../lib/services/spawn-helper";
 
-function seedWorkspaceAfterCreate(workspaceId: string): Workspace {
-  const ws: Workspace = {
+function seedWorkspaceAfterCreate(workspaceId: string): NestedWorkspace {
+  const ws: NestedWorkspace = {
     id: workspaceId,
     name: "Worktree N",
     activePaneId: "p-1",

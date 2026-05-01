@@ -37,7 +37,7 @@ import {
 import { workspaces } from "../lib/stores/workspace";
 import {
   isPreviewSurface,
-  type Workspace,
+  type NestedWorkspace,
   type PreviewSurface,
   type Pane,
 } from "../lib/types";
@@ -104,7 +104,7 @@ describe("createWorkspaceFromDef — preview surfaces", () => {
 
     const list = get(workspaces);
     expect(list).toHaveLength(1);
-    const ws = list[0] as Workspace;
+    const ws = list[0] as NestedWorkspace;
     expect(ws.splitRoot.type).toBe("pane");
     if (ws.splitRoot.type !== "pane") return;
     const surfaces = ws.splitRoot.pane.surfaces;

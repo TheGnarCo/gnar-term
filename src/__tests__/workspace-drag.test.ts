@@ -87,7 +87,7 @@ import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
 import {
   uid,
   getAllPanes,
-  type Workspace,
+  type NestedWorkspace,
   type Pane,
   type SplitNode,
   type TerminalSurface,
@@ -131,8 +131,8 @@ function makePane(surfaces: TerminalSurface[]): Pane {
 
 function makeWorkspace(
   splitRoot: SplitNode,
-  overrides: Partial<Workspace> = {},
-): Workspace {
+  overrides: Partial<NestedWorkspace> = {},
+): NestedWorkspace {
   return {
     id: uid(),
     name: "WS",

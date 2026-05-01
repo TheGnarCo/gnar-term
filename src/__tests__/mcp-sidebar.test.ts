@@ -10,11 +10,11 @@ import {
   _resetMcpSidebarForTest,
 } from "../lib/stores/mcp-sidebar";
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
-import type { Workspace, Pane } from "../lib/types";
+import type { NestedWorkspace, Pane } from "../lib/types";
 
 function setActiveWorkspace(id: string): void {
   const pane: Pane = { id: `${id}-pane`, surfaces: [], activeSurfaceId: null };
-  const ws: Workspace = {
+  const ws: NestedWorkspace = {
     id,
     name: id,
     splitRoot: { type: "pane", pane },
@@ -115,13 +115,13 @@ describe("mcp-sidebar store (per-workspace)", () => {
     // Two workspaces.
     const p1: Pane = { id: "p-1", surfaces: [], activeSurfaceId: null };
     const p2: Pane = { id: "p-2", surfaces: [], activeSurfaceId: null };
-    const w1: Workspace = {
+    const w1: NestedWorkspace = {
       id: "ws-1",
       name: "W1",
       splitRoot: { type: "pane", pane: p1 },
       activePaneId: p1.id,
     };
-    const w2: Workspace = {
+    const w2: NestedWorkspace = {
       id: "ws-2",
       name: "W2",
       splitRoot: { type: "pane", pane: p2 },

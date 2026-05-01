@@ -1,6 +1,6 @@
 /**
- * Workspace Group Service — CRUD + flow functions for the core
- * Workspace Group primitive. Relocated from the project-scope extension
+ * Workspace Service — CRUD + flow functions for the core
+ * Workspace primitive. Relocated from the project-scope extension
  * in Stage 5; see ADR 004.
  *
  * Components and core commands call into this module rather than
@@ -27,7 +27,11 @@ import {
   schedulePersist,
 } from "./workspace-service";
 import { eventBus } from "./event-bus";
-import { getAllPanes, type Workspace, type WorkspaceMetadata } from "../types";
+import {
+  getAllPanes,
+  type NestedWorkspace,
+  type NestedWorkspaceMetadata,
+} from "../types";
 import { wsMeta } from "./service-helpers";
 import {
   getDashboardContribution,
@@ -94,7 +98,7 @@ export function deleteWorkspaceGroup(id: string): void {
  * reclaim, reconcile). Extension-layer consumers that need a CWD-prefix
  * fallback for unclaimed workspaces should compose with this result.
  */
-export function getWorktreeWorkspaces(groupId: string): Workspace[] {
+export function getWorktreeWorkspaces(groupId: string): NestedWorkspace[] {
   return get(workspaces).filter((w) => wsMeta(w).groupId === groupId);
 }
 
@@ -209,7 +213,7 @@ export function groupDashboardPath(groupPath: string): string {
 
 function buildGroupDashboardMarkdown(group: WorkspaceEntry): string {
   // The Group Dashboard is the generic, agent-agnostic landing page for
-  // a Workspace Group. It surfaces GitHub work-tracker context — open
+  // a Workspace. It surfaces GitHub work-tracker context — open
   // issues + open PRs — side by side, as a passive read-only browse
   // panel. Spawn-on-issue lives on the per-group Agentic Dashboard tile
   // (which mounts the same `gnar:issues` widget without `displayOnly`).
@@ -470,7 +474,7 @@ export function createSettingsDashboardWorkspace(
  *   (pre-stamp legacy records). Use for the group-overview reconcile pass.
  */
 export function isDashboardWorkspace(
-  ws: { metadata?: WorkspaceMetadata },
+  ws: { metadata?: NestedWorkspaceMetadata },
   groupId: string,
   contribId?: string,
   allowLegacyUndefined = false,

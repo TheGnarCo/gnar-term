@@ -53,7 +53,7 @@ import {
   type Pane,
   type SplitNode,
   type TerminalSurface,
-  type Workspace,
+  type NestedWorkspace,
 } from "../types";
 import { findParentSplit } from "../types";
 import {
@@ -192,11 +192,11 @@ function newSessionId(): string {
   return `mcp-${crypto.randomUUID?.() ?? Math.random().toString(36).slice(2)}`;
 }
 
-// ---- Workspace / pane resolution ----
+// ---- NestedWorkspace / pane resolution ----
 
 function findPaneById(
   paneId: string,
-): { workspace: Workspace; pane: Pane } | null {
+): { workspace: NestedWorkspace; pane: Pane } | null {
   for (const ws of get(workspaces)) {
     for (const pane of getAllPanes(ws.splitRoot)) {
       if (pane.id === paneId) return { workspace: ws, pane };
@@ -205,7 +205,7 @@ function findPaneById(
   return null;
 }
 
-function findWorkspaceById(workspaceId: string): Workspace | null {
+function findWorkspaceById(workspaceId: string): NestedWorkspace | null {
   return get(workspaces).find((w) => w.id === workspaceId) ?? null;
 }
 
@@ -213,7 +213,7 @@ function findWorkspaceById(workspaceId: string): Workspace | null {
  *  the caller expressed a specific host pane to split; null means "place in
  *  the workspace's active pane (or first pane)." */
 interface ResolvedTarget {
-  workspace: Workspace;
+  workspace: NestedWorkspace;
   hostPane: Pane | null;
   source: "args-pane" | "args-workspace" | "binding-pane" | "binding-workspace";
 }
@@ -296,14 +296,14 @@ function resolveTarget(
 
 /** Pick a host pane to split off when the caller didn't supply one. Prefers
  *  the workspace's active pane; falls back to the first pane in the tree. */
-function pickHostPane(workspace: Workspace): Pane {
+function pickHostPane(workspace: NestedWorkspace): Pane {
   const all = getAllPanes(workspace.splitRoot);
   if (workspace.activePaneId) {
     const active = all.find((p) => p.id === workspace.activePaneId);
     if (active) return active;
   }
   if (all.length > 0) return all[0]!;
-  // Workspace exists but has no panes (shouldn't happen in practice; create one).
+  // NestedWorkspace exists but has no panes (shouldn't happen in practice; create one).
   const newPane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
   workspace.splitRoot = { type: "pane", pane: newPane };
   workspaces.update((l) => [...l]);
@@ -312,7 +312,7 @@ function pickHostPane(workspace: Workspace): Pane {
 
 /** Split `hostPane` off into a new sibling pane within its workspace. */
 function splitPaneInWorkspace(
-  workspace: Workspace,
+  workspace: NestedWorkspace,
   hostPane: Pane,
   direction: "horizontal" | "vertical",
 ): Pane {

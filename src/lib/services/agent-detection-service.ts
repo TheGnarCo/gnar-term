@@ -313,7 +313,7 @@ function publishStatus(
   });
 }
 
-// --- Workspace resolution ---
+// --- NestedWorkspace resolution ---
 
 function resolveWorkspaceIdForSurface(surfaceId: string): string {
   return lookupSurfaceWorkspaceId(surfaceId) ?? "";

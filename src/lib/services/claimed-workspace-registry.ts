@@ -1,5 +1,5 @@
 /**
- * Claimed Workspace Registry
+ * Claimed NestedWorkspace Registry
  *
  * Extensions "claim" workspace IDs so they appear in the extension's
  * own sidebar section instead of the main Workspaces block.
@@ -34,7 +34,7 @@ export function claimWorkspace(workspaceId: string, source: string): void {
 
 export function unclaimWorkspace(workspaceId: string): void {
   registry.unregister(workspaceId);
-  // Workspace is back at the root — restore it to the root-row list
+  // NestedWorkspace is back at the root — restore it to the root-row list
   // (append to the end matches the legacy behavior for fresh workspaces).
   appendRootRow({ kind: "workspace", id: workspaceId });
 }

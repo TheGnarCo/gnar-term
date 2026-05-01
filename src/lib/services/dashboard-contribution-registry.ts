@@ -1,6 +1,6 @@
 /**
  * Dashboard Contribution Registry — extensions (and core) register
- * "kinds of dashboard" that can be added to a Workspace Group. Each
+ * "kinds of dashboard" that can be added to a Workspace. Each
  * contribution knows how to create its own Dashboard workspace from a
  * group; the group's multi-dashboard grid renders the resulting
  * workspaces keyed off `metadata.dashboardContributionId`.
@@ -10,7 +10,7 @@ import { createRegistry } from "./create-registry";
 import type { WorkspaceEntry } from "../config";
 
 /**
- * A kind of dashboard that can attach to a Workspace Group. The
+ * A kind of dashboard that can attach to a Workspace. The
  * registry stores the declarative metadata; group actions ("Add
  * <Dashboard>", "Remove <Dashboard>") read from it to build their menus,
  * and the core Group lifecycle code calls `create` to materialize the

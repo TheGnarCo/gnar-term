@@ -26,7 +26,7 @@ import {
   _resetMcpServerForTest,
 } from "../lib/services/mcp-server";
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
-import type { Workspace, Pane } from "../lib/types";
+import type { NestedWorkspace, Pane } from "../lib/types";
 import { isPreviewSurface, getAllSurfaces } from "../lib/types";
 import {
   registerPreviewSurface,
@@ -41,9 +41,12 @@ function rpc(method: string, params?: unknown, id: number = 1) {
   return { jsonrpc: "2.0" as const, id, method, params };
 }
 
-function makeWorkspace(id: string, name = id): { ws: Workspace; pane: Pane } {
+function makeWorkspace(
+  id: string,
+  name = id,
+): { ws: NestedWorkspace; pane: Pane } {
   const pane: Pane = { id: `${id}-pane`, surfaces: [], activeSurfaceId: null };
-  const ws: Workspace = {
+  const ws: NestedWorkspace = {
     id,
     name,
     splitRoot: { type: "pane", pane },

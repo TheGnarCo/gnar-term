@@ -10,7 +10,7 @@
  *   - EmptySurface sources buttons from workspaceActionStore and from
  *     the EMPTY_SURFACE_COMMAND_IDS promotion list.
  *   - App startup honors a persisted `state.workspaces: []` as a valid
- *     restored empty state instead of auto-seeding "Workspace 1".
+ *     restored empty state instead of auto-seeding "NestedWorkspace 1".
  */
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
@@ -89,11 +89,11 @@ describe("App startup honors an explicit empty persisted state", () => {
   // Startup restoration lives in bootstrap/restore-workspaces.ts.
   const RESTORE = read("src/lib/bootstrap/restore-workspaces.ts");
 
-  it("treats state.workspaces = [] as a restored state (no auto-seeded Workspace 1)", () => {
+  it("treats state.workspaces = [] as a restored state (no auto-seeded NestedWorkspace 1)", () => {
     // The restore condition must accept any Array, not require non-empty.
     expect(RESTORE).toMatch(/Array\.isArray\(state\.workspaces\)/);
     // The old "state.workspaces && state.workspaces.length > 0" gate
-    // would re-seed Workspace 1 on an empty persisted state.
+    // would re-seed NestedWorkspace 1 on an empty persisted state.
     const oneLine = RESTORE.replace(/\s+/g, " ");
     expect(oneLine).not.toMatch(
       /if\s*\(\s*state\.workspaces\s*&&\s*state\.workspaces\.length\s*>\s*0\s*\)/,

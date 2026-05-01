@@ -536,7 +536,7 @@ export interface ExtensionAPI {
 
   /**
    * Register a dashboard contribution — a "kind of dashboard" that can
-   * attach to a Workspace Group. Each group's context menu surfaces an
+   * attach to a Workspace. Each group's context menu surfaces an
    * "Add <actionLabel>" affordance per registered contribution whose
    * `isAvailableFor` gate accepts the group and whose `capPerGroup`
    * isn't already met. When invoked, core calls `create(group)` to
@@ -559,11 +559,11 @@ export interface ExtensionAPI {
    */
   registerPseudoWorkspace(pw: PseudoWorkspaceInput): void;
 
-  // Workspace subtitle — components rendered below workspace name in sidebar
+  // NestedWorkspace subtitle — components rendered below workspace name in sidebar
   /** Register a Svelte component to render below workspace names. Component receives { workspaceId } prop. */
   registerWorkspaceSubtitle(component: unknown, priority?: number): void;
 
-  // Workspace actions — buttons in the workspace header and sidebar top bar.
+  // NestedWorkspace actions — buttons in the workspace header and sidebar top bar.
   // Icon/shortcut/zone may be declared once in the manifest and omitted here;
   // runtime values win over manifest fallbacks.
   registerWorkspaceAction(
@@ -663,7 +663,7 @@ export interface ExtensionAPI {
     props?: Record<string, unknown>,
   ): void;
 
-  // Workspace management — switch and close by ID
+  // NestedWorkspace management — switch and close by ID
   switchWorkspace(workspaceId: string): void;
   closeWorkspace(workspaceId: string): void;
 
@@ -933,7 +933,7 @@ export interface DragReorderHandle {
   getState: () => DragReorderState;
 }
 
-// --- Workspace action types ---
+// --- NestedWorkspace action types ---
 
 /**
  * Context passed to workspace action handlers and `when` filters.
@@ -964,7 +964,7 @@ export interface WorkspaceActionInfo {
 // attaches `source` and stores the full record in the registry.
 
 /**
- * Minimum shape of a Workspace Group passed to contribution hooks. The
+ * Minimum shape of a Workspace passed to contribution hooks. The
  * canonical type lives in core (`src/lib/config.ts#WorkspaceEntry`);
  * the public API only exposes the fields contributions are allowed to
  * read so core can evolve the stored record without breaking extensions.
@@ -1079,7 +1079,7 @@ export interface PseudoWorkspaceInput {
   onClose?: () => void;
 }
 
-// --- Workspace creation options ---
+// --- NestedWorkspace creation options ---
 
 export interface CreateWorkspaceOptions {
   /** Environment variables to set on the workspace's terminal PTY */
@@ -1105,7 +1105,7 @@ export interface WorkspaceRef {
   // Opaque per-workspace metadata set at creation time (e.g. groupId,
   // worktreePath, branch). Extensions use this to detect nesting — e.g.
   // the core git status subtitle collapses when groupId is present
-  // because the Workspace Group banner already shows cwd+branch.
+  // because the Workspace banner already shows cwd+branch.
   metadata?: Record<string, unknown>;
 }
 

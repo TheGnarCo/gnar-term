@@ -25,7 +25,7 @@ globalThis.ResizeObserver =
 import PaneView from "../lib/components/PaneView.svelte";
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
 import { workspaceGroupsStore } from "../lib/stores/workspace-groups";
-import type { Workspace, Pane } from "../lib/types";
+import type { NestedWorkspace, Pane } from "../lib/types";
 
 function makePane(id: string): Pane {
   return {
@@ -59,7 +59,7 @@ describe("PaneView — settings dashboard body", () => {
       },
     ]);
 
-    const ws: Workspace = {
+    const ws: NestedWorkspace = {
       id: "ws-settings",
       name: "Settings",
       splitRoot: { type: "pane", pane: makePane("p1") },
@@ -69,7 +69,7 @@ describe("PaneView — settings dashboard body", () => {
         groupId: "g1",
         dashboardContributionId: "settings",
       },
-    } as unknown as Workspace;
+    } as unknown as NestedWorkspace;
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
 

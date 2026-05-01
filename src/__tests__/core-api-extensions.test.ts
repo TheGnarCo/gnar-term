@@ -35,7 +35,7 @@ vi.mock("../lib/services/service-helpers", () => ({
 
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
 import type {
-  Workspace,
+  NestedWorkspace,
   Pane,
   TerminalSurface,
   ExtensionSurface,
@@ -98,11 +98,13 @@ function makePane(
   };
 }
 
-function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
+function makeWorkspace(
+  overrides: Partial<NestedWorkspace> = {},
+): NestedWorkspace {
   const pane = makePane();
   return {
     id: uid(),
-    name: "Workspace 1",
+    name: "NestedWorkspace 1",
     splitRoot: { type: "pane", pane },
     activePaneId: pane.id,
     ...overrides,
@@ -253,7 +255,7 @@ describe("focusSurfaceById", () => {
     activeWorkspaceIdx.set(0);
 
     expect(() => focusSurfaceById("nonexistent-id")).not.toThrow();
-    // Workspace idx unchanged
+    // NestedWorkspace idx unchanged
     expect(get(activeWorkspaceIdx)).toBe(0);
   });
 

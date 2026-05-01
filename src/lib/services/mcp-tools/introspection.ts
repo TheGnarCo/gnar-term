@@ -15,7 +15,7 @@ import { pollEvents } from "../mcp-event-buffer";
 import { agentsStore } from "../agent-detection-service";
 import type { ToolDef } from "../mcp-types";
 
-// ---- Workspace introspection helpers ----
+// ---- NestedWorkspace introspection helpers ----
 
 function describeSurface(s: Surface) {
   return { id: s.id, kind: s.kind, title: s.title };

@@ -9,15 +9,15 @@ import {
   isTerminalSurface,
   type Surface,
   type TerminalSurface,
-  type Workspace,
-  type WorkspaceMetadata,
+  type NestedWorkspace,
+  type NestedWorkspaceMetadata,
 } from "../types";
 
 /**
  * Returns the typed metadata for a workspace, falling back to an empty object.
  * Use this instead of `ws.metadata as any` or unsafe casts.
  */
-export function wsMeta(ws: Workspace): WorkspaceMetadata {
+export function wsMeta(ws: NestedWorkspace): NestedWorkspaceMetadata {
   return ws.metadata ?? {};
 }
 

@@ -1,5 +1,5 @@
 /**
- * Workspace Action Registry
+ * NestedWorkspace Action Registry
  *
  * Extensions register workspace actions (buttons) that appear in
  * the sidebar header or top bar. Each action has an icon, label,

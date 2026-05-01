@@ -68,7 +68,7 @@ import {
 } from "../lib/stores/mcp-sidebar";
 import { _resetEventBufferForTest } from "../lib/services/mcp-event-buffer";
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
-import type { Workspace, Pane } from "../lib/types";
+import type { NestedWorkspace, Pane } from "../lib/types";
 import { getAllSurfaces } from "../lib/types";
 import {
   registerSurfaceType,
@@ -97,9 +97,12 @@ function rpc(method: string, params?: unknown, id: number = 1) {
 }
 
 /** Build a deterministic workspace fixture with a given id and a single pane. */
-function makeWorkspace(id: string, name = id): { ws: Workspace; pane: Pane } {
+function makeWorkspace(
+  id: string,
+  name = id,
+): { ws: NestedWorkspace; pane: Pane } {
   const pane: Pane = { id: `${id}-pane`, surfaces: [], activeSurfaceId: null };
-  const ws: Workspace = {
+  const ws: NestedWorkspace = {
     id,
     name,
     splitRoot: { type: "pane", pane },
@@ -1484,7 +1487,7 @@ describe("MCP — spawn_agent worktree flag", () => {
         },
       ],
     };
-    const ws: Workspace = {
+    const ws: NestedWorkspace = {
       id: "ws-host",
       name: "host",
       splitRoot: { type: "pane", pane },

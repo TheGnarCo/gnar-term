@@ -42,7 +42,7 @@
     if (idx >= 0) switchWorkspace(idx);
   }
 
-  function getContribInfo(ws: import("../types").Workspace): {
+  function getContribInfo(ws: import("../types").NestedWorkspace): {
     icon: unknown;
     label: string;
     groupPath: string | undefined;

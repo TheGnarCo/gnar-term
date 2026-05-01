@@ -124,7 +124,7 @@ import {
   activeWorkspaceIdx,
 } from "../lib/stores/workspace";
 import { uid } from "../lib/types";
-import type { Pane, TerminalSurface, Workspace } from "../lib/types";
+import type { Pane, TerminalSurface, NestedWorkspace } from "../lib/types";
 import { togglePaneZoom } from "../lib/services/pane-service";
 import { switchWorkspace } from "../lib/services/workspace-service";
 import { adjustFontSize, resetFontSize } from "../lib/terminal-service";
@@ -161,7 +161,7 @@ function makePane(surfaces: TerminalSurface[] = []): Pane {
   return pane;
 }
 
-function makeWorkspace(pane: Pane): Workspace {
+function makeWorkspace(pane: Pane): NestedWorkspace {
   return {
     id: uid(),
     name: "Test",

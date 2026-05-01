@@ -109,13 +109,13 @@ import {
   findSurfaceLocation,
 } from "../lib/services/surface-service";
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
-import type { Pane, Workspace } from "../lib/types";
+import type { Pane, NestedWorkspace } from "../lib/types";
 import { uid } from "../lib/types";
 
 /** Set up a minimal workspace with a single pane in the store. */
-function setupWorkspace(): { ws: Workspace; pane: Pane } {
+function setupWorkspace(): { ws: NestedWorkspace; pane: Pane } {
   const pane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
-  const ws: Workspace = {
+  const ws: NestedWorkspace = {
     id: uid(),
     name: "Test WS",
     splitRoot: { type: "pane", pane },

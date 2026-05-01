@@ -12,7 +12,7 @@
  *     applies copyPatterns/setupScript, creates the workspace with metadata
  *     including spawnedBy, and returns the new workspace id)
  *   - Sets the agent's startup command on the workspace's first terminal
- *     surface (already wired by createWorkspaceFromDef via WorkspaceDef.command)
+ *     surface (already wired by createWorkspaceFromDef via NestedWorkspaceDef.command)
  *
  * Branch defaulting (when caller doesn't pass a branch):
  *   `agent/<agent>/<shortTimestamp>` — base32 unix-seconds
@@ -38,7 +38,7 @@ import {
   getAllPanes,
   isTerminalSurface,
   type Pane,
-  type Workspace,
+  type NestedWorkspace,
 } from "../types";
 
 export type SpawnAgentType = "claude-code" | "codex" | "aider" | "custom";
@@ -165,12 +165,12 @@ export function buildStartupCommand(
   return `${base} ${quoteTaskForShell(taskContext)}`;
 }
 
-function findWorkspace(workspaceId: string): Workspace | undefined {
+function findWorkspace(workspaceId: string): NestedWorkspace | undefined {
   return get(workspaces).find((w) => w.id === workspaceId);
 }
 
 function firstPaneAndTerminal(
-  ws: Workspace,
+  ws: NestedWorkspace,
 ): { pane: Pane; surfaceId: string } | null {
   const panes = getAllPanes(ws.splitRoot);
   for (const pane of panes) {
@@ -241,7 +241,7 @@ export async function spawnAgentInWorktree(
   }
 
   // Override the surface name to reflect the spawn intent — createTerminalSurface
-  // assigns "Shell N" by default. The WorkspaceDef path doesn't pass `name`
+  // assigns "Shell N" by default. The NestedWorkspaceDef path doesn't pass `name`
   // through (we only set `command`), so we rename here.
   for (const s of placement.pane.surfaces) {
     if (isTerminalSurface(s) && s.id === placement.surfaceId) {

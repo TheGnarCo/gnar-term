@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
    * SidebarChipButton — small 14×14 close/lock button used in the
-   * primary sidebar (workspace rows, group banners). Encapsulates the
+   * primary sidebar (nested workspace rows, workspace banners). Encapsulates the
    * shared idle/hover color logic and stopPropagation wiring.
    */
   import { theme } from "../stores/theme";

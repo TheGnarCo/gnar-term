@@ -18,7 +18,7 @@
 
   export let mode: "row" | "container" = "row";
 
-  /** Rail color (workspace accent, group hex, etc.). */
+  /** Rail color (nested workspace accent, workspace hex, etc.). */
   export let color: string;
 
   /** Whether dragging is enabled. */

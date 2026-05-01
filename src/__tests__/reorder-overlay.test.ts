@@ -75,14 +75,14 @@ describe("per-project overlay (via WorkspaceListBlock shell)", () => {
     expect(GROUP_SECTION_CONTENT).toMatch(/overlay\.label/);
   });
 
-  it("WorkspaceSectionContent paints the strong overlay with the group's own color", () => {
-    // Non-source groups during a group drag render a solid colored
-    // tile using the theme-resolved group color.
+  it("WorkspaceSectionContent paints the strong overlay with the workspace's own color", () => {
+    // Non-source workspaces during a workspace drag render a solid
+    // colored tile using the theme-resolved workspace color.
     expect(GROUP_SECTION_CONTENT).toMatch(
       /overlay\.kind\s*===\s*["']strong["'][\s\S]*?workspaceHex/,
     );
     expect(GROUP_SECTION_CONTENT).toMatch(
-      /workspaceHex\s*=\s*[^\n]*resolveWorkspaceColor\(group\.color,\s*\$theme\)/,
+      /workspaceHex\s*=\s*[^\n]*resolveWorkspaceColor\(workspace\.color,\s*\$theme\)/,
     );
   });
 

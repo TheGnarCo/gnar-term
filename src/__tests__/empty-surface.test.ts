@@ -81,7 +81,7 @@ describe("EmptySurface renders and is wired up", () => {
 
   it("promoted-commands list includes create-workspace", () => {
     const cmds = read("src/lib/services/empty-surface-commands.ts");
-    expect(cmds).toMatch(/workspace-groups:create-workspace/);
+    expect(cmds).toMatch(/workspaces:create-workspace/);
   });
 });
 

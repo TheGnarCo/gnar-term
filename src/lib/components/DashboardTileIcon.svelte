@@ -5,7 +5,7 @@
    *
    * Color rules (in priority order):
    *   1. diff + dirty      → amber warning tone ("changes to review")
-   *   2. isActive/isHovered → baseColor (group accent)
+   *   2. isActive/isHovered → baseColor (workspace accent)
    *   3. otherwise         → dimColor (uniform inactive appearance)
    */
   import type { Component, ComponentType } from "svelte";

@@ -93,11 +93,13 @@ describe("PaneView — settings dashboard body", () => {
     });
 
     const panel = container.querySelector<HTMLElement>(
-      "[data-group-dashboard-settings]",
+      "[data-workspace-dashboard-settings]",
     );
     expect(panel).not.toBeNull();
-    expect(panel?.getAttribute("data-group-id")).toBe("g1");
+    expect(panel?.getAttribute("data-workspace-id")).toBe("g1");
     // No tab strip — Settings is its own dashboard now.
-    expect(container.querySelector("[data-group-dashboard-tabs]")).toBeNull();
+    expect(
+      container.querySelector("[data-workspace-dashboard-tabs]"),
+    ).toBeNull();
   });
 });

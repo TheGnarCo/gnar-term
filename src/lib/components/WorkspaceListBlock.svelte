@@ -232,7 +232,7 @@
           ? { workspaceId: srcRow.id, dropTarget: currentPaneTarget }
           : null,
       );
-      // Mutate the ghost to show deny state when incompatible group
+      // Mutate the ghost to show deny state when incompatible drop target
       if (ghostEl) {
         if (currentPaneTarget?.kind === "deny") {
           createDragDenyOverlay(ghostEl);
@@ -316,8 +316,8 @@
       const ws = $nestedWorkspaces.find((w) => w.id === srcRow.id);
       if (ws && wsMeta(ws).locked === true) return;
     } else if (srcRow?.kind === "workspace") {
-      const group = getWorkspace(srcRow.id);
-      if (group?.locked === true) return;
+      const workspace = getWorkspace(srcRow.id);
+      if (workspace?.locked === true) return;
     }
     rootDrag.start(e, rowIdx);
   }

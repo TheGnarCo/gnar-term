@@ -2,7 +2,7 @@
   /**
    * ColorSlotPicker — a small color-swatch grid for picking one of the
    * named `WORKSPACE_COLOR_SLOTS` tones. Used by settings panels that let
-   * the user tint a sidebar row (workspace group banner, Global Agentic
+   * the user tint a sidebar row (workspace banner, Global Agentic
    * Dashboard, etc.). The picker is purely presentational; the caller
    * supplies the current selection and handles persistence via `onSelect`.
    */

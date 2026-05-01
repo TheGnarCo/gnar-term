@@ -66,8 +66,8 @@
   /**
    * When true, a nested workspace inside this container is the active
    * workspace. The banner swaps its idle `$theme.border` stroke for the
-   * container's `color` so the active state ties the group banner to
-   * its active child visually.
+   * container's `color` so the active state ties the workspace banner
+   * to its active child visually.
    */
   export let hasActiveChild: boolean = false;
   /** Drag scope id (container id). */
@@ -180,7 +180,7 @@
   </div>
 {:else}
   <!-- Root variant — the colored grip column lives at the outer flex
-       level so it stretches the full group height (a continuous rail
+       level so it stretches the full workspace height (a continuous rail
        connecting the banner to the nested children). A light border
        (matching the inactive dashboard-tile stroke) wraps only the
        banner row; the nested workspace list renders below the border

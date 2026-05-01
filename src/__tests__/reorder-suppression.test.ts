@@ -61,7 +61,7 @@ describe("canStart gating", () => {
 
   it("WorkspaceListBlock gates startRootRowDrag for locked workspaces", () => {
     expect(WORKSPACE_LIST_BLOCK).toContain('srcRow?.kind === "workspace"');
-    expect(WORKSPACE_LIST_BLOCK).toContain("group?.locked === true");
+    expect(WORKSPACE_LIST_BLOCK).toContain("workspace?.locked === true");
   });
 });
 
@@ -80,8 +80,8 @@ describe("reorderContext is published on every drag", () => {
     expect(WORKSPACE_LIST_VIEW).toMatch(/kind:\s*"nested-workspace"/);
   });
 
-  it("WorkspaceSectionContent threads scopeId={group.id} and containerBlockId to WorkspaceListView", () => {
-    expect(GROUP_SECTION_CONTENT).toMatch(/scopeId=\{\s*group\.id\s*\}/);
+  it("WorkspaceSectionContent threads scopeId={workspace.id} and containerBlockId to WorkspaceListView", () => {
+    expect(GROUP_SECTION_CONTENT).toMatch(/scopeId=\{\s*workspace\.id\s*\}/);
     // containerBlockId is forwarded from the parent via the shorthand
     // attribute ({containerBlockId}) rather than hardcoded.
     expect(GROUP_SECTION_CONTENT).toMatch(/\{containerBlockId\}/);

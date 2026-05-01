@@ -5,9 +5,9 @@
    * consistent "dashboard → Settings" mental model:
    *
    *   - Name field — persists `name`
-   *   - Banner color picker — writes `color` on the group
+   *   - Banner color picker — writes `color` on the workspace
    *   - Dashboards toggles — enable/disable each registered contribution
-   *     for this group (autoProvision contribs render locked-on)
+   *     for this workspace (autoProvision contribs render locked-on)
    *   - Markdown source — read-only path to the Overview preview file
    */
   import { theme } from "../stores/theme";
@@ -34,25 +34,25 @@
   let regeneratingRow: string | null = null;
   let regenerateError = "";
 
-  $: group = $workspacesStore.find((g) => g.id === parentWorkspaceId);
-  $: currentColorSlot = group?.color ?? "purple";
-  $: markdownPath = group ? workspaceDashboardPath(group.path) : "";
+  $: workspace = $workspacesStore.find((w) => w.id === parentWorkspaceId);
+  $: currentColorSlot = workspace?.color ?? "purple";
+  $: markdownPath = workspace ? workspaceDashboardPath(workspace.path) : "";
 
   let nameDraft = "";
   let editingName = false;
-  $: if (!editingName && group) nameDraft = group.name;
+  $: if (!editingName && workspace) nameDraft = workspace.name;
 
   function selectColor(slot: string): void {
-    if (!group) return;
-    updateWorkspace(group.id, { color: slot });
+    if (!workspace) return;
+    updateWorkspace(workspace.id, { color: slot });
   }
 
   function commitName(): void {
     editingName = false;
-    if (!group) return;
+    if (!workspace) return;
     const trimmed = nameDraft.trim();
-    if (!trimmed || trimmed === group.name) return;
-    updateWorkspace(group.id, { name: trimmed });
+    if (!trimmed || trimmed === workspace.name) return;
+    updateWorkspace(workspace.id, { name: trimmed });
   }
 
   // The Dashboards section excludes the Settings contribution itself —
@@ -64,18 +64,18 @@
     (c) => c.id !== "settings",
   );
 
-  // Precompute the set of active contribution ids for this group as a
-  // reactive derivation. `{@const active = activeIds.has(c.id)}` in the
-  // template picks up changes to `$nestedWorkspaces` immediately — calling a
-  // helper that reads `$nestedWorkspaces` internally does NOT re-run on store
-  // updates in Svelte 5 (only the direct reference does).
+  // Precompute the set of active contribution ids for this workspace as
+  // a reactive derivation. `{@const active = activeIds.has(c.id)}` in
+  // the template picks up changes to `$nestedWorkspaces` immediately —
+  // calling a helper that reads `$nestedWorkspaces` internally does NOT
+  // re-run on store updates in Svelte 5 (only the direct reference does).
   $: activeContributionIds = new Set<string>(
-    group
+    workspace
       ? $nestedWorkspaces
           .filter((w) => {
             const md = wsMeta(w);
             return (
-              md.isDashboard === true && md.parentWorkspaceId === group!.id
+              md.isDashboard === true && md.parentWorkspaceId === workspace!.id
             );
           })
           .map((w) => wsMeta(w).dashboardContributionId)
@@ -87,19 +87,19 @@
     contribution: DashboardContribution,
     next: boolean,
   ): Promise<void> {
-    if (!group) return;
+    if (!workspace) return;
     if (contribution.autoProvision) return;
     if (next) {
       try {
-        await contribution.create(group);
+        await contribution.create(workspace);
       } catch (err) {
         console.error(
-          `[group-settings] Failed to add "${contribution.id}":`,
+          `[workspace-settings] Failed to add "${contribution.id}":`,
           err,
         );
       }
     } else {
-      closeDashboardForWorkspace(group.id, contribution.id);
+      closeDashboardForWorkspace(workspace.id, contribution.id);
     }
   }
 
@@ -114,10 +114,10 @@
   async function regenerateDashboard(
     contribution: DashboardContribution,
   ): Promise<void> {
-    if (!group) return;
+    if (!workspace) return;
     if (!contribution.regenerate) return;
     const confirmed = await showConfirmPrompt(
-      `Delete and regenerate the "${contribution.label}" dashboard for "${group.name}"? Any custom edits to its markdown will be lost.`,
+      `Delete and regenerate the "${contribution.label}" dashboard for "${workspace.name}"? Any custom edits to its markdown will be lost.`,
       {
         title: `Regenerate ${contribution.label}`,
         confirmLabel: "Regenerate",
@@ -128,11 +128,11 @@
     regeneratingRow = contribution.id;
     regenerateError = "";
     try {
-      await contribution.regenerate(group);
+      await contribution.regenerate(workspace);
     } catch (err) {
       regenerateError = `Failed to regenerate "${contribution.label}": ${err instanceof Error ? err.message : String(err)}`;
       console.error(
-        `[group-settings] regenerate("${contribution.id}") failed:`,
+        `[workspace-settings] regenerate("${contribution.id}") failed:`,
         err,
       );
     } finally {
@@ -141,10 +141,10 @@
   }
 </script>
 
-{#if group}
+{#if workspace}
   <div
-    data-group-dashboard-settings
-    data-group-id={group.id}
+    data-workspace-dashboard-settings
+    data-workspace-id={workspace.id}
     style="
       flex: 1; min-width: 0; min-height: 0; overflow: auto;
       padding: 24px 32px; display: flex; flex-direction: column; gap: 24px;
@@ -154,7 +154,7 @@
     <section style="display: flex; flex-direction: column; gap: 8px;">
       <h3 style="margin: 0; font-size: 14px; font-weight: 600;">Name</h3>
       <input
-        data-group-name-input
+        data-workspace-name-input
         type="text"
         bind:value={nameDraft}
         on:focus={() => (editingName = true)}
@@ -162,7 +162,7 @@
         on:keydown={(e) => {
           if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur();
           if (e.key === "Escape") {
-            nameDraft = group?.name ?? "";
+            nameDraft = workspace?.name ?? "";
             (e.currentTarget as HTMLInputElement).blur();
           }
         }}
@@ -182,7 +182,7 @@
         Banner color
       </h3>
       <p style="margin: 0; color: {$theme.fgDim}; font-size: 12px;">
-        Pick a color for this group's sidebar banner and rail.
+        Pick a color for this workspace's sidebar banner and rail.
       </p>
       <ColorSlotPicker currentSlot={currentColorSlot} onSelect={selectColor} />
     </section>
@@ -193,8 +193,8 @@
     >
       <h3 style="margin: 0; font-size: 14px; font-weight: 600;">Dashboards</h3>
       <p style="margin: 0; color: {$theme.fgDim}; font-size: 12px;">
-        Toggle which dashboards appear on this workspace group. Required
-        dashboards are always on.
+        Toggle which dashboards appear on this workspace. Required dashboards
+        are always on.
       </p>
       <div
         style="display: flex; flex-direction: column; gap: 6px; margin-top: 4px;"

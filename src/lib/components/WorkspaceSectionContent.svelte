@@ -59,7 +59,7 @@
 
   export let parentWorkspaceId: string;
   /**
-   * The namespaced sidebar-block id that hosts this group — forwarded
+   * The namespaced sidebar-block id that hosts this workspace — forwarded
    * to the ContainerRow's nested WorkspaceListView so workspace-drag
    * ReorderContext publishes the actual block id.
    */
@@ -70,16 +70,16 @@
    */
   export let onGripMouseDown: ((e: MouseEvent) => void) | undefined = undefined;
   /**
-   * Group overlay directive, resolved by the parent from the current
-   * reorder context. Covers the entire group block (header +
-   * nestedWorkspaces) as one zone.
+   * Workspace overlay directive, resolved by the parent from the
+   * current reorder context. Covers the entire workspace block (header
+   * + nestedWorkspaces) as one zone.
    */
   export let overlay:
     | { kind: "strong"; label: string }
     | { kind: "light" }
     | null = null;
 
-  let group: Workspace | undefined;
+  let workspace: Workspace | undefined;
   let stateVersion = 0;
 
   const onWorkspaceStateChanged = () => {
@@ -96,7 +96,7 @@
     );
   });
 
-  // Re-read whenever the groups list, the nestedWorkspaces store, or state
+  // Re-read whenever the workspaces list, the nestedWorkspaces store, or state
   // version changes. The store subscription covers mutations through
   // setWorkspaces; stateVersion is there for parity with other
   // extension-driven consumers that listen for the event directly.
@@ -104,30 +104,34 @@
     void $workspacesStore;
     void $nestedWorkspaces;
     void stateVersion;
-    group = getWorkspace(parentWorkspaceId);
+    workspace = getWorkspace(parentWorkspaceId);
   }
 
-  $: filterIds = group ? new Set(group.nestedWorkspaceIds) : new Set<string>();
+  $: filterIds = workspace
+    ? new Set(workspace.nestedWorkspaceIds)
+    : new Set<string>();
 
   // The primary workspace drives the container row's status dot. It is
   // excluded from the nested list — clicking the row activates it directly.
-  $: primaryWs = group?.primaryNestedWorkspaceId
-    ? $nestedWorkspaces.find((w) => w.id === group!.primaryNestedWorkspaceId)
+  $: primaryWs = workspace?.primaryNestedWorkspaceId
+    ? $nestedWorkspaces.find(
+        (w) => w.id === workspace!.primaryNestedWorkspaceId,
+      )
     : undefined;
 
   // Nested list shows worktree nestedWorkspaces only (excludes primary and dashboards).
-  $: nestedIds = group
+  $: nestedIds = workspace
     ? new Set(
-        group.nestedWorkspaceIds.filter((id) => {
+        workspace.nestedWorkspaceIds.filter((id) => {
           const ws = $nestedWorkspaces.find((w) => w.id === id);
           if (!ws) return false;
           const md = wsMeta(ws);
-          return !md.isDashboard && id !== group!.primaryNestedWorkspaceId;
+          return !md.isDashboard && id !== workspace!.primaryNestedWorkspaceId;
         }),
       )
     : new Set<string>();
 
-  // Most-active bot status across all nestedWorkspaces in this group.
+  // Most-active bot status across all nestedWorkspaces in this workspace.
   $: workspaceAgents = $agentsStore.filter((a) => filterIds.has(a.workspaceId));
   $: workspaceBotStatus = (() => {
     if (workspaceAgents.length === 0) return null;
@@ -147,7 +151,7 @@
     return null;
   })();
 
-  // True when the primary workspace of this group is currently active.
+  // True when the primary workspace of this workspace is currently active.
   // Makes the container row border solid only when the primary workspace
   // is selected (not when a nested workspace is selected).
   $: isPrimaryActive = (() => {
@@ -160,64 +164,64 @@
   // reactive — `getChildRowsFor` reads the store via `get()` and wouldn't
   // otherwise pull Svelte into the dependency graph.
   $: childRows =
-    group && $childRowContributorStore
-      ? getChildRowsFor("workspace", group.id)
+    workspace && $childRowContributorStore
+      ? getChildRowsFor("workspace", workspace.id)
       : [];
 
-  $: workspaceContext = group
+  $: workspaceContext = workspace
     ? ({
-        parentWorkspaceId: group.id,
-        workspacePath: group.path,
-        workspaceName: group.name,
-        isGit: group.isGit,
-        workspaceColor: group.color,
+        parentWorkspaceId: workspace.id,
+        workspacePath: workspace.path,
+        workspaceName: workspace.name,
+        isGit: workspace.isGit,
+        workspaceColor: workspace.color,
       } satisfies WorkspaceActionContext)
     : undefined;
 
-  $: isWorkspaceLocked = group?.locked === true;
+  $: isWorkspaceLocked = workspace?.locked === true;
 
   async function handleRenameWorkspace() {
-    if (!group) return;
-    const next = await showInputPrompt("Rename workspace group", group.name);
+    if (!workspace) return;
+    const next = await showInputPrompt("Rename workspace", workspace.name);
     const trimmed = next?.trim();
-    if (!trimmed || trimmed === group.name) return;
-    updateWorkspace(group.id, { name: trimmed });
+    if (!trimmed || trimmed === workspace.name) return;
+    updateWorkspace(workspace.id, { name: trimmed });
   }
 
   async function handleUnlockWorkspace() {
-    if (!group) return;
+    if (!workspace) return;
     const confirmed = await showConfirmPrompt(
-      `Unlock workspace group "${group.name}"?`,
+      `Unlock workspace "${workspace.name}"?`,
       { title: "Unlock Workspace", confirmLabel: "Unlock" },
     );
     if (!confirmed) return;
-    toggleWorkspaceLock(group.id);
+    toggleWorkspaceLock(workspace.id);
   }
 
   async function handleDeleteWorkspace() {
-    const g = group;
-    if (!g) return;
-    const nestedCount = $nestedWorkspaces.filter((w) => {
-      const md = wsMeta(w);
-      return md?.parentWorkspaceId === g.id && !md?.isDashboard;
+    const w = workspace;
+    if (!w) return;
+    const nestedCount = $nestedWorkspaces.filter((nw) => {
+      const md = wsMeta(nw);
+      return md?.parentWorkspaceId === w.id && !md?.isDashboard;
     }).length;
     const nestedLine =
       nestedCount > 0
         ? ` ${nestedCount} nested workspace${nestedCount === 1 ? "" : "s"} will also be closed.`
         : "";
     const confirmed = await showConfirmPrompt(
-      `Delete group "${g.name}"?${nestedLine}`,
+      `Delete workspace "${w.name}"?${nestedLine}`,
       { title: "Delete Workspace", confirmLabel: "Delete", danger: true },
     );
     if (!confirmed) return;
-    closeNestedWorkspacesInWorkspace(g.id);
-    deleteWorkspace(g.id);
+    closeNestedWorkspacesInWorkspace(w.id);
+    deleteWorkspace(w.id);
   }
 
-  // Banner left-click: activate the group's primary workspace if it's not
+  // Banner left-click: activate the workspace's primary workspace if it's not
   // already active. If the primary is already active this is a no-op.
   async function handleBannerClick() {
-    if (!group || isPrimaryActive) return;
+    if (!workspace || isPrimaryActive) return;
     // Prefer the primary workspace; fall back to the dashboard then first nested.
     if (primaryWs) {
       const idx = $nestedWorkspaces.indexOf(primaryWs);
@@ -225,15 +229,15 @@
         switchNestedWorkspace(idx);
         return;
       }
-    } else if (group.primaryNestedWorkspaceId) {
+    } else if (workspace.primaryNestedWorkspaceId) {
       // Primary workspace is missing (was deleted) — recreate it
       const newWsId = await createNestedWorkspaceFromDef({
-        name: group.name,
-        cwd: group.path,
-        metadata: { parentWorkspaceId: group.id },
+        name: workspace.name,
+        cwd: workspace.path,
+        metadata: { parentWorkspaceId: workspace.id },
       });
       if (newWsId) {
-        updateWorkspace(group.id, { primaryNestedWorkspaceId: newWsId });
+        updateWorkspace(workspace.id, { primaryNestedWorkspaceId: newWsId });
         claimWorkspace(newWsId, "core");
         // Re-fetch the workspace list to get the new workspace
         const newIdx = $nestedWorkspaces.findIndex((w) => w.id === newWsId);
@@ -243,15 +247,15 @@
         return;
       }
     }
-    if (openWorkspaceDashboard(group)) return;
+    if (openWorkspaceDashboard(workspace)) return;
     const nestedIdx = $nestedWorkspaces.findIndex((w) => {
-      return wsMeta(w)?.parentWorkspaceId === group!.id;
+      return wsMeta(w)?.parentWorkspaceId === workspace!.id;
     });
     if (nestedIdx >= 0) switchNestedWorkspace(nestedIdx);
   }
 
   function handleBannerContextMenu(e: MouseEvent) {
-    if (!group) return;
+    if (!workspace) return;
     e.preventDefault();
     e.stopPropagation();
     const items: MenuItem[] = [
@@ -262,7 +266,7 @@
         },
       },
     ];
-    if (group.isGit && workspaceContext) {
+    if (workspace.isGit && workspaceContext) {
       items.push({
         label: "New Worktree",
         icon: GitBranchIcon as unknown as Component,
@@ -274,14 +278,14 @@
     items.push({
       label: isWorkspaceLocked ? "Unlock Workspace" : "Lock Workspace",
       action: () => {
-        if (group) toggleWorkspaceLock(group.id);
+        if (workspace) toggleWorkspaceLock(workspace.id);
       },
     });
     items.push({
       label: "Archive Workspace",
       disabled: isWorkspaceLocked,
       action: () => {
-        if (group) void archiveWorkspace(group.id);
+        if (workspace) void archiveWorkspace(workspace.id);
       },
     });
     items.push({
@@ -295,8 +299,10 @@
     contextMenu.set({ x: e.clientX, y: e.clientY, items });
   }
 
-  $: workspaceHex = group ? resolveWorkspaceColor(group.color, $theme) : "";
-  $: headerFg = group ? contrastColor(workspaceHex) : $theme.fg;
+  $: workspaceHex = workspace
+    ? resolveWorkspaceColor(workspace.color, $theme)
+    : "";
+  $: headerFg = workspace ? contrastColor(workspaceHex) : $theme.fg;
   $: subtitleFg = $theme.fgMuted ?? $theme.fgDim ?? $theme.fg;
   $: dimIconColor = ($theme.fgDim ?? $theme.fgMuted ?? "#888") as string;
 
@@ -306,13 +312,13 @@
   let dashboardCloseHovered: string | null = null;
 
   $: dashboardWorkspaces = (() => {
-    const gId = group?.id;
-    if (!gId) return [] as Array<{ ws: NestedWorkspace; idx: number }>;
+    const wId = workspace?.id;
+    if (!wId) return [] as Array<{ ws: NestedWorkspace; idx: number }>;
     return $nestedWorkspaces
       .map((ws, idx) => ({ ws, idx }))
       .filter(({ ws }) => {
         const md = wsMeta(ws);
-        return md?.isDashboard === true && md?.parentWorkspaceId === gId;
+        return md?.isDashboard === true && md?.parentWorkspaceId === wId;
       })
       .sort((a, b) => {
         const aS = wsMeta(a.ws)?.dashboardContributionId === "settings";
@@ -356,29 +362,29 @@
   }
 
   // Dashboard-hint for nested nestedWorkspaces: any workspace hosting a
-  // preview surface pointed at the group's dashboard path gets a
+  // preview surface pointed at the workspace's dashboard path gets a
   // dashboard icon.
   function hintForWorkspaceDashboardHost(ws: NestedWorkspace) {
-    if (!group) return undefined;
-    const path = workspaceDashboardPath(group.path);
+    if (!workspace) return undefined;
+    const path = workspaceDashboardPath(workspace.path);
     const hosts = getAllSurfaces(ws).some(
       (s) => isPreviewSurface(s) && s.path === path,
     );
     if (!hosts) return undefined;
     return {
-      id: group.id,
+      id: workspace.id,
       color: workspaceHex,
       onClick: () => {
-        if (group) void openWorkspaceDashboard(group);
+        if (workspace) void openWorkspaceDashboard(workspace);
       },
     };
   }
 </script>
 
-{#if group}
+{#if workspace}
   <div
     data-project-section
-    data-project-id={group.id}
+    data-project-id={workspace.id}
     style="
       font-size: 12px; color: {$theme.fg};
       position: relative;
@@ -392,10 +398,10 @@
       filterIds={nestedIds}
       hasActiveChild={isPrimaryActive}
       dashboardHintFor={hintForWorkspaceDashboardHost}
-      scopeId={group.id}
+      scopeId={workspace.id}
       {containerBlockId}
-      containerLabel={group.name}
-      testId={group.id}
+      containerLabel={workspace.name}
+      testId={workspace.id}
       workspaceListViewComponent={WorkspaceListView}
     >
       <span
@@ -408,7 +414,7 @@
           overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
           user-select: none;
           pointer-events: none;
-        ">{group.name}</span
+        ">{workspace.name}</span
       >
 
       <svelte:fragment slot="banner-end" let:bannerHovered>
@@ -432,7 +438,7 @@
       <svelte:fragment slot="banner-subtitle" let:collapsed>
         {#if collapsed && workspaceBotStatus}
           <div
-            data-group-bot-status-row
+            data-workspace-bot-status-row
             aria-hidden="true"
             style="padding: 0 8px 4px 0; font-size: 11px; color: {workspaceBotStatus.color}; display: flex; align-items: center; gap: 4px; overflow: hidden; opacity: 0.85;"
           >
@@ -448,7 +454,7 @@
               stroke-linejoin="round"
               style="flex-shrink: 0;"
             >
-              <title>Bot active in group</title>
+              <title>Bot active in workspace</title>
               <path d="M12 8V4H8" />
               <rect width="16" height="12" x="4" y="8" rx="2" />
               <path d="M2 14h2" />
@@ -465,9 +471,9 @@
         <div style="pointer-events: auto;">
           <PathStatusLine
             target={{
-              id: group.id,
-              path: group.path,
-              isGit: group.isGit,
+              id: workspace.id,
+              path: workspace.path,
+              isGit: workspace.isGit,
             }}
             fgColor={subtitleFg}
             iconColor={workspaceHex}
@@ -521,7 +527,7 @@
                 iconComponent={IconComp}
                 baseColor={workspaceHex}
                 contributionId={contribId}
-                workspacePath={group?.path}
+                workspacePath={workspace?.path}
                 {isActive}
                 isHovered={hoveredDashId === entry.ws.id}
               />
@@ -569,7 +575,7 @@
             {/if}
           </div>
         {/each}
-        {#if workspaceContext && group?.isGit}
+        {#if workspaceContext && workspace?.isGit}
           <!-- svelte-ignore a11y_consider_explicit_label -->
           <button
             class="dash-btn"
@@ -626,7 +632,7 @@
       <svelte:fragment slot="after-nested">
         {#if childRows.length > 0}
           <div
-            data-project-children={group.id}
+            data-project-children={workspace.id}
             style="display: flex; flex-direction: column;"
           >
             {#each childRows as row (row.kind + ":" + row.id)}

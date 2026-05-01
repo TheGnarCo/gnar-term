@@ -7,8 +7,8 @@
  * entries safely reference extensions that may not be installed.
  */
 export const EMPTY_SURFACE_COMMAND_IDS: string[] = [
-  // workspace-groups:create-workspace removed: "New Project..." now
-  // surfaces via the project-scope workspaceAction (rendered
-  // automatically by EmptySurface alongside "New Workspace"), so
-  // keeping the command id here would double-render it.
+  // workspaces:create-workspace removed: "New Workspace..." now surfaces
+  // via the workspace-scope workspaceAction (rendered automatically by
+  // EmptySurface alongside "New Nested Workspace"), so keeping the
+  // command id here would double-render it.
 ];

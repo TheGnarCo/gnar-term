@@ -10,7 +10,7 @@ export const metaPreviewActive = writable<boolean>(false);
 /**
  * Id of the primary-sidebar block currently hovered (mouseenter on its
  * drag-grip column). `__workspaces__` for the built-in Workspaces block,
- * the namespaced section id (e.g. `workspace-groups:workspaces`) otherwise,
+ * the namespaced section id (e.g. `workspaces:workspaces`) otherwise,
  * `null` when no block is hovered. Section-header banners subscribe to
  * decide whether to paint the dark-dot frit over the rail-overlap zone.
  */

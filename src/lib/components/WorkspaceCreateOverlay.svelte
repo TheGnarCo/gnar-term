@@ -59,7 +59,7 @@
   async function browse() {
     const selected = await dialogOpen({
       directory: true,
-      title: "Select Group Folder",
+      title: "Select Workspace Folder",
     });
     if (typeof selected !== "string") return;
     path = selected;
@@ -82,7 +82,7 @@
 
   function submit() {
     if (!path) {
-      error = "Please select a group folder.";
+      error = "Please select a workspace folder.";
       return;
     }
     if (!name.trim()) {
@@ -148,13 +148,13 @@
 
       <div style="display: flex; flex-direction: column; gap: 4px;">
         <label
-          for="workspace-group-folder"
+          for="workspace-folder"
           style="font-size: 12px; color: {$theme.fgDim}; font-weight: 500;"
           >Folder</label
         >
         <div style="display: flex; gap: 8px;">
           <input
-            id="workspace-group-folder"
+            id="workspace-folder"
             type="text"
             readonly
             value={path}
@@ -180,17 +180,17 @@
 
       <div style="display: flex; flex-direction: column; gap: 4px;">
         <label
-          for="workspace-group-name"
+          for="workspace-name"
           style="font-size: 12px; color: {$theme.fgDim}; font-weight: 500;"
           >Name</label
         >
         <input
-          id="workspace-group-name"
+          id="workspace-name"
           bind:this={nameInput}
           type="text"
           bind:value={name}
           on:input={handleNameInput}
-          placeholder="my-group"
+          placeholder="my-workspace"
           style="
             padding: 8px 12px; background: {$theme.bg};
             border: 1px solid {$theme.borderActive}; border-radius: 6px;

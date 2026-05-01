@@ -75,9 +75,10 @@
   // Dashboard nestedWorkspaces can't accumulate surfaces — the preview cannot
   // be closed from the UI, so no regen affordance is needed either.
   //
-  // For non-Dashboard nestedWorkspaces tied to a workspace group
-  // (metadata.parentWorkspaceId), keep the workspace-groups regen affordance so
-  // users can re-spawn a group-dashboard preview surface after closing it.
+  // For non-Dashboard nestedWorkspaces tied to a workspace
+  // (metadata.parentWorkspaceId), keep the workspace regen affordance
+  // so users can re-spawn a workspace-dashboard preview surface after
+  // closing it.
   $: workspaceMetadata = (() => {
     const ws = $nestedWorkspaces.find((w) => w.id === workspaceId);
     return ws ? wsMeta(ws) : undefined;

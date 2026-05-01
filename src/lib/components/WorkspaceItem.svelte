@@ -45,7 +45,7 @@
    * keep showing their own status.
    */
   export let hideStatusBadges: boolean = false;
-  /** When true, this workspace is nested inside a container group and should always show the close button. */
+  /** When true, this workspace is nested inside a container workspace and should always show the close button. */
   export let isNested: boolean = false;
   /** Sidebar position index for the ⌘N shortcut hint. */
   export let shortcutIdx: number | undefined = undefined;
@@ -72,21 +72,21 @@
     return $dashboardWorkspaceRegistry.get(id) ?? null;
   })();
   $: dashboardWorkspaceIcon = dashboardWorkspaceEntry?.icon ?? null;
-  // Workspaces spawned by a dashboard (Global Agentic or per-group)
+  // Workspaces spawned by a dashboard (Global Agentic or per-workspace)
   // get a bot marker so they're visually distinguishable from plain
-  // group nestedWorkspaces or worktrees. `metadata.spawnedBy` is the §3.2
+  // nested workspaces or worktrees. `metadata.spawnedBy` is the §3.2
   // marker; `parentOrchestratorId` is the pre-migration field we still
   // honor until Stage 8 rewrites legacy user data.
-  // Dashboards are singleton surfaces bound to their group; suppress
-  // close / rename / right-click affordances so the user interacts
-  // with them only via the group's tile.
+  // Dashboards are singleton surfaces bound to their workspace;
+  // suppress close / rename / right-click affordances so the user
+  // interacts with them only via the workspace's tile.
   $: isDashboardWs = wsMeta(workspace).isDashboard === true;
   $: isDashboardWorkspaceRow = dashboardWorkspaceIcon !== null;
   // Locked nestedWorkspaces: drag-start is suppressed at the row level,
   // close affordance is hidden in the grip, and the rail shows a
   // lock chip in place of the close button.
   $: isLocked = wsMeta(workspace).locked === true;
-  // Nested nestedWorkspaces live under a group's colored banner. The group
+  // Nested workspaces live under a workspace's colored banner. The
   // banner itself already rolls up status (and the per-row chip handles
   // agent state), so the long blue notification row duplicates chrome
   // and crowds the nested layout — suppress it in that context.

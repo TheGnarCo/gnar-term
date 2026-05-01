@@ -123,6 +123,14 @@ pub async fn create_worktree(
     let safe_path_str = safe_path
         .to_str()
         .ok_or_else(|| "worktree path contains invalid UTF-8".to_string())?;
+
+    // Ensure parent directory exists
+    let parent_dir = safe_path
+        .parent()
+        .ok_or_else(|| format!("worktree path has no parent directory: {worktree_path}"))?;
+    std::fs::create_dir_all(parent_dir)
+        .map_err(|e| format!("failed to create worktree parent directory: {e}"))?;
+
     run_git(
         &repo_path,
         &["worktree", "add", "-b", &branch, "--", safe_path_str, &base],

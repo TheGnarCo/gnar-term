@@ -268,14 +268,10 @@
     deleteWorkspaceGroup(g.id);
   }
 
-  // Banner left-click: activate the group's Dashboard if one is bound,
-  // otherwise activate the group's first nested workspace (resolved by
-  // scanning workspace metadata — `group.workspaceIds` is sometimes
-  // empty until `reclaimWorkspacesAcrossGroups` rebuilds it). If a
-  // nested workspace is already active this is a no-op — the user
-  // already has the group "open", so re-selecting would be noise.
+  // Banner left-click: activate the group's primary workspace if it's not
+  // already active. If the primary is already active this is a no-op.
   async function handleBannerClick() {
-    if (!group || hasActiveChild) return;
+    if (!group || isPrimaryActive) return;
     // Prefer the primary workspace; fall back to the dashboard then first nested.
     if (primaryWs) {
       const idx = $workspaces.indexOf(primaryWs);

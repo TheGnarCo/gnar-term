@@ -166,7 +166,9 @@
     style="flex: 1; min-width: 0;"
   >
     <div
-      style="padding: 0 24px 0 2px; display: flex; align-items: center; gap: 8px;"
+      style="padding: {isNested
+        ? '6px 24px 6px 2px'
+        : '0 24px 0 2px'}; display: flex; align-items: center; gap: 8px;"
     >
       <div
         style="flex: 1; overflow: hidden; display: flex; align-items: center; gap: 4px;"

@@ -8,6 +8,7 @@
   import { renamingSurfaceId } from "../stores/ui";
   import { renameSurface } from "../services/surface-service";
   import { shortcutHintsActive } from "../stores/shortcut-hints";
+  import BotIcon from "../icons/BotIcon.svelte";
 
   export let surface: Surface;
   export let index: number;
@@ -139,26 +140,7 @@
   }}
 >
   {#if agentDotColor}
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="10"
-      height="10"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke={agentDotColor}
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      style="flex-shrink: 0;"
-      aria-hidden="true"
-    >
-      <path d="M12 8V4H8" />
-      <rect width="16" height="12" x="4" y="8" rx="2" />
-      <path d="M2 14h2" />
-      <path d="M20 14h2" />
-      <path d="M15 13v2" />
-      <path d="M9 13v2" />
-    </svg>
+    <BotIcon size={10} color={agentDotColor} />
     <span
       role="img"
       aria-label={agentStatus ?? "agent"}

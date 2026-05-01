@@ -10,7 +10,9 @@
   import ExtensionWrapper from "./ExtensionWrapper.svelte";
   import PrimarySidebarElement from "./PrimarySidebarElement.svelte";
   import RenameableLabel from "./RenameableLabel.svelte";
+  import SidebarSubtitleRow from "./SidebarSubtitleRow.svelte";
   import WorktreeIcon from "../icons/WorktreeIcon.svelte";
+  import BotIcon from "../icons/BotIcon.svelte";
   import { modLabel } from "../terminal-service";
   import { discoEmojiFor, discoColorFor } from "../utils/disco-decoration";
 
@@ -167,25 +169,7 @@
               justify-content: center; color: {railColor};
             "
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <title>Agent-spawned workspace</title>
-              <path d="M12 8V4H8" />
-              <rect width="16" height="12" x="4" y="8" rx="2" />
-              <path d="M2 14h2" />
-              <path d="M20 14h2" />
-              <path d="M15 13v2" />
-              <path d="M9 13v2" />
-            </svg>
+            <BotIcon size={12} title="Agent-spawned workspace" />
           </span>
         {/if}
         {#if isManaged && !shouldShowWorktreeStatus}
@@ -286,43 +270,24 @@
 
     {#if !hideStatusBadges && agentBadges.length > 0 && agentBadges[0]}
       {@const badge = agentBadges[0]}
-      <div
+      <SidebarSubtitleRow
         data-harness-title-row
         title={badge.label}
         aria-hidden="true"
-        style="padding: 0 12px 4px 6px; font-size: 11px; color: {badge.color}; display: flex; align-items: center; gap: 4px; overflow: hidden; opacity: 0.85;"
+        color={badge.color}
+        padding="0 12px 4px 6px"
+        opacity={0.85}
       >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="10"
-          height="10"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          style="flex-shrink: 0;"
-        >
-          <title>Active harness session</title>
-          <path d="M12 8V4H8" />
-          <rect width="16" height="12" x="4" y="8" rx="2" />
-          <path d="M2 14h2" />
-          <path d="M20 14h2" />
-          <path d="M15 13v2" />
-          <path d="M9 13v2" />
-        </svg>
+        <BotIcon size={10} />
         <span
           style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
           >{badge.label}</span
         >
-      </div>
+      </SidebarSubtitleRow>
     {/if}
 
     {#if shouldShowWorktreeStatus && !hideStatusBadges}
-      <div
-        style="padding: 0 24px 2px 2px; font-size: 11px; color: {$theme.fgMuted}; display: flex; align-items: center; gap: 4px; overflow: hidden;"
-      >
+      <SidebarSubtitleRow color={$theme.fgMuted}>
         <span style="flex-shrink: 0; display: inline-flex; color: {railColor};">
           <WorktreeIcon size={10} />
         </span>
@@ -331,13 +296,11 @@
         >
           {worktreeDirName}
         </span>
-      </div>
+      </SidebarSubtitleRow>
     {/if}
 
     {#if !isDashboardWorkspaceRow && subtitleComponents.length > 0}
-      <div
-        style="padding: 0 24px 2px 2px; font-size: 11px; color: {$theme.fgMuted}; display: flex; align-items: center; gap: 4px; overflow: hidden;"
-      >
+      <SidebarSubtitleRow color={$theme.fgMuted}>
         {#each subtitleComponents as sub (sub.id)}
           {@const subApi = getExtensionApiById(sub.source)}
           {#if subApi}
@@ -354,7 +317,7 @@
             />
           {/if}
         {/each}
-      </div>
+      </SidebarSubtitleRow>
     {/if}
 
     {#if latestNotification && !hideStatusBadges && !isInsideWorkspace && agentBadges.length === 0}

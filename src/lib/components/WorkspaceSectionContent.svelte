@@ -39,9 +39,11 @@
   import DashboardTileIcon from "./DashboardTileIcon.svelte";
   import SidebarChipButton from "./SidebarChipButton.svelte";
   import RenameableLabel from "./RenameableLabel.svelte";
+  import SidebarSubtitleRow from "./SidebarSubtitleRow.svelte";
   import GridIcon from "../icons/GridIcon.svelte";
   import GitBranchIcon from "../icons/GitBranchIcon.svelte";
   import WorktreeIcon from "../icons/WorktreeIcon.svelte";
+  import BotIcon from "../icons/BotIcon.svelte";
   import type { MenuItem } from "../context-menu-types";
   import { contextMenu, showConfirmPrompt } from "../stores/ui";
   import { contrastColor } from "../utils/contrast";
@@ -439,36 +441,19 @@
 
       <svelte:fragment slot="banner-subtitle" let:collapsed>
         {#if collapsed && workspaceBotStatus}
-          <div
+          <SidebarSubtitleRow
             data-workspace-bot-status-row
             aria-hidden="true"
-            style="padding: 0 8px 4px 0; font-size: 11px; color: {workspaceBotStatus.color}; display: flex; align-items: center; gap: 4px; overflow: hidden; opacity: 0.85;"
+            color={workspaceBotStatus.color}
+            padding="0 8px 4px 0"
+            opacity={0.85}
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="10"
-              height="10"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              style="flex-shrink: 0;"
-            >
-              <title>Bot active in workspace</title>
-              <path d="M12 8V4H8" />
-              <rect width="16" height="12" x="4" y="8" rx="2" />
-              <path d="M2 14h2" />
-              <path d="M20 14h2" />
-              <path d="M15 13v2" />
-              <path d="M9 13v2" />
-            </svg>
+            <BotIcon size={10} />
             <span
               style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
               >{workspaceBotStatus.label}</span
             >
-          </div>
+          </SidebarSubtitleRow>
         {/if}
         <div style="pointer-events: auto;">
           <PathStatusLine

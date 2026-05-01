@@ -56,12 +56,14 @@
   $: hasUnread = allSurfaces.some((s) => s.hasUnread);
   $: latestNotification = allSurfaces.find((s) => s.notification)?.notification;
   $: isManaged = !!workspace.metadata?.worktreePath;
-  $: worktreeDisplayPath = (() => {
+  $: worktreeDirName = (() => {
     const path = workspace.metadata?.worktreePath;
     if (!path) return "";
     const parts = path.split("/").filter((p) => p.length > 0);
-    return parts.slice(-2).join("/");
+    return parts[parts.length - 1] || "";
   })();
+  $: shouldShowWorktreeStatus =
+    isManaged && worktreeDirName && worktreeDirName !== workspace.name;
   $: dashboardWorkspaceEntry = (() => {
     const id = wsMeta(workspace).dashboardWorkspaceId;
     if (typeof id !== "string") return null;
@@ -361,7 +363,7 @@
       </div>
     {/if}
 
-    {#if isManaged && !hideStatusBadges}
+    {#if shouldShowWorktreeStatus && !hideStatusBadges}
       <div
         style="padding: 2px 24px 4px 2px; font-size: 11px; color: {$theme.fgMuted}; display: flex; align-items: center; gap: 4px; overflow: hidden;"
       >
@@ -385,27 +387,31 @@
         <span
           style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
         >
-          {worktreeDisplayPath}
+          {worktreeDirName}
         </span>
       </div>
     {/if}
 
-    {#each isDashboardWorkspaceRow ? [] : subtitleComponents as sub (sub.id)}
-      {@const subApi = getExtensionApiById(sub.source)}
-      {#if subApi}
-        <ExtensionWrapper
-          api={subApi}
-          component={sub.component}
-          props={{ workspaceId: workspace.id, accentColor: railColor }}
-        />
-      {:else}
-        <svelte:component
-          this={sub.component as Component}
-          workspaceId={workspace.id}
-          accentColor={railColor}
-        />
-      {/if}
-    {/each}
+    {#if !isDashboardWorkspaceRow && subtitleComponents.length > 0}
+      <div style="padding-left: 2px;">
+        {#each subtitleComponents as sub (sub.id)}
+          {@const subApi = getExtensionApiById(sub.source)}
+          {#if subApi}
+            <ExtensionWrapper
+              api={subApi}
+              component={sub.component}
+              props={{ workspaceId: workspace.id, accentColor: railColor }}
+            />
+          {:else}
+            <svelte:component
+              this={sub.component as Component}
+              workspaceId={workspace.id}
+              accentColor={railColor}
+            />
+          {/if}
+        {/each}
+      </div>
+    {/if}
 
     {#if latestNotification && !hideStatusBadges && !isInsideGroup && agentBadges.length === 0}
       <div

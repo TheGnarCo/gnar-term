@@ -237,8 +237,8 @@
           position: relative;
           box-sizing: border-box;
           border-left: 1px solid {railBorderColor};
-          border-top: 1px solid {railBorderColor};
-          border-bottom: 1px solid {railBorderColor};
+          border-top: 1px solid {color};
+          border-bottom: 1px solid {color};
         "
         role="presentation"
       >

@@ -18,6 +18,7 @@
     activeWorkspaceIdx,
   } from "../stores/workspace";
   import DragGrip from "./DragGrip.svelte";
+  import CloseIcon from "../icons/CloseIcon.svelte";
   import ExtensionWrapper from "./ExtensionWrapper.svelte";
   import { getExtensionApiById } from "../services/extension-loader";
   import type { Component } from "svelte";
@@ -183,17 +184,19 @@
         display: flex; align-items: center; justify-content: center;
         width: 14px; height: 14px;
         color: {rowHovered ? $theme.danger : bannerBackground};
-        background: {$theme.bgSurface ?? $theme.bg};
-        border: 1px solid {rowHovered ? $theme.danger : bannerBackground};
+        background: transparent;
+        border: none;
         border-radius: 3px; cursor: pointer; padding: 0;
-        font-size: 10px; line-height: 1;
+        line-height: 1;
         transition: color 0.1s, border-color 0.1s;
         -webkit-app-region: no-drag;
       "
       on:mousedown|stopPropagation
       on:click|stopPropagation={handleClose}
       on:mouseenter={() => (rowHovered = true)}
-      on:mouseleave={() => (rowHovered = false)}>×</button
+      on:mouseleave={() => (rowHovered = false)}
     >
+      <CloseIcon width="9" height="9" />
+    </button>
   {/if}
 </div>

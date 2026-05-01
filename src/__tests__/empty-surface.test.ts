@@ -21,6 +21,7 @@ function read(path: string): string {
 
 describe("sidebar: empty workspace zones render no placeholder", () => {
   const LIST_VIEW = read("src/lib/components/WorkspaceListView.svelte");
+  const LIST_BLOCK = read("src/lib/components/WorkspaceListBlock.svelte");
 
   it("WorkspaceListView has no 'No nestedWorkspaces' text", () => {
     expect(LIST_VIEW).not.toMatch(/No nestedWorkspaces/i);
@@ -29,6 +30,24 @@ describe("sidebar: empty workspace zones render no placeholder", () => {
   it("WorkspaceListView drops the `entries.length === 0` empty-state block", () => {
     const oneLine = LIST_VIEW.replace(/\s+/g, " ");
     expect(oneLine).not.toMatch(/\{#if\s+entries\.length\s*===\s*0\s*\}/);
+  });
+
+  it("WorkspaceListBlock renders nothing for an empty rootRowOrder", () => {
+    // The dashed "No nestedWorkspaces" placeholder leaked the internal
+    // identifier into UI copy AND caused a brief flash on reload before
+    // hydration completed. The block must render no empty-state at all.
+    expect(LIST_BLOCK).not.toMatch(/No nestedWorkspaces/i);
+    expect(LIST_BLOCK).not.toMatch(/No workspaces/i);
+    const oneLine = LIST_BLOCK.replace(/\s+/g, " ");
+    expect(oneLine).not.toMatch(/\{#if\s+renderedRows\.length\s*===\s*0\s*\}/);
+  });
+});
+
+describe("EmptySurface copy uses 'workspaces', not the leaked identifier", () => {
+  const EMPTY = read("src/lib/components/EmptySurface.svelte");
+
+  it("does not reference the internal 'nestedWorkspaces' identifier", () => {
+    expect(EMPTY).not.toMatch(/No nestedWorkspaces/i);
   });
 });
 

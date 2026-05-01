@@ -197,7 +197,7 @@
           >{currentWs.name}</strong
         >. Start something new, or jump to another workspace.
       {:else}
-        No nestedWorkspaces are open. Create one to get started.
+        No workspaces are open. Create one to get started.
       {/if}
     </div>
     {#if buttons.length > 0}

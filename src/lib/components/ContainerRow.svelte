@@ -121,8 +121,7 @@
     style="position: relative;"
   >
     <PrimarySidebarElement
-      isWorkspace={true}
-      isCompact={false}
+      kind="umbrella"
       name={containerLabel}
       isActive={false}
       isLocked={locked}

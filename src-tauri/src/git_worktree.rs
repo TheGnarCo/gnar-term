@@ -1,6 +1,6 @@
 use crate::git_helpers::validate_git_ref;
 use serde::Serialize;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 
 #[derive(Clone, Debug, Serialize, PartialEq)]
@@ -21,6 +21,18 @@ fn validate_worktree_path(worktree_path: &str) -> Result<PathBuf, String> {
         std::fs::canonicalize(&home).map_err(|e| format!("failed to resolve HOME: {e}"))?;
 
     let path = Path::new(worktree_path);
+
+    // Reject `..` components upfront. The canonicalize-based check below
+    // collapses `..` against existing on-disk parents, but a path whose
+    // ancestor walk lands inside HOME may still embed traversal that
+    // resolves elsewhere on first use. Disallowing `..` syntactically is
+    // both cheaper and harder to fool than relying on canonicalization
+    // alone.
+    if path.components().any(|c| c == Component::ParentDir) {
+        return Err(format!(
+            "worktree path must not contain '..': {worktree_path}"
+        ));
+    }
 
     let canonical = if path.exists() {
         std::fs::canonicalize(path)
@@ -272,6 +284,22 @@ mod tests {
         assert!(
             resolved.ends_with(".gnar-term-test-missing-parent/leaf"),
             "resolved tail should be preserved, got: {resolved:?}"
+        );
+    }
+
+    /// `..` traversal must be rejected syntactically — even when the
+    /// canonicalized result happens to land inside HOME, embedding `..`
+    /// in worktree paths is never legitimate input.
+    #[test]
+    fn validate_worktree_path_rejects_parent_traversal() {
+        let home = std::env::var("HOME").expect("HOME set");
+        let target = format!("{home}/foo/../bar");
+        let result = validate_worktree_path(&target);
+        assert!(result.is_err(), "expected '..' rejection, got: {result:?}");
+        let err = result.unwrap_err();
+        assert!(
+            err.contains("must not contain '..'"),
+            "expected traversal rejection message, got: {err}"
         );
     }
 }

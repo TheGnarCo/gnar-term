@@ -10,6 +10,16 @@ import { createRegistry } from "./create-registry";
 import type { Workspace } from "../config";
 
 /**
+ * Stable persisted id for the built-in Workspace overview dashboard.
+ * The string `"group"` predates the Workspace/NestedWorkspace rename and
+ * is preserved verbatim — it's stamped onto every overview dashboard
+ * workspace's `metadata.dashboardContributionId` and survives across
+ * upgrades. Tests, fixtures, and unrelated `spawnedBy.kind: "group"`
+ * literals do NOT use this constant.
+ */
+export const OVERVIEW_DASHBOARD_CONTRIBUTION_ID = "group";
+
+/**
  * A kind of dashboard that can attach to a Workspace. The
  * registry stores the declarative metadata; workspace actions ("Add
  * <Dashboard>", "Remove <Dashboard>") read from it to build their menus,

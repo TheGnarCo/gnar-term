@@ -23,6 +23,7 @@ import {
   createNestedWorkspaceFromDef,
   switchNestedWorkspace,
 } from "../services/nested-workspace-service";
+import { OVERVIEW_DASHBOARD_CONTRIBUTION_ID } from "../services/dashboard-contribution-registry";
 
 // Restore-complete signal — lets async work (extension provision loops,
 // reconcileWorkspaceDashboards) defer safely until nestedWorkspaces are in the store.
@@ -126,7 +127,7 @@ export async function restoreWorkspaces(
       const contributionId =
         typeof md?.dashboardContributionId === "string"
           ? md.dashboardContributionId
-          : "group";
+          : OVERVIEW_DASHBOARD_CONTRIBUTION_ID;
       const dedupeKey = `${ownerWorkspaceId}:${contributionId}`;
       if (seenDashboards.has(dedupeKey)) return false;
       seenDashboards.add(dedupeKey);

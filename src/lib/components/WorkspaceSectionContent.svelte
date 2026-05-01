@@ -391,8 +391,8 @@
 
 {#if workspace}
   <div
-    data-project-section
-    data-project-id={workspace.id}
+    data-workspace-section
+    data-workspace-id={workspace.id}
     style="
       font-size: 12px; color: {$theme.fg};
       position: relative;
@@ -500,13 +500,12 @@
               dashboardCloseHovered = null;
             }}
           >
-            <!-- svelte-ignore a11y_consider_explicit_label -->
             <button
               class="dash-btn"
               data-dashboard-item={entry.ws.id}
               data-dashboard-contribution={contribId}
               data-active={isActive ? "true" : undefined}
-              title={entry.ws.name}
+              aria-label={entry.ws.name}
               on:click|stopPropagation={() => switchNestedWorkspace(entry.idx)}
               on:contextmenu|preventDefault|stopPropagation={(e) =>
                 showDashboardContextMenu(e.clientX, e.clientY, entry.idx)}
@@ -571,10 +570,9 @@
           </div>
         {/each}
         {#if workspaceContext && workspace?.isGit}
-          <!-- svelte-ignore a11y_consider_explicit_label -->
           <button
             class="dash-btn"
-            title="New Worktree"
+            aria-label="New Worktree"
             on:click|stopPropagation={() =>
               runCommandById("worktrees:create-workspace", workspaceContext)}
             on:mouseenter={() => (branchChipHovered = true)}
@@ -594,13 +592,12 @@
           </button>
         {/if}
         {#if showToggle}
-          <!-- svelte-ignore a11y_consider_explicit_label -->
           <button
             class="dash-btn"
             on:click|stopPropagation={toggle}
             on:mouseenter={() => (caretHovered = true)}
             on:mouseleave={() => (caretHovered = false)}
-            title={collapsed ? "Expand" : "Collapse"}
+            aria-label={collapsed ? "Expand workspace" : "Collapse workspace"}
             style="background: {$theme.bgSurface ??
               'transparent'}; border: 1px solid {$theme.border ??
               'transparent'};"
@@ -627,7 +624,7 @@
       <svelte:fragment slot="after-nested">
         {#if childRows.length > 0}
           <div
-            data-project-children={workspace.id}
+            data-workspace-children={workspace.id}
             style="display: flex; flex-direction: column;"
           >
             {#each childRows as row (row.kind + ":" + row.id)}

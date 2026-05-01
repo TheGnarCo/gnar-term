@@ -36,6 +36,19 @@ interface LegacyGroupEntry {
   workspaceDefs: (NestedWorkspaceDef & { name: string })[];
 }
 
+/**
+ * Renames the legacy `primaryWorkspaceId` / `dashboardWorkspaceId`
+ * pointer fields on archive entries (which carry `workspaceDefs`
+ * directly).
+ *
+ * INTENTIONALLY NOT shared with `renameLegacyWorkspaceFields` in
+ * `src/lib/stores/workspaces.ts`. The store version operates on the
+ * live `_workspaces` array and ALSO resets `nestedWorkspaceIds: []`
+ * (rebuilt at runtime by the workspace:created listener). This archive
+ * version must preserve archive-specific shape and must NOT reset that
+ * field. Any new legacy key added to one must be manually audited for
+ * applicability to the other.
+ */
 function renameWorkspaceFields(w: LegacyWorkspaceShape): Workspace {
   const {
     primaryWorkspaceId,

@@ -13,7 +13,10 @@ import { get } from "svelte/store";
 import { registerCommand, runCommandById } from "../services/command-registry";
 import { registerWorkspaceAction } from "../services/workspace-action-registry";
 import { registerRootRowRenderer } from "../services/root-row-renderer-registry";
-import { registerDashboardContribution } from "../services/dashboard-contribution-registry";
+import {
+  registerDashboardContribution,
+  OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
+} from "../services/dashboard-contribution-registry";
 import { eventBus, type AppEvent } from "../services/event-bus";
 import { appendRootRow } from "../stores/root-row-order";
 import {
@@ -167,7 +170,7 @@ async function createWorkspaceFlow(prefill?: {
   try {
     await provisionAutoDashboardsForWorkspace(workspace);
     const overview = get(nestedWorkspaces).find((w) =>
-      isDashboardWorkspace(w, workspace.id, "group"),
+      isDashboardWorkspace(w, workspace.id, OVERVIEW_DASHBOARD_CONTRIBUTION_ID),
     );
     if (overview) {
       updateWorkspace(id, { dashboardNestedWorkspaceId: overview.id });
@@ -383,7 +386,7 @@ export async function initWorkspaces(): Promise<void> {
   // Overview nestedWorkspace. `lockedReason` surfaces in the Settings
   // dashboard's toggle list explaining why the toggle is fixed-on.
   registerDashboardContribution({
-    id: "group",
+    id: OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
     source: "core",
     label: "Workspace Dashboard",
     actionLabel: "Add Workspace Dashboard",

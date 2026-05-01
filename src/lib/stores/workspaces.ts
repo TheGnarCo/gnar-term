@@ -20,6 +20,7 @@ import {
   loadExtensionState,
   saveExtensionState,
 } from "../services/extension-state";
+import { makePersistScheduler } from "../utils/persist-scheduler";
 
 const STATE_ID = "workspace-groups";
 const WORKSPACES_KEY = "workspaces";
@@ -32,6 +33,24 @@ interface LegacyWorkspaceShape extends Workspace {
   dashboardWorkspaceId?: string;
 }
 
+/**
+ * Load-bearing for the main → current upgrade path: settings files
+ * written before the group-unification rename still carry
+ * `primaryWorkspaceId` / `dashboardWorkspaceId`. Removing this shim
+ * would silently drop pointer fields, leaving workspaces without valid
+ * nested-workspace references on first cold start after upgrade.
+ *
+ * This is INTENTIONALLY NOT shared with `renameWorkspaceFields` in
+ * `v3-archive-shape.ts`. This version operates on live-store entries
+ * and ALSO resets `nestedWorkspaceIds: []` (the workspace:created
+ * listener rebuilds them at runtime); the archive version operates on
+ * `workspaceDefs` shape and must NOT reset that field. Any new legacy
+ * key added to one must be manually audited for applicability to the
+ * other.
+ *
+ * Removal target: Stage 8, when the data moves into `GnarTermConfig`
+ * and a schemaVersion gate provably rewrites the persisted file.
+ */
 function renameLegacyWorkspaceFields(g: Workspace): Workspace {
   const legacy = g as LegacyWorkspaceShape;
   const {
@@ -60,20 +79,23 @@ function renameLegacyWorkspaceFields(g: Workspace): Workspace {
 const _workspaces = writable<Workspace[]>([]);
 export const workspacesStore: Readable<Workspace[]> = _workspaces;
 
+/**
+ * Round-tripped through the persisted JSON for downgrade compatibility
+ * with settings files written by the legacy extension-state code
+ * (`extension-state.ts` maps `projectOrder → workspaceOrder`). The
+ * loaded value is intentionally never read at runtime — `rootRowOrder`
+ * (`./root-row-order.ts`) drives sidebar ordering — but it must persist
+ * unchanged so a downgrade or a partial migration does not silently
+ * lose ordering.
+ *
+ * Removal target: Stage 8, when the data moves into `GnarTermConfig`
+ * and a schemaVersion gate provably rewrites the persisted file.
+ */
 const _workspaceOrder = writable<string[]>([]);
 
 const _activeWorkspaceId = writable<string | null>(null);
 
 let _loaded = false;
-let _persistTimer: ReturnType<typeof setTimeout> | null = null;
-
-function schedulePersist(): void {
-  if (_persistTimer) clearTimeout(_persistTimer);
-  _persistTimer = setTimeout(() => {
-    _persistTimer = null;
-    void persistNow();
-  }, PERSIST_DEBOUNCE_MS);
-}
 
 async function persistNow(): Promise<void> {
   const payload: Record<string, unknown> = {
@@ -83,6 +105,9 @@ async function persistNow(): Promise<void> {
   };
   await saveExtensionState(STATE_ID, payload);
 }
+
+const _scheduler = makePersistScheduler(persistNow, PERSIST_DEBOUNCE_MS);
+const schedulePersist = _scheduler.schedulePersist;
 
 /**
  * Read state from disk and seed the stores. Idempotent — subsequent
@@ -113,11 +138,11 @@ export async function loadWorkspaces(): Promise<void> {
 
 /** Flush pending writes — called from app close hooks. */
 export async function flushWorkspaces(): Promise<void> {
-  if (_persistTimer) {
-    clearTimeout(_persistTimer);
-    _persistTimer = null;
+  if (!_loaded) {
+    _scheduler.cancel();
+    return;
   }
-  if (_loaded) await persistNow();
+  await _scheduler.flush();
 }
 
 export function getWorkspaces(): Workspace[] {
@@ -144,10 +169,7 @@ export function setActiveWorkspaceId(id: string | null): void {
 
 /** Test hook — reset in-memory state so tests start clean. */
 export function resetWorkspacesForTest(): void {
-  if (_persistTimer) {
-    clearTimeout(_persistTimer);
-    _persistTimer = null;
-  }
+  _scheduler.cancel();
   _workspaces.set([]);
   _workspaceOrder.set([]);
   _activeWorkspaceId.set(null);

@@ -107,6 +107,9 @@
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
       onSelect();
+    } else if (e.key === "F2") {
+      e.preventDefault();
+      renamingSurfaceId.set(surface.id);
     }
   }
 </script>

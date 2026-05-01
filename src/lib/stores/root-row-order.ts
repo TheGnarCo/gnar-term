@@ -30,44 +30,60 @@ export interface RootRow {
 const _rootRowOrder = writable<RootRow[]>([]);
 export const rootRowOrder = _rootRowOrder;
 
+const rowKey = (r: RootRow): string => `${r.kind}:${r.id}`;
+
+// Tracks the current row keys for O(1) dedup. Stays in sync with
+// _rootRowOrder via every mutation helper below; rebuilt from scratch
+// in setRootRowOrder. Bootstrap is O(N) instead of O(N²) when the same
+// helper is called once per workspace during session restore.
+let _rowKeys = new Set<string>();
+
 /** Replace the full order. Used during bootstrap and drag-drop reorder. */
 export function setRootRowOrder(next: RootRow[]): void {
   _rootRowOrder.set(next);
+  _rowKeys = new Set(next.map(rowKey));
   persist();
 }
 
 /** Insert a row at position 0 if not already present. */
 export function prependRootRow(row: RootRow): void {
-  const current = get(_rootRowOrder);
-  if (current.some((r) => r.kind === row.kind && r.id === row.id)) return;
-  _rootRowOrder.set([row, ...current]);
+  const k = rowKey(row);
+  if (_rowKeys.has(k)) return;
+  _rootRowOrder.update((current) => [row, ...current]);
+  _rowKeys.add(k);
   persist();
 }
 
 /** Append a row to the end if not already present. */
 export function appendRootRow(row: RootRow): void {
-  const current = get(_rootRowOrder);
-  if (current.some((r) => r.kind === row.kind && r.id === row.id)) return;
-  _rootRowOrder.set([...current, row]);
+  const k = rowKey(row);
+  if (_rowKeys.has(k)) return;
+  _rootRowOrder.update((current) => [...current, row]);
+  _rowKeys.add(k);
   persist();
 }
 
 /** Remove a row by kind + id. No-op if missing. */
 export function removeRootRow(row: RootRow): void {
-  const current = get(_rootRowOrder);
-  const next = current.filter((r) => !(r.kind === row.kind && r.id === row.id));
-  if (next.length === current.length) return;
-  _rootRowOrder.set(next);
+  const k = rowKey(row);
+  if (!_rowKeys.has(k)) return;
+  _rootRowOrder.update((current) =>
+    current.filter((r) => !(r.kind === row.kind && r.id === row.id)),
+  );
+  _rowKeys.delete(k);
   persist();
 }
 
 /** Insert a row at the given index. No-op if the row is already present. */
 export function insertRootRow(at: number, row: RootRow): void {
-  const current = get(_rootRowOrder);
-  if (current.some((r) => r.kind === row.kind && r.id === row.id)) return;
-  const next = [...current];
-  next.splice(Math.max(0, Math.min(next.length, at)), 0, row);
-  _rootRowOrder.set(next);
+  const k = rowKey(row);
+  if (_rowKeys.has(k)) return;
+  _rootRowOrder.update((current) => {
+    const next = [...current];
+    next.splice(Math.max(0, Math.min(next.length, at)), 0, row);
+    return next;
+  });
+  _rowKeys.add(k);
   persist();
 }
 
@@ -137,6 +153,7 @@ export function bootstrapRootRowOrder(
   }
 
   _rootRowOrder.set(next);
+  _rowKeys = new Set(next.map(rowKey));
   persist();
 }
 

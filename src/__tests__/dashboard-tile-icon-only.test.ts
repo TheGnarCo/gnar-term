@@ -1,8 +1,8 @@
 /**
  * Dashboard buttons in WorkspaceSectionContent's btn-row slot render
- * icon-only: no text label, workspace name lives in the `title` attribute.
- * Regression for the redesign that moved dashboard tiles from
- * WorkspaceListView's grid into the ContainerRow btn-row slot.
+ * icon-only: no text label, workspace name lives in the `aria-label`
+ * attribute. Regression for the redesign that moved dashboard tiles
+ * from WorkspaceListView's grid into the ContainerRow btn-row slot.
  */
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
@@ -18,8 +18,8 @@ describe("dashboard btn-row — icon only", () => {
     expect(SOURCE).toContain("data-dashboard-contribution={contribId}");
   });
 
-  it("preserves the workspace name in the button's title attribute", () => {
-    expect(SOURCE).toContain("title={entry.ws.name}");
+  it("preserves the workspace name in the button's aria-label attribute", () => {
+    expect(SOURCE).toContain("aria-label={entry.ws.name}");
   });
 
   it("uses DashboardTileIcon for icon rendering (icon-only, no label)", () => {

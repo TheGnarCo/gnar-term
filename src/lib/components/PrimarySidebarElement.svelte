@@ -18,14 +18,30 @@
   import SidebarChipButton from "./SidebarChipButton.svelte";
   import { shortcutHint } from "../actions/shortcut-hint";
 
-  /** Whether this is a workspace (renders gradient pattern) */
-  export let isWorkspace: boolean = false;
+  /**
+   * Row variant. Drives chrome (banner gradient, close vs no-close,
+   * data-sidebar-element marker) and default density:
+   *
+   *   - "umbrella"  — workspace banner row (ContainerRow). Renders the
+   *                   gradient rail; close/lock affordances are
+   *                   suppressed because callers manage closure on the
+   *                   banner itself.
+   *   - "nested"    — regular nested-workspace row (WorkspaceItem).
+   *                   Standard 32px height, close button, no banner.
+   *   - "dashboard" — workspace's dashboard row. Tighter (30px) height
+   *                   with reduced vertical padding.
+   */
+  export let kind: "umbrella" | "nested" | "dashboard" = "nested";
 
-  /** Whether to use compact sizing (smaller height/padding) */
-  export let isCompact: boolean = false;
-
-  /** Whether this is a nested item (reduces vertical padding) */
-  export let isNested: boolean = false;
+  /**
+   * Density modifier for `kind: "nested"`. When the row is rendered
+   * inside an umbrella banner, callers pass `compact={true}` so its
+   * vertical padding collapses to 0 — matches dashboard density and
+   * prevents the nested list from "breathing" inside the banner.
+   * Ignored for `kind: "umbrella"` (banner controls its own padding)
+   * and `kind: "dashboard"` (always compact).
+   */
+  export let compact: boolean = false;
 
   /** Display name/label */
   export let name: string = "";
@@ -68,15 +84,19 @@
   let isHovered = false;
 
   $: effectiveColor = color || $theme.accent;
+  $: isUmbrella = kind === "umbrella";
+  $: isDashboard = kind === "dashboard";
   $: showClose =
-    canClose && !isDragging && !isWorkspace && !isLocked && isHovered;
-  $: showLock = isLocked && !isDragging && !isWorkspace;
-  $: verticalPadding = isCompact || isNested ? "0px" : "4px";
+    canClose && !isDragging && !isUmbrella && !isLocked && isHovered;
+  $: showLock = isLocked && !isDragging && !isUmbrella;
+  $: verticalPadding = isDashboard || compact ? "0px" : "4px";
+  $: minHeight = isDashboard ? "30px" : "32px";
+  $: innerXPadding = isDashboard ? "8px" : "6px";
 </script>
 
 <div
   use:shortcutHint={shortcutLabel}
-  data-sidebar-element={isWorkspace ? "workspace" : "nested-workspace"}
+  data-sidebar-element={isUmbrella ? "workspace" : "nested-workspace"}
   data-active={isActive ? "true" : undefined}
   data-drag-idx={dataDragIdx}
   data-workspace-id={dataWorkspaceId}
@@ -84,7 +104,7 @@
   style="
     display: {isDragging ? 'none' : 'flex'};
     position: relative;
-    min-height: {isCompact ? '30px' : '32px'};
+    min-height: {minHeight};
     margin: 0 8px 0 0;
     border-radius: 0 6px 6px 0;
     overflow: hidden;
@@ -112,7 +132,7 @@
     {isDragging}
     {onGripMouseDown}
   />
-  {#if isWorkspace}
+  {#if isUmbrella}
     <!-- Workspace banner rail gradient -->
     <div
       aria-hidden="true"
@@ -148,7 +168,7 @@
     style="
       flex: 1; min-width: 0;
       display: flex; align-items: center; gap: 8px;
-      padding: {verticalPadding} {isCompact ? '8px' : '6px'};
+      padding: {verticalPadding} {innerXPadding};
       min-height: 100%;
     "
   >

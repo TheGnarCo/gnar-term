@@ -8,10 +8,10 @@ import {
   serializeLayout,
   createNestedWorkspaceFromDef,
 } from "./nested-workspace-service";
-import { wsMeta } from "./service-helpers";
 import {
-  getWorktreeWorkspaces,
+  getNestedWorkspacesForWorkspace,
   closeNestedWorkspacesInWorkspace,
+  isDashboardWorkspace,
   provisionAutoDashboardsForWorkspace,
 } from "./workspace-service";
 import {
@@ -27,10 +27,6 @@ import {
   archivedDefs,
 } from "../stores/archive";
 
-function isDashboardWorkspace(ws: NestedWorkspace): boolean {
-  return wsMeta(ws).isDashboard === true;
-}
-
 function countRunningPtys(ws: NestedWorkspace): number {
   return getAllSurfaces(ws).filter((s) => isTerminalSurface(s) && s.ptyId >= 0)
     .length;
@@ -43,8 +39,10 @@ export async function archiveWorkspace(
   if (!workspace) return false;
   if (workspace.locked) return false;
 
-  const allInWorkspace = getWorktreeWorkspaces(parentWorkspaceId);
-  const nonDashboard = allInWorkspace.filter((ws) => !isDashboardWorkspace(ws));
+  const allInWorkspace = getNestedWorkspacesForWorkspace(parentWorkspaceId);
+  const nonDashboard = allInWorkspace.filter(
+    (ws) => !isDashboardWorkspace(ws, parentWorkspaceId),
+  );
 
   const runningCount = nonDashboard.reduce(
     (sum, ws) => sum + countRunningPtys(ws),

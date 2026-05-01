@@ -152,8 +152,12 @@
     "
   >
     <section style="display: flex; flex-direction: column; gap: 8px;">
-      <h3 style="margin: 0; font-size: 14px; font-weight: 600;">Name</h3>
+      <label
+        for="workspace-name-input"
+        style="margin: 0; font-size: 14px; font-weight: 600;">Name</label
+      >
       <input
+        id="workspace-name-input"
         data-workspace-name-input
         type="text"
         bind:value={nameDraft}

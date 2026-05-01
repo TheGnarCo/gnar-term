@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   getWorkspace: vi.fn(() => undefined as unknown),
   getWorkspaces: vi.fn(() => [] as unknown[]),
   setWorkspaces: vi.fn(),
-  getWorktreeWorkspaces: vi.fn(() => [] as unknown[]),
+  getNestedWorkspacesForWorkspace: vi.fn(() => [] as unknown[]),
   closeNestedWorkspacesInWorkspace: vi.fn(),
   provisionAutoDashboardsForWorkspace: vi.fn(() => Promise.resolve()),
   removeRootRow: vi.fn(),
@@ -51,10 +51,12 @@ vi.mock("../lib/stores/workspaces", () => ({
 }));
 
 vi.mock("../lib/services/workspace-service", () => ({
-  getWorktreeWorkspaces: mocks.getWorktreeWorkspaces,
+  getNestedWorkspacesForWorkspace: mocks.getNestedWorkspacesForWorkspace,
   closeNestedWorkspacesInWorkspace: mocks.closeNestedWorkspacesInWorkspace,
   provisionAutoDashboardsForWorkspace:
     mocks.provisionAutoDashboardsForWorkspace,
+  isDashboardWorkspace: (ws: { metadata?: { isDashboard?: boolean } }) =>
+    ws.metadata?.isDashboard === true,
 }));
 
 vi.mock("../lib/stores/root-row-order", () => ({
@@ -88,7 +90,7 @@ beforeEach(() => {
   );
   mocks.getWorkspace.mockReturnValue(undefined);
   mocks.getWorkspaces.mockReturnValue([]);
-  mocks.getWorktreeWorkspaces.mockReturnValue([]);
+  mocks.getNestedWorkspacesForWorkspace.mockReturnValue([]);
   mocks.provisionAutoDashboardsForWorkspace.mockImplementation(() =>
     Promise.resolve(),
   );
@@ -153,7 +155,7 @@ describe("archiveWorkspace", () => {
     mocks.getWorkspaces.mockReturnValue([workspace]);
     // Only the dashboard has a running PTY — counting it would prompt;
     // skipping it should not.
-    mocks.getWorktreeWorkspaces.mockReturnValueOnce([dashboardWs]);
+    mocks.getNestedWorkspacesForWorkspace.mockReturnValueOnce([dashboardWs]);
 
     const result = await archiveWorkspace("g-1");
 
@@ -167,7 +169,7 @@ describe("archiveWorkspace", () => {
     const ws2 = makeRunningTerminalWs("ws-2", "W2", -1);
     mocks.getWorkspace.mockReturnValueOnce(workspace);
     mocks.getWorkspaces.mockReturnValue([workspace, { id: "other" }]);
-    mocks.getWorktreeWorkspaces.mockReturnValueOnce([ws1, ws2]);
+    mocks.getNestedWorkspacesForWorkspace.mockReturnValueOnce([ws1, ws2]);
 
     const result = await archiveWorkspace("g-1");
 
@@ -199,7 +201,7 @@ describe("archiveWorkspace", () => {
     const workspace = makeWorkspace();
     const wsRunning = makeRunningTerminalWs("ws-1", "W1", 42);
     mocks.getWorkspace.mockReturnValueOnce(workspace);
-    mocks.getWorktreeWorkspaces.mockReturnValueOnce([wsRunning]);
+    mocks.getNestedWorkspacesForWorkspace.mockReturnValueOnce([wsRunning]);
     mocks.showConfirmPrompt.mockResolvedValueOnce(false);
 
     const result = await archiveWorkspace("g-1");
@@ -219,7 +221,10 @@ describe("archiveWorkspace", () => {
     };
     mocks.getWorkspace.mockReturnValueOnce(workspace);
     mocks.getWorkspaces.mockReturnValue([workspace]);
-    mocks.getWorktreeWorkspaces.mockReturnValueOnce([ws1, dashboardWs]);
+    mocks.getNestedWorkspacesForWorkspace.mockReturnValueOnce([
+      ws1,
+      dashboardWs,
+    ]);
 
     await archiveWorkspace("g-1");
 

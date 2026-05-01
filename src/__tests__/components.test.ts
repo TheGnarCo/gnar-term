@@ -1780,7 +1780,7 @@ describe("WorkspaceSectionContent", () => {
     });
 
     // New Worktree button renders (icon-only) even without any workspace actions registered.
-    expect(screen.getByTitle("New Worktree")).toBeTruthy();
+    expect(screen.getByLabelText("New Worktree")).toBeTruthy();
 
     // Registering the core create-worktree action after mount doesn't add a second button.
     registerWorkspaceAction({
@@ -1794,7 +1794,7 @@ describe("WorkspaceSectionContent", () => {
     await tick();
 
     // Still just one New Worktree button — the action doesn't add a second one.
-    expect(screen.getByTitle("New Worktree")).toBeTruthy();
+    expect(screen.getByLabelText("New Worktree")).toBeTruthy();
   });
 });
 

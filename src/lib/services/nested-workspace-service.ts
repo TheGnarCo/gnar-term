@@ -43,10 +43,10 @@ import {
   addNestedWorkspaceToWorkspace,
   insertNestedWorkspaceIntoWorkspace,
 } from "./workspace-service";
+import { makePersistScheduler } from "../utils/persist-scheduler";
 
 // --- NestedWorkspace persistence (debounced save to state.json) ---
 
-let persistTimer: ReturnType<typeof setTimeout> | null = null;
 const PERSIST_DELAY = 2000;
 
 export async function persistWorkspaces(): Promise<void> {
@@ -67,10 +67,8 @@ export async function persistWorkspaces(): Promise<void> {
   });
 }
 
-export function schedulePersist(): void {
-  if (persistTimer) clearTimeout(persistTimer);
-  persistTimer = setTimeout(persistWorkspaces, PERSIST_DELAY);
-}
+const _scheduler = makePersistScheduler(persistWorkspaces, PERSIST_DELAY);
+export const schedulePersist = _scheduler.schedulePersist;
 
 export async function createNestedWorkspace(name: string) {
   const pane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };

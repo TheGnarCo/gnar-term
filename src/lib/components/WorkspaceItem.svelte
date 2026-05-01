@@ -116,9 +116,8 @@
 </script>
 
 <PrimarySidebarElement
-  isWorkspace={false}
-  isCompact={isDashboardWs}
-  {isNested}
+  kind={isDashboardWs ? "dashboard" : "nested"}
+  compact={isNested}
   name={workspace.name}
   {isActive}
   {isLocked}
@@ -162,6 +161,7 @@
       >
         {#if isAgentSpawned}
           <span
+            aria-hidden="true"
             data-workspace-agent-icon
             title="Spawned by agent dashboard"
             style="
@@ -169,11 +169,12 @@
               justify-content: center; color: {railColor};
             "
           >
-            <BotIcon size={12} title="Agent-spawned workspace" />
+            <BotIcon size={12} />
           </span>
         {/if}
         {#if isManaged && !shouldShowWorktreeStatus}
           <span
+            aria-hidden="true"
             data-workspace-worktree-icon
             title="Git worktree workspace"
             style="

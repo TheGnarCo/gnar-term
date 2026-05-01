@@ -8,11 +8,8 @@ vi.mock("@tauri-apps/api/event", () => ({
 }));
 
 import type { Workspace } from "../lib/config";
-import { addWorkspaceToGroup } from "../lib/services/workspace-group-service";
-import {
-  getWorkspaceGroups,
-  setWorkspaceGroups,
-} from "../lib/stores/workspace-groups";
+import { addNestedWorkspaceToWorkspace } from "../lib/services/workspace-group-service";
+import { getWorkspaces, setWorkspaces } from "../lib/stores/workspace-groups";
 import { nestedWorkspaces } from "../lib/stores/workspace";
 
 describe("Workspace.primaryWorkspaceId", () => {
@@ -44,10 +41,10 @@ describe("Workspace.primaryWorkspaceId", () => {
   });
 });
 
-describe("addWorkspaceToGroup — primary invariant", () => {
+describe("addNestedWorkspaceToWorkspace — primary invariant", () => {
   beforeEach(() => {
     nestedWorkspaces.set([]);
-    setWorkspaceGroups([
+    setWorkspaces([
       {
         id: "g1",
         name: "G1",
@@ -76,9 +73,9 @@ describe("addWorkspaceToGroup — primary invariant", () => {
   });
 
   it("allows adding a worktree workspace to a group that already has a primary", () => {
-    const changed = addWorkspaceToGroup("g1", "ws-worktree");
+    const changed = addNestedWorkspaceToWorkspace("g1", "ws-worktree");
     expect(changed).toBe(true);
-    const group = getWorkspaceGroups().find((g) => g.id === "g1");
+    const group = getWorkspaces().find((g) => g.id === "g1");
     expect(group?.workspaceIds).toContain("ws-worktree");
   });
 
@@ -92,7 +89,7 @@ describe("addWorkspaceToGroup — primary invariant", () => {
         metadata: { groupId: "g1" },
       } as never,
     ]);
-    expect(() => addWorkspaceToGroup("g1", "ws-second")).toThrow(
+    expect(() => addNestedWorkspaceToWorkspace("g1", "ws-second")).toThrow(
       "already has a primary workspace",
     );
   });

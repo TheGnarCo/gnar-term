@@ -40,7 +40,7 @@ import {
   insertRootRow,
 } from "../stores/root-row-order";
 import {
-  addWorkspaceToGroup,
+  addNestedWorkspaceToWorkspace,
   insertWorkspaceIntoGroup,
 } from "./workspace-group-service";
 
@@ -528,7 +528,7 @@ export function createWorkspaceFromSurface(
         insertOptions.positionInGroup,
       );
     } else {
-      addWorkspaceToGroup(effectiveGroupId, newWs.id);
+      addNestedWorkspaceToWorkspace(effectiveGroupId, newWs.id);
     }
   }
   schedulePersist();

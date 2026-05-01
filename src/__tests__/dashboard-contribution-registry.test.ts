@@ -1,18 +1,18 @@
 /**
  * Tests for the dashboard-contribution registry. Covers register /
  * unregister / cap enforcement / availability gating — the surface
- * `getDashboardContributionsForGroup` and `canAddContributionToGroup`
+ * `getDashboardContributionsForWorkspace` and `canAddContributionToWorkspace`
  * expose to Stage 5+ consumers.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { get } from "svelte/store";
 import type { Workspace } from "../lib/config";
 import {
-  canAddContributionToGroup,
+  canAddContributionToWorkspace,
   dashboardContributionStore,
   getDashboardContribution,
   getDashboardContributions,
-  getDashboardContributionsForGroup,
+  getDashboardContributionsForWorkspace,
   registerDashboardContribution,
   resetDashboardContributions,
   unregisterDashboardContribution,
@@ -98,13 +98,16 @@ describe("dashboard-contribution registry", () => {
     expect(getDashboardContributions().map((c) => c.id)).toEqual(["c"]);
   });
 
-  describe("getDashboardContributionsForGroup", () => {
+  describe("getDashboardContributionsForWorkspace", () => {
     it("returns every contribution when none have availability gates", () => {
       const a = makeContribution({ id: "a" });
       const b = makeContribution({ id: "b" });
       registerDashboardContribution(a);
       registerDashboardContribution(b);
-      expect(getDashboardContributionsForGroup(makeGroup())).toEqual([a, b]);
+      expect(getDashboardContributionsForWorkspace(makeGroup())).toEqual([
+        a,
+        b,
+      ]);
     });
 
     it("filters out contributions whose isAvailableFor returns false", () => {
@@ -119,9 +122,9 @@ describe("dashboard-contribution registry", () => {
       registerDashboardContribution(always);
       registerDashboardContribution(never);
       const group = makeGroup();
-      expect(getDashboardContributionsForGroup(group).map((c) => c.id)).toEqual(
-        ["always"],
-      );
+      expect(
+        getDashboardContributionsForWorkspace(group).map((c) => c.id),
+      ).toEqual(["always"]);
     });
 
     it("passes the group to each gate so contributions can branch on it", () => {
@@ -132,36 +135,42 @@ describe("dashboard-contribution registry", () => {
       const gitGroup = makeGroup({ id: "g-git", isGit: true });
       const plainGroup = makeGroup({ id: "g-plain", isGit: false });
       expect(
-        getDashboardContributionsForGroup(gitGroup).map((c) => c.id),
+        getDashboardContributionsForWorkspace(gitGroup).map((c) => c.id),
       ).toEqual(["gitOnly"]);
       expect(
-        getDashboardContributionsForGroup(plainGroup).map((c) => c.id),
+        getDashboardContributionsForWorkspace(plainGroup).map((c) => c.id),
       ).toEqual([]);
       expect(gate).toHaveBeenCalledWith(gitGroup);
       expect(gate).toHaveBeenCalledWith(plainGroup);
     });
   });
 
-  describe("canAddContributionToGroup (cap enforcement)", () => {
+  describe("canAddContributionToWorkspace (cap enforcement)", () => {
     it("returns false when the contribution is not registered", () => {
-      expect(canAddContributionToGroup(makeGroup(), "unregistered", 0)).toBe(
-        false,
-      );
+      expect(
+        canAddContributionToWorkspace(makeGroup(), "unregistered", 0),
+      ).toBe(false);
     });
 
     it("allows adding while under the cap", () => {
       registerDashboardContribution(makeContribution({ capPerGroup: 1 }));
-      expect(canAddContributionToGroup(makeGroup(), "example", 0)).toBe(true);
+      expect(canAddContributionToWorkspace(makeGroup(), "example", 0)).toBe(
+        true,
+      );
     });
 
     it("rejects adding when the count equals the cap", () => {
       registerDashboardContribution(makeContribution({ capPerGroup: 1 }));
-      expect(canAddContributionToGroup(makeGroup(), "example", 1)).toBe(false);
+      expect(canAddContributionToWorkspace(makeGroup(), "example", 1)).toBe(
+        false,
+      );
     });
 
     it("rejects adding when the count exceeds the cap", () => {
       registerDashboardContribution(makeContribution({ capPerGroup: 2 }));
-      expect(canAddContributionToGroup(makeGroup(), "example", 3)).toBe(false);
+      expect(canAddContributionToWorkspace(makeGroup(), "example", 3)).toBe(
+        false,
+      );
     });
 
     it("rejects adding when isAvailableFor denies the group, even under cap", () => {
@@ -171,16 +180,18 @@ describe("dashboard-contribution registry", () => {
           isAvailableFor: () => false,
         }),
       );
-      expect(canAddContributionToGroup(makeGroup(), "example", 0)).toBe(false);
+      expect(canAddContributionToWorkspace(makeGroup(), "example", 0)).toBe(
+        false,
+      );
     });
 
     it("honors Number.POSITIVE_INFINITY as effectively unlimited", () => {
       registerDashboardContribution(
         makeContribution({ capPerGroup: Number.POSITIVE_INFINITY }),
       );
-      expect(canAddContributionToGroup(makeGroup(), "example", 10_000)).toBe(
-        true,
-      );
+      expect(
+        canAddContributionToWorkspace(makeGroup(), "example", 10_000),
+      ).toBe(true);
     });
   });
 });

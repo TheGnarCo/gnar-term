@@ -46,7 +46,7 @@ export interface DashboardContribution {
    * Maximum number of this contribution's dashboards that may coexist
    * inside a single group. `1` means exclusive (agentic) and
    * `Number.POSITIVE_INFINITY` allows unlimited. Enforced at
-   * "Add <Dashboard>" time via `canAddContributionToGroup`.
+   * "Add <Dashboard>" time via `canAddContributionToWorkspace`.
    */
   capPerGroup: number;
   /**
@@ -127,7 +127,7 @@ export function getDashboardContributions(): DashboardContribution[] {
  * each contribution's optional `isAvailableFor` gate and drops those
  * that return false. Stable registration order is preserved.
  */
-export function getDashboardContributionsForGroup(
+export function getDashboardContributionsForWorkspace(
   group: Workspace,
 ): DashboardContribution[] {
   return getDashboardContributions().filter(
@@ -145,7 +145,7 @@ export function getDashboardContributionsForGroup(
  * Returns false when: the contribution isn't registered, the
  * availability gate denies the group, or `currentCount >= capPerGroup`.
  */
-export function canAddContributionToGroup(
+export function canAddContributionToWorkspace(
   group: Workspace,
   contributionId: string,
   currentCount: number,

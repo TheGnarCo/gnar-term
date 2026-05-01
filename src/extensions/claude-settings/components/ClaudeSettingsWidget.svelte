@@ -6,7 +6,7 @@
     getDashboardHost,
     deriveDashboardScope,
   } from "../../../lib/contexts/dashboard-host";
-  import { getWorkspaceGroup } from "../../../lib/stores/workspace-groups";
+  import { getWorkspace } from "../../../lib/stores/workspace-groups";
   import SettingsFileEditor from "./SettingsFileEditor.svelte";
 
   const api = getContext<ExtensionAPI | undefined>(EXTENSION_API_KEY);
@@ -17,8 +17,7 @@
   const host = getDashboardHost();
   const scope = deriveDashboardScope(host);
 
-  $: group =
-    scope.kind === "group" ? getWorkspaceGroup(scope.groupId) : undefined;
+  $: group = scope.kind === "group" ? getWorkspace(scope.groupId) : undefined;
   $: projectRoot = group?.path ?? "";
 
   $: settingsPath = projectRoot ? `${projectRoot}/.claude/settings.json` : null;

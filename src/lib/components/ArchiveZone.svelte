@@ -12,10 +12,7 @@
     archivedDefs,
     type ArchivedRow,
   } from "../stores/archive";
-  import {
-    unarchiveWorkspace,
-    unarchiveGroup,
-  } from "../services/archive-service";
+  import { unarchiveWorkspace } from "../services/archive-service";
   import DragGrip from "./DragGrip.svelte";
 
   let expanded = false;
@@ -86,8 +83,7 @@
       confirmLabel: "Unarchive",
     });
     if (!confirmed) return;
-    if (row.kind === "workspace") void unarchiveWorkspace(row.id);
-    else void unarchiveGroup(row.id);
+    if (row.kind === "workspace-group") void unarchiveWorkspace(row.id);
   }
 
   function showItemContextMenu(x: number, y: number, row: ArchivedRow) {
@@ -159,8 +155,7 @@
         e.clientY >= rect.top &&
         e.clientY <= rect.bottom;
       if (!overZone) {
-        if (row.kind === "workspace") void unarchiveWorkspace(row.id);
-        else void unarchiveGroup(row.id);
+        if (row.kind === "workspace-group") void unarchiveWorkspace(row.id);
       }
     }
   }

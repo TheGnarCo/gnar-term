@@ -1,5 +1,5 @@
 /**
- * reconcileGroupDashboards must deduplicate ALL autoProvision contribution
+ * reconcileWorkspaceDashboards must deduplicate ALL autoProvision contribution
  * types (settings, agentic, …), not just "group". Duplicates arise from a
  * startup race where a provision loop creates fresh dashboards after
  * nestedWorkspaces.set([]) clears the store but before restoreWorkspaces finishes.
@@ -15,12 +15,12 @@ vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn().mockResolvedValue(vi.fn()),
 }));
 
-import { reconcileGroupDashboards } from "../lib/services/workspace-group-service";
+import { reconcileWorkspaceDashboards } from "../lib/services/workspace-group-service";
 import {
   nestedWorkspaces,
   activeNestedWorkspaceIdx,
 } from "../lib/stores/workspace";
-import { workspaceGroupsStore } from "../lib/stores/workspace-groups";
+import { workspacesStore } from "../lib/stores/workspace-groups";
 import {
   registerDashboardContribution,
   resetDashboardContributions,
@@ -53,13 +53,13 @@ function makeDashboard(id: string, contribId: string): never {
   } as never;
 }
 
-describe("reconcileGroupDashboards — dedupe all contribution types", () => {
+describe("reconcileWorkspaceDashboards — dedupe all contribution types", () => {
   beforeEach(() => {
     invokeMock.mockReset();
     invokeMock.mockImplementation(async () => undefined);
     nestedWorkspaces.set([]);
     activeNestedWorkspaceIdx.set(-1);
-    workspaceGroupsStore.set([GROUP]);
+    workspacesStore.set([GROUP]);
     resetDashboardContributions();
   });
 
@@ -78,7 +78,7 @@ describe("reconcileGroupDashboards — dedupe all contribution types", () => {
       makeDashboard("settings-2", "settings"),
     ]);
 
-    await reconcileGroupDashboards();
+    await reconcileWorkspaceDashboards();
 
     const remaining = get(nestedWorkspaces).filter((w) => {
       return (
@@ -104,7 +104,7 @@ describe("reconcileGroupDashboards — dedupe all contribution types", () => {
       makeDashboard("agentic-2", "agentic"),
     ]);
 
-    await reconcileGroupDashboards();
+    await reconcileWorkspaceDashboards();
 
     const remaining = get(nestedWorkspaces).filter((w) => {
       return (
@@ -140,7 +140,7 @@ describe("reconcileGroupDashboards — dedupe all contribution types", () => {
       makeDashboard("agentic-2", "agentic"),
     ]);
 
-    await reconcileGroupDashboards();
+    await reconcileWorkspaceDashboards();
 
     const all = get(nestedWorkspaces);
     for (const contribId of ["group", "settings", "agentic"]) {

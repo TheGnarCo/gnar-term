@@ -28,14 +28,14 @@ import {
   nestedWorkspaces,
   activeNestedWorkspaceIdx,
 } from "../lib/stores/workspace";
-import { workspaceGroupsStore } from "../lib/stores/workspace-groups";
+import { workspacesStore } from "../lib/stores/workspace-groups";
 
 function rpc(method: string, params?: unknown, id: number = 1) {
   return { jsonrpc: "2.0" as const, id, method, params };
 }
 
 function seedGroup(id: string) {
-  workspaceGroupsStore.set([
+  workspacesStore.set([
     {
       id,
       name: `Group ${id}`,
@@ -55,7 +55,7 @@ describe("MCP dashboard contribution tools", () => {
     resetDashboardContributions();
     nestedWorkspaces.set([]);
     activeNestedWorkspaceIdx.set(-1);
-    workspaceGroupsStore.set([]);
+    workspacesStore.set([]);
   });
 
   describe("list_dashboard_contributions", () => {

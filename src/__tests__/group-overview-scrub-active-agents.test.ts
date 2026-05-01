@@ -1,6 +1,6 @@
 /**
  * Legacy `## Active Agents` sections in group Overview markdown get
- * stripped on reconcileGroupDashboards. Older templates emitted this
+ * stripped on reconcileWorkspaceDashboards. Older templates emitted this
  * redundantly with the Agentic Dashboard tile; the scrub runs once
  * per reconciliation pass and is idempotent.
  */
@@ -14,8 +14,8 @@ vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn().mockResolvedValue(vi.fn()),
 }));
 
-import { reconcileGroupDashboards } from "../lib/services/workspace-group-service";
-import { workspaceGroupsStore } from "../lib/stores/workspace-groups";
+import { reconcileWorkspaceDashboards } from "../lib/services/workspace-group-service";
+import { workspacesStore } from "../lib/stores/workspace-groups";
 import {
   nestedWorkspaces,
   activeNestedWorkspaceIdx,
@@ -26,7 +26,7 @@ describe("scrub Active Agents from group Overview", () => {
     invokeMock.mockReset();
     nestedWorkspaces.set([]);
     activeNestedWorkspaceIdx.set(-1);
-    workspaceGroupsStore.set([
+    workspacesStore.set([
       {
         id: "g1",
         name: "Agent Skills",
@@ -67,7 +67,7 @@ describe("scrub Active Agents from group Overview", () => {
       return undefined;
     });
 
-    await reconcileGroupDashboards();
+    await reconcileWorkspaceDashboards();
 
     const writes = invokeMock.mock.calls.filter(
       (call) => call[0] === "write_file",
@@ -107,7 +107,7 @@ describe("scrub Active Agents from group Overview", () => {
       return undefined;
     });
 
-    await reconcileGroupDashboards();
+    await reconcileWorkspaceDashboards();
 
     const writes = invokeMock.mock.calls.filter(
       (call) => call[0] === "write_file",

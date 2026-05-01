@@ -14,8 +14,8 @@ import {
 } from "../../lib/contexts/dashboard-host";
 import { nestedWorkspaces } from "../../lib/stores/workspace";
 import {
-  getWorkspaceGroup,
-  workspaceGroupsStore,
+  getWorkspace,
+  workspacesStore,
 } from "../../lib/stores/workspace-groups";
 import { claimedWorkspaceIds } from "../../lib/services/claimed-workspace-registry";
 import type {
@@ -95,7 +95,7 @@ export function throttle<TArgs extends unknown[]>(
  * emission (F32 perf fix).
  */
 const _groupWorkspaceIndex = derived(
-  [nestedWorkspaces, workspaceGroupsStore, claimedWorkspaceIds],
+  [nestedWorkspaces, workspacesStore, claimedWorkspaceIds],
   ([$nestedWorkspaces, $groups, $claimedIds]): Map<string, Set<string>> => {
     const index = new Map<string, Set<string>>();
     for (const group of $groups) {
@@ -288,7 +288,7 @@ export function resolveSpawnTarget(
   repoPathProp: string | undefined,
 ): SpawnTarget {
   if (scope.kind === "group") {
-    const group = getWorkspaceGroup(scope.groupId);
+    const group = getWorkspace(scope.groupId);
     if (!group) return { ok: false, error: "Workspace Group not found" };
     return {
       ok: true,

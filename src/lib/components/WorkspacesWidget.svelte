@@ -1,6 +1,6 @@
 <script lang="ts">
   import { nestedWorkspaces } from "../stores/workspace";
-  import { workspaceGroupsStore } from "../stores/workspace-groups";
+  import { workspacesStore } from "../stores/workspace-groups";
   import { getDashboardContribution } from "../services/dashboard-contribution-registry";
   import {
     getDashboardHost,
@@ -19,7 +19,7 @@
   $: groupId = scope.kind === "group" ? scope.groupId : null;
 
   $: group = groupId
-    ? ($workspaceGroupsStore.find((g) => g.id === groupId) ?? null)
+    ? ($workspacesStore.find((g) => g.id === groupId) ?? null)
     : null;
 
   $: groupWs = groupId
@@ -52,7 +52,7 @@
       ? getDashboardContribution(md.dashboardContributionId)
       : undefined;
     const tileGroupPath = md.groupId
-      ? $workspaceGroupsStore.find((g) => g.id === md.groupId)?.path
+      ? $workspacesStore.find((g) => g.id === md.groupId)?.path
       : undefined;
     return {
       icon: contribution?.icon ?? GridIcon,

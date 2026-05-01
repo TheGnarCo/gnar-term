@@ -7,12 +7,12 @@ const mocks = vi.hoisted(() => ({
   serializeLayout: vi.fn(() => ({ pane: { surfaces: [] } })),
   schedulePersist: vi.fn(),
   showConfirmPrompt: vi.fn(() => Promise.resolve(true)),
-  getWorkspaceGroup: vi.fn(() => undefined as unknown),
-  getWorkspaceGroups: vi.fn(() => [] as unknown[]),
-  setWorkspaceGroups: vi.fn(),
+  getWorkspace: vi.fn(() => undefined as unknown),
+  getWorkspaces: vi.fn(() => [] as unknown[]),
+  setWorkspaces: vi.fn(),
   getWorktreeWorkspaces: vi.fn(() => [] as unknown[]),
-  closeWorkspacesInGroup: vi.fn(),
-  provisionAutoDashboardsForGroup: vi.fn(() => Promise.resolve()),
+  closeNestedWorkspacesInWorkspace: vi.fn(),
+  provisionAutoDashboardsForWorkspace: vi.fn(() => Promise.resolve()),
   removeRootRow: vi.fn(),
   appendRootRow: vi.fn(),
 }));
@@ -45,15 +45,16 @@ vi.mock("../lib/services/workspace-service", () => ({
 }));
 
 vi.mock("../lib/stores/workspace-groups", () => ({
-  getWorkspaceGroup: mocks.getWorkspaceGroup,
-  getWorkspaceGroups: mocks.getWorkspaceGroups,
-  setWorkspaceGroups: mocks.setWorkspaceGroups,
+  getWorkspace: mocks.getWorkspace,
+  getWorkspaces: mocks.getWorkspaces,
+  setWorkspaces: mocks.setWorkspaces,
 }));
 
 vi.mock("../lib/services/workspace-group-service", () => ({
   getWorktreeWorkspaces: mocks.getWorktreeWorkspaces,
-  closeWorkspacesInGroup: mocks.closeWorkspacesInGroup,
-  provisionAutoDashboardsForGroup: mocks.provisionAutoDashboardsForGroup,
+  closeNestedWorkspacesInWorkspace: mocks.closeNestedWorkspacesInWorkspace,
+  provisionAutoDashboardsForWorkspace:
+    mocks.provisionAutoDashboardsForWorkspace,
 }));
 
 vi.mock("../lib/stores/root-row-order", () => ({
@@ -75,22 +76,7 @@ import {
 import {
   archiveWorkspace,
   unarchiveWorkspace,
-  archiveGroup,
-  unarchiveGroup,
 } from "../lib/services/archive-service";
-
-function makeWs(overrides = {}) {
-  return {
-    id: "ws-1",
-    name: "My WS",
-    splitRoot: {
-      type: "pane" as const,
-      pane: { id: "p1", surfaces: [], activeSurfaceId: null },
-    },
-    activePaneId: "p1",
-    ...overrides,
-  };
-}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -100,10 +86,10 @@ beforeEach(() => {
   mocks.createWorkspaceFromDef.mockImplementation(() =>
     Promise.resolve("new-ws-id"),
   );
-  mocks.getWorkspaceGroup.mockReturnValue(undefined);
-  mocks.getWorkspaceGroups.mockReturnValue([]);
+  mocks.getWorkspace.mockReturnValue(undefined);
+  mocks.getWorkspaces.mockReturnValue([]);
   mocks.getWorktreeWorkspaces.mockReturnValue([]);
-  mocks.provisionAutoDashboardsForGroup.mockImplementation(() =>
+  mocks.provisionAutoDashboardsForWorkspace.mockImplementation(() =>
     Promise.resolve(),
   );
 });
@@ -149,124 +135,12 @@ function makeRunningTerminalWs(id: string, name: string, ptyId: number) {
 }
 
 describe("archiveWorkspace", () => {
-  it("serializes workspace, closes it, and adds to archive", async () => {
-    nestedWorkspaces.set([makeWs()]);
-    const result = await archiveWorkspace("ws-1");
-    expect(result).toBe(true);
-    expect(mocks.closeWorkspace).toHaveBeenCalledWith(0);
-    expect(get(archivedOrder)).toEqual([{ kind: "workspace", id: "ws-1" }]);
-    expect(get(archivedDefs).nestedWorkspaces["ws-1"]?.def.name).toBe("My WS");
-  });
-
-  it("returns false for an unknown workspace id", async () => {
-    nestedWorkspaces.set([]);
-    const result = await archiveWorkspace("nonexistent");
-    expect(result).toBe(false);
-    expect(mocks.closeWorkspace).not.toHaveBeenCalled();
-  });
-
-  it("shows confirm prompt when workspace has running PTY", async () => {
-    const wsWithPty = makeWs({
-      splitRoot: {
-        type: "pane" as const,
-        pane: {
-          id: "p1",
-          activeSurfaceId: "s1",
-          surfaces: [
-            {
-              kind: "terminal",
-              id: "s1",
-              title: "bash",
-              ptyId: 42,
-              hasUnread: false,
-              cwd: "/",
-              terminal: {},
-              pendingData: [],
-            },
-          ],
-        },
-      },
-    });
-    nestedWorkspaces.set([wsWithPty]);
-    await archiveWorkspace("ws-1");
-    expect(mocks.showConfirmPrompt).toHaveBeenCalled();
-  });
-
-  it("returns false when user cancels the confirm prompt", async () => {
-    mocks.showConfirmPrompt.mockResolvedValueOnce(false);
-    const wsWithPty = makeWs({
-      splitRoot: {
-        type: "pane" as const,
-        pane: {
-          id: "p1",
-          activeSurfaceId: "s1",
-          surfaces: [
-            {
-              kind: "terminal",
-              id: "s1",
-              title: "bash",
-              ptyId: 42,
-              hasUnread: false,
-              cwd: "/",
-              terminal: {},
-              pendingData: [],
-            },
-          ],
-        },
-      },
-    });
-    nestedWorkspaces.set([wsWithPty]);
-    const result = await archiveWorkspace("ws-1");
-    expect(result).toBe(false);
-    expect(mocks.closeWorkspace).not.toHaveBeenCalled();
-  });
-});
-
-describe("unarchiveWorkspace", () => {
-  it("restores workspace from frozen def and removes from archive", async () => {
-    const def = {
-      id: "ws-1",
-      name: "My WS",
-      layout: { pane: { surfaces: [] } },
-    };
-    addToArchive({ kind: "workspace", id: "ws-1" }, { def });
-    await unarchiveWorkspace("ws-1");
-    expect(mocks.createWorkspaceFromDef).toHaveBeenCalledWith(def, {
-      restoring: true,
-    });
-    expect(get(archivedOrder)).toHaveLength(0);
-    expect(get(archivedDefs).nestedWorkspaces["ws-1"]).toBeUndefined();
-  });
-
-  it("is a no-op for an unknown id", async () => {
-    await unarchiveWorkspace("nonexistent");
-    expect(mocks.createWorkspaceFromDef).not.toHaveBeenCalled();
-  });
-
-  it("keeps the archive entry intact when createWorkspaceFromDef rejects", async () => {
-    const def = {
-      id: "ws-1",
-      name: "My WS",
-      layout: { pane: { surfaces: [] } },
-    };
-    addToArchive({ kind: "workspace", id: "ws-1" }, { def });
-    mocks.createWorkspaceFromDef.mockRejectedValueOnce(new Error("boom"));
-
-    await expect(unarchiveWorkspace("ws-1")).rejects.toThrow("boom");
-
-    // archive entry must survive so the user can retry
-    expect(get(archivedOrder)).toEqual([{ kind: "workspace", id: "ws-1" }]);
-    expect(get(archivedDefs).nestedWorkspaces["ws-1"]).toBeDefined();
-  });
-});
-
-describe("archiveGroup", () => {
   it("returns false when the group is not found", async () => {
-    mocks.getWorkspaceGroup.mockReturnValueOnce(undefined);
-    const result = await archiveGroup("g-missing");
+    mocks.getWorkspace.mockReturnValueOnce(undefined);
+    const result = await archiveWorkspace("g-missing");
     expect(result).toBe(false);
-    expect(mocks.closeWorkspacesInGroup).not.toHaveBeenCalled();
-    expect(mocks.setWorkspaceGroups).not.toHaveBeenCalled();
+    expect(mocks.closeNestedWorkspacesInWorkspace).not.toHaveBeenCalled();
+    expect(mocks.setWorkspaces).not.toHaveBeenCalled();
   });
 
   it("skips dashboard nestedWorkspaces when counting running PTYs", async () => {
@@ -275,13 +149,13 @@ describe("archiveGroup", () => {
       ...makeRunningTerminalWs("ws-dash", "Dashboard", 99),
       metadata: { isDashboard: true },
     };
-    mocks.getWorkspaceGroup.mockReturnValueOnce(group);
-    mocks.getWorkspaceGroups.mockReturnValue([group]);
+    mocks.getWorkspace.mockReturnValueOnce(group);
+    mocks.getWorkspaces.mockReturnValue([group]);
     // Only the dashboard has a running PTY — counting it would prompt;
     // skipping it should not.
     mocks.getWorktreeWorkspaces.mockReturnValueOnce([dashboardWs]);
 
-    const result = await archiveGroup("g-1");
+    const result = await archiveWorkspace("g-1");
 
     expect(mocks.showConfirmPrompt).not.toHaveBeenCalled();
     expect(result).toBe(true);
@@ -291,15 +165,15 @@ describe("archiveGroup", () => {
     const group = makeGroup();
     const ws1 = makeRunningTerminalWs("ws-1", "W1", -1);
     const ws2 = makeRunningTerminalWs("ws-2", "W2", -1);
-    mocks.getWorkspaceGroup.mockReturnValueOnce(group);
-    mocks.getWorkspaceGroups.mockReturnValue([group, { id: "other" }]);
+    mocks.getWorkspace.mockReturnValueOnce(group);
+    mocks.getWorkspaces.mockReturnValue([group, { id: "other" }]);
     mocks.getWorktreeWorkspaces.mockReturnValueOnce([ws1, ws2]);
 
-    const result = await archiveGroup("g-1");
+    const result = await archiveWorkspace("g-1");
 
     expect(result).toBe(true);
-    expect(mocks.closeWorkspacesInGroup).toHaveBeenCalledWith("g-1");
-    expect(mocks.setWorkspaceGroups).toHaveBeenCalledWith([{ id: "other" }]);
+    expect(mocks.closeNestedWorkspacesInWorkspace).toHaveBeenCalledWith("g-1");
+    expect(mocks.setWorkspaces).toHaveBeenCalledWith([{ id: "other" }]);
     expect(mocks.removeRootRow).toHaveBeenCalledWith({
       kind: "workspace-group",
       id: "g-1",
@@ -317,15 +191,15 @@ describe("archiveGroup", () => {
   it("returns false when the user cancels the confirm prompt", async () => {
     const group = makeGroup();
     const wsRunning = makeRunningTerminalWs("ws-1", "W1", 42);
-    mocks.getWorkspaceGroup.mockReturnValueOnce(group);
+    mocks.getWorkspace.mockReturnValueOnce(group);
     mocks.getWorktreeWorkspaces.mockReturnValueOnce([wsRunning]);
     mocks.showConfirmPrompt.mockResolvedValueOnce(false);
 
-    const result = await archiveGroup("g-1");
+    const result = await archiveWorkspace("g-1");
 
     expect(result).toBe(false);
-    expect(mocks.closeWorkspacesInGroup).not.toHaveBeenCalled();
-    expect(mocks.setWorkspaceGroups).not.toHaveBeenCalled();
+    expect(mocks.closeNestedWorkspacesInWorkspace).not.toHaveBeenCalled();
+    expect(mocks.setWorkspaces).not.toHaveBeenCalled();
     expect(get(archivedOrder)).toHaveLength(0);
   });
 
@@ -336,11 +210,11 @@ describe("archiveGroup", () => {
       ...makeRunningTerminalWs("ws-dash", "Dashboard", -1),
       metadata: { isDashboard: true },
     };
-    mocks.getWorkspaceGroup.mockReturnValueOnce(group);
-    mocks.getWorkspaceGroups.mockReturnValue([group]);
+    mocks.getWorkspace.mockReturnValueOnce(group);
+    mocks.getWorkspaces.mockReturnValue([group]);
     mocks.getWorktreeWorkspaces.mockReturnValueOnce([ws1, dashboardWs]);
 
-    await archiveGroup("g-1");
+    await archiveWorkspace("g-1");
 
     const stored = get(archivedDefs).groups["g-1"];
     expect(stored?.workspaceDefs).toHaveLength(1);
@@ -348,13 +222,13 @@ describe("archiveGroup", () => {
   });
 });
 
-describe("unarchiveGroup", () => {
+describe("unarchiveWorkspace", () => {
   it("is a no-op when the group is not in the archive", async () => {
-    await unarchiveGroup("g-missing");
-    expect(mocks.setWorkspaceGroups).not.toHaveBeenCalled();
+    await unarchiveWorkspace("g-missing");
+    expect(mocks.setWorkspaces).not.toHaveBeenCalled();
     expect(mocks.appendRootRow).not.toHaveBeenCalled();
     expect(mocks.createWorkspaceFromDef).not.toHaveBeenCalled();
-    expect(mocks.provisionAutoDashboardsForGroup).not.toHaveBeenCalled();
+    expect(mocks.provisionAutoDashboardsForWorkspace).not.toHaveBeenCalled();
   });
 
   it("restores the group, appends root row, creates nestedWorkspaces, and provisions dashboards", async () => {
@@ -365,11 +239,11 @@ describe("unarchiveGroup", () => {
       { kind: "workspace-group", id: "g-1" },
       { group, workspaceDefs: [def1, def2] },
     );
-    mocks.getWorkspaceGroups.mockReturnValueOnce([{ id: "existing" }]);
+    mocks.getWorkspaces.mockReturnValueOnce([{ id: "existing" }]);
 
-    await unarchiveGroup("g-1");
+    await unarchiveWorkspace("g-1");
 
-    expect(mocks.setWorkspaceGroups).toHaveBeenCalledWith([
+    expect(mocks.setWorkspaces).toHaveBeenCalledWith([
       { id: "existing" },
       group,
     ]);
@@ -384,7 +258,9 @@ describe("unarchiveGroup", () => {
     expect(mocks.createWorkspaceFromDef).toHaveBeenNthCalledWith(2, def2, {
       restoring: true,
     });
-    expect(mocks.provisionAutoDashboardsForGroup).toHaveBeenCalledWith(group);
+    expect(mocks.provisionAutoDashboardsForWorkspace).toHaveBeenCalledWith(
+      group,
+    );
 
     // archive entry cleared on success
     expect(get(archivedOrder)).toHaveLength(0);
@@ -404,13 +280,13 @@ describe("unarchiveGroup", () => {
     );
     mocks.createWorkspaceFromDef.mockRejectedValueOnce(new Error("nope"));
 
-    await expect(unarchiveGroup("g-1")).rejects.toThrow("nope");
+    await expect(unarchiveWorkspace("g-1")).rejects.toThrow("nope");
 
     // archive entry must survive so the user can retry
     expect(get(archivedOrder)).toEqual([
       { kind: "workspace-group", id: "g-1" },
     ]);
     expect(get(archivedDefs).groups["g-1"]).toBeDefined();
-    expect(mocks.provisionAutoDashboardsForGroup).not.toHaveBeenCalled();
+    expect(mocks.provisionAutoDashboardsForWorkspace).not.toHaveBeenCalled();
   });
 });

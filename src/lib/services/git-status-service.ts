@@ -23,7 +23,7 @@ import {
 } from "./status-registry";
 import { nestedWorkspaces, activeWorkspace } from "../stores/workspace";
 import { getActiveCwd, getWorkspaceCwd, wsMeta } from "./service-helpers";
-import { getWorkspaceGroup } from "../stores/workspace-groups";
+import { getWorkspace } from "../stores/workspace-groups";
 
 export const GIT_STATUS_SOURCE = "git";
 
@@ -470,7 +470,7 @@ async function ensurePolling(wsId: string): Promise<void> {
     if (ws) {
       const groupId = wsMeta(ws).groupId;
       if (typeof groupId === "string") {
-        cwd = getWorkspaceGroup(groupId)?.path;
+        cwd = getWorkspace(groupId)?.path;
       }
     }
   }

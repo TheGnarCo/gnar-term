@@ -388,10 +388,10 @@ describe("Kanban widget", () => {
     // Seed a workspace group whose path matches the nestedWorkspaces' CWD so
     // the host-context-driven filter includes them as unclaimed CWD
     // matches — mirroring the group-scope rule in widget-helpers.
-    const { setWorkspaceGroups, resetWorkspaceGroupsForTest } =
+    const { setWorkspaces, resetWorkspacesForTest } =
       await import("../../../lib/stores/workspace-groups");
-    resetWorkspaceGroupsForTest();
-    setWorkspaceGroups([
+    resetWorkspacesForTest();
+    setWorkspaces([
       {
         id: "group-proj",
         name: "Project A",
@@ -445,10 +445,10 @@ describe("Issues widget", () => {
     // into the next one.
     invalidateGhAvailability();
     tauriInvokeGhAvailable.current = true;
-    const { setWorkspaceGroups, resetWorkspaceGroupsForTest } =
+    const { setWorkspaces, resetWorkspacesForTest } =
       await import("../../../lib/stores/workspace-groups");
-    resetWorkspaceGroupsForTest();
-    setWorkspaceGroups([
+    resetWorkspacesForTest();
+    setWorkspaces([
       {
         id: GROUP_ID,
         name: "Issues Dash",
@@ -989,10 +989,10 @@ describe("Prs widget", () => {
     resetRegistry();
     invalidateGhAvailability();
     tauriInvokeGhAvailable.current = true;
-    const { setWorkspaceGroups, resetWorkspaceGroupsForTest } =
+    const { setWorkspaces, resetWorkspacesForTest } =
       await import("../../../lib/stores/workspace-groups");
-    resetWorkspaceGroupsForTest();
-    setWorkspaceGroups([
+    resetWorkspacesForTest();
+    setWorkspaces([
       {
         id: GROUP_ID,
         name: "PRs Dash",
@@ -1331,10 +1331,10 @@ describe("TaskSpawner widget", () => {
     saveConfigMock.mockClear();
     spawnAgentInWorktreeMock.mockClear();
     resetRegistry();
-    const { setWorkspaceGroups, resetWorkspaceGroupsForTest } =
+    const { setWorkspaces, resetWorkspacesForTest } =
       await import("../../../lib/stores/workspace-groups");
-    resetWorkspaceGroupsForTest();
-    setWorkspaceGroups([
+    resetWorkspacesForTest();
+    setWorkspaces([
       {
         id: GROUP_ID,
         name: "Spawn Group",

@@ -72,7 +72,7 @@
     type CliArgs,
   } from "./lib/bootstrap/restore-workspaces";
   import {
-    reconcileGroupDashboards,
+    reconcileWorkspaceDashboards,
     reconcilePrimaryWorkspaces,
     setupPrimaryWorkspaceAutoRecreation,
   } from "./lib/services/workspace-group-service";
@@ -653,14 +653,14 @@
 
     await restoreWorkspaces(cliArgs, config);
     // Signal that nestedWorkspaces are in the store so deferred work (the
-    // agentic extension's provision loop, reconcileGroupDashboards) can
+    // agentic extension's provision loop, reconcileWorkspaceDashboards) can
     // safely read and write the nestedWorkspaces store without racing restore.
     markRestored();
     // Backfill primaryWorkspaceId and wrap standalone nestedWorkspaces now that
     // the nestedWorkspaces store is populated.
     await reconcilePrimaryWorkspaces();
     setupPrimaryWorkspaceAutoRecreation();
-    void reconcileGroupDashboards();
+    void reconcileWorkspaceDashboards();
 
     // Rehydrate the persisted root-row order so drag-sorted layouts
     // survive across restarts. Entities are all registered by this

@@ -52,9 +52,9 @@ vi.mock("../lib/services/workspace-service", () => ({
 }));
 
 vi.mock("../lib/stores/workspace-groups", () => ({
-  getWorkspaceGroups: vi.fn().mockReturnValue([]),
-  workspaceGroupsStore: { subscribe: vi.fn() },
-  setActiveGroupId: vi.fn(),
+  getWorkspaces: vi.fn().mockReturnValue([]),
+  workspacesStore: { subscribe: vi.fn() },
+  setActiveWorkspaceId: vi.fn(),
 }));
 
 vi.mock("../lib/stores/root-row-order", () => ({
@@ -90,7 +90,7 @@ import {
   nestedWorkspaces,
   activeNestedWorkspaceIdx,
 } from "../lib/stores/workspace";
-import { getWorkspaceGroups } from "../lib/stores/workspace-groups";
+import { getWorkspaces } from "../lib/stores/workspace-groups";
 import {
   uid,
   type NestedWorkspace,
@@ -508,7 +508,7 @@ describe("tab-drag — commitTabDrop", () => {
     nestedWorkspaces.set([ws, wsTarget, wsTarget2]);
     activeNestedWorkspaceIdx.set(0);
 
-    vi.mocked(getWorkspaceGroups).mockReturnValue([
+    vi.mocked(getWorkspaces).mockReturnValue([
       {
         id: "grp1",
         workspaceIds: [wsTarget.id, wsTarget2.id],
@@ -554,7 +554,7 @@ describe("tab-drag — commitTabDrop", () => {
     nestedWorkspaces.set([ws, wsTarget, wsTarget2]);
     activeNestedWorkspaceIdx.set(0);
 
-    vi.mocked(getWorkspaceGroups).mockReturnValue([
+    vi.mocked(getWorkspaces).mockReturnValue([
       {
         id: "grp1",
         workspaceIds: [wsTarget.id, wsTarget2.id],
@@ -925,8 +925,8 @@ describe("tab-drag — commitTabDrop: new-workspace-in-group passes targetGroupI
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
-    // Mock getWorkspaceGroups to return a group with the workspace
-    vi.mocked(getWorkspaceGroups).mockReturnValue([
+    // Mock getWorkspaces to return a group with the workspace
+    vi.mocked(getWorkspaces).mockReturnValue([
       { id: "grp-1", workspaceIds: [ws.id], name: "Group 1" },
     ]);
 

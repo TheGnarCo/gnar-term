@@ -14,7 +14,7 @@ import { dashboardWorkspaceRegistry } from "../dashboard-workspace-service";
 import { workspaceSubtitleStore } from "../workspace-subtitle-registry";
 import { dashboardTabStore } from "../dashboard-tab-registry";
 import {
-  canAddContributionToGroup,
+  canAddContributionToWorkspace,
   dashboardContributionStore,
   getDashboardContribution,
 } from "../dashboard-contribution-registry";
@@ -22,7 +22,7 @@ import {
   closeDashboardForGroup,
   isDashboardWorkspace,
 } from "../workspace-group-service";
-import { getWorkspaceGroup } from "../../stores/workspace-groups";
+import { getWorkspace } from "../../stores/workspace-groups";
 import { listMarkdownComponents } from "../markdown-component-registry";
 import type { ToolDef } from "../mcp-types";
 
@@ -323,7 +323,7 @@ export const registryMirrorTools: ToolDef[] = [
     handler: (args) => {
       const p = args as { group_id?: string };
       const contribs = get(dashboardContributionStore);
-      const group = p.group_id ? getWorkspaceGroup(p.group_id) : undefined;
+      const group = p.group_id ? getWorkspace(p.group_id) : undefined;
       if (p.group_id && !group) {
         throw new Error(`Unknown workspace group: ${p.group_id}`);
       }
@@ -366,7 +366,7 @@ export const registryMirrorTools: ToolDef[] = [
     },
     handler: async (args) => {
       const p = args as { group_id: string; contribution_id: string };
-      const group = getWorkspaceGroup(p.group_id);
+      const group = getWorkspace(p.group_id);
       if (!group) throw new Error(`Unknown workspace group: ${p.group_id}`);
       const contribution = getDashboardContribution(p.contribution_id);
       if (!contribution) {
@@ -380,7 +380,9 @@ export const registryMirrorTools: ToolDef[] = [
       const currentCount = get(nestedWorkspaces).filter((w) =>
         isDashboardWorkspace(w, group.id, contribution.id),
       ).length;
-      if (!canAddContributionToGroup(group, contribution.id, currentCount)) {
+      if (
+        !canAddContributionToWorkspace(group, contribution.id, currentCount)
+      ) {
         throw new Error(
           `Cannot add "${p.contribution_id}" to group "${p.group_id}" (at cap or gated by availability).`,
         );

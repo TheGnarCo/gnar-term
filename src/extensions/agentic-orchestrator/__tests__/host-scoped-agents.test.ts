@@ -31,8 +31,8 @@ import {
   resetClaimedWorkspaces,
 } from "../../../lib/services/claimed-workspace-registry";
 import {
-  setWorkspaceGroups,
-  resetWorkspaceGroupsForTest,
+  setWorkspaces,
+  resetWorkspacesForTest,
 } from "../../../lib/stores/workspace-groups";
 import type { DashboardHostContext } from "../../../lib/contexts/dashboard-host";
 
@@ -88,7 +88,7 @@ describe("hostScopedAgentsStore", () => {
   beforeEach(() => {
     nestedWorkspaces.set([]);
     resetClaimedWorkspaces();
-    resetWorkspaceGroupsForTest();
+    resetWorkspacesForTest();
   });
 
   it("no host → empty list", async () => {
@@ -126,7 +126,7 @@ describe("hostScopedAgentsStore", () => {
       seedWorkspace("ws-out", { metadata: { groupId: "grp-2" } }),
       seedWorkspace("ws-none", {}),
     ]);
-    setWorkspaceGroups([
+    setWorkspaces([
       {
         id: "grp-1",
         name: "One",
@@ -152,7 +152,7 @@ describe("hostScopedAgentsStore", () => {
       seedWorkspace("ws-under", { cwd: "/work/one/sub" }),
       seedWorkspace("ws-elsewhere", { cwd: "/other/path" }),
     ]);
-    setWorkspaceGroups([
+    setWorkspaces([
       {
         id: "grp-1",
         name: "One",
@@ -174,7 +174,7 @@ describe("hostScopedAgentsStore", () => {
 
   it("group scope → excludes claimed nestedWorkspaces even when CWD matches (they belong to another owner)", async () => {
     nestedWorkspaces.set([seedWorkspace("ws-under", { cwd: "/work/one/sub" })]);
-    setWorkspaceGroups([
+    setWorkspaces([
       {
         id: "grp-1",
         name: "One",
@@ -198,7 +198,7 @@ describe("hostScopedAgentsStore", () => {
     nestedWorkspaces.set([
       seedWorkspace("ws-sibling", { cwd: "/work/one-other/sub" }),
     ]);
-    setWorkspaceGroups([
+    setWorkspaces([
       {
         id: "grp-1",
         name: "One",
@@ -218,14 +218,14 @@ describe("hostScopedAgentsStore", () => {
   });
 
   it("group scope → includes workspace in group.workspaceIds even when claimed and no metadata.groupId", async () => {
-    // Regression test: promote-to-group calls addWorkspaceToGroup + claimWorkspace
+    // Regression test: promote-to-group calls addNestedWorkspaceToWorkspace + claimWorkspace
     // but does NOT stamp metadata.groupId. Without criterion 2 in hostScopedAgentsStore,
     // the claim guard ($claimedIds.has) would block the CWD fallback and the agent
     // would be invisible in the group's Kanban dashboard.
     nestedWorkspaces.set([
       seedWorkspace("ws-native", { cwd: "" }), // no cwd, no metadata.groupId
     ]);
-    setWorkspaceGroups([
+    setWorkspaces([
       {
         id: "grp-1",
         name: "One",
@@ -248,7 +248,7 @@ describe("hostScopedAgentsStore", () => {
 
   it("group scope → workspace in group.workspaceIds for a different group is not included", async () => {
     nestedWorkspaces.set([seedWorkspace("ws-other", { cwd: "" })]);
-    setWorkspaceGroups([
+    setWorkspaces([
       {
         id: "grp-1",
         name: "One",

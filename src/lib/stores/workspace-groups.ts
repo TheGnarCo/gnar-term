@@ -19,13 +19,13 @@ import {
 } from "../services/extension-state";
 
 const STATE_ID = "workspace-groups";
-const WORKSPACE_GROUPS_KEY = "workspaceGroups";
-const WORKSPACE_GROUP_ORDER_KEY = "workspaceGroupOrder";
+const WORKSPACE_GROUPS_KEY = "workspaces";
+const WORKSPACE_GROUP_ORDER_KEY = "workspaceOrder";
 const ACTIVE_GROUP_ID_KEY = "activeGroupId";
 const PERSIST_DEBOUNCE_MS = 300;
 
 const _groups = writable<Workspace[]>([]);
-export const workspaceGroupsStore: Readable<Workspace[]> = _groups;
+export const workspacesStore: Readable<Workspace[]> = _groups;
 
 const _groupOrder = writable<string[]>([]);
 
@@ -55,7 +55,7 @@ async function persistNow(): Promise<void> {
  * Read state from disk and seed the stores. Idempotent — subsequent
  * calls are no-ops so tests can freely call the initializer.
  */
-export async function loadWorkspaceGroups(): Promise<void> {
+export async function loadWorkspaces(): Promise<void> {
   if (_loaded) return;
   _loaded = true;
   const state = await loadExtensionState(STATE_ID);
@@ -85,30 +85,30 @@ export async function flushWorkspaceGroups(): Promise<void> {
   if (_loaded) await persistNow();
 }
 
-export function getWorkspaceGroups(): Workspace[] {
+export function getWorkspaces(): Workspace[] {
   return get(_groups);
 }
 
-export function getWorkspaceGroup(id: string): Workspace | undefined {
-  return getWorkspaceGroups().find((g) => g.id === id);
+export function getWorkspace(id: string): Workspace | undefined {
+  return getWorkspaces().find((g) => g.id === id);
 }
 
-export function setWorkspaceGroups(next: Workspace[]): void {
+export function setWorkspaces(next: Workspace[]): void {
   _groups.set(next);
   schedulePersist();
 }
 
-export function getActiveGroupId(): string | null {
+export function getActiveWorkspaceId(): string | null {
   return get(_activeGroupId);
 }
 
-export function setActiveGroupId(id: string | null): void {
+export function setActiveWorkspaceId(id: string | null): void {
   _activeGroupId.set(id);
   schedulePersist();
 }
 
 /** Test hook — reset in-memory state so tests start clean. */
-export function resetWorkspaceGroupsForTest(): void {
+export function resetWorkspacesForTest(): void {
   if (_persistTimer) {
     clearTimeout(_persistTimer);
     _persistTimer = null;

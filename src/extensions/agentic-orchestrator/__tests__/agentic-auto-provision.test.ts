@@ -42,7 +42,7 @@ import {
   nestedWorkspaces,
   activeNestedWorkspaceIdx,
 } from "../../../lib/stores/workspace";
-import { workspaceGroupsStore } from "../../../lib/stores/workspace-groups";
+import { workspacesStore } from "../../../lib/stores/workspace-groups";
 import {
   markRestored,
   resetRestoreSignal,
@@ -55,7 +55,7 @@ describe("agentic auto-provision", () => {
     resetDashboardContributions();
     nestedWorkspaces.set([]);
     activeNestedWorkspaceIdx.set(-1);
-    workspaceGroupsStore.set([]);
+    workspacesStore.set([]);
   });
 
   it("contribution advertises autoProvision + locked reason", async () => {
@@ -72,7 +72,7 @@ describe("agentic auto-provision", () => {
   });
 
   it("provisions the Agentic Dashboard for every existing group on activate", async () => {
-    workspaceGroupsStore.set([
+    workspacesStore.set([
       {
         id: "g1",
         name: "G1",
@@ -122,7 +122,7 @@ describe("agentic auto-provision", () => {
   });
 
   it("closes every agentic dashboard workspace on deactivate", async () => {
-    workspaceGroupsStore.set([
+    workspacesStore.set([
       {
         id: "g1",
         name: "G1",

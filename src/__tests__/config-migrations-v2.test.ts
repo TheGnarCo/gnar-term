@@ -105,12 +105,12 @@ function makeOrchestrator(
   };
 }
 
-function seedWorkspaceGroupsState(
+function seedWorkspacesState(
   groups: Array<{ id: string; path: string }>,
 ): void {
   fs.set(
     "/home/test/.config/gnar-term/extensions/workspace-groups/state.json",
-    JSON.stringify({ workspaceGroups: groups }),
+    JSON.stringify({ workspaces: groups }),
   );
 }
 
@@ -139,7 +139,7 @@ describe("config v2 migration — agent orchestrators → dashboards", () => {
   });
 
   it("nested orchestrator → writes markdown to <group.path>/.gnar-term/agentic-dashboard.md", async () => {
-    seedWorkspaceGroupsState([{ id: "grp-a", path: "/work/projA" }]);
+    seedWorkspacesState([{ id: "grp-a", path: "/work/projA" }]);
     fs.set("/tmp/one.md", "# Orch One\ncontent\n");
 
     const { migrated } = await migrate({
@@ -159,7 +159,7 @@ describe("config v2 migration — agent orchestrators → dashboards", () => {
   });
 
   it("extra nested orchestrators beyond the first are dropped (cap enforcement)", async () => {
-    seedWorkspaceGroupsState([{ id: "grp-a", path: "/work/projA" }]);
+    seedWorkspacesState([{ id: "grp-a", path: "/work/projA" }]);
     fs.set("/tmp/keep.md", "# Keep\n");
     fs.set("/tmp/drop.md", "# Drop\n");
 
@@ -187,7 +187,7 @@ describe("config v2 migration — agent orchestrators → dashboards", () => {
   });
 
   it("existing target markdown wins — migration does not overwrite user edits", async () => {
-    seedWorkspaceGroupsState([{ id: "grp-a", path: "/work/projA" }]);
+    seedWorkspacesState([{ id: "grp-a", path: "/work/projA" }]);
     fs.set("/tmp/src.md", "# Old source\n");
     fs.set(
       "/work/projA/.gnar-term/agentic-dashboard.md",
@@ -247,7 +247,7 @@ describe("config v2 migration — agent orchestrators → dashboards", () => {
   });
 
   it("mixed nested + rootless: each class migrated independently", async () => {
-    seedWorkspaceGroupsState([
+    seedWorkspacesState([
       { id: "grp-a", path: "/work/projA" },
       { id: "grp-b", path: "/work/projB" },
     ]);
@@ -282,7 +282,7 @@ describe("config v2 migration — agent orchestrators → dashboards", () => {
 
   it("orphan orchestrator (parentGroupId references a deleted group) is skipped with warning; schema still bumps", async () => {
     // Extension state empty — no group with that id.
-    seedWorkspaceGroupsState([]);
+    seedWorkspacesState([]);
     fs.set("/tmp/orphan.md", "# Orphan\n");
 
     const { migrated, applied } = await migrate({

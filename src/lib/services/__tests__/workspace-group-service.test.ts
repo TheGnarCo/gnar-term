@@ -6,19 +6,19 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { get } from "svelte/store";
 import {
-  addWorkspaceGroup,
-  addWorkspaceToGroup,
-  closeWorkspacesInGroup,
-  deleteWorkspaceGroup,
-  getWorkspaceGroup,
-  getWorkspaceGroups,
-  removeWorkspaceFromAllGroups,
-  updateWorkspaceGroup,
+  addWorkspace,
+  addNestedWorkspaceToWorkspace,
+  closeNestedWorkspacesInWorkspace,
+  deleteWorkspace,
+  getWorkspace,
+  getWorkspaces,
+  removeNestedWorkspaceFromAllWorkspaces,
+  updateWorkspace,
   WORKSPACE_GROUP_STATE_CHANGED,
 } from "../workspace-group-service";
 import {
-  resetWorkspaceGroupsForTest,
-  workspaceGroupsStore,
+  resetWorkspacesForTest,
+  workspacesStore,
 } from "../../stores/workspace-groups";
 import { eventBus } from "../event-bus";
 import { rootRowOrder } from "../../stores/root-row-order";
@@ -48,58 +48,58 @@ function makeGroup(id: string, overrides: Partial<Workspace> = {}): Workspace {
 
 describe("workspace-group-service", () => {
   beforeEach(() => {
-    resetWorkspaceGroupsForTest();
+    resetWorkspacesForTest();
     rootRowOrder.set([]);
   });
 
-  it("addWorkspaceGroup persists the group and appends a root row", () => {
+  it("addWorkspace persists the group and appends a root row", () => {
     const group = makeGroup("g1");
-    addWorkspaceGroup(group);
+    addWorkspace(group);
 
-    expect(getWorkspaceGroups()).toHaveLength(1);
-    expect(get(workspaceGroupsStore)[0].id).toBe("g1");
+    expect(getWorkspaces()).toHaveLength(1);
+    expect(get(workspacesStore)[0].id).toBe("g1");
     expect(get(rootRowOrder)).toContainEqual({
       kind: "workspace-group",
       id: "g1",
     });
   });
 
-  it("updateWorkspaceGroup patches an existing group in place", () => {
-    addWorkspaceGroup(makeGroup("g1"));
-    updateWorkspaceGroup("g1", { name: "Renamed" });
-    expect(getWorkspaceGroup("g1")?.name).toBe("Renamed");
+  it("updateWorkspace patches an existing group in place", () => {
+    addWorkspace(makeGroup("g1"));
+    updateWorkspace("g1", { name: "Renamed" });
+    expect(getWorkspace("g1")?.name).toBe("Renamed");
   });
 
-  it("deleteWorkspaceGroup removes the record and its root row", () => {
-    addWorkspaceGroup(makeGroup("g1"));
-    deleteWorkspaceGroup("g1");
-    expect(getWorkspaceGroups()).toHaveLength(0);
+  it("deleteWorkspace removes the record and its root row", () => {
+    addWorkspace(makeGroup("g1"));
+    deleteWorkspace("g1");
+    expect(getWorkspaces()).toHaveLength(0);
     expect(get(rootRowOrder)).not.toContainEqual({
       kind: "workspace-group",
       id: "g1",
     });
   });
 
-  it("addWorkspaceToGroup is idempotent", () => {
-    addWorkspaceGroup(makeGroup("g1"));
-    expect(addWorkspaceToGroup("g1", "ws1")).toBe(true);
-    expect(addWorkspaceToGroup("g1", "ws1")).toBe(false);
-    expect(getWorkspaceGroup("g1")?.workspaceIds).toEqual(["ws1"]);
+  it("addNestedWorkspaceToWorkspace is idempotent", () => {
+    addWorkspace(makeGroup("g1"));
+    expect(addNestedWorkspaceToWorkspace("g1", "ws1")).toBe(true);
+    expect(addNestedWorkspaceToWorkspace("g1", "ws1")).toBe(false);
+    expect(getWorkspace("g1")?.workspaceIds).toEqual(["ws1"]);
   });
 
-  it("removeWorkspaceFromAllGroups strips the id across every group", () => {
-    addWorkspaceGroup(makeGroup("g1"));
-    addWorkspaceGroup(makeGroup("g2"));
-    addWorkspaceToGroup("g1", "ws1");
-    addWorkspaceToGroup("g2", "ws1");
+  it("removeNestedWorkspaceFromAllWorkspaces strips the id across every group", () => {
+    addWorkspace(makeGroup("g1"));
+    addWorkspace(makeGroup("g2"));
+    addNestedWorkspaceToWorkspace("g1", "ws1");
+    addNestedWorkspaceToWorkspace("g2", "ws1");
 
-    removeWorkspaceFromAllGroups("ws1");
+    removeNestedWorkspaceFromAllWorkspaces("ws1");
 
-    expect(getWorkspaceGroup("g1")?.workspaceIds).toEqual([]);
-    expect(getWorkspaceGroup("g2")?.workspaceIds).toEqual([]);
+    expect(getWorkspace("g1")?.workspaceIds).toEqual([]);
+    expect(getWorkspace("g2")?.workspaceIds).toEqual([]);
   });
 
-  describe("closeWorkspacesInGroup", () => {
+  describe("closeNestedWorkspacesInWorkspace", () => {
     function makeWs(id: string, groupId?: string): NestedWorkspace {
       return {
         id,
@@ -126,7 +126,7 @@ describe("workspace-group-service", () => {
         makeWs("ws-root"),
       ]);
 
-      closeWorkspacesInGroup("g1");
+      closeNestedWorkspacesInWorkspace("g1");
 
       const remainingIds = get(nestedWorkspaces).map((w) => w.id);
       expect(remainingIds).toEqual(["ws-other", "ws-root"]);
@@ -134,7 +134,7 @@ describe("workspace-group-service", () => {
 
     it("is a no-op when no nestedWorkspaces belong to the group", () => {
       nestedWorkspaces.set([makeWs("ws-root"), makeWs("ws-other", "g2")]);
-      closeWorkspacesInGroup("g1");
+      closeNestedWorkspacesInWorkspace("g1");
       expect(get(nestedWorkspaces).map((w) => w.id)).toEqual([
         "ws-root",
         "ws-other",
@@ -148,7 +148,7 @@ describe("workspace-group-service", () => {
       } as NestedWorkspace;
       nestedWorkspaces.set([dashboard, makeWs("ws-nested", "g1")]);
 
-      closeWorkspacesInGroup("g1");
+      closeNestedWorkspacesInWorkspace("g1");
 
       expect(get(nestedWorkspaces)).toHaveLength(0);
     });
@@ -157,9 +157,9 @@ describe("workspace-group-service", () => {
   it("emits WORKSPACE_GROUP_STATE_CHANGED on mutations", () => {
     const listener = vi.fn();
     eventBus.on(WORKSPACE_GROUP_STATE_CHANGED, listener);
-    addWorkspaceGroup(makeGroup("g1"));
-    updateWorkspaceGroup("g1", { name: "Renamed" });
-    deleteWorkspaceGroup("g1");
+    addWorkspace(makeGroup("g1"));
+    updateWorkspace("g1", { name: "Renamed" });
+    deleteWorkspace("g1");
     eventBus.off(WORKSPACE_GROUP_STATE_CHANGED, listener);
 
     // add + update + delete = 3 events

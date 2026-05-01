@@ -58,11 +58,11 @@
   import { dashboardWorkspaceRegistry } from "../services/dashboard-workspace-service";
   import { configStore } from "../config";
   import { resolveGroupColor } from "../theme-data";
-  import { archiveWorkspace, archiveGroup } from "../services/archive-service";
+  import { archiveWorkspace } from "../services/archive-service";
   import { buildWorkspaceContextMenuItems } from "../utils/workspace-context-menu";
   import { wsMeta } from "../services/service-helpers";
   import { toggleWorkspaceLock } from "../services/workspace-service";
-  import { getWorkspaceGroup } from "../stores/workspace-groups";
+  import { getWorkspace } from "../stores/workspace-groups";
 
   function resolvePseudoWorkspaceColor(pw: PseudoWorkspace): string {
     const slot = $configStore.pseudoWorkspaceColors?.[pw.id] ?? "purple";
@@ -250,9 +250,8 @@
         currentPaneTarget = null;
         setWorkspaceDragState(null);
         const srcRow = $rootRowOrder[fromIdx];
-        if (srcRow?.kind === "workspace") void archiveWorkspace(srcRow.id);
-        else if (srcRow?.kind === "workspace-group")
-          void archiveGroup(srcRow.id);
+        if (srcRow?.kind === "workspace-group")
+          void archiveWorkspace(srcRow.id);
         return true; // suppress normal rootRowOrder reorder
       }
       const paneTarget = currentPaneTarget;
@@ -318,7 +317,7 @@
       const ws = $nestedWorkspaces.find((w) => w.id === srcRow.id);
       if (ws && wsMeta(ws).locked === true) return;
     } else if (srcRow?.kind === "workspace-group") {
-      const group = getWorkspaceGroup(srcRow.id);
+      const group = getWorkspace(srcRow.id);
       if (group?.locked === true) return;
     }
     rootDrag.start(e, rowIdx);
@@ -426,7 +425,6 @@
         onNewSurface();
       },
       onPromote: () => runPromoteToProject(globalIdx),
-      onArchive: () => void archiveWorkspace(ws.id),
       onToggleLock: () => toggleWorkspaceLock(ws.id),
       onClose: () => void confirmAndCloseWorkspace(ws, globalIdx),
     });

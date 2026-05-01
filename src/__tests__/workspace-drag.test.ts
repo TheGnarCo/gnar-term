@@ -6,7 +6,7 @@
  * Both move the surface out of its source pane (collapsing the pane
  * if it empties) and persist. createWorkspaceFromSurface inherits the
  * source workspace's groupId, refuses to leave the source empty, and
- * registers the new workspace via appendRootRow + addWorkspaceToGroup
+ * registers the new workspace via appendRootRow + addNestedWorkspaceToWorkspace
  * (when the source belongs to a group).
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
@@ -62,11 +62,11 @@ vi.mock("../lib/services/workspace-group-service", async () => {
   >("../lib/services/workspace-group-service");
   return {
     ...actual,
-    addWorkspaceToGroup: (
-      ...args: Parameters<typeof actual.addWorkspaceToGroup>
+    addNestedWorkspaceToWorkspace: (
+      ...args: Parameters<typeof actual.addNestedWorkspaceToWorkspace>
     ) => addWorkspaceToGroupSpy(...args),
-    removeWorkspaceFromAllGroups: (
-      ...args: Parameters<typeof actual.removeWorkspaceFromAllGroups>
+    removeNestedWorkspaceFromAllWorkspaces: (
+      ...args: Parameters<typeof actual.removeNestedWorkspaceFromAllWorkspaces>
     ) => removeWorkspaceFromAllGroupsSpy(...args),
     insertWorkspaceIntoGroup: (
       ...args: Parameters<typeof actual.insertWorkspaceIntoGroup>
@@ -427,7 +427,7 @@ describe("expandWorkspaceIntoPanes", () => {
     });
   });
 
-  it("calls removeWorkspaceFromAllGroups for the source workspace", () => {
+  it("calls removeNestedWorkspaceFromAllWorkspaces for the source workspace", () => {
     const sA = mockSurface({ title: "A" });
     const sB = mockSurface({ title: "B" });
     const srcPane = makePane([sA]);
@@ -637,7 +637,7 @@ describe("mergeWorkspaceIntoPane", () => {
     });
   });
 
-  it("calls removeWorkspaceFromAllGroups for the source workspace", () => {
+  it("calls removeNestedWorkspaceFromAllWorkspaces for the source workspace", () => {
     const sA = mockSurface({ title: "A" });
     const sB = mockSurface({ title: "B" });
     const srcPane = makePane([sA]);

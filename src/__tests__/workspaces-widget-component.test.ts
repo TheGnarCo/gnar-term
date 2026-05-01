@@ -27,8 +27,8 @@ vi.mock("@tauri-apps/api/event", () => ({
 import WorkspacesWidget from "../lib/components/WorkspacesWidget.svelte";
 import { nestedWorkspaces } from "../lib/stores/workspace";
 import {
-  setWorkspaceGroups,
-  resetWorkspaceGroupsForTest,
+  setWorkspaces,
+  resetWorkspacesForTest,
 } from "../lib/stores/workspace-groups";
 import { DASHBOARD_HOST_KEY } from "../lib/contexts/dashboard-host";
 import type { NestedWorkspace } from "../lib/types";
@@ -53,7 +53,7 @@ function makeWorkspace(
 beforeEach(() => {
   cleanup();
   nestedWorkspaces.set([]);
-  resetWorkspaceGroupsForTest();
+  resetWorkspacesForTest();
 });
 
 describe("WorkspacesWidget", () => {
@@ -65,7 +65,7 @@ describe("WorkspacesWidget", () => {
   });
 
   it("renders nothing when the group only has a group-overview dashboard", () => {
-    setWorkspaceGroups([
+    setWorkspaces([
       {
         id: "g1",
         name: "My Group",
@@ -93,7 +93,7 @@ describe("WorkspacesWidget", () => {
   });
 
   it("renders non-group dashboard cards but excludes the group overview", () => {
-    setWorkspaceGroups([
+    setWorkspaces([
       {
         id: "g1",
         name: "My Group",
@@ -138,7 +138,7 @@ describe("WorkspacesWidget", () => {
   });
 
   it("renders regular workspace rows with correct names", () => {
-    setWorkspaceGroups([
+    setWorkspaces([
       {
         id: "g1",
         name: "My Group",
@@ -167,7 +167,7 @@ describe("WorkspacesWidget", () => {
   });
 
   it("excludes nestedWorkspaces from other groups", () => {
-    setWorkspaceGroups([
+    setWorkspaces([
       {
         id: "g1",
         name: "Group One",
@@ -207,11 +207,11 @@ describe("WorkspacesWidget click-to-navigate", () => {
     cleanup();
     switchWorkspaceMock.mockClear();
     nestedWorkspaces.set([]);
-    resetWorkspaceGroupsForTest();
+    resetWorkspacesForTest();
   });
 
   it("clicking a workspace row calls switchWorkspace with its index", async () => {
-    setWorkspaceGroups([
+    setWorkspaces([
       {
         id: "g1",
         name: "My Group",

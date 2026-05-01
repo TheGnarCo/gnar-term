@@ -16,12 +16,12 @@ vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn().mockResolvedValue(vi.fn()),
 }));
 
-import { reconcileGroupDashboards } from "../lib/services/workspace-group-service";
+import { reconcileWorkspaceDashboards } from "../lib/services/workspace-group-service";
 import {
   nestedWorkspaces,
   activeNestedWorkspaceIdx,
 } from "../lib/stores/workspace";
-import { workspaceGroupsStore } from "../lib/stores/workspace-groups";
+import { workspacesStore } from "../lib/stores/workspace-groups";
 
 const GROUP = {
   id: "g1",
@@ -41,7 +41,7 @@ describe("dashboardContributionId backfill", () => {
     invokeMock.mockImplementation(async () => undefined);
     nestedWorkspaces.set([]);
     activeNestedWorkspaceIdx.set(-1);
-    workspaceGroupsStore.set([GROUP]);
+    workspacesStore.set([GROUP]);
   });
 
   it("stamps 'group' on a legacy Overview dashboard (preview → project-dashboard.md)", async () => {
@@ -70,7 +70,7 @@ describe("dashboardContributionId backfill", () => {
       } as never,
     ]);
 
-    await reconcileGroupDashboards();
+    await reconcileWorkspaceDashboards();
 
     const md = get(nestedWorkspaces)[0]!.metadata;
     expect(md.dashboardContributionId).toBe("group");
@@ -102,7 +102,7 @@ describe("dashboardContributionId backfill", () => {
       } as never,
     ]);
 
-    await reconcileGroupDashboards();
+    await reconcileWorkspaceDashboards();
 
     const md = get(nestedWorkspaces)[0]!.metadata;
     expect(md.dashboardContributionId).toBe("agentic");
@@ -138,7 +138,7 @@ describe("dashboardContributionId backfill", () => {
       } as never,
     ]);
 
-    await reconcileGroupDashboards();
+    await reconcileWorkspaceDashboards();
 
     const md = get(nestedWorkspaces)[0]!.metadata;
     expect(md.dashboardContributionId).toBe("group");

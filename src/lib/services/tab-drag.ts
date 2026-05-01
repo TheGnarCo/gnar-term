@@ -22,7 +22,7 @@ import {
   splitPaneWithSurface,
 } from "./pane-service";
 import { createWorkspaceFromSurface } from "./workspace-service";
-import { getWorkspaceGroups } from "../stores/workspace-groups";
+import { getWorkspaces } from "../stores/workspace-groups";
 import { rootRowOrder } from "../stores/root-row-order";
 
 export type TabDropTarget =
@@ -453,9 +453,7 @@ export function commitTabDrop(): void {
       const allWs = get(nestedWorkspaces);
       const tgtWs = allWs[dropTarget.insertGlobalIdx];
       if (!tgtWs) break;
-      const group = getWorkspaceGroups().find(
-        (g) => g.id === dropTarget.groupId,
-      );
+      const group = getWorkspaces().find((g) => g.id === dropTarget.groupId);
       if (!group) break;
       const posInGroup = group.workspaceIds.indexOf(tgtWs.id);
       const insertPos =

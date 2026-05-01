@@ -27,7 +27,7 @@ import {
   nestedWorkspaces,
   activeNestedWorkspaceIdx,
 } from "../lib/stores/workspace";
-import { workspaceGroupsStore } from "../lib/stores/workspace-groups";
+import { workspacesStore } from "../lib/stores/workspace-groups";
 import type { NestedWorkspace, Pane } from "../lib/types";
 
 function makePane(id: string): Pane {
@@ -46,11 +46,11 @@ describe("PaneView — settings dashboard body", () => {
     cleanup();
     nestedWorkspaces.set([]);
     activeNestedWorkspaceIdx.set(-1);
-    workspaceGroupsStore.set([]);
+    workspacesStore.set([]);
   });
 
   it("renders GroupDashboardSettings for a settings contribution workspace", () => {
-    workspaceGroupsStore.set([
+    workspacesStore.set([
       {
         id: "g1",
         name: "My Group",

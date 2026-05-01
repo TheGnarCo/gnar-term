@@ -147,7 +147,7 @@ import {
   registerWorkspaceAction,
   resetWorkspaceActions,
 } from "../lib/services/workspace-action-registry";
-import { setWorkspaceGroups } from "../lib/stores/workspace-groups";
+import { setWorkspaces } from "../lib/stores/workspace-groups";
 import type { Workspace } from "../lib/config";
 
 // ---------------------------------------------------------------------------
@@ -1747,7 +1747,7 @@ describe("PrimarySidebar", () => {
 describe("WorkspaceSectionContent", () => {
   beforeEach(() => {
     resetWorkspaceActions();
-    setWorkspaceGroups([]);
+    setWorkspaces([]);
     cleanup();
   });
 
@@ -1763,7 +1763,7 @@ describe("WorkspaceSectionContent", () => {
       isGit: true,
       createdAt: new Date().toISOString(),
     };
-    setWorkspaceGroups([group]);
+    setWorkspaces([group]);
 
     render(WorkspaceGroupSectionHarness, { props: { groupId: "grp-1" } });
 

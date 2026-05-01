@@ -4,23 +4,17 @@ import {
   isTerminalSurface,
   type NestedWorkspace,
 } from "../types";
-import type { NestedWorkspaceDef } from "../config";
-import { nestedWorkspaces } from "../stores/workspace";
-import {
-  serializeLayout,
-  closeWorkspace,
-  createWorkspaceFromDef,
-} from "./workspace-service";
+import { serializeLayout, createWorkspaceFromDef } from "./workspace-service";
 import { wsMeta } from "./service-helpers";
 import {
   getWorktreeWorkspaces,
-  closeWorkspacesInGroup,
-  provisionAutoDashboardsForGroup,
+  closeNestedWorkspacesInWorkspace,
+  provisionAutoDashboardsForWorkspace,
 } from "./workspace-group-service";
 import {
-  getWorkspaceGroup,
-  getWorkspaceGroups,
-  setWorkspaceGroups,
+  getWorkspace,
+  getWorkspaces,
+  setWorkspaces,
 } from "../stores/workspace-groups";
 import { removeRootRow, appendRootRow } from "../stores/root-row-order";
 import { showConfirmPrompt } from "../stores/ui";
@@ -39,34 +33,8 @@ function countRunningPtys(ws: NestedWorkspace): number {
     .length;
 }
 
-export async function archiveWorkspace(wsId: string): Promise<boolean> {
-  const ws = get(nestedWorkspaces).find((w) => w.id === wsId);
-  if (!ws) return false;
-
-  const running = countRunningPtys(ws);
-  if (running > 0) {
-    const confirmed = await showConfirmPrompt(
-      `Archiving will suspend ${running} running process${running > 1 ? "es" : ""}. Continue?`,
-      { title: "Archive Workspace", confirmLabel: "Archive", danger: true },
-    );
-    if (!confirmed) return false;
-  }
-
-  const def: NestedWorkspaceDef & { name: string } = {
-    id: ws.id,
-    name: ws.name,
-    layout: serializeLayout(ws.splitRoot),
-    ...(ws.metadata ? { metadata: ws.metadata } : {}),
-  };
-
-  const idx = get(nestedWorkspaces).findIndex((w) => w.id === wsId);
-  closeWorkspace(idx);
-  addToArchive({ kind: "workspace", id: wsId }, { def });
-  return true;
-}
-
-export async function archiveGroup(groupId: string): Promise<boolean> {
-  const group = getWorkspaceGroup(groupId);
+export async function archiveWorkspace(groupId: string): Promise<boolean> {
+  const group = getWorkspace(groupId);
   if (!group) return false;
   if (group.locked) return false;
 
@@ -80,7 +48,7 @@ export async function archiveGroup(groupId: string): Promise<boolean> {
   if (runningCount > 0) {
     const confirmed = await showConfirmPrompt(
       `Archiving will suspend ${runningCount} running process${runningCount > 1 ? "es" : ""}. Continue?`,
-      { title: "Archive Group", confirmLabel: "Archive", danger: true },
+      { title: "Archive Workspace", confirmLabel: "Archive", danger: true },
     );
     if (!confirmed) return false;
   }
@@ -92,8 +60,8 @@ export async function archiveGroup(groupId: string): Promise<boolean> {
     ...(ws.metadata ? { metadata: ws.metadata } : {}),
   }));
 
-  closeWorkspacesInGroup(groupId);
-  setWorkspaceGroups(getWorkspaceGroups().filter((g) => g.id !== groupId));
+  closeNestedWorkspacesInWorkspace(groupId);
+  setWorkspaces(getWorkspaces().filter((g) => g.id !== groupId));
   removeRootRow({ kind: "workspace-group", id: groupId });
   addToArchive(
     { kind: "workspace-group", id: groupId },
@@ -102,17 +70,7 @@ export async function archiveGroup(groupId: string): Promise<boolean> {
   return true;
 }
 
-export async function unarchiveWorkspace(wsId: string): Promise<void> {
-  const defs = get(archivedDefs);
-  const entry = defs.nestedWorkspaces[wsId];
-  if (!entry) return;
-  // Create first; only drop the archive entry once we know the restore
-  // succeeded, so a failure leaves the user able to retry.
-  await createWorkspaceFromDef(entry.def, { restoring: true });
-  removeFromArchive({ kind: "workspace", id: wsId });
-}
-
-export async function unarchiveGroup(groupId: string): Promise<void> {
+export async function unarchiveWorkspace(groupId: string): Promise<void> {
   const defs = get(archivedDefs);
   const entry = defs.groups[groupId];
   if (!entry) return;
@@ -120,11 +78,11 @@ export async function unarchiveGroup(groupId: string): Promise<void> {
   // nestedWorkspaces into it, but `removeFromArchive` is held until every
   // async restore step has resolved — if any throws, the archive entry
   // survives so the user can retry.
-  setWorkspaceGroups([...getWorkspaceGroups(), entry.group]);
+  setWorkspaces([...getWorkspaces(), entry.group]);
   appendRootRow({ kind: "workspace-group", id: groupId });
   for (const def of entry.workspaceDefs) {
     await createWorkspaceFromDef(def, { restoring: true });
   }
-  await provisionAutoDashboardsForGroup(entry.group);
+  await provisionAutoDashboardsForWorkspace(entry.group);
   removeFromArchive({ kind: "workspace-group", id: groupId });
 }

@@ -2,9 +2,9 @@ import type { ExtensionManifest, ExtensionAPI, WorkspaceRef } from "../api";
 import { createWorkspaceFromDef } from "../../lib/services/workspace-service";
 import {
   closeAutoDashboardsBySource,
-  provisionAutoDashboardsForGroup,
+  provisionAutoDashboardsForWorkspace,
 } from "../../lib/services/workspace-group-service";
-import { getWorkspaceGroups } from "../../lib/stores/workspace-groups";
+import { getWorkspaces } from "../../lib/stores/workspace-groups";
 import { waitRestored } from "../../lib/bootstrap/restore-workspaces";
 import ClaudeMark from "./icons/ClaudeMark.svelte";
 import UserSettingsPanel from "./components/UserSettingsPanel.svelte";
@@ -59,8 +59,8 @@ export function registerClaudeSettingsExtension(api: ExtensionAPI): void {
 
     void (async () => {
       await waitRestored();
-      for (const group of getWorkspaceGroups()) {
-        await provisionAutoDashboardsForGroup(group);
+      for (const group of getWorkspaces()) {
+        await provisionAutoDashboardsForWorkspace(group);
       }
     })();
   });

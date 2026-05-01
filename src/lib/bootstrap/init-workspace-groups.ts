@@ -21,25 +21,25 @@ import {
   activeNestedWorkspaceIdx,
 } from "../stores/workspace";
 import {
-  loadWorkspaceGroups,
-  getWorkspaceGroups as readGroups,
-  getActiveGroupId,
-  setActiveGroupId,
+  loadWorkspaces,
+  getWorkspaces as readGroups,
+  getActiveWorkspaceId,
+  setActiveWorkspaceId,
 } from "../stores/workspace-groups";
 import {
-  addWorkspaceGroup,
-  addWorkspaceToGroup,
+  addWorkspace,
+  addNestedWorkspaceToWorkspace,
   claimWorkspace,
   createGroupDashboardWorkspace,
   createSettingsDashboardWorkspace,
   isDashboardWorkspace,
-  openGroupDashboard,
-  provisionAutoDashboardsForGroup,
-  reclaimWorkspacesAcrossGroups,
+  openWorkspaceDashboard,
+  provisionAutoDashboardsForWorkspace,
+  reclaimNestedWorkspacesAcrossWorkspaces,
   regenerateGroupDashboardTemplate,
-  removeWorkspaceFromAllGroups,
+  removeNestedWorkspaceFromAllWorkspaces,
   unclaimWorkspace,
-  updateWorkspaceGroup,
+  updateWorkspace,
 } from "../services/workspace-group-service";
 import { resolveGroupColor } from "../theme-data";
 import { theme } from "../stores/theme";
@@ -81,13 +81,13 @@ function onWorkspaceCreated(event: AppEvent): void {
   const metadata = event.metadata as NestedWorkspaceMetadata | undefined;
   const targetGroupId = metadata?.groupId;
   if (!targetGroupId) return;
-  addWorkspaceToGroup(targetGroupId, event.id);
+  addNestedWorkspaceToWorkspace(targetGroupId, event.id);
   claimWorkspace(event.id, SOURCE);
 }
 
 function onWorkspaceClosed(event: AppEvent): void {
   if (event.type !== "workspace:closed") return;
-  removeWorkspaceFromAllGroups(event.id);
+  removeNestedWorkspaceFromAllWorkspaces(event.id);
   unclaimWorkspace(event.id);
 }
 
@@ -102,7 +102,7 @@ function onWorkspaceActivated(event: AppEvent): void {
   void invoke<boolean>("is_git_repo", { path: group.path })
     .then((isGit) => {
       if (isGit !== group.isGit) {
-        updateWorkspaceGroup(groupId, { isGit });
+        updateWorkspace(groupId, { isGit });
       }
     })
     .catch(() => {});
@@ -155,21 +155,21 @@ async function createWorkspaceGroupFlow(prefill?: {
     createdAt: new Date().toISOString(),
   };
 
-  addWorkspaceGroup(group);
+  addWorkspace(group);
 
   // Auto-provision every autoProvision dashboard contribution for the
   // new group (group Overview, Settings, and any extension-owned
   // autoProvision contributions like Agentic). The Overview dashboard
-  // is tracked via `group.dashboardWorkspaceId` so `openGroupDashboard`
+  // is tracked via `group.dashboardWorkspaceId` so `openWorkspaceDashboard`
   // can activate it directly; the helper returns its id when the
   // contribution's source is core + id is "group".
   try {
-    await provisionAutoDashboardsForGroup(group);
+    await provisionAutoDashboardsForWorkspace(group);
     const overview = get(nestedWorkspaces).find((w) =>
       isDashboardWorkspace(w, group.id, "group"),
     );
     if (overview) {
-      updateWorkspaceGroup(id, { dashboardWorkspaceId: overview.id });
+      updateWorkspace(id, { dashboardWorkspaceId: overview.id });
     }
   } catch (err) {
     console.error(
@@ -196,7 +196,7 @@ async function createWorkspaceGroupFlow(prefill?: {
       .reverse()
       .find((w) => wsMeta(w).groupId === id && !wsMeta(w).isDashboard);
     if (newWs) {
-      updateWorkspaceGroup(id, { primaryWorkspaceId: newWs.id });
+      updateWorkspace(id, { primaryWorkspaceId: newWs.id });
       const idx = get(nestedWorkspaces).indexOf(newWs);
       if (idx >= 0) switchWorkspace(idx);
     }
@@ -208,7 +208,7 @@ async function createWorkspaceGroupFlow(prefill?: {
     );
   }
 
-  setActiveGroupId(id);
+  setActiveWorkspaceId(id);
   return id;
 }
 
@@ -244,7 +244,7 @@ async function promoteActiveWorkspaceToGroup(): Promise<void> {
 
   // Move the workspace into the new group. workspace:created already
   // fired at creation time, so replay the claim bookkeeping manually.
-  addWorkspaceToGroup(newGroupId, activeWs.id);
+  addNestedWorkspaceToWorkspace(newGroupId, activeWs.id);
   claimWorkspace(activeWs.id, SOURCE);
 }
 
@@ -273,7 +273,7 @@ function registerPerGroupCommands(): void {
 }
 
 export async function initWorkspaceGroups(): Promise<void> {
-  await loadWorkspaceGroups();
+  await loadWorkspaces();
 
   // Seed rootRowOrder with each existing group. appendRootRow is
   // idempotent, so a persisted order is preserved.
@@ -284,7 +284,7 @@ export async function initWorkspaceGroups(): Promise<void> {
   // Re-claim any restored nestedWorkspaces that belong to a known group —
   // workspace ids change on every restart, so the workspaceIds list is
   // rebuilt from metadata.groupId on each workspace.
-  reclaimWorkspacesAcrossGroups();
+  reclaimNestedWorkspacesAcrossWorkspaces();
 
   registerPerGroupCommands();
 
@@ -345,12 +345,12 @@ export async function initWorkspaceGroups(): Promise<void> {
     action: () => {
       const groups = readGroups();
       if (groups.length === 0) return;
-      const activeId = getActiveGroupId();
+      const activeId = getActiveWorkspaceId();
       const group = activeId
         ? groups.find((g) => g.id === activeId)
         : groups[0];
       if (!group) return;
-      void openGroupDashboard(group);
+      void openWorkspaceDashboard(group);
     },
   });
 
@@ -366,7 +366,7 @@ export async function initWorkspaceGroups(): Promise<void> {
       const groupId = ws ? wsMeta(ws).groupId : undefined;
       if (typeof groupId !== "string") return;
       const group = readGroups().find((g) => g.id === groupId);
-      if (group) void openGroupDashboard(group);
+      if (group) void openWorkspaceDashboard(group);
     },
   });
 

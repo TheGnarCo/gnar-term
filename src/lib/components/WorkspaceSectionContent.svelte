@@ -12,21 +12,18 @@
   } from "../stores/workspace";
   import { eventBus, type ExtensionEvent } from "../services/event-bus";
   import type { Workspace } from "../config";
+  import { workspacesStore, getWorkspace } from "../stores/workspace-groups";
   import {
-    workspaceGroupsStore,
-    getWorkspaceGroup,
-  } from "../stores/workspace-groups";
-  import {
-    deleteWorkspaceGroup,
-    updateWorkspaceGroup,
-    closeWorkspacesInGroup,
+    deleteWorkspace,
+    updateWorkspace,
+    closeNestedWorkspacesInWorkspace,
     groupDashboardPath,
-    openGroupDashboard,
+    openWorkspaceDashboard,
     WORKSPACE_GROUP_STATE_CHANGED,
-    toggleWorkspaceGroupLock,
+    toggleWorkspaceLock,
     claimWorkspace,
   } from "../services/workspace-group-service";
-  import { archiveGroup } from "../services/archive-service";
+  import { archiveWorkspace } from "../services/archive-service";
   import { type WorkspaceActionContext } from "../services/workspace-action-registry";
   import {
     childRowContributorStore,
@@ -101,13 +98,13 @@
 
   // Re-read whenever the groups list, the nestedWorkspaces store, or state
   // version changes. The store subscription covers mutations through
-  // setWorkspaceGroups; stateVersion is there for parity with other
+  // setWorkspaces; stateVersion is there for parity with other
   // extension-driven consumers that listen for the event directly.
   $: {
-    void $workspaceGroupsStore;
+    void $workspacesStore;
     void $nestedWorkspaces;
     void stateVersion;
-    group = getWorkspaceGroup(groupId);
+    group = getWorkspace(groupId);
   }
 
   $: filterIds = group ? new Set(group.workspaceIds) : new Set<string>();
@@ -182,7 +179,7 @@
     const next = await showInputPrompt("Rename workspace group", group.name);
     const trimmed = next?.trim();
     if (!trimmed || trimmed === group.name) return;
-    updateWorkspaceGroup(group.id, { name: trimmed });
+    updateWorkspace(group.id, { name: trimmed });
   }
 
   async function handleUnlockGroup() {
@@ -192,7 +189,7 @@
       { title: "Unlock Workspace", confirmLabel: "Unlock" },
     );
     if (!confirmed) return;
-    toggleWorkspaceGroupLock(group.id);
+    toggleWorkspaceLock(group.id);
   }
 
   async function handleDeleteGroup() {
@@ -211,8 +208,8 @@
       { title: "Delete Workspace", confirmLabel: "Delete", danger: true },
     );
     if (!confirmed) return;
-    closeWorkspacesInGroup(g.id);
-    deleteWorkspaceGroup(g.id);
+    closeNestedWorkspacesInWorkspace(g.id);
+    deleteWorkspace(g.id);
   }
 
   // Banner left-click: activate the group's primary workspace if it's not
@@ -234,7 +231,7 @@
         metadata: { groupId: group.id },
       });
       if (newWsId) {
-        updateWorkspaceGroup(group.id, { primaryWorkspaceId: newWsId });
+        updateWorkspace(group.id, { primaryWorkspaceId: newWsId });
         claimWorkspace(newWsId, "core");
         // Re-fetch the workspace list to get the new workspace
         const newIdx = $nestedWorkspaces.findIndex((w) => w.id === newWsId);
@@ -244,7 +241,7 @@
         return;
       }
     }
-    if (openGroupDashboard(group)) return;
+    if (openWorkspaceDashboard(group)) return;
     const nestedIdx = $nestedWorkspaces.findIndex((w) => {
       return wsMeta(w)?.groupId === group!.id;
     });
@@ -275,14 +272,14 @@
     items.push({
       label: isGroupLocked ? "Unlock Workspace" : "Lock Workspace",
       action: () => {
-        if (group) toggleWorkspaceGroupLock(group.id);
+        if (group) toggleWorkspaceLock(group.id);
       },
     });
     items.push({
       label: "Archive Workspace",
       disabled: isGroupLocked,
       action: () => {
-        if (group) void archiveGroup(group.id);
+        if (group) void archiveWorkspace(group.id);
       },
     });
     items.push({
@@ -370,7 +367,7 @@
       id: group.id,
       color: groupHex,
       onClick: () => {
-        if (group) void openGroupDashboard(group);
+        if (group) void openWorkspaceDashboard(group);
       },
     };
   }

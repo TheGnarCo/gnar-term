@@ -27,13 +27,10 @@ vi.mock("../lib/services/event-bus", () => ({
   eventBus: { emit: vi.fn(), on: vi.fn(), off: vi.fn() },
 }));
 
+import { setWorkspaces, getWorkspaces } from "../lib/stores/workspace-groups";
 import {
-  setWorkspaceGroups,
-  getWorkspaceGroups,
-} from "../lib/stores/workspace-groups";
-import {
-  toggleWorkspaceGroupLock,
-  deleteWorkspaceGroup,
+  toggleWorkspaceLock,
+  deleteWorkspace,
 } from "../lib/services/workspace-group-service";
 import { removeRootRow } from "../lib/stores/root-row-order";
 import type { Workspace } from "../lib/config";
@@ -51,59 +48,57 @@ function makeGroup(overrides: Partial<Workspace> = {}): Workspace {
   };
 }
 
-describe("toggleWorkspaceGroupLock", () => {
+describe("toggleWorkspaceLock", () => {
   beforeEach(() => {
-    setWorkspaceGroups([]);
+    setWorkspaces([]);
   });
 
   it("sets locked to true on first toggle", () => {
-    setWorkspaceGroups([makeGroup({ id: "g1" })]);
-    toggleWorkspaceGroupLock("g1");
-    expect(getWorkspaceGroups()[0].locked).toBe(true);
+    setWorkspaces([makeGroup({ id: "g1" })]);
+    toggleWorkspaceLock("g1");
+    expect(getWorkspaces()[0].locked).toBe(true);
   });
 
   it("clears locked back to false on second toggle", () => {
-    setWorkspaceGroups([makeGroup({ id: "g1", locked: true })]);
-    toggleWorkspaceGroupLock("g1");
-    expect(getWorkspaceGroups()[0].locked).toBe(false);
+    setWorkspaces([makeGroup({ id: "g1", locked: true })]);
+    toggleWorkspaceLock("g1");
+    expect(getWorkspaces()[0].locked).toBe(false);
   });
 
   it("preserves other fields when toggling", () => {
-    setWorkspaceGroups([
-      makeGroup({ id: "g1", name: "Keep Me", color: "blue" }),
-    ]);
-    toggleWorkspaceGroupLock("g1");
-    const g = getWorkspaceGroups()[0];
+    setWorkspaces([makeGroup({ id: "g1", name: "Keep Me", color: "blue" })]);
+    toggleWorkspaceLock("g1");
+    const g = getWorkspaces()[0];
     expect(g.locked).toBe(true);
     expect(g.name).toBe("Keep Me");
     expect(g.color).toBe("blue");
   });
 
   it("only mutates the matching group", () => {
-    setWorkspaceGroups([makeGroup({ id: "g1" }), makeGroup({ id: "g2" })]);
-    toggleWorkspaceGroupLock("g2");
-    expect(getWorkspaceGroups()[0].locked).toBeUndefined();
-    expect(getWorkspaceGroups()[1].locked).toBe(true);
+    setWorkspaces([makeGroup({ id: "g1" }), makeGroup({ id: "g2" })]);
+    toggleWorkspaceLock("g2");
+    expect(getWorkspaces()[0].locked).toBeUndefined();
+    expect(getWorkspaces()[1].locked).toBe(true);
   });
 
   it("is a no-op for an unknown group id", () => {
     const g = makeGroup({ id: "g1" });
-    setWorkspaceGroups([g]);
-    toggleWorkspaceGroupLock("does-not-exist");
-    expect(getWorkspaceGroups()[0]).toEqual(g);
+    setWorkspaces([g]);
+    toggleWorkspaceLock("does-not-exist");
+    expect(getWorkspaces()[0]).toEqual(g);
   });
 });
 
-describe("deleteWorkspaceGroup — lock gate", () => {
+describe("deleteWorkspace — lock gate", () => {
   beforeEach(() => {
-    setWorkspaceGroups([]);
+    setWorkspaces([]);
     vi.mocked(removeRootRow).mockClear();
   });
 
   it("deletes an unlocked group normally", () => {
-    setWorkspaceGroups([makeGroup({ id: "g1" })]);
-    deleteWorkspaceGroup("g1");
-    expect(getWorkspaceGroups()).toHaveLength(0);
+    setWorkspaces([makeGroup({ id: "g1" })]);
+    deleteWorkspace("g1");
+    expect(getWorkspaces()).toHaveLength(0);
     expect(removeRootRow).toHaveBeenCalledWith({
       kind: "workspace-group",
       id: "g1",
@@ -111,17 +106,17 @@ describe("deleteWorkspaceGroup — lock gate", () => {
   });
 
   it("is a no-op when group is locked", () => {
-    setWorkspaceGroups([makeGroup({ id: "g1", locked: true })]);
-    deleteWorkspaceGroup("g1");
-    expect(getWorkspaceGroups()).toHaveLength(1);
+    setWorkspaces([makeGroup({ id: "g1", locked: true })]);
+    deleteWorkspace("g1");
+    expect(getWorkspaces()).toHaveLength(1);
     expect(removeRootRow).not.toHaveBeenCalled();
   });
 });
 
-describe("archiveGroup — lock gate (source audit)", () => {
+describe("archiveWorkspace — lock gate (source audit)", () => {
   it("returns early when group is locked", () => {
     const src = readFileSync("src/lib/services/archive-service.ts", "utf-8");
-    // Verify the lock gate appears in the archiveGroup function body
+    // Verify the lock gate appears in the archiveWorkspace function body
     expect(src).toContain("if (group.locked) return false");
   });
 });

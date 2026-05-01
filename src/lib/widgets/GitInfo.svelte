@@ -12,7 +12,7 @@
    */
   import { getContext, onDestroy, onMount } from "svelte";
   import { theme } from "../stores/theme";
-  import { getWorkspaceGroup } from "../stores/workspace-groups";
+  import { getWorkspace } from "../stores/workspace-groups";
   import {
     deriveDashboardScope,
     getDashboardHost,
@@ -51,7 +51,7 @@
 
   function resolveRepoPath(): string | null {
     if (scope.kind === "group") {
-      const g = getWorkspaceGroup(scope.groupId);
+      const g = getWorkspace(scope.groupId);
       return g?.path ?? null;
     }
     if (scope.kind === "global") {

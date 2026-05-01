@@ -87,7 +87,7 @@ async function readWorkspaceGroups(
     const state = await readJson<Record<string, unknown>>(path);
     if (!state) continue;
     const groups =
-      (state.workspaceGroups as LegacyWorkspaceGroup[] | undefined) ??
+      (state.workspaces as LegacyWorkspaceGroup[] | undefined) ??
       (state.projects as LegacyWorkspaceGroup[] | undefined);
     if (Array.isArray(groups)) return groups;
   }

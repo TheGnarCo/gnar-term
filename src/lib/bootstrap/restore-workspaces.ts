@@ -11,7 +11,7 @@
  */
 import { get } from "svelte/store";
 import { nestedWorkspaces } from "../stores/workspace";
-import { getWorkspaceGroups } from "../stores/workspace-groups";
+import { getWorkspaces } from "../stores/workspace-groups";
 import {
   loadState,
   type GnarTermConfig,
@@ -25,7 +25,7 @@ import {
 } from "../services/workspace-service";
 
 // Restore-complete signal — lets async work (extension provision loops,
-// reconcileGroupDashboards) defer safely until nestedWorkspaces are in the store.
+// reconcileWorkspaceDashboards) defer safely until nestedWorkspaces are in the store.
 let _restored = false;
 const _waiters: Array<() => void> = [];
 
@@ -114,7 +114,7 @@ export async function restoreWorkspaces(
     // Pre-fix releases spawned a new Dashboard on every launch because
     // workspace ids regenerated, so persisted state can carry
     // duplicates — keep the first occurrence and drop the rest.
-    const knownGroupIds = new Set(getWorkspaceGroups().map((g) => g.id));
+    const knownGroupIds = new Set(getWorkspaces().map((g) => g.id));
     const seenDashboards = new Set<string>();
     const filteredDefs = state.nestedWorkspaces.filter((wsDef) => {
       const md = wsDef.metadata;

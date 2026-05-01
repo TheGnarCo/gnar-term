@@ -19,9 +19,9 @@ import type { ExtensionManifest, ExtensionAPI, WorkspaceRef } from "../api";
 import { createWorkspaceFromDef } from "../../lib/services/workspace-service";
 import {
   closeAutoDashboardsBySource,
-  provisionAutoDashboardsForGroup,
+  provisionAutoDashboardsForWorkspace,
 } from "../../lib/services/workspace-group-service";
-import { getWorkspaceGroups } from "../../lib/stores/workspace-groups";
+import { getWorkspaces } from "../../lib/stores/workspace-groups";
 import { waitRestored } from "../../lib/bootstrap/restore-workspaces";
 import { getConfig, saveConfig } from "../../lib/config";
 import BotIcon from "./icons/BotIcon.svelte";
@@ -109,7 +109,7 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
     });
 
     // Back-fill the Agentic Dashboard for every existing group. Fresh
-    // groups hit provisionAutoDashboardsForGroup through the normal
+    // groups hit provisionAutoDashboardsForWorkspace through the normal
     // create flow, but groups that existed before the extension was
     // enabled would otherwise stay without an agentic tile until app
     // restart. Run in the background — the extension is fully usable
@@ -120,8 +120,8 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
     // restoreWorkspaces completes so this loop never races the restore.
     void (async () => {
       await waitRestored();
-      for (const group of getWorkspaceGroups()) {
-        await provisionAutoDashboardsForGroup(group);
+      for (const group of getWorkspaces()) {
+        await provisionAutoDashboardsForWorkspace(group);
       }
     })();
 

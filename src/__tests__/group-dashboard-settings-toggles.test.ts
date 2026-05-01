@@ -20,7 +20,7 @@ import {
   nestedWorkspaces,
   activeNestedWorkspaceIdx,
 } from "../lib/stores/workspace";
-import { workspaceGroupsStore } from "../lib/stores/workspace-groups";
+import { workspacesStore } from "../lib/stores/workspace-groups";
 import {
   registerDashboardContribution,
   resetDashboardContributions,
@@ -41,7 +41,7 @@ describe("GroupDashboardSettings — Dashboards toggles", () => {
     cleanup();
     nestedWorkspaces.set([]);
     activeNestedWorkspaceIdx.set(-1);
-    workspaceGroupsStore.set([GROUP]);
+    workspacesStore.set([GROUP]);
     resetDashboardContributions();
   });
 

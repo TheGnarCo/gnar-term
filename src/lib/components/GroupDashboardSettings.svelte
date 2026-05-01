@@ -12,10 +12,10 @@
    */
   import { theme } from "../stores/theme";
   import ColorSlotPicker from "./ColorSlotPicker.svelte";
-  import { workspaceGroupsStore } from "../stores/workspace-groups";
+  import { workspacesStore } from "../stores/workspace-groups";
   import {
     groupDashboardPath,
-    updateWorkspaceGroup,
+    updateWorkspace,
     closeDashboardForGroup,
   } from "../services/workspace-group-service";
   import { nestedWorkspaces } from "../stores/workspace";
@@ -34,7 +34,7 @@
   let regeneratingRow: string | null = null;
   let regenerateError = "";
 
-  $: group = $workspaceGroupsStore.find((g) => g.id === groupId);
+  $: group = $workspacesStore.find((g) => g.id === groupId);
   $: currentColorSlot = group?.color ?? "purple";
   $: markdownPath = group ? groupDashboardPath(group.path) : "";
 
@@ -44,7 +44,7 @@
 
   function selectColor(slot: string): void {
     if (!group) return;
-    updateWorkspaceGroup(group.id, { color: slot });
+    updateWorkspace(group.id, { color: slot });
   }
 
   function commitName(): void {
@@ -52,7 +52,7 @@
     if (!group) return;
     const trimmed = nameDraft.trim();
     if (!trimmed || trimmed === group.name) return;
-    updateWorkspaceGroup(group.id, { name: trimmed });
+    updateWorkspace(group.id, { name: trimmed });
   }
 
   // The Dashboards section excludes the Settings contribution itself —

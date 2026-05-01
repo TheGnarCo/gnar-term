@@ -1,5 +1,5 @@
 /**
- * provisionAutoDashboardsForGroup — called on group create and on startup
+ * provisionAutoDashboardsForWorkspace — called on group create and on startup
  * reconciliation. Iterates every registered DashboardContribution with
  * `autoProvision: true` and invokes contribution.create(group) for any
  * that isn't already backed by a workspace. Idempotent.
@@ -23,7 +23,7 @@ import {
   registerDashboardContribution,
   resetDashboardContributions,
 } from "../lib/services/dashboard-contribution-registry";
-import { provisionAutoDashboardsForGroup } from "../lib/services/workspace-group-service";
+import { provisionAutoDashboardsForWorkspace } from "../lib/services/workspace-group-service";
 import type { Workspace } from "../lib/config";
 
 function makeGroup(id: string): Workspace {
@@ -38,7 +38,7 @@ function makeGroup(id: string): Workspace {
   };
 }
 
-describe("provisionAutoDashboardsForGroup", () => {
+describe("provisionAutoDashboardsForWorkspace", () => {
   beforeEach(() => {
     nestedWorkspaces.set([]);
     activeNestedWorkspaceIdx.set(-1);
@@ -76,7 +76,7 @@ describe("provisionAutoDashboardsForGroup", () => {
     });
 
     const group = makeGroup("g1");
-    await provisionAutoDashboardsForGroup(group);
+    await provisionAutoDashboardsForWorkspace(group);
 
     expect(aCreate).toHaveBeenCalledWith(group);
     expect(bCreate).toHaveBeenCalledWith(group);
@@ -117,7 +117,7 @@ describe("provisionAutoDashboardsForGroup", () => {
       } as never,
     ]);
 
-    await provisionAutoDashboardsForGroup(group);
+    await provisionAutoDashboardsForWorkspace(group);
 
     expect(aCreate).not.toHaveBeenCalled();
     // Sanity: no new nestedWorkspaces added.
@@ -153,8 +153,8 @@ describe("provisionAutoDashboardsForGroup", () => {
     });
 
     const group = makeGroup("g1");
-    await provisionAutoDashboardsForGroup(group);
-    await provisionAutoDashboardsForGroup(group);
+    await provisionAutoDashboardsForWorkspace(group);
+    await provisionAutoDashboardsForWorkspace(group);
 
     expect(bCreate).toHaveBeenCalledTimes(1);
   });

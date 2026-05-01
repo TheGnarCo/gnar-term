@@ -27,7 +27,7 @@ import {
   collapseEmptyPaneInWorkspace,
 } from "./workspace-service";
 import { removeRootRow } from "../stores/root-row-order";
-import { removeWorkspaceFromAllGroups } from "./workspace-group-service";
+import { removeNestedWorkspaceFromAllWorkspaces } from "./workspace-group-service";
 import { handleWorkspaceClosed as gitStatusWorkspaceClosed } from "./git-status-service";
 import { safeFocus, getCwdForSurface } from "./service-helpers";
 import { eventBus } from "./event-bus";
@@ -439,7 +439,7 @@ export function expandWorkspaceIntoPanes(
     Math.min(get(activeNestedWorkspaceIdx), get(nestedWorkspaces).length - 1),
   );
   removeRootRow({ kind: "workspace", id: srcWorkspaceId });
-  removeWorkspaceFromAllGroups(srcWorkspaceId);
+  removeNestedWorkspaceFromAllWorkspaces(srcWorkspaceId);
   gitStatusWorkspaceClosed(srcWorkspaceId);
   schedulePersist();
 }
@@ -487,7 +487,7 @@ export function mergeWorkspaceIntoPane(
     Math.min(get(activeNestedWorkspaceIdx), get(nestedWorkspaces).length - 1),
   );
   removeRootRow({ kind: "workspace", id: srcWorkspaceId });
-  removeWorkspaceFromAllGroups(srcWorkspaceId);
+  removeNestedWorkspaceFromAllWorkspaces(srcWorkspaceId);
   gitStatusWorkspaceClosed(srcWorkspaceId);
   schedulePersist();
 }

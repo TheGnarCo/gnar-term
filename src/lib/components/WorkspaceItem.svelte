@@ -365,7 +365,7 @@
 
     {#if shouldShowWorktreeStatus && !hideStatusBadges}
       <div
-        style="padding: 2px 24px 4px 2px; font-size: 11px; color: {railColor}; display: flex; align-items: center; gap: 4px; overflow: hidden;"
+        style="padding: 0 24px 2px 2px; font-size: 11px; color: {$theme.fgMuted}; display: flex; align-items: center; gap: 4px; overflow: hidden;"
       >
         <svg
           width="10"

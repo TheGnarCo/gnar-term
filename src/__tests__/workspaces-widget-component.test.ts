@@ -33,7 +33,7 @@ import {
 import { DASHBOARD_HOST_KEY } from "../lib/contexts/dashboard-host";
 import type { NestedWorkspace } from "../lib/types";
 
-function makeWorkspace(
+function makeNestedWorkspace(
   id: string,
   name: string,
   metadata: Record<string, unknown> = {},
@@ -77,7 +77,7 @@ describe("WorkspacesWidget", () => {
       },
     ]);
     nestedWorkspaces.set([
-      makeWorkspace("ws-overview", "Group Overview", {
+      makeNestedWorkspace("ws-overview", "Group Overview", {
         parentWorkspaceId: "g1",
         isDashboard: true,
         dashboardContributionId: "group",
@@ -107,17 +107,17 @@ describe("WorkspacesWidget", () => {
       },
     ]);
     nestedWorkspaces.set([
-      makeWorkspace("ws-overview", "Group Overview", {
+      makeNestedWorkspace("ws-overview", "Group Overview", {
         parentWorkspaceId: "g1",
         isDashboard: true,
         dashboardContributionId: "group",
       }),
-      makeWorkspace("ws-settings", "Settings Dashboard", {
+      makeNestedWorkspace("ws-settings", "Settings Dashboard", {
         parentWorkspaceId: "g1",
         isDashboard: true,
         dashboardContributionId: "settings",
       }),
-      makeWorkspace("ws-agentic", "Agentic Dashboard", {
+      makeNestedWorkspace("ws-agentic", "Agentic Dashboard", {
         parentWorkspaceId: "g1",
         isDashboard: true,
         dashboardContributionId: "agentic",
@@ -154,10 +154,10 @@ describe("WorkspacesWidget", () => {
       },
     ]);
     nestedWorkspaces.set([
-      makeWorkspace("ws-alpha", "Alpha NestedWorkspace", {
+      makeNestedWorkspace("ws-alpha", "Alpha NestedWorkspace", {
         parentWorkspaceId: "g1",
       }),
-      makeWorkspace("ws-beta", "Beta NestedWorkspace", {
+      makeNestedWorkspace("ws-beta", "Beta NestedWorkspace", {
         parentWorkspaceId: "g1",
       }),
     ]);
@@ -198,8 +198,12 @@ describe("WorkspacesWidget", () => {
       },
     ]);
     nestedWorkspaces.set([
-      makeWorkspace("ws-g1", "G1 NestedWorkspace", { parentWorkspaceId: "g1" }),
-      makeWorkspace("ws-g2", "G2 NestedWorkspace", { parentWorkspaceId: "g2" }),
+      makeNestedWorkspace("ws-g1", "G1 NestedWorkspace", {
+        parentWorkspaceId: "g1",
+      }),
+      makeNestedWorkspace("ws-g2", "G2 NestedWorkspace", {
+        parentWorkspaceId: "g2",
+      }),
     ]);
 
     const { container } = render(WorkspacesWidget, {
@@ -235,10 +239,10 @@ describe("WorkspacesWidget click-to-navigate", () => {
       },
     ]);
     nestedWorkspaces.set([
-      makeWorkspace("ws-alpha", "Alpha NestedWorkspace", {
+      makeNestedWorkspace("ws-alpha", "Alpha NestedWorkspace", {
         parentWorkspaceId: "g1",
       }),
-      makeWorkspace("ws-beta", "Beta NestedWorkspace", {
+      makeNestedWorkspace("ws-beta", "Beta NestedWorkspace", {
         parentWorkspaceId: "g1",
       }),
     ]);

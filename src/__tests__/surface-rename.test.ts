@@ -24,7 +24,10 @@ import {
 } from "../lib/services/surface-service";
 import type { NestedWorkspace } from "../lib/types";
 
-function makeWorkspace(surfaceId: string, title = "Tab"): NestedWorkspace {
+function makeNestedWorkspace(
+  surfaceId: string,
+  title = "Tab",
+): NestedWorkspace {
   return {
     id: "ws-1",
     name: "Test",
@@ -61,7 +64,7 @@ describe("renameActiveSurface()", () => {
   });
 
   it("sets renamingSurfaceId to the active surface id", () => {
-    nestedWorkspaces.set([makeWorkspace("s-42")]);
+    nestedWorkspaces.set([makeNestedWorkspace("s-42")]);
     activeNestedWorkspaceIdx.set(0);
     renameActiveSurface();
     expect(get(renamingSurfaceId)).toBe("s-42");
@@ -75,7 +78,7 @@ describe("renameSurface()", () => {
   });
 
   it("updates the surface title", () => {
-    nestedWorkspaces.set([makeWorkspace("s-42", "Original")]);
+    nestedWorkspaces.set([makeNestedWorkspace("s-42", "Original")]);
     renameSurface("s-42", "Renamed");
     const pane =
       get(nestedWorkspaces)[0].splitRoot.type === "pane"
@@ -85,7 +88,7 @@ describe("renameSurface()", () => {
   });
 
   it("is a no-op for unknown surface id", () => {
-    nestedWorkspaces.set([makeWorkspace("s-42", "Original")]);
+    nestedWorkspaces.set([makeNestedWorkspace("s-42", "Original")]);
     renameSurface("unknown", "Changed");
     const pane =
       get(nestedWorkspaces)[0].splitRoot.type === "pane"

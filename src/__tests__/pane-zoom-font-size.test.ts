@@ -161,7 +161,7 @@ function makePane(surfaces: TerminalSurface[] = []): Pane {
   return pane;
 }
 
-function makeWorkspace(pane: Pane): NestedWorkspace {
+function makeNestedWorkspace(pane: Pane): NestedWorkspace {
   return {
     id: uid(),
     name: "Test",
@@ -218,8 +218,8 @@ describe("switchNestedWorkspace clears zoom", () => {
     const s2 = mockTerminalSurface();
     const p1 = makePane([s1]);
     const p2 = makePane([s2]);
-    const ws1 = makeWorkspace(p1);
-    const ws2 = makeWorkspace(p2);
+    const ws1 = makeNestedWorkspace(p1);
+    const ws2 = makeNestedWorkspace(p2);
     nestedWorkspaces.set([ws1, ws2]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -269,7 +269,7 @@ describe("adjustFontSize", () => {
     const surf1 = mockTerminalSurface();
     const surf2 = mockTerminalSurface();
     const p = makePane([surf1, surf2]);
-    const ws = makeWorkspace(p);
+    const ws = makeNestedWorkspace(p);
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -284,7 +284,7 @@ describe("adjustFontSize", () => {
     // Wrap fit in a spy so we can assert on it
     const fitSpy = vi.spyOn(surf.fitAddon, "fit");
     const p = makePane([surf]);
-    const ws = makeWorkspace(p);
+    const ws = makeNestedWorkspace(p);
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 

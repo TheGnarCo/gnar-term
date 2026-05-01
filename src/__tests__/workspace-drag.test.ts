@@ -132,7 +132,7 @@ function makePane(surfaces: TerminalSurface[]): Pane {
   };
 }
 
-function makeWorkspace(
+function makeNestedWorkspace(
   splitRoot: SplitNode,
   overrides: Partial<NestedWorkspace> = {},
 ): NestedWorkspace {
@@ -167,7 +167,7 @@ describe("createNestedWorkspaceFromSurface", () => {
     const sA = mockSurface({ title: "A" });
     const sB = mockSurface({ title: "B" });
     const pane = makePane([sA, sB]);
-    const ws = makeWorkspace({ type: "pane", pane });
+    const ws = makeNestedWorkspace({ type: "pane", pane });
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -187,7 +187,7 @@ describe("createNestedWorkspaceFromSurface", () => {
     const sA = mockSurface({ title: "A" });
     const sB = mockSurface({ title: "B" });
     const pane = makePane([sA, sB]);
-    const ws = makeWorkspace(
+    const ws = makeNestedWorkspace(
       { type: "pane", pane },
       { metadata: { parentWorkspaceId: "group-1" } },
     );
@@ -206,7 +206,7 @@ describe("createNestedWorkspaceFromSurface", () => {
     const sA = mockSurface({ title: "A" });
     const sB = mockSurface({ title: "B" });
     const pane = makePane([sA, sB]);
-    const ws = makeWorkspace({ type: "pane", pane });
+    const ws = makeNestedWorkspace({ type: "pane", pane });
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -221,7 +221,7 @@ describe("createNestedWorkspaceFromSurface", () => {
   it("is a no-op when source workspace has only 1 surface (guard)", () => {
     const sA = mockSurface({ title: "A" });
     const pane = makePane([sA]);
-    const ws = makeWorkspace({ type: "pane", pane });
+    const ws = makeNestedWorkspace({ type: "pane", pane });
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -248,7 +248,7 @@ describe("createNestedWorkspaceFromSurface", () => {
         { type: "pane", pane: otherPane },
       ],
     };
-    const ws = makeWorkspace(root);
+    const ws = makeNestedWorkspace(root);
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -266,7 +266,7 @@ describe("createNestedWorkspaceFromSurface", () => {
     const sA = mockSurface({ title: "A" });
     const sB = mockSurface({ title: "B" });
     const pane = makePane([sA, sB]);
-    const ws = makeWorkspace({ type: "pane", pane });
+    const ws = makeNestedWorkspace({ type: "pane", pane });
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -284,7 +284,7 @@ describe("createNestedWorkspaceFromSurface", () => {
     const sA = mockSurface({ title: "A" });
     const sB = mockSurface({ title: "B" });
     const pane = makePane([sA, sB]);
-    const ws = makeWorkspace({ type: "pane", pane });
+    const ws = makeNestedWorkspace({ type: "pane", pane });
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -301,8 +301,8 @@ describe("moveSurfaceToWorkspace", () => {
     const sC = mockSurface({ title: "C" });
     const sourcePane = makePane([sA, sB]);
     const targetPane = makePane([sC]);
-    const sourceWs = makeWorkspace({ type: "pane", pane: sourcePane });
-    const targetWs = makeWorkspace({ type: "pane", pane: targetPane });
+    const sourceWs = makeNestedWorkspace({ type: "pane", pane: sourcePane });
+    const targetWs = makeNestedWorkspace({ type: "pane", pane: targetPane });
     nestedWorkspaces.set([sourceWs, targetWs]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -330,9 +330,9 @@ describe("moveSurfaceToWorkspace", () => {
         { type: "pane", pane: otherPane },
       ],
     };
-    const sourceWs = makeWorkspace(sourceRoot);
+    const sourceWs = makeNestedWorkspace(sourceRoot);
     const targetPane = makePane([sC]);
-    const targetWs = makeWorkspace({ type: "pane", pane: targetPane });
+    const targetWs = makeNestedWorkspace({ type: "pane", pane: targetPane });
     nestedWorkspaces.set([sourceWs, targetWs]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -349,8 +349,8 @@ describe("moveSurfaceToWorkspace", () => {
     const sC = mockSurface({ title: "C" });
     const sourcePane = makePane([sA, sB]);
     const targetPane = makePane([sC]);
-    const sourceWs = makeWorkspace({ type: "pane", pane: sourcePane });
-    const targetWs = makeWorkspace({ type: "pane", pane: targetPane });
+    const sourceWs = makeNestedWorkspace({ type: "pane", pane: sourcePane });
+    const targetWs = makeNestedWorkspace({ type: "pane", pane: targetPane });
     nestedWorkspaces.set([sourceWs, targetWs]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -367,8 +367,8 @@ describe("expandWorkspaceIntoPanes", () => {
     const sC = mockSurface({ title: "C" });
     const srcPane = makePane([sA, sB]);
     const tgtPane = makePane([sC]);
-    const srcWs = makeWorkspace({ type: "pane", pane: srcPane });
-    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    const srcWs = makeNestedWorkspace({ type: "pane", pane: srcPane });
+    const tgtWs = makeNestedWorkspace({ type: "pane", pane: tgtPane });
     nestedWorkspaces.set([srcWs, tgtWs]);
     activeNestedWorkspaceIdx.set(1);
 
@@ -396,8 +396,8 @@ describe("expandWorkspaceIntoPanes", () => {
     const sB = mockSurface({ title: "B" });
     const srcPane = makePane([sA]);
     const tgtPane = makePane([sB]);
-    const srcWs = makeWorkspace({ type: "pane", pane: srcPane });
-    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    const srcWs = makeNestedWorkspace({ type: "pane", pane: srcPane });
+    const tgtWs = makeNestedWorkspace({ type: "pane", pane: tgtPane });
     nestedWorkspaces.set([srcWs, tgtWs]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -414,8 +414,8 @@ describe("expandWorkspaceIntoPanes", () => {
     const sB = mockSurface({ title: "B" });
     const srcPane = makePane([sA]);
     const tgtPane = makePane([sB]);
-    const srcWs = makeWorkspace({ type: "pane", pane: srcPane });
-    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    const srcWs = makeNestedWorkspace({ type: "pane", pane: srcPane });
+    const tgtWs = makeNestedWorkspace({ type: "pane", pane: tgtPane });
     nestedWorkspaces.set([srcWs, tgtWs]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -432,8 +432,8 @@ describe("expandWorkspaceIntoPanes", () => {
     const sB = mockSurface({ title: "B" });
     const srcPane = makePane([sA]);
     const tgtPane = makePane([sB]);
-    const srcWs = makeWorkspace({ type: "pane", pane: srcPane });
-    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    const srcWs = makeNestedWorkspace({ type: "pane", pane: srcPane });
+    const tgtWs = makeNestedWorkspace({ type: "pane", pane: tgtPane });
     nestedWorkspaces.set([srcWs, tgtWs]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -447,8 +447,8 @@ describe("expandWorkspaceIntoPanes", () => {
     const sB = mockSurface({ title: "B" });
     const srcPane = makePane([sA]);
     const tgtPane = makePane([sB]);
-    const srcWs = makeWorkspace({ type: "pane", pane: srcPane });
-    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    const srcWs = makeNestedWorkspace({ type: "pane", pane: srcPane });
+    const tgtWs = makeNestedWorkspace({ type: "pane", pane: tgtPane });
     nestedWorkspaces.set([srcWs, tgtWs]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -462,8 +462,8 @@ describe("expandWorkspaceIntoPanes", () => {
     const sB = mockSurface({ title: "B" });
     const srcPane = makePane([sA]);
     const tgtPane = makePane([sB]);
-    const srcWs = makeWorkspace({ type: "pane", pane: srcPane });
-    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    const srcWs = makeNestedWorkspace({ type: "pane", pane: srcPane });
+    const tgtWs = makeNestedWorkspace({ type: "pane", pane: tgtPane });
     nestedWorkspaces.set([srcWs, tgtWs]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -487,7 +487,7 @@ describe("expandWorkspaceIntoPanes", () => {
     const sA = mockSurface({ title: "A" });
     const sB = mockSurface({ title: "B" });
     const pane = makePane([sA, sB]);
-    const ws = makeWorkspace({ type: "pane", pane });
+    const ws = makeNestedWorkspace({ type: "pane", pane });
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -501,8 +501,8 @@ describe("expandWorkspaceIntoPanes", () => {
     const sB = mockSurface({ title: "B" });
     const srcPane = makePane([sA]);
     const tgtPane = makePane([sB]);
-    const srcWs = makeWorkspace({ type: "pane", pane: srcPane });
-    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    const srcWs = makeNestedWorkspace({ type: "pane", pane: srcPane });
+    const tgtWs = makeNestedWorkspace({ type: "pane", pane: tgtPane });
     nestedWorkspaces.set([srcWs, tgtWs]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -521,8 +521,8 @@ describe("expandWorkspaceIntoPanes", () => {
     const sB = mockSurface({ title: "B" });
     const srcPane = makePane([sA]);
     const tgtPane = makePane([sB]);
-    const srcWs = makeWorkspace({ type: "pane", pane: srcPane });
-    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    const srcWs = makeNestedWorkspace({ type: "pane", pane: srcPane });
+    const tgtWs = makeNestedWorkspace({ type: "pane", pane: tgtPane });
     nestedWorkspaces.set([srcWs, tgtWs]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -537,8 +537,8 @@ describe("expandWorkspaceIntoPanes", () => {
     const sC = mockSurface({ title: "C" });
     const srcPane = makePane([sA, sB]);
     const tgtPane = makePane([sC]);
-    const srcWs = makeWorkspace({ type: "pane", pane: srcPane });
-    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    const srcWs = makeNestedWorkspace({ type: "pane", pane: srcPane });
+    const tgtWs = makeNestedWorkspace({ type: "pane", pane: tgtPane });
     nestedWorkspaces.set([srcWs, tgtWs]);
     activeNestedWorkspaceIdx.set(1);
 
@@ -560,8 +560,8 @@ describe("mergeWorkspaceIntoPane", () => {
     const sC = mockSurface({ title: "C" });
     const srcPane = makePane([sA, sB]);
     const tgtPane = makePane([sC]);
-    const srcWs = makeWorkspace({ type: "pane", pane: srcPane });
-    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    const srcWs = makeNestedWorkspace({ type: "pane", pane: srcPane });
+    const tgtWs = makeNestedWorkspace({ type: "pane", pane: tgtPane });
     nestedWorkspaces.set([srcWs, tgtWs]);
     activeNestedWorkspaceIdx.set(1);
 
@@ -576,8 +576,8 @@ describe("mergeWorkspaceIntoPane", () => {
     const sC = mockSurface({ title: "C" });
     const srcPane = makePane([sA, sB]);
     const tgtPane = makePane([sC]);
-    const srcWs = makeWorkspace({ type: "pane", pane: srcPane });
-    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    const srcWs = makeNestedWorkspace({ type: "pane", pane: srcPane });
+    const tgtWs = makeNestedWorkspace({ type: "pane", pane: tgtPane });
     nestedWorkspaces.set([srcWs, tgtWs]);
     activeNestedWorkspaceIdx.set(1);
 
@@ -591,8 +591,8 @@ describe("mergeWorkspaceIntoPane", () => {
     const sB = mockSurface({ title: "B" });
     const srcPane = makePane([sA]);
     const tgtPane = makePane([sB]);
-    const srcWs = makeWorkspace({ type: "pane", pane: srcPane });
-    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    const srcWs = makeNestedWorkspace({ type: "pane", pane: srcPane });
+    const tgtWs = makeNestedWorkspace({ type: "pane", pane: tgtPane });
     nestedWorkspaces.set([srcWs, tgtWs]);
     activeNestedWorkspaceIdx.set(1);
 
@@ -606,8 +606,8 @@ describe("mergeWorkspaceIntoPane", () => {
     const sB = mockSurface({ title: "B" });
     const srcPane = makePane([sA]);
     const tgtPane = makePane([sB]);
-    const srcWs = makeWorkspace({ type: "pane", pane: srcPane });
-    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    const srcWs = makeNestedWorkspace({ type: "pane", pane: srcPane });
+    const tgtWs = makeNestedWorkspace({ type: "pane", pane: tgtPane });
     nestedWorkspaces.set([srcWs, tgtWs]);
     activeNestedWorkspaceIdx.set(1);
 
@@ -624,8 +624,8 @@ describe("mergeWorkspaceIntoPane", () => {
     const sB = mockSurface({ title: "B" });
     const srcPane = makePane([sA]);
     const tgtPane = makePane([sB]);
-    const srcWs = makeWorkspace({ type: "pane", pane: srcPane });
-    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    const srcWs = makeNestedWorkspace({ type: "pane", pane: srcPane });
+    const tgtWs = makeNestedWorkspace({ type: "pane", pane: tgtPane });
     nestedWorkspaces.set([srcWs, tgtWs]);
     activeNestedWorkspaceIdx.set(1);
 
@@ -642,8 +642,8 @@ describe("mergeWorkspaceIntoPane", () => {
     const sB = mockSurface({ title: "B" });
     const srcPane = makePane([sA]);
     const tgtPane = makePane([sB]);
-    const srcWs = makeWorkspace({ type: "pane", pane: srcPane });
-    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    const srcWs = makeNestedWorkspace({ type: "pane", pane: srcPane });
+    const tgtWs = makeNestedWorkspace({ type: "pane", pane: tgtPane });
     nestedWorkspaces.set([srcWs, tgtWs]);
     activeNestedWorkspaceIdx.set(1);
 
@@ -657,8 +657,8 @@ describe("mergeWorkspaceIntoPane", () => {
     const sB = mockSurface({ title: "B" });
     const srcPane = makePane([sA]);
     const tgtPane = makePane([sB]);
-    const srcWs = makeWorkspace({ type: "pane", pane: srcPane });
-    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    const srcWs = makeNestedWorkspace({ type: "pane", pane: srcPane });
+    const tgtWs = makeNestedWorkspace({ type: "pane", pane: tgtPane });
     nestedWorkspaces.set([srcWs, tgtWs]);
     activeNestedWorkspaceIdx.set(1);
 
@@ -671,7 +671,7 @@ describe("mergeWorkspaceIntoPane", () => {
     const sA = mockSurface({ title: "A" });
     const sB = mockSurface({ title: "B" });
     const pane = makePane([sA, sB]);
-    const ws = makeWorkspace({ type: "pane", pane });
+    const ws = makeNestedWorkspace({ type: "pane", pane });
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -696,9 +696,9 @@ describe("mergeWorkspaceIntoPane", () => {
         { type: "pane", pane: srcPane2 },
       ],
     };
-    const srcWs = makeWorkspace(srcRoot);
+    const srcWs = makeNestedWorkspace(srcRoot);
     const tgtPane = makePane([sC]);
-    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    const tgtWs = makeNestedWorkspace({ type: "pane", pane: tgtPane });
     nestedWorkspaces.set([srcWs, tgtWs]);
     activeNestedWorkspaceIdx.set(1);
 
@@ -713,8 +713,8 @@ describe("mergeWorkspaceIntoPane", () => {
     const sB = mockSurface({ title: "B" });
     const srcPane = makePane([sA]);
     const tgtPane = makePane([sB]);
-    const srcWs = makeWorkspace({ type: "pane", pane: srcPane });
-    const tgtWs = makeWorkspace({ type: "pane", pane: tgtPane });
+    const srcWs = makeNestedWorkspace({ type: "pane", pane: srcPane });
+    const tgtWs = makeNestedWorkspace({ type: "pane", pane: tgtPane });
     nestedWorkspaces.set([srcWs, tgtWs]);
     activeNestedWorkspaceIdx.set(1);
 
@@ -729,7 +729,7 @@ describe("createNestedWorkspaceFromSurface — targetWorkspaceId", () => {
     const sA = mockSurface({ title: "A" });
     const sB = mockSurface({ title: "B" });
     const pane = makePane([sA, sB]);
-    const ws = makeWorkspace({ type: "pane", pane }); // no parentWorkspaceId
+    const ws = makeNestedWorkspace({ type: "pane", pane }); // no parentWorkspaceId
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -748,7 +748,7 @@ describe("createNestedWorkspaceFromSurface — targetWorkspaceId", () => {
     const sA = mockSurface({ title: "A" });
     const sB = mockSurface({ title: "B" });
     const pane = makePane([sA, sB]);
-    const ws = makeWorkspace({ type: "pane", pane }); // no parentWorkspaceId
+    const ws = makeNestedWorkspace({ type: "pane", pane }); // no parentWorkspaceId
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -771,7 +771,7 @@ describe("createNestedWorkspaceFromSurface — targetWorkspaceId", () => {
     const sA = mockSurface({ title: "A" });
     const sB = mockSurface({ title: "B" });
     const pane = makePane([sA, sB]);
-    const ws = makeWorkspace(
+    const ws = makeNestedWorkspace(
       { type: "pane", pane },
       { metadata: { parentWorkspaceId: "src-group" } },
     );
@@ -797,7 +797,7 @@ describe("createNestedWorkspaceFromSurface — targetWorkspaceId", () => {
     const sA = mockSurface({ title: "A" });
     const sB = mockSurface({ title: "B" });
     const pane = makePane([sA, sB]);
-    const ws = makeWorkspace(
+    const ws = makeNestedWorkspace(
       { type: "pane", pane },
       { metadata: { parentWorkspaceId: "src-group" } }, // srcWorkspaceId is set
     );

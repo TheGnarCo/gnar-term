@@ -34,7 +34,7 @@ function makeSurface(id: string): TerminalSurface {
   };
 }
 
-function makeWorkspace(id: string, name: string): NestedWorkspace {
+function makeNestedWorkspace(id: string, name: string): NestedWorkspace {
   const s1 = makeSurface(`${id}-s1`);
   const pane: Pane = { id: `${id}-p1`, surfaces: [s1], activeSurfaceId: s1.id };
   return {
@@ -58,8 +58,8 @@ describe("NestedWorkspace stores", () => {
   });
 
   it("derives activeWorkspace from idx", () => {
-    const ws1 = makeWorkspace("ws1", "Workspace 1");
-    const ws2 = makeWorkspace("ws2", "Workspace 2");
+    const ws1 = makeNestedWorkspace("ws1", "Workspace 1");
+    const ws2 = makeNestedWorkspace("ws2", "Workspace 2");
     nestedWorkspaces.set([ws1, ws2]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -70,7 +70,7 @@ describe("NestedWorkspace stores", () => {
   });
 
   it("derives activePane from activeWorkspace", () => {
-    const ws = makeWorkspace("ws1", "Test");
+    const ws = makeNestedWorkspace("ws1", "Test");
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -80,7 +80,7 @@ describe("NestedWorkspace stores", () => {
   });
 
   it("derives activeSurface from activePane", () => {
-    const ws = makeWorkspace("ws1", "Test");
+    const ws = makeNestedWorkspace("ws1", "Test");
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -90,13 +90,13 @@ describe("NestedWorkspace stores", () => {
   });
 
   it("returns null for out-of-bounds idx", () => {
-    nestedWorkspaces.set([makeWorkspace("ws1", "Test")]);
+    nestedWorkspaces.set([makeNestedWorkspace("ws1", "Test")]);
     activeNestedWorkspaceIdx.set(5);
     expect(get(activeWorkspace)).toBeNull();
   });
 
   it("handles workspace updates reactively", () => {
-    const ws = makeWorkspace("ws1", "Test");
+    const ws = makeNestedWorkspace("ws1", "Test");
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 

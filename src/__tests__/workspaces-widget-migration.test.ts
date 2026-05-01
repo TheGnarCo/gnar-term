@@ -16,7 +16,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { migrateWorkspaceDashboardWidgets } from "../lib/services/workspace-group-service";
 import type { Workspace } from "../lib/config";
 
-function makeGroup(): Workspace {
+function makeWorkspace(): Workspace {
   return {
     id: "g1",
     name: "My Project",
@@ -45,7 +45,7 @@ describe("migrateWorkspaceDashboardWidgets", () => {
     );
 
     await migrateWorkspaceDashboardWidgets(
-      makeGroup(),
+      makeWorkspace(),
       "/tmp/my-project/.gnar-term/project-dashboard.md",
     );
 
@@ -79,7 +79,7 @@ describe("migrateWorkspaceDashboardWidgets", () => {
     );
 
     await migrateWorkspaceDashboardWidgets(
-      makeGroup(),
+      makeWorkspace(),
       "/tmp/my-project/.gnar-term/project-dashboard.md",
     );
 
@@ -98,7 +98,7 @@ describe("migrateWorkspaceDashboardWidgets", () => {
     );
 
     await migrateWorkspaceDashboardWidgets(
-      makeGroup(),
+      makeWorkspace(),
       "/tmp/my-project/.gnar-term/project-dashboard.md",
     );
 

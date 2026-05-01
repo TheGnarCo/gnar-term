@@ -206,7 +206,11 @@ function makePane(id: string, surfaces?: TerminalSurface[]): Pane {
   };
 }
 
-function makeWorkspace(id: string, name: string, pane?: Pane): NestedWorkspace {
+function makeNestedWorkspace(
+  id: string,
+  name: string,
+  pane?: Pane,
+): NestedWorkspace {
   const p = pane ?? makePane(`${id}-p1`);
   return {
     id,
@@ -353,7 +357,7 @@ describe("FindBar", () => {
 
   it("passes regex:true to findNext when regex toggle is enabled", async () => {
     const surface = makeSurface("s1");
-    const ws = makeWorkspace("w1", "test", makePane("p1", [surface]));
+    const ws = makeNestedWorkspace("w1", "test", makePane("p1", [surface]));
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
     findBarVisible.set(true);
@@ -378,7 +382,7 @@ describe("FindBar", () => {
 
   it("passes caseSensitive:true to findNext when case toggle is enabled", async () => {
     const surface = makeSurface("s2");
-    const ws = makeWorkspace("w2", "test", makePane("p2", [surface]));
+    const ws = makeNestedWorkspace("w2", "test", makePane("p2", [surface]));
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
     findBarVisible.set(true);
@@ -403,7 +407,7 @@ describe("FindBar", () => {
 
   it("passes wholeWord:true to findNext when whole-word toggle is enabled", async () => {
     const surface = makeSurface("s3");
-    const ws = makeWorkspace("w3", "test", makePane("p3", [surface]));
+    const ws = makeNestedWorkspace("w3", "test", makePane("p3", [surface]));
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
     findBarVisible.set(true);
@@ -1034,7 +1038,7 @@ describe("WorkspaceItem", () => {
     wsOverrides: Partial<NestedWorkspace> = {},
     isActive = true,
   ) {
-    const ws = makeWorkspace("ws1", "My Workspace");
+    const ws = makeNestedWorkspace("ws1", "My Workspace");
     Object.assign(ws, wsOverrides);
     return render(WorkspaceItem, {
       props: {
@@ -1055,7 +1059,7 @@ describe("WorkspaceItem", () => {
   });
 
   it("renders close button in DragGrip when grip is expanded", async () => {
-    const ws = makeWorkspace("ws1", "My Workspace");
+    const ws = makeNestedWorkspace("ws1", "My Workspace");
     const { container } = render(WorkspaceItem, {
       props: {
         workspace: ws,
@@ -1078,7 +1082,7 @@ describe("WorkspaceItem", () => {
   it("shows unread badge when surfaces have unread data", () => {
     const surface = makeSurface("s1", { hasUnread: true });
     const pane = makePane("p1", [surface]);
-    const ws = makeWorkspace("ws1", "Unread WS", pane);
+    const ws = makeNestedWorkspace("ws1", "Unread WS", pane);
     const { container: withUnread } = render(WorkspaceItem, {
       props: {
         workspace: ws,
@@ -1097,7 +1101,7 @@ describe("WorkspaceItem", () => {
 
     const surfaceNoUnread = makeSurface("s2", { hasUnread: false });
     const paneNoUnread = makePane("p2", [surfaceNoUnread]);
-    const wsNoUnread = makeWorkspace("ws2", "No Unread WS", paneNoUnread);
+    const wsNoUnread = makeNestedWorkspace("ws2", "No Unread WS", paneNoUnread);
     const { container: withoutUnread } = render(WorkspaceItem, {
       props: {
         workspace: wsNoUnread,
@@ -1125,7 +1129,7 @@ describe("WorkspaceItem", () => {
     // Render with unread to get the count with badge
     const surface = makeSurface("s1", { hasUnread: true });
     const pane = makePane("p1", [surface]);
-    const ws = makeWorkspace("ws1", "Unread WS", pane);
+    const ws = makeNestedWorkspace("ws1", "Unread WS", pane);
     const { container: withUnread } = render(WorkspaceItem, {
       props: {
         workspace: ws,
@@ -1171,7 +1175,7 @@ describe("WorkspaceItem", () => {
   it("renders notification text when a surface has a notification", () => {
     const surface = makeSurface("s1", { notification: "Build complete" });
     const pane = makePane("p1", [surface]);
-    const ws = makeWorkspace("ws1", "Notified", pane);
+    const ws = makeNestedWorkspace("ws1", "Notified", pane);
     render(WorkspaceItem, {
       props: {
         workspace: ws,
@@ -1194,7 +1198,7 @@ describe("WorkspaceItem", () => {
     // work" and must render a visible row.
     const { setStatusItem, clearAllStatusForWorkspace } =
       await import("../lib/services/status-registry");
-    const ws = makeWorkspace("ws-agent", "Agent WS");
+    const ws = makeNestedWorkspace("ws-agent", "Agent WS");
     setStatusItem("_agent", ws.id, "surface:s1", {
       category: "process",
       priority: 0,
@@ -1226,7 +1230,7 @@ describe("WorkspaceItem", () => {
     // suppressed when metadata.parentWorkspaceId is set.
     const surface = makeSurface("s1", { notification: "Build complete" });
     const pane = makePane("p1", [surface]);
-    const ws = makeWorkspace("ws1", "Nested WS", pane);
+    const ws = makeNestedWorkspace("ws1", "Nested WS", pane);
     ws.metadata = { parentWorkspaceId: "g1" };
     render(WorkspaceItem, {
       props: {
@@ -1269,7 +1273,7 @@ describe("WorkspaceItem", () => {
   });
 
   it("applies accentColor as DragGrip railColor when provided", () => {
-    const ws = makeWorkspace("ws1", "Accent WS");
+    const ws = makeNestedWorkspace("ws1", "Accent WS");
     render(WorkspaceItem, {
       props: {
         workspace: ws,
@@ -1332,7 +1336,7 @@ describe("WorkspaceItem", () => {
 
   it("renders a clickable dashboard icon when dashboardHint is provided", async () => {
     const hintOnClick = vi.fn();
-    const ws = makeWorkspace("ws-nested", "Nested WS");
+    const ws = makeNestedWorkspace("ws-nested", "Nested WS");
     const { container } = render(WorkspaceItem, {
       props: {
         workspace: ws,
@@ -1360,7 +1364,7 @@ describe("WorkspaceItem", () => {
   it("does not trigger workspace select when the dashboard icon is clicked", async () => {
     const onSelect = vi.fn();
     const hintOnClick = vi.fn();
-    const ws = makeWorkspace("ws-nested", "Nested WS");
+    const ws = makeNestedWorkspace("ws-nested", "Nested WS");
     const { container } = render(WorkspaceItem, {
       props: {
         workspace: ws,
@@ -1575,8 +1579,8 @@ describe("PrimarySidebar", () => {
 
   it("renders workspace items from store", () => {
     primarySidebarVisible.set(true);
-    const ws1 = makeWorkspace("ws1", "Project Alpha");
-    const ws2 = makeWorkspace("ws2", "Project Beta");
+    const ws1 = makeNestedWorkspace("ws1", "Project Alpha");
+    const ws2 = makeNestedWorkspace("ws2", "Project Beta");
     nestedWorkspaces.set([ws1, ws2]);
     activeNestedWorkspaceIdx.set(0);
     render(PrimarySidebar, { props: sidebarProps });
@@ -1620,9 +1624,9 @@ describe("PrimarySidebar", () => {
 
   it("renders correct number of workspace items", () => {
     primarySidebarVisible.set(true);
-    const ws1 = makeWorkspace("ws1", "WS One");
-    const ws2 = makeWorkspace("ws2", "WS Two");
-    const ws3 = makeWorkspace("ws3", "WS Three");
+    const ws1 = makeNestedWorkspace("ws1", "WS One");
+    const ws2 = makeNestedWorkspace("ws2", "WS Two");
+    const ws3 = makeNestedWorkspace("ws3", "WS Three");
     nestedWorkspaces.set([ws1, ws2, ws3]);
     activeNestedWorkspaceIdx.set(1);
     render(PrimarySidebar, { props: sidebarProps });
@@ -1917,7 +1921,7 @@ describe("WorkspaceItem — harness sub-row", () => {
 
     const surface = makeSurface("s1", { title: "claude > fixing bug" });
     const pane = makePane("p1", [surface]);
-    const ws = makeWorkspace("ws-harness", "Harness WS", pane);
+    const ws = makeNestedWorkspace("ws-harness", "Harness WS", pane);
 
     setStatusItem("_agent", ws.id, "surface:s1", {
       category: "process",
@@ -1995,7 +1999,7 @@ describe("WorkspaceItem — harness sub-row", () => {
 
     const surface = makeSurface("s1", { title: "claude" });
     const pane = makePane("p1", [surface]);
-    const ws = makeWorkspace("ws-hidden2", "Hidden2", pane);
+    const ws = makeNestedWorkspace("ws-hidden2", "Hidden2", pane);
 
     setStatusItem("_agent", ws.id, "surface:s1", {
       category: "process",

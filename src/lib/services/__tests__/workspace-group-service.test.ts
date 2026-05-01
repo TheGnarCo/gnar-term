@@ -33,7 +33,10 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn().mockResolvedValue(undefined),
 }));
 
-function makeGroup(id: string, overrides: Partial<Workspace> = {}): Workspace {
+function makeWorkspace(
+  id: string,
+  overrides: Partial<Workspace> = {},
+): Workspace {
   return {
     id,
     name: `Group ${id}`,
@@ -53,7 +56,7 @@ describe("workspace-group-service", () => {
   });
 
   it("addWorkspace persists the group and appends a root row", () => {
-    const group = makeGroup("g1");
+    const group = makeWorkspace("g1");
     addWorkspace(group);
 
     expect(getWorkspaces()).toHaveLength(1);
@@ -65,13 +68,13 @@ describe("workspace-group-service", () => {
   });
 
   it("updateWorkspace patches an existing group in place", () => {
-    addWorkspace(makeGroup("g1"));
+    addWorkspace(makeWorkspace("g1"));
     updateWorkspace("g1", { name: "Renamed" });
     expect(getWorkspace("g1")?.name).toBe("Renamed");
   });
 
   it("deleteWorkspace removes the record and its root row", () => {
-    addWorkspace(makeGroup("g1"));
+    addWorkspace(makeWorkspace("g1"));
     deleteWorkspace("g1");
     expect(getWorkspaces()).toHaveLength(0);
     expect(get(rootRowOrder)).not.toContainEqual({
@@ -81,15 +84,15 @@ describe("workspace-group-service", () => {
   });
 
   it("addNestedWorkspaceToWorkspace is idempotent", () => {
-    addWorkspace(makeGroup("g1"));
+    addWorkspace(makeWorkspace("g1"));
     expect(addNestedWorkspaceToWorkspace("g1", "ws1")).toBe(true);
     expect(addNestedWorkspaceToWorkspace("g1", "ws1")).toBe(false);
     expect(getWorkspace("g1")?.nestedWorkspaceIds).toEqual(["ws1"]);
   });
 
   it("removeNestedWorkspaceFromAllWorkspaces strips the id across every group", () => {
-    addWorkspace(makeGroup("g1"));
-    addWorkspace(makeGroup("g2"));
+    addWorkspace(makeWorkspace("g1"));
+    addWorkspace(makeWorkspace("g2"));
     addNestedWorkspaceToWorkspace("g1", "ws1");
     addNestedWorkspaceToWorkspace("g2", "ws1");
 
@@ -157,7 +160,7 @@ describe("workspace-group-service", () => {
   it("emits WORKSPACE_GROUP_STATE_CHANGED on mutations", () => {
     const listener = vi.fn();
     eventBus.on(WORKSPACE_GROUP_STATE_CHANGED, listener);
-    addWorkspace(makeGroup("g1"));
+    addWorkspace(makeWorkspace("g1"));
     updateWorkspace("g1", { name: "Renamed" });
     deleteWorkspace("g1");
     eventBus.off(WORKSPACE_GROUP_STATE_CHANGED, listener);

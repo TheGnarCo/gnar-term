@@ -94,7 +94,7 @@ beforeEach(() => {
   );
 });
 
-function makeGroup(overrides = {}) {
+function makeWorkspace(overrides = {}) {
   return {
     id: "g-1",
     name: "My Group",
@@ -144,7 +144,7 @@ describe("archiveWorkspace", () => {
   });
 
   it("skips dashboard nestedWorkspaces when counting running PTYs", async () => {
-    const group = makeGroup();
+    const group = makeWorkspace();
     const dashboardWs = {
       ...makeRunningTerminalWs("ws-dash", "Dashboard", 99),
       metadata: { isDashboard: true },
@@ -162,7 +162,7 @@ describe("archiveWorkspace", () => {
   });
 
   it("closes nestedWorkspaces, removes group, removes root row, and adds to archive", async () => {
-    const group = makeGroup();
+    const group = makeWorkspace();
     const ws1 = makeRunningTerminalWs("ws-1", "W1", -1);
     const ws2 = makeRunningTerminalWs("ws-2", "W2", -1);
     mocks.getWorkspace.mockReturnValueOnce(group);
@@ -187,7 +187,7 @@ describe("archiveWorkspace", () => {
   });
 
   it("returns false when the user cancels the confirm prompt", async () => {
-    const group = makeGroup();
+    const group = makeWorkspace();
     const wsRunning = makeRunningTerminalWs("ws-1", "W1", 42);
     mocks.getWorkspace.mockReturnValueOnce(group);
     mocks.getWorktreeWorkspaces.mockReturnValueOnce([wsRunning]);
@@ -202,7 +202,7 @@ describe("archiveWorkspace", () => {
   });
 
   it("serializes only non-dashboard nestedWorkspaces into the archived defs", async () => {
-    const group = makeGroup();
+    const group = makeWorkspace();
     const ws1 = makeRunningTerminalWs("ws-1", "Real", -1);
     const dashboardWs = {
       ...makeRunningTerminalWs("ws-dash", "Dashboard", -1),
@@ -230,7 +230,7 @@ describe("unarchiveWorkspace", () => {
   });
 
   it("restores the group, appends root row, creates nestedWorkspaces, and provisions dashboards", async () => {
-    const group = makeGroup();
+    const group = makeWorkspace();
     const def1 = { id: "ws-1", name: "W1", layout: { pane: { surfaces: [] } } };
     const def2 = { id: "ws-2", name: "W2", layout: { pane: { surfaces: [] } } };
     addToArchive("g-1", {
@@ -274,7 +274,7 @@ describe("unarchiveWorkspace", () => {
   });
 
   it("does NOT remove the archive entry when createNestedWorkspaceFromDef rejects", async () => {
-    const group = makeGroup();
+    const group = makeWorkspace();
     const def = {
       id: "ws-1",
       name: "W1",

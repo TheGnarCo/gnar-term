@@ -4,7 +4,7 @@ import { readFileSync } from "fs";
 import WorkspaceItem from "../lib/components/WorkspaceItem.svelte";
 import type { NestedWorkspace } from "../lib/types";
 
-function makeWorkspace(): NestedWorkspace {
+function makeNestedWorkspace(): NestedWorkspace {
   return {
     id: "ws1",
     name: "Test",
@@ -24,7 +24,7 @@ describe("WorkspaceItem drag grip", () => {
   it("renders a DragGrip", () => {
     const { container } = render(WorkspaceItem, {
       props: {
-        workspace: makeWorkspace(),
+        workspace: makeNestedWorkspace(),
         index: 0,
         isActive: false,
         onSelect: noop,
@@ -42,7 +42,7 @@ describe("WorkspaceItem drag grip", () => {
     const onGripMouseDown = vi.fn();
     const { container } = render(WorkspaceItem, {
       props: {
-        workspace: makeWorkspace(),
+        workspace: makeNestedWorkspace(),
         index: 0,
         isActive: false,
         onSelect: noop,
@@ -66,7 +66,7 @@ describe("WorkspaceItem drag grip", () => {
   it("keeps grip at fixed 14px on row-level hover (no expansion)", async () => {
     const { container } = render(WorkspaceItem, {
       props: {
-        workspace: makeWorkspace(),
+        workspace: makeNestedWorkspace(),
         index: 0,
         isActive: false,
         onSelect: noop,
@@ -99,7 +99,7 @@ describe("WorkspaceItem drag grip", () => {
     const onSelect = vi.fn();
     const { container } = render(WorkspaceItem, {
       props: {
-        workspace: makeWorkspace(),
+        workspace: makeNestedWorkspace(),
         index: 0,
         isActive: false,
         onSelect,
@@ -131,7 +131,7 @@ describe("WorkspaceItem border", () => {
 
   function makeWorktreeWorkspace(): NestedWorkspace {
     return {
-      ...makeWorkspace(),
+      ...makeNestedWorkspace(),
       metadata: { worktreePath: "/tmp/some-worktree" },
     };
   }
@@ -157,7 +157,7 @@ describe("WorkspaceItem border", () => {
   it("renders a 1px border in railColor for active nestedWorkspaces", () => {
     const { container } = render(WorkspaceItem, {
       props: {
-        workspace: makeWorkspace(),
+        workspace: makeNestedWorkspace(),
         index: 0,
         isActive: true,
         onSelect: noop,
@@ -176,7 +176,7 @@ describe("WorkspaceItem border", () => {
   it("renders a 1px inactive-theme border for inactive nestedWorkspaces (worktree or not)", () => {
     const { container } = render(WorkspaceItem, {
       props: {
-        workspace: makeWorkspace(),
+        workspace: makeNestedWorkspace(),
         index: 0,
         isActive: false,
         onSelect: noop,

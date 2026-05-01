@@ -134,7 +134,7 @@ function makePane(surfaces: TerminalSurface[]): Pane {
   };
 }
 
-function makeWorkspace(pane: Pane): NestedWorkspace {
+function makeNestedWorkspace(pane: Pane): NestedWorkspace {
   return {
     id: uid(),
     name: "WS",
@@ -179,7 +179,7 @@ afterEach(() => {
 describe("tab-drag — threshold", () => {
   it("does not activate before 5px movement", () => {
     const pane = makePane([mockTerminalSurface()]);
-    const ws = makeWorkspace(pane);
+    const ws = makeNestedWorkspace(pane);
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -199,7 +199,7 @@ describe("tab-drag — threshold", () => {
 
   it("activates after >5px movement", () => {
     const pane = makePane([mockTerminalSurface()]);
-    const ws = makeWorkspace(pane);
+    const ws = makeNestedWorkspace(pane);
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -220,7 +220,7 @@ describe("tab-drag — threshold", () => {
 describe("tab-drag — cancel", () => {
   it("cancelTabDrag clears state to null", () => {
     const pane = makePane([mockTerminalSurface()]);
-    const ws = makeWorkspace(pane);
+    const ws = makeNestedWorkspace(pane);
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -242,7 +242,7 @@ describe("tab-drag — cancel", () => {
 describe("tab-drag — commitTabDrop", () => {
   it("is a no-op when dropTarget is null", () => {
     const pane = makePane([mockTerminalSurface()]);
-    const ws = makeWorkspace(pane);
+    const ws = makeNestedWorkspace(pane);
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -260,7 +260,7 @@ describe("tab-drag — commitTabDrop", () => {
     const sB = mockTerminalSurface({ title: "B" });
     const sC = mockTerminalSurface({ title: "C" });
     const pane = makePane([sA, sB, sC]);
-    const ws = makeWorkspace(pane);
+    const ws = makeNestedWorkspace(pane);
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -314,7 +314,7 @@ describe("tab-drag — commitTabDrop", () => {
   it("clears tabDragState after commit", () => {
     const sA = mockTerminalSurface({ title: "A" });
     const pane = makePane([sA]);
-    const ws = makeWorkspace(pane);
+    const ws = makeNestedWorkspace(pane);
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -451,7 +451,7 @@ describe("tab-drag — commitTabDrop", () => {
     const sA = mockTerminalSurface({ title: "A" });
     const sB = mockTerminalSurface({ title: "B" });
     const pane = makePane([sA, sB]);
-    const ws = makeWorkspace(pane);
+    const ws = makeNestedWorkspace(pane);
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -477,7 +477,7 @@ describe("tab-drag — commitTabDrop", () => {
     const sA = mockTerminalSurface({ title: "A" });
     const sB = mockTerminalSurface({ title: "B" });
     const pane = makePane([sA, sB]);
-    const ws = makeWorkspace(pane);
+    const ws = makeNestedWorkspace(pane);
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -502,9 +502,9 @@ describe("tab-drag — commitTabDrop", () => {
     const sA = mockTerminalSurface({ title: "A" });
     const sB = mockTerminalSurface({ title: "B" });
     const pane = makePane([sA, sB]);
-    const ws = makeWorkspace(pane);
-    const wsTarget = makeWorkspace(makePane([mockTerminalSurface()]));
-    const wsTarget2 = makeWorkspace(makePane([mockTerminalSurface()]));
+    const ws = makeNestedWorkspace(pane);
+    const wsTarget = makeNestedWorkspace(makePane([mockTerminalSurface()]));
+    const wsTarget2 = makeNestedWorkspace(makePane([mockTerminalSurface()]));
     nestedWorkspaces.set([ws, wsTarget, wsTarget2]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -548,9 +548,9 @@ describe("tab-drag — commitTabDrop", () => {
     const sA = mockTerminalSurface({ title: "A" });
     const sB = mockTerminalSurface({ title: "B" });
     const pane = makePane([sA, sB]);
-    const ws = makeWorkspace(pane);
-    const wsTarget = makeWorkspace(makePane([mockTerminalSurface()]));
-    const wsTarget2 = makeWorkspace(makePane([mockTerminalSurface()]));
+    const ws = makeNestedWorkspace(pane);
+    const wsTarget = makeNestedWorkspace(makePane([mockTerminalSurface()]));
+    const wsTarget2 = makeNestedWorkspace(makePane([mockTerminalSurface()]));
     nestedWorkspaces.set([ws, wsTarget, wsTarget2]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -694,7 +694,7 @@ describe("tab-drag — tab hover activation", () => {
     const sB = mockTerminalSurface({ title: "B" });
     const pane = makePane([sA, sB]);
     pane.activeSurfaceId = sA.id;
-    const ws = makeWorkspace(pane);
+    const ws = makeNestedWorkspace(pane);
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -725,7 +725,7 @@ describe("tab-drag — surface body detection", () => {
     const sA = mockTerminalSurface({ title: "A" });
     const sB = mockTerminalSurface({ title: "B" });
     const pane = makePane([sA, sB]);
-    const ws = makeWorkspace(pane);
+    const ws = makeNestedWorkspace(pane);
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -766,7 +766,7 @@ describe("tab-drag — surface body detection", () => {
   it("does not detect surface-split on source pane when it has only 1 surface", () => {
     const sA = mockTerminalSurface({ title: "A" });
     const pane = makePane([sA]);
-    const ws = makeWorkspace(pane);
+    const ws = makeNestedWorkspace(pane);
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -866,7 +866,7 @@ describe("tab-drag — detectDropTarget: root tab over nested workspace row", ()
     const sA = mockTerminalSurface({ title: "A" });
     const sB = mockTerminalSurface({ title: "B" });
     const srcPane = makePane([sA, sB]);
-    const srcWs = makeWorkspace(srcPane); // no parentWorkspaceId — root workspace
+    const srcWs = makeNestedWorkspace(srcPane); // no parentWorkspaceId — root workspace
 
     const nestedPane = makePane([mockTerminalSurface({ title: "C" })]);
     const nestedWs: NestedWorkspace = {
@@ -921,7 +921,7 @@ describe("tab-drag — commitTabDrop: new-workspace-in-group passes targetWorksp
     const sA = mockTerminalSurface({ title: "A" });
     const sB = mockTerminalSurface({ title: "B" });
     const pane = makePane([sA, sB]);
-    const ws = makeWorkspace(pane); // root workspace — no parentWorkspaceId
+    const ws = makeNestedWorkspace(pane); // root workspace — no parentWorkspaceId
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 

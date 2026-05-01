@@ -35,7 +35,7 @@ import {
 import { removeRootRow } from "../lib/stores/root-row-order";
 import type { Workspace } from "../lib/config";
 
-function makeGroup(overrides: Partial<Workspace> = {}): Workspace {
+function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
   return {
     id: "g1",
     name: "Test Group",
@@ -54,19 +54,21 @@ describe("toggleWorkspaceLock", () => {
   });
 
   it("sets locked to true on first toggle", () => {
-    setWorkspaces([makeGroup({ id: "g1" })]);
+    setWorkspaces([makeWorkspace({ id: "g1" })]);
     toggleWorkspaceLock("g1");
     expect(getWorkspaces()[0].locked).toBe(true);
   });
 
   it("clears locked back to false on second toggle", () => {
-    setWorkspaces([makeGroup({ id: "g1", locked: true })]);
+    setWorkspaces([makeWorkspace({ id: "g1", locked: true })]);
     toggleWorkspaceLock("g1");
     expect(getWorkspaces()[0].locked).toBe(false);
   });
 
   it("preserves other fields when toggling", () => {
-    setWorkspaces([makeGroup({ id: "g1", name: "Keep Me", color: "blue" })]);
+    setWorkspaces([
+      makeWorkspace({ id: "g1", name: "Keep Me", color: "blue" }),
+    ]);
     toggleWorkspaceLock("g1");
     const g = getWorkspaces()[0];
     expect(g.locked).toBe(true);
@@ -75,14 +77,14 @@ describe("toggleWorkspaceLock", () => {
   });
 
   it("only mutates the matching group", () => {
-    setWorkspaces([makeGroup({ id: "g1" }), makeGroup({ id: "g2" })]);
+    setWorkspaces([makeWorkspace({ id: "g1" }), makeWorkspace({ id: "g2" })]);
     toggleWorkspaceLock("g2");
     expect(getWorkspaces()[0].locked).toBeUndefined();
     expect(getWorkspaces()[1].locked).toBe(true);
   });
 
   it("is a no-op for an unknown group id", () => {
-    const g = makeGroup({ id: "g1" });
+    const g = makeWorkspace({ id: "g1" });
     setWorkspaces([g]);
     toggleWorkspaceLock("does-not-exist");
     expect(getWorkspaces()[0]).toEqual(g);
@@ -96,7 +98,7 @@ describe("deleteWorkspace — lock gate", () => {
   });
 
   it("deletes an unlocked group normally", () => {
-    setWorkspaces([makeGroup({ id: "g1" })]);
+    setWorkspaces([makeWorkspace({ id: "g1" })]);
     deleteWorkspace("g1");
     expect(getWorkspaces()).toHaveLength(0);
     expect(removeRootRow).toHaveBeenCalledWith({
@@ -106,7 +108,7 @@ describe("deleteWorkspace — lock gate", () => {
   });
 
   it("is a no-op when group is locked", () => {
-    setWorkspaces([makeGroup({ id: "g1", locked: true })]);
+    setWorkspaces([makeWorkspace({ id: "g1", locked: true })]);
     deleteWorkspace("g1");
     expect(getWorkspaces()).toHaveLength(1);
     expect(removeRootRow).not.toHaveBeenCalled();

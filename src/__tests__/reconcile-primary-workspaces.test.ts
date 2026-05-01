@@ -22,7 +22,7 @@ import { getWorkspaces, setWorkspaces } from "../lib/stores/workspace-groups";
 import { reconcilePrimaryWorkspaces } from "../lib/services/workspace-group-service";
 import type { Workspace } from "../lib/config";
 
-function makeGroup(overrides: Partial<Workspace> = {}): Workspace {
+function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
   return {
     id: "g1",
     name: "Group 1",
@@ -35,7 +35,10 @@ function makeGroup(overrides: Partial<Workspace> = {}): Workspace {
   };
 }
 
-function makeWorkspace(id: string, overrides: Record<string, unknown> = {}) {
+function makeNestedWorkspace(
+  id: string,
+  overrides: Record<string, unknown> = {},
+) {
   return {
     id,
     name: `Workspace ${id}`,
@@ -52,10 +55,10 @@ describe("reconcilePrimaryWorkspaces", () => {
   });
 
   it("backfills primaryNestedWorkspaceId on a group that lacks it", async () => {
-    const group = makeGroup({ id: "g1", nestedWorkspaceIds: ["ws-1"] });
+    const group = makeWorkspace({ id: "g1", nestedWorkspaceIds: ["ws-1"] });
     setWorkspaces([group]);
     nestedWorkspaces.set([
-      makeWorkspace("ws-1", { metadata: { parentWorkspaceId: "g1" } }),
+      makeNestedWorkspace("ws-1", { metadata: { parentWorkspaceId: "g1" } }),
     ]);
 
     await reconcilePrimaryWorkspaces();
@@ -65,14 +68,14 @@ describe("reconcilePrimaryWorkspaces", () => {
   });
 
   it("skips groups that already have primaryNestedWorkspaceId", async () => {
-    const group = makeGroup({
+    const group = makeWorkspace({
       id: "g1",
       nestedWorkspaceIds: ["ws-1"],
       primaryNestedWorkspaceId: "ws-1",
     });
     setWorkspaces([group]);
     nestedWorkspaces.set([
-      makeWorkspace("ws-1", { metadata: { parentWorkspaceId: "g1" } }),
+      makeNestedWorkspace("ws-1", { metadata: { parentWorkspaceId: "g1" } }),
     ]);
 
     await reconcilePrimaryWorkspaces();
@@ -84,13 +87,16 @@ describe("reconcilePrimaryWorkspaces", () => {
   });
 
   it("skips worktree nestedWorkspaces when choosing primary", async () => {
-    const group = makeGroup({ id: "g1", nestedWorkspaceIds: ["wt-1", "ws-2"] });
+    const group = makeWorkspace({
+      id: "g1",
+      nestedWorkspaceIds: ["wt-1", "ws-2"],
+    });
     setWorkspaces([group]);
     nestedWorkspaces.set([
-      makeWorkspace("wt-1", {
+      makeNestedWorkspace("wt-1", {
         metadata: { parentWorkspaceId: "g1", worktreePath: "/tmp/wt1" },
       }),
-      makeWorkspace("ws-2", { metadata: { parentWorkspaceId: "g1" } }),
+      makeNestedWorkspace("ws-2", { metadata: { parentWorkspaceId: "g1" } }),
     ]);
 
     await reconcilePrimaryWorkspaces();
@@ -100,16 +106,16 @@ describe("reconcilePrimaryWorkspaces", () => {
   });
 
   it("skips dashboard nestedWorkspaces when choosing primary", async () => {
-    const group = makeGroup({
+    const group = makeWorkspace({
       id: "g1",
       nestedWorkspaceIds: ["dash-1", "ws-2"],
     });
     setWorkspaces([group]);
     nestedWorkspaces.set([
-      makeWorkspace("dash-1", {
+      makeNestedWorkspace("dash-1", {
         metadata: { parentWorkspaceId: "g1", isDashboard: true },
       }),
-      makeWorkspace("ws-2", { metadata: { parentWorkspaceId: "g1" } }),
+      makeNestedWorkspace("ws-2", { metadata: { parentWorkspaceId: "g1" } }),
     ]);
 
     await reconcilePrimaryWorkspaces();
@@ -120,7 +126,7 @@ describe("reconcilePrimaryWorkspaces", () => {
 
   it("wraps a standalone workspace into a new group", async () => {
     nestedWorkspaces.set([
-      makeWorkspace("ws-solo", { name: "Solo", metadata: {} }),
+      makeNestedWorkspace("ws-solo", { name: "Solo", metadata: {} }),
     ]);
 
     await reconcilePrimaryWorkspaces();
@@ -139,7 +145,7 @@ describe("reconcilePrimaryWorkspaces", () => {
 
   it("does not wrap dashboard nestedWorkspaces", async () => {
     nestedWorkspaces.set([
-      makeWorkspace("dash-global", { metadata: { isDashboard: true } }),
+      makeNestedWorkspace("dash-global", { metadata: { isDashboard: true } }),
     ]);
 
     await reconcilePrimaryWorkspaces();
@@ -149,7 +155,7 @@ describe("reconcilePrimaryWorkspaces", () => {
 
   it("is idempotent — calling twice does not double-wrap", async () => {
     nestedWorkspaces.set([
-      makeWorkspace("ws-solo", { name: "Solo", metadata: {} }),
+      makeNestedWorkspace("ws-solo", { name: "Solo", metadata: {} }),
     ]);
 
     await reconcilePrimaryWorkspaces();
@@ -160,7 +166,7 @@ describe("reconcilePrimaryWorkspaces", () => {
 
   it("does not wrap orphan worktree nestedWorkspaces (standalone with worktreePath set)", async () => {
     nestedWorkspaces.set([
-      makeWorkspace("wt-orphan", {
+      makeNestedWorkspace("wt-orphan", {
         metadata: { worktreePath: "/tmp/wt-orphan" },
       }),
     ]);
@@ -172,7 +178,7 @@ describe("reconcilePrimaryWorkspaces", () => {
 
   it("wraps a workspace with an orphaned (unknown) parentWorkspaceId into a new group", async () => {
     nestedWorkspaces.set([
-      makeWorkspace("ws-orphan-group", {
+      makeNestedWorkspace("ws-orphan-group", {
         metadata: { parentWorkspaceId: "deleted-group-id" },
       }),
     ]);
@@ -190,13 +196,16 @@ describe("reconcilePrimaryWorkspaces", () => {
   });
 
   it("leaves primaryNestedWorkspaceId unset on a group with only ineligible members (all worktrees)", async () => {
-    const group = makeGroup({ id: "g1", nestedWorkspaceIds: ["wt-1", "wt-2"] });
+    const group = makeWorkspace({
+      id: "g1",
+      nestedWorkspaceIds: ["wt-1", "wt-2"],
+    });
     setWorkspaces([group]);
     nestedWorkspaces.set([
-      makeWorkspace("wt-1", {
+      makeNestedWorkspace("wt-1", {
         metadata: { parentWorkspaceId: "g1", worktreePath: "/tmp/wt1" },
       }),
-      makeWorkspace("wt-2", {
+      makeNestedWorkspace("wt-2", {
         metadata: { parentWorkspaceId: "g1", worktreePath: "/tmp/wt2" },
       }),
     ]);

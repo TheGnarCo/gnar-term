@@ -20,7 +20,7 @@ import {
   type DashboardContribution,
 } from "../lib/services/dashboard-contribution-registry";
 
-function makeGroup(overrides: Partial<Workspace> = {}): Workspace {
+function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
   return {
     id: "g1",
     name: "Test Group",
@@ -104,7 +104,7 @@ describe("dashboard-contribution registry", () => {
       const b = makeContribution({ id: "b" });
       registerDashboardContribution(a);
       registerDashboardContribution(b);
-      expect(getDashboardContributionsForWorkspace(makeGroup())).toEqual([
+      expect(getDashboardContributionsForWorkspace(makeWorkspace())).toEqual([
         a,
         b,
       ]);
@@ -121,7 +121,7 @@ describe("dashboard-contribution registry", () => {
       });
       registerDashboardContribution(always);
       registerDashboardContribution(never);
-      const group = makeGroup();
+      const group = makeWorkspace();
       expect(
         getDashboardContributionsForWorkspace(group).map((c) => c.id),
       ).toEqual(["always"]);
@@ -132,8 +132,8 @@ describe("dashboard-contribution registry", () => {
       registerDashboardContribution(
         makeContribution({ id: "gitOnly", isAvailableFor: gate }),
       );
-      const gitGroup = makeGroup({ id: "g-git", isGit: true });
-      const plainGroup = makeGroup({ id: "g-plain", isGit: false });
+      const gitGroup = makeWorkspace({ id: "g-git", isGit: true });
+      const plainGroup = makeWorkspace({ id: "g-plain", isGit: false });
       expect(
         getDashboardContributionsForWorkspace(gitGroup).map((c) => c.id),
       ).toEqual(["gitOnly"]);
@@ -148,27 +148,27 @@ describe("dashboard-contribution registry", () => {
   describe("canAddContributionToWorkspace (cap enforcement)", () => {
     it("returns false when the contribution is not registered", () => {
       expect(
-        canAddContributionToWorkspace(makeGroup(), "unregistered", 0),
+        canAddContributionToWorkspace(makeWorkspace(), "unregistered", 0),
       ).toBe(false);
     });
 
     it("allows adding while under the cap", () => {
       registerDashboardContribution(makeContribution({ capPerWorkspace: 1 }));
-      expect(canAddContributionToWorkspace(makeGroup(), "example", 0)).toBe(
+      expect(canAddContributionToWorkspace(makeWorkspace(), "example", 0)).toBe(
         true,
       );
     });
 
     it("rejects adding when the count equals the cap", () => {
       registerDashboardContribution(makeContribution({ capPerWorkspace: 1 }));
-      expect(canAddContributionToWorkspace(makeGroup(), "example", 1)).toBe(
+      expect(canAddContributionToWorkspace(makeWorkspace(), "example", 1)).toBe(
         false,
       );
     });
 
     it("rejects adding when the count exceeds the cap", () => {
       registerDashboardContribution(makeContribution({ capPerWorkspace: 2 }));
-      expect(canAddContributionToWorkspace(makeGroup(), "example", 3)).toBe(
+      expect(canAddContributionToWorkspace(makeWorkspace(), "example", 3)).toBe(
         false,
       );
     });
@@ -180,7 +180,7 @@ describe("dashboard-contribution registry", () => {
           isAvailableFor: () => false,
         }),
       );
-      expect(canAddContributionToWorkspace(makeGroup(), "example", 0)).toBe(
+      expect(canAddContributionToWorkspace(makeWorkspace(), "example", 0)).toBe(
         false,
       );
     });
@@ -190,7 +190,7 @@ describe("dashboard-contribution registry", () => {
         makeContribution({ capPerWorkspace: Number.POSITIVE_INFINITY }),
       );
       expect(
-        canAddContributionToWorkspace(makeGroup(), "example", 10_000),
+        canAddContributionToWorkspace(makeWorkspace(), "example", 10_000),
       ).toBe(true);
     });
   });

@@ -27,7 +27,7 @@ import {
 import { GIT_STATUS_SOURCE } from "../lib/services/git-status-service";
 import type { NestedWorkspace } from "../lib/types";
 
-function makeWorkspace(
+function makeNestedWorkspace(
   id: string,
   metadata: Record<string, unknown> = {},
 ): NestedWorkspace {
@@ -66,7 +66,7 @@ describe("GitStatusLine nested rules", () => {
   });
 
   it("hides inline git-info for a normal nested workspace (no worktreePath)", () => {
-    const ws = makeWorkspace("ws-nested", { parentWorkspaceId: "p1" });
+    const ws = makeNestedWorkspace("ws-nested", { parentWorkspaceId: "p1" });
     nestedWorkspaces.set([ws]);
     activate(ws.id);
     setDirty(ws.id);
@@ -77,7 +77,7 @@ describe("GitStatusLine nested rules", () => {
   });
 
   it("shows worktree branch + dirty for a worktree nested workspace when active", () => {
-    const ws = makeWorkspace("ws-worktree", {
+    const ws = makeNestedWorkspace("ws-worktree", {
       parentWorkspaceId: "p1",
       worktreePath: "/work/wt",
       branch: "feat/x",
@@ -93,7 +93,7 @@ describe("GitStatusLine nested rules", () => {
   });
 
   it("shows only the worktree branch (no dirty) when the workspace is inactive", () => {
-    const ws = makeWorkspace("ws-worktree", {
+    const ws = makeNestedWorkspace("ws-worktree", {
       parentWorkspaceId: "p1",
       worktreePath: "/work/wt",
       branch: "feat/x",
@@ -109,7 +109,7 @@ describe("GitStatusLine nested rules", () => {
   });
 
   it("does not render dirty label for a root workspace — WorkspaceDiffPrSubtitle owns that row", () => {
-    const ws = makeWorkspace("ws-root", {});
+    const ws = makeNestedWorkspace("ws-root", {});
     nestedWorkspaces.set([ws]);
     activate(ws.id);
     setDirty(ws.id);

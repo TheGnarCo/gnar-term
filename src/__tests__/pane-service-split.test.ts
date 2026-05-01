@@ -82,7 +82,7 @@ function makePane(surfaces: TerminalSurface[]): Pane {
   };
 }
 
-function makeWorkspace(splitRoot: SplitNode): NestedWorkspace {
+function makeNestedWorkspace(splitRoot: SplitNode): NestedWorkspace {
   return {
     id: uid(),
     name: "WS",
@@ -121,7 +121,7 @@ describe("splitPaneWithSurface — split-from-root", () => {
         { type: "pane", pane: targetPane },
       ],
     };
-    const ws = makeWorkspace(root);
+    const ws = makeNestedWorkspace(root);
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -152,7 +152,7 @@ describe("splitPaneWithSurface — split-from-root", () => {
     const sourcePane = makePane([sA, sB]);
     const targetPane = makePane([sC]);
     // NestedWorkspace 1: target is its own root.
-    const targetWs = makeWorkspace({ type: "pane", pane: targetPane });
+    const targetWs = makeNestedWorkspace({ type: "pane", pane: targetPane });
     // NestedWorkspace 2: source — but splitPaneWithSurface only operates on
     // the active workspace via get(activeWorkspace). We need source
     // and target in the SAME workspace. Use a horizontal split as the
@@ -196,7 +196,7 @@ describe("splitPaneWithSurface — split-from-root", () => {
         { type: "pane", pane: targetPane },
       ],
     };
-    const ws = makeWorkspace(root);
+    const ws = makeNestedWorkspace(root);
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -232,7 +232,7 @@ describe("splitPaneWithSurface — split-from-root", () => {
         { type: "pane", pane: targetPane },
       ],
     };
-    const ws = makeWorkspace(root);
+    const ws = makeNestedWorkspace(root);
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -276,7 +276,7 @@ describe("splitPaneWithSurface — split-from-root", () => {
       ratio: 0.5,
       children: [{ type: "pane", pane: sourcePane }, splitInner],
     };
-    const ws = makeWorkspace(splitRoot);
+    const ws = makeNestedWorkspace(splitRoot);
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -312,7 +312,7 @@ describe("splitPaneWithSurface — split-from-root", () => {
         { type: "pane", pane: targetPane },
       ],
     };
-    const ws = makeWorkspace(root);
+    const ws = makeNestedWorkspace(root);
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -336,7 +336,7 @@ describe("splitPaneWithSurface — split-from-root", () => {
         { type: "pane", pane: targetPane },
       ],
     };
-    const ws = makeWorkspace(root);
+    const ws = makeNestedWorkspace(root);
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 
@@ -355,7 +355,7 @@ describe("splitPaneWithSurface — split-from-root", () => {
     const sA = mockSurface({ title: "A" });
     const sB = mockSurface({ title: "B" });
     const pane = makePane([sA, sB]);
-    const ws = makeWorkspace({ type: "pane", pane });
+    const ws = makeNestedWorkspace({ type: "pane", pane });
     nestedWorkspaces.set([ws]);
     activeNestedWorkspaceIdx.set(0);
 

@@ -26,7 +26,7 @@ import {
 import { provisionAutoDashboardsForWorkspace } from "../lib/services/workspace-group-service";
 import type { Workspace } from "../lib/config";
 
-function makeGroup(id: string): Workspace {
+function makeWorkspace(id: string): Workspace {
   return {
     id,
     name: `Group ${id}`,
@@ -75,7 +75,7 @@ describe("provisionAutoDashboardsForWorkspace", () => {
       create: vi.fn(async () => "ws-c"),
     });
 
-    const group = makeGroup("g1");
+    const group = makeWorkspace("g1");
     await provisionAutoDashboardsForWorkspace(group);
 
     expect(aCreate).toHaveBeenCalledWith(group);
@@ -102,7 +102,7 @@ describe("provisionAutoDashboardsForWorkspace", () => {
       create: aCreate,
     });
 
-    const group = makeGroup("g1");
+    const group = makeWorkspace("g1");
     // Seed the nestedWorkspaces store with an existing dashboard for "a".
     nestedWorkspaces.set([
       {
@@ -152,7 +152,7 @@ describe("provisionAutoDashboardsForWorkspace", () => {
       create: bCreate,
     });
 
-    const group = makeGroup("g1");
+    const group = makeWorkspace("g1");
     await provisionAutoDashboardsForWorkspace(group);
     await provisionAutoDashboardsForWorkspace(group);
 

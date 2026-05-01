@@ -52,7 +52,7 @@
   let closeButtonHovered = false;
   // shortcutLabel takes priority over close/lock when meta-hold is active.
   $: showShortcut = !!shortcutLabel && $shortcutHintsActive;
-  $: showClose = onClose != null && !locked && !showShortcut;
+  $: showClose = onClose != null && visible && !locked && !showShortcut;
   $: showLock = locked && !showShortcut;
 
   $: effectiveColor = railColor ?? theme.fgDim;

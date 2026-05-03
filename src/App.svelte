@@ -362,7 +362,7 @@
     },
     {
       id: "core.workspace-switcher",
-      title: "Switch Branch...",
+      title: "Switch Workspace...",
       shortcut: isMac ? "⌘O" : "Ctrl+O",
       action: () => (workspaceSwitcherOpen = true),
       source: "core",

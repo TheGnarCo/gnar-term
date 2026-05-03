@@ -22,11 +22,19 @@
 
   $: parentMap = new Map($workspacesStore.map((w) => [w.id, w]));
 
-  $: rows = filterWorkspaces($nestedWorkspaces, parentMap, query);
+  $: rows = filterWorkspaces(
+    $nestedWorkspaces,
+    parentMap,
+    query,
+    $workspacesStore,
+  );
+
+  // All rows are keyboard-navigable; Enter dispatches to the right activate fn based on kind
+  $: selectableRows = rows;
 
   // Clamp selectedIdx when rows shrink
-  $: if (selectedIdx >= rows.length) {
-    selectedIdx = Math.max(0, rows.length - 1);
+  $: if (selectedIdx >= selectableRows.length) {
+    selectedIdx = Math.max(0, selectableRows.length - 1);
   }
 
   // Reset state each time the switcher opens
@@ -40,9 +48,26 @@
     open = false;
   }
 
-  function activate(row: SwitcherRow) {
+  function activateNested(row: SwitcherRow) {
     switchNestedWorkspace(row.idx);
     close();
+  }
+
+  function activateUmbrella(row: SwitcherRow) {
+    // Navigate to the umbrella's last-active nested workspace if available
+    const umbrellaId = row.wsId;
+    if (!umbrellaId) return;
+    const umbrella = $workspacesStore.find((w) => w.id === umbrellaId);
+    const targetId = umbrella?.lastActiveNestedWorkspaceId;
+    const idx = targetId
+      ? $nestedWorkspaces.findIndex((ws) => ws.id === targetId)
+      : $nestedWorkspaces.findIndex(
+          (ws) => ws.metadata?.parentWorkspaceId === umbrellaId,
+        );
+    if (idx >= 0) {
+      switchNestedWorkspace(idx);
+      close();
+    }
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -54,7 +79,7 @@
     }
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      selectedIdx = Math.min(selectedIdx + 1, rows.length - 1);
+      selectedIdx = Math.min(selectedIdx + 1, selectableRows.length - 1);
       scrollSelectedIntoView();
       return;
     }
@@ -66,8 +91,9 @@
     }
     if (e.key === "Enter") {
       e.preventDefault();
-      const row = rows[selectedIdx];
-      if (row) activate(row);
+      const row = selectableRows[selectedIdx];
+      if (row?.kind === "umbrella") activateUmbrella(row);
+      else if (row) activateNested(row);
       return;
     }
   }
@@ -97,6 +123,11 @@
     }
   }
 
+  // Map from nested row to its index in selectableRows (for isSelected check)
+  function getSelectableIdx(row: SwitcherRow): number {
+    return selectableRows.indexOf(row);
+  }
+
   const shortcutLabel = isMac ? "⌘O" : "Ctrl+O";
 </script>
 
@@ -117,7 +148,7 @@
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Switch Branch"
+      aria-label="Switch Workspace"
       tabindex="-1"
       bind:this={panelEl}
       on:keydown={handlePanelKeydown}
@@ -167,7 +198,7 @@
           bind:this={inputEl}
           bind:value={query}
           on:input={handleInput}
-          placeholder="Switch branch…"
+          placeholder="Switch workspace…"
           autocomplete="off"
           spellcheck={false}
           class="no-default-outline"
@@ -193,7 +224,7 @@
       <div
         style="flex: 1; overflow-y: auto; min-height: 0;"
         role="listbox"
-        aria-label="Branch list"
+        aria-label="Workspace list"
       >
         {#if rows.length === 0}
           <div
@@ -202,70 +233,99 @@
               color: {$theme.fgMuted}; font-size: 13px;
             "
           >
-            No branches match "{query}"
+            No workspaces match "{query}"
           </div>
         {:else}
-          {#each rows as row, i (row.ws.id)}
-            {@const isActive = row.idx === $activeNestedWorkspaceIdx}
-            {@const isSelected = i === selectedIdx}
-            <!-- svelte-ignore a11y_click_events_have_key_events -->
-            <!-- svelte-ignore a11y_interactive_supports_focus -->
-            <div
-              role="option"
-              aria-selected={isSelected}
-              data-selected={isSelected}
-              on:mousedown={() => activate(row)}
-              on:mousemove={() => (selectedIdx = i)}
-              style="
-                display: flex; align-items: center; gap: 10px;
-                padding: 9px 14px;
-                background: {isSelected ? $theme.bgHighlight : 'transparent'};
-                cursor: pointer;
-                border-bottom: 1px solid {$theme.border};
-                transition: background 80ms;
-              "
-            >
-              <!-- Branch name -->
-              <span
+          {#each rows as row (row.ws.id + row.kind)}
+            {#if row.kind === "umbrella"}
+              {@const uIdx = getSelectableIdx(row)}
+              {@const isSelected = uIdx === selectedIdx}
+              <!-- Umbrella section header -->
+              <!-- svelte-ignore a11y_click_events_have_key_events -->
+              <!-- svelte-ignore a11y_interactive_supports_focus -->
+              <div
+                role="button"
+                data-selected={isSelected}
+                on:mousedown={() => activateUmbrella(row)}
+                on:mousemove={() => (selectedIdx = uIdx)}
                 style="
-                  flex: 1; min-width: 0;
-                  color: {$theme.fg}; font-size: 13px;
-                  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+                  padding: 6px 14px 4px;
+                  font-size: 11px;
+                  font-weight: 700;
+                  letter-spacing: 0.06em;
+                  text-transform: uppercase;
+                  color: {isSelected ? $theme.fg : $theme.fgMuted};
+                  background: {isSelected ? $theme.bgHighlight : 'transparent'};
+                  cursor: pointer;
+                  user-select: none;
                 "
               >
                 {row.ws.name}
-              </span>
-
-              <!-- Parent workspace label -->
-              {#if row.parentLabel}
+              </div>
+            {:else}
+              {@const sIdx = getSelectableIdx(row)}
+              {@const isActive = row.idx === $activeNestedWorkspaceIdx}
+              {@const isSelected = sIdx === selectedIdx}
+              <!-- svelte-ignore a11y_click_events_have_key_events -->
+              <!-- svelte-ignore a11y_interactive_supports_focus -->
+              <div
+                role="option"
+                aria-selected={isSelected}
+                data-selected={isSelected}
+                on:mousedown={() => activateNested(row)}
+                on:mousemove={() => (selectedIdx = sIdx)}
+                style="
+                  display: flex; align-items: center; gap: 10px;
+                  padding: 9px 14px;
+                  padding-left: {row.depth === 1 ? 30 : 14}px;
+                  background: {isSelected ? $theme.bgHighlight : 'transparent'};
+                  cursor: pointer;
+                  border-bottom: 1px solid {$theme.border};
+                  transition: background 80ms;
+                "
+              >
+                <!-- Workspace name -->
                 <span
                   style="
-                    font-size: 11px; color: {$theme.fgMuted};
+                    flex: 1; min-width: 0;
+                    color: {$theme.fg}; font-size: 13px;
                     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-                    max-width: 140px; flex-shrink: 0;
                   "
                 >
-                  {row.parentLabel}
+                  {row.ws.name}
                 </span>
-              {/if}
 
-              <!-- Active badge -->
-              {#if isActive}
-                <span
-                  style="
-                    font-size: 10px; font-weight: 600;
-                    color: {$theme.success};
-                    background: {$theme.success}22;
-                    border: 1px solid {$theme.success}66;
-                    border-radius: 4px; padding: 1px 6px;
-                    flex-shrink: 0; text-transform: uppercase;
-                    letter-spacing: 0.04em;
-                  "
-                >
-                  active
-                </span>
-              {/if}
-            </div>
+                <!-- Parent workspace label (flat mode only — depth=0 nested rows) -->
+                {#if row.parentLabel && row.depth === 0}
+                  <span
+                    style="
+                      font-size: 11px; color: {$theme.fgMuted};
+                      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+                      max-width: 140px; flex-shrink: 0;
+                    "
+                  >
+                    {row.parentLabel}
+                  </span>
+                {/if}
+
+                <!-- Active badge -->
+                {#if isActive}
+                  <span
+                    style="
+                      font-size: 10px; font-weight: 600;
+                      color: {$theme.success};
+                      background: {$theme.success}22;
+                      border: 1px solid {$theme.success}66;
+                      border-radius: 4px; padding: 1px 6px;
+                      flex-shrink: 0; text-transform: uppercase;
+                      letter-spacing: 0.04em;
+                    "
+                  >
+                    active
+                  </span>
+                {/if}
+              </div>
+            {/if}
           {/each}
         {/if}
       </div>

@@ -139,6 +139,7 @@
   import FormPrompt from "./lib/components/FormPrompt.svelte";
   import RestoreCommandsOverlay from "./lib/components/RestoreCommandsOverlay.svelte";
   import ShortcutReference from "./lib/components/ShortcutReference.svelte";
+  import WorkspaceSwitcher from "./lib/components/WorkspaceSwitcher.svelte";
   import WorkspaceCreateOverlay from "./lib/components/WorkspaceCreateOverlay.svelte";
   import { surfaceTypeStore } from "./lib/services/surface-type-registry";
   import {
@@ -163,6 +164,10 @@
   // Shortcut reference overlay (⌘/). Two-way bound to the modal so it can
   // self-close on Escape / backdrop click without needing a callback.
   let shortcutReferenceOpen = false;
+
+  // Workspace/branch switcher overlay (⌘O / Ctrl+O). Two-way bound so the
+  // component can self-close on Escape / confirm / backdrop click.
+  let workspaceSwitcherOpen = false;
 
   // ---- Extension error toast ----
   let activeToasts: {
@@ -359,6 +364,13 @@
       title: "Show Keyboard Shortcuts",
       shortcut: isMac ? "⌘/" : undefined,
       action: () => (shortcutReferenceOpen = true),
+      source: "core",
+    },
+    {
+      id: "core.workspace-switcher",
+      title: "Switch Branch...",
+      shortcut: isMac ? "⌘O" : "Ctrl+O",
+      action: () => (workspaceSwitcherOpen = true),
       source: "core",
     },
     {
@@ -923,6 +935,7 @@
   />
 {/if}
 <ShortcutReference bind:open={shortcutReferenceOpen} />
+<WorkspaceSwitcher bind:open={workspaceSwitcherOpen} />
 
 <style>
   .extension-toast-container {

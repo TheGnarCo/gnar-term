@@ -63,6 +63,33 @@ import {
   createNestedWorkspaceFromDef,
   switchNestedWorkspace,
 } from "../services/nested-workspace-service";
+import type { NestedWorkspaceDef } from "../config";
+
+/**
+ * Check if `repoPath` contains a `.gnar-term/workspace.json` bootstrap file.
+ * If it does, parse it and merge its fields into `defaultDef` (repo config
+ * overrides defaults; unspecified fields are preserved from `defaultDef`).
+ * Falls back silently to `defaultDef` on missing file or invalid JSON.
+ */
+export async function applyRepoDef(
+  defaultDef: NestedWorkspaceDef,
+  repoPath: string,
+): Promise<NestedWorkspaceDef> {
+  const bootstrapPath = `${repoPath}/.gnar-term/workspace.json`;
+  const hasBootstrap = await invoke<boolean>("file_exists", {
+    path: bootstrapPath,
+  });
+  if (!hasBootstrap) return defaultDef;
+  try {
+    const raw = await invoke<string>("read_file", { path: bootstrapPath });
+    return { ...defaultDef, ...JSON.parse(raw) };
+  } catch {
+    console.warn(
+      "[bootstrap] Invalid .gnar-term/workspace.json, using defaults",
+    );
+    return defaultDef;
+  }
+}
 
 /**
  * Stage 5 moved Workspaces out of the extension layer and into core,
@@ -189,12 +216,14 @@ async function createWorkspaceFlow(prefill?: {
   try {
     const wsCount =
       getWorkspaces().find((w) => w.id === id)?.nestedWorkspaceIds.length ?? 0;
-    await createNestedWorkspaceFromDef({
+    const initialDef: NestedWorkspaceDef = {
       name: `${result.name} Branch ${wsCount + 1}`,
       cwd: result.path,
       metadata: { parentWorkspaceId: id },
       layout: { pane: { surfaces: [{ type: "terminal" }] } },
-    });
+    };
+    const resolvedDef = await applyRepoDef(initialDef, result.path);
+    await createNestedWorkspaceFromDef(resolvedDef);
     const newWs = get(nestedWorkspaces)
       .slice()
       .reverse()

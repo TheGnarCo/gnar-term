@@ -363,10 +363,10 @@
         </div>
       </div>
     {:else if pane.surfaces.length === 0}
-      <!-- Empty pane view — the user just closed the last surface. Shows
-           the same EmptySurface UX the app uses when every workspace has
-           been closed, but scoped to this single empty pane. -->
-      <EmptySurface />
+      <!-- Empty pane view — the user just closed the last surface. In
+           pane context EmptySurface renders a compact UI (New Terminal +
+           Close Pane), not the full workspace launcher. -->
+      <EmptySurface context="pane" paneId={pane.id} {onClosePane} />
     {/if}
 
     {#each pane.surfaces as surface (surface.id)}

@@ -15,6 +15,7 @@
   import { sidebarVisible, sidebarWidth } from "../stores/ui";
   import { sidebarSectionStore } from "../services/sidebar-section-registry";
   import { workspaceActionStore } from "../services/workspace-action-registry";
+  import { runCommandById } from "../services/command-registry";
   import { primarySections } from "../stores/mcp-sidebar";
   import WorkspaceListBlock from "./WorkspaceListBlock.svelte";
   import SidebarSectionBlock from "./SidebarSectionBlock.svelte";
@@ -27,6 +28,8 @@
     plus: `<line x1="8" y1="3" x2="8" y2="13" /><line x1="3" y1="8" x2="13" y2="8" />`,
     "git-branch": `<line x1="7" y1="2" x2="7" y2="10" /><line x1="3" y1="6" x2="11" y2="6" /><circle cx="12" cy="12" r="1.5" fill="currentColor" /><path d="M7 10 C7 12 10 12 12 12" fill="none" />`,
     "folder-plus": `<path d="M2 4 L2 13 L14 13 L14 6 L8 6 L7 4 Z" fill="none" /><line x1="8" y1="8" x2="8" y2="12" /><line x1="6" y1="10" x2="10" y2="10" />`,
+    search: `<circle cx="7" cy="7" r="4" /><line x1="10" y1="10" x2="13" y2="13" />`,
+    "question-mark": `<path d="M5.5 5.5 a2.5 2.5 0 1 1 3.5 2.3 c-1 0.5 -1 1.2 -1 2.2" /><circle cx="8" cy="12.5" r="0.6" fill="currentColor" stroke="none" />`,
   };
   function iconSvg(icon: string): string {
     return iconSvgMap[icon] ?? "";
@@ -118,6 +121,18 @@
             svgContent={iconSvg(action.icon)}
           />
         {/each}
+        <SidebarActionButton
+          title="Switch Workspace (⌘O)"
+          onClick={() => runCommandById("core.workspace-switcher")}
+          theme={$theme}
+          svgContent={iconSvg("search")}
+        />
+        <SidebarActionButton
+          title="Keyboard Shortcuts (⌘/)"
+          onClick={() => runCommandById("core.show-keyboard-shortcuts")}
+          theme={$theme}
+          svgContent={iconSvg("question-mark")}
+        />
       </div>
 
       <!-- Scrollable content: the Workspaces section (which includes

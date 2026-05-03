@@ -1727,10 +1727,13 @@ describe("Sidebar", () => {
     render(Sidebar, {
       props: { ...sidebarProps },
     });
-    // Only 1 button (main), no caret
+    // Top row contains: "+ New" chip + the two always-on discoverability
+    // buttons (Switch Workspace, Keyboard Shortcuts). No dropdown caret.
     const splitContainer = screen.getByText("+ New").closest("div")!;
     const buttons = splitContainer.querySelectorAll("button");
-    expect(buttons.length).toBe(1);
+    expect(buttons.length).toBe(3);
+    expect(screen.queryByTitle("Switch Workspace (⌘O)")).not.toBeNull();
+    expect(screen.queryByTitle("Keyboard Shortcuts (⌘/)")).not.toBeNull();
   });
 
   it("renders extension-registered sidebar sections below the Workspaces block", () => {

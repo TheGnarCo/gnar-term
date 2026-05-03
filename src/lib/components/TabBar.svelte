@@ -2,6 +2,8 @@
   import { theme } from "../stores/theme";
   import Tab from "./Tab.svelte";
   import NewSurfaceButton from "./NewSurfaceButton.svelte";
+  import CloseButton from "./CloseButton.svelte";
+  import { zoomedSurfaceId } from "../stores/nested-workspace";
   import type { Pane } from "../types";
   import { getWorkspaceStatusByCategory } from "../services/status-registry";
   import {
@@ -33,6 +35,10 @@
   $: activeIsPreview =
     pane.surfaces.find((s) => s.id === pane.activeSurfaceId)?.kind ===
     "preview";
+
+  $: isZoomed =
+    $zoomedSurfaceId !== null &&
+    pane.surfaces.some((s) => s.id === $zoomedSurfaceId);
 
   $: processStatusStore = workspaceId
     ? getWorkspaceStatusByCategory(workspaceId, "process")
@@ -157,6 +163,13 @@
   <div
     style="display: flex; align-items: center; gap: 2px; padding-right: 2px; flex-shrink: 0;"
   >
+    {#if isZoomed}
+      <button
+        style="font-size: 10px; color: {$theme.fgDim}; padding: 1px 6px; border-radius: 8px; background: {$theme.bgHighlight}; cursor: pointer; border: none;"
+        on:click={() => zoomedSurfaceId.set(null)}
+        title="Exit zoom (⌘⇧Enter)">Zoomed</button
+      >
+    {/if}
     {#if showJumpToBottom && onJumpToBottom}
       <button
         data-jump-to-bottom
@@ -249,28 +262,6 @@
         /></svg
       >
     </button>
-    <button
-      aria-label="Close Pane"
-      title="Close Pane"
-      style="background: none; border: none; padding: 0; font: inherit; color: {$theme.fgDim}; cursor: pointer; width: 24px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center;"
-      on:click|stopPropagation={onClosePane}
-    >
-      <svg
-        width="12"
-        height="12"
-        viewBox="0 0 12 12"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.5"
-        stroke-linecap="round"
-        aria-hidden="true"
-        ><line x1="2" y1="2" x2="10" y2="10" /><line
-          x1="10"
-          y1="2"
-          x2="2"
-          y2="10"
-        /></svg
-      >
-    </button>
+    <CloseButton size="container" label="Close Pane" on:click={onClosePane} />
   </div>
 </div>

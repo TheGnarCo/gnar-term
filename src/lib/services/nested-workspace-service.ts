@@ -42,7 +42,9 @@ import {
 import {
   addNestedWorkspaceToWorkspace,
   insertNestedWorkspaceIntoWorkspace,
+  updateWorkspace,
 } from "./workspace-service";
+import { getWorkspace } from "../stores/workspaces";
 import { makePersistScheduler } from "../utils/persist-scheduler";
 
 // --- NestedWorkspace persistence (debounced save to state.json) ---
@@ -154,11 +156,17 @@ export async function createNestedWorkspaceFromDef(
           if (sDef.name) surface.title = sDef.name;
           if (sDef.command) {
             // Defined command is the persistent record; on restore we
-            // require user approval before running it, so we do NOT set
-            // startupCommand. Fresh creation runs the command immediately.
+            // require user approval before running it unless the parent
+            // workspace has autoRunRestoreCommands enabled.
             surface.definedCommand = sDef.command;
             if (restoring) {
-              surface.pendingRestoreCommand = true;
+              const parentWsId = def.metadata?.parentWorkspaceId;
+              const parentWs = parentWsId ? getWorkspace(parentWsId) : null;
+              if (parentWs?.autoRunRestoreCommands) {
+                surface.startupCommand = sDef.command;
+              } else {
+                surface.pendingRestoreCommand = true;
+              }
             } else {
               surface.startupCommand = sDef.command;
             }
@@ -246,6 +254,13 @@ export function switchNestedWorkspace(idx: number) {
   activePseudoWorkspaceId.set(null);
   zoomedSurfaceId.set(null);
   activeNestedWorkspaceIdx.set(idx);
+  // Record the last-active nested workspace on the parent umbrella workspace
+  // so activateWorkspace can restore it on the next switch.
+  const ws = wsList[idx];
+  const parentWsId = ws?.metadata?.parentWorkspaceId;
+  if (parentWsId) {
+    updateWorkspace(parentWsId, { lastActiveNestedWorkspaceId: ws.id });
+  }
   eventBus.emit({
     type: "workspace:activated",
     id: wsList[idx]!.id,

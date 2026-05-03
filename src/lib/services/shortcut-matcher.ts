@@ -64,7 +64,7 @@ function parseShortcut(shortcut: string): KeyDescriptor | null {
 // Browsers report the shifted character for Shift+key (e.g. Shift+] → "}").
 // Map unshifted keys to their shifted equivalents so shortcut strings like
 // "⌘⇧]" still match when e.key is "}".
-const SHIFTED_CHARS: Record<string, string> = { "]": "}", "[": "{" };
+const SHIFTED_CHARS: Record<string, string> = { "]": "}", "[": "{", "`": "~" };
 
 export function matchesShortcut(shortcut: string, e: KeyboardEvent): boolean {
   const desc = parseShortcut(shortcut);

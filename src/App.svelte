@@ -85,6 +85,7 @@
     createNestedWorkspace,
     createNestedWorkspaceFromDef,
     switchNestedWorkspace,
+    switchToLastNestedWorkspace,
     closeAllWorkspaces,
     renameNestedWorkspace,
     saveCurrentWorkspace,
@@ -422,6 +423,13 @@
       action: () => switchNestedWorkspace(i),
       source: "core",
     })),
+    {
+      id: "core.last-workspace",
+      title: "Switch to Last Workspace",
+      shortcut: isMac ? "⌘`" : "Ctrl+Shift+`",
+      action: () => switchToLastNestedWorkspace(),
+      source: "core",
+    },
     {
       id: "core.save-workspace",
       title: "Save Current Workspace...",

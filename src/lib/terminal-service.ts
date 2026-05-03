@@ -941,6 +941,7 @@ function createKeyHandler(
             "g",
             "h",
             "r",
+            "~",
           ].includes(k)
         )
           return false;

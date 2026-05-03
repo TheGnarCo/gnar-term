@@ -8,6 +8,7 @@ import {
   activeSurface,
   activePseudoWorkspaceId,
   zoomedSurfaceId,
+  workspaceHistory,
 } from "../stores/nested-workspace";
 import { showInputPrompt, showConfirmPrompt } from "../stores/ui";
 import { createTerminalSurface } from "../terminal-service";
@@ -252,9 +253,11 @@ export function switchNestedWorkspace(idx: number) {
     get(activeNestedWorkspaceIdx) >= 0
       ? (wsList[get(activeNestedWorkspaceIdx)]?.id ?? null)
       : null;
+  const newId = wsList[idx]!.id;
   activePseudoWorkspaceId.set(null);
   zoomedSurfaceId.set(null);
   activeNestedWorkspaceIdx.set(idx);
+  workspaceHistory.update(([, cur]) => [cur, newId]);
   // Record the last-active nested workspace on the parent umbrella workspace
   // so activateWorkspace can restore it on the next switch.
   const ws = wsList[idx];
@@ -264,10 +267,17 @@ export function switchNestedWorkspace(idx: number) {
   }
   eventBus.emit({
     type: "workspace:activated",
-    id: wsList[idx]!.id,
+    id: newId,
     previousId,
   });
   void safeFocus(get(activeSurface));
+}
+
+export function switchToLastNestedWorkspace(): void {
+  const [prevId] = get(workspaceHistory);
+  if (!prevId) return;
+  const idx = get(nestedWorkspaces).findIndex((ws) => ws.id === prevId);
+  if (idx >= 0) switchNestedWorkspace(idx);
 }
 
 export function closeNestedWorkspace(idx: number) {

@@ -5,6 +5,12 @@ import { getAllPanes } from "../types";
 export const nestedWorkspaces = writable<NestedWorkspace[]>([]);
 export const activeNestedWorkspaceIdx = writable<number>(-1);
 
+/** [previousId, currentId] — updated on each switchNestedWorkspace call. */
+export const workspaceHistory = writable<[string | null, string | null]>([
+  null,
+  null,
+]);
+
 /**
  * Id of the currently-active pseudo-workspace (e.g. the Global Agentic
  * Dashboard), or `null` when a real workspace is active. Pseudo-nestedWorkspaces

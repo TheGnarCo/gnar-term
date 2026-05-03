@@ -146,6 +146,8 @@
   } from "./lib/services/dashboard-workspace-service";
   import SettingsPanel from "./lib/components/SettingsPanel.svelte";
   import GearIcon from "./lib/icons/GearIcon.svelte";
+  import WorkspaceOverviewDashboard from "./lib/components/WorkspaceOverviewDashboard.svelte";
+  import GridIcon from "./lib/icons/GridIcon.svelte";
   import type { Component } from "svelte";
 
   const TOAST_DURATION_MS = 5000;
@@ -648,6 +650,14 @@
       accentColor: "#8998A8",
     });
 
+    // Register the global Workspaces overview dashboard.
+    registerDashboardWorkspaceType({
+      id: "gnar-term:workspace-overview",
+      label: "Workspaces",
+      icon: GridIcon as unknown as Component,
+      component: WorkspaceOverviewDashboard as unknown as Component,
+    });
+
     // Register included extensions. Only activate if explicitly enabled
     // in config — a fresh install starts with no extensions active
     // (opt-in model). Errors per extension are isolated.
@@ -846,7 +856,10 @@
   </div>
 {/if}
 
-<div id="app" style="display: flex; height: 100vh; overflow: hidden;">
+<div
+  id="app"
+  style="display: flex; height: 100vh; overflow: hidden; --theme-accent: {$theme.accent};"
+>
   <Sidebar
     bind:this={sidebarComponent}
     onSwitchWorkspace={switchNestedWorkspace}
@@ -928,6 +941,21 @@
 <WorkspaceSwitcher bind:open={workspaceSwitcherOpen} />
 
 <style>
+  :global(:focus-visible) {
+    outline: 2px solid var(--theme-accent, #7c6aff);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  :global(.no-default-outline) {
+    outline: none;
+  }
+
+  :global(.no-default-outline:focus-visible) {
+    outline: 2px solid var(--theme-accent, #7c6aff);
+    outline-offset: 2px;
+  }
+
   .extension-toast-container {
     position: fixed;
     top: 32px;

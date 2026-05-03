@@ -61,11 +61,20 @@ function parseShortcut(shortcut: string): KeyDescriptor | null {
   return { key: key.toLowerCase(), meta, ctrl, shift, alt };
 }
 
+// Browsers report the shifted character for Shift+key (e.g. Shift+] → "}").
+// Map unshifted keys to their shifted equivalents so shortcut strings like
+// "⌘⇧]" still match when e.key is "}".
+const SHIFTED_CHARS: Record<string, string> = { "]": "}", "[": "{" };
+
 export function matchesShortcut(shortcut: string, e: KeyboardEvent): boolean {
   const desc = parseShortcut(shortcut);
   if (!desc) return false;
+  const eventKey = e.key.toLowerCase();
+  const shifted = desc.shift ? SHIFTED_CHARS[desc.key] : undefined;
+  const keyMatches =
+    eventKey === desc.key || (shifted !== undefined && eventKey === shifted);
   return (
-    e.key.toLowerCase() === desc.key &&
+    keyMatches &&
     e.metaKey === desc.meta &&
     e.ctrlKey === desc.ctrl &&
     e.shiftKey === desc.shift &&

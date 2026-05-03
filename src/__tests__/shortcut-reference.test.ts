@@ -123,3 +123,94 @@ describe("⌘/ command palette wiring", () => {
     expect(action).not.toHaveBeenCalled();
   });
 });
+
+describe("⌘⇧]/[ shifted-bracket surface cycling shortcuts", () => {
+  beforeEach(() => {
+    resetCommands();
+  });
+
+  it("fires next-surface when e.key is } (shifted ] on mac)", () => {
+    const action = vi.fn();
+    registerCommand({
+      id: "core.next-surface",
+      title: "Next Surface",
+      shortcut: "⌘⇧]",
+      action,
+      source: "core",
+    });
+    // Browsers report "}" for Shift+] — not "]"
+    const e = {
+      key: "}",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: true,
+      altKey: false,
+      preventDefault: vi.fn(),
+    } as unknown as KeyboardEvent;
+    expect(executeByShortcut(e)).toBe(true);
+    expect(action).toHaveBeenCalledOnce();
+  });
+
+  it("fires prev-surface when e.key is { (shifted [ on mac)", () => {
+    const action = vi.fn();
+    registerCommand({
+      id: "core.prev-surface",
+      title: "Previous Surface",
+      shortcut: "⌘⇧[",
+      action,
+      source: "core",
+    });
+    const e = {
+      key: "{",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: true,
+      altKey: false,
+      preventDefault: vi.fn(),
+    } as unknown as KeyboardEvent;
+    expect(executeByShortcut(e)).toBe(true);
+    expect(action).toHaveBeenCalledOnce();
+  });
+
+  it("fires next-surface on Ctrl+Shift+] (linux) with e.key }", () => {
+    const action = vi.fn();
+    registerCommand({
+      id: "core.next-surface",
+      title: "Next Surface",
+      shortcut: "Ctrl+Shift+]",
+      action,
+      source: "core",
+    });
+    const e = {
+      key: "}",
+      metaKey: false,
+      ctrlKey: true,
+      shiftKey: true,
+      altKey: false,
+      preventDefault: vi.fn(),
+    } as unknown as KeyboardEvent;
+    expect(executeByShortcut(e)).toBe(true);
+    expect(action).toHaveBeenCalledOnce();
+  });
+
+  it("fires prev-surface on Ctrl+Shift+[ (linux) with e.key {", () => {
+    const action = vi.fn();
+    registerCommand({
+      id: "core.prev-surface",
+      title: "Previous Surface",
+      shortcut: "Ctrl+Shift+[",
+      action,
+      source: "core",
+    });
+    const e = {
+      key: "{",
+      metaKey: false,
+      ctrlKey: true,
+      shiftKey: true,
+      altKey: false,
+      preventDefault: vi.fn(),
+    } as unknown as KeyboardEvent;
+    expect(executeByShortcut(e)).toBe(true);
+    expect(action).toHaveBeenCalledOnce();
+  });
+});

@@ -1720,9 +1720,8 @@ describe("WorkspaceSectionContent", () => {
     cleanup();
   });
 
-  it("renders ⎇ Branch button for every workspace regardless of extension actions", async () => {
-    // The New Worktree button shows unconditionally
-    // for every workspace with a workspaceContext (i.e. any existing workspace entry).
+  it("renders workspace-tile zone actions as buttons in the banner row", async () => {
+    // Without any workspace-tile actions, no branch button renders.
     const workspace: Workspace = {
       id: "grp-1",
       name: "Test Workspace",
@@ -1738,22 +1737,22 @@ describe("WorkspaceSectionContent", () => {
       props: { parentWorkspaceId: "grp-1" },
     });
 
-    // New Worktree button renders (icon-only) even without any workspace actions registered.
-    expect(screen.getByLabelText("New Worktree")).toBeTruthy();
+    // No branch button without any registered workspace-tile action.
+    expect(screen.queryByLabelText("Branch Workspace")).toBeNull();
 
-    // Registering the core create-worktree action after mount doesn't add a second button.
+    // Registering a workspace-tile action makes the button appear.
     registerWorkspaceAction({
-      id: "core:create-worktree",
-      label: "⎇ Branch",
+      id: "branched-workspaces:branch",
+      label: "Branch Workspace",
       icon: "git-branch",
-      source: "core",
+      zone: "workspace-tile",
+      source: "branched-workspaces",
       handler: noop,
-      when: (ctx) => !!ctx.parentWorkspaceId && ctx.isGit === true,
+      when: (ctx) => ctx.isGit === true,
     });
     await tick();
 
-    // Still just one New Worktree button — the action doesn't add a second one.
-    expect(screen.getByLabelText("New Worktree")).toBeTruthy();
+    expect(screen.getByLabelText("Branch Workspace")).toBeTruthy();
   });
 });
 

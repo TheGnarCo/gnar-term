@@ -174,6 +174,16 @@ describe("Extension barrier enforcement", () => {
       "agentic-orchestrator/components/Columns.svelte": [
         "../../../lib/services/markdown-component-registry",
       ],
+      // branched-workspaces owns worktree and nested-workspace creation;
+      // these services live in core so existing branches stay operable
+      // when the extension is disabled (the service and lifecycle events
+      // remain in core). The extension pierces core the same way
+      // diff-viewer and agentic-orchestrator do.
+      "branched-workspaces/index.ts": [
+        "../../lib/services/worktree-service",
+        "../../lib/services/nested-workspace-service",
+        "../../lib/stores/workspaces",
+      ],
     };
     const violations: string[] = [];
     for (const file of extensionFiles) {

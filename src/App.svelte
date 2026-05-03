@@ -681,18 +681,8 @@
       icon: "plus",
       shortcut: `${shiftModLabel}N`,
       source: "core",
-      handler: (ctx) => {
-        if (ctx.parentWorkspaceId && ctx.workspacePath) {
-          const name = `Workspace ${get(nestedWorkspaces).length + 1}`;
-          void createNestedWorkspaceFromDef({
-            name,
-            cwd: ctx.workspacePath as string,
-            metadata: { parentWorkspaceId: ctx.parentWorkspaceId as string },
-            layout: { pane: { surfaces: [{ type: "terminal" }] } },
-          });
-        } else {
-          runCommandById("create-workspace");
-        }
+      handler: (_ctx) => {
+        runCommandById("create-workspace");
       },
     });
 

@@ -204,8 +204,8 @@ export interface ExtensionManifestWorkspaceAction {
   icon?: string;
   /** Optional keyboard shortcut (e.g. "⌘⇧N"). */
   shortcut?: string;
-  /** Where the action appears: "workspace" (default) or "sidebar". */
-  zone?: "workspace" | "sidebar";
+  /** Where the action appears: "workspace" (default), "sidebar", or "workspace-tile". */
+  zone?: "workspace" | "sidebar" | "workspace-tile";
 }
 
 export interface ExtensionManifestWorkspaceSubtitle {
@@ -569,8 +569,9 @@ export interface ExtensionAPI {
       icon?: string;
       shortcut?: string;
       /** Where the action appears: "workspace" (default) in the workspace header,
-       *  "sidebar" in the top bar alongside reorder. */
-      zone?: "workspace" | "sidebar";
+       *  "sidebar" in the top bar alongside reorder,
+       *  "workspace-tile" as a dash-btn tile in the workspace group banner row. */
+      zone?: "workspace" | "sidebar" | "workspace-tile";
       handler: (ctx: WorkspaceActionContext) => void | Promise<void>;
       when?: (ctx: WorkspaceActionContext) => boolean;
     },
@@ -943,7 +944,7 @@ export interface WorkspaceActionInfo {
   label: string;
   icon: string;
   shortcut?: string;
-  zone?: "workspace" | "sidebar";
+  zone?: "workspace" | "sidebar" | "workspace-tile";
   handler: (ctx: WorkspaceActionContext) => void | Promise<void>;
   when?: (ctx: WorkspaceActionContext) => boolean;
 }

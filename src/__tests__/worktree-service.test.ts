@@ -48,14 +48,12 @@ describe("initWorktrees()", () => {
     settingsRef.current = {};
   });
 
-  it("registers create-workspace command", () => {
+  it("does NOT register a create-workspace command — creation is owned by the branched-workspaces extension", () => {
     initWorktrees();
     const cmd = get(commandStore).find(
       (c) => c.id === "worktrees:create-workspace",
     );
-    expect(cmd).toBeTruthy();
-    expect(cmd!.title).toBe("New Worktree...");
-    expect(cmd!.source).toBe("worktrees");
+    expect(cmd).toBeUndefined();
   });
 
   it("does NOT register the workspace action — that is handled by init-workspaces", () => {

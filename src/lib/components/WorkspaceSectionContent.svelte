@@ -5,7 +5,7 @@
   import WorkspaceListView from "./WorkspaceListView.svelte";
   import { resolveWorkspaceColor } from "../theme-data";
   import { theme } from "../stores/theme";
-  import { runCommandById } from "../services/command-registry";
+
   import {
     nestedWorkspaces,
     activeNestedWorkspaceIdx,
@@ -24,7 +24,10 @@
     claimWorkspace,
   } from "../services/workspace-service";
   import { archiveWorkspace } from "../services/archive-service";
-  import { type WorkspaceActionContext } from "../services/workspace-action-registry";
+  import {
+    type WorkspaceActionContext,
+    workspaceActionStore,
+  } from "../services/workspace-action-registry";
   import {
     childRowContributorStore,
     getChildRowsFor,
@@ -42,7 +45,9 @@
   import SidebarSubtitleRow from "./SidebarSubtitleRow.svelte";
   import GridIcon from "../icons/GridIcon.svelte";
   import GitBranchIcon from "../icons/GitBranchIcon.svelte";
-  import WorktreeIcon from "../icons/WorktreeIcon.svelte";
+  const tileIconComponents: Record<string, unknown> = {
+    "git-branch": GitBranchIcon,
+  };
   import BotIcon from "../icons/BotIcon.svelte";
   import type { MenuItem } from "../context-menu-types";
   import { contextMenu, showConfirmPrompt } from "../stores/ui";
@@ -287,12 +292,12 @@
         action: handleRenameWorkspace,
       },
     ];
-    if (workspace.isGit && workspaceContext) {
+    for (const action of tileActions) {
       items.push({
-        label: "New Worktree",
-        icon: GitBranchIcon as unknown as Component,
-        action: () =>
-          runCommandById("worktrees:create-workspace", workspaceContext),
+        label: action.label,
+        icon: (tileIconComponents[action.icon] ??
+          GitBranchIcon) as unknown as Component,
+        action: () => action.handler(workspaceContext ?? {}),
       });
     }
     items.push({ label: "", action: () => {}, separator: true });
@@ -328,7 +333,7 @@
   $: dimIconColor = ($theme.fgDim ?? $theme.fgMuted ?? "#888") as string;
 
   let hoveredDashId: string | null = null;
-  let branchChipHovered = false;
+  let hoveredTileActionId: string | null = null;
   let caretHovered = false;
   let dashboardCloseHovered: string | null = null;
 
@@ -348,6 +353,12 @@
         return aS ? 1 : -1;
       });
   })();
+
+  $: tileActions = $workspaceActionStore.filter(
+    (a) =>
+      a.zone === "workspace-tile" &&
+      (!a.when || a.when(workspaceContext ?? {})),
+  );
 
   function showDashboardContextMenu(
     x: number,
@@ -591,28 +602,28 @@
             {/if}
           </div>
         {/each}
-        {#if workspaceContext && workspace?.isGit}
+        {#each tileActions as action (action.id)}
           <button
             class="dash-btn"
-            aria-label="New Worktree"
+            aria-label={action.label}
             on:click|stopPropagation={() =>
-              runCommandById("worktrees:create-workspace", workspaceContext)}
-            on:mouseenter={() => (branchChipHovered = true)}
-            on:mouseleave={() => (branchChipHovered = false)}
+              action.handler(workspaceContext ?? {})}
+            on:mouseenter={() => (hoveredTileActionId = action.id)}
+            on:mouseleave={() => (hoveredTileActionId = null)}
             style="background: {$theme.bgSurface ??
               'transparent'}; border: 1px solid {$theme.border ??
               'transparent'};"
           >
             <DashboardTileIcon
-              iconComponent={WorktreeIcon}
+              iconComponent={tileIconComponents[action.icon] ?? GridIcon}
               baseColor={workspaceHex}
               contributionId={undefined}
               workspacePath={undefined}
               isActive={false}
-              isHovered={branchChipHovered}
+              isHovered={hoveredTileActionId === action.id}
             />
           </button>
-        {/if}
+        {/each}
         {#if showToggle}
           <button
             class="dash-btn"

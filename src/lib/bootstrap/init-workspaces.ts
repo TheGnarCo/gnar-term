@@ -10,8 +10,7 @@
  * behavior).
  */
 import { get } from "svelte/store";
-import { registerCommand, runCommandById } from "../services/command-registry";
-import { registerWorkspaceAction } from "../services/workspace-action-registry";
+import { registerCommand } from "../services/command-registry";
 import { registerRootRowRenderer } from "../services/root-row-renderer-registry";
 import {
   registerDashboardContribution,
@@ -282,32 +281,6 @@ async function promoteActiveNestedWorkspaceToWorkspace(): Promise<void> {
   claimWorkspace(activeWs.id, SOURCE);
 }
 
-/**
- * Register one palette command per workspace —
- * "<workspace>: New Branch". Re-run whenever workspaces
- * change so added workspaces get their commands.
- */
-function registerPerWorkspaceCommands(): void {
-  for (const workspace of getWorkspaces()) {
-    registerCommand({
-      id: `new-ws-${workspace.id}`,
-      title: `${workspace.name}: New Branched Workspace`,
-      source: SOURCE,
-      action: () => {
-        const count =
-          getWorkspaces().find((w) => w.id === workspace.id)?.nestedWorkspaceIds
-            .length ?? 0;
-        void createNestedWorkspaceFromDef({
-          name: `${workspace.name} Branch ${count + 1}`,
-          cwd: workspace.path,
-          metadata: { parentWorkspaceId: workspace.id },
-          layout: { pane: { surfaces: [{ type: "terminal" }] } },
-        });
-      },
-    });
-  }
-}
-
 export async function initWorkspaces(): Promise<void> {
   await loadWorkspaces();
 
@@ -323,8 +296,6 @@ export async function initWorkspaces(): Promise<void> {
   // on each load.
   reclaimNestedWorkspacesAcrossWorkspaces();
 
-  registerPerWorkspaceCommands();
-
   // Root-row renderer for "workspace" kind. ContainerRow inside
   // the renderer owns the grip/banner/nested-list chrome; the rail
   // color + label resolvers let the outer list paint the grip in the
@@ -339,22 +310,6 @@ export async function initWorkspaces(): Promise<void> {
       return resolveWorkspaceColor(workspace.color, get(theme));
     },
     label: (id: string) => getWorkspaces().find((w) => w.id === id)?.name,
-  });
-
-  // Formerly owned by the worktree-nestedWorkspaces extension.
-  // Registered here so the action is available in context menus on
-  // git-backed workspaces. The ⎇ Branch button in
-  // WorkspaceSectionContent calls the command directly; this action
-  // surfaces it in the workspace action registry.
-  registerWorkspaceAction({
-    id: "core:create-worktree",
-    label: "⎇ Branch",
-    icon: "git-branch",
-    source: SOURCE,
-    when: (ctx) => !!ctx?.parentWorkspaceId && ctx.isGit === true,
-    handler: (ctx) => {
-      runCommandById("worktrees:create-workspace", ctx);
-    },
   });
 
   // Commands

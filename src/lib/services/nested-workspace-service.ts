@@ -33,6 +33,7 @@ import {
   type LayoutNode,
 } from "../config";
 import { safeFocus } from "./service-helpers";
+import { readTerminalBuffer, writeSessionLog } from "./session-log-service";
 import { eventBus } from "./event-bus";
 import {
   appendRootRow,
@@ -273,6 +274,30 @@ export function closeNestedWorkspace(idx: number) {
   const wsList = get(nestedWorkspaces);
   const ws = wsList[idx];
   if (!ws) return;
+
+  // Capture scrollback buffers synchronously BEFORE disposal
+  const captures: Array<{
+    content: string;
+    surfaceName: string;
+    surfaceId: string;
+  }> = [];
+  for (const surface of getAllSurfaces(ws)) {
+    if (isTerminalSurface(surface) && surface.ptyId >= 0) {
+      const content = readTerminalBuffer(surface);
+      if (content) {
+        captures.push({
+          content,
+          surfaceName: surface.title ?? surface.id,
+          surfaceId: surface.id,
+        });
+      }
+    }
+  }
+  const wsId = ws.id;
+  for (const cap of captures) {
+    void writeSessionLog(cap.content, cap.surfaceName, cap.surfaceId, wsId);
+  }
+
   for (const pane of getAllPanes(ws.splitRoot)) {
     pane.resizeObserver?.disconnect();
   }
@@ -290,7 +315,6 @@ export function closeNestedWorkspace(idx: number) {
   if (zoomed && getAllSurfaces(ws).some((s) => s.id === zoomed)) {
     zoomedSurfaceId.set(null);
   }
-  const wsId = ws.id;
   nestedWorkspaces.update((list) => list.filter((_, i) => i !== idx));
   activeNestedWorkspaceIdx.set(
     Math.min(get(activeNestedWorkspaceIdx), get(nestedWorkspaces).length - 1),

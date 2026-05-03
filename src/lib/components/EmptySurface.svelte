@@ -26,8 +26,15 @@
   import { rootRowOrder } from "../stores/root-row-order";
   import { rootRowRendererStore } from "../services/root-row-renderer-registry";
   import { switchNestedWorkspace } from "../services/nested-workspace-service";
-  import { newSurface } from "../services/surface-service";
+  import {
+    newSurface,
+    openFileAsPreviewSplit,
+  } from "../services/surface-service";
   import { wsMeta } from "../services/service-helpers";
+  import {
+    sessionLogsStore,
+    type SessionLogEntry,
+  } from "../services/session-log-service";
 
   const iconSvgMap: Record<string, string> = {
     plus: `<line x1="8" y1="3" x2="8" y2="13" /><line x1="3" y1="8" x2="13" y2="8" />`,
@@ -104,6 +111,7 @@
     idx: number;
     label: string;
     badge?: string;
+    sessionLogs?: SessionLogEntry[];
   }
 
   $: jumpRows = (() => {
@@ -120,6 +128,7 @@
           workspaceId: ws.id,
           idx,
           label: ws.name,
+          sessionLogs: $sessionLogsStore[ws.id],
         });
         seen.add(ws.id);
         continue;
@@ -140,6 +149,7 @@
               idx: i,
               label: ws.name,
               badge: headerLabel,
+              sessionLogs: $sessionLogsStore[ws.id],
             });
             seen.add(ws.id);
           }
@@ -157,6 +167,7 @@
         workspaceId: ws.id,
         idx: i,
         label: ws.name,
+        sessionLogs: $sessionLogsStore[ws.id],
       });
       seen.add(ws.id);
     }
@@ -308,6 +319,28 @@
               </span>
             {/if}
           </button>
+          {#if row.sessionLogs && row.sessionLogs.length > 0}
+            <div
+              style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: -2px; padding-left: 4px;"
+            >
+              {#each row.sessionLogs as log (log.logPath)}
+                <button
+                  type="button"
+                  on:click={() => openFileAsPreviewSplit(log.logPath)}
+                  style="
+                    font-size: 11px; padding: 2px 8px;
+                    border: 1px solid {$theme.border};
+                    background: {$theme.bgSurface};
+                    color: {$theme.fgDim};
+                    border-radius: 4px; cursor: pointer;
+                    font-family: inherit;
+                  "
+                >
+                  Session log · {new Date(log.timestamp).toLocaleTimeString()}
+                </button>
+              {/each}
+            </div>
+          {/if}
         {/each}
       </div>
     {/if}

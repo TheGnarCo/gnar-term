@@ -213,7 +213,7 @@
     }).length;
     const nestedLine =
       nestedCount > 0
-        ? ` ${nestedCount} nested workspace${nestedCount === 1 ? "" : "s"} will also be closed.`
+        ? ` ${nestedCount} branch${nestedCount === 1 ? "" : "es"} will also be closed.`
         : "";
     const confirmed = await showConfirmPrompt(
       `Delete workspace "${w.name}"?${nestedLine}`,

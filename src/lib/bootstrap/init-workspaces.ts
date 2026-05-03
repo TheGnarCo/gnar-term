@@ -190,7 +190,7 @@ async function createWorkspaceFlow(prefill?: {
     const wsCount =
       getWorkspaces().find((w) => w.id === id)?.nestedWorkspaceIds.length ?? 0;
     await createNestedWorkspaceFromDef({
-      name: `${result.name} Workspace ${wsCount + 1}`,
+      name: `${result.name} Branch ${wsCount + 1}`,
       cwd: result.path,
       metadata: { parentWorkspaceId: id },
       layout: { pane: { surfaces: [{ type: "terminal" }] } },
@@ -255,21 +255,21 @@ async function promoteActiveNestedWorkspaceToWorkspace(): Promise<void> {
 
 /**
  * Register one palette command per workspace —
- * "<workspace>: New NestedWorkspace". Re-run whenever workspaces
+ * "<workspace>: New Branch". Re-run whenever workspaces
  * change so added workspaces get their commands.
  */
 function registerPerWorkspaceCommands(): void {
   for (const workspace of getWorkspaces()) {
     registerCommand({
       id: `new-ws-${workspace.id}`,
-      title: `${workspace.name}: New NestedWorkspace`,
+      title: `${workspace.name}: New Branch`,
       source: SOURCE,
       action: () => {
         const count =
           getWorkspaces().find((w) => w.id === workspace.id)?.nestedWorkspaceIds
             .length ?? 0;
         void createNestedWorkspaceFromDef({
-          name: `${workspace.name} Workspace ${count + 1}`,
+          name: `${workspace.name} Branch ${count + 1}`,
           cwd: workspace.path,
           metadata: { parentWorkspaceId: workspace.id },
           layout: { pane: { surfaces: [{ type: "terminal" }] } },
@@ -340,7 +340,7 @@ export async function initWorkspaces(): Promise<void> {
 
   registerCommand({
     id: "promote-nested-workspace-to-workspace",
-    title: "Promote NestedWorkspace to Workspace...",
+    title: "Promote to Workspace...",
     source: SOURCE,
     action: () => {
       void promoteActiveNestedWorkspaceToWorkspace();

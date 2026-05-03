@@ -57,7 +57,7 @@
 
   async function confirmAndUnarchive(id: string) {
     const confirmed = await showConfirmPrompt(
-      `Unarchive "${getName(id)}" and restore its nested workspaces?`,
+      `Unarchive "${getName(id)}" and restore its branches?`,
       { confirmLabel: "Unarchive" },
     );
     if (!confirmed) return;

@@ -8,6 +8,7 @@
   import { isDebugBuild } from "../services/service-helpers";
   import { titleBarButtonStore } from "../services/titlebar-button-registry";
   import TitleBarContributedButton from "./TitleBarContributedButton.svelte";
+  import { activeWorkspace } from "../stores/nested-workspace";
 
   // Single source of truth: cfg!(debug_assertions) from Rust, exposed via the
   // is_debug_build command. True for `tauri dev` and `tauri build --debug`,
@@ -39,6 +40,7 @@
   // hidden (and we're not fullscreen), the TitleBar starts at x=0, so push
   // its first button well past the traffic-light cluster.
   $: leftPadding = !$sidebarVisible && isMac && !$isFullscreen ? "84px" : "8px";
+  $: branch = $activeWorkspace?.metadata?.branch ?? null;
 </script>
 
 <div
@@ -76,14 +78,21 @@
   </button>
 
   <div
-    style="flex: 1; display: flex; justify-content: center; pointer-events: none;"
+    style="flex: 1; display: flex; justify-content: center; align-items: center; pointer-events: none;"
   >
-    <span
-      style="
-      font-size: 11px; font-weight: 600; letter-spacing: 1.5px;
-      color: {fg};
-    ">{isDev ? "GNARTERM (DEV)" : "GNARTERM"}</span
-    >
+    {#if $activeWorkspace}
+      <span class="title-ws" style="color: {fgActive};"
+        >{$activeWorkspace.name}</span
+      >
+      {#if branch}
+        <span class="title-sep" aria-hidden="true">·</span>
+        <span class="title-branch" style="color: {fg};">{branch}</span>
+      {/if}
+    {:else}
+      <span class="title-ws" style="color: {fg};"
+        >{isDev ? "GNARTERM (DEV)" : "GNARTERM"}</span
+      >
+    {/if}
   </div>
 
   {#each $titleBarButtonStore as btn (btn.id)}
@@ -110,3 +119,33 @@
     >
   </button>
 </div>
+
+<style>
+  .title-ws {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 160px;
+  }
+
+  .title-sep {
+    opacity: 0.4;
+    margin: 0 4px;
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+
+  .title-branch {
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 0;
+    opacity: 0.7;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 160px;
+  }
+</style>

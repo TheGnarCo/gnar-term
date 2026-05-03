@@ -828,6 +828,21 @@
       isFullscreen.set(await appWindow.isFullscreen());
     });
 
+    void appWindow.onFocusChanged((focused) => {
+      if (!focused) return;
+      for (const ws of get(nestedWorkspaces)) {
+        for (const s of getAllSurfaces(ws)) {
+          if (isTerminalSurface(s) && s.opened) {
+            try {
+              s.fitAddon.fit();
+            } catch {
+              // detached terminal — ignore
+            }
+          }
+        }
+      }
+    });
+
     // Flush workspace and extension state to disk before the window closes.
     // Tauri v2: the window closes synchronously unless we preventDefault the
     // event first. Without this, the async flush races the process teardown

@@ -18,6 +18,16 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn().mockResolvedValue(undefined),
 }));
 
+// availableMonitors is called by clampToMonitors inside restoreWindowBounds.
+// Return a large monitor so in-range test coords pass through unchanged.
+vi.mock("@tauri-apps/api/window", () => ({
+  availableMonitors: vi
+    .fn()
+    .mockResolvedValue([
+      { position: { x: 0, y: 0 }, size: { width: 7680, height: 4320 } },
+    ]),
+}));
+
 const saveStateMock = vi.fn().mockResolvedValue(undefined);
 vi.mock("../../config", async () => {
   const actual =

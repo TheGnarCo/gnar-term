@@ -141,7 +141,7 @@ afterEach(() => {
 });
 
 describe("createNestedWorkspaceFromDef — restore vs fresh", () => {
-  it("restored surface gets definedCommand + pendingRestoreCommand, NOT startupCommand", async () => {
+  it("restored surface gets definedCommand + startupCommand (auto-run default) when no parent workspace", async () => {
     await createNestedWorkspaceFromDef(
       {
         name: "Restored",
@@ -158,8 +158,9 @@ describe("createNestedWorkspaceFromDef — restore vs fresh", () => {
     const ws = get(nestedWorkspaces)[0]!;
     const s = firstTerminalSurface(ws);
     expect(s.definedCommand).toBe("npm run dev");
-    expect(s.pendingRestoreCommand).toBe(true);
-    expect(s.startupCommand).toBeUndefined();
+    // No parent workspace → defaults to auto-run (opt-out model)
+    expect(s.startupCommand).toBe("npm run dev");
+    expect(s.pendingRestoreCommand).toBeUndefined();
   });
 
   it("fresh-created surface with a command gets all three (definedCommand + startupCommand, NOT pending)", async () => {

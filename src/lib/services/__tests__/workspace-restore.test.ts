@@ -9,7 +9,8 @@
  *
  * S9 tests:
  *   5. autoRunRestoreCommands=true → startupCommand set directly (not pendingRestoreCommand)
- *   6. autoRunRestoreCommands=false/unset → pendingRestoreCommand set (existing behavior)
+ *   6. autoRunRestoreCommands=undefined → startupCommand set (opt-out default)
+ *   7. autoRunRestoreCommands=false → pendingRestoreCommand set (explicit opt-out)
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { get } from "svelte/store";
@@ -199,8 +200,39 @@ describe("S9 — auto-run restore commands", () => {
     expect(surface.pendingRestoreCommand).toBeUndefined();
   });
 
-  it("sets pendingRestoreCommand when autoRunRestoreCommands is false/unset on parent workspace", async () => {
-    const ws = makeWorkspace("g1"); // autoRunRestoreCommands not set
+  it("sets startupCommand (auto-run) when autoRunRestoreCommands is undefined on parent workspace", async () => {
+    const ws = makeWorkspace("g1"); // autoRunRestoreCommands not set → defaults to opt-out (true)
+    addWorkspace(ws);
+
+    await createNestedWorkspaceFromDef(
+      {
+        name: "Test",
+        cwd: "/tmp",
+        metadata: { parentWorkspaceId: "g1" },
+        layout: {
+          pane: {
+            surfaces: [{ command: "echo hello" }],
+          },
+        },
+      },
+      { restoring: true },
+    );
+
+    const allNestedWs = get(nestedWorkspaces);
+    const createdWs = allNestedWs[allNestedWs.length - 1]!;
+    const pane =
+      createdWs.splitRoot.type === "pane" ? createdWs.splitRoot.pane : null;
+    expect(pane).not.toBeNull();
+    const surface = pane!.surfaces[0] as {
+      startupCommand?: string;
+      pendingRestoreCommand?: true;
+    };
+    expect(surface.startupCommand).toBe("echo hello");
+    expect(surface.pendingRestoreCommand).toBeUndefined();
+  });
+
+  it("sets pendingRestoreCommand when autoRunRestoreCommands is explicitly false on parent workspace", async () => {
+    const ws = makeWorkspace("g1", { autoRunRestoreCommands: false });
     addWorkspace(ws);
 
     await createNestedWorkspaceFromDef(

@@ -163,7 +163,7 @@ export async function createNestedWorkspaceFromDef(
             if (restoring) {
               const parentWsId = def.metadata?.parentWorkspaceId;
               const parentWs = parentWsId ? getWorkspace(parentWsId) : null;
-              if (parentWs?.autoRunRestoreCommands) {
+              if (parentWs?.autoRunRestoreCommands !== false) {
                 surface.startupCommand = sDef.command;
               } else {
                 surface.pendingRestoreCommand = true;

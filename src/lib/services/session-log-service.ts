@@ -1,6 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
-import { writable } from "svelte/store";
+import { get, writable } from "svelte/store";
 import { getConfigDir } from "./service-helpers";
+import { nestedWorkspaces } from "../stores/nested-workspace";
+import { getAllSurfaces, isTerminalSurface } from "../types";
 
 export interface SessionLogEntry {
   surfaceName: string;
@@ -80,4 +82,35 @@ export async function writeSessionLog(
   } catch (e) {
     console.warn("[session-log] Failed to write session log:", e);
   }
+}
+
+/**
+ * Best-effort — capture and persist session logs for every live terminal
+ * surface across all open nested workspaces. Intended for on-quit use:
+ * call this before terminals are disposed so buffers are still readable.
+ *
+ * Silently swallows per-surface failures (each writeSessionLog already
+ * catches internally) so a single bad surface cannot block the quit.
+ */
+export async function writeSessionLogsForAllSurfaces(): Promise<void> {
+  const wsList = get(nestedWorkspaces);
+  const writes: Array<Promise<void>> = [];
+  for (const ws of wsList) {
+    for (const surface of getAllSurfaces(ws)) {
+      if (isTerminalSurface(surface) && surface.ptyId >= 0) {
+        const content = readTerminalBuffer(surface);
+        if (content) {
+          writes.push(
+            writeSessionLog(
+              content,
+              surface.title ?? surface.id,
+              surface.id,
+              ws.id,
+            ),
+          );
+        }
+      }
+    }
+  }
+  await Promise.allSettled(writes);
 }

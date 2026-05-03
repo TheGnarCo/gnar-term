@@ -7,12 +7,20 @@
  *     pluralization is correct.
  *   - The `ptyId === -1` filter skips terminals still spawning.
  *   - A rejected dialog promise resolves to `false` so quit is cancelled.
+ *   - Session logs are written for live terminals when quit is confirmed.
+ *   - Session logs are NOT written when the user cancels.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const askMock = vi.fn();
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   ask: (...args: unknown[]) => askMock(...args),
+}));
+
+const writeSessionLogsMock = vi.fn().mockResolvedValue(undefined);
+vi.mock("../session-log-service", () => ({
+  writeSessionLogsForAllSurfaces: (...args: unknown[]) =>
+    writeSessionLogsMock(...args),
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -60,6 +68,7 @@ function makeWorkspace(id: string, ptyIds: number[]): NestedWorkspace {
 describe("quit-confirmation-service", () => {
   beforeEach(() => {
     askMock.mockReset();
+    writeSessionLogsMock.mockReset().mockResolvedValue(undefined);
     nestedWorkspaces.set([]);
   });
 
@@ -119,6 +128,37 @@ describe("quit-confirmation-service", () => {
       nestedWorkspaces.set([makeWorkspace("w1", [5])]);
       askMock.mockRejectedValue(new Error("dialog crashed"));
       expect(await confirmQuit()).toBe(false);
+    });
+
+    it("writes session logs when quit is confirmed with live terminals", async () => {
+      nestedWorkspaces.set([makeWorkspace("w1", [5])]);
+      askMock.mockResolvedValue(true);
+      const result = await confirmQuit();
+      expect(result).toBe(true);
+      expect(writeSessionLogsMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("writes session logs when quit proceeds with no live terminals (no dialog)", async () => {
+      nestedWorkspaces.set([makeWorkspace("w1", [-1])]);
+      const result = await confirmQuit();
+      expect(result).toBe(true);
+      expect(writeSessionLogsMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("does NOT write session logs when the user cancels", async () => {
+      nestedWorkspaces.set([makeWorkspace("w1", [5])]);
+      askMock.mockResolvedValue(false);
+      const result = await confirmQuit();
+      expect(result).toBe(false);
+      expect(writeSessionLogsMock).not.toHaveBeenCalled();
+    });
+
+    it("still returns true if session log write throws", async () => {
+      nestedWorkspaces.set([makeWorkspace("w1", [5])]);
+      askMock.mockResolvedValue(true);
+      writeSessionLogsMock.mockRejectedValue(new Error("disk full"));
+      const result = await confirmQuit();
+      expect(result).toBe(true);
     });
   });
 });

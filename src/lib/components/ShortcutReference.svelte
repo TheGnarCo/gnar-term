@@ -80,6 +80,11 @@
           mac: "⌘⇧H",
           other: "Ctrl+Shift+H",
         },
+        {
+          label: "Close Pane",
+          mac: "⌘⇧X",
+          other: "Ctrl+Shift+X",
+        },
       ],
     },
     {

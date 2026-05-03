@@ -1050,6 +1050,35 @@ describe("CommandPalette", () => {
     const input = container.querySelector("input") as HTMLInputElement;
     expect(input.getAttribute("aria-activedescendant")).toBe("cmd-option-0");
   });
+
+  it("close-pane command is registered and appears in palette", () => {
+    registerCommands([
+      {
+        id: "core.close-pane",
+        title: "Close Pane",
+        shortcut: "⇧⌘X",
+        action: noop,
+        source: "test",
+      },
+    ]);
+    commandPaletteOpen.set(true);
+    render(CommandPalette);
+    expect(screen.getByText("Close Pane")).toBeTruthy();
+  });
+
+  it("rename-workspace command is registered and appears in palette", () => {
+    registerCommands([
+      {
+        id: "core.rename-workspace",
+        title: "Rename Workspace",
+        action: noop,
+        source: "test",
+      },
+    ]);
+    commandPaletteOpen.set(true);
+    render(CommandPalette);
+    expect(screen.getByText("Rename Workspace")).toBeTruthy();
+  });
 });
 
 // ===========================================================================

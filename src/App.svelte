@@ -484,6 +484,24 @@
       action: () => void spawnOrNavigate("gnar-term:settings"),
       source: "core",
     },
+    {
+      id: "core.close-pane",
+      title: "Close Pane",
+      shortcut: `${shiftModLabel}X`,
+      action: () => {
+        const pane = get(activePane);
+        if (pane) closePane(pane.id);
+      },
+      source: "core",
+    },
+    {
+      // No shortcut — keyboard binding in keyboard-shortcuts.ts (⇧⌘R / Ctrl+Shift+R)
+      // avoids double-fire with the hardcoded handler. Palette discoverability only.
+      id: "core.rename-workspace",
+      title: "Rename Workspace",
+      action: () => sidebarComponent?.startRename($activeNestedWorkspaceIdx),
+      source: "core",
+    },
     ...$extensionStore
       .filter(
         (ext) =>

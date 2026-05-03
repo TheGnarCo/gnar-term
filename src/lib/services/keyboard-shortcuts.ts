@@ -15,12 +15,17 @@ import {
   findBarVisible,
   sidebarVisible,
 } from "../stores/ui";
-import { nestedWorkspaces, activeSurface } from "../stores/nested-workspace";
+import {
+  nestedWorkspaces,
+  activeSurface,
+  activePane,
+} from "../stores/nested-workspace";
 import { activateWorkspace } from "./workspace-service";
 import { rootRowOrder } from "../stores/root-row-order";
 import { isTerminalSurface } from "../types";
 import { createNestedWorkspace } from "./nested-workspace-service";
 import {
+  closePane,
   flashFocusedPane,
   focusDirection,
   resizeActivePane,
@@ -156,6 +161,13 @@ export function handleAppKeydown(
       e.preventDefault();
       const s = get(activeSurface);
       if (s) togglePaneZoom(s.id);
+      return;
+    }
+    // Shift+Cmd+X (mac) / Ctrl+Shift+X (Linux) — close active pane
+    if (k === "x") {
+      e.preventDefault();
+      const pane = get(activePane);
+      if (pane) closePane(pane.id);
       return;
     }
     // Non-mac only: Ctrl+Shift+K/F mirror the mac Cmd bindings above.

@@ -26,34 +26,34 @@
       rows: [
         { label: "Switch Workspace 1-9", mac: "⌘1-9", other: "—" },
         {
-          label: "Switch Branched Workspace 1-9",
+          label: "Select Surface/Tab 1-9",
           mac: "Ctrl+1-9",
           other: "Ctrl+1-9",
         },
         {
-          label: "Next Branched Workspace",
+          label: "Next Workspace",
           mac: "⌘⇧]",
           other: "Ctrl+Shift+]",
         },
         {
-          label: "Prev Branched Workspace",
+          label: "Prev Workspace",
           mac: "⌘⇧[",
           other: "Ctrl+Shift+[",
         },
         {
-          label: "Cycle Branched Workspace Forward",
+          label: "Cycle Workspace Forward",
           mac: "Ctrl+Tab",
           other: "Ctrl+Tab",
         },
         {
-          label: "Cycle Branched Workspace Back",
+          label: "Cycle Workspace Back",
           mac: "Ctrl+Shift+Tab",
           other: "Ctrl+Shift+Tab",
         },
-        { label: "Focus Pane Left", mac: "Alt+⌘←", other: "—" },
-        { label: "Focus Pane Right", mac: "Alt+⌘→", other: "—" },
-        { label: "Focus Pane Up", mac: "Alt+⌘↑", other: "—" },
-        { label: "Focus Pane Down", mac: "Alt+⌘↓", other: "—" },
+        { label: "Focus Pane Left", mac: "Alt+⌘←", other: "Ctrl+Alt+←" },
+        { label: "Focus Pane Right", mac: "Alt+⌘→", other: "Ctrl+Alt+→" },
+        { label: "Focus Pane Up", mac: "Alt+⌘↑", other: "Ctrl+Alt+↑" },
+        { label: "Focus Pane Down", mac: "Alt+⌘↓", other: "Ctrl+Alt+↓" },
       ],
     },
     {
@@ -68,7 +68,7 @@
         {
           label: "Resize Pane",
           mac: "⌘⇧←→↑↓",
-          other: "—",
+          other: "Ctrl+Shift+←→↑↓",
         },
         {
           label: "Toggle Pane Zoom",
@@ -83,23 +83,26 @@
       ],
     },
     {
-      title: "Surfaces (Terminals)",
+      title: "Surfaces",
       rows: [
-        { label: "New Branched Workspace", mac: "⌘N", other: "—" },
+        { label: "New Workspace", mac: "⌘N", other: "—" },
         { label: "New Terminal", mac: "⌘T", other: "—" },
         { label: "Close Terminal", mac: "⌘W", other: "Ctrl+Shift+W" },
         {
-          label: "Close Branched Workspace",
+          label: "Close Workspace",
           mac: "⌘⇧W",
           other: "Ctrl+Shift+Q",
         },
         { label: "Find in Terminal", mac: "⌘F", other: "Ctrl+Shift+F" },
+        { label: "Find Next", mac: "⌘G", other: "—" },
+        { label: "Find Previous", mac: "⌘⇧G", other: "—" },
         {
           label: "Clear Scrollback",
           mac: "⌘K",
           other: "Ctrl+Shift+K",
         },
-        { label: "Rename Terminal", mac: "⌘R", other: "—" },
+        { label: "Rename Surface/Tab", mac: "⌘R", other: "—" },
+        { label: "Rename Workspace", mac: "⌘⇧R", other: "Ctrl+Shift+R" },
       ],
     },
     {

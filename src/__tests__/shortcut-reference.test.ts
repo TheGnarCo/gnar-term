@@ -43,7 +43,7 @@ describe("ShortcutReference component", () => {
     // Section headings for every category.
     expect(getByText("Navigation")).toBeTruthy();
     expect(getByText("Panes")).toBeTruthy();
-    expect(getByText("Surfaces (Terminals)")).toBeTruthy();
+    expect(getByText("Surfaces")).toBeTruthy();
     expect(getByText("App")).toBeTruthy();
   });
 

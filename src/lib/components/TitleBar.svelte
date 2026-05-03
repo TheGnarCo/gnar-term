@@ -5,10 +5,11 @@
   import { spawnOrNavigate } from "../services/dashboard-workspace-service";
   import { isMac, modLabel, shiftModLabel } from "../terminal-service";
   import { shortcutHint } from "../actions/shortcut-hint";
-  import { isDebugBuild } from "../services/service-helpers";
+  import { isDebugBuild, wsMeta } from "../services/service-helpers";
   import { titleBarButtonStore } from "../services/titlebar-button-registry";
   import TitleBarContributedButton from "./TitleBarContributedButton.svelte";
   import { activeWorkspace } from "../stores/nested-workspace";
+  import { workspacesStore } from "../stores/workspaces";
 
   // Single source of truth: cfg!(debug_assertions) from Rust, exposed via the
   // is_debug_build command. True for `tauri dev` and `tauri build --debug`,
@@ -41,6 +42,14 @@
   // its first button well past the traffic-light cluster.
   $: leftPadding = !$sidebarVisible && isMac && !$isFullscreen ? "84px" : "8px";
   $: branch = $activeWorkspace?.metadata?.branch ?? null;
+  $: parentWorkspaceId = $activeWorkspace
+    ? wsMeta($activeWorkspace).parentWorkspaceId
+    : null;
+  $: umbrellaName = parentWorkspaceId
+    ? ($workspacesStore.find((w) => w.id === parentWorkspaceId)?.name ?? null)
+    : null;
+  $: showUmbrella = umbrellaName && umbrellaName !== $activeWorkspace?.name;
+  $: showBranch = branch && branch !== $activeWorkspace?.name;
 </script>
 
 <div
@@ -81,10 +90,14 @@
     style="flex: 1; display: flex; justify-content: center; align-items: center; pointer-events: none;"
   >
     {#if $activeWorkspace}
+      {#if showUmbrella}
+        <span class="title-ws" style="color: {fg};">{umbrellaName}</span>
+        <span class="title-sep" aria-hidden="true">·</span>
+      {/if}
       <span class="title-ws" style="color: {fgActive};"
         >{$activeWorkspace.name}</span
       >
-      {#if branch}
+      {#if showBranch}
         <span class="title-sep" aria-hidden="true">·</span>
         <span class="title-branch" style="color: {fg};">{branch}</span>
       {/if}

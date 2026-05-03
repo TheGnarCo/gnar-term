@@ -110,6 +110,7 @@ vi.stubGlobal("ResizeObserver", MockResizeObserver);
 // ---------------------------------------------------------------------------
 
 import TitleBar from "../lib/components/TitleBar.svelte";
+import ShortcutReference from "../lib/components/ShortcutReference.svelte";
 import FindBar from "../lib/components/FindBar.svelte";
 import Tab from "../lib/components/Tab.svelte";
 import TabBar from "../lib/components/TabBar.svelte";
@@ -233,6 +234,69 @@ beforeEach(() => {
   nestedWorkspaces.set([]);
   activeNestedWorkspaceIdx.set(-1);
   unregisterBySource("test");
+});
+
+// ===========================================================================
+// ShortcutReference
+// ===========================================================================
+
+describe("ShortcutReference", () => {
+  it("does not render when open is false", () => {
+    const { container } = render(ShortcutReference, { props: { open: false } });
+    expect(
+      container.querySelector("[data-testid='shortcut-reference']"),
+    ).toBeNull();
+  });
+
+  it("renders when open is true", () => {
+    render(ShortcutReference, { props: { open: true } });
+    expect(screen.getByTestId("shortcut-reference")).toBeTruthy();
+  });
+
+  it("shows corrected label: Select Surface/Tab 1-9 (not Switch Branched Workspace)", () => {
+    render(ShortcutReference, { props: { open: true } });
+    expect(screen.getByText("Select Surface/Tab 1-9")).toBeTruthy();
+    expect(screen.queryByText(/Switch Branched Workspace/)).toBeNull();
+  });
+
+  it("shows Linux bindings for Focus Pane (not —)", () => {
+    render(ShortcutReference, { props: { open: true } });
+    expect(screen.getAllByText("Ctrl+Alt+←").length).toBeGreaterThan(0);
+  });
+
+  it("shows Linux bindings for Resize Pane (not —)", () => {
+    render(ShortcutReference, { props: { open: true } });
+    expect(screen.getByText("Ctrl+Shift+←→↑↓")).toBeTruthy();
+  });
+
+  it("uses Surfaces section title (not Surfaces (Terminals))", () => {
+    render(ShortcutReference, { props: { open: true } });
+    expect(screen.getByText("Surfaces")).toBeTruthy();
+    expect(screen.queryByText("Surfaces (Terminals)")).toBeNull();
+  });
+
+  it("shows Rename Workspace entry", () => {
+    render(ShortcutReference, { props: { open: true } });
+    expect(screen.getByText("Rename Workspace")).toBeTruthy();
+  });
+
+  it("shows Rename Surface/Tab entry", () => {
+    render(ShortcutReference, { props: { open: true } });
+    expect(screen.getByText("Rename Surface/Tab")).toBeTruthy();
+  });
+
+  it("shows Find Next and Find Previous entries", () => {
+    render(ShortcutReference, { props: { open: true } });
+    expect(screen.getByText("Find Next")).toBeTruthy();
+    expect(screen.getByText("Find Previous")).toBeTruthy();
+  });
+
+  it("uses workspace terminology (not Branched Workspace) for nav shortcuts", () => {
+    render(ShortcutReference, { props: { open: true } });
+    expect(screen.getByText("Next Workspace")).toBeTruthy();
+    expect(screen.getByText("Prev Workspace")).toBeTruthy();
+    expect(screen.queryByText(/Branched Workspace/)).toBeNull();
+  });
 });
 
 // ===========================================================================

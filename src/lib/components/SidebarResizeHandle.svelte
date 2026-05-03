@@ -69,9 +69,14 @@
 ></div>
 
 <style>
-  .sidebar-resize-handle:hover,
-  .sidebar-resize-handle:focus-visible {
+  .sidebar-resize-handle:hover {
     opacity: 1 !important;
     outline: none;
+  }
+
+  .sidebar-resize-handle:focus-visible {
+    opacity: 1 !important;
+    outline: 2px solid var(--theme-accent, #7c6aff);
+    outline-offset: 2px;
   }
 </style>

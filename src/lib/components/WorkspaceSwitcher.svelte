@@ -170,8 +170,9 @@
           placeholder="Switch branch…"
           autocomplete="off"
           spellcheck={false}
+          class="no-default-outline"
           style="
-            flex: 1; background: transparent; border: none; outline: none;
+            flex: 1; background: transparent; border: none;
             color: {$theme.fg}; font-size: 14px;
             font-family: inherit;
           "

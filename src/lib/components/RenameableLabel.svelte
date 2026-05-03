@@ -12,6 +12,8 @@
   export let ariaLabel: string;
   /** Inline style applied to the editable span. */
   export let style: string = "";
+  /** CSS class(es) applied to the editable span. */
+  export let klass: string = "";
 
   let labelEl: HTMLSpanElement;
   let editing = false;
@@ -78,6 +80,7 @@
   aria-label={ariaLabel}
   aria-multiline="false"
   tabindex="-1"
+  class={klass}
   {style}
   on:blur={finishRename}
   on:keydown={handleKeydown}>{value}</span

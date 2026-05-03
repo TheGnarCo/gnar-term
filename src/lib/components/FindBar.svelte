@@ -103,10 +103,11 @@
       placeholder="Find..."
       bind:value={query}
       on:input={() => doSearch("next")}
+      class="no-default-outline"
       style="
         background: {$theme.bg}; border: 1px solid {$theme.border};
         border-radius: 4px; padding: 3px 8px; color: {$theme.fg};
-        font-size: 13px; font-family: inherit; width: 200px; outline: none;
+        font-size: 13px; font-family: inherit; width: 200px;
       "
     />
     <button

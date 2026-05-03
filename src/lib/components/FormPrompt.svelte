@@ -155,11 +155,12 @@
             <select
               id="form-{field.key}"
               bind:value={values[field.key]}
+              class="no-default-outline"
               style="
                 padding: 8px 12px; background: {$theme.bg};
                 border: 1px solid {$theme.borderActive}; border-radius: 6px;
                 color: {$theme.fg}; font-size: 13px;
-                outline: none; font-family: inherit; width: 100%;
+                font-family: inherit; width: 100%;
                 box-sizing: border-box;
               "
             >
@@ -190,6 +191,7 @@
                   title={values[field.key]
                     ? `${values[field.key]} (locked)`
                     : undefined}
+                  class="no-default-outline"
                   style="
                     flex: 1; padding: 8px 12px;
                     background: {$theme.bgSurface};
@@ -197,7 +199,7 @@
                     color: {values[field.key] ? $theme.fg : $theme.fgDim};
                     opacity: 0.75;
                     font-size: 13px;
-                    outline: none; font-family: inherit; box-sizing: border-box; cursor: default;
+                    font-family: inherit; box-sizing: border-box; cursor: default;
                   "
                 />
               {:else}
@@ -206,11 +208,12 @@
                   type="text"
                   bind:value={values[field.key]}
                   placeholder={field.placeholder ?? "No folder selected"}
+                  class="no-default-outline"
                   style="
                     flex: 1; padding: 8px 12px; background: {$theme.bg};
                     border: 1px solid {$theme.borderActive}; border-radius: 6px;
                     color: {$theme.fg}; font-size: 13px;
-                    outline: none; font-family: inherit; box-sizing: border-box;
+                    font-family: inherit; box-sizing: border-box;
                   "
                 />
                 <button
@@ -247,11 +250,12 @@
               type="text"
               placeholder={field.placeholder ?? ""}
               bind:value={values[field.key]}
+              class="no-default-outline"
               style="
                 padding: 8px 12px; background: {$theme.bg};
                 border: 1px solid {$theme.borderActive}; border-radius: 6px;
                 color: {$theme.fg}; font-size: 13px;
-                outline: none; font-family: inherit; width: 100%;
+                font-family: inherit; width: 100%;
                 box-sizing: border-box;
               "
             />

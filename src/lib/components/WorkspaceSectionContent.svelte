@@ -430,6 +430,7 @@
         value={workspace.name}
         onCommit={commitRename}
         ariaLabel="Workspace name"
+        klass="no-default-outline"
         style="
           flex: 1; min-width: 0;
           font-size: 13px; font-weight: 600; color: {isPrimaryActive
@@ -438,7 +439,7 @@
           overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
           user-select: none;
           pointer-events: none;
-          outline: none; padding: 2px 4px; margin-left: -4px; border-radius: 4px;
+          padding: 2px 4px; margin-left: -4px; border-radius: 4px;
         "
       />
 

@@ -246,6 +246,7 @@
           value={workspace.name}
           onCommit={onRename}
           ariaLabel="Workspace name"
+          klass="no-default-outline"
           style="
             font-weight: {isActive ? '600' : '400'};
             color: {isDisco
@@ -255,7 +256,7 @@
               : $theme.fgMuted};
             font-size: 13px; overflow: hidden;
             text-overflow: ellipsis; white-space: nowrap;
-            outline: none; padding: 2px 4px; margin-left: -4px; border-radius: 4px;
+            padding: 2px 4px; margin-left: -4px; border-radius: 4px;
           "
         />
       </div>

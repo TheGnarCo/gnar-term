@@ -104,10 +104,11 @@
         on:input={() => {
           selectedIdx = 0;
         }}
+        class="no-default-outline"
         style="
           padding: 14px 18px; background: transparent; border: none;
           border-bottom: 1px solid {$theme.border}; color: {$theme.fg};
-          font-size: 15px; outline: none; font-family: inherit;
+          font-size: 15px; font-family: inherit;
         "
       />
       <div

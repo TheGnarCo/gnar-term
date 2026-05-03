@@ -159,11 +159,12 @@
             readonly
             value={path}
             placeholder="No folder selected"
+            class="no-default-outline"
             style="
               flex: 1; padding: 8px 12px; background: {$theme.bg};
               border: 1px solid {$theme.borderActive}; border-radius: 6px;
               color: {path ? $theme.fg : $theme.fgDim}; font-size: 13px;
-              outline: none; font-family: inherit; box-sizing: border-box; cursor: default;
+              font-family: inherit; box-sizing: border-box; cursor: default;
             "
           />
           <button
@@ -191,11 +192,12 @@
           bind:value={name}
           on:input={handleNameInput}
           placeholder="my-workspace"
+          class="no-default-outline"
           style="
             padding: 8px 12px; background: {$theme.bg};
             border: 1px solid {$theme.borderActive}; border-radius: 6px;
             color: {$theme.fg}; font-size: 13px;
-            outline: none; font-family: inherit; width: 100%; box-sizing: border-box;
+            font-family: inherit; width: 100%; box-sizing: border-box;
           "
         />
       </div>

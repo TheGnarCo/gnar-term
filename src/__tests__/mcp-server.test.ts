@@ -54,14 +54,18 @@ vi.mock("../lib/services/agent-detection-service", () => ({
   agentsStore: agentsStoreMock,
 }));
 
-const { interruptAgentMock, killAgentMock } = vi.hoisted(() => ({
-  interruptAgentMock: vi.fn().mockResolvedValue(true),
-  killAgentMock: vi.fn().mockResolvedValue(true),
-}));
+const { interruptAgentMock, killAgentMock, sendKeysToAgentMock } = vi.hoisted(
+  () => ({
+    interruptAgentMock: vi.fn().mockResolvedValue(true),
+    killAgentMock: vi.fn().mockResolvedValue(true),
+    sendKeysToAgentMock: vi.fn().mockResolvedValue(true),
+  }),
+);
 
 vi.mock("../lib/services/agent-intervention-service", () => ({
   interruptAgent: interruptAgentMock,
   killAgent: killAgentMock,
+  sendKeysToAgent: sendKeysToAgentMock,
 }));
 
 import {
@@ -183,6 +187,7 @@ describe("MCP server JSON-RPC", () => {
         "remove_sidebar_section",
         "render_sidebar",
         "send_keys",
+        "send_keys_to_agent",
         "send_prompt",
         "spawn_agent",
         "spawn_preview",
@@ -190,7 +195,7 @@ describe("MCP server JSON-RPC", () => {
         "write_file",
       ].sort(),
     );
-    expect(names).toHaveLength(44);
+    expect(names).toHaveLength(45);
     for (const t of tools) {
       expect(t).toHaveProperty("inputSchema");
     }
@@ -471,6 +476,30 @@ describe("MCP server JSON-RPC", () => {
       }),
     );
     expect((resp as any).result.structuredContent).toEqual({ ok: false });
+  });
+
+  it("send_keys_to_agent delegates to sendKeysToAgent and returns ok: true", async () => {
+    sendKeysToAgentMock.mockResolvedValueOnce(true);
+    const resp = await dispatch(
+      rpc("tools/call", {
+        name: "send_keys_to_agent",
+        arguments: { agent_id: "agent-1", keys: "hello\r" },
+      }),
+    );
+    expect(sendKeysToAgentMock).toHaveBeenCalledWith("agent-1", "hello\r");
+    expect((resp as any).result.structuredContent).toEqual({ ok: true });
+  });
+
+  it("send_keys_to_agent throws an error with agent_id when agent not found", async () => {
+    sendKeysToAgentMock.mockResolvedValueOnce(false);
+    const resp = await dispatch(
+      rpc("tools/call", {
+        name: "send_keys_to_agent",
+        arguments: { agent_id: "missing-agent", keys: "\x03" },
+      }),
+    );
+    expect((resp as any).error.message).toContain("missing-agent");
+    expect((resp as any).error.message).toContain("not found or has no PTY");
   });
 
   it("split_pane creates a new pane in the target workspace and returns pane_id", async () => {
@@ -1398,8 +1427,8 @@ describe("tool metadata", () => {
     }
   });
 
-  it("tool count matches spec (44)", () => {
-    expect(_getToolsForTest()).toHaveLength(44);
+  it("tool count matches spec (45)", () => {
+    expect(_getToolsForTest()).toHaveLength(45);
   });
 });
 

@@ -30,7 +30,6 @@
  *   | ----------------------- | -------------------------------------------- |
  *   | surface-type-registry   | list_surface_types, open_surface             |
  *   | command-registry        | list_commands, invoke_command                |
- *   | sidebar-tab-registry    | list_sidebar_tabs, activate_sidebar_tab      |
  *   | workspace-action-reg…   | list_workspace_actions, invoke_workspace_…   |
  *   | context-menu-item-reg…  | list_context_menu_items, invoke_context_…   |
  *

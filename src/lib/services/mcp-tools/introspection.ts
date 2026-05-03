@@ -13,7 +13,11 @@ import {
 import { listPreviewSurfaces } from "../preview-surface-registry";
 import { pollEvents } from "../mcp-event-buffer";
 import { agentsStore } from "../agent-detection-service";
-import { interruptAgent, killAgent } from "../agent-intervention-service";
+import {
+  interruptAgent,
+  killAgent,
+  sendKeysToAgent,
+} from "../agent-intervention-service";
 import type { ToolDef } from "../mcp-types";
 
 // ---- NestedWorkspace introspection helpers ----
@@ -160,6 +164,25 @@ export const introspectionTools: ToolDef[] = [
       const { agent_id } = args as { agent_id: string };
       const ok = await killAgent(agent_id);
       return { ok };
+    },
+  },
+  {
+    name: "send_keys_to_agent",
+    description:
+      "Send raw keystrokes to a detected agent's PTY. Use agent_id from list_agents.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        agent_id: { type: "string" },
+        keys: { type: "string" },
+      },
+      required: ["agent_id", "keys"],
+    },
+    handler: async (args) => {
+      const p = args as { agent_id: string; keys: string };
+      const ok = await sendKeysToAgent(p.agent_id, p.keys);
+      if (!ok) throw new Error(`agent ${p.agent_id} not found or has no PTY`);
+      return { ok: true };
     },
   },
   {

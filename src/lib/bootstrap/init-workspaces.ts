@@ -291,7 +291,7 @@ function registerPerWorkspaceCommands(): void {
   for (const workspace of getWorkspaces()) {
     registerCommand({
       id: `new-ws-${workspace.id}`,
-      title: `${workspace.name}: New Branch`,
+      title: `${workspace.name}: New Branched Workspace`,
       source: SOURCE,
       action: () => {
         const count =

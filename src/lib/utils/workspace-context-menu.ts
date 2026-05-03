@@ -17,7 +17,7 @@ export interface WorkspaceContextMenuOptions {
   isInsideWorkspace: boolean;
   /** True when the promote-nested-workspace-to-workspace command is registered. */
   canPromoteCommand: boolean;
-  /** Total number of nestedWorkspaces in the list — used to disable "Close Branch". */
+  /** Total number of nestedWorkspaces in the list — used to disable "Close Branched Workspace". */
   workspaceCount: number;
   /**
    * True when the workspace is currently locked (metadata.locked === true).
@@ -32,7 +32,7 @@ export interface WorkspaceContextMenuOptions {
   onPromote?: () => void;
   onArchive?: () => void;
   /**
-   * Called when the user toggles "Lock Branch" / "Unlock Branch".
+   * Called when the user toggles "Lock Branched Workspace" / "Unlock Branched Workspace".
    * Omit to exclude the item entirely (e.g. for dashboards).
    */
   onToggleLock?: () => void;
@@ -44,12 +44,12 @@ export interface WorkspaceContextMenuOptions {
  * that callers pass directly to `contextMenu.set({ x, y, items })`.
  *
  * Item presence:
- *   - "Rename Branch"                — omitted for dashboards
+ *   - "Rename Branched Workspace"    — omitted for dashboards
  *   - "New Surface"                  — included only when `onNewSurface` is provided
  *   - separator + "Promote…"         — omitted for dashboards / nested workspaces inside a workspace
  *   - separator + "Lock/Unlock…"     — omitted for dashboards or when no `onToggleLock`
  *   - "Archive"                      — omitted for dashboards; disabled while locked
- *   - "Close Branch"                 — always present; disabled for dashboards, when
+ *   - "Close Branched Workspace"     — always present; disabled for dashboards, when
  *                                       count ≤ 1, or while locked
  */
 export function buildWorkspaceContextMenuItems(
@@ -77,7 +77,7 @@ export function buildWorkspaceContextMenuItems(
 
   if (canRename && onRename) {
     items.push({
-      label: "Rename Branch",
+      label: "Rename Branched Workspace",
       shortcut: "⇧⌘R",
       action: onRename,
     });
@@ -103,7 +103,7 @@ export function buildWorkspaceContextMenuItems(
 
   if (!isDashboard && onToggleLock) {
     items.push({
-      label: isLocked ? "Unlock Branch" : "Lock Branch",
+      label: isLocked ? "Unlock Branched Workspace" : "Lock Branched Workspace",
       action: onToggleLock,
     });
   }
@@ -117,7 +117,7 @@ export function buildWorkspaceContextMenuItems(
   }
 
   items.push({
-    label: "Close Branch",
+    label: "Close Branched Workspace",
     shortcut: "⇧⌘W",
     danger: true,
     disabled: workspaceCount <= 1 || isDashboard || isLocked,

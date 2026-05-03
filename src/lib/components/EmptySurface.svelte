@@ -206,9 +206,9 @@
       {#if currentWs}
         No surfaces in <strong style="color: {$theme.fg};"
           >{currentWs.name}</strong
-        >. Start something new, or jump to another branch.
+        >. Start something new, or jump to another workspace.
       {:else}
-        No branches are open. Create one to get started.
+        No workspaces are open. Create one to get started.
       {/if}
     </div>
     {#if buttons.length > 0}
@@ -279,7 +279,7 @@
             letter-spacing: 0.5px; color: {$theme.fgDim}; text-align: left;
           "
         >
-          Jump to branch
+          Jump to Workspace
         </div>
         {#each jumpRows as row (row.workspaceId)}
           <button

@@ -38,20 +38,28 @@ describe("S8 terminology: NestedWorkspace → Branch in user-facing copy", () =>
   describe("workspace-context-menu.ts nested workspace context menu labels", () => {
     const src = readSrc("utils/workspace-context-menu.ts");
 
-    it('does not say "Rename Workspace" (should be "Rename Branch")', () => {
-      expect(src).not.toContain('"Rename Workspace"');
+    it('says "Rename Branched Workspace"', () => {
+      expect(src).toContain('"Rename Branched Workspace"');
     });
 
-    it('does not say "Lock Workspace" (should be "Lock Branch")', () => {
-      expect(src).not.toContain('"Lock Workspace"');
+    it('says "Lock Branched Workspace"', () => {
+      expect(src).toContain('"Lock Branched Workspace"');
     });
 
-    it('does not say "Unlock Workspace" (should be "Unlock Branch")', () => {
-      expect(src).not.toContain('"Unlock Workspace"');
+    it('says "Unlock Branched Workspace"', () => {
+      expect(src).toContain('"Unlock Branched Workspace"');
     });
 
-    it('does not say "Close Workspace" (should be "Close Branch")', () => {
-      expect(src).not.toContain('"Close Workspace"');
+    it('says "Close Branched Workspace"', () => {
+      expect(src).toContain('"Close Branched Workspace"');
+    });
+
+    it('does not say bare "Rename Branch"', () => {
+      expect(src).not.toContain('"Rename Branch"');
+    });
+
+    it('does not say bare "Close Branch"', () => {
+      expect(src).not.toContain('"Close Branch"');
     });
   });
 
@@ -69,16 +77,20 @@ describe("S8 terminology: NestedWorkspace → Branch in user-facing copy", () =>
   describe("EmptySurface.svelte user-visible text", () => {
     const src = readSrc("components/EmptySurface.svelte");
 
-    it('does not say "jump to another workspace" (should be "branch")', () => {
-      expect(src).not.toContain("jump to another workspace");
+    it('says "No workspaces are open" (Workspace terminology)', () => {
+      expect(src).toContain("No workspaces are open");
     });
 
-    it('does not say "No workspaces are open" (should be "No branches")', () => {
-      expect(src).not.toContain("No workspaces are open");
+    it('says "Jump to Workspace" section label (Workspace terminology)', () => {
+      expect(src).toContain("Jump to Workspace");
     });
 
-    it('does not say "Jump to workspace" section label (should be "Jump to branch")', () => {
-      expect(src).not.toContain("Jump to workspace");
+    it('does not say "No branches are open"', () => {
+      expect(src).not.toContain("No branches are open");
+    });
+
+    it('does not say "Jump to branch"', () => {
+      expect(src).not.toContain("Jump to branch");
     });
   });
 

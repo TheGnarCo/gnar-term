@@ -26,27 +26,27 @@
       rows: [
         { label: "Switch Workspace 1-9", mac: "⌘1-9", other: "—" },
         {
-          label: "Switch Branch 1-9",
+          label: "Switch Branched Workspace 1-9",
           mac: "Ctrl+1-9",
           other: "Ctrl+1-9",
         },
         {
-          label: "Next Branch",
+          label: "Next Branched Workspace",
           mac: "⌘⇧]",
           other: "Ctrl+Shift+]",
         },
         {
-          label: "Prev Branch",
+          label: "Prev Branched Workspace",
           mac: "⌘⇧[",
           other: "Ctrl+Shift+[",
         },
         {
-          label: "Cycle Branch Forward",
+          label: "Cycle Branched Workspace Forward",
           mac: "Ctrl+Tab",
           other: "Ctrl+Tab",
         },
         {
-          label: "Cycle Branch Back",
+          label: "Cycle Branched Workspace Back",
           mac: "Ctrl+Shift+Tab",
           other: "Ctrl+Shift+Tab",
         },
@@ -85,11 +85,11 @@
     {
       title: "Surfaces (Terminals)",
       rows: [
-        { label: "New Branch", mac: "⌘N", other: "—" },
+        { label: "New Branched Workspace", mac: "⌘N", other: "—" },
         { label: "New Terminal", mac: "⌘T", other: "—" },
         { label: "Close Terminal", mac: "⌘W", other: "Ctrl+Shift+W" },
         {
-          label: "Close Branch",
+          label: "Close Branched Workspace",
           mac: "⌘⇧W",
           other: "Ctrl+Shift+Q",
         },
@@ -111,7 +111,7 @@
           other: "Ctrl+Shift+P",
         },
         {
-          label: "Switch Branch (fuzzy)",
+          label: "Switch Workspace (fuzzy)",
           mac: "⌘O",
           other: "Ctrl+O",
         },

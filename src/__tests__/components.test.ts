@@ -521,7 +521,7 @@ describe("Tab", () => {
     expect(spans.length).toBe(1);
   });
 
-  it("renders close button (x symbol)", () => {
+  it("renders close button with aria-label", () => {
     const surface = makeSurface("t1");
     render(Tab, {
       props: {
@@ -532,7 +532,7 @@ describe("Tab", () => {
         onClose: noop,
       },
     });
-    expect(screen.getByText("×")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Close tab" })).toBeTruthy();
   });
 
   it("renders active tab with the tab class", () => {

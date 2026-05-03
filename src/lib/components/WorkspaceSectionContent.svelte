@@ -45,6 +45,7 @@
   import SidebarSubtitleRow from "./SidebarSubtitleRow.svelte";
   import GridIcon from "../icons/GridIcon.svelte";
   import GitBranchIcon from "../icons/GitBranchIcon.svelte";
+  import CloseIcon from "../icons/CloseIcon.svelte";
   const tileIconComponents: Record<string, unknown> = {
     "git-branch": GitBranchIcon,
   };
@@ -597,7 +598,7 @@
                   transition: color 0.1s, border-color 0.1s;
                   -webkit-app-region: no-drag;
                   z-index: 1;
-                ">×</button
+                "><CloseIcon width="8" height="8" /></button
               >
             {/if}
           </div>

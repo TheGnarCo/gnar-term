@@ -13,6 +13,7 @@
   import { readable } from "svelte/store";
   import { tabDragState } from "../services/tab-drag";
   import { workspaceDragState } from "../services/workspace-drag";
+  import { onMount, afterUpdate } from "svelte";
 
   const emptyStore: Readable<StatusItem[]> = readable([]);
 
@@ -38,8 +39,6 @@
     : emptyStore;
   $: processItems = $processStatusStore;
 
-  // Live tab-drag state — drives the within-pane reorder insert
-  // indicator and the cross-pane split outline.
   $: drag = $tabDragState;
   $: reorderInsertIdx =
     drag?.dropTarget?.kind === "reorder" && drag.dropTarget.paneId === pane.id
@@ -50,23 +49,85 @@
   $: isWorkspaceMergeTarget =
     $workspaceDragState?.dropTarget?.kind === "tab-merge" &&
     $workspaceDragState.dropTarget.paneId === pane.id;
+
+  let tabsEl: HTMLDivElement | null = null;
+  let canScrollLeft = false;
+  let canScrollRight = false;
+
+  function updateScrollState() {
+    if (!tabsEl) return;
+    canScrollLeft = tabsEl.scrollLeft > 0;
+    canScrollRight =
+      tabsEl.scrollLeft < tabsEl.scrollWidth - tabsEl.clientWidth - 1;
+  }
+
+  onMount(() => {
+    updateScrollState();
+    const ro = new ResizeObserver(updateScrollState);
+    if (tabsEl) ro.observe(tabsEl);
+    return () => ro.disconnect();
+  });
+
+  afterUpdate(updateScrollState);
 </script>
 
 <div
-  role="tablist"
-  data-pane-id={pane.id}
   style="
-    display: flex; align-items: center; gap: 1px; position: relative;
+    display: flex; align-items: center; position: relative;
     background: {$theme.tabBarBg}; border-bottom: 1px solid {$theme.tabBarBorder};
-    height: 28px; padding: 0 4px; flex-shrink: 0; overflow-x: auto;
-    scrollbar-width: none;
+    height: 28px; flex-shrink: 0;
     {isSplitTarget || isWorkspaceMergeTarget
     ? `outline: 2px solid ${$theme.accent}; outline-offset: -2px;`
     : ''}
   "
 >
-  {#each pane.surfaces as surface, i (surface.id)}
-    {#if reorderInsertIdx === i}
+  {#if canScrollLeft}
+    <button
+      aria-label="Scroll tabs left"
+      on:click={() => tabsEl?.scrollBy({ left: -120, behavior: "smooth" })}
+      style="
+        background: none; border: none; padding: 0; font: inherit;
+        color: {$theme.fgDim}; cursor: pointer; width: 20px; height: 28px;
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0; font-size: 14px; line-height: 1;
+        -webkit-app-region: no-drag;
+      ">‹</button
+    >
+  {/if}
+
+  <div
+    role="tablist"
+    data-pane-id={pane.id}
+    bind:this={tabsEl}
+    on:scroll={updateScrollState}
+    style="
+      display: flex; align-items: center; gap: 1px; flex: 1; min-width: 0;
+      padding: 0 4px; overflow-x: auto; scrollbar-width: none;
+    "
+  >
+    {#each pane.surfaces as surface, i (surface.id)}
+      {#if reorderInsertIdx === i}
+        <span
+          aria-hidden="true"
+          style="
+            width: 2px; align-self: stretch; background: {$theme.accent};
+            flex-shrink: 0; border-radius: 1px;
+          "
+        ></span>
+      {/if}
+      <Tab
+        {surface}
+        index={i}
+        isActive={surface.id === pane.activeSurfaceId}
+        paneId={pane.id}
+        {workspaceId}
+        onSelect={() => onSelectSurface(surface.id)}
+        onClose={() => onCloseSurface(surface.id)}
+        agentDotColor={agentDotColorForSurface(processItems, surface.id)}
+        agentStatus={agentStatusForSurface(processItems, surface.id)}
+      />
+    {/each}
+    {#if reorderInsertIdx === pane.surfaces.length}
       <span
         aria-hidden="true"
         style="
@@ -75,34 +136,26 @@
         "
       ></span>
     {/if}
-    <Tab
-      {surface}
-      index={i}
-      isActive={surface.id === pane.activeSurfaceId}
-      paneId={pane.id}
-      {workspaceId}
-      onSelect={() => onSelectSurface(surface.id)}
-      onClose={() => onCloseSurface(surface.id)}
-      agentDotColor={agentDotColorForSurface(processItems, surface.id)}
-      agentStatus={agentStatusForSurface(processItems, surface.id)}
-    />
-  {/each}
-  {#if reorderInsertIdx === pane.surfaces.length}
-    <span
-      aria-hidden="true"
+
+    <NewSurfaceButton {onNewSurface} {onSelectSurfaceType} />
+  </div>
+
+  {#if canScrollRight}
+    <button
+      aria-label="Scroll tabs right"
+      on:click={() => tabsEl?.scrollBy({ left: 120, behavior: "smooth" })}
       style="
-        width: 2px; align-self: stretch; background: {$theme.accent};
-        flex-shrink: 0; border-radius: 1px;
-      "
-    ></span>
+        background: none; border: none; padding: 0; font: inherit;
+        color: {$theme.fgDim}; cursor: pointer; width: 20px; height: 28px;
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0; font-size: 14px; line-height: 1;
+        -webkit-app-region: no-drag;
+      ">›</button
+    >
   {/if}
 
-  <NewSurfaceButton {onNewSurface} {onSelectSurfaceType} />
-
-  <div style="flex: 1;"></div>
-
   <div
-    style="display: flex; align-items: center; gap: 2px; padding-right: 2px;"
+    style="display: flex; align-items: center; gap: 2px; padding-right: 2px; flex-shrink: 0;"
   >
     {#if showJumpToBottom && onJumpToBottom}
       <button

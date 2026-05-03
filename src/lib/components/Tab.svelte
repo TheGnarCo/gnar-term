@@ -9,6 +9,7 @@
   import { renameSurface } from "../services/surface-service";
   import { shortcutHintsActive } from "../stores/shortcut-hints";
   import BotIcon from "../icons/BotIcon.svelte";
+  import CloseButton from "./CloseButton.svelte";
 
   export let surface: Surface;
   export let index: number;
@@ -26,7 +27,6 @@
   $: isWaiting = agentStatus === "waiting";
 
   let hovered = false;
-  let closeHovered = false;
   let nameEl: HTMLSpanElement | null = null;
   let _renaming = false;
 
@@ -174,25 +174,12 @@
         ? `${surface.title || "Preview"} (MD Preview)`
         : surface.title || `Shell ${index + 1}`}{/if}
   </span>
-  <button
-    aria-label="Close tab"
-    style="
-      background: none; border: none; padding: {$shortcutHintsActive
-      ? '0 3px'
-      : '0'};
-      font: inherit; cursor: pointer; margin-left: 4px;
-      color: {closeHovered ? $theme.danger : $theme.fgDim};
-      font-size: {$shortcutHintsActive ? '16px' : '13px'};
-      visibility: {isActive || hovered || $shortcutHintsActive
-      ? 'visible'
-      : 'hidden'};
-      transition: font-size 0.1s, padding 0.1s;
-      line-height: 1;
-    "
-    on:click|stopPropagation={onClose}
-    on:mouseenter={() => (closeHovered = true)}
-    on:mouseleave={() => (closeHovered = false)}>×</button
-  >
+  <CloseButton
+    size="tab"
+    label="Close tab"
+    visible={isActive || hovered || $shortcutHintsActive}
+    on:click={onClose}
+  />
 </div>
 
 <style>

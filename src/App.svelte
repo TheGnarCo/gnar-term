@@ -149,6 +149,8 @@
   import SettingsPanel from "./lib/components/SettingsPanel.svelte";
   import GearIcon from "./lib/icons/GearIcon.svelte";
   import type { Component } from "svelte";
+  import { registerSidebarTab } from "./lib/services/sidebar-tab-registry";
+  import AgentsSidebarTab from "./lib/components/AgentsSidebarTab.svelte";
 
   const TOAST_DURATION_MS = 5000;
 
@@ -640,6 +642,16 @@
     initGitStatus();
     initPreview();
     initAgentDetectionBootstrap();
+
+    // Register the core agents summary sidebar tab — shows all detected
+    // agents across all workspaces, regardless of which is currently active.
+    registerSidebarTab({
+      id: "agents-summary",
+      label: "Agents",
+      icon: undefined,
+      component: AgentsSidebarTab as unknown as Component,
+      source: "core",
+    });
 
     // Workspaces (formerly the project-scope extension) —
     // registered from core so the root-row renderer, commands, and

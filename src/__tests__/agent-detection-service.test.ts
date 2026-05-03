@@ -963,6 +963,84 @@ describe("agent-detection-service — split-chunk OSC detection", () => {
   });
 });
 
+describe("agent-detection-service — done status (S-DONE-IDLE)", () => {
+  it("title change to 'ready' transitions agent status to 'done'", () => {
+    nestedWorkspaces.set([
+      makeNestedWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 200 }]),
+    ]);
+    initAgentDetection();
+    expect(getAgents()[0]?.status).toBe("idle");
+
+    eventBus.emit({
+      type: "surface:titleChanged",
+      id: "s1",
+      oldTitle: "claude",
+      newTitle: "claude — ready",
+    });
+    expect(getAgents()[0]?.status).toBe("done");
+  });
+
+  it("title change to 'done' transitions agent status to 'done'", () => {
+    nestedWorkspaces.set([
+      makeNestedWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 201 }]),
+    ]);
+    initAgentDetection();
+
+    eventBus.emit({
+      type: "surface:titleChanged",
+      id: "s1",
+      oldTitle: "claude",
+      newTitle: "claude — done",
+    });
+    expect(getAgents()[0]?.status).toBe("done");
+  });
+
+  it("done status writes a muted variant to the registry", () => {
+    nestedWorkspaces.set([
+      makeNestedWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 202 }]),
+    ]);
+    initAgentDetection();
+
+    eventBus.emit({
+      type: "surface:titleChanged",
+      id: "s1",
+      oldTitle: "claude",
+      newTitle: "claude — ready",
+    });
+
+    const item = get(statusRegistry.store).find(
+      (i) => i.source === "_agent" && i.metadata?.surfaceId === "s1",
+    );
+    expect(item?.label).toBe("done");
+    expect(item?.variant).toBe("muted");
+  });
+
+  it("idle timeout after 30s without a title match emits 'idle', not 'done'", () => {
+    vi.useFakeTimers();
+    try {
+      nestedWorkspaces.set([
+        makeNestedWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 203 }]),
+      ]);
+      initAgentDetection();
+
+      // Trigger running state (starts idle timer)
+      eventBus.emit({
+        type: "surface:titleChanged",
+        id: "s1",
+        oldTitle: "claude",
+        newTitle: "claude working",
+      });
+      expect(getAgents()[0]?.status).toBe("running");
+
+      // Let the 30s idle timeout fire
+      vi.advanceTimersByTime(31_000);
+      expect(getAgents()[0]?.status).toBe("idle");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe("agent-detection-service — lookup helpers", () => {
   it("getAgentByAgentId returns undefined for unknown id", () => {
     expect(getAgentByAgentId("nope")).toBeUndefined();

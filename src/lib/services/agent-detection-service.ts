@@ -71,7 +71,7 @@ export interface AgentPattern {
 }
 
 export type TrackerMode = "osc" | "title-only";
-export type HarnessStatus = "running" | "waiting" | "idle" | "active";
+export type HarnessStatus = "running" | "waiting" | "idle" | "active" | "done";
 
 // --- Defaults ---
 
@@ -182,7 +182,7 @@ function loadIdleTimeoutMs(): number {
 // --- Status tracker ---
 
 const RUNNING_TITLE_PATTERNS = ["thinking", "working"];
-const IDLE_TITLE_PATTERNS = ["ready", "done"];
+const DONE_TITLE_PATTERNS = ["ready", "done"];
 
 // How long a non-matching title must persist before we detach the agent.
 // Prevents momentary title flickers (e.g. Claude cycling through internal
@@ -240,12 +240,12 @@ function createStatusTracker(
       if (matchesAny(title, RUNNING_TITLE_PATTERNS)) {
         setStatus(mode === "osc" ? "running" : "active");
         resetIdleTimer();
-      } else if (matchesAny(title, IDLE_TITLE_PATTERNS)) {
+      } else if (matchesAny(title, DONE_TITLE_PATTERNS)) {
         if (idleTimer !== undefined) {
           clearTimeout(idleTimer);
           idleTimer = undefined;
         }
-        setStatus("idle");
+        setStatus("done");
       }
     },
     destroy() {
@@ -308,7 +308,9 @@ function publishStatus(
             ? "success"
             : status === "waiting"
               ? "warning"
-              : "muted",
+              : status === "done"
+                ? "muted"
+                : "muted",
         metadata: { surfaceId: tracked.surfaceId },
       });
     }

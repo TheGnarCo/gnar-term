@@ -55,6 +55,8 @@
   import { agentsStore } from "../services/agent-detection-service";
   import { variantColor } from "../status-colors";
   import { wsMeta } from "../services/service-helpers";
+  import { shortcutHintsActive } from "../stores/shortcut-hints";
+  import { modLabel } from "../terminal-service";
 
   export let parentWorkspaceId: string;
   /**
@@ -77,6 +79,8 @@
     | { kind: "strong"; label: string }
     | { kind: "light" }
     | null = null;
+  /** Position among workspace-kind rows only (0-indexed), for Cmd+N shortcut label. */
+  export let shortcutIdx: number | undefined = undefined;
 
   let workspace: Workspace | undefined;
   let stateVersion = 0;
@@ -444,6 +448,15 @@
             idleColor={workspaceHex}
             onClick={() => void handleDeleteWorkspace()}
           />
+        {:else if shortcutIdx !== undefined && shortcutIdx < 9 && $shortcutHintsActive}
+          <span
+            aria-hidden="true"
+            style="
+              font-size: 10px; font-weight: 700; padding: 2px 5px;
+              border-radius: 4px; background: {workspaceHex};
+              color: {headerFg}; white-space: nowrap; pointer-events: none;
+            ">{modLabel}{shortcutIdx + 1}</span
+          >
         {/if}
       </svelte:fragment>
 
@@ -451,7 +464,6 @@
         {#if collapsed && workspaceBotStatus}
           <SidebarSubtitleRow
             data-workspace-bot-status-row
-            aria-hidden="true"
             color={workspaceBotStatus.color}
             padding="0 8px 4px 0"
             opacity={0.85}

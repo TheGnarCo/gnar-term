@@ -1,17 +1,17 @@
 /**
  * v2 Workspace Groups Unification migration — collapses the legacy
- * AgentOrchestrator entity into the new NestedWorkspace-Group-scoped Agentic
+ * AgentOrchestrator entity into the new NestedWorkspace-scoped Agentic
  * Dashboard contribution and the singleton Global Agentic Dashboard.
  *
  * Runs once per config (schemaVersion 1 → 2). Reads the workspace-groups
- * extension state from disk to resolve each group's `path`, then:
+ * extension state from disk to resolve each workspace's `path`, then:
  *
- *   - For each group with ≥1 nested orchestrator (parentGroupId match):
+ *   - For each workspace with ≥1 nested orchestrator (parentGroupId match):
  *     the first orchestrator's markdown is copied to
- *     `<group.path>/.gnar-term/agentic-dashboard.md` (target wins on
- *     conflict). Additional nested orchestrators on the same group are
+ *     `<workspace.path>/.gnar-term/agentic-dashboard.md` (target wins on
+ *     conflict). Additional nested orchestrators on the same workspace are
  *     logged and dropped — the spec caps Agentic Dashboards at one per
- *     group.
+ *     workspace.
  *
  *   - For rootless orchestrators (no parentGroupId): the first one's
  *     markdown is copied to `~/.config/gnar-term/global-agents.md` (the

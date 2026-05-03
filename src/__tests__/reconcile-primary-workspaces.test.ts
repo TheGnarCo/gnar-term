@@ -197,6 +197,37 @@ describe("reconcilePrimaryWorkspaces", () => {
     );
   });
 
+  it("wraps a standalone nested workspace with no cwd using ~ as default path", async () => {
+    nestedWorkspaces.set([
+      makeNestedWorkspace("ws-no-cwd", {
+        name: "No CWD",
+        metadata: {},
+        // cwd intentionally absent from metadata
+      }),
+    ]);
+
+    await reconcilePrimaryWorkspaces();
+
+    const workspaces = getWorkspaces();
+    expect(workspaces).toHaveLength(1);
+    expect(workspaces[0].path).toBe("~");
+  });
+
+  it("uses the nested workspace's cwd when present", async () => {
+    nestedWorkspaces.set([
+      makeNestedWorkspace("ws-with-cwd", {
+        name: "With CWD",
+        metadata: { cwd: "/home/user/projects/myapp" },
+      }),
+    ]);
+
+    await reconcilePrimaryWorkspaces();
+
+    const workspaces = getWorkspaces();
+    expect(workspaces).toHaveLength(1);
+    expect(workspaces[0].path).toBe("/home/user/projects/myapp");
+  });
+
   it("leaves primaryNestedWorkspaceId unset on a workspace with only ineligible members (all worktrees)", async () => {
     const workspace = makeWorkspace({
       id: "g1",

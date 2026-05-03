@@ -19,7 +19,7 @@
  * kinds) are contributed through `registerRootRowRenderer` on the
  * extension API — WorkspaceListBlock looks them up by kind.
  */
-import { writable, derived, get } from "svelte/store";
+import { writable, get } from "svelte/store";
 import { saveState, getState } from "../config";
 
 export interface RootRow {
@@ -166,9 +166,3 @@ function persist(): void {
     void saveState({ rootRowOrder: get(_rootRowOrder) });
   }, 500);
 }
-
-/**
- * Derived store returning the current order as-is. Future-proofed as a
- * derived so the filtering logic can tighten without churning callers.
- */
-export const rootRows = derived(rootRowOrder, ($order) => $order);

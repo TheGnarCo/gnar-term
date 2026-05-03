@@ -396,6 +396,141 @@ export const appStateStore: Readable<AppState> = _appStateStore;
  * in the same release so old state on disk reads as the new shape in
  * memory without requiring an explicit schemaVersion lookup.
  */
+type StoredNestedWorkspace = NestedWorkspaceDef & { name: string };
+
+function migrateNestedWorkspaceMetadata(
+  nestedWorkspaces: StoredNestedWorkspace[],
+): { result: StoredNestedWorkspace[]; changed: boolean } {
+  let changed = false;
+  const result = nestedWorkspaces.map((ws) => {
+    // Guard: metadata must be a plain object before we widen the cast.
+    if (
+      typeof ws.metadata !== "object" ||
+      ws.metadata === null ||
+      Array.isArray(ws.metadata)
+    ) {
+      return ws;
+    }
+    // Migration reads persisted state which may carry legacy keys not in
+    // NestedWorkspaceMetadata (parentOrchestratorId, orchestratorId, spawnedBy).
+    // Cast to a wider type so we can inspect and drop them.
+    const md = ws.metadata as NestedWorkspaceMetadata & Record<string, unknown>;
+
+    const needsProjectIdRewrite = "projectId" in md;
+    const needsSpawnedBy =
+      typeof md.parentOrchestratorId === "string" && !("spawnedBy" in md);
+    const needsLegacyDrop =
+      "parentOrchestratorId" in md || "orchestratorId" in md;
+    const needsContributionId =
+      md.isDashboard === true &&
+      typeof md.orchestratorId === "string" &&
+      !("dashboardContributionId" in md);
+    // Pre-rename releases stamped spawnedBy with kind: "group". Newer
+    // releases use kind: "workspace" (matching the WorkspaceEntry → Workspace
+    // umbrella rename). Detect the legacy literal so we can rewrite it.
+    const existingSpawnedBy = (md as { spawnedBy?: { kind?: unknown } })
+      .spawnedBy;
+    const needsSpawnedByKindRewrite =
+      existingSpawnedBy !== undefined &&
+      existingSpawnedBy !== null &&
+      typeof existingSpawnedBy === "object" &&
+      (existingSpawnedBy as { kind?: unknown }).kind === "group";
+
+    if (
+      !needsProjectIdRewrite &&
+      !needsSpawnedBy &&
+      !needsContributionId &&
+      !needsLegacyDrop &&
+      !needsSpawnedByKindRewrite
+    ) {
+      return ws;
+    }
+
+    const { projectId, parentOrchestratorId, orchestratorId, ...rest } =
+      md as Record<string, unknown> & {
+        projectId?: unknown;
+        parentOrchestratorId?: unknown;
+        orchestratorId?: unknown;
+      };
+    const nextMd: Record<string, unknown> = { ...rest };
+
+    if (needsProjectIdRewrite) {
+      if (
+        nextMd.parentWorkspaceId === undefined &&
+        projectId !== undefined &&
+        projectId !== null
+      ) {
+        nextMd.parentWorkspaceId = projectId;
+      }
+    }
+
+    if (needsSpawnedBy) {
+      const parentWorkspaceId =
+        typeof nextMd.parentWorkspaceId === "string"
+          ? nextMd.parentWorkspaceId
+          : undefined;
+      nextMd.spawnedBy = parentWorkspaceId
+        ? { kind: "workspace", parentWorkspaceId }
+        : { kind: "global" };
+    } else if (parentOrchestratorId !== undefined) {
+      // parentOrchestratorId present but spawnedBy already set — drop the
+      // legacy marker without synthesizing a replacement.
+    }
+
+    if (needsSpawnedByKindRewrite) {
+      const legacy = existingSpawnedBy as {
+        kind: "group";
+        parentWorkspaceId?: unknown;
+      };
+      const parentWorkspaceId =
+        typeof legacy.parentWorkspaceId === "string"
+          ? legacy.parentWorkspaceId
+          : undefined;
+      nextMd.spawnedBy = parentWorkspaceId
+        ? { kind: "workspace", parentWorkspaceId }
+        : { kind: "global" };
+    }
+
+    if (needsContributionId) {
+      nextMd.dashboardContributionId = "agentic";
+    } else if (orchestratorId !== undefined && md.isDashboard !== true) {
+      // Preserve stray orchestratorId on non-dashboard nestedWorkspaces only if
+      // the caller didn't otherwise trigger a rewrite path — but since we
+      // decompose `md` above, drop it.
+    }
+
+    changed = true;
+    return { ...ws, metadata: nextMd };
+  });
+  return { result, changed };
+}
+
+function migrateRootRowOrder(
+  rowOrder: NonNullable<AppState["rootRowOrder"]>,
+  nestedIds: Set<string>,
+): { result: NonNullable<AppState["rootRowOrder"]>; changed: boolean } {
+  let changed = false;
+  const result: NonNullable<AppState["rootRowOrder"]> = [];
+  for (const row of rowOrder) {
+    if (row.kind === "agent-orchestrator") {
+      changed = true;
+      continue;
+    }
+    if (row.kind === "project" || row.kind === "workspace-group") {
+      changed = true;
+      result.push({ ...row, kind: "workspace" });
+      continue;
+    }
+    if (row.kind === "workspace" && nestedIds.has(row.id)) {
+      changed = true;
+      result.push({ ...row, kind: "nested-workspace" });
+      continue;
+    }
+    result.push(row);
+  }
+  return { result, changed };
+}
+
 export function migrateLegacyProjectShapes(state: AppState): {
   migrated: AppState;
   changed: boolean;
@@ -404,110 +539,16 @@ export function migrateLegacyProjectShapes(state: AppState): {
   let next: AppState = state;
 
   if (Array.isArray(state.nestedWorkspaces)) {
-    let workspacesChanged = false;
-    const nestedWorkspaces = state.nestedWorkspaces.map((ws) => {
-      // Migration reads persisted state which may carry legacy keys not in
-      // NestedWorkspaceMetadata (parentOrchestratorId, orchestratorId, spawnedBy).
-      // Cast to a wider type so we can inspect and drop them.
-      const md = ws.metadata as
-        | (NestedWorkspaceMetadata & Record<string, unknown>)
-        | undefined;
-      if (!md) return ws;
-
-      const needsProjectIdRewrite = "projectId" in md;
-      const needsSpawnedBy =
-        typeof md.parentOrchestratorId === "string" && !("spawnedBy" in md);
-      const needsLegacyDrop =
-        "parentOrchestratorId" in md || "orchestratorId" in md;
-      const needsContributionId =
-        md.isDashboard === true &&
-        typeof md.orchestratorId === "string" &&
-        !("dashboardContributionId" in md);
-      // Pre-rename releases stamped spawnedBy with kind: "group". Newer
-      // releases use kind: "workspace" (matching the WorkspaceEntry → Workspace
-      // umbrella rename). Detect the legacy literal so we can rewrite it.
-      const existingSpawnedBy = (md as { spawnedBy?: { kind?: unknown } })
-        .spawnedBy;
-      const needsSpawnedByKindRewrite =
-        existingSpawnedBy !== undefined &&
-        existingSpawnedBy !== null &&
-        typeof existingSpawnedBy === "object" &&
-        (existingSpawnedBy as { kind?: unknown }).kind === "group";
-
-      if (
-        !needsProjectIdRewrite &&
-        !needsSpawnedBy &&
-        !needsContributionId &&
-        !needsLegacyDrop &&
-        !needsSpawnedByKindRewrite
-      ) {
-        return ws;
-      }
-
-      const { projectId, parentOrchestratorId, orchestratorId, ...rest } =
-        md as Record<string, unknown> & {
-          projectId?: unknown;
-          parentOrchestratorId?: unknown;
-          orchestratorId?: unknown;
-        };
-      const nextMd: Record<string, unknown> = { ...rest };
-
-      if (needsProjectIdRewrite) {
-        if (
-          nextMd.parentWorkspaceId === undefined &&
-          projectId !== undefined &&
-          projectId !== null
-        ) {
-          nextMd.parentWorkspaceId = projectId;
-        }
-      }
-
-      if (needsSpawnedBy) {
-        const parentWorkspaceId =
-          typeof nextMd.parentWorkspaceId === "string"
-            ? nextMd.parentWorkspaceId
-            : undefined;
-        nextMd.spawnedBy = parentWorkspaceId
-          ? { kind: "workspace", parentWorkspaceId }
-          : { kind: "global" };
-      } else if (parentOrchestratorId !== undefined) {
-        // parentOrchestratorId present but spawnedBy already set — drop the
-        // legacy marker without synthesizing a replacement.
-      }
-
-      if (needsSpawnedByKindRewrite) {
-        const legacy = existingSpawnedBy as {
-          kind: "group";
-          parentWorkspaceId?: unknown;
-        };
-        const parentWorkspaceId =
-          typeof legacy.parentWorkspaceId === "string"
-            ? legacy.parentWorkspaceId
-            : undefined;
-        nextMd.spawnedBy = parentWorkspaceId
-          ? { kind: "workspace", parentWorkspaceId }
-          : { kind: "global" };
-      }
-
-      if (needsContributionId) {
-        nextMd.dashboardContributionId = "agentic";
-      } else if (orchestratorId !== undefined && md.isDashboard !== true) {
-        // Preserve stray orchestratorId on non-dashboard nestedWorkspaces only if
-        // the caller didn't otherwise trigger a rewrite path — but since we
-        // decompose `md` above, drop it.
-      }
-
-      workspacesChanged = true;
-      return { ...ws, metadata: nextMd };
-    });
-    if (workspacesChanged) {
+    const { result, changed: wsChanged } = migrateNestedWorkspaceMetadata(
+      state.nestedWorkspaces,
+    );
+    if (wsChanged) {
       changed = true;
-      next = { ...next, nestedWorkspaces };
+      next = { ...next, nestedWorkspaces: result };
     }
   }
 
   if (Array.isArray(state.rootRowOrder)) {
-    let orderChanged = false;
     // Build the set of nested-workspace ids from the (possibly already
     // migrated) workspaces list so we can disambiguate legacy
     // `kind: "workspace"` rows: rows whose id matches a nested workspace
@@ -518,24 +559,10 @@ export function migrateLegacyProjectShapes(state: AppState): {
         .map((w) => w.id)
         .filter((id): id is string => typeof id === "string"),
     );
-    const rootRowOrder: typeof state.rootRowOrder = [];
-    for (const row of state.rootRowOrder) {
-      if (row.kind === "agent-orchestrator") {
-        orderChanged = true;
-        continue;
-      }
-      if (row.kind === "project" || row.kind === "workspace-group") {
-        orderChanged = true;
-        rootRowOrder.push({ ...row, kind: "workspace" });
-        continue;
-      }
-      if (row.kind === "workspace" && nestedIds.has(row.id)) {
-        orderChanged = true;
-        rootRowOrder.push({ ...row, kind: "nested-workspace" });
-        continue;
-      }
-      rootRowOrder.push(row);
-    }
+    const { result: rootRowOrder, changed: orderChanged } = migrateRootRowOrder(
+      state.rootRowOrder,
+      nestedIds,
+    );
     if (orderChanged) {
       changed = true;
       next = { ...next, rootRowOrder };

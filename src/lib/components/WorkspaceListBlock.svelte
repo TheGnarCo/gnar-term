@@ -42,8 +42,7 @@
   import ExtensionWrapper from "./ExtensionWrapper.svelte";
   import { getExtensionApiById } from "../services/extension-loader";
   import { contrastColor } from "../utils/contrast";
-  import { shortcutHint } from "../actions/shortcut-hint";
-  import { modLabel } from "../terminal-service";
+
   import { getAllSurfaces, type NestedWorkspace } from "../types";
   import { commandStore } from "../services/command-registry";
   import { tabDragState } from "../services/tab-drag";
@@ -101,6 +100,7 @@
     rendererRailColor?: string;
     rendererLabel?: string;
     pseudoWorkspace?: PseudoWorkspace;
+    workspaceOnlyIdx?: number;
   };
   // Use `derived()` (not a `$:` IIFE) so Svelte's store-subscription
   // plumbing tracks the sources explicitly. An earlier attempt wrapped
@@ -124,6 +124,7 @@
       const renderers = new Map($renderers.map((r) => [r.id, r] as const));
       const pseudoById = new Map($pseudoWs.map((pw) => [pw.id, pw] as const));
       const renderedWsIds = new Set<string>();
+      let workspaceCount = 0;
       $order.forEach((row, idx) => {
         const key = `${row.kind}:${row.id}`;
         if (row.kind === "nested-workspace") {
@@ -141,6 +142,8 @@
         }
         const r = renderers.get(row.kind);
         if (!r) return;
+        const workspaceOnlyIdx =
+          row.kind === "workspace" ? workspaceCount++ : undefined;
         rows.push({
           row,
           idx,
@@ -149,6 +152,7 @@
           rendererSource: r.source,
           rendererRailColor: r.railColor?.(row.id),
           rendererLabel: r.label?.(row.id),
+          workspaceOnlyIdx,
         });
       });
       // Fallback — any unclaimed workspace in the store that isn't
@@ -489,7 +493,6 @@
             bind:this={workspaceItems[ws.id]}
             workspace={ws}
             index={globalIdx}
-            shortcutIdx={entry.idx}
             isActive={globalIdx === $activeNestedWorkspaceIdx}
             dragActive={isSource}
             onSelect={() => {
@@ -503,27 +506,21 @@
         {:else if entry.row.kind === "pseudo-workspace" && entry.pseudoWorkspace}
           <PseudoWorkspaceRow
             pseudo={entry.pseudoWorkspace}
-            shortcutIdx={entry.idx}
             onGripMouseDown={(e) => startRootRowDrag(e, entry.idx)}
           />
         {:else if entry.rendererComponent && entry.rendererSource}
           {@const extApi = getExtensionApiById(entry.rendererSource)}
           {#if extApi}
-            <div
-              use:shortcutHint={entry.idx < 9
-                ? `${modLabel}${entry.idx + 1}`
-                : undefined}
-            >
-              <ExtensionWrapper
-                api={extApi}
-                component={entry.rendererComponent}
-                props={{
-                  id: entry.row.id,
-                  onGripMouseDown: (e: MouseEvent) =>
-                    startRootRowDrag(e, entry.idx),
-                }}
-              />
-            </div>
+            <ExtensionWrapper
+              api={extApi}
+              component={entry.rendererComponent}
+              props={{
+                id: entry.row.id,
+                onGripMouseDown: (e: MouseEvent) =>
+                  startRootRowDrag(e, entry.idx),
+                shortcutIdx: entry.workspaceOnlyIdx,
+              }}
+            />
           {/if}
         {/if}
       </div>

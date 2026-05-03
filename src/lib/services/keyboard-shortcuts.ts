@@ -15,12 +15,8 @@ import {
   findBarVisible,
   primarySidebarVisible,
 } from "../stores/ui";
-import {
-  nestedWorkspaces,
-  activeSurface,
-  activeNestedWorkspaceIdx,
-  activePseudoWorkspaceId,
-} from "../stores/nested-workspace";
+import { nestedWorkspaces, activeSurface } from "../stores/nested-workspace";
+import { activateWorkspace } from "./workspace-service";
 import { rootRowOrder } from "../stores/root-row-order";
 import { isTerminalSurface } from "../types";
 import { createNestedWorkspace } from "./nested-workspace-service";
@@ -93,22 +89,16 @@ export function handleAppKeydown(
       return;
     }
 
-    // ⌘1-9: select nth root row in the primary sidebar
+    // ⌘1-9: activate nth umbrella workspace in the primary sidebar
     if (e.key >= "1" && e.key <= "9") {
       const n = parseInt(e.key) - 1;
-      const row = get(rootRowOrder)[n];
+      const workspaceRows = get(rootRowOrder).filter(
+        (r) => r.kind === "workspace",
+      );
+      const row = workspaceRows[n];
       if (!row) return;
       e.preventDefault();
-      if (row.kind === "nested-workspace") {
-        const idx = get(nestedWorkspaces).findIndex((ws) => ws.id === row.id);
-        if (idx >= 0) {
-          activeNestedWorkspaceIdx.set(idx);
-          activePseudoWorkspaceId.set(null);
-        }
-      } else if (row.kind === "pseudo-workspace") {
-        activeNestedWorkspaceIdx.set(-1);
-        activePseudoWorkspaceId.set(row.id);
-      }
+      void activateWorkspace(row.id);
       return;
     }
   }

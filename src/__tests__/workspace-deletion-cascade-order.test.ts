@@ -65,7 +65,7 @@ describe("umbrella deletion cascades close AFTER removing the umbrella", () => {
     )?.[0];
     expect(fn).toBeDefined();
     expect(fn).toMatch(
-      /getWorkspaces\(\)\.find\(\s*\(\s*g\s*\)\s*=>\s*g\.primaryNestedWorkspaceId\s*===\s*closedId/,
+      /getWorkspaces\(\)\.find\(\s*\(\s*w\s*\)\s*=>\s*w\.primaryNestedWorkspaceId\s*===\s*closedId/,
     );
     expect(fn).toMatch(/if\s*\(\s*!workspace\s*\)\s*return/);
   });

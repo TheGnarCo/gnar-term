@@ -66,7 +66,6 @@ vi.mock("../lib/stores/root-row-order", () => ({
   setRootRowOrder: vi.fn(),
   prependRootRow: vi.fn(),
   bootstrapRootRowOrder: vi.fn(),
-  rootRows: { subscribe: vi.fn() },
   get: vi.fn().mockReturnValue([]),
 }));
 

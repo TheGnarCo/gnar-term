@@ -150,7 +150,7 @@ export function getWorkspaces(): Workspace[] {
 }
 
 export function getWorkspace(id: string): Workspace | undefined {
-  return getWorkspaces().find((g) => g.id === id);
+  return getWorkspaces().find((w) => w.id === id);
 }
 
 export function setWorkspaces(next: Workspace[]): void {

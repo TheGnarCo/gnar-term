@@ -149,6 +149,9 @@
       if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();
         onSelect();
+      } else if (e.key === "F2" && !isDashboardWs && !isLocked) {
+        e.preventDefault();
+        void startRename();
       }
     }}
     style="flex: 1; min-width: 0;"

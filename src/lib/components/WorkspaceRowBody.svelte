@@ -14,6 +14,8 @@
   export let id: string;
   /** Forwarded to ContainerRow via WorkspaceSectionContent. */
   export let onGripMouseDown: (e: MouseEvent) => void = () => {};
+  /** Position among workspace-kind rows only, for Cmd+N shortcut label. */
+  export let shortcutIdx: number | undefined = undefined;
 </script>
 
 <WorkspaceSectionContent
@@ -21,4 +23,5 @@
   containerBlockId="__workspaces__"
   overlay={null}
   {onGripMouseDown}
+  {shortcutIdx}
 />

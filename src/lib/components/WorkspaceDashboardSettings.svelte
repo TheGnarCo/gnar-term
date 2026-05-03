@@ -42,6 +42,10 @@
   let editingName = false;
   $: if (!editingName && workspace) nameDraft = workspace.name;
 
+  let pathDraft = "";
+  let editingPath = false;
+  $: if (!editingPath && workspace) pathDraft = workspace.path;
+
   function selectColor(slot: string): void {
     if (!workspace) return;
     updateWorkspace(workspace.id, { color: slot });
@@ -53,6 +57,14 @@
     const trimmed = nameDraft.trim();
     if (!trimmed || trimmed === workspace.name) return;
     updateWorkspace(workspace.id, { name: trimmed });
+  }
+
+  function commitPath(): void {
+    editingPath = false;
+    if (!workspace) return;
+    const trimmed = pathDraft.trim();
+    if (!trimmed || trimmed === workspace.path) return;
+    updateWorkspace(workspace.id, { path: trimmed });
   }
 
   // The Dashboards section excludes the Settings contribution itself —
@@ -177,6 +189,37 @@
           border: 1px solid {$theme.border};
           border-radius: 4px; font-size: 13px;
           max-width: 420px;
+        "
+      />
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 8px;">
+      <label
+        for="workspace-path-input"
+        style="margin: 0; font-size: 14px; font-weight: 600;"
+        >Working directory</label
+      >
+      <input
+        id="workspace-path-input"
+        data-workspace-path-input
+        type="text"
+        bind:value={pathDraft}
+        on:focus={() => (editingPath = true)}
+        on:blur={commitPath}
+        on:keydown={(e) => {
+          if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur();
+          if (e.key === "Escape") {
+            pathDraft = workspace?.path ?? "";
+            (e.currentTarget as HTMLInputElement).blur();
+          }
+        }}
+        style="
+          padding: 6px 10px;
+          background: {$theme.bgSurface};
+          color: {$theme.fg};
+          border: 1px solid {$theme.border};
+          border-radius: 4px; font-size: 13px;
+          max-width: 420px; font-family: monospace;
         "
       />
     </section>

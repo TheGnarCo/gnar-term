@@ -28,6 +28,7 @@ import {
   createNestedWorkspaceFromDef,
   closeNestedWorkspace,
   schedulePersist,
+  switchNestedWorkspace,
 } from "./nested-workspace-service";
 import { eventBus } from "./event-bus";
 import {
@@ -62,8 +63,8 @@ export function updateWorkspace(
   id: string,
   patch: Partial<Omit<Workspace, "id">>,
 ): void {
-  const next = getWorkspaces().map((g) =>
-    g.id === id ? { ...g, ...patch } : g,
+  const next = getWorkspaces().map((w) =>
+    w.id === id ? { ...w, ...patch } : w,
   );
   setWorkspaces(next);
   emitStateChanged({ parentWorkspaceId: id });
@@ -76,10 +77,10 @@ export function updateWorkspace(
  */
 export function toggleWorkspaceLock(id: string): void {
   const workspaces = getWorkspaces();
-  const idx = workspaces.findIndex((g) => g.id === id);
+  const idx = workspaces.findIndex((w) => w.id === id);
   if (idx === -1) return;
-  const next = workspaces.map((g) =>
-    g.id === id ? { ...g, locked: !g.locked } : g,
+  const next = workspaces.map((w) =>
+    w.id === id ? { ...w, locked: !w.locked } : w,
   );
   setWorkspaces(next);
   emitStateChanged({ parentWorkspaceId: id });
@@ -88,7 +89,7 @@ export function toggleWorkspaceLock(id: string): void {
 export function deleteWorkspace(id: string): void {
   const workspace = getWorkspace(id);
   if (workspace?.locked) return;
-  const next = getWorkspaces().filter((g) => g.id !== id);
+  const next = getWorkspaces().filter((w) => w.id !== id);
   setWorkspaces(next);
   removeRootRow({ kind: "workspace", id });
   if (workspace) releaseWorkspaceDirtyStore(workspace.path);
@@ -139,7 +140,7 @@ export function addNestedWorkspaceToWorkspace(
   workspaceId: string,
 ): boolean {
   const workspaces = getWorkspaces();
-  const workspace = workspaces.find((g) => g.id === parentWorkspaceId);
+  const workspace = workspaces.find((w) => w.id === parentWorkspaceId);
   if (!workspace) return false;
   if (workspace.nestedWorkspaceIds.includes(workspaceId)) return false;
 
@@ -159,14 +160,14 @@ export function addNestedWorkspaceToWorkspace(
     }
   }
 
-  const next = workspaces.map((g) => {
-    if (g.id === parentWorkspaceId) {
+  const next = workspaces.map((w) => {
+    if (w.id === parentWorkspaceId) {
       return {
-        ...g,
-        nestedWorkspaceIds: [...g.nestedWorkspaceIds, workspaceId],
+        ...w,
+        nestedWorkspaceIds: [...w.nestedWorkspaceIds, workspaceId],
       };
     }
-    return g;
+    return w;
   });
   setWorkspaces(next);
   emitStateChanged({ parentWorkspaceId });
@@ -185,17 +186,17 @@ export function insertNestedWorkspaceIntoWorkspace(
 ): boolean {
   const workspaces = getWorkspaces();
   let changed = false;
-  const next = workspaces.map((g) => {
-    if (g.id !== parentWorkspaceId) return g;
-    if (g.nestedWorkspaceIds.includes(workspaceId)) return g;
+  const next = workspaces.map((w) => {
+    if (w.id !== parentWorkspaceId) return w;
+    if (w.nestedWorkspaceIds.includes(workspaceId)) return w;
     changed = true;
-    const ids = [...g.nestedWorkspaceIds];
+    const ids = [...w.nestedWorkspaceIds];
     ids.splice(
       Math.max(0, Math.min(ids.length, positionInWorkspace)),
       0,
       workspaceId,
     );
-    return { ...g, nestedWorkspaceIds: ids };
+    return { ...w, nestedWorkspaceIds: ids };
   });
   if (!changed) return false;
   setWorkspaces(next);
@@ -211,9 +212,9 @@ export function insertNestedWorkspaceIntoWorkspace(
 export function removeNestedWorkspaceFromAllWorkspaces(
   workspaceId: string,
 ): void {
-  const next = getWorkspaces().map((g) => ({
-    ...g,
-    nestedWorkspaceIds: g.nestedWorkspaceIds.filter((id) => id !== workspaceId),
+  const next = getWorkspaces().map((w) => ({
+    ...w,
+    nestedWorkspaceIds: w.nestedWorkspaceIds.filter((id) => id !== workspaceId),
   }));
   setWorkspaces(next);
   emitStateChanged({});
@@ -623,6 +624,46 @@ export function openWorkspaceDashboard(workspace: Workspace): boolean {
 }
 
 /**
+ * Activate an umbrella workspace: switch to its primary nested workspace,
+ * creating one if missing, or fall back to the dashboard / first nested
+ * workspace. Mirrors the WorkspaceSectionContent banner-click logic.
+ */
+export async function activateWorkspace(workspaceId: string): Promise<void> {
+  const workspace = getWorkspace(workspaceId);
+  if (!workspace) return;
+  const ws = get(nestedWorkspaces);
+  const primaryWs = workspace.primaryNestedWorkspaceId
+    ? ws.find((w) => w.id === workspace.primaryNestedWorkspaceId)
+    : undefined;
+  if (primaryWs) {
+    const idx = ws.indexOf(primaryWs);
+    if (idx >= 0) {
+      switchNestedWorkspace(idx);
+      return;
+    }
+  } else if (workspace.primaryNestedWorkspaceId) {
+    const newWsId = await createNestedWorkspaceFromDef({
+      name: workspace.name,
+      cwd: workspace.path,
+      metadata: { parentWorkspaceId: workspace.id },
+    });
+    if (newWsId) {
+      updateWorkspace(workspace.id, { primaryNestedWorkspaceId: newWsId });
+      claimWorkspace(newWsId, "core");
+      const newIdx = get(nestedWorkspaces).findIndex((w) => w.id === newWsId);
+      if (newIdx >= 0) switchNestedWorkspace(newIdx);
+      return;
+    }
+  }
+  if (openWorkspaceDashboard(workspace)) return;
+  const allWs = get(nestedWorkspaces);
+  const nestedIdx = allWs.findIndex(
+    (w) => wsMeta(w)?.parentWorkspaceId === workspace.id,
+  );
+  if (nestedIdx >= 0) switchNestedWorkspace(nestedIdx);
+}
+
+/**
  * Called on app startup (after nestedWorkspaces are restored) — ensures every
  * workspace has exactly one Dashboard NestedWorkspace. Prior releases
  * matched the dashboard via `workspace.dashboardNestedWorkspaceId`; nested workspace
@@ -632,7 +673,7 @@ export function openWorkspaceDashboard(workspace: Workspace): boolean {
  *
  *   1. Adopt the first workspace matching `metadata.isDashboard ===
  *      true && metadata.parentWorkspaceId === workspace.id` (with no contribution id,
- *      or an explicit `"group"` id) — rebinding the workspace's
+ *      or an explicit `OVERVIEW_DASHBOARD_CONTRIBUTION_ID` id) — rebinding the workspace's
  *      `dashboardNestedWorkspaceId` to that workspace.
  *   2. Close every extra Workspace Dashboard for the same workspace (users end
  *      up with these when pre-fix state carried duplicates).
@@ -641,6 +682,69 @@ export function openWorkspaceDashboard(workspace: Workspace): boolean {
  * The loop is sequential because `closeNestedWorkspace` mutates the
  * nestedWorkspaces store and ripples to `$activeNestedWorkspaceIdx`.
  */
+async function reconcileDashboardsForWorkspace(
+  workspace: Workspace,
+  dashboardIndex: Map<string, Map<string, NestedWorkspace[]>>,
+): Promise<void> {
+  // One-shot cleanup: strip the legacy `## Active Agents` section
+  // from the workspace's Overview markdown if it's still there. Runs
+  // before we materialize / rebind the dashboard workspace so the
+  // first render already reflects the cleaned file.
+  await scrubWorkspaceDashboardActiveAgents(
+    workspaceDashboardPath(workspace.path),
+  );
+  await migrateWorkspaceDashboardWidgets(
+    workspace,
+    workspaceDashboardPath(workspace.path),
+  );
+
+  const byContrib = dashboardIndex.get(workspace.id);
+
+  // Deduplicate every autoProvision contribution type — keeps the first
+  // match, closes the rest. Previously only "group" was covered; the
+  // startup race could leave duplicate "settings" or extension-owned
+  // dashboards (e.g. "agentic") that are now caught here too.
+  for (const c of getDashboardContributions()) {
+    if (!c.autoProvision) continue;
+    const dupeMatches = byContrib?.get(c.id) ?? [];
+    if (dupeMatches.length <= 1) continue;
+    const [keep, ...extras] = dupeMatches;
+    for (const dup of extras) closeNestedWorkspaceById(dup.id);
+    // Prune the index to mirror the store mutation; the post-dedupe
+    // `existingContribIds` snapshot below relies on this.
+    if (keep) byContrib?.set(c.id, [keep]);
+  }
+
+  // Back-fill any autoProvision contribution (including OVERVIEW_DASHBOARD_CONTRIBUTION_ID if
+  // it is still missing after the dedupe pass, plus `"settings"` and
+  // extension-owned autoProvision contributions).
+  try {
+    const existingContribIds = new Set(byContrib?.keys() ?? []);
+    await provisionAutoDashboardsForWorkspace(workspace, existingContribIds);
+    // Rebind `dashboardNestedWorkspaceId` to the current OVERVIEW_DASHBOARD_CONTRIBUTION_ID overview —
+    // either the one that survived dedupe or the one just provisioned.
+    // Check the index first (O(1)); fall back to a store scan only for
+    // dashboards provisioned after the index was built.
+    const overview =
+      byContrib?.get(OVERVIEW_DASHBOARD_CONTRIBUTION_ID)?.[0] ??
+      get(nestedWorkspaces).find((w) =>
+        isDashboardWorkspace(
+          w,
+          workspace.id,
+          OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
+          true,
+        ),
+      );
+    if (overview && overview.id !== workspace.dashboardNestedWorkspaceId) {
+      updateWorkspace(workspace.id, {
+        dashboardNestedWorkspaceId: overview.id,
+      });
+    }
+  } catch (err) {
+    console.warn("[workspace-service] Dashboard reconciliation failed:", err);
+  }
+}
+
 export async function reconcileWorkspaceDashboards(): Promise<void> {
   // Backfill `dashboardContributionId` on restored legacy dashboards
   // so autoProvision's strict contribId match doesn't spawn duplicates.
@@ -673,69 +777,9 @@ export async function reconcileWorkspaceDashboards(): Promise<void> {
   }
 
   await Promise.allSettled(
-    getWorkspaces().map(async (workspace) => {
-      // One-shot cleanup: strip the legacy `## Active Agents` section
-      // from the workspace's Overview markdown if it's still there. Runs
-      // before we materialize / rebind the dashboard workspace so the
-      // first render already reflects the cleaned file.
-      await scrubWorkspaceDashboardActiveAgents(
-        workspaceDashboardPath(workspace.path),
-      );
-      await migrateWorkspaceDashboardWidgets(
-        workspace,
-        workspaceDashboardPath(workspace.path),
-      );
-
-      const byContrib = dashboardIndex.get(workspace.id);
-
-      // Deduplicate every autoProvision contribution type — keeps the first
-      // match, closes the rest. Previously only "group" was covered; the
-      // startup race could leave duplicate "settings" or extension-owned
-      // dashboards (e.g. "agentic") that are now caught here too.
-      for (const c of getDashboardContributions()) {
-        if (!c.autoProvision) continue;
-        const dupeMatches = byContrib?.get(c.id) ?? [];
-        if (dupeMatches.length <= 1) continue;
-        const [keep, ...extras] = dupeMatches;
-        for (const dup of extras) closeNestedWorkspaceById(dup.id);
-        // Prune the index to mirror the store mutation; the post-dedupe
-        // `existingContribIds` snapshot below relies on this.
-        if (keep) byContrib?.set(c.id, [keep]);
-      }
-
-      // Back-fill any autoProvision contribution (including `"group"` if
-      // it is still missing after the dedupe pass, plus `"settings"` and
-      // extension-owned autoProvision contributions).
-      try {
-        const existingContribIds = new Set(byContrib?.keys() ?? []);
-        await provisionAutoDashboardsForWorkspace(
-          workspace,
-          existingContribIds,
-        );
-        // Rebind `dashboardNestedWorkspaceId` to the current "group" overview —
-        // either the one that survived dedupe or the one just provisioned.
-        // The provision step may have appended to the store, so re-snapshot
-        // for the overview lookup.
-        const overview = get(nestedWorkspaces).find((w) =>
-          isDashboardWorkspace(
-            w,
-            workspace.id,
-            OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
-            true,
-          ),
-        );
-        if (overview && overview.id !== workspace.dashboardNestedWorkspaceId) {
-          updateWorkspace(workspace.id, {
-            dashboardNestedWorkspaceId: overview.id,
-          });
-        }
-      } catch (err) {
-        console.warn(
-          "[workspace-service] Dashboard reconciliation failed:",
-          err,
-        );
-      }
-    }),
+    getWorkspaces().map((workspace) =>
+      reconcileDashboardsForWorkspace(workspace, dashboardIndex),
+    ),
   );
 }
 
@@ -747,7 +791,7 @@ export async function reconcileWorkspaceDashboards(): Promise<void> {
  */
 export function reclaimNestedWorkspacesAcrossWorkspaces(): void {
   const workspaces = getWorkspaces();
-  const workspaceIds = new Set(workspaces.map((g) => g.id));
+  const workspaceIds = new Set(workspaces.map((w) => w.id));
 
   // Collect workspace ids per workspace in a single pass to avoid one
   // setWorkspaces() call (and event emission) per workspace.
@@ -767,14 +811,14 @@ export function reclaimNestedWorkspacesAcrossWorkspaces(): void {
   }
 
   if (newMembers.size > 0) {
-    const next = workspaces.map((g) => {
-      const toAdd = newMembers.get(g.id) ?? [];
-      if (toAdd.length === 0) return g;
-      const existing = new Set(g.nestedWorkspaceIds);
+    const next = workspaces.map((w) => {
+      const toAdd = newMembers.get(w.id) ?? [];
+      if (toAdd.length === 0) return w;
+      const existing = new Set(w.nestedWorkspaceIds);
       const fresh = toAdd.filter((id) => !existing.has(id));
       return fresh.length > 0
-        ? { ...g, nestedWorkspaceIds: [...g.nestedWorkspaceIds, ...fresh] }
-        : g;
+        ? { ...w, nestedWorkspaceIds: [...w.nestedWorkspaceIds, ...fresh] }
+        : w;
     });
     setWorkspaces(next);
     emitStateChanged({});
@@ -783,19 +827,7 @@ export function reclaimNestedWorkspacesAcrossWorkspaces(): void {
   for (const wsId of toClaimIds) claimWorkspace(wsId, "core");
 }
 
-/**
- * Startup reconciliation — called after nestedWorkspaces are restored.
- *
- * Pass 1: For every workspace lacking `primaryNestedWorkspaceId`, select the first
- * member workspace that is neither a dashboard nor a worktree.
- *
- * Pass 2: Wrap every standalone workspace (no metadata.parentWorkspaceId, not a
- * dashboard) into a fresh workspace with that workspace as its primary.
- *
- * Idempotent — workspaces that already have `primaryNestedWorkspaceId` are skipped.
- */
-export async function reconcilePrimaryWorkspaces(): Promise<void> {
-  // Pass 1 — backfill existing workspaces.
+function backfillPrimaryWorkspaces(): void {
   for (const workspace of getWorkspaces()) {
     if (workspace.primaryNestedWorkspaceId) continue;
     const members = getNestedWorkspacesForWorkspace(workspace.id);
@@ -808,12 +840,13 @@ export async function reconcilePrimaryWorkspaces(): Promise<void> {
     // Workspaces with no eligible primary are left without one — the next
     // nested-workspace creation flow will set it.
   }
+}
 
-  // Pass 2 — wrap standalone nestedWorkspaces.
-  const knownWorkspaceIds = new Set(getWorkspaces().map((g) => g.id));
+function wrapStandaloneNestedWorkspaces(): void {
+  const knownWorkspaceIds = new Set(getWorkspaces().map((w) => w.id));
   // Snapshot before we start mutating so the loop is stable.
   const snapshot = get(nestedWorkspaces);
-  const usedColors = getWorkspaces().map((g) => g.color);
+  const usedColors = getWorkspaces().map((w) => w.color);
 
   for (const ws of snapshot) {
     const md = wsMeta(ws);
@@ -829,11 +862,14 @@ export async function reconcilePrimaryWorkspaces(): Promise<void> {
       WORKSPACE_COLOR_SLOTS[colorIdx] ?? WORKSPACE_COLOR_SLOTS[0];
     usedColors.push(color);
 
+    const rawCwd = (md as Record<string, unknown>).cwd;
+    const path = typeof rawCwd === "string" && rawCwd ? rawCwd : "~";
+
     const id = crypto.randomUUID();
     const workspace: Workspace = {
       id,
       name: ws.name,
-      path: ((md as Record<string, unknown>).cwd as string) ?? "",
+      path,
       color,
       nestedWorkspaceIds: [ws.id],
       primaryNestedWorkspaceId: ws.id,
@@ -857,17 +893,39 @@ export async function reconcilePrimaryWorkspaces(): Promise<void> {
     claimWorkspace(ws.id, "core");
     knownWorkspaceIds.add(id);
   }
+}
 
-  // Pass 3 — claim all nestedWorkspaces that have metadata.parentWorkspaceId pointing to
+function rehydrateClaimRegistry(): void {
+  // Claim all nestedWorkspaces that have metadata.parentWorkspaceId pointing to
   // valid workspaces. This rehydrates the in-memory claim registry from
   // persisted metadata on restart.
-  const validWorkspaceIds = new Set(getWorkspaces().map((g) => g.id));
+  const validWorkspaceIds = new Set(getWorkspaces().map((w) => w.id));
   for (const ws of get(nestedWorkspaces)) {
     const md = wsMeta(ws);
     if (md.parentWorkspaceId && validWorkspaceIds.has(md.parentWorkspaceId)) {
       claimWorkspace(ws.id, "core");
     }
   }
+}
+
+/**
+ * Startup reconciliation — called after nestedWorkspaces are restored.
+ *
+ * Pass 1: For every workspace lacking `primaryNestedWorkspaceId`, select the first
+ * member workspace that is neither a dashboard nor a worktree.
+ *
+ * Pass 2: Wrap every standalone workspace (no metadata.parentWorkspaceId, not a
+ * dashboard) into a fresh workspace with that workspace as its primary.
+ *
+ * Pass 3: Rehydrate the in-memory claim registry from persisted parentWorkspaceId
+ * metadata so claimed workspaces survive restarts.
+ *
+ * Idempotent — workspaces that already have `primaryNestedWorkspaceId` are skipped.
+ */
+export async function reconcilePrimaryWorkspaces(): Promise<void> {
+  backfillPrimaryWorkspaces();
+  wrapStandaloneNestedWorkspaces();
+  rehydrateClaimRegistry();
 }
 
 /**
@@ -879,7 +937,7 @@ export function setupPrimaryWorkspaceAutoRecreation(): void {
     if (event.type !== "workspace:closed") return;
     const closedId = event.id;
     const workspace = getWorkspaces().find(
-      (g) => g.primaryNestedWorkspaceId === closedId,
+      (w) => w.primaryNestedWorkspaceId === closedId,
     );
     if (!workspace) return; // Not a primary workspace
 

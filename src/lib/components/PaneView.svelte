@@ -23,6 +23,7 @@
   import { tabDragState } from "../services/tab-drag";
   import { workspaceDragState } from "../services/workspace-drag";
   import { wsMeta } from "../services/service-helpers";
+  import { dismissPane, relaunchPane } from "../services/pane-service";
 
   export let pane: Pane;
   export let workspaceId: string = "";
@@ -327,7 +328,41 @@
       parentWorkspaceId={settingsDashboardWorkspaceId}
     />
   {:else}
-    {#if pane.surfaces.length === 0}
+    {#if pane.exitedSurface && pane.surfaces.length === 0}
+      <div
+        style="
+          flex: 1; display: flex; flex-direction: column;
+          align-items: center; justify-content: center; gap: 12px;
+          color: {$theme.fgMuted}; font-size: 13px;
+        "
+      >
+        <span>Shell exited (code {pane.exitedSurface.code}).</span>
+        <div style="display: flex; gap: 8px;">
+          <button
+            on:click={() => void relaunchPane(pane.id)}
+            style="
+              padding: 5px 14px; border-radius: 6px; cursor: pointer;
+              background: {$theme.accent ?? $theme.bgHighlight};
+              color: {$theme.fg}; border: 1px solid {$theme.border};
+              font-size: 12px; font-family: inherit;
+            "
+          >
+            Relaunch
+          </button>
+          <button
+            on:click={() => dismissPane(pane.id)}
+            style="
+              padding: 5px 14px; border-radius: 6px; cursor: pointer;
+              background: transparent; color: {$theme.fgMuted};
+              border: 1px solid {$theme.border};
+              font-size: 12px; font-family: inherit;
+            "
+          >
+            Dismiss
+          </button>
+        </div>
+      </div>
+    {:else if pane.surfaces.length === 0}
       <!-- Empty pane view — the user just closed the last surface. Shows
            the same EmptySurface UX the app uses when every workspace has
            been closed, but scoped to this single empty pane. -->

@@ -303,6 +303,7 @@ struct PtyTitle {
 #[derive(Clone, Serialize)]
 struct PtyExit {
     pty_id: u32,
+    exit_code: Option<i32>,
 }
 
 /// Return CLI arguments passed to the app.
@@ -485,7 +486,13 @@ function __gnarterm_report_cwd --on-event fish_prompt\n\
             match reader.read(&mut buf) {
                 Ok(0) => {
                     // PTY closed — notify frontend
-                    let _ = app_handle.emit("pty-exit", PtyExit { pty_id: id });
+                    let _ = app_handle.emit(
+                        "pty-exit",
+                        PtyExit {
+                            pty_id: id,
+                            exit_code: None,
+                        },
+                    );
                     break;
                 }
                 Ok(n) => {
@@ -561,7 +568,13 @@ function __gnarterm_report_cwd --on-event fish_prompt\n\
                     }
                 }
                 Err(_) => {
-                    let _ = app_handle.emit("pty-exit", PtyExit { pty_id: id });
+                    let _ = app_handle.emit(
+                        "pty-exit",
+                        PtyExit {
+                            pty_id: id,
+                            exit_code: None,
+                        },
+                    );
                     break;
                 }
             }

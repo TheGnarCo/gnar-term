@@ -64,6 +64,7 @@ export interface Pane {
   activeSurfaceId: string | null;
   resizeObserver?: ResizeObserver;
   element?: HTMLElement;
+  exitedSurface?: { code: number; definedCommand?: string; cwd?: string };
 }
 
 export type SplitNode =

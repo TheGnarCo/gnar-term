@@ -189,14 +189,13 @@ describe("WorkspaceView renders all nestedWorkspaces (not just active)", () => {
 
 describe("pty-exit workspace recovery", () => {
   it("clamps activeNestedWorkspaceIdx after workspace removal", async () => {
-    // Structural invariant: verified via source scan because this logic
-    // runs inside a Tauri event listener that can't be triggered in vitest.
+    // Structural invariant: verified via source scan.
+    // Since S-RELAUNCH, pty-exit no longer auto-collapses panes — it sets
+    // exitedSurface instead. Workspace removal (and the index clamp) now
+    // happens in pane-service.ts removePane(), called by dismissPane().
     const fs = await import("fs");
-    const source = fs.readFileSync("src/lib/terminal-service.ts", "utf-8");
-    // After splicing a workspace from the list, activeNestedWorkspaceIdx must be
-    // clamped to the new last index (or -1 when the list is empty, so the
-    // Empty Surface takes over).
-    expect(source).toContain("activeNestedWorkspaceIdx.set(wsList.length - 1)");
+    const source = fs.readFileSync("src/lib/services/pane-service.ts", "utf-8");
+    expect(source).toContain("activeNestedWorkspaceIdx.set(");
   });
 
   it("does NOT auto-create a default workspace when all are closed (Empty Surface takes over)", async () => {

@@ -163,6 +163,34 @@ export function closePane(paneId: string) {
   schedulePersist();
 }
 
+export function dismissPane(paneId: string): void {
+  const ws = get(activeWorkspace);
+  if (!ws) return;
+  const pane = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
+  if (!pane) return;
+  pane.exitedSurface = undefined;
+  removePane(ws, pane);
+  schedulePersist();
+}
+
+export async function relaunchPane(paneId: string): Promise<void> {
+  const ws = get(activeWorkspace);
+  if (!ws) return;
+  const pane = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
+  if (!pane || !pane.exitedSurface) return;
+  const { definedCommand, cwd } = pane.exitedSurface;
+  pane.exitedSurface = undefined;
+  nestedWorkspaces.update((l) => l);
+  const surface = await createTerminalSurface(pane, cwd);
+  if (definedCommand) {
+    surface.definedCommand = definedCommand;
+    surface.startupCommand = definedCommand;
+    surface.title = definedCommand;
+  }
+  nestedWorkspaces.update((l) => l);
+  void safeFocus(surface);
+}
+
 export function focusPane(paneId: string) {
   const ws = get(activeWorkspace);
   if (!ws || ws.activePaneId === paneId) return;

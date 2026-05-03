@@ -41,14 +41,7 @@ import {
   getContextMenuItemsForFile,
 } from "./services/context-menu-item-registry";
 import type { TerminalSurface, Pane, NestedWorkspace } from "./types";
-import {
-  uid,
-  getAllSurfaces,
-  getAllPanes,
-  isTerminalSurface,
-  findParentSplit,
-  replaceNodeInTree,
-} from "./types";
+import { uid, getAllSurfaces, getAllPanes, isTerminalSurface } from "./types";
 import type { MenuItem } from "./context-menu-types";
 import "@xterm/xterm/css/xterm.css";
 
@@ -462,7 +455,7 @@ export async function teardownListeners(): Promise<void> {
   }
 }
 
-function handlePtyExit(pty_id: number): void {
+function handlePtyExit(pty_id: number, exit_code: number | null = null): void {
   // pty-exit arrives via emit while chunks arrive via Channel — different
   // transports, so a trailing chunk may already be in the per-pty buffer.
   // Flush it synchronously to the surface's terminal before we tear down
@@ -496,42 +489,20 @@ function handlePtyExit(pty_id: number): void {
           (s) => isTerminalSurface(s) && s.ptyId === pty_id,
         );
         if (idx >= 0) {
+          const exiting = pane.surfaces[idx] as TerminalSurface;
+          const { definedCommand, cwd } = exiting;
           pane.surfaces.splice(idx, 1);
           if (pane.surfaces.length > 0) {
             pane.activeSurfaceId =
               pane.surfaces[Math.min(idx, pane.surfaces.length - 1)]!.id;
           } else {
-            // Pane is empty — collapse it from the split tree
+            // Pane is empty — show relaunch prompt instead of collapsing
             pane.activeSurfaceId = null;
-            pane.resizeObserver?.disconnect();
-            if (
-              ws.splitRoot.type === "pane" &&
-              ws.splitRoot.pane.id === pane.id
-            ) {
-              // This was the only pane in the workspace — remove the
-              // workspace. Users are allowed to close all nestedWorkspaces;
-              // App.svelte renders an Empty Surface when the list is
-              // empty, so we don't auto-create a default.
-              const wsIdx = wsList.indexOf(ws);
-              wsList.splice(wsIdx, 1);
-              const currentIdx = get(activeNestedWorkspaceIdx);
-              if (currentIdx >= wsList.length) {
-                activeNestedWorkspaceIdx.set(wsList.length - 1);
-              }
-              return wsList;
-            }
-            // Find parent split and collapse it
-            const parentInfo = findParentSplit(ws.splitRoot, pane.id);
-            if (parentInfo && parentInfo.parent.type === "split") {
-              const sibling =
-                parentInfo.parent.children[parentInfo.index === 0 ? 1 : 0];
-              if (ws.splitRoot === parentInfo.parent) {
-                ws.splitRoot = sibling;
-              } else {
-                replaceNodeInTree(ws.splitRoot, parentInfo.parent, sibling);
-              }
-              ws.activePaneId = getAllPanes(ws.splitRoot)[0]?.id ?? null;
-            }
+            pane.exitedSurface = {
+              code: exit_code ?? 0,
+              definedCommand,
+              cwd,
+            };
           }
           return wsList;
         }
@@ -647,9 +618,12 @@ export async function setupListeners() {
     window.addEventListener("keydown", _keydownHandler, { capture: true });
   }
   _unlisteners.push(
-    await listen<{ pty_id: number }>("pty-exit", (event) => {
-      handlePtyExit(event.payload.pty_id);
-    }),
+    await listen<{ pty_id: number; exit_code?: number | null }>(
+      "pty-exit",
+      (event) => {
+        handlePtyExit(event.payload.pty_id, event.payload.exit_code ?? null);
+      },
+    ),
   );
 
   _unlisteners.push(

@@ -53,12 +53,6 @@ describe("Extension barrier enforcement", () => {
       // path as core's built-in Workspace Dashboard.
       "agentic-orchestrator/index.ts": [
         "../../lib/services/nested-workspace-service",
-        // The extension mirrors its declared `globalAgentsMarkdownPath`
-        // setting into `config.agenticGlobal.markdownPath` so the
-        // Global Agentic Dashboard body + Stage-8 migration share one
-        // canonical location. Reaching the config helpers directly is
-        // the simplest sync path.
-        "../../lib/config",
         // Auto-provision: on activate, back-fill the Agentic Dashboard
         // for every existing workspace; on deactivate, close the
         // provisioned dashboards. No public ExtensionAPI surface exposes
@@ -116,9 +110,8 @@ describe("Extension barrier enforcement", () => {
         "../../../lib/contexts/dashboard-host",
         "../../../lib/services/preview-surface-registry",
         "../../../lib/services/preview-service",
-        // Reads `config.agenticGlobal.markdownPath` to honor the user's
-        // configured Global Agentic Dashboard markdown location, and
-        // saves `pseudoWorkspaceColors` back from the Settings tab.
+        // Reads `pseudoWorkspaceColors` from the live config store and
+        // saves color picks back from the Settings tab.
         "../../../lib/config",
         // Settings tab renders the color picker against the shared
         // theme + WORKSPACE_COLOR_SLOTS palette.

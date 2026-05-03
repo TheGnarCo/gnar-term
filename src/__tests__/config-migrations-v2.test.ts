@@ -210,7 +210,7 @@ describe("config v2 migration — agent orchestrators → dashboards", () => {
     );
   });
 
-  it("rootless orchestrator → writes markdown to ~/.config/gnar-term/global-agents.md and stamps agenticGlobal.markdownPath", async () => {
+  it("rootless orchestrator → writes markdown to ~/.config/gnar-term/global-agents.md", async () => {
     fs.set("/tmp/root.md", "# Global source\n");
 
     const { migrated } = await migrate({
@@ -222,7 +222,6 @@ describe("config v2 migration — agent orchestrators → dashboards", () => {
 
     const target = "/home/test/.config/gnar-term/global-agents.md";
     expect(fs.get(target)).toBe("# Global source\n");
-    expect(migrated.agenticGlobal?.markdownPath).toBe(target);
     expect(migrated.agentOrchestrators).toBeUndefined();
   });
 
@@ -230,7 +229,7 @@ describe("config v2 migration — agent orchestrators → dashboards", () => {
     fs.set("/tmp/keep-root.md", "# Keep global\n");
     fs.set("/tmp/drop-root.md", "# Drop\n");
 
-    const { migrated } = await migrate({
+    await migrate({
       schemaVersion: 1,
       agentOrchestrators: [
         makeOrchestrator({ id: "o-keep", path: "/tmp/keep-root.md" }),
@@ -240,9 +239,6 @@ describe("config v2 migration — agent orchestrators → dashboards", () => {
 
     expect(fs.get("/home/test/.config/gnar-term/global-agents.md")).toBe(
       "# Keep global\n",
-    );
-    expect(migrated.agenticGlobal?.markdownPath).toBe(
-      "/home/test/.config/gnar-term/global-agents.md",
     );
   });
 

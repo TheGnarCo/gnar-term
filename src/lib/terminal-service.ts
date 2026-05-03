@@ -45,10 +45,19 @@ import { uid, getAllSurfaces, getAllPanes, isTerminalSurface } from "./types";
 import type { MenuItem } from "./context-menu-types";
 import "@xterm/xterm/css/xterm.css";
 
-/** Platform detection — used for Cmd (macOS) vs Ctrl (Linux/Windows) shortcuts. */
+/**
+ * Platform detection — used for Cmd (macOS) vs Ctrl (Linux/Windows) shortcuts.
+ *
+ * `navigator.platform` is deprecated; modern browsers prefer
+ * `navigator.userAgentData.platform` or the userAgent string. We
+ * belt-and-suspenders both: the userAgent fallback covers WebKitGTK /
+ * future engines that drop `platform`, and the `platform` check covers
+ * older runtimes whose userAgent does not literally contain "Mac".
+ */
 export const isMac =
   typeof navigator !== "undefined" &&
-  navigator.platform.toUpperCase().includes("MAC");
+  (navigator.userAgent.includes("Mac") ||
+    navigator.platform.toUpperCase().includes("MAC"));
 
 // Per-surface PTY-ready signal. connectPty() resolves the deferred once the
 // Rust spawn_pty call returns; waitForPtyReady() awaits it instead of polling
@@ -480,6 +489,7 @@ function handlePtyExit(pty_id: number, exit_code: number | null = null): void {
   ptyPaused.delete(pty_id);
   ptyHasOutput.delete(pty_id);
   firstOutputListeners.delete(pty_id);
+  osc7ReceivedPtys.delete(pty_id);
 
   // Remove the surface from its pane, and collapse empty panes
   nestedWorkspaces.update((wsList) => {
@@ -556,6 +566,11 @@ function applyPtyTitle(pty_id: number, title: string) {
     for (const ws of wsList) {
       for (const s of getAllSurfaces(ws)) {
         if (isTerminalSurface(s) && s.ptyId === pty_id) {
+          // A user-set rename wins over OSC 0/2 escape-sequence updates.
+          // Without this guard, a long-running shell that re-emits its
+          // title on every prompt (zsh / bash / starship) would clobber
+          // the explicit name the user assigned.
+          if (s.userDefinedTitle) return wsList;
           if (s.title !== title) {
             changed = { id: s.id, oldTitle: s.title, newTitle: title };
             s.title = title;
@@ -652,8 +667,15 @@ const pendingRunningTitles = new Map<number, ReturnType<typeof setTimeout>>();
 // For shells that don't emit OSC 7, poll get_pty_cwd periodically.
 // Uses get_all_pty_cwds to batch all PTYs into a single IPC round-trip,
 // then applies a single nestedWorkspaces.update() only when at least one cwd changed.
+//
+// `osc7ReceivedPtys` records PTYs that have ever delivered an OSC 7
+// sequence — once a shell proves it speaks OSC 7 we can skip it on every
+// subsequent poll tick. The polling fallback only matters for shells
+// that never emit OSC 7 at all. Cleaned up in `handlePtyExit` so the set
+// can never grow unbounded across long-running sessions.
 let cwdPollTimer: ReturnType<typeof setInterval> | null = null;
 let cwdChangeHook: (() => void) | null = null;
+const osc7ReceivedPtys = new Set<number>();
 
 export function registerCwdChangeHook(cb: () => void): void {
   cwdChangeHook = cb;
@@ -677,6 +699,11 @@ export function startCwdPolling() {
         for (const ws of wsList) {
           for (const s of getAllSurfaces(ws)) {
             if (!isTerminalSurface(s) || s.ptyId < 0) continue;
+            // Skip PTYs that have already proven they emit OSC 7 — the
+            // polling fallback only exists for shells that never deliver
+            // a CWD escape sequence. Saves an IPC-derived diff loop per
+            // tick on the common case.
+            if (osc7ReceivedPtys.has(s.ptyId)) continue;
             const cwd = cwdMap[String(s.ptyId)];
             if (cwd && cwd !== s.cwd) {
               s.cwd = cwd;
@@ -964,6 +991,10 @@ function createOsc7Handler(
   surface: TerminalSurface,
 ): (data: string) => boolean {
   return (data: string) => {
+    // Mark this pty as OSC-7-capable on the first sequence we see so the
+    // polling fallback can skip it on subsequent ticks. Set entry is
+    // cleared in handlePtyExit when the pty tears down.
+    osc7ReceivedPtys.add(surface.ptyId);
     let cwd = data;
     if (cwd.startsWith("file://")) {
       const rest = cwd.slice(7);
@@ -978,11 +1009,15 @@ function createOsc7Handler(
       clearTimeout(pending);
       pendingRunningTitles.delete(surface.ptyId);
     }
+    // A user-set rename wins over OSC-7 derived titles — we never clobber
+    // an explicit `userDefinedTitle` even if the cwd-based heuristic would
+    // otherwise overwrite the active label.
     if (
-      !surface.title ||
-      surface.title.startsWith("Shell ") ||
-      surface.title.startsWith("Running: ") ||
-      !surface.title.includes(" ")
+      !surface.userDefinedTitle &&
+      (!surface.title ||
+        surface.title.startsWith("Shell ") ||
+        surface.title.startsWith("Running: ") ||
+        !surface.title.includes(" "))
     ) {
       surface.title = basename || "~";
     }

@@ -15,9 +15,10 @@
  *
  *   - For rootless orchestrators (no parentGroupId): the first one's
  *     markdown is copied to `~/.config/gnar-term/global-agents.md` (the
- *     default Global Agentic Dashboard path) and recorded in
- *     `config.agenticGlobal.markdownPath`. Additional rootless
- *     orchestrators are logged and dropped.
+ *     default Global Agentic Dashboard path). Additional rootless
+ *     orchestrators are logged and dropped. The agentic-orchestrator
+ *     extension reads its own `globalAgentsMarkdownPath` setting at
+ *     runtime — no core config field is written.
  *
  *   - `config.agentOrchestrators` is deleted.
  *
@@ -162,8 +163,7 @@ function groupByParent(orchestrators: LegacyOrchestrator[]): {
 
 /**
  * Apply the workspace-groups unification migration to `config`. Returns
- * the next config shape with `agentOrchestrators` removed and
- * `agenticGlobal.markdownPath` populated where applicable. Side-effects
+ * the next config shape with `agentOrchestrators` removed. Side-effects
  * (markdown file moves) run via `invoke` and are best-effort.
  */
 export async function migrateV2WorkspaceGroupsUnification(
@@ -207,16 +207,11 @@ export async function migrateV2WorkspaceGroupsUnification(
   }
 
   // Rootless: first becomes the Global Agentic Dashboard source; rest dropped.
-  const nextAgenticGlobal = { ...(config.agenticGlobal ?? {}) };
   if (rootless.length > 0) {
     const [first, ...extras] = rootless;
-    const defaultGlobalPath = `${home}/.config/gnar-term/global-agents.md`;
-    const targetPath = nextAgenticGlobal.markdownPath ?? defaultGlobalPath;
+    const targetPath = `${home}/.config/gnar-term/global-agents.md`;
     if (first) {
       await moveMarkdown(first.path, targetPath);
-      if (!nextAgenticGlobal.markdownPath) {
-        nextAgenticGlobal.markdownPath = targetPath;
-      }
     }
     if (extras.length > 0) {
       console.warn(
@@ -229,9 +224,5 @@ export async function migrateV2WorkspaceGroupsUnification(
 
   const { agentOrchestrators: _removed, ...rest } = legacyConfig;
   void _removed;
-  const next: GnarTermConfig = {
-    ...(rest as GnarTermConfig),
-    agenticGlobal: nextAgenticGlobal,
-  };
-  return next;
+  return rest as GnarTermConfig;
 }

@@ -889,7 +889,7 @@ describe("agent-detection-service — agentsStore reactive subscriber", () => {
 describe("agent-detection-service — active status (non-OSC agents)", () => {
   it("title-only agents emit 'active' status on output, not 'running'", () => {
     nestedWorkspaces.set([
-      makeNestedWorkspace("w1", [{ id: "s1", title: "aider", ptyId: 110 }]),
+      makeNestedWorkspace("w1", [{ id: "s1", title: "cursor", ptyId: 110 }]),
     ]);
     initAgentDetection();
     expect(getAgents()[0]?.status).toBe("idle");
@@ -901,7 +901,7 @@ describe("agent-detection-service — active status (non-OSC agents)", () => {
 
   it("'active' status writes a success variant to the registry (not muted)", () => {
     nestedWorkspaces.set([
-      makeNestedWorkspace("w1", [{ id: "s1", title: "aider", ptyId: 111 }]),
+      makeNestedWorkspace("w1", [{ id: "s1", title: "cursor", ptyId: 111 }]),
     ]);
     initAgentDetection();
     notifyOutputObservers(111, "some output");

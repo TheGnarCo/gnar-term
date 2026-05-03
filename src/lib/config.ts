@@ -168,6 +168,13 @@ export interface Workspace {
   dashboardNestedWorkspaceId?: string;
   /** When true, the workspace cannot be drag-reordered or deleted/archived. */
   locked?: boolean;
+  /**
+   * Runtime-only flag set by `validateWorkspaceRootPaths` when the workspace
+   * `path` does not exist on disk (e.g. a deleted directory across restarts).
+   * Not persisted — re-derived on every startup. Consumed by sidebar
+   * components to surface a "path missing" affordance.
+   */
+  pathMissing?: boolean;
 }
 
 export interface GnarTermConfig {
@@ -192,17 +199,6 @@ export interface GnarTermConfig {
   extensions?: Record<string, ExtensionConfig>;
   worktrees?: WorktreesConfig;
   agents?: AgentsConfig;
-  /**
-   * Global Agentic Dashboard configuration — the singleton
-   * pseudo-workspace pinned at the top of the root sidebar. `markdownPath`
-   * points at the backing markdown file the dashboard renders. Absent on
-   * fresh installs; the pseudo-workspace falls back to the default
-   * `~/.config/gnar-term/global-agents.md` path. Stage 8 migration stamps
-   * this field when converting a legacy rootless orchestrator.
-   */
-  agenticGlobal?: {
-    markdownPath?: string;
-  };
   /**
    * Per-pseudo-workspace color overrides, keyed by pseudo id
    * (e.g. `"agentic.global"`). Values are slot names from

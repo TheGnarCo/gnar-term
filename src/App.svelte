@@ -78,6 +78,7 @@
     reconcileWorkspaceDashboards,
     reconcilePrimaryWorkspaces,
     setupPrimaryWorkspaceAutoRecreation,
+    validateWorkspaceRootPaths,
   } from "./lib/services/workspace-service";
 
   // Services
@@ -720,6 +721,10 @@
     await reconcilePrimaryWorkspaces();
     setupPrimaryWorkspaceAutoRecreation();
     void reconcileWorkspaceDashboards();
+    // Stamp `pathMissing` on workspaces whose root directory has gone
+    // missing across sessions. Runs in the background — a slow FS
+    // probe shouldn't block the rest of bootstrap.
+    void validateWorkspaceRootPaths();
 
     // Rehydrate the persisted root-row order so drag-sorted layouts
     // survive across restarts. Entities are all registered by this

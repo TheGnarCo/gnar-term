@@ -407,6 +407,14 @@ export function renameSurface(surfaceId: string, title: string): void {
         const s = pane.surfaces.find((s) => s.id === surfaceId);
         if (s) {
           s.title = title;
+          // Stamp the user's explicit choice on terminal surfaces so OSC
+          // 0/2 (title) and OSC 7 (cwd) escape sequences and agent
+          // detach restore won't clobber it. Non-terminal surfaces
+          // (preview, extension) don't receive escape-sequence titles,
+          // so the field is meaningless for them.
+          if (isTerminalSurface(s)) {
+            s.userDefinedTitle = title;
+          }
           return [...wsList];
         }
       }

@@ -31,6 +31,14 @@ export interface TerminalSurface {
   // Set by connectPty on spawn failure; consumed by TerminalSurface.svelte to
   // show an error message and remove the dead surface from its pane.
   spawnError?: string;
+  /**
+   * Title set explicitly by the user via `renameSurface` (the
+   * Rename Surface command). When present, OSC 0/2 (window title) and
+   * OSC 7 (cwd) escape sequences will not overwrite `title`, and
+   * `detachAgent` prefers it over the captured `preAgentTitle`. Runtime
+   * only — not currently persisted across app restart.
+   */
+  userDefinedTitle?: string;
 }
 
 export interface ExtensionSurface {

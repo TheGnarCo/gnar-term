@@ -51,6 +51,35 @@ function makeNestedWorkspace(
   };
 }
 
+function makeNestedWorkspaceWithTerminal(
+  surfaceId: string,
+  title = "Terminal",
+): NestedWorkspace {
+  return {
+    id: "ws-1",
+    name: "Test",
+    activePaneId: "pane-1",
+    splitRoot: {
+      type: "pane",
+      pane: {
+        id: "pane-1",
+        surfaces: [
+          {
+            kind: "terminal",
+            id: surfaceId,
+            title,
+            hasUnread: false,
+            ptyId: 1,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            terminal: { dispose: () => {} } as any,
+          },
+        ],
+        activeSurfaceId: surfaceId,
+      },
+    },
+  };
+}
+
 describe("renameActiveSurface()", () => {
   beforeEach(() => {
     nestedWorkspaces.set([]);
@@ -95,6 +124,38 @@ describe("renameSurface()", () => {
         ? get(nestedWorkspaces)[0].splitRoot.pane
         : null;
     expect(pane?.surfaces[0].title).toBe("Original");
+  });
+
+  it("stamps userDefinedTitle on terminal surfaces (Story 15)", () => {
+    nestedWorkspaces.set([
+      makeNestedWorkspaceWithTerminal("s-term", "Original"),
+    ]);
+    renameSurface("s-term", "MyName");
+    const pane =
+      get(nestedWorkspaces)[0].splitRoot.type === "pane"
+        ? get(nestedWorkspaces)[0].splitRoot.pane
+        : null;
+    const surface = pane?.surfaces[0];
+    expect(surface?.title).toBe("MyName");
+    expect(
+      surface?.kind === "terminal" ? surface.userDefinedTitle : undefined,
+    ).toBe("MyName");
+  });
+
+  it("does NOT stamp userDefinedTitle on non-terminal surfaces (Story 15)", () => {
+    nestedWorkspaces.set([makeNestedWorkspace("s-ext", "Original")]);
+    renameSurface("s-ext", "Changed");
+    const pane =
+      get(nestedWorkspaces)[0].splitRoot.type === "pane"
+        ? get(nestedWorkspaces)[0].splitRoot.pane
+        : null;
+    const surface = pane?.surfaces[0];
+    expect(surface?.title).toBe("Changed");
+    // userDefinedTitle is meaningful only for terminal surfaces (escape-seq target).
+    expect(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (surface as any)?.userDefinedTitle,
+    ).toBeUndefined();
   });
 });
 

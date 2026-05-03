@@ -424,7 +424,11 @@ export async function createWorkspaceDashboardNestedWorkspace(
  *
  * Inference rules (preview-surface path-based):
  *   - backs the workspace's `project-dashboard.md` → `"group"`
- *   - backs the workspace's `.gnar-term/agentic-dashboard.md` → `"agentic"`
+ *
+ * Other contribution types (e.g. agentic dashboards) own their own
+ * stamping at creation time — the legacy path-based inference for
+ * `.gnar-term/agentic-dashboard.md` was retired with the
+ * Workspace→NestedWorkspace rename.
  *
  * Runs in a single nestedWorkspaces.update so subscribers see one state
  * transition. Idempotent: any workspace whose stamp is already set is
@@ -457,10 +461,8 @@ function backfillDashboardContributionIds(): void {
 
       let inferred: string | null = null;
       const workspacePath = workspaceDashboardPath(workspace.path);
-      const agenticPath = `${workspace.path.replace(/\/+$/, "")}/.gnar-term/agentic-dashboard.md`;
       if (previewPaths.includes(workspacePath))
         inferred = OVERVIEW_DASHBOARD_CONTRIBUTION_ID;
-      else if (previewPaths.includes(agenticPath)) inferred = "agentic";
       if (!inferred) return ws;
 
       mutated = true;
@@ -934,6 +936,34 @@ export async function reconcilePrimaryWorkspaces(): Promise<void> {
   backfillPrimaryWorkspaces();
   wrapStandaloneNestedWorkspaces();
   rehydrateClaimRegistry();
+}
+
+/**
+ * Stamp `pathMissing: true` on any workspace whose `path` no longer
+ * exists on disk (e.g. the user deleted the directory between sessions
+ * or moved a worktree out from under the app). The flag is runtime-only
+ * — not persisted — and is re-derived on every startup. Sidebar
+ * components surface a "path missing" affordance when the flag is set.
+ *
+ * Best-effort: a failing `file_exists` invoke is treated as "not
+ * missing" so a transient FS error doesn't paint every workspace red.
+ * Idempotent: a workspace whose path now exists has its flag cleared on
+ * the next sweep.
+ */
+export async function validateWorkspaceRootPaths(): Promise<void> {
+  const workspaces = getWorkspaces();
+  for (const workspace of workspaces) {
+    let exists = true;
+    try {
+      exists = await invoke<boolean>("file_exists", { path: workspace.path });
+    } catch {
+      exists = true;
+    }
+    const missing = !exists;
+    if ((workspace.pathMissing ?? false) !== missing) {
+      updateWorkspace(workspace.id, { pathMissing: missing });
+    }
+  }
 }
 
 /**

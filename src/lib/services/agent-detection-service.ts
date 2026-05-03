@@ -77,8 +77,8 @@ export type HarnessStatus = "running" | "waiting" | "idle" | "active" | "done";
 
 const DEFAULT_PATTERNS: AgentPattern[] = [
   { name: "Claude Code", titlePatterns: ["claude"], oscDetectable: true },
-  { name: "Codex", titlePatterns: ["codex"], oscDetectable: false },
-  { name: "Aider", titlePatterns: ["aider"], oscDetectable: false },
+  { name: "Codex", titlePatterns: ["codex"], oscDetectable: true },
+  { name: "Aider", titlePatterns: ["aider"], oscDetectable: true },
   { name: "Cursor", titlePatterns: ["cursor"], oscDetectable: false },
   {
     name: "GitHub Copilot",
@@ -439,17 +439,29 @@ function detachAgent(tracked: TrackedSurface): void {
   _agents = _agents.filter((a) => a.agentId !== tracked.agentId);
   syncStore();
 
-  if (tracked.preAgentTitle) {
-    const all = get(nestedWorkspaces);
-    for (const ws of all) {
-      for (const pane of getAllPanes(ws.splitRoot)) {
-        for (const surface of pane.surfaces) {
-          if (surface.id === tracked.surfaceId && isTerminalSurface(surface)) {
+  // Restore the surface title when the agent detaches. A user-set
+  // `userDefinedTitle` always wins over the captured `preAgentTitle` —
+  // if the user renamed the surface during the agent run we re-apply
+  // their explicit name even if there was no preAgentTitle stamped at
+  // attach time.
+  const all = get(nestedWorkspaces);
+  let restored = false;
+  for (const ws of all) {
+    for (const pane of getAllPanes(ws.splitRoot)) {
+      for (const surface of pane.surfaces) {
+        if (surface.id === tracked.surfaceId && isTerminalSurface(surface)) {
+          if (surface.userDefinedTitle) {
+            surface.title = surface.userDefinedTitle;
+            restored = true;
+          } else if (tracked.preAgentTitle) {
             surface.title = tracked.preAgentTitle;
+            restored = true;
           }
         }
       }
     }
+  }
+  if (restored) {
     nestedWorkspaces.update((l) => [...l]);
   }
 

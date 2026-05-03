@@ -76,38 +76,6 @@ describe("dashboardContributionId backfill", () => {
     expect(md.dashboardContributionId).toBe("group");
   });
 
-  it("stamps 'agentic' on a legacy Agentic dashboard (preview → agentic-dashboard.md)", async () => {
-    nestedWorkspaces.set([
-      {
-        id: "ws-legacy-agentic",
-        name: "Agents",
-        splitRoot: {
-          type: "pane",
-          pane: {
-            id: "p2",
-            surfaces: [
-              {
-                kind: "preview",
-                id: "s2",
-                title: "Agents",
-                path: "/tmp/repo/.gnar-term/agentic-dashboard.md",
-                hasUnread: false,
-              },
-            ],
-            activeSurfaceId: "s2",
-          },
-        },
-        activePaneId: "p2",
-        metadata: { isDashboard: true, parentWorkspaceId: "g1" },
-      } as never,
-    ]);
-
-    await reconcileWorkspaceDashboards();
-
-    const md = get(nestedWorkspaces)[0]!.metadata;
-    expect(md.dashboardContributionId).toBe("agentic");
-  });
-
   it("leaves already-stamped nestedWorkspaces alone", async () => {
     nestedWorkspaces.set([
       {

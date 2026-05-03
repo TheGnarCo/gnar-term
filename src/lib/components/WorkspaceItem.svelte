@@ -21,6 +21,7 @@
   import type { NestedWorkspace } from "../types";
   import { workspaceSurfaceMap } from "../services/nested-workspace-service";
   import { wsMeta } from "../services/service-helpers";
+  import { workspacesStore } from "../stores/workspaces";
 
   export let workspace: NestedWorkspace;
   export let index: number;
@@ -94,6 +95,17 @@
   // and crowds the nested layout — suppress it in that context.
   $: isInsideWorkspace =
     typeof wsMeta(workspace).parentWorkspaceId === "string";
+  // Surface the parent workspace's path-missing flag on every nested
+  // row inside it. The umbrella banner (ContainerRow) currently has no
+  // affordance for this state — flagging it on the row makes the
+  // condition discoverable from anywhere the workspace renders.
+  $: parentWorkspacePathMissing = (() => {
+    const parentId = wsMeta(workspace).parentWorkspaceId;
+    if (typeof parentId !== "string") return false;
+    return (
+      $workspacesStore.find((w) => w.id === parentId)?.pathMissing === true
+    );
+  })();
   $: isAgentSpawned = wsMeta(workspace).spawnedBy != null;
   $: railColor =
     (isDashboardWorkspaceRow && dashboardWorkspaceEntry?.accentColor) ||
@@ -301,6 +313,20 @@
         >
           {worktreeDirName}
         </span>
+      </SidebarSubtitleRow>
+    {/if}
+
+    {#if parentWorkspacePathMissing && !hideStatusBadges}
+      <SidebarSubtitleRow
+        data-workspace-path-missing
+        color={$theme.danger}
+        title="Workspace root path no longer exists on disk"
+      >
+        <span aria-hidden="true">⚠</span>
+        <span
+          style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+          >path missing</span
+        >
       </SidebarSubtitleRow>
     {/if}
 

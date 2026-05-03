@@ -23,7 +23,6 @@ import {
 } from "../../lib/services/workspace-service";
 import { getWorkspaces } from "../../lib/stores/workspaces";
 import { waitRestored } from "../../lib/bootstrap/restore-workspaces";
-import { getConfig, saveConfig } from "../../lib/config";
 import BotIcon from "./icons/BotIcon.svelte";
 import GlobalAgenticDashboardBody from "./components/GlobalAgenticDashboardBody.svelte";
 import AgentStatusGrid from "./components/AgentStatusGrid.svelte";
@@ -64,36 +63,7 @@ export const agenticOrchestratorManifest: ExtensionManifest = {
 // --- Registration ---
 
 export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
-  let settingsUnsub: (() => void) | null = null;
-
   api.onActivate(() => {
-    // Mirror the declared `globalAgentsMarkdownPath` setting into
-    // `config.agenticGlobal.markdownPath` so the pseudo-workspace body
-    // and core consumers can read a single canonical location (spec
-    // §3.1). The setting acts as the editable surface; the config field
-    // is the read-side contract.
-    settingsUnsub = api.settings.subscribe((s) => {
-      const raw = s?.globalAgentsMarkdownPath;
-      const candidate = typeof raw === "string" ? raw.trim() : "";
-      const current = getConfig().agenticGlobal?.markdownPath ?? "";
-      if (candidate === current) return;
-      const next = candidate
-        ? {
-            agenticGlobal: {
-              ...(getConfig().agenticGlobal ?? {}),
-              markdownPath: candidate,
-            },
-          }
-        : {
-            agenticGlobal: Object.fromEntries(
-              Object.entries(getConfig().agenticGlobal ?? {}).filter(
-                ([k]) => k !== "markdownPath",
-              ),
-            ),
-          };
-      void saveConfig(next);
-    });
-
     api.registerDashboardContribution({
       id: "agentic",
       label: "Agentic Dashboard",
@@ -278,10 +248,6 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
   });
 
   api.onDeactivate(() => {
-    if (settingsUnsub) {
-      settingsUnsub();
-      settingsUnsub = null;
-    }
     // Close the per-workspace Agentic Dashboard nestedWorkspaces the extension
     // auto-provisioned. Runs before the extension's contributions are
     // unregistered (deactivateExtension order), so the registry still

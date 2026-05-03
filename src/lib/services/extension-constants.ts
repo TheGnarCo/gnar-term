@@ -196,6 +196,8 @@ const VALID_EVENT_LIST: AppEventType[] = [
   "theme:changed",
   "worktree:merged",
   "agent:statusChanged",
+  "agent:interrupted",
+  "agent:killed",
   "surface:ptyReady",
 ];
 export const VALID_EVENTS: Set<string> = new Set(VALID_EVENT_LIST);

@@ -131,7 +131,9 @@ export type AppEventType =
   | "sidebar:toggled"
   | "theme:changed"
   | "worktree:merged"
-  | "agent:statusChanged";
+  | "agent:statusChanged"
+  | "agent:interrupted"
+  | "agent:killed";
 
 /** Base shape for all events delivered to extension handlers. */
 export interface AppEvent {

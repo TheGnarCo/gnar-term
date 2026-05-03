@@ -17,6 +17,8 @@ vi.mock("../lib/stores/nested-workspace", async () => {
 import {
   agentsStore,
   getAgents,
+  getAgentByAgentId,
+  getAgentBySurfaceId,
   initAgentDetection,
   destroyAgentDetection,
   resetAgentDetectionForTests,
@@ -958,5 +960,37 @@ describe("agent-detection-service — split-chunk OSC detection", () => {
       (i) => i.source === "_agent" && i.metadata?.surfaceId === "s1",
     );
     expect(item?.label).toBe("waiting");
+  });
+});
+
+describe("agent-detection-service — lookup helpers", () => {
+  it("getAgentByAgentId returns undefined for unknown id", () => {
+    expect(getAgentByAgentId("nope")).toBeUndefined();
+  });
+
+  it("getAgentBySurfaceId returns undefined for unknown surface", () => {
+    expect(getAgentBySurfaceId("nope")).toBeUndefined();
+  });
+
+  it("getAgentByAgentId finds a registered agent", () => {
+    nestedWorkspaces.set([
+      makeNestedWorkspace("ws1", [{ id: "s1", title: "claude", ptyId: 1 }]),
+    ]);
+    initAgentDetection();
+    const agents = getAgents();
+    expect(agents).toHaveLength(1);
+    const found = getAgentByAgentId(agents[0].agentId);
+    expect(found).toBeDefined();
+    expect(found?.surfaceId).toBe("s1");
+  });
+
+  it("getAgentBySurfaceId finds a registered agent", () => {
+    nestedWorkspaces.set([
+      makeNestedWorkspace("ws1", [{ id: "s1", title: "claude", ptyId: 1 }]),
+    ]);
+    initAgentDetection();
+    const found = getAgentBySurfaceId("s1");
+    expect(found).toBeDefined();
+    expect(found?.workspaceId).toBe("ws1");
   });
 });

@@ -13,6 +13,7 @@ import {
 import { listPreviewSurfaces } from "../preview-surface-registry";
 import { pollEvents } from "../mcp-event-buffer";
 import { agentsStore } from "../agent-detection-service";
+import { interruptAgent, killAgent } from "../agent-intervention-service";
 import type { ToolDef } from "../mcp-types";
 
 // ---- NestedWorkspace introspection helpers ----
@@ -129,6 +130,36 @@ export const introspectionTools: ToolDef[] = [
         workspace_id: e.workspaceId,
       }));
       return { previews };
+    },
+  },
+  {
+    name: "interrupt_agent",
+    description:
+      "Send Ctrl-C (SIGINT) to a detected agent's PTY — equivalent to the user pressing Ctrl-C in the agent's terminal. Returns `{ ok: true }` on success, `{ ok: false }` when the agent is not found or has no PTY. Use list_agents to get agent_id values.",
+    inputSchema: {
+      type: "object",
+      properties: { agent_id: { type: "string" } },
+      required: ["agent_id"],
+    },
+    handler: async (args) => {
+      const { agent_id } = args as { agent_id: string };
+      const ok = await interruptAgent(agent_id);
+      return { ok };
+    },
+  },
+  {
+    name: "kill_agent",
+    description:
+      "Forcefully kill a detected agent's PTY process. Returns `{ ok: true }` on success, `{ ok: false }` when the agent is not found or has no PTY. Prefer interrupt_agent (Ctrl-C) first; use kill_agent only when the agent is unresponsive.",
+    inputSchema: {
+      type: "object",
+      properties: { agent_id: { type: "string" } },
+      required: ["agent_id"],
+    },
+    handler: async (args) => {
+      const { agent_id } = args as { agent_id: string };
+      const ok = await killAgent(agent_id);
+      return { ok };
     },
   },
   {

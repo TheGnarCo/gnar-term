@@ -115,6 +115,16 @@ export function getAgents(): DetectedAgent[] {
   return _agents.slice();
 }
 
+export function getAgentByAgentId(agentId: string): DetectedAgent | undefined {
+  return _agents.find((a) => a.agentId === agentId);
+}
+
+export function getAgentBySurfaceId(
+  surfaceId: string,
+): DetectedAgent | undefined {
+  return _agents.find((a) => a.surfaceId === surfaceId);
+}
+
 // --- Pattern matching ---
 
 const _patternRegexCache = new WeakMap<AgentPattern, RegExp>();

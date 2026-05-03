@@ -54,6 +54,16 @@ vi.mock("../lib/services/agent-detection-service", () => ({
   agentsStore: agentsStoreMock,
 }));
 
+const { interruptAgentMock, killAgentMock } = vi.hoisted(() => ({
+  interruptAgentMock: vi.fn().mockResolvedValue(true),
+  killAgentMock: vi.fn().mockResolvedValue(true),
+}));
+
+vi.mock("../lib/services/agent-intervention-service", () => ({
+  interruptAgent: interruptAgentMock,
+  killAgent: killAgentMock,
+}));
+
 import {
   dispatch,
   _getToolsForTest,
@@ -146,7 +156,9 @@ describe("MCP server JSON-RPC", () => {
         "get_status_for_workspace",
         "invoke_command",
         "invoke_context_menu_item",
+        "interrupt_agent",
         "invoke_workspace_action",
+        "kill_agent",
         "kill_session",
         "list_agents",
         "list_commands",
@@ -178,7 +190,7 @@ describe("MCP server JSON-RPC", () => {
         "write_file",
       ].sort(),
     );
-    expect(names).toHaveLength(42);
+    expect(names).toHaveLength(44);
     for (const t of tools) {
       expect(t).toHaveProperty("inputSchema");
     }
@@ -413,6 +425,52 @@ describe("MCP server JSON-RPC", () => {
     );
     const result = (resp as any).result.structuredContent;
     expect(result).toEqual({ agents: [] });
+  });
+
+  it("interrupt_agent delegates to interruptAgent and returns ok: true", async () => {
+    interruptAgentMock.mockResolvedValueOnce(true);
+    const resp = await dispatch(
+      rpc("tools/call", {
+        name: "interrupt_agent",
+        arguments: { agent_id: "agent-1" },
+      }),
+    );
+    expect(interruptAgentMock).toHaveBeenCalledWith("agent-1");
+    expect((resp as any).result.structuredContent).toEqual({ ok: true });
+  });
+
+  it("interrupt_agent returns ok: false when agent not found", async () => {
+    interruptAgentMock.mockResolvedValueOnce(false);
+    const resp = await dispatch(
+      rpc("tools/call", {
+        name: "interrupt_agent",
+        arguments: { agent_id: "nope" },
+      }),
+    );
+    expect((resp as any).result.structuredContent).toEqual({ ok: false });
+  });
+
+  it("kill_agent delegates to killAgent and returns ok: true", async () => {
+    killAgentMock.mockResolvedValueOnce(true);
+    const resp = await dispatch(
+      rpc("tools/call", {
+        name: "kill_agent",
+        arguments: { agent_id: "agent-1" },
+      }),
+    );
+    expect(killAgentMock).toHaveBeenCalledWith("agent-1");
+    expect((resp as any).result.structuredContent).toEqual({ ok: true });
+  });
+
+  it("kill_agent returns ok: false when agent not found", async () => {
+    killAgentMock.mockResolvedValueOnce(false);
+    const resp = await dispatch(
+      rpc("tools/call", {
+        name: "kill_agent",
+        arguments: { agent_id: "nope" },
+      }),
+    );
+    expect((resp as any).result.structuredContent).toEqual({ ok: false });
   });
 
   it("split_pane creates a new pane in the target workspace and returns pane_id", async () => {
@@ -1340,8 +1398,8 @@ describe("tool metadata", () => {
     }
   });
 
-  it("tool count matches spec (42)", () => {
-    expect(_getToolsForTest()).toHaveLength(42);
+  it("tool count matches spec (44)", () => {
+    expect(_getToolsForTest()).toHaveLength(44);
   });
 });
 

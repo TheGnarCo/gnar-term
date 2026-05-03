@@ -153,6 +153,10 @@ export interface Workspace {
    * on first startup after migration. Never reassigned.
    */
   primaryNestedWorkspaceId?: string;
+  /** Id of the nestedWorkspace the user was last on in this workspace. Preferred over primaryNestedWorkspaceId on activate. */
+  lastActiveNestedWorkspaceId?: string;
+  /** When true, startup commands run automatically on app restart without confirmation prompts. */
+  autoRunRestoreCommands?: boolean;
   /** True when `path` is the root of a git repo. Used by gates (e.g. worktree actions). */
   isGit: boolean;
   createdAt: string;

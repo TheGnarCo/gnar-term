@@ -226,6 +226,33 @@
 
     <section style="display: flex; flex-direction: column; gap: 8px;">
       <h3 style="margin: 0; font-size: 14px; font-weight: 600;">
+        Session restore
+      </h3>
+      <label
+        style="display: flex; align-items: center; gap: 8px; cursor: pointer;"
+      >
+        <input
+          type="checkbox"
+          data-auto-run-restore
+          checked={workspace?.autoRunRestoreCommands ?? false}
+          on:change={() =>
+            workspace &&
+            updateWorkspace(workspace.id, {
+              autoRunRestoreCommands: !workspace.autoRunRestoreCommands,
+            })}
+        />
+        <span style="font-size: 13px;"
+          >Auto-run startup commands on restore</span
+        >
+      </label>
+      <p style="margin: 0; color: {$theme.fgDim}; font-size: 12px;">
+        When enabled, startup commands run automatically on app restart without
+        confirmation.
+      </p>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 8px;">
+      <h3 style="margin: 0; font-size: 14px; font-weight: 600;">
         Banner color
       </h3>
       <p style="margin: 0; color: {$theme.fgDim}; font-size: 12px;">

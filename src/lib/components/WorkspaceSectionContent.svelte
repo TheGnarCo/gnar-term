@@ -232,33 +232,42 @@
     closeNestedWorkspacesInWorkspace(w.id);
   }
 
-  // Banner left-click: activate the workspace's primary workspace if it's not
-  // already active. If the primary is already active this is a no-op.
+  // Banner left-click: activate the workspace's last-active (or primary) branch
+  // if it's not already active. If already active this is a no-op.
   async function handleBannerClick() {
     if (!workspace || isPrimaryActive) return;
-    // Prefer the primary workspace; fall back to the dashboard then first nested.
-    if (primaryWs) {
-      const idx = $nestedWorkspaces.indexOf(primaryWs);
+    // Prefer lastActiveNestedWorkspaceId, fall back to primaryNestedWorkspaceId.
+    const preferredId =
+      workspace.lastActiveNestedWorkspaceId ??
+      workspace.primaryNestedWorkspaceId;
+    const preferredWs = $nestedWorkspaces.find((w) => w.id === preferredId);
+    if (preferredWs) {
+      const idx = $nestedWorkspaces.indexOf(preferredWs);
       if (idx >= 0) {
         switchNestedWorkspace(idx);
         return;
       }
     } else if (workspace.primaryNestedWorkspaceId) {
-      // Primary workspace is missing (was deleted) — recreate it
-      const newWsId = await createNestedWorkspaceFromDef({
-        name: workspace.name,
-        cwd: workspace.path,
-        metadata: { parentWorkspaceId: workspace.id },
-      });
-      if (newWsId) {
-        updateWorkspace(workspace.id, { primaryNestedWorkspaceId: newWsId });
-        claimWorkspace(newWsId, "core");
-        // Re-fetch the workspace list to get the new workspace
-        const newIdx = $nestedWorkspaces.findIndex((w) => w.id === newWsId);
-        if (newIdx >= 0) {
-          switchNestedWorkspace(newIdx);
+      // Primary workspace is specifically set but missing (was deleted) — recreate it.
+      const primaryExists = $nestedWorkspaces.some(
+        (w) => w.id === workspace!.primaryNestedWorkspaceId,
+      );
+      if (!primaryExists) {
+        const newWsId = await createNestedWorkspaceFromDef({
+          name: workspace.name,
+          cwd: workspace.path,
+          metadata: { parentWorkspaceId: workspace.id },
+        });
+        if (newWsId) {
+          updateWorkspace(workspace.id, { primaryNestedWorkspaceId: newWsId });
+          claimWorkspace(newWsId, "core");
+          // Re-fetch the workspace list to get the new workspace
+          const newIdx = $nestedWorkspaces.findIndex((w) => w.id === newWsId);
+          if (newIdx >= 0) {
+            switchNestedWorkspace(newIdx);
+          }
+          return;
         }
-        return;
       }
     }
     if (openWorkspaceDashboard(workspace)) return;

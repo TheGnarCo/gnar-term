@@ -632,16 +632,24 @@ export async function activateWorkspace(workspaceId: string): Promise<void> {
   const workspace = getWorkspace(workspaceId);
   if (!workspace) return;
   const ws = get(nestedWorkspaces);
-  const primaryWs = workspace.primaryNestedWorkspaceId
-    ? ws.find((w) => w.id === workspace.primaryNestedWorkspaceId)
+  // Prefer lastActiveNestedWorkspaceId, fall back to primaryNestedWorkspaceId
+  const preferredId =
+    workspace.lastActiveNestedWorkspaceId ?? workspace.primaryNestedWorkspaceId;
+  const preferredWs = preferredId
+    ? ws.find((w) => w.id === preferredId)
     : undefined;
-  if (primaryWs) {
-    const idx = ws.indexOf(primaryWs);
+  if (preferredWs) {
+    const idx = ws.indexOf(preferredWs);
     if (idx >= 0) {
       switchNestedWorkspace(idx);
       return;
     }
-  } else if (workspace.primaryNestedWorkspaceId) {
+  }
+  // If the primary specifically is set but missing, recreate it.
+  const primaryExists =
+    workspace.primaryNestedWorkspaceId &&
+    ws.some((w) => w.id === workspace.primaryNestedWorkspaceId);
+  if (workspace.primaryNestedWorkspaceId && !primaryExists) {
     const newWsId = await createNestedWorkspaceFromDef({
       name: workspace.name,
       cwd: workspace.path,

@@ -12,7 +12,6 @@ import {
 } from "../lib/stores/nested-workspace";
 import {
   primarySidebarVisible,
-  secondarySidebarVisible,
   commandPaletteOpen,
   findBarVisible,
   contextMenu,
@@ -134,10 +133,6 @@ describe("UI stores", () => {
     expect(get(primarySidebarVisible)).toBe(true);
   });
 
-  it("secondarySidebarVisible defaults to false", () => {
-    expect(get(secondarySidebarVisible)).toBe(false);
-  });
-
   it("commandPaletteOpen defaults to false", () => {
     expect(get(commandPaletteOpen)).toBe(false);
   });
@@ -155,13 +150,6 @@ describe("UI stores", () => {
     expect(get(primarySidebarVisible)).toBe(false);
     primarySidebarVisible.set(true);
     expect(get(primarySidebarVisible)).toBe(true);
-  });
-
-  it("toggles secondary sidebar visibility", () => {
-    secondarySidebarVisible.set(true);
-    expect(get(secondarySidebarVisible)).toBe(true);
-    secondarySidebarVisible.set(false);
-    expect(get(secondarySidebarVisible)).toBe(false);
   });
 
   it("sets context menu state", () => {

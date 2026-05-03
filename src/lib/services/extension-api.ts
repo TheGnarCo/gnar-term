@@ -8,11 +8,6 @@
  */
 import { get } from "svelte/store";
 import { eventBus, type AppEventType } from "./event-bus";
-import {
-  setSidebarTabBadge,
-  clearSidebarTabBadge,
-  activateSidebarTab as activateSidebarTabFn,
-} from "./sidebar-tab-registry";
 import { surfaceTypeStore } from "./surface-type-registry";
 import {
   getContextMenuItemsForFile,
@@ -49,7 +44,6 @@ import {
   openFileAsPreviewSplit,
 } from "./surface-service";
 import {
-  secondarySidebarVisible,
   pendingAction,
   showInputPrompt as coreShowInputPrompt,
   showFormPrompt as coreShowFormPrompt,
@@ -288,10 +282,6 @@ export function createExtensionAPI(
         ? coreShowFormPrompt(title, fields, options)
         : coreShowFormPrompt(title, fields);
     },
-    toggleSecondarySidebar() {
-      secondarySidebarVisible.update((v) => !v);
-    },
-
     createNestedWorkspace(
       name: string,
       cwd: string,
@@ -358,18 +348,6 @@ export function createExtensionAPI(
       return out;
     },
 
-    badgeSidebarTab(tabId: string, hasBadge: boolean) {
-      const namespacedId = `${extId}:${tabId}`;
-      if (hasBadge) {
-        setSidebarTabBadge(namespacedId, true);
-      } else {
-        clearSidebarTabBadge(namespacedId);
-      }
-    },
-    activateSidebarTab(tabId: string) {
-      const namespacedId = `${extId}:${tabId}`;
-      activateSidebarTabFn(namespacedId);
-    },
     setWorkspaceIndicator(workspaceId: string, status: string | null) {
       if (status === null) {
         clearStatusItem("_agent", workspaceId, "default");

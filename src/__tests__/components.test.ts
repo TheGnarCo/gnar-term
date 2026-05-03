@@ -118,14 +118,12 @@ import CommandPalette from "../lib/components/CommandPalette.svelte";
 import WorkspaceItem from "../lib/components/WorkspaceItem.svelte";
 import PaneView from "../lib/components/PaneView.svelte";
 import PrimarySidebar from "../lib/components/PrimarySidebar.svelte";
-import SecondarySidebar from "../lib/components/SecondarySidebar.svelte";
 import TerminalSurfaceComponent from "../lib/components/TerminalSurface.svelte";
 import WorkspaceSectionHarness from "./workspace-section-harness.svelte";
 
 // Store imports
 import {
   primarySidebarVisible,
-  secondarySidebarVisible,
   commandPaletteOpen,
   findBarVisible,
   contextMenu,
@@ -229,7 +227,6 @@ const noop = () => {};
 beforeEach(() => {
   cleanup();
   primarySidebarVisible.set(true);
-  secondarySidebarVisible.set(false);
   commandPaletteOpen.set(false);
   findBarVisible.set(false);
   contextMenu.set(null);
@@ -262,56 +259,18 @@ describe("TitleBar", () => {
     expect(el.style.height).toBe("38px");
   });
 
-  it("always renders both sidebar toggles", () => {
+  it("renders primary sidebar toggle", () => {
     const { container } = render(TitleBar);
     const primaryBtn = container.querySelector(
       "button[title^='Toggle Primary Sidebar']",
     );
     expect(primaryBtn).toBeTruthy();
-    expect(screen.getByTitle("Toggle Secondary Sidebar")).toBeTruthy();
   });
 
   it("renders settings button", () => {
     const { container } = render(TitleBar);
     const settingsBtn = container.querySelector("button[title*='Settings']");
     expect(settingsBtn).toBeTruthy();
-  });
-});
-
-// ===========================================================================
-// SecondarySidebar
-// ===========================================================================
-
-describe("SecondarySidebar", () => {
-  it("renders when secondarySidebarVisible is true", () => {
-    secondarySidebarVisible.set(true);
-    const { container } = render(SecondarySidebar);
-    expect(container.querySelector("#secondary-sidebar")).toBeTruthy();
-  });
-
-  it("does not render when secondarySidebarVisible is false", () => {
-    secondarySidebarVisible.set(false);
-    const { container } = render(SecondarySidebar);
-    expect(container.querySelector("#secondary-sidebar")).toBeNull();
-  });
-
-  it("has data-tauri-drag-region", () => {
-    secondarySidebarVisible.set(true);
-    const { container } = render(SecondarySidebar);
-    const dragRegions = container.querySelectorAll("[data-tauri-drag-region]");
-    expect(dragRegions.length).toBeGreaterThan(0);
-  });
-
-  it("shows empty state message when no tabs are registered", () => {
-    secondarySidebarVisible.set(true);
-    render(SecondarySidebar);
-    expect(screen.getByText("No tabs registered")).toBeTruthy();
-  });
-
-  it("does not render toggle in header (lives in TitleBar)", () => {
-    secondarySidebarVisible.set(true);
-    render(SecondarySidebar);
-    expect(screen.queryByTitle("Toggle Secondary Sidebar")).toBeNull();
   });
 });
 

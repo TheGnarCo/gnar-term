@@ -48,10 +48,6 @@ import { eventBus } from "../lib/services/event-bus";
 import { pendingAction } from "../lib/stores/ui";
 import { commandStore } from "../lib/services/command-registry";
 import {
-  sidebarTabStore,
-  resetSidebarTabs,
-} from "../lib/services/sidebar-tab-registry";
-import {
   sidebarSectionStore,
   resetSidebarSections,
 } from "../lib/services/sidebar-section-registry";
@@ -102,7 +98,6 @@ describe("validateManifest", () => {
         contributes: {
           commands: [{ id: "do-thing", title: "Do Thing" }],
           events: ["workspace:created", "pane:focused"],
-          secondarySidebarTabs: [{ id: "my-tab", label: "My Tab" }],
           primarySidebarSections: [{ id: "my-section", label: "My Section" }],
           surfaces: [{ id: "my-surface", label: "My Surface" }],
         },
@@ -202,7 +197,6 @@ describe("createExtensionAPI", () => {
     expect(api).toHaveProperty("on");
     expect(api).toHaveProperty("off");
     expect(api).toHaveProperty("registerCommand");
-    expect(api).toHaveProperty("registerSecondarySidebarTab");
     expect(api).toHaveProperty("registerPrimarySidebarSection");
     expect(api).toHaveProperty("registerSurfaceType");
     expect(api).toHaveProperty("state");
@@ -514,34 +508,6 @@ describe("Extension lifecycle", () => {
     // Handler should be cleaned up
     eventBus.emit({ type: "workspace:created", id: "ws2", name: "Test 2" });
     expect(handler).not.toHaveBeenCalled();
-  });
-
-  it("deactivateExtension cleans up registered sidebar tabs", async () => {
-    const manifest = makeManifest({
-      id: "tab-cleanup",
-      contributes: {
-        secondarySidebarTabs: [{ id: "my-tab", label: "My Tab" }],
-      },
-    });
-    const registerFn = (api: ExtensionAPI) => {
-      api.onActivate(() => {
-        api.registerSecondarySidebarTab("my-tab", { fake: "component" });
-      });
-    };
-
-    resetSidebarTabs();
-    registerExtension(manifest, registerFn);
-    await activateExtension("tab-cleanup");
-
-    expect(
-      get(sidebarTabStore).some((t) => t.id === "tab-cleanup:my-tab"),
-    ).toBe(true);
-
-    deactivateExtension("tab-cleanup");
-
-    expect(
-      get(sidebarTabStore).some((t) => t.id === "tab-cleanup:my-tab"),
-    ).toBe(false);
   });
 
   it("deactivateExtension cleans up registered sidebar sections", async () => {

@@ -82,11 +82,6 @@ import {
   resetCommands,
 } from "../lib/services/command-registry";
 import {
-  registerSidebarTab,
-  resetSidebarTabs,
-  activeSidebarTabStore,
-} from "../lib/services/sidebar-tab-registry";
-import {
   registerWorkspaceAction,
   resetWorkspaceActions,
 } from "../lib/services/workspace-action-registry";
@@ -139,7 +134,6 @@ describe("MCP server JSON-RPC", () => {
     const names = tools.map((t) => t.name).sort();
     expect(names).toEqual(
       [
-        "activate_sidebar_tab",
         "add_dashboard_to_workspace",
         "close_preview",
         "create_preview_file",
@@ -165,7 +159,6 @@ describe("MCP server JSON-RPC", () => {
         "list_dashboard_workspaces",
         "list_panes",
         "list_sidebar_sections",
-        "list_sidebar_tabs",
         "list_surface_types",
         "list_workspace_actions",
         "list_workspace_subtitles",
@@ -185,7 +178,7 @@ describe("MCP server JSON-RPC", () => {
         "write_file",
       ].sort(),
     );
-    expect(names).toHaveLength(44);
+    expect(names).toHaveLength(42);
     for (const t of tools) {
       expect(t).toHaveProperty("inputSchema");
     }
@@ -944,52 +937,6 @@ describe("MCP mirror tools — commands", () => {
   });
 });
 
-describe("MCP mirror tools — sidebar tabs", () => {
-  beforeEach(() => resetSidebarTabs());
-
-  it("list_sidebar_tabs returns registered tabs", async () => {
-    registerSidebarTab({
-      id: "files",
-      label: "Files",
-      component: {},
-      source: "file-browser",
-    });
-    const r = await dispatch(
-      rpc("tools/call", { name: "list_sidebar_tabs", arguments: {} }),
-    );
-    expect((r as any).result.structuredContent.tabs).toEqual([
-      { id: "files", label: "Files", source: "file-browser" },
-    ]);
-  });
-
-  it("activate_sidebar_tab updates the active tab store", async () => {
-    registerSidebarTab({
-      id: "changes",
-      label: "Changes",
-      component: {},
-      source: "diff-viewer",
-    });
-    const r = await dispatch(
-      rpc("tools/call", {
-        name: "activate_sidebar_tab",
-        arguments: { tab_id: "changes" },
-      }),
-    );
-    expect((r as any).result.structuredContent).toEqual({ ok: true });
-    expect(get(activeSidebarTabStore)).toBe("changes");
-  });
-
-  it("activate_sidebar_tab rejects unknown tab ids", async () => {
-    const resp = await dispatch(
-      rpc("tools/call", {
-        name: "activate_sidebar_tab",
-        arguments: { tab_id: "nope" },
-      }),
-    );
-    expect((resp as any).error.code).toBe(-32000);
-  });
-});
-
 describe("MCP mirror tools — workspace actions", () => {
   beforeEach(() => resetWorkspaceActions());
 
@@ -1393,8 +1340,8 @@ describe("tool metadata", () => {
     }
   });
 
-  it("tool count matches spec (44)", () => {
-    expect(_getToolsForTest()).toHaveLength(44);
+  it("tool count matches spec (42)", () => {
+    expect(_getToolsForTest()).toHaveLength(42);
   });
 });
 

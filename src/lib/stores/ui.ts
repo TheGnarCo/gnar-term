@@ -64,8 +64,6 @@ export const blockReorderActive = derived(
 );
 
 export const primarySidebarWidth = writable<number>(220);
-export const secondarySidebarVisible = writable<boolean>(false);
-export const secondarySidebarWidth = writable<number>(220);
 export const commandPaletteOpen = writable<boolean>(false);
 export const findBarVisible = writable<boolean>(false);
 

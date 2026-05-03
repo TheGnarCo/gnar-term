@@ -98,17 +98,6 @@ export const primarySections = derived(
   },
 );
 
-/** Sections in the active workspace's secondary sidebar. */
-export const secondarySections = derived(
-  [mcpSidebarSections, activeWorkspace],
-  ([$map, $ws]) => {
-    if (!$ws) return [];
-    return Array.from($map.values()).filter(
-      (s) => s.side === "secondary" && s.workspaceId === $ws.id,
-    );
-  },
-);
-
 export function _resetMcpSidebarForTest(): void {
   mcpSidebarSections.set(new Map());
 }

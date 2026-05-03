@@ -7,7 +7,6 @@
   import {
     isFullscreen,
     primarySidebarVisible,
-    secondarySidebarVisible,
     commandPaletteOpen,
     findBarVisible,
     pendingAction,
@@ -127,7 +126,6 @@
 
   // Components
   import PrimarySidebar from "./lib/components/PrimarySidebar.svelte";
-  import SecondarySidebar from "./lib/components/SecondarySidebar.svelte";
   import TitleBar from "./lib/components/TitleBar.svelte";
   import WorkspaceView from "./lib/components/WorkspaceView.svelte";
   import EmptySurface from "./lib/components/EmptySurface.svelte";
@@ -149,8 +147,6 @@
   import SettingsPanel from "./lib/components/SettingsPanel.svelte";
   import GearIcon from "./lib/icons/GearIcon.svelte";
   import type { Component } from "svelte";
-  import { registerSidebarTab } from "./lib/services/sidebar-tab-registry";
-  import AgentsSidebarTab from "./lib/components/AgentsSidebarTab.svelte";
 
   const TOAST_DURATION_MS = 5000;
 
@@ -337,12 +333,6 @@
       title: "Toggle Primary Sidebar",
       shortcut: `${shiftModLabel}B`,
       action: () => primarySidebarVisible.update((v) => !v),
-      source: "core",
-    },
-    {
-      id: "core.toggle-secondary-sidebar",
-      title: "Toggle Secondary Sidebar",
-      action: () => secondarySidebarVisible.update((v) => !v),
       source: "core",
     },
     {
@@ -643,16 +633,6 @@
     initPreview();
     initAgentDetectionBootstrap();
 
-    // Register the core agents summary sidebar tab — shows all detected
-    // agents across all workspaces, regardless of which is currently active.
-    registerSidebarTab({
-      id: "agents-summary",
-      label: "Agents",
-      icon: undefined,
-      component: AgentsSidebarTab as unknown as Component,
-      source: "core",
-    });
-
     // Workspaces (formerly the project-scope extension) —
     // registered from core so the root-row renderer, commands, and
     // Dashboard contribution are available before extensions activate.
@@ -931,8 +911,6 @@
       <FindBar bind:this={findBarComponent} />
     </div>
   </div>
-
-  <SecondarySidebar />
 </div>
 
 <CommandPalette />

@@ -1,11 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { theme } from "../stores/theme";
-  import {
-    isFullscreen,
-    primarySidebarVisible,
-    secondarySidebarVisible,
-  } from "../stores/ui";
+  import { isFullscreen, primarySidebarVisible } from "../stores/ui";
   import { spawnOrNavigate } from "../services/dashboard-workspace-service";
   import { isMac, modLabel, shiftModLabel } from "../terminal-service";
   import { shortcutHint } from "../actions/shortcut-hint";
@@ -112,28 +108,6 @@
       ><path
         d="M6.8 1.5h2.4l.3 1.9.8.3 1.6-1 1.7 1.7-1 1.6.3.8 1.9.3v2.4l-1.9.3-.3.8 1 1.6-1.7 1.7-1.6-1-.8.3-.3 1.9H6.8l-.3-1.9-.8-.3-1.6 1-1.7-1.7 1-1.6-.3-.8-1.9-.3V6.8l1.9-.3.3-.8-1-1.6 1.7-1.7 1.6 1 .8-.3z"
       /><circle cx="8" cy="8" r="2" /></svg
-    >
-  </button>
-
-  <button
-    style="{btnStyle} color: {$secondarySidebarVisible ? fgActive : fg};"
-    title="Toggle Secondary Sidebar"
-    aria-label="Toggle Secondary Sidebar"
-    on:click={() => secondarySidebarVisible.update((v) => !v)}
-  >
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.5"
-      ><rect x="1" y="2" width="14" height="12" rx="1.5" /><line
-        x1="10.5"
-        y1="2"
-        x2="10.5"
-        y2="14"
-      /></svg
     >
   </button>
 </div>

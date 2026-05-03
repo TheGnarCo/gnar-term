@@ -1,11 +1,9 @@
 /**
  * File Browser — included extension
  *
- * Registers a secondary sidebar tab showing files in the active workspace's cwd.
- * Clicking a file opens it in preview.
+ * Registers context menu items for files in the active workspace's cwd.
  */
 import type { ExtensionManifest, ExtensionAPI } from "../api";
-import FileBrowser from "./FileBrowser.svelte";
 
 export const fileBrowserManifest: ExtensionManifest = {
   id: "file-browser",
@@ -15,8 +13,6 @@ export const fileBrowserManifest: ExtensionManifest = {
   entry: "./index.ts",
   included: true,
   contributes: {
-    secondarySidebarTabs: [{ id: "files", label: "Files", icon: "folder" }],
-    commands: [{ id: "toggle-file-browser", title: "Toggle File Browser" }],
     contextMenuItems: [
       {
         id: "open-as-preview",
@@ -41,12 +37,6 @@ export const fileBrowserManifest: ExtensionManifest = {
 
 export function registerFileBrowserExtension(api: ExtensionAPI): void {
   api.onActivate(() => {
-    api.registerSecondarySidebarTab("files", FileBrowser);
-
-    api.registerCommand("toggle-file-browser", () => {
-      api.toggleSecondarySidebar();
-    });
-
     api.registerContextMenuItem("open-as-preview", (filePath) => {
       api.openPreviewSplit(filePath);
     });

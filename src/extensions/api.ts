@@ -212,7 +212,6 @@ export interface ExtensionManifestWorkspaceSubtitle {
 }
 
 export interface ExtensionContributions {
-  secondarySidebarTabs?: ExtensionManifestTab[];
   primarySidebarSections?: ExtensionManifestSection[];
   commands?: ExtensionManifestCommand[];
   surfaces?: ExtensionManifestSurface[];
@@ -340,12 +339,6 @@ export interface ExtensionAPI {
       isActive?: Readable<boolean>;
       onClick: () => void;
     },
-  ): void;
-  registerSecondarySidebarTab(tabId: string, component: unknown): void;
-  registerSecondarySidebarAction(
-    tabId: string,
-    actionId: string,
-    handler: () => void,
   ): void;
   registerPrimarySidebarSection(
     sectionId: string,
@@ -645,7 +638,6 @@ export interface ExtensionAPI {
     >,
     options?: { submitLabel?: string },
   ): Promise<Record<string, string> | null>;
-  toggleSecondarySidebar(): void;
   createNestedWorkspace(
     name: string,
     cwd: string,
@@ -696,11 +688,6 @@ export interface ExtensionAPI {
     title: string;
   }>;
 
-  // Sidebar tab indicators
-  /** Set or clear a notification badge dot on a secondary sidebar tab. */
-  badgeSidebarTab(tabId: string, hasBadge: boolean): void;
-  /** Programmatically switch to a secondary sidebar tab (opens sidebar if closed). */
-  activateSidebarTab(tabId: string): void;
   /** Set or clear a status indicator on a workspace item (e.g., "running" | "waiting" | "idle" | null to clear). */
   setWorkspaceIndicator(workspaceId: string, status: string | null): void;
 

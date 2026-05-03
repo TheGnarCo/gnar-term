@@ -6,7 +6,6 @@
  */
 import type { ExtensionManifest, ExtensionAPI, WorkspaceRef } from "../api";
 import DiffSurface from "./DiffSurface.svelte";
-import ChangesTab from "./ChangesTab.svelte";
 import DiffIcon from "./DiffIcon.svelte";
 import { createNestedWorkspaceFromDef } from "../../lib/services/nested-workspace-service";
 
@@ -26,14 +25,6 @@ export const diffViewerManifest: ExtensionManifest = {
       { id: "compare-branches", title: "Compare Branches..." },
     ],
     contextMenuItems: [{ id: "diff-file", label: "Show Diff", when: "*" }],
-    secondarySidebarTabs: [
-      {
-        id: "changes",
-        label: "Changes",
-        icon: "diff",
-        actions: [{ id: "refresh", icon: "refresh", title: "Refresh" }],
-      },
-    ],
     settings: {
       fields: {
         diffMode: {
@@ -59,7 +50,7 @@ export const diffViewerManifest: ExtensionManifest = {
         },
       },
     },
-    events: ["workspace:activated", "worktree:merged"],
+    events: ["workspace:activated"],
   },
 };
 
@@ -139,25 +130,6 @@ export function registerDiffViewerExtension(api: ExtensionAPI): void {
       icon: DiffIcon,
       paneConstraints: { singleSurface: true },
       create: (workspace) => createDiffDashboardWorkspace(workspace),
-    });
-
-    // Changes sidebar tab
-    api.registerSecondarySidebarTab("changes", ChangesTab);
-
-    const triggerChangesRefresh = () => {
-      const refresh = api.state.get<() => void>("changes-refresh");
-      if (refresh) refresh();
-    };
-    api.registerSecondarySidebarAction(
-      "changes",
-      "refresh",
-      triggerChangesRefresh,
-    );
-
-    // Auto-open Changes tab when a worktree merge completes
-    api.on("worktree:merged", () => {
-      api.badgeSidebarTab("changes", true);
-      api.activateSidebarTab("changes");
     });
   });
 }

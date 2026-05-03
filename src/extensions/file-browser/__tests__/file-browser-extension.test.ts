@@ -1,6 +1,6 @@
 /**
  * Tests for the file-browser included extension — validates that file-browser
- * registers itself as a secondary sidebar tab and command via the extension API.
+ * registers context menu items via the extension API.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { get } from "svelte/store";
@@ -13,10 +13,6 @@ vi.mock("@tauri-apps/api/event", () => ({
 }));
 
 import { fileBrowserManifest, registerFileBrowserExtension } from "..";
-import {
-  sidebarTabStore,
-  resetSidebarTabs,
-} from "../../../lib/services/sidebar-tab-registry";
 import {
   commandStore,
   resetCommands,
@@ -35,7 +31,6 @@ import {
 describe("File Browser included extension", () => {
   beforeEach(async () => {
     await resetExtensions();
-    resetSidebarTabs();
     resetCommands();
     resetContextMenuItems();
   });
@@ -50,25 +45,15 @@ describe("File Browser included extension", () => {
     expect(fileBrowserManifest.contributes?.events).toBeUndefined();
   });
 
-  it("registers sidebar tab via API with namespaced id", async () => {
-    registerExtension(fileBrowserManifest, registerFileBrowserExtension);
-    await activateExtension("file-browser");
-    const tabs = get(sidebarTabStore);
-    expect(tabs).toHaveLength(1);
-    expect(tabs[0].id).toBe("file-browser:files");
-    expect(tabs[0].label).toBe("Files");
-    expect(tabs[0].source).toBe("file-browser");
-    expect(tabs[0].component).toBeTruthy();
+  it("manifest does not declare commands", () => {
+    expect(fileBrowserManifest.contributes?.commands).toBeUndefined();
   });
 
-  it("registers command via API with namespaced id", async () => {
+  it("registers no commands on activation", async () => {
     registerExtension(fileBrowserManifest, registerFileBrowserExtension);
     await activateExtension("file-browser");
     const cmds = get(commandStore);
-    const cmd = cmds.find((c) => c.id === "file-browser:toggle-file-browser");
-    expect(cmd).toBeTruthy();
-    expect(cmd!.title).toBe("Toggle File Browser");
-    expect(cmd!.source).toBe("file-browser");
+    expect(cmds.filter((c) => c.source === "file-browser")).toHaveLength(0);
   });
 
   it("registers context menu items for all files", async () => {

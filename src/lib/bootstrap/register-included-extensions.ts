@@ -35,10 +35,6 @@ import {
   registerJrvsThemesExtension,
 } from "../../extensions/jrvs-themes";
 import {
-  githubSidebarManifest,
-  registerGitHubSidebarExtension,
-} from "../../extensions/github-sidebar";
-import {
   claudeSettingsManifest,
   registerClaudeSettingsExtension,
 } from "../../extensions/claude-settings";
@@ -63,7 +59,6 @@ export const INCLUDED_EXTENSIONS: readonly IncludedExtension[] = [
   ],
   [diffViewerManifest, registerDiffViewerExtension, "diff-viewer"],
   [jrvsThemesManifest, registerJrvsThemesExtension, "jrvs-themes"],
-  [githubSidebarManifest, registerGitHubSidebarExtension, "github-sidebar"],
   [claudeSettingsManifest, registerClaudeSettingsExtension, "claude-settings"],
 ] as const;
 

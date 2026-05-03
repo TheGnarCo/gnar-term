@@ -3,7 +3,6 @@ import { invoke } from "@tauri-apps/api/core";
 import { nestedWorkspaces } from "../../stores/nested-workspace";
 import { surfaceTypeStore } from "../surface-type-registry";
 import { commandStore } from "../command-registry";
-import { sidebarTabStore, activateSidebarTab } from "../sidebar-tab-registry";
 import { workspaceActionStore } from "../workspace-action-registry";
 import {
   contextMenuItemStore,
@@ -79,43 +78,6 @@ export const registryMirrorTools: ToolDef[] = [
         );
       }
       await cmd.action();
-      return { ok: true };
-    },
-  },
-
-  // ---- Sidebar tabs (mirror of sidebarTabStore) ----
-  {
-    name: "list_sidebar_tabs",
-    description:
-      "List secondary-sidebar tabs contributed by extensions. Returns `{ id, label, source }` for each. Use activate_sidebar_tab to switch to one.",
-    inputSchema: { type: "object", properties: {} },
-    handler: () => {
-      const tabs = get(sidebarTabStore).map((t) => ({
-        id: t.id,
-        label: t.label,
-        source: t.source,
-      }));
-      return { tabs };
-    },
-  },
-  {
-    name: "activate_sidebar_tab",
-    description:
-      "Switch the secondary sidebar to a registered tab by id (see list_sidebar_tabs).",
-    inputSchema: {
-      type: "object",
-      properties: { tab_id: { type: "string" } },
-      required: ["tab_id"],
-    },
-    handler: (args) => {
-      const p = args as { tab_id: string };
-      const tab = get(sidebarTabStore).find((t) => t.id === p.tab_id);
-      if (!tab) {
-        throw new Error(
-          `Unknown sidebar tab: ${p.tab_id}. Call list_sidebar_tabs to see what's registered.`,
-        );
-      }
-      activateSidebarTab(p.tab_id);
       return { ok: true };
     },
   },

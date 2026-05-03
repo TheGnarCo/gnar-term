@@ -259,7 +259,7 @@
   $: registerCommands([
     {
       id: "core.new-workspace",
-      title: "New Workspace",
+      title: "New Branched Workspace",
       shortcut: `${shiftModLabel}N`,
       action: () =>
         createNestedWorkspace(`Workspace ${$nestedWorkspaces.length + 1}`),
@@ -298,7 +298,7 @@
     {
       // Avoid colliding with Close Surface's Ctrl+Shift+W on Linux/Windows.
       id: "core.close-workspace",
-      title: "Close Workspace",
+      title: "Close Branched Workspace",
       shortcut: isMac ? `${shiftModLabel}W` : `${shiftModLabel}Q`,
       action: () => {
         void (async () => {

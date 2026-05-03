@@ -431,7 +431,11 @@ export async function confirmAndCloseWorkspace(
     if (!isDashboard) {
       const confirmed = await showConfirmPrompt(
         `Close "${ws.name}"? This will dispose the terminal.`,
-        { title: "Close Workspace", confirmLabel: "Close", danger: true },
+        {
+          title: "Close Branched Workspace",
+          confirmLabel: "Close",
+          danger: true,
+        },
       );
       if (!confirmed) return false;
     }
@@ -456,7 +460,7 @@ export async function confirmAndCloseWorkspace(
           ],
         },
       ],
-      { submitLabel: "Close Workspace" },
+      { submitLabel: "Close Branched Workspace" },
     );
     if (!result) return false;
     pendingCloseActions.set(

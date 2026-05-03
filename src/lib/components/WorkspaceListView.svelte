@@ -236,10 +236,10 @@
     const srcWs = $nestedWorkspaces.find(
       (w) => w.id === tabDrag!.sourceWorkspaceId,
     );
-    if (!srcWs) return "New Workspace";
+    if (!srcWs) return "New Branched Workspace";
     return (
       getAllSurfaces(srcWs).find((s) => s.id === tabDrag!.surfaceId)?.title ||
-      "New Workspace"
+      "New Branched Workspace"
     );
   })();
   $: effectiveDropLabel = active ? sourceWs?.name : tabDragSurfaceLabel;

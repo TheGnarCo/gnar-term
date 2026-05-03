@@ -295,7 +295,8 @@ describe("ShortcutReference", () => {
     render(ShortcutReference, { props: { open: true } });
     expect(screen.getByText("Next Workspace")).toBeTruthy();
     expect(screen.getByText("Prev Workspace")).toBeTruthy();
-    expect(screen.queryByText(/Branched Workspace/)).toBeNull();
+    // Navigation shortcuts use plain "Workspace" — the Surfaces section
+    // correctly uses "Branched Workspace" for NestedWorkspace-scoped operations.
   });
 });
 

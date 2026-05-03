@@ -90,11 +90,11 @@
     {
       title: "Surfaces",
       rows: [
-        { label: "New Workspace", mac: "⌘N", other: "—" },
+        { label: "New Branched Workspace", mac: "⌘N", other: "—" },
         { label: "New Terminal", mac: "⌘T", other: "—" },
         { label: "Close Terminal", mac: "⌘W", other: "Ctrl+Shift+W" },
         {
-          label: "Close Workspace",
+          label: "Close Branched Workspace",
           mac: "⌘⇧W",
           other: "Ctrl+Shift+Q",
         },

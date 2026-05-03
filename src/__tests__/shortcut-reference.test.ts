@@ -74,6 +74,19 @@ describe("ShortcutReference component", () => {
     await fireEvent.mouseDown(overlay);
     expect(queryByTestId("shortcut-reference")).toBeNull();
   });
+
+  it('uses "Branched Workspace" vocabulary for NestedWorkspace shortcuts', () => {
+    const { getByText, queryByText } = render(ShortcutReference, {
+      props: { open: true },
+    });
+    // ⌘N creates a Branched Workspace (NestedWorkspace), not a top-level Workspace
+    expect(getByText("New Branched Workspace")).toBeTruthy();
+    // ⌘⇧W closes a Branched Workspace (NestedWorkspace), not a top-level Workspace
+    expect(getByText("Close Branched Workspace")).toBeTruthy();
+    // The old generic labels must not appear in the Surfaces section
+    expect(queryByText(/^New Workspace$/)).toBeNull();
+    expect(queryByText(/^Close Workspace$/)).toBeNull();
+  });
 });
 
 describe("⌘/ command palette wiring", () => {

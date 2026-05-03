@@ -559,7 +559,7 @@ export function createNestedWorkspaceFromSurface(
     srcWorkspaceId;
   const newWs: NestedWorkspace = {
     id: uid(),
-    name: surface.title || "New Workspace",
+    name: surface.title || "New Branched Workspace",
     splitRoot: { type: "pane", pane: newPane },
     activePaneId: newPane.id,
     ...(effectiveWorkspaceId

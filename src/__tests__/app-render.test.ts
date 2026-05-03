@@ -538,7 +538,7 @@ describe("Command palette has all required commands", () => {
     const source = fs.readFileSync("src/App.svelte", "utf-8");
     const requiredCommands = [
       "Close Surface",
-      "Close Workspace",
+      "Close Branched Workspace",
       "Next Surface",
       "Previous Surface",
       "Toggle Find Bar",

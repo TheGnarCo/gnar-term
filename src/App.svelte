@@ -2,7 +2,6 @@
   import { onMount, onDestroy } from "svelte";
   import { listen } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { ask } from "@tauri-apps/plugin-dialog";
   import { theme, themes, xtermTheme } from "./lib/stores/theme";
   import { fontSize, setFontSizeFromConfig } from "./lib/stores/font-size";
   import {
@@ -29,7 +28,12 @@
   import { claimedWorkspaceIds } from "./lib/services/claimed-workspace-registry";
   import { get } from "svelte/store";
   import { invoke } from "@tauri-apps/api/core";
-  import { loadConfig, saveConfig, getWorkspaceCommands } from "./lib/config";
+  import {
+    loadConfig,
+    saveConfig,
+    getState,
+    getWorkspaceCommands,
+  } from "./lib/config";
   import { registerTheme } from "./lib/services/theme-registry";
   import {
     setupListeners,
@@ -115,6 +119,11 @@
   import { initMcpServer } from "./lib/services/mcp-server";
   import { handleAppKeydown } from "./lib/services/keyboard-shortcuts";
   import { initShortcutHints } from "./lib/stores/shortcut-hints";
+  import {
+    restoreWindowBounds,
+    saveWindowBounds,
+  } from "./lib/services/window-bounds-service";
+  import { confirmQuit } from "./lib/services/quit-confirmation-service";
 
   // Components
   import PrimarySidebar from "./lib/components/PrimarySidebar.svelte";
@@ -129,6 +138,7 @@
   import ConfirmPrompt from "./lib/components/ConfirmPrompt.svelte";
   import FormPrompt from "./lib/components/FormPrompt.svelte";
   import RestoreCommandsOverlay from "./lib/components/RestoreCommandsOverlay.svelte";
+  import ShortcutReference from "./lib/components/ShortcutReference.svelte";
   import WorkspaceCreateOverlay from "./lib/components/WorkspaceCreateOverlay.svelte";
   import { surfaceTypeStore } from "./lib/services/surface-type-registry";
   import {
@@ -149,6 +159,10 @@
   // nestedWorkspaces are re-restored later (rare, but possible via dev reload).
   let restoreCommandsOverlayShown = false;
   let showRestoreCommandsOverlay = false;
+
+  // Shortcut reference overlay (⌘/). Two-way bound to the modal so it can
+  // self-close on Escape / backdrop click without needing a callback.
+  let shortcutReferenceOpen = false;
 
   // ---- Extension error toast ----
   let activeToasts: {
@@ -336,6 +350,15 @@
       title: "Open Settings",
       shortcut: isMac ? "⌘," : "Ctrl+,",
       action: () => void spawnOrNavigate("gnar-term:settings"),
+      source: "core",
+    },
+    {
+      // Shortcut intentionally mac-only — see ShortcutReference.svelte's
+      // "Keyboard Shortcuts" row for the same Linux/Win blank.
+      id: "core.show-keyboard-shortcuts",
+      title: "Show Keyboard Shortcuts",
+      shortcut: isMac ? "⌘/" : undefined,
+      action: () => (shortcutReferenceOpen = true),
       source: "core",
     },
     {
@@ -656,6 +679,12 @@
     // agentic extension's provision loop, reconcileWorkspaceDashboards) can
     // safely read and write the nestedWorkspaces store without racing restore.
     markRestored();
+
+    // Re-apply the persisted window bounds. `restoreWorkspaces` calls
+    // loadState() which populates the in-memory AppState — read it via
+    // getState() so we don't need to thread the value back through the
+    // bootstrap signature. Best-effort; failures are logged and ignored.
+    void restoreWindowBounds(getState().windowBounds, getCurrentWindow());
     // Backfill primaryNestedWorkspaceId and wrap standalone nestedWorkspaces now that
     // the nestedWorkspaces store is populated.
     await reconcilePrimaryWorkspaces();
@@ -775,16 +804,12 @@
     // and project membership / debounced writes can be lost on quit.
     void appWindow.onCloseRequested(async (event) => {
       event.preventDefault();
-      let confirmed = false;
-      try {
-        confirmed = await ask("Quit GnarTerm?", {
-          title: "Quit",
-          kind: "warning",
-        });
-      } catch {
-        return;
-      }
+      const confirmed = await confirmQuit();
       if (!confirmed) return;
+      // Snapshot window bounds before destroy so the next launch lands
+      // where the user left off. Best-effort; saveWindowBounds swallows
+      // its own errors.
+      await saveWindowBounds(appWindow);
       // Run all flushes defensively so one failure can't strand the others.
       const results = await Promise.allSettled([
         persistWorkspaces(),
@@ -897,6 +922,7 @@
     onClose={() => (showRestoreCommandsOverlay = false)}
   />
 {/if}
+<ShortcutReference bind:open={shortcutReferenceOpen} />
 
 <style>
   .extension-toast-container {

@@ -23,6 +23,7 @@ import { createNestedWorkspace } from "./nested-workspace-service";
 import {
   flashFocusedPane,
   focusDirection,
+  resizeActivePane,
   togglePaneZoom,
 } from "./pane-service";
 import {
@@ -106,6 +107,28 @@ export function handleAppKeydown(
   // Shortcuts that reference component bindings or aren't in the
   // command palette. Use Cmd (mac) or Ctrl+Shift (other).
   if ((isMac ? e.metaKey : ctrl) && shift && !alt) {
+    // ⌘⇧Arrow (mac) / Ctrl+Shift+Arrow (other) — keyboard pane resize.
+    // Handled before the letter-key dispatch since arrows aren't letters.
+    if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      resizeActivePane("left");
+      return;
+    }
+    if (e.key === "ArrowRight") {
+      e.preventDefault();
+      resizeActivePane("right");
+      return;
+    }
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      resizeActivePane("up");
+      return;
+    }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      resizeActivePane("down");
+      return;
+    }
     const k = e.key.toLowerCase();
     if (k === "h") {
       e.preventDefault();

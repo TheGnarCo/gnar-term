@@ -320,18 +320,109 @@ export function reorderTab(paneId: string, fromIdx: number, toIdx: number) {
 export function focusDirection(dir: "left" | "right" | "up" | "down") {
   const ws = get(activeWorkspace);
   if (!ws) return;
-  const panes = getAllPanes(ws.splitRoot);
-  if (panes.length <= 1) return;
-  const currentIdx = panes.findIndex((p) => p.id === ws.activePaneId);
-  const nextIdx =
-    dir === "right" || dir === "down"
-      ? (currentIdx + 1) % panes.length
-      : (currentIdx - 1 + panes.length) % panes.length;
-  const nextPane = panes[nextIdx]!;
-  ws.activePaneId = nextPane.id;
+  const allPanes = getAllPanes(ws.splitRoot);
+  if (allPanes.length <= 1) return;
+
+  const active = allPanes.find((p) => p.id === ws.activePaneId);
+
+  const focus = (target: Pane) => {
+    ws.activePaneId = target.id;
+    nestedWorkspaces.update((l) => [...l]);
+    const s = target.surfaces.find((s) => s.id === target.activeSurfaceId);
+    void safeFocus(s);
+  };
+
+  // Without a measured active element we can't do spatial selection;
+  // fall back to DFS order (preserves prior behavior in tests/headless contexts).
+  if (!active?.element) {
+    const idx = allPanes.findIndex((p) => p.id === ws.activePaneId);
+    const nextIdx =
+      dir === "right" || dir === "down"
+        ? (idx + 1) % allPanes.length
+        : (idx - 1 + allPanes.length) % allPanes.length;
+    focus(allPanes[nextIdx]!);
+    return;
+  }
+
+  const aRect = active.element.getBoundingClientRect();
+  const EPS = 4; // px tolerance for rects sharing an edge
+
+  const measurable = allPanes.filter((p) => p.element && p.id !== active.id);
+  const candidates = measurable.filter((p) => {
+    const r = p.element!.getBoundingClientRect();
+    switch (dir) {
+      case "left":
+        return r.right <= aRect.left + EPS;
+      case "right":
+        return r.left >= aRect.right - EPS;
+      case "up":
+        return r.bottom <= aRect.top + EPS;
+      case "down":
+        return r.top >= aRect.bottom - EPS;
+    }
+  });
+
+  if (candidates.length === 0) {
+    // Spatial fallback: DFS wrap-around (original behavior).
+    const idx = allPanes.findIndex((p) => p.id === active.id);
+    const nextIdx =
+      dir === "right" || dir === "down"
+        ? (idx + 1) % allPanes.length
+        : (idx - 1 + allPanes.length) % allPanes.length;
+    focus(allPanes[nextIdx]!);
+    return;
+  }
+
+  // Among spatial candidates, pick the one whose center on the perpendicular
+  // axis is closest to the active pane's center on that axis.
+  const aCenterX = (aRect.left + aRect.right) / 2;
+  const aCenterY = (aRect.top + aRect.bottom) / 2;
+  const isHoriz = dir === "left" || dir === "right";
+  const best = candidates.reduce((a, b) => {
+    const ra = a.element!.getBoundingClientRect();
+    const rb = b.element!.getBoundingClientRect();
+    const da = isHoriz
+      ? Math.abs((ra.top + ra.bottom) / 2 - aCenterY)
+      : Math.abs((ra.left + ra.right) / 2 - aCenterX);
+    const db = isHoriz
+      ? Math.abs((rb.top + rb.bottom) / 2 - aCenterY)
+      : Math.abs((rb.left + rb.right) / 2 - aCenterX);
+    return da <= db ? a : b;
+  });
+
+  focus(best);
+}
+
+/**
+ * Resize the active pane's enclosing split by adjusting its `ratio`. The
+ * arrow direction picks which divider to move:
+ *   - horizontal split: "right" grows ratio (moves divider right), "left" shrinks
+ *   - vertical split: "down" grows ratio, "up" shrinks
+ *   - mismatched arrow vs split axis: no-op
+ *
+ * Ratio is clamped to [0.1, 0.9] to keep both children visible. No-op when
+ * the active pane has no parent split (single-pane workspace).
+ */
+export function resizeActivePane(
+  dir: "left" | "right" | "up" | "down",
+  delta = 0.05,
+): void {
+  const ws = get(activeWorkspace);
+  if (!ws || !ws.activePaneId) return;
+  const parentInfo = findParentSplit(ws.splitRoot, ws.activePaneId);
+  if (!parentInfo || parentInfo.parent.type !== "split") return;
+  const parent = parentInfo.parent;
+
+  const isHorizArrow = dir === "left" || dir === "right";
+  const splitIsHoriz = parent.direction === "horizontal";
+  if (isHorizArrow !== splitIsHoriz) return;
+
+  const sign = dir === "right" || dir === "down" ? 1 : -1;
+  const next = Math.max(0.1, Math.min(0.9, parent.ratio + sign * delta));
+  if (next === parent.ratio) return;
+  parent.ratio = next;
   nestedWorkspaces.update((l) => [...l]);
-  const s = nextPane.surfaces.find((s) => s.id === nextPane.activeSurfaceId);
-  void safeFocus(s);
+  schedulePersist();
 }
 
 export function flashFocusedPane() {

@@ -19,7 +19,7 @@
   import { slide } from "svelte/transition";
   import { theme } from "../stores/theme";
   import { nestedWorkspaces } from "../stores/nested-workspace";
-  import PrimarySidebarElement from "./PrimarySidebarElement.svelte";
+  import SidebarElement from "./SidebarElement.svelte";
   import SidebarRail from "./SidebarRail.svelte";
   import DefaultWorkspaceListView from "./WorkspaceListView.svelte";
   import type { NestedWorkspace } from "../types";
@@ -114,13 +114,13 @@
 
 {#if parentColor}
   <!-- Nested-inside-parent variant — banner only, with left-edge
-       colored accent. Uses PrimarySidebarElement for unified styling. -->
+       colored accent. Uses SidebarElement for unified styling. -->
   <div
     data-container-row={testId ?? ""}
     data-container-mode="nested"
     style="position: relative;"
   >
-    <PrimarySidebarElement
+    <SidebarElement
       kind="umbrella"
       name={containerLabel}
       isActive={false}
@@ -155,7 +155,7 @@
           </div>
         {/if}
       </div>
-    </PrimarySidebarElement>
+    </SidebarElement>
     {#if !collapsed && nonDashboardCount > 0}
       <div
         data-container-nested={scopeId}

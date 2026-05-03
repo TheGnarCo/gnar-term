@@ -214,7 +214,7 @@ export interface ExtensionManifestWorkspaceSubtitle {
 }
 
 export interface ExtensionContributions {
-  primarySidebarSections?: ExtensionManifestSection[];
+  sidebarSections?: ExtensionManifestSection[];
   commands?: ExtensionManifestCommand[];
   surfaces?: ExtensionManifestSurface[];
   contextMenuItems?: ExtensionManifestContextMenu[];
@@ -342,7 +342,7 @@ export interface ExtensionAPI {
       onClick: () => void;
     },
   ): void;
-  registerPrimarySidebarSection(
+  registerSidebarSection(
     sectionId: string,
     component: unknown,
     options?: {
@@ -784,7 +784,7 @@ export interface ExtensionAPI {
   /** The sidebar drag-reorder currently in progress, or null when idle. */
   reorderContext: Readable<ReorderContext | null>;
   /**
-   * Id of the primary-sidebar block currently hovered over its drag-grip
+   * Id of the sidebar block currently hovered over its drag-grip
    * column, or null when no block is hovered. Extensions that render
    * section banners can subscribe to this to paint hover-only UI (e.g.
    * a dark-dot frit over the rail-overlap zone) in sync with core-owned
@@ -1059,7 +1059,7 @@ export interface PseudoWorkspaceInput {
   /** Optional settings component surfaced in the extension's settings page. */
   settings?: unknown;
   /**
-   * Optional component rendered INSIDE the primary-sidebar root row,
+   * Optional component rendered INSIDE the sidebar root row,
    * to the right of `icon`, in place of the plain text label. Mounted
    * with the registering extension's `api` provided via context so the
    * widget can subscribe to live state (`api.agents`, etc.). Footprint

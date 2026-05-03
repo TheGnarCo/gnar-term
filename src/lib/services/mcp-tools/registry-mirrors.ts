@@ -209,7 +209,7 @@ export const registryMirrorTools: ToolDef[] = [
   {
     name: "list_sidebar_sections",
     description:
-      "List primary-sidebar sections contributed by extensions — sticky panels below Workspaces. Returns `{ id, label, source }` for each. Sections are rendered by core; no invoke tool exists because interaction happens inside the section's own component.",
+      "List sidebar sections contributed by extensions — sticky panels below Workspaces. Returns `{ id, label, source }` for each. Sections are rendered by core; no invoke tool exists because interaction happens inside the section's own component.",
     inputSchema: { type: "object", properties: {} },
     handler: () => {
       const sections = get(sidebarSectionStore).map((s) => ({

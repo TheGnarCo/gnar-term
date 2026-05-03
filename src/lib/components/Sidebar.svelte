@@ -1,6 +1,6 @@
 <script lang="ts">
   /**
-   * PrimarySidebar — thin host that mounts the Workspaces section
+   * Sidebar — thin host that mounts the Workspaces section
    * plus any extension-registered SidebarSectionBlocks / MCP
    * sections after it.
    *
@@ -12,7 +12,7 @@
    * aren't reorderable at the top level either.
    */
   import { theme } from "../stores/theme";
-  import { primarySidebarVisible, primarySidebarWidth } from "../stores/ui";
+  import { sidebarVisible, sidebarWidth } from "../stores/ui";
   import { sidebarSectionStore } from "../services/sidebar-section-registry";
   import { workspaceActionStore } from "../services/workspace-action-registry";
   import { primarySections } from "../stores/mcp-sidebar";
@@ -54,11 +54,11 @@
   }
 </script>
 
-{#if $primarySidebarVisible}
+{#if $sidebarVisible}
   <div
-    id="primary-sidebar"
+    id="sidebar"
     style="
-      width: {$primarySidebarWidth}px;
+      width: {$sidebarWidth}px;
       background: {$theme.sidebarBg};
       display: flex; overflow: hidden;
       font-size: 13px;
@@ -134,9 +134,8 @@
           {onNewSurface}
         />
 
-        <!-- Extension-registered sections (legacy registerPrimarySidebarSection
-             API). 16px gap above each so they breathe below the Workspaces
-             block. -->
+        <!-- Extension-registered sections (registerSidebarSection API).
+             16px gap above each so they breathe below the Workspaces block. -->
         {#each $sidebarSectionStore as section (section.id)}
           <div aria-hidden="true" style="height: 16px;"></div>
           <SidebarSectionBlock
@@ -160,7 +159,7 @@
       theme={$theme}
       onDrag={(clientX) => {
         const maxWidth = window.innerWidth * 0.33;
-        primarySidebarWidth.set(Math.max(140, Math.min(maxWidth, clientX)));
+        sidebarWidth.set(Math.max(140, Math.min(maxWidth, clientX)));
       }}
     />
   </div>

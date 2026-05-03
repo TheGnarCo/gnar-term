@@ -8,7 +8,7 @@
   import { workspaceSubtitleStore } from "../services/workspace-subtitle-registry";
   import { getExtensionApiById } from "../services/extension-loader";
   import ExtensionWrapper from "./ExtensionWrapper.svelte";
-  import PrimarySidebarElement from "./PrimarySidebarElement.svelte";
+  import SidebarElement from "./SidebarElement.svelte";
   import RenameableLabel from "./RenameableLabel.svelte";
   import SidebarSubtitleRow from "./SidebarSubtitleRow.svelte";
   import WorktreeIcon from "../icons/WorktreeIcon.svelte";
@@ -115,7 +115,7 @@
   export let onGripMouseDown: ((e: MouseEvent) => void) | undefined = undefined;
 </script>
 
-<PrimarySidebarElement
+<SidebarElement
   kind={isDashboardWs ? "dashboard" : "nested"}
   compact={isNested}
   name={workspace.name}
@@ -332,4 +332,4 @@
       </div>
     {/if}
   </div>
-</PrimarySidebarElement>
+</SidebarElement>

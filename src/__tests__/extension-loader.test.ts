@@ -98,7 +98,7 @@ describe("validateManifest", () => {
         contributes: {
           commands: [{ id: "do-thing", title: "Do Thing" }],
           events: ["workspace:created", "pane:focused"],
-          primarySidebarSections: [{ id: "my-section", label: "My Section" }],
+          sidebarSections: [{ id: "my-section", label: "My Section" }],
           surfaces: [{ id: "my-surface", label: "My Surface" }],
         },
       }),
@@ -197,7 +197,7 @@ describe("createExtensionAPI", () => {
     expect(api).toHaveProperty("on");
     expect(api).toHaveProperty("off");
     expect(api).toHaveProperty("registerCommand");
-    expect(api).toHaveProperty("registerPrimarySidebarSection");
+    expect(api).toHaveProperty("registerSidebarSection");
     expect(api).toHaveProperty("registerSurfaceType");
     expect(api).toHaveProperty("state");
     expect(api).toHaveProperty("nestedWorkspaces");
@@ -514,12 +514,12 @@ describe("Extension lifecycle", () => {
     const manifest = makeManifest({
       id: "section-cleanup",
       contributes: {
-        primarySidebarSections: [{ id: "my-section", label: "My Section" }],
+        sidebarSections: [{ id: "my-section", label: "My Section" }],
       },
     });
     const registerFn = (api: ExtensionAPI) => {
       api.onActivate(() => {
-        api.registerPrimarySidebarSection("my-section", {
+        api.registerSidebarSection("my-section", {
           fake: "component",
         });
       });

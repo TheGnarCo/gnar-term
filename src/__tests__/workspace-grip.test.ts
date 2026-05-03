@@ -88,7 +88,7 @@ describe("WorkspaceItem drag grip", () => {
 
   it("rounds only the right corners so the rail renders as a straight vertical bar on the left", () => {
     const SIDEBAR_ELEM_SOURCE = readFileSync(
-      "src/lib/components/PrimarySidebarElement.svelte",
+      "src/lib/components/SidebarElement.svelte",
       "utf-8",
     ).replace(/\s+/g, " ");
     expect(SIDEBAR_ELEM_SOURCE).toMatch(/border-radius:\s*0 6px 6px 0/);

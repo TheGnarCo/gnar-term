@@ -46,7 +46,7 @@ export function createUIRegistrationAPI(
 ): Pick<
   ExtensionAPI,
   | "registerTitleBarButton"
-  | "registerPrimarySidebarSection"
+  | "registerSidebarSection"
   | "registerRootRowRenderer"
   | "appendRootRow"
   | "removeRootRow"
@@ -87,7 +87,7 @@ export function createUIRegistrationAPI(
       });
     },
 
-    registerPrimarySidebarSection(
+    registerSidebarSection(
       sectionId: string,
       component: unknown,
       options?: {
@@ -97,7 +97,7 @@ export function createUIRegistrationAPI(
         props?: Record<string, unknown>;
       },
     ) {
-      const declared = manifest.contributes?.primarySidebarSections?.find(
+      const declared = manifest.contributes?.sidebarSections?.find(
         (s) => s.id === sectionId,
       );
       const namespacedId = `${extId}:${sectionId}`;
@@ -110,7 +110,7 @@ export function createUIRegistrationAPI(
         showLabel: options?.showLabel,
         // Inject the host block id so sections that host inner drag-reorder
         // can publish a ReorderContext whose containerBlockId matches the
-        // actual namespaced block id rendered by PrimarySidebar.
+        // actual namespaced block id rendered by Sidebar.
         props: { ...(options?.props ?? {}), hostBlockId: namespacedId },
       });
     },

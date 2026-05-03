@@ -333,9 +333,9 @@ function detectDropTarget(
       return null;
     }
 
-    // Empty primary-sidebar area — drop to spawn a new workspace appended
+    // Empty sidebar area — drop to spawn a new workspace appended
     // at the end of the root row order.
-    const sidebar = el.closest("#primary-sidebar");
+    const sidebar = el.closest("#sidebar");
     if (sidebar) {
       const srcWs = get(nestedWorkspaces).find(
         (w) => w.id === sourceWorkspaceId,

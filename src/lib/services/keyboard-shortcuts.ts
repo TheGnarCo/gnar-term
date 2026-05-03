@@ -13,7 +13,7 @@ import { get } from "svelte/store";
 import {
   commandPaletteOpen,
   findBarVisible,
-  primarySidebarVisible,
+  sidebarVisible,
 } from "../stores/ui";
 import { nestedWorkspaces, activeSurface } from "../stores/nested-workspace";
 import { activateWorkspace } from "./workspace-service";
@@ -66,7 +66,7 @@ export function handleAppKeydown(
       n: () =>
         createNestedWorkspace(`Workspace ${get(nestedWorkspaces).length + 1}`),
       t: () => newSurfaceFromSidebar(),
-      b: () => primarySidebarVisible.update((v) => !v),
+      b: () => sidebarVisible.update((v) => !v),
       k: () => {
         const s = get(activeSurface);
         if (s && isTerminalSurface(s)) s.terminal.clear();

@@ -1,13 +1,12 @@
 <script lang="ts">
   /**
-   * SidebarResizeHandle — shared resize divider for PrimarySidebar and
-   * SecondarySidebar. Encapsulates dragging state, the dragResize action,
-   * border-color theming, and keyboard resize support (ArrowLeft/ArrowRight
-   * for WCAG 2.1 SC 2.1.1 keyboard operability).
+   * SidebarResizeHandle — resize divider for the sidebar. Encapsulates
+   * dragging state, the dragResize action, border-color theming, and keyboard
+   * resize support (ArrowLeft/ArrowRight for WCAG 2.1 SC 2.1.1 keyboard
+   * operability).
    *
    * Props:
-   *   direction — "right" for primary sidebar (handle on the right edge),
-   *               "left" for secondary sidebar (handle on the left edge).
+   *   direction — "right" for the sidebar handle (on the right edge).
    *   onDrag    — called on every mousemove / keyboard step with the new
    *               clientX-equivalent offset so the parent can update its
    *               width store.

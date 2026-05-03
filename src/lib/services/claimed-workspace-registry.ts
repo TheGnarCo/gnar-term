@@ -3,7 +3,7 @@
  *
  * Extensions "claim" workspace IDs so they appear in the extension's
  * own sidebar section instead of the main Workspaces block.
- * PrimarySidebar reads this store to filter the main list.
+ * Sidebar reads this store to filter the main list.
  *
  * Each claim tracks its source extension for cleanup on deactivation.
  */

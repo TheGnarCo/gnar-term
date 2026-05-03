@@ -74,7 +74,7 @@ export interface PseudoWorkspace {
    */
   settings?: unknown;
   /**
-   * Optional component rendered INSIDE the primary-sidebar root row,
+   * Optional component rendered INSIDE the sidebar root row,
    * to the right of the icon, in place of the plain text label. Used
    * by the Global Agentic Dashboard to render a live status-chip grid
    * instead of the static "Agents dashboard" string. Mounted via

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { theme } from "../stores/theme";
-  import { isFullscreen, primarySidebarVisible } from "../stores/ui";
+  import { isFullscreen, sidebarVisible } from "../stores/ui";
   import { spawnOrNavigate } from "../services/dashboard-workspace-service";
   import { isMac, modLabel, shiftModLabel } from "../terminal-service";
   import { shortcutHint } from "../actions/shortcut-hint";
@@ -38,8 +38,7 @@
   // it sits to the left of the TitleBar and absorbs that space. When it's
   // hidden (and we're not fullscreen), the TitleBar starts at x=0, so push
   // its first button well past the traffic-light cluster.
-  $: leftPadding =
-    !$primarySidebarVisible && isMac && !$isFullscreen ? "84px" : "8px";
+  $: leftPadding = !$sidebarVisible && isMac && !$isFullscreen ? "84px" : "8px";
 </script>
 
 <div
@@ -51,14 +50,14 @@
   "
 >
   <button
-    style="{btnStyle} color: {$primarySidebarVisible ? fgActive : fg};"
-    title="Toggle Primary Sidebar ({isMac ? modLabel : shiftModLabel}B)"
-    aria-label="Toggle Primary Sidebar"
+    style="{btnStyle} color: {$sidebarVisible ? fgActive : fg};"
+    title="Toggle Sidebar ({isMac ? modLabel : shiftModLabel}B)"
+    aria-label="Toggle Sidebar"
     use:shortcutHint={{
       label: isMac ? `${modLabel}B` : `${shiftModLabel}B`,
       placement: "below",
     }}
-    on:click={() => primarySidebarVisible.update((v) => !v)}
+    on:click={() => sidebarVisible.update((v) => !v)}
   >
     <svg
       width="16"

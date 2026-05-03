@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
    * SidebarRail — shared drag rail (DragGrip + hover scoping + lock /
-   * close handling) used by both PrimarySidebarElement (single-row rail)
+   * close handling) used by both SidebarElement (single-row rail)
    * and ContainerRow's root variant (multi-row rail that stretches the
    * full container height).
    *

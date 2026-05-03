@@ -75,7 +75,7 @@ describe("App.svelte structure verification", () => {
     const fs = await import("fs");
     const source = fs.readFileSync("src/App.svelte", "utf-8");
     // Must have these components in the template
-    expect(source).toContain("<PrimarySidebar");
+    expect(source).toContain("<Sidebar");
     expect(source).toContain("<TitleBar");
     expect(source).toContain("<WorkspaceView");
     expect(source).toContain("<FindBar");

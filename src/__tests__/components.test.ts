@@ -117,13 +117,13 @@ import ContextMenu from "../lib/components/ContextMenu.svelte";
 import CommandPalette from "../lib/components/CommandPalette.svelte";
 import WorkspaceItem from "../lib/components/WorkspaceItem.svelte";
 import PaneView from "../lib/components/PaneView.svelte";
-import PrimarySidebar from "../lib/components/PrimarySidebar.svelte";
+import Sidebar from "../lib/components/Sidebar.svelte";
 import TerminalSurfaceComponent from "../lib/components/TerminalSurface.svelte";
 import WorkspaceSectionHarness from "./workspace-section-harness.svelte";
 
 // Store imports
 import {
-  primarySidebarVisible,
+  sidebarVisible,
   commandPaletteOpen,
   findBarVisible,
   contextMenu,
@@ -226,7 +226,7 @@ const noop = () => {};
 
 beforeEach(() => {
   cleanup();
-  primarySidebarVisible.set(true);
+  sidebarVisible.set(true);
   commandPaletteOpen.set(false);
   findBarVisible.set(false);
   contextMenu.set(null);
@@ -262,7 +262,7 @@ describe("TitleBar", () => {
   it("renders primary sidebar toggle", () => {
     const { container } = render(TitleBar);
     const primaryBtn = container.querySelector(
-      "button[title^='Toggle Primary Sidebar']",
+      "button[title^='Toggle Sidebar']",
     );
     expect(primaryBtn).toBeTruthy();
   });
@@ -1225,7 +1225,7 @@ describe("WorkspaceItem", () => {
     );
     // Mouse-based drag system (shared utility — HTML5 DnD is broken
     // in Tauri WKWebView). Root-row drag now lives in
-    // WorkspaceListBlock; PrimarySidebar is a thin host.
+    // WorkspaceListBlock; Sidebar is a thin host.
     expect(listBlockSource).toContain("createDragReorder");
     expect(listBlockSource).toContain("insertIndicator");
     expect(listBlockSource).toContain("dragActive");
@@ -1497,7 +1497,7 @@ describe("PaneView", () => {
 // Sidebar
 // ===========================================================================
 
-describe("PrimarySidebar", () => {
+describe("Sidebar", () => {
   const sidebarProps = {
     onSwitchWorkspace: noop,
     onRenameWorkspace: noop,
@@ -1510,20 +1510,20 @@ describe("PrimarySidebar", () => {
     cleanup();
   });
 
-  it("renders when primarySidebarVisible is true", () => {
-    primarySidebarVisible.set(true);
-    const { container } = render(PrimarySidebar, { props: sidebarProps });
-    expect(container.querySelector("#primary-sidebar")).toBeTruthy();
+  it("renders when sidebarVisible is true", () => {
+    sidebarVisible.set(true);
+    const { container } = render(Sidebar, { props: sidebarProps });
+    expect(container.querySelector("#sidebar")).toBeTruthy();
   });
 
-  it("does not render when primarySidebarVisible is false", () => {
-    primarySidebarVisible.set(false);
-    const { container } = render(PrimarySidebar, { props: sidebarProps });
-    expect(container.querySelector("#primary-sidebar")).toBeNull();
+  it("does not render when sidebarVisible is false", () => {
+    sidebarVisible.set(false);
+    const { container } = render(Sidebar, { props: sidebarProps });
+    expect(container.querySelector("#sidebar")).toBeNull();
   });
 
   it("renders split button for workspace actions in the top row (sidebar toggles live in TitleBar)", () => {
-    primarySidebarVisible.set(true);
+    sidebarVisible.set(true);
     registerWorkspaceAction({
       id: "core:new-workspace",
       label: "New Workspace",
@@ -1532,31 +1532,31 @@ describe("PrimarySidebar", () => {
       source: "core",
       handler: noop,
     });
-    render(PrimarySidebar, { props: sidebarProps });
+    render(Sidebar, { props: sidebarProps });
     // "+ New" now sits in the top (title) row alongside any sidebar-
     // zone action buttons — the old "Workspaces" header row inside
     // WorkspaceListBlock has been retired.
     expect(screen.getByText("+ New")).toBeTruthy();
     expect(screen.queryByText("Workspaces")).toBeNull();
-    expect(screen.queryByTitle("Toggle Primary Sidebar (⌘B)")).toBeNull();
+    expect(screen.queryByTitle("Toggle Sidebar (⌘B)")).toBeNull();
     expect(screen.queryByTitle("Toggle Secondary Sidebar")).toBeNull();
   });
 
   it("renders workspace items from store", () => {
-    primarySidebarVisible.set(true);
+    sidebarVisible.set(true);
     const ws1 = makeNestedWorkspace("ws1", "Project Alpha");
     const ws2 = makeNestedWorkspace("ws2", "Project Beta");
     nestedWorkspaces.set([ws1, ws2]);
     activeNestedWorkspaceIdx.set(0);
-    render(PrimarySidebar, { props: sidebarProps });
+    render(Sidebar, { props: sidebarProps });
     expect(screen.getByText("Project Alpha")).toBeTruthy();
     expect(screen.getByText("Project Beta")).toBeTruthy();
   });
 
   it("header has data-tauri-drag-region (when windowed, for traffic-light padding)", () => {
-    primarySidebarVisible.set(true);
+    sidebarVisible.set(true);
     isFullscreen.set(false);
-    const { container } = render(PrimarySidebar, { props: sidebarProps });
+    const { container } = render(Sidebar, { props: sidebarProps });
     const dragRegions = container.querySelectorAll("[data-tauri-drag-region]");
     expect(dragRegions.length).toBeGreaterThan(0);
   });
@@ -1565,8 +1565,8 @@ describe("PrimarySidebar", () => {
     // Regression: overflow:hidden on the 38px top row clipped the "+ New"
     // dropdown, making it invisible when opened. Must stay overflow:visible
     // so the absolutely-positioned menu can render below the row.
-    primarySidebarVisible.set(true);
-    const { container } = render(PrimarySidebar, { props: sidebarProps });
+    sidebarVisible.set(true);
+    const { container } = render(Sidebar, { props: sidebarProps });
     const dragRegion = container.querySelector(
       "[data-tauri-drag-region]",
     ) as HTMLElement | null;
@@ -1579,22 +1579,22 @@ describe("PrimarySidebar", () => {
     // should not swap branches, otherwise blocks snap into a new position.
     // In fullscreen the drag attributes are harmless no-ops (no window to
     // drag); the 38px acts as stable top padding.
-    primarySidebarVisible.set(true);
+    sidebarVisible.set(true);
     isFullscreen.set(true);
-    const { container } = render(PrimarySidebar, { props: sidebarProps });
+    const { container } = render(Sidebar, { props: sidebarProps });
     const dragRegions = container.querySelectorAll("[data-tauri-drag-region]");
     expect(dragRegions.length).toBeGreaterThan(0);
     isFullscreen.set(false);
   });
 
   it("renders correct number of workspace items", () => {
-    primarySidebarVisible.set(true);
+    sidebarVisible.set(true);
     const ws1 = makeNestedWorkspace("ws1", "WS One");
     const ws2 = makeNestedWorkspace("ws2", "WS Two");
     const ws3 = makeNestedWorkspace("ws3", "WS Three");
     nestedWorkspaces.set([ws1, ws2, ws3]);
     activeNestedWorkspaceIdx.set(1);
-    render(PrimarySidebar, { props: sidebarProps });
+    render(Sidebar, { props: sidebarProps });
     expect(screen.getByText("WS One")).toBeTruthy();
     expect(screen.getByText("WS Two")).toBeTruthy();
     expect(screen.getByText("WS Three")).toBeTruthy();
@@ -1607,7 +1607,7 @@ describe("PrimarySidebar", () => {
   }
 
   it("does NOT show a 'Re-order Sections' button (reorder is implicit via grip)", () => {
-    primarySidebarVisible.set(true);
+    sidebarVisible.set(true);
     registerWorkspaceAction({
       id: "core:new-workspace",
       label: "New Workspace",
@@ -1618,12 +1618,12 @@ describe("PrimarySidebar", () => {
     registerSidebarSection(makeSection("s1", "Section 1", "ext-a"));
     registerSidebarSection(makeSection("s2", "Section 2", "ext-b"));
 
-    render(PrimarySidebar, { props: { ...sidebarProps } });
+    render(Sidebar, { props: { ...sidebarProps } });
     expect(screen.queryByTitle("Re-order Sections")).toBeNull();
   });
 
   it("does not show dropdown caret with no extension sections and no extra actions", () => {
-    primarySidebarVisible.set(true);
+    sidebarVisible.set(true);
     registerWorkspaceAction({
       id: "core:new-workspace",
       label: "New Workspace",
@@ -1631,7 +1631,7 @@ describe("PrimarySidebar", () => {
       source: "core",
       handler: noop,
     });
-    render(PrimarySidebar, {
+    render(Sidebar, {
       props: { ...sidebarProps },
     });
     // Only 1 button (main), no caret
@@ -1644,7 +1644,7 @@ describe("PrimarySidebar", () => {
     // The Workspaces section is no longer user-reorderable post-B,
     // and there are no block-level DragGrips at the top level.
     // Sections still render, they just can't be dragged.
-    primarySidebarVisible.set(true);
+    sidebarVisible.set(true);
     registerWorkspaceAction({
       id: "core:new-workspace",
       label: "New Workspace",
@@ -1655,13 +1655,13 @@ describe("PrimarySidebar", () => {
     registerSidebarSection(makeSection("s1", "Section 1", "ext-a"));
     registerSidebarSection(makeSection("s2", "Section 2", "ext-b"));
 
-    render(PrimarySidebar, { props: { ...sidebarProps } });
+    render(Sidebar, { props: { ...sidebarProps } });
     expect(screen.getByText("Section 1")).toBeTruthy();
     expect(screen.getByText("Section 2")).toBeTruthy();
   });
 
   it("renders sidebar-zone actions as buttons in the top row", () => {
-    primarySidebarVisible.set(true);
+    sidebarVisible.set(true);
     registerWorkspaceAction({
       id: "core:new-workspace",
       label: "New Workspace",
@@ -1677,7 +1677,7 @@ describe("PrimarySidebar", () => {
       source: "ext",
       handler: noop,
     });
-    render(PrimarySidebar, { props: sidebarProps });
+    render(Sidebar, { props: sidebarProps });
     // Sidebar-zone action renders as a button in the top row
     expect(screen.getByTitle("New Project")).toBeTruthy();
     // Main split button reads "+ New" (lives in the same top row now).
@@ -1685,7 +1685,7 @@ describe("PrimarySidebar", () => {
   });
 
   it("plain + New button still renders when workspace-zone extensions exist", async () => {
-    primarySidebarVisible.set(true);
+    sidebarVisible.set(true);
     registerWorkspaceAction({
       id: "core:new-workspace",
       label: "New Workspace",
@@ -1700,7 +1700,7 @@ describe("PrimarySidebar", () => {
       source: "ext",
       handler: noop,
     });
-    render(PrimarySidebar, { props: sidebarProps });
+    render(Sidebar, { props: sidebarProps });
     // The sidebar now has a plain "+ New" button (no dropdown).
     // Non-sidebar-zone extension actions are no longer shown in the top row.
     expect(screen.getByText("+ New")).toBeTruthy();

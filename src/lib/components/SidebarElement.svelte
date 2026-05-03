@@ -1,8 +1,8 @@
 <script lang="ts">
   /**
-   * PrimarySidebarElement — unified row chrome (drag grip, close/lock,
+   * SidebarElement — unified row chrome (drag grip, close/lock,
    * hover/active states, optional workspace banner gradient) for the
-   * primary sidebar.
+   * sidebar.
    *
    * Used by WorkspaceItem (nested-workspace rows, including dashboard rows)
    * and by ContainerRow's nested-inside-parent variant. The root

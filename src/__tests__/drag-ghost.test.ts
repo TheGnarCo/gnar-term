@@ -135,9 +135,7 @@ describe("drag source hides + ghost shows at target", () => {
   const LIST_VIEW = read("src/lib/components/WorkspaceListView.svelte");
 
   it("WorkspaceItem hides its row (display: none) while dragActive", () => {
-    const SIDEBAR_ELEM = read(
-      "src/lib/components/PrimarySidebarElement.svelte",
-    );
+    const SIDEBAR_ELEM = read("src/lib/components/SidebarElement.svelte");
     expect(SIDEBAR_ELEM).toMatch(
       /display:\s*\{\s*isDragging\s*\?\s*'none'\s*:\s*'flex'\s*\}/,
     );

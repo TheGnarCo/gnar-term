@@ -72,7 +72,7 @@
   export let onRenameWorkspace: (idx: number, name: string) => void;
   export let onNewSurface: () => void;
 
-  // Exposed via bind:this so PrimarySidebar's "rename active" keyboard
+  // Exposed via bind:this so Sidebar's "rename active" keyboard
   // handler can trigger inline rename on a specific workspace index.
   let workspaceItems: Record<string, WorkspaceItem> = {};
   export function startRename(globalIdx: number) {
@@ -196,7 +196,7 @@
 
   const rootDrag = createDragReorder({
     dataAttr: "root-row-idx",
-    containerSelector: "#primary-sidebar",
+    containerSelector: "#sidebar",
     ghostStyle: () => ({
       background: "transparent",
       border: `1px solid ${$theme.border ?? "transparent"}`,
@@ -427,7 +427,7 @@
 
 <!-- No "Workspaces" label row here anymore. The label was redundant
      (there's only one root section), and the "+ New" split-button
-     moved up into PrimarySidebar's top row so it aligns with the
+     moved up into Sidebar's top row so it aligns with the
      other title-row buttons. -->
 
 <!-- Root rows: nestedWorkspaces and whole project blocks interleaved per

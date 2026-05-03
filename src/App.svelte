@@ -6,7 +6,7 @@
   import { fontSize, setFontSizeFromConfig } from "./lib/stores/font-size";
   import {
     isFullscreen,
-    primarySidebarVisible,
+    sidebarVisible,
     commandPaletteOpen,
     findBarVisible,
     pendingAction,
@@ -125,7 +125,7 @@
   import { confirmQuit } from "./lib/services/quit-confirmation-service";
 
   // Components
-  import PrimarySidebar from "./lib/components/PrimarySidebar.svelte";
+  import Sidebar from "./lib/components/Sidebar.svelte";
   import TitleBar from "./lib/components/TitleBar.svelte";
   import WorkspaceView from "./lib/components/WorkspaceView.svelte";
   import EmptySurface from "./lib/components/EmptySurface.svelte";
@@ -150,7 +150,7 @@
 
   const TOAST_DURATION_MS = 5000;
 
-  let sidebarComponent: PrimarySidebar;
+  let sidebarComponent: Sidebar;
   let findBarComponent: FindBar;
 
   // Module-scoped within this component instance; gates the bulk
@@ -180,7 +180,7 @@
   $: {
     const count = $nestedWorkspaces.length;
     if (_prevWorkspaceCount > 0 && count === 0) {
-      primarySidebarVisible.set(false);
+      sidebarVisible.set(false);
     }
     _prevWorkspaceCount = count;
   }
@@ -329,10 +329,10 @@
       source: "core",
     },
     {
-      id: "core.toggle-primary-sidebar",
-      title: "Toggle Primary Sidebar",
+      id: "core.toggle-sidebar",
+      title: "Toggle Sidebar",
       shortcut: `${shiftModLabel}B`,
-      action: () => primarySidebarVisible.update((v) => !v),
+      action: () => sidebarVisible.update((v) => !v),
       source: "core",
     },
     {
@@ -847,7 +847,7 @@
 {/if}
 
 <div id="app" style="display: flex; height: 100vh; overflow: hidden;">
-  <PrimarySidebar
+  <Sidebar
     bind:this={sidebarComponent}
     onSwitchWorkspace={switchNestedWorkspace}
     onRenameWorkspace={renameNestedWorkspace}

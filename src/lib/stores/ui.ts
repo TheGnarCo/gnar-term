@@ -2,13 +2,13 @@ import { writable, derived } from "svelte/store";
 import type { MenuItem } from "../context-menu-types";
 
 export const isFullscreen = writable<boolean>(false);
-export const primarySidebarVisible = writable<boolean>(true);
+export const sidebarVisible = writable<boolean>(true);
 
 /** True while the Meta key is held. Used to preview drag-over states across the sidebar. */
 export const metaPreviewActive = writable<boolean>(false);
 
 /**
- * Id of the primary-sidebar block currently hovered (mouseenter on its
+ * Id of the sidebar block currently hovered (mouseenter on its
  * drag-grip column). `__workspaces__` for the built-in Workspaces block,
  * the namespaced section id (e.g. `workspaces:workspaces`) otherwise,
  * `null` when no block is hovered. Section-header banners subscribe to
@@ -63,7 +63,7 @@ export const blockReorderActive = derived(
   ($ctx) => $ctx?.kind === "section",
 );
 
-export const primarySidebarWidth = writable<number>(220);
+export const sidebarWidth = writable<number>(220);
 export const commandPaletteOpen = writable<boolean>(false);
 export const findBarVisible = writable<boolean>(false);
 

@@ -986,7 +986,7 @@ function createOsc7Handler(
     ) {
       surface.title = basename || "~";
     }
-    nestedWorkspaces.update((l) => [...l]);
+    nestedWorkspaces.update((l) => l);
     cwdChangeHook?.();
     return true;
   };
@@ -1179,7 +1179,7 @@ export async function runDefinedCommand(
     return;
   }
   surface.pendingRestoreCommand = false;
-  nestedWorkspaces.update((l) => [...l]);
+  nestedWorkspaces.update((l) => l);
 }
 
 const FONT_SIZE_MIN = 8;
@@ -1227,7 +1227,7 @@ export function resetFontSize(): void {
 export function dismissDefinedCommand(surface: TerminalSurface): void {
   if (!surface.pendingRestoreCommand) return;
   surface.pendingRestoreCommand = false;
-  nestedWorkspaces.update((l) => [...l]);
+  nestedWorkspaces.update((l) => l);
 }
 
 /** Find the workspace + pane currently containing a given surface. Used to

@@ -83,7 +83,7 @@ export function splitPaneEmpty(
     }
   }
   ws.activePaneId = newPane.id;
-  nestedWorkspaces.update((l) => [...l]);
+  nestedWorkspaces.update((l) => l);
   eventBus.emit({
     type: "pane:split",
     parentPaneId: activeP.id,
@@ -108,7 +108,7 @@ export async function splitPane(
   if (!result) return;
   const cwd = await getCwdForSurface(sourceSurface);
   const surface = await createTerminalSurface(result.newPane, cwd);
-  nestedWorkspaces.update((l) => [...l]);
+  nestedWorkspaces.update((l) => l);
   void safeFocus(surface);
   schedulePersist();
 }
@@ -141,7 +141,7 @@ export function removePane(ws: NestedWorkspace, pane: Pane) {
     }
     ws.activePaneId = getAllPanes(ws.splitRoot)[0]?.id ?? null;
   }
-  nestedWorkspaces.update((l) => [...l]);
+  nestedWorkspaces.update((l) => l);
   eventBus.emit({ type: "pane:closed", id: paneId, workspaceId: wsId });
   void safeFocus(get(activeSurface));
 }
@@ -196,7 +196,7 @@ export function focusPane(paneId: string) {
   if (!ws || ws.activePaneId === paneId) return;
   const previousId = ws.activePaneId;
   ws.activePaneId = paneId;
-  nestedWorkspaces.update((l) => [...l]);
+  nestedWorkspaces.update((l) => l);
   eventBus.emit({ type: "pane:focused", id: paneId, previousId });
 }
 
@@ -291,7 +291,7 @@ export function splitPaneWithSurface(
   }
 
   ws.activePaneId = newPane.id;
-  nestedWorkspaces.update((l) => [...l]);
+  nestedWorkspaces.update((l) => l);
   schedulePersist();
 }
 
@@ -329,7 +329,7 @@ export function mergeTabToPane(
   targetPane.surfaces.push(surface);
   targetPane.activeSurfaceId = surface.id;
   ws.activePaneId = targetPane.id;
-  nestedWorkspaces.update((l) => [...l]);
+  nestedWorkspaces.update((l) => l);
   schedulePersist();
 }
 
@@ -341,7 +341,7 @@ export function reorderTab(paneId: string, fromIdx: number, toIdx: number) {
   const item = pane.surfaces.splice(fromIdx, 1)[0]!;
   const adjustedTo = fromIdx < toIdx ? toIdx - 1 : toIdx;
   pane.surfaces.splice(adjustedTo, 0, item);
-  nestedWorkspaces.update((l) => [...l]);
+  nestedWorkspaces.update((l) => l);
   schedulePersist();
 }
 
@@ -355,7 +355,7 @@ export function focusDirection(dir: "left" | "right" | "up" | "down") {
 
   const focus = (target: Pane) => {
     ws.activePaneId = target.id;
-    nestedWorkspaces.update((l) => [...l]);
+    nestedWorkspaces.update((l) => l);
     const s = target.surfaces.find((s) => s.id === target.activeSurfaceId);
     void safeFocus(s);
   };
@@ -449,7 +449,7 @@ export function resizeActivePane(
   const next = Math.max(0.1, Math.min(0.9, parent.ratio + sign * delta));
   if (next === parent.ratio) return;
   parent.ratio = next;
-  nestedWorkspaces.update((l) => [...l]);
+  nestedWorkspaces.update((l) => l);
   schedulePersist();
 }
 
@@ -667,6 +667,6 @@ export function moveSurfaceToWorkspace(
   targetPane.surfaces.push(surface);
   targetPane.activeSurfaceId = surface.id;
 
-  nestedWorkspaces.update((l) => [...l]);
+  nestedWorkspaces.update((l) => l);
   schedulePersist();
 }

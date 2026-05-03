@@ -12,7 +12,7 @@
  * platform call cannot strand startup or block quit.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { LogicalPosition, LogicalSize } from "@tauri-apps/api/window";
+import { PhysicalPosition, PhysicalSize } from "@tauri-apps/api/dpi";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn().mockResolvedValue(undefined),
@@ -68,14 +68,14 @@ describe("window-bounds-service", () => {
         api,
       );
       expect(setSize).toHaveBeenCalledTimes(1);
-      const sizeArg = setSize.mock.calls[0]![0] as LogicalSize;
-      expect(sizeArg).toBeInstanceOf(LogicalSize);
+      const sizeArg = setSize.mock.calls[0]![0] as PhysicalSize;
+      expect(sizeArg).toBeInstanceOf(PhysicalSize);
       expect(sizeArg.width).toBe(1280);
       expect(sizeArg.height).toBe(720);
 
       expect(setPosition).toHaveBeenCalledTimes(1);
-      const posArg = setPosition.mock.calls[0]![0] as LogicalPosition;
-      expect(posArg).toBeInstanceOf(LogicalPosition);
+      const posArg = setPosition.mock.calls[0]![0] as PhysicalPosition;
+      expect(posArg).toBeInstanceOf(PhysicalPosition);
       expect(posArg.x).toBe(100);
       expect(posArg.y).toBe(50);
     });

@@ -10,17 +10,23 @@
  * misbehaving Tauri window API can't strand the launch sequence or
  * block a user-initiated quit.
  */
-import { LogicalPosition, LogicalSize } from "@tauri-apps/api/window";
+import { PhysicalPosition, PhysicalSize } from "@tauri-apps/api/dpi";
 import { saveState, type AppState } from "../config";
 
 /**
  * Minimal slice of the Tauri Window API used here. Declared structurally
  * so tests can supply a plain object without dragging in the real
  * `@tauri-apps/api/window` Window class.
+ *
+ * Bounds are exchanged in **physical pixels** end-to-end. `outerSize` and
+ * `outerPosition` return PhysicalSize/PhysicalPosition in Tauri v2; using
+ * Logical units on the restore side would cause Tauri to multiply by the
+ * device pixel ratio, doubling the window each launch on Retina/HiDPI
+ * displays.
  */
 export interface WindowBoundsApi {
-  setSize(size: LogicalSize): Promise<void>;
-  setPosition(position: LogicalPosition): Promise<void>;
+  setSize(size: PhysicalSize): Promise<void>;
+  setPosition(position: PhysicalPosition): Promise<void>;
   outerSize(): Promise<{ width: number; height: number }>;
   outerPosition(): Promise<{ x: number; y: number }>;
 }
@@ -37,10 +43,10 @@ export async function restoreWindowBounds(
   if (!bounds) return;
   try {
     if (bounds.width != null && bounds.height != null) {
-      await appWindow.setSize(new LogicalSize(bounds.width, bounds.height));
+      await appWindow.setSize(new PhysicalSize(bounds.width, bounds.height));
     }
     if (bounds.x != null && bounds.y != null) {
-      await appWindow.setPosition(new LogicalPosition(bounds.x, bounds.y));
+      await appWindow.setPosition(new PhysicalPosition(bounds.x, bounds.y));
     }
   } catch (err) {
     console.warn("[startup] failed to restore window bounds:", err);

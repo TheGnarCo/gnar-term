@@ -866,3 +866,594 @@ pub(crate) async fn detect_font() -> Result<String, String> {
     // 8. Nothing found — return empty, frontend uses platform default
     Ok(String::new())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validate_read_path_allows_normal_files() {
+        // /etc/hosts exists on all unix systems and is not blocked
+        let result = validate_read_path("/etc/hosts");
+        assert!(
+            result.is_ok(),
+            "Should allow reading /etc/hosts: {result:?}"
+        );
+    }
+
+    #[test]
+    fn validate_read_path_blocks_ssh_dir() {
+        let home = std::env::var("HOME").expect("HOME env var required for tests");
+        let ssh_key = format!("{home}/.ssh/id_rsa");
+        let result = validate_read_path(&ssh_key);
+        // Rejected either because the file doesn't exist (canonicalize fails)
+        // or because the path is in the blocklist — both are safe outcomes on
+        // CI runners that don't have ~/.ssh populated.
+        assert!(result.is_err(), "Should block reading ~/.ssh/id_rsa");
+    }
+
+    #[test]
+    fn validate_read_path_blocks_gnupg_dir() {
+        let home = std::env::var("HOME").unwrap();
+        let gpg = format!("{home}/.gnupg/trustdb.gpg");
+        let result = validate_read_path(&gpg);
+        // Rejected either because dir doesn't exist (canonicalize fails)
+        // or because it's in the blocklist — both are safe outcomes
+        assert!(result.is_err(), "Should block reading ~/.gnupg/");
+    }
+
+    #[test]
+    fn validate_read_path_blocks_aws_credentials() {
+        let home = std::env::var("HOME").unwrap();
+        let aws = format!("{home}/.aws/credentials");
+        let result = validate_read_path(&aws);
+        assert!(result.is_err(), "Should block reading ~/.aws/credentials");
+    }
+
+    #[test]
+    fn validate_read_path_rejects_nonexistent_file() {
+        let result = validate_read_path("/nonexistent/path/to/file.txt");
+        assert!(result.is_err(), "Should reject nonexistent paths");
+    }
+
+    #[test]
+    fn validate_read_path_blocks_netrc() {
+        let home = std::env::var("HOME").unwrap();
+        let p = format!("{home}/.netrc");
+        assert!(validate_read_path(&p).is_err(), "Should block ~/.netrc");
+    }
+
+    #[test]
+    fn validate_read_path_blocks_git_credentials() {
+        let home = std::env::var("HOME").unwrap();
+        let p = format!("{home}/.git-credentials");
+        assert!(
+            validate_read_path(&p).is_err(),
+            "Should block ~/.git-credentials"
+        );
+    }
+
+    #[test]
+    fn validate_read_path_blocks_npmrc() {
+        let home = std::env::var("HOME").unwrap();
+        let p = format!("{home}/.npmrc");
+        assert!(validate_read_path(&p).is_err(), "Should block ~/.npmrc");
+    }
+
+    #[test]
+    fn validate_read_path_blocks_pypirc() {
+        let home = std::env::var("HOME").unwrap();
+        let p = format!("{home}/.pypirc");
+        assert!(validate_read_path(&p).is_err(), "Should block ~/.pypirc");
+    }
+
+    #[test]
+    fn validate_read_path_blocks_bash_history() {
+        let home = std::env::var("HOME").unwrap();
+        let p = format!("{home}/.bash_history");
+        assert!(
+            validate_read_path(&p).is_err(),
+            "Should block ~/.bash_history"
+        );
+    }
+
+    #[test]
+    fn validate_read_path_blocks_zsh_history() {
+        let home = std::env::var("HOME").unwrap();
+        let p = format!("{home}/.zsh_history");
+        assert!(
+            validate_read_path(&p).is_err(),
+            "Should block ~/.zsh_history"
+        );
+    }
+
+    #[test]
+    fn validate_read_path_blocks_fish_history() {
+        let home = std::env::var("HOME").unwrap();
+        // fish stores history in ~/.config/fish/ and ~/.local/share/fish/
+        // The blocklist covers ~/.fish/ — test the direct prefix
+        let p = format!("{home}/.fish/fish_history");
+        assert!(validate_read_path(&p).is_err(), "Should block ~/.fish/");
+    }
+
+    #[test]
+    fn validate_read_path_blocks_home_library_keychains() {
+        let home = std::env::var("HOME").unwrap();
+        let p = format!("{home}/Library/Keychains/login.keychain-db");
+        assert!(
+            validate_read_path(&p).is_err(),
+            "Should block ~/Library/Keychains"
+        );
+    }
+
+    #[test]
+    fn validate_read_path_blocks_system_library_keychains() {
+        // /Library/Keychains is system keychain (macOS). Blocked regardless of HOME.
+        let result = validate_read_path("/Library/Keychains/System.keychain");
+        assert!(
+            result.is_err(),
+            "Should block /Library/Keychains on macOS systems"
+        );
+    }
+
+    #[test]
+    fn validate_write_path_allows_config_dir() {
+        let home = std::env::var("HOME").unwrap();
+        let config = format!("{home}/.config/gnar-term/gnar-term.json");
+        let result = validate_write_path(&config);
+        assert!(
+            result.is_ok(),
+            "Should allow writing to ~/.config/gnar-term/: {result:?}"
+        );
+    }
+
+    #[test]
+    fn validate_write_path_blocks_home_dir() {
+        let home = std::env::var("HOME").unwrap();
+        let path = format!("{home}/.bashrc");
+        let result = validate_write_path(&path);
+        assert!(result.is_err(), "Should block writing to ~/.bashrc");
+        assert!(result.unwrap_err().contains("Write denied"));
+    }
+
+    #[test]
+    fn validate_write_path_blocks_system_paths() {
+        let result = validate_write_path("/etc/passwd");
+        assert!(result.is_err(), "Should block writing to /etc/passwd");
+    }
+
+    #[test]
+    fn validate_write_path_blocks_traversal() {
+        let home = std::env::var("HOME").unwrap();
+        let traversal = format!("{home}/.config/gnar-term/../../.bashrc");
+        let result = validate_write_path(&traversal);
+        assert!(result.is_err(), "Should block path traversal via ../");
+    }
+
+    #[test]
+    fn validate_write_path_allows_nested_config() {
+        let home = std::env::var("HOME").unwrap();
+        let nested = format!("{home}/.config/gnar-term/themes/custom.json");
+        let result = validate_write_path(&nested);
+        assert!(
+            result.is_ok(),
+            "Should allow nested paths under config dir: {result:?}"
+        );
+    }
+
+    #[test]
+    fn validate_write_path_allows_project_local_dot_gnar_term() {
+        // Project-local state files (project dashboards, project-nested
+        // agent dashboards) live inside a `.gnar-term/` directory under
+        // the project's own path. This path shape is allowed even though
+        // it's not under ~/.config/gnar-term/.
+        let path = "/tmp/some-project/.gnar-term/project-dashboard.md";
+        let result = validate_write_path(path);
+        assert!(
+            result.is_ok(),
+            "Should allow writes under a project-local .gnar-term/ dir: {result:?}"
+        );
+    }
+
+    #[test]
+    fn validate_write_path_rejects_dot_gnar_term_lookalike() {
+        // `.gnar-term.evil` is NOT the .gnar-term segment; must still be
+        // blocked. Also tests that a path whose only "match" is a
+        // prefix-sharing filename fails.
+        let path = "/tmp/some-project/.gnar-term.evil/x.md";
+        let result = validate_write_path(path);
+        assert!(
+            result.is_err(),
+            "Should reject look-alike dirs (.gnar-term.evil): {result:?}"
+        );
+    }
+
+    #[test]
+    fn validate_claude_read_rejects_non_claude_path() {
+        let result = validate_claude_read("/etc/hosts");
+        assert!(
+            result.is_err(),
+            "Should reject non-.claude/ paths: {result:?}"
+        );
+    }
+
+    #[test]
+    fn validate_claude_read_rejects_traversal_escape() {
+        // A raw substring check for `/.claude/` would be happy with this
+        // and then `read_to_string` would resolve the `..` and escape.
+        let home = std::env::var("HOME").unwrap();
+        let evil = format!("{home}/.claude/../.ssh/id_rsa");
+        let result = validate_claude_read(&evil);
+        assert!(
+            result.is_err(),
+            "Should reject paths that traverse out of .claude/ via ..: {result:?}"
+        );
+    }
+
+    #[test]
+    fn validate_claude_read_rejects_lookalike_segment() {
+        // `.claude.evil` shares a prefix but is NOT `.claude`.
+        let path = "/tmp/evil/.claude.evil/secrets.json";
+        let result = validate_claude_read(path);
+        assert!(
+            result.is_err(),
+            "Should reject `.claude` lookalike directory names: {result:?}"
+        );
+    }
+
+    #[test]
+    fn validate_claude_write_allows_settings_json() {
+        let home = std::env::var("HOME").unwrap();
+        let path = format!("{home}/.claude/settings.json");
+        let result = validate_claude_write(&path);
+        assert!(
+            result.is_ok(),
+            "Should allow writing ~/.claude/settings.json: {result:?}"
+        );
+    }
+
+    #[test]
+    fn validate_claude_write_allows_settings_local_json() {
+        let home = std::env::var("HOME").unwrap();
+        let path = format!("{home}/.claude/settings.local.json");
+        let result = validate_claude_write(&path);
+        assert!(
+            result.is_ok(),
+            "Should allow writing ~/.claude/settings.local.json: {result:?}"
+        );
+    }
+
+    #[test]
+    fn validate_claude_write_allows_skills_subdir() {
+        let home = std::env::var("HOME").unwrap();
+        let path = format!("{home}/.claude/skills/my-skill/SKILL.md");
+        let result = validate_claude_write(&path);
+        assert!(
+            result.is_ok(),
+            "Should allow writing anywhere under ~/.claude/skills/: {result:?}"
+        );
+    }
+
+    #[test]
+    fn validate_claude_write_allows_agents_subdir() {
+        let home = std::env::var("HOME").unwrap();
+        let path = format!("{home}/.claude/agents/foo.json");
+        let result = validate_claude_write(&path);
+        assert!(
+            result.is_ok(),
+            "Should allow writing under ~/.claude/agents/: {result:?}"
+        );
+    }
+
+    #[test]
+    fn validate_claude_write_allows_project_scoped_claude_dir() {
+        // Project-scoped `.claude/settings.local.json` under any directory
+        // is allowed — the convention is `.claude` anywhere in the ancestry.
+        let path = "/tmp/some-project/.claude/settings.local.json";
+        let result = validate_claude_write(path);
+        assert!(
+            result.is_ok(),
+            "Should allow writes to project-scoped .claude/settings.local.json: {result:?}"
+        );
+    }
+
+    #[test]
+    fn validate_claude_write_rejects_other_claude_files() {
+        let home = std::env::var("HOME").unwrap();
+        let path = format!("{home}/.claude/hooks.json");
+        let result = validate_claude_write(&path);
+        assert!(
+            result.is_err(),
+            "Should reject arbitrary ~/.claude/*.json files: {result:?}"
+        );
+        let path2 = format!("{home}/.claude/secrets.json");
+        assert!(
+            validate_claude_write(&path2).is_err(),
+            "Should reject ~/.claude/secrets.json"
+        );
+    }
+
+    #[test]
+    fn validate_claude_write_rejects_non_claude_path() {
+        let home = std::env::var("HOME").unwrap();
+        let path = format!("{home}/.config/gnar-term/settings.json");
+        let result = validate_claude_write(&path);
+        assert!(
+            result.is_err(),
+            "Should reject non-.claude/ paths even when named settings.json: {result:?}"
+        );
+    }
+
+    #[test]
+    fn validate_claude_write_rejects_traversal() {
+        let home = std::env::var("HOME").unwrap();
+        // Traversal: starts inside .claude/ but climbs out.
+        let path = format!("{home}/.claude/../.bashrc");
+        let result = validate_claude_write(&path);
+        assert!(
+            result.is_err(),
+            "Should reject traversal out of .claude/: {result:?}"
+        );
+    }
+
+    #[test]
+    fn validate_claude_write_rejects_lookalike_segment() {
+        // `.claude.evil` must not satisfy the .claude segment check.
+        let path = "/tmp/evil/.claude.evil/settings.json";
+        let result = validate_claude_write(path);
+        assert!(
+            result.is_err(),
+            "Should reject `.claude` lookalike segments: {result:?}"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn validate_claude_write_rejects_symlink_escape_to_blocked_dir() {
+        let home = std::env::var("HOME").unwrap();
+        let claude_dir = format!("{home}/.claude");
+        let _ = std::fs::create_dir_all(&claude_dir);
+        // Create ~/.ssh so canonicalize succeeds even on CI runners without
+        // one. The directory itself is enough — we don't need any keys.
+        let ssh_dir = format!("{home}/.ssh");
+        let _ = std::fs::create_dir_all(&ssh_dir);
+
+        let link_dir = format!("{claude_dir}/skills-escape-test-link");
+        let _ = std::fs::remove_file(&link_dir);
+        let _ = std::fs::remove_dir_all(&link_dir);
+        std::os::unix::fs::symlink(&ssh_dir, &link_dir).expect("symlink");
+
+        // Path shape satisfies the allowlist on paper
+        // (.claude/<link>/skills/x.json passes the `seen_claude` +
+        // `skills` component check), but the canonical form resolves into
+        // ~/.ssh which is_blocked_path will reject.
+        let evil = format!("{link_dir}/settings.json");
+        let result = validate_claude_write(&evil);
+        let _ = std::fs::remove_file(&link_dir);
+        assert!(
+            result.is_err(),
+            "Should reject writes whose canonical resolves into a blocked dir: {result:?}"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn validate_write_path_rejects_symlink_escape() {
+        let home = std::env::var("HOME").unwrap();
+        let config_dir = format!("{home}/.config/gnar-term");
+        let _ = std::fs::create_dir_all(&config_dir);
+        let link = format!("{config_dir}/symlink-escape-test");
+        // Clean from any prior run
+        let _ = std::fs::remove_file(&link);
+        let target = "/tmp";
+        std::os::unix::fs::symlink(target, &link).expect("symlink");
+
+        let result = validate_write_path(&format!("{link}/pwned.txt"));
+        let _ = std::fs::remove_file(&link);
+        assert!(
+            result.is_err(),
+            "Should reject writes through an escaping symlink: {result:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn file_exists_blocks_sensitive_paths() {
+        let home = std::env::var("HOME").unwrap();
+        let ssh = format!("{home}/.ssh/id_rsa");
+        assert!(
+            !file_exists(ssh).await,
+            "file_exists must not leak presence of ~/.ssh/id_rsa"
+        );
+    }
+
+    #[tokio::test]
+    async fn list_dir_blocks_sensitive_paths() {
+        let home = std::env::var("HOME").unwrap();
+        let ssh = format!("{home}/.ssh");
+        let result = list_dir(ssh).await;
+        assert!(result.is_err(), "list_dir must refuse ~/.ssh");
+    }
+
+    #[tokio::test]
+    async fn mcp_list_dir_blocks_sensitive_paths() {
+        let home = std::env::var("HOME").unwrap();
+        let ssh = format!("{home}/.ssh");
+        let result = mcp_list_dir(ssh, Some(true)).await;
+        assert!(result.is_err(), "mcp_list_dir must refuse ~/.ssh");
+    }
+
+    #[tokio::test]
+    async fn mcp_file_info_blocks_sensitive_paths() {
+        let home = std::env::var("HOME").unwrap();
+        let ssh = format!("{home}/.ssh/id_rsa");
+        let (exists, _) = mcp_file_info(ssh).await;
+        assert!(
+            !exists,
+            "mcp_file_info must not leak presence of ~/.ssh/id_rsa"
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn file_exists_rejects_symlink_to_blocked_dir() {
+        // A symlink inside a normal dir that points at ~/.ssh must be blocked
+        // even though the link's own path is benign.
+        use std::fs;
+        let home = std::env::var("HOME").unwrap();
+        let blocked_target = format!("{home}/.ssh");
+        // Only meaningful when the target actually exists on this host.
+        if !std::path::Path::new(&blocked_target).exists() {
+            return;
+        }
+        let tmp = std::env::temp_dir().join("gnar_review_file_exists_test");
+        let _ = fs::remove_file(&tmp);
+        std::os::unix::fs::symlink(&blocked_target, &tmp).expect("failed to create test symlink");
+        let path_str = tmp.to_string_lossy().to_string();
+        let result = file_exists(path_str).await;
+        let _ = fs::remove_file(&tmp);
+        assert!(!result, "symlinks into ~/.ssh must be rejected");
+    }
+
+    #[test]
+    fn file_read_write_roundtrip() {
+        let home = std::env::var("HOME").unwrap();
+        let config_dir = format!("{home}/.config/gnar-term/test-tmp");
+        std::fs::create_dir_all(&config_dir).expect("Failed to create test dir");
+
+        let test_path = format!("{config_dir}/roundtrip_test.txt");
+        let content =
+            "Hello from GnarTerm integration test!\nLine 2\nLine 3 with unicode: \u{1F680}";
+
+        // Write via validate_write_path + fs::write (same as write_file command)
+        validate_write_path(&test_path).expect("Write path should be valid");
+        std::fs::write(&test_path, content).expect("Failed to write file");
+
+        // Read back via validate_read_path + fs::read_to_string (same as read_file command)
+        let validated = validate_read_path(&test_path).expect("Read path should be valid");
+        let read_back = std::fs::read_to_string(&validated).expect("Failed to read file");
+
+        assert_eq!(read_back, content, "Content should match after roundtrip");
+
+        // Cleanup
+        let _ = std::fs::remove_file(&test_path);
+        let _ = std::fs::remove_dir(&config_dir);
+    }
+
+    #[test]
+    fn b64_encode_empty() {
+        assert_eq!(b64_encode(b""), "");
+    }
+
+    #[test]
+    fn b64_encode_single_byte() {
+        // 'A' (0x41) -> base64 "QQ=="
+        assert_eq!(b64_encode(b"A"), "QQ==");
+    }
+
+    #[test]
+    fn b64_encode_two_bytes() {
+        // "AB" -> base64 "QUI="
+        assert_eq!(b64_encode(b"AB"), "QUI=");
+    }
+
+    #[test]
+    fn b64_encode_three_bytes() {
+        // "ABC" -> base64 "QUJD"
+        assert_eq!(b64_encode(b"ABC"), "QUJD");
+    }
+
+    #[test]
+    fn b64_encode_hello_world() {
+        assert_eq!(b64_encode(b"Hello, World!"), "SGVsbG8sIFdvcmxkIQ==");
+    }
+
+    #[test]
+    fn b64_encode_terminal_escape_sequences() {
+        // ESC[31m = red color code
+        let ansi_red = b"\x1b[31mHello\x1b[0m";
+        let encoded = b64_encode(ansi_red);
+        // Verify it's valid base64 and round-trips correctly
+        assert!(!encoded.is_empty());
+        assert!(
+            encoded.len().is_multiple_of(4),
+            "Base64 output length should be multiple of 4"
+        );
+        // Known base64 for this sequence
+        assert_eq!(encoded, "G1szMW1IZWxsbxtbMG0=");
+    }
+
+    #[test]
+    fn b64_encode_binary_data() {
+        // All byte values 0x00..0xFF
+        let data: Vec<u8> = (0..=255).collect();
+        let encoded = b64_encode(&data);
+        assert!(!encoded.is_empty());
+        assert!(
+            encoded.len().is_multiple_of(4),
+            "Base64 output should be padded to multiple of 4"
+        );
+    }
+
+    #[test]
+    fn ensure_dir_creates_nested_directory() {
+        let home = std::env::var("HOME").unwrap();
+        let test_dir = format!("{home}/.config/gnar-term/test-tmp/nested/deep/dir");
+
+        // Remove if leftover from a previous run
+        let _ = std::fs::remove_dir_all(format!("{home}/.config/gnar-term/test-tmp/nested"));
+
+        // validate_write_path should allow it
+        validate_write_path(&test_dir).expect("Path should be valid under config dir");
+
+        // Create it (same logic as ensure_dir command)
+        std::fs::create_dir_all(&test_dir).expect("Should create nested dirs");
+        assert!(
+            std::path::Path::new(&test_dir).is_dir(),
+            "Directory should exist"
+        );
+
+        // Cleanup
+        let _ = std::fs::remove_dir_all(format!("{home}/.config/gnar-term/test-tmp/nested"));
+    }
+
+    #[test]
+    fn get_home_returns_valid_path() {
+        // Same logic as get_home command
+        let home = std::env::var("HOME").expect("HOME should be set in test env");
+        assert!(!home.is_empty(), "HOME should not be empty");
+        assert!(
+            home.starts_with('/'),
+            "HOME should be an absolute path, got: {home}"
+        );
+        assert!(
+            std::path::Path::new(&home).is_dir(),
+            "HOME should point to an existing directory"
+        );
+    }
+
+    #[tokio::test]
+    async fn open_url_rejects_javascript_scheme() {
+        let result = open_url("javascript:alert(1)".to_string()).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Rejected"));
+    }
+
+    #[tokio::test]
+    async fn open_url_rejects_file_scheme() {
+        let result = open_url("file:///etc/passwd".to_string()).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn open_url_rejects_non_http_scheme() {
+        // Covers ftp://, data:, javascript:, file:// etc.
+        for bad in &[
+            "ftp://example.com",
+            "data:text/html,x",
+            "javascript:alert(1)",
+        ] {
+            let result = open_url(bad.to_string()).await;
+            assert!(result.is_err(), "Expected error for {bad}");
+        }
+    }
+}

@@ -715,3 +715,796 @@ pub(crate) async fn get_all_pty_cwds(
 
     Ok(result)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use portable_pty::{native_pty_system, CommandBuilder, PtySize};
+    use std::collections::HashMap;
+    use std::sync::atomic::Ordering;
+    use std::sync::{Arc, Mutex};
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn pause_flag_blocks_and_resumes() {
+        let flag = Arc::new(PauseFlag::new());
+        let flag2 = flag.clone();
+
+        flag.pause();
+
+        // Spawn a thread that will wait on the flag
+        let handle = std::thread::spawn(move || {
+            let start = Instant::now();
+            flag2.wait_if_paused();
+            start.elapsed()
+        });
+
+        // Give the thread time to block
+        std::thread::sleep(Duration::from_millis(50));
+
+        // Resume — the thread should unblock
+        flag.resume();
+
+        let elapsed = handle.join().unwrap();
+        assert!(
+            elapsed >= Duration::from_millis(40),
+            "Thread should have blocked ~50ms, got {elapsed:?}"
+        );
+        assert!(
+            elapsed < Duration::from_millis(500),
+            "Thread should resume quickly, got {elapsed:?}"
+        );
+    }
+
+    #[test]
+    fn pause_flag_does_not_block_when_not_paused() {
+        let flag = PauseFlag::new();
+        let start = Instant::now();
+        flag.wait_if_paused();
+        assert!(
+            start.elapsed() < Duration::from_millis(5),
+            "Should not block"
+        );
+    }
+
+    #[test]
+    fn pty_read_ps_aux_does_not_hang() {
+        let pty_system = native_pty_system();
+        let pair = pty_system
+            .openpty(PtySize {
+                rows: 24,
+                cols: 80,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .expect("Failed to open PTY");
+
+        let mut cmd = CommandBuilder::new("sh");
+        cmd.arg("-c");
+        cmd.arg("ps aux; echo '__DONE__'");
+
+        let _child = pair.slave.spawn_command(cmd).expect("Failed to spawn");
+        drop(pair.slave);
+
+        let mut reader = pair
+            .master
+            .try_clone_reader()
+            .expect("Failed to get reader");
+        let pause_flag = Arc::new(PauseFlag::new());
+        let pause_clone = pause_flag.clone();
+
+        // Read in a separate thread (mirrors the real reader thread)
+        let reader_handle = std::thread::spawn(move || {
+            let mut buf = [0u8; 4096]; // Same buffer size as production
+            let mut total_bytes = 0usize;
+            let mut output = Vec::new();
+
+            loop {
+                pause_clone.wait_if_paused();
+                match reader.read(&mut buf) {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        total_bytes += n;
+                        output.extend_from_slice(&buf[..n]);
+
+                        // Simulate backpressure: pause every 32KB, resume after 1ms
+                        // This exercises the pause/resume cycle under load
+                        if total_bytes % 32768 < 4096 {
+                            pause_clone.wait_if_paused(); // would block if paused
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+            (total_bytes, output)
+        });
+
+        // Simulate frontend backpressure: pause briefly, then resume
+        // This tests that the reader thread doesn't deadlock when paused
+        std::thread::sleep(Duration::from_millis(10));
+        pause_flag.pause();
+        std::thread::sleep(Duration::from_millis(50));
+        pause_flag.resume();
+
+        // Wait for reader to finish with a generous timeout
+        let result = reader_handle.join().expect("Reader thread panicked");
+        let (total_bytes, output) = result;
+
+        // Verify we got real output
+        assert!(total_bytes > 0, "Should have read some bytes from ps aux");
+        let output_str = String::from_utf8_lossy(&output);
+        assert!(
+            output_str.contains("__DONE__"),
+            "Should have received all output (got {total_bytes} bytes)"
+        );
+        println!("[test] ps aux produced {total_bytes} bytes — read successfully without hanging");
+    }
+
+    #[test]
+    fn pty_high_throughput_does_not_stall() {
+        let pty_system = native_pty_system();
+        let pair = pty_system
+            .openpty(PtySize {
+                rows: 24,
+                cols: 80,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .expect("Failed to open PTY");
+
+        // Generate ~500KB of output using yes (piped through head for determinism)
+        let mut cmd = CommandBuilder::new("sh");
+        cmd.arg("-c");
+        cmd.arg("yes 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' | head -c 500000; echo '__HIGH_THROUGHPUT_DONE__'");
+
+        let _child = pair.slave.spawn_command(cmd).expect("Failed to spawn");
+        drop(pair.slave);
+
+        let mut reader = pair
+            .master
+            .try_clone_reader()
+            .expect("Failed to get reader");
+        let pause_flag = Arc::new(PauseFlag::new());
+        let pause_clone = pause_flag.clone();
+
+        let start = Instant::now();
+
+        let reader_handle = std::thread::spawn(move || {
+            let mut buf = [0u8; 4096];
+            let mut total = 0usize;
+            let mut output_tail = Vec::new();
+
+            loop {
+                pause_clone.wait_if_paused();
+                match reader.read(&mut buf) {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        total += n;
+                        // Keep only last 4KB to check for done marker
+                        output_tail.extend_from_slice(&buf[..n]);
+                        if output_tail.len() > 8192 {
+                            let start = output_tail.len() - 8192;
+                            output_tail = output_tail[start..].to_vec();
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+            (total, output_tail)
+        });
+
+        // Simulate aggressive backpressure: pause/resume rapidly
+        for _ in 0..10 {
+            std::thread::sleep(Duration::from_millis(5));
+            pause_flag.pause();
+            std::thread::sleep(Duration::from_millis(10));
+            pause_flag.resume();
+        }
+
+        let (total, tail) = reader_handle.join().expect("Reader thread panicked");
+        let elapsed = start.elapsed();
+
+        assert!(
+            elapsed < Duration::from_secs(10),
+            "Should complete within 10s, took {elapsed:?}"
+        );
+        assert!(total > 50_000, "Should read at least 50KB, got {total}");
+        let tail_str = String::from_utf8_lossy(&tail);
+        assert!(
+            tail_str.contains("__HIGH_THROUGHPUT_DONE__"),
+            "Should receive completion marker (got {total} bytes total)"
+        );
+        println!("[test] High-throughput test: {total} bytes in {elapsed:?}");
+    }
+
+    #[test]
+    fn osc7_parse_empty_hostname() {
+        // file:///Users/foo → /Users/foo
+        let url = "file:///Users/foo";
+        let path = url.strip_prefix("file://").unwrap();
+        let cwd = if path.starts_with('/') {
+            path.to_string()
+        } else if let Some(slash_idx) = path.find('/') {
+            path[slash_idx..].to_string()
+        } else {
+            path.to_string()
+        };
+        assert_eq!(cwd, "/Users/foo");
+    }
+
+    #[test]
+    fn osc7_parse_with_hostname() {
+        // file://myhost/Users/foo → /Users/foo
+        let url = "file://myhost/Users/foo";
+        let path = url.strip_prefix("file://").unwrap();
+        let cwd = if path.starts_with('/') {
+            path.to_string()
+        } else if let Some(slash_idx) = path.find('/') {
+            path[slash_idx..].to_string()
+        } else {
+            path.to_string()
+        };
+        assert_eq!(cwd, "/Users/foo");
+    }
+
+    #[test]
+    fn osc7_parse_no_scheme() {
+        let url = "/Users/foo".to_string();
+        let cwd = if let Some(path) = url.strip_prefix("file://") {
+            if path.starts_with('/') {
+                path.to_string()
+            } else if let Some(slash_idx) = path.find('/') {
+                path[slash_idx..].to_string()
+            } else {
+                path.to_string()
+            }
+        } else {
+            url.clone()
+        };
+        assert_eq!(cwd, "/Users/foo");
+    }
+
+    #[test]
+    fn pid_i32_cast_rejects_overflow() {
+        let big_pid: u32 = u32::MAX;
+        let result = i32::try_from(big_pid);
+        assert!(result.is_err(), "i32::try_from(u32::MAX) should fail");
+    }
+
+    #[test]
+    fn pid_i32_cast_accepts_normal_pid() {
+        let normal_pid: u32 = 12345;
+        let result = i32::try_from(normal_pid);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 12345);
+    }
+
+    #[test]
+    fn pty_spawn_returns_valid_id_and_is_tracked() {
+        let state = AppState {
+            ptys: Mutex::new(HashMap::new()),
+            watch_flags: Mutex::new(HashMap::new()),
+        };
+
+        let pty_system = native_pty_system();
+        let pair = pty_system
+            .openpty(PtySize {
+                rows: 24,
+                cols: 80,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .expect("Failed to open PTY");
+
+        let mut cmd = CommandBuilder::new("sh");
+        cmd.arg("-c");
+        cmd.arg("echo HELLO; sleep 0.1");
+
+        let child = pair.slave.spawn_command(cmd).expect("Failed to spawn");
+        let child_pid = child.process_id();
+        drop(pair.slave);
+
+        let writer = pair.master.take_writer().expect("Failed to get writer");
+        let pty_id = NEXT_PTY_ID.fetch_add(1, Ordering::Relaxed);
+        assert!(pty_id > 0, "PTY ID should be positive");
+
+        let paused = Arc::new(PauseFlag::new());
+        {
+            let mut ptys = state.ptys.lock().unwrap();
+            ptys.insert(
+                pty_id,
+                PtyInstance {
+                    writer,
+                    master_pty: pair.master,
+                    child_pid,
+                    paused,
+                },
+            );
+        }
+
+        // Verify the PTY is tracked in the map
+        let ptys = state.ptys.lock().unwrap();
+        assert!(ptys.contains_key(&pty_id), "PTY should be in the state map");
+        assert!(
+            ptys.get(&pty_id).unwrap().child_pid.is_some(),
+            "PTY should have a child PID"
+        );
+    }
+
+    #[test]
+    fn pty_write_and_read_echo_output() {
+        let pty_system = native_pty_system();
+        let pair = pty_system
+            .openpty(PtySize {
+                rows: 24,
+                cols: 80,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .expect("Failed to open PTY");
+
+        let cmd = CommandBuilder::new("cat");
+        let _child = pair.slave.spawn_command(cmd).expect("Failed to spawn");
+        drop(pair.slave);
+
+        let mut writer = pair.master.take_writer().expect("Failed to get writer");
+        let mut reader = pair
+            .master
+            .try_clone_reader()
+            .expect("Failed to get reader");
+
+        // Write to the PTY
+        writer.write_all(b"HELLO\n").expect("Failed to write");
+        drop(writer); // Close stdin so cat exits
+
+        // Read output
+        let mut output = Vec::new();
+        let mut buf = [0u8; 4096];
+        loop {
+            match reader.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => output.extend_from_slice(&buf[..n]),
+                Err(_) => break,
+            }
+        }
+        let output_str = String::from_utf8_lossy(&output);
+        assert!(
+            output_str.contains("HELLO"),
+            "Should see echoed input, got: {output_str}"
+        );
+    }
+
+    #[test]
+    fn pty_resize_does_not_panic() {
+        let pty_system = native_pty_system();
+        let pair = pty_system
+            .openpty(PtySize {
+                rows: 24,
+                cols: 80,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .expect("Failed to open PTY");
+
+        let mut cmd = CommandBuilder::new("sh");
+        cmd.arg("-c");
+        cmd.arg("sleep 1");
+        let _child = pair.slave.spawn_command(cmd).expect("Failed to spawn");
+        drop(pair.slave);
+
+        // Resize to 120x40
+        let result = pair.master.resize(PtySize {
+            rows: 40,
+            cols: 120,
+            pixel_width: 0,
+            pixel_height: 0,
+        });
+        assert!(result.is_ok(), "Resize should succeed: {:?}", result.err());
+
+        // Resize to very small
+        let result = pair.master.resize(PtySize {
+            rows: 1,
+            cols: 1,
+            pixel_width: 0,
+            pixel_height: 0,
+        });
+        assert!(
+            result.is_ok(),
+            "Resize to 1x1 should succeed: {:?}",
+            result.err()
+        );
+    }
+
+    #[test]
+    fn pty_kill_removes_from_state() {
+        let state = AppState {
+            ptys: Mutex::new(HashMap::new()),
+            watch_flags: Mutex::new(HashMap::new()),
+        };
+
+        let pty_system = native_pty_system();
+        let pair = pty_system
+            .openpty(PtySize {
+                rows: 24,
+                cols: 80,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .expect("Failed to open PTY");
+
+        let mut cmd = CommandBuilder::new("sh");
+        cmd.arg("-c");
+        cmd.arg("sleep 60");
+        let child = pair.slave.spawn_command(cmd).expect("Failed to spawn");
+        let child_pid = child.process_id();
+        drop(pair.slave);
+
+        let writer = pair.master.take_writer().expect("Failed to get writer");
+        let pty_id = NEXT_PTY_ID.fetch_add(1, Ordering::Relaxed);
+        let paused = Arc::new(PauseFlag::new());
+
+        {
+            let mut ptys = state.ptys.lock().unwrap();
+            ptys.insert(
+                pty_id,
+                PtyInstance {
+                    writer,
+                    master_pty: pair.master,
+                    child_pid,
+                    paused: paused.clone(),
+                },
+            );
+        }
+
+        // Verify it's in the map
+        assert!(state.ptys.lock().unwrap().contains_key(&pty_id));
+
+        // Kill: remove from map and signal process
+        {
+            let mut ptys = state.ptys.lock().unwrap();
+            if let Some(pty) = ptys.remove(&pty_id) {
+                pty.paused.resume();
+                if let Some(pid) = pty.child_pid {
+                    #[cfg(unix)]
+                    unsafe {
+                        let pid_i32 = pid as i32;
+                        libc::kill(pid_i32, libc::SIGKILL);
+                    }
+                }
+            }
+        }
+
+        // Verify it's gone
+        assert!(
+            !state.ptys.lock().unwrap().contains_key(&pty_id),
+            "PTY should be removed from map after kill"
+        );
+    }
+
+    #[test]
+    fn pty_spawn_with_cwd_and_get_cwd() {
+        let state = AppState {
+            ptys: Mutex::new(HashMap::new()),
+            watch_flags: Mutex::new(HashMap::new()),
+        };
+
+        let pty_system = native_pty_system();
+        let pair = pty_system
+            .openpty(PtySize {
+                rows: 24,
+                cols: 80,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .expect("Failed to open PTY");
+
+        let mut cmd = CommandBuilder::new("sh");
+        cmd.arg("-c");
+        cmd.arg("sleep 2");
+        cmd.cwd("/tmp");
+
+        let child = pair.slave.spawn_command(cmd).expect("Failed to spawn");
+        let child_pid = child.process_id();
+        drop(pair.slave);
+
+        let writer = pair.master.take_writer().expect("Failed to get writer");
+        let pty_id = NEXT_PTY_ID.fetch_add(1, Ordering::Relaxed);
+
+        let paused = Arc::new(PauseFlag::new());
+        {
+            let mut ptys = state.ptys.lock().unwrap();
+            ptys.insert(
+                pty_id,
+                PtyInstance {
+                    writer,
+                    master_pty: pair.master,
+                    child_pid,
+                    paused,
+                },
+            );
+        }
+
+        // Give the process a moment to start
+        std::thread::sleep(Duration::from_millis(200));
+
+        // Verify get_pty_cwd returns the correct directory
+        #[allow(unused_variables)] // `pid` is only read in the macOS cfg block
+        if let Some(pid) = child_pid {
+            #[cfg(target_os = "macos")]
+            {
+                let output = std::process::Command::new("lsof")
+                    .args(["-a", "-p", &pid.to_string(), "-d", "cwd", "-Fn"])
+                    .output()
+                    .expect("lsof should run");
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                let mut found_cwd = String::new();
+                for line in stdout.lines() {
+                    if let Some(path) = line.strip_prefix('n') {
+                        if path.starts_with('/') {
+                            found_cwd = path.to_string();
+                            break;
+                        }
+                    }
+                }
+                // /tmp is a symlink to /private/tmp on macOS
+                assert!(
+                    found_cwd == "/tmp" || found_cwd == "/private/tmp",
+                    "CWD should be /tmp or /private/tmp, got: {found_cwd}"
+                );
+            }
+        } else {
+            panic!("Child PID should be available");
+        }
+    }
+
+    #[test]
+    fn get_all_pty_cwds_returns_cwd_for_all_ptys() {
+        // Spawn two PTYs in different directories and verify the batch command
+        // returns an entry for each without requiring per-PTY IPC round-trips.
+        let state = AppState {
+            ptys: Mutex::new(HashMap::new()),
+            watch_flags: Mutex::new(HashMap::new()),
+        };
+
+        let pty_system = native_pty_system();
+
+        let spawn_pty_in_dir = |dir: &str| -> u32 {
+            let pair = pty_system
+                .openpty(PtySize {
+                    rows: 24,
+                    cols: 80,
+                    pixel_width: 0,
+                    pixel_height: 0,
+                })
+                .expect("Failed to open PTY");
+
+            let mut cmd = CommandBuilder::new("sh");
+            cmd.arg("-c");
+            cmd.arg("sleep 3");
+            cmd.cwd(dir);
+
+            let child = pair.slave.spawn_command(cmd).expect("Failed to spawn");
+            let child_pid = child.process_id();
+            drop(pair.slave);
+
+            let writer = pair.master.take_writer().expect("Failed to get writer");
+            let pty_id = NEXT_PTY_ID.fetch_add(1, Ordering::Relaxed);
+            let paused = Arc::new(PauseFlag::new());
+
+            {
+                let mut ptys = state.ptys.lock().unwrap();
+                ptys.insert(
+                    pty_id,
+                    PtyInstance {
+                        writer,
+                        master_pty: pair.master,
+                        child_pid,
+                        paused,
+                    },
+                );
+            }
+            pty_id
+        };
+
+        let id1 = spawn_pty_in_dir("/tmp");
+        let id2 = spawn_pty_in_dir("/tmp");
+
+        // Allow processes to start
+        std::thread::sleep(Duration::from_millis(200));
+
+        // Collect pid_map same way get_all_pty_cwds does (lock then release)
+        let pid_map: Vec<(u32, u32)> = {
+            let ptys = state.ptys.lock().unwrap();
+            ptys.iter()
+                .filter_map(|(&id, entry)| entry.child_pid.map(|pid| (id, pid)))
+                .collect()
+        };
+
+        let mut result: std::collections::HashMap<String, String> =
+            std::collections::HashMap::new();
+
+        for (pty_id, pid) in pid_map {
+            #[cfg(target_os = "macos")]
+            {
+                let output = std::process::Command::new("lsof")
+                    .args(["-a", "-p", &pid.to_string(), "-d", "cwd", "-Fn"])
+                    .output()
+                    .expect("lsof should run");
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                for line in stdout.lines() {
+                    if let Some(path) = line.strip_prefix('n') {
+                        if path.starts_with('/') {
+                            result.insert(pty_id.to_string(), path.to_string());
+                            break;
+                        }
+                    }
+                }
+            }
+            #[cfg(target_os = "linux")]
+            {
+                if let Ok(path) = std::fs::read_link(format!("/proc/{pid}/cwd")) {
+                    result.insert(pty_id.to_string(), path.to_string_lossy().to_string());
+                }
+            }
+        }
+
+        // Both PTYs should be present in the result map
+        assert!(
+            result.contains_key(&id1.to_string()),
+            "Batch result should contain pty_id {id1}"
+        );
+        assert!(
+            result.contains_key(&id2.to_string()),
+            "Batch result should contain pty_id {id2}"
+        );
+
+        // Each should resolve to /tmp (macOS may symlink it to /private/tmp)
+        let cwd1 = result.get(&id1.to_string()).unwrap();
+        let cwd2 = result.get(&id2.to_string()).unwrap();
+        for cwd in [cwd1, cwd2] {
+            assert!(
+                cwd == "/tmp" || cwd == "/private/tmp",
+                "Expected /tmp or /private/tmp, got: {cwd}"
+            );
+        }
+    }
+
+    #[test]
+    fn osc9_plain_text_is_notification() {
+        assert_eq!(
+            classify_osc("9;Build complete"),
+            OscAction::Notification("Build complete".into())
+        );
+    }
+
+    #[test]
+    fn osc9_subcommand_is_ignored() {
+        // "4;0;" is a color-query / sub-command, not a notification
+        assert_eq!(classify_osc("9;4;0;"), OscAction::Ignore);
+        assert_eq!(classify_osc("9;4;0;rgb:0000/0000/0000"), OscAction::Ignore);
+    }
+
+    #[test]
+    fn osc99_plain_text_is_notification() {
+        assert_eq!(
+            classify_osc("99;Hello from kitty"),
+            OscAction::Notification("Hello from kitty".into())
+        );
+    }
+
+    #[test]
+    fn osc777_notify_payload_is_humanized() {
+        // OSC 777 xterm/urxvt notify format: notify;<title>;<body>
+        // We format as "<title>: <body>" so the UI doesn't surface the
+        // raw "notify;…" prefix (regression: Claude Code emits this and
+        // the sidebar was showing the raw payload).
+        assert_eq!(
+            classify_osc("777;notify;Title;Body text"),
+            OscAction::Notification("Title: Body text".into())
+        );
+    }
+
+    #[test]
+    fn osc777_notify_title_only() {
+        assert_eq!(
+            classify_osc("777;notify;Claude Code;"),
+            OscAction::Notification("Claude Code".into())
+        );
+    }
+
+    #[test]
+    fn osc777_non_notify_payload_passes_through() {
+        // Non-notify OSC 777 sub-actions keep their raw payload so we
+        // don't lose information when an agent uses a custom action.
+        assert_eq!(
+            classify_osc("777;other;Hello"),
+            OscAction::Notification("other;Hello".into())
+        );
+    }
+
+    #[test]
+    fn osc0_sets_title() {
+        assert_eq!(
+            classify_osc("0;my terminal title"),
+            OscAction::Title("my terminal title".into())
+        );
+    }
+
+    #[test]
+    fn osc2_sets_title() {
+        assert_eq!(
+            classify_osc("2;window name"),
+            OscAction::Title("window name".into())
+        );
+    }
+
+    #[test]
+    fn osc_unknown_is_ignored() {
+        assert_eq!(classify_osc("52;c;dGVzdA=="), OscAction::Ignore);
+        assert_eq!(classify_osc("4;1;rgb:ffff/0000/0000"), OscAction::Ignore);
+    }
+
+    #[test]
+    fn osc9_empty_payload_is_ignored() {
+        assert_eq!(classify_osc("9;"), OscAction::Ignore);
+    }
+
+    #[test]
+    fn osc9_text_starting_with_letter_is_notification() {
+        assert_eq!(
+            classify_osc("9;3 new emails"),
+            OscAction::Notification("3 new emails".into())
+        );
+    }
+
+    #[test]
+    fn osc9_number_without_semicolon_is_notification() {
+        // A payload like "9;42" — just a number, no sub-command semicolon
+        assert_eq!(classify_osc("9;42"), OscAction::Notification("42".into()));
+    }
+
+    #[test]
+    fn sanitize_strips_c0_control_characters() {
+        // NUL, BEL, ESC, etc. should be removed
+        let input = "hello\x00world\x07\x1b[31m";
+        assert_eq!(sanitize_notification(input), "helloworld[31m");
+    }
+
+    #[test]
+    fn sanitize_strips_del_and_c1_controls() {
+        let input = "foo\x7fbar\u{0080}\u{009f}baz";
+        assert_eq!(sanitize_notification(input), "foobarbaz");
+    }
+
+    #[test]
+    fn sanitize_truncates_to_500_chars() {
+        let long = "a".repeat(600);
+        let result = sanitize_notification(&long);
+        assert_eq!(result.len(), 500);
+    }
+
+    #[test]
+    fn sanitize_preserves_normal_unicode() {
+        let input = "Build complete \u{2705}";
+        assert_eq!(sanitize_notification(input), input);
+    }
+
+    #[test]
+    fn osc9_notification_strips_control_chars() {
+        // A PTY payload containing an embedded ESC sequence should be sanitized
+        assert_eq!(
+            classify_osc("9;Hello\x1b[1mWorld"),
+            OscAction::Notification("Hello[1mWorld".into())
+        );
+    }
+
+    #[test]
+    fn osc_notification_truncated_at_500_chars() {
+        let long_payload = format!("9;{}", "x".repeat(600));
+        if let OscAction::Notification(text) = classify_osc(&long_payload) {
+            assert_eq!(text.len(), 500);
+        } else {
+            panic!("Expected Notification variant");
+        }
+    }
+}

@@ -148,3 +148,62 @@ pub(crate) async fn unwatch_claude_file(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::pty::AppState;
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+
+    #[test]
+    fn file_watcher_cancellation_sets_stop_flag() {
+        let state = AppState {
+            ptys: Mutex::new(HashMap::new()),
+            watch_flags: Mutex::new(HashMap::new()),
+        };
+
+        let watch_id = NEXT_WATCH_ID.fetch_add(1, Ordering::Relaxed);
+        let stop = Arc::new(AtomicBool::new(false));
+        let stop_clone = stop.clone();
+
+        // Insert the watcher flag (same as watch_file does)
+        state.watch_flags.lock().unwrap().insert(watch_id, stop);
+
+        // Spawn a mock watcher thread that checks the flag
+        let watcher_handle = std::thread::spawn(move || {
+            let mut iterations = 0;
+            loop {
+                std::thread::sleep(Duration::from_millis(10));
+                if stop_clone.load(Ordering::Relaxed) {
+                    break;
+                }
+                iterations += 1;
+                assert!(
+                    iterations <= 100,
+                    "Watcher thread did not stop within timeout"
+                );
+            }
+        });
+
+        // Simulate unwatch: remove flag and set it to true
+        std::thread::sleep(Duration::from_millis(30));
+        {
+            let mut flags = state.watch_flags.lock().unwrap();
+            if let Some(flag) = flags.remove(&watch_id) {
+                flag.store(true, Ordering::Relaxed);
+            }
+        }
+
+        // Watcher thread should exit cleanly
+        watcher_handle
+            .join()
+            .expect("Watcher thread should stop without panic");
+
+        // Flag should no longer be in the map
+        assert!(
+            !state.watch_flags.lock().unwrap().contains_key(&watch_id),
+            "Watch flag should be removed after unwatch"
+        );
+    }
+}

@@ -1,9 +1,9 @@
 /**
  * DashboardHostContext — a uniform surface exposed to every dashboard
- * body (real dashboard workspaces + pseudo-workspaces) so embedded
+ * body (real dashboard nestedWorkspaces + pseudo-nestedWorkspaces) so embedded
  * widgets derive their scope from a single shape.
  *
- * Real dashboard workspaces expose their own `workspace.metadata` via
+ * Real dashboard nestedWorkspaces expose their own `workspace.metadata` via
  * this context. The Global Agentic Dashboard pseudo-workspace provides
  * a synthetic context with `metadata = { isGlobalAgenticDashboard: true }`.
  * Widgets (`gnar:agent-list`, `gnar:kanban`, `gnar:task-spawner`) read
@@ -12,11 +12,11 @@
  *
  * Scope derivation inside widgets:
  *   - `metadata.isGlobalAgenticDashboard === true` → { kind: "global" }
- *   - `metadata.groupId` present                   → { kind: "group", groupId }
+ *   - `metadata.parentWorkspaceId` present                   → { kind: "workspace", parentWorkspaceId }
  *   - Otherwise                                     → inert / error
  */
 import { getContext, setContext } from "svelte";
-import type { WorkspaceMetadata } from "../types";
+import type { NestedWorkspaceMetadata } from "../types";
 
 export interface DashboardHostContext {
   /**
@@ -24,7 +24,7 @@ export interface DashboardHostContext {
    * actual dashboard workspace, or the synthetic metadata the
    * pseudo-workspace registry carried for a virtual host.
    */
-  metadata: WorkspaceMetadata;
+  metadata: NestedWorkspaceMetadata;
 }
 
 /** Svelte context key. Scoped string to avoid collisions. */
@@ -54,7 +54,7 @@ export function getDashboardHost(): DashboardHostContext | null {
 
 export type DashboardScope =
   | { kind: "global" }
-  | { kind: "group"; groupId: string }
+  | { kind: "workspace"; parentWorkspaceId: string }
   | { kind: "none" };
 
 /**
@@ -63,7 +63,7 @@ export type DashboardScope =
  * consistent across widget implementations.
  *
  * Returns `{ kind: "none" }` when neither `isGlobalAgenticDashboard`
- * nor a string `groupId` is present — callers should treat that as
+ * nor a string `parentWorkspaceId` is present — callers should treat that as
  * "host has no scope" (typically render empty).
  */
 export function deriveDashboardScope(
@@ -74,9 +74,9 @@ export function deriveDashboardScope(
   if (md.isGlobalAgenticDashboard === true) {
     return { kind: "global" };
   }
-  const groupId = md.groupId;
-  if (typeof groupId === "string" && groupId.length > 0) {
-    return { kind: "group", groupId };
+  const parentWorkspaceId = md.parentWorkspaceId;
+  if (typeof parentWorkspaceId === "string" && parentWorkspaceId.length > 0) {
+    return { kind: "workspace", parentWorkspaceId };
   }
   return { kind: "none" };
 }

@@ -64,7 +64,7 @@ describe("status registry", () => {
     expect(items[0]!.label).toBe("feat/status-bar");
   });
 
-  it("keeps items from different workspaces separate", () => {
+  it("keeps items from different nestedWorkspaces separate", () => {
     setStatusItem("git", "ws-1", "branch", {
       category: "git",
       priority: 10,
@@ -146,7 +146,7 @@ describe("status registry", () => {
 
   // --- unregisterStatusBySource ---
 
-  it("removes all items from a source across all workspaces", () => {
+  it("removes all items from a source across all nestedWorkspaces", () => {
     setStatusItem("git", "ws-1", "branch", {
       category: "git",
       priority: 10,

@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
    * AgentStatusGrid — compact 2x2 status-chip grid rendered inside the
-   * Global Agentic Dashboard's primary-sidebar row (in place of the
+   * Global Agentic Dashboard's sidebar row (in place of the
    * "Agents dashboard" label).
    *
    * Each chip is a colored dot + count for one of the four kanban

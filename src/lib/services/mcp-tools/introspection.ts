@@ -1,9 +1,9 @@
 import { get } from "svelte/store";
 import {
-  workspaces,
+  nestedWorkspaces,
   activeWorkspace,
   activePane,
-} from "../../stores/workspace";
+} from "../../stores/nested-workspace";
 import {
   getAllPanes,
   isTerminalSurface,
@@ -13,9 +13,14 @@ import {
 import { listPreviewSurfaces } from "../preview-surface-registry";
 import { pollEvents } from "../mcp-event-buffer";
 import { agentsStore } from "../agent-detection-service";
+import {
+  interruptAgent,
+  killAgent,
+  sendKeysToAgent,
+} from "../agent-intervention-service";
 import type { ToolDef } from "../mcp-types";
 
-// ---- Workspace introspection helpers ----
+// ---- NestedWorkspace introspection helpers ----
 
 function describeSurface(s: Surface) {
   return { id: s.id, kind: s.kind, title: s.title };
@@ -73,15 +78,15 @@ export const introspectionTools: ToolDef[] = [
   },
   {
     name: "list_workspaces",
-    description: "List all open workspaces.",
+    description: "List all open nestedWorkspaces.",
     inputSchema: { type: "object", properties: {} },
     handler: () => {
-      const list = get(workspaces).map((ws) => ({
+      const list = get(nestedWorkspaces).map((ws) => ({
         id: ws.id,
         name: ws.name,
         activePaneId: ws.activePaneId,
       }));
-      return { workspaces: list };
+      return { nestedWorkspaces: list };
     },
   },
   {
@@ -107,7 +112,7 @@ export const introspectionTools: ToolDef[] = [
     handler: (args) => {
       const p = args as { workspace_id?: string };
       const target = p.workspace_id
-        ? get(workspaces).find((w) => w.id === p.workspace_id)
+        ? get(nestedWorkspaces).find((w) => w.id === p.workspace_id)
         : get(activeWorkspace);
       if (!target) return { panes: [] };
       const list = getAllPanes(target.splitRoot).map((pane) =>
@@ -129,6 +134,55 @@ export const introspectionTools: ToolDef[] = [
         workspace_id: e.workspaceId,
       }));
       return { previews };
+    },
+  },
+  {
+    name: "interrupt_agent",
+    description:
+      "Send Ctrl-C (SIGINT) to a detected agent's PTY — equivalent to the user pressing Ctrl-C in the agent's terminal. Returns `{ ok: true }` on success, `{ ok: false }` when the agent is not found or has no PTY. Use list_agents to get agent_id values.",
+    inputSchema: {
+      type: "object",
+      properties: { agent_id: { type: "string" } },
+      required: ["agent_id"],
+    },
+    handler: async (args) => {
+      const { agent_id } = args as { agent_id: string };
+      const ok = await interruptAgent(agent_id);
+      return { ok };
+    },
+  },
+  {
+    name: "kill_agent",
+    description:
+      "Forcefully kill a detected agent's PTY process. Returns `{ ok: true }` on success, `{ ok: false }` when the agent is not found or has no PTY. Prefer interrupt_agent (Ctrl-C) first; use kill_agent only when the agent is unresponsive.",
+    inputSchema: {
+      type: "object",
+      properties: { agent_id: { type: "string" } },
+      required: ["agent_id"],
+    },
+    handler: async (args) => {
+      const { agent_id } = args as { agent_id: string };
+      const ok = await killAgent(agent_id);
+      return { ok };
+    },
+  },
+  {
+    name: "send_keys_to_agent",
+    description:
+      "Send raw keystrokes to a detected agent's PTY. Use agent_id from list_agents.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        agent_id: { type: "string" },
+        keys: { type: "string" },
+      },
+      required: ["agent_id", "keys"],
+    },
+    handler: async (args) => {
+      const p = args as { agent_id: string; keys: string };
+      const ok = await sendKeysToAgent(p.agent_id, p.keys);
+      if (!ok) throw new Error(`agent ${p.agent_id} not found or has no PTY`);
+      return { ok: true };
     },
   },
   {

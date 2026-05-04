@@ -5,31 +5,31 @@
    *
    * Color rules (in priority order):
    *   1. diff + dirty      → amber warning tone ("changes to review")
-   *   2. isActive/isHovered → baseColor (group accent)
+   *   2. isActive/isHovered → baseColor (workspace accent)
    *   3. otherwise         → dimColor (uniform inactive appearance)
    */
   import type { Component, ComponentType } from "svelte";
   import { readable, type Readable } from "svelte/store";
   import {
-    groupDirtyStore,
-    type GroupDirtyState,
-  } from "../services/group-git-dirty-store";
+    workspaceDirtyStore,
+    type WorkspaceDirtyState,
+  } from "../services/workspace-git-dirty-store";
   import { theme } from "../stores/theme";
 
   export let iconComponent: Component | ComponentType | unknown;
   export let baseColor: string;
   export let contributionId: string | undefined;
-  export let groupPath: string | undefined;
+  export let workspacePath: string | undefined;
   export let isActive: boolean = false;
   export let isHovered: boolean = false;
 
-  const CLEAN_STATE: GroupDirtyState = { ready: true, hasChanges: false };
+  const CLEAN_STATE: WorkspaceDirtyState = { ready: true, hasChanges: false };
 
   $: isDiff = contributionId === "diff";
 
-  const dirtyStore: Readable<GroupDirtyState> =
-    contributionId === "diff" && groupPath
-      ? groupDirtyStore(groupPath)
+  const dirtyStore: Readable<WorkspaceDirtyState> =
+    contributionId === "diff" && workspacePath
+      ? workspaceDirtyStore(workspacePath)
       : readable(CLEAN_STATE);
 
   $: dimColor = ($theme["fgDim"] ?? $theme.fgMuted ?? "#888") as string;

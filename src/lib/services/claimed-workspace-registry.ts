@@ -1,9 +1,9 @@
 /**
- * Claimed Workspace Registry
+ * Claimed NestedWorkspace Registry
  *
  * Extensions "claim" workspace IDs so they appear in the extension's
  * own sidebar section instead of the main Workspaces block.
- * PrimarySidebar reads this store to filter the main list.
+ * Sidebar reads this store to filter the main list.
  *
  * Each claim tracks its source extension for cleanup on deactivation.
  */
@@ -29,17 +29,17 @@ export function claimWorkspace(workspaceId: string, source: string): void {
   // A claimed workspace is hosted inside its owner (e.g. a project
   // block), so it must disappear from the root-row list. No-op if it
   // wasn't there.
-  removeRootRow({ kind: "workspace", id: workspaceId });
+  removeRootRow({ kind: "nested-workspace", id: workspaceId });
 }
 
 export function unclaimWorkspace(workspaceId: string): void {
   registry.unregister(workspaceId);
-  // Workspace is back at the root — restore it to the root-row list
-  // (append to the end matches the legacy behavior for fresh workspaces).
-  appendRootRow({ kind: "workspace", id: workspaceId });
+  // NestedWorkspace is back at the root — restore it to the root-row list
+  // (append to the end matches the legacy behavior for fresh nestedWorkspaces).
+  appendRootRow({ kind: "nested-workspace", id: workspaceId });
 }
 
-/** Unclaim all workspaces owned by a given source extension. */
+/** Unclaim all nestedWorkspaces owned by a given source extension. */
 export function unclaimBySource(source: string): void {
   // Collect ids before unregistering so we can mirror each into the
   // root-row list (no way to get them back once registry.unregisterBySource
@@ -50,7 +50,7 @@ export function unclaimBySource(source: string): void {
   });
   unsub();
   registry.unregisterBySource(source);
-  for (const id of ids) appendRootRow({ kind: "workspace", id });
+  for (const id of ids) appendRootRow({ kind: "nested-workspace", id });
 }
 
 export const resetClaimedWorkspaces = registry.reset;

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick, type Component } from "svelte";
+  import { type Component } from "svelte";
   import { theme } from "../stores/theme";
   import { anyReorderActive } from "../stores/ui";
   import { getWorkspaceStatusByCategory } from "../services/status-registry";
@@ -8,18 +8,22 @@
   import { workspaceSubtitleStore } from "../services/workspace-subtitle-registry";
   import { getExtensionApiById } from "../services/extension-loader";
   import ExtensionWrapper from "./ExtensionWrapper.svelte";
-  import DragGrip from "./DragGrip.svelte";
+  import SidebarElement from "./SidebarElement.svelte";
+  import RenameableLabel from "./RenameableLabel.svelte";
+  import SidebarSubtitleRow from "./SidebarSubtitleRow.svelte";
+  import WorktreeIcon from "../icons/WorktreeIcon.svelte";
+  import BotIcon from "../icons/BotIcon.svelte";
   import { modLabel } from "../terminal-service";
-  import { shortcutHintsActive } from "../stores/shortcut-hints";
   import { discoEmojiFor, discoColorFor } from "../utils/disco-decoration";
 
   $: isDisco = $theme.name === "Molly Disco";
   import { getAllSurfaces } from "../types";
-  import type { Workspace } from "../types";
-  import { workspaceSurfaceMap } from "../services/workspace-service";
+  import type { NestedWorkspace } from "../types";
+  import { workspaceSurfaceMap } from "../services/nested-workspace-service";
   import { wsMeta } from "../services/service-helpers";
+  import { workspacesStore } from "../stores/workspaces";
 
-  export let workspace: Workspace;
+  export let workspace: NestedWorkspace;
   export let index: number;
   export let isActive: boolean;
   export let onSelect: () => void;
@@ -41,45 +45,67 @@
    * notification). Used when the workspace is rendered inside a
    * container that aggregates status itself — e.g. nested under an
    * AgentDashboardRow whose banner already rolls up detected-agent
-   * activity. Projects leave this false so their nested workspaces
+   * activity. Projects leave this false so their nested nestedWorkspaces
    * keep showing their own status.
    */
   export let hideStatusBadges: boolean = false;
+  /** When true, this workspace is nested inside a container workspace and should always show the close button. */
+  export let isNested: boolean = false;
+  /** Sidebar position index for the ⌘N shortcut hint. */
+  export let shortcutIdx: number | undefined = undefined;
 
-  let hovered = false;
-  let nameEl: HTMLSpanElement;
-  let _renaming = false;
+  let labelComponent: RenameableLabel;
 
   $: allSurfaces =
     $workspaceSurfaceMap.get(workspace.id) ?? getAllSurfaces(workspace);
   $: hasUnread = allSurfaces.some((s) => s.hasUnread);
   $: latestNotification = allSurfaces.find((s) => s.notification)?.notification;
   $: isManaged = !!workspace.metadata?.worktreePath;
+  $: worktreeDirName = (() => {
+    const path = workspace.metadata?.worktreePath;
+    if (!path) return "";
+    const parts = path.split("/").filter((p) => p.length > 0);
+    return parts[parts.length - 1] || "";
+  })();
+  $: shouldShowWorktreeStatus =
+    isManaged && worktreeDirName && worktreeDirName !== workspace.name;
   $: dashboardWorkspaceEntry = (() => {
-    const id = wsMeta(workspace).dashboardWorkspaceId;
+    const id = wsMeta(workspace).dashboardNestedWorkspaceId;
     if (typeof id !== "string") return null;
     return $dashboardWorkspaceRegistry.get(id) ?? null;
   })();
   $: dashboardWorkspaceIcon = dashboardWorkspaceEntry?.icon ?? null;
-  // Workspaces spawned by a dashboard (Global Agentic or per-group)
+  // Workspaces spawned by a dashboard (Global Agentic or per-workspace)
   // get a bot marker so they're visually distinguishable from plain
-  // group workspaces or worktrees. `metadata.spawnedBy` is the §3.2
+  // nested workspaces or worktrees. `metadata.spawnedBy` is the §3.2
   // marker; `parentOrchestratorId` is the pre-migration field we still
   // honor until Stage 8 rewrites legacy user data.
-  // Dashboards are singleton surfaces bound to their group; suppress
-  // close / rename / right-click affordances so the user interacts
-  // with them only via the group's tile.
+  // Dashboards are singleton surfaces bound to their workspace;
+  // suppress close / rename / right-click affordances so the user
+  // interacts with them only via the workspace's tile.
   $: isDashboardWs = wsMeta(workspace).isDashboard === true;
   $: isDashboardWorkspaceRow = dashboardWorkspaceIcon !== null;
-  // Locked workspaces: drag-start is suppressed at the row level,
+  // Locked nestedWorkspaces: drag-start is suppressed at the row level,
   // close affordance is hidden in the grip, and the rail shows a
   // lock chip in place of the close button.
   $: isLocked = wsMeta(workspace).locked === true;
-  // Nested workspaces live under a group's colored banner. The group
+  // Nested workspaces live under a workspace's colored banner. The
   // banner itself already rolls up status (and the per-row chip handles
   // agent state), so the long blue notification row duplicates chrome
   // and crowds the nested layout — suppress it in that context.
-  $: isInsideGroup = typeof wsMeta(workspace).groupId === "string";
+  $: isInsideWorkspace =
+    typeof wsMeta(workspace).parentWorkspaceId === "string";
+  // Surface the parent workspace's path-missing flag on every nested
+  // row inside it. The umbrella banner (ContainerRow) currently has no
+  // affordance for this state — flagging it on the row makes the
+  // condition discoverable from anywhere the workspace renders.
+  $: parentWorkspacePathMissing = (() => {
+    const parentId = wsMeta(workspace).parentWorkspaceId;
+    if (typeof parentId !== "string") return false;
+    return (
+      $workspacesStore.find((w) => w.id === parentId)?.pathMissing === true
+    );
+  })();
   $: isAgentSpawned = wsMeta(workspace).spawnedBy != null;
   $: railColor =
     (isDashboardWorkspaceRow && dashboardWorkspaceEntry?.accentColor) ||
@@ -92,150 +118,65 @@
 
   $: subtitleComponents = $workspaceSubtitleStore;
 
-  export async function startRename() {
-    _renaming = true;
-    await tick();
-    if (!nameEl) return;
-    nameEl.contentEditable = "true";
-    nameEl.style.background = $theme.bgSurface;
-    nameEl.style.border = `1px solid ${$theme.borderActive}`;
-    nameEl.focus();
-    const range = document.createRange();
-    range.selectNodeContents(nameEl);
-    const sel = window.getSelection();
-    sel?.removeAllRanges();
-    sel?.addRange(range);
-  }
-
-  function finishRename() {
-    if (!nameEl) return;
-    nameEl.contentEditable = "false";
-    nameEl.style.background = "transparent";
-    nameEl.style.border = "none";
-    const newName = nameEl.textContent?.trim();
-    if (newName && newName !== workspace.name) {
-      onRename(newName);
-    } else {
-      nameEl.textContent = workspace.name;
-    }
-    _renaming = false;
+  export async function startRename(): Promise<void> {
+    await labelComponent?.startRename();
   }
 
   export let dragActive = false;
   /** Mousedown handler fired when the drag grip is pressed. Drag origin, not row body. */
   export let onGripMouseDown: ((e: MouseEvent) => void) | undefined = undefined;
-  /** Sidebar position index for the ⌘N shortcut hint. When provided, overrides index-based hint. */
-  export let shortcutIdx: number | undefined = undefined;
 </script>
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<!-- svelte-ignore a11y_click_events_have_key_events -->
-<div
-  data-drag-idx={index}
-  data-workspace-id={workspace.id}
-  data-worktree={isManaged ? "true" : undefined}
-  style="
-    display: {dragActive ? 'none' : 'flex'};
-    position: relative;
-    margin: 0 8px 0 0; border-radius: 0 6px 6px 0; overflow: hidden; cursor: pointer;
-    background: {isActive
-    ? $theme.bgActive
-    : hovered
-      ? $theme.bgHighlight
-      : ($theme.bgSurface ?? 'transparent')};
-    border: 1px solid {isActive ? railColor : ($theme.border ?? 'transparent')};
-  "
-  on:contextmenu|preventDefault={(e) => {
+<SidebarElement
+  kind={isDashboardWs ? "dashboard" : "nested"}
+  compact={isNested}
+  name={workspace.name}
+  {isActive}
+  {isLocked}
+  isDragging={dragActive}
+  canDrag={!!onGripMouseDown}
+  canClose={true}
+  color={railColor}
+  dataDragIdx={index}
+  dataWorkspaceId={workspace.id}
+  dataWorktree={isManaged ? "true" : undefined}
+  shortcutLabel={shortcutIdx !== undefined && shortcutIdx < 9
+    ? `${modLabel}${shortcutIdx + 1}`
+    : undefined}
+  {onGripMouseDown}
+  {onClose}
+  onContextMenu={(e) => {
     // Dashboards are non-interactive surfaces; right-click is a no-op.
     if (isDashboardWs) return;
     onContextMenu(e.clientX, e.clientY);
   }}
-  on:mouseenter={() => (hovered = true)}
-  on:mouseleave={() => {
-    hovered = false;
-  }}
-  on:mousedown={(e) => {
-    // Locked workspaces refuse drag-start at the row body. The grip
-    // column still receives the mousedown (its native cursor is
-    // not-allowed) so callers see consistent input but cannot
-    // initiate a reorder.
-    if (isLocked) return;
-    onGripMouseDown?.(e);
-  }}
 >
-  {#if onGripMouseDown}
-    <!-- Grip column. The drag-start handler lives on the outer row
-         div (above) so hovering anywhere on the row expands the grip
-         and mousedowns on the body itself initiate the reorder —
-         createDragReorder's 5px threshold keeps taps as selects. -->
-    <DragGrip
-      theme={$theme}
-      visible={dragActive || (hovered && !$anyReorderActive)}
-      {railColor}
-      railOpacity={1}
-      alwaysShowDots={true}
-      fadeRight={!(dragActive || (hovered && !$anyReorderActive))}
-      locked={isLocked}
-      onClose={!isDashboardWs || isDashboardWorkspaceRow ? onClose : undefined}
-      closeTooltip="Close Workspace (⇧⌘W)"
-      shortcutLabel={shortcutIdx !== undefined && shortcutIdx < 9
-        ? `${modLabel}${shortcutIdx + 1}`
-        : undefined}
-    />
-    <!-- Drag-edge fade: continues the rail's dot pattern from the
-         very left of the row into the row body for ~14px, dropping
-         off fast. Matches the project banner's fade treatment so
-         the rail → row-body transition reads as a gradient rather
-         than a hard edge. Independent of expansion state. -->
-    <div
-      aria-hidden="true"
-      style="
-        position: absolute;
-        top: 0; bottom: 0;
-        left: 0; width: 14px;
-        pointer-events: none;
-        background-image:
-          radial-gradient(circle, {railColor} 1.1px, transparent 1.6px),
-          radial-gradient(circle, {railColor} 1.1px, transparent 1.6px);
-        background-size: 5px 5px;
-        background-position: 0 0, 2.5px 2.5px;
-        background-repeat: repeat;
-        -webkit-mask-image: linear-gradient(
-          to right,
-          rgba(0, 0, 0, 1) 0%,
-          rgba(0, 0, 0, 0.3) 20%,
-          rgba(0, 0, 0, 0) 70%
-        );
-        mask-image: linear-gradient(
-          to right,
-          rgba(0, 0, 0, 1) 0%,
-          rgba(0, 0, 0, 0.3) 20%,
-          rgba(0, 0, 0, 0) 70%
-        );
-      "
-    ></div>
-  {/if}
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <div
     role="button"
     tabindex="0"
+    data-workspace-content
     on:click={onSelect}
     on:keydown={(e) => {
       if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();
         onSelect();
+      } else if (e.key === "F2" && !isDashboardWs && !isLocked) {
+        e.preventDefault();
+        void startRename();
       }
     }}
     style="flex: 1; min-width: 0;"
   >
     <div
-      style="padding: 4px 24px 2px 6px; display: flex; align-items: center; gap: 8px;"
+      style="padding: 0 24px 0 2px; display: flex; align-items: center; gap: 8px;"
     >
       <div
         style="flex: 1; overflow: hidden; display: flex; align-items: center; gap: 4px;"
       >
         {#if isAgentSpawned}
           <span
+            aria-hidden="true"
             data-workspace-agent-icon
             title="Spawned by agent dashboard"
             style="
@@ -243,29 +184,12 @@
               justify-content: center; color: {railColor};
             "
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <title>Agent-spawned workspace</title>
-              <path d="M12 8V4H8" />
-              <rect width="16" height="12" x="4" y="8" rx="2" />
-              <path d="M2 14h2" />
-              <path d="M20 14h2" />
-              <path d="M15 13v2" />
-              <path d="M9 13v2" />
-            </svg>
+            <BotIcon size={12} />
           </span>
         {/if}
-        {#if isManaged}
+        {#if isManaged && !shouldShowWorktreeStatus}
           <span
+            aria-hidden="true"
             data-workspace-worktree-icon
             title="Git worktree workspace"
             style="
@@ -273,23 +197,7 @@
               justify-content: center; color: {railColor};
             "
           >
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <title>Git worktree workspace</title>
-              <circle cx="4" cy="4" r="2" />
-              <circle cx="4" cy="12" r="2" />
-              <circle cx="12" cy="8" r="2" />
-              <path d="M4 6 L4 10" />
-              <path d="M6 4 C8 4 10 6 10 8" />
-            </svg>
+            <WorktreeIcon size={12} />
           </span>
         {/if}
         {#if dashboardHint}
@@ -340,8 +248,17 @@
             />
           </span>
         {/if}
-        <span
-          bind:this={nameEl}
+        {#if isDisco}
+          <span aria-hidden="true" style="flex-shrink: 0;"
+            >{discoEmojiFor(workspace.id)}</span
+          >
+        {/if}
+        <RenameableLabel
+          bind:this={labelComponent}
+          value={workspace.name}
+          onCommit={onRename}
+          ariaLabel="Workspace name"
+          klass="no-default-outline"
           style="
             font-weight: {isActive ? '600' : '400'};
             color: {isDisco
@@ -351,23 +268,9 @@
               : $theme.fgMuted};
             font-size: 13px; overflow: hidden;
             text-overflow: ellipsis; white-space: nowrap;
-            outline: none; padding: 2px 4px; margin-left: -4px; border-radius: 4px;
+            padding: 2px 4px; margin-left: -4px; border-radius: 4px;
           "
-          on:blur={finishRename}
-          on:keydown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              nameEl.blur();
-            }
-            if (e.key === "Escape") {
-              e.preventDefault();
-              nameEl.textContent = workspace.name;
-              nameEl.blur();
-            }
-          }}
-          >{#if isDisco}{discoEmojiFor(workspace.id)}
-          {/if}{workspace.name}</span
-        >
+        />
       </div>
 
       {#if !hideStatusBadges && hasUnread && agentBadges.length === 0}
@@ -384,57 +287,71 @@
 
     {#if !hideStatusBadges && agentBadges.length > 0 && agentBadges[0]}
       {@const badge = agentBadges[0]}
-      <div
+      <SidebarSubtitleRow
         data-harness-title-row
         title={badge.label}
         aria-hidden="true"
-        style="padding: 0 12px 4px 6px; font-size: 11px; color: {badge.color}; display: flex; align-items: center; gap: 4px; overflow: hidden; opacity: 0.85;"
+        color={badge.color}
+        padding="0 12px 4px 6px"
+        opacity={0.85}
       >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="10"
-          height="10"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          style="flex-shrink: 0;"
-        >
-          <title>Active harness session</title>
-          <path d="M12 8V4H8" />
-          <rect width="16" height="12" x="4" y="8" rx="2" />
-          <path d="M2 14h2" />
-          <path d="M20 14h2" />
-          <path d="M15 13v2" />
-          <path d="M9 13v2" />
-        </svg>
+        <BotIcon size={10} />
         <span
           style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
           >{badge.label}</span
         >
-      </div>
+      </SidebarSubtitleRow>
     {/if}
 
-    {#each isDashboardWorkspaceRow ? [] : subtitleComponents as sub (sub.id)}
-      {@const subApi = getExtensionApiById(sub.source)}
-      {#if subApi}
-        <ExtensionWrapper
-          api={subApi}
-          component={sub.component}
-          props={{ workspaceId: workspace.id, accentColor: railColor }}
-        />
-      {:else}
-        <svelte:component
-          this={sub.component as Component}
-          workspaceId={workspace.id}
-          accentColor={railColor}
-        />
-      {/if}
-    {/each}
+    {#if shouldShowWorktreeStatus && !hideStatusBadges}
+      <SidebarSubtitleRow color={$theme.fgMuted}>
+        <span style="flex-shrink: 0; display: inline-flex; color: {railColor};">
+          <WorktreeIcon size={10} />
+        </span>
+        <span
+          style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+        >
+          {worktreeDirName}
+        </span>
+      </SidebarSubtitleRow>
+    {/if}
 
-    {#if latestNotification && !hideStatusBadges && !isInsideGroup && agentBadges.length === 0}
+    {#if parentWorkspacePathMissing && !hideStatusBadges}
+      <SidebarSubtitleRow
+        data-workspace-path-missing
+        color={$theme.danger}
+        title="Workspace root path no longer exists on disk"
+      >
+        <span aria-hidden="true">⚠</span>
+        <span
+          style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+          >path missing</span
+        >
+      </SidebarSubtitleRow>
+    {/if}
+
+    {#if !isDashboardWorkspaceRow && subtitleComponents.length > 0}
+      <SidebarSubtitleRow color={$theme.fgMuted}>
+        {#each subtitleComponents as sub (sub.id)}
+          {@const subApi = getExtensionApiById(sub.source)}
+          {#if subApi}
+            <ExtensionWrapper
+              api={subApi}
+              component={sub.component}
+              props={{ workspaceId: workspace.id, accentColor: railColor }}
+            />
+          {:else}
+            <svelte:component
+              this={sub.component as Component}
+              workspaceId={workspace.id}
+              accentColor={railColor}
+            />
+          {/if}
+        {/each}
+      </SidebarSubtitleRow>
+    {/if}
+
+    {#if latestNotification && !hideStatusBadges && !isInsideWorkspace && agentBadges.length === 0}
       <div
         style="padding: 2px 12px 6px 6px; font-size: 11px; color: {$theme.notify}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
       >
@@ -442,4 +359,4 @@
       </div>
     {/if}
   </div>
-</div>
+</SidebarElement>

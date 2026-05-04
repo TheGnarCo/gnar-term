@@ -1,15 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { get } from "svelte/store";
 
-vi.mock("../lib/services/workspace-service", () => ({
-  createWorkspaceFromDef: vi.fn().mockResolvedValue("new-ws-id"),
-  switchWorkspace: vi.fn(),
+vi.mock("../lib/services/nested-workspace-service", () => ({
+  createNestedWorkspaceFromDef: vi.fn().mockResolvedValue("new-ws-id"),
+  switchNestedWorkspace: vi.fn(),
 }));
 
-// Minimal mock of the workspaces store — tests override subscribe per-test.
+// Minimal mock of the nestedWorkspaces store — tests override subscribe per-test.
 const mockWorkspacesValue: unknown[] = [];
-vi.mock("../lib/stores/workspace", () => ({
-  workspaces: {
+vi.mock("../lib/stores/nested-workspace", () => ({
+  nestedWorkspaces: {
     subscribe: vi.fn((cb: (v: unknown[]) => void) => {
       cb(mockWorkspacesValue);
       return () => {};
@@ -25,10 +25,10 @@ import {
   clearDashboardRegistry,
 } from "../lib/services/dashboard-workspace-service";
 import {
-  createWorkspaceFromDef,
-  switchWorkspace,
-} from "../lib/services/workspace-service";
-import { workspaces } from "../lib/stores/workspace";
+  createNestedWorkspaceFromDef,
+  switchNestedWorkspace,
+} from "../lib/services/nested-workspace-service";
+import { nestedWorkspaces } from "../lib/stores/nested-workspace";
 
 const MockIcon = {} as unknown as import("svelte").Component;
 const MockComponent = {} as unknown as import("svelte").Component;
@@ -83,43 +83,46 @@ describe("spawnOrNavigate", () => {
 
   it("does nothing for unregistered id", async () => {
     await spawnOrNavigate("ext:nonexistent");
-    expect(createWorkspaceFromDef).not.toHaveBeenCalled();
-    expect(switchWorkspace).not.toHaveBeenCalled();
+    expect(createNestedWorkspaceFromDef).not.toHaveBeenCalled();
+    expect(switchNestedWorkspace).not.toHaveBeenCalled();
   });
 
   it("creates workspace when none exists", async () => {
-    vi.mocked(workspaces).subscribe = vi.fn((cb) => {
+    vi.mocked(nestedWorkspaces).subscribe = vi.fn((cb) => {
       cb([]);
       return () => {};
     });
     registerDashboardWorkspaceType(makeEntry("ext:foo"));
     await spawnOrNavigate("ext:foo");
-    expect(createWorkspaceFromDef).toHaveBeenCalledWith(
+    expect(createNestedWorkspaceFromDef).toHaveBeenCalledWith(
       expect.objectContaining({
         name: "Foo",
         layout: { pane: { surfaces: [] } },
         metadata: expect.objectContaining({
-          dashboardWorkspaceId: "ext:foo",
+          dashboardNestedWorkspaceId: "ext:foo",
           isDashboard: true,
         }),
       }),
     );
-    expect(switchWorkspace).not.toHaveBeenCalled();
+    expect(switchNestedWorkspace).not.toHaveBeenCalled();
   });
 
   it("switches to existing workspace instead of creating", async () => {
-    vi.mocked(workspaces).subscribe = vi.fn((cb) => {
+    vi.mocked(nestedWorkspaces).subscribe = vi.fn((cb) => {
       cb([
         {
           id: "ws-1",
-          metadata: { dashboardWorkspaceId: "ext:foo", isDashboard: true },
+          metadata: {
+            dashboardNestedWorkspaceId: "ext:foo",
+            isDashboard: true,
+          },
         },
       ]);
       return () => {};
     });
     registerDashboardWorkspaceType(makeEntry("ext:foo"));
     await spawnOrNavigate("ext:foo");
-    expect(switchWorkspace).toHaveBeenCalledWith(0);
-    expect(createWorkspaceFromDef).not.toHaveBeenCalled();
+    expect(switchNestedWorkspace).toHaveBeenCalledWith(0);
+    expect(createNestedWorkspaceFromDef).not.toHaveBeenCalled();
   });
 });

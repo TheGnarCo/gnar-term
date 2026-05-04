@@ -54,6 +54,20 @@ vi.mock("../lib/services/agent-detection-service", () => ({
   agentsStore: agentsStoreMock,
 }));
 
+const { interruptAgentMock, killAgentMock, sendKeysToAgentMock } = vi.hoisted(
+  () => ({
+    interruptAgentMock: vi.fn().mockResolvedValue(true),
+    killAgentMock: vi.fn().mockResolvedValue(true),
+    sendKeysToAgentMock: vi.fn().mockResolvedValue(true),
+  }),
+);
+
+vi.mock("../lib/services/agent-intervention-service", () => ({
+  interruptAgent: interruptAgentMock,
+  killAgent: killAgentMock,
+  sendKeysToAgent: sendKeysToAgentMock,
+}));
+
 import {
   dispatch,
   _getToolsForTest,
@@ -67,8 +81,11 @@ import {
   _resetMcpSidebarForTest,
 } from "../lib/stores/mcp-sidebar";
 import { _resetEventBufferForTest } from "../lib/services/mcp-event-buffer";
-import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
-import type { Workspace, Pane } from "../lib/types";
+import {
+  nestedWorkspaces,
+  activeNestedWorkspaceIdx,
+} from "../lib/stores/nested-workspace";
+import type { NestedWorkspace, Pane } from "../lib/types";
 import { getAllSurfaces } from "../lib/types";
 import {
   registerSurfaceType,
@@ -78,11 +95,6 @@ import {
   registerCommand,
   resetCommands,
 } from "../lib/services/command-registry";
-import {
-  registerSidebarTab,
-  resetSidebarTabs,
-  activeSidebarTabStore,
-} from "../lib/services/sidebar-tab-registry";
 import {
   registerWorkspaceAction,
   resetWorkspaceActions,
@@ -97,9 +109,12 @@ function rpc(method: string, params?: unknown, id: number = 1) {
 }
 
 /** Build a deterministic workspace fixture with a given id and a single pane. */
-function makeWorkspace(id: string, name = id): { ws: Workspace; pane: Pane } {
+function makeNestedWorkspace(
+  id: string,
+  name = id,
+): { ws: NestedWorkspace; pane: Pane } {
   const pane: Pane = { id: `${id}-pane`, surfaces: [], activeSurfaceId: null };
-  const ws: Workspace = {
+  const ws: NestedWorkspace = {
     id,
     name,
     splitRoot: { type: "pane", pane },
@@ -114,8 +129,8 @@ describe("MCP server JSON-RPC", () => {
     _resetMcpSidebarForTest();
     _resetEventBufferForTest();
     _resetMcpServerForTest();
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
+    nestedWorkspaces.set([]);
+    activeNestedWorkspaceIdx.set(-1);
     agentsStoreMock.set([]);
   });
 
@@ -133,8 +148,7 @@ describe("MCP server JSON-RPC", () => {
     const names = tools.map((t) => t.name).sort();
     expect(names).toEqual(
       [
-        "activate_sidebar_tab",
-        "add_dashboard_to_group",
+        "add_dashboard_to_workspace",
         "close_preview",
         "create_preview_file",
         "dispatch_tasks",
@@ -146,7 +160,9 @@ describe("MCP server JSON-RPC", () => {
         "get_status_for_workspace",
         "invoke_command",
         "invoke_context_menu_item",
+        "interrupt_agent",
         "invoke_workspace_action",
+        "kill_agent",
         "kill_session",
         "list_agents",
         "list_commands",
@@ -159,7 +175,6 @@ describe("MCP server JSON-RPC", () => {
         "list_dashboard_workspaces",
         "list_panes",
         "list_sidebar_sections",
-        "list_sidebar_tabs",
         "list_surface_types",
         "list_workspace_actions",
         "list_workspace_subtitles",
@@ -168,10 +183,11 @@ describe("MCP server JSON-RPC", () => {
         "poll_events",
         "read_file",
         "read_output",
-        "remove_dashboard_from_group",
+        "remove_dashboard_from_workspace",
         "remove_sidebar_section",
         "render_sidebar",
         "send_keys",
+        "send_keys_to_agent",
         "send_prompt",
         "spawn_agent",
         "spawn_preview",
@@ -179,7 +195,7 @@ describe("MCP server JSON-RPC", () => {
         "write_file",
       ].sort(),
     );
-    expect(names).toHaveLength(44);
+    expect(names).toHaveLength(45);
     for (const t of tools) {
       expect(t).toHaveProperty("inputSchema");
     }
@@ -248,10 +264,10 @@ describe("MCP server JSON-RPC", () => {
   });
 
   it("render_sidebar with an explicit workspace_id stores in that workspace", async () => {
-    const { ws: wsA } = makeWorkspace("ws-A");
-    const { ws: wsB } = makeWorkspace("ws-B");
-    workspaces.set([wsA, wsB]);
-    activeWorkspaceIdx.set(0); // user is looking at A
+    const { ws: wsA } = makeNestedWorkspace("ws-A");
+    const { ws: wsB } = makeNestedWorkspace("ws-B");
+    nestedWorkspaces.set([wsA, wsB]);
+    activeNestedWorkspaceIdx.set(0); // user is looking at A
 
     // Adversarial: bind connection to A, then explicitly target B. Override
     // must win — the section must end up in B, not A.
@@ -281,10 +297,10 @@ describe("MCP server JSON-RPC", () => {
   });
 
   it("render_sidebar uses the connection binding when no workspace_id is passed", async () => {
-    const { ws: wsA } = makeWorkspace("ws-A");
-    const { ws: wsB } = makeWorkspace("ws-B");
-    workspaces.set([wsA, wsB]);
-    activeWorkspaceIdx.set(0); // user looks at A
+    const { ws: wsA } = makeNestedWorkspace("ws-A");
+    const { ws: wsB } = makeNestedWorkspace("ws-B");
+    nestedWorkspaces.set([wsA, wsB]);
+    activeNestedWorkspaceIdx.set(0); // user looks at A
 
     // Adversarial: bind connection to B but make A the active workspace. The
     // render must follow the binding (B), not user focus (A).
@@ -307,9 +323,9 @@ describe("MCP server JSON-RPC", () => {
   });
 
   it("render_sidebar errors clearly when unbound and no workspace_id passed", async () => {
-    const { ws: wsA } = makeWorkspace("ws-A");
-    workspaces.set([wsA]);
-    activeWorkspaceIdx.set(0); // there IS an active workspace, but agent is unbound
+    const { ws: wsA } = makeNestedWorkspace("ws-A");
+    nestedWorkspaces.set([wsA]);
+    activeNestedWorkspaceIdx.set(0); // there IS an active workspace, but agent is unbound
 
     const ctx = _testContext(null);
     const resp = await dispatch(
@@ -331,9 +347,9 @@ describe("MCP server JSON-RPC", () => {
   });
 
   it("remove_sidebar_section uses the binding workspace", async () => {
-    const { ws: wsA } = makeWorkspace("ws-A");
-    workspaces.set([wsA]);
-    activeWorkspaceIdx.set(0);
+    const { ws: wsA } = makeNestedWorkspace("ws-A");
+    nestedWorkspaces.set([wsA]);
+    activeNestedWorkspaceIdx.set(0);
 
     const ctx = _testContext({ workspaceId: "ws-A" });
     await dispatch(
@@ -357,9 +373,9 @@ describe("MCP server JSON-RPC", () => {
   });
 
   it("poll_events returns the cursor and events array", async () => {
-    const { ws: wsA } = makeWorkspace("ws-A");
-    workspaces.set([wsA]);
-    activeWorkspaceIdx.set(0);
+    const { ws: wsA } = makeNestedWorkspace("ws-A");
+    nestedWorkspaces.set([wsA]);
+    activeNestedWorkspaceIdx.set(0);
     const ctx = _testContext({ workspaceId: "ws-A" });
     await dispatch(
       rpc("tools/call", {
@@ -416,10 +432,80 @@ describe("MCP server JSON-RPC", () => {
     expect(result).toEqual({ agents: [] });
   });
 
+  it("interrupt_agent delegates to interruptAgent and returns ok: true", async () => {
+    interruptAgentMock.mockResolvedValueOnce(true);
+    const resp = await dispatch(
+      rpc("tools/call", {
+        name: "interrupt_agent",
+        arguments: { agent_id: "agent-1" },
+      }),
+    );
+    expect(interruptAgentMock).toHaveBeenCalledWith("agent-1");
+    expect((resp as any).result.structuredContent).toEqual({ ok: true });
+  });
+
+  it("interrupt_agent returns ok: false when agent not found", async () => {
+    interruptAgentMock.mockResolvedValueOnce(false);
+    const resp = await dispatch(
+      rpc("tools/call", {
+        name: "interrupt_agent",
+        arguments: { agent_id: "nope" },
+      }),
+    );
+    expect((resp as any).result.structuredContent).toEqual({ ok: false });
+  });
+
+  it("kill_agent delegates to killAgent and returns ok: true", async () => {
+    killAgentMock.mockResolvedValueOnce(true);
+    const resp = await dispatch(
+      rpc("tools/call", {
+        name: "kill_agent",
+        arguments: { agent_id: "agent-1" },
+      }),
+    );
+    expect(killAgentMock).toHaveBeenCalledWith("agent-1");
+    expect((resp as any).result.structuredContent).toEqual({ ok: true });
+  });
+
+  it("kill_agent returns ok: false when agent not found", async () => {
+    killAgentMock.mockResolvedValueOnce(false);
+    const resp = await dispatch(
+      rpc("tools/call", {
+        name: "kill_agent",
+        arguments: { agent_id: "nope" },
+      }),
+    );
+    expect((resp as any).result.structuredContent).toEqual({ ok: false });
+  });
+
+  it("send_keys_to_agent delegates to sendKeysToAgent and returns ok: true", async () => {
+    sendKeysToAgentMock.mockResolvedValueOnce(true);
+    const resp = await dispatch(
+      rpc("tools/call", {
+        name: "send_keys_to_agent",
+        arguments: { agent_id: "agent-1", keys: "hello\r" },
+      }),
+    );
+    expect(sendKeysToAgentMock).toHaveBeenCalledWith("agent-1", "hello\r");
+    expect((resp as any).result.structuredContent).toEqual({ ok: true });
+  });
+
+  it("send_keys_to_agent throws an error with agent_id when agent not found", async () => {
+    sendKeysToAgentMock.mockResolvedValueOnce(false);
+    const resp = await dispatch(
+      rpc("tools/call", {
+        name: "send_keys_to_agent",
+        arguments: { agent_id: "missing-agent", keys: "\x03" },
+      }),
+    );
+    expect((resp as any).error.message).toContain("missing-agent");
+    expect((resp as any).error.message).toContain("not found or has no PTY");
+  });
+
   it("split_pane creates a new pane in the target workspace and returns pane_id", async () => {
-    // makeWorkspace returns { ws, pane } — see the fixture helper at line ~99
-    const { ws, pane } = makeWorkspace("ws-split");
-    workspaces.set([ws]);
+    // makeNestedWorkspace returns { ws, pane } — see the fixture helper at line ~99
+    const { ws, pane } = makeNestedWorkspace("ws-split");
+    nestedWorkspaces.set([ws]);
     const ctx = _testContext({ paneId: pane.id, workspaceId: ws.id });
 
     const resp = await dispatch(
@@ -437,8 +523,8 @@ describe("MCP server JSON-RPC", () => {
   });
 
   it("split_pane throws when surface_type is preview but preview_path is missing", async () => {
-    const { ws, pane } = makeWorkspace("ws-split-err");
-    workspaces.set([ws]);
+    const { ws, pane } = makeNestedWorkspace("ws-split-err");
+    nestedWorkspaces.set([ws]);
     const ctx = _testContext({ paneId: pane.id, workspaceId: ws.id });
 
     const resp = await dispatch(
@@ -456,8 +542,8 @@ describe("MCP server JSON-RPC", () => {
   });
 
   it("split_pane errors when workspace_id is unknown", async () => {
-    const { ws } = makeWorkspace("ws-split-known");
-    workspaces.set([ws]);
+    const { ws } = makeNestedWorkspace("ws-split-known");
+    nestedWorkspaces.set([ws]);
     const ctx = _testContext({ workspaceId: ws.id });
 
     const resp = await dispatch(
@@ -474,8 +560,8 @@ describe("MCP server JSON-RPC", () => {
   });
 
   it("split_pane errors when pane_id is unknown", async () => {
-    const { ws } = makeWorkspace("ws-split-known2");
-    workspaces.set([ws]);
+    const { ws } = makeNestedWorkspace("ws-split-known2");
+    nestedWorkspaces.set([ws]);
     const ctx = _testContext({ workspaceId: ws.id });
 
     const resp = await dispatch(
@@ -492,8 +578,8 @@ describe("MCP server JSON-RPC", () => {
   });
 
   it("split_pane with surface_type preview creates a new pane and opens a preview surface", async () => {
-    const { ws, pane } = makeWorkspace("ws-split-preview");
-    workspaces.set([ws]);
+    const { ws, pane } = makeNestedWorkspace("ws-split-preview");
+    nestedWorkspaces.set([ws]);
     const ctx = _testContext({ paneId: pane.id, workspaceId: ws.id });
 
     const resp = await dispatch(
@@ -563,23 +649,23 @@ describe("MCP server JSON-RPC", () => {
   });
 
   it("list_workspaces wraps the list in a record (structuredContent must be an object)", async () => {
-    const { ws: wsA } = makeWorkspace("ws-A");
-    workspaces.set([wsA]);
-    activeWorkspaceIdx.set(0);
+    const { ws: wsA } = makeNestedWorkspace("ws-A");
+    nestedWorkspaces.set([wsA]);
+    activeNestedWorkspaceIdx.set(0);
     const r = await dispatch(
       rpc("tools/call", { name: "list_workspaces", arguments: {} }),
     );
     const result = (r as any).result.structuredContent;
     expect(result).not.toBeNull();
     expect(Array.isArray(result)).toBe(false);
-    expect(Array.isArray(result.workspaces)).toBe(true);
-    expect(result.workspaces[0].id).toBe("ws-A");
+    expect(Array.isArray(result.nestedWorkspaces)).toBe(true);
+    expect(result.nestedWorkspaces[0].id).toBe("ws-A");
   });
 
   it("list_panes wraps the list in a record", async () => {
-    const { ws: wsA } = makeWorkspace("ws-A");
-    workspaces.set([wsA]);
-    activeWorkspaceIdx.set(0);
+    const { ws: wsA } = makeNestedWorkspace("ws-A");
+    nestedWorkspaces.set([wsA]);
+    activeNestedWorkspaceIdx.set(0);
     const r = await dispatch(
       rpc("tools/call", { name: "list_panes", arguments: {} }),
     );
@@ -646,22 +732,22 @@ describe("MCP server JSON-RPC", () => {
 describe("resolveTarget — connection-binding resolution rules (the v1 bug fence)", () => {
   beforeEach(() => {
     _resetMcpServerForTest();
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
+    nestedWorkspaces.set([]);
+    activeNestedWorkspaceIdx.set(-1);
   });
 
   it("rule 1: explicit pane_id wins, returns its current workspace", () => {
-    const { ws: wsA, pane: paneA } = makeWorkspace("ws-A");
-    const { ws: wsB } = makeWorkspace("ws-B");
-    workspaces.set([wsA, wsB]);
-    activeWorkspaceIdx.set(1); // user looks at B (adversarial)
+    const { ws: wsA, pane: paneA } = makeNestedWorkspace("ws-A");
+    const { ws: wsB } = makeNestedWorkspace("ws-B");
+    nestedWorkspaces.set([wsA, wsB]);
+    activeNestedWorkspaceIdx.set(1); // user looks at B (adversarial)
 
     // Bind the agent to A, but pass an explicit pane in B.
-    const { pane: paneB } = makeWorkspace("ws-B"); // separate fixture
+    const { pane: paneB } = makeNestedWorkspace("ws-B"); // separate fixture
     // Replace wsB to contain a pane we can target.
     wsB.splitRoot = { type: "pane", pane: paneB };
     wsB.activePaneId = paneB.id;
-    workspaces.set([wsA, wsB]);
+    nestedWorkspaces.set([wsA, wsB]);
 
     const ctx = _testContext({ paneId: paneA.id, workspaceId: "ws-A" });
     const resolved = _resolveTargetForTest({ pane_id: paneB.id }, ctx);
@@ -671,9 +757,9 @@ describe("resolveTarget — connection-binding resolution rules (the v1 bug fenc
   });
 
   it("rule 1: explicit pane_id pointing at a closed pane errors (no fallback)", () => {
-    const { ws: wsA } = makeWorkspace("ws-A");
-    workspaces.set([wsA]);
-    activeWorkspaceIdx.set(0);
+    const { ws: wsA } = makeNestedWorkspace("ws-A");
+    nestedWorkspaces.set([wsA]);
+    activeNestedWorkspaceIdx.set(0);
     const ctx = _testContext({ workspaceId: "ws-A" });
     expect(() => _resolveTargetForTest({ pane_id: "ghost" }, ctx)).toThrow(
       /not found/,
@@ -681,10 +767,10 @@ describe("resolveTarget — connection-binding resolution rules (the v1 bug fenc
   });
 
   it("rule 2: explicit workspace_id wins over binding", () => {
-    const { ws: wsA } = makeWorkspace("ws-A");
-    const { ws: wsB } = makeWorkspace("ws-B");
-    workspaces.set([wsA, wsB]);
-    activeWorkspaceIdx.set(0); // user looks at A
+    const { ws: wsA } = makeNestedWorkspace("ws-A");
+    const { ws: wsB } = makeNestedWorkspace("ws-B");
+    nestedWorkspaces.set([wsA, wsB]);
+    activeNestedWorkspaceIdx.set(0); // user looks at A
     const ctx = _testContext({ workspaceId: "ws-A" });
     const resolved = _resolveTargetForTest({ workspace_id: "ws-B" }, ctx);
     expect(resolved.workspace.id).toBe("ws-B");
@@ -692,8 +778,8 @@ describe("resolveTarget — connection-binding resolution rules (the v1 bug fenc
   });
 
   it("rule 2: explicit but unknown workspace_id errors", () => {
-    const { ws: wsA } = makeWorkspace("ws-A");
-    workspaces.set([wsA]);
+    const { ws: wsA } = makeNestedWorkspace("ws-A");
+    nestedWorkspaces.set([wsA]);
     const ctx = _testContext({ workspaceId: "ws-A" });
     expect(() =>
       _resolveTargetForTest({ workspace_id: "ws-ghost" }, ctx),
@@ -701,10 +787,10 @@ describe("resolveTarget — connection-binding resolution rules (the v1 bug fenc
   });
 
   it("rule 3: binding pane wins when no args, ignores user focus on a different workspace", () => {
-    const { ws: wsA, pane: paneA } = makeWorkspace("ws-A");
-    const { ws: wsB } = makeWorkspace("ws-B");
-    workspaces.set([wsA, wsB]);
-    activeWorkspaceIdx.set(1); // ADVERSARIAL: user looks at B
+    const { ws: wsA, pane: paneA } = makeNestedWorkspace("ws-A");
+    const { ws: wsB } = makeNestedWorkspace("ws-B");
+    nestedWorkspaces.set([wsA, wsB]);
+    activeNestedWorkspaceIdx.set(1); // ADVERSARIAL: user looks at B
     const ctx = _testContext({ paneId: paneA.id, workspaceId: "ws-A" });
     const resolved = _resolveTargetForTest({}, ctx);
     expect(resolved.workspace.id).toBe("ws-A"); // binding wins
@@ -713,9 +799,9 @@ describe("resolveTarget — connection-binding resolution rules (the v1 bug fenc
   });
 
   it("rule 3 with cross-workspace move: pane_id is stable, workspace re-derived", () => {
-    const { ws: wsA, pane: paneA } = makeWorkspace("ws-A");
-    const { ws: wsB } = makeWorkspace("ws-B");
-    workspaces.set([wsA, wsB]);
+    const { ws: wsA, pane: paneA } = makeNestedWorkspace("ws-A");
+    const { ws: wsB } = makeNestedWorkspace("ws-B");
+    nestedWorkspaces.set([wsA, wsB]);
 
     // Move paneA into wsB by mutating splitRoot.
     wsA.splitRoot = {
@@ -723,7 +809,7 @@ describe("resolveTarget — connection-binding resolution rules (the v1 bug fenc
       pane: { id: "wsA-empty", surfaces: [], activeSurfaceId: null },
     };
     wsB.splitRoot = { type: "pane", pane: paneA };
-    workspaces.update((l) => [...l]);
+    nestedWorkspaces.update((l) => [...l]);
 
     // Connection still bound to paneA (originally in ws-A). After the move the
     // resolver must report the pane's CURRENT workspace.
@@ -734,9 +820,9 @@ describe("resolveTarget — connection-binding resolution rules (the v1 bug fenc
   });
 
   it("rule 4: when bound pane is closed, falls through to bound workspace", () => {
-    const { ws: wsA } = makeWorkspace("ws-A");
-    workspaces.set([wsA]);
-    activeWorkspaceIdx.set(0);
+    const { ws: wsA } = makeNestedWorkspace("ws-A");
+    nestedWorkspaces.set([wsA]);
+    activeNestedWorkspaceIdx.set(0);
     const ctx = _testContext({ paneId: "closed-pane", workspaceId: "ws-A" });
     const resolved = _resolveTargetForTest({}, ctx);
     expect(resolved.workspace.id).toBe("ws-A");
@@ -745,9 +831,9 @@ describe("resolveTarget — connection-binding resolution rules (the v1 bug fenc
   });
 
   it("rule 5: unbound + no args = error (NEVER fall back to active workspace)", () => {
-    const { ws: wsA } = makeWorkspace("ws-A");
-    workspaces.set([wsA]);
-    activeWorkspaceIdx.set(0); // there IS an active workspace
+    const { ws: wsA } = makeNestedWorkspace("ws-A");
+    nestedWorkspaces.set([wsA]);
+    activeNestedWorkspaceIdx.set(0); // there IS an active workspace
     const ctx = _testContext(null);
     expect(() => _resolveTargetForTest({}, ctx)).toThrow(
       /no pane\/workspace context/,
@@ -756,10 +842,10 @@ describe("resolveTarget — connection-binding resolution rules (the v1 bug fenc
 
   it("THE V1 BUG FENCE: bound to W1, GUI focused on W2 → still resolves to W1", () => {
     // This is the exact bug shipped on 2026-04-16. Permanent regression test.
-    const { ws: w1 } = makeWorkspace("ws-1");
-    const { ws: w2 } = makeWorkspace("ws-2");
-    workspaces.set([w1, w2]);
-    activeWorkspaceIdx.set(1); // focus is W2
+    const { ws: w1 } = makeNestedWorkspace("ws-1");
+    const { ws: w2 } = makeNestedWorkspace("ws-2");
+    nestedWorkspaces.set([w1, w2]);
+    activeNestedWorkspaceIdx.set(1); // focus is W2
     const ctx = _testContext({ workspaceId: "ws-1" });
     const resolved = _resolveTargetForTest({}, ctx);
     expect(resolved.workspace.id).toBe("ws-1");
@@ -771,9 +857,9 @@ describe("resolveTarget — connection-binding resolution rules (the v1 bug fenc
     // the same binding pane. findParentSplit + DOM render become O(depth)
     // per spawn → O(N²) total → UI freeze. The original freeze we hit on
     // 2026-04-16. Regression test: resolveTarget must prefer lastSpawnedPaneId.
-    const { ws, pane: hostPane } = makeWorkspace("ws-host");
-    workspaces.set([ws]);
-    activeWorkspaceIdx.set(0);
+    const { ws, pane: hostPane } = makeNestedWorkspace("ws-host");
+    nestedWorkspaces.set([ws]);
+    activeNestedWorkspaceIdx.set(0);
     const ctx = _testContext({ paneId: hostPane.id, workspaceId: "ws-host" });
 
     // First resolution: no lastSpawnedPaneId yet → use binding pane.
@@ -791,7 +877,7 @@ describe("resolveTarget — connection-binding resolution rules (the v1 bug fenc
         { type: "pane", pane: newPane },
       ],
     };
-    workspaces.set([ws]);
+    nestedWorkspaces.set([ws]);
     ctx.lastSpawnedPaneId = newPane.id;
 
     // Next resolution: must use the new pane, NOT the binding pane.
@@ -800,9 +886,9 @@ describe("resolveTarget — connection-binding resolution rules (the v1 bug fenc
   });
 
   it("lastSpawnedPaneId is ignored when the pane was closed (falls through to binding)", () => {
-    const { ws, pane: hostPane } = makeWorkspace("ws-host");
-    workspaces.set([ws]);
-    activeWorkspaceIdx.set(0);
+    const { ws, pane: hostPane } = makeNestedWorkspace("ws-host");
+    nestedWorkspaces.set([ws]);
+    activeNestedWorkspaceIdx.set(0);
     const ctx = _testContext({ paneId: hostPane.id, workspaceId: "ws-host" });
     ctx.lastSpawnedPaneId = "never-existed";
     const resolved = _resolveTargetForTest({}, ctx);
@@ -814,8 +900,8 @@ describe("MCP mirror tools — surface types", () => {
   beforeEach(() => {
     resetSurfaceTypes();
     _resetMcpServerForTest();
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
+    nestedWorkspaces.set([]);
+    activeNestedWorkspaceIdx.set(-1);
   });
 
   it("list_surface_types returns registered types", async () => {
@@ -834,8 +920,8 @@ describe("MCP mirror tools — surface types", () => {
 
   it("open_surface rejects an unregistered surface type", async () => {
     const ctx = _testContext({ workspaceId: "ws-1" });
-    const { ws } = makeWorkspace("ws-1");
-    workspaces.set([ws]);
+    const { ws } = makeNestedWorkspace("ws-1");
+    nestedWorkspaces.set([ws]);
     const resp = await dispatch(
       rpc("tools/call", {
         name: "open_surface",
@@ -854,8 +940,8 @@ describe("MCP mirror tools — surface types", () => {
       component: {},
       source: "test",
     });
-    const { ws } = makeWorkspace("ws-1");
-    workspaces.set([ws]);
+    const { ws } = makeNestedWorkspace("ws-1");
+    nestedWorkspaces.set([ws]);
     const ctx = _testContext({ workspaceId: "ws-1" });
     const resp = await dispatch(
       rpc("tools/call", {
@@ -872,7 +958,7 @@ describe("MCP mirror tools — surface types", () => {
     const r = (resp as any).result.structuredContent;
     expect(r.surface_id).toBeTruthy();
     expect(r.workspace_id).toBe("ws-1");
-    const placed = getAllSurfaces(get(workspaces)[0]!);
+    const placed = getAllSurfaces(get(nestedWorkspaces)[0]!);
     expect(placed).toHaveLength(1);
     expect(placed[0]!.kind).toBe("extension");
     expect(placed[0]!.title).toBe("Test Panel");
@@ -935,52 +1021,6 @@ describe("MCP mirror tools — commands", () => {
     );
     expect((resp as any).error.code).toBe(-32000);
     expect((resp as any).error.message).toMatch(/Unknown command/);
-  });
-});
-
-describe("MCP mirror tools — sidebar tabs", () => {
-  beforeEach(() => resetSidebarTabs());
-
-  it("list_sidebar_tabs returns registered tabs", async () => {
-    registerSidebarTab({
-      id: "files",
-      label: "Files",
-      component: {},
-      source: "file-browser",
-    });
-    const r = await dispatch(
-      rpc("tools/call", { name: "list_sidebar_tabs", arguments: {} }),
-    );
-    expect((r as any).result.structuredContent.tabs).toEqual([
-      { id: "files", label: "Files", source: "file-browser" },
-    ]);
-  });
-
-  it("activate_sidebar_tab updates the active tab store", async () => {
-    registerSidebarTab({
-      id: "changes",
-      label: "Changes",
-      component: {},
-      source: "diff-viewer",
-    });
-    const r = await dispatch(
-      rpc("tools/call", {
-        name: "activate_sidebar_tab",
-        arguments: { tab_id: "changes" },
-      }),
-    );
-    expect((r as any).result.structuredContent).toEqual({ ok: true });
-    expect(get(activeSidebarTabStore)).toBe("changes");
-  });
-
-  it("activate_sidebar_tab rejects unknown tab ids", async () => {
-    const resp = await dispatch(
-      rpc("tools/call", {
-        name: "activate_sidebar_tab",
-        arguments: { tab_id: "nope" },
-      }),
-    );
-    expect((resp as any).error.code).toBe(-32000);
   });
 });
 
@@ -1236,7 +1276,7 @@ describe("MCP mirror tools — sidebar sections", () => {
   });
 });
 
-describe("MCP mirror tools — dashboard workspaces", () => {
+describe("MCP mirror tools — dashboard nestedWorkspaces", () => {
   beforeEach(async () => {
     const mod = await import("../lib/services/dashboard-workspace-service");
     mod.clearDashboardRegistry();
@@ -1319,14 +1359,14 @@ describe("MCP mirror tools — status items", () => {
   beforeEach(async () => {
     const mod = await import("../lib/services/status-registry");
     mod.statusRegistry.reset();
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
+    nestedWorkspaces.set([]);
+    activeNestedWorkspaceIdx.set(-1);
   });
 
   it("get_status_for_workspace returns items for the resolved workspace", async () => {
     const mod = await import("../lib/services/status-registry");
-    const { ws } = makeWorkspace("ws-1");
-    workspaces.set([ws]);
+    const { ws } = makeNestedWorkspace("ws-1");
+    nestedWorkspaces.set([ws]);
     mod.setStatusItem("git", "ws-1", "branch", {
       category: "git",
       priority: 10,
@@ -1356,9 +1396,9 @@ describe("MCP mirror tools — status items", () => {
 
   it("get_status_for_workspace honors explicit workspace_id", async () => {
     const mod = await import("../lib/services/status-registry");
-    const { ws: a } = makeWorkspace("ws-a");
-    const { ws: b } = makeWorkspace("ws-b");
-    workspaces.set([a, b]);
+    const { ws: a } = makeNestedWorkspace("ws-a");
+    const { ws: b } = makeNestedWorkspace("ws-b");
+    nestedWorkspaces.set([a, b]);
     mod.setStatusItem("git", "ws-b", "branch", {
       category: "git",
       priority: 10,
@@ -1387,8 +1427,8 @@ describe("tool metadata", () => {
     }
   });
 
-  it("tool count matches spec (44)", () => {
-    expect(_getToolsForTest()).toHaveLength(44);
+  it("tool count matches spec (45)", () => {
+    expect(_getToolsForTest()).toHaveLength(45);
   });
 });
 
@@ -1397,8 +1437,8 @@ describe("MCP — spawn_agent worktree flag", () => {
     invokeMock.mockReset();
     spawnAgentInWorktreeMock.mockReset();
     _resetMcpServerForTest();
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
+    nestedWorkspaces.set([]);
+    activeNestedWorkspaceIdx.set(-1);
   });
 
   it("delegates to spawnAgentInWorktree when worktree flag is set", async () => {
@@ -1411,8 +1451,8 @@ describe("MCP — spawn_agent worktree flag", () => {
     });
     // Bind to an existing workspace so resolveTarget for repoPath fallback
     // wouldn't fire (we provide repoPath explicitly here).
-    const { ws } = makeWorkspace("ws-host");
-    workspaces.set([ws]);
+    const { ws } = makeNestedWorkspace("ws-host");
+    nestedWorkspaces.set([ws]);
     const ctx = _testContext({ workspaceId: "ws-host" });
 
     const resp = await dispatch(
@@ -1484,13 +1524,13 @@ describe("MCP — spawn_agent worktree flag", () => {
         },
       ],
     };
-    const ws: Workspace = {
+    const ws: NestedWorkspace = {
       id: "ws-host",
       name: "host",
       splitRoot: { type: "pane", pane },
       activePaneId: pane.id,
     };
-    workspaces.set([ws]);
+    nestedWorkspaces.set([ws]);
     const ctx = _testContext({ workspaceId: "ws-host", paneId: "host-pane" });
 
     await dispatch(
@@ -1565,8 +1605,8 @@ describe("kill_session — unlisten cleanup", () => {
   beforeEach(() => {
     invokeMock.mockReset();
     _resetMcpServerForTest();
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
+    nestedWorkspaces.set([]);
+    activeNestedWorkspaceIdx.set(-1);
   });
 
   it("calls the pending unlisten when kill_session is invoked", async () => {

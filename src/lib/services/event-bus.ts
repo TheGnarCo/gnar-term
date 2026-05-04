@@ -69,7 +69,9 @@ export type AppEvent =
       surfaceId: string;
       workspaceId: string;
       agentName: string;
-    };
+    }
+  | { type: "agent:interrupted"; agentId: string; agentName: string }
+  | { type: "agent:killed"; agentId: string; agentName: string };
 
 export type AppEventType = AppEvent["type"];
 

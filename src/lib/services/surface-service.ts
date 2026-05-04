@@ -1,12 +1,12 @@
 import { get } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
 import {
-  workspaces,
-  activeWorkspaceIdx,
+  nestedWorkspaces,
+  activeNestedWorkspaceIdx,
   activeWorkspace,
   activePane,
   activeSurface,
-} from "../stores/workspace";
+} from "../stores/nested-workspace";
 import { renamingSurfaceId } from "../stores/ui";
 import { createTerminalSurface } from "../terminal-service";
 import {
@@ -14,13 +14,16 @@ import {
   uid,
   isTerminalSurface,
   isExtensionSurface,
-  type Workspace,
+  type NestedWorkspace,
   type Pane,
   type Surface,
   type PreviewSurface,
 } from "../types";
 import { removePane, splitPaneEmpty } from "./pane-service";
-import { closeWorkspace, schedulePersist } from "./workspace-service";
+import {
+  closeNestedWorkspace,
+  schedulePersist,
+} from "./nested-workspace-service";
 import { findPreviewSurfaceByPath } from "./preview-surface-registry";
 import { safeFocus, getCwdForSurface } from "./service-helpers";
 import { eventBus } from "./event-bus";
@@ -33,19 +36,19 @@ export function selectSurface(paneId: string, surfaceId: string) {
   pane.activeSurfaceId = surfaceId;
   const s = pane.surfaces.find((s) => s.id === surfaceId);
   if (s) s.hasUnread = false;
-  workspaces.update((l) => [...l]);
+  nestedWorkspaces.update((l) => [...l]);
   eventBus.emit({ type: "surface:activated", id: surfaceId, paneId });
   void safeFocus(s);
 }
 
 /**
  * Close all extension surfaces matching the given surface type IDs across all
- * workspaces. Used during extension deactivation to prevent orphaned surfaces.
+ * nestedWorkspaces. Used during extension deactivation to prevent orphaned surfaces.
  */
 export function closeExtensionSurfaces(surfaceTypeIds: string[]): void {
   if (surfaceTypeIds.length === 0) return;
   const typeSet = new Set(surfaceTypeIds);
-  const wsList = get(workspaces);
+  const wsList = get(nestedWorkspaces);
 
   for (const ws of wsList) {
     const panes = getAllPanes(ws.splitRoot);
@@ -62,10 +65,10 @@ export function closeExtensionSurfaces(surfaceTypeIds: string[]): void {
 }
 
 export function closeSurfaceById(paneId: string, surfaceId: string) {
-  // Search all workspaces — MCP can target a surface in a backgrounded
+  // Search all nestedWorkspaces — MCP can target a surface in a backgrounded
   // workspace, and the App.svelte callsite passes a paneId we know lives
   // in the active workspace, so an exhaustive scan covers both.
-  for (const ws of get(workspaces)) {
+  for (const ws of get(nestedWorkspaces)) {
     const pane = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
     if (!pane) continue;
     const idx = pane.surfaces.findIndex((s) => s.id === surfaceId);
@@ -75,7 +78,7 @@ export function closeSurfaceById(paneId: string, surfaceId: string) {
   }
 }
 
-function removeSurface(ws: Workspace, pane: Pane, surfaceIdx: number) {
+function removeSurface(ws: NestedWorkspace, pane: Pane, surfaceIdx: number) {
   const surface = pane.surfaces[surfaceIdx]!;
   const surfaceId = surface.id;
   const paneId = pane.id;
@@ -98,17 +101,17 @@ function removeSurface(ws: Workspace, pane: Pane, surfaceIdx: number) {
     const paneCount = getAllPanes(ws.splitRoot).length;
     if (paneCount > 1) {
       removePane(ws, pane);
-      workspaces.update((l) => [...l]);
+      nestedWorkspaces.update((l) => [...l]);
     } else {
       pane.resizeObserver?.disconnect();
-      const wsIdx = get(workspaces).indexOf(ws);
-      if (wsIdx >= 0) closeWorkspace(wsIdx);
+      const wsIdx = get(nestedWorkspaces).indexOf(ws);
+      if (wsIdx >= 0) closeNestedWorkspace(wsIdx);
       return;
     }
   } else {
     pane.activeSurfaceId =
       pane.surfaces[Math.min(surfaceIdx, pane.surfaces.length - 1)]!.id;
-    workspaces.update((l) => [...l]);
+    nestedWorkspaces.update((l) => [...l]);
     const s = pane.surfaces.find((s) => s.id === pane.activeSurfaceId);
     void safeFocus(s);
   }
@@ -125,7 +128,7 @@ export async function newSurface(paneId: string) {
   );
   const cwd = await getCwdForSurface(sourceSurface);
   const surface = await createTerminalSurface(pane, cwd);
-  workspaces.update((l) => [...l]);
+  nestedWorkspaces.update((l) => [...l]);
   eventBus.emit({
     type: "surface:created",
     id: surface.id,
@@ -148,7 +151,7 @@ export async function newSurfaceWithCommand(paneId: string, command: string) {
   const surface = await createTerminalSurface(pane, cwd);
   surface.title = command;
   surface.startupCommand = command;
-  workspaces.update((l) => [...l]);
+  nestedWorkspaces.update((l) => [...l]);
   eventBus.emit({
     type: "surface:created",
     id: surface.id,
@@ -164,7 +167,7 @@ export function nextSurface() {
   if (!pane || pane.surfaces.length <= 1) return;
   const idx = pane.surfaces.findIndex((s) => s.id === pane.activeSurfaceId);
   pane.activeSurfaceId = pane.surfaces[(idx + 1) % pane.surfaces.length]!.id;
-  workspaces.update((l) => [...l]);
+  nestedWorkspaces.update((l) => [...l]);
   void safeFocus(get(activeSurface));
 }
 
@@ -174,7 +177,7 @@ export function prevSurface() {
   const idx = pane.surfaces.findIndex((s) => s.id === pane.activeSurfaceId);
   pane.activeSurfaceId =
     pane.surfaces[(idx - 1 + pane.surfaces.length) % pane.surfaces.length]!.id;
-  workspaces.update((l) => [...l]);
+  nestedWorkspaces.update((l) => [...l]);
   void safeFocus(get(activeSurface));
 }
 
@@ -184,7 +187,7 @@ export function selectSurfaceByNumber(num: number) {
   const idx = num === 9 ? pane.surfaces.length - 1 : num - 1;
   if (idx >= 0 && idx < pane.surfaces.length) {
     pane.activeSurfaceId = pane.surfaces[idx]!.id;
-    workspaces.update((l) => [...l]);
+    nestedWorkspaces.update((l) => [...l]);
     void safeFocus(get(activeSurface));
   }
 }
@@ -216,7 +219,7 @@ export function openExtensionSurfaceInPane(
   };
   pane.surfaces.push(surface);
   pane.activeSurfaceId = surface.id;
-  workspaces.update((l) => [...l]);
+  nestedWorkspaces.update((l) => [...l]);
 }
 
 export function openExtensionSurfaceInPaneById(
@@ -225,11 +228,11 @@ export function openExtensionSurfaceInPaneById(
   title: string,
   props?: Record<string, unknown>,
 ): { surfaceId: string; paneId: string } | null {
-  // Search all workspaces, not just the active one — this helper is called
+  // Search all nestedWorkspaces, not just the active one — this helper is called
   // from both UI code (where active workspace is set) and from MCP (where
   // the agent's target workspace may not be the user's focused one).
   let pane: Pane | undefined;
-  for (const ws of get(workspaces)) {
+  for (const ws of get(nestedWorkspaces)) {
     const found = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
     if (found) {
       pane = found;
@@ -247,18 +250,18 @@ export function openExtensionSurfaceInPaneById(
   };
   pane.surfaces.push(surface);
   pane.activeSurfaceId = surface.id;
-  workspaces.update((l) => [...l]);
+  nestedWorkspaces.update((l) => [...l]);
   return { surfaceId: surface.id, paneId: pane.id };
 }
 
 /**
- * Search all workspaces for a surface by ID.
+ * Search all nestedWorkspaces for a surface by ID.
  * Returns the containing workspace, pane, and surface — or null if not found.
  */
 export function findSurfaceLocation(
   surfaceId: string,
-): { workspace: Workspace; pane: Pane; surface: Surface } | null {
-  const wsList = get(workspaces);
+): { workspace: NestedWorkspace; pane: Pane; surface: Surface } | null {
+  const wsList = get(nestedWorkspaces);
   for (const ws of wsList) {
     for (const pane of getAllPanes(ws.splitRoot)) {
       const surface = pane.surfaces.find((s) => s.id === surfaceId);
@@ -276,7 +279,7 @@ export function markSurfaceUnreadById(surfaceId: string): void {
   const loc = findSurfaceLocation(surfaceId);
   if (!loc) return;
   loc.surface.hasUnread = true;
-  workspaces.update((l) => [...l]);
+  nestedWorkspaces.update((l) => [...l]);
 }
 
 /**
@@ -288,14 +291,14 @@ export function focusSurfaceById(surfaceId: string): void {
   if (!loc) return;
 
   const { workspace: targetWs, pane: targetPane } = loc;
-  const wsList = get(workspaces);
+  const wsList = get(nestedWorkspaces);
   const targetIdx = wsList.findIndex((ws) => ws.id === targetWs.id);
   if (targetIdx < 0) return;
 
   // Switch workspace if needed
-  const currentIdx = get(activeWorkspaceIdx);
+  const currentIdx = get(activeNestedWorkspaceIdx);
   if (currentIdx !== targetIdx) {
-    activeWorkspaceIdx.set(targetIdx);
+    activeNestedWorkspaceIdx.set(targetIdx);
     eventBus.emit({
       type: "workspace:activated",
       id: targetWs.id,
@@ -320,7 +323,7 @@ export function newSurfaceFromSidebar() {
  * optionally focusing it. Returns the created surface or null if the pane
  * could not be found.
  *
- * Searches all workspaces (not just the active one) — preview surfaces
+ * Searches all nestedWorkspaces (not just the active one) — preview surfaces
  * can be spawned from MCP / extensions, where the target workspace may
  * differ from the user's focused one. Mirrors
  * openExtensionSurfaceInPaneById's lookup.
@@ -330,9 +333,9 @@ export function createPreviewSurfaceInPane(
   path: string,
   options?: { focus?: boolean; title?: string },
 ): PreviewSurface | null {
-  let owningWs: Workspace | undefined;
+  let owningWs: NestedWorkspace | undefined;
   let pane: Pane | undefined;
-  for (const ws of get(workspaces)) {
+  for (const ws of get(nestedWorkspaces)) {
     const found = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
     if (found) {
       owningWs = ws;
@@ -360,7 +363,7 @@ export function createPreviewSurfaceInPane(
   } else if (!pane.activeSurfaceId) {
     pane.activeSurfaceId = surface.id;
   }
-  workspaces.update((l) => [...l]);
+  nestedWorkspaces.update((l) => [...l]);
   eventBus.emit({
     type: "surface:created",
     id: surface.id,
@@ -398,12 +401,20 @@ export function renameActiveSurface(): void {
 }
 
 export function renameSurface(surfaceId: string, title: string): void {
-  workspaces.update((wsList) => {
+  nestedWorkspaces.update((wsList) => {
     for (const ws of wsList) {
       for (const pane of getAllPanes(ws.splitRoot)) {
         const s = pane.surfaces.find((s) => s.id === surfaceId);
         if (s) {
           s.title = title;
+          // Stamp the user's explicit choice on terminal surfaces so OSC
+          // 0/2 (title) and OSC 7 (cwd) escape sequences and agent
+          // detach restore won't clobber it. Non-terminal surfaces
+          // (preview, extension) don't receive escape-sequence titles,
+          // so the field is meaningless for them.
+          if (isTerminalSurface(s)) {
+            s.userDefinedTitle = title;
+          }
           return [...wsList];
         }
       }

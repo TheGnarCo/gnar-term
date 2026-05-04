@@ -5,23 +5,28 @@
  *   1. --workspace <name> — open a named workspace from config.commands
  *   2. --path / --working-directory / --command — synthesize a one-off
  *      workspace around the CLI args
- *   3. persisted state.json — restore the last session's workspaces
+ *   3. persisted state.json — restore the last session's nestedWorkspaces
  *   4. config.autoload — open every named workspace listed
  *   5. fall back to a single default "Workspace 1"
  */
 import { get } from "svelte/store";
-import { workspaces } from "../stores/workspace";
-import { getWorkspaceGroups } from "../stores/workspace-groups";
-import { loadState, type GnarTermConfig, type WorkspaceDef } from "../config";
+import { nestedWorkspaces } from "../stores/nested-workspace";
+import { getWorkspaces } from "../stores/workspaces";
+import {
+  loadState,
+  type GnarTermConfig,
+  type NestedWorkspaceDef,
+} from "../config";
 import { initArchiveFromState } from "../stores/archive";
 import {
-  createWorkspace,
-  createWorkspaceFromDef,
-  switchWorkspace,
-} from "../services/workspace-service";
+  createNestedWorkspace,
+  createNestedWorkspaceFromDef,
+  switchNestedWorkspace,
+} from "../services/nested-workspace-service";
+import { OVERVIEW_DASHBOARD_CONTRIBUTION_ID } from "../services/dashboard-contribution-registry";
 
 // Restore-complete signal — lets async work (extension provision loops,
-// reconcileGroupDashboards) defer safely until workspaces are in the store.
+// reconcileWorkspaceDashboards) defer safely until nestedWorkspaces are in the store.
 let _restored = false;
 const _waiters: Array<() => void> = [];
 
@@ -31,7 +36,7 @@ export function markRestored(): void {
   _waiters.length = 0;
 }
 
-/** Resolves immediately if workspaces are already restored; waits otherwise. */
+/** Resolves immediately if nestedWorkspaces are already restored; waits otherwise. */
 export function waitRestored(): Promise<void> {
   if (_restored) return Promise.resolve();
   return new Promise((r) => _waiters.push(r));
@@ -63,19 +68,19 @@ export async function restoreWorkspaces(
       (c) => c.name === cliArgs.workspace && c.workspace,
     );
     if (cmd?.workspace) {
-      await createWorkspaceFromDef(cmd.workspace);
+      await createNestedWorkspaceFromDef(cmd.workspace);
     } else {
       console.warn(
-        `[cli] Workspace "${cliArgs.workspace}" not found in config`,
+        `[cli] NestedWorkspace "${cliArgs.workspace}" not found in config`,
       );
-      await createWorkspace(cliArgs.title || "Workspace 1");
+      await createNestedWorkspace(cliArgs.title || "Workspace 1");
     }
     return;
   }
 
   if (cliCwd || cliArgs.command) {
     const wsName = cliArgs.title || cliCwd?.split("/").pop() || "Workspace 1";
-    const def: WorkspaceDef = {
+    const def: NestedWorkspaceDef = {
       name: wsName,
       cwd: cliCwd || undefined,
       layout: {
@@ -90,60 +95,60 @@ export async function restoreWorkspaces(
         },
       },
     };
-    await createWorkspaceFromDef(def);
+    await createNestedWorkspaceFromDef(def);
     return;
   }
 
-  // Try to restore persisted workspaces from state.json
+  // Try to restore persisted nestedWorkspaces from state.json
   const state = await loadState();
   initArchiveFromState();
-  if (Array.isArray(state.workspaces)) {
-    // Clear any existing workspaces to prevent doubling on re-mount
-    workspaces.set([]);
-    // Drop orphan Dashboard workspaces whose owning group no longer
-    // exists. Without this, restarting after a group deletion leaves a
+  if (Array.isArray(state.nestedWorkspaces)) {
+    // Clear any existing nestedWorkspaces to prevent doubling on re-mount
+    nestedWorkspaces.set([]);
+    // Drop orphan Dashboard nestedWorkspaces whose owning workspace no longer
+    // exists. Without this, restarting after a workspace deletion leaves a
     // ghost dashboard in the main view that the user can't navigate
     // away from via the sidebar.
     //
-    // Additionally dedupe dashboards: each `(groupId, dashboardContributionId)`
+    // Additionally dedupe dashboards: each `(parentWorkspaceId, dashboardContributionId)`
     // pair should materialize exactly one dashboard workspace.
     // Pre-fix releases spawned a new Dashboard on every launch because
     // workspace ids regenerated, so persisted state can carry
     // duplicates — keep the first occurrence and drop the rest.
-    const knownGroupIds = new Set(getWorkspaceGroups().map((g) => g.id));
+    const knownWorkspaceIds = new Set(getWorkspaces().map((g) => g.id));
     const seenDashboards = new Set<string>();
-    const filteredDefs = state.workspaces.filter((wsDef) => {
+    const filteredDefs = state.nestedWorkspaces.filter((wsDef) => {
       const md = wsDef.metadata;
       const isDashboard = md?.isDashboard === true;
-      const ownerGroupId = md?.groupId;
+      const ownerWorkspaceId = md?.parentWorkspaceId;
       if (!isDashboard) return true;
-      if (typeof ownerGroupId !== "string") return true;
-      if (!knownGroupIds.has(ownerGroupId)) return false;
+      if (typeof ownerWorkspaceId !== "string") return true;
+      if (!knownWorkspaceIds.has(ownerWorkspaceId)) return false;
       const contributionId =
         typeof md?.dashboardContributionId === "string"
           ? md.dashboardContributionId
-          : "group";
-      const dedupeKey = `${ownerGroupId}:${contributionId}`;
+          : OVERVIEW_DASHBOARD_CONTRIBUTION_ID;
+      const dedupeKey = `${ownerWorkspaceId}:${contributionId}`;
       if (seenDashboards.has(dedupeKey)) return false;
       seenDashboards.add(dedupeKey);
       return true;
     });
     for (const wsDef of filteredDefs) {
-      await createWorkspaceFromDef(wsDef, { restoring: true });
+      await createNestedWorkspaceFromDef(wsDef, { restoring: true });
     }
-    // Restored workspaces whose `metadata.isDashboard === true` are
-    // group/pseudo dashboards — accessed through their group's tile,
-    // not as a primary active surface. If the only restored workspaces
-    // are dashboards, leave `activeWorkspaceIdx = -1` so the main view
+    // Restored nestedWorkspaces whose `metadata.isDashboard === true` are
+    // workspace/pseudo dashboards — accessed through their workspace's tile,
+    // not as a primary active surface. If the only restored nestedWorkspaces
+    // are dashboards, leave `activeNestedWorkspaceIdx = -1` so the main view
     // renders the EmptySurface. Otherwise pick the persisted active
     // index unless it points at a dashboard, in which case fall through
     // to the first non-dashboard workspace.
-    const restored = get(workspaces);
+    const restored = get(nestedWorkspaces);
     if (restored.length > 0) {
       const isDashboard = (idx: number): boolean => {
         return restored[idx]?.metadata?.isDashboard === true;
       };
-      const persistedIdx = state.activeWorkspaceIdx ?? 0;
+      const persistedIdx = state.activeNestedWorkspaceIdx ?? 0;
       const clampedIdx = Math.min(persistedIdx, restored.length - 1);
       let targetIdx = -1;
       if (clampedIdx >= 0 && !isDashboard(clampedIdx)) {
@@ -152,7 +157,7 @@ export async function restoreWorkspaces(
         targetIdx = restored.findIndex((_, i) => !isDashboard(i));
       }
       if (targetIdx >= 0) {
-        switchWorkspace(targetIdx);
+        switchNestedWorkspace(targetIdx);
       }
     }
     // An explicit empty array (user closed everything) is a valid
@@ -166,12 +171,12 @@ export async function restoreWorkspaces(
     for (const name of config.autoload) {
       const cmd = config.commands.find((c) => c.name === name && c.workspace);
       if (cmd?.workspace) {
-        await createWorkspaceFromDef(cmd.workspace);
+        await createNestedWorkspaceFromDef(cmd.workspace);
         autoloaded = true;
       }
     }
   }
-  if (!autoloaded && get(workspaces).length === 0) {
-    await createWorkspace("Workspace 1");
+  if (!autoloaded && get(nestedWorkspaces).length === 0) {
+    await createNestedWorkspace("Workspace 1");
   }
 }

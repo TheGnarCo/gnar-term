@@ -2,72 +2,88 @@
  * Root-row ordering for the Workspaces section.
  *
  * The Workspaces section renders a single interleaved list of root
- * rows: unclaimed workspaces (kind: "workspace") and workspace group
- * blocks (kind: "workspace-group"). Each row is identified by {kind, id}.
- * Users can drag freely across this list — a workspace can sit
- * between two groups, a group between two workspaces.
+ * rows: unclaimed nestedWorkspaces (kind: "nested-workspace") and workspace
+ * blocks (kind: "workspace"). Each row is identified by {kind, id}.
+ * Users can drag freely across this list — a nested workspace can sit
+ * between two workspaces, a workspace between two nested workspaces.
  *
  * This module owns:
  *   - the ordered list (persisted across restarts)
  *   - a derived view that filters out rows whose referent no longer
- *     exists (deleted group, workspace that got claimed by a
- *     group, etc.) and appends newly-created entities in insertion
+ *     exists (deleted workspace, nested workspace that got claimed by a
+ *     workspace, etc.) and appends newly-created entities in insertion
  *     order
  *   - mutation helpers for append / remove / move
  *
- * Renderers for non-workspace kinds (workspace groups, future extension
+ * Renderers for non-nested-workspace kinds (workspaces, future extension
  * kinds) are contributed through `registerRootRowRenderer` on the
  * extension API — WorkspaceListBlock looks them up by kind.
  */
-import { writable, derived, get } from "svelte/store";
+import { writable, get } from "svelte/store";
 import { saveState, getState } from "../config";
 
 export interface RootRow {
-  kind: "workspace" | "project" | string;
+  kind: "nested-workspace" | "workspace" | string;
   id: string;
 }
 
 const _rootRowOrder = writable<RootRow[]>([]);
 export const rootRowOrder = _rootRowOrder;
 
+const rowKey = (r: RootRow): string => `${r.kind}:${r.id}`;
+
+// Tracks the current row keys for O(1) dedup. Stays in sync with
+// _rootRowOrder via every mutation helper below; rebuilt from scratch
+// in setRootRowOrder. Bootstrap is O(N) instead of O(N²) when the same
+// helper is called once per workspace during session restore.
+let _rowKeys = new Set<string>();
+
 /** Replace the full order. Used during bootstrap and drag-drop reorder. */
 export function setRootRowOrder(next: RootRow[]): void {
   _rootRowOrder.set(next);
+  _rowKeys = new Set(next.map(rowKey));
   persist();
 }
 
 /** Insert a row at position 0 if not already present. */
 export function prependRootRow(row: RootRow): void {
-  const current = get(_rootRowOrder);
-  if (current.some((r) => r.kind === row.kind && r.id === row.id)) return;
-  _rootRowOrder.set([row, ...current]);
+  const k = rowKey(row);
+  if (_rowKeys.has(k)) return;
+  _rootRowOrder.update((current) => [row, ...current]);
+  _rowKeys.add(k);
   persist();
 }
 
 /** Append a row to the end if not already present. */
 export function appendRootRow(row: RootRow): void {
-  const current = get(_rootRowOrder);
-  if (current.some((r) => r.kind === row.kind && r.id === row.id)) return;
-  _rootRowOrder.set([...current, row]);
+  const k = rowKey(row);
+  if (_rowKeys.has(k)) return;
+  _rootRowOrder.update((current) => [...current, row]);
+  _rowKeys.add(k);
   persist();
 }
 
 /** Remove a row by kind + id. No-op if missing. */
 export function removeRootRow(row: RootRow): void {
-  const current = get(_rootRowOrder);
-  const next = current.filter((r) => !(r.kind === row.kind && r.id === row.id));
-  if (next.length === current.length) return;
-  _rootRowOrder.set(next);
+  const k = rowKey(row);
+  if (!_rowKeys.has(k)) return;
+  _rootRowOrder.update((current) =>
+    current.filter((r) => !(r.kind === row.kind && r.id === row.id)),
+  );
+  _rowKeys.delete(k);
   persist();
 }
 
 /** Insert a row at the given index. No-op if the row is already present. */
 export function insertRootRow(at: number, row: RootRow): void {
-  const current = get(_rootRowOrder);
-  if (current.some((r) => r.kind === row.kind && r.id === row.id)) return;
-  const next = [...current];
-  next.splice(Math.max(0, Math.min(next.length, at)), 0, row);
-  _rootRowOrder.set(next);
+  const k = rowKey(row);
+  if (_rowKeys.has(k)) return;
+  _rootRowOrder.update((current) => {
+    const next = [...current];
+    next.splice(Math.max(0, Math.min(next.length, at)), 0, row);
+    return next;
+  });
+  _rowKeys.add(k);
   persist();
 }
 
@@ -89,7 +105,7 @@ export function moveRootRow(from: number, to: number): void {
  * that aren't yet listed (appended to the end) and dropping any entries
  * whose referent is unknown.
  *
- * `knownWorkspaceIds` comes from the workspaces store; `extensionRows`
+ * `knownWorkspaceIds` comes from the nestedWorkspaces store; `extensionRows`
  * from registered extensions (via registerRootRowBootstrapContributor).
  */
 export function bootstrapRootRowOrder(
@@ -100,9 +116,10 @@ export function bootstrapRootRowOrder(
   const key = (r: RootRow) => `${r.kind}:${r.id}`;
 
   // Build the full known set — anything persisted that isn't in it is
-  // stale (workspace deleted, group removed) and gets dropped.
+  // stale (nested workspace deleted, workspace removed) and gets dropped.
   const known = new Set<string>();
-  for (const id of knownWorkspaceIds) known.add(key({ kind: "workspace", id }));
+  for (const id of knownWorkspaceIds)
+    known.add(key({ kind: "nested-workspace", id }));
   for (const r of extensionRows) known.add(key(r));
 
   // Keep persisted order where referents still exist.
@@ -117,9 +134,9 @@ export function bootstrapRootRowOrder(
   }
 
   // Append entities that weren't in the persisted order —
-  // extension-contributed rows first (groups), then unclaimed
-  // workspaces. Matches the legacy "groups above workspaces" default
-  // on first-run installs.
+  // extension-contributed rows first (workspaces), then unclaimed
+  // nestedWorkspaces. Matches the legacy "workspaces above nested
+  // workspaces" default on first-run installs.
   for (const r of extensionRows) {
     const k = key(r);
     if (!seen.has(k)) {
@@ -128,14 +145,15 @@ export function bootstrapRootRowOrder(
     }
   }
   for (const id of knownWorkspaceIds) {
-    const k = key({ kind: "workspace", id });
+    const k = key({ kind: "nested-workspace", id });
     if (!seen.has(k)) {
-      next.push({ kind: "workspace", id });
+      next.push({ kind: "nested-workspace", id });
       seen.add(k);
     }
   }
 
   _rootRowOrder.set(next);
+  _rowKeys = new Set(next.map(rowKey));
   persist();
 }
 
@@ -148,9 +166,3 @@ function persist(): void {
     void saveState({ rootRowOrder: get(_rootRowOrder) });
   }, 500);
 }
-
-/**
- * Derived store returning the current order as-is. Future-proofed as a
- * derived so the filtering logic can tighten without churning callers.
- */
-export const rootRows = derived(rootRowOrder, ($order) => $order);

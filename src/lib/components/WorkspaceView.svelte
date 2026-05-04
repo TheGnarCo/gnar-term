@@ -1,8 +1,8 @@
 <script lang="ts">
-  import type { Workspace } from "../types";
+  import type { NestedWorkspace } from "../types";
   import SplitNodeView from "./SplitNodeView.svelte";
 
-  export let workspace: Workspace;
+  export let workspace: NestedWorkspace;
   export let visible: boolean;
   export let onSelectSurface: (paneId: string, surfaceId: string) => void;
   export let onCloseSurface: (paneId: string, surfaceId: string) => void;

@@ -30,7 +30,6 @@
  *   | ----------------------- | -------------------------------------------- |
  *   | surface-type-registry   | list_surface_types, open_surface             |
  *   | command-registry        | list_commands, invoke_command                |
- *   | sidebar-tab-registry    | list_sidebar_tabs, activate_sidebar_tab      |
  *   | workspace-action-reg…   | list_workspace_actions, invoke_workspace_…   |
  *   | context-menu-item-reg…  | list_context_menu_items, invoke_context_…   |
  *
@@ -45,7 +44,11 @@
 import { get, writable } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, emit } from "@tauri-apps/api/event";
-import { workspaces, activeWorkspace, activePane } from "../stores/workspace";
+import {
+  nestedWorkspaces,
+  activeWorkspace,
+  activePane,
+} from "../stores/nested-workspace";
 import {
   getAllPanes,
   isTerminalSurface,
@@ -53,7 +56,7 @@ import {
   type Pane,
   type SplitNode,
   type TerminalSurface,
-  type Workspace,
+  type NestedWorkspace,
 } from "../types";
 import { findParentSplit } from "../types";
 import {
@@ -192,12 +195,12 @@ function newSessionId(): string {
   return `mcp-${crypto.randomUUID?.() ?? Math.random().toString(36).slice(2)}`;
 }
 
-// ---- Workspace / pane resolution ----
+// ---- NestedWorkspace / pane resolution ----
 
 function findPaneById(
   paneId: string,
-): { workspace: Workspace; pane: Pane } | null {
-  for (const ws of get(workspaces)) {
+): { workspace: NestedWorkspace; pane: Pane } | null {
+  for (const ws of get(nestedWorkspaces)) {
     for (const pane of getAllPanes(ws.splitRoot)) {
       if (pane.id === paneId) return { workspace: ws, pane };
     }
@@ -205,15 +208,15 @@ function findPaneById(
   return null;
 }
 
-function findWorkspaceById(workspaceId: string): Workspace | null {
-  return get(workspaces).find((w) => w.id === workspaceId) ?? null;
+function findWorkspaceById(workspaceId: string): NestedWorkspace | null {
+  return get(nestedWorkspaces).find((w) => w.id === workspaceId) ?? null;
 }
 
 /** Resolution result returned by `resolveTarget`. `hostPane` is non-null when
  *  the caller expressed a specific host pane to split; null means "place in
  *  the workspace's active pane (or first pane)." */
 interface ResolvedTarget {
-  workspace: Workspace;
+  workspace: NestedWorkspace;
   hostPane: Pane | null;
   source: "args-pane" | "args-workspace" | "binding-pane" | "binding-workspace";
 }
@@ -296,23 +299,23 @@ function resolveTarget(
 
 /** Pick a host pane to split off when the caller didn't supply one. Prefers
  *  the workspace's active pane; falls back to the first pane in the tree. */
-function pickHostPane(workspace: Workspace): Pane {
+function pickHostPane(workspace: NestedWorkspace): Pane {
   const all = getAllPanes(workspace.splitRoot);
   if (workspace.activePaneId) {
     const active = all.find((p) => p.id === workspace.activePaneId);
     if (active) return active;
   }
   if (all.length > 0) return all[0]!;
-  // Workspace exists but has no panes (shouldn't happen in practice; create one).
+  // NestedWorkspace exists but has no panes (shouldn't happen in practice; create one).
   const newPane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
   workspace.splitRoot = { type: "pane", pane: newPane };
-  workspaces.update((l) => [...l]);
+  nestedWorkspaces.update((l) => [...l]);
   return newPane;
 }
 
 /** Split `hostPane` off into a new sibling pane within its workspace. */
 function splitPaneInWorkspace(
-  workspace: Workspace,
+  workspace: NestedWorkspace,
   hostPane: Pane,
   direction: "horizontal" | "vertical",
 ): Pane {
@@ -338,7 +341,7 @@ function splitPaneInWorkspace(
     }
   }
   workspace.activePaneId = newPane.id;
-  workspaces.update((l) => [...l]);
+  nestedWorkspaces.update((l) => [...l]);
   return newPane;
 }
 
@@ -358,7 +361,7 @@ async function getPtyCwd(ptyId: number): Promise<string> {
 }
 
 function removeSurfaceFromPane(paneId: string, surfaceId: string): void {
-  workspaces.update((list) => {
+  nestedWorkspaces.update((list) => {
     for (const ws of list) {
       for (const pane of getAllPanes(ws.splitRoot)) {
         if (pane.id !== paneId) continue;
@@ -599,7 +602,7 @@ registerTool({
     surface.title = p.name;
     surface.startupCommand = startupCommand;
     newPane.activeSurfaceId = surface.id;
-    workspaces.update((l) => [...l]);
+    nestedWorkspaces.update((l) => [...l]);
     void safeFocus(surface);
 
     const ptyId = await waitForPtyId(surface);
@@ -738,7 +741,7 @@ registerTool({
     } else {
       const surface = await createTerminalSurface(newPane);
       newPane.activeSurfaceId = surface.id;
-      workspaces.update((l) => [...l]);
+      nestedWorkspaces.update((l) => [...l]);
       void safeFocus(surface);
     }
 
@@ -1011,7 +1014,7 @@ registerTool({
 registerTool({
   name: "render_sidebar",
   description:
-    "Declare or replace an extension sidebar section in the resolved workspace. Sections are workspace-scoped: invisible from other workspaces.",
+    "Declare or replace an extension sidebar section in the resolved workspace. Sections are workspace-scoped: invisible from other nestedWorkspaces.",
   inputSchema: {
     type: "object",
     properties: {
@@ -1355,8 +1358,8 @@ const UI_MUTATING_TOOLS = new Set([
   "spawn_preview",
   "create_preview_file",
   "close_preview",
-  "add_dashboard_to_group",
-  "remove_dashboard_from_group",
+  "add_dashboard_to_workspace",
+  "remove_dashboard_from_workspace",
 ]);
 
 export async function dispatch(

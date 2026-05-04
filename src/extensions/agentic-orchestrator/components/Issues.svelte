@@ -2,7 +2,7 @@
   /**
    * Issues — renders `gh issue list` output inside a markdown doc.
    * Scope derives from the enclosing DashboardHostContext:
-   *   - group host → group.path backs the default repo + spawn target
+   *   - workspace host → workspace.path backs the default repo + spawn target
    *   - global host → caller must set `repoPath`; otherwise shown as error
    *   - no host → form disabled
    *
@@ -61,7 +61,7 @@
    * When true, the per-row Spawn split-button + selection checkbox +
    * bulk toolbar are suppressed. The bot-icon "active workspace" link
    * is still shown so the Overview dashboard can hint at attribution.
-   * Used by the Group Overview Dashboard, where the issue list is a
+   * Used by the Workspace Overview Dashboard, where the issue list is a
    * passive browse panel and spawning lives on the Agent Dashboard.
    */
   export let displayOnly: boolean = false;
@@ -125,12 +125,12 @@
   }
 
   /**
-   * Subscribe to the workspaces store so the per-row affordance updates
-   * live as agent workspaces are spawned / closed. Keyed lookup: issue
+   * Subscribe to the nestedWorkspaces store so the per-row affordance updates
+   * live as agent nestedWorkspaces are spawned / closed. Keyed lookup: issue
    * number → first workspace whose `metadata.spawnedFromIssues` array
    * includes that number.
    */
-  const workspacesStore = api.workspaces;
+  const workspacesStore = api.nestedWorkspaces;
   $: handledIssues = (() => {
     const map = new Map<number, string>();
     for (const ws of $workspacesStore) {
@@ -145,7 +145,7 @@
 
   function jumpToHandledWorkspace(issueNumber: number) {
     const wsId = handledIssues.get(issueNumber);
-    if (wsId) api.switchWorkspace(wsId);
+    if (wsId) api.switchNestedWorkspace(wsId);
   }
 
   function isGhMissing(msg: string): boolean {
@@ -239,7 +239,9 @@
         repoPath: target.repoPath,
         branch: `agent/${agent}/${issue.number}-${branchSlug}`,
         spawnedBy: target.spawnedBy,
-        ...(target.groupId ? { groupId: target.groupId } : {}),
+        ...(target.parentWorkspaceId
+          ? { parentWorkspaceId: target.parentWorkspaceId }
+          : {}),
         spawnedFromIssues: [issue.number],
       });
       toggleIssueSelection(issue.number, false);
@@ -283,7 +285,9 @@
             repoPath: target.repoPath,
             branch: `agent/${agent}/${issue.number}-${branchSlug}`,
             spawnedBy: target.spawnedBy,
-            ...(target.groupId ? { groupId: target.groupId } : {}),
+            ...(target.parentWorkspaceId
+              ? { parentWorkspaceId: target.parentWorkspaceId }
+              : {}),
             spawnedFromIssues: [issue.number],
           });
         } catch (err) {
@@ -351,7 +355,9 @@
         repoPath: target.repoPath,
         branch: `agent/${agent}/${branchSuffix}`,
         spawnedBy: target.spawnedBy,
-        ...(target.groupId ? { groupId: target.groupId } : {}),
+        ...(target.parentWorkspaceId
+          ? { parentWorkspaceId: target.parentWorkspaceId }
+          : {}),
         spawnedFromIssues: numbers,
       });
       clearSelection();

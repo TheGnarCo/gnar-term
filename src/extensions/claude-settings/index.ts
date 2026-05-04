@@ -1,14 +1,10 @@
-import type {
-  ExtensionManifest,
-  ExtensionAPI,
-  WorkspaceGroupRef,
-} from "../api";
-import { createWorkspaceFromDef } from "../../lib/services/workspace-service";
+import type { ExtensionManifest, ExtensionAPI, WorkspaceRef } from "../api";
+import { createNestedWorkspaceFromDef } from "../../lib/services/nested-workspace-service";
 import {
   closeAutoDashboardsBySource,
-  provisionAutoDashboardsForGroup,
-} from "../../lib/services/workspace-group-service";
-import { getWorkspaceGroups } from "../../lib/stores/workspace-groups";
+  provisionAutoDashboardsForWorkspace,
+} from "../../lib/services/workspace-service";
+import { getWorkspaces } from "../../lib/stores/workspaces";
 import { waitRestored } from "../../lib/bootstrap/restore-workspaces";
 import ClaudeMark from "./icons/ClaudeMark.svelte";
 import UserSettingsPanel from "./components/UserSettingsPanel.svelte";
@@ -21,7 +17,7 @@ export const claudeSettingsManifest: ExtensionManifest = {
   name: "Claude Settings",
   version: "0.1.0",
   description:
-    "Interactive GUI for ~/.claude/settings.json. TitleBar button shows user-level settings overlay; auto-provisioned group dashboard shows project .claude/ settings with full editing support.",
+    "Interactive GUI for ~/.claude/settings.json. TitleBar button shows user-level settings overlay; auto-provisioned workspace dashboard shows project .claude/ settings with full editing support.",
   entry: "./index.ts",
   included: true,
   permissions: [],
@@ -54,17 +50,17 @@ export function registerClaudeSettingsExtension(api: ExtensionAPI): void {
       id: "claude-settings",
       label: "Claude Settings",
       actionLabel: "Add Claude Settings Dashboard",
-      capPerGroup: 1,
+      capPerWorkspace: 1,
       autoProvision: true,
       icon: ClaudeMark,
       lockedReason: "Required by Claude Settings extension",
-      create: (group) => createClaudeSettingsDashboard(api, group),
+      create: (workspace) => createClaudeSettingsDashboard(api, workspace),
     });
 
     void (async () => {
       await waitRestored();
-      for (const group of getWorkspaceGroups()) {
-        await provisionAutoDashboardsForGroup(group);
+      for (const workspace of getWorkspaces()) {
+        await provisionAutoDashboardsForWorkspace(workspace);
       }
     })();
   });
@@ -76,16 +72,16 @@ export function registerClaudeSettingsExtension(api: ExtensionAPI): void {
 
 // --- Dashboard creation ---
 
-function claudeSettingsMarkdownPath(group: WorkspaceGroupRef): string {
-  return `${group.path.replace(/\/+$/, "")}/.gnar-term/claude-settings.md`;
+function claudeSettingsMarkdownPath(workspace: WorkspaceRef): string {
+  return `${workspace.path.replace(/\/+$/, "")}/.gnar-term/claude-settings.md`;
 }
 
 async function writeClaudeSettingsTemplate(
   api: ExtensionAPI,
-  group: WorkspaceGroupRef,
+  workspace: WorkspaceRef,
   options: { force?: boolean } = {},
 ): Promise<string> {
-  const mdPath = claudeSettingsMarkdownPath(group);
+  const mdPath = claudeSettingsMarkdownPath(workspace);
   if (!options.force) {
     const exists = await api
       .invoke<boolean>("file_exists", { path: mdPath })
@@ -103,10 +99,10 @@ async function writeClaudeSettingsTemplate(
 
 async function createClaudeSettingsDashboard(
   api: ExtensionAPI,
-  group: WorkspaceGroupRef,
+  workspace: WorkspaceRef,
 ): Promise<string> {
-  const mdPath = await writeClaudeSettingsTemplate(api, group);
-  return createWorkspaceFromDef({
+  const mdPath = await writeClaudeSettingsTemplate(api, workspace);
+  return createNestedWorkspaceFromDef({
     name: "Claude Settings",
     layout: {
       pane: {
@@ -122,7 +118,7 @@ async function createClaudeSettingsDashboard(
     },
     metadata: {
       isDashboard: true,
-      groupId: group.id,
+      parentWorkspaceId: workspace.id,
       dashboardContributionId: "claude-settings",
     },
   });

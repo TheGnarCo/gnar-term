@@ -48,10 +48,6 @@ import { eventBus } from "../lib/services/event-bus";
 import { pendingAction } from "../lib/stores/ui";
 import { commandStore } from "../lib/services/command-registry";
 import {
-  sidebarTabStore,
-  resetSidebarTabs,
-} from "../lib/services/sidebar-tab-registry";
-import {
   sidebarSectionStore,
   resetSidebarSections,
 } from "../lib/services/sidebar-section-registry";
@@ -102,8 +98,7 @@ describe("validateManifest", () => {
         contributes: {
           commands: [{ id: "do-thing", title: "Do Thing" }],
           events: ["workspace:created", "pane:focused"],
-          secondarySidebarTabs: [{ id: "my-tab", label: "My Tab" }],
-          primarySidebarSections: [{ id: "my-section", label: "My Section" }],
+          sidebarSections: [{ id: "my-section", label: "My Section" }],
           surfaces: [{ id: "my-surface", label: "My Surface" }],
         },
       }),
@@ -202,11 +197,10 @@ describe("createExtensionAPI", () => {
     expect(api).toHaveProperty("on");
     expect(api).toHaveProperty("off");
     expect(api).toHaveProperty("registerCommand");
-    expect(api).toHaveProperty("registerSecondarySidebarTab");
-    expect(api).toHaveProperty("registerPrimarySidebarSection");
+    expect(api).toHaveProperty("registerSidebarSection");
     expect(api).toHaveProperty("registerSurfaceType");
     expect(api).toHaveProperty("state");
-    expect(api).toHaveProperty("workspaces");
+    expect(api).toHaveProperty("nestedWorkspaces");
     expect(api).toHaveProperty("activeWorkspace");
     expect(api).toHaveProperty("activePane");
     expect(api).toHaveProperty("activeSurface");
@@ -217,9 +211,9 @@ describe("createExtensionAPI", () => {
   it("exposes read-only Svelte stores", () => {
     const { api } = createExtensionAPI(manifest);
     // Readable stores have subscribe but not set
-    expect(typeof api.workspaces.subscribe).toBe("function");
+    expect(typeof api.nestedWorkspaces.subscribe).toBe("function");
     expect(
-      (api.workspaces as unknown as Record<string, unknown>).set,
+      (api.nestedWorkspaces as unknown as Record<string, unknown>).set,
     ).toBeUndefined();
   });
 
@@ -516,44 +510,16 @@ describe("Extension lifecycle", () => {
     expect(handler).not.toHaveBeenCalled();
   });
 
-  it("deactivateExtension cleans up registered sidebar tabs", async () => {
-    const manifest = makeManifest({
-      id: "tab-cleanup",
-      contributes: {
-        secondarySidebarTabs: [{ id: "my-tab", label: "My Tab" }],
-      },
-    });
-    const registerFn = (api: ExtensionAPI) => {
-      api.onActivate(() => {
-        api.registerSecondarySidebarTab("my-tab", { fake: "component" });
-      });
-    };
-
-    resetSidebarTabs();
-    registerExtension(manifest, registerFn);
-    await activateExtension("tab-cleanup");
-
-    expect(
-      get(sidebarTabStore).some((t) => t.id === "tab-cleanup:my-tab"),
-    ).toBe(true);
-
-    deactivateExtension("tab-cleanup");
-
-    expect(
-      get(sidebarTabStore).some((t) => t.id === "tab-cleanup:my-tab"),
-    ).toBe(false);
-  });
-
   it("deactivateExtension cleans up registered sidebar sections", async () => {
     const manifest = makeManifest({
       id: "section-cleanup",
       contributes: {
-        primarySidebarSections: [{ id: "my-section", label: "My Section" }],
+        sidebarSections: [{ id: "my-section", label: "My Section" }],
       },
     });
     const registerFn = (api: ExtensionAPI) => {
       api.onActivate(() => {
-        api.registerPrimarySidebarSection("my-section", {
+        api.registerSidebarSection("my-section", {
           fake: "component",
         });
       });
@@ -707,7 +673,8 @@ describe("Extension lifecycle", () => {
     await activateExtension("surface-orphan");
 
     // Simulate a workspace with an extension surface of this type
-    const { workspaces: wsStore } = await import("../lib/stores/workspace");
+    const { nestedWorkspaces: wsStore } =
+      await import("../lib/stores/nested-workspace");
     wsStore.set([
       {
         id: "ws-1",
@@ -735,7 +702,7 @@ describe("Extension lifecycle", () => {
           },
         },
       },
-    ] as unknown as import("../lib/types").Workspace[]);
+    ] as unknown as import("../lib/types").NestedWorkspace[]);
 
     deactivateExtension("surface-orphan");
 
@@ -908,7 +875,7 @@ describe("Extension lifecycle", () => {
     expect(ext?.enabled).toBe(false);
   });
 
-  it("deactivateExtension unclaims workspaces claimed by the extension", async () => {
+  it("deactivateExtension unclaims nestedWorkspaces claimed by the extension", async () => {
     resetClaimedWorkspaces();
     const manifest = makeManifest({
       id: "claim-cleanup",
@@ -924,13 +891,13 @@ describe("Extension lifecycle", () => {
     });
     await activateExtension("claim-cleanup");
 
-    // Verify workspaces are claimed
+    // Verify nestedWorkspaces are claimed
     expect(get(claimedWorkspaceIds).has("ws-1")).toBe(true);
     expect(get(claimedWorkspaceIds).has("ws-2")).toBe(true);
 
     deactivateExtension("claim-cleanup");
 
-    // After deactivation, workspaces should be unclaimed
+    // After deactivation, nestedWorkspaces should be unclaimed
     expect(get(claimedWorkspaceIds).has("ws-1")).toBe(false);
     expect(get(claimedWorkspaceIds).has("ws-2")).toBe(false);
   });
@@ -1554,7 +1521,8 @@ describe("api.getWorkspaceIdForSurface", () => {
   });
 
   it("resolves the owning workspace for a surface regardless of which is active", async () => {
-    const { workspaces: wsStore } = await import("../lib/stores/workspace");
+    const { nestedWorkspaces: wsStore } =
+      await import("../lib/stores/nested-workspace");
     wsStore.set([
       {
         id: "ws-A",
@@ -1598,7 +1566,7 @@ describe("api.getWorkspaceIdForSurface", () => {
           },
         },
       },
-    ] as unknown as import("../lib/types").Workspace[]);
+    ] as unknown as import("../lib/types").NestedWorkspace[]);
 
     const { api } = createExtensionAPI(makeManifest({ id: "resolver-ext" }));
 
@@ -1614,7 +1582,8 @@ describe("api.getWorkspaceIdForSurface", () => {
   });
 
   it("getAllTerminalSurfaces returns terminals from every workspace and every pane", async () => {
-    const { workspaces: wsStore } = await import("../lib/stores/workspace");
+    const { nestedWorkspaces: wsStore } =
+      await import("../lib/stores/nested-workspace");
     wsStore.set([
       {
         id: "ws-active",
@@ -1688,7 +1657,7 @@ describe("api.getWorkspaceIdForSurface", () => {
           },
         },
       },
-    ] as unknown as import("../lib/types").Workspace[]);
+    ] as unknown as import("../lib/types").NestedWorkspace[]);
 
     const { api } = createExtensionAPI(makeManifest({ id: "bootstrap-ext" }));
     const surfaces = api.getAllTerminalSurfaces();
@@ -1715,7 +1684,8 @@ describe("api.getWorkspaceIdForSurface", () => {
   });
 
   it("finds surfaces inside split panes, not just the active pane", async () => {
-    const { workspaces: wsStore } = await import("../lib/stores/workspace");
+    const { nestedWorkspaces: wsStore } =
+      await import("../lib/stores/nested-workspace");
     wsStore.set([
       {
         id: "ws-split",
@@ -1761,7 +1731,7 @@ describe("api.getWorkspaceIdForSurface", () => {
           ],
         },
       },
-    ] as unknown as import("../lib/types").Workspace[]);
+    ] as unknown as import("../lib/types").NestedWorkspace[]);
 
     const { api } = createExtensionAPI(makeManifest({ id: "split-ext" }));
     expect(api.getWorkspaceIdForSurface("surf-right")).toBe("ws-split");

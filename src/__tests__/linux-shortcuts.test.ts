@@ -177,6 +177,7 @@ describe("Linux keyboard shortcut handling", () => {
         "g",
         "h",
         "r",
+        "~",
       ];
 
       for (const key of appShortcuts) {

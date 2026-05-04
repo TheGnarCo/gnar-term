@@ -1,30 +1,30 @@
 /**
- * Tests for the GROUP_COLORS palette.
+ * Tests for the WORKSPACE_COLOR_SLOTS palette.
  */
 import { describe, it, expect } from "vitest";
 import {
-  GROUP_COLOR_SLOTS,
-  getGroupColors,
-  resolveGroupColor,
+  WORKSPACE_COLOR_SLOTS,
+  getWorkspaceColors,
+  resolveWorkspaceColor,
   themes,
 } from "../lib/theme-data";
 
-describe("GROUP_COLOR_SLOTS", () => {
+describe("WORKSPACE_COLOR_SLOTS", () => {
   it("has 12 slots", () => {
-    expect(GROUP_COLOR_SLOTS).toHaveLength(12);
+    expect(WORKSPACE_COLOR_SLOTS).toHaveLength(12);
   });
 
   it("has no duplicate slots", () => {
-    const unique = new Set(GROUP_COLOR_SLOTS);
-    expect(unique.size).toBe(GROUP_COLOR_SLOTS.length);
+    const unique = new Set(WORKSPACE_COLOR_SLOTS);
+    expect(unique.size).toBe(WORKSPACE_COLOR_SLOTS.length);
   });
 });
 
-describe("group color resolution", () => {
+describe("workspace color resolution", () => {
   it("resolves every slot to a hex in every theme", () => {
     for (const theme of Object.values(themes)) {
-      const colors = getGroupColors(theme);
-      for (const slot of GROUP_COLOR_SLOTS) {
+      const colors = getWorkspaceColors(theme);
+      for (const slot of WORKSPACE_COLOR_SLOTS) {
         expect(colors[slot]).toMatch(/^#[0-9a-fA-F]{3,6}$/);
       }
     }
@@ -32,12 +32,12 @@ describe("group color resolution", () => {
 
   it("passes hex values through unchanged", () => {
     const theme = themes["one-dark"];
-    expect(resolveGroupColor("#abcdef", theme)).toBe("#abcdef");
+    expect(resolveWorkspaceColor("#abcdef", theme)).toBe("#abcdef");
   });
 
   it("returns theme-specific values for the same slot across themes", () => {
-    const dark = resolveGroupColor("red", themes["github-dark"]);
-    const solarized = resolveGroupColor("red", themes["solarized-dark"]);
+    const dark = resolveWorkspaceColor("red", themes["github-dark"]);
+    const solarized = resolveWorkspaceColor("red", themes["solarized-dark"]);
     // Slot name identical but resolved hex differs per theme.
     expect(dark).not.toBe("red");
     expect(solarized).not.toBe("red");

@@ -3,10 +3,10 @@
  * the X button, ⇧⌘W, and the extension API's close-workspace pendingAction.
  *
  * Verifies that:
- *   - Regular workspaces show a confirm prompt before closing
+ *   - Regular nestedWorkspaces show a confirm prompt before closing
  *   - Cancelling the prompt does NOT close the workspace
- *   - Dashboard workspaces close without a prompt
- *   - Worktree workspaces show the keep/delete form prompt
+ *   - Dashboard nestedWorkspaces close without a prompt
+ *   - Worktree nestedWorkspaces show the keep/delete form prompt
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
@@ -34,12 +34,14 @@ vi.mock("../lib/stores/ui", async (importOriginal) => {
 });
 
 const mockCloseWorkspace = vi.fn<(idx: number) => void>();
-vi.mock("../lib/services/workspace-service", async (importOriginal) => {
+vi.mock("../lib/services/nested-workspace-service", async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import("../lib/services/workspace-service")>();
+    await importOriginal<
+      typeof import("../lib/services/nested-workspace-service")
+    >();
   return {
     ...actual,
-    closeWorkspace: (idx: number) => mockCloseWorkspace(idx),
+    closeNestedWorkspace: (idx: number) => mockCloseWorkspace(idx),
   };
 });
 
@@ -93,7 +95,7 @@ describe("confirmAndCloseWorkspace", () => {
     const ws = {
       id: "ws-dash",
       name: "Dashboard",
-      metadata: { dashboardWorkspaceId: "some-id" },
+      metadata: { dashboardNestedWorkspaceId: "some-id" },
     };
     const result = await confirmAndCloseWorkspace(ws, 1);
     expect(result).toBe(true);

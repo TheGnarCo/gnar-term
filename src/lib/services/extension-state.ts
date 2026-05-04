@@ -33,9 +33,9 @@ const LEGACY_EXTENSION_MIGRATIONS: Record<
   "workspace-groups": {
     legacyId: "project-scope",
     keyRenames: {
-      projects: "workspaceGroups",
-      projectOrder: "workspaceGroupOrder",
-      activeProjectId: "activeGroupId",
+      projects: "workspaces",
+      projectOrder: "workspaceOrder",
+      activeProjectId: "activeWorkspaceId",
     },
   },
 };

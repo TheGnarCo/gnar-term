@@ -40,9 +40,9 @@ Element.prototype.animate = vi.fn().mockImplementation(() => {
 
 import ContainerRowWithSlot from "./container-row-with-slot.svelte";
 import WorkspaceListViewStub from "./workspace-list-view-stub.svelte";
-import { workspaces } from "../lib/stores/workspace";
+import { nestedWorkspaces } from "../lib/stores/nested-workspace";
 
-// Seed the workspaces store so nonDashboardCount reflects filterIds correctly.
+// Seed the nestedWorkspaces store so nonDashboardCount reflects filterIds correctly.
 function makeWs(id: string) {
   return { id, name: id, panes: [], metadata: {} };
 }
@@ -50,14 +50,16 @@ function makeWs(id: string) {
 const baseProps = {
   color: "#4a90d9",
   filterIds: new Set(["ws-1"]),
-  scopeId: "group-1",
+  scopeId: "workspace-1",
   workspaceListViewComponent: WorkspaceListViewStub,
 };
 
 describe("ContainerRow collapse/expand", () => {
-  beforeEach(() => workspaces.set([makeWs("ws-1"), makeWs("ws-2")] as never[]));
+  beforeEach(() =>
+    nestedWorkspaces.set([makeWs("ws-1"), makeWs("ws-2")] as never[]),
+  );
   afterEach(() => {
-    workspaces.set([]);
+    nestedWorkspaces.set([]);
     cleanup();
   });
 

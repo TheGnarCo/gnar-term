@@ -1,18 +1,18 @@
 <script lang="ts">
   /**
    * `gnar:git-info` — compact git status summary for the enclosing
-   * Workspace Group's repo path. Shows current branch, dirty-file
+   * Workspace's repo path. Shows current branch, dirty-file
    * count, and a "Browse on GitHub" link when the origin remote is a
    * recognizable HTTP(S) URL.
    *
    * Scope comes from the enclosing `DashboardHostContext` (spec §5.3):
-   *   - group scope  → uses `group.path` as the repo to inspect
+   *   - workspace scope  → uses `workspace.path` as the repo to inspect
    *   - global scope → widget takes `repoPath` as an explicit config
    *   - none         → widget is inert
    */
   import { getContext, onDestroy, onMount } from "svelte";
   import { theme } from "../stores/theme";
-  import { getWorkspaceGroup } from "../stores/workspace-groups";
+  import { getWorkspace } from "../stores/workspaces";
   import {
     deriveDashboardScope,
     getDashboardHost,
@@ -50,8 +50,8 @@
   const scope = deriveDashboardScope(host);
 
   function resolveRepoPath(): string | null {
-    if (scope.kind === "group") {
-      const g = getWorkspaceGroup(scope.groupId);
+    if (scope.kind === "workspace") {
+      const g = getWorkspace(scope.parentWorkspaceId);
       return g?.path ?? null;
     }
     if (scope.kind === "global") {
@@ -137,7 +137,7 @@
 
   {#if scope.kind === "none"}
     <div data-git-info-no-scope style="color: {$theme.fgDim};">
-      Mount inside a Workspace Group dashboard to see git status.
+      Mount inside a Workspace dashboard to see git status.
     </div>
   {:else if loading && !branch}
     <div style="color: {$theme.fgDim};">Loading…</div>

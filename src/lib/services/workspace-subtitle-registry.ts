@@ -1,5 +1,5 @@
 /**
- * Workspace Subtitle Registry — store-based registration for components
+ * NestedWorkspace Subtitle Registry — store-based registration for components
  * that render below workspace names in the primary sidebar.
  *
  * Extensions register Svelte components that receive a `workspaceId` prop.

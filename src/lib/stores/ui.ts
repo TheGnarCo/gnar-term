@@ -2,15 +2,15 @@ import { writable, derived } from "svelte/store";
 import type { MenuItem } from "../context-menu-types";
 
 export const isFullscreen = writable<boolean>(false);
-export const primarySidebarVisible = writable<boolean>(true);
+export const sidebarVisible = writable<boolean>(true);
 
 /** True while the Meta key is held. Used to preview drag-over states across the sidebar. */
 export const metaPreviewActive = writable<boolean>(false);
 
 /**
- * Id of the primary-sidebar block currently hovered (mouseenter on its
+ * Id of the sidebar block currently hovered (mouseenter on its
  * drag-grip column). `__workspaces__` for the built-in Workspaces block,
- * the namespaced section id (e.g. `workspace-groups:workspaceGroups`) otherwise,
+ * the namespaced section id (e.g. `workspaces:workspaces`) otherwise,
  * `null` when no block is hovered. Section-header banners subscribe to
  * decide whether to paint the dark-dot frit over the rail-overlap zone.
  */
@@ -18,8 +18,8 @@ export const hoveredSidebarBlockId = writable<string | null>(null);
 
 /**
  * Key of the root row currently hovered inside the Workspaces section
- * — encoded as `"kind:id"` (e.g. `"workspace-group:g-42"`, `"workspace:w-7"`),
- * or null when no row is hovered. Row renderers (WorkspaceGroupRowBody,
+ * — encoded as `"kind:id"` (e.g. `"workspace:g-42"`, `"nested-workspace:w-7"`),
+ * or null when no row is hovered. Row renderers (WorkspaceRowBody,
  * WorkspaceItem-in-root mode) subscribe to decide whether their rail
  * is in the expanded hover state.
  */
@@ -51,7 +51,7 @@ export const anyReorderActive = derived(
  */
 export const innerReorderActive = derived(
   reorderContext,
-  ($ctx) => $ctx?.kind === "workspace" || $ctx?.kind === "workspace-group",
+  ($ctx) => $ctx?.kind === "nested-workspace" || $ctx?.kind === "workspace",
 );
 
 /**
@@ -63,9 +63,7 @@ export const blockReorderActive = derived(
   ($ctx) => $ctx?.kind === "section",
 );
 
-export const primarySidebarWidth = writable<number>(220);
-export const secondarySidebarVisible = writable<boolean>(false);
-export const secondarySidebarWidth = writable<number>(220);
+export const sidebarWidth = writable<number>(220);
 export const commandPaletteOpen = writable<boolean>(false);
 export const findBarVisible = writable<boolean>(false);
 
@@ -160,8 +158,8 @@ export function showConfirmPrompt(
  *   - select:         dropdown of pre-defined options
  *   - info:           read-only label (useful for showing context like a
  *                     worktree path during a confirm dialog)
- *   - color:          swatch picker over GROUP_COLOR_SLOTS (matches
- *                     the chrome used by group creation)
+ *   - color:          swatch picker over WORKSPACE_COLOR_SLOTS (matches
+ *                     the chrome used by workspace creation)
  */
 export type FormField =
   | {
@@ -201,8 +199,8 @@ export type FormField =
       /** When true, the Browse button is hidden — the value is shown
        *  but not editable. Use when the caller has already resolved
        *  the directory and the user shouldn't be able to repoint it
-       *  (e.g. a dashboard spawned inside a group inherits the
-       *  group's path). */
+       *  (e.g. a dashboard spawned inside a workspace inherits the
+       *  workspace's path). */
       readonly?: boolean;
     };
 export interface FormPromptState {

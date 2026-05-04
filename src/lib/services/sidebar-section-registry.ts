@@ -1,8 +1,8 @@
 /**
- * Primary Sidebar Section Registry — store-based section registration.
+ * Sidebar Section Registry — store-based section registration.
  *
  * Extensions register collapsible sections that appear below the
- * Workspaces section in the primary sidebar. Core owns the header
+ * Workspaces section in the sidebar. Core owns the header
  * (label + chevron); extensions provide the content component.
  */
 import { createRegistry } from "./create-registry";

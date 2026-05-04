@@ -11,10 +11,10 @@
    * dashboards reseeds the poll loop.
    *
    * The uncommitted-changes badge previously lived here; it moved to
-   * the per-group Diff dashboard contribution. Open PR badges also
-   * lived here; they moved to the per-group `gnar:prs` widget on the
-   * Group Overview Dashboard, which has the room to render the full
-   * list without crowding the banner.
+   * the per-workspace Diff dashboard contribution. Open PR badges also
+   * lived here; they moved to the per-workspace `gnar:prs` widget on
+   * the Workspace Overview Dashboard, which has the room to render the
+   * full list without crowding the banner.
    */
   import { onDestroy, getContext } from "svelte";
   import { EXTENSION_API_KEY, type ExtensionAPI } from "../../extensions/api";

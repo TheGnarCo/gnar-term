@@ -62,7 +62,7 @@ interface LegacyOrchestrator {
   path: string;
   createdAt: string;
   parentGroupId?: string;
-  dashboardWorkspaceId?: string;
+  dashboardNestedWorkspaceId?: string;
 }
 
 interface LegacyConfigInput extends GnarTermConfig {
@@ -99,18 +99,18 @@ function makeOrchestrator(
     ...(overrides.parentGroupId
       ? { parentGroupId: overrides.parentGroupId }
       : {}),
-    ...(overrides.dashboardWorkspaceId
-      ? { dashboardWorkspaceId: overrides.dashboardWorkspaceId }
+    ...(overrides.dashboardNestedWorkspaceId
+      ? { dashboardNestedWorkspaceId: overrides.dashboardNestedWorkspaceId }
       : {}),
   };
 }
 
-function seedWorkspaceGroupsState(
+function seedWorkspacesState(
   groups: Array<{ id: string; path: string }>,
 ): void {
   fs.set(
     "/home/test/.config/gnar-term/extensions/workspace-groups/state.json",
-    JSON.stringify({ workspaceGroups: groups }),
+    JSON.stringify({ workspaces: groups }),
   );
 }
 
@@ -124,8 +124,8 @@ describe("config v2 migration — agent orchestrators → dashboards", () => {
     const { migrated, applied } = await migrate({
       schemaVersion: 1,
     });
-    expect(applied).toEqual([2]);
-    expect(migrated.schemaVersion).toBe(2);
+    expect(applied).toEqual([2, 3]);
+    expect(migrated.schemaVersion).toBe(3);
     expect(migrated.agentOrchestrators).toBeUndefined();
   });
 
@@ -135,11 +135,11 @@ describe("config v2 migration — agent orchestrators → dashboards", () => {
       agentOrchestrators: [],
     });
     expect(migrated.agentOrchestrators).toBeUndefined();
-    expect(migrated.schemaVersion).toBe(2);
+    expect(migrated.schemaVersion).toBe(3);
   });
 
   it("nested orchestrator → writes markdown to <group.path>/.gnar-term/agentic-dashboard.md", async () => {
-    seedWorkspaceGroupsState([{ id: "grp-a", path: "/work/projA" }]);
+    seedWorkspacesState([{ id: "grp-a", path: "/work/projA" }]);
     fs.set("/tmp/one.md", "# Orch One\ncontent\n");
 
     const { migrated } = await migrate({
@@ -159,7 +159,7 @@ describe("config v2 migration — agent orchestrators → dashboards", () => {
   });
 
   it("extra nested orchestrators beyond the first are dropped (cap enforcement)", async () => {
-    seedWorkspaceGroupsState([{ id: "grp-a", path: "/work/projA" }]);
+    seedWorkspacesState([{ id: "grp-a", path: "/work/projA" }]);
     fs.set("/tmp/keep.md", "# Keep\n");
     fs.set("/tmp/drop.md", "# Drop\n");
 
@@ -187,7 +187,7 @@ describe("config v2 migration — agent orchestrators → dashboards", () => {
   });
 
   it("existing target markdown wins — migration does not overwrite user edits", async () => {
-    seedWorkspaceGroupsState([{ id: "grp-a", path: "/work/projA" }]);
+    seedWorkspacesState([{ id: "grp-a", path: "/work/projA" }]);
     fs.set("/tmp/src.md", "# Old source\n");
     fs.set(
       "/work/projA/.gnar-term/agentic-dashboard.md",
@@ -210,7 +210,7 @@ describe("config v2 migration — agent orchestrators → dashboards", () => {
     );
   });
 
-  it("rootless orchestrator → writes markdown to ~/.config/gnar-term/global-agents.md and stamps agenticGlobal.markdownPath", async () => {
+  it("rootless orchestrator → writes markdown to ~/.config/gnar-term/global-agents.md", async () => {
     fs.set("/tmp/root.md", "# Global source\n");
 
     const { migrated } = await migrate({
@@ -222,7 +222,6 @@ describe("config v2 migration — agent orchestrators → dashboards", () => {
 
     const target = "/home/test/.config/gnar-term/global-agents.md";
     expect(fs.get(target)).toBe("# Global source\n");
-    expect(migrated.agenticGlobal?.markdownPath).toBe(target);
     expect(migrated.agentOrchestrators).toBeUndefined();
   });
 
@@ -230,7 +229,7 @@ describe("config v2 migration — agent orchestrators → dashboards", () => {
     fs.set("/tmp/keep-root.md", "# Keep global\n");
     fs.set("/tmp/drop-root.md", "# Drop\n");
 
-    const { migrated } = await migrate({
+    await migrate({
       schemaVersion: 1,
       agentOrchestrators: [
         makeOrchestrator({ id: "o-keep", path: "/tmp/keep-root.md" }),
@@ -241,13 +240,10 @@ describe("config v2 migration — agent orchestrators → dashboards", () => {
     expect(fs.get("/home/test/.config/gnar-term/global-agents.md")).toBe(
       "# Keep global\n",
     );
-    expect(migrated.agenticGlobal?.markdownPath).toBe(
-      "/home/test/.config/gnar-term/global-agents.md",
-    );
   });
 
   it("mixed nested + rootless: each class migrated independently", async () => {
-    seedWorkspaceGroupsState([
+    seedWorkspacesState([
       { id: "grp-a", path: "/work/projA" },
       { id: "grp-b", path: "/work/projB" },
     ]);
@@ -282,7 +278,7 @@ describe("config v2 migration — agent orchestrators → dashboards", () => {
 
   it("orphan orchestrator (parentGroupId references a deleted group) is skipped with warning; schema still bumps", async () => {
     // Extension state empty — no group with that id.
-    seedWorkspaceGroupsState([]);
+    seedWorkspacesState([]);
     fs.set("/tmp/orphan.md", "# Orphan\n");
 
     const { migrated, applied } = await migrate({
@@ -296,7 +292,7 @@ describe("config v2 migration — agent orchestrators → dashboards", () => {
       ],
     });
 
-    expect(applied).toEqual([2]);
+    expect(applied).toEqual([2, 3]);
     // Source file is left in place for manual rescue.
     expect(fs.get("/tmp/orphan.md")).toBe("# Orphan\n");
     expect(migrated.agentOrchestrators).toBeUndefined();

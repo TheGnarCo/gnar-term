@@ -2,6 +2,8 @@
   import { theme } from "../stores/theme";
   import Tab from "./Tab.svelte";
   import NewSurfaceButton from "./NewSurfaceButton.svelte";
+  import CloseButton from "./CloseButton.svelte";
+  import { zoomedSurfaceId } from "../stores/nested-workspace";
   import type { Pane } from "../types";
   import { getWorkspaceStatusByCategory } from "../services/status-registry";
   import {
@@ -13,6 +15,7 @@
   import { readable } from "svelte/store";
   import { tabDragState } from "../services/tab-drag";
   import { workspaceDragState } from "../services/workspace-drag";
+  import { onMount, afterUpdate } from "svelte";
 
   const emptyStore: Readable<StatusItem[]> = readable([]);
 
@@ -33,13 +36,15 @@
     pane.surfaces.find((s) => s.id === pane.activeSurfaceId)?.kind ===
     "preview";
 
+  $: isZoomed =
+    $zoomedSurfaceId !== null &&
+    pane.surfaces.some((s) => s.id === $zoomedSurfaceId);
+
   $: processStatusStore = workspaceId
     ? getWorkspaceStatusByCategory(workspaceId, "process")
     : emptyStore;
   $: processItems = $processStatusStore;
 
-  // Live tab-drag state — drives the within-pane reorder insert
-  // indicator and the cross-pane split outline.
   $: drag = $tabDragState;
   $: reorderInsertIdx =
     drag?.dropTarget?.kind === "reorder" && drag.dropTarget.paneId === pane.id
@@ -50,23 +55,85 @@
   $: isWorkspaceMergeTarget =
     $workspaceDragState?.dropTarget?.kind === "tab-merge" &&
     $workspaceDragState.dropTarget.paneId === pane.id;
+
+  let tabsEl: HTMLDivElement | null = null;
+  let canScrollLeft = false;
+  let canScrollRight = false;
+
+  function updateScrollState() {
+    if (!tabsEl) return;
+    canScrollLeft = tabsEl.scrollLeft > 0;
+    canScrollRight =
+      tabsEl.scrollLeft < tabsEl.scrollWidth - tabsEl.clientWidth - 1;
+  }
+
+  onMount(() => {
+    updateScrollState();
+    const ro = new ResizeObserver(updateScrollState);
+    if (tabsEl) ro.observe(tabsEl);
+    return () => ro.disconnect();
+  });
+
+  afterUpdate(updateScrollState);
 </script>
 
 <div
-  role="tablist"
-  data-pane-id={pane.id}
   style="
-    display: flex; align-items: center; gap: 1px; position: relative;
+    display: flex; align-items: center; position: relative;
     background: {$theme.tabBarBg}; border-bottom: 1px solid {$theme.tabBarBorder};
-    height: 28px; padding: 0 4px; flex-shrink: 0; overflow-x: auto;
-    scrollbar-width: none;
+    height: 28px; flex-shrink: 0;
     {isSplitTarget || isWorkspaceMergeTarget
     ? `outline: 2px solid ${$theme.accent}; outline-offset: -2px;`
     : ''}
   "
 >
-  {#each pane.surfaces as surface, i (surface.id)}
-    {#if reorderInsertIdx === i}
+  {#if canScrollLeft}
+    <button
+      aria-label="Scroll tabs left"
+      on:click={() => tabsEl?.scrollBy({ left: -120, behavior: "smooth" })}
+      style="
+        background: none; border: none; padding: 0; font: inherit;
+        color: {$theme.fgDim}; cursor: pointer; width: 20px; height: 28px;
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0; font-size: 14px; line-height: 1;
+        -webkit-app-region: no-drag;
+      ">‹</button
+    >
+  {/if}
+
+  <div
+    role="tablist"
+    data-pane-id={pane.id}
+    bind:this={tabsEl}
+    on:scroll={updateScrollState}
+    style="
+      display: flex; align-items: center; gap: 1px; flex: 1; min-width: 0;
+      padding: 0 4px; overflow-x: auto; scrollbar-width: none;
+    "
+  >
+    {#each pane.surfaces as surface, i (surface.id)}
+      {#if reorderInsertIdx === i}
+        <span
+          aria-hidden="true"
+          style="
+            width: 2px; align-self: stretch; background: {$theme.accent};
+            flex-shrink: 0; border-radius: 1px;
+          "
+        ></span>
+      {/if}
+      <Tab
+        {surface}
+        index={i}
+        isActive={surface.id === pane.activeSurfaceId}
+        paneId={pane.id}
+        {workspaceId}
+        onSelect={() => onSelectSurface(surface.id)}
+        onClose={() => onCloseSurface(surface.id)}
+        agentDotColor={agentDotColorForSurface(processItems, surface.id)}
+        agentStatus={agentStatusForSurface(processItems, surface.id)}
+      />
+    {/each}
+    {#if reorderInsertIdx === pane.surfaces.length}
       <span
         aria-hidden="true"
         style="
@@ -75,35 +142,34 @@
         "
       ></span>
     {/if}
-    <Tab
-      {surface}
-      index={i}
-      isActive={surface.id === pane.activeSurfaceId}
-      paneId={pane.id}
-      {workspaceId}
-      onSelect={() => onSelectSurface(surface.id)}
-      onClose={() => onCloseSurface(surface.id)}
-      agentDotColor={agentDotColorForSurface(processItems, surface.id)}
-      agentStatus={agentStatusForSurface(processItems, surface.id)}
-    />
-  {/each}
-  {#if reorderInsertIdx === pane.surfaces.length}
-    <span
-      aria-hidden="true"
+
+    <NewSurfaceButton {onNewSurface} {onSelectSurfaceType} />
+  </div>
+
+  {#if canScrollRight}
+    <button
+      aria-label="Scroll tabs right"
+      on:click={() => tabsEl?.scrollBy({ left: 120, behavior: "smooth" })}
       style="
-        width: 2px; align-self: stretch; background: {$theme.accent};
-        flex-shrink: 0; border-radius: 1px;
-      "
-    ></span>
+        background: none; border: none; padding: 0; font: inherit;
+        color: {$theme.fgDim}; cursor: pointer; width: 20px; height: 28px;
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0; font-size: 14px; line-height: 1;
+        -webkit-app-region: no-drag;
+      ">›</button
+    >
   {/if}
 
-  <NewSurfaceButton {onNewSurface} {onSelectSurfaceType} />
-
-  <div style="flex: 1;"></div>
-
   <div
-    style="display: flex; align-items: center; gap: 2px; padding-right: 2px;"
+    style="display: flex; align-items: center; gap: 2px; padding-right: 2px; flex-shrink: 0;"
   >
+    {#if isZoomed}
+      <button
+        style="font-size: 10px; color: {$theme.fgDim}; padding: 1px 6px; border-radius: 8px; background: {$theme.bgHighlight}; cursor: pointer; border: none;"
+        on:click={() => zoomedSurfaceId.set(null)}
+        title="Exit zoom (⌘⇧Enter)">Zoomed</button
+      >
+    {/if}
     {#if showJumpToBottom && onJumpToBottom}
       <button
         data-jump-to-bottom
@@ -196,28 +262,6 @@
         /></svg
       >
     </button>
-    <button
-      aria-label="Close Pane"
-      title="Close Pane"
-      style="background: none; border: none; padding: 0; font: inherit; color: {$theme.fgDim}; cursor: pointer; width: 24px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center;"
-      on:click|stopPropagation={onClosePane}
-    >
-      <svg
-        width="12"
-        height="12"
-        viewBox="0 0 12 12"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.5"
-        stroke-linecap="round"
-        aria-hidden="true"
-        ><line x1="2" y1="2" x2="10" y2="10" /><line
-          x1="10"
-          y1="2"
-          x2="2"
-          y2="10"
-        /></svg
-      >
-    </button>
+    <CloseButton size="container" label="Close Pane" on:click={onClosePane} />
   </div>
 </div>

@@ -7,7 +7,6 @@
  */
 import { type AppEventType } from "./event-bus";
 import { unregisterBySource } from "./command-registry";
-import { unregisterSidebarTabsBySource } from "./sidebar-tab-registry";
 import { unregisterTitleBarButtonsBySource } from "./titlebar-button-registry";
 import { unregisterSidebarSectionsBySource } from "./sidebar-section-registry";
 import { unregisterSurfaceTypesBySource } from "./surface-type-registry";
@@ -161,7 +160,6 @@ export function isBlockedAppPath(path: string): boolean {
  */
 export const REGISTRY_CLEANUP_FNS: Array<(source: string) => void> = [
   unregisterBySource,
-  unregisterSidebarTabsBySource,
   unregisterTitleBarButtonsBySource,
   unregisterSidebarSectionsBySource,
   unregisterSurfaceTypesBySource,
@@ -198,6 +196,8 @@ const VALID_EVENT_LIST: AppEventType[] = [
   "theme:changed",
   "worktree:merged",
   "agent:statusChanged",
+  "agent:interrupted",
+  "agent:killed",
   "surface:ptyReady",
 ];
 export const VALID_EVENTS: Set<string> = new Set(VALID_EVENT_LIST);

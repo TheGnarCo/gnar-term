@@ -12,11 +12,8 @@ import {
   type DashboardHostContext,
   type DashboardScope,
 } from "../../lib/contexts/dashboard-host";
-import { workspaces } from "../../lib/stores/workspace";
-import {
-  getWorkspaceGroup,
-  workspaceGroupsStore,
-} from "../../lib/stores/workspace-groups";
+import { nestedWorkspaces } from "../../lib/stores/nested-workspace";
+import { getWorkspace, workspacesStore } from "../../lib/stores/workspaces";
 import { claimedWorkspaceIds } from "../../lib/services/claimed-workspace-registry";
 import type {
   SpawnedByMarker,
@@ -42,7 +39,7 @@ export const SPAWN_AGENT_OPTIONS: Array<{ id: SpawnAgentType; label: string }> =
  * immediate re-fetch (force=true bypasses this throttle).
  *
  * Sized to keep us comfortably under GitHub's rate limits even with
- * many group dashboards mounted at once: with 5 group dashboards × 2
+ * many workspace dashboards mounted at once: with 5 workspace dashboards × 2
  * widgets each, a 5-minute cycle is 120 calls/hour total — well under
  * the 5000/hour authenticated REST limit and the GraphQL points cap.
  * 30s polling (the previous value) put us at ~1200 calls/hour for the
@@ -85,35 +82,35 @@ export function throttle<TArgs extends unknown[]>(
 }
 
 /**
- * Shared module-level derived store: maps each groupId to the set of
+ * Shared module-level derived store: maps each parentWorkspaceId to the set of
  * workspace IDs that belong to it under the §5.3 criteria (metadata,
- * explicit membership, and CWD-prefix fallback for unclaimed workspaces).
+ * explicit membership, and CWD-prefix fallback for unclaimed nestedWorkspaces).
  *
- * Computed once whenever workspaces / groups / claimed-ids change — all
+ * Computed once whenever nestedWorkspaces / workspaces / claimed-ids change — all
  * mounted dashboard widgets share this single computation instead of each
- * widget independently re-walking every workspace's surfaces on every
+ * widget independently re-walking every nested workspace's surfaces on every
  * emission (F32 perf fix).
  */
-const _groupWorkspaceIndex = derived(
-  [workspaces, workspaceGroupsStore, claimedWorkspaceIds],
-  ([$workspaces, $groups, $claimedIds]): Map<string, Set<string>> => {
+const _workspaceNestedWorkspaceIndex = derived(
+  [nestedWorkspaces, workspacesStore, claimedWorkspaceIds],
+  ([$nestedWorkspaces, $workspaces, $claimedIds]): Map<string, Set<string>> => {
     const index = new Map<string, Set<string>>();
-    for (const group of $groups) {
-      const base = group.path ? group.path.replace(/\/+$/, "") : "";
+    for (const workspace of $workspaces) {
+      const base = workspace.path ? workspace.path.replace(/\/+$/, "") : "";
       const prefix = base ? `${base}/` : "";
-      const members = new Set<string>(group.workspaceIds ?? []);
-      for (const ws of $workspaces) {
+      const members = new Set<string>(workspace.nestedWorkspaceIds ?? []);
+      for (const ws of $nestedWorkspaces) {
         const md = ws.metadata as Record<string, unknown> | undefined;
-        // Criterion 1: workspace was created with this group's id in metadata.
-        if (md?.groupId === group.id) {
+        // Criterion 1: nested workspace was created with this workspace's id in metadata.
+        if (md?.parentWorkspaceId === workspace.id) {
           members.add(ws.id);
           continue;
         }
-        // Criterion 2: workspace is explicitly listed in group.workspaceIds
+        // Criterion 2: nested workspace is explicitly listed in workspace.nestedWorkspaceIds
         // — already in `members` from the initial Set construction above.
         if (members.has(ws.id)) continue;
-        // Criterion 3: CWD fallback — only for unclaimed workspaces so we
-        // don't double-count workspaces already owned by another group/owner.
+        // Criterion 3: CWD fallback — only for unclaimed nestedWorkspaces so we
+        // don't double-count nestedWorkspaces already owned by another workspace/owner.
         if (!base || $claimedIds.has(ws.id)) continue;
         for (const surface of getAllSurfaces(ws)) {
           if (
@@ -126,7 +123,7 @@ const _groupWorkspaceIndex = derived(
           }
         }
       }
-      index.set(group.id, members);
+      index.set(workspace.id, members);
     }
     return index;
   },
@@ -137,17 +134,18 @@ const _groupWorkspaceIndex = derived(
  * DashboardHostContext. Implements the §5.3 scope rules:
  *   - no host / "none" scope → empty list
  *   - "global" scope         → every detected agent
- *   - "group" scope          → agents whose workspace satisfies any of:
- *        1. `metadata.groupId === groupId` (set by workspace creation)
- *        2. workspace id is in `group.workspaceIds` (set by drag-drop /
- *           promote-to-group flows that don't stamp metadata.groupId)
- *        3. workspace is unclaimed AND its first terminal CWD sits under
- *           the group's `path` prefix (catches native agents in terminals
- *           that were never explicitly added to the group)
+ *   - "workspace" scope      → agents whose nested workspace satisfies any of:
+ *        1. `metadata.parentWorkspaceId === parentWorkspaceId` (set by nested-workspace creation)
+ *        2. nested workspace id is in `workspace.nestedWorkspaceIds` (set by drag-drop /
+ *           promote-to-workspace flows that don't stamp metadata.parentWorkspaceId)
+ *        3. nested workspace is unclaimed AND its first terminal CWD sits under
+ *           the workspace's `path` prefix (catches native agents in terminals
+ *           that were never explicitly added to the workspace)
  *
  * Criteria 1 and 2 are checked before the claimed-workspace guard because
- * both represent explicit group membership — a workspace that belongs to
- * this group should appear even if it has been claimed by "core".
+ * both represent explicit workspace membership — a nested workspace that
+ * belongs to this workspace should appear even if it has been claimed by
+ * "core".
  *
  * Prefix containment uses a trailing-slash suffix so `/work/one` never
  * captures `/work/one-other` by accident.
@@ -163,23 +161,26 @@ export function hostScopedAgentsStore(
   if (scope.kind === "global") {
     return derived(api.agents, (agents) => agents);
   }
-  // "group" scope: each widget's derived store filters api.agents using the
-  // shared _groupWorkspaceIndex (O(1) lookup per agent) rather than walking
-  // all workspaces × surfaces independently.
-  return derived([api.agents, _groupWorkspaceIndex], ([$agents, $index]) => {
-    const members = $index.get(scope.groupId);
-    if (!members) return [];
-    return $agents.filter((a) => members.has(a.workspaceId));
-  });
+  // "workspace" scope: each widget's derived store filters api.agents using the
+  // shared _workspaceNestedWorkspaceIndex (O(1) lookup per agent) rather than walking
+  // all nestedWorkspaces × surfaces independently.
+  return derived(
+    [api.agents, _workspaceNestedWorkspaceIndex],
+    ([$agents, $index]) => {
+      const members = $index.get(scope.parentWorkspaceId);
+      if (!members) return [];
+      return $agents.filter((a) => members.has(a.workspaceId));
+    },
+  );
 }
 
 /**
- * Jump to the surface owning the given agent. Switches workspaces and
+ * Jump to the surface owning the given agent. Switches nestedWorkspaces and
  * focuses the pane so the user lands on the agent's terminal.
  */
 export function jumpToAgent(api: ExtensionAPI, agent: AgentRef): void {
   if (agent.workspaceId) {
-    api.switchWorkspace(agent.workspaceId);
+    api.switchNestedWorkspace(agent.workspaceId);
   }
   api.focusSurface(agent.surfaceId);
 }
@@ -242,7 +243,7 @@ export function timeAgo(iso: string): string {
 }
 
 /**
- * Resolve a workspace name from an id by walking the api.workspaces
+ * Resolve a workspace name from an id by walking the api.nestedWorkspaces
  * snapshot. Returns the id itself when no matching workspace exists
  * (e.g. an agent whose workspace was already torn down).
  */
@@ -251,7 +252,7 @@ export function workspaceNameFor(
   workspaceId: string,
 ): string {
   if (!workspaceId) return "";
-  const ws = get(api.workspaces).find((w) => w.id === workspaceId);
+  const ws = get(api.nestedWorkspaces).find((w) => w.id === workspaceId);
   return ws?.name ?? workspaceId;
 }
 
@@ -279,7 +280,7 @@ export type SpawnTarget =
       ok: true;
       repoPath: string;
       spawnedBy: SpawnedByMarker;
-      groupId?: string;
+      parentWorkspaceId?: string;
     }
   | { ok: false; error: string };
 
@@ -287,14 +288,17 @@ export function resolveSpawnTarget(
   scope: DashboardScope,
   repoPathProp: string | undefined,
 ): SpawnTarget {
-  if (scope.kind === "group") {
-    const group = getWorkspaceGroup(scope.groupId);
-    if (!group) return { ok: false, error: "Workspace Group not found" };
+  if (scope.kind === "workspace") {
+    const workspace = getWorkspace(scope.parentWorkspaceId);
+    if (!workspace) return { ok: false, error: "Workspace not found" };
     return {
       ok: true,
-      repoPath: group.path,
-      spawnedBy: { kind: "group", groupId: scope.groupId },
-      groupId: scope.groupId,
+      repoPath: workspace.path,
+      spawnedBy: {
+        kind: "workspace",
+        parentWorkspaceId: scope.parentWorkspaceId,
+      },
+      parentWorkspaceId: scope.parentWorkspaceId,
     };
   }
   if (scope.kind === "global") {
@@ -318,6 +322,7 @@ export function resolveSpawnTarget(
 export function scopeAttrs(scope: DashboardScope): Record<string, string> {
   return {
     "data-scope-kind": scope.kind,
-    "data-scope-group-id": scope.kind === "group" ? scope.groupId : "",
+    "data-scope-workspace-id":
+      scope.kind === "workspace" ? scope.parentWorkspaceId : "",
   };
 }

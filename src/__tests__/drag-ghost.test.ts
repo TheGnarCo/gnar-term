@@ -97,12 +97,35 @@ describe("DropGhost placeholder component", () => {
     // from non-source siblings during a drag. The floating cursor-
     // attached ghost stays normal-bordered.
     expect(DROP_GHOST).toMatch(/rgba\(40,\s*40,\s*40,\s*0\.[68]\)/);
-    expect(DROP_GHOST).toMatch(/2px\s+dashed\s+rgba\(255,\s*255,\s*255/);
+    expect(DROP_GHOST).toMatch(/1px\s+dashed\s+rgba\(255,\s*255,\s*255/);
     expect(DROP_GHOST).toMatch(/height:\s*\{\s*height\s*\}\s*px/);
   });
 
   it("is pointer-events: none so it never intercepts the drop", () => {
     expect(DROP_GHOST).toMatch(/pointer-events:\s*none/);
+  });
+
+  it("has zero top and bottom margin so the row container's gap is the only inter-row spacing", () => {
+    // The DropGhost is rendered INSIDE a row container that already
+    // owns the 8px inter-row gap (.root-row + .root-row,
+    // .workspace-list-row + .workspace-list-row). Adding a
+    // margin-top/bottom on the ghost would NOT collapse with the row
+    // gap on the bottom edge — it stacks, producing an 8px layout
+    // shift every time the indicator moves. Pinning margin: 0
+    // top/bottom keeps the ghost as a true height-replacement for
+    // the row's content.
+    const marginRules = DROP_GHOST.match(/margin:\s*[^;]+;/g) ?? [];
+    expect(marginRules.length).toBeGreaterThan(0);
+    for (const rule of marginRules) {
+      const values = rule
+        .replace(/margin:\s*/, "")
+        .replace(";", "")
+        .trim()
+        .split(/\s+/);
+      expect(values.length).toBe(4);
+      expect(values[0]).toBe("0");
+      expect(values[2]).toBe("0");
+    }
   });
 });
 
@@ -112,8 +135,9 @@ describe("drag source hides + ghost shows at target", () => {
   const LIST_VIEW = read("src/lib/components/WorkspaceListView.svelte");
 
   it("WorkspaceItem hides its row (display: none) while dragActive", () => {
-    expect(WORKSPACE_ITEM).toMatch(
-      /display:\s*\{\s*dragActive\s*\?\s*'none'\s*:\s*'flex'\s*\}/,
+    const SIDEBAR_ELEM = read("src/lib/components/SidebarElement.svelte");
+    expect(SIDEBAR_ELEM).toMatch(
+      /display:\s*\{\s*isDragging\s*\?\s*'none'\s*:\s*'flex'\s*\}/,
     );
     // The old opacity-dim approach is gone.
     expect(WORKSPACE_ITEM).not.toMatch(
@@ -121,12 +145,31 @@ describe("drag source hides + ghost shows at target", () => {
     );
   });
 
-  it("WorkspaceListBlock hides the dragged root row (display: none)", () => {
-    // Root-level rows (workspace or project) hide their content while
-    // being dragged; the DropGhost holds the slot.
+  it("WorkspaceListBlock skips rendering the dragged root row entirely", () => {
+    // Root-level rows hide while being dragged; the DropGhost holds the
+    // slot. The source row's outer `.root-row` is FULLY skipped (not
+    // just inner display:none) — that lets the Ghost-row inherit the
+    // source's first/last-row status via the natural
+    // `.root-row + .root-row { margin-top: 8px }` rule, so the Ghost
+    // has the same 8px gaps to its neighbors as a real row would.
+    const oneLine = LIST_BLOCK.replace(/\s+/g, " ");
+    expect(oneLine).toMatch(/\{#if\s+!isSource\}/);
+    expect(oneLine).not.toMatch(
+      /display:\s*\{\s*isSource\s*\?\s*'none'\s*:\s*'block'\s*\}/,
+    );
+  });
+
+  it("WorkspaceListBlock renders the DropGhost as its own .root-row sibling", () => {
+    // The DropGhost lives inside its OWN `.root-row` div, not nested
+    // inside an existing entry row. This is what makes the
+    // `.root-row + .root-row` margin rule paint a gap above and below
+    // the ghost during a drag.
     const oneLine = LIST_BLOCK.replace(/\s+/g, " ");
     expect(oneLine).toMatch(
-      /display:\s*\{\s*isSource\s*\?\s*'none'\s*:\s*'block'\s*\}/,
+      /\{#if\s+ghostBefore\}\s*<div\s+class="root-row">\s*<DropGhost/,
+    );
+    expect(oneLine).toMatch(
+      /\{#if\s+ghostAfter\}\s*<div\s+class="root-row">\s*<DropGhost/,
     );
   });
 
@@ -162,14 +205,11 @@ describe("root-workspace drag paints strong overlay on sibling rows", () => {
     );
   });
 
-  it("renders an absolute-positioned overlay over non-source rows", () => {
+  it("does not render an overlay over non-source rows (items stay normal)", () => {
     const oneLine = LIST_BLOCK.replace(/\s+/g, " ");
-    // Overlay branch is gated on isSibling and covers the whole row
-    // (inset: 0) with the row's color + contrast fg, pointer-events
-    // none so the drag itself stays responsive beneath.
-    expect(oneLine).toMatch(/\{#if isSibling\}/);
-    expect(oneLine).toMatch(/position:\s*absolute;\s*inset:\s*0/);
-    expect(oneLine).toMatch(/pointer-events:\s*none/);
+    // Overlay removed per UX: non-source rows should not change appearance
+    // during drag — only the drag ghost itself changes.
+    expect(oneLine).not.toMatch(/\{#if isSibling\}/);
   });
 
   it("uses contrastColor against the row color for the overlay text", () => {

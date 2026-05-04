@@ -63,9 +63,9 @@ export function getExtensionApiById(
 /**
  * Register an ExtensionAPI for a core subsystem that doesn't live in
  * the extension layer but needs to mount components through
- * `ExtensionWrapper` (e.g. Workspace Groups — Stage 5 moved the CRUD
- * into core, but row renderers still flow through the ExtensionWrapper
- * path to inherit the shared Svelte context).
+ * `ExtensionWrapper` (e.g. Workspaces — Stage 5 moved the CRUD into
+ * core, but row renderers still flow through the ExtensionWrapper path
+ * to inherit the shared Svelte context).
  *
  * Unlike `registerExtension`, this does not add to the `_extensions`
  * store and does not wire an activation lifecycle; it only registers
@@ -255,7 +255,7 @@ export function deactivateExtension(id: string): void {
 
 /**
  * Flush all pending debounced state writes to disk.
- * Call this on app close so state like project workspaceIds doesn't
+ * Call this on app close so state like project nestedWorkspaceIds doesn't
  * get lost within the 300ms debounce window.
  *
  * Writes run in parallel so one slow extension can't block the others,

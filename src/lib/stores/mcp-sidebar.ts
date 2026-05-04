@@ -17,7 +17,7 @@
  * client polls for via `poll_events`.
  */
 import { writable, derived } from "svelte/store";
-import { activeWorkspace } from "./workspace";
+import { activeWorkspace } from "./nested-workspace";
 
 export interface SidebarItem {
   id: string;
@@ -94,17 +94,6 @@ export const primarySections = derived(
     if (!$ws) return [];
     return Array.from($map.values()).filter(
       (s) => s.side === "primary" && s.workspaceId === $ws.id,
-    );
-  },
-);
-
-/** Sections in the active workspace's secondary sidebar. */
-export const secondarySections = derived(
-  [mcpSidebarSections, activeWorkspace],
-  ([$map, $ws]) => {
-    if (!$ws) return [];
-    return Array.from($map.values()).filter(
-      (s) => s.side === "secondary" && s.workspaceId === $ws.id,
     );
   },
 );

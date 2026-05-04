@@ -14,9 +14,9 @@ vi.mock("svelte", () => ({
   tick: vi.fn(() => Promise.resolve()),
 }));
 
-vi.mock("../lib/stores/workspace", () => ({
+vi.mock("../lib/stores/nested-workspace", () => ({
   activeSurface: writable(null),
-  workspaces: writable([]),
+  nestedWorkspaces: writable([]),
 }));
 
 vi.mock("../lib/types", () => ({
@@ -27,7 +27,10 @@ vi.mock("../lib/types", () => ({
 
 import { invoke } from "@tauri-apps/api/core";
 import { tick } from "svelte";
-import { activeSurface, workspaces } from "../lib/stores/workspace";
+import {
+  activeSurface,
+  nestedWorkspaces,
+} from "../lib/stores/nested-workspace";
 
 const mockedInvoke = vi.mocked(invoke);
 const mockedTick = vi.mocked(tick);
@@ -222,7 +225,7 @@ describe("registerPtyForSurface", () => {
       terminal: { focus: vi.fn() },
     } as unknown as Surface;
 
-    workspaces.set([]);
+    nestedWorkspaces.set([]);
 
     const {
       lookupTerminalByPtyId,

@@ -3,14 +3,14 @@
  * branch + dirty count and writes the results into the status registry
  * under source `"git"`.
  *
- * All workspaces share a single 20s batch timer that calls
+ * All nestedWorkspaces share a single 20s batch timer that calls
  * `git_status_short_batch` with every cached git root in one IPC round
  * trip. On activation/CWD-change an immediate individual refresh still
  * runs so status updates feel instant. `.git/index` file-watching gives
  * sub-second reactivity for actual git ops.
  *
  * PR/CI state was historically registered here under itemId `"pr"`; the
- * pill was retired in favor of the Group Dashboards' `gnar:prs` widget,
+ * pill was retired in favor of the Workspace Dashboards' `gnar:prs` widget,
  * which renders the full open-PR list with row actions instead of a
  * single per-workspace badge.
  */
@@ -21,9 +21,9 @@ import {
   clearStatusItem,
   clearAllStatusForSourceAndWorkspace,
 } from "./status-registry";
-import { workspaces, activeWorkspace } from "../stores/workspace";
+import { nestedWorkspaces, activeWorkspace } from "../stores/nested-workspace";
 import { getActiveCwd, getWorkspaceCwd, wsMeta } from "./service-helpers";
-import { getWorkspaceGroup } from "../stores/workspace-groups";
+import { getWorkspace } from "../stores/workspaces";
 
 export const GIT_STATUS_SOURCE = "git";
 
@@ -455,7 +455,7 @@ async function ensurePolling(wsId: string): Promise<void> {
   if (workspaceCwds.has(wsId)) return;
 
   // Active workspace can use the cheaper live-surface lookup; other
-  // workspaces walk their own split tree so newly-created-but-inactive
+  // nestedWorkspaces walk their own split tree so newly-created-but-inactive
   // rows don't wait for the user to activate them before status fills.
   let cwd =
     activeWorkspaceId === wsId
@@ -463,14 +463,14 @@ async function ensurePolling(wsId: string): Promise<void> {
       : await getWorkspaceCwd(wsId);
 
   if (!cwd) {
-    // Nested workspaces that haven't been activated yet have no pty CWD.
-    // Fall back to the group's root path so their diff status still
+    // Nested nestedWorkspaces that haven't been activated yet have no pty CWD.
+    // Fall back to the workspace's root path so their diff status still
     // shows the project's dirty state until they're first opened.
-    const ws = get(workspaces).find((w) => w.id === wsId);
+    const ws = get(nestedWorkspaces).find((w) => w.id === wsId);
     if (ws) {
-      const groupId = wsMeta(ws).groupId;
-      if (typeof groupId === "string") {
-        cwd = getWorkspaceGroup(groupId)?.path;
+      const parentWorkspaceId = wsMeta(ws).parentWorkspaceId;
+      if (typeof parentWorkspaceId === "string") {
+        cwd = getWorkspace(parentWorkspaceId)?.path;
       }
     }
   }
@@ -491,11 +491,11 @@ export function startGitStatusService(): void {
   // Bootstrap: kick polling for every workspace already in the store —
   // restored sessions don't fire `workspace:created`, so without this
   // pass only the active workspace would populate status on startup.
-  for (const ws of get(workspaces)) {
+  for (const ws of get(nestedWorkspaces)) {
     void ensurePolling(ws.id);
   }
 
-  unsubWorkspaces = workspaces.subscribe((wsList) => {
+  unsubWorkspaces = nestedWorkspaces.subscribe((wsList) => {
     // Kick off polling for any workspace whose pty CWD just became available
     // (covers the case where the pty starts after the service was initialised).
     for (const ws of wsList) {

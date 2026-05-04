@@ -2,29 +2,17 @@
 <script lang="ts">
   import {
     contextMenu,
-    anyReorderActive,
     metaPreviewActive,
     showConfirmPrompt,
   } from "../stores/ui";
   import { theme } from "../stores/theme";
-  import {
-    archivedOrder,
-    archivedDefs,
-    type ArchivedRow,
-  } from "../stores/archive";
-  import {
-    unarchiveWorkspace,
-    unarchiveGroup,
-  } from "../services/archive-service";
+  import { archivedOrder, archivedDefs } from "../stores/archive";
+  import { unarchiveWorkspace } from "../services/archive-service";
   import DragGrip from "./DragGrip.svelte";
 
   let expanded = false;
   let archiveZoneEl: HTMLElement | null = null;
-  let hoveredRowKey: string | null = null;
-
-  function rowKey(row: ArchivedRow): string {
-    return `${row.kind}:${row.id}`;
-  }
+  let hoveredRowId: string | null = null;
 
   let metaPreviewTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -53,66 +41,52 @@
     deactivateMetaPreview();
   }
 
-  $: if (archiveZoneEl) {
-    if ($anyReorderActive)
-      archiveZoneEl.setAttribute("data-drag-active", "true");
-    else archiveZoneEl.removeAttribute("data-drag-active");
-  }
-
   $: totalCount = $archivedOrder.length;
 
   function toggle() {
     expanded = !expanded;
   }
 
-  function getName(row: ArchivedRow): string {
-    if (row.kind === "workspace") {
-      return $archivedDefs.workspaces[row.id]?.def.name ?? row.id;
-    }
-    return $archivedDefs.groups[row.id]?.group.name ?? row.id;
+  function getName(id: string): string {
+    return $archivedDefs.workspaces[id]?.workspace.name ?? id;
   }
 
-  function getGroupWorkspaceCount(id: string): number {
-    return $archivedDefs.groups[id]?.workspaceDefs.length ?? 0;
+  function getNestedCount(id: string): number {
+    return $archivedDefs.workspaces[id]?.nestedWorkspaceDefs.length ?? 0;
   }
 
-  async function confirmAndUnarchive(row: ArchivedRow) {
-    const name = getName(row);
-    const isGroup = row.kind === "workspace-group";
-    const message = isGroup
-      ? `Unarchive "${name}" and restore its workspaces?`
-      : `Unarchive "${name}"?`;
-    const confirmed = await showConfirmPrompt(message, {
-      confirmLabel: "Unarchive",
-    });
+  async function confirmAndUnarchive(id: string) {
+    const confirmed = await showConfirmPrompt(
+      `Unarchive "${getName(id)}" and restore its branches?`,
+      { confirmLabel: "Unarchive" },
+    );
     if (!confirmed) return;
-    if (row.kind === "workspace") void unarchiveWorkspace(row.id);
-    else void unarchiveGroup(row.id);
+    void unarchiveWorkspace(id);
   }
 
-  function showItemContextMenu(x: number, y: number, row: ArchivedRow) {
+  function showItemContextMenu(x: number, y: number, id: string) {
     contextMenu.set({
       x,
       y,
       items: [
         {
           label: "Unarchive",
-          action: () => void confirmAndUnarchive(row),
+          action: () => void confirmAndUnarchive(id),
         },
       ],
     });
   }
 
   // Drag-out state
-  let draggingRow: ArchivedRow | null = null;
+  let draggingId: string | null = null;
   let ghostEl: HTMLElement | null = null;
 
-  function startItemDrag(e: MouseEvent, row: ArchivedRow) {
+  function startItemDrag(e: MouseEvent, id: string) {
     if (e.button !== 0) return;
-    draggingRow = row;
+    draggingId = id;
 
     ghostEl = document.createElement("div");
-    ghostEl.textContent = getName(row);
+    ghostEl.textContent = getName(id);
     Object.assign(ghostEl.style, {
       position: "fixed",
       pointerEvents: "none",
@@ -146,9 +120,9 @@
     ghostEl?.remove();
     ghostEl = null;
 
-    if (!draggingRow) return;
-    const row = draggingRow;
-    draggingRow = null;
+    if (!draggingId) return;
+    const id = draggingId;
+    draggingId = null;
 
     const archiveEl = document.querySelector("[data-archive-zone]");
     if (archiveEl) {
@@ -158,10 +132,7 @@
         e.clientX <= rect.right &&
         e.clientY >= rect.top &&
         e.clientY <= rect.bottom;
-      if (!overZone) {
-        if (row.kind === "workspace") void unarchiveWorkspace(row.id);
-        else void unarchiveGroup(row.id);
-      }
+      if (!overZone) void unarchiveWorkspace(id);
     }
   }
 </script>
@@ -200,29 +171,22 @@
       {#if totalCount === 0}
         <div class="empty-hint">drag here to archive</div>
       {:else}
-        {#each $archivedOrder as row (`${row.kind}:${row.id}`)}
+        {#each $archivedOrder as id (id)}
           <!-- svelte-ignore a11y-no-static-element-interactions -->
           <div
             class="archive-item"
-            on:mouseenter={() => (hoveredRowKey = rowKey(row))}
-            on:mouseleave={() => (hoveredRowKey = null)}
+            on:mouseenter={() => (hoveredRowId = id)}
+            on:mouseleave={() => (hoveredRowId = null)}
             on:contextmenu|preventDefault={(e) =>
-              showItemContextMenu(e.clientX, e.clientY, row)}
-            on:mousedown={(e) => startItemDrag(e, row)}
+              showItemContextMenu(e.clientX, e.clientY, id)}
+            on:mousedown={(e) => startItemDrag(e, id)}
           >
             <DragGrip
               theme={$theme}
-              visible={hoveredRowKey === rowKey(row)}
+              visible={hoveredRowId === id}
               railOpacity={0.35}
-              fadeRight={true}
             />
-            {#if row.kind === "workspace-group"}
-              <span class="item-name"
-                >{getName(row)} ({getGroupWorkspaceCount(row.id)})</span
-              >
-            {:else}
-              <span class="item-name">{getName(row)}</span>
-            {/if}
+            <span class="item-name">{getName(id)} ({getNestedCount(id)})</span>
           </div>
         {/each}
       {/if}
@@ -237,9 +201,7 @@
     position: relative;
   }
 
-  .archive-zone:global([data-drag-over])::after,
-  .archive-zone:global([data-drag-preview])::after,
-  .archive-zone:global([data-drag-active])::after {
+  .archive-zone:global([data-drag-preview])::after {
     content: "Archive";
     position: absolute;
     inset: 0;

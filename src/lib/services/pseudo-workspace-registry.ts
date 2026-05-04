@@ -1,7 +1,7 @@
 /**
- * Pseudo-Workspace Registry — extensions register non-persisted, pinned
+ * Pseudo-NestedWorkspace Registry — extensions register non-persisted, pinned
  * entries that render in the root sidebar list alongside real
- * workspaces. The canonical use case is the Global Agentic Dashboard
+ * nestedWorkspaces. The canonical use case is the Global Agentic Dashboard
  * (registered by the agentic extension), which appears at the top of
  * the root list, cannot be deleted or renamed, and renders a
  * configurable markdown body.
@@ -16,7 +16,7 @@ import {
 
 /**
  * A virtual "workspace" pinned at a fixed position in the root list.
- * Pseudo-workspaces are not stored in `AppState.workspaces`; they are
+ * Pseudo-nestedWorkspaces are not stored in `AppState.nestedWorkspaces`; they are
  * rebuilt from the registry on every render and cannot be closed,
  * renamed, or have panes/surfaces added via the normal workspace
  * controls.
@@ -41,7 +41,7 @@ export interface PseudoWorkspace {
   label: string;
   /**
    * Position within the root list:
-   *   - `"root-top"`: pinned above real workspaces and groups.
+   *   - `"root-top"`: pinned above real nestedWorkspaces and workspaces.
    *   - `"root-bottom"`: pinned below every real row.
    * Order within a position bucket follows registration order.
    */
@@ -62,7 +62,7 @@ export interface PseudoWorkspace {
    * Synthetic workspace metadata exposed to the body via
    * `DashboardHostContext`. Mirrors the metadata a real dashboard
    * workspace would carry, so widgets that derive scope from
-   * `metadata.isGlobalAgenticDashboard` / `metadata.groupId` work
+   * `metadata.isGlobalAgenticDashboard` / `metadata.parentWorkspaceId` work
    * uniformly between pseudo- and real hosts.
    */
   metadata: Record<string, unknown>;
@@ -74,12 +74,12 @@ export interface PseudoWorkspace {
    */
   settings?: unknown;
   /**
-   * Optional component rendered INSIDE the primary-sidebar root row,
+   * Optional component rendered INSIDE the sidebar root row,
    * to the right of the icon, in place of the plain text label. Used
    * by the Global Agentic Dashboard to render a live status-chip grid
    * instead of the static "Agents dashboard" string. Mounted via
    * ExtensionWrapper so it receives the registering extension's `api`
-   * (and can subscribe to `api.agents`, `api.workspaces`, etc.).
+   * (and can subscribe to `api.agents`, `api.nestedWorkspaces`, etc.).
    *
    * The component is rendered inside a tight flex slot — keep its
    * footprint small (40px-ish height, ~60% of the row's inner width).
@@ -124,13 +124,13 @@ export function unregisterPseudoWorkspacesBySource(source: string): void {
 export const getPseudoWorkspace = registry.get;
 export const resetPseudoWorkspaces = registry.reset;
 
-/** All registered pseudo-workspaces, in registration order. */
+/** All registered pseudo-nestedWorkspaces, in registration order. */
 export function getPseudoWorkspaces(): PseudoWorkspace[] {
   return get(pseudoWorkspaceStore);
 }
 
 /**
- * Pseudo-workspaces that should render at the top of the root list,
+ * Pseudo-nestedWorkspaces that should render at the top of the root list,
  * in registration order. Returned array is stable across calls until
  * the registry mutates.
  */
@@ -139,7 +139,7 @@ export function getRootTopPseudoWorkspaces(): PseudoWorkspace[] {
 }
 
 /**
- * Pseudo-workspaces that should render at the bottom of the root list,
+ * Pseudo-nestedWorkspaces that should render at the bottom of the root list,
  * in registration order.
  */
 export function getRootBottomPseudoWorkspaces(): PseudoWorkspace[] {

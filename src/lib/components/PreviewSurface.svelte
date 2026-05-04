@@ -5,7 +5,7 @@
   import { theme } from "../stores/theme";
   import type { PreviewSurface } from "../types";
   import { getAllPanes } from "../types";
-  import { workspaces } from "../stores/workspace";
+  import { nestedWorkspaces } from "../stores/nested-workspace";
   import {
     openPreview,
     refreshPreviewElement,
@@ -32,7 +32,7 @@
     paneId: string;
     hostMetadata?: Record<string, unknown>;
   } | null {
-    for (const ws of get(workspaces)) {
+    for (const ws of get(nestedWorkspaces)) {
       for (const pane of getAllPanes(ws.splitRoot)) {
         if (pane.surfaces.some((s) => s.id === surface.id)) {
           const hostMetadata = ws.metadata;

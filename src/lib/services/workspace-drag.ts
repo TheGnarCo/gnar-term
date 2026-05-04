@@ -1,5 +1,5 @@
 import { writable, get, type Readable } from "svelte/store";
-import { workspaces } from "../stores/workspace";
+import { nestedWorkspaces } from "../stores/nested-workspace";
 import { getAllPanes } from "../types";
 import { wsMeta } from "./service-helpers";
 export type WorkspacePaneDropTarget =
@@ -29,11 +29,11 @@ export function setWorkspaceDragState(state: WorkspaceDragState | null): void {
 export function detectWorkspacePaneDrop(
   x: number,
   y: number,
-  srcWorkspaceId: string,
+  srcNestedWorkspaceId: string,
 ): WorkspacePaneDropTarget {
-  const allWs = get(workspaces);
-  const srcWs = allWs.find((ws) => ws.id === srcWorkspaceId);
-  const srcGroupId = srcWs ? wsMeta(srcWs).groupId : undefined;
+  const allWs = get(nestedWorkspaces);
+  const srcWs = allWs.find((ws) => ws.id === srcNestedWorkspaceId);
+  const srcWorkspaceId = srcWs ? wsMeta(srcWs).parentWorkspaceId : undefined;
 
   const paneBodies = Array.from(
     document.querySelectorAll("[data-pane-body]"),
@@ -51,12 +51,12 @@ export function detectWorkspacePaneDrop(
     const tgtWs = allWs.find((ws) =>
       getAllPanes(ws.splitRoot).some((p) => p.id === paneId),
     );
-    if (!tgtWs || tgtWs.id === srcWorkspaceId) continue;
+    if (!tgtWs || tgtWs.id === srcNestedWorkspaceId) continue;
 
-    const tgtGroupId = wsMeta(tgtWs).groupId;
+    const tgtWorkspaceId = wsMeta(tgtWs).parentWorkspaceId;
 
-    // Group compatibility: root → root only; grouped → same group only
-    if (srcGroupId !== tgtGroupId) {
+    // Workspace compatibility: rootless → rootless only; nested → same parent workspace only
+    if (srcWorkspaceId !== tgtWorkspaceId) {
       return { kind: "deny" };
     }
 
@@ -122,11 +122,11 @@ export function removeDragDenyOverlay(ghostEl: HTMLElement): void {
 export function detectTabBarDropForWorkspace(
   x: number,
   y: number,
-  srcWorkspaceId: string,
+  srcNestedWorkspaceId: string,
 ): WorkspacePaneDropTarget {
-  const allWs = get(workspaces);
-  const srcWs = allWs.find((ws) => ws.id === srcWorkspaceId);
-  const srcGroupId = srcWs ? wsMeta(srcWs).groupId : undefined;
+  const allWs = get(nestedWorkspaces);
+  const srcWs = allWs.find((ws) => ws.id === srcNestedWorkspaceId);
+  const srcWorkspaceId = srcWs ? wsMeta(srcWs).parentWorkspaceId : undefined;
 
   const elAtCursor = document.elementFromPoint(x, y);
   if (!elAtCursor) return null;
@@ -142,10 +142,10 @@ export function detectTabBarDropForWorkspace(
   const tgtWs = allWs.find((ws) =>
     getAllPanes(ws.splitRoot).some((p) => p.id === paneId),
   );
-  if (!tgtWs || tgtWs.id === srcWorkspaceId) return null;
+  if (!tgtWs || tgtWs.id === srcNestedWorkspaceId) return null;
 
-  const tgtGroupId = wsMeta(tgtWs).groupId;
-  if (srcGroupId !== tgtGroupId) {
+  const tgtWorkspaceId = wsMeta(tgtWs).parentWorkspaceId;
+  if (srcWorkspaceId !== tgtWorkspaceId) {
     return { kind: "deny" };
   }
 

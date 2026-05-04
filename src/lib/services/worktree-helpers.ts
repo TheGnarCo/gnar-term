@@ -144,22 +144,24 @@ export async function promptWorktreeConfig(
           defaultValue: "main",
         } as const);
 
-  const result = await showFormPrompt(options?.title || "New Worktree", [
-    {
-      key: "branch",
-      label: "Branch Name",
-      placeholder: "feature/my-branch",
-      defaultValue: options?.branchPrefix || "",
-    },
-    baseField,
-  ]);
+  const result = await showFormPrompt(
+    options?.title || "New Worktree Workspace",
+    [
+      {
+        key: "branch",
+        label: "Branch Name",
+        placeholder: "feature/my-branch",
+        defaultValue: options?.branchPrefix || "",
+      },
+      baseField,
+    ],
+  );
   if (!result || !result.branch?.trim()) return null;
 
   const branch = result.branch.trim();
   const base = result.base?.trim() || "main";
-  const repoName = repoPath.split("/").pop() || "repo";
-  const parentDir = repoPath.substring(0, repoPath.lastIndexOf("/"));
-  const worktreePath = `${parentDir}/${repoName}-${branch.replace(/\//g, "-")}`;
+  const worktreeName = branch.replace(/\//g, "-");
+  const worktreePath = `${repoPath}/.gnar-term/worktrees/${worktreeName}`;
 
   return { repoPath, branch, base, worktreePath };
 }

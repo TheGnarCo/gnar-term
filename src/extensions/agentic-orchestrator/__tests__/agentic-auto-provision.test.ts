@@ -1,7 +1,7 @@
 /**
  * Agentic auto-provision (Story 4): on activate, every existing
- * workspace group gets an Agentic Dashboard workspace; on deactivate,
- * the provisioned workspaces are closed.
+ * workspace gets an Agentic Dashboard nested workspace; on deactivate,
+ * the provisioned nestedWorkspaces are closed.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { get } from "svelte/store";
@@ -38,8 +38,11 @@ import {
   getDashboardContribution,
   resetDashboardContributions,
 } from "../../../lib/services/dashboard-contribution-registry";
-import { workspaces, activeWorkspaceIdx } from "../../../lib/stores/workspace";
-import { workspaceGroupsStore } from "../../../lib/stores/workspace-groups";
+import {
+  nestedWorkspaces,
+  activeNestedWorkspaceIdx,
+} from "../../../lib/stores/nested-workspace";
+import { workspacesStore } from "../../../lib/stores/workspaces";
 import {
   markRestored,
   resetRestoreSignal,
@@ -50,9 +53,9 @@ describe("agentic auto-provision", () => {
     resetRestoreSignal();
     await resetExtensions();
     resetDashboardContributions();
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
-    workspaceGroupsStore.set([]);
+    nestedWorkspaces.set([]);
+    activeNestedWorkspaceIdx.set(-1);
+    workspacesStore.set([]);
   });
 
   it("contribution advertises autoProvision + locked reason", async () => {
@@ -68,14 +71,14 @@ describe("agentic auto-provision", () => {
     expect(contribution?.icon).toBeDefined();
   });
 
-  it("provisions the Agentic Dashboard for every existing group on activate", async () => {
-    workspaceGroupsStore.set([
+  it("provisions the Agentic Dashboard for every existing workspace on activate", async () => {
+    workspacesStore.set([
       {
         id: "g1",
         name: "G1",
         path: "/tmp/g1",
         color: "blue",
-        workspaceIds: [],
+        nestedWorkspaceIds: [],
         isGit: true,
         createdAt: "2026-04-21T00:00:00.000Z",
       },
@@ -84,12 +87,12 @@ describe("agentic auto-provision", () => {
         name: "G2",
         path: "/tmp/g2",
         color: "green",
-        workspaceIds: [],
+        nestedWorkspaceIds: [],
         isGit: true,
         createdAt: "2026-04-21T00:00:00.000Z",
       },
     ]);
-    // Simulate workspaces already restored (runtime-enable path).
+    // Simulate nestedWorkspaces already restored (runtime-enable path).
     markRestored();
 
     registerExtension(
@@ -101,17 +104,17 @@ describe("agentic auto-provision", () => {
     // Activation schedules a background provision pass — let microtasks drain.
     await new Promise((r) => setTimeout(r, 50));
 
-    const all = get(workspaces);
+    const all = get(nestedWorkspaces);
     const forG1 = all.find((w) => {
       return (
         w.metadata?.dashboardContributionId === "agentic" &&
-        w.metadata?.groupId === "g1"
+        w.metadata?.parentWorkspaceId === "g1"
       );
     });
     const forG2 = all.find((w) => {
       return (
         w.metadata?.dashboardContributionId === "agentic" &&
-        w.metadata?.groupId === "g2"
+        w.metadata?.parentWorkspaceId === "g2"
       );
     });
     expect(forG1).toBeTruthy();
@@ -119,13 +122,13 @@ describe("agentic auto-provision", () => {
   });
 
   it("closes every agentic dashboard workspace on deactivate", async () => {
-    workspaceGroupsStore.set([
+    workspacesStore.set([
       {
         id: "g1",
         name: "G1",
         path: "/tmp/g1",
         color: "blue",
-        workspaceIds: [],
+        nestedWorkspaceIds: [],
         isGit: true,
         createdAt: "2026-04-21T00:00:00.000Z",
       },
@@ -141,7 +144,7 @@ describe("agentic auto-provision", () => {
 
     // Sanity: the workspace was created.
     expect(
-      get(workspaces).some((w) => {
+      get(nestedWorkspaces).some((w) => {
         return w.metadata?.dashboardContributionId === "agentic";
       }),
     ).toBe(true);
@@ -149,7 +152,7 @@ describe("agentic auto-provision", () => {
     deactivateExtension("agentic-orchestrator");
 
     expect(
-      get(workspaces).some((w) => {
+      get(nestedWorkspaces).some((w) => {
         return w.metadata?.dashboardContributionId === "agentic";
       }),
     ).toBe(false);

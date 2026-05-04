@@ -43,13 +43,13 @@ describe("App.svelte structure verification", () => {
     // Must await fontReady before creating workspace
     expect(source).toContain("await fontReady");
     expect(source).toContain("setupListeners()");
-    // Workspace restoration moved to bootstrap/restore-workspaces.ts —
+    // NestedWorkspace restoration moved to bootstrap/restore-workspaces.ts —
     // the fallback "Workspace 1" seed now lives there.
     const restore = fs.readFileSync(
       "src/lib/bootstrap/restore-workspaces.ts",
       "utf-8",
     );
-    expect(restore).toContain('createWorkspace("Workspace 1")');
+    expect(restore).toContain('createNestedWorkspace("Workspace 1")');
   });
 
   it("does not duplicate surface push (createTerminalSurface handles it)", async () => {
@@ -75,8 +75,7 @@ describe("App.svelte structure verification", () => {
     const fs = await import("fs");
     const source = fs.readFileSync("src/App.svelte", "utf-8");
     // Must have these components in the template
-    expect(source).toContain("<PrimarySidebar");
-    expect(source).toContain("<SecondarySidebar");
+    expect(source).toContain("<Sidebar");
     expect(source).toContain("<TitleBar");
     expect(source).toContain("<WorkspaceView");
     expect(source).toContain("<FindBar");
@@ -97,7 +96,7 @@ describe("App.svelte structure verification", () => {
     expect(termAreaMatch![1]).toContain("min-height: 0");
   });
 
-  it("close-workspace pendingAction routes through confirmAndCloseWorkspace, not bare closeWorkspace", async () => {
+  it("close-workspace pendingAction routes through confirmAndCloseWorkspace, not bare closeNestedWorkspace", async () => {
     const fs = await import("fs");
     const source = fs.readFileSync("src/App.svelte", "utf-8");
     // The pendingAction handler for close-workspace must call confirmAndCloseWorkspace
@@ -106,8 +105,8 @@ describe("App.svelte structure verification", () => {
     expect(source).toMatch(
       /action\.type === "close-workspace"[\s\S]{0,200}confirmAndCloseWorkspace/,
     );
-    // Bare closeWorkspace(idx) must NOT appear inside the close-workspace branch.
-    // Extract just that branch and assert it contains no direct closeWorkspace call.
+    // Bare closeNestedWorkspace(idx) must NOT appear inside the close-workspace branch.
+    // Extract just that branch and assert it contains no direct closeNestedWorkspace call.
     const branchMatch = source.match(
       /action\.type === "close-workspace"([\s\S]*?)(?=\} else if|$)/,
     );
@@ -175,29 +174,28 @@ describe("pendingAction consumer", () => {
 
 // Structural invariant: verified via source scan because mounting the full
 // component tree requires Tauri runtime which isn't available in vitest.
-describe("WorkspaceView renders all workspaces (not just active)", () => {
+describe("WorkspaceView renders all nestedWorkspaces (not just active)", () => {
   it("uses each loop with display toggle, not conditional rendering", async () => {
     const fs = await import("fs");
     const source = fs.readFileSync("src/App.svelte", "utf-8");
-    // Must iterate ALL workspaces and show/hide with CSS
-    expect(source).toContain("{#each $workspaces as ws, i (ws.id)}");
+    // Must iterate ALL nestedWorkspaces and show/hide with CSS
+    expect(source).toContain("{#each $nestedWorkspaces as ws, i (ws.id)}");
     // Stage 7 extends the visibility gate with the pseudo-workspace
-    // mutual-exclusion clause; match the base `i === $activeWorkspaceIdx`
+    // mutual-exclusion clause; match the base `i === $activeNestedWorkspaceIdx`
     // without locking down the rest of the expression.
-    expect(source).toMatch(/visible=\{i === \$activeWorkspaceIdx[^}]*\}/);
+    expect(source).toMatch(/visible=\{i === \$activeNestedWorkspaceIdx[^}]*\}/);
   });
 });
 
 describe("pty-exit workspace recovery", () => {
-  it("clamps activeWorkspaceIdx after workspace removal", async () => {
-    // Structural invariant: verified via source scan because this logic
-    // runs inside a Tauri event listener that can't be triggered in vitest.
+  it("clamps activeNestedWorkspaceIdx after workspace removal", async () => {
+    // Structural invariant: verified via source scan.
+    // Since S-RELAUNCH, pty-exit no longer auto-collapses panes — it sets
+    // exitedSurface instead. Workspace removal (and the index clamp) now
+    // happens in pane-service.ts removePane(), called by dismissPane().
     const fs = await import("fs");
-    const source = fs.readFileSync("src/lib/terminal-service.ts", "utf-8");
-    // After splicing a workspace from the list, activeWorkspaceIdx must be
-    // clamped to the new last index (or -1 when the list is empty, so the
-    // Empty Surface takes over).
-    expect(source).toContain("activeWorkspaceIdx.set(wsList.length - 1)");
+    const source = fs.readFileSync("src/lib/services/pane-service.ts", "utf-8");
+    expect(source).toContain("activeNestedWorkspaceIdx.set(");
   });
 
   it("does NOT auto-create a default workspace when all are closed (Empty Surface takes over)", async () => {
@@ -263,23 +261,23 @@ describe("Config loads per-project files", () => {
   });
 });
 
-describe("Workspace from config definition", () => {
-  it("createWorkspaceFromDef is implemented in workspace-service", async () => {
-    const ws = await import("../lib/services/workspace-service");
-    expect(typeof ws.createWorkspaceFromDef).toBe("function");
+describe("NestedWorkspace from config definition", () => {
+  it("createNestedWorkspaceFromDef is implemented in workspace-service", async () => {
+    const ws = await import("../lib/services/nested-workspace-service");
+    expect(typeof ws.createNestedWorkspaceFromDef).toBe("function");
   });
 
   // Structural invariant: verified via source scan because mounting the full
   // component tree requires Tauri runtime which isn't available in vitest.
-  it("command palette wires workspace commands to createWorkspaceFromDef", async () => {
+  it("command palette wires workspace commands to createNestedWorkspaceFromDef", async () => {
     const fs = await import("fs");
     const source = fs.readFileSync("src/App.svelte", "utf-8");
     expect(source).toContain(
-      "cmd.workspace) void createWorkspaceFromDef(cmd.workspace)",
+      "cmd.workspace) void createNestedWorkspaceFromDef(cmd.workspace)",
     );
   });
 
-  it("autoloads workspaces from config on startup", async () => {
+  it("autoloads nestedWorkspaces from config on startup", async () => {
     const fs = await import("fs");
     // Startup resolution lives in bootstrap/restore-workspaces.ts —
     // scan that module for the autoload branch.
@@ -288,17 +286,17 @@ describe("Workspace from config definition", () => {
       "utf-8",
     );
     expect(source).toContain("config.autoload");
-    expect(source).toContain("createWorkspaceFromDef(cmd.workspace)");
+    expect(source).toContain("createNestedWorkspaceFromDef(cmd.workspace)");
     // Falls back to default workspace if nothing autoloaded
     expect(source).toContain("!autoloaded");
   });
 
-  // Structural invariant: verified via source scan because createWorkspaceFromDef
+  // Structural invariant: verified via source scan because createNestedWorkspaceFromDef
   // calls Tauri invoke internally, so it can't be run in vitest.
   it("handles layout with splits and surface definitions", async () => {
     const fs = await import("fs");
     const source = fs.readFileSync(
-      "src/lib/services/workspace-service.ts",
+      "src/lib/services/nested-workspace-service.ts",
       "utf-8",
     );
     expect(source).toContain("nodeDef.children[0]");
@@ -342,13 +340,13 @@ describe("No spurious fit/scrollToBottom on store updates", () => {
     );
   });
 
-  it("switchWorkspace does not directly call fit or scrollToBottom", async () => {
+  it("switchNestedWorkspace does not directly call fit or scrollToBottom", async () => {
     const fs = await import("fs");
     const source = fs.readFileSync(
-      "src/lib/services/workspace-service.ts",
+      "src/lib/services/nested-workspace-service.ts",
       "utf-8",
     );
-    const start = source.indexOf("function switchWorkspace");
+    const start = source.indexOf("function switchNestedWorkspace");
     const end = source.indexOf("\nexport function ", start + 1);
     const fn = source.slice(start, end);
     expect(fn).not.toMatch(/\.fitAddon\.fit\(\)/);
@@ -467,10 +465,10 @@ describe("CWD polling fallback", () => {
   });
 });
 
-describe("Workspace save/restore", () => {
+describe("NestedWorkspace save/restore", () => {
   it("serializeLayout produces config-compatible output", async () => {
     const { serializeLayout } =
-      await import("../lib/services/workspace-service");
+      await import("../lib/services/nested-workspace-service");
 
     // Test with a simple pane node
     const paneNode: import("../lib/types").SplitNode = {
@@ -519,13 +517,13 @@ describe("Workspace save/restore", () => {
   });
 
   it("saveCurrentWorkspace is exported from workspace-service", async () => {
-    const ws = await import("../lib/services/workspace-service");
+    const ws = await import("../lib/services/nested-workspace-service");
     expect(typeof ws.saveCurrentWorkspace).toBe("function");
   });
 
   // Structural invariant: verified via source scan because mounting the full
   // component tree requires Tauri runtime which isn't available in vitest.
-  it("command palette has Save Current Workspace", async () => {
+  it("command palette has Save Current NestedWorkspace", async () => {
     const fs = await import("fs");
     const source = fs.readFileSync("src/App.svelte", "utf-8");
     expect(source).toContain('"Save Current Workspace..."');
@@ -540,7 +538,7 @@ describe("Command palette has all required commands", () => {
     const source = fs.readFileSync("src/App.svelte", "utf-8");
     const requiredCommands = [
       "Close Surface",
-      "Close Workspace",
+      "Close Branched Workspace",
       "Next Surface",
       "Previous Surface",
       "Toggle Find Bar",
@@ -655,7 +653,7 @@ describe("SplitNodeView has draggable dividers with ratio support", () => {
       "utf-8",
     );
     expect(source).toContain(
-      'import { schedulePersist } from "../services/workspace-service"',
+      'import { schedulePersist } from "../services/nested-workspace-service"',
     );
     const onEndMatch = source.match(/onEnd:\s*\(\)\s*=>\s*\{([^}]+)\}/);
     expect(onEndMatch).not.toBeNull();

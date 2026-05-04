@@ -6,39 +6,40 @@ import {
   removeSection,
   removeSectionsForWorkspace,
   primarySections,
-  secondarySections,
   _resetMcpSidebarForTest,
 } from "../lib/stores/mcp-sidebar";
-import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
-import type { Workspace, Pane } from "../lib/types";
+import {
+  nestedWorkspaces,
+  activeNestedWorkspaceIdx,
+} from "../lib/stores/nested-workspace";
+import type { NestedWorkspace, Pane } from "../lib/types";
 
 function setActiveWorkspace(id: string): void {
   const pane: Pane = { id: `${id}-pane`, surfaces: [], activeSurfaceId: null };
-  const ws: Workspace = {
+  const ws: NestedWorkspace = {
     id,
     name: id,
     splitRoot: { type: "pane", pane },
     activePaneId: pane.id,
   };
-  workspaces.set([ws]);
-  activeWorkspaceIdx.set(0);
+  nestedWorkspaces.set([ws]);
+  activeNestedWorkspaceIdx.set(0);
 }
 
 describe("mcp-sidebar store (per-workspace)", () => {
   beforeEach(() => {
     _resetMcpSidebarForTest();
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
+    nestedWorkspaces.set([]);
+    activeNestedWorkspaceIdx.set(-1);
   });
 
   it("starts empty", () => {
     setActiveWorkspace("ws-1");
     expect(get(mcpSidebarSections).size).toBe(0);
     expect(get(primarySections)).toEqual([]);
-    expect(get(secondarySections)).toEqual([]);
   });
 
-  it("upserts primary and secondary sections separately within a workspace", () => {
+  it("upserts multiple primary sections within a workspace", () => {
     setActiveWorkspace("ws-1");
     upsertSection({
       side: "primary",
@@ -48,35 +49,34 @@ describe("mcp-sidebar store (per-workspace)", () => {
       workspaceId: "ws-1",
     });
     upsertSection({
-      side: "secondary",
-      sectionId: "s1",
-      title: "S1",
+      side: "primary",
+      sectionId: "p2",
+      title: "P2",
       items: [{ id: "b", label: "B" }],
       workspaceId: "ws-1",
     });
-    expect(get(primarySections)).toHaveLength(1);
-    expect(get(secondarySections)).toHaveLength(1);
+    expect(get(primarySections)).toHaveLength(2);
     expect(get(primarySections)[0].title).toBe("P1");
-    expect(get(secondarySections)[0].title).toBe("S1");
+    expect(get(primarySections)[1].title).toBe("P2");
   });
 
   it("replaces an existing section with the same id within the same workspace", () => {
     setActiveWorkspace("ws-1");
     upsertSection({
-      side: "secondary",
-      sectionId: "s1",
+      side: "primary",
+      sectionId: "p1",
       title: "first",
       items: [],
       workspaceId: "ws-1",
     });
     upsertSection({
-      side: "secondary",
-      sectionId: "s1",
+      side: "primary",
+      sectionId: "p1",
       title: "second",
       items: [{ id: "x", label: "X" }],
       workspaceId: "ws-1",
     });
-    const sections = get(secondarySections);
+    const sections = get(primarySections);
     expect(sections).toHaveLength(1);
     expect(sections[0].title).toBe("second");
     expect(sections[0].items).toEqual([{ id: "x", label: "X" }]);
@@ -88,57 +88,56 @@ describe("mcp-sidebar store (per-workspace)", () => {
     expect(get(primarySections)).toEqual([]);
   });
 
-  it("allows the same section_id on different sides", () => {
+  it("allows multiple primary sections with different ids", () => {
     setActiveWorkspace("ws-1");
     upsertSection({
       side: "primary",
-      sectionId: "tools",
-      title: "P",
+      sectionId: "tools-a",
+      title: "A",
       items: [],
       workspaceId: "ws-1",
     });
     upsertSection({
-      side: "secondary",
-      sectionId: "tools",
-      title: "S",
+      side: "primary",
+      sectionId: "tools-b",
+      title: "B",
       items: [],
       workspaceId: "ws-1",
     });
+    expect(get(primarySections)).toHaveLength(2);
+    removeSection("ws-1", "primary", "tools-a");
     expect(get(primarySections)).toHaveLength(1);
-    expect(get(secondarySections)).toHaveLength(1);
-    removeSection("ws-1", "primary", "tools");
-    expect(get(primarySections)).toHaveLength(0);
-    expect(get(secondarySections)).toHaveLength(1);
+    expect(get(primarySections)[0].sectionId).toBe("tools-b");
   });
 
   it("scopes sections per workspace: a section in W2 is invisible from W1", () => {
-    // Two workspaces.
+    // Two nestedWorkspaces.
     const p1: Pane = { id: "p-1", surfaces: [], activeSurfaceId: null };
     const p2: Pane = { id: "p-2", surfaces: [], activeSurfaceId: null };
-    const w1: Workspace = {
+    const w1: NestedWorkspace = {
       id: "ws-1",
       name: "W1",
       splitRoot: { type: "pane", pane: p1 },
       activePaneId: p1.id,
     };
-    const w2: Workspace = {
+    const w2: NestedWorkspace = {
       id: "ws-2",
       name: "W2",
       splitRoot: { type: "pane", pane: p2 },
       activePaneId: p2.id,
     };
-    workspaces.set([w1, w2]);
-    activeWorkspaceIdx.set(0); // active = W1
+    nestedWorkspaces.set([w1, w2]);
+    activeNestedWorkspaceIdx.set(0); // active = W1
 
     upsertSection({
-      side: "secondary",
+      side: "primary",
       sectionId: "shared-id",
       title: "in W1",
       items: [],
       workspaceId: "ws-1",
     });
     upsertSection({
-      side: "secondary",
+      side: "primary",
       sectionId: "shared-id",
       title: "in W2",
       items: [],
@@ -146,13 +145,13 @@ describe("mcp-sidebar store (per-workspace)", () => {
     });
 
     // Looking at W1 — only the W1 section should be visible.
-    expect(get(secondarySections)).toHaveLength(1);
-    expect(get(secondarySections)[0].title).toBe("in W1");
+    expect(get(primarySections)).toHaveLength(1);
+    expect(get(primarySections)[0].title).toBe("in W1");
 
     // Switch to W2 — only the W2 section should be visible.
-    activeWorkspaceIdx.set(1);
-    expect(get(secondarySections)).toHaveLength(1);
-    expect(get(secondarySections)[0].title).toBe("in W2");
+    activeNestedWorkspaceIdx.set(1);
+    expect(get(primarySections)).toHaveLength(1);
+    expect(get(primarySections)[0].title).toBe("in W2");
   });
 
   it("removeSectionsForWorkspace prunes everything tied to a destroyed workspace", () => {
@@ -165,7 +164,7 @@ describe("mcp-sidebar store (per-workspace)", () => {
       workspaceId: "ws-doomed",
     });
     upsertSection({
-      side: "secondary",
+      side: "primary",
       sectionId: "b",
       title: "B",
       items: [],

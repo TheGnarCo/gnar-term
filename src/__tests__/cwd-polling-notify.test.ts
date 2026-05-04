@@ -1,5 +1,5 @@
 /**
- * Regression test: `startCwdPolling` must notify the `workspaces` store
+ * Regression test: `startCwdPolling` must notify the `nestedWorkspaces` store
  * whenever a surface's cwd changes, not only when the title also
  * changed. Without this, sidebar subscribers (e.g. the core git status
  * service) never see the user's `cd` and keep showing the original cwd.
@@ -20,15 +20,18 @@ vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
   writeText: vi.fn(),
 }));
 
-import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
-import type { Workspace } from "../lib/types";
+import {
+  nestedWorkspaces,
+  activeNestedWorkspaceIdx,
+} from "../lib/stores/nested-workspace";
+import type { NestedWorkspace } from "../lib/types";
 import {
   startCwdPolling,
   registerCwdChangeHook,
   _stopCwdPolling,
 } from "../lib/terminal-service";
 
-function makeWs(id: string, surfaceId: string, cwd: string): Workspace {
+function makeWs(id: string, surfaceId: string, cwd: string): NestedWorkspace {
   return {
     id,
     name: id,
@@ -50,26 +53,26 @@ function makeWs(id: string, surfaceId: string, cwd: string): Workspace {
         ],
       },
     },
-  } as unknown as Workspace;
+  } as unknown as NestedWorkspace;
 }
 
-describe("startCwdPolling notifies the workspaces store on cwd change", () => {
+describe("startCwdPolling notifies the nestedWorkspaces store on cwd change", () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
+    nestedWorkspaces.set([]);
+    activeNestedWorkspaceIdx.set(-1);
   });
 
   afterEach(() => {
     _stopCwdPolling();
     vi.useRealTimers();
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
+    nestedWorkspaces.set([]);
+    activeNestedWorkspaceIdx.set(-1);
   });
 
-  it("fires workspaces.update when pty cwd differs from cached cwd, even if title is preserved", async () => {
+  it("fires nestedWorkspaces.update when pty cwd differs from cached cwd, even if title is preserved", async () => {
     const ws = makeWs("A", "surf-A", "/repos/project-A");
-    workspaces.set([ws]);
+    nestedWorkspaces.set([ws]);
 
     let ptyCwd = "/repos/project-A";
     const tauri = await import("@tauri-apps/api/core");
@@ -81,7 +84,7 @@ describe("startCwdPolling notifies the workspaces store on cwd change", () => {
     });
 
     let updateCount = 0;
-    const unsub = workspaces.subscribe(() => {
+    const unsub = nestedWorkspaces.subscribe(() => {
       updateCount++;
     });
     // Initial subscribe fires once — reset counter so we only count
@@ -101,7 +104,7 @@ describe("startCwdPolling notifies the workspaces store on cwd change", () => {
     expect(updateCount).toBeGreaterThan(baseline);
 
     // The surface's cwd is now the new path.
-    const current = get(workspaces);
+    const current = get(nestedWorkspaces);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const surface = (current[0]!.splitRoot as any).pane.surfaces[0];
     expect(surface.cwd).toBe("/repos/project-B");
@@ -113,7 +116,7 @@ describe("startCwdPolling notifies the workspaces store on cwd change", () => {
 
   it("fires the registered cwd change hook when cwd changes", async () => {
     const ws = makeWs("A", "surf-A", "/repos/project-A");
-    workspaces.set([ws]);
+    nestedWorkspaces.set([ws]);
 
     let ptyCwd = "/repos/project-A";
     const tauri = await import("@tauri-apps/api/core");

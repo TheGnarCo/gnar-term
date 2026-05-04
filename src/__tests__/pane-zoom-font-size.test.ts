@@ -120,13 +120,13 @@ vi.stubGlobal("ResizeObserver", MockResizeObserver);
 
 import {
   zoomedSurfaceId,
-  workspaces,
-  activeWorkspaceIdx,
-} from "../lib/stores/workspace";
+  nestedWorkspaces,
+  activeNestedWorkspaceIdx,
+} from "../lib/stores/nested-workspace";
 import { uid } from "../lib/types";
-import type { Pane, TerminalSurface, Workspace } from "../lib/types";
+import type { Pane, TerminalSurface, NestedWorkspace } from "../lib/types";
 import { togglePaneZoom } from "../lib/services/pane-service";
-import { switchWorkspace } from "../lib/services/workspace-service";
+import { switchNestedWorkspace } from "../lib/services/nested-workspace-service";
 import { adjustFontSize, resetFontSize } from "../lib/terminal-service";
 import { saveConfig } from "../lib/config";
 import { Terminal } from "@xterm/xterm";
@@ -161,7 +161,7 @@ function makePane(surfaces: TerminalSurface[] = []): Pane {
   return pane;
 }
 
-function makeWorkspace(pane: Pane): Workspace {
+function makeNestedWorkspace(pane: Pane): NestedWorkspace {
   return {
     id: uid(),
     name: "Test",
@@ -173,8 +173,8 @@ function makeWorkspace(pane: Pane): Workspace {
 // Reset stores and mock state before each test
 beforeEach(() => {
   zoomedSurfaceId.set(null);
-  workspaces.set([]);
-  activeWorkspaceIdx.set(-1);
+  nestedWorkspaces.set([]);
+  activeNestedWorkspaceIdx.set(-1);
   _mockFontSize = undefined;
   vi.clearAllMocks();
   // Re-apply the saveConfig side-effect after clearAllMocks
@@ -212,23 +212,23 @@ describe("togglePaneZoom", () => {
   });
 });
 
-describe("switchWorkspace clears zoom", () => {
+describe("switchNestedWorkspace clears zoom", () => {
   it("resets zoomedSurfaceId to null on workspace switch", () => {
     const s1 = mockTerminalSurface();
     const s2 = mockTerminalSurface();
     const p1 = makePane([s1]);
     const p2 = makePane([s2]);
-    const ws1 = makeWorkspace(p1);
-    const ws2 = makeWorkspace(p2);
-    workspaces.set([ws1, ws2]);
-    activeWorkspaceIdx.set(0);
+    const ws1 = makeNestedWorkspace(p1);
+    const ws2 = makeNestedWorkspace(p2);
+    nestedWorkspaces.set([ws1, ws2]);
+    activeNestedWorkspaceIdx.set(0);
 
     // Zoom a surface in workspace 0
     zoomedSurfaceId.set(s1.id);
     expect(get(zoomedSurfaceId)).toBe(s1.id);
 
     // Switch to workspace 1 — zoom should clear
-    switchWorkspace(1);
+    switchNestedWorkspace(1);
     expect(get(zoomedSurfaceId)).toBeNull();
   });
 });
@@ -269,9 +269,9 @@ describe("adjustFontSize", () => {
     const surf1 = mockTerminalSurface();
     const surf2 = mockTerminalSurface();
     const p = makePane([surf1, surf2]);
-    const ws = makeWorkspace(p);
-    workspaces.set([ws]);
-    activeWorkspaceIdx.set(0);
+    const ws = makeNestedWorkspace(p);
+    nestedWorkspaces.set([ws]);
+    activeNestedWorkspaceIdx.set(0);
 
     adjustFontSize(2);
 
@@ -284,9 +284,9 @@ describe("adjustFontSize", () => {
     // Wrap fit in a spy so we can assert on it
     const fitSpy = vi.spyOn(surf.fitAddon, "fit");
     const p = makePane([surf]);
-    const ws = makeWorkspace(p);
-    workspaces.set([ws]);
-    activeWorkspaceIdx.set(0);
+    const ws = makeNestedWorkspace(p);
+    nestedWorkspaces.set([ws]);
+    activeNestedWorkspaceIdx.set(0);
 
     adjustFontSize(1);
 

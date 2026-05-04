@@ -24,7 +24,10 @@ import {
   activateExtension,
   resetExtensions,
 } from "../../../lib/services/extension-loader";
-import { workspaces, activeWorkspaceIdx } from "../../../lib/stores/workspace";
+import {
+  nestedWorkspaces,
+  activeNestedWorkspaceIdx,
+} from "../../../lib/stores/nested-workspace";
 import { resetSurfaceTypes } from "../../../lib/services/surface-type-registry";
 import { resetCommands } from "../../../lib/services/command-registry";
 
@@ -34,8 +37,8 @@ describe("Diff dashboard contribution", () => {
     resetCommands();
     resetSurfaceTypes();
     resetDashboardContributions();
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
+    nestedWorkspaces.set([]);
+    activeNestedWorkspaceIdx.set(-1);
   });
 
   it("registers a 'diff' dashboard contribution on activation", async () => {
@@ -47,7 +50,7 @@ describe("Diff dashboard contribution", () => {
     expect(diff).toBeTruthy();
     expect(diff?.label).toBe("Diff");
     expect(diff?.source).toBe("diff-viewer");
-    expect(diff?.capPerGroup).toBe(1);
+    expect(diff?.capPerWorkspace).toBe(1);
     expect(diff?.paneConstraints?.singleSurface).toBe(true);
     expect(diff?.autoProvision).toBeFalsy();
     expect(diff?.icon).toBeDefined();
@@ -65,17 +68,17 @@ describe("Diff dashboard contribution", () => {
       name: "My Group",
       path: "/tmp/my-group",
       color: "blue",
-      workspaceIds: [],
+      nestedWorkspaceIds: [],
       isGit: true,
       createdAt: "2026-04-21T00:00:00.000Z",
     });
 
-    const all = get(workspaces);
+    const all = get(nestedWorkspaces);
     const created = all.find(
       (w) => w.metadata?.dashboardContributionId === "diff",
     );
     expect(created).toBeTruthy();
     expect(created!.metadata?.isDashboard).toBe(true);
-    expect(created!.metadata?.groupId).toBe("g1");
+    expect(created!.metadata?.parentWorkspaceId).toBe("g1");
   });
 });

@@ -9,7 +9,7 @@ import { buildWorkspaceContextMenuItems } from "../lib/utils/workspace-context-m
 
 const baseOpts = {
   isDashboard: false,
-  isInsideGroup: false,
+  isInsideWorkspace: false,
   canPromoteCommand: false,
   workspaceCount: 2,
   onClose: () => {},
@@ -19,11 +19,11 @@ describe("buildWorkspaceContextMenuItems — lock/unlock", () => {
   it("omits lock toggle entirely when onToggleLock is not provided", () => {
     const items = buildWorkspaceContextMenuItems({ ...baseOpts });
     const labels = items.map((i) => i.label);
-    expect(labels).not.toContain("Lock Workspace");
-    expect(labels).not.toContain("Unlock Workspace");
+    expect(labels).not.toContain("Lock Branched Workspace");
+    expect(labels).not.toContain("Unlock Branched Workspace");
   });
 
-  it("renders 'Lock Workspace' when isLocked is false", () => {
+  it("renders 'Lock Branched Workspace' when isLocked is false", () => {
     const onToggleLock = vi.fn();
     const items = buildWorkspaceContextMenuItems({
       ...baseOpts,
@@ -31,11 +31,11 @@ describe("buildWorkspaceContextMenuItems — lock/unlock", () => {
       onToggleLock,
     });
     const labels = items.map((i) => i.label);
-    expect(labels).toContain("Lock Workspace");
-    expect(labels).not.toContain("Unlock Workspace");
+    expect(labels).toContain("Lock Branched Workspace");
+    expect(labels).not.toContain("Unlock Branched Workspace");
   });
 
-  it("renders 'Unlock Workspace' when isLocked is true", () => {
+  it("renders 'Unlock Branched Workspace' when isLocked is true", () => {
     const onToggleLock = vi.fn();
     const items = buildWorkspaceContextMenuItems({
       ...baseOpts,
@@ -43,8 +43,8 @@ describe("buildWorkspaceContextMenuItems — lock/unlock", () => {
       onToggleLock,
     });
     const labels = items.map((i) => i.label);
-    expect(labels).toContain("Unlock Workspace");
-    expect(labels).not.toContain("Lock Workspace");
+    expect(labels).toContain("Unlock Branched Workspace");
+    expect(labels).not.toContain("Lock Branched Workspace");
   });
 
   it("invokes onToggleLock when the lock item is activated", () => {
@@ -54,19 +54,19 @@ describe("buildWorkspaceContextMenuItems — lock/unlock", () => {
       isLocked: false,
       onToggleLock,
     });
-    const lock = items.find((i) => i.label === "Lock Workspace");
+    const lock = items.find((i) => i.label === "Lock Branched Workspace");
     expect(lock).toBeDefined();
     lock!.action();
     expect(onToggleLock).toHaveBeenCalledTimes(1);
   });
 
-  it("disables Close Workspace when the workspace is locked", () => {
+  it("disables Close Branched Workspace when the workspace is locked", () => {
     const items = buildWorkspaceContextMenuItems({
       ...baseOpts,
       isLocked: true,
       onToggleLock: () => {},
     });
-    const close = items.find((i) => i.label === "Close Workspace");
+    const close = items.find((i) => i.label === "Close Branched Workspace");
     expect(close).toBeDefined();
     expect(close!.disabled).toBe(true);
   });
@@ -103,8 +103,8 @@ describe("buildWorkspaceContextMenuItems — lock/unlock", () => {
       onToggleLock: () => {},
     });
     const labels = items.map((i) => i.label);
-    expect(labels).not.toContain("Lock Workspace");
-    expect(labels).not.toContain("Unlock Workspace");
+    expect(labels).not.toContain("Lock Branched Workspace");
+    expect(labels).not.toContain("Unlock Branched Workspace");
   });
 
   it("treats omitted isLocked as false (default behavior unchanged)", () => {
@@ -112,7 +112,7 @@ describe("buildWorkspaceContextMenuItems — lock/unlock", () => {
       ...baseOpts,
       onArchive: () => {},
     });
-    const close = items.find((i) => i.label === "Close Workspace");
+    const close = items.find((i) => i.label === "Close Branched Workspace");
     expect(close).toBeDefined();
     // workspaceCount of 2 + not locked + not dashboard = enabled
     expect(close!.disabled).toBe(false);

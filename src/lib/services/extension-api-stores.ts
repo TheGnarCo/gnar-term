@@ -1,10 +1,10 @@
 import type { Readable } from "svelte/store";
 import {
-  workspaces,
+  nestedWorkspaces,
   activeWorkspace,
   activePane,
   activeSurface,
-} from "../stores/workspace";
+} from "../stores/nested-workspace";
 import { theme } from "../stores/theme";
 import {
   reorderContext,
@@ -19,7 +19,7 @@ export function createStoreProjections(
   extId: string,
 ): Pick<
   ExtensionAPI,
-  | "workspaces"
+  | "nestedWorkspaces"
   | "activeWorkspace"
   | "activePane"
   | "activeSurface"
@@ -42,9 +42,9 @@ export function createStoreProjections(
   void extId;
 
   return {
-    workspaces: {
+    nestedWorkspaces: {
       subscribe(fn: (value: unknown) => void) {
-        return workspaces.subscribe((ws) =>
+        return nestedWorkspaces.subscribe((ws) =>
           fn(
             ws.map((w) => ({
               id: w.id,
@@ -54,7 +54,7 @@ export function createStoreProjections(
           ),
         );
       },
-    } as ExtensionAPI["workspaces"],
+    } as ExtensionAPI["nestedWorkspaces"],
     activeWorkspace: {
       subscribe(fn: (value: unknown) => void) {
         return activeWorkspace.subscribe((w) =>

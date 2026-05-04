@@ -9,20 +9,22 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { get } from "svelte/store";
 
-vi.mock("../lib/stores/workspace", async () => {
+vi.mock("../lib/stores/nested-workspace", async () => {
   const { writable: w } = await import("svelte/store");
-  return { workspaces: w([]) };
+  return { nestedWorkspaces: w([]) };
 });
 
 import {
   agentsStore,
   getAgents,
+  getAgentByAgentId,
+  getAgentBySurfaceId,
   initAgentDetection,
   destroyAgentDetection,
   resetAgentDetectionForTests,
 } from "../lib/services/agent-detection-service";
 import { eventBus, type AppEvent } from "../lib/services/event-bus";
-import { workspaces } from "../lib/stores/workspace";
+import { nestedWorkspaces } from "../lib/stores/nested-workspace";
 import { statusRegistry } from "../lib/services/status-registry";
 import { notifyOutputObservers } from "../lib/services/surface-output-observer";
 
@@ -32,7 +34,7 @@ const consoleErrorSpy = vi
 
 beforeEach(() => {
   resetAgentDetectionForTests();
-  workspaces.set([]);
+  nestedWorkspaces.set([]);
 });
 
 afterEach(() => {
@@ -40,7 +42,7 @@ afterEach(() => {
   consoleErrorSpy.mockClear();
 });
 
-function makeWorkspace(
+function makeNestedWorkspace(
   id: string,
   surfaces: Array<{ id: string; title: string; ptyId?: number }>,
 ) {
@@ -104,8 +106,8 @@ describe("agent-detection-service — basics", () => {
 
 describe("agent-detection-service — attach on matching title", () => {
   it("bootstraps detection for pre-existing terminals whose title matches", () => {
-    workspaces.set([
-      makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 1 }]),
+    nestedWorkspaces.set([
+      makeNestedWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 1 }]),
     ]);
     initAgentDetection();
     const agents = getAgents();
@@ -117,8 +119,8 @@ describe("agent-detection-service — attach on matching title", () => {
 
   it("attaches to a newly-created terminal on surface:created", () => {
     initAgentDetection();
-    workspaces.set([
-      makeWorkspace("w1", [{ id: "s1", title: "codex repl", ptyId: 2 }]),
+    nestedWorkspaces.set([
+      makeNestedWorkspace("w1", [{ id: "s1", title: "codex repl", ptyId: 2 }]),
     ]);
     eventBus.emit({
       type: "surface:created",
@@ -132,17 +134,21 @@ describe("agent-detection-service — attach on matching title", () => {
   });
 
   it("does not attach when the title does not match any pattern", () => {
-    workspaces.set([
-      makeWorkspace("w1", [{ id: "s1", title: "bash", ptyId: 3 }]),
+    nestedWorkspaces.set([
+      makeNestedWorkspace("w1", [{ id: "s1", title: "bash", ptyId: 3 }]),
     ]);
     initAgentDetection();
     expect(getAgents()).toEqual([]);
   });
 
   it("resolves the workspace id from the surface, not the active workspace", () => {
-    workspaces.set([
-      makeWorkspace("w-other", [{ id: "other", title: "bash", ptyId: 9 }]),
-      makeWorkspace("w-target", [{ id: "s1", title: "claude", ptyId: 1 }]),
+    nestedWorkspaces.set([
+      makeNestedWorkspace("w-other", [
+        { id: "other", title: "bash", ptyId: 9 },
+      ]),
+      makeNestedWorkspace("w-target", [
+        { id: "s1", title: "claude", ptyId: 1 },
+      ]),
     ]);
     initAgentDetection();
     const agents = getAgents();
@@ -152,8 +158,8 @@ describe("agent-detection-service — attach on matching title", () => {
 
 describe("agent-detection-service — detach on surface:closed", () => {
   it("removes the agent from the registry on close", () => {
-    workspaces.set([
-      makeWorkspace("w1", [{ id: "s1", title: "aider", ptyId: 4 }]),
+    nestedWorkspaces.set([
+      makeNestedWorkspace("w1", [{ id: "s1", title: "aider", ptyId: 4 }]),
     ]);
     initAgentDetection();
     expect(getAgents()).toHaveLength(1);
@@ -172,8 +178,8 @@ describe("agent-detection-service — detach on surface:closed", () => {
 
 describe("agent-detection-service — title transitions", () => {
   it("attaches when a title changes to match after initial mismatch", () => {
-    workspaces.set([
-      makeWorkspace("w1", [{ id: "s1", title: "zsh", ptyId: 5 }]),
+    nestedWorkspaces.set([
+      makeNestedWorkspace("w1", [{ id: "s1", title: "zsh", ptyId: 5 }]),
     ]);
     initAgentDetection();
     expect(getAgents()).toEqual([]);
@@ -192,8 +198,8 @@ describe("agent-detection-service — title transitions", () => {
   it("detaches when the title changes away from a matching pattern (after debounce)", () => {
     vi.useFakeTimers();
     try {
-      workspaces.set([
-        makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 6 }]),
+      nestedWorkspaces.set([
+        makeNestedWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 6 }]),
       ]);
       initAgentDetection();
       expect(getAgents()).toHaveLength(1);
@@ -218,8 +224,8 @@ describe("agent-detection-service — title transitions", () => {
   it("does not detach when title briefly loses match then recovers (flicker)", () => {
     vi.useFakeTimers();
     try {
-      workspaces.set([
-        makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 6 }]),
+      nestedWorkspaces.set([
+        makeNestedWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 6 }]),
       ]);
       initAgentDetection();
       expect(getAgents()).toHaveLength(1);
@@ -251,8 +257,8 @@ describe("agent-detection-service — title transitions", () => {
   });
 
   it("forwards title changes to the tracker while the agent stays matched", () => {
-    workspaces.set([
-      makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 7 }]),
+    nestedWorkspaces.set([
+      makeNestedWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 7 }]),
     ]);
     initAgentDetection();
     expect(getAgents()[0]?.status).toBe("idle");
@@ -282,8 +288,8 @@ describe("agent-detection-service — title transitions", () => {
 
 describe("agent-detection-service — status publishing", () => {
   it("emits agent:statusChanged when the tracker transitions", () => {
-    workspaces.set([
-      makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 8 }]),
+    nestedWorkspaces.set([
+      makeNestedWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 8 }]),
     ]);
 
     const captured: AppEvent[] = [];
@@ -310,8 +316,8 @@ describe("agent-detection-service — status publishing", () => {
   });
 
   it("writes a workspace indicator on status change", () => {
-    workspaces.set([
-      makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 10 }]),
+    nestedWorkspaces.set([
+      makeNestedWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 10 }]),
     ]);
     initAgentDetection();
 
@@ -329,8 +335,8 @@ describe("agent-detection-service — status publishing", () => {
   });
 
   it("clears the workspace indicator on detach", () => {
-    workspaces.set([
-      makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 11 }]),
+    nestedWorkspaces.set([
+      makeNestedWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 11 }]),
     ]);
     initAgentDetection();
     eventBus.emit({
@@ -359,8 +365,8 @@ describe("agent-detection-service — status publishing", () => {
     // source=_agent, category=process, so aggregateAgentBadges counted
     // one attached agent as two and the WorkspaceItem tooltip read
     // "2 idle" for a lone agent. Verify we now write a single entry.
-    workspaces.set([
-      makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 21 }]),
+    nestedWorkspaces.set([
+      makeNestedWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 21 }]),
     ]);
     initAgentDetection();
     const items = get(statusRegistry.store).filter(
@@ -376,8 +382,8 @@ describe("agent-detection-service — status publishing", () => {
     // status-registry empty — the sidebar workspace chip would then be
     // missing until the first output/title change. Verify that a
     // freshly attached agent has a muted status item written.
-    workspaces.set([
-      makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 20 }]),
+    nestedWorkspaces.set([
+      makeNestedWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 20 }]),
     ]);
     initAgentDetection();
 
@@ -394,8 +400,8 @@ describe("agent-detection-service — status publishing", () => {
   });
 
   it("writes a per-surface status item keyed by `surface:<id>`", () => {
-    workspaces.set([
-      makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 12 }]),
+    nestedWorkspaces.set([
+      makeNestedWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 12 }]),
     ]);
     initAgentDetection();
     eventBus.emit({
@@ -425,8 +431,8 @@ describe("agent-detection-service — OSC output classification", () => {
     // OSC notification, which meant every OSC 0/2 title ping pinned
     // OSC-mode agents in "waiting" forever. Claude Code updates its
     // title frequently, so users saw the idle/running state stuck.
-    workspaces.set([
-      makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 30 }]),
+    nestedWorkspaces.set([
+      makeNestedWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 30 }]),
     ]);
     initAgentDetection();
 
@@ -444,8 +450,8 @@ describe("agent-detection-service — OSC output classification", () => {
   });
 
   it("treats OSC 9 as notification (transitions to waiting)", () => {
-    workspaces.set([
-      makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 31 }]),
+    nestedWorkspaces.set([
+      makeNestedWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 31 }]),
     ]);
     initAgentDetection();
 
@@ -466,8 +472,8 @@ describe("agent-detection-service — OSC output classification", () => {
     // never produced a chip. Agent detection now waits for
     // surface:ptyReady before wiring the observer — simulate that
     // flow and make sure output routed to the real ptyId attaches.
-    workspaces.set([
-      makeWorkspace("w1", [{ id: "s1", title: "Shell 1", ptyId: -1 }]),
+    nestedWorkspaces.set([
+      makeNestedWorkspace("w1", [{ id: "s1", title: "Shell 1", ptyId: -1 }]),
     ]);
     initAgentDetection();
 
@@ -478,7 +484,7 @@ describe("agent-detection-service — OSC output classification", () => {
 
     // PTY becomes ready. Backfill the workspace state so the
     // agent-detection cache can resolve it, then emit the event.
-    workspaces.update((list) => {
+    nestedWorkspaces.update((list) => {
       const ws = list[0];
       if (!ws) return list;
       for (const p of [ws.splitRoot].flatMap((r) =>
@@ -507,8 +513,8 @@ describe("agent-detection-service — OSC output classification", () => {
   });
 
   it("treats OSC 777 as notification", () => {
-    workspaces.set([
-      makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 32 }]),
+    nestedWorkspaces.set([
+      makeNestedWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 32 }]),
     ]);
     initAgentDetection();
 
@@ -528,8 +534,8 @@ describe("agent-detection-service — lifecycle hygiene", () => {
     // items in the registry if a tracker's workspace id fell out of
     // sync. A subsequent init then inherited ghost chips. Confirm the
     // destroy path clears every `_agent` item.
-    workspaces.set([
-      makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 50 }]),
+    nestedWorkspaces.set([
+      makeNestedWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 50 }]),
     ]);
     initAgentDetection();
     expect(
@@ -548,8 +554,8 @@ describe("agent-detection-service — lifecycle hygiene", () => {
     // second ptyReady carries a different ptyId. The observer must
     // unbind from the stale id and re-bind to the new one — otherwise
     // output on the live pty is silently dropped.
-    workspaces.set([
-      makeWorkspace("w1", [{ id: "s1", title: "Shell 1", ptyId: -1 }]),
+    nestedWorkspaces.set([
+      makeNestedWorkspace("w1", [{ id: "s1", title: "Shell 1", ptyId: -1 }]),
     ]);
     initAgentDetection();
     eventBus.emit({ type: "surface:ptyReady", id: "s1", ptyId: 100 });
@@ -573,7 +579,7 @@ describe("agent-detection-service — lifecycle hygiene", () => {
 });
 
 describe("agent-detection-service — late workspace load (startup race)", () => {
-  it("attaches agent when workspaces load after surface:created and surface:ptyReady", () => {
+  it("attaches agent when nestedWorkspaces load after surface:created and surface:ptyReady", () => {
     // Simulates the startup race: Tauri emits surface events before the
     // workspace store is populated, so allTerminalSurfaces() returned []
     // and the surface was tracked with no agent. When the workspace loads
@@ -589,8 +595,8 @@ describe("agent-detection-service — late workspace load (startup race)", () =>
     eventBus.emit({ type: "surface:ptyReady", id: "s1", ptyId: 60 });
     expect(getAgents()).toHaveLength(0);
 
-    workspaces.set([
-      makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 60 }]),
+    nestedWorkspaces.set([
+      makeNestedWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 60 }]),
     ]);
 
     expect(getAgents()).toHaveLength(1);
@@ -603,7 +609,7 @@ describe("agent-detection-service — late workspace load (startup race)", () =>
   });
 
   it("backfills idle status item when title changes to match before workspace loads", () => {
-    // Regression: surface:titleChanged fires with "claude" before workspaces
+    // Regression: surface:titleChanged fires with "claude" before nestedWorkspaces
     // load. attachAgent() captures workspaceId = "" so the initial
     // publishStatus("idle") writes nothing. The workspace subscription skipped
     // already-attached agents, so the status item was NEVER written.
@@ -617,7 +623,7 @@ describe("agent-detection-service — late workspace load (startup race)", () =>
     });
     eventBus.emit({ type: "surface:ptyReady", id: "s1", ptyId: 62 });
 
-    // Title changes to "claude" while workspaces aren't loaded yet —
+    // Title changes to "claude" while nestedWorkspaces aren't loaded yet —
     // agent attaches but has no workspace → status item cannot be written.
     eventBus.emit({
       type: "surface:titleChanged",
@@ -635,9 +641,9 @@ describe("agent-detection-service — late workspace load (startup race)", () =>
       ),
     ).toBeUndefined();
 
-    // Workspace loads — subscription should backfill the idle status item.
-    workspaces.set([
-      makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 62 }]),
+    // NestedWorkspace loads — subscription should backfill the idle status item.
+    nestedWorkspaces.set([
+      makeNestedWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 62 }]),
     ]);
 
     const item = get(statusRegistry.store).find(
@@ -650,7 +656,7 @@ describe("agent-detection-service — late workspace load (startup race)", () =>
   });
 
   it("publishes waiting status after workspace loads late then OSC fires", () => {
-    // The dot must show when Claude uses AskUserQuestion after workspaces
+    // The dot must show when Claude uses AskUserQuestion after nestedWorkspaces
     // were loaded post-surface-events — this was the reported "no dot" bug.
     initAgentDetection();
     eventBus.emit({
@@ -661,8 +667,8 @@ describe("agent-detection-service — late workspace load (startup race)", () =>
     });
     eventBus.emit({ type: "surface:ptyReady", id: "s1", ptyId: 61 });
 
-    workspaces.set([
-      makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 61 }]),
+    nestedWorkspaces.set([
+      makeNestedWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 61 }]),
     ]);
     expect(getAgents()).toHaveLength(1);
 
@@ -678,10 +684,10 @@ describe("agent-detection-service — late workspace load (startup race)", () =>
 
 describe("agent-detection-service — workspace:closed cleanup", () => {
   it("removes agents from a workspace when workspace:closed fires", () => {
-    // closeWorkspace() emits workspace:closed but NOT surface:closed for
+    // closeNestedWorkspace() emits workspace:closed but NOT surface:closed for
     // each terminal, so agents were lingering as idle after a workspace close.
-    workspaces.set([
-      makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 10 }]),
+    nestedWorkspaces.set([
+      makeNestedWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 10 }]),
     ]);
     initAgentDetection();
     expect(getAgents()).toHaveLength(1);
@@ -692,10 +698,10 @@ describe("agent-detection-service — workspace:closed cleanup", () => {
     expect(getAgents()).toHaveLength(0);
   });
 
-  it("does not affect agents in other workspaces when one closes", () => {
-    workspaces.set([
-      makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 11 }]),
-      makeWorkspace("w2", [{ id: "s2", title: "claude", ptyId: 12 }]),
+  it("does not affect agents in other nestedWorkspaces when one closes", () => {
+    nestedWorkspaces.set([
+      makeNestedWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 11 }]),
+      makeNestedWorkspace("w2", [{ id: "s2", title: "claude", ptyId: 12 }]),
     ]);
     initAgentDetection();
     expect(getAgents()).toHaveLength(2);
@@ -712,14 +718,16 @@ describe("agent-detection-service — title restoration on agent close", () => {
   it("restores surface title to pre-agent name when title changes away from match (after debounce)", () => {
     vi.useFakeTimers();
     try {
-      const ws = makeWorkspace("w1", [{ id: "s1", title: "zsh", ptyId: 50 }]);
-      workspaces.set([ws]);
+      const ws = makeNestedWorkspace("w1", [
+        { id: "s1", title: "zsh", ptyId: 50 },
+      ]);
+      nestedWorkspaces.set([ws]);
       initAgentDetection();
       expect(getAgents()).toHaveLength(0);
 
       const surface = ws.splitRoot.pane.surfaces[0]!;
       surface.title = "claude";
-      workspaces.update((l) => [...l]);
+      nestedWorkspaces.update((l) => [...l]);
 
       eventBus.emit({
         type: "surface:titleChanged",
@@ -730,7 +738,7 @@ describe("agent-detection-service — title restoration on agent close", () => {
       expect(getAgents()).toHaveLength(1);
 
       surface.title = "zsh";
-      workspaces.update((l) => [...l]);
+      nestedWorkspaces.update((l) => [...l]);
       eventBus.emit({
         type: "surface:titleChanged",
         id: "s1",
@@ -747,13 +755,15 @@ describe("agent-detection-service — title restoration on agent close", () => {
   });
 
   it("restores surface title to pre-agent name when the surface is closed", () => {
-    const ws = makeWorkspace("w1", [{ id: "s1", title: "bash", ptyId: 51 }]);
-    workspaces.set([ws]);
+    const ws = makeNestedWorkspace("w1", [
+      { id: "s1", title: "bash", ptyId: 51 },
+    ]);
+    nestedWorkspaces.set([ws]);
     initAgentDetection();
 
     const surface = ws.splitRoot.pane.surfaces[0]!;
     surface.title = "claude";
-    workspaces.update((l) => [...l]);
+    nestedWorkspaces.update((l) => [...l]);
     eventBus.emit({
       type: "surface:titleChanged",
       id: "s1",
@@ -763,7 +773,7 @@ describe("agent-detection-service — title restoration on agent close", () => {
     expect(getAgents()).toHaveLength(1);
 
     surface.title = "Claude Code (thinking...)";
-    workspaces.update((l) => [...l]);
+    nestedWorkspaces.update((l) => [...l]);
 
     eventBus.emit({ type: "surface:closed", id: "s1", paneId: "p" });
     expect(getAgents()).toHaveLength(0);
@@ -773,16 +783,16 @@ describe("agent-detection-service — title restoration on agent close", () => {
   it("does not restore title when bootstrapped with agent title already active (after debounce)", () => {
     vi.useFakeTimers();
     try {
-      const ws = makeWorkspace("w1", [
+      const ws = makeNestedWorkspace("w1", [
         { id: "s1", title: "claude", ptyId: 52 },
       ]);
-      workspaces.set([ws]);
+      nestedWorkspaces.set([ws]);
       initAgentDetection();
       expect(getAgents()).toHaveLength(1);
 
       const surface = ws.splitRoot.pane.surfaces[0]!;
       surface.title = "zsh";
-      workspaces.update((l) => [...l]);
+      nestedWorkspaces.update((l) => [...l]);
       eventBus.emit({
         type: "surface:titleChanged",
         id: "s1",
@@ -821,8 +831,8 @@ describe("agent-detection-service — event bus contract", () => {
 
 describe("agent-detection-service — agentsStore reactive subscriber", () => {
   it("agentsStore subscriber receives updated status when an agent transitions via title change", () => {
-    workspaces.set([
-      makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 99 }]),
+    nestedWorkspaces.set([
+      makeNestedWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 99 }]),
     ]);
     initAgentDetection();
 
@@ -850,8 +860,8 @@ describe("agent-detection-service — agentsStore reactive subscriber", () => {
   });
 
   it("agentsStore subscriber receives an updated list when a new agent is attached via title change", () => {
-    workspaces.set([
-      makeWorkspace("w1", [{ id: "s2", title: "zsh", ptyId: 100 }]),
+    nestedWorkspaces.set([
+      makeNestedWorkspace("w1", [{ id: "s2", title: "zsh", ptyId: 100 }]),
     ]);
     initAgentDetection();
 
@@ -878,8 +888,8 @@ describe("agent-detection-service — agentsStore reactive subscriber", () => {
 
 describe("agent-detection-service — active status (non-OSC agents)", () => {
   it("title-only agents emit 'active' status on output, not 'running'", () => {
-    workspaces.set([
-      makeWorkspace("w1", [{ id: "s1", title: "aider", ptyId: 110 }]),
+    nestedWorkspaces.set([
+      makeNestedWorkspace("w1", [{ id: "s1", title: "cursor", ptyId: 110 }]),
     ]);
     initAgentDetection();
     expect(getAgents()[0]?.status).toBe("idle");
@@ -890,8 +900,8 @@ describe("agent-detection-service — active status (non-OSC agents)", () => {
   });
 
   it("'active' status writes a success variant to the registry (not muted)", () => {
-    workspaces.set([
-      makeWorkspace("w1", [{ id: "s1", title: "aider", ptyId: 111 }]),
+    nestedWorkspaces.set([
+      makeNestedWorkspace("w1", [{ id: "s1", title: "cursor", ptyId: 111 }]),
     ]);
     initAgentDetection();
     notifyOutputObservers(111, "some output");
@@ -909,8 +919,8 @@ describe("agent-detection-service — repeat waiting notification", () => {
     // Regression: setStatus() dedup was silently swallowing the second
     // notification while already in "waiting" state, so markSurfaceUnreadById
     // (and the unread badge) never re-triggered for a second prompt.
-    workspaces.set([
-      makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 120 }]),
+    nestedWorkspaces.set([
+      makeNestedWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 120 }]),
     ]);
     initAgentDetection();
 
@@ -937,8 +947,8 @@ describe("agent-detection-service — repeat waiting notification", () => {
 
 describe("agent-detection-service — split-chunk OSC detection", () => {
   it("detects an OSC 9 notification split across two PTY chunks", () => {
-    workspaces.set([
-      makeWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 130 }]),
+    nestedWorkspaces.set([
+      makeNestedWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 130 }]),
     ]);
     initAgentDetection();
 
@@ -950,5 +960,115 @@ describe("agent-detection-service — split-chunk OSC detection", () => {
       (i) => i.source === "_agent" && i.metadata?.surfaceId === "s1",
     );
     expect(item?.label).toBe("waiting");
+  });
+});
+
+describe("agent-detection-service — done status (S-DONE-IDLE)", () => {
+  it("title change to 'ready' transitions agent status to 'done'", () => {
+    nestedWorkspaces.set([
+      makeNestedWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 200 }]),
+    ]);
+    initAgentDetection();
+    expect(getAgents()[0]?.status).toBe("idle");
+
+    eventBus.emit({
+      type: "surface:titleChanged",
+      id: "s1",
+      oldTitle: "claude",
+      newTitle: "claude — ready",
+    });
+    expect(getAgents()[0]?.status).toBe("done");
+  });
+
+  it("title change to 'done' transitions agent status to 'done'", () => {
+    nestedWorkspaces.set([
+      makeNestedWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 201 }]),
+    ]);
+    initAgentDetection();
+
+    eventBus.emit({
+      type: "surface:titleChanged",
+      id: "s1",
+      oldTitle: "claude",
+      newTitle: "claude — done",
+    });
+    expect(getAgents()[0]?.status).toBe("done");
+  });
+
+  it("done status writes a muted variant to the registry", () => {
+    nestedWorkspaces.set([
+      makeNestedWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 202 }]),
+    ]);
+    initAgentDetection();
+
+    eventBus.emit({
+      type: "surface:titleChanged",
+      id: "s1",
+      oldTitle: "claude",
+      newTitle: "claude — ready",
+    });
+
+    const item = get(statusRegistry.store).find(
+      (i) => i.source === "_agent" && i.metadata?.surfaceId === "s1",
+    );
+    expect(item?.label).toBe("done");
+    expect(item?.variant).toBe("muted");
+  });
+
+  it("idle timeout after 30s without a title match emits 'idle', not 'done'", () => {
+    vi.useFakeTimers();
+    try {
+      nestedWorkspaces.set([
+        makeNestedWorkspace("w1", [{ id: "s1", title: "claude", ptyId: 203 }]),
+      ]);
+      initAgentDetection();
+
+      // Trigger running state (starts idle timer)
+      eventBus.emit({
+        type: "surface:titleChanged",
+        id: "s1",
+        oldTitle: "claude",
+        newTitle: "claude working",
+      });
+      expect(getAgents()[0]?.status).toBe("running");
+
+      // Let the 30s idle timeout fire
+      vi.advanceTimersByTime(31_000);
+      expect(getAgents()[0]?.status).toBe("idle");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("agent-detection-service — lookup helpers", () => {
+  it("getAgentByAgentId returns undefined for unknown id", () => {
+    expect(getAgentByAgentId("nope")).toBeUndefined();
+  });
+
+  it("getAgentBySurfaceId returns undefined for unknown surface", () => {
+    expect(getAgentBySurfaceId("nope")).toBeUndefined();
+  });
+
+  it("getAgentByAgentId finds a registered agent", () => {
+    nestedWorkspaces.set([
+      makeNestedWorkspace("ws1", [{ id: "s1", title: "claude", ptyId: 1 }]),
+    ]);
+    initAgentDetection();
+    const agents = getAgents();
+    expect(agents).toHaveLength(1);
+    const found = getAgentByAgentId(agents[0].agentId);
+    expect(found).toBeDefined();
+    expect(found?.surfaceId).toBe("s1");
+  });
+
+  it("getAgentBySurfaceId finds a registered agent", () => {
+    nestedWorkspaces.set([
+      makeNestedWorkspace("ws1", [{ id: "s1", title: "claude", ptyId: 1 }]),
+    ]);
+    initAgentDetection();
+    const found = getAgentBySurfaceId("s1");
+    expect(found).toBeDefined();
+    expect(found?.workspaceId).toBe("ws1");
   });
 });

@@ -1,24 +1,27 @@
 <script lang="ts">
   /**
    * `gnar:worktrees` — lists the open worktrees rooted at the
-   * Workspace Group's repo path. Each row surfaces the branch name,
+   * Workspace's repo path. Each row surfaces the branch name,
    * the base branch, and (when a workspace is bound) a click-to-jump
    * affordance that switches to that worktree workspace.
    *
    * Scope comes from the enclosing `DashboardHostContext`:
-   *   - group scope  → filter to `group.path` as the repo
+   *   - workspace scope  → filter to `workspace.path` as the repo
    *   - global scope → filter to `repoPath` config when provided;
    *     otherwise show every persisted worktree
    *   - none         → widget is inert
    */
   import { theme } from "../stores/theme";
-  import { getWorkspaceGroup } from "../stores/workspace-groups";
+  import { getWorkspace } from "../stores/workspaces";
   import {
     deriveDashboardScope,
     getDashboardHost,
   } from "../contexts/dashboard-host";
   import { worktreeEntriesStore } from "../services/worktree-service";
-  import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
+  import {
+    nestedWorkspaces,
+    activeNestedWorkspaceIdx,
+  } from "../stores/nested-workspace";
 
   /** Explicit repo override under global scope. */
   export let repoPath: string | undefined = undefined;
@@ -27,8 +30,8 @@
   const scope = deriveDashboardScope(host);
 
   function resolveRepoPath(): string | null {
-    if (scope.kind === "group") {
-      const g = getWorkspaceGroup(scope.groupId);
+    if (scope.kind === "workspace") {
+      const g = getWorkspace(scope.parentWorkspaceId);
       return g?.path ?? null;
     }
     if (scope.kind === "global") {
@@ -52,8 +55,8 @@
 
   function jumpToWorktree(workspaceId: string | undefined): void {
     if (!workspaceId) return;
-    const idx = $workspaces.findIndex((w) => w.id === workspaceId);
-    if (idx >= 0) activeWorkspaceIdx.set(idx);
+    const idx = $nestedWorkspaces.findIndex((w) => w.id === workspaceId);
+    if (idx >= 0) activeNestedWorkspaceIdx.set(idx);
   }
 </script>
 
@@ -80,7 +83,7 @@
 
   {#if scope.kind === "none"}
     <div data-worktrees-no-scope style="color: {$theme.fgDim};">
-      Mount inside a Workspace Group dashboard to see worktrees.
+      Mount inside a Workspace dashboard to see worktrees.
     </div>
   {:else if entries.length === 0}
     <div
@@ -93,6 +96,7 @@
     <div style="display: flex; flex-direction: column; gap: 4px;">
       {#each entries as entry (entry.worktreePath)}
         {@const hasWorkspace = !!entry.workspaceId}
+        <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
         <div
           data-worktree-row
           data-branch={entry.branch}

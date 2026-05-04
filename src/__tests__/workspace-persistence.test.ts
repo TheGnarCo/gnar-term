@@ -12,12 +12,15 @@ vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn().mockResolvedValue(vi.fn()),
 }));
 
-import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
+import {
+  nestedWorkspaces,
+  activeNestedWorkspaceIdx,
+} from "../lib/stores/nested-workspace";
 
 describe("workspace persistence", () => {
   beforeEach(() => {
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
+    nestedWorkspaces.set([]);
+    activeNestedWorkspaceIdx.set(-1);
     vi.useFakeTimers();
   });
 
@@ -25,16 +28,16 @@ describe("workspace persistence", () => {
     vi.useRealTimers();
   });
 
-  it("persistWorkspaces serializes all workspaces and calls saveState", async () => {
+  it("persistWorkspaces serializes all nestedWorkspaces and calls saveState", async () => {
     const { persistWorkspaces } =
-      await import("../lib/services/workspace-service");
+      await import("../lib/services/nested-workspace-service");
     const config = await import("../lib/config");
     const saveStateSpy = vi
       .spyOn(config, "saveState")
       .mockResolvedValue(undefined);
 
-    // Set up two workspaces in the store
-    workspaces.set([
+    // Set up two nestedWorkspaces in the store
+    nestedWorkspaces.set([
       {
         id: "ws1",
         name: "Dev",
@@ -54,7 +57,7 @@ describe("workspace persistence", () => {
         activePaneId: "p2",
       },
     ]);
-    activeWorkspaceIdx.set(1);
+    activeNestedWorkspaceIdx.set(1);
 
     persistWorkspaces();
 
@@ -62,7 +65,7 @@ describe("workspace persistence", () => {
     await vi.runAllTimersAsync();
 
     expect(saveStateSpy).toHaveBeenCalledWith({
-      workspaces: [
+      nestedWorkspaces: [
         {
           id: "ws1",
           name: "Dev",
@@ -76,7 +79,7 @@ describe("workspace persistence", () => {
           layout: { pane: { surfaces: [] } },
         },
       ],
-      activeWorkspaceIdx: 1,
+      activeNestedWorkspaceIdx: 1,
     });
 
     saveStateSpy.mockRestore();
@@ -84,13 +87,13 @@ describe("workspace persistence", () => {
 
   it("schedulePersist debounces multiple calls into one save", async () => {
     const { schedulePersist } =
-      await import("../lib/services/workspace-service");
+      await import("../lib/services/nested-workspace-service");
     const config = await import("../lib/config");
     const saveStateSpy = vi
       .spyOn(config, "saveState")
       .mockResolvedValue(undefined);
 
-    workspaces.set([
+    nestedWorkspaces.set([
       {
         id: "ws1",
         name: "WS",
@@ -101,7 +104,7 @@ describe("workspace persistence", () => {
         activePaneId: "p1",
       },
     ]);
-    activeWorkspaceIdx.set(0);
+    activeNestedWorkspaceIdx.set(0);
 
     // Call schedulePersist multiple times rapidly
     schedulePersist();
@@ -119,13 +122,13 @@ describe("workspace persistence", () => {
 
   it("persistWorkspaces round-trips workspace metadata (regression for 0b92007)", async () => {
     const { persistWorkspaces } =
-      await import("../lib/services/workspace-service");
+      await import("../lib/services/nested-workspace-service");
     const config = await import("../lib/config");
     const saveStateSpy = vi
       .spyOn(config, "saveState")
       .mockResolvedValue(undefined);
 
-    workspaces.set([
+    nestedWorkspaces.set([
       {
         id: "ws-project",
         name: "Project A",
@@ -134,22 +137,22 @@ describe("workspace persistence", () => {
           pane: { id: "p1", surfaces: [], activeSurfaceId: null },
         },
         activePaneId: "p1",
-        metadata: { groupId: "proj-alpha", color: "blue" },
+        metadata: { parentWorkspaceId: "proj-alpha", color: "blue" },
       },
-    ] as unknown as import("../lib/types").Workspace[]);
-    activeWorkspaceIdx.set(0);
+    ] as unknown as import("../lib/types").NestedWorkspace[]);
+    activeNestedWorkspaceIdx.set(0);
 
     await persistWorkspaces();
 
     expect(saveStateSpy).toHaveBeenCalledTimes(1);
     const payload = saveStateSpy.mock.calls[0]![0];
-    expect(payload.workspaces).toEqual([
+    expect(payload.nestedWorkspaces).toEqual([
       {
         id: "ws-project",
         name: "Project A",
         cwd: undefined,
         layout: { pane: { surfaces: [] } },
-        metadata: { groupId: "proj-alpha", color: "blue" },
+        metadata: { parentWorkspaceId: "proj-alpha", color: "blue" },
       },
     ]);
 
@@ -158,7 +161,7 @@ describe("workspace persistence", () => {
 
   it("serializeLayout captures terminal cwd and title", async () => {
     const { serializeLayout } =
-      await import("../lib/services/workspace-service");
+      await import("../lib/services/nested-workspace-service");
 
     const layout = serializeLayout({
       type: "pane",
@@ -200,24 +203,25 @@ describe("workspace persistence", () => {
   it("restore falls back to defaults when no saved state", async () => {
     const config = await import("../lib/config");
 
-    // loadState returns empty object (no workspaces)
+    // loadState returns empty object (no nestedWorkspaces)
     const loadStateSpy = vi.spyOn(config, "loadState").mockResolvedValue({});
 
     const state = await config.loadState();
-    expect(state.workspaces).toBeUndefined();
+    expect(state.nestedWorkspaces).toBeUndefined();
 
-    // App.svelte logic: if no state.workspaces, fall back to autoload/default
-    const shouldRestore = state.workspaces && state.workspaces.length > 0;
+    // App.svelte logic: if no state.nestedWorkspaces, fall back to autoload/default
+    const shouldRestore =
+      state.nestedWorkspaces && state.nestedWorkspaces.length > 0;
     expect(shouldRestore).toBeFalsy();
 
     loadStateSpy.mockRestore();
   });
 
-  it("restore uses saved state when workspaces exist", async () => {
+  it("restore uses saved state when nestedWorkspaces exist", async () => {
     const config = await import("../lib/config");
 
     const savedState = {
-      workspaces: [
+      nestedWorkspaces: [
         {
           name: "Restored",
           layout: {
@@ -227,7 +231,7 @@ describe("workspace persistence", () => {
           },
         },
       ],
-      activeWorkspaceIdx: 0,
+      activeNestedWorkspaceIdx: 0,
     };
 
     const loadStateSpy = vi
@@ -235,9 +239,9 @@ describe("workspace persistence", () => {
       .mockResolvedValue(savedState);
 
     const state = await config.loadState();
-    expect(state.workspaces).toHaveLength(1);
-    expect(state.workspaces![0].name).toBe("Restored");
-    expect(state.activeWorkspaceIdx).toBe(0);
+    expect(state.nestedWorkspaces).toHaveLength(1);
+    expect(state.nestedWorkspaces![0].name).toBe("Restored");
+    expect(state.activeNestedWorkspaceIdx).toBe(0);
 
     loadStateSpy.mockRestore();
   });

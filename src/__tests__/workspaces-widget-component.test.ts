@@ -5,15 +5,15 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, cleanup, fireEvent } from "@testing-library/svelte";
 
-const { switchWorkspaceMock } = vi.hoisted(() => ({
-  switchWorkspaceMock: vi.fn(),
+const { switchNestedWorkspaceMock } = vi.hoisted(() => ({
+  switchNestedWorkspaceMock: vi.fn(),
 }));
-vi.mock("../lib/services/workspace-service", () => ({
-  switchWorkspace: switchWorkspaceMock,
-  createWorkspace: vi.fn(),
+vi.mock("../lib/services/nested-workspace-service", () => ({
+  switchNestedWorkspace: switchNestedWorkspaceMock,
+  createNestedWorkspace: vi.fn(),
   schedulePersist: vi.fn(),
-  closeWorkspace: vi.fn(),
-  renameWorkspace: vi.fn(),
+  closeNestedWorkspace: vi.fn(),
+  renameNestedWorkspace: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -25,19 +25,19 @@ vi.mock("@tauri-apps/api/event", () => ({
 }));
 
 import WorkspacesWidget from "../lib/components/WorkspacesWidget.svelte";
-import { workspaces } from "../lib/stores/workspace";
+import { nestedWorkspaces } from "../lib/stores/nested-workspace";
 import {
-  setWorkspaceGroups,
-  resetWorkspaceGroupsForTest,
-} from "../lib/stores/workspace-groups";
+  setWorkspaces,
+  resetWorkspacesForTest,
+} from "../lib/stores/workspaces";
 import { DASHBOARD_HOST_KEY } from "../lib/contexts/dashboard-host";
-import type { Workspace } from "../lib/types";
+import type { NestedWorkspace } from "../lib/types";
 
-function makeWorkspace(
+function makeNestedWorkspace(
   id: string,
   name: string,
   metadata: Record<string, unknown> = {},
-): Workspace {
+): NestedWorkspace {
   return {
     id,
     name,
@@ -52,76 +52,82 @@ function makeWorkspace(
 
 beforeEach(() => {
   cleanup();
-  workspaces.set([]);
-  resetWorkspaceGroupsForTest();
+  nestedWorkspaces.set([]);
+  resetWorkspacesForTest();
 });
 
 describe("WorkspacesWidget", () => {
   it("renders nothing when there is no dashboard host context", () => {
     const { container } = render(WorkspacesWidget);
-    expect(container.querySelector("[data-workspaces-widget]")).toBeNull();
+    expect(
+      container.querySelector("[data-nestedWorkspaces-widget]"),
+    ).toBeNull();
   });
 
-  it("renders nothing when the group only has a group-overview dashboard", () => {
-    setWorkspaceGroups([
+  it("renders nothing when the workspace only has a workspace-overview dashboard", () => {
+    setWorkspaces([
       {
         id: "g1",
-        name: "My Group",
+        name: "My Workspace",
         path: "/tmp/g1",
         color: "purple",
-        workspaceIds: [],
+        nestedWorkspaceIds: [],
         isGit: false,
         createdAt: "2026-01-01T00:00:00.000Z",
       },
     ]);
-    workspaces.set([
-      makeWorkspace("ws-overview", "Group Overview", {
-        groupId: "g1",
+    nestedWorkspaces.set([
+      makeNestedWorkspace("ws-overview", "Workspace Overview", {
+        parentWorkspaceId: "g1",
         isDashboard: true,
         dashboardContributionId: "group",
       }),
     ]);
 
     const { container } = render(WorkspacesWidget, {
-      context: new Map([[DASHBOARD_HOST_KEY, { metadata: { groupId: "g1" } }]]),
+      context: new Map([
+        [DASHBOARD_HOST_KEY, { metadata: { parentWorkspaceId: "g1" } }],
+      ]),
     });
 
     expect(container.querySelector("[data-dashboard-cards]")).toBeNull();
     expect(container.querySelector("[data-workspace-rows]")).toBeNull();
   });
 
-  it("renders non-group dashboard cards but excludes the group overview", () => {
-    setWorkspaceGroups([
+  it("renders non-overview dashboard cards but excludes the workspace overview", () => {
+    setWorkspaces([
       {
         id: "g1",
-        name: "My Group",
+        name: "My Workspace",
         path: "/tmp/g1",
         color: "blue",
-        workspaceIds: [],
+        nestedWorkspaceIds: [],
         isGit: false,
         createdAt: "2026-01-01T00:00:00.000Z",
       },
     ]);
-    workspaces.set([
-      makeWorkspace("ws-overview", "Group Overview", {
-        groupId: "g1",
+    nestedWorkspaces.set([
+      makeNestedWorkspace("ws-overview", "Workspace Overview", {
+        parentWorkspaceId: "g1",
         isDashboard: true,
         dashboardContributionId: "group",
       }),
-      makeWorkspace("ws-settings", "Settings Dashboard", {
-        groupId: "g1",
+      makeNestedWorkspace("ws-settings", "Settings Dashboard", {
+        parentWorkspaceId: "g1",
         isDashboard: true,
         dashboardContributionId: "settings",
       }),
-      makeWorkspace("ws-agentic", "Agentic Dashboard", {
-        groupId: "g1",
+      makeNestedWorkspace("ws-agentic", "Agentic Dashboard", {
+        parentWorkspaceId: "g1",
         isDashboard: true,
         dashboardContributionId: "agentic",
       }),
     ]);
 
     const { container } = render(WorkspacesWidget, {
-      context: new Map([[DASHBOARD_HOST_KEY, { metadata: { groupId: "g1" } }]]),
+      context: new Map([
+        [DASHBOARD_HOST_KEY, { metadata: { parentWorkspaceId: "g1" } }],
+      ]),
     });
 
     const cards = container.querySelectorAll("[data-dashboard-card]");
@@ -136,106 +142,124 @@ describe("WorkspacesWidget", () => {
   });
 
   it("renders regular workspace rows with correct names", () => {
-    setWorkspaceGroups([
+    setWorkspaces([
       {
         id: "g1",
-        name: "My Group",
+        name: "My Workspace",
         path: "/tmp/g1",
         color: "green",
-        workspaceIds: [],
+        nestedWorkspaceIds: [],
         isGit: false,
         createdAt: "2026-01-01T00:00:00.000Z",
       },
     ]);
-    workspaces.set([
-      makeWorkspace("ws-alpha", "Alpha Workspace", { groupId: "g1" }),
-      makeWorkspace("ws-beta", "Beta Workspace", { groupId: "g1" }),
+    nestedWorkspaces.set([
+      makeNestedWorkspace("ws-alpha", "Alpha NestedWorkspace", {
+        parentWorkspaceId: "g1",
+      }),
+      makeNestedWorkspace("ws-beta", "Beta NestedWorkspace", {
+        parentWorkspaceId: "g1",
+      }),
     ]);
 
     const { container } = render(WorkspacesWidget, {
-      context: new Map([[DASHBOARD_HOST_KEY, { metadata: { groupId: "g1" } }]]),
+      context: new Map([
+        [DASHBOARD_HOST_KEY, { metadata: { parentWorkspaceId: "g1" } }],
+      ]),
     });
 
     const rows = container.querySelectorAll("[data-workspace-row]");
     expect(rows).toHaveLength(2);
 
     const names = Array.from(rows).map((r) => r.getAttribute("data-ws-name"));
-    expect(names).toContain("Alpha Workspace");
-    expect(names).toContain("Beta Workspace");
+    expect(names).toContain("Alpha NestedWorkspace");
+    expect(names).toContain("Beta NestedWorkspace");
   });
 
-  it("excludes workspaces from other groups", () => {
-    setWorkspaceGroups([
+  it("excludes nestedWorkspaces from other workspaces", () => {
+    setWorkspaces([
       {
         id: "g1",
-        name: "Group One",
+        name: "Workspace One",
         path: "/tmp/g1",
         color: "red",
-        workspaceIds: [],
+        nestedWorkspaceIds: [],
         isGit: false,
         createdAt: "2026-01-01T00:00:00.000Z",
       },
       {
         id: "g2",
-        name: "Group Two",
+        name: "Workspace Two",
         path: "/tmp/g2",
         color: "blue",
-        workspaceIds: [],
+        nestedWorkspaceIds: [],
         isGit: false,
         createdAt: "2026-01-01T00:00:00.000Z",
       },
     ]);
-    workspaces.set([
-      makeWorkspace("ws-g1", "G1 Workspace", { groupId: "g1" }),
-      makeWorkspace("ws-g2", "G2 Workspace", { groupId: "g2" }),
+    nestedWorkspaces.set([
+      makeNestedWorkspace("ws-g1", "G1 NestedWorkspace", {
+        parentWorkspaceId: "g1",
+      }),
+      makeNestedWorkspace("ws-g2", "G2 NestedWorkspace", {
+        parentWorkspaceId: "g2",
+      }),
     ]);
 
     const { container } = render(WorkspacesWidget, {
-      context: new Map([[DASHBOARD_HOST_KEY, { metadata: { groupId: "g1" } }]]),
+      context: new Map([
+        [DASHBOARD_HOST_KEY, { metadata: { parentWorkspaceId: "g1" } }],
+      ]),
     });
 
     const rows = container.querySelectorAll("[data-workspace-row]");
     expect(rows).toHaveLength(1);
-    expect(rows[0]!.getAttribute("data-ws-name")).toBe("G1 Workspace");
+    expect(rows[0]!.getAttribute("data-ws-name")).toBe("G1 NestedWorkspace");
   });
 });
 
 describe("WorkspacesWidget click-to-navigate", () => {
   beforeEach(() => {
     cleanup();
-    switchWorkspaceMock.mockClear();
-    workspaces.set([]);
-    resetWorkspaceGroupsForTest();
+    switchNestedWorkspaceMock.mockClear();
+    nestedWorkspaces.set([]);
+    resetWorkspacesForTest();
   });
 
-  it("clicking a workspace row calls switchWorkspace with its index", async () => {
-    setWorkspaceGroups([
+  it("clicking a workspace row calls switchNestedWorkspace with its index", async () => {
+    setWorkspaces([
       {
         id: "g1",
-        name: "My Group",
+        name: "My Workspace",
         path: "/tmp/g1",
         color: "blue",
-        workspaceIds: [],
+        nestedWorkspaceIds: [],
         isGit: false,
         createdAt: "2026-01-01T00:00:00.000Z",
       },
     ]);
-    workspaces.set([
-      makeWorkspace("ws-alpha", "Alpha Workspace", { groupId: "g1" }),
-      makeWorkspace("ws-beta", "Beta Workspace", { groupId: "g1" }),
+    nestedWorkspaces.set([
+      makeNestedWorkspace("ws-alpha", "Alpha NestedWorkspace", {
+        parentWorkspaceId: "g1",
+      }),
+      makeNestedWorkspace("ws-beta", "Beta NestedWorkspace", {
+        parentWorkspaceId: "g1",
+      }),
     ]);
 
     const { container } = render(WorkspacesWidget, {
-      context: new Map([[DASHBOARD_HOST_KEY, { metadata: { groupId: "g1" } }]]),
+      context: new Map([
+        [DASHBOARD_HOST_KEY, { metadata: { parentWorkspaceId: "g1" } }],
+      ]),
     });
 
     const rows = container.querySelectorAll("[data-workspace-row]");
     expect(rows).toHaveLength(2);
 
-    // Click the second workspace row (index 1 in the workspaces store)
+    // Click the second workspace row (index 1 in the nestedWorkspaces store)
     await fireEvent.click(rows[1]!);
 
-    expect(switchWorkspaceMock).toHaveBeenCalledTimes(1);
-    expect(switchWorkspaceMock).toHaveBeenCalledWith(1);
+    expect(switchNestedWorkspaceMock).toHaveBeenCalledTimes(1);
+    expect(switchNestedWorkspaceMock).toHaveBeenCalledWith(1);
   });
 });

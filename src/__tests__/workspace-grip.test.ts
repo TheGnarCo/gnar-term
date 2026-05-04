@@ -2,14 +2,9 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, cleanup, fireEvent } from "@testing-library/svelte";
 import { readFileSync } from "fs";
 import WorkspaceItem from "../lib/components/WorkspaceItem.svelte";
-import type { Workspace } from "../lib/types";
+import type { NestedWorkspace } from "../lib/types";
 
-const WORKSPACE_ITEM_SOURCE = readFileSync(
-  "src/lib/components/WorkspaceItem.svelte",
-  "utf-8",
-).replace(/\s+/g, " ");
-
-function makeWorkspace(): Workspace {
+function makeNestedWorkspace(): NestedWorkspace {
   return {
     id: "ws1",
     name: "Test",
@@ -29,7 +24,7 @@ describe("WorkspaceItem drag grip", () => {
   it("renders a DragGrip", () => {
     const { container } = render(WorkspaceItem, {
       props: {
-        workspace: makeWorkspace(),
+        workspace: makeNestedWorkspace(),
         index: 0,
         isActive: false,
         onSelect: noop,
@@ -43,11 +38,11 @@ describe("WorkspaceItem drag grip", () => {
     expect(grip).not.toBeNull();
   });
 
-  it("invokes onGripMouseDown when the grip is pressed", async () => {
+  it("invokes onGripMouseDown when the grip is hovered and pressed", async () => {
     const onGripMouseDown = vi.fn();
     const { container } = render(WorkspaceItem, {
       props: {
-        workspace: makeWorkspace(),
+        workspace: makeNestedWorkspace(),
         index: 0,
         isActive: false,
         onSelect: noop,
@@ -57,15 +52,21 @@ describe("WorkspaceItem drag grip", () => {
         onGripMouseDown,
       },
     });
-    const grip = container.querySelector(".drag-grip") as HTMLElement;
-    await fireEvent.mouseDown(grip);
+    const row = container.querySelector("[data-drag-idx]") as HTMLElement;
+    const gripArea = row.querySelector(
+      "[data-sidebar-element] > div",
+    ) as HTMLElement;
+    // Trigger mouseenter on the grip area to set railHovered
+    await fireEvent.mouseEnter(gripArea);
+    // Fire mousedown on the grip area
+    await fireEvent.mouseDown(gripArea);
     expect(onGripMouseDown).toHaveBeenCalledTimes(1);
   });
 
   it("keeps grip at fixed 14px on row-level hover (no expansion)", async () => {
     const { container } = render(WorkspaceItem, {
       props: {
-        workspace: makeWorkspace(),
+        workspace: makeNestedWorkspace(),
         index: 0,
         isActive: false,
         onSelect: noop,
@@ -77,26 +78,28 @@ describe("WorkspaceItem drag grip", () => {
     });
     const row = container.querySelector("[data-drag-idx]") as HTMLElement;
     const grip = container.querySelector(".drag-grip") as HTMLElement;
-    // Grip is a fixed 14px — no expansion on hover to avoid content shift.
-    expect(grip.style.width).toBe("14px");
+    // Grip is a fixed 8px — no expansion on hover to avoid content shift.
+    expect(grip.style.width).toBe("8px");
     await fireEvent.mouseEnter(row);
-    expect(grip.style.width).toBe("14px");
+    expect(grip.style.width).toBe("8px");
     await fireEvent.mouseLeave(row);
-    expect(grip.style.width).toBe("14px");
+    expect(grip.style.width).toBe("8px");
   });
 
   it("rounds only the right corners so the rail renders as a straight vertical bar on the left", () => {
-    expect(WORKSPACE_ITEM_SOURCE).toMatch(/border-radius:\s*0\s+6px\s+6px\s+0/);
-    // Negative: the old uniform radius is gone.
-    expect(WORKSPACE_ITEM_SOURCE).not.toMatch(/border-radius:\s*6px\s*;/);
+    const SIDEBAR_ELEM_SOURCE = readFileSync(
+      "src/lib/components/SidebarElement.svelte",
+      "utf-8",
+    ).replace(/\s+/g, " ");
+    expect(SIDEBAR_ELEM_SOURCE).toMatch(/border-radius:\s*0 6px 6px 0/);
   });
 
-  it("invokes onGripMouseDown when ANY part of the row body is pressed (row-level drag-origin)", async () => {
+  it("invokes onGripMouseDown when the rail is hovered and row is pressed", async () => {
     const onGripMouseDown = vi.fn();
     const onSelect = vi.fn();
     const { container } = render(WorkspaceItem, {
       props: {
-        workspace: makeWorkspace(),
+        workspace: makeNestedWorkspace(),
         index: 0,
         isActive: false,
         onSelect,
@@ -107,13 +110,16 @@ describe("WorkspaceItem drag grip", () => {
       },
     });
     const row = container.querySelector("[data-drag-idx]") as HTMLElement;
-    await fireEvent.mouseDown(row);
-    // Row-level mousedown is the drag-start surface now; a tap (mousedown
-    // below createDragReorder's 5px threshold) still lets click fire on
-    // the inner content div so selection works for single clicks.
+    const gripArea = row.querySelector(
+      "[data-sidebar-element] > div",
+    ) as HTMLElement;
+    // Trigger mouseenter on the grip area to set railHovered
+    await fireEvent.mouseEnter(gripArea);
+    // Now mousedown on the grip area should trigger the callback
+    await fireEvent.mouseDown(gripArea);
     expect(onGripMouseDown).toHaveBeenCalledTimes(1);
     const contentDiv = container.querySelector(
-      "[data-drag-idx] > div:last-of-type",
+      "[data-workspace-content]",
     ) as HTMLElement;
     await fireEvent.click(contentDiv);
     expect(onSelect).toHaveBeenCalled();
@@ -123,14 +129,14 @@ describe("WorkspaceItem drag grip", () => {
 describe("WorkspaceItem border", () => {
   afterEach(() => cleanup());
 
-  function makeWorktreeWorkspace(): Workspace {
+  function makeWorktreeWorkspace(): NestedWorkspace {
     return {
-      ...makeWorkspace(),
+      ...makeNestedWorkspace(),
       metadata: { worktreePath: "/tmp/some-worktree" },
     };
   }
 
-  it("marks worktree workspaces with data-worktree=true", () => {
+  it("marks worktree nestedWorkspaces with data-worktree=true", () => {
     const { container } = render(WorkspaceItem, {
       props: {
         workspace: makeWorktreeWorkspace(),
@@ -148,10 +154,10 @@ describe("WorkspaceItem border", () => {
     expect(row.dataset.worktree).toBe("true");
   });
 
-  it("renders a 1px border in railColor for active workspaces", () => {
+  it("renders a 1px border in railColor for active nestedWorkspaces", () => {
     const { container } = render(WorkspaceItem, {
       props: {
-        workspace: makeWorkspace(),
+        workspace: makeNestedWorkspace(),
         index: 0,
         isActive: true,
         onSelect: noop,
@@ -167,10 +173,10 @@ describe("WorkspaceItem border", () => {
     expect(row.style.border).toContain("rgb(255, 0, 170)");
   });
 
-  it("renders a 1px inactive-theme border for inactive workspaces (worktree or not)", () => {
+  it("renders a 1px inactive-theme border for inactive nestedWorkspaces (worktree or not)", () => {
     const { container } = render(WorkspaceItem, {
       props: {
-        workspace: makeWorkspace(),
+        workspace: makeNestedWorkspace(),
         index: 0,
         isActive: false,
         onSelect: noop,

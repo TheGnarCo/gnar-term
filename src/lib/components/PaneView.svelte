@@ -1,12 +1,12 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { theme } from "../stores/theme";
-  import { workspaces } from "../stores/workspace";
+  import { nestedWorkspaces } from "../stores/nested-workspace";
   import { commandStore } from "../services/command-registry";
   import TabBar from "./TabBar.svelte";
   import TerminalSurface from "./TerminalSurface.svelte";
   import PreviewSurface from "./PreviewSurface.svelte";
-  import GroupDashboardSettings from "./GroupDashboardSettings.svelte";
+  import WorkspaceDashboardSettings from "./WorkspaceDashboardSettings.svelte";
   import { dashboardWorkspaceRegistry } from "../services/dashboard-workspace-service";
   import RestoreCommandPrompt from "./RestoreCommandPrompt.svelte";
   import EmptySurface from "./EmptySurface.svelte";
@@ -23,6 +23,7 @@
   import { tabDragState } from "../services/tab-drag";
   import { workspaceDragState } from "../services/workspace-drag";
   import { wsMeta } from "../services/service-helpers";
+  import { dismissPane, relaunchPane } from "../services/pane-service";
 
   export let pane: Pane;
   export let workspaceId: string = "";
@@ -72,39 +73,40 @@
   // When the workspace is a constrained Dashboard (metadata.isDashboard
   // === true), hide the tab bar, split buttons, and new-surface
   // affordances entirely. The single Live Preview surface fills the pane.
-  // Dashboard workspaces can't accumulate surfaces — the preview cannot
+  // Dashboard nestedWorkspaces can't accumulate surfaces — the preview cannot
   // be closed from the UI, so no regen affordance is needed either.
   //
-  // For non-Dashboard workspaces tied to a workspace group
-  // (metadata.groupId), keep the workspace-groups regen affordance so
-  // users can re-spawn a group-dashboard preview surface after closing it.
+  // For non-Dashboard nestedWorkspaces tied to a workspace
+  // (metadata.parentWorkspaceId), keep the workspace regen affordance
+  // so users can re-spawn a workspace-dashboard preview surface after
+  // closing it.
   $: workspaceMetadata = (() => {
-    const ws = $workspaces.find((w) => w.id === workspaceId);
+    const ws = $nestedWorkspaces.find((w) => w.id === workspaceId);
     return ws ? wsMeta(ws) : undefined;
   })();
   $: isDashboardWorkspace = workspaceMetadata?.isDashboard === true;
   // When the dashboard workspace belongs to the core "settings"
-  // contribution, PaneView renders the shared GroupDashboardSettings
+  // contribution, PaneView renders the shared WorkspaceDashboardSettings
   // component in place of the surface list. The workspace carries no
   // preview surface — it exists purely as a routing record.
-  $: settingsDashboardGroupId =
+  $: settingsDashboardWorkspaceId =
     isDashboardWorkspace &&
     workspaceMetadata?.dashboardContributionId === "settings" &&
-    typeof workspaceMetadata?.groupId === "string"
-      ? workspaceMetadata.groupId
+    typeof workspaceMetadata?.parentWorkspaceId === "string"
+      ? workspaceMetadata.parentWorkspaceId
       : null;
   $: dashboardWorkspaceEntry =
     isDashboardWorkspace &&
-    typeof workspaceMetadata?.dashboardWorkspaceId === "string"
+    typeof workspaceMetadata?.dashboardNestedWorkspaceId === "string"
       ? ($dashboardWorkspaceRegistry.get(
-          workspaceMetadata.dashboardWorkspaceId,
+          workspaceMetadata.dashboardNestedWorkspaceId,
         ) ?? null)
       : null;
   $: regenCommandId =
     isDashboardWorkspace &&
-    !settingsDashboardGroupId &&
-    typeof workspaceMetadata?.groupId === "string"
-      ? "workspace-groups:regenerate-active-group-dashboard"
+    !settingsDashboardWorkspaceId &&
+    typeof workspaceMetadata?.parentWorkspaceId === "string"
+      ? "workspaces:regenerate-active-workspace-dashboard"
       : undefined;
   $: regenCommand = regenCommandId
     ? $commandStore.find((c) => c.id === regenCommandId)
@@ -139,7 +141,7 @@
 
   function clearUnreadInPane() {
     if (!paneHasUnread) return;
-    workspaces.update((wsList) => {
+    nestedWorkspaces.update((wsList) => {
       const ws = wsList.find((w) => w.id === workspaceId);
       if (!ws) return wsList;
       // Walk this pane's surfaces and clear hasUnread + notification text.
@@ -318,17 +320,53 @@
     {:else}
       <svelte:component this={dashboardWorkspaceEntry.component} />
     {/if}
-  {:else if settingsDashboardGroupId}
+  {:else if settingsDashboardWorkspaceId}
     <!-- Settings dashboard — PaneView renders the shared settings body
          in place of any surface list. The workspace carries no preview
          surface, so no other render branches fire. -->
-    <GroupDashboardSettings groupId={settingsDashboardGroupId} />
+    <WorkspaceDashboardSettings
+      parentWorkspaceId={settingsDashboardWorkspaceId}
+    />
   {:else}
-    {#if pane.surfaces.length === 0}
-      <!-- Empty pane view — the user just closed the last surface. Shows
-           the same EmptySurface UX the app uses when every workspace has
-           been closed, but scoped to this single empty pane. -->
-      <EmptySurface />
+    {#if pane.exitedSurface && pane.surfaces.length === 0}
+      <div
+        style="
+          flex: 1; display: flex; flex-direction: column;
+          align-items: center; justify-content: center; gap: 12px;
+          color: {$theme.fgMuted}; font-size: 13px;
+        "
+      >
+        <span>Shell exited (code {pane.exitedSurface.code}).</span>
+        <div style="display: flex; gap: 8px;">
+          <button
+            on:click={() => void relaunchPane(pane.id)}
+            style="
+              padding: 5px 14px; border-radius: 6px; cursor: pointer;
+              background: {$theme.accent ?? $theme.bgHighlight};
+              color: {$theme.fg}; border: 1px solid {$theme.border};
+              font-size: 12px; font-family: inherit;
+            "
+          >
+            Relaunch
+          </button>
+          <button
+            on:click={() => dismissPane(pane.id)}
+            style="
+              padding: 5px 14px; border-radius: 6px; cursor: pointer;
+              background: transparent; color: {$theme.fgMuted};
+              border: 1px solid {$theme.border};
+              font-size: 12px; font-family: inherit;
+            "
+          >
+            Dismiss
+          </button>
+        </div>
+      </div>
+    {:else if pane.surfaces.length === 0}
+      <!-- Empty pane view — the user just closed the last surface. In
+           pane context EmptySurface renders a compact UI (New Terminal +
+           Close Pane), not the full workspace launcher. -->
+      <EmptySurface context="pane" paneId={pane.id} {onClosePane} />
     {/if}
 
     {#each pane.surfaces as surface (surface.id)}

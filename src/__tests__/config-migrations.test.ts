@@ -1,9 +1,11 @@
 /**
  * Tests for the config migration scaffold. Covers the empty-table
- * baseline and exercises the forward-upgrade path via the test-only
- * migration registry.
+ * baseline and exercises the forward-upgrade path via a `vi.mock`-swapped
+ * registry.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { GnarTermConfig } from "../lib/config";
+import type { ConfigMigration } from "../lib/services/migrations/registry";
 
 // v2 migration calls Tauri invoke for get_home + file I/O. Stub it so
 // the test doesn't have to boot the Tauri harness; we only care about
@@ -21,11 +23,29 @@ vi.mock("@tauri-apps/api/core", () => ({
 vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn().mockResolvedValue(vi.fn()),
 }));
-import type { GnarTermConfig } from "../lib/config";
+
+// Registry override — when `current` is set, it replaces the production
+// migration list seen by `config-migrations.ts`. Default `null` keeps
+// the real MIGRATIONS in play so production-table tests run untouched.
+const { migrationOverride } = vi.hoisted(() => ({
+  migrationOverride: { current: null as ConfigMigration[] | null },
+}));
+
+vi.mock("../lib/services/migrations/registry", async () => {
+  const actual = await vi.importActual<
+    typeof import("../lib/services/migrations/registry")
+  >("../lib/services/migrations/registry");
+  return {
+    ...actual,
+    get MIGRATIONS() {
+      return migrationOverride.current ?? actual.MIGRATIONS;
+    },
+  };
+});
+
 import {
   CURRENT_SCHEMA_VERSION,
   runConfigMigrations,
-  __testing__,
 } from "../lib/services/config-migrations";
 
 describe("runConfigMigrations — production migration table", () => {
@@ -33,9 +53,9 @@ describe("runConfigMigrations — production migration table", () => {
     const { migrated, changed, applied } = await runConfigMigrations({});
     expect(changed).toBe(true);
     // v1 rewrites the extensions map + orchestrator parent field; v2
-    // collapses agentOrchestrators into dashboards. Both run on an
-    // unstamped config and the final schemaVersion lands at v2.
-    expect(applied).toEqual([1, 2]);
+    // collapses agentOrchestrators into dashboards; v3 flattens the
+    // archive shape. All run on an unstamped config.
+    expect(applied).toEqual([1, 2, 3]);
     expect(migrated.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
   });
 
@@ -122,15 +142,23 @@ describe("runConfigMigrations — v1 Projects → Workspace Groups", () => {
 
 describe("runConfigMigrations — with registered migrations", () => {
   beforeEach(() => {
-    __testing__.reset();
+    migrationOverride.current = [];
   });
 
   afterEach(() => {
-    __testing__.reset();
+    migrationOverride.current = null;
   });
 
+  // Helper mirrors the prior `__testing__.registerMigration` shape:
+  // append + keep the list sorted by `version` so the scaffold sees the
+  // same monotonic order the production registry guarantees.
+  const registerMigration = (m: ConfigMigration): void => {
+    migrationOverride.current!.push(m);
+    migrationOverride.current!.sort((a, b) => a.version - b.version);
+  };
+
   it("applies a pending migration to a config with no schemaVersion", async () => {
-    __testing__.registerMigration({
+    registerMigration({
       version: 1,
       description: "add fontFamily default",
       up: (c) => ({ ...c, fontFamily: "Menlo" }),
@@ -146,7 +174,7 @@ describe("runConfigMigrations — with registered migrations", () => {
   });
 
   it("skips migrations already applied on a stamped config", async () => {
-    __testing__.registerMigration({
+    registerMigration({
       version: 1,
       description: "no-op test migration",
       up: (c) => ({ ...c, theme: "overwritten" }),
@@ -162,12 +190,12 @@ describe("runConfigMigrations — with registered migrations", () => {
   });
 
   it("applies migrations in version order when multiple are pending", async () => {
-    __testing__.registerMigration({
+    registerMigration({
       version: 2,
       description: "second",
       up: (c) => ({ ...c, fontSize: (c.fontSize ?? 0) + 10 }),
     });
-    __testing__.registerMigration({
+    registerMigration({
       version: 1,
       description: "first",
       up: (c) => ({ ...c, fontSize: 5 }),
@@ -180,12 +208,12 @@ describe("runConfigMigrations — with registered migrations", () => {
   });
 
   it("only runs migrations above the config's schemaVersion", async () => {
-    __testing__.registerMigration({
+    registerMigration({
       version: 1,
       description: "already applied",
       up: (c) => ({ ...c, fontSize: 999 }),
     });
-    __testing__.registerMigration({
+    registerMigration({
       version: 2,
       description: "pending",
       up: (c) => ({ ...c, theme: "upgraded" }),

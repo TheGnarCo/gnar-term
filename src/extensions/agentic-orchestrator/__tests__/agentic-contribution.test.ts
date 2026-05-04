@@ -27,9 +27,9 @@ vi.mock("../../../lib/services/extension-state", () => ({
 const { createWorkspaceFromDefMock } = vi.hoisted(() => ({
   createWorkspaceFromDefMock: vi.fn(async () => "ws-agentic-new"),
 }));
-vi.mock("../../../lib/services/workspace-service", () => ({
-  createWorkspaceFromDef: createWorkspaceFromDefMock,
-  closeWorkspace: vi.fn(),
+vi.mock("../../../lib/services/nested-workspace-service", () => ({
+  createNestedWorkspaceFromDef: createWorkspaceFromDefMock,
+  closeNestedWorkspace: vi.fn(),
 }));
 
 import {
@@ -54,7 +54,7 @@ describe("agentic extension — Dashboard contribution registration", () => {
     createWorkspaceFromDefMock.mockClear();
   });
 
-  it("registers an 'agentic' contribution with capPerGroup=1 on activate", async () => {
+  it("registers an 'agentic' contribution with capPerWorkspace=1 on activate", async () => {
     registerExtension(
       agenticOrchestratorManifest,
       registerAgenticOrchestratorExtension,
@@ -65,7 +65,7 @@ describe("agentic extension — Dashboard contribution registration", () => {
     expect(contribution).toBeDefined();
     expect(contribution?.label).toBe("Agentic Dashboard");
     expect(contribution?.actionLabel).toBe("Add Agentic Dashboard");
-    expect(contribution?.capPerGroup).toBe(1);
+    expect(contribution?.capPerWorkspace).toBe(1);
     expect(contribution?.source).toBe("agentic-orchestrator");
   });
 
@@ -80,7 +80,7 @@ describe("agentic extension — Dashboard contribution registration", () => {
     expect(getDashboardContribution("agentic")).toBeUndefined();
   });
 
-  it("create(group) materializes a dashboard workspace with agentic metadata", async () => {
+  it("create(workspace) materializes a dashboard nested workspace with agentic metadata", async () => {
     registerExtension(
       agenticOrchestratorManifest,
       registerAgenticOrchestratorExtension,
@@ -112,7 +112,7 @@ describe("agentic extension — Dashboard contribution registration", () => {
     );
     expect(def.metadata).toMatchObject({
       isDashboard: true,
-      groupId: "grp-1",
+      parentWorkspaceId: "grp-1",
       dashboardContributionId: "agentic",
     });
   });

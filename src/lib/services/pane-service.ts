@@ -1,13 +1,13 @@
 import { get } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
 import {
-  workspaces,
-  activeWorkspaceIdx,
+  nestedWorkspaces,
+  activeNestedWorkspaceIdx,
   activeWorkspace,
   activePane,
   activeSurface,
   zoomedSurfaceId,
-} from "../stores/workspace";
+} from "../stores/nested-workspace";
 import { theme } from "../stores/theme";
 import { createTerminalSurface } from "../terminal-service";
 import {
@@ -17,17 +17,17 @@ import {
   isTerminalSurface,
   findParentSplit,
   replaceNodeInTree,
-  type Workspace,
+  type NestedWorkspace,
   type Pane,
   type SplitNode,
 } from "../types";
 import {
-  createWorkspace,
+  createNestedWorkspace,
   schedulePersist,
   collapseEmptyPaneInWorkspace,
-} from "./workspace-service";
+} from "./nested-workspace-service";
 import { removeRootRow } from "../stores/root-row-order";
-import { removeWorkspaceFromAllGroups } from "./workspace-group-service";
+import { removeNestedWorkspaceFromAllWorkspaces } from "./workspace-service";
 import { handleWorkspaceClosed as gitStatusWorkspaceClosed } from "./git-status-service";
 import { safeFocus, getCwdForSurface } from "./service-helpers";
 import { eventBus } from "./event-bus";
@@ -83,7 +83,7 @@ export function splitPaneEmpty(
     }
   }
   ws.activePaneId = newPane.id;
-  workspaces.update((l) => [...l]);
+  nestedWorkspaces.update((l) => l);
   eventBus.emit({
     type: "pane:split",
     parentPaneId: activeP.id,
@@ -108,24 +108,26 @@ export async function splitPane(
   if (!result) return;
   const cwd = await getCwdForSurface(sourceSurface);
   const surface = await createTerminalSurface(result.newPane, cwd);
-  workspaces.update((l) => [...l]);
+  nestedWorkspaces.update((l) => l);
   void safeFocus(surface);
   schedulePersist();
 }
 
-export function removePane(ws: Workspace, pane: Pane) {
+export function removePane(ws: NestedWorkspace, pane: Pane) {
   const paneId = pane.id;
   const wsId = ws.id;
   pane.resizeObserver?.disconnect();
   if (ws.splitRoot.type === "pane" && ws.splitRoot.pane.id === pane.id) {
-    const wsList = get(workspaces);
+    const wsList = get(nestedWorkspaces);
     const wsIdx = wsList.indexOf(ws);
-    workspaces.update((list) => list.filter((w) => w.id !== ws.id));
+    nestedWorkspaces.update((list) => list.filter((w) => w.id !== ws.id));
     eventBus.emit({ type: "pane:closed", id: paneId, workspaceId: wsId });
-    if (get(workspaces).length === 0) {
-      void createWorkspace("Workspace 1");
+    if (get(nestedWorkspaces).length === 0) {
+      void createNestedWorkspace("Workspace 1");
     } else {
-      activeWorkspaceIdx.set(Math.min(wsIdx, get(workspaces).length - 1));
+      activeNestedWorkspaceIdx.set(
+        Math.min(wsIdx, get(nestedWorkspaces).length - 1),
+      );
     }
     return;
   }
@@ -139,7 +141,7 @@ export function removePane(ws: Workspace, pane: Pane) {
     }
     ws.activePaneId = getAllPanes(ws.splitRoot)[0]?.id ?? null;
   }
-  workspaces.update((l) => [...l]);
+  nestedWorkspaces.update((l) => l);
   eventBus.emit({ type: "pane:closed", id: paneId, workspaceId: wsId });
   void safeFocus(get(activeSurface));
 }
@@ -161,12 +163,40 @@ export function closePane(paneId: string) {
   schedulePersist();
 }
 
+export function dismissPane(paneId: string): void {
+  const ws = get(activeWorkspace);
+  if (!ws) return;
+  const pane = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
+  if (!pane) return;
+  pane.exitedSurface = undefined;
+  removePane(ws, pane);
+  schedulePersist();
+}
+
+export async function relaunchPane(paneId: string): Promise<void> {
+  const ws = get(activeWorkspace);
+  if (!ws) return;
+  const pane = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
+  if (!pane || !pane.exitedSurface) return;
+  const { definedCommand, cwd } = pane.exitedSurface;
+  pane.exitedSurface = undefined;
+  nestedWorkspaces.update((l) => l);
+  const surface = await createTerminalSurface(pane, cwd);
+  if (definedCommand) {
+    surface.definedCommand = definedCommand;
+    surface.startupCommand = definedCommand;
+    surface.title = definedCommand;
+  }
+  nestedWorkspaces.update((l) => l);
+  void safeFocus(surface);
+}
+
 export function focusPane(paneId: string) {
   const ws = get(activeWorkspace);
   if (!ws || ws.activePaneId === paneId) return;
   const previousId = ws.activePaneId;
   ws.activePaneId = paneId;
-  workspaces.update((l) => [...l]);
+  nestedWorkspaces.update((l) => l);
   eventBus.emit({ type: "pane:focused", id: paneId, previousId });
 }
 
@@ -261,7 +291,7 @@ export function splitPaneWithSurface(
   }
 
   ws.activePaneId = newPane.id;
-  workspaces.update((l) => [...l]);
+  nestedWorkspaces.update((l) => l);
   schedulePersist();
 }
 
@@ -299,7 +329,7 @@ export function mergeTabToPane(
   targetPane.surfaces.push(surface);
   targetPane.activeSurfaceId = surface.id;
   ws.activePaneId = targetPane.id;
-  workspaces.update((l) => [...l]);
+  nestedWorkspaces.update((l) => l);
   schedulePersist();
 }
 
@@ -311,25 +341,116 @@ export function reorderTab(paneId: string, fromIdx: number, toIdx: number) {
   const item = pane.surfaces.splice(fromIdx, 1)[0]!;
   const adjustedTo = fromIdx < toIdx ? toIdx - 1 : toIdx;
   pane.surfaces.splice(adjustedTo, 0, item);
-  workspaces.update((l) => [...l]);
+  nestedWorkspaces.update((l) => l);
   schedulePersist();
 }
 
 export function focusDirection(dir: "left" | "right" | "up" | "down") {
   const ws = get(activeWorkspace);
   if (!ws) return;
-  const panes = getAllPanes(ws.splitRoot);
-  if (panes.length <= 1) return;
-  const currentIdx = panes.findIndex((p) => p.id === ws.activePaneId);
-  const nextIdx =
-    dir === "right" || dir === "down"
-      ? (currentIdx + 1) % panes.length
-      : (currentIdx - 1 + panes.length) % panes.length;
-  const nextPane = panes[nextIdx]!;
-  ws.activePaneId = nextPane.id;
-  workspaces.update((l) => [...l]);
-  const s = nextPane.surfaces.find((s) => s.id === nextPane.activeSurfaceId);
-  void safeFocus(s);
+  const allPanes = getAllPanes(ws.splitRoot);
+  if (allPanes.length <= 1) return;
+
+  const active = allPanes.find((p) => p.id === ws.activePaneId);
+
+  const focus = (target: Pane) => {
+    ws.activePaneId = target.id;
+    nestedWorkspaces.update((l) => l);
+    const s = target.surfaces.find((s) => s.id === target.activeSurfaceId);
+    void safeFocus(s);
+  };
+
+  // Without a measured active element we can't do spatial selection;
+  // fall back to DFS order (preserves prior behavior in tests/headless contexts).
+  if (!active?.element) {
+    const idx = allPanes.findIndex((p) => p.id === ws.activePaneId);
+    const nextIdx =
+      dir === "right" || dir === "down"
+        ? (idx + 1) % allPanes.length
+        : (idx - 1 + allPanes.length) % allPanes.length;
+    focus(allPanes[nextIdx]!);
+    return;
+  }
+
+  const aRect = active.element.getBoundingClientRect();
+  const EPS = 4; // px tolerance for rects sharing an edge
+
+  const measurable = allPanes.filter((p) => p.element && p.id !== active.id);
+  const candidates = measurable.filter((p) => {
+    const r = p.element!.getBoundingClientRect();
+    switch (dir) {
+      case "left":
+        return r.right <= aRect.left + EPS;
+      case "right":
+        return r.left >= aRect.right - EPS;
+      case "up":
+        return r.bottom <= aRect.top + EPS;
+      case "down":
+        return r.top >= aRect.bottom - EPS;
+    }
+  });
+
+  if (candidates.length === 0) {
+    // Spatial fallback: DFS wrap-around (original behavior).
+    const idx = allPanes.findIndex((p) => p.id === active.id);
+    const nextIdx =
+      dir === "right" || dir === "down"
+        ? (idx + 1) % allPanes.length
+        : (idx - 1 + allPanes.length) % allPanes.length;
+    focus(allPanes[nextIdx]!);
+    return;
+  }
+
+  // Among spatial candidates, pick the one whose center on the perpendicular
+  // axis is closest to the active pane's center on that axis.
+  const aCenterX = (aRect.left + aRect.right) / 2;
+  const aCenterY = (aRect.top + aRect.bottom) / 2;
+  const isHoriz = dir === "left" || dir === "right";
+  const best = candidates.reduce((a, b) => {
+    const ra = a.element!.getBoundingClientRect();
+    const rb = b.element!.getBoundingClientRect();
+    const da = isHoriz
+      ? Math.abs((ra.top + ra.bottom) / 2 - aCenterY)
+      : Math.abs((ra.left + ra.right) / 2 - aCenterX);
+    const db = isHoriz
+      ? Math.abs((rb.top + rb.bottom) / 2 - aCenterY)
+      : Math.abs((rb.left + rb.right) / 2 - aCenterX);
+    return da <= db ? a : b;
+  });
+
+  focus(best);
+}
+
+/**
+ * Resize the active pane's enclosing split by adjusting its `ratio`. The
+ * arrow direction picks which divider to move:
+ *   - horizontal split: "right" grows ratio (moves divider right), "left" shrinks
+ *   - vertical split: "down" grows ratio, "up" shrinks
+ *   - mismatched arrow vs split axis: no-op
+ *
+ * Ratio is clamped to [0.1, 0.9] to keep both children visible. No-op when
+ * the active pane has no parent split (single-pane workspace).
+ */
+export function resizeActivePane(
+  dir: "left" | "right" | "up" | "down",
+  delta = 0.05,
+): void {
+  const ws = get(activeWorkspace);
+  if (!ws || !ws.activePaneId) return;
+  const parentInfo = findParentSplit(ws.splitRoot, ws.activePaneId);
+  if (!parentInfo || parentInfo.parent.type !== "split") return;
+  const parent = parentInfo.parent;
+
+  const isHorizArrow = dir === "left" || dir === "right";
+  const splitIsHoriz = parent.direction === "horizontal";
+  if (isHorizArrow !== splitIsHoriz) return;
+
+  const sign = dir === "right" || dir === "down" ? 1 : -1;
+  const next = Math.max(0.1, Math.min(0.9, parent.ratio + sign * delta));
+  if (next === parent.ratio) return;
+  parent.ratio = next;
+  nestedWorkspaces.update((l) => l);
+  schedulePersist();
 }
 
 export function flashFocusedPane() {
@@ -359,8 +480,8 @@ export function splitFromSidebar(direction: "horizontal" | "vertical") {
  * the previously-created pane, producing a right-leaning binary split tree.
  *
  * The source workspace is removed without disposing its terminals (they move
- * into tgtWs). Group membership and rootRowOrder are cleaned up directly so
- * the worktree handler's "keep or delete?" dialog is NOT triggered — the
+ * into tgtWs). Workspace membership and rootRowOrder are cleaned up directly
+ * so the worktree handler's "keep or delete?" dialog is NOT triggered — the
  * surfaces are still live.
  */
 export function expandWorkspaceIntoPanes(
@@ -369,7 +490,7 @@ export function expandWorkspaceIntoPanes(
   direction: "horizontal" | "vertical",
   before: boolean,
 ): void {
-  const allWs = get(workspaces);
+  const allWs = get(nestedWorkspaces);
   const srcWs = allWs.find((ws) => ws.id === srcWorkspaceId);
   const tgtWs = allWs.find((ws) =>
     getAllPanes(ws.splitRoot).some((p) => p.id === targetPaneId),
@@ -430,12 +551,14 @@ export function expandWorkspaceIntoPanes(
   // Remove source workspace without disposing terminals (surfaces already moved).
   // Clean up directly instead of emitting workspace:closed to avoid triggering
   // the worktree handler's interactive "keep or delete?" dialog.
-  workspaces.update((list) => list.filter((ws) => ws.id !== srcWorkspaceId));
-  activeWorkspaceIdx.set(
-    Math.min(get(activeWorkspaceIdx), get(workspaces).length - 1),
+  nestedWorkspaces.update((list) =>
+    list.filter((ws) => ws.id !== srcWorkspaceId),
   );
-  removeRootRow({ kind: "workspace", id: srcWorkspaceId });
-  removeWorkspaceFromAllGroups(srcWorkspaceId);
+  activeNestedWorkspaceIdx.set(
+    Math.min(get(activeNestedWorkspaceIdx), get(nestedWorkspaces).length - 1),
+  );
+  removeRootRow({ kind: "nested-workspace", id: srcWorkspaceId });
+  removeNestedWorkspaceFromAllWorkspaces(srcWorkspaceId);
   gitStatusWorkspaceClosed(srcWorkspaceId);
   schedulePersist();
 }
@@ -447,14 +570,14 @@ export function expandWorkspaceIntoPanes(
  * `srcWorkspaceId` into `targetPaneId` in the target workspace.
  *
  * The source workspace is removed without disposing terminals (surfaces move
- * live). Group membership and rootRowOrder are cleaned up directly so the
- * worktree handler's "keep or delete?" dialog is NOT triggered.
+ * live). Workspace membership and rootRowOrder are cleaned up directly so
+ * the worktree handler's "keep or delete?" dialog is NOT triggered.
  */
 export function mergeWorkspaceIntoPane(
   srcWorkspaceId: string,
   targetPaneId: string,
 ): void {
-  const allWs = get(workspaces);
+  const allWs = get(nestedWorkspaces);
   const srcWs = allWs.find((ws) => ws.id === srcWorkspaceId);
   const tgtWs = allWs.find((ws) =>
     getAllPanes(ws.splitRoot).some((p) => p.id === targetPaneId),
@@ -476,14 +599,14 @@ export function mergeWorkspaceIntoPane(
   }
   tgtWs.activePaneId = targetPane.id;
 
-  workspaces.update((list) => [
+  nestedWorkspaces.update((list) => [
     ...list.filter((ws) => ws.id !== srcWorkspaceId),
   ]);
-  activeWorkspaceIdx.set(
-    Math.min(get(activeWorkspaceIdx), get(workspaces).length - 1),
+  activeNestedWorkspaceIdx.set(
+    Math.min(get(activeNestedWorkspaceIdx), get(nestedWorkspaces).length - 1),
   );
-  removeRootRow({ kind: "workspace", id: srcWorkspaceId });
-  removeWorkspaceFromAllGroups(srcWorkspaceId);
+  removeRootRow({ kind: "nested-workspace", id: srcWorkspaceId });
+  removeNestedWorkspaceFromAllWorkspaces(srcWorkspaceId);
   gitStatusWorkspaceClosed(srcWorkspaceId);
   schedulePersist();
 }
@@ -509,7 +632,7 @@ export function moveSurfaceToWorkspace(
   sourcePaneId: string,
   targetWorkspaceId: string,
 ): void {
-  const allWs = get(workspaces);
+  const allWs = get(nestedWorkspaces);
   const srcWs = allWs.find((ws) =>
     getAllPanes(ws.splitRoot).some((p) => p.id === sourcePaneId),
   );
@@ -544,6 +667,6 @@ export function moveSurfaceToWorkspace(
   targetPane.surfaces.push(surface);
   targetPane.activeSurfaceId = surface.id;
 
-  workspaces.update((l) => [...l]);
+  nestedWorkspaces.update((l) => l);
   schedulePersist();
 }

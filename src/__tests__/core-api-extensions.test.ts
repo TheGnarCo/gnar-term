@@ -33,9 +33,12 @@ vi.mock("../lib/services/service-helpers", () => ({
 
 // --- Imports ---
 
-import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
+import {
+  nestedWorkspaces,
+  activeNestedWorkspaceIdx,
+} from "../lib/stores/nested-workspace";
 import type {
-  Workspace,
+  NestedWorkspace,
   Pane,
   TerminalSurface,
   ExtensionSurface,
@@ -98,7 +101,9 @@ function makePane(
   };
 }
 
-function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
+function makeNestedWorkspace(
+  overrides: Partial<NestedWorkspace> = {},
+): NestedWorkspace {
   const pane = makePane();
   return {
     id: uid(),
@@ -113,24 +118,24 @@ function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
 
 describe("findSurfaceLocation", () => {
   beforeEach(() => {
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
+    nestedWorkspaces.set([]);
+    activeNestedWorkspaceIdx.set(-1);
   });
 
-  it("finds a surface across multiple workspaces and panes", () => {
+  it("finds a surface across multiple nestedWorkspaces and panes", () => {
     const targetSurface = mockTerminalSurface();
     const pane1 = makePane([mockTerminalSurface()]);
     const pane2 = makePane([targetSurface]);
-    const ws1 = makeWorkspace({
+    const ws1 = makeNestedWorkspace({
       splitRoot: { type: "pane", pane: pane1 },
       activePaneId: pane1.id,
     });
-    const ws2 = makeWorkspace({
+    const ws2 = makeNestedWorkspace({
       splitRoot: { type: "pane", pane: pane2 },
       activePaneId: pane2.id,
     });
 
-    workspaces.set([ws1, ws2]);
+    nestedWorkspaces.set([ws1, ws2]);
 
     const loc = findSurfaceLocation(targetSurface.id);
     expect(loc).not.toBeNull();
@@ -140,8 +145,8 @@ describe("findSurfaceLocation", () => {
   });
 
   it("returns null when surface does not exist", () => {
-    const ws = makeWorkspace();
-    workspaces.set([ws]);
+    const ws = makeNestedWorkspace();
+    nestedWorkspaces.set([ws]);
 
     const loc = findSurfaceLocation("nonexistent-id");
     expect(loc).toBeNull();
@@ -150,11 +155,11 @@ describe("findSurfaceLocation", () => {
   it("works with extension surfaces", () => {
     const extSurface = mockExtensionSurface();
     const pane = makePane([extSurface]);
-    const ws = makeWorkspace({
+    const ws = makeNestedWorkspace({
       splitRoot: { type: "pane", pane },
       activePaneId: pane.id,
     });
-    workspaces.set([ws]);
+    nestedWorkspaces.set([ws]);
 
     const loc = findSurfaceLocation(extSurface.id);
     expect(loc).not.toBeNull();
@@ -164,18 +169,18 @@ describe("findSurfaceLocation", () => {
 
 describe("markSurfaceUnreadById", () => {
   beforeEach(() => {
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
+    nestedWorkspaces.set([]);
+    activeNestedWorkspaceIdx.set(-1);
   });
 
   it("sets hasUnread to true on an existing surface", () => {
     const surface = mockTerminalSurface({ hasUnread: false });
     const pane = makePane([surface]);
-    const ws = makeWorkspace({
+    const ws = makeNestedWorkspace({
       splitRoot: { type: "pane", pane },
       activePaneId: pane.id,
     });
-    workspaces.set([ws]);
+    nestedWorkspaces.set([ws]);
 
     markSurfaceUnreadById(surface.id);
 
@@ -184,8 +189,8 @@ describe("markSurfaceUnreadById", () => {
   });
 
   it("is a no-op when surface does not exist (no error thrown)", () => {
-    const ws = makeWorkspace();
-    workspaces.set([ws]);
+    const ws = makeNestedWorkspace();
+    nestedWorkspaces.set([ws]);
 
     // Should not throw
     expect(() => markSurfaceUnreadById("nonexistent-id")).not.toThrow();
@@ -194,14 +199,14 @@ describe("markSurfaceUnreadById", () => {
   it("triggers store update", () => {
     const surface = mockTerminalSurface({ hasUnread: false });
     const pane = makePane([surface]);
-    const ws = makeWorkspace({
+    const ws = makeNestedWorkspace({
       splitRoot: { type: "pane", pane },
       activePaneId: pane.id,
     });
-    workspaces.set([ws]);
+    nestedWorkspaces.set([ws]);
 
     const updates: unknown[] = [];
-    const unsub = workspaces.subscribe((v) => updates.push(v));
+    const unsub = nestedWorkspaces.subscribe((v) => updates.push(v));
 
     markSurfaceUnreadById(surface.id);
 
@@ -213,14 +218,14 @@ describe("markSurfaceUnreadById", () => {
 
 describe("focusSurfaceById", () => {
   beforeEach(() => {
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
+    nestedWorkspaces.set([]);
+    activeNestedWorkspaceIdx.set(-1);
   });
 
   it("switches to the workspace containing the surface and selects it", () => {
     const surface1 = mockTerminalSurface();
     const pane1 = makePane([surface1]);
-    const ws1 = makeWorkspace({
+    const ws1 = makeNestedWorkspace({
       name: "WS 1",
       splitRoot: { type: "pane", pane: pane1 },
       activePaneId: pane1.id,
@@ -228,19 +233,19 @@ describe("focusSurfaceById", () => {
 
     const targetSurface = mockTerminalSurface({ hasUnread: true });
     const pane2 = makePane([mockTerminalSurface(), targetSurface]);
-    const ws2 = makeWorkspace({
+    const ws2 = makeNestedWorkspace({
       name: "WS 2",
       splitRoot: { type: "pane", pane: pane2 },
       activePaneId: pane2.id,
     });
 
-    workspaces.set([ws1, ws2]);
-    activeWorkspaceIdx.set(0); // Start on ws1
+    nestedWorkspaces.set([ws1, ws2]);
+    activeNestedWorkspaceIdx.set(0); // Start on ws1
 
     focusSurfaceById(targetSurface.id);
 
     // Should have switched to ws2 (index 1)
-    expect(get(activeWorkspaceIdx)).toBe(1);
+    expect(get(activeNestedWorkspaceIdx)).toBe(1);
     // Surface should be selected (activeSurfaceId updated)
     expect(pane2.activeSurfaceId).toBe(targetSurface.id);
     // hasUnread should be cleared by selectSurface
@@ -248,29 +253,29 @@ describe("focusSurfaceById", () => {
   });
 
   it("is a no-op when surface does not exist (no error thrown)", () => {
-    const ws = makeWorkspace();
-    workspaces.set([ws]);
-    activeWorkspaceIdx.set(0);
+    const ws = makeNestedWorkspace();
+    nestedWorkspaces.set([ws]);
+    activeNestedWorkspaceIdx.set(0);
 
     expect(() => focusSurfaceById("nonexistent-id")).not.toThrow();
-    // Workspace idx unchanged
-    expect(get(activeWorkspaceIdx)).toBe(0);
+    // NestedWorkspace idx unchanged
+    expect(get(activeNestedWorkspaceIdx)).toBe(0);
   });
 
   it("works when surface is in the already-active workspace", () => {
     const targetSurface = mockTerminalSurface();
     const otherSurface = mockTerminalSurface();
     const pane = makePane([otherSurface, targetSurface]);
-    const ws = makeWorkspace({
+    const ws = makeNestedWorkspace({
       splitRoot: { type: "pane", pane },
       activePaneId: pane.id,
     });
-    workspaces.set([ws]);
-    activeWorkspaceIdx.set(0);
+    nestedWorkspaces.set([ws]);
+    activeNestedWorkspaceIdx.set(0);
 
     focusSurfaceById(targetSurface.id);
 
-    expect(get(activeWorkspaceIdx)).toBe(0);
+    expect(get(activeNestedWorkspaceIdx)).toBe(0);
     expect(pane.activeSurfaceId).toBe(targetSurface.id);
   });
 });

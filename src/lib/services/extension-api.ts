@@ -8,11 +8,6 @@
  */
 import { get } from "svelte/store";
 import { eventBus, type AppEventType } from "./event-bus";
-import {
-  setSidebarTabBadge,
-  clearSidebarTabBadge,
-  activateSidebarTab as activateSidebarTabFn,
-} from "./sidebar-tab-registry";
 import { surfaceTypeStore } from "./surface-type-registry";
 import {
   getContextMenuItemsForFile,
@@ -49,7 +44,6 @@ import {
   openFileAsPreviewSplit,
 } from "./surface-service";
 import {
-  secondarySidebarVisible,
   pendingAction,
   showInputPrompt as coreShowInputPrompt,
   showFormPrompt as coreShowFormPrompt,
@@ -84,7 +78,7 @@ import {
 } from "../actions/drag-reorder";
 import { reorderContext, anyReorderActive, contextMenu } from "../stores/ui";
 import { getActiveCwd, lookupSurfaceWorkspaceId } from "./service-helpers";
-import { workspaces } from "../stores/workspace";
+import { nestedWorkspaces } from "../stores/nested-workspace";
 import { getAllSurfaces, isTerminalSurface } from "../types";
 import type { ExtensionManifest, ExtensionAPI } from "../extension-types";
 import type { AppEvent } from "./event-bus";
@@ -288,11 +282,7 @@ export function createExtensionAPI(
         ? coreShowFormPrompt(title, fields, options)
         : coreShowFormPrompt(title, fields);
     },
-    toggleSecondarySidebar() {
-      secondarySidebarVisible.update((v) => !v);
-    },
-
-    createWorkspace(
+    createNestedWorkspace(
       name: string,
       cwd: string,
       options?: {
@@ -323,10 +313,10 @@ export function createExtensionAPI(
         props,
       });
     },
-    switchWorkspace(workspaceId: string) {
+    switchNestedWorkspace(workspaceId: string) {
       pendingAction.set({ type: "switch-workspace", workspaceId });
     },
-    closeWorkspace(workspaceId: string) {
+    closeNestedWorkspace(workspaceId: string) {
       pendingAction.set({ type: "close-workspace", workspaceId });
     },
 
@@ -344,7 +334,7 @@ export function createExtensionAPI(
     },
     getAllTerminalSurfaces() {
       const out: Array<{ id: string; workspaceId: string; title: string }> = [];
-      for (const ws of get(workspaces)) {
+      for (const ws of get(nestedWorkspaces)) {
         for (const surf of getAllSurfaces(ws)) {
           if (isTerminalSurface(surf)) {
             out.push({
@@ -358,18 +348,6 @@ export function createExtensionAPI(
       return out;
     },
 
-    badgeSidebarTab(tabId: string, hasBadge: boolean) {
-      const namespacedId = `${extId}:${tabId}`;
-      if (hasBadge) {
-        setSidebarTabBadge(namespacedId, true);
-      } else {
-        clearSidebarTabBadge(namespacedId);
-      }
-    },
-    activateSidebarTab(tabId: string) {
-      const namespacedId = `${extId}:${tabId}`;
-      activateSidebarTabFn(namespacedId);
-    },
     setWorkspaceIndicator(workspaceId: string, status: string | null) {
       if (status === null) {
         clearStatusItem("_agent", workspaceId, "default");
@@ -440,14 +418,14 @@ export function createExtensionAPI(
         return () => {};
       }
 
-      // Resolve surfaceId → ptyId by scanning all workspaces.
+      // Resolve surfaceId → ptyId by scanning all nestedWorkspaces.
       // The PTY may not be connected yet (ptyId = -1) when surface:created
-      // fires, so we subscribe to the workspaces store and wait for it.
+      // fires, so we subscribe to the nestedWorkspaces store and wait for it.
       let observedPtyId: number | null = null;
       let cleaned = false;
 
       function resolvePty(): number | null {
-        const allWs = get(workspaces);
+        const allWs = get(nestedWorkspaces);
         for (const ws of allWs) {
           for (const surf of getAllSurfaces(ws)) {
             if (
@@ -476,7 +454,7 @@ export function createExtensionAPI(
       // If not resolved yet, watch for PTY connection
       const unsub =
         immediate === null
-          ? workspaces.subscribe(() => {
+          ? nestedWorkspaces.subscribe(() => {
               if (cleaned || observedPtyId !== null) return;
               const ptyId = resolvePty();
               if (ptyId !== null) {

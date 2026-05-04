@@ -13,11 +13,11 @@ import type { MenuItem } from "../context-menu-types";
 export interface WorkspaceContextMenuOptions {
   /** True when the workspace is a dashboard surface (rename/promote/archive disabled). */
   isDashboard: boolean;
-  /** True when the workspace is already nested inside a group (promote disabled). */
-  isInsideGroup: boolean;
-  /** True when the promote-workspace-to-group command is registered. */
+  /** True when the nested workspace already lives inside a Workspace (promote disabled). */
+  isInsideWorkspace: boolean;
+  /** True when the promote-nested-workspace-to-workspace command is registered. */
   canPromoteCommand: boolean;
-  /** Total number of workspaces in the list — used to disable "Close Workspace". */
+  /** Total number of nestedWorkspaces in the list — used to disable "Close Branched Workspace". */
   workspaceCount: number;
   /**
    * True when the workspace is currently locked (metadata.locked === true).
@@ -32,7 +32,7 @@ export interface WorkspaceContextMenuOptions {
   onPromote?: () => void;
   onArchive?: () => void;
   /**
-   * Called when the user toggles "Lock Workspace" / "Unlock Workspace".
+   * Called when the user toggles "Lock Branched Workspace" / "Unlock Branched Workspace".
    * Omit to exclude the item entirely (e.g. for dashboards).
    */
   onToggleLock?: () => void;
@@ -44,12 +44,12 @@ export interface WorkspaceContextMenuOptions {
  * that callers pass directly to `contextMenu.set({ x, y, items })`.
  *
  * Item presence:
- *   - "Rename Workspace"             — omitted for dashboards
+ *   - "Rename Branched Workspace"    — omitted for dashboards
  *   - "New Surface"                  — included only when `onNewSurface` is provided
- *   - separator + "Promote…"         — omitted for dashboards / grouped workspaces
+ *   - separator + "Promote…"         — omitted for dashboards / nested workspaces inside a workspace
  *   - separator + "Lock/Unlock…"     — omitted for dashboards or when no `onToggleLock`
  *   - "Archive"                      — omitted for dashboards; disabled while locked
- *   - "Close Workspace"              — always present; disabled for dashboards, when
+ *   - "Close Branched Workspace"     — always present; disabled for dashboards, when
  *                                       count ≤ 1, or while locked
  */
 export function buildWorkspaceContextMenuItems(
@@ -57,7 +57,7 @@ export function buildWorkspaceContextMenuItems(
 ): MenuItem[] {
   const {
     isDashboard,
-    isInsideGroup,
+    isInsideWorkspace,
     canPromoteCommand,
     workspaceCount,
     isLocked = false,
@@ -70,14 +70,14 @@ export function buildWorkspaceContextMenuItems(
   } = opts;
 
   const canRename = !isDashboard;
-  const canPromote = canPromoteCommand && !isDashboard && !isInsideGroup;
+  const canPromote = canPromoteCommand && !isDashboard && !isInsideWorkspace;
   const canArchive = !isDashboard;
 
   const items: MenuItem[] = [];
 
   if (canRename && onRename) {
     items.push({
-      label: "Rename Workspace",
+      label: "Rename Branched Workspace",
       shortcut: "⇧⌘R",
       action: onRename,
     });
@@ -94,7 +94,7 @@ export function buildWorkspaceContextMenuItems(
   if (canPromote && onPromote) {
     items.push({ label: "", action: () => {}, separator: true });
     items.push({
-      label: "Promote to Workspace Group...",
+      label: "Promote to Workspace...",
       action: onPromote,
     });
   }
@@ -103,7 +103,7 @@ export function buildWorkspaceContextMenuItems(
 
   if (!isDashboard && onToggleLock) {
     items.push({
-      label: isLocked ? "Unlock Workspace" : "Lock Workspace",
+      label: isLocked ? "Unlock Branched Workspace" : "Lock Branched Workspace",
       action: onToggleLock,
     });
   }
@@ -117,7 +117,7 @@ export function buildWorkspaceContextMenuItems(
   }
 
   items.push({
-    label: "Close Workspace",
+    label: "Close Branched Workspace",
     shortcut: "⇧⌘W",
     danger: true,
     disabled: workspaceCount <= 1 || isDashboard || isLocked,

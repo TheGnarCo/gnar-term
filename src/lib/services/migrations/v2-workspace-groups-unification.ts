@@ -1,23 +1,24 @@
 /**
  * v2 Workspace Groups Unification migration — collapses the legacy
- * AgentOrchestrator entity into the new Workspace-Group-scoped Agentic
+ * AgentOrchestrator entity into the new NestedWorkspace-scoped Agentic
  * Dashboard contribution and the singleton Global Agentic Dashboard.
  *
  * Runs once per config (schemaVersion 1 → 2). Reads the workspace-groups
- * extension state from disk to resolve each group's `path`, then:
+ * extension state from disk to resolve each workspace's `path`, then:
  *
- *   - For each group with ≥1 nested orchestrator (parentGroupId match):
+ *   - For each workspace with ≥1 nested orchestrator (parentGroupId match):
  *     the first orchestrator's markdown is copied to
- *     `<group.path>/.gnar-term/agentic-dashboard.md` (target wins on
- *     conflict). Additional nested orchestrators on the same group are
+ *     `<workspace.path>/.gnar-term/agentic-dashboard.md` (target wins on
+ *     conflict). Additional nested orchestrators on the same workspace are
  *     logged and dropped — the spec caps Agentic Dashboards at one per
- *     group.
+ *     workspace.
  *
  *   - For rootless orchestrators (no parentGroupId): the first one's
  *     markdown is copied to `~/.config/gnar-term/global-agents.md` (the
- *     default Global Agentic Dashboard path) and recorded in
- *     `config.agenticGlobal.markdownPath`. Additional rootless
- *     orchestrators are logged and dropped.
+ *     default Global Agentic Dashboard path). Additional rootless
+ *     orchestrators are logged and dropped. The agentic-orchestrator
+ *     extension reads its own `globalAgentsMarkdownPath` setting at
+ *     runtime — no core config field is written.
  *
  *   - `config.agentOrchestrators` is deleted.
  *
@@ -42,7 +43,7 @@ interface LegacyConfigShape extends GnarTermConfig {
 
 /**
  * Structural description of a workspace group — mirrors the
- * `WorkspaceGroupEntry` in core but kept here to avoid a runtime import
+ * `Workspace` in core but kept here to avoid a runtime import
  * dependency on the public config type. The migration only needs
  * `{ id, path }`.
  */
@@ -58,7 +59,7 @@ interface LegacyOrchestrator {
   color?: string;
   path: string;
   parentGroupId?: string;
-  dashboardWorkspaceId?: string;
+  dashboardNestedWorkspaceId?: string;
   createdAt?: string;
 }
 
@@ -87,7 +88,7 @@ async function readWorkspaceGroups(
     const state = await readJson<Record<string, unknown>>(path);
     if (!state) continue;
     const groups =
-      (state.workspaceGroups as LegacyWorkspaceGroup[] | undefined) ??
+      (state.workspaces as LegacyWorkspaceGroup[] | undefined) ??
       (state.projects as LegacyWorkspaceGroup[] | undefined);
     if (Array.isArray(groups)) return groups;
   }
@@ -162,8 +163,7 @@ function groupByParent(orchestrators: LegacyOrchestrator[]): {
 
 /**
  * Apply the workspace-groups unification migration to `config`. Returns
- * the next config shape with `agentOrchestrators` removed and
- * `agenticGlobal.markdownPath` populated where applicable. Side-effects
+ * the next config shape with `agentOrchestrators` removed. Side-effects
  * (markdown file moves) run via `invoke` and are best-effort.
  */
 export async function migrateV2WorkspaceGroupsUnification(
@@ -184,13 +184,13 @@ export async function migrateV2WorkspaceGroupsUnification(
   const { nestedByGroup, rootless } = groupByParent(orchestrators);
 
   // Nested: first per group migrates; rest are logged + dropped.
-  for (const [groupId, list] of nestedByGroup) {
+  for (const [parentWorkspaceId, list] of nestedByGroup) {
     const [first, ...extras] = list;
     if (!first) continue;
-    const groupPath = groupPathById.get(groupId);
+    const groupPath = groupPathById.get(parentWorkspaceId);
     if (!groupPath) {
       console.warn(
-        `[migration v2] Group ${groupId} not found in extension state; ` +
+        `[migration v2] Group ${parentWorkspaceId} not found in extension state; ` +
           `keeping orchestrator markdown at ${first.path} for manual rescue.`,
       );
     } else {
@@ -200,23 +200,18 @@ export async function migrateV2WorkspaceGroupsUnification(
     if (extras.length > 0) {
       console.warn(
         `[migration v2] Dropping ${extras.length} extra nested orchestrator(s) ` +
-          `for group ${groupId}: ${extras.map((o) => o.id).join(", ")}. ` +
+          `for group ${parentWorkspaceId}: ${extras.map((o) => o.id).join(", ")}. ` +
           `Their markdown remains at its old path for manual rescue.`,
       );
     }
   }
 
   // Rootless: first becomes the Global Agentic Dashboard source; rest dropped.
-  const nextAgenticGlobal = { ...(config.agenticGlobal ?? {}) };
   if (rootless.length > 0) {
     const [first, ...extras] = rootless;
-    const defaultGlobalPath = `${home}/.config/gnar-term/global-agents.md`;
-    const targetPath = nextAgenticGlobal.markdownPath ?? defaultGlobalPath;
+    const targetPath = `${home}/.config/gnar-term/global-agents.md`;
     if (first) {
       await moveMarkdown(first.path, targetPath);
-      if (!nextAgenticGlobal.markdownPath) {
-        nextAgenticGlobal.markdownPath = targetPath;
-      }
     }
     if (extras.length > 0) {
       console.warn(
@@ -229,9 +224,5 @@ export async function migrateV2WorkspaceGroupsUnification(
 
   const { agentOrchestrators: _removed, ...rest } = legacyConfig;
   void _removed;
-  const next: GnarTermConfig = {
-    ...(rest as GnarTermConfig),
-    agenticGlobal: nextAgenticGlobal,
-  };
-  return next;
+  return rest as GnarTermConfig;
 }

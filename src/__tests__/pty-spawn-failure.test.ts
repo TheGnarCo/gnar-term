@@ -108,21 +108,24 @@ import {
   closeSurfaceById,
   findSurfaceLocation,
 } from "../lib/services/surface-service";
-import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
-import type { Pane, Workspace } from "../lib/types";
+import {
+  nestedWorkspaces,
+  activeNestedWorkspaceIdx,
+} from "../lib/stores/nested-workspace";
+import type { Pane, NestedWorkspace } from "../lib/types";
 import { uid } from "../lib/types";
 
 /** Set up a minimal workspace with a single pane in the store. */
-function setupWorkspace(): { ws: Workspace; pane: Pane } {
+function setupWorkspace(): { ws: NestedWorkspace; pane: Pane } {
   const pane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
-  const ws: Workspace = {
+  const ws: NestedWorkspace = {
     id: uid(),
     name: "Test WS",
     splitRoot: { type: "pane", pane },
     activePaneId: pane.id,
   };
-  workspaces.set([ws]);
-  activeWorkspaceIdx.set(0);
+  nestedWorkspaces.set([ws]);
+  activeNestedWorkspaceIdx.set(0);
   return { ws, pane };
 }
 
@@ -130,7 +133,7 @@ describe("PTY spawn failure: connectPty sets spawnError", () => {
   beforeEach(() => {
     vi.mocked(invoke).mockReset();
     vi.mocked(invoke).mockResolvedValue(undefined);
-    workspaces.set([]);
+    nestedWorkspaces.set([]);
   });
 
   it("sets surface.spawnError with the failure message when spawn_pty rejects", async () => {
@@ -171,7 +174,7 @@ describe("PTY spawn failure: surface cleanup via TerminalSurface contract", () =
   beforeEach(() => {
     vi.mocked(invoke).mockReset();
     vi.mocked(invoke).mockResolvedValue(undefined);
-    workspaces.set([]);
+    nestedWorkspaces.set([]);
   });
 
   it("surface is removed from pane after closeSurfaceById is called on spawn error", async () => {
@@ -196,10 +199,14 @@ describe("PTY spawn failure: surface cleanup via TerminalSurface contract", () =
 
     // Surface is gone from the pane
     expect(
-      get(workspaces)[0]
-        ? get(workspaces)[0]!.splitRoot.type === "pane" &&
-            (get(workspaces)[0]!.splitRoot as { type: "pane"; pane: Pane }).pane
-              .surfaces.length
+      get(nestedWorkspaces)[0]
+        ? get(nestedWorkspaces)[0]!.splitRoot.type === "pane" &&
+            (
+              get(nestedWorkspaces)[0]!.splitRoot as {
+                type: "pane";
+                pane: Pane;
+              }
+            ).pane.surfaces.length
         : 0,
     ).toBe(0);
   });

@@ -4,20 +4,19 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { get } from "svelte/store";
 import {
-  workspaces,
-  activeWorkspaceIdx,
+  nestedWorkspaces,
+  activeNestedWorkspaceIdx,
   activeWorkspace,
   activePane,
   activeSurface,
-} from "../lib/stores/workspace";
+} from "../lib/stores/nested-workspace";
 import {
-  primarySidebarVisible,
-  secondarySidebarVisible,
+  sidebarVisible,
   commandPaletteOpen,
   findBarVisible,
   contextMenu,
 } from "../lib/stores/ui";
-import type { Workspace, Pane, TerminalSurface } from "../lib/types";
+import type { NestedWorkspace, Pane, TerminalSurface } from "../lib/types";
 
 function makeSurface(id: string): TerminalSurface {
   return {
@@ -34,7 +33,7 @@ function makeSurface(id: string): TerminalSurface {
   };
 }
 
-function makeWorkspace(id: string, name: string): Workspace {
+function makeNestedWorkspace(id: string, name: string): NestedWorkspace {
   const s1 = makeSurface(`${id}-s1`);
   const pane: Pane = { id: `${id}-p1`, surfaces: [s1], activeSurfaceId: s1.id };
   return {
@@ -45,34 +44,34 @@ function makeWorkspace(id: string, name: string): Workspace {
   };
 }
 
-describe("Workspace stores", () => {
+describe("NestedWorkspace stores", () => {
   beforeEach(() => {
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
+    nestedWorkspaces.set([]);
+    activeNestedWorkspaceIdx.set(-1);
   });
 
-  it("starts with empty workspaces", () => {
-    expect(get(workspaces)).toEqual([]);
-    expect(get(activeWorkspaceIdx)).toBe(-1);
+  it("starts with empty nestedWorkspaces", () => {
+    expect(get(nestedWorkspaces)).toEqual([]);
+    expect(get(activeNestedWorkspaceIdx)).toBe(-1);
     expect(get(activeWorkspace)).toBeNull();
   });
 
   it("derives activeWorkspace from idx", () => {
-    const ws1 = makeWorkspace("ws1", "Workspace 1");
-    const ws2 = makeWorkspace("ws2", "Workspace 2");
-    workspaces.set([ws1, ws2]);
-    activeWorkspaceIdx.set(0);
+    const ws1 = makeNestedWorkspace("ws1", "Workspace 1");
+    const ws2 = makeNestedWorkspace("ws2", "Workspace 2");
+    nestedWorkspaces.set([ws1, ws2]);
+    activeNestedWorkspaceIdx.set(0);
 
     expect(get(activeWorkspace)?.name).toBe("Workspace 1");
 
-    activeWorkspaceIdx.set(1);
+    activeNestedWorkspaceIdx.set(1);
     expect(get(activeWorkspace)?.name).toBe("Workspace 2");
   });
 
   it("derives activePane from activeWorkspace", () => {
-    const ws = makeWorkspace("ws1", "Test");
-    workspaces.set([ws]);
-    activeWorkspaceIdx.set(0);
+    const ws = makeNestedWorkspace("ws1", "Test");
+    nestedWorkspaces.set([ws]);
+    activeNestedWorkspaceIdx.set(0);
 
     const pane = get(activePane);
     expect(pane).not.toBeNull();
@@ -80,9 +79,9 @@ describe("Workspace stores", () => {
   });
 
   it("derives activeSurface from activePane", () => {
-    const ws = makeWorkspace("ws1", "Test");
-    workspaces.set([ws]);
-    activeWorkspaceIdx.set(0);
+    const ws = makeNestedWorkspace("ws1", "Test");
+    nestedWorkspaces.set([ws]);
+    activeNestedWorkspaceIdx.set(0);
 
     const surface = get(activeSurface);
     expect(surface).not.toBeNull();
@@ -90,19 +89,19 @@ describe("Workspace stores", () => {
   });
 
   it("returns null for out-of-bounds idx", () => {
-    workspaces.set([makeWorkspace("ws1", "Test")]);
-    activeWorkspaceIdx.set(5);
+    nestedWorkspaces.set([makeNestedWorkspace("ws1", "Test")]);
+    activeNestedWorkspaceIdx.set(5);
     expect(get(activeWorkspace)).toBeNull();
   });
 
   it("handles workspace updates reactively", () => {
-    const ws = makeWorkspace("ws1", "Test");
-    workspaces.set([ws]);
-    activeWorkspaceIdx.set(0);
+    const ws = makeNestedWorkspace("ws1", "Test");
+    nestedWorkspaces.set([ws]);
+    activeNestedWorkspaceIdx.set(0);
 
     expect(get(activeWorkspace)?.name).toBe("Test");
 
-    workspaces.update((list) => {
+    nestedWorkspaces.update((list) => {
       list[0].name = "Updated";
       return [...list];
     });
@@ -114,15 +113,15 @@ describe("Workspace stores", () => {
     const s1 = makeSurface("s1");
     const s2 = makeSurface("s2");
     const pane: Pane = { id: "p1", surfaces: [s1, s2], activeSurfaceId: "s2" };
-    const ws: Workspace = {
+    const ws: NestedWorkspace = {
       id: "ws1",
       name: "Test",
       splitRoot: { type: "pane", pane },
       activePaneId: "p1",
     };
 
-    workspaces.set([ws]);
-    activeWorkspaceIdx.set(0);
+    nestedWorkspaces.set([ws]);
+    activeNestedWorkspaceIdx.set(0);
 
     const surface = get(activeSurface);
     expect(surface?.id).toBe("s2");
@@ -130,12 +129,8 @@ describe("Workspace stores", () => {
 });
 
 describe("UI stores", () => {
-  it("primarySidebarVisible defaults to true", () => {
-    expect(get(primarySidebarVisible)).toBe(true);
-  });
-
-  it("secondarySidebarVisible defaults to false", () => {
-    expect(get(secondarySidebarVisible)).toBe(false);
+  it("sidebarVisible defaults to true", () => {
+    expect(get(sidebarVisible)).toBe(true);
   });
 
   it("commandPaletteOpen defaults to false", () => {
@@ -150,18 +145,11 @@ describe("UI stores", () => {
     expect(get(contextMenu)).toBeNull();
   });
 
-  it("toggles primary sidebar visibility", () => {
-    primarySidebarVisible.set(false);
-    expect(get(primarySidebarVisible)).toBe(false);
-    primarySidebarVisible.set(true);
-    expect(get(primarySidebarVisible)).toBe(true);
-  });
-
-  it("toggles secondary sidebar visibility", () => {
-    secondarySidebarVisible.set(true);
-    expect(get(secondarySidebarVisible)).toBe(true);
-    secondarySidebarVisible.set(false);
-    expect(get(secondarySidebarVisible)).toBe(false);
+  it("toggles sidebar visibility", () => {
+    sidebarVisible.set(false);
+    expect(get(sidebarVisible)).toBe(false);
+    sidebarVisible.set(true);
+    expect(get(sidebarVisible)).toBe(true);
   });
 
   it("sets context menu state", () => {

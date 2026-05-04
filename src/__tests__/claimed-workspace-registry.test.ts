@@ -17,7 +17,7 @@ describe("claimed-workspace-registry", () => {
     resetClaimedWorkspaces();
   });
 
-  it("starts with no claimed workspaces", () => {
+  it("starts with no claimed nestedWorkspaces", () => {
     expect(get(claimedWorkspaceIds).size).toBe(0);
   });
 
@@ -28,7 +28,7 @@ describe("claimed-workspace-registry", () => {
     expect(ids.size).toBe(1);
   });
 
-  it("claims multiple workspaces from different sources", () => {
+  it("claims multiple nestedWorkspaces from different sources", () => {
     claimWorkspace("ws-1", "ext-git");
     claimWorkspace("ws-2", "ext-docker");
     const ids = get(claimedWorkspaceIds);
@@ -47,7 +47,7 @@ describe("claimed-workspace-registry", () => {
     expect(ids.has("ws-2")).toBe(true);
   });
 
-  it("unclaims all workspaces by source extension", () => {
+  it("unclaims all nestedWorkspaces by source extension", () => {
     claimWorkspace("ws-1", "ext-git");
     claimWorkspace("ws-2", "ext-git");
     claimWorkspace("ws-3", "ext-docker");

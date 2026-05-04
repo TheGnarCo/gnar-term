@@ -10,7 +10,7 @@ import {
   isExtensionSurface,
   type Pane,
   type SplitNode,
-  type Workspace,
+  type NestedWorkspace,
   type TerminalSurface,
   type ExtensionSurface,
 } from "../lib/types";
@@ -115,7 +115,7 @@ describe("getAllSurfaces()", () => {
     };
     const pane2: Pane = { id: "pane2", surfaces: [t2], activeSurfaceId: "t2" };
 
-    const ws: Workspace = {
+    const ws: NestedWorkspace = {
       id: "ws1",
       name: "Test",
       splitRoot: {
@@ -144,7 +144,7 @@ describe("getAllSurfaces()", () => {
       surfaces: [t1, e1],
       activeSurfaceId: "t1",
     };
-    const ws: Workspace = {
+    const ws: NestedWorkspace = {
       id: "ws1",
       name: "Test",
       splitRoot: { type: "pane", pane },
@@ -175,7 +175,7 @@ describe("ExtensionSurface", () => {
       surfaces: [t1, e1],
       activeSurfaceId: "t1",
     };
-    const ws: Workspace = {
+    const ws: NestedWorkspace = {
       id: "ws1",
       name: "Test",
       splitRoot: { type: "pane", pane },

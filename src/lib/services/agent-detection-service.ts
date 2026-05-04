@@ -9,7 +9,7 @@
  *
  * What it does:
  *   1. On init, bootstraps tracking for every pre-existing terminal
- *      surface across all workspaces and panes — then subscribes to
+ *      surface across all nestedWorkspaces and panes — then subscribes to
  *      surface:created / :titleChanged / :closed for new/changed/closed
  *      surfaces.
  *   2. Matches PTY titles and streaming output against a pattern list
@@ -45,7 +45,7 @@ import {
 } from "./status-registry";
 import { statusRegistry } from "./status-registry";
 import { markSurfaceUnreadById } from "./surface-service";
-import { workspaces } from "../stores/workspace";
+import { nestedWorkspaces } from "../stores/nested-workspace";
 import { getAllPanes, isTerminalSurface } from "../types";
 import {
   lookupSurfaceWorkspaceId,
@@ -71,14 +71,14 @@ export interface AgentPattern {
 }
 
 export type TrackerMode = "osc" | "title-only";
-export type HarnessStatus = "running" | "waiting" | "idle" | "active";
+export type HarnessStatus = "running" | "waiting" | "idle" | "active" | "done";
 
 // --- Defaults ---
 
 const DEFAULT_PATTERNS: AgentPattern[] = [
   { name: "Claude Code", titlePatterns: ["claude"], oscDetectable: true },
-  { name: "Codex", titlePatterns: ["codex"], oscDetectable: false },
-  { name: "Aider", titlePatterns: ["aider"], oscDetectable: false },
+  { name: "Codex", titlePatterns: ["codex"], oscDetectable: true },
+  { name: "Aider", titlePatterns: ["aider"], oscDetectable: true },
   { name: "Cursor", titlePatterns: ["cursor"], oscDetectable: false },
   {
     name: "GitHub Copilot",
@@ -113,6 +113,16 @@ function generateAgentId(): string {
 
 export function getAgents(): DetectedAgent[] {
   return _agents.slice();
+}
+
+export function getAgentByAgentId(agentId: string): DetectedAgent | undefined {
+  return _agents.find((a) => a.agentId === agentId);
+}
+
+export function getAgentBySurfaceId(
+  surfaceId: string,
+): DetectedAgent | undefined {
+  return _agents.find((a) => a.surfaceId === surfaceId);
 }
 
 // --- Pattern matching ---
@@ -172,7 +182,7 @@ function loadIdleTimeoutMs(): number {
 // --- Status tracker ---
 
 const RUNNING_TITLE_PATTERNS = ["thinking", "working"];
-const IDLE_TITLE_PATTERNS = ["ready", "done"];
+const DONE_TITLE_PATTERNS = ["ready", "done"];
 
 // How long a non-matching title must persist before we detach the agent.
 // Prevents momentary title flickers (e.g. Claude cycling through internal
@@ -230,12 +240,12 @@ function createStatusTracker(
       if (matchesAny(title, RUNNING_TITLE_PATTERNS)) {
         setStatus(mode === "osc" ? "running" : "active");
         resetIdleTimer();
-      } else if (matchesAny(title, IDLE_TITLE_PATTERNS)) {
+      } else if (matchesAny(title, DONE_TITLE_PATTERNS)) {
         if (idleTimer !== undefined) {
           clearTimeout(idleTimer);
           idleTimer = undefined;
         }
-        setStatus("idle");
+        setStatus("done");
       }
     },
     destroy() {
@@ -298,7 +308,9 @@ function publishStatus(
             ? "success"
             : status === "waiting"
               ? "warning"
-              : "muted",
+              : status === "done"
+                ? "muted"
+                : "muted",
         metadata: { surfaceId: tracked.surfaceId },
       });
     }
@@ -313,7 +325,7 @@ function publishStatus(
   });
 }
 
-// --- Workspace resolution ---
+// --- NestedWorkspace resolution ---
 
 function resolveWorkspaceIdForSurface(surfaceId: string): string {
   return lookupSurfaceWorkspaceId(surfaceId) ?? "";
@@ -329,7 +341,7 @@ function allTerminalSurfaces(): Array<{
   title: string;
   workspaceId: string;
 }> {
-  const all = get(workspaces);
+  const all = get(nestedWorkspaces);
   const out: Array<{ id: string; title: string; workspaceId: string }> = [];
   for (const ws of all) {
     for (const pane of getAllPanes(ws.splitRoot)) {
@@ -414,7 +426,7 @@ function detachAgent(tracked: TrackedSurface): void {
   const agent = _agents.find((a) => a.agentId === tracked.agentId);
   // Re-resolve at detach time in case the surface was attached before
   // its owning workspace was known (workspaceId=""), or moved between
-  // workspaces after attach — otherwise the per-surface registry item
+  // nestedWorkspaces after attach — otherwise the per-surface registry item
   // would leak with no way to clear it.
   const workspaceId =
     agent?.workspaceId && agent.workspaceId !== ""
@@ -427,18 +439,30 @@ function detachAgent(tracked: TrackedSurface): void {
   _agents = _agents.filter((a) => a.agentId !== tracked.agentId);
   syncStore();
 
-  if (tracked.preAgentTitle) {
-    const all = get(workspaces);
-    for (const ws of all) {
-      for (const pane of getAllPanes(ws.splitRoot)) {
-        for (const surface of pane.surfaces) {
-          if (surface.id === tracked.surfaceId && isTerminalSurface(surface)) {
+  // Restore the surface title when the agent detaches. A user-set
+  // `userDefinedTitle` always wins over the captured `preAgentTitle` —
+  // if the user renamed the surface during the agent run we re-apply
+  // their explicit name even if there was no preAgentTitle stamped at
+  // attach time.
+  const all = get(nestedWorkspaces);
+  let restored = false;
+  for (const ws of all) {
+    for (const pane of getAllPanes(ws.splitRoot)) {
+      for (const surface of pane.surfaces) {
+        if (surface.id === tracked.surfaceId && isTerminalSurface(surface)) {
+          if (surface.userDefinedTitle) {
+            surface.title = surface.userDefinedTitle;
+            restored = true;
+          } else if (tracked.preAgentTitle) {
             surface.title = tracked.preAgentTitle;
+            restored = true;
           }
         }
       }
     }
-    workspaces.update((l) => [...l]);
+  }
+  if (restored) {
+    nestedWorkspaces.update((l) => [...l]);
   }
 
   tracked.agentId = null;
@@ -629,7 +653,7 @@ export function initAgentDetection(): void {
     type: "workspace:closed";
     id: string;
   }) => {
-    // closeWorkspace() disposes surfaces and emits workspace:closed but does
+    // closeNestedWorkspace() disposes surfaces and emits workspace:closed but does
     // NOT fire surface:closed for each terminal, so handleClosed never runs
     // for those surfaces. Sweep all tracked surfaces whose agent belongs to
     // the closing workspace so they don't linger as "idle".
@@ -655,7 +679,7 @@ export function initAgentDetection(): void {
     if (!tracked) {
       // Missed surface:created (e.g. init raced with a restore) —
       // attach now using the current title from the workspace store
-      // (may be empty if workspaces haven't loaded yet) and fall
+      // (may be empty if nestedWorkspaces haven't loaded yet) and fall
       // through to observer wiring.
       const currentTitleForPty =
         allTerminalSurfaces().find((s) => s.id === event.id)?.title ?? "";
@@ -687,11 +711,11 @@ export function initAgentDetection(): void {
 
   // Re-detect agents when the workspace store is populated or updated.
   // Handles the startup race where surface events (surface:created,
-  // surface:ptyReady) arrive before workspaces finish loading — at that
+  // surface:ptyReady) arrive before nestedWorkspaces finish loading — at that
   // point allTerminalSurfaces() returned [] so surfaces were tracked
-  // without agents. When workspaces load, this subscription re-checks
+  // without agents. When nestedWorkspaces load, this subscription re-checks
   // unattached surfaces against their now-known titles.
-  const unsubWorkspaces = workspaces.subscribe(() => {
+  const unsubWorkspaces = nestedWorkspaces.subscribe(() => {
     // Build the surface-title lookup once per emission rather than calling
     // allTerminalSurfaces() for each unattached surface (O(W×P×S) vs.
     // O(tracked × W×P×S) per emission — F12 perf fix).

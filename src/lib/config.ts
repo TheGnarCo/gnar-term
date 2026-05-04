@@ -17,7 +17,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { writable, type Readable } from "svelte/store";
 import { getHome, getConfigDir } from "./services/service-helpers";
 import { runConfigMigrations } from "./services/config-migrations";
-import type { WorkspaceMetadata } from "./types";
+import type { NestedWorkspaceMetadata } from "./types";
 import type { ThemeDef } from "./theme-data";
 
 // --- Types (cmux-compatible + extensions) ---
@@ -50,9 +50,9 @@ export interface SplitDef {
 
 export type LayoutNode = { pane: PaneDef } | SplitDef;
 
-export interface WorkspaceDef {
+export interface NestedWorkspaceDef {
   /**
-   * Stable identifier. Optional on fresh creation — `createWorkspaceFromDef`
+   * Stable identifier. Optional on fresh creation — `createNestedWorkspaceFromDef`
    * mints a new id when absent. Populated by `persistWorkspaces` so that
    * on restart the same id is reused, letting `rootRowOrder` (which keys
    * rows by `{kind, id}`) survive the round-trip and preserve user-
@@ -63,7 +63,7 @@ export interface WorkspaceDef {
   cwd?: string;
   color?: string;
   env?: Record<string, string>;
-  metadata?: WorkspaceMetadata;
+  metadata?: NestedWorkspaceMetadata;
   layout?: LayoutNode;
 }
 
@@ -74,7 +74,7 @@ export interface CommandDef {
   command?: string; // simple shell command
   confirm?: boolean;
   restart?: "ignore" | "recreate" | "confirm";
-  workspace?: WorkspaceDef; // workspace command
+  workspace?: NestedWorkspaceDef; // workspace command
 }
 
 export interface ExtensionConfig {
@@ -85,7 +85,7 @@ export interface ExtensionConfig {
 
 export type McpSetting = "auto" | "on" | "off";
 
-export interface WorktreeWorkspaceEntry {
+export interface WorktreeWorkspace {
   worktreePath: string;
   branch: string;
   baseBranch: string;
@@ -102,7 +102,7 @@ export interface WorktreesSettings {
 }
 
 export interface WorktreesConfig {
-  entries?: WorktreeWorkspaceEntry[];
+  entries?: WorktreeWorkspace[];
   settings?: WorktreesSettings;
 }
 
@@ -128,9 +128,9 @@ export interface AgentsConfig {
 }
 
 /**
- * Workspace Group — a named, colored, path-rooted grouping of
- * workspaces. Workspaces whose CWD falls under `path` are auto-adopted
- * (via `metadata.groupId`) and render nested inside the group's block
+ * Workspace — a named, colored, path-rooted parent of nestedWorkspaces.
+ * NestedWorkspaces whose CWD falls under `path` are auto-adopted
+ * (via `metadata.parentWorkspaceId`) and render under the workspace's block
  * in the Workspaces section.
  *
  * Defined in core (rather than in an extension) because it is persisted
@@ -139,25 +139,42 @@ export interface AgentsConfig {
  * type already lives here so dashboard-contribution consumers can depend
  * on a stable core import path.
  */
-export interface WorkspaceGroupEntry {
+export interface Workspace {
   id: string;
   name: string;
   /** Root CWD — auto-adoption uses this as a longest-prefix ancestor match. */
   path: string;
   color: string;
-  /** Ids of workspaces currently claimed by this group. */
-  workspaceIds: string[];
+  /** Ids of nestedWorkspaces currently claimed by this workspace. */
+  nestedWorkspaceIds: string[];
+  /**
+   * Id of the one non-worktree, non-dashboard nestedWorkspace in this workspace.
+   * Set at workspace creation and backfilled by reconcilePrimaryWorkspaces()
+   * on first startup after migration. Never reassigned.
+   */
+  primaryNestedWorkspaceId?: string;
+  /** Id of the nestedWorkspace the user was last on in this workspace. Preferred over primaryNestedWorkspaceId on activate. */
+  lastActiveNestedWorkspaceId?: string;
+  /** When true, startup commands run automatically on app restart without confirmation prompts. */
+  autoRunRestoreCommands?: boolean;
   /** True when `path` is the root of a git repo. Used by gates (e.g. worktree actions). */
   isGit: boolean;
   createdAt: string;
   /**
-   * Id of the Group Dashboard workspace hosting this group's markdown
-   * Live Preview. Eagerly created alongside the group. Resolved from
-   * the workspaces store by consumers.
+   * Id of the Dashboard nestedWorkspace hosting this workspace's markdown
+   * Live Preview. Eagerly created alongside the workspace. Resolved from
+   * the nestedWorkspaces store by consumers.
    */
-  dashboardWorkspaceId?: string;
-  /** When true, the group cannot be drag-reordered or deleted/archived. */
+  dashboardNestedWorkspaceId?: string;
+  /** When true, the workspace cannot be drag-reordered or deleted/archived. */
   locked?: boolean;
+  /**
+   * Runtime-only flag set by `validateWorkspaceRootPaths` when the workspace
+   * `path` does not exist on disk (e.g. a deleted directory across restarts).
+   * Not persisted — re-derived on every startup. Consumed by sidebar
+   * components to surface a "path missing" affordance.
+   */
+  pathMissing?: boolean;
 }
 
 export interface GnarTermConfig {
@@ -183,20 +200,9 @@ export interface GnarTermConfig {
   worktrees?: WorktreesConfig;
   agents?: AgentsConfig;
   /**
-   * Global Agentic Dashboard configuration — the singleton
-   * pseudo-workspace pinned at the top of the root sidebar. `markdownPath`
-   * points at the backing markdown file the dashboard renders. Absent on
-   * fresh installs; the pseudo-workspace falls back to the default
-   * `~/.config/gnar-term/global-agents.md` path. Stage 8 migration stamps
-   * this field when converting a legacy rootless orchestrator.
-   */
-  agenticGlobal?: {
-    markdownPath?: string;
-  };
-  /**
    * Per-pseudo-workspace color overrides, keyed by pseudo id
    * (e.g. `"agentic.global"`). Values are slot names from
-   * `GROUP_COLOR_SLOTS` (same palette Workspace Groups use) or any
+   * `WORKSPACE_COLOR_SLOTS` (same palette Workspaces use) or any
    * `#RRGGBB` literal. Consumed by `PseudoWorkspaceRow` to paint the
    * banner; absent entries fall back to a theme-neutral default.
    */
@@ -223,21 +229,20 @@ export interface AppState {
   sidebarWidths?: { primary?: number; secondary?: number };
   sidebarVisible?: { primary?: boolean; secondary?: boolean };
   windowBounds?: { x?: number; y?: number; width?: number; height?: number };
-  workspaces?: (WorkspaceDef & { name: string })[];
-  activeWorkspaceIdx?: number;
+  nestedWorkspaces?: (NestedWorkspaceDef & { name: string })[];
+  activeNestedWorkspaceIdx?: number;
   // Interleaved ordering for the Workspaces section: unclaimed
-  // workspaces and workspace group blocks sit in a single list the user
+  // nestedWorkspaces and workspace blocks sit in a single list the user
   // can drag across freely. See stores/root-row-order.ts.
   rootRowOrder?: { kind: string; id: string }[];
-  // Archived (suspended) workspaces and groups. See stores/archive.ts.
-  archivedOrder?: { kind: string; id: string }[];
+  // Archived (suspended) workspaces. See stores/archive.ts.
+  archivedOrder?: string[];
   archivedDefs?: {
-    workspaces: Record<string, { def: WorkspaceDef & { name: string } }>;
-    groups: Record<
+    workspaces: Record<
       string,
       {
-        group: WorkspaceGroupEntry;
-        workspaceDefs: (WorkspaceDef & { name: string })[];
+        workspace: Workspace;
+        nestedWorkspaceDefs: (NestedWorkspaceDef & { name: string })[];
       }
     >;
   };
@@ -372,13 +377,17 @@ const _appStateStore = writable<AppState>({});
 export const appStateStore: Readable<AppState> = _appStateStore;
 
 /**
- * Rewrite legacy workspace-scoped state shapes to the new Workspace
- * Groups + Dashboard Contributions layout:
- *   - workspaces[].metadata.projectId → metadata.groupId
- *   - workspaces[].metadata.parentOrchestratorId → metadata.spawnedBy
- *   - workspaces[].metadata.orchestratorId (on dashboards) →
+ * Rewrite legacy workspace-scoped state shapes to the new
+ * Workspace + NestedWorkspace layout:
+ *   - nestedWorkspaces[].metadata.projectId → metadata.parentWorkspaceId
+ *   - nestedWorkspaces[].metadata.parentOrchestratorId → metadata.spawnedBy
+ *   - nestedWorkspaces[].metadata.orchestratorId (on dashboards) →
  *       metadata.dashboardContributionId = "agentic"
- *   - rootRowOrder[].kind === "project" → "workspace-group"
+ *   - rootRowOrder[].kind === "project" → "workspace"
+ *   - rootRowOrder[].kind === "workspace-group" → "workspace"
+ *   - rootRowOrder[].kind === "workspace" + id matches a nested workspace
+ *       → "nested-workspace" (id-based disambiguation; surviving "workspace"
+ *       rows are umbrella workspace blocks)
  *   - rootRowOrder[].kind === "agent-orchestrator" → dropped (Stage 7
  *     removed the orchestrator root-row)
  *
@@ -387,6 +396,141 @@ export const appStateStore: Readable<AppState> = _appStateStore;
  * in the same release so old state on disk reads as the new shape in
  * memory without requiring an explicit schemaVersion lookup.
  */
+type StoredNestedWorkspace = NestedWorkspaceDef & { name: string };
+
+function migrateNestedWorkspaceMetadata(
+  nestedWorkspaces: StoredNestedWorkspace[],
+): { result: StoredNestedWorkspace[]; changed: boolean } {
+  let changed = false;
+  const result = nestedWorkspaces.map((ws) => {
+    // Guard: metadata must be a plain object before we widen the cast.
+    if (
+      typeof ws.metadata !== "object" ||
+      ws.metadata === null ||
+      Array.isArray(ws.metadata)
+    ) {
+      return ws;
+    }
+    // Migration reads persisted state which may carry legacy keys not in
+    // NestedWorkspaceMetadata (parentOrchestratorId, orchestratorId, spawnedBy).
+    // Cast to a wider type so we can inspect and drop them.
+    const md = ws.metadata as NestedWorkspaceMetadata & Record<string, unknown>;
+
+    const needsProjectIdRewrite = "projectId" in md;
+    const needsSpawnedBy =
+      typeof md.parentOrchestratorId === "string" && !("spawnedBy" in md);
+    const needsLegacyDrop =
+      "parentOrchestratorId" in md || "orchestratorId" in md;
+    const needsContributionId =
+      md.isDashboard === true &&
+      typeof md.orchestratorId === "string" &&
+      !("dashboardContributionId" in md);
+    // Pre-rename releases stamped spawnedBy with kind: "group". Newer
+    // releases use kind: "workspace" (matching the WorkspaceEntry → Workspace
+    // umbrella rename). Detect the legacy literal so we can rewrite it.
+    const existingSpawnedBy = (md as { spawnedBy?: { kind?: unknown } })
+      .spawnedBy;
+    const needsSpawnedByKindRewrite =
+      existingSpawnedBy !== undefined &&
+      existingSpawnedBy !== null &&
+      typeof existingSpawnedBy === "object" &&
+      (existingSpawnedBy as { kind?: unknown }).kind === "group";
+
+    if (
+      !needsProjectIdRewrite &&
+      !needsSpawnedBy &&
+      !needsContributionId &&
+      !needsLegacyDrop &&
+      !needsSpawnedByKindRewrite
+    ) {
+      return ws;
+    }
+
+    const { projectId, parentOrchestratorId, orchestratorId, ...rest } =
+      md as Record<string, unknown> & {
+        projectId?: unknown;
+        parentOrchestratorId?: unknown;
+        orchestratorId?: unknown;
+      };
+    const nextMd: Record<string, unknown> = { ...rest };
+
+    if (needsProjectIdRewrite) {
+      if (
+        nextMd.parentWorkspaceId === undefined &&
+        projectId !== undefined &&
+        projectId !== null
+      ) {
+        nextMd.parentWorkspaceId = projectId;
+      }
+    }
+
+    if (needsSpawnedBy) {
+      const parentWorkspaceId =
+        typeof nextMd.parentWorkspaceId === "string"
+          ? nextMd.parentWorkspaceId
+          : undefined;
+      nextMd.spawnedBy = parentWorkspaceId
+        ? { kind: "workspace", parentWorkspaceId }
+        : { kind: "global" };
+    } else if (parentOrchestratorId !== undefined) {
+      // parentOrchestratorId present but spawnedBy already set — drop the
+      // legacy marker without synthesizing a replacement.
+    }
+
+    if (needsSpawnedByKindRewrite) {
+      const legacy = existingSpawnedBy as {
+        kind: "group";
+        parentWorkspaceId?: unknown;
+      };
+      const parentWorkspaceId =
+        typeof legacy.parentWorkspaceId === "string"
+          ? legacy.parentWorkspaceId
+          : undefined;
+      nextMd.spawnedBy = parentWorkspaceId
+        ? { kind: "workspace", parentWorkspaceId }
+        : { kind: "global" };
+    }
+
+    if (needsContributionId) {
+      nextMd.dashboardContributionId = "agentic";
+    } else if (orchestratorId !== undefined && md.isDashboard !== true) {
+      // Preserve stray orchestratorId on non-dashboard nestedWorkspaces only if
+      // the caller didn't otherwise trigger a rewrite path — but since we
+      // decompose `md` above, drop it.
+    }
+
+    changed = true;
+    return { ...ws, metadata: nextMd };
+  });
+  return { result, changed };
+}
+
+function migrateRootRowOrder(
+  rowOrder: NonNullable<AppState["rootRowOrder"]>,
+  nestedIds: Set<string>,
+): { result: NonNullable<AppState["rootRowOrder"]>; changed: boolean } {
+  let changed = false;
+  const result: NonNullable<AppState["rootRowOrder"]> = [];
+  for (const row of rowOrder) {
+    if (row.kind === "agent-orchestrator") {
+      changed = true;
+      continue;
+    }
+    if (row.kind === "project" || row.kind === "workspace-group") {
+      changed = true;
+      result.push({ ...row, kind: "workspace" });
+      continue;
+    }
+    if (row.kind === "workspace" && nestedIds.has(row.id)) {
+      changed = true;
+      result.push({ ...row, kind: "nested-workspace" });
+      continue;
+    }
+    result.push(row);
+  }
+  return { result, changed };
+}
+
 export function migrateLegacyProjectShapes(state: AppState): {
   migrated: AppState;
   changed: boolean;
@@ -394,97 +538,31 @@ export function migrateLegacyProjectShapes(state: AppState): {
   let changed = false;
   let next: AppState = state;
 
-  if (Array.isArray(state.workspaces)) {
-    let workspacesChanged = false;
-    const workspaces = state.workspaces.map((ws) => {
-      // Migration reads persisted state which may carry legacy keys not in
-      // WorkspaceMetadata (parentOrchestratorId, orchestratorId, spawnedBy).
-      // Cast to a wider type so we can inspect and drop them.
-      const md = ws.metadata as
-        | (WorkspaceMetadata & Record<string, unknown>)
-        | undefined;
-      if (!md) return ws;
-
-      const needsProjectIdRewrite = "projectId" in md;
-      const needsSpawnedBy =
-        typeof md.parentOrchestratorId === "string" && !("spawnedBy" in md);
-      const needsLegacyDrop =
-        "parentOrchestratorId" in md || "orchestratorId" in md;
-      const needsContributionId =
-        md.isDashboard === true &&
-        typeof md.orchestratorId === "string" &&
-        !("dashboardContributionId" in md);
-
-      if (
-        !needsProjectIdRewrite &&
-        !needsSpawnedBy &&
-        !needsContributionId &&
-        !needsLegacyDrop
-      ) {
-        return ws;
-      }
-
-      const { projectId, parentOrchestratorId, orchestratorId, ...rest } =
-        md as Record<string, unknown> & {
-          projectId?: unknown;
-          parentOrchestratorId?: unknown;
-          orchestratorId?: unknown;
-        };
-      const nextMd: Record<string, unknown> = { ...rest };
-
-      if (needsProjectIdRewrite) {
-        if (
-          nextMd.groupId === undefined &&
-          projectId !== undefined &&
-          projectId !== null
-        ) {
-          nextMd.groupId = projectId;
-        }
-      }
-
-      if (needsSpawnedBy) {
-        const groupId =
-          typeof nextMd.groupId === "string" ? nextMd.groupId : undefined;
-        nextMd.spawnedBy = groupId
-          ? { kind: "group", groupId }
-          : { kind: "global" };
-      } else if (parentOrchestratorId !== undefined) {
-        // parentOrchestratorId present but spawnedBy already set — drop the
-        // legacy marker without synthesizing a replacement.
-      }
-
-      if (needsContributionId) {
-        nextMd.dashboardContributionId = "agentic";
-      } else if (orchestratorId !== undefined && md.isDashboard !== true) {
-        // Preserve stray orchestratorId on non-dashboard workspaces only if
-        // the caller didn't otherwise trigger a rewrite path — but since we
-        // decompose `md` above, drop it.
-      }
-
-      workspacesChanged = true;
-      return { ...ws, metadata: nextMd };
-    });
-    if (workspacesChanged) {
+  if (Array.isArray(state.nestedWorkspaces)) {
+    const { result, changed: wsChanged } = migrateNestedWorkspaceMetadata(
+      state.nestedWorkspaces,
+    );
+    if (wsChanged) {
       changed = true;
-      next = { ...next, workspaces };
+      next = { ...next, nestedWorkspaces: result };
     }
   }
 
   if (Array.isArray(state.rootRowOrder)) {
-    let orderChanged = false;
-    const rootRowOrder: typeof state.rootRowOrder = [];
-    for (const row of state.rootRowOrder) {
-      if (row.kind === "agent-orchestrator") {
-        orderChanged = true;
-        continue;
-      }
-      if (row.kind === "project") {
-        orderChanged = true;
-        rootRowOrder.push({ ...row, kind: "workspace-group" });
-        continue;
-      }
-      rootRowOrder.push(row);
-    }
+    // Build the set of nested-workspace ids from the (possibly already
+    // migrated) workspaces list so we can disambiguate legacy
+    // `kind: "workspace"` rows: rows whose id matches a nested workspace
+    // are renamed to `"nested-workspace"`; surviving `"workspace"` rows
+    // are umbrella workspace blocks that don't need a rewrite.
+    const nestedIds = new Set<string>(
+      (next.nestedWorkspaces ?? state.nestedWorkspaces ?? [])
+        .map((w) => w.id)
+        .filter((id): id is string => typeof id === "string"),
+    );
+    const { result: rootRowOrder, changed: orderChanged } = migrateRootRowOrder(
+      state.rootRowOrder,
+      nestedIds,
+    );
     if (orderChanged) {
       changed = true;
       next = { ...next, rootRowOrder };

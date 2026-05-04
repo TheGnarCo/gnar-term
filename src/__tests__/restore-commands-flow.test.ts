@@ -92,25 +92,28 @@ vi.stubGlobal("ResizeObserver", MockResizeObserver);
 
 import { invoke } from "@tauri-apps/api/core";
 import {
-  createWorkspaceFromDef,
+  createNestedWorkspaceFromDef,
   serializeLayout,
-} from "../lib/services/workspace-service";
+} from "../lib/services/nested-workspace-service";
 import {
   runDefinedCommand,
   dismissDefinedCommand,
 } from "../lib/terminal-service";
-import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
+import {
+  nestedWorkspaces,
+  activeNestedWorkspaceIdx,
+} from "../lib/stores/nested-workspace";
 import {
   getAllPanes,
   isTerminalSurface,
   type TerminalSurface,
-  type Workspace,
+  type NestedWorkspace,
   type Pane,
 } from "../lib/types";
 import RestoreCommandPrompt from "../lib/components/RestoreCommandPrompt.svelte";
 import RestoreCommandsOverlay from "../lib/components/RestoreCommandsOverlay.svelte";
 
-function firstTerminalSurface(ws: Workspace): TerminalSurface {
+function firstTerminalSurface(ws: NestedWorkspace): TerminalSurface {
   for (const pane of getAllPanes(ws.splitRoot)) {
     for (const s of pane.surfaces) {
       if (isTerminalSurface(s)) return s;
@@ -127,19 +130,19 @@ beforeEach(() => {
     if (cmd === "spawn_pty") return Promise.resolve(nextPty++);
     return Promise.resolve(undefined as unknown);
   });
-  workspaces.set([]);
-  activeWorkspaceIdx.set(-1);
+  nestedWorkspaces.set([]);
+  activeNestedWorkspaceIdx.set(-1);
 });
 
 afterEach(() => {
   cleanup();
-  workspaces.set([]);
-  activeWorkspaceIdx.set(-1);
+  nestedWorkspaces.set([]);
+  activeNestedWorkspaceIdx.set(-1);
 });
 
-describe("createWorkspaceFromDef — restore vs fresh", () => {
-  it("restored surface gets definedCommand + pendingRestoreCommand, NOT startupCommand", async () => {
-    await createWorkspaceFromDef(
+describe("createNestedWorkspaceFromDef — restore vs fresh", () => {
+  it("restored surface gets definedCommand + startupCommand (auto-run default) when no parent workspace", async () => {
+    await createNestedWorkspaceFromDef(
       {
         name: "Restored",
         layout: {
@@ -152,15 +155,16 @@ describe("createWorkspaceFromDef — restore vs fresh", () => {
       },
       { restoring: true },
     );
-    const ws = get(workspaces)[0]!;
+    const ws = get(nestedWorkspaces)[0]!;
     const s = firstTerminalSurface(ws);
     expect(s.definedCommand).toBe("npm run dev");
-    expect(s.pendingRestoreCommand).toBe(true);
-    expect(s.startupCommand).toBeUndefined();
+    // No parent workspace → defaults to auto-run (opt-out model)
+    expect(s.startupCommand).toBe("npm run dev");
+    expect(s.pendingRestoreCommand).toBeUndefined();
   });
 
   it("fresh-created surface with a command gets all three (definedCommand + startupCommand, NOT pending)", async () => {
-    await createWorkspaceFromDef({
+    await createNestedWorkspaceFromDef({
       name: "Fresh",
       layout: {
         pane: {
@@ -168,7 +172,7 @@ describe("createWorkspaceFromDef — restore vs fresh", () => {
         },
       },
     });
-    const ws = get(workspaces)[0]!;
+    const ws = get(nestedWorkspaces)[0]!;
     const s = firstTerminalSurface(ws);
     expect(s.definedCommand).toBe("ls -la");
     expect(s.startupCommand).toBe("ls -la");
@@ -176,7 +180,7 @@ describe("createWorkspaceFromDef — restore vs fresh", () => {
   });
 
   it("round-trips: serialized output of a restored workspace still carries `command`", async () => {
-    await createWorkspaceFromDef(
+    await createNestedWorkspaceFromDef(
       {
         name: "Restored",
         layout: {
@@ -187,7 +191,7 @@ describe("createWorkspaceFromDef — restore vs fresh", () => {
       },
       { restoring: true },
     );
-    const ws = get(workspaces)[0]!;
+    const ws = get(nestedWorkspaces)[0]!;
     const layout = serializeLayout(ws.splitRoot) as {
       pane: { surfaces: Array<Record<string, unknown>> };
     };
@@ -222,7 +226,7 @@ describe("runDefinedCommand / dismissDefinedCommand", () => {
       surfaces: [surface],
       activeSurfaceId: surface.id,
     };
-    workspaces.set([
+    nestedWorkspaces.set([
       {
         id: "ws1",
         name: "ws",
@@ -353,7 +357,7 @@ describe("RestoreCommandsOverlay", () => {
       definedCommand: "npm test",
       pendingRestoreCommand: true,
     };
-    workspaces.set([
+    nestedWorkspaces.set([
       {
         id: "ws1",
         name: "Alpha",

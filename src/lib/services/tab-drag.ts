@@ -13,7 +13,7 @@
  * split and sidebar moves added in later stories).
  */
 import { writable, get, type Readable } from "svelte/store";
-import { workspaces } from "../stores/workspace";
+import { nestedWorkspaces } from "../stores/nested-workspace";
 import { theme } from "../stores/theme";
 import { getAllPanes, getAllSurfaces } from "../types";
 import {
@@ -21,8 +21,8 @@ import {
   mergeTabToPane,
   splitPaneWithSurface,
 } from "./pane-service";
-import { createWorkspaceFromSurface } from "./workspace-service";
-import { getWorkspaceGroups } from "../stores/workspace-groups";
+import { createNestedWorkspaceFromSurface } from "./nested-workspace-service";
+import { getWorkspaces } from "../stores/workspaces";
 import { rootRowOrder } from "../stores/root-row-order";
 
 export type TabDropTarget =
@@ -35,8 +35,8 @@ export type TabDropTarget =
     }
   | { kind: "new-workspace"; insertIdx: number; insertEdge: "before" | "after" }
   | {
-      kind: "new-workspace-in-group";
-      groupId: string;
+      kind: "new-nested-workspace-in-workspace";
+      parentWorkspaceId: string;
       insertGlobalIdx: number;
       insertEdge: "before" | "after";
     }
@@ -85,7 +85,7 @@ function activateHoveredTab(x: number, y: number, sourcePaneId: string): void {
   }
   if (surfaceId === lastHoveredTabId) return;
   lastHoveredTabId = surfaceId;
-  workspaces.update((wsList) =>
+  nestedWorkspaces.update((wsList) =>
     wsList.map((ws) => {
       const pane = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
       if (!pane || !pane.surfaces.find((s) => s.id === surfaceId)) return ws;
@@ -235,8 +235,9 @@ function detectDropTarget(
       return { kind: "merge", paneId };
     }
 
-    // Group workspace row (nested inside a container — must check BEFORE
-    // root-row because nested rows sit inside root-row wrappers in the DOM).
+    // Workspace's nested-workspace row (nested inside a container — must
+    // check BEFORE root-row because nested rows sit inside root-row
+    // wrappers in the DOM).
     const wsViewRowEl = el.closest(
       "[data-ws-view-drag-idx]",
     ) as HTMLElement | null;
@@ -244,15 +245,18 @@ function detectDropTarget(
       const containerEl = wsViewRowEl.closest(
         "[data-container-nested]",
       ) as HTMLElement | null;
-      const groupId =
+      const parentWorkspaceId =
         containerEl?.getAttribute("data-container-nested") ?? null;
-      if (groupId) {
-        const srcWs = get(workspaces).find((w) => w.id === sourceWorkspaceId);
-        const srcGroupId = srcWs?.metadata?.groupId;
-        if (srcGroupId !== groupId) {
-          if (srcGroupId) return null; // grouped tab over different group → deny
-          // Root tab over a group's nested workspace → create a nested workspace
-          // in that group rather than falling through to root-row detection.
+      if (parentWorkspaceId) {
+        const srcWs = get(nestedWorkspaces).find(
+          (w) => w.id === sourceWorkspaceId,
+        );
+        const srcWorkspaceId = srcWs?.metadata?.parentWorkspaceId;
+        if (srcWorkspaceId !== parentWorkspaceId) {
+          if (srcWorkspaceId) return null; // tab from a different workspace → deny
+          // Root tab over a workspace's nested workspace → create a nested
+          // workspace in that workspace rather than falling through to
+          // root-row detection.
           if (srcWs && getAllSurfaces(srcWs).length > 1) {
             const globalIdx = parseInt(
               wsViewRowEl.getAttribute("data-ws-view-drag-idx") || "0",
@@ -262,15 +266,15 @@ function detectDropTarget(
             const insertEdge: "before" | "after" =
               y < rect.top + rect.height / 2 ? "before" : "after";
             return {
-              kind: "new-workspace-in-group",
-              groupId,
+              kind: "new-nested-workspace-in-workspace",
+              parentWorkspaceId,
               insertGlobalIdx: globalIdx,
               insertEdge,
             };
           }
           return null;
         } else {
-          // Same group — offer a positional insert.
+          // Same workspace — offer a positional insert.
           if (srcWs && getAllSurfaces(srcWs).length > 1) {
             const globalIdx = parseInt(
               wsViewRowEl.getAttribute("data-ws-view-drag-idx") || "0",
@@ -280,8 +284,8 @@ function detectDropTarget(
             const insertEdge: "before" | "after" =
               y < rect.top + rect.height / 2 ? "before" : "after";
             return {
-              kind: "new-workspace-in-group",
-              groupId,
+              kind: "new-nested-workspace-in-workspace",
+              parentWorkspaceId,
               insertGlobalIdx: globalIdx,
               insertEdge,
             };
@@ -311,9 +315,11 @@ function detectDropTarget(
       }
     }
     if (rootRowEl) {
-      const srcWs = get(workspaces).find((w) => w.id === sourceWorkspaceId);
-      const srcGroupId = srcWs?.metadata?.groupId;
-      if (srcGroupId) return null;
+      const srcWs = get(nestedWorkspaces).find(
+        (w) => w.id === sourceWorkspaceId,
+      );
+      const srcWorkspaceId = srcWs?.metadata?.parentWorkspaceId;
+      if (srcWorkspaceId) return null;
       const rowIdx = parseInt(
         rootRowEl.getAttribute("data-root-row-idx") || "0",
         10,
@@ -327,13 +333,15 @@ function detectDropTarget(
       return null;
     }
 
-    // Empty primary-sidebar area — drop to spawn a new workspace appended
+    // Empty sidebar area — drop to spawn a new workspace appended
     // at the end of the root row order.
-    const sidebar = el.closest("#primary-sidebar");
+    const sidebar = el.closest("#sidebar");
     if (sidebar) {
-      const srcWs = get(workspaces).find((w) => w.id === sourceWorkspaceId);
-      const srcGroupId = srcWs?.metadata?.groupId;
-      if (srcGroupId) return null;
+      const srcWs = get(nestedWorkspaces).find(
+        (w) => w.id === sourceWorkspaceId,
+      );
+      const srcWorkspaceId = srcWs?.metadata?.parentWorkspaceId;
+      if (srcWorkspaceId) return null;
       if (srcWs && getAllSurfaces(srcWs).length > 1) {
         const order = get(rootRowOrder);
         const lastIdx = Math.max(0, order.length - 1);
@@ -358,7 +366,7 @@ function detectDropTarget(
     if (!paneId) continue;
     if (paneId === sourcePaneId) {
       // Allow same-pane surface-split only when there are ≥2 surfaces to split from.
-      const allWs = get(workspaces);
+      const allWs = get(nestedWorkspaces);
       const srcWs = allWs.find((w) => w.id === sourceWorkspaceId);
       const srcPane =
         srcWs &&
@@ -401,7 +409,7 @@ export function commitTabDrop(): void {
 
   switch (dropTarget.kind) {
     case "reorder": {
-      const allWs = get(workspaces);
+      const allWs = get(nestedWorkspaces);
       const srcWs = allWs.find((w) => w.id === sourceWorkspaceId);
       if (!srcWs) return;
       const pane = getAllPanes(srcWs.splitRoot).find(
@@ -437,32 +445,42 @@ export function commitTabDrop(): void {
         dropTarget.insertEdge === "before"
           ? dropTarget.insertIdx
           : dropTarget.insertIdx + 1;
-      createWorkspaceFromSurface(surfaceId, sourcePaneId, sourceWorkspaceId, {
-        kind: "root",
-        insertIdx: insertAt,
-      });
+      createNestedWorkspaceFromSurface(
+        surfaceId,
+        sourcePaneId,
+        sourceWorkspaceId,
+        {
+          kind: "root",
+          insertIdx: insertAt,
+        },
+      );
       break;
     }
-    case "new-workspace-in-group": {
-      const allWs = get(workspaces);
+    case "new-nested-workspace-in-workspace": {
+      const allWs = get(nestedWorkspaces);
       const tgtWs = allWs[dropTarget.insertGlobalIdx];
       if (!tgtWs) break;
-      const group = getWorkspaceGroups().find(
-        (g) => g.id === dropTarget.groupId,
+      const workspace = getWorkspaces().find(
+        (w) => w.id === dropTarget.parentWorkspaceId,
       );
-      if (!group) break;
-      const posInGroup = group.workspaceIds.indexOf(tgtWs.id);
+      if (!workspace) break;
+      const posInWorkspace = workspace.nestedWorkspaceIds.indexOf(tgtWs.id);
       const insertPos =
         dropTarget.insertEdge === "before"
-          ? Math.max(0, posInGroup)
-          : posInGroup === -1
-            ? group.workspaceIds.length
-            : posInGroup + 1;
-      createWorkspaceFromSurface(surfaceId, sourcePaneId, sourceWorkspaceId, {
-        kind: "group",
-        positionInGroup: insertPos,
-        targetGroupId: dropTarget.groupId,
-      });
+          ? Math.max(0, posInWorkspace)
+          : posInWorkspace === -1
+            ? workspace.nestedWorkspaceIds.length
+            : posInWorkspace + 1;
+      createNestedWorkspaceFromSurface(
+        surfaceId,
+        sourcePaneId,
+        sourceWorkspaceId,
+        {
+          kind: "workspace",
+          positionInWorkspace: insertPos,
+          targetWorkspaceId: dropTarget.parentWorkspaceId,
+        },
+      );
       break;
     }
     default:

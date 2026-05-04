@@ -1,11 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
 
-const WORKSPACE_ITEM = readFileSync(
-  "src/lib/components/WorkspaceItem.svelte",
-  "utf-8",
-).replace(/\s+/g, " ");
-
 const WORKSPACE_LIST_BLOCK = readFileSync(
   "src/lib/components/WorkspaceListBlock.svelte",
   "utf-8",
@@ -16,8 +11,8 @@ const WORKSPACE_LIST_VIEW = readFileSync(
   "utf-8",
 ).replace(/\s+/g, " ");
 
-const GROUP_SECTION_CONTENT = readFileSync(
-  "src/lib/components/WorkspaceGroupSectionContent.svelte",
+const SOURCE = readFileSync(
+  "src/lib/components/WorkspaceSectionContent.svelte",
   "utf-8",
 ).replace(/\s+/g, " ");
 
@@ -28,16 +23,17 @@ const EXTENSION_API = readFileSync(
 
 describe("grip visibility suppression", () => {
   it("WorkspaceItem keeps its own grip collapsed when any reorder is active unless the item is the drag source", () => {
-    // WorkspaceItem still owns a grip when rendered INSIDE a project
-    // (WorkspaceListView); at the root level it's rendered without
-    // one (WorkspaceListBlock draws the grip externally). The visible
-    // gate tracks row-level hover so hovering any part of the row
-    // (not just the grip column) expands it.
-    // shortcutHintsActive is intentionally excluded — meta-hold shows
-    // the tooltip chip without triggering the solid-background drag state.
-    expect(WORKSPACE_ITEM).toContain("anyReorderActive");
-    expect(WORKSPACE_ITEM).toMatch(
-      /visible=\{\s*dragActive\s*\|\|\s*\(\s*hovered\s*&&\s*!\s*\$anyReorderActive\s*\)\s*\}/,
+    // SidebarRail owns the grip visibility logic for both row and
+    // container modes. The gate tracks rail-level hover and suppresses
+    // expansion while any reorder is in progress unless the row is the
+    // drag source (isDragging).
+    const RAIL = readFileSync(
+      "src/lib/components/SidebarRail.svelte",
+      "utf-8",
+    ).replace(/\s+/g, " ");
+    expect(RAIL).toContain("anyReorderActive");
+    expect(RAIL).toMatch(
+      /isDragging\s*\|\|\s*\(\s*canDrag\s*&&\s*railHovered\s*&&\s*!\s*\$anyReorderActive\s*&&\s*!\s*locked\s*\)/,
     );
   });
 
@@ -63,11 +59,9 @@ describe("canStart gating", () => {
     );
   });
 
-  it("WorkspaceListBlock gates startRootRowDrag for locked workspace-groups", () => {
-    expect(WORKSPACE_LIST_BLOCK).toContain(
-      'srcRow?.kind === "workspace-group"',
-    );
-    expect(WORKSPACE_LIST_BLOCK).toContain("group?.locked === true");
+  it("WorkspaceListBlock gates startRootRowDrag for locked workspaces", () => {
+    expect(WORKSPACE_LIST_BLOCK).toContain('srcRow?.kind === "workspace"');
+    expect(WORKSPACE_LIST_BLOCK).toContain("workspace?.locked === true");
   });
 });
 
@@ -80,17 +74,17 @@ describe("reorderContext is published on every drag", () => {
     );
   });
 
-  it("WorkspaceListView accepts scopeId + containerBlockId props and publishes workspace-kind context", () => {
+  it("WorkspaceListView accepts scopeId + containerBlockId props and publishes nested-workspace-kind context", () => {
     expect(WORKSPACE_LIST_VIEW).toMatch(/export let scopeId/);
     expect(WORKSPACE_LIST_VIEW).toMatch(/export let containerBlockId/);
-    expect(WORKSPACE_LIST_VIEW).toMatch(/kind:\s*"workspace"/);
+    expect(WORKSPACE_LIST_VIEW).toMatch(/kind:\s*"nested-workspace"/);
   });
 
-  it("WorkspaceGroupSectionContent threads scopeId={group.id} and containerBlockId to WorkspaceListView", () => {
-    expect(GROUP_SECTION_CONTENT).toMatch(/scopeId=\{\s*group\.id\s*\}/);
+  it("WorkspaceSectionContent threads scopeId={workspace.id} and containerBlockId to WorkspaceListView", () => {
+    expect(SOURCE).toMatch(/scopeId=\{\s*workspace\.id\s*\}/);
     // containerBlockId is forwarded from the parent via the shorthand
     // attribute ({containerBlockId}) rather than hardcoded.
-    expect(GROUP_SECTION_CONTENT).toMatch(/\{containerBlockId\}/);
+    expect(SOURCE).toMatch(/\{containerBlockId\}/);
   });
 });
 

@@ -92,27 +92,27 @@ describe("Video preview XSS prevention", () => {
 
 describe("Sidebar drag-drop reorder (B3)", () => {
   it("adjusts destination index when dragging forward", () => {
-    const workspaces = ["A", "B", "C"];
+    const nestedWorkspaces = ["A", "B", "C"];
     const fromIdx = 0;
     const dropTargetIdx = 2;
 
-    const item = workspaces.splice(fromIdx, 1)[0];
+    const item = nestedWorkspaces.splice(fromIdx, 1)[0];
     const toIdx = fromIdx < dropTargetIdx ? dropTargetIdx - 1 : dropTargetIdx;
-    workspaces.splice(toIdx, 0, item);
+    nestedWorkspaces.splice(toIdx, 0, item);
 
-    expect(workspaces).toEqual(["B", "A", "C"]);
+    expect(nestedWorkspaces).toEqual(["B", "A", "C"]);
   });
 
   it("does not adjust index when dragging backward", () => {
-    const workspaces = ["A", "B", "C"];
+    const nestedWorkspaces = ["A", "B", "C"];
     const fromIdx = 2;
     const dropTargetIdx = 0;
 
-    const item = workspaces.splice(fromIdx, 1)[0];
+    const item = nestedWorkspaces.splice(fromIdx, 1)[0];
     const toIdx = fromIdx < dropTargetIdx ? dropTargetIdx - 1 : dropTargetIdx;
-    workspaces.splice(toIdx, 0, item);
+    nestedWorkspaces.splice(toIdx, 0, item);
 
-    expect(workspaces).toEqual(["C", "A", "B"]);
+    expect(nestedWorkspaces).toEqual(["C", "A", "B"]);
   });
 });
 
@@ -122,45 +122,45 @@ describe("Sidebar drag-drop reorder (B3)", () => {
 
 describe("Close Other Workspaces (B4)", () => {
   it("keeps only the target workspace when closing others", () => {
-    const workspaces = ["A", "B", "C", "D", "E"];
+    const nestedWorkspaces = ["A", "B", "C", "D", "E"];
     let targetIdx = 2;
 
-    for (let i = workspaces.length - 1; i >= 0; i--) {
+    for (let i = nestedWorkspaces.length - 1; i >= 0; i--) {
       if (i !== targetIdx) {
-        workspaces.splice(i, 1);
+        nestedWorkspaces.splice(i, 1);
         if (i < targetIdx) targetIdx--;
       }
     }
 
-    expect(workspaces).toEqual(["C"]);
+    expect(nestedWorkspaces).toEqual(["C"]);
   });
 
   it("handles target at index 0", () => {
-    const workspaces = ["A", "B", "C"];
+    const nestedWorkspaces = ["A", "B", "C"];
     let targetIdx = 0;
 
-    for (let i = workspaces.length - 1; i >= 0; i--) {
+    for (let i = nestedWorkspaces.length - 1; i >= 0; i--) {
       if (i !== targetIdx) {
-        workspaces.splice(i, 1);
+        nestedWorkspaces.splice(i, 1);
         if (i < targetIdx) targetIdx--;
       }
     }
 
-    expect(workspaces).toEqual(["A"]);
+    expect(nestedWorkspaces).toEqual(["A"]);
   });
 
   it("handles target at last index", () => {
-    const workspaces = ["A", "B", "C"];
+    const nestedWorkspaces = ["A", "B", "C"];
     let targetIdx = 2;
 
-    for (let i = workspaces.length - 1; i >= 0; i--) {
+    for (let i = nestedWorkspaces.length - 1; i >= 0; i--) {
       if (i !== targetIdx) {
-        workspaces.splice(i, 1);
+        nestedWorkspaces.splice(i, 1);
         if (i < targetIdx) targetIdx--;
       }
     }
 
-    expect(workspaces).toEqual(["C"]);
+    expect(nestedWorkspaces).toEqual(["C"]);
   });
 });
 

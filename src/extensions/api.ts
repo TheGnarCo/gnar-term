@@ -11,16 +11,16 @@
  */
 import type { Readable } from "svelte/store";
 
-// --- Group color slots (shared across extensions + core) ---
+// --- Workspace color slots (shared across extensions + core) ---
 //
-// Semantic palette for workspace groups and extensions that want
+// Semantic palette for workspaces and extensions that want
 // theme-following color pickers. Each slot maps onto the active theme's
-// ansi palette via getGroupColors(), so a stored slot name resolves to
+// ansi palette via getWorkspaceColors(), so a stored slot name resolves to
 // different hex values as the user switches themes. Custom hex strings
-// (anything starting with "#") pass through resolveGroupColor()
+// (anything starting with "#") pass through resolveWorkspaceColor()
 // unchanged — users who type their own color keep it verbatim.
 
-export const GROUP_COLOR_SLOTS = [
+export const WORKSPACE_COLOR_SLOTS = [
   "red",
   "pink",
   "green",
@@ -35,14 +35,14 @@ export const GROUP_COLOR_SLOTS = [
   "teal",
 ] as const;
 
-export type GroupColorSlot = (typeof GROUP_COLOR_SLOTS)[number];
+export type WorkspaceColorSlot = (typeof WORKSPACE_COLOR_SLOTS)[number];
 
 /**
  * Minimum theme shape required for slot resolution — only the ansi
  * block. Both core's ThemeDef and the extension-facing ExtensionTheme
  * satisfy this interface.
  */
-export interface GroupColorTheme {
+export interface WorkspaceColorTheme {
   ansi: {
     red: string;
     brightRed: string;
@@ -59,9 +59,9 @@ export interface GroupColorTheme {
   };
 }
 
-export function getGroupColors(
-  theme: GroupColorTheme,
-): Record<GroupColorSlot, string> {
+export function getWorkspaceColors(
+  theme: WorkspaceColorTheme,
+): Record<WorkspaceColorSlot, string> {
   return {
     red: theme.ansi.red,
     pink: theme.ansi.brightRed,
@@ -83,13 +83,13 @@ export function getGroupColors(
  * theme; custom hex strings (starting with `#`) pass through unchanged.
  * Unknown strings return as-is.
  */
-export function resolveGroupColor(
+export function resolveWorkspaceColor(
   color: string,
-  theme: GroupColorTheme,
+  theme: WorkspaceColorTheme,
 ): string {
   if (color.startsWith("#")) return color;
-  const colors = getGroupColors(theme);
-  return colors[color as GroupColorSlot] ?? color;
+  const colors = getWorkspaceColors(theme);
+  return colors[color as WorkspaceColorSlot] ?? color;
 }
 
 // --- Status types (inlined so api.ts stays self-contained) ---
@@ -131,7 +131,9 @@ export type AppEventType =
   | "sidebar:toggled"
   | "theme:changed"
   | "worktree:merged"
-  | "agent:statusChanged";
+  | "agent:statusChanged"
+  | "agent:interrupted"
+  | "agent:killed";
 
 /** Base shape for all events delivered to extension handlers. */
 export interface AppEvent {
@@ -202,8 +204,8 @@ export interface ExtensionManifestWorkspaceAction {
   icon?: string;
   /** Optional keyboard shortcut (e.g. "⌘⇧N"). */
   shortcut?: string;
-  /** Where the action appears: "workspace" (default) or "sidebar". */
-  zone?: "workspace" | "sidebar";
+  /** Where the action appears: "workspace" (default), "sidebar", or "workspace-tile". */
+  zone?: "workspace" | "sidebar" | "workspace-tile";
 }
 
 export interface ExtensionManifestWorkspaceSubtitle {
@@ -212,8 +214,7 @@ export interface ExtensionManifestWorkspaceSubtitle {
 }
 
 export interface ExtensionContributions {
-  secondarySidebarTabs?: ExtensionManifestTab[];
-  primarySidebarSections?: ExtensionManifestSection[];
+  sidebarSections?: ExtensionManifestSection[];
   commands?: ExtensionManifestCommand[];
   surfaces?: ExtensionManifestSurface[];
   contextMenuItems?: ExtensionManifestContextMenu[];
@@ -341,13 +342,7 @@ export interface ExtensionAPI {
       onClick: () => void;
     },
   ): void;
-  registerSecondarySidebarTab(tabId: string, component: unknown): void;
-  registerSecondarySidebarAction(
-    tabId: string,
-    actionId: string,
-    handler: () => void,
-  ): void;
-  registerPrimarySidebarSection(
+  registerSidebarSection(
     sectionId: string,
     component: unknown,
     options?: {
@@ -358,13 +353,13 @@ export interface ExtensionAPI {
     },
   ): void;
   /**
-   * Register a renderer for a non-workspace row kind inside the
-   * Workspaces section's interleaved list (workspace groups today,
-   * other kinds later). The component receives `{ id: string }` as a
-   * prop and is responsible for its own drag-hover feedback.
+   * Register a renderer for a non-nested-workspace row kind inside the
+   * Workspaces section's interleaved list (workspaces today, other kinds
+   * later). The component receives `{ id: string }` as a prop and is
+   * responsible for its own drag-hover feedback.
    *
    * `options.railColor`, when provided, lets core paint the DragGrip
-   * rail in a per-row color (e.g. the group's color). Returning
+   * rail in a per-row color (e.g. the workspace's color). Returning
    * undefined for a given id falls back to the theme accent.
    */
   registerRootRowRenderer(
@@ -379,8 +374,7 @@ export interface ExtensionAPI {
    * Append a row to the end of the Workspaces section's root-row
    * list. Idempotent — repeat calls for the same {kind, id} are
    * no-ops. Extensions call this when they create an entity that
-   * should render at the root level (e.g. workspace-group on group
-   * create).
+   * should render at the root level (e.g. nested-workspace on workspace create).
    */
   appendRootRow(row: { kind: string; id: string }): void;
   /**
@@ -494,7 +488,7 @@ export interface ExtensionAPI {
   /**
    * Contribute child rows to another extension's parent rows. The
    * `parentType` matches the kind of a row registered via
-   * `registerRootRowRenderer` (e.g. "workspace-group", "dashboard"); given a
+   * `registerRootRowRenderer` (e.g. "workspace", "dashboard"); given a
    * specific parent's id, return the child row ids that should render
    * underneath it. Each id is dispatched through the same
    * root-row-renderer registry, so children inherit whatever the
@@ -536,34 +530,36 @@ export interface ExtensionAPI {
 
   /**
    * Register a dashboard contribution — a "kind of dashboard" that can
-   * attach to a Workspace Group. Each group's context menu surfaces an
+   * attach to a Workspace. Each workspace's context menu surfaces an
    * "Add <actionLabel>" affordance per registered contribution whose
-   * `isAvailableFor` gate accepts the group and whose `capPerGroup`
-   * isn't already met. When invoked, core calls `create(group)` to
-   * materialize the dashboard workspace. Automatically unregistered on
-   * extension deactivate.
+   * `isAvailableFor` gate accepts the workspace and whose `capPerWorkspace`
+   * isn't already met. When invoked, core calls `create(workspace)` to
+   * materialize the dashboard nested-workspace. Automatically
+   * unregistered on extension deactivate.
    *
-   * Core's built-in Group Dashboard registers under `id: "group"`. The
-   * agentic extension registers under `id: "agentic"`. Dashboard tiles
-   * carry `metadata.dashboardContributionId = contribution.id` so the
+   * Core's built-in Workspace Dashboard registers under `id: "group"`
+   * (preserved across the Workspace→NestedWorkspace rename for
+   * persisted-data compatibility). The agentic extension registers under
+   * `id: "agentic"`. Dashboard tiles carry
+   * `metadata.dashboardContributionId = contribution.id` so the
    * multi-dashboard grid can attribute them back to their contribution.
    */
   registerDashboardContribution(contribution: DashboardContributionInput): void;
 
   /**
    * Register a pseudo-workspace — a non-persisted, pinned entry that
-   * renders in the root sidebar list. Pseudo-workspaces cannot be
+   * renders in the root sidebar list. Pseudo-nestedWorkspaces cannot be
    * deleted, renamed, or have panes/surfaces added through normal
    * workspace controls. The canonical use is the Global Agentic
    * Dashboard. Automatically unregistered on extension deactivate.
    */
   registerPseudoWorkspace(pw: PseudoWorkspaceInput): void;
 
-  // Workspace subtitle — components rendered below workspace name in sidebar
+  // NestedWorkspace subtitle — components rendered below workspace name in sidebar
   /** Register a Svelte component to render below workspace names. Component receives { workspaceId } prop. */
   registerWorkspaceSubtitle(component: unknown, priority?: number): void;
 
-  // Workspace actions — buttons in the workspace header and sidebar top bar.
+  // NestedWorkspace actions — buttons in the workspace header and sidebar top bar.
   // Icon/shortcut/zone may be declared once in the manifest and omitted here;
   // runtime values win over manifest fallbacks.
   registerWorkspaceAction(
@@ -573,8 +569,9 @@ export interface ExtensionAPI {
       icon?: string;
       shortcut?: string;
       /** Where the action appears: "workspace" (default) in the workspace header,
-       *  "sidebar" in the top bar alongside reorder. */
-      zone?: "workspace" | "sidebar";
+       *  "sidebar" in the top bar alongside reorder,
+       *  "workspace-tile" as a dash-btn tile in the workspace group banner row. */
+      zone?: "workspace" | "sidebar" | "workspace-tile";
       handler: (ctx: WorkspaceActionContext) => void | Promise<void>;
       when?: (ctx: WorkspaceActionContext) => boolean;
     },
@@ -644,8 +641,7 @@ export interface ExtensionAPI {
     >,
     options?: { submitLabel?: string },
   ): Promise<Record<string, string> | null>;
-  toggleSecondarySidebar(): void;
-  createWorkspace(
+  createNestedWorkspace(
     name: string,
     cwd: string,
     options?: CreateWorkspaceOptions,
@@ -663,9 +659,9 @@ export interface ExtensionAPI {
     props?: Record<string, unknown>,
   ): void;
 
-  // Workspace management — switch and close by ID
-  switchWorkspace(workspaceId: string): void;
-  closeWorkspace(workspaceId: string): void;
+  // NestedWorkspace management — switch and close by ID
+  switchNestedWorkspace(workspaceId: string): void;
+  closeNestedWorkspace(workspaceId: string): void;
 
   /** Set hasUnread=true on a surface tab (e.g., to signal "agent waiting"). Cleared automatically when the surface is selected. */
   markSurfaceUnread(surfaceId: string): void;
@@ -682,7 +678,7 @@ export interface ExtensionAPI {
    */
   reportError(message: string): void;
   /**
-   * Enumerate every terminal surface across all workspaces and all panes
+   * Enumerate every terminal surface across all nestedWorkspaces and all panes
    * (active or background, split or single). Used by extensions that need
    * to bootstrap tracking for surfaces that existed before activation —
    * surface:created only fires for surfaces created AFTER the listener was
@@ -695,11 +691,6 @@ export interface ExtensionAPI {
     title: string;
   }>;
 
-  // Sidebar tab indicators
-  /** Set or clear a notification badge dot on a secondary sidebar tab. */
-  badgeSidebarTab(tabId: string, hasBadge: boolean): void;
-  /** Programmatically switch to a secondary sidebar tab (opens sidebar if closed). */
-  activateSidebarTab(tabId: string): void;
   /** Set or clear a status indicator on a workspace item (e.g., "running" | "waiting" | "idle" | null to clear). */
   setWorkspaceIndicator(workspaceId: string, status: string | null): void;
 
@@ -778,8 +769,8 @@ export interface ExtensionAPI {
   getSettings(): Record<string, unknown>;
 
   // Read-only core state (Svelte readable stores)
-  workspaces: Readable<WorkspaceRef[]>;
-  activeWorkspace: Readable<WorkspaceRef | null>;
+  nestedWorkspaces: Readable<NestedWorkspaceRef[]>;
+  activeWorkspace: Readable<NestedWorkspaceRef | null>;
   activePane: Readable<PaneRef | null>;
   activeSurface: Readable<SurfaceRef | null>;
   /**
@@ -794,7 +785,7 @@ export interface ExtensionAPI {
   /** The sidebar drag-reorder currently in progress, or null when idle. */
   reorderContext: Readable<ReorderContext | null>;
   /**
-   * Id of the primary-sidebar block currently hovered over its drag-grip
+   * Id of the sidebar block currently hovered over its drag-grip
    * column, or null when no block is hovered. Extensions that render
    * section banners can subscribe to this to paint hover-only UI (e.g.
    * a dark-dot frit over the rail-overlap zone) in sync with core-owned
@@ -803,7 +794,7 @@ export interface ExtensionAPI {
   hoveredSidebarBlockId: Readable<string | null>;
   /**
    * Key of the Workspaces-section root row currently hovered over its
-   * grip column, encoded as `"kind:id"` (e.g. `"workspace-group:g-42"`), or
+   * grip column, encoded as `"kind:id"` (e.g. `"workspace:g-42"`), or
    * null when no row is hovered. Renderers registered via
    * `registerRootRowRenderer` use this to derive their own
    * expansion/frit state in sync with the core-owned grip.
@@ -831,9 +822,9 @@ export interface ExtensionAPI {
    * - **DragGrip** — left-border drag handle that appears on hover
    *   Props: `{ theme, visible, onMouseDown, ariaLabel? }`
    * - **ContainerRow** — shared banner + nested-list chrome for
-   *   "container workspaces" (workspace groups, agent dashboards). Banner can
-   *   represent a first-class workspace by wiring onBannerClick/onClose
-   *   to switchWorkspace/closeWorkspace.
+   *   "container nestedWorkspaces" (workspaces, agent dashboards). Banner can
+   *   represent a first-class nested-workspace by wiring onBannerClick/onClose
+   *   to switchNestedWorkspace/closeNestedWorkspace.
    *   Props: `{ color, foreground, parentColor?, onGripMouseDown?,
    *     onBannerClick?, onBannerContextMenu?, onClose?, filterIds,
    *     dashboardHintFor?, hideStatusBadges?, scopeId, containerBlockId,
@@ -867,7 +858,7 @@ export interface ExtensionAPI {
        * Called on every drag state change. Return the ReorderContext to
        * publish to the global reorder-context store (or null when the drag
        * ends). The sidebar reads this store to render per-level dims and
-       * labels on every block, group, and workspace.
+       * labels on every block, workspace, and nested workspace.
        *
        * Required for `scope: "inner"` drags that should participate in the
        * global overlay system.
@@ -880,30 +871,31 @@ export interface ExtensionAPI {
 /**
  * Describes the sidebar drag-reorder currently in progress.
  *
- * - `kind: "workspace"` — a workspace row is being dragged. `scopeId` is the
- *   immediate container: `"__workspaces__"` when dragging from the unclaimed
- *   list, or a group id when dragging inside a workspace group.
- *   `containerBlockId` is the top-level sidebar block the drag lives in.
- * - `kind: "workspace-group"` — a group row is being dragged inside the
- *   Workspaces block. `sourceGroupId` is the id of the dragged group.
+ * - `kind: "nested-workspace"` — a nested workspace row is being dragged.
+ *   `scopeId` is the immediate container: `"__workspaces__"` when dragging
+ *   from the unclaimed list, or a workspace id when dragging inside a
+ *   workspace block. `containerBlockId` is the top-level sidebar block the
+ *   drag lives in.
+ * - `kind: "workspace"` — a workspace row is being dragged inside the
+ *   Workspaces block. `sourceWorkspaceId` is the id of the dragged workspace.
  * - `kind: "section"` — a top-level sidebar block is being dragged.
  *   `sourceBlockId` is the block id.
  */
 export type ReorderContext =
-  | { kind: "workspace"; scopeId: string; containerBlockId: string }
+  | { kind: "nested-workspace"; scopeId: string; containerBlockId: string }
   | {
-      kind: "workspace-group";
-      sourceGroupId: string;
+      kind: "workspace";
+      sourceWorkspaceId: string;
       containerBlockId: string;
     }
   | { kind: "section"; sourceBlockId: string }
   | {
       // Root-level drag inside the Workspaces section — the unified
-      // lane that covers unclaimed workspaces + whole workspace-group
+      // lane that covers unclaimed nestedWorkspaces + whole workspace
       // blocks. `sourceKind` + `sourceId` identify the dragged row so
       // sibling rows (of any kind) can resolve their overlay.
       kind: "rootRow";
-      sourceKind: "workspace" | "workspace-group" | string;
+      sourceKind: "nested-workspace" | "workspace" | string;
       sourceId: string;
       containerBlockId: string;
     };
@@ -933,13 +925,13 @@ export interface DragReorderHandle {
   getState: () => DragReorderState;
 }
 
-// --- Workspace action types ---
+// --- NestedWorkspace action types ---
 
 /**
  * Context passed to workspace action handlers and `when` filters.
  *
  * Core passes an empty context `{}` for top-level actions. Extensions
- * may populate additional fields (e.g., group or git metadata) when
+ * may populate additional fields (e.g., workspace or git metadata) when
  * invoking actions from their own UI. Use optional chaining to access
  * extension-provided fields safely.
  */
@@ -952,24 +944,24 @@ export interface WorkspaceActionInfo {
   label: string;
   icon: string;
   shortcut?: string;
-  zone?: "workspace" | "sidebar";
+  zone?: "workspace" | "sidebar" | "workspace-tile";
   handler: (ctx: WorkspaceActionContext) => void | Promise<void>;
   when?: (ctx: WorkspaceActionContext) => boolean;
 }
 
-// --- Dashboard contributions / pseudo-workspaces ---
+// --- Dashboard contributions / pseudo-nestedWorkspaces ---
 //
 // Stage 4 surface. Extensions register a DashboardContributionInput or
 // PseudoWorkspaceInput via the corresponding ExtensionAPI method; core
 // attaches `source` and stores the full record in the registry.
 
 /**
- * Minimum shape of a Workspace Group passed to contribution hooks. The
- * canonical type lives in core (`src/lib/config.ts#WorkspaceGroupEntry`);
+ * Minimum shape of a Workspace passed to contribution hooks. The
+ * canonical type lives in core (`src/lib/config.ts#Workspace`);
  * the public API only exposes the fields contributions are allowed to
  * read so core can evolve the stored record without breaking extensions.
  */
-export interface WorkspaceGroupRef {
+export interface WorkspaceRef {
   id: string;
   name: string;
   /** Root CWD — contributions typically place markdown under `<path>/.gnar-term/...`. */
@@ -986,8 +978,8 @@ export interface WorkspaceGroupRef {
 export interface DashboardContributionInput {
   /**
    * Stable identifier. Also stamped as `metadata.dashboardContributionId`
-   * on the created dashboard workspace so the grid can attribute tiles.
-   * Must be unique across all contributions.
+   * on the created dashboard nested-workspace so the grid can attribute
+   * tiles. Must be unique across all contributions.
    */
   id: string;
   /** Tile label (e.g. "Agentic Dashboard"). */
@@ -995,49 +987,49 @@ export interface DashboardContributionInput {
   /** Context-menu verb (e.g. "Add Agentic Dashboard"). */
   actionLabel: string;
   /**
-   * Maximum coexisting dashboards of this kind per group. `1` is the
+   * Maximum coexisting dashboards of this kind per workspace. `1` is the
    * canonical exclusive cap; `Number.POSITIVE_INFINITY` for unlimited.
    */
-  capPerGroup: number;
+  capPerWorkspace: number;
   /**
-   * Materialize the dashboard for the given group. Must resolve to the
-   * new workspace's id.
+   * Materialize the dashboard for the given workspace. Must resolve to
+   * the new nested-workspace's id.
    */
-  create: (group: WorkspaceGroupRef) => Promise<string>;
+  create: (workspace: WorkspaceRef) => Promise<string>;
   /**
    * Optional "delete and regenerate" hook surfaced as a button next to
-   * the dashboard's row in Group Settings. Implementations typically
+   * the dashboard's row in Workspace Settings. Implementations typically
    * force-rewrite the dashboard's backing markdown so a stale user
    * file picks up a newer seeded template. Contributions without
    * backing state (e.g. Diff) omit this and the button does not render.
    */
-  regenerate?: (group: WorkspaceGroupRef) => Promise<void>;
+  regenerate?: (workspace: WorkspaceRef) => Promise<void>;
   /**
    * Optional gate — when returns false, the contribution is hidden from
-   * this group's "Add Dashboard" menu.
+   * this workspace's "Add Dashboard" menu.
    */
-  isAvailableFor?: (group: WorkspaceGroupRef) => boolean;
+  isAvailableFor?: (workspace: WorkspaceRef) => boolean;
   /**
    * Optional icon component rendered on the dashboard tile. Tiles are
-   * icon-only; the workspace name is surfaced as the tile's `title`.
+   * icon-only; the nested-workspace name is surfaced as the tile's `title`.
    */
   icon?: unknown;
   /**
-   * When true, the contribution materializes on every workspace group
-   * (at group creation and startup reconciliation) and cannot be
+   * When true, the contribution materializes on every workspace
+   * (at workspace creation and startup reconciliation) and cannot be
    * removed. Also hides the contribution from "Add Dashboard" menus
    * and suppresses the per-tile Delete action.
    */
   autoProvision?: boolean;
   /**
-   * Hints for how PaneView should render the dashboard workspace.
-   * `singleSurface: true` documents that the contribution's workspace
-   * is a tab-less / split-less single-surface pane.
+   * Hints for how PaneView should render the dashboard nested-workspace.
+   * `singleSurface: true` documents that the contribution's
+   * nested-workspace is a tab-less / split-less single-surface pane.
    */
   paneConstraints?: { singleSurface?: boolean };
   /**
    * Human-readable reason the contribution's toggle is locked in the
-   * Settings dashboard's per-group toggle list. Typically set
+   * Settings dashboard's per-workspace toggle list. Typically set
    * alongside `autoProvision: true`.
    */
   lockedReason?: string;
@@ -1068,7 +1060,7 @@ export interface PseudoWorkspaceInput {
   /** Optional settings component surfaced in the extension's settings page. */
   settings?: unknown;
   /**
-   * Optional component rendered INSIDE the primary-sidebar root row,
+   * Optional component rendered INSIDE the sidebar root row,
    * to the right of `icon`, in place of the plain text label. Mounted
    * with the registering extension's `api` provided via context so the
    * widget can subscribe to live state (`api.agents`, etc.). Footprint
@@ -1079,7 +1071,7 @@ export interface PseudoWorkspaceInput {
   onClose?: () => void;
 }
 
-// --- Workspace creation options ---
+// --- NestedWorkspace creation options ---
 
 export interface CreateWorkspaceOptions {
   /** Environment variables to set on the workspace's terminal PTY */
@@ -1099,13 +1091,13 @@ export interface MergeResult {
 
 // --- Public-facing core state types (stable subset for extensions) ---
 
-export interface WorkspaceRef {
+export interface NestedWorkspaceRef {
   id: string;
   name: string;
-  // Opaque per-workspace metadata set at creation time (e.g. groupId,
+  // Opaque per-workspace metadata set at creation time (e.g. parentWorkspaceId,
   // worktreePath, branch). Extensions use this to detect nesting — e.g.
-  // the core git status subtitle collapses when groupId is present
-  // because the Workspace Group banner already shows cwd+branch.
+  // the core git status subtitle collapses when parentWorkspaceId is present
+  // because the Workspace banner already shows cwd+branch.
   metadata?: Record<string, unknown>;
 }
 

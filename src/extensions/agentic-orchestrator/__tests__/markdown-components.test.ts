@@ -56,9 +56,9 @@ vi.mock("../../../lib/services/spawn-helper", () => ({
   spawnAgentInWorktree: spawnAgentInWorktreeMock,
 }));
 
-vi.mock("../../../lib/services/workspace-service", () => ({
-  createWorkspaceFromDef: vi.fn().mockResolvedValue("ws-new"),
-  closeWorkspace: vi.fn(),
+vi.mock("../../../lib/services/nested-workspace-service", () => ({
+  createNestedWorkspaceFromDef: vi.fn().mockResolvedValue("ws-new"),
+  closeNestedWorkspace: vi.fn(),
 }));
 
 const { configRef, saveConfigMock } = vi.hoisted(() => {
@@ -80,9 +80,11 @@ vi.mock("../../../lib/config", async (importOriginal) => {
   };
 });
 
-vi.mock("../../../lib/stores/workspace", async (importOriginal) => {
+vi.mock("../../../lib/stores/nested-workspace", async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import("../../../lib/stores/workspace")>();
+    await importOriginal<
+      typeof import("../../../lib/stores/nested-workspace")
+    >();
   return actual;
 });
 
@@ -147,7 +149,7 @@ const { switchSpy, focusSpy, invokeSpy } = vi.hoisted(() => ({
 function makeApi(
   options: {
     agents?: DetectedAgent[];
-    workspaces?: Array<{ id: string; name: string }>;
+    nestedWorkspaces?: Array<{ id: string; name: string }>;
     invoke?: (cmd: string, args?: unknown) => unknown;
   } = {},
 ): ExtensionAPI {
@@ -161,12 +163,12 @@ function makeApi(
       },
     },
     theme: writable(themes["github-dark"]),
-    workspaces: writable(options.workspaces ?? []),
+    nestedWorkspaces: writable(options.nestedWorkspaces ?? []),
     agents: _testAgentsRef.store,
     invoke: options.invoke
       ? vi.fn(async (cmd: string, args?: unknown) => options.invoke!(cmd, args))
       : invokeSpy,
-    switchWorkspace: switchSpy,
+    switchNestedWorkspace: switchSpy,
     focusSurface: focusSpy,
   } as unknown as ExtensionAPI;
 }
@@ -282,7 +284,7 @@ describe("Kanban widget", () => {
     expect(container.querySelectorAll("[data-kanban-empty]").length).toBe(4);
   });
 
-  it("buckets agents into the correct columns when scoped to a group host", async () => {
+  it("buckets agents into the correct columns when scoped to a workspace host", async () => {
     // Seed an api whose agentsStore receives the agents we register through
     // the registry. Since the widget reads agentsStore directly, we drive
     // it through registerAgent (which syncs the store).
@@ -291,10 +293,10 @@ describe("Kanban widget", () => {
 
     // Match the dashboard scope by giving each agent a workspace whose
     // first terminal cwd is under /work/proj.
-    const wsStore = (await import("../../../lib/stores/workspace")) as {
-      workspaces: { set: (v: unknown) => void };
+    const wsStore = (await import("../../../lib/stores/nested-workspace")) as {
+      nestedWorkspaces: { set: (v: unknown) => void };
     };
-    wsStore.workspaces.set([
+    wsStore.nestedWorkspaces.set([
       {
         id: "ws-running",
         name: "Run",
@@ -385,20 +387,20 @@ describe("Kanban widget", () => {
       }),
     );
 
-    // Seed a workspace group whose path matches the workspaces' CWD so
+    // Seed a workspace whose path matches the nestedWorkspaces' CWD so
     // the host-context-driven filter includes them as unclaimed CWD
-    // matches — mirroring the group-scope rule in widget-helpers.
-    const { setWorkspaceGroups, resetWorkspaceGroupsForTest } =
-      await import("../../../lib/stores/workspace-groups");
-    resetWorkspaceGroupsForTest();
-    setWorkspaceGroups([
+    // matches — mirroring the workspace-scope rule in widget-helpers.
+    const { setWorkspaces, resetWorkspacesForTest } =
+      await import("../../../lib/stores/workspaces");
+    resetWorkspacesForTest();
+    setWorkspaces([
       {
         id: "group-proj",
         name: "Project A",
         path: "/work/proj",
         color: "blue",
-        groupDashboardEnabled: true,
-        workspaceIds: [],
+        workspaceDashboardEnabled: true,
+        nestedWorkspaceIds: [],
       },
     ]);
 
@@ -407,7 +409,7 @@ describe("Kanban widget", () => {
         api,
         component: Kanban,
         props: {},
-        host: { metadata: { groupId: "group-proj" } },
+        host: { metadata: { parentWorkspaceId: "group-proj" } },
       },
     });
 
@@ -432,9 +434,9 @@ describe("Kanban widget", () => {
 // --- Issues ---
 
 describe("Issues widget", () => {
-  const GROUP_ID = "grp-issues";
-  const GROUP_PATH = "/work/proj";
-  const groupHost = { metadata: { groupId: GROUP_ID } };
+  const WORKSPACE_ID = "grp-issues";
+  const WORKSPACE_PATH = "/work/proj";
+  const workspaceHost = { metadata: { parentWorkspaceId: WORKSPACE_ID } };
 
   beforeEach(async () => {
     configRef.current = {};
@@ -445,17 +447,17 @@ describe("Issues widget", () => {
     // into the next one.
     invalidateGhAvailability();
     tauriInvokeGhAvailable.current = true;
-    const { setWorkspaceGroups, resetWorkspaceGroupsForTest } =
-      await import("../../../lib/stores/workspace-groups");
-    resetWorkspaceGroupsForTest();
-    setWorkspaceGroups([
+    const { setWorkspaces, resetWorkspacesForTest } =
+      await import("../../../lib/stores/workspaces");
+    resetWorkspacesForTest();
+    setWorkspaces([
       {
-        id: GROUP_ID,
+        id: WORKSPACE_ID,
         name: "Issues Dash",
-        path: GROUP_PATH,
+        path: WORKSPACE_PATH,
         color: "blue",
-        groupDashboardEnabled: true,
-        workspaceIds: [],
+        workspaceDashboardEnabled: true,
+        nestedWorkspaceIds: [],
       },
     ]);
   });
@@ -497,7 +499,7 @@ describe("Issues widget", () => {
         api,
         component: Issues,
         props: {},
-        host: groupHost,
+        host: workspaceHost,
       },
     });
 
@@ -547,7 +549,7 @@ describe("Issues widget", () => {
         api,
         component: Issues,
         props: {},
-        host: groupHost,
+        host: workspaceHost,
       },
     });
 
@@ -567,9 +569,9 @@ describe("Issues widget", () => {
     const callArg = spawnAgentInWorktreeMock.mock.calls[0]?.[0];
     expect(callArg).toMatchObject({
       agent: "claude-code",
-      repoPath: GROUP_PATH,
-      groupId: GROUP_ID,
-      spawnedBy: { kind: "group", groupId: GROUP_ID },
+      repoPath: WORKSPACE_PATH,
+      parentWorkspaceId: WORKSPACE_ID,
+      spawnedBy: { kind: "workspace", parentWorkspaceId: WORKSPACE_ID },
     });
     expect(callArg.taskContext).toContain("Issue #7");
     expect(callArg.taskContext).toContain("Make it faster");
@@ -601,7 +603,7 @@ describe("Issues widget", () => {
         api,
         component: Issues,
         props: {},
-        host: groupHost,
+        host: workspaceHost,
       },
     });
 
@@ -639,7 +641,7 @@ describe("Issues widget", () => {
         api,
         component: Issues,
         props: {},
-        host: groupHost,
+        host: workspaceHost,
       },
     });
 
@@ -681,7 +683,7 @@ describe("Issues widget", () => {
         api,
         component: Issues,
         props: { displayOnly: true },
-        host: groupHost,
+        host: workspaceHost,
       },
     });
 
@@ -726,7 +728,7 @@ describe("Issues widget", () => {
     const api = makeApi({ invoke: invokeFn });
 
     const { container } = render(ExtensionWrapper, {
-      props: { api, component: Issues, props: {}, host: groupHost },
+      props: { api, component: Issues, props: {}, host: workspaceHost },
     });
 
     await new Promise((r) => setTimeout(r, 0));
@@ -807,7 +809,7 @@ describe("Issues widget", () => {
     const api = makeApi({ invoke: invokeFn });
 
     const { container } = render(ExtensionWrapper, {
-      props: { api, component: Issues, props: {}, host: groupHost },
+      props: { api, component: Issues, props: {}, host: workspaceHost },
     });
 
     await new Promise((r) => setTimeout(r, 0));
@@ -860,7 +862,7 @@ describe("Issues widget", () => {
     });
     const api = makeApi({ invoke: invokeFn });
     const { container } = render(ExtensionWrapper, {
-      props: { api, component: Issues, props: {}, host: groupHost },
+      props: { api, component: Issues, props: {}, host: workspaceHost },
     });
 
     await new Promise((r) => setTimeout(r, 0));
@@ -899,7 +901,7 @@ describe("Issues widget", () => {
     });
     const api = makeApi({
       invoke: invokeFn,
-      workspaces: [
+      nestedWorkspaces: [
         {
           id: "ws-handler",
           name: "agent: #51",
@@ -909,7 +911,7 @@ describe("Issues widget", () => {
     });
 
     const { container } = render(ExtensionWrapper, {
-      props: { api, component: Issues, props: {}, host: groupHost },
+      props: { api, component: Issues, props: {}, host: workspaceHost },
     });
 
     await new Promise((r) => setTimeout(r, 0));
@@ -945,7 +947,7 @@ describe("Issues widget", () => {
     });
     const api = makeApi({ invoke: invokeFn });
     const { container } = render(ExtensionWrapper, {
-      props: { api, component: Issues, props: {}, host: groupHost },
+      props: { api, component: Issues, props: {}, host: workspaceHost },
     });
 
     // First fetch fires on mount, then awaits the gh_available probe
@@ -979,9 +981,9 @@ describe("Issues widget", () => {
 // --- Prs ---
 
 describe("Prs widget", () => {
-  const GROUP_ID = "grp-prs";
-  const GROUP_PATH = "/work/proj";
-  const groupHost = { metadata: { groupId: GROUP_ID } };
+  const WORKSPACE_ID = "grp-prs";
+  const WORKSPACE_PATH = "/work/proj";
+  const workspaceHost = { metadata: { parentWorkspaceId: WORKSPACE_ID } };
 
   beforeEach(async () => {
     configRef.current = {};
@@ -989,17 +991,17 @@ describe("Prs widget", () => {
     resetRegistry();
     invalidateGhAvailability();
     tauriInvokeGhAvailable.current = true;
-    const { setWorkspaceGroups, resetWorkspaceGroupsForTest } =
-      await import("../../../lib/stores/workspace-groups");
-    resetWorkspaceGroupsForTest();
-    setWorkspaceGroups([
+    const { setWorkspaces, resetWorkspacesForTest } =
+      await import("../../../lib/stores/workspaces");
+    resetWorkspacesForTest();
+    setWorkspaces([
       {
-        id: GROUP_ID,
+        id: WORKSPACE_ID,
         name: "PRs Dash",
-        path: GROUP_PATH,
+        path: WORKSPACE_PATH,
         color: "blue",
-        groupDashboardEnabled: true,
-        workspaceIds: [],
+        workspaceDashboardEnabled: true,
+        nestedWorkspaceIds: [],
       },
     ]);
   });
@@ -1043,7 +1045,7 @@ describe("Prs widget", () => {
         api,
         component: Prs,
         props: {},
-        host: groupHost,
+        host: workspaceHost,
       },
     });
 
@@ -1085,7 +1087,7 @@ describe("Prs widget", () => {
         api,
         component: Prs,
         props: {},
-        host: groupHost,
+        host: workspaceHost,
       },
     });
 
@@ -1113,7 +1115,7 @@ describe("Prs widget", () => {
         api,
         component: Prs,
         props: {},
-        host: groupHost,
+        host: workspaceHost,
       },
     });
 
@@ -1143,7 +1145,7 @@ describe("Prs widget", () => {
         api,
         component: Prs,
         props: {},
-        host: groupHost,
+        host: workspaceHost,
       },
     });
 
@@ -1197,7 +1199,7 @@ describe("AgentStatusRow widget", () => {
     ).toBe("running");
   });
 
-  it("clicking the row invokes switchWorkspace + focusSurface", async () => {
+  it("clicking the row invokes switchNestedWorkspace + focusSurface", async () => {
     const api = makeApi();
     registerAgent(
       makeAgent({
@@ -1321,9 +1323,9 @@ describe("AgentList widget", () => {
 // --- TaskSpawner ---
 
 describe("TaskSpawner widget", () => {
-  const GROUP_ID = "grp-spawn";
-  const GROUP_PATH = "/work/proj";
-  const groupHost = { metadata: { groupId: GROUP_ID } };
+  const WORKSPACE_ID = "grp-spawn";
+  const WORKSPACE_PATH = "/work/proj";
+  const workspaceHost = { metadata: { parentWorkspaceId: WORKSPACE_ID } };
   const globalHost = { metadata: { isGlobalAgenticDashboard: true } };
 
   beforeEach(async () => {
@@ -1331,17 +1333,17 @@ describe("TaskSpawner widget", () => {
     saveConfigMock.mockClear();
     spawnAgentInWorktreeMock.mockClear();
     resetRegistry();
-    const { setWorkspaceGroups, resetWorkspaceGroupsForTest } =
-      await import("../../../lib/stores/workspace-groups");
-    resetWorkspaceGroupsForTest();
-    setWorkspaceGroups([
+    const { setWorkspaces, resetWorkspacesForTest } =
+      await import("../../../lib/stores/workspaces");
+    resetWorkspacesForTest();
+    setWorkspaces([
       {
-        id: GROUP_ID,
-        name: "Spawn Group",
-        path: GROUP_PATH,
+        id: WORKSPACE_ID,
+        name: "Spawn Workspace",
+        path: WORKSPACE_PATH,
         color: "blue",
-        groupDashboardEnabled: true,
-        workspaceIds: [],
+        workspaceDashboardEnabled: true,
+        nestedWorkspaceIds: [],
       },
     ]);
   });
@@ -1357,7 +1359,7 @@ describe("TaskSpawner widget", () => {
         api,
         component: TaskSpawner,
         props: {},
-        host: groupHost,
+        host: workspaceHost,
       },
     });
 
@@ -1382,7 +1384,7 @@ describe("TaskSpawner widget", () => {
         api,
         component: TaskSpawner,
         props: {},
-        host: groupHost,
+        host: workspaceHost,
       },
     });
 
@@ -1403,7 +1405,7 @@ describe("TaskSpawner widget", () => {
         api,
         component: TaskSpawner,
         props: {},
-        host: groupHost,
+        host: workspaceHost,
       },
     });
 
@@ -1424,14 +1426,14 @@ describe("TaskSpawner widget", () => {
     expect(spawnBtn.disabled).toBe(false);
   });
 
-  it("group scope → spawns with repoPath=group.path, groupId, spawnedBy={kind:'group'}", async () => {
+  it("workspace scope → spawns with repoPath=workspace.path, parentWorkspaceId, spawnedBy={kind:'workspace'}", async () => {
     const api = makeApi();
     const { container } = render(ExtensionWrapper, {
       props: {
         api,
         component: TaskSpawner,
         props: {},
-        host: groupHost,
+        host: workspaceHost,
       },
     });
 
@@ -1459,9 +1461,9 @@ describe("TaskSpawner widget", () => {
     expect(callArg).toMatchObject({
       agent: "claude-code",
       taskContext: "Refactor the thing",
-      repoPath: GROUP_PATH,
-      groupId: GROUP_ID,
-      spawnedBy: { kind: "group", groupId: GROUP_ID },
+      repoPath: WORKSPACE_PATH,
+      parentWorkspaceId: WORKSPACE_ID,
+      spawnedBy: { kind: "workspace", parentWorkspaceId: WORKSPACE_ID },
       branch: "agent/claude-code/refactor-the-thing",
     });
     // Form collapses on success.
@@ -1471,7 +1473,7 @@ describe("TaskSpawner widget", () => {
     ).not.toBeNull();
   });
 
-  it("global scope + repoPath config → spawns with spawnedBy={kind:'global'} and no groupId", async () => {
+  it("global scope + repoPath config → spawns with spawnedBy={kind:'global'} and no parentWorkspaceId", async () => {
     const api = makeApi();
     const { container } = render(ExtensionWrapper, {
       props: {
@@ -1503,7 +1505,7 @@ describe("TaskSpawner widget", () => {
       repoPath: "/work/anywhere",
       spawnedBy: { kind: "global" },
     });
-    expect(callArg.groupId).toBeUndefined();
+    expect(callArg.parentWorkspaceId).toBeUndefined();
   });
 
   it("no host / scope=none → spawn button stays disabled even with task text", async () => {
@@ -1541,7 +1543,7 @@ describe("TaskSpawner widget", () => {
         api,
         component: TaskSpawner,
         props: {},
-        host: groupHost,
+        host: workspaceHost,
       },
     });
 
@@ -1571,7 +1573,7 @@ describe("TaskSpawner widget", () => {
         api,
         component: TaskSpawner,
         props: {},
-        host: groupHost,
+        host: workspaceHost,
       },
     });
 

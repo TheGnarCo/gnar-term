@@ -38,8 +38,8 @@ vi.mock("../lib/terminal-service", () => ({
 }));
 
 // Services — stubbed so keydown dispatch doesn't trigger real side effects.
-vi.mock("../lib/services/workspace-service", () => ({
-  createWorkspace: vi.fn(),
+vi.mock("../lib/services/nested-workspace-service", () => ({
+  createNestedWorkspace: vi.fn(),
 }));
 vi.mock("../lib/services/pane-service", () => ({
   flashFocusedPane: vi.fn(),
@@ -60,9 +60,14 @@ vi.mock("../lib/services/workspace-action-registry", () => ({
   executeWorkspaceActionByShortcut: vi.fn().mockReturnValue(false),
 }));
 
+const activateWorkspaceMock = vi.fn();
+vi.mock("../lib/services/workspace-service", () => ({
+  activateWorkspace: (...args: unknown[]) => activateWorkspaceMock(...args),
+}));
+
 async function loadModule() {
   const ui = await import("../lib/stores/ui");
-  const workspace = await import("../lib/stores/workspace");
+  const workspace = await import("../lib/stores/nested-workspace");
   const shortcuts = await import("../lib/services/keyboard-shortcuts");
   return { ui, workspace, shortcuts };
 }
@@ -96,7 +101,7 @@ describe("keyboard-shortcuts — clear + find bindings", () => {
     isTerminalSurfaceMock.mockReturnValue(true);
     const { workspace } = await loadModule();
     // Seed activeSurface with a fake terminal surface.
-    workspace.workspaces.set([
+    workspace.nestedWorkspaces.set([
       {
         id: "ws",
         name: "ws",
@@ -118,7 +123,7 @@ describe("keyboard-shortcuts — clear + find bindings", () => {
         activePaneId: "p",
       } as never,
     ]);
-    workspace.activeWorkspaceIdx.set(0);
+    workspace.activeNestedWorkspaceIdx.set(0);
   });
 
   describe("macOS platform", () => {
@@ -239,5 +244,82 @@ describe("keyboard-shortcuts — font zoom bindings", () => {
       );
       expect(adjustFontSizeMock).toHaveBeenCalledWith(-1);
     });
+  });
+});
+
+describe("keyboard-shortcuts — ⌘1-9 workspace activation", () => {
+  beforeEach(async () => {
+    mockIsMac = true;
+    activateWorkspaceMock.mockReset();
+    const { rootRowOrder } = await import("../lib/stores/root-row-order");
+    rootRowOrder.set([]);
+  });
+
+  it("activates the nth workspace-kind row, skipping non-workspace rows", async () => {
+    const { rootRowOrder } = await import("../lib/stores/root-row-order");
+    rootRowOrder.set([
+      { kind: "nested-workspace", id: "nw-1" },
+      { kind: "workspace", id: "ws-A" },
+      { kind: "nested-workspace", id: "nw-2" },
+      { kind: "workspace", id: "ws-B" },
+    ]);
+    const { shortcuts } = await loadModule();
+    // ⌘1 → first workspace-kind row = ws-A
+    shortcuts.handleAppKeydown(mkEvent({ key: "1", meta: true }), ctx);
+    expect(activateWorkspaceMock).toHaveBeenCalledWith("ws-A");
+  });
+
+  it("activates the second workspace-kind row with ⌘2", async () => {
+    const { rootRowOrder } = await import("../lib/stores/root-row-order");
+    rootRowOrder.set([
+      { kind: "workspace", id: "ws-A" },
+      { kind: "nested-workspace", id: "nw-1" },
+      { kind: "workspace", id: "ws-B" },
+      { kind: "workspace", id: "ws-C" },
+    ]);
+    const { shortcuts } = await loadModule();
+    shortcuts.handleAppKeydown(mkEvent({ key: "2", meta: true }), ctx);
+    expect(activateWorkspaceMock).toHaveBeenCalledWith("ws-B");
+  });
+
+  it("does nothing when ⌘N has no workspace at that position", async () => {
+    const { rootRowOrder } = await import("../lib/stores/root-row-order");
+    rootRowOrder.set([{ kind: "workspace", id: "ws-only" }]);
+    const { shortcuts } = await loadModule();
+    // ⌘5 — only one workspace exists
+    shortcuts.handleAppKeydown(mkEvent({ key: "5", meta: true }), ctx);
+    expect(activateWorkspaceMock).not.toHaveBeenCalled();
+  });
+
+  it("ignores non-workspace rows when counting positions", async () => {
+    const { rootRowOrder } = await import("../lib/stores/root-row-order");
+    // 9 rows but only 2 are workspace-kind
+    rootRowOrder.set([
+      { kind: "nested-workspace", id: "nw-1" },
+      { kind: "nested-workspace", id: "nw-2" },
+      { kind: "nested-workspace", id: "nw-3" },
+      { kind: "workspace", id: "ws-A" },
+      { kind: "nested-workspace", id: "nw-4" },
+      { kind: "workspace", id: "ws-B" },
+      { kind: "nested-workspace", id: "nw-5" },
+    ]);
+    const { shortcuts } = await loadModule();
+    shortcuts.handleAppKeydown(mkEvent({ key: "1", meta: true }), ctx);
+    expect(activateWorkspaceMock).toHaveBeenCalledWith("ws-A");
+    activateWorkspaceMock.mockReset();
+    shortcuts.handleAppKeydown(mkEvent({ key: "2", meta: true }), ctx);
+    expect(activateWorkspaceMock).toHaveBeenCalledWith("ws-B");
+    activateWorkspaceMock.mockReset();
+    shortcuts.handleAppKeydown(mkEvent({ key: "3", meta: true }), ctx);
+    expect(activateWorkspaceMock).not.toHaveBeenCalled();
+  });
+
+  it("does not activate workspaces via Ctrl+N on non-Mac (⌘-only feature)", async () => {
+    mockIsMac = false;
+    const { rootRowOrder } = await import("../lib/stores/root-row-order");
+    rootRowOrder.set([{ kind: "workspace", id: "ws-linux" }]);
+    const { shortcuts } = await loadModule();
+    shortcuts.handleAppKeydown(mkEvent({ key: "1", ctrl: true }), ctx);
+    expect(activateWorkspaceMock).not.toHaveBeenCalled();
   });
 });

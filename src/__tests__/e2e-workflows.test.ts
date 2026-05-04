@@ -34,14 +34,14 @@ vi.mock("../lib/services/service-helpers", () => ({
 // --- Imports ---
 
 import {
-  workspaces,
-  activeWorkspaceIdx,
+  nestedWorkspaces,
+  activeNestedWorkspaceIdx,
   activeWorkspace,
   activePane,
   activeSurface,
-} from "../lib/stores/workspace";
+} from "../lib/stores/nested-workspace";
 import type {
-  Workspace,
+  NestedWorkspace,
   Pane,
   TerminalSurface,
   ExtensionSurface,
@@ -49,10 +49,10 @@ import type {
 import { uid, getAllPanes } from "../lib/types";
 import { createTerminalSurface } from "../lib/terminal-service";
 import {
-  createWorkspace,
-  switchWorkspace,
-  closeWorkspace,
-} from "../lib/services/workspace-service";
+  createNestedWorkspace,
+  switchNestedWorkspace,
+  closeNestedWorkspace,
+} from "../lib/services/nested-workspace-service";
 import { splitPane, focusPane, closePane } from "../lib/services/pane-service";
 import { getCwdForSurface } from "../lib/services/service-helpers";
 import {
@@ -102,7 +102,9 @@ function makePane(
   };
 }
 
-function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
+function makeNestedWorkspace(
+  overrides: Partial<NestedWorkspace> = {},
+): NestedWorkspace {
   const pane = makePane();
   return {
     id: uid(),
@@ -129,8 +131,8 @@ function setupCreateTerminalSurfaceMock(): void {
 // --- Setup / Teardown ---
 
 beforeEach(() => {
-  workspaces.set([]);
-  activeWorkspaceIdx.set(-1);
+  nestedWorkspaces.set([]);
+  activeNestedWorkspaceIdx.set(-1);
   vi.clearAllMocks();
   vi.useFakeTimers();
   setupCreateTerminalSurfaceMock();
@@ -141,49 +143,49 @@ afterEach(() => {
 });
 
 // ============================================================
-// 1. Workspace lifecycle
+// 1. NestedWorkspace lifecycle
 // ============================================================
 
 describe("Workflow: workspace lifecycle", () => {
   it("creates a workspace, switches to it, then closes it", async () => {
-    const existing = makeWorkspace({ name: "Initial" });
-    workspaces.set([existing]);
-    activeWorkspaceIdx.set(0);
+    const existing = makeNestedWorkspace({ name: "Initial" });
+    nestedWorkspaces.set([existing]);
+    activeNestedWorkspaceIdx.set(0);
 
     // Create a new workspace
-    await createWorkspace("My Project");
+    await createNestedWorkspace("My Project");
 
     // Verify it appears in the store
-    const wsList = get(workspaces);
+    const wsList = get(nestedWorkspaces);
     expect(wsList).toHaveLength(2);
     expect(wsList[1].name).toBe("My Project");
 
     // Verify activeWorkspace switched to the new one
-    expect(get(activeWorkspaceIdx)).toBe(1);
+    expect(get(activeNestedWorkspaceIdx)).toBe(1);
     expect(get(activeWorkspace)?.name).toBe("My Project");
 
     // Switch back to the first workspace
-    switchWorkspace(0);
-    expect(get(activeWorkspaceIdx)).toBe(0);
+    switchNestedWorkspace(0);
+    expect(get(activeNestedWorkspaceIdx)).toBe(0);
     expect(get(activeWorkspace)?.name).toBe("Initial");
 
     // Switch to new workspace and close it
-    switchWorkspace(1);
+    switchNestedWorkspace(1);
     expect(get(activeWorkspace)?.name).toBe("My Project");
 
-    closeWorkspace(1);
+    closeNestedWorkspace(1);
 
     // Verify it's removed
-    expect(get(workspaces)).toHaveLength(1);
-    expect(get(workspaces)[0].name).toBe("Initial");
+    expect(get(nestedWorkspaces)).toHaveLength(1);
+    expect(get(nestedWorkspaces)[0].name).toBe("Initial");
 
     // Active workspace should fall back
-    expect(get(activeWorkspaceIdx)).toBe(0);
+    expect(get(activeNestedWorkspaceIdx)).toBe(0);
     expect(get(activeWorkspace)?.name).toBe("Initial");
   });
 
   it("creates a workspace with a pane and terminal surface", async () => {
-    await createWorkspace("Dev");
+    await createNestedWorkspace("Dev");
 
     const ws = get(activeWorkspace);
     expect(ws).not.toBeNull();
@@ -207,9 +209,9 @@ describe("Workflow: workspace lifecycle", () => {
 describe("Workflow: pane split and navigation", () => {
   it("splits a pane, navigates between panes, then closes one", async () => {
     // Start with a single-pane workspace
-    const ws = makeWorkspace({ name: "Split Test" });
-    workspaces.set([ws]);
-    activeWorkspaceIdx.set(0);
+    const ws = makeNestedWorkspace({ name: "Split Test" });
+    nestedWorkspaces.set([ws]);
+    activeNestedWorkspaceIdx.set(0);
 
     const originalPaneId = ws.activePaneId!;
 
@@ -253,9 +255,9 @@ describe("Workflow: pane split and navigation", () => {
   });
 
   it("splits vertically and verifies direction", async () => {
-    const ws = makeWorkspace({ name: "Vertical Split" });
-    workspaces.set([ws]);
-    activeWorkspaceIdx.set(0);
+    const ws = makeNestedWorkspace({ name: "Vertical Split" });
+    nestedWorkspaces.set([ws]);
+    activeNestedWorkspaceIdx.set(0);
 
     await splitPane(ws.activePaneId!, "vertical");
 
@@ -278,7 +280,7 @@ describe("Workflow: pane split and navigation", () => {
     const paneB = makePane([
       mockTerminalSurface({ cwd: "/src/pane-b", ptyId: 20 }),
     ]);
-    const ws: Workspace = {
+    const ws: NestedWorkspace = {
       id: uid(),
       name: "Cwd Source",
       splitRoot: {
@@ -292,8 +294,8 @@ describe("Workflow: pane split and navigation", () => {
       },
       activePaneId: paneB.id, // B is focused
     };
-    workspaces.set([ws]);
-    activeWorkspaceIdx.set(0);
+    nestedWorkspaces.set([ws]);
+    activeNestedWorkspaceIdx.set(0);
 
     // Split A (the non-focused pane)
     await splitPane(paneA.id, "horizontal");
@@ -315,7 +317,7 @@ describe("Workflow: pane split and navigation", () => {
     const paneB = makePane([
       mockTerminalSurface({ cwd: "/src/pane-b", ptyId: 20 }),
     ]);
-    const ws: Workspace = {
+    const ws: NestedWorkspace = {
       id: uid(),
       name: "Cwd Source",
       splitRoot: {
@@ -329,8 +331,8 @@ describe("Workflow: pane split and navigation", () => {
       },
       activePaneId: paneB.id, // B is focused
     };
-    workspaces.set([ws]);
-    activeWorkspaceIdx.set(0);
+    nestedWorkspaces.set([ws]);
+    activeNestedWorkspaceIdx.set(0);
 
     // Open a new tab in A (the non-focused pane)
     await newSurface(paneA.id);
@@ -353,9 +355,9 @@ describe("Workflow: extension surface lifecycle", () => {
 
   it("registers a surface type, opens an extension surface, then closes it", () => {
     // Set up a workspace with a pane
-    const ws = makeWorkspace({ name: "Extension Test" });
-    workspaces.set([ws]);
-    activeWorkspaceIdx.set(0);
+    const ws = makeNestedWorkspace({ name: "Extension Test" });
+    nestedWorkspaces.set([ws]);
+    activeNestedWorkspaceIdx.set(0);
 
     // Register a custom surface type
     registerSurfaceType({
@@ -403,9 +405,9 @@ describe("Workflow: extension surface lifecycle", () => {
   });
 
   it("opens multiple extension surfaces and closes one in the middle", () => {
-    const ws = makeWorkspace({ name: "Multi Surface" });
-    workspaces.set([ws]);
-    activeWorkspaceIdx.set(0);
+    const ws = makeNestedWorkspace({ name: "Multi Surface" });
+    nestedWorkspaces.set([ws]);
+    activeNestedWorkspaceIdx.set(0);
 
     registerSurfaceType({
       id: "notes:editor",
@@ -437,16 +439,16 @@ describe("Workflow: extension surface lifecycle", () => {
     // whole workspace — same behavior as terminal-service.ts's
     // pty-exit handler. App.svelte renders EmptySurface when the
     // workspace list is empty.
-    const ws = makeWorkspace({ name: "Lonely" });
-    const otherWs = makeWorkspace({ name: "Other" });
-    workspaces.set([ws, otherWs]);
-    activeWorkspaceIdx.set(0);
+    const ws = makeNestedWorkspace({ name: "Lonely" });
+    const otherWs = makeNestedWorkspace({ name: "Other" });
+    nestedWorkspaces.set([ws, otherWs]);
+    activeNestedWorkspaceIdx.set(0);
 
     const pane = get(activePane)!;
     const surface = pane.surfaces[0]!;
     closeSurfaceById(pane.id, surface.id);
 
-    const list = get(workspaces);
+    const list = get(nestedWorkspaces);
     expect(list).toHaveLength(1);
     expect(list[0]!.id).toBe(otherWs.id);
   });
@@ -457,77 +459,77 @@ describe("Workflow: extension surface lifecycle", () => {
 // ============================================================
 
 describe("Workflow: multi-workspace switching", () => {
-  it("creates 3 workspaces, switches between them, closes one", async () => {
-    // Create 3 workspaces
-    await createWorkspace("Project A");
-    await createWorkspace("Project B");
-    await createWorkspace("Project C");
+  it("creates 3 nestedWorkspaces, switches between them, closes one", async () => {
+    // Create 3 nestedWorkspaces
+    await createNestedWorkspace("Project A");
+    await createNestedWorkspace("Project B");
+    await createNestedWorkspace("Project C");
 
-    expect(get(workspaces)).toHaveLength(3);
-    expect(get(workspaces).map((ws) => ws.name)).toEqual([
+    expect(get(nestedWorkspaces)).toHaveLength(3);
+    expect(get(nestedWorkspaces).map((ws) => ws.name)).toEqual([
       "Project A",
       "Project B",
       "Project C",
     ]);
 
     // Active workspace should be the last created
-    expect(get(activeWorkspaceIdx)).toBe(2);
+    expect(get(activeNestedWorkspaceIdx)).toBe(2);
     expect(get(activeWorkspace)?.name).toBe("Project C");
 
     // Switch to first workspace
-    switchWorkspace(0);
+    switchNestedWorkspace(0);
     expect(get(activeWorkspace)?.name).toBe("Project A");
 
     // Switch to second
-    switchWorkspace(1);
+    switchNestedWorkspace(1);
     expect(get(activeWorkspace)?.name).toBe("Project B");
 
     // Switch to third
-    switchWorkspace(2);
+    switchNestedWorkspace(2);
     expect(get(activeWorkspace)?.name).toBe("Project C");
 
     // Close the middle workspace (Project B, index 1)
     // First, need to be viewing something other than what gets deleted.
-    switchWorkspace(0);
-    closeWorkspace(1);
+    switchNestedWorkspace(0);
+    closeNestedWorkspace(1);
 
-    // Verify remaining workspaces
-    const remaining = get(workspaces);
+    // Verify remaining nestedWorkspaces
+    const remaining = get(nestedWorkspaces);
     expect(remaining).toHaveLength(2);
     expect(remaining.map((ws) => ws.name)).toEqual(["Project A", "Project C"]);
 
     // Active workspace index should adjust
-    expect(get(activeWorkspaceIdx)).toBe(0);
+    expect(get(activeNestedWorkspaceIdx)).toBe(0);
     expect(get(activeWorkspace)?.name).toBe("Project A");
 
-    // Can still switch to the remaining workspaces
-    switchWorkspace(1);
+    // Can still switch to the remaining nestedWorkspaces
+    switchNestedWorkspace(1);
     expect(get(activeWorkspace)?.name).toBe("Project C");
 
-    switchWorkspace(0);
+    switchNestedWorkspace(0);
     expect(get(activeWorkspace)?.name).toBe("Project A");
   });
 
   it("closing the last active workspace falls back to the previous", async () => {
-    await createWorkspace("WS 1");
-    await createWorkspace("WS 2");
-    await createWorkspace("WS 3");
+    await createNestedWorkspace("WS 1");
+    await createNestedWorkspace("WS 2");
+    await createNestedWorkspace("WS 3");
 
     // Active is WS 3 (index 2)
     expect(get(activeWorkspace)?.name).toBe("WS 3");
 
     // Close the active workspace (last one)
-    closeWorkspace(2);
+    closeNestedWorkspace(2);
 
-    expect(get(workspaces)).toHaveLength(2);
+    expect(get(nestedWorkspaces)).toHaveLength(2);
     // Should fall back to the last valid index
-    expect(get(activeWorkspaceIdx)).toBe(1);
+    expect(get(activeNestedWorkspaceIdx)).toBe(1);
     expect(get(activeWorkspace)?.name).toBe("WS 2");
   });
 
   it("each workspace maintains independent pane state", async () => {
-    await createWorkspace("Editor");
-    await createWorkspace("Terminal");
+    await createNestedWorkspace("Editor");
+    await createNestedWorkspace("Terminal");
 
     // Split pane in the second workspace (Terminal)
     const termWs = get(activeWorkspace)!;
@@ -538,11 +540,11 @@ describe("Workflow: multi-workspace switching", () => {
     expect(getAllPanes(get(activeWorkspace)!.splitRoot)).toHaveLength(2);
 
     // Switch to Editor workspace — it should still have 1 pane
-    switchWorkspace(0);
+    switchNestedWorkspace(0);
     expect(getAllPanes(get(activeWorkspace)!.splitRoot)).toHaveLength(1);
 
     // Switch back to Terminal — still has 2 panes
-    switchWorkspace(1);
+    switchNestedWorkspace(1);
     expect(getAllPanes(get(activeWorkspace)!.splitRoot)).toHaveLength(2);
   });
 });

@@ -5,10 +5,10 @@
    * row with a core-drawn grip column on the left.
    *
    * Row kinds:
-   *   - "workspace"        → unclaimed workspace, rendered via WorkspaceItem
+   *   - "nested-workspace" → unclaimed nested workspace, rendered via WorkspaceItem
+   *   - "workspace"        → workspace block, rendered via the registered renderer
    *   - "pseudo-workspace" → pinned extension row rendered via PseudoWorkspaceRow
-   *   - other              → looked up from rootRowRendererStore (projects
-   *                          register "project" as a renderer on activate).
+   *   - other              → looked up from rootRowRendererStore.
    *
    * This block OWNS the drag pipeline for the root list. Renderers
    * inherit drag behavior — they do not spin up their own reorder
@@ -18,13 +18,11 @@
    */
   import { derived, get } from "svelte/store";
   import { theme } from "../stores/theme";
-  import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
   import {
-    contextMenu,
-    reorderContext,
-    anyReorderActive,
-    metaPreviewActive,
-  } from "../stores/ui";
+    nestedWorkspaces,
+    activeNestedWorkspaceIdx,
+  } from "../stores/nested-workspace";
+  import { contextMenu, reorderContext, anyReorderActive } from "../stores/ui";
   import { confirmAndCloseWorkspace } from "../services/worktree-service";
   import {
     rootRowOrder,
@@ -44,9 +42,8 @@
   import ExtensionWrapper from "./ExtensionWrapper.svelte";
   import { getExtensionApiById } from "../services/extension-loader";
   import { contrastColor } from "../utils/contrast";
-  import { shortcutHint } from "../actions/shortcut-hint";
-  import { modLabel } from "../terminal-service";
-  import { getAllSurfaces, type Workspace } from "../types";
+
+  import { getAllSurfaces, type NestedWorkspace } from "../types";
   import { commandStore } from "../services/command-registry";
   import { tabDragState } from "../services/tab-drag";
   import {
@@ -59,27 +56,27 @@
   import { expandWorkspaceIntoPanes } from "../services/pane-service";
   import { dashboardWorkspaceRegistry } from "../services/dashboard-workspace-service";
   import { configStore } from "../config";
-  import { resolveGroupColor } from "../theme-data";
-  import { archiveWorkspace, archiveGroup } from "../services/archive-service";
+  import { resolveWorkspaceColor } from "../theme-data";
+  import { archiveWorkspace } from "../services/archive-service";
   import { buildWorkspaceContextMenuItems } from "../utils/workspace-context-menu";
   import { wsMeta } from "../services/service-helpers";
-  import { toggleWorkspaceLock } from "../services/workspace-service";
-  import { getWorkspaceGroup } from "../stores/workspace-groups";
+  import { toggleWorkspaceLock } from "../services/nested-workspace-service";
+  import { getWorkspace } from "../stores/workspaces";
 
   function resolvePseudoWorkspaceColor(pw: PseudoWorkspace): string {
     const slot = $configStore.pseudoWorkspaceColors?.[pw.id] ?? "purple";
-    return resolveGroupColor(slot, $theme);
+    return resolveWorkspaceColor(slot, $theme);
   }
 
   export let onSwitchWorkspace: (idx: number) => void;
   export let onRenameWorkspace: (idx: number, name: string) => void;
   export let onNewSurface: () => void;
 
-  // Exposed via bind:this so PrimarySidebar's "rename active" keyboard
+  // Exposed via bind:this so Sidebar's "rename active" keyboard
   // handler can trigger inline rename on a specific workspace index.
   let workspaceItems: Record<string, WorkspaceItem> = {};
   export function startRename(globalIdx: number) {
-    const ws = $workspaces[globalIdx];
+    const ws = $nestedWorkspaces[globalIdx];
     const item = ws ? workspaceItems[ws.id] : undefined;
     if (item) item.startRename();
   }
@@ -91,18 +88,19 @@
   // their workspace or project. Workspaces present in the store but
   // NOT in rootRowOrder are auto-appended at render time: this covers
   // first-run installs (empty persisted order), direct
-  // `workspaces.set` in tests, and any path that skips the service
+  // `nestedWorkspaces.set` in tests, and any path that skips the service
   // helpers.
   type RenderedRow = {
     row: RootRow;
     idx: number;
     key: string;
-    workspace?: Workspace;
+    workspace?: NestedWorkspace;
     rendererComponent?: unknown;
     rendererSource?: string;
     rendererRailColor?: string;
     rendererLabel?: string;
     pseudoWorkspace?: PseudoWorkspace;
+    workspaceOnlyIdx?: number;
   };
   // Use `derived()` (not a `$:` IIFE) so Svelte's store-subscription
   // plumbing tracks the sources explicitly. An earlier attempt wrapped
@@ -110,7 +108,7 @@
   // detected reliably across HMR.
   const renderedRowsStore = derived(
     [
-      workspaces,
+      nestedWorkspaces,
       rootRowOrder,
       rootRowRendererStore,
       claimedWorkspaceIds,
@@ -126,9 +124,10 @@
       const renderers = new Map($renderers.map((r) => [r.id, r] as const));
       const pseudoById = new Map($pseudoWs.map((pw) => [pw.id, pw] as const));
       const renderedWsIds = new Set<string>();
+      let workspaceCount = 0;
       $order.forEach((row, idx) => {
         const key = `${row.kind}:${row.id}`;
-        if (row.kind === "workspace") {
+        if (row.kind === "nested-workspace") {
           const ws = byId.get(row.id);
           if (!ws) return;
           rows.push({ row, idx, key, workspace: ws });
@@ -143,6 +142,8 @@
         }
         const r = renderers.get(row.kind);
         if (!r) return;
+        const workspaceOnlyIdx =
+          row.kind === "workspace" ? workspaceCount++ : undefined;
         rows.push({
           row,
           idx,
@@ -151,11 +152,12 @@
           rendererSource: r.source,
           rendererRailColor: r.railColor?.(row.id),
           rendererLabel: r.label?.(row.id),
+          workspaceOnlyIdx,
         });
       });
       // Fallback — any unclaimed workspace in the store that isn't
       // already rendered gets appended at the end. Covers first-run
-      // installs (empty persisted order), direct `workspaces.set` in
+      // installs (empty persisted order), direct `nestedWorkspaces.set` in
       // tests, and stale rootRowOrder entries whose workspace ids were
       // regenerated across sessions.
       if (renderedWsIds.size < byId.size) {
@@ -163,9 +165,9 @@
         for (const [id, ws] of byId) {
           if (renderedWsIds.has(id)) continue;
           rows.push({
-            row: { kind: "workspace", id },
+            row: { kind: "nested-workspace", id },
             idx: idx++,
-            key: `workspace:${id}`,
+            key: `nested-workspace:${id}`,
             workspace: ws,
           });
         }
@@ -186,7 +188,7 @@
   let dragActive = false;
   let dragSourceHeight = 0;
 
-  // Workspace-to-pane drop state: updated on every mousemove during a root drag.
+  // NestedWorkspace-to-pane drop state: updated on every mousemove during a root drag.
   let currentPaneTarget: WorkspacePaneDropTarget = null;
 
   // Archive zone drag state: true when the dragged row is hovering over [data-archive-zone].
@@ -194,9 +196,9 @@
 
   const rootDrag = createDragReorder({
     dataAttr: "root-row-idx",
-    containerSelector: "#primary-sidebar",
+    containerSelector: "#sidebar",
     ghostStyle: () => ({
-      background: $theme.bgFloat ?? $theme.bgSurface ?? "#111",
+      background: "transparent",
       border: `1px solid ${$theme.border ?? "transparent"}`,
     }),
     canStart: () => !$anyReorderActive,
@@ -204,26 +206,22 @@
     onMove: (x, y, ghostEl) => {
       const fromIdx = rootDrag.getState().sourceIdx;
       if (fromIdx === null) return;
-      // Archive zone detection runs for all row kinds (workspace AND workspace-group).
+      // Archive zone hit-test runs for all row kinds (nested-workspace AND
+      // workspace). Tracks `overArchiveZone` so the drop commit can route to
+      // archiveWorkspace; no visual feedback is painted on the zone — UX
+      // calls for the archive section to keep its normal appearance during
+      // a drag.
       const archiveEl = document.querySelector("[data-archive-zone]");
       if (archiveEl) {
         const rect = archiveEl.getBoundingClientRect();
-        const over =
+        overArchiveZone =
           x >= rect.left &&
           x <= rect.right &&
           y >= rect.top &&
           y <= rect.bottom;
-        if (over !== overArchiveZone) {
-          overArchiveZone = over;
-          if (over) {
-            archiveEl.setAttribute("data-drag-over", "true");
-          } else {
-            archiveEl.removeAttribute("data-drag-over");
-          }
-        }
       }
       const srcRow = $rootRowOrder[fromIdx];
-      if (srcRow?.kind !== "workspace") {
+      if (srcRow?.kind !== "nested-workspace") {
         currentPaneTarget = null;
         setWorkspaceDragState(null);
         return;
@@ -234,7 +232,7 @@
           ? { workspaceId: srcRow.id, dropTarget: currentPaneTarget }
           : null,
       );
-      // Mutate the ghost to show deny state when incompatible group
+      // Mutate the ghost to show deny state when incompatible drop target
       if (ghostEl) {
         if (currentPaneTarget?.kind === "deny") {
           createDragDenyOverlay(ghostEl);
@@ -246,15 +244,10 @@
     onDragCommit: (fromIdx) => {
       if (overArchiveZone) {
         overArchiveZone = false;
-        document
-          .querySelector("[data-archive-zone]")
-          ?.removeAttribute("data-drag-over");
         currentPaneTarget = null;
         setWorkspaceDragState(null);
         const srcRow = $rootRowOrder[fromIdx];
         if (srcRow?.kind === "workspace") void archiveWorkspace(srcRow.id);
-        else if (srcRow?.kind === "workspace-group")
-          void archiveGroup(srcRow.id);
         return true; // suppress normal rootRowOrder reorder
       }
       const paneTarget = currentPaneTarget;
@@ -262,7 +255,7 @@
       setWorkspaceDragState(null);
       if (paneTarget?.kind === "pane-split") {
         const srcRow = $rootRowOrder[fromIdx];
-        if (srcRow?.kind === "workspace") {
+        if (srcRow?.kind === "nested-workspace") {
           const direction =
             paneTarget.zone === "left" || paneTarget.zone === "right"
               ? "horizontal"
@@ -292,9 +285,6 @@
         currentPaneTarget = null;
         setWorkspaceDragState(null);
         overArchiveZone = false;
-        document
-          .querySelector("[data-archive-zone]")
-          ?.removeAttribute("data-drag-over");
       }
       if (s.active && s.sourceIdx !== null) {
         const src = $rootRowOrder[s.sourceIdx];
@@ -316,19 +306,19 @@
 
   function startRootRowDrag(e: MouseEvent, rowIdx: number) {
     const srcRow = $rootRowOrder[rowIdx];
-    if (srcRow?.kind === "workspace") {
-      const ws = $workspaces.find((w) => w.id === srcRow.id);
+    if (srcRow?.kind === "nested-workspace") {
+      const ws = $nestedWorkspaces.find((w) => w.id === srcRow.id);
       if (ws && wsMeta(ws).locked === true) return;
-    } else if (srcRow?.kind === "workspace-group") {
-      const group = getWorkspaceGroup(srcRow.id);
-      if (group?.locked === true) return;
+    } else if (srcRow?.kind === "workspace") {
+      const workspace = getWorkspace(srcRow.id);
+      if (workspace?.locked === true) return;
     }
     rootDrag.start(e, rowIdx);
   }
 
   // Source row metadata used for the DropGhost label/color so the
   // drop slot reads as the dragged row's own tile. Looks up the
-  // row's rendered metadata from renderedRows so workspaces use the
+  // row's rendered metadata from renderedRows so nestedWorkspaces use the
   // theme accent / workspace name, and projects use the project's
   // color + name via the registered railColor/label resolvers.
   $: sourceRow =
@@ -345,7 +335,7 @@
     if (pw) return resolvePseudoWorkspaceColor(pw);
     const ws = sourceEntry?.workspace;
     if (ws) {
-      const dashId = wsMeta(ws).dashboardWorkspaceId;
+      const dashId = wsMeta(ws).dashboardNestedWorkspaceId;
       if (typeof dashId === "string") {
         return (
           $dashboardWorkspaceRegistry.get(dashId)?.accentColor ?? $theme.accent
@@ -367,8 +357,7 @@
   $: tabDrag = $tabDragState;
   $: tabDragToRoot =
     tabDrag?.dropTarget?.kind === "new-workspace" ? tabDrag.dropTarget : null;
-  $: effectiveActive =
-    dragActive || tabDragToRoot !== null || $metaPreviewActive;
+  $: effectiveActive = dragActive || tabDragToRoot !== null;
   // null source idx → every row's idx !== null → all rows show sibling overlay
   $: effectiveDragSourceIdx = dragActive
     ? dragSourceIdx
@@ -381,11 +370,13 @@
   $: effectiveDragSourceHeight = dragActive ? dragSourceHeight : 32;
   $: tabDragSurfaceTitle = (() => {
     if (!tabDrag) return "";
-    const srcWs = $workspaces.find((w) => w.id === tabDrag!.sourceWorkspaceId);
-    if (!srcWs) return "New Workspace";
+    const srcWs = $nestedWorkspaces.find(
+      (w) => w.id === tabDrag!.sourceWorkspaceId,
+    );
+    if (!srcWs) return "New Branched Workspace";
     return (
       getAllSurfaces(srcWs).find((s) => s.id === tabDrag!.surfaceId)?.title ||
-      "New Workspace"
+      "New Branched Workspace"
     );
   })();
   $: effectiveSourceRowLabel = dragActive
@@ -393,33 +384,33 @@
     : tabDragSurfaceTitle;
   $: effectiveSourceRowColor = dragActive ? sourceRowColor : $theme.accent;
 
-  // --- Workspace row context menu (previously in WorkspaceListBlock's
+  // --- NestedWorkspace row context menu (previously in WorkspaceListBlock's
   // showWorkspaceContextMenu; unchanged modulo re-scoping to rendered
   // root rows). ---
   function runPromoteToProject(globalIdx: number) {
     onSwitchWorkspace(globalIdx);
     const cmd = get(commandStore).find(
-      (c) => c.id === "promote-workspace-to-group",
+      (c) => c.id === "promote-nested-workspace-to-workspace",
     );
     if (cmd) void cmd.action();
   }
 
   $: canPromote = $commandStore.some(
-    (c) => c.id === "promote-workspace-to-group",
+    (c) => c.id === "promote-nested-workspace-to-workspace",
   );
 
   function showWorkspaceContextMenu(x: number, y: number, globalIdx: number) {
-    const ws = $workspaces[globalIdx];
+    const ws = $nestedWorkspaces[globalIdx];
     if (!ws) return;
     const md = wsMeta(ws);
     const isDashboard = md?.isDashboard === true;
-    const isInsideGroup = typeof md?.groupId === "string";
+    const isInsideWorkspace = typeof md?.parentWorkspaceId === "string";
     const isLocked = md?.locked === true;
     const items = buildWorkspaceContextMenuItems({
       isDashboard,
-      isInsideGroup,
+      isInsideWorkspace,
       canPromoteCommand: canPromote,
-      workspaceCount: $workspaces.length,
+      workspaceCount: $nestedWorkspaces.length,
       isLocked,
       onRename: () => startRename(globalIdx),
       onNewSurface: () => {
@@ -427,7 +418,6 @@
         onNewSurface();
       },
       onPromote: () => runPromoteToProject(globalIdx),
-      onArchive: () => void archiveWorkspace(ws.id),
       onToggleLock: () => toggleWorkspaceLock(ws.id),
       onClose: () => void confirmAndCloseWorkspace(ws, globalIdx),
     });
@@ -437,18 +427,24 @@
 
 <!-- No "Workspaces" label row here anymore. The label was redundant
      (there's only one root section), and the "+ New" split-button
-     moved up into PrimarySidebar's top row so it aligns with the
+     moved up into Sidebar's top row so it aligns with the
      other title-row buttons. -->
 
-<!-- Root rows: workspaces and whole project blocks interleaved per
+<!-- Root rows: nestedWorkspaces and whole project blocks interleaved per
      $rootRowOrder. Each row is shelled with a core-drawn DragGrip
      (left) + content (right). Non-source rows during a drag get a
      strong overlay with the row's own color + name centered. -->
 {#each renderedRows as entry (entry.key)}
   {@const isSource = dragActive && dragSourceIdx === entry.idx}
-  {@const isSibling = effectiveActive && effectiveDragSourceIdx !== entry.idx}
+  {@const _isSibling = effectiveActive && effectiveDragSourceIdx !== entry.idx}
+  {@const ghostBefore =
+    effectiveInsertIndicator?.idx === entry.idx &&
+    effectiveInsertIndicator.edge === "before"}
+  {@const ghostAfter =
+    effectiveInsertIndicator?.idx === entry.idx &&
+    effectiveInsertIndicator.edge === "after"}
   {@const ws = entry.workspace}
-  {@const _dashId = ws ? wsMeta(ws).dashboardWorkspaceId : undefined}
+  {@const _dashId = ws ? wsMeta(ws).dashboardNestedWorkspaceId : undefined}
   {@const rowColor =
     entry.rendererRailColor ??
     (entry.pseudoWorkspace
@@ -457,66 +453,64 @@
         ? ($dashboardWorkspaceRegistry.get(_dashId)?.accentColor ??
           $theme.accent)
         : $theme.accent)}
-  {@const rowFg = contrastColor(rowColor)}
-  {@const rowLabel =
-    entry.row.kind === "workspace" && ws
+  {@const _rowFg = contrastColor(rowColor)}
+  {@const _rowLabel =
+    entry.row.kind === "nested-workspace" && ws
       ? ws.name
       : entry.row.kind === "pseudo-workspace" && entry.pseudoWorkspace
         ? entry.pseudoWorkspace.label
         : (entry.rendererLabel ?? "")}
-  <div class="root-row" data-root-row-container={entry.idx}>
-    {#if effectiveInsertIndicator?.idx === entry.idx && effectiveInsertIndicator.edge === "before"}
+  <!-- The DropGhost is a sibling .root-row, NOT a child of an existing
+       row. The source row is fully skipped from rendering (not just
+       inner display:none) — that lets the Ghost-row inherit the
+       source's "first/last row" status via the natural .root-row +
+       .root-row { margin-top: 8px } rule. Result: the ghost has the
+       same 8px gaps to its neighbors as a real row would, AND the
+       totals stay balanced (Ghost-row in slot K replaces source-row
+       in slot K, including its margin-top contribution). -->
+  {#if ghostBefore}
+    <div class="root-row">
       <DropGhost
         theme={$theme}
         height={effectiveDragSourceHeight}
         accent={effectiveSourceRowColor}
         label={effectiveSourceRowLabel}
       />
-    {/if}
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div
-      data-root-row-idx={entry.idx}
-      style="
-        display: {isSource ? 'none' : 'block'};
-        position: relative;
-      "
-    >
-      <!-- Row content — the renderer draws its OWN grip (via
-           onGripMouseDown) so the row looks self-contained (no gap
-           between active workspace bg and its rail, matching the
-           nested-workspace style). Core still owns the drag pipeline
-           — the renderer's grip just calls back into startRootRowDrag. -->
-      {#if entry.row.kind === "workspace" && ws}
-        {@const globalIdx = $workspaces.indexOf(ws)}
-        <WorkspaceItem
-          bind:this={workspaceItems[ws.id]}
-          workspace={ws}
-          index={globalIdx}
-          shortcutIdx={entry.idx}
-          isActive={globalIdx === $activeWorkspaceIdx}
-          dragActive={isSource}
-          onSelect={() => {
-            if (!dragActive) onSwitchWorkspace(globalIdx);
-          }}
-          onClose={() => void confirmAndCloseWorkspace(ws, globalIdx)}
-          onRename={(name) => onRenameWorkspace(globalIdx, name)}
-          onContextMenu={(x, y) => showWorkspaceContextMenu(x, y, globalIdx)}
-          onGripMouseDown={(e) => startRootRowDrag(e, entry.idx)}
-        />
-      {:else if entry.row.kind === "pseudo-workspace" && entry.pseudoWorkspace}
-        <PseudoWorkspaceRow
-          pseudo={entry.pseudoWorkspace}
-          shortcutIdx={entry.idx}
-          onGripMouseDown={(e) => startRootRowDrag(e, entry.idx)}
-        />
-      {:else if entry.rendererComponent && entry.rendererSource}
-        {@const extApi = getExtensionApiById(entry.rendererSource)}
-        {#if extApi}
-          <div
-            use:shortcutHint={entry.idx < 9
-              ? `${modLabel}${entry.idx + 1}`
-              : undefined}
-          >
+    </div>
+  {/if}
+  {#if !isSource}
+    <div class="root-row" data-root-row-container={entry.idx}>
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div data-root-row-idx={entry.idx} style="position: relative;">
+        <!-- Row content — the renderer draws its OWN grip (via
+             onGripMouseDown) so the row looks self-contained (no gap
+             between active workspace bg and its rail, matching the
+             nested-workspace style). Core still owns the drag pipeline
+             — the renderer's grip just calls back into startRootRowDrag. -->
+        {#if entry.row.kind === "nested-workspace" && ws}
+          {@const globalIdx = $nestedWorkspaces.indexOf(ws)}
+          <WorkspaceItem
+            bind:this={workspaceItems[ws.id]}
+            workspace={ws}
+            index={globalIdx}
+            isActive={globalIdx === $activeNestedWorkspaceIdx}
+            dragActive={isSource}
+            onSelect={() => {
+              if (!dragActive) onSwitchWorkspace(globalIdx);
+            }}
+            onClose={() => void confirmAndCloseWorkspace(ws, globalIdx)}
+            onRename={(name) => onRenameWorkspace(globalIdx, name)}
+            onContextMenu={(x, y) => showWorkspaceContextMenu(x, y, globalIdx)}
+            onGripMouseDown={(e) => startRootRowDrag(e, entry.idx)}
+          />
+        {:else if entry.row.kind === "pseudo-workspace" && entry.pseudoWorkspace}
+          <PseudoWorkspaceRow
+            pseudo={entry.pseudoWorkspace}
+            onGripMouseDown={(e) => startRootRowDrag(e, entry.idx)}
+          />
+        {:else if entry.rendererComponent && entry.rendererSource}
+          {@const extApi = getExtensionApiById(entry.rendererSource)}
+          {#if extApi}
             <ExtensionWrapper
               api={extApi}
               component={entry.rendererComponent}
@@ -524,61 +518,25 @@
                 id: entry.row.id,
                 onGripMouseDown: (e: MouseEvent) =>
                   startRootRowDrag(e, entry.idx),
+                shortcutIdx: entry.workspaceOnlyIdx,
               }}
             />
-          </div>
+          {/if}
         {/if}
-      {/if}
-
-      {#if isSibling}
-        <!-- Strong overlay on non-source root rows during a drag.
-             Shaped like a workspace row (rounded right + 8px trailing
-             margin) so the drop context reads as a stack of tiles
-             matching the row shape, not as a full-width wash. -->
-        <div
-          aria-hidden="true"
-          style="
-            position: absolute; inset: 0 8px 0 0;
-            background: {rowColor}; color: {rowFg};
-            display: flex; align-items: center; justify-content: center;
-            font-size: 13px; font-weight: 600;
-            pointer-events: none;
-            z-index: 3;
-            border-radius: 0 6px 6px 0;
-          "
-        >
-          {rowLabel}
-        </div>
-      {/if}
+      </div>
     </div>
-    {#if effectiveInsertIndicator?.idx === entry.idx && effectiveInsertIndicator.edge === "after"}
+  {/if}
+  {#if ghostAfter}
+    <div class="root-row">
       <DropGhost
         theme={$theme}
         height={effectiveDragSourceHeight}
         accent={effectiveSourceRowColor}
         label={effectiveSourceRowLabel}
       />
-    {/if}
-  </div>
-{/each}
-
-{#if renderedRows.length === 0}
-  <div
-    style="
-      display: flex; align-items: center;
-      margin: 0 8px 0 0; border-radius: 0 6px 6px 0;
-      border: 1px dashed {$theme.border};
-      opacity: 0.45;
-    "
-  >
-    <div style="width: 14px; flex-shrink: 0;"></div>
-    <div
-      style="flex: 1; padding: 8px 6px; color: {$theme.fgDim}; font-size: 12px;"
-    >
-      No workspaces
     </div>
-  </div>
-{/if}
+  {/if}
+{/each}
 
 <style>
   /* Inter-row gap — matches the nested workspace inter-row gap

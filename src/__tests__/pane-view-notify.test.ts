@@ -27,8 +27,8 @@ globalThis.ResizeObserver =
   ResizeObserverStub as unknown as typeof ResizeObserver;
 
 import PaneView from "../lib/components/PaneView.svelte";
-import { workspaces } from "../lib/stores/workspace";
-import type { Workspace, Pane, TerminalSurface } from "../lib/types";
+import { nestedWorkspaces } from "../lib/stores/nested-workspace";
+import type { NestedWorkspace, Pane, TerminalSurface } from "../lib/types";
 
 function makeTerminalSurface(id: string, hasUnread: boolean): TerminalSurface {
   return {
@@ -66,14 +66,14 @@ function makePane(surfaces: TerminalSurface[]): Pane {
   };
 }
 
-function setupWorkspace(pane: Pane): Workspace {
-  const ws: Workspace = {
+function setupWorkspace(pane: Pane): NestedWorkspace {
+  const ws: NestedWorkspace = {
     id: "ws1",
     name: "Test",
     splitRoot: { type: "pane", pane },
     activePaneId: pane.id,
   };
-  workspaces.set([ws]);
+  nestedWorkspaces.set([ws]);
   return ws;
 }
 
@@ -82,7 +82,7 @@ const noop = () => {};
 describe("PaneView notification chrome", () => {
   afterEach(() => {
     cleanup();
-    workspaces.set([]);
+    nestedWorkspaces.set([]);
   });
 
   it("renders default border when no surface in the pane has hasUnread", () => {
@@ -173,7 +173,7 @@ describe("PaneView notification chrome", () => {
     expect(unread2.hasUnread).toBe(false);
     expect(unread1.notification).toBeUndefined();
     // Store reference is also up to date (re-emitted via .update())
-    const ws = get(workspaces)[0];
+    const ws = get(nestedWorkspaces)[0];
     const stored = ws?.splitRoot;
     if (stored && stored.type === "pane") {
       expect(stored.pane.surfaces.every((s) => !s.hasUnread)).toBe(true);

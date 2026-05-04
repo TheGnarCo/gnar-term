@@ -1,6 +1,6 @@
 <script lang="ts">
   /**
-   * ContainerRow — shared root-row chrome for "container workspaces" in
+   * ContainerRow — shared root-row chrome for "container nestedWorkspaces" in
    * the Workspaces sidebar section (projects, agent orchestrators).
    *
    * The banner is **inert**: callers cannot register a click handler.
@@ -18,11 +18,11 @@
   import { type Component } from "svelte";
   import { slide } from "svelte/transition";
   import { theme } from "../stores/theme";
-  import { reorderContext } from "../stores/ui";
-  import { workspaces } from "../stores/workspace";
-  import DragGrip from "./DragGrip.svelte";
+  import { nestedWorkspaces } from "../stores/nested-workspace";
+  import SidebarElement from "./SidebarElement.svelte";
+  import SidebarRail from "./SidebarRail.svelte";
   import DefaultWorkspaceListView from "./WorkspaceListView.svelte";
-  import type { Workspace } from "../types";
+  import type { NestedWorkspace } from "../types";
   import { wsMeta } from "../services/service-helpers";
 
   /** Banner + rail color. Required. */
@@ -58,7 +58,7 @@
   /** Dashboard-hint resolver forwarded to WorkspaceListView. */
   export let dashboardHintFor:
     | ((
-        ws: Workspace,
+        ws: NestedWorkspace,
       ) => { id: string; color?: string; onClick: () => void } | undefined)
     | undefined = undefined;
   /** Forwarded: suppress per-row status badges when the container aggregates. */
@@ -66,8 +66,8 @@
   /**
    * When true, a nested workspace inside this container is the active
    * workspace. The banner swaps its idle `$theme.border` stroke for the
-   * container's `color` so the active state ties the group banner to
-   * its active child visually.
+   * container's `color` so the active state ties the workspace banner
+   * to its active child visually.
    */
   export let hasActiveChild: boolean = false;
   /** Drag scope id (container id). */
@@ -90,31 +90,10 @@
     undefined;
 
   let bannerHovered = false;
-  let mouseOverContainer = false;
-  let containerLeaveTimer: ReturnType<typeof setTimeout> | null = null;
 
-  function handleContainerEnter() {
-    if (containerLeaveTimer !== null) {
-      clearTimeout(containerLeaveTimer);
-      containerLeaveTimer = null;
-    }
-    mouseOverContainer = true;
-  }
-
-  function handleContainerLeave() {
-    containerLeaveTimer = setTimeout(() => {
-      mouseOverContainer = false;
-      containerLeaveTimer = null;
-    }, 80);
-  }
-
-  $: rowHovered = mouseOverContainer;
-  $: railBorderColor =
-    hasActiveChild && collapsed ? color : ($theme.border ?? "transparent");
-
-  // Non-dashboard count: dashboards don't count as real nested workspaces for
+  // Non-dashboard count: dashboards don't count as real nested nestedWorkspaces for
   // the purposes of showing the toggle button and auto-expand/collapse.
-  $: nonDashboardCount = $workspaces.filter(
+  $: nonDashboardCount = $nestedWorkspaces.filter(
     (ws) => filterIds.has(ws.id) && wsMeta(ws).isDashboard !== true,
   ).length;
 
@@ -134,35 +113,28 @@
 </script>
 
 {#if parentColor}
-  <!-- Nested-inside-parent variant — banner only, with a left-edge
-       colored accent replacing the old full-bleed colored background. -->
+  <!-- Nested-inside-parent variant — banner only, with left-edge
+       colored accent. Uses SidebarElement for unified styling. -->
   <div
     data-container-row={testId ?? ""}
     data-container-mode="nested"
     style="position: relative;"
   >
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div
-      data-container-banner
-      style="
-        position: relative;
-        margin: 0 8px 0 0;
-        border-radius: 0 6px 6px 0;
-        overflow: hidden;
-        min-height: 40px;
-        cursor: default;
-        background: transparent;
-        color: {$theme.fg};
-        border-left: 3px solid {color};
-      "
-      on:contextmenu={onBannerContextMenu}
-      on:mouseenter={() => (bannerHovered = true)}
-      on:mouseleave={() => (bannerHovered = false)}
+    <SidebarElement
+      kind="umbrella"
+      name={containerLabel}
+      isActive={false}
+      isLocked={locked}
+      isDragging={false}
+      canDrag={false}
+      canClose={!!onClose}
+      {color}
+      {onClose}
+      onContextMenu={onBannerContextMenu}
     >
       <div
         data-container-banner-body
-        style="padding: 4px 8px; display: flex; flex-direction: column; gap: 2px; min-height: 32px; justify-content: center;"
+        style="padding: 4px 8px; display: flex; flex-direction: column; gap: 2px; min-height: 32px; justify-content: center; flex: 1; min-width: 0;"
       >
         <div
           style="display: flex; align-items: center; gap: 8px; min-width: 0;"
@@ -183,7 +155,7 @@
           </div>
         {/if}
       </div>
-    </div>
+    </SidebarElement>
     {#if !collapsed && nonDashboardCount > 0}
       <div
         data-container-nested={scopeId}
@@ -207,7 +179,7 @@
   </div>
 {:else}
   <!-- Root variant — the colored grip column lives at the outer flex
-       level so it stretches the full group height (a continuous rail
+       level so it stretches the full workspace height (a continuous rail
        connecting the banner to the nested children). A light border
        (matching the inactive dashboard-tile stroke) wraps only the
        banner row; the nested workspace list renders below the border
@@ -219,50 +191,16 @@
     style="display: flex; position: relative; align-items: stretch;"
   >
     {#if onGripMouseDown}
-      <div
-        data-container-rail
-        on:mouseenter={handleContainerEnter}
-        on:mouseleave={handleContainerLeave}
-        on:mousedown={(e) => onGripMouseDown?.(e)}
-        style="
-          flex-shrink: 0;
-          align-self: stretch;
-          display: flex;
-          position: relative;
-          box-sizing: border-box;
-          border-left: 1px solid {railBorderColor};
-          border-top: 1px solid {railBorderColor};
-          border-bottom: 1px solid {collapsed
-          ? railBorderColor
-          : 'transparent'};
-        "
-        role="presentation"
-      >
-        <DragGrip
-          theme={$theme}
-          visible={rowHovered && $reorderContext === null}
-          railColor={color}
-          railOpacity={1}
-          alwaysShowDots={true}
-          fadeRight={!rowHovered}
-          onClose={locked ? undefined : onClose}
-          closeTooltip="Delete Workspace Group"
-          {locked}
-        />
-        {#if hasActiveChild && collapsed}
-          <div
-            aria-hidden="true"
-            style="
-              position: absolute;
-              top: 0; left: 0; bottom: 0;
-              width: 1px;
-              background: {color};
-              pointer-events: none;
-              z-index: 4;
-            "
-          ></div>
-        {/if}
-      </div>
+      <SidebarRail
+        mode="container"
+        {color}
+        canDrag={true}
+        {locked}
+        hasActiveStripe={hasActiveChild && collapsed}
+        {onGripMouseDown}
+        {onClose}
+        closeTooltip="Delete Workspace"
+      />
     {/if}
     <div
       style="
@@ -283,13 +221,13 @@
           ? ($theme.bgHighlight ?? 'transparent')
           : ($theme.bgSurface ?? 'transparent')};
           color: {$theme.fg};
-          border-top: 1px solid {hasActiveChild && collapsed
+          border-top: 1px solid {hasActiveChild
           ? color
           : ($theme.border ?? 'transparent')};
-          border-right: 1px solid {hasActiveChild && collapsed
+          border-right: 1px solid {hasActiveChild
           ? color
           : ($theme.border ?? 'transparent')};
-          border-bottom: 1px solid {hasActiveChild && collapsed
+          border-bottom: 1px solid {hasActiveChild
           ? color
           : ($theme.border ?? 'transparent')};
           border-left: none;
@@ -299,19 +237,12 @@
         "
         on:contextmenu={onBannerContextMenu}
         on:click={onBannerClick}
-        on:mousedown={(e) => onGripMouseDown?.(e)}
-        on:mouseenter={() => {
-          bannerHovered = true;
-          handleContainerEnter();
-        }}
-        on:mouseleave={() => {
-          bannerHovered = false;
-          handleContainerLeave();
-        }}
+        on:mouseenter={() => (bannerHovered = true)}
+        on:mouseleave={() => (bannerHovered = false)}
       >
         <div
           data-container-banner-body
-          style="padding-left: 6px; padding-right: 0; display: flex; flex-direction: column; gap: 2px; min-height: 32px; justify-content: center;"
+          style="padding-left: 8px; padding-right: 0; display: flex; flex-direction: column; gap: 2px; min-height: 32px; justify-content: center;"
         >
           <div
             style="display: flex; align-items: center; gap: 8px; min-width: 0;"
@@ -337,7 +268,7 @@
         <div
           data-container-nested={scopeId}
           data-nested-count={nonDashboardCount}
-          style="display: flex; flex-direction: column; margin-left: -2px;"
+          style="display: flex; flex-direction: column; margin-left: -2px; margin-top: -2px;"
           transition:slide={{ duration: 200 }}
         >
           <svelte:component

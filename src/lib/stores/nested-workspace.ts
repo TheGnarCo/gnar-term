@@ -1,0 +1,46 @@
+import { writable, derived } from "svelte/store";
+import type { NestedWorkspace } from "../types";
+import { getAllPanes } from "../types";
+
+export const nestedWorkspaces = writable<NestedWorkspace[]>([]);
+export const activeNestedWorkspaceIdx = writable<number>(-1);
+
+/** [previousId, currentId] — updated on each switchNestedWorkspace call. */
+export const workspaceHistory = writable<[string | null, string | null]>([
+  null,
+  null,
+]);
+
+/**
+ * Id of the currently-active pseudo-workspace (e.g. the Global Agentic
+ * Dashboard), or `null` when a real workspace is active. Pseudo-nestedWorkspaces
+ * are registered via `registerPseudoWorkspace` and do not live in the
+ * `nestedWorkspaces` array — they're rendered from the pseudo-workspace
+ * registry. Activation is mutually exclusive with `activeNestedWorkspaceIdx`:
+ * setting this to a non-null id hides every real workspace view and
+ * mounts the pseudo's body instead.
+ */
+export const activePseudoWorkspaceId = writable<string | null>(null);
+
+/**
+ * When non-null, holds the surface ID of the pane that is "zoomed" to fill
+ * the full workspace area. All other panes are hidden (but kept mounted) so
+ * terminal state is preserved. Cleared on workspace switch.
+ */
+export const zoomedSurfaceId = writable<string | null>(null);
+
+export const activeWorkspace = derived(
+  [nestedWorkspaces, activeNestedWorkspaceIdx],
+  ([$ws, $idx]) => $ws[$idx] ?? null,
+);
+
+export const activePane = derived([activeWorkspace], ([$ws]) => {
+  if (!$ws) return null;
+  const panes = getAllPanes($ws.splitRoot);
+  return panes.find((p) => p.id === $ws.activePaneId) ?? null;
+});
+
+export const activeSurface = derived([activePane], ([$pane]) => {
+  if (!$pane) return null;
+  return $pane.surfaces.find((s) => s.id === $pane.activeSurfaceId) ?? null;
+});

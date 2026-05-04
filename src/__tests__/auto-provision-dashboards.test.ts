@@ -1,7 +1,7 @@
 /**
- * provisionAutoDashboardsForGroup — called on group create and on startup
+ * provisionAutoDashboardsForWorkspace — called on workspace create and on startup
  * reconciliation. Iterates every registered DashboardContribution with
- * `autoProvision: true` and invokes contribution.create(group) for any
+ * `autoProvision: true` and invokes contribution.create(workspace) for any
  * that isn't already backed by a workspace. Idempotent.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
@@ -15,30 +15,33 @@ vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn().mockResolvedValue(vi.fn()),
 }));
 
-import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
+import {
+  nestedWorkspaces,
+  activeNestedWorkspaceIdx,
+} from "../lib/stores/nested-workspace";
 import {
   registerDashboardContribution,
   resetDashboardContributions,
 } from "../lib/services/dashboard-contribution-registry";
-import { provisionAutoDashboardsForGroup } from "../lib/services/workspace-group-service";
-import type { WorkspaceGroupEntry } from "../lib/config";
+import { provisionAutoDashboardsForWorkspace } from "../lib/services/workspace-service";
+import type { Workspace } from "../lib/config";
 
-function makeGroup(id: string): WorkspaceGroupEntry {
+function makeWorkspace(id: string): Workspace {
   return {
     id,
-    name: `Group ${id}`,
+    name: `Workspace `,
     path: `/tmp/${id}`,
     color: "purple",
-    workspaceIds: [],
+    nestedWorkspaceIds: [],
     isGit: false,
     createdAt: "2026-04-21T00:00:00.000Z",
   };
 }
 
-describe("provisionAutoDashboardsForGroup", () => {
+describe("provisionAutoDashboardsForWorkspace", () => {
   beforeEach(() => {
-    workspaces.set([]);
-    activeWorkspaceIdx.set(-1);
+    nestedWorkspaces.set([]);
+    activeNestedWorkspaceIdx.set(-1);
     resetDashboardContributions();
   });
 
@@ -50,7 +53,7 @@ describe("provisionAutoDashboardsForGroup", () => {
       source: "core",
       label: "A",
       actionLabel: "Add A",
-      capPerGroup: 1,
+      capPerWorkspace: 1,
       autoProvision: true,
       create: aCreate,
     });
@@ -59,7 +62,7 @@ describe("provisionAutoDashboardsForGroup", () => {
       source: "core",
       label: "B",
       actionLabel: "Add B",
-      capPerGroup: 1,
+      capPerWorkspace: 1,
       autoProvision: true,
       create: bCreate,
     });
@@ -68,15 +71,15 @@ describe("provisionAutoDashboardsForGroup", () => {
       source: "core",
       label: "C",
       actionLabel: "Add C",
-      capPerGroup: 1,
+      capPerWorkspace: 1,
       create: vi.fn(async () => "ws-c"),
     });
 
-    const group = makeGroup("g1");
-    await provisionAutoDashboardsForGroup(group);
+    const workspace = makeWorkspace("g1");
+    await provisionAutoDashboardsForWorkspace(workspace);
 
-    expect(aCreate).toHaveBeenCalledWith(group);
-    expect(bCreate).toHaveBeenCalledWith(group);
+    expect(aCreate).toHaveBeenCalledWith(workspace);
+    expect(bCreate).toHaveBeenCalledWith(workspace);
     // Non-autoProvision contributions are NOT auto-materialized.
     expect(
       (
@@ -87,44 +90,44 @@ describe("provisionAutoDashboardsForGroup", () => {
     ).toBeUndefined();
   });
 
-  it("skips contributions whose dashboard workspace already exists for the group", async () => {
+  it("skips contributions whose dashboard workspace already exists for the workspace", async () => {
     const aCreate = vi.fn(async () => "ws-a");
     registerDashboardContribution({
       id: "a",
       source: "core",
       label: "A",
       actionLabel: "Add A",
-      capPerGroup: 1,
+      capPerWorkspace: 1,
       autoProvision: true,
       create: aCreate,
     });
 
-    const group = makeGroup("g1");
-    // Seed the workspaces store with an existing dashboard for "a".
-    workspaces.set([
+    const workspace = makeWorkspace("g1");
+    // Seed the nestedWorkspaces store with an existing dashboard for "a".
+    nestedWorkspaces.set([
       {
         id: "ws-existing",
         name: "A",
         layout: { pane: { id: "p", surfaces: [], activeIdx: 0 } },
         metadata: {
           isDashboard: true,
-          groupId: group.id,
+          parentWorkspaceId: workspace.id,
           dashboardContributionId: "a",
         },
       } as never,
     ]);
 
-    await provisionAutoDashboardsForGroup(group);
+    await provisionAutoDashboardsForWorkspace(workspace);
 
     expect(aCreate).not.toHaveBeenCalled();
-    // Sanity: no new workspaces added.
-    expect(get(workspaces)).toHaveLength(1);
+    // Sanity: no new nestedWorkspaces added.
+    expect(get(nestedWorkspaces)).toHaveLength(1);
   });
 
   it("is idempotent — calling twice does not double-materialize", async () => {
     const bCreate = vi.fn(async () => {
       // Simulate create by pushing a workspace into the store.
-      workspaces.update((ws) => [
+      nestedWorkspaces.update((ws) => [
         ...ws,
         {
           id: `ws-${ws.length + 1}`,
@@ -132,7 +135,7 @@ describe("provisionAutoDashboardsForGroup", () => {
           layout: { pane: { id: "p", surfaces: [], activeIdx: 0 } },
           metadata: {
             isDashboard: true,
-            groupId: "g1",
+            parentWorkspaceId: "g1",
             dashboardContributionId: "b",
           },
         } as never,
@@ -144,14 +147,14 @@ describe("provisionAutoDashboardsForGroup", () => {
       source: "core",
       label: "B",
       actionLabel: "Add B",
-      capPerGroup: 1,
+      capPerWorkspace: 1,
       autoProvision: true,
       create: bCreate,
     });
 
-    const group = makeGroup("g1");
-    await provisionAutoDashboardsForGroup(group);
-    await provisionAutoDashboardsForGroup(group);
+    const workspace = makeWorkspace("g1");
+    await provisionAutoDashboardsForWorkspace(workspace);
+    await provisionAutoDashboardsForWorkspace(workspace);
 
     expect(bCreate).toHaveBeenCalledTimes(1);
   });

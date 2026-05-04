@@ -6,7 +6,7 @@
     getDashboardHost,
     deriveDashboardScope,
   } from "../../../lib/contexts/dashboard-host";
-  import { getWorkspaceGroup } from "../../../lib/stores/workspace-groups";
+  import { getWorkspace } from "../../../lib/stores/workspaces";
   import SettingsFileEditor from "./SettingsFileEditor.svelte";
 
   const api = getContext<ExtensionAPI | undefined>(EXTENSION_API_KEY);
@@ -17,9 +17,11 @@
   const host = getDashboardHost();
   const scope = deriveDashboardScope(host);
 
-  $: group =
-    scope.kind === "group" ? getWorkspaceGroup(scope.groupId) : undefined;
-  $: projectRoot = group?.path ?? "";
+  $: workspace =
+    scope.kind === "workspace"
+      ? getWorkspace(scope.parentWorkspaceId)
+      : undefined;
+  $: projectRoot = workspace?.path ?? "";
 
   $: settingsPath = projectRoot ? `${projectRoot}/.claude/settings.json` : null;
   $: localSettingsPath = projectRoot
@@ -46,7 +48,7 @@
     </div>
   {:else if !projectRoot}
     <div style="padding: 16px; color: {t.fgDim}; font-size: 12px;">
-      No workspace group associated with this dashboard.
+      No workspace associated with this dashboard.
     </div>
   {:else}
     <!-- Tab bar -->

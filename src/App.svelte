@@ -894,7 +894,24 @@
 
 <div
   id="app"
-  style="display: flex; height: 100vh; overflow: hidden; --theme-accent: {$theme.accent};"
+  style="
+    display: flex; height: 100vh; overflow: hidden;
+    --theme-bg: {$theme.bg};
+    --theme-bg-surface: {$theme.bgSurface};
+    --theme-bg-highlight: {$theme.bgHighlight};
+    --theme-border: {$theme.border};
+    --theme-border-active: {$theme.borderActive};
+    --theme-fg: {$theme.fg};
+    --theme-fg-dim: {$theme.fgDim};
+    --theme-accent: {$theme.accent};
+    --theme-notify: {$theme.notify};
+    --theme-notify-glow: {$theme.notifyGlow};
+    --theme-sidebar-bg: {$theme.sidebarBg};
+    --theme-tab-bar-bg: {$theme.tabBarBg};
+    --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-6: 24px;
+    --title-bar-height: 38px;
+    --tab-bar-height: 28px;
+  "
 >
   <Sidebar
     bind:this={sidebarComponent}

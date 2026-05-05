@@ -63,10 +63,6 @@ import type {
   ExtensionManifest,
   LoadedExtension,
 } from "../lib/extension-types";
-import {
-  claimedWorkspaceIds,
-  resetClaimedWorkspaces,
-} from "../lib/services/claimed-workspace-registry";
 import * as config from "../lib/config";
 
 // --- Helpers ---
@@ -872,33 +868,6 @@ describe("Extension lifecycle", () => {
       (e) => e.manifest.id === "throw-activate",
     );
     expect(ext?.enabled).toBe(false);
-  });
-
-  it("deactivateExtension unclaims workspaces claimed by the extension", async () => {
-    resetClaimedWorkspaces();
-    const manifest = makeManifest({
-      id: "claim-cleanup",
-      contributes: {
-        events: ["workspace:created"],
-      },
-    });
-    registerExtension(manifest, (api: ExtensionAPI) => {
-      api.onActivate(() => {
-        api.claimWorkspace("ws-1");
-        api.claimWorkspace("ws-2");
-      });
-    });
-    await activateExtension("claim-cleanup");
-
-    // Verify workspaces are claimed
-    expect(get(claimedWorkspaceIds).has("ws-1")).toBe(true);
-    expect(get(claimedWorkspaceIds).has("ws-2")).toBe(true);
-
-    deactivateExtension("claim-cleanup");
-
-    // After deactivation, workspaces should be unclaimed
-    expect(get(claimedWorkspaceIds).has("ws-1")).toBe(false);
-    expect(get(claimedWorkspaceIds).has("ws-2")).toBe(false);
   });
 });
 

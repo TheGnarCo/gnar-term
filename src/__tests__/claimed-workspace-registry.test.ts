@@ -1,82 +1,71 @@
 /**
- * Tests for claimed-workspace-registry — extensions claim workspace IDs
- * so they render in extension sidebar sections instead of the main list.
+ * Tests for claimed-workspace-registry — Stage 10:
+ * `claimedWorkspaceIds` is derived from `workspaces` filtered by
+ * `parentWorkspaceId`. The legacy registry that tracked claims with a
+ * source extension id is gone.
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { get } from "svelte/store";
+import { claimedWorkspaceIds } from "../lib/services/claimed-workspace-registry";
 import {
-  claimedWorkspaceIds,
-  claimWorkspace,
-  unclaimWorkspace,
-  unclaimBySource,
-  resetClaimedWorkspaces,
-} from "../lib/services/claimed-workspace-registry";
+  workspaces,
+  resetWorkspaceStoreForTest,
+} from "../lib/stores/workspace";
+import type { Workspace } from "../lib/types";
 
-describe("claimed-workspace-registry", () => {
+function makeWorkspace(id: string, parentWorkspaceId?: string): Workspace {
+  return {
+    id,
+    name: id,
+    splitRoot: {
+      type: "pane",
+      pane: { id: `${id}-p`, surfaces: [], activeSurfaceId: null },
+    },
+    activePaneId: `${id}-p`,
+    ...(parentWorkspaceId ? { parentWorkspaceId } : {}),
+  };
+}
+
+describe("claimedWorkspaceIds", () => {
   beforeEach(() => {
-    resetClaimedWorkspaces();
+    resetWorkspaceStoreForTest();
   });
 
-  it("starts with no claimed workspaces", () => {
+  it("starts empty", () => {
     expect(get(claimedWorkspaceIds).size).toBe(0);
   });
 
-  it("claims a workspace", () => {
-    claimWorkspace("ws-1", "ext-git");
-    const ids = get(claimedWorkspaceIds);
-    expect(ids.has("ws-1")).toBe(true);
-    expect(ids.size).toBe(1);
-  });
-
-  it("claims multiple workspaces from different sources", () => {
-    claimWorkspace("ws-1", "ext-git");
-    claimWorkspace("ws-2", "ext-docker");
+  it("contains ids of workspaces with a parentWorkspaceId", () => {
+    workspaces.set([
+      makeWorkspace("root"),
+      makeWorkspace("child-1", "root"),
+      makeWorkspace("child-2", "root"),
+    ]);
     const ids = get(claimedWorkspaceIds);
     expect(ids.size).toBe(2);
-    expect(ids.has("ws-1")).toBe(true);
-    expect(ids.has("ws-2")).toBe(true);
+    expect(ids.has("child-1")).toBe(true);
+    expect(ids.has("child-2")).toBe(true);
+    expect(ids.has("root")).toBe(false);
   });
 
-  it("unclaims a workspace by id", () => {
-    claimWorkspace("ws-1", "ext-git");
-    claimWorkspace("ws-2", "ext-git");
-    unclaimWorkspace("ws-1");
-    const ids = get(claimedWorkspaceIds);
-    expect(ids.size).toBe(1);
-    expect(ids.has("ws-1")).toBe(false);
-    expect(ids.has("ws-2")).toBe(true);
-  });
+  it("updates when a workspace gains or loses a parent", () => {
+    workspaces.set([makeWorkspace("ws-1")]);
+    expect(get(claimedWorkspaceIds).has("ws-1")).toBe(false);
 
-  it("unclaims all workspaces by source extension", () => {
-    claimWorkspace("ws-1", "ext-git");
-    claimWorkspace("ws-2", "ext-git");
-    claimWorkspace("ws-3", "ext-docker");
-    unclaimBySource("ext-git");
-    const ids = get(claimedWorkspaceIds);
-    expect(ids.size).toBe(1);
-    expect(ids.has("ws-3")).toBe(true);
-  });
-
-  it("unclaimBySource is a no-op for unknown source", () => {
-    claimWorkspace("ws-1", "ext-git");
-    unclaimBySource("ext-unknown");
-    expect(get(claimedWorkspaceIds).size).toBe(1);
-  });
-
-  it("resets to empty", () => {
-    claimWorkspace("ws-1", "ext-git");
-    claimWorkspace("ws-2", "ext-docker");
-    resetClaimedWorkspaces();
-    expect(get(claimedWorkspaceIds).size).toBe(0);
-  });
-
-  it("re-claiming with a different source updates the owner", () => {
-    claimWorkspace("ws-1", "ext-git");
-    claimWorkspace("ws-1", "ext-docker");
-    // ws-1 is now owned by ext-docker
-    unclaimBySource("ext-git");
+    workspaces.update((list) =>
+      list.map((w) =>
+        w.id === "ws-1" ? { ...w, parentWorkspaceId: "root" } : w,
+      ),
+    );
     expect(get(claimedWorkspaceIds).has("ws-1")).toBe(true);
-    unclaimBySource("ext-docker");
+
+    workspaces.update((list) =>
+      list.map((w) => {
+        if (w.id !== "ws-1") return w;
+        const { parentWorkspaceId: _drop, ...rest } = w;
+        return rest as Workspace;
+      }),
+    );
     expect(get(claimedWorkspaceIds).has("ws-1")).toBe(false);
   });
 });

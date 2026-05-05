@@ -177,7 +177,12 @@ describe("hostScopedAgentsStore", () => {
   });
 
   it("workspace scope → excludes claimed workspaces even when CWD matches (they belong to another owner)", async () => {
-    workspaces.set([seedWorkspace("ws-under", { cwd: "/work/one/sub" })]);
+    workspaces.set([
+      {
+        ...seedWorkspace("ws-under", { cwd: "/work/one/sub" }),
+        parentWorkspaceId: "someone-else",
+      },
+    ]);
     setWorkspaces([
       {
         id: "grp-1",
@@ -231,7 +236,10 @@ describe("hostScopedAgentsStore", () => {
     // the claim guard ($claimedIds.has) would block the CWD fallback and the agent
     // would be invisible in the workspace's Kanban dashboard.
     workspaces.set([
-      seedWorkspace("ws-native", { cwd: "" }), // no cwd, no metadata.parentWorkspaceId
+      {
+        ...seedWorkspace("ws-native", { cwd: "" }), // no cwd, no metadata.parentWorkspaceId
+        parentWorkspaceId: "grp-1",
+      },
     ]);
     setWorkspaces([
       {

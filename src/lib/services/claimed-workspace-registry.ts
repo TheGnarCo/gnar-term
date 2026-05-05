@@ -1,56 +1,59 @@
 /**
- * Claimed Workspace Registry
+ * Claimed Workspace ID derivation + sidebar mirror helpers.
  *
- * Extensions "claim" workspace IDs so they appear in the extension's
- * own sidebar section instead of the main Workspaces block.
- * Sidebar reads this store to filter the main list.
+ * A workspace is "claimed" iff it has a `parentWorkspaceId` — that is,
+ * it lives inside another Workspace and should not appear at the
+ * sidebar root. The registry that used to track claims with a source
+ * extension id is gone (Stage 10): the unified Workspace already carries
+ * `parentWorkspaceId` as a top-level field, so claim status is derived,
+ * not tracked.
  *
- * Each claim tracks its source extension for cleanup on deactivation.
+ * `claimWorkspace` / `unclaimWorkspace` remain as small mirror helpers
+ * that keep the persisted `rootRowOrder` consistent with the live
+ * Workspace shape — call sites that flip `parentWorkspaceId` use them
+ * to drop or restore the corresponding root row.
  */
 import { derived, type Readable } from "svelte/store";
-import { createRegistry } from "./create-registry";
+import { workspaces } from "../stores/workspace";
 import { removeRootRow, appendRootRow } from "../stores/root-row-order";
 
-interface Claim {
-  id: string; // workspaceId — serves as registry identity
-  source: string; // extension id that claimed the workspace
-}
-
-const registry = createRegistry<Claim>();
-
-/** Readable set of workspace IDs claimed by extensions. */
+/** Readable set of workspace IDs that have a parent workspace. */
 export const claimedWorkspaceIds: Readable<Set<string>> = derived(
-  registry.store,
-  ($claims) => new Set($claims.map((c) => c.id)),
+  workspaces,
+  ($workspaces) => {
+    const ids = new Set<string>();
+    for (const w of $workspaces) {
+      if (typeof w.parentWorkspaceId === "string") ids.add(w.id);
+    }
+    return ids;
+  },
 );
 
-export function claimWorkspace(workspaceId: string, source: string): void {
-  registry.register({ id: workspaceId, source });
-  // A claimed workspace is hosted inside its owner (e.g. a project
-  // block), so it must disappear from the root-row list. No-op if it
-  // wasn't there.
+/**
+ * Mirror a workspace becoming claimed: drop it from the root-row list.
+ * The `source` parameter is accepted for backward compatibility with the
+ * pre-Stage-10 API but is no longer recorded anywhere.
+ */
+export function claimWorkspace(workspaceId: string, _source?: string): void {
   removeRootRow({ kind: "child-workspace", id: workspaceId });
 }
 
+/** Mirror a workspace becoming unclaimed: append it back to the root-row list. */
 export function unclaimWorkspace(workspaceId: string): void {
-  registry.unregister(workspaceId);
-  // Workspace is back at the root — restore it to the root-row list
-  // (append to the end matches the legacy behavior for fresh workspaces).
   appendRootRow({ kind: "child-workspace", id: workspaceId });
 }
 
-/** Unclaim all workspaces owned by a given source extension. */
-export function unclaimBySource(source: string): void {
-  // Collect ids before unregistering so we can mirror each into the
-  // root-row list (no way to get them back once registry.unregisterBySource
-  // wipes them).
-  const ids: string[] = [];
-  const unsub = registry.store.subscribe((claims) => {
-    for (const c of claims) if (c.source === source) ids.push(c.id);
-  });
-  unsub();
-  registry.unregisterBySource(source);
-  for (const id of ids) appendRootRow({ kind: "child-workspace", id });
+/**
+ * Pre-Stage-10 hook for "deactivate extension X — drop every claim it
+ * holds". With the registry gone, no per-source tracking exists; this
+ * function is a no-op preserved only because `extension-constants` wires
+ * it into `REGISTRY_CLEANUP_FNS`.
+ */
+export function unclaimBySource(_source: string): void {
+  // No-op: claim is now derived from Workspace.parentWorkspaceId.
 }
 
-export const resetClaimedWorkspaces = registry.reset;
+/** Test hook — no-op (no internal state remains). */
+export function resetClaimedWorkspaces(): void {
+  // No-op: claimedWorkspaceIds is derived from the workspaces store.
+}

@@ -30,7 +30,7 @@ Agentic orchestration features now require extensions to do more: track state ac
 Use `api.state` (arbitrary JSON, persisted to `~/.config/gnar-term/extensions/<id>/state.json`) for data types that exceed the settings schema, paired with extension-provided overlay UIs for editing.
 
 - Good, because `api.state` already supports arbitrary JSON with debounced persistence
-- Good, because project-scope already proves this pattern (`ProjectEntry[]` in state)
+- Good, because the legacy `workspace-scope` extension already proves this pattern (`ProjectEntry[]` in its state — historical name preserved as that's what shipped on disk)
 - Good, because it requires zero changes to the settings schema or core settings UI
 - Bad, because state-backed configuration is invisible in the Settings overlay — users must find the extension's custom UI
 

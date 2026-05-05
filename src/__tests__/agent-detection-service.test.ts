@@ -14,15 +14,13 @@ vi.mock("../lib/stores/workspace", async () => {
   const _ws = w([]);
   return {
     workspaces: _ws,
-    // Keep workspaces alias so transitive imports (workspace-runtime-service etc.)
-    // that still import workspaces don't get undefined.
-    workspaces: _ws,
     activeWorkspaceIdx: w(-1),
     activeWorkspace: d(_ws, () => null),
     activeSurface: w(null),
     activePseudoWorkspaceId: w(null),
     zoomedSurfaceId: w(null),
     workspaceHistory: w([null, null]),
+    installSchedulePersist: () => undefined,
   };
 });
 

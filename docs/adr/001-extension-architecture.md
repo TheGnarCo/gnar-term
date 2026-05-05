@@ -153,19 +153,19 @@ interface ExtensionAPI {
 
 ### Extension points (v1 — delivered)
 
-| Seam                     | Core owns                                              | Extension owns                                     |
-| ------------------------ | ------------------------------------------------------ | -------------------------------------------------- |
-| Secondary sidebar tabs   | Tab bar rendering, switching, scrolling, reorder       | Tab label/icon, content component                  |
-| Secondary control row    | Icon button rendering, click routing                   | Action declarations (icon + id), handler functions |
-| Primary sidebar sections | Collapsible header (label + chevron), expand/collapse  | Content component below header                     |
-| Custom surface types     | Surface tab in pane, lifecycle                         | Content component inside pane                      |
-| Commands                 | Palette rendering, display                             | Command handler                                    |
-| Context menu items       | Menu rendering, file pattern matching                  | Handler function, when pattern                     |
-| Overlays                 | Rendering above main content, lifecycle                | Overlay component, props                           |
-| Dashboard tabs           | Dashboard overlay, tab bar                             | Tab component, label                               |
-| Workspace actions        | Button rendering in sidebar header / project sections  | Handler, icon, visibility filter                   |
-| Workspace claiming       | Filtering claimed workspaces from main list            | Claim/unclaim calls                                |
-| Settings pages           | Settings overlay, left nav, JSON Schema form rendering | JSON Schema for settings fields                    |
+| Seam                     | Core owns                                               | Extension owns                                     |
+| ------------------------ | ------------------------------------------------------- | -------------------------------------------------- |
+| Secondary sidebar tabs   | Tab bar rendering, switching, scrolling, reorder        | Tab label/icon, content component                  |
+| Secondary control row    | Icon button rendering, click routing                    | Action declarations (icon + id), handler functions |
+| Primary sidebar sections | Collapsible header (label + chevron), expand/collapse   | Content component below header                     |
+| Custom surface types     | Surface tab in pane, lifecycle                          | Content component inside pane                      |
+| Commands                 | Palette rendering, display                              | Command handler                                    |
+| Context menu items       | Menu rendering, file pattern matching                   | Handler function, when pattern                     |
+| Overlays                 | Rendering above main content, lifecycle                 | Overlay component, props                           |
+| Dashboard tabs           | Dashboard overlay, tab bar                              | Tab component, label                               |
+| Workspace actions        | Button rendering in sidebar header / workspace sections | Handler, icon, visibility filter                   |
+| Workspace claiming       | Filtering claimed workspaces from main list             | Claim/unclaim calls                                |
+| Settings pages           | Settings overlay, left nav, JSON Schema form rendering  | JSON Schema for settings fields                    |
 
 ### Config structure
 
@@ -214,7 +214,7 @@ The Extensions page lists all extensions with enable/disable toggles and install
 | Diff Viewer          | Surface type           | Side-by-side and unified diff display for git changes                                               |
 | Git Status           | Status registry        | Git branch, PR review, and dirty state in the sidebar                                               |
 
-> **Note:** Project Scope was removed in ADR-004. Workspaces (its successor) live in core as the sole grouping primitive, with Branched Workspaces and Dashboard Workspaces riding on them.
+> **Note:** The legacy WorkspaceScope (formerly "Project Scope") extension was removed in ADR-004. Workspaces (its successor) live in core as the sole grouping primitive, with Branched Workspaces and Dashboard Workspaces riding on them.
 
 ## Alternatives considered
 

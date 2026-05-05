@@ -8,16 +8,16 @@ nav_order: 7
 
 Status: Accepted
 Date: 2026-05-05
-Supersedes: prior `Project` (extension-owned) and `AgentOrchestrator` (extension-owned) entities; the original draft of this ADR which proposed the term "Workspace Group" — the primitive shipped as **Workspace** instead.
+Supersedes: prior `WorkspaceScope` (extension-owned, formerly "Project Scope") and `AgentOrchestrator` (extension-owned) entities; the original draft of this ADR which proposed the term "Workspace Group" — the primitive shipped as **Workspace** instead.
 
 ## Context
 
 GnarTerm previously carried two parallel "container" concepts:
 
-- **Projects** (`src/extensions/project-scope/`) — a path-rooted grouping primitive that claimed workspaces by `metadata.projectId`.
-- **Agent Orchestrators** (`src/extensions/agentic-orchestrator/`) — an agent-flavoured container that owned its own dashboard workspace and could nest under a Project.
+- **WorkspaceScope** (`src/extensions/project-scope/`, formerly "Project Scope") — a path-rooted grouping primitive that claimed workspaces by metadata.
+- **Agent Orchestrators** (`src/extensions/agentic-orchestrator/`) — an agent-flavoured container that owned its own dashboard workspace and could nest under a WorkspaceScope.
 
-Each concept had its own root-row renderer, claim-by-metadata machinery, eagerly-owned dashboard workspace, and lifecycle quirks. A user creating "an agentic space inside a project" had to reason about two parallel entity types and their intersection, while the on-disk story split workspace data across the legacy `parentWorkspaces` array, a per-extension state file at `~/.config/gnar-term/extensions/workspace-groups/state.json`, and `state.workspaces[]`.
+Each concept had its own root-row renderer, claim-by-metadata machinery, eagerly-owned dashboard workspace, and lifecycle quirks. A user creating "an agentic space inside a Workspace" had to reason about two parallel entity types and their intersection, while the on-disk story split workspace data across the legacy `parentWorkspaces` array, a per-extension state file at `~/.config/gnar-term/extensions/workspace-groups/state.json`, and `state.workspaces[]`.
 
 The goal of this ADR is to record the shape that landed and the rules for adding to it — not the migration path that got us here.
 
@@ -25,13 +25,24 @@ The goal of this ADR is to record the shape that landed and the rules for adding
 
 There is exactly one container primitive — **Workspace** — and two child kinds that ride on it. All three persist in a single canonical array. User-facing vocabulary is **Workspace + Branch**; "parent / child" terminology survives in field names and internal types but is not exposed in UI.
 
+### Workspace dual nature (transitional)
+
+The `Workspace` is conceptually one primitive but has two runtime presences during the in-progress unification:
+
+1. **Metadata record** (`WorkspaceRecord` in `src/lib/stores/workspace.ts`) — the paneless, persistent record that owns Workspace-level fields (`path`, `color`, `isGit`, `branchedWorkspaceIds`, `dashboardWorkspaceId`, `lastActiveBranchedWorkspaceId`, `locked`). Lives in its own `workspacesStore` runtime store and renders the sidebar row + container chrome.
+2. **Renderable surface** — the Workspace's own pane layout (`splitRoot`, `activePaneId`). The Workspace's _primary surface is its terminal workspace_ (its own panes), not a child Dashboard or Branch. Activating a Workspace (row click, ⌘N) lands on this surface.
+
+These coexist because the metadata record was historically paneless (Stage 9 collapsed it from the legacy `parentWorkspaces[]`/`workspace-groups` extension state into a single `state.workspaces[]` row but kept it paneless). Stage 10 — not yet shipped — makes the metadata record carry its own `splitRoot`, drops the runtime split between record and renderable, and reduces "Workspace" to the single `Workspace` interface below. Until then the row-vs-tab UI is split across two entries that share an id.
+
+`DashboardWorkspace` and `BranchedWorkspace` are _not_ the Workspace's primary surface; they are children that render alongside it. The dashboard tile buttons in the banner activate dashboard children; clicking the row activates the Workspace itself.
+
 ### Type shape
 
 `src/lib/types.ts` defines the runtime types. `src/lib/config.ts` defines the on-disk equivalents.
 
 ```ts
-// Top-level: project-bound container shown in the sidebar.
-// Owns project-level fields (path, color, isGit, createdAt) and 0..N
+// Top-level: path-rooted container shown in the sidebar.
+// Owns Workspace-level fields (path, color, isGit, createdAt) and 0..N
 // children. Has its own pane layout — when no Branch is selected, the
 // Workspace itself is the working area.
 interface Workspace {
@@ -80,17 +91,17 @@ type ChildWorkspace = BranchedWorkspace | DashboardWorkspace;
 
 ### Pseudo-Workspaces
 
-A separate, non-persisted `PseudoWorkspace` exists for pinned containers that are not project-bound and cannot be deleted, renamed, or reordered through normal UI controls (e.g. the Global Agentic Dashboard at `position: "root-top"`). Pseudo-workspaces are registered by extensions with `{ id, position, icon, render, settings? }` and live in the pseudo-workspace registry — they are never written to `state.workspaces[]`.
+A separate, non-persisted `PseudoWorkspace` exists for pinned containers that are not path-rooted and cannot be deleted, renamed, or reordered through normal UI controls (e.g. the Global Agentic Dashboard at `position: "root-top"`). Pseudo-workspaces are registered by extensions with `{ id, position, icon, render, settings? }` and live in the pseudo-workspace registry — they are never written to `state.workspaces[]`.
 
 ### Discriminants and invariants
 
 The shape is a structural discriminated union. The rules:
 
-| Predicate                                            | Kind               | Required fields             |
-| ---------------------------------------------------- | ------------------ | --------------------------- |
-| `parentWorkspaceId` absent                           | Workspace          | `path` (when project-bound) |
-| `parentWorkspaceId` present + `worktreePath` present | BranchedWorkspace  | `worktreePath`, `branch`    |
-| `parentWorkspaceId` present + `isDashboard === true` | DashboardWorkspace | `dashboardContributionId`   |
+| Predicate                                            | Kind               | Required fields           |
+| ---------------------------------------------------- | ------------------ | ------------------------- |
+| `parentWorkspaceId` absent                           | Workspace          | `path` (when path-rooted) |
+| `parentWorkspaceId` present + `worktreePath` present | BranchedWorkspace  | `worktreePath`, `branch`  |
+| `parentWorkspaceId` present + `isDashboard === true` | DashboardWorkspace | `dashboardContributionId` |
 
 Invariants enforced by the runtime:
 
@@ -128,7 +139,7 @@ Extensions register dashboard kinds with `{ id, label, actionLabel, capPerGroup,
 - **`branched-workspaces`** (included extension) — registers the "Branch Workspace" tile action and palette command. Branch creation calls into `src/lib/services/worktree-service.ts` in core; the service stays in core so existing Branches are operable with the extension disabled.
 - **`agentic-orchestrator`** — registers the Agentic dashboard contribution (cap 1 per Workspace) and the `agentic.global` pseudo-workspace. Widgets read scope from a uniform `DashboardHostContext` provided by their host (real or pseudo); they take no scope props.
 
-Project Scope and the AgentOrchestrator entity (with `parentOrchestratorId`, `baseDir`, `parentProjectId`, `AgentOrchestratorRow`) are removed.
+The legacy WorkspaceScope (formerly "Project Scope") extension and the AgentOrchestrator entity (with `parentOrchestratorId`, `baseDir`, `parentProjectId`, `AgentOrchestratorRow`) are removed. Historical field names like `parentProjectId` are preserved here only so consumers migrating older state can grep for them.
 
 ## Consequences
 
@@ -147,8 +158,8 @@ Negative:
 ## Alternatives considered
 
 1. **Keep separate `Workspace`, `Branch`, `Dashboard` types with no shared base.** Rejected — duplicates layout, locked, extensionData, and lifecycle hooks. The shared base + structural discrimination matches actual usage where most consumers care about "any workspace" not "branch specifically".
-2. **Tag the union with a `kind: "project" | "branch" | "dashboard"` field.** Deferred, not rejected. Cleanest type story but a sweeping migration over persisted state. The structural discriminant works today; the tag is a follow-on.
-3. **User-facing "Group" or "Project" terminology.** Rejected — Workspace is the user's mental anchor (it's already in every menu, shortcut, and URL). Calling the container something else introduced a vocabulary tax with no payoff.
+2. **Tag the union with a `kind: "workspace" | "branch" | "dashboard"` field.** Deferred, not rejected. Cleanest type story but a sweeping migration over persisted state. The structural discriminant works today; the tag is a follow-on.
+3. **User-facing "Group" container terminology.** Rejected — Workspace is the user's mental anchor (it's already in every menu, shortcut, and URL). Calling the container something else introduced a vocabulary tax with no payoff.
 
 ## References
 

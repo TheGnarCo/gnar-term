@@ -39,7 +39,6 @@
   import DashboardTileIcon from "./DashboardTileIcon.svelte";
   import SidebarChipButton from "./SidebarChipButton.svelte";
   import RenameableLabel from "./RenameableLabel.svelte";
-  import SidebarSubtitleRow from "./SidebarSubtitleRow.svelte";
   import GridIcon from "../icons/GridIcon.svelte";
   import GitBranchIcon from "../icons/GitBranchIcon.svelte";
   import CloseIcon from "../icons/CloseIcon.svelte";
@@ -479,18 +478,22 @@
 
       <svelte:fragment slot="banner-subtitle" let:collapsed>
         {#if collapsed && workspaceBotStatus}
-          <SidebarSubtitleRow
+          <div
             data-workspace-bot-status-row
-            color={workspaceBotStatus.color}
-            padding="0 8px 4px 0"
-            opacity={0.85}
+            style="padding: 0 12px 2px 0; display: flex; align-items: center; min-width: 0; overflow: hidden; line-height: 1.2;"
           >
-            <BotIcon size={10} />
             <span
-              style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
-              >{workspaceBotStatus.label}</span
+              style="font-size: 10px; color: {subtitleFg}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; display: inline-flex; align-items: center; gap: 3px;"
+              title={workspaceBotStatus.label}
             >
-          </SidebarSubtitleRow>
+              <span
+                style="display: inline-flex; align-items: center; color: {workspaceBotStatus.color}; opacity: 0.8; flex-shrink: 0;"
+              >
+                <BotIcon size={10} />
+              </span>
+              {workspaceBotStatus.label}
+            </span>
+          </div>
         {/if}
         <div style="pointer-events: auto;">
           <PathStatusLine

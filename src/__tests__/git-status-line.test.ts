@@ -1,8 +1,8 @@
 /**
  * GitStatusLine regression tests: ensure normal child workspaces suppress
- * their inline git-info row (the project row shows shared diff/branch
- * state). Worktree child workspaces keep it — branch and dirty state
- * are per-worktree and not redundant with the project row.
+ * their inline git-info row (the parent Workspace row shows shared
+ * diff/branch state). Worktree child workspaces keep it — branch and
+ * dirty state are per-worktree and not redundant with the parent row.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, cleanup } from "@testing-library/svelte";

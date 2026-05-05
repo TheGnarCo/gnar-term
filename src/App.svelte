@@ -724,7 +724,7 @@
 
     // Rehydrate the persisted root-row order so drag-sorted layouts
     // survive across restarts. Entities are all registered by this
-    // point — extensions (projects, agent dashboards) appended during
+    // point — extensions (workspaces, agent dashboards) appended during
     // activation, and restoreWorkspaces appended workspaces — so the
     // known set is stable. bootstrapRootRowOrder re-sorts to match the
     // persisted order and appends any brand-new entity at the end.
@@ -847,7 +847,7 @@
     // Flush workspace and extension state to disk before the window closes.
     // Tauri v2: the window closes synchronously unless we preventDefault the
     // event first. Without this, the async flush races the process teardown
-    // and project membership / debounced writes can be lost on quit.
+    // and workspace membership / debounced writes can be lost on quit.
     void appWindow.onCloseRequested(async (event) => {
       event.preventDefault();
       const confirmed = await confirmQuit();

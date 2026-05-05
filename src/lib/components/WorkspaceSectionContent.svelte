@@ -16,9 +16,9 @@
     closeWorkspacesInWorkspace,
     workspaceDashboardPath,
     openWorkspaceDashboard,
+    activateWorkspace,
     WORKSPACE_STATE_CHANGED,
     toggleWorkspaceLock,
-    claimWorkspace,
   } from "../services/workspace-service";
   import { archiveWorkspace } from "../services/archive-service";
   import {
@@ -33,7 +33,6 @@
   import {
     switchWorkspace,
     closeWorkspace,
-    createWorkspaceFromDef,
   } from "../services/workspace-runtime-service";
   import { getDashboardContribution } from "../services/dashboard-contribution-registry";
   import DashboardTileIcon from "./DashboardTileIcon.svelte";
@@ -230,51 +229,12 @@
     closeWorkspacesInWorkspace(w.id);
   }
 
-  // Banner left-click: activate the workspace's last-active (or primary) branch
-  // if it's not already active. If already active this is a no-op.
+  // Banner left-click: activate the Workspace's own terminal tabs (its
+  // primary surface). Delegates to activateWorkspace so row-click and
+  // ⌘1-9 share one routing rule.
   async function handleBannerClick() {
     if (!workspace || isPrimaryActive) return;
-    // Prefer lastActiveBranchedWorkspaceId, fall back to primaryBranchedWorkspaceId.
-    const preferredId =
-      workspace.lastActiveBranchedWorkspaceId ??
-      workspace.primaryBranchedWorkspaceId;
-    const preferredWs = $workspaces.find((w) => w.id === preferredId);
-    if (preferredWs) {
-      const idx = $workspaces.indexOf(preferredWs);
-      if (idx >= 0) {
-        switchWorkspace(idx);
-        return;
-      }
-    } else if (workspace.primaryBranchedWorkspaceId) {
-      // Primary workspace is specifically set but missing (was deleted) — recreate it.
-      const primaryExists = $workspaces.some(
-        (w) => w.id === workspace!.primaryBranchedWorkspaceId,
-      );
-      if (!primaryExists) {
-        const newWsId = await createWorkspaceFromDef({
-          name: workspace.name,
-          cwd: workspace.path,
-          metadata: { parentWorkspaceId: workspace.id },
-        });
-        if (newWsId) {
-          updateWorkspace(workspace.id, {
-            primaryBranchedWorkspaceId: newWsId,
-          });
-          claimWorkspace(newWsId, "core");
-          // Re-fetch the workspace list to get the new workspace
-          const newIdx = $workspaces.findIndex((w) => w.id === newWsId);
-          if (newIdx >= 0) {
-            switchWorkspace(newIdx);
-          }
-          return;
-        }
-      }
-    }
-    if (openWorkspaceDashboard(workspace)) return;
-    const branchedIdx = $workspaces.findIndex((w) => {
-      return wsMeta(w)?.parentWorkspaceId === workspace!.id;
-    });
-    if (branchedIdx >= 0) switchWorkspace(branchedIdx);
+    await activateWorkspace(workspace.id);
   }
 
   function handleBannerContextMenu(e: MouseEvent) {

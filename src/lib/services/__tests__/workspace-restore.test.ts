@@ -1,11 +1,15 @@
 /**
- * Unit tests for S2 (last-active branch restore) and S9 (auto-run restore commands).
+ * Unit tests for S2 (last-active branch tracking) and S9 (auto-run restore commands).
  *
  * S2 tests:
  *   1. switchWorkspace records lastActiveBranchedWorkspaceId on parent workspace
  *   2. switchWorkspace does NOT record when child has no parentWorkspaceId
- *   3. activateWorkspace prefers lastActiveBranchedWorkspaceId over primaryBranchedWorkspaceId
- *   4. activateWorkspace falls back to primaryBranchedWorkspaceId when lastActive not set
+ *   3. activateWorkspace lands on primaryBranchedWorkspaceId — Workspace's
+ *      own tabs — even when lastActiveBranchedWorkspaceId points elsewhere.
+ *      lastActive is preserved as a tracking field for "jump to active
+ *      branch" but does NOT route row activations.
+ *   4. activateWorkspace lands on primaryBranchedWorkspaceId when lastActive
+ *      is unset (sanity case for the primary-only path).
  *
  * S9 tests:
  *   5. autoRunRestoreCommands=true → startupCommand set directly (not pendingRestoreCommand)
@@ -118,7 +122,7 @@ describe("S2 — last-active branch restore", () => {
     expect(getWorkspace("g1")?.lastActiveBranchedWorkspaceId).toBeUndefined();
   });
 
-  it("activateWorkspace prefers lastActiveBranchedWorkspaceId over primaryBranchedWorkspaceId when both exist", async () => {
+  it("activateWorkspace lands on primaryBranchedWorkspaceId even when lastActiveBranchedWorkspaceId points elsewhere", async () => {
     const ws = makeWorkspace("g1", {
       branchedWorkspaceIds: ["nw-primary", "nw-last"],
       primaryBranchedWorkspaceId: "nw-primary",
@@ -133,10 +137,10 @@ describe("S2 — last-active branch restore", () => {
 
     const idx = get(activeWorkspaceIdx);
     const active = get(workspaces)[idx];
-    expect(active?.id).toBe("nw-last");
+    expect(active?.id).toBe("nw-primary");
   });
 
-  it("activateWorkspace falls back to primaryBranchedWorkspaceId when lastActiveBranchedWorkspaceId is not set", async () => {
+  it("activateWorkspace lands on primaryBranchedWorkspaceId when lastActiveBranchedWorkspaceId is not set", async () => {
     const ws = makeWorkspace("g1", {
       branchedWorkspaceIds: ["nw-primary"],
       primaryBranchedWorkspaceId: "nw-primary",

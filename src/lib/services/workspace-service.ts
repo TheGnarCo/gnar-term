@@ -617,33 +617,35 @@ export function openWorkspaceDashboard(workspace: WorkspaceRecord): boolean {
 }
 
 /**
- * Activate a parent workspace: switch to its primary child workspace,
- * creating one if missing, or fall back to the dashboard / first child
- * workspace. Mirrors the WorkspaceSectionContent banner-click logic.
+ * Activate a Workspace by id: land on its own terminal tabs (the
+ * `primaryBranchedWorkspaceId` runtime workspace — the Workspace's
+ * primary surface per ADR-004).
+ *
+ * Row click and ⌘1-9 both flow through here. We deliberately ignore
+ * `lastActiveBranchedWorkspaceId` — that field tracks the most-recent
+ * Branch for the "jump to active branch" affordance, not for routing
+ * row activations. Branches and Dashboards are reached by clicking
+ * their own rows / dashboard tiles, not via the parent row.
+ *
+ * If the primary is set but missing (deleted or never restored),
+ * recreate it so the row remains clickable. Final fallbacks (dashboard,
+ * any branch) cover edge cases where no primary is set yet.
  */
 export async function activateWorkspace(workspaceId: string): Promise<void> {
   const workspace = getWorkspace(workspaceId);
   if (!workspace) return;
   const ws = get(workspaces);
-  // Prefer lastActiveBranchedWorkspaceId, fall back to primaryBranchedWorkspaceId
-  const preferredId =
-    workspace.lastActiveBranchedWorkspaceId ??
-    workspace.primaryBranchedWorkspaceId;
-  const preferredWs = preferredId
-    ? ws.find((w) => w.id === preferredId)
-    : undefined;
-  if (preferredWs) {
-    const idx = ws.indexOf(preferredWs);
+
+  const primaryId = workspace.primaryBranchedWorkspaceId;
+  const primaryWs = primaryId ? ws.find((w) => w.id === primaryId) : undefined;
+  if (primaryWs) {
+    const idx = ws.indexOf(primaryWs);
     if (idx >= 0) {
       switchWorkspace(idx);
       return;
     }
   }
-  // If the primary specifically is set but missing, recreate it.
-  const primaryExists =
-    workspace.primaryBranchedWorkspaceId &&
-    ws.some((w) => w.id === workspace.primaryBranchedWorkspaceId);
-  if (workspace.primaryBranchedWorkspaceId && !primaryExists) {
+  if (primaryId && !primaryWs) {
     const newWsId = await createWorkspaceFromDef({
       name: workspace.name,
       cwd: workspace.path,

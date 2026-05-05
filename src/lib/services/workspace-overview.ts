@@ -8,6 +8,7 @@
  * Settings tabs.
  */
 import type { Workspace } from "../types";
+import { isBranchedWorkspace } from "../types";
 
 export interface WorkspaceGroup {
   /** The primary workspace, or null for standalone child workspaces. */
@@ -89,10 +90,8 @@ export function resolveDirtyPath(
   ws: Workspace,
   parentPrimary: Workspace | null,
 ): string | null {
-  const worktreePath = (ws as Workspace & { worktreePath?: string })
-    .worktreePath;
-  if (typeof worktreePath === "string" && worktreePath) {
-    return worktreePath;
+  if (isBranchedWorkspace(ws) && ws.worktreePath) {
+    return ws.worktreePath;
   }
   if (parentPrimary?.path) {
     return parentPrimary.path;

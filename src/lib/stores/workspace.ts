@@ -12,7 +12,7 @@
  */
 import { get, writable, derived } from "svelte/store";
 import type { Writable, Readable } from "svelte/store";
-import type { Workspace } from "../types";
+import type { Workspace, BranchedWorkspace } from "../types";
 import { getAllPanes } from "../types";
 import type { WorkspaceDef, LayoutNode, WorkspaceRecord } from "../config";
 
@@ -85,19 +85,14 @@ export function normalizeWorkspace(
     ws.dashboardContributionId = meta.dashboardContributionId;
   }
 
-  // Worktree / branch fields
+  // Worktree / branch fields — once worktreePath is set, ws structurally
+  // becomes a BranchedWorkspace so we narrow once and write the rest.
   if (typeof meta.worktreePath === "string") {
-    (ws as Workspace & { worktreePath: string }).worktreePath =
-      meta.worktreePath;
-  }
-  if (typeof meta.branch === "string") {
-    (ws as Workspace & { branch: string }).branch = meta.branch;
-  }
-  if (typeof meta.baseBranch === "string") {
-    (ws as Workspace & { baseBranch: string }).baseBranch = meta.baseBranch;
-  }
-  if (typeof meta.repoPath === "string") {
-    (ws as Workspace & { repoPath: string }).repoPath = meta.repoPath;
+    const bws = ws as BranchedWorkspace;
+    bws.worktreePath = meta.worktreePath;
+    if (typeof meta.branch === "string") bws.branch = meta.branch;
+    if (typeof meta.baseBranch === "string") bws.baseBranch = meta.baseBranch;
+    if (typeof meta.repoPath === "string") bws.repoPath = meta.repoPath;
   }
 
   // User locking (from metadata)

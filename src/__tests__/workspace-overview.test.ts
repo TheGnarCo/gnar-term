@@ -7,7 +7,7 @@ import {
   buildGroups,
   resolveDirtyPath,
 } from "../lib/services/workspace-overview";
-import type { Workspace } from "../lib/types";
+import type { Workspace, BranchedWorkspace } from "../lib/types";
 
 // --- Helpers ---
 
@@ -49,8 +49,7 @@ function makeChild(
   if (opts.parentWorkspaceId) ws.parentWorkspaceId = opts.parentWorkspaceId;
   if (opts.isDashboard) ws.isDashboard = true;
   if (opts.worktreePath) {
-    (ws as Workspace & { worktreePath: string }).worktreePath =
-      opts.worktreePath;
+    (ws as BranchedWorkspace).worktreePath = opts.worktreePath;
   }
   return ws;
 }
@@ -145,6 +144,7 @@ describe("buildGroups", () => {
 describe("resolveDirtyPath", () => {
   it("returns worktreePath when present", () => {
     const ws = makeChild("n1", "branch", {
+      parentWorkspaceId: "u1",
       worktreePath: "/repos/alpha/worktree",
     });
     const primary = makePrimary("u1", "Alpha", "/repos/alpha");

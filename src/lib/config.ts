@@ -363,6 +363,27 @@ export async function loadState(): Promise<AppState> {
   } catch {
     _appState = {};
   }
+
+  // Pre-Stage-9 → Stage-9: fold legacy ParentWorkspace records into the
+  // unified state.workspaces[] list. Idempotent — short-circuits when
+  // there are no parentWorkspaces. The migrated state is written back to
+  // disk so future loads bypass the migration.
+  const { migrateLegacyWorkspaces } =
+    await import("./bootstrap/migrate-legacy-workspaces");
+  const migrated = migrateLegacyWorkspaces(_appState);
+  if (migrated !== _appState) {
+    _appState = migrated;
+    try {
+      await invoke("ensure_dir", { path: configDir });
+      await invoke("write_file", {
+        path,
+        content: JSON.stringify(_appState, null, 2),
+      });
+    } catch (err) {
+      console.error("[state] Failed to persist migrated state:", err);
+    }
+  }
+
   _appStateStore.set(_appState);
   return _appState;
 }

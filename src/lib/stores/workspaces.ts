@@ -5,24 +5,29 @@
  * Stage 5 so commands, overlays, and row renderers that manipulate
  * workspaces no longer depend on the extension API layer.
  *
- * Persistence (Stage 8): the workspace list and active-workspace id live
- * inside the unified `AppState` (`~/.config/gnar-term/state.json`).
- * The on-disk keys are still named `parentWorkspaces` /
- * `activeParentWorkspaceId` for now — they'll be renamed when the runtime
- * type unification (project record + layout) lands. On first load after
- * upgrade, data is migrated forward from the legacy per-extension file
- * at `~/.config/gnar-term/extensions/workspace-groups/state.json`; the
- * legacy file is left in place so a downgrade still finds its data.
+ * Persistence (Stage 9): project Workspace records are persisted as
+ * entries inside the unified `AppState.workspaces[]` (alongside Branches
+ * and Dashboards). The legacy on-disk keys
+ * `parentWorkspaces` / `activeParentWorkspaceId` are migrated forward
+ * once at load time (`loadState`) and then dropped. This store still
+ * exposes the legacy `ParentWorkspace` shape to existing consumers — its
+ * data is projected from `state.workspaces[]` at load and serialized
+ * back through `getProjectRecordsAsWorkspaceDefs()` on every persist
+ * triggered by the unified workspace store.
+ *
+ * On first load after the Stage 8 upgrade (no `parentWorkspaces` in
+ * state.json yet, no project records in `state.workspaces[]`), data is
+ * still migrated forward from the legacy per-extension file at
+ * `~/.config/gnar-term/extensions/workspace-groups/state.json`.
  */
 import { get, writable, type Readable } from "svelte/store";
 import { loadExtensionState } from "../services/extension-state";
-import { loadState, saveState } from "../config";
-import { makePersistScheduler } from "../utils/persist-scheduler";
+import { loadState, saveState, type WorkspaceDef } from "../config";
+import { schedulePersist as scheduleUnifiedPersist } from "./workspace";
 
 const LEGACY_STATE_ID = "workspace-groups";
 const LEGACY_WORKSPACES_KEY = "workspaces";
 const LEGACY_ACTIVE_WORKSPACE_ID_KEY = "activeWorkspaceId";
-const PERSIST_DEBOUNCE_MS = 300;
 
 /**
  * ParentWorkspace — legacy name for the persisted Workspace record:
@@ -58,24 +63,108 @@ const _activeWorkspaceId = writable<string | null>(null);
 
 let _loaded = false;
 
-async function persistNow(): Promise<void> {
-  await saveState({
-    parentWorkspaces: get(_workspaces),
-    activeParentWorkspaceId: get(_activeWorkspaceId) ?? undefined,
-  });
+/**
+ * Identify project-Workspace records inside the unified
+ * `state.workspaces[]` array. Project records carry a `path` and have
+ * neither a `parentWorkspaceId` (Branches/Dashboards) nor a
+ * `worktreePath` (orphaned Branches). The post-migration state.json
+ * uses this exact shape for project records.
+ */
+export function isProjectRecord(def: WorkspaceDef): boolean {
+  return (
+    def.path !== undefined &&
+    def.parentWorkspaceId === undefined &&
+    def.worktreePath === undefined &&
+    def.isDashboard !== true
+  );
 }
 
-const _scheduler = makePersistScheduler(persistNow, PERSIST_DEBOUNCE_MS);
-const schedulePersist = _scheduler.schedulePersist;
+/**
+ * Lift a project `WorkspaceDef` (post-migration shape) back to a
+ * `ParentWorkspace` for the legacy in-memory store. The
+ * `branchedWorkspaceIds` cache is reset to `[]` — the
+ * `workspace:created` listener rebuilds membership from
+ * `metadata.parentWorkspaceId`.
+ */
+function defToParentWorkspace(def: WorkspaceDef): ParentWorkspace {
+  return {
+    id: def.id,
+    name: def.name,
+    path: def.path ?? "",
+    color: def.color ?? "",
+    isGit: def.isGit ?? false,
+    createdAt: def.createdAt ?? new Date().toISOString(),
+    branchedWorkspaceIds: [],
+    ...(def.autoRunRestoreCommands !== undefined && {
+      autoRunRestoreCommands: def.autoRunRestoreCommands,
+    }),
+    ...(def.lastActiveBranchedWorkspaceId !== undefined && {
+      lastActiveBranchedWorkspaceId: def.lastActiveBranchedWorkspaceId,
+    }),
+    ...(def.dashboardWorkspaceId !== undefined && {
+      dashboardWorkspaceId: def.dashboardWorkspaceId,
+    }),
+    ...(def.locked !== undefined && { locked: def.locked }),
+  };
+}
+
+/**
+ * Inverse of `defToParentWorkspace`: serialize a ParentWorkspace back
+ * into a WorkspaceDef for persistence. Used by the unified workspace
+ * store's persist path so all workspaces (project, branched, dashboard)
+ * land in `state.workspaces[]` together.
+ *
+ * The on-disk shape carries an empty layout (`{ pane: { surfaces: [] }
+ * }`) for project records — at runtime, project records don't have a
+ * splitRoot of their own (their UI is delegated to the active Branch).
+ * Layout is preserved across restarts because the migration helper
+ * (`migrateLegacyWorkspaces`) inherits the absorbed primary's layout
+ * onto the merged record; this function never overwrites it because at
+ * runtime the legacy store does not track layouts.
+ */
+export function parentWorkspaceToDef(p: ParentWorkspace): WorkspaceDef {
+  const def: WorkspaceDef = {
+    id: p.id,
+    name: p.name,
+    layout: { pane: { surfaces: [] } },
+    path: p.path,
+    color: p.color,
+    isGit: p.isGit,
+    createdAt: p.createdAt,
+  };
+  if (p.autoRunRestoreCommands !== undefined) {
+    def.autoRunRestoreCommands = p.autoRunRestoreCommands;
+  }
+  if (p.lastActiveBranchedWorkspaceId !== undefined) {
+    def.lastActiveBranchedWorkspaceId = p.lastActiveBranchedWorkspaceId;
+  }
+  if (p.dashboardWorkspaceId !== undefined) {
+    def.dashboardWorkspaceId = p.dashboardWorkspaceId;
+  }
+  if (p.locked !== undefined) def.locked = p.locked;
+  return def;
+}
+
+/** Snapshot of project records ready to merge into `state.workspaces[]`. */
+export function getProjectRecordsAsWorkspaceDefs(): WorkspaceDef[] {
+  return get(_workspaces).map(parentWorkspaceToDef);
+}
+
+function schedulePersist(): void {
+  scheduleUnifiedPersist();
+}
 
 /**
  * Read state from disk and seed the stores. Idempotent — subsequent
  * calls are no-ops so tests can freely call the initializer.
  *
- * Reads from `AppState` (state.json). On first launch after the Stage 8
- * upgrade, if `AppState.parentWorkspaces` is missing, falls back to the
- * legacy extension-state file and writes the data forward into AppState
- * so subsequent loads are pure single-file reads.
+ * Stage 9: project records live inside `state.workspaces[]` after
+ * migration runs in `loadState`. We project them back to
+ * `ParentWorkspace` shape for the legacy in-memory store.
+ *
+ * On first launch where neither `state.parentWorkspaces` nor any
+ * project record in `state.workspaces[]` is present (very old install),
+ * fall back to the legacy per-extension state file and persist forward.
  */
 export async function loadWorkspaces(): Promise<void> {
   if (_loaded) return;
@@ -86,13 +175,22 @@ export async function loadWorkspaces(): Promise<void> {
   let workspaces: ParentWorkspace[] | null = null;
   let active: string | null = null;
 
-  if (Array.isArray(state.parentWorkspaces)) {
+  // Post-migration path: project records live in state.workspaces[].
+  if (Array.isArray(state.workspaces)) {
+    const projectDefs = state.workspaces.filter(isProjectRecord);
+    if (projectDefs.length > 0) {
+      workspaces = projectDefs.map(defToParentWorkspace);
+    }
+  }
+
+  // Pre-migration paths (should be rare since loadState runs migration):
+  // 1. state.parentWorkspaces still present (state.json predates this load).
+  if (workspaces === null && Array.isArray(state.parentWorkspaces)) {
     workspaces = state.parentWorkspaces;
-    active =
-      typeof state.activeParentWorkspaceId === "string"
-        ? state.activeParentWorkspaceId
-        : null;
-  } else {
+  }
+
+  // 2. legacy extension state file.
+  if (workspaces === null) {
     const legacy = await loadExtensionState(LEGACY_STATE_ID);
     if (Array.isArray(legacy[LEGACY_WORKSPACES_KEY])) {
       workspaces = legacy[LEGACY_WORKSPACES_KEY] as ParentWorkspace[];
@@ -101,11 +199,29 @@ export async function loadWorkspaces(): Promise<void> {
       active = legacy[LEGACY_ACTIVE_WORKSPACE_ID_KEY] as string;
     }
     if (workspaces && workspaces.length > 0) {
-      // Persist forward immediately so a future load reads from AppState.
+      // Persist forward immediately so future loads read from AppState.
       await saveState({
-        parentWorkspaces: workspaces,
-        activeParentWorkspaceId: active ?? undefined,
+        workspaces: [
+          ...workspaces.map(parentWorkspaceToDef),
+          ...(state.workspaces ?? []),
+        ],
+        activeWorkspaceId: active ?? state.activeWorkspaceId,
       });
+    }
+  }
+
+  // Active id resolution:
+  //   - state.activeWorkspaceId may already point at the project after migration.
+  //   - state.activeParentWorkspaceId is dropped by migration but tolerated as fallback.
+  if (active === null) {
+    const candidate =
+      typeof state.activeWorkspaceId === "string"
+        ? state.activeWorkspaceId
+        : typeof state.activeParentWorkspaceId === "string"
+          ? state.activeParentWorkspaceId
+          : null;
+    if (candidate !== null && workspaces?.some((w) => w.id === candidate)) {
+      active = candidate;
     }
   }
 
@@ -115,11 +231,8 @@ export async function loadWorkspaces(): Promise<void> {
 
 /** Flush pending writes — called from app close hooks. */
 export async function flushWorkspaces(): Promise<void> {
-  if (!_loaded) {
-    _scheduler.cancel();
-    return;
-  }
-  await _scheduler.flush();
+  // Persistence is owned by the unified workspace store; that store's
+  // own flush hook handles the write. No-op here.
 }
 
 export function getWorkspaces(): ParentWorkspace[] {
@@ -146,7 +259,6 @@ export function setActiveWorkspaceId(id: string | null): void {
 
 /** Test hook — reset in-memory state so tests start clean. */
 export function resetWorkspacesForTest(): void {
-  _scheduler.cancel();
   _workspaces.set([]);
   _activeWorkspaceId.set(null);
   _loaded = false;

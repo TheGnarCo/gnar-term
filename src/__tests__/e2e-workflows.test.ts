@@ -29,14 +29,6 @@ vi.mock("../lib/services/service-helpers", () => ({
   safeFocus: vi.fn(),
   getActiveCwd: vi.fn().mockResolvedValue(undefined),
   getCwdForSurface: vi.fn().mockResolvedValue(undefined),
-  wsMeta: (
-    ws:
-      | {
-          extensionData?: Record<string, unknown>;
-          metadata?: Record<string, unknown>;
-        }
-      | undefined,
-  ) => ws?.extensionData ?? ws?.metadata ?? {},
 }));
 
 // --- Imports ---

@@ -42,11 +42,9 @@ function makeDashboard(id: string, contribId: string): never {
       pane: { id: "p", surfaces: [], activeSurfaceId: null },
     },
     activePaneId: "p",
-    metadata: {
-      isDashboard: true,
-      parentWorkspaceId: WORKSPACE.id,
-      dashboardContributionId: contribId,
-    },
+    isDashboard: true,
+    parentWorkspaceId: WORKSPACE.id,
+    dashboardContributionId: contribId,
   } as never;
 }
 
@@ -79,8 +77,8 @@ describe("reconcileWorkspaceDashboards — dedupe all contribution types", () =>
 
     const remaining = get(workspaces).filter((w) => {
       return (
-        w.metadata?.dashboardContributionId === "settings" &&
-        w.metadata?.parentWorkspaceId === WORKSPACE.id
+        w.dashboardContributionId === "settings" &&
+        w.parentWorkspaceId === WORKSPACE.id
       );
     });
     expect(remaining).toHaveLength(1);
@@ -105,8 +103,8 @@ describe("reconcileWorkspaceDashboards — dedupe all contribution types", () =>
 
     const remaining = get(workspaces).filter((w) => {
       return (
-        w.metadata?.dashboardContributionId === "agentic" &&
-        w.metadata?.parentWorkspaceId === WORKSPACE.id
+        w.dashboardContributionId === "agentic" &&
+        w.parentWorkspaceId === WORKSPACE.id
       );
     });
     expect(remaining).toHaveLength(1);
@@ -143,8 +141,8 @@ describe("reconcileWorkspaceDashboards — dedupe all contribution types", () =>
     for (const contribId of ["group", "settings", "agentic"]) {
       const matches = all.filter((w) => {
         return (
-          w.metadata?.dashboardContributionId === contribId &&
-          w.metadata?.parentWorkspaceId === WORKSPACE.id
+          w.dashboardContributionId === contribId &&
+          w.parentWorkspaceId === WORKSPACE.id
         );
       });
       expect(

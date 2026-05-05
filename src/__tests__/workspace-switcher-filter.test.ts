@@ -12,15 +12,13 @@ function makeWs(
     parentWorkspaceId?: string;
   },
 ): Workspace {
-  const { parentWorkspaceId, ...rest } = overrides;
   return {
     splitRoot: {
       type: "pane",
       pane: { id: "p1", surfaces: [], activeSurfaceId: null },
     },
     activePaneId: "p1",
-    ...(parentWorkspaceId ? { metadata: { parentWorkspaceId } } : {}),
-    ...rest,
+    ...overrides,
   } as Workspace;
 }
 
@@ -69,18 +67,15 @@ describe("filterWorkspaces — child ordering within parent groups", () => {
       id: "nw-dash",
       name: "Dashboard",
       parentWorkspaceId: "ws-x",
-      metadata: { parentWorkspaceId: "ws-x", isDashboard: true },
+      isDashboard: true,
     });
     const branch = makeWs({
       id: "nw-branch",
       name: "feat/thing",
       parentWorkspaceId: "ws-x",
-      metadata: {
-        parentWorkspaceId: "ws-x",
-        worktreePath: "/some/path",
-        branch: "feat/thing",
-      },
-    });
+      worktreePath: "/some/path",
+      branch: "feat/thing",
+    } as Workspace & { worktreePath?: string; branch?: string });
     const main = makeWs({
       id: "nw-main",
       name: "main",

@@ -106,11 +106,9 @@ describe("provisionAutoDashboardsForWorkspace", () => {
         id: "ws-existing",
         name: "A",
         layout: { pane: { id: "p", surfaces: [], activeIdx: 0 } },
-        metadata: {
-          isDashboard: true,
-          parentWorkspaceId: workspace.id,
-          dashboardContributionId: "a",
-        },
+        isDashboard: true,
+        parentWorkspaceId: workspace.id,
+        dashboardContributionId: "a",
       } as never,
     ]);
 
@@ -130,11 +128,9 @@ describe("provisionAutoDashboardsForWorkspace", () => {
           id: `ws-${ws.length + 1}`,
           name: "B",
           layout: { pane: { id: "p", surfaces: [], activeIdx: 0 } },
-          metadata: {
-            isDashboard: true,
-            parentWorkspaceId: "g1",
-            dashboardContributionId: "b",
-          },
+          isDashboard: true,
+          parentWorkspaceId: "g1",
+          dashboardContributionId: "b",
         } as never,
       ]);
       return "ws-1";

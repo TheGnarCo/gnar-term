@@ -11,7 +11,6 @@
   import { theme } from "../stores/theme";
   import DashboardTileIcon from "./DashboardTileIcon.svelte";
   import GridIcon from "../icons/GridIcon.svelte";
-  import { wsMeta } from "../services/service-helpers";
 
   const host = getDashboardHost();
   const scope = deriveDashboardScope(host);
@@ -24,17 +23,14 @@
     : null;
 
   $: workspaceWs = parentWorkspaceId
-    ? $workspaces.filter(
-        (ws) => wsMeta(ws).parentWorkspaceId === parentWorkspaceId,
-      )
+    ? $workspaces.filter((ws) => ws.parentWorkspaceId === parentWorkspaceId)
     : [];
 
-  $: dashboardCards = workspaceWs.filter((ws) => {
-    const md = wsMeta(ws);
-    return md.isDashboard === true && md.dashboardContributionId !== "group";
-  });
+  $: dashboardCards = workspaceWs.filter(
+    (ws) => ws.isDashboard === true && ws.dashboardContributionId !== "group",
+  );
 
-  $: workspaceRows = workspaceWs.filter((ws) => !wsMeta(ws).isDashboard);
+  $: workspaceRows = workspaceWs.filter((ws) => !ws.isDashboard);
 
   $: workspaceColor = parentWorkspace
     ? resolveWorkspaceColor(parentWorkspace.color, $theme)
@@ -50,12 +46,11 @@
     label: string;
     workspacePath: string | undefined;
   } {
-    const md = wsMeta(ws);
-    const contribution = md.dashboardContributionId
-      ? getDashboardContribution(md.dashboardContributionId)
+    const contribution = ws.dashboardContributionId
+      ? getDashboardContribution(ws.dashboardContributionId)
       : undefined;
-    const tileWorkspacePath = md.parentWorkspaceId
-      ? $workspacesStore.find((w) => w.id === md.parentWorkspaceId)?.path
+    const tileWorkspacePath = ws.parentWorkspaceId
+      ? $workspacesStore.find((w) => w.id === ws.parentWorkspaceId)?.path
       : undefined;
     return {
       icon: contribution?.icon ?? GridIcon,
@@ -90,7 +85,7 @@
             <DashboardTileIcon
               iconComponent={info.icon}
               baseColor={workspaceColor}
-              contributionId={wsMeta(ws).dashboardContributionId}
+              contributionId={ws.dashboardContributionId}
               workspacePath={info.workspacePath}
             />
             <span class="dashboard-card-label">{info.label}</span>

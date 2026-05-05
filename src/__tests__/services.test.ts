@@ -29,14 +29,6 @@ vi.mock("../lib/services/service-helpers", () => ({
   safeFocus: vi.fn(),
   getActiveCwd: vi.fn().mockResolvedValue(undefined),
   getCwdForSurface: vi.fn().mockResolvedValue(undefined),
-  wsMeta: (
-    ws:
-      | {
-          extensionData?: Record<string, unknown>;
-          metadata?: Record<string, unknown>;
-        }
-      | undefined,
-  ) => ws?.extensionData ?? ws?.metadata ?? {},
 }));
 
 // --- Imports ---
@@ -405,16 +397,16 @@ describe("workspace-service", () => {
       expect(get(workspaces)[0].metadata?.locked).toBe(true);
     });
 
-    it("clears metadata.locked back to false on second toggle", () => {
+    it("clears locked back to false on second toggle", () => {
       const ws = makeChildWorkspace({
         name: "WS",
-        metadata: { locked: true },
+        locked: true,
       });
       workspaces.set([ws]);
 
       toggleWorkspaceLock(ws.id);
 
-      expect(get(workspaces)[0].metadata?.locked).toBe(false);
+      expect(get(workspaces)[0].locked).toBe(false);
     });
 
     it("preserves other metadata fields when toggling", () => {

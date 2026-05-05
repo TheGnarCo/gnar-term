@@ -125,11 +125,9 @@ describe("WorkspaceDashboardSettings — Dashboards toggles", () => {
         id: "ws-diff-1",
         name: "Diff",
         layout: { pane: { id: "p", surfaces: [], activeIdx: 0 } },
-        metadata: {
-          isDashboard: true,
-          parentWorkspaceId: WORKSPACE.id,
-          dashboardContributionId: "diff",
-        },
+        isDashboard: true,
+        parentWorkspaceId: WORKSPACE.id,
+        dashboardContributionId: "diff",
       } as never,
     ]);
 

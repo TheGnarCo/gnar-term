@@ -6,7 +6,6 @@ import {
   switchWorkspace,
 } from "./workspace-runtime-service";
 import { createRegistry } from "./create-registry";
-import { wsMeta } from "./service-helpers";
 
 interface DashboardWorkspaceEntry {
   id: string;
@@ -54,9 +53,7 @@ export async function spawnOrNavigate(id: string): Promise<void> {
   if (!entry) return;
 
   const wsList = get(workspaces);
-  const existingIdx = wsList.findIndex(
-    (w) => wsMeta(w).dashboardWorkspaceId === id,
-  );
+  const existingIdx = wsList.findIndex((w) => w.dashboardWorkspaceId === id);
 
   if (existingIdx >= 0) {
     switchWorkspace(existingIdx);

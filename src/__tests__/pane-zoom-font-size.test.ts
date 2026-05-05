@@ -89,14 +89,6 @@ vi.mock("../lib/services/service-helpers", () => ({
   getActiveCwd: vi.fn().mockResolvedValue(undefined),
   getCwdForSurface: vi.fn().mockResolvedValue(undefined),
   getHome: vi.fn().mockResolvedValue("/home/test"),
-  wsMeta: (
-    ws:
-      | {
-          extensionData?: Record<string, unknown>;
-          metadata?: Record<string, unknown>;
-        }
-      | undefined,
-  ) => ws?.extensionData ?? ws?.metadata ?? {},
 }));
 
 vi.mock("../lib/services/event-bus", () => ({

@@ -9,51 +9,7 @@ import {
   isTerminalSurface,
   type Surface,
   type TerminalSurface,
-  type Workspace,
-  type WorkspaceMetadata,
 } from "../types";
-import type { WorkspaceRecord } from "../config";
-
-/**
- * Returns a merged metadata view for a workspace.
- *
- * Stage 10 promoted previously-metadata fields (parentWorkspaceId,
- * isDashboard, dashboardWorkspaceId, worktreePath, locked, etc.) to
- * top-level Workspace fields. Existing call sites still read those
- * through `wsMeta`, so this view layers extension/legacy metadata first
- * and overlays top-level fields on top — top-level wins because it is
- * the canonical source after Stage 10.
- */
-export function wsMeta(ws: Workspace | WorkspaceRecord): WorkspaceMetadata {
-  const w = ws as Workspace;
-  const base: WorkspaceMetadata = {
-    ...((w.metadata as WorkspaceMetadata | undefined) ?? {}),
-    ...((w.extensionData as WorkspaceMetadata | undefined) ?? {}),
-  };
-  if (w.parentWorkspaceId !== undefined)
-    base.parentWorkspaceId = w.parentWorkspaceId;
-  if (w.isDashboard !== undefined) base.isDashboard = w.isDashboard;
-  if (w.dashboardWorkspaceId !== undefined)
-    base.dashboardWorkspaceId = w.dashboardWorkspaceId;
-  if (w.dashboardContributionId !== undefined)
-    base.dashboardContributionId = w.dashboardContributionId;
-  if (w.lastActiveBranchedWorkspaceId !== undefined)
-    base.lastActiveBranchedWorkspaceId = w.lastActiveBranchedWorkspaceId;
-  if (w.locked !== undefined) base.locked = w.locked;
-  if (w.autoRunRestoreCommands !== undefined)
-    base.autoRunRestoreCommands = w.autoRunRestoreCommands;
-  const bw = w as Partial<{
-    worktreePath: string;
-    branch: string;
-    baseBranch: string;
-    repoPath: string;
-  }>;
-  if (bw.worktreePath !== undefined) base.worktreePath = bw.worktreePath;
-  if (bw.branch !== undefined) base.branch = bw.branch;
-  if (bw.baseBranch !== undefined) base.baseBranch = bw.baseBranch;
-  if (bw.repoPath !== undefined) base.repoPath = bw.repoPath;
-  return base;
-}
 
 // Cached home directory — resolved once, reused everywhere
 let _home = "";

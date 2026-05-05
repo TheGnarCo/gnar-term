@@ -32,14 +32,6 @@ vi.mock("../lib/services/service-helpers", () => ({
   safeFocus: vi.fn(),
   getActiveCwd: vi.fn().mockResolvedValue(undefined),
   getCwdForSurface: vi.fn().mockResolvedValue(undefined),
-  wsMeta: (
-    ws:
-      | {
-          extensionData?: Record<string, unknown>;
-          metadata?: Record<string, unknown>;
-        }
-      | undefined,
-  ) => ws?.extensionData ?? ws?.metadata ?? {},
 }));
 
 const appendRootRowSpy = vi.fn();
@@ -194,7 +186,7 @@ describe("createWorkspaceFromSurface", () => {
     const pane = makePane([sA, sB]);
     const ws = makeChildWorkspace(
       { type: "pane", pane },
-      { metadata: { parentWorkspaceId: "workspace-1" } },
+      { parentWorkspaceId: "workspace-1" },
     );
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
@@ -203,7 +195,7 @@ describe("createWorkspaceFromSurface", () => {
 
     const updated = get(workspaces);
     const newWs = updated[1]!;
-    expect(newWs.metadata?.parentWorkspaceId).toBe("workspace-1");
+    expect(newWs.parentWorkspaceId).toBe("workspace-1");
     expect(addChildToWorkspaceSpy).toHaveBeenCalledWith(
       "workspace-1",
       newWs.id,
@@ -777,7 +769,7 @@ describe("createWorkspaceFromSurface — targetWorkspaceId", () => {
     const pane = makePane([sA, sB]);
     const ws = makeChildWorkspace(
       { type: "pane", pane },
-      { metadata: { parentWorkspaceId: "src-workspace" } },
+      { parentWorkspaceId: "src-workspace" },
     );
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
@@ -789,7 +781,7 @@ describe("createWorkspaceFromSurface — targetWorkspaceId", () => {
 
     const updated = get(workspaces);
     const newWs = updated.find((w) => w.id !== ws.id)!;
-    expect(newWs.metadata?.parentWorkspaceId).toBe("src-workspace");
+    expect(newWs.parentWorkspaceId).toBe("src-workspace");
     expect(insertChildIntoWorkspaceSpy).toHaveBeenCalledWith(
       "src-workspace",
       newWs.id,
@@ -803,7 +795,7 @@ describe("createWorkspaceFromSurface — targetWorkspaceId", () => {
     const pane = makePane([sA, sB]);
     const ws = makeChildWorkspace(
       { type: "pane", pane },
-      { metadata: { parentWorkspaceId: "src-workspace" } }, // srcWorkspaceId is set
+      { parentWorkspaceId: "src-workspace" }, // srcWorkspaceId is set
     );
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
@@ -816,7 +808,7 @@ describe("createWorkspaceFromSurface — targetWorkspaceId", () => {
 
     const updated = get(workspaces);
     const newWs = updated.find((w) => w.id !== ws.id)!;
-    expect(newWs.metadata?.parentWorkspaceId).toBe("target-workspace-override");
+    expect(newWs.parentWorkspaceId).toBe("target-workspace-override");
     expect(insertChildIntoWorkspaceSpy).toHaveBeenCalledWith(
       "target-workspace-override",
       newWs.id,

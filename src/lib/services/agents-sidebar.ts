@@ -8,7 +8,6 @@
 import type { DetectedAgent } from "./agent-detection-service";
 import type { Workspace } from "../types";
 import type { WorkspaceRecord } from "../config";
-import { wsMeta } from "./service-helpers";
 
 export interface AgentRow extends DetectedAgent {
   /** Display name of the child workspace (Branch) the agent lives in. */
@@ -33,7 +32,7 @@ export function buildAgentRows(
     .filter((a) => a.status !== "closed")
     .map((a) => {
       const ctx = branchedWsList.find((w) => w.id === a.workspaceId);
-      const parentId = ctx ? wsMeta(ctx).parentWorkspaceId : null;
+      const parentId = ctx?.parentWorkspaceId ?? null;
       const project = parentId
         ? workspaces.find((w) => w.id === parentId)
         : null;

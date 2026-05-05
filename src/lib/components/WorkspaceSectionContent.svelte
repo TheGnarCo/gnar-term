@@ -51,7 +51,6 @@
   import { getAllSurfaces, isPreviewSurface, type Workspace } from "../types";
   import { agentsStore } from "../services/agent-detection-service";
   import { variantColor } from "../status-colors";
-  import { wsMeta } from "../services/service-helpers";
   import { shortcutHintsActive } from "../stores/shortcut-hints";
   import { modLabel } from "../terminal-service";
 
@@ -124,7 +123,7 @@
         workspace.branchedWorkspaceIds.filter((id) => {
           const ws = $workspaces.find((w) => w.id === id);
           if (!ws) return false;
-          return !wsMeta(ws).isDashboard;
+          return !ws.isDashboard;
         }),
       )
     : new Set<string>();
@@ -202,10 +201,9 @@
   async function handleDeleteWorkspace() {
     const w = workspace;
     if (!w) return;
-    const branchedCount = $workspaces.filter((nw) => {
-      const md = wsMeta(nw);
-      return md?.parentWorkspaceId === w.id && !md?.isDashboard;
-    }).length;
+    const branchedCount = $workspaces.filter(
+      (nw) => nw.parentWorkspaceId === w.id && !nw.isDashboard,
+    ).length;
     const branchedLine =
       branchedCount > 0
         ? ` ${branchedCount} branch${branchedCount === 1 ? "" : "es"} will also be closed.`
@@ -287,13 +285,12 @@
     if (!wId) return [] as Array<{ ws: Workspace; idx: number }>;
     return $workspaces
       .map((ws, idx) => ({ ws, idx }))
-      .filter(({ ws }) => {
-        const md = wsMeta(ws);
-        return md?.isDashboard === true && md?.parentWorkspaceId === wId;
-      })
+      .filter(
+        ({ ws }) => ws.isDashboard === true && ws.parentWorkspaceId === wId,
+      )
       .sort((a, b) => {
-        const aS = wsMeta(a.ws)?.dashboardContributionId === "settings";
-        const bS = wsMeta(b.ws)?.dashboardContributionId === "settings";
+        const aS = a.ws.dashboardContributionId === "settings";
+        const bS = b.ws.dashboardContributionId === "settings";
         if (aS === bS) return 0;
         return aS ? 1 : -1;
       });
@@ -312,8 +309,7 @@
   ): void {
     const ws = $workspaces[globalIdx];
     if (!ws) return;
-    const md = wsMeta(ws);
-    const contribId = md?.dashboardContributionId;
+    const contribId = ws.dashboardContributionId;
     if (typeof contribId !== "string") return;
     const contribution = getDashboardContribution(contribId);
     if (!contribution || contribution.autoProvision) return;
@@ -460,8 +456,7 @@
 
       <svelte:fragment slot="btn-row" let:collapsed let:toggle let:showToggle>
         {#each dashboardWorkspaces as entry (entry.ws.id)}
-          {@const md = wsMeta(entry.ws)}
-          {@const contribId = md.dashboardContributionId}
+          {@const contribId = entry.ws.dashboardContributionId}
           {@const contribution = contribId
             ? getDashboardContribution(contribId)
             : undefined}

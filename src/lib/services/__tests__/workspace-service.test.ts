@@ -109,7 +109,7 @@ describe("workspace-service", () => {
           pane: { id: `${id}-p`, surfaces: [], activeSurfaceId: null },
         },
         activePaneId: `${id}-p`,
-        ...(parentWorkspaceId ? { metadata: { parentWorkspaceId } } : {}),
+        ...(parentWorkspaceId ? { parentWorkspaceId } : {}),
       } as Workspace;
     }
 
@@ -141,7 +141,7 @@ describe("workspace-service", () => {
     it("also closes the workspace's Dashboard child workspace (same parentWorkspaceId metadata)", () => {
       const dashboard = {
         ...makeWs("ws-dashboard", "g1"),
-        metadata: { parentWorkspaceId: "g1", isDashboard: true },
+        isDashboard: true,
       } as Workspace;
       workspaces.set([dashboard, makeWs("ws-child", "g1")]);
 

@@ -1277,7 +1277,7 @@ describe("WorkspaceItem", () => {
     const surface = makeSurface("s1", { notification: "Build complete" });
     const pane = makePane("p1", [surface]);
     const ws = makeChildWorkspace("ws1", "Child WS", pane);
-    ws.metadata = { parentWorkspaceId: "g1" };
+    ws.parentWorkspaceId = "g1";
     render(WorkspaceItem, {
       props: {
         workspace: ws,
@@ -1469,11 +1469,9 @@ describe("PaneView", () => {
       name: "Dashboard",
       splitRoot: { type: "pane", pane: makePane("p1") },
       activePaneId: "p1",
-      metadata: {
-        isDashboard: true,
-        parentWorkspaceId: "g1",
-        dashboardContributionId: "group",
-      },
+      isDashboard: true,
+      parentWorkspaceId: "g1",
+      dashboardContributionId: "group",
     };
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
@@ -1509,11 +1507,9 @@ describe("PaneView", () => {
       name: "Settings",
       splitRoot: { type: "pane", pane: makePane("p1") },
       activePaneId: "p1",
-      metadata: {
-        isDashboard: true,
-        parentWorkspaceId: "g1",
-        dashboardContributionId: "settings",
-      },
+      isDashboard: true,
+      parentWorkspaceId: "g1",
+      dashboardContributionId: "settings",
     };
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);

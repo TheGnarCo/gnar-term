@@ -26,13 +26,13 @@ import type { Workspace } from "../lib/types";
 
 function makeChildWorkspace(
   id: string,
-  metadata: Record<string, unknown> = {},
+  extraFields: Record<string, unknown> = {},
 ): Workspace {
   return {
     id,
     name: id,
     layout: { pane: { id: `${id}-pane`, surfaces: [], activeIdx: 0 } },
-    metadata,
+    ...extraFields,
   } as Workspace;
 }
 

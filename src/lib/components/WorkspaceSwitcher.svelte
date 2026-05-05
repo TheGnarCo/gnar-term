@@ -9,7 +9,6 @@
     type SwitcherRow,
   } from "../services/workspace-switcher-filter";
   import { isMac } from "../terminal-service";
-  import { wsMeta } from "../services/service-helpers";
   import type { Workspace } from "../types";
   import WorkspaceSwitcherChips from "./WorkspaceSwitcherChips.svelte";
 
@@ -56,9 +55,7 @@
     const targetId = parent?.lastActiveBranchedWorkspaceId;
     const idx = targetId
       ? $workspaces.findIndex((ws) => ws.id === targetId)
-      : $workspaces.findIndex(
-          (ws) => wsMeta(ws).parentWorkspaceId === parentId,
-        );
+      : $workspaces.findIndex((ws) => ws.parentWorkspaceId === parentId);
     if (idx >= 0) {
       switchWorkspace(idx);
       close();
@@ -126,8 +123,8 @@
   const shortcutLabel = isMac ? "⌘O" : "Ctrl+O";
 
   function wsDisplayLabel(ws: Workspace): string {
-    const meta = wsMeta(ws);
-    if (!meta.isDashboard && !meta.worktreePath) return "Workspace";
+    const worktreePath = (ws as { worktreePath?: string }).worktreePath;
+    if (!ws.isDashboard && !worktreePath) return "Workspace";
     return ws.name;
   }
 </script>
@@ -312,10 +309,10 @@
                 <WorkspaceSwitcherChips
                   ws={row.ws}
                   dirtyPath={(() => {
-                    const meta = wsMeta(row.ws);
-                    if (typeof meta.worktreePath === "string")
-                      return meta.worktreePath;
-                    const pid = meta.parentWorkspaceId;
+                    const worktreePath = (row.ws as { worktreePath?: string })
+                      .worktreePath;
+                    if (typeof worktreePath === "string") return worktreePath;
+                    const pid = row.ws.parentWorkspaceId;
                     if (typeof pid !== "string") return null;
                     return parentMap.get(pid)?.path ?? null;
                   })()}

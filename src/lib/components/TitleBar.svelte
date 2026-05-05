@@ -5,7 +5,7 @@
   import { spawnOrNavigate } from "../services/dashboard-workspace-service";
   import { isMac, modLabel, shiftModLabel } from "../terminal-service";
   import { shortcutHint } from "../actions/shortcut-hint";
-  import { isDebugBuild, wsMeta } from "../services/service-helpers";
+  import { isDebugBuild } from "../services/service-helpers";
   import { titleBarButtonStore } from "../services/titlebar-button-registry";
   import TitleBarContributedButton from "./TitleBarContributedButton.svelte";
   import { runCommandById } from "../services/command-registry";
@@ -37,9 +37,7 @@
   // hidden (and we're not fullscreen), the TitleBar starts at x=0, so push
   // its first button well past the traffic-light cluster.
   $: leftPadding = !$sidebarVisible && isMac && !$isFullscreen ? "84px" : "8px";
-  $: parentWorkspaceId = $activeWorkspace
-    ? wsMeta($activeWorkspace).parentWorkspaceId
-    : null;
+  $: parentWorkspaceId = $activeWorkspace?.parentWorkspaceId ?? null;
   $: parentWorkspace = parentWorkspaceId
     ? ($workspacesStore.find((w) => w.id === parentWorkspaceId) ?? null)
     : null;
@@ -52,9 +50,11 @@
   // Derive workspace type for the title context suffix
   $: wsTypeSuffix = (() => {
     if (!$activeWorkspace) return null;
-    const meta = wsMeta($activeWorkspace);
-    if (meta.isDashboard) return "Dashboard";
-    if (meta.worktreePath) return meta.branch ?? "Branch";
+    const worktreePath = ($activeWorkspace as { worktreePath?: string })
+      .worktreePath;
+    const branch = ($activeWorkspace as { branch?: string }).branch;
+    if ($activeWorkspace.isDashboard) return "Dashboard";
+    if (worktreePath) return branch ?? "Branch";
     return "Workspace";
   })();
 

@@ -35,7 +35,7 @@ import {
   type LayoutNode,
   type WorkspaceDef,
 } from "../config";
-import { safeFocus, wsMeta } from "./service-helpers";
+import { safeFocus } from "./service-helpers";
 import { readTerminalBuffer, writeSessionLog } from "./session-log-service";
 import { eventBus } from "./event-bus";
 import {
@@ -211,7 +211,8 @@ export async function createWorkspaceFromDef(
             // workspace has autoRunRestoreCommands enabled.
             surface.definedCommand = sDef.command;
             if (restoring) {
-              const parentWsId = def.metadata?.parentWorkspaceId;
+              const parentWsId =
+                def.parentWorkspaceId ?? def.metadata?.parentWorkspaceId;
               const parentWs = parentWsId ? getWorkspace(parentWsId) : null;
               if (parentWs?.autoRunRestoreCommands !== false) {
                 surface.startupCommand = sDef.command;
@@ -258,6 +259,10 @@ export async function createWorkspaceFromDef(
     splitRoot = { type: "pane", pane };
   }
 
+  // Build the workspace. Top-level fields on `def` win over the legacy
+  // `def.metadata` blob for backwards compat with callers (e.g. extensions)
+  // that still pass structural fields inside `metadata`.
+  const md = def.metadata;
   const ws: Workspace = {
     // Reuse the persisted id when restoring so rootRowOrder survives
     // a restart; mint a fresh one for first-launch creation.
@@ -265,44 +270,99 @@ export async function createWorkspaceFromDef(
     name: wsName,
     splitRoot,
     activePaneId: getAllPanes(splitRoot)[0]?.id ?? null,
-    ...(def.metadata ? { metadata: def.metadata } : {}),
+    ...(md ? { metadata: md } : {}),
   };
-  // Stage 10 round-trip fix: workspaceDefToTemplate stashes the
-  // discriminator + structural fields (parentWorkspaceId, isDashboard,
-  // worktreePath, etc.) into `metadata` so wsMeta consumers see them.
-  // serializeWorkspace, however, reads them only from top-level — without
-  // this promotion every restored Branch / Dashboard / Root drops its
-  // identity on the next persist, and the startup reconciler then
-  // re-promotes each one to a fresh Root. Promoting here closes the loop.
-  const md = def.metadata;
-  if (md) {
-    if (typeof md.parentWorkspaceId === "string")
-      ws.parentWorkspaceId = md.parentWorkspaceId;
-    if (typeof md.isDashboard === "boolean") ws.isDashboard = md.isDashboard;
-    if (typeof md.dashboardContributionId === "string")
-      ws.dashboardContributionId = md.dashboardContributionId;
-    if (typeof md.dashboardWorkspaceId === "string")
-      ws.dashboardWorkspaceId = md.dashboardWorkspaceId;
-    if (typeof md.lastActiveBranchedWorkspaceId === "string")
-      ws.lastActiveBranchedWorkspaceId = md.lastActiveBranchedWorkspaceId;
-    if (typeof md.locked === "boolean") ws.locked = md.locked;
-    if (typeof md.autoRunRestoreCommands === "boolean")
-      ws.autoRunRestoreCommands = md.autoRunRestoreCommands;
-    if (typeof md.path === "string") ws.path = md.path;
-    if (typeof md.color === "string") ws.color = md.color;
-    if (typeof md.isGit === "boolean") ws.isGit = md.isGit;
-    if (typeof md.createdAt === "string") ws.createdAt = md.createdAt;
-    const bw = ws as Workspace & {
-      worktreePath?: string;
-      branch?: string;
-      baseBranch?: string;
-      repoPath?: string;
-    };
-    if (typeof md.worktreePath === "string") bw.worktreePath = md.worktreePath;
-    if (typeof md.branch === "string") bw.branch = md.branch;
-    if (typeof md.baseBranch === "string") bw.baseBranch = md.baseBranch;
-    if (typeof md.repoPath === "string") bw.repoPath = md.repoPath;
-  }
+
+  // Structural / discriminant fields — top-level def wins over metadata.
+  const parentWorkspaceId =
+    def.parentWorkspaceId ??
+    (typeof md?.parentWorkspaceId === "string"
+      ? md.parentWorkspaceId
+      : undefined);
+  if (parentWorkspaceId !== undefined) ws.parentWorkspaceId = parentWorkspaceId;
+
+  const isDashboard =
+    def.isDashboard ??
+    (typeof md?.isDashboard === "boolean" ? md.isDashboard : undefined);
+  if (isDashboard !== undefined) ws.isDashboard = isDashboard;
+
+  const dashboardContributionId =
+    def.dashboardContributionId ??
+    (typeof md?.dashboardContributionId === "string"
+      ? md.dashboardContributionId
+      : undefined);
+  if (dashboardContributionId !== undefined)
+    ws.dashboardContributionId = dashboardContributionId;
+
+  const dashboardWorkspaceId =
+    def.dashboardWorkspaceId ??
+    (typeof md?.dashboardWorkspaceId === "string"
+      ? md.dashboardWorkspaceId
+      : undefined);
+  if (dashboardWorkspaceId !== undefined)
+    ws.dashboardWorkspaceId = dashboardWorkspaceId;
+
+  const lastActiveBranchedWorkspaceId =
+    def.lastActiveBranchedWorkspaceId ??
+    (typeof md?.lastActiveBranchedWorkspaceId === "string"
+      ? md.lastActiveBranchedWorkspaceId
+      : undefined);
+  if (lastActiveBranchedWorkspaceId !== undefined)
+    ws.lastActiveBranchedWorkspaceId = lastActiveBranchedWorkspaceId;
+
+  const locked =
+    def.locked ?? (typeof md?.locked === "boolean" ? md.locked : undefined);
+  if (locked !== undefined) ws.locked = locked;
+
+  const autoRunRestoreCommands =
+    def.autoRunRestoreCommands ??
+    (typeof md?.autoRunRestoreCommands === "boolean"
+      ? md.autoRunRestoreCommands
+      : undefined);
+  if (autoRunRestoreCommands !== undefined)
+    ws.autoRunRestoreCommands = autoRunRestoreCommands;
+
+  const path = def.path ?? (typeof md?.path === "string" ? md.path : undefined);
+  if (path !== undefined) ws.path = path;
+
+  const color =
+    def.color ?? (typeof md?.color === "string" ? md.color : undefined);
+  if (color !== undefined) ws.color = color;
+
+  const isGit =
+    def.isGit ?? (typeof md?.isGit === "boolean" ? md.isGit : undefined);
+  if (isGit !== undefined) ws.isGit = isGit;
+
+  const createdAt =
+    def.createdAt ??
+    (typeof md?.createdAt === "string" ? md.createdAt : undefined);
+  if (createdAt !== undefined) ws.createdAt = createdAt;
+
+  // Branch fields (BranchedWorkspace extension)
+  const bw = ws as Workspace & {
+    worktreePath?: string;
+    branch?: string;
+    baseBranch?: string;
+    repoPath?: string;
+  };
+  const worktreePath =
+    def.worktreePath ??
+    (typeof md?.worktreePath === "string" ? md.worktreePath : undefined);
+  if (worktreePath !== undefined) bw.worktreePath = worktreePath;
+
+  const branch =
+    def.branch ?? (typeof md?.branch === "string" ? md.branch : undefined);
+  if (branch !== undefined) bw.branch = branch;
+
+  const baseBranch =
+    def.baseBranch ??
+    (typeof md?.baseBranch === "string" ? md.baseBranch : undefined);
+  if (baseBranch !== undefined) bw.baseBranch = baseBranch;
+
+  const repoPath =
+    def.repoPath ??
+    (typeof md?.repoPath === "string" ? md.repoPath : undefined);
+  if (repoPath !== undefined) bw.repoPath = repoPath;
 
   workspaces.update((list) => [...list, ws]);
   // Stage 10: a runtime workspace whose id matches a WorkspaceRecord is
@@ -354,7 +414,7 @@ export function switchWorkspace(idx: number) {
   // Record the last-active child workspace on the parent workspace
   // so activateWorkspace can restore it on the next switch.
   const ws = wsList[idx];
-  const parentWsId = ws ? wsMeta(ws).parentWorkspaceId : undefined;
+  const parentWsId = ws?.parentWorkspaceId;
   if (ws && parentWsId) {
     updateWorkspace(parentWsId, { lastActiveBranchedWorkspaceId: ws.id });
   }
@@ -449,7 +509,7 @@ export function toggleWorkspaceLock(workspaceId: string): void {
     list.map((ws) => {
       if (ws.id !== workspaceId) return ws;
       changed = true;
-      const nextLocked = !wsMeta(ws).locked;
+      const nextLocked = !ws.locked;
       return {
         ...ws,
         locked: nextLocked,
@@ -644,7 +704,7 @@ export function createWorkspaceFromSurface(
     surfaces: [surface],
     activeSurfaceId: surface.id,
   };
-  const srcWorkspaceId = srcWs ? wsMeta(srcWs).parentWorkspaceId : undefined;
+  const srcWorkspaceId = srcWs?.parentWorkspaceId;
   const effectiveWorkspaceId =
     (insertOptions?.kind === "workspace" && insertOptions.targetWorkspaceId) ||
     srcWorkspaceId;

@@ -56,7 +56,6 @@
   import { resolveWorkspaceColor } from "../theme-data";
   import { archiveWorkspace } from "../services/archive-service";
   import { buildWorkspaceContextMenuItems } from "../utils/workspace-context-menu";
-  import { wsMeta } from "../services/service-helpers";
   import { toggleWorkspaceLock } from "../services/workspace-runtime-service";
   import { getWorkspace } from "../stores/workspace";
 
@@ -311,7 +310,7 @@
     const srcRow = $rootRowOrder[rowIdx];
     if (srcRow?.kind === "child-workspace") {
       const ws = $workspaces.find((w) => w.id === srcRow.id);
-      if (ws && wsMeta(ws).locked === true) return;
+      if (ws && ws.locked === true) return;
     } else if (srcRow?.kind === "workspace") {
       const workspace = getWorkspace(srcRow.id);
       if (workspace?.locked === true) return;
@@ -338,7 +337,7 @@
     if (pw) return resolvePseudoWorkspaceColor(pw);
     const ws = sourceEntry?.workspace;
     if (ws) {
-      const dashId = wsMeta(ws).dashboardWorkspaceId;
+      const dashId = ws.dashboardWorkspaceId;
       if (typeof dashId === "string") {
         return (
           $dashboardWorkspaceRegistry.get(dashId)?.accentColor ?? $theme.accent
@@ -401,10 +400,9 @@
   function showWorkspaceContextMenu(x: number, y: number, globalIdx: number) {
     const ws = $workspaces[globalIdx];
     if (!ws) return;
-    const md = wsMeta(ws);
-    const isDashboard = md?.isDashboard === true;
-    const isInsideWorkspace = typeof md?.parentWorkspaceId === "string";
-    const isLocked = md?.locked === true;
+    const isDashboard = ws.isDashboard === true;
+    const isInsideWorkspace = typeof ws.parentWorkspaceId === "string";
+    const isLocked = ws.locked === true;
     const items = buildWorkspaceContextMenuItems({
       isDashboard,
       isInsideWorkspace,
@@ -443,7 +441,7 @@
     effectiveInsertIndicator?.idx === entry.idx &&
     effectiveInsertIndicator.edge === "after"}
   {@const ws = entry.workspace}
-  {@const _dashId = ws ? wsMeta(ws).dashboardWorkspaceId : undefined}
+  {@const _dashId = ws?.dashboardWorkspaceId}
   {@const rowColor =
     entry.rendererRailColor ??
     (entry.pseudoWorkspace

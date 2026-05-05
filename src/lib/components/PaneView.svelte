@@ -22,7 +22,6 @@
   import ExtensionWrapper from "./ExtensionWrapper.svelte";
   import { tabDragState } from "../services/tab-drag";
   import { workspaceDragState } from "../services/workspace-drag";
-  import { wsMeta } from "../services/service-helpers";
   import { dismissPane, relaunchPane } from "../services/pane-service";
 
   export let pane: Pane;
@@ -80,10 +79,7 @@
   // (metadata.parentWorkspaceId), keep the workspace regen affordance
   // so users can re-spawn a workspace-dashboard preview surface after
   // closing it.
-  $: workspaceMetadata = (() => {
-    const ws = $workspaces.find((w) => w.id === workspaceId);
-    return ws ? wsMeta(ws) : undefined;
-  })();
+  $: workspaceMetadata = $workspaces.find((w) => w.id === workspaceId);
   $: isDashboardWorkspace = workspaceMetadata?.isDashboard === true;
   // When the dashboard workspace belongs to the core "settings"
   // contribution, PaneView renders the shared WorkspaceDashboardSettings

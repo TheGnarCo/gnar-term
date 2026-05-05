@@ -23,7 +23,6 @@
   import SidebarRail from "./SidebarRail.svelte";
   import DefaultWorkspaceListView from "./WorkspaceListView.svelte";
   import type { Workspace } from "../types";
-  import { wsMeta } from "../services/service-helpers";
 
   /** Banner + rail color. Required. */
   export let color: string;
@@ -94,7 +93,7 @@
   // Non-dashboard count: dashboards don't count as real child workspaces for
   // the purposes of showing the toggle button and auto-expand/collapse.
   $: nonDashboardCount = $workspaces.filter(
-    (ws) => filterIds.has(ws.id) && wsMeta(ws).isDashboard !== true,
+    (ws) => filterIds.has(ws.id) && ws.isDashboard !== true,
   ).length;
 
   let collapsed = false;

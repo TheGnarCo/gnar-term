@@ -26,7 +26,6 @@ import {
   closeWorkspace,
 } from "./workspace-runtime-service";
 import { workspaces } from "../stores/workspace";
-import { wsMeta } from "./service-helpers";
 
 /** Result of a git_merge Tauri command invocation. */
 interface MergeResult {
@@ -424,10 +423,10 @@ export async function confirmAndCloseWorkspace(
   // Service-level lock guard: the right-click menu disables Close when a
   // workspace is locked, but ⇧⌘W and the command palette dispatch directly
   // here. Gating at the service ensures every caller honors the lock.
-  if (wsMeta(ws).locked === true) return false;
+  if (ws.locked === true) return false;
   const entry = getWorktreeEntries().find((e) => e.workspaceId === ws.id);
   if (!entry) {
-    const isDashboard = typeof wsMeta(ws).dashboardWorkspaceId === "string";
+    const isDashboard = typeof ws.dashboardWorkspaceId === "string";
     if (!isDashboard) {
       const confirmed = await showConfirmPrompt(
         `Close "${ws.name}"? This will dispose the terminal.`,

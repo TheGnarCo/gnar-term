@@ -60,7 +60,7 @@ import {
   waitForPtyReady,
   onFirstPtyOutput,
 } from "../terminal-service";
-import { safeFocus, wsMeta } from "./service-helpers";
+import { safeFocus } from "./service-helpers";
 import {
   registerMcpPty,
   unregisterMcpPty,
@@ -586,7 +586,7 @@ registerTool({
     }
 
     const target = resolveTarget(p, ctx);
-    if (wsMeta(target.workspace).locked === true) {
+    if (target.workspace.locked === true) {
       throw new Error(
         `workspace "${target.workspace.id}" is locked — agents cannot be spawned into it`,
       );

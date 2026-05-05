@@ -17,14 +17,13 @@
   import { workspaces } from "../stores/workspace";
   import { getWorkspaceStatusByCategory } from "../services/status-registry";
   import { GIT_STATUS_SOURCE } from "../services/git-status-service";
-  import { wsMeta } from "../services/service-helpers";
   import type { StatusItem } from "../types/status";
 
   export let workspaceId: string;
   export let accentColor: string | undefined = undefined;
 
   $: currentWs = $workspaces.find((w) => w.id === workspaceId);
-  $: isChild = Boolean(currentWs && wsMeta(currentWs).parentWorkspaceId);
+  $: isChild = Boolean(currentWs?.parentWorkspaceId);
 
   $: fgMuted = ($theme["fgMuted"] ?? $theme.fgDim) as string;
   $: iconFg = accentColor ?? fgMuted;

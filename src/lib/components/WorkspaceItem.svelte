@@ -20,7 +20,6 @@
   import { getAllSurfaces } from "../types";
   import type { Workspace } from "../types";
   import { workspaceSurfaceMap } from "../services/workspace-runtime-service";
-  import { wsMeta } from "../services/service-helpers";
   import { workspacesStore } from "../stores/workspace";
 
   export let workspace: Workspace;
@@ -60,17 +59,17 @@
     $workspaceSurfaceMap.get(workspace.id) ?? getAllSurfaces(workspace);
   $: hasUnread = allSurfaces.some((s) => s.hasUnread);
   $: latestNotification = allSurfaces.find((s) => s.notification)?.notification;
-  $: isManaged = !!wsMeta(workspace).worktreePath;
+  $: worktreePath = (workspace as { worktreePath?: string }).worktreePath;
+  $: isManaged = !!worktreePath;
   $: worktreeDirName = (() => {
-    const path = wsMeta(workspace).worktreePath;
-    if (!path) return "";
-    const parts = path.split("/").filter((p) => p.length > 0);
+    if (!worktreePath) return "";
+    const parts = worktreePath.split("/").filter((p) => p.length > 0);
     return parts[parts.length - 1] || "";
   })();
   $: shouldShowWorktreeStatus =
     isManaged && worktreeDirName && worktreeDirName !== workspace.name;
   $: dashboardWorkspaceEntry = (() => {
-    const id = wsMeta(workspace).dashboardWorkspaceId;
+    const id = workspace.dashboardWorkspaceId;
     if (typeof id !== "string") return null;
     return $dashboardWorkspaceRegistry.get(id) ?? null;
   })();
@@ -83,32 +82,31 @@
   // Dashboards are singleton surfaces bound to their workspace;
   // suppress close / rename / right-click affordances so the user
   // interacts with them only via the workspace's tile.
-  $: isDashboardWs = wsMeta(workspace).isDashboard === true;
+  $: isDashboardWs = workspace.isDashboard === true;
   $: isDashboardWorkspaceRow = dashboardWorkspaceIcon !== null;
   // Locked workspaces: drag-start is suppressed at the row level,
   // close affordance is hidden in the grip, and the rail shows a
   // lock chip in place of the close button.
-  $: isLocked = wsMeta(workspace).locked === true;
+  $: isLocked = workspace.locked === true;
   // Child workspaces live under a parent workspace's colored banner.
   // The banner itself already rolls up status (and the per-row chip
   // handles agent state), so the long blue notification row duplicates
   // chrome and crowds the child layout — suppress it in that context.
-  $: isInsideWorkspace =
-    typeof wsMeta(workspace).parentWorkspaceId === "string";
+  $: isInsideWorkspace = typeof workspace.parentWorkspaceId === "string";
   // Surface the parent workspace's path-missing flag on every child
   // row inside it. The parent banner (ContainerRow) currently has no
   // affordance for this state — flagging it on the row makes the
   // condition discoverable from anywhere the workspace renders.
   $: parentWorkspacePathMissing = (() => {
-    const parentId = wsMeta(workspace).parentWorkspaceId;
+    const parentId = workspace.parentWorkspaceId;
     if (typeof parentId !== "string") return false;
     return (
       $workspacesStore.find((w) => w.id === parentId)?.pathMissing === true
     );
   })();
-  $: isAgentSpawned = wsMeta(workspace).spawnedBy != null;
+  $: isAgentSpawned = workspace.metadata?.spawnedBy != null;
   $: agentSpawnTooltip = (() => {
-    const sb = wsMeta(workspace).spawnedBy;
+    const sb = workspace.metadata?.spawnedBy;
     if (!sb) return "";
     if (sb.kind === "global") return "Spawned by Global Agentic Dashboard";
     const parent = $workspacesStore.find((w) => w.id === sb.parentWorkspaceId);

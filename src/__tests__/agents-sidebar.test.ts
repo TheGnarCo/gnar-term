@@ -37,7 +37,7 @@ function makeChildWorkspace(
       pane: { id: "pane-1", surfaces: [], activeSurfaceId: null },
     },
     activePaneId: "pane-1",
-    metadata: parentWorkspaceId ? { parentWorkspaceId } : undefined,
+    ...(parentWorkspaceId ? { parentWorkspaceId } : {}),
   };
 }
 

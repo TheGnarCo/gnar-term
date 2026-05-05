@@ -10,7 +10,6 @@ import {
   type Pane,
   type Surface,
 } from "../../types";
-import { wsMeta } from "../service-helpers";
 import { listPreviewSurfaces } from "../preview-surface-registry";
 import { pollEvents } from "../mcp-event-buffer";
 import { agentsStore } from "../agent-detection-service";
@@ -85,18 +84,19 @@ export const introspectionTools: ToolDef[] = [
     inputSchema: { type: "object", properties: {} },
     handler: () => {
       const list = get(workspaces).map((ws) => {
-        const m = wsMeta(ws);
+        const worktreePath =
+          (ws as { worktreePath?: string }).worktreePath ?? null;
         return {
           id: ws.id,
           name: ws.name,
           activePaneId: ws.activePaneId,
-          locked: m.locked === true,
-          isDashboard: m.isDashboard === true,
-          isBranched: typeof m.worktreePath === "string",
-          worktreePath: m.worktreePath ?? null,
-          parentWorkspaceId: m.parentWorkspaceId ?? null,
-          projectId: m.projectId ?? null,
-          spawnedBy: m.spawnedBy ?? null,
+          locked: ws.locked === true,
+          isDashboard: ws.isDashboard === true,
+          isBranched: typeof worktreePath === "string",
+          worktreePath,
+          parentWorkspaceId: ws.parentWorkspaceId ?? null,
+          projectId: ws.metadata?.projectId ?? null,
+          spawnedBy: ws.metadata?.spawnedBy ?? null,
         };
       });
       return { workspaces: list };
@@ -221,7 +221,7 @@ export const introspectionTools: ToolDef[] = [
       };
       const ws = get(workspaces).find((w) => w.id === workspace_id);
       if (!ws) throw new Error(`workspace ${workspace_id} not found`);
-      const current = wsMeta(ws).locked === true;
+      const current = ws.locked === true;
       if (current !== locked) toggleWorkspaceLock(workspace_id);
       return { workspace_id, locked };
     },

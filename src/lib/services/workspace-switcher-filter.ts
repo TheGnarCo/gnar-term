@@ -1,6 +1,5 @@
 import type { Workspace } from "../types";
 import type { WorkspaceRecord } from "../config";
-import { wsMeta } from "./service-helpers";
 
 export interface SwitcherRow {
   ws: Workspace;
@@ -44,7 +43,7 @@ export function filterWorkspaces(
   // Flat mode (no parent workspaces): preserve original behavior
   if (parentWorkspaces.length === 0) {
     const rows: SwitcherRow[] = workspaces.map((ws, idx) => {
-      const parentId = wsMeta(ws).parentWorkspaceId;
+      const parentId = ws.parentWorkspaceId;
       const parent = parentId ? parentMap.get(parentId) : undefined;
       return {
         ws,
@@ -72,7 +71,7 @@ export function filterWorkspaces(
 
   for (let idx = 0; idx < workspaces.length; idx++) {
     const ws = workspaces[idx]!;
-    const parentId = wsMeta(ws).parentWorkspaceId;
+    const parentId = ws.parentWorkspaceId;
     const isUnderParent = !!(parentId && parentIds.has(parentId));
     const parent = isUnderParent ? parentMap.get(parentId!) : undefined;
 
@@ -133,9 +132,9 @@ export function filterWorkspaces(
 }
 
 function wsTypeOrder(ws: Workspace): number {
-  const meta = wsMeta(ws);
-  if (!meta.isDashboard && !meta.worktreePath) return 0; // main workspace first
-  if (meta.worktreePath) return 1; // branch workspaces second
+  const worktreePath = (ws as { worktreePath?: string }).worktreePath;
+  if (!ws.isDashboard && !worktreePath) return 0; // main workspace first
+  if (worktreePath) return 1; // branch workspaces second
   return 2; // dashboards last
 }
 

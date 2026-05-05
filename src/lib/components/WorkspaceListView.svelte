@@ -42,7 +42,6 @@
   import { commandStore } from "../services/command-registry";
   import { dashboardWorkspaceRegistry } from "../services/dashboard-workspace-service";
   import { buildWorkspaceContextMenuItems } from "../utils/workspace-context-menu";
-  import { wsMeta } from "../services/service-helpers";
 
   /** Set of workspace IDs to display. If undefined, shows all. */
   export let filterIds: Set<string> | undefined = undefined;
@@ -100,7 +99,7 @@
     .map((ws, idx) => ({ ws, idx }))
     .filter(({ ws }) => (filterIds ? filterIds.has(ws.id) : true));
 
-  $: entries = allEntries.filter(({ ws }) => wsMeta(ws).isDashboard !== true);
+  $: entries = allEntries.filter(({ ws }) => ws.isDashboard !== true);
 
   $: isChild = scopeId !== null;
 
@@ -187,7 +186,7 @@
     // Locked workspaces refuse drag-start. canStart in createDragReorder
     // fires before sourceIdx is populated, so we gate here instead.
     const ws = $workspaces[globalIdx];
-    if (ws && wsMeta(ws).locked === true) return;
+    if (ws && ws.locked === true) return;
     reorder.start(e, globalIdx);
   }
 
@@ -201,7 +200,7 @@
   $: railColor = accentColor ?? $theme.accent;
   $: overlayFg = contrastColor(railColor);
   $: dropAccent = (() => {
-    const id = sourceWs ? wsMeta(sourceWs).dashboardWorkspaceId : undefined;
+    const id = sourceWs?.dashboardWorkspaceId;
     if (typeof id === "string") {
       return $dashboardWorkspaceRegistry.get(id)?.accentColor ?? railColor;
     }
@@ -250,10 +249,9 @@
   function showChildContextMenu(x: number, y: number, globalIdx: number) {
     const ws = $workspaces[globalIdx];
     if (!ws) return;
-    const md = wsMeta(ws);
-    const isDashboard = md.isDashboard === true;
-    const isInsideWorkspace = typeof md.parentWorkspaceId === "string";
-    const isLocked = md.locked === true;
+    const isDashboard = ws.isDashboard === true;
+    const isInsideWorkspace = typeof ws.parentWorkspaceId === "string";
+    const isLocked = ws.locked === true;
     const canPromoteCommand = get(commandStore).some(
       (c) => c.id === "promote-child-workspace",
     );

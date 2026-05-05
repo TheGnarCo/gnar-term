@@ -22,7 +22,6 @@ import {
   splitPaneWithSurface,
 } from "./pane-service";
 import { createWorkspaceFromSurface } from "./workspace-runtime-service";
-import { wsMeta } from "./service-helpers";
 import { getWorkspaces } from "../stores/workspace";
 import { rootRowOrder } from "../stores/root-row-order";
 
@@ -250,9 +249,7 @@ function detectDropTarget(
         containerEl?.getAttribute("data-container-children") ?? null;
       if (parentWorkspaceId) {
         const srcWs = get(workspaces).find((w) => w.id === sourceWorkspaceId);
-        const srcWorkspaceId = srcWs
-          ? wsMeta(srcWs).parentWorkspaceId
-          : undefined;
+        const srcWorkspaceId = srcWs?.parentWorkspaceId;
         if (srcWorkspaceId !== parentWorkspaceId) {
           if (srcWorkspaceId) return null; // tab from a different workspace → deny
           // Root tab over a workspace's child workspace → create a nested
@@ -317,9 +314,7 @@ function detectDropTarget(
     }
     if (rootRowEl) {
       const srcWs = get(workspaces).find((w) => w.id === sourceWorkspaceId);
-      const srcWorkspaceId = srcWs
-        ? wsMeta(srcWs).parentWorkspaceId
-        : undefined;
+      const srcWorkspaceId = srcWs?.parentWorkspaceId;
       if (srcWorkspaceId) return null;
       const rowIdx = parseInt(
         rootRowEl.getAttribute("data-root-row-idx") || "0",
@@ -339,9 +334,7 @@ function detectDropTarget(
     const sidebar = el.closest("#sidebar");
     if (sidebar) {
       const srcWs = get(workspaces).find((w) => w.id === sourceWorkspaceId);
-      const srcWorkspaceId = srcWs
-        ? wsMeta(srcWs).parentWorkspaceId
-        : undefined;
+      const srcWorkspaceId = srcWs?.parentWorkspaceId;
       if (srcWorkspaceId) return null;
       if (srcWs && getAllSurfaces(srcWs).length > 1) {
         const order = get(rootRowOrder);

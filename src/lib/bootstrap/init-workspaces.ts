@@ -53,7 +53,7 @@ import {
   createDialogPrefill,
 } from "../stores/workspaces-ui";
 import { invoke } from "@tauri-apps/api/core";
-import { getActiveCwd, wsMeta } from "../services/service-helpers";
+import { getActiveCwd } from "../services/service-helpers";
 import type { WorkspaceMetadata } from "../types";
 import {
   createWorkspaceFromDef,
@@ -104,13 +104,12 @@ function generateId(): string {
 
 function onWorkspaceCreated(event: AppEvent): void {
   if (event.type !== "workspace:created") return;
-  // Stage 10 promoted parentWorkspaceId to a top-level Workspace field, so
-  // event.metadata may not carry it. Resolve through wsMeta against the
-  // live runtime workspace, falling back to the event payload for
+  // parentWorkspaceId is a top-level Workspace field; read it directly from
+  // the live runtime workspace, falling back to the event payload for
   // backwards compatibility with emitters that still pass metadata only.
   const ws = get(workspaces).find((w) => w.id === event.id);
   const parentWorkspaceId =
-    (ws ? wsMeta(ws).parentWorkspaceId : undefined) ??
+    ws?.parentWorkspaceId ??
     (event.metadata as WorkspaceMetadata | undefined)?.parentWorkspaceId;
   if (typeof parentWorkspaceId !== "string") return;
   addChildToWorkspace(parentWorkspaceId, event.id);
@@ -127,7 +126,7 @@ function onWorkspaceActivated(event: AppEvent): void {
   if (event.type !== "workspace:activated") return;
   const ws = get(workspaces).find((w) => w.id === event.id);
   if (!ws) return;
-  const parentWorkspaceId = wsMeta(ws).parentWorkspaceId;
+  const parentWorkspaceId = ws.parentWorkspaceId;
   if (typeof parentWorkspaceId !== "string") return;
   const workspace = getWorkspaces().find((w) => w.id === parentWorkspaceId);
   if (!workspace) return;
@@ -350,7 +349,7 @@ export async function initWorkspaces(): Promise<void> {
       const list = get(workspaces);
       const idx = get(activeWorkspaceIdx);
       const ws = typeof idx === "number" ? list[idx] : undefined;
-      const parentWorkspaceId = ws ? wsMeta(ws).parentWorkspaceId : undefined;
+      const parentWorkspaceId = ws?.parentWorkspaceId;
       if (typeof parentWorkspaceId !== "string") return;
       const workspace = getWorkspaces().find((w) => w.id === parentWorkspaceId);
       if (workspace) void openWorkspaceDashboard(workspace);

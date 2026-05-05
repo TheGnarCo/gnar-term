@@ -1,7 +1,6 @@
 import { writable, get, type Readable } from "svelte/store";
 import { workspaces } from "../stores/workspace";
 import { getAllPanes } from "../types";
-import { wsMeta } from "./service-helpers";
 export type WorkspacePaneDropTarget =
   | {
       kind: "pane-split";
@@ -33,7 +32,7 @@ export function detectWorkspacePaneDrop(
 ): WorkspacePaneDropTarget {
   const allWs = get(workspaces);
   const srcWs = allWs.find((ws) => ws.id === srcChildWorkspaceId);
-  const srcWorkspaceId = srcWs ? wsMeta(srcWs).parentWorkspaceId : undefined;
+  const srcWorkspaceId = srcWs?.parentWorkspaceId;
 
   const paneBodies = Array.from(
     document.querySelectorAll("[data-pane-body]"),
@@ -53,7 +52,7 @@ export function detectWorkspacePaneDrop(
     );
     if (!tgtWs || tgtWs.id === srcChildWorkspaceId) continue;
 
-    const tgtWorkspaceId = wsMeta(tgtWs).parentWorkspaceId;
+    const tgtWorkspaceId = tgtWs.parentWorkspaceId;
 
     // Workspace compatibility: rootless → rootless only; nested → same parent workspace only
     if (srcWorkspaceId !== tgtWorkspaceId) {
@@ -126,7 +125,7 @@ export function detectTabBarDropForWorkspace(
 ): WorkspacePaneDropTarget {
   const allWs = get(workspaces);
   const srcWs = allWs.find((ws) => ws.id === srcChildWorkspaceId);
-  const srcWorkspaceId = srcWs ? wsMeta(srcWs).parentWorkspaceId : undefined;
+  const srcWorkspaceId = srcWs?.parentWorkspaceId;
 
   const elAtCursor = document.elementFromPoint(x, y);
   if (!elAtCursor) return null;
@@ -144,7 +143,7 @@ export function detectTabBarDropForWorkspace(
   );
   if (!tgtWs || tgtWs.id === srcChildWorkspaceId) return null;
 
-  const tgtWorkspaceId = wsMeta(tgtWs).parentWorkspaceId;
+  const tgtWorkspaceId = tgtWs.parentWorkspaceId;
   if (srcWorkspaceId !== tgtWorkspaceId) {
     return { kind: "deny" };
   }

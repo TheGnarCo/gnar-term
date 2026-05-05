@@ -26,7 +26,6 @@
   import { showConfirmPrompt } from "../stores/ui";
   import type { Component } from "svelte";
   import GridIcon from "../icons/GridIcon.svelte";
-  import { wsMeta } from "../services/service-helpers";
 
   export let parentWorkspaceId: string;
 
@@ -84,13 +83,11 @@
   $: activeContributionIds = new Set<string>(
     workspace
       ? $workspaces
-          .filter((w) => {
-            const md = wsMeta(w);
-            return (
-              md.isDashboard === true && md.parentWorkspaceId === workspace!.id
-            );
-          })
-          .map((w) => wsMeta(w).dashboardContributionId)
+          .filter(
+            (w) =>
+              w.isDashboard === true && w.parentWorkspaceId === workspace!.id,
+          )
+          .map((w) => w.dashboardContributionId)
           .filter((v): v is string => typeof v === "string")
       : [],
   );

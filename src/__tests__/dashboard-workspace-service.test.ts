@@ -17,16 +17,7 @@ vi.mock("../lib/stores/workspace", () => ({
   },
 }));
 
-vi.mock("../lib/services/service-helpers", () => ({
-  wsMeta: (
-    ws:
-      | {
-          extensionData?: Record<string, unknown>;
-          metadata?: Record<string, unknown>;
-        }
-      | undefined,
-  ) => ws?.extensionData ?? ws?.metadata ?? {},
-}));
+vi.mock("../lib/services/service-helpers", () => ({}));
 
 import {
   registerDashboardWorkspaceType,
@@ -123,10 +114,8 @@ describe("spawnOrNavigate", () => {
       cb([
         {
           id: "ws-1",
-          metadata: {
-            dashboardWorkspaceId: "ext:foo",
-            isDashboard: true,
-          },
+          dashboardWorkspaceId: "ext:foo",
+          isDashboard: true,
         },
       ]);
       return () => {};

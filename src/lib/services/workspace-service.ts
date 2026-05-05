@@ -29,7 +29,6 @@ import {
 } from "./workspace-runtime-service";
 import { eventBus } from "./event-bus";
 import { getAllPanes, type Workspace } from "../types";
-import { wsMeta } from "./service-helpers";
 import {
   getDashboardContribution,
   getDashboardContributions,
@@ -98,7 +97,7 @@ export function deleteWorkspace(id: string): void {
  */
 export function getChildrenOfWorkspace(parentWorkspaceId: string): Workspace[] {
   return get(workspaces).filter(
-    (w) => wsMeta(w).parentWorkspaceId === parentWorkspaceId,
+    (w) => w.parentWorkspaceId === parentWorkspaceId,
   );
 }
 
@@ -415,10 +414,9 @@ function backfillDashboardContributionIds(): void {
   let mutated = false;
   workspaces.update((list) => {
     const next = list.map((ws) => {
-      const md = wsMeta(ws);
-      if (md.isDashboard !== true) return ws;
-      if (typeof md.dashboardContributionId === "string") return ws;
-      const parentWorkspaceId = md.parentWorkspaceId;
+      if (ws.isDashboard !== true) return ws;
+      if (typeof ws.dashboardContributionId === "string") return ws;
+      const parentWorkspaceId = ws.parentWorkspaceId;
       if (typeof parentWorkspaceId !== "string") return ws;
       const workspace = workspaceById.get(parentWorkspaceId);
       if (!workspace) return ws;
@@ -477,16 +475,15 @@ export function createSettingsDashboardWorkspace(
  *   (pre-stamp legacy records). Use for the workspace-overview reconcile pass.
  */
 export function isDashboardWorkspace(
-  ws: WorkspaceRecord | import("../types").Workspace,
+  ws: import("../types").Workspace,
   parentWorkspaceId: string,
   contribId?: string,
   allowLegacyUndefined = false,
 ): boolean {
-  const md = wsMeta(ws);
-  if (md.isDashboard !== true) return false;
-  if (md.parentWorkspaceId !== parentWorkspaceId) return false;
+  if (ws.isDashboard !== true) return false;
+  if (ws.parentWorkspaceId !== parentWorkspaceId) return false;
   if (contribId === undefined) return true;
-  const contribution = md.dashboardContributionId;
+  const contribution = ws.dashboardContributionId;
   if (allowLegacyUndefined) {
     return contribution === undefined || contribution === contribId;
   }
@@ -557,9 +554,8 @@ export function closeAutoDashboardsBySource(source: string): void {
   if (autoIds.size === 0) return;
   const matchIds = get(workspaces)
     .filter((w) => {
-      const md = wsMeta(w);
-      if (md.isDashboard !== true) return false;
-      const contrib = md.dashboardContributionId;
+      if (w.isDashboard !== true) return false;
+      const contrib = w.dashboardContributionId;
       return typeof contrib === "string" && autoIds.has(contrib);
     })
     .map((w) => w.id);
@@ -728,11 +724,10 @@ export async function reconcileWorkspaceDashboards(): Promise<void> {
   // and the post-dedupe `existingContribIds` snapshot stay in sync.
   const dashboardIndex = new Map<string, Map<string, Workspace[]>>();
   for (const w of get(workspaces)) {
-    const md = wsMeta(w);
-    if (md.isDashboard !== true) continue;
-    const parentId = md.parentWorkspaceId;
+    if (w.isDashboard !== true) continue;
+    const parentId = w.parentWorkspaceId;
     if (typeof parentId !== "string") continue;
-    const contribId = md.dashboardContributionId;
+    const contribId = w.dashboardContributionId;
     if (typeof contribId !== "string") continue;
     let byContrib = dashboardIndex.get(parentId);
     if (!byContrib) {
@@ -766,7 +761,7 @@ export function reclaimChildWorkspaces(): void {
   const newMembers = new Map<string, string[]>();
   const toClaimIds: string[] = [];
   for (const ws of get(workspaces)) {
-    const parentWorkspaceId = wsMeta(ws).parentWorkspaceId;
+    const parentWorkspaceId = ws.parentWorkspaceId;
     if (
       typeof parentWorkspaceId !== "string" ||
       !workspaceIds.has(parentWorkspaceId)
@@ -813,18 +808,17 @@ function wrapStandaloneChildWorkspaces(): void {
 
   for (const ws of snapshot) {
     if (knownWorkspaceIds.has(ws.id)) continue;
-    const md = wsMeta(ws);
-    if (md.parentWorkspaceId && knownWorkspaceIds.has(md.parentWorkspaceId))
+    if (ws.parentWorkspaceId && knownWorkspaceIds.has(ws.parentWorkspaceId))
       continue;
-    if (md.isDashboard) continue;
-    if (md.worktreePath) continue;
+    if (ws.isDashboard) continue;
+    if ((ws as { worktreePath?: string }).worktreePath) continue;
 
     const colorIdx = usedColors.length % WORKSPACE_COLOR_SLOTS.length;
     const color: string =
       WORKSPACE_COLOR_SLOTS[colorIdx] ?? WORKSPACE_COLOR_SLOTS[0];
     usedColors.push(color);
 
-    const rawCwd = (md as Record<string, unknown>).cwd;
+    const rawCwd = ws.metadata?.cwd;
     const path = typeof rawCwd === "string" && rawCwd ? rawCwd : "~";
 
     const workspace: WorkspaceRecord = {

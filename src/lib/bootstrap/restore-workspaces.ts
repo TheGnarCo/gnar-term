@@ -31,7 +31,6 @@ import {
   switchWorkspace,
 } from "../services/workspace-runtime-service";
 import { OVERVIEW_DASHBOARD_CONTRIBUTION_ID } from "../services/dashboard-contribution-registry";
-import { wsMeta } from "../services/service-helpers";
 
 // Restore-complete signal — lets async work (extension provision loops,
 // reconcileWorkspaceDashboards) defer safely until workspaces are in the store.
@@ -198,7 +197,7 @@ export async function restoreWorkspaces(
     if (restored.length > 0) {
       const isDashboard = (idx: number): boolean => {
         const ws = restored[idx];
-        return ws ? wsMeta(ws).isDashboard === true : false;
+        return ws ? ws.isDashboard === true : false;
       };
       const activeId = state.activeWorkspaceId;
       let targetIdx = -1;

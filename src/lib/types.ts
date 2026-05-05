@@ -44,8 +44,8 @@ export interface Workspace {
   /**
    * Transitional: legacy metadata blob carried over from the
    * pre-unification store. New writers should set top-level fields and
-   * `extensionData` instead. Read access goes through `wsMeta()` which
-   * unifies this with `extensionData`. Removed once all writers migrate.
+   * `extensionData` instead. Read access uses top-level fields directly.
+   * Removed once all writers migrate.
    */
   metadata?: WorkspaceMetadata;
 }

@@ -12,15 +12,13 @@ function makeWs(
     parentWorkspaceId?: string;
   },
 ): Workspace {
-  const { parentWorkspaceId, ...rest } = overrides;
   return {
     splitRoot: {
       type: "pane",
       pane: { id: "p1", surfaces: [], activeSurfaceId: null },
     },
     activePaneId: "p1",
-    ...(parentWorkspaceId ? { metadata: { parentWorkspaceId } } : {}),
-    ...rest,
+    ...overrides,
   } as Workspace;
 }
 

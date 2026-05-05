@@ -132,8 +132,8 @@ describe("WorkspaceItem border", () => {
   function makeWorktreeWorkspace(): Workspace {
     return {
       ...makeChildWorkspace(),
-      metadata: { worktreePath: "/tmp/some-worktree" },
-    };
+      worktreePath: "/tmp/some-worktree",
+    } as Workspace;
   }
 
   it("marks branched workspaces with data-worktree=true", () => {

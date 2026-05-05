@@ -27,7 +27,6 @@
     newSurface,
     openFileAsPreviewSplit,
   } from "../services/surface-service";
-  import { wsMeta } from "../services/service-helpers";
   import {
     sessionLogsStore,
     type SessionLogEntry,
@@ -146,7 +145,7 @@
         for (let i = 0; i < list.length; i++) {
           const ws = list[i]!;
           if (seen.has(ws.id)) continue;
-          if (wsMeta(ws).parentWorkspaceId === row.id) {
+          if (ws.parentWorkspaceId === row.id) {
             out.push({
               kind: "workspace",
               workspaceId: ws.id,

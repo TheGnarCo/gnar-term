@@ -65,6 +65,24 @@ export interface WorkspaceTemplate {
   env?: Record<string, string>;
   metadata?: WorkspaceMetadata;
   layout?: LayoutNode;
+  // Stage 10: structural / discriminant fields promoted to top level.
+  // `createWorkspaceFromDef` reads these directly, falling back to
+  // `metadata` for backwards compat with callers that still pass them
+  // in the metadata blob.
+  parentWorkspaceId?: string;
+  isDashboard?: boolean;
+  dashboardContributionId?: string;
+  dashboardWorkspaceId?: string;
+  lastActiveBranchedWorkspaceId?: string;
+  locked?: boolean;
+  autoRunRestoreCommands?: boolean;
+  path?: string;
+  isGit?: boolean;
+  createdAt?: string;
+  worktreePath?: string;
+  branch?: string;
+  baseBranch?: string;
+  repoPath?: string;
 }
 
 /**

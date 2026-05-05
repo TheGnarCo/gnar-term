@@ -63,14 +63,14 @@ describe("dashboardContributionId backfill", () => {
           },
         },
         activePaneId: "p1",
-        metadata: { isDashboard: true, parentWorkspaceId: "g1" },
+        isDashboard: true,
+        parentWorkspaceId: "g1",
       } as never,
     ]);
 
     await reconcileWorkspaceDashboards();
 
-    const md = get(workspaces)[0]!.metadata;
-    expect(md.dashboardContributionId).toBe("group");
+    expect(get(workspaces)[0]!.dashboardContributionId).toBe("group");
   });
 
   it("leaves already-stamped workspaces alone", async () => {
@@ -95,17 +95,14 @@ describe("dashboardContributionId backfill", () => {
           },
         },
         activePaneId: "p3",
-        metadata: {
-          isDashboard: true,
-          parentWorkspaceId: "g1",
-          dashboardContributionId: "group",
-        },
+        isDashboard: true,
+        parentWorkspaceId: "g1",
+        dashboardContributionId: "group",
       } as never,
     ]);
 
     await reconcileWorkspaceDashboards();
 
-    const md = get(workspaces)[0]!.metadata;
-    expect(md.dashboardContributionId).toBe("group");
+    expect(get(workspaces)[0]!.dashboardContributionId).toBe("group");
   });
 });

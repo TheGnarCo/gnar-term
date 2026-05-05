@@ -71,7 +71,7 @@ function makeChild(id: string, parentWorkspaceId?: string): Workspace {
       pane: { id: `${id}-p`, surfaces: [], activeSurfaceId: null },
     },
     activePaneId: `${id}-p`,
-    ...(parentWorkspaceId ? { metadata: { parentWorkspaceId } } : {}),
+    ...(parentWorkspaceId ? { parentWorkspaceId } : {}),
   } as Workspace;
 }
 

@@ -88,14 +88,6 @@ vi.mock("../lib/services/service-helpers", () => ({
   getCwdForSurface: vi.fn().mockResolvedValue(undefined),
   registerPtyForSurface: vi.fn(),
   lookupTerminalByPtyId: vi.fn().mockReturnValue(null),
-  wsMeta: (
-    ws:
-      | {
-          extensionData?: Record<string, unknown>;
-          metadata?: Record<string, unknown>;
-        }
-      | undefined,
-  ) => ws?.extensionData ?? ws?.metadata ?? {},
 }));
 
 vi.stubGlobal("localStorage", {

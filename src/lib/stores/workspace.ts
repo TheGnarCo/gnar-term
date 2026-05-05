@@ -67,49 +67,52 @@ export const zoomedSurfaceId = writable<string | null>(null);
 /**
  * Convert a unified `WorkspaceDef` (on-disk format) into a
  * `WorkspaceTemplate` so the existing `createWorkspaceFromDef` runtime
- * path can hydrate PTY surfaces. All non-structural fields
- * (Workspace-level, dashboard, worktree, locked, extension data) are
- * packed into metadata, which `createWorkspaceFromDef` carries through
- * onto the constructed `Workspace`. Consumers read those fields via
- * `wsMeta(ws)` (see `service-helpers.ts`), which transparently handles
- * both the top-level and metadata shapes.
+ * path can hydrate PTY surfaces. Structural / discriminant fields are
+ * set at the top level of the template (Stage 10). Extension data that
+ * has no top-level home is forwarded in `metadata` for backwards compat.
  */
 export function workspaceDefToTemplate(
   def: WorkspaceDef,
 ): import("../config").WorkspaceTemplate {
-  const metadata: Record<string, unknown> = { ...(def.extensionData ?? {}) };
-  // Structural / discriminant fields
-  if (def.parentWorkspaceId !== undefined)
-    metadata.parentWorkspaceId = def.parentWorkspaceId;
-  if (def.isDashboard !== undefined) metadata.isDashboard = def.isDashboard;
-  if (def.dashboardContributionId !== undefined)
-    metadata.dashboardContributionId = def.dashboardContributionId;
-  if (def.worktreePath !== undefined) metadata.worktreePath = def.worktreePath;
-  if (def.branch !== undefined) metadata.branch = def.branch;
-  if (def.baseBranch !== undefined) metadata.baseBranch = def.baseBranch;
-  if (def.repoPath !== undefined) metadata.repoPath = def.repoPath;
-  if (def.locked !== undefined) metadata.locked = def.locked;
-  // Workspace-level fields — stashed in metadata so `wsMeta(ws)` consumers
-  // can read them off the constructed Workspace at runtime.
-  if (def.path !== undefined) metadata.path = def.path;
-  if (def.color !== undefined) metadata.color = def.color;
-  if (def.isGit !== undefined) metadata.isGit = def.isGit;
-  if (def.createdAt !== undefined) metadata.createdAt = def.createdAt;
-  if (def.autoRunRestoreCommands !== undefined)
-    metadata.autoRunRestoreCommands = def.autoRunRestoreCommands;
-  if (def.lastActiveBranchedWorkspaceId !== undefined)
-    metadata.lastActiveBranchedWorkspaceId = def.lastActiveBranchedWorkspaceId;
-  if (def.dashboardWorkspaceId !== undefined)
-    metadata.dashboardWorkspaceId = def.dashboardWorkspaceId;
+  // Extension keys only (no promoted structural fields).
+  const extensionMetadata = def.extensionData
+    ? { ...def.extensionData }
+    : undefined;
 
   const nwDef: import("../config").WorkspaceTemplate = {
     id: def.id,
     name: def.name,
     layout: def.layout,
   };
+
+  // Workspace-level fields
   if (def.color !== undefined) nwDef.color = def.color;
-  if (Object.keys(metadata).length > 0) {
-    nwDef.metadata = metadata as import("../types").WorkspaceMetadata;
+  if (def.path !== undefined) nwDef.path = def.path;
+  if (def.isGit !== undefined) nwDef.isGit = def.isGit;
+  if (def.createdAt !== undefined) nwDef.createdAt = def.createdAt;
+  if (def.autoRunRestoreCommands !== undefined)
+    nwDef.autoRunRestoreCommands = def.autoRunRestoreCommands;
+  if (def.lastActiveBranchedWorkspaceId !== undefined)
+    nwDef.lastActiveBranchedWorkspaceId = def.lastActiveBranchedWorkspaceId;
+  if (def.dashboardWorkspaceId !== undefined)
+    nwDef.dashboardWorkspaceId = def.dashboardWorkspaceId;
+
+  // Structural / discriminant fields
+  if (def.parentWorkspaceId !== undefined)
+    nwDef.parentWorkspaceId = def.parentWorkspaceId;
+  if (def.isDashboard !== undefined) nwDef.isDashboard = def.isDashboard;
+  if (def.dashboardContributionId !== undefined)
+    nwDef.dashboardContributionId = def.dashboardContributionId;
+  if (def.locked !== undefined) nwDef.locked = def.locked;
+
+  // Branch fields
+  if (def.worktreePath !== undefined) nwDef.worktreePath = def.worktreePath;
+  if (def.branch !== undefined) nwDef.branch = def.branch;
+  if (def.baseBranch !== undefined) nwDef.baseBranch = def.baseBranch;
+  if (def.repoPath !== undefined) nwDef.repoPath = def.repoPath;
+
+  if (extensionMetadata && Object.keys(extensionMetadata).length > 0) {
+    nwDef.metadata = extensionMetadata as import("../types").WorkspaceMetadata;
   }
   return nwDef;
 }

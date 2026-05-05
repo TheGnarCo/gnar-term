@@ -22,7 +22,7 @@ import {
   clearAllStatusForSourceAndWorkspace,
 } from "./status-registry";
 import { workspaces, activeWorkspace } from "../stores/workspace";
-import { getActiveCwd, getWorkspaceCwd, wsMeta } from "./service-helpers";
+import { getActiveCwd, getWorkspaceCwd } from "./service-helpers";
 import { getWorkspace } from "../stores/workspace";
 
 export const GIT_STATUS_SOURCE = "git";
@@ -468,7 +468,7 @@ async function ensurePolling(wsId: string): Promise<void> {
     // shows the project's dirty state until they're first opened.
     const ws = get(workspaces).find((w) => w.id === wsId);
     if (ws) {
-      const parentWorkspaceId = wsMeta(ws).parentWorkspaceId;
+      const parentWorkspaceId = ws.parentWorkspaceId;
       if (typeof parentWorkspaceId === "string") {
         cwd = getWorkspace(parentWorkspaceId)?.path;
       }

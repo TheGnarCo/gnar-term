@@ -33,7 +33,7 @@ import type { Workspace } from "../lib/types";
 function makeChildWorkspace(
   id: string,
   name: string,
-  metadata: Record<string, unknown> = {},
+  extraFields: Record<string, unknown> = {},
 ): Workspace {
   return {
     id,
@@ -43,8 +43,8 @@ function makeChildWorkspace(
       pane: { id: `${id}-pane`, surfaces: [], activeSurfaceId: null },
     },
     activePaneId: null,
-    metadata,
-  };
+    ...extraFields,
+  } as Workspace;
 }
 
 beforeEach(() => {

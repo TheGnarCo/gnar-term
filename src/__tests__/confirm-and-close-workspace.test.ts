@@ -95,7 +95,7 @@ describe("confirmAndCloseWorkspace", () => {
     const ws = {
       id: "ws-dash",
       name: "Dashboard",
-      metadata: { dashboardWorkspaceId: "some-id" },
+      dashboardWorkspaceId: "some-id",
     };
     const result = await confirmAndCloseWorkspace(ws, 1);
     expect(result).toBe(true);
@@ -131,7 +131,7 @@ describe("confirmAndCloseWorkspace", () => {
     const ws = {
       id: "ws-locked",
       name: "Locked Workspace",
-      metadata: { locked: true },
+      locked: true,
     };
     const result = await confirmAndCloseWorkspace(ws, 0);
     expect(result).toBe(false);
@@ -154,7 +154,7 @@ describe("confirmAndCloseWorkspace", () => {
     const ws = {
       id: "ws-wt-locked",
       name: "Worktree feat",
-      metadata: { locked: true },
+      locked: true,
     };
     const result = await confirmAndCloseWorkspace(ws, 0);
     expect(result).toBe(false);

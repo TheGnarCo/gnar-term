@@ -47,27 +47,56 @@ import {
   insertChildIntoWorkspace,
   updateWorkspace,
 } from "./workspace-service";
-import { getWorkspace } from "../stores/workspaces";
+import {
+  getWorkspace,
+  getProjectRecordsAsWorkspaceDefs,
+  getActiveWorkspaceId as getActiveProjectWorkspaceId,
+  installSchedulePersist as installLegacySchedulePersist,
+} from "../stores/workspaces";
 import { makePersistScheduler } from "../utils/persist-scheduler";
 
 // --- Workspace persistence (debounced save to state.json) ---
 
 const PERSIST_DELAY = 2000;
 
+/**
+ * Stage 9 single-writer persist: serialize the unified runtime store
+ * (Branches, Dashboards, orphaned Branches), then merge project records
+ * from the legacy store. Project records are NOT in the runtime store —
+ * they are paneless containers whose UI is delegated to their primary
+ * Branch — but they live in the same on-disk array so a single
+ * `state.workspaces[]` covers everything.
+ *
+ * The active id prefers the legacy active (project id, what the sidebar
+ * tracks) and falls back to the runtime active (the focused tab).
+ */
 export async function persistWorkspaces(): Promise<void> {
   const wsList = get(workspaces);
-  const serialized = wsList.map((ws) => serializeWorkspace(ws));
+  const runtimeDefs = wsList.map((ws) => serializeWorkspace(ws));
+  const projectDefs = getProjectRecordsAsWorkspaceDefs();
+  const projectIds = new Set(projectDefs.map((d) => d.id));
+  const merged = [
+    ...projectDefs,
+    ...runtimeDefs.filter((d) => !projectIds.has(d.id)),
+  ];
+
   const idx = get(activeWorkspaceIdx);
-  const activeId =
+  const runtimeActiveId =
     idx >= 0 && idx < wsList.length ? (wsList[idx]?.id ?? null) : null;
+  const activeId = getActiveProjectWorkspaceId() ?? runtimeActiveId;
+
   await saveState({
-    workspaces: serialized,
+    workspaces: merged,
     activeWorkspaceId: activeId ?? undefined,
   });
 }
 
 const _scheduler = makePersistScheduler(persistWorkspaces, PERSIST_DELAY);
 export const schedulePersist = _scheduler.schedulePersist;
+
+// Wire the legacy store to the same single scheduler so its mutations
+// (color/lock/name/etc. via setWorkspaces) trigger the merged write.
+installLegacySchedulePersist(schedulePersist);
 
 export async function createWorkspace(name: string) {
   const pane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };

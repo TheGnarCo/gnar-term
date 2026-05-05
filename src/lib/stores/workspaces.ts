@@ -23,7 +23,16 @@
 import { get, writable, type Readable } from "svelte/store";
 import { loadExtensionState } from "../services/extension-state";
 import { loadState, saveState, type WorkspaceDef } from "../config";
-import { schedulePersist as scheduleUnifiedPersist } from "./workspace";
+
+// Persist scheduler is injected post-init by workspace-runtime-service to
+// avoid a circular module init (this store is imported from runtime-service
+// for `getWorkspace`). Unset until the runtime module finishes evaluating —
+// during early tests/bootstrap before the runtime module loads, mutations
+// here are no-ops with respect to scheduling, which matches prior behavior.
+let _scheduledPersist: (() => void) | null = null;
+export function installSchedulePersist(fn: () => void): void {
+  _scheduledPersist = fn;
+}
 
 const LEGACY_STATE_ID = "workspace-groups";
 const LEGACY_WORKSPACES_KEY = "workspaces";
@@ -151,7 +160,7 @@ export function getProjectRecordsAsWorkspaceDefs(): WorkspaceDef[] {
 }
 
 function schedulePersist(): void {
-  scheduleUnifiedPersist();
+  _scheduledPersist?.();
 }
 
 /**

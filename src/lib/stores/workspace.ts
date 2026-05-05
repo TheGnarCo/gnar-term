@@ -14,10 +14,7 @@ import { get, writable, derived } from "svelte/store";
 import type { Writable, Readable } from "svelte/store";
 import type { Workspace } from "../types";
 import { getAllPanes } from "../types";
-import { saveState } from "../config";
-import { makePersistScheduler } from "../utils/persist-scheduler";
 import type { WorkspaceDef, LayoutNode, ParentWorkspace } from "../config";
-const PERSIST_DEBOUNCE_MS = 300;
 
 // ---------------------------------------------------------------------------
 // Core writables
@@ -287,33 +284,9 @@ export const activeSurface = derived([activePane], ([$pane]) => {
   return $pane.surfaces.find((s) => s.id === $pane.activeSurfaceId) ?? null;
 });
 
-// ---------------------------------------------------------------------------
-// Persistence
-// ---------------------------------------------------------------------------
-
-let _persistEnabled = false;
-
-export function enableWorkspaceStorePersist(): void {
-  _persistEnabled = true;
-}
-
-async function persistNow(): Promise<void> {
-  if (!_persistEnabled) return;
-  const wsList = get(_workspaces);
-  const serialized: WorkspaceDef[] = wsList.map((ws) => serializeWorkspace(ws));
-  await saveState({
-    workspaces: serialized,
-    activeWorkspaceId: get(activeWorkspaceId) ?? undefined,
-  });
-}
-
-const _scheduler = makePersistScheduler(persistNow, PERSIST_DEBOUNCE_MS);
-export const schedulePersist = _scheduler.schedulePersist;
-
-/** Flush pending writes — called from app close hooks. */
-export async function flushWorkspaceStore(): Promise<void> {
-  await _scheduler.flush();
-}
+// Persistence is owned by `workspace-runtime-service.persistWorkspaces`,
+// which serializes this store and merges in legacy project records to
+// produce the single canonical `state.workspaces[]` writer.
 
 // ---------------------------------------------------------------------------
 // Getters
@@ -368,8 +341,6 @@ export function seedWorkspaces(
 
 /** Test hook — reset in-memory state so tests start clean. */
 export function resetWorkspaceStoreForTest(): void {
-  _scheduler.cancel();
-  _persistEnabled = false;
   _workspaces.set([]);
   activeWorkspaceIdx.set(-1);
 }

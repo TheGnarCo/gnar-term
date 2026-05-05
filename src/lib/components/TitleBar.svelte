@@ -44,7 +44,10 @@
     ? ($workspacesStore.find((w) => w.id === parentWorkspaceId) ?? null)
     : null;
 
-  $: devRing = isDev ? `inset 0 0 0 8px ${DEV_ACCENT}` : "none";
+  $: titleBarBg = isDev ? DEV_ACCENT : $theme.bg;
+  // On the yellow dev background we need dark glyphs for readability.
+  $: btnFg = isDev ? "#1a1a1a" : $theme.fg;
+  $: btnFgDim = isDev ? "#3a3a3a" : $theme.fgDim;
 
   // Derive workspace type for the title context suffix
   $: wsTypeSuffix = (() => {
@@ -65,11 +68,11 @@
   style="
     height: 38px; flex-shrink: 0; display: flex; align-items: center;
     padding: 0 8px 0 {leftPadding}; -webkit-app-region: drag;
-    background: {$theme.bg}; border-bottom: 1px solid {$theme.border}; box-shadow: {devRing};
+    background: {titleBarBg}; border-bottom: 1px solid {$theme.border};
   "
 >
   <button
-    style="{btnStyle} color: {$sidebarVisible ? $theme.fg : $theme.fgDim};"
+    style="{btnStyle} color: {$sidebarVisible ? btnFg : btnFgDim};"
     title="Toggle Sidebar ({isMac ? modLabel : shiftModLabel}B)"
     aria-label="Toggle Sidebar"
     use:shortcutHint={{
@@ -98,9 +101,9 @@
     style="flex: 1; display: flex; justify-content: center; align-items: center; pointer-events: none;"
   >
     {#if $activeWorkspace && titleText}
-      <span class="title-ws" style="color: {$theme.fg};">{titleText}</span>
+      <span class="title-ws" style="color: {btnFg};">{titleText}</span>
     {:else}
-      <span class="title-ws" style="color: {$theme.fgDim};"
+      <span class="title-ws" style="color: {isDev ? btnFg : $theme.fgDim};"
         >{isDev ? "GNARTERM (DEV)" : "GNARTERM"}</span
       >
     {/if}
@@ -110,13 +113,13 @@
     <TitleBarContributedButton
       button={btn}
       {btnStyle}
-      fg={$theme.fgDim}
-      fgActive={$theme.fg}
+      fg={btnFgDim}
+      fgActive={btnFg}
     />
   {/each}
 
   <button
-    style="{btnStyle} color: {$theme.fgDim};"
+    style="{btnStyle} color: {btnFgDim};"
     title="Keyboard Shortcuts ({isMac ? '⌘/' : 'Ctrl+/'})"
     aria-label="Keyboard Shortcuts"
     use:shortcutHint={{ label: isMac ? "⌘/" : "Ctrl+/", placement: "below" }}
@@ -142,7 +145,7 @@
   </button>
 
   <button
-    style="{btnStyle} color: {$theme.fgDim};"
+    style="{btnStyle} color: {btnFgDim};"
     title="Settings ({modLabel},)"
     aria-label="Settings"
     use:shortcutHint={{ label: isMac ? "⌘," : "Ctrl+,", placement: "below" }}

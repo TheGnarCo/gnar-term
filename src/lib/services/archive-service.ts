@@ -59,14 +59,6 @@ export async function archiveWorkspace(
     ...(ws.metadata ? { metadata: ws.metadata } : {}),
   }));
 
-  // Remove the parent workspace from the store BEFORE cascading the close.
-  // The close path emits `workspace:closed`, and
-  // `setupPrimaryBranchedWorkspaceAutoRecreation` looks the parent up by
-  // `primaryBranchedWorkspaceId` to spawn a replacement. While the parent
-  // still sits in the store the listener creates a phantom child
-  // workspace whose `parentWorkspaceId` then dangles after the parent
-  // is removed — on reload that orphan re-wraps into a fresh parent,
-  // so archives appear to leak ghost workspaces.
   setWorkspaces(getWorkspaces().filter((w) => w.id !== parentWorkspaceId));
   removeRootRow({ kind: "workspace", id: parentWorkspaceId });
   closeWorkspacesInWorkspace(parentWorkspaceId);

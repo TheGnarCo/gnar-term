@@ -3,13 +3,21 @@ import { migrateLegacyWorkspaces } from "./migrate-legacy-workspaces";
 import type { AppState, WorkspaceDef, LayoutNode } from "../config";
 import type { WorkspaceRecord } from "../stores/workspace";
 
+// Pre-Stage-10 record shape — the migration reads this legacy field;
+// the live WorkspaceRecord interface no longer carries it.
+type LegacyWorkspaceRecord = WorkspaceRecord & {
+  primaryBranchedWorkspaceId?: string;
+};
+
 const layout = (id: string): LayoutNode => ({
   pane: { surfaces: [{ type: "terminal", cwd: `/cwd/${id}` }] },
 });
 
 const emptyLayout: LayoutNode = { pane: { surfaces: [] } };
 
-const parent = (over: Partial<WorkspaceRecord> = {}): WorkspaceRecord => ({
+const parent = (
+  over: Partial<LegacyWorkspaceRecord> = {},
+): LegacyWorkspaceRecord => ({
   id: "P",
   name: "Project",
   path: "/p",

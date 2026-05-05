@@ -1,18 +1,18 @@
 /**
- * Pre-Stage-9 → Stage-9 data migration.
+ * Pre-Stage-9 → Stage-10 data migration.
  *
  * Folds the legacy `WorkspaceRecord` list (`AppState.parentWorkspaces`)
  * into the unified `WorkspaceDef[]` (`AppState.workspaces`):
  *
- *  - Each `WorkspaceRecord P` and its primary BranchedWorkspace `B`
- *    (the one whose id matches `P.primaryBranchedWorkspaceId`) collapse
- *    into a single Workspace using `P.id`. The merged record carries
- *    `B.layout` + `B.extensionData` plus `P`'s Workspace-level fields
- *    (path, color, isGit, createdAt, etc.).
+ *  - Each `WorkspaceRecord P` and its legacy primary BranchedWorkspace
+ *    `B` (the one whose id matches `P.primaryBranchedWorkspaceId`)
+ *    collapse into a single Workspace using `P.id`. The merged record
+ *    carries `B.layout` + `B.extensionData` plus `P`'s Workspace-level
+ *    fields (path, color, isGit, createdAt, etc.).
  *  - Existing Branches/Dashboards keep their `parentWorkspaceId === P.id`
  *    references — they continue to point at the merged Workspace.
- *  - `primaryBranchedWorkspaceId` is dropped (the Workspace IS the
- *    default working area).
+ *  - The legacy `primaryBranchedWorkspaceId` notion is dropped: every
+ *    Workspace is its own Root, branches are siblings.
  *  - `lastActiveBranchedWorkspaceId` pointing at the absorbed primary is
  *    dropped; pointing at any other Branch is preserved.
  *  - Active id is redirected: an absorbed primary's id → Workspace id.
@@ -22,10 +22,22 @@
 import type { AppState, WorkspaceDef, LayoutNode } from "../config";
 import type { WorkspaceRecord } from "../stores/workspace";
 
+/**
+ * Legacy WorkspaceRecord shape (pre-Stage-10): Records carried a
+ * `primaryBranchedWorkspaceId` pointing at the runtime BranchedWorkspace
+ * that owned the Record's tab surface. Stage 10 dropped this field —
+ * the Record's id and the runtime Root id are unified — but the
+ * migration still needs to read the legacy persisted shape to fold
+ * absorbed primaries into the merged Workspace.
+ */
+type LegacyWorkspaceRecord = WorkspaceRecord & {
+  primaryBranchedWorkspaceId?: string;
+};
+
 const EMPTY_LAYOUT: LayoutNode = { pane: { surfaces: [] } };
 
 export function migrateLegacyWorkspaces(state: AppState): AppState {
-  const parents = state.parentWorkspaces ?? [];
+  const parents = (state.parentWorkspaces ?? []) as LegacyWorkspaceRecord[];
   if (parents.length === 0) return state;
 
   const wsdef = state.workspaces ?? [];
@@ -82,7 +94,7 @@ export function migrateLegacyWorkspaces(state: AppState): AppState {
 function pickActiveId(
   state: AppState,
   absorbedIds: Set<string>,
-  parents: WorkspaceRecord[],
+  parents: LegacyWorkspaceRecord[],
 ): string | undefined {
   const wsActive = state.activeWorkspaceId;
   if (wsActive && !absorbedIds.has(wsActive)) return wsActive;

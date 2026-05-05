@@ -151,6 +151,12 @@
           rendererLabel: r.label?.(row.id),
           workspaceOnlyIdx,
         });
+        // Stage 10: a workspace row hosts the Workspace's own tab surface
+        // at the shared id. Mark the runtime workspace as rendered so the
+        // fallback below doesn't re-emit it as a standalone child row.
+        if (row.kind === "workspace" && byId.has(row.id)) {
+          renderedWsIds.add(row.id);
+        }
       });
       // Fallback — any unclaimed workspace in the store that isn't
       // already rendered gets appended at the end. Covers first-run

@@ -382,7 +382,6 @@ export interface WorkspaceRecord {
   color: string;
   /** Ids of Branches (worktree-backed variants) currently claimed by this Workspace. */
   branchedWorkspaceIds: string[];
-  primaryBranchedWorkspaceId?: string;
   lastActiveBranchedWorkspaceId?: string;
   autoRunRestoreCommands?: boolean;
   isGit: boolean;

@@ -33,6 +33,7 @@ import {
   getConfig,
   type WorkspaceTemplate,
   type LayoutNode,
+  type WorkspaceDef,
 } from "../config";
 import { safeFocus, wsMeta } from "./service-helpers";
 import { readTerminalBuffer, writeSessionLog } from "./session-log-service";
@@ -60,12 +61,15 @@ import { makePersistScheduler } from "../utils/persist-scheduler";
 const PERSIST_DELAY = 2000;
 
 /**
- * Stage 9 single-writer persist: serialize the unified runtime store
- * (Branches, Dashboards, orphaned Branches), then merge WorkspaceRecord
- * entries from the record store. WorkspaceRecord entries are NOT in
- * the runtime store — they are paneless containers whose UI is
- * delegated to their primary Branch — but they live in the same on-disk
- * array so a single `state.workspaces[]` covers everything.
+ * Stage 10 single-writer persist: the runtime store is canonical for
+ * every Workspace, Branch, and Dashboard — Roots share an id with their
+ * WorkspaceRecord, so a runtime def at that id carries the Root's tab
+ * surface. The Record store contributes Workspace-level fields (path,
+ * color, isGit, createdAt, lock, dashboard ref) merged on top.
+ *
+ * Records without a corresponding runtime entry (transient state during
+ * load, or a Record whose Root has yet to be materialized) are emitted
+ * as paneless defs so the on-disk array stays complete.
  *
  * The active id prefers the WorkspaceRecord active (what the sidebar
  * tracks) and falls back to the runtime active (the focused tab).
@@ -73,12 +77,33 @@ const PERSIST_DELAY = 2000;
 export async function persistWorkspaces(): Promise<void> {
   const wsList = get(workspaces);
   const runtimeDefs = wsList.map((ws) => serializeWorkspace(ws));
+  const runtimeById = new Map(runtimeDefs.map((d) => [d.id, d] as const));
+
   const recordDefs = getWorkspaceRecordsAsDefs();
   const recordIds = new Set(recordDefs.map((d) => d.id));
-  const merged = [
-    ...recordDefs,
-    ...runtimeDefs.filter((d) => !recordIds.has(d.id)),
-  ];
+
+  // Records first so Roots lead the persisted array. When a runtime def
+  // shares a Root's id, the Record is canonical for Workspace-level
+  // fields (name, path, color, etc.) and the runtime contributes
+  // `layout` (the Root's tab surface).
+  const merged: WorkspaceDef[] = [];
+  for (const rd of recordDefs) {
+    const runtime = runtimeById.get(rd.id);
+    if (!runtime) {
+      merged.push(rd);
+      continue;
+    }
+    merged.push({
+      ...runtime,
+      ...rd,
+      layout: runtime.layout,
+    });
+  }
+  // Runtime entries without a matching Record (Branches, Dashboards,
+  // standalone runtime workspaces) follow.
+  for (const rd of runtimeDefs) {
+    if (!recordIds.has(rd.id)) merged.push(rd);
+  }
 
   const idx = get(activeWorkspaceIdx);
   const runtimeActiveId =
@@ -242,9 +267,53 @@ export async function createWorkspaceFromDef(
     activePaneId: getAllPanes(splitRoot)[0]?.id ?? null,
     ...(def.metadata ? { metadata: def.metadata } : {}),
   };
+  // Stage 10 round-trip fix: workspaceDefToTemplate stashes the
+  // discriminator + structural fields (parentWorkspaceId, isDashboard,
+  // worktreePath, etc.) into `metadata` so wsMeta consumers see them.
+  // serializeWorkspace, however, reads them only from top-level — without
+  // this promotion every restored Branch / Dashboard / Root drops its
+  // identity on the next persist, and the startup reconciler then
+  // re-promotes each one to a fresh Root. Promoting here closes the loop.
+  const md = def.metadata;
+  if (md) {
+    if (typeof md.parentWorkspaceId === "string")
+      ws.parentWorkspaceId = md.parentWorkspaceId;
+    if (typeof md.isDashboard === "boolean") ws.isDashboard = md.isDashboard;
+    if (typeof md.dashboardContributionId === "string")
+      ws.dashboardContributionId = md.dashboardContributionId;
+    if (typeof md.dashboardWorkspaceId === "string")
+      ws.dashboardWorkspaceId = md.dashboardWorkspaceId;
+    if (typeof md.lastActiveBranchedWorkspaceId === "string")
+      ws.lastActiveBranchedWorkspaceId = md.lastActiveBranchedWorkspaceId;
+    if (typeof md.locked === "boolean") ws.locked = md.locked;
+    if (typeof md.autoRunRestoreCommands === "boolean")
+      ws.autoRunRestoreCommands = md.autoRunRestoreCommands;
+    if (typeof md.path === "string") ws.path = md.path;
+    if (typeof md.color === "string") ws.color = md.color;
+    if (typeof md.isGit === "boolean") ws.isGit = md.isGit;
+    if (typeof md.createdAt === "string") ws.createdAt = md.createdAt;
+    const bw = ws as Workspace & {
+      worktreePath?: string;
+      branch?: string;
+      baseBranch?: string;
+      repoPath?: string;
+    };
+    if (typeof md.worktreePath === "string") bw.worktreePath = md.worktreePath;
+    if (typeof md.branch === "string") bw.branch = md.branch;
+    if (typeof md.baseBranch === "string") bw.baseBranch = md.baseBranch;
+    if (typeof md.repoPath === "string") bw.repoPath = md.repoPath;
+  }
 
   workspaces.update((list) => [...list, ws]);
-  appendRootRow({ kind: "child-workspace", id: ws.id });
+  // Stage 10: a runtime workspace whose id matches a WorkspaceRecord is
+  // the Workspace's own Root — it is already represented in rootRowOrder
+  // by the `{kind: "workspace", id}` row that addWorkspace appended.
+  // Skip the child-workspace row to avoid rendering the same Workspace
+  // twice in the sidebar.
+  const isWorkspaceOwnRoot = getWorkspace(ws.id) !== undefined;
+  if (!isWorkspaceOwnRoot) {
+    appendRootRow({ kind: "child-workspace", id: ws.id });
+  }
   eventBus.emit({
     type: "workspace:created",
     id: ws.id,
@@ -383,6 +452,7 @@ export function toggleWorkspaceLock(workspaceId: string): void {
       const nextLocked = !wsMeta(ws).locked;
       return {
         ...ws,
+        locked: nextLocked,
         metadata: { ...ws.metadata, locked: nextLocked },
       };
     }),
@@ -584,7 +654,10 @@ export function createWorkspaceFromSurface(
     splitRoot: { type: "pane", pane: newPane },
     activePaneId: newPane.id,
     ...(effectiveWorkspaceId
-      ? { metadata: { parentWorkspaceId: effectiveWorkspaceId } }
+      ? {
+          parentWorkspaceId: effectiveWorkspaceId,
+          metadata: { parentWorkspaceId: effectiveWorkspaceId },
+        }
       : {}),
   };
 

@@ -4,12 +4,12 @@
  * S2 tests:
  *   1. switchWorkspace records lastActiveBranchedWorkspaceId on parent workspace
  *   2. switchWorkspace does NOT record when child has no parentWorkspaceId
- *   3. activateWorkspace lands on primaryBranchedWorkspaceId — Workspace's
- *      own tabs — even when lastActiveBranchedWorkspaceId points elsewhere.
- *      lastActive is preserved as a tracking field for "jump to active
- *      branch" but does NOT route row activations.
- *   4. activateWorkspace lands on primaryBranchedWorkspaceId when lastActive
- *      is unset (sanity case for the primary-only path).
+ *   3. activateWorkspace lands on the Workspace's own Root (the runtime
+ *      workspace whose id matches the Record id) even when
+ *      lastActiveBranchedWorkspaceId points at a sibling Branch. lastActive
+ *      is preserved as a tracking field but does NOT route row activations.
+ *   4. activateWorkspace materializes a Root runtime workspace at the
+ *      Record's id when none exists yet (lazy materialization on click).
  *
  * S9 tests:
  *   5. autoRunRestoreCommands=true → startupCommand set directly (not pendingRestoreCommand)
@@ -122,39 +122,35 @@ describe("S2 — last-active branch restore", () => {
     expect(getWorkspace("g1")?.lastActiveBranchedWorkspaceId).toBeUndefined();
   });
 
-  it("activateWorkspace lands on primaryBranchedWorkspaceId even when lastActiveBranchedWorkspaceId points elsewhere", async () => {
+  it("activateWorkspace lands on the Workspace's own Root even when lastActiveBranchedWorkspaceId points at a Branch", async () => {
     const ws = makeWorkspace("g1", {
-      branchedWorkspaceIds: ["nw-primary", "nw-last"],
-      primaryBranchedWorkspaceId: "nw-primary",
+      branchedWorkspaceIds: ["nw-last"],
       lastActiveBranchedWorkspaceId: "nw-last",
     });
     addWorkspace(ws);
 
-    workspaces.set([makeChild("nw-primary", "g1"), makeChild("nw-last", "g1")]);
+    workspaces.set([makeChild("g1"), makeChild("nw-last", "g1")]);
     activeWorkspaceIdx.set(-1);
 
     await activateWorkspace("g1");
 
     const idx = get(activeWorkspaceIdx);
     const active = get(workspaces)[idx];
-    expect(active?.id).toBe("nw-primary");
+    expect(active?.id).toBe("g1");
   });
 
-  it("activateWorkspace lands on primaryBranchedWorkspaceId when lastActiveBranchedWorkspaceId is not set", async () => {
-    const ws = makeWorkspace("g1", {
-      branchedWorkspaceIds: ["nw-primary"],
-      primaryBranchedWorkspaceId: "nw-primary",
-    });
+  it("activateWorkspace materializes a Root runtime workspace when none exists yet", async () => {
+    const ws = makeWorkspace("g1");
     addWorkspace(ws);
 
-    workspaces.set([makeChild("nw-primary", "g1")]);
+    workspaces.set([]);
     activeWorkspaceIdx.set(-1);
 
     await activateWorkspace("g1");
 
     const idx = get(activeWorkspaceIdx);
     const active = get(workspaces)[idx];
-    expect(active?.id).toBe("nw-primary");
+    expect(active?.id).toBe("g1");
   });
 });
 

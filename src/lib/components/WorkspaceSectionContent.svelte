@@ -111,22 +111,20 @@
     ? new Set(workspace.branchedWorkspaceIds)
     : new Set<string>();
 
-  // The primary workspace drives the container row's status dot. It is
-  // excluded from the child list — clicking the row activates it directly.
-  $: primaryWs = workspace?.primaryBranchedWorkspaceId
-    ? $workspaces.find((w) => w.id === workspace!.primaryBranchedWorkspaceId)
+  // The Root runtime Workspace shares its id with the Record (ADR-004
+  // Stage 10). It drives the container row's status dot and renders when
+  // the row is clicked.
+  $: primaryWs = workspace
+    ? $workspaces.find((w) => w.id === workspace!.id)
     : undefined;
 
-  // Child list shows branched workspaces only (excludes primary and dashboards).
+  // Child list shows branched workspaces only (excludes dashboards).
   $: branchedIds = workspace
     ? new Set(
         workspace.branchedWorkspaceIds.filter((id) => {
           const ws = $workspaces.find((w) => w.id === id);
           if (!ws) return false;
-          const md = wsMeta(ws);
-          return (
-            !md.isDashboard && id !== workspace!.primaryBranchedWorkspaceId
-          );
+          return !wsMeta(ws).isDashboard;
         }),
       )
     : new Set<string>();
@@ -217,14 +215,6 @@
       { title: "Delete Workspace", confirmLabel: "Delete", danger: true },
     );
     if (!confirmed) return;
-    // Delete the parent BEFORE cascading the close. Closing a child
-    // workspace fires `workspace:closed`, and `setupPrimaryWorkspaceAutoRecreation`
-    // looks the parent up by `primaryBranchedWorkspaceId` to recreate a
-    // replacement primary. If the parent is still in the store at that
-    // point, the listener spawns a phantom child workspace whose
-    // parentWorkspaceId then dangles when we delete the parent next —
-    // on reload the orphan gets re-wrapped into a fresh parent, so
-    // deletes appear to "come back".
     deleteWorkspace(w.id);
     closeWorkspacesInWorkspace(w.id);
   }

@@ -25,7 +25,6 @@ import {
 import {
   createWorkspaceFromDef,
   closeWorkspace,
-  schedulePersist,
   switchWorkspace,
 } from "./workspace-runtime-service";
 import { eventBus } from "./event-bus";
@@ -123,9 +122,6 @@ export function closeWorkspacesInWorkspace(id: string): void {
  * Appends `workspaceId` to `parentWorkspaceId`'s child-id list if not already
  * present. No-op when the parent workspace is missing (e.g. was just deleted).
  * Returns true when a change was persisted.
- *
- * Enforces the single-primary invariant: throws if adding a non-worktree,
- * non-dashboard workspace to a parent that already has a primaryBranchedWorkspaceId.
  */
 export function addChildToWorkspace(
   parentWorkspaceId: string,
@@ -135,22 +131,6 @@ export function addChildToWorkspace(
   const workspace = primaryWorkspaces.find((w) => w.id === parentWorkspaceId);
   if (!workspace) return false;
   if (workspace.branchedWorkspaceIds.includes(workspaceId)) return false;
-
-  // Enforce single-primary invariant.
-  const incomingWs = get(workspaces).find((w) => w.id === workspaceId);
-  if (incomingWs) {
-    const md = wsMeta(incomingWs);
-    if (
-      !md.worktreePath &&
-      !md.isDashboard &&
-      workspace.primaryBranchedWorkspaceId
-    ) {
-      throw new Error(
-        `Workspace "${parentWorkspaceId}" already has a primary workspace "${workspace.primaryBranchedWorkspaceId}". ` +
-          `Cannot add a second non-branched workspace "${workspaceId}".`,
-      );
-    }
-  }
 
   const next = primaryWorkspaces.map((w) => {
     if (w.id === parentWorkspaceId) {
@@ -460,6 +440,7 @@ function backfillDashboardContributionIds(): void {
       mutated = true;
       return {
         ...ws,
+        dashboardContributionId: inferred,
         metadata: {
           ...(ws.metadata ?? {}),
           dashboardContributionId: inferred,
@@ -617,54 +598,37 @@ export function openWorkspaceDashboard(workspace: WorkspaceRecord): boolean {
 }
 
 /**
- * Activate a Workspace by id: land on its own terminal tabs (the
- * `primaryBranchedWorkspaceId` runtime workspace — the Workspace's
- * primary surface per ADR-004).
+ * Activate a Workspace by id: land on its own Root tab surface — the
+ * runtime Workspace whose id matches the Workspace's record id (ADR-004
+ * Stage 10).
  *
  * Row click and ⌘1-9 both flow through here. We deliberately ignore
  * `lastActiveBranchedWorkspaceId` — that field tracks the most-recent
  * Branch for the "jump to active branch" affordance, not for routing
  * row activations. Branches and Dashboards are reached by clicking
- * their own rows / dashboard tiles, not via the parent row.
+ * their own rows / dashboard tiles, not via the Workspace row.
  *
- * If the primary is set but missing (deleted or never restored),
- * recreate it so the row remains clickable. Final fallbacks (dashboard,
- * any branch) cover edge cases where no primary is set yet.
+ * If the Root runtime Workspace is missing (deleted, never restored, or
+ * a stale persisted id), materialize it with the record id so the row
+ * always lands on its own tabs. We never fall through to the dashboard
+ * or a branch — the Workspace's own surface is the canonical landing.
  */
 export async function activateWorkspace(workspaceId: string): Promise<void> {
   const workspace = getWorkspace(workspaceId);
   if (!workspace) return;
-  const ws = get(workspaces);
-
-  const primaryId = workspace.primaryBranchedWorkspaceId;
-  const primaryWs = primaryId ? ws.find((w) => w.id === primaryId) : undefined;
-  if (primaryWs) {
-    const idx = ws.indexOf(primaryWs);
-    if (idx >= 0) {
-      switchWorkspace(idx);
-      return;
-    }
+  const existingIdx = get(workspaces).findIndex((w) => w.id === workspace.id);
+  if (existingIdx >= 0) {
+    switchWorkspace(existingIdx);
+    return;
   }
-  if (primaryId && !primaryWs) {
-    const newWsId = await createWorkspaceFromDef({
-      name: workspace.name,
-      cwd: workspace.path,
-      metadata: { parentWorkspaceId: workspace.id },
-    });
-    if (newWsId) {
-      updateWorkspace(workspace.id, { primaryBranchedWorkspaceId: newWsId });
-      claimWorkspace(newWsId, "core");
-      const newIdx = get(workspaces).findIndex((w) => w.id === newWsId);
-      if (newIdx >= 0) switchWorkspace(newIdx);
-      return;
-    }
-  }
-  if (openWorkspaceDashboard(workspace)) return;
-  const allWs = get(workspaces);
-  const branchedIdx = allWs.findIndex(
-    (w) => wsMeta(w)?.parentWorkspaceId === workspace.id,
-  );
-  if (branchedIdx >= 0) switchWorkspace(branchedIdx);
+  const rootId = await createWorkspaceFromDef({
+    id: workspace.id,
+    name: workspace.name,
+    cwd: workspace.path,
+  });
+  if (!rootId) return;
+  const newIdx = get(workspaces).findIndex((w) => w.id === rootId);
+  if (newIdx >= 0) switchWorkspace(newIdx);
 }
 
 /**
@@ -831,34 +795,28 @@ export function reclaimChildWorkspaces(): void {
   for (const wsId of toClaimIds) claimWorkspace(wsId, "core");
 }
 
-function backfillPrimaryWorkspaces(): void {
-  for (const workspace of getWorkspaces()) {
-    if (workspace.primaryBranchedWorkspaceId) continue;
-    const members = getChildrenOfWorkspace(workspace.id);
-    const primary = members.find(
-      (w) => !wsMeta(w).worktreePath && !wsMeta(w).isDashboard,
-    );
-    if (primary) {
-      updateWorkspace(workspace.id, { primaryBranchedWorkspaceId: primary.id });
-    }
-    // Workspaces with no eligible primary are left without one — the next
-    // child-workspace creation flow will set it.
-  }
-}
-
+/**
+ * Promote every standalone runtime Workspace to a Root by creating a
+ * matching WorkspaceRecord with the same id (ADR-004 Stage 10: Root and
+ * Record share an id). A "standalone" runtime workspace is one that:
+ *   - has no matching Record (no row in the sidebar yet)
+ *   - is not a Dashboard surface (those belong to a parent Workspace)
+ *   - is not an orphan Branch (worktreePath set but parent missing)
+ *
+ * Runtime Branches (`parentWorkspaceId` resolves to a known Record) are
+ * left alone — they're already correctly attached.
+ */
 function wrapStandaloneChildWorkspaces(): void {
   const knownWorkspaceIds = new Set(getWorkspaces().map((w) => w.id));
-  // Snapshot before we start mutating so the loop is stable.
   const snapshot = get(workspaces);
   const usedColors = getWorkspaces().map((w) => w.color);
 
   for (const ws of snapshot) {
+    if (knownWorkspaceIds.has(ws.id)) continue;
     const md = wsMeta(ws);
     if (md.parentWorkspaceId && knownWorkspaceIds.has(md.parentWorkspaceId))
       continue;
     if (md.isDashboard) continue;
-    // Orphan branched workspaces (workspace deleted, worktreePath still set) are
-    // not primary candidates — skip them rather than wrapping them alone.
     if (md.worktreePath) continue;
 
     const colorIdx = usedColors.length % WORKSPACE_COLOR_SLOTS.length;
@@ -869,33 +827,17 @@ function wrapStandaloneChildWorkspaces(): void {
     const rawCwd = (md as Record<string, unknown>).cwd;
     const path = typeof rawCwd === "string" && rawCwd ? rawCwd : "~";
 
-    const id = crypto.randomUUID();
     const workspace: WorkspaceRecord = {
-      id,
+      id: ws.id,
       name: ws.name,
       path,
       color,
-      branchedWorkspaceIds: [ws.id],
-      primaryBranchedWorkspaceId: ws.id,
+      branchedWorkspaceIds: [],
       isGit: false,
       createdAt: new Date().toISOString(),
     };
-
-    // Stamp the workspace with its new workspace and persist so the parentWorkspaceId
-    // survives a restart — without this the workspace comes back as
-    // standalone, fails the claim check, and gets wrapped again.
-    workspaces.update((list) =>
-      list.map((w) =>
-        w.id === ws.id
-          ? { ...w, metadata: { ...(w.metadata ?? {}), parentWorkspaceId: id } }
-          : w,
-      ),
-    );
-    schedulePersist();
     addWorkspace(workspace);
-    // onWorkspaceCreated already fired before reconcile runs, so claim here.
-    claimWorkspace(ws.id, "core");
-    knownWorkspaceIds.add(id);
+    knownWorkspaceIds.add(ws.id);
   }
 }
 
@@ -915,19 +857,15 @@ function rehydrateClaimRegistry(): void {
 /**
  * Startup reconciliation — called after workspaces are restored.
  *
- * Pass 1: For every workspace lacking `primaryBranchedWorkspaceId`, select the first
- * member workspace that is neither a dashboard nor a worktree.
+ * Pass 1: Promote every standalone runtime Workspace to a Root by
+ * creating a matching WorkspaceRecord (Stage 10: shared id).
  *
- * Pass 2: Wrap every standalone workspace (no metadata.parentWorkspaceId, not a
- * dashboard) into a fresh workspace with that workspace as its primary.
+ * Pass 2: Rehydrate the in-memory claim registry from persisted
+ * parentWorkspaceId metadata so claimed Branches survive restarts.
  *
- * Pass 3: Rehydrate the in-memory claim registry from persisted parentWorkspaceId
- * metadata so claimed workspaces survive restarts.
- *
- * Idempotent — workspaces that already have `primaryBranchedWorkspaceId` are skipped.
+ * Idempotent.
  */
 export async function reconcilePrimaryWorkspaces(): Promise<void> {
-  backfillPrimaryWorkspaces();
   wrapStandaloneChildWorkspaces();
   rehydrateClaimRegistry();
 }
@@ -958,33 +896,6 @@ export async function validateWorkspaceRootPaths(): Promise<void> {
       updateWorkspace(workspace.id, { pathMissing: missing });
     }
   }
-}
-
-/**
- * When a primary workspace is deleted, recreate it to maintain the invariant
- * that every workspace has exactly one non-branched workspace.
- */
-export function setupPrimaryWorkspaceAutoRecreation(): void {
-  eventBus.on("workspace:closed", async (event) => {
-    if (event.type !== "workspace:closed") return;
-    const closedId = event.id;
-    const workspace = getWorkspaces().find(
-      (w) => w.primaryBranchedWorkspaceId === closedId,
-    );
-    if (!workspace) return; // Not a primary workspace
-
-    // Recreate the primary workspace with the same name
-    const newWsId = await createWorkspaceFromDef({
-      name: workspace.name,
-      cwd: workspace.path,
-      metadata: { parentWorkspaceId: workspace.id },
-    });
-    if (newWsId) {
-      // Update the workspace's primary to the new workspace
-      updateWorkspace(workspace.id, { primaryBranchedWorkspaceId: newWsId });
-      claimWorkspace(newWsId, "core");
-    }
-  });
 }
 
 export {

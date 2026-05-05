@@ -15,15 +15,44 @@ import {
 import type { WorkspaceRecord } from "../config";
 
 /**
- * Returns the typed metadata for a workspace, falling back to an empty object.
+ * Returns a merged metadata view for a workspace.
  *
- * Reads `extensionData` first (populated by the unified-store bridge),
- * then falls back to `metadata` for legacy workspace records.
+ * Stage 10 promoted previously-metadata fields (parentWorkspaceId,
+ * isDashboard, dashboardWorkspaceId, worktreePath, locked, etc.) to
+ * top-level Workspace fields. Existing call sites still read those
+ * through `wsMeta`, so this view layers extension/legacy metadata first
+ * and overlays top-level fields on top — top-level wins because it is
+ * the canonical source after Stage 10.
  */
 export function wsMeta(ws: Workspace | WorkspaceRecord): WorkspaceMetadata {
-  const ed = (ws as Workspace).extensionData;
-  if (ed) return ed as WorkspaceMetadata;
-  return (ws as Workspace).metadata ?? {};
+  const w = ws as Workspace;
+  const base: WorkspaceMetadata = {
+    ...((w.metadata as WorkspaceMetadata | undefined) ?? {}),
+    ...((w.extensionData as WorkspaceMetadata | undefined) ?? {}),
+  };
+  if (w.parentWorkspaceId !== undefined)
+    base.parentWorkspaceId = w.parentWorkspaceId;
+  if (w.isDashboard !== undefined) base.isDashboard = w.isDashboard;
+  if (w.dashboardWorkspaceId !== undefined)
+    base.dashboardWorkspaceId = w.dashboardWorkspaceId;
+  if (w.dashboardContributionId !== undefined)
+    base.dashboardContributionId = w.dashboardContributionId;
+  if (w.lastActiveBranchedWorkspaceId !== undefined)
+    base.lastActiveBranchedWorkspaceId = w.lastActiveBranchedWorkspaceId;
+  if (w.locked !== undefined) base.locked = w.locked;
+  if (w.autoRunRestoreCommands !== undefined)
+    base.autoRunRestoreCommands = w.autoRunRestoreCommands;
+  const bw = w as Partial<{
+    worktreePath: string;
+    branch: string;
+    baseBranch: string;
+    repoPath: string;
+  }>;
+  if (bw.worktreePath !== undefined) base.worktreePath = bw.worktreePath;
+  if (bw.branch !== undefined) base.branch = bw.branch;
+  if (bw.baseBranch !== undefined) base.baseBranch = bw.baseBranch;
+  if (bw.repoPath !== undefined) base.repoPath = bw.repoPath;
+  return base;
 }
 
 // Cached home directory — resolved once, reused everywhere

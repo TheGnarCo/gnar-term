@@ -76,7 +76,6 @@
   import {
     reconcileWorkspaceDashboards,
     reconcilePrimaryWorkspaces,
-    setupPrimaryWorkspaceAutoRecreation,
     validateWorkspaceRootPaths,
   } from "./lib/services/workspace-service";
 
@@ -712,10 +711,9 @@
     // getState() so we don't need to thread the value back through the
     // bootstrap signature. Best-effort; failures are logged and ignored.
     void restoreWindowBounds(getState().windowBounds, getCurrentWindow());
-    // Backfill primaryBranchedWorkspaceId and wrap standalone workspaces now that
-    // the workspaces store is populated.
+    // Promote standalone runtime workspaces to Roots and rehydrate the
+    // claim registry now that the workspaces store is populated.
     await reconcilePrimaryWorkspaces();
-    setupPrimaryWorkspaceAutoRecreation();
     void reconcileWorkspaceDashboards();
     // Stamp `pathMissing` on workspaces whose root directory has gone
     // missing across sessions. Runs in the background — a slow FS

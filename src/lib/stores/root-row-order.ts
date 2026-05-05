@@ -115,11 +115,24 @@ export function bootstrapRootRowOrder(
   const persisted = getState().rootRowOrder ?? [];
   const key = (r: RootRow) => `${r.kind}:${r.id}`;
 
+  // Stage 10: a Workspace and its own tab-surface share an id. The
+  // canonical row is `{kind: "workspace", id}` (contributed via
+  // `extensionRows`); the older `{kind: "child-workspace", id}` shape is
+  // legacy persisted state from pre-Stage-10 sessions. Suppress the
+  // child-workspace entry whenever a workspace entry exists at the same
+  // id so the sidebar doesn't render the same Workspace twice.
+  const workspaceIds = new Set<string>();
+  for (const r of extensionRows) {
+    if (r.kind === "workspace") workspaceIds.add(r.id);
+  }
+
   // Build the full known set — anything persisted that isn't in it is
   // stale (child workspace deleted, parent workspace removed) and gets dropped.
   const known = new Set<string>();
-  for (const id of knownWorkspaceIds)
+  for (const id of knownWorkspaceIds) {
+    if (workspaceIds.has(id)) continue;
     known.add(key({ kind: "child-workspace", id }));
+  }
   for (const r of extensionRows) known.add(key(r));
 
   // Keep persisted order where referents still exist.
@@ -145,6 +158,7 @@ export function bootstrapRootRowOrder(
     }
   }
   for (const id of knownWorkspaceIds) {
+    if (workspaceIds.has(id)) continue;
     const k = key({ kind: "child-workspace", id });
     if (!seen.has(k)) {
       next.push({ kind: "child-workspace", id });

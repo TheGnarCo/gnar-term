@@ -104,10 +104,16 @@ function generateId(): string {
 
 function onWorkspaceCreated(event: AppEvent): void {
   if (event.type !== "workspace:created") return;
-  const metadata = event.metadata as WorkspaceMetadata | undefined;
-  const targetWorkspaceId = metadata?.parentWorkspaceId;
-  if (!targetWorkspaceId) return;
-  addChildToWorkspace(targetWorkspaceId, event.id);
+  // Stage 10 promoted parentWorkspaceId to a top-level Workspace field, so
+  // event.metadata may not carry it. Resolve through wsMeta against the
+  // live runtime workspace, falling back to the event payload for
+  // backwards compatibility with emitters that still pass metadata only.
+  const ws = get(workspaces).find((w) => w.id === event.id);
+  const parentWorkspaceId =
+    (ws ? wsMeta(ws).parentWorkspaceId : undefined) ??
+    (event.metadata as WorkspaceMetadata | undefined)?.parentWorkspaceId;
+  if (typeof parentWorkspaceId !== "string") return;
+  addChildToWorkspace(parentWorkspaceId, event.id);
   claimWorkspace(event.id, SOURCE);
 }
 
@@ -206,35 +212,24 @@ async function createWorkspaceFlow(prefill?: {
     );
   }
 
-  // Spawn an initial child workspace inside the new workspace and
-  // activate it. The workspace:created handler claims it into the
-  // parent automatically when it sees metadata.parentWorkspaceId.
+  // ADR-004 Stage 10: materialize the Root runtime Workspace whose id
+  // matches the WorkspaceRecord, so the sidebar row's tab surface
+  // exists immediately. No `parentWorkspaceId` — the Root IS the
+  // Workspace, not a child of itself.
   try {
-    const wsCount =
-      getWorkspaces().find((w) => w.id === id)?.branchedWorkspaceIds.length ??
-      0;
     const initialDef: WorkspaceTemplate = {
-      name: `${result.name} Branch ${wsCount + 1}`,
+      id,
+      name: result.name,
       cwd: result.path,
-      metadata: { parentWorkspaceId: id },
       layout: { pane: { surfaces: [{ type: "terminal" }] } },
     };
     const resolvedDef = await applyRepoDef(initialDef, result.path);
     await createWorkspaceFromDef(resolvedDef);
-    const newWs = get(workspaces)
-      .slice()
-      .reverse()
-      .find(
-        (w) => wsMeta(w).parentWorkspaceId === id && !wsMeta(w).isDashboard,
-      );
-    if (newWs) {
-      updateWorkspace(id, { primaryBranchedWorkspaceId: newWs.id });
-      const idx = get(workspaces).indexOf(newWs);
-      if (idx >= 0) switchWorkspace(idx);
-    }
+    const idx = get(workspaces).findIndex((w) => w.id === id);
+    if (idx >= 0) switchWorkspace(idx);
   } catch (err) {
     console.error(
-      `[workspaces] Failed to spawn initial child workspace: ${
+      `[workspaces] Failed to spawn Root runtime workspace: ${
         err instanceof Error ? err.message : String(err)
       }`,
     );

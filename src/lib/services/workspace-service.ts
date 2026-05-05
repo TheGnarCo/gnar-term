@@ -21,7 +21,7 @@ import {
   getWorkspaces,
   setActiveWorkspaceId,
   setWorkspaces,
-} from "../stores/workspaces";
+} from "../stores/workspace";
 import {
   createWorkspaceFromDef,
   closeWorkspace,

@@ -24,7 +24,7 @@ globalThis.ResizeObserver =
 
 import PaneView from "../lib/components/PaneView.svelte";
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
-import { workspacesStore } from "../lib/stores/workspaces";
+import { workspacesStore } from "../lib/stores/workspace";
 import type { Workspace, Pane } from "../lib/types";
 
 function makePane(id: string): Pane {

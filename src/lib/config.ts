@@ -18,7 +18,7 @@ import { writable, type Readable } from "svelte/store";
 import { getHome, getConfigDir } from "./services/service-helpers";
 import type { WorkspaceMetadata } from "./types";
 import type { ThemeDef } from "./theme-data";
-import type { WorkspaceRecord } from "./stores/workspaces";
+import type { WorkspaceRecord } from "./stores/workspace";
 
 // --- Types (cmux-compatible + extensions) ---
 
@@ -177,7 +177,7 @@ export type { Workspace } from "./types";
  * that import from this module continue to compile. The canonical
  * definition lives in `./stores/workspaces`.
  */
-export type { WorkspaceRecord } from "./stores/workspaces";
+export type { WorkspaceRecord } from "./stores/workspace";
 
 export interface GnarTermConfig {
   // gnar-term extensions

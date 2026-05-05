@@ -20,7 +20,7 @@ import {
   createWorkspaceFromDef,
 } from "../workspace-runtime-service";
 import { activateWorkspace, addWorkspace } from "../workspace-service";
-import { resetWorkspacesForTest, getWorkspace } from "../../stores/workspaces";
+import { resetWorkspacesForTest, getWorkspace } from "../../stores/workspace";
 import { rootRowOrder } from "../../stores/root-row-order";
 import type { Workspace } from "../../types";
 import type { WorkspaceRecord } from "../../config";

@@ -143,7 +143,7 @@ import {
   registerWorkspaceAction,
   resetWorkspaceActions,
 } from "../lib/services/workspace-action-registry";
-import { setWorkspaces } from "../lib/stores/workspaces";
+import { setWorkspaces } from "../lib/stores/workspace";
 import type { WorkspaceRecord } from "../lib/config";
 
 // ---------------------------------------------------------------------------

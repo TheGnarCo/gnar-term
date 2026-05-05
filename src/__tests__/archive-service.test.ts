@@ -34,6 +34,9 @@ vi.mock("../lib/stores/workspace", async () => {
     activeSurface: writable(null),
     activePseudoWorkspaceId: writable(null),
     zoomedSurfaceId: writable(null),
+    getWorkspace: mocks.getWorkspace,
+    getWorkspaces: mocks.getWorkspaces,
+    setWorkspaces: mocks.setWorkspaces,
   };
 });
 
@@ -42,12 +45,6 @@ vi.mock("../lib/services/workspace-runtime-service", () => ({
   createWorkspaceFromDef: mocks.createWorkspaceFromDef,
   serializeLayout: mocks.serializeLayout,
   schedulePersist: mocks.schedulePersist,
-}));
-
-vi.mock("../lib/stores/workspaces", () => ({
-  getWorkspace: mocks.getWorkspace,
-  getWorkspaces: mocks.getWorkspaces,
-  setWorkspaces: mocks.setWorkspaces,
 }));
 
 vi.mock("../lib/services/workspace-service", () => ({

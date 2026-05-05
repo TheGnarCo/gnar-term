@@ -20,7 +20,7 @@
  * Pure (state in, state out) so it can be unit-tested without I/O.
  */
 import type { AppState, WorkspaceDef, LayoutNode } from "../config";
-import type { WorkspaceRecord } from "../stores/workspaces";
+import type { WorkspaceRecord } from "../stores/workspace";
 
 const EMPTY_LAYOUT: LayoutNode = { pane: { surfaces: [] } };
 

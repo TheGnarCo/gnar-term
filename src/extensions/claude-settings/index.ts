@@ -4,7 +4,7 @@ import {
   closeAutoDashboardsBySource,
   provisionAutoDashboardsForWorkspace,
 } from "../../lib/services/workspace-service";
-import { getWorkspaces } from "../../lib/stores/workspaces";
+import { getWorkspaces } from "../../lib/stores/workspace";
 import { waitRestored } from "../../lib/bootstrap/restore-workspaces";
 import ClaudeMark from "./icons/ClaudeMark.svelte";
 import UserSettingsPanel from "./components/UserSettingsPanel.svelte";

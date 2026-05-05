@@ -12,7 +12,7 @@
    */
   import { theme } from "../stores/theme";
   import ColorSlotPicker from "./ColorSlotPicker.svelte";
-  import { workspacesStore } from "../stores/workspaces";
+  import { workspacesStore } from "../stores/workspace";
   import {
     workspaceDashboardPath,
     updateWorkspace,

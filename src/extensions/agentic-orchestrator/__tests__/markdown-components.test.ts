@@ -389,7 +389,7 @@ describe("Kanban widget", () => {
     // the host-context-driven filter includes them as unclaimed CWD
     // matches — mirroring the workspace-scope rule in widget-helpers.
     const { setWorkspaces, resetWorkspacesForTest } =
-      await import("../../../lib/stores/workspaces");
+      await import("../../../lib/stores/workspace");
     resetWorkspacesForTest();
     setWorkspaces([
       {
@@ -446,7 +446,7 @@ describe("Issues widget", () => {
     invalidateGhAvailability();
     tauriInvokeGhAvailable.current = true;
     const { setWorkspaces, resetWorkspacesForTest } =
-      await import("../../../lib/stores/workspaces");
+      await import("../../../lib/stores/workspace");
     resetWorkspacesForTest();
     setWorkspaces([
       {
@@ -990,7 +990,7 @@ describe("Prs widget", () => {
     invalidateGhAvailability();
     tauriInvokeGhAvailable.current = true;
     const { setWorkspaces, resetWorkspacesForTest } =
-      await import("../../../lib/stores/workspaces");
+      await import("../../../lib/stores/workspace");
     resetWorkspacesForTest();
     setWorkspaces([
       {
@@ -1332,7 +1332,7 @@ describe("TaskSpawner widget", () => {
     spawnAgentInWorktreeMock.mockClear();
     resetRegistry();
     const { setWorkspaces, resetWorkspacesForTest } =
-      await import("../../../lib/stores/workspaces");
+      await import("../../../lib/stores/workspace");
     resetWorkspacesForTest();
     setWorkspaces([
       {

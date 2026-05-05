@@ -14,7 +14,7 @@
  */
 import { get } from "svelte/store";
 import { workspaces } from "../stores/workspace";
-import { getWorkspaces, isProjectRecord } from "../stores/workspaces";
+import { getWorkspaces, isProjectRecord } from "../stores/workspace";
 import {
   loadState,
   type GnarTermConfig,

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { migrateLegacyWorkspaces } from "./migrate-legacy-workspaces";
 import type { AppState, WorkspaceDef, LayoutNode } from "../config";
-import type { WorkspaceRecord } from "../stores/workspaces";
+import type { WorkspaceRecord } from "../stores/workspace";
 
 const layout = (id: string): LayoutNode => ({
   pane: { surfaces: [{ type: "terminal", cwd: `/cwd/${id}` }] },

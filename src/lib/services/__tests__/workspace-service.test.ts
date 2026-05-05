@@ -19,7 +19,7 @@ import {
 import {
   resetWorkspacesForTest,
   workspacesStore,
-} from "../../stores/workspaces";
+} from "../../stores/workspace";
 import { eventBus } from "../event-bus";
 import { rootRowOrder } from "../../stores/root-row-order";
 import { workspaces, activeWorkspaceIdx } from "../../stores/workspace";

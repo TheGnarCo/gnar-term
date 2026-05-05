@@ -21,7 +21,7 @@
   import type { Workspace } from "../types";
   import { workspaceSurfaceMap } from "../services/workspace-runtime-service";
   import { wsMeta } from "../services/service-helpers";
-  import { workspacesStore } from "../stores/workspaces";
+  import { workspacesStore } from "../stores/workspace";
 
   export let workspace: Workspace;
   export let index: number;

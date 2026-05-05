@@ -58,7 +58,7 @@
   import { buildWorkspaceContextMenuItems } from "../utils/workspace-context-menu";
   import { wsMeta } from "../services/service-helpers";
   import { toggleWorkspaceLock } from "../services/workspace-runtime-service";
-  import { getWorkspace } from "../stores/workspaces";
+  import { getWorkspace } from "../stores/workspace";
 
   function resolvePseudoWorkspaceColor(pw: PseudoWorkspace): string {
     const slot = $configStore.pseudoWorkspaceColors?.[pw.id] ?? "purple";

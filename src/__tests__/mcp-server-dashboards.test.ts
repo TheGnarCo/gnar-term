@@ -25,7 +25,7 @@ import {
   resetDashboardContributions,
 } from "../lib/services/dashboard-contribution-registry";
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
-import { workspacesStore } from "../lib/stores/workspaces";
+import { workspacesStore } from "../lib/stores/workspace";
 
 function rpc(method: string, params?: unknown, id: number = 1) {
   return { jsonrpc: "2.0" as const, id, method, params };

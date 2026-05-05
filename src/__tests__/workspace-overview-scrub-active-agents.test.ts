@@ -15,7 +15,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 }));
 
 import { reconcileWorkspaceDashboards } from "../lib/services/workspace-service";
-import { workspacesStore } from "../lib/stores/workspaces";
+import { workspacesStore } from "../lib/stores/workspace";
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
 
 describe("scrub Active Agents from workspace Overview", () => {

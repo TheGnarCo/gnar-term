@@ -27,7 +27,7 @@ vi.mock("../lib/services/event-bus", () => ({
   eventBus: { emit: vi.fn(), on: vi.fn(), off: vi.fn() },
 }));
 
-import { setWorkspaces, getWorkspaces } from "../lib/stores/workspaces";
+import { setWorkspaces, getWorkspaces } from "../lib/stores/workspace";
 import {
   toggleWorkspaceLock,
   deleteWorkspace,

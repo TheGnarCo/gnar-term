@@ -1,6 +1,6 @@
 <script lang="ts">
   import { workspaces } from "../stores/workspace";
-  import { workspacesStore } from "../stores/workspaces";
+  import { workspacesStore } from "../stores/workspace";
   import { getDashboardContribution } from "../services/dashboard-contribution-registry";
   import {
     getDashboardHost,

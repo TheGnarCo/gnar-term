@@ -33,7 +33,7 @@ import {
 import {
   setWorkspaces,
   resetWorkspacesForTest,
-} from "../../../lib/stores/workspaces";
+} from "../../../lib/stores/workspace";
 import type { DashboardHostContext } from "../../../lib/contexts/dashboard-host";
 
 function makeAgent(overrides: Partial<DetectedAgent> = {}): DetectedAgent {

@@ -23,7 +23,7 @@ import {
 } from "./pane-service";
 import { createWorkspaceFromSurface } from "./workspace-runtime-service";
 import { wsMeta } from "./service-helpers";
-import { getWorkspaces } from "../stores/workspaces";
+import { getWorkspaces } from "../stores/workspace";
 import { rootRowOrder } from "../stores/root-row-order";
 
 export type TabDropTarget =

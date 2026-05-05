@@ -14,7 +14,7 @@ import {
   getWorkspace,
   getWorkspaces,
   setWorkspaces,
-} from "../stores/workspaces";
+} from "../stores/workspace";
 import { removeRootRow, appendRootRow } from "../stores/root-row-order";
 import { showConfirmPrompt } from "../stores/ui";
 import {

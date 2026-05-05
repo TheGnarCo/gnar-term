@@ -15,7 +15,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 
 import { invoke } from "@tauri-apps/api/core";
 import { workspaces } from "../lib/stores/workspace";
-import { getWorkspaces, setWorkspaces } from "../lib/stores/workspaces";
+import { getWorkspaces, setWorkspaces } from "../lib/stores/workspace";
 import { validateWorkspaceRootPaths } from "../lib/services/workspace-service";
 import type { Workspace } from "../lib/config";
 

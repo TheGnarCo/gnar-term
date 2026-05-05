@@ -52,7 +52,7 @@ import {
   getProjectRecordsAsWorkspaceDefs,
   getActiveWorkspaceId as getActiveProjectWorkspaceId,
   installSchedulePersist as installLegacySchedulePersist,
-} from "../stores/workspaces";
+} from "../stores/workspace";
 import { makePersistScheduler } from "../utils/persist-scheduler";
 
 // --- Workspace persistence (debounced save to state.json) ---

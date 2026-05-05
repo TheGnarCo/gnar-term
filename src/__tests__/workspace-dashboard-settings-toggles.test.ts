@@ -17,7 +17,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 
 import WorkspaceDashboardSettings from "../lib/components/WorkspaceDashboardSettings.svelte";
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
-import { workspacesStore } from "../lib/stores/workspaces";
+import { workspacesStore } from "../lib/stores/workspace";
 import {
   registerDashboardContribution,
   resetDashboardContributions,

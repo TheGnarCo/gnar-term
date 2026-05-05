@@ -13,7 +13,7 @@ import {
   type DashboardScope,
 } from "../../lib/contexts/dashboard-host";
 import { workspaces } from "../../lib/stores/workspace";
-import { getWorkspace, workspacesStore } from "../../lib/stores/workspaces";
+import { getWorkspace, workspacesStore } from "../../lib/stores/workspace";
 import { claimedWorkspaceIds } from "../../lib/services/claimed-workspace-registry";
 import type {
   SpawnedByMarker,

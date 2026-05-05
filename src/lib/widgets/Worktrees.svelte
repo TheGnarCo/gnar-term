@@ -12,7 +12,7 @@
    *   - none         → widget is inert
    */
   import { theme } from "../stores/theme";
-  import { getWorkspace } from "../stores/workspaces";
+  import { getWorkspace } from "../stores/workspace";
   import {
     deriveDashboardScope,
     getDashboardHost,

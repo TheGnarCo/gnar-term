@@ -23,7 +23,7 @@ import {
 } from "./status-registry";
 import { workspaces, activeWorkspace } from "../stores/workspace";
 import { getActiveCwd, getWorkspaceCwd, wsMeta } from "./service-helpers";
-import { getWorkspace } from "../stores/workspaces";
+import { getWorkspace } from "../stores/workspace";
 
 export const GIT_STATUS_SOURCE = "git";
 

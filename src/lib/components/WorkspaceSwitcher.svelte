@@ -2,7 +2,7 @@
   import { tick } from "svelte";
   import { theme } from "../stores/theme";
   import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
-  import { workspacesStore } from "../stores/workspaces";
+  import { workspacesStore } from "../stores/workspace";
   import { switchWorkspace } from "../services/workspace-runtime-service";
   import {
     filterWorkspaces,

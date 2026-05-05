@@ -9,7 +9,7 @@
   import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
   import { eventBus, type ExtensionEvent } from "../services/event-bus";
   import type { WorkspaceRecord } from "../config";
-  import { workspacesStore, getWorkspace } from "../stores/workspaces";
+  import { workspacesStore, getWorkspace } from "../stores/workspace";
   import {
     deleteWorkspace,
     updateWorkspace,

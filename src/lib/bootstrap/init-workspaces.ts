@@ -24,7 +24,7 @@ import {
   getWorkspaces,
   getActiveWorkspaceId,
   setActiveWorkspaceId,
-} from "../stores/workspaces";
+} from "../stores/workspace";
 import {
   addWorkspace,
   addChildToWorkspace,

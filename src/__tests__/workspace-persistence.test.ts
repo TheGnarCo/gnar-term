@@ -17,7 +17,7 @@ import {
   setWorkspaces,
   setActiveWorkspaceId,
   resetWorkspacesForTest,
-} from "../lib/stores/workspaces";
+} from "../lib/stores/workspace";
 
 describe("workspace persistence", () => {
   beforeEach(() => {

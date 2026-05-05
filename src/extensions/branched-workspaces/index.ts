@@ -13,7 +13,7 @@
 import type { ExtensionManifest, ExtensionAPI } from "../api";
 import { createWorktreeWorkspace } from "../../lib/services/worktree-service";
 import { createWorkspaceFromDef } from "../../lib/services/workspace-runtime-service";
-import { getWorkspaces } from "../../lib/stores/workspaces";
+import { getWorkspaces } from "../../lib/stores/workspace";
 
 export const branchedWorkspacesManifest: ExtensionManifest = {
   id: "branched-workspaces",

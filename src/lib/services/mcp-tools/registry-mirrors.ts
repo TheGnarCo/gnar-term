@@ -21,7 +21,7 @@ import {
   closeDashboardForWorkspace,
   isDashboardWorkspace,
 } from "../workspace-service";
-import { getWorkspace } from "../../stores/workspaces";
+import { getWorkspace } from "../../stores/workspace";
 import { listMarkdownComponents } from "../markdown-component-registry";
 import type { ToolDef } from "../mcp-types";
 

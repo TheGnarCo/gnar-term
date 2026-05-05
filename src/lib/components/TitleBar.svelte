@@ -10,7 +10,7 @@
   import TitleBarContributedButton from "./TitleBarContributedButton.svelte";
   import { runCommandById } from "../services/command-registry";
   import { activeWorkspace } from "../stores/workspace";
-  import { workspacesStore } from "../stores/workspaces";
+  import { workspacesStore } from "../stores/workspace";
 
   // Single source of truth: cfg!(debug_assertions) from Rust, exposed via the
   // is_debug_build command. True for `tauri dev` and `tauri build --debug`,

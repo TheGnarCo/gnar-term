@@ -9,7 +9,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 
 import type { Workspace } from "../lib/config";
 import { addChildToWorkspace } from "../lib/services/workspace-service";
-import { getWorkspaces, setWorkspaces } from "../lib/stores/workspaces";
+import { getWorkspaces, setWorkspaces } from "../lib/stores/workspace";
 import { workspaces } from "../lib/stores/workspace";
 
 describe("Workspace.primaryBranchedWorkspaceId", () => {

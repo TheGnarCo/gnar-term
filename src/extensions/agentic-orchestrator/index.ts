@@ -21,7 +21,7 @@ import {
   closeAutoDashboardsBySource,
   provisionAutoDashboardsForWorkspace,
 } from "../../lib/services/workspace-service";
-import { getWorkspaces } from "../../lib/stores/workspaces";
+import { getWorkspaces } from "../../lib/stores/workspace";
 import { waitRestored } from "../../lib/bootstrap/restore-workspaces";
 import BotIcon from "./icons/BotIcon.svelte";
 import GlobalAgenticDashboardBody from "./components/GlobalAgenticDashboardBody.svelte";

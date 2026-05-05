@@ -59,11 +59,16 @@ vi.mock("../lib/services/workspace-runtime-service", () => ({
     createWorkspaceFromSurfaceSpy(...args),
 }));
 
-vi.mock("../lib/stores/workspaces", () => ({
-  getWorkspaces: vi.fn().mockReturnValue([]),
-  workspacesStore: { subscribe: vi.fn() },
-  setActiveWorkspaceId: vi.fn(),
-}));
+vi.mock("../lib/stores/workspace", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../lib/stores/workspace")>();
+  return {
+    ...actual,
+    getWorkspaces: vi.fn().mockReturnValue([]),
+    workspacesStore: { subscribe: vi.fn() },
+    setActiveWorkspaceId: vi.fn(),
+  };
+});
 
 vi.mock("../lib/stores/root-row-order", () => ({
   rootRowOrder: { subscribe: vi.fn(), set: vi.fn() },
@@ -94,7 +99,7 @@ vi.mock("../lib/services/pane-service", async () => {
 });
 
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
-import { getWorkspaces } from "../lib/stores/workspaces";
+import { getWorkspaces } from "../lib/stores/workspace";
 import {
   uid,
   type Workspace,

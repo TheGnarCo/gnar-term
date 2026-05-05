@@ -12,7 +12,7 @@
    */
   import { getContext, onDestroy, onMount } from "svelte";
   import { theme } from "../stores/theme";
-  import { getWorkspace } from "../stores/workspaces";
+  import { getWorkspace } from "../stores/workspace";
   import {
     deriveDashboardScope,
     getDashboardHost,

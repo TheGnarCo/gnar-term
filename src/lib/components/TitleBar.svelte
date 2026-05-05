@@ -11,8 +11,6 @@
   import { runCommandById } from "../services/command-registry";
   import { activeWorkspace } from "../stores/workspace";
   import { workspacesStore } from "../stores/workspaces";
-  import { contrastColor } from "../utils/contrast";
-  import { resolveWorkspaceColor } from "../theme-data";
 
   // Single source of truth: cfg!(debug_assertions) from Rust, exposed via the
   // is_debug_build command. True for `tauri dev` and `tauri build --debug`,
@@ -45,23 +43,7 @@
   $: parentWorkspace = parentWorkspaceId
     ? ($workspacesStore.find((w) => w.id === parentWorkspaceId) ?? null)
     : null;
-  $: wsColor = parentWorkspace?.color ?? null;
-  $: resolvedWsColor = wsColor ? resolveWorkspaceColor(wsColor, $theme) : null;
 
-  // Full-bar color derived from the active workspace's drag-handle color.
-  // Icons and text always contrast against this background.
-  $: barBg = resolvedWsColor ?? $theme.bg;
-  $: barFg = resolvedWsColor ? contrastColor(resolvedWsColor) : $theme.fg;
-  $: barFgDim = resolvedWsColor
-    ? barFg === "#000"
-      ? "rgba(0,0,0,0.55)"
-      : "rgba(255,255,255,0.55)"
-    : $theme.fgDim;
-  $: barBorder = resolvedWsColor
-    ? barFg === "#000"
-      ? "rgba(0,0,0,0.18)"
-      : "rgba(255,255,255,0.12)"
-    : $theme.border;
   $: devRing = isDev ? `inset 0 0 0 8px ${DEV_ACCENT}` : "none";
 
   // Derive workspace type for the title context suffix
@@ -83,11 +65,11 @@
   style="
     height: 38px; flex-shrink: 0; display: flex; align-items: center;
     padding: 0 8px 0 {leftPadding}; -webkit-app-region: drag;
-    background: {barBg}; border-bottom: 1px solid {barBorder}; box-shadow: {devRing};
+    background: {$theme.bg}; border-bottom: 1px solid {$theme.border}; box-shadow: {devRing};
   "
 >
   <button
-    style="{btnStyle} color: {$sidebarVisible ? barFg : barFgDim};"
+    style="{btnStyle} color: {$sidebarVisible ? $theme.fg : $theme.fgDim};"
     title="Toggle Sidebar ({isMac ? modLabel : shiftModLabel}B)"
     aria-label="Toggle Sidebar"
     use:shortcutHint={{
@@ -116,9 +98,9 @@
     style="flex: 1; display: flex; justify-content: center; align-items: center; pointer-events: none;"
   >
     {#if $activeWorkspace && titleText}
-      <span class="title-ws" style="color: {barFg};">{titleText}</span>
+      <span class="title-ws" style="color: {$theme.fg};">{titleText}</span>
     {:else}
-      <span class="title-ws" style="color: {barFgDim};"
+      <span class="title-ws" style="color: {$theme.fgDim};"
         >{isDev ? "GNARTERM (DEV)" : "GNARTERM"}</span
       >
     {/if}
@@ -128,13 +110,13 @@
     <TitleBarContributedButton
       button={btn}
       {btnStyle}
-      fg={barFgDim}
-      fgActive={barFg}
+      fg={$theme.fgDim}
+      fgActive={$theme.fg}
     />
   {/each}
 
   <button
-    style="{btnStyle} color: {barFgDim};"
+    style="{btnStyle} color: {$theme.fgDim};"
     title="Keyboard Shortcuts ({isMac ? '⌘/' : 'Ctrl+/'})"
     aria-label="Keyboard Shortcuts"
     use:shortcutHint={{ label: isMac ? "⌘/" : "Ctrl+/", placement: "below" }}
@@ -160,7 +142,7 @@
   </button>
 
   <button
-    style="{btnStyle} color: {barFgDim};"
+    style="{btnStyle} color: {$theme.fgDim};"
     title="Settings ({modLabel},)"
     aria-label="Settings"
     use:shortcutHint={{ label: isMac ? "⌘," : "Ctrl+,", placement: "below" }}

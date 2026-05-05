@@ -1,5 +1,5 @@
 /**
- * spawn-helper — shared "spawn an agent into a fresh worktree workspace"
+ * spawn-helper — shared "spawn an agent into a fresh branched workspace"
  * pipeline. Invoked by:
  *   1. The MCP `spawn_agent` tool when its `worktree` flag is set.
  *   2. The in-app widgets (Issues split-button, TaskSpawner Spawn button)
@@ -12,7 +12,7 @@
  *     applies copyPatterns/setupScript, creates the workspace with metadata
  *     including spawnedBy, and returns the new workspace id)
  *   - Sets the agent's startup command on the workspace's first terminal
- *     surface (already wired by createWorkspaceFromDef via WorkspaceDef.command)
+ *     surface (already wired by createWorkspaceFromDef via WorkspaceTemplate.command)
  *
  * Branch defaulting (when caller doesn't pass a branch):
  *   `agent/<agent>/<shortTimestamp>` — base32 unix-seconds
@@ -56,7 +56,7 @@ const AGENT_COMMANDS: Record<Exclude<SpawnAgentType, "custom">, string> = {
  */
 export type SpawnedByMarker =
   | { kind: "global" }
-  | { kind: "group"; groupId: string };
+  | { kind: "workspace"; parentWorkspaceId: string };
 
 export interface SpawnAgentInWorktreeArgs {
   /** Display name for the spawned workspace. */
@@ -77,12 +77,12 @@ export interface SpawnAgentInWorktreeArgs {
   /** Base branch. Default: "main". */
   base?: string;
   /**
-   * When provided, the new workspace's metadata.groupId is set to this
-   * id — used when the spawning dashboard lives under a workspace group,
-   * so workspace-groups claims the worktree into the group's nested list
-   * alongside other group workspaces.
+   * When provided, the new child workspace's metadata.parentWorkspaceId is
+   * set to this id — used when the spawning dashboard lives under a
+   * Workspace, so the workspace claims the worktree into its child list
+   * alongside other child workspaces.
    */
-  groupId?: string;
+  parentWorkspaceId?: string;
   /**
    * Provenance marker — the new workspace's metadata.spawnedBy records
    * which dashboard spawned it. Presence drives the bot-icon treatment
@@ -212,7 +212,9 @@ export async function spawnAgentInWorktree(
     base,
     worktreePath,
     startupCommand,
-    ...(args.groupId ? { groupId: args.groupId } : {}),
+    ...(args.parentWorkspaceId
+      ? { parentWorkspaceId: args.parentWorkspaceId }
+      : {}),
     ...(args.spawnedBy ? { spawnedBy: args.spawnedBy } : {}),
     ...(args.spawnedFromIssues && args.spawnedFromIssues.length > 0
       ? { spawnedFromIssues: args.spawnedFromIssues }
@@ -241,7 +243,7 @@ export async function spawnAgentInWorktree(
   }
 
   // Override the surface name to reflect the spawn intent — createTerminalSurface
-  // assigns "Shell N" by default. The WorkspaceDef path doesn't pass `name`
+  // assigns "Shell N" by default. The WorkspaceTemplate path doesn't pass `name`
   // through (we only set `command`), so we rename here.
   for (const s of placement.pane.surfaces) {
     if (isTerminalSurface(s) && s.id === placement.surfaceId) {

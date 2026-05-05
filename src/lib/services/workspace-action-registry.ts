@@ -17,8 +17,9 @@ export interface WorkspaceAction extends RegistryItem {
   icon: string;
   shortcut?: string;
   /** Where the action appears: "workspace" (default) in the workspace header,
-   *  "sidebar" in the top bar alongside reorder. */
-  zone?: "workspace" | "sidebar";
+   *  "sidebar" in the top bar alongside reorder,
+   *  "workspace-tile" as a dash-btn tile in the workspace group banner row. */
+  zone?: "workspace" | "sidebar" | "workspace-tile";
   handler: (ctx: WorkspaceActionContext) => void | Promise<void>;
   when?: (ctx: WorkspaceActionContext) => boolean;
 }

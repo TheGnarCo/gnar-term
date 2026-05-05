@@ -30,7 +30,6 @@
  *   | ----------------------- | -------------------------------------------- |
  *   | surface-type-registry   | list_surface_types, open_surface             |
  *   | command-registry        | list_commands, invoke_command                |
- *   | sidebar-tab-registry    | list_sidebar_tabs, activate_sidebar_tab      |
  *   | workspace-action-reg…   | list_workspace_actions, invoke_workspace_…   |
  *   | context-menu-item-reg…  | list_context_menu_items, invoke_context_…   |
  *
@@ -61,7 +60,7 @@ import {
   waitForPtyReady,
   onFirstPtyOutput,
 } from "../terminal-service";
-import { safeFocus } from "./service-helpers";
+import { safeFocus, wsMeta } from "./service-helpers";
 import {
   registerMcpPty,
   unregisterMcpPty,
@@ -104,7 +103,7 @@ const _mcpStatus = writable<McpStatus>("pending");
 export const mcpStatus = { subscribe: _mcpStatus.subscribe };
 
 type AgentType = "claude-code" | "codex" | "aider" | "custom";
-type SessionStatus = "starting" | "exited";
+type SessionStatus = "starting" | "running" | "exited";
 
 interface McpSession {
   session_id: string;
@@ -473,7 +472,7 @@ export function unregisterMcpToolsBySource(source: string): void {
 registerTool({
   name: "spawn_agent",
   description:
-    "Spawn a new gnar-term pane running an AI coding agent (claude-code, codex, aider) or a custom command. Targets the agent's host workspace by default (per connection binding); pass workspace_id/pane_id to override. Pass `worktree` to instead create a fresh worktree workspace and spawn the agent there (auto-resolves branch / worktree path; optionally tags the workspace under a dashboard).",
+    "Spawn a new gnar-term pane running an AI coding agent (claude-code, codex, aider) or a custom command. Targets the agent's host workspace by default (per connection binding); pass workspace_id/pane_id to override. Pass `worktree` to instead create a fresh branched workspace and spawn the agent there (auto-resolves branch / worktree path; optionally tags the workspace under a dashboard).",
   inputSchema: {
     type: "object",
     properties: {
@@ -493,7 +492,7 @@ registerTool({
       worktree: {
         type: "object",
         description:
-          "When set, spawn into a freshly-created worktree workspace instead of splitting the host pane.",
+          "When set, spawn into a freshly-created branched workspace instead of splitting the host pane.",
         properties: {
           branch: {
             type: "string",
@@ -536,7 +535,7 @@ registerTool({
       };
     };
 
-    // --- Worktree path: spawn into a brand-new worktree workspace.
+    // --- Worktree path: spawn into a brand-new branched workspace.
     if (p.worktree) {
       // Resolve repoPath from arg, else from the binding workspace's first
       // terminal cwd.
@@ -587,6 +586,11 @@ registerTool({
     }
 
     const target = resolveTarget(p, ctx);
+    if (wsMeta(target.workspace).locked === true) {
+      throw new Error(
+        `workspace "${target.workspace.id}" is locked — agents cannot be spawned into it`,
+      );
+    }
     const hostPane = target.hostPane ?? pickHostPane(target.workspace);
     const newPane = splitPaneInWorkspace(
       target.workspace,
@@ -636,6 +640,19 @@ registerTool({
       type: "session.statusChanged",
       sessionId: session.session_id,
       status: "starting",
+    });
+
+    // Flip status from "starting" → "running" on the agent's first PTY
+    // output so list_sessions / get_session_info can distinguish "spawned
+    // but no output yet" from "actively rendering."
+    onFirstPtyOutput(ptyId, () => {
+      if (session.status !== "starting") return;
+      session.status = "running";
+      pushEvent({
+        type: "session.statusChanged",
+        sessionId: session.session_id,
+        status: "running",
+      });
     });
 
     if (p.task) {
@@ -809,6 +826,27 @@ registerTool({
       status: "exited",
     });
     return { ok: true };
+  },
+});
+
+registerTool({
+  name: "list_sessions",
+  description:
+    "List all MCP-tracked sessions (the spawn_agent registry, not native agents). Each entry contains session_id, name, agent, pid, status (starting | running | exited), cwd, createdAt, pane_id, workspace_id. For native agents started by the user, use list_agents.",
+  inputSchema: { type: "object", properties: {} },
+  handler: () => {
+    const list = Array.from(sessions.values()).map((s) => ({
+      session_id: s.session_id,
+      name: s.name,
+      agent: s.agent,
+      pid: s.pid,
+      status: s.status,
+      cwd: s.cwd,
+      createdAt: s.createdAt,
+      pane_id: s.paneId,
+      workspace_id: findPaneById(s.paneId)?.workspace.id ?? null,
+    }));
+    return { sessions: list };
   },
 });
 
@@ -1355,8 +1393,8 @@ const UI_MUTATING_TOOLS = new Set([
   "spawn_preview",
   "create_preview_file",
   "close_preview",
-  "add_dashboard_to_group",
-  "remove_dashboard_from_group",
+  "add_dashboard_to_workspace",
+  "remove_dashboard_from_workspace",
 ]);
 
 export async function dispatch(

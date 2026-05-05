@@ -4,29 +4,68 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "fs";
+import { readFileSync, readdirSync } from "fs";
+import { join } from "path";
 
-const RUST_SOURCE = readFileSync("src-tauri/src/lib.rs", "utf-8");
+// The audit covers the entire Rust backend, not just lib.rs. Commands and
+// helpers were extracted into sibling modules (pty.rs, fs_commands.rs,
+// file_watch.rs, …) so we concatenate every `*.rs` under `src-tauri/src`.
+const RUST_SRC_DIR = "src-tauri/src";
+const RUST_SOURCE = readdirSync(RUST_SRC_DIR)
+  .filter((f) => f.endsWith(".rs"))
+  .map((f) => readFileSync(join(RUST_SRC_DIR, f), "utf-8"))
+  .join("\n");
+
+// Strip every `#[cfg(test)] mod tests { ... }` block. Each Rust source file
+// hosts its own test mod, so a single `indexOf("#[cfg(test)]")` split won't
+// work once we concatenate multiple files. We walk the source, find each
+// `#[cfg(test)]` marker, then skip past the matching `}` for the following
+// module by tracking brace depth. Strings inside test code don't matter for
+// our coarse audits (println! / .lock().unwrap()).
+function stripTestMods(src: string): string {
+  const out: string[] = [];
+  let i = 0;
+  const marker = "#[cfg(test)]";
+  while (i < src.length) {
+    const next = src.indexOf(marker, i);
+    if (next < 0) {
+      out.push(src.slice(i));
+      break;
+    }
+    out.push(src.slice(i, next));
+    // Find the opening brace of the test mod that follows the marker.
+    const braceOpen = src.indexOf("{", next);
+    if (braceOpen < 0) {
+      // Malformed; bail and include remainder.
+      out.push(src.slice(next));
+      break;
+    }
+    let depth = 1;
+    let j = braceOpen + 1;
+    while (j < src.length && depth > 0) {
+      const ch = src[j];
+      if (ch === "{") depth++;
+      else if (ch === "}") depth--;
+      j++;
+    }
+    i = j;
+  }
+  return out.join("");
+}
+
+const RUST_PROD_SOURCE = stripTestMods(RUST_SOURCE);
 
 describe("Rust backend audit", () => {
   it("has no debug println! statements in production code", () => {
-    // Only check production code (before #[cfg(test)])
-    const testBoundary = RUST_SOURCE.indexOf("#[cfg(test)]");
-    const prodCode =
-      testBoundary >= 0 ? RUST_SOURCE.slice(0, testBoundary) : RUST_SOURCE;
-    const lines = prodCode.split("\n");
+    const lines = RUST_PROD_SOURCE.split("\n");
     const printlnLines = lines.filter(
-      (line) => line.includes("println!") && !line.trim().startsWith("//"),
+      (line) => /\bprintln!/.test(line) && !line.trim().startsWith("//"),
     );
     expect(printlnLines).toEqual([]);
   });
 
   it("has no .lock().unwrap() on mutex in production code (should use map_err)", () => {
-    // Split source at #[cfg(test)] — only check production code before it
-    const testBoundary = RUST_SOURCE.indexOf("#[cfg(test)]");
-    const prodCode =
-      testBoundary >= 0 ? RUST_SOURCE.slice(0, testBoundary) : RUST_SOURCE;
-    const lines = prodCode.split("\n");
+    const lines = RUST_PROD_SOURCE.split("\n");
     const unwrapLockLines = lines.filter(
       (line) =>
         line.includes(".lock().unwrap()") && !line.trim().startsWith("//"),

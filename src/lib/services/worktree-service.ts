@@ -1,5 +1,5 @@
 /**
- * Worktree Service — owns the WorktreeWorkspaceEntry list and the
+ * Worktree Service — owns the WorktreeWorkspace list and the
  * archive / merge-archive flows. Persists state to GnarTermConfig.worktrees.
  */
 import { get, writable, type Readable } from "svelte/store";
@@ -7,7 +7,7 @@ import { invoke } from "@tauri-apps/api/core";
 import {
   getConfig,
   saveConfig,
-  type WorktreeWorkspaceEntry,
+  type WorktreeWorkspace,
   type WorktreesSettings,
 } from "../config";
 import {
@@ -21,8 +21,12 @@ import {
   promptWorktreeConfig,
   createWorktree,
 } from "./worktree-helpers";
-import { createWorkspaceFromDef, closeWorkspace } from "./workspace-service";
+import {
+  createWorkspaceFromDef,
+  closeWorkspace,
+} from "./workspace-runtime-service";
 import { workspaces } from "../stores/workspace";
+import { wsMeta } from "./service-helpers";
 
 /** Result of a git_merge Tauri command invocation. */
 interface MergeResult {
@@ -31,16 +35,15 @@ interface MergeResult {
   conflicts?: string[];
 }
 
-const _entries = writable<WorktreeWorkspaceEntry[]>([]);
+const _entries = writable<WorktreeWorkspace[]>([]);
 
 // Pre-confirmed worktree actions set by confirmAndCloseWorkspace so that
 // handleWorkspaceClosed can skip its own dialog when close was initiated
 // through the combined confirm UI.
 const pendingCloseActions = new Map<string, "keep" | "delete">();
-export const worktreeEntriesStore: Readable<WorktreeWorkspaceEntry[]> =
-  _entries;
+export const worktreeEntriesStore: Readable<WorktreeWorkspace[]> = _entries;
 
-export function getWorktreeEntries(): WorktreeWorkspaceEntry[] {
+export function getWorktreeEntries(): WorktreeWorkspace[] {
   return get(_entries);
 }
 
@@ -54,9 +57,7 @@ export function loadWorktreeEntries(): void {
   _entries.set([...entries]);
 }
 
-async function persistEntries(
-  entries: WorktreeWorkspaceEntry[],
-): Promise<void> {
+async function persistEntries(entries: WorktreeWorkspace[]): Promise<void> {
   _entries.set([...entries]);
   const cfg = getConfig();
   await saveConfig({
@@ -73,20 +74,20 @@ export function _resetWorktreeService(): void {
 }
 
 /** Test-only seed — bypasses persistence. */
-export function _seedWorktreeEntries(entries: WorktreeWorkspaceEntry[]): void {
+export function _seedWorktreeEntries(entries: WorktreeWorkspace[]): void {
   _entries.set([...entries]);
 }
 
 interface CreateContext {
-  groupPath?: unknown;
-  groupId?: unknown;
+  workspacePath?: unknown;
+  parentWorkspaceId?: unknown;
 }
 
-/** Run the full "new worktree workspace" flow. */
+/** Run the full "new branched workspace" flow. */
 export async function createWorktreeWorkspace(
   ctx: CreateContext,
 ): Promise<void> {
-  const repoPath = await resolveRepoPath(ctx.groupPath);
+  const repoPath = await resolveRepoPath(ctx.workspacePath);
   if (!repoPath) return;
 
   const settings = getWorktreeSettings();
@@ -99,17 +100,17 @@ export async function createWorktreeWorkspace(
     branch: config.branch,
     base: config.base,
     worktreePath: config.worktreePath,
-    groupId:
-      ctx.groupId !== undefined && ctx.groupId !== null
-        ? String(ctx.groupId)
+    parentWorkspaceId:
+      ctx.parentWorkspaceId !== undefined && ctx.parentWorkspaceId !== null
+        ? String(ctx.parentWorkspaceId)
         : undefined,
   });
 }
 
 /**
- * Non-interactive worktree-workspace creation. Caller supplies a fully
+ * Non-interactive branched-workspace creation. Caller supplies a fully
  * resolved config (branch/base/paths). Used by the agent spawn-helper —
- * which needs to spin up worktree workspaces without going through the
+ * which needs to spin up branched workspaces without going through the
  * showFormPrompt UI flow.
  *
  * Honors the same settings.copyPatterns / settings.setupScript pipeline
@@ -124,20 +125,22 @@ export interface WorktreeWorkspaceConfig {
   branch: string;
   base: string;
   worktreePath: string;
-  groupId?: string;
+  parentWorkspaceId?: string;
   /**
    * Optional startup command to run in the new workspace's terminal.
-   * Maps to surface.startupCommand via the WorkspaceDef layout — fires
+   * Maps to surface.startupCommand via the WorkspaceTemplate layout — fires
    * once the PTY is ready (no setTimeout).
    */
   startupCommand?: string;
   /**
    * Dashboard provenance — when the worktree is spawned from the Global
-   * Agentic Dashboard or an Agentic Dashboard contribution on a group,
+   * Agentic Dashboard or an Agentic Dashboard contribution on a workspace,
    * this records which. Surfaces as `metadata.spawnedBy` on the new
    * workspace. See spec §5.3.
    */
-  spawnedBy?: { kind: "global" } | { kind: "group"; groupId: string };
+  spawnedBy?:
+    | { kind: "global" }
+    | { kind: "workspace"; parentWorkspaceId: string };
   /**
    * GitHub issue numbers this workspace is handling. Stamped on the
    * workspace as `metadata.spawnedFromIssues`. Drives the bot-icon /
@@ -196,7 +199,10 @@ export async function createWorktreeWorkspaceFromConfig(
     }
   }
 
-  const wsName = `Worktree ${getWorktreeEntries().length + 1}`;
+  // Derive workspace name from worktree path (e.g., ".worktrees/my-branch" → "my-branch")
+  const wsName =
+    config.worktreePath.replace(/\/$/, "").split("/").pop() ||
+    `Worktree ${getWorktreeEntries().length + 1}`;
   // Snapshot workspace ids before createWorkspaceFromDef — diff after
   // the call to find the newly-created workspace's id.
   const prevIds = new Set(get(workspaces).map((w) => w.id));
@@ -210,7 +216,9 @@ export async function createWorktreeWorkspaceFromConfig(
       branch: config.branch,
       baseBranch: config.base,
       repoPath: config.repoPath,
-      ...(config.groupId ? { groupId: config.groupId } : {}),
+      ...(config.parentWorkspaceId
+        ? { parentWorkspaceId: config.parentWorkspaceId }
+        : {}),
       ...(config.spawnedBy ? { spawnedBy: config.spawnedBy } : {}),
       ...(config.spawnedFromIssues && config.spawnedFromIssues.length > 0
         ? { spawnedFromIssues: config.spawnedFromIssues }
@@ -404,26 +412,30 @@ export function handleWorkspaceCreated(
 }
 
 /**
- * Combined close confirmation for worktree workspaces. Shows a single dialog
+ * Combined close confirmation for branched workspaces. Shows a single dialog
  * that collects both "confirm close" and "keep/delete worktree" in one step.
- * For non-worktree workspaces falls back to the standard confirm prompt.
+ * For non-branched workspaces falls back to the standard confirm prompt.
  * Calls closeWorkspace(idx) on confirm.
  */
 export async function confirmAndCloseWorkspace(
-  ws: { id: string; name: string; metadata?: Record<string, unknown> },
+  ws: import("../types").Workspace | import("../types").Workspace,
   idx: number,
 ): Promise<boolean> {
   // Service-level lock guard: the right-click menu disables Close when a
   // workspace is locked, but ⇧⌘W and the command palette dispatch directly
   // here. Gating at the service ensures every caller honors the lock.
-  if (ws.metadata?.locked === true) return false;
+  if (wsMeta(ws).locked === true) return false;
   const entry = getWorktreeEntries().find((e) => e.workspaceId === ws.id);
   if (!entry) {
-    const isDashboard = typeof ws.metadata?.dashboardWorkspaceId === "string";
+    const isDashboard = typeof wsMeta(ws).dashboardWorkspaceId === "string";
     if (!isDashboard) {
       const confirmed = await showConfirmPrompt(
         `Close "${ws.name}"? This will dispose the terminal.`,
-        { title: "Close Workspace", confirmLabel: "Close", danger: true },
+        {
+          title: "Close Branched Workspace",
+          confirmLabel: "Close",
+          danger: true,
+        },
       );
       if (!confirmed) return false;
     }
@@ -448,7 +460,7 @@ export async function confirmAndCloseWorkspace(
           ],
         },
       ],
-      { submitLabel: "Close Workspace" },
+      { submitLabel: "Close Branched Workspace" },
     );
     if (!result) return false;
     pendingCloseActions.set(

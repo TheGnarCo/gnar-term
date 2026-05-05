@@ -11,8 +11,7 @@ import {
   activeSurface,
 } from "../lib/stores/workspace";
 import {
-  primarySidebarVisible,
-  secondarySidebarVisible,
+  sidebarVisible,
   commandPaletteOpen,
   findBarVisible,
   contextMenu,
@@ -34,7 +33,7 @@ function makeSurface(id: string): TerminalSurface {
   };
 }
 
-function makeWorkspace(id: string, name: string): Workspace {
+function makeChildWorkspace(id: string, name: string): Workspace {
   const s1 = makeSurface(`${id}-s1`);
   const pane: Pane = { id: `${id}-p1`, surfaces: [s1], activeSurfaceId: s1.id };
   return {
@@ -58,8 +57,8 @@ describe("Workspace stores", () => {
   });
 
   it("derives activeWorkspace from idx", () => {
-    const ws1 = makeWorkspace("ws1", "Workspace 1");
-    const ws2 = makeWorkspace("ws2", "Workspace 2");
+    const ws1 = makeChildWorkspace("ws1", "Workspace 1");
+    const ws2 = makeChildWorkspace("ws2", "Workspace 2");
     workspaces.set([ws1, ws2]);
     activeWorkspaceIdx.set(0);
 
@@ -70,7 +69,7 @@ describe("Workspace stores", () => {
   });
 
   it("derives activePane from activeWorkspace", () => {
-    const ws = makeWorkspace("ws1", "Test");
+    const ws = makeChildWorkspace("ws1", "Test");
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
 
@@ -80,7 +79,7 @@ describe("Workspace stores", () => {
   });
 
   it("derives activeSurface from activePane", () => {
-    const ws = makeWorkspace("ws1", "Test");
+    const ws = makeChildWorkspace("ws1", "Test");
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
 
@@ -90,13 +89,13 @@ describe("Workspace stores", () => {
   });
 
   it("returns null for out-of-bounds idx", () => {
-    workspaces.set([makeWorkspace("ws1", "Test")]);
+    workspaces.set([makeChildWorkspace("ws1", "Test")]);
     activeWorkspaceIdx.set(5);
     expect(get(activeWorkspace)).toBeNull();
   });
 
   it("handles workspace updates reactively", () => {
-    const ws = makeWorkspace("ws1", "Test");
+    const ws = makeChildWorkspace("ws1", "Test");
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
 
@@ -130,12 +129,8 @@ describe("Workspace stores", () => {
 });
 
 describe("UI stores", () => {
-  it("primarySidebarVisible defaults to true", () => {
-    expect(get(primarySidebarVisible)).toBe(true);
-  });
-
-  it("secondarySidebarVisible defaults to false", () => {
-    expect(get(secondarySidebarVisible)).toBe(false);
+  it("sidebarVisible defaults to true", () => {
+    expect(get(sidebarVisible)).toBe(true);
   });
 
   it("commandPaletteOpen defaults to false", () => {
@@ -150,18 +145,11 @@ describe("UI stores", () => {
     expect(get(contextMenu)).toBeNull();
   });
 
-  it("toggles primary sidebar visibility", () => {
-    primarySidebarVisible.set(false);
-    expect(get(primarySidebarVisible)).toBe(false);
-    primarySidebarVisible.set(true);
-    expect(get(primarySidebarVisible)).toBe(true);
-  });
-
-  it("toggles secondary sidebar visibility", () => {
-    secondarySidebarVisible.set(true);
-    expect(get(secondarySidebarVisible)).toBe(true);
-    secondarySidebarVisible.set(false);
-    expect(get(secondarySidebarVisible)).toBe(false);
+  it("toggles sidebar visibility", () => {
+    sidebarVisible.set(false);
+    expect(get(sidebarVisible)).toBe(false);
+    sidebarVisible.set(true);
+    expect(get(sidebarVisible)).toBe(true);
   });
 
   it("sets context menu state", () => {

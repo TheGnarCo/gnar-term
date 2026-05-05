@@ -34,7 +34,7 @@ import {
   getContextMenuItemsForFile,
 } from "../lib/services/context-menu-item-registry";
 
-function makeWorkspace(id: string): { ws: Workspace; pane: Pane } {
+function makeChildWorkspace(id: string): { ws: Workspace; pane: Pane } {
   const pane: Pane = { id: `${id}-pane`, surfaces: [], activeSurfaceId: null };
   const ws: Workspace = {
     id,
@@ -53,7 +53,7 @@ describe("openFileAsPreviewSplit", () => {
   });
 
   it("splits horizontally and places a preview surface in the new pane", () => {
-    const { ws, pane } = makeWorkspace("ws-1");
+    const { ws, pane } = makeChildWorkspace("ws-1");
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
 
@@ -75,7 +75,7 @@ describe("openFileAsPreviewSplit", () => {
   });
 
   it("uses a horizontal split so the preview appears side-by-side", () => {
-    const { ws } = makeWorkspace("ws-1");
+    const { ws } = makeChildWorkspace("ws-1");
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
 
@@ -89,7 +89,7 @@ describe("openFileAsPreviewSplit", () => {
   });
 
   it("focuses an existing preview instead of opening a duplicate", () => {
-    const { ws, pane } = makeWorkspace("ws-1");
+    const { ws, pane } = makeChildWorkspace("ws-1");
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
 

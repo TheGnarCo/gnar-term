@@ -6,25 +6,29 @@ const WORKSPACE_LIST_BLOCK = readFileSync(
   "utf-8",
 ).replace(/\s+/g, " ");
 
-const GROUP_SECTION_CONTENT = readFileSync(
-  "src/lib/components/WorkspaceGroupSectionContent.svelte",
+const SOURCE = readFileSync(
+  "src/lib/components/WorkspaceSectionContent.svelte",
   "utf-8",
 ).replace(/\s+/g, " ");
 
 describe("root-row overlay (WorkspaceListBlock)", () => {
-  it("paints an isSibling overlay on every non-source root row during a drag", () => {
-    // Unified drag now covers both workspace and project rows at the
-    // root level; sibling rows paint an opaque tile with the row's
-    // own label centered.
+  it("does not paint an isSibling overlay during drag (items keep normal appearance)", () => {
+    // Overlay removed per UX feedback: non-source rows should not
+    // change appearance during drag — only the drag ghost itself changes.
     expect(WORKSPACE_LIST_BLOCK).toMatch(
       /isSibling\s*=\s*effectiveActive\s*&&\s*effectiveDragSourceIdx\s*!==\s*entry\.idx/,
     );
-    expect(WORKSPACE_LIST_BLOCK).toMatch(/\{#if isSibling\}/);
-    expect(WORKSPACE_LIST_BLOCK).toMatch(/position:\s*absolute;\s*inset:\s*0/);
+    // isSibling variable still computed but not used for rendering
+    expect(WORKSPACE_LIST_BLOCK).not.toMatch(/\{#if isSibling\}/);
   });
 
-  it("source row hides (display: none) instead of dimming", () => {
-    expect(WORKSPACE_LIST_BLOCK).toMatch(
+  it("source row is fully skipped (not rendered) instead of dimming", () => {
+    // The dragged row's outer `.root-row` is fully omitted via
+    // `{#if !isSource}` — the DropGhost is rendered as its own
+    // `.root-row` sibling so it inherits first/last-row status from
+    // the natural `.root-row + .root-row { margin-top: 8px }` rule.
+    expect(WORKSPACE_LIST_BLOCK).toMatch(/\{#if !isSource\}/);
+    expect(WORKSPACE_LIST_BLOCK).not.toMatch(
       /display:\s*\{\s*isSource\s*\?\s*'none'\s*:\s*'block'\s*\}/,
     );
   });
@@ -52,42 +56,42 @@ describe("per-project overlay (via WorkspaceListBlock shell)", () => {
   });
 
   it("core bootstrap registers color + label resolvers on the row renderer", () => {
-    // Core (bootstrap/init-workspace-groups.ts) provides the resolvers
-    // so core can paint the group's overlay and ghost without reaching
+    // Core (bootstrap/init-workspaces.ts) provides the resolvers
+    // so core can paint the workspace's overlay and ghost without reaching
     // into extension state directly.
     const BOOTSTRAP = readFileSync(
-      "src/lib/bootstrap/init-workspace-groups.ts",
+      "src/lib/bootstrap/init-workspaces.ts",
       "utf-8",
     );
     expect(BOOTSTRAP).toMatch(/railColor:/);
     expect(BOOTSTRAP).toMatch(/label:/);
-    expect(BOOTSTRAP).toMatch(/resolveGroupColor/);
+    expect(BOOTSTRAP).toMatch(/resolveWorkspaceColor/);
   });
 
-  it("WorkspaceGroupSectionContent accepts a unified overlay prop supporting strong + light", () => {
-    expect(GROUP_SECTION_CONTENT).toMatch(/export let overlay/);
-    expect(GROUP_SECTION_CONTENT).toMatch(/kind:\s*"strong"/);
-    expect(GROUP_SECTION_CONTENT).toMatch(/kind:\s*"light"/);
+  it("WorkspaceSectionContent accepts a unified overlay prop supporting strong + light", () => {
+    expect(SOURCE).toMatch(/export let overlay/);
+    expect(SOURCE).toMatch(/kind:\s*"strong"/);
+    expect(SOURCE).toMatch(/kind:\s*"light"/);
   });
 
-  it("WorkspaceGroupSectionContent renders one overlay spanning the whole group block; label only for strong", () => {
-    expect(GROUP_SECTION_CONTENT).toMatch(/\{#if overlay\}/);
-    expect(GROUP_SECTION_CONTENT).toMatch(/overlay\.kind\s*===\s*"strong"/);
-    expect(GROUP_SECTION_CONTENT).toMatch(/overlay\.label/);
+  it("WorkspaceSectionContent renders one overlay spanning the whole workspace block; label only for strong", () => {
+    expect(SOURCE).toMatch(/\{#if overlay\}/);
+    expect(SOURCE).toMatch(/overlay\.kind\s*===\s*"strong"/);
+    expect(SOURCE).toMatch(/overlay\.label/);
   });
 
-  it("WorkspaceGroupSectionContent paints the strong overlay with the group's own color", () => {
-    // Non-source groups during a group drag render a solid colored
-    // tile using the theme-resolved group color.
-    expect(GROUP_SECTION_CONTENT).toMatch(
-      /overlay\.kind\s*===\s*["']strong["'][\s\S]*?groupHex/,
+  it("WorkspaceSectionContent paints the strong overlay with the workspace's own color", () => {
+    // Non-source workspaces during a workspace drag render a solid
+    // colored tile using the theme-resolved workspace color.
+    expect(SOURCE).toMatch(
+      /overlay\.kind\s*===\s*["']strong["'][\s\S]*?workspaceHex/,
     );
-    expect(GROUP_SECTION_CONTENT).toMatch(
-      /groupHex\s*=\s*[^\n]*resolveGroupColor\(group\.color,\s*\$theme\)/,
+    expect(SOURCE).toMatch(
+      /workspaceHex\s*=\s*[^\n]*resolveWorkspaceColor\(workspace\.color,\s*\$theme\)/,
     );
   });
 
-  it("WorkspaceGroupSectionContent uses the light dim (black-40) for the light variant", () => {
-    expect(GROUP_SECTION_CONTENT).toMatch(/rgba\(0,\s*0,\s*0,\s*0\.4\)/);
+  it("WorkspaceSectionContent uses the light dim (black-40) for the light variant", () => {
+    expect(SOURCE).toMatch(/rgba\(0,\s*0,\s*0,\s*0\.4\)/);
   });
 });

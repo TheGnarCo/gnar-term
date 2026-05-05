@@ -13,11 +13,10 @@
    */
   import { theme } from "../stores/theme";
   import { reorderContext } from "../stores/ui";
-  import {
-    activePseudoWorkspaceId,
-    activeWorkspaceIdx,
-  } from "../stores/workspace";
+  import { activePseudoWorkspaceId } from "../stores/workspace";
+  import { activeWorkspaceId } from "../stores/workspace";
   import DragGrip from "./DragGrip.svelte";
+  import SidebarChipButton from "./SidebarChipButton.svelte";
   import ExtensionWrapper from "./ExtensionWrapper.svelte";
   import { getExtensionApiById } from "../services/extension-loader";
   import type { Component } from "svelte";
@@ -26,7 +25,7 @@
     unregisterPseudoWorkspace,
   } from "../services/pseudo-workspace-registry";
   import { configStore } from "../config";
-  import { resolveGroupColor } from "../theme-data";
+  import { resolveWorkspaceColor } from "../theme-data";
   import { shortcutHint } from "../actions/shortcut-hint";
   import { modLabel } from "../terminal-service";
 
@@ -42,10 +41,13 @@
   let rowHovered = false;
 
   $: configuredSlot = $configStore.pseudoWorkspaceColors?.[pseudo.id];
-  $: bannerBackground = resolveGroupColor(configuredSlot ?? "purple", $theme);
+  $: bannerBackground = resolveWorkspaceColor(
+    configuredSlot ?? "purple",
+    $theme,
+  );
 
   function activate(): void {
-    activeWorkspaceIdx.set(-1);
+    activeWorkspaceId.set(null);
     activePseudoWorkspaceId.set(pseudo.id);
   }
 
@@ -105,9 +107,6 @@
       railColor={bannerBackground}
       railOpacity={1}
       alwaysShowDots={true}
-      fadeRight={!gripVisible}
-      onClose={pseudo.onClose ? handleClose : undefined}
-      closeTooltip={"Close " + pseudo.label}
     />
     <div
       aria-hidden="true"
@@ -142,7 +141,7 @@
   <div
     style="
       flex: 1; min-width: 0;
-      padding: 4px 6px;
+      padding: 4px 6px 4px 8px;
       display: flex; align-items: center; gap: 8px;
       min-height: 32px;
     "
@@ -175,4 +174,16 @@
       </span>
     {/if}
   </div>
+  {#if pseudo.onClose && rowHovered}
+    <div
+      style="position: absolute; top: 50%; right: 6px; transform: translateY(-50%);"
+    >
+      <SidebarChipButton
+        variant="close"
+        title={"Close " + pseudo.label}
+        idleColor={bannerBackground}
+        onClick={handleClose}
+      />
+    </div>
+  {/if}
 </div>

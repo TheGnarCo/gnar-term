@@ -47,7 +47,7 @@ describe("Diff dashboard contribution", () => {
     expect(diff).toBeTruthy();
     expect(diff?.label).toBe("Diff");
     expect(diff?.source).toBe("diff-viewer");
-    expect(diff?.capPerGroup).toBe(1);
+    expect(diff?.capPerWorkspace).toBe(1);
     expect(diff?.paneConstraints?.singleSurface).toBe(true);
     expect(diff?.autoProvision).toBeFalsy();
     expect(diff?.icon).toBeDefined();
@@ -65,7 +65,7 @@ describe("Diff dashboard contribution", () => {
       name: "My Group",
       path: "/tmp/my-group",
       color: "blue",
-      workspaceIds: [],
+      branchedWorkspaceIds: [],
       isGit: true,
       createdAt: "2026-04-21T00:00:00.000Z",
     });
@@ -76,6 +76,6 @@ describe("Diff dashboard contribution", () => {
     );
     expect(created).toBeTruthy();
     expect(created!.metadata?.isDashboard).toBe(true);
-    expect(created!.metadata?.groupId).toBe("g1");
+    expect(created!.metadata?.parentWorkspaceId).toBe("g1");
   });
 });

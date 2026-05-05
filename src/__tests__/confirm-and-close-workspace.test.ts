@@ -34,9 +34,11 @@ vi.mock("../lib/stores/ui", async (importOriginal) => {
 });
 
 const mockCloseWorkspace = vi.fn<(idx: number) => void>();
-vi.mock("../lib/services/workspace-service", async (importOriginal) => {
+vi.mock("../lib/services/workspace-runtime-service", async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import("../lib/services/workspace-service")>();
+    await importOriginal<
+      typeof import("../lib/services/workspace-runtime-service")
+    >();
   return {
     ...actual,
     closeWorkspace: (idx: number) => mockCloseWorkspace(idx),
@@ -102,7 +104,7 @@ describe("confirmAndCloseWorkspace", () => {
     expect(mockCloseWorkspace).toHaveBeenCalledWith(1);
   });
 
-  it("shows the worktree keep/delete form for a worktree workspace", async () => {
+  it("shows the worktree keep/delete form for a branched workspace", async () => {
     _seedWorktreeEntries([
       {
         worktreePath: "/repo/feat",
@@ -138,7 +140,7 @@ describe("confirmAndCloseWorkspace", () => {
     expect(mockCloseWorkspace).not.toHaveBeenCalled();
   });
 
-  it("refuses to close a locked worktree workspace without showing the form", async () => {
+  it("refuses to close a locked branched workspace without showing the form", async () => {
     _seedWorktreeEntries([
       {
         worktreePath: "/repo/feat",

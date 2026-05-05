@@ -75,8 +75,7 @@ describe("App.svelte structure verification", () => {
     const fs = await import("fs");
     const source = fs.readFileSync("src/App.svelte", "utf-8");
     // Must have these components in the template
-    expect(source).toContain("<PrimarySidebar");
-    expect(source).toContain("<SecondarySidebar");
+    expect(source).toContain("<Sidebar");
     expect(source).toContain("<TitleBar");
     expect(source).toContain("<WorkspaceView");
     expect(source).toContain("<FindBar");
@@ -190,14 +189,13 @@ describe("WorkspaceView renders all workspaces (not just active)", () => {
 
 describe("pty-exit workspace recovery", () => {
   it("clamps activeWorkspaceIdx after workspace removal", async () => {
-    // Structural invariant: verified via source scan because this logic
-    // runs inside a Tauri event listener that can't be triggered in vitest.
+    // Structural invariant: verified via source scan.
+    // Since S-RELAUNCH, pty-exit no longer auto-collapses panes — it sets
+    // exitedSurface instead. Workspace removal (and the index clamp) now
+    // happens in pane-service.ts removePane(), called by dismissPane().
     const fs = await import("fs");
-    const source = fs.readFileSync("src/lib/terminal-service.ts", "utf-8");
-    // After splicing a workspace from the list, activeWorkspaceIdx must be
-    // clamped to the new last index (or -1 when the list is empty, so the
-    // Empty Surface takes over).
-    expect(source).toContain("activeWorkspaceIdx.set(wsList.length - 1)");
+    const source = fs.readFileSync("src/lib/services/pane-service.ts", "utf-8");
+    expect(source).toContain("activeWorkspaceId.set(");
   });
 
   it("does NOT auto-create a default workspace when all are closed (Empty Surface takes over)", async () => {
@@ -265,7 +263,7 @@ describe("Config loads per-project files", () => {
 
 describe("Workspace from config definition", () => {
   it("createWorkspaceFromDef is implemented in workspace-service", async () => {
-    const ws = await import("../lib/services/workspace-service");
+    const ws = await import("../lib/services/workspace-runtime-service");
     expect(typeof ws.createWorkspaceFromDef).toBe("function");
   });
 
@@ -298,7 +296,7 @@ describe("Workspace from config definition", () => {
   it("handles layout with splits and surface definitions", async () => {
     const fs = await import("fs");
     const source = fs.readFileSync(
-      "src/lib/services/workspace-service.ts",
+      "src/lib/services/workspace-runtime-service.ts",
       "utf-8",
     );
     expect(source).toContain("nodeDef.children[0]");
@@ -345,7 +343,7 @@ describe("No spurious fit/scrollToBottom on store updates", () => {
   it("switchWorkspace does not directly call fit or scrollToBottom", async () => {
     const fs = await import("fs");
     const source = fs.readFileSync(
-      "src/lib/services/workspace-service.ts",
+      "src/lib/services/workspace-runtime-service.ts",
       "utf-8",
     );
     const start = source.indexOf("function switchWorkspace");
@@ -470,7 +468,7 @@ describe("CWD polling fallback", () => {
 describe("Workspace save/restore", () => {
   it("serializeLayout produces config-compatible output", async () => {
     const { serializeLayout } =
-      await import("../lib/services/workspace-service");
+      await import("../lib/services/workspace-runtime-service");
 
     // Test with a simple pane node
     const paneNode: import("../lib/types").SplitNode = {
@@ -519,7 +517,7 @@ describe("Workspace save/restore", () => {
   });
 
   it("saveCurrentWorkspace is exported from workspace-service", async () => {
-    const ws = await import("../lib/services/workspace-service");
+    const ws = await import("../lib/services/workspace-runtime-service");
     expect(typeof ws.saveCurrentWorkspace).toBe("function");
   });
 
@@ -655,7 +653,7 @@ describe("SplitNodeView has draggable dividers with ratio support", () => {
       "utf-8",
     );
     expect(source).toContain(
-      'import { schedulePersist } from "../services/workspace-service"',
+      'import { schedulePersist } from "../services/workspace-runtime-service"',
     );
     const onEndMatch = source.match(/onEnd:\s*\(\)\s*=>\s*\{([^}]+)\}/);
     expect(onEndMatch).not.toBeNull();

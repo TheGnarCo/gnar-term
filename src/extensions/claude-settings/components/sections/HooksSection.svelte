@@ -51,7 +51,7 @@
     onChange("hooks", updated);
   }
 
-  function removeGroup(event: string, idx: number) {
+  function removeWorkspace(event: string, idx: number) {
     const existing = [...(hooksMap[event] ?? [])];
     existing.splice(idx, 1);
     const updated: HooksMap = { ...hooksMap };
@@ -111,7 +111,7 @@
               {/each}
               <button
                 style="font-size: 10px; color: {theme.fgDim}; background: none; border: none; cursor: pointer; padding: 0;"
-                on:click={() => removeGroup(event, idx)}>Remove</button
+                on:click={() => removeWorkspace(event, idx)}>Remove</button
               >
             </div>
           {/each}

@@ -24,7 +24,7 @@
   export let accentColor: string | undefined = undefined;
 
   $: currentWs = $workspaces.find((w) => w.id === workspaceId);
-  $: isNested = Boolean(currentWs && wsMeta(currentWs).groupId);
+  $: isChild = Boolean(currentWs && wsMeta(currentWs).parentWorkspaceId);
 
   $: fgMuted = ($theme["fgMuted"] ?? $theme.fgDim) as string;
   $: iconFg = accentColor ?? fgMuted;
@@ -152,7 +152,7 @@
   onDestroy(() => stopPrPolling());
 
   $: showPr =
-    !isNested && pr !== null && (pr.state === "OPEN" || pr.state === "open");
+    !isChild && pr !== null && (pr.state === "OPEN" || pr.state === "open");
   $: isDraft = pr?.isDraft ?? false;
   $: prColor = pr
     ? isDraft

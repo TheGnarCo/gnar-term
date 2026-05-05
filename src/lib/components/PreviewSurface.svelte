@@ -15,6 +15,7 @@
     registerPreviewSurface,
     unregisterPreviewSurface,
   } from "../services/preview-surface-registry";
+  import { wsMeta } from "../services/service-helpers";
 
   export let surface: PreviewSurface;
   export let visible: boolean;
@@ -35,11 +36,11 @@
     for (const ws of get(workspaces)) {
       for (const pane of getAllPanes(ws.splitRoot)) {
         if (pane.surfaces.some((s) => s.id === surface.id)) {
-          const hostMetadata = ws.metadata;
+          const hostMetadata = wsMeta(ws);
           return {
             workspaceId: ws.id,
             paneId: pane.id,
-            ...(hostMetadata ? { hostMetadata } : {}),
+            ...(Object.keys(hostMetadata).length > 0 ? { hostMetadata } : {}),
           };
         }
       }

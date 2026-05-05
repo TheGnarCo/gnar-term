@@ -8,20 +8,33 @@
  *   3. persisted state.json — restore the last session's workspaces
  *   4. config.autoload — open every named workspace listed
  *   5. fall back to a single default "Workspace 1"
+ *
+ * If `state.workspaces[]` is present (unified format), `seedWorkspaces()`
+ * is called to hydrate the new store.
  */
 import { get } from "svelte/store";
 import { workspaces } from "../stores/workspace";
-import { getWorkspaceGroups } from "../stores/workspace-groups";
-import { loadState, type GnarTermConfig, type WorkspaceDef } from "../config";
+import { getWorkspaces } from "../stores/workspaces";
+import {
+  loadState,
+  type GnarTermConfig,
+  type WorkspaceTemplate,
+  type WorkspaceDef,
+} from "../config";
+import { seedWorkspaces, workspaceDefToTemplate } from "../stores/workspace";
 import { initArchiveFromState } from "../stores/archive";
+import { uid } from "../types";
+import type { Workspace, BranchedWorkspace } from "../types";
 import {
   createWorkspace,
   createWorkspaceFromDef,
   switchWorkspace,
-} from "../services/workspace-service";
+} from "../services/workspace-runtime-service";
+import { OVERVIEW_DASHBOARD_CONTRIBUTION_ID } from "../services/dashboard-contribution-registry";
+import { wsMeta } from "../services/service-helpers";
 
 // Restore-complete signal — lets async work (extension provision loops,
-// reconcileGroupDashboards) defer safely until workspaces are in the store.
+// reconcileWorkspaceDashboards) defer safely until workspaces are in the store.
 let _restored = false;
 const _waiters: Array<() => void> = [];
 
@@ -41,6 +54,51 @@ export function waitRestored(): Promise<void> {
 export function resetRestoreSignal(): void {
   _restored = false;
   _waiters.length = 0;
+}
+
+/**
+ * Deserialize a WorkspaceDef into a runtime Workspace object.
+ * This reconstructs a minimal Workspace suitable for `seedWorkspaces()`.
+ * The splitRoot is built lazily — it carries a single pane with no
+ * surfaces until the full restore path populates it.
+ */
+export function workspaceDefToWorkspace(def: WorkspaceDef): Workspace {
+  const paneId = uid();
+  const ws: Workspace = {
+    id: def.id,
+    name: def.name,
+    splitRoot: {
+      type: "pane",
+      pane: { id: paneId, surfaces: [], activeSurfaceId: null },
+    },
+    activePaneId: paneId,
+  };
+  if (def.path !== undefined) ws.path = def.path;
+  if (def.color !== undefined) ws.color = def.color;
+  if (def.isGit !== undefined) ws.isGit = def.isGit;
+  if (def.createdAt !== undefined) ws.createdAt = def.createdAt;
+  if (def.autoRunRestoreCommands !== undefined)
+    ws.autoRunRestoreCommands = def.autoRunRestoreCommands;
+  if (def.lastActiveBranchedWorkspaceId !== undefined)
+    ws.lastActiveBranchedWorkspaceId = def.lastActiveBranchedWorkspaceId;
+  if (def.dashboardWorkspaceId !== undefined)
+    ws.dashboardWorkspaceId = def.dashboardWorkspaceId;
+  if (def.locked !== undefined) ws.locked = def.locked;
+  if (def.parentWorkspaceId !== undefined)
+    ws.parentWorkspaceId = def.parentWorkspaceId;
+  if (def.isDashboard !== undefined) ws.isDashboard = def.isDashboard;
+  if (def.dashboardContributionId !== undefined)
+    ws.dashboardContributionId = def.dashboardContributionId;
+  if (def.extensionData !== undefined) ws.extensionData = def.extensionData;
+  // BranchedWorkspace fields — cast to mutable BranchedWorkspace to set extra fields
+  if (def.worktreePath !== undefined) {
+    const bws = ws as BranchedWorkspace;
+    bws.worktreePath = def.worktreePath;
+    if (def.branch !== undefined) bws.branch = def.branch;
+    if (def.baseBranch !== undefined) bws.baseBranch = def.baseBranch;
+    if (def.repoPath !== undefined) bws.repoPath = def.repoPath;
+  }
+  return ws;
 }
 
 export interface CliArgs {
@@ -75,7 +133,7 @@ export async function restoreWorkspaces(
 
   if (cliCwd || cliArgs.command) {
     const wsName = cliArgs.title || cliCwd?.split("/").pop() || "Workspace 1";
-    const def: WorkspaceDef = {
+    const def: WorkspaceTemplate = {
       name: wsName,
       cwd: cliCwd || undefined,
       layout: {
@@ -97,66 +155,60 @@ export async function restoreWorkspaces(
   // Try to restore persisted workspaces from state.json
   const state = await loadState();
   initArchiveFromState();
-  if (Array.isArray(state.workspaces)) {
-    // Clear any existing workspaces to prevent doubling on re-mount
+
+  // ---------------------------------------------------------------------------
+  // Unified format: state.workspaces[] is the canonical on-disk shape.
+  // Convert each WorkspaceDef back to a legacy WorkspaceTemplate and feed
+  // through `createWorkspaceFromDef` so PTY surfaces hydrate via the
+  // existing path.
+  // ---------------------------------------------------------------------------
+  if (Array.isArray(state.workspaces) && state.workspaces.length > 0) {
+    const wsList = (state.workspaces as WorkspaceDef[]).map(
+      workspaceDefToWorkspace,
+    );
+    seedWorkspaces(wsList, state.activeWorkspaceId ?? null);
+
     workspaces.set([]);
-    // Drop orphan Dashboard workspaces whose owning group no longer
-    // exists. Without this, restarting after a group deletion leaves a
-    // ghost dashboard in the main view that the user can't navigate
-    // away from via the sidebar.
-    //
-    // Additionally dedupe dashboards: each `(groupId, dashboardContributionId)`
-    // pair should materialize exactly one dashboard workspace.
-    // Pre-fix releases spawned a new Dashboard on every launch because
-    // workspace ids regenerated, so persisted state can carry
-    // duplicates — keep the first occurrence and drop the rest.
-    const knownGroupIds = new Set(getWorkspaceGroups().map((g) => g.id));
+    const knownWorkspaceIds = new Set(getWorkspaces().map((g) => g.id));
     const seenDashboards = new Set<string>();
-    const filteredDefs = state.workspaces.filter((wsDef) => {
-      const md = wsDef.metadata;
-      const isDashboard = md?.isDashboard === true;
-      const ownerGroupId = md?.groupId;
+    const filteredDefs = (state.workspaces as WorkspaceDef[]).filter((def) => {
+      const isDashboard = def.isDashboard === true;
+      const ownerWorkspaceId = def.parentWorkspaceId;
       if (!isDashboard) return true;
-      if (typeof ownerGroupId !== "string") return true;
-      if (!knownGroupIds.has(ownerGroupId)) return false;
+      if (typeof ownerWorkspaceId !== "string") return true;
+      if (!knownWorkspaceIds.has(ownerWorkspaceId)) return false;
       const contributionId =
-        typeof md?.dashboardContributionId === "string"
-          ? md.dashboardContributionId
-          : "group";
-      const dedupeKey = `${ownerGroupId}:${contributionId}`;
+        typeof def.dashboardContributionId === "string"
+          ? def.dashboardContributionId
+          : OVERVIEW_DASHBOARD_CONTRIBUTION_ID;
+      const dedupeKey = `${ownerWorkspaceId}:${contributionId}`;
       if (seenDashboards.has(dedupeKey)) return false;
       seenDashboards.add(dedupeKey);
       return true;
     });
-    for (const wsDef of filteredDefs) {
-      await createWorkspaceFromDef(wsDef, { restoring: true });
+    for (const def of filteredDefs) {
+      const nwDef = workspaceDefToTemplate(def);
+      await createWorkspaceFromDef(nwDef, { restoring: true });
     }
-    // Restored workspaces whose `metadata.isDashboard === true` are
-    // group/pseudo dashboards — accessed through their group's tile,
-    // not as a primary active surface. If the only restored workspaces
-    // are dashboards, leave `activeWorkspaceIdx = -1` so the main view
-    // renders the EmptySurface. Otherwise pick the persisted active
-    // index unless it points at a dashboard, in which case fall through
-    // to the first non-dashboard workspace.
     const restored = get(workspaces);
     if (restored.length > 0) {
       const isDashboard = (idx: number): boolean => {
-        return restored[idx]?.metadata?.isDashboard === true;
+        const ws = restored[idx];
+        return ws ? wsMeta(ws).isDashboard === true : false;
       };
-      const persistedIdx = state.activeWorkspaceIdx ?? 0;
-      const clampedIdx = Math.min(persistedIdx, restored.length - 1);
+      const activeId = state.activeWorkspaceId;
       let targetIdx = -1;
-      if (clampedIdx >= 0 && !isDashboard(clampedIdx)) {
-        targetIdx = clampedIdx;
-      } else {
+      if (typeof activeId === "string") {
+        const idx = restored.findIndex((w) => w.id === activeId);
+        if (idx >= 0 && !isDashboard(idx)) targetIdx = idx;
+      }
+      if (targetIdx < 0) {
         targetIdx = restored.findIndex((_, i) => !isDashboard(i));
       }
       if (targetIdx >= 0) {
         switchWorkspace(targetIdx);
       }
     }
-    // An explicit empty array (user closed everything) is a valid
-    // restored state — the Empty Surface will render.
     return;
   }
 

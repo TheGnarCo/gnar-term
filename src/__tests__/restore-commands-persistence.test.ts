@@ -13,7 +13,7 @@ vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn().mockResolvedValue(vi.fn()),
 }));
 
-import { serializeLayout } from "../lib/services/workspace-service";
+import { serializeLayout } from "../lib/services/workspace-runtime-service";
 import type { TerminalSurface } from "../lib/types";
 
 function makeSurface(

@@ -5,9 +5,9 @@
   import { getDashboardHost } from "../lib/contexts/dashboard-host";
 
   const host = getDashboardHost();
-  const groupId =
-    host && typeof host.metadata.groupId === "string"
-      ? host.metadata.groupId
+  const parentWorkspaceId =
+    host && typeof host.metadata.parentWorkspaceId === "string"
+      ? host.metadata.parentWorkspaceId
       : "";
   const isGlobal =
     host?.metadata.isGlobalAgenticDashboard === true ? "yes" : "no";
@@ -16,6 +16,6 @@
 <div
   data-host-stub-widget
   data-host-present={host ? "yes" : "no"}
-  data-host-group-id={groupId}
+  data-host-parent-workspace-id={parentWorkspaceId}
   data-host-global={isGlobal}
 ></div>

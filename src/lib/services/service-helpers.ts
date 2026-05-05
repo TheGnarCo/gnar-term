@@ -12,13 +12,18 @@ import {
   type Workspace,
   type WorkspaceMetadata,
 } from "../types";
+import type { ParentWorkspace } from "../config";
 
 /**
  * Returns the typed metadata for a workspace, falling back to an empty object.
- * Use this instead of `ws.metadata as any` or unsafe casts.
+ *
+ * Reads `extensionData` first (populated by the unified-store bridge),
+ * then falls back to `metadata` for legacy workspace records.
  */
-export function wsMeta(ws: Workspace): WorkspaceMetadata {
-  return ws.metadata ?? {};
+export function wsMeta(ws: Workspace | ParentWorkspace): WorkspaceMetadata {
+  const ed = (ws as Workspace).extensionData;
+  if (ed) return ed as WorkspaceMetadata;
+  return (ws as Workspace).metadata ?? {};
 }
 
 // Cached home directory — resolved once, reused everywhere
@@ -87,37 +92,54 @@ const _ptyIndex = new Map<number, TerminalSurface>(); // ptyId → terminal surf
 const _surfaceWsIndex = new Map<string, string>(); // surfaceId → workspaceId
 const _surfacePtyIndex = new Map<string, number>(); // surfaceId → ptyId
 
-workspaces.subscribe(($ws) => {
-  _ptyIndex.clear();
-  _surfaceWsIndex.clear();
-  _surfacePtyIndex.clear();
-  for (const ws of $ws) {
-    if (!ws?.splitRoot) continue;
-    for (const pane of getAllPanes(ws.splitRoot)) {
-      for (const surface of pane.surfaces) {
-        _surfaceWsIndex.set(surface.id, ws.id);
-        if (isTerminalSurface(surface)) {
-          if (surface.ptyId >= 0) _ptyIndex.set(surface.ptyId, surface);
-          _surfacePtyIndex.set(surface.id, surface.ptyId);
+// Deferred subscription: avoid subscribing at module load time to prevent
+// circular-initialization issues (workspace.ts → config.ts → service-helpers.ts
+// → workspace.ts). The subscription is established on first use of any
+// lookup function, or explicitly via initSurfaceIndex().
+let _indexSubscribed = false;
+function ensureIndexSubscribed(): void {
+  if (_indexSubscribed) return;
+  _indexSubscribed = true;
+  workspaces.subscribe(($ws) => {
+    _ptyIndex.clear();
+    _surfaceWsIndex.clear();
+    _surfacePtyIndex.clear();
+    for (const ws of $ws) {
+      if (!ws?.splitRoot) continue;
+      for (const pane of getAllPanes(ws.splitRoot)) {
+        for (const surface of pane.surfaces) {
+          _surfaceWsIndex.set(surface.id, ws.id);
+          if (isTerminalSurface(surface)) {
+            if (surface.ptyId >= 0) _ptyIndex.set(surface.ptyId, surface);
+            _surfacePtyIndex.set(surface.id, surface.ptyId);
+          }
         }
       }
     }
-  }
-});
+  });
+}
+
+/** Call once at app startup (after stores are initialized) to begin tracking. */
+export function initSurfaceIndex(): void {
+  ensureIndexSubscribed();
+}
 
 export function lookupTerminalByPtyId(
   ptyId: number,
 ): TerminalSurface | undefined {
+  ensureIndexSubscribed();
   return _ptyIndex.get(ptyId);
 }
 
 export function lookupSurfaceWorkspaceId(
   surfaceId: string,
 ): string | undefined {
+  ensureIndexSubscribed();
   return _surfaceWsIndex.get(surfaceId);
 }
 
 export function lookupPtyIdForSurface(surfaceId: string): number | undefined {
+  ensureIndexSubscribed();
   return _surfacePtyIndex.get(surfaceId);
 }
 

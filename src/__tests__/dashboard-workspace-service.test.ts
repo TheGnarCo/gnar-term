@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { get } from "svelte/store";
 
-vi.mock("../lib/services/workspace-service", () => ({
+vi.mock("../lib/services/workspace-runtime-service", () => ({
   createWorkspaceFromDef: vi.fn().mockResolvedValue("new-ws-id"),
   switchWorkspace: vi.fn(),
 }));
@@ -17,6 +17,17 @@ vi.mock("../lib/stores/workspace", () => ({
   },
 }));
 
+vi.mock("../lib/services/service-helpers", () => ({
+  wsMeta: (
+    ws:
+      | {
+          extensionData?: Record<string, unknown>;
+          metadata?: Record<string, unknown>;
+        }
+      | undefined,
+  ) => ws?.extensionData ?? ws?.metadata ?? {},
+}));
+
 import {
   registerDashboardWorkspaceType,
   unregisterDashboardWorkspaceType,
@@ -27,7 +38,7 @@ import {
 import {
   createWorkspaceFromDef,
   switchWorkspace,
-} from "../lib/services/workspace-service";
+} from "../lib/services/workspace-runtime-service";
 import { workspaces } from "../lib/stores/workspace";
 
 const MockIcon = {} as unknown as import("svelte").Component;
@@ -112,7 +123,10 @@ describe("spawnOrNavigate", () => {
       cb([
         {
           id: "ws-1",
-          metadata: { dashboardWorkspaceId: "ext:foo", isDashboard: true },
+          metadata: {
+            dashboardWorkspaceId: "ext:foo",
+            isDashboard: true,
+          },
         },
       ]);
       return () => {};

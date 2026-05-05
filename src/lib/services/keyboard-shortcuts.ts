@@ -13,20 +13,17 @@ import { get } from "svelte/store";
 import {
   commandPaletteOpen,
   findBarVisible,
-  primarySidebarVisible,
+  sidebarVisible,
 } from "../stores/ui";
-import {
-  workspaces,
-  activeSurface,
-  activeWorkspaceIdx,
-  activePseudoWorkspaceId,
-} from "../stores/workspace";
+import { activeSurface, activePane } from "../stores/workspace";
+import { activateWorkspace } from "./workspace-service";
 import { rootRowOrder } from "../stores/root-row-order";
 import { isTerminalSurface } from "../types";
-import { createWorkspace } from "./workspace-service";
 import {
+  closePane,
   flashFocusedPane,
   focusDirection,
+  resizeActivePane,
   togglePaneZoom,
 } from "./pane-service";
 import {
@@ -66,9 +63,8 @@ export function handleAppKeydown(
   // command palette (the palette uses ⇧⌘ for most entries).
   if (isMac && e.metaKey && !shift && !alt) {
     const cmdShortcuts: Record<string, () => void> = {
-      n: () => createWorkspace(`Workspace ${get(workspaces).length + 1}`),
       t: () => newSurfaceFromSidebar(),
-      b: () => primarySidebarVisible.update((v) => !v),
+      b: () => sidebarVisible.update((v) => !v),
       k: () => {
         const s = get(activeSurface);
         if (s && isTerminalSurface(s)) s.terminal.clear();
@@ -92,22 +88,22 @@ export function handleAppKeydown(
       return;
     }
 
-    // ⌘1-9: select nth root row in the primary sidebar
+    // ⌘1-9: activate nth parent workspace in the primary sidebar.
+    // Flashes the focused pane after activation so the user has a visible
+    // confirmation of which workspace/branch they landed on (avoids the
+    // silent wrong-branch-landing UX when last-active resolved to a
+    // worktree-backed Branched Workspace).
     if (e.key >= "1" && e.key <= "9") {
       const n = parseInt(e.key) - 1;
-      const row = get(rootRowOrder)[n];
+      const workspaceRows = get(rootRowOrder).filter(
+        (r) => r.kind === "workspace",
+      );
+      const row = workspaceRows[n];
       if (!row) return;
       e.preventDefault();
-      if (row.kind === "workspace") {
-        const idx = get(workspaces).findIndex((ws) => ws.id === row.id);
-        if (idx >= 0) {
-          activeWorkspaceIdx.set(idx);
-          activePseudoWorkspaceId.set(null);
-        }
-      } else if (row.kind === "pseudo-workspace") {
-        activeWorkspaceIdx.set(-1);
-        activePseudoWorkspaceId.set(row.id);
-      }
+      void Promise.resolve(activateWorkspace(row.id)).then(() =>
+        flashFocusedPane(),
+      );
       return;
     }
   }
@@ -115,6 +111,28 @@ export function handleAppKeydown(
   // Shortcuts that reference component bindings or aren't in the
   // command palette. Use Cmd (mac) or Ctrl+Shift (other).
   if ((isMac ? e.metaKey : ctrl) && shift && !alt) {
+    // ⌘⇧Arrow (mac) / Ctrl+Shift+Arrow (other) — keyboard pane resize.
+    // Handled before the letter-key dispatch since arrows aren't letters.
+    if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      resizeActivePane("left");
+      return;
+    }
+    if (e.key === "ArrowRight") {
+      e.preventDefault();
+      resizeActivePane("right");
+      return;
+    }
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      resizeActivePane("up");
+      return;
+    }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      resizeActivePane("down");
+      return;
+    }
     const k = e.key.toLowerCase();
     if (k === "h") {
       e.preventDefault();
@@ -142,6 +160,13 @@ export function handleAppKeydown(
       e.preventDefault();
       const s = get(activeSurface);
       if (s) togglePaneZoom(s.id);
+      return;
+    }
+    // Shift+Cmd+X (mac) / Ctrl+Shift+X (Linux) — close active pane
+    if (k === "x") {
+      e.preventDefault();
+      const pane = get(activePane);
+      if (pane) closePane(pane.id);
       return;
     }
     // Non-mac only: Ctrl+Shift+K/F mirror the mac Cmd bindings above.

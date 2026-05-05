@@ -75,11 +75,6 @@ gnar-term runs on macOS and Linux. When making changes:
 
 ## Architecture
 
-See `docs/` for design documentation:
-
-- **[docs/glossary.md](docs/glossary.md)** — canonical definitions for terms used across the codebase (workspace, pane, surface, etc.)
-- **[docs/sidebar-architecture.md](docs/sidebar-architecture.md)** — primary/secondary sidebar layout, extension model, and control placement rules
-
 ### Frontend Structure
 
 App.svelte is a thin shell that wires services to the DOM. Business logic lives in service modules:

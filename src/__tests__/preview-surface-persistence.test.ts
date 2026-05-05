@@ -33,7 +33,7 @@ vi.mock("../lib/terminal-service", () => ({
 import {
   serializeLayout,
   createWorkspaceFromDef,
-} from "../lib/services/workspace-service";
+} from "../lib/services/workspace-runtime-service";
 import { workspaces } from "../lib/stores/workspace";
 import {
   isPreviewSurface,

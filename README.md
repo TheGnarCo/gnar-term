@@ -11,10 +11,6 @@
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Linux-green" alt="Platforms" />
 </p>
 
-<p align="center">
-  <img src="./docs/screenshot.png" alt="gnar-term screenshot" width="900" />
-</p>
-
 ## Why gnar-term?
 
 I love [cmux](https://github.com/manaflow-ai/cmux). It's currently my favorite terminal multiplexer for working with AI coding agents. But there were a few things I wanted:
@@ -193,7 +189,7 @@ Right-click in the terminal for contextual actions. File-specific actions appear
 - **Flow control** — PTY backpressure prevents the terminal from choking on fast output
 - **Process cleanup** — closing a tab kills the child process tree (no zombie processes)
 - **Ctrl+Tab / Ctrl+Shift+Tab** — cycle through tabs in the active pane
-- **Extension system** — extensible architecture for sidebar tabs, surface types, commands, and context menus ([build your first extension](docs/extension-getting-started.md))
+- **Extension system** — extensible architecture for sidebar tabs, surface types, commands, and context menus (see [EXTENSIONS.md](EXTENSIONS.md))
 - **Cross-platform** — macOS and Linux via Tauri v2
 
 ### Shell integration
@@ -360,12 +356,7 @@ GnarTerm has an extension system for adding sidebar tabs, surface types, command
 
 Extensions are standalone directories that can live anywhere — in the GnarTerm repo, in a separate project, or in their own git repository.
 
-| Resource                                                 | Description                                               |
-| -------------------------------------------------------- | --------------------------------------------------------- |
-| **[Getting Started](docs/extension-getting-started.md)** | Build your first extension in 10 minutes                  |
-| **[EXTENSIONS.md](EXTENSIONS.md)**                       | Full API reference (manifest, methods, events, commands)  |
-| **[Extension Cookbook](docs/extension-cookbook.md)**     | Step-by-step recipes for common patterns                  |
-| **[Development Guide](docs/extension-development.md)**   | Project setup, building, testing, debugging, distribution |
+See **[EXTENSIONS.md](EXTENSIONS.md)** for the full API reference (manifest, methods, events, commands).
 
 ## MCP integration (agent orchestration)
 

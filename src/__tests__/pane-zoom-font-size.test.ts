@@ -89,6 +89,14 @@ vi.mock("../lib/services/service-helpers", () => ({
   getActiveCwd: vi.fn().mockResolvedValue(undefined),
   getCwdForSurface: vi.fn().mockResolvedValue(undefined),
   getHome: vi.fn().mockResolvedValue("/home/test"),
+  wsMeta: (
+    ws:
+      | {
+          extensionData?: Record<string, unknown>;
+          metadata?: Record<string, unknown>;
+        }
+      | undefined,
+  ) => ws?.extensionData ?? ws?.metadata ?? {},
 }));
 
 vi.mock("../lib/services/event-bus", () => ({
@@ -126,7 +134,7 @@ import {
 import { uid } from "../lib/types";
 import type { Pane, TerminalSurface, Workspace } from "../lib/types";
 import { togglePaneZoom } from "../lib/services/pane-service";
-import { switchWorkspace } from "../lib/services/workspace-service";
+import { switchWorkspace } from "../lib/services/workspace-runtime-service";
 import { adjustFontSize, resetFontSize } from "../lib/terminal-service";
 import { saveConfig } from "../lib/config";
 import { Terminal } from "@xterm/xterm";
@@ -161,7 +169,7 @@ function makePane(surfaces: TerminalSurface[] = []): Pane {
   return pane;
 }
 
-function makeWorkspace(pane: Pane): Workspace {
+function makeChildWorkspace(pane: Pane): Workspace {
   return {
     id: uid(),
     name: "Test",
@@ -218,8 +226,8 @@ describe("switchWorkspace clears zoom", () => {
     const s2 = mockTerminalSurface();
     const p1 = makePane([s1]);
     const p2 = makePane([s2]);
-    const ws1 = makeWorkspace(p1);
-    const ws2 = makeWorkspace(p2);
+    const ws1 = makeChildWorkspace(p1);
+    const ws2 = makeChildWorkspace(p2);
     workspaces.set([ws1, ws2]);
     activeWorkspaceIdx.set(0);
 
@@ -269,7 +277,7 @@ describe("adjustFontSize", () => {
     const surf1 = mockTerminalSurface();
     const surf2 = mockTerminalSurface();
     const p = makePane([surf1, surf2]);
-    const ws = makeWorkspace(p);
+    const ws = makeChildWorkspace(p);
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
 
@@ -284,7 +292,7 @@ describe("adjustFontSize", () => {
     // Wrap fit in a spy so we can assert on it
     const fitSpy = vi.spyOn(surf.fitAddon, "fit");
     const p = makePane([surf]);
-    const ws = makeWorkspace(p);
+    const ws = makeChildWorkspace(p);
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
 

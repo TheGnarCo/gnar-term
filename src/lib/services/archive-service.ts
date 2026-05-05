@@ -1,23 +1,20 @@
 import { get } from "svelte/store";
 import { getAllSurfaces, isTerminalSurface, type Workspace } from "../types";
-import type { WorkspaceDef } from "../config";
-import { workspaces } from "../stores/workspace";
 import {
   serializeLayout,
-  closeWorkspace,
   createWorkspaceFromDef,
+} from "./workspace-runtime-service";
+import {
+  getChildrenOfWorkspace,
+  closeWorkspacesInWorkspace,
+  isDashboardWorkspace,
+  provisionAutoDashboardsForWorkspace,
 } from "./workspace-service";
-import { wsMeta } from "./service-helpers";
 import {
-  getWorkspacesInGroup,
-  closeWorkspacesInGroup,
-  provisionAutoDashboardsForGroup,
-} from "./workspace-group-service";
-import {
-  getWorkspaceGroup,
-  getWorkspaceGroups,
-  setWorkspaceGroups,
-} from "../stores/workspace-groups";
+  getWorkspace,
+  getWorkspaces,
+  setWorkspaces,
+} from "../stores/workspaces";
 import { removeRootRow, appendRootRow } from "../stores/root-row-order";
 import { showConfirmPrompt } from "../stores/ui";
 import {
@@ -26,48 +23,22 @@ import {
   archivedDefs,
 } from "../stores/archive";
 
-function isDashboardWorkspace(ws: Workspace): boolean {
-  return wsMeta(ws).isDashboard === true;
-}
-
 function countRunningPtys(ws: Workspace): number {
   return getAllSurfaces(ws).filter((s) => isTerminalSurface(s) && s.ptyId >= 0)
     .length;
 }
 
-export async function archiveWorkspace(wsId: string): Promise<boolean> {
-  const ws = get(workspaces).find((w) => w.id === wsId);
-  if (!ws) return false;
+export async function archiveWorkspace(
+  parentWorkspaceId: string,
+): Promise<boolean> {
+  const workspace = getWorkspace(parentWorkspaceId);
+  if (!workspace) return false;
+  if (workspace.locked) return false;
 
-  const running = countRunningPtys(ws);
-  if (running > 0) {
-    const confirmed = await showConfirmPrompt(
-      `Archiving will suspend ${running} running process${running > 1 ? "es" : ""}. Continue?`,
-      { title: "Archive Workspace", confirmLabel: "Archive", danger: true },
-    );
-    if (!confirmed) return false;
-  }
-
-  const def: WorkspaceDef & { name: string } = {
-    id: ws.id,
-    name: ws.name,
-    layout: serializeLayout(ws.splitRoot),
-    ...(ws.metadata ? { metadata: ws.metadata } : {}),
-  };
-
-  const idx = get(workspaces).findIndex((w) => w.id === wsId);
-  closeWorkspace(idx);
-  addToArchive({ kind: "workspace", id: wsId }, { def });
-  return true;
-}
-
-export async function archiveGroup(groupId: string): Promise<boolean> {
-  const group = getWorkspaceGroup(groupId);
-  if (!group) return false;
-  if (group.locked) return false;
-
-  const allInGroup = getWorkspacesInGroup(groupId);
-  const nonDashboard = allInGroup.filter((ws) => !isDashboardWorkspace(ws));
+  const allInWorkspace = getChildrenOfWorkspace(parentWorkspaceId);
+  const nonDashboard = allInWorkspace.filter(
+    (ws) => !isDashboardWorkspace(ws, parentWorkspaceId),
+  );
 
   const runningCount = nonDashboard.reduce(
     (sum, ws) => sum + countRunningPtys(ws),
@@ -76,7 +47,7 @@ export async function archiveGroup(groupId: string): Promise<boolean> {
   if (runningCount > 0) {
     const confirmed = await showConfirmPrompt(
       `Archiving will suspend ${runningCount} running process${runningCount > 1 ? "es" : ""}. Continue?`,
-      { title: "Archive Group", confirmLabel: "Archive", danger: true },
+      { title: "Archive Workspace", confirmLabel: "Archive", danger: true },
     );
     if (!confirmed) return false;
   }
@@ -88,39 +59,39 @@ export async function archiveGroup(groupId: string): Promise<boolean> {
     ...(ws.metadata ? { metadata: ws.metadata } : {}),
   }));
 
-  closeWorkspacesInGroup(groupId);
-  setWorkspaceGroups(getWorkspaceGroups().filter((g) => g.id !== groupId));
-  removeRootRow({ kind: "workspace-group", id: groupId });
-  addToArchive(
-    { kind: "workspace-group", id: groupId },
-    { group, workspaceDefs },
-  );
+  // Remove the parent workspace from the store BEFORE cascading the close.
+  // The close path emits `workspace:closed`, and
+  // `setupPrimaryBranchedWorkspaceAutoRecreation` looks the parent up by
+  // `primaryBranchedWorkspaceId` to spawn a replacement. While the parent
+  // still sits in the store the listener creates a phantom child
+  // workspace whose `parentWorkspaceId` then dangles after the parent
+  // is removed — on reload that orphan re-wraps into a fresh parent,
+  // so archives appear to leak ghost workspaces.
+  setWorkspaces(getWorkspaces().filter((w) => w.id !== parentWorkspaceId));
+  removeRootRow({ kind: "workspace", id: parentWorkspaceId });
+  closeWorkspacesInWorkspace(parentWorkspaceId);
+  addToArchive(parentWorkspaceId, {
+    workspace,
+    childWorkspaceDefs: workspaceDefs,
+  });
   return true;
 }
 
-export async function unarchiveWorkspace(wsId: string): Promise<void> {
+export async function unarchiveWorkspace(
+  parentWorkspaceId: string,
+): Promise<void> {
   const defs = get(archivedDefs);
-  const entry = defs.workspaces[wsId];
+  const entry = defs.workspaces[parentWorkspaceId];
   if (!entry) return;
-  // Create first; only drop the archive entry once we know the restore
-  // succeeded, so a failure leaves the user able to retry.
-  await createWorkspaceFromDef(entry.def, { restoring: true });
-  removeFromArchive({ kind: "workspace", id: wsId });
-}
-
-export async function unarchiveGroup(groupId: string): Promise<void> {
-  const defs = get(archivedDefs);
-  const entry = defs.groups[groupId];
-  if (!entry) return;
-  // Container (group + root row) must be in place before we restore
+  // Container (workspace + root row) must be in place before we restore
   // workspaces into it, but `removeFromArchive` is held until every
   // async restore step has resolved — if any throws, the archive entry
   // survives so the user can retry.
-  setWorkspaceGroups([...getWorkspaceGroups(), entry.group]);
-  appendRootRow({ kind: "workspace-group", id: groupId });
-  for (const def of entry.workspaceDefs) {
+  setWorkspaces([...getWorkspaces(), entry.workspace]);
+  appendRootRow({ kind: "workspace", id: parentWorkspaceId });
+  for (const def of entry.childWorkspaceDefs) {
     await createWorkspaceFromDef(def, { restoring: true });
   }
-  await provisionAutoDashboardsForGroup(entry.group);
-  removeFromArchive({ kind: "workspace-group", id: groupId });
+  await provisionAutoDashboardsForWorkspace(entry.workspace);
+  removeFromArchive(parentWorkspaceId);
 }

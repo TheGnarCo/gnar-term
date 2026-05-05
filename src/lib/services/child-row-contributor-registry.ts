@@ -6,7 +6,7 @@
  * Concrete uses:
  *   - agentic-orchestrator contributes dashboard rows under
  *     project-scope's project rows (parentType: "project")
- *   - agentic-orchestrator contributes worktree workspace rows under
+ *   - agentic-orchestrator contributes branched workspace rows under
  *     its own dashboard rows (parentType: "dashboard")
  *
  * Each contributor returns child row descriptors `{ kind, id }` for a

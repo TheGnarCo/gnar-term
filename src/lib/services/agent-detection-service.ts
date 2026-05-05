@@ -71,14 +71,14 @@ export interface AgentPattern {
 }
 
 export type TrackerMode = "osc" | "title-only";
-export type HarnessStatus = "running" | "waiting" | "idle" | "active";
+export type HarnessStatus = "running" | "waiting" | "idle" | "active" | "done";
 
 // --- Defaults ---
 
 const DEFAULT_PATTERNS: AgentPattern[] = [
   { name: "Claude Code", titlePatterns: ["claude"], oscDetectable: true },
-  { name: "Codex", titlePatterns: ["codex"], oscDetectable: false },
-  { name: "Aider", titlePatterns: ["aider"], oscDetectable: false },
+  { name: "Codex", titlePatterns: ["codex"], oscDetectable: true },
+  { name: "Aider", titlePatterns: ["aider"], oscDetectable: true },
   { name: "Cursor", titlePatterns: ["cursor"], oscDetectable: false },
   {
     name: "GitHub Copilot",
@@ -113,6 +113,16 @@ function generateAgentId(): string {
 
 export function getAgents(): DetectedAgent[] {
   return _agents.slice();
+}
+
+export function getAgentByAgentId(agentId: string): DetectedAgent | undefined {
+  return _agents.find((a) => a.agentId === agentId);
+}
+
+export function getAgentBySurfaceId(
+  surfaceId: string,
+): DetectedAgent | undefined {
+  return _agents.find((a) => a.surfaceId === surfaceId);
 }
 
 // --- Pattern matching ---
@@ -172,7 +182,7 @@ function loadIdleTimeoutMs(): number {
 // --- Status tracker ---
 
 const RUNNING_TITLE_PATTERNS = ["thinking", "working"];
-const IDLE_TITLE_PATTERNS = ["ready", "done"];
+const DONE_TITLE_PATTERNS = ["ready", "done"];
 
 // How long a non-matching title must persist before we detach the agent.
 // Prevents momentary title flickers (e.g. Claude cycling through internal
@@ -230,12 +240,12 @@ function createStatusTracker(
       if (matchesAny(title, RUNNING_TITLE_PATTERNS)) {
         setStatus(mode === "osc" ? "running" : "active");
         resetIdleTimer();
-      } else if (matchesAny(title, IDLE_TITLE_PATTERNS)) {
+      } else if (matchesAny(title, DONE_TITLE_PATTERNS)) {
         if (idleTimer !== undefined) {
           clearTimeout(idleTimer);
           idleTimer = undefined;
         }
-        setStatus("idle");
+        setStatus("done");
       }
     },
     destroy() {
@@ -298,7 +308,9 @@ function publishStatus(
             ? "success"
             : status === "waiting"
               ? "warning"
-              : "muted",
+              : status === "done"
+                ? "muted"
+                : "muted",
         metadata: { surfaceId: tracked.surfaceId },
       });
     }
@@ -427,17 +439,29 @@ function detachAgent(tracked: TrackedSurface): void {
   _agents = _agents.filter((a) => a.agentId !== tracked.agentId);
   syncStore();
 
-  if (tracked.preAgentTitle) {
-    const all = get(workspaces);
-    for (const ws of all) {
-      for (const pane of getAllPanes(ws.splitRoot)) {
-        for (const surface of pane.surfaces) {
-          if (surface.id === tracked.surfaceId && isTerminalSurface(surface)) {
+  // Restore the surface title when the agent detaches. A user-set
+  // `userDefinedTitle` always wins over the captured `preAgentTitle` —
+  // if the user renamed the surface during the agent run we re-apply
+  // their explicit name even if there was no preAgentTitle stamped at
+  // attach time.
+  const all = get(workspaces);
+  let restored = false;
+  for (const ws of all) {
+    for (const pane of getAllPanes(ws.splitRoot)) {
+      for (const surface of pane.surfaces) {
+        if (surface.id === tracked.surfaceId && isTerminalSurface(surface)) {
+          if (surface.userDefinedTitle) {
+            surface.title = surface.userDefinedTitle;
+            restored = true;
+          } else if (tracked.preAgentTitle) {
             surface.title = tracked.preAgentTitle;
+            restored = true;
           }
         }
       }
     }
+  }
+  if (restored) {
     workspaces.update((l) => [...l]);
   }
 

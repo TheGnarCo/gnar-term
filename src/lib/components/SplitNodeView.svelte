@@ -4,7 +4,7 @@
   import { theme } from "../stores/theme";
   import { zoomedSurfaceId } from "../stores/workspace";
   import { dragResize } from "../actions/drag-resize";
-  import { schedulePersist } from "../services/workspace-service";
+  import { schedulePersist } from "../services/workspace-runtime-service";
   import PaneView from "./PaneView.svelte";
   import SplitNodeView from "./SplitNodeView.svelte";
 

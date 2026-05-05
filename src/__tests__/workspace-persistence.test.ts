@@ -27,7 +27,7 @@ describe("workspace persistence", () => {
 
   it("persistWorkspaces serializes all workspaces and calls saveState", async () => {
     const { persistWorkspaces } =
-      await import("../lib/services/workspace-service");
+      await import("../lib/services/workspace-runtime-service");
     const config = await import("../lib/config");
     const saveStateSpy = vi
       .spyOn(config, "saveState")
@@ -66,17 +66,15 @@ describe("workspace persistence", () => {
         {
           id: "ws1",
           name: "Dev",
-          cwd: undefined,
           layout: { pane: { surfaces: [] } },
         },
         {
           id: "ws2",
           name: "Test",
-          cwd: undefined,
           layout: { pane: { surfaces: [] } },
         },
       ],
-      activeWorkspaceIdx: 1,
+      activeWorkspaceId: "ws2",
     });
 
     saveStateSpy.mockRestore();
@@ -84,7 +82,7 @@ describe("workspace persistence", () => {
 
   it("schedulePersist debounces multiple calls into one save", async () => {
     const { schedulePersist } =
-      await import("../lib/services/workspace-service");
+      await import("../lib/services/workspace-runtime-service");
     const config = await import("../lib/config");
     const saveStateSpy = vi
       .spyOn(config, "saveState")
@@ -117,14 +115,15 @@ describe("workspace persistence", () => {
     saveStateSpy.mockRestore();
   });
 
-  it("persistWorkspaces round-trips workspace metadata (regression for 0b92007)", async () => {
+  it("persistWorkspaces round-trips workspace top-level fields (regression for 0b92007)", async () => {
     const { persistWorkspaces } =
-      await import("../lib/services/workspace-service");
+      await import("../lib/services/workspace-runtime-service");
     const config = await import("../lib/config");
     const saveStateSpy = vi
       .spyOn(config, "saveState")
       .mockResolvedValue(undefined);
 
+    // Workspaces now carry top-level fields (not metadata) in the unified store.
     workspaces.set([
       {
         id: "ws-project",
@@ -134,7 +133,8 @@ describe("workspace persistence", () => {
           pane: { id: "p1", surfaces: [], activeSurfaceId: null },
         },
         activePaneId: "p1",
-        metadata: { groupId: "proj-alpha", color: "blue" },
+        parentWorkspaceId: "proj-alpha",
+        color: "blue",
       },
     ] as unknown as import("../lib/types").Workspace[]);
     activeWorkspaceIdx.set(0);
@@ -147,18 +147,19 @@ describe("workspace persistence", () => {
       {
         id: "ws-project",
         name: "Project A",
-        cwd: undefined,
         layout: { pane: { surfaces: [] } },
-        metadata: { groupId: "proj-alpha", color: "blue" },
+        color: "blue",
+        parentWorkspaceId: "proj-alpha",
       },
     ]);
+    expect(payload.activeWorkspaceId).toBe("ws-project");
 
     saveStateSpy.mockRestore();
   });
 
   it("serializeLayout captures terminal cwd and title", async () => {
     const { serializeLayout } =
-      await import("../lib/services/workspace-service");
+      await import("../lib/services/workspace-runtime-service");
 
     const layout = serializeLayout({
       type: "pane",
@@ -204,6 +205,8 @@ describe("workspace persistence", () => {
     const loadStateSpy = vi.spyOn(config, "loadState").mockResolvedValue({});
 
     const state = await config.loadState();
+    // AppState restored state uses the unified `workspaces` array
+    // (WorkspaceDef[]).
     expect(state.workspaces).toBeUndefined();
 
     // App.svelte logic: if no state.workspaces, fall back to autoload/default

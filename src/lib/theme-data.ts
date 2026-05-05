@@ -7,7 +7,7 @@
  *   2. Theme colors (`ThemeDef` below) — bg / fg / accent / ansi blocks.
  *      User-selectable via the theme picker; extensions may contribute
  *      new themes via `ExtensionAPI.registerTheme`.
- *   3. Group color slots (`GROUP_COLOR_SLOTS` in extensions/api.ts) —
+ *   3. Workspace color slots (`WORKSPACE_COLOR_SLOTS` in extensions/api.ts) —
  *      semantic names (red / mint / lavender / …) resolved through the
  *      active theme's ansi palette. Custom `#hex` strings pass through.
  *
@@ -615,15 +615,15 @@ const mollyDisco: ThemeDef = {
 };
 
 // --- All themes ---
-// Group-color slot helpers live in ../extensions/api.ts (to keep
+// Workspace-color slot helpers live in ../extensions/api.ts (to keep
 // extensions self-contained). Re-export from here so core callers and
 // tests can reach them through the theme-data module.
 export {
-  GROUP_COLOR_SLOTS,
-  type GroupColorSlot,
-  type GroupColorTheme,
-  getGroupColors,
-  resolveGroupColor,
+  WORKSPACE_COLOR_SLOTS,
+  type WorkspaceColorSlot,
+  type WorkspaceColorTheme,
+  getWorkspaceColors,
+  resolveWorkspaceColor,
 } from "../extensions/api";
 
 export const themes: Record<string, ThemeDef> = {

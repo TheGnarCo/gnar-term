@@ -98,7 +98,7 @@ function makePane(
   };
 }
 
-function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
+function makeChildWorkspace(overrides: Partial<Workspace> = {}): Workspace {
   const pane = makePane();
   return {
     id: uid(),
@@ -121,11 +121,11 @@ describe("findSurfaceLocation", () => {
     const targetSurface = mockTerminalSurface();
     const pane1 = makePane([mockTerminalSurface()]);
     const pane2 = makePane([targetSurface]);
-    const ws1 = makeWorkspace({
+    const ws1 = makeChildWorkspace({
       splitRoot: { type: "pane", pane: pane1 },
       activePaneId: pane1.id,
     });
-    const ws2 = makeWorkspace({
+    const ws2 = makeChildWorkspace({
       splitRoot: { type: "pane", pane: pane2 },
       activePaneId: pane2.id,
     });
@@ -140,7 +140,7 @@ describe("findSurfaceLocation", () => {
   });
 
   it("returns null when surface does not exist", () => {
-    const ws = makeWorkspace();
+    const ws = makeChildWorkspace();
     workspaces.set([ws]);
 
     const loc = findSurfaceLocation("nonexistent-id");
@@ -150,7 +150,7 @@ describe("findSurfaceLocation", () => {
   it("works with extension surfaces", () => {
     const extSurface = mockExtensionSurface();
     const pane = makePane([extSurface]);
-    const ws = makeWorkspace({
+    const ws = makeChildWorkspace({
       splitRoot: { type: "pane", pane },
       activePaneId: pane.id,
     });
@@ -171,7 +171,7 @@ describe("markSurfaceUnreadById", () => {
   it("sets hasUnread to true on an existing surface", () => {
     const surface = mockTerminalSurface({ hasUnread: false });
     const pane = makePane([surface]);
-    const ws = makeWorkspace({
+    const ws = makeChildWorkspace({
       splitRoot: { type: "pane", pane },
       activePaneId: pane.id,
     });
@@ -184,7 +184,7 @@ describe("markSurfaceUnreadById", () => {
   });
 
   it("is a no-op when surface does not exist (no error thrown)", () => {
-    const ws = makeWorkspace();
+    const ws = makeChildWorkspace();
     workspaces.set([ws]);
 
     // Should not throw
@@ -194,7 +194,7 @@ describe("markSurfaceUnreadById", () => {
   it("triggers store update", () => {
     const surface = mockTerminalSurface({ hasUnread: false });
     const pane = makePane([surface]);
-    const ws = makeWorkspace({
+    const ws = makeChildWorkspace({
       splitRoot: { type: "pane", pane },
       activePaneId: pane.id,
     });
@@ -220,7 +220,7 @@ describe("focusSurfaceById", () => {
   it("switches to the workspace containing the surface and selects it", () => {
     const surface1 = mockTerminalSurface();
     const pane1 = makePane([surface1]);
-    const ws1 = makeWorkspace({
+    const ws1 = makeChildWorkspace({
       name: "WS 1",
       splitRoot: { type: "pane", pane: pane1 },
       activePaneId: pane1.id,
@@ -228,7 +228,7 @@ describe("focusSurfaceById", () => {
 
     const targetSurface = mockTerminalSurface({ hasUnread: true });
     const pane2 = makePane([mockTerminalSurface(), targetSurface]);
-    const ws2 = makeWorkspace({
+    const ws2 = makeChildWorkspace({
       name: "WS 2",
       splitRoot: { type: "pane", pane: pane2 },
       activePaneId: pane2.id,
@@ -248,7 +248,7 @@ describe("focusSurfaceById", () => {
   });
 
   it("is a no-op when surface does not exist (no error thrown)", () => {
-    const ws = makeWorkspace();
+    const ws = makeChildWorkspace();
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
 
@@ -261,7 +261,7 @@ describe("focusSurfaceById", () => {
     const targetSurface = mockTerminalSurface();
     const otherSurface = mockTerminalSurface();
     const pane = makePane([otherSurface, targetSurface]);
-    const ws = makeWorkspace({
+    const ws = makeChildWorkspace({
       splitRoot: { type: "pane", pane },
       activePaneId: pane.id,
     });

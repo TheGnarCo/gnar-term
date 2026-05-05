@@ -50,7 +50,7 @@ function makeWs(id: string) {
 const baseProps = {
   color: "#4a90d9",
   filterIds: new Set(["ws-1"]),
-  scopeId: "group-1",
+  scopeId: "workspace-1",
   workspaceListViewComponent: WorkspaceListViewStub,
 };
 
@@ -64,13 +64,13 @@ describe("ContainerRow collapse/expand", () => {
   it("is expanded by default and collapses on chevron click", async () => {
     const { container } = render(ContainerRowWithSlot, { props: baseProps });
 
-    expect(container.querySelector("[data-container-nested]")).not.toBeNull();
+    expect(container.querySelector("[data-container-children]")).not.toBeNull();
 
     const chevron = container.querySelector("button") as HTMLElement;
     await fireEvent.click(chevron);
     await tick();
 
-    expect(container.querySelector("[data-container-nested]")).toBeNull();
+    expect(container.querySelector("[data-container-children]")).toBeNull();
   });
 
   it("auto-expands when a workspace is added while collapsed", async () => {
@@ -81,12 +81,12 @@ describe("ContainerRow collapse/expand", () => {
     const chevron = container.querySelector("button") as HTMLElement;
     await fireEvent.click(chevron);
     await tick();
-    expect(container.querySelector("[data-container-nested]")).toBeNull();
+    expect(container.querySelector("[data-container-children]")).toBeNull();
 
     await rerender({ filterIds: new Set(["ws-1", "ws-2"]) });
     await tick();
 
-    expect(container.querySelector("[data-container-nested]")).not.toBeNull();
+    expect(container.querySelector("[data-container-children]")).not.toBeNull();
   });
 
   it("stays collapsed when filterIds shrinks or stays the same size", async () => {
@@ -97,11 +97,11 @@ describe("ContainerRow collapse/expand", () => {
     const chevron = container.querySelector("button") as HTMLElement;
     await fireEvent.click(chevron);
     await tick();
-    expect(container.querySelector("[data-container-nested]")).toBeNull();
+    expect(container.querySelector("[data-container-children]")).toBeNull();
 
     await rerender({ filterIds: new Set(["ws-1"]) });
     await tick();
 
-    expect(container.querySelector("[data-container-nested]")).toBeNull();
+    expect(container.querySelector("[data-container-children]")).toBeNull();
   });
 });

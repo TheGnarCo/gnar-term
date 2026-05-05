@@ -4,7 +4,8 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import { readFileSync } from "fs";
+import { readFileSync, readdirSync } from "fs";
+import { join } from "path";
 
 // Mock Tauri APIs before any imports that use them
 vi.mock("@tauri-apps/api/core", () => ({
@@ -18,7 +19,14 @@ vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
   writeText: vi.fn().mockResolvedValue(undefined),
 }));
 
-const RUST_SOURCE = readFileSync("src-tauri/src/lib.rs", "utf-8");
+// Rust commands and helpers are split across sibling modules (pty.rs,
+// fs_commands.rs, file_watch.rs, …); concatenate every `*.rs` under
+// `src-tauri/src` so structural assertions remain valid after extraction.
+const RUST_SRC_DIR = "src-tauri/src";
+const RUST_SOURCE = readdirSync(RUST_SRC_DIR)
+  .filter((f) => f.endsWith(".rs"))
+  .map((f) => readFileSync(join(RUST_SRC_DIR, f), "utf-8"))
+  .join("\n");
 
 describe("Molly Disco theme", () => {
   it("is registered in theme-data.ts", async () => {

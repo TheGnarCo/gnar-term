@@ -94,7 +94,7 @@ import { invoke } from "@tauri-apps/api/core";
 import {
   createWorkspaceFromDef,
   serializeLayout,
-} from "../lib/services/workspace-service";
+} from "../lib/services/workspace-runtime-service";
 import {
   runDefinedCommand,
   dismissDefinedCommand,
@@ -138,7 +138,7 @@ afterEach(() => {
 });
 
 describe("createWorkspaceFromDef — restore vs fresh", () => {
-  it("restored surface gets definedCommand + pendingRestoreCommand, NOT startupCommand", async () => {
+  it("restored surface gets definedCommand + startupCommand (auto-run default) when no parent workspace", async () => {
     await createWorkspaceFromDef(
       {
         name: "Restored",
@@ -155,8 +155,9 @@ describe("createWorkspaceFromDef — restore vs fresh", () => {
     const ws = get(workspaces)[0]!;
     const s = firstTerminalSurface(ws);
     expect(s.definedCommand).toBe("npm run dev");
-    expect(s.pendingRestoreCommand).toBe(true);
-    expect(s.startupCommand).toBeUndefined();
+    // No parent workspace → defaults to auto-run (opt-out model)
+    expect(s.startupCommand).toBe("npm run dev");
+    expect(s.pendingRestoreCommand).toBeUndefined();
   });
 
   it("fresh-created surface with a command gets all three (definedCommand + startupCommand, NOT pending)", async () => {

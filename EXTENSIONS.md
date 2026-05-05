@@ -1,28 +1,6 @@
----
-title: API Reference
-parent: Extensions
-nav_order: 2
----
-
 # GnarTerm Extension API
 
 GnarTerm ships with an extension system that lets you add sidebar tabs, pane surface types, commands, context menu items, overlays, workspace actions, and settings without modifying core. Extensions are standalone directories with a JSON manifest and a JavaScript entry point — they can live anywhere: in the GnarTerm repo, in a separate project, or in their own git repository.
-
-> **New to extensions?** Start with the [Getting Started Guide](docs/extension-getting-started.md) — build a working extension in 10 minutes, then come back here for the full API reference.
-
-### Extension Documentation
-
-| Document                                                 | Purpose                                                   |
-| -------------------------------------------------------- | --------------------------------------------------------- |
-| **[Getting Started](docs/extension-getting-started.md)** | Build your first extension from scratch (tutorial)        |
-| **[Extension Cookbook](docs/extension-cookbook.md)**     | Step-by-step recipes for common patterns                  |
-| **[Development Guide](docs/extension-development.md)**   | Project setup, building, testing, debugging, distribution |
-| **[Registry System](docs/registry-system.md)**           | How registries work (architecture deep-dive)              |
-| **[Sidebar Architecture](docs/sidebar-architecture.md)** | Sidebar layout rules and guidelines                       |
-| **[Glossary](docs/glossary.md)**                         | Definitions for terms used across the codebase            |
-| **[ADR-001](docs/adr/001-extension-architecture.md)**    | Architecture decision record (design rationale)           |
-| **[ADR-002](docs/adr/002-extension-api-evolution.md)**   | API evolution: badges, indicators, cross-extension events |
-| **[Event Contracts](docs/event-contracts.md)**           | Cross-extension event schemas and payload definitions     |
 
 ## Quick Start
 
@@ -1089,8 +1067,6 @@ A pack of additional themes (Kirby-inspired). Registers theme entries that show 
 
 External extensions live **outside** the GnarTerm repo in their own directory or git repository. They use the exact same manifest + entry point pattern as included extensions — there is no difference in capability. The only distinction is how they're installed: included extensions are bundled with the app; external extensions are installed from a local path.
 
-> **First time?** The [Getting Started Guide](docs/extension-getting-started.md) walks through building an external extension from scratch.
-
 ### How external extensions work
 
 1. You create a directory with `extension.json` and a bundled `dist/index.js`
@@ -1175,7 +1151,7 @@ expect(mockApi.registerCommand).toHaveBeenCalledWith(
 );
 ```
 
-See the [Development Guide — Testing](docs/extension-development.md#testing) for a complete mock API pattern and testing strategies.
+The pattern above (mocking the `ExtensionAPI` and asserting on `register*` calls) generalizes to any contribution surface — settings fields, commands, sidebar tabs, surface types, and context-menu items.
 
 ### Distribution
 

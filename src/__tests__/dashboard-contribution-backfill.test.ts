@@ -16,19 +16,19 @@ vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn().mockResolvedValue(vi.fn()),
 }));
 
-import { reconcileGroupDashboards } from "../lib/services/workspace-group-service";
+import { reconcileWorkspaceDashboards } from "../lib/services/workspace-service";
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
-import { workspaceGroupsStore } from "../lib/stores/workspace-groups";
+import { workspacesStore } from "../lib/stores/workspaces";
 
-const GROUP = {
+const WORKSPACE = {
   id: "g1",
   name: "Repo",
   path: "/tmp/repo",
   color: "purple",
-  workspaceIds: ["ws-legacy-group", "ws-legacy-agentic"],
+  branchedWorkspaceIds: ["ws-legacy-overview", "ws-legacy-agentic"],
   isGit: false,
   createdAt: "2026-04-21T00:00:00.000Z",
-  dashboardWorkspaceId: "ws-legacy-group",
+  dashboardWorkspaceId: "ws-legacy-overview",
 };
 
 describe("dashboardContributionId backfill", () => {
@@ -38,13 +38,13 @@ describe("dashboardContributionId backfill", () => {
     invokeMock.mockImplementation(async () => undefined);
     workspaces.set([]);
     activeWorkspaceIdx.set(-1);
-    workspaceGroupsStore.set([GROUP]);
+    workspacesStore.set([WORKSPACE]);
   });
 
   it("stamps 'group' on a legacy Overview dashboard (preview → project-dashboard.md)", async () => {
     workspaces.set([
       {
-        id: "ws-legacy-group",
+        id: "ws-legacy-overview",
         name: "Dashboard",
         splitRoot: {
           type: "pane",
@@ -63,46 +63,14 @@ describe("dashboardContributionId backfill", () => {
           },
         },
         activePaneId: "p1",
-        metadata: { isDashboard: true, groupId: "g1" },
+        metadata: { isDashboard: true, parentWorkspaceId: "g1" },
       } as never,
     ]);
 
-    await reconcileGroupDashboards();
+    await reconcileWorkspaceDashboards();
 
     const md = get(workspaces)[0]!.metadata;
     expect(md.dashboardContributionId).toBe("group");
-  });
-
-  it("stamps 'agentic' on a legacy Agentic dashboard (preview → agentic-dashboard.md)", async () => {
-    workspaces.set([
-      {
-        id: "ws-legacy-agentic",
-        name: "Agents",
-        splitRoot: {
-          type: "pane",
-          pane: {
-            id: "p2",
-            surfaces: [
-              {
-                kind: "preview",
-                id: "s2",
-                title: "Agents",
-                path: "/tmp/repo/.gnar-term/agentic-dashboard.md",
-                hasUnread: false,
-              },
-            ],
-            activeSurfaceId: "s2",
-          },
-        },
-        activePaneId: "p2",
-        metadata: { isDashboard: true, groupId: "g1" },
-      } as never,
-    ]);
-
-    await reconcileGroupDashboards();
-
-    const md = get(workspaces)[0]!.metadata;
-    expect(md.dashboardContributionId).toBe("agentic");
   });
 
   it("leaves already-stamped workspaces alone", async () => {
@@ -129,13 +97,13 @@ describe("dashboardContributionId backfill", () => {
         activePaneId: "p3",
         metadata: {
           isDashboard: true,
-          groupId: "g1",
+          parentWorkspaceId: "g1",
           dashboardContributionId: "group",
         },
       } as never,
     ]);
 
-    await reconcileGroupDashboards();
+    await reconcileWorkspaceDashboards();
 
     const md = get(workspaces)[0]!.metadata;
     expect(md.dashboardContributionId).toBe("group");

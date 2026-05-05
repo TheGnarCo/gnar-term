@@ -1,6 +1,8 @@
 <script lang="ts">
   import type { ThemeDef } from "../theme-data";
   import { shortcutHintsActive } from "../stores/shortcut-hints";
+  import CloseIcon from "../icons/CloseIcon.svelte";
+  import LockIcon from "../icons/LockIcon.svelte";
 
   export let theme: ThemeDef;
   export let visible: boolean = false;
@@ -50,13 +52,11 @@
   let closeButtonHovered = false;
   // shortcutLabel takes priority over close/lock when meta-hold is active.
   $: showShortcut = !!shortcutLabel && $shortcutHintsActive;
-  $: showClose = onClose != null && !locked && !showShortcut;
+  $: showClose = onClose != null && visible && !locked && !showShortcut;
   $: showLock = locked && !showShortcut;
 
   $: effectiveColor = railColor ?? theme.fgDim;
   $: effectiveDotColor = dotColor ?? effectiveColor;
-  $: showDots = visible || alwaysShowDots;
-  $: showRailStripe = !showDots;
 
   // Frit pattern stays identical across rest and hover states — same
   // dot size, softness, color, and geometry. The fade mask is removed
@@ -67,6 +67,8 @@
   $: fritBackgroundSize = "5px 5px";
   $: fritBackgroundPosition = "0 0, 2.5px 2.5px";
   $: fritBackgroundRepeat = "repeat";
+  $: showDots = visible && alwaysShowDots;
+  $: showRailStripe = !visible;
 </script>
 
 <div
@@ -77,7 +79,7 @@
     flex-shrink: 0;
     align-self: stretch;
     position: relative;
-    width: 14px;
+    width: 8px;
     cursor: {locked ? 'not-allowed' : visible ? 'grab' : 'default'};
     overflow: hidden;
   "
@@ -91,7 +93,7 @@
       style="
         position: absolute;
         left: 0; top: 0; bottom: 0;
-        width: 6px;
+        width: 8px;
         background: {effectiveColor};
         opacity: {railOpacity};
       "
@@ -106,7 +108,8 @@
     <div
       style="
         position: absolute;
-        inset: 0;
+        left: 0; top: 0; bottom: 0;
+        width: 8px;
         pointer-events: none;
         background-image: {fritBackgroundImage};
         background-size: {fritBackgroundSize};
@@ -153,24 +156,22 @@
         align-items: center;
         justify-content: center;
         color: {closeButtonHovered ? theme.danger : effectiveColor};
-        background: {closeButtonHovered
-        ? (theme.bgHighlight ?? 'rgba(255,255,255,0.08)')
-        : (theme.bgSurface ?? theme.bg)};
-        border: 1px solid {closeButtonHovered ? theme.danger : effectiveColor};
+        background: transparent;
+        border: none;
         border-radius: 3px;
-        font-size: 10px;
         cursor: pointer;
         padding: 0;
         line-height: 1;
         -webkit-app-region: no-drag;
-        opacity: {visible ? 1 : 0.35};
-        transition: background 0.1s, color 0.1s, border-color 0.1s, opacity 0.15s;
+        transition: background 0.1s, color 0.1s, border-color 0.1s;
       "
       on:mousedown|stopPropagation
       on:click|stopPropagation={onClose}
       on:mouseenter={() => (closeButtonHovered = true)}
-      on:mouseleave={() => (closeButtonHovered = false)}>×</button
+      on:mouseleave={() => (closeButtonHovered = false)}
     >
+      <CloseIcon width="9" height="9" />
+    </button>
   {/if}
   {#if showLock}
     <!-- Lock chip: visual-only indicator that the workspace is locked.
@@ -188,29 +189,13 @@
         align-items: center;
         justify-content: center;
         color: {effectiveColor};
-        background: {theme.bgSurface ?? theme.bg};
-        border: 1px solid {effectiveColor};
+        background: transparent;
+        border: none;
         border-radius: 3px;
         pointer-events: none;
-        opacity: {visible ? 1 : 0.35};
-        transition: opacity 0.15s;
       "
     >
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="9"
-        height="9"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2.5"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
-        <title>Workspace locked</title>
-        <rect width="14" height="10" x="5" y="11" rx="2" />
-        <path d="M8 11V7a4 4 0 0 1 8 0v4" />
-      </svg>
+      <LockIcon width="9" height="9" />
     </div>
   {/if}
 </div>

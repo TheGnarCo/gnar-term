@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
    * DiffPrStatusLine — compact diff + PR statusline for container row
-   * banners (workspace groups). Renders two optional rows beneath
+   * banners (workspaces). Renders two optional rows beneath
    * PathStatusLine:
    *
    *   1. Diff row — [diff icon] M3 A1 D1   (only when working tree is dirty)

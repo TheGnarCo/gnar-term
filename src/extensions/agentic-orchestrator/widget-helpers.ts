@@ -13,10 +13,7 @@ import {
   type DashboardScope,
 } from "../../lib/contexts/dashboard-host";
 import { workspaces } from "../../lib/stores/workspace";
-import {
-  getWorkspaceGroup,
-  workspaceGroupsStore,
-} from "../../lib/stores/workspace-groups";
+import { getWorkspace, workspacesStore } from "../../lib/stores/workspaces";
 import { claimedWorkspaceIds } from "../../lib/services/claimed-workspace-registry";
 import type {
   SpawnedByMarker,
@@ -42,7 +39,7 @@ export const SPAWN_AGENT_OPTIONS: Array<{ id: SpawnAgentType; label: string }> =
  * immediate re-fetch (force=true bypasses this throttle).
  *
  * Sized to keep us comfortably under GitHub's rate limits even with
- * many group dashboards mounted at once: with 5 group dashboards × 2
+ * many workspace dashboards mounted at once: with 5 workspace dashboards × 2
  * widgets each, a 5-minute cycle is 120 calls/hour total — well under
  * the 5000/hour authenticated REST limit and the GraphQL points cap.
  * 30s polling (the previous value) put us at ~1200 calls/hour for the
@@ -85,35 +82,38 @@ export function throttle<TArgs extends unknown[]>(
 }
 
 /**
- * Shared module-level derived store: maps each groupId to the set of
+ * Shared module-level derived store: maps each parentWorkspaceId to the set of
  * workspace IDs that belong to it under the §5.3 criteria (metadata,
  * explicit membership, and CWD-prefix fallback for unclaimed workspaces).
  *
- * Computed once whenever workspaces / groups / claimed-ids change — all
+ * Computed once whenever workspaces / workspaces / claimed-ids change — all
  * mounted dashboard widgets share this single computation instead of each
- * widget independently re-walking every workspace's surfaces on every
+ * widget independently re-walking every child workspace's surfaces on every
  * emission (F32 perf fix).
  */
-const _groupWorkspaceIndex = derived(
-  [workspaces, workspaceGroupsStore, claimedWorkspaceIds],
-  ([$workspaces, $groups, $claimedIds]): Map<string, Set<string>> => {
+const _workspaceChildIndex = derived(
+  [workspaces, workspacesStore, claimedWorkspaceIds],
+  ([$workspaces, $primaryWorkspaces, $claimedIds]): Map<
+    string,
+    Set<string>
+  > => {
     const index = new Map<string, Set<string>>();
-    for (const group of $groups) {
-      const base = group.path ? group.path.replace(/\/+$/, "") : "";
+    for (const workspace of $primaryWorkspaces) {
+      const base = workspace.path ? workspace.path.replace(/\/+$/, "") : "";
       const prefix = base ? `${base}/` : "";
-      const members = new Set<string>(group.workspaceIds ?? []);
+      const members = new Set<string>(workspace.branchedWorkspaceIds ?? []);
       for (const ws of $workspaces) {
         const md = ws.metadata as Record<string, unknown> | undefined;
-        // Criterion 1: workspace was created with this group's id in metadata.
-        if (md?.groupId === group.id) {
+        // Criterion 1: child workspace was created with this workspace's id in metadata.
+        if (md?.parentWorkspaceId === workspace.id) {
           members.add(ws.id);
           continue;
         }
-        // Criterion 2: workspace is explicitly listed in group.workspaceIds
+        // Criterion 2: child workspace is explicitly listed in workspace.branchedWorkspaceIds
         // — already in `members` from the initial Set construction above.
         if (members.has(ws.id)) continue;
         // Criterion 3: CWD fallback — only for unclaimed workspaces so we
-        // don't double-count workspaces already owned by another group/owner.
+        // don't double-count workspaces already owned by another parent workspace.
         if (!base || $claimedIds.has(ws.id)) continue;
         for (const surface of getAllSurfaces(ws)) {
           if (
@@ -126,7 +126,7 @@ const _groupWorkspaceIndex = derived(
           }
         }
       }
-      index.set(group.id, members);
+      index.set(workspace.id, members);
     }
     return index;
   },
@@ -137,17 +137,18 @@ const _groupWorkspaceIndex = derived(
  * DashboardHostContext. Implements the §5.3 scope rules:
  *   - no host / "none" scope → empty list
  *   - "global" scope         → every detected agent
- *   - "group" scope          → agents whose workspace satisfies any of:
- *        1. `metadata.groupId === groupId` (set by workspace creation)
- *        2. workspace id is in `group.workspaceIds` (set by drag-drop /
- *           promote-to-group flows that don't stamp metadata.groupId)
- *        3. workspace is unclaimed AND its first terminal CWD sits under
- *           the group's `path` prefix (catches native agents in terminals
- *           that were never explicitly added to the group)
+ *   - "workspace" scope      → agents whose child workspace satisfies any of:
+ *        1. `metadata.parentWorkspaceId === parentWorkspaceId` (set by child-workspace creation)
+ *        2. child workspace id is in `workspace.branchedWorkspaceIds` (set by drag-drop /
+ *           promote-to-workspace flows that don't stamp metadata.parentWorkspaceId)
+ *        3. child workspace is unclaimed AND its first terminal CWD sits under
+ *           the parent workspace's `path` prefix (catches native agents in terminals
+ *           that were never explicitly added to the parent workspace)
  *
  * Criteria 1 and 2 are checked before the claimed-workspace guard because
- * both represent explicit group membership — a workspace that belongs to
- * this group should appear even if it has been claimed by "core".
+ * both represent explicit workspace membership — a child workspace that
+ * belongs to this parent should appear even if it has been claimed by
+ * "core".
  *
  * Prefix containment uses a trailing-slash suffix so `/work/one` never
  * captures `/work/one-other` by accident.
@@ -163,11 +164,11 @@ export function hostScopedAgentsStore(
   if (scope.kind === "global") {
     return derived(api.agents, (agents) => agents);
   }
-  // "group" scope: each widget's derived store filters api.agents using the
-  // shared _groupWorkspaceIndex (O(1) lookup per agent) rather than walking
+  // "workspace" scope: each widget's derived store filters api.agents using the
+  // shared _workspaceChildIndex (O(1) lookup per agent) rather than walking
   // all workspaces × surfaces independently.
-  return derived([api.agents, _groupWorkspaceIndex], ([$agents, $index]) => {
-    const members = $index.get(scope.groupId);
+  return derived([api.agents, _workspaceChildIndex], ([$agents, $index]) => {
+    const members = $index.get(scope.parentWorkspaceId);
     if (!members) return [];
     return $agents.filter((a) => members.has(a.workspaceId));
   });
@@ -279,7 +280,7 @@ export type SpawnTarget =
       ok: true;
       repoPath: string;
       spawnedBy: SpawnedByMarker;
-      groupId?: string;
+      parentWorkspaceId?: string;
     }
   | { ok: false; error: string };
 
@@ -287,14 +288,17 @@ export function resolveSpawnTarget(
   scope: DashboardScope,
   repoPathProp: string | undefined,
 ): SpawnTarget {
-  if (scope.kind === "group") {
-    const group = getWorkspaceGroup(scope.groupId);
-    if (!group) return { ok: false, error: "Workspace Group not found" };
+  if (scope.kind === "workspace") {
+    const workspace = getWorkspace(scope.parentWorkspaceId);
+    if (!workspace) return { ok: false, error: "Workspace not found" };
     return {
       ok: true,
-      repoPath: group.path,
-      spawnedBy: { kind: "group", groupId: scope.groupId },
-      groupId: scope.groupId,
+      repoPath: workspace.path,
+      spawnedBy: {
+        kind: "workspace",
+        parentWorkspaceId: scope.parentWorkspaceId,
+      },
+      parentWorkspaceId: scope.parentWorkspaceId,
     };
   }
   if (scope.kind === "global") {
@@ -318,6 +322,7 @@ export function resolveSpawnTarget(
 export function scopeAttrs(scope: DashboardScope): Record<string, string> {
   return {
     "data-scope-kind": scope.kind,
-    "data-scope-group-id": scope.kind === "group" ? scope.groupId : "",
+    "data-scope-workspace-id":
+      scope.kind === "workspace" ? scope.parentWorkspaceId : "",
   };
 }

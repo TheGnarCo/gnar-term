@@ -88,6 +88,14 @@ vi.mock("../lib/services/service-helpers", () => ({
   getCwdForSurface: vi.fn().mockResolvedValue(undefined),
   registerPtyForSurface: vi.fn(),
   lookupTerminalByPtyId: vi.fn().mockReturnValue(null),
+  wsMeta: (
+    ws:
+      | {
+          extensionData?: Record<string, unknown>;
+          metadata?: Record<string, unknown>;
+        }
+      | undefined,
+  ) => ws?.extensionData ?? ws?.metadata ?? {},
 }));
 
 vi.stubGlobal("localStorage", {
@@ -198,8 +206,12 @@ describe("PTY spawn failure: surface cleanup via TerminalSurface contract", () =
     expect(
       get(workspaces)[0]
         ? get(workspaces)[0]!.splitRoot.type === "pane" &&
-            (get(workspaces)[0]!.splitRoot as { type: "pane"; pane: Pane }).pane
-              .surfaces.length
+            (
+              get(workspaces)[0]!.splitRoot as {
+                type: "pane";
+                pane: Pane;
+              }
+            ).pane.surfaces.length
         : 0,
     ).toBe(0);
   });

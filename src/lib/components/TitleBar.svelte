@@ -1,17 +1,18 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { theme } from "../stores/theme";
-  import {
-    isFullscreen,
-    primarySidebarVisible,
-    secondarySidebarVisible,
-  } from "../stores/ui";
+  import { isFullscreen, sidebarVisible } from "../stores/ui";
   import { spawnOrNavigate } from "../services/dashboard-workspace-service";
   import { isMac, modLabel, shiftModLabel } from "../terminal-service";
   import { shortcutHint } from "../actions/shortcut-hint";
-  import { isDebugBuild } from "../services/service-helpers";
+  import { isDebugBuild, wsMeta } from "../services/service-helpers";
   import { titleBarButtonStore } from "../services/titlebar-button-registry";
   import TitleBarContributedButton from "./TitleBarContributedButton.svelte";
+  import { runCommandById } from "../services/command-registry";
+  import { activeWorkspace } from "../stores/workspace";
+  import { workspacesStore } from "../stores/workspaces";
+  import { contrastColor } from "../utils/contrast";
+  import { resolveWorkspaceColor } from "../theme-data";
 
   // Single source of truth: cfg!(debug_assertions) from Rust, exposed via the
   // is_debug_build command. True for `tauri dev` and `tauri build --debug`,
@@ -22,12 +23,7 @@
     isDev = await isDebugBuild();
   });
 
-  const DEV_BG = "#C8900A";
-  const DEV_FG = "#1C0F00";
-
-  $: bg = isDev ? DEV_BG : $theme.bg;
-  $: fg = isDev ? DEV_FG : $theme.fgDim;
-  $: fgActive = isDev ? DEV_FG : $theme.fg;
+  const DEV_ACCENT = "#C8900A";
 
   let btnStyle = "";
   $: btnStyle = `
@@ -42,8 +38,44 @@
   // it sits to the left of the TitleBar and absorbs that space. When it's
   // hidden (and we're not fullscreen), the TitleBar starts at x=0, so push
   // its first button well past the traffic-light cluster.
-  $: leftPadding =
-    !$primarySidebarVisible && isMac && !$isFullscreen ? "84px" : "8px";
+  $: leftPadding = !$sidebarVisible && isMac && !$isFullscreen ? "84px" : "8px";
+  $: parentWorkspaceId = $activeWorkspace
+    ? wsMeta($activeWorkspace).parentWorkspaceId
+    : null;
+  $: parentWorkspace = parentWorkspaceId
+    ? ($workspacesStore.find((w) => w.id === parentWorkspaceId) ?? null)
+    : null;
+  $: wsColor = parentWorkspace?.color ?? null;
+  $: resolvedWsColor = wsColor ? resolveWorkspaceColor(wsColor, $theme) : null;
+
+  // Full-bar color derived from the active workspace's drag-handle color.
+  // Icons and text always contrast against this background.
+  $: barBg = resolvedWsColor ?? $theme.bg;
+  $: barFg = resolvedWsColor ? contrastColor(resolvedWsColor) : $theme.fg;
+  $: barFgDim = resolvedWsColor
+    ? barFg === "#000"
+      ? "rgba(0,0,0,0.55)"
+      : "rgba(255,255,255,0.55)"
+    : $theme.fgDim;
+  $: barBorder = resolvedWsColor
+    ? barFg === "#000"
+      ? "rgba(0,0,0,0.18)"
+      : "rgba(255,255,255,0.12)"
+    : $theme.border;
+  $: devRing = isDev ? `inset 0 0 0 8px ${DEV_ACCENT}` : "none";
+
+  // Derive workspace type for the title context suffix
+  $: wsTypeSuffix = (() => {
+    if (!$activeWorkspace) return null;
+    const meta = wsMeta($activeWorkspace);
+    if (meta.isDashboard) return "Dashboard";
+    if (meta.worktreePath) return meta.branch ?? "Branch";
+    return "Workspace";
+  })();
+
+  $: titleText = parentWorkspace
+    ? `${parentWorkspace.name} – ${wsTypeSuffix}`
+    : ($activeWorkspace?.name ?? null);
 </script>
 
 <div
@@ -51,18 +83,18 @@
   style="
     height: 38px; flex-shrink: 0; display: flex; align-items: center;
     padding: 0 8px 0 {leftPadding}; -webkit-app-region: drag;
-    background: {bg}; border-bottom: 1px solid {isDev ? DEV_FG : $theme.border};
+    background: {barBg}; border-bottom: 1px solid {barBorder}; box-shadow: {devRing};
   "
 >
   <button
-    style="{btnStyle} color: {$primarySidebarVisible ? fgActive : fg};"
-    title="Toggle Primary Sidebar ({isMac ? modLabel : shiftModLabel}B)"
-    aria-label="Toggle Primary Sidebar"
+    style="{btnStyle} color: {$sidebarVisible ? barFg : barFgDim};"
+    title="Toggle Sidebar ({isMac ? modLabel : shiftModLabel}B)"
+    aria-label="Toggle Sidebar"
     use:shortcutHint={{
       label: isMac ? `${modLabel}B` : `${shiftModLabel}B`,
       placement: "below",
     }}
-    on:click={() => primarySidebarVisible.update((v) => !v)}
+    on:click={() => sidebarVisible.update((v) => !v)}
   >
     <svg
       width="16"
@@ -81,22 +113,54 @@
   </button>
 
   <div
-    style="flex: 1; display: flex; justify-content: center; pointer-events: none;"
+    style="flex: 1; display: flex; justify-content: center; align-items: center; pointer-events: none;"
   >
-    <span
-      style="
-      font-size: 11px; font-weight: 600; letter-spacing: 1.5px;
-      color: {fg};
-    ">{isDev ? "GNARTERM (DEV)" : "GNARTERM"}</span
-    >
+    {#if $activeWorkspace && titleText}
+      <span class="title-ws" style="color: {barFg};">{titleText}</span>
+    {:else}
+      <span class="title-ws" style="color: {barFgDim};"
+        >{isDev ? "GNARTERM (DEV)" : "GNARTERM"}</span
+      >
+    {/if}
   </div>
 
   {#each $titleBarButtonStore as btn (btn.id)}
-    <TitleBarContributedButton button={btn} {btnStyle} {fg} {fgActive} />
+    <TitleBarContributedButton
+      button={btn}
+      {btnStyle}
+      fg={barFgDim}
+      fgActive={barFg}
+    />
   {/each}
 
   <button
-    style="{btnStyle} color: {fg};"
+    style="{btnStyle} color: {barFgDim};"
+    title="Keyboard Shortcuts ({isMac ? '⌘/' : 'Ctrl+/'})"
+    aria-label="Keyboard Shortcuts"
+    use:shortcutHint={{ label: isMac ? "⌘/" : "Ctrl+/", placement: "below" }}
+    on:click={() => runCommandById("core.show-keyboard-shortcuts")}
+  >
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.5"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      ><path d="M5.5 5.5 a2.5 2.5 0 1 1 3.5 2.3 c-1 0.5 -1 1.2 -1 2.2" /><circle
+        cx="8"
+        cy="12.5"
+        r="0.6"
+        fill="currentColor"
+        stroke="none"
+      /></svg
+    >
+  </button>
+
+  <button
+    style="{btnStyle} color: {barFgDim};"
     title="Settings ({modLabel},)"
     aria-label="Settings"
     use:shortcutHint={{ label: isMac ? "⌘," : "Ctrl+,", placement: "below" }}
@@ -114,26 +178,16 @@
       /><circle cx="8" cy="8" r="2" /></svg
     >
   </button>
-
-  <button
-    style="{btnStyle} color: {$secondarySidebarVisible ? fgActive : fg};"
-    title="Toggle Secondary Sidebar"
-    aria-label="Toggle Secondary Sidebar"
-    on:click={() => secondarySidebarVisible.update((v) => !v)}
-  >
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.5"
-      ><rect x="1" y="2" width="14" height="12" rx="1.5" /><line
-        x1="10.5"
-        y1="2"
-        x2="10.5"
-        y2="14"
-      /></svg
-    >
-  </button>
 </div>
+
+<style>
+  .title-ws {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 240px;
+  }
+</style>

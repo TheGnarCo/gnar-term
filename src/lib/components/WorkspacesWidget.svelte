@@ -1,13 +1,13 @@
 <script lang="ts">
   import { workspaces } from "../stores/workspace";
-  import { workspaceGroupsStore } from "../stores/workspace-groups";
+  import { workspacesStore } from "../stores/workspaces";
   import { getDashboardContribution } from "../services/dashboard-contribution-registry";
   import {
     getDashboardHost,
     deriveDashboardScope,
   } from "../contexts/dashboard-host";
-  import { switchWorkspace } from "../services/workspace-service";
-  import { resolveGroupColor } from "../theme-data";
+  import { switchWorkspace } from "../services/workspace-runtime-service";
+  import { resolveWorkspaceColor } from "../theme-data";
   import { theme } from "../stores/theme";
   import DashboardTileIcon from "./DashboardTileIcon.svelte";
   import GridIcon from "../icons/GridIcon.svelte";
@@ -16,25 +16,28 @@
   const host = getDashboardHost();
   const scope = deriveDashboardScope(host);
 
-  $: groupId = scope.kind === "group" ? scope.groupId : null;
+  $: parentWorkspaceId =
+    scope.kind === "workspace" ? scope.parentWorkspaceId : null;
 
-  $: group = groupId
-    ? ($workspaceGroupsStore.find((g) => g.id === groupId) ?? null)
+  $: parentWorkspace = parentWorkspaceId
+    ? ($workspacesStore.find((w) => w.id === parentWorkspaceId) ?? null)
     : null;
 
-  $: groupWs = groupId
-    ? $workspaces.filter((ws) => wsMeta(ws).groupId === groupId)
+  $: workspaceWs = parentWorkspaceId
+    ? $workspaces.filter(
+        (ws) => wsMeta(ws).parentWorkspaceId === parentWorkspaceId,
+      )
     : [];
 
-  $: dashboardCards = groupWs.filter((ws) => {
+  $: dashboardCards = workspaceWs.filter((ws) => {
     const md = wsMeta(ws);
     return md.isDashboard === true && md.dashboardContributionId !== "group";
   });
 
-  $: workspaceRows = groupWs.filter((ws) => !wsMeta(ws).isDashboard);
+  $: workspaceRows = workspaceWs.filter((ws) => !wsMeta(ws).isDashboard);
 
-  $: groupColor = group
-    ? resolveGroupColor(group.color, $theme)
+  $: workspaceColor = parentWorkspace
+    ? resolveWorkspaceColor(parentWorkspace.color, $theme)
     : ($theme.accent ?? "#888");
 
   function navigate(wsId: string): void {
@@ -45,26 +48,26 @@
   function getContribInfo(ws: import("../types").Workspace): {
     icon: unknown;
     label: string;
-    groupPath: string | undefined;
+    workspacePath: string | undefined;
   } {
     const md = wsMeta(ws);
     const contribution = md.dashboardContributionId
       ? getDashboardContribution(md.dashboardContributionId)
       : undefined;
-    const tileGroupPath = md.groupId
-      ? $workspaceGroupsStore.find((g) => g.id === md.groupId)?.path
+    const tileWorkspacePath = md.parentWorkspaceId
+      ? $workspacesStore.find((w) => w.id === md.parentWorkspaceId)?.path
       : undefined;
     return {
       icon: contribution?.icon ?? GridIcon,
       label: contribution?.label ?? ws.name,
-      groupPath: tileGroupPath,
+      workspacePath: tileWorkspacePath,
     };
   }
 
   $: hasContent = dashboardCards.length > 0 || workspaceRows.length > 0;
 </script>
 
-{#if groupId && hasContent}
+{#if parentWorkspaceId && hasContent}
   <div class="workspaces-widget" data-workspaces-widget>
     {#if dashboardCards.length > 0}
       <div class="dashboard-cards" data-dashboard-cards>
@@ -86,9 +89,9 @@
           >
             <DashboardTileIcon
               iconComponent={info.icon}
-              baseColor={groupColor}
+              baseColor={workspaceColor}
               contributionId={wsMeta(ws).dashboardContributionId}
-              groupPath={info.groupPath}
+              workspacePath={info.workspacePath}
             />
             <span class="dashboard-card-label">{info.label}</span>
           </div>
@@ -108,7 +111,7 @@
             on:click={() => navigate(ws.id)}
             style="color: {$theme.fg};"
           >
-            <span class="workspace-dot" style="background: {groupColor};"
+            <span class="workspace-dot" style="background: {workspaceColor};"
             ></span>
             <span class="workspace-name">{ws.name}</span>
           </div>

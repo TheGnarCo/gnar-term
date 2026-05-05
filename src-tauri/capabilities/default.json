@@ -16,7 +16,10 @@
     "clipboard-manager:allow-write-image",
     "dialog:allow-open",
     "dialog:allow-ask",
+    "dialog:allow-message",
     "notification:default",
-    "updater:default"
+    "updater:default",
+    "process:default",
+    "process:allow-restart"
   ]
 }

@@ -7,6 +7,7 @@ import {
   activePane,
   activeSurface,
 } from "../stores/workspace";
+import { activeWorkspaceId } from "../stores/workspace";
 import { renamingSurfaceId } from "../stores/ui";
 import { createTerminalSurface } from "../terminal-service";
 import {
@@ -20,7 +21,7 @@ import {
   type PreviewSurface,
 } from "../types";
 import { removePane, splitPaneEmpty } from "./pane-service";
-import { closeWorkspace, schedulePersist } from "./workspace-service";
+import { closeWorkspace, schedulePersist } from "./workspace-runtime-service";
 import { findPreviewSurfaceByPath } from "./preview-surface-registry";
 import { safeFocus, getCwdForSurface } from "./service-helpers";
 import { eventBus } from "./event-bus";
@@ -295,7 +296,7 @@ export function focusSurfaceById(surfaceId: string): void {
   // Switch workspace if needed
   const currentIdx = get(activeWorkspaceIdx);
   if (currentIdx !== targetIdx) {
-    activeWorkspaceIdx.set(targetIdx);
+    activeWorkspaceId.set(targetWs.id);
     eventBus.emit({
       type: "workspace:activated",
       id: targetWs.id,
@@ -404,6 +405,14 @@ export function renameSurface(surfaceId: string, title: string): void {
         const s = pane.surfaces.find((s) => s.id === surfaceId);
         if (s) {
           s.title = title;
+          // Stamp the user's explicit choice on terminal surfaces so OSC
+          // 0/2 (title) and OSC 7 (cwd) escape sequences and agent
+          // detach restore won't clobber it. Non-terminal surfaces
+          // (preview, extension) don't receive escape-sequence titles,
+          // so the field is meaningless for them.
+          if (isTerminalSurface(s)) {
+            s.userDefinedTitle = title;
+          }
           return [...wsList];
         }
       }

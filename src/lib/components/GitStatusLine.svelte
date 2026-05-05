@@ -16,7 +16,7 @@
 
   $: currentWs = $workspaces.find((w) => w.id === workspaceId);
   $: workspaceMetadata = currentWs ? wsMeta(currentWs) : {};
-  $: isNested = Boolean(workspaceMetadata.groupId);
+  $: isChild = Boolean(workspaceMetadata.parentWorkspaceId);
   $: isWorktree = Boolean(workspaceMetadata.worktreePath);
   $: worktreeBranch = workspaceMetadata.branch;
 
@@ -49,27 +49,41 @@
   }
 
   $: topRowHasContent = Boolean(cwdItem || branchItem);
-  $: nestedRowHasContent =
-    Boolean(worktreeBranch) ||
-    (isActiveWorkspace && Boolean(worktreeDirtyItem));
 </script>
 
-{#if isNested}
-  <!-- Normal nested workspaces share a repo with their project — their
-       branch/dirty state duplicates the ProjectStatusLine shown on the
-       project row. Only worktree workspaces (unique branch + tree) get
-       their own inline git info. -->
-  {#if isWorktree && nestedRowHasContent}
+{#if isChild}
+  <!-- Child workspaces show git branch info (matching container row style).
+       Worktree workspaces show only their own branch, not the parent repo's branch. -->
+  {#if !isWorktree && branchItem}
     <div
-      style="padding: 0 12px 6px 6px; display: flex; align-items: center; gap: 6px; overflow: hidden; line-height: 1.2;"
+      style="display: flex; align-items: center; gap: 4px; overflow: hidden; line-height: 1.2;"
     >
-      {#if worktreeBranch}
+      <span
+        style="font-size: 11px; color: {fgMuted}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-flex; align-items: center; gap: 4px;"
+        title={branchItem.tooltip || branchItem.label}
+      >
         <span
-          style="font-size: 10px; color: {fgMuted}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
-          title={`worktree branch: ${worktreeBranch}`}>⌥ {worktreeBranch}</span
+          style="color: {accentColor ?? fgMuted}; opacity: 0.8; flex-shrink: 0;"
+          >⎇</span
         >
-      {/if}
-      {#if worktreeBranch && worktreeDirtyItem && isActiveWorkspace}
+        {branchItem.label}
+      </span>
+    </div>
+  {/if}
+  {#if isWorktree && worktreeBranch}
+    <div
+      style="display: flex; align-items: center; gap: 4px; overflow: hidden; line-height: 1.2;"
+    >
+      <span
+        style="font-size: 11px; color: {fgMuted}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-flex; align-items: center; gap: 4px;"
+        title={`worktree branch: ${worktreeBranch}`}
+        ><span
+          style="color: {accentColor ?? fgMuted}; opacity: 0.8; flex-shrink: 0;"
+          >⎇</span
+        >
+        {worktreeBranch}</span
+      >
+      {#if worktreeDirtyItem && isActiveWorkspace}
         <span
           aria-hidden="true"
           style="font-size: 10px; color: {fgMuted}; opacity: 0.4;">|</span

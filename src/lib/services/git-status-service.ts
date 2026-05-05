@@ -10,7 +10,7 @@
  * sub-second reactivity for actual git ops.
  *
  * PR/CI state was historically registered here under itemId `"pr"`; the
- * pill was retired in favor of the Group Dashboards' `gnar:prs` widget,
+ * pill was retired in favor of the Workspace Dashboards' `gnar:prs` widget,
  * which renders the full open-PR list with row actions instead of a
  * single per-workspace badge.
  */
@@ -23,7 +23,7 @@ import {
 } from "./status-registry";
 import { workspaces, activeWorkspace } from "../stores/workspace";
 import { getActiveCwd, getWorkspaceCwd, wsMeta } from "./service-helpers";
-import { getWorkspaceGroup } from "../stores/workspace-groups";
+import { getWorkspace } from "../stores/workspaces";
 
 export const GIT_STATUS_SOURCE = "git";
 
@@ -463,14 +463,14 @@ async function ensurePolling(wsId: string): Promise<void> {
       : await getWorkspaceCwd(wsId);
 
   if (!cwd) {
-    // Nested workspaces that haven't been activated yet have no pty CWD.
-    // Fall back to the group's root path so their diff status still
+    // Child workspaces that haven't been activated yet have no pty CWD.
+    // Fall back to the workspace's root path so their diff status still
     // shows the project's dirty state until they're first opened.
     const ws = get(workspaces).find((w) => w.id === wsId);
     if (ws) {
-      const groupId = wsMeta(ws).groupId;
-      if (typeof groupId === "string") {
-        cwd = getWorkspaceGroup(groupId)?.path;
+      const parentWorkspaceId = wsMeta(ws).parentWorkspaceId;
+      if (typeof parentWorkspaceId === "string") {
+        cwd = getWorkspace(parentWorkspaceId)?.path;
       }
     }
   }

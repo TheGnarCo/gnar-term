@@ -21,7 +21,7 @@ import {
 } from "../lib/services/surface-service";
 import type { Workspace } from "../lib/types";
 
-function makeWorkspace(surfaceId: string, title = "Tab"): Workspace {
+function makeChildWorkspace(surfaceId: string, title = "Tab"): Workspace {
   return {
     id: "ws-1",
     name: "Test",
@@ -45,6 +45,35 @@ function makeWorkspace(surfaceId: string, title = "Tab"): Workspace {
   };
 }
 
+function makeChildWorkspaceWithTerminal(
+  surfaceId: string,
+  title = "Terminal",
+): Workspace {
+  return {
+    id: "ws-1",
+    name: "Test",
+    activePaneId: "pane-1",
+    splitRoot: {
+      type: "pane",
+      pane: {
+        id: "pane-1",
+        surfaces: [
+          {
+            kind: "terminal",
+            id: surfaceId,
+            title,
+            hasUnread: false,
+            ptyId: 1,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            terminal: { dispose: () => {} } as any,
+          },
+        ],
+        activeSurfaceId: surfaceId,
+      },
+    },
+  };
+}
+
 describe("renameActiveSurface()", () => {
   beforeEach(() => {
     workspaces.set([]);
@@ -58,7 +87,7 @@ describe("renameActiveSurface()", () => {
   });
 
   it("sets renamingSurfaceId to the active surface id", () => {
-    workspaces.set([makeWorkspace("s-42")]);
+    workspaces.set([makeChildWorkspace("s-42")]);
     activeWorkspaceIdx.set(0);
     renameActiveSurface();
     expect(get(renamingSurfaceId)).toBe("s-42");
@@ -72,7 +101,7 @@ describe("renameSurface()", () => {
   });
 
   it("updates the surface title", () => {
-    workspaces.set([makeWorkspace("s-42", "Original")]);
+    workspaces.set([makeChildWorkspace("s-42", "Original")]);
     renameSurface("s-42", "Renamed");
     const pane =
       get(workspaces)[0].splitRoot.type === "pane"
@@ -82,13 +111,43 @@ describe("renameSurface()", () => {
   });
 
   it("is a no-op for unknown surface id", () => {
-    workspaces.set([makeWorkspace("s-42", "Original")]);
+    workspaces.set([makeChildWorkspace("s-42", "Original")]);
     renameSurface("unknown", "Changed");
     const pane =
       get(workspaces)[0].splitRoot.type === "pane"
         ? get(workspaces)[0].splitRoot.pane
         : null;
     expect(pane?.surfaces[0].title).toBe("Original");
+  });
+
+  it("stamps userDefinedTitle on terminal surfaces (Story 15)", () => {
+    workspaces.set([makeChildWorkspaceWithTerminal("s-term", "Original")]);
+    renameSurface("s-term", "MyName");
+    const pane =
+      get(workspaces)[0].splitRoot.type === "pane"
+        ? get(workspaces)[0].splitRoot.pane
+        : null;
+    const surface = pane?.surfaces[0];
+    expect(surface?.title).toBe("MyName");
+    expect(
+      surface?.kind === "terminal" ? surface.userDefinedTitle : undefined,
+    ).toBe("MyName");
+  });
+
+  it("does NOT stamp userDefinedTitle on non-terminal surfaces (Story 15)", () => {
+    workspaces.set([makeChildWorkspace("s-ext", "Original")]);
+    renameSurface("s-ext", "Changed");
+    const pane =
+      get(workspaces)[0].splitRoot.type === "pane"
+        ? get(workspaces)[0].splitRoot.pane
+        : null;
+    const surface = pane?.surfaces[0];
+    expect(surface?.title).toBe("Changed");
+    // userDefinedTitle is meaningful only for terminal surfaces (escape-seq target).
+    expect(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (surface as any)?.userDefinedTitle,
+    ).toBeUndefined();
   });
 });
 

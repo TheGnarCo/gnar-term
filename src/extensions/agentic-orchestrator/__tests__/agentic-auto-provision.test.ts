@@ -1,6 +1,6 @@
 /**
  * Agentic auto-provision (Story 4): on activate, every existing
- * workspace group gets an Agentic Dashboard workspace; on deactivate,
+ * workspace gets an Agentic Dashboard child workspace; on deactivate,
  * the provisioned workspaces are closed.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
@@ -39,7 +39,7 @@ import {
   resetDashboardContributions,
 } from "../../../lib/services/dashboard-contribution-registry";
 import { workspaces, activeWorkspaceIdx } from "../../../lib/stores/workspace";
-import { workspaceGroupsStore } from "../../../lib/stores/workspace-groups";
+import { workspacesStore } from "../../../lib/stores/workspaces";
 import {
   markRestored,
   resetRestoreSignal,
@@ -52,7 +52,7 @@ describe("agentic auto-provision", () => {
     resetDashboardContributions();
     workspaces.set([]);
     activeWorkspaceIdx.set(-1);
-    workspaceGroupsStore.set([]);
+    workspacesStore.set([]);
   });
 
   it("contribution advertises autoProvision + locked reason", async () => {
@@ -68,14 +68,14 @@ describe("agentic auto-provision", () => {
     expect(contribution?.icon).toBeDefined();
   });
 
-  it("provisions the Agentic Dashboard for every existing group on activate", async () => {
-    workspaceGroupsStore.set([
+  it("provisions the Agentic Dashboard for every existing workspace on activate", async () => {
+    workspacesStore.set([
       {
         id: "g1",
         name: "G1",
         path: "/tmp/g1",
         color: "blue",
-        workspaceIds: [],
+        branchedWorkspaceIds: [],
         isGit: true,
         createdAt: "2026-04-21T00:00:00.000Z",
       },
@@ -84,7 +84,7 @@ describe("agentic auto-provision", () => {
         name: "G2",
         path: "/tmp/g2",
         color: "green",
-        workspaceIds: [],
+        branchedWorkspaceIds: [],
         isGit: true,
         createdAt: "2026-04-21T00:00:00.000Z",
       },
@@ -105,13 +105,13 @@ describe("agentic auto-provision", () => {
     const forG1 = all.find((w) => {
       return (
         w.metadata?.dashboardContributionId === "agentic" &&
-        w.metadata?.groupId === "g1"
+        w.metadata?.parentWorkspaceId === "g1"
       );
     });
     const forG2 = all.find((w) => {
       return (
         w.metadata?.dashboardContributionId === "agentic" &&
-        w.metadata?.groupId === "g2"
+        w.metadata?.parentWorkspaceId === "g2"
       );
     });
     expect(forG1).toBeTruthy();
@@ -119,13 +119,13 @@ describe("agentic auto-provision", () => {
   });
 
   it("closes every agentic dashboard workspace on deactivate", async () => {
-    workspaceGroupsStore.set([
+    workspacesStore.set([
       {
         id: "g1",
         name: "G1",
         path: "/tmp/g1",
         color: "blue",
-        workspaceIds: [],
+        branchedWorkspaceIds: [],
         isGit: true,
         createdAt: "2026-04-21T00:00:00.000Z",
       },

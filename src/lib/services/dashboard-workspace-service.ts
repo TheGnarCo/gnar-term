@@ -1,8 +1,12 @@
 import { derived, get, type Readable } from "svelte/store";
 import type { Component } from "svelte";
 import { workspaces } from "../stores/workspace";
-import { createWorkspaceFromDef, switchWorkspace } from "./workspace-service";
+import {
+  createWorkspaceFromDef,
+  switchWorkspace,
+} from "./workspace-runtime-service";
 import { createRegistry } from "./create-registry";
+import { wsMeta } from "./service-helpers";
 
 interface DashboardWorkspaceEntry {
   id: string;
@@ -51,7 +55,7 @@ export async function spawnOrNavigate(id: string): Promise<void> {
 
   const wsList = get(workspaces);
   const existingIdx = wsList.findIndex(
-    (w) => w.metadata?.dashboardWorkspaceId === id,
+    (w) => wsMeta(w).dashboardWorkspaceId === id,
   );
 
   if (existingIdx >= 0) {

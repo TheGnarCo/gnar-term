@@ -13,11 +13,7 @@
   import { theme } from "../stores/theme";
   import { getAllSurfaces } from "../types";
   import { tabDragState } from "../services/tab-drag";
-  import {
-    reorderContext,
-    anyReorderActive,
-    metaPreviewActive,
-  } from "../stores/ui";
+  import { reorderContext, anyReorderActive } from "../stores/ui";
   import { createDragReorder } from "../actions/drag-reorder";
   import {
     detectWorkspacePaneDrop,
@@ -36,7 +32,7 @@
     renameWorkspace,
     reorderWorkspaces,
     toggleWorkspaceLock,
-  } from "../services/workspace-service";
+  } from "../services/workspace-runtime-service";
   import { get } from "svelte/store";
   import WorkspaceItem from "./WorkspaceItem.svelte";
   import DropGhost from "./DropGhost.svelte";
@@ -58,7 +54,7 @@
    * Optional per-workspace dashboard hint provider. When set, each rendered
    * WorkspaceItem receives the result as its `dashboardHint` prop — a small
    * clickable dashboard icon whose handler the caller owns. Used by
-   * AgentDashboardRow to navigate back to a nested workspace's owning
+   * AgentDashboardRow to navigate back to a child workspace's owning
    * dashboard without selecting the workspace.
    */
   export let dashboardHintFor:
@@ -105,6 +101,8 @@
 
   $: entries = allEntries.filter(({ ws }) => wsMeta(ws).isDashboard !== true);
 
+  $: isChild = scopeId !== null;
+
   let sourceIdx: number | null = null;
   let indicator: { idx: number; edge: "before" | "after" } | null = null;
   let active = false;
@@ -116,7 +114,7 @@
     containerSelector: ".workspace-list-view",
     canStart: () => !$anyReorderActive,
     ghostStyle: () => ({
-      background: $theme.bgFloat ?? $theme.bgSurface ?? "#111",
+      background: "transparent",
       border: `1px solid ${$theme.border ?? "transparent"}`,
     }),
     onDrop: (from, to) => {
@@ -170,7 +168,7 @@
       sourceHeight = s.sourceHeight;
       if (s.active && scopeId && containerBlockId) {
         reorderContext.set({
-          kind: "workspace",
+          kind: "child-workspace",
           scopeId,
           containerBlockId,
         });
@@ -211,22 +209,25 @@
 
   // --- Tab-drag overlay state ---
   $: tabDrag = $tabDragState;
-  $: tabDragToGroup =
-    tabDrag?.dropTarget?.kind === "new-workspace-in-group" &&
-    tabDrag.dropTarget.groupId === scopeId
+  $: tabDragToWorkspace =
+    tabDrag?.dropTarget?.kind === "new-child-workspace-in-workspace" &&
+    tabDrag.dropTarget.parentWorkspaceId === scopeId
       ? tabDrag.dropTarget
       : null;
-  $: effectiveActive = active || tabDragToGroup !== null || $metaPreviewActive;
+  $: effectiveActive = active || tabDragToWorkspace !== null;
   // null source idx → every row's idx !== null → all rows show sibling overlay
   $: effectiveSourceIdx = active ? sourceIdx : (null as number | null);
   $: effectiveIndicator = active
     ? indicator
-    : tabDragToGroup !== null
-      ? { idx: tabDragToGroup.insertGlobalIdx, edge: tabDragToGroup.insertEdge }
+    : tabDragToWorkspace !== null
+      ? {
+          idx: tabDragToWorkspace.insertGlobalIdx,
+          edge: tabDragToWorkspace.insertEdge,
+        }
       : (null as { idx: number; edge: "before" | "after" } | null);
   $: effectiveSourceHeight = active ? sourceHeight : 32;
   $: tabDragSurfaceLabel = (() => {
-    if (!tabDrag || !tabDragToGroup) return "";
+    if (!tabDrag || !tabDragToWorkspace) return "";
     const srcWs = $workspaces.find((w) => w.id === tabDrag!.sourceWorkspaceId);
     if (!srcWs) return "New Workspace";
     return (
@@ -239,25 +240,25 @@
 
   let itemRefs: Record<string, WorkspaceItem> = {};
 
-  // Nested workspaces share the same context menu surface as the root
+  // Child workspaces share the same context menu surface as the root
   // workspace list: Rename / (Promote) / Close. Rename drives the
   // underlying WorkspaceItem's inline rename via the bound ref; everything
   // else routes through the workspace service. Kept local to
   // WorkspaceListView so this shared component doesn't need parent
   // callbacks for each item.
-  function showNestedContextMenu(x: number, y: number, globalIdx: number) {
+  function showChildContextMenu(x: number, y: number, globalIdx: number) {
     const ws = $workspaces[globalIdx];
     if (!ws) return;
     const md = wsMeta(ws);
     const isDashboard = md.isDashboard === true;
-    const isInsideGroup = typeof md.groupId === "string";
+    const isInsideWorkspace = typeof md.parentWorkspaceId === "string";
     const isLocked = md.locked === true;
     const canPromoteCommand = get(commandStore).some(
-      (c) => c.id === "promote-workspace-to-group",
+      (c) => c.id === "promote-child-workspace",
     );
     const items = buildWorkspaceContextMenuItems({
       isDashboard,
-      isInsideGroup,
+      isInsideWorkspace,
       canPromoteCommand,
       workspaceCount: $workspaces.length,
       isLocked,
@@ -265,7 +266,7 @@
       onPromote: () => {
         switchWorkspace(globalIdx);
         const cmd = get(commandStore).find(
-          (c) => c.id === "promote-workspace-to-group",
+          (c) => c.id === "promote-child-workspace",
         );
         if (cmd) void cmd.action();
       },
@@ -305,12 +306,13 @@
             {accentColor}
             dashboardHint={dashboardHintFor?.(entry.ws)}
             {hideStatusBadges}
+            {isChild}
             onSelect={() => {
               if (!active) switchWorkspace(entry.idx);
             }}
             onClose={() => void confirmAndCloseWorkspace(entry.ws, entry.idx)}
             onRename={(name) => renameWorkspace(entry.idx, name)}
-            onContextMenu={(x, y) => showNestedContextMenu(x, y, entry.idx)}
+            onContextMenu={(x, y) => showChildContextMenu(x, y, entry.idx)}
             onGripMouseDown={(e) => startDrag(e, entry.idx)}
           />
           {#if isSibling}

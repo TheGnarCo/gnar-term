@@ -32,27 +32,30 @@ import {
 import { get } from "svelte/store";
 import { xtermTheme } from "./stores/theme";
 import { workspaces, activeWorkspaceIdx } from "./stores/workspace";
+import { activeWorkspaceId } from "./stores/workspace";
 import { contextMenu, pendingAction } from "./stores/ui";
 import {
   getRegisteredFileExtensions,
   getContextMenuItemsForFile,
 } from "./services/context-menu-item-registry";
 import type { TerminalSurface, Pane, Workspace } from "./types";
-import {
-  uid,
-  getAllSurfaces,
-  getAllPanes,
-  isTerminalSurface,
-  findParentSplit,
-  replaceNodeInTree,
-} from "./types";
+import { uid, getAllSurfaces, getAllPanes, isTerminalSurface } from "./types";
 import type { MenuItem } from "./context-menu-types";
 import "@xterm/xterm/css/xterm.css";
 
-/** Platform detection — used for Cmd (macOS) vs Ctrl (Linux/Windows) shortcuts. */
+/**
+ * Platform detection — used for Cmd (macOS) vs Ctrl (Linux/Windows) shortcuts.
+ *
+ * `navigator.platform` is deprecated; modern browsers prefer
+ * `navigator.userAgentData.platform` or the userAgent string. We
+ * belt-and-suspenders both: the userAgent fallback covers WebKitGTK /
+ * future engines that drop `platform`, and the `platform` check covers
+ * older runtimes whose userAgent does not literally contain "Mac".
+ */
 export const isMac =
   typeof navigator !== "undefined" &&
-  navigator.platform.toUpperCase().includes("MAC");
+  (navigator.userAgent.includes("Mac") ||
+    navigator.platform.toUpperCase().includes("MAC"));
 
 // Per-surface PTY-ready signal. connectPty() resolves the deferred once the
 // Rust spawn_pty call returns; waitForPtyReady() awaits it instead of polling
@@ -459,7 +462,7 @@ export async function teardownListeners(): Promise<void> {
   }
 }
 
-function handlePtyExit(pty_id: number): void {
+function handlePtyExit(pty_id: number, exit_code: number | null = null): void {
   // pty-exit arrives via emit while chunks arrive via Channel — different
   // transports, so a trailing chunk may already be in the per-pty buffer.
   // Flush it synchronously to the surface's terminal before we tear down
@@ -484,6 +487,7 @@ function handlePtyExit(pty_id: number): void {
   ptyPaused.delete(pty_id);
   ptyHasOutput.delete(pty_id);
   firstOutputListeners.delete(pty_id);
+  osc7ReceivedPtys.delete(pty_id);
 
   // Remove the surface from its pane, and collapse empty panes
   workspaces.update((wsList) => {
@@ -493,42 +497,20 @@ function handlePtyExit(pty_id: number): void {
           (s) => isTerminalSurface(s) && s.ptyId === pty_id,
         );
         if (idx >= 0) {
+          const exiting = pane.surfaces[idx] as TerminalSurface;
+          const { definedCommand, cwd } = exiting;
           pane.surfaces.splice(idx, 1);
           if (pane.surfaces.length > 0) {
             pane.activeSurfaceId =
               pane.surfaces[Math.min(idx, pane.surfaces.length - 1)]!.id;
           } else {
-            // Pane is empty — collapse it from the split tree
+            // Pane is empty — show relaunch prompt instead of collapsing
             pane.activeSurfaceId = null;
-            pane.resizeObserver?.disconnect();
-            if (
-              ws.splitRoot.type === "pane" &&
-              ws.splitRoot.pane.id === pane.id
-            ) {
-              // This was the only pane in the workspace — remove the
-              // workspace. Users are allowed to close all workspaces;
-              // App.svelte renders an Empty Surface when the list is
-              // empty, so we don't auto-create a default.
-              const wsIdx = wsList.indexOf(ws);
-              wsList.splice(wsIdx, 1);
-              const currentIdx = get(activeWorkspaceIdx);
-              if (currentIdx >= wsList.length) {
-                activeWorkspaceIdx.set(wsList.length - 1);
-              }
-              return wsList;
-            }
-            // Find parent split and collapse it
-            const parentInfo = findParentSplit(ws.splitRoot, pane.id);
-            if (parentInfo && parentInfo.parent.type === "split") {
-              const sibling =
-                parentInfo.parent.children[parentInfo.index === 0 ? 1 : 0];
-              if (ws.splitRoot === parentInfo.parent) {
-                ws.splitRoot = sibling;
-              } else {
-                replaceNodeInTree(ws.splitRoot, parentInfo.parent, sibling);
-              }
-              ws.activePaneId = getAllPanes(ws.splitRoot)[0]?.id ?? null;
-            }
+            pane.exitedSurface = {
+              code: exit_code ?? 0,
+              definedCommand,
+              cwd,
+            };
           }
           return wsList;
         }
@@ -582,6 +564,11 @@ function applyPtyTitle(pty_id: number, title: string) {
     for (const ws of wsList) {
       for (const s of getAllSurfaces(ws)) {
         if (isTerminalSurface(s) && s.ptyId === pty_id) {
+          // A user-set rename wins over OSC 0/2 escape-sequence updates.
+          // Without this guard, a long-running shell that re-emits its
+          // title on every prompt (zsh / bash / starship) would clobber
+          // the explicit name the user assigned.
+          if (s.userDefinedTitle) return wsList;
           if (s.title !== title) {
             changed = { id: s.id, oldTitle: s.title, newTitle: title };
             s.title = title;
@@ -644,9 +631,12 @@ export async function setupListeners() {
     window.addEventListener("keydown", _keydownHandler, { capture: true });
   }
   _unlisteners.push(
-    await listen<{ pty_id: number }>("pty-exit", (event) => {
-      handlePtyExit(event.payload.pty_id);
-    }),
+    await listen<{ pty_id: number; exit_code?: number | null }>(
+      "pty-exit",
+      (event) => {
+        handlePtyExit(event.payload.pty_id, event.payload.exit_code ?? null);
+      },
+    ),
   );
 
   _unlisteners.push(
@@ -675,8 +665,15 @@ const pendingRunningTitles = new Map<number, ReturnType<typeof setTimeout>>();
 // For shells that don't emit OSC 7, poll get_pty_cwd periodically.
 // Uses get_all_pty_cwds to batch all PTYs into a single IPC round-trip,
 // then applies a single workspaces.update() only when at least one cwd changed.
+//
+// `osc7ReceivedPtys` records PTYs that have ever delivered an OSC 7
+// sequence — once a shell proves it speaks OSC 7 we can skip it on every
+// subsequent poll tick. The polling fallback only matters for shells
+// that never emit OSC 7 at all. Cleaned up in `handlePtyExit` so the set
+// can never grow unbounded across long-running sessions.
 let cwdPollTimer: ReturnType<typeof setInterval> | null = null;
 let cwdChangeHook: (() => void) | null = null;
+const osc7ReceivedPtys = new Set<number>();
 
 export function registerCwdChangeHook(cb: () => void): void {
   cwdChangeHook = cb;
@@ -700,6 +697,11 @@ export function startCwdPolling() {
         for (const ws of wsList) {
           for (const s of getAllSurfaces(ws)) {
             if (!isTerminalSurface(s) || s.ptyId < 0) continue;
+            // Skip PTYs that have already proven they emit OSC 7 — the
+            // polling fallback only exists for shells that never deliver
+            // a CWD escape sequence. Saves an IPC-derived diff loop per
+            // tick on the common case.
+            if (osc7ReceivedPtys.has(s.ptyId)) continue;
             const cwd = cwdMap[String(s.ptyId)];
             if (cwd && cwd !== s.cwd) {
               s.cwd = cwd;
@@ -729,13 +731,13 @@ export async function createDefaultWorkspace() {
   const pane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
   const ws: Workspace = {
     id: uid(),
-    name: "Workspace 1",
+    name: "Branch 1",
     splitRoot: { type: "pane", pane },
     activePaneId: pane.id,
   };
   await createTerminalSurface(pane);
   workspaces.update((list) => [...list, ws]);
-  activeWorkspaceIdx.set(0);
+  activeWorkspaceId.set(ws.id);
 }
 
 // --- Surface Creation helpers ---
@@ -964,6 +966,7 @@ function createKeyHandler(
             "g",
             "h",
             "r",
+            "~",
           ].includes(k)
         )
           return false;
@@ -986,6 +989,10 @@ function createOsc7Handler(
   surface: TerminalSurface,
 ): (data: string) => boolean {
   return (data: string) => {
+    // Mark this pty as OSC-7-capable on the first sequence we see so the
+    // polling fallback can skip it on subsequent ticks. Set entry is
+    // cleared in handlePtyExit when the pty tears down.
+    osc7ReceivedPtys.add(surface.ptyId);
     let cwd = data;
     if (cwd.startsWith("file://")) {
       const rest = cwd.slice(7);
@@ -1000,15 +1007,19 @@ function createOsc7Handler(
       clearTimeout(pending);
       pendingRunningTitles.delete(surface.ptyId);
     }
+    // A user-set rename wins over OSC-7 derived titles — we never clobber
+    // an explicit `userDefinedTitle` even if the cwd-based heuristic would
+    // otherwise overwrite the active label.
     if (
-      !surface.title ||
-      surface.title.startsWith("Shell ") ||
-      surface.title.startsWith("Running: ") ||
-      !surface.title.includes(" ")
+      !surface.userDefinedTitle &&
+      (!surface.title ||
+        surface.title.startsWith("Shell ") ||
+        surface.title.startsWith("Running: ") ||
+        !surface.title.includes(" "))
     ) {
       surface.title = basename || "~";
     }
-    workspaces.update((l) => [...l]);
+    workspaces.update((l) => l);
     cwdChangeHook?.();
     return true;
   };
@@ -1201,7 +1212,7 @@ export async function runDefinedCommand(
     return;
   }
   surface.pendingRestoreCommand = false;
-  workspaces.update((l) => [...l]);
+  workspaces.update((l) => l);
 }
 
 const FONT_SIZE_MIN = 8;
@@ -1249,7 +1260,7 @@ export function resetFontSize(): void {
 export function dismissDefinedCommand(surface: TerminalSurface): void {
   if (!surface.pendingRestoreCommand) return;
   surface.pendingRestoreCommand = false;
-  workspaces.update((l) => [...l]);
+  workspaces.update((l) => l);
 }
 
 /** Find the workspace + pane currently containing a given surface. Used to

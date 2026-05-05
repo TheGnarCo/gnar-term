@@ -36,6 +36,14 @@ vi.mock("../lib/services/service-helpers", () => ({
   safeFocus: vi.fn(),
   getActiveCwd: vi.fn().mockResolvedValue(undefined),
   getCwdForSurface: vi.fn().mockResolvedValue(undefined),
+  wsMeta: (
+    ws:
+      | {
+          extensionData?: Record<string, unknown>;
+          metadata?: Record<string, unknown>;
+        }
+      | undefined,
+  ) => ws?.extensionData ?? ws?.metadata ?? {},
 }));
 
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
@@ -79,7 +87,7 @@ function makePane(surfaces: TerminalSurface[]): Pane {
   };
 }
 
-function makeWorkspace(splitRoot: SplitNode): Workspace {
+function makeChildWorkspace(splitRoot: SplitNode): Workspace {
   return {
     id: uid(),
     name: "WS",
@@ -118,7 +126,7 @@ describe("splitPaneWithSurface — split-from-root", () => {
         { type: "pane", pane: targetPane },
       ],
     };
-    const ws = makeWorkspace(root);
+    const ws = makeChildWorkspace(root);
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
 
@@ -149,7 +157,7 @@ describe("splitPaneWithSurface — split-from-root", () => {
     const sourcePane = makePane([sA, sB]);
     const targetPane = makePane([sC]);
     // Workspace 1: target is its own root.
-    const targetWs = makeWorkspace({ type: "pane", pane: targetPane });
+    const targetWs = makeChildWorkspace({ type: "pane", pane: targetPane });
     // Workspace 2: source — but splitPaneWithSurface only operates on
     // the active workspace via get(activeWorkspace). We need source
     // and target in the SAME workspace. Use a horizontal split as the
@@ -193,7 +201,7 @@ describe("splitPaneWithSurface — split-from-root", () => {
         { type: "pane", pane: targetPane },
       ],
     };
-    const ws = makeWorkspace(root);
+    const ws = makeChildWorkspace(root);
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
 
@@ -229,7 +237,7 @@ describe("splitPaneWithSurface — split-from-root", () => {
         { type: "pane", pane: targetPane },
       ],
     };
-    const ws = makeWorkspace(root);
+    const ws = makeChildWorkspace(root);
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
 
@@ -273,7 +281,7 @@ describe("splitPaneWithSurface — split-from-root", () => {
       ratio: 0.5,
       children: [{ type: "pane", pane: sourcePane }, splitInner],
     };
-    const ws = makeWorkspace(splitRoot);
+    const ws = makeChildWorkspace(splitRoot);
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
 
@@ -309,7 +317,7 @@ describe("splitPaneWithSurface — split-from-root", () => {
         { type: "pane", pane: targetPane },
       ],
     };
-    const ws = makeWorkspace(root);
+    const ws = makeChildWorkspace(root);
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
 
@@ -333,7 +341,7 @@ describe("splitPaneWithSurface — split-from-root", () => {
         { type: "pane", pane: targetPane },
       ],
     };
-    const ws = makeWorkspace(root);
+    const ws = makeChildWorkspace(root);
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
 
@@ -352,7 +360,7 @@ describe("splitPaneWithSurface — split-from-root", () => {
     const sA = mockSurface({ title: "A" });
     const sB = mockSurface({ title: "B" });
     const pane = makePane([sA, sB]);
-    const ws = makeWorkspace({ type: "pane", pane });
+    const ws = makeChildWorkspace({ type: "pane", pane });
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
 

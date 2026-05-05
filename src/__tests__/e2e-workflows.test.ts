@@ -29,6 +29,14 @@ vi.mock("../lib/services/service-helpers", () => ({
   safeFocus: vi.fn(),
   getActiveCwd: vi.fn().mockResolvedValue(undefined),
   getCwdForSurface: vi.fn().mockResolvedValue(undefined),
+  wsMeta: (
+    ws:
+      | {
+          extensionData?: Record<string, unknown>;
+          metadata?: Record<string, unknown>;
+        }
+      | undefined,
+  ) => ws?.extensionData ?? ws?.metadata ?? {},
 }));
 
 // --- Imports ---
@@ -52,7 +60,7 @@ import {
   createWorkspace,
   switchWorkspace,
   closeWorkspace,
-} from "../lib/services/workspace-service";
+} from "../lib/services/workspace-runtime-service";
 import { splitPane, focusPane, closePane } from "../lib/services/pane-service";
 import { getCwdForSurface } from "../lib/services/service-helpers";
 import {
@@ -102,7 +110,7 @@ function makePane(
   };
 }
 
-function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
+function makeChildWorkspace(overrides: Partial<Workspace> = {}): Workspace {
   const pane = makePane();
   return {
     id: uid(),
@@ -146,7 +154,7 @@ afterEach(() => {
 
 describe("Workflow: workspace lifecycle", () => {
   it("creates a workspace, switches to it, then closes it", async () => {
-    const existing = makeWorkspace({ name: "Initial" });
+    const existing = makeChildWorkspace({ name: "Initial" });
     workspaces.set([existing]);
     activeWorkspaceIdx.set(0);
 
@@ -207,7 +215,7 @@ describe("Workflow: workspace lifecycle", () => {
 describe("Workflow: pane split and navigation", () => {
   it("splits a pane, navigates between panes, then closes one", async () => {
     // Start with a single-pane workspace
-    const ws = makeWorkspace({ name: "Split Test" });
+    const ws = makeChildWorkspace({ name: "Split Test" });
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
 
@@ -253,7 +261,7 @@ describe("Workflow: pane split and navigation", () => {
   });
 
   it("splits vertically and verifies direction", async () => {
-    const ws = makeWorkspace({ name: "Vertical Split" });
+    const ws = makeChildWorkspace({ name: "Vertical Split" });
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
 
@@ -353,7 +361,7 @@ describe("Workflow: extension surface lifecycle", () => {
 
   it("registers a surface type, opens an extension surface, then closes it", () => {
     // Set up a workspace with a pane
-    const ws = makeWorkspace({ name: "Extension Test" });
+    const ws = makeChildWorkspace({ name: "Extension Test" });
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
 
@@ -403,7 +411,7 @@ describe("Workflow: extension surface lifecycle", () => {
   });
 
   it("opens multiple extension surfaces and closes one in the middle", () => {
-    const ws = makeWorkspace({ name: "Multi Surface" });
+    const ws = makeChildWorkspace({ name: "Multi Surface" });
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
 
@@ -437,8 +445,8 @@ describe("Workflow: extension surface lifecycle", () => {
     // whole workspace — same behavior as terminal-service.ts's
     // pty-exit handler. App.svelte renders EmptySurface when the
     // workspace list is empty.
-    const ws = makeWorkspace({ name: "Lonely" });
-    const otherWs = makeWorkspace({ name: "Other" });
+    const ws = makeChildWorkspace({ name: "Lonely" });
+    const otherWs = makeChildWorkspace({ name: "Other" });
     workspaces.set([ws, otherWs]);
     activeWorkspaceIdx.set(0);
 

@@ -204,17 +204,17 @@ The Extensions page lists all extensions with enable/disable toggles and install
 
 ### Included extensions (v1 — delivered)
 
-| Extension            | Type                   | Description                                                                                     |
-| -------------------- | ---------------------- | ----------------------------------------------------------------------------------------------- |
-| Preview              | Surface type           | File preview (47 file types) — extracted from core                                              |
-| File Browser         | Secondary sidebar tab  | Directory tree with context menu actions                                                        |
-| Worktree Workspaces  | Commands + state       | Git worktree-backed workspace lifecycle (create, archive)                                       |
-| Agentic Orchestrator | Dashboard contribution | Per-group Agentic Dashboard + Global Agentic pseudo-workspace; passive agent detection via core |
-| GitHub               | Secondary sidebar tab  | Issues, PRs, and commits via `gh` CLI                                                           |
-| Diff Viewer          | Surface type           | Side-by-side and unified diff display for git changes                                           |
-| Git Status           | Status registry        | Git branch, PR review, and dirty state in the sidebar                                           |
+| Extension            | Type                   | Description                                                                                         |
+| -------------------- | ---------------------- | --------------------------------------------------------------------------------------------------- |
+| Preview              | Surface type           | File preview (47 file types) — extracted from core                                                  |
+| File Browser         | Secondary sidebar tab  | Directory tree with context menu actions                                                            |
+| Worktree Workspaces  | Commands + state       | Git worktree-backed workspace lifecycle (create, archive)                                           |
+| Agentic Orchestrator | Dashboard contribution | Per-Workspace Agentic Dashboard + Global Agentic pseudo-workspace; passive agent detection via core |
+| GitHub               | Secondary sidebar tab  | Issues, PRs, and commits via `gh` CLI                                                               |
+| Diff Viewer          | Surface type           | Side-by-side and unified diff display for git changes                                               |
+| Git Status           | Status registry        | Git branch, PR review, and dirty state in the sidebar                                               |
 
-> **Note:** Project Scope was removed in ADR-004. Workspace Groups (its successor) live in core as a first-class primitive.
+> **Note:** Project Scope was removed in ADR-004. Workspaces (its successor) live in core as the sole grouping primitive, with Branched Workspaces and Dashboard Workspaces riding on them.
 
 ## Alternatives considered
 

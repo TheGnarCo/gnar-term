@@ -37,7 +37,7 @@ export function buildGroups(allWorkspaces: Workspace[]): WorkspaceGroup[] {
   // Drop dashboards entirely — they are not user-listable workspaces.
   const visible = allWorkspaces.filter((w) => !w.isDashboard);
 
-  // Primary: no parentWorkspaceId AND has a path (project-level fields present).
+  // Primary: no parentWorkspaceId AND has a path (Workspace-level fields present).
   const primaries = visible.filter((w) => !w.parentWorkspaceId && !!w.path);
 
   // Map primaryId → WorkspaceGroup for quick lookup.

@@ -6,9 +6,9 @@
  *      holds Workspace instances with panes (Branches, Dashboards,
  *      orphaned Branches). All workspaces here share the `Workspace`
  *      type from `types.ts`.
- *   2. Project-record store (`workspacesStore`, `getWorkspaces`,
+ *   2. WorkspaceRecord store (`workspacesStore`, `getWorkspaces`,
  *      `setWorkspaces`, ...) — holds `WorkspaceRecord` entries: the
- *      project-bound paneless containers that own project-level fields
+ *      path-rooted paneless containers that own Workspace-level fields
  *      (path, color, git) and track which Branches belong to them.
  *      Persisted as entries inside `state.workspaces[]` (alongside
  *      Branches and Dashboards) but kept as a separate runtime store
@@ -67,12 +67,12 @@ export const zoomedSurfaceId = writable<string | null>(null);
 /**
  * Convert a unified `WorkspaceDef` (on-disk format) into a
  * `WorkspaceTemplate` so the existing `createWorkspaceFromDef` runtime
- * path can hydrate PTY surfaces. All non-structural fields (project,
- * dashboard, worktree, locked, extension data) are packed into metadata,
- * which `createWorkspaceFromDef` carries through onto the constructed
- * `Workspace`. Consumers read those fields via `wsMeta(ws)` (see
- * `service-helpers.ts`), which transparently handles both the
- * top-level and metadata shapes.
+ * path can hydrate PTY surfaces. All non-structural fields
+ * (Workspace-level, dashboard, worktree, locked, extension data) are
+ * packed into metadata, which `createWorkspaceFromDef` carries through
+ * onto the constructed `Workspace`. Consumers read those fields via
+ * `wsMeta(ws)` (see `service-helpers.ts`), which transparently handles
+ * both the top-level and metadata shapes.
  */
 export function workspaceDefToTemplate(
   def: WorkspaceDef,
@@ -89,7 +89,7 @@ export function workspaceDefToTemplate(
   if (def.baseBranch !== undefined) metadata.baseBranch = def.baseBranch;
   if (def.repoPath !== undefined) metadata.repoPath = def.repoPath;
   if (def.locked !== undefined) metadata.locked = def.locked;
-  // Project-level fields — stashed in metadata so `wsMeta(ws)` consumers
+  // Workspace-level fields — stashed in metadata so `wsMeta(ws)` consumers
   // can read them off the constructed Workspace at runtime.
   if (def.path !== undefined) metadata.path = def.path;
   if (def.color !== undefined) metadata.color = def.color;
@@ -185,7 +185,7 @@ export const activeSurface = derived([activePane], ([$pane]) => {
 });
 
 // Persistence is owned by `workspace-runtime-service.persistWorkspaces`,
-// which serializes this store and merges in legacy project records to
+// which serializes this store and merges in WorkspaceRecord entries to
 // produce the single canonical `state.workspaces[]` writer.
 
 // ---------------------------------------------------------------------------
@@ -338,15 +338,15 @@ export function serializeWorkspace(ws: Workspace): WorkspaceDef {
 }
 
 // ===========================================================================
-// Project-record store (formerly src/lib/stores/workspaces.ts)
+// WorkspaceRecord store (formerly src/lib/stores/workspaces.ts)
 //
-// Project Workspaces are the project-bound paneless containers that own
-// project-level fields (path, color, git) and track which Branches
+// WorkspaceRecords are the path-rooted paneless containers that own
+// Workspace-level fields (path, color, git) and track which Branches
 // (worktree-backed variants) currently belong to them. Persisted inside
 // the unified `state.workspaces[]` array alongside Branches/Dashboards.
 //
-// Pre-Stage-8 fallback: when state.json has no project records yet
-// (very old install that skipped Stage 8), data is migrated forward
+// Pre-Stage-8 fallback: when state.json has no WorkspaceRecord entries
+// yet (very old install that skipped Stage 8), data is migrated forward
 // from the legacy per-extension file at
 // `~/.config/gnar-term/extensions/workspace-groups/state.json`.
 // ===========================================================================
@@ -355,9 +355,9 @@ export function serializeWorkspace(ws: Workspace): WorkspaceDef {
 // avoid a circular module init. Unset until the runtime module finishes
 // evaluating — during early tests/bootstrap before the runtime module
 // loads, mutations here are no-ops with respect to scheduling.
-let _projectSchedulePersist: (() => void) | null = null;
+let _recordsSchedulePersist: (() => void) | null = null;
 export function installSchedulePersist(fn: () => void): void {
-  _projectSchedulePersist = fn;
+  _recordsSchedulePersist = fn;
 }
 
 const LEGACY_STATE_ID = "workspace-groups";
@@ -365,13 +365,14 @@ const LEGACY_WORKSPACES_KEY = "workspaces";
 const LEGACY_ACTIVE_WORKSPACE_ID_KEY = "activeWorkspaceId";
 
 /**
- * WorkspaceRecord — the persisted project-Workspace shape: the
- * project-bound container that owns project-level fields (path, color,
+ * WorkspaceRecord — the persisted Workspace metadata shape: the
+ * path-rooted container that owns Workspace-level fields (path, color,
  * git) and tracks which Branches (worktree-backed variants provided by
  * the Branch Workspace extension) currently belong to it. Conceptually
- * this IS a Workspace; the type retains its old name until the runtime
- * unification renames it. New APIs and comments should say "Workspace"
- * and "Branch" rather than "parent" / "child".
+ * this IS a Workspace; the type retains its old name until Stage 10
+ * collapses it into the runtime `Workspace` interface. New APIs and
+ * comments should say "Workspace" and "Branch" rather than
+ * "parent" / "child".
  */
 export interface WorkspaceRecord {
   id: string;
@@ -391,21 +392,21 @@ export interface WorkspaceRecord {
   pathMissing?: boolean;
 }
 
-const _projectWorkspaces = writable<WorkspaceRecord[]>([]);
-export const workspacesStore: Readable<WorkspaceRecord[]> = _projectWorkspaces;
+const _workspaceRecords = writable<WorkspaceRecord[]>([]);
+export const workspacesStore: Readable<WorkspaceRecord[]> = _workspaceRecords;
 
-const _activeProjectWorkspaceId = writable<string | null>(null);
+const _activeWorkspaceRecordId = writable<string | null>(null);
 
-let _projectWorkspacesLoaded = false;
+let _workspaceRecordsLoaded = false;
 
 /**
- * Identify project-Workspace records inside the unified
- * `state.workspaces[]` array. Project records carry a `path` and have
- * neither a `parentWorkspaceId` (Branches/Dashboards) nor a
+ * Identify WorkspaceRecord entries inside the unified
+ * `state.workspaces[]` array. WorkspaceRecord defs carry a `path` and
+ * have neither a `parentWorkspaceId` (Branches/Dashboards) nor a
  * `worktreePath` (orphaned Branches). The post-migration state.json
- * uses this exact shape for project records.
+ * uses this exact shape for WorkspaceRecord entries.
  */
-export function isProjectRecord(def: WorkspaceDef): boolean {
+export function isWorkspaceRecordDef(def: WorkspaceDef): boolean {
   return (
     def.path !== undefined &&
     def.parentWorkspaceId === undefined &&
@@ -415,13 +416,13 @@ export function isProjectRecord(def: WorkspaceDef): boolean {
 }
 
 /**
- * Lift a project `WorkspaceDef` (post-migration shape) back to a
- * `WorkspaceRecord` for the in-memory project store. The
+ * Lift a `WorkspaceDef` (post-migration shape) back to a
+ * `WorkspaceRecord` for the in-memory record store. The
  * `branchedWorkspaceIds` cache is reset to `[]` — the
  * `workspace:created` listener rebuilds membership from
  * `metadata.parentWorkspaceId`.
  */
-function defToProjectRecord(def: WorkspaceDef): WorkspaceRecord {
+function defToWorkspaceRecord(def: WorkspaceDef): WorkspaceRecord {
   return {
     id: def.id,
     name: def.name,
@@ -444,20 +445,20 @@ function defToProjectRecord(def: WorkspaceDef): WorkspaceRecord {
 }
 
 /**
- * Inverse of `defToProjectRecord`: serialize a WorkspaceRecord back
+ * Inverse of `defToWorkspaceRecord`: serialize a WorkspaceRecord back
  * into a WorkspaceDef for persistence. Used by the unified persist path
- * so all workspaces (project, branched, dashboard) land in
+ * so all workspaces (records, branched, dashboard) land in
  * `state.workspaces[]` together.
  *
  * The on-disk shape carries an empty layout (`{ pane: { surfaces: [] }
- * }`) for project records — at runtime, project records don't have a
+ * }`) for WorkspaceRecord entries — at runtime, records don't have a
  * splitRoot of their own (their UI is delegated to the active Branch).
  * Layout is preserved across restarts because the migration helper
  * (`migrateLegacyWorkspaces`) inherits the absorbed primary's layout
  * onto the merged record; this function never overwrites it because at
- * runtime the project store does not track layouts.
+ * runtime the record store does not track layouts.
  */
-export function parentWorkspaceToDef(p: WorkspaceRecord): WorkspaceDef {
+export function workspaceRecordToDef(p: WorkspaceRecord): WorkspaceDef {
   const def: WorkspaceDef = {
     id: p.id,
     name: p.name,
@@ -480,41 +481,41 @@ export function parentWorkspaceToDef(p: WorkspaceRecord): WorkspaceDef {
   return def;
 }
 
-/** Snapshot of project records ready to merge into `state.workspaces[]`. */
-export function getProjectRecordsAsWorkspaceDefs(): WorkspaceDef[] {
-  return get(_projectWorkspaces).map(parentWorkspaceToDef);
+/** Snapshot of WorkspaceRecord entries ready to merge into `state.workspaces[]`. */
+export function getWorkspaceRecordsAsDefs(): WorkspaceDef[] {
+  return get(_workspaceRecords).map(workspaceRecordToDef);
 }
 
-function scheduleProjectPersist(): void {
-  _projectSchedulePersist?.();
+function scheduleRecordsPersist(): void {
+  _recordsSchedulePersist?.();
 }
 
 /**
- * Read state from disk and seed the project-record stores. Idempotent —
+ * Read state from disk and seed the WorkspaceRecord stores. Idempotent —
  * subsequent calls are no-ops so tests can freely call the initializer.
  *
  * `loadState` runs `migrateLegacyWorkspaces` first, so by the time we
- * reach this code project records always live inside
+ * reach this code WorkspaceRecord entries always live inside
  * `state.workspaces[]` — we project them back to `WorkspaceRecord`
  * shape for the in-memory store. The pre-Stage-8 extension-state
- * file is consulted only when `state.workspaces[]` has no project
- * records yet, and any data found there is persisted forward into
- * `state.workspaces[]` so future loads bypass the fallback.
+ * file is consulted only when `state.workspaces[]` has no
+ * WorkspaceRecord entries yet, and any data found there is persisted
+ * forward into `state.workspaces[]` so future loads bypass the fallback.
  */
 export async function loadWorkspaces(): Promise<void> {
-  if (_projectWorkspacesLoaded) return;
-  _projectWorkspacesLoaded = true;
+  if (_workspaceRecordsLoaded) return;
+  _workspaceRecordsLoaded = true;
 
   const state = await loadState();
 
   let records: WorkspaceRecord[] | null = null;
   let active: string | null = null;
 
-  // Post-migration path: project records live in state.workspaces[].
+  // Post-migration path: WorkspaceRecord entries live in state.workspaces[].
   if (Array.isArray(state.workspaces)) {
-    const projectDefs = state.workspaces.filter(isProjectRecord);
-    if (projectDefs.length > 0) {
-      records = projectDefs.map(defToProjectRecord);
+    const recordDefs = state.workspaces.filter(isWorkspaceRecordDef);
+    if (recordDefs.length > 0) {
+      records = recordDefs.map(defToWorkspaceRecord);
     }
   }
 
@@ -531,7 +532,7 @@ export async function loadWorkspaces(): Promise<void> {
       // Persist forward immediately so future loads read from AppState.
       await saveState({
         workspaces: [
-          ...records.map(parentWorkspaceToDef),
+          ...records.map(workspaceRecordToDef),
           ...(state.workspaces ?? []),
         ],
         activeWorkspaceId: active ?? state.activeWorkspaceId,
@@ -540,7 +541,7 @@ export async function loadWorkspaces(): Promise<void> {
   }
 
   // Active id resolution: state.activeWorkspaceId always reflects the
-  // post-migration id (migration redirects absorbed primary ids to project ids).
+  // post-migration id (migration redirects absorbed primary ids to record ids).
   if (
     active === null &&
     typeof state.activeWorkspaceId === "string" &&
@@ -549,12 +550,12 @@ export async function loadWorkspaces(): Promise<void> {
     active = state.activeWorkspaceId;
   }
 
-  _projectWorkspaces.set((records ?? []).map(normalizePersistedRecord));
-  _activeProjectWorkspaceId.set(active);
+  _workspaceRecords.set((records ?? []).map(normalizePersistedRecord));
+  _activeWorkspaceRecordId.set(active);
 }
 
 export function getWorkspaces(): WorkspaceRecord[] {
-  return get(_projectWorkspaces);
+  return get(_workspaceRecords);
 }
 
 export function getWorkspace(id: string): WorkspaceRecord | undefined {
@@ -562,24 +563,24 @@ export function getWorkspace(id: string): WorkspaceRecord | undefined {
 }
 
 export function setWorkspaces(next: WorkspaceRecord[]): void {
-  _projectWorkspaces.set(next);
-  scheduleProjectPersist();
+  _workspaceRecords.set(next);
+  scheduleRecordsPersist();
 }
 
 export function getActiveWorkspaceId(): string | null {
-  return get(_activeProjectWorkspaceId);
+  return get(_activeWorkspaceRecordId);
 }
 
 export function setActiveWorkspaceId(id: string | null): void {
-  _activeProjectWorkspaceId.set(id);
-  scheduleProjectPersist();
+  _activeWorkspaceRecordId.set(id);
+  scheduleRecordsPersist();
 }
 
 /** Test hook — reset in-memory state so tests start clean. */
 export function resetWorkspacesForTest(): void {
-  _projectWorkspaces.set([]);
-  _activeProjectWorkspaceId.set(null);
-  _projectWorkspacesLoaded = false;
+  _workspaceRecords.set([]);
+  _activeWorkspaceRecordId.set(null);
+  _workspaceRecordsLoaded = false;
 }
 
 /**

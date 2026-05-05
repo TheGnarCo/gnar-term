@@ -12,8 +12,8 @@ export function uid(): string {
 // ---------------------------------------------------------------------------
 
 /**
- * Base: every workspace has its own pane layout + optional project-level fields.
- * Primary/standalone workspaces carry `path`, `color`, `isGit`, `createdAt`.
+ * Base: every workspace has its own pane layout + optional Workspace-level fields.
+ * Path-rooted Workspaces carry `path`, `color`, `isGit`, `createdAt`.
  * Child workspaces (branched + dashboards) are identified by `parentWorkspaceId`.
  */
 export interface Workspace {
@@ -21,7 +21,7 @@ export interface Workspace {
   name: string;
   splitRoot: SplitNode;
   activePaneId: string | null;
-  // Project-level (present on primary/standalone workspaces, absent on children)
+  // Workspace-level (present on path-rooted Workspaces, absent on children)
   path?: string;
   color?: string;
   isGit?: boolean;

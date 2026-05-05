@@ -47,7 +47,7 @@
   /** Set of workspace IDs to display. If undefined, shows all. */
   export let filterIds: Set<string> | undefined = undefined;
 
-  /** Project accent color passed to each WorkspaceItem for left-border coloring. */
+  /** Workspace accent color passed to each WorkspaceItem for left-border coloring. */
   export let accentColor: string | undefined = undefined;
 
   /**
@@ -72,9 +72,10 @@
 
   /**
    * The immediate container ("scope") this list's workspaces live in — a
-   * project id when rendered inside a project scope, otherwise
-   * "__workspaces__". Published to `reorderContext` as `scopeId` during a
-   * drag so the sidebar's overlay layer knows which project is the source.
+   * Workspace id when rendered inside a Workspace's nested list,
+   * otherwise "__workspaces__". Published to `reorderContext` as
+   * `scopeId` during a drag so the sidebar's overlay layer knows which
+   * Workspace is the source.
    */
   export let scopeId: string | null = null;
 
@@ -192,7 +193,7 @@
 
   // Source metadata used for the DropGhost label + non-source
   // overlay color so the drag feedback matches the root-level style
-  // (project + workspace rows show their own tile with name centered).
+  // (Workspace + branch rows show their own tile with name centered).
   $: sourceWs =
     active && sourceIdx !== null
       ? ($workspaces.find((w, i) => i === sourceIdx) ?? null)
@@ -356,9 +357,9 @@
     margin-top: 8px;
   }
   /* 8px left + top margin on the nested list so the workspace rails
-     sit visually inset from the parent project's rail and the first
-     nested row breathes below the project banner. WorkspaceItem
-     itself has no margin (root workspaces are flush); we apply the
+     sit visually inset from the parent Workspace's rail and the first
+     nested row breathes below the Workspace banner. WorkspaceItem
+     itself has no margin (root Workspaces are flush); we apply the
      inset here so it only fires in the nested context. */
   .workspace-list-view {
     margin-left: 8px;

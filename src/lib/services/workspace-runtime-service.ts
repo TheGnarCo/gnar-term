@@ -49,8 +49,8 @@ import {
 } from "./workspace-service";
 import {
   getWorkspace,
-  getProjectRecordsAsWorkspaceDefs,
-  getActiveWorkspaceId as getActiveProjectWorkspaceId,
+  getWorkspaceRecordsAsDefs,
+  getActiveWorkspaceId as getActiveWorkspaceRecordId,
   installSchedulePersist as installLegacySchedulePersist,
 } from "../stores/workspace";
 import { makePersistScheduler } from "../utils/persist-scheduler";
@@ -61,29 +61,29 @@ const PERSIST_DELAY = 2000;
 
 /**
  * Stage 9 single-writer persist: serialize the unified runtime store
- * (Branches, Dashboards, orphaned Branches), then merge project records
- * from the legacy store. Project records are NOT in the runtime store —
- * they are paneless containers whose UI is delegated to their primary
- * Branch — but they live in the same on-disk array so a single
- * `state.workspaces[]` covers everything.
+ * (Branches, Dashboards, orphaned Branches), then merge WorkspaceRecord
+ * entries from the record store. WorkspaceRecord entries are NOT in
+ * the runtime store — they are paneless containers whose UI is
+ * delegated to their primary Branch — but they live in the same on-disk
+ * array so a single `state.workspaces[]` covers everything.
  *
- * The active id prefers the legacy active (project id, what the sidebar
+ * The active id prefers the WorkspaceRecord active (what the sidebar
  * tracks) and falls back to the runtime active (the focused tab).
  */
 export async function persistWorkspaces(): Promise<void> {
   const wsList = get(workspaces);
   const runtimeDefs = wsList.map((ws) => serializeWorkspace(ws));
-  const projectDefs = getProjectRecordsAsWorkspaceDefs();
-  const projectIds = new Set(projectDefs.map((d) => d.id));
+  const recordDefs = getWorkspaceRecordsAsDefs();
+  const recordIds = new Set(recordDefs.map((d) => d.id));
   const merged = [
-    ...projectDefs,
-    ...runtimeDefs.filter((d) => !projectIds.has(d.id)),
+    ...recordDefs,
+    ...runtimeDefs.filter((d) => !recordIds.has(d.id)),
   ];
 
   const idx = get(activeWorkspaceIdx);
   const runtimeActiveId =
     idx >= 0 && idx < wsList.length ? (wsList[idx]?.id ?? null) : null;
-  const activeId = getActiveProjectWorkspaceId() ?? runtimeActiveId;
+  const activeId = getActiveWorkspaceRecordId() ?? runtimeActiveId;
 
   await saveState({
     workspaces: merged,

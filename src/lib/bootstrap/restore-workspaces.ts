@@ -14,7 +14,7 @@
  */
 import { get } from "svelte/store";
 import { workspaces } from "../stores/workspace";
-import { getWorkspaces, isProjectRecord } from "../stores/workspace";
+import { getWorkspaces, isWorkspaceRecordDef } from "../stores/workspace";
 import {
   loadState,
   type GnarTermConfig,
@@ -163,13 +163,14 @@ export async function restoreWorkspaces(
   // existing path.
   // ---------------------------------------------------------------------------
   if (Array.isArray(state.workspaces) && state.workspaces.length > 0) {
-    // Project records (post-Stage-9 unified format) live in the legacy
-    // store at runtime — they are paneless containers whose tab UI is
-    // delegated to their primary Branch. Skip them here so the runtime
-    // store doesn't gain phantom paneless entries that show up in the
-    // tab strip and confuse reconciliation passes.
+    // WorkspaceRecord entries (post-Stage-9 unified format) live in
+    // the WorkspaceRecord store at runtime — they are paneless
+    // containers whose tab UI is delegated to their primary Branch.
+    // Skip them here so the runtime store doesn't gain phantom
+    // paneless entries that show up in the tab strip and confuse
+    // reconciliation passes.
     const runtimeDefs = (state.workspaces as WorkspaceDef[]).filter(
-      (def) => !isProjectRecord(def),
+      (def) => !isWorkspaceRecordDef(def),
     );
     const wsList = runtimeDefs.map(workspaceDefToWorkspace);
     seedWorkspaces(wsList, state.activeWorkspaceId ?? null);

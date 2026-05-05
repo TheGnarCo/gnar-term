@@ -7,15 +7,15 @@
  *  - Each `WorkspaceRecord P` and its primary BranchedWorkspace `B`
  *    (the one whose id matches `P.primaryBranchedWorkspaceId`) collapse
  *    into a single Workspace using `P.id`. The merged record carries
- *    `B.layout` + `B.extensionData` plus `P`'s project fields (path,
- *    color, isGit, createdAt, etc.).
+ *    `B.layout` + `B.extensionData` plus `P`'s Workspace-level fields
+ *    (path, color, isGit, createdAt, etc.).
  *  - Existing Branches/Dashboards keep their `parentWorkspaceId === P.id`
  *    references — they continue to point at the merged Workspace.
- *  - `primaryBranchedWorkspaceId` is dropped (the project Workspace IS
- *    the default working area).
+ *  - `primaryBranchedWorkspaceId` is dropped (the Workspace IS the
+ *    default working area).
  *  - `lastActiveBranchedWorkspaceId` pointing at the absorbed primary is
  *    dropped; pointing at any other Branch is preserved.
- *  - Active id is redirected: an absorbed primary's id → project id.
+ *  - Active id is redirected: an absorbed primary's id → Workspace id.
  *
  * Pure (state in, state out) so it can be unit-tested without I/O.
  */
@@ -39,33 +39,33 @@ export function migrateLegacyWorkspaces(state: AppState): AppState {
     const primary = primaryId ? wsById.get(primaryId) : undefined;
     if (primary) absorbedIds.add(primary.id);
 
-    const projectWs: WorkspaceDef = {
+    const recordDef: WorkspaceDef = {
       id: p.id,
       name: p.name,
       layout: primary?.layout ?? EMPTY_LAYOUT,
     };
-    if (p.path !== undefined) projectWs.path = p.path;
-    if (p.color !== undefined) projectWs.color = p.color;
-    if (p.isGit !== undefined) projectWs.isGit = p.isGit;
-    if (p.createdAt !== undefined) projectWs.createdAt = p.createdAt;
+    if (p.path !== undefined) recordDef.path = p.path;
+    if (p.color !== undefined) recordDef.color = p.color;
+    if (p.isGit !== undefined) recordDef.isGit = p.isGit;
+    if (p.createdAt !== undefined) recordDef.createdAt = p.createdAt;
     if (p.autoRunRestoreCommands !== undefined) {
-      projectWs.autoRunRestoreCommands = p.autoRunRestoreCommands;
+      recordDef.autoRunRestoreCommands = p.autoRunRestoreCommands;
     }
-    if (p.locked) projectWs.locked = p.locked;
+    if (p.locked) recordDef.locked = p.locked;
     if (p.dashboardWorkspaceId) {
-      projectWs.dashboardWorkspaceId = p.dashboardWorkspaceId;
+      recordDef.dashboardWorkspaceId = p.dashboardWorkspaceId;
     }
     if (
       p.lastActiveBranchedWorkspaceId &&
       p.lastActiveBranchedWorkspaceId !== primaryId
     ) {
-      projectWs.lastActiveBranchedWorkspaceId = p.lastActiveBranchedWorkspaceId;
+      recordDef.lastActiveBranchedWorkspaceId = p.lastActiveBranchedWorkspaceId;
     }
     if (primary?.extensionData) {
-      projectWs.extensionData = primary.extensionData;
+      recordDef.extensionData = primary.extensionData;
     }
 
-    merged.push(projectWs);
+    merged.push(recordDef);
   }
 
   const others = wsdef.filter((w) => !absorbedIds.has(w.id));

@@ -69,7 +69,7 @@ export interface WorkspaceTemplate {
 
 /**
  * Serialized on-disk shape for a unified Workspace (new format).
- * Today this carries Branches and Dashboards; project-level Workspace
+ * Today this carries Branches and Dashboards; path-rooted Workspace
  * records still persist separately in `parentWorkspaces` until the
  * runtime type unification lands. The `layout` field carries the
  * serialized splitRoot. Fields that don't apply to a given record
@@ -79,7 +79,7 @@ export interface WorkspaceDef {
   id: string;
   name: string;
   layout: LayoutNode;
-  // Project-level fields (primary workspaces only)
+  // Workspace-level fields (path-rooted Workspaces only)
   path?: string;
   color?: string;
   isGit?: boolean;
@@ -231,12 +231,12 @@ export interface AppState {
   archivedDefs?: {
     workspaces: Record<string, ArchivedWorkspaceDef>;
   };
-  // The Workspace list — the project-bound container records that own
-  // project-level fields (path, color, isGit) and track which Branches
-  // belong to them. Persisted under the legacy keys `parentWorkspaces` /
-  // `activeParentWorkspaceId` until the runtime type unification renames
-  // the storage; migrated into AppState in Stage 8 from the legacy
-  // per-extension state file
+  // The WorkspaceRecord list — the path-rooted container records that
+  // own Workspace-level fields (path, color, isGit) and track which
+  // Branches belong to them. Persisted under the legacy keys
+  // `parentWorkspaces` / `activeParentWorkspaceId` until the runtime
+  // type unification renames the storage; migrated into AppState in
+  // Stage 8 from the legacy per-extension state file
   // `~/.config/gnar-term/extensions/workspace-groups/state.json`.
   parentWorkspaces?: WorkspaceRecord[];
   activeParentWorkspaceId?: string;

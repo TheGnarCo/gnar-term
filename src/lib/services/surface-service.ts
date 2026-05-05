@@ -15,7 +15,6 @@ import {
   uid,
   isTerminalSurface,
   isExtensionSurface,
-  isDashboardWorkspace,
   type Workspace,
   type Pane,
   type Surface,
@@ -316,7 +315,7 @@ export function newSurfaceFromSidebar() {
   // Per ADR-004: Dashboard Workspaces are "single" surfaces — no tab
   // strip, no ⌘T. Tab Workspaces (root + Branched) own their tabs.
   const ws = get(activeWorkspace);
-  if (ws && isDashboardWorkspace(ws)) return;
+  if (ws?.isDashboard === true) return;
   const pane = get(activePane);
   if (pane) void newSurface(pane.id);
 }

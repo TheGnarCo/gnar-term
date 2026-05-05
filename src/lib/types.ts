@@ -63,44 +63,12 @@ export interface BranchedWorkspace extends Workspace {
   repoPath?: string;
 }
 
-/**
- * Dashboard surface attached to a Workspace. Materialized by the
- * Dashboard Contribution registry; the built-in Overview dashboard is
- * the only `dashboardContributionId === "group"` instance, capped at 1
- * per Workspace by the registry.
- */
-export interface DashboardWorkspace extends Workspace {
-  parentWorkspaceId: string;
-  isDashboard: true;
-  dashboardContributionId: string;
-}
-
-/**
- * Internal union of the two child kinds. Both share `parentWorkspaceId`
- * and the same lifecycle. NOT user-facing — UI copy says
- * "Workspace" and "Branch", never "child workspace". See ADR-004.
- */
-export type ChildWorkspace = BranchedWorkspace | DashboardWorkspace;
-
 /** Type guard: narrows to BranchedWorkspace via the worktreePath marker. */
 export function isBranchedWorkspace(ws: Workspace): ws is BranchedWorkspace {
   return (
     typeof (ws as BranchedWorkspace).parentWorkspaceId === "string" &&
     typeof (ws as BranchedWorkspace).worktreePath === "string"
   );
-}
-
-/** Type guard: narrows to DashboardWorkspace via the isDashboard marker. */
-export function isDashboardWorkspace(ws: Workspace): ws is DashboardWorkspace {
-  return (
-    ws.isDashboard === true &&
-    typeof (ws as DashboardWorkspace).parentWorkspaceId === "string"
-  );
-}
-
-/** Type guard: narrows to the ChildWorkspace union (Branch or Dashboard). */
-export function isChildWorkspace(ws: Workspace): ws is ChildWorkspace {
-  return isBranchedWorkspace(ws) || isDashboardWorkspace(ws);
 }
 
 export interface TerminalSurface {

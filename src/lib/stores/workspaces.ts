@@ -5,25 +5,23 @@
  * that manipulate workspaces no longer depend on the extension API
  * layer.
  *
- * Persistence reuses the existing per-extension JSON file at
- * `~/.config/gnar-term/extensions/workspace-groups/state.json` (loaded
- * via `loadExtensionState` / `saveExtensionState`). The on-disk key
- * (`"workspace-groups"`) is the persisted state id; renaming it would
- * orphan user data, so it stays. Stage 8 will move the data into
- * `GnarTermConfig`; until then we piggyback on the existing path so no
- * user data migrates in this stage.
+ * Persistence (Stage 8): parent workspaces and the active-parent id live
+ * inside the unified `AppState` (`~/.config/gnar-term/state.json`) under
+ * `parentWorkspaces` / `activeParentWorkspaceId`, alongside the unified
+ * Workspace store. On first load after upgrade, data is migrated forward
+ * from the legacy per-extension file at
+ * `~/.config/gnar-term/extensions/workspace-groups/state.json`; the
+ * legacy file is left in place for now so a downgrade still finds its
+ * data.
  */
 import { get, writable, type Readable } from "svelte/store";
-import {
-  loadExtensionState,
-  saveExtensionState,
-} from "../services/extension-state";
+import { loadExtensionState } from "../services/extension-state";
+import { loadState, saveState } from "../config";
 import { makePersistScheduler } from "../utils/persist-scheduler";
 
-const STATE_ID = "workspace-groups";
-const WORKSPACES_KEY = "workspaces";
-const WORKSPACE_ORDER_KEY = "workspaceOrder";
-const ACTIVE_WORKSPACE_ID_KEY = "activeWorkspaceId";
+const LEGACY_STATE_ID = "workspace-groups";
+const LEGACY_WORKSPACES_KEY = "workspaces";
+const LEGACY_ACTIVE_WORKSPACE_ID_KEY = "activeWorkspaceId";
 const PERSIST_DEBOUNCE_MS = 300;
 
 /**
@@ -54,31 +52,15 @@ export interface ParentWorkspace {
 const _workspaces = writable<ParentWorkspace[]>([]);
 export const workspacesStore: Readable<ParentWorkspace[]> = _workspaces;
 
-/**
- * Round-tripped through the persisted JSON for downgrade compatibility
- * with settings files written by the legacy extension-state code
- * (`extension-state.ts` maps `projectOrder → workspaceOrder`). The
- * loaded value is intentionally never read at runtime — `rootRowOrder`
- * (`./root-row-order.ts`) drives sidebar ordering — but it must persist
- * unchanged so a downgrade or a partial migration does not silently
- * lose ordering.
- *
- * Removal target: Stage 8, when the data moves into `GnarTermConfig`
- * and a schemaVersion gate provably rewrites the persisted file.
- */
-const _workspaceOrder = writable<string[]>([]);
-
 const _activeWorkspaceId = writable<string | null>(null);
 
 let _loaded = false;
 
 async function persistNow(): Promise<void> {
-  const payload: Record<string, unknown> = {
-    [WORKSPACES_KEY]: get(_workspaces),
-    [WORKSPACE_ORDER_KEY]: get(_workspaceOrder),
-    [ACTIVE_WORKSPACE_ID_KEY]: get(_activeWorkspaceId),
-  };
-  await saveExtensionState(STATE_ID, payload);
+  await saveState({
+    parentWorkspaces: get(_workspaces),
+    activeParentWorkspaceId: get(_activeWorkspaceId) ?? undefined,
+  });
 }
 
 const _scheduler = makePersistScheduler(persistNow, PERSIST_DEBOUNCE_MS);
@@ -87,25 +69,45 @@ const schedulePersist = _scheduler.schedulePersist;
 /**
  * Read state from disk and seed the stores. Idempotent — subsequent
  * calls are no-ops so tests can freely call the initializer.
+ *
+ * Reads from `AppState` (state.json). On first launch after the Stage 8
+ * upgrade, if `AppState.parentWorkspaces` is missing, falls back to the
+ * legacy extension-state file and writes the data forward into AppState
+ * so subsequent loads are pure single-file reads.
  */
 export async function loadWorkspaces(): Promise<void> {
   if (_loaded) return;
   _loaded = true;
-  const state = await loadExtensionState(STATE_ID);
-  const workspaces = Array.isArray(state[WORKSPACES_KEY])
-    ? (state[WORKSPACES_KEY] as ParentWorkspace[])
-    : [];
-  const order = Array.isArray(state[WORKSPACE_ORDER_KEY])
-    ? (state[WORKSPACE_ORDER_KEY] as string[])
-    : [];
-  const active =
-    typeof state[ACTIVE_WORKSPACE_ID_KEY] === "string"
-      ? (state[ACTIVE_WORKSPACE_ID_KEY] as string)
-      : null;
-  // Workspace ids are regenerated on each run, so drop any stale values;
-  // the workspace:created listener rebuilds them from metadata.parentWorkspaceId.
-  _workspaces.set(workspaces.map(normalizePersistedWorkspace));
-  _workspaceOrder.set(order);
+
+  const state = await loadState();
+
+  let workspaces: ParentWorkspace[] | null = null;
+  let active: string | null = null;
+
+  if (Array.isArray(state.parentWorkspaces)) {
+    workspaces = state.parentWorkspaces;
+    active =
+      typeof state.activeParentWorkspaceId === "string"
+        ? state.activeParentWorkspaceId
+        : null;
+  } else {
+    const legacy = await loadExtensionState(LEGACY_STATE_ID);
+    if (Array.isArray(legacy[LEGACY_WORKSPACES_KEY])) {
+      workspaces = legacy[LEGACY_WORKSPACES_KEY] as ParentWorkspace[];
+    }
+    if (typeof legacy[LEGACY_ACTIVE_WORKSPACE_ID_KEY] === "string") {
+      active = legacy[LEGACY_ACTIVE_WORKSPACE_ID_KEY] as string;
+    }
+    if (workspaces && workspaces.length > 0) {
+      // Persist forward immediately so a future load reads from AppState.
+      await saveState({
+        parentWorkspaces: workspaces,
+        activeParentWorkspaceId: active ?? undefined,
+      });
+    }
+  }
+
+  _workspaces.set((workspaces ?? []).map(normalizePersistedWorkspace));
   _activeWorkspaceId.set(active);
 }
 
@@ -144,7 +146,6 @@ export function setActiveWorkspaceId(id: string | null): void {
 export function resetWorkspacesForTest(): void {
   _scheduler.cancel();
   _workspaces.set([]);
-  _workspaceOrder.set([]);
   _activeWorkspaceId.set(null);
   _loaded = false;
 }

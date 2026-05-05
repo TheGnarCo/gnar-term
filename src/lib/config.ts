@@ -227,6 +227,12 @@ export interface AppState {
   archivedDefs?: {
     workspaces: Record<string, ArchivedWorkspaceDef>;
   };
+  // Parent workspaces — the project-scope container records that own
+  // project-level fields (path, color, isGit) and track child membership.
+  // Migrated into AppState in Stage 8 from the legacy per-extension state
+  // file `~/.config/gnar-term/extensions/workspace-groups/state.json`.
+  parentWorkspaces?: ParentWorkspace[];
+  activeParentWorkspaceId?: string;
 }
 
 export interface ArchivedWorkspaceDef {

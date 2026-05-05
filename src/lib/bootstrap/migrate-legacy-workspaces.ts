@@ -1,10 +1,10 @@
 /**
  * Pre-Stage-9 → Stage-9 data migration.
  *
- * Folds the legacy `ParentWorkspace` list (`AppState.parentWorkspaces`)
+ * Folds the legacy `WorkspaceRecord` list (`AppState.parentWorkspaces`)
  * into the unified `WorkspaceDef[]` (`AppState.workspaces`):
  *
- *  - Each `ParentWorkspace P` and its primary BranchedWorkspace `B`
+ *  - Each `WorkspaceRecord P` and its primary BranchedWorkspace `B`
  *    (the one whose id matches `P.primaryBranchedWorkspaceId`) collapse
  *    into a single Workspace using `P.id`. The merged record carries
  *    `B.layout` + `B.extensionData` plus `P`'s project fields (path,
@@ -20,7 +20,7 @@
  * Pure (state in, state out) so it can be unit-tested without I/O.
  */
 import type { AppState, WorkspaceDef, LayoutNode } from "../config";
-import type { ParentWorkspace } from "../stores/workspaces";
+import type { WorkspaceRecord } from "../stores/workspaces";
 
 const EMPTY_LAYOUT: LayoutNode = { pane: { surfaces: [] } };
 
@@ -82,7 +82,7 @@ export function migrateLegacyWorkspaces(state: AppState): AppState {
 function pickActiveId(
   state: AppState,
   absorbedIds: Set<string>,
-  parents: ParentWorkspace[],
+  parents: WorkspaceRecord[],
 ): string | undefined {
   const wsActive = state.activeWorkspaceId;
   if (wsActive && !absorbedIds.has(wsActive)) return wsActive;

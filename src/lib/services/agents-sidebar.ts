@@ -7,7 +7,7 @@
  */
 import type { DetectedAgent } from "./agent-detection-service";
 import type { Workspace } from "../types";
-import type { ParentWorkspace } from "../config";
+import type { WorkspaceRecord } from "../config";
 import { wsMeta } from "./service-helpers";
 
 export interface AgentRow extends DetectedAgent {
@@ -27,7 +27,7 @@ export interface AgentRow extends DetectedAgent {
 export function buildAgentRows(
   agents: DetectedAgent[],
   branchedWsList: Workspace[],
-  workspaces: ParentWorkspace[],
+  workspaces: WorkspaceRecord[],
 ): AgentRow[] {
   return agents
     .filter((a) => a.status !== "closed")

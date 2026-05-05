@@ -6,7 +6,7 @@ import { describe, it, expect } from "vitest";
 import { buildAgentRows } from "../lib/services/agents-sidebar";
 import type { DetectedAgent } from "../lib/services/agent-detection-service";
 import type { Workspace } from "../lib/types";
-import type { ParentWorkspace } from "../lib/config";
+import type { WorkspaceRecord } from "../lib/config";
 
 // --- Helpers ---
 
@@ -41,7 +41,7 @@ function makeChildWorkspace(
   };
 }
 
-function makeWorkspace(id: string, name: string): ParentWorkspace {
+function makeWorkspace(id: string, name: string): WorkspaceRecord {
   return {
     id,
     name,

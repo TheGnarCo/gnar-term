@@ -144,7 +144,7 @@ import {
   resetWorkspaceActions,
 } from "../lib/services/workspace-action-registry";
 import { setWorkspaces } from "../lib/stores/workspaces";
-import type { ParentWorkspace } from "../lib/config";
+import type { WorkspaceRecord } from "../lib/config";
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -1812,7 +1812,7 @@ describe("WorkspaceSectionContent", () => {
 
   it("renders workspace-tile zone actions as buttons in the banner row", async () => {
     // Without any workspace-tile actions, no branch button renders.
-    const workspace: ParentWorkspace = {
+    const workspace: WorkspaceRecord = {
       id: "grp-1",
       name: "Test Workspace",
       path: "/tmp/test-workspace",

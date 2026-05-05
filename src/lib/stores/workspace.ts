@@ -14,7 +14,7 @@ import { get, writable, derived } from "svelte/store";
 import type { Writable, Readable } from "svelte/store";
 import type { Workspace } from "../types";
 import { getAllPanes } from "../types";
-import type { WorkspaceDef, LayoutNode, ParentWorkspace } from "../config";
+import type { WorkspaceDef, LayoutNode, WorkspaceRecord } from "../config";
 
 // ---------------------------------------------------------------------------
 // Core writables
@@ -62,7 +62,7 @@ export const zoomedSurfaceId = writable<string | null>(null);
  */
 export function normalizeWorkspace(
   nw: Workspace,
-  legacyParents: ParentWorkspace[] = [],
+  legacyParents: WorkspaceRecord[] = [],
 ): Workspace {
   const meta = nw.metadata ?? {};
   const ws: Workspace = {

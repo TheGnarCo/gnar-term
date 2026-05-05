@@ -12,7 +12,7 @@ import {
   type Workspace,
   type WorkspaceMetadata,
 } from "../types";
-import type { ParentWorkspace } from "../config";
+import type { WorkspaceRecord } from "../config";
 
 /**
  * Returns the typed metadata for a workspace, falling back to an empty object.
@@ -20,7 +20,7 @@ import type { ParentWorkspace } from "../config";
  * Reads `extensionData` first (populated by the unified-store bridge),
  * then falls back to `metadata` for legacy workspace records.
  */
-export function wsMeta(ws: Workspace | ParentWorkspace): WorkspaceMetadata {
+export function wsMeta(ws: Workspace | WorkspaceRecord): WorkspaceMetadata {
   const ed = (ws as Workspace).extensionData;
   if (ed) return ed as WorkspaceMetadata;
   return (ws as Workspace).metadata ?? {};

@@ -1,5 +1,5 @@
 import type { Workspace } from "../types";
-import type { ParentWorkspace } from "../config";
+import type { WorkspaceRecord } from "../config";
 import { wsMeta } from "./service-helpers";
 
 export interface SwitcherRow {
@@ -35,9 +35,9 @@ export interface SwitcherRow {
  */
 export function filterWorkspaces(
   workspaces: Workspace[],
-  parentMap: Map<string, ParentWorkspace>,
+  parentMap: Map<string, WorkspaceRecord>,
   query: string,
-  parentWorkspaces: ParentWorkspace[] = [],
+  parentWorkspaces: WorkspaceRecord[] = [],
 ): SwitcherRow[] {
   const q = query.trim().toLowerCase();
 
@@ -139,7 +139,7 @@ function wsTypeOrder(ws: Workspace): number {
   return 2; // dashboards last
 }
 
-function makeParentRow(parent: ParentWorkspace): SwitcherRow {
+function makeParentRow(parent: WorkspaceRecord): SwitcherRow {
   // The ws field on parent rows holds a minimal Workspace-shaped object.
   // Consumers must check kind === "parent" before treating it as a real child workspace.
   return {

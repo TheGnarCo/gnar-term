@@ -10,7 +10,7 @@
  * and Dashboards). The legacy on-disk keys
  * `parentWorkspaces` / `activeParentWorkspaceId` are migrated forward
  * once at load time (`loadState`) and then dropped. This store still
- * exposes the legacy `ParentWorkspace` shape to existing consumers — its
+ * exposes the legacy `WorkspaceRecord` shape to existing consumers — its
  * data is projected from `state.workspaces[]` at load and serialized
  * back through `getProjectRecordsAsWorkspaceDefs()` on every persist
  * triggered by the unified workspace store.
@@ -39,7 +39,7 @@ const LEGACY_WORKSPACES_KEY = "workspaces";
 const LEGACY_ACTIVE_WORKSPACE_ID_KEY = "activeWorkspaceId";
 
 /**
- * ParentWorkspace — legacy name for the persisted Workspace record:
+ * WorkspaceRecord — legacy name for the persisted Workspace record:
  * the project-bound container that owns project-level fields (path,
  * color, git) and tracks which Branches (worktree-backed variants
  * provided by the Branch Workspace extension) currently belong to it.
@@ -47,7 +47,7 @@ const LEGACY_ACTIVE_WORKSPACE_ID_KEY = "activeWorkspaceId";
  * until the runtime unification renames it. New APIs and comments
  * should say "Workspace" and "Branch" rather than "parent" / "child".
  */
-export interface ParentWorkspace {
+export interface WorkspaceRecord {
   id: string;
   name: string;
   /** Root CWD — auto-adoption uses this as a longest-prefix ancestor match. */
@@ -65,8 +65,8 @@ export interface ParentWorkspace {
   pathMissing?: boolean;
 }
 
-const _workspaces = writable<ParentWorkspace[]>([]);
-export const workspacesStore: Readable<ParentWorkspace[]> = _workspaces;
+const _workspaces = writable<WorkspaceRecord[]>([]);
+export const workspacesStore: Readable<WorkspaceRecord[]> = _workspaces;
 
 const _activeWorkspaceId = writable<string | null>(null);
 
@@ -90,12 +90,12 @@ export function isProjectRecord(def: WorkspaceDef): boolean {
 
 /**
  * Lift a project `WorkspaceDef` (post-migration shape) back to a
- * `ParentWorkspace` for the legacy in-memory store. The
+ * `WorkspaceRecord` for the legacy in-memory store. The
  * `branchedWorkspaceIds` cache is reset to `[]` — the
  * `workspace:created` listener rebuilds membership from
  * `metadata.parentWorkspaceId`.
  */
-function defToParentWorkspace(def: WorkspaceDef): ParentWorkspace {
+function defToParentWorkspace(def: WorkspaceDef): WorkspaceRecord {
   return {
     id: def.id,
     name: def.name,
@@ -118,7 +118,7 @@ function defToParentWorkspace(def: WorkspaceDef): ParentWorkspace {
 }
 
 /**
- * Inverse of `defToParentWorkspace`: serialize a ParentWorkspace back
+ * Inverse of `defToParentWorkspace`: serialize a WorkspaceRecord back
  * into a WorkspaceDef for persistence. Used by the unified workspace
  * store's persist path so all workspaces (project, branched, dashboard)
  * land in `state.workspaces[]` together.
@@ -131,7 +131,7 @@ function defToParentWorkspace(def: WorkspaceDef): ParentWorkspace {
  * onto the merged record; this function never overwrites it because at
  * runtime the legacy store does not track layouts.
  */
-export function parentWorkspaceToDef(p: ParentWorkspace): WorkspaceDef {
+export function parentWorkspaceToDef(p: WorkspaceRecord): WorkspaceDef {
   const def: WorkspaceDef = {
     id: p.id,
     name: p.name,
@@ -169,7 +169,7 @@ function schedulePersist(): void {
  *
  * Stage 9: project records live inside `state.workspaces[]` after
  * migration runs in `loadState`. We project them back to
- * `ParentWorkspace` shape for the legacy in-memory store.
+ * `WorkspaceRecord` shape for the legacy in-memory store.
  *
  * On first launch where neither `state.parentWorkspaces` nor any
  * project record in `state.workspaces[]` is present (very old install),
@@ -181,7 +181,7 @@ export async function loadWorkspaces(): Promise<void> {
 
   const state = await loadState();
 
-  let workspaces: ParentWorkspace[] | null = null;
+  let workspaces: WorkspaceRecord[] | null = null;
   let active: string | null = null;
 
   // Post-migration path: project records live in state.workspaces[].
@@ -202,7 +202,7 @@ export async function loadWorkspaces(): Promise<void> {
   if (workspaces === null) {
     const legacy = await loadExtensionState(LEGACY_STATE_ID);
     if (Array.isArray(legacy[LEGACY_WORKSPACES_KEY])) {
-      workspaces = legacy[LEGACY_WORKSPACES_KEY] as ParentWorkspace[];
+      workspaces = legacy[LEGACY_WORKSPACES_KEY] as WorkspaceRecord[];
     }
     if (typeof legacy[LEGACY_ACTIVE_WORKSPACE_ID_KEY] === "string") {
       active = legacy[LEGACY_ACTIVE_WORKSPACE_ID_KEY] as string;
@@ -244,15 +244,15 @@ export async function flushWorkspaces(): Promise<void> {
   // own flush hook handles the write. No-op here.
 }
 
-export function getWorkspaces(): ParentWorkspace[] {
+export function getWorkspaces(): WorkspaceRecord[] {
   return get(_workspaces);
 }
 
-export function getWorkspace(id: string): ParentWorkspace | undefined {
+export function getWorkspace(id: string): WorkspaceRecord | undefined {
   return getWorkspaces().find((w) => w.id === id);
 }
 
-export function setWorkspaces(next: ParentWorkspace[]): void {
+export function setWorkspaces(next: WorkspaceRecord[]): void {
   _workspaces.set(next);
   schedulePersist();
 }
@@ -278,11 +278,11 @@ export function resetWorkspacesForTest(): void {
  * `branchedWorkspaceIds: []` cache so the `workspace:created` listener
  * rebuilds membership from `metadata.parentWorkspaceId`.
  */
-function normalizePersistedWorkspace(raw: unknown): ParentWorkspace {
+function normalizePersistedWorkspace(raw: unknown): WorkspaceRecord {
   const g = raw as Record<string, unknown>;
   const { branchedWorkspaceIds: _drop, ...rest } = g;
   return {
-    ...(rest as Omit<ParentWorkspace, "branchedWorkspaceIds">),
+    ...(rest as Omit<WorkspaceRecord, "branchedWorkspaceIds">),
     branchedWorkspaceIds: [],
-  } as ParentWorkspace;
+  } as WorkspaceRecord;
 }

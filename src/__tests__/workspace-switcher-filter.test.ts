@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { filterWorkspaces } from "../lib/services/workspace-switcher-filter";
 import type { Workspace } from "../lib/types";
-import type { ParentWorkspace } from "../lib/config";
+import type { WorkspaceRecord } from "../lib/config";
 
 // ---- Minimal stubs ----
 
@@ -24,7 +24,7 @@ function makeWs(
   } as Workspace;
 }
 
-function makeParent(id: string, name: string): ParentWorkspace {
+function makeParent(id: string, name: string): WorkspaceRecord {
   return {
     id,
     name,
@@ -55,7 +55,7 @@ const standaloneWs = makeWs({ id: "nw-5", name: "standalone" });
 
 const allWorkspaces = [...childrenOfA, ...childrenOfB, standaloneWs];
 
-const parentMap = new Map<string, ParentWorkspace>([
+const parentMap = new Map<string, WorkspaceRecord>([
   ["ws-a", parentA],
   ["ws-b", parentB],
 ]);
@@ -273,7 +273,7 @@ describe("filterWorkspaces — flat mode (no parentWorkspaces)", () => {
     makeWs({ id: "nw-5", name: "standalone" }),
   ];
 
-  const flatParentMap = new Map<string, ParentWorkspace>([
+  const flatParentMap = new Map<string, WorkspaceRecord>([
     ["ws-a", makeParent("ws-a", "Alpha Project")],
     ["ws-b", makeParent("ws-b", "Beta Corp")],
   ]);

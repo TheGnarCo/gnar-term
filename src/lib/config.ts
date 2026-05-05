@@ -18,7 +18,7 @@ import { writable, type Readable } from "svelte/store";
 import { getHome, getConfigDir } from "./services/service-helpers";
 import type { WorkspaceMetadata } from "./types";
 import type { ThemeDef } from "./theme-data";
-import type { ParentWorkspace } from "./stores/workspaces";
+import type { WorkspaceRecord } from "./stores/workspaces";
 
 // --- Types (cmux-compatible + extensions) ---
 
@@ -173,11 +173,11 @@ export interface AgentsConfig {
 export type { Workspace } from "./types";
 
 /**
- * Re-export ParentWorkspace from its canonical location so callers
+ * Re-export WorkspaceRecord from its canonical location so callers
  * that import from this module continue to compile. The canonical
  * definition lives in `./stores/workspaces`.
  */
-export type { ParentWorkspace } from "./stores/workspaces";
+export type { WorkspaceRecord } from "./stores/workspaces";
 
 export interface GnarTermConfig {
   // gnar-term extensions
@@ -238,12 +238,12 @@ export interface AppState {
   // the storage; migrated into AppState in Stage 8 from the legacy
   // per-extension state file
   // `~/.config/gnar-term/extensions/workspace-groups/state.json`.
-  parentWorkspaces?: ParentWorkspace[];
+  parentWorkspaces?: WorkspaceRecord[];
   activeParentWorkspaceId?: string;
 }
 
 export interface ArchivedWorkspaceDef {
-  workspace: ParentWorkspace;
+  workspace: WorkspaceRecord;
   childWorkspaceDefs: (WorkspaceTemplate & { name: string })[];
 }
 
@@ -364,7 +364,7 @@ export async function loadState(): Promise<AppState> {
     _appState = {};
   }
 
-  // Pre-Stage-9 → Stage-9: fold legacy ParentWorkspace records into the
+  // Pre-Stage-9 → Stage-9: fold legacy WorkspaceRecord records into the
   // unified state.workspaces[] list. Idempotent — short-circuits when
   // there are no parentWorkspaces. The migrated state is written back to
   // disk so future loads bypass the migration.

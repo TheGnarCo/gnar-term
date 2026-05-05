@@ -23,7 +23,7 @@ import { activateWorkspace, addWorkspace } from "../workspace-service";
 import { resetWorkspacesForTest, getWorkspace } from "../../stores/workspaces";
 import { rootRowOrder } from "../../stores/root-row-order";
 import type { Workspace } from "../../types";
-import type { ParentWorkspace } from "../../config";
+import type { WorkspaceRecord } from "../../config";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn().mockResolvedValue(undefined),
@@ -73,8 +73,8 @@ function makeChild(id: string, parentWorkspaceId?: string): Workspace {
 
 function makeWorkspace(
   id: string,
-  overrides: Partial<ParentWorkspace> = {},
-): ParentWorkspace {
+  overrides: Partial<WorkspaceRecord> = {},
+): WorkspaceRecord {
   return {
     id,
     name: `Workspace ${id}`,

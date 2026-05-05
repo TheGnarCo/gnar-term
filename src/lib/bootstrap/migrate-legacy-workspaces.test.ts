@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { migrateLegacyWorkspaces } from "./migrate-legacy-workspaces";
 import type { AppState, WorkspaceDef, LayoutNode } from "../config";
-import type { ParentWorkspace } from "../stores/workspaces";
+import type { WorkspaceRecord } from "../stores/workspaces";
 
 const layout = (id: string): LayoutNode => ({
   pane: { surfaces: [{ type: "terminal", cwd: `/cwd/${id}` }] },
@@ -9,7 +9,7 @@ const layout = (id: string): LayoutNode => ({
 
 const emptyLayout: LayoutNode = { pane: { surfaces: [] } };
 
-const parent = (over: Partial<ParentWorkspace> = {}): ParentWorkspace => ({
+const parent = (over: Partial<WorkspaceRecord> = {}): WorkspaceRecord => ({
   id: "P",
   name: "Project",
   path: "/p",

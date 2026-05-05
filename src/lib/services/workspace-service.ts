@@ -10,7 +10,7 @@
  */
 import { invoke } from "@tauri-apps/api/core";
 import { get } from "svelte/store";
-import type { SurfaceDef, ParentWorkspace } from "../config";
+import type { SurfaceDef, WorkspaceRecord } from "../config";
 import { WORKSPACE_COLOR_SLOTS } from "../../extensions/api";
 import { appendRootRow, removeRootRow } from "../stores/root-row-order";
 import { workspaces } from "../stores/workspace";
@@ -47,7 +47,7 @@ function emitStateChanged(metadata: Record<string, unknown> = {}): void {
   });
 }
 
-export function addWorkspace(workspace: ParentWorkspace): void {
+export function addWorkspace(workspace: WorkspaceRecord): void {
   setWorkspaces([...getWorkspaces(), workspace]);
   appendRootRow({ kind: "workspace", id: workspace.id });
   emitStateChanged({ parentWorkspaceId: workspace.id });
@@ -55,7 +55,7 @@ export function addWorkspace(workspace: ParentWorkspace): void {
 
 export function updateWorkspace(
   id: string,
-  patch: Partial<Omit<ParentWorkspace, "id">>,
+  patch: Partial<Omit<WorkspaceRecord, "id">>,
 ): void {
   const next = getWorkspaces().map((w) =>
     w.id === id ? { ...w, ...patch } : w,
@@ -221,7 +221,7 @@ export function workspaceDashboardPath(workspacePath: string): string {
   return `${workspacePath.replace(/\/+$/, "")}/.gnar-term/project-dashboard.md`;
 }
 
-function buildWorkspaceDashboardMarkdown(workspace: ParentWorkspace): string {
+function buildWorkspaceDashboardMarkdown(workspace: WorkspaceRecord): string {
   // The Workspace Dashboard is the generic, agent-agnostic landing page for
   // a Workspace. It surfaces GitHub work-tracker context — open
   // issues + open PRs — side by side, as a passive read-only browse
@@ -262,7 +262,7 @@ children:
  * workspace never trampling user customizations.
  */
 async function writeWorkspaceDashboardTemplate(
-  workspace: ParentWorkspace,
+  workspace: WorkspaceRecord,
   path: string,
   options: { force?: boolean } = {},
 ): Promise<void> {
@@ -287,7 +287,7 @@ async function writeWorkspaceDashboardTemplate(
  * needing the workspace to be closed/recreated.
  */
 export async function regenerateWorkspaceDashboardTemplate(
-  workspace: ParentWorkspace,
+  workspace: WorkspaceRecord,
 ): Promise<void> {
   await writeWorkspaceDashboardTemplate(
     workspace,
@@ -342,7 +342,7 @@ async function scrubWorkspaceDashboardActiveAgents(
 }
 
 export async function migrateWorkspaceDashboardWidgets(
-  workspace: ParentWorkspace,
+  workspace: WorkspaceRecord,
   path: string,
 ): Promise<void> {
   try {
@@ -367,7 +367,7 @@ export async function migrateWorkspaceDashboardWidgets(
 }
 
 function createDashboardWorkspaceFromDef(
-  workspace: ParentWorkspace,
+  workspace: WorkspaceRecord,
   name: string,
   contribId: string,
   surfaces: SurfaceDef[],
@@ -390,7 +390,7 @@ function createDashboardWorkspaceFromDef(
  * record can link to it.
  */
 export async function createWorkspaceDashboard(
-  workspace: ParentWorkspace,
+  workspace: WorkspaceRecord,
 ): Promise<string> {
   const path = workspaceDashboardPath(workspace.path);
   try {
@@ -429,7 +429,7 @@ export async function createWorkspaceDashboard(
 function backfillDashboardContributionIds(): void {
   const primaryWorkspaces = getWorkspaces();
   if (primaryWorkspaces.length === 0) return;
-  const workspaceById = new Map<string, ParentWorkspace>();
+  const workspaceById = new Map<string, WorkspaceRecord>();
   for (const g of primaryWorkspaces) workspaceById.set(g.id, g);
 
   let mutated = false;
@@ -480,7 +480,7 @@ function backfillDashboardContributionIds(): void {
  * contributions.
  */
 export function createSettingsDashboardWorkspace(
-  workspace: ParentWorkspace,
+  workspace: WorkspaceRecord,
 ): Promise<string> {
   return createDashboardWorkspaceFromDef(workspace, "Settings", "settings", []);
 }
@@ -496,7 +496,7 @@ export function createSettingsDashboardWorkspace(
  *   (pre-stamp legacy records). Use for the workspace-overview reconcile pass.
  */
 export function isDashboardWorkspace(
-  ws: ParentWorkspace | import("../types").Workspace,
+  ws: WorkspaceRecord | import("../types").Workspace,
   parentWorkspaceId: string,
   contribId?: string,
   allowLegacyUndefined = false,
@@ -541,7 +541,7 @@ function hasDashboardWorkspace(
  * caller has already built the snapshot (e.g. `reconcileWorkspaceDashboards`).
  */
 export async function provisionAutoDashboardsForWorkspace(
-  workspace: ParentWorkspace,
+  workspace: WorkspaceRecord,
   existingContribIds?: ReadonlySet<string>,
 ): Promise<void> {
   for (const c of getDashboardContributions()) {
@@ -607,7 +607,7 @@ export function closeDashboardForWorkspace(
  * eagerly on workspace creation, so this is a pure activation call.
  * Returns true on success.
  */
-export function openWorkspaceDashboard(workspace: ParentWorkspace): boolean {
+export function openWorkspaceDashboard(workspace: WorkspaceRecord): boolean {
   const targetId = workspace.dashboardWorkspaceId;
   if (!targetId) return false;
   const idx = get(workspaces).findIndex((w) => w.id === targetId);
@@ -685,7 +685,7 @@ export async function activateWorkspace(workspaceId: string): Promise<void> {
  * workspaces store and ripples to `$activeWorkspaceIdx`.
  */
 async function reconcileDashboardsForWorkspace(
-  workspace: ParentWorkspace,
+  workspace: WorkspaceRecord,
   dashboardIndex: Map<string, Map<string, Workspace[]>>,
 ): Promise<void> {
   // One-shot cleanup: strip the legacy `## Active Agents` section
@@ -868,7 +868,7 @@ function wrapStandaloneChildWorkspaces(): void {
     const path = typeof rawCwd === "string" && rawCwd ? rawCwd : "~";
 
     const id = crypto.randomUUID();
-    const workspace: ParentWorkspace = {
+    const workspace: WorkspaceRecord = {
       id,
       name: ws.name,
       path,

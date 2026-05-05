@@ -8,7 +8,7 @@
 
   import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
   import { eventBus, type ExtensionEvent } from "../services/event-bus";
-  import type { ParentWorkspace } from "../config";
+  import type { WorkspaceRecord } from "../config";
   import { workspacesStore, getWorkspace } from "../stores/workspaces";
   import {
     deleteWorkspace,
@@ -81,7 +81,7 @@
   /** Position among workspace-kind rows only (0-indexed), for Cmd+N shortcut label. */
   export let shortcutIdx: number | undefined = undefined;
 
-  let workspace: ParentWorkspace | undefined;
+  let workspace: WorkspaceRecord | undefined;
   let stateVersion = 0;
 
   const onWorkspaceStateChanged = () => {

@@ -47,7 +47,7 @@ import GearIcon from "../icons/GearIcon.svelte";
 import GridIcon from "../icons/GridIcon.svelte";
 import WorkspacesWidget from "../components/WorkspacesWidget.svelte";
 import { registerMarkdownComponent } from "../services/markdown-component-registry";
-import type { ParentWorkspace as Workspace } from "../config";
+import type { WorkspaceRecord as Workspace } from "../config";
 import {
   pendingCreateResolver,
   createDialogPrefill,

@@ -841,33 +841,21 @@ function wrapStandaloneChildWorkspaces(): void {
   }
 }
 
-function rehydrateClaimRegistry(): void {
-  // Claim all workspaces that have metadata.parentWorkspaceId pointing to
-  // valid workspaces. This rehydrates the in-memory claim registry from
-  // persisted metadata on restart.
-  const validWorkspaceIds = new Set(getWorkspaces().map((w) => w.id));
-  for (const ws of get(workspaces)) {
-    const md = wsMeta(ws);
-    if (md.parentWorkspaceId && validWorkspaceIds.has(md.parentWorkspaceId)) {
-      claimWorkspace(ws.id, "core");
-    }
-  }
-}
-
 /**
  * Startup reconciliation — called after workspaces are restored.
  *
- * Pass 1: Promote every standalone runtime Workspace to a Root by
- * creating a matching WorkspaceRecord (Stage 10: shared id).
- *
- * Pass 2: Rehydrate the in-memory claim registry from persisted
- * parentWorkspaceId metadata so claimed Branches survive restarts.
+ * Promotes every standalone runtime Workspace to a Root by creating a
+ * matching WorkspaceRecord (Stage 10: shared id). The previous "rehydrate
+ * claim registry" pass is gone: `claimedWorkspaceIds` is derived directly
+ * from `workspaces` (filtered by `parentWorkspaceId`), and
+ * `bootstrapRootRowOrder` already filters claimed workspaces out of the
+ * sidebar via that derived set, so no per-claim mutation is needed at
+ * startup.
  *
  * Idempotent.
  */
 export async function reconcilePrimaryWorkspaces(): Promise<void> {
   wrapStandaloneChildWorkspaces();
-  rehydrateClaimRegistry();
 }
 
 /**

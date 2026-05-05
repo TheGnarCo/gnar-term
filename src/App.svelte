@@ -68,7 +68,6 @@
   import { initAgentDetectionBootstrap } from "./lib/bootstrap/init-agent-detection";
   import { initCoreExtensionAPI } from "./lib/bootstrap/init-core-extension-api";
   import { initWorkspaces } from "./lib/bootstrap/init-workspaces";
-  import { flushWorkspaces } from "./lib/stores/workspaces";
   import {
     restoreWorkspaces,
     markRestored,
@@ -861,7 +860,6 @@
       const results = await Promise.allSettled([
         persistWorkspaces(),
         flushAllExtensionState(),
-        flushWorkspaces(),
       ]);
       for (const r of results) {
         if (r.status === "rejected") {

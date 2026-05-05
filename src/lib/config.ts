@@ -69,9 +69,11 @@ export interface WorkspaceTemplate {
 
 /**
  * Serialized on-disk shape for a unified Workspace (new format).
- * All workspaces (primary, branched, dashboards) share this shape.
- * The `layout` field carries the serialized splitRoot. Fields absent
- * on child workspaces (`path`, `color`, etc.) are omitted.
+ * Today this carries Branches and Dashboards; project-level Workspace
+ * records still persist separately in `parentWorkspaces` until the
+ * runtime type unification lands. The `layout` field carries the
+ * serialized splitRoot. Fields that don't apply to a given record
+ * (e.g. `path`, `color` on Branches) are omitted.
  */
 export interface WorkspaceDef {
   id: string;
@@ -86,11 +88,13 @@ export interface WorkspaceDef {
   // Navigation
   lastActiveBranchedWorkspaceId?: string;
   dashboardWorkspaceId?: string;
-  // Child workspace discriminants
+  // Membership / kind discriminants. `parentWorkspaceId` is the legacy
+  // name for "id of the Workspace this Branch (or Dashboard) belongs to".
   parentWorkspaceId?: string;
   isDashboard?: boolean;
   dashboardContributionId?: string;
-  // BranchedWorkspace fields
+  // Branch fields (worktree-backed Workspace variants provided by the
+  // Branch Workspace extension)
   worktreePath?: string;
   branch?: string;
   baseBranch?: string;
@@ -227,10 +231,13 @@ export interface AppState {
   archivedDefs?: {
     workspaces: Record<string, ArchivedWorkspaceDef>;
   };
-  // Parent workspaces — the project-scope container records that own
-  // project-level fields (path, color, isGit) and track child membership.
-  // Migrated into AppState in Stage 8 from the legacy per-extension state
-  // file `~/.config/gnar-term/extensions/workspace-groups/state.json`.
+  // The Workspace list — the project-bound container records that own
+  // project-level fields (path, color, isGit) and track which Branches
+  // belong to them. Persisted under the legacy keys `parentWorkspaces` /
+  // `activeParentWorkspaceId` until the runtime type unification renames
+  // the storage; migrated into AppState in Stage 8 from the legacy
+  // per-extension state file
+  // `~/.config/gnar-term/extensions/workspace-groups/state.json`.
   parentWorkspaces?: ParentWorkspace[];
   activeParentWorkspaceId?: string;
 }

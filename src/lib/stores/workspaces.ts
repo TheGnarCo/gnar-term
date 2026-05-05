@@ -1,18 +1,18 @@
 /**
  * Workspaces store — core's reactive source of truth for the persisted
- * parent workspace list. Previously owned by the project-scope extension;
- * relocated to core in Stage 5 so commands, overlays, and row renderers
- * that manipulate workspaces no longer depend on the extension API
- * layer.
+ * Workspace list (the project-bound things that show in the sidebar).
+ * Previously owned by the project-scope extension; relocated to core in
+ * Stage 5 so commands, overlays, and row renderers that manipulate
+ * workspaces no longer depend on the extension API layer.
  *
- * Persistence (Stage 8): parent workspaces and the active-parent id live
- * inside the unified `AppState` (`~/.config/gnar-term/state.json`) under
- * `parentWorkspaces` / `activeParentWorkspaceId`, alongside the unified
- * Workspace store. On first load after upgrade, data is migrated forward
- * from the legacy per-extension file at
- * `~/.config/gnar-term/extensions/workspace-groups/state.json`; the
- * legacy file is left in place for now so a downgrade still finds its
- * data.
+ * Persistence (Stage 8): the workspace list and active-workspace id live
+ * inside the unified `AppState` (`~/.config/gnar-term/state.json`).
+ * The on-disk keys are still named `parentWorkspaces` /
+ * `activeParentWorkspaceId` for now — they'll be renamed when the runtime
+ * type unification (project record + layout) lands. On first load after
+ * upgrade, data is migrated forward from the legacy per-extension file
+ * at `~/.config/gnar-term/extensions/workspace-groups/state.json`; the
+ * legacy file is left in place so a downgrade still finds its data.
  */
 import { get, writable, type Readable } from "svelte/store";
 import { loadExtensionState } from "../services/extension-state";
@@ -25,11 +25,13 @@ const LEGACY_ACTIVE_WORKSPACE_ID_KEY = "activeWorkspaceId";
 const PERSIST_DEBOUNCE_MS = 300;
 
 /**
- * ParentWorkspace — the project-scope container that owns project-level
- * fields (path, color, git) and tracks which child workspaces are
- * members. New code should prefer the unified `Workspace` from
- * `../types` for individual workspace access; `ParentWorkspace` is
- * the persisted store entry for the project container itself.
+ * ParentWorkspace — legacy name for the persisted Workspace record:
+ * the project-bound container that owns project-level fields (path,
+ * color, git) and tracks which Branches (worktree-backed variants
+ * provided by the Branch Workspace extension) currently belong to it.
+ * Conceptually this IS a Workspace; the type retains its old name
+ * until the runtime unification renames it. New APIs and comments
+ * should say "Workspace" and "Branch" rather than "parent" / "child".
  */
 export interface ParentWorkspace {
   id: string;
@@ -37,7 +39,7 @@ export interface ParentWorkspace {
   /** Root CWD — auto-adoption uses this as a longest-prefix ancestor match. */
   path: string;
   color: string;
-  /** Ids of branched workspaces currently claimed by this workspace. */
+  /** Ids of Branches (worktree-backed variants) currently claimed by this Workspace. */
   branchedWorkspaceIds: string[];
   primaryBranchedWorkspaceId?: string;
   lastActiveBranchedWorkspaceId?: string;

@@ -49,10 +49,21 @@ import type {
 import { uid, getAllPanes } from "../lib/types";
 import { createTerminalSurface } from "../lib/terminal-service";
 import {
-  createWorkspace,
+  createWorkspaceFromDef,
   switchWorkspace,
   closeWorkspace,
 } from "../lib/services/workspace-runtime-service";
+
+// Local helper for tests that previously called the deleted
+// `createWorkspace(name)` runtime API. It builds a minimal one-pane,
+// one-terminal WorkspaceTemplate so the tests still exercise the
+// runtime creation path through the surviving `createWorkspaceFromDef`.
+async function createWorkspace(name: string): Promise<void> {
+  await createWorkspaceFromDef({
+    name,
+    layout: { pane: { surfaces: [{ type: "terminal" }] } },
+  });
+}
 import { splitPane, focusPane, closePane } from "../lib/services/pane-service";
 import { getCwdForSurface } from "../lib/services/service-helpers";
 import {

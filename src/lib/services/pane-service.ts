@@ -23,7 +23,6 @@ import {
   type SplitNode,
 } from "../types";
 import {
-  createWorkspace,
   schedulePersist,
   collapseEmptyPaneInWorkspace,
 } from "./workspace-runtime-service";
@@ -124,9 +123,11 @@ export function removePane(ws: Workspace, pane: Pane) {
     const wsIdx = wsList.indexOf(ws);
     workspaces.update((list) => list.filter((w) => w.id !== ws.id));
     eventBus.emit({ type: "pane:closed", id: paneId, workspaceId: wsId });
-    if (get(workspaces).length === 0) {
-      void createWorkspace("Workspace 1");
-    } else {
+    // If this was the last workspace, leave the store empty so App.svelte
+    // renders <EmptySurface />. New workspaces must come from the New dialog
+    // (with a directory) or a config-driven WorkspaceTemplate — never from a
+    // naked auto-create here.
+    if (get(workspaces).length > 0) {
       const newIdx = Math.min(wsIdx, get(workspaces).length - 1);
       const targetId = get(workspaces)[newIdx]?.id ?? null;
       activeWorkspaceId.set(targetId);

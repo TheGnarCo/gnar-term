@@ -10,10 +10,12 @@
  * Branches covered:
  *   1. --path  → synthesizes a workspace named after the trailing dir
  *   2. --workspace <name>      → resolves config.commands[name].workspace
- *   3. --workspace <unknown>   → falls back to default "Workspace 1"
+ *   3. --workspace <unknown>   → warns and leaves the store empty
+ *                                 (no naked fallback workspace)
  *   4. --command "<cmd>"       → terminal surface carries `command`
  *   5. autoload list           → opens every named workspace
- *   6. no args, no state, no autoload → seeds a single "Workspace 1"
+ *   6. no args, no state, no autoload → leaves the store empty so
+ *      App.svelte renders <EmptySurface />.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { get } from "svelte/store";
@@ -150,16 +152,19 @@ describe("restoreWorkspaces — CLI-driven creation", () => {
     expect(list[0].name).toBe("Dev Stack");
   });
 
-  it("--workspace <unknown> falls back to a default Workspace 1", async () => {
+  it("--workspace <unknown> warns and leaves the store empty", async () => {
     const config: GnarTermConfig = {
       commands: [{ name: "dev", workspace: { name: "Dev Stack", layout: {} } }],
     };
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     await restoreWorkspaces({ ...EMPTY_CLI, workspace: "missing" }, config);
 
-    const list = get(workspaces);
-    expect(list).toHaveLength(1);
-    expect(list[0].name).toBe("Workspace 1");
+    expect(get(workspaces)).toHaveLength(0);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Workspace "missing" not found'),
+    );
+    warnSpy.mockRestore();
   });
 
   it("autoload opens every named workspace in order when no other args drive selection", async () => {
@@ -189,11 +194,10 @@ describe("restoreWorkspaces — CLI-driven creation", () => {
     expect(names).toEqual(["Alpha", "Beta"]);
   });
 
-  it("no args + no state + no autoload seeds a single default Workspace 1", async () => {
+  it("no args + no state + no autoload leaves the store empty for EmptySurface", async () => {
     await restoreWorkspaces({ ...EMPTY_CLI }, {});
 
-    const list = get(workspaces);
-    expect(list).toHaveLength(1);
-    expect(list[0].name).toBe("Workspace 1");
+    expect(get(workspaces)).toHaveLength(0);
+    expect(get(activeWorkspaceIdx)).toBe(-1);
   });
 });

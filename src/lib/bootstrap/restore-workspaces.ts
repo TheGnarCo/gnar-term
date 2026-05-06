@@ -25,7 +25,6 @@ import { initArchiveFromState } from "../stores/archive";
 import { uid } from "../types";
 import type { Workspace, BranchedWorkspace } from "../types";
 import {
-  createWorkspace,
   createWorkspaceFromDef,
   switchWorkspace,
 } from "../services/workspace-runtime-service";
@@ -142,10 +141,12 @@ export async function restoreWorkspaces(
     if (cmd?.workspace) {
       await createWorkspaceFromDef(cmd.workspace);
     } else {
+      // Unknown --workspace name: warn and leave the store empty so the
+      // launcher (EmptySurface) is shown. We won't synthesize a naked
+      // workspace as a fallback — the user can create one from the dialog.
       console.warn(
         `[cli] Workspace "${cliArgs.workspace}" not found in config`,
       );
-      await createWorkspace(cliArgs.title || "Workspace 1");
     }
     return;
   }
@@ -249,18 +250,14 @@ export async function restoreWorkspaces(
     return;
   }
 
-  // First launch — autoload from config, else seed a workspace.
-  let autoloaded = false;
+  // First launch — autoload from config, otherwise leave the store empty
+  // so App.svelte renders <EmptySurface />.
   if (config.autoload && config.autoload.length > 0 && config.commands) {
     for (const name of config.autoload) {
       const cmd = config.commands.find((c) => c.name === name && c.workspace);
       if (cmd?.workspace) {
         await createWorkspaceFromDef(cmd.workspace);
-        autoloaded = true;
       }
     }
-  }
-  if (!autoloaded && get(workspaces).length === 0) {
-    await createWorkspace("Workspace 1");
   }
 }

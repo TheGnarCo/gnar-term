@@ -56,7 +56,7 @@ vi.mock("../lib/terminal-service", () => ({
 
 // Mock workspace-service to avoid full DOM/PTY chain when workspace recovery runs
 vi.mock("../lib/services/workspace-service", () => ({
-  createWorkspace: vi.fn().mockResolvedValue(undefined),
+  createWorkspaceFromDef: vi.fn().mockResolvedValue(undefined),
 }));
 
 function makeSurface(

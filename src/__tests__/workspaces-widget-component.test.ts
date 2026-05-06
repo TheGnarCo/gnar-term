@@ -10,7 +10,7 @@ const { switchWorkspaceMock } = vi.hoisted(() => ({
 }));
 vi.mock("../lib/services/workspace-runtime-service", () => ({
   switchWorkspace: switchWorkspaceMock,
-  createWorkspace: vi.fn(),
+  createWorkspaceFromDef: vi.fn(),
   schedulePersist: vi.fn(),
   closeWorkspace: vi.fn(),
   renameWorkspace: vi.fn(),

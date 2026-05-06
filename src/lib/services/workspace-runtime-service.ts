@@ -57,35 +57,6 @@ import { schedulePersist, persistWorkspaces } from "./workspace-persist";
 // without dragging in this module's full dependency graph.
 export { schedulePersist, persistWorkspaces };
 
-export async function createWorkspace(name: string) {
-  const pane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
-  const ws: Workspace = {
-    id: uid(),
-    name,
-    paneLayout: { type: "pane", pane },
-    activePaneId: pane.id,
-    branchedWorkspaceIds: [],
-  };
-
-  const surface = await createTerminalSurface(pane);
-
-  workspaces.update((list) => [...list, ws]);
-  // Bare runtime workspaces are Roots (no rootWorkspaceId). Their
-  // sidebar row is materialized when `materializeStandaloneRoots`
-  // promotes them to a WorkspaceRecord during reconcile (which calls
-  // `addWorkspace` → appendRootRow). Until then they are headless
-  // workspaces — visible only as the active tab surface.
-  appendRootRow({ kind: "workspace", id: ws.id });
-  eventBus.emit({ type: "workspace:created", id: ws.id, name });
-  // Route activation through switchWorkspace so any listener on
-  // workspace:activated (e.g. agentic-orchestrator re-spawning a
-  // dashboard preview surface, core focus bookkeeping) fires for
-  // fresh workspaces the same way it would for a user-driven switch.
-  switchWorkspace(get(workspaces).length - 1);
-  void safeFocus(surface);
-  schedulePersist();
-}
-
 export async function createWorkspaceFromDef(
   def: WorkspaceTemplate,
   options?: { restoring?: boolean },

@@ -214,7 +214,7 @@ describe("createWorkspaceFromSurface", () => {
 
     const updated = get(workspaces);
     const newWs = updated[1]!;
-    expect(newWs.metadata?.rootWorkspaceId).toBeUndefined();
+    expect(newWs.rootWorkspaceId).toBeUndefined();
     expect(addChildToWorkspaceSpy).not.toHaveBeenCalled();
   });
 
@@ -721,7 +721,7 @@ describe("mergeWorkspaceIntoPane", () => {
 });
 
 describe("createWorkspaceFromSurface — targetWorkspaceId", () => {
-  it("sets rootWorkspaceId metadata using targetWorkspaceId when srcWs has no rootWorkspaceId", () => {
+  it("sets rootWorkspaceId using targetWorkspaceId when srcWs has no rootWorkspaceId", () => {
     const sA = mockSurface({ title: "A" });
     const sB = mockSurface({ title: "B" });
     const pane = makePane([sA, sB]);
@@ -737,7 +737,7 @@ describe("createWorkspaceFromSurface — targetWorkspaceId", () => {
 
     const updated = get(workspaces);
     const newWs = updated.find((w) => w.id !== ws.id)!;
-    expect(newWs.metadata?.rootWorkspaceId).toBe("target-workspace-1");
+    expect(newWs.rootWorkspaceId).toBe("target-workspace-1");
   });
 
   it("calls insertChildIntoWorkspace with targetWorkspaceId when srcWs has no rootWorkspaceId", () => {

@@ -50,7 +50,6 @@ import {
   createDialogPrefill,
 } from "../stores/workspaces-ui";
 import { invoke } from "@tauri-apps/api/core";
-import type { WorkspaceMetadata } from "../types";
 import {
   createWorkspaceFromDef,
   switchWorkspace,
@@ -100,13 +99,8 @@ function generateId(): string {
 
 function onWorkspaceCreated(event: AppEvent): void {
   if (event.type !== "workspace:created") return;
-  // rootWorkspaceId is a top-level Workspace field; read it directly from
-  // the live runtime workspace, falling back to the event payload for
-  // backwards compatibility with emitters that still pass metadata only.
   const ws = get(workspaces).find((w) => w.id === event.id);
-  const rootWorkspaceId =
-    ws?.rootWorkspaceId ??
-    (event.metadata as WorkspaceMetadata | undefined)?.rootWorkspaceId;
+  const rootWorkspaceId = ws?.rootWorkspaceId;
   if (typeof rootWorkspaceId !== "string") return;
   addChildToWorkspace(rootWorkspaceId, event.id);
 }

@@ -395,13 +395,12 @@ export async function mergeAndArchiveWorktreeWorkspace(): Promise<void> {
 
 /**
  * Handle workspace:created — link the workspaceId to a worktree entry whose
- * worktreePath matches the workspace's metadata.
+ * worktreePath matches the workspace.
  */
-export function handleWorkspaceCreated(
-  id: string,
-  metadata: import("../types").WorkspaceMetadata | undefined,
-): void {
-  const worktreePath = metadata?.worktreePath;
+export function handleWorkspaceCreated(id: string): void {
+  const ws = get(workspaces).find((w) => w.id === id);
+  const worktreePath = (ws as { worktreePath?: string } | undefined)
+    ?.worktreePath;
   if (typeof worktreePath !== "string") return;
   const entries = [...getWorktreeEntries()];
   const entry = entries.find((e) => e.worktreePath === worktreePath);

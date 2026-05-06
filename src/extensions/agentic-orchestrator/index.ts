@@ -337,10 +337,8 @@ async function createAgenticDashboardWorkspace(
         ],
       },
     },
-    metadata: {
-      isDashboard: true,
-      rootWorkspaceId: workspace.id,
-      dashboardContributionId: "agentic",
-    },
+    isDashboard: true,
+    rootWorkspaceId: workspace.id,
+    dashboardContributionId: "agentic",
   });
 }

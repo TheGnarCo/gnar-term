@@ -1143,14 +1143,22 @@ export type LayoutNodeInput = { pane: PaneDefInput } | SplitDefInput;
  * the public subset of core's `WorkspaceTemplate`. Use this from
  * dashboard contribution `create:` callbacks to materialize a new
  * workspace declaratively.
+ *
+ * Pass `rootWorkspaceId` to attach the new workspace as a Branch of an
+ * existing root Workspace; pass `isDashboard: true` plus a
+ * `dashboardContributionId` for dashboard variants. Extension-specific
+ * data goes in `extensionData`.
  */
 export interface WorkspaceDefInput {
   name?: string;
   cwd?: string;
   color?: string;
   env?: Record<string, string>;
-  metadata?: Record<string, unknown>;
   layout?: LayoutNodeInput;
+  rootWorkspaceId?: string;
+  isDashboard?: boolean;
+  dashboardContributionId?: string;
+  extensionData?: Record<string, unknown>;
 }
 
 // --- Git operation result types ---

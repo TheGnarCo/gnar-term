@@ -159,10 +159,8 @@ async function createDiffDashboardWorkspace(
         ],
       },
     },
-    metadata: {
-      isDashboard: true,
-      rootWorkspaceId: workspace.id,
-      dashboardContributionId: "diff",
-    },
+    isDashboard: true,
+    rootWorkspaceId: workspace.id,
+    dashboardContributionId: "diff",
   });
 }

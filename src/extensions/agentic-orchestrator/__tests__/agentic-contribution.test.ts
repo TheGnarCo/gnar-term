@@ -103,17 +103,17 @@ describe("agentic extension — Dashboard contribution registration", () => {
     const def = createWorkspaceFromDefMock.mock.calls[0]![0] as {
       name: string;
       layout: { pane: { surfaces: Array<{ type: string; path: string }> } };
-      metadata: Record<string, unknown>;
+      isDashboard?: boolean;
+      rootWorkspaceId?: string;
+      dashboardContributionId?: string;
     };
     expect(def.name).toBe("Agents");
     expect(def.layout.pane.surfaces[0]?.type).toBe("preview");
     expect(def.layout.pane.surfaces[0]?.path).toBe(
       "/work/proj/.gnar-term/agentic-dashboard.md",
     );
-    expect(def.metadata).toMatchObject({
-      isDashboard: true,
-      rootWorkspaceId: "grp-1",
-      dashboardContributionId: "agentic",
-    });
+    expect(def.isDashboard).toBe(true);
+    expect(def.rootWorkspaceId).toBe("grp-1");
+    expect(def.dashboardContributionId).toBe("agentic");
   });
 });

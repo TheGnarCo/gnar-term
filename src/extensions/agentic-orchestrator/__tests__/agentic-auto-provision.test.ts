@@ -103,14 +103,12 @@ describe("agentic auto-provision", () => {
     const all = get(workspaces);
     const forG1 = all.find((w) => {
       return (
-        w.metadata?.dashboardContributionId === "agentic" &&
-        w.metadata?.rootWorkspaceId === "g1"
+        w.dashboardContributionId === "agentic" && w.rootWorkspaceId === "g1"
       );
     });
     const forG2 = all.find((w) => {
       return (
-        w.metadata?.dashboardContributionId === "agentic" &&
-        w.metadata?.rootWorkspaceId === "g2"
+        w.dashboardContributionId === "agentic" && w.rootWorkspaceId === "g2"
       );
     });
     expect(forG1).toBeTruthy();
@@ -131,7 +129,7 @@ describe("agentic auto-provision", () => {
     // Sanity: the workspace was created.
     expect(
       get(workspaces).some((w) => {
-        return w.metadata?.dashboardContributionId === "agentic";
+        return w.dashboardContributionId === "agentic";
       }),
     ).toBe(true);
 
@@ -139,7 +137,7 @@ describe("agentic auto-provision", () => {
 
     expect(
       get(workspaces).some((w) => {
-        return w.metadata?.dashboardContributionId === "agentic";
+        return w.dashboardContributionId === "agentic";
       }),
     ).toBe(false);
   });

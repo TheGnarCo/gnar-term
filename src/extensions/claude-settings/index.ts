@@ -101,10 +101,8 @@ async function createClaudeSettingsDashboard(
         ],
       },
     },
-    metadata: {
-      isDashboard: true,
-      rootWorkspaceId: workspace.id,
-      dashboardContributionId: "claude-settings",
-    },
+    isDashboard: true,
+    rootWorkspaceId: workspace.id,
+    dashboardContributionId: "claude-settings",
   });
 }

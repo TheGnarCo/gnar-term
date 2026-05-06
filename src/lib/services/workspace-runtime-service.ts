@@ -172,16 +172,13 @@ export async function createWorkspaceFromDef(
           if (sDef.name) surface.title = sDef.name;
           if (sDef.command) {
             // Defined command is the persistent record; on restore we
-            // require user approval before running it unless the parent
+            // require user approval before running it unless the root
             // workspace has autoRunRestoreCommands enabled.
             surface.definedCommand = sDef.command;
             if (restoring) {
-              const mdRootId =
-                typeof def.metadata?.rootWorkspaceId === "string"
-                  ? def.metadata.rootWorkspaceId
-                  : undefined;
-              const rootWsId = def.rootWorkspaceId ?? mdRootId;
-              const rootWs = rootWsId ? getWorkspace(rootWsId) : null;
+              const rootWs = def.rootWorkspaceId
+                ? getWorkspace(def.rootWorkspaceId)
+                : null;
               if (rootWs?.autoRunRestoreCommands !== false) {
                 surface.startupCommand = sDef.command;
               } else {
@@ -227,10 +224,9 @@ export async function createWorkspaceFromDef(
     paneLayout = { type: "pane", pane };
   }
 
-  // Build the workspace. Top-level fields on `def` win over the legacy
-  // `def.metadata` blob for backwards compat with callers (e.g. extensions)
-  // that still pass structural fields inside `metadata`.
-  const md = def.metadata;
+  // Build the workspace from top-level `def` fields. Structural and
+  // discriminant fields are first-class on the template — extensions
+  // pass them at the top level, not via a metadata blob.
   const ws: Workspace = {
     // Reuse the persisted id when restoring so rootRowOrder survives
     // a restart; mint a fresh one for first-launch creation.
@@ -238,71 +234,24 @@ export async function createWorkspaceFromDef(
     name: wsName,
     paneLayout,
     activePaneId: getAllPanes(paneLayout)[0]?.id ?? null,
-    ...(md ? { metadata: md } : {}),
   };
 
-  // Structural / discriminant fields — top-level def wins over metadata.
-  const rootWorkspaceId =
-    def.rootWorkspaceId ??
-    (typeof md?.rootWorkspaceId === "string" ? md.rootWorkspaceId : undefined);
-  if (rootWorkspaceId !== undefined) ws.rootWorkspaceId = rootWorkspaceId;
-
-  const isDashboard =
-    def.isDashboard ??
-    (typeof md?.isDashboard === "boolean" ? md.isDashboard : undefined);
-  if (isDashboard !== undefined) ws.isDashboard = isDashboard;
-
-  const dashboardContributionId =
-    def.dashboardContributionId ??
-    (typeof md?.dashboardContributionId === "string"
-      ? md.dashboardContributionId
-      : undefined);
-  if (dashboardContributionId !== undefined)
-    ws.dashboardContributionId = dashboardContributionId;
-
-  const dashboardWorkspaceId =
-    def.dashboardWorkspaceId ??
-    (typeof md?.dashboardWorkspaceId === "string"
-      ? md.dashboardWorkspaceId
-      : undefined);
-  if (dashboardWorkspaceId !== undefined)
-    ws.dashboardWorkspaceId = dashboardWorkspaceId;
-
-  const lastActiveBranchedWorkspaceId =
-    def.lastActiveBranchedWorkspaceId ??
-    (typeof md?.lastActiveBranchedWorkspaceId === "string"
-      ? md.lastActiveBranchedWorkspaceId
-      : undefined);
-  if (lastActiveBranchedWorkspaceId !== undefined)
-    ws.lastActiveBranchedWorkspaceId = lastActiveBranchedWorkspaceId;
-
-  const locked =
-    def.locked ?? (typeof md?.locked === "boolean" ? md.locked : undefined);
-  if (locked !== undefined) ws.locked = locked;
-
-  const autoRunRestoreCommands =
-    def.autoRunRestoreCommands ??
-    (typeof md?.autoRunRestoreCommands === "boolean"
-      ? md.autoRunRestoreCommands
-      : undefined);
-  if (autoRunRestoreCommands !== undefined)
-    ws.autoRunRestoreCommands = autoRunRestoreCommands;
-
-  const path = def.path ?? (typeof md?.path === "string" ? md.path : undefined);
-  if (path !== undefined) ws.path = path;
-
-  const color =
-    def.color ?? (typeof md?.color === "string" ? md.color : undefined);
-  if (color !== undefined) ws.color = color;
-
-  const isGit =
-    def.isGit ?? (typeof md?.isGit === "boolean" ? md.isGit : undefined);
-  if (isGit !== undefined) ws.isGit = isGit;
-
-  const createdAt =
-    def.createdAt ??
-    (typeof md?.createdAt === "string" ? md.createdAt : undefined);
-  if (createdAt !== undefined) ws.createdAt = createdAt;
+  if (def.rootWorkspaceId !== undefined)
+    ws.rootWorkspaceId = def.rootWorkspaceId;
+  if (def.isDashboard !== undefined) ws.isDashboard = def.isDashboard;
+  if (def.dashboardContributionId !== undefined)
+    ws.dashboardContributionId = def.dashboardContributionId;
+  if (def.dashboardWorkspaceId !== undefined)
+    ws.dashboardWorkspaceId = def.dashboardWorkspaceId;
+  if (def.lastActiveBranchedWorkspaceId !== undefined)
+    ws.lastActiveBranchedWorkspaceId = def.lastActiveBranchedWorkspaceId;
+  if (def.locked !== undefined) ws.locked = def.locked;
+  if (def.autoRunRestoreCommands !== undefined)
+    ws.autoRunRestoreCommands = def.autoRunRestoreCommands;
+  if (def.path !== undefined) ws.path = def.path;
+  if (def.color !== undefined) ws.color = def.color;
+  if (def.isGit !== undefined) ws.isGit = def.isGit;
+  if (def.createdAt !== undefined) ws.createdAt = def.createdAt;
 
   // Branch fields (BranchedWorkspace extension)
   const bw = ws as Workspace & {
@@ -311,24 +260,10 @@ export async function createWorkspaceFromDef(
     baseBranch?: string;
     repoPath?: string;
   };
-  const worktreePath =
-    def.worktreePath ??
-    (typeof md?.worktreePath === "string" ? md.worktreePath : undefined);
-  if (worktreePath !== undefined) bw.worktreePath = worktreePath;
-
-  const branch =
-    def.branch ?? (typeof md?.branch === "string" ? md.branch : undefined);
-  if (branch !== undefined) bw.branch = branch;
-
-  const baseBranch =
-    def.baseBranch ??
-    (typeof md?.baseBranch === "string" ? md.baseBranch : undefined);
-  if (baseBranch !== undefined) bw.baseBranch = baseBranch;
-
-  const repoPath =
-    def.repoPath ??
-    (typeof md?.repoPath === "string" ? md.repoPath : undefined);
-  if (repoPath !== undefined) bw.repoPath = repoPath;
+  if (def.worktreePath !== undefined) bw.worktreePath = def.worktreePath;
+  if (def.branch !== undefined) bw.branch = def.branch;
+  if (def.baseBranch !== undefined) bw.baseBranch = def.baseBranch;
+  if (def.repoPath !== undefined) bw.repoPath = def.repoPath;
 
   // Root-shaped Workspaces own a (possibly empty) members list. Branches
   // and Dashboards omit the field entirely. reclaimChildWorkspaces fills
@@ -354,7 +289,6 @@ export async function createWorkspaceFromDef(
               ...existing,
               paneLayout: ws.paneLayout,
               activePaneId: ws.activePaneId,
-              ...(ws.metadata ? { metadata: ws.metadata } : {}),
             }
           : existing,
       ),
@@ -369,12 +303,7 @@ export async function createWorkspaceFromDef(
       appendRootRow({ kind: "workspace", id: ws.id });
     }
   }
-  eventBus.emit({
-    type: "workspace:created",
-    id: ws.id,
-    name: wsName,
-    ...(ws.metadata ? { metadata: ws.metadata } : {}),
-  });
+  eventBus.emit({ type: "workspace:created", id: ws.id, name: wsName });
   // Route through switchWorkspace so workspace:activated listeners
   // (e.g. agentic-orchestrator's dashboard workspace re-spawn hook)
   // fire on creation — auto-switching to the fresh workspace matches
@@ -495,9 +424,9 @@ export function renameWorkspace(idx: number, name: string) {
 }
 
 /**
- * Toggle the `locked` flag on a workspace's metadata. Locked workspaces
- * have their drag-reorder and close affordances suppressed in the UI.
- * No-op if no workspace with the given id exists.
+ * Toggle the `locked` flag on a workspace. Locked workspaces have their
+ * drag-reorder and close affordances suppressed in the UI. No-op if no
+ * workspace with the given id exists.
  */
 export function toggleWorkspaceLock(workspaceId: string): void {
   let changed = false;
@@ -505,12 +434,7 @@ export function toggleWorkspaceLock(workspaceId: string): void {
     list.map((ws) => {
       if (ws.id !== workspaceId) return ws;
       changed = true;
-      const nextLocked = !ws.locked;
-      return {
-        ...ws,
-        locked: nextLocked,
-        metadata: { ...ws.metadata, locked: nextLocked },
-      };
+      return { ...ws, locked: !ws.locked };
     }),
   );
   if (changed) schedulePersist();
@@ -709,12 +633,7 @@ export function createWorkspaceFromSurface(
     name: surface.title || "New Workspace",
     paneLayout: { type: "pane", pane: newPane },
     activePaneId: newPane.id,
-    ...(effectiveWorkspaceId
-      ? {
-          rootWorkspaceId: effectiveWorkspaceId,
-          metadata: { rootWorkspaceId: effectiveWorkspaceId },
-        }
-      : {}),
+    ...(effectiveWorkspaceId ? { rootWorkspaceId: effectiveWorkspaceId } : {}),
   };
 
   workspaces.update((list) => [...list, newWs]);

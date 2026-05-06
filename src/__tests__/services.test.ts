@@ -388,13 +388,13 @@ describe("workspace-service", () => {
   });
 
   describe("toggleWorkspaceLock", () => {
-    it("sets metadata.locked to true on first toggle", () => {
+    it("sets locked to true on first toggle", () => {
       const ws = makeChildWorkspace({ name: "WS" });
       workspaces.set([ws]);
 
       toggleWorkspaceLock(ws.id);
 
-      expect(get(workspaces)[0].metadata?.locked).toBe(true);
+      expect(get(workspaces)[0].locked).toBe(true);
     });
 
     it("clears locked back to false on second toggle", () => {
@@ -409,21 +409,6 @@ describe("workspace-service", () => {
       expect(get(workspaces)[0].locked).toBe(false);
     });
 
-    it("preserves other metadata fields when toggling", () => {
-      const ws = makeChildWorkspace({
-        name: "WS",
-        metadata: { worktreePath: "/tmp/wt", branch: "feat/x" },
-      });
-      workspaces.set([ws]);
-
-      toggleWorkspaceLock(ws.id);
-
-      const md = get(workspaces)[0].metadata;
-      expect(md?.locked).toBe(true);
-      expect(md?.worktreePath).toBe("/tmp/wt");
-      expect(md?.branch).toBe("feat/x");
-    });
-
     it("only mutates the matching workspace", () => {
       const ws1 = makeChildWorkspace({ name: "A" });
       const ws2 = makeChildWorkspace({ name: "B" });
@@ -431,8 +416,8 @@ describe("workspace-service", () => {
 
       toggleWorkspaceLock(ws2.id);
 
-      expect(get(workspaces)[0].metadata?.locked).toBeUndefined();
-      expect(get(workspaces)[1].metadata?.locked).toBe(true);
+      expect(get(workspaces)[0].locked).toBeUndefined();
+      expect(get(workspaces)[1].locked).toBe(true);
     });
 
     it("is a no-op for an unknown workspace id", () => {

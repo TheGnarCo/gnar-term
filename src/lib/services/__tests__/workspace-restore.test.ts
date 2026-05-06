@@ -177,7 +177,7 @@ describe("S9 — auto-run restore commands", () => {
       {
         name: "Test",
         cwd: "/tmp",
-        metadata: { rootWorkspaceId: "g1" },
+        rootWorkspaceId: "g1",
         layout: {
           pane: {
             surfaces: [{ command: "echo hello" }],
@@ -208,7 +208,7 @@ describe("S9 — auto-run restore commands", () => {
       {
         name: "Test",
         cwd: "/tmp",
-        metadata: { rootWorkspaceId: "g1" },
+        rootWorkspaceId: "g1",
         layout: {
           pane: {
             surfaces: [{ command: "echo hello" }],
@@ -239,7 +239,7 @@ describe("S9 — auto-run restore commands", () => {
       {
         name: "Test",
         cwd: "/tmp",
-        metadata: { rootWorkspaceId: "g1" },
+        rootWorkspaceId: "g1",
         layout: {
           pane: {
             surfaces: [{ command: "echo hello" }],

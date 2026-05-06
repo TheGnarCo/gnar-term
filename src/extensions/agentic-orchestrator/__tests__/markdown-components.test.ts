@@ -289,12 +289,27 @@ describe("Kanban widget", () => {
     const api = makeApi();
     // Detection moved to core; makeApi() wires api.agents to the test writable.
 
-    // Match the dashboard scope by giving each agent a workspace whose
-    // first terminal cwd is under /work/proj.
-    const wsStore = (await import("../../../lib/stores/workspace")) as {
-      workspaces: { set: (v: unknown) => void };
-    };
-    wsStore.workspaces.set([
+    // Seed the unified workspace store with a root workspace whose path
+    // matches the branches' CWDs (so the host-context-driven filter
+    // includes them as unclaimed CWD matches — mirroring the workspace-scope
+    // rule in widget-helpers) plus the three terminal branches.
+    const { workspaces, resetWorkspacesForTest } =
+      await import("../../../lib/stores/workspace");
+    resetWorkspacesForTest();
+    workspaces.set([
+      {
+        id: "group-proj",
+        name: "Project A",
+        path: "/work/proj",
+        color: "blue",
+        workspaceDashboardEnabled: true,
+        branchedWorkspaceIds: [],
+        splitRoot: {
+          type: "pane",
+          pane: { id: "gp", surfaces: [], activeSurfaceId: null },
+        },
+        activePaneId: "gp",
+      },
       {
         id: "ws-running",
         name: "Run",
@@ -361,7 +376,7 @@ describe("Kanban widget", () => {
           },
         },
       },
-    ]);
+    ] as never);
 
     registerAgent(
       makeAgent({
@@ -384,23 +399,6 @@ describe("Kanban widget", () => {
         status: "idle",
       }),
     );
-
-    // Seed a workspace whose path matches the workspaces' CWD so
-    // the host-context-driven filter includes them as unclaimed CWD
-    // matches — mirroring the workspace-scope rule in widget-helpers.
-    const { setWorkspaces, resetWorkspacesForTest } =
-      await import("../../../lib/stores/workspace");
-    resetWorkspacesForTest();
-    setWorkspaces([
-      {
-        id: "group-proj",
-        name: "Project A",
-        path: "/work/proj",
-        color: "blue",
-        workspaceDashboardEnabled: true,
-        branchedWorkspaceIds: [],
-      },
-    ]);
 
     const { container } = render(ExtensionWrapper, {
       props: {
@@ -445,10 +443,10 @@ describe("Issues widget", () => {
     // into the next one.
     invalidateGhAvailability();
     tauriInvokeGhAvailable.current = true;
-    const { setWorkspaces, resetWorkspacesForTest } =
+    const { workspaces, resetWorkspacesForTest } =
       await import("../../../lib/stores/workspace");
     resetWorkspacesForTest();
-    setWorkspaces([
+    workspaces.set([
       {
         id: WORKSPACE_ID,
         name: "Issues Dash",
@@ -456,8 +454,13 @@ describe("Issues widget", () => {
         color: "blue",
         workspaceDashboardEnabled: true,
         branchedWorkspaceIds: [],
+        splitRoot: {
+          type: "pane",
+          pane: { id: "ip", surfaces: [], activeSurfaceId: null },
+        },
+        activePaneId: "ip",
       },
-    ]);
+    ] as never);
   });
 
   afterEach(() => {
@@ -989,10 +992,10 @@ describe("Prs widget", () => {
     resetRegistry();
     invalidateGhAvailability();
     tauriInvokeGhAvailable.current = true;
-    const { setWorkspaces, resetWorkspacesForTest } =
+    const { workspaces, resetWorkspacesForTest } =
       await import("../../../lib/stores/workspace");
     resetWorkspacesForTest();
-    setWorkspaces([
+    workspaces.set([
       {
         id: WORKSPACE_ID,
         name: "PRs Dash",
@@ -1000,8 +1003,13 @@ describe("Prs widget", () => {
         color: "blue",
         workspaceDashboardEnabled: true,
         branchedWorkspaceIds: [],
+        splitRoot: {
+          type: "pane",
+          pane: { id: "pp", surfaces: [], activeSurfaceId: null },
+        },
+        activePaneId: "pp",
       },
-    ]);
+    ] as never);
   });
 
   afterEach(() => {
@@ -1331,10 +1339,10 @@ describe("TaskSpawner widget", () => {
     saveConfigMock.mockClear();
     spawnAgentInWorktreeMock.mockClear();
     resetRegistry();
-    const { setWorkspaces, resetWorkspacesForTest } =
+    const { workspaces, resetWorkspacesForTest } =
       await import("../../../lib/stores/workspace");
     resetWorkspacesForTest();
-    setWorkspaces([
+    workspaces.set([
       {
         id: WORKSPACE_ID,
         name: "Spawn Workspace",
@@ -1342,8 +1350,13 @@ describe("TaskSpawner widget", () => {
         color: "blue",
         workspaceDashboardEnabled: true,
         branchedWorkspaceIds: [],
+        splitRoot: {
+          type: "pane",
+          pane: { id: "sp", surfaces: [], activeSurfaceId: null },
+        },
+        activePaneId: "sp",
       },
-    ]);
+    ] as never);
   });
 
   afterEach(() => {

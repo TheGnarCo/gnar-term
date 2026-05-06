@@ -18,7 +18,6 @@ vi.mock("@tauri-apps/api/event", () => ({
 
 import { reconcileWorkspaceDashboards } from "../lib/services/workspace-service";
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
-import { workspacesStore } from "../lib/stores/workspace";
 
 const WORKSPACE = {
   id: "g1",
@@ -29,7 +28,12 @@ const WORKSPACE = {
   isGit: false,
   createdAt: "2026-04-21T00:00:00.000Z",
   dashboardWorkspaceId: "ws-legacy-overview",
-};
+  splitRoot: {
+    type: "pane",
+    pane: { id: "wp", surfaces: [], activeSurfaceId: null },
+  },
+  activePaneId: "wp",
+} as never;
 
 describe("dashboardContributionId backfill", () => {
   beforeEach(() => {
@@ -38,11 +42,11 @@ describe("dashboardContributionId backfill", () => {
     invokeMock.mockImplementation(async () => undefined);
     workspaces.set([]);
     activeWorkspaceIdx.set(-1);
-    workspacesStore.set([WORKSPACE]);
   });
 
   it("stamps 'group' on a legacy Overview dashboard (preview → project-dashboard.md)", async () => {
     workspaces.set([
+      WORKSPACE,
       {
         id: "ws-legacy-overview",
         name: "Dashboard",
@@ -70,11 +74,15 @@ describe("dashboardContributionId backfill", () => {
 
     await reconcileWorkspaceDashboards();
 
-    expect(get(workspaces)[0]!.dashboardContributionId).toBe("group");
+    const dashboard = get(workspaces).find(
+      (w) => w.id === "ws-legacy-overview",
+    );
+    expect(dashboard?.dashboardContributionId).toBe("group");
   });
 
   it("leaves already-stamped workspaces alone", async () => {
     workspaces.set([
+      WORKSPACE,
       {
         id: "ws-stamped",
         name: "Dashboard",
@@ -103,6 +111,7 @@ describe("dashboardContributionId backfill", () => {
 
     await reconcileWorkspaceDashboards();
 
-    expect(get(workspaces)[0]!.dashboardContributionId).toBe("group");
+    const dashboard = get(workspaces).find((w) => w.id === "ws-stamped");
+    expect(dashboard?.dashboardContributionId).toBe("group");
   });
 });

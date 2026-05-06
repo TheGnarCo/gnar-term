@@ -24,7 +24,6 @@ globalThis.ResizeObserver =
 
 import PaneView from "../lib/components/PaneView.svelte";
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
-import { workspacesStore } from "../lib/stores/workspace";
 import type { Workspace, Pane } from "../lib/types";
 
 function makePane(id: string): Pane {
@@ -43,21 +42,20 @@ describe("PaneView — settings dashboard body", () => {
     cleanup();
     workspaces.set([]);
     activeWorkspaceIdx.set(-1);
-    workspacesStore.set([]);
   });
 
   it("renders WorkspaceDashboardSettings for a settings contribution workspace", () => {
-    workspacesStore.set([
-      {
-        id: "g1",
-        name: "My Workspace",
-        path: "/tmp/g1",
-        color: "purple",
-        branchedWorkspaceIds: [],
-        isGit: false,
-        createdAt: "2026-04-21T00:00:00.000Z",
-      },
-    ]);
+    const root: Workspace = {
+      id: "g1",
+      name: "My Workspace",
+      path: "/tmp/g1",
+      color: "purple",
+      branchedWorkspaceIds: [],
+      isGit: false,
+      createdAt: "2026-04-21T00:00:00.000Z",
+      splitRoot: { type: "pane", pane: makePane("g1-p") },
+      activePaneId: "g1-p",
+    } as unknown as Workspace;
 
     const ws: Workspace = {
       id: "ws-settings",
@@ -68,8 +66,8 @@ describe("PaneView — settings dashboard body", () => {
       parentWorkspaceId: "g1",
       dashboardContributionId: "settings",
     } as unknown as Workspace;
-    workspaces.set([ws]);
-    activeWorkspaceIdx.set(0);
+    workspaces.set([root, ws]);
+    activeWorkspaceIdx.set(1);
 
     const pane = (ws.splitRoot as { type: "pane"; pane: Pane }).pane;
     const { container } = render(PaneView, {

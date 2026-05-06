@@ -17,7 +17,6 @@ vi.mock("@tauri-apps/api/event", () => ({
 
 import WorkspaceDashboardSettings from "../lib/components/WorkspaceDashboardSettings.svelte";
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
-import { workspacesStore } from "../lib/stores/workspace";
 import {
   registerDashboardContribution,
   resetDashboardContributions,
@@ -31,14 +30,18 @@ const WORKSPACE = {
   branchedWorkspaceIds: [],
   isGit: false,
   createdAt: "2026-04-21T00:00:00.000Z",
-};
+  splitRoot: {
+    type: "pane",
+    pane: { id: "wp", surfaces: [], activeSurfaceId: null },
+  },
+  activePaneId: "wp",
+} as never;
 
 describe("WorkspaceDashboardSettings — Dashboards toggles", () => {
   beforeEach(() => {
     cleanup();
-    workspaces.set([]);
+    workspaces.set([WORKSPACE]);
     activeWorkspaceIdx.set(-1);
-    workspacesStore.set([WORKSPACE]);
     resetDashboardContributions();
   });
 
@@ -120,11 +123,16 @@ describe("WorkspaceDashboardSettings — Dashboards toggles", () => {
       create: vi.fn(async () => "ws-diff"),
     });
     // Seed an active diff child workspace for this workspace.
-    workspaces.set([
+    workspaces.update((cur) => [
+      ...cur,
       {
         id: "ws-diff-1",
         name: "Diff",
-        layout: { pane: { id: "p", surfaces: [], activeIdx: 0 } },
+        splitRoot: {
+          type: "pane",
+          pane: { id: "p", surfaces: [], activeSurfaceId: null },
+        },
+        activePaneId: "p",
         isDashboard: true,
         parentWorkspaceId: WORKSPACE.id,
         dashboardContributionId: "diff",

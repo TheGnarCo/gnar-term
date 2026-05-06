@@ -47,7 +47,7 @@ import GearIcon from "../icons/GearIcon.svelte";
 import GridIcon from "../icons/GridIcon.svelte";
 import WorkspacesWidget from "../components/WorkspacesWidget.svelte";
 import { registerMarkdownComponent } from "../services/markdown-component-registry";
-import type { WorkspaceRecord as Workspace } from "../config";
+import type { WorkspaceRecord as Workspace } from "../stores/workspace";
 import {
   pendingCreateResolver,
   createDialogPrefill,
@@ -176,6 +176,10 @@ async function createWorkspaceFlow(prefill?: {
   }
 
   const id = generateId();
+  // Caller passes a record-shaped workspace; addWorkspace mints a
+  // placeholder splitRoot / activePaneId so the entry satisfies the
+  // unified Workspace shape until the matching runtime tab surface is
+  // built by createWorkspaceFromDef below.
   const workspace: Workspace = {
     id,
     name: result.name,

@@ -25,14 +25,14 @@ import {
   resetDashboardContributions,
 } from "../lib/services/dashboard-contribution-registry";
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
-import { workspacesStore } from "../lib/stores/workspace";
 
 function rpc(method: string, params?: unknown, id: number = 1) {
   return { jsonrpc: "2.0" as const, id, method, params };
 }
 
 function seedWorkspace(id: string) {
-  workspacesStore.set([
+  workspaces.update((cur) => [
+    ...cur,
     {
       id,
       name: `Workspace ${id}`,
@@ -41,7 +41,12 @@ function seedWorkspace(id: string) {
       branchedWorkspaceIds: [],
       isGit: false,
       createdAt: "2026-04-21T00:00:00.000Z",
-    },
+      splitRoot: {
+        type: "pane",
+        pane: { id: `${id}-p`, surfaces: [], activeSurfaceId: null },
+      },
+      activePaneId: `${id}-p`,
+    } as never,
   ]);
 }
 
@@ -52,7 +57,6 @@ describe("MCP dashboard contribution tools", () => {
     resetDashboardContributions();
     workspaces.set([]);
     activeWorkspaceIdx.set(-1);
-    workspacesStore.set([]);
   });
 
   describe("list_dashboard_contributions", () => {
@@ -108,11 +112,16 @@ describe("MCP dashboard contribution tools", () => {
         create: vi.fn(async () => "ws-diff"),
       });
       // Seed an active dashboard workspace for this contribution.
-      workspaces.set([
+      workspaces.update((cur) => [
+        ...cur,
         {
           id: "ws-abc",
           name: "Diff",
-          layout: { pane: { id: "p", surfaces: [], activeIdx: 0 } },
+          splitRoot: {
+            type: "pane",
+            pane: { id: "p", surfaces: [], activeSurfaceId: null },
+          },
+          activePaneId: "p",
           isDashboard: true,
           parentWorkspaceId: "g1",
           dashboardContributionId: "diff",

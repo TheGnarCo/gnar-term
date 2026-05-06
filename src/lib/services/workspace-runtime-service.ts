@@ -50,9 +50,7 @@ import {
 } from "./workspace-service";
 import {
   getWorkspace,
-  getWorkspaceRecordsAsDefs,
   getActiveWorkspaceId as getActiveWorkspaceRecordId,
-  installSchedulePersist as installLegacySchedulePersist,
 } from "../stores/workspace";
 import { makePersistScheduler } from "../utils/persist-scheduler";
 
@@ -61,49 +59,19 @@ import { makePersistScheduler } from "../utils/persist-scheduler";
 const PERSIST_DELAY = 2000;
 
 /**
- * Stage 10 single-writer persist: the runtime store is canonical for
- * every Workspace, Branch, and Dashboard — Roots share an id with their
- * WorkspaceRecord, so a runtime def at that id carries the Root's tab
- * surface. The Record store contributes Workspace-level fields (path,
- * color, isGit, createdAt, lock, dashboard ref) merged on top.
+ * Stage 10 single-writer persist: the unified `_workspaces` runtime
+ * store is canonical for every Workspace, Branch, and Dashboard. We
+ * serialize the entire list verbatim — root entries already carry
+ * Workspace-level fields (path, color, isGit, createdAt, lock,
+ * dashboard ref) and child entries carry their structural fields.
  *
- * Records without a corresponding runtime entry (transient state during
- * load, or a Record whose Root has yet to be materialized) are emitted
- * as paneless defs so the on-disk array stays complete.
- *
- * The active id prefers the WorkspaceRecord active (what the sidebar
- * tracks) and falls back to the runtime active (the focused tab).
+ * The active id prefers the explicit pointer maintained by
+ * `setActiveWorkspaceId` (what the sidebar tracks) and falls back to
+ * the runtime active (the focused tab) when unset.
  */
 export async function persistWorkspaces(): Promise<void> {
   const wsList = get(workspaces);
-  const runtimeDefs = wsList.map((ws) => serializeWorkspace(ws));
-  const runtimeById = new Map(runtimeDefs.map((d) => [d.id, d] as const));
-
-  const recordDefs = getWorkspaceRecordsAsDefs();
-  const recordIds = new Set(recordDefs.map((d) => d.id));
-
-  // Records first so Roots lead the persisted array. When a runtime def
-  // shares a Root's id, the Record is canonical for Workspace-level
-  // fields (name, path, color, etc.) and the runtime contributes
-  // `layout` (the Root's tab surface).
-  const merged: WorkspaceDef[] = [];
-  for (const rd of recordDefs) {
-    const runtime = runtimeById.get(rd.id);
-    if (!runtime) {
-      merged.push(rd);
-      continue;
-    }
-    merged.push({
-      ...runtime,
-      ...rd,
-      layout: runtime.layout,
-    });
-  }
-  // Runtime entries without a matching Record (Branches, Dashboards,
-  // standalone runtime workspaces) follow.
-  for (const rd of runtimeDefs) {
-    if (!recordIds.has(rd.id)) merged.push(rd);
-  }
+  const defs: WorkspaceDef[] = wsList.map((ws) => serializeWorkspace(ws));
 
   const idx = get(activeWorkspaceIdx);
   const runtimeActiveId =
@@ -111,17 +79,13 @@ export async function persistWorkspaces(): Promise<void> {
   const activeId = getActiveWorkspaceRecordId() ?? runtimeActiveId;
 
   await saveState({
-    workspaces: merged,
+    workspaces: defs,
     activeWorkspaceId: activeId ?? undefined,
   });
 }
 
 const _scheduler = makePersistScheduler(persistWorkspaces, PERSIST_DELAY);
 export const schedulePersist = _scheduler.schedulePersist;
-
-// Wire the legacy store to the same single scheduler so its mutations
-// (color/lock/name/etc. via setWorkspaces) trigger the merged write.
-installLegacySchedulePersist(schedulePersist);
 
 export async function createWorkspace(name: string) {
   const pane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
@@ -364,14 +328,26 @@ export async function createWorkspaceFromDef(
     (typeof md?.repoPath === "string" ? md.repoPath : undefined);
   if (repoPath !== undefined) bw.repoPath = repoPath;
 
-  workspaces.update((list) => [...list, ws]);
-  // Stage 10: a runtime workspace whose id matches a WorkspaceRecord is
-  // the Workspace's own Root — it is already represented in rootRowOrder
-  // by the `{kind: "workspace", id}` row that addWorkspace appended.
-  // Skip the child-workspace row to avoid rendering the same Workspace
-  // twice in the sidebar.
+  // Stage 10 unified store: a runtime workspace whose id matches an
+  // existing root entry IS the Workspace's own Root tab surface — merge
+  // the runtime fields onto the existing record-shaped entry rather
+  // than appending a duplicate row. Otherwise append as a new entry.
   const isWorkspaceOwnRoot = getWorkspace(ws.id) !== undefined;
-  if (!isWorkspaceOwnRoot) {
+  if (isWorkspaceOwnRoot) {
+    workspaces.update((list) =>
+      list.map((existing) =>
+        existing.id === ws.id
+          ? {
+              ...existing,
+              splitRoot: ws.splitRoot,
+              activePaneId: ws.activePaneId,
+              ...(ws.metadata ? { metadata: ws.metadata } : {}),
+            }
+          : existing,
+      ),
+    );
+  } else {
+    workspaces.update((list) => [...list, ws]);
     appendRootRow({ kind: "child-workspace", id: ws.id });
   }
   eventBus.emit({
@@ -387,10 +363,11 @@ export async function createWorkspaceFromDef(
   // because it'll restore the persisted active idx once every workspace
   // has been rebuilt, and we don't want N+1 activation events along
   // the way.
+  const finalIdx = get(workspaces).findIndex((w) => w.id === ws.id);
   if (!restoring) {
-    switchWorkspace(get(workspaces).length - 1);
+    if (finalIdx >= 0) switchWorkspace(finalIdx);
   } else {
-    activeWorkspaceIdx.set(get(workspaces).length - 1);
+    if (finalIdx >= 0) activeWorkspaceIdx.set(finalIdx);
   }
   const ap = getAllPanes(splitRoot).find((p) => p.id === ws.activePaneId);
   const as_ = ap?.surfaces.find((s) => s.id === ap.activeSurfaceId);

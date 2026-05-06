@@ -103,9 +103,16 @@ describe("S2 — last-active branch restore", () => {
     const ws = makeWorkspace("g1", { branchedWorkspaceIds: ["nw-a", "nw-b"] });
     addWorkspace(ws);
 
-    workspaces.set([makeChild("nw-a", "g1"), makeChild("nw-b", "g1")]);
+    // Append the children alongside g1 (don't clobber — Stage 10 unified store
+    // keeps both workspace and branch rows in `workspaces`).
+    workspaces.update((cur) => [
+      ...cur,
+      makeChild("nw-a", "g1"),
+      makeChild("nw-b", "g1"),
+    ]);
 
-    switchWorkspace(1); // switch to index 1 → nw-b
+    // After addWorkspace, g1 is at idx 0; nw-a at 1; nw-b at 2.
+    switchWorkspace(2);
 
     expect(getWorkspace("g1")?.lastActiveBranchedWorkspaceId).toBe("nw-b");
   });
@@ -114,9 +121,9 @@ describe("S2 — last-active branch restore", () => {
     const ws = makeWorkspace("g1");
     addWorkspace(ws);
 
-    workspaces.set([makeChild("nw-root")]); // no parentWorkspaceId
+    workspaces.update((cur) => [...cur, makeChild("nw-root")]); // no parentWorkspaceId
 
-    switchWorkspace(0);
+    switchWorkspace(1);
 
     // g1 should remain untouched — nw-root has no parentWorkspaceId
     expect(getWorkspace("g1")?.lastActiveBranchedWorkspaceId).toBeUndefined();
@@ -129,7 +136,7 @@ describe("S2 — last-active branch restore", () => {
     });
     addWorkspace(ws);
 
-    workspaces.set([makeChild("g1"), makeChild("nw-last", "g1")]);
+    workspaces.update((cur) => [...cur, makeChild("nw-last", "g1")]);
     activeWorkspaceIdx.set(-1);
 
     await activateWorkspace("g1");
@@ -143,7 +150,6 @@ describe("S2 — last-active branch restore", () => {
     const ws = makeWorkspace("g1");
     addWorkspace(ws);
 
-    workspaces.set([]);
     activeWorkspaceIdx.set(-1);
 
     await activateWorkspace("g1");

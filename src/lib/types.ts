@@ -42,6 +42,11 @@ export interface Workspace {
   // Parent reference — presence discriminates child workspaces from primary workspaces
   parentWorkspaceId?: string;
   /**
+   * Tracked only on root workspaces; lists the ids of branched/dashboard
+   * children currently claimed by this Workspace.
+   */
+  branchedWorkspaceIds?: string[];
+  /**
    * Transitional: legacy metadata blob carried over from the
    * pre-unification store. New writers should set top-level fields and
    * `extensionData` instead. Read access uses top-level fields directly.

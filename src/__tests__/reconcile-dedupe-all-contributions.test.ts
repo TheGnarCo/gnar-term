@@ -17,7 +17,6 @@ vi.mock("@tauri-apps/api/event", () => ({
 
 import { reconcileWorkspaceDashboards } from "../lib/services/workspace-service";
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
-import { workspacesStore } from "../lib/stores/workspace";
 import {
   registerDashboardContribution,
   resetDashboardContributions,
@@ -31,7 +30,12 @@ const WORKSPACE = {
   branchedWorkspaceIds: [],
   isGit: false,
   createdAt: "2026-04-21T00:00:00.000Z",
-};
+  splitRoot: {
+    type: "pane",
+    pane: { id: "wp", surfaces: [], activeSurfaceId: null },
+  },
+  activePaneId: "wp",
+} as never;
 
 function makeDashboard(id: string, contribId: string): never {
   return {
@@ -54,7 +58,6 @@ describe("reconcileWorkspaceDashboards — dedupe all contribution types", () =>
     invokeMock.mockImplementation(async () => undefined);
     workspaces.set([]);
     activeWorkspaceIdx.set(-1);
-    workspacesStore.set([WORKSPACE]);
     resetDashboardContributions();
   });
 
@@ -69,6 +72,7 @@ describe("reconcileWorkspaceDashboards — dedupe all contribution types", () =>
       create: vi.fn(async () => "ws-new"),
     });
     workspaces.set([
+      WORKSPACE,
       makeDashboard("settings-1", "settings"),
       makeDashboard("settings-2", "settings"),
     ]);
@@ -95,6 +99,7 @@ describe("reconcileWorkspaceDashboards — dedupe all contribution types", () =>
       create: vi.fn(async () => "ws-new"),
     });
     workspaces.set([
+      WORKSPACE,
       makeDashboard("agentic-1", "agentic"),
       makeDashboard("agentic-2", "agentic"),
     ]);
@@ -127,6 +132,7 @@ describe("reconcileWorkspaceDashboards — dedupe all contribution types", () =>
       });
     }
     workspaces.set([
+      WORKSPACE,
       makeDashboard("group-1", "group"),
       makeDashboard("group-2", "group"),
       makeDashboard("settings-1", "settings"),

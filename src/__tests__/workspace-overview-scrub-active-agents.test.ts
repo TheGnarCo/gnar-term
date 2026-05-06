@@ -15,15 +15,13 @@ vi.mock("@tauri-apps/api/event", () => ({
 }));
 
 import { reconcileWorkspaceDashboards } from "../lib/services/workspace-service";
-import { workspacesStore } from "../lib/stores/workspace";
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
 
 describe("scrub Active Agents from workspace Overview", () => {
   beforeEach(() => {
     invokeMock.mockReset();
-    workspaces.set([]);
     activeWorkspaceIdx.set(-1);
-    workspacesStore.set([
+    workspaces.set([
       {
         id: "g1",
         name: "Agent Skills",
@@ -33,8 +31,13 @@ describe("scrub Active Agents from workspace Overview", () => {
         isGit: false,
         createdAt: "2026-04-21T00:00:00.000Z",
         dashboardWorkspaceId: "ws-existing",
+        splitRoot: {
+          type: "pane",
+          pane: { id: "g1-p", surfaces: [], activeSurfaceId: null },
+        },
+        activePaneId: "g1-p",
       },
-    ]);
+    ] as never);
   });
 
   it("rewrites the Overview markdown when an Active Agents section is present", async () => {

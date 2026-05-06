@@ -10,7 +10,8 @@
  */
 import { invoke } from "@tauri-apps/api/core";
 import { get } from "svelte/store";
-import type { SurfaceDef, WorkspaceRecord } from "../config";
+import type { SurfaceDef } from "../config";
+import type { WorkspaceRecord } from "../stores/workspace";
 import { WORKSPACE_COLOR_SLOTS } from "../../extensions/api";
 import { appendRootRow, removeRootRow } from "../stores/root-row-order";
 import { workspaces } from "../stores/workspace";
@@ -46,7 +47,24 @@ function emitStateChanged(metadata: Record<string, unknown> = {}): void {
 }
 
 export function addWorkspace(workspace: WorkspaceRecord): void {
-  setWorkspaces([...getWorkspaces(), workspace]);
+  // Stage 10 unification: every entry in the unified store is a
+  // `Workspace` so even a record-shaped row needs a splitRoot. When the
+  // caller hasn't materialized a tab surface yet, mint a placeholder
+  // empty pane — `createWorkspaceFromDef` will overwrite splitRoot /
+  // activePaneId when the matching runtime workspace is created.
+  const ensured: WorkspaceRecord = {
+    ...workspace,
+    splitRoot: workspace.splitRoot ?? {
+      type: "pane",
+      pane: {
+        id: `placeholder-${workspace.id}`,
+        surfaces: [],
+        activeSurfaceId: null,
+      },
+    },
+    activePaneId: workspace.activePaneId ?? null,
+  };
+  setWorkspaces([...getWorkspaces(), ensured]);
   appendRootRow({ kind: "workspace", id: workspace.id });
   emitStateChanged({ parentWorkspaceId: workspace.id });
 }
@@ -129,13 +147,14 @@ export function addChildToWorkspace(
   const primaryWorkspaces = getWorkspaces();
   const workspace = primaryWorkspaces.find((w) => w.id === parentWorkspaceId);
   if (!workspace) return false;
-  if (workspace.branchedWorkspaceIds.includes(workspaceId)) return false;
+  if ((workspace.branchedWorkspaceIds ?? []).includes(workspaceId))
+    return false;
 
   const next = primaryWorkspaces.map((w) => {
     if (w.id === parentWorkspaceId) {
       return {
         ...w,
-        branchedWorkspaceIds: [...w.branchedWorkspaceIds, workspaceId],
+        branchedWorkspaceIds: [...(w.branchedWorkspaceIds ?? []), workspaceId],
       };
     }
     return w;
@@ -159,9 +178,10 @@ export function insertChildIntoWorkspace(
   let changed = false;
   const next = workspaces.map((w) => {
     if (w.id !== parentWorkspaceId) return w;
-    if (w.branchedWorkspaceIds.includes(workspaceId)) return w;
+    const current = w.branchedWorkspaceIds ?? [];
+    if (current.includes(workspaceId)) return w;
     changed = true;
-    const ids = [...w.branchedWorkspaceIds];
+    const ids = [...current];
     ids.splice(
       Math.max(0, Math.min(ids.length, positionInWorkspace)),
       0,
@@ -183,7 +203,7 @@ export function insertChildIntoWorkspace(
 export function removeChildFromAllWorkspaces(workspaceId: string): void {
   const next = getWorkspaces().map((w) => ({
     ...w,
-    branchedWorkspaceIds: w.branchedWorkspaceIds.filter(
+    branchedWorkspaceIds: (w.branchedWorkspaceIds ?? []).filter(
       (id) => id !== workspaceId,
     ),
   }));
@@ -777,10 +797,11 @@ export function reclaimChildWorkspaces(): void {
     const next = primaryWorkspaces.map((w) => {
       const toAdd = newMembers.get(w.id) ?? [];
       if (toAdd.length === 0) return w;
-      const existing = new Set(w.branchedWorkspaceIds);
+      const current = w.branchedWorkspaceIds ?? [];
+      const existing = new Set(current);
       const fresh = toAdd.filter((id) => !existing.has(id));
       return fresh.length > 0
-        ? { ...w, branchedWorkspaceIds: [...w.branchedWorkspaceIds, ...fresh] }
+        ? { ...w, branchedWorkspaceIds: [...current, ...fresh] }
         : w;
     });
     setWorkspaces(next);

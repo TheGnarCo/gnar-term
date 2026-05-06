@@ -1,34 +1,22 @@
 /**
  * Workspace stores — single source of truth for all workspace shapes.
  *
- * Two coexisting store sections:
- *   1. Unified runtime store (`workspaces`, `activeWorkspaceIdx`, ...) —
- *      holds Workspace instances with panes (Branches, Dashboards,
- *      orphaned Branches). All workspaces here share the `Workspace`
- *      type from `types.ts`.
- *   2. WorkspaceRecord store (`workspacesStore`, `getWorkspaces`,
- *      `setWorkspaces`, ...) — holds `WorkspaceRecord` entries: the
- *      path-rooted paneless containers that own Workspace-level fields
- *      (path, color, git) and track which Branches belong to them.
- *      Persisted as entries inside `state.workspaces[]` (alongside
- *      Branches and Dashboards) but kept as a separate runtime store
- *      because they are structurally paneless and are filtered out of
- *      tab-strip / reconciliation iterations.
+ * One unified runtime store (`workspaces`, `activeWorkspaceIdx`, ...)
+ * holds every Workspace instance: root path-rooted Workspaces, branched
+ * (worktree-backed) children, and Dashboards. The "root workspace"
+ * filter (`!parentWorkspaceId && !isDashboard && !worktreePath`) selects
+ * the entries that own Workspace-level fields (path, color, git) and
+ * appear as path-rooted rows in the sidebar.
  *
  * Persistence: a single writer in `workspace-runtime-service.persistWorkspaces`
- * serializes both sides into `state.workspaces[]` on every scheduled flush.
+ * serializes the unified store into `state.workspaces[]` on every scheduled
+ * flush.
  */
 import { get, writable, derived } from "svelte/store";
 import type { Writable, Readable } from "svelte/store";
 import type { Workspace } from "../types";
 import { getAllPanes } from "../types";
-import {
-  loadState,
-  saveState,
-  type WorkspaceDef,
-  type LayoutNode,
-} from "../config";
-import { loadExtensionState } from "../services/extension-state";
+import { loadState, type WorkspaceDef, type LayoutNode } from "../config";
 
 // ---------------------------------------------------------------------------
 // Core writables
@@ -341,232 +329,119 @@ export function serializeWorkspace(ws: Workspace): WorkspaceDef {
 }
 
 // ===========================================================================
-// WorkspaceRecord store (formerly src/lib/stores/workspaces.ts)
+// Root-workspace surface
 //
-// WorkspaceRecords are the path-rooted paneless containers that own
-// Workspace-level fields (path, color, git) and track which Branches
-// (worktree-backed variants) currently belong to them. Persisted inside
-// the unified `state.workspaces[]` array alongside Branches/Dashboards.
-//
-// Pre-Stage-8 fallback: when state.json has no WorkspaceRecord entries
-// yet (very old install that skipped Stage 8), data is migrated forward
-// from the legacy per-extension file at
-// `~/.config/gnar-term/extensions/workspace-groups/state.json`.
+// "Root workspaces" are the path-rooted entries inside `_workspaces` —
+// `Workspace` rows that own Workspace-level fields (path, color, git)
+// and track which Branches (worktree-backed variants) belong to them.
+// They live in the same array as Branches and Dashboards; the helpers
+// below project that array through the root filter.
 // ===========================================================================
 
-// Persist scheduler is injected post-init by workspace-runtime-service to
-// avoid a circular module init. Unset until the runtime module finishes
-// evaluating — during early tests/bootstrap before the runtime module
-// loads, mutations here are no-ops with respect to scheduling.
-let _recordsSchedulePersist: (() => void) | null = null;
-export function installSchedulePersist(fn: () => void): void {
-  _recordsSchedulePersist = fn;
-}
-
-const LEGACY_STATE_ID = "workspace-groups";
-const LEGACY_WORKSPACES_KEY = "workspaces";
-const LEGACY_ACTIVE_WORKSPACE_ID_KEY = "activeWorkspaceId";
-
 /**
- * WorkspaceRecord — the persisted Workspace metadata shape: the
- * path-rooted container that owns Workspace-level fields (path, color,
- * git) and tracks which Branches (worktree-backed variants provided by
- * the Branch Workspace extension) currently belong to it. Conceptually
- * this IS a Workspace; the type retains its old name until Stage 10
- * collapses it into the runtime `Workspace` interface. New APIs and
- * comments should say "Workspace" and "Branch" rather than
- * "parent" / "child".
+ * `WorkspaceRecord` narrows `Workspace` to the fields a root workspace
+ * is guaranteed to own at runtime (path, color, branchedWorkspaceIds,
+ * isGit, createdAt). Structural fields (`splitRoot`, `activePaneId`)
+ * stay optional so the creation flow can construct an entry before its
+ * tab surface exists; `addWorkspace` mints a placeholder splitRoot at
+ * write time, and `createWorkspaceFromDef` overwrites it once the
+ * runtime workspace materializes.
+ *
+ * Stage 10: this is just a typed view over `Workspace` rows in the
+ * unified `_workspaces` store — there is no separate "Record" store.
  */
-export interface WorkspaceRecord {
-  id: string;
-  name: string;
-  /** Root CWD — auto-adoption uses this as a longest-prefix ancestor match. */
+export type WorkspaceRecord = Omit<Workspace, "splitRoot" | "activePaneId"> & {
   path: string;
   color: string;
-  /** Ids of Branches (worktree-backed variants) currently claimed by this Workspace. */
   branchedWorkspaceIds: string[];
-  lastActiveBranchedWorkspaceId?: string;
-  autoRunRestoreCommands?: boolean;
   isGit: boolean;
   createdAt: string;
-  dashboardWorkspaceId?: string;
-  locked?: boolean;
-  pathMissing?: boolean;
+  splitRoot?: Workspace["splitRoot"];
+  activePaneId?: Workspace["activePaneId"];
+};
+
+/** A `Workspace` is a "root workspace" iff it owns Workspace-level fields. */
+function isRootWorkspace(ws: Workspace): boolean {
+  if (ws.parentWorkspaceId !== undefined) return false;
+  if (ws.isDashboard === true) return false;
+  if (typeof (ws as { worktreePath?: string }).worktreePath === "string") {
+    return false;
+  }
+  return true;
 }
 
-const _workspaceRecords = writable<WorkspaceRecord[]>([]);
-export const workspacesStore: Readable<WorkspaceRecord[]> = _workspaceRecords;
-
+/** Active root-workspace id. */
 const _activeWorkspaceRecordId = writable<string | null>(null);
+
+/**
+ * Public root-workspaces store. Read-only projection of `_workspaces`
+ * filtered to the path-rooted entries. Writes go through the typed
+ * helpers (`addWorkspace`, `setWorkspaces`, ...) which preserve
+ * children/dashboards by editing the array in place.
+ */
+export const workspacesStore: Readable<WorkspaceRecord[]> = derived(
+  _workspaces,
+  ($ws) => $ws.filter(isRootWorkspace) as WorkspaceRecord[],
+);
 
 let _workspaceRecordsLoaded = false;
 
 /**
- * Identify WorkspaceRecord entries inside the unified
- * `state.workspaces[]` array. WorkspaceRecord defs carry a `path` and
- * have neither a `parentWorkspaceId` (Branches/Dashboards) nor a
- * `worktreePath` (orphaned Branches). The post-migration state.json
- * uses this exact shape for WorkspaceRecord entries.
- */
-export function isWorkspaceRecordDef(def: WorkspaceDef): boolean {
-  return (
-    def.path !== undefined &&
-    def.parentWorkspaceId === undefined &&
-    def.worktreePath === undefined &&
-    def.isDashboard !== true
-  );
-}
-
-/**
- * Lift a `WorkspaceDef` (post-migration shape) back to a
- * `WorkspaceRecord` for the in-memory record store. The
- * `branchedWorkspaceIds` cache is reset to `[]` — the
- * `workspace:created` listener rebuilds membership from
- * `metadata.parentWorkspaceId`.
- */
-function defToWorkspaceRecord(def: WorkspaceDef): WorkspaceRecord {
-  return {
-    id: def.id,
-    name: def.name,
-    path: def.path ?? "",
-    color: def.color ?? "",
-    isGit: def.isGit ?? false,
-    createdAt: def.createdAt ?? new Date().toISOString(),
-    branchedWorkspaceIds: [],
-    ...(def.autoRunRestoreCommands !== undefined && {
-      autoRunRestoreCommands: def.autoRunRestoreCommands,
-    }),
-    ...(def.lastActiveBranchedWorkspaceId !== undefined && {
-      lastActiveBranchedWorkspaceId: def.lastActiveBranchedWorkspaceId,
-    }),
-    ...(def.dashboardWorkspaceId !== undefined && {
-      dashboardWorkspaceId: def.dashboardWorkspaceId,
-    }),
-    ...(def.locked !== undefined && { locked: def.locked }),
-  };
-}
-
-/**
- * Inverse of `defToWorkspaceRecord`: serialize a WorkspaceRecord back
- * into a WorkspaceDef for persistence. Used by the unified persist path
- * so all workspaces (records, branched, dashboard) land in
- * `state.workspaces[]` together.
+ * Read state from disk and seed the active root-workspace id. The
+ * unified `_workspaces` store itself is hydrated by the runtime path
+ * (`restoreWorkspaces` → `seedWorkspaces`); this function only handles
+ * the active-id pointer and the one-shot loaded flag.
  *
- * The on-disk shape carries an empty layout (`{ pane: { surfaces: [] }
- * }`) for WorkspaceRecord entries — at runtime, records don't have a
- * splitRoot of their own (their UI is delegated to the active Branch).
- * Layout is preserved across restarts because the migration helper
- * (`migrateLegacyWorkspaces`) inherits the absorbed primary's layout
- * onto the merged record; this function never overwrites it because at
- * runtime the record store does not track layouts.
- */
-export function workspaceRecordToDef(p: WorkspaceRecord): WorkspaceDef {
-  const def: WorkspaceDef = {
-    id: p.id,
-    name: p.name,
-    layout: { pane: { surfaces: [] } },
-    path: p.path,
-    color: p.color,
-    isGit: p.isGit,
-    createdAt: p.createdAt,
-  };
-  if (p.autoRunRestoreCommands !== undefined) {
-    def.autoRunRestoreCommands = p.autoRunRestoreCommands;
-  }
-  if (p.lastActiveBranchedWorkspaceId !== undefined) {
-    def.lastActiveBranchedWorkspaceId = p.lastActiveBranchedWorkspaceId;
-  }
-  if (p.dashboardWorkspaceId !== undefined) {
-    def.dashboardWorkspaceId = p.dashboardWorkspaceId;
-  }
-  if (p.locked !== undefined) def.locked = p.locked;
-  return def;
-}
-
-/** Snapshot of WorkspaceRecord entries ready to merge into `state.workspaces[]`. */
-export function getWorkspaceRecordsAsDefs(): WorkspaceDef[] {
-  return get(_workspaceRecords).map(workspaceRecordToDef);
-}
-
-function scheduleRecordsPersist(): void {
-  _recordsSchedulePersist?.();
-}
-
-/**
- * Read state from disk and seed the WorkspaceRecord stores. Idempotent —
- * subsequent calls are no-ops so tests can freely call the initializer.
- *
- * `loadState` runs `migrateLegacyWorkspaces` first, so by the time we
- * reach this code WorkspaceRecord entries always live inside
- * `state.workspaces[]` — we project them back to `WorkspaceRecord`
- * shape for the in-memory store. The pre-Stage-8 extension-state
- * file is consulted only when `state.workspaces[]` has no
- * WorkspaceRecord entries yet, and any data found there is persisted
- * forward into `state.workspaces[]` so future loads bypass the fallback.
+ * `loadState` runs `migrateLegacyWorkspaces` so by the time we read
+ * state every entry already lives inside `state.workspaces[]`.
+ * Idempotent — subsequent calls are no-ops so tests can freely call
+ * the initializer.
  */
 export async function loadWorkspaces(): Promise<void> {
   if (_workspaceRecordsLoaded) return;
   _workspaceRecordsLoaded = true;
 
   const state = await loadState();
-
-  let records: WorkspaceRecord[] | null = null;
-  let active: string | null = null;
-
-  // Post-migration path: WorkspaceRecord entries live in state.workspaces[].
-  if (Array.isArray(state.workspaces)) {
-    const recordDefs = state.workspaces.filter(isWorkspaceRecordDef);
-    if (recordDefs.length > 0) {
-      records = recordDefs.map(defToWorkspaceRecord);
-    }
+  if (typeof state.activeWorkspaceId === "string") {
+    _activeWorkspaceRecordId.set(state.activeWorkspaceId);
   }
-
-  // Pre-Stage-8 fallback: legacy per-extension state file.
-  if (records === null) {
-    const legacy = await loadExtensionState(LEGACY_STATE_ID);
-    if (Array.isArray(legacy[LEGACY_WORKSPACES_KEY])) {
-      records = legacy[LEGACY_WORKSPACES_KEY] as WorkspaceRecord[];
-    }
-    if (typeof legacy[LEGACY_ACTIVE_WORKSPACE_ID_KEY] === "string") {
-      active = legacy[LEGACY_ACTIVE_WORKSPACE_ID_KEY] as string;
-    }
-    if (records && records.length > 0) {
-      // Persist forward immediately so future loads read from AppState.
-      await saveState({
-        workspaces: [
-          ...records.map(workspaceRecordToDef),
-          ...(state.workspaces ?? []),
-        ],
-        activeWorkspaceId: active ?? state.activeWorkspaceId,
-      });
-    }
-  }
-
-  // Active id resolution: state.activeWorkspaceId always reflects the
-  // post-migration id (migration redirects absorbed primary ids to record ids).
-  if (
-    active === null &&
-    typeof state.activeWorkspaceId === "string" &&
-    records?.some((w) => w.id === state.activeWorkspaceId)
-  ) {
-    active = state.activeWorkspaceId;
-  }
-
-  _workspaceRecords.set((records ?? []).map(normalizePersistedRecord));
-  _activeWorkspaceRecordId.set(active);
 }
 
 export function getWorkspaces(): WorkspaceRecord[] {
-  return get(_workspaceRecords);
+  return get(_workspaces).filter(isRootWorkspace) as WorkspaceRecord[];
 }
 
 export function getWorkspace(id: string): WorkspaceRecord | undefined {
   return getWorkspaces().find((w) => w.id === id);
 }
 
-export function setWorkspaces(next: WorkspaceRecord[]): void {
-  _workspaceRecords.set(next);
-  scheduleRecordsPersist();
+/**
+ * Replace the root-workspace slice of the unified store with `next`,
+ * preserving every non-root entry (children + dashboards) in place.
+ * Roots in `next` keep the order in which they appear; non-root entries
+ * keep their original order, with non-root entries that originally
+ * appeared before any root retained at the front.
+ */
+export function setWorkspaces(next: readonly WorkspaceRecord[]): void {
+  _workspaces.update((current) => {
+    const merged: Workspace[] = [];
+    let nextIdx = 0;
+    for (const ws of current) {
+      if (isRootWorkspace(ws)) {
+        if (nextIdx < next.length) {
+          merged.push(next[nextIdx]! as Workspace);
+          nextIdx++;
+        }
+      } else {
+        merged.push(ws);
+      }
+    }
+    while (nextIdx < next.length) {
+      merged.push(next[nextIdx]! as Workspace);
+      nextIdx++;
+    }
+    return merged;
+  });
 }
 
 export function getActiveWorkspaceId(): string | null {
@@ -575,26 +450,11 @@ export function getActiveWorkspaceId(): string | null {
 
 export function setActiveWorkspaceId(id: string | null): void {
   _activeWorkspaceRecordId.set(id);
-  scheduleRecordsPersist();
 }
 
 /** Test hook — reset in-memory state so tests start clean. */
 export function resetWorkspacesForTest(): void {
-  _workspaceRecords.set([]);
+  _workspaces.set([]);
   _activeWorkspaceRecordId.set(null);
   _workspaceRecordsLoaded = false;
-}
-
-/**
- * Normalize a workspace loaded from disk: reset the runtime-only
- * `branchedWorkspaceIds: []` cache so the `workspace:created` listener
- * rebuilds membership from `metadata.parentWorkspaceId`.
- */
-function normalizePersistedRecord(raw: unknown): WorkspaceRecord {
-  const g = raw as Record<string, unknown>;
-  const { branchedWorkspaceIds: _drop, ...rest } = g;
-  return {
-    ...(rest as Omit<WorkspaceRecord, "branchedWorkspaceIds">),
-    branchedWorkspaceIds: [],
-  } as WorkspaceRecord;
 }

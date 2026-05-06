@@ -30,10 +30,7 @@ import {
   claimWorkspace,
   resetClaimedWorkspaces,
 } from "../../../lib/services/claimed-workspace-registry";
-import {
-  setWorkspaces,
-  resetWorkspacesForTest,
-} from "../../../lib/stores/workspace";
+import { resetWorkspacesForTest } from "../../../lib/stores/workspace";
 import type { DashboardHostContext } from "../../../lib/contexts/dashboard-host";
 
 function makeAgent(overrides: Partial<DetectedAgent> = {}): DetectedAgent {
@@ -84,6 +81,28 @@ function seedWorkspace(
   } as any;
 }
 
+function makeRoot(
+  id: string,
+  path: string,
+  branchedWorkspaceIds: string[] = [],
+  color: string = "blue",
+): unknown {
+  return {
+    id,
+    name: id,
+    path,
+    color,
+    branchedWorkspaceIds,
+    isGit: false,
+    createdAt: "2026-01-01",
+    splitRoot: {
+      type: "pane",
+      pane: { id: `${id}-p`, surfaces: [], activeSurfaceId: null },
+    },
+    activePaneId: `${id}-p`,
+  };
+}
+
 describe("hostScopedAgentsStore", () => {
   beforeEach(() => {
     workspaces.set([]);
@@ -125,17 +144,8 @@ describe("hostScopedAgentsStore", () => {
       seedWorkspace("ws-in", { metadata: { parentWorkspaceId: "grp-1" } }),
       seedWorkspace("ws-out", { metadata: { parentWorkspaceId: "grp-2" } }),
       seedWorkspace("ws-none", {}),
-    ]);
-    setWorkspaces([
-      {
-        id: "grp-1",
-        name: "One",
-        path: "/work/one",
-        color: "blue",
-        workspaceDashboardEnabled: true,
-        branchedWorkspaceIds: ["ws-in"],
-      },
-    ]);
+      makeRoot("grp-1", "/work/one", ["ws-in"]),
+    ] as never);
     const api = makeApi([
       makeAgent({ agentId: "a-in", workspaceId: "ws-in" }),
       makeAgent({ agentId: "a-out", workspaceId: "ws-out" }),
@@ -153,17 +163,8 @@ describe("hostScopedAgentsStore", () => {
     workspaces.set([
       seedWorkspace("ws-under", { cwd: "/work/one/sub" }),
       seedWorkspace("ws-elsewhere", { cwd: "/other/path" }),
-    ]);
-    setWorkspaces([
-      {
-        id: "grp-1",
-        name: "One",
-        path: "/work/one",
-        color: "blue",
-        workspaceDashboardEnabled: true,
-        branchedWorkspaceIds: [],
-      },
-    ]);
+      makeRoot("grp-1", "/work/one"),
+    ] as never);
     const api = makeApi([
       makeAgent({ agentId: "a-under", workspaceId: "ws-under" }),
       makeAgent({ agentId: "a-else", workspaceId: "ws-elsewhere" }),
@@ -182,17 +183,8 @@ describe("hostScopedAgentsStore", () => {
         ...seedWorkspace("ws-under", { cwd: "/work/one/sub" }),
         parentWorkspaceId: "someone-else",
       },
-    ]);
-    setWorkspaces([
-      {
-        id: "grp-1",
-        name: "One",
-        path: "/work/one",
-        color: "blue",
-        workspaceDashboardEnabled: true,
-        branchedWorkspaceIds: [],
-      },
-    ]);
+      makeRoot("grp-1", "/work/one"),
+    ] as never);
     claimWorkspace("ws-under", "someone-else");
     const api = makeApi([
       makeAgent({ agentId: "a-under", workspaceId: "ws-under" }),
@@ -208,17 +200,8 @@ describe("hostScopedAgentsStore", () => {
   it("workspace scope → prefix-only match: sibling paths don't leak in", async () => {
     workspaces.set([
       seedWorkspace("ws-sibling", { cwd: "/work/one-other/sub" }),
-    ]);
-    setWorkspaces([
-      {
-        id: "grp-1",
-        name: "One",
-        path: "/work/one",
-        color: "blue",
-        workspaceDashboardEnabled: true,
-        branchedWorkspaceIds: [],
-      },
-    ]);
+      makeRoot("grp-1", "/work/one"),
+    ] as never);
     const api = makeApi([
       makeAgent({ agentId: "a-sib", workspaceId: "ws-sibling" }),
     ]);
@@ -240,17 +223,8 @@ describe("hostScopedAgentsStore", () => {
         ...seedWorkspace("ws-native", { cwd: "" }), // no cwd, no metadata.parentWorkspaceId
         parentWorkspaceId: "grp-1",
       },
-    ]);
-    setWorkspaces([
-      {
-        id: "grp-1",
-        name: "One",
-        path: "/work/one",
-        color: "blue",
-        workspaceDashboardEnabled: true,
-        branchedWorkspaceIds: ["ws-native"], // explicitly listed in the workspace
-      },
-    ]);
+      makeRoot("grp-1", "/work/one", ["ws-native"]),
+    ] as never);
     // Simulate the claim that promote-to-workspace installs.
     claimWorkspace("ws-native", "core");
     const api = makeApi([
@@ -265,25 +239,11 @@ describe("hostScopedAgentsStore", () => {
   });
 
   it("workspace scope → workspace in workspace.branchedWorkspaceIds for a different workspace is not included", async () => {
-    workspaces.set([seedWorkspace("ws-other", { cwd: "" })]);
-    setWorkspaces([
-      {
-        id: "grp-1",
-        name: "One",
-        path: "/work/one",
-        color: "blue",
-        workspaceDashboardEnabled: true,
-        branchedWorkspaceIds: [],
-      },
-      {
-        id: "grp-2",
-        name: "Two",
-        path: "/work/two",
-        color: "red",
-        workspaceDashboardEnabled: true,
-        branchedWorkspaceIds: ["ws-other"],
-      },
-    ]);
+    workspaces.set([
+      seedWorkspace("ws-other", { cwd: "" }),
+      makeRoot("grp-1", "/work/one"),
+      makeRoot("grp-2", "/work/two", ["ws-other"], "red"),
+    ] as never);
     const api = makeApi([
       makeAgent({ agentId: "a-other", workspaceId: "ws-other" }),
     ]);

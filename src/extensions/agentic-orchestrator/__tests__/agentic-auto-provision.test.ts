@@ -39,11 +39,30 @@ import {
   resetDashboardContributions,
 } from "../../../lib/services/dashboard-contribution-registry";
 import { workspaces, activeWorkspaceIdx } from "../../../lib/stores/workspace";
-import { workspacesStore } from "../../../lib/stores/workspace";
 import {
   markRestored,
   resetRestoreSignal,
 } from "../../../lib/bootstrap/restore-workspaces";
+
+function seedRoot(
+  id: string,
+  color: string,
+): import("../../../lib/types").Workspace {
+  return {
+    id,
+    name: id.toUpperCase(),
+    path: `/tmp/${id}`,
+    color,
+    branchedWorkspaceIds: [],
+    isGit: true,
+    createdAt: "2026-04-21T00:00:00.000Z",
+    splitRoot: {
+      type: "pane",
+      pane: { id: `${id}-p`, surfaces: [], activeSurfaceId: null },
+    },
+    activePaneId: `${id}-p`,
+  } as unknown as import("../../../lib/types").Workspace;
+}
 
 describe("agentic auto-provision", () => {
   beforeEach(async () => {
@@ -52,7 +71,6 @@ describe("agentic auto-provision", () => {
     resetDashboardContributions();
     workspaces.set([]);
     activeWorkspaceIdx.set(-1);
-    workspacesStore.set([]);
   });
 
   it("contribution advertises autoProvision + locked reason", async () => {
@@ -69,26 +87,7 @@ describe("agentic auto-provision", () => {
   });
 
   it("provisions the Agentic Dashboard for every existing workspace on activate", async () => {
-    workspacesStore.set([
-      {
-        id: "g1",
-        name: "G1",
-        path: "/tmp/g1",
-        color: "blue",
-        branchedWorkspaceIds: [],
-        isGit: true,
-        createdAt: "2026-04-21T00:00:00.000Z",
-      },
-      {
-        id: "g2",
-        name: "G2",
-        path: "/tmp/g2",
-        color: "green",
-        branchedWorkspaceIds: [],
-        isGit: true,
-        createdAt: "2026-04-21T00:00:00.000Z",
-      },
-    ]);
+    workspaces.set([seedRoot("g1", "blue"), seedRoot("g2", "green")]);
     // Simulate workspaces already restored (runtime-enable path).
     markRestored();
 
@@ -119,17 +118,7 @@ describe("agentic auto-provision", () => {
   });
 
   it("closes every agentic dashboard workspace on deactivate", async () => {
-    workspacesStore.set([
-      {
-        id: "g1",
-        name: "G1",
-        path: "/tmp/g1",
-        color: "blue",
-        branchedWorkspaceIds: [],
-        isGit: true,
-        createdAt: "2026-04-21T00:00:00.000Z",
-      },
-    ]);
+    workspaces.set([seedRoot("g1", "blue")]);
     markRestored();
 
     registerExtension(

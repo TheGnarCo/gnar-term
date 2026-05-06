@@ -14,7 +14,6 @@ vi.mock("@tauri-apps/api/event", () => ({
 
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
 import {
-  setWorkspaces,
   setActiveWorkspaceId,
   resetWorkspacesForTest,
 } from "../lib/stores/workspace";
@@ -121,7 +120,7 @@ describe("workspace persistence", () => {
     saveStateSpy.mockRestore();
   });
 
-  it("persistWorkspaces merges project records from the legacy store with runtime workspaces", async () => {
+  it("persistWorkspaces serializes root + child workspaces from the unified store", async () => {
     const { persistWorkspaces } =
       await import("../lib/services/workspace-runtime-service");
     const config = await import("../lib/config");
@@ -129,7 +128,7 @@ describe("workspace persistence", () => {
       .spyOn(config, "saveState")
       .mockResolvedValue(undefined);
 
-    setWorkspaces([
+    workspaces.set([
       {
         id: "proj-alpha",
         name: "Alpha",
@@ -138,11 +137,12 @@ describe("workspace persistence", () => {
         branchedWorkspaceIds: [],
         isGit: true,
         createdAt: "2026-01-01",
+        splitRoot: {
+          type: "pane",
+          pane: { id: "alpha-p", surfaces: [], activeSurfaceId: null },
+        },
+        activePaneId: "alpha-p",
       },
-    ]);
-    setActiveWorkspaceId("proj-alpha");
-
-    workspaces.set([
       {
         id: "branch-1",
         name: "Branch 1",
@@ -154,7 +154,8 @@ describe("workspace persistence", () => {
         parentWorkspaceId: "proj-alpha",
       },
     ]);
-    activeWorkspaceIdx.set(0);
+    setActiveWorkspaceId("proj-alpha");
+    activeWorkspaceIdx.set(1);
 
     await persistWorkspaces();
 
@@ -166,49 +167,8 @@ describe("workspace persistence", () => {
     expect(proj?.path).toBe("/repos/alpha");
     expect(proj?.color).toBe("blue");
     expect(proj?.isGit).toBe(true);
-    // Legacy active id wins over runtime active idx.
+    // Explicit active id (from setActiveWorkspaceId) wins over runtime idx.
     expect(payload.activeWorkspaceId).toBe("proj-alpha");
-
-    saveStateSpy.mockRestore();
-  });
-
-  it("persistWorkspaces deduplicates a runtime entry that shadows a project record id", async () => {
-    const { persistWorkspaces } =
-      await import("../lib/services/workspace-runtime-service");
-    const config = await import("../lib/config");
-    const saveStateSpy = vi
-      .spyOn(config, "saveState")
-      .mockResolvedValue(undefined);
-
-    setWorkspaces([
-      {
-        id: "proj-alpha",
-        name: "Alpha",
-        path: "/repos/alpha",
-        color: "blue",
-        branchedWorkspaceIds: [],
-        isGit: true,
-        createdAt: "2026-01-01",
-      },
-    ]);
-
-    workspaces.set([
-      {
-        id: "proj-alpha",
-        name: "Alpha (stale runtime)",
-        splitRoot: {
-          type: "pane",
-          pane: { id: "p1", surfaces: [], activeSurfaceId: null },
-        },
-        activePaneId: "p1",
-      },
-    ]);
-
-    await persistWorkspaces();
-
-    const payload = saveStateSpy.mock.calls[0]![0];
-    expect(payload.workspaces?.map((w) => w.id)).toEqual(["proj-alpha"]);
-    expect(payload.workspaces?.[0]?.name).toBe("Alpha");
 
     saveStateSpy.mockRestore();
   });
@@ -236,6 +196,7 @@ describe("workspace persistence", () => {
       },
     ] as unknown as import("../lib/types").Workspace[]);
     activeWorkspaceIdx.set(0);
+    setActiveWorkspaceId(null);
 
     await persistWorkspaces();
 

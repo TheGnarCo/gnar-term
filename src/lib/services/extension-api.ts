@@ -76,6 +76,10 @@ import { reorderContext, anyReorderActive, contextMenu } from "../stores/ui";
 import { getActiveCwd, lookupSurfaceWorkspaceId } from "./service-helpers";
 import { workspaces } from "../stores/workspace";
 import { getAllSurfaces, isTerminalSurface } from "../types";
+import { createWorkspaceFromDef as coreCreateWorkspaceFromDef } from "./workspace-runtime-service";
+import { waitRestored } from "../bootstrap/restore-workspaces";
+import type { WorkspaceTemplate } from "../config";
+import type { WorkspaceDefInput } from "../../extensions/api";
 import type { ExtensionManifest, ExtensionAPI } from "../extension-types";
 import type { AppEvent } from "./event-bus";
 import {
@@ -279,6 +283,18 @@ export function createExtensionAPI(
       },
     ) {
       pendingAction.set({ type: "create-workspace", name, cwd, options });
+    },
+    createWorkspaceFromDef(def: WorkspaceDefInput): Promise<string> {
+      return coreCreateWorkspaceFromDef(def as WorkspaceTemplate);
+    },
+    onWorkspacesRestored(callback: () => void): () => void {
+      let cancelled = false;
+      void waitRestored().then(() => {
+        if (!cancelled) callback();
+      });
+      return () => {
+        cancelled = true;
+      };
     },
     openInEditor(filePath: string) {
       pendingAction.set({ type: "open-in-editor", filePath });

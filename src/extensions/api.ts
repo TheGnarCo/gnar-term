@@ -645,6 +645,24 @@ export interface ExtensionAPI {
     cwd: string,
     options?: CreateWorkspaceOptions,
   ): void;
+  /**
+   * Create a workspace from a declarative template (name + layout +
+   * metadata) and resolve to its id. Intended for dashboard
+   * contributions whose `create:` callback materializes a child
+   * workspace; for one-off creation, use `createWorkspace(name, cwd)`.
+   */
+  createWorkspaceFromDef(def: WorkspaceDefInput): Promise<string>;
+  /**
+   * Run `callback` once core's bootstrap workspace restore has settled.
+   * Fires immediately if restore already completed (the common case for
+   * extensions enabled at runtime). Returns a disposer that cancels a
+   * pending callback if invoked before the deferred run.
+   *
+   * Use this when an extension needs to read or mutate the workspace
+   * store at activation time but might race the bootstrap
+   * `restoreWorkspaces` call.
+   */
+  onWorkspacesRestored(callback: () => void): () => void;
   openInEditor(filePath: string): void;
   /** Open a file as a preview surface in a new pane split to the right. Deduplicates by path. */
   openPreviewSplit(filePath: string): void;
@@ -1082,6 +1100,57 @@ export interface CreateWorkspaceOptions {
   env?: Record<string, string>;
   /** Arbitrary metadata stored alongside the workspace (e.g., branch, worktreePath) */
   metadata?: Record<string, unknown>;
+}
+
+// --- Workspace template shapes for createWorkspaceFromDef ---
+
+/**
+ * Shape of a single surface inside a `WorkspaceDefInput.layout` pane.
+ * Mirrors the on-disk SurfaceDef but trimmed to the fields contributors
+ * are expected to set.
+ */
+export interface SurfaceDefInput {
+  type: "terminal" | "browser" | "extension" | "preview";
+  name?: string;
+  command?: string;
+  cwd?: string;
+  env?: Record<string, string>;
+  /** Browser surfaces only. */
+  url?: string;
+  /** `<extension-id>:<surface-id>` for extension-typed surfaces. */
+  extensionType?: string;
+  /** Opaque props forwarded to the extension surface component. */
+  extensionProps?: Record<string, unknown>;
+  /** Absolute path for preview-typed surfaces. */
+  path?: string;
+  focus?: boolean;
+}
+
+export interface PaneDefInput {
+  surfaces: SurfaceDefInput[];
+}
+
+export interface SplitDefInput {
+  direction: "horizontal" | "vertical";
+  split?: number;
+  children: [LayoutNodeInput, LayoutNodeInput];
+}
+
+export type LayoutNodeInput = { pane: PaneDefInput } | SplitDefInput;
+
+/**
+ * Workspace template accepted by `api.createWorkspaceFromDef`. Mirrors
+ * the public subset of core's `WorkspaceTemplate`. Use this from
+ * dashboard contribution `create:` callbacks to materialize a new
+ * workspace declaratively.
+ */
+export interface WorkspaceDefInput {
+  name?: string;
+  cwd?: string;
+  color?: string;
+  env?: Record<string, string>;
+  metadata?: Record<string, unknown>;
+  layout?: LayoutNodeInput;
 }
 
 // --- Git operation result types ---

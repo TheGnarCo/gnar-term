@@ -131,12 +131,12 @@ All contributions are declared upfront in the manifest. Core reads them before l
 
 Extensions run with a restricted set of Tauri commands by default. The `permissions` field in the manifest requests elevated access:
 
-| Permission     | Grants access to                                                                                                                             |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `"pty"`        | `spawn_pty`, `write_pty`, `kill_pty`, `resize_pty`, `get_pty_cwd`, `get_pty_title`, `pause_pty`, `resume_pty`                                |
-| `"shell"`      | `run_script` — arbitrary shell command execution in a specified working directory                                                            |
-| `"filesystem"` | `copy_files` — copy files matching glob patterns between directories                                                                         |
-| `"observe"`    | Read terminal output via `onSurfaceOutput` callback. Fires for every chunk of PTY data on surfaces the extension has registered interest in. |
+| Permission     | Grants access to                                                                                                                                  |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `"pty"`        | `spawn_pty`, `write_pty`, `kill_pty`, `resize_pty`, `get_pty_cwd`, `get_pty_title`, `pause_pty`, `resume_pty`                                     |
+| `"shell"`      | `run_script` — arbitrary shell command execution in a specified working directory                                                                 |
+| `"filesystem"` | `copy_files`, `write_file`, `ensure_dir`, `remove_dir` — write-side filesystem mutations (read-side commands like `read_file` need no permission) |
+| `"observe"`    | Read terminal output via `onSurfaceOutput` callback. Fires for every chunk of PTY data on surfaces the extension has registered interest in.      |
 
 A warning is logged when an extension with elevated permissions is activated.
 
@@ -144,8 +144,8 @@ A warning is logged when an extension with elevated permissions is activated.
 
 Extensions are sandboxed behind the **extension barrier** — they cannot import core modules, stores, or `@tauri-apps/api` directly. All interaction flows through the `ExtensionAPI` and registries:
 
-- **Command allowlist (deny-by-default):** Extensions can only call Tauri commands from a curated allowlist of 29 base commands (read-only file system, git info, GitHub CLI). Elevated commands require explicit permission declarations.
-- **Path restrictions:** File-reading commands block access to sensitive directories: `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.kube`, `~/.config/gcloud`, `~/.docker`, `/etc/shadow`, `/etc/gshadow`. Write operations are restricted to `~/.config/gnar-term/` only.
+- **Command allowlist (deny-by-default):** Extensions can only call Tauri commands from a curated allowlist of base commands (read-only file system, git info, GitHub CLI). Elevated commands require explicit permission declarations (`pty`, `shell`, `filesystem`, `observe`).
+- **Path restrictions:** Path-accepting commands block access to sensitive directories: `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.kube`, `~/.config/gcloud`, `~/.docker`, `/etc/shadow`, `/etc/gshadow`, **and the app's own config dir `~/.config/gnar-term/`** (so extensions cannot read or rewrite gnar-term's state file). Write commands additionally require the path to be either inside any `.gnar-term/` directory (project-local) or under `~/.gnar-term/` (user-global), enforced server-side in Rust.
 - **Event allowlisting:** Extensions must declare all events they emit or subscribe to in the manifest. Undeclared events throw at runtime.
 - **Read-only stores:** Extensions receive read-only projections of workspace, pane, surface, and theme stores. They cannot mutate core state directly.
 - **Scoped settings:** Extensions can only access their own settings, not other extensions' configuration or the full app config.
@@ -307,7 +307,7 @@ Overlays render as long as they are registered. Register to show, unregister to 
 
 #### Dashboard Tab
 
-Registers a tab in the project dashboard overlay. Dashboard tabs appear when a project dashboard is opened.
+Registers a tab in the Workspace dashboard overlay. Dashboard tabs appear when the dashboard for a Workspace is opened.
 
 ```typescript
 import MyDashTab from "./MyDashTab.svelte";
@@ -338,35 +338,21 @@ api.registerWorkspaceAction("create-worktree", {
 });
 
 // Sidebar-zone action (appears in top bar)
-api.registerWorkspaceAction("create-group", {
-  label: "New Group",
+api.registerWorkspaceAction("import-folder", {
+  label: "Import Folder",
   icon: "folder-plus",
   zone: "sidebar",
   handler: async () => {
-    /* create workspace group flow */
+    /* pick a directory and add it as a Workspace */
   },
 });
 ```
 
-`WorkspaceActionContext` is an open `{ [key: string]: unknown }` map. Core passes `{}` for top-level actions. Extensions may inject their own fields (e.g., `groupId`, `groupPath`) when invoking actions from their own UI — use optional chaining to access extension-provided fields safely.
+`WorkspaceActionContext` is an open `{ [key: string]: unknown }` map. Core passes `{}` for top-level actions. Extensions may inject their own fields when invoking actions from their own UI — use optional chaining to access extension-provided fields safely.
 
-Core passes an empty context `{}` for top-level actions (e.g., sidebar-zone actions that aren't scoped to a specific workspace). Extensions may populate context fields for actions they register.
+Core passes an empty context `{}` for top-level actions (e.g., sidebar-zone actions that aren't scoped to a specific Workspace). Extensions may populate context fields for actions they register.
 
 Use `api.getWorkspaceActions()` to retrieve all registered actions.
-
-#### Workspace Claiming
-
-Allows an extension to "own" workspaces, hiding them from the main Workspaces list and displaying them in the extension's own sidebar section.
-
-```typescript
-// Claim a workspace (removes from main list, source is set automatically)
-api.claimWorkspace(workspaceId);
-
-// Release a claimed workspace (returns to main list)
-api.unclaimWorkspace(workspaceId);
-```
-
-Claimed workspaces are typically rendered by the extension's own `PrimarySidebarSection` component.
 
 ### Events
 
@@ -448,26 +434,26 @@ const content = await api.invoke<string>("read_file", {
 });
 ```
 
-**Allowed commands (no permission required):** `file_exists`, `list_dir`, `read_file`, `read_file_base64`, `write_file`, `ensure_dir`, `remove_dir`, `get_home`, `is_git_repo`, `list_gitignored`, `watch_file`, `unwatch_file`, `show_in_file_manager`, `open_with_default_app`, `find_file`, `create_worktree`, `remove_worktree`, `list_worktrees`, `list_branches`, `git_clone`, `push_branch`, `delete_branch`, `git_checkout`, `gh_list_issues`, `gh_list_prs`, `git_log`, `git_status`, `git_diff`, `git_merge`.
+**Allowed commands (no permission required):** `file_exists`, `list_dir`, `read_file`, `read_file_base64`, `get_home`, `is_git_repo`, `list_gitignored`, `watch_file`, `unwatch_file`, `show_in_file_manager`, `open_with_default_app`, `open_url`, `find_file`, `create_worktree`, `remove_worktree`, `list_worktrees`, `list_branches`, `git_clone`, `push_branch`, `delete_branch`, `git_checkout`, `gh_list_issues`, `gh_list_prs`, `gh_available`, `git_log`, `git_status`, `git_diff`, `git_merge`, `git_remote_url`, `read_claude_file`, `write_claude_file`, `list_claude_dir`, `watch_claude_file`, `unwatch_claude_file`.
 
 **PTY-permission commands (requires `"pty"` in manifest permissions):** `spawn_pty`, `write_pty`, `kill_pty`, `resize_pty`, `get_pty_cwd`, `get_pty_title`, `pause_pty`, `resume_pty`.
 
 **Shell-permission commands (requires `"shell"` in manifest permissions):** `run_script`.
 
-**Filesystem-permission commands (requires `"filesystem"` in manifest permissions):** `copy_files`.
+**Filesystem-permission commands (requires `"filesystem"` in manifest permissions):** `copy_files`, `write_file`, `ensure_dir`, `remove_dir`. The Rust validator additionally restricts the target `path` to either a `.gnar-term/` segment (project-local state) or `~/.gnar-term/` (user-global state); writes anywhere else (including the blocked app config dir) are rejected.
 
 #### File System
 
-| Command            | Args                | Returns      | Notes                                      |
-| ------------------ | ------------------- | ------------ | ------------------------------------------ |
-| `file_exists`      | `{ path }`          | `boolean`    |                                            |
-| `list_dir`         | `{ path }`          | `DirEntry[]` | Sorted: dirs first, then alpha             |
-| `read_file`        | `{ path }`          | `string`     | Blocked for sensitive paths (~/.ssh, etc.) |
-| `read_file_base64` | `{ path }`          | `string`     | Base64-encoded content                     |
-| `write_file`       | `{ path, content }` | `void`       | Restricted to `~/.config/gnar-term/`       |
-| `ensure_dir`       | `{ path }`          | `void`       | Restricted to `~/.config/gnar-term/`       |
-| `remove_dir`       | `{ path }`          | `void`       | Restricted to `~/.config/gnar-term/`       |
-| `get_home`         | `{}`                | `string`     | User home directory                        |
+| Command            | Args                | Returns      | Notes                                                                                               |
+| ------------------ | ------------------- | ------------ | --------------------------------------------------------------------------------------------------- |
+| `file_exists`      | `{ path }`          | `boolean`    |                                                                                                     |
+| `list_dir`         | `{ path }`          | `DirEntry[]` | Sorted: dirs first, then alpha                                                                      |
+| `read_file`        | `{ path }`          | `string`     | Blocked for sensitive paths (~/.ssh, etc.) and the app config dir (~/.config/gnar-term/)            |
+| `read_file_base64` | `{ path }`          | `string`     | Base64-encoded content; same path restrictions as `read_file`                                       |
+| `write_file`       | `{ path, content }` | `void`       | **Requires `"filesystem"`.** Path must be inside a `.gnar-term/` directory or under `~/.gnar-term/` |
+| `ensure_dir`       | `{ path }`          | `void`       | **Requires `"filesystem"`.** Same path restrictions as `write_file`                                 |
+| `remove_dir`       | `{ path }`          | `void`       | **Requires `"filesystem"`.** Same path restrictions as `write_file`                                 |
+| `get_home`         | `{}`                | `string`     | User home directory                                                                                 |
 
 ```typescript
 interface DirEntry {
@@ -683,14 +669,14 @@ await api.sendNotification("Build complete"); // Title only
 await api.sendNotification("Tests passed", "All 847 tests green"); // Title + body
 
 // Surfaces
-api.openSurface("dashboard:dashboard", "My Dashboard", { groupId: "g-1" }); // Open an extension surface
+api.openSurface("dashboard:dashboard", "My Dashboard"); // Open an extension surface
 
 // User input
 const cwd = await api.getActiveCwd(); // CWD of focused terminal
 const name = await api.showInputPrompt("Name?"); // Prompt user for text input
 const dir = await api.pickDirectory(); // Native directory picker dialog
-const result = await api.showFormPrompt("Create Project", [
-  { key: "name", label: "Name", placeholder: "My Project" },
+const result = await api.showFormPrompt("Create Workspace", [
+  { key: "name", label: "Name", placeholder: "My Workspace" },
   { key: "path", label: "Path", defaultValue: "/home/user" },
   { key: "color", label: "Color", defaultValue: "#4a9eff" },
 ]); // Multi-field form dialog — returns { name, path, color } or null
@@ -949,9 +935,8 @@ Common theme properties: `bg`, `fg`, `fgDim`, `fgMuted`, `accent`, `border`, `bo
 | Command                  | Command palette                | No (handler) | `commands`                          |
 | Context menu item        | Right-click on files           | No (handler) | `contextMenuItems`                  |
 | Overlay                  | Full-screen above content      | Yes          | _(registered at runtime)_           |
-| Dashboard tab            | Project dashboard              | Yes          | _(registered at runtime)_           |
+| Dashboard tab            | Workspace dashboard            | Yes          | _(registered at runtime)_           |
 | Workspace action         | Header or top bar (via `zone`) | No (handler) | `workspaceActions`                  |
-| Workspace claiming       | Hides from main workspace list | No           | _(runtime via `claimWorkspace`)_    |
 | Settings                 | Settings overlay               | No (schema)  | `settings`                          |
 | Event subscription       | N/A (background)               | No           | `events`                            |
 | Custom event             | N/A (inter-extension)          | No           | `events` (with `extension:` prefix) |
@@ -1051,7 +1036,15 @@ Registers a secondary sidebar tab showing the directory tree of the active termi
 
 ### Agentic Orchestrator (`src/extensions/agentic-orchestrator/`)
 
-Passive AI agent detector with three-layer status tracking (OSC notifications → waiting, title pattern matching → running/idle, idle timeout → idle). Requires `"observe"` permission. Emits `extension:harness:statusChanged` events on status transitions.
+Registers the per-Workspace Agentic Dashboard contribution (auto-provisioned, cap 1 per Workspace) and the Global Agentic Dashboard pseudo-workspace, plus a set of `gnar:*` markdown widgets (kanban, agent-list, task-spawner, issues, prs, agent-status-row, columns) that mount inside those dashboards. Consumes core's passive agent detection via `api.agents`; the extension itself owns no detection logic. Requires `"filesystem"` for writing the dashboard's backing markdown.
+
+### Branched Workspaces (`src/extensions/branched-workspaces/`)
+
+Wraps git worktree creation behind a single workspace action: prompts for a branch name, creates a worktree under the Root Workspace, and registers the resulting directory as a Branch (a Workspace whose `rootWorkspaceId` points at its Root). Listens for the core `worktree:merged` event to clean up merged Branches.
+
+### Claude Settings (`src/extensions/claude-settings/`)
+
+TitleBar button opens a user-level overlay onto `~/.claude/settings.json`; auto-provisions a per-Workspace dashboard for that Workspace's project `.claude/` settings. Uses `read_claude_file` / `write_claude_file` for the user-level file (no `filesystem` permission needed) and the standard `write_file` / `ensure_dir` (gated by `"filesystem"`) for the per-Workspace dashboard markdown under `.gnar-term/`.
 
 ### Diff Viewer (`src/extensions/diff-viewer/`)
 
@@ -1087,7 +1080,7 @@ The `settings.json` entry looks like this:
 }
 ```
 
-### Project structure
+### Repository structure
 
 ```
 my-gnarterm-extension/
@@ -1127,7 +1120,7 @@ Your extension runs inside the GnarTerm WebView. You can use:
 
 - **`svelte` and `svelte/store`** — provided by the host; externalize in your build
 - **Any pure JS library** — bundle it into your output
-- **Tauri commands** — via `api.invoke()` (29 allowlisted base commands for file system, git, GitHub CLI, etc.)
+- **Tauri commands** — via `api.invoke()` (allowlisted base commands for file system, git, GitHub CLI, Claude settings, etc.; elevated commands require manifest permissions)
 
 You must **not** import from `@tauri-apps/api` or any GnarTerm `src/lib/` path. All native access goes through `api.invoke()`.
 
@@ -1182,11 +1175,11 @@ package.json
 
 The included extensions in `src/extensions/` are real-world examples of every extension pattern. Use them as reference when building your own:
 
-| Extension               | Patterns demonstrated                                                                        |
-| ----------------------- | -------------------------------------------------------------------------------------------- |
-| `preview/`              | Surface type, context menu items, file handling                                              |
-| `file-browser/`         | Sidebar tab, sidebar action, context menus, workspace actions                                |
-| `agentic-orchestrator/` | Dashboard contributions, pseudo-workspaces, observe permission, custom events                |
-| `diff-viewer/`          | Surface type, commands, context menus, core event subscription (`worktree:merged`), settings |
-| `worktree-workspaces/`  | Commands, workspace lifecycle, workspace claiming, git integration                           |
-| `jrvs-themes/`          | Theme pack registration                                                                      |
+| Extension               | Patterns demonstrated                                                                                 |
+| ----------------------- | ----------------------------------------------------------------------------------------------------- |
+| `file-browser/`         | Sidebar tab, sidebar action, context menus, workspace actions                                         |
+| `agentic-orchestrator/` | Dashboard contributions, pseudo-workspaces, markdown widgets, custom events, scoped settings          |
+| `branched-workspaces/`  | Workspace actions, git worktree integration, core event subscription (`worktree:merged`)              |
+| `claude-settings/`      | TitleBar button, dashboard contribution, dedicated Claude-file commands, markdown component embedding |
+| `diff-viewer/`          | Surface type, commands, context menus, core event subscription (`worktree:merged`), settings          |
+| `jrvs-themes/`          | Theme pack registration                                                                               |

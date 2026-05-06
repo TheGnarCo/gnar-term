@@ -128,12 +128,13 @@ Invariants enforced by the runtime:
 - A root Workspace's `dashboardWorkspaceId` (if present) points to a
   dashboard Branch it owns; that Branch's `dashboardContributionId` is
   the Overview kind.
-- `capPerGroup` from the Dashboard Contribution registry is enforced at
-  create time — duplicates are dropped at restore (`restore-workspaces.ts`
+- `capPerWorkspace` from the Dashboard Contribution registry is enforced
+  at create time — duplicates are dropped at restore (`restore-workspaces.ts`
   dedupes by `${rootWorkspaceId}:${contributionId}`).
-- A root Workspace's `branchedWorkspaceIds` is the source of truth for
-  its Branches; the inverse `rootWorkspaceId` field on each Branch must
-  agree.
+- A Branch's `rootWorkspaceId` is the canonical membership tag; the
+  root's `branchedWorkspaceIds` array exists only to preserve
+  user-controlled ordering and is rebuilt from `rootWorkspaceId` on
+  startup (`reclaimChildWorkspaces`).
 
 ### Pseudo-Workspaces
 
@@ -175,18 +176,20 @@ Sibling state stays separate from `workspaces[]` on purpose:
   worktree records keyed to worktree Branches by `workspaceId`.
 
 The legacy `parentWorkspaces[]` and `activeParentWorkspaceId` keys are
-migrated forward by `migrateLegacyWorkspaces`
-(`src/lib/bootstrap/migrate-legacy-workspaces.ts`) on first load and
-dropped from disk thereafter.
+not read by the loader; persisted state from older builds carrying those
+fields is silently ignored at restore.
 
 ### Dashboard Contribution registry
 
 Extensions register dashboard kinds with
-`{ id, label, actionLabel, capPerGroup, create(workspace), isAvailableFor?(workspace) }`.
+`{ id, label, actionLabel, capPerWorkspace, create(workspace), isAvailableFor?(workspace) }`.
 The registry drives the "Add X Dashboard" menu items, their caps, and
 restore-time deduplication. Core registers the built-in **Overview**
-dashboard with `id: "group"`, `capPerGroup: 1` — the literal string
-`"group"` is the stable contribution id and is not user-facing.
+dashboard with `id: OVERVIEW_DASHBOARD_CONTRIBUTION_ID` (literal value
+`"group"`), `capPerWorkspace: 1`. The literal string `"group"` is the
+stable contribution id preserved across the legacy
+Project/Group → Workspace rename for persisted-data compatibility; it
+is not user-facing.
 
 ### Sidebar render model
 
@@ -240,8 +243,8 @@ Negative:
   fields (`path`, `rootWorkspaceId`, `worktreePath`, `isDashboard`)
   because the discriminated union is not yet enforced via a `kind`
   tag. Type guards (`isBranchedWorkspace`,
-  `isDashboardWorkspace(workspace, rootWorkspaceId)`) bridge the gap;
-  converting to a tagged union remains a follow-on simplification.
+  `isDashboardWorkspace(ws, rootWorkspaceId, contribId?)`) bridge the
+  gap; converting to a tagged union remains a follow-on simplification.
 
 ## Alternatives considered
 
@@ -266,7 +269,6 @@ Negative:
 - Single persist writer: `src/lib/services/workspace-runtime-service.ts`
   (`persistWorkspaces`)
 - Sidebar order: `src/lib/stores/root-row-order.ts`
-- Migration: `src/lib/bootstrap/migrate-legacy-workspaces.ts`
 - Restore + dedupe: `src/lib/bootstrap/restore-workspaces.ts`
 - Branch creation: `src/lib/services/worktree-service.ts`,
   `src/extensions/branched-workspaces/index.ts`

@@ -208,7 +208,7 @@ The Extensions page lists all extensions with enable/disable toggles and install
 | -------------------- | ---------------------- | --------------------------------------------------------------------------------------------------- |
 | Preview              | Surface type           | File preview (47 file types) — extracted from core                                                  |
 | File Browser         | Secondary sidebar tab  | Directory tree with context menu actions                                                            |
-| Worktree Workspaces  | Commands + state       | Git worktree-backed workspace lifecycle (create, archive)                                           |
+| Branched Workspaces  | Commands + tile action | Git worktree-backed Branch lifecycle (create, archive). Worktree service stays in core.             |
 | Agentic Orchestrator | Dashboard contribution | Per-Workspace Agentic Dashboard + Global Agentic pseudo-workspace; passive agent detection via core |
 | GitHub               | Secondary sidebar tab  | Issues, PRs, and commits via `gh` CLI                                                               |
 | Diff Viewer          | Surface type           | Side-by-side and unified diff display for git changes                                               |

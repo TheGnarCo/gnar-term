@@ -1042,16 +1042,16 @@ mod tests {
     }
 
     #[test]
-    fn validate_write_path_allows_project_local_dot_gnar_term() {
-        // Project-local state files (project dashboards, project-nested
+    fn validate_write_path_allows_workspace_local_dot_gnar_term() {
+        // Workspace-local state files (workspace dashboards, branch-nested
         // agent dashboards) live inside a `.gnar-term/` directory under
-        // the project's own path. This path shape is allowed even though
+        // the workspace's own path. This path shape is allowed even though
         // it's not under ~/.config/gnar-term/.
-        let path = "/tmp/some-project/.gnar-term/project-dashboard.md";
+        let path = "/tmp/some-workspace/.gnar-term/workspace-dashboard.md";
         let result = validate_write_path(path);
         assert!(
             result.is_ok(),
-            "Should allow writes under a project-local .gnar-term/ dir: {result:?}"
+            "Should allow writes under a workspace-local .gnar-term/ dir: {result:?}"
         );
     }
 

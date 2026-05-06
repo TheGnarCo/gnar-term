@@ -222,8 +222,15 @@ export function removeChildFromAllWorkspaces(workspaceId: string): void {
  * checkout follows the workspace itself.
  */
 export function workspaceDashboardPath(workspacePath: string): string {
-  return `${workspacePath.replace(/\/+$/, "")}/.gnar-term/project-dashboard.md`;
+  return `${workspacePath.replace(/\/+$/, "")}/.gnar-term/workspace-dashboard.md`;
 }
+
+/**
+ * Legacy filename used before the rename. We migrate by reading the legacy
+ * file's contents into the new path on first dashboard write — see
+ * writeWorkspaceDashboardTemplate.
+ */
+const LEGACY_DASHBOARD_FILENAME = "project-dashboard.md";
 
 function buildWorkspaceDashboardMarkdown(workspace: WorkspaceRecord): string {
   // The Workspace Dashboard is the generic, agent-agnostic landing page for
@@ -270,13 +277,31 @@ async function writeWorkspaceDashboardTemplate(
   path: string,
   options: { force?: boolean } = {},
 ): Promise<void> {
+  const dir = path.replace(/\/[^/]+$/, "");
   if (!options.force) {
     const exists = await invoke<boolean>("file_exists", { path }).catch(
       () => false,
     );
     if (exists) return;
+
+    // Legacy migration: pre-rename workspaces stored their dashboard at
+    // .gnar-term/project-dashboard.md. If the legacy file is present and
+    // the new one isn't, copy contents so user customizations survive.
+    const legacyPath = `${dir}/${LEGACY_DASHBOARD_FILENAME}`;
+    const legacyExists = await invoke<boolean>("file_exists", {
+      path: legacyPath,
+    }).catch(() => false);
+    if (legacyExists) {
+      try {
+        const legacy = await invoke<string>("read_file", { path: legacyPath });
+        await invoke("ensure_dir", { path: dir });
+        await invoke("write_file", { path, content: legacy });
+        return;
+      } catch {
+        // Fall through to fresh template write
+      }
+    }
   }
-  const dir = path.replace(/\/[^/]+$/, "");
   await invoke("ensure_dir", { path: dir });
   await invoke("write_file", {
     path,

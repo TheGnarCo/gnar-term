@@ -24,7 +24,6 @@ import {
   setActiveWorkspaceId,
 } from "../stores/workspace";
 import {
-  addWorkspace,
   addChildToWorkspace,
   createWorkspaceDashboard,
   createSettingsDashboardWorkspace,
@@ -49,10 +48,7 @@ import {
   createDialogPrefill,
 } from "../stores/workspaces-ui";
 import { invoke } from "@tauri-apps/api/core";
-import {
-  createWorkspaceFromDef,
-  switchWorkspace,
-} from "../services/workspace-runtime-service";
+import { createWorkspaceFromDef } from "../services/workspace-runtime-service";
 import type { WorkspaceTemplate } from "../config";
 
 /**
@@ -162,29 +158,40 @@ async function createWorkspaceFlow(prefill?: {
   }
 
   const id = generateId();
-  // Caller passes a record-shaped workspace; addWorkspace mints a
-  // placeholder paneLayout / activePaneId so the entry satisfies the
-  // unified Workspace shape until the matching runtime tab surface is
-  // built by createWorkspaceFromDef below.
-  const workspace: Workspace = {
+  const baseDef: WorkspaceTemplate = {
     id,
     name: result.name,
     path: result.path,
     color: result.color,
-    branchedWorkspaceIds: [],
+    cwd: result.path,
     isGit,
     createdAt: new Date().toISOString(),
+    layout: { pane: { surfaces: [{ type: "terminal" }] } },
   };
+  const resolvedDef = await applyRepoDef(baseDef, result.path);
 
-  addWorkspace(workspace);
+  try {
+    await createWorkspaceFromDef(resolvedDef);
+  } catch (err) {
+    console.error(
+      `[workspaces] Failed to create workspace: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+    return null;
+  }
+
+  const workspace = getWorkspaces().find((w) => w.id === id);
+  if (!workspace) {
+    console.error("[workspaces] Workspace not found in store after creation");
+    return null;
+  }
 
   // Auto-provision every autoProvision dashboard contribution for the
   // new workspace (Overview, Settings, and any extension-owned
   // autoProvision contributions like Agentic). The Overview dashboard
   // is tracked via `workspace.dashboardWorkspaceId` so
-  // `openWorkspaceDashboard` can activate it directly; the helper
-  // returns its id when the contribution's source is core + id is
-  // "group" (the stable persisted contribution id).
+  // `openWorkspaceDashboard` can activate it directly.
   try {
     await provisionAutoDashboardsForWorkspace(workspace);
     const overview = get(workspaces).find((w) =>
@@ -196,29 +203,6 @@ async function createWorkspaceFlow(prefill?: {
   } catch (err) {
     console.error(
       `[workspaces] Failed to auto-provision dashboards: ${
-        err instanceof Error ? err.message : String(err)
-      }`,
-    );
-  }
-
-  // ADR-004: materialize the Root runtime Workspace whose id matches
-  // the WorkspaceRecord, so the sidebar row's tab surface exists
-  // immediately. No `rootWorkspaceId` — the Root IS the Workspace,
-  // not a Branch of itself.
-  try {
-    const initialDef: WorkspaceTemplate = {
-      id,
-      name: result.name,
-      cwd: result.path,
-      layout: { pane: { surfaces: [{ type: "terminal" }] } },
-    };
-    const resolvedDef = await applyRepoDef(initialDef, result.path);
-    await createWorkspaceFromDef(resolvedDef);
-    const idx = get(workspaces).findIndex((w) => w.id === id);
-    if (idx >= 0) switchWorkspace(idx);
-  } catch (err) {
-    console.error(
-      `[workspaces] Failed to spawn Root runtime workspace: ${
         err instanceof Error ? err.message : String(err)
       }`,
     );

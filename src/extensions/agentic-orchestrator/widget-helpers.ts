@@ -82,16 +82,18 @@ export function throttle<TArgs extends unknown[]>(
 
 /**
  * Shared module-level derived store: maps each rootWorkspaceId to the set of
- * workspace IDs that belong to it under the §5.3 criteria (metadata,
- * explicit membership, and CWD-prefix fallback for unclaimed workspaces).
+ * runtime workspace IDs that belong to it. Members come from three sources:
+ * metadata-stamped dashboard children, Branches in `branchedWorkspaceIds`,
+ * and unattached terminals whose CWD prefix-matches the Workspace's `path`.
  *
  * Computed once whenever workspaces / workspaces change — all mounted
  * dashboard widgets share this single computation instead of each widget
- * independently re-walking every child workspace's surfaces on every emission
- * (F32 perf fix).
+ * independently re-walking every Branch's surfaces on every emission.
  *
- * "Claimed" status (i.e. workspace already belongs to a Root) is derived
- * directly from `Workspace.rootWorkspaceId` — no parallel registry.
+ * Branch membership is derived directly from `Workspace.rootWorkspaceId`;
+ * the CWD-prefix fallback only applies to runtime workspaces with no
+ * `rootWorkspaceId` set, so a Branch already attached to one Workspace
+ * cannot be double-counted into another.
  */
 const _workspaceChildIndex = derived(
   [workspaces, workspacesStore],
@@ -103,16 +105,16 @@ const _workspaceChildIndex = derived(
       const members = new Set<string>(workspace.branchedWorkspaceIds ?? []);
       for (const ws of $workspaces) {
         const md = ws.metadata as Record<string, unknown> | undefined;
-        // Criterion 1: child workspace was created with this workspace's id in metadata.
+        // Source 1: dashboard child stamped with this Workspace's id.
         if (md?.rootWorkspaceId === workspace.id) {
           members.add(ws.id);
           continue;
         }
-        // Criterion 2: child workspace is explicitly listed in workspace.branchedWorkspaceIds
-        // — already in `members` from the initial Set construction above.
+        // Source 2: Branch already in branchedWorkspaceIds — present in
+        // `members` from the initial Set construction above.
         if (members.has(ws.id)) continue;
-        // Criterion 3: CWD fallback — only for unclaimed workspaces so we
-        // don't double-count workspaces already owned by another parent workspace.
+        // Source 3: CWD fallback — only for runtime workspaces that
+        // aren't already attached to a Workspace via rootWorkspaceId.
         if (!base || typeof ws.rootWorkspaceId === "string") continue;
         for (const surface of getAllSurfaces(ws)) {
           if (
@@ -133,21 +135,14 @@ const _workspaceChildIndex = derived(
 
 /**
  * Reactive store of the agents in scope for a widget mounted inside a
- * DashboardHostContext. Implements the §5.3 scope rules:
+ * DashboardHostContext. Scope rules:
  *   - no host / "none" scope → empty list
  *   - "global" scope         → every detected agent
- *   - "workspace" scope      → agents whose child workspace satisfies any of:
- *        1. `metadata.rootWorkspaceId === rootWorkspaceId` (set by child-workspace creation)
- *        2. child workspace id is in `workspace.branchedWorkspaceIds` (set by drag-drop /
- *           promote-to-workspace flows that don't stamp metadata.rootWorkspaceId)
- *        3. child workspace is unclaimed AND its first terminal CWD sits under
- *           the parent workspace's `path` prefix (catches native agents in terminals
- *           that were never explicitly added to the parent workspace)
- *
- * Criteria 1 and 2 are checked before the claimed-workspace guard because
- * both represent explicit workspace membership — a child workspace that
- * belongs to this parent should appear even if it has been claimed by
- * "core".
+ *   - "workspace" scope      → agents whose runtime workspace is a
+ *     member of the Workspace per `_workspaceChildIndex`. Membership
+ *     covers Branches in `workspace.branchedWorkspaceIds`, dashboard
+ *     children stamped with `metadata.rootWorkspaceId`, and unattached
+ *     terminals whose CWD sits under the Workspace's `path`.
  *
  * Prefix containment uses a trailing-slash suffix so `/work/one` never
  * captures `/work/one-other` by accident.

@@ -7,29 +7,29 @@ export interface SwitcherRow {
   parentLabel: string;
   kind: "child" | "parent";
   depth: number; // 0 for parent headers and standalone child rows, 1 for child rows under a parent
-  wsId?: string; // parent workspace id, only present on parent rows
+  wsId?: string; // root Workspace id, only present on header rows
 }
 
 /**
- * Filter child workspaces for the workspace switcher palette.
+ * Filter Branches for the workspace switcher palette.
  *
  * When parentWorkspaces is provided (non-empty), the list is grouped:
- *   - For each parent workspace: one header row (kind="parent", depth=0)
- *     followed by its child workspaces (kind="child", depth=1).
- *   - Standalone child workspaces (no rootWorkspaceId or unknown parent)
- *     appear at depth=0 after all parent groups.
+ *   - For each Workspace: one header row (kind="parent", depth=0)
+ *     followed by its Branches (kind="child", depth=1).
+ *   - Branches with no rootWorkspaceId (or pointing at an unknown
+ *     Workspace) appear at depth=0 after all groups.
  *
- * When parentWorkspaces is empty (default), the list is flat — all child
- * workspaces are returned with kind="child", depth=0, and parentLabel set
- * from parentMap. This preserves the original behavior.
+ * When parentWorkspaces is empty (default), the list is flat — all
+ * Branches are returned with kind="child", depth=0, and parentLabel
+ * set from parentMap.
  *
  * The idx on child rows is the flat index into the workspaces array —
  * preserved so switchWorkspace(idx) continues to work unchanged.
  *
  * @param workspaces - flat list from workspaces store
- * @param parentMap - map from rootWorkspaceId → parent workspace
+ * @param parentMap - map from rootWorkspaceId → root Workspace
  * @param query - raw user input (empty string = return all)
- * @param parentWorkspaces - ordered list of parent workspaces (enables grouped mode)
+ * @param parentWorkspaces - ordered list of root Workspaces (enables grouped mode)
  * @returns rows that match the query, preserving original indices
  */
 export function filterWorkspaces(
@@ -40,7 +40,7 @@ export function filterWorkspaces(
 ): SwitcherRow[] {
   const q = query.trim().toLowerCase();
 
-  // Flat mode (no parent workspaces): preserve original behavior
+  // Flat mode (no root Workspaces): preserve original behavior
   if (parentWorkspaces.length === 0) {
     const rows: SwitcherRow[] = workspaces.map((ws, idx) => {
       const parentId = ws.rootWorkspaceId;
@@ -62,7 +62,7 @@ export function filterWorkspaces(
     });
   }
 
-  // Grouped mode: parent workspaces provided
+  // Grouped mode: root Workspaces provided
   const parentIds = new Set(parentWorkspaces.map((w) => w.id));
 
   // Partition child workspaces into parent-children and standalone

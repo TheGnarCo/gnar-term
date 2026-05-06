@@ -88,7 +88,7 @@ export function handleAppKeydown(
       return;
     }
 
-    // ⌘1-9: activate nth parent workspace in the primary sidebar.
+    // ⌘1-9: activate nth root Workspace in the primary sidebar.
     // Flashes the focused pane after activation so the user has a visible
     // confirmation of which workspace/branch they landed on (avoids the
     // silent wrong-branch-landing UX when last-active resolved to a

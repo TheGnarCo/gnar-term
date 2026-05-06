@@ -534,8 +534,8 @@ export interface ExtensionAPI {
    * "Add <actionLabel>" affordance per registered contribution whose
    * `isAvailableFor` gate accepts the workspace and whose `capPerWorkspace`
    * isn't already met. When invoked, core calls `create(workspace)` to
-   * materialize the dashboard child workspace. Automatically
-   * unregistered on extension deactivate.
+   * materialize the dashboard Branch. Automatically unregistered on
+   * extension deactivate.
    *
    * Core's built-in Workspace Dashboard registers under `id: "group"`
    * (a stable persisted-data key kept across the rename). The agentic extension registers under
@@ -871,7 +871,7 @@ export interface ExtensionAPI {
        * Called on every drag state change. Return the ReorderContext to
        * publish to the global reorder-context store (or null when the drag
        * ends). The sidebar reads this store to render per-level dims and
-       * labels on every block, workspace, and child workspace.
+       * labels on every block, Workspace, and Branch.
        *
        * Required for `scope: "inner"` drags that should participate in the
        * global overlay system.
@@ -884,10 +884,10 @@ export interface ExtensionAPI {
 /**
  * Describes the sidebar drag-reorder currently in progress.
  *
- * - `kind: "child-workspace"` — a child workspace row is being dragged.
+ * - `kind: "child-workspace"` — a Branch row is being dragged.
  *   `scopeId` is the immediate container: `"__workspaces__"` when dragging
- *   from the unclaimed list, or a workspace id when dragging inside a
- *   workspace block. `containerBlockId` is the top-level sidebar block the
+ *   from the unattached list, or a Workspace id when dragging inside a
+ *   Workspace block. `containerBlockId` is the top-level sidebar block the
  *   drag lives in.
  * - `kind: "workspace"` — a workspace row is being dragged inside the
  *   Workspaces block. `sourceWorkspaceId` is the id of the dragged workspace.

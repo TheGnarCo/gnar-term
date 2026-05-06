@@ -4,10 +4,9 @@
  * action, root-row renderer, overlay, and Dashboard contribution that
  * let users create and manage Workspaces.
  *
- * Called after the core event bus, claimed-workspace registry, and
- * workspaces store are live, and after included extensions register
- * (so registration order matches the previous extension-activation
- * behavior).
+ * Called after the core event bus and workspaces store are live, and
+ * after included extensions register (so registration order matches
+ * the previous extension-activation behavior).
  */
 import { get } from "svelte/store";
 import { registerCommand } from "../services/command-registry";
@@ -246,9 +245,9 @@ export async function initWorkspaces(): Promise<void> {
     appendRootRow({ kind: "workspace", id: workspace.id });
   }
 
-  // Re-claim any restored Branches that belong to a known Workspace —
-  // Branch ids change on every restart, so the branchedWorkspaceIds list
-  // is rebuilt from rootWorkspaceId on each load.
+  // Rebuild branchedWorkspaceIds from rootWorkspaceId — Branch ids
+  // change on every restart, so the membership list is recomputed
+  // from the canonical tag on each load.
   reclaimChildWorkspaces();
 
   // Root-row renderer for "workspace" kind. ContainerRow inside

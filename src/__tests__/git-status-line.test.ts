@@ -1,6 +1,6 @@
 /**
  * GitStatusLine regression tests: ensure normal child workspaces suppress
- * their inline git-info row (the parent Workspace row shows shared
+ * their inline git-info row (the Workspace row shows shared
  * diff/branch state). Worktree child workspaces keep it — branch and
  * dirty state are per-worktree and not redundant with the parent row.
  */

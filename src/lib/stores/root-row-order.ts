@@ -138,7 +138,7 @@ export function bootstrapRootRowOrder(extensionRows: RootRow[]): void {
   persist();
 }
 
-// Debounced persistence so rapid mutations (create/claim/unclaim storms)
+// Debounced persistence so rapid mutations (create/remove storms)
 // don't blow up the state file.
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
 function persist(): void {

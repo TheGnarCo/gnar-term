@@ -177,11 +177,11 @@ describe("archiveWorkspace", () => {
       kind: "workspace",
       id: "g-1",
     });
-    // Order matters: the parent workspace must be removed from the workspaces
-    // store BEFORE its child workspaces close. The close path emits
-    // `workspace:closed`, which `setupPrimaryWorkspaceAutoRecreation` listens
-    // for; if the parent workspace is still present it will spawn a phantom
-    // replacement child workspace whose `rootWorkspaceId` then dangles.
+    // Order matters: the root Workspace must be removed from the
+    // workspaces store BEFORE its Branches close. The close path emits
+    // `workspace:closed`, which `setupPrimaryWorkspaceAutoRecreation`
+    // listens for; if the root Workspace is still present it will spawn
+    // a phantom replacement Branch whose `rootWorkspaceId` then dangles.
     const setOrder = mocks.setWorkspaces.mock.invocationCallOrder[0]!;
     const closeOrder =
       mocks.closeWorkspacesInWorkspace.mock.invocationCallOrder[0]!;

@@ -79,7 +79,7 @@ export interface SpawnAgentInWorktreeArgs {
   /**
    * When provided, the new Branch's `rootWorkspaceId` is set to this id —
    * used when the spawning dashboard lives under a Workspace, so the
-   * Workspace claims the worktree into its child list alongside other Branches.
+   * worktree is attached to that Workspace alongside other Branches.
    */
   rootWorkspaceId?: string;
   /**

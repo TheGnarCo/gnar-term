@@ -731,8 +731,9 @@
     // getState() so we don't need to thread the value back through the
     // bootstrap signature. Best-effort; failures are logged and ignored.
     void restoreWindowBounds(getState().windowBounds, getCurrentWindow());
-    // Promote standalone runtime workspaces to Roots and rehydrate the
-    // claim registry now that the workspaces store is populated.
+    // Promote standalone runtime workspaces to Roots and rebuild each
+    // Workspace's branchedWorkspaceIds from rootWorkspaceId now that the
+    // workspaces store is populated.
     await reconcilePrimaryWorkspaces();
     void reconcileWorkspaceDashboards();
     // Stamp `pathMissing` on workspaces whose root directory has gone

@@ -171,15 +171,12 @@ export interface WorkspaceMetadata {
   baseBranch?: string;
   /** Absolute path to the source repo for branched workspaces. */
   repoPath?: string;
-  // --- Project-scope extension ---
-  /** Project id used by the project-scope extension to claim the workspace. */
-  projectId?: string;
   // --- Dashboard / workspace fields ---
   /** Marks a workspace as a dashboard (used by workspace-service and related services). */
   isDashboard?: boolean;
   /** Root Workspace id this Branch belongs to (workspace-service). */
   rootWorkspaceId?: string;
-  /** Id of the parent workspace's current dashboard child workspace (workspace-service). */
+  /** Id of the root Workspace's current dashboard Branch (workspace-service). */
   dashboardWorkspaceId?: string;
   /**
    * Contribution id for the dashboard type: "group" | "agentic" | "settings" | string.

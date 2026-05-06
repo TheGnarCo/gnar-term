@@ -109,9 +109,9 @@ export function deleteWorkspace(id: string): void {
 /**
  * All Branches tagged with `ws.rootWorkspaceId === rootWorkspaceId`. This is the
  * canonical Branch-membership predicate for core operations (close
- * sweeps, reclaim, reconcile). Extension-layer consumers that need a
- * CWD-prefix fallback for unattached workspaces should compose with this
- * result.
+ * sweeps, membership rebuild, reconcile). Extension-layer consumers
+ * that need a CWD-prefix fallback for unattached workspaces should
+ * compose with this result.
  */
 export function getChildrenOfWorkspace(rootWorkspaceId: string): Workspace[] {
   return get(workspaces).filter((w) => w.rootWorkspaceId === rootWorkspaceId);
@@ -194,9 +194,9 @@ export function insertChildIntoWorkspace(
 }
 
 /**
- * Strips `workspaceId` from every parent workspace's child-id list. Used when a
- * child workspace is closed — child-membership is inferred from
- * `rootWorkspaceId`, so removing from all parents is cheap and idempotent.
+ * Strips `workspaceId` from every Workspace's `branchedWorkspaceIds`
+ * list. Used when a Branch is closed — Branch membership is derived
+ * from `rootWorkspaceId`, so the sweep is cheap and idempotent.
  */
 export function removeChildFromAllWorkspaces(workspaceId: string): void {
   const next = getWorkspaces().map((w) => ({
@@ -765,10 +765,11 @@ export async function reconcileWorkspaceDashboards(): Promise<void> {
 }
 
 /**
- * Re-claim Branches tagged with `rootWorkspaceId` that belong to a
- * known Workspace. Called on app startup once workspaces are loaded and
- * workspaces are restored — restoration creates fresh workspace ids so
- * we rebuild each workspace's branchedWorkspaceIds list here.
+ * Rebuild each Workspace's `branchedWorkspaceIds` list from runtime
+ * Workspaces tagged with `rootWorkspaceId`. Called on app startup once
+ * workspaces are loaded and workspaces are restored — restoration
+ * creates fresh workspace ids so the membership list is recomputed
+ * here from the canonical `rootWorkspaceId` tag.
  */
 export function reclaimChildWorkspaces(): void {
   const primaryWorkspaces = getWorkspaces();
@@ -807,14 +808,15 @@ export function reclaimChildWorkspaces(): void {
 
 /**
  * Promote every standalone runtime Workspace to a Root by creating a
- * matching WorkspaceRecord with the same id (ADR-004 Stage 10: Root and
- * Record share an id). A "standalone" runtime workspace is one that:
+ * matching WorkspaceRecord with the same id (Root and Record share an
+ * id). A "standalone" runtime workspace is one that:
  *   - has no matching Record (no row in the sidebar yet)
- *   - is not a Dashboard surface (those belong to a parent Workspace)
- *   - is not an orphan Branch (worktreePath set but parent missing)
- *
- * Runtime Branches (`rootWorkspaceId` resolves to a known Record) are
- * left alone — they're already correctly attached.
+ *   - is not a Branch (`rootWorkspaceId` unset). Branches are Branches
+ *     for life — even orphan Branches (rootWorkspaceId points at a
+ *     missing Workspace) are never promoted to Roots
+ *   - is not a Dashboard surface (those belong to a root Workspace)
+ *   - is not worktree-backed (worktreePath stamps it as a worktree
+ *     Branch even if its rootWorkspaceId is missing)
  */
 function wrapStandaloneChildWorkspaces(): void {
   const knownWorkspaceIds = new Set(getWorkspaces().map((w) => w.id));
@@ -823,8 +825,9 @@ function wrapStandaloneChildWorkspaces(): void {
 
   for (const ws of snapshot) {
     if (knownWorkspaceIds.has(ws.id)) continue;
-    if (ws.rootWorkspaceId && knownWorkspaceIds.has(ws.rootWorkspaceId))
-      continue;
+    // A Branch never becomes a Root. The presence of `rootWorkspaceId`
+    // marks the workspace as a Branch for life — orphan or not.
+    if (typeof ws.rootWorkspaceId === "string") continue;
     if (ws.isDashboard) continue;
     if ((ws as { worktreePath?: string }).worktreePath) continue;
 
@@ -853,9 +856,9 @@ function wrapStandaloneChildWorkspaces(): void {
 /**
  * Startup reconciliation — called after workspaces are restored.
  * Promotes every standalone runtime Workspace to a Root by creating a
- * matching WorkspaceRecord (Stage 10: shared id). Branch status is
- * derived directly from `Workspace.rootWorkspaceId`, so no parallel
- * claim registry needs rehydrating at startup.
+ * matching WorkspaceRecord (shared id). Branch status is derived
+ * directly from `Workspace.rootWorkspaceId`, so no parallel membership
+ * registry needs rehydrating at startup.
  *
  * Idempotent.
  */

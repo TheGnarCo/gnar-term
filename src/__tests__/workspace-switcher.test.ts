@@ -72,7 +72,7 @@ describe("filterWorkspaces", () => {
     expect(result[0]!.ws.id).toBe("nw-2");
   });
 
-  it("filters on parent workspace name", () => {
+  it("filters on Workspace name", () => {
     const result = filterWorkspaces(branches, parentMap, "alpha");
     // "Alpha Project" matches nw-1 and nw-2
     expect(result).toHaveLength(2);

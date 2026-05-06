@@ -80,7 +80,7 @@ export const introspectionTools: ToolDef[] = [
   {
     name: "list_workspaces",
     description:
-      "List all open workspaces with their metadata. Each entry includes id/name/activePaneId plus locked/isDashboard/isBranched/rootWorkspaceId/worktreePath/spawnedBy/projectId so callers can filter or reason about workspace provenance without a follow-up call.",
+      "List all open workspaces with their metadata. Each entry includes id/name/activePaneId plus locked/isDashboard/isBranched/rootWorkspaceId/worktreePath/spawnedBy so callers can filter or reason about workspace provenance without a follow-up call.",
     inputSchema: { type: "object", properties: {} },
     handler: () => {
       const list = get(workspaces).map((ws) => {
@@ -95,7 +95,6 @@ export const introspectionTools: ToolDef[] = [
           isBranched: typeof worktreePath === "string",
           worktreePath,
           rootWorkspaceId: ws.rootWorkspaceId ?? null,
-          projectId: ws.metadata?.projectId ?? null,
           spawnedBy: ws.metadata?.spawnedBy ?? null,
         };
       });

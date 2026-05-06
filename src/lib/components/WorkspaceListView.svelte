@@ -340,7 +340,7 @@
     margin-top: 8px;
   }
   /* 8px left + top margin on the nested list so the workspace rails
-     sit visually inset from the parent Workspace's rail and the first
+     sit visually inset from the root Workspace's rail and the first
      nested row breathes below the Workspace banner. WorkspaceItem
      itself has no margin (root Workspaces are flush); we apply the
      inset here so it only fires in the nested context. */

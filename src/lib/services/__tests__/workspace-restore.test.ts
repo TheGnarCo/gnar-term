@@ -2,7 +2,7 @@
  * Unit tests for S2 (last-active branch tracking) and S9 (auto-run restore commands).
  *
  * S2 tests:
- *   1. switchWorkspace records lastActiveBranchedWorkspaceId on parent workspace
+ *   1. switchWorkspace records lastActiveBranchedWorkspaceId on Workspace
  *   2. switchWorkspace does NOT record when child has no rootWorkspaceId
  *   3. activateWorkspace lands on the Workspace's own Root (the runtime
  *      workspace whose id matches the Record id) even when
@@ -99,7 +99,7 @@ describe("S2 — last-active branch restore", () => {
     activeWorkspaceIdx.set(-1);
   });
 
-  it("switchWorkspace records lastActiveBranchedWorkspaceId on parent workspace", () => {
+  it("switchWorkspace records lastActiveBranchedWorkspaceId on Workspace", () => {
     const ws = makeWorkspace("g1", { branchedWorkspaceIds: ["nw-a", "nw-b"] });
     addWorkspace(ws);
 
@@ -169,7 +169,7 @@ describe("S9 — auto-run restore commands", () => {
     vi.clearAllMocks();
   });
 
-  it("sets startupCommand directly when autoRunRestoreCommands is true on parent workspace", async () => {
+  it("sets startupCommand directly when autoRunRestoreCommands is true on Workspace", async () => {
     const ws = makeWorkspace("g1", { autoRunRestoreCommands: true });
     addWorkspace(ws);
 
@@ -200,7 +200,7 @@ describe("S9 — auto-run restore commands", () => {
     expect(surface.pendingRestoreCommand).toBeUndefined();
   });
 
-  it("sets startupCommand (auto-run) when autoRunRestoreCommands is undefined on parent workspace", async () => {
+  it("sets startupCommand (auto-run) when autoRunRestoreCommands is undefined on Workspace", async () => {
     const ws = makeWorkspace("g1"); // autoRunRestoreCommands not set → defaults to opt-out (true)
     addWorkspace(ws);
 
@@ -231,7 +231,7 @@ describe("S9 — auto-run restore commands", () => {
     expect(surface.pendingRestoreCommand).toBeUndefined();
   });
 
-  it("sets pendingRestoreCommand when autoRunRestoreCommands is explicitly false on parent workspace", async () => {
+  it("sets pendingRestoreCommand when autoRunRestoreCommands is explicitly false on Workspace", async () => {
     const ws = makeWorkspace("g1", { autoRunRestoreCommands: false });
     addWorkspace(ws);
 

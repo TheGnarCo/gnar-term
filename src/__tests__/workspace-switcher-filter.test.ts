@@ -140,7 +140,7 @@ describe("filterWorkspaces — grouped mode (parentWorkspaces provided)", () => 
       (r) => r.kind === "child" && r.depth === 1,
     );
 
-    // All four child-under-parent workspaces
+    // All four child-under-Workspaces
     expect(depth1Rows).toHaveLength(4);
     expect(depth1Rows.map((r) => r.ws.id)).toEqual(
       expect.arrayContaining(["nw-1", "nw-2", "nw-3", "nw-4"]),
@@ -290,7 +290,7 @@ describe("filterWorkspaces — flat mode (no parentWorkspaces)", () => {
     expect(result[0]!.ws.id).toBe("nw-2");
   });
 
-  it("filters on parent workspace name", () => {
+  it("filters on Workspace name", () => {
     const result = filterWorkspaces(branches, flatParentMap, "alpha");
     // "Alpha Project" matches nw-1 and nw-2
     expect(result).toHaveLength(2);

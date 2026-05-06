@@ -1,10 +1,9 @@
 /**
  * Tests for `hostScopedAgentsStore` — the scope-derivation helper that
- * powers the agent-list / kanban / task-spawner widgets. Mirrors the
- * spec §5.3 rules: global scope emits all agents; workspace scope emits
- * agents whose child workspace has matching `metadata.rootWorkspaceId`
- * OR whose raw terminal CWD falls under the workspace's `path` and that
- * haven't been claimed yet; no-scope emits an empty list.
+ * powers the agent-list / kanban / task-spawner widgets. Workspace scope
+ * emits agents whose Branch is in `workspace.branchedWorkspaceIds`
+ * (membership derived from `Workspace.rootWorkspaceId`). Global scope
+ * emits all agents; no-scope emits an empty list.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { get, writable } from "svelte/store";
@@ -172,7 +171,7 @@ describe("hostScopedAgentsStore", () => {
     expect(get(store).map((a) => a.agentId)).toEqual(["a-under"]);
   });
 
-  it("workspace scope → excludes claimed workspaces even when CWD matches (they belong to another owner)", async () => {
+  it("workspace scope → excludes Branches whose rootWorkspaceId points elsewhere", async () => {
     workspaces.set([
       {
         ...seedWorkspace("ws-under", { cwd: "/work/one/sub" }),
@@ -207,11 +206,11 @@ describe("hostScopedAgentsStore", () => {
     expect(get(store)).toEqual([]);
   });
 
-  it("workspace scope → includes workspace in workspace.branchedWorkspaceIds even when claimed and no metadata.rootWorkspaceId", async () => {
-    // Regression test: promote-to-workspace stamps Workspace.rootWorkspaceId
-    // but does NOT stamp metadata.rootWorkspaceId. Without criterion 2 in
-    // hostScopedAgentsStore, the claim guard would block the CWD fallback and
-    // the agent would be invisible in the workspace's Kanban dashboard.
+  it("workspace scope → includes a Branch via workspace.branchedWorkspaceIds without metadata.rootWorkspaceId", async () => {
+    // Regression test: Branch membership is derived from
+    // Workspace.rootWorkspaceId, independent of metadata. Agents on a
+    // Branch must surface in their root Workspace's Kanban even when
+    // the runtime workspace has no metadata.rootWorkspaceId stamp.
     workspaces.set([
       {
         ...seedWorkspace("ws-native", { cwd: "" }), // no cwd, no metadata.rootWorkspaceId

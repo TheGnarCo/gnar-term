@@ -65,16 +65,30 @@ fn validate_worktree_path(worktree_path: &str) -> Result<PathBuf, String> {
     Ok(canonical)
 }
 
-fn parse_branch_list(output: &str, include_remote: bool) -> Vec<BranchInfo> {
+fn parse_branch_list(
+    output: &str,
+    include_remote: bool,
+    current_branch: Option<&str>,
+) -> Vec<BranchInfo> {
+    // Lowercase the symbolic-ref name once for case-insensitive matching:
+    // on case-insensitive filesystems HEAD can be `jrvs/foo` while the
+    // on-disk ref is `Jrvs/foo`, and `git branch` displays the latter.
+    let current_lower = current_branch.map(str::to_lowercase);
     let mut branches = Vec::new();
     for line in output.lines() {
-        let line = line.trim();
         if line.is_empty() {
             continue;
         }
-        let is_current = line.starts_with("* ");
-        let name_raw = if is_current { &line[2..] } else { line }.trim();
-        if name_raw.starts_with('(') {
+        // Detect the `* ` current-marker prefix before trimming, so that
+        // an empty current-marker line like `* \n` (case-insensitive FS
+        // quirk) isn't mistaken for a branch named `*`.
+        let starred = line.starts_with("* ");
+        let name_raw = if starred {
+            line[2..].trim()
+        } else {
+            line.trim()
+        };
+        if name_raw.is_empty() || name_raw.starts_with('(') {
             continue;
         }
         let is_remote = name_raw.starts_with("remotes/");
@@ -92,6 +106,11 @@ fn parse_branch_list(output: &str, include_remote: bool) -> Vec<BranchInfo> {
         if name.contains(" -> ") {
             continue;
         }
+        let is_current = !is_remote
+            && match current_lower.as_deref() {
+                Some(cur) => name.to_lowercase() == cur,
+                None => starred,
+            };
         branches.push(BranchInfo {
             name,
             is_current,
@@ -150,13 +169,25 @@ pub async fn list_branches(
     include_remote: bool,
 ) -> Result<Vec<BranchInfo>, String> {
     validate_repo(&repo_path)?;
+    // `symbolic-ref --short HEAD` reliably returns the current branch even
+    // when `git branch` outputs an empty `* ` line (case-insensitive FS:
+    // HEAD points to `jrvs/foo` but the on-disk ref is `Jrvs/foo`).
+    // Errors out in detached HEAD state, in which case we fall back to
+    // `*` prefix detection in parse_branch_list.
+    let current = run_git(&repo_path, &["symbolic-ref", "--short", "HEAD"])
+        .ok()
+        .map(|s| s.trim().to_string());
     let args: Vec<&str> = if include_remote {
         vec!["branch", "-a"]
     } else {
         vec!["branch"]
     };
     let output = run_git(&repo_path, &args)?;
-    Ok(parse_branch_list(&output, include_remote))
+    Ok(parse_branch_list(
+        &output,
+        include_remote,
+        current.as_deref(),
+    ))
 }
 
 #[cfg(test)]
@@ -166,7 +197,7 @@ mod tests {
     #[test]
     fn parse_branch_list_local_only() {
         let output = "  develop\n* main\n  feature/auth\n";
-        let result = parse_branch_list(output, false);
+        let result = parse_branch_list(output, false, None);
         assert_eq!(result.len(), 3);
         assert_eq!(result[1].name, "main");
         assert!(result[1].is_current);
@@ -175,10 +206,38 @@ mod tests {
     #[test]
     fn parse_branch_list_skips_head_pointer() {
         let output = "* main\n  remotes/origin/HEAD -> origin/main\n  remotes/origin/main\n";
-        let result = parse_branch_list(output, true);
+        let result = parse_branch_list(output, true, None);
         assert_eq!(result.len(), 2);
         assert_eq!(result[0].name, "main");
         assert_eq!(result[1].name, "origin/main");
+    }
+
+    /// Regression: on case-insensitive filesystems (macOS APFS) `git branch`
+    /// can emit a `* ` current-marker line with no name when HEAD points to
+    /// `jrvs/foo` but the on-disk ref is `Jrvs/foo`. We must skip the empty
+    /// marker line and instead match the symbolic-ref name case-insensitively
+    /// against the listed branches, otherwise the UI shows `…` forever.
+    #[test]
+    fn parse_branch_list_marks_case_mismatched_current_branch() {
+        let output = "* \n  Jrvs/may-refresh\n  main\n";
+        let result = parse_branch_list(output, false, Some("jrvs/may-refresh"));
+        assert_eq!(result.len(), 2, "empty `* ` line should be skipped");
+        let current = result.iter().find(|b| b.is_current);
+        assert!(
+            current.is_some(),
+            "expected case-mismatched branch to be marked current"
+        );
+        assert_eq!(current.unwrap().name, "Jrvs/may-refresh");
+    }
+
+    /// Detached HEAD: symbolic-ref errors out, so we fall back to the `*`
+    /// prefix marker. The `(HEAD detached at …)` line is always skipped.
+    #[test]
+    fn parse_branch_list_falls_back_to_starred_when_no_symbolic_ref() {
+        let output = "* (HEAD detached at abc1234)\n  main\n  feature/x\n";
+        let result = parse_branch_list(output, false, None);
+        assert_eq!(result.len(), 2);
+        assert!(result.iter().all(|b| !b.is_current));
     }
 
     // F03 regressions: argument injection via branch/base names

@@ -102,9 +102,9 @@ export function workspaceDefToTemplate(
 // ---------------------------------------------------------------------------
 
 /**
- * Live list of all workspaces. Writable owned here; populated via
- * `setWorkspaceList` / `seedWorkspaces` (restore path) or mutated
- * directly by `workspace-runtime-service` (runtime CRUD path).
+ * Live list of all workspaces. Writable owned here; populated and
+ * mutated by `workspace-runtime-service` (the canonical CRUD path,
+ * shared by both runtime user actions and the restore boot path).
  */
 export const workspaces: Writable<Workspace[]> & Readable<Workspace[]> =
   _workspaces;
@@ -206,20 +206,6 @@ export function updateWorkspaceInList(
 
 export function setActiveWorkspaceIdValue(id: string | null): void {
   activeWorkspaceId.set(id);
-}
-
-/**
- * Seed stores from deserialized workspace defs. Called from restore path
- * after `loadState()`.
- */
-export function seedWorkspaces(
-  wsList: Workspace[],
-  activeId: string | null,
-): void {
-  _workspaces.set(wsList);
-  if (activeId !== null) {
-    activeWorkspaceId.set(activeId);
-  }
 }
 
 /** Test hook — reset in-memory state so tests start clean. */
@@ -390,8 +376,8 @@ let _workspaceRecordsLoaded = false;
 /**
  * Read state from disk and seed the active root-workspace id. The
  * unified `_workspaces` store itself is hydrated by the runtime path
- * (`restoreWorkspaces` → `seedWorkspaces`); this function only handles
- * the active-id pointer and the one-shot loaded flag.
+ * (`restoreWorkspaces` → `createWorkspaceFromDef`); this function only
+ * handles the active-id pointer and the one-shot loaded flag.
  *
  * Idempotent — subsequent calls are no-ops so tests can freely call
  * the initializer.

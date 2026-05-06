@@ -9,8 +9,8 @@
  *   4. config.autoload — open every named workspace listed
  *   5. fall back to a single default "Workspace 1"
  *
- * If `state.workspaces[]` is present (unified format), `seedWorkspaces()`
- * is called to hydrate the new store.
+ * If `state.workspaces[]` is present (unified format), each entry is
+ * fed directly through `createWorkspaceFromDef` with `restoring: true`.
  */
 import { get } from "svelte/store";
 import { workspaces } from "../stores/workspace";
@@ -20,14 +20,10 @@ import {
   type WorkspaceTemplate,
   type WorkspaceDef,
 } from "../config";
-import { seedWorkspaces, workspaceDefToTemplate } from "../stores/workspace";
+import { workspaceDefToTemplate } from "../stores/workspace";
 import { initArchiveFromState } from "../stores/archive";
-import { uid } from "../types";
-import type { Workspace, BranchedWorkspace } from "../types";
-import {
-  createWorkspaceFromDef,
-  switchWorkspace,
-} from "../services/workspace-runtime-service";
+import { createWorkspaceFromDef } from "../services/workspace-runtime-service";
+import { switchWorkspace } from "../services/workspace-runtime-service";
 import { OVERVIEW_DASHBOARD_CONTRIBUTION_ID } from "../services/dashboard-contribution-registry";
 
 // Restore-complete signal — lets async work (extension provision loops,
@@ -51,72 +47,6 @@ export function waitRestored(): Promise<void> {
 export function resetRestoreSignal(): void {
   _restored = false;
   _waiters.length = 0;
-}
-
-/**
- * Deserialize a WorkspaceDef into a runtime Workspace object.
- * This reconstructs a minimal Workspace suitable for `seedWorkspaces()`.
- * The paneLayout is built lazily — it carries a single pane with no
- * surfaces until the full restore path populates it.
- */
-export function workspaceDefToWorkspace(def: WorkspaceDef): Workspace {
-  const paneId = uid();
-  const ws: Workspace = {
-    id: def.id,
-    name: def.name,
-    paneLayout: {
-      type: "pane",
-      pane: { id: paneId, surfaces: [], activeSurfaceId: null },
-    },
-    activePaneId: paneId,
-  };
-  // Root-shaped Workspaces own a (possibly empty) members list. Branches and
-  // Dashboards omit the field entirely (they're tracked in their owner's list).
-  // reclaimBranchedWorkspaces fills in the actual ids after seedWorkspaces.
-  const isBranch = typeof def.worktreePath === "string";
-  const isDashboard = def.isDashboard === true;
-  const isBranched = typeof def.rootWorkspaceId === "string";
-  if (!isBranch && !isDashboard && !isBranched) {
-    ws.branchedWorkspaceIds = [];
-  }
-  // Legacy state.json predates the color and path fields. Root-shaped
-  // workspaces require both as strings; default the missing values at
-  // the load boundary so downstream renderers never see undefined.
-  const isRootShaped = !isBranch && !isDashboard && !isBranched;
-  if (def.path !== undefined) {
-    ws.path = def.path;
-  } else if (isRootShaped) {
-    ws.path = "";
-  }
-  if (def.color !== undefined) {
-    ws.color = def.color;
-  } else if (isRootShaped) {
-    ws.color = "blue";
-  }
-  if (def.isGit !== undefined) ws.isGit = def.isGit;
-  if (def.createdAt !== undefined) ws.createdAt = def.createdAt;
-  if (def.autoRunRestoreCommands !== undefined)
-    ws.autoRunRestoreCommands = def.autoRunRestoreCommands;
-  if (def.lastActiveBranchedWorkspaceId !== undefined)
-    ws.lastActiveBranchedWorkspaceId = def.lastActiveBranchedWorkspaceId;
-  if (def.dashboardWorkspaceId !== undefined)
-    ws.dashboardWorkspaceId = def.dashboardWorkspaceId;
-  if (def.locked !== undefined) ws.locked = def.locked;
-  if (def.rootWorkspaceId !== undefined)
-    ws.rootWorkspaceId = def.rootWorkspaceId;
-  if (def.isDashboard !== undefined) ws.isDashboard = def.isDashboard;
-  if (def.dashboardContributionId !== undefined)
-    ws.dashboardContributionId = def.dashboardContributionId;
-  if (def.extensionData !== undefined) ws.extensionData = def.extensionData;
-  // BranchedWorkspace fields — cast to mutable BranchedWorkspace to set extra fields
-  if (def.worktreePath !== undefined) {
-    const bws = ws as BranchedWorkspace;
-    bws.worktreePath = def.worktreePath;
-    if (def.branch !== undefined) bws.branch = def.branch;
-    if (def.baseBranch !== undefined) bws.baseBranch = def.baseBranch;
-    if (def.repoPath !== undefined) bws.repoPath = def.repoPath;
-  }
-  return ws;
 }
 
 export interface CliArgs {
@@ -183,19 +113,12 @@ export async function restoreWorkspaces(
   // existing path.
   // ---------------------------------------------------------------------------
   if (Array.isArray(state.workspaces) && state.workspaces.length > 0) {
-    // WorkspaceRecord defs are also hydrated as runtime workspaces —
-    // the Workspace's tab surface lives at the same id as its Record.
-    // Branches and Dashboards continue to ride alongside. The Record
-    // store still loads from the same defs (in `loadWorkspaces()`) for
-    // sidebar metadata.
     const runtimeDefs = state.workspaces as WorkspaceDef[];
-    const wsList = runtimeDefs.map(workspaceDefToWorkspace);
-    seedWorkspaces(wsList, state.activeWorkspaceId ?? null);
 
     // Persisted dashboards are dropped if their owning Workspace isn't
-    // about to be re-created. Drive that check off `runtimeDefs` (the
-    // source of truth for re-creation) — reading it from the live store
-    // would always be empty here because we just cleared it below.
+    // about to be re-created. Drive the check off `runtimeDefs` (the
+    // source of truth for re-creation) rather than the live store,
+    // which is empty until `createWorkspaceFromDef` runs below.
     const knownWorkspaceIds = new Set(
       runtimeDefs
         .filter(
@@ -207,7 +130,6 @@ export async function restoreWorkspaces(
         .map((def) => def.id)
         .filter((id): id is string => typeof id === "string"),
     );
-    workspaces.set([]);
     const seenDashboards = new Set<string>();
     const filteredDefs = runtimeDefs.filter((def) => {
       const isDashboard = def.isDashboard === true;

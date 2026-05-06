@@ -19,7 +19,11 @@
   import { onDestroy, getContext } from "svelte";
   import { EXTENSION_API_KEY, type ExtensionAPI } from "../../extensions/api";
 
-  export let target: { id: string; path: string; isGit: boolean };
+  export let target: {
+    id: string;
+    path: string | undefined;
+    isGit: boolean;
+  };
   /**
    * Optional override for the subtitle's text color. When the status
    * line sits inside a colored container banner, callers pass the
@@ -89,11 +93,11 @@
 
   onDestroy(() => stop());
 
-  $: showFirstRow = Boolean(target);
-  $: prettyPath = target
+  $: showFirstRow = Boolean(target?.path);
+  $: prettyPath = target?.path
     ? (() => {
-        const parts = target.path.split("/").filter(Boolean);
-        return parts.slice(-2).join("/") || target.path;
+        const parts = target.path!.split("/").filter(Boolean);
+        return parts.slice(-2).join("/") || target.path!;
       })()
     : "";
 </script>
@@ -105,7 +109,7 @@
     <!-- Path row -->
     <div
       style="display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden;"
-      title={target.path}
+      title={target.path ?? ""}
     >
       <svg
         width="10"

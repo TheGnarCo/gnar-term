@@ -81,14 +81,16 @@ export function getWorkspaceColors(
 /**
  * Resolve a color field to a hex value. Slot names look up the active
  * theme; custom hex strings (starting with `#`) pass through unchanged.
- * Unknown strings return as-is.
+ * Unknown strings return as-is. Legacy persisted records may lack a
+ * color, so undefined/null/empty fall back to the `blue` slot.
  */
 export function resolveWorkspaceColor(
-  color: string,
+  color: string | undefined | null,
   theme: WorkspaceColorTheme,
 ): string {
-  if (color.startsWith("#")) return color;
   const colors = getWorkspaceColors(theme);
+  if (!color) return colors.blue;
+  if (color.startsWith("#")) return color;
   return colors[color as WorkspaceColorSlot] ?? color;
 }
 

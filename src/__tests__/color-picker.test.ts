@@ -43,4 +43,17 @@ describe("workspace color resolution", () => {
     expect(solarized).not.toBe("red");
     expect(dark).not.toBe(solarized);
   });
+
+  // Legacy persisted workspaces predate the color field; loading them
+  // produced `workspace.color === undefined`, which crashed the sidebar
+  // render via `color.startsWith` and bricked the New / Settings /
+  // Claude-settings buttons. The function must tolerate the missing
+  // value and fall back rather than throw.
+  it("falls back to blue when color is undefined or null", () => {
+    const theme = themes["one-dark"];
+    const blue = getWorkspaceColors(theme).blue;
+    expect(resolveWorkspaceColor(undefined, theme)).toBe(blue);
+    expect(resolveWorkspaceColor(null, theme)).toBe(blue);
+    expect(resolveWorkspaceColor("", theme)).toBe(blue);
+  });
 });

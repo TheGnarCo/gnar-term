@@ -80,8 +80,20 @@ export function workspaceDefToWorkspace(def: WorkspaceDef): Workspace {
   if (!isBranch && !isDashboard && !isBranched) {
     ws.branchedWorkspaceIds = [];
   }
-  if (def.path !== undefined) ws.path = def.path;
-  if (def.color !== undefined) ws.color = def.color;
+  // Legacy state.json predates the color and path fields. Root-shaped
+  // workspaces require both as strings; default the missing values at
+  // the load boundary so downstream renderers never see undefined.
+  const isRootShaped = !isBranch && !isDashboard && !isBranched;
+  if (def.path !== undefined) {
+    ws.path = def.path;
+  } else if (isRootShaped) {
+    ws.path = "";
+  }
+  if (def.color !== undefined) {
+    ws.color = def.color;
+  } else if (isRootShaped) {
+    ws.color = "blue";
+  }
   if (def.isGit !== undefined) ws.isGit = def.isGit;
   if (def.createdAt !== undefined) ws.createdAt = def.createdAt;
   if (def.autoRunRestoreCommands !== undefined)

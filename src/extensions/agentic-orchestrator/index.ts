@@ -16,13 +16,6 @@
  *      `isGlobalAgenticDashboard: true` → global scope).
  */
 import type { ExtensionManifest, ExtensionAPI, WorkspaceRef } from "../api";
-import { createWorkspaceFromDef } from "../../lib/services/workspace-runtime-service";
-import {
-  closeAutoDashboardsBySource,
-  provisionAutoDashboardsForWorkspace,
-} from "../../lib/services/workspace-service";
-import { getWorkspaces } from "../../lib/stores/workspace";
-import { waitRestored } from "../../lib/bootstrap/restore-workspaces";
 import BotIcon from "./icons/BotIcon.svelte";
 import GlobalAgenticDashboardBody from "./components/GlobalAgenticDashboardBody.svelte";
 import AgentStatusGrid from "./components/AgentStatusGrid.svelte";
@@ -78,22 +71,12 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
       },
     });
 
-    // Back-fill the Agentic Dashboard for every existing workspace. Fresh
-    // workspaces hit provisionAutoDashboardsForWorkspace through the normal
-    // create flow, but workspaces that existed before the extension was
-    // enabled would otherwise stay without an agentic tile until app
-    // restart. Run in the background — the extension is fully usable
-    // while the provisioning sweeps through.
-    //
-    // waitRestored() is a no-op when the extension is enabled at runtime
-    // (markRestored already fired). At startup it defers until
-    // restoreWorkspaces completes so this loop never races the restore.
-    void (async () => {
-      await waitRestored();
-      for (const workspace of getWorkspaces()) {
-        await provisionAutoDashboardsForWorkspace(workspace);
-      }
-    })();
+    // The Agentic Dashboard contribution is autoProvision: true, so
+    // core's registerDashboardContribution wrapper handles the
+    // post-restore back-fill onto every existing workspace. The
+    // matching teardown on deactivate flows through the registry
+    // cleanup pipeline (closeAutoDashboardsBySource), so neither hook
+    // needs to be wired here.
 
     const CLOSED_KEY = "globalDashboardClosed";
 
@@ -247,13 +230,10 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
     });
   });
 
-  api.onDeactivate(() => {
-    // Close the per-workspace Agentic Dashboard workspaces the extension
-    // auto-provisioned. Runs before the extension's contributions are
-    // unregistered (deactivateExtension order), so the registry still
-    // advertises the agentic contribution's source here.
-    closeAutoDashboardsBySource("agentic-orchestrator");
-  });
+  // Auto-provisioned dashboards are torn down by the registry cleanup
+  // pipeline on deactivate (closeAutoDashboardsBySource runs before
+  // unregisterDashboardContributionsBySource), so no onDeactivate hook
+  // is needed here.
 }
 
 // --- Internal helpers ---
@@ -343,7 +323,7 @@ async function createAgenticDashboardWorkspace(
   workspace: WorkspaceRef,
 ): Promise<string> {
   const markdownPath = await writeAgenticDashboardTemplate(api, workspace);
-  return await createWorkspaceFromDef({
+  return await api.createWorkspaceFromDef({
     name: "Agents",
     layout: {
       pane: {

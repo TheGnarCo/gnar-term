@@ -1,11 +1,4 @@
 import type { ExtensionManifest, ExtensionAPI, WorkspaceRef } from "../api";
-import { createWorkspaceFromDef } from "../../lib/services/workspace-runtime-service";
-import {
-  closeAutoDashboardsBySource,
-  provisionAutoDashboardsForWorkspace,
-} from "../../lib/services/workspace-service";
-import { getWorkspaces } from "../../lib/stores/workspace";
-import { waitRestored } from "../../lib/bootstrap/restore-workspaces";
 import ClaudeMark from "./icons/ClaudeMark.svelte";
 import UserSettingsPanel from "./components/UserSettingsPanel.svelte";
 import ClaudeSettingsWidget from "./components/ClaudeSettingsWidget.svelte";
@@ -56,17 +49,9 @@ export function registerClaudeSettingsExtension(api: ExtensionAPI): void {
       lockedReason: "Required by Claude Settings extension",
       create: (workspace) => createClaudeSettingsDashboard(api, workspace),
     });
-
-    void (async () => {
-      await waitRestored();
-      for (const workspace of getWorkspaces()) {
-        await provisionAutoDashboardsForWorkspace(workspace);
-      }
-    })();
-  });
-
-  api.onDeactivate(() => {
-    closeAutoDashboardsBySource("claude-settings");
+    // Auto-provision back-fill onto existing workspaces is handled by
+    // core's registerDashboardContribution wrapper; matching teardown
+    // on deactivate runs through the registry cleanup pipeline.
   });
 }
 
@@ -102,7 +87,7 @@ async function createClaudeSettingsDashboard(
   workspace: WorkspaceRef,
 ): Promise<string> {
   const mdPath = await writeClaudeSettingsTemplate(api, workspace);
-  return createWorkspaceFromDef({
+  return api.createWorkspaceFromDef({
     name: "Claude Settings",
     layout: {
       pane: {

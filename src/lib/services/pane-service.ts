@@ -153,6 +153,11 @@ export function closePane(paneId: string) {
   if (!ws) return;
   const pane = getAllPanes(ws.paneLayout).find((p) => p.id === paneId);
   if (!pane) return;
+  // Snapshot surface ids so we can emit `surface:closed` after the
+  // splice. Without this, agent-detection-service keeps tracking
+  // surfaces that no longer exist (their bot status lingers on the
+  // workspace banner).
+  const closedSurfaceIds: string[] = pane.surfaces.map((s) => s.id);
   for (const s of [...pane.surfaces]) {
     if (isTerminalSurface(s)) {
       s.terminal.dispose();
@@ -161,6 +166,9 @@ export function closePane(paneId: string) {
     }
   }
   pane.surfaces = [];
+  for (const surfaceId of closedSurfaceIds) {
+    eventBus.emit({ type: "surface:closed", id: surfaceId, paneId });
+  }
   removePane(ws, pane);
   schedulePersist();
 }

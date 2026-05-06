@@ -489,7 +489,12 @@ function handlePtyExit(pty_id: number, exit_code: number | null = null): void {
   firstOutputListeners.delete(pty_id);
   osc7ReceivedPtys.delete(pty_id);
 
-  // Remove the surface from its pane, and collapse empty panes
+  // Remove the surface from its pane, and collapse empty panes.
+  // Emit `surface:closed` so listeners (tab bar reactivity,
+  // agent-detection-service) react — without it the bot status lingers
+  // and the tab strip stays stale on natural agent exit / kill_agent.
+  let closedSurfaceId: string | null = null;
+  let closedPaneId: string | null = null;
   workspaces.update((wsList) => {
     for (const ws of wsList) {
       for (const pane of getAllPanes(ws.paneLayout)) {
@@ -499,6 +504,8 @@ function handlePtyExit(pty_id: number, exit_code: number | null = null): void {
         if (idx >= 0) {
           const exiting = pane.surfaces[idx] as TerminalSurface;
           const { definedCommand, cwd } = exiting;
+          closedSurfaceId = exiting.id;
+          closedPaneId = pane.id;
           pane.surfaces.splice(idx, 1);
           if (pane.surfaces.length > 0) {
             pane.activeSurfaceId =
@@ -512,12 +519,19 @@ function handlePtyExit(pty_id: number, exit_code: number | null = null): void {
               cwd,
             };
           }
-          return wsList;
+          return [...wsList];
         }
       }
     }
     return wsList;
   });
+  if (closedSurfaceId !== null && closedPaneId !== null) {
+    eventBus.emit({
+      type: "surface:closed",
+      id: closedSurfaceId,
+      paneId: closedPaneId,
+    });
+  }
 }
 
 function handlePtyNotification(pty_id: number, text: string): void {

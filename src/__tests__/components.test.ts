@@ -2380,10 +2380,14 @@ describe("terminal link handling", () => {
     );
 
     const termInstance = TerminalCtor.mock.instances.at(-1)!;
-    // 3 calls: OSC 8 provider (index 0) + URL provider (index 1) + file-path provider (index 2)
-    expect(termInstance.registerLinkProvider).toHaveBeenCalledTimes(3);
+    // 2 calls: URL provider (index 0) + file-path provider (index 1).
+    // OSC 8 is now handled by the built-in linkHandler set in Terminal options
+    // — see terminal-service.ts. The default OSC 8 path routes through
+    // window.confirm, which Tauri remaps to plugin:dialog|confirm and rejects
+    // without `dialog:allow-confirm` permission, so we override it.
+    expect(termInstance.registerLinkProvider).toHaveBeenCalledTimes(2);
 
-    const provider = termInstance.registerLinkProvider.mock.calls[1][0] as {
+    const provider = termInstance.registerLinkProvider.mock.calls[0][0] as {
       provideLinks: (
         line: number,
         cb: (
@@ -2422,6 +2426,50 @@ describe("terminal link handling", () => {
     );
     expect(invokeMockFn).toHaveBeenCalledWith("open_url", {
       url: "https://example.com/path",
+    });
+  });
+
+  it("OSC 8 linkHandler is wired in Terminal options and invokes open_url", async () => {
+    // Regression: xterm.js's default OSC 8 handler calls window.confirm
+    // before navigating. Tauri remaps window.confirm to plugin:dialog|confirm,
+    // which is not granted in capabilities — so the click rejects with
+    // "dialog.confirm not allowed. Command not found" and the URL never opens.
+    // We override linkHandler in Terminal options to bypass that path.
+    const { invoke: invokeMock } = await import("@tauri-apps/api/core");
+    const invokeMockFn = vi.mocked(invokeMock);
+    invokeMockFn.mockClear();
+
+    const { Terminal: TerminalMock } = await import("@xterm/xterm");
+    const TerminalCtor = vi.mocked(
+      TerminalMock as unknown as new (...args: unknown[]) => unknown,
+    );
+
+    const { createTerminalSurface } = await import("../lib/terminal-service");
+    const fakePane = {
+      id: "p-osc8-linkhandler",
+      surfaces: [],
+      activeSurfaceId: null,
+    };
+    await createTerminalSurface(
+      fakePane as unknown as Parameters<typeof createTerminalSurface>[0],
+    );
+
+    const ctorArgs = TerminalCtor.mock.calls.at(-1)!;
+    const options = ctorArgs[0] as {
+      linkHandler?: {
+        activate: (e: MouseEvent, text: string) => void;
+        allowNonHttpProtocols?: boolean;
+      };
+    };
+    expect(options.linkHandler).toBeDefined();
+    expect(options.linkHandler!.allowNonHttpProtocols).toBe(false);
+
+    options.linkHandler!.activate(
+      new MouseEvent("click"),
+      "https://github.com/foo/bar/pull/1",
+    );
+    expect(invokeMockFn).toHaveBeenCalledWith("open_url", {
+      url: "https://github.com/foo/bar/pull/1",
     });
   });
 });

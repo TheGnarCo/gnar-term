@@ -99,44 +99,62 @@
 </script>
 
 {#if showFirstRow}
-  <!-- Path row -->
   <div
-    style="padding: 2px 12px 0 0; display: flex; align-items: center; min-width: 0; overflow: hidden; line-height: 1.2;"
+    style="display: flex; flex-direction: column; gap: 1px; padding: 0 12px 4px 6px; overflow: hidden;"
   >
-    <span
-      style="font-size: 10px; color: {fgMuted}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; display: inline-flex; align-items: center; gap: 3px;"
+    <!-- Path row -->
+    <div
+      style="display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden;"
       title={target.path}
     >
       <svg
         width="10"
         height="10"
         viewBox="0 0 16 16"
-        fill={iconColor ?? "currentColor"}
+        fill={iconColor ?? fgMuted}
         style="flex-shrink: 0; opacity: 0.7;"
+        aria-hidden="true"
       >
         <path
           d="M1 3.5A1.5 1.5 0 0 1 2.5 2h2.764c.958 0 1.76.56 2.062 1.5H13.5A1.5 1.5 0 0 1 15 5v7.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5z"
         />
       </svg>
-      {prettyPath}
-    </span>
-  </div>
-
-  <!-- Git row: branch only. Only rendered when git. -->
-  {#if target.isGit}
-    <div
-      style="padding: 0 12px 2px 0; display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; line-height: 1.2; flex-wrap: wrap;"
-    >
       <span
-        style="font-size: 10px; color: {fgMuted}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; display: inline-flex; align-items: center; gap: 3px;"
+        style="font-size: 10px; color: {fgMuted}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;"
+        >{prettyPath}</span
+      >
+    </div>
+
+    <!-- Git row: branch only. Only rendered when git. -->
+    {#if target.isGit}
+      <div
+        style="display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden;"
         title={branchError
           ? "Failed to read branch"
           : (branch ?? "detached HEAD")}
-        ><span
-          style="color: {iconColor ?? fgMuted}; opacity: 0.8; flex-shrink: 0;"
-          >⎇</span
-        >{branch ?? "…"}</span
       >
-    </div>
-  {/if}
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={iconColor ?? fgMuted}
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          style="flex-shrink: 0; opacity: 0.7;"
+          aria-hidden="true"
+        >
+          <line x1="6" y1="3" x2="6" y2="15" />
+          <circle cx="18" cy="6" r="3" />
+          <circle cx="6" cy="18" r="3" />
+          <path d="M18 9a9 9 0 0 1-9 9" />
+        </svg>
+        <span
+          style="font-size: 10px; color: {fgMuted}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0;"
+          >{branch ?? "…"}</span
+        >
+      </div>
+    {/if}
+  </div>
 {/if}

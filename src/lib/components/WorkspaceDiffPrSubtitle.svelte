@@ -16,10 +16,21 @@
   import { theme } from "../stores/theme";
   import { getWorkspaceStatusByCategory } from "../services/status-registry";
   import { GIT_STATUS_SOURCE } from "../services/git-status-service";
+  import { workspaces } from "../stores/workspace";
   import type { StatusItem } from "../types/status";
 
   export let workspaceId: string;
   export let accentColor: string | undefined = undefined;
+
+  // PR rows belong to root-workspace banners only — branches and
+  // dashboards inherit the PR status from their owning root, so showing
+  // it twice (or on a branch worktree that has no upstream) is noise.
+  $: thisWs = $workspaces.find((w) => w.id === workspaceId);
+  $: isRootWorkspace =
+    thisWs !== undefined &&
+    thisWs.rootWorkspaceId === undefined &&
+    thisWs.isDashboard !== true &&
+    typeof (thisWs as { worktreePath?: string }).worktreePath !== "string";
 
   $: fgMuted = ($theme["fgMuted"] ?? $theme.fgDim) as string;
   $: iconFg = accentColor ?? fgMuted;
@@ -146,7 +157,10 @@
 
   onDestroy(() => stopPrPolling());
 
-  $: showPr = pr !== null && (pr.state === "OPEN" || pr.state === "open");
+  $: showPr =
+    isRootWorkspace &&
+    pr !== null &&
+    (pr.state === "OPEN" || pr.state === "open");
   $: isDraft = pr?.isDraft ?? false;
   $: prColor = pr
     ? isDraft

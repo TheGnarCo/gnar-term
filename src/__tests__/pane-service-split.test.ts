@@ -139,43 +139,6 @@ describe("splitPaneWithSurface — split-from-root", () => {
     expect(newPane!.activeSurfaceId).toBe(sA.id);
   });
 
-  it("makes the new split the paneLayout when the target was the lone root pane", () => {
-    // Source has 2 surfaces so the source pane survives the move. The
-    // target is the paneLayout — so wrapping it in a split makes the
-    // new split the root.
-    const sA = mockSurface({ title: "A" });
-    const sB = mockSurface({ title: "B" });
-    const sC = mockSurface({ title: "C" });
-    const sourcePane = makePane([sA, sB]);
-    const targetPane = makePane([sC]);
-    // Workspace 1: target is its own root.
-    const targetWs = makeChildWorkspace({ type: "pane", pane: targetPane });
-    // Workspace 2: source — but splitPaneWithSurface only operates on
-    // the active workspace via get(activeWorkspace). We need source
-    // and target in the SAME workspace. Use a horizontal split as the
-    // common parent so target is nested, then ALSO test the
-    // "target == paneLayout" case via a different setup below.
-    void sourcePane;
-    void targetWs;
-    // Re-arrange: target is the root of the active workspace; source
-    // sits as a sibling under a parent split. We want the new split
-    // (target ↔ new pane) to become a CHILD of the parent.
-    // For the "target is paneLayout" case, both source and target must
-    // be in the same workspace and target must be the root — but if
-    // target is the root and there is also a source pane, target
-    // cannot be the root (the workspace would have two top-level
-    // pieces). So this case applies when the workspace has only the
-    // target pane — but then there is no source pane to move from.
-    //
-    // Resolution: this case is only triggered when source is a NESTED
-    // pane that becomes empty and gets collapsed away while target
-    // happens to still be the root. We exercise that via the "source
-    // has 1 surface; target is the only sibling" arrangement covered
-    // below. This separate test is satisfied by the basic "target was
-    // root" path which only fires when sourcePane !== root.
-    expect(true).toBe(true);
-  });
-
   it("collapses the source pane when its last surface moves to the target", () => {
     // Source has [A] only. After moving A to target, source is empty
     // and must collapse out of the tree. The dragged surface (A) must
@@ -243,7 +206,7 @@ describe("splitPaneWithSurface — split-from-root", () => {
     expect(sourcePane.activeSurfaceId).toBe(sB.id);
   });
 
-  it("replaces the target's slot in a nested parent split", () => {
+  it("replaces the target's slot in a nested outer split", () => {
     // Layout:           paneLayout (h)
     //                  /          \
     //              source         splitInner (v)

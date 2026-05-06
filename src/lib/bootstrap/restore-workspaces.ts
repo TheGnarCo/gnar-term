@@ -73,11 +73,11 @@ export function workspaceDefToWorkspace(def: WorkspaceDef): Workspace {
   };
   // Root-shaped Workspaces own a (possibly empty) members list. Branches and
   // Dashboards omit the field entirely (they're tracked in their owner's list).
-  // reclaimChildWorkspaces fills in the actual ids after seedWorkspaces.
+  // reclaimBranchedWorkspaces fills in the actual ids after seedWorkspaces.
   const isBranch = typeof def.worktreePath === "string";
   const isDashboard = def.isDashboard === true;
-  const isOwnedChild = typeof def.rootWorkspaceId === "string";
-  if (!isBranch && !isDashboard && !isOwnedChild) {
+  const isBranched = typeof def.rootWorkspaceId === "string";
+  if (!isBranch && !isDashboard && !isBranched) {
     ws.branchedWorkspaceIds = [];
   }
   if (def.path !== undefined) ws.path = def.path;

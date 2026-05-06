@@ -36,7 +36,7 @@ function makeParent(id: string, name: string): WorkspaceRecord {
 
 // ---- Grouped mode setup ----
 
-const parentA = makeParent("ws-a", "Alpha Project");
+const parentA = makeParent("ws-a", "Alpha Root");
 const parentB = makeParent("ws-b", "Beta Corp");
 
 const parentWorkspaces = [parentA, parentB];
@@ -60,9 +60,9 @@ const parentMap = new Map<string, WorkspaceRecord>([
 
 // ---- Grouped mode tests ----
 
-describe("filterWorkspaces — child ordering within parent groups", () => {
+describe("filterWorkspaces — branch ordering within a Root", () => {
   it("sorts: main workspace first, branches second, dashboards last", () => {
-    const parent = makeParent("ws-x", "My Project");
+    const parent = makeParent("ws-x", "My Root");
     const dashboard = makeWs({
       id: "nw-dash",
       name: "Dashboard",
@@ -269,7 +269,7 @@ describe("filterWorkspaces — flat mode (no parentWorkspaces)", () => {
   ];
 
   const flatParentMap = new Map<string, WorkspaceRecord>([
-    ["ws-a", makeParent("ws-a", "Alpha Project")],
+    ["ws-a", makeParent("ws-a", "Alpha Root")],
     ["ws-b", makeParent("ws-b", "Beta Corp")],
   ]);
 
@@ -292,7 +292,7 @@ describe("filterWorkspaces — flat mode (no parentWorkspaces)", () => {
 
   it("filters on Workspace name", () => {
     const result = filterWorkspaces(branches, flatParentMap, "alpha");
-    // "Alpha Project" matches nw-1 and nw-2
+    // "Alpha Root" matches nw-1 and nw-2
     expect(result).toHaveLength(2);
     expect(result.map((r) => r.ws.id)).toContain("nw-1");
     expect(result.map((r) => r.ws.id)).toContain("nw-2");

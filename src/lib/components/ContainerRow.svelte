@@ -169,7 +169,6 @@
           accentColor={color}
           {scopeId}
           {containerBlockId}
-          {containerLabel}
           {dashboardHintFor}
           {hideStatusBadges}
         />
@@ -277,7 +276,6 @@
             accentColor={color}
             {scopeId}
             {containerBlockId}
-            {containerLabel}
             {dashboardHintFor}
             {hideStatusBadges}
           />

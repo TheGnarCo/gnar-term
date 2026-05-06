@@ -83,16 +83,6 @@
    */
   export let containerBlockId: string | null = null;
 
-  /**
-   * Human-readable name of the scope this list lives in. The "Close
-   * Other Workspaces" menu item was removed, so the label is currently
-   * unused inside WorkspaceListView — retained on the prop surface so
-   * callers (ContainerRow) don't have to rewire when a future action
-   * needs the label.
-   */
-  export let containerLabel: string | undefined = undefined;
-  void containerLabel;
-
   $: allEntries = $workspaces
     .map((ws, idx) => ({ ws, idx }))
     .filter(({ ws }) => (filterIds ? filterIds.has(ws.id) : true));

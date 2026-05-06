@@ -104,7 +104,7 @@ export async function createWorkspace(name: string) {
 
   workspaces.update((list) => [...list, ws]);
   // Bare runtime workspaces are Roots (no rootWorkspaceId). Their
-  // sidebar row is materialized when `wrapStandaloneChildWorkspaces`
+  // sidebar row is materialized when `materializeStandaloneRoots`
   // promotes them to a WorkspaceRecord during reconcile (which calls
   // `addWorkspace` → appendRootRow). Until then they are headless
   // workspaces — visible only as the active tab surface.
@@ -275,7 +275,7 @@ export async function createWorkspaceFromDef(
   if (def.extensionData !== undefined) ws.extensionData = def.extensionData;
 
   // Root-shaped Workspaces own a (possibly empty) members list. Branches
-  // and Dashboards omit the field entirely. reclaimChildWorkspaces fills
+  // and Dashboards omit the field entirely. reclaimBranchedWorkspaces fills
   // in actual member ids after the loop completes.
   const isRootShaped =
     typeof ws.rootWorkspaceId !== "string" &&

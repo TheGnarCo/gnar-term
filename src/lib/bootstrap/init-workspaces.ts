@@ -31,7 +31,7 @@ import {
   isDashboardWorkspace,
   openWorkspaceDashboard,
   provisionAutoDashboardsForWorkspace,
-  reclaimChildWorkspaces,
+  reclaimBranchedWorkspaces,
   regenerateWorkspaceDashboardTemplate,
   removeChildFromAllWorkspaces,
   updateWorkspace,
@@ -240,7 +240,7 @@ export async function initWorkspaces(): Promise<void> {
   // Rebuild branchedWorkspaceIds from rootWorkspaceId — Branch ids
   // change on every restart, so the membership list is recomputed
   // from the canonical tag on each load.
-  reclaimChildWorkspaces();
+  reclaimBranchedWorkspaces();
 
   // Root-row renderer for "workspace" kind. ContainerRow inside
   // the renderer owns the grip/banner/child-list chrome; the rail

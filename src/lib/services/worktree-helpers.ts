@@ -26,12 +26,12 @@ async function pickDirectory(title: string): Promise<string | null> {
  * Returns null if the user cancels or the path is not a git repo.
  */
 export async function resolveRepoPath(
-  ctxProjectPath: unknown,
+  ctxWorkspacePath: unknown,
 ): Promise<string | null> {
   let repoPath: string | null;
 
-  if (typeof ctxProjectPath === "string") {
-    repoPath = ctxProjectPath;
+  if (typeof ctxWorkspacePath === "string") {
+    repoPath = ctxWorkspacePath;
   } else {
     repoPath = await pickDirectory("Select Git Repository");
     if (!repoPath) return null;

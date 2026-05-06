@@ -230,7 +230,7 @@ function buildWorkspaceDashboardMarkdown(workspace: WorkspaceRecord): string {
   // degrades gracefully for users who don't want agents.
   return `# ${workspace.name}
 
-Project at \`${workspace.path}\`.
+Workspace at \`${workspace.path}\`.
 
 \`\`\`gnar:workspaces
 \`\`\`
@@ -618,7 +618,7 @@ export async function reconcileWorkspaceDashboards(): Promise<void> {
  * creates fresh workspace ids so the membership list is recomputed
  * here from the canonical `rootWorkspaceId` tag.
  */
-export function reclaimChildWorkspaces(): void {
+export function reclaimBranchedWorkspaces(): void {
   const primaryWorkspaces = getWorkspaces();
   const workspaceIds = new Set(primaryWorkspaces.map((w) => w.id));
 
@@ -665,7 +665,7 @@ export function reclaimChildWorkspaces(): void {
  *   - is not worktree-backed (worktreePath stamps it as a worktree
  *     Branch even if its rootWorkspaceId is missing)
  */
-function wrapStandaloneChildWorkspaces(): void {
+function materializeStandaloneRoots(): void {
   const knownWorkspaceIds = new Set(getWorkspaces().map((w) => w.id));
   const snapshot = get(workspaces);
   const usedColors = getWorkspaces().map((w) => w.color);
@@ -709,7 +709,7 @@ function wrapStandaloneChildWorkspaces(): void {
  * Idempotent.
  */
 export async function reconcilePrimaryWorkspaces(): Promise<void> {
-  wrapStandaloneChildWorkspaces();
+  materializeStandaloneRoots();
 }
 
 /**

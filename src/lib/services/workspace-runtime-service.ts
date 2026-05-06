@@ -265,6 +265,12 @@ export async function createWorkspaceFromDef(
   if (def.baseBranch !== undefined) bw.baseBranch = def.baseBranch;
   if (def.repoPath !== undefined) bw.repoPath = def.repoPath;
 
+  // Provenance (worktree-service / spawn-helper)
+  if (def.spawnedBy !== undefined) ws.spawnedBy = def.spawnedBy;
+  if (def.spawnedFromIssues !== undefined)
+    ws.spawnedFromIssues = def.spawnedFromIssues;
+  if (def.extensionData !== undefined) ws.extensionData = def.extensionData;
+
   // Root-shaped Workspaces own a (possibly empty) members list. Branches
   // and Dashboards omit the field entirely. reclaimChildWorkspaces fills
   // in actual member ids after the loop completes.

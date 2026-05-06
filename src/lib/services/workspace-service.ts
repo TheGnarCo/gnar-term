@@ -372,19 +372,17 @@ function createDashboardWorkspaceFromDef(
   return createWorkspaceFromDef({
     name,
     layout: { pane: { surfaces } },
-    metadata: {
-      isDashboard: true,
-      rootWorkspaceId: workspace.id,
-      dashboardContributionId: contribId,
-    },
+    isDashboard: true,
+    rootWorkspaceId: workspace.id,
+    dashboardContributionId: contribId,
   });
 }
 
 /**
  * Create the Dashboard workspace for a workspace: a constrained workspace
- * (metadata.isDashboard = true) hosting a single Live Preview of the
- * workspace's markdown file. Returns the new workspace id so the workspace
- * record can link to it.
+ * (`isDashboard = true`) hosting a single Live Preview of the workspace's
+ * markdown file. Returns the new workspace id so the workspace record can
+ * link to it.
  */
 export async function createWorkspaceDashboard(
   workspace: WorkspaceRecord,
@@ -457,10 +455,6 @@ function backfillDashboardContributionIds(): void {
       return {
         ...ws,
         dashboardContributionId: inferred,
-        metadata: {
-          ...(ws.metadata ?? {}),
-          dashboardContributionId: inferred,
-        },
       };
     });
     return mutated ? next : list;
@@ -836,8 +830,7 @@ function wrapStandaloneChildWorkspaces(): void {
       WORKSPACE_COLOR_SLOTS[colorIdx] ?? WORKSPACE_COLOR_SLOTS[0];
     usedColors.push(color);
 
-    const rawCwd = ws.metadata?.cwd;
-    const path = typeof rawCwd === "string" && rawCwd ? rawCwd : "~";
+    const path = ws.path && ws.path.length > 0 ? ws.path : "~";
 
     const workspace: WorkspaceRecord = {
       id: ws.id,

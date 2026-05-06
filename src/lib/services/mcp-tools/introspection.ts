@@ -95,7 +95,7 @@ export const introspectionTools: ToolDef[] = [
           isBranched: typeof worktreePath === "string",
           worktreePath,
           rootWorkspaceId: ws.rootWorkspaceId ?? null,
-          spawnedBy: ws.metadata?.spawnedBy ?? null,
+          spawnedBy: ws.spawnedBy ?? null,
         };
       });
       return { workspaces: list };

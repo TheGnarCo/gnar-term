@@ -83,10 +83,7 @@ export type PendingAction =
       type: "create-workspace";
       name: string;
       cwd: string;
-      options?: {
-        env?: Record<string, string>;
-        metadata?: Record<string, unknown>;
-      };
+      options?: { env?: Record<string, string> };
     }
   | { type: "open-in-editor"; filePath: string }
   | {

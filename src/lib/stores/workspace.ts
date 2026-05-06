@@ -55,18 +55,12 @@ export const zoomedSurfaceId = writable<string | null>(null);
 /**
  * Convert a unified `WorkspaceDef` (on-disk format) into a
  * `WorkspaceTemplate` so the existing `createWorkspaceFromDef` runtime
- * path can hydrate PTY surfaces. Structural / discriminant fields are
- * set at the top level of the template (Stage 10). Extension data that
- * has no top-level home is forwarded in `metadata` for backwards compat.
+ * path can hydrate PTY surfaces. All fields are passed through at the
+ * top level — extension-owned data lives in `extensionData`.
  */
 export function workspaceDefToTemplate(
   def: WorkspaceDef,
 ): import("../config").WorkspaceTemplate {
-  // Extension keys only (no promoted structural fields).
-  const extensionMetadata = def.extensionData
-    ? { ...def.extensionData }
-    : undefined;
-
   const nwDef: import("../config").WorkspaceTemplate = {
     id: def.id,
     name: def.name,
@@ -99,9 +93,7 @@ export function workspaceDefToTemplate(
   if (def.baseBranch !== undefined) nwDef.baseBranch = def.baseBranch;
   if (def.repoPath !== undefined) nwDef.repoPath = def.repoPath;
 
-  if (extensionMetadata && Object.keys(extensionMetadata).length > 0) {
-    nwDef.metadata = extensionMetadata as import("../types").WorkspaceMetadata;
-  }
+  if (def.extensionData !== undefined) nwDef.extensionData = def.extensionData;
   return nwDef;
 }
 

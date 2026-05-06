@@ -62,10 +62,8 @@ export async function spawnOrNavigate(id: string): Promise<void> {
 
   await createWorkspaceFromDef({
     name: entry.label,
-    metadata: {
-      isDashboard: true,
-      dashboardWorkspaceId: id,
-    },
+    isDashboard: true,
+    dashboardWorkspaceId: id,
     layout: { pane: { surfaces: [] } },
   });
 }

@@ -210,19 +210,17 @@ export async function createWorktreeWorkspaceFromConfig(
     name: wsName,
     cwd: config.worktreePath,
     env: { GNARTERM_WORKTREE_ROOT: config.repoPath },
-    metadata: {
-      worktreePath: config.worktreePath,
-      branch: config.branch,
-      baseBranch: config.base,
-      repoPath: config.repoPath,
-      ...(config.rootWorkspaceId
-        ? { rootWorkspaceId: config.rootWorkspaceId }
-        : {}),
-      ...(config.spawnedBy ? { spawnedBy: config.spawnedBy } : {}),
-      ...(config.spawnedFromIssues && config.spawnedFromIssues.length > 0
-        ? { spawnedFromIssues: config.spawnedFromIssues }
-        : {}),
-    },
+    worktreePath: config.worktreePath,
+    branch: config.branch,
+    baseBranch: config.base,
+    repoPath: config.repoPath,
+    ...(config.rootWorkspaceId
+      ? { rootWorkspaceId: config.rootWorkspaceId }
+      : {}),
+    ...(config.spawnedBy ? { spawnedBy: config.spawnedBy } : {}),
+    ...(config.spawnedFromIssues && config.spawnedFromIssues.length > 0
+      ? { spawnedFromIssues: config.spawnedFromIssues }
+      : {}),
     layout: {
       pane: {
         surfaces: [

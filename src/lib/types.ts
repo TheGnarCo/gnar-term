@@ -47,12 +47,18 @@ export interface Workspace {
    */
   branchedWorkspaceIds?: string[];
   /**
-   * Transitional: legacy metadata blob carried over from the
-   * pre-unification store. New writers should set top-level fields and
-   * `extensionData` instead. Read access uses top-level fields directly.
-   * Removed once all writers migrate.
+   * Provenance marker — when set, the workspace was spawned from a
+   * dashboard. Drives the bot-icon affordance in the sidebar.
    */
-  metadata?: WorkspaceMetadata;
+  spawnedBy?:
+    | { kind: "global" }
+    | { kind: "workspace"; rootWorkspaceId: string };
+  /**
+   * GitHub issue numbers a worktree workspace was spawned to handle.
+   * Drives the bot-icon "jump to active workspace" affordance on the
+   * Issues widget.
+   */
+  spawnedFromIssues?: number[];
 }
 
 /**
@@ -152,63 +158,6 @@ export type SplitNode =
       children: [SplitNode, SplitNode];
       ratio: number;
     };
-
-/**
- * Typed metadata carried by a Workspace. All known keys are optional.
- * The index signature preserves compatibility with extension-API sites that
- * accept Record<string,unknown> and with serialised state that may carry
- * legacy or unknown keys.
- */
-export interface WorkspaceMetadata {
-  // --- Index signature: extensions may store arbitrary keys ---
-  [key: string]: unknown;
-  // --- Worktree fields ---
-  /** Set on branched workspaces; absolute path to the worktree directory. */
-  worktreePath?: string;
-  /** Git branch name for branched workspaces. */
-  branch?: string;
-  /** Base branch the worktree was created from. */
-  baseBranch?: string;
-  /** Absolute path to the source repo for branched workspaces. */
-  repoPath?: string;
-  // --- Dashboard / workspace fields ---
-  /** Marks a workspace as a dashboard (used by workspace-service and related services). */
-  isDashboard?: boolean;
-  /** Root Workspace id this Branch belongs to (workspace-service). */
-  rootWorkspaceId?: string;
-  /** Id of the root Workspace's current dashboard Branch (workspace-service). */
-  dashboardWorkspaceId?: string;
-  /**
-   * Contribution id for the dashboard type: "group" | "agentic" | "settings" | string.
-   * Backfilled by workspace-service for legacy workspaces. The "group"
-   * literal is the stable contribution id for the parent-workspace overview.
-   */
-  dashboardContributionId?: string;
-  /** True on the global agentic pseudo-workspace (agentic-orchestrator). */
-  isGlobalAgenticDashboard?: boolean;
-  // --- Agentic orchestrator / spawn-helper ---
-  /** Id of the dashboard workspace that spawned this workspace. */
-  parentDashboardId?: string;
-  /**
-   * Provenance marker set by spawn-helper. Records which dashboard spawned
-   * this workspace so the sidebar can show a bot-icon affordance.
-   */
-  spawnedBy?:
-    | { kind: "global" }
-    | { kind: "workspace"; rootWorkspaceId: string };
-  /**
-   * GitHub issue numbers this workspace is handling (agentic-orchestrator).
-   * Written by createWorktreeWorkspaceFromConfig.
-   */
-  spawnedFromIssues?: number[];
-  // --- User locking ---
-  /**
-   * When true, the workspace is "locked" — it cannot be closed via the
-   * Close affordances and is not draggable for reorder. Toggled by the
-   * "Lock Workspace" / "Unlock Workspace" context-menu item.
-   */
-  locked?: boolean;
-}
 
 // Helper functions for tree traversal
 export function getAllPanes(node: SplitNode): Pane[] {

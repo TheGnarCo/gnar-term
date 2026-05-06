@@ -244,7 +244,8 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
  * sync / checkout follows the workspace itself.
  */
 function agenticDashboardMarkdownPath(workspace: WorkspaceRef): string {
-  return `${workspace.path.replace(/\/+$/, "")}/.gnar-term/agentic-dashboard.md`;
+  const path = workspace.path ?? "";
+  return `${path.replace(/\/+$/, "")}/.gnar-term/agentic-dashboard.md`;
 }
 
 /**

@@ -102,9 +102,9 @@
     if (typeof rootId !== "string") return false;
     return $workspacesStore.find((w) => w.id === rootId)?.pathMissing === true;
   })();
-  $: isAgentSpawned = workspace.metadata?.spawnedBy != null;
+  $: isAgentSpawned = workspace.spawnedBy != null;
   $: agentSpawnTooltip = (() => {
-    const sb = workspace.metadata?.spawnedBy;
+    const sb = workspace.spawnedBy;
     if (!sb) return "";
     if (sb.kind === "global") return "Spawned by Global Agentic Dashboard";
     const root = $workspacesStore.find((w) => w.id === sb.rootWorkspaceId);

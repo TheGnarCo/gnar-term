@@ -104,9 +104,9 @@ const _workspaceChildIndex = derived(
       const prefix = base ? `${base}/` : "";
       const members = new Set<string>(workspace.branchedWorkspaceIds ?? []);
       for (const ws of $workspaces) {
-        const md = ws.metadata as Record<string, unknown> | undefined;
-        // Source 1: dashboard child stamped with this Workspace's id.
-        if (md?.rootWorkspaceId === workspace.id) {
+        // Source 1: child stamped with this Workspace's id (Branch or
+        // dashboard).
+        if (ws.rootWorkspaceId === workspace.id) {
           members.add(ws.id);
           continue;
         }

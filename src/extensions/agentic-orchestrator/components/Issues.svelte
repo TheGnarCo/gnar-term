@@ -127,17 +127,17 @@
   /**
    * Subscribe to the workspaces store so the per-row affordance updates
    * live as agent workspaces are spawned / closed. Keyed lookup: issue
-   * number → first workspace whose `metadata.spawnedFromIssues` array
-   * includes that number.
+   * number → first workspace whose `spawnedFromIssues` array includes
+   * that number.
    */
   const workspacesStore = api.workspaces;
   $: handledIssues = (() => {
     const map = new Map<number, string>();
     for (const ws of $workspacesStore) {
-      const numbers = ws.metadata?.spawnedFromIssues;
+      const numbers = ws.spawnedFromIssues;
       if (!Array.isArray(numbers)) continue;
       for (const n of numbers) {
-        if (typeof n === "number" && !map.has(n)) map.set(n, ws.id);
+        if (!map.has(n)) map.set(n, ws.id);
       }
     }
     return map;

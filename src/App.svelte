@@ -548,7 +548,6 @@
         name: action.name,
         cwd: action.cwd,
         env: action.options?.env,
-        metadata: action.options?.metadata,
         layout: { pane: { surfaces: [{ type: "terminal" }] } },
       });
     } else if (action.type === "open-in-editor") {
@@ -793,40 +792,6 @@
         ];
         const open = () =>
           openExtensionSurfaceInPane(surfaceTypeId, title, props);
-        void ensureProviderAndThen(surfaceTypeId, open);
-      } else if (
-        action.command === "open-surface-in-new-workspace" &&
-        action.args
-      ) {
-        const [wsName, surfaceTypeId, title, props, options] = action.args as [
-          string,
-          string,
-          string,
-          Record<string, unknown> | undefined,
-          { metadata?: Record<string, unknown> } | undefined,
-        ];
-        const open = () =>
-          void createWorkspaceFromDef({
-            name: wsName,
-            // Optional metadata forwards to the new workspace — e.g.
-            // container-row dirty clicks pass `{ rootWorkspaceId: <container-id> }`
-            // so the fresh "Diff" Branch nests inside its originating
-            // workspace instead of materializing at the sidebar root.
-            ...(options?.metadata ? { metadata: options.metadata } : {}),
-            layout: {
-              pane: {
-                surfaces: [
-                  {
-                    type: "extension",
-                    extensionType: surfaceTypeId,
-                    name: title,
-                    extensionProps: props ?? {},
-                    focus: true,
-                  },
-                ],
-              },
-            },
-          });
         void ensureProviderAndThen(surfaceTypeId, open);
       }
     }) as EventListener);

@@ -16,7 +16,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { writable, type Readable } from "svelte/store";
 import { getHome, getConfigDir } from "./services/service-helpers";
-import type { WorkspaceMetadata } from "./types";
 import type { ThemeDef } from "./theme-data";
 import type { WorkspaceRecord } from "./stores/workspace";
 
@@ -63,12 +62,7 @@ export interface WorkspaceTemplate {
   cwd?: string;
   color?: string;
   env?: Record<string, string>;
-  metadata?: WorkspaceMetadata;
   layout?: LayoutNode;
-  // Stage 10: structural / discriminant fields promoted to top level.
-  // `createWorkspaceFromDef` reads these directly, falling back to
-  // `metadata` for backwards compat with callers that still pass them
-  // in the metadata blob.
   rootWorkspaceId?: string;
   isDashboard?: boolean;
   dashboardContributionId?: string;
@@ -83,6 +77,11 @@ export interface WorkspaceTemplate {
   branch?: string;
   baseBranch?: string;
   repoPath?: string;
+  spawnedBy?:
+    | { kind: "global" }
+    | { kind: "workspace"; rootWorkspaceId: string };
+  spawnedFromIssues?: number[];
+  extensionData?: Record<string, unknown>;
 }
 
 /**

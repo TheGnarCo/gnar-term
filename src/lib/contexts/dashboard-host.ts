@@ -3,28 +3,30 @@
  * body (real dashboard workspaces + pseudo-workspaces) so embedded
  * widgets derive their scope from a single shape.
  *
- * Real dashboard workspaces expose their own `workspace.metadata` via
- * this context. The Global Agentic Dashboard pseudo-workspace provides
- * a synthetic context with `metadata = { isGlobalAgenticDashboard: true }`.
- * Widgets (`gnar:agent-list`, `gnar:kanban`, `gnar:task-spawner`) read
- * from this context via `getDashboardHost()` and never need props
- * threaded through markdown.
+ * Real dashboard workspaces project their structural fields (e.g.
+ * `{ rootWorkspaceId }`) into this context. The Global Agentic
+ * Dashboard pseudo-workspace provides a synthetic context with
+ * `metadata = { isGlobalAgenticDashboard: true }`. Widgets
+ * (`gnar:agent-list`, `gnar:kanban`, `gnar:task-spawner`) read from
+ * this context via `getDashboardHost()` and never need props threaded
+ * through markdown.
  *
  * Scope derivation inside widgets:
  *   - `metadata.isGlobalAgenticDashboard === true` → { kind: "global" }
- *   - `metadata.rootWorkspaceId` (or legacy `metadata.rootWorkspaceId`) present → { kind: "workspace", rootWorkspaceId }
- *   - Otherwise                                     → inert / error
+ *   - `metadata.rootWorkspaceId` present           → { kind: "workspace", rootWorkspaceId }
+ *   - Otherwise                                    → inert / error
  */
 import { getContext, setContext } from "svelte";
-import type { WorkspaceMetadata } from "../types";
 
 export interface DashboardHostContext {
   /**
-   * Metadata describing the host: the real workspace.metadata for an
-   * actual dashboard workspace, or the synthetic metadata the
-   * pseudo-workspace registry carried for a virtual host.
+   * Metadata describing the host. For a real dashboard workspace, callers
+   * pass a projection of the workspace's structural fields (e.g.
+   * `{ rootWorkspaceId }`); for a pseudo-workspace, callers pass the
+   * synthetic shape from `PseudoWorkspaceInput.metadata` (e.g.
+   * `{ isGlobalAgenticDashboard: true }`).
    */
-  metadata: WorkspaceMetadata;
+  metadata: Record<string, unknown>;
 }
 
 /** Svelte context key. Scoped string to avoid collisions. */

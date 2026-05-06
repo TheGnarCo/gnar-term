@@ -277,10 +277,7 @@ export function createExtensionAPI(
     createWorkspace(
       name: string,
       cwd: string,
-      options?: {
-        env?: Record<string, string>;
-        metadata?: Record<string, unknown>;
-      },
+      options?: { env?: Record<string, string> },
     ) {
       pendingAction.set({ type: "create-workspace", name, cwd, options });
     },

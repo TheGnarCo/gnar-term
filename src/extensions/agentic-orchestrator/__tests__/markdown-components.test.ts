@@ -906,7 +906,7 @@ describe("Issues widget", () => {
         {
           id: "ws-handler",
           name: "agent: #51",
-          metadata: { spawnedFromIssues: [51] },
+          spawnedFromIssues: [51],
         } as unknown as { id: string; name: string },
       ],
     });

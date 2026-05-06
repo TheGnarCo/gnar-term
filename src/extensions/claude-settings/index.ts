@@ -58,7 +58,8 @@ export function registerClaudeSettingsExtension(api: ExtensionAPI): void {
 // --- Dashboard creation ---
 
 function claudeSettingsMarkdownPath(workspace: WorkspaceRef): string {
-  return `${workspace.path.replace(/\/+$/, "")}/.gnar-term/claude-settings.md`;
+  const path = workspace.path ?? "";
+  return `${path.replace(/\/+$/, "")}/.gnar-term/claude-settings.md`;
 }
 
 async function writeClaudeSettingsTemplate(

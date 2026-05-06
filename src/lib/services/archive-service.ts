@@ -50,12 +50,40 @@ export async function archiveWorkspace(workspaceId: string): Promise<boolean> {
     if (!confirmed) return false;
   }
 
-  const workspaceDefs = nonDashboard.map((ws) => ({
-    id: ws.id,
-    name: ws.name,
-    layout: serializeLayout(ws.paneLayout),
-    ...(ws.metadata ? { metadata: ws.metadata } : {}),
-  }));
+  const workspaceDefs = nonDashboard.map((ws) => {
+    const bw = ws as Workspace & {
+      worktreePath?: string;
+      branch?: string;
+      baseBranch?: string;
+      repoPath?: string;
+    };
+    return {
+      id: ws.id,
+      name: ws.name,
+      layout: serializeLayout(ws.paneLayout),
+      ...(ws.rootWorkspaceId !== undefined
+        ? { rootWorkspaceId: ws.rootWorkspaceId }
+        : {}),
+      ...(ws.isDashboard !== undefined ? { isDashboard: ws.isDashboard } : {}),
+      ...(ws.dashboardContributionId !== undefined
+        ? { dashboardContributionId: ws.dashboardContributionId }
+        : {}),
+      ...(ws.locked !== undefined ? { locked: ws.locked } : {}),
+      ...(bw.worktreePath !== undefined
+        ? { worktreePath: bw.worktreePath }
+        : {}),
+      ...(bw.branch !== undefined ? { branch: bw.branch } : {}),
+      ...(bw.baseBranch !== undefined ? { baseBranch: bw.baseBranch } : {}),
+      ...(bw.repoPath !== undefined ? { repoPath: bw.repoPath } : {}),
+      ...(ws.spawnedBy !== undefined ? { spawnedBy: ws.spawnedBy } : {}),
+      ...(ws.spawnedFromIssues !== undefined
+        ? { spawnedFromIssues: ws.spawnedFromIssues }
+        : {}),
+      ...(ws.extensionData !== undefined
+        ? { extensionData: ws.extensionData }
+        : {}),
+    };
+  });
 
   setWorkspaces(getWorkspaces().filter((w) => w.id !== workspaceId));
   removeRootRow({ kind: "workspace", id: workspaceId });

@@ -646,10 +646,11 @@ export interface ExtensionAPI {
     options?: CreateWorkspaceOptions,
   ): void;
   /**
-   * Create a workspace from a declarative template (name + layout +
-   * metadata) and resolve to its id. Intended for dashboard
-   * contributions whose `create:` callback materializes a child
-   * workspace; for one-off creation, use `createWorkspace(name, cwd)`.
+   * Create a workspace from a declarative template (name, layout, and
+   * top-level fields like rootWorkspaceId / extensionData) and resolve
+   * to its id. Intended for dashboard contributions whose `create:`
+   * callback materializes a Branch workspace; for one-off creation,
+   * use `createWorkspace(name, cwd)`.
    */
   createWorkspaceFromDef(def: WorkspaceDefInput): Promise<string>;
   /**
@@ -970,26 +971,33 @@ export interface WorkspaceActionInfo {
 
 /**
  * Minimum shape of a Workspace passed to contribution hooks. The
- * canonical type lives in core (`src/lib/config.ts#WorkspaceDef`);
- * the public API only exposes the fields contributions are allowed to
- * read so core can evolve the stored record without breaking extensions.
- *
- * Extensions use `metadata` to detect nesting — e.g. the core git status
- * subtitle collapses when `rootWorkspaceId` is present because the
- * Workspace banner already shows cwd+branch.
+ * canonical type lives in core (`src/lib/types.ts#Workspace`); the
+ * public API exposes the read-only subset that contributions are
+ * allowed to inspect so core can evolve the stored record without
+ * breaking extensions.
  */
 export interface WorkspaceRef {
   id: string;
   name: string;
   /** Root CWD — contributions typically place markdown under `<path>/.gnar-term/...`. */
-  path: string;
-  color: string;
-  isGit: boolean;
-  /**
-   * Opaque per-workspace metadata set at creation time (e.g. rootWorkspaceId,
-   * worktreePath, branch).
-   */
-  metadata?: Record<string, unknown>;
+  path?: string;
+  color?: string;
+  isGit?: boolean;
+  /** Set on Branches / dashboards; identifies the root Workspace they belong to. */
+  rootWorkspaceId?: string;
+  /** Worktree-backed Workspace fields (BranchedWorkspace). */
+  worktreePath?: string;
+  branch?: string;
+  baseBranch?: string;
+  repoPath?: string;
+  /** Dashboard discriminants. */
+  isDashboard?: boolean;
+  dashboardContributionId?: string;
+  /** Provenance markers populated by spawn-helper / worktree-service. */
+  spawnedBy?:
+    | { kind: "global" }
+    | { kind: "workspace"; rootWorkspaceId: string };
+  spawnedFromIssues?: number[];
 }
 
 /**
@@ -1098,8 +1106,6 @@ export interface PseudoWorkspaceInput {
 export interface CreateWorkspaceOptions {
   /** Environment variables to set on the workspace's terminal PTY */
   env?: Record<string, string>;
-  /** Arbitrary metadata stored alongside the workspace (e.g., branch, worktreePath) */
-  metadata?: Record<string, unknown>;
 }
 
 // --- Workspace template shapes for createWorkspaceFromDef ---

@@ -100,10 +100,8 @@ describe("spawnOrNavigate", () => {
       expect.objectContaining({
         name: "Foo",
         layout: { pane: { surfaces: [] } },
-        metadata: expect.objectContaining({
-          dashboardWorkspaceId: "ext:foo",
-          isDashboard: true,
-        }),
+        dashboardWorkspaceId: "ext:foo",
+        isDashboard: true,
       }),
     );
     expect(switchWorkspace).not.toHaveBeenCalled();

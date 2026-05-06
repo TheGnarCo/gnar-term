@@ -73,6 +73,14 @@ gnar-term runs on macOS and Linux. When making changes:
 - Do NOT use AppleScript/screenshot GUI tests (they interrupt the user's screen)
 - No `setTimeout` hacks to fix timing issues — diagnose root cause
 
+## Vocabulary
+
+`docs/ontology.md` is the canonical glossary for Workspace / Branch /
+Dashboard / banner / pseudo-workspace and related terms. Consult it
+before naming a variable, type, store, issue, or PR. It also lists
+forbidden vocabulary (Stage, Project, Group, Parent/Child,
+Orchestrator) that must not appear in new code.
+
 ## Architecture
 
 ### Frontend Structure

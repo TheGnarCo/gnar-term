@@ -1257,6 +1257,35 @@ export function adjustFontSize(delta: number): void {
         } catch {
           // May fail if terminal is not attached to DOM yet — safe to ignore
         }
+        // WebGL caches glyphs in a texture atlas keyed by font metrics.
+        // Without an explicit invalidation the next render reuses stale
+        // glyphs and the cells overlap into garbled multicolor blocks.
+        try {
+          s.terminal.clearTextureAtlas?.();
+        } catch {
+          // No-op if renderer doesn't support atlas clearing
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Clear the WebGL texture atlas on every mounted terminal. Called after the
+ * OS resumes from sleep (the GPU context can return with corrupted glyph
+ * caches) and on DPR changes. xterm.js's resize path already invalidates the
+ * atlas, which is why a manual window resize "fixes" rendering corruption.
+ */
+export function clearAllTerminalAtlases(): void {
+  const wsList = get(workspaces);
+  for (const ws of wsList) {
+    for (const s of getAllSurfaces(ws)) {
+      if (isTerminalSurface(s)) {
+        try {
+          s.terminal.clearTextureAtlas?.();
+        } catch {
+          // No-op if renderer doesn't support atlas clearing
+        }
       }
     }
   }

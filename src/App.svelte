@@ -43,6 +43,7 @@
     shiftModLabel,
     adjustFontSize,
     resetFontSize,
+    clearAllTerminalAtlases,
   } from "./lib/terminal-service";
   import { getAllPanes, getAllSurfaces, isTerminalSurface } from "./lib/types";
   import { forEachTerminalSurface } from "./lib/services/service-helpers";
@@ -581,10 +582,25 @@
 
   // ---- Initialization ----
   let _cleanupShortcutHints: (() => void) | null = null;
-  onDestroy(() => _cleanupShortcutHints?.());
+  let _cleanupVisibilityRecover: (() => void) | null = null;
+  onDestroy(() => {
+    _cleanupShortcutHints?.();
+    _cleanupVisibilityRecover?.();
+  });
 
   onMount(async () => {
     _cleanupShortcutHints = initShortcutHints();
+
+    // OS sleep/resume can return the GPU context with a corrupted texture
+    // atlas — visible as garbled multi-color glyphs that "fix themselves"
+    // when the user resizes the window (resize is the only path that
+    // currently invalidates the atlas). Clear on every visibility regain.
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") clearAllTerminalAtlases();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    _cleanupVisibilityRecover = () =>
+      document.removeEventListener("visibilitychange", onVisibility);
     await fontReady;
     void setupListeners();
     startCwdPolling();
@@ -634,6 +650,11 @@
           s.fitAddon?.fit();
         } catch {
           // fit throws if the terminal isn't opened yet; ignored.
+        }
+        try {
+          s.terminal.clearTextureAtlas?.();
+        } catch {
+          // No-op if renderer doesn't support atlas clearing
         }
       });
       if (fontSizeInitialEmission) {

@@ -95,6 +95,13 @@ const AGENT_STATUS_SOURCE = "_agent";
 // "waiting" and kill the idle timer.
 const NOTIFICATION_OSC_RE = /\x1b\](?:9|99|777);/;
 
+// Alternate-screen mode toggles. TUI harnesses (Claude Code, Codex, etc.)
+// enter the alt screen on launch and leave it on exit. Watching the exit
+// sequence gives a reliable detach signal even when the surrounding shell
+// doesn't re-emit an OSC title after the harness quits.
+const ALT_SCREEN_EXIT_RE = /\x1b\[\?1049l/;
+const ALT_SCREEN_ENTER_RE = /\x1b\[\?1049h/;
+
 // --- Reactive registry ---
 
 const _agentsStore = writable<DetectedAgent[]>([]);
@@ -558,6 +565,27 @@ export function initAgentDetection(): void {
             tracked.tracker.onNotification(data);
           } else {
             tracked.tracker.onOutput();
+          }
+          // OSC-detectable harnesses (Claude Code, Codex, …) live in the
+          // alternate screen. The shell often doesn't re-emit an OSC title
+          // after the harness quits, so the title-mismatch detach path is
+          // unreliable. Watching the alt-screen exit sequence gives a
+          // strong "harness ended" signal independent of the shell. Entry
+          // back into the alt screen cancels a pending detach so that
+          // brief mid-session escapes (e.g. a pager) don't drop the agent.
+          if (tracked.agentPattern?.oscDetectable && tracked.agentId) {
+            if (ALT_SCREEN_ENTER_RE.test(probe) && tracked.detachTimer) {
+              clearTimeout(tracked.detachTimer);
+              tracked.detachTimer = null;
+            } else if (
+              ALT_SCREEN_EXIT_RE.test(probe) &&
+              tracked.detachTimer === null
+            ) {
+              tracked.detachTimer = setTimeout(() => {
+                tracked.detachTimer = null;
+                detachAgent(tracked);
+              }, TITLE_DETACH_DEBOUNCE_MS);
+            }
           }
         } else {
           // OSC-detectable agents (e.g. Claude Code) are identified by PTY

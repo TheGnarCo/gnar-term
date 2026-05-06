@@ -225,7 +225,7 @@ mod tests {
     }
 
     /// Regression: first-time worktree creation under a `.gnar-term/worktrees/`
-    /// directory that doesn't exist yet must still validate. canonicalize()
+    /// directory that doesn't exist yet must still validate. `canonicalize()`
     /// fails on non-existent dirs, so the validator walks up to the nearest
     /// existing ancestor before resolving — without this fix the user gets
     /// "failed to resolve parent of worktree path: No such file or directory"

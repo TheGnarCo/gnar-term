@@ -98,15 +98,15 @@ describe("filterWorkspaces", () => {
     expect(result).toHaveLength(0);
   });
 
-  it("handles workspaces with no parent gracefully", () => {
+  it("handles workspaces with no Root gracefully", () => {
     const result = filterWorkspaces(branches, parentMap, "standalone");
     expect(result).toHaveLength(1);
-    expect(result[0]!.parentLabel).toBe("");
+    expect(result[0]!.rootLabel).toBe("");
   });
 
-  it("attaches parentLabel correctly", () => {
+  it("attaches rootLabel correctly", () => {
     const result = filterWorkspaces(branches, parentMap, "develop");
     expect(result).toHaveLength(1);
-    expect(result[0]!.parentLabel).toBe("Beta Corp");
+    expect(result[0]!.rootLabel).toBe("Beta Corp");
   });
 });

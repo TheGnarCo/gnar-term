@@ -3,8 +3,9 @@
  *
  * Standalone Dashboard Workspaces (those spawned by `spawnOrNavigate` from
  * a `registerDashboardWorkspace` button — Settings, Claude Settings, etc.)
- * land in `_workspaces` with `isDashboard: true`, `dashboardWorkspaceId: id`,
- * and NO `rootWorkspaceId`. The runtime service appends a
+ * land in `_workspaces` with `isDashboard: true`,
+ * `dashboardContributionId: id`, and NO `rootWorkspaceId`. The runtime
+ * service appends a
  * `{ kind: "workspace", id }` row for them in `rootRowOrder` and the
  * registered "workspace" renderer (WorkspaceRowBody → WorkspaceSectionContent)
  * is used to draw the row.
@@ -137,7 +138,7 @@ const sidebarProps = {
 function makeStandaloneDashboardWorkspace(
   id: string,
   name: string,
-  dashboardWorkspaceId: string,
+  dashboardContributionId: string,
 ): Workspace {
   return {
     id,
@@ -148,7 +149,7 @@ function makeStandaloneDashboardWorkspace(
     },
     activePaneId: `${id}-p1`,
     isDashboard: true,
-    dashboardWorkspaceId,
+    dashboardContributionId,
   };
 }
 

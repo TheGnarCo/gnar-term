@@ -79,12 +79,6 @@ export const contextMenu = writable<ContextMenuState | null>(null);
 export type PendingAction =
   | { type: "split-right" }
   | { type: "split-down" }
-  | {
-      type: "create-workspace";
-      name: string;
-      cwd: string;
-      options?: { env?: Record<string, string> };
-    }
   | { type: "open-in-editor"; filePath: string }
   | {
       type: "open-surface";

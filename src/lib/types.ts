@@ -28,7 +28,12 @@ export interface Workspace {
   createdAt?: string;
   // Branch navigation
   lastActiveBranchedWorkspaceId?: string;
-  // Dashboard back-reference
+  /**
+   * Set on a root Workspace ONLY. Holds the runtime id of that Workspace's
+   * overview Dashboard Workspace, so `openWorkspaceDashboard` can activate
+   * it directly. Never carries a contribution id — that lives on the
+   * dashboard workspace itself in `dashboardContributionId`.
+   */
   dashboardWorkspaceId?: string;
   // Flags
   locked?: boolean;
@@ -36,14 +41,24 @@ export interface Workspace {
   autoRunRestoreCommands?: boolean;
   // Dashboard flag — present on Branches that are overview dashboards
   isDashboard?: boolean;
+  /**
+   * Set on a Dashboard Workspace ONLY. Stable identifier of the dashboard
+   * contribution this workspace renders (e.g. `"overview"`, `"settings"`,
+   * `"agentic"`, `"ext:foo"`). Used to look up the contribution in the
+   * Dashboard registry.
+   */
   dashboardContributionId?: string;
   // Extension data — replaces open-ended metadata index signature
   extensionData?: Record<string, unknown>;
   // Root Workspace reference — presence discriminates Branches from root Workspaces
   rootWorkspaceId?: string;
   /**
-   * Tracked only on root workspaces; lists the ids of branches/dashboards
-   * belonging to this Workspace.
+   * Set on root Workspaces ONLY. Ordered list of Branch / Dashboard ids
+   * whose `rootWorkspaceId` points back here. `rootWorkspaceId` is the
+   * canonical membership tag (reclaimed on startup); this array exists
+   * only to preserve user-controlled ordering (drag/drop, insert
+   * position). Do NOT use this as a membership query — derive from
+   * `rootWorkspaceId` instead.
    */
   branchedWorkspaceIds?: string[];
   /**

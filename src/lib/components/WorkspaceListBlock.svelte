@@ -93,7 +93,7 @@
      * Set when the row represents a standalone Dashboard Workspace
      * (created via `spawnOrNavigate` from a `registerDashboardWorkspace`
      * button — Settings, Claude Settings, etc.). These have
-     * `isDashboard: true`, `dashboardWorkspaceId`, and no
+     * `isDashboard: true`, `dashboardContributionId`, and no
      * `rootWorkspaceId`. The registered "workspace" renderer (built for
      * `WorkspaceRecord` rows with paths and branches) can't draw them, so
      * the block routes them through `WorkspaceItem` directly.

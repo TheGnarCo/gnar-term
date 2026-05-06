@@ -188,7 +188,8 @@
   $: railColor = accentColor ?? $theme.accent;
   $: overlayFg = contrastColor(railColor);
   $: dropAccent = (() => {
-    const id = sourceWs?.dashboardWorkspaceId;
+    if (sourceWs?.isDashboard !== true) return railColor;
+    const id = sourceWs.dashboardContributionId;
     if (typeof id === "string") {
       return $dashboardWorkspaceRegistry.get(id)?.accentColor ?? railColor;
     }

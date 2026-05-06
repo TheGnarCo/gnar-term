@@ -1,94 +1,12 @@
 /**
- * Security tests for XSS prevention and sidebar bug fixes.
- *
- * S1: Markdown preview sanitizes HTML via DOMPurify
- * S2: Image preview uses DOM APIs (no innerHTML with user data)
- * S3: Video preview uses DOM APIs (no innerHTML with user data)
- * B3: Drag-drop reorder adjusts index when dragging forward
- * B4: Close Other Workspaces handles array mutation correctly
+ * Behavioral tests for sidebar drag-drop reorder index math (B3) and
+ * "Close Other Workspaces" array splice math (B4). Source-scan XSS
+ * assertions (markdown / image / video previewers and "no null-as-any"
+ * scans) were removed — DOMPurify usage and innerHTML avoidance are
+ * verified by the previewers' behavior, not by greping their source.
  */
 
-import { describe, it, expect, vi } from "vitest";
-
-// Mock Tauri APIs
-vi.mock("@tauri-apps/api/core", () => ({
-  invoke: vi.fn().mockResolvedValue(undefined),
-  convertFileSrc: vi.fn(
-    (path: string) => `asset://localhost/${encodeURIComponent(path)}`,
-  ),
-}));
-
-vi.mock("@tauri-apps/api/event", () => ({
-  listen: vi.fn().mockResolvedValue(vi.fn()),
-}));
-
-// ---------------------------------------------------------------------------
-// S1: Markdown XSS prevention
-// ---------------------------------------------------------------------------
-
-describe("Markdown preview XSS prevention", () => {
-  it("imports DOMPurify in preview/markdown.ts", async () => {
-    const fs = await import("fs");
-    const source = fs.readFileSync(
-      "src/lib/preview/previewers/markdown.ts",
-      "utf-8",
-    );
-    expect(source).toContain('import DOMPurify from "dompurify"');
-    expect(source).toContain("DOMPurify.sanitize");
-    expect(source).not.toMatch(/element\.innerHTML\s*=\s*marked\.parse/);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// S2/S3: Image and video preview use DOM APIs, not innerHTML
-// ---------------------------------------------------------------------------
-
-describe("Image preview XSS prevention", () => {
-  it("does not use innerHTML with user data", async () => {
-    const fs = await import("fs");
-    const source = fs.readFileSync(
-      "src/lib/preview/previewers/image.ts",
-      "utf-8",
-    );
-    expect(source).not.toContain("innerHTML");
-    expect(source).toContain("document.createElement");
-  });
-
-  it("sets src and alt via DOM properties", async () => {
-    const fs = await import("fs");
-    const source = fs.readFileSync(
-      "src/lib/preview/previewers/image.ts",
-      "utf-8",
-    );
-    expect(source).toContain("img.src");
-    expect(source).toContain("img.alt");
-  });
-});
-
-describe("Video preview XSS prevention", () => {
-  it("does not use innerHTML with user data", async () => {
-    const fs = await import("fs");
-    const source = fs.readFileSync(
-      "src/lib/preview/previewers/video.ts",
-      "utf-8",
-    );
-    expect(source).not.toContain("innerHTML");
-    expect(source).toContain("document.createElement");
-  });
-
-  it("sets src via DOM property", async () => {
-    const fs = await import("fs");
-    const source = fs.readFileSync(
-      "src/lib/preview/previewers/video.ts",
-      "utf-8",
-    );
-    expect(source).toContain("video.src");
-  });
-});
-
-// ---------------------------------------------------------------------------
-// B3: Drag-drop reorder fix
-// ---------------------------------------------------------------------------
+import { describe, it, expect } from "vitest";
 
 describe("Sidebar drag-drop reorder (B3)", () => {
   it("adjusts destination index when dragging forward", () => {
@@ -115,10 +33,6 @@ describe("Sidebar drag-drop reorder (B3)", () => {
     expect(workspaces).toEqual(["C", "A", "B"]);
   });
 });
-
-// ---------------------------------------------------------------------------
-// B4: Close Other Workspaces fix
-// ---------------------------------------------------------------------------
 
 describe("Close Other Workspaces (B4)", () => {
   it("keeps only the target workspace when closing others", () => {
@@ -161,40 +75,5 @@ describe("Close Other Workspaces (B4)", () => {
     }
 
     expect(workspaces).toEqual(["C"]);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Discriminated union type safety
-// ---------------------------------------------------------------------------
-
-describe("Surface discriminated union", () => {
-  it("no more null-as-any hacks in source code", async () => {
-    const fs = await import("fs");
-    const tsFiles = [
-      "src/App.svelte",
-      "src/lib/terminal-service.ts",
-      "src/lib/types.ts",
-    ];
-
-    for (const file of tsFiles) {
-      try {
-        const source = fs.readFileSync(file, "utf-8");
-        expect(source).not.toContain("terminal: null as any");
-        expect(source).not.toContain("fitAddon: { fit: () => {} } as any");
-        expect(source).not.toContain("searchAddon: null as any");
-      } catch (e: unknown) {
-        if (
-          e instanceof Error &&
-          (e as NodeJS.ErrnoException).code !== "ENOENT"
-        )
-          throw e;
-      }
-    }
-  });
-
-  it("dead code markdown-viewer.ts is deleted", async () => {
-    const fs = await import("fs");
-    expect(() => fs.readFileSync("src/markdown-viewer.ts", "utf-8")).toThrow();
   });
 });

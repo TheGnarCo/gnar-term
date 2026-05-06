@@ -100,7 +100,7 @@ describe("spawnOrNavigate", () => {
       expect.objectContaining({
         name: "Foo",
         layout: { pane: { surfaces: [] } },
-        dashboardWorkspaceId: "ext:foo",
+        dashboardContributionId: "ext:foo",
         isDashboard: true,
       }),
     );
@@ -112,7 +112,7 @@ describe("spawnOrNavigate", () => {
       cb([
         {
           id: "ws-1",
-          dashboardWorkspaceId: "ext:foo",
+          dashboardContributionId: "ext:foo",
           isDashboard: true,
         },
       ]);

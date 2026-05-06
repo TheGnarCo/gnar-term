@@ -95,7 +95,7 @@ describe("confirmAndCloseWorkspace", () => {
     const ws = {
       id: "ws-dash",
       name: "Dashboard",
-      dashboardWorkspaceId: "some-id",
+      isDashboard: true,
     };
     const result = await confirmAndCloseWorkspace(ws, 1);
     expect(result).toBe(true);

@@ -423,7 +423,7 @@ export async function confirmAndCloseWorkspace(
   if (ws.locked === true) return false;
   const entry = getWorktreeEntries().find((e) => e.workspaceId === ws.id);
   if (!entry) {
-    const isDashboard = typeof ws.dashboardWorkspaceId === "string";
+    const isDashboard = ws.isDashboard === true;
     if (!isDashboard) {
       const confirmed = await showConfirmPrompt(
         `Close "${ws.name}"? This will dispose the terminal.`,

@@ -93,9 +93,9 @@
       : null;
   $: dashboardWorkspaceEntry =
     isDashboardWorkspace &&
-    typeof workspaceMetadata?.dashboardWorkspaceId === "string"
+    typeof workspaceMetadata?.dashboardContributionId === "string"
       ? ($dashboardWorkspaceRegistry.get(
-          workspaceMetadata.dashboardWorkspaceId,
+          workspaceMetadata.dashboardContributionId,
         ) ?? null)
       : null;
   $: regenCommandId =

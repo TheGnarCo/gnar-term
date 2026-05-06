@@ -19,9 +19,9 @@
   let inputEl: HTMLInputElement;
   let panelEl: HTMLDivElement;
 
-  $: parentMap = new Map($workspacesStore.map((w) => [w.id, w]));
+  $: rootMap = new Map($workspacesStore.map((w) => [w.id, w]));
 
-  $: rows = filterWorkspaces($workspaces, parentMap, query, $workspacesStore);
+  $: rows = filterWorkspaces($workspaces, rootMap, query, $workspacesStore);
 
   // All rows are keyboard-navigable; Enter dispatches to the right activate fn based on kind
   $: selectableRows = rows;
@@ -42,20 +42,20 @@
     open = false;
   }
 
-  function activateChild(row: SwitcherRow) {
+  function activateBranch(row: SwitcherRow) {
     switchWorkspace(row.idx);
     close();
   }
 
-  function activateParent(row: SwitcherRow) {
-    // Navigate to the parent's last-active child workspace if available
-    const parentId = row.wsId;
-    if (!parentId) return;
-    const parent = $workspacesStore.find((w) => w.id === parentId);
-    const targetId = parent?.lastActiveBranchedWorkspaceId;
+  function activateRoot(row: SwitcherRow) {
+    // Navigate to the root's last-active Branch if available
+    const rootId = row.wsId;
+    if (!rootId) return;
+    const root = $workspacesStore.find((w) => w.id === rootId);
+    const targetId = root?.lastActiveBranchedWorkspaceId;
     const idx = targetId
       ? $workspaces.findIndex((ws) => ws.id === targetId)
-      : $workspaces.findIndex((ws) => ws.rootWorkspaceId === parentId);
+      : $workspaces.findIndex((ws) => ws.rootWorkspaceId === rootId);
     if (idx >= 0) {
       switchWorkspace(idx);
       close();
@@ -84,8 +84,8 @@
     if (e.key === "Enter") {
       e.preventDefault();
       const row = selectableRows[selectedIdx];
-      if (row?.kind === "parent") activateParent(row);
-      else if (row) activateChild(row);
+      if (row?.kind === "root") activateRoot(row);
+      else if (row) activateBranch(row);
       return;
     }
   }
@@ -115,7 +115,7 @@
     }
   }
 
-  // Map from child row to its index in selectableRows (for isSelected check)
+  // Map from row to its index in selectableRows (for isSelected check)
   function getSelectableIdx(row: SwitcherRow): number {
     return selectableRows.indexOf(row);
   }
@@ -235,16 +235,16 @@
           </div>
         {:else}
           {#each rows as row (row.ws.id + row.kind)}
-            {#if row.kind === "parent"}
+            {#if row.kind === "root"}
               {@const uIdx = getSelectableIdx(row)}
               {@const isSelected = uIdx === selectedIdx}
-              <!-- Parent section header -->
+              <!-- Root section header -->
               <!-- svelte-ignore a11y_click_events_have_key_events -->
               <!-- svelte-ignore a11y_interactive_supports_focus -->
               <div
                 role="button"
                 data-selected={isSelected}
-                on:mousedown={() => activateParent(row)}
+                on:mousedown={() => activateRoot(row)}
                 on:mousemove={() => (selectedIdx = uIdx)}
                 style="
                   padding: 6px 14px 4px;
@@ -270,7 +270,7 @@
                 role="option"
                 aria-selected={isSelected}
                 data-selected={isSelected}
-                on:mousedown={() => activateChild(row)}
+                on:mousedown={() => activateBranch(row)}
                 on:mousemove={() => (selectedIdx = sIdx)}
                 style="
                   display: flex; align-items: center; gap: 10px;
@@ -293,8 +293,8 @@
                   {wsDisplayLabel(row.ws)}
                 </span>
 
-                <!-- Parent workspace label (flat mode only — depth=0 nested rows) -->
-                {#if row.parentLabel && row.depth === 0}
+                <!-- Root workspace label (flat mode only — depth=0 standalone rows) -->
+                {#if row.rootLabel && row.depth === 0}
                   <span
                     style="
                       font-size: 11px; color: {$theme.fgMuted};
@@ -302,7 +302,7 @@
                       max-width: 140px; flex-shrink: 0;
                     "
                   >
-                    {row.parentLabel}
+                    {row.rootLabel}
                   </span>
                 {/if}
 
@@ -312,9 +312,9 @@
                     const worktreePath = (row.ws as { worktreePath?: string })
                       .worktreePath;
                     if (typeof worktreePath === "string") return worktreePath;
-                    const pid = row.ws.rootWorkspaceId;
-                    if (typeof pid !== "string") return null;
-                    return parentMap.get(pid)?.path ?? null;
+                    const rootId = row.ws.rootWorkspaceId;
+                    if (typeof rootId !== "string") return null;
+                    return rootMap.get(rootId)?.path ?? null;
                   })()}
                 />
 

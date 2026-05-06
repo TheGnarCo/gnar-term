@@ -9,7 +9,6 @@ import {
   activePseudoWorkspaceId,
   zoomedSurfaceId,
   workspaceHistory,
-  serializeWorkspace,
   serializeLayout,
 } from "../stores/workspace";
 
@@ -32,10 +31,8 @@ import {
 } from "../types";
 import {
   saveConfig,
-  saveState,
   getConfig,
   type WorkspaceTemplate,
-  type WorkspaceDef,
   type LayoutNode,
 } from "../config";
 import { safeFocus } from "./service-helpers";
@@ -51,44 +48,14 @@ import {
   insertChildIntoWorkspace,
   updateWorkspace,
 } from "./workspace-service";
-import {
-  getWorkspace,
-  getActiveWorkspaceId as getActiveWorkspaceRecordId,
-} from "../stores/workspace";
-import { makePersistScheduler } from "../utils/persist-scheduler";
+import { getWorkspace } from "../stores/workspace";
+import { schedulePersist, persistWorkspaces } from "./workspace-persist";
 
-// --- Workspace persistence (debounced save to state.json) ---
-
-const PERSIST_DELAY = 2000;
-
-/**
- * Single-writer persist: the unified `_workspaces` runtime store is
- * canonical for every Workspace, Branch, and Dashboard. We serialize
- * the entire list verbatim — root entries already carry
- * Workspace-level fields (path, color, isGit, createdAt, lock,
- * dashboard ref) and child entries carry their structural fields.
- *
- * The active id prefers the explicit pointer maintained by
- * `setActiveWorkspaceId` (what the sidebar tracks) and falls back to
- * the runtime active (the focused tab) when unset.
- */
-export async function persistWorkspaces(): Promise<void> {
-  const wsList = get(workspaces);
-  const defs: WorkspaceDef[] = wsList.map((ws) => serializeWorkspace(ws));
-
-  const idx = get(activeWorkspaceIdx);
-  const runtimeActiveId =
-    idx >= 0 && idx < wsList.length ? (wsList[idx]?.id ?? null) : null;
-  const activeId = getActiveWorkspaceRecordId() ?? runtimeActiveId;
-
-  await saveState({
-    workspaces: defs,
-    activeWorkspaceId: activeId ?? undefined,
-  });
-}
-
-const _scheduler = makePersistScheduler(persistWorkspaces, PERSIST_DELAY);
-export const schedulePersist = _scheduler.schedulePersist;
+// Re-exported for existing call sites that import these from
+// workspace-runtime-service. The implementations live in
+// workspace-persist so workspace-service can also schedule persists
+// without dragging in this module's full dependency graph.
+export { schedulePersist, persistWorkspaces };
 
 export async function createWorkspace(name: string) {
   const pane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };

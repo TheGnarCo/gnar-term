@@ -362,7 +362,16 @@ function isRootWorkspace(ws: Workspace): boolean {
   return true;
 }
 
-/** Active root-workspace id. */
+/**
+ * Sidebar's "selected Workspace" pointer — independent from the focused
+ * tab tracked by `activeWorkspaceIdx`.
+ *
+ * The persisted `state.activeWorkspaceId` prefers this pointer over the
+ * runtime tab id, so that on restart the sidebar restores the Workspace
+ * the user was last interacting with at the row level even if the
+ * focused tab belonged to one of its Branches. Set by
+ * `setActiveWorkspaceId()` and read by `workspace-persist.ts`.
+ */
 const _activeWorkspaceRecordId = writable<string | null>(null);
 
 /**

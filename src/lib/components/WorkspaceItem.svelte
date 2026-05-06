@@ -69,7 +69,8 @@
   $: shouldShowWorktreeStatus =
     isManaged && worktreeDirName && worktreeDirName !== workspace.name;
   $: dashboardWorkspaceEntry = (() => {
-    const id = workspace.dashboardWorkspaceId;
+    if (workspace.isDashboard !== true) return null;
+    const id = workspace.dashboardContributionId;
     if (typeof id !== "string") return null;
     return $dashboardWorkspaceRegistry.get(id) ?? null;
   })();

@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { readFileSync } from "fs";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn().mockResolvedValue(undefined),
@@ -111,10 +110,14 @@ describe("deleteWorkspace — lock gate", () => {
   });
 });
 
-describe("archiveWorkspace — lock gate (source audit)", () => {
-  it("returns early when workspace is locked", () => {
-    const src = readFileSync("src/lib/services/archive-service.ts", "utf-8");
-    // Verify the lock gate appears in the archiveWorkspace function body
-    expect(src).toContain("if (workspace.locked) return false");
+describe("archiveWorkspace — lock gate", () => {
+  it("returns false and does not mutate stores when workspace is locked", async () => {
+    const { archiveWorkspace } =
+      await import("../lib/services/archive-service");
+    setWorkspaces([makeWorkspace({ id: "g-locked", locked: true })]);
+    const result = await archiveWorkspace("g-locked");
+    expect(result).toBe(false);
+    expect(getWorkspaces()).toHaveLength(1);
+    expect(getWorkspaces()[0].id).toBe("g-locked");
   });
 });

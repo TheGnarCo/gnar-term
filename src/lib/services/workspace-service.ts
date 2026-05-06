@@ -27,6 +27,7 @@ import {
   closeWorkspace,
   switchWorkspace,
 } from "./workspace-runtime-service";
+import { schedulePersist } from "./workspace-persist";
 import { eventBus } from "./event-bus";
 import { type Workspace } from "../types";
 import {
@@ -66,6 +67,7 @@ export function addWorkspace(workspace: WorkspaceRecord): void {
   setWorkspaces([...getWorkspaces(), ensured]);
   appendRootRow({ kind: "workspace", id: workspace.id });
   emitStateChanged({ workspaceId: workspace.id });
+  schedulePersist();
 }
 
 export function updateWorkspace(
@@ -77,6 +79,7 @@ export function updateWorkspace(
   );
   setWorkspaces(next);
   emitStateChanged({ workspaceId: id });
+  schedulePersist();
 }
 
 /**
@@ -93,6 +96,7 @@ export function toggleWorkspaceLock(id: string): void {
   );
   setWorkspaces(next);
   emitStateChanged({ workspaceId: id });
+  schedulePersist();
 }
 
 export function deleteWorkspace(id: string): void {
@@ -103,6 +107,7 @@ export function deleteWorkspace(id: string): void {
   removeRootRow({ kind: "workspace", id });
   if (workspace) releaseWorkspaceDirtyStore(workspace.path);
   emitStateChanged({ workspaceId: id });
+  schedulePersist();
 }
 
 /**
@@ -158,6 +163,7 @@ export function addChildToWorkspace(
   });
   setWorkspaces(next);
   emitStateChanged({ rootWorkspaceId });
+  schedulePersist();
   return true;
 }
 
@@ -189,6 +195,7 @@ export function insertChildIntoWorkspace(
   if (!changed) return false;
   setWorkspaces(next);
   emitStateChanged({ rootWorkspaceId });
+  schedulePersist();
   return true;
 }
 
@@ -206,6 +213,7 @@ export function removeChildFromAllWorkspaces(workspaceId: string): void {
   }));
   setWorkspaces(next);
   emitStateChanged({});
+  schedulePersist();
 }
 
 /**
@@ -650,6 +658,7 @@ export function reclaimBranchedWorkspaces(): void {
     });
     setWorkspaces(next);
     emitStateChanged({});
+    schedulePersist();
   }
 }
 

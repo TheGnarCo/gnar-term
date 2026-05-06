@@ -4,89 +4,89 @@ import type { WorkspaceRecord } from "../config";
 export interface SwitcherRow {
   ws: Workspace;
   idx: number;
-  parentLabel: string;
-  kind: "child" | "parent";
-  depth: number; // 0 for parent headers and standalone child rows, 1 for child rows under a parent
+  rootLabel: string;
+  kind: "branch" | "root";
+  depth: number; // 0 for root headers and standalone branch rows, 1 for branch rows under a root
   wsId?: string; // root Workspace id, only present on header rows
 }
 
 /**
  * Filter Branches for the workspace switcher palette.
  *
- * When parentWorkspaces is provided (non-empty), the list is grouped:
- *   - For each Workspace: one header row (kind="parent", depth=0)
- *     followed by its Branches (kind="child", depth=1).
+ * When rootWorkspaces is provided (non-empty), the list is grouped:
+ *   - For each Root Workspace: one header row (kind="root", depth=0)
+ *     followed by its Branches (kind="branch", depth=1).
  *   - Branches with no rootWorkspaceId (or pointing at an unknown
- *     Workspace) appear at depth=0 after all groups.
+ *     Root) appear at depth=0 after all groups.
  *
- * When parentWorkspaces is empty (default), the list is flat — all
- * Branches are returned with kind="child", depth=0, and parentLabel
- * set from parentMap.
+ * When rootWorkspaces is empty (default), the list is flat — all
+ * Branches are returned with kind="branch", depth=0, and rootLabel
+ * set from rootMap.
  *
- * The idx on child rows is the flat index into the workspaces array —
+ * The idx on branch rows is the flat index into the workspaces array —
  * preserved so switchWorkspace(idx) continues to work unchanged.
  *
  * @param workspaces - flat list from workspaces store
- * @param parentMap - map from rootWorkspaceId → root Workspace
+ * @param rootMap - map from rootWorkspaceId → root Workspace
  * @param query - raw user input (empty string = return all)
- * @param parentWorkspaces - ordered list of root Workspaces (enables grouped mode)
+ * @param rootWorkspaces - ordered list of root Workspaces (enables grouped mode)
  * @returns rows that match the query, preserving original indices
  */
 export function filterWorkspaces(
   workspaces: Workspace[],
-  parentMap: Map<string, WorkspaceRecord>,
+  rootMap: Map<string, WorkspaceRecord>,
   query: string,
-  parentWorkspaces: WorkspaceRecord[] = [],
+  rootWorkspaces: WorkspaceRecord[] = [],
 ): SwitcherRow[] {
   const q = query.trim().toLowerCase();
 
   // Flat mode (no root Workspaces): preserve original behavior
-  if (parentWorkspaces.length === 0) {
+  if (rootWorkspaces.length === 0) {
     const rows: SwitcherRow[] = workspaces.map((ws, idx) => {
-      const parentId = ws.rootWorkspaceId;
-      const parent = parentId ? parentMap.get(parentId) : undefined;
+      const rootId = ws.rootWorkspaceId;
+      const root = rootId ? rootMap.get(rootId) : undefined;
       return {
         ws,
         idx,
-        parentLabel: parent?.name ?? "",
-        kind: "child",
+        rootLabel: root?.name ?? "",
+        kind: "branch",
         depth: 0,
       };
     });
 
     if (!q) return rows;
 
-    return rows.filter(({ ws, parentLabel }) => {
-      const haystack = `${parentLabel} ${ws.name}`.toLowerCase();
+    return rows.filter(({ ws, rootLabel }) => {
+      const haystack = `${rootLabel} ${ws.name}`.toLowerCase();
       return haystack.includes(q);
     });
   }
 
   // Grouped mode: root Workspaces provided
-  const parentIds = new Set(parentWorkspaces.map((w) => w.id));
+  const rootIds = new Set(rootWorkspaces.map((w) => w.id));
 
-  // Partition child workspaces into parent-children and standalone
-  const byParent = new Map<string, SwitcherRow[]>();
+  // Partition branches into root-children and standalone
+  const byRoot = new Map<string, SwitcherRow[]>();
   const standaloneRows: SwitcherRow[] = [];
 
   for (let idx = 0; idx < workspaces.length; idx++) {
     const ws = workspaces[idx]!;
-    const parentId = ws.rootWorkspaceId;
-    const isUnderParent = !!(parentId && parentIds.has(parentId));
-    const parent = isUnderParent ? parentMap.get(parentId!) : undefined;
+    const rootId = ws.rootWorkspaceId;
+    const isUnderRoot = !!(rootId && rootIds.has(rootId));
+    const root = isUnderRoot ? rootMap.get(rootId!) : undefined;
 
     const row: SwitcherRow = {
       ws,
       idx,
-      parentLabel: parent?.name ?? "",
-      kind: "child",
-      depth: isUnderParent ? 1 : 0,
+      rootLabel: root?.name ?? "",
+      kind: "branch",
+      depth: isUnderRoot ? 1 : 0,
     };
 
-    if (isUnderParent && parentId) {
-      const bucket = byParent.get(parentId) ?? [];
+    if (isUnderRoot && rootId) {
+      const bucket = byRoot.get(rootId) ?? [];
       bucket.push(row);
-      byParent.set(parentId, bucket);
+      byRoot.set(rootId, bucket);
     } else {
       standaloneRows.push(row);
     }
@@ -95,31 +95,31 @@ export function filterWorkspaces(
   // Build the ordered output
   const result: SwitcherRow[] = [];
 
-  for (const parent of parentWorkspaces) {
-    // Sort children: main workspace first, then branches, then dashboards
-    const children = (byParent.get(parent.id) ?? []).sort(
+  for (const root of rootWorkspaces) {
+    // Sort branches: main workspace first, then worktree branches, then dashboards
+    const branches = (byRoot.get(root.id) ?? []).sort(
       (a, b) => wsTypeOrder(a.ws) - wsTypeOrder(b.ws),
     );
 
     if (!q) {
-      // No filter: emit parent header then all its children
-      result.push(makeParentRow(parent));
-      result.push(...children);
+      // No filter: emit root header then all its branches
+      result.push(makeRootRow(root));
+      result.push(...branches);
     } else {
-      const parentNameMatches = parent.name.toLowerCase().includes(q);
-      const matchingChildren = children.filter((row) =>
+      const rootNameMatches = root.name.toLowerCase().includes(q);
+      const matchingBranches = branches.filter((row) =>
         row.ws.name.toLowerCase().includes(q),
       );
 
-      if (parentNameMatches || matchingChildren.length > 0) {
-        result.push(makeParentRow(parent));
-        // When parent name matches, show all children; otherwise only matching ones
-        result.push(...(parentNameMatches ? children : matchingChildren));
+      if (rootNameMatches || matchingBranches.length > 0) {
+        result.push(makeRootRow(root));
+        // When root name matches, show all branches; otherwise only matching ones
+        result.push(...(rootNameMatches ? branches : matchingBranches));
       }
     }
   }
 
-  // Append standalone child rows
+  // Append standalone branch rows
   if (!q) {
     result.push(...standaloneRows);
   } else {
@@ -138,13 +138,13 @@ function wsTypeOrder(ws: Workspace): number {
   return 2; // dashboards last
 }
 
-function makeParentRow(parent: WorkspaceRecord): SwitcherRow {
-  // The ws field on parent rows holds a minimal Workspace-shaped object.
-  // Consumers must check kind === "parent" before treating it as a real child workspace.
+function makeRootRow(root: WorkspaceRecord): SwitcherRow {
+  // The ws field on root rows holds a minimal Workspace-shaped object.
+  // Consumers must check kind === "root" before treating it as a real branch workspace.
   return {
     ws: {
-      id: parent.id,
-      name: parent.name,
+      id: root.id,
+      name: root.name,
       paneLayout: {
         type: "pane",
         pane: { id: "", surfaces: [], activeSurfaceId: null },
@@ -152,9 +152,9 @@ function makeParentRow(parent: WorkspaceRecord): SwitcherRow {
       activePaneId: null,
     },
     idx: -1,
-    parentLabel: "",
-    kind: "parent",
+    rootLabel: "",
+    kind: "root",
     depth: 0,
-    wsId: parent.id,
+    wsId: root.id,
   };
 }

@@ -53,7 +53,9 @@ export async function spawnOrNavigate(id: string): Promise<void> {
   if (!entry) return;
 
   const wsList = get(workspaces);
-  const existingIdx = wsList.findIndex((w) => w.dashboardWorkspaceId === id);
+  const existingIdx = wsList.findIndex(
+    (w) => w.dashboardContributionId === id && w.rootWorkspaceId === undefined,
+  );
 
   if (existingIdx >= 0) {
     switchWorkspace(existingIdx);
@@ -63,7 +65,7 @@ export async function spawnOrNavigate(id: string): Promise<void> {
   await createWorkspaceFromDef({
     name: entry.label,
     isDashboard: true,
-    dashboardWorkspaceId: id,
+    dashboardContributionId: id,
     layout: { pane: { surfaces: [] } },
   });
 }

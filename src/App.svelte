@@ -543,13 +543,6 @@
       splitFromSidebar("horizontal");
     } else if (action.type === "split-down") {
       splitFromSidebar("vertical");
-    } else if (action.type === "create-workspace") {
-      void createWorkspaceFromDef({
-        name: action.name,
-        cwd: action.cwd,
-        env: action.options?.env,
-        layout: { pane: { surfaces: [{ type: "terminal" }] } },
-      });
     } else if (action.type === "open-in-editor") {
       void openInEditor(action.filePath);
     } else if (action.type === "open-surface") {

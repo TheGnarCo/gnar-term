@@ -5,8 +5,9 @@
  *
  * Components and core commands call into this module rather than
  * touching the `workspacesStore` directly so state transitions
- * (adding to root-row order, claiming workspaces, tearing down the
- * Dashboard workspace on delete) stay colocated with the store write.
+ * (adding to root-row order, attaching branches/dashboards, tearing
+ * down the Dashboard workspace on delete) stay colocated with the
+ * store write.
  */
 import { invoke } from "@tauri-apps/api/core";
 import { get } from "svelte/store";
@@ -109,7 +110,7 @@ export function deleteWorkspace(id: string): void {
  * All Branches tagged with `ws.rootWorkspaceId === rootWorkspaceId`. This is the
  * canonical Branch-membership predicate for core operations (close
  * sweeps, reclaim, reconcile). Extension-layer consumers that need a
- * CWD-prefix fallback for unclaimed workspaces should compose with this
+ * CWD-prefix fallback for unattached workspaces should compose with this
  * result.
  */
 export function getChildrenOfWorkspace(rootWorkspaceId: string): Workspace[] {

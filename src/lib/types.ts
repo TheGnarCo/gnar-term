@@ -42,8 +42,8 @@ export interface Workspace {
   // Root Workspace reference — presence discriminates Branches from root Workspaces
   rootWorkspaceId?: string;
   /**
-   * Tracked only on root workspaces; lists the ids of branched/dashboard
-   * children currently claimed by this Workspace.
+   * Tracked only on root workspaces; lists the ids of branches/dashboards
+   * belonging to this Workspace.
    */
   branchedWorkspaceIds?: string[];
   /**

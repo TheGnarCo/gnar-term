@@ -194,18 +194,15 @@ describe("PTY spawn failure: surface cleanup via TerminalSurface contract", () =
 
     closeSurfaceById(loc!.pane.id, surface.id);
 
-    // Surface is gone from the pane
-    expect(
-      get(workspaces)[0]
-        ? get(workspaces)[0]!.paneLayout.type === "pane" &&
-            (
-              get(workspaces)[0]!.paneLayout as {
-                type: "pane";
-                pane: Pane;
-              }
-            ).pane.surfaces.length
-        : 0,
-    ).toBe(0);
+    // The dead surface is gone from the pane. A replacement terminal
+    // may be spawned afterward (closing the last surface keeps the
+    // workspace alive), so assert by id instead of count.
+    const ws0 = get(workspaces)[0]!;
+    if (ws0.paneLayout.type === "pane") {
+      expect(
+        ws0.paneLayout.pane.surfaces.find((s) => s.id === surface.id),
+      ).toBeUndefined();
+    }
   });
 
   it("findSurfaceLocation returns null for a surface not in any workspace", async () => {

@@ -432,23 +432,30 @@ describe("Workflow: extension surface lifecycle", () => {
     expect((updated.surfaces[1] as ExtensionSurface).title).toBe("Note B");
   });
 
-  it("closing the last surface closes the workspace (matches pty-exit path)", () => {
-    // Closing the last surface in a workspace's only pane closes the
-    // whole workspace — same behavior as terminal-service.ts's
-    // pty-exit handler. App.svelte renders EmptySurface when the
-    // workspace list is empty.
+  it("closing the last surface keeps the workspace alive with a replacement terminal", () => {
+    // Closing the last surface in a workspace's only pane spawns a
+    // fresh terminal in place of the closed one — the workspace
+    // itself never gets deleted from under the user. Dashboards are
+    // the single-surface exception (covered in services.test.ts).
     const ws = makeChildWorkspace({ name: "Lonely" });
     const otherWs = makeChildWorkspace({ name: "Other" });
     workspaces.set([ws, otherWs]);
     activeWorkspaceIdx.set(0);
 
     const pane = get(activePane)!;
-    const surface = pane.surfaces[0]!;
-    closeSurfaceById(pane.id, surface.id);
+    const originalSurfaceId = pane.surfaces[0]!.id;
+    closeSurfaceById(pane.id, originalSurfaceId);
 
     const list = get(workspaces);
-    expect(list).toHaveLength(1);
-    expect(list[0]!.id).toBe(otherWs.id);
+    expect(list).toHaveLength(2);
+    expect(list[0]!.id).toBe(ws.id);
+    // Original surface is gone from the pane.
+    const lonely = list[0]!;
+    if (lonely.paneLayout.type === "pane") {
+      expect(
+        lonely.paneLayout.pane.surfaces.find((s) => s.id === originalSurfaceId),
+      ).toBeUndefined();
+    }
   });
 });
 

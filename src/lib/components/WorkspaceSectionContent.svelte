@@ -431,7 +431,7 @@
             data-workspace-bot-status-row
             title={workspaceBotStatus.label}
             color={workspaceBotStatus.color}
-            padding="0 12px 4px 6px"
+            padding="0 12px 0 6px"
             fontSize={10}
           >
             <span

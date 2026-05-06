@@ -76,6 +76,29 @@ export function closeSurfaceById(paneId: string, surfaceId: string) {
   }
 }
 
+async function spawnReplacementTerminal(
+  ws: Workspace,
+  pane: Pane,
+): Promise<void> {
+  // Inherit from the workspace itself: branches use worktreePath,
+  // root workspaces use path. Falls back to the shell's default cwd
+  // when neither is set (e.g. ad-hoc workspaces created without a
+  // path).
+  const cwd =
+    (ws as { worktreePath?: string }).worktreePath ?? ws.path ?? undefined;
+  const surface = await createTerminalSurface(pane, cwd);
+  pane.activeSurfaceId = surface.id;
+  workspaces.update((l) => [...l]);
+  eventBus.emit({
+    type: "surface:created",
+    id: surface.id,
+    paneId: pane.id,
+    kind: "terminal",
+  });
+  void safeFocus(surface);
+  schedulePersist();
+}
+
 function removeSurface(ws: Workspace, pane: Pane, surfaceIdx: number) {
   const surface = pane.surfaces[surfaceIdx]!;
   const surfaceId = surface.id;
@@ -91,19 +114,27 @@ function removeSurface(ws: Workspace, pane: Pane, surfaceIdx: number) {
   eventBus.emit({ type: "surface:closed", id: surfaceId, paneId });
 
   if (pane.surfaces.length === 0) {
-    // If this workspace has another pane (split view), collapse by
-    // removing the now-empty pane. Otherwise the last surface in the
-    // workspace just closed — close the whole workspace so the user
-    // isn't left staring at an empty-state shell. Matches the
-    // pty-exit path in terminal-service.ts.
+    // Branch by what to do when the last surface in this pane goes:
+    //   * split view (paneCount > 1) → collapse the empty pane.
+    //   * dashboard workspace → close the workspace, since dashboards
+    //     are single-surface and replacing with a terminal would
+    //     change their nature.
+    //   * otherwise → spawn a fresh terminal in the same pane so the
+    //     workspace itself never gets deleted by tab-close. Cwd
+    //     inherits from the workspace (worktreePath / path).
     const paneCount = getAllPanes(ws.paneLayout).length;
     if (paneCount > 1) {
       removePane(ws, pane);
       workspaces.update((l) => [...l]);
-    } else {
+    } else if (ws.isDashboard === true) {
       pane.resizeObserver?.disconnect();
       const wsIdx = get(workspaces).indexOf(ws);
       if (wsIdx >= 0) closeWorkspace(wsIdx);
+      return;
+    } else {
+      pane.activeSurfaceId = null;
+      workspaces.update((l) => [...l]);
+      void spawnReplacementTerminal(ws, pane);
       return;
     }
   } else {

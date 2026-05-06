@@ -1258,11 +1258,83 @@ describe("surface-service", () => {
       ).toBe(pane2.id);
     });
 
-    it("closes the workspace when the last surface of the only pane is closed", () => {
+    it("keeps the workspace alive and spawns a fresh terminal seeded with its cwd when the last surface of the only pane is closed", async () => {
+      const { createTerminalSurface } = await import("../lib/terminal-service");
+      vi.mocked(createTerminalSurface).mockImplementationOnce(
+        async (pane: Pane) => {
+          const replacement = mockTerminalSurface({ id: "replacement" });
+          pane.surfaces.push(replacement);
+          return replacement;
+        },
+      );
+
       const s = mockTerminalSurface();
       const pane = makePane([s]);
       pane.activeSurfaceId = s.id;
       const ws = makeChildWorkspace({
+        id: "ws-keep",
+        path: "/repos/keep",
+        paneLayout: { type: "pane", pane },
+        activePaneId: pane.id,
+      });
+      const other = makeChildWorkspace({ id: "ws-other" });
+      workspaces.set([ws, other]);
+      activeWorkspaceIdx.set(0);
+
+      closeActiveSurface();
+
+      // Workspace stays in the list — the old behavior (close the
+      // whole workspace when its last surface is gone) is gone.
+      const list = get(workspaces);
+      expect(list).toHaveLength(2);
+      expect(list.map((w) => w.id).sort()).toEqual(["ws-keep", "ws-other"]);
+
+      // A replacement terminal spawn was kicked off, inheriting the
+      // workspace's cwd.
+      expect(createTerminalSurface).toHaveBeenCalledWith(pane, "/repos/keep");
+    });
+
+    it("seeds the replacement terminal with worktreePath for branch workspaces", async () => {
+      const { createTerminalSurface } = await import("../lib/terminal-service");
+      vi.mocked(createTerminalSurface).mockImplementationOnce(
+        async (pane: Pane) => {
+          const replacement = mockTerminalSurface({ id: "branch-replacement" });
+          pane.surfaces.push(replacement);
+          return replacement;
+        },
+      );
+
+      const s = mockTerminalSurface();
+      const pane = makePane([s]);
+      pane.activeSurfaceId = s.id;
+      const ws = makeChildWorkspace({
+        id: "ws-branch",
+        rootWorkspaceId: "ws-root",
+        // Branch workspaces use worktreePath as their cwd source —
+        // path is unset on them by design.
+        paneLayout: { type: "pane", pane },
+        activePaneId: pane.id,
+      }) as Workspace & { worktreePath: string };
+      ws.worktreePath = "/repos/keep/.worktrees/feature";
+      workspaces.set([ws]);
+      activeWorkspaceIdx.set(0);
+
+      closeActiveSurface();
+
+      expect(get(workspaces)).toHaveLength(1);
+      expect(createTerminalSurface).toHaveBeenCalledWith(
+        pane,
+        "/repos/keep/.worktrees/feature",
+      );
+    });
+
+    it("closes a dashboard workspace when its last surface is closed (dashboards are single-surface)", () => {
+      const s = mockTerminalSurface();
+      const pane = makePane([s]);
+      pane.activeSurfaceId = s.id;
+      const ws = makeChildWorkspace({
+        id: "ws-dash",
+        isDashboard: true,
         paneLayout: { type: "pane", pane },
         activePaneId: pane.id,
       });

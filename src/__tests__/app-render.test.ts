@@ -31,13 +31,12 @@ describe("terminal-service exports", () => {
     ).toBeUndefined();
   });
 
-  it("exports createTerminalSurface, getActiveCwd, startCwdPolling, createDefaultWorkspace", async () => {
+  it("exports createTerminalSurface, getActiveCwd, startCwdPolling", async () => {
     const ts = await import("../lib/terminal-service");
     const helpers = await import("../lib/services/service-helpers");
     expect(typeof ts.createTerminalSurface).toBe("function");
     expect(typeof helpers.getActiveCwd).toBe("function");
     expect(typeof ts.startCwdPolling).toBe("function");
-    expect(typeof ts.createDefaultWorkspace).toBe("function");
   });
 });
 

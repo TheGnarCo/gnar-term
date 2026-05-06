@@ -42,16 +42,8 @@ import {
 import { safeFocus } from "./service-helpers";
 import { readTerminalBuffer, writeSessionLog } from "./session-log-service";
 import { eventBus } from "./event-bus";
-import {
-  appendRootRow,
-  removeRootRow,
-  insertRootRow,
-} from "../stores/root-row-order";
-import {
-  addChildToWorkspace,
-  insertChildIntoWorkspace,
-  updateWorkspace,
-} from "./workspace-service";
+import { appendRootRow, removeRootRow } from "../stores/root-row-order";
+import { updateWorkspace } from "./workspace-service";
 import { getWorkspace } from "../stores/workspace";
 import { schedulePersist, persistWorkspaces } from "./workspace-persist";
 
@@ -455,105 +447,6 @@ function collapseEmptyPaneInWorkspace(ws: Workspace, paneId: string): void {
   } else {
     replaceNodeInTree(ws.paneLayout, parentInfo.parent, sibling);
   }
-}
-
-/**
- * Spawn a new child workspace whose paneLayout is a single pane carrying the
- * dragged surface. Inherits the source workspace's rootWorkspaceId
- * so a tab dropped from a Branch inside a root Workspace lands as a
- * sibling within the same root Workspace.
- *
- * Refuses to leave the source empty: when the source workspace has only
- * one surface total, this is a no-op (the caller — tab-drag — also
- * guards against this when computing the drop target, but the service
- * enforces the invariant in case callers skip the check).
- */
-export function createWorkspaceFromSurface(
-  surfaceId: string,
-  sourcePaneId: string,
-  sourceWorkspaceId: string,
-  insertOptions?:
-    | { kind: "root"; insertIdx: number }
-    | {
-        kind: "workspace";
-        positionInWorkspace: number;
-        targetWorkspaceId?: string;
-      },
-): void {
-  const allWs = get(workspaces);
-  const srcWs = allWs.find((w) => w.id === sourceWorkspaceId);
-  if (!srcWs) return;
-  if (getAllSurfaces(srcWs).length < 2) return;
-
-  const sourcePane = getAllPanes(srcWs.paneLayout).find(
-    (p) => p.id === sourcePaneId,
-  );
-  if (!sourcePane) return;
-  const surfaceIdx = sourcePane.surfaces.findIndex((s) => s.id === surfaceId);
-  if (surfaceIdx === -1) return;
-  const [surface] = sourcePane.surfaces.splice(surfaceIdx, 1);
-  if (!surface) return;
-
-  if (sourcePane.activeSurfaceId === surfaceId) {
-    sourcePane.activeSurfaceId = sourcePane.surfaces[0]?.id ?? null;
-  }
-
-  // If the source pane is now empty (and isn't the workspace's root),
-  // fold it out of the split tree. The workspace itself survives —
-  // we already enforced >1 surface above.
-  if (
-    sourcePane.surfaces.length === 0 &&
-    !(
-      srcWs.paneLayout.type === "pane" &&
-      srcWs.paneLayout.pane.id === sourcePaneId
-    )
-  ) {
-    collapseEmptyPaneInWorkspace(srcWs, sourcePaneId);
-  }
-
-  const newPane: Pane = {
-    id: uid(),
-    surfaces: [surface],
-    activeSurfaceId: surface.id,
-  };
-  const srcWorkspaceId = srcWs?.rootWorkspaceId;
-  const effectiveWorkspaceId =
-    (insertOptions?.kind === "workspace" && insertOptions.targetWorkspaceId) ||
-    srcWorkspaceId;
-  const newWs: Workspace = {
-    id: uid(),
-    name: surface.title || "New Workspace",
-    paneLayout: { type: "pane", pane: newPane },
-    activePaneId: newPane.id,
-    ...(effectiveWorkspaceId ? { rootWorkspaceId: effectiveWorkspaceId } : {}),
-  };
-
-  workspaces.update((list) => [...list, newWs]);
-  // Branches (have rootWorkspaceId) never appear as a root row — they
-  // live nested inside their root's branch list. Roots created via
-  // pane-split-into-workspace get a `kind: "workspace"` row here.
-  if (typeof newWs.rootWorkspaceId !== "string") {
-    if (insertOptions?.kind === "root") {
-      insertRootRow(insertOptions.insertIdx, {
-        kind: "workspace",
-        id: newWs.id,
-      });
-    } else {
-      appendRootRow({ kind: "workspace", id: newWs.id });
-    }
-  }
-  if (effectiveWorkspaceId) {
-    if (insertOptions?.kind === "workspace") {
-      insertChildIntoWorkspace(
-        effectiveWorkspaceId,
-        newWs.id,
-        insertOptions.positionInWorkspace,
-      );
-    } else {
-      addChildToWorkspace(effectiveWorkspaceId, newWs.id);
-    }
-  }
-  schedulePersist();
 }
 
 // Re-exported so pane-service (which lives next to it) can collapse a

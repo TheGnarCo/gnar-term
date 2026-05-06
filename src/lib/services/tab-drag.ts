@@ -15,15 +15,12 @@
 import { writable, get, type Readable } from "svelte/store";
 import { workspaces } from "../stores/workspace";
 import { theme } from "../stores/theme";
-import { getAllPanes, getAllSurfaces } from "../types";
+import { getAllPanes } from "../types";
 import {
   reorderTab,
   mergeTabToPane,
   splitPaneWithSurface,
 } from "./pane-service";
-import { createWorkspaceFromSurface } from "./workspace-runtime-service";
-import { getWorkspaces } from "../stores/workspace";
-import { rootRowOrder } from "../stores/root-row-order";
 
 export type TabDropTarget =
   | { kind: "reorder"; paneId: string; insertIdx: number }
@@ -32,13 +29,6 @@ export type TabDropTarget =
       kind: "surface-split";
       paneId: string;
       zone: "top" | "bottom" | "left" | "right";
-    }
-  | { kind: "new-workspace"; insertIdx: number; insertEdge: "before" | "after" }
-  | {
-      kind: "new-child-workspace-in-workspace";
-      rootWorkspaceId: string;
-      insertGlobalIdx: number;
-      insertEdge: "before" | "after";
     }
   | null;
 
@@ -234,119 +224,6 @@ function detectDropTarget(
       }
       return { kind: "merge", paneId };
     }
-
-    // Workspace's child-workspace row (nested inside a container — must
-    // check BEFORE root-row because child rows sit inside root-row
-    // wrappers in the DOM).
-    const wsViewRowEl = el.closest(
-      "[data-ws-view-drag-idx]",
-    ) as HTMLElement | null;
-    if (wsViewRowEl) {
-      const containerEl = wsViewRowEl.closest(
-        "[data-container-children]",
-      ) as HTMLElement | null;
-      const rootWorkspaceId =
-        containerEl?.getAttribute("data-container-children") ?? null;
-      if (rootWorkspaceId) {
-        const srcWs = get(workspaces).find((w) => w.id === sourceWorkspaceId);
-        const srcWorkspaceId = srcWs?.rootWorkspaceId;
-        if (srcWorkspaceId !== rootWorkspaceId) {
-          if (srcWorkspaceId) return null; // tab from a different workspace → deny
-          // Root tab over a workspace's Branch → create a nested
-          // workspace in that workspace rather than falling through to
-          // root-row detection.
-          if (srcWs && getAllSurfaces(srcWs).length > 1) {
-            const globalIdx = parseInt(
-              wsViewRowEl.getAttribute("data-ws-view-drag-idx") || "0",
-              10,
-            );
-            const rect = wsViewRowEl.getBoundingClientRect();
-            const insertEdge: "before" | "after" =
-              y < rect.top + rect.height / 2 ? "before" : "after";
-            return {
-              kind: "new-child-workspace-in-workspace",
-              rootWorkspaceId,
-              insertGlobalIdx: globalIdx,
-              insertEdge,
-            };
-          }
-          return null;
-        } else {
-          // Same workspace — offer a positional insert.
-          if (srcWs && getAllSurfaces(srcWs).length > 1) {
-            const globalIdx = parseInt(
-              wsViewRowEl.getAttribute("data-ws-view-drag-idx") || "0",
-              10,
-            );
-            const rect = wsViewRowEl.getBoundingClientRect();
-            const insertEdge: "before" | "after" =
-              y < rect.top + rect.height / 2 ? "before" : "after";
-            return {
-              kind: "new-child-workspace-in-workspace",
-              rootWorkspaceId,
-              insertGlobalIdx: globalIdx,
-              insertEdge,
-            };
-          }
-          return null;
-        }
-      }
-    }
-
-    // Root row (workspace or container block).
-    // Direct hit on the inner content div — works for most cursor positions.
-    let rootRowEl = el.closest("[data-root-row-idx]") as HTMLElement | null;
-    // Fallback: cursor may land on a DropGhost rendered inside the row's
-    // outer container div (.root-row[data-root-row-container]).  The DropGhost
-    // is a sibling of the [data-root-row-idx] inner div, so closest() from the
-    // DropGhost never reaches [data-root-row-idx].  The container attribute
-    // exposes the correct row index and lets us find the inner div for an
-    // accurate bounding-rect edge calculation.
-    if (!rootRowEl) {
-      const containerEl = (el as Element).closest(
-        "[data-root-row-container]",
-      ) as HTMLElement | null;
-      if (containerEl) {
-        rootRowEl = containerEl.querySelector(
-          "[data-root-row-idx]",
-        ) as HTMLElement | null;
-      }
-    }
-    if (rootRowEl) {
-      const srcWs = get(workspaces).find((w) => w.id === sourceWorkspaceId);
-      const srcWorkspaceId = srcWs?.rootWorkspaceId;
-      if (srcWorkspaceId) return null;
-      const rowIdx = parseInt(
-        rootRowEl.getAttribute("data-root-row-idx") || "0",
-        10,
-      );
-      const rect = rootRowEl.getBoundingClientRect();
-      const insertEdge: "before" | "after" =
-        y < rect.top + rect.height / 2 ? "before" : "after";
-      if (srcWs && getAllSurfaces(srcWs).length > 1) {
-        return { kind: "new-workspace", insertIdx: rowIdx, insertEdge };
-      }
-      return null;
-    }
-
-    // Empty sidebar area — drop to spawn a new workspace appended
-    // at the end of the root row order.
-    const sidebar = el.closest("#sidebar");
-    if (sidebar) {
-      const srcWs = get(workspaces).find((w) => w.id === sourceWorkspaceId);
-      const srcWorkspaceId = srcWs?.rootWorkspaceId;
-      if (srcWorkspaceId) return null;
-      if (srcWs && getAllSurfaces(srcWs).length > 1) {
-        const order = get(rootRowOrder);
-        const lastIdx = Math.max(0, order.length - 1);
-        return {
-          kind: "new-workspace",
-          insertIdx: lastIdx,
-          insertEdge: "after",
-        };
-      }
-      return null;
-    }
   }
 
   // Pane surface body — directional split hint.
@@ -432,39 +309,6 @@ export function commitTabDrop(): void {
         direction,
         before,
       );
-      break;
-    }
-    case "new-workspace": {
-      const insertAt =
-        dropTarget.insertEdge === "before"
-          ? dropTarget.insertIdx
-          : dropTarget.insertIdx + 1;
-      createWorkspaceFromSurface(surfaceId, sourcePaneId, sourceWorkspaceId, {
-        kind: "root",
-        insertIdx: insertAt,
-      });
-      break;
-    }
-    case "new-child-workspace-in-workspace": {
-      const allWs = get(workspaces);
-      const tgtWs = allWs[dropTarget.insertGlobalIdx];
-      if (!tgtWs) break;
-      const workspace = getWorkspaces().find(
-        (w) => w.id === dropTarget.rootWorkspaceId,
-      );
-      if (!workspace) break;
-      const posInWorkspace = workspace.branchedWorkspaceIds.indexOf(tgtWs.id);
-      const insertPos =
-        dropTarget.insertEdge === "before"
-          ? Math.max(0, posInWorkspace)
-          : posInWorkspace === -1
-            ? workspace.branchedWorkspaceIds.length
-            : posInWorkspace + 1;
-      createWorkspaceFromSurface(surfaceId, sourcePaneId, sourceWorkspaceId, {
-        kind: "workspace",
-        positionInWorkspace: insertPos,
-        targetWorkspaceId: dropTarget.rootWorkspaceId,
-      });
       break;
     }
     default:

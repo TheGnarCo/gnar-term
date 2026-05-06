@@ -32,13 +32,12 @@ import {
 import { get } from "svelte/store";
 import { xtermTheme } from "./stores/theme";
 import { workspaces, activeWorkspaceIdx } from "./stores/workspace";
-import { activeWorkspaceId } from "./stores/workspace";
 import { contextMenu, pendingAction } from "./stores/ui";
 import {
   getRegisteredFileExtensions,
   getContextMenuItemsForFile,
 } from "./services/context-menu-item-registry";
-import type { TerminalSurface, Pane, Workspace } from "./types";
+import type { TerminalSurface, Pane } from "./types";
 import { uid, getAllSurfaces, getAllPanes, isTerminalSurface } from "./types";
 import type { MenuItem } from "./context-menu-types";
 import "@xterm/xterm/css/xterm.css";
@@ -665,21 +664,6 @@ export function startCwdPolling() {
       })
       .catch(() => {});
   }, 5000); // Poll every 5 seconds
-}
-
-// --- Default Workspace Recovery ---
-
-export async function createDefaultWorkspace() {
-  const pane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
-  const ws: Workspace = {
-    id: uid(),
-    name: "Branch 1",
-    paneLayout: { type: "pane", pane },
-    activePaneId: pane.id,
-  };
-  await createTerminalSurface(pane);
-  workspaces.update((list) => [...list, ws]);
-  activeWorkspaceId.set(ws.id);
 }
 
 // --- Surface Creation helpers ---

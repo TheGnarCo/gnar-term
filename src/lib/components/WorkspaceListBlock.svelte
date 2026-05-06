@@ -41,8 +41,7 @@
   } from "../services/workspace-runtime-service";
   import { activeWorkspaceIdx } from "../stores/workspace";
 
-  import { getAllSurfaces, type Workspace } from "../types";
-  import { tabDragState } from "../services/tab-drag";
+  import { type Workspace } from "../types";
   import {
     detectWorkspacePaneDrop,
     setWorkspaceDragState,
@@ -50,7 +49,6 @@
     removeDragDenyOverlay,
     type WorkspacePaneDropTarget,
   } from "../services/workspace-drag";
-  import { expandWorkspaceIntoPanes } from "../services/pane-service";
   import { configStore } from "../config";
   import { resolveWorkspaceColor } from "../theme-data";
   import { archiveWorkspace } from "../services/archive-service";
@@ -238,23 +236,6 @@
       const paneTarget = currentPaneTarget;
       currentPaneTarget = null;
       setWorkspaceDragState(null);
-      if (paneTarget?.kind === "pane-split") {
-        const srcRow = $rootRowOrder[fromIdx];
-        if (srcRow?.kind === "workspace") {
-          const direction =
-            paneTarget.zone === "left" || paneTarget.zone === "right"
-              ? "horizontal"
-              : "vertical";
-          const before =
-            paneTarget.zone === "left" || paneTarget.zone === "top";
-          expandWorkspaceIntoPanes(
-            srcRow.id,
-            paneTarget.paneId,
-            direction,
-            before,
-          );
-        }
-      }
       // Suppress sidebar reorder for any pane target (split OR deny) so
       // the workspace doesn't get accidentally reordered on a failed drop.
       return paneTarget !== null;
@@ -319,37 +300,12 @@
   $: sourceRowLabel =
     sourceEntry?.pseudoWorkspace?.label ?? sourceEntry?.rendererLabel ?? "";
 
-  // --- Tab-drag overlay state ---
-  // When a tab is being dragged over the root row list, synthesize the same
-  // effective drag variables that the native workspace reorder uses, so the
-  // sibling overlay and DropGhost indicators render identically.
-  $: tabDrag = $tabDragState;
-  $: tabDragToRoot =
-    tabDrag?.dropTarget?.kind === "new-workspace" ? tabDrag.dropTarget : null;
-  $: effectiveActive = dragActive || tabDragToRoot !== null;
-  // null source idx → every row's idx !== null → all rows show sibling overlay
-  $: effectiveDragSourceIdx = dragActive
-    ? dragSourceIdx
-    : (null as number | null);
-  $: effectiveInsertIndicator = dragActive
-    ? insertIndicator
-    : tabDragToRoot !== null
-      ? { idx: tabDragToRoot.insertIdx, edge: tabDragToRoot.insertEdge }
-      : (null as { idx: number; edge: "before" | "after" } | null);
-  $: effectiveDragSourceHeight = dragActive ? dragSourceHeight : 32;
-  $: tabDragSurfaceTitle = (() => {
-    if (!tabDrag) return "";
-    const srcWs = $workspaces.find((w) => w.id === tabDrag!.sourceWorkspaceId);
-    if (!srcWs) return "New Workspace";
-    return (
-      getAllSurfaces(srcWs).find((s) => s.id === tabDrag!.surfaceId)?.title ||
-      "New Workspace"
-    );
-  })();
-  $: effectiveSourceRowLabel = dragActive
-    ? sourceRowLabel
-    : tabDragSurfaceTitle;
-  $: effectiveSourceRowColor = dragActive ? sourceRowColor : $theme.accent;
+  $: effectiveActive = dragActive;
+  $: effectiveDragSourceIdx = dragSourceIdx;
+  $: effectiveInsertIndicator = insertIndicator;
+  $: effectiveDragSourceHeight = dragSourceHeight;
+  $: effectiveSourceRowLabel = sourceRowLabel;
+  $: effectiveSourceRowColor = sourceRowColor;
 </script>
 
 <!-- No "Workspaces" label row here anymore. The label was redundant

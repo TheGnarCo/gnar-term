@@ -11,8 +11,6 @@
    */
   import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
   import { theme } from "../stores/theme";
-  import { getAllSurfaces } from "../types";
-  import { tabDragState } from "../services/tab-drag";
   import { reorderContext, anyReorderActive } from "../stores/ui";
   import { createDragReorder } from "../actions/drag-reorder";
   import {
@@ -23,10 +21,6 @@
     removeDragDenyOverlay,
     type WorkspacePaneDropTarget,
   } from "../services/workspace-drag";
-  import {
-    expandWorkspaceIntoPanes,
-    mergeWorkspaceIntoPane,
-  } from "../services/pane-service";
   import {
     switchWorkspace,
     renameWorkspace,
@@ -114,9 +108,15 @@
       if (sourceIdx === null) return;
       const srcWsId = $workspaces[sourceIdx]?.id;
       if (!srcWsId) return;
-      // Tab bar takes precedence over pane body.
+      // Tab bar hover: only the deny case is relevant (no merge path).
       const tabTarget = detectTabBarDropForWorkspace(x, y, srcWsId);
-      currentPaneTarget = tabTarget ?? detectWorkspacePaneDrop(x, y, srcWsId);
+      const effectivePaneTarget =
+        tabTarget?.kind === "deny"
+          ? tabTarget
+          : tabTarget?.kind === "tab-merge"
+            ? null
+            : (tabTarget ?? detectWorkspacePaneDrop(x, y, srcWsId));
+      currentPaneTarget = effectivePaneTarget;
       setWorkspaceDragState(
         currentPaneTarget !== null
           ? { workspaceId: srcWsId, dropTarget: currentPaneTarget }
@@ -130,22 +130,10 @@
         }
       }
     },
-    onDragCommit: (fromIdx) => {
+    onDragCommit: () => {
       const paneTarget = currentPaneTarget;
       currentPaneTarget = null;
       setWorkspaceDragState(null);
-      const srcWsId = $workspaces[fromIdx]?.id;
-      if (paneTarget?.kind === "pane-split" && srcWsId) {
-        const direction =
-          paneTarget.zone === "left" || paneTarget.zone === "right"
-            ? "horizontal"
-            : "vertical";
-        const before = paneTarget.zone === "left" || paneTarget.zone === "top";
-        expandWorkspaceIntoPanes(srcWsId, paneTarget.paneId, direction, before);
-      } else if (paneTarget?.kind === "tab-merge" && srcWsId) {
-        mergeWorkspaceIntoPane(srcWsId, paneTarget.paneId);
-      }
-      // Return true to suppress sidebar reorder when a pane target was active.
       return paneTarget !== null;
     },
     onStateChange: () => {
@@ -196,36 +184,12 @@
     return railColor;
   })();
 
-  // --- Tab-drag overlay state ---
-  $: tabDrag = $tabDragState;
-  $: tabDragToWorkspace =
-    tabDrag?.dropTarget?.kind === "new-child-workspace-in-workspace" &&
-    tabDrag.dropTarget.rootWorkspaceId === scopeId
-      ? tabDrag.dropTarget
-      : null;
-  $: effectiveActive = active || tabDragToWorkspace !== null;
-  // null source idx → every row's idx !== null → all rows show sibling overlay
-  $: effectiveSourceIdx = active ? sourceIdx : (null as number | null);
-  $: effectiveIndicator = active
-    ? indicator
-    : tabDragToWorkspace !== null
-      ? {
-          idx: tabDragToWorkspace.insertGlobalIdx,
-          edge: tabDragToWorkspace.insertEdge,
-        }
-      : (null as { idx: number; edge: "before" | "after" } | null);
-  $: effectiveSourceHeight = active ? sourceHeight : 32;
-  $: tabDragSurfaceLabel = (() => {
-    if (!tabDrag || !tabDragToWorkspace) return "";
-    const srcWs = $workspaces.find((w) => w.id === tabDrag!.sourceWorkspaceId);
-    if (!srcWs) return "New Workspace";
-    return (
-      getAllSurfaces(srcWs).find((s) => s.id === tabDrag!.surfaceId)?.title ||
-      "New Workspace"
-    );
-  })();
-  $: effectiveDropLabel = active ? sourceWs?.name : tabDragSurfaceLabel;
-  $: effectiveDropAccent = active ? dropAccent : railColor;
+  $: effectiveActive = active;
+  $: effectiveSourceIdx = sourceIdx;
+  $: effectiveIndicator = indicator;
+  $: effectiveSourceHeight = sourceHeight;
+  $: effectiveDropLabel = sourceWs?.name;
+  $: effectiveDropAccent = dropAccent;
 
   let itemRefs: Record<string, WorkspaceItem> = {};
 

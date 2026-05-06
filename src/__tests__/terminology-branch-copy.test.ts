@@ -102,13 +102,4 @@ describe("S8 terminology: Workspace → Branch in user-facing copy", () => {
       expect(src).not.toContain("nested workspaces");
     });
   });
-
-  describe("terminal-service.ts default workspace recovery name", () => {
-    const src = readSrc("terminal-service.ts");
-
-    it('default recovery name is "Branch 1" not "Workspace 1"', () => {
-      // The old literal in createDefaultWorkspace
-      expect(src).not.toContain('"Workspace 1"');
-    });
-  });
 });

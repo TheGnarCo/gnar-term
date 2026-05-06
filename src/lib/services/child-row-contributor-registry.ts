@@ -4,9 +4,9 @@
  * needing to know who's contributing.
  *
  * Concrete uses:
- *   - agentic-orchestrator contributes dashboard rows under
- *     project-scope's project rows (parentType: "project")
- *   - agentic-orchestrator contributes branched workspace rows under
+ *   - agentic extension contributes dashboard rows under
+ *     workspace rows (parentType: "workspace")
+ *   - agentic extension contributes branched workspace rows under
  *     its own dashboard rows (parentType: "dashboard")
  *
  * Each contributor returns child row descriptors `{ kind, id }` for a
@@ -28,7 +28,7 @@ export interface ContributedChildRow {
 }
 
 export interface ChildRowContributor {
-  /** Parent row kind (e.g. "project", "dashboard"). */
+  /** Parent row kind (e.g. "workspace", "dashboard"). */
   parentType: string;
   /** Source of the registration (extension id). */
   source: string;

@@ -61,12 +61,11 @@
     return resolveWorkspaceColor(slot, $theme);
   }
 
-  // Sidebar exposes a "rename active" keyboard shortcut. Pre-Stage-10
-  // it dispatched into a WorkspaceItem mounted at root for the bare
-  // workspace path; that bare row no longer exists. Renames for Root
-  // workspaces go through WorkspaceSectionContent's banner label;
-  // Branches use WorkspaceListView. The shortcut is a no-op here —
-  // the Sidebar.startRename surface stays for API stability.
+  // Sidebar exposes a "rename active" keyboard shortcut, but Root
+  // workspaces rename through WorkspaceSectionContent's banner label
+  // and Branches go through WorkspaceListView — there is no bare row
+  // mounted here. The shortcut is a no-op at this surface; the
+  // Sidebar.startRename function stays for API stability.
   export function startRename(_globalIdx: number) {
     // Intentional no-op — see comment above.
   }

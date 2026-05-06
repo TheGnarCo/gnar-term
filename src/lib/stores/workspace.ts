@@ -384,8 +384,6 @@ let _workspaceRecordsLoaded = false;
  * (`restoreWorkspaces` → `seedWorkspaces`); this function only handles
  * the active-id pointer and the one-shot loaded flag.
  *
- * `loadState` runs `migrateLegacyWorkspaces` so by the time we read
- * state every entry already lives inside `state.workspaces[]`.
  * Idempotent — subsequent calls are no-ops so tests can freely call
  * the initializer.
  */

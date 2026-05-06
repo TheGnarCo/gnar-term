@@ -10,7 +10,12 @@ import {
   zoomedSurfaceId,
   workspaceHistory,
   serializeWorkspace,
+  serializeLayout,
 } from "../stores/workspace";
+
+// Re-exported so existing call sites that import serializeLayout from
+// workspace-runtime-service continue to compile after the dedupe.
+export { serializeLayout };
 import { showInputPrompt, showConfirmPrompt } from "../stores/ui";
 import { createTerminalSurface } from "../terminal-service";
 import {
@@ -18,8 +23,6 @@ import {
   getAllPanes,
   getAllSurfaces,
   isTerminalSurface,
-  isExtensionSurface,
-  isPreviewSurface,
   findParentSplit,
   replaceNodeInTree,
   type Workspace,
@@ -32,8 +35,8 @@ import {
   saveState,
   getConfig,
   type WorkspaceTemplate,
-  type LayoutNode,
   type WorkspaceDef,
+  type LayoutNode,
 } from "../config";
 import { safeFocus } from "./service-helpers";
 import { readTerminalBuffer, writeSessionLog } from "./session-log-service";
@@ -429,22 +432,7 @@ export function renameWorkspace(idx: number, name: string) {
   schedulePersist();
 }
 
-/**
- * Toggle the `locked` flag on a workspace. Locked workspaces have their
- * drag-reorder and close affordances suppressed in the UI. No-op if no
- * workspace with the given id exists.
- */
-export function toggleWorkspaceLock(workspaceId: string): void {
-  let changed = false;
-  workspaces.update((list) =>
-    list.map((ws) => {
-      if (ws.id !== workspaceId) return ws;
-      changed = true;
-      return { ...ws, locked: !ws.locked };
-    }),
-  );
-  if (changed) schedulePersist();
-}
+export { toggleWorkspaceLock } from "./workspace-service";
 
 export function reorderWorkspaces(fromIdx: number, toIdx: number) {
   const activeId = get(workspaces)[get(activeWorkspaceIdx)]?.id;
@@ -459,54 +447,6 @@ export function reorderWorkspaces(fromIdx: number, toIdx: number) {
     if (newIdx >= 0) activeWorkspaceIdx.set(newIdx);
   }
   schedulePersist();
-}
-
-export function serializeLayout(node: SplitNode): LayoutNode {
-  if (node.type === "pane") {
-    const surfaces = node.pane.surfaces.map((s) => {
-      if (isTerminalSurface(s)) {
-        const def: Record<string, unknown> = { type: "terminal" };
-        if (s.cwd) def.cwd = s.cwd;
-        if (s.definedCommand) def.command = s.definedCommand;
-        if (s.id === node.pane.activeSurfaceId) def.focus = true;
-        return def;
-      }
-      if (isPreviewSurface(s)) {
-        const def: Record<string, unknown> = { type: "preview", path: s.path };
-        if (s.title) def.name = s.title;
-        if (s.id === node.pane.activeSurfaceId) def.focus = true;
-        return def;
-      }
-      // Extension surface
-      const def: Record<string, unknown> = { type: "extension" };
-      if (s.title) def.name = s.title;
-      if (s.id === node.pane.activeSurfaceId) def.focus = true;
-      if (isExtensionSurface(s)) {
-        def.extensionType = s.surfaceTypeId;
-        if (s.props) {
-          // Strip non-serializable runtime values (DOM nodes, watch handles)
-          const {
-            element: _element,
-            watchId: _watchId,
-            ...serializableProps
-          } = s.props as Record<string, unknown>;
-          if (Object.keys(serializableProps).length > 0) {
-            def.extensionProps = serializableProps;
-          }
-        }
-      }
-      return def;
-    });
-    return { pane: { surfaces } };
-  }
-  return {
-    direction: node.direction,
-    split: node.ratio,
-    children: [
-      serializeLayout(node.children[0]),
-      serializeLayout(node.children[1]),
-    ],
-  };
 }
 
 export async function saveCurrentWorkspace() {

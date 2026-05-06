@@ -91,12 +91,8 @@ export function workspaceDefToWorkspace(def: WorkspaceDef): Workspace {
   if (def.dashboardWorkspaceId !== undefined)
     ws.dashboardWorkspaceId = def.dashboardWorkspaceId;
   if (def.locked !== undefined) ws.locked = def.locked;
-  // Migration compat: old state.json files persist `rootWorkspaceId`; accept
-  // both names so existing installs load correctly. Write only the new name.
-  const rootWorkspaceId =
-    def.rootWorkspaceId ??
-    (def as unknown as { rootWorkspaceId?: string }).rootWorkspaceId;
-  if (rootWorkspaceId !== undefined) ws.rootWorkspaceId = rootWorkspaceId;
+  if (def.rootWorkspaceId !== undefined)
+    ws.rootWorkspaceId = def.rootWorkspaceId;
   if (def.isDashboard !== undefined) ws.isDashboard = def.isDashboard;
   if (def.dashboardContributionId !== undefined)
     ws.dashboardContributionId = def.dashboardContributionId;
@@ -202,9 +198,7 @@ export async function restoreWorkspaces(
     const seenDashboards = new Set<string>();
     const filteredDefs = runtimeDefs.filter((def) => {
       const isDashboard = def.isDashboard === true;
-      const ownerWorkspaceId =
-        def.rootWorkspaceId ??
-        (def as unknown as { rootWorkspaceId?: string }).rootWorkspaceId;
+      const ownerWorkspaceId = def.rootWorkspaceId;
       if (!isDashboard) return true;
       if (typeof ownerWorkspaceId !== "string") return true;
       if (!knownWorkspaceIds.has(ownerWorkspaceId)) return false;

@@ -28,7 +28,7 @@ import {
   switchWorkspace,
 } from "./workspace-runtime-service";
 import { eventBus } from "./event-bus";
-import { getAllPanes, type Workspace } from "../types";
+import { type Workspace } from "../types";
 import {
   getDashboardContribution,
   getDashboardContributions,
@@ -294,74 +294,6 @@ export async function regenerateWorkspaceDashboardTemplate(
   );
 }
 
-/**
- * Remove the legacy `## Active Agents` section (heading + adjacent
- * `gnar:agent-list` fenced code block) from workspace Overview markdown.
- *
- * Older templates emitted this section into every workspace's
- * `project-dashboard.md`; once the Agentic Dashboard became its own
- * tile the widget's presence on the Overview was redundant. The
- * template stopped emitting it, but existing user files kept the
- * stale block. This runs once per reconciliation pass — idempotent by
- * design (match-or-skip, never appends).
- *
- * The matcher is strict: heading "## Active Agents" followed by
- * whitespace and a `gnar:agent-list` fenced code block. If the user
- * has added custom content under the heading, no match occurs and the
- * file is left alone.
- */
-function stripActiveAgentsSection(markdown: string): string | null {
-  const pattern =
-    /\n*##\s+Active Agents\s*\n+```gnar:agent-list\n[^`]*```\s*\n?/;
-  if (!pattern.test(markdown)) return null;
-  return markdown.replace(pattern, "\n");
-}
-
-async function scrubWorkspaceDashboardActiveAgents(
-  path: string,
-): Promise<void> {
-  try {
-    const exists = await invoke<boolean>("file_exists", { path }).catch(
-      () => false,
-    );
-    if (!exists) return;
-    const content = await invoke<string>("read_file", { path });
-    const next = stripActiveAgentsSection(content);
-    if (next === null) return;
-    await invoke("write_file", { path, content: next });
-  } catch (err) {
-    console.warn(
-      `[workspace-service] Failed to scrub Active Agents from "${path}":`,
-      err,
-    );
-  }
-}
-
-export async function migrateWorkspaceDashboardWidgets(
-  workspace: WorkspaceRecord,
-  path: string,
-): Promise<void> {
-  try {
-    const exists = await invoke<boolean>("file_exists", { path }).catch(
-      () => false,
-    );
-    if (!exists) return;
-    const content = await invoke<string>("read_file", { path });
-    if (content.includes("gnar:workspaces")) return;
-    const marker = "```gnar:columns";
-    const insert = "```gnar:workspaces\n```\n\n";
-    const migrated = content.includes(marker)
-      ? content.replace(marker, insert + marker)
-      : insert + content;
-    await invoke("write_file", { path, content: migrated });
-  } catch (err) {
-    console.warn(
-      `[workspace-service] Failed to migrate workspaces widget into "${path}":`,
-      err,
-    );
-  }
-}
-
 function createDashboardWorkspaceFromDef(
   workspace: WorkspaceRecord,
   name: string,
@@ -399,65 +331,6 @@ export async function createWorkspaceDashboard(
     OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
     [{ type: "preview", path, name: workspace.name, focus: true }],
   );
-}
-
-/**
- * Backfill `metadata.dashboardContributionId` on legacy dashboard
- * workspaces that were created before the field existed. Without the
- * stamp, `hasDashboardWorkspace` (strict-match) misses the workspace
- * and `provisionAutoDashboardsForWorkspace` spawns a duplicate every
- * startup.
- *
- * Inference rules (preview-surface path-based):
- *   - backs the workspace's `project-dashboard.md` → `"group"`
- *
- * Other contribution types (e.g. agentic dashboards) own their own
- * stamping at creation time — the legacy path-based inference for
- * `.gnar-term/agentic-dashboard.md` was retired with the
- * Workspace→Workspace rename.
- *
- * Runs in a single workspaces.update so subscribers see one state
- * transition. Idempotent: any workspace whose stamp is already set is
- * left alone.
- */
-function backfillDashboardContributionIds(): void {
-  const primaryWorkspaces = getWorkspaces();
-  if (primaryWorkspaces.length === 0) return;
-  const workspaceById = new Map<string, WorkspaceRecord>();
-  for (const g of primaryWorkspaces) workspaceById.set(g.id, g);
-
-  let mutated = false;
-  workspaces.update((list) => {
-    const next = list.map((ws) => {
-      if (ws.isDashboard !== true) return ws;
-      if (typeof ws.dashboardContributionId === "string") return ws;
-      const rootWorkspaceId = ws.rootWorkspaceId;
-      if (typeof rootWorkspaceId !== "string") return ws;
-      const workspace = workspaceById.get(rootWorkspaceId);
-      if (!workspace) return ws;
-
-      const previewPaths = getAllPanes(ws.paneLayout)
-        .flatMap((p) => p.surfaces)
-        .filter(
-          (s): s is { kind: "preview"; path: string } & typeof s =>
-            s.kind === "preview",
-        )
-        .map((s) => s.path);
-
-      let inferred: string | null = null;
-      const workspacePath = workspaceDashboardPath(workspace.path);
-      if (previewPaths.includes(workspacePath))
-        inferred = OVERVIEW_DASHBOARD_CONTRIBUTION_ID;
-      if (!inferred) return ws;
-
-      mutated = true;
-      return {
-        ...ws,
-        dashboardContributionId: inferred,
-      };
-    });
-    return mutated ? next : list;
-  });
 }
 
 /**
@@ -660,18 +533,6 @@ async function reconcileDashboardsForWorkspace(
   workspace: WorkspaceRecord,
   dashboardIndex: Map<string, Map<string, Workspace[]>>,
 ): Promise<void> {
-  // One-shot cleanup: strip the legacy `## Active Agents` section
-  // from the workspace's Overview markdown if it's still there. Runs
-  // before we materialize / rebind the dashboard workspace so the
-  // first render already reflects the cleaned file.
-  await scrubWorkspaceDashboardActiveAgents(
-    workspaceDashboardPath(workspace.path),
-  );
-  await migrateWorkspaceDashboardWidgets(
-    workspace,
-    workspaceDashboardPath(workspace.path),
-  );
-
   const byContrib = dashboardIndex.get(workspace.id);
 
   // Deduplicate every autoProvision contribution type — keeps the first
@@ -720,12 +581,6 @@ async function reconcileDashboardsForWorkspace(
 }
 
 export async function reconcileWorkspaceDashboards(): Promise<void> {
-  // Backfill `dashboardContributionId` on restored legacy dashboards
-  // so autoProvision's strict contribId match doesn't spawn duplicates.
-  // Safe to call unconditionally — idempotent, early-returns when
-  // nothing is inferable.
-  backfillDashboardContributionIds();
-
   // Single pass over workspaces builds an index keyed by
   // (parentId → contribId → matching workspaces). Without it, each
   // workspace × autoProvision-contribution iteration would scan the full

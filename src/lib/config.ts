@@ -17,7 +17,6 @@ import { invoke } from "@tauri-apps/api/core";
 import { writable, type Readable } from "svelte/store";
 import { getHome, getConfigDir } from "./services/service-helpers";
 import type { ThemeDef } from "./theme-data";
-import type { WorkspaceRecord } from "./stores/workspace";
 
 // --- Types (cmux-compatible + extensions) ---
 
@@ -85,12 +84,11 @@ export interface WorkspaceTemplate {
 }
 
 /**
- * Serialized on-disk shape for a unified Workspace (new format).
- * Today this carries Branches and Dashboards; path-rooted Workspace
- * records still persist separately in `parentWorkspaces` until the
- * runtime type unification lands. The `layout` field carries the
- * serialized paneLayout. Fields that don't apply to a given record
- * (e.g. `path`, `color` on Branches) are omitted.
+ * Serialized on-disk shape for a unified Workspace.
+ *
+ * `layout` carries the serialized paneLayout. Fields that don't apply
+ * to a given kind of Workspace (e.g. `path`, `color` on Branches)
+ * are omitted.
  */
 export interface WorkspaceDef {
   id: string;
@@ -240,7 +238,6 @@ export interface AppState {
   windowBounds?: { x?: number; y?: number; width?: number; height?: number };
   workspaces?: WorkspaceDef[];
   activeWorkspaceId?: string;
-  workspaceOrder?: { kind: string; id: string }[];
   // Interleaved ordering for the Workspaces section. See stores/root-row-order.ts.
   rootRowOrder?: { kind: string; id: string }[];
   // Archived (suspended) workspaces. See stores/archive.ts.
@@ -248,18 +245,10 @@ export interface AppState {
   archivedDefs?: {
     workspaces: Record<string, ArchivedWorkspaceDef>;
   };
-  // The WorkspaceRecord list — the path-rooted container records that
-  // own Workspace-level fields (path, color, isGit) and track which
-  // Branches belong to them. Persisted under the legacy keys
-  // `parentWorkspaces` / `activeParentWorkspaceId`; migrated from the
-  // legacy per-extension state file
-  // `~/.config/gnar-term/extensions/workspace-groups/state.json`.
-  parentWorkspaces?: WorkspaceRecord[];
-  activeParentWorkspaceId?: string;
 }
 
 export interface ArchivedWorkspaceDef {
-  workspace: WorkspaceRecord;
+  workspace: import("./stores/workspace").WorkspaceRecord;
   childWorkspaceDefs: (WorkspaceTemplate & { name: string })[];
 }
 
@@ -378,26 +367,6 @@ export async function loadState(): Promise<AppState> {
     _appState = JSON.parse(content) as AppState;
   } catch {
     _appState = {};
-  }
-
-  // Pre-Stage-9 → Stage-9: fold legacy WorkspaceRecord records into the
-  // unified state.workspaces[] list. Idempotent — short-circuits when
-  // there are no parentWorkspaces. The migrated state is written back to
-  // disk so future loads bypass the migration.
-  const { migrateLegacyWorkspaces } =
-    await import("./bootstrap/migrate-legacy-workspaces");
-  const migrated = migrateLegacyWorkspaces(_appState);
-  if (migrated !== _appState) {
-    _appState = migrated;
-    try {
-      await invoke("ensure_dir", { path: configDir });
-      await invoke("write_file", {
-        path,
-        content: JSON.stringify(_appState, null, 2),
-      });
-    } catch (err) {
-      console.error("[state] Failed to persist migrated state:", err);
-    }
   }
 
   _appStateStore.set(_appState);

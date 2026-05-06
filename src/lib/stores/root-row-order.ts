@@ -105,9 +105,8 @@ export function moveRootRow(from: number, to: number): void {
  * `extensionRows` enumerates every row that should currently exist:
  * one `{kind: "workspace", id}` per Root workspace, plus any pinned
  * extension rows. The persisted order is preserved where the row still
- * has a referent; legacy persisted shapes (e.g. `kind:"child-workspace"`
- * from pre-Stage-10 sessions) are dropped because they don't appear in
- * `extensionRows`.
+ * has a referent; entries whose referent is unknown are dropped because
+ * they don't appear in `extensionRows`.
  */
 export function bootstrapRootRowOrder(extensionRows: RootRow[]): void {
   const persisted = getState().rootRowOrder ?? [];

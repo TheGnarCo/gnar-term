@@ -232,7 +232,19 @@ export interface ExtensionManifest {
   description?: string;
   entry: string;
   included?: boolean;
-  /** Elevated permissions (e.g., ["pty"] for PTY access) */
+  /**
+   * Elevated permissions opted into by the extension. Valid values:
+   *   - `"pty"`        — spawn/write/kill PTYs (`spawn_pty`, `write_pty`, …)
+   *   - `"shell"`      — `run_script` arbitrary shell exec
+   *   - `"filesystem"` — write-side fs commands (`write_file`, `ensure_dir`,
+   *                      `remove_dir`, `copy_files`). Read-side commands
+   *                      (`read_file`, `list_dir`, …) are always available.
+   *                      Path must live inside a `.gnar-term/` directory or
+   *                      under `~/.gnar-term/`; the app config dir
+   *                      (`~/.config/gnar-term/`) is blocked even with this
+   *                      permission.
+   *   - `"observe"`    — read raw PTY output via `onSurfaceOutput`
+   */
   permissions?: string[];
   contributes?: ExtensionContributions;
 }
@@ -640,17 +652,12 @@ export interface ExtensionAPI {
     >,
     options?: { submitLabel?: string },
   ): Promise<Record<string, string> | null>;
-  createWorkspace(
-    name: string,
-    cwd: string,
-    options?: CreateWorkspaceOptions,
-  ): void;
   /**
-   * Create a workspace from a declarative template (name, layout, and
-   * top-level fields like rootWorkspaceId / extensionData) and resolve
-   * to its id. Intended for dashboard contributions whose `create:`
-   * callback materializes a Branch workspace; for one-off creation,
-   * use `createWorkspace(name, cwd)`.
+   * Create a workspace from a declarative template (name, layout, cwd,
+   * and top-level fields like `rootWorkspaceId` / `extensionData`) and
+   * resolve to its id. The single workspace-creation entrypoint for
+   * extensions — pass `layout: { pane: { surfaces: [{ type: "terminal" }] } }`
+   * for a one-off terminal workspace.
    */
   createWorkspaceFromDef(def: WorkspaceDefInput): Promise<string>;
   /**
@@ -1099,13 +1106,6 @@ export interface PseudoWorkspaceInput {
   rowBody?: unknown;
   /** Called after the row is removed; register a reopen action or persist closed state. */
   onClose?: () => void;
-}
-
-// --- Workspace creation options ---
-
-export interface CreateWorkspaceOptions {
-  /** Environment variables to set on the workspace's terminal PTY */
-  env?: Record<string, string>;
 }
 
 // --- Workspace template shapes for createWorkspaceFromDef ---

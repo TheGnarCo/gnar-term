@@ -45,7 +45,7 @@ export const agenticOrchestratorManifest: ExtensionManifest = {
           type: "string",
           title: "Global Agents markdown path",
           description:
-            "Backing markdown file for the Global Agentic Dashboard pseudo-workspace. Leave blank to fall back to ~/.config/gnar-term/global-agents.md.",
+            "Backing markdown file for the Global Agentic Dashboard pseudo-workspace. Leave blank to fall back to ~/.gnar-term/global-agents.md.",
           default: "",
         },
       },

@@ -13,7 +13,7 @@ export const claudeSettingsManifest: ExtensionManifest = {
     "Interactive GUI for ~/.claude/settings.json. TitleBar button shows user-level settings overlay; auto-provisioned workspace dashboard shows project .claude/ settings with full editing support.",
   entry: "./index.ts",
   included: true,
-  permissions: [],
+  permissions: ["filesystem"],
   contributes: {},
 };
 

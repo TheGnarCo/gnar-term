@@ -12,7 +12,6 @@
    *     markdown path indicator.
    */
   import { getContext, onDestroy, onMount } from "svelte";
-  import { invoke } from "@tauri-apps/api/core";
   import { setDashboardHost } from "../../../lib/contexts/dashboard-host";
   import {
     registerPreviewSurface,
@@ -68,23 +67,25 @@ title: Active Agents
       .getSetting<string>("globalAgentsMarkdownPath")
       ?.trim();
     if (configured) return configured;
-    const home = await invoke<string>("get_home").catch(() => "");
-    const root = home ? `${home}/.config/gnar-term` : ".config/gnar-term";
+    const home = await api.invoke<string>("get_home").catch(() => "");
+    const root = home ? `${home}/.gnar-term` : ".gnar-term";
     return `${root}/global-agents.md`;
   }
 
   async function ensureMarkdownPath(): Promise<string> {
     const path = await resolveMarkdownPath();
-    const exists = await invoke<boolean>("file_exists", { path }).catch(
-      () => false,
-    );
+    const exists = await api
+      .invoke<boolean>("file_exists", { path })
+      .catch(() => false);
     if (!exists) {
       const dir = path.replace(/\/[^/]+$/, "");
-      await invoke("ensure_dir", { path: dir }).catch(() => {});
-      await invoke("write_file", {
-        path,
-        content: DEFAULT_TEMPLATE,
-      }).catch(() => {});
+      await api.invoke("ensure_dir", { path: dir }).catch(() => {});
+      await api
+        .invoke("write_file", {
+          path,
+          content: DEFAULT_TEMPLATE,
+        })
+        .catch(() => {});
     }
     return path;
   }
@@ -109,7 +110,7 @@ title: Active Agents
   onDestroy(() => {
     result?.dispose?.();
     if (result?.watchId && result.watchId > 0) {
-      invoke("unwatch_file", { watchId: result.watchId }).catch(() => {});
+      api.invoke("unwatch_file", { watchId: result.watchId }).catch(() => {});
     }
     unregisterPreviewSurface(surfaceId);
   });
@@ -174,7 +175,7 @@ title: Active Agents
     regenerating = true;
     regenerateError = "";
     try {
-      await invoke("write_file", {
+      await api.invoke("write_file", {
         path: markdownPathResolved,
         content: DEFAULT_TEMPLATE,
       });

@@ -274,13 +274,6 @@ export function createExtensionAPI(
         ? coreShowFormPrompt(title, fields, options)
         : coreShowFormPrompt(title, fields);
     },
-    createWorkspace(
-      name: string,
-      cwd: string,
-      options?: { env?: Record<string, string> },
-    ) {
-      pendingAction.set({ type: "create-workspace", name, cwd, options });
-    },
     createWorkspaceFromDef(def: WorkspaceDefInput): Promise<string> {
       return coreCreateWorkspaceFromDef(def as WorkspaceTemplate);
     },

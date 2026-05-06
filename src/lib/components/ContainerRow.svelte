@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
    * ContainerRow — shared root-row chrome for "container workspaces" in
-   * the Workspaces sidebar section (projects, agent orchestrators).
+   * the Workspaces sidebar section (Workspaces, agent orchestrators).
    *
    * The banner is **inert**: callers cannot register a click handler.
    * Interaction lives in the child rows inside the nested list (e.g. the
@@ -12,8 +12,9 @@
    *   - `parentColor` unset → root mode: grip + banner + nested list
    *     stretch together with the shared rail color.
    *   - `parentColor` set → nested-inside-another-container mode: banner
-   *     only, no outer grip, with the orchestrator/project color painting
-   *     the banner background and a small accent strip on the right.
+   *     only, no outer grip, with the orchestrator/Workspace color
+   *     painting the banner background and a small accent strip on the
+   *     right.
    */
   import { type Component } from "svelte";
   import { slide } from "svelte/transition";
@@ -29,7 +30,7 @@
   /**
    * When set, render the nested variant: banner only (no grip), painted
    * with `color` as background. Used when this container is nested
-   * inside another container (e.g. a dashboard under a project).
+   * inside another container (e.g. a dashboard under a Workspace).
    */
   export let parentColor: string | undefined = undefined;
   /**

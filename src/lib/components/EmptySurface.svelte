@@ -3,7 +3,7 @@
    * EmptySurface — shown in the terminal area when no workspace is open,
    * or when the current workspace's active pane has zero surfaces (the
    * user just closed the last one). Provides quick actions plus a
-   * launcher into existing projects and workspaces.
+   * launcher into existing Workspaces and Branches.
    *
    * Buttons are sourced from:
    *   - `workspaceActionStore` (core + extension non-sidebar actions
@@ -11,8 +11,8 @@
    *   - `commandStore` entries registered with the ids listed in
    *     `empty-surface-commands.ts` (e.g. workspaces:create-workspace)
    *
-   * The "Jump to existing" list pulls from `rootRowOrder` so projects +
-   * workspace rows render in the same order the sidebar shows them.
+   * The "Jump to existing" list pulls from `rootRowOrder` so Workspaces
+   * and Branches render in the same order the sidebar shows them.
    */
   import { get } from "svelte/store";
   import { theme } from "../stores/theme";
@@ -79,7 +79,7 @@
     ),
   ];
 
-  // --- Existing workspaces / projects / dashboards ---
+  // --- Existing Workspaces / Branches / dashboards ---
   //
   // When the current empty pane lives inside a workspace, clicking its
   // own entry should spawn a terminal in the pane rather than switch
@@ -100,10 +100,10 @@
     switchWorkspace(idx);
   }
 
-  // Build a "jump list" modeled after the sidebar rootRowOrder. Project
-  // rows render as a header (click = switch to that project's first
-  // workspace); child workspaces fan out below. Standalone workspaces
-  // render as leaf entries. Non-workspace/project rows (e.g. agent
+  // Build a "jump list" modeled after the sidebar rootRowOrder. Root
+  // Workspace rows render as a header (click = switch to that
+  // Workspace's first Branch); Branches fan out below. Standalone
+  // entries render as leaf rows. Non-Workspace rows (e.g. agent
   // dashboards) are rendered through their label resolver so they show
   // something, but lack an activation handler beyond switchWorkspace —
   // dashboards open as preview surfaces via their own row click, not
@@ -160,8 +160,8 @@
       }
     }
     // Fallback pass — any workspaces not yet rendered (e.g. tagged to
-    // a project whose root row isn't in the order). Keeps the launcher
-    // exhaustive rather than silently hiding entries.
+    // a Workspace whose root row isn't in the order). Keeps the
+    // launcher exhaustive rather than silently hiding entries.
     for (let i = 0; i < list.length; i++) {
       const ws = list[i]!;
       if (seen.has(ws.id)) continue;

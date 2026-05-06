@@ -12,8 +12,8 @@
    *
    * This block OWNS the drag pipeline for the root list. Renderers
    * inherit drag behavior — they do not spin up their own reorder
-   * logic at the root level. Nested pipelines (a project's own
-   * workspace list) are unchanged and still live inside
+   * logic at the root level. Nested pipelines (a Workspace's own
+   * Branch list) are unchanged and still live inside
    * WorkspaceListView.
    */
   import { derived, get } from "svelte/store";
@@ -81,7 +81,7 @@
   // render time (source workspace for workspace rows, renderer
   // component for other kinds). Rows whose referent is missing are
   // skipped — this tolerates stale persisted entries that outlived
-  // their workspace or project. Workspaces present in the store but
+  // their owning Workspace. Workspaces present in the store but
   // NOT in rootRowOrder are auto-appended at render time: this covers
   // first-run installs (empty persisted order), direct
   // `workspaces.set` in tests, and any path that skips the service
@@ -181,8 +181,9 @@
 
   // --- Unified drag pipeline for the root list ---
   //
-  // One createDragReorder owns reordering across workspace rows AND
-  // project rows. The dataAttr "root-row-idx" tags each rendered row
+  // One createDragReorder owns reordering across all root rows
+  // (Workspaces and pinned extension rows alike). The dataAttr
+  // "root-row-idx" tags each rendered row
   // with its index into $rootRowOrder (NOT the filtered renderedRows
   // list — drops must target the underlying store positions).
   let dragSourceIdx: number | null = null;
@@ -320,8 +321,8 @@
 
   // Source row metadata used for the DropGhost label/color so the
   // drop slot reads as the dragged row's own tile. Looks up the
-  // row's rendered metadata from renderedRows so workspaces use the
-  // theme accent / workspace name, and projects use the project's
+  // row's rendered metadata from renderedRows so Workspaces use the
+  // theme accent / Workspace name, and pinned extension rows use the
   // color + name via the registered railColor/label resolvers.
   $: sourceRow =
     dragActive && dragSourceIdx !== null ? $rootRowOrder[dragSourceIdx] : null;
@@ -387,7 +388,7 @@
   // --- Workspace row context menu (previously in WorkspaceListBlock's
   // showWorkspaceContextMenu; unchanged modulo re-scoping to rendered
   // root rows). ---
-  function runPromoteToProject(globalIdx: number) {
+  function runPromoteToWorkspace(globalIdx: number) {
     onSwitchWorkspace(globalIdx);
     const cmd = get(commandStore).find(
       (c) => c.id === "promote-child-workspace",
@@ -414,7 +415,7 @@
         onSwitchWorkspace(globalIdx);
         onNewSurface();
       },
-      onPromote: () => runPromoteToProject(globalIdx),
+      onPromote: () => runPromoteToWorkspace(globalIdx),
       onToggleLock: () => toggleWorkspaceLock(ws.id),
       onClose: () => void confirmAndCloseWorkspace(ws, globalIdx),
     });
@@ -427,7 +428,7 @@
      moved up into Sidebar's top row so it aligns with the
      other title-row buttons. -->
 
-<!-- Root rows: workspaces and whole project blocks interleaved per
+<!-- Root rows: Workspaces and pinned extension blocks interleaved per
      $rootRowOrder. Each row is shelled with a core-drawn DragGrip
      (left) + content (right). Non-source rows during a drag get a
      strong overlay with the row's own color + name centered. -->

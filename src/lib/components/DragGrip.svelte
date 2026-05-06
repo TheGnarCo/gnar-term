@@ -31,7 +31,7 @@
   /**
    * When true, the dot pattern is masked with a left-to-right
    * gradient so the rail's right edge softens into the row content.
-   * Default false — workspace rails opt in; project rails stay
+   * Default false — Branch rails opt in; root Workspace rails stay
    * unfaded so the pattern runs the full rail height cleanly.
    */
   export let fadeRight: boolean = false;
@@ -103,8 +103,8 @@
     {@const fadeMask =
       "linear-gradient(to right, rgba(0,0,0,1) 0%, rgba(0,0,0,0.5) 60%, rgba(0,0,0,0) 100%)"}
     <!-- Frit dot pattern. Optional L→R fade (fadeRight prop) so the
-         rail's right edge softens into the row content. Workspaces
-         opt in; projects keep the pattern running clean. -->
+         rail's right edge softens into the row content. Branches opt
+         in; root Workspaces keep the pattern running clean. -->
     <div
       style="
         position: absolute;

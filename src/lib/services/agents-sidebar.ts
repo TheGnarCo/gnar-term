@@ -10,11 +10,11 @@ import type { Workspace } from "../types";
 import type { WorkspaceRecord } from "../config";
 
 export interface AgentRow extends DetectedAgent {
-  /** Display name of the child workspace (Branch) the agent lives in. */
+  /** Display name of the Branch the agent lives in. */
   ctxName: string;
-  /** Display name of the parent workspace (Project). */
-  projectName: string;
-  /** Index of the child workspace in the `workspaces` store, or -1 if not found. */
+  /** Display name of the Workspace this Branch belongs to. */
+  workspaceName: string;
+  /** Index of the Branch in the `workspaces` store, or -1 if not found. */
   wsIdx: number;
 }
 
@@ -31,16 +31,14 @@ export function buildAgentRows(
   return agents
     .filter((a) => a.status !== "closed")
     .map((a) => {
-      const ctx = branchedWsList.find((w) => w.id === a.workspaceId);
-      const parentId = ctx?.parentWorkspaceId ?? null;
-      const project = parentId
-        ? workspaces.find((w) => w.id === parentId)
-        : null;
+      const branch = branchedWsList.find((w) => w.id === a.workspaceId);
+      const rootId = branch?.parentWorkspaceId ?? null;
+      const root = rootId ? workspaces.find((w) => w.id === rootId) : null;
       const idx = branchedWsList.findIndex((w) => w.id === a.workspaceId);
       return {
         ...a,
-        ctxName: ctx?.name ?? "Unknown Branch",
-        projectName: project?.name ?? "Unknown Project",
+        ctxName: branch?.name ?? "Unknown Branch",
+        workspaceName: root?.name ?? "Unknown Workspace",
         wsIdx: idx,
       };
     });

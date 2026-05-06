@@ -24,7 +24,7 @@ function makeAgent(overrides: Partial<DetectedAgent> = {}): DetectedAgent {
   };
 }
 
-function makeChildWorkspace(
+function makeBranch(
   id: string,
   name: string,
   parentWorkspaceId?: string,
@@ -67,28 +67,28 @@ describe("buildAgentRows", () => {
     expect(rows.map((r) => r.agentId)).toEqual(["a1", "a3"]);
   });
 
-  it("correctly joins agent data with child workspace name", () => {
-    const nws = makeChildWorkspace("nws-1", "my-feature");
+  it("correctly joins agent data with the Branch name", () => {
+    const branch = makeBranch("nws-1", "my-feature");
     const agent = makeAgent({ workspaceId: "nws-1" });
-    const rows = buildAgentRows([agent], [nws], []);
+    const rows = buildAgentRows([agent], [branch], []);
     expect(rows).toHaveLength(1);
     expect(rows[0].ctxName).toBe("my-feature");
   });
 
-  it("correctly joins with parent workspace / project name", () => {
-    const nws = makeChildWorkspace("nws-1", "feature-branch", "ws-parent");
-    const parent = makeWorkspace("ws-parent", "MyProject");
+  it("correctly joins with the owning Workspace name", () => {
+    const branch = makeBranch("nws-1", "feature-branch", "ws-root");
+    const root = makeWorkspace("ws-root", "MyApp");
     const agent = makeAgent({ workspaceId: "nws-1" });
-    const rows = buildAgentRows([agent], [nws], [parent]);
-    expect(rows[0].projectName).toBe("MyProject");
+    const rows = buildAgentRows([agent], [branch], [root]);
+    expect(rows[0].workspaceName).toBe("MyApp");
   });
 
-  it("returns wsIdx = -1 when the workspace is not found", () => {
+  it("returns wsIdx = -1 when the Branch is not found", () => {
     const agent = makeAgent({ workspaceId: "nws-missing" });
     const rows = buildAgentRows([agent], [], []);
     expect(rows).toHaveLength(1);
     expect(rows[0].wsIdx).toBe(-1);
     expect(rows[0].ctxName).toBe("Unknown Branch");
-    expect(rows[0].projectName).toBe("Unknown Project");
+    expect(rows[0].workspaceName).toBe("Unknown Workspace");
   });
 });

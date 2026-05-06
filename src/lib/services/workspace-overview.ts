@@ -2,99 +2,94 @@
  * Workspace Overview — pure data transformation for the global
  * Workspaces dashboard.
  *
- * `buildGroups` maps primary workspaces + child workspaces into a
- * grouped display structure. Dashboard/pseudo-workspace child
- * workspaces are filtered out so the dashboard doesn't list itself or
- * Settings tabs.
+ * `buildOverviewSections` maps the unified workspace store into a
+ * sectioned display structure: each Workspace and its Branches.
+ * Dashboard rows are filtered out so the dashboard doesn't list itself
+ * or Settings tabs.
  */
 import type { Workspace } from "../types";
 import { isBranchedWorkspace } from "../types";
 
-export interface WorkspaceGroup {
-  /** The primary workspace, or null for standalone child workspaces. */
-  workspace: Workspace | null;
-  /** Real (non-dashboard) child workspaces belonging to this group. */
-  rows: Workspace[];
-}
-
 /**
- * Build a grouped display structure for the Workspace Overview dashboard.
+ * Build a sectioned display structure for the Workspace Overview dashboard.
  *
- * - Dashboard workspaces are always excluded (they are managed UI, not
- *   user-visible workspace rows).
- * - Primary workspaces are identified by the presence of `path` and
- *   absence of `parentWorkspaceId`. Each gets its own group, in array
- *   order from `allWorkspaces`.
- * - Child workspaces (`parentWorkspaceId` set) that reference a known
- *   primary are placed in that primary's group.
- * - Workspaces that fit neither category — standalone children with no
- *   path/parent, or orphaned children whose parent is unknown — collect
- *   at the end under a group with a `null` workspace.
- * - Empty primary groups (primary has no real child workspaces) are
- *   included so the user can still see the primary workspace exists.
+ * - Dashboard rows are always excluded (managed UI, not user-listable).
+ * - Root Workspaces are identified by `path` set and `parentWorkspaceId`
+ *   absent. Each Workspace gets its own section, in input order.
+ * - Branches (`parentWorkspaceId` set) referencing a known Workspace
+ *   are placed under that Workspace's section.
+ * - Rows that fit neither — orphaned Branches whose owning Workspace is
+ *   missing, or bare rows lacking both path and parentWorkspaceId —
+ *   collect at the end under a section with `workspace: null`.
+ * - Empty Workspace sections are kept so the user can still see the
+ *   Workspace exists.
  */
-export function buildGroups(allWorkspaces: Workspace[]): WorkspaceGroup[] {
-  // Drop dashboards entirely — they are not user-listable workspaces.
+export function buildOverviewSections(
+  allWorkspaces: Workspace[],
+): Array<{ workspace: Workspace | null; branches: Workspace[] }> {
   const visible = allWorkspaces.filter((w) => !w.isDashboard);
 
-  // Primary: no parentWorkspaceId AND has a path (Workspace-level fields present).
-  const primaries = visible.filter((w) => !w.parentWorkspaceId && !!w.path);
+  const roots = visible.filter((w) => !w.parentWorkspaceId && !!w.path);
 
-  // Map primaryId → WorkspaceGroup for quick lookup.
-  const primaryMap = new Map<string, WorkspaceGroup>();
-  const groups: WorkspaceGroup[] = [];
+  const sectionByRootId = new Map<
+    string,
+    { workspace: Workspace | null; branches: Workspace[] }
+  >();
+  const sections: Array<{
+    workspace: Workspace | null;
+    branches: Workspace[];
+  }> = [];
 
-  for (const primary of primaries) {
-    const group: WorkspaceGroup = { workspace: primary, rows: [] };
-    primaryMap.set(primary.id, group);
-    groups.push(group);
+  for (const root of roots) {
+    const section = { workspace: root as Workspace | null, branches: [] };
+    sectionByRootId.set(root.id, section);
+    sections.push(section);
   }
 
-  // Standalone collector at the end (children w/o known parent + bare
-  // workspaces lacking both path and parentWorkspaceId).
-  const standalones: WorkspaceGroup = { workspace: null, rows: [] };
-  const primarySet = new Set(primaries.map((p) => p.id));
+  const orphans: { workspace: Workspace | null; branches: Workspace[] } = {
+    workspace: null,
+    branches: [],
+  };
+  const rootSet = new Set(roots.map((r) => r.id));
 
   for (const ws of visible) {
-    if (primarySet.has(ws.id)) continue; // already a header
-    const parentWorkspaceId = ws.parentWorkspaceId;
-    if (parentWorkspaceId) {
-      const group = primaryMap.get(parentWorkspaceId);
-      if (group) {
-        group.rows.push(ws);
+    if (rootSet.has(ws.id)) continue;
+    const parentId = ws.parentWorkspaceId;
+    if (parentId) {
+      const section = sectionByRootId.get(parentId);
+      if (section) {
+        section.branches.push(ws);
         continue;
       }
     }
-    // Either parentWorkspaceId points to a missing primary, or no
-    // parentWorkspaceId AND no path — both end up in the standalone bucket.
-    standalones.rows.push(ws);
+    orphans.branches.push(ws);
   }
 
-  if (standalones.rows.length > 0) {
-    groups.push(standalones);
+  if (orphans.branches.length > 0) {
+    sections.push(orphans);
   }
 
-  return groups;
+  return sections;
 }
 
 /**
- * Resolve the filesystem path to use for git-dirty tracking for a
- * given child workspace.
+ * Resolve the filesystem path used for git-dirty tracking for a
+ * given Branch row.
  *
- * - Worktree-backed workspaces: `worktreePath` (the checked-out tree).
- * - Child workspace with a known parent primary: falls back to
- *   `parentPrimary.path` if no worktreePath.
+ * - Worktree-backed Branches: `worktreePath` (the checked-out tree).
+ * - Branch with a known owning Workspace: falls back to that
+ *   Workspace's `path` if no worktreePath.
  * - Standalone with no path info: returns null — no indicator rendered.
  */
 export function resolveDirtyPath(
   ws: Workspace,
-  parentPrimary: Workspace | null,
+  rootWorkspace: Workspace | null,
 ): string | null {
   if (isBranchedWorkspace(ws) && ws.worktreePath) {
     return ws.worktreePath;
   }
-  if (parentPrimary?.path) {
-    return parentPrimary.path;
+  if (rootWorkspace?.path) {
+    return rootWorkspace.path;
   }
   return null;
 }

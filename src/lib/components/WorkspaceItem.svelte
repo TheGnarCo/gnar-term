@@ -29,7 +29,7 @@
   export let onClose: () => void;
   export let onRename: (name: string) => void;
   export let onContextMenu: (x: number, y: number) => void;
-  /** Project accent color — when set, overrides the default border-left styling. */
+  /** Workspace accent color — when set, overrides the default border-left styling. */
   export let accentColor: string | undefined = undefined;
   /**
    * Optional hint that this workspace belongs to a dashboard. Adds a small
@@ -44,8 +44,8 @@
    * notification). Used when the workspace is rendered inside a
    * container that aggregates status itself — e.g. nested under an
    * AgentDashboardRow whose banner already rolls up detected-agent
-   * activity. Projects leave this false so their child workspaces
-   * keep showing their own status.
+   * activity. Root Workspaces leave this false so their Branches keep
+   * showing their own status.
    */
   export let hideStatusBadges: boolean = false;
   /** When true, this workspace is rendered inside a container workspace and should always show the close button. */

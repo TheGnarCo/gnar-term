@@ -1,13 +1,13 @@
 <script lang="ts">
   /**
    * PathStatusLine — shared git-status subtitle row used inside
-   * container banners (projects + agent dashboards). Renders two lines:
+   * container banners (Workspaces + agent dashboards). Renders two lines:
    *
    *   1. the last two path segments (e.g. `Code/my-repo`)
    *   2. git branch when the path is a git repo
    *
    * Generic over the target — callers pass an object with `{ id, path,
-   * isGit }`. The id drives caching so switching between projects /
+   * isGit }`. The id drives caching so switching between Workspaces /
    * dashboards reseeds the poll loop.
    *
    * The uncommitted-changes badge previously lived here; it moved to

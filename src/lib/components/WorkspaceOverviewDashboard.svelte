@@ -1,14 +1,14 @@
 <script lang="ts">
   /**
-   * WorkspaceOverviewDashboard — global dashboard listing all parent
-   * workspaces with their branched child workspaces indented beneath.
+   * WorkspaceOverviewDashboard — global dashboard listing every
+   * Workspace with its Branches indented beneath.
    *
    * Each row shows:
-   *   - Workspace name
+   *   - Branch name
    *   - Git-dirty indicator (amber dot) when the working tree has changes
    *   - Agent status chips for any running/waiting agents
    *
-   * Clicking a row activates that child workspace.
+   * Clicking a row activates that Branch.
    */
   import {
     workspaces,
@@ -18,14 +18,13 @@
   import { theme } from "../stores/theme";
   import { switchWorkspace } from "../services/workspace-runtime-service";
   import {
-    buildGroups,
+    buildOverviewSections,
     resolveDirtyPath,
   } from "../services/workspace-overview";
   import WorkspaceOverviewRow from "./WorkspaceOverviewRow.svelte";
   import type { Workspace } from "../types";
 
-  // Reactive grouped structure — recomputes when unified workspaces store changes.
-  $: groups = buildGroups($workspaces);
+  $: sections = buildOverviewSections($workspaces);
 
   // Precompute lookup: workspace.id → flat index in $workspaces (for switching).
   $: idxById = new Map<string, number>($workspaces.map((nw, i) => [nw.id, i]));
@@ -74,9 +73,9 @@
     </p>
   </div>
 
-  <!-- Groups -->
+  <!-- Sections -->
   <div style="flex: 1; overflow: auto; padding: 8px 0;">
-    {#if groups.length === 0}
+    {#if sections.length === 0}
       <div
         data-workspace-overview-empty
         style="
@@ -88,10 +87,11 @@
       </div>
     {/if}
 
-    {#each groups as group (group.workspace?.id ?? "__standalone__")}
-      <!-- Section header: workspace name or "Standalone" fallback -->
+    {#each sections as section (section.workspace?.id ?? "__standalone__")}
+      <!-- Section header: Workspace name or "Standalone" fallback -->
       <div
-        data-workspace-overview-workspace={group.workspace?.id ?? "standalone"}
+        data-workspace-overview-workspace={section.workspace?.id ??
+          "standalone"}
         style="
           padding: 10px 20px 4px;
           font-size: 11px; font-weight: 700;
@@ -100,10 +100,10 @@
           color: {$theme.fgMuted};
         "
       >
-        {group.workspace?.name ?? "Standalone"}
+        {section.workspace?.name ?? "Standalone"}
       </div>
 
-      {#if group.rows.length === 0}
+      {#if section.branches.length === 0}
         <div
           style="
             padding: 4px 20px 8px;
@@ -115,11 +115,11 @@
         </div>
       {/if}
 
-      {#each group.rows as ws (ws.id)}
+      {#each section.branches as ws (ws.id)}
         <WorkspaceOverviewRow
           {ws}
           active={isActive(ws)}
-          dirtyPath={resolveDirtyPath(ws, group.workspace)}
+          dirtyPath={resolveDirtyPath(ws, section.workspace)}
           onClick={handleRowClick}
         />
       {/each}

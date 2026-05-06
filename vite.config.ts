@@ -11,6 +11,11 @@ export default defineConfig({
     globals: true,
     setupFiles: ["src/test-setup.ts"],
     onConsoleLog: (msg) => !msg.includes("HTMLCanvasElement"),
+    // Default 5s is exceeded by dynamic `await import(...)` calls under
+    // full-suite parallel load (transform/import phase totals ~60s across
+    // 165 files). The tests pass in isolation; bumping the cap keeps them
+    // passing in the loaded run without masking real assertion failures.
+    testTimeout: 15000,
     coverage: {
       provider: "v8",
       include: ["src/lib/**/*.ts", "src/extensions/**/*.ts"],

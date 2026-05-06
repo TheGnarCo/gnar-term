@@ -81,9 +81,9 @@ describe("EmptySurface renders and is wired up", () => {
 
   it("App.svelte imports and renders EmptySurface when no workspace is active", () => {
     expect(APP).toMatch(/import EmptySurface from/);
-    // Stage 7 added a pseudo-workspace gate; the orphan-dashboard fix
-    // added an `activeWorkspaceIdx < 0` clause so the empty surface
-    // also renders when every restored workspace is a dashboard.
+    // The visibility gate includes a pseudo-workspace exclusion clause;
+    // the orphan-dashboard fix added an `activeWorkspaceIdx < 0` clause
+    // so the empty surface also renders when every restored workspace is a dashboard.
     expect(APP).toMatch(/\$workspaces\.length\s*===\s*0/);
     expect(APP).toMatch(/\$activeWorkspaceIdx\s*<\s*0/);
     expect(APP).toMatch(/<EmptySurface\s*\/>/);

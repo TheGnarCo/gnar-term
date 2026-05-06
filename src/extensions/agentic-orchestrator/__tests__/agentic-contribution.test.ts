@@ -1,5 +1,5 @@
 /**
- * Stage 7: verifies the Agentic Dashboard contribution is registered
+ * Verifies the Agentic Dashboard contribution is registered
  * via the DashboardContributionRegistry when the extension activates,
  * tear-down on deactivate, and that its `create` hook materializes a
  * dashboard workspace with the expected metadata shape.

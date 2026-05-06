@@ -1,7 +1,7 @@
 /**
  * Tests for the pseudo-workspace registry. Covers register / unregister
- * / position-bucketing — the surface sidebar rendering code (Stage 6+)
- * and the agentic extension (Stage 7) will consume.
+ * / position-bucketing — consumed by the surface sidebar rendering code
+ * and the agentic extension.
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { get } from "svelte/store";

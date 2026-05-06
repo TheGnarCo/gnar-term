@@ -180,8 +180,8 @@ describe("WorkspaceView renders all workspaces (not just active)", () => {
     const source = fs.readFileSync("src/App.svelte", "utf-8");
     // Must iterate ALL workspaces and show/hide with CSS
     expect(source).toContain("{#each $workspaces as ws, i (ws.id)}");
-    // Stage 7 extends the visibility gate with the pseudo-workspace
-    // mutual-exclusion clause; match the base `i === $activeWorkspaceIdx`
+    // The visibility gate includes a pseudo-workspace mutual-exclusion
+    // clause; match the base `i === $activeWorkspaceIdx`
     // without locking down the rest of the expression.
     expect(source).toMatch(/visible=\{i === \$activeWorkspaceIdx[^}]*\}/);
   });

@@ -1,7 +1,6 @@
 /**
  * Workspace Service — CRUD + flow functions for the core
- * Workspace primitive. Relocated from the project-scope extension
- * in Stage 5; see ADR 004.
+ * Workspace primitive; see ADR 004.
  *
  * Components and core commands call into this module rather than
  * touching the `workspacesStore` directly so state transitions
@@ -47,11 +46,11 @@ function emitStateChanged(metadata: Record<string, unknown> = {}): void {
 }
 
 export function addWorkspace(workspace: WorkspaceRecord): void {
-  // Stage 10 unification: every entry in the unified store is a
-  // `Workspace` so even a record-shaped row needs a paneLayout. When the
-  // caller hasn't materialized a tab surface yet, mint a placeholder
-  // empty pane — `createWorkspaceFromDef` will overwrite paneLayout /
-  // activePaneId when the matching runtime workspace is created.
+  // Every entry in the unified store is a `Workspace`, so even a
+  // record-shaped row needs a paneLayout. When the caller hasn't
+  // materialized a tab surface yet, mint a placeholder empty pane —
+  // `createWorkspaceFromDef` will overwrite paneLayout / activePaneId
+  // when the matching runtime workspace is created.
   const ensured: WorkspaceRecord = {
     ...workspace,
     paneLayout: workspace.paneLayout ?? {
@@ -607,8 +606,7 @@ export function openWorkspaceDashboard(workspace: WorkspaceRecord): boolean {
 
 /**
  * Activate a Workspace by id: land on its own Root tab surface — the
- * runtime Workspace whose id matches the Workspace's record id (ADR-004
- * Stage 10).
+ * runtime Workspace whose id matches the Workspace's record id (ADR-004).
  *
  * Row click and ⌘1-9 both flow through here. We deliberately ignore
  * `lastActiveBranchedWorkspaceId` — that field tracks the most-recent

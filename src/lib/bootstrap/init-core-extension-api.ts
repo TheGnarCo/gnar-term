@@ -1,12 +1,11 @@
 /**
  * Registers the shared `"core"` ExtensionAPI with the extension
- * loader. Stage 5 of the Workspaces unification relocated subsystems
- * (Workspaces, preview pipeline, etc.) out of the
- * extension layer and into core. Their UI contributions
- * still flow through the extension-facing registries (root-row
- * renderers, markdown components, etc.) so a single code path handles
- * mounting regardless of origin — but they stamp their origin as
- * `"core"` rather than a per-subsystem id.
+ * loader. Core subsystems (Workspaces, preview pipeline, etc.) live
+ * outside the extension layer, but their UI contributions still flow
+ * through the extension-facing registries (root-row renderers,
+ * markdown components, etc.) so a single code path handles mounting
+ * regardless of origin — they stamp their origin as `"core"` rather
+ * than a per-subsystem id.
  *
  * `ExtensionWrapper` looks up the source's `ExtensionAPI` via
  * `getExtensionApiById` so children inside the wrapper (e.g.

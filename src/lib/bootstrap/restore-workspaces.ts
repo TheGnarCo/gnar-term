@@ -174,11 +174,11 @@ export async function restoreWorkspaces(
   // existing path.
   // ---------------------------------------------------------------------------
   if (Array.isArray(state.workspaces) && state.workspaces.length > 0) {
-    // Stage 10: WorkspaceRecord defs are also hydrated as runtime
-    // workspaces — the Workspace's tab surface lives at the same id as
-    // its Record. Branches and Dashboards continue to ride alongside.
-    // The Record store still loads from the same defs (in
-    // `loadWorkspaces()`) for sidebar metadata.
+    // WorkspaceRecord defs are also hydrated as runtime workspaces —
+    // the Workspace's tab surface lives at the same id as its Record.
+    // Branches and Dashboards continue to ride alongside. The Record
+    // store still loads from the same defs (in `loadWorkspaces()`) for
+    // sidebar metadata.
     const runtimeDefs = state.workspaces as WorkspaceDef[];
     const wsList = runtimeDefs.map(workspaceDefToWorkspace);
     seedWorkspaces(wsList, state.activeWorkspaceId ?? null);

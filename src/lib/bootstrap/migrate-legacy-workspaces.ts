@@ -23,10 +23,10 @@ import type { AppState, WorkspaceDef, LayoutNode } from "../config";
 import type { WorkspaceRecord } from "../stores/workspace";
 
 /**
- * Legacy WorkspaceRecord shape (pre-Stage-10): Records carried a
+ * Legacy WorkspaceRecord shape: Records carried a
  * `primaryBranchedWorkspaceId` pointing at the runtime BranchedWorkspace
- * that owned the Record's tab surface. Stage 10 dropped this field —
- * the Record's id and the runtime Root id are unified — but the
+ * that owned the Record's tab surface. That field has been dropped —
+ * the Record's id and the runtime Root id are now unified — but the
  * migration still needs to read the legacy persisted shape to fold
  * absorbed primaries into the merged Workspace.
  */

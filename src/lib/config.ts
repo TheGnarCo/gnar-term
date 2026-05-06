@@ -251,9 +251,8 @@ export interface AppState {
   // The WorkspaceRecord list — the path-rooted container records that
   // own Workspace-level fields (path, color, isGit) and track which
   // Branches belong to them. Persisted under the legacy keys
-  // `parentWorkspaces` / `activeParentWorkspaceId` until the runtime
-  // type unification renames the storage; migrated into AppState in
-  // Stage 8 from the legacy per-extension state file
+  // `parentWorkspaces` / `activeParentWorkspaceId`; migrated from the
+  // legacy per-extension state file
   // `~/.config/gnar-term/extensions/workspace-groups/state.json`.
   parentWorkspaces?: WorkspaceRecord[];
   activeParentWorkspaceId?: string;

@@ -114,9 +114,9 @@
   // happening in a child Workspace.
   $: filterIds = workspace ? new Set([workspace.id]) : new Set<string>();
 
-  // The Root runtime Workspace shares its id with the Record (ADR-004
-  // Stage 10). It drives the container row's status dot and renders when
-  // the row is clicked.
+  // The Root runtime Workspace shares its id with the Record (ADR-004).
+  // It drives the container row's status dot and renders when the row
+  // is clicked.
   $: primaryWs = workspace
     ? $workspaces.find((w) => w.id === workspace!.id)
     : undefined;

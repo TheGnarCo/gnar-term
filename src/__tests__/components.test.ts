@@ -1601,7 +1601,7 @@ describe("Sidebar", () => {
     resetSidebarSections();
     resetWorkspaceActions();
     cleanup();
-    // Stage 10: workspace rows render through the registered "workspace"
+    // Workspace rows render through the registered "workspace"
     // root-row renderer (mounted via ExtensionWrapper). Register the core
     // extension API + the renderer so workspace names appear in tests.
     initCoreExtensionAPI();

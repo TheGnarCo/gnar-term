@@ -339,8 +339,8 @@ export function serializeWorkspace(ws: Workspace): WorkspaceDef {
  * write time, and `createWorkspaceFromDef` overwrites it once the
  * runtime workspace materializes.
  *
- * Stage 10: this is just a typed view over `Workspace` rows in the
- * unified `_workspaces` store — there is no separate "Record" store.
+ * This is a typed view over `Workspace` rows in the unified
+ * `_workspaces` store — there is no separate "Record" store.
  */
 export type WorkspaceRecord = Omit<Workspace, "paneLayout" | "activePaneId"> & {
   path: string;

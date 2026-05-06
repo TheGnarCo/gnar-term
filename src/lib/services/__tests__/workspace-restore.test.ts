@@ -103,7 +103,7 @@ describe("S2 — last-active branch restore", () => {
     const ws = makeWorkspace("g1", { branchedWorkspaceIds: ["nw-a", "nw-b"] });
     addWorkspace(ws);
 
-    // Append the children alongside g1 (don't clobber — Stage 10 unified store
+    // Append the children alongside g1 (don't clobber — the unified store
     // keeps both workspace and branch rows in `workspaces`).
     workspaces.update((cur) => [
       ...cur,

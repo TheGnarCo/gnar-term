@@ -78,7 +78,7 @@
   // get a bot marker so they're visually distinguishable from plain
   // child workspaces or worktrees. `metadata.spawnedBy` is the §3.2
   // marker; `parentOrchestratorId` is the pre-migration field we still
-  // honor until Stage 8 rewrites legacy user data.
+  // honor for legacy user data that has not yet been migrated.
   // Dashboards are singleton surfaces bound to their workspace;
   // suppress close / rename / right-click affordances so the user
   // interacts with them only via the workspace's tile.

@@ -59,9 +59,9 @@ import { makePersistScheduler } from "../utils/persist-scheduler";
 const PERSIST_DELAY = 2000;
 
 /**
- * Stage 10 single-writer persist: the unified `_workspaces` runtime
- * store is canonical for every Workspace, Branch, and Dashboard. We
- * serialize the entire list verbatim — root entries already carry
+ * Single-writer persist: the unified `_workspaces` runtime store is
+ * canonical for every Workspace, Branch, and Dashboard. We serialize
+ * the entire list verbatim — root entries already carry
  * Workspace-level fields (path, color, isGit, createdAt, lock,
  * dashboard ref) and child entries carry their structural fields.
  *
@@ -282,10 +282,10 @@ export async function createWorkspaceFromDef(
     ws.branchedWorkspaceIds = [];
   }
 
-  // Stage 10 unified store: a runtime workspace whose id matches an
-  // existing root entry IS the Workspace's own Root tab surface — merge
-  // the runtime fields onto the existing record-shaped entry rather
-  // than appending a duplicate row. Otherwise append as a new entry.
+  // A runtime workspace whose id matches an existing root entry IS the
+  // Workspace's own Root tab surface — merge the runtime fields onto
+  // the existing record-shaped entry rather than appending a duplicate
+  // row. Otherwise append as a new entry.
   const isWorkspaceOwnRoot = getWorkspace(ws.id) !== undefined;
   if (isWorkspaceOwnRoot) {
     workspaces.update((list) =>

@@ -104,8 +104,8 @@ describe("Extension barrier enforcement", () => {
       // GlobalAgenticDashboardBody is the Global Agentic Dashboard
       // pseudo-workspace's body; it installs a DashboardHostContext
       // (global scope) and drives the same markdown-preview pipeline
-      // core uses for real dashboards. Stage 7 introduced this piercing
-      // when the pseudo-workspace replaced the orchestrator root row.
+      // core uses for real dashboards. This piercing exists because
+      // the pseudo-workspace replaced the orchestrator root row.
       "agentic-orchestrator/components/GlobalAgenticDashboardBody.svelte": [
         "../../../lib/contexts/dashboard-host",
         "../../../lib/services/preview-surface-registry",

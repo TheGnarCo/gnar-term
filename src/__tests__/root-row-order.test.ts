@@ -131,7 +131,7 @@ describe("bootstrapRootRowOrder", () => {
     expect(get(rootRowOrder)).toEqual([{ kind: "workspace", id: "p1" }]);
   });
 
-  it("drops legacy 'child-workspace' entries on reload (Stage 10 cleanup)", () => {
+  it("drops legacy 'child-workspace' entries on reload", () => {
     mockState = {
       rootRowOrder: [
         { kind: "workspace", id: "p1" },

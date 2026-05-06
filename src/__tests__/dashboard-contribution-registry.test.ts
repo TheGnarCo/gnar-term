@@ -2,7 +2,7 @@
  * Tests for the dashboard-contribution registry. Covers register /
  * unregister / cap enforcement / availability gating — the surface
  * `getDashboardContributionsForWorkspace` and `canAddContributionToWorkspace`
- * expose to Stage 5+ consumers.
+ * expose to callers.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { get } from "svelte/store";

@@ -5,8 +5,8 @@
  * agent-list, task-spawner, issues, agent-status-row, columns).
  *
  * Passive detection lives in core (src/lib/services/agent-detection-service.ts);
- * this extension consumes agents via `api.agents`. Stage 7 collapsed the
- * previous AgentOrchestrator entity into a dashboard contribution — no
+ * this extension consumes agents via `api.agents`. The previous
+ * AgentOrchestrator entity was collapsed into a dashboard contribution — no
  * standalone root-level orchestrator row, no orchestrator CRUD. Widgets
  * pull their scope from the enclosing DashboardHostContext (spec §5.3);
  * this extension provides two such hosts:

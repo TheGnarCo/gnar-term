@@ -965,7 +965,7 @@ export interface WorkspaceActionInfo {
 
 // --- Dashboard contributions / pseudo-workspaces ---
 //
-// Stage 4 surface. Extensions register a DashboardContributionInput or
+// Extensions register a DashboardContributionInput or
 // PseudoWorkspaceInput via the corresponding ExtensionAPI method; core
 // attaches `source` and stores the full record in the registry.
 

@@ -1,8 +1,7 @@
 /**
- * Workspaces bootstrap — core's counterpart to the deleted
- * project-scope extension (Stage 5). Registers the commands, workspace
- * action, root-row renderer, overlay, and Dashboard contribution that
- * let users create and manage Workspaces.
+ * Workspaces bootstrap — registers the commands, workspace action,
+ * root-row renderer, overlay, and Dashboard contribution that let
+ * users create and manage Workspaces.
  *
  * Called after the core event bus and workspaces store are live, and
  * after included extensions register (so registration order matches
@@ -83,13 +82,12 @@ export async function applyRepoDef(
 }
 
 /**
- * Stage 5 moved Workspaces out of the extension layer and into core.
- * Registry contributions (commands,
- * workspace actions, root-row renderers, dashboard contributions) stamp
- * their origin under the shared `"core"` source so extensions that
- * unregister themselves by source can't sweep core contributions, and
- * so `ExtensionWrapper` can look up a single shared `"core"` API when
- * mounting core-owned components.
+ * Registry contributions (commands, workspace actions, root-row
+ * renderers, dashboard contributions) stamp their origin under the
+ * shared `"core"` source so extensions that unregister themselves by
+ * source can't sweep core contributions, and so `ExtensionWrapper` can
+ * look up a single shared `"core"` API when mounting core-owned
+ * components.
  */
 const SOURCE = "core";
 
@@ -203,10 +201,10 @@ async function createWorkspaceFlow(prefill?: {
     );
   }
 
-  // ADR-004 Stage 10: materialize the Root runtime Workspace whose id
-  // matches the WorkspaceRecord, so the sidebar row's tab surface
-  // exists immediately. No `rootWorkspaceId` — the Root IS the
-  // Workspace, not a Branch of itself.
+  // ADR-004: materialize the Root runtime Workspace whose id matches
+  // the WorkspaceRecord, so the sidebar row's tab surface exists
+  // immediately. No `rootWorkspaceId` — the Root IS the Workspace,
+  // not a Branch of itself.
   try {
     const initialDef: WorkspaceTemplate = {
       id,

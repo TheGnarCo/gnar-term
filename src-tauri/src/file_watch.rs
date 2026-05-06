@@ -90,17 +90,24 @@ pub(crate) async fn watch_file(
     Ok(watch_id)
 }
 
+/// Shared cancel for watchers started by either `watch_file` or
+/// `watch_claude_file` — they only differ in the validator and event
+/// name, so cancellation is identical.
+fn cancel_watch(state: &AppState, watch_id: u32) -> Result<(), String> {
+    let mut flags = state.watch_flags.lock().map_err(|e| e.to_string())?;
+    if let Some(flag) = flags.remove(&watch_id) {
+        flag.store(true, Ordering::Relaxed);
+    }
+    Ok(())
+}
+
 /// Stop watching a file
 #[tauri::command]
 pub(crate) async fn unwatch_file(
     state: tauri::State<'_, AppState>,
     watch_id: u32,
 ) -> Result<(), String> {
-    let mut flags = state.watch_flags.lock().map_err(|e| e.to_string())?;
-    if let Some(flag) = flags.remove(&watch_id) {
-        flag.store(true, Ordering::Relaxed);
-    }
-    Ok(())
+    cancel_watch(&state, watch_id)
 }
 
 /// Watch a Claude settings file for changes and emit `claude-file-changed`
@@ -142,11 +149,7 @@ pub(crate) async fn unwatch_claude_file(
     state: tauri::State<'_, AppState>,
     watch_id: u32,
 ) -> Result<(), String> {
-    let mut flags = state.watch_flags.lock().map_err(|e| e.to_string())?;
-    if let Some(flag) = flags.remove(&watch_id) {
-        flag.store(true, Ordering::Relaxed);
-    }
-    Ok(())
+    cancel_watch(&state, watch_id)
 }
 
 #[cfg(test)]

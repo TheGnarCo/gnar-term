@@ -1,7 +1,6 @@
-use crate::git_helpers::validate_git_ref;
+use crate::git_helpers::{run_git, validate_git_ref, validate_repo};
 use serde::Serialize;
 use std::path::{Component, Path, PathBuf};
-use std::process::Command;
 
 #[derive(Clone, Debug, Serialize, PartialEq)]
 pub struct BranchInfo {
@@ -64,32 +63,6 @@ fn validate_worktree_path(worktree_path: &str) -> Result<PathBuf, String> {
     }
 
     Ok(canonical)
-}
-
-fn validate_repo(repo_path: &str) -> Result<(), String> {
-    let path = Path::new(repo_path);
-    if !path.exists() {
-        return Err(format!("Repository path does not exist: {repo_path}"));
-    }
-    if !path.is_dir() {
-        return Err(format!("Repository path is not a directory: {repo_path}"));
-    }
-    Ok(())
-}
-
-fn run_git(repo_path: &str, args: &[&str]) -> Result<String, String> {
-    let output = Command::new("git")
-        .args(args)
-        .current_dir(repo_path)
-        .output()
-        .map_err(|e| format!("Failed to execute git: {e}"))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("git {} failed: {}", args.join(" "), stderr.trim()));
-    }
-
-    Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
 fn parse_branch_list(output: &str, include_remote: bool) -> Vec<BranchInfo> {
@@ -189,19 +162,6 @@ pub async fn list_branches(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn validate_repo_nonexistent_path() {
-        let result = validate_repo("/nonexistent/path/to/repo");
-        assert!(result.is_err());
-        assert!(result.unwrap_err().contains("does not exist"));
-    }
-
-    #[test]
-    fn validate_repo_valid_directory() {
-        let result = validate_repo(env!("CARGO_MANIFEST_DIR"));
-        assert!(result.is_ok());
-    }
 
     #[test]
     fn parse_branch_list_local_only() {

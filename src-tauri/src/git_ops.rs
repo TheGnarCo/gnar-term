@@ -1,37 +1,4 @@
-use crate::git_helpers::validate_git_ref;
-use std::path::Path;
-use std::process::Command;
-
-fn validate_repo(repo_path: &str) -> Result<(), String> {
-    let path = Path::new(repo_path);
-    if !path.exists() {
-        return Err(format!("Repository path does not exist: {repo_path}"));
-    }
-    if !path.is_dir() {
-        return Err(format!("Repository path is not a directory: {repo_path}"));
-    }
-    Ok(())
-}
-
-fn run_git(repo_path: &str, args: &[&str]) -> Result<String, String> {
-    let output = Command::new("git")
-        .args(args)
-        .current_dir(repo_path)
-        .output()
-        .map_err(|e| format!("Failed to execute git: {e}"))?;
-
-    if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(format!(
-            "git {} failed (exit {}): {}",
-            args.join(" "),
-            output.status.code().unwrap_or(-1),
-            stderr.trim()
-        ))
-    }
-}
+use crate::git_helpers::{run_git, validate_git_ref, validate_repo};
 
 #[tauri::command]
 pub async fn push_branch(
@@ -62,6 +29,7 @@ pub async fn git_checkout(repo_path: String, branch: String) -> Result<(), Strin
 mod tests {
     use super::*;
     use std::fs;
+    use std::process::Command;
     use std::sync::atomic::{AtomicU32, Ordering};
 
     static TEST_COUNTER: AtomicU32 = AtomicU32::new(0);
@@ -106,23 +74,6 @@ mod tests {
 
     fn cleanup_test_repo(dir: &std::path::Path) {
         let _ = fs::remove_dir_all(dir);
-    }
-
-    #[test]
-    fn test_validate_repo_nonexistent_path() {
-        let result = validate_repo("/tmp/definitely-does-not-exist-gnarterm");
-        assert!(result.is_err());
-        assert!(result.unwrap_err().contains("does not exist"));
-    }
-
-    #[test]
-    fn test_validate_repo_file_not_dir() {
-        let file_path = std::env::temp_dir().join("gnar-term-test-file");
-        fs::write(&file_path, "not a dir").expect("Failed to write temp file");
-        let result = validate_repo(file_path.to_str().unwrap());
-        assert!(result.is_err());
-        assert!(result.unwrap_err().contains("not a directory"));
-        let _ = fs::remove_file(&file_path);
     }
 
     #[tokio::test]

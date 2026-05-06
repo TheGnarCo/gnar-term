@@ -94,6 +94,7 @@ export async function createWorkspace(name: string) {
     name,
     paneLayout: { type: "pane", pane },
     activePaneId: pane.id,
+    branchedWorkspaceIds: [],
   };
 
   const surface = await createTerminalSurface(pane);
@@ -328,6 +329,17 @@ export async function createWorkspaceFromDef(
     def.repoPath ??
     (typeof md?.repoPath === "string" ? md.repoPath : undefined);
   if (repoPath !== undefined) bw.repoPath = repoPath;
+
+  // Root-shaped Workspaces own a (possibly empty) members list. Branches
+  // and Dashboards omit the field entirely. reclaimChildWorkspaces fills
+  // in actual member ids after the loop completes.
+  const isRootShaped =
+    typeof ws.rootWorkspaceId !== "string" &&
+    ws.isDashboard !== true &&
+    typeof bw.worktreePath !== "string";
+  if (isRootShaped && ws.branchedWorkspaceIds === undefined) {
+    ws.branchedWorkspaceIds = [];
+  }
 
   // Stage 10 unified store: a runtime workspace whose id matches an
   // existing root entry IS the Workspace's own Root tab surface — merge

@@ -33,9 +33,15 @@
   import PseudoWorkspaceRow from "./PseudoWorkspaceRow.svelte";
   import DropGhost from "./DropGhost.svelte";
   import ExtensionWrapper from "./ExtensionWrapper.svelte";
+  import WorkspaceItem from "./WorkspaceItem.svelte";
   import { getExtensionApiById } from "../services/extension-loader";
+  import {
+    switchWorkspace,
+    closeWorkspace,
+  } from "../services/workspace-runtime-service";
+  import { activeWorkspaceIdx } from "../stores/workspace";
 
-  import { getAllSurfaces } from "../types";
+  import { getAllSurfaces, type Workspace } from "../types";
   import { tabDragState } from "../services/tab-drag";
   import {
     detectWorkspacePaneDrop,
@@ -84,17 +90,28 @@
     rendererLabel?: string;
     pseudoWorkspace?: PseudoWorkspace;
     workspaceOnlyIdx?: number;
+    /**
+     * Set when the row represents a standalone Dashboard Workspace
+     * (created via `spawnOrNavigate` from a `registerDashboardWorkspace`
+     * button — Settings, Claude Settings, etc.). These have
+     * `isDashboard: true`, `dashboardWorkspaceId`, and no
+     * `rootWorkspaceId`. The registered "workspace" renderer (built for
+     * `WorkspaceRecord` rows with paths and branches) can't draw them, so
+     * the block routes them through `WorkspaceItem` directly.
+     */
+    standaloneDashboardWs?: Workspace;
   };
   // Use `derived()` (not a `$:` IIFE) so Svelte's store-subscription
   // plumbing tracks the sources explicitly. An earlier attempt wrapped
   // the computation in a `$:` IIFE and the dependencies weren't
   // detected reliably across HMR.
   const renderedRowsStore = derived(
-    [rootRowOrder, rootRowRendererStore, pseudoWorkspaceStore],
-    ([$order, $renderers, $pseudoWs]) => {
+    [rootRowOrder, rootRowRendererStore, pseudoWorkspaceStore, workspaces],
+    ([$order, $renderers, $pseudoWs, $workspaces]) => {
       const rows: RenderedRow[] = [];
       const renderers = new Map($renderers.map((r) => [r.id, r] as const));
       const pseudoById = new Map($pseudoWs.map((pw) => [pw.id, pw] as const));
+      const wsById = new Map($workspaces.map((w) => [w.id, w] as const));
       let workspaceCount = 0;
       $order.forEach((row, idx) => {
         const key = `${row.kind}:${row.id}`;
@@ -103,6 +120,27 @@
           if (!pw) return;
           rows.push({ row, idx, key, pseudoWorkspace: pw });
           return;
+        }
+        if (row.kind === "workspace") {
+          // Standalone Dashboard Workspaces (no rootWorkspaceId,
+          // isDashboard) bypass the registered "workspace" renderer and
+          // render via WorkspaceItem so the dashboard's icon, accent
+          // color, and label come from `dashboardWorkspaceRegistry`.
+          const ws = wsById.get(row.id);
+          if (
+            ws &&
+            ws.isDashboard === true &&
+            typeof ws.rootWorkspaceId !== "string"
+          ) {
+            rows.push({
+              row,
+              idx,
+              key,
+              workspaceOnlyIdx: workspaceCount++,
+              standaloneDashboardWs: ws,
+            });
+            return;
+          }
         }
         const r = renderers.get(row.kind);
         if (!r) return;
@@ -369,6 +407,25 @@
           <PseudoWorkspaceRow
             pseudo={entry.pseudoWorkspace}
             onGripMouseDown={(e) => startRootRowDrag(e, entry.idx)}
+          />
+        {:else if entry.standaloneDashboardWs}
+          {@const ws = entry.standaloneDashboardWs}
+          {@const globalIdx = $workspaces.findIndex((w) => w.id === ws.id)}
+          <WorkspaceItem
+            workspace={ws}
+            index={globalIdx}
+            isActive={globalIdx === $activeWorkspaceIdx}
+            onSelect={() => {
+              if (globalIdx >= 0) switchWorkspace(globalIdx);
+            }}
+            onClose={() => {
+              if (globalIdx >= 0) closeWorkspace(globalIdx);
+            }}
+            onRename={() => {}}
+            onContextMenu={() => {}}
+            onGripMouseDown={(e) => startRootRowDrag(e, entry.idx)}
+            dragActive={isSource}
+            shortcutIdx={entry.workspaceOnlyIdx}
           />
         {:else if entry.rendererComponent && entry.rendererSource}
           {@const extApi = getExtensionApiById(entry.rendererSource)}

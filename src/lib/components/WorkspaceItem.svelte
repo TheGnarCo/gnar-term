@@ -296,11 +296,15 @@
         aria-hidden="true"
         color={badge.color}
         padding="0 12px 4px 6px"
-        opacity={0.85}
+        fontSize={10}
       >
-        <BotIcon size={10} />
         <span
-          style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+          style="display: inline-flex; align-items: center; opacity: 0.7; flex-shrink: 0;"
+        >
+          <BotIcon size={10} />
+        </span>
+        <span
+          style="white-space: nowrap; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis;"
           >{badge.label}</span
         >
       </SidebarSubtitleRow>

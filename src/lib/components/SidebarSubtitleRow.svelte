@@ -3,13 +3,15 @@
   export let color: string;
   /** CSS padding shorthand. Defaults match the worktree/subtitle rows. */
   export let padding: string = "0 24px 2px 2px";
+  /** Font size in pixels. Defaults to 11; pass 10 for compact status rows. */
+  export let fontSize: number = 11;
   /** Optional opacity (e.g. 0.85 for status badges). */
   export let opacity: number | undefined = undefined;
 </script>
 
 <div
   {...$$restProps}
-  style="padding: {padding}; font-size: 11px; color: {color}; display: flex; align-items: center; gap: 4px; overflow: hidden;{opacity !==
+  style="padding: {padding}; font-size: {fontSize}px; color: {color}; display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden;{opacity !==
   undefined
     ? ` opacity: ${opacity};`
     : ''}"

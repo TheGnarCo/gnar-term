@@ -14,16 +14,12 @@
   import { onDestroy } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { theme } from "../stores/theme";
-  import { workspaces } from "../stores/workspace";
   import { getWorkspaceStatusByCategory } from "../services/status-registry";
   import { GIT_STATUS_SOURCE } from "../services/git-status-service";
   import type { StatusItem } from "../types/status";
 
   export let workspaceId: string;
   export let accentColor: string | undefined = undefined;
-
-  $: currentWs = $workspaces.find((w) => w.id === workspaceId);
-  $: isChild = Boolean(currentWs?.rootWorkspaceId);
 
   $: fgMuted = ($theme["fgMuted"] ?? $theme.fgDim) as string;
   $: iconFg = accentColor ?? fgMuted;
@@ -150,8 +146,7 @@
 
   onDestroy(() => stopPrPolling());
 
-  $: showPr =
-    !isChild && pr !== null && (pr.state === "OPEN" || pr.state === "open");
+  $: showPr = pr !== null && (pr.state === "OPEN" || pr.state === "open");
   $: isDraft = pr?.isDraft ?? false;
   $: prColor = pr
     ? isDraft

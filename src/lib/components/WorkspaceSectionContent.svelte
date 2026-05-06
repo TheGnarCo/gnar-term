@@ -2,6 +2,8 @@
   import { onDestroy, type Component } from "svelte";
   import ContainerRow from "./ContainerRow.svelte";
   import PathStatusLine from "./PathStatusLine.svelte";
+  import SidebarSubtitleRow from "./SidebarSubtitleRow.svelte";
+  import WorkspaceDiffPrSubtitle from "./WorkspaceDiffPrSubtitle.svelte";
   import WorkspaceListView from "./WorkspaceListView.svelte";
   import { resolveWorkspaceColor } from "../theme-data";
   import { theme } from "../stores/theme";
@@ -422,22 +424,23 @@
 
       <svelte:fragment slot="banner-subtitle" let:collapsed>
         {#if collapsed && workspaceBotStatus}
-          <div
+          <SidebarSubtitleRow
             data-workspace-bot-status-row
-            style="padding: 0 12px 2px 0; display: flex; align-items: center; min-width: 0; overflow: hidden; line-height: 1.2;"
+            title={workspaceBotStatus.label}
+            color={workspaceBotStatus.color}
+            padding="0 12px 4px 6px"
+            fontSize={10}
           >
             <span
-              style="font-size: 10px; color: {subtitleFg}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; display: inline-flex; align-items: center; gap: 3px;"
-              title={workspaceBotStatus.label}
+              style="display: inline-flex; align-items: center; opacity: 0.7; flex-shrink: 0;"
             >
-              <span
-                style="display: inline-flex; align-items: center; color: {workspaceBotStatus.color}; opacity: 0.8; flex-shrink: 0;"
-              >
-                <BotIcon size={10} />
-              </span>
-              {workspaceBotStatus.label}
+              <BotIcon size={10} />
             </span>
-          </div>
+            <span
+              style="white-space: nowrap; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis;"
+              >{workspaceBotStatus.label}</span
+            >
+          </SidebarSubtitleRow>
         {/if}
         <div style="pointer-events: auto;">
           <PathStatusLine
@@ -450,6 +453,14 @@
             iconColor={workspaceHex}
           />
         </div>
+        {#if primaryWs}
+          <div style="pointer-events: auto;">
+            <WorkspaceDiffPrSubtitle
+              workspaceId={primaryWs.id}
+              accentColor={workspaceHex}
+            />
+          </div>
+        {/if}
       </svelte:fragment>
 
       <svelte:fragment slot="btn-row" let:collapsed let:toggle let:showToggle>

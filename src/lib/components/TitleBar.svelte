@@ -9,8 +9,6 @@
   import { titleBarButtonStore } from "../services/titlebar-button-registry";
   import TitleBarContributedButton from "./TitleBarContributedButton.svelte";
   import { runCommandById } from "../services/command-registry";
-  import { activeWorkspace } from "../stores/workspace";
-  import { workspacesStore } from "../stores/workspace";
 
   // Single source of truth: cfg!(debug_assertions) from Rust, exposed via the
   // is_debug_build command. True for `tauri dev` and `tauri build --debug`,
@@ -37,30 +35,11 @@
   // hidden (and we're not fullscreen), the TitleBar starts at x=0, so push
   // its first button well past the traffic-light cluster.
   $: leftPadding = !$sidebarVisible && isMac && !$isFullscreen ? "84px" : "8px";
-  $: rootWorkspaceId = $activeWorkspace?.rootWorkspaceId ?? null;
-  $: rootWorkspace = rootWorkspaceId
-    ? ($workspacesStore.find((w) => w.id === rootWorkspaceId) ?? null)
-    : null;
 
   $: titleBarBg = isDev ? DEV_ACCENT : $theme.bg;
   // On the yellow dev background we need dark glyphs for readability.
   $: btnFg = isDev ? "#1a1a1a" : $theme.fg;
   $: btnFgDim = isDev ? "#3a3a3a" : $theme.fgDim;
-
-  // Derive workspace type for the title context suffix
-  $: wsTypeSuffix = (() => {
-    if (!$activeWorkspace) return null;
-    const worktreePath = ($activeWorkspace as { worktreePath?: string })
-      .worktreePath;
-    const branch = ($activeWorkspace as { branch?: string }).branch;
-    if ($activeWorkspace.isDashboard) return "Dashboard";
-    if (worktreePath) return branch ?? "Branch";
-    return "Workspace";
-  })();
-
-  $: titleText = rootWorkspace
-    ? `${rootWorkspace.name} – ${wsTypeSuffix}`
-    : ($activeWorkspace?.name ?? null);
 </script>
 
 <div
@@ -100,13 +79,9 @@
   <div
     style="flex: 1; display: flex; justify-content: center; align-items: center; pointer-events: none;"
   >
-    {#if $activeWorkspace && titleText}
-      <span class="title-ws" style="color: {btnFg};">{titleText}</span>
-    {:else}
-      <span class="title-ws" style="color: {isDev ? btnFg : $theme.fgDim};"
-        >{isDev ? "GNARTERM (DEV)" : "GNARTERM"}</span
-      >
-    {/if}
+    <span class="title-ws" style="color: {isDev ? btnFg : $theme.fgDim};"
+      >{isDev ? "GnarTerm (Dev)" : "GnarTerm"}</span
+    >
   </div>
 
   {#each $titleBarButtonStore as btn (btn.id)}

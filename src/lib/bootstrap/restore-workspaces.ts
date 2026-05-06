@@ -14,7 +14,6 @@
  */
 import { get } from "svelte/store";
 import { workspaces } from "../stores/workspace";
-import { getWorkspaces } from "../stores/workspace";
 import {
   loadState,
   type GnarTermConfig,
@@ -72,6 +71,15 @@ export function workspaceDefToWorkspace(def: WorkspaceDef): Workspace {
     },
     activePaneId: paneId,
   };
+  // Root-shaped Workspaces own a (possibly empty) members list. Branches and
+  // Dashboards omit the field entirely (they're tracked in their owner's list).
+  // reclaimChildWorkspaces fills in the actual ids after seedWorkspaces.
+  const isBranch = typeof def.worktreePath === "string";
+  const isDashboard = def.isDashboard === true;
+  const isOwnedChild = typeof def.rootWorkspaceId === "string";
+  if (!isBranch && !isDashboard && !isOwnedChild) {
+    ws.branchedWorkspaceIds = [];
+  }
   if (def.path !== undefined) ws.path = def.path;
   if (def.color !== undefined) ws.color = def.color;
   if (def.isGit !== undefined) ws.isGit = def.isGit;
@@ -175,8 +183,22 @@ export async function restoreWorkspaces(
     const wsList = runtimeDefs.map(workspaceDefToWorkspace);
     seedWorkspaces(wsList, state.activeWorkspaceId ?? null);
 
+    // Persisted dashboards are dropped if their owning Workspace isn't
+    // about to be re-created. Drive that check off `runtimeDefs` (the
+    // source of truth for re-creation) — reading it from the live store
+    // would always be empty here because we just cleared it below.
+    const knownWorkspaceIds = new Set(
+      runtimeDefs
+        .filter(
+          (def) =>
+            def.isDashboard !== true &&
+            typeof def.rootWorkspaceId !== "string" &&
+            typeof def.worktreePath !== "string",
+        )
+        .map((def) => def.id)
+        .filter((id): id is string => typeof id === "string"),
+    );
     workspaces.set([]);
-    const knownWorkspaceIds = new Set(getWorkspaces().map((g) => g.id));
     const seenDashboards = new Set<string>();
     const filteredDefs = runtimeDefs.filter((def) => {
       const isDashboard = def.isDashboard === true;

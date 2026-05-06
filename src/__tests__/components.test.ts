@@ -308,10 +308,10 @@ describe("ShortcutReference", () => {
 // ===========================================================================
 
 describe("TitleBar", () => {
-  it("renders GNARTERM text", () => {
+  it("renders GnarTerm text", () => {
     render(TitleBar);
     const el =
-      screen.queryByText("GNARTERM") ?? screen.queryByText("GNARTERM (DEV)");
+      screen.queryByText("GnarTerm") ?? screen.queryByText("GnarTerm (Dev)");
     expect(el).toBeTruthy();
   });
 

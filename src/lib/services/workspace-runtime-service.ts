@@ -15,7 +15,11 @@ import {
 // Re-exported so existing call sites that import serializeLayout from
 // workspace-runtime-service continue to compile after the dedupe.
 export { serializeLayout };
-import { showInputPrompt, showConfirmPrompt } from "../stores/ui";
+import {
+  showInputPrompt,
+  showConfirmPrompt,
+  sidebarVisible,
+} from "../stores/ui";
 import { createTerminalSurface } from "../terminal-service";
 import {
   uid,
@@ -261,6 +265,10 @@ export async function createWorkspaceFromDef(
   const finalIdx = get(workspaces).findIndex((w) => w.id === ws.id);
   if (!restoring) {
     if (finalIdx >= 0) switchWorkspace(finalIdx);
+    // Reveal the new banner: when the user creates a root-shaped workspace
+    // (not a branch, dashboard, or session restore), make sure the primary
+    // sidebar is open so the new row is visible.
+    if (isRootShaped) sidebarVisible.set(true);
   } else {
     if (finalIdx >= 0) activeWorkspaceIdx.set(finalIdx);
   }

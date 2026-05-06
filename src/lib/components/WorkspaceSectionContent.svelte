@@ -108,12 +108,11 @@
     workspace = getWorkspace(rootWorkspaceId);
   }
 
-  // Stage 10 unification: the root workspace can host its own agents
-  // (its surfaces live at the same id as the WorkspaceRecord), so the
-  // banner's bot tally must include the root id alongside its branches.
-  $: filterIds = workspace
-    ? new Set([workspace.id, ...workspace.branchedWorkspaceIds])
-    : new Set<string>();
+  // Banner reflects only the root workspace's own surfaces — branch
+  // banners roll up their own status separately. Mixing in branch
+  // agents here made a quiet root look "running" because of work
+  // happening in a child Workspace.
+  $: filterIds = workspace ? new Set([workspace.id]) : new Set<string>();
 
   // The Root runtime Workspace shares its id with the Record (ADR-004
   // Stage 10). It drives the container row's status dot and renders when

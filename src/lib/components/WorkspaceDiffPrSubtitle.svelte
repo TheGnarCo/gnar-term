@@ -210,39 +210,6 @@
       </div>
     {/if}
 
-    {#if showPr && pr}
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div
-        style="display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; cursor: pointer;"
-        title="#{pr.number} {pr.title}{isDraft ? ' (draft)' : ''}"
-        on:click={() => pr && invoke("open_url", { url: pr.url })}
-      >
-        <svg
-          width="10"
-          height="10"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke={iconFg}
-          stroke-width="3"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          style="flex-shrink: 0; opacity: 0.7;"
-          aria-hidden="true"
-        >
-          <circle cx="18" cy="18" r="3" />
-          <circle cx="6" cy="6" r="3" />
-          <path d="M13 6h3a2 2 0 0 1 2 2v7" />
-          <line x1="6" x2="6" y1="9" y2="21" />
-        </svg>
-        <span
-          style="font-size: 10px; color: {prColor}; white-space: nowrap; flex-shrink: 0; text-decoration: underline;"
-        >
-          #{pr.number}{isDraft ? " draft" : ""}
-        </span>
-      </div>
-    {/if}
-
     {#if showRemote}
       <div
         style="display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden;"
@@ -279,6 +246,39 @@
             >↓{behind}</span
           >
         {/if}
+      </div>
+    {/if}
+
+    {#if showPr && pr}
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div
+        style="display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; cursor: pointer;"
+        title="#{pr.number} {pr.title}{isDraft ? ' (draft)' : ''}"
+        on:click={() => pr && invoke("open_url", { url: pr.url })}
+      >
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={iconFg}
+          stroke-width="3"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          style="flex-shrink: 0; opacity: 0.7;"
+          aria-hidden="true"
+        >
+          <circle cx="18" cy="18" r="3" />
+          <circle cx="6" cy="6" r="3" />
+          <path d="M13 6h3a2 2 0 0 1 2 2v7" />
+          <line x1="6" x2="6" y1="9" y2="21" />
+        </svg>
+        <span
+          style="font-size: 10px; color: {prColor}; white-space: nowrap; flex-shrink: 0; text-decoration: underline;"
+        >
+          #{pr.number}{isDraft ? " draft" : ""}
+        </span>
       </div>
     {/if}
   </div>

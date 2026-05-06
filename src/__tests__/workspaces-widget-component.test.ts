@@ -38,7 +38,7 @@ function makeChildWorkspace(
   return {
     id,
     name,
-    splitRoot: {
+    paneLayout: {
       type: "pane",
       pane: { id: `${id}-pane`, surfaces: [], activeSurfaceId: null },
     },

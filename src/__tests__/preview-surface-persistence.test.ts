@@ -105,9 +105,9 @@ describe("createWorkspaceFromDef — preview surfaces", () => {
     const list = get(workspaces);
     expect(list).toHaveLength(1);
     const ws = list[0] as Workspace;
-    expect(ws.splitRoot.type).toBe("pane");
-    if (ws.splitRoot.type !== "pane") return;
-    const surfaces = ws.splitRoot.pane.surfaces;
+    expect(ws.paneLayout.type).toBe("pane");
+    if (ws.paneLayout.type !== "pane") return;
+    const surfaces = ws.paneLayout.pane.surfaces;
     expect(surfaces).toHaveLength(1);
     const preview = surfaces[0];
     expect(isPreviewSurface(preview)).toBe(true);
@@ -115,7 +115,7 @@ describe("createWorkspaceFromDef — preview surfaces", () => {
     expect(preview.path).toBe("/abs/plan.md");
     expect(preview.title).toBe("plan");
     expect(preview.hasUnread).toBe(false);
-    expect(ws.splitRoot.pane.activeSurfaceId).toBe(preview.id);
+    expect(ws.paneLayout.pane.activeSurfaceId).toBe(preview.id);
   });
 
   it("respects the name field from the surface def", async () => {
@@ -136,8 +136,8 @@ describe("createWorkspaceFromDef — preview surfaces", () => {
     });
 
     const ws = get(workspaces)[0]!;
-    if (ws.splitRoot.type !== "pane") throw new Error("expected pane root");
-    const preview = ws.splitRoot.pane.surfaces[0];
+    if (ws.paneLayout.type !== "pane") throw new Error("expected pane root");
+    const preview = ws.paneLayout.pane.surfaces[0];
     if (!isPreviewSurface(preview)) throw new Error("expected preview surface");
     expect(preview.title).toBe("Current Sprint");
   });
@@ -160,8 +160,8 @@ describe("createWorkspaceFromDef — preview surfaces", () => {
     await createWorkspaceFromDef({ name: "Round-trip WS", layout });
 
     const ws = get(workspaces)[0]!;
-    if (ws.splitRoot.type !== "pane") throw new Error("expected pane root");
-    const restored = ws.splitRoot.pane.surfaces[0];
+    if (ws.paneLayout.type !== "pane") throw new Error("expected pane root");
+    const restored = ws.paneLayout.pane.surfaces[0];
     if (!isPreviewSurface(restored)) {
       throw new Error("expected preview surface");
     }

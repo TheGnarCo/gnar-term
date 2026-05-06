@@ -53,7 +53,7 @@ export async function archiveWorkspace(workspaceId: string): Promise<boolean> {
   const workspaceDefs = nonDashboard.map((ws) => ({
     id: ws.id,
     name: ws.name,
-    layout: serializeLayout(ws.splitRoot),
+    layout: serializeLayout(ws.paneLayout),
     ...(ws.metadata ? { metadata: ws.metadata } : {}),
   }));
 

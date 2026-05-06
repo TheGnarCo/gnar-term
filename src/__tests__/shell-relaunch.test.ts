@@ -88,7 +88,7 @@ function makeWorkspace(pane: Pane): Workspace {
   return {
     id: "ws1",
     name: "Test Workspace",
-    splitRoot: { type: "pane", pane },
+    paneLayout: { type: "pane", pane },
     activePaneId: pane.id,
   };
 }
@@ -99,7 +99,7 @@ function makeWorkspace(pane: Pane): Workspace {
 function simulatePtyExit(ptyId: number, exitCode: number | null) {
   workspaces.update((wsList) => {
     for (const ws of wsList) {
-      for (const pane of getAllPanes(ws.splitRoot)) {
+      for (const pane of getAllPanes(ws.paneLayout)) {
         const idx = pane.surfaces.findIndex(
           (s) =>
             s.kind === "terminal" && (s as TerminalSurface).ptyId === ptyId,
@@ -143,7 +143,7 @@ describe("S-RELAUNCH: pty-exit handler", () => {
 
     simulatePtyExit(42, 1);
 
-    const updatedPane = getAllPanes(get(workspaces)[0].splitRoot)[0];
+    const updatedPane = getAllPanes(get(workspaces)[0].paneLayout)[0];
     expect(updatedPane.surfaces).toHaveLength(0);
     expect(updatedPane.exitedSurface).toBeDefined();
     expect(updatedPane.exitedSurface?.code).toBe(1);
@@ -159,7 +159,7 @@ describe("S-RELAUNCH: pty-exit handler", () => {
     simulatePtyExit(99, 0);
 
     // Workspace still has 1 pane — it was not collapsed
-    const panes = getAllPanes(get(workspaces)[0].splitRoot);
+    const panes = getAllPanes(get(workspaces)[0].paneLayout);
     expect(panes).toHaveLength(1);
     expect(panes[0].id).toBe("p1");
   });
@@ -176,7 +176,7 @@ describe("S-RELAUNCH: pty-exit handler", () => {
 
     simulatePtyExit(7, 0);
 
-    const updatedPane = getAllPanes(get(workspaces)[0].splitRoot)[0];
+    const updatedPane = getAllPanes(get(workspaces)[0].paneLayout)[0];
     expect(updatedPane.exitedSurface?.definedCommand).toBe("claude");
     expect(updatedPane.exitedSurface?.cwd).toBe("/home/user");
   });
@@ -191,7 +191,7 @@ describe("S-RELAUNCH: pty-exit handler", () => {
 
     simulatePtyExit(10, 0);
 
-    const updatedPane = getAllPanes(get(workspaces)[0].splitRoot)[0];
+    const updatedPane = getAllPanes(get(workspaces)[0].paneLayout)[0];
     expect(updatedPane.surfaces).toHaveLength(1);
     expect(updatedPane.exitedSurface).toBeUndefined();
     expect(updatedPane.activeSurfaceId).toBe("s2");
@@ -206,7 +206,7 @@ describe("S-RELAUNCH: pty-exit handler", () => {
 
     simulatePtyExit(5, null);
 
-    const updatedPane = getAllPanes(get(workspaces)[0].splitRoot)[0];
+    const updatedPane = getAllPanes(get(workspaces)[0].paneLayout)[0];
     expect(updatedPane.exitedSurface?.code).toBe(0);
   });
 });
@@ -273,7 +273,7 @@ describe("S-RELAUNCH: dismissPane", () => {
     const ws: Workspace = {
       id: "ws1",
       name: "Test",
-      splitRoot: {
+      paneLayout: {
         type: "split",
         direction: "horizontal",
         ratio: 0.5,
@@ -290,7 +290,7 @@ describe("S-RELAUNCH: dismissPane", () => {
     dismissPane("p1");
 
     // pane1 has been removed from the split tree; only pane2 remains
-    const panes = getAllPanes(get(workspaces)[0].splitRoot);
+    const panes = getAllPanes(get(workspaces)[0].paneLayout);
     expect(panes).toHaveLength(1);
     expect(panes[0].id).toBe("p2");
   });
@@ -310,7 +310,7 @@ describe("S-RELAUNCH: dismissPane", () => {
     const ws: Workspace = {
       id: "ws1",
       name: "Test",
-      splitRoot: {
+      paneLayout: {
         type: "split",
         direction: "vertical",
         ratio: 0.5,
@@ -325,12 +325,12 @@ describe("S-RELAUNCH: dismissPane", () => {
     activeWorkspaceIdx.set(0);
 
     // Before: 2 panes
-    expect(getAllPanes(get(workspaces)[0].splitRoot)).toHaveLength(2);
+    expect(getAllPanes(get(workspaces)[0].paneLayout)).toHaveLength(2);
 
     dismissPane("p1");
 
     // After: 1 pane — the pane was collapsed
-    expect(getAllPanes(get(workspaces)[0].splitRoot)).toHaveLength(1);
+    expect(getAllPanes(get(workspaces)[0].paneLayout)).toHaveLength(1);
   });
 
   it("is a no-op when pane has no exitedSurface (wrong state)", () => {
@@ -345,7 +345,7 @@ describe("S-RELAUNCH: dismissPane", () => {
     const ws: Workspace = {
       id: "ws1",
       name: "Test",
-      splitRoot: {
+      paneLayout: {
         type: "split",
         direction: "horizontal",
         ratio: 0.5,
@@ -361,7 +361,7 @@ describe("S-RELAUNCH: dismissPane", () => {
 
     // dismissPane on a pane without exitedSurface still collapses the pane
     dismissPane("p1");
-    expect(getAllPanes(get(workspaces)[0].splitRoot)).toHaveLength(1);
+    expect(getAllPanes(get(workspaces)[0].paneLayout)).toHaveLength(1);
   });
 });
 
@@ -387,7 +387,7 @@ describe("S-RELAUNCH: relaunchPane", () => {
     const ws: Workspace = {
       id: "ws1",
       name: "Test",
-      splitRoot: { type: "pane", pane },
+      paneLayout: { type: "pane", pane },
       activePaneId: "p1",
     };
     workspaces.set([ws]);
@@ -395,7 +395,7 @@ describe("S-RELAUNCH: relaunchPane", () => {
 
     await relaunchPane("p1");
 
-    const updatedPane = getAllPanes(get(workspaces)[0].splitRoot)[0];
+    const updatedPane = getAllPanes(get(workspaces)[0].paneLayout)[0];
     expect(updatedPane.exitedSurface).toBeUndefined();
   });
 
@@ -409,7 +409,7 @@ describe("S-RELAUNCH: relaunchPane", () => {
     const ws: Workspace = {
       id: "ws1",
       name: "Test",
-      splitRoot: { type: "pane", pane },
+      paneLayout: { type: "pane", pane },
       activePaneId: "p1",
     };
     workspaces.set([ws]);
@@ -417,7 +417,7 @@ describe("S-RELAUNCH: relaunchPane", () => {
 
     await relaunchPane("p1");
 
-    const updatedPane = getAllPanes(get(workspaces)[0].splitRoot)[0];
+    const updatedPane = getAllPanes(get(workspaces)[0].paneLayout)[0];
     expect(updatedPane.surfaces).toHaveLength(1);
     expect(updatedPane.activeSurfaceId).toBe("mock-surface");
   });
@@ -432,7 +432,7 @@ describe("S-RELAUNCH: relaunchPane", () => {
     const ws: Workspace = {
       id: "ws1",
       name: "Test",
-      splitRoot: { type: "pane", pane },
+      paneLayout: { type: "pane", pane },
       activePaneId: "p1",
     };
     workspaces.set([ws]);
@@ -456,7 +456,7 @@ describe("S-RELAUNCH: relaunchPane", () => {
     const ws: Workspace = {
       id: "ws1",
       name: "Test",
-      splitRoot: { type: "pane", pane },
+      paneLayout: { type: "pane", pane },
       activePaneId: "p1",
     };
     workspaces.set([ws]);
@@ -478,7 +478,7 @@ describe("S-RELAUNCH: relaunchPane", () => {
     const ws: Workspace = {
       id: "ws1",
       name: "Test",
-      splitRoot: { type: "pane", pane },
+      paneLayout: { type: "pane", pane },
       activePaneId: "p1",
     };
     workspaces.set([ws]);
@@ -489,7 +489,7 @@ describe("S-RELAUNCH: relaunchPane", () => {
     // Pane already had a surface and no exitedSurface — createTerminalSurface should not be called
     const { createTerminalSurface } = await import("../lib/terminal-service");
     expect(createTerminalSurface).not.toHaveBeenCalled();
-    expect(getAllPanes(get(workspaces)[0].splitRoot)[0].surfaces).toHaveLength(
+    expect(getAllPanes(get(workspaces)[0].paneLayout)[0].surfaces).toHaveLength(
       1,
     );
   });

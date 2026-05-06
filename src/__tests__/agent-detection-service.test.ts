@@ -60,7 +60,7 @@ function makeChildWorkspace(
     id,
     name: id,
     activePaneId: "p",
-    splitRoot: {
+    paneLayout: {
       type: "pane" as const,
       pane: {
         id: "p",
@@ -493,7 +493,7 @@ describe("agent-detection-service — OSC output classification", () => {
     workspaces.update((list) => {
       const ws = list[0];
       if (!ws) return list;
-      for (const p of [ws.splitRoot].flatMap((r) =>
+      for (const p of [ws.paneLayout].flatMap((r) =>
         r.type === "pane" ? [r.pane] : [],
       )) {
         for (const s of p.surfaces) {
@@ -731,7 +731,7 @@ describe("agent-detection-service — title restoration on agent close", () => {
       initAgentDetection();
       expect(getAgents()).toHaveLength(0);
 
-      const surface = ws.splitRoot.pane.surfaces[0]!;
+      const surface = ws.paneLayout.pane.surfaces[0]!;
       surface.title = "claude";
       workspaces.update((l) => [...l]);
 
@@ -767,7 +767,7 @@ describe("agent-detection-service — title restoration on agent close", () => {
     workspaces.set([ws]);
     initAgentDetection();
 
-    const surface = ws.splitRoot.pane.surfaces[0]!;
+    const surface = ws.paneLayout.pane.surfaces[0]!;
     surface.title = "claude";
     workspaces.update((l) => [...l]);
     eventBus.emit({
@@ -796,7 +796,7 @@ describe("agent-detection-service — title restoration on agent close", () => {
       initAgentDetection();
       expect(getAgents()).toHaveLength(1);
 
-      const surface = ws.splitRoot.pane.surfaces[0]!;
+      const surface = ws.paneLayout.pane.surfaces[0]!;
       surface.title = "zsh";
       workspaces.update((l) => [...l]);
       eventBus.emit({

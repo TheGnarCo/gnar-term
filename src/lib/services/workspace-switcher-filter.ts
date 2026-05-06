@@ -145,7 +145,7 @@ function makeParentRow(parent: WorkspaceRecord): SwitcherRow {
     ws: {
       id: parent.id,
       name: parent.name,
-      splitRoot: {
+      paneLayout: {
         type: "pane",
         pane: { id: "", surfaces: [], activeSurfaceId: null },
       },

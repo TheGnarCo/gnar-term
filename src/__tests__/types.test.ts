@@ -118,7 +118,7 @@ describe("getAllSurfaces()", () => {
     const ws: Workspace = {
       id: "ws1",
       name: "Test",
-      splitRoot: {
+      paneLayout: {
         type: "split",
         direction: "horizontal",
         ratio: 0.5,
@@ -147,7 +147,7 @@ describe("getAllSurfaces()", () => {
     const ws: Workspace = {
       id: "ws1",
       name: "Test",
-      splitRoot: { type: "pane", pane },
+      paneLayout: { type: "pane", pane },
       activePaneId: "pane1",
     };
 
@@ -178,7 +178,7 @@ describe("ExtensionSurface", () => {
     const ws: Workspace = {
       id: "ws1",
       name: "Test",
-      splitRoot: { type: "pane", pane },
+      paneLayout: { type: "pane", pane },
       activePaneId: "pane1",
     };
 

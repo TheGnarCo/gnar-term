@@ -171,7 +171,7 @@ export const activeWorkspace = derived(
 
 export const activePane = derived([activeWorkspace], ([$ws]) => {
   if (!$ws) return null;
-  const panes = getAllPanes($ws.splitRoot);
+  const panes = getAllPanes($ws.paneLayout);
   return panes.find((p) => p.id === $ws.activePaneId) ?? null;
 });
 
@@ -303,7 +303,7 @@ export function serializeWorkspace(ws: Workspace): WorkspaceDef {
   const def: WorkspaceDef = {
     id: ws.id,
     name: ws.name,
-    layout: serializeLayout(ws.splitRoot),
+    layout: serializeLayout(ws.paneLayout),
   };
   if (ws.path !== undefined) def.path = ws.path;
   if (ws.color !== undefined) def.color = ws.color;
@@ -346,22 +346,22 @@ export function serializeWorkspace(ws: Workspace): WorkspaceDef {
 /**
  * `WorkspaceRecord` narrows `Workspace` to the fields a root workspace
  * is guaranteed to own at runtime (path, color, branchedWorkspaceIds,
- * isGit, createdAt). Structural fields (`splitRoot`, `activePaneId`)
+ * isGit, createdAt). Structural fields (`paneLayout`, `activePaneId`)
  * stay optional so the creation flow can construct an entry before its
- * tab surface exists; `addWorkspace` mints a placeholder splitRoot at
+ * tab surface exists; `addWorkspace` mints a placeholder paneLayout at
  * write time, and `createWorkspaceFromDef` overwrites it once the
  * runtime workspace materializes.
  *
  * Stage 10: this is just a typed view over `Workspace` rows in the
  * unified `_workspaces` store — there is no separate "Record" store.
  */
-export type WorkspaceRecord = Omit<Workspace, "splitRoot" | "activePaneId"> & {
+export type WorkspaceRecord = Omit<Workspace, "paneLayout" | "activePaneId"> & {
   path: string;
   color: string;
   branchedWorkspaceIds: string[];
   isGit: boolean;
   createdAt: string;
-  splitRoot?: Workspace["splitRoot"];
+  paneLayout?: Workspace["paneLayout"];
   activePaneId?: Workspace["activePaneId"];
 };
 

@@ -87,7 +87,7 @@ function activateHoveredTab(x: number, y: number, sourcePaneId: string): void {
   lastHoveredTabId = surfaceId;
   workspaces.update((wsList) =>
     wsList.map((ws) => {
-      const pane = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
+      const pane = getAllPanes(ws.paneLayout).find((p) => p.id === paneId);
       if (!pane || !pane.surfaces.find((s) => s.id === surfaceId)) return ws;
       pane.activeSurfaceId = surfaceId;
       return { ...ws };
@@ -364,7 +364,7 @@ function detectDropTarget(
       const srcWs = allWs.find((w) => w.id === sourceWorkspaceId);
       const srcPane =
         srcWs &&
-        getAllPanes(srcWs.splitRoot).find((p) => p.id === sourcePaneId);
+        getAllPanes(srcWs.paneLayout).find((p) => p.id === sourcePaneId);
       if (!srcPane || srcPane.surfaces.length <= 1) continue;
     }
     const rect = bodyEl.getBoundingClientRect();
@@ -406,7 +406,7 @@ export function commitTabDrop(): void {
       const allWs = get(workspaces);
       const srcWs = allWs.find((w) => w.id === sourceWorkspaceId);
       if (!srcWs) return;
-      const pane = getAllPanes(srcWs.splitRoot).find(
+      const pane = getAllPanes(srcWs.paneLayout).find(
         (p) => p.id === dropTarget.paneId,
       );
       if (!pane) return;

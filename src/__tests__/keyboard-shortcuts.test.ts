@@ -105,7 +105,7 @@ describe("keyboard-shortcuts — clear + find bindings", () => {
       {
         id: "ws",
         name: "ws",
-        splitRoot: {
+        paneLayout: {
           type: "pane",
           pane: {
             id: "p",

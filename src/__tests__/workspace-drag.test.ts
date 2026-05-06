@@ -130,14 +130,14 @@ function makePane(surfaces: TerminalSurface[]): Pane {
 }
 
 function makeChildWorkspace(
-  splitRoot: SplitNode,
+  paneLayout: SplitNode,
   overrides: Partial<Workspace> = {},
 ): Workspace {
   return {
     id: uid(),
     name: "WS",
-    splitRoot,
-    activePaneId: getAllPanes(splitRoot)[0]?.id ?? null,
+    paneLayout,
+    activePaneId: getAllPanes(paneLayout)[0]?.id ?? null,
     ...overrides,
   };
 }
@@ -173,7 +173,7 @@ describe("createWorkspaceFromSurface", () => {
     const updated = get(workspaces);
     expect(updated.length).toBe(2);
     const newWs = updated[1]!;
-    expect(getAllPanes(newWs.splitRoot).flatMap((p) => p.surfaces)).toEqual([
+    expect(getAllPanes(newWs.paneLayout).flatMap((p) => p.surfaces)).toEqual([
       sA,
     ]);
     // Source pane keeps surviving surface.
@@ -257,7 +257,7 @@ describe("createWorkspaceFromSurface", () => {
     // Source workspace's split collapses — only otherPane remains.
     const updated = get(workspaces);
     const srcUpdated = updated.find((w) => w.id === ws.id)!;
-    const srcPanes = getAllPanes(srcUpdated.splitRoot);
+    const srcPanes = getAllPanes(srcUpdated.paneLayout);
     expect(srcPanes.length).toBe(1);
     expect(srcPanes[0]!.id).toBe(otherPane.id);
   });
@@ -339,8 +339,8 @@ describe("moveSurfaceToWorkspace", () => {
     moveSurfaceToWorkspace(sA.id, sourcePane.id, targetWs.id);
 
     const updatedSrc = get(workspaces).find((w) => w.id === sourceWs.id)!;
-    expect(getAllPanes(updatedSrc.splitRoot).length).toBe(1);
-    expect(getAllPanes(updatedSrc.splitRoot)[0]!.id).toBe(otherPane.id);
+    expect(getAllPanes(updatedSrc.paneLayout).length).toBe(1);
+    expect(getAllPanes(updatedSrc.paneLayout)[0]!.id).toBe(otherPane.id);
   });
 
   it("schedules a persist", () => {
@@ -378,7 +378,7 @@ describe("expandWorkspaceIntoPanes", () => {
     // Source workspace removed
     expect(updated.find((w) => w.id === srcWs.id)).toBeUndefined();
     // Target workspace now has 3 panes: original + one per source surface
-    const tgtPanes = getAllPanes(tgtWs.splitRoot);
+    const tgtPanes = getAllPanes(tgtWs.paneLayout);
     expect(tgtPanes.length).toBe(3);
     // Original target pane is still present
     expect(tgtPanes.some((p) => p.id === tgtPane.id)).toBe(true);
@@ -468,7 +468,7 @@ describe("expandWorkspaceIntoPanes", () => {
     expandWorkspaceIntoPanes(srcWs.id, tgtPane.id, "horizontal", true);
 
     // With before=true: new pane is the left child, target pane is the right child
-    const root = tgtWs.splitRoot;
+    const root = tgtWs.paneLayout;
     expect(root.type).toBe("split");
     if (root.type === "split") {
       // The new pane (with sA) should be at index 0 (before=true → left child)
@@ -543,7 +543,7 @@ describe("expandWorkspaceIntoPanes", () => {
     expandWorkspaceIntoPanes(srcWs.id, tgtPane.id, "horizontal", false);
 
     // activePaneId should point to the last newly-created pane (sB's pane)
-    const tgtPanes = getAllPanes(tgtWs.splitRoot);
+    const tgtPanes = getAllPanes(tgtWs.paneLayout);
     const activePaneId = tgtWs.activePaneId;
     const activePane = tgtPanes.find((p) => p.id === activePaneId);
     expect(activePane).toBeDefined();

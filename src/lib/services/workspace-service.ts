@@ -48,13 +48,13 @@ function emitStateChanged(metadata: Record<string, unknown> = {}): void {
 
 export function addWorkspace(workspace: WorkspaceRecord): void {
   // Stage 10 unification: every entry in the unified store is a
-  // `Workspace` so even a record-shaped row needs a splitRoot. When the
+  // `Workspace` so even a record-shaped row needs a paneLayout. When the
   // caller hasn't materialized a tab surface yet, mint a placeholder
-  // empty pane — `createWorkspaceFromDef` will overwrite splitRoot /
+  // empty pane — `createWorkspaceFromDef` will overwrite paneLayout /
   // activePaneId when the matching runtime workspace is created.
   const ensured: WorkspaceRecord = {
     ...workspace,
-    splitRoot: workspace.splitRoot ?? {
+    paneLayout: workspace.paneLayout ?? {
       type: "pane",
       pane: {
         id: `placeholder-${workspace.id}`,
@@ -439,7 +439,7 @@ function backfillDashboardContributionIds(): void {
       const workspace = workspaceById.get(rootWorkspaceId);
       if (!workspace) return ws;
 
-      const previewPaths = getAllPanes(ws.splitRoot)
+      const previewPaths = getAllPanes(ws.paneLayout)
         .flatMap((p) => p.surfaces)
         .filter(
           (s): s is { kind: "preview"; path: string } & typeof s =>

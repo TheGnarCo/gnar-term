@@ -29,7 +29,7 @@
   function collectRows(): Row[] {
     const out: Row[] = [];
     for (const ws of get(workspaces)) {
-      for (const pane of getAllPanes(ws.splitRoot)) {
+      for (const pane of getAllPanes(ws.paneLayout)) {
         for (const s of pane.surfaces) {
           if (
             isTerminalSurface(s) &&

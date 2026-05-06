@@ -103,7 +103,7 @@ function makeChildWorkspace(overrides: Partial<Workspace> = {}): Workspace {
   return {
     id: uid(),
     name: "Workspace 1",
-    splitRoot: { type: "pane", pane },
+    paneLayout: { type: "pane", pane },
     activePaneId: pane.id,
     ...overrides,
   };
@@ -122,11 +122,11 @@ describe("findSurfaceLocation", () => {
     const pane1 = makePane([mockTerminalSurface()]);
     const pane2 = makePane([targetSurface]);
     const ws1 = makeChildWorkspace({
-      splitRoot: { type: "pane", pane: pane1 },
+      paneLayout: { type: "pane", pane: pane1 },
       activePaneId: pane1.id,
     });
     const ws2 = makeChildWorkspace({
-      splitRoot: { type: "pane", pane: pane2 },
+      paneLayout: { type: "pane", pane: pane2 },
       activePaneId: pane2.id,
     });
 
@@ -151,7 +151,7 @@ describe("findSurfaceLocation", () => {
     const extSurface = mockExtensionSurface();
     const pane = makePane([extSurface]);
     const ws = makeChildWorkspace({
-      splitRoot: { type: "pane", pane },
+      paneLayout: { type: "pane", pane },
       activePaneId: pane.id,
     });
     workspaces.set([ws]);
@@ -172,7 +172,7 @@ describe("markSurfaceUnreadById", () => {
     const surface = mockTerminalSurface({ hasUnread: false });
     const pane = makePane([surface]);
     const ws = makeChildWorkspace({
-      splitRoot: { type: "pane", pane },
+      paneLayout: { type: "pane", pane },
       activePaneId: pane.id,
     });
     workspaces.set([ws]);
@@ -195,7 +195,7 @@ describe("markSurfaceUnreadById", () => {
     const surface = mockTerminalSurface({ hasUnread: false });
     const pane = makePane([surface]);
     const ws = makeChildWorkspace({
-      splitRoot: { type: "pane", pane },
+      paneLayout: { type: "pane", pane },
       activePaneId: pane.id,
     });
     workspaces.set([ws]);
@@ -222,7 +222,7 @@ describe("focusSurfaceById", () => {
     const pane1 = makePane([surface1]);
     const ws1 = makeChildWorkspace({
       name: "WS 1",
-      splitRoot: { type: "pane", pane: pane1 },
+      paneLayout: { type: "pane", pane: pane1 },
       activePaneId: pane1.id,
     });
 
@@ -230,7 +230,7 @@ describe("focusSurfaceById", () => {
     const pane2 = makePane([mockTerminalSurface(), targetSurface]);
     const ws2 = makeChildWorkspace({
       name: "WS 2",
-      splitRoot: { type: "pane", pane: pane2 },
+      paneLayout: { type: "pane", pane: pane2 },
       activePaneId: pane2.id,
     });
 
@@ -262,7 +262,7 @@ describe("focusSurfaceById", () => {
     const otherSurface = mockTerminalSurface();
     const pane = makePane([otherSurface, targetSurface]);
     const ws = makeChildWorkspace({
-      splitRoot: { type: "pane", pane },
+      paneLayout: { type: "pane", pane },
       activePaneId: pane.id,
     });
     workspaces.set([ws]);

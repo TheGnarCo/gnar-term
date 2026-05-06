@@ -13,7 +13,7 @@ function makeWs(
   },
 ): Workspace {
   return {
-    splitRoot: {
+    paneLayout: {
       type: "pane",
       pane: { id: "p1", surfaces: [], activeSurfaceId: null },
     },

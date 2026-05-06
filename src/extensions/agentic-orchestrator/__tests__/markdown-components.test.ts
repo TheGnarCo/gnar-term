@@ -304,7 +304,7 @@ describe("Kanban widget", () => {
         color: "blue",
         workspaceDashboardEnabled: true,
         branchedWorkspaceIds: [],
-        splitRoot: {
+        paneLayout: {
           type: "pane",
           pane: { id: "gp", surfaces: [], activeSurfaceId: null },
         },
@@ -314,7 +314,7 @@ describe("Kanban widget", () => {
         id: "ws-running",
         name: "Run",
         activePaneId: "p",
-        splitRoot: {
+        paneLayout: {
           type: "pane",
           pane: {
             id: "p",
@@ -336,7 +336,7 @@ describe("Kanban widget", () => {
         id: "ws-waiting",
         name: "Wait",
         activePaneId: "p",
-        splitRoot: {
+        paneLayout: {
           type: "pane",
           pane: {
             id: "p",
@@ -358,7 +358,7 @@ describe("Kanban widget", () => {
         id: "ws-idle",
         name: "Idle",
         activePaneId: "p",
-        splitRoot: {
+        paneLayout: {
           type: "pane",
           pane: {
             id: "p",
@@ -454,7 +454,7 @@ describe("Issues widget", () => {
         color: "blue",
         workspaceDashboardEnabled: true,
         branchedWorkspaceIds: [],
-        splitRoot: {
+        paneLayout: {
           type: "pane",
           pane: { id: "ip", surfaces: [], activeSurfaceId: null },
         },
@@ -1003,7 +1003,7 @@ describe("Prs widget", () => {
         color: "blue",
         workspaceDashboardEnabled: true,
         branchedWorkspaceIds: [],
-        splitRoot: {
+        paneLayout: {
           type: "pane",
           pane: { id: "pp", surfaces: [], activeSurfaceId: null },
         },
@@ -1350,7 +1350,7 @@ describe("TaskSpawner widget", () => {
         color: "blue",
         workspaceDashboardEnabled: true,
         branchedWorkspaceIds: [],
-        splitRoot: {
+        paneLayout: {
           type: "pane",
           pane: { id: "sp", surfaces: [], activeSurfaceId: null },
         },

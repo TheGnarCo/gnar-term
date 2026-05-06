@@ -61,7 +61,7 @@ export function splitPaneEmpty(
   const ws = get(activeWorkspace);
   if (!ws) return null;
   const activeP =
-    getAllPanes(ws.splitRoot).find((p) => p.id === paneId) ?? get(activePane);
+    getAllPanes(ws.paneLayout).find((p) => p.id === paneId) ?? get(activePane);
   if (!activeP) return null;
 
   const newPane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
@@ -75,10 +75,10 @@ export function splitPaneEmpty(
     ratio: 0.5,
   };
 
-  if (ws.splitRoot.type === "pane" && ws.splitRoot.pane.id === activeP.id) {
-    ws.splitRoot = newSplit;
+  if (ws.paneLayout.type === "pane" && ws.paneLayout.pane.id === activeP.id) {
+    ws.paneLayout = newSplit;
   } else {
-    const parentInfo = findParentSplit(ws.splitRoot, activeP.id);
+    const parentInfo = findParentSplit(ws.paneLayout, activeP.id);
     if (parentInfo && parentInfo.parent.type === "split") {
       parentInfo.parent.children[parentInfo.index] = newSplit;
     }
@@ -101,7 +101,8 @@ export async function splitPane(
   const ws = get(activeWorkspace);
   const sourcePane =
     ws &&
-    (getAllPanes(ws.splitRoot).find((p) => p.id === paneId) ?? get(activePane));
+    (getAllPanes(ws.paneLayout).find((p) => p.id === paneId) ??
+      get(activePane));
   const sourceSurface = sourcePane
     ? sourcePane.surfaces.find((s) => s.id === sourcePane.activeSurfaceId)
     : null;
@@ -118,7 +119,7 @@ export function removePane(ws: Workspace, pane: Pane) {
   const paneId = pane.id;
   const wsId = ws.id;
   pane.resizeObserver?.disconnect();
-  if (ws.splitRoot.type === "pane" && ws.splitRoot.pane.id === pane.id) {
+  if (ws.paneLayout.type === "pane" && ws.paneLayout.pane.id === pane.id) {
     const wsList = get(workspaces);
     const wsIdx = wsList.indexOf(ws);
     workspaces.update((list) => list.filter((w) => w.id !== ws.id));
@@ -132,15 +133,15 @@ export function removePane(ws: Workspace, pane: Pane) {
     }
     return;
   }
-  const parentInfo = findParentSplit(ws.splitRoot, pane.id);
+  const parentInfo = findParentSplit(ws.paneLayout, pane.id);
   if (parentInfo && parentInfo.parent.type === "split") {
     const sibling = parentInfo.parent.children[parentInfo.index === 0 ? 1 : 0];
-    if (ws.splitRoot === parentInfo.parent) {
-      ws.splitRoot = sibling;
+    if (ws.paneLayout === parentInfo.parent) {
+      ws.paneLayout = sibling;
     } else {
-      replaceNodeInTree(ws.splitRoot, parentInfo.parent, sibling);
+      replaceNodeInTree(ws.paneLayout, parentInfo.parent, sibling);
     }
-    ws.activePaneId = getAllPanes(ws.splitRoot)[0]?.id ?? null;
+    ws.activePaneId = getAllPanes(ws.paneLayout)[0]?.id ?? null;
   }
   workspaces.update((l) => l);
   eventBus.emit({ type: "pane:closed", id: paneId, workspaceId: wsId });
@@ -150,7 +151,7 @@ export function removePane(ws: Workspace, pane: Pane) {
 export function closePane(paneId: string) {
   const ws = get(activeWorkspace);
   if (!ws) return;
-  const pane = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
+  const pane = getAllPanes(ws.paneLayout).find((p) => p.id === paneId);
   if (!pane) return;
   for (const s of [...pane.surfaces]) {
     if (isTerminalSurface(s)) {
@@ -167,7 +168,7 @@ export function closePane(paneId: string) {
 export function dismissPane(paneId: string): void {
   const ws = get(activeWorkspace);
   if (!ws) return;
-  const pane = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
+  const pane = getAllPanes(ws.paneLayout).find((p) => p.id === paneId);
   if (!pane) return;
   pane.exitedSurface = undefined;
   removePane(ws, pane);
@@ -177,7 +178,7 @@ export function dismissPane(paneId: string): void {
 export async function relaunchPane(paneId: string): Promise<void> {
   const ws = get(activeWorkspace);
   if (!ws) return;
-  const pane = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
+  const pane = getAllPanes(ws.paneLayout).find((p) => p.id === paneId);
   if (!pane || !pane.exitedSurface) return;
   const { definedCommand, cwd } = pane.exitedSurface;
   pane.exitedSurface = undefined;
@@ -208,7 +209,7 @@ export function focusPane(paneId: string) {
  *
  * - source pane goes empty → it collapses out of the split tree
  *   (terminal/surface NOT disposed; it lives on in the new pane)
- * - target pane is the splitRoot → the wrapping split becomes the root
+ * - target pane is the paneLayout → the wrapping split becomes the root
  * - target pane is nested → its slot in the parent split is replaced
  *
  * No-op when source === target, when either pane can't be found, or
@@ -223,7 +224,7 @@ export function splitPaneWithSurface(
 ): void {
   const ws = get(activeWorkspace);
   if (!ws) return;
-  const allPanes = getAllPanes(ws.splitRoot);
+  const allPanes = getAllPanes(ws.paneLayout);
   const sourcePane = allPanes.find((p) => p.id === sourcePaneId);
   const targetPane = allPanes.find((p) => p.id === targetPaneId);
   if (!sourcePane || !targetPane) return;
@@ -258,10 +259,10 @@ export function splitPaneWithSurface(
     ratio: 0.5,
   };
 
-  if (ws.splitRoot.type === "pane" && ws.splitRoot.pane.id === targetPaneId) {
-    ws.splitRoot = newSplit;
+  if (ws.paneLayout.type === "pane" && ws.paneLayout.pane.id === targetPaneId) {
+    ws.paneLayout = newSplit;
   } else {
-    const parentInfo = findParentSplit(ws.splitRoot, targetPaneId);
+    const parentInfo = findParentSplit(ws.paneLayout, targetPaneId);
     if (parentInfo && parentInfo.parent.type === "split") {
       parentInfo.parent.children[parentInfo.index] = newSplit;
     }
@@ -271,7 +272,10 @@ export function splitPaneWithSurface(
   // already moved into the new pane, so we explicitly skip terminal
   // disposal (unlike removePane → closePane which kills the PTY).
   if (sourcePane.surfaces.length === 0) {
-    if (ws.splitRoot.type === "pane" && ws.splitRoot.pane.id === sourcePaneId) {
+    if (
+      ws.paneLayout.type === "pane" &&
+      ws.paneLayout.pane.id === sourcePaneId
+    ) {
       // Source was the root and is now empty — but we just made the
       // new split (containing target + new pane) the new root above
       // when target === root, which excludes this branch. Reaching
@@ -279,14 +283,14 @@ export function splitPaneWithSurface(
       // structurally impossible in a binary split tree. Bail safely.
       return;
     }
-    const srcParentInfo = findParentSplit(ws.splitRoot, sourcePaneId);
+    const srcParentInfo = findParentSplit(ws.paneLayout, sourcePaneId);
     if (srcParentInfo && srcParentInfo.parent.type === "split") {
       const sibling =
         srcParentInfo.parent.children[srcParentInfo.index === 0 ? 1 : 0]!;
-      if (ws.splitRoot === srcParentInfo.parent) {
-        ws.splitRoot = sibling;
+      if (ws.paneLayout === srcParentInfo.parent) {
+        ws.paneLayout = sibling;
       } else {
-        replaceNodeInTree(ws.splitRoot, srcParentInfo.parent, sibling);
+        replaceNodeInTree(ws.paneLayout, srcParentInfo.parent, sibling);
       }
     }
   }
@@ -309,7 +313,7 @@ export function mergeTabToPane(
   if (sourcePaneId === targetPaneId) return;
   const ws = get(activeWorkspace);
   if (!ws) return;
-  const allPanes = getAllPanes(ws.splitRoot);
+  const allPanes = getAllPanes(ws.paneLayout);
   const sourcePane = allPanes.find((p) => p.id === sourcePaneId);
   const targetPane = allPanes.find((p) => p.id === targetPaneId);
   if (!sourcePane || !targetPane) return;
@@ -323,7 +327,7 @@ export function mergeTabToPane(
   }
   if (
     sourcePane.surfaces.length === 0 &&
-    !(ws.splitRoot.type === "pane" && ws.splitRoot.pane.id === sourcePaneId)
+    !(ws.paneLayout.type === "pane" && ws.paneLayout.pane.id === sourcePaneId)
   ) {
     collapseEmptyPaneInWorkspace(ws, sourcePaneId);
   }
@@ -337,7 +341,7 @@ export function mergeTabToPane(
 export function reorderTab(paneId: string, fromIdx: number, toIdx: number) {
   const ws = get(activeWorkspace);
   if (!ws) return;
-  const pane = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
+  const pane = getAllPanes(ws.paneLayout).find((p) => p.id === paneId);
   if (!pane || fromIdx === toIdx) return;
   const item = pane.surfaces.splice(fromIdx, 1)[0]!;
   const adjustedTo = fromIdx < toIdx ? toIdx - 1 : toIdx;
@@ -349,7 +353,7 @@ export function reorderTab(paneId: string, fromIdx: number, toIdx: number) {
 export function focusDirection(dir: "left" | "right" | "up" | "down") {
   const ws = get(activeWorkspace);
   if (!ws) return;
-  const allPanes = getAllPanes(ws.splitRoot);
+  const allPanes = getAllPanes(ws.paneLayout);
   if (allPanes.length <= 1) return;
 
   const active = allPanes.find((p) => p.id === ws.activePaneId);
@@ -438,7 +442,7 @@ export function resizeActivePane(
 ): void {
   const ws = get(activeWorkspace);
   if (!ws || !ws.activePaneId) return;
-  const parentInfo = findParentSplit(ws.splitRoot, ws.activePaneId);
+  const parentInfo = findParentSplit(ws.paneLayout, ws.activePaneId);
   if (!parentInfo || parentInfo.parent.type !== "split") return;
   const parent = parentInfo.parent;
 
@@ -494,7 +498,7 @@ export function expandWorkspaceIntoPanes(
   const allWs = get(workspaces);
   const srcWs = allWs.find((ws) => ws.id === srcWorkspaceId);
   const tgtWs = allWs.find((ws) =>
-    getAllPanes(ws.splitRoot).some((p) => p.id === targetPaneId),
+    getAllPanes(ws.paneLayout).some((p) => p.id === targetPaneId),
   );
   if (!srcWs || !tgtWs || srcWs === tgtWs) return;
 
@@ -512,7 +516,7 @@ export function expandWorkspaceIntoPanes(
       activeSurfaceId: surface.id,
     };
 
-    const anchorPane = getAllPanes(tgtWs.splitRoot).find(
+    const anchorPane = getAllPanes(tgtWs.paneLayout).find(
       (p) => p.id === anchorPaneId,
     );
     if (!anchorPane) continue;
@@ -533,12 +537,12 @@ export function expandWorkspaceIntoPanes(
     };
 
     if (
-      tgtWs.splitRoot.type === "pane" &&
-      tgtWs.splitRoot.pane.id === anchorPaneId
+      tgtWs.paneLayout.type === "pane" &&
+      tgtWs.paneLayout.pane.id === anchorPaneId
     ) {
-      tgtWs.splitRoot = newSplit;
+      tgtWs.paneLayout = newSplit;
     } else {
-      const parentInfo = findParentSplit(tgtWs.splitRoot, anchorPaneId);
+      const parentInfo = findParentSplit(tgtWs.paneLayout, anchorPaneId);
       if (parentInfo && parentInfo.parent.type === "split") {
         parentInfo.parent.children[parentInfo.index] = newSplit;
       }
@@ -584,11 +588,11 @@ export function mergeWorkspaceIntoPane(
   const allWs = get(workspaces);
   const srcWs = allWs.find((ws) => ws.id === srcWorkspaceId);
   const tgtWs = allWs.find((ws) =>
-    getAllPanes(ws.splitRoot).some((p) => p.id === targetPaneId),
+    getAllPanes(ws.paneLayout).some((p) => p.id === targetPaneId),
   );
   if (!srcWs || !tgtWs || srcWs === tgtWs) return;
 
-  const targetPane = getAllPanes(tgtWs.splitRoot).find(
+  const targetPane = getAllPanes(tgtWs.paneLayout).find(
     (p) => p.id === targetPaneId,
   );
   if (!targetPane) return;
@@ -643,12 +647,12 @@ export function moveSurfaceToWorkspace(
 ): void {
   const allWs = get(workspaces);
   const srcWs = allWs.find((ws) =>
-    getAllPanes(ws.splitRoot).some((p) => p.id === sourcePaneId),
+    getAllPanes(ws.paneLayout).some((p) => p.id === sourcePaneId),
   );
   const tgtWs = allWs.find((ws) => ws.id === targetWorkspaceId);
   if (!srcWs || !tgtWs || srcWs === tgtWs) return;
 
-  const sourcePane = getAllPanes(srcWs.splitRoot).find(
+  const sourcePane = getAllPanes(srcWs.paneLayout).find(
     (p) => p.id === sourcePaneId,
   );
   if (!sourcePane) return;
@@ -662,14 +666,14 @@ export function moveSurfaceToWorkspace(
   if (
     sourcePane.surfaces.length === 0 &&
     !(
-      srcWs.splitRoot.type === "pane" &&
-      srcWs.splitRoot.pane.id === sourcePaneId
+      srcWs.paneLayout.type === "pane" &&
+      srcWs.paneLayout.pane.id === sourcePaneId
     )
   ) {
     collapseEmptyPaneInWorkspace(srcWs, sourcePaneId);
   }
 
-  const tgtAllPanes = getAllPanes(tgtWs.splitRoot);
+  const tgtAllPanes = getAllPanes(tgtWs.paneLayout);
   const targetPane =
     tgtAllPanes.find((p) => p.id === tgtWs.activePaneId) ?? tgtAllPanes[0];
   if (!targetPane) return;

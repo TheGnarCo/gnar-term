@@ -134,7 +134,7 @@ function makeChildWorkspace(overrides: Partial<Workspace> = {}): Workspace {
   return {
     id: uid(),
     name: "Workspace 1",
-    splitRoot: { type: "pane", pane },
+    paneLayout: { type: "pane", pane },
     activePaneId: pane.id,
     ...overrides,
   };
@@ -273,7 +273,7 @@ describe("workspace-service", () => {
       const s = mockTerminalSurface({ ptyId: 42 });
       const pane = makePane([s]);
       const ws1 = makeChildWorkspace({
-        splitRoot: { type: "pane", pane },
+        paneLayout: { type: "pane", pane },
         activePaneId: pane.id,
       });
       const ws2 = makeChildWorkspace({ name: "WS2" });
@@ -291,7 +291,7 @@ describe("workspace-service", () => {
       const pane = makePane();
       pane.resizeObserver = { disconnect } as unknown as ResizeObserver;
       const ws1 = makeChildWorkspace({
-        splitRoot: { type: "pane", pane },
+        paneLayout: { type: "pane", pane },
         activePaneId: pane.id,
       });
       const ws2 = makeChildWorkspace({ name: "WS2" });
@@ -571,7 +571,7 @@ describe("workspace-service", () => {
       const pane = makePane([s]);
       const ws = makeChildWorkspace({
         name: "My WS",
-        splitRoot: { type: "pane", pane },
+        paneLayout: { type: "pane", pane },
         activePaneId: pane.id,
       });
       workspaces.set([ws]);
@@ -597,7 +597,7 @@ describe("workspace-service", () => {
       const s = mockTerminalSurface();
       const pane = makePane([s]);
       const ws = makeChildWorkspace({
-        splitRoot: { type: "pane", pane },
+        paneLayout: { type: "pane", pane },
         activePaneId: pane.id,
       });
       workspaces.set([ws]);
@@ -627,7 +627,7 @@ describe("pane-service", () => {
       const pane1 = makePane();
       const pane2 = makePane();
       const ws = makeChildWorkspace({
-        splitRoot: {
+        paneLayout: {
           type: "split",
           direction: "horizontal",
           ratio: 0.5,
@@ -650,7 +650,7 @@ describe("pane-service", () => {
       const pane1 = makePane();
       const pane2 = makePane();
       const ws = makeChildWorkspace({
-        splitRoot: {
+        paneLayout: {
           type: "split",
           direction: "horizontal",
           ratio: 0.5,
@@ -676,7 +676,7 @@ describe("pane-service", () => {
     it("is a no-op if pane is already focused", () => {
       const pane = makePane();
       const ws = makeChildWorkspace({
-        splitRoot: { type: "pane", pane },
+        paneLayout: { type: "pane", pane },
         activePaneId: pane.id,
       });
       workspaces.set([ws]);
@@ -695,7 +695,7 @@ describe("pane-service", () => {
       const s3 = mockTerminalSurface({ title: "C" });
       const pane = makePane([s1, s2, s3]);
       const ws = makeChildWorkspace({
-        splitRoot: { type: "pane", pane },
+        paneLayout: { type: "pane", pane },
         activePaneId: pane.id,
       });
       workspaces.set([ws]);
@@ -712,7 +712,7 @@ describe("pane-service", () => {
       const s2 = mockTerminalSurface({ title: "B" });
       const pane = makePane([s1, s2]);
       const ws = makeChildWorkspace({
-        splitRoot: { type: "pane", pane },
+        paneLayout: { type: "pane", pane },
         activePaneId: pane.id,
       });
       workspaces.set([ws]);
@@ -730,7 +730,7 @@ describe("pane-service", () => {
       const s3 = mockTerminalSurface({ title: "C" });
       const pane = makePane([s1, s2, s3]);
       const ws = makeChildWorkspace({
-        splitRoot: { type: "pane", pane },
+        paneLayout: { type: "pane", pane },
         activePaneId: pane.id,
       });
       workspaces.set([ws]);
@@ -748,7 +748,7 @@ describe("pane-service", () => {
       const s3 = mockTerminalSurface({ title: "C" });
       const pane = makePane([s1, s2, s3]);
       const ws = makeChildWorkspace({
-        splitRoot: { type: "pane", pane },
+        paneLayout: { type: "pane", pane },
         activePaneId: pane.id,
       });
       workspaces.set([ws]);
@@ -768,7 +768,7 @@ describe("pane-service", () => {
       const pane2 = makePane();
       const pane3 = makePane();
       const ws = makeChildWorkspace({
-        splitRoot: {
+        paneLayout: {
           type: "split",
           direction: "horizontal",
           ratio: 0.5,
@@ -836,7 +836,7 @@ describe("pane-service", () => {
     it("is a no-op with only one pane", () => {
       const pane = makePane();
       const ws = makeChildWorkspace({
-        splitRoot: { type: "pane", pane },
+        paneLayout: { type: "pane", pane },
         activePaneId: pane.id,
       });
       workspaces.set([ws]);
@@ -853,7 +853,7 @@ describe("pane-service", () => {
       const pane1 = makePane();
       const pane2 = makePane();
       const ws = makeChildWorkspace({
-        splitRoot: {
+        paneLayout: {
           type: "split",
           direction: "horizontal",
           ratio: 0.5,
@@ -870,17 +870,17 @@ describe("pane-service", () => {
       removePane(ws, pane1);
 
       const updated = get(activeWorkspace);
-      expect(updated?.splitRoot.type).toBe("pane");
-      expect((updated?.splitRoot as { type: "pane"; pane: Pane }).pane.id).toBe(
-        pane2.id,
-      );
+      expect(updated?.paneLayout.type).toBe("pane");
+      expect(
+        (updated?.paneLayout as { type: "pane"; pane: Pane }).pane.id,
+      ).toBe(pane2.id);
     });
 
     it("emits pane:closed", () => {
       const pane1 = makePane();
       const pane2 = makePane();
       const ws = makeChildWorkspace({
-        splitRoot: {
+        paneLayout: {
           type: "split",
           direction: "horizontal",
           ratio: 0.5,
@@ -904,7 +904,7 @@ describe("pane-service", () => {
     it("removes the workspace when removing the root pane (and creates a new one)", () => {
       const pane = makePane();
       const ws1 = makeChildWorkspace({
-        splitRoot: { type: "pane", pane },
+        paneLayout: { type: "pane", pane },
         activePaneId: pane.id,
       });
       const ws2 = makeChildWorkspace({ name: "WS2" });
@@ -924,7 +924,7 @@ describe("pane-service", () => {
       pane1.resizeObserver = { disconnect } as unknown as ResizeObserver;
       const pane2 = makePane();
       const ws = makeChildWorkspace({
-        splitRoot: {
+        paneLayout: {
           type: "split",
           direction: "horizontal",
           ratio: 0.5,
@@ -957,7 +957,7 @@ describe("surface-service", () => {
       const pane = makePane([s1, s2]);
       pane.activeSurfaceId = s1.id;
       const ws = makeChildWorkspace({
-        splitRoot: { type: "pane", pane },
+        paneLayout: { type: "pane", pane },
         activePaneId: pane.id,
       });
       workspaces.set([ws]);
@@ -974,7 +974,7 @@ describe("surface-service", () => {
       const pane = makePane([s1, s2]);
       pane.activeSurfaceId = s1.id;
       const ws = makeChildWorkspace({
-        splitRoot: { type: "pane", pane },
+        paneLayout: { type: "pane", pane },
         activePaneId: pane.id,
       });
       workspaces.set([ws]);
@@ -991,7 +991,7 @@ describe("surface-service", () => {
       const pane = makePane([s1, s2]);
       pane.activeSurfaceId = s1.id;
       const ws = makeChildWorkspace({
-        splitRoot: { type: "pane", pane },
+        paneLayout: { type: "pane", pane },
         activePaneId: pane.id,
       });
       workspaces.set([ws]);
@@ -1015,7 +1015,7 @@ describe("surface-service", () => {
       const pane = makePane([s1, s2, s3]);
       pane.activeSurfaceId = s1.id;
       const ws = makeChildWorkspace({
-        splitRoot: { type: "pane", pane },
+        paneLayout: { type: "pane", pane },
         activePaneId: pane.id,
       });
       workspaces.set([ws]);
@@ -1032,7 +1032,7 @@ describe("surface-service", () => {
       const pane = makePane([s1, s2]);
       pane.activeSurfaceId = s2.id;
       const ws = makeChildWorkspace({
-        splitRoot: { type: "pane", pane },
+        paneLayout: { type: "pane", pane },
         activePaneId: pane.id,
       });
       workspaces.set([ws]);
@@ -1047,7 +1047,7 @@ describe("surface-service", () => {
       const s = mockTerminalSurface();
       const pane = makePane([s]);
       const ws = makeChildWorkspace({
-        splitRoot: { type: "pane", pane },
+        paneLayout: { type: "pane", pane },
         activePaneId: pane.id,
       });
       workspaces.set([ws]);
@@ -1067,7 +1067,7 @@ describe("surface-service", () => {
       const pane = makePane([s1, s2, s3]);
       pane.activeSurfaceId = s2.id;
       const ws = makeChildWorkspace({
-        splitRoot: { type: "pane", pane },
+        paneLayout: { type: "pane", pane },
         activePaneId: pane.id,
       });
       workspaces.set([ws]);
@@ -1084,7 +1084,7 @@ describe("surface-service", () => {
       const pane = makePane([s1, s2]);
       pane.activeSurfaceId = s1.id;
       const ws = makeChildWorkspace({
-        splitRoot: { type: "pane", pane },
+        paneLayout: { type: "pane", pane },
         activePaneId: pane.id,
       });
       workspaces.set([ws]);
@@ -1104,7 +1104,7 @@ describe("surface-service", () => {
       const pane = makePane([s1, s2, s3]);
       pane.activeSurfaceId = s1.id;
       const ws = makeChildWorkspace({
-        splitRoot: { type: "pane", pane },
+        paneLayout: { type: "pane", pane },
         activePaneId: pane.id,
       });
       workspaces.set([ws]);
@@ -1122,7 +1122,7 @@ describe("surface-service", () => {
       const pane = makePane([s1, s2, s3]);
       pane.activeSurfaceId = s1.id;
       const ws = makeChildWorkspace({
-        splitRoot: { type: "pane", pane },
+        paneLayout: { type: "pane", pane },
         activePaneId: pane.id,
       });
       workspaces.set([ws]);
@@ -1138,7 +1138,7 @@ describe("surface-service", () => {
       const pane = makePane([s1]);
       pane.activeSurfaceId = s1.id;
       const ws = makeChildWorkspace({
-        splitRoot: { type: "pane", pane },
+        paneLayout: { type: "pane", pane },
         activePaneId: pane.id,
       });
       workspaces.set([ws]);
@@ -1157,7 +1157,7 @@ describe("surface-service", () => {
       const pane = makePane([s1, s2]);
       pane.activeSurfaceId = s1.id;
       const ws = makeChildWorkspace({
-        splitRoot: { type: "pane", pane },
+        paneLayout: { type: "pane", pane },
         activePaneId: pane.id,
       });
       workspaces.set([ws]);
@@ -1175,7 +1175,7 @@ describe("surface-service", () => {
       const pane = makePane([s1, s2]);
       pane.activeSurfaceId = s1.id;
       const ws = makeChildWorkspace({
-        splitRoot: { type: "pane", pane },
+        paneLayout: { type: "pane", pane },
         activePaneId: pane.id,
       });
       workspaces.set([ws]);
@@ -1193,7 +1193,7 @@ describe("surface-service", () => {
       const pane = makePane([s1, s2]);
       pane.activeSurfaceId = s1.id;
       const ws = makeChildWorkspace({
-        splitRoot: { type: "pane", pane },
+        paneLayout: { type: "pane", pane },
         activePaneId: pane.id,
       });
       workspaces.set([ws]);
@@ -1210,7 +1210,7 @@ describe("surface-service", () => {
       const pane = makePane([s1, s2]);
       pane.activeSurfaceId = s1.id;
       const ws = makeChildWorkspace({
-        splitRoot: { type: "pane", pane },
+        paneLayout: { type: "pane", pane },
         activePaneId: pane.id,
       });
       workspaces.set([ws]);
@@ -1233,7 +1233,7 @@ describe("surface-service", () => {
       pane1.activeSurfaceId = s.id;
       const pane2 = makePane();
       const ws = makeChildWorkspace({
-        splitRoot: {
+        paneLayout: {
           type: "split",
           direction: "horizontal",
           ratio: 0.5,
@@ -1252,10 +1252,10 @@ describe("surface-service", () => {
       // pane1 had its last surface removed, so the pane should be gone
       // and pane2 should be promoted to root
       const updated = get(activeWorkspace);
-      expect(updated?.splitRoot.type).toBe("pane");
-      expect((updated?.splitRoot as { type: "pane"; pane: Pane }).pane.id).toBe(
-        pane2.id,
-      );
+      expect(updated?.paneLayout.type).toBe("pane");
+      expect(
+        (updated?.paneLayout as { type: "pane"; pane: Pane }).pane.id,
+      ).toBe(pane2.id);
     });
 
     it("closes the workspace when the last surface of the only pane is closed", () => {
@@ -1263,7 +1263,7 @@ describe("surface-service", () => {
       const pane = makePane([s]);
       pane.activeSurfaceId = s.id;
       const ws = makeChildWorkspace({
-        splitRoot: { type: "pane", pane },
+        paneLayout: { type: "pane", pane },
         activePaneId: pane.id,
       });
       const other = makeChildWorkspace({ id: "ws-other" });
@@ -1283,7 +1283,7 @@ describe("surface-service", () => {
       const s = mockTerminalSurface();
       const pane = makePane([s]);
       const ws = makeChildWorkspace({
-        splitRoot: { type: "pane", pane },
+        paneLayout: { type: "pane", pane },
         activePaneId: pane.id,
       });
       workspaces.set([ws]);
@@ -1307,7 +1307,7 @@ describe("surface-service", () => {
       const s = mockTerminalSurface();
       const pane = makePane([s]);
       const ws = makeChildWorkspace({
-        splitRoot: { type: "pane", pane },
+        paneLayout: { type: "pane", pane },
         activePaneId: pane.id,
       });
       workspaces.set([ws]);
@@ -1322,7 +1322,7 @@ describe("surface-service", () => {
       const s = mockTerminalSurface();
       const pane = makePane([s]);
       const ws = makeChildWorkspace({
-        splitRoot: { type: "pane", pane },
+        paneLayout: { type: "pane", pane },
         activePaneId: pane.id,
       });
       workspaces.set([ws]);

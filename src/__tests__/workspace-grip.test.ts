@@ -8,7 +8,7 @@ function makeChildWorkspace(): Workspace {
   return {
     id: "ws1",
     name: "Test",
-    splitRoot: {
+    paneLayout: {
       type: "pane",
       pane: { id: "p1", surfaces: [], activeSurfaceId: null },
     },

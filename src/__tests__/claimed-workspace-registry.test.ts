@@ -17,7 +17,7 @@ function makeWorkspace(id: string, rootWorkspaceId?: string): Workspace {
   return {
     id,
     name: id,
-    splitRoot: {
+    paneLayout: {
       type: "pane",
       pane: { id: `${id}-p`, surfaces: [], activeSurfaceId: null },
     },

@@ -70,7 +70,7 @@ function setupWorkspace(pane: Pane): Workspace {
   const ws: Workspace = {
     id: "ws1",
     name: "Test",
-    splitRoot: { type: "pane", pane },
+    paneLayout: { type: "pane", pane },
     activePaneId: pane.id,
   };
   workspaces.set([ws]);
@@ -174,7 +174,7 @@ describe("PaneView notification chrome", () => {
     expect(unread1.notification).toBeUndefined();
     // Store reference is also up to date (re-emitted via .update())
     const ws = get(workspaces)[0];
-    const stored = ws?.splitRoot;
+    const stored = ws?.paneLayout;
     if (stored && stored.type === "pane") {
       expect(stored.pane.surfaces.every((s) => !s.hasUnread)).toBe(true);
     }

@@ -39,7 +39,7 @@ function makeChildWorkspace(id: string): { ws: Workspace; pane: Pane } {
   const ws: Workspace = {
     id,
     name: id,
-    splitRoot: { type: "pane", pane },
+    paneLayout: { type: "pane", pane },
     activePaneId: pane.id,
   };
   return { ws, pane };
@@ -59,7 +59,7 @@ describe("openFileAsPreviewSplit", () => {
 
     openFileAsPreviewSplit("/docs/README.md");
 
-    const allPanes = getAllPanes(get(workspaces)[0]!.splitRoot);
+    const allPanes = getAllPanes(get(workspaces)[0]!.paneLayout);
     expect(allPanes).toHaveLength(2);
 
     const newPane = allPanes.find((p) => p.id !== pane.id)!;
@@ -81,10 +81,10 @@ describe("openFileAsPreviewSplit", () => {
 
     openFileAsPreviewSplit("/docs/README.md");
 
-    const splitRoot = get(workspaces)[0]!.splitRoot;
-    expect(splitRoot.type).toBe("split");
-    if (splitRoot.type === "split") {
-      expect(splitRoot.direction).toBe("horizontal");
+    const paneLayout = get(workspaces)[0]!.paneLayout;
+    expect(paneLayout.type).toBe("split");
+    if (paneLayout.type === "split") {
+      expect(paneLayout.direction).toBe("horizontal");
     }
   });
 
@@ -103,7 +103,7 @@ describe("openFileAsPreviewSplit", () => {
     openFileAsPreviewSplit("/docs/README.md");
 
     // No split should have occurred — still only one pane.
-    const allPanes = getAllPanes(get(workspaces)[0]!.splitRoot);
+    const allPanes = getAllPanes(get(workspaces)[0]!.paneLayout);
     expect(allPanes).toHaveLength(1);
 
     // No new surface placed.

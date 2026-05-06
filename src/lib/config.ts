@@ -90,7 +90,7 @@ export interface WorkspaceTemplate {
  * Today this carries Branches and Dashboards; path-rooted Workspace
  * records still persist separately in `parentWorkspaces` until the
  * runtime type unification lands. The `layout` field carries the
- * serialized splitRoot. Fields that don't apply to a given record
+ * serialized paneLayout. Fields that don't apply to a given record
  * (e.g. `path`, `color` on Branches) are omitted.
  */
 export interface WorkspaceDef {

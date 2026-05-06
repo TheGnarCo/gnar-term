@@ -110,7 +110,7 @@ function makeRunningTerminalWs(id: string, name: string, ptyId: number) {
   return {
     id,
     name,
-    splitRoot: {
+    paneLayout: {
       type: "pane" as const,
       pane: {
         id: `${id}-p1`,

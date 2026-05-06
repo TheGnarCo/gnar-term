@@ -128,7 +128,7 @@ export const introspectionTools: ToolDef[] = [
         ? get(workspaces).find((w) => w.id === p.workspace_id)
         : get(activeWorkspace);
       if (!target) return { panes: [] };
-      const list = getAllPanes(target.splitRoot).map((pane) =>
+      const list = getAllPanes(target.paneLayout).map((pane) =>
         describePane(pane, target.id),
       );
       return { panes: list };

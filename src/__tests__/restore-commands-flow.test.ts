@@ -111,7 +111,7 @@ import RestoreCommandPrompt from "../lib/components/RestoreCommandPrompt.svelte"
 import RestoreCommandsOverlay from "../lib/components/RestoreCommandsOverlay.svelte";
 
 function firstTerminalSurface(ws: Workspace): TerminalSurface {
-  for (const pane of getAllPanes(ws.splitRoot)) {
+  for (const pane of getAllPanes(ws.paneLayout)) {
     for (const s of pane.surfaces) {
       if (isTerminalSurface(s)) return s;
     }
@@ -189,7 +189,7 @@ describe("createWorkspaceFromDef — restore vs fresh", () => {
       { restoring: true },
     );
     const ws = get(workspaces)[0]!;
-    const layout = serializeLayout(ws.splitRoot) as {
+    const layout = serializeLayout(ws.paneLayout) as {
       pane: { surfaces: Array<Record<string, unknown>> };
     };
     expect(layout.pane.surfaces[0]!.command).toBe("npm test");
@@ -227,7 +227,7 @@ describe("runDefinedCommand / dismissDefinedCommand", () => {
       {
         id: "ws1",
         name: "ws",
-        splitRoot: { type: "pane", pane },
+        paneLayout: { type: "pane", pane },
         activePaneId: pane.id,
       },
     ]);
@@ -358,7 +358,7 @@ describe("RestoreCommandsOverlay", () => {
       {
         id: "ws1",
         name: "Alpha",
-        splitRoot: {
+        paneLayout: {
           type: "pane",
           pane: { id: "p1", surfaces: [a], activeSurfaceId: a.id },
         },
@@ -367,7 +367,7 @@ describe("RestoreCommandsOverlay", () => {
       {
         id: "ws2",
         name: "Beta",
-        splitRoot: {
+        paneLayout: {
           type: "pane",
           pane: { id: "p2", surfaces: [b], activeSurfaceId: b.id },
         },

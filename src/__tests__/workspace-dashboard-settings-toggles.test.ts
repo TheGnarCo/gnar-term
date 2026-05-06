@@ -30,7 +30,7 @@ const WORKSPACE = {
   branchedWorkspaceIds: [],
   isGit: false,
   createdAt: "2026-04-21T00:00:00.000Z",
-  splitRoot: {
+  paneLayout: {
     type: "pane",
     pane: { id: "wp", surfaces: [], activeSurfaceId: null },
   },
@@ -128,7 +128,7 @@ describe("WorkspaceDashboardSettings — Dashboards toggles", () => {
       {
         id: "ws-diff-1",
         name: "Diff",
-        splitRoot: {
+        paneLayout: {
           type: "pane",
           pane: { id: "p", surfaces: [], activeSurfaceId: null },
         },

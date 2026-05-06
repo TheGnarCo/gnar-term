@@ -171,7 +171,7 @@ function findWorkspace(workspaceId: string): Workspace | undefined {
 function firstPaneAndTerminal(
   ws: Workspace,
 ): { pane: Pane; surfaceId: string } | null {
-  const panes = getAllPanes(ws.splitRoot);
+  const panes = getAllPanes(ws.paneLayout);
   for (const pane of panes) {
     for (const s of pane.surfaces) {
       if (isTerminalSurface(s)) {

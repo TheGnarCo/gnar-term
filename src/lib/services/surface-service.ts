@@ -29,7 +29,7 @@ import { eventBus } from "./event-bus";
 export function selectSurface(paneId: string, surfaceId: string) {
   const ws = get(activeWorkspace);
   if (!ws) return;
-  const pane = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
+  const pane = getAllPanes(ws.paneLayout).find((p) => p.id === paneId);
   if (!pane) return;
   pane.activeSurfaceId = surfaceId;
   const s = pane.surfaces.find((s) => s.id === surfaceId);
@@ -49,7 +49,7 @@ export function closeExtensionSurfaces(surfaceTypeIds: string[]): void {
   const wsList = get(workspaces);
 
   for (const ws of wsList) {
-    const panes = getAllPanes(ws.splitRoot);
+    const panes = getAllPanes(ws.paneLayout);
     for (const pane of panes) {
       // Collect indices in reverse order to preserve splice correctness
       for (let i = pane.surfaces.length - 1; i >= 0; i--) {
@@ -67,7 +67,7 @@ export function closeSurfaceById(paneId: string, surfaceId: string) {
   // workspace, and the App.svelte callsite passes a paneId we know lives
   // in the active workspace, so an exhaustive scan covers both.
   for (const ws of get(workspaces)) {
-    const pane = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
+    const pane = getAllPanes(ws.paneLayout).find((p) => p.id === paneId);
     if (!pane) continue;
     const idx = pane.surfaces.findIndex((s) => s.id === surfaceId);
     if (idx < 0) return;
@@ -96,7 +96,7 @@ function removeSurface(ws: Workspace, pane: Pane, surfaceIdx: number) {
     // workspace just closed — close the whole workspace so the user
     // isn't left staring at an empty-state shell. Matches the
     // pty-exit path in terminal-service.ts.
-    const paneCount = getAllPanes(ws.splitRoot).length;
+    const paneCount = getAllPanes(ws.paneLayout).length;
     if (paneCount > 1) {
       removePane(ws, pane);
       workspaces.update((l) => [...l]);
@@ -119,7 +119,7 @@ function removeSurface(ws: Workspace, pane: Pane, surfaceIdx: number) {
 export async function newSurface(paneId: string) {
   const ws = get(activeWorkspace);
   if (!ws) return;
-  const pane = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
+  const pane = getAllPanes(ws.paneLayout).find((p) => p.id === paneId);
   if (!pane) return;
   const sourceSurface = pane.surfaces.find(
     (s) => s.id === pane.activeSurfaceId,
@@ -140,7 +140,7 @@ export async function newSurface(paneId: string) {
 export async function newSurfaceWithCommand(paneId: string, command: string) {
   const ws = get(activeWorkspace);
   if (!ws) return;
-  const pane = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
+  const pane = getAllPanes(ws.paneLayout).find((p) => p.id === paneId);
   if (!pane) return;
   const sourceSurface = pane.surfaces.find(
     (s) => s.id === pane.activeSurfaceId,
@@ -231,7 +231,7 @@ export function openExtensionSurfaceInPaneById(
   // the agent's target workspace may not be the user's focused one).
   let pane: Pane | undefined;
   for (const ws of get(workspaces)) {
-    const found = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
+    const found = getAllPanes(ws.paneLayout).find((p) => p.id === paneId);
     if (found) {
       pane = found;
       break;
@@ -261,7 +261,7 @@ export function findSurfaceLocation(
 ): { workspace: Workspace; pane: Pane; surface: Surface } | null {
   const wsList = get(workspaces);
   for (const ws of wsList) {
-    for (const pane of getAllPanes(ws.splitRoot)) {
+    for (const pane of getAllPanes(ws.paneLayout)) {
       const surface = pane.surfaces.find((s) => s.id === surfaceId);
       if (surface) return { workspace: ws, pane, surface };
     }
@@ -338,7 +338,7 @@ export function createPreviewSurfaceInPane(
   let owningWs: Workspace | undefined;
   let pane: Pane | undefined;
   for (const ws of get(workspaces)) {
-    const found = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
+    const found = getAllPanes(ws.paneLayout).find((p) => p.id === paneId);
     if (found) {
       owningWs = ws;
       pane = found;
@@ -405,7 +405,7 @@ export function renameActiveSurface(): void {
 export function renameSurface(surfaceId: string, title: string): void {
   workspaces.update((wsList) => {
     for (const ws of wsList) {
-      for (const pane of getAllPanes(ws.splitRoot)) {
+      for (const pane of getAllPanes(ws.paneLayout)) {
         const s = pane.surfaces.find((s) => s.id === surfaceId);
         if (s) {
           s.title = title;

@@ -28,7 +28,7 @@ const WORKSPACE = {
   isGit: false,
   createdAt: "2026-04-21T00:00:00.000Z",
   dashboardWorkspaceId: "ws-legacy-overview",
-  splitRoot: {
+  paneLayout: {
     type: "pane",
     pane: { id: "wp", surfaces: [], activeSurfaceId: null },
   },
@@ -50,7 +50,7 @@ describe("dashboardContributionId backfill", () => {
       {
         id: "ws-legacy-overview",
         name: "Dashboard",
-        splitRoot: {
+        paneLayout: {
           type: "pane",
           pane: {
             id: "p1",
@@ -86,7 +86,7 @@ describe("dashboardContributionId backfill", () => {
       {
         id: "ws-stamped",
         name: "Dashboard",
-        splitRoot: {
+        paneLayout: {
           type: "pane",
           pane: {
             id: "p3",

@@ -20,7 +20,7 @@
     : 'display: none;'}"
 >
   <SplitNodeView
-    node={workspace.splitRoot}
+    node={workspace.paneLayout}
     {workspace}
     {onSelectSurface}
     {onCloseSurface}

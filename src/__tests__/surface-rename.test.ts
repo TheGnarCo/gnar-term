@@ -26,7 +26,7 @@ function makeChildWorkspace(surfaceId: string, title = "Tab"): Workspace {
     id: "ws-1",
     name: "Test",
     activePaneId: "pane-1",
-    splitRoot: {
+    paneLayout: {
       type: "pane",
       pane: {
         id: "pane-1",
@@ -53,7 +53,7 @@ function makeChildWorkspaceWithTerminal(
     id: "ws-1",
     name: "Test",
     activePaneId: "pane-1",
-    splitRoot: {
+    paneLayout: {
       type: "pane",
       pane: {
         id: "pane-1",
@@ -104,8 +104,8 @@ describe("renameSurface()", () => {
     workspaces.set([makeChildWorkspace("s-42", "Original")]);
     renameSurface("s-42", "Renamed");
     const pane =
-      get(workspaces)[0].splitRoot.type === "pane"
-        ? get(workspaces)[0].splitRoot.pane
+      get(workspaces)[0].paneLayout.type === "pane"
+        ? get(workspaces)[0].paneLayout.pane
         : null;
     expect(pane?.surfaces[0].title).toBe("Renamed");
   });
@@ -114,8 +114,8 @@ describe("renameSurface()", () => {
     workspaces.set([makeChildWorkspace("s-42", "Original")]);
     renameSurface("unknown", "Changed");
     const pane =
-      get(workspaces)[0].splitRoot.type === "pane"
-        ? get(workspaces)[0].splitRoot.pane
+      get(workspaces)[0].paneLayout.type === "pane"
+        ? get(workspaces)[0].paneLayout.pane
         : null;
     expect(pane?.surfaces[0].title).toBe("Original");
   });
@@ -124,8 +124,8 @@ describe("renameSurface()", () => {
     workspaces.set([makeChildWorkspaceWithTerminal("s-term", "Original")]);
     renameSurface("s-term", "MyName");
     const pane =
-      get(workspaces)[0].splitRoot.type === "pane"
-        ? get(workspaces)[0].splitRoot.pane
+      get(workspaces)[0].paneLayout.type === "pane"
+        ? get(workspaces)[0].paneLayout.pane
         : null;
     const surface = pane?.surfaces[0];
     expect(surface?.title).toBe("MyName");
@@ -138,8 +138,8 @@ describe("renameSurface()", () => {
     workspaces.set([makeChildWorkspace("s-ext", "Original")]);
     renameSurface("s-ext", "Changed");
     const pane =
-      get(workspaces)[0].splitRoot.type === "pane"
-        ? get(workspaces)[0].splitRoot.pane
+      get(workspaces)[0].paneLayout.type === "pane"
+        ? get(workspaces)[0].paneLayout.pane
         : null;
     const surface = pane?.surfaces[0];
     expect(surface?.title).toBe("Changed");

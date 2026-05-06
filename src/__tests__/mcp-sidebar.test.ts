@@ -16,7 +16,7 @@ function setActiveWorkspace(id: string): void {
   const ws: Workspace = {
     id,
     name: id,
-    splitRoot: { type: "pane", pane },
+    paneLayout: { type: "pane", pane },
     activePaneId: pane.id,
   };
   workspaces.set([ws]);
@@ -114,13 +114,13 @@ describe("mcp-sidebar store (per-workspace)", () => {
     const w1: Workspace = {
       id: "ws-1",
       name: "W1",
-      splitRoot: { type: "pane", pane: p1 },
+      paneLayout: { type: "pane", pane: p1 },
       activePaneId: p1.id,
     };
     const w2: Workspace = {
       id: "ws-2",
       name: "W2",
-      splitRoot: { type: "pane", pane: p2 },
+      paneLayout: { type: "pane", pane: p2 },
       activePaneId: p2.id,
     };
     workspaces.set([w1, w2]);

@@ -114,7 +114,7 @@ function makeChildWorkspace(
   const ws: Workspace = {
     id,
     name,
-    splitRoot: { type: "pane", pane },
+    paneLayout: { type: "pane", pane },
     activePaneId: pane.id,
   };
   return { ws, pane };
@@ -752,7 +752,7 @@ describe("resolveTarget — connection-binding resolution rules (the v1 bug fenc
     // Bind the agent to A, but pass an explicit pane in B.
     const { pane: paneB } = makeChildWorkspace("ws-B"); // separate fixture
     // Replace wsB to contain a pane we can target.
-    wsB.splitRoot = { type: "pane", pane: paneB };
+    wsB.paneLayout = { type: "pane", pane: paneB };
     wsB.activePaneId = paneB.id;
     workspaces.set([wsA, wsB]);
 
@@ -810,12 +810,12 @@ describe("resolveTarget — connection-binding resolution rules (the v1 bug fenc
     const { ws: wsB } = makeChildWorkspace("ws-B");
     workspaces.set([wsA, wsB]);
 
-    // Move paneA into wsB by mutating splitRoot.
-    wsA.splitRoot = {
+    // Move paneA into wsB by mutating paneLayout.
+    wsA.paneLayout = {
       type: "pane",
       pane: { id: "wsA-empty", surfaces: [], activeSurfaceId: null },
     };
-    wsB.splitRoot = { type: "pane", pane: paneA };
+    wsB.paneLayout = { type: "pane", pane: paneA };
     workspaces.update((l) => [...l]);
 
     // Connection still bound to paneA (originally in ws-A). After the move the
@@ -875,7 +875,7 @@ describe("resolveTarget — connection-binding resolution rules (the v1 bug fenc
 
     // Simulate a successful spawn: push a new pane into the tree and record it.
     const newPane: Pane = { id: "new-1", surfaces: [], activeSurfaceId: null };
-    ws.splitRoot = {
+    ws.paneLayout = {
       type: "split",
       direction: "vertical",
       ratio: 0.5,
@@ -1534,7 +1534,7 @@ describe("MCP — spawn_agent worktree flag", () => {
     const ws: Workspace = {
       id: "ws-host",
       name: "host",
-      splitRoot: { type: "pane", pane },
+      paneLayout: { type: "pane", pane },
       activePaneId: pane.id,
     };
     workspaces.set([ws]);

@@ -58,7 +58,7 @@ export function resetRestoreSignal(): void {
 /**
  * Deserialize a WorkspaceDef into a runtime Workspace object.
  * This reconstructs a minimal Workspace suitable for `seedWorkspaces()`.
- * The splitRoot is built lazily — it carries a single pane with no
+ * The paneLayout is built lazily — it carries a single pane with no
  * surfaces until the full restore path populates it.
  */
 export function workspaceDefToWorkspace(def: WorkspaceDef): Workspace {
@@ -66,7 +66,7 @@ export function workspaceDefToWorkspace(def: WorkspaceDef): Workspace {
   const ws: Workspace = {
     id: def.id,
     name: def.name,
-    splitRoot: {
+    paneLayout: {
       type: "pane",
       pane: { id: paneId, surfaces: [], activeSurfaceId: null },
     },

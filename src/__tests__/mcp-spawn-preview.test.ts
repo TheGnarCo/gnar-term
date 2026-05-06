@@ -49,7 +49,7 @@ function makeChildWorkspace(
   const ws: Workspace = {
     id,
     name,
-    splitRoot: { type: "pane", pane },
+    paneLayout: { type: "pane", pane },
     activePaneId: pane.id,
   };
   return { ws, pane };

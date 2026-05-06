@@ -19,7 +19,7 @@ export function uid(): string {
 export interface Workspace {
   id: string;
   name: string;
-  splitRoot: SplitNode;
+  paneLayout: SplitNode;
   activePaneId: string | null;
   // Workspace-level (present on path-rooted Workspaces, absent on Branches)
   path?: string;
@@ -223,8 +223,8 @@ export function getAllPanes(node: SplitNode): Pane[] {
   return [...getAllPanes(node.children[0]), ...getAllPanes(node.children[1])];
 }
 
-export function getAllSurfaces(ws: { splitRoot: SplitNode }): Surface[] {
-  return getAllPanes(ws.splitRoot).flatMap((p) => p.surfaces);
+export function getAllSurfaces(ws: { paneLayout: SplitNode }): Surface[] {
+  return getAllPanes(ws.paneLayout).flatMap((p) => p.surfaces);
 }
 
 export function isTerminalSurface(s: Surface): s is TerminalSurface {

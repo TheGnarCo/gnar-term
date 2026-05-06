@@ -107,7 +107,7 @@ function makeChildWorkspace(overrides: Partial<Workspace> = {}): Workspace {
   return {
     id: uid(),
     name: "Workspace 1",
-    splitRoot: { type: "pane", pane },
+    paneLayout: { type: "pane", pane },
     activePaneId: pane.id,
     ...overrides,
   };
@@ -190,7 +190,7 @@ describe("Workflow: workspace lifecycle", () => {
     expect(ws!.name).toBe("Dev");
 
     // The workspace should have one pane with one terminal surface
-    const panes = getAllPanes(ws!.splitRoot);
+    const panes = getAllPanes(ws!.paneLayout);
     expect(panes).toHaveLength(1);
     expect(panes[0].surfaces).toHaveLength(1);
     expect(panes[0].surfaces[0].kind).toBe("terminal");
@@ -218,13 +218,13 @@ describe("Workflow: pane split and navigation", () => {
 
     // Verify two panes exist
     const currentWs = get(activeWorkspace)!;
-    const panes = getAllPanes(currentWs.splitRoot);
+    const panes = getAllPanes(currentWs.paneLayout);
     expect(panes).toHaveLength(2);
 
     // The split root should now be a split node
-    expect(currentWs.splitRoot.type).toBe("split");
-    if (currentWs.splitRoot.type === "split") {
-      expect(currentWs.splitRoot.direction).toBe("horizontal");
+    expect(currentWs.paneLayout.type).toBe("split");
+    if (currentWs.paneLayout.type === "split") {
+      expect(currentWs.paneLayout.direction).toBe("horizontal");
     }
 
     // activePane should be the new pane (splitPane focuses the new pane)
@@ -244,12 +244,12 @@ describe("Workflow: pane split and navigation", () => {
     closePane(newPaneId);
 
     const afterClose = get(activeWorkspace)!;
-    const remainingPanes = getAllPanes(afterClose.splitRoot);
+    const remainingPanes = getAllPanes(afterClose.paneLayout);
     expect(remainingPanes).toHaveLength(1);
     expect(remainingPanes[0].id).toBe(originalPaneId);
 
-    // splitRoot should collapse back to a pane node
-    expect(afterClose.splitRoot.type).toBe("pane");
+    // paneLayout should collapse back to a pane node
+    expect(afterClose.paneLayout.type).toBe("pane");
   });
 
   it("splits vertically and verifies direction", async () => {
@@ -260,10 +260,10 @@ describe("Workflow: pane split and navigation", () => {
     await splitPane(ws.activePaneId!, "vertical");
 
     const currentWs = get(activeWorkspace)!;
-    expect(currentWs.splitRoot.type).toBe("split");
-    if (currentWs.splitRoot.type === "split") {
-      expect(currentWs.splitRoot.direction).toBe("vertical");
-      expect(currentWs.splitRoot.ratio).toBe(0.5);
+    expect(currentWs.paneLayout.type).toBe("split");
+    if (currentWs.paneLayout.type === "split") {
+      expect(currentWs.paneLayout.direction).toBe("vertical");
+      expect(currentWs.paneLayout.ratio).toBe(0.5);
     }
   });
 
@@ -281,7 +281,7 @@ describe("Workflow: pane split and navigation", () => {
     const ws: Workspace = {
       id: uid(),
       name: "Cwd Source",
-      splitRoot: {
+      paneLayout: {
         type: "split",
         direction: "horizontal",
         ratio: 0.5,
@@ -318,7 +318,7 @@ describe("Workflow: pane split and navigation", () => {
     const ws: Workspace = {
       id: uid(),
       name: "Cwd Source",
-      splitRoot: {
+      paneLayout: {
         type: "split",
         direction: "horizontal",
         ratio: 0.5,
@@ -535,14 +535,14 @@ describe("Workflow: multi-workspace switching", () => {
     await splitPane(termPaneId, "horizontal");
 
     // Terminal workspace should now have 2 panes
-    expect(getAllPanes(get(activeWorkspace)!.splitRoot)).toHaveLength(2);
+    expect(getAllPanes(get(activeWorkspace)!.paneLayout)).toHaveLength(2);
 
     // Switch to Editor workspace — it should still have 1 pane
     switchWorkspace(0);
-    expect(getAllPanes(get(activeWorkspace)!.splitRoot)).toHaveLength(1);
+    expect(getAllPanes(get(activeWorkspace)!.paneLayout)).toHaveLength(1);
 
     // Switch back to Terminal — still has 2 panes
     switchWorkspace(1);
-    expect(getAllPanes(get(activeWorkspace)!.splitRoot)).toHaveLength(2);
+    expect(getAllPanes(get(activeWorkspace)!.paneLayout)).toHaveLength(2);
   });
 });

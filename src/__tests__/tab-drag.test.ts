@@ -139,7 +139,7 @@ function makeChildWorkspace(pane: Pane): Workspace {
   return {
     id: uid(),
     name: "WS",
-    splitRoot: { type: "pane", pane },
+    paneLayout: { type: "pane", pane },
     activePaneId: pane.id,
   };
 }
@@ -285,7 +285,7 @@ describe("tab-drag — commitTabDrop", () => {
     const ws: import("../lib/types").Workspace = {
       id: uid(),
       name: "WS",
-      splitRoot: {
+      paneLayout: {
         type: "split",
         direction: "horizontal",
         ratio: 0.5,
@@ -338,7 +338,7 @@ describe("tab-drag — commitTabDrop", () => {
     const ws: import("../lib/types").Workspace = {
       id: uid(),
       name: "WS",
-      splitRoot: {
+      paneLayout: {
         type: "split",
         direction: "horizontal",
         ratio: 0.5,
@@ -377,7 +377,7 @@ describe("tab-drag — commitTabDrop", () => {
     const ws: import("../lib/types").Workspace = {
       id: uid(),
       name: "WS",
-      splitRoot: {
+      paneLayout: {
         type: "split",
         direction: "horizontal",
         ratio: 0.5,
@@ -416,7 +416,7 @@ describe("tab-drag — commitTabDrop", () => {
     const ws: import("../lib/types").Workspace = {
       id: uid(),
       name: "WS",
-      splitRoot: {
+      paneLayout: {
         type: "split",
         direction: "horizontal",
         ratio: 0.5,
@@ -598,7 +598,7 @@ describe("tab-drag — commitTabDrop", () => {
     const ws: import("../lib/types").Workspace = {
       id: uid(),
       name: "WS",
-      splitRoot: {
+      paneLayout: {
         type: "split",
         direction: "horizontal",
         ratio: 0.5,
@@ -654,7 +654,7 @@ describe("tab-drag — tab hover activation", () => {
     const ws = {
       id: uid(),
       name: "WS",
-      splitRoot: {
+      paneLayout: {
         type: "split" as const,
         direction: "horizontal" as const,
         ratio: 0.5,
@@ -683,8 +683,8 @@ describe("tab-drag — tab hover activation", () => {
 
     const updated = get(workspaces);
     const updatedPaneB =
-      updated[0]!.splitRoot.type === "split"
-        ? updated[0]!.splitRoot.children[1]
+      updated[0]!.paneLayout.type === "split"
+        ? updated[0]!.paneLayout.children[1]
         : null;
     const pane = updatedPaneB?.type === "pane" ? updatedPaneB.pane : null;
     expect(pane?.activeSurfaceId).toBe(sC.id);
@@ -713,8 +713,8 @@ describe("tab-drag — tab hover activation", () => {
     );
 
     expect(
-      get(workspaces)[0]!.splitRoot.type === "pane"
-        ? (get(workspaces)[0]!.splitRoot as { pane: typeof pane }).pane
+      get(workspaces)[0]!.paneLayout.type === "pane"
+        ? (get(workspaces)[0]!.paneLayout as { pane: typeof pane }).pane
             .activeSurfaceId
         : null,
     ).toBe(sA.id);
@@ -809,7 +809,7 @@ describe("tab-drag — surface body detection", () => {
     const ws: import("../lib/types").Workspace = {
       id: uid(),
       name: "WS",
-      splitRoot: {
+      paneLayout: {
         type: "split",
         direction: "horizontal",
         ratio: 0.5,
@@ -873,7 +873,7 @@ describe("tab-drag — detectDropTarget: root tab over child workspace row", () 
     const childWs: Workspace = {
       id: uid(),
       name: "child",
-      splitRoot: { type: "pane", pane: childPane },
+      paneLayout: { type: "pane", pane: childPane },
       activePaneId: childPane.id,
       metadata: { rootWorkspaceId: "grp-1" },
     };

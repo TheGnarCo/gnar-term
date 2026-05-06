@@ -31,7 +31,7 @@ describe("scrub Active Agents from workspace Overview", () => {
         isGit: false,
         createdAt: "2026-04-21T00:00:00.000Z",
         dashboardWorkspaceId: "ws-existing",
-        splitRoot: {
+        paneLayout: {
           type: "pane",
           pane: { id: "g1-p", surfaces: [], activeSurfaceId: null },
         },

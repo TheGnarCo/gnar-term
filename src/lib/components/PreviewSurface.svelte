@@ -33,7 +33,7 @@
     hostMetadata?: Record<string, unknown>;
   } | null {
     for (const ws of get(workspaces)) {
-      for (const pane of getAllPanes(ws.splitRoot)) {
+      for (const pane of getAllPanes(ws.paneLayout)) {
         if (pane.surfaces.some((s) => s.id === surface.id)) {
           return {
             workspaceId: ws.id,

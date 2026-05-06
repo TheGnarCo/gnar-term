@@ -20,7 +20,7 @@ function makeRoot(
     id,
     name,
     path,
-    splitRoot: {
+    paneLayout: {
       type: "pane",
       pane: { id: `pane-${id}`, surfaces: [], activeSurfaceId: null },
     },
@@ -40,7 +40,7 @@ function makeBranch(
   const ws: Workspace = {
     id,
     name,
-    splitRoot: {
+    paneLayout: {
       type: "pane",
       pane: { id: `pane-${id}`, surfaces: [], activeSurfaceId: null },
     },

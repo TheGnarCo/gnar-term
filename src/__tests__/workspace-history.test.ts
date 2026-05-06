@@ -148,7 +148,7 @@ function makeWorkspace(name: string): Workspace {
   return {
     id: uid(),
     name,
-    splitRoot: { type: "pane", pane },
+    paneLayout: { type: "pane", pane },
     activePaneId: pane.id,
   };
 }

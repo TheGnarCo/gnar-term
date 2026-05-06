@@ -165,7 +165,7 @@ function makeChildWorkspace(pane: Pane): Workspace {
   return {
     id: uid(),
     name: "Test",
-    splitRoot: { type: "pane", pane },
+    paneLayout: { type: "pane", pane },
     activePaneId: pane.id,
   };
 }

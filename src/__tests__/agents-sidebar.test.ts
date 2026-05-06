@@ -32,7 +32,7 @@ function makeBranch(
   return {
     id,
     name,
-    splitRoot: {
+    paneLayout: {
       type: "pane",
       pane: { id: "pane-1", surfaces: [], activeSurfaceId: null },
     },

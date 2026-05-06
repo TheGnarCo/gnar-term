@@ -675,7 +675,7 @@ describe("Extension lifecycle", () => {
         id: "ws-1",
         name: "Test Workspace",
         activePaneId: "pane-1",
-        splitRoot: {
+        paneLayout: {
           type: "pane",
           pane: {
             id: "pane-1",
@@ -703,7 +703,8 @@ describe("Extension lifecycle", () => {
 
     // The extension surface should be removed
     const ws = get(wsStore);
-    const pane = ws[0].splitRoot.type === "pane" ? ws[0].splitRoot.pane : null;
+    const pane =
+      ws[0].paneLayout.type === "pane" ? ws[0].paneLayout.pane : null;
     expect(pane).toBeTruthy();
     expect(pane!.surfaces).toHaveLength(1);
     expect(pane!.surfaces[0].id).toBe("term-surface-1");
@@ -1495,7 +1496,7 @@ describe("api.getWorkspaceIdForSurface", () => {
         id: "ws-A",
         name: "A",
         activePaneId: "pane-A",
-        splitRoot: {
+        paneLayout: {
           type: "pane",
           pane: {
             id: "pane-A",
@@ -1516,7 +1517,7 @@ describe("api.getWorkspaceIdForSurface", () => {
         id: "ws-B",
         name: "B",
         activePaneId: "pane-B",
-        splitRoot: {
+        paneLayout: {
           type: "pane",
           pane: {
             id: "pane-B",
@@ -1555,7 +1556,7 @@ describe("api.getWorkspaceIdForSurface", () => {
         id: "ws-active",
         name: "Active",
         activePaneId: "p1",
-        splitRoot: {
+        paneLayout: {
           type: "split",
           direction: "horizontal",
           ratio: 0.5,
@@ -1599,7 +1600,7 @@ describe("api.getWorkspaceIdForSurface", () => {
         id: "ws-background",
         name: "Background",
         activePaneId: "p3",
-        splitRoot: {
+        paneLayout: {
           type: "pane",
           pane: {
             id: "p3",
@@ -1656,7 +1657,7 @@ describe("api.getWorkspaceIdForSurface", () => {
         id: "ws-split",
         name: "Split",
         activePaneId: "pane-left",
-        splitRoot: {
+        paneLayout: {
           type: "split",
           direction: "horizontal",
           ratio: 0.5,

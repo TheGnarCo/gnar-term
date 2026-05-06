@@ -92,7 +92,7 @@ export async function createWorkspace(name: string) {
   const ws: Workspace = {
     id: uid(),
     name,
-    splitRoot: { type: "pane", pane },
+    paneLayout: { type: "pane", pane },
     activePaneId: pane.id,
   };
 
@@ -217,13 +217,13 @@ export async function createWorkspaceFromDef(
     }
   }
 
-  let splitRoot: SplitNode;
+  let paneLayout: SplitNode;
   if (def.layout) {
-    splitRoot = await buildTree(def.layout, rootCwd, rootEnv);
+    paneLayout = await buildTree(def.layout, rootCwd, rootEnv);
   } else {
     const pane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
     await createTerminalSurface(pane, rootCwd, rootEnv);
-    splitRoot = { type: "pane", pane };
+    paneLayout = { type: "pane", pane };
   }
 
   // Build the workspace. Top-level fields on `def` win over the legacy
@@ -235,8 +235,8 @@ export async function createWorkspaceFromDef(
     // a restart; mint a fresh one for first-launch creation.
     id: def.id ?? uid(),
     name: wsName,
-    splitRoot,
-    activePaneId: getAllPanes(splitRoot)[0]?.id ?? null,
+    paneLayout,
+    activePaneId: getAllPanes(paneLayout)[0]?.id ?? null,
     ...(md ? { metadata: md } : {}),
   };
 
@@ -340,7 +340,7 @@ export async function createWorkspaceFromDef(
         existing.id === ws.id
           ? {
               ...existing,
-              splitRoot: ws.splitRoot,
+              paneLayout: ws.paneLayout,
               activePaneId: ws.activePaneId,
               ...(ws.metadata ? { metadata: ws.metadata } : {}),
             }
@@ -370,7 +370,7 @@ export async function createWorkspaceFromDef(
   } else {
     if (finalIdx >= 0) activeWorkspaceIdx.set(finalIdx);
   }
-  const ap = getAllPanes(splitRoot).find((p) => p.id === ws.activePaneId);
+  const ap = getAllPanes(paneLayout).find((p) => p.id === ws.activePaneId);
   const as_ = ap?.surfaces.find((s) => s.id === ap.activeSurfaceId);
   void safeFocus(as_);
   schedulePersist();
@@ -439,7 +439,7 @@ export function closeWorkspace(idx: number) {
     void writeSessionLog(cap.content, cap.surfaceName, cap.surfaceId, wsId);
   }
 
-  for (const pane of getAllPanes(ws.splitRoot)) {
+  for (const pane of getAllPanes(ws.paneLayout)) {
     pane.resizeObserver?.disconnect();
   }
   for (const surf of getAllSurfaces(ws)) {
@@ -567,7 +567,7 @@ export async function saveCurrentWorkspace() {
   const surface = get(activeSurface);
   const name = await showInputPrompt("Workspace name", ws.name);
   if (!name) return;
-  const layout = serializeLayout(ws.splitRoot);
+  const layout = serializeLayout(ws.paneLayout);
   const activeCwd =
     surface && isTerminalSurface(surface) ? surface.cwd : undefined;
   const wsDef: WorkspaceTemplate = { name, cwd: activeCwd || "~", layout };
@@ -608,23 +608,23 @@ export async function closeAllWorkspaces(): Promise<void> {
  * resize-observer / event-bus / focus side-effects — used by tab-drag
  * services after they move a surface out of a pane that becomes empty.
  *
- * Caller must guarantee `paneId` is NOT the splitRoot pane (a single
+ * Caller must guarantee `paneId` is NOT the paneLayout pane (a single
  * empty pane at the root has no sibling to collapse into and is the
  * caller's responsibility to handle).
  */
 function collapseEmptyPaneInWorkspace(ws: Workspace, paneId: string): void {
-  const parentInfo = findParentSplit(ws.splitRoot, paneId);
+  const parentInfo = findParentSplit(ws.paneLayout, paneId);
   if (!parentInfo || parentInfo.parent.type !== "split") return;
   const sibling = parentInfo.parent.children[parentInfo.index === 0 ? 1 : 0]!;
-  if (ws.splitRoot === parentInfo.parent) {
-    ws.splitRoot = sibling;
+  if (ws.paneLayout === parentInfo.parent) {
+    ws.paneLayout = sibling;
   } else {
-    replaceNodeInTree(ws.splitRoot, parentInfo.parent, sibling);
+    replaceNodeInTree(ws.paneLayout, parentInfo.parent, sibling);
   }
 }
 
 /**
- * Spawn a new child workspace whose splitRoot is a single pane carrying the
+ * Spawn a new child workspace whose paneLayout is a single pane carrying the
  * dragged surface. Inherits the source workspace's rootWorkspaceId
  * so a tab dropped from a Branch inside a root Workspace lands as a
  * sibling within the same root Workspace.
@@ -651,7 +651,7 @@ export function createWorkspaceFromSurface(
   if (!srcWs) return;
   if (getAllSurfaces(srcWs).length < 2) return;
 
-  const sourcePane = getAllPanes(srcWs.splitRoot).find(
+  const sourcePane = getAllPanes(srcWs.paneLayout).find(
     (p) => p.id === sourcePaneId,
   );
   if (!sourcePane) return;
@@ -670,8 +670,8 @@ export function createWorkspaceFromSurface(
   if (
     sourcePane.surfaces.length === 0 &&
     !(
-      srcWs.splitRoot.type === "pane" &&
-      srcWs.splitRoot.pane.id === sourcePaneId
+      srcWs.paneLayout.type === "pane" &&
+      srcWs.paneLayout.pane.id === sourcePaneId
     )
   ) {
     collapseEmptyPaneInWorkspace(srcWs, sourcePaneId);
@@ -689,7 +689,7 @@ export function createWorkspaceFromSurface(
   const newWs: Workspace = {
     id: uid(),
     name: surface.title || "New Workspace",
-    splitRoot: { type: "pane", pane: newPane },
+    paneLayout: { type: "pane", pane: newPane },
     activePaneId: newPane.id,
     ...(effectiveWorkspaceId
       ? {

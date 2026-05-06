@@ -48,7 +48,7 @@ export function detectWorkspacePaneDrop(
 
     // Find which workspace owns this pane
     const tgtWs = allWs.find((ws) =>
-      getAllPanes(ws.splitRoot).some((p) => p.id === paneId),
+      getAllPanes(ws.paneLayout).some((p) => p.id === paneId),
     );
     if (!tgtWs || tgtWs.id === srcChildWorkspaceId) continue;
 
@@ -139,7 +139,7 @@ export function detectTabBarDropForWorkspace(
   if (!paneId) return null;
 
   const tgtWs = allWs.find((ws) =>
-    getAllPanes(ws.splitRoot).some((p) => p.id === paneId),
+    getAllPanes(ws.paneLayout).some((p) => p.id === paneId),
   );
   if (!tgtWs || tgtWs.id === srcChildWorkspaceId) return null;
 

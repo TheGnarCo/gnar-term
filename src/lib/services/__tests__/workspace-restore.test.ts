@@ -66,7 +66,7 @@ function makeChild(id: string, rootWorkspaceId?: string): Workspace {
   return {
     id,
     name: id,
-    splitRoot: {
+    paneLayout: {
       type: "pane",
       pane: { id: `${id}-p`, surfaces: [], activeSurfaceId: null },
     },
@@ -190,7 +190,7 @@ describe("S9 — auto-run restore commands", () => {
     const allChildWs = get(workspaces);
     const createdWs = allChildWs[allChildWs.length - 1]!;
     const pane =
-      createdWs.splitRoot.type === "pane" ? createdWs.splitRoot.pane : null;
+      createdWs.paneLayout.type === "pane" ? createdWs.paneLayout.pane : null;
     expect(pane).not.toBeNull();
     const surface = pane!.surfaces[0] as {
       startupCommand?: string;
@@ -221,7 +221,7 @@ describe("S9 — auto-run restore commands", () => {
     const allChildWs = get(workspaces);
     const createdWs = allChildWs[allChildWs.length - 1]!;
     const pane =
-      createdWs.splitRoot.type === "pane" ? createdWs.splitRoot.pane : null;
+      createdWs.paneLayout.type === "pane" ? createdWs.paneLayout.pane : null;
     expect(pane).not.toBeNull();
     const surface = pane!.surfaces[0] as {
       startupCommand?: string;
@@ -252,7 +252,7 @@ describe("S9 — auto-run restore commands", () => {
     const allChildWs = get(workspaces);
     const createdWs = allChildWs[allChildWs.length - 1]!;
     const pane =
-      createdWs.splitRoot.type === "pane" ? createdWs.splitRoot.pane : null;
+      createdWs.paneLayout.type === "pane" ? createdWs.paneLayout.pane : null;
     expect(pane).not.toBeNull();
     const surface = pane!.surfaces[0] as {
       startupCommand?: string;

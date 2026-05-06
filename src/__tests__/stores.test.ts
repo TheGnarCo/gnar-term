@@ -39,7 +39,7 @@ function makeChildWorkspace(id: string, name: string): Workspace {
   return {
     id,
     name,
-    splitRoot: { type: "pane", pane },
+    paneLayout: { type: "pane", pane },
     activePaneId: pane.id,
   };
 }
@@ -116,7 +116,7 @@ describe("Workspace stores", () => {
     const ws: Workspace = {
       id: "ws1",
       name: "Test",
-      splitRoot: { type: "pane", pane },
+      paneLayout: { type: "pane", pane },
       activePaneId: "p1",
     };
 

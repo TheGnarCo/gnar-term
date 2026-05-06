@@ -41,7 +41,7 @@ function seedWorkspace(id: string) {
       branchedWorkspaceIds: [],
       isGit: false,
       createdAt: "2026-04-21T00:00:00.000Z",
-      splitRoot: {
+      paneLayout: {
         type: "pane",
         pane: { id: `${id}-p`, surfaces: [], activeSurfaceId: null },
       },
@@ -117,7 +117,7 @@ describe("MCP dashboard contribution tools", () => {
         {
           id: "ws-abc",
           name: "Diff",
-          splitRoot: {
+          paneLayout: {
             type: "pane",
             pane: { id: "p", surfaces: [], activeSurfaceId: null },
           },

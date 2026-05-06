@@ -234,7 +234,7 @@
       const wsIdx = (startWsIdx + i) % len;
       const w = ws[wsIdx];
       if (!w) continue;
-      const panes = getAllPanes(w.splitRoot);
+      const panes = getAllPanes(w.paneLayout);
       for (const p of panes) {
         const surface = p.surfaces.find((s) => s.hasUnread);
         if (!surface) continue;

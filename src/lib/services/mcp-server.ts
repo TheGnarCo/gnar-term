@@ -197,7 +197,7 @@ function findPaneById(
   paneId: string,
 ): { workspace: Workspace; pane: Pane } | null {
   for (const ws of get(workspaces)) {
-    for (const pane of getAllPanes(ws.splitRoot)) {
+    for (const pane of getAllPanes(ws.paneLayout)) {
       if (pane.id === paneId) return { workspace: ws, pane };
     }
   }
@@ -296,7 +296,7 @@ function resolveTarget(
 /** Pick a host pane to split off when the caller didn't supply one. Prefers
  *  the workspace's active pane; falls back to the first pane in the tree. */
 function pickHostPane(workspace: Workspace): Pane {
-  const all = getAllPanes(workspace.splitRoot);
+  const all = getAllPanes(workspace.paneLayout);
   if (workspace.activePaneId) {
     const active = all.find((p) => p.id === workspace.activePaneId);
     if (active) return active;
@@ -304,7 +304,7 @@ function pickHostPane(workspace: Workspace): Pane {
   if (all.length > 0) return all[0]!;
   // Workspace exists but has no panes (shouldn't happen in practice; create one).
   const newPane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
-  workspace.splitRoot = { type: "pane", pane: newPane };
+  workspace.paneLayout = { type: "pane", pane: newPane };
   workspaces.update((l) => [...l]);
   return newPane;
 }
@@ -326,12 +326,12 @@ function splitPaneInWorkspace(
     ratio: 0.5,
   };
   if (
-    workspace.splitRoot.type === "pane" &&
-    workspace.splitRoot.pane.id === hostPane.id
+    workspace.paneLayout.type === "pane" &&
+    workspace.paneLayout.pane.id === hostPane.id
   ) {
-    workspace.splitRoot = newSplit;
+    workspace.paneLayout = newSplit;
   } else {
-    const parentInfo = findParentSplit(workspace.splitRoot, hostPane.id);
+    const parentInfo = findParentSplit(workspace.paneLayout, hostPane.id);
     if (parentInfo && parentInfo.parent.type === "split") {
       parentInfo.parent.children[parentInfo.index] = newSplit;
     }
@@ -359,7 +359,7 @@ async function getPtyCwd(ptyId: number): Promise<string> {
 function removeSurfaceFromPane(paneId: string, surfaceId: string): void {
   workspaces.update((list) => {
     for (const ws of list) {
-      for (const pane of getAllPanes(ws.splitRoot)) {
+      for (const pane of getAllPanes(ws.paneLayout)) {
         if (pane.id !== paneId) continue;
         const idx = pane.surfaces.findIndex((s) => s.id === surfaceId);
         if (idx < 0) continue;
@@ -543,7 +543,7 @@ registerTool({
       if (!repoPath) {
         try {
           const target = resolveTarget(p, ctx);
-          for (const pane of getAllPanes(target.workspace.splitRoot)) {
+          for (const pane of getAllPanes(target.workspace.paneLayout)) {
             for (const s of pane.surfaces) {
               if (isTerminalSurface(s) && s.cwd) {
                 repoPath = s.cwd;

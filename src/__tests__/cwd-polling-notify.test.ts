@@ -33,7 +33,7 @@ function makeWs(id: string, surfaceId: string, cwd: string): Workspace {
     id,
     name: id,
     activePaneId: `pane-${id}`,
-    splitRoot: {
+    paneLayout: {
       type: "pane",
       pane: {
         id: `pane-${id}`,
@@ -103,7 +103,7 @@ describe("startCwdPolling notifies the workspaces store on cwd change", () => {
     // The surface's cwd is now the new path.
     const current = get(workspaces);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const surface = (current[0]!.splitRoot as any).pane.surfaces[0];
+    const surface = (current[0]!.paneLayout as any).pane.surfaces[0];
     expect(surface.cwd).toBe("/repos/project-B");
     // Custom title is preserved (title doesn't start with "Shell ").
     expect(surface.title).toBe("custom-title");

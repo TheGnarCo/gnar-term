@@ -344,7 +344,7 @@ function allTerminalSurfaces(): Array<{
   const all = get(workspaces);
   const out: Array<{ id: string; title: string; workspaceId: string }> = [];
   for (const ws of all) {
-    for (const pane of getAllPanes(ws.splitRoot)) {
+    for (const pane of getAllPanes(ws.paneLayout)) {
       for (const surface of pane.surfaces) {
         if (isTerminalSurface(surface)) {
           out.push({
@@ -447,7 +447,7 @@ function detachAgent(tracked: TrackedSurface): void {
   const all = get(workspaces);
   let restored = false;
   for (const ws of all) {
-    for (const pane of getAllPanes(ws.splitRoot)) {
+    for (const pane of getAllPanes(ws.paneLayout)) {
       for (const surface of pane.surfaces) {
         if (surface.id === tracked.surfaceId && isTerminalSurface(surface)) {
           if (surface.userDefinedTitle) {

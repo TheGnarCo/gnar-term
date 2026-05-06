@@ -83,7 +83,7 @@ function makeChildWorkspaceWithTerminal(
   return {
     id: wsId,
     name: wsId,
-    splitRoot: {
+    paneLayout: {
       type: "pane",
       pane: {
         id: `${wsId}-p`,

@@ -43,7 +43,7 @@ describe("workspace persistence", () => {
       {
         id: "ws1",
         name: "Dev",
-        splitRoot: {
+        paneLayout: {
           type: "pane",
           pane: { id: "p1", surfaces: [], activeSurfaceId: null },
         },
@@ -52,7 +52,7 @@ describe("workspace persistence", () => {
       {
         id: "ws2",
         name: "Test",
-        splitRoot: {
+        paneLayout: {
           type: "pane",
           pane: { id: "p2", surfaces: [], activeSurfaceId: null },
         },
@@ -97,7 +97,7 @@ describe("workspace persistence", () => {
       {
         id: "ws1",
         name: "WS",
-        splitRoot: {
+        paneLayout: {
           type: "pane",
           pane: { id: "p1", surfaces: [], activeSurfaceId: null },
         },
@@ -137,7 +137,7 @@ describe("workspace persistence", () => {
         branchedWorkspaceIds: [],
         isGit: true,
         createdAt: "2026-01-01",
-        splitRoot: {
+        paneLayout: {
           type: "pane",
           pane: { id: "alpha-p", surfaces: [], activeSurfaceId: null },
         },
@@ -146,7 +146,7 @@ describe("workspace persistence", () => {
       {
         id: "branch-1",
         name: "Branch 1",
-        splitRoot: {
+        paneLayout: {
           type: "pane",
           pane: { id: "p1", surfaces: [], activeSurfaceId: null },
         },
@@ -186,7 +186,7 @@ describe("workspace persistence", () => {
       {
         id: "ws-project",
         name: "Project A",
-        splitRoot: {
+        paneLayout: {
           type: "pane",
           pane: { id: "p1", surfaces: [], activeSurfaceId: null },
         },

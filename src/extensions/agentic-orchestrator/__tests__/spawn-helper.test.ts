@@ -41,7 +41,7 @@ function seedWorkspaceAfterCreate(workspaceId: string): Workspace {
     id: workspaceId,
     name: "Worktree N",
     activePaneId: "p-1",
-    splitRoot: {
+    paneLayout: {
       type: "pane",
       pane: {
         id: "p-1",

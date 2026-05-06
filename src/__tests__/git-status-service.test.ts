@@ -35,7 +35,7 @@ function makeWs(id: string, surfaceId: string, cwd: string): Workspace {
     id,
     name: id,
     activePaneId: `pane-${id}`,
-    splitRoot: {
+    paneLayout: {
       type: "pane",
       pane: {
         id: `pane-${id}`,
@@ -421,7 +421,7 @@ describe("git status service: refreshes when the active workspace's cwd changes"
 
     ptyCwd = "/repos/project-B";
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (ws.splitRoot as any).pane.surfaces[0].cwd = "/repos/project-B";
+    (ws.paneLayout as any).pane.surfaces[0].cwd = "/repos/project-B";
     workspaces.update((l) => [...l]);
 
     await vi.advanceTimersByTimeAsync(600);
@@ -463,7 +463,7 @@ describe("git status service: stale-data clear (H4)", () => {
           id: "ws-fail",
           name: "Fail",
           activePaneId: "p1",
-          splitRoot: {
+          paneLayout: {
             type: "pane",
             pane: {
               id: "p1",

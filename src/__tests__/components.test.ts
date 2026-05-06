@@ -207,7 +207,7 @@ function makeChildWorkspace(id: string, name: string, pane?: Pane): Workspace {
   return {
     id,
     name,
-    splitRoot: { type: "pane", pane: p },
+    paneLayout: { type: "pane", pane: p },
     activePaneId: p.id,
   };
 }
@@ -1200,7 +1200,7 @@ describe("WorkspaceItem", () => {
     const ws: Workspace = {
       id: "ws1",
       name: "Multi Surface",
-      splitRoot: { type: "pane", pane },
+      paneLayout: { type: "pane", pane },
       activePaneId: pane.id,
     };
     render(WorkspaceItem, {
@@ -1467,7 +1467,7 @@ describe("PaneView", () => {
     const ws: Workspace = {
       id: "ws-dash",
       name: "Dashboard",
-      splitRoot: { type: "pane", pane: makePane("p1") },
+      paneLayout: { type: "pane", pane: makePane("p1") },
       activePaneId: "p1",
       isDashboard: true,
       rootWorkspaceId: "g1",
@@ -1475,7 +1475,7 @@ describe("PaneView", () => {
     };
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
-    const pane = ws.splitRoot.type === "pane" ? ws.splitRoot.pane : null;
+    const pane = ws.paneLayout.type === "pane" ? ws.paneLayout.pane : null;
     if (!pane) throw new Error("expected single-pane workspace");
     const { container } = render(PaneView, {
       props: {
@@ -1505,7 +1505,7 @@ describe("PaneView", () => {
     const ws: Workspace = {
       id: "ws-settings",
       name: "Settings",
-      splitRoot: { type: "pane", pane: makePane("p1") },
+      paneLayout: { type: "pane", pane: makePane("p1") },
       activePaneId: "p1",
       isDashboard: true,
       rootWorkspaceId: "g1",
@@ -1513,7 +1513,7 @@ describe("PaneView", () => {
     };
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
-    const pane = ws.splitRoot.type === "pane" ? ws.splitRoot.pane : null;
+    const pane = ws.paneLayout.type === "pane" ? ws.paneLayout.pane : null;
     if (!pane) throw new Error("expected single-pane workspace");
     const { container } = render(PaneView, {
       props: {
@@ -2013,7 +2013,7 @@ describe("WorkspaceItem — harness sub-row", () => {
     const ws: Workspace = {
       id: "ws-hidden",
       name: "Hidden",
-      splitRoot: { type: "pane", pane },
+      paneLayout: { type: "pane", pane },
       activePaneId: "p1",
     };
 

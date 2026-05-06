@@ -492,7 +492,7 @@ function handlePtyExit(pty_id: number, exit_code: number | null = null): void {
   // Remove the surface from its pane, and collapse empty panes
   workspaces.update((wsList) => {
     for (const ws of wsList) {
-      for (const pane of getAllPanes(ws.splitRoot)) {
+      for (const pane of getAllPanes(ws.paneLayout)) {
         const idx = pane.surfaces.findIndex(
           (s) => isTerminalSurface(s) && s.ptyId === pty_id,
         );
@@ -537,7 +537,7 @@ function handlePtyNotification(pty_id: number, text: string): void {
           // is already looking at it.
           const inActiveWs = ws.id === activeWs?.id;
           const inActivePane = ws.activePaneId
-            ? getAllPanes(ws.splitRoot).some(
+            ? getAllPanes(ws.paneLayout).some(
                 (p) =>
                   p.id === ws.activePaneId &&
                   p.surfaces.some((ps) => ps.id === s.id) &&
@@ -732,7 +732,7 @@ export async function createDefaultWorkspace() {
   const ws: Workspace = {
     id: uid(),
     name: "Branch 1",
-    splitRoot: { type: "pane", pane },
+    paneLayout: { type: "pane", pane },
     activePaneId: pane.id,
   };
   await createTerminalSurface(pane);
@@ -1273,7 +1273,7 @@ function findContextForSurface(
   surfaceId: string,
 ): { paneId: string; workspaceId: string } | null {
   for (const ws of get(workspaces)) {
-    for (const pane of getAllPanes(ws.splitRoot)) {
+    for (const pane of getAllPanes(ws.paneLayout)) {
       if (pane.surfaces.some((s) => s.id === surfaceId)) {
         return { paneId: pane.id, workspaceId: ws.id };
       }

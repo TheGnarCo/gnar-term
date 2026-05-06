@@ -118,7 +118,7 @@ function setupWorkspace(): { ws: Workspace; pane: Pane } {
   const ws: Workspace = {
     id: uid(),
     name: "Test WS",
-    splitRoot: { type: "pane", pane },
+    paneLayout: { type: "pane", pane },
     activePaneId: pane.id,
   };
   workspaces.set([ws]);
@@ -197,9 +197,9 @@ describe("PTY spawn failure: surface cleanup via TerminalSurface contract", () =
     // Surface is gone from the pane
     expect(
       get(workspaces)[0]
-        ? get(workspaces)[0]!.splitRoot.type === "pane" &&
+        ? get(workspaces)[0]!.paneLayout.type === "pane" &&
             (
-              get(workspaces)[0]!.splitRoot as {
+              get(workspaces)[0]!.paneLayout as {
                 type: "pane";
                 pane: Pane;
               }

@@ -178,7 +178,7 @@ async function createWorkspaceFlow(prefill?: {
 
   const id = generateId();
   // Caller passes a record-shaped workspace; addWorkspace mints a
-  // placeholder splitRoot / activePaneId so the entry satisfies the
+  // placeholder paneLayout / activePaneId so the entry satisfies the
   // unified Workspace shape until the matching runtime tab surface is
   // built by createWorkspaceFromDef below.
   const workspace: Workspace = {

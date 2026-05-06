@@ -50,11 +50,11 @@ function split(
   return { type: "split", direction, children: [a, b], ratio };
 }
 
-function setupWorkspace(splitRoot: SplitNode, activePaneId: string) {
+function setupWorkspace(paneLayout: SplitNode, activePaneId: string) {
   const ws: Workspace = {
     id: "ws-1",
     name: "ws-1",
-    splitRoot,
+    paneLayout,
     activePaneId,
   };
   workspaces.set([ws]);
@@ -75,7 +75,7 @@ describe("resizeActivePane", () => {
 
     resizeActivePane("right");
 
-    const root = get(workspaces)[0]!.splitRoot;
+    const root = get(workspaces)[0]!.paneLayout;
     expect(root.type).toBe("split");
     if (root.type === "split") expect(root.ratio).toBeCloseTo(0.55, 5);
   });
@@ -87,7 +87,7 @@ describe("resizeActivePane", () => {
 
     resizeActivePane("left");
 
-    const root = get(workspaces)[0]!.splitRoot;
+    const root = get(workspaces)[0]!.paneLayout;
     if (root.type === "split") expect(root.ratio).toBeCloseTo(0.45, 5);
   });
 
@@ -98,7 +98,7 @@ describe("resizeActivePane", () => {
 
     resizeActivePane("up");
 
-    const root = get(workspaces)[0]!.splitRoot;
+    const root = get(workspaces)[0]!.paneLayout;
     if (root.type === "split") expect(root.ratio).toBe(0.5);
   });
 
@@ -107,7 +107,7 @@ describe("resizeActivePane", () => {
     setupWorkspace(paneNode(a), "a");
 
     expect(() => resizeActivePane("right")).not.toThrow();
-    const root = get(workspaces)[0]!.splitRoot;
+    const root = get(workspaces)[0]!.paneLayout;
     expect(root.type).toBe("pane");
   });
 
@@ -118,7 +118,7 @@ describe("resizeActivePane", () => {
 
     resizeActivePane("right"); // would be 0.93, clamps to 0.9
 
-    const root = get(workspaces)[0]!.splitRoot;
+    const root = get(workspaces)[0]!.paneLayout;
     if (root.type === "split") expect(root.ratio).toBeCloseTo(0.9, 5);
   });
 
@@ -129,7 +129,7 @@ describe("resizeActivePane", () => {
 
     resizeActivePane("left"); // would be 0.07, clamps to 0.1
 
-    const root = get(workspaces)[0]!.splitRoot;
+    const root = get(workspaces)[0]!.paneLayout;
     if (root.type === "split") expect(root.ratio).toBeCloseTo(0.1, 5);
   });
 
@@ -140,7 +140,7 @@ describe("resizeActivePane", () => {
 
     resizeActivePane("down");
 
-    const root = get(workspaces)[0]!.splitRoot;
+    const root = get(workspaces)[0]!.paneLayout;
     if (root.type === "split") expect(root.ratio).toBeCloseTo(0.55, 5);
   });
 });

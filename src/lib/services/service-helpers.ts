@@ -90,8 +90,8 @@ function ensureIndexSubscribed(): void {
     _surfaceWsIndex.clear();
     _surfacePtyIndex.clear();
     for (const ws of $ws) {
-      if (!ws?.splitRoot) continue;
-      for (const pane of getAllPanes(ws.splitRoot)) {
+      if (!ws?.paneLayout) continue;
+      for (const pane of getAllPanes(ws.paneLayout)) {
         for (const surface of pane.surfaces) {
           _surfaceWsIndex.set(surface.id, ws.id);
           if (isTerminalSurface(surface)) {
@@ -177,7 +177,7 @@ export async function getWorkspaceCwd(
 ): Promise<string | undefined> {
   const ws = get(workspaces).find((w) => w.id === workspaceId);
   if (!ws) return undefined;
-  for (const pane of getAllPanes(ws.splitRoot)) {
+  for (const pane of getAllPanes(ws.paneLayout)) {
     for (const s of pane.surfaces) {
       const cwd = await getCwdForSurface(s);
       if (cwd) return cwd;

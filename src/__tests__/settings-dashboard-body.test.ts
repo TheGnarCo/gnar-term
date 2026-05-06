@@ -53,14 +53,14 @@ describe("PaneView — settings dashboard body", () => {
       branchedWorkspaceIds: [],
       isGit: false,
       createdAt: "2026-04-21T00:00:00.000Z",
-      splitRoot: { type: "pane", pane: makePane("g1-p") },
+      paneLayout: { type: "pane", pane: makePane("g1-p") },
       activePaneId: "g1-p",
     } as unknown as Workspace;
 
     const ws: Workspace = {
       id: "ws-settings",
       name: "Settings",
-      splitRoot: { type: "pane", pane: makePane("p1") },
+      paneLayout: { type: "pane", pane: makePane("p1") },
       activePaneId: "p1",
       isDashboard: true,
       rootWorkspaceId: "g1",
@@ -69,7 +69,7 @@ describe("PaneView — settings dashboard body", () => {
     workspaces.set([root, ws]);
     activeWorkspaceIdx.set(1);
 
-    const pane = (ws.splitRoot as { type: "pane"; pane: Pane }).pane;
+    const pane = (ws.paneLayout as { type: "pane"; pane: Pane }).pane;
     const { container } = render(PaneView, {
       props: {
         pane,

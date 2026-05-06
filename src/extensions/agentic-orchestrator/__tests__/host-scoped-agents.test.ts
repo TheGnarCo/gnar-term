@@ -59,7 +59,7 @@ function seedWorkspace(
     id,
     name: id,
     activePaneId: "p",
-    splitRoot: {
+    paneLayout: {
       type: "pane",
       pane: {
         id: "p",
@@ -95,7 +95,7 @@ function makeRoot(
     branchedWorkspaceIds,
     isGit: false,
     createdAt: "2026-01-01",
-    splitRoot: {
+    paneLayout: {
       type: "pane",
       pane: { id: `${id}-p`, surfaces: [], activeSurfaceId: null },
     },

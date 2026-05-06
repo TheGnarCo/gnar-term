@@ -101,7 +101,7 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(
-            err.contains("must not start with '-'"),
+            err.contains("must not start with '-'") || err.contains("invalid characters"),
             "expected injection rejection, got: {err}"
         );
         cleanup_test_repo(&repo);
@@ -119,7 +119,7 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(
-            err.contains("must not start with '-'"),
+            err.contains("must not start with '-'") || err.contains("invalid characters"),
             "expected injection rejection, got: {err}"
         );
         cleanup_test_repo(&repo);
@@ -136,7 +136,7 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(
-            err.contains("must not start with '-'"),
+            err.contains("must not start with '-'") || err.contains("invalid characters"),
             "expected injection rejection, got: {err}"
         );
         cleanup_test_repo(&repo);

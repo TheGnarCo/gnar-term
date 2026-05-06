@@ -2,21 +2,17 @@
  * workspace-context-menu.ts — shared factory for workspace context menu items.
  *
  * Both WorkspaceListBlock and WorkspaceListView show a context menu with the
- * same core items (Rename, Promote, Archive, Close). They diverge only in a
- * few spots (Block adds "New Surface", View doesn't; exact close logic
- * differs). This helper captures the common shape so neither callsite needs to
- * inline the full conditional item array.
+ * same core items (Rename, Archive, Close). They diverge only in a few spots
+ * (Block adds "New Surface", View doesn't; exact close logic differs). This
+ * helper captures the common shape so neither callsite needs to inline the
+ * full conditional item array.
  */
 
 import type { MenuItem } from "../context-menu-types";
 
 export interface WorkspaceContextMenuOptions {
-  /** True when the workspace is a dashboard surface (rename/promote/archive disabled). */
+  /** True when the workspace is a dashboard surface (rename/archive disabled). */
   isDashboard: boolean;
-  /** True when the child workspace already lives inside a Workspace (promote disabled). */
-  isInsideWorkspace: boolean;
-  /** True when the promote-child-workspace command is registered. */
-  canPromoteCommand: boolean;
   /** Total number of workspaces in the list — used to disable "Close Branched Workspace". */
   workspaceCount: number;
   /**
@@ -29,7 +25,6 @@ export interface WorkspaceContextMenuOptions {
   onRename?: () => void;
   /** Called when "New Surface" is requested. Omit to exclude the item. */
   onNewSurface?: () => void;
-  onPromote?: () => void;
   onArchive?: () => void;
   /**
    * Called when the user toggles "Lock Branched Workspace" / "Unlock Branched Workspace".
@@ -46,7 +41,6 @@ export interface WorkspaceContextMenuOptions {
  * Item presence:
  *   - "Rename Branched Workspace"    — omitted for dashboards
  *   - "New Surface"                  — included only when `onNewSurface` is provided
- *   - separator + "Promote…"         — omitted for dashboards / child workspaces inside a workspace
  *   - separator + "Lock/Unlock…"     — omitted for dashboards or when no `onToggleLock`
  *   - "Archive"                      — omitted for dashboards; disabled while locked
  *   - "Close Branched Workspace"     — always present; disabled for dashboards, when
@@ -57,20 +51,16 @@ export function buildWorkspaceContextMenuItems(
 ): MenuItem[] {
   const {
     isDashboard,
-    isInsideWorkspace,
-    canPromoteCommand,
     workspaceCount,
     isLocked = false,
     onRename,
     onNewSurface,
-    onPromote,
     onArchive,
     onToggleLock,
     onClose,
   } = opts;
 
   const canRename = !isDashboard;
-  const canPromote = canPromoteCommand && !isDashboard && !isInsideWorkspace;
   const canArchive = !isDashboard;
 
   const items: MenuItem[] = [];
@@ -88,14 +78,6 @@ export function buildWorkspaceContextMenuItems(
       label: "New Surface",
       shortcut: "⌘T",
       action: onNewSurface,
-    });
-  }
-
-  if (canPromote && onPromote) {
-    items.push({ label: "", action: () => {}, separator: true });
-    items.push({
-      label: "Promote to Workspace...",
-      action: onPromote,
     });
   }
 

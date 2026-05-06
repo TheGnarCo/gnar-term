@@ -22,8 +22,8 @@
   import {
     rootRowOrder,
     bootstrapRootRowOrder,
+    type RootRow,
   } from "./lib/stores/root-row-order";
-  import { claimedWorkspaceIds } from "./lib/services/claimed-workspace-registry";
   import { get } from "svelte/store";
   import { invoke } from "@tauri-apps/api/core";
   import {
@@ -85,7 +85,6 @@
     switchWorkspace,
     switchToLastWorkspace,
     closeAllWorkspaces,
-    renameWorkspace,
     saveCurrentWorkspace,
     persistWorkspaces,
     schedulePersist,
@@ -722,26 +721,16 @@
 
     // Rehydrate the persisted root-row order so drag-sorted layouts
     // survive across restarts. Entities are all registered by this
-    // point — extensions (workspaces, agent dashboards) appended during
-    // activation, and restoreWorkspaces appended workspaces — so the
-    // known set is stable. bootstrapRootRowOrder re-sorts to match the
-    // persisted order and appends any brand-new entity at the end.
+    // point — pseudo-workspaces and any pinned extension rows have been
+    // appended during activation; restoreWorkspaces appended workspace
+    // rows. Bootstrap re-sorts to match the persisted order and drops
+    // entries whose referent is gone.
     const currentOrder = get(rootRowOrder);
-    // Pass everything except child-workspace rows through as
-    // extensionRows — those are passed via the first arg below. Pre-
-    // rename this filter read `kind !== "workspace"` because "workspace"
-    // used to mean child-workspace; after the parent rename, that
-    // filter would silently drop persisted parent rows on reload.
-    const extensionRows = currentOrder.filter(
-      (r) => r.kind !== "child-workspace",
-    );
-    const claimed = get(claimedWorkspaceIds);
-    bootstrapRootRowOrder(
-      get(workspaces)
-        .filter((w) => !claimed.has(w.id))
-        .map((w) => w.id),
-      extensionRows,
-    );
+    const passthroughRows = currentOrder.filter((r) => r.kind !== "workspace");
+    const rootWorkspaceRows: RootRow[] = get(workspaces)
+      .filter((w) => typeof w.rootWorkspaceId !== "string")
+      .map((w) => ({ kind: "workspace", id: w.id }));
+    bootstrapRootRowOrder([...rootWorkspaceRows, ...passthroughRows]);
 
     if (!restoreCommandsOverlayShown) {
       const hasPending = $workspaces.some((ws) =>
@@ -906,12 +895,7 @@
     --tab-bar-height: 28px;
   "
 >
-  <Sidebar
-    bind:this={sidebarComponent}
-    onSwitchWorkspace={switchWorkspace}
-    onRenameWorkspace={renameWorkspace}
-    onNewSurface={newSurfaceFromSidebar}
-  />
+  <Sidebar bind:this={sidebarComponent} />
 
   <div
     style="

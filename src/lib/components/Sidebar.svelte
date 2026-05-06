@@ -37,10 +37,6 @@
 
   let collapsedSections: Record<string, boolean> = {};
 
-  export let onSwitchWorkspace: (idx: number) => void;
-  export let onRenameWorkspace: (idx: number, name: string) => void;
-  export let onNewSurface: () => void;
-
   let workspaceListBlock: WorkspaceListBlock;
 
   // "New Workspace" (core-registered) is the primary action in the
@@ -178,12 +174,7 @@
            and each row's rail. 8px top inset keeps the first row's rounded
            corner from butting up against the "+ New" chrome above. -->
       <div style="flex: 1; overflow-y: auto; padding: 8px 0 8px 4px;">
-        <WorkspaceListBlock
-          bind:this={workspaceListBlock}
-          {onSwitchWorkspace}
-          {onRenameWorkspace}
-          {onNewSurface}
-        />
+        <WorkspaceListBlock bind:this={workspaceListBlock} />
 
         <!-- Extension-registered sections (registerSidebarSection API).
              16px gap above each so they breathe below the Workspaces block. -->

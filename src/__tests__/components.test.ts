@@ -135,6 +135,10 @@ import {
   unregisterBySource,
 } from "../lib/services/command-registry";
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
+import { rootRowOrder } from "../lib/stores/root-row-order";
+import { registerRootRowRenderer } from "../lib/services/root-row-renderer-registry";
+import WorkspaceRowBody from "../lib/components/WorkspaceRowBody.svelte";
+import { initCoreExtensionAPI } from "../lib/bootstrap/init-core-extension-api";
 import {
   registerSidebarSection,
   resetSidebarSections,
@@ -209,6 +213,11 @@ function makeChildWorkspace(id: string, name: string, pane?: Pane): Workspace {
     name,
     paneLayout: { type: "pane", pane: p },
     activePaneId: p.id,
+    branchedWorkspaceIds: [],
+    color: "purple",
+    path: `/tmp/${id}`,
+    isGit: false,
+    createdAt: "2026-01-01T00:00:00.000Z",
   };
 }
 
@@ -225,6 +234,7 @@ beforeEach(() => {
   findBarVisible.set(false);
   contextMenu.set(null);
   workspaces.set([]);
+  rootRowOrder.set([]);
   activeWorkspaceIdx.set(-1);
   unregisterBySource("test");
 });
@@ -1591,6 +1601,22 @@ describe("Sidebar", () => {
     resetSidebarSections();
     resetWorkspaceActions();
     cleanup();
+    // Stage 10: workspace rows render through the registered "workspace"
+    // root-row renderer (mounted via ExtensionWrapper). Register the core
+    // extension API + the renderer so workspace names appear in tests.
+    initCoreExtensionAPI();
+    registerRootRowRenderer({
+      id: "workspace",
+      source: "core",
+      component: WorkspaceRowBody,
+      label: (id: string) => {
+        let result: string | undefined;
+        workspaces.subscribe((list) => {
+          result = list.find((w) => w.id === id)?.name;
+        })();
+        return result;
+      },
+    });
   });
 
   it("renders when sidebarVisible is true", () => {
@@ -1630,6 +1656,10 @@ describe("Sidebar", () => {
     const ws1 = makeChildWorkspace("ws1", "Project Alpha");
     const ws2 = makeChildWorkspace("ws2", "Project Beta");
     workspaces.set([ws1, ws2]);
+    rootRowOrder.set([
+      { kind: "workspace", id: "ws1" },
+      { kind: "workspace", id: "ws2" },
+    ]);
     activeWorkspaceIdx.set(0);
     render(Sidebar, { props: sidebarProps });
     expect(screen.getByText("Project Alpha")).toBeTruthy();
@@ -1676,6 +1706,11 @@ describe("Sidebar", () => {
     const ws2 = makeChildWorkspace("ws2", "WS Two");
     const ws3 = makeChildWorkspace("ws3", "WS Three");
     workspaces.set([ws1, ws2, ws3]);
+    rootRowOrder.set([
+      { kind: "workspace", id: "ws1" },
+      { kind: "workspace", id: "ws2" },
+      { kind: "workspace", id: "ws3" },
+    ]);
     activeWorkspaceIdx.set(1);
     render(Sidebar, { props: sidebarProps });
     expect(screen.getByText("WS One")).toBeTruthy();

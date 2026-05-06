@@ -2,28 +2,25 @@
  * Root-row ordering for the Workspaces section.
  *
  * The Workspaces section renders a single interleaved list of root
- * rows: unclaimed child workspaces (kind: "child-workspace") and parent
- * workspace blocks (kind: "workspace"). Each row is identified by {kind, id}.
- * Users can drag freely across this list — a child workspace can sit
- * between two parent workspaces, and vice versa.
+ * rows: Workspace blocks (kind: "workspace") and pinned extension rows.
+ * Each row is identified by {kind, id}. Branches (workspaces with
+ * `rootWorkspaceId` set) never appear here — they live nested inside
+ * their root's branch list.
  *
  * This module owns:
  *   - the ordered list (persisted across restarts)
- *   - a derived view that filters out rows whose referent no longer
- *     exists (deleted parent workspace, child workspace that got claimed
- *     by a parent, etc.) and appends newly-created entities in insertion
- *     order
  *   - mutation helpers for append / remove / move
  *
- * Renderers for kinds other than "child-workspace" (parent workspaces,
- * future extension kinds) are contributed through `registerRootRowRenderer`
- * on the extension API — WorkspaceListBlock looks them up by kind.
+ * Renderers for each kind ("workspace", "pseudo-workspace", and any
+ * extension-registered kind) are contributed through
+ * `registerRootRowRenderer` on the extension API — WorkspaceListBlock
+ * looks them up by kind.
  */
 import { writable, get } from "svelte/store";
 import { saveState, getState } from "../config";
 
 export interface RootRow {
-  kind: "child-workspace" | "workspace" | string;
+  kind: "workspace" | "pseudo-workspace" | string;
   id: string;
 }
 
@@ -101,41 +98,24 @@ export function moveRootRow(from: number, to: number): void {
 }
 
 /**
- * Bootstrap the order from persisted state, filling in any known entities
- * that aren't yet listed (appended to the end) and dropping any entries
- * whose referent is unknown.
+ * Bootstrap the order from persisted state, filling in any rows whose
+ * referent is known but missing from the persisted list (appended to
+ * the end) and dropping any entries whose referent is unknown.
  *
- * `knownWorkspaceIds` comes from the workspaces store; `extensionRows`
- * from registered extensions (via registerRootRowBootstrapContributor).
+ * `extensionRows` enumerates every row that should currently exist:
+ * one `{kind: "workspace", id}` per Root workspace, plus any pinned
+ * extension rows. The persisted order is preserved where the row still
+ * has a referent; legacy persisted shapes (e.g. `kind:"child-workspace"`
+ * from pre-Stage-10 sessions) are dropped because they don't appear in
+ * `extensionRows`.
  */
-export function bootstrapRootRowOrder(
-  knownWorkspaceIds: string[],
-  extensionRows: RootRow[],
-): void {
+export function bootstrapRootRowOrder(extensionRows: RootRow[]): void {
   const persisted = getState().rootRowOrder ?? [];
   const key = (r: RootRow) => `${r.kind}:${r.id}`;
 
-  // Stage 10: a Workspace and its own tab-surface share an id. The
-  // canonical row is `{kind: "workspace", id}` (contributed via
-  // `extensionRows`); the older `{kind: "child-workspace", id}` shape is
-  // legacy persisted state from pre-Stage-10 sessions. Suppress the
-  // child-workspace entry whenever a workspace entry exists at the same
-  // id so the sidebar doesn't render the same Workspace twice.
-  const workspaceIds = new Set<string>();
-  for (const r of extensionRows) {
-    if (r.kind === "workspace") workspaceIds.add(r.id);
-  }
-
-  // Build the full known set — anything persisted that isn't in it is
-  // stale (child workspace deleted, parent workspace removed) and gets dropped.
   const known = new Set<string>();
-  for (const id of knownWorkspaceIds) {
-    if (workspaceIds.has(id)) continue;
-    known.add(key({ kind: "child-workspace", id }));
-  }
   for (const r of extensionRows) known.add(key(r));
 
-  // Keep persisted order where referents still exist.
   const next: RootRow[] = [];
   const seen = new Set<string>();
   for (const r of persisted) {
@@ -145,23 +125,10 @@ export function bootstrapRootRowOrder(
       seen.add(k);
     }
   }
-
-  // Append entities that weren't in the persisted order —
-  // extension-contributed rows first (parent workspaces), then unclaimed
-  // child workspaces. Matches the legacy "parents above children"
-  // default on first-run installs.
   for (const r of extensionRows) {
     const k = key(r);
     if (!seen.has(k)) {
       next.push(r);
-      seen.add(k);
-    }
-  }
-  for (const id of knownWorkspaceIds) {
-    if (workspaceIds.has(id)) continue;
-    const k = key({ kind: "child-workspace", id });
-    if (!seen.has(k)) {
-      next.push({ kind: "child-workspace", id });
       seen.add(k);
     }
   }

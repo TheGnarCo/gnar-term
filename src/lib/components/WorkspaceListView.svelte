@@ -33,13 +33,11 @@
     reorderWorkspaces,
     toggleWorkspaceLock,
   } from "../services/workspace-runtime-service";
-  import { get } from "svelte/store";
   import WorkspaceItem from "./WorkspaceItem.svelte";
   import DropGhost from "./DropGhost.svelte";
   import { contrastColor } from "../utils/contrast";
   import { contextMenu } from "../stores/ui";
   import { confirmAndCloseWorkspace } from "../services/worktree-service";
-  import { commandStore } from "../services/command-registry";
   import { dashboardWorkspaceRegistry } from "../services/dashboard-workspace-service";
   import { buildWorkspaceContextMenuItems } from "../utils/workspace-context-menu";
 
@@ -241,34 +239,21 @@
   let itemRefs: Record<string, WorkspaceItem> = {};
 
   // Child workspaces share the same context menu surface as the root
-  // workspace list: Rename / (Promote) / Close. Rename drives the
-  // underlying WorkspaceItem's inline rename via the bound ref; everything
-  // else routes through the workspace service. Kept local to
+  // workspace list: Rename / Close. Rename drives the underlying
+  // WorkspaceItem's inline rename via the bound ref; everything else
+  // routes through the workspace service. Kept local to
   // WorkspaceListView so this shared component doesn't need parent
   // callbacks for each item.
   function showChildContextMenu(x: number, y: number, globalIdx: number) {
     const ws = $workspaces[globalIdx];
     if (!ws) return;
     const isDashboard = ws.isDashboard === true;
-    const isInsideWorkspace = typeof ws.rootWorkspaceId === "string";
     const isLocked = ws.locked === true;
-    const canPromoteCommand = get(commandStore).some(
-      (c) => c.id === "promote-child-workspace",
-    );
     const items = buildWorkspaceContextMenuItems({
       isDashboard,
-      isInsideWorkspace,
-      canPromoteCommand,
       workspaceCount: $workspaces.length,
       isLocked,
       onRename: () => itemRefs[ws.id]?.startRename(),
-      onPromote: () => {
-        switchWorkspace(globalIdx);
-        const cmd = get(commandStore).find(
-          (c) => c.id === "promote-child-workspace",
-        );
-        if (cmd) void cmd.action();
-      },
       onToggleLock: () => toggleWorkspaceLock(ws.id),
       onClose: () => void confirmAndCloseWorkspace(ws, globalIdx),
     });

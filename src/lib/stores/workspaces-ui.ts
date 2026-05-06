@@ -28,7 +28,7 @@ export const pendingCreateResolver = writable<
 >(null);
 
 /**
- * Optional fields to pre-populate the create dialog with (e.g. from
- * the Promote-to-Workspace flow). Cleared by the overlay on close.
+ * Optional fields to pre-populate the create dialog with. Cleared by
+ * the overlay on close.
  */
 export const createDialogPrefill = writable<CreateDialogPrefill | null>(null);

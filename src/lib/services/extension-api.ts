@@ -13,10 +13,6 @@ import {
   getContextMenuItemsForFile,
   getContextMenuItemsForDir,
 } from "./context-menu-item-registry";
-import {
-  claimWorkspace as registryClaimWorkspace,
-  unclaimWorkspace as registryUnclaimWorkspace,
-} from "./claimed-workspace-registry";
 import { dashboardTabStore } from "./dashboard-tab-registry";
 import {
   childRowContributorStore,
@@ -201,14 +197,6 @@ export function createExtensionAPI(
       });
       if (typeof result === "string") return result;
       return null;
-    },
-
-    claimWorkspace(workspaceId: string) {
-      registryClaimWorkspace(workspaceId, extId);
-    },
-
-    unclaimWorkspace(workspaceId: string) {
-      registryUnclaimWorkspace(workspaceId);
     },
 
     openFile(path: string) {

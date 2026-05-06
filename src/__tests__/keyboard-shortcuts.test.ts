@@ -258,9 +258,9 @@ describe("keyboard-shortcuts — ⌘1-9 workspace activation", () => {
   it("activates the nth workspace-kind row, skipping non-workspace rows", async () => {
     const { rootRowOrder } = await import("../lib/stores/root-row-order");
     rootRowOrder.set([
-      { kind: "child-workspace", id: "nw-1" },
+      { kind: "pseudo-workspace", id: "nw-1" },
       { kind: "workspace", id: "ws-A" },
-      { kind: "child-workspace", id: "nw-2" },
+      { kind: "pseudo-workspace", id: "nw-2" },
       { kind: "workspace", id: "ws-B" },
     ]);
     const { shortcuts } = await loadModule();
@@ -273,7 +273,7 @@ describe("keyboard-shortcuts — ⌘1-9 workspace activation", () => {
     const { rootRowOrder } = await import("../lib/stores/root-row-order");
     rootRowOrder.set([
       { kind: "workspace", id: "ws-A" },
-      { kind: "child-workspace", id: "nw-1" },
+      { kind: "pseudo-workspace", id: "nw-1" },
       { kind: "workspace", id: "ws-B" },
       { kind: "workspace", id: "ws-C" },
     ]);
@@ -295,13 +295,13 @@ describe("keyboard-shortcuts — ⌘1-9 workspace activation", () => {
     const { rootRowOrder } = await import("../lib/stores/root-row-order");
     // 9 rows but only 2 are workspace-kind
     rootRowOrder.set([
-      { kind: "child-workspace", id: "nw-1" },
-      { kind: "child-workspace", id: "nw-2" },
-      { kind: "child-workspace", id: "nw-3" },
+      { kind: "pseudo-workspace", id: "nw-1" },
+      { kind: "pseudo-workspace", id: "nw-2" },
+      { kind: "pseudo-workspace", id: "nw-3" },
       { kind: "workspace", id: "ws-A" },
-      { kind: "child-workspace", id: "nw-4" },
+      { kind: "pseudo-workspace", id: "nw-4" },
       { kind: "workspace", id: "ws-B" },
-      { kind: "child-workspace", id: "nw-5" },
+      { kind: "pseudo-workspace", id: "nw-5" },
     ]);
     const { shortcuts } = await loadModule();
     shortcuts.handleAppKeydown(mkEvent({ key: "1", meta: true }), ctx);

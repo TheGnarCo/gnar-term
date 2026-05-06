@@ -12,10 +12,6 @@ vi.mock("../lib/stores/root-row-order", () => ({
   appendRootRow: vi.fn(),
   removeRootRow: vi.fn(),
 }));
-vi.mock("../lib/services/claimed-workspace-registry", () => ({
-  claimWorkspace: vi.fn(),
-  unclaimWorkspace: vi.fn(),
-}));
 vi.mock("../lib/services/workspace-git-dirty-store", () => ({
   releaseWorkspaceDirtyStore: vi.fn(),
 }));

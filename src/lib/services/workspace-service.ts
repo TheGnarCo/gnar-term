@@ -16,7 +16,6 @@ import { WORKSPACE_COLOR_SLOTS } from "../../extensions/api";
 import { appendRootRow, removeRootRow } from "../stores/root-row-order";
 import { workspaces } from "../stores/workspace";
 import { activeWorkspaceId } from "../stores/workspace";
-import { claimWorkspace, unclaimWorkspace } from "./claimed-workspace-registry";
 import {
   getWorkspace,
   getWorkspaces,
@@ -777,7 +776,6 @@ export function reclaimChildWorkspaces(): void {
   // Collect workspace ids per workspace in a single pass to avoid one
   // setWorkspaces() call (and event emission) per workspace.
   const newMembers = new Map<string, string[]>();
-  const toClaimIds: string[] = [];
   for (const ws of get(workspaces)) {
     const rootWorkspaceId = ws.rootWorkspaceId;
     if (
@@ -788,7 +786,6 @@ export function reclaimChildWorkspaces(): void {
     const members = newMembers.get(rootWorkspaceId) ?? [];
     members.push(ws.id);
     newMembers.set(rootWorkspaceId, members);
-    toClaimIds.push(ws.id);
   }
 
   if (newMembers.size > 0) {
@@ -805,8 +802,6 @@ export function reclaimChildWorkspaces(): void {
     setWorkspaces(next);
     emitStateChanged({});
   }
-
-  for (const wsId of toClaimIds) claimWorkspace(wsId, "core");
 }
 
 /**
@@ -856,14 +851,10 @@ function wrapStandaloneChildWorkspaces(): void {
 
 /**
  * Startup reconciliation — called after workspaces are restored.
- *
  * Promotes every standalone runtime Workspace to a Root by creating a
- * matching WorkspaceRecord (Stage 10: shared id). The previous "rehydrate
- * claim registry" pass is gone: `claimedWorkspaceIds` is derived directly
- * from `workspaces` (filtered by `rootWorkspaceId`), and
- * `bootstrapRootRowOrder` already filters claimed workspaces out of the
- * sidebar via that derived set, so no per-claim mutation is needed at
- * startup.
+ * matching WorkspaceRecord (Stage 10: shared id). Branch status is
+ * derived directly from `Workspace.rootWorkspaceId`, so no parallel
+ * claim registry needs rehydrating at startup.
  *
  * Idempotent.
  */
@@ -899,10 +890,4 @@ export async function validateWorkspaceRootPaths(): Promise<void> {
   }
 }
 
-export {
-  getWorkspace,
-  getWorkspaces,
-  setActiveWorkspaceId,
-  unclaimWorkspace,
-  claimWorkspace,
-};
+export { getWorkspace, getWorkspaces, setActiveWorkspaceId };

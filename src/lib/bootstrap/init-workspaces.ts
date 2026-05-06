@@ -28,7 +28,6 @@ import {
 import {
   addWorkspace,
   addChildToWorkspace,
-  claimWorkspace,
   createWorkspaceDashboard,
   createSettingsDashboardWorkspace,
   isDashboardWorkspace,
@@ -37,7 +36,6 @@ import {
   reclaimChildWorkspaces,
   regenerateWorkspaceDashboardTemplate,
   removeChildFromAllWorkspaces,
-  unclaimWorkspace,
   updateWorkspace,
 } from "../services/workspace-service";
 import { resolveWorkspaceColor } from "../theme-data";
@@ -53,7 +51,6 @@ import {
   createDialogPrefill,
 } from "../stores/workspaces-ui";
 import { invoke } from "@tauri-apps/api/core";
-import { getActiveCwd } from "../services/service-helpers";
 import type { WorkspaceMetadata } from "../types";
 import {
   createWorkspaceFromDef,
@@ -110,17 +107,14 @@ function onWorkspaceCreated(event: AppEvent): void {
   const ws = get(workspaces).find((w) => w.id === event.id);
   const rootWorkspaceId =
     ws?.rootWorkspaceId ??
-    (event.metadata as WorkspaceMetadata | undefined)?.rootWorkspaceId ??
     (event.metadata as WorkspaceMetadata | undefined)?.rootWorkspaceId;
   if (typeof rootWorkspaceId !== "string") return;
   addChildToWorkspace(rootWorkspaceId, event.id);
-  claimWorkspace(event.id, SOURCE);
 }
 
 function onWorkspaceClosed(event: AppEvent): void {
   if (event.type !== "workspace:closed") return;
   removeChildFromAllWorkspaces(event.id);
-  unclaimWorkspace(event.id);
 }
 
 function onWorkspaceActivated(event: AppEvent): void {
@@ -243,41 +237,6 @@ async function createWorkspaceFlow(prefill?: {
   return id;
 }
 
-/**
- * Promote the active, unrooted Branch into a new Workspace
- * rooted at that Branch's current working directory. Opens
- * the create dialog with path/name pre-filled, then moves the
- * Branch into the created Workspace.
- */
-async function promoteActiveBranch(): Promise<void> {
-  const list = get(workspaces);
-  const idx = get(activeWorkspaceIdx);
-  const activeWs = typeof idx === "number" ? list[idx] : undefined;
-  if (!activeWs) return;
-
-  // getActiveCwd observes the shell's OSC 7 signal — more accurate than
-  // whatever was persisted.
-  const cwd = (await getActiveCwd()) || (activeWs as { cwd?: string }).cwd;
-  if (!cwd) {
-    console.warn("[workspaces] Cannot promote — unknown working directory");
-    return;
-  }
-
-  const derivedName = cwd.replace(/\/+$/, "").split("/").pop() || activeWs.name;
-
-  const newWorkspaceId = await createWorkspaceFlow({
-    path: cwd,
-    name: derivedName,
-  });
-  if (!newWorkspaceId) return;
-
-  // Move the child workspace into the new workspace. workspace:created
-  // already fired at creation time, so replay the claim bookkeeping
-  // manually.
-  addChildToWorkspace(newWorkspaceId, activeWs.id);
-  claimWorkspace(activeWs.id, SOURCE);
-}
-
 export async function initWorkspaces(): Promise<void> {
   await loadWorkspaces();
 
@@ -315,15 +274,6 @@ export async function initWorkspaces(): Promise<void> {
     source: SOURCE,
     action: () => {
       void createWorkspaceFlow();
-    },
-  });
-
-  registerCommand({
-    id: "promote-child-workspace",
-    title: "Promote to Workspace...",
-    source: SOURCE,
-    action: () => {
-      void promoteActiveBranch();
     },
   });
 

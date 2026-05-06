@@ -275,7 +275,7 @@ describe("createWorkspaceFromSurface", () => {
     const updated = get(workspaces);
     const newWs = updated[1]!;
     expect(appendRootRowSpy).toHaveBeenCalledWith({
-      kind: "child-workspace",
+      kind: "workspace",
       id: newWs.id,
     });
   });
@@ -420,7 +420,7 @@ describe("expandWorkspaceIntoPanes", () => {
     expandWorkspaceIntoPanes(srcWs.id, tgtPane.id, "horizontal", false);
 
     expect(removeRootRowSpy).toHaveBeenCalledWith({
-      kind: "child-workspace",
+      kind: "workspace",
       id: srcWs.id,
     });
   });
@@ -628,7 +628,7 @@ describe("mergeWorkspaceIntoPane", () => {
     mergeWorkspaceIntoPane(srcWs.id, tgtPane.id);
 
     expect(removeRootRowSpy).toHaveBeenCalledWith({
-      kind: "child-workspace",
+      kind: "workspace",
       id: srcWs.id,
     });
   });

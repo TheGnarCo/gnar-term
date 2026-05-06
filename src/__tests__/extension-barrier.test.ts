@@ -125,7 +125,6 @@ describe("Extension barrier enforcement", () => {
         "../../lib/contexts/dashboard-host",
         "../../lib/stores/workspace",
         "../../lib/stores/workspace",
-        "../../lib/services/claimed-workspace-registry",
       ],
       // claude-settings/index.ts mirrors the agentic-orchestrator piercing
       // pattern: createWorkspaceFromDef to materialize the workspace dashboard,

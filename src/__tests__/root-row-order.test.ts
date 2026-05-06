@@ -27,13 +27,13 @@ beforeEach(() => {
 
 describe("appendRootRow", () => {
   it("appends rows in insertion order", () => {
-    appendRootRow({ kind: "child-workspace", id: "w1" });
     appendRootRow({ kind: "workspace", id: "p1" });
-    appendRootRow({ kind: "child-workspace", id: "w2" });
+    appendRootRow({ kind: "pseudo-workspace", id: "pw1" });
+    appendRootRow({ kind: "workspace", id: "p2" });
     expect(get(rootRowOrder)).toEqual([
-      { kind: "child-workspace", id: "w1" },
       { kind: "workspace", id: "p1" },
-      { kind: "child-workspace", id: "w2" },
+      { kind: "pseudo-workspace", id: "pw1" },
+      { kind: "workspace", id: "p2" },
     ]);
   });
 
@@ -43,8 +43,8 @@ describe("appendRootRow", () => {
     expect(get(rootRowOrder)).toHaveLength(1);
   });
 
-  it("treats child-workspace:X and workspace:X as distinct rows", () => {
-    appendRootRow({ kind: "child-workspace", id: "shared" });
+  it("treats pseudo-workspace:X and workspace:X as distinct rows", () => {
+    appendRootRow({ kind: "pseudo-workspace", id: "shared" });
     appendRootRow({ kind: "workspace", id: "shared" });
     expect(get(rootRowOrder)).toHaveLength(2);
   });
@@ -52,29 +52,29 @@ describe("appendRootRow", () => {
 
 describe("removeRootRow", () => {
   it("removes a specific {kind, id} pair", () => {
-    appendRootRow({ kind: "child-workspace", id: "w1" });
+    appendRootRow({ kind: "pseudo-workspace", id: "pw1" });
     appendRootRow({ kind: "workspace", id: "p1" });
-    removeRootRow({ kind: "child-workspace", id: "w1" });
+    removeRootRow({ kind: "pseudo-workspace", id: "pw1" });
     expect(get(rootRowOrder)).toEqual([{ kind: "workspace", id: "p1" }]);
   });
 
   it("is a no-op when the row isn't present", () => {
     appendRootRow({ kind: "workspace", id: "p1" });
-    removeRootRow({ kind: "child-workspace", id: "missing" });
+    removeRootRow({ kind: "pseudo-workspace", id: "missing" });
     expect(get(rootRowOrder)).toEqual([{ kind: "workspace", id: "p1" }]);
   });
 });
 
 describe("moveRootRow", () => {
   it("reorders items, accounting for the shift when moving forward", () => {
-    // [w1, w2, w3, w4] → move idx 0 to idx 2 should yield [w2, w3, w1, w4]
+    // [w1, w2, w3, w4] → move idx 0 to idx 2 should yield [w2, w1, w3, w4]
     // (drop-before-target semantics: `to` indexes the DESTINATION slot
     // before splicing out the source, so passing 2 places the source
     // at what becomes index 1 after the -1 adjustment).
-    appendRootRow({ kind: "child-workspace", id: "w1" });
-    appendRootRow({ kind: "child-workspace", id: "w2" });
-    appendRootRow({ kind: "child-workspace", id: "w3" });
-    appendRootRow({ kind: "child-workspace", id: "w4" });
+    appendRootRow({ kind: "workspace", id: "w1" });
+    appendRootRow({ kind: "workspace", id: "w2" });
+    appendRootRow({ kind: "workspace", id: "w3" });
+    appendRootRow({ kind: "workspace", id: "w4" });
     moveRootRow(0, 2);
     expect(get(rootRowOrder).map((r) => r.id)).toEqual([
       "w2",
@@ -85,15 +85,15 @@ describe("moveRootRow", () => {
   });
 
   it("handles backward moves (no index shift)", () => {
-    appendRootRow({ kind: "child-workspace", id: "w1" });
-    appendRootRow({ kind: "child-workspace", id: "w2" });
-    appendRootRow({ kind: "child-workspace", id: "w3" });
+    appendRootRow({ kind: "workspace", id: "w1" });
+    appendRootRow({ kind: "workspace", id: "w2" });
+    appendRootRow({ kind: "workspace", id: "w3" });
     moveRootRow(2, 0);
     expect(get(rootRowOrder).map((r) => r.id)).toEqual(["w3", "w1", "w2"]);
   });
 
   it("is a no-op for an out-of-range source index", () => {
-    appendRootRow({ kind: "child-workspace", id: "w1" });
+    appendRootRow({ kind: "workspace", id: "w1" });
     moveRootRow(5, 0);
     expect(get(rootRowOrder).map((r) => r.id)).toEqual(["w1"]);
   });
@@ -104,20 +104,18 @@ describe("bootstrapRootRowOrder", () => {
     mockState = {
       rootRowOrder: [
         { kind: "workspace", id: "p1" },
-        { kind: "child-workspace", id: "w1" },
+        { kind: "pseudo-workspace", id: "pw1" },
         { kind: "workspace", id: "p2" },
       ],
     };
-    bootstrapRootRowOrder(
-      ["w1"],
-      [
-        { kind: "workspace", id: "p1" },
-        { kind: "workspace", id: "p2" },
-      ],
-    );
+    bootstrapRootRowOrder([
+      { kind: "workspace", id: "p1" },
+      { kind: "pseudo-workspace", id: "pw1" },
+      { kind: "workspace", id: "p2" },
+    ]);
     expect(get(rootRowOrder)).toEqual([
       { kind: "workspace", id: "p1" },
-      { kind: "child-workspace", id: "w1" },
+      { kind: "pseudo-workspace", id: "pw1" },
       { kind: "workspace", id: "p2" },
     ]);
   });
@@ -126,20 +124,33 @@ describe("bootstrapRootRowOrder", () => {
     mockState = {
       rootRowOrder: [
         { kind: "workspace", id: "p_gone" },
-        { kind: "child-workspace", id: "w1" },
+        { kind: "workspace", id: "p1" },
       ],
     };
-    bootstrapRootRowOrder(["w1"], []);
-    expect(get(rootRowOrder)).toEqual([{ kind: "child-workspace", id: "w1" }]);
+    bootstrapRootRowOrder([{ kind: "workspace", id: "p1" }]);
+    expect(get(rootRowOrder)).toEqual([{ kind: "workspace", id: "p1" }]);
   });
 
-  it("appends newly-known entities (workspaces before unclaimed workspaces) for first-run installs", () => {
+  it("drops legacy 'child-workspace' entries on reload (Stage 10 cleanup)", () => {
+    mockState = {
+      rootRowOrder: [
+        { kind: "workspace", id: "p1" },
+        { kind: "child-workspace", id: "legacy" },
+      ],
+    };
+    bootstrapRootRowOrder([{ kind: "workspace", id: "p1" }]);
+    expect(get(rootRowOrder)).toEqual([{ kind: "workspace", id: "p1" }]);
+  });
+
+  it("appends newly-known entities for first-run installs", () => {
     mockState = {};
-    bootstrapRootRowOrder(["w1", "w2"], [{ kind: "workspace", id: "p1" }]);
+    bootstrapRootRowOrder([
+      { kind: "workspace", id: "p1" },
+      { kind: "pseudo-workspace", id: "pw1" },
+    ]);
     expect(get(rootRowOrder)).toEqual([
       { kind: "workspace", id: "p1" },
-      { kind: "child-workspace", id: "w1" },
-      { kind: "child-workspace", id: "w2" },
+      { kind: "pseudo-workspace", id: "pw1" },
     ]);
   });
 
@@ -147,17 +158,13 @@ describe("bootstrapRootRowOrder", () => {
     mockState = {
       rootRowOrder: [{ kind: "workspace", id: "p1" }],
     };
-    bootstrapRootRowOrder(
-      ["w1"],
-      [
-        { kind: "workspace", id: "p1" },
-        { kind: "workspace", id: "p_new" },
-      ],
-    );
+    bootstrapRootRowOrder([
+      { kind: "workspace", id: "p1" },
+      { kind: "workspace", id: "p_new" },
+    ]);
     expect(get(rootRowOrder)).toEqual([
       { kind: "workspace", id: "p1" },
       { kind: "workspace", id: "p_new" },
-      { kind: "child-workspace", id: "w1" },
     ]);
   });
 });

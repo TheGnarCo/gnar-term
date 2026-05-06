@@ -565,7 +565,7 @@ export function expandWorkspaceIntoPanes(
     const targetId = get(workspaces)[newIdx]?.id ?? null;
     activeWorkspaceId.set(targetId);
   }
-  removeRootRow({ kind: "child-workspace", id: srcWorkspaceId });
+  removeRootRow({ kind: "workspace", id: srcWorkspaceId });
   removeChildFromAllWorkspaces(srcWorkspaceId);
   gitStatusWorkspaceClosed(srcWorkspaceId);
   schedulePersist();
@@ -618,7 +618,7 @@ export function mergeWorkspaceIntoPane(
     const targetId = get(workspaces)[newIdx]?.id ?? null;
     activeWorkspaceId.set(targetId);
   }
-  removeRootRow({ kind: "child-workspace", id: srcWorkspaceId });
+  removeRootRow({ kind: "workspace", id: srcWorkspaceId });
   removeChildFromAllWorkspaces(srcWorkspaceId);
   gitStatusWorkspaceClosed(srcWorkspaceId);
   schedulePersist();

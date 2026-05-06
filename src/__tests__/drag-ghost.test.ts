@@ -212,11 +212,6 @@ describe("root-workspace drag paints strong overlay on sibling rows", () => {
     expect(oneLine).not.toMatch(/\{#if isSibling\}/);
   });
 
-  it("uses contrastColor against the row color for the overlay text", () => {
-    expect(LIST_BLOCK).toMatch(/import\s+\{\s*contrastColor\s*\}/);
-    expect(LIST_BLOCK).toMatch(/rowFg\s*=\s*contrastColor\(rowColor\)/);
-  });
-
   it("labels the DropGhost with the source row's own label", () => {
     // The DropGhost tile reads as the dragged row (not the neighboring
     // row's name). The source row's label is derived from the root

@@ -99,12 +99,12 @@ export async function createWorkspace(name: string) {
   const surface = await createTerminalSurface(pane);
 
   workspaces.update((list) => [...list, ws]);
-  // Add to the root-row list. If an extension handler for
-  // workspace:created claims this workspace (e.g. project-scope
-  // inserting it under a project), claimWorkspace will remove it from
-  // the root list — so final state is consistent regardless of
-  // handler ordering.
-  appendRootRow({ kind: "child-workspace", id: ws.id });
+  // Bare runtime workspaces are Roots (no rootWorkspaceId). Their
+  // sidebar row is materialized when `wrapStandaloneChildWorkspaces`
+  // promotes them to a WorkspaceRecord during reconcile (which calls
+  // `addWorkspace` → appendRootRow). Until then they are headless
+  // workspaces — visible only as the active tab surface.
+  appendRootRow({ kind: "workspace", id: ws.id });
   eventBus.emit({ type: "workspace:created", id: ws.id, name });
   // Route activation through switchWorkspace so any listener on
   // workspace:activated (e.g. agentic-orchestrator re-spawning a
@@ -349,7 +349,13 @@ export async function createWorkspaceFromDef(
     );
   } else {
     workspaces.update((list) => [...list, ws]);
-    appendRootRow({ kind: "child-workspace", id: ws.id });
+    // Branches (have rootWorkspaceId) live nested inside their root and
+    // never get a row of their own. Roots get a `kind: "workspace"` row
+    // here; the matching WorkspaceRecord append (via `addWorkspace`)
+    // is idempotent on the same id+kind.
+    if (typeof ws.rootWorkspaceId !== "string") {
+      appendRootRow({ kind: "workspace", id: ws.id });
+    }
   }
   eventBus.emit({
     type: "workspace:created",
@@ -460,7 +466,7 @@ export function closeWorkspace(idx: number) {
   activeWorkspaceIdx.set(
     Math.min(get(activeWorkspaceIdx), get(workspaces).length - 1),
   );
-  removeRootRow({ kind: "child-workspace", id: wsId });
+  removeRootRow({ kind: "workspace", id: wsId });
   eventBus.emit({ type: "workspace:closed", id: wsId });
   schedulePersist();
 }
@@ -700,13 +706,18 @@ export function createWorkspaceFromSurface(
   };
 
   workspaces.update((list) => [...list, newWs]);
-  if (insertOptions?.kind === "root") {
-    insertRootRow(insertOptions.insertIdx, {
-      kind: "child-workspace",
-      id: newWs.id,
-    });
-  } else {
-    appendRootRow({ kind: "child-workspace", id: newWs.id });
+  // Branches (have rootWorkspaceId) never appear as a root row — they
+  // live nested inside their root's branch list. Roots created via
+  // pane-split-into-workspace get a `kind: "workspace"` row here.
+  if (typeof newWs.rootWorkspaceId !== "string") {
+    if (insertOptions?.kind === "root") {
+      insertRootRow(insertOptions.insertIdx, {
+        kind: "workspace",
+        id: newWs.id,
+      });
+    } else {
+      appendRootRow({ kind: "workspace", id: newWs.id });
+    }
   }
   if (effectiveWorkspaceId) {
     if (insertOptions?.kind === "workspace") {

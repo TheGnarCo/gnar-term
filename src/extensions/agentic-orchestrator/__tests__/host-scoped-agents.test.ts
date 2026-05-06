@@ -26,10 +26,6 @@ import type { AgentRef as DetectedAgent } from "../../api";
 import type { ExtensionAPI } from "../../api";
 import { hostScopedAgentsStore } from "../widget-helpers";
 import { workspaces } from "../../../lib/stores/workspace";
-import {
-  claimWorkspace,
-  resetClaimedWorkspaces,
-} from "../../../lib/services/claimed-workspace-registry";
 import { resetWorkspacesForTest } from "../../../lib/stores/workspace";
 import type { DashboardHostContext } from "../../../lib/contexts/dashboard-host";
 
@@ -106,7 +102,6 @@ function makeRoot(
 describe("hostScopedAgentsStore", () => {
   beforeEach(() => {
     workspaces.set([]);
-    resetClaimedWorkspaces();
     resetWorkspacesForTest();
   });
 
@@ -185,7 +180,6 @@ describe("hostScopedAgentsStore", () => {
       },
       makeRoot("grp-1", "/work/one"),
     ] as never);
-    claimWorkspace("ws-under", "someone-else");
     const api = makeApi([
       makeAgent({ agentId: "a-under", workspaceId: "ws-under" }),
     ]);
@@ -214,10 +208,10 @@ describe("hostScopedAgentsStore", () => {
   });
 
   it("workspace scope → includes workspace in workspace.branchedWorkspaceIds even when claimed and no metadata.rootWorkspaceId", async () => {
-    // Regression test: promote-to-workspace calls addChildToWorkspace + claimWorkspace
-    // but does NOT stamp metadata.rootWorkspaceId. Without criterion 2 in hostScopedAgentsStore,
-    // the claim guard ($claimedIds.has) would block the CWD fallback and the agent
-    // would be invisible in the workspace's Kanban dashboard.
+    // Regression test: promote-to-workspace stamps Workspace.rootWorkspaceId
+    // but does NOT stamp metadata.rootWorkspaceId. Without criterion 2 in
+    // hostScopedAgentsStore, the claim guard would block the CWD fallback and
+    // the agent would be invisible in the workspace's Kanban dashboard.
     workspaces.set([
       {
         ...seedWorkspace("ws-native", { cwd: "" }), // no cwd, no metadata.rootWorkspaceId
@@ -225,8 +219,6 @@ describe("hostScopedAgentsStore", () => {
       },
       makeRoot("grp-1", "/work/one", ["ws-native"]),
     ] as never);
-    // Simulate the claim that promote-to-workspace installs.
-    claimWorkspace("ws-native", "core");
     const api = makeApi([
       makeAgent({ agentId: "a-native", workspaceId: "ws-native" }),
     ]);

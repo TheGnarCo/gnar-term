@@ -9,8 +9,6 @@ import { buildWorkspaceContextMenuItems } from "../lib/utils/workspace-context-m
 
 const baseOpts = {
   isDashboard: false,
-  isInsideWorkspace: false,
-  canPromoteCommand: false,
   workspaceCount: 2,
   onClose: () => {},
 };

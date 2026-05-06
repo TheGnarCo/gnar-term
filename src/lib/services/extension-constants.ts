@@ -13,7 +13,6 @@ import { unregisterSurfaceTypesBySource } from "./surface-type-registry";
 import { unregisterContextMenuItemsBySource } from "./context-menu-item-registry";
 import { unregisterWorkspaceActionsBySource } from "./workspace-action-registry";
 import { unregisterDashboardTabsBySource } from "./dashboard-tab-registry";
-import { unclaimBySource } from "./claimed-workspace-registry";
 import { unregisterStatusBySource } from "./status-registry";
 import { unregisterWorkspaceSubtitlesBySource } from "./workspace-subtitle-registry";
 import { unregisterRootRowRenderersBySource } from "./root-row-renderer-registry";
@@ -166,7 +165,6 @@ export const REGISTRY_CLEANUP_FNS: Array<(source: string) => void> = [
   unregisterContextMenuItemsBySource,
   unregisterWorkspaceActionsBySource,
   unregisterDashboardTabsBySource,
-  unclaimBySource,
   unregisterStatusBySource,
   unregisterWorkspaceSubtitlesBySource,
   unregisterRootRowRenderersBySource,

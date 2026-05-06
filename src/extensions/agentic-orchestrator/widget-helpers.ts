@@ -14,7 +14,6 @@ import {
 } from "../../lib/contexts/dashboard-host";
 import { workspaces } from "../../lib/stores/workspace";
 import { getWorkspace, workspacesStore } from "../../lib/stores/workspace";
-import { claimedWorkspaceIds } from "../../lib/services/claimed-workspace-registry";
 import type {
   SpawnedByMarker,
   SpawnAgentType,
@@ -86,17 +85,17 @@ export function throttle<TArgs extends unknown[]>(
  * workspace IDs that belong to it under the §5.3 criteria (metadata,
  * explicit membership, and CWD-prefix fallback for unclaimed workspaces).
  *
- * Computed once whenever workspaces / workspaces / claimed-ids change — all
- * mounted dashboard widgets share this single computation instead of each
- * widget independently re-walking every child workspace's surfaces on every
- * emission (F32 perf fix).
+ * Computed once whenever workspaces / workspaces change — all mounted
+ * dashboard widgets share this single computation instead of each widget
+ * independently re-walking every child workspace's surfaces on every emission
+ * (F32 perf fix).
+ *
+ * "Claimed" status (i.e. workspace already belongs to a Root) is derived
+ * directly from `Workspace.rootWorkspaceId` — no parallel registry.
  */
 const _workspaceChildIndex = derived(
-  [workspaces, workspacesStore, claimedWorkspaceIds],
-  ([$workspaces, $primaryWorkspaces, $claimedIds]): Map<
-    string,
-    Set<string>
-  > => {
+  [workspaces, workspacesStore],
+  ([$workspaces, $primaryWorkspaces]): Map<string, Set<string>> => {
     const index = new Map<string, Set<string>>();
     for (const workspace of $primaryWorkspaces) {
       const base = workspace.path ? workspace.path.replace(/\/+$/, "") : "";
@@ -114,7 +113,7 @@ const _workspaceChildIndex = derived(
         if (members.has(ws.id)) continue;
         // Criterion 3: CWD fallback — only for unclaimed workspaces so we
         // don't double-count workspaces already owned by another parent workspace.
-        if (!base || $claimedIds.has(ws.id)) continue;
+        if (!base || typeof ws.rootWorkspaceId === "string") continue;
         for (const surface of getAllSurfaces(ws)) {
           if (
             isTerminalSurface(surface) &&

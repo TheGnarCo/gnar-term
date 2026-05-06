@@ -122,23 +122,8 @@
     const out: JumpRow[] = [];
     const seen = new Set<string>();
     for (const row of $rootRowOrder) {
-      if (row.kind === "child-workspace") {
-        const idx = list.findIndex((w) => w.id === row.id);
-        if (idx < 0) continue;
-        const ws = list[idx]!;
-        out.push({
-          kind: "workspace",
-          workspaceId: ws.id,
-          idx,
-          label: ws.name,
-          sessionLogs: $sessionLogsStore[ws.id],
-        });
-        seen.add(ws.id);
-        continue;
-      }
-      // Non-child-workspace row kinds (workspace, agent-orchestrator…).
-      // Use their renderer-contributed label as a visual header, then
-      // fan out any workspaces tagged with the row's rootWorkspaceId.
+      // Use the row renderer's label as a visual header, then fan out
+      // any workspaces tagged with the row's rootWorkspaceId.
       const rendererMeta = $rootRowRendererStore.find((r) => r.id === row.kind);
       const headerLabel = rendererMeta?.label?.(row.id);
       if (headerLabel && row.kind === "workspace") {

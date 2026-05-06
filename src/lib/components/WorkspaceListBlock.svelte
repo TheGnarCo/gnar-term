@@ -5,8 +5,7 @@
    * row with a core-drawn grip column on the left.
    *
    * Row kinds:
-   *   - "child-workspace" → unclaimed child workspace, rendered via WorkspaceItem
-   *   - "workspace"        → workspace block, rendered via the registered renderer
+   *   - "workspace"        → Root Workspace, rendered via the registered renderer (chips)
    *   - "pseudo-workspace" → pinned extension row rendered via PseudoWorkspaceRow
    *   - other              → looked up from rootRowRendererStore.
    *
@@ -16,32 +15,27 @@
    * Branch list) are unchanged and still live inside
    * WorkspaceListView.
    */
-  import { derived, get } from "svelte/store";
+  import { derived } from "svelte/store";
   import { theme } from "../stores/theme";
-  import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
-  import { contextMenu, reorderContext, anyReorderActive } from "../stores/ui";
-  import { confirmAndCloseWorkspace } from "../services/worktree-service";
+  import { workspaces } from "../stores/workspace";
+  import { reorderContext, anyReorderActive } from "../stores/ui";
   import {
     rootRowOrder,
     moveRootRow,
     type RootRow,
   } from "../stores/root-row-order";
   import { rootRowRendererStore } from "../services/root-row-renderer-registry";
-  import { claimedWorkspaceIds } from "../services/claimed-workspace-registry";
   import {
     pseudoWorkspaceStore,
     type PseudoWorkspace,
   } from "../services/pseudo-workspace-registry";
   import { createDragReorder } from "../actions/drag-reorder";
-  import WorkspaceItem from "./WorkspaceItem.svelte";
   import PseudoWorkspaceRow from "./PseudoWorkspaceRow.svelte";
   import DropGhost from "./DropGhost.svelte";
   import ExtensionWrapper from "./ExtensionWrapper.svelte";
   import { getExtensionApiById } from "../services/extension-loader";
-  import { contrastColor } from "../utils/contrast";
 
-  import { getAllSurfaces, type Workspace } from "../types";
-  import { commandStore } from "../services/command-registry";
+  import { getAllSurfaces } from "../types";
   import { tabDragState } from "../services/tab-drag";
   import {
     detectWorkspacePaneDrop,
@@ -51,12 +45,9 @@
     type WorkspacePaneDropTarget,
   } from "../services/workspace-drag";
   import { expandWorkspaceIntoPanes } from "../services/pane-service";
-  import { dashboardWorkspaceRegistry } from "../services/dashboard-workspace-service";
   import { configStore } from "../config";
   import { resolveWorkspaceColor } from "../theme-data";
   import { archiveWorkspace } from "../services/archive-service";
-  import { buildWorkspaceContextMenuItems } from "../utils/workspace-context-menu";
-  import { toggleWorkspaceLock } from "../services/workspace-runtime-service";
   import { getWorkspace } from "../stores/workspace";
 
   function resolvePseudoWorkspaceColor(pw: PseudoWorkspace): string {
@@ -64,17 +55,14 @@
     return resolveWorkspaceColor(slot, $theme);
   }
 
-  export let onSwitchWorkspace: (idx: number) => void;
-  export let onRenameWorkspace: (idx: number, name: string) => void;
-  export let onNewSurface: () => void;
-
-  // Exposed via bind:this so Sidebar's "rename active" keyboard
-  // handler can trigger inline rename on a specific workspace index.
-  let workspaceItems: Record<string, WorkspaceItem> = {};
-  export function startRename(globalIdx: number) {
-    const ws = $workspaces[globalIdx];
-    const item = ws ? workspaceItems[ws.id] : undefined;
-    if (item) item.startRename();
+  // Sidebar exposes a "rename active" keyboard shortcut. Pre-Stage-10
+  // it dispatched into a WorkspaceItem mounted at root for the bare
+  // workspace path; that bare row no longer exists. Renames for Root
+  // workspaces go through WorkspaceSectionContent's banner label;
+  // Branches use WorkspaceListView. The shortcut is a no-op here —
+  // the Sidebar.startRename surface stays for API stability.
+  export function startRename(_globalIdx: number) {
+    // Intentional no-op — see comment above.
   }
 
   // Derived view: rootRowOrder as-is plus per-row metadata we need at
@@ -90,7 +78,6 @@
     row: RootRow;
     idx: number;
     key: string;
-    workspace?: Workspace;
     rendererComponent?: unknown;
     rendererSource?: string;
     rendererRailColor?: string;
@@ -103,33 +90,14 @@
   // the computation in a `$:` IIFE and the dependencies weren't
   // detected reliably across HMR.
   const renderedRowsStore = derived(
-    [
-      workspaces,
-      rootRowOrder,
-      rootRowRendererStore,
-      claimedWorkspaceIds,
-      pseudoWorkspaceStore,
-    ],
-    ([$ws, $order, $renderers, $claimed, $pseudoWs]) => {
+    [rootRowOrder, rootRowRendererStore, pseudoWorkspaceStore],
+    ([$order, $renderers, $pseudoWs]) => {
       const rows: RenderedRow[] = [];
-      const byId = new Map(
-        $ws
-          .filter((ws) => !$claimed.has(ws.id))
-          .map((ws) => [ws.id, ws] as const),
-      );
       const renderers = new Map($renderers.map((r) => [r.id, r] as const));
       const pseudoById = new Map($pseudoWs.map((pw) => [pw.id, pw] as const));
-      const renderedWsIds = new Set<string>();
       let workspaceCount = 0;
       $order.forEach((row, idx) => {
         const key = `${row.kind}:${row.id}`;
-        if (row.kind === "child-workspace") {
-          const ws = byId.get(row.id);
-          if (!ws) return;
-          rows.push({ row, idx, key, workspace: ws });
-          renderedWsIds.add(ws.id);
-          return;
-        }
         if (row.kind === "pseudo-workspace") {
           const pw = pseudoById.get(row.id);
           if (!pw) return;
@@ -150,30 +118,7 @@
           rendererLabel: r.label?.(row.id),
           workspaceOnlyIdx,
         });
-        // Stage 10: a workspace row hosts the Workspace's own tab surface
-        // at the shared id. Mark the runtime workspace as rendered so the
-        // fallback below doesn't re-emit it as a standalone child row.
-        if (row.kind === "workspace" && byId.has(row.id)) {
-          renderedWsIds.add(row.id);
-        }
       });
-      // Fallback — any unclaimed workspace in the store that isn't
-      // already rendered gets appended at the end. Covers first-run
-      // installs (empty persisted order), direct `workspaces.set` in
-      // tests, and stale rootRowOrder entries whose workspace ids were
-      // regenerated across sessions.
-      if (renderedWsIds.size < byId.size) {
-        let idx = $order.length;
-        for (const [id, ws] of byId) {
-          if (renderedWsIds.has(id)) continue;
-          rows.push({
-            row: { kind: "child-workspace", id },
-            idx: idx++,
-            key: `child-workspace:${id}`,
-            workspace: ws,
-          });
-        }
-      }
       return rows;
     },
   );
@@ -224,7 +169,7 @@
           y <= rect.bottom;
       }
       const srcRow = $rootRowOrder[fromIdx];
-      if (srcRow?.kind !== "child-workspace") {
+      if (srcRow?.kind !== "workspace") {
         currentPaneTarget = null;
         setWorkspaceDragState(null);
         return;
@@ -258,7 +203,7 @@
       setWorkspaceDragState(null);
       if (paneTarget?.kind === "pane-split") {
         const srcRow = $rootRowOrder[fromIdx];
-        if (srcRow?.kind === "child-workspace") {
+        if (srcRow?.kind === "workspace") {
           const direction =
             paneTarget.zone === "left" || paneTarget.zone === "right"
               ? "horizontal"
@@ -309,10 +254,7 @@
 
   function startRootRowDrag(e: MouseEvent, rowIdx: number) {
     const srcRow = $rootRowOrder[rowIdx];
-    if (srcRow?.kind === "child-workspace") {
-      const ws = $workspaces.find((w) => w.id === srcRow.id);
-      if (ws && ws.locked === true) return;
-    } else if (srcRow?.kind === "workspace") {
+    if (srcRow?.kind === "workspace") {
       const workspace = getWorkspace(srcRow.id);
       if (workspace?.locked === true) return;
     }
@@ -332,26 +274,13 @@
           (e) => e.row.kind === sourceRow!.kind && e.row.id === sourceRow!.id,
         )
       : undefined;
-  $: sourceRowColor = (() => {
-    if (sourceEntry?.rendererRailColor) return sourceEntry.rendererRailColor;
-    const pw = sourceEntry?.pseudoWorkspace;
-    if (pw) return resolvePseudoWorkspaceColor(pw);
-    const ws = sourceEntry?.workspace;
-    if (ws) {
-      const dashId = ws.dashboardWorkspaceId;
-      if (typeof dashId === "string") {
-        return (
-          $dashboardWorkspaceRegistry.get(dashId)?.accentColor ?? $theme.accent
-        );
-      }
-    }
-    return $theme.accent;
-  })();
+  $: sourceRowColor =
+    sourceEntry?.rendererRailColor ??
+    (sourceEntry?.pseudoWorkspace
+      ? resolvePseudoWorkspaceColor(sourceEntry.pseudoWorkspace)
+      : $theme.accent);
   $: sourceRowLabel =
-    sourceEntry?.pseudoWorkspace?.label ??
-    sourceEntry?.rendererLabel ??
-    sourceEntry?.workspace?.name ??
-    "";
+    sourceEntry?.pseudoWorkspace?.label ?? sourceEntry?.rendererLabel ?? "";
 
   // --- Tab-drag overlay state ---
   // When a tab is being dragged over the root row list, synthesize the same
@@ -384,43 +313,6 @@
     ? sourceRowLabel
     : tabDragSurfaceTitle;
   $: effectiveSourceRowColor = dragActive ? sourceRowColor : $theme.accent;
-
-  // --- Workspace row context menu (previously in WorkspaceListBlock's
-  // showWorkspaceContextMenu; unchanged modulo re-scoping to rendered
-  // root rows). ---
-  function runPromoteToWorkspace(globalIdx: number) {
-    onSwitchWorkspace(globalIdx);
-    const cmd = get(commandStore).find(
-      (c) => c.id === "promote-child-workspace",
-    );
-    if (cmd) void cmd.action();
-  }
-
-  $: canPromote = $commandStore.some((c) => c.id === "promote-child-workspace");
-
-  function showWorkspaceContextMenu(x: number, y: number, globalIdx: number) {
-    const ws = $workspaces[globalIdx];
-    if (!ws) return;
-    const isDashboard = ws.isDashboard === true;
-    const isInsideWorkspace = typeof ws.rootWorkspaceId === "string";
-    const isLocked = ws.locked === true;
-    const items = buildWorkspaceContextMenuItems({
-      isDashboard,
-      isInsideWorkspace,
-      canPromoteCommand: canPromote,
-      workspaceCount: $workspaces.length,
-      isLocked,
-      onRename: () => startRename(globalIdx),
-      onNewSurface: () => {
-        onSwitchWorkspace(globalIdx);
-        onNewSurface();
-      },
-      onPromote: () => runPromoteToWorkspace(globalIdx),
-      onToggleLock: () => toggleWorkspaceLock(ws.id),
-      onClose: () => void confirmAndCloseWorkspace(ws, globalIdx),
-    });
-    contextMenu.set({ x, y, items });
-  }
 </script>
 
 <!-- No "Workspaces" label row here anymore. The label was redundant
@@ -441,23 +333,11 @@
   {@const ghostAfter =
     effectiveInsertIndicator?.idx === entry.idx &&
     effectiveInsertIndicator.edge === "after"}
-  {@const ws = entry.workspace}
-  {@const _dashId = ws?.dashboardWorkspaceId}
-  {@const rowColor =
+  {@const _rowColor =
     entry.rendererRailColor ??
     (entry.pseudoWorkspace
       ? resolvePseudoWorkspaceColor(entry.pseudoWorkspace)
-      : typeof _dashId === "string"
-        ? ($dashboardWorkspaceRegistry.get(_dashId)?.accentColor ??
-          $theme.accent)
-        : $theme.accent)}
-  {@const _rowFg = contrastColor(rowColor)}
-  {@const _rowLabel =
-    entry.row.kind === "child-workspace" && ws
-      ? ws.name
-      : entry.row.kind === "pseudo-workspace" && entry.pseudoWorkspace
-        ? entry.pseudoWorkspace.label
-        : (entry.rendererLabel ?? "")}
+      : $theme.accent)}
   <!-- The DropGhost is a sibling .root-row, NOT a child of an existing
        row. The source row is fully skipped from rendering (not just
        inner display:none) — that lets the Ghost-row inherit the
@@ -482,26 +362,10 @@
       <div data-root-row-idx={entry.idx} style="position: relative;">
         <!-- Row content — the renderer draws its OWN grip (via
              onGripMouseDown) so the row looks self-contained (no gap
-             between active workspace bg and its rail, matching the
-             child-workspace row style). Core still owns the drag pipeline
-             — the renderer's grip just calls back into startRootRowDrag. -->
-        {#if entry.row.kind === "child-workspace" && ws}
-          {@const globalIdx = $workspaces.indexOf(ws)}
-          <WorkspaceItem
-            bind:this={workspaceItems[ws.id]}
-            workspace={ws}
-            index={globalIdx}
-            isActive={globalIdx === $activeWorkspaceIdx}
-            dragActive={isSource}
-            onSelect={() => {
-              if (!dragActive) onSwitchWorkspace(globalIdx);
-            }}
-            onClose={() => void confirmAndCloseWorkspace(ws, globalIdx)}
-            onRename={(name) => onRenameWorkspace(globalIdx, name)}
-            onContextMenu={(x, y) => showWorkspaceContextMenu(x, y, globalIdx)}
-            onGripMouseDown={(e) => startRootRowDrag(e, entry.idx)}
-          />
-        {:else if entry.row.kind === "pseudo-workspace" && entry.pseudoWorkspace}
+             between active workspace bg and its rail). Core still owns
+             the drag pipeline — the renderer's grip just calls back
+             into startRootRowDrag. -->
+        {#if entry.row.kind === "pseudo-workspace" && entry.pseudoWorkspace}
           <PseudoWorkspaceRow
             pseudo={entry.pseudoWorkspace}
             onGripMouseDown={(e) => startRootRowDrag(e, entry.idx)}

@@ -526,7 +526,7 @@ describe("tab-drag — commitTabDrop", () => {
       position: { x: 0, y: 0 },
       dropTarget: {
         kind: "new-child-workspace-in-workspace",
-        parentWorkspaceId: "grp1",
+        rootWorkspaceId: "grp1",
         insertGlobalIdx: 1,
         insertEdge: "before",
       },
@@ -572,7 +572,7 @@ describe("tab-drag — commitTabDrop", () => {
       position: { x: 0, y: 0 },
       dropTarget: {
         kind: "new-child-workspace-in-workspace",
-        parentWorkspaceId: "grp1",
+        rootWorkspaceId: "grp1",
         insertGlobalIdx: 1,
         insertEdge: "after",
       },
@@ -867,7 +867,7 @@ describe("tab-drag — detectDropTarget: root tab over child workspace row", () 
     const sA = mockTerminalSurface({ title: "A" });
     const sB = mockTerminalSurface({ title: "B" });
     const srcPane = makePane([sA, sB]);
-    const srcWs = makeChildWorkspace(srcPane); // no parentWorkspaceId — root workspace
+    const srcWs = makeChildWorkspace(srcPane); // no rootWorkspaceId — root workspace
 
     const childPane = makePane([mockTerminalSurface({ title: "C" })]);
     const childWs: Workspace = {
@@ -875,7 +875,7 @@ describe("tab-drag — detectDropTarget: root tab over child workspace row", () 
       name: "child",
       splitRoot: { type: "pane", pane: childPane },
       activePaneId: childPane.id,
-      metadata: { parentWorkspaceId: "grp-1" },
+      metadata: { rootWorkspaceId: "grp-1" },
     };
     workspaces.set([srcWs, childWs]);
     activeWorkspaceIdx.set(0);
@@ -912,7 +912,7 @@ describe("tab-drag — detectDropTarget: root tab over child workspace row", () 
     const state = get(tabDragState);
     expect(state?.dropTarget?.kind).toBe("new-child-workspace-in-workspace");
     if (state?.dropTarget?.kind === "new-child-workspace-in-workspace") {
-      expect(state.dropTarget.parentWorkspaceId).toBe("grp-1");
+      expect(state.dropTarget.rootWorkspaceId).toBe("grp-1");
     }
   });
 });
@@ -922,7 +922,7 @@ describe("tab-drag — commitTabDrop: new-child-workspace-in-workspace passes ta
     const sA = mockTerminalSurface({ title: "A" });
     const sB = mockTerminalSurface({ title: "B" });
     const pane = makePane([sA, sB]);
-    const ws = makeChildWorkspace(pane); // root workspace — no parentWorkspaceId
+    const ws = makeChildWorkspace(pane); // root workspace — no rootWorkspaceId
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
 
@@ -938,7 +938,7 @@ describe("tab-drag — commitTabDrop: new-child-workspace-in-workspace passes ta
       position: { x: 0, y: 0 },
       dropTarget: {
         kind: "new-child-workspace-in-workspace",
-        parentWorkspaceId: "grp-1",
+        rootWorkspaceId: "grp-1",
         insertGlobalIdx: 0,
         insertEdge: "after",
       },

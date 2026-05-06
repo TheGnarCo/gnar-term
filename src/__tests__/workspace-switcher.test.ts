@@ -9,7 +9,7 @@ function makeWs(
   overrides: Partial<Workspace> & {
     id: string;
     name: string;
-    parentWorkspaceId?: string;
+    rootWorkspaceId?: string;
   },
 ): Workspace {
   return {
@@ -40,10 +40,10 @@ const parentA = makeParent("ws-a", "Alpha Project");
 const parentB = makeParent("ws-b", "Beta Corp");
 
 const branches = [
-  makeWs({ id: "nw-1", name: "main", parentWorkspaceId: "ws-a" }),
-  makeWs({ id: "nw-2", name: "feature/login", parentWorkspaceId: "ws-a" }),
-  makeWs({ id: "nw-3", name: "hotfix-db", parentWorkspaceId: "ws-b" }),
-  makeWs({ id: "nw-4", name: "develop", parentWorkspaceId: "ws-b" }),
+  makeWs({ id: "nw-1", name: "main", rootWorkspaceId: "ws-a" }),
+  makeWs({ id: "nw-2", name: "feature/login", rootWorkspaceId: "ws-a" }),
+  makeWs({ id: "nw-3", name: "hotfix-db", rootWorkspaceId: "ws-b" }),
+  makeWs({ id: "nw-4", name: "develop", rootWorkspaceId: "ws-b" }),
   makeWs({ id: "nw-5", name: "standalone" }), // no parent
 ];
 

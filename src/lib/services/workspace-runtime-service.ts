@@ -175,10 +175,13 @@ export async function createWorkspaceFromDef(
             // workspace has autoRunRestoreCommands enabled.
             surface.definedCommand = sDef.command;
             if (restoring) {
-              const parentWsId =
-                def.parentWorkspaceId ?? def.metadata?.parentWorkspaceId;
-              const parentWs = parentWsId ? getWorkspace(parentWsId) : null;
-              if (parentWs?.autoRunRestoreCommands !== false) {
+              const mdRootId =
+                typeof def.metadata?.rootWorkspaceId === "string"
+                  ? def.metadata.rootWorkspaceId
+                  : undefined;
+              const rootWsId = def.rootWorkspaceId ?? mdRootId;
+              const rootWs = rootWsId ? getWorkspace(rootWsId) : null;
+              if (rootWs?.autoRunRestoreCommands !== false) {
                 surface.startupCommand = sDef.command;
               } else {
                 surface.pendingRestoreCommand = true;
@@ -238,12 +241,10 @@ export async function createWorkspaceFromDef(
   };
 
   // Structural / discriminant fields — top-level def wins over metadata.
-  const parentWorkspaceId =
-    def.parentWorkspaceId ??
-    (typeof md?.parentWorkspaceId === "string"
-      ? md.parentWorkspaceId
-      : undefined);
-  if (parentWorkspaceId !== undefined) ws.parentWorkspaceId = parentWorkspaceId;
+  const rootWorkspaceId =
+    def.rootWorkspaceId ??
+    (typeof md?.rootWorkspaceId === "string" ? md.rootWorkspaceId : undefined);
+  if (rootWorkspaceId !== undefined) ws.rootWorkspaceId = rootWorkspaceId;
 
   const isDashboard =
     def.isDashboard ??
@@ -388,10 +389,10 @@ export function switchWorkspace(idx: number) {
   zoomedSurfaceId.set(null);
   activeWorkspaceIdx.set(idx);
   workspaceHistory.update(([, cur]) => [cur, newId]);
-  // Record the last-active child workspace on the parent workspace
+  // Record the last-active Branch on the root Workspace
   // so activateWorkspace can restore it on the next switch.
   const ws = wsList[idx];
-  const parentWsId = ws?.parentWorkspaceId;
+  const parentWsId = ws?.rootWorkspaceId;
   if (ws && parentWsId) {
     updateWorkspace(parentWsId, { lastActiveBranchedWorkspaceId: ws.id });
   }
@@ -624,9 +625,9 @@ function collapseEmptyPaneInWorkspace(ws: Workspace, paneId: string): void {
 
 /**
  * Spawn a new child workspace whose splitRoot is a single pane carrying the
- * dragged surface. Inherits the source workspace's parentWorkspaceId
- * so a tab dropped from a workspace inside a parent lands as a
- * sibling within the same parent workspace.
+ * dragged surface. Inherits the source workspace's rootWorkspaceId
+ * so a tab dropped from a Branch inside a root Workspace lands as a
+ * sibling within the same root Workspace.
  *
  * Refuses to leave the source empty: when the source workspace has only
  * one surface total, this is a no-op (the caller — tab-drag — also
@@ -681,7 +682,7 @@ export function createWorkspaceFromSurface(
     surfaces: [surface],
     activeSurfaceId: surface.id,
   };
-  const srcWorkspaceId = srcWs?.parentWorkspaceId;
+  const srcWorkspaceId = srcWs?.rootWorkspaceId;
   const effectiveWorkspaceId =
     (insertOptions?.kind === "workspace" && insertOptions.targetWorkspaceId) ||
     srcWorkspaceId;
@@ -692,8 +693,8 @@ export function createWorkspaceFromSurface(
     activePaneId: newPane.id,
     ...(effectiveWorkspaceId
       ? {
-          parentWorkspaceId: effectiveWorkspaceId,
-          metadata: { parentWorkspaceId: effectiveWorkspaceId },
+          rootWorkspaceId: effectiveWorkspaceId,
+          metadata: { rootWorkspaceId: effectiveWorkspaceId },
         }
       : {}),
   };

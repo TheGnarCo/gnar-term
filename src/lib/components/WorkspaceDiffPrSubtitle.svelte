@@ -23,7 +23,7 @@
   export let accentColor: string | undefined = undefined;
 
   $: currentWs = $workspaces.find((w) => w.id === workspaceId);
-  $: isChild = Boolean(currentWs?.parentWorkspaceId);
+  $: isChild = Boolean(currentWs?.rootWorkspaceId);
 
   $: fgMuted = ($theme["fgMuted"] ?? $theme.fgDim) as string;
   $: iconFg = accentColor ?? fgMuted;

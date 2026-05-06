@@ -60,7 +60,7 @@ describe("applyRepoDef", () => {
     const defaultDef: WorkspaceTemplate = {
       name: "Default Branch 1",
       cwd: "/some/repo",
-      metadata: { parentWorkspaceId: "ws-123" },
+      metadata: { rootWorkspaceId: "ws-123" },
       layout: { pane: { surfaces: [{ type: "terminal" }] } },
     };
 
@@ -72,7 +72,7 @@ describe("applyRepoDef", () => {
 
     // Fields not in repoDef are preserved from defaultDef
     expect(result.cwd).toBe("/some/repo");
-    expect(result.metadata).toEqual({ parentWorkspaceId: "ws-123" });
+    expect(result.metadata).toEqual({ rootWorkspaceId: "ws-123" });
   });
 
   it("returns the default def unchanged when bootstrap file does not exist", async () => {
@@ -86,7 +86,7 @@ describe("applyRepoDef", () => {
     const defaultDef: WorkspaceTemplate = {
       name: "Default Branch 1",
       cwd: "/some/repo",
-      metadata: { parentWorkspaceId: "ws-123" },
+      metadata: { rootWorkspaceId: "ws-123" },
       layout: { pane: { surfaces: [{ type: "terminal" }] } },
     };
 
@@ -109,7 +109,7 @@ describe("applyRepoDef", () => {
     const defaultDef: WorkspaceTemplate = {
       name: "Default Branch 1",
       cwd: "/some/repo",
-      metadata: { parentWorkspaceId: "ws-123" },
+      metadata: { rootWorkspaceId: "ws-123" },
       layout: { pane: { surfaces: [{ type: "terminal" }] } },
     };
 

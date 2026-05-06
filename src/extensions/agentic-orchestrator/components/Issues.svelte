@@ -239,8 +239,8 @@
         repoPath: target.repoPath,
         branch: `agent/${agent}/${issue.number}-${branchSlug}`,
         spawnedBy: target.spawnedBy,
-        ...(target.parentWorkspaceId
-          ? { parentWorkspaceId: target.parentWorkspaceId }
+        ...(target.rootWorkspaceId
+          ? { rootWorkspaceId: target.rootWorkspaceId }
           : {}),
         spawnedFromIssues: [issue.number],
       });
@@ -285,8 +285,8 @@
             repoPath: target.repoPath,
             branch: `agent/${agent}/${issue.number}-${branchSlug}`,
             spawnedBy: target.spawnedBy,
-            ...(target.parentWorkspaceId
-              ? { parentWorkspaceId: target.parentWorkspaceId }
+            ...(target.rootWorkspaceId
+              ? { rootWorkspaceId: target.rootWorkspaceId }
               : {}),
             spawnedFromIssues: [issue.number],
           });
@@ -355,8 +355,8 @@
         repoPath: target.repoPath,
         branch: `agent/${agent}/${branchSuffix}`,
         spawnedBy: target.spawnedBy,
-        ...(target.parentWorkspaceId
-          ? { parentWorkspaceId: target.parentWorkspaceId }
+        ...(target.rootWorkspaceId
+          ? { rootWorkspaceId: target.rootWorkspaceId }
           : {}),
         spawnedFromIssues: numbers,
       });

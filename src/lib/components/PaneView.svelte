@@ -75,8 +75,8 @@
   // Dashboard workspaces can't accumulate surfaces — the preview cannot
   // be closed from the UI, so no regen affordance is needed either.
   //
-  // For non-Dashboard workspaces tied to a workspace
-  // (metadata.parentWorkspaceId), keep the workspace regen affordance
+  // For non-Dashboard workspaces tied to a Workspace
+  // (rootWorkspaceId), keep the workspace regen affordance
   // so users can re-spawn a workspace-dashboard preview surface after
   // closing it.
   $: workspaceMetadata = $workspaces.find((w) => w.id === workspaceId);
@@ -88,8 +88,8 @@
   $: settingsDashboardWorkspaceId =
     isDashboardWorkspace &&
     workspaceMetadata?.dashboardContributionId === "settings" &&
-    typeof workspaceMetadata?.parentWorkspaceId === "string"
-      ? workspaceMetadata.parentWorkspaceId
+    typeof workspaceMetadata?.rootWorkspaceId === "string"
+      ? workspaceMetadata.rootWorkspaceId
       : null;
   $: dashboardWorkspaceEntry =
     isDashboardWorkspace &&
@@ -101,7 +101,7 @@
   $: regenCommandId =
     isDashboardWorkspace &&
     !settingsDashboardWorkspaceId &&
-    typeof workspaceMetadata?.parentWorkspaceId === "string"
+    typeof workspaceMetadata?.rootWorkspaceId === "string"
       ? "workspaces:regenerate-active-workspace-dashboard"
       : undefined;
   $: regenCommand = regenCommandId
@@ -321,7 +321,7 @@
          in place of any surface list. The workspace carries no preview
          surface, so no other render branches fire. -->
     <WorkspaceDashboardSettings
-      parentWorkspaceId={settingsDashboardWorkspaceId}
+      rootWorkspaceId={settingsDashboardWorkspaceId}
     />
   {:else}
     {#if pane.exitedSurface && pane.surfaces.length === 0}

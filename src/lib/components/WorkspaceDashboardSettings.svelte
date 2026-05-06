@@ -27,13 +27,13 @@
   import type { Component } from "svelte";
   import GridIcon from "../icons/GridIcon.svelte";
 
-  export let parentWorkspaceId: string;
+  export let rootWorkspaceId: string;
 
   /** Per-row regenerate-in-flight flag. Keyed by contribution id. */
   let regeneratingRow: string | null = null;
   let regenerateError = "";
 
-  $: workspace = $workspacesStore.find((w) => w.id === parentWorkspaceId);
+  $: workspace = $workspacesStore.find((w) => w.id === rootWorkspaceId);
   $: currentColorSlot = workspace?.color ?? "purple";
   $: markdownPath = workspace ? workspaceDashboardPath(workspace.path) : "";
 
@@ -85,7 +85,7 @@
       ? $workspaces
           .filter(
             (w) =>
-              w.isDashboard === true && w.parentWorkspaceId === workspace!.id,
+              w.isDashboard === true && w.rootWorkspaceId === workspace!.id,
           )
           .map((w) => w.dashboardContributionId)
           .filter((v): v is string => typeof v === "string")

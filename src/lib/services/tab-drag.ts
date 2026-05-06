@@ -36,7 +36,7 @@ export type TabDropTarget =
   | { kind: "new-workspace"; insertIdx: number; insertEdge: "before" | "after" }
   | {
       kind: "new-child-workspace-in-workspace";
-      parentWorkspaceId: string;
+      rootWorkspaceId: string;
       insertGlobalIdx: number;
       insertEdge: "before" | "after";
     }
@@ -245,14 +245,14 @@ function detectDropTarget(
       const containerEl = wsViewRowEl.closest(
         "[data-container-children]",
       ) as HTMLElement | null;
-      const parentWorkspaceId =
+      const rootWorkspaceId =
         containerEl?.getAttribute("data-container-children") ?? null;
-      if (parentWorkspaceId) {
+      if (rootWorkspaceId) {
         const srcWs = get(workspaces).find((w) => w.id === sourceWorkspaceId);
-        const srcWorkspaceId = srcWs?.parentWorkspaceId;
-        if (srcWorkspaceId !== parentWorkspaceId) {
+        const srcWorkspaceId = srcWs?.rootWorkspaceId;
+        if (srcWorkspaceId !== rootWorkspaceId) {
           if (srcWorkspaceId) return null; // tab from a different workspace → deny
-          // Root tab over a workspace's child workspace → create a nested
+          // Root tab over a workspace's Branch → create a nested
           // workspace in that workspace rather than falling through to
           // root-row detection.
           if (srcWs && getAllSurfaces(srcWs).length > 1) {
@@ -265,7 +265,7 @@ function detectDropTarget(
               y < rect.top + rect.height / 2 ? "before" : "after";
             return {
               kind: "new-child-workspace-in-workspace",
-              parentWorkspaceId,
+              rootWorkspaceId,
               insertGlobalIdx: globalIdx,
               insertEdge,
             };
@@ -283,7 +283,7 @@ function detectDropTarget(
               y < rect.top + rect.height / 2 ? "before" : "after";
             return {
               kind: "new-child-workspace-in-workspace",
-              parentWorkspaceId,
+              rootWorkspaceId,
               insertGlobalIdx: globalIdx,
               insertEdge,
             };
@@ -314,7 +314,7 @@ function detectDropTarget(
     }
     if (rootRowEl) {
       const srcWs = get(workspaces).find((w) => w.id === sourceWorkspaceId);
-      const srcWorkspaceId = srcWs?.parentWorkspaceId;
+      const srcWorkspaceId = srcWs?.rootWorkspaceId;
       if (srcWorkspaceId) return null;
       const rowIdx = parseInt(
         rootRowEl.getAttribute("data-root-row-idx") || "0",
@@ -334,7 +334,7 @@ function detectDropTarget(
     const sidebar = el.closest("#sidebar");
     if (sidebar) {
       const srcWs = get(workspaces).find((w) => w.id === sourceWorkspaceId);
-      const srcWorkspaceId = srcWs?.parentWorkspaceId;
+      const srcWorkspaceId = srcWs?.rootWorkspaceId;
       if (srcWorkspaceId) return null;
       if (srcWs && getAllSurfaces(srcWs).length > 1) {
         const order = get(rootRowOrder);
@@ -450,7 +450,7 @@ export function commitTabDrop(): void {
       const tgtWs = allWs[dropTarget.insertGlobalIdx];
       if (!tgtWs) break;
       const workspace = getWorkspaces().find(
-        (w) => w.id === dropTarget.parentWorkspaceId,
+        (w) => w.id === dropTarget.rootWorkspaceId,
       );
       if (!workspace) break;
       const posInWorkspace = workspace.branchedWorkspaceIds.indexOf(tgtWs.id);
@@ -463,7 +463,7 @@ export function commitTabDrop(): void {
       createWorkspaceFromSurface(surfaceId, sourcePaneId, sourceWorkspaceId, {
         kind: "workspace",
         positionInWorkspace: insertPos,
-        targetWorkspaceId: dropTarget.parentWorkspaceId,
+        targetWorkspaceId: dropTarget.rootWorkspaceId,
       });
       break;
     }

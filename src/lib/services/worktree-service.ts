@@ -79,7 +79,7 @@ export function _seedWorktreeEntries(entries: WorktreeWorkspace[]): void {
 
 interface CreateContext {
   workspacePath?: unknown;
-  parentWorkspaceId?: unknown;
+  rootWorkspaceId?: unknown;
 }
 
 /** Run the full "new branched workspace" flow. */
@@ -99,9 +99,9 @@ export async function createWorktreeWorkspace(
     branch: config.branch,
     base: config.base,
     worktreePath: config.worktreePath,
-    parentWorkspaceId:
-      ctx.parentWorkspaceId !== undefined && ctx.parentWorkspaceId !== null
-        ? String(ctx.parentWorkspaceId)
+    rootWorkspaceId:
+      ctx.rootWorkspaceId !== undefined && ctx.rootWorkspaceId !== null
+        ? String(ctx.rootWorkspaceId)
         : undefined,
   });
 }
@@ -124,7 +124,7 @@ export interface WorktreeWorkspaceConfig {
   branch: string;
   base: string;
   worktreePath: string;
-  parentWorkspaceId?: string;
+  rootWorkspaceId?: string;
   /**
    * Optional startup command to run in the new workspace's terminal.
    * Maps to surface.startupCommand via the WorkspaceTemplate layout — fires
@@ -139,7 +139,7 @@ export interface WorktreeWorkspaceConfig {
    */
   spawnedBy?:
     | { kind: "global" }
-    | { kind: "workspace"; parentWorkspaceId: string };
+    | { kind: "workspace"; rootWorkspaceId: string };
   /**
    * GitHub issue numbers this workspace is handling. Stamped on the
    * workspace as `metadata.spawnedFromIssues`. Drives the bot-icon /
@@ -215,8 +215,8 @@ export async function createWorktreeWorkspaceFromConfig(
       branch: config.branch,
       baseBranch: config.base,
       repoPath: config.repoPath,
-      ...(config.parentWorkspaceId
-        ? { parentWorkspaceId: config.parentWorkspaceId }
+      ...(config.rootWorkspaceId
+        ? { rootWorkspaceId: config.rootWorkspaceId }
         : {}),
       ...(config.spawnedBy ? { spawnedBy: config.spawnedBy } : {}),
       ...(config.spawnedFromIssues && config.spawnedFromIssues.length > 0

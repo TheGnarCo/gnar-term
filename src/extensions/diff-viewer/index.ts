@@ -161,7 +161,7 @@ async function createDiffDashboardWorkspace(
     },
     metadata: {
       isDashboard: true,
-      parentWorkspaceId: workspace.id,
+      rootWorkspaceId: workspace.id,
       dashboardContributionId: "diff",
     },
   });

@@ -103,7 +103,7 @@ export const registryMirrorTools: ToolDef[] = [
   {
     name: "invoke_workspace_action",
     description:
-      "Invoke a workspace action by id (see list_workspace_actions). `context` is forwarded to the action's handler — core passes an empty object for top-level invocations; extensions that dispatch actions from their own UI may populate fields like `{ workspaceId, parentWorkspaceId, branch, isGit }`. Use the owning extension's docs to learn which fields it reads.",
+      "Invoke a workspace action by id (see list_workspace_actions). `context` is forwarded to the action's handler — core passes an empty object for top-level invocations; extensions that dispatch actions from their own UI may populate fields like `{ workspaceId, rootWorkspaceId, branch, isGit }`. Use the owning extension's docs to learn which fields it reads.",
     inputSchema: {
       type: "object",
       properties: {
@@ -112,7 +112,7 @@ export const registryMirrorTools: ToolDef[] = [
           type: "object",
           additionalProperties: true,
           description:
-            "Free-form object forwarded to the handler. Typical fields: workspaceId, parentWorkspaceId, workspacePath, branch, isGit. Shape depends on the owning extension.",
+            "Free-form object forwarded to the handler. Typical fields: workspaceId, rootWorkspaceId, workspacePath, branch, isGit. Shape depends on the owning extension.",
         },
       },
       required: ["action_id"],

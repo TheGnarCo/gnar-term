@@ -4,7 +4,7 @@
  * One unified runtime store (`workspaces`, `activeWorkspaceIdx`, ...)
  * holds every Workspace instance: root path-rooted Workspaces, branched
  * (worktree-backed) children, and Dashboards. The "root workspace"
- * filter (`!parentWorkspaceId && !isDashboard && !worktreePath`) selects
+ * filter (`!rootWorkspaceId && !isDashboard && !worktreePath`) selects
  * the entries that own Workspace-level fields (path, color, git) and
  * appear as path-rooted rows in the sidebar.
  *
@@ -85,9 +85,14 @@ export function workspaceDefToTemplate(
   if (def.dashboardWorkspaceId !== undefined)
     nwDef.dashboardWorkspaceId = def.dashboardWorkspaceId;
 
-  // Structural / discriminant fields
-  if (def.parentWorkspaceId !== undefined)
-    nwDef.parentWorkspaceId = def.parentWorkspaceId;
+  // Structural / discriminant fields.
+  // Migration compat: old state.json files persist `parentWorkspaceId`; accept
+  // both names here so existing installs load correctly. Write only the new name.
+  const rootWorkspaceIdFromDef =
+    def.rootWorkspaceId ??
+    (def as unknown as { parentWorkspaceId?: string }).parentWorkspaceId;
+  if (rootWorkspaceIdFromDef !== undefined)
+    nwDef.rootWorkspaceId = rootWorkspaceIdFromDef;
   if (def.isDashboard !== undefined) nwDef.isDashboard = def.isDashboard;
   if (def.dashboardContributionId !== undefined)
     nwDef.dashboardContributionId = def.dashboardContributionId;
@@ -310,8 +315,8 @@ export function serializeWorkspace(ws: Workspace): WorkspaceDef {
     def.lastActiveBranchedWorkspaceId = ws.lastActiveBranchedWorkspaceId;
   if (ws.dashboardWorkspaceId !== undefined)
     def.dashboardWorkspaceId = ws.dashboardWorkspaceId;
-  if (ws.parentWorkspaceId !== undefined)
-    def.parentWorkspaceId = ws.parentWorkspaceId;
+  if (ws.rootWorkspaceId !== undefined)
+    def.rootWorkspaceId = ws.rootWorkspaceId;
   if (ws.isDashboard !== undefined) def.isDashboard = ws.isDashboard;
   if (ws.dashboardContributionId !== undefined)
     def.dashboardContributionId = ws.dashboardContributionId;
@@ -362,7 +367,7 @@ export type WorkspaceRecord = Omit<Workspace, "splitRoot" | "activePaneId"> & {
 
 /** A `Workspace` is a "root workspace" iff it owns Workspace-level fields. */
 function isRootWorkspace(ws: Workspace): boolean {
-  if (ws.parentWorkspaceId !== undefined) return false;
+  if (ws.rootWorkspaceId !== undefined) return false;
   if (ws.isDashboard === true) return false;
   if (typeof (ws as { worktreePath?: string }).worktreePath === "string") {
     return false;

@@ -76,6 +76,6 @@ describe("Diff dashboard contribution", () => {
     );
     expect(created).toBeTruthy();
     expect(created!.metadata?.isDashboard).toBe(true);
-    expect(created!.metadata?.parentWorkspaceId).toBe("g1");
+    expect(created!.metadata?.rootWorkspaceId).toBe("g1");
   });
 });

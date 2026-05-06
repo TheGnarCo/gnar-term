@@ -100,7 +100,7 @@ describe("workspace-service", () => {
   });
 
   describe("closeWorkspacesInWorkspace", () => {
-    function makeWs(id: string, parentWorkspaceId?: string): Workspace {
+    function makeWs(id: string, rootWorkspaceId?: string): Workspace {
       return {
         id,
         name: id,
@@ -109,7 +109,7 @@ describe("workspace-service", () => {
           pane: { id: `${id}-p`, surfaces: [], activeSurfaceId: null },
         },
         activePaneId: `${id}-p`,
-        ...(parentWorkspaceId ? { parentWorkspaceId } : {}),
+        ...(rootWorkspaceId ? { rootWorkspaceId } : {}),
       } as Workspace;
     }
 
@@ -138,7 +138,7 @@ describe("workspace-service", () => {
       expect(get(workspaces).map((w) => w.id)).toEqual(["ws-root", "ws-other"]);
     });
 
-    it("also closes the workspace's Dashboard child workspace (same parentWorkspaceId metadata)", () => {
+    it("also closes the workspace's Dashboard child workspace (same rootWorkspaceId metadata)", () => {
       const dashboard = {
         ...makeWs("ws-dashboard", "g1"),
         isDashboard: true,

@@ -63,7 +63,7 @@ describe("GitStatusLine child workspace rules", () => {
   });
 
   it("hides inline git-info for a normal child workspace (no worktreePath)", () => {
-    const ws = makeChildWorkspace("ws-child", { parentWorkspaceId: "p1" });
+    const ws = makeChildWorkspace("ws-child", { rootWorkspaceId: "p1" });
     workspaces.set([ws]);
     activate(ws.id);
     setDirty(ws.id);
@@ -75,7 +75,7 @@ describe("GitStatusLine child workspace rules", () => {
 
   it("shows worktree branch + dirty for a worktree child workspace when active", () => {
     const ws = makeChildWorkspace("ws-worktree", {
-      parentWorkspaceId: "p1",
+      rootWorkspaceId: "p1",
       worktreePath: "/work/wt",
       branch: "feat/x",
     });
@@ -91,7 +91,7 @@ describe("GitStatusLine child workspace rules", () => {
 
   it("shows only the worktree branch (no dirty) when the workspace is inactive", () => {
     const ws = makeChildWorkspace("ws-worktree", {
-      parentWorkspaceId: "p1",
+      rootWorkspaceId: "p1",
       worktreePath: "/work/wt",
       branch: "feat/x",
     });

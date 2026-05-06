@@ -88,31 +88,27 @@
   // close affordance is hidden in the grip, and the rail shows a
   // lock chip in place of the close button.
   $: isLocked = workspace.locked === true;
-  // Child workspaces live under a parent workspace's colored banner.
-  // The banner itself already rolls up status (and the per-row chip
-  // handles agent state), so the long blue notification row duplicates
-  // chrome and crowds the child layout — suppress it in that context.
-  $: isInsideWorkspace = typeof workspace.parentWorkspaceId === "string";
-  // Surface the parent workspace's path-missing flag on every child
-  // row inside it. The parent banner (ContainerRow) currently has no
+  // Branches live inside a Workspace's colored banner. The banner already
+  // rolls up status (and the per-row chip handles agent state), so the
+  // long blue notification row duplicates chrome and crowds the Branch
+  // layout — suppress it in that context.
+  $: isInsideWorkspace = typeof workspace.rootWorkspaceId === "string";
+  // Surface the root Workspace's path-missing flag on every Branch row
+  // inside it. The Workspace banner (ContainerRow) currently has no
   // affordance for this state — flagging it on the row makes the
-  // condition discoverable from anywhere the workspace renders.
-  $: parentWorkspacePathMissing = (() => {
-    const parentId = workspace.parentWorkspaceId;
-    if (typeof parentId !== "string") return false;
-    return (
-      $workspacesStore.find((w) => w.id === parentId)?.pathMissing === true
-    );
+  // condition discoverable from anywhere the Branch renders.
+  $: rootWorkspacePathMissing = (() => {
+    const rootId = workspace.rootWorkspaceId;
+    if (typeof rootId !== "string") return false;
+    return $workspacesStore.find((w) => w.id === rootId)?.pathMissing === true;
   })();
   $: isAgentSpawned = workspace.metadata?.spawnedBy != null;
   $: agentSpawnTooltip = (() => {
     const sb = workspace.metadata?.spawnedBy;
     if (!sb) return "";
     if (sb.kind === "global") return "Spawned by Global Agentic Dashboard";
-    const parent = $workspacesStore.find((w) => w.id === sb.parentWorkspaceId);
-    return parent
-      ? `Spawned by Workspace: ${parent.name}`
-      : "Spawned by Workspace";
+    const root = $workspacesStore.find((w) => w.id === sb.rootWorkspaceId);
+    return root ? `Spawned by Workspace: ${root.name}` : "Spawned by Workspace";
   })();
   $: railColor =
     (isDashboardWorkspaceRow && dashboardWorkspaceEntry?.accentColor) ||
@@ -323,7 +319,7 @@
       </SidebarSubtitleRow>
     {/if}
 
-    {#if parentWorkspacePathMissing && !hideStatusBadges}
+    {#if rootWorkspacePathMissing && !hideStatusBadges}
       <SidebarSubtitleRow
         data-workspace-path-missing
         color={$theme.danger}

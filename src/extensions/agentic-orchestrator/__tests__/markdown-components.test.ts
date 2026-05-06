@@ -405,7 +405,7 @@ describe("Kanban widget", () => {
         api,
         component: Kanban,
         props: {},
-        host: { metadata: { parentWorkspaceId: "group-proj" } },
+        host: { metadata: { rootWorkspaceId: "group-proj" } },
       },
     });
 
@@ -432,7 +432,7 @@ describe("Kanban widget", () => {
 describe("Issues widget", () => {
   const WORKSPACE_ID = "grp-issues";
   const WORKSPACE_PATH = "/work/proj";
-  const workspaceHost = { metadata: { parentWorkspaceId: WORKSPACE_ID } };
+  const workspaceHost = { metadata: { rootWorkspaceId: WORKSPACE_ID } };
 
   beforeEach(async () => {
     configRef.current = {};
@@ -571,8 +571,8 @@ describe("Issues widget", () => {
     expect(callArg).toMatchObject({
       agent: "claude-code",
       repoPath: WORKSPACE_PATH,
-      parentWorkspaceId: WORKSPACE_ID,
-      spawnedBy: { kind: "workspace", parentWorkspaceId: WORKSPACE_ID },
+      rootWorkspaceId: WORKSPACE_ID,
+      spawnedBy: { kind: "workspace", rootWorkspaceId: WORKSPACE_ID },
     });
     expect(callArg.taskContext).toContain("Issue #7");
     expect(callArg.taskContext).toContain("Make it faster");
@@ -984,7 +984,7 @@ describe("Issues widget", () => {
 describe("Prs widget", () => {
   const WORKSPACE_ID = "grp-prs";
   const WORKSPACE_PATH = "/work/proj";
-  const workspaceHost = { metadata: { parentWorkspaceId: WORKSPACE_ID } };
+  const workspaceHost = { metadata: { rootWorkspaceId: WORKSPACE_ID } };
 
   beforeEach(async () => {
     configRef.current = {};
@@ -1331,7 +1331,7 @@ describe("AgentList widget", () => {
 describe("TaskSpawner widget", () => {
   const WORKSPACE_ID = "grp-spawn";
   const WORKSPACE_PATH = "/work/proj";
-  const workspaceHost = { metadata: { parentWorkspaceId: WORKSPACE_ID } };
+  const workspaceHost = { metadata: { rootWorkspaceId: WORKSPACE_ID } };
   const globalHost = { metadata: { isGlobalAgenticDashboard: true } };
 
   beforeEach(async () => {
@@ -1437,7 +1437,7 @@ describe("TaskSpawner widget", () => {
     expect(spawnBtn.disabled).toBe(false);
   });
 
-  it("workspace scope → spawns with repoPath=workspace.path, parentWorkspaceId, spawnedBy={kind:'workspace'}", async () => {
+  it("workspace scope → spawns with repoPath=workspace.path, rootWorkspaceId, spawnedBy={kind:'workspace'}", async () => {
     const api = makeApi();
     const { container } = render(ExtensionWrapper, {
       props: {
@@ -1473,8 +1473,8 @@ describe("TaskSpawner widget", () => {
       agent: "claude-code",
       taskContext: "Refactor the thing",
       repoPath: WORKSPACE_PATH,
-      parentWorkspaceId: WORKSPACE_ID,
-      spawnedBy: { kind: "workspace", parentWorkspaceId: WORKSPACE_ID },
+      rootWorkspaceId: WORKSPACE_ID,
+      spawnedBy: { kind: "workspace", rootWorkspaceId: WORKSPACE_ID },
       branch: "agent/claude-code/refactor-the-thing",
     });
     // Form collapses on success.
@@ -1484,7 +1484,7 @@ describe("TaskSpawner widget", () => {
     ).not.toBeNull();
   });
 
-  it("global scope + repoPath config → spawns with spawnedBy={kind:'global'} and no parentWorkspaceId", async () => {
+  it("global scope + repoPath config → spawns with spawnedBy={kind:'global'} and no rootWorkspaceId", async () => {
     const api = makeApi();
     const { container } = render(ExtensionWrapper, {
       props: {
@@ -1516,7 +1516,7 @@ describe("TaskSpawner widget", () => {
       repoPath: "/work/anywhere",
       spawnedBy: { kind: "global" },
     });
-    expect(callArg.parentWorkspaceId).toBeUndefined();
+    expect(callArg.rootWorkspaceId).toBeUndefined();
   });
 
   it("no host / scope=none → spawn button stays disabled even with task text", async () => {

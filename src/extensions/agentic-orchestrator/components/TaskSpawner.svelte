@@ -4,7 +4,7 @@
    *
    * The spawn target is derived from the enclosing DashboardHostContext:
    *   - "workspace" scope → repoPath = the workspace's path;
-   *     metadata.parentWorkspaceId + metadata.spawnedBy = { kind:'workspace', parentWorkspaceId }
+   *     metadata.rootWorkspaceId + metadata.spawnedBy = { kind:'workspace', rootWorkspaceId }
    *   - "global" scope → repoPath from the `repoPath` config prop (the
    *     Global Agentic Dashboard can't infer a repo on its own);
    *     metadata.spawnedBy = { kind:'global' }
@@ -91,8 +91,8 @@
         repoPath: target.repoPath,
         branch: branchName,
         spawnedBy: target.spawnedBy,
-        ...(target.parentWorkspaceId
-          ? { parentWorkspaceId: target.parentWorkspaceId }
+        ...(target.rootWorkspaceId
+          ? { rootWorkspaceId: target.rootWorkspaceId }
           : {}),
       });
       // Success — collapse the form back to the "+ New Task" button.

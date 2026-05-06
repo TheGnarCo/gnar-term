@@ -15,15 +15,15 @@
   const host = getDashboardHost();
   const scope = deriveDashboardScope(host);
 
-  $: parentWorkspaceId =
-    scope.kind === "workspace" ? scope.parentWorkspaceId : null;
+  $: rootWorkspaceId =
+    scope.kind === "workspace" ? scope.rootWorkspaceId : null;
 
-  $: parentWorkspace = parentWorkspaceId
-    ? ($workspacesStore.find((w) => w.id === parentWorkspaceId) ?? null)
+  $: rootWorkspace = rootWorkspaceId
+    ? ($workspacesStore.find((w) => w.id === rootWorkspaceId) ?? null)
     : null;
 
-  $: workspaceWs = parentWorkspaceId
-    ? $workspaces.filter((ws) => ws.parentWorkspaceId === parentWorkspaceId)
+  $: workspaceWs = rootWorkspaceId
+    ? $workspaces.filter((ws) => ws.rootWorkspaceId === rootWorkspaceId)
     : [];
 
   $: dashboardCards = workspaceWs.filter(
@@ -32,8 +32,8 @@
 
   $: workspaceRows = workspaceWs.filter((ws) => !ws.isDashboard);
 
-  $: workspaceColor = parentWorkspace
-    ? resolveWorkspaceColor(parentWorkspace.color, $theme)
+  $: workspaceColor = rootWorkspace
+    ? resolveWorkspaceColor(rootWorkspace.color, $theme)
     : ($theme.accent ?? "#888");
 
   function navigate(wsId: string): void {
@@ -49,8 +49,8 @@
     const contribution = ws.dashboardContributionId
       ? getDashboardContribution(ws.dashboardContributionId)
       : undefined;
-    const tileWorkspacePath = ws.parentWorkspaceId
-      ? $workspacesStore.find((w) => w.id === ws.parentWorkspaceId)?.path
+    const tileWorkspacePath = ws.rootWorkspaceId
+      ? $workspacesStore.find((w) => w.id === ws.rootWorkspaceId)?.path
       : undefined;
     return {
       icon: contribution?.icon ?? GridIcon,
@@ -62,7 +62,7 @@
   $: hasContent = dashboardCards.length > 0 || workspaceRows.length > 0;
 </script>
 
-{#if parentWorkspaceId && hasContent}
+{#if rootWorkspaceId && hasContent}
   <div class="workspaces-widget" data-workspaces-widget>
     {#if dashboardCards.length > 0}
       <div class="dashboard-cards" data-dashboard-cards>

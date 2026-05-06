@@ -14,7 +14,7 @@
   $: items = $statusStore.filter((item) => item.source === GIT_STATUS_SOURCE);
 
   $: currentWs = $workspaces.find((w) => w.id === workspaceId);
-  $: isChild = Boolean(currentWs?.parentWorkspaceId);
+  $: isChild = Boolean(currentWs?.rootWorkspaceId);
   $: isWorktree = Boolean(
     (currentWs as { worktreePath?: string } | undefined)?.worktreePath,
   );

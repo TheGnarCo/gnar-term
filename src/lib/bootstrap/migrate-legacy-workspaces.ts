@@ -9,7 +9,7 @@
  *    collapse into a single Workspace using `P.id`. The merged record
  *    carries `B.layout` + `B.extensionData` plus `P`'s Workspace-level
  *    fields (path, color, isGit, createdAt, etc.).
- *  - Existing Branches/Dashboards keep their `parentWorkspaceId === P.id`
+ *  - Existing Branches/Dashboards keep their `rootWorkspaceId === P.id`
  *    references — they continue to point at the merged Workspace.
  *  - The legacy `primaryBranchedWorkspaceId` notion is dropped: every
  *    Workspace is its own Root, branches are siblings.

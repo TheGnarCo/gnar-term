@@ -55,7 +55,7 @@
     const targetId = parent?.lastActiveBranchedWorkspaceId;
     const idx = targetId
       ? $workspaces.findIndex((ws) => ws.id === targetId)
-      : $workspaces.findIndex((ws) => ws.parentWorkspaceId === parentId);
+      : $workspaces.findIndex((ws) => ws.rootWorkspaceId === parentId);
     if (idx >= 0) {
       switchWorkspace(idx);
       close();
@@ -312,7 +312,7 @@
                     const worktreePath = (row.ws as { worktreePath?: string })
                       .worktreePath;
                     if (typeof worktreePath === "string") return worktreePath;
-                    const pid = row.ws.parentWorkspaceId;
+                    const pid = row.ws.rootWorkspaceId;
                     if (typeof pid !== "string") return null;
                     return parentMap.get(pid)?.path ?? null;
                   })()}

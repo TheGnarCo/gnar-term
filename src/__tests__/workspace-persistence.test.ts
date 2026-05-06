@@ -151,7 +151,7 @@ describe("workspace persistence", () => {
           pane: { id: "p1", surfaces: [], activeSurfaceId: null },
         },
         activePaneId: "p1",
-        parentWorkspaceId: "proj-alpha",
+        rootWorkspaceId: "proj-alpha",
       },
     ]);
     setActiveWorkspaceId("proj-alpha");
@@ -191,7 +191,7 @@ describe("workspace persistence", () => {
           pane: { id: "p1", surfaces: [], activeSurfaceId: null },
         },
         activePaneId: "p1",
-        parentWorkspaceId: "proj-alpha",
+        rootWorkspaceId: "proj-alpha",
         color: "blue",
       },
     ] as unknown as import("../lib/types").Workspace[]);
@@ -208,7 +208,7 @@ describe("workspace persistence", () => {
         name: "Project A",
         layout: { pane: { surfaces: [] } },
         color: "blue",
-        parentWorkspaceId: "proj-alpha",
+        rootWorkspaceId: "proj-alpha",
       },
     ]);
     expect(payload.activeWorkspaceId).toBe("ws-project");

@@ -5,7 +5,7 @@
   import { themes } from "../lib/theme-data";
   import WorkspaceSectionContent from "../lib/components/WorkspaceSectionContent.svelte";
 
-  export let parentWorkspaceId: string;
+  export let rootWorkspaceId: string;
 
   setContext(EXTENSION_API_KEY, {
     theme: writable(themes["github-dark"]),
@@ -13,4 +13,4 @@
   });
 </script>
 
-<WorkspaceSectionContent {parentWorkspaceId} containerBlockId="" />
+<WorkspaceSectionContent {rootWorkspaceId} containerBlockId="" />

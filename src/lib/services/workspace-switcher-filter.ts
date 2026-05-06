@@ -16,7 +16,7 @@ export interface SwitcherRow {
  * When parentWorkspaces is provided (non-empty), the list is grouped:
  *   - For each parent workspace: one header row (kind="parent", depth=0)
  *     followed by its child workspaces (kind="child", depth=1).
- *   - Standalone child workspaces (no parentWorkspaceId or unknown parent)
+ *   - Standalone child workspaces (no rootWorkspaceId or unknown parent)
  *     appear at depth=0 after all parent groups.
  *
  * When parentWorkspaces is empty (default), the list is flat — all child
@@ -27,7 +27,7 @@ export interface SwitcherRow {
  * preserved so switchWorkspace(idx) continues to work unchanged.
  *
  * @param workspaces - flat list from workspaces store
- * @param parentMap - map from parentWorkspaceId → parent workspace
+ * @param parentMap - map from rootWorkspaceId → parent workspace
  * @param query - raw user input (empty string = return all)
  * @param parentWorkspaces - ordered list of parent workspaces (enables grouped mode)
  * @returns rows that match the query, preserving original indices
@@ -43,7 +43,7 @@ export function filterWorkspaces(
   // Flat mode (no parent workspaces): preserve original behavior
   if (parentWorkspaces.length === 0) {
     const rows: SwitcherRow[] = workspaces.map((ws, idx) => {
-      const parentId = ws.parentWorkspaceId;
+      const parentId = ws.rootWorkspaceId;
       const parent = parentId ? parentMap.get(parentId) : undefined;
       return {
         ws,
@@ -71,7 +71,7 @@ export function filterWorkspaces(
 
   for (let idx = 0; idx < workspaces.length; idx++) {
     const ws = workspaces[idx]!;
-    const parentId = ws.parentWorkspaceId;
+    const parentId = ws.rootWorkspaceId;
     const isUnderParent = !!(parentId && parentIds.has(parentId));
     const parent = isUnderParent ? parentMap.get(parentId!) : undefined;
 

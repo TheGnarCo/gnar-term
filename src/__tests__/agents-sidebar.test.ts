@@ -27,7 +27,7 @@ function makeAgent(overrides: Partial<DetectedAgent> = {}): DetectedAgent {
 function makeBranch(
   id: string,
   name: string,
-  parentWorkspaceId?: string,
+  rootWorkspaceId?: string,
 ): Workspace {
   return {
     id,
@@ -37,7 +37,7 @@ function makeBranch(
       pane: { id: "pane-1", surfaces: [], activeSurfaceId: null },
     },
     activePaneId: "pane-1",
-    ...(parentWorkspaceId ? { parentWorkspaceId } : {}),
+    ...(rootWorkspaceId ? { rootWorkspaceId } : {}),
   };
 }
 

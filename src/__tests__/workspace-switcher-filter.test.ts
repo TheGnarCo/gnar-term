@@ -9,7 +9,7 @@ function makeWs(
   overrides: Partial<Workspace> & {
     id: string;
     name: string;
-    parentWorkspaceId?: string;
+    rootWorkspaceId?: string;
   },
 ): Workspace {
   return {
@@ -42,12 +42,12 @@ const parentB = makeParent("ws-b", "Beta Corp");
 const parentWorkspaces = [parentA, parentB];
 
 const childrenOfA = [
-  makeWs({ id: "nw-1", name: "main", parentWorkspaceId: "ws-a" }),
-  makeWs({ id: "nw-2", name: "feature/login", parentWorkspaceId: "ws-a" }),
+  makeWs({ id: "nw-1", name: "main", rootWorkspaceId: "ws-a" }),
+  makeWs({ id: "nw-2", name: "feature/login", rootWorkspaceId: "ws-a" }),
 ];
 const childrenOfB = [
-  makeWs({ id: "nw-3", name: "hotfix-db", parentWorkspaceId: "ws-b" }),
-  makeWs({ id: "nw-4", name: "develop", parentWorkspaceId: "ws-b" }),
+  makeWs({ id: "nw-3", name: "hotfix-db", rootWorkspaceId: "ws-b" }),
+  makeWs({ id: "nw-4", name: "develop", rootWorkspaceId: "ws-b" }),
 ];
 const standaloneWs = makeWs({ id: "nw-5", name: "standalone" });
 
@@ -66,20 +66,20 @@ describe("filterWorkspaces — child ordering within parent groups", () => {
     const dashboard = makeWs({
       id: "nw-dash",
       name: "Dashboard",
-      parentWorkspaceId: "ws-x",
+      rootWorkspaceId: "ws-x",
       isDashboard: true,
     });
     const branch = makeWs({
       id: "nw-branch",
       name: "feat/thing",
-      parentWorkspaceId: "ws-x",
+      rootWorkspaceId: "ws-x",
       worktreePath: "/some/path",
       branch: "feat/thing",
     } as Workspace & { worktreePath?: string; branch?: string });
     const main = makeWs({
       id: "nw-main",
       name: "main",
-      parentWorkspaceId: "ws-x",
+      rootWorkspaceId: "ws-x",
     });
 
     // Supply in wrong order: dashboard, branch, main
@@ -261,10 +261,10 @@ describe("filterWorkspaces — grouped mode (parentWorkspaces provided)", () => 
 
 describe("filterWorkspaces — flat mode (no parentWorkspaces)", () => {
   const branches = [
-    makeWs({ id: "nw-1", name: "main", parentWorkspaceId: "ws-a" }),
-    makeWs({ id: "nw-2", name: "feature/login", parentWorkspaceId: "ws-a" }),
-    makeWs({ id: "nw-3", name: "hotfix-db", parentWorkspaceId: "ws-b" }),
-    makeWs({ id: "nw-4", name: "develop", parentWorkspaceId: "ws-b" }),
+    makeWs({ id: "nw-1", name: "main", rootWorkspaceId: "ws-a" }),
+    makeWs({ id: "nw-2", name: "feature/login", rootWorkspaceId: "ws-a" }),
+    makeWs({ id: "nw-3", name: "hotfix-db", rootWorkspaceId: "ws-b" }),
+    makeWs({ id: "nw-4", name: "develop", rootWorkspaceId: "ws-b" }),
     makeWs({ id: "nw-5", name: "standalone" }),
   ];
 

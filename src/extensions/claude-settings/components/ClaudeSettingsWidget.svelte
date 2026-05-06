@@ -19,7 +19,7 @@
 
   $: workspace =
     scope.kind === "workspace"
-      ? getWorkspace(scope.parentWorkspaceId)
+      ? getWorkspace(scope.rootWorkspaceId)
       : undefined;
   $: projectRoot = workspace?.path ?? "";
 

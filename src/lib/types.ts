@@ -14,19 +14,19 @@ export function uid(): string {
 /**
  * Base: every workspace has its own pane layout + optional Workspace-level fields.
  * Path-rooted Workspaces carry `path`, `color`, `isGit`, `createdAt`.
- * Child workspaces (branched + dashboards) are identified by `parentWorkspaceId`.
+ * Branches (branched + dashboards) are identified by `rootWorkspaceId`.
  */
 export interface Workspace {
   id: string;
   name: string;
   splitRoot: SplitNode;
   activePaneId: string | null;
-  // Workspace-level (present on path-rooted Workspaces, absent on children)
+  // Workspace-level (present on path-rooted Workspaces, absent on Branches)
   path?: string;
   color?: string;
   isGit?: boolean;
   createdAt?: string;
-  // Child workspaces navigation
+  // Branch navigation
   lastActiveBranchedWorkspaceId?: string;
   // Dashboard back-reference
   dashboardWorkspaceId?: string;
@@ -34,13 +34,13 @@ export interface Workspace {
   locked?: boolean;
   pathMissing?: boolean; // runtime-only, not persisted
   autoRunRestoreCommands?: boolean;
-  // Dashboard flag — present on child workspaces that are overview dashboards
+  // Dashboard flag — present on Branches that are overview dashboards
   isDashboard?: boolean;
   dashboardContributionId?: string;
   // Extension data — replaces open-ended metadata index signature
   extensionData?: Record<string, unknown>;
-  // Parent reference — presence discriminates child workspaces from primary workspaces
-  parentWorkspaceId?: string;
+  // Root Workspace reference — presence discriminates Branches from root Workspaces
+  rootWorkspaceId?: string;
   /**
    * Tracked only on root workspaces; lists the ids of branched/dashboard
    * children currently claimed by this Workspace.
@@ -56,12 +56,12 @@ export interface Workspace {
 }
 
 /**
- * Worktree-backed Workspace variant. Carries the parent back-reference
+ * Worktree-backed Workspace variant. Carries the root Workspace back-reference
  * plus worktree fields. Created by the branched-workspaces extension via
  * `worktree-service` in core.
  */
 export interface BranchedWorkspace extends Workspace {
-  parentWorkspaceId: string;
+  rootWorkspaceId: string;
   worktreePath: string;
   branch: string;
   baseBranch?: string;
@@ -71,7 +71,7 @@ export interface BranchedWorkspace extends Workspace {
 /** Type guard: narrows to BranchedWorkspace via the worktreePath marker. */
 export function isBranchedWorkspace(ws: Workspace): ws is BranchedWorkspace {
   return (
-    typeof (ws as BranchedWorkspace).parentWorkspaceId === "string" &&
+    typeof (ws as BranchedWorkspace).rootWorkspaceId === "string" &&
     typeof (ws as BranchedWorkspace).worktreePath === "string"
   );
 }
@@ -177,8 +177,12 @@ export interface WorkspaceMetadata {
   // --- Dashboard / workspace fields ---
   /** Marks a workspace as a dashboard (used by workspace-service and related services). */
   isDashboard?: boolean;
-  /** Parent workspace id this workspace belongs to (workspace-service). */
-  parentWorkspaceId?: string;
+  /**
+   * Root Workspace id this Branch belongs to (workspace-service).
+   * Legacy state.json files persist this as `parentWorkspaceId`; the
+   * deserializer in workspace.ts maps the old name onto this field.
+   */
+  rootWorkspaceId?: string;
   /** Id of the parent workspace's current dashboard child workspace (workspace-service). */
   dashboardWorkspaceId?: string;
   /**
@@ -198,7 +202,7 @@ export interface WorkspaceMetadata {
    */
   spawnedBy?:
     | { kind: "global" }
-    | { kind: "workspace"; parentWorkspaceId: string };
+    | { kind: "workspace"; rootWorkspaceId: string };
   /**
    * GitHub issue numbers this workspace is handling (agentic-orchestrator).
    * Written by createWorktreeWorkspaceFromConfig.

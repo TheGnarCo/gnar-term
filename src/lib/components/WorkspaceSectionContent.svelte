@@ -54,7 +54,7 @@
   import { shortcutHintsActive } from "../stores/shortcut-hints";
   import { modLabel } from "../terminal-service";
 
-  export let parentWorkspaceId: string;
+  export let rootWorkspaceId: string;
   /**
    * The namespaced sidebar-block id that hosts this workspace — forwarded
    * to the ContainerRow's child WorkspaceListView so workspace-drag
@@ -103,7 +103,7 @@
     void $workspacesStore;
     void $workspaces;
     void stateVersion;
-    workspace = getWorkspace(parentWorkspaceId);
+    workspace = getWorkspace(rootWorkspaceId);
   }
 
   $: filterIds = workspace
@@ -167,7 +167,7 @@
 
   $: workspaceContext = workspace
     ? ({
-        parentWorkspaceId: workspace.id,
+        rootWorkspaceId: workspace.id,
         workspacePath: workspace.path,
         workspaceName: workspace.name,
         isGit: workspace.isGit,
@@ -202,7 +202,7 @@
     const w = workspace;
     if (!w) return;
     const branchedCount = $workspaces.filter(
-      (nw) => nw.parentWorkspaceId === w.id && !nw.isDashboard,
+      (nw) => nw.rootWorkspaceId === w.id && !nw.isDashboard,
     ).length;
     const branchedLine =
       branchedCount > 0
@@ -285,9 +285,7 @@
     if (!wId) return [] as Array<{ ws: Workspace; idx: number }>;
     return $workspaces
       .map((ws, idx) => ({ ws, idx }))
-      .filter(
-        ({ ws }) => ws.isDashboard === true && ws.parentWorkspaceId === wId,
-      )
+      .filter(({ ws }) => ws.isDashboard === true && ws.rootWorkspaceId === wId)
       .sort((a, b) => {
         const aS = a.ws.dashboardContributionId === "settings";
         const bS = b.ws.dashboardContributionId === "settings";

@@ -62,7 +62,7 @@ export interface PseudoWorkspace {
    * Synthetic workspace metadata exposed to the body via
    * `DashboardHostContext`. Mirrors the metadata a real dashboard
    * workspace would carry, so widgets that derive scope from
-   * `metadata.isGlobalAgenticDashboard` / `metadata.parentWorkspaceId` work
+   * `metadata.isGlobalAgenticDashboard` / `metadata.rootWorkspaceId` work
    * uniformly between pseudo- and real hosts.
    */
   metadata: Record<string, unknown>;

@@ -107,7 +107,7 @@ describe("provisionAutoDashboardsForWorkspace", () => {
         name: "A",
         layout: { pane: { id: "p", surfaces: [], activeIdx: 0 } },
         isDashboard: true,
-        parentWorkspaceId: workspace.id,
+        rootWorkspaceId: workspace.id,
         dashboardContributionId: "a",
       } as never,
     ]);
@@ -129,7 +129,7 @@ describe("provisionAutoDashboardsForWorkspace", () => {
           name: "B",
           layout: { pane: { id: "p", surfaces: [], activeIdx: 0 } },
           isDashboard: true,
-          parentWorkspaceId: "g1",
+          rootWorkspaceId: "g1",
           dashboardContributionId: "b",
         } as never,
       ]);

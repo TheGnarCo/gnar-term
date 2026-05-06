@@ -1,29 +1,29 @@
 /**
  * Claimed Workspace ID derivation + sidebar mirror helpers.
  *
- * A workspace is "claimed" iff it has a `parentWorkspaceId` — that is,
+ * A workspace is "claimed" iff it has a `rootWorkspaceId` — that is,
  * it lives inside another Workspace and should not appear at the
  * sidebar root. The registry that used to track claims with a source
  * extension id is gone (Stage 10): the unified Workspace already carries
- * `parentWorkspaceId` as a top-level field, so claim status is derived,
+ * `rootWorkspaceId` as a top-level field, so claim status is derived,
  * not tracked.
  *
  * `claimWorkspace` / `unclaimWorkspace` remain as small mirror helpers
  * that keep the persisted `rootRowOrder` consistent with the live
- * Workspace shape — call sites that flip `parentWorkspaceId` use them
+ * Workspace shape — call sites that flip `rootWorkspaceId` use them
  * to drop or restore the corresponding root row.
  */
 import { derived, type Readable } from "svelte/store";
 import { workspaces } from "../stores/workspace";
 import { removeRootRow, appendRootRow } from "../stores/root-row-order";
 
-/** Readable set of workspace IDs that have a parent workspace. */
+/** Readable set of workspace IDs that belong to a root Workspace (i.e. are Branches or Dashboards). */
 export const claimedWorkspaceIds: Readable<Set<string>> = derived(
   workspaces,
   ($workspaces) => {
     const ids = new Set<string>();
     for (const w of $workspaces) {
-      if (typeof w.parentWorkspaceId === "string") ids.add(w.id);
+      if (typeof w.rootWorkspaceId === "string") ids.add(w.id);
     }
     return ids;
   },
@@ -50,7 +50,7 @@ export function unclaimWorkspace(workspaceId: string): void {
  * it into `REGISTRY_CLEANUP_FNS`.
  */
 export function unclaimBySource(_source: string): void {
-  // No-op: claim is now derived from Workspace.parentWorkspaceId.
+  // No-op: claim is now derived from Workspace.rootWorkspaceId.
 }
 
 /** Test hook — no-op (no internal state remains). */

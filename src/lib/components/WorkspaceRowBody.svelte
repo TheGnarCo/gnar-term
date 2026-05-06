@@ -19,7 +19,7 @@
 </script>
 
 <WorkspaceSectionContent
-  parentWorkspaceId={id}
+  rootWorkspaceId={id}
   containerBlockId="__workspaces__"
   overlay={null}
   {onGripMouseDown}

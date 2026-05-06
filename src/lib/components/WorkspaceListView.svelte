@@ -211,7 +211,7 @@
   $: tabDrag = $tabDragState;
   $: tabDragToWorkspace =
     tabDrag?.dropTarget?.kind === "new-child-workspace-in-workspace" &&
-    tabDrag.dropTarget.parentWorkspaceId === scopeId
+    tabDrag.dropTarget.rootWorkspaceId === scopeId
       ? tabDrag.dropTarget
       : null;
   $: effectiveActive = active || tabDragToWorkspace !== null;
@@ -250,7 +250,7 @@
     const ws = $workspaces[globalIdx];
     if (!ws) return;
     const isDashboard = ws.isDashboard === true;
-    const isInsideWorkspace = typeof ws.parentWorkspaceId === "string";
+    const isInsideWorkspace = typeof ws.rootWorkspaceId === "string";
     const isLocked = ws.locked === true;
     const canPromoteCommand = get(commandStore).some(
       (c) => c.id === "promote-child-workspace",

@@ -236,7 +236,7 @@ describe("markdown previewer — markdown-component handling", () => {
       path: "/abs/x.md",
       paneId: "pane-host-1",
       workspaceId: "ws-host-1",
-      hostMetadata: { parentWorkspaceId: "workspace-abc", isDashboard: true },
+      hostMetadata: { rootWorkspaceId: "workspace-abc", isDashboard: true },
     });
 
     previewer.render(
@@ -290,7 +290,7 @@ describe("markdown previewer — markdown-component handling", () => {
       paneId: "pane-detached-1",
       workspaceId: "ws-detached-1",
       hostMetadata: {
-        parentWorkspaceId: "workspace-detached",
+        rootWorkspaceId: "workspace-detached",
         isDashboard: true,
       },
     });

@@ -47,7 +47,7 @@ function makeDashboard(id: string, contribId: string): never {
     },
     activePaneId: "p",
     isDashboard: true,
-    parentWorkspaceId: WORKSPACE.id,
+    rootWorkspaceId: WORKSPACE.id,
     dashboardContributionId: contribId,
   } as never;
 }
@@ -82,7 +82,7 @@ describe("reconcileWorkspaceDashboards — dedupe all contribution types", () =>
     const remaining = get(workspaces).filter((w) => {
       return (
         w.dashboardContributionId === "settings" &&
-        w.parentWorkspaceId === WORKSPACE.id
+        w.rootWorkspaceId === WORKSPACE.id
       );
     });
     expect(remaining).toHaveLength(1);
@@ -109,7 +109,7 @@ describe("reconcileWorkspaceDashboards — dedupe all contribution types", () =>
     const remaining = get(workspaces).filter((w) => {
       return (
         w.dashboardContributionId === "agentic" &&
-        w.parentWorkspaceId === WORKSPACE.id
+        w.rootWorkspaceId === WORKSPACE.id
       );
     });
     expect(remaining).toHaveLength(1);
@@ -148,7 +148,7 @@ describe("reconcileWorkspaceDashboards — dedupe all contribution types", () =>
       const matches = all.filter((w) => {
         return (
           w.dashboardContributionId === contribId &&
-          w.parentWorkspaceId === WORKSPACE.id
+          w.rootWorkspaceId === WORKSPACE.id
         );
       });
       expect(

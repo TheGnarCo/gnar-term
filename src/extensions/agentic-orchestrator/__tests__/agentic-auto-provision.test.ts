@@ -104,13 +104,13 @@ describe("agentic auto-provision", () => {
     const forG1 = all.find((w) => {
       return (
         w.metadata?.dashboardContributionId === "agentic" &&
-        w.metadata?.parentWorkspaceId === "g1"
+        w.metadata?.rootWorkspaceId === "g1"
       );
     });
     const forG2 = all.find((w) => {
       return (
         w.metadata?.dashboardContributionId === "agentic" &&
-        w.metadata?.parentWorkspaceId === "g2"
+        w.metadata?.rootWorkspaceId === "g2"
       );
     });
     expect(forG1).toBeTruthy();

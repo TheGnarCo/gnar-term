@@ -14,12 +14,12 @@ import { isBranchedWorkspace } from "../types";
  * Build a sectioned display structure for the Workspace Overview dashboard.
  *
  * - Dashboard rows are always excluded (managed UI, not user-listable).
- * - Root Workspaces are identified by `path` set and `parentWorkspaceId`
+ * - Root Workspaces are identified by `path` set and `rootWorkspaceId`
  *   absent. Each Workspace gets its own section, in input order.
- * - Branches (`parentWorkspaceId` set) referencing a known Workspace
+ * - Branches (`rootWorkspaceId` set) referencing a known Workspace
  *   are placed under that Workspace's section.
  * - Rows that fit neither — orphaned Branches whose owning Workspace is
- *   missing, or bare rows lacking both path and parentWorkspaceId —
+ *   missing, or bare rows lacking both path and rootWorkspaceId —
  *   collect at the end under a section with `workspace: null`.
  * - Empty Workspace sections are kept so the user can still see the
  *   Workspace exists.
@@ -29,7 +29,7 @@ export function buildOverviewSections(
 ): Array<{ workspace: Workspace | null; branches: Workspace[] }> {
   const visible = allWorkspaces.filter((w) => !w.isDashboard);
 
-  const roots = visible.filter((w) => !w.parentWorkspaceId && !!w.path);
+  const roots = visible.filter((w) => !w.rootWorkspaceId && !!w.path);
 
   const sectionByRootId = new Map<
     string,
@@ -54,7 +54,7 @@ export function buildOverviewSections(
 
   for (const ws of visible) {
     if (rootSet.has(ws.id)) continue;
-    const parentId = ws.parentWorkspaceId;
+    const parentId = ws.rootWorkspaceId;
     if (parentId) {
       const section = sectionByRootId.get(parentId);
       if (section) {

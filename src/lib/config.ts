@@ -69,7 +69,7 @@ export interface WorkspaceTemplate {
   // `createWorkspaceFromDef` reads these directly, falling back to
   // `metadata` for backwards compat with callers that still pass them
   // in the metadata blob.
-  parentWorkspaceId?: string;
+  rootWorkspaceId?: string;
   isDashboard?: boolean;
   dashboardContributionId?: string;
   dashboardWorkspaceId?: string;
@@ -106,9 +106,11 @@ export interface WorkspaceDef {
   // Navigation
   lastActiveBranchedWorkspaceId?: string;
   dashboardWorkspaceId?: string;
-  // Membership / kind discriminants. `parentWorkspaceId` is the legacy
-  // name for "id of the Workspace this Branch (or Dashboard) belongs to".
-  parentWorkspaceId?: string;
+  // Membership / kind discriminants. `rootWorkspaceId` identifies
+  // which Workspace this Branch (or Dashboard) belongs to.
+  // Deserialization also accepts the legacy name `parentWorkspaceId`
+  // (old state.json files) — see workspaceDefToTemplate in workspace.ts.
+  rootWorkspaceId?: string;
   isDashboard?: boolean;
   dashboardContributionId?: string;
   // Branch fields (worktree-backed Workspace variants provided by the

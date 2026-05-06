@@ -68,7 +68,7 @@ export function registerBranchedWorkspacesExtension(api: ExtensionAPI): void {
           void createWorkspaceFromDef({
             name: `${workspace.name} Branch ${count + 1}`,
             cwd: workspace.path,
-            metadata: { parentWorkspaceId: workspace.id },
+            metadata: { rootWorkspaceId: workspace.id },
             layout: { pane: { surfaces: [{ type: "terminal" }] } },
           });
         },

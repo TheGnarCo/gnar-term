@@ -402,7 +402,7 @@
     const ws = $workspaces[globalIdx];
     if (!ws) return;
     const isDashboard = ws.isDashboard === true;
-    const isInsideWorkspace = typeof ws.parentWorkspaceId === "string";
+    const isInsideWorkspace = typeof ws.rootWorkspaceId === "string";
     const isLocked = ws.locked === true;
     const items = buildWorkspaceContextMenuItems({
       isDashboard,

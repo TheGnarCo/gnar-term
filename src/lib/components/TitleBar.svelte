@@ -37,9 +37,9 @@
   // hidden (and we're not fullscreen), the TitleBar starts at x=0, so push
   // its first button well past the traffic-light cluster.
   $: leftPadding = !$sidebarVisible && isMac && !$isFullscreen ? "84px" : "8px";
-  $: parentWorkspaceId = $activeWorkspace?.parentWorkspaceId ?? null;
-  $: parentWorkspace = parentWorkspaceId
-    ? ($workspacesStore.find((w) => w.id === parentWorkspaceId) ?? null)
+  $: rootWorkspaceId = $activeWorkspace?.rootWorkspaceId ?? null;
+  $: rootWorkspace = rootWorkspaceId
+    ? ($workspacesStore.find((w) => w.id === rootWorkspaceId) ?? null)
     : null;
 
   $: titleBarBg = isDev ? DEV_ACCENT : $theme.bg;
@@ -58,8 +58,8 @@
     return "Workspace";
   })();
 
-  $: titleText = parentWorkspace
-    ? `${parentWorkspace.name} – ${wsTypeSuffix}`
+  $: titleText = rootWorkspace
+    ? `${rootWorkspace.name} – ${wsTypeSuffix}`
     : ($activeWorkspace?.name ?? null);
 </script>
 

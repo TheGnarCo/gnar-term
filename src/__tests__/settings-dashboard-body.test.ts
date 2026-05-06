@@ -63,7 +63,7 @@ describe("PaneView — settings dashboard body", () => {
       splitRoot: { type: "pane", pane: makePane("p1") },
       activePaneId: "p1",
       isDashboard: true,
-      parentWorkspaceId: "g1",
+      rootWorkspaceId: "g1",
       dashboardContributionId: "settings",
     } as unknown as Workspace;
     workspaces.set([root, ws]);

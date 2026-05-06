@@ -1273,11 +1273,11 @@ describe("WorkspaceItem", () => {
     // Regression: child workspaces render under a workspace's colored
     // banner that already rolls up status; the long blue notification
     // row duplicates chrome and crowds the child layout, so it's
-    // suppressed when metadata.parentWorkspaceId is set.
+    // suppressed when metadata.rootWorkspaceId is set.
     const surface = makeSurface("s1", { notification: "Build complete" });
     const pane = makePane("p1", [surface]);
     const ws = makeChildWorkspace("ws1", "Child WS", pane);
-    ws.parentWorkspaceId = "g1";
+    ws.rootWorkspaceId = "g1";
     render(WorkspaceItem, {
       props: {
         workspace: ws,
@@ -1470,7 +1470,7 @@ describe("PaneView", () => {
       splitRoot: { type: "pane", pane: makePane("p1") },
       activePaneId: "p1",
       isDashboard: true,
-      parentWorkspaceId: "g1",
+      rootWorkspaceId: "g1",
       dashboardContributionId: "group",
     };
     workspaces.set([ws]);
@@ -1508,7 +1508,7 @@ describe("PaneView", () => {
       splitRoot: { type: "pane", pane: makePane("p1") },
       activePaneId: "p1",
       isDashboard: true,
-      parentWorkspaceId: "g1",
+      rootWorkspaceId: "g1",
       dashboardContributionId: "settings",
     };
     workspaces.set([ws]);
@@ -1529,7 +1529,7 @@ describe("PaneView", () => {
         onFocusPane: noop,
       },
     });
-    // WorkspaceDashboardSettings renders a settings panel keyed by parentWorkspaceId.
+    // WorkspaceDashboardSettings renders a settings panel keyed by rootWorkspaceId.
     // Absent a matching workspace in the store it renders nothing, but the
     // render branch is still reached — no tab strip appears either way.
     expect(
@@ -1820,7 +1820,7 @@ describe("WorkspaceSectionContent", () => {
     setWorkspaces([workspace]);
 
     render(WorkspaceSectionHarness, {
-      props: { parentWorkspaceId: "grp-1" },
+      props: { rootWorkspaceId: "grp-1" },
     });
 
     // No branch button without any registered workspace-tile action.

@@ -32,7 +32,7 @@ function makeBranch(
   id: string,
   name: string,
   opts: {
-    parentWorkspaceId?: string;
+    rootWorkspaceId?: string;
     isDashboard?: boolean;
     worktreePath?: string;
   } = {},
@@ -46,7 +46,7 @@ function makeBranch(
     },
     activePaneId: `pane-${id}`,
   };
-  if (opts.parentWorkspaceId) ws.parentWorkspaceId = opts.parentWorkspaceId;
+  if (opts.rootWorkspaceId) ws.rootWorkspaceId = opts.rootWorkspaceId;
   if (opts.isDashboard) ws.isDashboard = true;
   if (opts.worktreePath) {
     (ws as BranchedWorkspace).worktreePath = opts.worktreePath;
@@ -60,8 +60,8 @@ describe("buildOverviewSections", () => {
   it("returns one section per Workspace when all Branches belong to roots", () => {
     const u1 = makeRoot("u1", "Alpha");
     const u2 = makeRoot("u2", "Beta");
-    const n1 = makeBranch("n1", "branch-1", { parentWorkspaceId: "u1" });
-    const n2 = makeBranch("n2", "branch-2", { parentWorkspaceId: "u2" });
+    const n1 = makeBranch("n1", "branch-1", { rootWorkspaceId: "u1" });
+    const n2 = makeBranch("n2", "branch-2", { rootWorkspaceId: "u2" });
     const sections = buildOverviewSections([u1, u2, n1, n2]);
     expect(sections).toHaveLength(2);
     expect(sections[0]!.workspace?.id).toBe("u1");
@@ -73,12 +73,12 @@ describe("buildOverviewSections", () => {
 
   it("filters out dashboard rows", () => {
     const u1 = makeRoot("u1", "Alpha");
-    const n1 = makeBranch("n1", "branch-1", { parentWorkspaceId: "u1" });
+    const n1 = makeBranch("n1", "branch-1", { rootWorkspaceId: "u1" });
     const settings = makeBranch("settings", "Settings", {
       isDashboard: true,
     });
     const n2 = makeBranch("n2", "branch-2", {
-      parentWorkspaceId: "u1",
+      rootWorkspaceId: "u1",
       isDashboard: true,
     });
     const sections = buildOverviewSections([u1, n1, settings, n2]);
@@ -87,9 +87,9 @@ describe("buildOverviewSections", () => {
     expect(sections[0]!.branches[0]!.id).toBe("n1");
   });
 
-  it("collects standalones (no parentWorkspaceId) under a null-workspace section at the end", () => {
+  it("collects standalones (no rootWorkspaceId) under a null-workspace section at the end", () => {
     const u1 = makeRoot("u1", "Alpha");
-    const n1 = makeBranch("n1", "branch-1", { parentWorkspaceId: "u1" });
+    const n1 = makeBranch("n1", "branch-1", { rootWorkspaceId: "u1" });
     const standalone = makeBranch("standalone", "MyPersonalTab");
     const sections = buildOverviewSections([u1, n1, standalone]);
     expect(sections).toHaveLength(2);
@@ -97,9 +97,9 @@ describe("buildOverviewSections", () => {
     expect(sections[1]!.branches[0]!.id).toBe("standalone");
   });
 
-  it("collects orphaned Branches (unknown parentWorkspaceId) as standalones", () => {
+  it("collects orphaned Branches (unknown rootWorkspaceId) as standalones", () => {
     const orphan = makeBranch("orphan", "Orphaned", {
-      parentWorkspaceId: "ghost-workspace",
+      rootWorkspaceId: "ghost-workspace",
     });
     const sections = buildOverviewSections([orphan]);
     expect(sections).toHaveLength(1);
@@ -110,7 +110,7 @@ describe("buildOverviewSections", () => {
   it("includes empty Workspace sections (no Branches)", () => {
     const u1 = makeRoot("u1", "Alpha");
     const u2 = makeRoot("u2", "Empty");
-    const n1 = makeBranch("n1", "branch-1", { parentWorkspaceId: "u1" });
+    const n1 = makeBranch("n1", "branch-1", { rootWorkspaceId: "u1" });
     const sections = buildOverviewSections([u1, u2, n1]);
     expect(sections).toHaveLength(2);
     expect(sections[1]!.workspace?.id).toBe("u2");
@@ -119,7 +119,7 @@ describe("buildOverviewSections", () => {
 
   it("omits the standalone section when there are no standalones", () => {
     const u1 = makeRoot("u1", "Alpha");
-    const n1 = makeBranch("n1", "branch-1", { parentWorkspaceId: "u1" });
+    const n1 = makeBranch("n1", "branch-1", { rootWorkspaceId: "u1" });
     const sections = buildOverviewSections([u1, n1]);
     expect(sections).toHaveLength(1);
     expect(sections[0]!.workspace?.id).toBe("u1");
@@ -143,7 +143,7 @@ describe("buildOverviewSections", () => {
 describe("resolveDirtyPath", () => {
   it("returns worktreePath when present", () => {
     const ws = makeBranch("n1", "branch", {
-      parentWorkspaceId: "u1",
+      rootWorkspaceId: "u1",
       worktreePath: "/repos/alpha/worktree",
     });
     const root = makeRoot("u1", "Alpha", "/repos/alpha");
@@ -151,7 +151,7 @@ describe("resolveDirtyPath", () => {
   });
 
   it("falls back to the owning Workspace path when no worktreePath", () => {
-    const ws = makeBranch("n1", "branch", { parentWorkspaceId: "u1" });
+    const ws = makeBranch("n1", "branch", { rootWorkspaceId: "u1" });
     const root = makeRoot("u1", "Alpha", "/repos/alpha");
     expect(resolveDirtyPath(ws, root)).toBe("/repos/alpha");
   });
@@ -162,7 +162,7 @@ describe("resolveDirtyPath", () => {
   });
 
   it("returns null when the owning Workspace has no path and no worktreePath", () => {
-    const ws = makeBranch("n1", "branch", { parentWorkspaceId: "u1" });
+    const ws = makeBranch("n1", "branch", { rootWorkspaceId: "u1" });
     const root = { ...makeRoot("u1", "Alpha"), path: "" };
     expect(resolveDirtyPath(ws, root)).toBeNull();
   });

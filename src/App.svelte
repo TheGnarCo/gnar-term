@@ -798,8 +798,8 @@
           void createWorkspaceFromDef({
             name: wsName,
             // Optional metadata forwards to the new workspace — e.g.
-            // container-row dirty clicks pass `{ parentWorkspaceId: <container-id> }`
-            // so the fresh "Diff" child workspace nests inside its originating
+            // container-row dirty clicks pass `{ rootWorkspaceId: <container-id> }`
+            // so the fresh "Diff" Branch nests inside its originating
             // workspace instead of materializing at the sidebar root.
             ...(options?.metadata ? { metadata: options.metadata } : {}),
             layout: {

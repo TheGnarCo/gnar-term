@@ -961,7 +961,7 @@ export interface WorkspaceActionInfo {
  * read so core can evolve the stored record without breaking extensions.
  *
  * Extensions use `metadata` to detect nesting — e.g. the core git status
- * subtitle collapses when `parentWorkspaceId` is present because the
+ * subtitle collapses when `rootWorkspaceId` is present because the
  * Workspace banner already shows cwd+branch.
  */
 export interface WorkspaceRef {
@@ -972,7 +972,7 @@ export interface WorkspaceRef {
   color: string;
   isGit: boolean;
   /**
-   * Opaque per-workspace metadata set at creation time (e.g. parentWorkspaceId,
+   * Opaque per-workspace metadata set at creation time (e.g. rootWorkspaceId,
    * worktreePath, branch).
    */
   metadata?: Record<string, unknown>;

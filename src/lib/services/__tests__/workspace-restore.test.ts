@@ -3,7 +3,7 @@
  *
  * S2 tests:
  *   1. switchWorkspace records lastActiveBranchedWorkspaceId on parent workspace
- *   2. switchWorkspace does NOT record when child has no parentWorkspaceId
+ *   2. switchWorkspace does NOT record when child has no rootWorkspaceId
  *   3. activateWorkspace lands on the Workspace's own Root (the runtime
  *      workspace whose id matches the Record id) even when
  *      lastActiveBranchedWorkspaceId points at a sibling Branch. lastActive
@@ -62,7 +62,7 @@ vi.mock("../../terminal-service", () => ({
 }));
 
 // Minimal Workspace factory
-function makeChild(id: string, parentWorkspaceId?: string): Workspace {
+function makeChild(id: string, rootWorkspaceId?: string): Workspace {
   return {
     id,
     name: id,
@@ -71,7 +71,7 @@ function makeChild(id: string, parentWorkspaceId?: string): Workspace {
       pane: { id: `${id}-p`, surfaces: [], activeSurfaceId: null },
     },
     activePaneId: `${id}-p`,
-    ...(parentWorkspaceId ? { parentWorkspaceId } : {}),
+    ...(rootWorkspaceId ? { rootWorkspaceId } : {}),
   } as Workspace;
 }
 
@@ -117,15 +117,15 @@ describe("S2 — last-active branch restore", () => {
     expect(getWorkspace("g1")?.lastActiveBranchedWorkspaceId).toBe("nw-b");
   });
 
-  it("switchWorkspace does NOT record lastActiveBranchedWorkspaceId when child has no parentWorkspaceId", () => {
+  it("switchWorkspace does NOT record lastActiveBranchedWorkspaceId when child has no rootWorkspaceId", () => {
     const ws = makeWorkspace("g1");
     addWorkspace(ws);
 
-    workspaces.update((cur) => [...cur, makeChild("nw-root")]); // no parentWorkspaceId
+    workspaces.update((cur) => [...cur, makeChild("nw-root")]); // no rootWorkspaceId
 
     switchWorkspace(1);
 
-    // g1 should remain untouched — nw-root has no parentWorkspaceId
+    // g1 should remain untouched — nw-root has no rootWorkspaceId
     expect(getWorkspace("g1")?.lastActiveBranchedWorkspaceId).toBeUndefined();
   });
 
@@ -177,7 +177,7 @@ describe("S9 — auto-run restore commands", () => {
       {
         name: "Test",
         cwd: "/tmp",
-        metadata: { parentWorkspaceId: "g1" },
+        metadata: { rootWorkspaceId: "g1" },
         layout: {
           pane: {
             surfaces: [{ command: "echo hello" }],
@@ -208,7 +208,7 @@ describe("S9 — auto-run restore commands", () => {
       {
         name: "Test",
         cwd: "/tmp",
-        metadata: { parentWorkspaceId: "g1" },
+        metadata: { rootWorkspaceId: "g1" },
         layout: {
           pane: {
             surfaces: [{ command: "echo hello" }],
@@ -239,7 +239,7 @@ describe("S9 — auto-run restore commands", () => {
       {
         name: "Test",
         cwd: "/tmp",
-        metadata: { parentWorkspaceId: "g1" },
+        metadata: { rootWorkspaceId: "g1" },
         layout: {
           pane: {
             surfaces: [{ command: "echo hello" }],

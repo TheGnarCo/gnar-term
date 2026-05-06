@@ -32,7 +32,7 @@ export function buildAgentRows(
     .filter((a) => a.status !== "closed")
     .map((a) => {
       const branch = branchedWsList.find((w) => w.id === a.workspaceId);
-      const rootId = branch?.parentWorkspaceId ?? null;
+      const rootId = branch?.rootWorkspaceId ?? null;
       const root = rootId ? workspaces.find((w) => w.id === rootId) : null;
       const idx = branchedWsList.findIndex((w) => w.id === a.workspaceId);
       return {

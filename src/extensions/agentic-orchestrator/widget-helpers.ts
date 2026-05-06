@@ -82,7 +82,7 @@ export function throttle<TArgs extends unknown[]>(
 }
 
 /**
- * Shared module-level derived store: maps each parentWorkspaceId to the set of
+ * Shared module-level derived store: maps each rootWorkspaceId to the set of
  * workspace IDs that belong to it under the §5.3 criteria (metadata,
  * explicit membership, and CWD-prefix fallback for unclaimed workspaces).
  *
@@ -105,7 +105,7 @@ const _workspaceChildIndex = derived(
       for (const ws of $workspaces) {
         const md = ws.metadata as Record<string, unknown> | undefined;
         // Criterion 1: child workspace was created with this workspace's id in metadata.
-        if (md?.parentWorkspaceId === workspace.id) {
+        if (md?.rootWorkspaceId === workspace.id) {
           members.add(ws.id);
           continue;
         }
@@ -138,9 +138,9 @@ const _workspaceChildIndex = derived(
  *   - no host / "none" scope → empty list
  *   - "global" scope         → every detected agent
  *   - "workspace" scope      → agents whose child workspace satisfies any of:
- *        1. `metadata.parentWorkspaceId === parentWorkspaceId` (set by child-workspace creation)
+ *        1. `metadata.rootWorkspaceId === rootWorkspaceId` (set by child-workspace creation)
  *        2. child workspace id is in `workspace.branchedWorkspaceIds` (set by drag-drop /
- *           promote-to-workspace flows that don't stamp metadata.parentWorkspaceId)
+ *           promote-to-workspace flows that don't stamp metadata.rootWorkspaceId)
  *        3. child workspace is unclaimed AND its first terminal CWD sits under
  *           the parent workspace's `path` prefix (catches native agents in terminals
  *           that were never explicitly added to the parent workspace)
@@ -168,7 +168,7 @@ export function hostScopedAgentsStore(
   // shared _workspaceChildIndex (O(1) lookup per agent) rather than walking
   // all workspaces × surfaces independently.
   return derived([api.agents, _workspaceChildIndex], ([$agents, $index]) => {
-    const members = $index.get(scope.parentWorkspaceId);
+    const members = $index.get(scope.rootWorkspaceId);
     if (!members) return [];
     return $agents.filter((a) => members.has(a.workspaceId));
   });
@@ -280,7 +280,7 @@ export type SpawnTarget =
       ok: true;
       repoPath: string;
       spawnedBy: SpawnedByMarker;
-      parentWorkspaceId?: string;
+      rootWorkspaceId?: string;
     }
   | { ok: false; error: string };
 
@@ -289,16 +289,16 @@ export function resolveSpawnTarget(
   repoPathProp: string | undefined,
 ): SpawnTarget {
   if (scope.kind === "workspace") {
-    const workspace = getWorkspace(scope.parentWorkspaceId);
+    const workspace = getWorkspace(scope.rootWorkspaceId);
     if (!workspace) return { ok: false, error: "Workspace not found" };
     return {
       ok: true,
       repoPath: workspace.path,
       spawnedBy: {
         kind: "workspace",
-        parentWorkspaceId: scope.parentWorkspaceId,
+        rootWorkspaceId: scope.rootWorkspaceId,
       },
-      parentWorkspaceId: scope.parentWorkspaceId,
+      rootWorkspaceId: scope.rootWorkspaceId,
     };
   }
   if (scope.kind === "global") {
@@ -323,6 +323,6 @@ export function scopeAttrs(scope: DashboardScope): Record<string, string> {
   return {
     "data-scope-kind": scope.kind,
     "data-scope-workspace-id":
-      scope.kind === "workspace" ? scope.parentWorkspaceId : "",
+      scope.kind === "workspace" ? scope.rootWorkspaceId : "",
   };
 }

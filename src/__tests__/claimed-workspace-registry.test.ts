@@ -1,7 +1,7 @@
 /**
  * Tests for claimed-workspace-registry — Stage 10:
  * `claimedWorkspaceIds` is derived from `workspaces` filtered by
- * `parentWorkspaceId`. The legacy registry that tracked claims with a
+ * `rootWorkspaceId`. The legacy registry that tracked claims with a
  * source extension id is gone.
  */
 import { describe, it, expect, beforeEach } from "vitest";
@@ -13,7 +13,7 @@ import {
 } from "../lib/stores/workspace";
 import type { Workspace } from "../lib/types";
 
-function makeWorkspace(id: string, parentWorkspaceId?: string): Workspace {
+function makeWorkspace(id: string, rootWorkspaceId?: string): Workspace {
   return {
     id,
     name: id,
@@ -22,7 +22,7 @@ function makeWorkspace(id: string, parentWorkspaceId?: string): Workspace {
       pane: { id: `${id}-p`, surfaces: [], activeSurfaceId: null },
     },
     activePaneId: `${id}-p`,
-    ...(parentWorkspaceId ? { parentWorkspaceId } : {}),
+    ...(rootWorkspaceId ? { rootWorkspaceId } : {}),
   };
 }
 
@@ -35,7 +35,7 @@ describe("claimedWorkspaceIds", () => {
     expect(get(claimedWorkspaceIds).size).toBe(0);
   });
 
-  it("contains ids of workspaces with a parentWorkspaceId", () => {
+  it("contains ids of workspaces with a rootWorkspaceId", () => {
     workspaces.set([
       makeWorkspace("root"),
       makeWorkspace("child-1", "root"),
@@ -54,7 +54,7 @@ describe("claimedWorkspaceIds", () => {
 
     workspaces.update((list) =>
       list.map((w) =>
-        w.id === "ws-1" ? { ...w, parentWorkspaceId: "root" } : w,
+        w.id === "ws-1" ? { ...w, rootWorkspaceId: "root" } : w,
       ),
     );
     expect(get(claimedWorkspaceIds).has("ws-1")).toBe(true);
@@ -62,7 +62,7 @@ describe("claimedWorkspaceIds", () => {
     workspaces.update((list) =>
       list.map((w) => {
         if (w.id !== "ws-1") return w;
-        const { parentWorkspaceId: _drop, ...rest } = w;
+        const { rootWorkspaceId: _drop, ...rest } = w;
         return rest as Workspace;
       }),
     );

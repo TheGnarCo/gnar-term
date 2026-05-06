@@ -123,7 +123,7 @@ describe("MCP dashboard contribution tools", () => {
           },
           activePaneId: "p",
           isDashboard: true,
-          parentWorkspaceId: "g1",
+          rootWorkspaceId: "g1",
           dashboardContributionId: "diff",
         } as never,
       ]);

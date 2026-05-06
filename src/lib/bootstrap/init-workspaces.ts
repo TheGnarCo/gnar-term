@@ -104,15 +104,16 @@ function generateId(): string {
 
 function onWorkspaceCreated(event: AppEvent): void {
   if (event.type !== "workspace:created") return;
-  // parentWorkspaceId is a top-level Workspace field; read it directly from
+  // rootWorkspaceId is a top-level Workspace field; read it directly from
   // the live runtime workspace, falling back to the event payload for
   // backwards compatibility with emitters that still pass metadata only.
   const ws = get(workspaces).find((w) => w.id === event.id);
-  const parentWorkspaceId =
-    ws?.parentWorkspaceId ??
-    (event.metadata as WorkspaceMetadata | undefined)?.parentWorkspaceId;
-  if (typeof parentWorkspaceId !== "string") return;
-  addChildToWorkspace(parentWorkspaceId, event.id);
+  const rootWorkspaceId =
+    ws?.rootWorkspaceId ??
+    (event.metadata as WorkspaceMetadata | undefined)?.rootWorkspaceId ??
+    (event.metadata as WorkspaceMetadata | undefined)?.rootWorkspaceId;
+  if (typeof rootWorkspaceId !== "string") return;
+  addChildToWorkspace(rootWorkspaceId, event.id);
   claimWorkspace(event.id, SOURCE);
 }
 
@@ -126,14 +127,14 @@ function onWorkspaceActivated(event: AppEvent): void {
   if (event.type !== "workspace:activated") return;
   const ws = get(workspaces).find((w) => w.id === event.id);
   if (!ws) return;
-  const parentWorkspaceId = ws.parentWorkspaceId;
-  if (typeof parentWorkspaceId !== "string") return;
-  const workspace = getWorkspaces().find((w) => w.id === parentWorkspaceId);
+  const rootWorkspaceId = ws.rootWorkspaceId;
+  if (typeof rootWorkspaceId !== "string") return;
+  const workspace = getWorkspaces().find((w) => w.id === rootWorkspaceId);
   if (!workspace) return;
   void invoke<boolean>("is_git_repo", { path: workspace.path })
     .then((isGit) => {
       if (isGit !== workspace.isGit) {
-        updateWorkspace(parentWorkspaceId, { isGit });
+        updateWorkspace(rootWorkspaceId, { isGit });
       }
     })
     .catch(() => {});
@@ -217,8 +218,8 @@ async function createWorkspaceFlow(prefill?: {
 
   // ADR-004 Stage 10: materialize the Root runtime Workspace whose id
   // matches the WorkspaceRecord, so the sidebar row's tab surface
-  // exists immediately. No `parentWorkspaceId` — the Root IS the
-  // Workspace, not a child of itself.
+  // exists immediately. No `rootWorkspaceId` — the Root IS the
+  // Workspace, not a Branch of itself.
   try {
     const initialDef: WorkspaceTemplate = {
       id,
@@ -243,12 +244,12 @@ async function createWorkspaceFlow(prefill?: {
 }
 
 /**
- * Promote the active, parent-less child workspace into a new Workspace
- * rooted at that workspace's current working directory. Opens
+ * Promote the active, unrooted Branch into a new Workspace
+ * rooted at that Branch's current working directory. Opens
  * the create dialog with path/name pre-filled, then moves the
- * child workspace into the created workspace.
+ * Branch into the created Workspace.
  */
-async function promoteActiveChildWorkspace(): Promise<void> {
+async function promoteActiveBranch(): Promise<void> {
   const list = get(workspaces);
   const idx = get(activeWorkspaceIdx);
   const activeWs = typeof idx === "number" ? list[idx] : undefined;
@@ -286,10 +287,9 @@ export async function initWorkspaces(): Promise<void> {
     appendRootRow({ kind: "workspace", id: workspace.id });
   }
 
-  // Re-claim any restored child workspaces that belong to a known
-  // workspace — child workspace ids change on every restart, so the
-  // branchedWorkspaceIds list is rebuilt from metadata.parentWorkspaceId
-  // on each load.
+  // Re-claim any restored Branches that belong to a known Workspace —
+  // Branch ids change on every restart, so the branchedWorkspaceIds list
+  // is rebuilt from rootWorkspaceId on each load.
   reclaimChildWorkspaces();
 
   // Root-row renderer for "workspace" kind. ContainerRow inside
@@ -323,7 +323,7 @@ export async function initWorkspaces(): Promise<void> {
     title: "Promote to Workspace...",
     source: SOURCE,
     action: () => {
-      void promoteActiveChildWorkspace();
+      void promoteActiveBranch();
     },
   });
 
@@ -353,9 +353,9 @@ export async function initWorkspaces(): Promise<void> {
       const list = get(workspaces);
       const idx = get(activeWorkspaceIdx);
       const ws = typeof idx === "number" ? list[idx] : undefined;
-      const parentWorkspaceId = ws?.parentWorkspaceId;
-      if (typeof parentWorkspaceId !== "string") return;
-      const workspace = getWorkspaces().find((w) => w.id === parentWorkspaceId);
+      const rootWorkspaceId = ws?.rootWorkspaceId;
+      if (typeof rootWorkspaceId !== "string") return;
+      const workspace = getWorkspaces().find((w) => w.id === rootWorkspaceId);
       if (workspace) void openWorkspaceDashboard(workspace);
     },
   });

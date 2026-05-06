@@ -66,7 +66,7 @@ export function addWorkspace(workspace: WorkspaceRecord): void {
   };
   setWorkspaces([...getWorkspaces(), ensured]);
   appendRootRow({ kind: "workspace", id: workspace.id });
-  emitStateChanged({ parentWorkspaceId: workspace.id });
+  emitStateChanged({ workspaceId: workspace.id });
 }
 
 export function updateWorkspace(
@@ -77,7 +77,7 @@ export function updateWorkspace(
     w.id === id ? { ...w, ...patch } : w,
   );
   setWorkspaces(next);
-  emitStateChanged({ parentWorkspaceId: id });
+  emitStateChanged({ workspaceId: id });
 }
 
 /**
@@ -93,7 +93,7 @@ export function toggleWorkspaceLock(id: string): void {
     w.id === id ? { ...w, locked: !w.locked } : w,
   );
   setWorkspaces(next);
-  emitStateChanged({ parentWorkspaceId: id });
+  emitStateChanged({ workspaceId: id });
 }
 
 export function deleteWorkspace(id: string): void {
@@ -103,24 +103,22 @@ export function deleteWorkspace(id: string): void {
   setWorkspaces(next);
   removeRootRow({ kind: "workspace", id });
   if (workspace) releaseWorkspaceDirtyStore(workspace.path);
-  emitStateChanged({ parentWorkspaceId: id });
+  emitStateChanged({ workspaceId: id });
 }
 
 /**
- * All workspaces tagged with `parentWorkspaceId === parentWorkspaceId`. This is the
- * canonical child-workspace-membership predicate for core operations (close
+ * All Branches tagged with `ws.rootWorkspaceId === rootWorkspaceId`. This is the
+ * canonical Branch-membership predicate for core operations (close
  * sweeps, reclaim, reconcile). Extension-layer consumers that need a
  * CWD-prefix fallback for unclaimed workspaces should compose with this
  * result.
  */
-export function getChildrenOfWorkspace(parentWorkspaceId: string): Workspace[] {
-  return get(workspaces).filter(
-    (w) => w.parentWorkspaceId === parentWorkspaceId,
-  );
+export function getChildrenOfWorkspace(rootWorkspaceId: string): Workspace[] {
+  return get(workspaces).filter((w) => w.rootWorkspaceId === rootWorkspaceId);
 }
 
 /**
- * Close every workspace tagged with `metadata.parentWorkspaceId === id`. Deletion
+ * Close every workspace tagged with `rootWorkspaceId === id`. Deletion
  * ripples through the workspaces store, so we resolve each workspace by
  * id after recollecting the list. Dashboard workspaces for the workspace
  * match the same predicate and are closed here too; callers should not
@@ -136,22 +134,22 @@ export function closeWorkspacesInWorkspace(id: string): void {
 }
 
 /**
- * Appends `workspaceId` to `parentWorkspaceId`'s child-id list if not already
- * present. No-op when the parent workspace is missing (e.g. was just deleted).
+ * Appends `workspaceId` to `rootWorkspaceId`'s child-id list if not already
+ * present. No-op when the root workspace is missing (e.g. was just deleted).
  * Returns true when a change was persisted.
  */
 export function addChildToWorkspace(
-  parentWorkspaceId: string,
+  rootWorkspaceId: string,
   workspaceId: string,
 ): boolean {
   const primaryWorkspaces = getWorkspaces();
-  const workspace = primaryWorkspaces.find((w) => w.id === parentWorkspaceId);
+  const workspace = primaryWorkspaces.find((w) => w.id === rootWorkspaceId);
   if (!workspace) return false;
   if ((workspace.branchedWorkspaceIds ?? []).includes(workspaceId))
     return false;
 
   const next = primaryWorkspaces.map((w) => {
-    if (w.id === parentWorkspaceId) {
+    if (w.id === rootWorkspaceId) {
       return {
         ...w,
         branchedWorkspaceIds: [...(w.branchedWorkspaceIds ?? []), workspaceId],
@@ -160,24 +158,24 @@ export function addChildToWorkspace(
     return w;
   });
   setWorkspaces(next);
-  emitStateChanged({ parentWorkspaceId });
+  emitStateChanged({ rootWorkspaceId });
   return true;
 }
 
 /**
- * Inserts `workspaceId` into `parentWorkspaceId`'s child-id list at `positionInWorkspace`.
- * No-op when the parent workspace is missing or already contains the child.
+ * Inserts `workspaceId` into `rootWorkspaceId`'s child-id list at `positionInWorkspace`.
+ * No-op when the root workspace is missing or already contains the child.
  * Returns true when a change was persisted.
  */
 export function insertChildIntoWorkspace(
-  parentWorkspaceId: string,
+  rootWorkspaceId: string,
   workspaceId: string,
   positionInWorkspace: number,
 ): boolean {
   const workspaces = getWorkspaces();
   let changed = false;
   const next = workspaces.map((w) => {
-    if (w.id !== parentWorkspaceId) return w;
+    if (w.id !== rootWorkspaceId) return w;
     const current = w.branchedWorkspaceIds ?? [];
     if (current.includes(workspaceId)) return w;
     changed = true;
@@ -191,14 +189,14 @@ export function insertChildIntoWorkspace(
   });
   if (!changed) return false;
   setWorkspaces(next);
-  emitStateChanged({ parentWorkspaceId });
+  emitStateChanged({ rootWorkspaceId });
   return true;
 }
 
 /**
  * Strips `workspaceId` from every parent workspace's child-id list. Used when a
  * child workspace is closed — child-membership is inferred from
- * `parentWorkspaceId`, so removing from all parents is cheap and idempotent.
+ * `rootWorkspaceId`, so removing from all parents is cheap and idempotent.
  */
 export function removeChildFromAllWorkspaces(workspaceId: string): void {
   const next = getWorkspaces().map((w) => ({
@@ -376,7 +374,7 @@ function createDashboardWorkspaceFromDef(
     layout: { pane: { surfaces } },
     metadata: {
       isDashboard: true,
-      parentWorkspaceId: workspace.id,
+      rootWorkspaceId: workspace.id,
       dashboardContributionId: contribId,
     },
   });
@@ -436,9 +434,9 @@ function backfillDashboardContributionIds(): void {
     const next = list.map((ws) => {
       if (ws.isDashboard !== true) return ws;
       if (typeof ws.dashboardContributionId === "string") return ws;
-      const parentWorkspaceId = ws.parentWorkspaceId;
-      if (typeof parentWorkspaceId !== "string") return ws;
-      const workspace = workspaceById.get(parentWorkspaceId);
+      const rootWorkspaceId = ws.rootWorkspaceId;
+      if (typeof rootWorkspaceId !== "string") return ws;
+      const workspace = workspaceById.get(rootWorkspaceId);
       if (!workspace) return ws;
 
       const previewPaths = getAllPanes(ws.splitRoot)
@@ -496,12 +494,12 @@ export function createSettingsDashboardWorkspace(
  */
 export function isDashboardWorkspace(
   ws: import("../types").Workspace,
-  parentWorkspaceId: string,
+  rootWorkspaceId: string,
   contribId?: string,
   allowLegacyUndefined = false,
 ): boolean {
   if (ws.isDashboard !== true) return false;
-  if (ws.parentWorkspaceId !== parentWorkspaceId) return false;
+  if (ws.rootWorkspaceId !== rootWorkspaceId) return false;
   if (contribId === undefined) return true;
   const contribution = ws.dashboardContributionId;
   if (allowLegacyUndefined) {
@@ -510,19 +508,19 @@ export function isDashboardWorkspace(
   return contribution === contribId;
 }
 
-function findDashboardWorkspace(parentWorkspaceId: string, contribId: string) {
+function findDashboardWorkspace(rootWorkspaceId: string, contribId: string) {
   return get(workspaces).find((w) =>
-    isDashboardWorkspace(w, parentWorkspaceId, contribId),
+    isDashboardWorkspace(w, rootWorkspaceId, contribId),
   );
 }
 
 /** True when a workspace exists for the given workspace + contribution pair. */
 function hasDashboardWorkspace(
-  parentWorkspaceId: string,
+  rootWorkspaceId: string,
   contribId: string,
 ): boolean {
   return get(workspaces).some((w) =>
-    isDashboardWorkspace(w, parentWorkspaceId, contribId),
+    isDashboardWorkspace(w, rootWorkspaceId, contribId),
   );
 }
 
@@ -583,15 +581,15 @@ export function closeAutoDashboardsBySource(source: string): void {
 }
 
 /**
- * Locate the dashboard workspace for `parentWorkspaceId` + `contributionId` and
+ * Locate the dashboard workspace for `rootWorkspaceId` + `contributionId` and
  * close it. Used by the Settings toggle UI and by MCP to remove a
  * dashboard contribution from a workspace.
  */
 export function closeDashboardForWorkspace(
-  parentWorkspaceId: string,
+  rootWorkspaceId: string,
   contributionId: string,
 ): boolean {
-  const match = findDashboardWorkspace(parentWorkspaceId, contributionId);
+  const match = findDashboardWorkspace(rootWorkspaceId, contributionId);
   if (!match) return false;
   const contribution = getDashboardContribution(contributionId);
   if (contribution?.autoProvision) return false;
@@ -656,7 +654,7 @@ export async function activateWorkspace(workspaceId: string): Promise<void> {
  * passes:
  *
  *   1. Adopt the first workspace matching `metadata.isDashboard ===
- *      true && metadata.parentWorkspaceId === workspace.id` (with no contribution id,
+ *      true && rootWorkspaceId === workspace.id` (with no contribution id,
  *      or an explicit `OVERVIEW_DASHBOARD_CONTRIBUTION_ID` id) — rebinding the workspace's
  *      `dashboardWorkspaceId` to that workspace.
  *   2. Close every extra Workspace Dashboard for the same workspace (users end
@@ -745,7 +743,7 @@ export async function reconcileWorkspaceDashboards(): Promise<void> {
   const dashboardIndex = new Map<string, Map<string, Workspace[]>>();
   for (const w of get(workspaces)) {
     if (w.isDashboard !== true) continue;
-    const parentId = w.parentWorkspaceId;
+    const parentId = w.rootWorkspaceId;
     if (typeof parentId !== "string") continue;
     const contribId = w.dashboardContributionId;
     if (typeof contribId !== "string") continue;
@@ -767,8 +765,8 @@ export async function reconcileWorkspaceDashboards(): Promise<void> {
 }
 
 /**
- * Re-claim workspaces tagged with `metadata.parentWorkspaceId` that belong to a
- * known workspace. Called on app startup once workspaces are loaded and
+ * Re-claim Branches tagged with `rootWorkspaceId` that belong to a
+ * known Workspace. Called on app startup once workspaces are loaded and
  * workspaces are restored — restoration creates fresh workspace ids so
  * we rebuild each workspace's branchedWorkspaceIds list here.
  */
@@ -781,15 +779,15 @@ export function reclaimChildWorkspaces(): void {
   const newMembers = new Map<string, string[]>();
   const toClaimIds: string[] = [];
   for (const ws of get(workspaces)) {
-    const parentWorkspaceId = ws.parentWorkspaceId;
+    const rootWorkspaceId = ws.rootWorkspaceId;
     if (
-      typeof parentWorkspaceId !== "string" ||
-      !workspaceIds.has(parentWorkspaceId)
+      typeof rootWorkspaceId !== "string" ||
+      !workspaceIds.has(rootWorkspaceId)
     )
       continue;
-    const members = newMembers.get(parentWorkspaceId) ?? [];
+    const members = newMembers.get(rootWorkspaceId) ?? [];
     members.push(ws.id);
-    newMembers.set(parentWorkspaceId, members);
+    newMembers.set(rootWorkspaceId, members);
     toClaimIds.push(ws.id);
   }
 
@@ -819,7 +817,7 @@ export function reclaimChildWorkspaces(): void {
  *   - is not a Dashboard surface (those belong to a parent Workspace)
  *   - is not an orphan Branch (worktreePath set but parent missing)
  *
- * Runtime Branches (`parentWorkspaceId` resolves to a known Record) are
+ * Runtime Branches (`rootWorkspaceId` resolves to a known Record) are
  * left alone — they're already correctly attached.
  */
 function wrapStandaloneChildWorkspaces(): void {
@@ -829,7 +827,7 @@ function wrapStandaloneChildWorkspaces(): void {
 
   for (const ws of snapshot) {
     if (knownWorkspaceIds.has(ws.id)) continue;
-    if (ws.parentWorkspaceId && knownWorkspaceIds.has(ws.parentWorkspaceId))
+    if (ws.rootWorkspaceId && knownWorkspaceIds.has(ws.rootWorkspaceId))
       continue;
     if (ws.isDashboard) continue;
     if ((ws as { worktreePath?: string }).worktreePath) continue;
@@ -862,7 +860,7 @@ function wrapStandaloneChildWorkspaces(): void {
  * Promotes every standalone runtime Workspace to a Root by creating a
  * matching WorkspaceRecord (Stage 10: shared id). The previous "rehydrate
  * claim registry" pass is gone: `claimedWorkspaceIds` is derived directly
- * from `workspaces` (filtered by `parentWorkspaceId`), and
+ * from `workspaces` (filtered by `rootWorkspaceId`), and
  * `bootstrapRootRowOrder` already filters claimed workspaces out of the
  * sidebar via that derived set, so no per-claim mutation is needed at
  * startup.

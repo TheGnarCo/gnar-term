@@ -118,7 +118,7 @@ async function createClaudeSettingsDashboard(
     },
     metadata: {
       isDashboard: true,
-      parentWorkspaceId: workspace.id,
+      rootWorkspaceId: workspace.id,
       dashboardContributionId: "claude-settings",
     },
   });

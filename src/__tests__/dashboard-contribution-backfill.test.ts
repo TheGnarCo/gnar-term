@@ -68,7 +68,7 @@ describe("dashboardContributionId backfill", () => {
         },
         activePaneId: "p1",
         isDashboard: true,
-        parentWorkspaceId: "g1",
+        rootWorkspaceId: "g1",
       } as never,
     ]);
 
@@ -104,7 +104,7 @@ describe("dashboardContributionId backfill", () => {
         },
         activePaneId: "p3",
         isDashboard: true,
-        parentWorkspaceId: "g1",
+        rootWorkspaceId: "g1",
         dashboardContributionId: "group",
       } as never,
     ]);

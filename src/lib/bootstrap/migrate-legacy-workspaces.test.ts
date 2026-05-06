@@ -66,20 +66,20 @@ describe("migrateLegacyWorkspaces", () => {
     expect(out.activeWorkspaceId).toBe("P");
   });
 
-  it("preserves Branches that point at the project (parentWorkspaceId === P.id) and leaves their refs valid", () => {
+  it("preserves Branches that point at the project (rootWorkspaceId === P.id) and leaves their refs valid", () => {
     const state: AppState = {
       parentWorkspaces: [parent({ id: "P", primaryBranchedWorkspaceId: "B1" })],
       workspaces: [
         wsdef({ id: "B1" }),
-        wsdef({ id: "B2", parentWorkspaceId: "P", worktreePath: "/wt/2" }),
-        wsdef({ id: "B3", parentWorkspaceId: "P", worktreePath: "/wt/3" }),
+        wsdef({ id: "B2", rootWorkspaceId: "P", worktreePath: "/wt/2" }),
+        wsdef({ id: "B3", rootWorkspaceId: "P", worktreePath: "/wt/3" }),
       ],
     };
 
     const out = migrateLegacyWorkspaces(state);
     const ids = out.workspaces?.map((w) => w.id);
     expect(ids).toEqual(["P", "B2", "B3"]);
-    expect(out.workspaces?.find((w) => w.id === "B2")?.parentWorkspaceId).toBe(
+    expect(out.workspaces?.find((w) => w.id === "B2")?.rootWorkspaceId).toBe(
       "P",
     );
   });
@@ -118,7 +118,7 @@ describe("migrateLegacyWorkspaces", () => {
       parentWorkspaces: [parent({ id: "P", primaryBranchedWorkspaceId: "B1" })],
       workspaces: [
         wsdef({ id: "B1" }),
-        wsdef({ id: "B2", parentWorkspaceId: "P" }),
+        wsdef({ id: "B2", rootWorkspaceId: "P" }),
       ],
       activeWorkspaceId: "B2",
     };
@@ -160,7 +160,7 @@ describe("migrateLegacyWorkspaces", () => {
       ],
       workspaces: [
         wsdef({ id: "B1" }),
-        wsdef({ id: "B2", parentWorkspaceId: "P" }),
+        wsdef({ id: "B2", rootWorkspaceId: "P" }),
       ],
     };
     const out = migrateLegacyWorkspaces(state);
@@ -179,7 +179,7 @@ describe("migrateLegacyWorkspaces", () => {
     expect(out.workspaces?.[0]?.extensionData).toEqual(ext);
   });
 
-  it("preserves Dashboards (parentWorkspaceId + isDashboard) untouched", () => {
+  it("preserves Dashboards (rootWorkspaceId + isDashboard) untouched", () => {
     const state: AppState = {
       parentWorkspaces: [
         parent({
@@ -192,7 +192,7 @@ describe("migrateLegacyWorkspaces", () => {
         wsdef({ id: "B1" }),
         wsdef({
           id: "D1",
-          parentWorkspaceId: "P",
+          rootWorkspaceId: "P",
           isDashboard: true,
           dashboardContributionId: "overview",
         }),
@@ -201,7 +201,7 @@ describe("migrateLegacyWorkspaces", () => {
     const out = migrateLegacyWorkspaces(state);
     const dash = out.workspaces?.find((w) => w.id === "D1");
     expect(dash?.isDashboard).toBe(true);
-    expect(dash?.parentWorkspaceId).toBe("P");
+    expect(dash?.rootWorkspaceId).toBe("P");
     expect(
       out.workspaces?.find((w) => w.id === "P")?.dashboardWorkspaceId,
     ).toBe("D1");

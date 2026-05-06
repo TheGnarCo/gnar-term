@@ -138,14 +138,14 @@
       }
       // Non-child-workspace row kinds (workspace, agent-orchestrator…).
       // Use their renderer-contributed label as a visual header, then
-      // fan out any workspaces tagged with the row's parentWorkspaceId.
+      // fan out any workspaces tagged with the row's rootWorkspaceId.
       const rendererMeta = $rootRowRendererStore.find((r) => r.id === row.kind);
       const headerLabel = rendererMeta?.label?.(row.id);
       if (headerLabel && row.kind === "workspace") {
         for (let i = 0; i < list.length; i++) {
           const ws = list[i]!;
           if (seen.has(ws.id)) continue;
-          if (ws.parentWorkspaceId === row.id) {
+          if (ws.rootWorkspaceId === row.id) {
             out.push({
               kind: "workspace",
               workspaceId: ws.id,

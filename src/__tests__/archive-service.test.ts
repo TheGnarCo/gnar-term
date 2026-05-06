@@ -181,7 +181,7 @@ describe("archiveWorkspace", () => {
     // store BEFORE its child workspaces close. The close path emits
     // `workspace:closed`, which `setupPrimaryWorkspaceAutoRecreation` listens
     // for; if the parent workspace is still present it will spawn a phantom
-    // replacement child workspace whose `parentWorkspaceId` then dangles.
+    // replacement child workspace whose `rootWorkspaceId` then dangles.
     const setOrder = mocks.setWorkspaces.mock.invocationCallOrder[0]!;
     const closeOrder =
       mocks.closeWorkspacesInWorkspace.mock.invocationCallOrder[0]!;

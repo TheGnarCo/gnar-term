@@ -63,8 +63,8 @@ export type DashboardScope =
  * consistent across widget implementations.
  *
  * Returns `{ kind: "none" }` when neither `isGlobalAgenticDashboard`
- * nor a string `rootWorkspaceId` (or legacy `rootWorkspaceId`) is present —
- * callers should treat that as "host has no scope" (typically render empty).
+ * nor a string `rootWorkspaceId` is present — callers should treat that
+ * as "host has no scope" (typically render empty).
  */
 export function deriveDashboardScope(
   host: DashboardHostContext | null,
@@ -74,14 +74,8 @@ export function deriveDashboardScope(
   if (md.isGlobalAgenticDashboard === true) {
     return { kind: "global" };
   }
-  // Accept both new and legacy field names for backward compat with
-  // old state.json metadata blobs.
   const rootWorkspaceId =
-    typeof md.rootWorkspaceId === "string"
-      ? md.rootWorkspaceId
-      : typeof md.rootWorkspaceId === "string"
-        ? md.rootWorkspaceId
-        : undefined;
+    typeof md.rootWorkspaceId === "string" ? md.rootWorkspaceId : undefined;
   if (typeof rootWorkspaceId === "string" && rootWorkspaceId.length > 0) {
     return { kind: "workspace", rootWorkspaceId };
   }

@@ -177,11 +177,7 @@ export interface WorkspaceMetadata {
   // --- Dashboard / workspace fields ---
   /** Marks a workspace as a dashboard (used by workspace-service and related services). */
   isDashboard?: boolean;
-  /**
-   * Root Workspace id this Branch belongs to (workspace-service).
-   * Legacy state.json files persist this as `parentWorkspaceId`; the
-   * deserializer in workspace.ts maps the old name onto this field.
-   */
+  /** Root Workspace id this Branch belongs to (workspace-service). */
   rootWorkspaceId?: string;
   /** Id of the parent workspace's current dashboard child workspace (workspace-service). */
   dashboardWorkspaceId?: string;

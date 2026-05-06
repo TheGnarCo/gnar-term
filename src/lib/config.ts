@@ -108,8 +108,6 @@ export interface WorkspaceDef {
   dashboardWorkspaceId?: string;
   // Membership / kind discriminants. `rootWorkspaceId` identifies
   // which Workspace this Branch (or Dashboard) belongs to.
-  // Deserialization also accepts the legacy name `parentWorkspaceId`
-  // (old state.json files) — see workspaceDefToTemplate in workspace.ts.
   rootWorkspaceId?: string;
   isDashboard?: boolean;
   dashboardContributionId?: string;

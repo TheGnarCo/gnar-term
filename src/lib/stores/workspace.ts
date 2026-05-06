@@ -86,13 +86,8 @@ export function workspaceDefToTemplate(
     nwDef.dashboardWorkspaceId = def.dashboardWorkspaceId;
 
   // Structural / discriminant fields.
-  // Migration compat: old state.json files persist `parentWorkspaceId`; accept
-  // both names here so existing installs load correctly. Write only the new name.
-  const rootWorkspaceIdFromDef =
-    def.rootWorkspaceId ??
-    (def as unknown as { parentWorkspaceId?: string }).parentWorkspaceId;
-  if (rootWorkspaceIdFromDef !== undefined)
-    nwDef.rootWorkspaceId = rootWorkspaceIdFromDef;
+  if (def.rootWorkspaceId !== undefined)
+    nwDef.rootWorkspaceId = def.rootWorkspaceId;
   if (def.isDashboard !== undefined) nwDef.isDashboard = def.isDashboard;
   if (def.dashboardContributionId !== undefined)
     nwDef.dashboardContributionId = def.dashboardContributionId;

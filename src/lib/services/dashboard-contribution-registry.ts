@@ -7,7 +7,7 @@
  */
 import { get, type Readable } from "svelte/store";
 import { createRegistry } from "./create-registry";
-import type { WorkspaceRecord as Workspace } from "../config";
+import type { RootWorkspace as Workspace } from "../config";
 
 /**
  * Stable persisted id for the built-in Workspace overview dashboard.

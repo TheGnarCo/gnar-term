@@ -168,7 +168,7 @@ export const activeSurface = derived([activePane], ([$pane]) => {
 });
 
 // Persistence is owned by `workspace-runtime-service.persistWorkspaces`,
-// which serializes this store and merges in WorkspaceRecord entries to
+// which serializes this store and merges in RootWorkspace entries to
 // produce the single canonical `state.workspaces[]` writer.
 
 // ---------------------------------------------------------------------------
@@ -317,7 +317,7 @@ export function serializeWorkspace(ws: Workspace): WorkspaceDef {
 // ===========================================================================
 
 /**
- * `WorkspaceRecord` narrows `Workspace` to the fields a root workspace
+ * `RootWorkspace` narrows `Workspace` to the fields a root workspace
  * is guaranteed to own at runtime (path, color, branchedWorkspaceIds,
  * isGit, createdAt). Structural fields (`paneLayout`, `activePaneId`)
  * stay optional so the creation flow can construct an entry before its
@@ -326,9 +326,9 @@ export function serializeWorkspace(ws: Workspace): WorkspaceDef {
  * runtime workspace materializes.
  *
  * This is a typed view over `Workspace` rows in the unified
- * `_workspaces` store — there is no separate "Record" store.
+ * `_workspaces` store — there is no separate root-only store.
  */
-export type WorkspaceRecord = Omit<Workspace, "paneLayout" | "activePaneId"> & {
+export type RootWorkspace = Omit<Workspace, "paneLayout" | "activePaneId"> & {
   path: string;
   color: string;
   branchedWorkspaceIds: string[];
@@ -358,7 +358,7 @@ function isRootWorkspace(ws: Workspace): boolean {
  * focused tab belonged to one of its Branches. Set by
  * `setActiveWorkspaceId()` and read by `workspace-persist.ts`.
  */
-const _activeWorkspaceRecordId = writable<string | null>(null);
+const _activeRootWorkspaceId = writable<string | null>(null);
 
 /**
  * Public root-workspaces store. Read-only projection of `_workspaces`
@@ -366,12 +366,12 @@ const _activeWorkspaceRecordId = writable<string | null>(null);
  * helpers (`addWorkspace`, `setWorkspaces`, ...) which preserve
  * children/dashboards by editing the array in place.
  */
-export const workspacesStore: Readable<WorkspaceRecord[]> = derived(
+export const workspacesStore: Readable<RootWorkspace[]> = derived(
   _workspaces,
-  ($ws) => $ws.filter(isRootWorkspace) as WorkspaceRecord[],
+  ($ws) => $ws.filter(isRootWorkspace) as RootWorkspace[],
 );
 
-let _workspaceRecordsLoaded = false;
+let _rootWorkspacesLoaded = false;
 
 /**
  * Read state from disk and seed the active root-workspace id. The
@@ -383,20 +383,20 @@ let _workspaceRecordsLoaded = false;
  * the initializer.
  */
 export async function loadWorkspaces(): Promise<void> {
-  if (_workspaceRecordsLoaded) return;
-  _workspaceRecordsLoaded = true;
+  if (_rootWorkspacesLoaded) return;
+  _rootWorkspacesLoaded = true;
 
   const state = await loadState();
   if (typeof state.activeWorkspaceId === "string") {
-    _activeWorkspaceRecordId.set(state.activeWorkspaceId);
+    _activeRootWorkspaceId.set(state.activeWorkspaceId);
   }
 }
 
-export function getWorkspaces(): WorkspaceRecord[] {
-  return get(_workspaces).filter(isRootWorkspace) as WorkspaceRecord[];
+export function getWorkspaces(): RootWorkspace[] {
+  return get(_workspaces).filter(isRootWorkspace) as RootWorkspace[];
 }
 
-export function getWorkspace(id: string): WorkspaceRecord | undefined {
+export function getWorkspace(id: string): RootWorkspace | undefined {
   return getWorkspaces().find((w) => w.id === id);
 }
 
@@ -407,7 +407,7 @@ export function getWorkspace(id: string): WorkspaceRecord | undefined {
  * keep their original order, with non-root entries that originally
  * appeared before any root retained at the front.
  */
-export function setWorkspaces(next: readonly WorkspaceRecord[]): void {
+export function setWorkspaces(next: readonly RootWorkspace[]): void {
   _workspaces.update((current) => {
     const merged: Workspace[] = [];
     let nextIdx = 0;
@@ -430,16 +430,16 @@ export function setWorkspaces(next: readonly WorkspaceRecord[]): void {
 }
 
 export function getActiveWorkspaceId(): string | null {
-  return get(_activeWorkspaceRecordId);
+  return get(_activeRootWorkspaceId);
 }
 
 export function setActiveWorkspaceId(id: string | null): void {
-  _activeWorkspaceRecordId.set(id);
+  _activeRootWorkspaceId.set(id);
 }
 
 /** Test hook — reset in-memory state so tests start clean. */
 export function resetWorkspacesForTest(): void {
   _workspaces.set([]);
-  _activeWorkspaceRecordId.set(null);
-  _workspaceRecordsLoaded = false;
+  _activeRootWorkspaceId.set(null);
+  _rootWorkspacesLoaded = false;
 }

@@ -5,11 +5,11 @@
  *   1. switchWorkspace records lastActiveBranchedWorkspaceId on Workspace
  *   2. switchWorkspace does NOT record when child has no rootWorkspaceId
  *   3. activateWorkspace lands on the Workspace's own Root (the runtime
- *      workspace whose id matches the Record id) even when
+ *      workspace whose id matches the RootWorkspace id) even when
  *      lastActiveBranchedWorkspaceId points at a sibling Branch. lastActive
  *      is preserved as a tracking field but does NOT route row activations.
  *   4. activateWorkspace materializes a Root runtime workspace at the
- *      Record's id when none exists yet (lazy materialization on click).
+ *      RootWorkspace's id when none exists yet (lazy materialization on click).
  *
  * S9 tests:
  *   5. autoRunRestoreCommands=true → startupCommand set directly (not pendingRestoreCommand)
@@ -27,7 +27,7 @@ import { activateWorkspace, addWorkspace } from "../workspace-service";
 import { resetWorkspacesForTest, getWorkspace } from "../../stores/workspace";
 import { rootRowOrder } from "../../stores/root-row-order";
 import type { Workspace } from "../../types";
-import type { WorkspaceRecord } from "../../config";
+import type { RootWorkspace } from "../../config";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn().mockResolvedValue(undefined),
@@ -77,8 +77,8 @@ function makeChild(id: string, rootWorkspaceId?: string): Workspace {
 
 function makeWorkspace(
   id: string,
-  overrides: Partial<WorkspaceRecord> = {},
-): WorkspaceRecord {
+  overrides: Partial<RootWorkspace> = {},
+): RootWorkspace {
   return {
     id,
     name: `Workspace ${id}`,

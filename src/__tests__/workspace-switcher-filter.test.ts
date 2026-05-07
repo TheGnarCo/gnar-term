@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { filterWorkspaces } from "../lib/services/workspace-switcher-filter";
 import type { Workspace } from "../lib/types";
-import type { WorkspaceRecord } from "../lib/config";
+import type { RootWorkspace } from "../lib/config";
 
 // ---- Minimal stubs ----
 
@@ -22,7 +22,7 @@ function makeWs(
   } as Workspace;
 }
 
-function makeRoot(id: string, name: string): WorkspaceRecord {
+function makeRoot(id: string, name: string): RootWorkspace {
   return {
     id,
     name,
@@ -53,7 +53,7 @@ const standaloneWs = makeWs({ id: "nw-5", name: "standalone" });
 
 const allWorkspaces = [...branchesOfA, ...branchesOfB, standaloneWs];
 
-const rootMap = new Map<string, WorkspaceRecord>([
+const rootMap = new Map<string, RootWorkspace>([
   ["ws-a", rootA],
   ["ws-b", rootB],
 ]);
@@ -95,9 +95,10 @@ describe("filterWorkspaces — branch ordering within a Root", () => {
   });
 
   it("groups the Root workspace itself under its own header, above its dashboards", () => {
-    // ADR-004: the Root runtime Workspace shares its id with the Record,
-    // and its `rootWorkspaceId` is undefined. It should still appear
-    // nested under its own group, sorted as the type-0 main entry.
+    // ADR-004: the Root runtime Workspace shares its id with the
+    // RootWorkspace, and its `rootWorkspaceId` is undefined. It should
+    // still appear nested under its own group, sorted as the type-0
+    // main entry.
     const root = makeRoot("ws-x", "Agent Skills");
     const rootSelf = makeWs({ id: "ws-x", name: "Agent Skills" });
     const settings = makeWs({
@@ -284,7 +285,7 @@ describe("filterWorkspaces — flat mode (no rootWorkspaces)", () => {
     makeWs({ id: "nw-5", name: "standalone" }),
   ];
 
-  const flatRootMap = new Map<string, WorkspaceRecord>([
+  const flatRootMap = new Map<string, RootWorkspace>([
     ["ws-a", makeRoot("ws-a", "Alpha Root")],
     ["ws-b", makeRoot("ws-b", "Beta Corp")],
   ]);

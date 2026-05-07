@@ -9,7 +9,7 @@
 
   import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
   import { eventBus, type ExtensionEvent } from "../services/event-bus";
-  import type { WorkspaceRecord } from "../config";
+  import type { RootWorkspace } from "../config";
   import { workspacesStore, getWorkspace } from "../stores/workspace";
   import {
     deleteWorkspace,
@@ -84,7 +84,7 @@
    */
   export let popoverActive: boolean = false;
 
-  let workspace: WorkspaceRecord | undefined;
+  let workspace: RootWorkspace | undefined;
   let stateVersion = 0;
 
   const onWorkspaceStateChanged = () => {
@@ -118,9 +118,9 @@
   // happening in a child Workspace.
   $: filterIds = workspace ? new Set([workspace.id]) : new Set<string>();
 
-  // The Root runtime Workspace shares its id with the Record (ADR-004).
-  // It drives the container row's status dot and renders when the row
-  // is clicked.
+  // The Root runtime Workspace shares its id with its RootWorkspace
+  // entry (ADR-004). It drives the container row's status dot and
+  // renders when the row is clicked.
   $: primaryWs = workspace
     ? $workspaces.find((w) => w.id === workspace!.id)
     : undefined;

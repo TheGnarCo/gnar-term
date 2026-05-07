@@ -246,7 +246,7 @@ export async function createWorkspaceFromDef(
     );
     // Branches (have rootWorkspaceId) live nested inside their root and
     // never get a row of their own. Roots get a `kind: "workspace"` row
-    // here; the matching WorkspaceRecord append (via `addWorkspace`)
+    // here; the matching RootWorkspace append (via `addWorkspace`)
     // is idempotent on the same id+kind.
     if (typeof ws.rootWorkspaceId !== "string") {
       appendRootRow({ kind: "workspace", id: ws.id });

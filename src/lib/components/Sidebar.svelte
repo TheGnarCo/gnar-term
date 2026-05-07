@@ -26,6 +26,7 @@
   import ArchiveZone from "./ArchiveZone.svelte";
   import SidebarResizeHandle from "./SidebarResizeHandle.svelte";
   import NewWorkspaceSplitButton from "./NewWorkspaceSplitButton.svelte";
+  import DragGrip from "./DragGrip.svelte";
 
   const iconSvgMap: Record<string, string> = {
     plus: `<line x1="8" y1="3" x2="8" y2="13" /><line x1="3" y1="8" x2="13" y2="8" />`,
@@ -66,19 +67,11 @@
     });
 
   let hoveredCollapsedRow: CollapsedRow | null = null;
-  let railBannerTop = 0;
-  let railContainerEl: HTMLElement | null = null;
-  let railStripEls: (HTMLElement | null)[] = [];
   let railCloseTimer: ReturnType<typeof setTimeout> | null = null;
 
-  function handleRailEnter(row: CollapsedRow, idx: number) {
+  function handleRailEnter(row: CollapsedRow) {
     cancelRailClose();
     hoveredCollapsedRow = row;
-    if (railContainerEl && railStripEls[idx]) {
-      const containerRect = railContainerEl.getBoundingClientRect();
-      const stripRect = railStripEls[idx]!.getBoundingClientRect();
-      railBannerTop = stripRect.top - containerRect.top;
-    }
   }
 
   function scheduleRailClose() {
@@ -111,8 +104,10 @@
   class:collapsed={!$sidebarVisible}
   role="presentation"
   style="
-    width: {$sidebarVisible ? `${$sidebarWidth}px` : '12px'};
-    background: {$sidebarVisible ? $theme.sidebarBg : 'transparent'};
+    width: {$sidebarVisible ? `${$sidebarWidth}px` : '8px'};
+    background: {$sidebarVisible
+    ? $theme.sidebarBg
+    : ($theme.bg ?? 'transparent')};
     display: flex;
     overflow: {$sidebarVisible ? 'hidden' : 'visible'};
     font-size: 13px;
@@ -185,12 +180,12 @@
       />
     </div>
   {:else}
-    <!-- Collapsed: workspace rail strips float over the terminal as an overlay.
-         The sidebar takes 0px layout space; the strips are absolutely positioned
-         so the terminal background fills the full screen. -->
-    <!-- svelte-ignore a11y-no-static-element-interactions -->
+    <!-- Collapsed: the 8px sidebar is the same background as the terminal so
+         there is no visual border. Each workspace row renders its DragGrip
+         (the frit-pattern rail) at full row height. Hovering reveals a banner
+         that extends to the right, styled identically to ContainerRow's banner
+         so it feels like revealing the hidden portion of the row. -->
     <div
-      bind:this={railContainerEl}
       data-collapsed-rail
       style="
         position: absolute;
@@ -200,56 +195,64 @@
         display: flex;
         flex-direction: column;
         padding: 8px 0;
-        gap: 4px;
+        gap: 2px;
       "
     >
-      {#each collapsedRows as row, idx (row.id)}
+      {#each collapsedRows as row (row.id)}
         <!-- svelte-ignore a11y-no-static-element-interactions -->
         <div
-          bind:this={railStripEls[idx]}
-          on:mouseenter={() => handleRailEnter(row, idx)}
+          on:mouseenter={() => handleRailEnter(row)}
           on:mouseleave={scheduleRailClose}
           on:mousedown={() => void activateWorkspace(row.id)}
           style="
-            width: {row.isActive ? 12 : 5}px;
-            height: 32px;
-            border-radius: 2px;
-            background: {row.color};
-            opacity: {row.isActive ? 1 : 0.3};
-            cursor: pointer;
-            flex-shrink: 0;
-            transition: opacity 0.1s;
-          "
-        ></div>
-      {/each}
-
-      {#if hoveredCollapsedRow !== null}
-        <!-- svelte-ignore a11y-no-static-element-interactions -->
-        <div
-          on:mouseenter={cancelRailClose}
-          on:mouseleave={scheduleRailClose}
-          on:mousedown={() => void activateWorkspace(hoveredCollapsedRow!.id)}
-          style="
-            position: absolute;
-            left: 16px;
-            top: {railBannerTop}px;
-            height: 32px;
+            position: relative;
             display: flex;
-            align-items: center;
-            background: {$theme.bgHighlight};
-            border-left: 3px solid {hoveredCollapsedRow.color};
-            border-radius: 0 6px 6px 0;
-            padding: 0 10px;
-            color: {$theme.fg};
+            align-items: stretch;
+            min-height: 40px;
             cursor: pointer;
-            z-index: 100;
-            box-shadow: 4px 0 16px rgba(0,0,0,0.45);
-            white-space: nowrap;
+            overflow: visible;
           "
         >
-          <span style="font-size: 13px;">{hoveredCollapsedRow.name}</span>
+          <DragGrip
+            theme={$theme}
+            visible={hoveredCollapsedRow?.id === row.id}
+            railColor={row.color}
+            railOpacity={row.isActive ? 1 : 0.35}
+            alwaysShowDots={true}
+          />
+          {#if hoveredCollapsedRow?.id === row.id}
+            <!-- svelte-ignore a11y-no-static-element-interactions -->
+            <div
+              on:mouseenter={cancelRailClose}
+              on:mouseleave={scheduleRailClose}
+              on:mousedown|stopPropagation={() =>
+                void activateWorkspace(row.id)}
+              style="
+                position: absolute;
+                left: 8px;
+                top: 0;
+                bottom: 0;
+                display: flex;
+                align-items: center;
+                padding: 4px 12px 4px 8px;
+                background: {$theme.bgHighlight ?? $theme.bg};
+                color: {$theme.fg};
+                border-top: 1px solid {$theme.border ?? 'transparent'};
+                border-right: 1px solid {$theme.border ?? 'transparent'};
+                border-bottom: 1px solid {$theme.border ?? 'transparent'};
+                border-left: none;
+                border-radius: 0 6px 6px 0;
+                cursor: pointer;
+                white-space: nowrap;
+                z-index: 100;
+                font-size: 13px;
+              "
+            >
+              {row.name}
+            </div>
+          {/if}
         </div>
-      {/if}
+      {/each}
     </div>
   {/if}
 </div>

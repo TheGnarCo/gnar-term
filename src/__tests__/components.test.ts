@@ -1722,16 +1722,16 @@ describe("Sidebar", () => {
     expect(container.querySelector("#sidebar")).toBeTruthy();
   });
 
-  it("sidebar takes active-rail width when collapsed (terminal content offset by rail width)", () => {
+  it("sidebar takes DragGrip width when collapsed (terminal content offset by 8px)", () => {
     sidebarVisible.set(false);
     const { container } = render(Sidebar, { props: sidebarProps });
     const slot = container.querySelector("#sidebar") as HTMLElement | null;
     expect(slot).not.toBeNull();
     expect(slot!.classList.contains("collapsed")).toBe(true);
-    // 12px matches the active workspace rail width — terminal content is pushed
-    // right by that amount while the sidebar background stays transparent.
+    // 8px matches the DragGrip frit-pattern width — terminal content is pushed
+    // right by that amount; no sidebar chrome is visible (bg matches terminal).
     const widthPx = parseInt(slot!.style.width, 10);
-    expect(widthPx).toBe(12);
+    expect(widthPx).toBe(8);
   });
 
   it("does not render the + New split button inline when collapsed", () => {

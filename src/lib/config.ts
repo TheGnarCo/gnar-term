@@ -241,6 +241,9 @@ export interface AppState {
   archivedDefs?: {
     workspaces: Record<string, ArchivedWorkspaceDef>;
   };
+  // Primary sidebar expanded (true) / collapsed (false). See stores/ui.ts
+  // and services/sidebar-persistence-service.ts.
+  sidebarVisible?: boolean;
 }
 
 export interface ArchivedWorkspaceDef {

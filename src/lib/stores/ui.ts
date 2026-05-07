@@ -5,12 +5,13 @@ export const isFullscreen = writable<boolean>(false);
 
 /**
  * Primary sidebar expanded/collapsed state. Persisted in AppState as
- * `sidebarVisible.primary`.
+ * `sidebarVisible` (boolean) by `sidebar-persistence-service` so the
+ * user's choice survives across launches.
  *
  *   true  — expanded: full-width sidebar takes layout space.
- *   false — collapsed: 8px rail-only slot; full sidebar appears as
- *           a hover-triggered overlay over the terminal area, and
- *           the "+ New" split button moves to the TitleBar.
+ *   false — collapsed: 4px rail-only slot; full sidebar appears as
+ *           a per-row popover over the terminal area, and the
+ *           "+ New" split button moves to the TitleBar.
  *
  * The boolean keeps its historical name (and persisted key) for
  * AppState migration — pre-existing `false` values now read as

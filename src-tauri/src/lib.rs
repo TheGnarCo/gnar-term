@@ -166,15 +166,22 @@ fn get_cli_args(args: tauri::State<'_, CliArgs>) -> CliArgs {
     args.inner().clone()
 }
 
-/// Read the `mcp` setting from `gnar-term.json`. Returns `"auto"` if no
-/// config exists or the field is missing. Values that aren't recognized fall
-/// back to `"auto"`.
+/// Read the `mcp` setting from a settings file. Probe order matches the
+/// frontend's `loadConfig` priority in `src/lib/config.ts`: per-project
+/// `settings.json` first, then legacy `gnar-term.json` / `cmux.json`,
+/// then global `~/.config/gnar-term/settings.json` and its legacy peers.
+/// Returns `"auto"` if no config exists or the field is missing. Values
+/// that aren't recognized fall back to `"auto"`.
 fn read_mcp_setting() -> String {
     let paths: Vec<std::path::PathBuf> = {
         let mut v = Vec::new();
+        v.push(std::path::PathBuf::from("settings.json"));
         v.push(std::path::PathBuf::from("gnar-term.json"));
         v.push(std::path::PathBuf::from("cmux.json"));
         if let Ok(config_dir) = global_config_dir() {
+            v.push(std::path::PathBuf::from(format!(
+                "{config_dir}/settings.json"
+            )));
             v.push(std::path::PathBuf::from(format!(
                 "{config_dir}/gnar-term.json"
             )));

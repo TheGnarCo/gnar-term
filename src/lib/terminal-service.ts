@@ -151,6 +151,14 @@ export const fontReady = detectFont().then((f) => {
   resolvedFontFamily = f;
 });
 
+// User-supplied fontFamily wins over auto-detection. The bundled+system
+// fallbacks are always appended so a typo or missing font still renders.
+function effectiveFontFamily(): string {
+  const userFont = getConfig().fontFamily?.trim();
+  if (userFont) return `${userFont}, ${BUNDLED_FONT}, ${SYSTEM_FALLBACK}`;
+  return resolvedFontFamily;
+}
+
 // --- Flow Control ---
 
 const ptyBuffers = new Map<number, Uint8Array[]>();
@@ -1038,7 +1046,7 @@ export async function createTerminalSurface(
   const terminal = new Terminal({
     cursorBlink: true,
     fontSize: getConfig().fontSize ?? 14,
-    fontFamily: resolvedFontFamily,
+    fontFamily: effectiveFontFamily(),
     theme: currentXtermTheme,
     allowProposedApi: true,
     scrollback: config.scrollback ?? 10000,
@@ -1187,6 +1195,33 @@ export function adjustFontSize(delta: number): void {
         } catch {
           // No-op if renderer doesn't support atlas clearing
         }
+      }
+    }
+  }
+}
+
+/**
+ * Push the current effective fontFamily to every mounted terminal. Mirrors
+ * adjustFontSize's atlas-invalidation + fit dance so glyph metrics stay in
+ * sync. Call after settings persist a new fontFamily.
+ */
+export function applyFontFamily(): void {
+  const next = effectiveFontFamily();
+  const wsList = get(workspaces);
+  for (const ws of wsList) {
+    for (const s of getAllSurfaces(ws)) {
+      if (!isTerminalSurface(s)) continue;
+      if (s.terminal.options.fontFamily === next) continue;
+      s.terminal.options.fontFamily = next;
+      try {
+        s.fitAddon.fit();
+      } catch {
+        // May fail if terminal is not attached to DOM yet — safe to ignore
+      }
+      try {
+        s.terminal.clearTextureAtlas?.();
+      } catch {
+        // No-op if renderer doesn't support atlas clearing
       }
     }
   }

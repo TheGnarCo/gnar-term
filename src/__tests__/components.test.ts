@@ -119,6 +119,7 @@ import CommandPalette from "../lib/components/CommandPalette.svelte";
 import WorkspaceItem from "../lib/components/WorkspaceItem.svelte";
 import PaneView from "../lib/components/PaneView.svelte";
 import Sidebar from "../lib/components/Sidebar.svelte";
+import NewWorkspaceSplitButton from "../lib/components/NewWorkspaceSplitButton.svelte";
 import TerminalSurfaceComponent from "../lib/components/TerminalSurface.svelte";
 import WorkspaceSectionHarness from "./workspace-section-harness.svelte";
 
@@ -1589,6 +1590,53 @@ describe("PaneView", () => {
 // ===========================================================================
 // Sidebar
 // ===========================================================================
+
+describe("NewWorkspaceSplitButton", () => {
+  beforeEach(() => {
+    resetWorkspaceActions();
+    cleanup();
+  });
+
+  it("renders + New and a search button when core action is registered", () => {
+    registerWorkspaceAction({
+      id: "core:new-workspace",
+      label: "New Workspace",
+      icon: "plus",
+      source: "core",
+      handler: noop,
+    });
+    const { container } = render(NewWorkspaceSplitButton);
+    const buttons = container.querySelectorAll("button");
+    expect(buttons.length).toBe(2);
+    expect(buttons[0].textContent?.trim()).toBe("+ New");
+    expect(buttons[1].getAttribute("title")).toMatch(/Switch Workspace/);
+  });
+
+  it("invokes the core action handler when + New is clicked", async () => {
+    const handler = vi.fn();
+    registerWorkspaceAction({
+      id: "core:new-workspace",
+      label: "New Workspace",
+      icon: "plus",
+      source: "core",
+      handler,
+    });
+    const { container } = render(NewWorkspaceSplitButton);
+    const newBtn = container.querySelectorAll("button")[0] as HTMLButtonElement;
+    await fireEvent.click(newBtn);
+    expect(handler).toHaveBeenCalledOnce();
+  });
+
+  it("falls back to the search-only button when no core action is registered", () => {
+    const { container } = render(NewWorkspaceSplitButton);
+    // No "+ New" — only a single search button (SidebarActionButton fallback).
+    expect(
+      Array.from(container.querySelectorAll("button")).find(
+        (b) => b.textContent?.trim() === "+ New",
+      ),
+    ).toBeUndefined();
+  });
+});
 
 describe("Sidebar", () => {
   const sidebarProps = {

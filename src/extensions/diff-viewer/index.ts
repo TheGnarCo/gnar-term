@@ -25,31 +25,6 @@ export const diffViewerManifest: ExtensionManifest = {
       { id: "compare-branches", title: "Compare Branches..." },
     ],
     contextMenuItems: [{ id: "diff-file", label: "Show Diff", when: "*" }],
-    settings: {
-      fields: {
-        diffMode: {
-          type: "select",
-          title: "Diff Display Mode",
-          default: "unified",
-          options: [
-            { label: "Unified", value: "unified" },
-            { label: "Side by Side", value: "side-by-side" },
-          ],
-        },
-        contextLines: {
-          type: "number",
-          title: "Context Lines",
-          description: "Number of context lines around each change",
-          default: 3,
-        },
-        ignoreWhitespace: {
-          type: "boolean",
-          title: "Ignore Whitespace",
-          description: "Exclude whitespace-only changes from diffs",
-          default: false,
-        },
-      },
-    },
     events: ["workspace:activated"],
   },
 };

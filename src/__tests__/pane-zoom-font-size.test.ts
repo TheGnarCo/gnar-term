@@ -57,12 +57,6 @@ vi.mock("@xterm/addon-webgl", () => ({
     onContextLoss = vi.fn();
   },
 }));
-vi.mock("@xterm/addon-web-links", () => ({
-  WebLinksAddon: class {
-    activate = vi.fn();
-    dispose = vi.fn();
-  },
-}));
 vi.mock("@xterm/addon-search", () => ({
   SearchAddon: class {
     activate = vi.fn();

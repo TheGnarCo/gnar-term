@@ -263,19 +263,28 @@ export const SETTINGS_SECTIONS: SchemaSection[] = [
     ownsKeys: ["sandbox"],
     fields: [
       {
-        key: "sandbox.enabled",
-        label: "Sandbox enabled",
-        description: "Run commands inside a security sandbox.",
+        key: "sandbox.allowUnsandboxedCommands",
+        label: "Allow unsandboxed commands",
+        description:
+          "When true, Claude Code may run shell commands outside the sandbox without prompting.",
         type: "boolean",
         default: false,
       },
       {
-        key: "sandbox.failIfUnavailable",
-        label: "Fail if sandbox unavailable",
+        key: "sandbox.excludedCommands",
+        label: "Excluded commands",
         description:
-          "Error instead of falling back when sandbox is not available.",
-        type: "boolean",
-        default: false,
+          "Commands that bypass the sandbox (e.g. git, gh). These run with full filesystem and network access.",
+        type: "string-list",
+        default: [],
+      },
+      {
+        key: "sandbox.filesystem.allowWrite",
+        label: "Filesystem write allowlist",
+        description:
+          "Paths the sandbox may write to. Supports absolute paths, ~ expansion, and glob patterns.",
+        type: "string-list",
+        default: [],
       },
     ],
   },

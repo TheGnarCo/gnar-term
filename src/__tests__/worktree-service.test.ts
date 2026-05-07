@@ -165,13 +165,11 @@ describe("Worktree settings defaults", () => {
       branchPrefix: "feat/",
       copyPatterns: ".env",
       setupScript: "npm install",
-      mergeStrategy: "squash",
     };
     expect(getWorktreeSettings()).toEqual({
       branchPrefix: "feat/",
       copyPatterns: ".env",
       setupScript: "npm install",
-      mergeStrategy: "squash",
     });
   });
 });

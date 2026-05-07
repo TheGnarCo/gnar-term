@@ -1,6 +1,6 @@
 {
   "identifier": "default",
-  "description": "Default capability for ClawTab",
+  "description": "Default capability for GnarTerm",
   "windows": ["main"],
   "permissions": [
     "core:default",

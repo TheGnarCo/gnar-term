@@ -15,7 +15,6 @@ export default tseslint.config(
       // (TypeError: Cannot read properties of undefined reading 'type') due to a bug
       // in svelte-eslint-parser with {@const} blocks in Svelte templates.
       // TODO: Re-test after svelte-eslint-parser > 1.6.0 — remove exclusions if fixed.
-      "src/lib/components/SettingsOverlay.svelte",
       "src/lib/components/WorkspaceItem.svelte",
     ],
   },

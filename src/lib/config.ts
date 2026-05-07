@@ -151,7 +151,6 @@ export interface WorktreesSettings {
   branchPrefix?: string;
   copyPatterns?: string;
   setupScript?: string;
-  mergeStrategy?: "merge" | "squash" | "rebase";
 }
 
 export interface WorktreesConfig {
@@ -199,7 +198,6 @@ export interface GnarTermConfig {
   theme?: string;
   fontSize?: number;
   fontFamily?: string;
-  opacity?: number;
   scrollback?: number;
   shell?: string;
   autoload?: string[]; // workspace command names to launch on startup
@@ -233,8 +231,6 @@ export interface GnarTermConfig {
 }
 
 export interface AppState {
-  sidebarWidths?: { primary?: number; secondary?: number };
-  sidebarVisible?: { primary?: boolean; secondary?: boolean };
   windowBounds?: { x?: number; y?: number; width?: number; height?: number };
   workspaces?: WorkspaceDef[];
   activeWorkspaceId?: string;

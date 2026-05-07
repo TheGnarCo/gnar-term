@@ -71,30 +71,30 @@ export function filterWorkspaces(
 
   for (let idx = 0; idx < workspaces.length; idx++) {
     const ws = workspaces[idx]!;
-    // A workspace belongs to a Root group if it points at one (branches +
+    // A workspace nests under a Root if it points at one (branches +
     // dashboards) or if it IS the Root itself (the runtime entry shares
     // its id with the Record per ADR-004).
-    const parentRootId = ws.rootWorkspaceId;
+    const rootRef = ws.rootWorkspaceId;
     const isOwnRoot = rootIds.has(ws.id);
-    const groupRootId = isOwnRoot
+    const bucketRootId = isOwnRoot
       ? ws.id
-      : parentRootId && rootIds.has(parentRootId)
-        ? parentRootId
+      : rootRef && rootIds.has(rootRef)
+        ? rootRef
         : undefined;
-    const root = groupRootId ? rootMap.get(groupRootId) : undefined;
+    const root = bucketRootId ? rootMap.get(bucketRootId) : undefined;
 
     const row: SwitcherRow = {
       ws,
       idx,
       rootLabel: root?.name ?? "",
       kind: "branch",
-      depth: groupRootId ? 1 : 0,
+      depth: bucketRootId ? 1 : 0,
     };
 
-    if (groupRootId) {
-      const bucket = byRoot.get(groupRootId) ?? [];
+    if (bucketRootId) {
+      const bucket = byRoot.get(bucketRootId) ?? [];
       bucket.push(row);
-      byRoot.set(groupRootId, bucket);
+      byRoot.set(bucketRootId, bucket);
     } else {
       standaloneRows.push(row);
     }

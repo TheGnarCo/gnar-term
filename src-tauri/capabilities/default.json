@@ -1,6 +1,6 @@
 {
   "identifier": "default",
-  "description": "Default capability for ClawTab",
+  "description": "Default capability for GnarTerm",
   "windows": ["main"],
   "permissions": [
     "core:default",
@@ -8,7 +8,18 @@
     "core:event:allow-listen",
     "core:event:allow-emit",
     "core:window:allow-start-dragging",
+    "core:window:allow-close",
+    "core:window:allow-destroy",
+    "core:image:default",
     "clipboard-manager:allow-read-text",
-    "clipboard-manager:allow-write-text"
+    "clipboard-manager:allow-write-text",
+    "clipboard-manager:allow-write-image",
+    "dialog:allow-open",
+    "dialog:allow-ask",
+    "dialog:allow-message",
+    "notification:default",
+    "updater:default",
+    "process:default",
+    "process:allow-restart"
   ]
 }

@@ -102,9 +102,9 @@
   role="presentation"
   style="
     width: {$sidebarVisible ? `${$sidebarWidth}px` : `${RAIL_WIDTH_PX}px`};
-    background: {$theme.sidebarBg};
+    background: {$sidebarVisible ? $theme.sidebarBg : 'transparent'};
     display: flex;
-    overflow: {!$sidebarVisible && overlayActive ? 'visible' : 'hidden'};
+    overflow: hidden;
     font-size: 13px;
     flex-shrink: 0;
     position: relative;
@@ -122,11 +122,9 @@
       width: {$sidebarVisible ? '100%' : `${$sidebarWidth}px`};
       height: 100%;
       display: flex;
-      background: {$theme.sidebarBg};
+      background: {$sidebarVisible ? $theme.sidebarBg : 'transparent'};
       transition: box-shadow 120ms ease;
-      {$sidebarVisible
-      ? ''
-      : `position: absolute; left: 0; top: 0; z-index: 100; ${overlayActive ? 'box-shadow: 0 0 24px rgba(0, 0, 0, 0.45);' : ''}`}
+      {$sidebarVisible ? '' : 'position: absolute; left: 0; top: 0;'}
     "
   >
     <div

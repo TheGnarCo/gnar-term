@@ -48,7 +48,10 @@ import {
   createDialogPrefill,
 } from "../stores/workspaces-ui";
 import { invoke } from "@tauri-apps/api/core";
-import { createWorkspaceFromDef } from "../services/workspace-runtime-service";
+import {
+  createWorkspaceFromDef,
+  switchWorkspace,
+} from "../services/workspace-runtime-service";
 import type { WorkspaceTemplate } from "../config";
 
 /**
@@ -143,7 +146,7 @@ function openCreateDialog(prefill?: {
  * and spawn its Dashboard child workspace. Returns the new workspace
  * id on success, null on cancel.
  */
-async function createWorkspaceFlow(prefill?: {
+export async function createWorkspaceFlow(prefill?: {
   path: string;
   name?: string;
 }): Promise<string | null> {
@@ -210,6 +213,14 @@ async function createWorkspaceFlow(prefill?: {
     );
   }
 
+  // Each auto-provisioned dashboard goes through createWorkspaceFromDef,
+  // which auto-switches activeWorkspaceIdx to the freshly created
+  // dashboard. Restore the active workspace to the workspace itself so
+  // the user lands on the workspace's tabs surface, not Settings.
+  const newIdx = get(workspaces).findIndex((w) => w.id === id);
+  if (newIdx >= 0 && newIdx !== get(activeWorkspaceIdx)) {
+    switchWorkspace(newIdx);
+  }
   setActiveWorkspaceId(id);
   return id;
 }

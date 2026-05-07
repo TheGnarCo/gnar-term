@@ -4,11 +4,13 @@
    * container banners (Workspaces + agent dashboards). Renders two lines:
    *
    *   1. the last two path segments (e.g. `Code/my-repo`)
-   *   2. git branch when the path is a git repo
+   *   2. git branch when the active terminal is inside a git repo
    *
    * Generic over the target — callers pass an object with `{ id, path,
-   * isGit }`. The id drives caching so switching between Workspaces /
-   * dashboards reseeds the poll loop.
+   * isGit }`. The branch read subscribes to the status registry, which
+   * the git-status-service keeps in sync with the workspace's live PTY
+   * CWD (OSC 7 / .git/index watcher). That way `cd` between worktrees
+   * inside a workspace reflects in the banner without a stale 45s poll.
    *
    * The uncommitted-changes badge previously lived here; it moved to
    * the per-workspace Diff dashboard contribution. Open PR badges also
@@ -16,8 +18,9 @@
    * the Workspace Overview Dashboard, which has the room to render the
    * full list without crowding the banner.
    */
-  import { onDestroy, getContext } from "svelte";
+  import { getContext } from "svelte";
   import { EXTENSION_API_KEY, type ExtensionAPI } from "../../extensions/api";
+  import { getWorkspaceStatusByCategory } from "../services/status-registry";
 
   export let target: {
     id: string;
@@ -40,58 +43,13 @@
   $: themeMuted = ($theme["fgMuted"] ?? $theme.fgDim) as string;
   $: fgMuted = fgColor ?? themeMuted;
 
-  interface BranchInfo {
-    name: string;
-    is_current: boolean;
-    is_remote: boolean;
-  }
-
-  let branch: string | null = null;
-  let branchError = false;
-  let lastTargetId: string | null = null;
-
-  const REFRESH_MS = 45_000;
-
-  async function refreshBranch(): Promise<void> {
-    try {
-      const branches = await api.invoke<BranchInfo[]>("list_branches", {
-        repoPath: target.path,
-        includeRemote: false,
-      });
-      const current = branches.find((b) => b.is_current);
-      branch = current?.name ?? null;
-      branchError = false;
-    } catch {
-      branch = null;
-      branchError = true;
-    }
-  }
-
-  let timer: ReturnType<typeof setInterval> | null = null;
-
-  function start(id: string): void {
-    if (timer) clearInterval(timer);
-    lastTargetId = id;
-    void refreshBranch();
-    timer = setInterval(() => void refreshBranch(), REFRESH_MS);
-  }
-
-  function stop(): void {
-    if (timer) {
-      clearInterval(timer);
-      timer = null;
-    }
-  }
-
-  $: if (target?.isGit) {
-    if (target.id !== lastTargetId) start(target.id);
-  } else {
-    stop();
-    branch = null;
-    lastTargetId = null;
-  }
-
-  onDestroy(() => stop());
+  // Subscribe to git status items the git-status-service publishes for
+  // this workspace. The `branch` item's label is `<branch>` plus an
+  // optional ` +N -M` suffix; we strip the suffix so the banner shows
+  // just the bare branch name.
+  $: gitStatusStore = getWorkspaceStatusByCategory(target.id, "git");
+  $: branchItem = $gitStatusStore.find((i) => i.id.endsWith(":branch"));
+  $: branch = branchItem ? (branchItem.label.split(" ")[0] ?? null) : null;
 
   $: showFirstRow = Boolean(target?.path);
   $: prettyPath = target?.path
@@ -133,9 +91,7 @@
     {#if target.isGit}
       <div
         style="display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden;"
-        title={branchError
-          ? "Failed to read branch"
-          : (branch ?? "detached HEAD")}
+        title={branch ?? "detached HEAD"}
       >
         <svg
           width="10"

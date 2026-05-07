@@ -1722,18 +1722,15 @@ describe("Sidebar", () => {
     expect(container.querySelector("#sidebar")).toBeTruthy();
   });
 
-  it("renders a fixed-width rail slot when collapsed (sidebarVisible=false)", () => {
+  it("sidebar takes zero layout width when collapsed (rails float as overlay)", () => {
     sidebarVisible.set(false);
     const { container } = render(Sidebar, { props: sidebarProps });
     const slot = container.querySelector("#sidebar") as HTMLElement | null;
     expect(slot).not.toBeNull();
     expect(slot!.classList.contains("collapsed")).toBe(true);
-    // Wide enough to show the 8px grip rail plus a sliver of banner
-    // past it, but not so wide that row content (icons, labels) leaks
-    // into the collapsed slot.
+    // Width is 0 so the terminal fills the full screen; rails float as an overlay.
     const widthPx = parseInt(slot!.style.width, 10);
-    expect(widthPx).toBeGreaterThanOrEqual(10);
-    expect(widthPx).toBeLessThan(20);
+    expect(widthPx).toBe(0);
   });
 
   it("does not render the + New split button inline when collapsed", () => {
@@ -1753,43 +1750,23 @@ describe("Sidebar", () => {
     expect(inlineNewButton).toBeUndefined();
   });
 
-  it("activates the overlay on hover when collapsed", async () => {
+  it("renders floating rail overlay and not sidebar-content when collapsed", () => {
     sidebarVisible.set(false);
     sidebarWidth.set(220);
     const { container } = render(Sidebar, { props: sidebarProps });
     const slot = container.querySelector("#sidebar") as HTMLElement;
-    const inner = slot.querySelector(".sidebar-content") as HTMLElement;
-
-    expect(inner.style.width).toBe("220px");
-    expect(slot.classList.contains("overlay-active")).toBe(false);
-
-    slot.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
-    await tick();
-
-    expect(slot.classList.contains("overlay-active")).toBe(true);
+    // Full sidebar content is not rendered when collapsed
+    expect(slot.querySelector(".sidebar-content")).toBeNull();
+    // Floating rail overlay is rendered instead
+    expect(slot.querySelector("[data-collapsed-rail]")).not.toBeNull();
+    // Sidebar overflows visibly so floating banners can escape the 0px slot
+    expect(slot.style.overflow).toBe("visible");
   });
 
-  it("closes the overlay after the mouseleave grace period", async () => {
-    vi.useFakeTimers();
-    try {
-      sidebarVisible.set(false);
-      const { container } = render(Sidebar, { props: sidebarProps });
-      const slot = container.querySelector("#sidebar") as HTMLElement;
-
-      slot.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
-      await tick();
-      expect(slot.classList.contains("overlay-active")).toBe(true);
-
-      slot.dispatchEvent(new MouseEvent("mouseleave", { bubbles: true }));
-      await tick();
-      expect(slot.classList.contains("overlay-active")).toBe(true);
-
-      vi.advanceTimersByTime(200);
-      await tick();
-      expect(slot.classList.contains("overlay-active")).toBe(false);
-    } finally {
-      vi.useRealTimers();
-    }
+  it("does not render ArchiveZone when collapsed", () => {
+    sidebarVisible.set(false);
+    const { container } = render(Sidebar, { props: sidebarProps });
+    expect(container.querySelector("[data-archive-zone]")).toBeNull();
   });
 
   it("renders split button for workspace actions in the top row (sidebar toggles live in TitleBar)", () => {

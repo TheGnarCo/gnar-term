@@ -16,18 +16,16 @@
   import { sidebarSectionStore } from "../services/sidebar-section-registry";
   import { workspaceActionStore } from "../services/workspace-action-registry";
   import { primarySections } from "../stores/mcp-sidebar";
+  import { workspaces, activeWorkspaceId } from "../stores/workspace";
+  import { rootRowOrder } from "../stores/root-row-order";
+  import { activateWorkspace } from "../services/workspace-service";
   import WorkspaceListBlock from "./WorkspaceListBlock.svelte";
   import SidebarSectionBlock from "./SidebarSectionBlock.svelte";
   import SidebarActionButton from "./SidebarActionButton.svelte";
   import McpSidebarSection from "./McpSidebarSection.svelte";
   import ArchiveZone from "./ArchiveZone.svelte";
   import SidebarResizeHandle from "./SidebarResizeHandle.svelte";
-  import CollapsedRailView from "./CollapsedRailView.svelte";
   import NewWorkspaceSplitButton from "./NewWorkspaceSplitButton.svelte";
-
-  // Width of the rail-only slot when the sidebar is collapsed.
-  // Matches the DragGrip frit-pattern width (8px).
-  const RAIL_WIDTH_PX = 8;
 
   const iconSvgMap: Record<string, string> = {
     plus: `<line x1="8" y1="3" x2="8" y2="13" /><line x1="3" y1="8" x2="13" y2="8" />`,
@@ -41,8 +39,63 @@
   }
 
   let collapsedSections: Record<string, boolean> = {};
-
   let workspaceListBlock: WorkspaceListBlock;
+
+  // ---------------------------------------------------------------------------
+  // Collapsed rail state
+  // ---------------------------------------------------------------------------
+
+  type CollapsedRow = {
+    id: string;
+    name: string;
+    color: string;
+    isActive: boolean;
+  };
+
+  $: wsMap = new Map($workspaces.map((w) => [w.id, w]));
+  $: collapsedRows = $rootRowOrder
+    .filter((r) => r.kind === "workspace")
+    .map((r): CollapsedRow => {
+      const ws = wsMap.get(r.id);
+      return {
+        id: r.id,
+        name: ws?.name ?? r.id,
+        color: ws?.color ?? $theme.accent,
+        isActive: r.id === $activeWorkspaceId,
+      };
+    });
+
+  let hoveredCollapsedRow: CollapsedRow | null = null;
+  let railBannerTop = 0;
+  let railContainerEl: HTMLElement | null = null;
+  let railStripEls: (HTMLElement | null)[] = [];
+  let railCloseTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function handleRailEnter(row: CollapsedRow, idx: number) {
+    cancelRailClose();
+    hoveredCollapsedRow = row;
+    if (railContainerEl && railStripEls[idx]) {
+      const containerRect = railContainerEl.getBoundingClientRect();
+      const stripRect = railStripEls[idx]!.getBoundingClientRect();
+      railBannerTop = stripRect.top - containerRect.top;
+    }
+  }
+
+  function scheduleRailClose() {
+    railCloseTimer = setTimeout(() => {
+      hoveredCollapsedRow = null;
+      railCloseTimer = null;
+    }, 80);
+  }
+
+  function cancelRailClose() {
+    if (railCloseTimer) {
+      clearTimeout(railCloseTimer);
+      railCloseTimer = null;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
 
   $: sidebarZoneActions = $workspaceActionStore.filter(
     (a) => a.zone === "sidebar" && (!a.when || a.when({})),
@@ -58,8 +111,8 @@
   class:collapsed={!$sidebarVisible}
   role="presentation"
   style="
-    width: {$sidebarVisible ? `${$sidebarWidth}px` : `${RAIL_WIDTH_PX}px`};
-    background: {$theme.sidebarBg};
+    width: {$sidebarVisible ? `${$sidebarWidth}px` : '0px'};
+    background: {$sidebarVisible ? $theme.sidebarBg : 'transparent'};
     display: flex;
     overflow: {$sidebarVisible ? 'hidden' : 'visible'};
     font-size: 13px;
@@ -132,7 +185,71 @@
       />
     </div>
   {:else}
-    <!-- Collapsed: rail strips only. No archive, no dragging. -->
-    <CollapsedRailView sidebarWidth={$sidebarWidth} />
+    <!-- Collapsed: workspace rail strips float over the terminal as an overlay.
+         The sidebar takes 0px layout space; the strips are absolutely positioned
+         so the terminal background fills the full screen. -->
+    <!-- svelte-ignore a11y-no-static-element-interactions -->
+    <div
+      bind:this={railContainerEl}
+      data-collapsed-rail
+      style="
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        display: flex;
+        flex-direction: column;
+        padding: 8px 0;
+        gap: 4px;
+      "
+    >
+      {#each collapsedRows as row, idx (row.id)}
+        <!-- svelte-ignore a11y-no-static-element-interactions -->
+        <div
+          bind:this={railStripEls[idx]}
+          on:mouseenter={() => handleRailEnter(row, idx)}
+          on:mouseleave={scheduleRailClose}
+          on:mousedown={() => void activateWorkspace(row.id)}
+          style="
+            width: {row.isActive ? 12 : 5}px;
+            height: 32px;
+            border-radius: 2px;
+            background: {row.color};
+            opacity: {row.isActive ? 1 : 0.3};
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: opacity 0.1s;
+          "
+        ></div>
+      {/each}
+
+      {#if hoveredCollapsedRow !== null}
+        <!-- svelte-ignore a11y-no-static-element-interactions -->
+        <div
+          on:mouseenter={cancelRailClose}
+          on:mouseleave={scheduleRailClose}
+          on:mousedown={() => void activateWorkspace(hoveredCollapsedRow!.id)}
+          style="
+            position: absolute;
+            left: 16px;
+            top: {railBannerTop}px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            background: {$theme.bgHighlight};
+            border-left: 3px solid {hoveredCollapsedRow.color};
+            border-radius: 0 6px 6px 0;
+            padding: 0 10px;
+            color: {$theme.fg};
+            cursor: pointer;
+            z-index: 100;
+            box-shadow: 4px 0 16px rgba(0,0,0,0.45);
+            white-space: nowrap;
+          "
+        >
+          <span style="font-size: 13px;">{hoveredCollapsedRow.name}</span>
+        </div>
+      {/if}
+    </div>
   {/if}
 </div>

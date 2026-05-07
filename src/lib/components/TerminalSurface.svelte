@@ -3,8 +3,13 @@
   import { WebglAddon } from "@xterm/addon-webgl";
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
+  import { writeImage } from "@tauri-apps/plugin-clipboard-manager";
   import { connectPty } from "../terminal-service";
   import { theme } from "../stores/theme";
+  import {
+    findSurfaceLocation,
+    closeSurfaceById,
+  } from "../services/surface-service";
   import type { TerminalSurface as TermSurface } from "../types";
 
   export let surface: TermSurface;
@@ -14,10 +19,67 @@
   let termEl: HTMLElement;
   let dragOver = false;
   let unlistenDragDrop: (() => void) | undefined;
+  export let userScrolledUp = false;
+  let scrollDisposable: { dispose(): void } | undefined;
+  let errorMessage: string | undefined = undefined;
+
+  const IMAGE_EXTS = new Set([
+    "png",
+    "jpg",
+    "jpeg",
+    "gif",
+    "webp",
+    "bmp",
+    "svg",
+    "tiff",
+    "ico",
+    "avif",
+  ]);
+
+  function isImageFile(path: string): boolean {
+    const ext = path.split(".").pop()?.toLowerCase() ?? "";
+    return IMAGE_EXTS.has(ext);
+  }
 
   /** Shell-escape a file path by wrapping in single quotes. */
   function shellEscape(path: string): string {
     return "'" + path.replace(/'/g, "'\\''") + "'";
+  }
+
+  async function handleDropPaths(paths: string[]): Promise<void> {
+    if (!paths.length || surface.ptyId < 0) return;
+
+    const imagePaths: string[] = [];
+    const textParts: string[] = [];
+
+    for (const path of paths) {
+      if (isImageFile(path)) {
+        imagePaths.push(path);
+      } else {
+        textParts.push(shellEscape(path));
+      }
+    }
+
+    if (imagePaths.length > 0) {
+      try {
+        await writeImage(imagePaths[0]!);
+      } catch (e) {
+        console.warn("Failed to write image to clipboard:", e);
+        return;
+      }
+    }
+
+    if (textParts.length > 0) {
+      void invoke("write_pty", {
+        ptyId: surface.ptyId,
+        data: textParts.join(" ") + " ",
+      });
+    } else if (imagePaths.length > 0) {
+      // Image is now in clipboard; send Ctrl+V so the terminal app
+      // reads it. Claude Code CLI interprets \x16 as a clipboard paste
+      // and shows [Image 1], matching manual Ctrl+V behavior.
+      void invoke("write_pty", { ptyId: surface.ptyId, data: "\x16" });
+    }
   }
 
   function handleDragOver(e: DragEvent) {
@@ -29,13 +91,60 @@
     dragOver = false;
   }
 
+  async function handleDropImageData(file: File): Promise<void> {
+    const buf = await file.arrayBuffer();
+    await writeImage(buf);
+    if (surface.ptyId >= 0)
+      void invoke("write_pty", { ptyId: surface.ptyId, data: "\x16" });
+  }
+
   function handleDrop(e: DragEvent) {
     e.preventDefault();
     dragOver = false;
-    const files = e.dataTransfer?.files;
-    if (!files || files.length === 0 || surface.ptyId < 0) return;
-    const paths = Array.from(files).map(f => shellEscape((f as any).path || f.name));
-    invoke("write_pty", { ptyId: surface.ptyId, data: paths.join(" ") });
+    if (surface.ptyId < 0) return;
+
+    const dt = e.dataTransfer;
+    if (!dt) return;
+
+    const fileArray = Array.from(dt.files);
+    if (fileArray.length > 0) {
+      // Path-bearing drops are owned by the tauri://drag-drop listener; skip here
+      // to avoid double-handling on macOS where both events fire for the same drop.
+      if (fileArray.some((f) => (f as unknown as { path?: string }).path))
+        return;
+      // Files without paths: browser image drags or unsettled NSFilePromises.
+      const imageFile = fileArray.find((f) => f.type.startsWith("image/"));
+      if (imageFile) {
+        void handleDropImageData(imageFile).catch((err) =>
+          console.warn("Failed to write dropped image:", err),
+        );
+        return;
+      }
+    }
+
+    // Last resort: items may carry data when files is empty (some drag sources)
+    const imageItem = Array.from(dt.items).find(
+      (item) => item.kind === "file" && item.type.startsWith("image/"),
+    );
+    if (imageItem) {
+      const file = imageItem.getAsFile();
+      if (file) {
+        void handleDropImageData(file).catch((err) =>
+          console.warn("Failed to write dropped image:", err),
+        );
+      }
+    }
+  }
+
+  function registerScrollTracking() {
+    scrollDisposable?.dispose();
+    scrollDisposable = surface.terminal.onScroll((newScrollPos: number) => {
+      const maxScroll = Math.max(
+        0,
+        surface.terminal.buffer.active.length - surface.terminal.rows,
+      );
+      userScrolledUp = newScrollPos < maxScroll;
+    });
   }
 
   onMount(async () => {
@@ -45,16 +154,37 @@
       surface.terminal.open(surface.termElement);
 
       await tick();
-      await new Promise(r => requestAnimationFrame(r));
+      await new Promise((r) => requestAnimationFrame(r));
 
-      try { surface.fitAddon.fit(); } catch (e) { console.warn("fitAddon.fit() failed on mount:", e); }
-      await connectPty(surface, cwd);
+      try {
+        surface.fitAddon.fit();
+      } catch (e) {
+        console.warn("fitAddon.fit() failed on mount:", e);
+      }
+      await connectPty(surface, cwd, surface.env);
+
+      // If the PTY failed to spawn, show an error in the pane and remove the
+      // dead surface so it is not persisted to config on restart.
+      // The 2-second delay is intentional UX: give the user time to read the
+      // error before the pane closes (not a timing-race workaround).
+      if (surface.spawnError) {
+        errorMessage = surface.spawnError;
+        const surfaceId = surface.id;
+        setTimeout(() => {
+          const loc = findSurfaceLocation(surfaceId);
+          if (loc) {
+            closeSurfaceById(loc.pane.id, surfaceId);
+          }
+        }, 2000);
+        return;
+      }
 
       // Send startup command after PTY is connected (not on a timer)
       if (surface.startupCommand && surface.ptyId >= 0) {
-        invoke("write_pty", { ptyId: surface.ptyId, data: `${surface.startupCommand}\n` }).catch((e) =>
-          console.warn("Failed to send startup command:", e)
-        );
+        invoke("write_pty", {
+          ptyId: surface.ptyId,
+          data: `${surface.startupCommand}\n`,
+        }).catch((e) => console.warn("Failed to send startup command:", e));
         surface.startupCommand = undefined;
       }
 
@@ -84,36 +214,79 @@
       surface.opened = true;
     }
 
+    registerScrollTracking();
+
     // Tauri native file drop (more reliable than HTML5 on Linux WebKitGTK)
-    unlistenDragDrop = await listen<{ paths: string[]; position: { x: number; y: number } }>("tauri://drag-drop", (event) => {
+    unlistenDragDrop = await listen<{
+      paths: string[];
+      position: { x: number; y: number };
+    }>("tauri://drag-drop", (event) => {
       if (!visible || surface.ptyId < 0) return;
-      const { paths } = event.payload;
-      if (paths.length > 0) {
-        const escaped = paths.map(p => shellEscape(p)).join(" ");
-        invoke("write_pty", { ptyId: surface.ptyId, data: escaped });
-      }
+      void handleDropPaths(event.payload.paths);
     });
   });
 
   onDestroy(() => {
     unlistenDragDrop?.();
+    scrollDisposable?.dispose();
   });
 
-  $: if (visible && surface.opened && termEl) {
-    requestAnimationFrame(() => {
-      try {
-        surface.fitAddon.fit();
-        surface.terminal.scrollToBottom();
-      } catch (e) { console.warn("fitAddon.fit() failed on visibility change:", e); }
-    });
+  let _prevVisible = false;
+  $: {
+    const justBecameVisible =
+      visible && !_prevVisible && surface.opened && termEl;
+    _prevVisible = visible;
+    if (justBecameVisible) {
+      requestAnimationFrame(() => {
+        try {
+          surface.fitAddon.fit();
+          surface.terminal.scrollToBottom();
+          userScrolledUp = false;
+        } catch (e) {
+          console.warn("fitAddon.fit() failed on visibility change:", e);
+        }
+      });
+    }
   }
 </script>
 
 <!-- svelte-ignore a11y-no-static-element-interactions -->
 <div
   bind:this={termEl}
+  data-scrolled-up={userScrolledUp || undefined}
   on:dragover={handleDragOver}
   on:dragleave={handleDragLeave}
   on:drop={handleDrop}
-  style="flex: 1; min-height: 0; min-width: 0; overflow: hidden; display: {visible ? 'flex' : 'none'}; flex-direction: column; {dragOver ? `box-shadow: inset 0 0 0 2px ${$theme.accent}; border-radius: 4px;` : ''}"
+  style="position: relative; flex: 1; min-height: 0; min-width: 0; overflow: hidden; display: {visible
+    ? 'flex'
+    : 'none'}; flex-direction: column; {dragOver
+    ? `box-shadow: inset 0 0 0 2px ${$theme.accent}; border-radius: 4px;`
+    : ''}"
 ></div>
+
+{#if errorMessage && visible}
+  <div
+    style="
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: {$theme.termBg};
+      color: {$theme.danger};
+      font-family: monospace;
+      font-size: 13px;
+      padding: 24px;
+      gap: 8px;
+      z-index: 10;
+    "
+  >
+    <span style="font-size: 20px;">✖</span>
+    <span style="font-weight: bold;">Failed to start terminal</span>
+    <span
+      style="color: {$theme.fgMuted}; word-break: break-word; text-align: center;"
+      >{errorMessage}</span
+    >
+  </div>
+{/if}

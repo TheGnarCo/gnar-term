@@ -23,6 +23,7 @@ import {
 import { removePane, splitPaneEmpty } from "./pane-service";
 import { closeWorkspace, schedulePersist } from "./workspace-runtime-service";
 import { findPreviewSurfaceByPath } from "./preview-surface-registry";
+import { canPreview } from "./preview-registry";
 import { safeFocus, getCwdForSurface } from "./service-helpers";
 import { eventBus } from "./event-bus";
 
@@ -411,11 +412,25 @@ export function createPreviewSurfaceInPane(
  * Open a file as a preview surface in a new pane split to the right of the
  * currently active pane. If a preview for the same path is already open
  * anywhere, focuses it instead (same dedup semantics as spawn_preview MCP).
+ *
+ * Files whose extension has no registered previewer are handed off to the
+ * system default application (`open_with_default_app`) instead of opening
+ * an empty preview surface that immediately renders an error.
  */
 export function openFileAsPreviewSplit(filePath: string): void {
   const existing = findPreviewSurfaceByPath(filePath);
   if (existing) {
     focusSurfaceById(existing.surfaceId);
+    return;
+  }
+
+  if (!canPreview(filePath)) {
+    void invoke("open_with_default_app", { path: filePath }).catch((err) =>
+      console.warn(
+        `[surface] open_with_default_app failed for ${filePath}:`,
+        err,
+      ),
+    );
     return;
   }
 

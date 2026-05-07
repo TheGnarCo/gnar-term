@@ -1,10 +1,12 @@
 /**
  * openFileAsPreviewSplit — opens a markdown file as a side-by-side preview.
  *
- * Verifies: horizontal split creation, preview surface placement, and
- * deduplication (focus existing instead of opening a second copy).
+ * Verifies: horizontal split creation, preview surface placement,
+ * deduplication (focus existing instead of opening a second copy), and
+ * the canPreview-based fallback to `open_with_default_app` for files
+ * without a registered previewer (B10/D3 wiring).
  */
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, beforeAll, vi } from "vitest";
 import { get } from "svelte/store";
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -17,6 +19,7 @@ vi.mock("../lib/terminal-service", () => ({
   createTerminalSurface: vi.fn(),
 }));
 
+import { invoke } from "@tauri-apps/api/core";
 import { openFileAsPreviewSplit } from "../lib/services/surface-service";
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
 import { isPreviewSurface, getAllSurfaces, getAllPanes } from "../lib/types";
@@ -25,6 +28,17 @@ import {
   registerPreviewSurface,
   resetPreviewSurfaceRegistry,
 } from "../lib/services/preview-surface-registry";
+import { clearPreviewers } from "../lib/services/preview-registry";
+
+const mockInvoke = vi.mocked(invoke);
+
+// Register at least the markdown previewer so canPreview("/docs/README.md")
+// returns true. Without this the new canPreview gate in
+// openFileAsPreviewSplit would short-circuit every test.
+beforeAll(async () => {
+  clearPreviewers();
+  await import("../lib/preview/previewers/markdown");
+});
 
 function makeChildWorkspace(id: string): { ws: Workspace; pane: Pane } {
   const pane: Pane = { id: `${id}-pane`, surfaces: [], activeSurfaceId: null };
@@ -42,6 +56,7 @@ describe("openFileAsPreviewSplit", () => {
     workspaces.set([]);
     activeWorkspaceIdx.set(-1);
     resetPreviewSurfaceRegistry();
+    mockInvoke.mockClear();
   });
 
   it("splits horizontally and places a preview surface in the new pane", () => {
@@ -106,5 +121,38 @@ describe("openFileAsPreviewSplit", () => {
     openFileAsPreviewSplit("/docs/README.md");
     // No crash, no state change.
     expect(get(workspaces)).toHaveLength(0);
+  });
+
+  it("falls back to open_with_default_app for files without a registered previewer", () => {
+    const { ws, pane } = makeChildWorkspace("ws-1");
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+
+    openFileAsPreviewSplit("/tmp/installer.exe");
+
+    // No split, no preview surface — the file was handed off to the OS.
+    const allPanes = getAllPanes(get(workspaces)[0]!.paneLayout);
+    expect(allPanes).toHaveLength(1);
+    expect(allPanes[0]!.id).toBe(pane.id);
+    expect(getAllSurfaces(get(workspaces)[0]!)).toHaveLength(0);
+
+    expect(mockInvoke).toHaveBeenCalledWith("open_with_default_app", {
+      path: "/tmp/installer.exe",
+    });
+  });
+
+  it("does not fall back when the extension has a registered previewer", () => {
+    const { ws } = makeChildWorkspace("ws-1");
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+
+    openFileAsPreviewSplit("/docs/README.md");
+
+    // The markdown previewer is registered, so the gate must let this through
+    // and we should NOT have invoked the OS handoff.
+    const openCalls = mockInvoke.mock.calls.filter(
+      ([cmd]) => cmd === "open_with_default_app",
+    );
+    expect(openCalls).toHaveLength(0);
   });
 });

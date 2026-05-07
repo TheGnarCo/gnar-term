@@ -1673,10 +1673,30 @@ describe("Sidebar", () => {
     expect(container.querySelector("#sidebar")).toBeTruthy();
   });
 
-  it("does not render when sidebarVisible is false", () => {
+  it("renders an 8px rail slot when collapsed (sidebarVisible=false)", () => {
     sidebarVisible.set(false);
     const { container } = render(Sidebar, { props: sidebarProps });
-    expect(container.querySelector("#sidebar")).toBeNull();
+    const slot = container.querySelector("#sidebar") as HTMLElement | null;
+    expect(slot).not.toBeNull();
+    expect(slot!.classList.contains("collapsed")).toBe(true);
+    expect(slot!.style.width).toBe("8px");
+  });
+
+  it("does not render the + New split button inline when collapsed", () => {
+    sidebarVisible.set(false);
+    registerWorkspaceAction({
+      id: "core:new-workspace",
+      label: "New Workspace",
+      icon: "plus",
+      shortcut: "Cmd+Shift+N",
+      source: "core",
+      handler: noop,
+    });
+    const { container } = render(Sidebar, { props: sidebarProps });
+    const inlineNewButton = Array.from(
+      container.querySelectorAll("button"),
+    ).find((b) => b.textContent?.trim() === "+ New");
+    expect(inlineNewButton).toBeUndefined();
   });
 
   it("renders split button for workspace actions in the top row (sidebar toggles live in TitleBar)", () => {

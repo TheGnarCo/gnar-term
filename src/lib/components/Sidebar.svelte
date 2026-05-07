@@ -48,15 +48,34 @@
   }
 </script>
 
-{#if $sidebarVisible}
+<div
+  id="sidebar"
+  class:collapsed={!$sidebarVisible}
+  style="
+    width: {$sidebarVisible ? `${$sidebarWidth}px` : '8px'};
+    background: {$theme.sidebarBg};
+    display: flex; overflow: hidden;
+    font-size: 13px;
+    flex-shrink: 0;
+    position: relative;
+  "
+>
+  <!-- In collapsed mode the inner content is absolutely positioned at
+       its full natural width but clipped by the 8px slot's overflow:
+       hidden — exposing only the leftmost 8px of each row, which is
+       where the workspace grip rail lives. Hover overlay logic in a
+       follow-up task lifts the clip so the full sidebar opens over
+       the terminal. -->
   <div
-    id="sidebar"
+    class="sidebar-content"
     style="
-      width: {$sidebarWidth}px;
+      width: {$sidebarVisible ? '100%' : `${$sidebarWidth}px`};
+      height: 100%;
+      display: flex;
       background: {$theme.sidebarBg};
-      display: flex; overflow: hidden;
-      font-size: 13px;
-      flex-shrink: 0;
+      {$sidebarVisible
+      ? ''
+      : 'position: absolute; left: 0; top: 0; z-index: 100;'}
     "
   >
     <div
@@ -66,28 +85,33 @@
            Always 38px so the sidebar's "+ New" and zone actions stay
            reachable in every window mode, including native fullscreen
            where the OS title bar is gone. The window-drag attributes
-           are harmless no-ops when there's no window to drag. -->
-      <div
-        data-tauri-drag-region=""
-        style="
-          height: 38px;
-          flex-shrink: 0;
-          display: flex; align-items: center; justify-content: flex-end;
-          padding: 0 6px; gap: 4px;
-          overflow: visible;
-          -webkit-app-region: drag;
-        "
-      >
-        {#each sidebarZoneActions as action (action.id)}
-          <SidebarActionButton
-            title={action.label}
-            onClick={() => action.handler({})}
-            theme={$theme}
-            svgContent={iconSvg(action.icon)}
-          />
-        {/each}
-        <NewWorkspaceSplitButton />
-      </div>
+           are harmless no-ops when there's no window to drag.
+           Hidden in collapsed mode — the "+ New" split button moves to
+           the TitleBar (Task 5) and zone actions reappear when the
+           overlay opens (Task 4). -->
+      {#if $sidebarVisible}
+        <div
+          data-tauri-drag-region=""
+          style="
+            height: 38px;
+            flex-shrink: 0;
+            display: flex; align-items: center; justify-content: flex-end;
+            padding: 0 6px; gap: 4px;
+            overflow: visible;
+            -webkit-app-region: drag;
+          "
+        >
+          {#each sidebarZoneActions as action (action.id)}
+            <SidebarActionButton
+              title={action.label}
+              onClick={() => action.handler({})}
+              theme={$theme}
+              svgContent={iconSvg(action.icon)}
+            />
+          {/each}
+          <NewWorkspaceSplitButton />
+        </div>
+      {/if}
 
       <!-- Scrollable content: the Workspaces section (which includes
            pseudo-workspace rows via rootRowOrder), any extension-registered
@@ -118,13 +142,15 @@
 
       <ArchiveZone />
     </div>
-    <SidebarResizeHandle
-      direction="right"
-      theme={$theme}
-      onDrag={(clientX) => {
-        const maxWidth = window.innerWidth * 0.33;
-        sidebarWidth.set(Math.max(140, Math.min(maxWidth, clientX)));
-      }}
-    />
+    {#if $sidebarVisible}
+      <SidebarResizeHandle
+        direction="right"
+        theme={$theme}
+        onDrag={(clientX) => {
+          const maxWidth = window.innerWidth * 0.33;
+          sidebarWidth.set(Math.max(140, Math.min(maxWidth, clientX)));
+        }}
+      />
+    {/if}
   </div>
-{/if}
+</div>

@@ -2,7 +2,7 @@
  * Gnar Term MCP server — runs in the Svelte webview and speaks JSON-RPC 2.0
  * over Tauri events to the Rust UDS bridge.
  *
- * Architecture (see Spacebase MCP spec § Connection binding):
+ * # Architecture (see Spacebase MCP spec § Connection binding)
  *
  * - The Rust bridge accepts multiple concurrent connections, assigns each a
  *   `connection_id`, and forwards `mcp-request` events as
@@ -18,47 +18,92 @@
  *
  * We hand-roll JSON-RPC 2.0 rather than pulling in `@modelcontextprotocol/sdk`
  * for two reasons: the SDK targets Node, and the surface area is tiny.
+ *
+ * # Ideology: MCP mirrors the extension contribution points
+ *
+ * Extensions contribute capabilities by registering into core registries
+ * (commands, surface types, sidebar tabs, workspace actions, …). Rather than
+ * handcoding an MCP tool per extension, each contribution registry is
+ * reflected as a generic `list_X` / `invoke_X` pair:
+ *
+ *   | Registry                | Tools                                        |
+ *   | ----------------------- | -------------------------------------------- |
+ *   | surface-type-registry   | list_surface_types, open_surface             |
+ *   | command-registry        | list_commands, invoke_command                |
+ *   | workspace-action-reg…   | list_workspace_actions, invoke_workspace_…   |
+ *   | context-menu-item-reg…  | list_context_menu_items, invoke_context_…   |
+ *
+ * Adding an extension automatically increases MCP's surface area by its
+ * contributions; adding an MCP tool never requires touching an extension.
+ * MCP never imports from `src/extensions/*` — the extension barrier runs in
+ * one direction (extensions depend on core) and MCP sits on the core side.
+ *
+ * If you catch yourself writing a tool named after a specific extension,
+ * stop — that's the old pattern.
  */
-import { get } from "svelte/store";
+import { get, writable } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, emit } from "@tauri-apps/api/event";
-import {
-  workspaces,
-  activeWorkspace,
-  activePane,
-} from "../stores/workspace";
+import { workspaces, activeWorkspace, activePane } from "../stores/workspace";
 import {
   getAllPanes,
-  getAllSurfaces,
   isTerminalSurface,
   uid,
   type Pane,
   type SplitNode,
-  type Surface,
   type TerminalSurface,
   type Workspace,
 } from "../types";
 import { findParentSplit } from "../types";
-import { createTerminalSurface, waitForPtyReady } from "../terminal-service";
+import {
+  createTerminalSurface,
+  waitForPtyReady,
+  onFirstPtyOutput,
+} from "../terminal-service";
 import { safeFocus } from "./service-helpers";
 import {
   registerMcpPty,
   unregisterMcpPty,
   getMcpBuffer,
 } from "./mcp-output-buffer";
-import { pushEvent, pollEvents } from "./mcp-event-buffer";
+import { pushEvent } from "./mcp-event-buffer";
 import {
   upsertSection,
   removeSection,
   type SidebarItem,
-} from "../stores/extension-sidebar";
-import { openPreviewFromContent } from "../../preview";
+} from "../stores/mcp-sidebar";
+import {
+  openExtensionSurfaceInPaneById,
+  createPreviewSurfaceInPane,
+  focusSurfaceById,
+  closeSurfaceById,
+} from "./surface-service";
+import {
+  findPreviewSurfaceByPath,
+  listPreviewSurfaces,
+} from "./preview-surface-registry";
+import { surfaceTypeStore } from "./surface-type-registry";
+import { getWorkspaceStatus } from "./status-registry";
 import { getMcpSetting } from "../config";
+import { spawnAgentInWorktree } from "./spawn-helper";
+import {
+  type ConnectionBinding,
+  type ConnectionContext,
+  type ToolDef,
+} from "./mcp-types";
+export type { ConnectionBinding, ConnectionContext, ToolDef };
+import { filesystemTools } from "./mcp-tools/filesystem";
+import { registryMirrorTools } from "./mcp-tools/registry-mirrors";
+import { introspectionTools } from "./mcp-tools/introspection";
 
 // ---- Types ----
 
+export type McpStatus = "live" | "error" | "disabled" | "pending";
+const _mcpStatus = writable<McpStatus>("pending");
+export const mcpStatus = { subscribe: _mcpStatus.subscribe };
+
 type AgentType = "claude-code" | "codex" | "aider" | "custom";
-type SessionStatus = "starting" | "running" | "idle" | "exited";
+type SessionStatus = "starting" | "running" | "exited";
 
 interface McpSession {
   session_id: string;
@@ -71,6 +116,8 @@ interface McpSession {
   paneId: string;
   surfaceId: string;
   ptyId: number;
+  /** Cleanup for the first-PTY-output listener (if task is still pending). */
+  unlisten?: () => void;
 }
 
 interface JsonRpcRequest {
@@ -93,23 +140,6 @@ interface JsonRpcError {
 }
 
 type JsonRpcResponse = JsonRpcSuccess | JsonRpcError;
-
-/** Per-connection state recorded from the `$/gnar-term/hello` handshake. */
-export interface ConnectionBinding {
-  paneId: string | null;
-  workspaceId: string | null;
-  clientPid: number | null;
-}
-
-export interface ConnectionContext {
-  connectionId: number;
-  binding: ConnectionBinding | null;
-  /** Most-recent pane this connection spawned into. Used as the split host for
-   *  the *next* spawn so rapid-fire `dispatch_tasks` produces a shallow
-   *  right-chain instead of an N-deep left spine around the binding pane —
-   *  the latter exploded `findParentSplit` + DOM render cost into O(N²). */
-  lastSpawnedPaneId: string | null;
-}
 
 /** Sentinel for callers that have no transport context (test code calling
  *  dispatch directly, etc). Tools that require binding will error with the
@@ -163,20 +193,11 @@ function newSessionId(): string {
 
 // ---- Workspace / pane resolution ----
 
-/** Find the workspace that currently contains a pane with the given id, or
- *  null if no workspace contains it (pane was closed, or invalid id). */
-function findWorkspaceForPane(paneId: string): Workspace | null {
+function findPaneById(
+  paneId: string,
+): { workspace: Workspace; pane: Pane } | null {
   for (const ws of get(workspaces)) {
-    for (const pane of getAllPanes(ws.splitRoot)) {
-      if (pane.id === paneId) return ws;
-    }
-  }
-  return null;
-}
-
-function findPaneById(paneId: string): { workspace: Workspace; pane: Pane } | null {
-  for (const ws of get(workspaces)) {
-    for (const pane of getAllPanes(ws.splitRoot)) {
+    for (const pane of getAllPanes(ws.paneLayout)) {
       if (pane.id === paneId) return { workspace: ws, pane };
     }
   }
@@ -193,11 +214,7 @@ function findWorkspaceById(workspaceId: string): Workspace | null {
 interface ResolvedTarget {
   workspace: Workspace;
   hostPane: Pane | null;
-  source:
-    | "args-pane"
-    | "args-workspace"
-    | "binding-pane"
-    | "binding-workspace";
+  source: "args-pane" | "args-workspace" | "binding-pane" | "binding-workspace";
 }
 
 interface TargetArgs {
@@ -210,7 +227,10 @@ interface TargetArgs {
  *  Throws with an actionable error message if no target can be resolved.
  *  Critically: this function NEVER reads `activeWorkspace`. User GUI focus is
  *  not an authoritative routing input. */
-function resolveTarget(args: TargetArgs, ctx: ConnectionContext): ResolvedTarget {
+function resolveTarget(
+  args: TargetArgs,
+  ctx: ConnectionContext,
+): ResolvedTarget {
   // Rule 1: explicit pane_id wins.
   if (args.pane_id) {
     const found = findPaneById(args.pane_id);
@@ -219,7 +239,11 @@ function resolveTarget(args: TargetArgs, ctx: ConnectionContext): ResolvedTarget
         `pane_id "${args.pane_id}" not found (it may have been closed)`,
       );
     }
-    return { workspace: found.workspace, hostPane: found.pane, source: "args-pane" };
+    return {
+      workspace: found.workspace,
+      hostPane: found.pane,
+      source: "args-pane",
+    };
   }
   // Rule 2: explicit workspace_id.
   if (args.workspace_id) {
@@ -272,15 +296,15 @@ function resolveTarget(args: TargetArgs, ctx: ConnectionContext): ResolvedTarget
 /** Pick a host pane to split off when the caller didn't supply one. Prefers
  *  the workspace's active pane; falls back to the first pane in the tree. */
 function pickHostPane(workspace: Workspace): Pane {
-  const all = getAllPanes(workspace.splitRoot);
+  const all = getAllPanes(workspace.paneLayout);
   if (workspace.activePaneId) {
     const active = all.find((p) => p.id === workspace.activePaneId);
     if (active) return active;
   }
-  if (all.length > 0) return all[0];
+  if (all.length > 0) return all[0]!;
   // Workspace exists but has no panes (shouldn't happen in practice; create one).
   const newPane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
-  workspace.splitRoot = { type: "pane", pane: newPane };
+  workspace.paneLayout = { type: "pane", pane: newPane };
   workspaces.update((l) => [...l]);
   return newPane;
 }
@@ -302,12 +326,12 @@ function splitPaneInWorkspace(
     ratio: 0.5,
   };
   if (
-    workspace.splitRoot.type === "pane" &&
-    workspace.splitRoot.pane.id === hostPane.id
+    workspace.paneLayout.type === "pane" &&
+    workspace.paneLayout.pane.id === hostPane.id
   ) {
-    workspace.splitRoot = newSplit;
+    workspace.paneLayout = newSplit;
   } else {
-    const parentInfo = findParentSplit(workspace.splitRoot, hostPane.id);
+    const parentInfo = findParentSplit(workspace.paneLayout, hostPane.id);
     if (parentInfo && parentInfo.parent.type === "split") {
       parentInfo.parent.children[parentInfo.index] = newSplit;
     }
@@ -335,11 +359,11 @@ async function getPtyCwd(ptyId: number): Promise<string> {
 function removeSurfaceFromPane(paneId: string, surfaceId: string): void {
   workspaces.update((list) => {
     for (const ws of list) {
-      for (const pane of getAllPanes(ws.splitRoot)) {
+      for (const pane of getAllPanes(ws.paneLayout)) {
         if (pane.id !== paneId) continue;
         const idx = pane.surfaces.findIndex((s) => s.id === surfaceId);
         if (idx < 0) continue;
-        const surface = pane.surfaces[idx];
+        const surface = pane.surfaces[idx]!;
         if (isTerminalSurface(surface)) {
           try {
             surface.terminal.dispose();
@@ -352,49 +376,12 @@ function removeSurfaceFromPane(paneId: string, surfaceId: string): void {
           pane.activeSurfaceId = null;
         } else {
           pane.activeSurfaceId =
-            pane.surfaces[Math.min(idx, pane.surfaces.length - 1)].id;
+            pane.surfaces[Math.min(idx, pane.surfaces.length - 1)]!.id;
         }
       }
     }
     return [...list];
   });
-}
-
-function reapDeadSessions(): void {
-  const aliveSurfaceIds = new Set<string>();
-  for (const ws of get(workspaces)) {
-    for (const surface of getAllSurfaces(ws)) {
-      aliveSurfaceIds.add(surface.id);
-    }
-  }
-  for (const [id, session] of sessions) {
-    if (!aliveSurfaceIds.has(session.surfaceId)) {
-      unregisterMcpPty(session.ptyId);
-      ptyToSession.delete(session.ptyId);
-      sessions.delete(id);
-    }
-  }
-}
-
-// ---- Workspace introspection helpers ----
-
-function describeSurface(s: Surface) {
-  return { id: s.id, kind: s.kind, title: s.title };
-}
-
-function describePane(pane: Pane, workspaceId: string) {
-  const activeSurface = pane.surfaces.find((s) => s.id === pane.activeSurfaceId);
-  let cwd = "";
-  if (activeSurface && isTerminalSurface(activeSurface)) {
-    cwd = activeSurface.cwd ?? "";
-  }
-  return {
-    id: pane.id,
-    workspaceId,
-    cwd,
-    activeSurfaceId: pane.activeSurfaceId,
-    surfaces: pane.surfaces.map(describeSurface),
-  };
 }
 
 // ---- Observability: dispatch log ----
@@ -435,21 +422,11 @@ function logDispatch(entry: DispatchLogEntry): void {
   );
 }
 
-export function getDispatchLog(): readonly DispatchLogEntry[] {
+export function _getDispatchLogForTest(): readonly DispatchLogEntry[] {
   return dispatchLog;
 }
 
 // ---- Tool definitions ----
-
-interface ToolDef {
-  name: string;
-  description: string;
-  inputSchema: Record<string, unknown>;
-  handler: (
-    args: Record<string, unknown>,
-    ctx: ConnectionContext,
-  ) => Promise<unknown> | unknown;
-}
 
 const TOOLS: ToolDef[] = [];
 
@@ -457,17 +434,53 @@ function registerTool(t: ToolDef) {
   TOOLS.push(t);
 }
 
+/**
+ * Register an MCP tool contributed by an extension. Extensions expand the
+ * MCP surface with domain-specific tools they own. Tools registered here
+ * are unregistered automatically when the extension deactivates via
+ * unregisterMcpToolsBySource.
+ *
+ * Exposed indirectly to extensions through the ExtensionAPI.registerMcpTool
+ * method in extension-api-ui.ts — extensions do not import this directly.
+ *
+ * Handler signature intentionally omits ConnectionContext; extensions
+ * should not read or mutate per-connection state (that's reserved for
+ * core tools that bind pane/workspace targets). If a future extension
+ * genuinely needs connection context, promote the signature then, not
+ * preemptively.
+ */
+export function registerExtensionMcpTool(
+  source: string,
+  name: string,
+  description: string,
+  inputSchema: Record<string, unknown>,
+  handler: (args: Record<string, unknown>) => Promise<unknown> | unknown,
+): void {
+  TOOLS.push({ name, description, inputSchema, handler, source });
+}
+
+/** Cleanup: remove all tools contributed by a given extension id. */
+export function unregisterMcpToolsBySource(source: string): void {
+  for (let i = TOOLS.length - 1; i >= 0; i--) {
+    const tool = TOOLS[i];
+    if (tool && tool.source === source) TOOLS.splice(i, 1);
+  }
+}
+
 // ---- Session management ----
 
 registerTool({
   name: "spawn_agent",
   description:
-    "Spawn a new gnar-term pane running an AI coding agent (claude-code, codex, aider) or a custom command. Targets the agent's host workspace by default (per connection binding); pass workspace_id/pane_id to override.",
+    "Spawn a new gnar-term pane running an AI coding agent (claude-code, codex, aider) or a custom command. Targets the agent's host workspace by default (per connection binding); pass workspace_id/pane_id to override. Pass `worktree` to instead create a fresh branched workspace and spawn the agent there (auto-resolves branch / worktree path; optionally tags the workspace under a dashboard).",
   inputSchema: {
     type: "object",
     properties: {
       name: { type: "string" },
-      agent: { type: "string", enum: ["claude-code", "codex", "aider", "custom"] },
+      agent: {
+        type: "string",
+        enum: ["claude-code", "codex", "aider", "custom"],
+      },
       task: { type: "string" },
       cwd: { type: "string" },
       command: { type: "string" },
@@ -476,6 +489,32 @@ registerTool({
       rows: { type: "number" },
       workspace_id: { type: "string" },
       pane_id: { type: "string" },
+      worktree: {
+        type: "object",
+        description:
+          "When set, spawn into a freshly-created branched workspace instead of splitting the host pane.",
+        properties: {
+          branch: {
+            type: "string",
+            description:
+              "Branch name. Default: agent/<agent>/<short-timestamp>.",
+          },
+          base: {
+            type: "string",
+            description: "Base branch. Default: main.",
+          },
+          repoPath: {
+            type: "string",
+            description:
+              "Source repo path. Required if not in a workspace context.",
+          },
+          taskContext: {
+            type: "string",
+            description:
+              "Optional free-text task description prepended to the agent's startup command (quoted as a single argument).",
+          },
+        },
+      },
     },
     required: ["name", "agent"],
   },
@@ -488,10 +527,57 @@ registerTool({
       command?: string;
       workspace_id?: string;
       pane_id?: string;
+      worktree?: {
+        branch?: string;
+        base?: string;
+        repoPath?: string;
+        taskContext?: string;
+      };
     };
+
+    // --- Worktree path: spawn into a brand-new branched workspace.
+    if (p.worktree) {
+      // Resolve repoPath from arg, else from the binding workspace's first
+      // terminal cwd.
+      let repoPath = p.worktree.repoPath?.trim() ?? "";
+      if (!repoPath) {
+        try {
+          const target = resolveTarget(p, ctx);
+          for (const pane of getAllPanes(target.workspace.paneLayout)) {
+            for (const s of pane.surfaces) {
+              if (isTerminalSurface(s) && s.cwd) {
+                repoPath = s.cwd;
+                break;
+              }
+            }
+            if (repoPath) break;
+          }
+        } catch {
+          // resolveTarget threw — surface the original "no repoPath" error.
+        }
+      }
+      if (!repoPath) {
+        throw new Error(
+          "spawn_agent worktree: repoPath required (no workspace context to derive it from)",
+        );
+      }
+      const result = await spawnAgentInWorktree({
+        name: p.name,
+        agent: p.agent,
+        command: p.command,
+        taskContext: p.worktree.taskContext,
+        repoPath,
+        ...(p.worktree.branch ? { branch: p.worktree.branch } : {}),
+        ...(p.worktree.base ? { base: p.worktree.base } : {}),
+      });
+      ctx.lastSpawnedPaneId = result.pane_id;
+      return result;
+    }
+
     let startupCommand: string | undefined;
     if (p.agent === "custom") {
-      if (!p.command) throw new Error('agent "custom" requires a command parameter');
+      if (!p.command)
+        throw new Error('agent "custom" requires a command parameter');
       startupCommand = p.command;
     } else {
       const agentCmd = AGENT_COMMANDS[p.agent];
@@ -500,8 +586,17 @@ registerTool({
     }
 
     const target = resolveTarget(p, ctx);
+    if (target.workspace.locked === true) {
+      throw new Error(
+        `workspace "${target.workspace.id}" is locked — agents cannot be spawned into it`,
+      );
+    }
     const hostPane = target.hostPane ?? pickHostPane(target.workspace);
-    const newPane = splitPaneInWorkspace(target.workspace, hostPane, "vertical");
+    const newPane = splitPaneInWorkspace(
+      target.workspace,
+      hostPane,
+      "vertical",
+    );
     ctx.lastSpawnedPaneId = newPane.id;
 
     const surface = await createTerminalSurface(newPane, p.cwd);
@@ -509,7 +604,7 @@ registerTool({
     surface.startupCommand = startupCommand;
     newPane.activeSurfaceId = surface.id;
     workspaces.update((l) => [...l]);
-    safeFocus(surface);
+    void safeFocus(surface);
 
     const ptyId = await waitForPtyId(surface);
     registerMcpPty(ptyId);
@@ -547,10 +642,45 @@ registerTool({
       status: "starting",
     });
 
+    // Flip status from "starting" → "running" on the agent's first PTY
+    // output so list_sessions / get_session_info can distinguish "spawned
+    // but no output yet" from "actively rendering."
+    onFirstPtyOutput(ptyId, () => {
+      if (session.status !== "starting") return;
+      session.status = "running";
+      pushEvent({
+        type: "session.statusChanged",
+        sessionId: session.session_id,
+        status: "running",
+      });
+    });
+
     if (p.task) {
-      setTimeout(() => {
-        invoke("write_pty", { ptyId, data: p.task + "\r" }).catch(() => {});
-      }, 3000);
+      const task = p.task;
+      let safetyTimer: ReturnType<typeof setTimeout> | null = null;
+      const unlisten = onFirstPtyOutput(ptyId, () => {
+        if (safetyTimer !== null) {
+          clearTimeout(safetyTimer);
+          safetyTimer = null;
+        }
+        session.unlisten = undefined;
+        invoke("write_pty", { ptyId, data: task + "\r" }).catch((err) =>
+          console.warn(
+            `[mcp] spawn_agent: task write failed for session ${session.session_id}:`,
+            err,
+          ),
+        );
+      });
+      session.unlisten = unlisten;
+      // Safety fallback: if no output arrives within 30s, cancel and warn.
+      safetyTimer = setTimeout(() => {
+        safetyTimer = null;
+        unlisten();
+        if (session.unlisten) session.unlisten = undefined;
+        console.warn(
+          `[mcp] spawn_agent: no PTY output within 30s for session ${session.session_id} — task not written`,
+        );
+      }, 30000);
     }
 
     return {
@@ -567,21 +697,69 @@ registerTool({
 });
 
 registerTool({
-  name: "list_sessions",
-  description: "List MCP-spawned sessions currently alive in gnar-term.",
-  inputSchema: { type: "object", properties: {} },
-  handler: () => {
-    reapDeadSessions();
-    const list = Array.from(sessions.values()).map((s) => ({
-      session_id: s.session_id,
-      name: s.name,
-      agent: s.agent,
-      pid: s.pid,
-      status: s.status,
-      cwd: s.cwd,
-      createdAt: s.createdAt,
-    }));
-    return { sessions: list };
+  name: "split_pane",
+  description:
+    "Split a pane and open a surface in the new half. Defaults to a terminal split right. Returns the new pane_id.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      direction: {
+        type: "string",
+        enum: ["horizontal", "vertical"],
+        description:
+          "Split direction: 'horizontal' = side-by-side, 'vertical' = stacked. Default: 'horizontal'.",
+      },
+      surface_type: {
+        type: "string",
+        enum: ["terminal", "preview"],
+        description: "Surface to open in the new pane. Default: 'terminal'.",
+      },
+      preview_path: {
+        type: "string",
+        description:
+          "Absolute path to the file to preview. Required when surface_type is 'preview'.",
+      },
+      workspace_id: { type: "string" },
+      pane_id: { type: "string" },
+    },
+  },
+  handler: async (args, ctx) => {
+    const p = args as {
+      direction?: "horizontal" | "vertical";
+      surface_type?: "terminal" | "preview";
+      preview_path?: string;
+      workspace_id?: string;
+      pane_id?: string;
+    };
+    if (p.surface_type === "preview" && !p.preview_path) {
+      throw new Error(
+        "preview_path is required when surface_type is 'preview'",
+      );
+    }
+    const target = resolveTarget(p, ctx);
+    const hostPane = target.hostPane ?? pickHostPane(target.workspace);
+    const dir = p.direction === "vertical" ? "vertical" : "horizontal";
+    const newPane = splitPaneInWorkspace(target.workspace, hostPane, dir);
+    ctx.lastSpawnedPaneId = newPane.id;
+    // split_pane is a lower-level primitive — it does not emit `pane.created`
+    // because it does not spawn a tracked agent session. (Compare open_surface,
+    // which also omits the event for the same reason.)
+
+    if (p.surface_type === "preview") {
+      const surface = createPreviewSurfaceInPane(newPane.id, p.preview_path!, {
+        focus: true,
+      });
+      if (!surface) {
+        throw new Error(`Could not open preview in new pane ${newPane.id}`);
+      }
+    } else {
+      const surface = await createTerminalSurface(newPane);
+      newPane.activeSurfaceId = surface.id;
+      workspaces.update((l) => [...l]);
+      void safeFocus(surface);
+    }
+
+    return { pane_id: newPane.id, workspace_id: target.workspace.id };
   },
 });
 
@@ -628,6 +806,11 @@ registerTool({
     const { session_id } = args as { session_id: string };
     const session = sessions.get(session_id);
     if (!session) throw new Error(`session ${session_id} not found`);
+    // Cancel any pending first-output task listener before killing.
+    if (session.unlisten) {
+      session.unlisten();
+      session.unlisten = undefined;
+    }
     try {
       await invoke("kill_pty", { ptyId: session.ptyId });
     } catch (err) {
@@ -646,11 +829,33 @@ registerTool({
   },
 });
 
+registerTool({
+  name: "list_sessions",
+  description:
+    "List all MCP-tracked sessions (the spawn_agent registry, not native agents). Each entry contains session_id, name, agent, pid, status (starting | running | exited), cwd, createdAt, pane_id, workspace_id. For native agents started by the user, use list_agents.",
+  inputSchema: { type: "object", properties: {} },
+  handler: () => {
+    const list = Array.from(sessions.values()).map((s) => ({
+      session_id: s.session_id,
+      name: s.name,
+      agent: s.agent,
+      pid: s.pid,
+      status: s.status,
+      cwd: s.cwd,
+      createdAt: s.createdAt,
+      pane_id: s.paneId,
+      workspace_id: findPaneById(s.paneId)?.workspace.id ?? null,
+    }));
+    return { sessions: list };
+  },
+});
+
 // ---- Interaction ----
 
 registerTool({
   name: "send_prompt",
-  description: "Send text to an MCP session's PTY. Appends Enter unless press_enter is false.",
+  description:
+    "Send text to an MCP session's PTY. Appends Enter unless press_enter is false.",
   inputSchema: {
     type: "object",
     properties: {
@@ -661,7 +866,11 @@ registerTool({
     required: ["session_id", "text"],
   },
   handler: async (args) => {
-    const p = args as { session_id: string; text: string; press_enter?: boolean };
+    const p = args as {
+      session_id: string;
+      text: string;
+      press_enter?: boolean;
+    };
     const session = sessions.get(p.session_id);
     if (!session) throw new Error(`session ${p.session_id} not found`);
     const data = p.text + (p.press_enter === false ? "" : "\r");
@@ -672,7 +881,8 @@ registerTool({
 
 registerTool({
   name: "send_keys",
-  description: "Send a named keystroke (ctrl+c, enter, escape, arrows, etc.) to an MCP session.",
+  description:
+    "Send a named keystroke (ctrl+c, enter, escape, arrows, etc.) to an MCP session.",
   inputSchema: {
     type: "object",
     properties: {
@@ -698,7 +908,8 @@ registerTool({
 
 registerTool({
   name: "read_output",
-  description: "Read terminal output from an MCP session. Supports cursor-based polling and ANSI stripping.",
+  description:
+    "Read terminal output from an MCP session. Supports cursor-based polling and ANSI stripping.",
   inputSchema: {
     type: "object",
     properties: {
@@ -741,7 +952,7 @@ registerTool({
 registerTool({
   name: "dispatch_tasks",
   description:
-    "Spawn multiple agent sessions in parallel. Each task resolves its target independently — pass workspace_id/pane_id per task to override the connection binding.",
+    "Spawn multiple agent sessions sequentially. Each spawn inherits the pane context of the previous one via lastSpawnedPaneId to keep the split tree shallow. Pass workspace_id/pane_id per task to override the connection binding.",
   inputSchema: {
     type: "object",
     properties: {
@@ -895,17 +1106,32 @@ registerTool({
   },
 });
 
+// ---- Generic surface-type discovery + open ----
+//
+// Extensions register surface types at runtime using an
+// `<extension-id>:<surface-id>` namespace. Agents can discover what's
+// available via list_surface_types and open any of them via open_surface.
+// MCP stays agnostic to which extensions exist — no extension id or
+// surface id is hard-coded here.
+
 registerTool({
-  name: "create_preview",
+  name: "open_surface",
   description:
-    "Open a preview surface with markdown/text/code content. Targets the agent's host workspace by default; pass workspace_id/pane_id to override.",
+    "Open any registered extension surface type in a pane. Call list_surface_types first to see which ids exist; props are forwarded to the owning extension's surface component unchanged — consult that extension for the expected prop shape. Targets the agent's host workspace by default; pass workspace_id/pane_id to override.",
   inputSchema: {
     type: "object",
     properties: {
-      content: { type: "string" },
-      format: { type: "string", enum: ["markdown", "text", "code"] },
-      language: { type: "string" },
+      surface_type_id: {
+        type: "string",
+        description:
+          "Surface type id as returned by list_surface_types (format: `<extension-id>:<surface-id>`).",
+      },
       title: { type: "string" },
+      props: {
+        type: "object",
+        additionalProperties: true,
+        description: "Opaque props object forwarded to the surface component.",
+      },
       placement: {
         type: "string",
         enum: ["split-right", "split-down", "new-tab", "current-pane"],
@@ -913,59 +1139,85 @@ registerTool({
       workspace_id: { type: "string" },
       pane_id: { type: "string" },
     },
-    required: ["content", "format"],
+    required: ["surface_type_id", "title"],
   },
   handler: (args, ctx) => {
     const p = args as {
-      content: string;
-      format: "markdown" | "text" | "code";
-      language?: string;
-      title?: string;
+      surface_type_id: string;
+      title: string;
+      props?: Record<string, unknown>;
       placement?: "split-right" | "split-down" | "new-tab" | "current-pane";
       workspace_id?: string;
       pane_id?: string;
     };
+    const typeDef = get(surfaceTypeStore).find(
+      (t) => t.id === p.surface_type_id,
+    );
+    if (!typeDef) {
+      throw new Error(
+        `Unknown surface type: ${p.surface_type_id}. Call list_surface_types to see what's registered.`,
+      );
+    }
     const target = resolveTarget(p, ctx);
-    const title = p.title ?? "Preview";
-    let rendered: string;
-    if (p.format === "markdown") rendered = p.content;
-    else if (p.format === "code")
-      rendered = "```" + (p.language ?? "") + "\n" + p.content + "\n```";
-    else rendered = "```\n" + p.content + "\n```";
-    const previewSurface = openPreviewFromContent(rendered, title);
-
     const placement = p.placement ?? "split-right";
     const hostPane = target.hostPane ?? pickHostPane(target.workspace);
     let targetPane: Pane;
     if (placement === "split-right") {
-      targetPane = splitPaneInWorkspace(target.workspace, hostPane, "horizontal");
+      targetPane = splitPaneInWorkspace(
+        target.workspace,
+        hostPane,
+        "horizontal",
+      );
       ctx.lastSpawnedPaneId = targetPane.id;
     } else if (placement === "split-down") {
       targetPane = splitPaneInWorkspace(target.workspace, hostPane, "vertical");
       ctx.lastSpawnedPaneId = targetPane.id;
     } else {
-      // new-tab and current-pane drop into the host pane's surface list.
       targetPane = hostPane;
     }
-
-    const surface = {
-      kind: "preview" as const,
-      id: previewSurface.id,
-      filePath: previewSurface.filePath,
-      title: previewSurface.title,
-      element: previewSurface.element,
-      watchId: previewSurface.watchId,
-      hasUnread: false,
-    };
-    targetPane.surfaces.push(surface);
-    targetPane.activeSurfaceId = surface.id;
-    workspaces.update((l) => [...l]);
-
+    const result = openExtensionSurfaceInPaneById(
+      targetPane.id,
+      p.surface_type_id,
+      p.title,
+      p.props,
+    );
+    if (!result) {
+      throw new Error("Could not place surface in a pane");
+    }
     return {
-      preview_id: surface.id,
-      pane_id: targetPane.id,
+      surface_id: result.surfaceId,
+      pane_id: result.paneId,
       workspace_id: target.workspace.id,
     };
+  },
+});
+
+// ---- Status items (mirror of statusRegistry, scoped per workspace) ----
+
+registerTool({
+  name: "get_status_for_workspace",
+  description:
+    "List structured status items contributed by extensions for a workspace (e.g. git branch, agent-running badge). Returns `{ items }` with each item carrying `{ id, source, category, priority, label, icon?, tooltip?, variant? }`. Sorted by priority ascending. Defaults to the agent's bound workspace; pass workspace_id to override.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      workspace_id: { type: "string" },
+    },
+  },
+  handler: (args, ctx) => {
+    const p = args as { workspace_id?: string };
+    const target = resolveTarget({ workspace_id: p.workspace_id }, ctx);
+    const items = get(getWorkspaceStatus(target.workspace.id)).map((i) => ({
+      id: i.id,
+      source: i.source,
+      category: i.category,
+      priority: i.priority,
+      label: i.label,
+      icon: i.icon,
+      tooltip: i.tooltip,
+      variant: i.variant,
+    }));
+    return { workspace_id: target.workspace.id, items };
   },
 });
 
@@ -986,145 +1238,144 @@ registerTool({
   },
 });
 
-// ---- UI introspection (observers; report user GUI focus) ----
+// ---- Preview surfaces ----
 
 registerTool({
-  name: "get_active_workspace",
+  name: "spawn_preview",
   description:
-    "Return the workspace the user is currently focused on. Reports user GUI focus, NOT the agent's binding — agents should use get_agent_context for routing. Fields are null when no workspace is open.",
-  inputSchema: { type: "object", properties: {} },
-  handler: () => {
-    const ws = get(activeWorkspace);
+    "Open a file as a preview surface in a pane. Markdown files render with gnar:<name> markdown-components as live widgets. If a preview surface for the same path is already open anywhere in the app, focuses it instead of opening a duplicate. Returns the new (or existing) surface id. IMPORTANT: the file must already exist on disk before calling this — call write_file first, or use create_preview_file which does both atomically.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      path: {
+        type: "string",
+        description: "Absolute path to the file to preview.",
+      },
+      workspace_id: {
+        type: "string",
+        description:
+          "Optional override; defaults to the agent's host workspace.",
+      },
+      pane_id: {
+        type: "string",
+        description:
+          "Optional override; defaults to the agent's host pane (or the workspace's primary pane if no host context).",
+      },
+      focus: {
+        type: "boolean",
+        description: "Whether to focus the new surface. Default true.",
+      },
+    },
+    required: ["path"],
+  },
+  handler: (args, ctx) => {
+    const p = args as {
+      path: string;
+      workspace_id?: string;
+      pane_id?: string;
+      focus?: boolean;
+    };
+    // Dedupe across the entire app — preview surfaces are unique by path.
+    const existing = findPreviewSurfaceByPath(p.path);
+    if (existing) {
+      if (p.focus !== false) focusSurfaceById(existing.surfaceId);
+      return {
+        surface_id: existing.surfaceId,
+        pane_id: existing.paneId,
+        workspace_id: existing.workspaceId,
+        reused: true,
+      };
+    }
+    const target = resolveTarget(p, ctx);
+    const hostPane = target.hostPane ?? pickHostPane(target.workspace);
+    const surface = createPreviewSurfaceInPane(hostPane.id, p.path, {
+      focus: p.focus !== false,
+    });
+    if (!surface) {
+      throw new Error(
+        `Could not place preview surface in pane ${hostPane.id} (workspace ${target.workspace.id})`,
+      );
+    }
     return {
-      id: ws?.id ?? null,
-      name: ws?.name ?? null,
-      activePaneId: ws?.activePaneId ?? null,
+      surface_id: surface.id,
+      pane_id: hostPane.id,
+      workspace_id: target.workspace.id,
+      reused: false,
     };
   },
 });
 
 registerTool({
-  name: "list_workspaces",
-  description: "List all open workspaces.",
-  inputSchema: { type: "object", properties: {} },
-  handler: () => {
-    const list = get(workspaces).map((ws) => ({
-      id: ws.id,
-      name: ws.name,
-      activePaneId: ws.activePaneId,
-    }));
-    return { workspaces: list };
-  },
-});
-
-registerTool({
-  name: "get_active_pane",
+  name: "create_preview_file",
   description:
-    "Return the user-focused pane and its surfaces. Reports user GUI focus, NOT the agent's binding. `pane` is null when no pane is focused.",
-  inputSchema: { type: "object", properties: {} },
-  handler: () => {
-    const ws = get(activeWorkspace);
-    const pane = get(activePane);
-    if (!ws || !pane) return { pane: null };
-    return { pane: describePane(pane, ws.id) };
-  },
-});
-
-registerTool({
-  name: "list_panes",
-  description: "List panes in a workspace (defaults to the active workspace).",
-  inputSchema: {
-    type: "object",
-    properties: { workspace_id: { type: "string" } },
-  },
-  handler: (args) => {
-    const p = args as { workspace_id?: string };
-    const target = p.workspace_id
-      ? get(workspaces).find((w) => w.id === p.workspace_id)
-      : get(activeWorkspace);
-    if (!target) return { panes: [] };
-    const list = getAllPanes(target.splitRoot).map((pane) => describePane(pane, target.id));
-    return { panes: list };
-  },
-});
-
-// ---- Lifecycle events ----
-
-registerTool({
-  name: "poll_events",
-  description: "Poll the 500-entry lifecycle event ring buffer.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      cursor: { type: "number" },
-      max: { type: "number" },
-    },
-  },
-  handler: (args) => {
-    const p = args as { cursor?: number; max?: number };
-    return pollEvents({ cursor: p.cursor, max: p.max });
-  },
-});
-
-// ---- Filesystem ----
-
-registerTool({
-  name: "list_dir",
-  description: "List a directory. Returns entries with name, path, is_dir, size.",
+    "Write a file with the given content and immediately open it as a preview surface. Writes the file first, then opens the preview — never the other way around. Equivalent to write_file followed by spawn_preview, with the same dedupe-by-path behavior. For ad-hoc documents (notes, reports, one-off previews), default the path to docs/gnar-term/<name>.md unless the user specifies otherwise.",
   inputSchema: {
     type: "object",
     properties: {
       path: { type: "string" },
-      include_hidden: { type: "boolean" },
+      content: { type: "string" },
+      workspace_id: { type: "string" },
+      pane_id: { type: "string" },
+      focus: { type: "boolean" },
     },
-    required: ["path"],
+    required: ["path", "content"],
   },
-  handler: async (args) => {
-    const p = args as { path: string; include_hidden?: boolean };
-    const entries = await invoke<
-      Array<{ name: string; path: string; is_dir: boolean; size: number }>
-    >("mcp_list_dir", { path: p.path, includeHidden: p.include_hidden });
-    return { entries };
+  handler: async (args, ctx) => {
+    const p = args as {
+      path: string;
+      content: string;
+      workspace_id?: string;
+      pane_id?: string;
+      focus?: boolean;
+    };
+    await invoke("write_file", { path: p.path, content: p.content });
+    const spawn = TOOLS.find((t) => t.name === "spawn_preview")!;
+    return spawn.handler(
+      {
+        path: p.path,
+        workspace_id: p.workspace_id,
+        pane_id: p.pane_id,
+        focus: p.focus,
+      },
+      ctx,
+    );
   },
 });
 
 registerTool({
-  name: "read_file",
-  description: "Read a UTF-8 file and return its contents. Non-UTF-8 content is an error.",
+  name: "close_preview",
+  description:
+    "Close an open preview surface by id. Looks the surface up in the preview-surface registry and removes it from its host pane (collapsing the pane / closing the workspace if it becomes empty, same as a user-driven tab close). Safe to call for an unknown id — returns `{ closed: false }`.",
   inputSchema: {
     type: "object",
     properties: {
-      path: { type: "string" },
-      max_bytes: { type: "number" },
+      surface_id: {
+        type: "string",
+        description: "Id of the preview surface to close.",
+      },
     },
-    required: ["path"],
+    required: ["surface_id"],
   },
-  handler: async (args) => {
-    const p = args as { path: string; max_bytes?: number };
-    const content = await invoke<string>("read_file", { path: p.path });
-    if (p.max_bytes && content.length > p.max_bytes) {
-      return { content: content.slice(0, p.max_bytes), truncated: true };
-    }
-    return { content, truncated: false };
+  handler: (args) => {
+    const p = args as { surface_id: string };
+    const entry = listPreviewSurfaces().find(
+      (e) => e.surfaceId === p.surface_id,
+    );
+    if (!entry) return { closed: false };
+    closeSurfaceById(entry.paneId, entry.surfaceId);
+    return { closed: true };
   },
 });
 
-registerTool({
-  name: "file_exists",
-  description: "Check whether a path exists. Returns exists and (if it does) is_dir.",
-  inputSchema: {
-    type: "object",
-    properties: { path: { type: "string" } },
-    required: ["path"],
-  },
-  handler: async (args) => {
-    const p = args as { path: string };
-    const [exists, isDir] = await invoke<[boolean, boolean]>("mcp_file_info", {
-      path: p.path,
-    });
-    return exists ? { exists: true, is_dir: isDir } : { exists: false };
-  },
-});
+// ---- Push extracted tool groups into TOOLS ----
+
+for (const t of [
+  ...filesystemTools,
+  ...registryMirrorTools,
+  ...introspectionTools,
+]) {
+  TOOLS.push(t);
+}
 
 // ---- JSON-RPC dispatch ----
 
@@ -1136,9 +1387,14 @@ const SERVER_INFO = { name: "gnar-term", version: "0.3.1" };
 const UI_MUTATING_TOOLS = new Set([
   "spawn_agent",
   "dispatch_tasks",
-  "create_preview",
+  "open_surface",
   "render_sidebar",
   "remove_sidebar_section",
+  "spawn_preview",
+  "create_preview_file",
+  "close_preview",
+  "add_dashboard_to_workspace",
+  "remove_dashboard_from_workspace",
 ]);
 
 export async function dispatch(
@@ -1181,7 +1437,9 @@ export async function dispatch(
           description: t.description,
           inputSchema: t.inputSchema,
         }));
-        return isNotification ? null : { jsonrpc: "2.0", id, result: { tools } };
+        return isNotification
+          ? null
+          : { jsonrpc: "2.0", id, result: { tools } };
       }
       case "tools/call": {
         const params = (req.params ?? {}) as {
@@ -1223,7 +1481,10 @@ export async function dispatch(
                 source: "tool-result",
               };
             }
-            logEntry.result = { kind: "ok", summary: JSON.stringify(value).slice(0, 120) };
+            logEntry.result = {
+              kind: "ok",
+              summary: JSON.stringify(value).slice(0, 120),
+            };
             logDispatch(logEntry);
           }
           if (isNotification) return null;
@@ -1232,7 +1493,9 @@ export async function dispatch(
           // validators, so only attach structuredContent when the tool returned
           // a plain object. Text `content` still carries the full JSON payload.
           const isRecord =
-            value !== null && typeof value === "object" && !Array.isArray(value);
+            value !== null &&
+            typeof value === "object" &&
+            !Array.isArray(value);
           return {
             jsonrpc: "2.0",
             id,
@@ -1304,7 +1567,10 @@ export async function initMcpServer(): Promise<void> {
   initialized = true;
 
   const setting = getMcpSetting();
-  if (setting === "off") return;
+  if (setting === "off") {
+    _mcpStatus.set("disabled");
+    return;
+  }
 
   // Bridge pty-exit to session status updates.
   await listen<{ pty_id: number }>("pty-exit", (event) => {
@@ -1367,6 +1633,8 @@ export async function initMcpServer(): Promise<void> {
     connectionContexts.delete(envelope.connection_id);
   });
 
+  _mcpStatus.set("live");
+
   // Lifecycle events for user GUI focus changes (observers).
   let lastWorkspaceId: string | null = null;
   let lastPaneId: string | null = null;
@@ -1397,14 +1665,6 @@ export function _getToolsForTest(): ToolDef[] {
   return TOOLS;
 }
 
-export function _getSessionsForTest(): Map<string, McpSession> {
-  return sessions;
-}
-
-export function _getConnectionContextsForTest(): Map<number, ConnectionContext> {
-  return connectionContexts;
-}
-
 /** Build a connection context for tests. Pass binding=null for an unbound
  *  agent (will hit resolution rule 5); pass partial binding for the bound
  *  cases. The connectionId is auto-assigned to a synthetic value. */
@@ -1431,6 +1691,10 @@ export function _resolveTargetForTest(
   ctx: ConnectionContext,
 ): ResolvedTarget {
   return resolveTarget(args, ctx);
+}
+
+export function _getSessionsForTest(): Map<string, McpSession> {
+  return sessions;
 }
 
 export function _resetMcpServerForTest(): void {

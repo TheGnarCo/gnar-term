@@ -56,18 +56,24 @@
   }
 </script>
 
+<!-- Collapsed mode: the sidebar is absolutely positioned so it overlays
+     the main column rather than sitting next to it as a flex sibling.
+     The main column applies padding-left equal to RAIL_WIDTH_PX so its
+     content scoots out from under the overlay. This avoids any visual
+     seam at the rail/terminal edge. Expanded mode keeps the historical
+     flex-sibling layout. -->
 <div
   id="sidebar"
   class:collapsed={!$sidebarVisible}
   role="presentation"
   style="
-    width: {$sidebarVisible ? `${$sidebarWidth}px` : `${RAIL_WIDTH_PX}px`};
+    {$sidebarVisible
+    ? `position: relative; width: ${$sidebarWidth}px; flex-shrink: 0;`
+    : `position: absolute; left: 0; top: 0; bottom: 0; width: ${RAIL_WIDTH_PX}px; z-index: 2;`}
     background: {$sidebarVisible ? $theme.sidebarBg : $theme.bg};
     display: flex;
     overflow: hidden;
     font-size: 13px;
-    flex-shrink: 0;
-    position: relative;
   "
 >
   <!-- In collapsed mode the wrapper is a 12px rail strip clipped via

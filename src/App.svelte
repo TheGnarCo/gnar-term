@@ -892,10 +892,18 @@
     <TitleBar />
   {/if}
 
+  <!-- Row container is position: relative so the collapsed sidebar can
+       overlay the main column. When collapsed, the sidebar floats on top
+       of the terminal canvas and the main column gains a left padding so
+       its content scoots out from under the rail. This eliminates the
+       flex-sibling boundary that otherwise reads as a vertical seam at
+       the rail/terminal edge. Expanded mode keeps the historical flex
+       layout untouched. -->
   <div
     style="
       flex: 1; display: flex; flex-direction: row;
       min-height: 0; min-width: 0; overflow: hidden;
+      position: relative;
     "
   >
     <Sidebar bind:this={sidebarComponent} />
@@ -904,6 +912,7 @@
       style="
         flex: 1; display: flex; flex-direction: column;
         background: {$theme.bg}; min-width: 0; min-height: 0; overflow: hidden;
+        {$sidebarVisible ? '' : 'padding-left: 12px;'}
       "
     >
       {#if $sidebarVisible}

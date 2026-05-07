@@ -665,7 +665,18 @@ export function initAgentDetection(): void {
       }
       tracked.tracker?.onTitleChange(event.newTitle);
     } else if (!match && tracked.agentId) {
-      if (tracked.detachTimer === null) {
+      // OSC-detectable agents (Claude Code, Codex, Aider) re-title to
+      // the active task as they work — e.g. Claude's title becomes
+      // "Strategic opportunity assessment for Vellum" with no
+      // "claude" substring left. The authoritative "agent stopped"
+      // signal for these is alt-screen exit; a title that no longer
+      // matches just means the agent is busy. Capture the new title
+      // for the running/done heuristic and stop there. Title-only
+      // agents (e.g. Cursor) still detach on mismatch — title is
+      // their only signal.
+      if (tracked.agentPattern?.oscDetectable) {
+        tracked.tracker?.onTitleChange(event.newTitle);
+      } else if (tracked.detachTimer === null) {
         tracked.detachTimer = setTimeout(() => {
           tracked.detachTimer = null;
           detachAgent(tracked);

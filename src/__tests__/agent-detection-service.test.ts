@@ -201,7 +201,38 @@ describe("agent-detection-service — title transitions", () => {
     expect(agents[0]?.agentName).toBe("Claude Code");
   });
 
-  it("detaches when the title changes away from a matching pattern (after debounce)", () => {
+  it("detaches title-only agents (e.g. Cursor) when the title stops matching (after debounce)", () => {
+    vi.useFakeTimers();
+    try {
+      workspaces.set([
+        makeChildWorkspace("w1", [{ id: "s1", title: "cursor", ptyId: 6 }]),
+      ]);
+      initAgentDetection();
+      expect(getAgents()).toHaveLength(1);
+
+      eventBus.emit({
+        type: "surface:titleChanged",
+        id: "s1",
+        oldTitle: "cursor",
+        newTitle: "zsh",
+      });
+      // Still attached immediately after the title change
+      expect(getAgents()).toHaveLength(1);
+
+      // Advance past the debounce window — now detaches
+      vi.advanceTimersByTime(5_000);
+      expect(getAgents()).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps OSC-detectable agents attached when the title re-flows to the active task", () => {
+    // Claude Code (and other OSC-detectable harnesses) routinely
+    // rewrite their title to the current task — e.g. "Strategic
+    // opportunity assessment for Vellum". The title no longer
+    // contains "claude" but the agent is plainly still active.
+    // Detach for these is driven by alt-screen exit, not the title.
     vi.useFakeTimers();
     try {
       workspaces.set([
@@ -214,14 +245,21 @@ describe("agent-detection-service — title transitions", () => {
         type: "surface:titleChanged",
         id: "s1",
         oldTitle: "claude",
-        newTitle: "zsh",
+        newTitle: "Strategic opportunity assessment for Vellum",
       });
-      // Still attached immediately after the title change
-      expect(getAgents()).toHaveLength(1);
 
-      // Advance past the debounce window — now detaches
-      vi.advanceTimersByTime(5_000);
-      expect(getAgents()).toHaveLength(0);
+      // Well past what would have been the title-detach debounce window.
+      vi.advanceTimersByTime(10_000);
+      expect(getAgents()).toHaveLength(1);
+      // And the running-title heuristic still feeds through onTitleChange,
+      // so a "thinking"-bearing title re-flips status to running.
+      eventBus.emit({
+        type: "surface:titleChanged",
+        id: "s1",
+        oldTitle: "Strategic opportunity assessment for Vellum",
+        newTitle: "Strategic opportunity assessment for Vellum (thinking)",
+      });
+      expect(getAgents()[0]?.status).toBe("running");
     } finally {
       vi.useRealTimers();
     }
@@ -721,7 +759,10 @@ describe("agent-detection-service — workspace:closed cleanup", () => {
 });
 
 describe("agent-detection-service — title restoration on agent close", () => {
-  it("restores surface title to pre-agent name when title changes away from match (after debounce)", () => {
+  it("restores surface title to pre-agent name when a title-only agent's title stops matching (after debounce)", () => {
+    // Title-only agents (e.g. Cursor) detach on title mismatch.
+    // OSC-detectable agents (Claude / Codex / Aider) do not — they
+    // re-title to the active task during normal operation.
     vi.useFakeTimers();
     try {
       const ws = makeChildWorkspace("w1", [
@@ -732,14 +773,14 @@ describe("agent-detection-service — title restoration on agent close", () => {
       expect(getAgents()).toHaveLength(0);
 
       const surface = ws.paneLayout.pane.surfaces[0]!;
-      surface.title = "claude";
+      surface.title = "cursor";
       workspaces.update((l) => [...l]);
 
       eventBus.emit({
         type: "surface:titleChanged",
         id: "s1",
         oldTitle: "zsh",
-        newTitle: "claude",
+        newTitle: "cursor",
       });
       expect(getAgents()).toHaveLength(1);
 
@@ -748,7 +789,7 @@ describe("agent-detection-service — title restoration on agent close", () => {
       eventBus.emit({
         type: "surface:titleChanged",
         id: "s1",
-        oldTitle: "claude",
+        oldTitle: "cursor",
         newTitle: "zsh",
       });
 
@@ -786,11 +827,11 @@ describe("agent-detection-service — title restoration on agent close", () => {
     expect(surface.title).toBe("bash");
   });
 
-  it("does not restore title when bootstrapped with agent title already active (after debounce)", () => {
+  it("does not restore title when a title-only agent was bootstrapped with the agent title already active (after debounce)", () => {
     vi.useFakeTimers();
     try {
       const ws = makeChildWorkspace("w1", [
-        { id: "s1", title: "claude", ptyId: 52 },
+        { id: "s1", title: "cursor", ptyId: 52 },
       ]);
       workspaces.set([ws]);
       initAgentDetection();
@@ -802,7 +843,7 @@ describe("agent-detection-service — title restoration on agent close", () => {
       eventBus.emit({
         type: "surface:titleChanged",
         id: "s1",
-        oldTitle: "claude",
+        oldTitle: "cursor",
         newTitle: "zsh",
       });
 

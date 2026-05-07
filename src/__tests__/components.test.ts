@@ -110,6 +110,7 @@ vi.stubGlobal("ResizeObserver", MockResizeObserver);
 // ---------------------------------------------------------------------------
 
 import TitleBar from "../lib/components/TitleBar.svelte";
+import ShortcutReference from "../lib/components/ShortcutReference.svelte";
 import FindBar from "../lib/components/FindBar.svelte";
 import Tab from "../lib/components/Tab.svelte";
 import TabBar from "../lib/components/TabBar.svelte";
@@ -117,15 +118,15 @@ import ContextMenu from "../lib/components/ContextMenu.svelte";
 import CommandPalette from "../lib/components/CommandPalette.svelte";
 import WorkspaceItem from "../lib/components/WorkspaceItem.svelte";
 import PaneView from "../lib/components/PaneView.svelte";
-import PrimarySidebar from "../lib/components/PrimarySidebar.svelte";
-import SecondarySidebar from "../lib/components/SecondarySidebar.svelte";
+import Sidebar from "../lib/components/Sidebar.svelte";
+import NewWorkspaceSplitButton from "../lib/components/NewWorkspaceSplitButton.svelte";
 import TerminalSurfaceComponent from "../lib/components/TerminalSurface.svelte";
-import WorkspaceGroupSectionHarness from "./workspace-group-section-harness.svelte";
+import WorkspaceSectionHarness from "./workspace-section-harness.svelte";
 
 // Store imports
 import {
-  primarySidebarVisible,
-  secondarySidebarVisible,
+  sidebarVisible,
+  sidebarWidth,
   commandPaletteOpen,
   findBarVisible,
   contextMenu,
@@ -136,6 +137,10 @@ import {
   unregisterBySource,
 } from "../lib/services/command-registry";
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
+import { rootRowOrder } from "../lib/stores/root-row-order";
+import { registerRootRowRenderer } from "../lib/services/root-row-renderer-registry";
+import WorkspaceRowBody from "../lib/components/WorkspaceRowBody.svelte";
+import { initCoreExtensionAPI } from "../lib/bootstrap/init-core-extension-api";
 import {
   registerSidebarSection,
   resetSidebarSections,
@@ -144,8 +149,8 @@ import {
   registerWorkspaceAction,
   resetWorkspaceActions,
 } from "../lib/services/workspace-action-registry";
-import { setWorkspaceGroups } from "../lib/stores/workspace-groups";
-import type { WorkspaceGroupEntry } from "../lib/config";
+import { setWorkspaces } from "../lib/stores/workspace";
+import type { WorkspaceRecord } from "../lib/config";
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -203,13 +208,18 @@ function makePane(id: string, surfaces?: TerminalSurface[]): Pane {
   };
 }
 
-function makeWorkspace(id: string, name: string, pane?: Pane): Workspace {
+function makeChildWorkspace(id: string, name: string, pane?: Pane): Workspace {
   const p = pane ?? makePane(`${id}-p1`);
   return {
     id,
     name,
-    splitRoot: { type: "pane", pane: p },
+    paneLayout: { type: "pane", pane: p },
     activePaneId: p.id,
+    branchedWorkspaceIds: [],
+    color: "purple",
+    path: `/tmp/${id}`,
+    isGit: false,
+    createdAt: "2026-01-01T00:00:00.000Z",
   };
 }
 
@@ -221,14 +231,71 @@ const noop = () => {};
 
 beforeEach(() => {
   cleanup();
-  primarySidebarVisible.set(true);
-  secondarySidebarVisible.set(false);
+  sidebarVisible.set(true);
   commandPaletteOpen.set(false);
   findBarVisible.set(false);
   contextMenu.set(null);
   workspaces.set([]);
+  rootRowOrder.set([]);
   activeWorkspaceIdx.set(-1);
   unregisterBySource("test");
+});
+
+// ===========================================================================
+// ShortcutReference
+// ===========================================================================
+
+describe("ShortcutReference", () => {
+  it("renders the dashboard surface body", () => {
+    render(ShortcutReference, { props: { open: true } });
+    expect(screen.getByTestId("shortcut-reference")).toBeTruthy();
+  });
+
+  it("shows corrected label: Select Surface/Tab 1-9 (not Switch Branched Workspace)", () => {
+    render(ShortcutReference, { props: { open: true } });
+    expect(screen.getByText("Select Surface/Tab 1-9")).toBeTruthy();
+    expect(screen.queryByText(/Switch Branched Workspace/)).toBeNull();
+  });
+
+  it("shows Linux bindings for Focus Pane (not —)", () => {
+    render(ShortcutReference, { props: { open: true } });
+    expect(screen.getAllByText("Ctrl+Alt+←").length).toBeGreaterThan(0);
+  });
+
+  it("shows Linux bindings for Resize Pane (not —)", () => {
+    render(ShortcutReference, { props: { open: true } });
+    expect(screen.getByText("Ctrl+Shift+←→↑↓")).toBeTruthy();
+  });
+
+  it("uses Surfaces section title (not Surfaces (Terminals))", () => {
+    render(ShortcutReference, { props: { open: true } });
+    expect(screen.getByText("Surfaces")).toBeTruthy();
+    expect(screen.queryByText("Surfaces (Terminals)")).toBeNull();
+  });
+
+  it("shows Rename Workspace entry", () => {
+    render(ShortcutReference, { props: { open: true } });
+    expect(screen.getByText("Rename Workspace")).toBeTruthy();
+  });
+
+  it("shows Rename Surface/Tab entry", () => {
+    render(ShortcutReference, { props: { open: true } });
+    expect(screen.getByText("Rename Surface/Tab")).toBeTruthy();
+  });
+
+  it("shows Find Next and Find Previous entries", () => {
+    render(ShortcutReference, { props: { open: true } });
+    expect(screen.getByText("Find Next")).toBeTruthy();
+    expect(screen.getByText("Find Previous")).toBeTruthy();
+  });
+
+  it("uses workspace terminology (not Branched Workspace) for nav shortcuts", () => {
+    render(ShortcutReference, { props: { open: true } });
+    expect(screen.getByText("Next Workspace")).toBeTruthy();
+    expect(screen.getByText("Prev Workspace")).toBeTruthy();
+    // Navigation shortcuts use plain "Workspace" — the Surfaces section
+    // correctly uses "Branched Workspace" for Workspace-scoped operations.
+  });
 });
 
 // ===========================================================================
@@ -236,10 +303,10 @@ beforeEach(() => {
 // ===========================================================================
 
 describe("TitleBar", () => {
-  it("renders GNARTERM text", () => {
+  it("renders GnarTerm text", () => {
     render(TitleBar);
     const el =
-      screen.queryByText("GNARTERM") ?? screen.queryByText("GNARTERM (DEV)");
+      screen.queryByText("GnarTerm") ?? screen.queryByText("GnarTerm (Dev)");
     expect(el).toBeTruthy();
   });
 
@@ -255,13 +322,12 @@ describe("TitleBar", () => {
     expect(el.style.height).toBe("38px");
   });
 
-  it("always renders both sidebar toggles", () => {
+  it("renders primary sidebar toggle", () => {
     const { container } = render(TitleBar);
     const primaryBtn = container.querySelector(
-      "button[title^='Toggle Primary Sidebar']",
+      "button[title^='Toggle Sidebar']",
     );
     expect(primaryBtn).toBeTruthy();
-    expect(screen.getByTitle("Toggle Secondary Sidebar")).toBeTruthy();
   });
 
   it("renders settings button", () => {
@@ -269,42 +335,60 @@ describe("TitleBar", () => {
     const settingsBtn = container.querySelector("button[title*='Settings']");
     expect(settingsBtn).toBeTruthy();
   });
-});
 
-// ===========================================================================
-// SecondarySidebar
-// ===========================================================================
-
-describe("SecondarySidebar", () => {
-  it("renders when secondarySidebarVisible is true", () => {
-    secondarySidebarVisible.set(true);
-    const { container } = render(SecondarySidebar);
-    expect(container.querySelector("#secondary-sidebar")).toBeTruthy();
+  it("renders the + New split button when sidebar is collapsed", () => {
+    sidebarVisible.set(false);
+    registerWorkspaceAction({
+      id: "core:new-workspace",
+      label: "New Workspace",
+      icon: "plus",
+      shortcut: "Cmd+Shift+N",
+      source: "core",
+      handler: noop,
+    });
+    const { container } = render(TitleBar);
+    const newBtn = Array.from(container.querySelectorAll("button")).find(
+      (b) => b.textContent?.trim() === "+ New",
+    );
+    expect(newBtn).toBeDefined();
   });
 
-  it("does not render when secondarySidebarVisible is false", () => {
-    secondarySidebarVisible.set(false);
-    const { container } = render(SecondarySidebar);
-    expect(container.querySelector("#secondary-sidebar")).toBeNull();
+  it("does not render the + New split button when sidebar is expanded", () => {
+    sidebarVisible.set(true);
+    registerWorkspaceAction({
+      id: "core:new-workspace",
+      label: "New Workspace",
+      icon: "plus",
+      shortcut: "Cmd+Shift+N",
+      source: "core",
+      handler: noop,
+    });
+    const { container } = render(TitleBar);
+    const newBtn = Array.from(container.querySelectorAll("button")).find(
+      (b) => b.textContent?.trim() === "+ New",
+    );
+    expect(newBtn).toBeUndefined();
   });
 
-  it("has data-tauri-drag-region", () => {
-    secondarySidebarVisible.set(true);
-    const { container } = render(SecondarySidebar);
-    const dragRegions = container.querySelectorAll("[data-tauri-drag-region]");
-    expect(dragRegions.length).toBeGreaterThan(0);
-  });
-
-  it("shows empty state message when no tabs are registered", () => {
-    secondarySidebarVisible.set(true);
-    render(SecondarySidebar);
-    expect(screen.getByText("No tabs registered")).toBeTruthy();
-  });
-
-  it("does not render toggle in header (lives in TitleBar)", () => {
-    secondarySidebarVisible.set(true);
-    render(SecondarySidebar);
-    expect(screen.queryByTitle("Toggle Secondary Sidebar")).toBeNull();
+  it("places the split button before the sidebar toggle in DOM order when collapsed", () => {
+    sidebarVisible.set(false);
+    registerWorkspaceAction({
+      id: "core:new-workspace",
+      label: "New Workspace",
+      icon: "plus",
+      shortcut: "Cmd+Shift+N",
+      source: "core",
+      handler: noop,
+    });
+    const { container } = render(TitleBar);
+    const buttons = Array.from(container.querySelectorAll("button"));
+    const newIdx = buttons.findIndex((b) => b.textContent?.trim() === "+ New");
+    const toggleIdx = buttons.findIndex(
+      (b) => b.getAttribute("aria-label") === "Toggle Sidebar",
+    );
+    expect(newIdx).toBeGreaterThanOrEqual(0);
+    expect(toggleIdx).toBeGreaterThanOrEqual(0);
+    expect(newIdx).toBeLessThan(toggleIdx);
   });
 });
 
@@ -350,7 +434,7 @@ describe("FindBar", () => {
 
   it("passes regex:true to findNext when regex toggle is enabled", async () => {
     const surface = makeSurface("s1");
-    const ws = makeWorkspace("w1", "test", makePane("p1", [surface]));
+    const ws = makeChildWorkspace("w1", "test", makePane("p1", [surface]));
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
     findBarVisible.set(true);
@@ -375,7 +459,7 @@ describe("FindBar", () => {
 
   it("passes caseSensitive:true to findNext when case toggle is enabled", async () => {
     const surface = makeSurface("s2");
-    const ws = makeWorkspace("w2", "test", makePane("p2", [surface]));
+    const ws = makeChildWorkspace("w2", "test", makePane("p2", [surface]));
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
     findBarVisible.set(true);
@@ -400,7 +484,7 @@ describe("FindBar", () => {
 
   it("passes wholeWord:true to findNext when whole-word toggle is enabled", async () => {
     const surface = makeSurface("s3");
-    const ws = makeWorkspace("w3", "test", makePane("p3", [surface]));
+    const ws = makeChildWorkspace("w3", "test", makePane("p3", [surface]));
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
     findBarVisible.set(true);
@@ -491,7 +575,7 @@ describe("Tab", () => {
     expect(spans.length).toBe(1);
   });
 
-  it("renders close button (x symbol)", () => {
+  it("renders close button with aria-label", () => {
     const surface = makeSurface("t1");
     render(Tab, {
       props: {
@@ -502,7 +586,7 @@ describe("Tab", () => {
         onClose: noop,
       },
     });
-    expect(screen.getByText("×")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Close tab" })).toBeTruthy();
   });
 
   it("renders active tab with the tab class", () => {
@@ -1020,6 +1104,35 @@ describe("CommandPalette", () => {
     const input = container.querySelector("input") as HTMLInputElement;
     expect(input.getAttribute("aria-activedescendant")).toBe("cmd-option-0");
   });
+
+  it("close-pane command is registered and appears in palette", () => {
+    registerCommands([
+      {
+        id: "core.close-pane",
+        title: "Close Pane",
+        shortcut: "⇧⌘X",
+        action: noop,
+        source: "test",
+      },
+    ]);
+    commandPaletteOpen.set(true);
+    render(CommandPalette);
+    expect(screen.getByText("Close Pane")).toBeTruthy();
+  });
+
+  it("rename-workspace command is registered and appears in palette", () => {
+    registerCommands([
+      {
+        id: "core.rename-workspace",
+        title: "Rename Workspace",
+        action: noop,
+        source: "test",
+      },
+    ]);
+    commandPaletteOpen.set(true);
+    render(CommandPalette);
+    expect(screen.getByText("Rename Workspace")).toBeTruthy();
+  });
 });
 
 // ===========================================================================
@@ -1031,7 +1144,7 @@ describe("WorkspaceItem", () => {
     wsOverrides: Partial<Workspace> = {},
     isActive = true,
   ) {
-    const ws = makeWorkspace("ws1", "My Workspace");
+    const ws = makeChildWorkspace("ws1", "My Workspace");
     Object.assign(ws, wsOverrides);
     return render(WorkspaceItem, {
       props: {
@@ -1052,7 +1165,7 @@ describe("WorkspaceItem", () => {
   });
 
   it("renders close button in DragGrip when grip is expanded", async () => {
-    const ws = makeWorkspace("ws1", "My Workspace");
+    const ws = makeChildWorkspace("ws1", "My Workspace");
     const { container } = render(WorkspaceItem, {
       props: {
         workspace: ws,
@@ -1065,17 +1178,17 @@ describe("WorkspaceItem", () => {
         onGripMouseDown: noop,
       },
     });
-    // Hover the row — this makes the grip visible, which shows the × chip
+    // Hover the row — this makes the grip visible, which shows the close button
     const row = container.firstElementChild as HTMLElement;
     await fireEvent.mouseEnter(row);
     await tick();
-    expect(screen.getByText("×")).toBeTruthy();
+    expect(screen.getByLabelText("Close My Workspace")).toBeTruthy();
   });
 
   it("shows unread badge when surfaces have unread data", () => {
     const surface = makeSurface("s1", { hasUnread: true });
     const pane = makePane("p1", [surface]);
-    const ws = makeWorkspace("ws1", "Unread WS", pane);
+    const ws = makeChildWorkspace("ws1", "Unread WS", pane);
     const { container: withUnread } = render(WorkspaceItem, {
       props: {
         workspace: ws,
@@ -1094,7 +1207,7 @@ describe("WorkspaceItem", () => {
 
     const surfaceNoUnread = makeSurface("s2", { hasUnread: false });
     const paneNoUnread = makePane("p2", [surfaceNoUnread]);
-    const wsNoUnread = makeWorkspace("ws2", "No Unread WS", paneNoUnread);
+    const wsNoUnread = makeChildWorkspace("ws2", "No Unread WS", paneNoUnread);
     const { container: withoutUnread } = render(WorkspaceItem, {
       props: {
         workspace: wsNoUnread,
@@ -1122,7 +1235,7 @@ describe("WorkspaceItem", () => {
     // Render with unread to get the count with badge
     const surface = makeSurface("s1", { hasUnread: true });
     const pane = makePane("p1", [surface]);
-    const ws = makeWorkspace("ws1", "Unread WS", pane);
+    const ws = makeChildWorkspace("ws1", "Unread WS", pane);
     const { container: withUnread } = render(WorkspaceItem, {
       props: {
         workspace: ws,
@@ -1147,7 +1260,7 @@ describe("WorkspaceItem", () => {
     const ws: Workspace = {
       id: "ws1",
       name: "Multi Surface",
-      splitRoot: { type: "pane", pane },
+      paneLayout: { type: "pane", pane },
       activePaneId: pane.id,
     };
     render(WorkspaceItem, {
@@ -1168,7 +1281,7 @@ describe("WorkspaceItem", () => {
   it("renders notification text when a surface has a notification", () => {
     const surface = makeSurface("s1", { notification: "Build complete" });
     const pane = makePane("p1", [surface]);
-    const ws = makeWorkspace("ws1", "Notified", pane);
+    const ws = makeChildWorkspace("ws1", "Notified", pane);
     render(WorkspaceItem, {
       props: {
         workspace: ws,
@@ -1191,7 +1304,7 @@ describe("WorkspaceItem", () => {
     // work" and must render a visible row.
     const { setStatusItem, clearAllStatusForWorkspace } =
       await import("../lib/services/status-registry");
-    const ws = makeWorkspace("ws-agent", "Agent WS");
+    const ws = makeChildWorkspace("ws-agent", "Agent WS");
     setStatusItem("_agent", ws.id, "surface:s1", {
       category: "process",
       priority: 0,
@@ -1216,15 +1329,15 @@ describe("WorkspaceItem", () => {
     clearAllStatusForWorkspace(ws.id);
   });
 
-  it("suppresses the notification row when nested inside a workspace group", () => {
-    // Regression: nested workspaces render under a group's colored
+  it("suppresses the notification row when child of a workspace", () => {
+    // Regression: child workspaces render under a workspace's colored
     // banner that already rolls up status; the long blue notification
-    // row duplicates chrome and crowds the nested layout, so it's
-    // suppressed when metadata.groupId is set.
+    // row duplicates chrome and crowds the child layout, so it's
+    // suppressed when metadata.rootWorkspaceId is set.
     const surface = makeSurface("s1", { notification: "Build complete" });
     const pane = makePane("p1", [surface]);
-    const ws = makeWorkspace("ws1", "Nested WS", pane);
-    ws.metadata = { groupId: "g1" };
+    const ws = makeChildWorkspace("ws1", "Child WS", pane);
+    ws.rootWorkspaceId = "g1";
     render(WorkspaceItem, {
       props: {
         workspace: ws,
@@ -1259,14 +1372,14 @@ describe("WorkspaceItem", () => {
     );
     // Mouse-based drag system (shared utility — HTML5 DnD is broken
     // in Tauri WKWebView). Root-row drag now lives in
-    // WorkspaceListBlock; PrimarySidebar is a thin host.
+    // WorkspaceListBlock; Sidebar is a thin host.
     expect(listBlockSource).toContain("createDragReorder");
     expect(listBlockSource).toContain("insertIndicator");
     expect(listBlockSource).toContain("dragActive");
   });
 
   it("applies accentColor as DragGrip railColor when provided", () => {
-    const ws = makeWorkspace("ws1", "Accent WS");
+    const ws = makeChildWorkspace("ws1", "Accent WS");
     render(WorkspaceItem, {
       props: {
         workspace: ws,
@@ -1292,18 +1405,23 @@ describe("WorkspaceItem", () => {
   });
 
   it("always renders the DragGrip dot pattern at full railColor (no solid-bg wrapper)", () => {
-    const source = readFileSync(
+    const railSource = readFileSync(
+      "src/lib/components/SidebarRail.svelte",
+      "utf-8",
+    );
+    // alwaysShowDots={!locked} + full opacity so the dot pattern reads at rest
+    // without needing a colored wrapper bg (which would appear as a
+    // solid "border" block). Locked items show solid rail instead.
+    expect(railSource).toMatch(/alwaysShowDots=\{!locked\}/);
+    expect(railSource).toMatch(/railOpacity=\{1\}/);
+
+    // WorkspaceItem uses railColor which falls back through:
+    // dashboard entry color → accentColor prop → theme.accent
+    const workspaceSource = readFileSync(
       "src/lib/components/WorkspaceItem.svelte",
       "utf-8",
     );
-    // railColor falls back through dashboard entry color → accentColor prop → theme.accent
-    expect(source).toContain("accentColor");
-    expect(source).toContain("$theme.accent");
-    // alwaysShowDots + full opacity so the dot pattern reads at rest
-    // without needing a colored wrapper bg (which would appear as a
-    // solid "border" block).
-    expect(source).toMatch(/alwaysShowDots=\{true\}/);
-    expect(source).toMatch(/railOpacity=\{1\}/);
+    expect(workspaceSource).toContain("railColor");
   });
 
   it("passes accentColor through WorkspaceListView", () => {
@@ -1324,7 +1442,7 @@ describe("WorkspaceItem", () => {
 
   it("renders a clickable dashboard icon when dashboardHint is provided", async () => {
     const hintOnClick = vi.fn();
-    const ws = makeWorkspace("ws-nested", "Nested WS");
+    const ws = makeChildWorkspace("ws-child", "Child WS");
     const { container } = render(WorkspaceItem, {
       props: {
         workspace: ws,
@@ -1352,7 +1470,7 @@ describe("WorkspaceItem", () => {
   it("does not trigger workspace select when the dashboard icon is clicked", async () => {
     const onSelect = vi.fn();
     const hintOnClick = vi.fn();
-    const ws = makeWorkspace("ws-nested", "Nested WS");
+    const ws = makeChildWorkspace("ws-child", "Child WS");
     const { container } = render(WorkspaceItem, {
       props: {
         workspace: ws,
@@ -1402,24 +1520,22 @@ describe("PaneView", () => {
     expect(screen.getByText("Pane Tab")).toBeTruthy();
   });
 
-  it("does not render an Overview/Settings tab strip over Group Dashboards", () => {
+  it("does not render an Overview/Settings tab strip over Workspace Dashboards", () => {
     // The Settings dashboard is now its own contribution (gear icon,
-    // auto-provisioned). PaneView no longer wraps the Group Dashboard
+    // auto-provisioned). PaneView no longer wraps the Workspace Dashboard
     // preview in an Overview/Settings tab strip.
     const ws: Workspace = {
       id: "ws-dash",
       name: "Dashboard",
-      splitRoot: { type: "pane", pane: makePane("p1") },
+      paneLayout: { type: "pane", pane: makePane("p1") },
       activePaneId: "p1",
-      metadata: {
-        isDashboard: true,
-        groupId: "g1",
-        dashboardContributionId: "group",
-      },
+      isDashboard: true,
+      rootWorkspaceId: "g1",
+      dashboardContributionId: "group",
     };
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
-    const pane = ws.splitRoot.type === "pane" ? ws.splitRoot.pane : null;
+    const pane = ws.paneLayout.type === "pane" ? ws.paneLayout.pane : null;
     if (!pane) throw new Error("expected single-pane workspace");
     const { container } = render(PaneView, {
       props: {
@@ -1435,27 +1551,29 @@ describe("PaneView", () => {
         onFocusPane: noop,
       },
     });
-    expect(container.querySelector("[data-group-dashboard-tabs]")).toBeNull();
-    expect(container.querySelector("[data-group-dashboard-tab]")).toBeNull();
+    expect(
+      container.querySelector("[data-workspace-dashboard-tabs]"),
+    ).toBeNull();
+    expect(
+      container.querySelector("[data-workspace-dashboard-tab]"),
+    ).toBeNull();
   });
 
-  it("renders GroupDashboardSettings for a settings-contribution workspace", () => {
+  it("renders WorkspaceDashboardSettings for a settings-contribution workspace", () => {
     // Settings contribution → PaneView swaps the surface list for the
     // shared settings body.
     const ws: Workspace = {
       id: "ws-settings",
       name: "Settings",
-      splitRoot: { type: "pane", pane: makePane("p1") },
+      paneLayout: { type: "pane", pane: makePane("p1") },
       activePaneId: "p1",
-      metadata: {
-        isDashboard: true,
-        groupId: "g1",
-        dashboardContributionId: "settings",
-      },
+      isDashboard: true,
+      rootWorkspaceId: "g1",
+      dashboardContributionId: "settings",
     };
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
-    const pane = ws.splitRoot.type === "pane" ? ws.splitRoot.pane : null;
+    const pane = ws.paneLayout.type === "pane" ? ws.paneLayout.pane : null;
     if (!pane) throw new Error("expected single-pane workspace");
     const { container } = render(PaneView, {
       props: {
@@ -1471,10 +1589,12 @@ describe("PaneView", () => {
         onFocusPane: noop,
       },
     });
-    // GroupDashboardSettings renders a settings panel keyed by groupId.
-    // Absent a matching group in the store it renders nothing, but the
+    // WorkspaceDashboardSettings renders a settings panel keyed by rootWorkspaceId.
+    // Absent a matching workspace in the store it renders nothing, but the
     // render branch is still reached — no tab strip appears either way.
-    expect(container.querySelector("[data-group-dashboard-tabs]")).toBeNull();
+    expect(
+      container.querySelector("[data-workspace-dashboard-tabs]"),
+    ).toBeNull();
   });
 
   it("renders the + button via the embedded TabBar", () => {
@@ -1520,7 +1640,54 @@ describe("PaneView", () => {
 // Sidebar
 // ===========================================================================
 
-describe("PrimarySidebar", () => {
+describe("NewWorkspaceSplitButton", () => {
+  beforeEach(() => {
+    resetWorkspaceActions();
+    cleanup();
+  });
+
+  it("renders + New and a search button when core action is registered", () => {
+    registerWorkspaceAction({
+      id: "core:new-workspace",
+      label: "New Workspace",
+      icon: "plus",
+      source: "core",
+      handler: noop,
+    });
+    const { container } = render(NewWorkspaceSplitButton);
+    const buttons = container.querySelectorAll("button");
+    expect(buttons.length).toBe(2);
+    expect(buttons[0].textContent?.trim()).toBe("+ New");
+    expect(buttons[1].getAttribute("title")).toMatch(/Switch Workspace/);
+  });
+
+  it("invokes the core action handler when + New is clicked", async () => {
+    const handler = vi.fn();
+    registerWorkspaceAction({
+      id: "core:new-workspace",
+      label: "New Workspace",
+      icon: "plus",
+      source: "core",
+      handler,
+    });
+    const { container } = render(NewWorkspaceSplitButton);
+    const newBtn = container.querySelectorAll("button")[0] as HTMLButtonElement;
+    await fireEvent.click(newBtn);
+    expect(handler).toHaveBeenCalledOnce();
+  });
+
+  it("falls back to the search-only button when no core action is registered", () => {
+    const { container } = render(NewWorkspaceSplitButton);
+    // No "+ New" — only a single search button (SidebarActionButton fallback).
+    expect(
+      Array.from(container.querySelectorAll("button")).find(
+        (b) => b.textContent?.trim() === "+ New",
+      ),
+    ).toBeUndefined();
+  });
+});
+
+describe("Sidebar", () => {
   const sidebarProps = {
     onSwitchWorkspace: noop,
     onRenameWorkspace: noop,
@@ -1531,22 +1698,46 @@ describe("PrimarySidebar", () => {
     resetSidebarSections();
     resetWorkspaceActions();
     cleanup();
+    // Workspace rows render through the registered "workspace"
+    // root-row renderer (mounted via ExtensionWrapper). Register the core
+    // extension API + the renderer so workspace names appear in tests.
+    initCoreExtensionAPI();
+    registerRootRowRenderer({
+      id: "workspace",
+      source: "core",
+      component: WorkspaceRowBody,
+      label: (id: string) => {
+        let result: string | undefined;
+        workspaces.subscribe((list) => {
+          result = list.find((w) => w.id === id)?.name;
+        })();
+        return result;
+      },
+    });
   });
 
-  it("renders when primarySidebarVisible is true", () => {
-    primarySidebarVisible.set(true);
-    const { container } = render(PrimarySidebar, { props: sidebarProps });
-    expect(container.querySelector("#primary-sidebar")).toBeTruthy();
+  it("renders when sidebarVisible is true", () => {
+    sidebarVisible.set(true);
+    const { container } = render(Sidebar, { props: sidebarProps });
+    expect(container.querySelector("#sidebar")).toBeTruthy();
   });
 
-  it("does not render when primarySidebarVisible is false", () => {
-    primarySidebarVisible.set(false);
-    const { container } = render(PrimarySidebar, { props: sidebarProps });
-    expect(container.querySelector("#primary-sidebar")).toBeNull();
+  it("renders a fixed-width rail slot when collapsed (sidebarVisible=false)", () => {
+    sidebarVisible.set(false);
+    const { container } = render(Sidebar, { props: sidebarProps });
+    const slot = container.querySelector("#sidebar") as HTMLElement | null;
+    expect(slot).not.toBeNull();
+    expect(slot!.classList.contains("collapsed")).toBe(true);
+    // Wide enough to show the 8px grip rail plus a sliver of banner
+    // past it, but not so wide that row content (icons, labels) leaks
+    // into the collapsed slot.
+    const widthPx = parseInt(slot!.style.width, 10);
+    expect(widthPx).toBeGreaterThanOrEqual(10);
+    expect(widthPx).toBeLessThan(20);
   });
 
-  it("renders split button for workspace actions in the top row (sidebar toggles live in TitleBar)", () => {
-    primarySidebarVisible.set(true);
+  it("does not render the + New split button inline when collapsed", () => {
+    sidebarVisible.set(false);
     registerWorkspaceAction({
       id: "core:new-workspace",
       label: "New Workspace",
@@ -1555,31 +1746,91 @@ describe("PrimarySidebar", () => {
       source: "core",
       handler: noop,
     });
-    render(PrimarySidebar, { props: sidebarProps });
+    const { container } = render(Sidebar, { props: sidebarProps });
+    const inlineNewButton = Array.from(
+      container.querySelectorAll("button"),
+    ).find((b) => b.textContent?.trim() === "+ New");
+    expect(inlineNewButton).toBeUndefined();
+  });
+
+  it("activates the overlay on hover when collapsed", async () => {
+    sidebarVisible.set(false);
+    sidebarWidth.set(220);
+    const { container } = render(Sidebar, { props: sidebarProps });
+    const slot = container.querySelector("#sidebar") as HTMLElement;
+    const inner = slot.querySelector(".sidebar-content") as HTMLElement;
+
+    expect(inner.style.width).toBe("220px");
+    expect(slot.classList.contains("overlay-active")).toBe(false);
+
+    slot.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+    await tick();
+
+    expect(slot.classList.contains("overlay-active")).toBe(true);
+  });
+
+  it("closes the overlay after the mouseleave grace period", async () => {
+    vi.useFakeTimers();
+    try {
+      sidebarVisible.set(false);
+      const { container } = render(Sidebar, { props: sidebarProps });
+      const slot = container.querySelector("#sidebar") as HTMLElement;
+
+      slot.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+      await tick();
+      expect(slot.classList.contains("overlay-active")).toBe(true);
+
+      slot.dispatchEvent(new MouseEvent("mouseleave", { bubbles: true }));
+      await tick();
+      expect(slot.classList.contains("overlay-active")).toBe(true);
+
+      vi.advanceTimersByTime(200);
+      await tick();
+      expect(slot.classList.contains("overlay-active")).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("renders split button for workspace actions in the top row (sidebar toggles live in TitleBar)", () => {
+    sidebarVisible.set(true);
+    registerWorkspaceAction({
+      id: "core:new-workspace",
+      label: "New Workspace",
+      icon: "plus",
+      shortcut: "Cmd+Shift+N",
+      source: "core",
+      handler: noop,
+    });
+    render(Sidebar, { props: sidebarProps });
     // "+ New" now sits in the top (title) row alongside any sidebar-
     // zone action buttons — the old "Workspaces" header row inside
     // WorkspaceListBlock has been retired.
     expect(screen.getByText("+ New")).toBeTruthy();
     expect(screen.queryByText("Workspaces")).toBeNull();
-    expect(screen.queryByTitle("Toggle Primary Sidebar (⌘B)")).toBeNull();
+    expect(screen.queryByTitle("Toggle Sidebar (⌘B)")).toBeNull();
     expect(screen.queryByTitle("Toggle Secondary Sidebar")).toBeNull();
   });
 
   it("renders workspace items from store", () => {
-    primarySidebarVisible.set(true);
-    const ws1 = makeWorkspace("ws1", "Project Alpha");
-    const ws2 = makeWorkspace("ws2", "Project Beta");
+    sidebarVisible.set(true);
+    const ws1 = makeChildWorkspace("ws1", "Project Alpha");
+    const ws2 = makeChildWorkspace("ws2", "Project Beta");
     workspaces.set([ws1, ws2]);
+    rootRowOrder.set([
+      { kind: "workspace", id: "ws1" },
+      { kind: "workspace", id: "ws2" },
+    ]);
     activeWorkspaceIdx.set(0);
-    render(PrimarySidebar, { props: sidebarProps });
+    render(Sidebar, { props: sidebarProps });
     expect(screen.getByText("Project Alpha")).toBeTruthy();
     expect(screen.getByText("Project Beta")).toBeTruthy();
   });
 
   it("header has data-tauri-drag-region (when windowed, for traffic-light padding)", () => {
-    primarySidebarVisible.set(true);
+    sidebarVisible.set(true);
     isFullscreen.set(false);
-    const { container } = render(PrimarySidebar, { props: sidebarProps });
+    const { container } = render(Sidebar, { props: sidebarProps });
     const dragRegions = container.querySelectorAll("[data-tauri-drag-region]");
     expect(dragRegions.length).toBeGreaterThan(0);
   });
@@ -1588,8 +1839,8 @@ describe("PrimarySidebar", () => {
     // Regression: overflow:hidden on the 38px top row clipped the "+ New"
     // dropdown, making it invisible when opened. Must stay overflow:visible
     // so the absolutely-positioned menu can render below the row.
-    primarySidebarVisible.set(true);
-    const { container } = render(PrimarySidebar, { props: sidebarProps });
+    sidebarVisible.set(true);
+    const { container } = render(Sidebar, { props: sidebarProps });
     const dragRegion = container.querySelector(
       "[data-tauri-drag-region]",
     ) as HTMLElement | null;
@@ -1602,22 +1853,27 @@ describe("PrimarySidebar", () => {
     // should not swap branches, otherwise blocks snap into a new position.
     // In fullscreen the drag attributes are harmless no-ops (no window to
     // drag); the 38px acts as stable top padding.
-    primarySidebarVisible.set(true);
+    sidebarVisible.set(true);
     isFullscreen.set(true);
-    const { container } = render(PrimarySidebar, { props: sidebarProps });
+    const { container } = render(Sidebar, { props: sidebarProps });
     const dragRegions = container.querySelectorAll("[data-tauri-drag-region]");
     expect(dragRegions.length).toBeGreaterThan(0);
     isFullscreen.set(false);
   });
 
   it("renders correct number of workspace items", () => {
-    primarySidebarVisible.set(true);
-    const ws1 = makeWorkspace("ws1", "WS One");
-    const ws2 = makeWorkspace("ws2", "WS Two");
-    const ws3 = makeWorkspace("ws3", "WS Three");
+    sidebarVisible.set(true);
+    const ws1 = makeChildWorkspace("ws1", "WS One");
+    const ws2 = makeChildWorkspace("ws2", "WS Two");
+    const ws3 = makeChildWorkspace("ws3", "WS Three");
     workspaces.set([ws1, ws2, ws3]);
+    rootRowOrder.set([
+      { kind: "workspace", id: "ws1" },
+      { kind: "workspace", id: "ws2" },
+      { kind: "workspace", id: "ws3" },
+    ]);
     activeWorkspaceIdx.set(1);
-    render(PrimarySidebar, { props: sidebarProps });
+    render(Sidebar, { props: sidebarProps });
     expect(screen.getByText("WS One")).toBeTruthy();
     expect(screen.getByText("WS Two")).toBeTruthy();
     expect(screen.getByText("WS Three")).toBeTruthy();
@@ -1630,7 +1886,7 @@ describe("PrimarySidebar", () => {
   }
 
   it("does NOT show a 'Re-order Sections' button (reorder is implicit via grip)", () => {
-    primarySidebarVisible.set(true);
+    sidebarVisible.set(true);
     registerWorkspaceAction({
       id: "core:new-workspace",
       label: "New Workspace",
@@ -1641,12 +1897,12 @@ describe("PrimarySidebar", () => {
     registerSidebarSection(makeSection("s1", "Section 1", "ext-a"));
     registerSidebarSection(makeSection("s2", "Section 2", "ext-b"));
 
-    render(PrimarySidebar, { props: { ...sidebarProps } });
+    render(Sidebar, { props: { ...sidebarProps } });
     expect(screen.queryByTitle("Re-order Sections")).toBeNull();
   });
 
   it("does not show dropdown caret with no extension sections and no extra actions", () => {
-    primarySidebarVisible.set(true);
+    sidebarVisible.set(true);
     registerWorkspaceAction({
       id: "core:new-workspace",
       label: "New Workspace",
@@ -1654,20 +1910,23 @@ describe("PrimarySidebar", () => {
       source: "core",
       handler: noop,
     });
-    render(PrimarySidebar, {
+    render(Sidebar, {
       props: { ...sidebarProps },
     });
-    // Only 1 button (main), no caret
-    const splitContainer = screen.getByText("+ New").closest("div")!;
+    // Top row contains: "+ New" chip + Search as a split button. No dropdown caret.
+    // Keyboard Shortcuts has moved to the TitleBar.
+    const splitContainer = screen.getByText("+ New").closest("span")!;
     const buttons = splitContainer.querySelectorAll("button");
-    expect(buttons.length).toBe(1);
+    expect(buttons.length).toBe(2);
+    expect(screen.queryByTitle("Switch Workspace (⌘O)")).not.toBeNull();
+    expect(screen.queryByTitle("Keyboard Shortcuts (⌘/)")).toBeNull();
   });
 
   it("renders extension-registered sidebar sections below the Workspaces block", () => {
     // The Workspaces section is no longer user-reorderable post-B,
     // and there are no block-level DragGrips at the top level.
     // Sections still render, they just can't be dragged.
-    primarySidebarVisible.set(true);
+    sidebarVisible.set(true);
     registerWorkspaceAction({
       id: "core:new-workspace",
       label: "New Workspace",
@@ -1678,13 +1937,13 @@ describe("PrimarySidebar", () => {
     registerSidebarSection(makeSection("s1", "Section 1", "ext-a"));
     registerSidebarSection(makeSection("s2", "Section 2", "ext-b"));
 
-    render(PrimarySidebar, { props: { ...sidebarProps } });
+    render(Sidebar, { props: { ...sidebarProps } });
     expect(screen.getByText("Section 1")).toBeTruthy();
     expect(screen.getByText("Section 2")).toBeTruthy();
   });
 
   it("renders sidebar-zone actions as buttons in the top row", () => {
-    primarySidebarVisible.set(true);
+    sidebarVisible.set(true);
     registerWorkspaceAction({
       id: "core:new-workspace",
       label: "New Workspace",
@@ -1700,15 +1959,15 @@ describe("PrimarySidebar", () => {
       source: "ext",
       handler: noop,
     });
-    render(PrimarySidebar, { props: sidebarProps });
+    render(Sidebar, { props: sidebarProps });
     // Sidebar-zone action renders as a button in the top row
     expect(screen.getByTitle("New Project")).toBeTruthy();
     // Main split button reads "+ New" (lives in the same top row now).
     expect(screen.getByText("+ New")).toBeTruthy();
   });
 
-  it("dropdown includes default action when workspace-zone extensions exist", async () => {
-    primarySidebarVisible.set(true);
+  it("plain + New button still renders when workspace-zone extensions exist", async () => {
+    sidebarVisible.set(true);
     registerWorkspaceAction({
       id: "core:new-workspace",
       label: "New Workspace",
@@ -1723,80 +1982,59 @@ describe("PrimarySidebar", () => {
       source: "ext",
       handler: noop,
     });
-    render(PrimarySidebar, { props: sidebarProps });
-    // Open the dropdown by clicking the caret next to the "+ New" main button.
-    // "New Workspace" is present only inside the dropdown menu items.
-    const mainBtn = screen.getByText("+ New");
-    const caretBtn = mainBtn
-      .closest("div")!
-      .querySelector("button:last-child") as HTMLElement;
-    await fireEvent.click(caretBtn);
-    // Dropdown includes both the default action and the extension action
-    expect(screen.getByText("New Workspace")).toBeTruthy();
-    expect(screen.getByText("New Worktree")).toBeTruthy();
+    render(Sidebar, { props: sidebarProps });
+    // The sidebar now has a plain "+ New" button (no dropdown).
+    // Non-sidebar-zone extension actions are no longer shown in the top row.
+    expect(screen.getByText("+ New")).toBeTruthy();
+    // No "New Worktree" text in the sidebar top row — only sidebar-zone actions render there.
+    expect(screen.queryByText("New Worktree")).toBeNull();
   });
 });
 
 // ===========================================================================
-// WorkspaceGroupSectionContent — per-group "+ New" split button
+// WorkspaceSectionContent — per-workspace New Worktree button
 // ===========================================================================
 
-describe("WorkspaceGroupSectionContent", () => {
+describe("WorkspaceSectionContent", () => {
   beforeEach(() => {
     resetWorkspaceActions();
-    setWorkspaceGroups([]);
+    setWorkspaces([]);
     cleanup();
   });
 
-  it("picks up workspace actions registered AFTER the component mounts", async () => {
-    // Regression: `$: actions = getWorkspaceActions().filter(...)` used to
-    // read the store via `get()`, which doesn't create a Svelte dep. When
-    // extensions activated after the component mounted (e.g. the worktree-
-    // workspaces extension), the per-group "+ New" dropdown stayed stale
-    // until the next render nudge. Now the statement reads the store
-    // directly so extension-registered actions appear live.
-    registerWorkspaceAction({
-      id: "core:new-workspace",
-      label: "New Workspace",
-      icon: "plus",
-      source: "core",
-      handler: noop,
-    });
-    const group: WorkspaceGroupEntry = {
+  it("renders workspace-tile zone actions as buttons in the banner row", async () => {
+    // Without any workspace-tile actions, no branch button renders.
+    const workspace: WorkspaceRecord = {
       id: "grp-1",
-      name: "Test Group",
-      path: "/tmp/test-group",
+      name: "Test Workspace",
+      path: "/tmp/test-workspace",
       color: "mint",
-      workspaceIds: [],
+      branchedWorkspaceIds: [],
       isGit: true,
       createdAt: new Date().toISOString(),
     };
-    setWorkspaceGroups([group]);
+    setWorkspaces([workspace]);
 
-    render(WorkspaceGroupSectionHarness, { props: { groupId: "grp-1" } });
+    render(WorkspaceSectionHarness, {
+      props: { rootWorkspaceId: "grp-1" },
+    });
 
-    // Pre-registration: only the "+ New" main button, no caret.
-    let splitContainer = screen.getByText("+ New").closest("div")!;
-    expect(splitContainer.querySelectorAll("button").length).toBe(1);
+    // No branch button without any registered workspace-tile action.
+    expect(screen.queryByLabelText("Branch Workspace")).toBeNull();
 
-    // Activate the worktree-workspaces-style action after mount.
+    // Registering a workspace-tile action makes the button appear.
     registerWorkspaceAction({
-      id: "worktree-workspaces:create-worktree",
-      label: "New Worktree",
+      id: "branched-workspaces:branch",
+      label: "Branch Workspace",
       icon: "git-branch",
-      source: "worktree-workspaces",
+      zone: "workspace-tile",
+      source: "branched-workspaces",
       handler: noop,
-      when: (ctx) => !ctx.groupId || ctx.isGit === true,
+      when: (ctx) => ctx.isGit === true,
     });
     await tick();
 
-    // Caret now renders and the dropdown exposes the new action.
-    splitContainer = screen.getByText("+ New").closest("div")!;
-    const buttons = splitContainer.querySelectorAll("button");
-    expect(buttons.length).toBe(2);
-    const caretBtn = buttons[buttons.length - 1] as HTMLElement;
-    await fireEvent.click(caretBtn);
-    expect(screen.getByText("New Worktree")).toBeTruthy();
+    expect(screen.getByLabelText("Branch Workspace")).toBeTruthy();
   });
 });
 
@@ -1929,7 +2167,7 @@ describe("WorkspaceItem — harness sub-row", () => {
 
     const surface = makeSurface("s1", { title: "claude > fixing bug" });
     const pane = makePane("p1", [surface]);
-    const ws = makeWorkspace("ws-harness", "Harness WS", pane);
+    const ws = makeChildWorkspace("ws-harness", "Harness WS", pane);
 
     setStatusItem("_agent", ws.id, "surface:s1", {
       category: "process",
@@ -1953,7 +2191,12 @@ describe("WorkspaceItem — harness sub-row", () => {
 
     const harnessEl = container.querySelector("[data-harness-title-row]");
     expect(harnessEl).not.toBeNull();
-    expect(harnessEl?.getAttribute("title")).toBe("1 running");
+    // When a single tracked agent surface exists, its current task title
+    // is surfaced via the tooltip so the user can see what the agent is
+    // working on without leaving the sidebar.
+    expect(harnessEl?.getAttribute("title")).toBe(
+      "1 running — claude > fixing bug",
+    );
     clearAllStatusForWorkspace(ws.id);
   });
 
@@ -1971,7 +2214,7 @@ describe("WorkspaceItem — harness sub-row", () => {
     const ws: Workspace = {
       id: "ws-hidden",
       name: "Hidden",
-      splitRoot: { type: "pane", pane },
+      paneLayout: { type: "pane", pane },
       activePaneId: "p1",
     };
 
@@ -1997,7 +2240,7 @@ describe("WorkspaceItem — harness sub-row", () => {
 
     const harnessEl = container.querySelector("[data-harness-title-row]");
     expect(harnessEl).not.toBeNull();
-    expect(harnessEl?.getAttribute("title")).toBe("1 idle");
+    expect(harnessEl?.getAttribute("title")).toBe("1 idle — claude");
     clearAllStatusForWorkspace(ws.id);
   });
 
@@ -2007,7 +2250,7 @@ describe("WorkspaceItem — harness sub-row", () => {
 
     const surface = makeSurface("s1", { title: "claude" });
     const pane = makePane("p1", [surface]);
-    const ws = makeWorkspace("ws-hidden2", "Hidden2", pane);
+    const ws = makeChildWorkspace("ws-hidden2", "Hidden2", pane);
 
     setStatusItem("_agent", ws.id, "surface:s1", {
       category: "process",
@@ -2031,6 +2274,60 @@ describe("WorkspaceItem — harness sub-row", () => {
     });
 
     expect(container.querySelector("[data-harness-title-row]")).toBeNull();
+    clearAllStatusForWorkspace(ws.id);
+  });
+
+  it("falls back to the badge count when multiple agent surfaces are tracked", async () => {
+    // With two tracked surfaces in the same workspace, no single title
+    // is dominant; the row reverts to the aggregate "N running" count
+    // rather than picking one task at random.
+    const { setStatusItem, clearAllStatusForWorkspace } =
+      await import("../lib/services/status-registry");
+
+    const a = makeSurface("s-a", { title: "Strategic plan A" });
+    const b = makeSurface("s-b", { title: "Strategic plan B" });
+    const pane: Pane = {
+      id: "p1",
+      surfaces: [a, b],
+      activeSurfaceId: "s-a",
+    };
+    const ws: Workspace = {
+      id: "ws-multi",
+      name: "Multi",
+      paneLayout: { type: "pane", pane },
+      activePaneId: "p1",
+    };
+
+    setStatusItem("_agent", ws.id, "surface:s-a", {
+      category: "process",
+      priority: 0,
+      label: "running",
+      variant: "success",
+      metadata: { surfaceId: "s-a" },
+    });
+    setStatusItem("_agent", ws.id, "surface:s-b", {
+      category: "process",
+      priority: 0,
+      label: "running",
+      variant: "success",
+      metadata: { surfaceId: "s-b" },
+    });
+
+    const { container } = render(WorkspaceItem, {
+      props: {
+        workspace: ws,
+        index: 0,
+        isActive: true,
+        onSelect: noop,
+        onClose: noop,
+        onRename: noop,
+        onContextMenu: noop,
+      },
+    });
+
+    const harnessEl = container.querySelector("[data-harness-title-row]");
+    expect(harnessEl).not.toBeNull();
+    expect(harnessEl?.getAttribute("title")).toBe("2 running");
     clearAllStatusForWorkspace(ws.id);
   });
 });
@@ -2303,10 +2600,14 @@ describe("terminal link handling", () => {
     );
 
     const termInstance = TerminalCtor.mock.instances.at(-1)!;
-    // 3 calls: OSC 8 provider (index 0) + URL provider (index 1) + file-path provider (index 2)
-    expect(termInstance.registerLinkProvider).toHaveBeenCalledTimes(3);
+    // 2 calls: URL provider (index 0) + file-path provider (index 1).
+    // OSC 8 is now handled by the built-in linkHandler set in Terminal options
+    // — see terminal-service.ts. The default OSC 8 path routes through
+    // window.confirm, which Tauri remaps to plugin:dialog|confirm and rejects
+    // without `dialog:allow-confirm` permission, so we override it.
+    expect(termInstance.registerLinkProvider).toHaveBeenCalledTimes(2);
 
-    const provider = termInstance.registerLinkProvider.mock.calls[1][0] as {
+    const provider = termInstance.registerLinkProvider.mock.calls[0][0] as {
       provideLinks: (
         line: number,
         cb: (
@@ -2345,6 +2646,50 @@ describe("terminal link handling", () => {
     );
     expect(invokeMockFn).toHaveBeenCalledWith("open_url", {
       url: "https://example.com/path",
+    });
+  });
+
+  it("OSC 8 linkHandler is wired in Terminal options and invokes open_url", async () => {
+    // Regression: xterm.js's default OSC 8 handler calls window.confirm
+    // before navigating. Tauri remaps window.confirm to plugin:dialog|confirm,
+    // which is not granted in capabilities — so the click rejects with
+    // "dialog.confirm not allowed. Command not found" and the URL never opens.
+    // We override linkHandler in Terminal options to bypass that path.
+    const { invoke: invokeMock } = await import("@tauri-apps/api/core");
+    const invokeMockFn = vi.mocked(invokeMock);
+    invokeMockFn.mockClear();
+
+    const { Terminal: TerminalMock } = await import("@xterm/xterm");
+    const TerminalCtor = vi.mocked(
+      TerminalMock as unknown as new (...args: unknown[]) => unknown,
+    );
+
+    const { createTerminalSurface } = await import("../lib/terminal-service");
+    const fakePane = {
+      id: "p-osc8-linkhandler",
+      surfaces: [],
+      activeSurfaceId: null,
+    };
+    await createTerminalSurface(
+      fakePane as unknown as Parameters<typeof createTerminalSurface>[0],
+    );
+
+    const ctorArgs = TerminalCtor.mock.calls.at(-1)!;
+    const options = ctorArgs[0] as {
+      linkHandler?: {
+        activate: (e: MouseEvent, text: string) => void;
+        allowNonHttpProtocols?: boolean;
+      };
+    };
+    expect(options.linkHandler).toBeDefined();
+    expect(options.linkHandler!.allowNonHttpProtocols).toBe(false);
+
+    options.linkHandler!.activate(
+      new MouseEvent("click"),
+      "https://github.com/foo/bar/pull/1",
+    );
+    expect(invokeMockFn).toHaveBeenCalledWith("open_url", {
+      url: "https://github.com/foo/bar/pull/1",
     });
   });
 });

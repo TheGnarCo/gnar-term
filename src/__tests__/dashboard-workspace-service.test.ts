@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { get } from "svelte/store";
 
-vi.mock("../lib/services/workspace-service", () => ({
+vi.mock("../lib/services/workspace-runtime-service", () => ({
   createWorkspaceFromDef: vi.fn().mockResolvedValue("new-ws-id"),
   switchWorkspace: vi.fn(),
 }));
@@ -17,6 +17,8 @@ vi.mock("../lib/stores/workspace", () => ({
   },
 }));
 
+vi.mock("../lib/services/service-helpers", () => ({}));
+
 import {
   registerDashboardWorkspaceType,
   unregisterDashboardWorkspaceType,
@@ -27,7 +29,7 @@ import {
 import {
   createWorkspaceFromDef,
   switchWorkspace,
-} from "../lib/services/workspace-service";
+} from "../lib/services/workspace-runtime-service";
 import { workspaces } from "../lib/stores/workspace";
 
 const MockIcon = {} as unknown as import("svelte").Component;
@@ -98,10 +100,8 @@ describe("spawnOrNavigate", () => {
       expect.objectContaining({
         name: "Foo",
         layout: { pane: { surfaces: [] } },
-        metadata: expect.objectContaining({
-          dashboardWorkspaceId: "ext:foo",
-          isDashboard: true,
-        }),
+        dashboardContributionId: "ext:foo",
+        isDashboard: true,
       }),
     );
     expect(switchWorkspace).not.toHaveBeenCalled();
@@ -112,7 +112,8 @@ describe("spawnOrNavigate", () => {
       cb([
         {
           id: "ws-1",
-          metadata: { dashboardWorkspaceId: "ext:foo", isDashboard: true },
+          dashboardContributionId: "ext:foo",
+          isDashboard: true,
         },
       ]);
       return () => {};

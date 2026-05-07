@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tick } from "svelte";
+  import { get } from "svelte/store";
   import { theme } from "../stores/theme";
   import { commandPaletteOpen } from "../stores/ui";
   import { activeSurface } from "../stores/workspace";
@@ -25,13 +26,19 @@
     commandPaletteOpen.set(false);
     query = "";
     selectedIdx = 0;
-    const s = $activeSurface;
-    if (s && isTerminalSurface(s)) void tick().then(() => s.terminal.focus());
+    // Read activeSurface inside tick, not at close-time: when the close
+    // is triggered by execute() the action may have switched workspaces
+    // and changed the active surface. Capturing earlier focuses the
+    // OLD terminal (or one whose DOM was just torn down).
+    void tick().then(() => {
+      const s = get(activeSurface);
+      if (s && isTerminalSurface(s)) s.terminal.focus();
+    });
   }
 
   function execute(cmd: Command) {
-    close();
     void cmd.action();
+    close();
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -104,10 +111,11 @@
         on:input={() => {
           selectedIdx = 0;
         }}
+        class="no-default-outline"
         style="
           padding: 14px 18px; background: transparent; border: none;
           border-bottom: 1px solid {$theme.border}; color: {$theme.fg};
-          font-size: 15px; outline: none; font-family: inherit;
+          font-size: 15px; font-family: inherit;
         "
       />
       <div

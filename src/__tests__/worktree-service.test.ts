@@ -39,6 +39,7 @@ import {
   handleWorkspaceCreated,
 } from "../lib/services/worktree-service";
 import { eventBus } from "../lib/services/event-bus";
+import { workspaces } from "../lib/stores/workspace";
 
 describe("initWorktrees()", () => {
   beforeEach(() => {
@@ -48,17 +49,15 @@ describe("initWorktrees()", () => {
     settingsRef.current = {};
   });
 
-  it("registers create-workspace command", () => {
+  it("does NOT register a create-workspace command — creation is owned by the branched-workspaces extension", () => {
     initWorktrees();
     const cmd = get(commandStore).find(
       (c) => c.id === "worktrees:create-workspace",
     );
-    expect(cmd).toBeTruthy();
-    expect(cmd!.title).toBe("New Worktree...");
-    expect(cmd!.source).toBe("worktrees");
+    expect(cmd).toBeUndefined();
   });
 
-  it("does NOT register the workspace action — that lives in the worktree-workspaces extension", () => {
+  it("does NOT register the workspace action — that is handled by init-workspaces", () => {
     initWorktrees();
     const action = get(workspaceActionStore).find(
       (a) => a.id === "core:create-worktree-workspace",
@@ -98,11 +97,23 @@ describe("initWorktrees()", () => {
       },
     ]);
 
+    workspaces.set([
+      {
+        id: "ws-1",
+        name: "Worktree 1",
+        paneLayout: {
+          type: "pane",
+          pane: { id: "p", surfaces: [], activeSurfaceId: null },
+        },
+        activePaneId: "p",
+        worktreePath: "/repo-feat",
+      } as unknown as import("../lib/types").Workspace,
+    ]);
+
     eventBus.emit({
       type: "workspace:created",
       id: "ws-1",
       name: "Worktree 1",
-      metadata: { worktreePath: "/repo-feat" },
     });
 
     const entries = getWorktreeEntries();
@@ -121,7 +132,20 @@ describe("initWorktrees()", () => {
       },
     ]);
 
-    handleWorkspaceCreated("ws-other", { worktreePath: "/some/other" });
+    workspaces.set([
+      {
+        id: "ws-other",
+        name: "Other",
+        paneLayout: {
+          type: "pane",
+          pane: { id: "p", surfaces: [], activeSurfaceId: null },
+        },
+        activePaneId: "p",
+        worktreePath: "/some/other",
+      } as unknown as import("../lib/types").Workspace,
+    ]);
+
+    handleWorkspaceCreated("ws-other");
 
     expect(getWorktreeEntries()[0].workspaceId).toBeUndefined();
   });
@@ -141,13 +165,11 @@ describe("Worktree settings defaults", () => {
       branchPrefix: "feat/",
       copyPatterns: ".env",
       setupScript: "npm install",
-      mergeStrategy: "squash",
     };
     expect(getWorktreeSettings()).toEqual({
       branchPrefix: "feat/",
       copyPatterns: ".env",
       setupScript: "npm install",
-      mergeStrategy: "squash",
     });
   });
 });

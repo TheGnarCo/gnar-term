@@ -8,20 +8,26 @@
  *   3. persisted state.json — restore the last session's workspaces
  *   4. config.autoload — open every named workspace listed
  *   5. fall back to a single default "Workspace 1"
+ *
+ * If `state.workspaces[]` is present (unified format), each entry is
+ * fed directly through `createWorkspaceFromDef` with `restoring: true`.
  */
 import { get } from "svelte/store";
 import { workspaces } from "../stores/workspace";
-import { getWorkspaceGroups } from "../stores/workspace-groups";
-import { loadState, type GnarTermConfig, type WorkspaceDef } from "../config";
-import { initArchiveFromState } from "../stores/archive";
 import {
-  createWorkspace,
-  createWorkspaceFromDef,
-  switchWorkspace,
-} from "../services/workspace-service";
+  loadState,
+  type GnarTermConfig,
+  type WorkspaceTemplate,
+  type WorkspaceDef,
+} from "../config";
+import { workspaceDefToTemplate } from "../stores/workspace";
+import { initArchiveFromState } from "../stores/archive";
+import { createWorkspaceFromDef } from "../services/workspace-runtime-service";
+import { switchWorkspace } from "../services/workspace-runtime-service";
+import { OVERVIEW_DASHBOARD_CONTRIBUTION_ID } from "../services/dashboard-contribution-registry";
 
 // Restore-complete signal — lets async work (extension provision loops,
-// reconcileGroupDashboards) defer safely until workspaces are in the store.
+// reconcileWorkspaceDashboards) defer safely until workspaces are in the store.
 let _restored = false;
 const _waiters: Array<() => void> = [];
 
@@ -65,17 +71,19 @@ export async function restoreWorkspaces(
     if (cmd?.workspace) {
       await createWorkspaceFromDef(cmd.workspace);
     } else {
+      // Unknown --workspace name: warn and leave the store empty so the
+      // launcher (EmptySurface) is shown. We won't synthesize a naked
+      // workspace as a fallback — the user can create one from the dialog.
       console.warn(
         `[cli] Workspace "${cliArgs.workspace}" not found in config`,
       );
-      await createWorkspace(cliArgs.title || "Workspace 1");
     }
     return;
   }
 
   if (cliCwd || cliArgs.command) {
     const wsName = cliArgs.title || cliCwd?.split("/").pop() || "Workspace 1";
-    const def: WorkspaceDef = {
+    const def: WorkspaceTemplate = {
       name: wsName,
       cwd: cliCwd || undefined,
       layout: {
@@ -97,81 +105,81 @@ export async function restoreWorkspaces(
   // Try to restore persisted workspaces from state.json
   const state = await loadState();
   initArchiveFromState();
-  if (Array.isArray(state.workspaces)) {
-    // Clear any existing workspaces to prevent doubling on re-mount
-    workspaces.set([]);
-    // Drop orphan Dashboard workspaces whose owning group no longer
-    // exists. Without this, restarting after a group deletion leaves a
-    // ghost dashboard in the main view that the user can't navigate
-    // away from via the sidebar.
-    //
-    // Additionally dedupe dashboards: each `(groupId, dashboardContributionId)`
-    // pair should materialize exactly one dashboard workspace.
-    // Pre-fix releases spawned a new Dashboard on every launch because
-    // workspace ids regenerated, so persisted state can carry
-    // duplicates — keep the first occurrence and drop the rest.
-    const knownGroupIds = new Set(getWorkspaceGroups().map((g) => g.id));
+
+  // ---------------------------------------------------------------------------
+  // Unified format: state.workspaces[] is the canonical on-disk shape.
+  // Convert each WorkspaceDef back to a legacy WorkspaceTemplate and feed
+  // through `createWorkspaceFromDef` so PTY surfaces hydrate via the
+  // existing path.
+  // ---------------------------------------------------------------------------
+  if (Array.isArray(state.workspaces) && state.workspaces.length > 0) {
+    const runtimeDefs = state.workspaces as WorkspaceDef[];
+
+    // Persisted dashboards are dropped if their owning Workspace isn't
+    // about to be re-created. Drive the check off `runtimeDefs` (the
+    // source of truth for re-creation) rather than the live store,
+    // which is empty until `createWorkspaceFromDef` runs below.
+    const knownWorkspaceIds = new Set(
+      runtimeDefs
+        .filter(
+          (def) =>
+            def.isDashboard !== true &&
+            typeof def.rootWorkspaceId !== "string" &&
+            typeof def.worktreePath !== "string",
+        )
+        .map((def) => def.id)
+        .filter((id): id is string => typeof id === "string"),
+    );
     const seenDashboards = new Set<string>();
-    const filteredDefs = state.workspaces.filter((wsDef) => {
-      const md = wsDef.metadata;
-      const isDashboard = md?.isDashboard === true;
-      const ownerGroupId = md?.groupId;
+    const filteredDefs = runtimeDefs.filter((def) => {
+      const isDashboard = def.isDashboard === true;
+      const ownerWorkspaceId = def.rootWorkspaceId;
       if (!isDashboard) return true;
-      if (typeof ownerGroupId !== "string") return true;
-      if (!knownGroupIds.has(ownerGroupId)) return false;
+      if (typeof ownerWorkspaceId !== "string") return true;
+      if (!knownWorkspaceIds.has(ownerWorkspaceId)) return false;
       const contributionId =
-        typeof md?.dashboardContributionId === "string"
-          ? md.dashboardContributionId
-          : "group";
-      const dedupeKey = `${ownerGroupId}:${contributionId}`;
+        typeof def.dashboardContributionId === "string"
+          ? def.dashboardContributionId
+          : OVERVIEW_DASHBOARD_CONTRIBUTION_ID;
+      const dedupeKey = `${ownerWorkspaceId}:${contributionId}`;
       if (seenDashboards.has(dedupeKey)) return false;
       seenDashboards.add(dedupeKey);
       return true;
     });
-    for (const wsDef of filteredDefs) {
-      await createWorkspaceFromDef(wsDef, { restoring: true });
+    for (const def of filteredDefs) {
+      const nwDef = workspaceDefToTemplate(def);
+      await createWorkspaceFromDef(nwDef, { restoring: true });
     }
-    // Restored workspaces whose `metadata.isDashboard === true` are
-    // group/pseudo dashboards — accessed through their group's tile,
-    // not as a primary active surface. If the only restored workspaces
-    // are dashboards, leave `activeWorkspaceIdx = -1` so the main view
-    // renders the EmptySurface. Otherwise pick the persisted active
-    // index unless it points at a dashboard, in which case fall through
-    // to the first non-dashboard workspace.
     const restored = get(workspaces);
     if (restored.length > 0) {
       const isDashboard = (idx: number): boolean => {
-        return restored[idx]?.metadata?.isDashboard === true;
+        const ws = restored[idx];
+        return ws ? ws.isDashboard === true : false;
       };
-      const persistedIdx = state.activeWorkspaceIdx ?? 0;
-      const clampedIdx = Math.min(persistedIdx, restored.length - 1);
+      const activeId = state.activeWorkspaceId;
       let targetIdx = -1;
-      if (clampedIdx >= 0 && !isDashboard(clampedIdx)) {
-        targetIdx = clampedIdx;
-      } else {
+      if (typeof activeId === "string") {
+        const idx = restored.findIndex((w) => w.id === activeId);
+        if (idx >= 0 && !isDashboard(idx)) targetIdx = idx;
+      }
+      if (targetIdx < 0) {
         targetIdx = restored.findIndex((_, i) => !isDashboard(i));
       }
       if (targetIdx >= 0) {
         switchWorkspace(targetIdx);
       }
     }
-    // An explicit empty array (user closed everything) is a valid
-    // restored state — the Empty Surface will render.
     return;
   }
 
-  // First launch — autoload from config, else seed a workspace.
-  let autoloaded = false;
+  // First launch — autoload from config, otherwise leave the store empty
+  // so App.svelte renders <EmptySurface />.
   if (config.autoload && config.autoload.length > 0 && config.commands) {
     for (const name of config.autoload) {
       const cmd = config.commands.find((c) => c.name === name && c.workspace);
       if (cmd?.workspace) {
         await createWorkspaceFromDef(cmd.workspace);
-        autoloaded = true;
       }
     }
-  }
-  if (!autoloaded && get(workspaces).length === 0) {
-    await createWorkspace("Workspace 1");
   }
 }

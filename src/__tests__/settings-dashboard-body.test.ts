@@ -1,5 +1,5 @@
 /**
- * PaneView renders the shared `GroupDashboardSettings` body (not a
+ * PaneView renders the shared `WorkspaceDashboardSettings` body (not a
  * preview surface, not a tab strip) for a workspace whose metadata
  * marks it as the "settings" dashboard contribution.
  */
@@ -24,7 +24,6 @@ globalThis.ResizeObserver =
 
 import PaneView from "../lib/components/PaneView.svelte";
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
-import { workspaceGroupsStore } from "../lib/stores/workspace-groups";
 import type { Workspace, Pane } from "../lib/types";
 
 function makePane(id: string): Pane {
@@ -43,37 +42,34 @@ describe("PaneView — settings dashboard body", () => {
     cleanup();
     workspaces.set([]);
     activeWorkspaceIdx.set(-1);
-    workspaceGroupsStore.set([]);
   });
 
-  it("renders GroupDashboardSettings for a settings contribution workspace", () => {
-    workspaceGroupsStore.set([
-      {
-        id: "g1",
-        name: "My Group",
-        path: "/tmp/g1",
-        color: "purple",
-        workspaceIds: [],
-        isGit: false,
-        createdAt: "2026-04-21T00:00:00.000Z",
-      },
-    ]);
+  it("renders WorkspaceDashboardSettings for a settings contribution workspace", () => {
+    const root: Workspace = {
+      id: "g1",
+      name: "My Workspace",
+      path: "/tmp/g1",
+      color: "purple",
+      branchedWorkspaceIds: [],
+      isGit: false,
+      createdAt: "2026-04-21T00:00:00.000Z",
+      paneLayout: { type: "pane", pane: makePane("g1-p") },
+      activePaneId: "g1-p",
+    } as unknown as Workspace;
 
     const ws: Workspace = {
       id: "ws-settings",
       name: "Settings",
-      splitRoot: { type: "pane", pane: makePane("p1") },
+      paneLayout: { type: "pane", pane: makePane("p1") },
       activePaneId: "p1",
-      metadata: {
-        isDashboard: true,
-        groupId: "g1",
-        dashboardContributionId: "settings",
-      },
+      isDashboard: true,
+      rootWorkspaceId: "g1",
+      dashboardContributionId: "settings",
     } as unknown as Workspace;
-    workspaces.set([ws]);
-    activeWorkspaceIdx.set(0);
+    workspaces.set([root, ws]);
+    activeWorkspaceIdx.set(1);
 
-    const pane = (ws.splitRoot as { type: "pane"; pane: Pane }).pane;
+    const pane = (ws.paneLayout as { type: "pane"; pane: Pane }).pane;
     const { container } = render(PaneView, {
       props: {
         pane,
@@ -90,11 +86,13 @@ describe("PaneView — settings dashboard body", () => {
     });
 
     const panel = container.querySelector<HTMLElement>(
-      "[data-group-dashboard-settings]",
+      "[data-workspace-dashboard-settings]",
     );
     expect(panel).not.toBeNull();
-    expect(panel?.getAttribute("data-group-id")).toBe("g1");
+    expect(panel?.getAttribute("data-workspace-id")).toBe("g1");
     // No tab strip — Settings is its own dashboard now.
-    expect(container.querySelector("[data-group-dashboard-tabs]")).toBeNull();
+    expect(
+      container.querySelector("[data-workspace-dashboard-tabs]"),
+    ).toBeNull();
   });
 });

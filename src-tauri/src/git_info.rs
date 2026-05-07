@@ -1,39 +1,11 @@
+use crate::git_helpers::{run_git, validate_git_ref, validate_repo};
 use serde::Serialize;
-use std::path::Path;
-use std::process::Command;
 
 #[derive(Clone, Debug, Serialize, PartialEq)]
 pub struct FileStatus {
     pub path: String,
     pub status: String,
     pub staged: String,
-}
-
-fn validate_repo(repo_path: &str) -> Result<(), String> {
-    let path = Path::new(repo_path);
-    if !path.exists() {
-        return Err(format!("Repository path does not exist: {repo_path}"));
-    }
-    if !path.is_dir() {
-        return Err(format!("Repository path is not a directory: {repo_path}"));
-    }
-    Ok(())
-}
-
-fn run_git(repo_path: &str, args: &[&str]) -> Result<String, String> {
-    let output = Command::new("git")
-        .args(args)
-        .current_dir(repo_path)
-        .output()
-        .map_err(|e| format!("Failed to execute git: {e}"))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let joined = args.join(" ");
-        return Err(format!("git {joined} failed: {stderr}"));
-    }
-
-    String::from_utf8(output.stdout).map_err(|e| format!("Invalid UTF-8 in git output: {e}"))
 }
 
 fn parse_status_output(output: &str) -> Vec<FileStatus> {
@@ -90,27 +62,6 @@ pub async fn git_remote_url(repo_path: String) -> Result<String, String> {
         // Git exits non-zero when the config key is missing; treat that
         // as "no remote" rather than an error to the caller.
         Err(_) => Ok(String::new()),
-    }
-}
-
-/// Validate a git ref string against a strict allowlist of characters.
-///
-/// Accepts only alphanumeric characters plus hyphen, underscore, dot,
-/// slash, and `@` — the characters that appear in valid git ref names,
-/// branch names, and commit SHAs. Rejects anything else to prevent
-/// ref-parsing edge cases from reaching git.
-fn validate_git_ref(r: &str) -> Result<(), String> {
-    if r.is_empty() {
-        return Err("git ref must not be empty".to_string());
-    }
-    let invalid: Vec<char> = r
-        .chars()
-        .filter(|c| !matches!(c, 'A'..='Z' | 'a'..='z' | '0'..='9' | '-' | '_' | '.' | '/' | '@' | '{' | '}'))
-        .collect();
-    if invalid.is_empty() {
-        Ok(())
-    } else {
-        Err(format!("git ref contains invalid characters: {invalid:?}"))
     }
 }
 
@@ -220,34 +171,5 @@ mod tests {
         assert_eq!(strip_userinfo(url), url);
     }
 
-    // --- validate_git_ref tests (F33) ---
-
-    #[test]
-    fn git_ref_accepts_branch_names() {
-        assert!(validate_git_ref("main").is_ok());
-        assert!(validate_git_ref("feature/my-branch").is_ok());
-        assert!(validate_git_ref("v1.2.3").is_ok());
-        assert!(validate_git_ref("HEAD@{1}").is_ok());
-        assert!(validate_git_ref("abc1234def5678").is_ok());
-    }
-
-    #[test]
-    fn git_ref_rejects_empty_string() {
-        assert!(validate_git_ref("").is_err());
-    }
-
-    #[test]
-    fn git_ref_rejects_shell_special_chars() {
-        assert!(validate_git_ref("main;rm -rf /").is_err());
-        assert!(validate_git_ref("$(evil)").is_err());
-        assert!(validate_git_ref("main\x00evil").is_err());
-        assert!(validate_git_ref("branch name").is_err()); // space
-    }
-
-    #[test]
-    fn git_ref_rejects_tilde_and_caret() {
-        // ~ and ^ have special meaning to git's rev-parse and are not in the allowlist
-        assert!(validate_git_ref("HEAD~1").is_err());
-        assert!(validate_git_ref("HEAD^").is_err());
-    }
+    // validate_git_ref tests live in git_helpers.rs (canonical home).
 }

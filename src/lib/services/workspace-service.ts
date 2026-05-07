@@ -1,549 +1,720 @@
-import { get, derived } from "svelte/store";
-import type { Readable } from "svelte/store";
+/**
+ * Workspace Service — CRUD + flow functions for the core
+ * Workspace primitive; see ADR 004.
+ *
+ * Components and core commands call into this module rather than
+ * touching the `workspacesStore` directly so state transitions
+ * (adding to root-row order, attaching branches/dashboards, tearing
+ * down the Dashboard workspace on delete) stay colocated with the
+ * store write.
+ */
 import { invoke } from "@tauri-apps/api/core";
+import { get } from "svelte/store";
+import type { SurfaceDef } from "../config";
+import type { WorkspaceRecord } from "../stores/workspace";
+import { WORKSPACE_COLOR_SLOTS } from "../../extensions/api";
+import { appendRootRow, removeRootRow } from "../stores/root-row-order";
+import { workspaces } from "../stores/workspace";
+import { activeWorkspaceId } from "../stores/workspace";
 import {
-  workspaces,
-  activeWorkspaceIdx,
-  activeWorkspace,
-  activeSurface,
-  activePseudoWorkspaceId,
-  zoomedSurfaceId,
+  getWorkspace,
+  getWorkspaces,
+  setActiveWorkspaceId,
+  setWorkspaces,
 } from "../stores/workspace";
-import { showInputPrompt, showConfirmPrompt } from "../stores/ui";
-import { createTerminalSurface } from "../terminal-service";
 import {
-  uid,
-  getAllPanes,
-  getAllSurfaces,
-  isTerminalSurface,
-  isExtensionSurface,
-  isPreviewSurface,
-  findParentSplit,
-  replaceNodeInTree,
-  type Workspace,
-  type Pane,
-  type SplitNode,
-  type PreviewSurface,
-} from "../types";
-import {
-  saveConfig,
-  saveState,
-  getConfig,
-  type WorkspaceDef,
-  type LayoutNode,
-} from "../config";
-import { safeFocus } from "./service-helpers";
+  createWorkspaceFromDef,
+  closeWorkspace,
+  switchWorkspace,
+} from "./workspace-runtime-service";
+import { schedulePersist } from "./workspace-persist";
 import { eventBus } from "./event-bus";
+import { type Workspace } from "../types";
 import {
-  appendRootRow,
-  removeRootRow,
-  insertRootRow,
-} from "../stores/root-row-order";
-import {
-  addWorkspaceToGroup,
-  insertWorkspaceIntoGroup,
-} from "./workspace-group-service";
+  getDashboardContribution,
+  getDashboardContributions,
+  OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
+} from "./dashboard-contribution-registry";
+import { releaseWorkspaceDirtyStore } from "./workspace-git-dirty-store";
 
-// --- Workspace persistence (debounced save to state.json) ---
+export const WORKSPACE_STATE_CHANGED = "extension:workspace:state-changed";
 
-let persistTimer: ReturnType<typeof setTimeout> | null = null;
-const PERSIST_DELAY = 2000;
-
-export async function persistWorkspaces(): Promise<void> {
-  const wsList = get(workspaces);
-  const serialized = wsList.map((ws) => ({
-    // Persist the id so `rootRowOrder` (keyed by `{kind, id}`) survives
-    // a restart — without this every workspace id regenerates on
-    // `createWorkspaceFromDef` and any user-dragged order is lost.
-    id: ws.id,
-    name: ws.name,
-    cwd: undefined as string | undefined,
-    layout: serializeLayout(ws.splitRoot),
-    ...(ws.metadata ? { metadata: ws.metadata } : {}),
-  }));
-  await saveState({
-    workspaces: serialized,
-    activeWorkspaceIdx: get(activeWorkspaceIdx),
+function emitStateChanged(metadata: Record<string, unknown> = {}): void {
+  eventBus.emit({
+    type: WORKSPACE_STATE_CHANGED,
+    ...metadata,
   });
 }
 
-export function schedulePersist(): void {
-  if (persistTimer) clearTimeout(persistTimer);
-  persistTimer = setTimeout(persistWorkspaces, PERSIST_DELAY);
-}
-
-export async function createWorkspace(name: string) {
-  const pane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
-  const ws: Workspace = {
-    id: uid(),
-    name,
-    splitRoot: { type: "pane", pane },
-    activePaneId: pane.id,
+export function addWorkspace(workspace: WorkspaceRecord): void {
+  // Every entry in the unified store is a `Workspace`, so even a
+  // record-shaped row needs a paneLayout. When the caller hasn't
+  // materialized a tab surface yet, mint a placeholder empty pane —
+  // `createWorkspaceFromDef` will overwrite paneLayout / activePaneId
+  // when the matching runtime workspace is created.
+  const ensured: WorkspaceRecord = {
+    ...workspace,
+    paneLayout: workspace.paneLayout ?? {
+      type: "pane",
+      pane: {
+        id: `placeholder-${workspace.id}`,
+        surfaces: [],
+        activeSurfaceId: null,
+      },
+    },
+    activePaneId: workspace.activePaneId ?? null,
   };
-
-  const surface = await createTerminalSurface(pane);
-
-  workspaces.update((list) => [...list, ws]);
-  // Add to the root-row list. If an extension handler for
-  // workspace:created claims this workspace (e.g. project-scope
-  // inserting it under a project), claimWorkspace will remove it from
-  // the root list — so final state is consistent regardless of
-  // handler ordering.
-  appendRootRow({ kind: "workspace", id: ws.id });
-  eventBus.emit({ type: "workspace:created", id: ws.id, name });
-  // Route activation through switchWorkspace so any listener on
-  // workspace:activated (e.g. agentic-orchestrator re-spawning a
-  // dashboard preview surface, core focus bookkeeping) fires for
-  // fresh workspaces the same way it would for a user-driven switch.
-  switchWorkspace(get(workspaces).length - 1);
-  void safeFocus(surface);
+  setWorkspaces([...getWorkspaces(), ensured]);
+  appendRootRow({ kind: "workspace", id: workspace.id });
+  emitStateChanged({ workspaceId: workspace.id });
   schedulePersist();
 }
 
-export async function createWorkspaceFromDef(
-  def: WorkspaceDef,
-  options?: { restoring?: boolean },
-): Promise<string> {
-  const wsName = def.name || `Workspace ${get(workspaces).length + 1}`;
-  const rootCwd = def.cwd;
-  const rootEnv = def.env;
-  const restoring = options?.restoring === true;
-
-  async function buildTree(
-    nodeDef: LayoutNode,
-    inheritedCwd?: string,
-    inheritedEnv?: Record<string, string>,
-  ): Promise<SplitNode> {
-    if ("pane" in nodeDef) {
-      const pane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
-      for (const sDef of nodeDef.pane.surfaces) {
-        const cwd = sDef.cwd || inheritedCwd;
-        if (sDef.type === "extension" && sDef.extensionType) {
-          // Generic extension surface from config
-          const surface = {
-            kind: "extension" as const,
-            id: uid(),
-            surfaceTypeId: sDef.extensionType,
-            title: sDef.name || sDef.extensionType,
-            hasUnread: false,
-            props: sDef.extensionProps || {},
-          };
-          pane.surfaces.push(surface);
-          if (!pane.activeSurfaceId || sDef.focus)
-            pane.activeSurfaceId = surface.id;
-        } else if (sDef.type === "preview" && sDef.path) {
-          // Preview surface from config — backed by a file path. The
-          // markdown previewer is what renders markdown-component directives;
-          // any previewable file type works here.
-          const basename = sDef.path.split("/").pop() || sDef.path;
-          const surface: PreviewSurface = {
-            kind: "preview",
-            id: uid(),
-            title: sDef.name || basename.replace(/\.md$/, ""),
-            path: sDef.path,
-            hasUnread: false,
-          };
-          pane.surfaces.push(surface);
-          if (!pane.activeSurfaceId || sDef.focus)
-            pane.activeSurfaceId = surface.id;
-        } else {
-          const envMerged = { ...inheritedEnv, ...sDef.env };
-          const surface = await createTerminalSurface(
-            pane,
-            cwd,
-            Object.keys(envMerged).length > 0 ? envMerged : undefined,
-          );
-          if (sDef.name) surface.title = sDef.name;
-          if (sDef.command) {
-            // Defined command is the persistent record; on restore we
-            // require user approval before running it, so we do NOT set
-            // startupCommand. Fresh creation runs the command immediately.
-            surface.definedCommand = sDef.command;
-            if (restoring) {
-              surface.pendingRestoreCommand = true;
-            } else {
-              surface.startupCommand = sDef.command;
-            }
-          }
-          if (sDef.focus) pane.activeSurfaceId = surface.id;
-        }
-      }
-      if (pane.surfaces.length === 0) {
-        await createTerminalSurface(pane, inheritedCwd, inheritedEnv);
-      }
-      return { type: "pane", pane };
-    } else {
-      const left = await buildTree(
-        nodeDef.children[0],
-        inheritedCwd,
-        inheritedEnv,
-      );
-      const right = await buildTree(
-        nodeDef.children[1],
-        inheritedCwd,
-        inheritedEnv,
-      );
-      return {
-        type: "split",
-        direction: nodeDef.direction,
-        ratio: nodeDef.split || 0.5,
-        children: [left, right],
-      };
-    }
-  }
-
-  let splitRoot: SplitNode;
-  if (def.layout) {
-    splitRoot = await buildTree(def.layout, rootCwd, rootEnv);
-  } else {
-    const pane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
-    await createTerminalSurface(pane, rootCwd, rootEnv);
-    splitRoot = { type: "pane", pane };
-  }
-
-  const ws: Workspace = {
-    // Reuse the persisted id when restoring so rootRowOrder survives
-    // a restart; mint a fresh one for first-launch creation.
-    id: def.id ?? uid(),
-    name: wsName,
-    splitRoot,
-    activePaneId: getAllPanes(splitRoot)[0]?.id ?? null,
-    ...(def.metadata ? { metadata: def.metadata } : {}),
-  };
-
-  workspaces.update((list) => [...list, ws]);
-  appendRootRow({ kind: "workspace", id: ws.id });
-  eventBus.emit({
-    type: "workspace:created",
-    id: ws.id,
-    name: wsName,
-    ...(ws.metadata ? { metadata: ws.metadata } : {}),
-  });
-  // Route through switchWorkspace so workspace:activated listeners
-  // (e.g. agentic-orchestrator's dashboard workspace re-spawn hook)
-  // fire on creation — auto-switching to the fresh workspace matches
-  // the user-driven switch path. Session restore skips the auto-switch
-  // because it'll restore the persisted active idx once every workspace
-  // has been rebuilt, and we don't want N+1 activation events along
-  // the way.
-  if (!restoring) {
-    switchWorkspace(get(workspaces).length - 1);
-  } else {
-    activeWorkspaceIdx.set(get(workspaces).length - 1);
-  }
-  const ap = getAllPanes(splitRoot).find((p) => p.id === ws.activePaneId);
-  const as_ = ap?.surfaces.find((s) => s.id === ap.activeSurfaceId);
-  void safeFocus(as_);
-  schedulePersist();
-  return ws.id;
-}
-
-export function switchWorkspace(idx: number) {
-  const wsList = get(workspaces);
-  if (idx < 0 || idx >= wsList.length) return;
-  const previousId =
-    get(activeWorkspaceIdx) >= 0
-      ? (wsList[get(activeWorkspaceIdx)]?.id ?? null)
-      : null;
-  activePseudoWorkspaceId.set(null);
-  zoomedSurfaceId.set(null);
-  activeWorkspaceIdx.set(idx);
-  eventBus.emit({
-    type: "workspace:activated",
-    id: wsList[idx]!.id,
-    previousId,
-  });
-  void safeFocus(get(activeSurface));
-}
-
-export function closeWorkspace(idx: number) {
-  const wsList = get(workspaces);
-  const ws = wsList[idx];
-  if (!ws) return;
-  for (const pane of getAllPanes(ws.splitRoot)) {
-    pane.resizeObserver?.disconnect();
-  }
-  for (const surf of getAllSurfaces(ws)) {
-    if (isTerminalSurface(surf)) {
-      surf.terminal.dispose();
-      if (surf.ptyId >= 0) {
-        // PTY may already have exited — safe to ignore
-        invoke("kill_pty", { ptyId: surf.ptyId }).catch(() => {});
-      }
-    }
-  }
-  // Clear zoom if the workspace being closed contains the currently-zoomed surface
-  const zoomed = get(zoomedSurfaceId);
-  if (zoomed && getAllSurfaces(ws).some((s) => s.id === zoomed)) {
-    zoomedSurfaceId.set(null);
-  }
-  const wsId = ws.id;
-  workspaces.update((list) => list.filter((_, i) => i !== idx));
-  activeWorkspaceIdx.set(
-    Math.min(get(activeWorkspaceIdx), get(workspaces).length - 1),
+export function updateWorkspace(
+  id: string,
+  patch: Partial<Omit<WorkspaceRecord, "id">>,
+): void {
+  const next = getWorkspaces().map((w) =>
+    w.id === id ? { ...w, ...patch } : w,
   );
-  removeRootRow({ kind: "workspace", id: wsId });
-  eventBus.emit({ type: "workspace:closed", id: wsId });
-  schedulePersist();
-}
-
-export function renameWorkspace(idx: number, name: string) {
-  const oldName = get(workspaces)[idx]?.name ?? "";
-  const id = get(workspaces)[idx]?.id ?? "";
-  workspaces.update((list) => {
-    list[idx]!.name = name;
-    return [...list];
-  });
-  eventBus.emit({ type: "workspace:renamed", id, oldName, newName: name });
+  setWorkspaces(next);
+  emitStateChanged({ workspaceId: id });
   schedulePersist();
 }
 
 /**
- * Toggle the `locked` flag on a workspace's metadata. Locked workspaces
- * have their drag-reorder and close affordances suppressed in the UI.
+ * Toggle the `locked` flag on a workspace. Locked workspaces have
+ * their drag-reorder, delete, and archive affordances suppressed.
  * No-op if no workspace with the given id exists.
  */
-export function toggleWorkspaceLock(workspaceId: string): void {
-  let changed = false;
-  workspaces.update((list) =>
-    list.map((ws) => {
-      if (ws.id !== workspaceId) return ws;
-      changed = true;
-      const nextLocked = !ws.metadata?.locked;
-      return {
-        ...ws,
-        metadata: { ...ws.metadata, locked: nextLocked },
-      };
-    }),
+export function toggleWorkspaceLock(id: string): void {
+  const primaryWorkspaces = getWorkspaces();
+  const idx = primaryWorkspaces.findIndex((w) => w.id === id);
+  if (idx === -1) return;
+  const next = primaryWorkspaces.map((w) =>
+    w.id === id ? { ...w, locked: !w.locked } : w,
   );
-  if (changed) schedulePersist();
-}
-
-export function reorderWorkspaces(fromIdx: number, toIdx: number) {
-  const activeId = get(workspaces)[get(activeWorkspaceIdx)]?.id;
-  workspaces.update((list) => {
-    const item = list.splice(fromIdx, 1)[0]!;
-    const adjustedTo = fromIdx < toIdx ? toIdx - 1 : toIdx;
-    list.splice(adjustedTo, 0, item);
-    return [...list];
-  });
-  if (activeId) {
-    const newIdx = get(workspaces).findIndex((ws) => ws.id === activeId);
-    if (newIdx >= 0) activeWorkspaceIdx.set(newIdx);
-  }
+  setWorkspaces(next);
+  emitStateChanged({ workspaceId: id });
   schedulePersist();
 }
 
-export function serializeLayout(node: SplitNode): LayoutNode {
-  if (node.type === "pane") {
-    const surfaces = node.pane.surfaces.map((s) => {
-      if (isTerminalSurface(s)) {
-        const def: Record<string, unknown> = { type: "terminal" };
-        if (s.cwd) def.cwd = s.cwd;
-        if (s.definedCommand) def.command = s.definedCommand;
-        if (s.id === node.pane.activeSurfaceId) def.focus = true;
-        return def;
-      }
-      if (isPreviewSurface(s)) {
-        const def: Record<string, unknown> = { type: "preview", path: s.path };
-        if (s.title) def.name = s.title;
-        if (s.id === node.pane.activeSurfaceId) def.focus = true;
-        return def;
-      }
-      // Extension surface
-      const def: Record<string, unknown> = { type: "extension" };
-      if (s.title) def.name = s.title;
-      if (s.id === node.pane.activeSurfaceId) def.focus = true;
-      if (isExtensionSurface(s)) {
-        def.extensionType = s.surfaceTypeId;
-        if (s.props) {
-          // Strip non-serializable runtime values (DOM nodes, watch handles)
-          const {
-            element: _element,
-            watchId: _watchId,
-            ...serializableProps
-          } = s.props as Record<string, unknown>;
-          if (Object.keys(serializableProps).length > 0) {
-            def.extensionProps = serializableProps;
-          }
-        }
-      }
-      return def;
-    });
-    return { pane: { surfaces } };
-  }
-  return {
-    direction: node.direction,
-    split: node.ratio,
-    children: [
-      serializeLayout(node.children[0]),
-      serializeLayout(node.children[1]),
-    ],
-  };
+export function deleteWorkspace(id: string): void {
+  const workspace = getWorkspace(id);
+  if (workspace?.locked) return;
+  const next = getWorkspaces().filter((w) => w.id !== id);
+  setWorkspaces(next);
+  removeRootRow({ kind: "workspace", id });
+  if (workspace) releaseWorkspaceDirtyStore(workspace.path);
+  emitStateChanged({ workspaceId: id });
+  schedulePersist();
 }
 
-export async function saveCurrentWorkspace() {
-  const ws = get(activeWorkspace);
-  if (!ws) return;
-  const surface = get(activeSurface);
-  const name = await showInputPrompt("Workspace name", ws.name);
-  if (!name) return;
-  const layout = serializeLayout(ws.splitRoot);
-  const activeCwd =
-    surface && isTerminalSurface(surface) ? surface.cwd : undefined;
-  const wsDef: WorkspaceDef = { name, cwd: activeCwd || "~", layout };
-  const config = getConfig();
-  const commands = config.commands || [];
-  const existing = commands.findIndex((c) => c.name === name);
-  const entry = { name, workspace: wsDef };
-  if (existing >= 0) {
-    commands[existing] = entry;
-  } else {
-    commands.push(entry);
-  }
-  await saveConfig({ commands });
+/**
+ * All Branches tagged with `ws.rootWorkspaceId === rootWorkspaceId`. This is the
+ * canonical Branch-membership predicate for core operations (close
+ * sweeps, membership rebuild, reconcile). Extension-layer consumers
+ * that need a CWD-prefix fallback for unattached workspaces should
+ * compose with this result.
+ */
+export function getBranchesOfWorkspace(rootWorkspaceId: string): Workspace[] {
+  return get(workspaces).filter((w) => w.rootWorkspaceId === rootWorkspaceId);
 }
 
-export async function closeAllWorkspaces(): Promise<void> {
-  const count = get(workspaces).length;
-  if (count === 0) return;
-  const confirmed = await showConfirmPrompt(
-    `Close all ${count} workspace${count === 1 ? "" : "s"}? This will dispose every terminal and cannot be undone.`,
+/**
+ * Close every workspace tagged with `rootWorkspaceId === id`. Deletion
+ * ripples through the workspaces store, so we resolve each workspace by
+ * id after recollecting the list. Dashboard workspaces for the workspace
+ * match the same predicate and are closed here too; callers should not
+ * close the dashboard separately.
+ */
+function closeWorkspaceById(wsId: string): void {
+  const idx = get(workspaces).findIndex((w) => w.id === wsId);
+  if (idx >= 0) closeWorkspace(idx);
+}
+
+export function closeWorkspacesInWorkspace(id: string): void {
+  for (const ws of getBranchesOfWorkspace(id)) closeWorkspaceById(ws.id);
+}
+
+/**
+ * Appends `workspaceId` to `rootWorkspaceId`'s Branch-id list if not already
+ * present. No-op when the root workspace is missing (e.g. was just deleted).
+ * Returns true when a change was persisted.
+ */
+export function addBranchToWorkspace(
+  rootWorkspaceId: string,
+  workspaceId: string,
+): boolean {
+  const primaryWorkspaces = getWorkspaces();
+  const workspace = primaryWorkspaces.find((w) => w.id === rootWorkspaceId);
+  if (!workspace) return false;
+  if ((workspace.branchedWorkspaceIds ?? []).includes(workspaceId))
+    return false;
+
+  const next = primaryWorkspaces.map((w) => {
+    if (w.id === rootWorkspaceId) {
+      return {
+        ...w,
+        branchedWorkspaceIds: [...(w.branchedWorkspaceIds ?? []), workspaceId],
+      };
+    }
+    return w;
+  });
+  setWorkspaces(next);
+  emitStateChanged({ rootWorkspaceId });
+  schedulePersist();
+  return true;
+}
+
+/**
+ * Strips `workspaceId` from every Workspace's `branchedWorkspaceIds`
+ * list. Used when a Branch is closed — Branch membership is derived
+ * from `rootWorkspaceId`, so the sweep is cheap and idempotent.
+ */
+export function removeBranchFromAllWorkspaces(workspaceId: string): void {
+  const next = getWorkspaces().map((w) => ({
+    ...w,
+    branchedWorkspaceIds: (w.branchedWorkspaceIds ?? []).filter(
+      (id) => id !== workspaceId,
+    ),
+  }));
+  setWorkspaces(next);
+  emitStateChanged({});
+  schedulePersist();
+}
+
+/**
+ * Path of the markdown file backing a workspace's Dashboard. Lives inside
+ * the workspace's own `.gnar-term/` directory so multi-machine sync /
+ * checkout follows the workspace itself.
+ */
+export function workspaceDashboardPath(workspacePath: string): string {
+  return `${workspacePath.replace(/\/+$/, "")}/.gnar-term/workspace-dashboard.md`;
+}
+
+function buildWorkspaceDashboardMarkdown(workspace: WorkspaceRecord): string {
+  // The Workspace Dashboard is the generic, agent-agnostic landing page for
+  // a Workspace. It surfaces GitHub work-tracker context — open
+  // issues + open PRs — side by side, as a passive read-only browse
+  // panel. Spawn-on-issue lives on the per-workspace Agentic Dashboard tile
+  // (which mounts the same `gnar:issues` widget without `displayOnly`).
+  //
+  // `gnar:columns`, `gnar:issues`, and `gnar:prs` are all registered by
+  // the agentic extension. When that extension is disabled the markdown
+  // previewer renders unknown widgets as a fallback, so the Dashboard
+  // degrades gracefully for users who don't want agents.
+  return `# ${workspace.name}
+
+Workspace at \`${workspace.path}\`.
+
+\`\`\`gnar:workspaces
+\`\`\`
+
+\`\`\`gnar:columns
+children:
+  - name: issues
+    config:
+      state: open
+      displayOnly: true
+  - name: prs
+    config:
+      state: open
+\`\`\`
+`;
+}
+
+/**
+ * Write the Workspace Overview Dashboard markdown template to `path`.
+ *
+ * `force: true` overwrites any existing file — used by the
+ * "Regenerate" action in Workspace Settings to refresh user-stale
+ * templates after the seeded layout changes. The default skips the
+ * write when a file is already present so first-create on an existing
+ * workspace never trampling user customizations.
+ */
+async function writeWorkspaceDashboardTemplate(
+  workspace: WorkspaceRecord,
+  path: string,
+  options: { force?: boolean } = {},
+): Promise<void> {
+  const dir = path.replace(/\/[^/]+$/, "");
+  if (!options.force) {
+    const exists = await invoke<boolean>("file_exists", { path }).catch(
+      () => false,
+    );
+    if (exists) return;
+  }
+  await invoke("ensure_dir", { path: dir });
+  await invoke("write_file", {
+    path,
+    content: buildWorkspaceDashboardMarkdown(workspace),
+  });
+}
+
+/**
+ * Public regenerate hook for the Workspace Overview Dashboard
+ * contribution. Force-rewrites the markdown at `workspaceDashboardPath`;
+ * the preview surface watching that file picks up the change without
+ * needing the workspace to be closed/recreated.
+ */
+export async function regenerateWorkspaceDashboardTemplate(
+  workspace: WorkspaceRecord,
+): Promise<void> {
+  await writeWorkspaceDashboardTemplate(
+    workspace,
+    workspaceDashboardPath(workspace.path),
     {
-      title: "Close All Workspaces",
-      confirmLabel: "Close All",
-      cancelLabel: "Cancel",
+      force: true,
     },
   );
-  if (!confirmed) return;
-  // closeWorkspace mutates the store and shifts indices, so always pop
-  // index 0 until the list is empty.
-  while (get(workspaces).length > 0) {
-    closeWorkspace(0);
-  }
+}
+
+function createDashboardWorkspaceFromDef(
+  workspace: WorkspaceRecord,
+  name: string,
+  contribId: string,
+  surfaces: SurfaceDef[],
+): Promise<string> {
+  return createWorkspaceFromDef({
+    name,
+    layout: { pane: { surfaces } },
+    isDashboard: true,
+    rootWorkspaceId: workspace.id,
+    dashboardContributionId: contribId,
+  });
 }
 
 /**
- * Collapse an empty pane out of a workspace's split tree. Mirrors the
- * structural piece of `removePane` (in pane-service) without the
- * resize-observer / event-bus / focus side-effects — used by tab-drag
- * services after they move a surface out of a pane that becomes empty.
- *
- * Caller must guarantee `paneId` is NOT the splitRoot pane (a single
- * empty pane at the root has no sibling to collapse into and is the
- * caller's responsibility to handle).
+ * Create the Dashboard workspace for a workspace: a constrained workspace
+ * (`isDashboard = true`) hosting a single Live Preview of the workspace's
+ * markdown file. Returns the new workspace id so the workspace record can
+ * link to it.
  */
-function collapseEmptyPaneInWorkspace(ws: Workspace, paneId: string): void {
-  const parentInfo = findParentSplit(ws.splitRoot, paneId);
-  if (!parentInfo || parentInfo.parent.type !== "split") return;
-  const sibling = parentInfo.parent.children[parentInfo.index === 0 ? 1 : 0]!;
-  if (ws.splitRoot === parentInfo.parent) {
-    ws.splitRoot = sibling;
-  } else {
-    replaceNodeInTree(ws.splitRoot, parentInfo.parent, sibling);
+export async function createWorkspaceDashboard(
+  workspace: WorkspaceRecord,
+): Promise<string> {
+  const path = workspaceDashboardPath(workspace.path);
+  try {
+    await writeWorkspaceDashboardTemplate(workspace, path);
+  } catch {
+    // Best-effort write — the workspace can still be created; the
+    // preview surface will surface the backing-file error if relevant.
   }
-}
-
-/**
- * Spawn a new workspace whose splitRoot is a single pane carrying the
- * dragged surface. Inherits the source workspace's groupId so a tab
- * dropped from a grouped workspace into the sidebar lands as a
- * sibling within the same group.
- *
- * Refuses to leave the source empty: when the source workspace has only
- * one surface total, this is a no-op (the caller — tab-drag — also
- * guards against this when computing the drop target, but the service
- * enforces the invariant in case callers skip the check).
- */
-export function createWorkspaceFromSurface(
-  surfaceId: string,
-  sourcePaneId: string,
-  sourceWorkspaceId: string,
-  insertOptions?:
-    | { kind: "root"; insertIdx: number }
-    | { kind: "group"; positionInGroup: number; targetGroupId?: string },
-): void {
-  const allWs = get(workspaces);
-  const srcWs = allWs.find((w) => w.id === sourceWorkspaceId);
-  if (!srcWs) return;
-  if (getAllSurfaces(srcWs).length < 2) return;
-
-  const sourcePane = getAllPanes(srcWs.splitRoot).find(
-    (p) => p.id === sourcePaneId,
+  return createDashboardWorkspaceFromDef(
+    workspace,
+    "Dashboard",
+    OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
+    [{ type: "preview", path, name: workspace.name, focus: true }],
   );
-  if (!sourcePane) return;
-  const surfaceIdx = sourcePane.surfaces.findIndex((s) => s.id === surfaceId);
-  if (surfaceIdx === -1) return;
-  const [surface] = sourcePane.surfaces.splice(surfaceIdx, 1);
-  if (!surface) return;
+}
 
-  if (sourcePane.activeSurfaceId === surfaceId) {
-    sourcePane.activeSurfaceId = sourcePane.surfaces[0]?.id ?? null;
+/**
+ * Materialize the Settings dashboard workspace for a workspace — a
+ * constrained dashboard (metadata.isDashboard = true,
+ * dashboardContributionId = "settings") whose body PaneView renders as
+ * the shared `<WorkspaceDashboardSettings>` component. The workspace carries
+ * a single empty preview surface so it satisfies the workspace schema;
+ * PaneView intercepts and replaces the surface render for settings
+ * contributions.
+ */
+export function createSettingsDashboardWorkspace(
+  workspace: WorkspaceRecord,
+): Promise<string> {
+  return createDashboardWorkspaceFromDef(workspace, "Settings", "settings", []);
+}
+
+/**
+ * Canonical predicate for workspace dashboard membership.
+ *
+ * - No `contribId` → matches any dashboard workspace for the workspace.
+ * - `contribId` provided, `allowLegacyUndefined = false` → strict exact
+ *   match (use for lookups where the contribution is known).
+ * - `contribId` provided, `allowLegacyUndefined = true` → matches exact
+ *   OR a workspace whose `dashboardContributionId` is still `undefined`
+ *   (pre-stamp legacy records). Use for the workspace-overview reconcile pass.
+ */
+export function isDashboardWorkspace(
+  ws: import("../types").Workspace,
+  rootWorkspaceId: string,
+  contribId?: string,
+  allowLegacyUndefined = false,
+): boolean {
+  if (ws.isDashboard !== true) return false;
+  if (ws.rootWorkspaceId !== rootWorkspaceId) return false;
+  if (contribId === undefined) return true;
+  const contribution = ws.dashboardContributionId;
+  if (allowLegacyUndefined) {
+    return contribution === undefined || contribution === contribId;
   }
+  return contribution === contribId;
+}
 
-  // If the source pane is now empty (and isn't the workspace's root),
-  // fold it out of the split tree. The workspace itself survives —
-  // we already enforced >1 surface above.
-  if (
-    sourcePane.surfaces.length === 0 &&
-    !(
-      srcWs.splitRoot.type === "pane" &&
-      srcWs.splitRoot.pane.id === sourcePaneId
-    )
-  ) {
-    collapseEmptyPaneInWorkspace(srcWs, sourcePaneId);
-  }
+function findDashboardWorkspace(rootWorkspaceId: string, contribId: string) {
+  return get(workspaces).find((w) =>
+    isDashboardWorkspace(w, rootWorkspaceId, contribId),
+  );
+}
 
-  const newPane: Pane = {
-    id: uid(),
-    surfaces: [surface],
-    activeSurfaceId: surface.id,
-  };
-  const srcGroupId = srcWs?.metadata?.groupId;
-  const effectiveGroupId =
-    (insertOptions?.kind === "group" && insertOptions.targetGroupId) ||
-    srcGroupId;
-  const newWs: Workspace = {
-    id: uid(),
-    name: surface.title || "New Workspace",
-    splitRoot: { type: "pane", pane: newPane },
-    activePaneId: newPane.id,
-    ...(effectiveGroupId ? { metadata: { groupId: effectiveGroupId } } : {}),
-  };
+/** True when a workspace exists for the given workspace + contribution pair. */
+function hasDashboardWorkspace(
+  rootWorkspaceId: string,
+  contribId: string,
+): boolean {
+  return get(workspaces).some((w) =>
+    isDashboardWorkspace(w, rootWorkspaceId, contribId),
+  );
+}
 
-  workspaces.update((list) => [...list, newWs]);
-  if (insertOptions?.kind === "root") {
-    insertRootRow(insertOptions.insertIdx, { kind: "workspace", id: newWs.id });
-  } else {
-    appendRootRow({ kind: "workspace", id: newWs.id });
-  }
-  if (effectiveGroupId) {
-    if (insertOptions?.kind === "group") {
-      insertWorkspaceIntoGroup(
-        effectiveGroupId,
-        newWs.id,
-        insertOptions.positionInGroup,
+/**
+ * Provision every registered `autoProvision` dashboard contribution for
+ * `workspace`. Called after a workspace is created and on startup
+ * reconciliation so auto-provision contributions (settings, agentic)
+ * always have their workspace available. Idempotent — a contribution
+ * already backed by a workspace is skipped.
+ *
+ * `existingContribIds` is an optional precomputed set of contribution
+ * ids already backed by a dashboard workspace for this parent. Pass it
+ * to skip the per-call O(N) scan over child workspaces when the
+ * caller has already built the snapshot (e.g. `reconcileWorkspaceDashboards`).
+ */
+export async function provisionAutoDashboardsForWorkspace(
+  workspace: WorkspaceRecord,
+  existingContribIds?: ReadonlySet<string>,
+): Promise<void> {
+  for (const c of getDashboardContributions()) {
+    if (!c.autoProvision) continue;
+    const exists = existingContribIds
+      ? existingContribIds.has(c.id)
+      : hasDashboardWorkspace(workspace.id, c.id);
+    if (exists) continue;
+    try {
+      await c.create(workspace);
+    } catch (err) {
+      console.warn(
+        `[workspace-service] auto-provision failed for "${c.id}":`,
+        err,
       );
-    } else {
-      addWorkspaceToGroup(effectiveGroupId, newWs.id);
     }
   }
-  schedulePersist();
 }
 
-// Re-exported so pane-service (which lives next to it) can collapse a
-// pane after moving a surface across workspaces without duplicating
-// the helper.
-export { collapseEmptyPaneInWorkspace };
+/**
+ * Close every workspace whose `dashboardContributionId` belongs to a
+ * contribution registered by `source` and marked autoProvision. Used on
+ * extension deactivate so auto-provisioned dashboards disappear
+ * alongside their owning extension.
+ */
+export function closeAutoDashboardsBySource(source: string): void {
+  const autoIds = new Set(
+    getDashboardContributions()
+      .filter((c) => c.source === source && c.autoProvision)
+      .map((c) => c.id),
+  );
+  if (autoIds.size === 0) return;
+  const matchIds = get(workspaces)
+    .filter((w) => {
+      if (w.isDashboard !== true) return false;
+      const contrib = w.dashboardContributionId;
+      return typeof contrib === "string" && autoIds.has(contrib);
+    })
+    .map((w) => w.id);
+  for (const wsId of matchIds) closeWorkspaceById(wsId);
+}
 
-// Derived store: one flat Map<workspaceId, Surface[]> rebuilt per workspace
-// update. WorkspaceItem rows still re-run their reactive statement on every
-// workspaces emission, but each pays only a Map.get() O(1) lookup instead of
-// calling getAllSurfaces independently — O(W×S) once vs O(R×W×S) before.
-export const workspaceSurfaceMap: Readable<
-  Map<string, ReturnType<typeof getAllSurfaces>>
-> = derived(workspaces, ($ws) => {
-  const m = new Map<string, ReturnType<typeof getAllSurfaces>>();
-  for (const ws of $ws) m.set(ws.id, getAllSurfaces(ws));
-  return m;
-});
+/**
+ * Locate the dashboard workspace for `rootWorkspaceId` + `contributionId` and
+ * close it. Used by the Settings toggle UI and by MCP to remove a
+ * dashboard contribution from a workspace.
+ */
+export function closeDashboardForWorkspace(
+  rootWorkspaceId: string,
+  contributionId: string,
+): boolean {
+  const match = findDashboardWorkspace(rootWorkspaceId, contributionId);
+  if (!match) return false;
+  const contribution = getDashboardContribution(contributionId);
+  if (contribution?.autoProvision) return false;
+  closeWorkspaceById(match.id);
+  return true;
+}
+
+/**
+ * Switch to a workspace's Dashboard workspace. The Dashboard is created
+ * eagerly on workspace creation, so this is a pure activation call.
+ * Returns true on success.
+ */
+export function openWorkspaceDashboard(workspace: WorkspaceRecord): boolean {
+  const targetId = workspace.dashboardWorkspaceId;
+  if (!targetId) return false;
+  const idx = get(workspaces).findIndex((w) => w.id === targetId);
+  if (idx < 0) return false;
+  activeWorkspaceId.set(targetId);
+  return true;
+}
+
+/**
+ * Activate a Workspace by id: land on its own Root tab surface — the
+ * runtime Workspace whose id matches the Workspace's record id (ADR-004).
+ *
+ * Row click and ⌘1-9 both flow through here. We deliberately ignore
+ * `lastActiveBranchedWorkspaceId` — that field tracks the most-recent
+ * Branch for the "jump to active branch" affordance, not for routing
+ * row activations. Branches and Dashboards are reached by clicking
+ * their own rows / dashboard tiles, not via the Workspace row.
+ *
+ * If the Root runtime Workspace is missing (deleted, never restored, or
+ * a stale persisted id), materialize it with the record id so the row
+ * always lands on its own tabs. We never fall through to the dashboard
+ * or a branch — the Workspace's own surface is the canonical landing.
+ */
+export async function activateWorkspace(workspaceId: string): Promise<void> {
+  const workspace = getWorkspace(workspaceId);
+  if (!workspace) return;
+  const existingIdx = get(workspaces).findIndex((w) => w.id === workspace.id);
+  if (existingIdx >= 0) {
+    switchWorkspace(existingIdx);
+    return;
+  }
+  const rootId = await createWorkspaceFromDef({
+    id: workspace.id,
+    name: workspace.name,
+    cwd: workspace.path,
+  });
+  if (!rootId) return;
+  const newIdx = get(workspaces).findIndex((w) => w.id === rootId);
+  if (newIdx >= 0) switchWorkspace(newIdx);
+}
+
+/**
+ * Called on app startup (after workspaces are restored) — ensures every
+ * workspace has exactly one Dashboard Workspace. Prior releases
+ * matched the dashboard via `workspace.dashboardWorkspaceId`; child workspace
+ * ids were unstable across restarts, so on every reload the lookup
+ * missed and a fresh dashboard was spawned. The cleanup runs in three
+ * passes:
+ *
+ *   1. Adopt the first workspace matching `metadata.isDashboard ===
+ *      true && rootWorkspaceId === workspace.id` (with no contribution id,
+ *      or an explicit `OVERVIEW_DASHBOARD_CONTRIBUTION_ID` id) — rebinding the workspace's
+ *      `dashboardWorkspaceId` to that workspace.
+ *   2. Close every extra Workspace Dashboard for the same workspace (users end
+ *      up with these when pre-fix state carried duplicates).
+ *   3. Only when no dashboard exists at all, create a fresh one.
+ *
+ * The loop is sequential because `closeWorkspace` mutates the
+ * workspaces store and ripples to `$activeWorkspaceIdx`.
+ */
+async function reconcileDashboardsForWorkspace(
+  workspace: WorkspaceRecord,
+  dashboardIndex: Map<string, Map<string, Workspace[]>>,
+): Promise<void> {
+  const byContrib = dashboardIndex.get(workspace.id);
+
+  // Deduplicate every autoProvision contribution type — keeps the first
+  // match, closes the rest. Previously only "group" was covered; the
+  // startup race could leave duplicate "settings" or extension-owned
+  // dashboards (e.g. "agentic") that are now caught here too.
+  for (const c of getDashboardContributions()) {
+    if (!c.autoProvision) continue;
+    const dupeMatches = byContrib?.get(c.id) ?? [];
+    if (dupeMatches.length <= 1) continue;
+    const [keep, ...extras] = dupeMatches;
+    for (const dup of extras) closeWorkspaceById(dup.id);
+    // Prune the index to mirror the store mutation; the post-dedupe
+    // `existingContribIds` snapshot below relies on this.
+    if (keep) byContrib?.set(c.id, [keep]);
+  }
+
+  // Back-fill any autoProvision contribution (including OVERVIEW_DASHBOARD_CONTRIBUTION_ID if
+  // it is still missing after the dedupe pass, plus `"settings"` and
+  // extension-owned autoProvision contributions).
+  try {
+    const existingContribIds = new Set(byContrib?.keys() ?? []);
+    await provisionAutoDashboardsForWorkspace(workspace, existingContribIds);
+    // Rebind `dashboardWorkspaceId` to the current OVERVIEW_DASHBOARD_CONTRIBUTION_ID overview —
+    // either the one that survived dedupe or the one just provisioned.
+    // Check the index first (O(1)); fall back to a store scan only for
+    // dashboards provisioned after the index was built.
+    const overview =
+      byContrib?.get(OVERVIEW_DASHBOARD_CONTRIBUTION_ID)?.[0] ??
+      get(workspaces).find((w) =>
+        isDashboardWorkspace(
+          w,
+          workspace.id,
+          OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
+          true,
+        ),
+      );
+    if (overview && overview.id !== workspace.dashboardWorkspaceId) {
+      updateWorkspace(workspace.id, {
+        dashboardWorkspaceId: overview.id,
+      });
+    }
+  } catch (err) {
+    console.warn("[workspace-service] Dashboard reconciliation failed:", err);
+  }
+}
+
+export async function reconcileWorkspaceDashboards(): Promise<void> {
+  // Single pass over workspaces builds an index keyed by
+  // (parentId → contribId → matching workspaces). Without it, each
+  // workspace × autoProvision-contribution iteration would scan the full
+  // workspaces list (W*C cold-start cost). The index is mutated
+  // in lock-step with closeWorkspaceById below so the dedupe pass
+  // and the post-dedupe `existingContribIds` snapshot stay in sync.
+  const dashboardIndex = new Map<string, Map<string, Workspace[]>>();
+  for (const w of get(workspaces)) {
+    if (w.isDashboard !== true) continue;
+    const parentId = w.rootWorkspaceId;
+    if (typeof parentId !== "string") continue;
+    const contribId = w.dashboardContributionId;
+    if (typeof contribId !== "string") continue;
+    let byContrib = dashboardIndex.get(parentId);
+    if (!byContrib) {
+      byContrib = new Map();
+      dashboardIndex.set(parentId, byContrib);
+    }
+    const list = byContrib.get(contribId) ?? [];
+    list.push(w);
+    byContrib.set(contribId, list);
+  }
+
+  await Promise.allSettled(
+    getWorkspaces().map((workspace) =>
+      reconcileDashboardsForWorkspace(workspace, dashboardIndex),
+    ),
+  );
+}
+
+/**
+ * Rebuild each Workspace's `branchedWorkspaceIds` list from runtime
+ * Workspaces tagged with `rootWorkspaceId`. Called on app startup once
+ * workspaces are loaded and workspaces are restored — restoration
+ * creates fresh workspace ids so the membership list is recomputed
+ * here from the canonical `rootWorkspaceId` tag.
+ */
+export function reclaimBranchedWorkspaces(): void {
+  const primaryWorkspaces = getWorkspaces();
+  const workspaceIds = new Set(primaryWorkspaces.map((w) => w.id));
+
+  // Collect workspace ids per workspace in a single pass to avoid one
+  // setWorkspaces() call (and event emission) per workspace.
+  const newMembers = new Map<string, string[]>();
+  for (const ws of get(workspaces)) {
+    const rootWorkspaceId = ws.rootWorkspaceId;
+    if (
+      typeof rootWorkspaceId !== "string" ||
+      !workspaceIds.has(rootWorkspaceId)
+    )
+      continue;
+    const members = newMembers.get(rootWorkspaceId) ?? [];
+    members.push(ws.id);
+    newMembers.set(rootWorkspaceId, members);
+  }
+
+  if (newMembers.size > 0) {
+    const next = primaryWorkspaces.map((w) => {
+      const toAdd = newMembers.get(w.id) ?? [];
+      if (toAdd.length === 0) return w;
+      const current = w.branchedWorkspaceIds ?? [];
+      const existing = new Set(current);
+      const fresh = toAdd.filter((id) => !existing.has(id));
+      return fresh.length > 0
+        ? { ...w, branchedWorkspaceIds: [...current, ...fresh] }
+        : w;
+    });
+    setWorkspaces(next);
+    emitStateChanged({});
+    schedulePersist();
+  }
+}
+
+/**
+ * Promote every standalone runtime Workspace to a Root by creating a
+ * matching WorkspaceRecord with the same id (Root and Record share an
+ * id). A "standalone" runtime workspace is one that:
+ *   - has no matching Record (no row in the sidebar yet)
+ *   - is not a Branch (`rootWorkspaceId` unset). Branches are Branches
+ *     for life — even orphan Branches (rootWorkspaceId points at a
+ *     missing Workspace) are never promoted to Roots
+ *   - is not a Dashboard surface (those belong to a root Workspace)
+ *   - is not worktree-backed (worktreePath stamps it as a worktree
+ *     Branch even if its rootWorkspaceId is missing)
+ */
+function materializeStandaloneRoots(): void {
+  const knownWorkspaceIds = new Set(getWorkspaces().map((w) => w.id));
+  const snapshot = get(workspaces);
+  const usedColors = getWorkspaces().map((w) => w.color);
+
+  for (const ws of snapshot) {
+    if (knownWorkspaceIds.has(ws.id)) continue;
+    // A Branch never becomes a Root. The presence of `rootWorkspaceId`
+    // marks the workspace as a Branch for life — orphan or not.
+    if (typeof ws.rootWorkspaceId === "string") continue;
+    if (ws.isDashboard) continue;
+    if ((ws as { worktreePath?: string }).worktreePath) continue;
+
+    const colorIdx = usedColors.length % WORKSPACE_COLOR_SLOTS.length;
+    const color: string =
+      WORKSPACE_COLOR_SLOTS[colorIdx] ?? WORKSPACE_COLOR_SLOTS[0];
+    usedColors.push(color);
+
+    const path = ws.path && ws.path.length > 0 ? ws.path : "~";
+
+    const workspace: WorkspaceRecord = {
+      id: ws.id,
+      name: ws.name,
+      path,
+      color,
+      branchedWorkspaceIds: [],
+      isGit: false,
+      createdAt: new Date().toISOString(),
+    };
+    addWorkspace(workspace);
+    knownWorkspaceIds.add(ws.id);
+  }
+}
+
+/**
+ * Startup reconciliation — called after workspaces are restored.
+ * Promotes every standalone runtime Workspace to a Root by creating a
+ * matching WorkspaceRecord (shared id). Branch status is derived
+ * directly from `Workspace.rootWorkspaceId`, so no parallel membership
+ * registry needs rehydrating at startup.
+ *
+ * Idempotent.
+ */
+export async function reconcilePrimaryWorkspaces(): Promise<void> {
+  materializeStandaloneRoots();
+}
+
+/**
+ * Stamp `pathMissing: true` on any workspace whose `path` no longer
+ * exists on disk (e.g. the user deleted the directory between sessions
+ * or moved a worktree out from under the app). The flag is runtime-only
+ * — not persisted — and is re-derived on every startup. Sidebar
+ * components surface a "path missing" affordance when the flag is set.
+ *
+ * Best-effort: a failing `file_exists` invoke is treated as "not
+ * missing" so a transient FS error doesn't paint every workspace red.
+ * Idempotent: a workspace whose path now exists has its flag cleared on
+ * the next sweep.
+ */
+export async function validateWorkspaceRootPaths(): Promise<void> {
+  const workspaces = getWorkspaces();
+  for (const workspace of workspaces) {
+    let exists = true;
+    try {
+      exists = await invoke<boolean>("file_exists", { path: workspace.path });
+    } catch {
+      exists = true;
+    }
+    const missing = !exists;
+    if ((workspace.pathMissing ?? false) !== missing) {
+      updateWorkspace(workspace.id, { pathMissing: missing });
+    }
+  }
+}
+
+export { getWorkspace, getWorkspaces, setActiveWorkspaceId };

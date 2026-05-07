@@ -41,12 +41,15 @@ function rpc(method: string, params?: unknown, id: number = 1) {
   return { jsonrpc: "2.0" as const, id, method, params };
 }
 
-function makeWorkspace(id: string, name = id): { ws: Workspace; pane: Pane } {
+function makeChildWorkspace(
+  id: string,
+  name = id,
+): { ws: Workspace; pane: Pane } {
   const pane: Pane = { id: `${id}-pane`, surfaces: [], activeSurfaceId: null };
   const ws: Workspace = {
     id,
     name,
-    splitRoot: { type: "pane", pane },
+    paneLayout: { type: "pane", pane },
     activePaneId: pane.id,
   };
   return { ws, pane };
@@ -63,7 +66,7 @@ describe("MCP — spawn_preview", () => {
   });
 
   it("opens a preview surface in the binding's host pane", async () => {
-    const { ws, pane } = makeWorkspace("ws-1");
+    const { ws, pane } = makeChildWorkspace("ws-1");
     workspaces.set([ws]);
     const ctx = _testContext({ paneId: pane.id, workspaceId: "ws-1" });
 
@@ -91,7 +94,7 @@ describe("MCP — spawn_preview", () => {
   });
 
   it("focuses an existing preview when the same path is already open", async () => {
-    const { ws, pane } = makeWorkspace("ws-1");
+    const { ws, pane } = makeChildWorkspace("ws-1");
     workspaces.set([ws]);
     // Simulate an already-mounted preview (PreviewSurface.svelte normally
     // registers itself on mount; tests bypass that).
@@ -119,8 +122,8 @@ describe("MCP — spawn_preview", () => {
   });
 
   it("explicit pane_id wins over the binding pane", async () => {
-    const { ws: wsA, pane: paneA } = makeWorkspace("ws-A");
-    const { ws: wsB, pane: paneB } = makeWorkspace("ws-B");
+    const { ws: wsA, pane: paneA } = makeChildWorkspace("ws-A");
+    const { ws: wsB, pane: paneB } = makeChildWorkspace("ws-B");
     workspaces.set([wsA, wsB]);
     const ctx = _testContext({ paneId: paneA.id, workspaceId: "ws-A" });
 
@@ -141,7 +144,7 @@ describe("MCP — spawn_preview", () => {
   });
 
   it("errors when unbound and no workspace_id/pane_id is passed", async () => {
-    const { ws } = makeWorkspace("ws-1");
+    const { ws } = makeChildWorkspace("ws-1");
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
     const ctx = _testContext(null);
@@ -171,7 +174,7 @@ describe("MCP — create_preview_file", () => {
 
   it("invokes write_file then opens the preview", async () => {
     invokeMock.mockResolvedValue(undefined);
-    const { ws, pane } = makeWorkspace("ws-1");
+    const { ws, pane } = makeChildWorkspace("ws-1");
     workspaces.set([ws]);
     const ctx = _testContext({ paneId: pane.id, workspaceId: "ws-1" });
 
@@ -204,7 +207,7 @@ describe("MCP — create_preview_file", () => {
 
   it("propagates write_file errors without opening a surface", async () => {
     invokeMock.mockRejectedValueOnce(new Error("Write denied: blocked path"));
-    const { ws, pane } = makeWorkspace("ws-1");
+    const { ws, pane } = makeChildWorkspace("ws-1");
     workspaces.set([ws]);
     const ctx = _testContext({ paneId: pane.id, workspaceId: "ws-1" });
 
@@ -280,7 +283,7 @@ describe("MCP — close_preview", () => {
   });
 
   it("closes a preview surface registered with the registry", async () => {
-    const { ws, pane } = makeWorkspace("ws-1");
+    const { ws, pane } = makeChildWorkspace("ws-1");
     workspaces.set([ws]);
     const ctx = _testContext({ paneId: pane.id, workspaceId: "ws-1" });
 

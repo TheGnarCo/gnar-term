@@ -48,10 +48,6 @@ import { eventBus } from "../lib/services/event-bus";
 import { pendingAction } from "../lib/stores/ui";
 import { commandStore } from "../lib/services/command-registry";
 import {
-  sidebarTabStore,
-  resetSidebarTabs,
-} from "../lib/services/sidebar-tab-registry";
-import {
   sidebarSectionStore,
   resetSidebarSections,
 } from "../lib/services/sidebar-section-registry";
@@ -67,10 +63,6 @@ import type {
   ExtensionManifest,
   LoadedExtension,
 } from "../lib/extension-types";
-import {
-  claimedWorkspaceIds,
-  resetClaimedWorkspaces,
-} from "../lib/services/claimed-workspace-registry";
 import * as config from "../lib/config";
 
 // --- Helpers ---
@@ -102,8 +94,7 @@ describe("validateManifest", () => {
         contributes: {
           commands: [{ id: "do-thing", title: "Do Thing" }],
           events: ["workspace:created", "pane:focused"],
-          secondarySidebarTabs: [{ id: "my-tab", label: "My Tab" }],
-          primarySidebarSections: [{ id: "my-section", label: "My Section" }],
+          sidebarSections: [{ id: "my-section", label: "My Section" }],
           surfaces: [{ id: "my-surface", label: "My Surface" }],
         },
       }),
@@ -202,8 +193,7 @@ describe("createExtensionAPI", () => {
     expect(api).toHaveProperty("on");
     expect(api).toHaveProperty("off");
     expect(api).toHaveProperty("registerCommand");
-    expect(api).toHaveProperty("registerSecondarySidebarTab");
-    expect(api).toHaveProperty("registerPrimarySidebarSection");
+    expect(api).toHaveProperty("registerSidebarSection");
     expect(api).toHaveProperty("registerSurfaceType");
     expect(api).toHaveProperty("state");
     expect(api).toHaveProperty("workspaces");
@@ -516,44 +506,16 @@ describe("Extension lifecycle", () => {
     expect(handler).not.toHaveBeenCalled();
   });
 
-  it("deactivateExtension cleans up registered sidebar tabs", async () => {
-    const manifest = makeManifest({
-      id: "tab-cleanup",
-      contributes: {
-        secondarySidebarTabs: [{ id: "my-tab", label: "My Tab" }],
-      },
-    });
-    const registerFn = (api: ExtensionAPI) => {
-      api.onActivate(() => {
-        api.registerSecondarySidebarTab("my-tab", { fake: "component" });
-      });
-    };
-
-    resetSidebarTabs();
-    registerExtension(manifest, registerFn);
-    await activateExtension("tab-cleanup");
-
-    expect(
-      get(sidebarTabStore).some((t) => t.id === "tab-cleanup:my-tab"),
-    ).toBe(true);
-
-    deactivateExtension("tab-cleanup");
-
-    expect(
-      get(sidebarTabStore).some((t) => t.id === "tab-cleanup:my-tab"),
-    ).toBe(false);
-  });
-
   it("deactivateExtension cleans up registered sidebar sections", async () => {
     const manifest = makeManifest({
       id: "section-cleanup",
       contributes: {
-        primarySidebarSections: [{ id: "my-section", label: "My Section" }],
+        sidebarSections: [{ id: "my-section", label: "My Section" }],
       },
     });
     const registerFn = (api: ExtensionAPI) => {
       api.onActivate(() => {
-        api.registerPrimarySidebarSection("my-section", {
+        api.registerSidebarSection("my-section", {
           fake: "component",
         });
       });
@@ -713,7 +675,7 @@ describe("Extension lifecycle", () => {
         id: "ws-1",
         name: "Test Workspace",
         activePaneId: "pane-1",
-        splitRoot: {
+        paneLayout: {
           type: "pane",
           pane: {
             id: "pane-1",
@@ -741,7 +703,8 @@ describe("Extension lifecycle", () => {
 
     // The extension surface should be removed
     const ws = get(wsStore);
-    const pane = ws[0].splitRoot.type === "pane" ? ws[0].splitRoot.pane : null;
+    const pane =
+      ws[0].paneLayout.type === "pane" ? ws[0].paneLayout.pane : null;
     expect(pane).toBeTruthy();
     expect(pane!.surfaces).toHaveLength(1);
     expect(pane!.surfaces[0].id).toBe("term-surface-1");
@@ -906,33 +869,6 @@ describe("Extension lifecycle", () => {
       (e) => e.manifest.id === "throw-activate",
     );
     expect(ext?.enabled).toBe(false);
-  });
-
-  it("deactivateExtension unclaims workspaces claimed by the extension", async () => {
-    resetClaimedWorkspaces();
-    const manifest = makeManifest({
-      id: "claim-cleanup",
-      contributes: {
-        events: ["workspace:created"],
-      },
-    });
-    registerExtension(manifest, (api: ExtensionAPI) => {
-      api.onActivate(() => {
-        api.claimWorkspace("ws-1");
-        api.claimWorkspace("ws-2");
-      });
-    });
-    await activateExtension("claim-cleanup");
-
-    // Verify workspaces are claimed
-    expect(get(claimedWorkspaceIds).has("ws-1")).toBe(true);
-    expect(get(claimedWorkspaceIds).has("ws-2")).toBe(true);
-
-    deactivateExtension("claim-cleanup");
-
-    // After deactivation, workspaces should be unclaimed
-    expect(get(claimedWorkspaceIds).has("ws-1")).toBe(false);
-    expect(get(claimedWorkspaceIds).has("ws-2")).toBe(false);
   });
 });
 
@@ -1560,7 +1496,7 @@ describe("api.getWorkspaceIdForSurface", () => {
         id: "ws-A",
         name: "A",
         activePaneId: "pane-A",
-        splitRoot: {
+        paneLayout: {
           type: "pane",
           pane: {
             id: "pane-A",
@@ -1581,7 +1517,7 @@ describe("api.getWorkspaceIdForSurface", () => {
         id: "ws-B",
         name: "B",
         activePaneId: "pane-B",
-        splitRoot: {
+        paneLayout: {
           type: "pane",
           pane: {
             id: "pane-B",
@@ -1620,7 +1556,7 @@ describe("api.getWorkspaceIdForSurface", () => {
         id: "ws-active",
         name: "Active",
         activePaneId: "p1",
-        splitRoot: {
+        paneLayout: {
           type: "split",
           direction: "horizontal",
           ratio: 0.5,
@@ -1664,7 +1600,7 @@ describe("api.getWorkspaceIdForSurface", () => {
         id: "ws-background",
         name: "Background",
         activePaneId: "p3",
-        splitRoot: {
+        paneLayout: {
           type: "pane",
           pane: {
             id: "p3",
@@ -1721,7 +1657,7 @@ describe("api.getWorkspaceIdForSurface", () => {
         id: "ws-split",
         name: "Split",
         activePaneId: "pane-left",
-        splitRoot: {
+        paneLayout: {
           type: "split",
           direction: "horizontal",
           ratio: 0.5,

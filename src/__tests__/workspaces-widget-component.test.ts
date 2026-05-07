@@ -8,9 +8,9 @@ import { render, cleanup, fireEvent } from "@testing-library/svelte";
 const { switchWorkspaceMock } = vi.hoisted(() => ({
   switchWorkspaceMock: vi.fn(),
 }));
-vi.mock("../lib/services/workspace-service", () => ({
+vi.mock("../lib/services/workspace-runtime-service", () => ({
   switchWorkspace: switchWorkspaceMock,
-  createWorkspace: vi.fn(),
+  createWorkspaceFromDef: vi.fn(),
   schedulePersist: vi.fn(),
   closeWorkspace: vi.fn(),
   renameWorkspace: vi.fn(),
@@ -26,34 +26,31 @@ vi.mock("@tauri-apps/api/event", () => ({
 
 import WorkspacesWidget from "../lib/components/WorkspacesWidget.svelte";
 import { workspaces } from "../lib/stores/workspace";
-import {
-  setWorkspaceGroups,
-  resetWorkspaceGroupsForTest,
-} from "../lib/stores/workspace-groups";
+import { setWorkspaces, resetWorkspacesForTest } from "../lib/stores/workspace";
 import { DASHBOARD_HOST_KEY } from "../lib/contexts/dashboard-host";
 import type { Workspace } from "../lib/types";
 
-function makeWorkspace(
+function makeChildWorkspace(
   id: string,
   name: string,
-  metadata: Record<string, unknown> = {},
+  extraFields: Record<string, unknown> = {},
 ): Workspace {
   return {
     id,
     name,
-    splitRoot: {
+    paneLayout: {
       type: "pane",
       pane: { id: `${id}-pane`, surfaces: [], activeSurfaceId: null },
     },
     activePaneId: null,
-    metadata,
-  };
+    ...extraFields,
+  } as Workspace;
 }
 
 beforeEach(() => {
   cleanup();
   workspaces.set([]);
-  resetWorkspaceGroupsForTest();
+  resetWorkspacesForTest();
 });
 
 describe("WorkspacesWidget", () => {
@@ -62,66 +59,70 @@ describe("WorkspacesWidget", () => {
     expect(container.querySelector("[data-workspaces-widget]")).toBeNull();
   });
 
-  it("renders nothing when the group only has a group-overview dashboard", () => {
-    setWorkspaceGroups([
+  it("renders nothing when the workspace only has a workspace-overview dashboard", () => {
+    setWorkspaces([
       {
         id: "g1",
-        name: "My Group",
+        name: "My Workspace",
         path: "/tmp/g1",
         color: "purple",
-        workspaceIds: [],
+        branchedWorkspaceIds: [],
         isGit: false,
         createdAt: "2026-01-01T00:00:00.000Z",
       },
     ]);
     workspaces.set([
-      makeWorkspace("ws-overview", "Group Overview", {
-        groupId: "g1",
+      makeChildWorkspace("ws-overview", "Workspace Overview", {
+        rootWorkspaceId: "g1",
         isDashboard: true,
         dashboardContributionId: "group",
       }),
     ]);
 
     const { container } = render(WorkspacesWidget, {
-      context: new Map([[DASHBOARD_HOST_KEY, { metadata: { groupId: "g1" } }]]),
+      context: new Map([
+        [DASHBOARD_HOST_KEY, { metadata: { rootWorkspaceId: "g1" } }],
+      ]),
     });
 
     expect(container.querySelector("[data-dashboard-cards]")).toBeNull();
     expect(container.querySelector("[data-workspace-rows]")).toBeNull();
   });
 
-  it("renders non-group dashboard cards but excludes the group overview", () => {
-    setWorkspaceGroups([
+  it("renders non-overview dashboard cards but excludes the workspace overview", () => {
+    setWorkspaces([
       {
         id: "g1",
-        name: "My Group",
+        name: "My Workspace",
         path: "/tmp/g1",
         color: "blue",
-        workspaceIds: [],
+        branchedWorkspaceIds: [],
         isGit: false,
         createdAt: "2026-01-01T00:00:00.000Z",
       },
     ]);
     workspaces.set([
-      makeWorkspace("ws-overview", "Group Overview", {
-        groupId: "g1",
+      makeChildWorkspace("ws-overview", "Workspace Overview", {
+        rootWorkspaceId: "g1",
         isDashboard: true,
         dashboardContributionId: "group",
       }),
-      makeWorkspace("ws-settings", "Settings Dashboard", {
-        groupId: "g1",
+      makeChildWorkspace("ws-settings", "Settings Dashboard", {
+        rootWorkspaceId: "g1",
         isDashboard: true,
         dashboardContributionId: "settings",
       }),
-      makeWorkspace("ws-agentic", "Agentic Dashboard", {
-        groupId: "g1",
+      makeChildWorkspace("ws-agentic", "Agentic Dashboard", {
+        rootWorkspaceId: "g1",
         isDashboard: true,
         dashboardContributionId: "agentic",
       }),
     ]);
 
     const { container } = render(WorkspacesWidget, {
-      context: new Map([[DASHBOARD_HOST_KEY, { metadata: { groupId: "g1" } }]]),
+      context: new Map([
+        [DASHBOARD_HOST_KEY, { metadata: { rootWorkspaceId: "g1" } }],
+      ]),
     });
 
     const cards = container.querySelectorAll("[data-dashboard-card]");
@@ -136,24 +137,30 @@ describe("WorkspacesWidget", () => {
   });
 
   it("renders regular workspace rows with correct names", () => {
-    setWorkspaceGroups([
+    setWorkspaces([
       {
         id: "g1",
-        name: "My Group",
+        name: "My Workspace",
         path: "/tmp/g1",
         color: "green",
-        workspaceIds: [],
+        branchedWorkspaceIds: [],
         isGit: false,
         createdAt: "2026-01-01T00:00:00.000Z",
       },
     ]);
     workspaces.set([
-      makeWorkspace("ws-alpha", "Alpha Workspace", { groupId: "g1" }),
-      makeWorkspace("ws-beta", "Beta Workspace", { groupId: "g1" }),
+      makeChildWorkspace("ws-alpha", "Alpha Workspace", {
+        rootWorkspaceId: "g1",
+      }),
+      makeChildWorkspace("ws-beta", "Beta Workspace", {
+        rootWorkspaceId: "g1",
+      }),
     ]);
 
     const { container } = render(WorkspacesWidget, {
-      context: new Map([[DASHBOARD_HOST_KEY, { metadata: { groupId: "g1" } }]]),
+      context: new Map([
+        [DASHBOARD_HOST_KEY, { metadata: { rootWorkspaceId: "g1" } }],
+      ]),
     });
 
     const rows = container.querySelectorAll("[data-workspace-row]");
@@ -164,34 +171,40 @@ describe("WorkspacesWidget", () => {
     expect(names).toContain("Beta Workspace");
   });
 
-  it("excludes workspaces from other groups", () => {
-    setWorkspaceGroups([
+  it("excludes workspaces from other workspaces", () => {
+    setWorkspaces([
       {
         id: "g1",
-        name: "Group One",
+        name: "Workspace One",
         path: "/tmp/g1",
         color: "red",
-        workspaceIds: [],
+        branchedWorkspaceIds: [],
         isGit: false,
         createdAt: "2026-01-01T00:00:00.000Z",
       },
       {
         id: "g2",
-        name: "Group Two",
+        name: "Workspace Two",
         path: "/tmp/g2",
         color: "blue",
-        workspaceIds: [],
+        branchedWorkspaceIds: [],
         isGit: false,
         createdAt: "2026-01-01T00:00:00.000Z",
       },
     ]);
     workspaces.set([
-      makeWorkspace("ws-g1", "G1 Workspace", { groupId: "g1" }),
-      makeWorkspace("ws-g2", "G2 Workspace", { groupId: "g2" }),
+      makeChildWorkspace("ws-g1", "G1 Workspace", {
+        rootWorkspaceId: "g1",
+      }),
+      makeChildWorkspace("ws-g2", "G2 Workspace", {
+        rootWorkspaceId: "g2",
+      }),
     ]);
 
     const { container } = render(WorkspacesWidget, {
-      context: new Map([[DASHBOARD_HOST_KEY, { metadata: { groupId: "g1" } }]]),
+      context: new Map([
+        [DASHBOARD_HOST_KEY, { metadata: { rootWorkspaceId: "g1" } }],
+      ]),
     });
 
     const rows = container.querySelectorAll("[data-workspace-row]");
@@ -205,28 +218,34 @@ describe("WorkspacesWidget click-to-navigate", () => {
     cleanup();
     switchWorkspaceMock.mockClear();
     workspaces.set([]);
-    resetWorkspaceGroupsForTest();
+    resetWorkspacesForTest();
   });
 
   it("clicking a workspace row calls switchWorkspace with its index", async () => {
-    setWorkspaceGroups([
+    setWorkspaces([
       {
         id: "g1",
-        name: "My Group",
+        name: "My Workspace",
         path: "/tmp/g1",
         color: "blue",
-        workspaceIds: [],
+        branchedWorkspaceIds: [],
         isGit: false,
         createdAt: "2026-01-01T00:00:00.000Z",
       },
     ]);
     workspaces.set([
-      makeWorkspace("ws-alpha", "Alpha Workspace", { groupId: "g1" }),
-      makeWorkspace("ws-beta", "Beta Workspace", { groupId: "g1" }),
+      makeChildWorkspace("ws-alpha", "Alpha Workspace", {
+        rootWorkspaceId: "g1",
+      }),
+      makeChildWorkspace("ws-beta", "Beta Workspace", {
+        rootWorkspaceId: "g1",
+      }),
     ]);
 
     const { container } = render(WorkspacesWidget, {
-      context: new Map([[DASHBOARD_HOST_KEY, { metadata: { groupId: "g1" } }]]),
+      context: new Map([
+        [DASHBOARD_HOST_KEY, { metadata: { rootWorkspaceId: "g1" } }],
+      ]),
     });
 
     const rows = container.querySelectorAll("[data-workspace-row]");

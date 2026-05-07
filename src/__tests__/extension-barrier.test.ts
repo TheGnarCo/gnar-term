@@ -43,30 +43,24 @@ describe("Extension barrier enforcement", () => {
     // worktree-service which lives in core for the same reason).
     // Keep this list small — each entry is a deliberate departure.
     const FILE_EXCEPTIONS: Record<string, string[]> = {
-      // The Diff Dashboard contribution's `create(group)` materializes
+      // The Diff Dashboard contribution's `create(workspace)` materializes
       // a dashboard workspace via createWorkspaceFromDef — mirrors the
       // agentic-orchestrator piercing below.
-      "diff-viewer/index.ts": ["../../lib/services/workspace-service"],
-      // The Agentic Dashboard contribution's `create(group)` must
+      "diff-viewer/index.ts": ["../../lib/services/workspace-runtime-service"],
+      // The Agentic Dashboard contribution's `create(workspace)` must
       // materialize a dashboard workspace; reaching for
       // createWorkspaceFromDef keeps the contribution on the same code
-      // path as core's built-in Group Dashboard.
+      // path as core's built-in Workspace Dashboard.
       "agentic-orchestrator/index.ts": [
-        "../../lib/services/workspace-service",
-        // The extension mirrors its declared `globalAgentsMarkdownPath`
-        // setting into `config.agenticGlobal.markdownPath` so the
-        // Global Agentic Dashboard body + Stage-8 migration share one
-        // canonical location. Reaching the config helpers directly is
-        // the simplest sync path.
-        "../../lib/config",
+        "../../lib/services/workspace-runtime-service",
         // Auto-provision: on activate, back-fill the Agentic Dashboard
-        // for every existing workspace group; on deactivate, close the
+        // for every existing workspace; on deactivate, close the
         // provisioned dashboards. No public ExtensionAPI surface exposes
-        // the group list / dashboard tear-down, so the extension pierces
+        // the workspace list / dashboard tear-down, so the extension pierces
         // core — same shape as the existing `createWorkspaceFromDef`
         // piercing above.
-        "../../lib/services/workspace-group-service",
-        "../../lib/stores/workspace-groups",
+        "../../lib/services/workspace-service",
+        "../../lib/stores/workspace",
         // The back-fill provision loop must wait for workspaces to be
         // restored before running (races the restore loop on startup).
         // waitRestored() resolves immediately on runtime-enable, defers
@@ -85,9 +79,9 @@ describe("Extension barrier enforcement", () => {
         // `gh --version` calls on mount.
         "../../../lib/services/gh-availability",
         // Dashboard widgets derive scope from DashboardHostContext +
-        // group.path (spec §5.3). Same piercing as Kanban / AgentList.
+        // workspace.path (spec §5.3). Same piercing as Kanban / AgentList.
         "../../../lib/contexts/dashboard-host",
-        "../../../lib/stores/workspace-groups",
+        "../../../lib/stores/workspace",
       ],
       // Prs is the read-only sibling of Issues — same gh-availability
       // probe + DashboardHostContext piercings, but no spawn-helper
@@ -99,7 +93,7 @@ describe("Extension barrier enforcement", () => {
       "agentic-orchestrator/components/TaskSpawner.svelte": [
         "../../../lib/services/spawn-helper",
         "../../../lib/contexts/dashboard-host",
-        "../../../lib/stores/workspace-groups",
+        "../../../lib/stores/workspace",
       ],
       "agentic-orchestrator/components/AgentList.svelte": [
         "../../../lib/contexts/dashboard-host",
@@ -110,46 +104,44 @@ describe("Extension barrier enforcement", () => {
       // GlobalAgenticDashboardBody is the Global Agentic Dashboard
       // pseudo-workspace's body; it installs a DashboardHostContext
       // (global scope) and drives the same markdown-preview pipeline
-      // core uses for real dashboards. Stage 7 introduced this piercing
-      // when the pseudo-workspace replaced the orchestrator root row.
+      // core uses for real dashboards. This piercing exists because
+      // the pseudo-workspace replaced the orchestrator root row.
       "agentic-orchestrator/components/GlobalAgenticDashboardBody.svelte": [
         "../../../lib/contexts/dashboard-host",
         "../../../lib/services/preview-surface-registry",
         "../../../lib/services/preview-service",
-        // Reads `config.agenticGlobal.markdownPath` to honor the user's
-        // configured Global Agentic Dashboard markdown location, and
-        // saves `pseudoWorkspaceColors` back from the Settings tab.
+        // Reads `pseudoWorkspaceColors` from the live config store and
+        // saves color picks back from the Settings tab.
         "../../../lib/config",
         // Settings tab renders the color picker against the shared
-        // theme + GROUP_COLOR_SLOTS palette.
+        // theme + WORKSPACE_COLOR_SLOTS palette.
         "../../../lib/stores/theme",
         "../../../lib/theme-data",
         // Regenerate Dashboard button shows a confirmation prompt before
-        // overwriting user edits — same pattern as GroupDashboardSettings.
+        // overwriting user edits — same pattern as WorkspaceDashboardSettings.
         "../../../lib/stores/ui",
       ],
       "agentic-orchestrator/widget-helpers.ts": [
         "../../lib/contexts/dashboard-host",
         "../../lib/stores/workspace",
-        "../../lib/stores/workspace-groups",
-        "../../lib/services/claimed-workspace-registry",
+        "../../lib/stores/workspace",
       ],
       // claude-settings/index.ts mirrors the agentic-orchestrator piercing
-      // pattern: createWorkspaceFromDef to materialize the group dashboard,
-      // workspace-group-service + workspace-groups for auto-provision on
+      // pattern: createWorkspaceFromDef to materialize the workspace dashboard,
+      // workspace-service + workspaces for auto-provision on
       // activate, and restore-workspaces to defer the back-fill loop until
       // workspaces are restored.
       "claude-settings/index.ts": [
+        "../../lib/services/workspace-runtime-service",
         "../../lib/services/workspace-service",
-        "../../lib/services/workspace-group-service",
-        "../../lib/stores/workspace-groups",
+        "../../lib/stores/workspace",
         "../../lib/bootstrap/restore-workspaces",
       ],
       // ClaudeSettingsWidget reads dashboard scope via DashboardHostContext
-      // and group.path via workspace-groups — same piercing as Kanban.
+      // and workspace.path via workspaces — same piercing as Kanban.
       "claude-settings/components/ClaudeSettingsWidget.svelte": [
         "../../../lib/contexts/dashboard-host",
-        "../../../lib/stores/workspace-groups",
+        "../../../lib/stores/workspace",
       ],
       // SettingsFileEditor imports from the extension's own lib/ directory —
       // these are intra-extension imports, not core piercings. The test regex
@@ -173,6 +165,16 @@ describe("Extension barrier enforcement", () => {
       // duplicating the lookup logic would invite drift.
       "agentic-orchestrator/components/Columns.svelte": [
         "../../../lib/services/markdown-component-registry",
+      ],
+      // branched-workspaces owns worktree and Branch creation;
+      // these services live in core so existing branches stay operable
+      // when the extension is disabled (the service and lifecycle events
+      // remain in core). The extension pierces core the same way
+      // diff-viewer and agentic-orchestrator do.
+      "branched-workspaces/index.ts": [
+        "../../lib/services/worktree-service",
+        "../../lib/services/workspace-runtime-service",
+        "../../lib/stores/workspace",
       ],
     };
     const violations: string[] = [];

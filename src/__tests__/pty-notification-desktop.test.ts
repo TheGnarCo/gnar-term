@@ -62,7 +62,7 @@ function makeWorkspaceWith(
   return {
     id,
     name: id,
-    splitRoot: {
+    paneLayout: {
       type: "pane",
       pane: {
         id: `${id}-p`,

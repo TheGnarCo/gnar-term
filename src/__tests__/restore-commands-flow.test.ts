@@ -61,12 +61,6 @@ vi.mock("@xterm/addon-webgl", () => ({
     onContextLoss = vi.fn();
   },
 }));
-vi.mock("@xterm/addon-web-links", () => ({
-  WebLinksAddon: class {
-    activate = vi.fn();
-    dispose = vi.fn();
-  },
-}));
 vi.mock("@xterm/addon-search", () => ({
   SearchAddon: class {
     activate = vi.fn();
@@ -94,7 +88,7 @@ import { invoke } from "@tauri-apps/api/core";
 import {
   createWorkspaceFromDef,
   serializeLayout,
-} from "../lib/services/workspace-service";
+} from "../lib/services/workspace-runtime-service";
 import {
   runDefinedCommand,
   dismissDefinedCommand,
@@ -111,7 +105,7 @@ import RestoreCommandPrompt from "../lib/components/RestoreCommandPrompt.svelte"
 import RestoreCommandsOverlay from "../lib/components/RestoreCommandsOverlay.svelte";
 
 function firstTerminalSurface(ws: Workspace): TerminalSurface {
-  for (const pane of getAllPanes(ws.splitRoot)) {
+  for (const pane of getAllPanes(ws.paneLayout)) {
     for (const s of pane.surfaces) {
       if (isTerminalSurface(s)) return s;
     }
@@ -138,7 +132,7 @@ afterEach(() => {
 });
 
 describe("createWorkspaceFromDef — restore vs fresh", () => {
-  it("restored surface gets definedCommand + pendingRestoreCommand, NOT startupCommand", async () => {
+  it("restored surface gets definedCommand + startupCommand (auto-run default) when no Workspace", async () => {
     await createWorkspaceFromDef(
       {
         name: "Restored",
@@ -155,8 +149,9 @@ describe("createWorkspaceFromDef — restore vs fresh", () => {
     const ws = get(workspaces)[0]!;
     const s = firstTerminalSurface(ws);
     expect(s.definedCommand).toBe("npm run dev");
-    expect(s.pendingRestoreCommand).toBe(true);
-    expect(s.startupCommand).toBeUndefined();
+    // No Workspace → defaults to auto-run (opt-out model)
+    expect(s.startupCommand).toBe("npm run dev");
+    expect(s.pendingRestoreCommand).toBeUndefined();
   });
 
   it("fresh-created surface with a command gets all three (definedCommand + startupCommand, NOT pending)", async () => {
@@ -188,7 +183,7 @@ describe("createWorkspaceFromDef — restore vs fresh", () => {
       { restoring: true },
     );
     const ws = get(workspaces)[0]!;
-    const layout = serializeLayout(ws.splitRoot) as {
+    const layout = serializeLayout(ws.paneLayout) as {
       pane: { surfaces: Array<Record<string, unknown>> };
     };
     expect(layout.pane.surfaces[0]!.command).toBe("npm test");
@@ -226,7 +221,7 @@ describe("runDefinedCommand / dismissDefinedCommand", () => {
       {
         id: "ws1",
         name: "ws",
-        splitRoot: { type: "pane", pane },
+        paneLayout: { type: "pane", pane },
         activePaneId: pane.id,
       },
     ]);
@@ -357,7 +352,7 @@ describe("RestoreCommandsOverlay", () => {
       {
         id: "ws1",
         name: "Alpha",
-        splitRoot: {
+        paneLayout: {
           type: "pane",
           pane: { id: "p1", surfaces: [a], activeSurfaceId: a.id },
         },
@@ -366,7 +361,7 @@ describe("RestoreCommandsOverlay", () => {
       {
         id: "ws2",
         name: "Beta",
-        splitRoot: {
+        paneLayout: {
           type: "pane",
           pane: { id: "p2", surfaces: [b], activeSurfaceId: b.id },
         },

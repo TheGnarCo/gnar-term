@@ -33,13 +33,12 @@
     hostMetadata?: Record<string, unknown>;
   } | null {
     for (const ws of get(workspaces)) {
-      for (const pane of getAllPanes(ws.splitRoot)) {
+      for (const pane of getAllPanes(ws.paneLayout)) {
         if (pane.surfaces.some((s) => s.id === surface.id)) {
-          const hostMetadata = ws.metadata;
           return {
             workspaceId: ws.id,
             paneId: pane.id,
-            ...(hostMetadata ? { hostMetadata } : {}),
+            hostMetadata: ws as unknown as Record<string, unknown>,
           };
         }
       }

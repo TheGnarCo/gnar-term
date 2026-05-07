@@ -9,7 +9,7 @@
  *   - App.svelte renders an EmptySurface when $workspaces is empty.
  *   - EmptySurface sources buttons from workspaceActionStore and from
  *     the EMPTY_SURFACE_COMMAND_IDS promotion list.
- *   - App startup honors a persisted `state.workspaces: []` as a valid
+ *   - App startup honors a persisted `state.nestedWorkspaces: []` as a valid
  *     restored empty state instead of auto-seeding "Workspace 1".
  */
 import { describe, it, expect } from "vitest";
@@ -21,14 +21,29 @@ function read(path: string): string {
 
 describe("sidebar: empty workspace zones render no placeholder", () => {
   const LIST_VIEW = read("src/lib/components/WorkspaceListView.svelte");
+  const LIST_BLOCK = read("src/lib/components/WorkspaceListBlock.svelte");
 
-  it("WorkspaceListView has no 'No workspaces' text", () => {
-    expect(LIST_VIEW).not.toMatch(/No workspaces/i);
+  it("WorkspaceListView has no 'No nestedWorkspaces' text", () => {
+    expect(LIST_VIEW).not.toMatch(/No nestedWorkspaces/i);
   });
 
   it("WorkspaceListView drops the `entries.length === 0` empty-state block", () => {
     const oneLine = LIST_VIEW.replace(/\s+/g, " ");
     expect(oneLine).not.toMatch(/\{#if\s+entries\.length\s*===\s*0\s*\}/);
+  });
+
+  it("WorkspaceListBlock has no empty-state placeholder (truly empty when no rows)", () => {
+    expect(LIST_BLOCK).not.toMatch(/No nestedWorkspaces/i);
+    const oneLine = LIST_BLOCK.replace(/\s+/g, " ");
+    expect(oneLine).not.toMatch(/\{#if\s+renderedRows\.length\s*===\s*0\s*\}/);
+  });
+});
+
+describe("EmptySurface copy uses 'workspaces', not the leaked identifier", () => {
+  const EMPTY = read("src/lib/components/EmptySurface.svelte");
+
+  it("does not reference the internal 'nestedWorkspaces' identifier", () => {
+    expect(EMPTY).not.toMatch(/No nestedWorkspaces/i);
   });
 });
 
@@ -48,7 +63,7 @@ describe("terminal-service: pty close does not auto-seed a workspace", () => {
 });
 
 describe("workspace-service: closing the last workspace is allowed", () => {
-  const SVC = read("src/lib/services/workspace-service.ts");
+  const SVC = read("src/lib/services/workspace-runtime-service.ts");
 
   it("closeWorkspace no longer guards against wsList.length <= 1", () => {
     expect(SVC).not.toMatch(/length\s*<=\s*1/);
@@ -66,9 +81,9 @@ describe("EmptySurface renders and is wired up", () => {
 
   it("App.svelte imports and renders EmptySurface when no workspace is active", () => {
     expect(APP).toMatch(/import EmptySurface from/);
-    // Stage 7 added a pseudo-workspace gate; the orphan-dashboard fix
-    // added an `activeWorkspaceIdx < 0` clause so the empty surface
-    // also renders when every restored workspace is a dashboard.
+    // The visibility gate includes a pseudo-workspace exclusion clause;
+    // the orphan-dashboard fix added an `activeWorkspaceIdx < 0` clause
+    // so the empty surface also renders when every restored workspace is a dashboard.
     expect(APP).toMatch(/\$workspaces\.length\s*===\s*0/);
     expect(APP).toMatch(/\$activeWorkspaceIdx\s*<\s*0/);
     expect(APP).toMatch(/<EmptySurface\s*\/>/);
@@ -79,24 +94,19 @@ describe("EmptySurface renders and is wired up", () => {
     expect(EMPTY).toMatch(/EMPTY_SURFACE_COMMAND_IDS/);
   });
 
-  it("promoted-commands list includes create-workspace-group", () => {
+  it("promoted-commands list includes create-workspace", () => {
     const cmds = read("src/lib/services/empty-surface-commands.ts");
-    expect(cmds).toMatch(/workspace-groups:create-workspace-group/);
+    expect(cmds).toMatch(/workspaces:create-workspace/);
   });
 });
 
-describe("App startup honors an explicit empty persisted state", () => {
+describe("App startup restore path: no legacy nestedWorkspaces fallback", () => {
   // Startup restoration lives in bootstrap/restore-workspaces.ts.
   const RESTORE = read("src/lib/bootstrap/restore-workspaces.ts");
 
-  it("treats state.workspaces = [] as a restored state (no auto-seeded Workspace 1)", () => {
-    // The restore condition must accept any Array, not require non-empty.
-    expect(RESTORE).toMatch(/Array\.isArray\(state\.workspaces\)/);
-    // The old "state.workspaces && state.workspaces.length > 0" gate
-    // would re-seed Workspace 1 on an empty persisted state.
-    const oneLine = RESTORE.replace(/\s+/g, " ");
-    expect(oneLine).not.toMatch(
-      /if\s*\(\s*state\.workspaces\s*&&\s*state\.workspaces\.length\s*>\s*0\s*\)/,
-    );
+  it("restore-workspaces.ts has no nestedWorkspaces fallback path", () => {
+    // The legacy fallback (state.nestedWorkspaces[]) was removed entirely.
+    // New state is always WorkspaceDef[] — no nestedWorkspaces code should remain.
+    expect(RESTORE).not.toMatch(/state\.nestedWorkspaces/);
   });
 });

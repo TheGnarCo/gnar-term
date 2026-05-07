@@ -16,7 +16,7 @@ bun.lock
 *.key
 *.cert
 *.pfx
-docs/superpowers/
+docs/superpowers/brainstorm/
 docs/implement/
 docs/gnar-term/
 .superpowers/

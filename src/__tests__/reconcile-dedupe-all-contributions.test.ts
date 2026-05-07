@@ -1,5 +1,5 @@
 /**
- * reconcileGroupDashboards must deduplicate ALL autoProvision contribution
+ * reconcileWorkspaceDashboards must deduplicate ALL autoProvision contribution
  * types (settings, agentic, …), not just "group". Duplicates arise from a
  * startup race where a provision loop creates fresh dashboards after
  * workspaces.set([]) clears the store but before restoreWorkspaces finishes.
@@ -15,48 +15,49 @@ vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn().mockResolvedValue(vi.fn()),
 }));
 
-import { reconcileGroupDashboards } from "../lib/services/workspace-group-service";
+import { reconcileWorkspaceDashboards } from "../lib/services/workspace-service";
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
-import { workspaceGroupsStore } from "../lib/stores/workspace-groups";
 import {
   registerDashboardContribution,
   resetDashboardContributions,
 } from "../lib/services/dashboard-contribution-registry";
 
-const GROUP = {
+const WORKSPACE = {
   id: "g1",
-  name: "TestGroup",
-  path: "/tmp/group1",
+  name: "TestWorkspace",
+  path: "/tmp/workspace1",
   color: "blue",
-  workspaceIds: [],
+  branchedWorkspaceIds: [],
   isGit: false,
   createdAt: "2026-04-21T00:00:00.000Z",
-};
+  paneLayout: {
+    type: "pane",
+    pane: { id: "wp", surfaces: [], activeSurfaceId: null },
+  },
+  activePaneId: "wp",
+} as never;
 
 function makeDashboard(id: string, contribId: string): never {
   return {
     id,
     name: contribId,
-    splitRoot: {
+    paneLayout: {
       type: "pane",
       pane: { id: "p", surfaces: [], activeSurfaceId: null },
     },
     activePaneId: "p",
-    metadata: {
-      isDashboard: true,
-      groupId: GROUP.id,
-      dashboardContributionId: contribId,
-    },
+    isDashboard: true,
+    rootWorkspaceId: WORKSPACE.id,
+    dashboardContributionId: contribId,
   } as never;
 }
 
-describe("reconcileGroupDashboards — dedupe all contribution types", () => {
+describe("reconcileWorkspaceDashboards — dedupe all contribution types", () => {
   beforeEach(() => {
     invokeMock.mockReset();
     invokeMock.mockImplementation(async () => undefined);
     workspaces.set([]);
     activeWorkspaceIdx.set(-1);
-    workspaceGroupsStore.set([GROUP]);
     resetDashboardContributions();
   });
 
@@ -66,21 +67,22 @@ describe("reconcileGroupDashboards — dedupe all contribution types", () => {
       source: "core",
       label: "Settings",
       actionLabel: "Add Settings",
-      capPerGroup: 1,
+      capPerWorkspace: 1,
       autoProvision: true,
       create: vi.fn(async () => "ws-new"),
     });
     workspaces.set([
+      WORKSPACE,
       makeDashboard("settings-1", "settings"),
       makeDashboard("settings-2", "settings"),
     ]);
 
-    await reconcileGroupDashboards();
+    await reconcileWorkspaceDashboards();
 
     const remaining = get(workspaces).filter((w) => {
       return (
-        w.metadata?.dashboardContributionId === "settings" &&
-        w.metadata?.groupId === GROUP.id
+        w.dashboardContributionId === "settings" &&
+        w.rootWorkspaceId === WORKSPACE.id
       );
     });
     expect(remaining).toHaveLength(1);
@@ -92,21 +94,22 @@ describe("reconcileGroupDashboards — dedupe all contribution types", () => {
       source: "ext",
       label: "Agentic",
       actionLabel: "Add Agentic",
-      capPerGroup: 1,
+      capPerWorkspace: 1,
       autoProvision: true,
       create: vi.fn(async () => "ws-new"),
     });
     workspaces.set([
+      WORKSPACE,
       makeDashboard("agentic-1", "agentic"),
       makeDashboard("agentic-2", "agentic"),
     ]);
 
-    await reconcileGroupDashboards();
+    await reconcileWorkspaceDashboards();
 
     const remaining = get(workspaces).filter((w) => {
       return (
-        w.metadata?.dashboardContributionId === "agentic" &&
-        w.metadata?.groupId === GROUP.id
+        w.dashboardContributionId === "agentic" &&
+        w.rootWorkspaceId === WORKSPACE.id
       );
     });
     expect(remaining).toHaveLength(1);
@@ -123,12 +126,13 @@ describe("reconcileGroupDashboards — dedupe all contribution types", () => {
         source,
         label: id,
         actionLabel: `Add ${id}`,
-        capPerGroup: 1,
+        capPerWorkspace: 1,
         autoProvision: true,
         create: vi.fn(async () => "ws-new"),
       });
     }
     workspaces.set([
+      WORKSPACE,
       makeDashboard("group-1", "group"),
       makeDashboard("group-2", "group"),
       makeDashboard("settings-1", "settings"),
@@ -137,14 +141,14 @@ describe("reconcileGroupDashboards — dedupe all contribution types", () => {
       makeDashboard("agentic-2", "agentic"),
     ]);
 
-    await reconcileGroupDashboards();
+    await reconcileWorkspaceDashboards();
 
     const all = get(workspaces);
     for (const contribId of ["group", "settings", "agentic"]) {
       const matches = all.filter((w) => {
         return (
-          w.metadata?.dashboardContributionId === contribId &&
-          w.metadata?.groupId === GROUP.id
+          w.dashboardContributionId === contribId &&
+          w.rootWorkspaceId === WORKSPACE.id
         );
       });
       expect(

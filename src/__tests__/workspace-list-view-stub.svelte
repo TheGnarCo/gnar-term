@@ -3,7 +3,6 @@
   export const accentColor: string = "";
   export const scopeId: string = "";
   export const containerBlockId: string = "";
-  export const containerLabel: string = "";
   export const dashboardHintFor: unknown = undefined;
   export const hideStatusBadges: boolean = false;
 </script>

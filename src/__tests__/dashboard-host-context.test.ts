@@ -19,7 +19,7 @@ describe("deriveDashboardScope", () => {
     expect(deriveDashboardScope(null)).toEqual({ kind: "none" });
   });
 
-  it("returns { kind: 'none' } when metadata has neither flag nor groupId", () => {
+  it("returns { kind: 'none' } when metadata has neither flag nor rootWorkspaceId", () => {
     expect(deriveDashboardScope(host({}))).toEqual({ kind: "none" });
     expect(deriveDashboardScope(host({ unrelated: 1 }))).toEqual({
       kind: "none",
@@ -47,32 +47,32 @@ describe("deriveDashboardScope", () => {
     );
   });
 
-  it("detects a group host via a string groupId", () => {
-    expect(deriveDashboardScope(host({ groupId: "g-42" }))).toEqual({
-      kind: "group",
-      groupId: "g-42",
+  it("detects a workspace-scoped host via a string rootWorkspaceId", () => {
+    expect(deriveDashboardScope(host({ rootWorkspaceId: "g-42" }))).toEqual({
+      kind: "workspace",
+      rootWorkspaceId: "g-42",
     });
   });
 
-  it("ignores an empty-string groupId — treats it as absent", () => {
-    expect(deriveDashboardScope(host({ groupId: "" }))).toEqual({
+  it("ignores an empty-string rootWorkspaceId — treats it as absent", () => {
+    expect(deriveDashboardScope(host({ rootWorkspaceId: "" }))).toEqual({
       kind: "none",
     });
   });
 
-  it("ignores a non-string groupId (e.g. a number leaked from a migration)", () => {
+  it("ignores a non-string rootWorkspaceId (e.g. a number leaked from a migration)", () => {
     expect(
-      deriveDashboardScope(host({ groupId: 123 as unknown as string })),
+      deriveDashboardScope(host({ rootWorkspaceId: 123 as unknown as string })),
     ).toEqual({ kind: "none" });
   });
 
-  it("prioritizes the global flag over groupId when both are present (global is the stricter claim)", () => {
+  it("prioritizes the global flag over rootWorkspaceId when both are present (global is the stricter claim)", () => {
     // This is a defensive case — the two shouldn't coexist in practice,
-    // but if a Group Dashboard ever embeds global-scoped widgets, the
+    // but if a Workspace Dashboard ever embeds global-scoped widgets, the
     // global flag wins.
     expect(
       deriveDashboardScope(
-        host({ isGlobalAgenticDashboard: true, groupId: "g-1" }),
+        host({ isGlobalAgenticDashboard: true, rootWorkspaceId: "g-1" }),
       ),
     ).toEqual({ kind: "global" });
   });

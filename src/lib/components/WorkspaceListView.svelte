@@ -11,13 +11,7 @@
    */
   import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
   import { theme } from "../stores/theme";
-  import { getAllSurfaces } from "../types";
-  import { tabDragState } from "../services/tab-drag";
-  import {
-    reorderContext,
-    anyReorderActive,
-    metaPreviewActive,
-  } from "../stores/ui";
+  import { reorderContext, anyReorderActive } from "../stores/ui";
   import { createDragReorder } from "../actions/drag-reorder";
   import {
     detectWorkspacePaneDrop,
@@ -28,37 +22,30 @@
     type WorkspacePaneDropTarget,
   } from "../services/workspace-drag";
   import {
-    expandWorkspaceIntoPanes,
-    mergeWorkspaceIntoPane,
-  } from "../services/pane-service";
-  import {
     switchWorkspace,
     renameWorkspace,
     reorderWorkspaces,
     toggleWorkspaceLock,
-  } from "../services/workspace-service";
-  import { get } from "svelte/store";
+  } from "../services/workspace-runtime-service";
   import WorkspaceItem from "./WorkspaceItem.svelte";
   import DropGhost from "./DropGhost.svelte";
   import { contrastColor } from "../utils/contrast";
   import { contextMenu } from "../stores/ui";
   import { confirmAndCloseWorkspace } from "../services/worktree-service";
-  import { commandStore } from "../services/command-registry";
   import { dashboardWorkspaceRegistry } from "../services/dashboard-workspace-service";
   import { buildWorkspaceContextMenuItems } from "../utils/workspace-context-menu";
-  import { wsMeta } from "../services/service-helpers";
 
   /** Set of workspace IDs to display. If undefined, shows all. */
   export let filterIds: Set<string> | undefined = undefined;
 
-  /** Project accent color passed to each WorkspaceItem for left-border coloring. */
+  /** Workspace accent color passed to each WorkspaceItem for left-border coloring. */
   export let accentColor: string | undefined = undefined;
 
   /**
    * Optional per-workspace dashboard hint provider. When set, each rendered
    * WorkspaceItem receives the result as its `dashboardHint` prop — a small
    * clickable dashboard icon whose handler the caller owns. Used by
-   * AgentDashboardRow to navigate back to a nested workspace's owning
+   * AgentDashboardRow to navigate back to a child workspace's owning
    * dashboard without selecting the workspace.
    */
   export let dashboardHintFor:
@@ -76,9 +63,10 @@
 
   /**
    * The immediate container ("scope") this list's workspaces live in — a
-   * project id when rendered inside a project scope, otherwise
-   * "__workspaces__". Published to `reorderContext` as `scopeId` during a
-   * drag so the sidebar's overlay layer knows which project is the source.
+   * Workspace id when rendered inside a Workspace's nested list,
+   * otherwise "__workspaces__". Published to `reorderContext` as
+   * `scopeId` during a drag so the sidebar's overlay layer knows which
+   * Workspace is the source.
    */
   export let scopeId: string | null = null;
 
@@ -89,21 +77,13 @@
    */
   export let containerBlockId: string | null = null;
 
-  /**
-   * Human-readable name of the scope this list lives in. The "Close
-   * Other Workspaces" menu item was removed, so the label is currently
-   * unused inside WorkspaceListView — retained on the prop surface so
-   * callers (ContainerRow) don't have to rewire when a future action
-   * needs the label.
-   */
-  export let containerLabel: string | undefined = undefined;
-  void containerLabel;
-
   $: allEntries = $workspaces
     .map((ws, idx) => ({ ws, idx }))
     .filter(({ ws }) => (filterIds ? filterIds.has(ws.id) : true));
 
-  $: entries = allEntries.filter(({ ws }) => wsMeta(ws).isDashboard !== true);
+  $: entries = allEntries.filter(({ ws }) => ws.isDashboard !== true);
+
+  $: isChild = scopeId !== null;
 
   let sourceIdx: number | null = null;
   let indicator: { idx: number; edge: "before" | "after" } | null = null;
@@ -116,7 +96,7 @@
     containerSelector: ".workspace-list-view",
     canStart: () => !$anyReorderActive,
     ghostStyle: () => ({
-      background: $theme.bgFloat ?? $theme.bgSurface ?? "#111",
+      background: "transparent",
       border: `1px solid ${$theme.border ?? "transparent"}`,
     }),
     onDrop: (from, to) => {
@@ -128,9 +108,15 @@
       if (sourceIdx === null) return;
       const srcWsId = $workspaces[sourceIdx]?.id;
       if (!srcWsId) return;
-      // Tab bar takes precedence over pane body.
+      // Tab bar hover: only the deny case is relevant (no merge path).
       const tabTarget = detectTabBarDropForWorkspace(x, y, srcWsId);
-      currentPaneTarget = tabTarget ?? detectWorkspacePaneDrop(x, y, srcWsId);
+      const effectivePaneTarget =
+        tabTarget?.kind === "deny"
+          ? tabTarget
+          : tabTarget?.kind === "tab-merge"
+            ? null
+            : (tabTarget ?? detectWorkspacePaneDrop(x, y, srcWsId));
+      currentPaneTarget = effectivePaneTarget;
       setWorkspaceDragState(
         currentPaneTarget !== null
           ? { workspaceId: srcWsId, dropTarget: currentPaneTarget }
@@ -144,22 +130,10 @@
         }
       }
     },
-    onDragCommit: (fromIdx) => {
+    onDragCommit: () => {
       const paneTarget = currentPaneTarget;
       currentPaneTarget = null;
       setWorkspaceDragState(null);
-      const srcWsId = $workspaces[fromIdx]?.id;
-      if (paneTarget?.kind === "pane-split" && srcWsId) {
-        const direction =
-          paneTarget.zone === "left" || paneTarget.zone === "right"
-            ? "horizontal"
-            : "vertical";
-        const before = paneTarget.zone === "left" || paneTarget.zone === "top";
-        expandWorkspaceIntoPanes(srcWsId, paneTarget.paneId, direction, before);
-      } else if (paneTarget?.kind === "tab-merge" && srcWsId) {
-        mergeWorkspaceIntoPane(srcWsId, paneTarget.paneId);
-      }
-      // Return true to suppress sidebar reorder when a pane target was active.
       return paneTarget !== null;
     },
     onStateChange: () => {
@@ -170,7 +144,7 @@
       sourceHeight = s.sourceHeight;
       if (s.active && scopeId && containerBlockId) {
         reorderContext.set({
-          kind: "workspace",
+          kind: "branch",
           scopeId,
           containerBlockId,
         });
@@ -188,13 +162,13 @@
     // Locked workspaces refuse drag-start. canStart in createDragReorder
     // fires before sourceIdx is populated, so we gate here instead.
     const ws = $workspaces[globalIdx];
-    if (ws && wsMeta(ws).locked === true) return;
+    if (ws && ws.locked === true) return;
     reorder.start(e, globalIdx);
   }
 
   // Source metadata used for the DropGhost label + non-source
   // overlay color so the drag feedback matches the root-level style
-  // (project + workspace rows show their own tile with name centered).
+  // (Workspace + branch rows show their own tile with name centered).
   $: sourceWs =
     active && sourceIdx !== null
       ? ($workspaces.find((w, i) => i === sourceIdx) ?? null)
@@ -202,73 +176,39 @@
   $: railColor = accentColor ?? $theme.accent;
   $: overlayFg = contrastColor(railColor);
   $: dropAccent = (() => {
-    const id = sourceWs ? wsMeta(sourceWs).dashboardWorkspaceId : undefined;
+    if (sourceWs?.isDashboard !== true) return railColor;
+    const id = sourceWs.dashboardContributionId;
     if (typeof id === "string") {
       return $dashboardWorkspaceRegistry.get(id)?.accentColor ?? railColor;
     }
     return railColor;
   })();
 
-  // --- Tab-drag overlay state ---
-  $: tabDrag = $tabDragState;
-  $: tabDragToGroup =
-    tabDrag?.dropTarget?.kind === "new-workspace-in-group" &&
-    tabDrag.dropTarget.groupId === scopeId
-      ? tabDrag.dropTarget
-      : null;
-  $: effectiveActive = active || tabDragToGroup !== null || $metaPreviewActive;
-  // null source idx → every row's idx !== null → all rows show sibling overlay
-  $: effectiveSourceIdx = active ? sourceIdx : (null as number | null);
-  $: effectiveIndicator = active
-    ? indicator
-    : tabDragToGroup !== null
-      ? { idx: tabDragToGroup.insertGlobalIdx, edge: tabDragToGroup.insertEdge }
-      : (null as { idx: number; edge: "before" | "after" } | null);
-  $: effectiveSourceHeight = active ? sourceHeight : 32;
-  $: tabDragSurfaceLabel = (() => {
-    if (!tabDrag || !tabDragToGroup) return "";
-    const srcWs = $workspaces.find((w) => w.id === tabDrag!.sourceWorkspaceId);
-    if (!srcWs) return "New Workspace";
-    return (
-      getAllSurfaces(srcWs).find((s) => s.id === tabDrag!.surfaceId)?.title ||
-      "New Workspace"
-    );
-  })();
-  $: effectiveDropLabel = active ? sourceWs?.name : tabDragSurfaceLabel;
-  $: effectiveDropAccent = active ? dropAccent : railColor;
+  $: effectiveActive = active;
+  $: effectiveSourceIdx = sourceIdx;
+  $: effectiveIndicator = indicator;
+  $: effectiveSourceHeight = sourceHeight;
+  $: effectiveDropLabel = sourceWs?.name;
+  $: effectiveDropAccent = dropAccent;
 
   let itemRefs: Record<string, WorkspaceItem> = {};
 
-  // Nested workspaces share the same context menu surface as the root
-  // workspace list: Rename / (Promote) / Close. Rename drives the
-  // underlying WorkspaceItem's inline rename via the bound ref; everything
-  // else routes through the workspace service. Kept local to
+  // Child workspaces share the same context menu surface as the root
+  // workspace list: Rename / Close. Rename drives the underlying
+  // WorkspaceItem's inline rename via the bound ref; everything else
+  // routes through the workspace service. Kept local to
   // WorkspaceListView so this shared component doesn't need parent
   // callbacks for each item.
-  function showNestedContextMenu(x: number, y: number, globalIdx: number) {
+  function showChildContextMenu(x: number, y: number, globalIdx: number) {
     const ws = $workspaces[globalIdx];
     if (!ws) return;
-    const md = wsMeta(ws);
-    const isDashboard = md.isDashboard === true;
-    const isInsideGroup = typeof md.groupId === "string";
-    const isLocked = md.locked === true;
-    const canPromoteCommand = get(commandStore).some(
-      (c) => c.id === "promote-workspace-to-group",
-    );
+    const isDashboard = ws.isDashboard === true;
+    const isLocked = ws.locked === true;
     const items = buildWorkspaceContextMenuItems({
       isDashboard,
-      isInsideGroup,
-      canPromoteCommand,
       workspaceCount: $workspaces.length,
       isLocked,
       onRename: () => itemRefs[ws.id]?.startRename(),
-      onPromote: () => {
-        switchWorkspace(globalIdx);
-        const cmd = get(commandStore).find(
-          (c) => c.id === "promote-workspace-to-group",
-        );
-        if (cmd) void cmd.action();
-      },
       onToggleLock: () => toggleWorkspaceLock(ws.id),
       onClose: () => void confirmAndCloseWorkspace(ws, globalIdx),
     });
@@ -305,12 +245,13 @@
             {accentColor}
             dashboardHint={dashboardHintFor?.(entry.ws)}
             {hideStatusBadges}
+            {isChild}
             onSelect={() => {
               if (!active) switchWorkspace(entry.idx);
             }}
             onClose={() => void confirmAndCloseWorkspace(entry.ws, entry.idx)}
             onRename={(name) => renameWorkspace(entry.idx, name)}
-            onContextMenu={(x, y) => showNestedContextMenu(x, y, entry.idx)}
+            onContextMenu={(x, y) => showChildContextMenu(x, y, entry.idx)}
             onGripMouseDown={(e) => startDrag(e, entry.idx)}
           />
           {#if isSibling}
@@ -327,7 +268,7 @@
               pointer-events: none;
               z-index: 3;
               border-radius: 0 6px 6px 0;
-              margin-right: 8px;
+              margin-right: 4px;
             "
             >
               {entry.ws.name}
@@ -354,9 +295,9 @@
     margin-top: 8px;
   }
   /* 8px left + top margin on the nested list so the workspace rails
-     sit visually inset from the parent project's rail and the first
-     nested row breathes below the project banner. WorkspaceItem
-     itself has no margin (root workspaces are flush); we apply the
+     sit visually inset from the root Workspace's rail and the first
+     nested row breathes below the Workspace banner. WorkspaceItem
+     itself has no margin (root Workspaces are flush); we apply the
      inset here so it only fires in the nested context. */
   .workspace-list-view {
     margin-left: 8px;

@@ -3,8 +3,8 @@
  * register, unregister, unregisterBySource, get, and reset operations.
  *
  * Used by command-registry, sidebar-tab-registry, sidebar-section-registry,
- * surface-type-registry, theme-registry, claimed-workspace-registry, etc.
- * to eliminate repeated boilerplate.
+ * surface-type-registry, theme-registry, etc. to eliminate repeated
+ * boilerplate.
  *
  * By default items are identified by a top-level `id` string field (the
  * `RegistryItem` contract). Pass `getId` to use a composite/derived

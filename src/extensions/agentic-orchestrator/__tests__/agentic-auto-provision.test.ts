@@ -1,7 +1,10 @@
 /**
- * Agentic auto-provision (Story 4): on activate, every existing
- * workspace group gets an Agentic Dashboard workspace; on deactivate,
- * the provisioned workspaces are closed.
+ * Agentic Dashboard contribution registration. Only the Settings
+ * dashboard auto-provisions on every workspace by default; the Agentic
+ * Dashboard is opt-in via the workspace's Settings panel toggle. These
+ * tests pin the registered shape (icon present, no autoProvision /
+ * lockedReason) and verify that activation does NOT eagerly back-fill
+ * existing workspaces with an agentic dashboard.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { get } from "svelte/store";
@@ -31,7 +34,6 @@ import {
 import {
   registerExtension,
   activateExtension,
-  deactivateExtension,
   resetExtensions,
 } from "../../../lib/services/extension-loader";
 import {
@@ -39,11 +41,30 @@ import {
   resetDashboardContributions,
 } from "../../../lib/services/dashboard-contribution-registry";
 import { workspaces, activeWorkspaceIdx } from "../../../lib/stores/workspace";
-import { workspaceGroupsStore } from "../../../lib/stores/workspace-groups";
 import {
   markRestored,
   resetRestoreSignal,
 } from "../../../lib/bootstrap/restore-workspaces";
+
+function seedRoot(
+  id: string,
+  color: string,
+): import("../../../lib/types").Workspace {
+  return {
+    id,
+    name: id.toUpperCase(),
+    path: `/tmp/${id}`,
+    color,
+    branchedWorkspaceIds: [],
+    isGit: true,
+    createdAt: "2026-04-21T00:00:00.000Z",
+    paneLayout: {
+      type: "pane",
+      pane: { id: `${id}-p`, surfaces: [], activeSurfaceId: null },
+    },
+    activePaneId: `${id}-p`,
+  } as unknown as import("../../../lib/types").Workspace;
+}
 
 describe("agentic auto-provision", () => {
   beforeEach(async () => {
@@ -52,10 +73,9 @@ describe("agentic auto-provision", () => {
     resetDashboardContributions();
     workspaces.set([]);
     activeWorkspaceIdx.set(-1);
-    workspaceGroupsStore.set([]);
   });
 
-  it("contribution advertises autoProvision + locked reason", async () => {
+  it("contribution registers as opt-in (no autoProvision / lockedReason)", async () => {
     registerExtension(
       agenticOrchestratorManifest,
       registerAgenticOrchestratorExtension,
@@ -63,32 +83,14 @@ describe("agentic auto-provision", () => {
     await activateExtension("agentic-orchestrator");
 
     const contribution = getDashboardContribution("agentic");
-    expect(contribution?.autoProvision).toBe(true);
-    expect(contribution?.lockedReason).toBe("Required by Agentic extension");
+    expect(contribution).toBeDefined();
+    expect(contribution?.autoProvision).toBeFalsy();
+    expect(contribution?.lockedReason).toBeUndefined();
     expect(contribution?.icon).toBeDefined();
   });
 
-  it("provisions the Agentic Dashboard for every existing group on activate", async () => {
-    workspaceGroupsStore.set([
-      {
-        id: "g1",
-        name: "G1",
-        path: "/tmp/g1",
-        color: "blue",
-        workspaceIds: [],
-        isGit: true,
-        createdAt: "2026-04-21T00:00:00.000Z",
-      },
-      {
-        id: "g2",
-        name: "G2",
-        path: "/tmp/g2",
-        color: "green",
-        workspaceIds: [],
-        isGit: true,
-        createdAt: "2026-04-21T00:00:00.000Z",
-      },
-    ]);
+  it("does NOT back-fill the Agentic Dashboard onto existing workspaces on activate", async () => {
+    workspaces.set([seedRoot("g1", "blue"), seedRoot("g2", "green")]);
     // Simulate workspaces already restored (runtime-enable path).
     markRestored();
 
@@ -98,60 +100,12 @@ describe("agentic auto-provision", () => {
     );
     await activateExtension("agentic-orchestrator");
 
-    // Activation schedules a background provision pass — let microtasks drain.
+    // Drain any deferred microtasks the registry might queue.
     await new Promise((r) => setTimeout(r, 50));
 
-    const all = get(workspaces);
-    const forG1 = all.find((w) => {
-      return (
-        w.metadata?.dashboardContributionId === "agentic" &&
-        w.metadata?.groupId === "g1"
-      );
-    });
-    const forG2 = all.find((w) => {
-      return (
-        w.metadata?.dashboardContributionId === "agentic" &&
-        w.metadata?.groupId === "g2"
-      );
-    });
-    expect(forG1).toBeTruthy();
-    expect(forG2).toBeTruthy();
-  });
-
-  it("closes every agentic dashboard workspace on deactivate", async () => {
-    workspaceGroupsStore.set([
-      {
-        id: "g1",
-        name: "G1",
-        path: "/tmp/g1",
-        color: "blue",
-        workspaceIds: [],
-        isGit: true,
-        createdAt: "2026-04-21T00:00:00.000Z",
-      },
-    ]);
-    markRestored();
-
-    registerExtension(
-      agenticOrchestratorManifest,
-      registerAgenticOrchestratorExtension,
+    const hasAnyAgenticDashboard = get(workspaces).some(
+      (w) => w.dashboardContributionId === "agentic",
     );
-    await activateExtension("agentic-orchestrator");
-    await new Promise((r) => setTimeout(r, 50));
-
-    // Sanity: the workspace was created.
-    expect(
-      get(workspaces).some((w) => {
-        return w.metadata?.dashboardContributionId === "agentic";
-      }),
-    ).toBe(true);
-
-    deactivateExtension("agentic-orchestrator");
-
-    expect(
-      get(workspaces).some((w) => {
-        return w.metadata?.dashboardContributionId === "agentic";
-      }),
-    ).toBe(false);
+    expect(hasAnyAgenticDashboard).toBe(false);
   });
 });

@@ -1,40 +1,39 @@
 <script lang="ts">
   import { workspaces } from "../stores/workspace";
-  import { workspaceGroupsStore } from "../stores/workspace-groups";
+  import { workspacesStore } from "../stores/workspace";
   import { getDashboardContribution } from "../services/dashboard-contribution-registry";
   import {
     getDashboardHost,
     deriveDashboardScope,
   } from "../contexts/dashboard-host";
-  import { switchWorkspace } from "../services/workspace-service";
-  import { resolveGroupColor } from "../theme-data";
+  import { switchWorkspace } from "../services/workspace-runtime-service";
+  import { resolveWorkspaceColor } from "../theme-data";
   import { theme } from "../stores/theme";
   import DashboardTileIcon from "./DashboardTileIcon.svelte";
   import GridIcon from "../icons/GridIcon.svelte";
-  import { wsMeta } from "../services/service-helpers";
 
   const host = getDashboardHost();
   const scope = deriveDashboardScope(host);
 
-  $: groupId = scope.kind === "group" ? scope.groupId : null;
+  $: rootWorkspaceId =
+    scope.kind === "workspace" ? scope.rootWorkspaceId : null;
 
-  $: group = groupId
-    ? ($workspaceGroupsStore.find((g) => g.id === groupId) ?? null)
+  $: rootWorkspace = rootWorkspaceId
+    ? ($workspacesStore.find((w) => w.id === rootWorkspaceId) ?? null)
     : null;
 
-  $: groupWs = groupId
-    ? $workspaces.filter((ws) => wsMeta(ws).groupId === groupId)
+  $: workspaceWs = rootWorkspaceId
+    ? $workspaces.filter((ws) => ws.rootWorkspaceId === rootWorkspaceId)
     : [];
 
-  $: dashboardCards = groupWs.filter((ws) => {
-    const md = wsMeta(ws);
-    return md.isDashboard === true && md.dashboardContributionId !== "group";
-  });
+  $: dashboardCards = workspaceWs.filter(
+    (ws) => ws.isDashboard === true && ws.dashboardContributionId !== "group",
+  );
 
-  $: workspaceRows = groupWs.filter((ws) => !wsMeta(ws).isDashboard);
+  $: workspaceRows = workspaceWs.filter((ws) => !ws.isDashboard);
 
-  $: groupColor = group
-    ? resolveGroupColor(group.color, $theme)
+  $: workspaceColor = rootWorkspace
+    ? resolveWorkspaceColor(rootWorkspace.color, $theme)
     : ($theme.accent ?? "#888");
 
   function navigate(wsId: string): void {
@@ -45,26 +44,25 @@
   function getContribInfo(ws: import("../types").Workspace): {
     icon: unknown;
     label: string;
-    groupPath: string | undefined;
+    workspacePath: string | undefined;
   } {
-    const md = wsMeta(ws);
-    const contribution = md.dashboardContributionId
-      ? getDashboardContribution(md.dashboardContributionId)
+    const contribution = ws.dashboardContributionId
+      ? getDashboardContribution(ws.dashboardContributionId)
       : undefined;
-    const tileGroupPath = md.groupId
-      ? $workspaceGroupsStore.find((g) => g.id === md.groupId)?.path
+    const tileWorkspacePath = ws.rootWorkspaceId
+      ? $workspacesStore.find((w) => w.id === ws.rootWorkspaceId)?.path
       : undefined;
     return {
       icon: contribution?.icon ?? GridIcon,
       label: contribution?.label ?? ws.name,
-      groupPath: tileGroupPath,
+      workspacePath: tileWorkspacePath,
     };
   }
 
   $: hasContent = dashboardCards.length > 0 || workspaceRows.length > 0;
 </script>
 
-{#if groupId && hasContent}
+{#if rootWorkspaceId && hasContent}
   <div class="workspaces-widget" data-workspaces-widget>
     {#if dashboardCards.length > 0}
       <div class="dashboard-cards" data-dashboard-cards>
@@ -86,9 +84,9 @@
           >
             <DashboardTileIcon
               iconComponent={info.icon}
-              baseColor={groupColor}
-              contributionId={wsMeta(ws).dashboardContributionId}
-              groupPath={info.groupPath}
+              baseColor={workspaceColor}
+              contributionId={ws.dashboardContributionId}
+              workspacePath={info.workspacePath}
             />
             <span class="dashboard-card-label">{info.label}</span>
           </div>
@@ -108,7 +106,7 @@
             on:click={() => navigate(ws.id)}
             style="color: {$theme.fg};"
           >
-            <span class="workspace-dot" style="background: {groupColor};"
+            <span class="workspace-dot" style="background: {workspaceColor};"
             ></span>
             <span class="workspace-name">{ws.name}</span>
           </div>

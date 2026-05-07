@@ -1,17 +1,16 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { theme } from "../stores/theme";
-  import {
-    isFullscreen,
-    primarySidebarVisible,
-    secondarySidebarVisible,
-  } from "../stores/ui";
+  import { isFullscreen, sidebarVisible } from "../stores/ui";
   import { spawnOrNavigate } from "../services/dashboard-workspace-service";
   import { isMac, modLabel, shiftModLabel } from "../terminal-service";
   import { shortcutHint } from "../actions/shortcut-hint";
   import { isDebugBuild } from "../services/service-helpers";
   import { titleBarButtonStore } from "../services/titlebar-button-registry";
   import TitleBarContributedButton from "./TitleBarContributedButton.svelte";
+  import NewWorkspaceSplitButton from "./NewWorkspaceSplitButton.svelte";
+  import KeyboardIcon from "../icons/KeyboardIcon.svelte";
+  import { runCommandById } from "../services/command-registry";
 
   // Single source of truth: cfg!(debug_assertions) from Rust, exposed via the
   // is_debug_build command. True for `tauri dev` and `tauri build --debug`,
@@ -22,12 +21,7 @@
     isDev = await isDebugBuild();
   });
 
-  const DEV_BG = "#C8900A";
-  const DEV_FG = "#1C0F00";
-
-  $: bg = isDev ? DEV_BG : $theme.bg;
-  $: fg = isDev ? DEV_FG : $theme.fgDim;
-  $: fgActive = isDev ? DEV_FG : $theme.fg;
+  const DEV_ACCENT = "#C8900A";
 
   let btnStyle = "";
   $: btnStyle = `
@@ -42,8 +36,12 @@
   // it sits to the left of the TitleBar and absorbs that space. When it's
   // hidden (and we're not fullscreen), the TitleBar starts at x=0, so push
   // its first button well past the traffic-light cluster.
-  $: leftPadding =
-    !$primarySidebarVisible && isMac && !$isFullscreen ? "84px" : "8px";
+  $: leftPadding = !$sidebarVisible && isMac && !$isFullscreen ? "84px" : "8px";
+
+  $: titleBarBg = isDev ? DEV_ACCENT : $theme.bg;
+  // On the yellow dev background we need dark glyphs for readability.
+  $: btnFg = isDev ? "#1a1a1a" : $theme.fg;
+  $: btnFgDim = isDev ? "#3a3a3a" : $theme.fgDim;
 </script>
 
 <div
@@ -51,18 +49,30 @@
   style="
     height: 38px; flex-shrink: 0; display: flex; align-items: center;
     padding: 0 8px 0 {leftPadding}; -webkit-app-region: drag;
-    background: {bg}; border-bottom: 1px solid {isDev ? DEV_FG : $theme.border};
+    background: {titleBarBg}; border-bottom: 1px solid {$theme.border};
   "
 >
+  {#if !$sidebarVisible}
+    <!-- Hosts the "+ New" split button while the primary sidebar is
+         collapsed. Sits to the LEFT of the sidebar-toggle so creating
+         a workspace stays in the same visual region as expanding the
+         sidebar. The wrapper carries -webkit-app-region: no-drag so
+         clicks don't initiate a window drag (the TitleBar itself is
+         a Tauri drag region). -->
+    <div style="margin-right: 4px; -webkit-app-region: no-drag;">
+      <NewWorkspaceSplitButton />
+    </div>
+  {/if}
+
   <button
-    style="{btnStyle} color: {$primarySidebarVisible ? fgActive : fg};"
-    title="Toggle Primary Sidebar ({isMac ? modLabel : shiftModLabel}B)"
-    aria-label="Toggle Primary Sidebar"
+    style="{btnStyle} color: {$sidebarVisible ? btnFg : btnFgDim};"
+    title="Toggle Sidebar ({isMac ? modLabel : shiftModLabel}B)"
+    aria-label="Toggle Sidebar"
     use:shortcutHint={{
       label: isMac ? `${modLabel}B` : `${shiftModLabel}B`,
       placement: "below",
     }}
-    on:click={() => primarySidebarVisible.update((v) => !v)}
+    on:click={() => sidebarVisible.update((v) => !v)}
   >
     <svg
       width="16"
@@ -81,22 +91,34 @@
   </button>
 
   <div
-    style="flex: 1; display: flex; justify-content: center; pointer-events: none;"
+    style="flex: 1; display: flex; justify-content: center; align-items: center; pointer-events: none;"
   >
-    <span
-      style="
-      font-size: 11px; font-weight: 600; letter-spacing: 1.5px;
-      color: {fg};
-    ">{isDev ? "GNARTERM (DEV)" : "GNARTERM"}</span
+    <span class="title-ws" style="color: {isDev ? btnFg : $theme.fgDim};"
+      >{isDev ? "GnarTerm (Dev)" : "GnarTerm"}</span
     >
   </div>
 
   {#each $titleBarButtonStore as btn (btn.id)}
-    <TitleBarContributedButton button={btn} {btnStyle} {fg} {fgActive} />
+    <TitleBarContributedButton
+      button={btn}
+      {btnStyle}
+      fg={btnFgDim}
+      fgActive={btnFg}
+    />
   {/each}
 
   <button
-    style="{btnStyle} color: {fg};"
+    style="{btnStyle} color: {btnFgDim};"
+    title="Keyboard Shortcuts ({isMac ? '⌘/' : 'Ctrl+/'})"
+    aria-label="Keyboard Shortcuts"
+    use:shortcutHint={{ label: isMac ? "⌘/" : "Ctrl+/", placement: "below" }}
+    on:click={() => runCommandById("core.show-keyboard-shortcuts")}
+  >
+    <KeyboardIcon size={16} />
+  </button>
+
+  <button
+    style="{btnStyle} color: {btnFgDim};"
     title="Settings ({modLabel},)"
     aria-label="Settings"
     use:shortcutHint={{ label: isMac ? "⌘," : "Ctrl+,", placement: "below" }}
@@ -114,26 +136,16 @@
       /><circle cx="8" cy="8" r="2" /></svg
     >
   </button>
-
-  <button
-    style="{btnStyle} color: {$secondarySidebarVisible ? fgActive : fg};"
-    title="Toggle Secondary Sidebar"
-    aria-label="Toggle Secondary Sidebar"
-    on:click={() => secondarySidebarVisible.update((v) => !v)}
-  >
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.5"
-      ><rect x="1" y="2" width="14" height="12" rx="1.5" /><line
-        x1="10.5"
-        y1="2"
-        x2="10.5"
-        y2="14"
-      /></svg
-    >
-  </button>
 </div>
+
+<style>
+  .title-ws {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 240px;
+  }
+</style>

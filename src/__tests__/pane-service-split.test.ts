@@ -8,7 +8,7 @@
  *   - source pane goes empty after the move → collapse it (without
  *     disposing the dragged surface)
  *   - source pane keeps surfaces → it stays in the tree
- *   - target pane is the splitRoot → new split becomes the root
+ *   - target pane is the paneLayout → new split becomes the root
  *   - target pane is nested → parent split's child slot is replaced
  *   - schedulePersist fires
  *   - active pane follows the dragged surface
@@ -79,12 +79,12 @@ function makePane(surfaces: TerminalSurface[]): Pane {
   };
 }
 
-function makeWorkspace(splitRoot: SplitNode): Workspace {
+function makeChildWorkspace(paneLayout: SplitNode): Workspace {
   return {
     id: uid(),
     name: "WS",
-    splitRoot,
-    activePaneId: getAllPanes(splitRoot)[0]?.id ?? null,
+    paneLayout,
+    activePaneId: getAllPanes(paneLayout)[0]?.id ?? null,
   };
 }
 
@@ -100,7 +100,7 @@ afterEach(() => {
 });
 
 describe("splitPaneWithSurface — split-from-root", () => {
-  it("creates a new split rooted at the workspace when the target is splitRoot", () => {
+  it("creates a new split rooted at the workspace when the target is paneLayout", () => {
     // Two panes: source [A,B], target [C]. Single root pane initially
     // is the source — but for a cross-pane split test we need both, so
     // start with a horizontal split: source on left, target on right.
@@ -118,7 +118,7 @@ describe("splitPaneWithSurface — split-from-root", () => {
         { type: "pane", pane: targetPane },
       ],
     };
-    const ws = makeWorkspace(root);
+    const ws = makeChildWorkspace(root);
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
 
@@ -128,7 +128,7 @@ describe("splitPaneWithSurface — split-from-root", () => {
     expect(sourcePane.surfaces.map((s) => s.id)).toEqual([sB.id]);
     // Target pane should now be wrapped in a split with the new pane
     const updatedWs = get(workspaces)[0]!;
-    const panes = getAllPanes(updatedWs.splitRoot);
+    const panes = getAllPanes(updatedWs.paneLayout);
     // 3 panes total: source, target, and the new one carrying A
     expect(panes.length).toBe(3);
     const newPane = panes.find(
@@ -137,43 +137,6 @@ describe("splitPaneWithSurface — split-from-root", () => {
     expect(newPane).toBeDefined();
     expect(newPane!.surfaces.map((s) => s.id)).toEqual([sA.id]);
     expect(newPane!.activeSurfaceId).toBe(sA.id);
-  });
-
-  it("makes the new split the splitRoot when the target was the lone root pane", () => {
-    // Source has 2 surfaces so the source pane survives the move. The
-    // target is the splitRoot — so wrapping it in a split makes the
-    // new split the root.
-    const sA = mockSurface({ title: "A" });
-    const sB = mockSurface({ title: "B" });
-    const sC = mockSurface({ title: "C" });
-    const sourcePane = makePane([sA, sB]);
-    const targetPane = makePane([sC]);
-    // Workspace 1: target is its own root.
-    const targetWs = makeWorkspace({ type: "pane", pane: targetPane });
-    // Workspace 2: source — but splitPaneWithSurface only operates on
-    // the active workspace via get(activeWorkspace). We need source
-    // and target in the SAME workspace. Use a horizontal split as the
-    // common parent so target is nested, then ALSO test the
-    // "target == splitRoot" case via a different setup below.
-    void sourcePane;
-    void targetWs;
-    // Re-arrange: target is the root of the active workspace; source
-    // sits as a sibling under a parent split. We want the new split
-    // (target ↔ new pane) to become a CHILD of the parent.
-    // For the "target is splitRoot" case, both source and target must
-    // be in the same workspace and target must be the root — but if
-    // target is the root and there is also a source pane, target
-    // cannot be the root (the workspace would have two top-level
-    // pieces). So this case applies when the workspace has only the
-    // target pane — but then there is no source pane to move from.
-    //
-    // Resolution: this case is only triggered when source is a NESTED
-    // pane that becomes empty and gets collapsed away while target
-    // happens to still be the root. We exercise that via the "source
-    // has 1 surface; target is the only sibling" arrangement covered
-    // below. This separate test is satisfied by the basic "target was
-    // root" path which only fires when sourcePane !== root.
-    expect(true).toBe(true);
   });
 
   it("collapses the source pane when its last surface moves to the target", () => {
@@ -193,14 +156,14 @@ describe("splitPaneWithSurface — split-from-root", () => {
         { type: "pane", pane: targetPane },
       ],
     };
-    const ws = makeWorkspace(root);
+    const ws = makeChildWorkspace(root);
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
 
     splitPaneWithSurface(sA.id, sourcePane.id, targetPane.id, "horizontal");
 
     const updatedWs = get(workspaces)[0]!;
-    const panes = getAllPanes(updatedWs.splitRoot);
+    const panes = getAllPanes(updatedWs.paneLayout);
     const paneIds = panes.map((p) => p.id);
     // Source pane is gone, target pane survives, new pane exists.
     expect(paneIds).not.toContain(sourcePane.id);
@@ -229,22 +192,22 @@ describe("splitPaneWithSurface — split-from-root", () => {
         { type: "pane", pane: targetPane },
       ],
     };
-    const ws = makeWorkspace(root);
+    const ws = makeChildWorkspace(root);
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
 
     splitPaneWithSurface(sA.id, sourcePane.id, targetPane.id);
 
     const updatedWs = get(workspaces)[0]!;
-    const panes = getAllPanes(updatedWs.splitRoot);
+    const panes = getAllPanes(updatedWs.paneLayout);
     expect(panes.map((p) => p.id)).toContain(sourcePane.id);
     expect(sourcePane.surfaces.map((s) => s.id)).toEqual([sB.id]);
     // sourcePane.activeSurfaceId rebound to surviving surface
     expect(sourcePane.activeSurfaceId).toBe(sB.id);
   });
 
-  it("replaces the target's slot in a nested parent split", () => {
-    // Layout:           splitRoot (h)
+  it("replaces the target's slot in a nested outer split", () => {
+    // Layout:           paneLayout (h)
     //                  /          \
     //              source         splitInner (v)
     //                            /         \
@@ -267,21 +230,21 @@ describe("splitPaneWithSurface — split-from-root", () => {
         { type: "pane", pane: otherPane },
       ],
     };
-    const splitRoot: SplitNode = {
+    const paneLayout: SplitNode = {
       type: "split",
       direction: "horizontal",
       ratio: 0.5,
       children: [{ type: "pane", pane: sourcePane }, splitInner],
     };
-    const ws = makeWorkspace(splitRoot);
+    const ws = makeChildWorkspace(paneLayout);
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
 
     splitPaneWithSurface(sA.id, sourcePane.id, targetPane.id, "horizontal");
 
     const updatedWs = get(workspaces)[0]!;
-    expect(updatedWs.splitRoot.type).toBe("split");
-    const panes = getAllPanes(updatedWs.splitRoot);
+    expect(updatedWs.paneLayout.type).toBe("split");
+    const panes = getAllPanes(updatedWs.paneLayout);
     // 4 panes: source (still), target, otherPane, newPane carrying A.
     expect(panes.length).toBe(4);
     const newPane = panes.find(
@@ -309,7 +272,7 @@ describe("splitPaneWithSurface — split-from-root", () => {
         { type: "pane", pane: targetPane },
       ],
     };
-    const ws = makeWorkspace(root);
+    const ws = makeChildWorkspace(root);
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
 
@@ -333,14 +296,14 @@ describe("splitPaneWithSurface — split-from-root", () => {
         { type: "pane", pane: targetPane },
       ],
     };
-    const ws = makeWorkspace(root);
+    const ws = makeChildWorkspace(root);
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
 
     splitPaneWithSurface(sA.id, sourcePane.id, targetPane.id);
 
     const updatedWs = get(workspaces)[0]!;
-    const newPane = getAllPanes(updatedWs.splitRoot).find(
+    const newPane = getAllPanes(updatedWs.paneLayout).find(
       (p) => p.id !== sourcePane.id && p.id !== targetPane.id,
     )!;
     expect(updatedWs.activePaneId).toBe(newPane.id);
@@ -352,14 +315,14 @@ describe("splitPaneWithSurface — split-from-root", () => {
     const sA = mockSurface({ title: "A" });
     const sB = mockSurface({ title: "B" });
     const pane = makePane([sA, sB]);
-    const ws = makeWorkspace({ type: "pane", pane });
+    const ws = makeChildWorkspace({ type: "pane", pane });
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
 
     splitPaneWithSurface(sA.id, pane.id, pane.id, "horizontal", false);
 
     const updatedWs = get(workspaces)[0]!;
-    const panes = getAllPanes(updatedWs.splitRoot);
+    const panes = getAllPanes(updatedWs.paneLayout);
     expect(panes.length).toBe(2);
     // Original pane keeps sB; new pane receives sA.
     const original = panes.find((p) => p.surfaces.some((s) => s.id === sB.id))!;

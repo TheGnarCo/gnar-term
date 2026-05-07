@@ -33,7 +33,7 @@ Specifically:
 
 2. **Extensions own everything else:**
    - All non-terminal surface types (preview, diff, harness, custom viewers)
-   - All sidebar tabs and sections (files, agents, GitHub, changes, projects)
+   - All sidebar tabs and sections (files, agents, GitHub, changes)
    - All content-type detection and rendering
    - All context menu items beyond core clipboard/terminal operations
 
@@ -63,7 +63,7 @@ The audit confirmed no other boundary violations exist. All non-terminal content
 
 - `diff-viewer`: Registers its own surface type via the extension API
 - `agentic-orchestrator`: Registers harness surface type via the extension API
-- `file-browser`, `github`, `profile-card`, `project-scope`: All use extension registrations
+- `branched-workspaces`: Uses extension registrations
 
 ### Enforcement
 

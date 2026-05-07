@@ -19,10 +19,6 @@ import {
 import type { ExtensionManifest } from "../extension-types";
 
 import {
-  fileBrowserManifest,
-  registerFileBrowserExtension,
-} from "../../extensions/file-browser";
-import {
   agenticOrchestratorManifest,
   registerAgenticOrchestratorExtension,
 } from "../../extensions/agentic-orchestrator";
@@ -35,17 +31,13 @@ import {
   registerJrvsThemesExtension,
 } from "../../extensions/jrvs-themes";
 import {
-  worktreeWorkspacesManifest,
-  registerWorktreeWorkspacesExtension,
-} from "../../extensions/worktree-workspaces";
-import {
-  githubSidebarManifest,
-  registerGitHubSidebarExtension,
-} from "../../extensions/github-sidebar";
-import {
   claudeSettingsManifest,
   registerClaudeSettingsExtension,
 } from "../../extensions/claude-settings";
+import {
+  branchedWorkspacesManifest,
+  registerBranchedWorkspacesExtension,
+} from "../../extensions/branched-workspaces";
 
 type IncludedExtension = readonly [
   ExtensionManifest,
@@ -59,7 +51,6 @@ type IncludedExtension = readonly [
  * activation is independent per extension.
  */
 export const INCLUDED_EXTENSIONS: readonly IncludedExtension[] = [
-  [fileBrowserManifest, registerFileBrowserExtension, "file-browser"],
   [
     agenticOrchestratorManifest,
     registerAgenticOrchestratorExtension,
@@ -67,13 +58,12 @@ export const INCLUDED_EXTENSIONS: readonly IncludedExtension[] = [
   ],
   [diffViewerManifest, registerDiffViewerExtension, "diff-viewer"],
   [jrvsThemesManifest, registerJrvsThemesExtension, "jrvs-themes"],
-  [
-    worktreeWorkspacesManifest,
-    registerWorktreeWorkspacesExtension,
-    "worktree-workspaces",
-  ],
-  [githubSidebarManifest, registerGitHubSidebarExtension, "github-sidebar"],
   [claudeSettingsManifest, registerClaudeSettingsExtension, "claude-settings"],
+  [
+    branchedWorkspacesManifest,
+    registerBranchedWorkspacesExtension,
+    "branched-workspaces",
+  ],
 ] as const;
 
 export async function registerIncludedExtensions(

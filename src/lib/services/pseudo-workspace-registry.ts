@@ -16,7 +16,7 @@ import {
 
 /**
  * A virtual "workspace" pinned at a fixed position in the root list.
- * Pseudo-workspaces are not stored in `AppState.workspaces`; they are
+ * Pseudo-workspaces are not stored in the workspaces list; they are
  * rebuilt from the registry on every render and cannot be closed,
  * renamed, or have panes/surfaces added via the normal workspace
  * controls.
@@ -41,7 +41,7 @@ export interface PseudoWorkspace {
   label: string;
   /**
    * Position within the root list:
-   *   - `"root-top"`: pinned above real workspaces and groups.
+   *   - `"root-top"`: pinned above real workspaces and workspaces.
    *   - `"root-bottom"`: pinned below every real row.
    * Order within a position bucket follows registration order.
    */
@@ -62,7 +62,7 @@ export interface PseudoWorkspace {
    * Synthetic workspace metadata exposed to the body via
    * `DashboardHostContext`. Mirrors the metadata a real dashboard
    * workspace would carry, so widgets that derive scope from
-   * `metadata.isGlobalAgenticDashboard` / `metadata.groupId` work
+   * `metadata.isGlobalAgenticDashboard` / `metadata.rootWorkspaceId` work
    * uniformly between pseudo- and real hosts.
    */
   metadata: Record<string, unknown>;
@@ -74,7 +74,7 @@ export interface PseudoWorkspace {
    */
   settings?: unknown;
   /**
-   * Optional component rendered INSIDE the primary-sidebar root row,
+   * Optional component rendered INSIDE the sidebar root row,
    * to the right of the icon, in place of the plain text label. Used
    * by the Global Agentic Dashboard to render a live status-chip grid
    * instead of the static "Agents dashboard" string. Mounted via

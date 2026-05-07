@@ -7,14 +7,12 @@
  */
 import { type AppEventType } from "./event-bus";
 import { unregisterBySource } from "./command-registry";
-import { unregisterSidebarTabsBySource } from "./sidebar-tab-registry";
 import { unregisterTitleBarButtonsBySource } from "./titlebar-button-registry";
 import { unregisterSidebarSectionsBySource } from "./sidebar-section-registry";
 import { unregisterSurfaceTypesBySource } from "./surface-type-registry";
 import { unregisterContextMenuItemsBySource } from "./context-menu-item-registry";
 import { unregisterWorkspaceActionsBySource } from "./workspace-action-registry";
 import { unregisterDashboardTabsBySource } from "./dashboard-tab-registry";
-import { unclaimBySource } from "./claimed-workspace-registry";
 import { unregisterStatusBySource } from "./status-registry";
 import { unregisterWorkspaceSubtitlesBySource } from "./workspace-subtitle-registry";
 import { unregisterRootRowRenderersBySource } from "./root-row-renderer-registry";
@@ -24,6 +22,7 @@ import { unregisterChildRowContributorsBySource } from "./child-row-contributor-
 import { unregisterDashboardContributionsBySource } from "./dashboard-contribution-registry";
 import { unregisterPseudoWorkspacesBySource } from "./pseudo-workspace-registry";
 import { unregisterMcpToolsBySource } from "./mcp-server";
+import { closeAutoDashboardsBySource } from "./workspace-service";
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 
 // --- Tauri commands safe for extension use (allowlist) ---
@@ -161,20 +160,21 @@ export function isBlockedAppPath(path: string): boolean {
  */
 export const REGISTRY_CLEANUP_FNS: Array<(source: string) => void> = [
   unregisterBySource,
-  unregisterSidebarTabsBySource,
   unregisterTitleBarButtonsBySource,
   unregisterSidebarSectionsBySource,
   unregisterSurfaceTypesBySource,
   unregisterContextMenuItemsBySource,
   unregisterWorkspaceActionsBySource,
   unregisterDashboardTabsBySource,
-  unclaimBySource,
   unregisterStatusBySource,
   unregisterWorkspaceSubtitlesBySource,
   unregisterRootRowRenderersBySource,
   unregisterThemesBySource,
   unregisterMarkdownComponentsBySource,
   unregisterChildRowContributorsBySource,
+  // Must run before unregisterDashboardContributionsBySource so the
+  // closer can still resolve which contributions belonged to source.
+  closeAutoDashboardsBySource,
   unregisterDashboardContributionsBySource,
   unregisterPseudoWorkspacesBySource,
   unregisterMcpToolsBySource,
@@ -198,6 +198,8 @@ const VALID_EVENT_LIST: AppEventType[] = [
   "theme:changed",
   "worktree:merged",
   "agent:statusChanged",
+  "agent:interrupted",
+  "agent:killed",
   "surface:ptyReady",
 ];
 export const VALID_EVENTS: Set<string> = new Set(VALID_EVENT_LIST);

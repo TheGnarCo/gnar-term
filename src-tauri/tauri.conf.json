@@ -30,7 +30,7 @@
         "scope": ["$APPDIR/**"]
       }
     },
-    "enableGTKAppId": false,
+    "enableGTKAppId": true,
     "withGlobalTauri": false
   },
   "plugins": {

@@ -1,0 +1,94 @@
+/**
+ * Tests for buildAgentRows — the pure data transformation that maps
+ * raw agent + workspace store values into displayable sidebar rows.
+ */
+import { describe, it, expect } from "vitest";
+import { buildAgentRows } from "../lib/services/agents-sidebar";
+import type { DetectedAgent } from "../lib/services/agent-detection-service";
+import type { Workspace } from "../lib/types";
+import type { WorkspaceRecord } from "../lib/config";
+
+// --- Helpers ---
+
+function makeAgent(overrides: Partial<DetectedAgent> = {}): DetectedAgent {
+  const now = new Date().toISOString();
+  return {
+    agentId: "agent-1",
+    agentName: "Claude Code",
+    surfaceId: "surface-1",
+    workspaceId: "nws-1",
+    status: "running",
+    createdAt: now,
+    lastStatusChange: now,
+    ...overrides,
+  };
+}
+
+function makeBranch(
+  id: string,
+  name: string,
+  rootWorkspaceId?: string,
+): Workspace {
+  return {
+    id,
+    name,
+    paneLayout: {
+      type: "pane",
+      pane: { id: "pane-1", surfaces: [], activeSurfaceId: null },
+    },
+    activePaneId: "pane-1",
+    ...(rootWorkspaceId ? { rootWorkspaceId } : {}),
+  };
+}
+
+function makeWorkspace(id: string, name: string): WorkspaceRecord {
+  return {
+    id,
+    name,
+    color: "#aaa",
+    path: "/tmp",
+    branchedWorkspaceIds: [],
+    isGit: false,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+// --- Tests ---
+
+describe("buildAgentRows", () => {
+  it("filters out agents with status 'closed'", () => {
+    const agents = [
+      makeAgent({ agentId: "a1", status: "running" }),
+      makeAgent({ agentId: "a2", status: "closed" }),
+      makeAgent({ agentId: "a3", status: "waiting" }),
+    ];
+    const rows = buildAgentRows(agents, [], []);
+    expect(rows).toHaveLength(2);
+    expect(rows.map((r) => r.agentId)).toEqual(["a1", "a3"]);
+  });
+
+  it("correctly joins agent data with the Branch name", () => {
+    const branch = makeBranch("nws-1", "my-feature");
+    const agent = makeAgent({ workspaceId: "nws-1" });
+    const rows = buildAgentRows([agent], [branch], []);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].ctxName).toBe("my-feature");
+  });
+
+  it("correctly joins with the owning Workspace name", () => {
+    const branch = makeBranch("nws-1", "feature-branch", "ws-root");
+    const root = makeWorkspace("ws-root", "MyApp");
+    const agent = makeAgent({ workspaceId: "nws-1" });
+    const rows = buildAgentRows([agent], [branch], [root]);
+    expect(rows[0].workspaceName).toBe("MyApp");
+  });
+
+  it("returns wsIdx = -1 when the Branch is not found", () => {
+    const agent = makeAgent({ workspaceId: "nws-missing" });
+    const rows = buildAgentRows([agent], [], []);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].wsIdx).toBe(-1);
+    expect(rows[0].ctxName).toBe("Unknown Branch");
+    expect(rows[0].workspaceName).toBe("Unknown Workspace");
+  });
+});

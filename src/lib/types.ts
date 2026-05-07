@@ -7,6 +7,96 @@ export function uid(): string {
   return `id-${++_id}-${Date.now()}`;
 }
 
+// ---------------------------------------------------------------------------
+// Unified Workspace type hierarchy
+// ---------------------------------------------------------------------------
+
+/**
+ * Base: every workspace has its own pane layout + optional Workspace-level fields.
+ * Path-rooted Workspaces carry `path`, `color`, `isGit`, `createdAt`.
+ * Branches (branched + dashboards) are identified by `rootWorkspaceId`.
+ */
+export interface Workspace {
+  id: string;
+  name: string;
+  paneLayout: SplitNode;
+  activePaneId: string | null;
+  // Workspace-level (present on path-rooted Workspaces, absent on Branches)
+  path?: string;
+  color?: string;
+  isGit?: boolean;
+  createdAt?: string;
+  // Branch navigation
+  lastActiveBranchedWorkspaceId?: string;
+  /**
+   * Set on a root Workspace ONLY. Holds the runtime id of that Workspace's
+   * overview Dashboard Workspace, so `openWorkspaceDashboard` can activate
+   * it directly. Never carries a contribution id — that lives on the
+   * dashboard workspace itself in `dashboardContributionId`.
+   */
+  dashboardWorkspaceId?: string;
+  // Flags
+  locked?: boolean;
+  pathMissing?: boolean; // runtime-only, not persisted
+  autoRunRestoreCommands?: boolean;
+  // Dashboard flag — present on Branches that are overview dashboards
+  isDashboard?: boolean;
+  /**
+   * Set on a Dashboard Workspace ONLY. Stable identifier of the dashboard
+   * contribution this workspace renders (e.g. `"overview"`, `"settings"`,
+   * `"agentic"`, `"ext:foo"`). Used to look up the contribution in the
+   * Dashboard registry.
+   */
+  dashboardContributionId?: string;
+  // Extension data — replaces open-ended metadata index signature
+  extensionData?: Record<string, unknown>;
+  // Root Workspace reference — presence discriminates Branches from root Workspaces
+  rootWorkspaceId?: string;
+  /**
+   * Set on root Workspaces ONLY. Ordered list of Branch / Dashboard ids
+   * whose `rootWorkspaceId` points back here. `rootWorkspaceId` is the
+   * canonical membership tag (reclaimed on startup); this array exists
+   * only to preserve user-controlled ordering (drag/drop, insert
+   * position). Do NOT use this as a membership query — derive from
+   * `rootWorkspaceId` instead.
+   */
+  branchedWorkspaceIds?: string[];
+  /**
+   * Provenance marker — when set, the workspace was spawned from a
+   * dashboard. Drives the bot-icon affordance in the sidebar.
+   */
+  spawnedBy?:
+    | { kind: "global" }
+    | { kind: "workspace"; rootWorkspaceId: string };
+  /**
+   * GitHub issue numbers a worktree workspace was spawned to handle.
+   * Drives the bot-icon "jump to active workspace" affordance on the
+   * Issues widget.
+   */
+  spawnedFromIssues?: number[];
+}
+
+/**
+ * Worktree-backed Workspace variant. Carries the root Workspace back-reference
+ * plus worktree fields. Created by the branched-workspaces extension via
+ * `worktree-service` in core.
+ */
+export interface BranchedWorkspace extends Workspace {
+  rootWorkspaceId: string;
+  worktreePath: string;
+  branch: string;
+  baseBranch?: string;
+  repoPath?: string;
+}
+
+/** Type guard: narrows to BranchedWorkspace via the worktreePath marker. */
+export function isBranchedWorkspace(ws: Workspace): ws is BranchedWorkspace {
+  return (
+    typeof (ws as BranchedWorkspace).rootWorkspaceId === "string" &&
+    typeof (ws as BranchedWorkspace).worktreePath === "string"
+  );
+}
+
 export interface TerminalSurface {
   kind: "terminal";
   id: string;
@@ -31,6 +121,14 @@ export interface TerminalSurface {
   // Set by connectPty on spawn failure; consumed by TerminalSurface.svelte to
   // show an error message and remove the dead surface from its pane.
   spawnError?: string;
+  /**
+   * Title set explicitly by the user via `renameSurface` (the
+   * Rename Surface command). When present, OSC 0/2 (window title) and
+   * OSC 7 (cwd) escape sequences will not overwrite `title`, and
+   * `detachAgent` prefers it over the captured `preAgentTitle`. Runtime
+   * only — not currently persisted across app restart.
+   */
+  userDefinedTitle?: string;
 }
 
 export interface ExtensionSurface {
@@ -64,6 +162,7 @@ export interface Pane {
   activeSurfaceId: string | null;
   resizeObserver?: ResizeObserver;
   element?: HTMLElement;
+  exitedSurface?: { code: number; definedCommand?: string; cwd?: string };
 }
 
 export type SplitNode =
@@ -75,79 +174,14 @@ export type SplitNode =
       ratio: number;
     };
 
-/**
- * Typed metadata carried by a Workspace. All known keys are optional.
- * The index signature preserves compatibility with extension-API sites that
- * accept Record<string,unknown> and with serialised state that may carry
- * legacy or unknown keys.
- */
-export interface WorkspaceMetadata {
-  // --- Index signature: extensions may store arbitrary keys ---
-  [key: string]: unknown;
-  // --- Worktree fields ---
-  /** Set on worktree-backed workspaces; absolute path to the worktree directory. */
-  worktreePath?: string;
-  /** Git branch name for worktree workspaces. */
-  branch?: string;
-  /** Base branch the worktree was created from. */
-  baseBranch?: string;
-  /** Absolute path to the source repo for worktree workspaces. */
-  repoPath?: string;
-  // --- Project-scope extension ---
-  /** Project id used by the project-scope extension to claim the workspace. */
-  projectId?: string;
-  // --- Dashboard / group fields ---
-  /** Marks a workspace as a dashboard (used by workspace-group and related services). */
-  isDashboard?: boolean;
-  /** Group id this workspace belongs to (workspace-group-service). */
-  groupId?: string;
-  /** Id of the group's current dashboard workspace (workspace-group-service). */
-  dashboardWorkspaceId?: string;
-  /**
-   * Contribution id for the dashboard type: "group" | "agentic" | "settings" | string.
-   * Backfilled by workspace-group-service for legacy workspaces.
-   */
-  dashboardContributionId?: string;
-  /** True on the global agentic pseudo-workspace (agentic-orchestrator). */
-  isGlobalAgenticDashboard?: boolean;
-  // --- Agentic orchestrator / spawn-helper ---
-  /** Id of the dashboard workspace that spawned this workspace. */
-  parentDashboardId?: string;
-  /**
-   * Provenance marker set by spawn-helper. Records which dashboard spawned
-   * this workspace so the sidebar can show a bot-icon affordance.
-   */
-  spawnedBy?: { kind: "global" } | { kind: "group"; groupId: string };
-  /**
-   * GitHub issue numbers this workspace is handling (agentic-orchestrator).
-   * Written by createWorktreeWorkspaceFromConfig.
-   */
-  spawnedFromIssues?: number[];
-  // --- User locking ---
-  /**
-   * When true, the workspace is "locked" — it cannot be closed via the
-   * Close affordances and is not draggable for reorder. Toggled by the
-   * "Lock Workspace" / "Unlock Workspace" context-menu item.
-   */
-  locked?: boolean;
-}
-
-export interface Workspace {
-  id: string;
-  name: string;
-  splitRoot: SplitNode;
-  activePaneId: string | null;
-  metadata?: WorkspaceMetadata;
-}
-
 // Helper functions for tree traversal
 export function getAllPanes(node: SplitNode): Pane[] {
   if (node.type === "pane") return [node.pane];
   return [...getAllPanes(node.children[0]), ...getAllPanes(node.children[1])];
 }
 
-export function getAllSurfaces(ws: Workspace): Surface[] {
-  return getAllPanes(ws.splitRoot).flatMap((p) => p.surfaces);
+export function getAllSurfaces(ws: { paneLayout: SplitNode }): Surface[] {
+  return getAllPanes(ws.paneLayout).flatMap((p) => p.surfaces);
 }
 
 export function isTerminalSurface(s: Surface): s is TerminalSurface {

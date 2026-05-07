@@ -14,17 +14,23 @@
   import { onDestroy } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { theme } from "../stores/theme";
-  import { workspaces } from "../stores/workspace";
   import { getWorkspaceStatusByCategory } from "../services/status-registry";
   import { GIT_STATUS_SOURCE } from "../services/git-status-service";
-  import { wsMeta } from "../services/service-helpers";
+  import { workspaces } from "../stores/workspace";
   import type { StatusItem } from "../types/status";
 
   export let workspaceId: string;
   export let accentColor: string | undefined = undefined;
 
-  $: currentWs = $workspaces.find((w) => w.id === workspaceId);
-  $: isNested = Boolean(currentWs && wsMeta(currentWs).groupId);
+  // PR rows belong to root-workspace banners only — branches and
+  // dashboards inherit the PR status from their owning root, so showing
+  // it twice (or on a branch worktree that has no upstream) is noise.
+  $: thisWs = $workspaces.find((w) => w.id === workspaceId);
+  $: isRootWorkspace =
+    thisWs !== undefined &&
+    thisWs.rootWorkspaceId === undefined &&
+    thisWs.isDashboard !== true &&
+    typeof (thisWs as { worktreePath?: string }).worktreePath !== "string";
 
   $: fgMuted = ($theme["fgMuted"] ?? $theme.fgDim) as string;
   $: iconFg = accentColor ?? fgMuted;
@@ -152,7 +158,9 @@
   onDestroy(() => stopPrPolling());
 
   $: showPr =
-    !isNested && pr !== null && (pr.state === "OPEN" || pr.state === "open");
+    isRootWorkspace &&
+    pr !== null &&
+    (pr.state === "OPEN" || pr.state === "open");
   $: isDraft = pr?.isDraft ?? false;
   $: prColor = pr
     ? isDraft
@@ -163,40 +171,81 @@
 
 {#if showDiff || showPr || showRemote}
   <div
-    style="display: flex; flex-direction: column; gap: 1px; padding: 0 12px 4px 6px; overflow: hidden;"
+    style="display: flex; flex-direction: column; gap: 1px; padding: 0 12px 0 6px; overflow: hidden;"
   >
-    {#if showDiff}
+    {#if showDiff || showRemote}
+      {@const combinedTitle = [
+        showDiff ? (dirtyItem?.tooltip ?? diffLabel) : null,
+        ahead > 0 ? `${ahead} ahead` : null,
+        behind > 0 ? `${behind} behind` : null,
+      ]
+        .filter(Boolean)
+        .join(" · ")}
       <div
         style="display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden;"
-        title={dirtyItem?.tooltip ?? diffLabel}
+        title={combinedTitle}
       >
-        <svg
-          width="10"
-          height="10"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke={iconFg}
-          stroke-width="3"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          style="flex-shrink: 0; opacity: 0.7;"
-          aria-hidden="true"
-        >
-          <path d="M12 3v14" />
-          <path d="M5 10h14" />
-          <path d="M5 21h14" />
-        </svg>
-        {#if diffSegments.length > 0}
-          {#each diffSegments as seg}
-            <span
-              style="font-size: 10px; color: {seg?.color}; white-space: nowrap; flex-shrink: 0;"
-              >{seg?.label}</span
-            >
-          {/each}
+        {#if showDiff}
+          <svg
+            width="10"
+            height="10"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke={iconFg}
+            stroke-width="3"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            style="flex-shrink: 0; opacity: 0.7;"
+            aria-hidden="true"
+          >
+            <path d="M12 3v14" />
+            <path d="M5 10h14" />
+            <path d="M5 21h14" />
+          </svg>
         {:else}
+          <svg
+            width="10"
+            height="10"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke={iconFg}
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            style="flex-shrink: 0; opacity: 0.7;"
+            aria-hidden="true"
+          >
+            <line x1="8" y1="20" x2="8" y2="6" />
+            <polyline points="4 10 8 6 12 10" />
+            <line x1="16" y1="4" x2="16" y2="18" />
+            <polyline points="12 14 16 18 20 14" />
+          </svg>
+        {/if}
+        {#if showDiff}
+          {#if diffSegments.length > 0}
+            {#each diffSegments as seg}
+              <span
+                style="font-size: 10px; color: {seg?.color}; white-space: nowrap; flex-shrink: 0;"
+                >{seg?.label}</span
+              >
+            {/each}
+          {:else}
+            <span
+              style="font-size: 10px; color: #e8b73a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
+              >{diffLabel}</span
+            >
+          {/if}
+        {/if}
+        {#if ahead > 0}
           <span
-            style="font-size: 10px; color: #e8b73a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
-            >{diffLabel}</span
+            style="font-size: 10px; color: #4ec957; white-space: nowrap; flex-shrink: 0;"
+            >↑{ahead}</span
+          >
+        {/if}
+        {#if behind > 0}
+          <span
+            style="font-size: 10px; color: #e8b73a; white-space: nowrap; flex-shrink: 0;"
+            >↓{behind}</span
           >
         {/if}
       </div>
@@ -232,45 +281,6 @@
         >
           #{pr.number}{isDraft ? " draft" : ""}
         </span>
-      </div>
-    {/if}
-
-    {#if showRemote}
-      <div
-        style="display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden;"
-        title="{ahead > 0 ? `${ahead} ahead` : ''}{ahead > 0 && behind > 0
-          ? ', '
-          : ''}{behind > 0 ? `${behind} behind` : ''} of remote"
-      >
-        <svg
-          width="10"
-          height="10"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke={iconFg}
-          stroke-width="2.5"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          style="flex-shrink: 0; opacity: 0.7;"
-          aria-hidden="true"
-        >
-          <line x1="8" y1="20" x2="8" y2="6" />
-          <polyline points="4 10 8 6 12 10" />
-          <line x1="16" y1="4" x2="16" y2="18" />
-          <polyline points="12 14 16 18 20 14" />
-        </svg>
-        {#if ahead > 0}
-          <span
-            style="font-size: 10px; color: #4ec957; white-space: nowrap; flex-shrink: 0;"
-            >↑{ahead}</span
-          >
-        {/if}
-        {#if behind > 0}
-          <span
-            style="font-size: 10px; color: #e8b73a; white-space: nowrap; flex-shrink: 0;"
-            >↓{behind}</span
-          >
-        {/if}
       </div>
     {/if}
   </div>

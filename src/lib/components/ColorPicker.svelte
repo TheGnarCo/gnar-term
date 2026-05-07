@@ -122,6 +122,7 @@
         on:input={handleCustomInput}
         placeholder="#ff3366"
         maxlength="7"
+        class="no-default-outline"
         style="
           flex: 1; padding: 4px 8px; font-size: 12px;
           font-family: monospace;
@@ -130,7 +131,7 @@
           border: 1px solid {validCustom || !customHex
           ? $theme.border
           : $theme.danger};
-          border-radius: 4px; outline: none;
+          border-radius: 4px;
         "
       />
     </div>

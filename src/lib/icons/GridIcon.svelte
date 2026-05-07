@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
-   * Grid icon — used as the tile glyph for the core Group Dashboard
-   * (the per-group Overview). Stroke-matched to other dashboard icons.
+   * Grid icon — used as the tile glyph for the core Workspace Dashboard
+   * (the per-workspace Overview). Stroke-matched to other dashboard icons.
    */
   export let size: number = 14;
   export let color: string = "currentColor";

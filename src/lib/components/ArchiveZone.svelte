@@ -3,116 +3,82 @@
   import {
     contextMenu,
     anyReorderActive,
-    metaPreviewActive,
     showConfirmPrompt,
   } from "../stores/ui";
   import { theme } from "../stores/theme";
-  import {
-    archivedOrder,
-    archivedDefs,
-    type ArchivedRow,
-  } from "../stores/archive";
-  import {
-    unarchiveWorkspace,
-    unarchiveGroup,
-  } from "../services/archive-service";
+  import { archivedOrder, archivedDefs } from "../stores/archive";
+  import { unarchiveWorkspace } from "../services/archive-service";
   import DragGrip from "./DragGrip.svelte";
 
   let expanded = false;
+  // True when the current expanded state was triggered by a drag entering
+  // the zone, NOT by a user click. The reorder-end watcher only collapses
+  // back when the open state was auto-driven — manual user toggles persist.
+  let autoExpanded = false;
   let archiveZoneEl: HTMLElement | null = null;
-  let hoveredRowKey: string | null = null;
-
-  function rowKey(row: ArchivedRow): string {
-    return `${row.kind}:${row.id}`;
-  }
-
-  let metaPreviewTimer: ReturnType<typeof setTimeout> | null = null;
-
-  function activateMetaPreview() {
-    archiveZoneEl?.setAttribute("data-drag-preview", "true");
-    metaPreviewActive.set(true);
-  }
-  function deactivateMetaPreview() {
-    if (metaPreviewTimer !== null) {
-      clearTimeout(metaPreviewTimer);
-      metaPreviewTimer = null;
-    }
-    archiveZoneEl?.removeAttribute("data-drag-preview");
-    metaPreviewActive.set(false);
-  }
-
-  function onKeyDown(e: KeyboardEvent) {
-    if (e.key === "Meta" && metaPreviewTimer === null) {
-      metaPreviewTimer = setTimeout(activateMetaPreview, 600);
-    }
-  }
-  function onKeyUp(e: KeyboardEvent) {
-    if (e.key === "Meta") deactivateMetaPreview();
-  }
-  function onBlur() {
-    deactivateMetaPreview();
-  }
-
-  $: if (archiveZoneEl) {
-    if ($anyReorderActive)
-      archiveZoneEl.setAttribute("data-drag-active", "true");
-    else archiveZoneEl.removeAttribute("data-drag-active");
-  }
+  let hoveredRowId: string | null = null;
+  let headerHovered = false;
 
   $: totalCount = $archivedOrder.length;
 
   function toggle() {
     expanded = !expanded;
+    autoExpanded = false;
   }
 
-  function getName(row: ArchivedRow): string {
-    if (row.kind === "workspace") {
-      return $archivedDefs.workspaces[row.id]?.def.name ?? row.id;
+  // Drag-hover auto-expand: while a sidebar drag is active and the cursor
+  // enters the archive zone, expand it so the user can see what sits
+  // inside (and where their item lands). Replaces the older Meta-hold
+  // preview overlay — the expansion itself is the discoverability cue.
+  function onZoneEnter() {
+    if ($anyReorderActive && !expanded) {
+      expanded = true;
+      autoExpanded = true;
     }
-    return $archivedDefs.groups[row.id]?.group.name ?? row.id;
   }
 
-  function getGroupWorkspaceCount(id: string): number {
-    return $archivedDefs.groups[id]?.workspaceDefs.length ?? 0;
+  // When the drag ends, collapse back if (and only if) we auto-expanded.
+  $: if (!$anyReorderActive && autoExpanded) {
+    expanded = false;
+    autoExpanded = false;
   }
 
-  async function confirmAndUnarchive(row: ArchivedRow) {
-    const name = getName(row);
-    const isGroup = row.kind === "workspace-group";
-    const message = isGroup
-      ? `Unarchive "${name}" and restore its workspaces?`
-      : `Unarchive "${name}"?`;
-    const confirmed = await showConfirmPrompt(message, {
-      confirmLabel: "Unarchive",
-    });
+  function getName(id: string): string {
+    return $archivedDefs.workspaces[id]?.workspace.name ?? id;
+  }
+
+  async function confirmAndUnarchive(id: string) {
+    const confirmed = await showConfirmPrompt(
+      `Unarchive "${getName(id)}" and restore its branches?`,
+      { confirmLabel: "Unarchive" },
+    );
     if (!confirmed) return;
-    if (row.kind === "workspace") void unarchiveWorkspace(row.id);
-    else void unarchiveGroup(row.id);
+    void unarchiveWorkspace(id);
   }
 
-  function showItemContextMenu(x: number, y: number, row: ArchivedRow) {
+  function showItemContextMenu(x: number, y: number, id: string) {
     contextMenu.set({
       x,
       y,
       items: [
         {
           label: "Unarchive",
-          action: () => void confirmAndUnarchive(row),
+          action: () => void confirmAndUnarchive(id),
         },
       ],
     });
   }
 
   // Drag-out state
-  let draggingRow: ArchivedRow | null = null;
+  let draggingId: string | null = null;
   let ghostEl: HTMLElement | null = null;
 
-  function startItemDrag(e: MouseEvent, row: ArchivedRow) {
+  function startItemDrag(e: MouseEvent, id: string) {
     if (e.button !== 0) return;
-    draggingRow = row;
+    draggingId = id;
 
     ghostEl = document.createElement("div");
-    ghostEl.textContent = getName(row);
+    ghostEl.textContent = getName(id);
     Object.assign(ghostEl.style, {
       position: "fixed",
       pointerEvents: "none",
@@ -146,9 +112,9 @@
     ghostEl?.remove();
     ghostEl = null;
 
-    if (!draggingRow) return;
-    const row = draggingRow;
-    draggingRow = null;
+    if (!draggingId) return;
+    const id = draggingId;
+    draggingId = null;
 
     const archiveEl = document.querySelector("[data-archive-zone]");
     if (archiveEl) {
@@ -158,41 +124,65 @@
         e.clientX <= rect.right &&
         e.clientY >= rect.top &&
         e.clientY <= rect.bottom;
-      if (!overZone) {
-        if (row.kind === "workspace") void unarchiveWorkspace(row.id);
-        else void unarchiveGroup(row.id);
-      }
+      if (!overZone) void unarchiveWorkspace(id);
     }
   }
 </script>
 
-<svelte:window on:keydown={onKeyDown} on:keyup={onKeyUp} on:blur={onBlur} />
-
+<!-- The archive section sits at the bottom of the sidebar (outside the
+     scrollable content) so it stays visible as a drop target. Inner
+     padding-left of 4px matches the scrollable content's left inset so
+     the row chrome lines up with the workspace rows above. -->
 <div data-archive-zone class="archive-zone" bind:this={archiveZoneEl}>
   <button
     type="button"
     on:click={toggle}
-    class="archive-header"
-    class:has-items={totalCount > 0}
+    on:mouseenter={() => {
+      headerHovered = true;
+      onZoneEnter();
+    }}
+    on:mouseleave={() => (headerHovered = false)}
+    data-archive-header
+    aria-expanded={expanded}
+    class="archive-banner"
+    style="
+      background: {headerHovered
+      ? $theme.bgHighlight
+      : ($theme.bgSurface ?? 'transparent')};
+      border: 1px solid {$theme.border ?? 'transparent'};
+      color: {$theme.fg};
+    "
   >
-    <svg
-      aria-hidden="true"
-      width="12"
-      height="8"
-      viewBox="0 0 12 8"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.5"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      style="transition: transform 0.2s ease; transform: rotate({expanded
-        ? 0
-        : 180}deg);"><polyline points="1,1 6,7 11,1" /></svg
-    >
-    <span>Archive</span>
-    {#if totalCount > 0}
-      <span class="badge">{totalCount}</span>
-    {/if}
+    <DragGrip
+      theme={$theme}
+      visible={false}
+      railColor={$theme.fgDim}
+      railOpacity={0.35}
+    />
+    <div class="archive-banner-body">
+      <span
+        aria-hidden="true"
+        class="chevron"
+        style="transform: rotate({expanded ? 90 : 0}deg);"
+      >
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 12 12"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polyline points="3,2 8,6 3,10" />
+        </svg>
+      </span>
+      <span class="archive-label">Archive</span>
+      {#if totalCount > 0}
+        <span class="count-chip">{totalCount}</span>
+      {/if}
+    </div>
   </button>
 
   {#if expanded}
@@ -200,29 +190,30 @@
       {#if totalCount === 0}
         <div class="empty-hint">drag here to archive</div>
       {:else}
-        {#each $archivedOrder as row (`${row.kind}:${row.id}`)}
+        {#each $archivedOrder as id (id)}
           <!-- svelte-ignore a11y-no-static-element-interactions -->
           <div
             class="archive-item"
-            on:mouseenter={() => (hoveredRowKey = rowKey(row))}
-            on:mouseleave={() => (hoveredRowKey = null)}
+            on:mouseenter={() => (hoveredRowId = id)}
+            on:mouseleave={() => (hoveredRowId = null)}
             on:contextmenu|preventDefault={(e) =>
-              showItemContextMenu(e.clientX, e.clientY, row)}
-            on:mousedown={(e) => startItemDrag(e, row)}
+              showItemContextMenu(e.clientX, e.clientY, id)}
+            on:mousedown={(e) => startItemDrag(e, id)}
+            style="
+              background: {hoveredRowId === id
+              ? $theme.bgHighlight
+              : ($theme.bgSurface ?? 'transparent')};
+              border: 1px solid {$theme.border ?? 'transparent'};
+              color: {$theme.fg};
+            "
           >
             <DragGrip
               theme={$theme}
-              visible={hoveredRowKey === rowKey(row)}
+              visible={hoveredRowId === id}
+              railColor={$theme.fgDim}
               railOpacity={0.35}
-              fadeRight={true}
             />
-            {#if row.kind === "workspace-group"}
-              <span class="item-name"
-                >{getName(row)} ({getGroupWorkspaceCount(row.id)})</span
-              >
-            {:else}
-              <span class="item-name">{getName(row)}</span>
-            {/if}
+            <span class="item-name">{getName(id)}</span>
           </div>
         {/each}
       {/if}
@@ -232,64 +223,80 @@
 
 <style>
   .archive-zone {
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
     flex-shrink: 0;
     position: relative;
+    /* 4px left inset matches the scrollable content's
+       `padding: 8px 0 8px 4px` so the archive row's rail aligns with the
+       workspace rows above it. 8px top breathing room mirrors the
+       scrollable area's vertical inset. */
+    padding: 8px 0 8px 4px;
   }
 
-  .archive-zone:global([data-drag-over])::after,
-  .archive-zone:global([data-drag-preview])::after,
-  .archive-zone:global([data-drag-active])::after {
-    content: "Archive";
-    position: absolute;
-    inset: 0;
+  /* Header banner: matches SidebarElement child chrome — drag-grip
+     column, border, hover background, rounded right edge, 4px
+     right-side gap so the right border lines up with the workspace
+     banners' `margin-right: 4px` above. */
+  .archive-banner {
+    width: calc(100% - 4px);
+    box-sizing: border-box;
     display: flex;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    background: rgba(55, 55, 55, 0.93);
-    color: rgba(255, 255, 255, 0.7);
+    align-items: stretch;
+    min-height: 32px;
+    margin: 0;
+    padding: 0;
+    border-radius: 0 6px 6px 0;
+    cursor: pointer;
+    font-family: inherit;
     font-size: 13px;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    z-index: 10;
-    pointer-events: none;
-    border-radius: 4px;
+    overflow: hidden;
+    transition: background 0.1s;
   }
 
-  .archive-header {
-    width: 100%;
+  .archive-banner-body {
+    flex: 1;
+    min-width: 0;
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 7px 10px;
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: rgba(255, 255, 255, 0.35);
+    padding: 4px 6px;
   }
 
-  .archive-header.has-items {
-    color: rgba(255, 255, 255, 0.55);
+  .chevron {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 12px;
+    color: inherit;
+    transition: transform 0.15s ease;
+    flex-shrink: 0;
   }
 
-  .badge {
-    margin-left: auto;
+  .archive-label {
+    flex: 1;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .count-chip {
     background: rgba(255, 255, 255, 0.06);
-    color: rgba(255, 255, 255, 0.35);
+    color: rgba(255, 255, 255, 0.55);
     border-radius: 3px;
     padding: 1px 5px;
     font-size: 10px;
+    font-weight: 600;
+    flex-shrink: 0;
   }
 
   .archive-list {
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    margin-top: 2px;
     max-height: 160px;
     overflow-y: auto;
-    padding-bottom: 8px;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
   }
 
   .empty-hint {
@@ -300,21 +307,29 @@
     text-align: center;
   }
 
+  /* Archived items: same chrome as a child SidebarElement row.
+     4px right inset matches the banner above and the workspace
+     banners' `margin-right: 4px`. */
   .archive-item {
-    padding: 4px 10px 4px 0;
-    font-size: 12px;
-    color: rgba(255, 255, 255, 0.45);
+    width: calc(100% - 4px);
+    box-sizing: border-box;
     display: flex;
     align-items: center;
+    min-height: 32px;
+    border-radius: 0 6px 6px 0;
+    overflow: hidden;
     user-select: none;
     cursor: grab;
-    gap: 4px;
+    transition: background 0.1s;
   }
 
   .item-name {
+    flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     min-width: 0;
+    padding: 4px 6px;
+    font-size: 13px;
   }
 </style>

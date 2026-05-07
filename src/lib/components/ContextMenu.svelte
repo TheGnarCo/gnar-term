@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick } from "svelte";
+  import { tick, type Component } from "svelte";
   import { contextMenu } from "../stores/ui";
   import { theme } from "../stores/theme";
 
@@ -138,7 +138,26 @@
             if (el instanceof HTMLElement) el.style.background = "transparent";
           }}
         >
-          <span>{item.label}</span>
+          <span
+            style="display: flex; align-items: center; gap: 8px; min-width: 0;"
+          >
+            {#if item.icon}
+              <span
+                aria-hidden="true"
+                style="display: inline-flex; flex-shrink: 0; width: 12px; height: 12px;"
+              >
+                <svelte:component
+                  this={item.icon as Component}
+                  width={12}
+                  height={12}
+                />
+              </span>
+            {/if}
+            <span
+              style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+              >{item.label}</span
+            >
+          </span>
           {#if item.shortcut}
             <span
               style="font-size: 11px; color: {$theme.fgDim}; margin-left: 24px;"

@@ -64,12 +64,6 @@ vi.mock("@xterm/addon-webgl", () => ({
     onContextLoss = vi.fn();
   },
 }));
-vi.mock("@xterm/addon-web-links", () => ({
-  WebLinksAddon: class {
-    activate = vi.fn();
-    dispose = vi.fn();
-  },
-}));
 vi.mock("@xterm/addon-search", () => ({
   SearchAddon: class {
     activate = vi.fn();
@@ -177,6 +171,7 @@ describe("Linux keyboard shortcut handling", () => {
         "g",
         "h",
         "r",
+        "~",
       ];
 
       for (const key of appShortcuts) {

@@ -49,10 +49,21 @@ import type {
 import { uid, getAllPanes } from "../lib/types";
 import { createTerminalSurface } from "../lib/terminal-service";
 import {
-  createWorkspace,
+  createWorkspaceFromDef,
   switchWorkspace,
   closeWorkspace,
-} from "../lib/services/workspace-service";
+} from "../lib/services/workspace-runtime-service";
+
+// Local helper for tests that previously called the deleted
+// `createWorkspace(name)` runtime API. It builds a minimal one-pane,
+// one-terminal WorkspaceTemplate so the tests still exercise the
+// runtime creation path through the surviving `createWorkspaceFromDef`.
+async function createWorkspace(name: string): Promise<void> {
+  await createWorkspaceFromDef({
+    name,
+    layout: { pane: { surfaces: [{ type: "terminal" }] } },
+  });
+}
 import { splitPane, focusPane, closePane } from "../lib/services/pane-service";
 import { getCwdForSurface } from "../lib/services/service-helpers";
 import {
@@ -102,12 +113,12 @@ function makePane(
   };
 }
 
-function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
+function makeChildWorkspace(overrides: Partial<Workspace> = {}): Workspace {
   const pane = makePane();
   return {
     id: uid(),
     name: "Workspace 1",
-    splitRoot: { type: "pane", pane },
+    paneLayout: { type: "pane", pane },
     activePaneId: pane.id,
     ...overrides,
   };
@@ -146,7 +157,7 @@ afterEach(() => {
 
 describe("Workflow: workspace lifecycle", () => {
   it("creates a workspace, switches to it, then closes it", async () => {
-    const existing = makeWorkspace({ name: "Initial" });
+    const existing = makeChildWorkspace({ name: "Initial" });
     workspaces.set([existing]);
     activeWorkspaceIdx.set(0);
 
@@ -190,7 +201,7 @@ describe("Workflow: workspace lifecycle", () => {
     expect(ws!.name).toBe("Dev");
 
     // The workspace should have one pane with one terminal surface
-    const panes = getAllPanes(ws!.splitRoot);
+    const panes = getAllPanes(ws!.paneLayout);
     expect(panes).toHaveLength(1);
     expect(panes[0].surfaces).toHaveLength(1);
     expect(panes[0].surfaces[0].kind).toBe("terminal");
@@ -207,7 +218,7 @@ describe("Workflow: workspace lifecycle", () => {
 describe("Workflow: pane split and navigation", () => {
   it("splits a pane, navigates between panes, then closes one", async () => {
     // Start with a single-pane workspace
-    const ws = makeWorkspace({ name: "Split Test" });
+    const ws = makeChildWorkspace({ name: "Split Test" });
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
 
@@ -218,13 +229,13 @@ describe("Workflow: pane split and navigation", () => {
 
     // Verify two panes exist
     const currentWs = get(activeWorkspace)!;
-    const panes = getAllPanes(currentWs.splitRoot);
+    const panes = getAllPanes(currentWs.paneLayout);
     expect(panes).toHaveLength(2);
 
     // The split root should now be a split node
-    expect(currentWs.splitRoot.type).toBe("split");
-    if (currentWs.splitRoot.type === "split") {
-      expect(currentWs.splitRoot.direction).toBe("horizontal");
+    expect(currentWs.paneLayout.type).toBe("split");
+    if (currentWs.paneLayout.type === "split") {
+      expect(currentWs.paneLayout.direction).toBe("horizontal");
     }
 
     // activePane should be the new pane (splitPane focuses the new pane)
@@ -244,26 +255,26 @@ describe("Workflow: pane split and navigation", () => {
     closePane(newPaneId);
 
     const afterClose = get(activeWorkspace)!;
-    const remainingPanes = getAllPanes(afterClose.splitRoot);
+    const remainingPanes = getAllPanes(afterClose.paneLayout);
     expect(remainingPanes).toHaveLength(1);
     expect(remainingPanes[0].id).toBe(originalPaneId);
 
-    // splitRoot should collapse back to a pane node
-    expect(afterClose.splitRoot.type).toBe("pane");
+    // paneLayout should collapse back to a pane node
+    expect(afterClose.paneLayout.type).toBe("pane");
   });
 
   it("splits vertically and verifies direction", async () => {
-    const ws = makeWorkspace({ name: "Vertical Split" });
+    const ws = makeChildWorkspace({ name: "Vertical Split" });
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
 
     await splitPane(ws.activePaneId!, "vertical");
 
     const currentWs = get(activeWorkspace)!;
-    expect(currentWs.splitRoot.type).toBe("split");
-    if (currentWs.splitRoot.type === "split") {
-      expect(currentWs.splitRoot.direction).toBe("vertical");
-      expect(currentWs.splitRoot.ratio).toBe(0.5);
+    expect(currentWs.paneLayout.type).toBe("split");
+    if (currentWs.paneLayout.type === "split") {
+      expect(currentWs.paneLayout.direction).toBe("vertical");
+      expect(currentWs.paneLayout.ratio).toBe(0.5);
     }
   });
 
@@ -281,7 +292,7 @@ describe("Workflow: pane split and navigation", () => {
     const ws: Workspace = {
       id: uid(),
       name: "Cwd Source",
-      splitRoot: {
+      paneLayout: {
         type: "split",
         direction: "horizontal",
         ratio: 0.5,
@@ -318,7 +329,7 @@ describe("Workflow: pane split and navigation", () => {
     const ws: Workspace = {
       id: uid(),
       name: "Cwd Source",
-      splitRoot: {
+      paneLayout: {
         type: "split",
         direction: "horizontal",
         ratio: 0.5,
@@ -353,7 +364,7 @@ describe("Workflow: extension surface lifecycle", () => {
 
   it("registers a surface type, opens an extension surface, then closes it", () => {
     // Set up a workspace with a pane
-    const ws = makeWorkspace({ name: "Extension Test" });
+    const ws = makeChildWorkspace({ name: "Extension Test" });
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
 
@@ -403,7 +414,7 @@ describe("Workflow: extension surface lifecycle", () => {
   });
 
   it("opens multiple extension surfaces and closes one in the middle", () => {
-    const ws = makeWorkspace({ name: "Multi Surface" });
+    const ws = makeChildWorkspace({ name: "Multi Surface" });
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
 
@@ -432,23 +443,30 @@ describe("Workflow: extension surface lifecycle", () => {
     expect((updated.surfaces[1] as ExtensionSurface).title).toBe("Note B");
   });
 
-  it("closing the last surface closes the workspace (matches pty-exit path)", () => {
-    // Closing the last surface in a workspace's only pane closes the
-    // whole workspace — same behavior as terminal-service.ts's
-    // pty-exit handler. App.svelte renders EmptySurface when the
-    // workspace list is empty.
-    const ws = makeWorkspace({ name: "Lonely" });
-    const otherWs = makeWorkspace({ name: "Other" });
+  it("closing the last surface keeps the workspace alive with a replacement terminal", () => {
+    // Closing the last surface in a workspace's only pane spawns a
+    // fresh terminal in place of the closed one — the workspace
+    // itself never gets deleted from under the user. Dashboards are
+    // the single-surface exception (covered in services.test.ts).
+    const ws = makeChildWorkspace({ name: "Lonely" });
+    const otherWs = makeChildWorkspace({ name: "Other" });
     workspaces.set([ws, otherWs]);
     activeWorkspaceIdx.set(0);
 
     const pane = get(activePane)!;
-    const surface = pane.surfaces[0]!;
-    closeSurfaceById(pane.id, surface.id);
+    const originalSurfaceId = pane.surfaces[0]!.id;
+    closeSurfaceById(pane.id, originalSurfaceId);
 
     const list = get(workspaces);
-    expect(list).toHaveLength(1);
-    expect(list[0]!.id).toBe(otherWs.id);
+    expect(list).toHaveLength(2);
+    expect(list[0]!.id).toBe(ws.id);
+    // Original surface is gone from the pane.
+    const lonely = list[0]!;
+    if (lonely.paneLayout.type === "pane") {
+      expect(
+        lonely.paneLayout.pane.surfaces.find((s) => s.id === originalSurfaceId),
+      ).toBeUndefined();
+    }
   });
 });
 
@@ -535,14 +553,14 @@ describe("Workflow: multi-workspace switching", () => {
     await splitPane(termPaneId, "horizontal");
 
     // Terminal workspace should now have 2 panes
-    expect(getAllPanes(get(activeWorkspace)!.splitRoot)).toHaveLength(2);
+    expect(getAllPanes(get(activeWorkspace)!.paneLayout)).toHaveLength(2);
 
     // Switch to Editor workspace — it should still have 1 pane
     switchWorkspace(0);
-    expect(getAllPanes(get(activeWorkspace)!.splitRoot)).toHaveLength(1);
+    expect(getAllPanes(get(activeWorkspace)!.paneLayout)).toHaveLength(1);
 
     // Switch back to Terminal — still has 2 panes
     switchWorkspace(1);
-    expect(getAllPanes(get(activeWorkspace)!.splitRoot)).toHaveLength(2);
+    expect(getAllPanes(get(activeWorkspace)!.paneLayout)).toHaveLength(2);
   });
 });

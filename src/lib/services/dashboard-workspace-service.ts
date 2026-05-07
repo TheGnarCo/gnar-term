@@ -1,7 +1,10 @@
 import { derived, get, type Readable } from "svelte/store";
 import type { Component } from "svelte";
 import { workspaces } from "../stores/workspace";
-import { createWorkspaceFromDef, switchWorkspace } from "./workspace-service";
+import {
+  createWorkspaceFromDef,
+  switchWorkspace,
+} from "./workspace-runtime-service";
 import { createRegistry } from "./create-registry";
 
 interface DashboardWorkspaceEntry {
@@ -51,7 +54,7 @@ export async function spawnOrNavigate(id: string): Promise<void> {
 
   const wsList = get(workspaces);
   const existingIdx = wsList.findIndex(
-    (w) => w.metadata?.dashboardWorkspaceId === id,
+    (w) => w.dashboardContributionId === id && w.rootWorkspaceId === undefined,
   );
 
   if (existingIdx >= 0) {
@@ -61,10 +64,8 @@ export async function spawnOrNavigate(id: string): Promise<void> {
 
   await createWorkspaceFromDef({
     name: entry.label,
-    metadata: {
-      isDashboard: true,
-      dashboardWorkspaceId: id,
-    },
+    isDashboard: true,
+    dashboardContributionId: id,
     layout: { pane: { surfaces: [] } },
   });
 }

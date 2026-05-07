@@ -5,6 +5,8 @@ import {
   activePane,
   activeSurface,
 } from "../stores/workspace";
+import type { Workspace } from "../types";
+import type { WorkspaceRef } from "../../extensions/api";
 import { theme } from "../stores/theme";
 import {
   reorderContext,
@@ -41,25 +43,41 @@ export function createStoreProjections(
   // use it.
   void extId;
 
+  function project(w: Workspace): WorkspaceRef {
+    const ref: WorkspaceRef = { id: w.id, name: w.name };
+    if (w.path !== undefined) ref.path = w.path;
+    if (w.color !== undefined) ref.color = w.color;
+    if (w.isGit !== undefined) ref.isGit = w.isGit;
+    if (w.rootWorkspaceId !== undefined)
+      ref.rootWorkspaceId = w.rootWorkspaceId;
+    const bw = w as Workspace & {
+      worktreePath?: string;
+      branch?: string;
+      baseBranch?: string;
+      repoPath?: string;
+    };
+    if (bw.worktreePath !== undefined) ref.worktreePath = bw.worktreePath;
+    if (bw.branch !== undefined) ref.branch = bw.branch;
+    if (bw.baseBranch !== undefined) ref.baseBranch = bw.baseBranch;
+    if (bw.repoPath !== undefined) ref.repoPath = bw.repoPath;
+    if (w.isDashboard !== undefined) ref.isDashboard = w.isDashboard;
+    if (w.dashboardContributionId !== undefined)
+      ref.dashboardContributionId = w.dashboardContributionId;
+    if (w.spawnedBy !== undefined) ref.spawnedBy = w.spawnedBy;
+    if (w.spawnedFromIssues !== undefined)
+      ref.spawnedFromIssues = w.spawnedFromIssues;
+    return ref;
+  }
+
   return {
     workspaces: {
       subscribe(fn: (value: unknown) => void) {
-        return workspaces.subscribe((ws) =>
-          fn(
-            ws.map((w) => ({
-              id: w.id,
-              name: w.name,
-              metadata: w.metadata,
-            })),
-          ),
-        );
+        return workspaces.subscribe((ws) => fn(ws.map(project)));
       },
     } as ExtensionAPI["workspaces"],
     activeWorkspace: {
       subscribe(fn: (value: unknown) => void) {
-        return activeWorkspace.subscribe((w) =>
-          fn(w ? { id: w.id, name: w.name, metadata: w.metadata } : null),
-        );
+        return activeWorkspace.subscribe((w) => fn(w ? project(w) : null));
       },
     } as ExtensionAPI["activeWorkspace"],
     activePane: {

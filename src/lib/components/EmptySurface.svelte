@@ -3,16 +3,16 @@
    * EmptySurface — shown in the terminal area when no workspace is open,
    * or when the current workspace's active pane has zero surfaces (the
    * user just closed the last one). Provides quick actions plus a
-   * launcher into existing projects and workspaces.
+   * launcher into existing Workspaces and Branches.
    *
    * Buttons are sourced from:
    *   - `workspaceActionStore` (core + extension non-sidebar actions
    *     whose `when` filter accepts an empty context)
    *   - `commandStore` entries registered with the ids listed in
-   *     `empty-surface-commands.ts` (e.g. workspace-groups:create-workspace-group)
+   *     `empty-surface-commands.ts` (e.g. workspaces:create-workspace)
    *
-   * The "Jump to existing" list pulls from `rootRowOrder` so projects +
-   * workspace rows render in the same order the sidebar shows them.
+   * The "Jump to existing" list pulls from `rootRowOrder` so Workspaces
+   * and Branches render in the same order the sidebar shows them.
    */
   import { get } from "svelte/store";
   import { theme } from "../stores/theme";
@@ -22,9 +22,22 @@
   import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
   import { rootRowOrder } from "../stores/root-row-order";
   import { rootRowRendererStore } from "../services/root-row-renderer-registry";
-  import { switchWorkspace } from "../services/workspace-service";
-  import { newSurface } from "../services/surface-service";
-  import { wsMeta } from "../services/service-helpers";
+  import { switchWorkspace } from "../services/workspace-runtime-service";
+  import {
+    newSurface,
+    openFileAsPreviewSplit,
+  } from "../services/surface-service";
+  import {
+    sessionLogsStore,
+    type SessionLogEntry,
+  } from "../services/session-log-service";
+
+  // "workspace" (default): full launcher with jump-rows.
+  // "pane": compact UI for a split-pane that just lost its last surface —
+  // a New Terminal button + Close Pane link, no jump-rows.
+  export let context: "workspace" | "pane" = "workspace";
+  export let paneId: string | undefined = undefined;
+  export let onClosePane: (() => void) | undefined = undefined;
 
   const iconSvgMap: Record<string, string> = {
     plus: `<line x1="8" y1="3" x2="8" y2="13" /><line x1="3" y1="8" x2="13" y2="8" />`,
@@ -66,7 +79,7 @@
     ),
   ];
 
-  // --- Existing workspaces / projects / dashboards ---
+  // --- Existing Workspaces / Branches / dashboards ---
   //
   // When the current empty pane lives inside a workspace, clicking its
   // own entry should spawn a terminal in the pane rather than switch
@@ -87,10 +100,10 @@
     switchWorkspace(idx);
   }
 
-  // Build a "jump list" modeled after the sidebar rootRowOrder. Project
-  // rows render as a header (click = switch to that project's first
-  // workspace); nested workspaces fan out below. Standalone workspaces
-  // render as leaf entries. Non-workspace/project rows (e.g. agent
+  // Build a "jump list" modeled after the sidebar rootRowOrder. Root
+  // Workspace rows render as a header (click = switch to that
+  // Workspace's first Branch); Branches fan out below. Standalone
+  // entries render as leaf rows. Non-Workspace rows (e.g. agent
   // dashboards) are rendered through their label resolver so they show
   // something, but lack an activation handler beyond switchWorkspace —
   // dashboards open as preview surfaces via their own row click, not
@@ -101,6 +114,7 @@
     idx: number;
     label: string;
     badge?: string;
+    sessionLogs?: SessionLogEntry[];
   }
 
   $: jumpRows = (() => {
@@ -108,35 +122,22 @@
     const out: JumpRow[] = [];
     const seen = new Set<string>();
     for (const row of $rootRowOrder) {
-      if (row.kind === "workspace") {
-        const idx = list.findIndex((w) => w.id === row.id);
-        if (idx < 0) continue;
-        const ws = list[idx]!;
-        out.push({
-          kind: "workspace",
-          workspaceId: ws.id,
-          idx,
-          label: ws.name,
-        });
-        seen.add(ws.id);
-        continue;
-      }
-      // Non-workspace row kinds (workspace-group, agent-orchestrator…).
-      // Use their renderer-contributed label as a visual header, then
-      // fan out any workspaces tagged with the row's groupId.
+      // Use the row renderer's label as a visual header, then fan out
+      // any workspaces tagged with the row's rootWorkspaceId.
       const rendererMeta = $rootRowRendererStore.find((r) => r.id === row.kind);
       const headerLabel = rendererMeta?.label?.(row.id);
-      if (headerLabel && row.kind === "workspace-group") {
+      if (headerLabel && row.kind === "workspace") {
         for (let i = 0; i < list.length; i++) {
           const ws = list[i]!;
           if (seen.has(ws.id)) continue;
-          if (wsMeta(ws).groupId === row.id) {
+          if (ws.rootWorkspaceId === row.id) {
             out.push({
               kind: "workspace",
               workspaceId: ws.id,
               idx: i,
               label: ws.name,
               badge: headerLabel,
+              sessionLogs: $sessionLogsStore[ws.id],
             });
             seen.add(ws.id);
           }
@@ -144,8 +145,8 @@
       }
     }
     // Fallback pass — any workspaces not yet rendered (e.g. tagged to
-    // a project whose root row isn't in the order). Keeps the launcher
-    // exhaustive rather than silently hiding entries.
+    // a Workspace whose root row isn't in the order). Keeps the
+    // launcher exhaustive rather than silently hiding entries.
     for (let i = 0; i < list.length; i++) {
       const ws = list[i]!;
       if (seen.has(ws.id)) continue;
@@ -154,6 +155,7 @@
         workspaceId: ws.id,
         idx: i,
         label: ws.name,
+        sessionLogs: $sessionLogsStore[ws.id],
       });
       seen.add(ws.id);
     }
@@ -161,8 +163,87 @@
   })();
 </script>
 
-<div
-  style="
+{#if context === "pane"}
+  <div
+    style="
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: {$theme.bg};
+      overflow: auto;
+    "
+  >
+    <div
+      style="
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        padding: 24px;
+      "
+    >
+      <div
+        style="
+          font-size: 13px;
+          color: {$theme.fgMuted};
+          text-align: center;
+        "
+      >
+        Empty pane.
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <button
+          type="button"
+          on:click={() => {
+            if (paneId) void newSurface(paneId);
+          }}
+          disabled={!paneId}
+          style="
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 6px 12px;
+            border: 1px solid {$theme.border};
+            background: {$theme.bgSurface};
+            color: {$theme.fg};
+            border-radius: 6px;
+            font-size: 13px; font-family: inherit;
+            cursor: {paneId ? 'pointer' : 'not-allowed'};
+          "
+        >
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            {@html iconSvgMap.plus}
+          </svg>
+          New Terminal
+        </button>
+        {#if onClosePane}
+          <button
+            type="button"
+            on:click={() => onClosePane?.()}
+            style="
+              background: none; border: none; padding: 4px 6px;
+              color: {$theme.fgDim};
+              font-size: 12px; font-family: inherit;
+              cursor: pointer; text-decoration: underline;
+            "
+          >
+            Close Pane
+          </button>
+        {/if}
+      </div>
+    </div>
+  </div>
+{:else}
+  <div
+    style="
     flex: 1;
     display: flex;
     align-items: center;
@@ -170,9 +251,9 @@
     background: {$theme.bg};
     overflow: auto;
   "
->
-  <div
-    style="
+  >
+    <div
+      style="
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -180,37 +261,37 @@
       padding: 32px;
       max-width: 520px;
     "
-  >
-    <div
-      style="
+    >
+      <div
+        style="
         font-size: 13px;
         color: {$theme.fgMuted};
         text-align: center;
         line-height: 1.5;
       "
-    >
-      {#if currentWs}
-        No surfaces in <strong style="color: {$theme.fg};"
-          >{currentWs.name}</strong
-        >. Start something new, or jump to another workspace.
-      {:else}
-        No workspaces are open. Create one to get started.
-      {/if}
-    </div>
-    {#if buttons.length > 0}
-      <div
-        style="
+      >
+        {#if currentWs}
+          No surfaces in <strong style="color: {$theme.fg};"
+            >{currentWs.name}</strong
+          >. Start something new, or jump to another workspace.
+        {:else}
+          No workspaces are open. Create one to get started.
+        {/if}
+      </div>
+      {#if buttons.length > 0}
+        <div
+          style="
           display: flex;
           flex-wrap: wrap;
           gap: 8px;
           justify-content: center;
         "
-      >
-        {#each buttons as btn (btn.label)}
-          <button
-            type="button"
-            on:click={btn.run}
-            style="
+        >
+          {#each buttons as btn (btn.label)}
+            <button
+              type="button"
+              on:click={btn.run}
+              style="
               display: inline-flex;
               align-items: center;
               gap: 6px;
@@ -224,89 +305,112 @@
               cursor: pointer;
               transition: background 0.1s, border-color 0.1s;
             "
-            on:mouseenter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.borderColor =
-                $theme.borderActive ?? $theme.accent;
-            }}
-            on:mouseleave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.borderColor =
-                $theme.border;
-            }}
-          >
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
+              on:mouseenter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.borderColor =
+                  $theme.borderActive ?? $theme.accent;
+              }}
+              on:mouseleave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.borderColor =
+                  $theme.border;
+              }}
             >
-              {@html iconSvgMap[btn.icon] ?? iconSvgMap.plus}
-            </svg>
-            {btn.label}
-          </button>
-        {/each}
-      </div>
-    {/if}
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                {@html iconSvgMap[btn.icon] ?? iconSvgMap.plus}
+              </svg>
+              {btn.label}
+            </button>
+          {/each}
+        </div>
+      {/if}
 
-    {#if jumpRows.length > 0}
-      <div
-        style="
+      {#if jumpRows.length > 0}
+        <div
+          style="
           display: flex; flex-direction: column; gap: 6px;
           width: 100%; max-width: 420px;
           margin-top: 4px;
         "
-      >
-        <div
-          style="
+        >
+          <div
+            style="
             font-size: 11px; font-weight: 600; text-transform: uppercase;
             letter-spacing: 0.5px; color: {$theme.fgDim}; text-align: left;
           "
-        >
-          Jump to workspace
-        </div>
-        {#each jumpRows as row (row.workspaceId)}
-          <button
-            type="button"
-            on:click={() => activateWorkspaceAt(row.idx)}
-            style="
+          >
+            Jump to Workspace
+          </div>
+          {#each jumpRows as row (row.workspaceId)}
+            <button
+              type="button"
+              on:click={() => activateWorkspaceAt(row.idx)}
+              style="
               display: flex; align-items: center; gap: 8px;
               padding: 8px 12px;
               border: 1px solid {row.idx === $activeWorkspaceIdx
-              ? ($theme.borderActive ?? $theme.accent)
-              : $theme.border};
+                ? ($theme.borderActive ?? $theme.accent)
+                : $theme.border};
               background: {row.idx === $activeWorkspaceIdx
-              ? $theme.bgHighlight
-              : $theme.bgSurface};
+                ? $theme.bgHighlight
+                : $theme.bgSurface};
               color: {$theme.fg};
               border-radius: 6px;
               font-size: 13px; font-family: inherit; cursor: pointer;
               text-align: left;
             "
-          >
-            <span style="flex: 1; min-width: 0;">{row.label}</span>
-            {#if row.badge}
-              <span
-                style="
+            >
+              <span style="flex: 1; min-width: 0;">{row.label}</span>
+              {#if row.badge}
+                <span
+                  style="
                   font-size: 10px; color: {$theme.fgDim};
                   padding: 1px 6px; border-radius: 8px;
                   background: {$theme.bgHighlight};
                   white-space: nowrap;
                 "
+                >
+                  {row.badge}
+                </span>
+              {/if}
+              {#if row.idx === $activeWorkspaceIdx}
+                <span style="font-size: 10px; color: {$theme.fgDim};">
+                  current — starts a new terminal
+                </span>
+              {/if}
+            </button>
+            {#if row.sessionLogs && row.sessionLogs.length > 0}
+              <div
+                style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: -2px; padding-left: 4px;"
               >
-                {row.badge}
-              </span>
+                {#each row.sessionLogs as log (log.logPath)}
+                  <button
+                    type="button"
+                    on:click={() => openFileAsPreviewSplit(log.logPath)}
+                    style="
+                    font-size: 11px; padding: 2px 8px;
+                    border: 1px solid {$theme.border};
+                    background: {$theme.bgSurface};
+                    color: {$theme.fgDim};
+                    border-radius: 4px; cursor: pointer;
+                    font-family: inherit;
+                  "
+                  >
+                    Session log · {new Date(log.timestamp).toLocaleTimeString()}
+                  </button>
+                {/each}
+              </div>
             {/if}
-            {#if row.idx === $activeWorkspaceIdx}
-              <span style="font-size: 10px; color: {$theme.fgDim};">
-                current — starts a new terminal
-              </span>
-            {/if}
-          </button>
-        {/each}
-      </div>
-    {/if}
+          {/each}
+        </div>
+      {/if}
+    </div>
   </div>
-</div>
+{/if}

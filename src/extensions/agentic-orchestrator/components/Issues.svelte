@@ -2,7 +2,7 @@
   /**
    * Issues — renders `gh issue list` output inside a markdown doc.
    * Scope derives from the enclosing DashboardHostContext:
-   *   - group host → group.path backs the default repo + spawn target
+   *   - workspace host → workspace.path backs the default repo + spawn target
    *   - global host → caller must set `repoPath`; otherwise shown as error
    *   - no host → form disabled
    *
@@ -61,7 +61,7 @@
    * When true, the per-row Spawn split-button + selection checkbox +
    * bulk toolbar are suppressed. The bot-icon "active workspace" link
    * is still shown so the Overview dashboard can hint at attribution.
-   * Used by the Group Overview Dashboard, where the issue list is a
+   * Used by the Workspace Overview Dashboard, where the issue list is a
    * passive browse panel and spawning lives on the Agent Dashboard.
    */
   export let displayOnly: boolean = false;
@@ -127,17 +127,17 @@
   /**
    * Subscribe to the workspaces store so the per-row affordance updates
    * live as agent workspaces are spawned / closed. Keyed lookup: issue
-   * number → first workspace whose `metadata.spawnedFromIssues` array
-   * includes that number.
+   * number → first workspace whose `spawnedFromIssues` array includes
+   * that number.
    */
   const workspacesStore = api.workspaces;
   $: handledIssues = (() => {
     const map = new Map<number, string>();
     for (const ws of $workspacesStore) {
-      const numbers = ws.metadata?.spawnedFromIssues;
+      const numbers = ws.spawnedFromIssues;
       if (!Array.isArray(numbers)) continue;
       for (const n of numbers) {
-        if (typeof n === "number" && !map.has(n)) map.set(n, ws.id);
+        if (!map.has(n)) map.set(n, ws.id);
       }
     }
     return map;
@@ -239,7 +239,9 @@
         repoPath: target.repoPath,
         branch: `agent/${agent}/${issue.number}-${branchSlug}`,
         spawnedBy: target.spawnedBy,
-        ...(target.groupId ? { groupId: target.groupId } : {}),
+        ...(target.rootWorkspaceId
+          ? { rootWorkspaceId: target.rootWorkspaceId }
+          : {}),
         spawnedFromIssues: [issue.number],
       });
       toggleIssueSelection(issue.number, false);
@@ -251,7 +253,7 @@
   }
 
   /**
-   * Spawn a separate worktree workspace per selected issue, in
+   * Spawn a separate branched workspace per selected issue, in
    * sequence. Sequential (not parallel) to avoid hammering git with
    * concurrent worktree creates and to keep error attribution sharp —
    * if one issue fails, later issues still spawn so the user gets
@@ -283,7 +285,9 @@
             repoPath: target.repoPath,
             branch: `agent/${agent}/${issue.number}-${branchSlug}`,
             spawnedBy: target.spawnedBy,
-            ...(target.groupId ? { groupId: target.groupId } : {}),
+            ...(target.rootWorkspaceId
+              ? { rootWorkspaceId: target.rootWorkspaceId }
+              : {}),
             spawnedFromIssues: [issue.number],
           });
         } catch (err) {
@@ -303,7 +307,7 @@
   }
 
   /**
-   * Spawn a single worktree workspace whose agent prompt enumerates
+   * Spawn a single branched workspace whose agent prompt enumerates
    * every selected issue. Stamps `spawnedFromIssues` with all numbers
    * so the bot-icon attribution lights up for each row, all pointing
    * at the same workspace.
@@ -351,7 +355,9 @@
         repoPath: target.repoPath,
         branch: `agent/${agent}/${branchSuffix}`,
         spawnedBy: target.spawnedBy,
-        ...(target.groupId ? { groupId: target.groupId } : {}),
+        ...(target.rootWorkspaceId
+          ? { rootWorkspaceId: target.rootWorkspaceId }
+          : {}),
         spawnedFromIssues: numbers,
       });
       clearSelection();

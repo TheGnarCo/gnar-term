@@ -2,10 +2,6 @@ import {
   registerCommand as registryRegisterCommand,
   runCommandById as registryRunCommandById,
 } from "./command-registry";
-import {
-  registerSidebarTab,
-  registerSidebarAction,
-} from "./sidebar-tab-registry";
 import { registerTitleBarButton as registryRegisterTitleBarButton } from "./titlebar-button-registry";
 import { registerSidebarSection } from "./sidebar-section-registry";
 import { registerSurfaceType as registryRegisterSurfaceType } from "./surface-type-registry";
@@ -35,6 +31,9 @@ import {
   registerDashboardWorkspaceType,
   spawnOrNavigate,
 } from "./dashboard-workspace-service";
+import { provisionAutoDashboardsForWorkspace } from "./workspace-service";
+import { waitRestored } from "../bootstrap/restore-workspaces";
+import { getWorkspaces } from "../stores/workspace";
 import { registerExtensionMcpTool } from "./mcp-server";
 import type {
   DashboardContributionInput,
@@ -50,9 +49,7 @@ export function createUIRegistrationAPI(
 ): Pick<
   ExtensionAPI,
   | "registerTitleBarButton"
-  | "registerSecondarySidebarTab"
-  | "registerSecondarySidebarAction"
-  | "registerPrimarySidebarSection"
+  | "registerSidebarSection"
   | "registerRootRowRenderer"
   | "appendRootRow"
   | "removeRootRow"
@@ -93,40 +90,7 @@ export function createUIRegistrationAPI(
       });
     },
 
-    registerSecondarySidebarTab(tabId: string, component: unknown) {
-      const declared = manifest.contributes?.secondarySidebarTabs?.find(
-        (t) => t.id === tabId,
-      );
-      registerSidebarTab({
-        id: `${extId}:${tabId}`,
-        label: declared?.label ?? tabId,
-        icon: declared?.icon,
-        component,
-        source: extId,
-      });
-    },
-
-    registerSecondarySidebarAction(
-      tabId: string,
-      actionId: string,
-      handler: () => void,
-    ) {
-      const declaredTab = manifest.contributes?.secondarySidebarTabs?.find(
-        (t) => t.id === tabId,
-      );
-      const declaredAction = declaredTab?.actions?.find(
-        (a) => a.id === actionId,
-      );
-      registerSidebarAction({
-        tabId: `${extId}:${tabId}`,
-        actionId,
-        title: declaredAction?.title,
-        handler,
-        source: extId,
-      });
-    },
-
-    registerPrimarySidebarSection(
+    registerSidebarSection(
       sectionId: string,
       component: unknown,
       options?: {
@@ -136,7 +100,7 @@ export function createUIRegistrationAPI(
         props?: Record<string, unknown>;
       },
     ) {
-      const declared = manifest.contributes?.primarySidebarSections?.find(
+      const declared = manifest.contributes?.sidebarSections?.find(
         (s) => s.id === sectionId,
       );
       const namespacedId = `${extId}:${sectionId}`;
@@ -149,7 +113,7 @@ export function createUIRegistrationAPI(
         showLabel: options?.showLabel,
         // Inject the host block id so sections that host inner drag-reorder
         // can publish a ReorderContext whose containerBlockId matches the
-        // actual namespaced block id rendered by PrimarySidebar.
+        // actual namespaced block id rendered by Sidebar.
         props: { ...(options?.props ?? {}), hostBlockId: namespacedId },
       });
     },
@@ -273,6 +237,19 @@ export function createUIRegistrationAPI(
         ...contribution,
         source: extId,
       });
+      // Auto-provision contributions back-fill onto every existing
+      // workspace once restore completes, so extensions activated after
+      // bootstrap (or whose contributions were unknown at workspace
+      // create time) still materialize their tile. Idempotent —
+      // workspaces already backed by this contribution are skipped.
+      if (contribution.autoProvision) {
+        void (async () => {
+          await waitRestored();
+          for (const ws of getWorkspaces()) {
+            await provisionAutoDashboardsForWorkspace(ws);
+          }
+        })();
+      }
     },
 
     registerPseudoWorkspace(pw: PseudoWorkspaceInput) {

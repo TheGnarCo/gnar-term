@@ -54,6 +54,20 @@ vi.mock("../lib/services/agent-detection-service", () => ({
   agentsStore: agentsStoreMock,
 }));
 
+const { interruptAgentMock, killAgentMock, sendKeysToAgentMock } = vi.hoisted(
+  () => ({
+    interruptAgentMock: vi.fn().mockResolvedValue(true),
+    killAgentMock: vi.fn().mockResolvedValue(true),
+    sendKeysToAgentMock: vi.fn().mockResolvedValue(true),
+  }),
+);
+
+vi.mock("../lib/services/agent-intervention-service", () => ({
+  interruptAgent: interruptAgentMock,
+  killAgent: killAgentMock,
+  sendKeysToAgent: sendKeysToAgentMock,
+}));
+
 import {
   dispatch,
   _getToolsForTest,
@@ -79,11 +93,6 @@ import {
   resetCommands,
 } from "../lib/services/command-registry";
 import {
-  registerSidebarTab,
-  resetSidebarTabs,
-  activeSidebarTabStore,
-} from "../lib/services/sidebar-tab-registry";
-import {
   registerWorkspaceAction,
   resetWorkspaceActions,
 } from "../lib/services/workspace-action-registry";
@@ -97,12 +106,15 @@ function rpc(method: string, params?: unknown, id: number = 1) {
 }
 
 /** Build a deterministic workspace fixture with a given id and a single pane. */
-function makeWorkspace(id: string, name = id): { ws: Workspace; pane: Pane } {
+function makeChildWorkspace(
+  id: string,
+  name = id,
+): { ws: Workspace; pane: Pane } {
   const pane: Pane = { id: `${id}-pane`, surfaces: [], activeSurfaceId: null };
   const ws: Workspace = {
     id,
     name,
-    splitRoot: { type: "pane", pane },
+    paneLayout: { type: "pane", pane },
     activePaneId: pane.id,
   };
   return { ws, pane };
@@ -133,8 +145,7 @@ describe("MCP server JSON-RPC", () => {
     const names = tools.map((t) => t.name).sort();
     expect(names).toEqual(
       [
-        "activate_sidebar_tab",
-        "add_dashboard_to_group",
+        "add_dashboard_to_workspace",
         "close_preview",
         "create_preview_file",
         "dispatch_tasks",
@@ -146,7 +157,9 @@ describe("MCP server JSON-RPC", () => {
         "get_status_for_workspace",
         "invoke_command",
         "invoke_context_menu_item",
+        "interrupt_agent",
         "invoke_workspace_action",
+        "kill_agent",
         "kill_session",
         "list_agents",
         "list_commands",
@@ -158,8 +171,8 @@ describe("MCP server JSON-RPC", () => {
         "list_open_previews",
         "list_dashboard_workspaces",
         "list_panes",
+        "list_sessions",
         "list_sidebar_sections",
-        "list_sidebar_tabs",
         "list_surface_types",
         "list_workspace_actions",
         "list_workspace_subtitles",
@@ -168,18 +181,20 @@ describe("MCP server JSON-RPC", () => {
         "poll_events",
         "read_file",
         "read_output",
-        "remove_dashboard_from_group",
+        "remove_dashboard_from_workspace",
         "remove_sidebar_section",
         "render_sidebar",
         "send_keys",
+        "send_keys_to_agent",
         "send_prompt",
+        "set_workspace_lock",
         "spawn_agent",
         "spawn_preview",
         "split_pane",
         "write_file",
       ].sort(),
     );
-    expect(names).toHaveLength(44);
+    expect(names).toHaveLength(47);
     for (const t of tools) {
       expect(t).toHaveProperty("inputSchema");
     }
@@ -248,8 +263,8 @@ describe("MCP server JSON-RPC", () => {
   });
 
   it("render_sidebar with an explicit workspace_id stores in that workspace", async () => {
-    const { ws: wsA } = makeWorkspace("ws-A");
-    const { ws: wsB } = makeWorkspace("ws-B");
+    const { ws: wsA } = makeChildWorkspace("ws-A");
+    const { ws: wsB } = makeChildWorkspace("ws-B");
     workspaces.set([wsA, wsB]);
     activeWorkspaceIdx.set(0); // user is looking at A
 
@@ -281,8 +296,8 @@ describe("MCP server JSON-RPC", () => {
   });
 
   it("render_sidebar uses the connection binding when no workspace_id is passed", async () => {
-    const { ws: wsA } = makeWorkspace("ws-A");
-    const { ws: wsB } = makeWorkspace("ws-B");
+    const { ws: wsA } = makeChildWorkspace("ws-A");
+    const { ws: wsB } = makeChildWorkspace("ws-B");
     workspaces.set([wsA, wsB]);
     activeWorkspaceIdx.set(0); // user looks at A
 
@@ -307,7 +322,7 @@ describe("MCP server JSON-RPC", () => {
   });
 
   it("render_sidebar errors clearly when unbound and no workspace_id passed", async () => {
-    const { ws: wsA } = makeWorkspace("ws-A");
+    const { ws: wsA } = makeChildWorkspace("ws-A");
     workspaces.set([wsA]);
     activeWorkspaceIdx.set(0); // there IS an active workspace, but agent is unbound
 
@@ -331,7 +346,7 @@ describe("MCP server JSON-RPC", () => {
   });
 
   it("remove_sidebar_section uses the binding workspace", async () => {
-    const { ws: wsA } = makeWorkspace("ws-A");
+    const { ws: wsA } = makeChildWorkspace("ws-A");
     workspaces.set([wsA]);
     activeWorkspaceIdx.set(0);
 
@@ -357,7 +372,7 @@ describe("MCP server JSON-RPC", () => {
   });
 
   it("poll_events returns the cursor and events array", async () => {
-    const { ws: wsA } = makeWorkspace("ws-A");
+    const { ws: wsA } = makeChildWorkspace("ws-A");
     workspaces.set([wsA]);
     activeWorkspaceIdx.set(0);
     const ctx = _testContext({ workspaceId: "ws-A" });
@@ -416,9 +431,79 @@ describe("MCP server JSON-RPC", () => {
     expect(result).toEqual({ agents: [] });
   });
 
+  it("interrupt_agent delegates to interruptAgent and returns ok: true", async () => {
+    interruptAgentMock.mockResolvedValueOnce(true);
+    const resp = await dispatch(
+      rpc("tools/call", {
+        name: "interrupt_agent",
+        arguments: { agent_id: "agent-1" },
+      }),
+    );
+    expect(interruptAgentMock).toHaveBeenCalledWith("agent-1");
+    expect((resp as any).result.structuredContent).toEqual({ ok: true });
+  });
+
+  it("interrupt_agent returns ok: false when agent not found", async () => {
+    interruptAgentMock.mockResolvedValueOnce(false);
+    const resp = await dispatch(
+      rpc("tools/call", {
+        name: "interrupt_agent",
+        arguments: { agent_id: "nope" },
+      }),
+    );
+    expect((resp as any).result.structuredContent).toEqual({ ok: false });
+  });
+
+  it("kill_agent delegates to killAgent and returns ok: true", async () => {
+    killAgentMock.mockResolvedValueOnce(true);
+    const resp = await dispatch(
+      rpc("tools/call", {
+        name: "kill_agent",
+        arguments: { agent_id: "agent-1" },
+      }),
+    );
+    expect(killAgentMock).toHaveBeenCalledWith("agent-1");
+    expect((resp as any).result.structuredContent).toEqual({ ok: true });
+  });
+
+  it("kill_agent returns ok: false when agent not found", async () => {
+    killAgentMock.mockResolvedValueOnce(false);
+    const resp = await dispatch(
+      rpc("tools/call", {
+        name: "kill_agent",
+        arguments: { agent_id: "nope" },
+      }),
+    );
+    expect((resp as any).result.structuredContent).toEqual({ ok: false });
+  });
+
+  it("send_keys_to_agent delegates to sendKeysToAgent and returns ok: true", async () => {
+    sendKeysToAgentMock.mockResolvedValueOnce(true);
+    const resp = await dispatch(
+      rpc("tools/call", {
+        name: "send_keys_to_agent",
+        arguments: { agent_id: "agent-1", keys: "hello\r" },
+      }),
+    );
+    expect(sendKeysToAgentMock).toHaveBeenCalledWith("agent-1", "hello\r");
+    expect((resp as any).result.structuredContent).toEqual({ ok: true });
+  });
+
+  it("send_keys_to_agent throws an error with agent_id when agent not found", async () => {
+    sendKeysToAgentMock.mockResolvedValueOnce(false);
+    const resp = await dispatch(
+      rpc("tools/call", {
+        name: "send_keys_to_agent",
+        arguments: { agent_id: "missing-agent", keys: "\x03" },
+      }),
+    );
+    expect((resp as any).error.message).toContain("missing-agent");
+    expect((resp as any).error.message).toContain("not found or has no PTY");
+  });
+
   it("split_pane creates a new pane in the target workspace and returns pane_id", async () => {
-    // makeWorkspace returns { ws, pane } — see the fixture helper at line ~99
-    const { ws, pane } = makeWorkspace("ws-split");
+    // makeChildWorkspace returns { ws, pane } — see the fixture helper at line ~99
+    const { ws, pane } = makeChildWorkspace("ws-split");
     workspaces.set([ws]);
     const ctx = _testContext({ paneId: pane.id, workspaceId: ws.id });
 
@@ -437,7 +522,7 @@ describe("MCP server JSON-RPC", () => {
   });
 
   it("split_pane throws when surface_type is preview but preview_path is missing", async () => {
-    const { ws, pane } = makeWorkspace("ws-split-err");
+    const { ws, pane } = makeChildWorkspace("ws-split-err");
     workspaces.set([ws]);
     const ctx = _testContext({ paneId: pane.id, workspaceId: ws.id });
 
@@ -456,7 +541,7 @@ describe("MCP server JSON-RPC", () => {
   });
 
   it("split_pane errors when workspace_id is unknown", async () => {
-    const { ws } = makeWorkspace("ws-split-known");
+    const { ws } = makeChildWorkspace("ws-split-known");
     workspaces.set([ws]);
     const ctx = _testContext({ workspaceId: ws.id });
 
@@ -474,7 +559,7 @@ describe("MCP server JSON-RPC", () => {
   });
 
   it("split_pane errors when pane_id is unknown", async () => {
-    const { ws } = makeWorkspace("ws-split-known2");
+    const { ws } = makeChildWorkspace("ws-split-known2");
     workspaces.set([ws]);
     const ctx = _testContext({ workspaceId: ws.id });
 
@@ -492,7 +577,7 @@ describe("MCP server JSON-RPC", () => {
   });
 
   it("split_pane with surface_type preview creates a new pane and opens a preview surface", async () => {
-    const { ws, pane } = makeWorkspace("ws-split-preview");
+    const { ws, pane } = makeChildWorkspace("ws-split-preview");
     workspaces.set([ws]);
     const ctx = _testContext({ paneId: pane.id, workspaceId: ws.id });
 
@@ -563,7 +648,7 @@ describe("MCP server JSON-RPC", () => {
   });
 
   it("list_workspaces wraps the list in a record (structuredContent must be an object)", async () => {
-    const { ws: wsA } = makeWorkspace("ws-A");
+    const { ws: wsA } = makeChildWorkspace("ws-A");
     workspaces.set([wsA]);
     activeWorkspaceIdx.set(0);
     const r = await dispatch(
@@ -577,7 +662,7 @@ describe("MCP server JSON-RPC", () => {
   });
 
   it("list_panes wraps the list in a record", async () => {
-    const { ws: wsA } = makeWorkspace("ws-A");
+    const { ws: wsA } = makeChildWorkspace("ws-A");
     workspaces.set([wsA]);
     activeWorkspaceIdx.set(0);
     const r = await dispatch(
@@ -600,10 +685,18 @@ describe("MCP server JSON-RPC", () => {
     expect(result).toEqual({ panes: [] });
   });
 
-  it("list_sessions is not a registered tool (superseded by list_agents)", async () => {
+  it("list_sessions returns the spawn_agent session registry (distinct from list_agents)", async () => {
     const tools = _getToolsForTest();
     const names = (tools as any[]).map((t) => t.name);
-    expect(names).not.toContain("list_sessions");
+    expect(names).toContain("list_sessions");
+    expect(names).toContain("list_agents");
+
+    // With no MCP-spawned sessions, the registry is empty even when
+    // native agents would show up via list_agents.
+    const r = await dispatch(
+      rpc("tools/call", { name: "list_sessions", arguments: {} }),
+    );
+    expect((r as any).result.structuredContent).toEqual({ sessions: [] });
   });
 
   it("get_active_workspace returns nullable fields when no workspace is open", async () => {
@@ -651,15 +744,15 @@ describe("resolveTarget — connection-binding resolution rules (the v1 bug fenc
   });
 
   it("rule 1: explicit pane_id wins, returns its current workspace", () => {
-    const { ws: wsA, pane: paneA } = makeWorkspace("ws-A");
-    const { ws: wsB } = makeWorkspace("ws-B");
+    const { ws: wsA, pane: paneA } = makeChildWorkspace("ws-A");
+    const { ws: wsB } = makeChildWorkspace("ws-B");
     workspaces.set([wsA, wsB]);
     activeWorkspaceIdx.set(1); // user looks at B (adversarial)
 
     // Bind the agent to A, but pass an explicit pane in B.
-    const { pane: paneB } = makeWorkspace("ws-B"); // separate fixture
+    const { pane: paneB } = makeChildWorkspace("ws-B"); // separate fixture
     // Replace wsB to contain a pane we can target.
-    wsB.splitRoot = { type: "pane", pane: paneB };
+    wsB.paneLayout = { type: "pane", pane: paneB };
     wsB.activePaneId = paneB.id;
     workspaces.set([wsA, wsB]);
 
@@ -671,7 +764,7 @@ describe("resolveTarget — connection-binding resolution rules (the v1 bug fenc
   });
 
   it("rule 1: explicit pane_id pointing at a closed pane errors (no fallback)", () => {
-    const { ws: wsA } = makeWorkspace("ws-A");
+    const { ws: wsA } = makeChildWorkspace("ws-A");
     workspaces.set([wsA]);
     activeWorkspaceIdx.set(0);
     const ctx = _testContext({ workspaceId: "ws-A" });
@@ -681,8 +774,8 @@ describe("resolveTarget — connection-binding resolution rules (the v1 bug fenc
   });
 
   it("rule 2: explicit workspace_id wins over binding", () => {
-    const { ws: wsA } = makeWorkspace("ws-A");
-    const { ws: wsB } = makeWorkspace("ws-B");
+    const { ws: wsA } = makeChildWorkspace("ws-A");
+    const { ws: wsB } = makeChildWorkspace("ws-B");
     workspaces.set([wsA, wsB]);
     activeWorkspaceIdx.set(0); // user looks at A
     const ctx = _testContext({ workspaceId: "ws-A" });
@@ -692,7 +785,7 @@ describe("resolveTarget — connection-binding resolution rules (the v1 bug fenc
   });
 
   it("rule 2: explicit but unknown workspace_id errors", () => {
-    const { ws: wsA } = makeWorkspace("ws-A");
+    const { ws: wsA } = makeChildWorkspace("ws-A");
     workspaces.set([wsA]);
     const ctx = _testContext({ workspaceId: "ws-A" });
     expect(() =>
@@ -701,8 +794,8 @@ describe("resolveTarget — connection-binding resolution rules (the v1 bug fenc
   });
 
   it("rule 3: binding pane wins when no args, ignores user focus on a different workspace", () => {
-    const { ws: wsA, pane: paneA } = makeWorkspace("ws-A");
-    const { ws: wsB } = makeWorkspace("ws-B");
+    const { ws: wsA, pane: paneA } = makeChildWorkspace("ws-A");
+    const { ws: wsB } = makeChildWorkspace("ws-B");
     workspaces.set([wsA, wsB]);
     activeWorkspaceIdx.set(1); // ADVERSARIAL: user looks at B
     const ctx = _testContext({ paneId: paneA.id, workspaceId: "ws-A" });
@@ -713,16 +806,16 @@ describe("resolveTarget — connection-binding resolution rules (the v1 bug fenc
   });
 
   it("rule 3 with cross-workspace move: pane_id is stable, workspace re-derived", () => {
-    const { ws: wsA, pane: paneA } = makeWorkspace("ws-A");
-    const { ws: wsB } = makeWorkspace("ws-B");
+    const { ws: wsA, pane: paneA } = makeChildWorkspace("ws-A");
+    const { ws: wsB } = makeChildWorkspace("ws-B");
     workspaces.set([wsA, wsB]);
 
-    // Move paneA into wsB by mutating splitRoot.
-    wsA.splitRoot = {
+    // Move paneA into wsB by mutating paneLayout.
+    wsA.paneLayout = {
       type: "pane",
       pane: { id: "wsA-empty", surfaces: [], activeSurfaceId: null },
     };
-    wsB.splitRoot = { type: "pane", pane: paneA };
+    wsB.paneLayout = { type: "pane", pane: paneA };
     workspaces.update((l) => [...l]);
 
     // Connection still bound to paneA (originally in ws-A). After the move the
@@ -734,7 +827,7 @@ describe("resolveTarget — connection-binding resolution rules (the v1 bug fenc
   });
 
   it("rule 4: when bound pane is closed, falls through to bound workspace", () => {
-    const { ws: wsA } = makeWorkspace("ws-A");
+    const { ws: wsA } = makeChildWorkspace("ws-A");
     workspaces.set([wsA]);
     activeWorkspaceIdx.set(0);
     const ctx = _testContext({ paneId: "closed-pane", workspaceId: "ws-A" });
@@ -745,7 +838,7 @@ describe("resolveTarget — connection-binding resolution rules (the v1 bug fenc
   });
 
   it("rule 5: unbound + no args = error (NEVER fall back to active workspace)", () => {
-    const { ws: wsA } = makeWorkspace("ws-A");
+    const { ws: wsA } = makeChildWorkspace("ws-A");
     workspaces.set([wsA]);
     activeWorkspaceIdx.set(0); // there IS an active workspace
     const ctx = _testContext(null);
@@ -756,8 +849,8 @@ describe("resolveTarget — connection-binding resolution rules (the v1 bug fenc
 
   it("THE V1 BUG FENCE: bound to W1, GUI focused on W2 → still resolves to W1", () => {
     // This is the exact bug shipped on 2026-04-16. Permanent regression test.
-    const { ws: w1 } = makeWorkspace("ws-1");
-    const { ws: w2 } = makeWorkspace("ws-2");
+    const { ws: w1 } = makeChildWorkspace("ws-1");
+    const { ws: w2 } = makeChildWorkspace("ws-2");
     workspaces.set([w1, w2]);
     activeWorkspaceIdx.set(1); // focus is W2
     const ctx = _testContext({ workspaceId: "ws-1" });
@@ -771,7 +864,7 @@ describe("resolveTarget — connection-binding resolution rules (the v1 bug fenc
     // the same binding pane. findParentSplit + DOM render become O(depth)
     // per spawn → O(N²) total → UI freeze. The original freeze we hit on
     // 2026-04-16. Regression test: resolveTarget must prefer lastSpawnedPaneId.
-    const { ws, pane: hostPane } = makeWorkspace("ws-host");
+    const { ws, pane: hostPane } = makeChildWorkspace("ws-host");
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
     const ctx = _testContext({ paneId: hostPane.id, workspaceId: "ws-host" });
@@ -782,7 +875,7 @@ describe("resolveTarget — connection-binding resolution rules (the v1 bug fenc
 
     // Simulate a successful spawn: push a new pane into the tree and record it.
     const newPane: Pane = { id: "new-1", surfaces: [], activeSurfaceId: null };
-    ws.splitRoot = {
+    ws.paneLayout = {
       type: "split",
       direction: "vertical",
       ratio: 0.5,
@@ -800,7 +893,7 @@ describe("resolveTarget — connection-binding resolution rules (the v1 bug fenc
   });
 
   it("lastSpawnedPaneId is ignored when the pane was closed (falls through to binding)", () => {
-    const { ws, pane: hostPane } = makeWorkspace("ws-host");
+    const { ws, pane: hostPane } = makeChildWorkspace("ws-host");
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);
     const ctx = _testContext({ paneId: hostPane.id, workspaceId: "ws-host" });
@@ -834,7 +927,7 @@ describe("MCP mirror tools — surface types", () => {
 
   it("open_surface rejects an unregistered surface type", async () => {
     const ctx = _testContext({ workspaceId: "ws-1" });
-    const { ws } = makeWorkspace("ws-1");
+    const { ws } = makeChildWorkspace("ws-1");
     workspaces.set([ws]);
     const resp = await dispatch(
       rpc("tools/call", {
@@ -854,7 +947,7 @@ describe("MCP mirror tools — surface types", () => {
       component: {},
       source: "test",
     });
-    const { ws } = makeWorkspace("ws-1");
+    const { ws } = makeChildWorkspace("ws-1");
     workspaces.set([ws]);
     const ctx = _testContext({ workspaceId: "ws-1" });
     const resp = await dispatch(
@@ -935,52 +1028,6 @@ describe("MCP mirror tools — commands", () => {
     );
     expect((resp as any).error.code).toBe(-32000);
     expect((resp as any).error.message).toMatch(/Unknown command/);
-  });
-});
-
-describe("MCP mirror tools — sidebar tabs", () => {
-  beforeEach(() => resetSidebarTabs());
-
-  it("list_sidebar_tabs returns registered tabs", async () => {
-    registerSidebarTab({
-      id: "files",
-      label: "Files",
-      component: {},
-      source: "file-browser",
-    });
-    const r = await dispatch(
-      rpc("tools/call", { name: "list_sidebar_tabs", arguments: {} }),
-    );
-    expect((r as any).result.structuredContent.tabs).toEqual([
-      { id: "files", label: "Files", source: "file-browser" },
-    ]);
-  });
-
-  it("activate_sidebar_tab updates the active tab store", async () => {
-    registerSidebarTab({
-      id: "changes",
-      label: "Changes",
-      component: {},
-      source: "diff-viewer",
-    });
-    const r = await dispatch(
-      rpc("tools/call", {
-        name: "activate_sidebar_tab",
-        arguments: { tab_id: "changes" },
-      }),
-    );
-    expect((r as any).result.structuredContent).toEqual({ ok: true });
-    expect(get(activeSidebarTabStore)).toBe("changes");
-  });
-
-  it("activate_sidebar_tab rejects unknown tab ids", async () => {
-    const resp = await dispatch(
-      rpc("tools/call", {
-        name: "activate_sidebar_tab",
-        arguments: { tab_id: "nope" },
-      }),
-    );
-    expect((resp as any).error.code).toBe(-32000);
   });
 });
 
@@ -1325,7 +1372,7 @@ describe("MCP mirror tools — status items", () => {
 
   it("get_status_for_workspace returns items for the resolved workspace", async () => {
     const mod = await import("../lib/services/status-registry");
-    const { ws } = makeWorkspace("ws-1");
+    const { ws } = makeChildWorkspace("ws-1");
     workspaces.set([ws]);
     mod.setStatusItem("git", "ws-1", "branch", {
       category: "git",
@@ -1356,8 +1403,8 @@ describe("MCP mirror tools — status items", () => {
 
   it("get_status_for_workspace honors explicit workspace_id", async () => {
     const mod = await import("../lib/services/status-registry");
-    const { ws: a } = makeWorkspace("ws-a");
-    const { ws: b } = makeWorkspace("ws-b");
+    const { ws: a } = makeChildWorkspace("ws-a");
+    const { ws: b } = makeChildWorkspace("ws-b");
     workspaces.set([a, b]);
     mod.setStatusItem("git", "ws-b", "branch", {
       category: "git",
@@ -1387,8 +1434,8 @@ describe("tool metadata", () => {
     }
   });
 
-  it("tool count matches spec (44)", () => {
-    expect(_getToolsForTest()).toHaveLength(44);
+  it("tool count matches spec (47)", () => {
+    expect(_getToolsForTest()).toHaveLength(47);
   });
 });
 
@@ -1411,7 +1458,7 @@ describe("MCP — spawn_agent worktree flag", () => {
     });
     // Bind to an existing workspace so resolveTarget for repoPath fallback
     // wouldn't fire (we provide repoPath explicitly here).
-    const { ws } = makeWorkspace("ws-host");
+    const { ws } = makeChildWorkspace("ws-host");
     workspaces.set([ws]);
     const ctx = _testContext({ workspaceId: "ws-host" });
 
@@ -1487,7 +1534,7 @@ describe("MCP — spawn_agent worktree flag", () => {
     const ws: Workspace = {
       id: "ws-host",
       name: "host",
-      splitRoot: { type: "pane", pane },
+      paneLayout: { type: "pane", pane },
       activePaneId: pane.id,
     };
     workspaces.set([ws]);

@@ -30,7 +30,6 @@
  *   | ----------------------- | -------------------------------------------- |
  *   | surface-type-registry   | list_surface_types, open_surface             |
  *   | command-registry        | list_commands, invoke_command                |
- *   | sidebar-tab-registry    | list_sidebar_tabs, activate_sidebar_tab      |
  *   | workspace-action-reg…   | list_workspace_actions, invoke_workspace_…   |
  *   | context-menu-item-reg…  | list_context_menu_items, invoke_context_…   |
  *
@@ -104,7 +103,7 @@ const _mcpStatus = writable<McpStatus>("pending");
 export const mcpStatus = { subscribe: _mcpStatus.subscribe };
 
 type AgentType = "claude-code" | "codex" | "aider" | "custom";
-type SessionStatus = "starting" | "exited";
+type SessionStatus = "starting" | "running" | "exited";
 
 interface McpSession {
   session_id: string;
@@ -198,7 +197,7 @@ function findPaneById(
   paneId: string,
 ): { workspace: Workspace; pane: Pane } | null {
   for (const ws of get(workspaces)) {
-    for (const pane of getAllPanes(ws.splitRoot)) {
+    for (const pane of getAllPanes(ws.paneLayout)) {
       if (pane.id === paneId) return { workspace: ws, pane };
     }
   }
@@ -297,7 +296,7 @@ function resolveTarget(
 /** Pick a host pane to split off when the caller didn't supply one. Prefers
  *  the workspace's active pane; falls back to the first pane in the tree. */
 function pickHostPane(workspace: Workspace): Pane {
-  const all = getAllPanes(workspace.splitRoot);
+  const all = getAllPanes(workspace.paneLayout);
   if (workspace.activePaneId) {
     const active = all.find((p) => p.id === workspace.activePaneId);
     if (active) return active;
@@ -305,7 +304,7 @@ function pickHostPane(workspace: Workspace): Pane {
   if (all.length > 0) return all[0]!;
   // Workspace exists but has no panes (shouldn't happen in practice; create one).
   const newPane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
-  workspace.splitRoot = { type: "pane", pane: newPane };
+  workspace.paneLayout = { type: "pane", pane: newPane };
   workspaces.update((l) => [...l]);
   return newPane;
 }
@@ -327,12 +326,12 @@ function splitPaneInWorkspace(
     ratio: 0.5,
   };
   if (
-    workspace.splitRoot.type === "pane" &&
-    workspace.splitRoot.pane.id === hostPane.id
+    workspace.paneLayout.type === "pane" &&
+    workspace.paneLayout.pane.id === hostPane.id
   ) {
-    workspace.splitRoot = newSplit;
+    workspace.paneLayout = newSplit;
   } else {
-    const parentInfo = findParentSplit(workspace.splitRoot, hostPane.id);
+    const parentInfo = findParentSplit(workspace.paneLayout, hostPane.id);
     if (parentInfo && parentInfo.parent.type === "split") {
       parentInfo.parent.children[parentInfo.index] = newSplit;
     }
@@ -360,7 +359,7 @@ async function getPtyCwd(ptyId: number): Promise<string> {
 function removeSurfaceFromPane(paneId: string, surfaceId: string): void {
   workspaces.update((list) => {
     for (const ws of list) {
-      for (const pane of getAllPanes(ws.splitRoot)) {
+      for (const pane of getAllPanes(ws.paneLayout)) {
         if (pane.id !== paneId) continue;
         const idx = pane.surfaces.findIndex((s) => s.id === surfaceId);
         if (idx < 0) continue;
@@ -473,7 +472,7 @@ export function unregisterMcpToolsBySource(source: string): void {
 registerTool({
   name: "spawn_agent",
   description:
-    "Spawn a new gnar-term pane running an AI coding agent (claude-code, codex, aider) or a custom command. Targets the agent's host workspace by default (per connection binding); pass workspace_id/pane_id to override. Pass `worktree` to instead create a fresh worktree workspace and spawn the agent there (auto-resolves branch / worktree path; optionally tags the workspace under a dashboard).",
+    "Spawn a new gnar-term pane running an AI coding agent (claude-code, codex, aider) or a custom command. Targets the agent's host workspace by default (per connection binding); pass workspace_id/pane_id to override. Pass `worktree` to instead create a fresh branched workspace and spawn the agent there (auto-resolves branch / worktree path; optionally tags the workspace under a dashboard).",
   inputSchema: {
     type: "object",
     properties: {
@@ -493,7 +492,7 @@ registerTool({
       worktree: {
         type: "object",
         description:
-          "When set, spawn into a freshly-created worktree workspace instead of splitting the host pane.",
+          "When set, spawn into a freshly-created branched workspace instead of splitting the host pane.",
         properties: {
           branch: {
             type: "string",
@@ -536,7 +535,7 @@ registerTool({
       };
     };
 
-    // --- Worktree path: spawn into a brand-new worktree workspace.
+    // --- Worktree path: spawn into a brand-new branched workspace.
     if (p.worktree) {
       // Resolve repoPath from arg, else from the binding workspace's first
       // terminal cwd.
@@ -544,7 +543,7 @@ registerTool({
       if (!repoPath) {
         try {
           const target = resolveTarget(p, ctx);
-          for (const pane of getAllPanes(target.workspace.splitRoot)) {
+          for (const pane of getAllPanes(target.workspace.paneLayout)) {
             for (const s of pane.surfaces) {
               if (isTerminalSurface(s) && s.cwd) {
                 repoPath = s.cwd;
@@ -587,6 +586,11 @@ registerTool({
     }
 
     const target = resolveTarget(p, ctx);
+    if (target.workspace.locked === true) {
+      throw new Error(
+        `workspace "${target.workspace.id}" is locked — agents cannot be spawned into it`,
+      );
+    }
     const hostPane = target.hostPane ?? pickHostPane(target.workspace);
     const newPane = splitPaneInWorkspace(
       target.workspace,
@@ -636,6 +640,19 @@ registerTool({
       type: "session.statusChanged",
       sessionId: session.session_id,
       status: "starting",
+    });
+
+    // Flip status from "starting" → "running" on the agent's first PTY
+    // output so list_sessions / get_session_info can distinguish "spawned
+    // but no output yet" from "actively rendering."
+    onFirstPtyOutput(ptyId, () => {
+      if (session.status !== "starting") return;
+      session.status = "running";
+      pushEvent({
+        type: "session.statusChanged",
+        sessionId: session.session_id,
+        status: "running",
+      });
     });
 
     if (p.task) {
@@ -809,6 +826,27 @@ registerTool({
       status: "exited",
     });
     return { ok: true };
+  },
+});
+
+registerTool({
+  name: "list_sessions",
+  description:
+    "List all MCP-tracked sessions (the spawn_agent registry, not native agents). Each entry contains session_id, name, agent, pid, status (starting | running | exited), cwd, createdAt, pane_id, workspace_id. For native agents started by the user, use list_agents.",
+  inputSchema: { type: "object", properties: {} },
+  handler: () => {
+    const list = Array.from(sessions.values()).map((s) => ({
+      session_id: s.session_id,
+      name: s.name,
+      agent: s.agent,
+      pid: s.pid,
+      status: s.status,
+      cwd: s.cwd,
+      createdAt: s.createdAt,
+      pane_id: s.paneId,
+      workspace_id: findPaneById(s.paneId)?.workspace.id ?? null,
+    }));
+    return { sessions: list };
   },
 });
 
@@ -1355,8 +1393,8 @@ const UI_MUTATING_TOOLS = new Set([
   "spawn_preview",
   "create_preview_file",
   "close_preview",
-  "add_dashboard_to_group",
-  "remove_dashboard_from_group",
+  "add_dashboard_to_workspace",
+  "remove_dashboard_from_workspace",
 ]);
 
 export async function dispatch(

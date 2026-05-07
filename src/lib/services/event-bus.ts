@@ -8,12 +8,7 @@
 // --- Event types ---
 
 export type AppEvent =
-  | {
-      type: "workspace:created";
-      id: string;
-      name: string;
-      metadata?: Record<string, unknown>;
-    }
+  | { type: "workspace:created"; id: string; name: string }
   | { type: "workspace:activated"; id: string; previousId: string | null }
   | { type: "workspace:closed"; id: string }
   | { type: "workspace:renamed"; id: string; oldName: string; newName: string }
@@ -69,7 +64,9 @@ export type AppEvent =
       surfaceId: string;
       workspaceId: string;
       agentName: string;
-    };
+    }
+  | { type: "agent:interrupted"; agentId: string; agentName: string }
+  | { type: "agent:killed"; agentId: string; agentName: string };
 
 export type AppEventType = AppEvent["type"];
 

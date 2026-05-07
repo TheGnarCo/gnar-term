@@ -7,6 +7,7 @@
     activateExtension,
     deactivateExtension,
   } from "../services/extension-loader";
+  import { applyFontFamily } from "../terminal-service";
   import {
     installExtensionFromPath,
     uninstallExtension,
@@ -54,7 +55,6 @@
   let currentTheme = "";
   let fontSize = 14;
   let fontFamily = "";
-  let opacity = 1.0;
   let scrollback = 10000;
   let shell = "";
   let availableFonts: string[] = [];
@@ -65,7 +65,6 @@
     currentTheme = cfg.theme || "github-dark";
     fontSize = cfg.fontSize || 14;
     fontFamily = cfg.fontFamily || "";
-    opacity = cfg.opacity ?? 1.0;
     scrollback = cfg.scrollback ?? 10000;
     shell = cfg.shell ?? "";
     fontLoadError = "";
@@ -143,11 +142,6 @@
     dirty = true;
   }
 
-  function handleOpacityChange(value: number) {
-    opacity = value;
-    dirty = true;
-  }
-
   function handleScrollbackChange(value: number) {
     scrollback = value;
     dirty = true;
@@ -164,10 +158,10 @@
       theme: currentTheme,
       fontSize,
       fontFamily,
-      opacity,
       scrollback,
       shell: shell || undefined,
     });
+    applyFontFamily();
 
     const cfg = getConfig();
     const extensions = { ...cfg.extensions };
@@ -382,7 +376,6 @@
           {currentTheme}
           {fontSize}
           {fontFamily}
-          {opacity}
           {scrollback}
           {shell}
           {availableFonts}
@@ -390,7 +383,6 @@
           onThemeChange={handleThemeChange}
           onFontSizeChange={handleFontSizeChange}
           onFontFamilyChange={handleFontFamilyChange}
-          onOpacityChange={handleOpacityChange}
           onScrollbackChange={handleScrollbackChange}
           onShellChange={handleShellChange}
         />

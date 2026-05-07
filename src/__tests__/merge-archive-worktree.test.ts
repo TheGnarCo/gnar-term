@@ -73,11 +73,12 @@ import {
   getWorktreeEntries,
 } from "../lib/services/worktree-service";
 import { eventBus } from "../lib/services/event-bus";
-import type { WorktreeWorkspaceEntry } from "../lib/config";
+import { workspaces } from "../lib/stores/workspace";
+import type { WorktreeWorkspace } from "../lib/config";
 
 function makeEntry(
-  overrides: Partial<WorktreeWorkspaceEntry> = {},
-): WorktreeWorkspaceEntry {
+  overrides: Partial<WorktreeWorkspace> = {},
+): WorktreeWorkspace {
   return {
     worktreePath: overrides.worktreePath ?? "/repos/myrepo-feat-x",
     branch: overrides.branch ?? "feat-x",
@@ -302,7 +303,20 @@ describe("Merge & Archive Worktree (core service)", () => {
     const entry = makeEntry();
     _seedWorktreeEntries([entry]);
 
-    handleWorkspaceCreated("ws-99", { worktreePath: entry.worktreePath });
+    workspaces.set([
+      {
+        id: "ws-99",
+        name: "ws-99",
+        paneLayout: {
+          type: "pane",
+          pane: { id: "p", surfaces: [], activeSurfaceId: null },
+        },
+        activePaneId: "p",
+        worktreePath: entry.worktreePath,
+      } as unknown as import("../lib/types").Workspace,
+    ]);
+
+    handleWorkspaceCreated("ws-99");
 
     const entries = getWorktreeEntries();
     expect(entries).toHaveLength(1);
@@ -312,7 +326,20 @@ describe("Merge & Archive Worktree (core service)", () => {
   it("workspace:created handler does not modify entries without matching worktreePath", () => {
     _seedWorktreeEntries([makeEntry()]);
 
-    handleWorkspaceCreated("ws-100", { worktreePath: "/some/other/path" });
+    workspaces.set([
+      {
+        id: "ws-100",
+        name: "ws-100",
+        paneLayout: {
+          type: "pane",
+          pane: { id: "p", surfaces: [], activeSurfaceId: null },
+        },
+        activePaneId: "p",
+        worktreePath: "/some/other/path",
+      } as unknown as import("../lib/types").Workspace,
+    ]);
+
+    handleWorkspaceCreated("ws-100");
 
     const entries = getWorktreeEntries();
     expect(entries[0].workspaceId).toBeUndefined();

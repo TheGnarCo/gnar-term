@@ -3,28 +3,30 @@
  * body (real dashboard workspaces + pseudo-workspaces) so embedded
  * widgets derive their scope from a single shape.
  *
- * Real dashboard workspaces expose their own `workspace.metadata` via
- * this context. The Global Agentic Dashboard pseudo-workspace provides
- * a synthetic context with `metadata = { isGlobalAgenticDashboard: true }`.
- * Widgets (`gnar:agent-list`, `gnar:kanban`, `gnar:task-spawner`) read
- * from this context via `getDashboardHost()` and never need props
- * threaded through markdown.
+ * Real dashboard workspaces project their structural fields (e.g.
+ * `{ rootWorkspaceId }`) into this context. The Global Agentic
+ * Dashboard pseudo-workspace provides a synthetic context with
+ * `metadata = { isGlobalAgenticDashboard: true }`. Widgets
+ * (`gnar:agent-list`, `gnar:kanban`, `gnar:task-spawner`) read from
+ * this context via `getDashboardHost()` and never need props threaded
+ * through markdown.
  *
  * Scope derivation inside widgets:
  *   - `metadata.isGlobalAgenticDashboard === true` → { kind: "global" }
- *   - `metadata.groupId` present                   → { kind: "group", groupId }
- *   - Otherwise                                     → inert / error
+ *   - `metadata.rootWorkspaceId` present           → { kind: "workspace", rootWorkspaceId }
+ *   - Otherwise                                    → inert / error
  */
 import { getContext, setContext } from "svelte";
-import type { WorkspaceMetadata } from "../types";
 
 export interface DashboardHostContext {
   /**
-   * Metadata describing the host: the real workspace.metadata for an
-   * actual dashboard workspace, or the synthetic metadata the
-   * pseudo-workspace registry carried for a virtual host.
+   * Metadata describing the host. For a real dashboard workspace, callers
+   * pass a projection of the workspace's structural fields (e.g.
+   * `{ rootWorkspaceId }`); for a pseudo-workspace, callers pass the
+   * synthetic shape from `PseudoWorkspaceInput.metadata` (e.g.
+   * `{ isGlobalAgenticDashboard: true }`).
    */
-  metadata: WorkspaceMetadata;
+  metadata: Record<string, unknown>;
 }
 
 /** Svelte context key. Scoped string to avoid collisions. */
@@ -54,7 +56,7 @@ export function getDashboardHost(): DashboardHostContext | null {
 
 export type DashboardScope =
   | { kind: "global" }
-  | { kind: "group"; groupId: string }
+  | { kind: "workspace"; rootWorkspaceId: string }
   | { kind: "none" };
 
 /**
@@ -63,8 +65,8 @@ export type DashboardScope =
  * consistent across widget implementations.
  *
  * Returns `{ kind: "none" }` when neither `isGlobalAgenticDashboard`
- * nor a string `groupId` is present — callers should treat that as
- * "host has no scope" (typically render empty).
+ * nor a string `rootWorkspaceId` is present — callers should treat that
+ * as "host has no scope" (typically render empty).
  */
 export function deriveDashboardScope(
   host: DashboardHostContext | null,
@@ -74,9 +76,10 @@ export function deriveDashboardScope(
   if (md.isGlobalAgenticDashboard === true) {
     return { kind: "global" };
   }
-  const groupId = md.groupId;
-  if (typeof groupId === "string" && groupId.length > 0) {
-    return { kind: "group", groupId };
+  const rootWorkspaceId =
+    typeof md.rootWorkspaceId === "string" ? md.rootWorkspaceId : undefined;
+  if (typeof rootWorkspaceId === "string" && rootWorkspaceId.length > 0) {
+    return { kind: "workspace", rootWorkspaceId };
   }
   return { kind: "none" };
 }

@@ -71,14 +71,14 @@ export interface AgentPattern {
 }
 
 export type TrackerMode = "osc" | "title-only";
-export type HarnessStatus = "running" | "waiting" | "idle" | "active";
+export type HarnessStatus = "running" | "waiting" | "idle" | "active" | "done";
 
 // --- Defaults ---
 
 const DEFAULT_PATTERNS: AgentPattern[] = [
   { name: "Claude Code", titlePatterns: ["claude"], oscDetectable: true },
-  { name: "Codex", titlePatterns: ["codex"], oscDetectable: false },
-  { name: "Aider", titlePatterns: ["aider"], oscDetectable: false },
+  { name: "Codex", titlePatterns: ["codex"], oscDetectable: true },
+  { name: "Aider", titlePatterns: ["aider"], oscDetectable: true },
   { name: "Cursor", titlePatterns: ["cursor"], oscDetectable: false },
   {
     name: "GitHub Copilot",
@@ -94,6 +94,13 @@ const AGENT_STATUS_SOURCE = "_agent";
 // (title) deliberately excluded — every title ping used to pin Claude in
 // "waiting" and kill the idle timer.
 const NOTIFICATION_OSC_RE = /\x1b\](?:9|99|777);/;
+
+// Alternate-screen mode toggles. TUI harnesses (Claude Code, Codex, etc.)
+// enter the alt screen on launch and leave it on exit. Watching the exit
+// sequence gives a reliable detach signal even when the surrounding shell
+// doesn't re-emit an OSC title after the harness quits.
+const ALT_SCREEN_EXIT_RE = /\x1b\[\?1049l/;
+const ALT_SCREEN_ENTER_RE = /\x1b\[\?1049h/;
 
 // --- Reactive registry ---
 
@@ -113,6 +120,16 @@ function generateAgentId(): string {
 
 export function getAgents(): DetectedAgent[] {
   return _agents.slice();
+}
+
+export function getAgentByAgentId(agentId: string): DetectedAgent | undefined {
+  return _agents.find((a) => a.agentId === agentId);
+}
+
+export function getAgentBySurfaceId(
+  surfaceId: string,
+): DetectedAgent | undefined {
+  return _agents.find((a) => a.surfaceId === surfaceId);
 }
 
 // --- Pattern matching ---
@@ -172,7 +189,7 @@ function loadIdleTimeoutMs(): number {
 // --- Status tracker ---
 
 const RUNNING_TITLE_PATTERNS = ["thinking", "working"];
-const IDLE_TITLE_PATTERNS = ["ready", "done"];
+const DONE_TITLE_PATTERNS = ["ready", "done"];
 
 // How long a non-matching title must persist before we detach the agent.
 // Prevents momentary title flickers (e.g. Claude cycling through internal
@@ -230,12 +247,12 @@ function createStatusTracker(
       if (matchesAny(title, RUNNING_TITLE_PATTERNS)) {
         setStatus(mode === "osc" ? "running" : "active");
         resetIdleTimer();
-      } else if (matchesAny(title, IDLE_TITLE_PATTERNS)) {
+      } else if (matchesAny(title, DONE_TITLE_PATTERNS)) {
         if (idleTimer !== undefined) {
           clearTimeout(idleTimer);
           idleTimer = undefined;
         }
-        setStatus("idle");
+        setStatus("done");
       }
     },
     destroy() {
@@ -298,7 +315,9 @@ function publishStatus(
             ? "success"
             : status === "waiting"
               ? "warning"
-              : "muted",
+              : status === "done"
+                ? "muted"
+                : "muted",
         metadata: { surfaceId: tracked.surfaceId },
       });
     }
@@ -332,7 +351,7 @@ function allTerminalSurfaces(): Array<{
   const all = get(workspaces);
   const out: Array<{ id: string; title: string; workspaceId: string }> = [];
   for (const ws of all) {
-    for (const pane of getAllPanes(ws.splitRoot)) {
+    for (const pane of getAllPanes(ws.paneLayout)) {
       for (const surface of pane.surfaces) {
         if (isTerminalSurface(surface)) {
           out.push({
@@ -427,17 +446,29 @@ function detachAgent(tracked: TrackedSurface): void {
   _agents = _agents.filter((a) => a.agentId !== tracked.agentId);
   syncStore();
 
-  if (tracked.preAgentTitle) {
-    const all = get(workspaces);
-    for (const ws of all) {
-      for (const pane of getAllPanes(ws.splitRoot)) {
-        for (const surface of pane.surfaces) {
-          if (surface.id === tracked.surfaceId && isTerminalSurface(surface)) {
+  // Restore the surface title when the agent detaches. A user-set
+  // `userDefinedTitle` always wins over the captured `preAgentTitle` —
+  // if the user renamed the surface during the agent run we re-apply
+  // their explicit name even if there was no preAgentTitle stamped at
+  // attach time.
+  const all = get(workspaces);
+  let restored = false;
+  for (const ws of all) {
+    for (const pane of getAllPanes(ws.paneLayout)) {
+      for (const surface of pane.surfaces) {
+        if (surface.id === tracked.surfaceId && isTerminalSurface(surface)) {
+          if (surface.userDefinedTitle) {
+            surface.title = surface.userDefinedTitle;
+            restored = true;
+          } else if (tracked.preAgentTitle) {
             surface.title = tracked.preAgentTitle;
+            restored = true;
           }
         }
       }
     }
+  }
+  if (restored) {
     workspaces.update((l) => [...l]);
   }
 
@@ -535,6 +566,27 @@ export function initAgentDetection(): void {
           } else {
             tracked.tracker.onOutput();
           }
+          // OSC-detectable harnesses (Claude Code, Codex, …) live in the
+          // alternate screen. The shell often doesn't re-emit an OSC title
+          // after the harness quits, so the title-mismatch detach path is
+          // unreliable. Watching the alt-screen exit sequence gives a
+          // strong "harness ended" signal independent of the shell. Entry
+          // back into the alt screen cancels a pending detach so that
+          // brief mid-session escapes (e.g. a pager) don't drop the agent.
+          if (tracked.agentPattern?.oscDetectable && tracked.agentId) {
+            if (ALT_SCREEN_ENTER_RE.test(probe) && tracked.detachTimer) {
+              clearTimeout(tracked.detachTimer);
+              tracked.detachTimer = null;
+            } else if (
+              ALT_SCREEN_EXIT_RE.test(probe) &&
+              tracked.detachTimer === null
+            ) {
+              tracked.detachTimer = setTimeout(() => {
+                tracked.detachTimer = null;
+                detachAgent(tracked);
+              }, TITLE_DETACH_DEBOUNCE_MS);
+            }
+          }
         } else {
           // OSC-detectable agents (e.g. Claude Code) are identified by PTY
           // title changes only — matching raw output causes false positives
@@ -613,7 +665,18 @@ export function initAgentDetection(): void {
       }
       tracked.tracker?.onTitleChange(event.newTitle);
     } else if (!match && tracked.agentId) {
-      if (tracked.detachTimer === null) {
+      // OSC-detectable agents (Claude Code, Codex, Aider) re-title to
+      // the active task as they work — e.g. Claude's title becomes
+      // "Strategic opportunity assessment for Vellum" with no
+      // "claude" substring left. The authoritative "agent stopped"
+      // signal for these is alt-screen exit; a title that no longer
+      // matches just means the agent is busy. Capture the new title
+      // for the running/done heuristic and stop there. Title-only
+      // agents (e.g. Cursor) still detach on mismatch — title is
+      // their only signal.
+      if (tracked.agentPattern?.oscDetectable) {
+        tracked.tracker?.onTitleChange(event.newTitle);
+      } else if (tracked.detachTimer === null) {
         tracked.detachTimer = setTimeout(() => {
           tracked.detachTimer = null;
           detachAgent(tracked);

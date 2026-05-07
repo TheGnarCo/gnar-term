@@ -11,8 +11,7 @@
    *   - Settings — color picker for the sidebar row + the configured
    *     markdown path indicator.
    */
-  import { onDestroy, onMount } from "svelte";
-  import { invoke } from "@tauri-apps/api/core";
+  import { getContext, onDestroy, onMount } from "svelte";
   import { setDashboardHost } from "../../../lib/contexts/dashboard-host";
   import {
     registerPreviewSurface,
@@ -23,12 +22,13 @@
     type PreviewResult,
   } from "../../../lib/services/preview-service";
   import { getConfig, saveConfig, configStore } from "../../../lib/config";
+  import { EXTENSION_API_KEY, type ExtensionAPI } from "../../api";
   import { showConfirmPrompt } from "../../../lib/stores/ui";
   import { theme } from "../../../lib/stores/theme";
   import {
-    GROUP_COLOR_SLOTS,
-    resolveGroupColor,
-    type GroupColorSlot,
+    WORKSPACE_COLOR_SLOTS,
+    resolveWorkspaceColor,
+    type WorkspaceColorSlot,
   } from "../../../lib/theme-data";
 
   const DEFAULT_TEMPLATE = `# Agents
@@ -47,6 +47,8 @@ title: Active Agents
   const hostMetadata = { isGlobalAgenticDashboard: true };
   const surfaceId = `pseudo.agentic.global:${Math.random().toString(36).slice(2, 8)}`;
 
+  const api = getContext<ExtensionAPI>(EXTENSION_API_KEY);
+
   setDashboardHost({ metadata: hostMetadata });
 
   let container: HTMLElement;
@@ -61,25 +63,29 @@ title: Active Agents
     $configStore.pseudoWorkspaceColors?.[PSEUDO_ID] ?? "purple";
 
   async function resolveMarkdownPath(): Promise<string> {
-    const configured = getConfig().agenticGlobal?.markdownPath?.trim();
+    const configured = api
+      .getSetting<string>("globalAgentsMarkdownPath")
+      ?.trim();
     if (configured) return configured;
-    const home = await invoke<string>("get_home").catch(() => "");
-    const root = home ? `${home}/.config/gnar-term` : ".config/gnar-term";
+    const home = await api.invoke<string>("get_home").catch(() => "");
+    const root = home ? `${home}/.gnar-term` : ".gnar-term";
     return `${root}/global-agents.md`;
   }
 
   async function ensureMarkdownPath(): Promise<string> {
     const path = await resolveMarkdownPath();
-    const exists = await invoke<boolean>("file_exists", { path }).catch(
-      () => false,
-    );
+    const exists = await api
+      .invoke<boolean>("file_exists", { path })
+      .catch(() => false);
     if (!exists) {
       const dir = path.replace(/\/[^/]+$/, "");
-      await invoke("ensure_dir", { path: dir }).catch(() => {});
-      await invoke("write_file", {
-        path,
-        content: DEFAULT_TEMPLATE,
-      }).catch(() => {});
+      await api.invoke("ensure_dir", { path: dir }).catch(() => {});
+      await api
+        .invoke("write_file", {
+          path,
+          content: DEFAULT_TEMPLATE,
+        })
+        .catch(() => {});
     }
     return path;
   }
@@ -104,7 +110,7 @@ title: Active Agents
   onDestroy(() => {
     result?.dispose?.();
     if (result?.watchId && result.watchId > 0) {
-      invoke("unwatch_file", { watchId: result.watchId }).catch(() => {});
+      api.invoke("unwatch_file", { watchId: result.watchId }).catch(() => {});
     }
     unregisterPreviewSurface(surfaceId);
   });
@@ -137,8 +143,8 @@ title: Active Agents
   }
 
   async function handleColorKeydown(event: KeyboardEvent): Promise<void> {
-    const slots = GROUP_COLOR_SLOTS;
-    const idx = slots.indexOf(currentColorSlot as GroupColorSlot);
+    const slots = WORKSPACE_COLOR_SLOTS;
+    const idx = slots.indexOf(currentColorSlot as WorkspaceColorSlot);
     let nextIdx: number | null = null;
     if (event.key === "ArrowRight") {
       event.preventDefault();
@@ -169,7 +175,7 @@ title: Active Agents
     regenerating = true;
     regenerateError = "";
     try {
-      await invoke("write_file", {
+      await api.invoke("write_file", {
         path: markdownPathResolved,
         content: DEFAULT_TEMPLATE,
       });
@@ -280,8 +286,8 @@ title: Active Agents
           on:keydown={handleColorKeydown}
           style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px;"
         >
-          {#each GROUP_COLOR_SLOTS as slot (slot)}
-            {@const hex = resolveGroupColor(slot, $theme)}
+          {#each WORKSPACE_COLOR_SLOTS as slot (slot)}
+            {@const hex = resolveWorkspaceColor(slot, $theme)}
             {@const isSelected = slot === currentColorSlot}
             <button
               type="button"

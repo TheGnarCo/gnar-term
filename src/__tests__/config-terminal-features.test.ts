@@ -191,12 +191,6 @@ describe("copy-on-select wires onSelectionChange to clipboard write", () => {
         dispose = vi.fn();
       },
     }));
-    vi.doMock("@xterm/addon-web-links", () => ({
-      WebLinksAddon: class {
-        activate = vi.fn();
-        dispose = vi.fn();
-      },
-    }));
     vi.doMock("@xterm/addon-search", () => ({
       SearchAddon: class {
         activate = vi.fn();
@@ -280,12 +274,6 @@ describe("copy-on-select wires onSelectionChange to clipboard write", () => {
     vi.doMock("@xterm/addon-fit", () => ({
       FitAddon: class {
         fit = vi.fn();
-        activate = vi.fn();
-        dispose = vi.fn();
-      },
-    }));
-    vi.doMock("@xterm/addon-web-links", () => ({
-      WebLinksAddon: class {
         activate = vi.fn();
         dispose = vi.fn();
       },

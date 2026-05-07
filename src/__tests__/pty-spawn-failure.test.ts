@@ -61,12 +61,6 @@ vi.mock("@xterm/addon-webgl", () => ({
     onContextLoss = vi.fn();
   },
 }));
-vi.mock("@xterm/addon-web-links", () => ({
-  WebLinksAddon: class {
-    activate = vi.fn();
-    dispose = vi.fn();
-  },
-}));
 vi.mock("@xterm/addon-search", () => ({
   SearchAddon: class {
     activate = vi.fn();
@@ -118,7 +112,7 @@ function setupWorkspace(): { ws: Workspace; pane: Pane } {
   const ws: Workspace = {
     id: uid(),
     name: "Test WS",
-    splitRoot: { type: "pane", pane },
+    paneLayout: { type: "pane", pane },
     activePaneId: pane.id,
   };
   workspaces.set([ws]);
@@ -194,14 +188,15 @@ describe("PTY spawn failure: surface cleanup via TerminalSurface contract", () =
 
     closeSurfaceById(loc!.pane.id, surface.id);
 
-    // Surface is gone from the pane
-    expect(
-      get(workspaces)[0]
-        ? get(workspaces)[0]!.splitRoot.type === "pane" &&
-            (get(workspaces)[0]!.splitRoot as { type: "pane"; pane: Pane }).pane
-              .surfaces.length
-        : 0,
-    ).toBe(0);
+    // The dead surface is gone from the pane. A replacement terminal
+    // may be spawned afterward (closing the last surface keeps the
+    // workspace alive), so assert by id instead of count.
+    const ws0 = get(workspaces)[0]!;
+    if (ws0.paneLayout.type === "pane") {
+      expect(
+        ws0.paneLayout.pane.surfaces.find((s) => s.id === surface.id),
+      ).toBeUndefined();
+    }
   });
 
   it("findSurfaceLocation returns null for a surface not in any workspace", async () => {

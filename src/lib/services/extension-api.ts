@@ -8,20 +8,11 @@
  */
 import { get } from "svelte/store";
 import { eventBus, type AppEventType } from "./event-bus";
-import {
-  setSidebarTabBadge,
-  clearSidebarTabBadge,
-  activateSidebarTab as activateSidebarTabFn,
-} from "./sidebar-tab-registry";
 import { surfaceTypeStore } from "./surface-type-registry";
 import {
   getContextMenuItemsForFile,
   getContextMenuItemsForDir,
 } from "./context-menu-item-registry";
-import {
-  claimWorkspace as registryClaimWorkspace,
-  unclaimWorkspace as registryUnclaimWorkspace,
-} from "./claimed-workspace-registry";
 import { dashboardTabStore } from "./dashboard-tab-registry";
 import {
   childRowContributorStore,
@@ -49,7 +40,6 @@ import {
   openFileAsPreviewSplit,
 } from "./surface-service";
 import {
-  secondarySidebarVisible,
   pendingAction,
   showInputPrompt as coreShowInputPrompt,
   showFormPrompt as coreShowFormPrompt,
@@ -86,6 +76,10 @@ import { reorderContext, anyReorderActive, contextMenu } from "../stores/ui";
 import { getActiveCwd, lookupSurfaceWorkspaceId } from "./service-helpers";
 import { workspaces } from "../stores/workspace";
 import { getAllSurfaces, isTerminalSurface } from "../types";
+import { createWorkspaceFromDef as coreCreateWorkspaceFromDef } from "./workspace-runtime-service";
+import { waitRestored } from "../bootstrap/restore-workspaces";
+import type { WorkspaceTemplate } from "../config";
+import type { WorkspaceDefInput } from "../../extensions/api";
 import type { ExtensionManifest, ExtensionAPI } from "../extension-types";
 import type { AppEvent } from "./event-bus";
 import {
@@ -209,14 +203,6 @@ export function createExtensionAPI(
       return null;
     },
 
-    claimWorkspace(workspaceId: string) {
-      registryClaimWorkspace(workspaceId, extId);
-    },
-
-    unclaimWorkspace(workspaceId: string) {
-      registryUnclaimWorkspace(workspaceId);
-    },
-
     openFile(path: string) {
       const items = getContextMenuItemsForFile(path);
       void items[0]?.handler(path);
@@ -288,19 +274,17 @@ export function createExtensionAPI(
         ? coreShowFormPrompt(title, fields, options)
         : coreShowFormPrompt(title, fields);
     },
-    toggleSecondarySidebar() {
-      secondarySidebarVisible.update((v) => !v);
+    createWorkspaceFromDef(def: WorkspaceDefInput): Promise<string> {
+      return coreCreateWorkspaceFromDef(def as WorkspaceTemplate);
     },
-
-    createWorkspace(
-      name: string,
-      cwd: string,
-      options?: {
-        env?: Record<string, string>;
-        metadata?: Record<string, unknown>;
-      },
-    ) {
-      pendingAction.set({ type: "create-workspace", name, cwd, options });
+    onWorkspacesRestored(callback: () => void): () => void {
+      let cancelled = false;
+      void waitRestored().then(() => {
+        if (!cancelled) callback();
+      });
+      return () => {
+        cancelled = true;
+      };
     },
     openInEditor(filePath: string) {
       pendingAction.set({ type: "open-in-editor", filePath });
@@ -358,18 +342,6 @@ export function createExtensionAPI(
       return out;
     },
 
-    badgeSidebarTab(tabId: string, hasBadge: boolean) {
-      const namespacedId = `${extId}:${tabId}`;
-      if (hasBadge) {
-        setSidebarTabBadge(namespacedId, true);
-      } else {
-        clearSidebarTabBadge(namespacedId);
-      }
-    },
-    activateSidebarTab(tabId: string) {
-      const namespacedId = `${extId}:${tabId}`;
-      activateSidebarTabFn(namespacedId);
-    },
     setWorkspaceIndicator(workspaceId: string, status: string | null) {
       if (status === null) {
         clearStatusItem("_agent", workspaceId, "default");

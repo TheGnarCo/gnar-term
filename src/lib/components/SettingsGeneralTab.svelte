@@ -4,7 +4,6 @@
   export let currentTheme: string;
   export let fontSize: number;
   export let fontFamily: string;
-  export let opacity: number;
   export let scrollback: number;
   export let shell: string;
   export let availableFonts: string[];
@@ -13,7 +12,6 @@
   export let onThemeChange: (value: string) => void;
   export let onFontSizeChange: (value: number) => void;
   export let onFontFamilyChange: (value: string) => void;
-  export let onOpacityChange: (value: number) => void;
   export let onScrollbackChange: (value: number) => void;
   export let onShellChange: (value: string) => void;
 </script>
@@ -94,23 +92,6 @@
           >{fontLoadError}</span
         >
       {/if}
-    </label>
-
-    <!-- Opacity -->
-    <label style="display: flex; flex-direction: column; gap: 4px;">
-      <span style="font-size: 11px; color: {$theme.fgDim}; font-weight: 500;"
-        >Opacity ({Math.round(opacity * 100)}%)</span
-      >
-      <input
-        data-field="opacity"
-        type="range"
-        min="0.3"
-        max="1"
-        step="0.05"
-        value={opacity}
-        on:input={(e) => onOpacityChange(parseFloat(e.currentTarget.value))}
-        style="width: 200px;"
-      />
     </label>
 
     <!-- Scrollback lines -->

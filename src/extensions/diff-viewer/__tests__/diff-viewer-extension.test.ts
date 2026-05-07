@@ -60,21 +60,6 @@ describe("Diff Viewer included extension", () => {
     ]);
   });
 
-  it("manifest declares settings (diffMode, contextLines, ignoreWhitespace)", () => {
-    const settings = diffViewerManifest.contributes?.settings;
-    expect(settings).toBeDefined();
-    const fields = settings!.fields;
-    expect(fields.diffMode).toBeDefined();
-    expect(fields.diffMode.type).toBe("select");
-    expect(fields.diffMode.default).toBe("unified");
-    expect(fields.contextLines).toBeDefined();
-    expect(fields.contextLines.type).toBe("number");
-    expect(fields.contextLines.default).toBe(3);
-    expect(fields.ignoreWhitespace).toBeDefined();
-    expect(fields.ignoreWhitespace.type).toBe("boolean");
-    expect(fields.ignoreWhitespace.default).toBe(false);
-  });
-
   // --- Registration tests ---
 
   it("registers the surface type on activation", async () => {

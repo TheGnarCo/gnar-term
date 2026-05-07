@@ -7,6 +7,7 @@ import {
   activePane,
   activeSurface,
 } from "../stores/workspace";
+import { activeWorkspaceId } from "../stores/workspace";
 import { renamingSurfaceId } from "../stores/ui";
 import { createTerminalSurface } from "../terminal-service";
 import {
@@ -20,7 +21,7 @@ import {
   type PreviewSurface,
 } from "../types";
 import { removePane, splitPaneEmpty } from "./pane-service";
-import { closeWorkspace, schedulePersist } from "./workspace-service";
+import { closeWorkspace, schedulePersist } from "./workspace-runtime-service";
 import { findPreviewSurfaceByPath } from "./preview-surface-registry";
 import { safeFocus, getCwdForSurface } from "./service-helpers";
 import { eventBus } from "./event-bus";
@@ -28,7 +29,7 @@ import { eventBus } from "./event-bus";
 export function selectSurface(paneId: string, surfaceId: string) {
   const ws = get(activeWorkspace);
   if (!ws) return;
-  const pane = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
+  const pane = getAllPanes(ws.paneLayout).find((p) => p.id === paneId);
   if (!pane) return;
   pane.activeSurfaceId = surfaceId;
   const s = pane.surfaces.find((s) => s.id === surfaceId);
@@ -48,7 +49,7 @@ export function closeExtensionSurfaces(surfaceTypeIds: string[]): void {
   const wsList = get(workspaces);
 
   for (const ws of wsList) {
-    const panes = getAllPanes(ws.splitRoot);
+    const panes = getAllPanes(ws.paneLayout);
     for (const pane of panes) {
       // Collect indices in reverse order to preserve splice correctness
       for (let i = pane.surfaces.length - 1; i >= 0; i--) {
@@ -66,13 +67,36 @@ export function closeSurfaceById(paneId: string, surfaceId: string) {
   // workspace, and the App.svelte callsite passes a paneId we know lives
   // in the active workspace, so an exhaustive scan covers both.
   for (const ws of get(workspaces)) {
-    const pane = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
+    const pane = getAllPanes(ws.paneLayout).find((p) => p.id === paneId);
     if (!pane) continue;
     const idx = pane.surfaces.findIndex((s) => s.id === surfaceId);
     if (idx < 0) return;
     removeSurface(ws, pane, idx);
     return;
   }
+}
+
+async function spawnReplacementTerminal(
+  ws: Workspace,
+  pane: Pane,
+): Promise<void> {
+  // Inherit from the workspace itself: branches use worktreePath,
+  // root workspaces use path. Falls back to the shell's default cwd
+  // when neither is set (e.g. ad-hoc workspaces created without a
+  // path).
+  const cwd =
+    (ws as { worktreePath?: string }).worktreePath ?? ws.path ?? undefined;
+  const surface = await createTerminalSurface(pane, cwd);
+  pane.activeSurfaceId = surface.id;
+  workspaces.update((l) => [...l]);
+  eventBus.emit({
+    type: "surface:created",
+    id: surface.id,
+    paneId: pane.id,
+    kind: "terminal",
+  });
+  void safeFocus(surface);
+  schedulePersist();
 }
 
 function removeSurface(ws: Workspace, pane: Pane, surfaceIdx: number) {
@@ -90,19 +114,27 @@ function removeSurface(ws: Workspace, pane: Pane, surfaceIdx: number) {
   eventBus.emit({ type: "surface:closed", id: surfaceId, paneId });
 
   if (pane.surfaces.length === 0) {
-    // If this workspace has another pane (split view), collapse by
-    // removing the now-empty pane. Otherwise the last surface in the
-    // workspace just closed — close the whole workspace so the user
-    // isn't left staring at an empty-state shell. Matches the
-    // pty-exit path in terminal-service.ts.
-    const paneCount = getAllPanes(ws.splitRoot).length;
+    // Branch by what to do when the last surface in this pane goes:
+    //   * split view (paneCount > 1) → collapse the empty pane.
+    //   * dashboard workspace → close the workspace, since dashboards
+    //     are single-surface and replacing with a terminal would
+    //     change their nature.
+    //   * otherwise → spawn a fresh terminal in the same pane so the
+    //     workspace itself never gets deleted by tab-close. Cwd
+    //     inherits from the workspace (worktreePath / path).
+    const paneCount = getAllPanes(ws.paneLayout).length;
     if (paneCount > 1) {
       removePane(ws, pane);
       workspaces.update((l) => [...l]);
-    } else {
+    } else if (ws.isDashboard === true) {
       pane.resizeObserver?.disconnect();
       const wsIdx = get(workspaces).indexOf(ws);
       if (wsIdx >= 0) closeWorkspace(wsIdx);
+      return;
+    } else {
+      pane.activeSurfaceId = null;
+      workspaces.update((l) => [...l]);
+      void spawnReplacementTerminal(ws, pane);
       return;
     }
   } else {
@@ -118,7 +150,7 @@ function removeSurface(ws: Workspace, pane: Pane, surfaceIdx: number) {
 export async function newSurface(paneId: string) {
   const ws = get(activeWorkspace);
   if (!ws) return;
-  const pane = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
+  const pane = getAllPanes(ws.paneLayout).find((p) => p.id === paneId);
   if (!pane) return;
   const sourceSurface = pane.surfaces.find(
     (s) => s.id === pane.activeSurfaceId,
@@ -139,7 +171,7 @@ export async function newSurface(paneId: string) {
 export async function newSurfaceWithCommand(paneId: string, command: string) {
   const ws = get(activeWorkspace);
   if (!ws) return;
-  const pane = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
+  const pane = getAllPanes(ws.paneLayout).find((p) => p.id === paneId);
   if (!pane) return;
   const sourceSurface = pane.surfaces.find(
     (s) => s.id === pane.activeSurfaceId,
@@ -230,7 +262,7 @@ export function openExtensionSurfaceInPaneById(
   // the agent's target workspace may not be the user's focused one).
   let pane: Pane | undefined;
   for (const ws of get(workspaces)) {
-    const found = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
+    const found = getAllPanes(ws.paneLayout).find((p) => p.id === paneId);
     if (found) {
       pane = found;
       break;
@@ -260,7 +292,7 @@ export function findSurfaceLocation(
 ): { workspace: Workspace; pane: Pane; surface: Surface } | null {
   const wsList = get(workspaces);
   for (const ws of wsList) {
-    for (const pane of getAllPanes(ws.splitRoot)) {
+    for (const pane of getAllPanes(ws.paneLayout)) {
       const surface = pane.surfaces.find((s) => s.id === surfaceId);
       if (surface) return { workspace: ws, pane, surface };
     }
@@ -295,7 +327,7 @@ export function focusSurfaceById(surfaceId: string): void {
   // Switch workspace if needed
   const currentIdx = get(activeWorkspaceIdx);
   if (currentIdx !== targetIdx) {
-    activeWorkspaceIdx.set(targetIdx);
+    activeWorkspaceId.set(targetWs.id);
     eventBus.emit({
       type: "workspace:activated",
       id: targetWs.id,
@@ -311,6 +343,10 @@ export function focusSurfaceById(surfaceId: string): void {
 }
 
 export function newSurfaceFromSidebar() {
+  // Per ADR-004: Dashboard Workspaces are "single" surfaces — no tab
+  // strip, no ⌘T. Tab Workspaces (root + Branched) own their tabs.
+  const ws = get(activeWorkspace);
+  if (ws?.isDashboard === true) return;
   const pane = get(activePane);
   if (pane) void newSurface(pane.id);
 }
@@ -333,7 +369,7 @@ export function createPreviewSurfaceInPane(
   let owningWs: Workspace | undefined;
   let pane: Pane | undefined;
   for (const ws of get(workspaces)) {
-    const found = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
+    const found = getAllPanes(ws.paneLayout).find((p) => p.id === paneId);
     if (found) {
       owningWs = ws;
       pane = found;
@@ -400,10 +436,18 @@ export function renameActiveSurface(): void {
 export function renameSurface(surfaceId: string, title: string): void {
   workspaces.update((wsList) => {
     for (const ws of wsList) {
-      for (const pane of getAllPanes(ws.splitRoot)) {
+      for (const pane of getAllPanes(ws.paneLayout)) {
         const s = pane.surfaces.find((s) => s.id === surfaceId);
         if (s) {
           s.title = title;
+          // Stamp the user's explicit choice on terminal surfaces so OSC
+          // 0/2 (title) and OSC 7 (cwd) escape sequences and agent
+          // detach restore won't clobber it. Non-terminal surfaces
+          // (preview, extension) don't receive escape-sequence titles,
+          // so the field is meaningless for them.
+          if (isTerminalSurface(s)) {
+            s.userDefinedTitle = title;
+          }
           return [...wsList];
         }
       }

@@ -1,14 +1,14 @@
 <script lang="ts">
   /**
    * DiffPrStatusLine — compact diff + PR statusline for container row
-   * banners (workspace groups). Renders two optional rows beneath
+   * banners (workspaces). Renders two optional rows beneath
    * PathStatusLine:
    *
    *   1. Diff row — [diff icon] M3 A1 D1   (only when working tree is dirty)
    *   2. PR row   — [PR icon] #42 my title  (only when a PR exists for HEAD)
    *
    * Self-contained polling: diff at 30s, PR at 60s. Keyed on `id` so
-   * switching projects reseeds both loops immediately.
+   * switching Workspaces reseeds both loops immediately.
    */
   import { onDestroy, getContext } from "svelte";
   import { invoke } from "@tauri-apps/api/core";

@@ -8,10 +8,14 @@
   import { renamingSurfaceId } from "../stores/ui";
   import { renameSurface } from "../services/surface-service";
   import { shortcutHintsActive } from "../stores/shortcut-hints";
+  import BotIcon from "../icons/BotIcon.svelte";
+  import CloseButton from "./CloseButton.svelte";
+  import ThinkingDots from "./ThinkingDots.svelte";
 
   export let surface: Surface;
   export let index: number;
   export let isActive: boolean;
+  export let paneIsActive: boolean = false;
   export let onSelect: () => void;
   export let onClose: () => void;
   /** Pane that owns this tab — needed to identify drop targets. */
@@ -23,9 +27,9 @@
   /** Optional agent status label ("running", "waiting", etc). */
   export let agentStatus: string | null = null;
   $: isWaiting = agentStatus === "waiting";
+  $: isThinking = agentStatus === "running" || agentStatus === "active";
 
   let hovered = false;
-  let closeHovered = false;
   let nameEl: HTMLSpanElement | null = null;
   let _renaming = false;
 
@@ -106,6 +110,9 @@
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
       onSelect();
+    } else if (e.key === "F2") {
+      e.preventDefault();
+      renamingSurfaceId.set(surface.id);
     }
   }
 </script>
@@ -126,7 +133,11 @@
     : hovered
       ? $theme.bgHighlight
       : 'transparent'};
-    border-bottom: 2px solid {isActive ? $theme.accent : 'transparent'};
+    border-bottom: 3px solid {isActive
+    ? paneIsActive
+      ? $theme.accent
+      : $theme.border
+    : 'transparent'};
     border-radius: 4px 4px 0 0; white-space: nowrap;
     display: flex; align-items: center; gap: 4px;
   "
@@ -139,35 +150,24 @@
   }}
 >
   {#if agentDotColor}
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="10"
-      height="10"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke={agentDotColor}
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      style="flex-shrink: 0;"
-      aria-hidden="true"
-    >
-      <path d="M12 8V4H8" />
-      <rect width="16" height="12" x="4" y="8" rx="2" />
-      <path d="M2 14h2" />
-      <path d="M20 14h2" />
-      <path d="M15 13v2" />
-      <path d="M9 13v2" />
-    </svg>
-    <span
-      role="img"
-      aria-label={agentStatus ?? "agent"}
-      class:pulse={isWaiting}
-      style="
-        width: {isWaiting ? 8 : 7}px; height: {isWaiting ? 8 : 7}px;
-        border-radius: 50%; background: {agentDotColor}; flex-shrink: 0;
-      "
-    ></span>
+    <BotIcon size={10} color={agentDotColor} />
+    {#if isThinking}
+      <ThinkingDots
+        color={agentDotColor}
+        size={4}
+        label={agentStatus ?? "agent"}
+      />
+    {:else}
+      <span
+        role="img"
+        aria-label={agentStatus ?? "agent"}
+        class:pulse={isWaiting}
+        style="
+          width: {isWaiting ? 8 : 7}px; height: {isWaiting ? 8 : 7}px;
+          border-radius: 50%; background: {agentDotColor}; flex-shrink: 0;
+        "
+      ></span>
+    {/if}
   {:else if surface.hasUnread && !isActive}
     <span
       aria-label="Unread activity"
@@ -189,25 +189,12 @@
         ? `${surface.title || "Preview"} (MD Preview)`
         : surface.title || `Shell ${index + 1}`}{/if}
   </span>
-  <button
-    aria-label="Close tab"
-    style="
-      background: none; border: none; padding: {$shortcutHintsActive
-      ? '0 3px'
-      : '0'};
-      font: inherit; cursor: pointer; margin-left: 4px;
-      color: {closeHovered ? $theme.danger : $theme.fgDim};
-      font-size: {$shortcutHintsActive ? '16px' : '13px'};
-      visibility: {isActive || hovered || $shortcutHintsActive
-      ? 'visible'
-      : 'hidden'};
-      transition: font-size 0.1s, padding 0.1s;
-      line-height: 1;
-    "
-    on:click|stopPropagation={onClose}
-    on:mouseenter={() => (closeHovered = true)}
-    on:mouseleave={() => (closeHovered = false)}>×</button
-  >
+  <CloseButton
+    size="tab"
+    label="Close tab"
+    visible={isActive || hovered || $shortcutHintsActive}
+    on:click={onClose}
+  />
 </div>
 
 <style>

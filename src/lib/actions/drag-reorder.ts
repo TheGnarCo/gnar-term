@@ -90,7 +90,7 @@ export function createDragReorder(
 
     // Gather visible items in THIS drop zone, scoped to the specific
     // container the drag started in. Using the source's captured
-    // container (not a global querySelector) keeps nested workspace
+    // container (not a global querySelector) keeps child workspace
     // lists from leaking into one another — a drag in project A's
     // list never picks up items from project B's.
     const items = sourceContainer

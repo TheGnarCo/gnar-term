@@ -1,5 +1,5 @@
 /**
- * Stage 7: verifies the Agentic Dashboard contribution is registered
+ * Verifies the Agentic Dashboard contribution is registered
  * via the DashboardContributionRegistry when the extension activates,
  * tear-down on deactivate, and that its `create` hook materializes a
  * dashboard workspace with the expected metadata shape.
@@ -27,7 +27,7 @@ vi.mock("../../../lib/services/extension-state", () => ({
 const { createWorkspaceFromDefMock } = vi.hoisted(() => ({
   createWorkspaceFromDefMock: vi.fn(async () => "ws-agentic-new"),
 }));
-vi.mock("../../../lib/services/workspace-service", () => ({
+vi.mock("../../../lib/services/workspace-runtime-service", () => ({
   createWorkspaceFromDef: createWorkspaceFromDefMock,
   closeWorkspace: vi.fn(),
 }));
@@ -54,7 +54,7 @@ describe("agentic extension — Dashboard contribution registration", () => {
     createWorkspaceFromDefMock.mockClear();
   });
 
-  it("registers an 'agentic' contribution with capPerGroup=1 on activate", async () => {
+  it("registers an 'agentic' contribution with capPerWorkspace=1 on activate", async () => {
     registerExtension(
       agenticOrchestratorManifest,
       registerAgenticOrchestratorExtension,
@@ -65,7 +65,7 @@ describe("agentic extension — Dashboard contribution registration", () => {
     expect(contribution).toBeDefined();
     expect(contribution?.label).toBe("Agentic Dashboard");
     expect(contribution?.actionLabel).toBe("Add Agentic Dashboard");
-    expect(contribution?.capPerGroup).toBe(1);
+    expect(contribution?.capPerWorkspace).toBe(1);
     expect(contribution?.source).toBe("agentic-orchestrator");
   });
 
@@ -80,7 +80,7 @@ describe("agentic extension — Dashboard contribution registration", () => {
     expect(getDashboardContribution("agentic")).toBeUndefined();
   });
 
-  it("create(group) materializes a dashboard workspace with agentic metadata", async () => {
+  it("create(workspace) materializes a dashboard child workspace with agentic metadata", async () => {
     registerExtension(
       agenticOrchestratorManifest,
       registerAgenticOrchestratorExtension,
@@ -103,17 +103,17 @@ describe("agentic extension — Dashboard contribution registration", () => {
     const def = createWorkspaceFromDefMock.mock.calls[0]![0] as {
       name: string;
       layout: { pane: { surfaces: Array<{ type: string; path: string }> } };
-      metadata: Record<string, unknown>;
+      isDashboard?: boolean;
+      rootWorkspaceId?: string;
+      dashboardContributionId?: string;
     };
     expect(def.name).toBe("Agents");
     expect(def.layout.pane.surfaces[0]?.type).toBe("preview");
     expect(def.layout.pane.surfaces[0]?.path).toBe(
       "/work/proj/.gnar-term/agentic-dashboard.md",
     );
-    expect(def.metadata).toMatchObject({
-      isDashboard: true,
-      groupId: "grp-1",
-      dashboardContributionId: "agentic",
-    });
+    expect(def.isDashboard).toBe(true);
+    expect(def.rootWorkspaceId).toBe("grp-1");
+    expect(def.dashboardContributionId).toBe("agentic");
   });
 });

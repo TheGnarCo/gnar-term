@@ -1,6 +1,6 @@
 <script lang="ts">
   /**
-   * Gear icon — used as the tile glyph for the per-group Settings
+   * Gear icon — used as the tile glyph for the per-workspace Settings
    * dashboard. Lucide-style stroke (width=2, round line caps).
    */
   export let size: number = 14;

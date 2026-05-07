@@ -10,6 +10,7 @@
   import { shortcutHintsActive } from "../stores/shortcut-hints";
   import BotIcon from "../icons/BotIcon.svelte";
   import CloseButton from "./CloseButton.svelte";
+  import ThinkingDots from "./ThinkingDots.svelte";
 
   export let surface: Surface;
   export let index: number;
@@ -25,6 +26,7 @@
   /** Optional agent status label ("running", "waiting", etc). */
   export let agentStatus: string | null = null;
   $: isWaiting = agentStatus === "waiting";
+  $: isThinking = agentStatus === "running" || agentStatus === "active";
 
   let hovered = false;
   let nameEl: HTMLSpanElement | null = null;
@@ -144,15 +146,23 @@
 >
   {#if agentDotColor}
     <BotIcon size={10} color={agentDotColor} />
-    <span
-      role="img"
-      aria-label={agentStatus ?? "agent"}
-      class:pulse={isWaiting}
-      style="
-        width: {isWaiting ? 8 : 7}px; height: {isWaiting ? 8 : 7}px;
-        border-radius: 50%; background: {agentDotColor}; flex-shrink: 0;
-      "
-    ></span>
+    {#if isThinking}
+      <ThinkingDots
+        color={agentDotColor}
+        size={4}
+        label={agentStatus ?? "agent"}
+      />
+    {:else}
+      <span
+        role="img"
+        aria-label={agentStatus ?? "agent"}
+        class:pulse={isWaiting}
+        style="
+          width: {isWaiting ? 8 : 7}px; height: {isWaiting ? 8 : 7}px;
+          border-radius: 50%; background: {agentDotColor}; flex-shrink: 0;
+        "
+      ></span>
+    {/if}
   {:else if surface.hasUnread && !isActive}
     <span
       aria-label="Unread activity"

@@ -1,90 +1,50 @@
 /**
- * Tests for the keyboard-shortcut reference overlay (S6).
+ * Tests for the keyboard-shortcut reference panel.
  *
  * Coverage:
- *   - The component renders nothing when `open` is false and a dialog when
- *     `open` is true. Backdrop click and Escape both close it.
+ *   - The panel renders all section headings and includes the ⌘/ self-reference.
+ *   - Workspace vocabulary is correct (no legacy "Branched Workspace" labels).
  *   - When a `Show Keyboard Shortcuts` command is registered with the `⌘/`
- *     shortcut, `executeByShortcut` fires it on a metaKey + "/" event so the
- *     command-palette wiring used in App.svelte routes correctly.
+ *     shortcut, `executeByShortcut` fires it on a metaKey + "/" event.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, fireEvent, cleanup } from "@testing-library/svelte";
+import { render, cleanup } from "@testing-library/svelte";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn().mockResolvedValue(undefined),
 }));
 
 import ShortcutReference from "../lib/components/ShortcutReference.svelte";
-import ShortcutReferenceHarness from "./shortcut-reference-harness.svelte";
 import {
   registerCommand,
   resetCommands,
   executeByShortcut,
 } from "../lib/services/command-registry";
 
-describe("ShortcutReference component", () => {
+describe("ShortcutReference panel", () => {
   beforeEach(() => {
     cleanup();
   });
 
-  it("renders nothing when open is false", () => {
-    const { queryByTestId } = render(ShortcutReference, {
-      props: { open: false },
-    });
-    expect(queryByTestId("shortcut-reference")).toBeNull();
-  });
-
-  it("renders the dialog when open is true", () => {
-    const { getByRole, getByText } = render(ShortcutReference, {
-      props: { open: true },
-    });
-    expect(getByRole("dialog")).toBeTruthy();
-    // Section headings for every category.
+  it("renders the panel with section headings and the title", () => {
+    const { getByTestId, getByText, getAllByText } = render(ShortcutReference);
+    expect(getByTestId("shortcut-reference")).toBeTruthy();
     expect(getByText("Navigation")).toBeTruthy();
     expect(getByText("Panes")).toBeTruthy();
     expect(getByText("Surfaces")).toBeTruthy();
     expect(getByText("App")).toBeTruthy();
+    expect(getAllByText("Keyboard Shortcuts").length).toBeGreaterThanOrEqual(2);
   });
 
   it("includes the ⌘/ self-reference row in the App section", () => {
-    const { getAllByText, getByText } = render(ShortcutReference, {
-      props: { open: true },
-    });
-    // Both the dialog title and the App-section row have this label.
-    expect(getAllByText("Keyboard Shortcuts").length).toBeGreaterThanOrEqual(2);
+    const { getByText } = render(ShortcutReference);
     expect(getByText("⌘/")).toBeTruthy();
   });
 
-  it("closes when Escape is pressed", async () => {
-    const { getByTestId, queryByTestId } = render(ShortcutReferenceHarness, {
-      props: { open: true },
-    });
-    const overlay = getByTestId("shortcut-reference");
-    await fireEvent.keyDown(overlay, { key: "Escape" });
-    // bind:open in the harness flips back to false; the modal unmounts.
-    expect(queryByTestId("shortcut-reference")).toBeNull();
-  });
-
-  it("closes when the backdrop is clicked", async () => {
-    const { getByTestId, queryByTestId } = render(ShortcutReferenceHarness, {
-      props: { open: true },
-    });
-    const overlay = getByTestId("shortcut-reference");
-    await fireEvent.mouseDown(overlay);
-    expect(queryByTestId("shortcut-reference")).toBeNull();
-  });
-
   it('uses "Workspace" vocabulary for Workspace shortcuts (Workspace = Root Sidebar Workspace)', () => {
-    const { getByText, queryByText } = render(ShortcutReference, {
-      props: { open: true },
-    });
-    // ⌘N creates a (Root) Workspace via the dialog flow.
+    const { getByText, queryByText } = render(ShortcutReference);
     expect(getByText("New Workspace")).toBeTruthy();
-    // ⌘⇧W closes the active workspace (root or branched).
     expect(getByText("Close Workspace")).toBeTruthy();
-    // The legacy "Branched Workspace" labels must not appear here — branching
-    // is owned by the branched-workspaces extension and uses its own commands.
     expect(queryByText(/^New Branched Workspace$/)).toBeNull();
     expect(queryByText(/^Close Branched Workspace$/)).toBeNull();
   });
@@ -152,7 +112,6 @@ describe("⌘⇧]/[ shifted-bracket surface cycling shortcuts", () => {
       action,
       source: "core",
     });
-    // Browsers report "}" for Shift+] — not "]"
     const e = {
       key: "}",
       metaKey: true,

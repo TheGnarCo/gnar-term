@@ -136,6 +136,7 @@
   import FormPrompt from "./lib/components/FormPrompt.svelte";
   import RestoreCommandsOverlay from "./lib/components/RestoreCommandsOverlay.svelte";
   import ShortcutReference from "./lib/components/ShortcutReference.svelte";
+  import KeyboardIcon from "./lib/icons/KeyboardIcon.svelte";
   import WorkspaceSwitcher from "./lib/components/WorkspaceSwitcher.svelte";
   import WorkspaceCreateOverlay from "./lib/components/WorkspaceCreateOverlay.svelte";
   import { surfaceTypeStore } from "./lib/services/surface-type-registry";
@@ -159,10 +160,6 @@
   // workspaces are re-restored later (rare, but possible via dev reload).
   let restoreCommandsOverlayShown = false;
   let showRestoreCommandsOverlay = false;
-
-  // Shortcut reference overlay (⌘/). Two-way bound to the modal so it can
-  // self-close on Escape / backdrop click without needing a callback.
-  let shortcutReferenceOpen = false;
 
   // Workspace/branch switcher overlay (⌘O / Ctrl+O). Two-way bound so the
   // component can self-close on Escape / confirm / backdrop click.
@@ -355,7 +352,7 @@
       id: "core.show-keyboard-shortcuts",
       title: "Show Keyboard Shortcuts",
       shortcut: isMac ? "⌘/" : undefined,
-      action: () => (shortcutReferenceOpen = true),
+      action: () => void spawnOrNavigate("gnar-term:keyboard-shortcuts"),
       source: "core",
     },
     {
@@ -692,6 +689,15 @@
       component: WorkspaceOverviewDashboard as unknown as Component,
     });
 
+    // Register the keyboard-shortcuts reference dashboard (⌘/).
+    registerDashboardWorkspaceType({
+      id: "gnar-term:keyboard-shortcuts",
+      label: "Keyboard Shortcuts",
+      icon: KeyboardIcon as unknown as Component,
+      component: ShortcutReference as unknown as Component,
+      accentColor: "#7FB8E6",
+    });
+
     // Register included extensions. Only activate if explicitly enabled
     // in config — a fresh install starts with no extensions active
     // (opt-in model). Errors per extension are isolated.
@@ -947,7 +953,6 @@
     onClose={() => (showRestoreCommandsOverlay = false)}
   />
 {/if}
-<ShortcutReference bind:open={shortcutReferenceOpen} />
 <WorkspaceSwitcher bind:open={workspaceSwitcherOpen} />
 
 <style>

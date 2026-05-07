@@ -15,7 +15,6 @@
   import { sidebarVisible, sidebarWidth } from "../stores/ui";
   import { sidebarSectionStore } from "../services/sidebar-section-registry";
   import { workspaceActionStore } from "../services/workspace-action-registry";
-  import { runCommandById } from "../services/command-registry";
   import { primarySections } from "../stores/mcp-sidebar";
   import WorkspaceListBlock from "./WorkspaceListBlock.svelte";
   import SidebarSectionBlock from "./SidebarSectionBlock.svelte";
@@ -23,6 +22,7 @@
   import McpSidebarSection from "./McpSidebarSection.svelte";
   import ArchiveZone from "./ArchiveZone.svelte";
   import SidebarResizeHandle from "./SidebarResizeHandle.svelte";
+  import NewWorkspaceSplitButton from "./NewWorkspaceSplitButton.svelte";
 
   const iconSvgMap: Record<string, string> = {
     plus: `<line x1="8" y1="3" x2="8" y2="13" /><line x1="3" y1="8" x2="13" y2="8" />`,
@@ -39,11 +39,6 @@
 
   let workspaceListBlock: WorkspaceListBlock;
 
-  // "New Workspace" (core-registered) is the primary action in the
-  // Workspaces header "+ New" button.
-  $: coreAction = $workspaceActionStore.find(
-    (a) => a.id === "core:new-workspace",
-  );
   $: sidebarZoneActions = $workspaceActionStore.filter(
     (a) => a.zone === "sidebar" && (!a.when || a.when({})),
   );
@@ -91,80 +86,7 @@
             svgContent={iconSvg(action.icon)}
           />
         {/each}
-        {#if coreAction}
-          <span
-            class="top-row-new-chip"
-            style="
-              flex-shrink: 0; border-radius: 6px; overflow: hidden;
-              background: {$theme.bgHighlight ??
-              $theme.bgFloat ??
-              'rgba(0, 0, 0, 0.3)'};
-              box-shadow: inset 0 0 0 1px {$theme.border ?? 'transparent'};
-              --section-btn-fg: {$theme.fg};
-              -webkit-app-region: no-drag;
-              display: flex; align-items: stretch;
-            "
-          >
-            <button
-              style="
-                -webkit-app-region: no-drag;
-                background: transparent; border: none;
-                color: {$theme.fg}; cursor: pointer;
-                font-size: 12px; padding: 4px 10px;
-                border-right: 1px solid {$theme.border ??
-                'rgba(255,255,255,0.12)'};
-              "
-              on:click={() => coreAction?.handler({})}
-            >
-              + New
-            </button>
-            <button
-              title="Switch Workspace (⌘O)"
-              style="
-                -webkit-app-region: no-drag;
-                background: transparent; border: none;
-                color: {$theme.fgDim}; cursor: pointer;
-                padding: 4px 8px;
-                display: flex; align-items: center;
-              "
-              on:click={() => runCommandById("core.workspace-switcher")}
-              on:mouseenter={(e) => {
-                const el = e.currentTarget;
-                if (el instanceof HTMLElement) {
-                  el.style.background = $theme.bgHighlight;
-                  el.style.color = $theme.fg;
-                }
-              }}
-              on:mouseleave={(e) => {
-                const el = e.currentTarget;
-                if (el instanceof HTMLElement) {
-                  el.style.background = "transparent";
-                  el.style.color = $theme.fgDim;
-                }
-              }}
-            >
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 16 16"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                {@html iconSvg("search")}
-              </svg>
-            </button>
-          </span>
-        {:else}
-          <SidebarActionButton
-            title="Switch Workspace (⌘O)"
-            onClick={() => runCommandById("core.workspace-switcher")}
-            theme={$theme}
-            svgContent={iconSvg("search")}
-          />
-        {/if}
+        <NewWorkspaceSplitButton />
       </div>
 
       <!-- Scrollable content: the Workspaces section (which includes
@@ -206,10 +128,3 @@
     />
   </div>
 {/if}
-
-<style>
-  /* Top-row "+ New" chip — hover tint matches the rest of the top-row buttons. */
-  .top-row-new-chip button:hover {
-    background: rgba(255, 255, 255, 0.08) !important;
-  }
-</style>

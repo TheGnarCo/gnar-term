@@ -11,6 +11,7 @@
   import SidebarElement from "./SidebarElement.svelte";
   import RenameableLabel from "./RenameableLabel.svelte";
   import SidebarSubtitleRow from "./SidebarSubtitleRow.svelte";
+  import ThinkingDots from "./ThinkingDots.svelte";
   import WorktreeIcon from "../icons/WorktreeIcon.svelte";
   import BotIcon from "../icons/BotIcon.svelte";
   import { modLabel } from "../terminal-service";
@@ -291,6 +292,37 @@
         />
       </div>
 
+      {#if !hideStatusBadges && agentBadges.length > 0 && agentBadges[0]}
+        {@const badge = agentBadges[0]}
+        {@const isThinking =
+          badge.variant === "success" || badge.variant === "default"}
+        {@const isWaiting = badge.variant === "warning"}
+        <span
+          data-harness-title-row
+          title={agentTaskTitle
+            ? `${badge.label} — ${agentTaskTitle}`
+            : badge.label}
+          style="display: inline-flex; align-items: center; gap: 4px; padding: 0 3px; flex-shrink: 0; color: {badge.color};"
+        >
+          <span
+            style="display: inline-flex; align-items: center; opacity: 0.7;"
+          >
+            <BotIcon size={10} />
+          </span>
+          {#if isThinking}
+            <ThinkingDots color={badge.color} size={4} label={badge.label} />
+          {:else}
+            <span
+              aria-label={badge.label}
+              class:pulse={isWaiting}
+              style="width: {isWaiting ? 7 : 6}px; height: {isWaiting
+                ? 7
+                : 6}px; border-radius: 50%; background: {badge.color};"
+            ></span>
+          {/if}
+        </span>
+      {/if}
+
       {#if !hideStatusBadges && hasUnread && agentBadges.length === 0}
         <span
           title="Workspace has new terminal activity"
@@ -302,31 +334,6 @@
         </span>
       {/if}
     </div>
-
-    {#if !hideStatusBadges && agentBadges.length > 0 && agentBadges[0]}
-      {@const badge = agentBadges[0]}
-      {@const subtitleLabel = agentTaskTitle ?? badge.label}
-      <SidebarSubtitleRow
-        data-harness-title-row
-        title={agentTaskTitle
-          ? `${badge.label} — ${agentTaskTitle}`
-          : badge.label}
-        aria-hidden="true"
-        color={badge.color}
-        padding="0 12px 4px 6px"
-        fontSize={10}
-      >
-        <span
-          style="display: inline-flex; align-items: center; opacity: 0.7; flex-shrink: 0;"
-        >
-          <BotIcon size={10} />
-        </span>
-        <span
-          style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
-          >{subtitleLabel}</span
-        >
-      </SidebarSubtitleRow>
-    {/if}
 
     {#if shouldShowWorktreeStatus && !hideStatusBadges}
       <SidebarSubtitleRow color={$theme.fgMuted}>
@@ -385,3 +392,20 @@
     {/if}
   </div>
 </SidebarElement>
+
+<style>
+  .pulse {
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%,
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.5;
+      transform: scale(1.25);
+    }
+  }
+</style>

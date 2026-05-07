@@ -169,6 +169,7 @@
     ? `${modLabel}${shortcutIdx + 1}`
     : undefined}
   {onGripMouseDown}
+  onRailClick={onSelect}
   {onClose}
   onContextMenu={(e) => {
     // Dashboards are non-interactive surfaces; right-click is a no-op.

@@ -213,6 +213,7 @@
         isActive={hasActiveChild}
         {popoverActive}
         {onGripMouseDown}
+        onClick={onBannerClick}
         {onClose}
         closeTooltip="Delete Workspace"
       />

@@ -74,6 +74,13 @@
   /** Callback when drag grip is pressed */
   export let onGripMouseDown: ((e: MouseEvent) => void) | undefined = undefined;
 
+  /**
+   * Callback when the rail itself is clicked. Lets the colored rail
+   * stripe act as an activation target alongside the slot content's own
+   * click handler. Pass-through to SidebarRail.
+   */
+  export let onRailClick: (() => void) | undefined = undefined;
+
   /** Callback when close button is clicked */
   export let onClose: (() => void) | undefined = undefined;
 
@@ -146,6 +153,7 @@
     {isActive}
     {popoverActive}
     {onGripMouseDown}
+    onClick={onRailClick}
   />
   {#if isParent}
     <!-- Workspace banner rail gradient -->

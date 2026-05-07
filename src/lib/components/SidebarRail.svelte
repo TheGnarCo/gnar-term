@@ -53,6 +53,14 @@
   /** Mousedown handler for drag start. */
   export let onGripMouseDown: ((e: MouseEvent) => void) | undefined = undefined;
 
+  /**
+   * Click handler for the rail itself. Lets the rail behave as an
+   * activation target — clicking the colored stripe activates the row /
+   * container that owns it. The grip's internal close button stops
+   * propagation, so closing never doubles as an activate.
+   */
+  export let onClick: (() => void) | undefined = undefined;
+
   /** Container mode: rail-mounted close button. */
   export let onClose: (() => void) | undefined = undefined;
 
@@ -93,6 +101,7 @@
       onGripMouseDown(e);
     }
   }}
+  on:click={() => onClick?.()}
   style="
     display: flex;
     position: relative;

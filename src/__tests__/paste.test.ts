@@ -25,6 +25,7 @@ vi.mock("@xterm/xterm", () => ({
   Terminal: class {
     open = vi.fn();
     write = vi.fn();
+    paste = vi.fn();
     focus = vi.fn();
     dispose = vi.fn();
     cols = 80;
@@ -34,12 +35,15 @@ vi.mock("@xterm/xterm", () => ({
     onTitleChange = vi.fn();
     loadAddon = vi.fn();
     options: Record<string, unknown> = {};
-    buffer = { active: { getLine: vi.fn() } };
+    buffer = { active: { getLine: vi.fn(), length: 0 } };
     parser = { registerOscHandler: vi.fn() };
     attachCustomKeyEventHandler = vi.fn();
     registerLinkProvider = vi.fn();
     getSelection = vi.fn().mockReturnValue("selected text");
+    hasSelection = vi.fn().mockReturnValue(false);
+    onSelectionChange = vi.fn();
     scrollToBottom = vi.fn();
+    onScroll = vi.fn().mockReturnValue({ dispose: vi.fn() });
   },
 }));
 vi.mock("@xterm/addon-fit", () => ({
@@ -54,12 +58,6 @@ vi.mock("@xterm/addon-webgl", () => ({
     activate = vi.fn();
     dispose = vi.fn();
     onContextLoss = vi.fn();
-  },
-}));
-vi.mock("@xterm/addon-web-links", () => ({
-  WebLinksAddon: class {
-    activate = vi.fn();
-    dispose = vi.fn();
   },
 }));
 vi.mock("@xterm/addon-search", () => ({
@@ -135,25 +133,33 @@ describe("Paste — single write to PTY via Tauri clipboard plugin", () => {
       expect(spy).toHaveBeenCalled();
     });
 
-    it("reads clipboard via Tauri plugin and writes to PTY exactly once", async () => {
+    it("reads clipboard via Tauri plugin and routes through terminal.paste() exactly once", async () => {
       const event = new KeyboardEvent("keydown", {
         key: "v",
         ...copyPasteModifiers,
       });
+      const termMock = surface.terminal as unknown as Record<
+        string,
+        ReturnType<typeof vi.fn>
+      >;
       keyHandler(event);
 
-      // clipboardRead is async — wait for it to resolve
+      // clipboardRead is async — wait for terminal.paste to be called
       await vi.waitFor(() => {
-        expect(invoke).toHaveBeenCalledWith("write_pty", {
-          ptyId: 42,
-          data: "pasted text",
-        });
+        expect(termMock.paste).toHaveBeenCalledWith("pasted text");
       });
 
-      const writeCalls = vi
+      // write_pty must NOT be called directly with the raw clipboard text
+      const directWriteCalls = vi
         .mocked(invoke)
-        .mock.calls.filter(([cmd]) => cmd === "write_pty");
-      expect(writeCalls).toHaveLength(1);
+        .mock.calls.filter(
+          ([cmd, args]) =>
+            cmd === "write_pty" &&
+            (args as { data?: string }).data === "pasted text",
+        );
+      expect(directWriteCalls).toHaveLength(0);
+
+      expect(termMock.paste).toHaveBeenCalledTimes(1);
     });
 
     it("returns false to prevent xterm.js from also processing the keydown", () => {
@@ -197,23 +203,139 @@ describe("Paste — single write to PTY via Tauri clipboard plugin", () => {
     });
   });
 
+  describe("Ctrl+V on macOS — sends \\x16 to PTY, no clipboard paste", () => {
+    it.skipIf(!isMac)(
+      "calls preventDefault to suppress WKWebView paste event",
+      () => {
+        const event = new KeyboardEvent("keydown", {
+          key: "v",
+          ctrlKey: true,
+        });
+        const spy = vi.spyOn(event, "preventDefault");
+        keyHandler(event);
+        expect(spy).toHaveBeenCalled();
+      },
+    );
+
+    it.skipIf(!isMac)("sends \\x16 to PTY (not clipboard text)", async () => {
+      const event = new KeyboardEvent("keydown", {
+        key: "v",
+        ctrlKey: true,
+      });
+      keyHandler(event);
+
+      await vi.waitFor(() => {
+        expect(invoke).toHaveBeenCalledWith("write_pty", {
+          ptyId: 42,
+          data: "\x16",
+        });
+      });
+      // Must not have read the clipboard
+      expect(clipboardRead).not.toHaveBeenCalled();
+    });
+
+    it.skipIf(!isMac)("returns false to suppress xterm processing", () => {
+      const event = new KeyboardEvent("keydown", {
+        key: "v",
+        ctrlKey: true,
+      });
+      expect(keyHandler(event)).toBe(false);
+    });
+  });
+
   describe("Ctrl+Shift+V paste (Linux)", () => {
-    it("calls preventDefault and reads clipboard", async () => {
+    it("calls preventDefault and routes clipboard through terminal.paste()", async () => {
       const event = new KeyboardEvent("keydown", {
         key: "v",
         ctrlKey: true,
         shiftKey: true,
       });
       const spy = vi.spyOn(event, "preventDefault");
+      const termMock = surface.terminal as unknown as Record<
+        string,
+        ReturnType<typeof vi.fn>
+      >;
       keyHandler(event);
       expect(spy).toHaveBeenCalled();
 
       await vi.waitFor(() => {
-        expect(invoke).toHaveBeenCalledWith("write_pty", {
-          ptyId: 42,
-          data: "pasted text",
-        });
+        expect(termMock.paste).toHaveBeenCalledWith("pasted text");
       });
+
+      // write_pty must NOT be called directly with the raw clipboard text
+      const directWriteCalls = vi
+        .mocked(invoke)
+        .mock.calls.filter(
+          ([cmd, args]) =>
+            cmd === "write_pty" &&
+            (args as { data?: string }).data === "pasted text",
+        );
+      expect(directWriteCalls).toHaveLength(0);
+    });
+  });
+
+  describe("Bracketed paste routing via terminal.paste()", () => {
+    it("calls terminal.paste() with clipboard text, not write_pty directly", async () => {
+      const event = new KeyboardEvent("keydown", {
+        key: "v",
+        ...copyPasteModifiers,
+      });
+      const termMock = surface.terminal as unknown as Record<
+        string,
+        ReturnType<typeof vi.fn>
+      >;
+      keyHandler(event);
+
+      await vi.waitFor(() => {
+        expect(termMock.paste).toHaveBeenCalledWith("pasted text");
+      });
+
+      const directWriteCalls = vi
+        .mocked(invoke)
+        .mock.calls.filter(
+          ([cmd, args]) =>
+            cmd === "write_pty" &&
+            (args as { data?: string }).data === "pasted text",
+        );
+      expect(directWriteCalls).toHaveLength(0);
+    });
+
+    it("does not call terminal.paste() when clipboard is empty", async () => {
+      vi.mocked(clipboardRead).mockResolvedValueOnce("");
+      const event = new KeyboardEvent("keydown", {
+        key: "v",
+        ...copyPasteModifiers,
+      });
+      const termMock = surface.terminal as unknown as Record<
+        string,
+        ReturnType<typeof vi.fn>
+      >;
+      keyHandler(event);
+
+      await vi.waitFor(() => {
+        expect(clipboardRead).toHaveBeenCalled();
+      });
+
+      expect(termMock.paste).not.toHaveBeenCalled();
+    });
+
+    it("does not call terminal.paste() when PTY is disconnected (ptyId = -1)", async () => {
+      (surface as unknown as { ptyId: number }).ptyId = -1;
+      const event = new KeyboardEvent("keydown", {
+        key: "v",
+        ...copyPasteModifiers,
+      });
+      const termMock = surface.terminal as unknown as Record<
+        string,
+        ReturnType<typeof vi.fn>
+      >;
+      keyHandler(event);
+
+      await vi.waitFor(() => {
+        expect(clipboardRead).toHaveBeenCalled();
+      });
+
+      expect(termMock.paste).not.toHaveBeenCalled();
     });
   });
 

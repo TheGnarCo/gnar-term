@@ -1,282 +1,1024 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import { listen } from "@tauri-apps/api/event";
+  import { getCurrentWindow } from "@tauri-apps/api/window";
   import { theme, themes, xtermTheme } from "./lib/stores/theme";
-  import { primarySidebarVisible, secondarySidebarVisible, commandPaletteOpen, findBarVisible, pendingAction, showInputPrompt } from "./lib/stores/ui";
-  import { workspaces, activeWorkspaceIdx, activeWorkspace, activePane, activeSurface } from "./lib/stores/workspace";
+  import { fontSize, setFontSizeFromConfig } from "./lib/stores/font-size";
+  import {
+    isFullscreen,
+    sidebarVisible,
+    commandPaletteOpen,
+    findBarVisible,
+    pendingAction,
+  } from "./lib/stores/ui";
+  import {
+    workspaces,
+    activeWorkspaceIdx,
+    activePane,
+    activeSurface,
+    activePseudoWorkspaceId,
+  } from "./lib/stores/workspace";
+  import { pseudoWorkspaceStore } from "./lib/services/pseudo-workspace-registry";
+  import {
+    rootRowOrder,
+    bootstrapRootRowOrder,
+    type RootRow,
+  } from "./lib/stores/root-row-order";
+  import { get } from "svelte/store";
   import { invoke } from "@tauri-apps/api/core";
-  import { loadConfig, saveConfig, getConfig, getWorkspaceCommands, type WorkspaceDef } from "./lib/config";
-  import { setupListeners, fontReady, startCwdPolling, isMac, modLabel, shiftModLabel } from "./lib/terminal-service";
-  import { getAllSurfaces, isTerminalSurface } from "./lib/types";
-  import { refreshPreviewStyles } from "./preview/index";
-  import "./preview/init";
+  import {
+    loadConfig,
+    saveConfig,
+    getState,
+    getWorkspaceCommands,
+  } from "./lib/config";
+  import { registerTheme } from "./lib/services/theme-registry";
+  import {
+    setupListeners,
+    fontReady,
+    startCwdPolling,
+    registerCwdChangeHook,
+    isMac,
+    modLabel,
+    shiftModLabel,
+    adjustFontSize,
+    resetFontSize,
+    clearAllTerminalAtlases,
+  } from "./lib/terminal-service";
+  import { getAllPanes, getAllSurfaces, isTerminalSurface } from "./lib/types";
+  import { forEachTerminalSurface } from "./lib/services/service-helpers";
+  import { check } from "@tauri-apps/plugin-updater";
+  import { relaunch } from "@tauri-apps/plugin-process";
+  import { ask, message } from "@tauri-apps/plugin-dialog";
+  import { eventBus } from "./lib/services/event-bus";
+
+  // Extension lifecycle
+  import {
+    extensionStore,
+    extensionErrorStore,
+    reportExtensionError,
+    flushAllExtensionState,
+    ensureProviderAndThen,
+  } from "./lib/services/extension-loader";
+  import { loadExternalExtensions } from "./lib/services/extension-management";
+  import { registerIncludedExtensions } from "./lib/bootstrap/register-included-extensions";
+  import { initWorktrees } from "./lib/bootstrap/init-worktrees";
+  import { confirmAndCloseWorkspace } from "./lib/services/worktree-service";
+  import { initGitStatus } from "./lib/bootstrap/init-git-status";
+  import { initPreview } from "./lib/bootstrap/init-preview";
+  import { initAgentDetectionBootstrap } from "./lib/bootstrap/init-agent-detection";
+  import { initCoreExtensionAPI } from "./lib/bootstrap/init-core-extension-api";
+  import { initWorkspaces } from "./lib/bootstrap/init-workspaces";
+  import {
+    restoreWorkspaces,
+    markRestored,
+    type CliArgs,
+  } from "./lib/bootstrap/restore-workspaces";
+  import {
+    reconcileWorkspaceDashboards,
+    reconcilePrimaryWorkspaces,
+    validateWorkspaceRootPaths,
+  } from "./lib/services/workspace-service";
 
   // Services
-  import { createWorkspace, createWorkspaceFromDef, switchWorkspace, closeWorkspace, renameWorkspace, reorderWorkspaces, saveCurrentWorkspace } from "./lib/services/workspace-service";
-  import { splitPane, closePane, focusPane, reorderTab, focusDirection, flashFocusedPane, splitFromSidebar } from "./lib/services/pane-service";
-  import { selectSurface, closeSurfaceById, newSurface, nextSurface, prevSurface, selectSurfaceByNumber, closeActiveSurface, openPreviewInPane, newSurfaceFromSidebar } from "./lib/services/surface-service";
+  import {
+    createWorkspaceFromDef,
+    switchWorkspace,
+    switchToLastWorkspace,
+    closeAllWorkspaces,
+    saveCurrentWorkspace,
+    persistWorkspaces,
+    schedulePersist,
+  } from "./lib/services/workspace-runtime-service";
+  import {
+    splitPane,
+    closePane,
+    focusPane,
+    splitFromSidebar,
+    togglePaneZoom,
+  } from "./lib/services/pane-service";
+  import {
+    selectSurface,
+    closeSurfaceById,
+    newSurface,
+    nextSurface,
+    prevSurface,
+    closeActiveSurface,
+    openExtensionSurfaceInPane,
+    openExtensionSurfaceInPaneById,
+    newSurfaceWithCommand,
+    newSurfaceFromSidebar,
+  } from "./lib/services/surface-service";
+  import {
+    registerCommands,
+    runCommandById,
+  } from "./lib/services/command-registry";
+  import { registerWorkspaceAction } from "./lib/services/workspace-action-registry";
   import { initMcpServer } from "./lib/services/mcp-server";
+  import { handleAppKeydown } from "./lib/services/keyboard-shortcuts";
+  import { initShortcutHints } from "./lib/stores/shortcut-hints";
+  import {
+    restoreWindowBounds,
+    saveWindowBounds,
+  } from "./lib/services/window-bounds-service";
+  import { confirmQuit } from "./lib/services/quit-confirmation-service";
 
   // Components
-  import PrimarySidebar from "./lib/components/PrimarySidebar.svelte";
-  import SecondarySidebar from "./lib/components/SecondarySidebar.svelte";
+  import Sidebar from "./lib/components/Sidebar.svelte";
   import TitleBar from "./lib/components/TitleBar.svelte";
   import WorkspaceView from "./lib/components/WorkspaceView.svelte";
+  import EmptySurface from "./lib/components/EmptySurface.svelte";
   import CommandPalette from "./lib/components/CommandPalette.svelte";
   import FindBar from "./lib/components/FindBar.svelte";
   import ContextMenu from "./lib/components/ContextMenu.svelte";
   import InputPrompt from "./lib/components/InputPrompt.svelte";
+  import ConfirmPrompt from "./lib/components/ConfirmPrompt.svelte";
+  import FormPrompt from "./lib/components/FormPrompt.svelte";
+  import RestoreCommandsOverlay from "./lib/components/RestoreCommandsOverlay.svelte";
+  import ShortcutReference from "./lib/components/ShortcutReference.svelte";
+  import KeyboardIcon from "./lib/icons/KeyboardIcon.svelte";
+  import WorkspaceSwitcher from "./lib/components/WorkspaceSwitcher.svelte";
+  import WorkspaceCreateOverlay from "./lib/components/WorkspaceCreateOverlay.svelte";
+  import { surfaceTypeStore } from "./lib/services/surface-type-registry";
+  import {
+    registerDashboardWorkspaceType,
+    spawnOrNavigate,
+  } from "./lib/services/dashboard-workspace-service";
+  import SettingsPanel from "./lib/components/SettingsPanel.svelte";
+  import GearIcon from "./lib/icons/GearIcon.svelte";
+  import WorkspaceOverviewDashboard from "./lib/components/WorkspaceOverviewDashboard.svelte";
+  import GridIcon from "./lib/icons/GridIcon.svelte";
+  import type { Component } from "svelte";
 
-  let sidebarComponent: PrimarySidebar;
+  const TOAST_DURATION_MS = 5000;
+
+  let sidebarComponent: Sidebar;
   let findBarComponent: FindBar;
+
+  // Module-scoped within this component instance; gates the bulk
+  // "Restore commands?" dialog so it only fires once per launch even if
+  // workspaces are re-restored later (rare, but possible via dev reload).
+  let restoreCommandsOverlayShown = false;
+  let showRestoreCommandsOverlay = false;
+
+  // Workspace/branch switcher overlay (⌘O / Ctrl+O). Two-way bound so the
+  // component can self-close on Escape / confirm / backdrop click.
+  let workspaceSwitcherOpen = false;
+
+  // ---- Extension error toast ----
+  let activeToasts: {
+    id: string;
+    name: string;
+    timerId: ReturnType<typeof setTimeout>;
+  }[] = [];
+  const shownErrorIds = new Set<string>();
+
+  // Close the primary sidebar when the last workspace is removed.
+  let _prevWorkspaceCount = 0;
+  $: {
+    const count = $workspaces.length;
+    if (_prevWorkspaceCount > 0 && count === 0) {
+      sidebarVisible.set(false);
+    }
+    _prevWorkspaceCount = count;
+  }
+
+  $: {
+    for (const err of $extensionErrorStore) {
+      if (!shownErrorIds.has(err.id)) {
+        shownErrorIds.add(err.id);
+        const timerId = setTimeout(() => {
+          activeToasts = activeToasts.filter((t) => t.id !== err.id);
+        }, TOAST_DURATION_MS);
+        activeToasts = [...activeToasts, { id: err.id, name: err.id, timerId }];
+      }
+    }
+  }
+
+  function dismissToast(id: string) {
+    const toast = activeToasts.find((t) => t.id === id);
+    if (toast) clearTimeout(toast.timerId);
+    activeToasts = activeToasts.filter((t) => t.id !== id);
+    void spawnOrNavigate("gnar-term:settings");
+  }
 
   // ---- Theme ----
 
   function applyTheme(id: string) {
+    const previousId = get(theme.id);
     theme.set(id);
-    for (const ws of $workspaces) {
-      for (const s of getAllSurfaces(ws)) {
-        if (isTerminalSurface(s)) s.terminal.options.theme = $xtermTheme;
-      }
-    }
-    refreshPreviewStyles();
-    saveConfig({ theme: id });
+    forEachTerminalSurface((s) => {
+      s.terminal.options.theme = $xtermTheme;
+    });
+    eventBus.emit({ type: "theme:changed", id, previousId });
+    void saveConfig({ theme: id });
   }
 
-  // ---- Command palette ----
+  // ---- Notification navigation ----
 
-  $: paletteCommands = [
-    { name: "New Workspace", shortcut: `${shiftModLabel}N`, action: () => createWorkspace(`Workspace ${$workspaces.length + 1}`) },
-    { name: "New Surface (Tab)", shortcut: `${shiftModLabel}T`, action: () => newSurfaceFromSidebar() },
-    { name: "Split Right", shortcut: isMac ? `${modLabel}D` : `${shiftModLabel}D`, action: () => splitFromSidebar("horizontal") },
-    { name: "Split Down", shortcut: `${shiftModLabel}D`, action: () => splitFromSidebar("vertical") },
-    { name: "Close Surface", shortcut: isMac ? `${modLabel}W` : `${shiftModLabel}W`, action: () => closeActiveSurface() },
-    { name: "Close Workspace", shortcut: `${shiftModLabel}W`, action: () => closeWorkspace($activeWorkspaceIdx) },
-    { name: "Next Surface", shortcut: `${shiftModLabel}]`, action: () => nextSurface() },
-    { name: "Previous Surface", shortcut: `${shiftModLabel}[`, action: () => prevSurface() },
-    { name: "Toggle Primary Sidebar", shortcut: `${shiftModLabel}B`, action: () => primarySidebarVisible.update(v => !v) },
-    { name: "Toggle Secondary Sidebar", action: () => secondarySidebarVisible.update(v => !v) },
-    { name: "Toggle Find Bar", shortcut: `${shiftModLabel}F`, action: () => findBarVisible.update(v => !v) },
-    { name: "Clear Scrollback", shortcut: `${shiftModLabel}K`, action: () => { const s = $activeSurface; if (s && isTerminalSurface(s)) s.terminal.clear(); } },
+  /**
+   * Jump to the next surface with an unread notification. Search order is
+   * deterministic — start at the active workspace's active pane and walk
+   * forward through workspaces / panes / surfaces, wrapping around. The
+   * landed surface is marked read; other unreads stay until visited.
+   */
+  function jumpToNextUnread(): void {
+    const ws = $workspaces;
+    if (ws.length === 0) return;
+    const startWsIdx = Math.max(0, $activeWorkspaceIdx);
+    const len = ws.length;
+    for (let i = 0; i < len; i++) {
+      const wsIdx = (startWsIdx + i) % len;
+      const w = ws[wsIdx];
+      if (!w) continue;
+      const panes = getAllPanes(w.paneLayout);
+      for (const p of panes) {
+        const surface = p.surfaces.find((s) => s.hasUnread);
+        if (!surface) continue;
+        if (wsIdx !== $activeWorkspaceIdx) switchWorkspace(wsIdx);
+        focusPane(p.id);
+        selectSurface(p.id, surface.id);
+        workspaces.update((wsList) => {
+          surface.hasUnread = false;
+          surface.notification = undefined;
+          return [...wsList];
+        });
+        return;
+      }
+    }
+  }
+
+  // ---- Command palette (register into command registry) ----
+
+  $: registerCommands([
+    {
+      id: "core.new-workspace",
+      title: "New Workspace",
+      shortcut: `${modLabel}N`,
+      action: () => runCommandById("create-workspace"),
+      source: "core",
+    },
+    {
+      id: "core.new-surface",
+      title: "New Surface (Tab)",
+      shortcut: `${shiftModLabel}T`,
+      action: () => newSurfaceFromSidebar(),
+      source: "core",
+    },
+    {
+      id: "core.split-right",
+      title: "Split Right",
+      shortcut: isMac ? `${modLabel}D` : `${shiftModLabel}D`,
+      action: () => splitFromSidebar("horizontal"),
+      source: "core",
+    },
+    {
+      // On mac Split Right uses bare ⌘D so ⇧D is free; on Linux/Windows
+      // Split Right already uses Ctrl+Shift+D, so use Ctrl+Shift+E here.
+      id: "core.split-down",
+      title: "Split Down",
+      shortcut: isMac ? `${shiftModLabel}D` : `${shiftModLabel}E`,
+      action: () => splitFromSidebar("vertical"),
+      source: "core",
+    },
+    {
+      id: "core.close-surface",
+      title: "Close Surface",
+      shortcut: isMac ? `${modLabel}W` : `${shiftModLabel}W`,
+      action: () => closeActiveSurface(),
+      source: "core",
+    },
+    {
+      // Avoid colliding with Close Surface's Ctrl+Shift+W on Linux/Windows.
+      id: "core.close-workspace",
+      title: "Close Workspace",
+      shortcut: isMac ? `${shiftModLabel}W` : `${shiftModLabel}Q`,
+      action: () => {
+        void (async () => {
+          const ws = $workspaces[$activeWorkspaceIdx];
+          if (!ws) return;
+          await confirmAndCloseWorkspace(ws, $activeWorkspaceIdx);
+        })();
+      },
+      source: "core",
+    },
+    {
+      // Palette-only escape hatch for nuking stale state — e.g. orphaned
+      // workspaces left behind by workspace deletion on older builds.
+      // Intentionally no shortcut (destructive, rarely wanted).
+      id: "core.close-all-workspaces",
+      title: "Close All Workspaces",
+      action: () => void closeAllWorkspaces(),
+      source: "core",
+    },
+    {
+      id: "core.next-surface",
+      title: "Next Surface",
+      shortcut: `${shiftModLabel}]`,
+      action: () => nextSurface(),
+      source: "core",
+    },
+    {
+      id: "core.prev-surface",
+      title: "Previous Surface",
+      shortcut: `${shiftModLabel}[`,
+      action: () => prevSurface(),
+      source: "core",
+    },
+    {
+      id: "core.toggle-sidebar",
+      title: "Toggle Sidebar",
+      shortcut: `${shiftModLabel}B`,
+      action: () => sidebarVisible.update((v) => !v),
+      source: "core",
+    },
+    {
+      id: "core.toggle-find-bar",
+      title: "Toggle Find Bar",
+      shortcut: `${shiftModLabel}F`,
+      action: () => findBarVisible.update((v) => !v),
+      source: "core",
+    },
+    {
+      id: "core.open-settings",
+      title: "Open Settings",
+      shortcut: isMac ? "⌘," : "Ctrl+,",
+      action: () => void spawnOrNavigate("gnar-term:settings"),
+      source: "core",
+    },
+    {
+      // Shortcut intentionally mac-only — see ShortcutReference.svelte's
+      // "Keyboard Shortcuts" row for the same Linux/Win blank.
+      id: "core.show-keyboard-shortcuts",
+      title: "Show Keyboard Shortcuts",
+      shortcut: isMac ? "⌘/" : undefined,
+      action: () => void spawnOrNavigate("gnar-term:keyboard-shortcuts"),
+      source: "core",
+    },
+    {
+      id: "core.workspace-switcher",
+      title: "Switch Workspace...",
+      shortcut: isMac ? "⌘O" : "Ctrl+O",
+      action: () => (workspaceSwitcherOpen = true),
+      source: "core",
+    },
+    {
+      id: "core.clear-scrollback",
+      title: "Clear Scrollback",
+      shortcut: isMac ? `${modLabel}K` : `${shiftModLabel}K`,
+      action: () => {
+        const s = $activeSurface;
+        if (s && isTerminalSurface(s)) s.terminal.clear();
+      },
+      source: "core",
+    },
+    {
+      id: "core.jump-to-unread",
+      title: "Jump to Next Unread Notification",
+      shortcut: `${shiftModLabel}U`,
+      action: () => jumpToNextUnread(),
+      source: "core",
+    },
+    {
+      id: "core.toggle-pane-zoom",
+      title: "Toggle Pane Zoom",
+      shortcut: `${shiftModLabel}Enter`,
+      action: () => {
+        const s = $activeSurface;
+        if (s) togglePaneZoom(s.id);
+      },
+      source: "core",
+    },
+    {
+      id: "core.increase-font-size",
+      title: "Increase Font Size",
+      shortcut: isMac ? `${modLabel}=` : `Ctrl+Shift+=`,
+      action: () => adjustFontSize(1),
+      source: "core",
+    },
+    {
+      id: "core.decrease-font-size",
+      title: "Decrease Font Size",
+      shortcut: isMac ? `${modLabel}-` : `Ctrl+Shift+-`,
+      action: () => adjustFontSize(-1),
+      source: "core",
+    },
+    {
+      id: "core.reset-font-size",
+      title: "Reset Font Size",
+      shortcut: isMac ? `${modLabel}0` : `Ctrl+Shift+0`,
+      action: () => resetFontSize(),
+      source: "core",
+    },
     ...$workspaces.map((ws, i) => ({
-      name: `Switch to: ${ws.name}`,
+      id: `core.switch-workspace-${ws.id}`,
+      title: `Switch to: ${ws.name}`,
       shortcut: i < 9 ? `${modLabel}${i + 1}` : undefined,
       action: () => switchWorkspace(i),
+      source: "core",
     })),
-    { name: "Save Current Workspace...", action: () => saveCurrentWorkspace() },
-    { name: `Preview File...`, action: async () => {
-      const path = await showInputPrompt("Path to file");
-      if (path) openPreviewInPane(path);
-    }},
-    ...getWorkspaceCommands().map(cmd => ({
-      name: cmd.name,
-      action: () => { if (cmd.workspace) createWorkspaceFromDef(cmd.workspace); },
+    {
+      id: "core.last-workspace",
+      title: "Switch to Last Workspace",
+      shortcut: isMac ? "⌘`" : "Ctrl+Shift+`",
+      action: () => switchToLastWorkspace(),
+      source: "core",
+    },
+    {
+      id: "core.save-workspace",
+      title: "Save Current Workspace...",
+      action: () => saveCurrentWorkspace(),
+      source: "core",
+    },
+    ...getWorkspaceCommands().map((cmd) => ({
+      id: `core.workspace-cmd-${cmd.name}`,
+      title: cmd.name,
+      action: () => {
+        if (cmd.workspace) void createWorkspaceFromDef(cmd.workspace);
+      },
+      source: "core",
     })),
     ...Object.entries(themes).map(([id, t]) => ({
-      name: `Theme: ${t.name}`,
+      id: `core.theme-${id}`,
+      title: `Theme: ${t.name}`,
       action: () => applyTheme(id),
+      source: "core",
     })),
-  ];
+    {
+      id: "core.check-for-updates",
+      title: "Check for Updates",
+      action: async () => {
+        try {
+          const update = await check();
+          if (update) {
+            const confirmed = await ask(
+              `Update ${update.version} is available. Install now and restart GnarTerm?`,
+              { title: "Update available", kind: "info" },
+            );
+            if (confirmed) {
+              await update.downloadAndInstall();
+              await relaunch();
+            }
+          } else {
+            await message("GnarTerm is up to date.", {
+              title: "No updates",
+              kind: "info",
+            });
+          }
+        } catch (err) {
+          console.error("[updater] Failed to check for updates:", err);
+          await message(
+            `Update check failed: ${err instanceof Error ? err.message : String(err)}`,
+            { title: "Update check failed", kind: "error" },
+          );
+        }
+      },
+      source: "core",
+    },
+    {
+      id: "core.view-extensions",
+      title: "Extensions: View Installed",
+      action: () => void spawnOrNavigate("gnar-term:settings"),
+      source: "core",
+    },
+    {
+      id: "core.close-pane",
+      title: "Close Pane",
+      shortcut: `${shiftModLabel}X`,
+      action: () => {
+        const pane = get(activePane);
+        if (pane) closePane(pane.id);
+      },
+      source: "core",
+    },
+    {
+      // No shortcut — keyboard binding in keyboard-shortcuts.ts (⇧⌘R / Ctrl+Shift+R)
+      // avoids double-fire with the hardcoded handler. Palette discoverability only.
+      id: "core.rename-workspace",
+      title: "Rename Workspace",
+      action: () => sidebarComponent?.startRename($activeWorkspaceIdx),
+      source: "core",
+    },
+    ...$extensionStore
+      .filter(
+        (ext) =>
+          ext.manifest.contributes?.settings &&
+          Object.keys(ext.manifest.contributes.settings.fields).length > 0,
+      )
+      .map((ext) => ({
+        id: `core.ext-settings-${ext.manifest.id}`,
+        title: `Settings: ${ext.manifest.name}`,
+        action: () => void spawnOrNavigate("gnar-term:settings"),
+        source: "core",
+      })),
+  ]);
+
+  // ---- Open file in $EDITOR ----
+
+  async function openInEditor(filePath: string) {
+    const pane = $activePane;
+    if (!pane) return;
+    // Reject paths with control characters (newlines, tabs, etc.) that could
+    // break out of the shell command or cause unexpected behavior
+    if (/[\x00-\x1f\x7f]/.test(filePath)) {
+      console.warn(
+        "[openInEditor] Rejected path with control characters:",
+        filePath,
+      );
+      return;
+    }
+    const escaped = filePath.replace(/'/g, "'\\''");
+    await newSurfaceWithCommand(pane.id, `\${EDITOR:-vi} '${escaped}'`);
+  }
 
   // ---- Pending action consumer ----
 
   $: if ($pendingAction) {
     const action = $pendingAction;
     pendingAction.set(null);
-    if (action.type === "open-preview" && action.payload) {
-      openPreviewInPane(action.payload);
-    } else if (action.type === "split-right") {
+    if (action.type === "split-right") {
       splitFromSidebar("horizontal");
     } else if (action.type === "split-down") {
       splitFromSidebar("vertical");
+    } else if (action.type === "open-in-editor") {
+      void openInEditor(action.filePath);
+    } else if (action.type === "open-surface") {
+      openExtensionSurfaceInPane(
+        action.surfaceTypeId,
+        action.title,
+        action.props,
+      );
+    } else if (action.type === "switch-workspace") {
+      const idx = $workspaces.findIndex((w) => w.id === action.workspaceId);
+      if (idx >= 0) switchWorkspace(idx);
+    } else if (action.type === "close-workspace") {
+      const idx = $workspaces.findIndex((w) => w.id === action.workspaceId);
+      const ws = $workspaces[idx];
+      if (idx >= 0 && ws) void confirmAndCloseWorkspace(ws, idx);
     }
   }
 
   // ---- Keyboard shortcuts ----
 
   function handleKeydown(e: KeyboardEvent) {
-    const shift = e.shiftKey;
-    const alt = e.altKey;
-    const ctrl = e.ctrlKey;
-    const cmd = isMac ? e.metaKey : (ctrl && shift);
-
-    // macOS: Cmd+key (no shift) shortcuts
-    if (isMac && e.metaKey && !shift && !alt) {
-      if (e.key === "n") { e.preventDefault(); createWorkspace(`Workspace ${$workspaces.length + 1}`); return; }
-      if (e.key === "t") { e.preventDefault(); newSurfaceFromSidebar(); return; }
-      if (e.key === "d") { e.preventDefault(); splitFromSidebar("horizontal"); return; }
-      if (e.key === "w") { e.preventDefault(); closeActiveSurface(); return; }
-      if (e.key >= "1" && e.key <= "8") { e.preventDefault(); switchWorkspace(parseInt(e.key) - 1); return; }
-      if (e.key === "9") { e.preventDefault(); switchWorkspace($workspaces.length - 1); return; }
-      if (e.key === "b") { e.preventDefault(); primarySidebarVisible.update(v => !v); return; }
-      if (e.key === "k") { e.preventDefault(); const s = $activeSurface; if (s && isTerminalSurface(s)) s.terminal.clear(); return; }
-      if (e.key === "p") { e.preventDefault(); commandPaletteOpen.update(v => !v); return; }
-      if (e.key === "f") { e.preventDefault(); findBarVisible.update(v => !v); return; }
-      if (e.key === "g") { e.preventDefault(); findBarVisible.set(true); findBarComponent?.findNext(); return; }
-    }
-
-    // macOS: Ctrl+number selects surfaces
-    if (isMac && ctrl && !e.metaKey && !shift && !alt && e.key >= "1" && e.key <= "8") { e.preventDefault(); selectSurfaceByNumber(parseInt(e.key)); return; }
-    if (isMac && ctrl && !e.metaKey && !shift && !alt && e.key === "9") { e.preventDefault(); selectSurfaceByNumber(9); return; }
-
-    // Shared Cmd+Shift / Ctrl+Shift shortcuts
-    if (cmd && shift && !alt) {
-      const k = e.key.toLowerCase();
-      if (k === "t") { e.preventDefault(); newSurfaceFromSidebar(); return; }
-      if (k === "n") { e.preventDefault(); createWorkspace(`Workspace ${$workspaces.length + 1}`); return; }
-      if (k === "d") { e.preventDefault(); splitFromSidebar("vertical"); return; }
-      if (k === "w") { e.preventDefault(); closeWorkspace($activeWorkspaceIdx); return; }
-      if (k === "h") { e.preventDefault(); flashFocusedPane(); return; }
-      if (k === "r") { e.preventDefault(); sidebarComponent?.startRename($activeWorkspaceIdx); return; }
-      if (k === "g") { e.preventDefault(); findBarVisible.set(true); findBarComponent?.findPrev(); return; }
-      if (k === "b") { e.preventDefault(); primarySidebarVisible.update(v => !v); return; }
-      if (k === "p") { e.preventDefault(); commandPaletteOpen.update(v => !v); return; }
-      if (k === "k") { e.preventDefault(); const s = $activeSurface; if (s && isTerminalSurface(s)) s.terminal.clear(); return; }
-      if (k === "f") { e.preventDefault(); findBarVisible.update(v => !v); return; }
-      if (e.key === "]") { e.preventDefault(); nextSurface(); return; }
-      if (e.key === "[") { e.preventDefault(); prevSurface(); return; }
-    }
-
-    // Ctrl+Tab / Ctrl+Shift+Tab
-    if (ctrl && !alt && e.key === "Tab") { e.preventDefault(); if (shift) prevSurface(); else nextSurface(); return; }
-
-    // Alt+Cmd/Ctrl+arrows for pane navigation
-    if (alt && (isMac ? e.metaKey : ctrl) && !shift) {
-      if (e.key === "ArrowLeft") { e.preventDefault(); focusDirection("left"); return; }
-      if (e.key === "ArrowRight") { e.preventDefault(); focusDirection("right"); return; }
-      if (e.key === "ArrowUp") { e.preventDefault(); focusDirection("up"); return; }
-      if (e.key === "ArrowDown") { e.preventDefault(); focusDirection("down"); return; }
-    }
-
-    if (e.key === "Escape" && $findBarVisible) { e.preventDefault(); findBarVisible.set(false); return; }
-  }
-
-  // ---- CLI args type ----
-  interface CliArgs {
-    path: string | null;
-    working_directory: string | null;
-    command: string | null;
-    title: string | null;
-    workspace: string | null;
-    config: string | null;
+    handleAppKeydown(e, {
+      startRenameActiveWorkspace: () =>
+        sidebarComponent?.startRename($activeWorkspaceIdx),
+      findNext: () => findBarComponent?.findNext(),
+      findPrev: () => findBarComponent?.findPrev(),
+    });
   }
 
   // ---- Initialization ----
-  onMount(async () => {
-    await fontReady;
-    setupListeners();
-    startCwdPolling();
-    initMcpServer().catch((err) => console.warn("[mcp] init failed:", err));
+  let _cleanupShortcutHints: (() => void) | null = null;
+  let _cleanupVisibilityRecover: (() => void) | null = null;
+  onDestroy(() => {
+    _cleanupShortcutHints?.();
+    _cleanupVisibilityRecover?.();
+  });
 
+  onMount(async () => {
+    _cleanupShortcutHints = initShortcutHints();
+
+    // OS sleep/resume can return the GPU context with a corrupted texture
+    // atlas — visible as garbled multi-color glyphs that "fix themselves"
+    // when the user resizes the window (resize is the only path that
+    // currently invalidates the atlas). Clear on every visibility regain.
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") clearAllTerminalAtlases();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    _cleanupVisibilityRecover = () =>
+      document.removeEventListener("visibilitychange", onVisibility);
+    await fontReady;
+    void setupListeners();
+    startCwdPolling();
+    registerCwdChangeHook(schedulePersist);
+    initMcpServer().catch((err) => {
+      // Surface frontend-side init failures through the extension error
+      // toast rather than a silent console.warn.
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn("[mcp] init failed:", err);
+      reportExtensionError("mcp", `MCP bridge unavailable: ${msg}`);
+    });
+
+    // Backend emits this when the Rust MCP bridge fails to spawn
+    // (currently: Windows — UDS not implemented yet). Used to be a silent
+    // backend log, which left Windows users with an invisible dead
+    // feature. Now surfaces to the same toast as any other extension error.
+    void listen<string>("mcp-bridge-failed", (event) => {
+      reportExtensionError("mcp", `MCP bridge unavailable: ${event.payload}`);
+    });
+
+    // Load config before extensions so getSetting() works in onActivate
     const cliArgs = await invoke<CliArgs>("get_cli_args");
     const config = await loadConfig(cliArgs.config || undefined);
+    if (config.userThemes) {
+      for (const [id, t] of Object.entries(config.userThemes)) {
+        try {
+          registerTheme("user", id, t);
+        } catch (err) {
+          console.warn(`[theme] Failed to register user theme "${id}":`, err);
+        }
+      }
+    }
     if (config.theme) {
       theme.set(config.theme);
     }
+    setFontSizeFromConfig(config.fontSize);
 
-    const cliCwd = cliArgs.path || cliArgs.working_directory;
+    // After the config is applied, subscribe to font-size changes so any
+    // subsequent user-triggered zoom propagates to every live terminal,
+    // refits the pty, and persists. The first emission is the loaded
+    // value — apply but don't persist (prevents a write-on-startup).
+    let fontSizeInitialEmission = true;
+    fontSize.subscribe((size) => {
+      forEachTerminalSurface((s) => {
+        s.terminal.options.fontSize = size;
+        try {
+          s.fitAddon?.fit();
+        } catch {
+          // fit throws if the terminal isn't opened yet; ignored.
+        }
+        try {
+          s.terminal.clearTextureAtlas?.();
+        } catch {
+          // No-op if renderer doesn't support atlas clearing
+        }
+      });
+      if (fontSizeInitialEmission) {
+        fontSizeInitialEmission = false;
+        return;
+      }
+      void saveConfig({ fontSize: size });
+    });
 
-    if (cliArgs.workspace) {
-      const cmd = config.commands?.find(
-        c => c.name === cliArgs.workspace && c.workspace
+    // Register the shared "core" ExtensionAPI before any core
+    // subsystem contributes a UI renderer — ExtensionWrapper uses this
+    // to inject `api.theme` / `api.invoke` into components mounted
+    // under source="core".
+    initCoreExtensionAPI();
+
+    // Wire core worktree handling before extensions register so any
+    // extension subscribing to "worktree:merged" finds the emitter live.
+    initWorktrees();
+    initGitStatus();
+    initPreview();
+    initAgentDetectionBootstrap();
+
+    // Workspaces (formerly the project-scope extension) —
+    // registered from core so the root-row renderer, commands, and
+    // Dashboard contribution are available before extensions activate.
+    await initWorkspaces();
+
+    // Register the core settings Dashboard Workspace before extensions so the
+    // gear button is wired before any extension activates.
+    registerDashboardWorkspaceType({
+      id: "gnar-term:settings",
+      label: "Settings",
+      icon: GearIcon as unknown as Component,
+      component: SettingsPanel as unknown as Component,
+      accentColor: "#8998A8",
+    });
+
+    // Register the global Workspaces overview dashboard.
+    registerDashboardWorkspaceType({
+      id: "gnar-term:workspace-overview",
+      label: "Workspaces",
+      icon: GridIcon as unknown as Component,
+      component: WorkspaceOverviewDashboard as unknown as Component,
+    });
+
+    // Register the keyboard-shortcuts reference dashboard (⌘/).
+    registerDashboardWorkspaceType({
+      id: "gnar-term:keyboard-shortcuts",
+      label: "Keyboard Shortcuts",
+      icon: KeyboardIcon as unknown as Component,
+      component: ShortcutReference as unknown as Component,
+      accentColor: "#7FB8E6",
+    });
+
+    // Register included extensions. Only activate if explicitly enabled
+    // in config — a fresh install starts with no extensions active
+    // (opt-in model). Errors per extension are isolated.
+    await registerIncludedExtensions(config);
+
+    // Load external extensions from config (after config is loaded)
+    await loadExternalExtensions();
+
+    // Register core workspace actions (after extensions so they appear first)
+    registerWorkspaceAction({
+      id: "core:new-workspace",
+      label: "New Workspace",
+      icon: "plus",
+      shortcut: `${shiftModLabel}N`,
+      source: "core",
+      handler: (_ctx) => {
+        runCommandById("create-workspace");
+      },
+    });
+
+    await restoreWorkspaces(cliArgs, config);
+    // Signal that workspaces are in the store so deferred work (the
+    // agentic extension's provision loop, reconcileWorkspaceDashboards) can
+    // safely read and write the workspaces store without racing restore.
+    markRestored();
+
+    // Re-apply the persisted window bounds. `restoreWorkspaces` calls
+    // loadState() which populates the in-memory AppState — read it via
+    // getState() so we don't need to thread the value back through the
+    // bootstrap signature. Best-effort; failures are logged and ignored.
+    void restoreWindowBounds(getState().windowBounds, getCurrentWindow());
+    // Promote standalone runtime workspaces to Roots and rebuild each
+    // Workspace's branchedWorkspaceIds from rootWorkspaceId now that the
+    // workspaces store is populated.
+    await reconcilePrimaryWorkspaces();
+    void reconcileWorkspaceDashboards();
+    // Stamp `pathMissing` on workspaces whose root directory has gone
+    // missing across sessions. Runs in the background — a slow FS
+    // probe shouldn't block the rest of bootstrap.
+    void validateWorkspaceRootPaths();
+
+    // Rehydrate the persisted root-row order so drag-sorted layouts
+    // survive across restarts. Entities are all registered by this
+    // point — pseudo-workspaces and any pinned extension rows have been
+    // appended during activation; restoreWorkspaces appended workspace
+    // rows. Bootstrap re-sorts to match the persisted order and drops
+    // entries whose referent is gone.
+    const currentOrder = get(rootRowOrder);
+    const passthroughRows = currentOrder.filter((r) => r.kind !== "workspace");
+    const rootWorkspaceRows: RootRow[] = get(workspaces)
+      .filter((w) => typeof w.rootWorkspaceId !== "string")
+      .map((w) => ({ kind: "workspace", id: w.id }));
+    bootstrapRootRowOrder([...rootWorkspaceRows, ...passthroughRows]);
+
+    if (!restoreCommandsOverlayShown) {
+      const hasPending = $workspaces.some((ws) =>
+        getAllSurfaces(ws).some(
+          (s) => isTerminalSurface(s) && s.pendingRestoreCommand,
+        ),
       );
-      if (cmd?.workspace) {
-        await createWorkspaceFromDef(cmd.workspace);
-      } else {
-        console.warn(`[cli] Workspace "${cliArgs.workspace}" not found in config`);
-        await createWorkspace(cliArgs.title || "Workspace 1");
-      }
-    } else if (cliCwd || cliArgs.command) {
-      const wsName = cliArgs.title || cliCwd?.split("/").pop() || "Workspace 1";
-      const def: WorkspaceDef = {
-        name: wsName,
-        cwd: cliCwd || undefined,
-        layout: {
-          pane: {
-            surfaces: [{
-              type: "terminal",
-              cwd: cliCwd || undefined,
-              command: cliArgs.command || undefined,
-            }]
-          }
-        }
-      };
-      await createWorkspaceFromDef(def);
-    } else {
-      let autoloaded = false;
-      if (config.autoload && config.autoload.length > 0 && config.commands) {
-        for (const name of config.autoload) {
-          const cmd = config.commands.find(c => c.name === name && c.workspace);
-          if (cmd?.workspace) {
-            await createWorkspaceFromDef(cmd.workspace);
-            autoloaded = true;
-          }
-        }
-      }
-      if (!autoloaded) {
-        await createWorkspace("Workspace 1");
+      if (hasPending) {
+        restoreCommandsOverlayShown = true;
+        showRestoreCommandsOverlay = true;
       }
     }
 
-    listen<string>("menu-theme", (event) => {
+    void listen<string>("menu-theme", (event) => {
       applyTheme(event.payload.replace("theme-", ""));
     });
 
     await listen("menu-cmd-palette", () => {
-      commandPaletteOpen.update(v => !v);
+      commandPaletteOpen.update((v) => !v);
     });
 
     await listen("menu-close-tab", () => {
       closeActiveSurface();
+    });
+
+    // Handle status item actions (e.g., clicking "3 modified" opens diff surface)
+    document.addEventListener("status-action", ((e: CustomEvent) => {
+      const action = e.detail as { command: string; args?: unknown[] };
+      if (action.command === "open-url" && action.args?.[0]) {
+        void invoke("open_url", {
+          url: action.args[0] as string,
+        });
+      } else if (action.command === "open-surface" && action.args) {
+        const [surfaceTypeId, title, props] = action.args as [
+          string,
+          string,
+          Record<string, unknown> | undefined,
+        ];
+        const open = () =>
+          openExtensionSurfaceInPane(surfaceTypeId, title, props);
+        void ensureProviderAndThen(surfaceTypeId, open);
+      }
+    }) as EventListener);
+
+    // Track fullscreen state for layout adjustments (e.g. traffic light padding)
+    const appWindow = getCurrentWindow();
+    isFullscreen.set(await appWindow.isFullscreen());
+    void appWindow.onResized(async () => {
+      isFullscreen.set(await appWindow.isFullscreen());
+    });
+
+    void appWindow.onFocusChanged((focused) => {
+      if (!focused) return;
+      for (const ws of get(workspaces)) {
+        for (const s of getAllSurfaces(ws)) {
+          if (isTerminalSurface(s) && s.opened) {
+            try {
+              s.fitAddon.fit();
+            } catch {
+              // detached terminal — ignore
+            }
+          }
+        }
+      }
+    });
+
+    // Flush workspace and extension state to disk before the window closes.
+    // Tauri v2: the window closes synchronously unless we preventDefault the
+    // event first. Without this, the async flush races the process teardown
+    // and workspace membership / debounced writes can be lost on quit.
+    void appWindow.onCloseRequested(async (event) => {
+      event.preventDefault();
+      const confirmed = await confirmQuit();
+      if (!confirmed) return;
+      // Snapshot window bounds before destroy so the next launch lands
+      // where the user left off. Best-effort; saveWindowBounds swallows
+      // its own errors.
+      await saveWindowBounds(appWindow);
+      // Run all flushes defensively so one failure can't strand the others.
+      const results = await Promise.allSettled([
+        persistWorkspaces(),
+        flushAllExtensionState(),
+      ]);
+      for (const r of results) {
+        if (r.status === "rejected") {
+          console.error("[shutdown] flush failed:", r.reason);
+        }
+      }
+      try {
+        await appWindow.destroy();
+      } catch (err) {
+        console.error("[shutdown] destroy failed:", err);
+      }
     });
   });
 </script>
 
 <svelte:window on:keydown={handleKeydown} />
 
-<div id="app" style="display: flex; height: 100vh; overflow: hidden;">
-  <PrimarySidebar
-    bind:this={sidebarComponent}
-    onNewWorkspace={() => createWorkspace(`Workspace ${$workspaces.length + 1}`)}
-    onSwitchWorkspace={switchWorkspace}
-    onCloseWorkspace={closeWorkspace}
-    onRenameWorkspace={renameWorkspace}
-    onNewSurface={newSurfaceFromSidebar}
-    onReorderWorkspaces={reorderWorkspaces}
-  />
+{#if activeToasts.length > 0}
+  <div class="extension-toast-container">
+    {#each activeToasts as toast (toast.id)}
+      <button class="extension-toast" on:click={() => dismissToast(toast.id)}>
+        Extension "{toast.name}" failed to load
+      </button>
+    {/each}
+  </div>
+{/if}
 
-  <div style="
-    flex: 1; display: flex; flex-direction: column;
-    background: {$theme.bg}; min-width: 0; min-height: 0; overflow: hidden;
-  ">
+<div
+  id="app"
+  style="
+    display: flex; flex-direction: column; height: 100vh; overflow: hidden;
+    --theme-bg: {$theme.bg};
+    --theme-bg-surface: {$theme.bgSurface};
+    --theme-bg-highlight: {$theme.bgHighlight};
+    --theme-border: {$theme.border};
+    --theme-border-active: {$theme.borderActive};
+    --theme-fg: {$theme.fg};
+    --theme-fg-dim: {$theme.fgDim};
+    --theme-accent: {$theme.accent};
+    --theme-notify: {$theme.notify};
+    --theme-notify-glow: {$theme.notifyGlow};
+    --theme-sidebar-bg: {$theme.sidebarBg};
+    --theme-tab-bar-bg: {$theme.tabBarBg};
+    --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-6: 24px;
+    --title-bar-height: 38px;
+    --tab-bar-height: 28px;
+  "
+>
+  <!-- When the sidebar is collapsed, the TitleBar takes the full window
+       width and the rail-only sidebar drops below it on the left. This
+       lets the macOS traffic-light cluster overlay the TitleBar (which
+       already pads them out via leftPadding) without competing with the
+       sidebar for the top-left of the window. When expanded, the
+       TitleBar stays inside the right column so the sidebar keeps its
+       own top chrome region. -->
+  {#if !$sidebarVisible}
     <TitleBar />
+  {/if}
+
+  <div
+    style="
+      flex: 1; display: flex; flex-direction: row;
+      min-height: 0; min-width: 0; overflow: hidden;
+    "
+  >
+    <Sidebar bind:this={sidebarComponent} />
 
     <div
-      id="terminal-area"
-      style="flex: 1; display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; position: relative;"
+      style="
+        flex: 1; display: flex; flex-direction: column;
+        background: {$theme.bg}; min-width: 0; min-height: 0; overflow: hidden;
+      "
     >
-      {#each $workspaces as ws, i (ws.id)}
-        <WorkspaceView
-          workspace={ws}
-          visible={i === $activeWorkspaceIdx}
-          onSelectSurface={selectSurface}
-          onCloseSurface={closeSurfaceById}
-          onNewSurface={newSurface}
-          onSplitRight={(paneId) => splitPane(paneId, "horizontal")}
-          onSplitDown={(paneId) => splitPane(paneId, "vertical")}
-          onClosePane={closePane}
-          onFocusPane={focusPane}
-          onReorderTab={reorderTab}
-        />
-      {/each}
+      {#if $sidebarVisible}
+        <TitleBar />
+      {/if}
 
-      <FindBar bind:this={findBarComponent} />
+      <div
+        id="terminal-area"
+        style="flex: 1; display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; position: relative;"
+      >
+        {#each $workspaces as ws, i (ws.id)}
+          <WorkspaceView
+            workspace={ws}
+            visible={i === $activeWorkspaceIdx &&
+              $activePseudoWorkspaceId === null}
+            onSelectSurface={selectSurface}
+            onCloseSurface={closeSurfaceById}
+            onNewSurface={newSurface}
+            onSelectSurfaceType={(paneId, typeId) => {
+              const typeDef = $surfaceTypeStore.find((t) => t.id === typeId);
+              if (typeDef) {
+                openExtensionSurfaceInPaneById(paneId, typeId, typeDef.label);
+              }
+            }}
+            onSplitRight={(paneId) => splitPane(paneId, "horizontal")}
+            onSplitDown={(paneId) => splitPane(paneId, "vertical")}
+            onClosePane={closePane}
+            onFocusPane={focusPane}
+          />
+        {/each}
+
+        {#each $pseudoWorkspaceStore as pseudo (pseudo.id)}
+          <div
+            data-pseudo-workspace-view={pseudo.id}
+            style="
+              flex: 1; min-height: 0; min-width: 0; display: {pseudo.id ===
+            $activePseudoWorkspaceId
+              ? 'flex'
+              : 'none'};
+              flex-direction: column;
+            "
+          >
+            <svelte:component
+              this={pseudo.render as import("svelte").Component}
+            />
+          </div>
+        {/each}
+
+        {#if ($workspaces.length === 0 || $activeWorkspaceIdx < 0) && $activePseudoWorkspaceId === null}
+          <EmptySurface />
+        {/if}
+
+        <FindBar bind:this={findBarComponent} />
+      </div>
     </div>
   </div>
-
-  <SecondarySidebar />
 </div>
 
-<CommandPalette commands={paletteCommands} />
+<CommandPalette />
 <ContextMenu />
 <InputPrompt />
+<ConfirmPrompt />
+<FormPrompt />
+<WorkspaceCreateOverlay />
+{#if showRestoreCommandsOverlay}
+  <RestoreCommandsOverlay
+    onClose={() => (showRestoreCommandsOverlay = false)}
+  />
+{/if}
+<WorkspaceSwitcher bind:open={workspaceSwitcherOpen} />
+
+<style>
+  :global(:focus-visible) {
+    outline: 2px solid var(--theme-accent, #7c6aff);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  :global(.no-default-outline) {
+    outline: none;
+  }
+
+  :global(.no-default-outline:focus-visible) {
+    outline: 2px solid var(--theme-accent, #7c6aff);
+    outline-offset: 2px;
+  }
+
+  .extension-toast-container {
+    position: fixed;
+    top: 32px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    pointer-events: none;
+  }
+
+  .extension-toast {
+    pointer-events: auto;
+    background: rgba(200, 50, 50, 0.9);
+    color: #f0f0f0;
+    border: 1px solid rgba(255, 80, 80, 0.6);
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    transition: opacity 0.2s ease;
+  }
+
+  .extension-toast:hover {
+    background: rgba(220, 60, 60, 0.95);
+  }
+</style>

@@ -1,10 +1,13 @@
 node_modules/
 dist/
+coverage/
 src-tauri/target/
+src-tauri/gen/schemas/
 *.log
 .DS_Store
 *.swp
 *.swo
+bun.lock
 
 # Local tooling artifacts
 .claude/worktrees/
@@ -20,3 +23,18 @@ docs/superpowers/
 *.key
 *.cert
 *.pfx
+docs/superpowers/brainstorm/
+docs/implement/
+docs/gnar-term/
+.superpowers/
+
+# Jekyll build artifacts
+docs/_site/
+docs/.jekyll-cache/
+
+# Claude Code runtime state
+.claude/scheduled_tasks.lock
+.claude/worktrees/
+
+# gnar-term runtime state
+.gnar-term

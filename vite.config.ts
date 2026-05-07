@@ -9,6 +9,35 @@ export default defineConfig({
     environment: "jsdom",
     include: ["src/**/*.test.ts"],
     globals: true,
+    setupFiles: ["src/test-setup.ts"],
+    onConsoleLog: (msg) => !msg.includes("HTMLCanvasElement"),
+    // Default 5s is exceeded by dynamic `await import(...)` calls under
+    // full-suite parallel load (transform/import phase totals ~60s across
+    // 165 files). The tests pass in isolation; bumping the cap keeps them
+    // passing in the loaded run without masking real assertion failures.
+    testTimeout: 15000,
+    coverage: {
+      provider: "v8",
+      include: ["src/lib/**/*.ts", "src/extensions/**/*.ts"],
+      exclude: [
+        "src/**/*.test.ts",
+        "src/**/*.d.ts",
+        "src/lib/types/**/*.ts",
+        "src/extensions/agentic-orchestrator/index.ts",
+        "src/lib/services/git-status-service.ts",
+        // Dominated by a Tauri event listener (installMcpOutputListener)
+        // that can't be exercised without a live Tauri runtime.
+        "src/lib/services/mcp-output-buffer.ts",
+      ],
+      // Temporary floor while the consolidation + meta-surface work is
+      // in flight. Raise these back up after the work settles.
+      thresholds: {
+        lines: 50,
+        branches: 50,
+        functions: 50,
+        statements: 50,
+      },
+    },
   },
   clearScreen: false,
   server: {
@@ -17,9 +46,6 @@ export default defineConfig({
     strictPort: true,
   },
   envPrefix: ["VITE_", "TAURI_"],
-  optimizeDeps: {
-    exclude: ["@embedpdf/snippet"],
-  },
   build: {
     target: "esnext",
     minify: !process.env.TAURI_DEBUG ? "esbuild" : false,

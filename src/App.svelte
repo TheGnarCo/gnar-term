@@ -863,7 +863,7 @@
 <div
   id="app"
   style="
-    display: flex; height: 100vh; overflow: hidden;
+    display: flex; flex-direction: column; height: 100vh; overflow: hidden;
     --theme-bg: {$theme.bg};
     --theme-bg-surface: {$theme.bgSurface};
     --theme-bg-highlight: {$theme.bgHighlight};
@@ -881,63 +881,83 @@
     --tab-bar-height: 28px;
   "
 >
-  <Sidebar bind:this={sidebarComponent} />
+  <!-- When the sidebar is collapsed, the TitleBar takes the full window
+       width and the rail-only sidebar drops below it on the left. This
+       lets the macOS traffic-light cluster overlay the TitleBar (which
+       already pads them out via leftPadding) without competing with the
+       sidebar for the top-left of the window. When expanded, the
+       TitleBar stays inside the right column so the sidebar keeps its
+       own top chrome region. -->
+  {#if !$sidebarVisible}
+    <TitleBar />
+  {/if}
 
   <div
     style="
-    flex: 1; display: flex; flex-direction: column;
-    background: {$theme.bg}; min-width: 0; min-height: 0; overflow: hidden;
-  "
+      flex: 1; display: flex; flex-direction: row;
+      min-height: 0; min-width: 0; overflow: hidden;
+    "
   >
-    <TitleBar />
+    <Sidebar bind:this={sidebarComponent} />
 
     <div
-      id="terminal-area"
-      style="flex: 1; display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; position: relative;"
+      style="
+        flex: 1; display: flex; flex-direction: column;
+        background: {$theme.bg}; min-width: 0; min-height: 0; overflow: hidden;
+      "
     >
-      {#each $workspaces as ws, i (ws.id)}
-        <WorkspaceView
-          workspace={ws}
-          visible={i === $activeWorkspaceIdx &&
-            $activePseudoWorkspaceId === null}
-          onSelectSurface={selectSurface}
-          onCloseSurface={closeSurfaceById}
-          onNewSurface={newSurface}
-          onSelectSurfaceType={(paneId, typeId) => {
-            const typeDef = $surfaceTypeStore.find((t) => t.id === typeId);
-            if (typeDef) {
-              openExtensionSurfaceInPaneById(paneId, typeId, typeDef.label);
-            }
-          }}
-          onSplitRight={(paneId) => splitPane(paneId, "horizontal")}
-          onSplitDown={(paneId) => splitPane(paneId, "vertical")}
-          onClosePane={closePane}
-          onFocusPane={focusPane}
-        />
-      {/each}
-
-      {#each $pseudoWorkspaceStore as pseudo (pseudo.id)}
-        <div
-          data-pseudo-workspace-view={pseudo.id}
-          style="
-            flex: 1; min-height: 0; min-width: 0; display: {pseudo.id ===
-          $activePseudoWorkspaceId
-            ? 'flex'
-            : 'none'};
-            flex-direction: column;
-          "
-        >
-          <svelte:component
-            this={pseudo.render as import("svelte").Component}
-          />
-        </div>
-      {/each}
-
-      {#if ($workspaces.length === 0 || $activeWorkspaceIdx < 0) && $activePseudoWorkspaceId === null}
-        <EmptySurface />
+      {#if $sidebarVisible}
+        <TitleBar />
       {/if}
 
-      <FindBar bind:this={findBarComponent} />
+      <div
+        id="terminal-area"
+        style="flex: 1; display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; position: relative;"
+      >
+        {#each $workspaces as ws, i (ws.id)}
+          <WorkspaceView
+            workspace={ws}
+            visible={i === $activeWorkspaceIdx &&
+              $activePseudoWorkspaceId === null}
+            onSelectSurface={selectSurface}
+            onCloseSurface={closeSurfaceById}
+            onNewSurface={newSurface}
+            onSelectSurfaceType={(paneId, typeId) => {
+              const typeDef = $surfaceTypeStore.find((t) => t.id === typeId);
+              if (typeDef) {
+                openExtensionSurfaceInPaneById(paneId, typeId, typeDef.label);
+              }
+            }}
+            onSplitRight={(paneId) => splitPane(paneId, "horizontal")}
+            onSplitDown={(paneId) => splitPane(paneId, "vertical")}
+            onClosePane={closePane}
+            onFocusPane={focusPane}
+          />
+        {/each}
+
+        {#each $pseudoWorkspaceStore as pseudo (pseudo.id)}
+          <div
+            data-pseudo-workspace-view={pseudo.id}
+            style="
+              flex: 1; min-height: 0; min-width: 0; display: {pseudo.id ===
+            $activePseudoWorkspaceId
+              ? 'flex'
+              : 'none'};
+              flex-direction: column;
+            "
+          >
+            <svelte:component
+              this={pseudo.render as import("svelte").Component}
+            />
+          </div>
+        {/each}
+
+        {#if ($workspaces.length === 0 || $activeWorkspaceIdx < 0) && $activePseudoWorkspaceId === null}
+          <EmptySurface />
+        {/if}
+
+        <FindBar bind:this={findBarComponent} />
+      </div>
     </div>
   </div>
 </div>

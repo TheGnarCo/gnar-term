@@ -1722,13 +1722,18 @@ describe("Sidebar", () => {
     expect(container.querySelector("#sidebar")).toBeTruthy();
   });
 
-  it("renders an 8px rail slot when collapsed (sidebarVisible=false)", () => {
+  it("renders a fixed-width rail slot when collapsed (sidebarVisible=false)", () => {
     sidebarVisible.set(false);
     const { container } = render(Sidebar, { props: sidebarProps });
     const slot = container.querySelector("#sidebar") as HTMLElement | null;
     expect(slot).not.toBeNull();
     expect(slot!.classList.contains("collapsed")).toBe(true);
-    expect(slot!.style.width).toBe("8px");
+    // Wide enough to show the 8px grip rail plus a sliver of banner
+    // past it, but not so wide that row content (icons, labels) leaks
+    // into the collapsed slot.
+    const widthPx = parseInt(slot!.style.width, 10);
+    expect(widthPx).toBeGreaterThanOrEqual(10);
+    expect(widthPx).toBeLessThan(20);
   });
 
   it("does not render the + New split button inline when collapsed", () => {

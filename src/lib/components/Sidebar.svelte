@@ -29,6 +29,12 @@
   // (e.g. catching the OS scrollbar) without the overlay flashing shut.
   const HOVER_CLOSE_DELAY_MS = 150;
 
+  // Width of the rail-only slot when the sidebar is collapsed. The
+  // workspace banner's grip rail is 8px (DragGrip frit pattern); show
+  // it plus a few pixels of banner past the rail so the colour stripe
+  // is visible without revealing row content.
+  const RAIL_WIDTH_PX = 12;
+
   let overlayActive = false;
   let closeTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -95,7 +101,7 @@
   on:mouseleave={handleSlotLeave}
   role="presentation"
   style="
-    width: {$sidebarVisible ? `${$sidebarWidth}px` : '8px'};
+    width: {$sidebarVisible ? `${$sidebarWidth}px` : `${RAIL_WIDTH_PX}px`};
     background: {$theme.sidebarBg};
     display: flex;
     overflow: {!$sidebarVisible && overlayActive ? 'visible' : 'hidden'};
@@ -105,11 +111,11 @@
   "
 >
   <!-- In collapsed mode the inner content is absolutely positioned at
-       its full natural width but clipped by the 8px slot's overflow:
-       hidden — exposing only the leftmost 8px of each row, which is
-       where the workspace grip rail lives. Hover overlay logic in a
-       follow-up task lifts the clip so the full sidebar opens over
-       the terminal. -->
+       its full natural width but clipped by the rail slot's
+       overflow: hidden — exposing only the leftmost RAIL_WIDTH_PX
+       pixels of each row, which is where the workspace grip rail and
+       a sliver of the banner colour live. Hovering lifts the clip so
+       the full sidebar opens over the terminal. -->
   <div
     class="sidebar-content"
     style="

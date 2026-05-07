@@ -164,6 +164,19 @@
     return $activeWorkspaceIdx === $workspaces.indexOf(primaryWs);
   })();
 
+  // True when ANY workspace inside this container (the root itself, any
+  // branched workspace, or any dashboard child) is the active workspace.
+  // Used to keep the collapsed-mode rail at full width while a descendant
+  // is active — the rail represents the whole workspace, not just the root.
+  $: hasActiveDescendant = (() => {
+    if (!workspace) return false;
+    const active = $workspaces[$activeWorkspaceIdx];
+    if (!active) return false;
+    return (
+      active.id === workspace.id || active.rootWorkspaceId === workspace.id
+    );
+  })();
+
   // Re-evaluate contributed children when contributors register/unregister.
   // The `$childRowContributorStore` reference is what makes this statement
   // reactive — `getChildRowsFor` reads the store via `get()` and wouldn't
@@ -381,7 +394,7 @@
       onBannerContextMenu={handleBannerContextMenu}
       onBannerClick={handleBannerClick}
       filterIds={branchedIds}
-      hasActiveChild={isPrimaryActive}
+      hasActiveChild={hasActiveDescendant}
       {popoverActive}
       dashboardHintFor={hintForWorkspaceDashboardHost}
       scopeId={workspace.id}

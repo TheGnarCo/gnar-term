@@ -189,7 +189,9 @@
         {/each}
       </div>
 
-      <ArchiveZone />
+      {#if $sidebarVisible}
+        <ArchiveZone />
+      {/if}
     </div>
     {#if $sidebarVisible}
       <SidebarResizeHandle

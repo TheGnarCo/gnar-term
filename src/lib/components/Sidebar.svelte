@@ -111,7 +111,7 @@
   class:collapsed={!$sidebarVisible}
   role="presentation"
   style="
-    width: {$sidebarVisible ? `${$sidebarWidth}px` : '0px'};
+    width: {$sidebarVisible ? `${$sidebarWidth}px` : '12px'};
     background: {$sidebarVisible ? $theme.sidebarBg : 'transparent'};
     display: flex;
     overflow: {$sidebarVisible ? 'hidden' : 'visible'};

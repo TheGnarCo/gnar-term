@@ -1722,15 +1722,16 @@ describe("Sidebar", () => {
     expect(container.querySelector("#sidebar")).toBeTruthy();
   });
 
-  it("sidebar takes zero layout width when collapsed (rails float as overlay)", () => {
+  it("sidebar takes active-rail width when collapsed (terminal content offset by rail width)", () => {
     sidebarVisible.set(false);
     const { container } = render(Sidebar, { props: sidebarProps });
     const slot = container.querySelector("#sidebar") as HTMLElement | null;
     expect(slot).not.toBeNull();
     expect(slot!.classList.contains("collapsed")).toBe(true);
-    // Width is 0 so the terminal fills the full screen; rails float as an overlay.
+    // 12px matches the active workspace rail width — terminal content is pushed
+    // right by that amount while the sidebar background stays transparent.
     const widthPx = parseInt(slot!.style.width, 10);
-    expect(widthPx).toBe(0);
+    expect(widthPx).toBe(12);
   });
 
   it("does not render the + New split button inline when collapsed", () => {

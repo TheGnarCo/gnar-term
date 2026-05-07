@@ -13,7 +13,7 @@
    *                  hosts the close button inside the grip.
    */
   import { theme } from "../stores/theme";
-  import { anyReorderActive } from "../stores/ui";
+  import { anyReorderActive, sidebarVisible } from "../stores/ui";
   import DragGrip from "./DragGrip.svelte";
 
   export let mode: "row" | "container" = "row";
@@ -72,7 +72,7 @@
     position: relative;
     {mode === 'container'
     ? `flex-shrink: 0; align-self: stretch; box-sizing: border-box;
-         border-left: 1px solid ${railBorderColor};
+         ${$sidebarVisible ? `border-left: 1px solid ${railBorderColor};` : ''}
          border-top: 1px solid ${color};
          border-bottom: 1px solid ${color};`
     : ''}

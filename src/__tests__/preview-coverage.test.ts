@@ -366,3 +366,81 @@ describe("YAML/TOML previewer", () => {
     expect(result.element.textContent).toContain("port");
   });
 });
+
+// ─── PDF previewer (B10 regression) ───────────────────────────────
+
+describe("PDF previewer", () => {
+  it("revokes the Blob URL on dispose so each preview doesn't leak", async () => {
+    // Empty 1-byte payload is fine — we're testing URL lifecycle, not parsing.
+    const fakeBase64 = btoa("\0");
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "read_file_base64") return fakeBase64;
+      return undefined as unknown;
+    });
+
+    const created: string[] = [];
+    const revoked: string[] = [];
+    const createSpy = vi
+      .spyOn(URL, "createObjectURL")
+      .mockImplementation((blob: Blob | MediaSource) => {
+        const url = `blob:fake/${created.length}`;
+        created.push(url);
+        void blob;
+        return url;
+      });
+    const revokeSpy = vi
+      .spyOn(URL, "revokeObjectURL")
+      .mockImplementation((url: string) => {
+        revoked.push(url);
+      });
+
+    try {
+      const result = await openPreview("/tmp/doc.pdf");
+      // PDF render is async (awaits read_file_base64 in a .then()); flush
+      // the microtask queue so createObjectURL has run before we dispose.
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(created).toHaveLength(1);
+      expect(revoked).toHaveLength(0);
+
+      result.dispose?.();
+
+      expect(revoked).toEqual(created);
+    } finally {
+      createSpy.mockRestore();
+      revokeSpy.mockRestore();
+    }
+  });
+
+  it("dispose called before the base64 read resolves does not throw", async () => {
+    let resolveRead: ((value: string) => void) | undefined;
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "read_file_base64") {
+        return new Promise<string>((r) => {
+          resolveRead = r;
+        });
+      }
+      return undefined as unknown;
+    });
+
+    const createSpy = vi.spyOn(URL, "createObjectURL");
+    const revokeSpy = vi.spyOn(URL, "revokeObjectURL");
+
+    try {
+      const result = await openPreview("/tmp/doc.pdf");
+      // Tear down before the read resolves.
+      expect(() => result.dispose?.()).not.toThrow();
+
+      // Now resolve the read — the previewer should bail out instead of
+      // attaching a stranded iframe with an un-revokable URL.
+      resolveRead?.(btoa("\0"));
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(createSpy).not.toHaveBeenCalled();
+      expect(revokeSpy).not.toHaveBeenCalled();
+    } finally {
+      createSpy.mockRestore();
+      revokeSpy.mockRestore();
+    }
+  });
+});

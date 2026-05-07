@@ -127,7 +127,12 @@ export async function openPreview(
     }
   }
 
-  previewer.render(content, filePath, element, ctx);
+  // Track the latest previewer-supplied cleanup. Re-renders on file
+  // changes or refresh trigger replace this with a fresh callback after
+  // running the previous one, so a stateful previewer (e.g. PDF, with a
+  // Blob URL) doesn't accumulate resources across renders.
+  let renderCleanup: (() => void) | undefined =
+    previewer.render(content, filePath, element, ctx) ?? undefined;
 
   let watchId = 0;
   if (!isBinary) {
@@ -139,7 +144,10 @@ export async function openPreview(
         content: string;
       }>("file-changed", (event) => {
         if (event.payload.watch_id !== watchId) return;
-        previewer.render(event.payload.content, filePath, element, ctx);
+        renderCleanup?.();
+        renderCleanup =
+          previewer.render(event.payload.content, filePath, element, ctx) ??
+          undefined;
       });
       // Stash the unlisten so dispose can detach the listener; otherwise
       // each open leaks a permanent listener for the lifetime of the app.
@@ -151,6 +159,7 @@ export async function openPreview(
         watchId,
         dispose: () => {
           unlisten();
+          renderCleanup?.();
         },
       };
       return result;
@@ -159,7 +168,14 @@ export async function openPreview(
     }
   }
 
-  return { id, filePath, title: fileName, element, watchId };
+  return {
+    id,
+    filePath,
+    title: fileName,
+    element,
+    watchId,
+    ...(renderCleanup ? { dispose: renderCleanup } : {}),
+  };
 }
 
 /**

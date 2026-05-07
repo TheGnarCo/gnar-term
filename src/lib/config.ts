@@ -335,10 +335,6 @@ export function getConfig(): GnarTermConfig {
   return _config;
 }
 
-export function getCommands(): CommandDef[] {
-  return _config.commands || [];
-}
-
 export function getMcpSetting(): McpSetting {
   const v = _config.mcp;
   if (v === "on" || v === "off" || v === "auto") return v;
@@ -346,7 +342,7 @@ export function getMcpSetting(): McpSetting {
 }
 
 export function getWorkspaceCommands(): CommandDef[] {
-  return getCommands().filter((c) => c.workspace);
+  return (_config.commands || []).filter((c) => c.workspace);
 }
 
 // --- Runtime state ---

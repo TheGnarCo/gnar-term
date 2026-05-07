@@ -48,12 +48,17 @@ export interface PreviewContext {
 
 export interface Previewer {
   extensions: string[];
+  /**
+   * Render `content` (or, for binary previewers, just use `filePath`) into
+   * `element`. May return a cleanup callback that the registry runs on
+   * preview teardown — used by the PDF previewer to revoke its Blob URL.
+   */
   render(
     content: string,
     filePath: string,
     element: HTMLElement,
     ctx?: PreviewContext,
-  ): void;
+  ): void | (() => void);
 }
 
 // --- Registry ---

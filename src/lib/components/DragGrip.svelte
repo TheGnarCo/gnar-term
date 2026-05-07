@@ -48,6 +48,15 @@
   export let locked: boolean = false;
   /** When set, renders this label in the close/lock slot during meta-hold (shortcutHintsActive). */
   export let shortcutLabel: string | undefined = undefined;
+  /**
+   * Renders the rail stripe at the slim 6px width instead of the full
+   * 8px. Callers set this in collapsed sidebar mode for inactive,
+   * non-hovered rows whose popover/banner isn't open, so the rail reads
+   * as a thin accent that expands back to 8px the moment any of those
+   * conditions flips. The grip wrapper itself stays 8px wide so row
+   * layout is unaffected.
+   */
+  export let narrowRail: boolean = false;
 
   let closeButtonHovered = false;
   // shortcutLabel takes priority over close/lock when meta-hold is active.
@@ -69,6 +78,7 @@
   $: fritBackgroundRepeat = "repeat";
   $: showDots = visible && alwaysShowDots;
   $: showRailStripe = !visible;
+  $: railStripeWidth = narrowRail ? "6px" : "8px";
 </script>
 
 <div
@@ -93,9 +103,10 @@
       style="
         position: absolute;
         left: 0; top: 0; bottom: 0;
-        width: 8px;
+        width: {railStripeWidth};
         background: {effectiveColor};
         opacity: {railOpacity};
+        transition: width 0.1s;
       "
     ></div>
   {/if}

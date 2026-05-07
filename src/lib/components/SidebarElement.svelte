@@ -49,6 +49,13 @@
   /** Whether this element is currently active */
   export let isActive: boolean = false;
 
+  /**
+   * True while the row's collapsed-mode hover banner is open. Forwarded
+   * to SidebarRail so the rail stays at full width while the banner is
+   * shown, even after the cursor has left the rail itself.
+   */
+  export let popoverActive: boolean = false;
+
   /** Whether this element is locked (shows lock icon instead of close) */
   export let isLocked: boolean = false;
 
@@ -136,6 +143,8 @@
     {canDrag}
     locked={isLocked}
     {isDragging}
+    {isActive}
+    {popoverActive}
     {onGripMouseDown}
   />
   {#if isParent}

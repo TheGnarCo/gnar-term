@@ -33,6 +33,23 @@
   /** Container mode: paint a 1px accent stripe at the rail's left edge. */
   export let hasActiveStripe: boolean = false;
 
+  /**
+   * Whether the owning row/container represents the active workspace (or
+   * has an active descendant in container mode). Drives rail-width in
+   * collapsed sidebar mode: active rails stay 8px so the active row
+   * remains visually anchored, inactive rails shrink to 6px and expand
+   * back to 8px on hover. Has no effect when the sidebar is expanded.
+   */
+  export let isActive: boolean = false;
+
+  /**
+   * True while the row's hover banner/popover is open. Treated like a
+   * hover signal for rail width: the rail stays at 8px while the popover
+   * is showing, even if the cursor has left the rail itself for the
+   * popover body. Has no effect when the sidebar is expanded.
+   */
+  export let popoverActive: boolean = false;
+
   /** Mousedown handler for drag start. */
   export let onGripMouseDown: ((e: MouseEvent) => void) | undefined = undefined;
 
@@ -47,6 +64,15 @@
   $: effectiveCanDrag = canDrag && $canSidebarDrag;
   $: visible = isDragging || (effectiveCanDrag && railHovered && !locked);
   $: railBorderColor = $theme.border ?? "transparent";
+  // Collapsed mode rail-width policy: thin (6px) when inactive, not
+  // currently hovered/dragged, AND the row's popover/banner isn't open.
+  // Expanded mode keeps the historical 8px rail regardless of state.
+  $: narrowRail =
+    !$sidebarVisible &&
+    !isActive &&
+    !railHovered &&
+    !isDragging &&
+    !popoverActive;
 </script>
 
 <!-- The rail occupies the leftmost 8px of the row, flush with the
@@ -87,6 +113,7 @@
     onClose={mode === "container" && !locked ? onClose : undefined}
     {closeTooltip}
     {locked}
+    {narrowRail}
   />
   {#if mode === "container" && hasActiveStripe}
     <div

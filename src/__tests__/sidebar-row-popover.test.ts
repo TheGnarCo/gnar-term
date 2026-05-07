@@ -89,7 +89,9 @@ describe("WorkspaceListBlock per-row popover (collapsed sidebar)", () => {
     ) as HTMLElement | null;
     expect(popover).not.toBeNull();
     expect(popover!.style.position).toBe("fixed");
-    expect(popover!.style.width).toBe("220px");
+    // Popover renders at left:4 so it aligns with the expanded sidebar's
+    // 4px left gutter; effective width is sidebarWidth - 4 (216 of 220).
+    expect(popover!.style.width).toBe("216px");
     expect(get(hoveredRootRowKey)).toBe(row!.getAttribute("data-root-row-key"));
   });
 

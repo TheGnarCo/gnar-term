@@ -143,6 +143,12 @@
   export let dragActive = false;
   /** Mousedown handler fired when the drag grip is pressed. Drag origin, not row body. */
   export let onGripMouseDown: ((e: MouseEvent) => void) | undefined = undefined;
+  /**
+   * True while this row's collapsed-mode popover/banner is open.
+   * Forwarded to SidebarElement so the rail stays full-width while the
+   * banner is showing.
+   */
+  export let popoverActive: boolean = false;
 </script>
 
 <SidebarElement
@@ -150,6 +156,7 @@
   compact={isChild}
   name={workspace.name}
   {isActive}
+  {popoverActive}
   {isLocked}
   isDragging={dragActive}
   canDrag={!!onGripMouseDown}

@@ -88,6 +88,12 @@
    */
   export let workspaceListViewComponent: Component | unknown | undefined =
     undefined;
+  /**
+   * True while this root row's collapsed-mode popover is open. Forwarded
+   * to the SidebarRail so the rail stays full-width while the banner is
+   * being shown, even after the cursor has left the rail itself.
+   */
+  export let popoverActive: boolean = false;
 
   let bannerHovered = false;
 
@@ -204,6 +210,8 @@
         canDrag={true}
         {locked}
         hasActiveStripe={hasActiveChild && collapsed}
+        isActive={hasActiveChild}
+        {popoverActive}
         {onGripMouseDown}
         {onClose}
         closeTooltip="Delete Workspace"

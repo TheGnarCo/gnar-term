@@ -16,6 +16,11 @@
   export let onGripMouseDown: (e: MouseEvent) => void = () => {};
   /** Position among workspace-kind rows only, for Cmd+N shortcut label. */
   export let shortcutIdx: number | undefined = undefined;
+  /**
+   * True while this root row's collapsed-mode popover/banner is open.
+   * Forwarded down so the rail stays full-width while the banner shows.
+   */
+  export let popoverActive: boolean = false;
 </script>
 
 <WorkspaceSectionContent
@@ -24,4 +29,5 @@
   overlay={null}
   {onGripMouseDown}
   {shortcutIdx}
+  {popoverActive}
 />

@@ -377,10 +377,12 @@
      other title-row buttons. -->
 
 {#snippet rowBody(entry: RenderedRow)}
+  {@const popoverActive = popoverRow?.key === entry.key}
   {#if entry.row.kind === "pseudo-workspace" && entry.pseudoWorkspace}
     <PseudoWorkspaceRow
       pseudo={entry.pseudoWorkspace}
       onGripMouseDown={(e) => startRootRowDrag(e, entry.idx)}
+      {popoverActive}
     />
   {:else if entry.standaloneDashboardWs}
     {@const ws = entry.standaloneDashboardWs}
@@ -400,6 +402,7 @@
       onGripMouseDown={(e) => startRootRowDrag(e, entry.idx)}
       dragActive={false}
       shortcutIdx={entry.workspaceOnlyIdx}
+      {popoverActive}
     />
   {:else if entry.rendererComponent && entry.rendererSource}
     {@const extApi = getExtensionApiById(entry.rendererSource)}
@@ -411,6 +414,7 @@
           id: entry.row.id,
           onGripMouseDown: (e: MouseEvent) => startRootRowDrag(e, entry.idx),
           shortcutIdx: entry.workspaceOnlyIdx,
+          popoverActive,
         }}
       />
     {/if}
@@ -482,6 +486,11 @@
 {#if !$sidebarVisible && popoverRow}
   {@const popoverEntry = renderedRows.find((r) => r.key === popoverRow!.key)}
   {#if popoverEntry}
+    <!-- Popover anchors at left:4px so the row's rail lines up with the
+         4px gutter painted by the sidebar wrapper's padding-left:4px in
+         expanded mode (and matches the wrapper's collapsed rail
+         placement). Width subtracts the gutter so the right edge stays
+         flush at viewport x = sidebarWidth. -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
       class="root-row-popover"
@@ -489,8 +498,8 @@
       style="
         position: fixed;
         top: {popoverRow.top}px;
-        left: 0;
-        width: {$sidebarWidth}px;
+        left: 4px;
+        width: {$sidebarWidth - 4}px;
         z-index: 200;
         pointer-events: auto;
         background: transparent;

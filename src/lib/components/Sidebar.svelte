@@ -62,7 +62,7 @@
   role="presentation"
   style="
     width: {$sidebarVisible ? `${$sidebarWidth}px` : `${RAIL_WIDTH_PX}px`};
-    background: {$sidebarVisible ? $theme.sidebarBg : 'transparent'};
+    background: {$sidebarVisible ? $theme.sidebarBg : $theme.bg};
     display: flex;
     overflow: hidden;
     font-size: 13px;
@@ -81,7 +81,7 @@
       width: {$sidebarVisible ? '100%' : `${$sidebarWidth}px`};
       height: 100%;
       display: flex;
-      background: {$sidebarVisible ? $theme.sidebarBg : 'transparent'};
+      background: {$sidebarVisible ? $theme.sidebarBg : $theme.bg};
       transition: box-shadow 120ms ease;
       {$sidebarVisible ? '' : 'position: absolute; left: 0; top: 0;'}
     "

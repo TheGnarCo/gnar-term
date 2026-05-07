@@ -77,6 +77,12 @@
     | null = null;
   /** Position among workspace-kind rows only (0-indexed), for Cmd+N shortcut label. */
   export let shortcutIdx: number | undefined = undefined;
+  /**
+   * True while this row's collapsed-mode popover/banner is open.
+   * Forwarded to ContainerRow → SidebarRail so the rail stays full-width
+   * while the banner is shown.
+   */
+  export let popoverActive: boolean = false;
 
   let workspace: WorkspaceRecord | undefined;
   let stateVersion = 0;
@@ -376,6 +382,7 @@
       onBannerClick={handleBannerClick}
       filterIds={branchedIds}
       hasActiveChild={isPrimaryActive}
+      {popoverActive}
       dashboardHintFor={hintForWorkspaceDashboardHost}
       scopeId={workspace.id}
       {containerBlockId}

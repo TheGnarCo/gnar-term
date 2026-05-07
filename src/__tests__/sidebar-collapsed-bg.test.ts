@@ -1,15 +1,12 @@
 /**
- * Verifies the primary sidebar paints a transparent background when
- * collapsed so the terminal area's bg shows through (seamless rail look).
- * When expanded the sidebar still paints `$theme.sidebarBg`.
+ * Verifies the primary sidebar paints `$theme.bg` when collapsed so the
+ * 12px rail strip is visually continuous with the terminal area (no
+ * vertical seam from the hardcoded body bg in index.html, which only
+ * matches one theme). When expanded the sidebar paints `$theme.sidebarBg`.
  *
- * JSDOM normalisation notes:
- *   - `background: transparent` is the CSS initial value; JSDOM strips it from
- *     both the style object and the raw attribute string.  We therefore assert
- *     its absence by checking that style.background is empty ("") rather than
- *     checking for the string "transparent".
- *   - `background: #hex` values are normalised to rgb() by JSDOM, so the
- *     expanded-state assertion converts the expected hex to rgb() first.
+ * JSDOM normalisation note: `background: #hex` values are normalised to
+ * rgb() in the style object, so we convert expected hex values to rgb()
+ * before comparing.
  */
 import { describe, it, expect, afterEach } from "vitest";
 import { render, cleanup } from "@testing-library/svelte";
@@ -32,16 +29,17 @@ describe("Sidebar collapsed background", () => {
     sidebarVisible.set(true);
   });
 
-  it("uses transparent bg on the wrapper and content when collapsed", () => {
+  it("paints theme.bg on the wrapper and content when collapsed", () => {
     sidebarVisible.set(false);
     const { container } = render(Sidebar);
     const wrapper = container.querySelector("#sidebar") as HTMLElement;
     const content = wrapper.querySelector(".sidebar-content") as HTMLElement;
-    // JSDOM strips `background: transparent` (it is the CSS initial value),
-    // leaving style.background as an empty string — which is the correct
-    // signal that no opaque background is painted.
-    expect(wrapper.style.background).toBe("");
-    expect(content.style.background).toBe("");
+    const rawExpected = get(theme).bg;
+    const expected = rawExpected.startsWith("#")
+      ? hexToRgb(rawExpected)
+      : rawExpected;
+    expect(wrapper.style.background).toBe(expected);
+    expect(content.style.background).toBe(expected);
   });
 
   it("uses theme.sidebarBg on wrapper and content when expanded", () => {

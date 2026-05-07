@@ -1,20 +1,10 @@
 <!-- src/lib/components/ArchiveZone.svelte -->
 <script lang="ts">
-  import {
-    contextMenu,
-    anyReorderActive,
-    showConfirmPrompt,
-  } from "../stores/ui";
+  import { contextMenu, showConfirmPrompt } from "../stores/ui";
   import { theme } from "../stores/theme";
   import { archivedOrder, archivedDefs } from "../stores/archive";
   import { unarchiveWorkspace } from "../services/archive-service";
-  import DragGrip from "./DragGrip.svelte";
-
   let expanded = false;
-  // True when the current expanded state was triggered by a drag entering
-  // the zone, NOT by a user click. The reorder-end watcher only collapses
-  // back when the open state was auto-driven — manual user toggles persist.
-  let autoExpanded = false;
   let archiveZoneEl: HTMLElement | null = null;
   let hoveredRowId: string | null = null;
   let headerHovered = false;
@@ -23,24 +13,6 @@
 
   function toggle() {
     expanded = !expanded;
-    autoExpanded = false;
-  }
-
-  // Drag-hover auto-expand: while a sidebar drag is active and the cursor
-  // enters the archive zone, expand it so the user can see what sits
-  // inside (and where their item lands). Replaces the older Meta-hold
-  // preview overlay — the expansion itself is the discoverability cue.
-  function onZoneEnter() {
-    if ($anyReorderActive && !expanded) {
-      expanded = true;
-      autoExpanded = true;
-    }
-  }
-
-  // When the drag ends, collapse back if (and only if) we auto-expanded.
-  $: if (!$anyReorderActive && autoExpanded) {
-    expanded = false;
-    autoExpanded = false;
   }
 
   function getName(id: string): string {
@@ -137,10 +109,7 @@
   <button
     type="button"
     on:click={toggle}
-    on:mouseenter={() => {
-      headerHovered = true;
-      onZoneEnter();
-    }}
+    on:mouseenter={() => (headerHovered = true)}
     on:mouseleave={() => (headerHovered = false)}
     data-archive-header
     aria-expanded={expanded}
@@ -149,15 +118,13 @@
       background: {headerHovered
       ? $theme.bgHighlight
       : ($theme.bgSurface ?? 'transparent')};
-      border: 1px solid {$theme.border ?? 'transparent'};
       color: {$theme.fg};
     "
   >
-    <DragGrip
-      theme={$theme}
-      visible={false}
-      railColor={$theme.fgDim}
-      railOpacity={0.35}
+    <div
+      aria-hidden="true"
+      class="rail-border"
+      style="border-color: {$theme.fgDim};"
     />
     <div class="archive-banner-body">
       <span
@@ -203,15 +170,13 @@
               background: {hoveredRowId === id
               ? $theme.bgHighlight
               : ($theme.bgSurface ?? 'transparent')};
-              border: 1px solid {$theme.border ?? 'transparent'};
               color: {$theme.fg};
             "
           >
-            <DragGrip
-              theme={$theme}
-              visible={hoveredRowId === id}
-              railColor={$theme.fgDim}
-              railOpacity={0.35}
+            <div
+              aria-hidden="true"
+              class="rail-border"
+              style="border-color: {$theme.fgDim};"
             />
             <span class="item-name">{getName(id)}</span>
           </div>
@@ -225,31 +190,36 @@
   .archive-zone {
     flex-shrink: 0;
     position: relative;
-    /* 4px left inset matches the scrollable content's
-       `padding: 8px 0 8px 4px` so the archive row's rail aligns with the
-       workspace rows above it. 8px top breathing room mirrors the
-       scrollable area's vertical inset. */
     padding: 8px 0 8px 4px;
   }
 
-  /* Header banner: matches SidebarElement child chrome — drag-grip
-     column, border, hover background, rounded right edge, 4px
-     right-side gap so the right border lines up with the workspace
-     banners' `margin-right: 4px` above. */
   .archive-banner {
-    width: calc(100% - 4px);
+    width: 100%;
     box-sizing: border-box;
     display: flex;
     align-items: stretch;
     min-height: 32px;
     margin: 0;
     padding: 0;
-    border-radius: 0 6px 6px 0;
+    border: none;
+    border-radius: 6px;
+    position: relative;
     cursor: pointer;
     font-family: inherit;
     font-size: 13px;
     overflow: hidden;
     transition: background 0.1s;
+  }
+
+  .rail-border {
+    position: absolute;
+    inset: 0;
+    border: 3px solid;
+    border-left-width: 6px;
+    border-radius: 6px;
+    opacity: 0.35;
+    pointer-events: none;
+    box-sizing: border-box;
   }
 
   .archive-banner-body {
@@ -307,16 +277,14 @@
     text-align: center;
   }
 
-  /* Archived items: same chrome as a child SidebarElement row.
-     4px right inset matches the banner above and the workspace
-     banners' `margin-right: 4px`. */
   .archive-item {
-    width: calc(100% - 4px);
+    width: 100%;
     box-sizing: border-box;
     display: flex;
     align-items: center;
     min-height: 32px;
-    border-radius: 0 6px 6px 0;
+    border-radius: 6px;
+    position: relative;
     overflow: hidden;
     user-select: none;
     cursor: grab;

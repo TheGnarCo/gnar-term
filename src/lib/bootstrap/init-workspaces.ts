@@ -239,8 +239,8 @@ export async function initWorkspaces(): Promise<void> {
   // from the canonical tag on each load.
   reclaimBranchedWorkspaces();
 
-  // Root-row renderer for "workspace" kind. ContainerRow inside
-  // the renderer owns the grip/banner/child-list chrome; the rail
+  // Root-row renderer for "workspace" kind. SidebarBanner inside
+  // the renderer owns the grip/bar/child-list chrome; the rail
   // color + label resolvers let the outer list paint the grip in the
   // workspace's color and show its name in the drag overlay.
   registerRootRowRenderer({

@@ -95,7 +95,7 @@
   // layout — suppress it in that context.
   $: isInsideWorkspace = typeof workspace.rootWorkspaceId === "string";
   // Surface the root Workspace's path-missing flag on every Branch row
-  // inside it. The Workspace banner (ContainerRow) currently has no
+  // inside it. The Workspace banner (SidebarBanner) currently has no
   // affordance for this state — flagging it on the row makes the
   // condition discoverable from anywhere the Branch renders.
   $: rootWorkspacePathMissing = (() => {

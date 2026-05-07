@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, type Component } from "svelte";
-  import ContainerRow from "./ContainerRow.svelte";
+  import SidebarBanner from "./SidebarBanner.svelte";
   import PathStatusLine from "./PathStatusLine.svelte";
   import WorkspaceDiffPrSubtitle from "./WorkspaceDiffPrSubtitle.svelte";
   import WorkspaceListView from "./WorkspaceListView.svelte";
@@ -57,13 +57,13 @@
   export let rootWorkspaceId: string;
   /**
    * The namespaced sidebar-block id that hosts this workspace — forwarded
-   * to the ContainerRow's child WorkspaceListView so workspace-drag
+   * to the SidebarBanner's child WorkspaceListView so workspace-drag
    * ReorderContext publishes the actual block id.
    */
   export let containerBlockId: string = "";
   /**
    * Forwarded from WorkspaceRowBody — the drag grip is owned by
-   * ContainerRow in root mode.
+   * SidebarBanner in root mode.
    */
   export let onGripMouseDown: ((e: MouseEvent) => void) | undefined = undefined;
   /**
@@ -79,8 +79,8 @@
   export let shortcutIdx: number | undefined = undefined;
   /**
    * True while this row's collapsed-mode popover/banner is open.
-   * Forwarded to ContainerRow → SidebarRail so the rail stays full-width
-   * while the banner is shown.
+   * Forwarded to SidebarBanner → SidebarRail so the rail stays full-width
+   * while the popover is shown.
    */
   export let popoverActive: boolean = false;
 
@@ -157,14 +157,14 @@
   })();
 
   // True when the primary workspace of this workspace is currently active.
-  // Makes the container row border solid only when the primary workspace
+  // Makes the banner border solid only when the primary workspace
   // is selected (not when a child workspace is selected).
   $: isPrimaryActive = (() => {
     if (!primaryWs) return false;
     return $activeWorkspaceIdx === $workspaces.indexOf(primaryWs);
   })();
 
-  // True when ANY workspace inside this container (the root itself, any
+  // True when ANY workspace inside this banner (the root itself, any
   // branched workspace, or any dashboard child) is the active workspace.
   // Used to keep the collapsed-mode rail at full width while a descendant
   // is active — the rail represents the whole workspace, not just the root.
@@ -388,7 +388,7 @@
       position: relative;
     "
   >
-    <ContainerRow
+    <SidebarBanner
       color={workspaceHex}
       {onGripMouseDown}
       onBannerContextMenu={handleBannerContextMenu}
@@ -608,7 +608,7 @@
           </div>
         {/if}
       </svelte:fragment>
-    </ContainerRow>
+    </SidebarBanner>
 
     {#if overlay}
       <div

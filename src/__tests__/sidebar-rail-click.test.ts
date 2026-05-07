@@ -3,7 +3,7 @@
  * callback. The rail is the colored stripe on the left edge of every
  * workspace / branch / dashboard row — historically it was drag-only,
  * which made the workspace's collapsed-mode rail appear inert. Wiring
- * onClick lets ContainerRow forward `onBannerClick` and SidebarElement
+ * onClick lets SidebarBanner forward `onBannerClick` and SidebarElement
  * forward `onRailClick`, so a rail click activates the row in any
  * sidebar mode.
  */

@@ -5,8 +5,8 @@
    * sidebar.
    *
    * Used by WorkspaceItem (Branch rows, including dashboard rows)
-   * and by ContainerRow's Branch-inside-Workspace variant. The root
-   * ContainerRow variant builds its own banner because its rail spans
+   * and by SidebarBanner's Branch-inside-Workspace variant. The root
+   * SidebarBanner variant builds its own banner because its rail spans
    * multiple rows; see that file for details.
    *
    * The wrapper itself is intentionally inert — callers that want a
@@ -22,7 +22,7 @@
    * Row variant. Drives chrome (banner gradient, close vs no-close,
    * data-sidebar-element marker) and default density:
    *
-   *   - "parent"    — workspace banner row (ContainerRow). Renders the
+   *   - "parent"    — workspace banner row (SidebarBanner). Renders the
    *                   gradient rail; close/lock affordances are
    *                   suppressed because callers manage closure on the
    *                   banner itself.

@@ -1,5 +1,5 @@
 <h1 align="center">🤙 gnar-term</h1>
-<p align="center">A cross-platform terminal workspace manager with built-in file previews, themes, and cmux-compatible config</p>
+<p align="center">A cross-platform terminal workspace manager with built-in file previews, themes, and cmux-compatible config.</p>
 
 <p align="center">
   <a href="https://github.com/TheGnarCo/gnar-term/releases/latest"><img src="https://img.shields.io/badge/Download-Latest%20Release-blue?style=for-the-badge" alt="Download" /></a>
@@ -8,21 +8,17 @@
 <p align="center">
   <a href="https://github.com/TheGnarCo/gnar-term"><img src="https://img.shields.io/github/stars/TheGnarCo/gnar-term?style=flat&logo=github&label=stars" alt="GitHub stars" /></a>
   <a href="https://github.com/TheGnarCo/gnar-term/actions"><img src="https://img.shields.io/github/actions/workflow/status/TheGnarCo/gnar-term/ci.yml?label=CI" alt="CI" /></a>
-  <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-green" alt="Platforms" />
-</p>
-
-<p align="center">
-  <img src="./docs/screenshot.png" alt="gnar-term screenshot" width="900" />
+  <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Linux-green" alt="Platforms" />
 </p>
 
 ## Why gnar-term?
 
 I love [cmux](https://github.com/manaflow-ai/cmux). It's currently my favorite terminal multiplexer for working with AI coding agents. But there were a few things I wanted:
 
-- **Cross-platform** — cmux is macOS-only (Swift/AppKit). I needed something that runs on Linux and Windows too. gnar-term is built with Tauri, so it runs everywhere.
-- **Built-in file previews** — Click a file path in the terminal and preview it right there. Markdown renders with GitHub styling, PDFs page through, CSVs become tables, images and videos display inline. No context switching to Finder or another app.
+- **Cross-platform** — cmux is macOS-only (Swift/AppKit). I needed something that runs on Linux too. gnar-term is built with Tauri, so it runs on macOS and Linux.
+- **Built-in file previews** — Click a file path in the terminal and preview it right there. Markdown renders with GitHub styling, PDFs page through, CSVs become tables, images and videos display inline. No context switching to Finder or another app. (Provided by the built-in Preview extension — can be disabled in Settings > Extensions.)
 - **Command palette** — `⌘P` to fuzzy-search commands, switch workspaces, change themes, and load saved layouts. One keystroke to do anything.
-- **Themes** — 10 built-in themes (6 dark, 4 light) that switch instantly and persist across restarts.
+- **Themes** — 11 built-in themes (6 dark, 5 light) that switch instantly and persist across restarts.
 - **cmux-compatible config** — Your `cmux.json` workspace definitions work in gnar-term. Copy it over and go.
 
 gnar-term isn't trying to replace cmux. If you're on macOS and want native Metal performance with Ghostty rendering, cmux is incredible. gnar-term is for when you want those workflows on any platform, plus file previews and a command palette baked in.
@@ -75,11 +71,12 @@ Split horizontally (<code>⌘D</code>) and vertically (<code>⇧⌘D</code>). Ea
 <tr>
 <td width="40%" valign="middle">
 <h3>File previews</h3>
-Click any file path in the terminal to preview it in a new tab. Handles bare filenames, relative paths, and quoted paths with spaces. Live-reloads when the file changes on disk.
+Click any file path in the terminal to preview it in a new tab. Handles bare filenames, relative paths, and quoted paths with spaces. Live-reloads when the file changes on disk. Preview is provided by the built-in Preview extension and can be disabled in Settings > Extensions.
 </td>
 <td width="60%">
 
 **Supported formats:**
+
 - 📝 Markdown (GitHub-style rendering via `github-markdown-css`)
 - 📄 PDF (page-by-page canvas rendering via `pdf.js`)
 - 📊 CSV / TSV (table with sticky headers and row highlighting)
@@ -93,12 +90,13 @@ Click any file path in the terminal to preview it in a new tab. Handles bare fil
 </tr>
 <tr>
 <td width="40%" valign="middle">
-<h3>10 built-in themes</h3>
-Switch themes instantly from the command palette (<code>⌘P</code>) or the native <b>View → Theme</b> menu. Persists to <code>gnar-term.json</code> across restarts.
+<h3>11 built-in themes</h3>
+Switch themes instantly from the command palette (<code>⌘P</code>) or the native <b>View → Theme</b> menu. Persists to <code>settings.json</code> across restarts.
 </td>
 <td width="60%">
 
 **Dark:**
+
 - GitHub Dark (default)
 - Tokyo Night
 - Catppuccin Mocha
@@ -107,6 +105,7 @@ Switch themes instantly from the command palette (<code>⌘P</code>) or the nati
 - One Dark
 
 **Light:**
+
 - Molly (warm ivory + rose gold)
 - Molly Disco (Lisa Frank-inspired vibrant purples + neon)
 - GitHub Light
@@ -118,7 +117,7 @@ Switch themes instantly from the command palette (<code>⌘P</code>) or the nati
 <tr>
 <td width="40%" valign="middle">
 <h3>cmux-compatible config</h3>
-Define workspace layouts and custom commands in <code>gnar-term.json</code>. Copy your <code>cmux.json</code> and it just works. Autoload workspaces on startup.
+Define workspace layouts and custom commands in <code>settings.json</code>. Copy your <code>cmux.json</code> and it just works. Autoload workspaces on startup.
 </td>
 <td width="60%">
 
@@ -136,12 +135,12 @@ Define workspace layouts and custom commands in <code>gnar-term.json</code>. Cop
           "direction": "horizontal",
           "split": 0.6,
           "children": [
-            { "pane": { "surfaces": [
-              { "type": "terminal", "command": "npm run dev" }
-            ]}},
-            { "pane": { "surfaces": [
-              { "type": "terminal" }
-            ]}}
+            {
+              "pane": {
+                "surfaces": [{ "type": "terminal", "command": "npm run dev" }]
+              }
+            },
+            { "pane": { "surfaces": [{ "type": "terminal" }] } }
           ]
         }
       }
@@ -190,8 +189,17 @@ Right-click in the terminal for contextual actions. File-specific actions appear
 - **Flow control** — PTY backpressure prevents the terminal from choking on fast output
 - **Process cleanup** — closing a tab kills the child process tree (no zombie processes)
 - **Ctrl+Tab / Ctrl+Shift+Tab** — cycle through tabs in the active pane
-- **Modular preview system** — add new file type previewers by dropping an extension in `src/preview/`
-- **Cross-platform** — macOS, Linux, and Windows via Tauri v2
+- **Extension system** — extensible architecture for sidebar tabs, surface types, commands, and context menus (see [EXTENSIONS.md](EXTENSIONS.md))
+- **Cross-platform** — macOS and Linux via Tauri v2
+
+### Shell integration
+
+GnarTerm automatically installs shell integration for CWD tracking — no manual config needed.
+
+- **zsh:** On startup, GnarTerm writes a `.zshenv` to `~/.config/gnar-term/shell/` and sets `ZDOTDIR` to that directory. The integration file sources your original `.zshenv` (via `GNARTERM_ORIG_ZDOTDIR`), restores `ZDOTDIR`, and hooks into `precmd`/`chpwd` to report the current directory via OSC 7.
+- **bash:** GnarTerm writes `bash-integration.sh` to `~/.config/gnar-term/shell/` and sets `GNARTERM_SHELL_INTEGRATION` to that path. Add `[ -n "$GNARTERM_SHELL_INTEGRATION" ] && source "$GNARTERM_SHELL_INTEGRATION"` to your `.bashrc` to enable CWD tracking.
+
+This is how `api.getActiveCwd()`, tab title updates, and directory inheritance for new tabs/splits work under the hood.
 
 ## CLI Usage
 
@@ -241,9 +249,16 @@ Grab the latest release for your platform:
 
 - **macOS** — `.dmg` (Apple Silicon + Intel, signed and notarized)
 - **Linux** — `.AppImage` / `.deb` / `.rpm`
-- **Windows** — `.msi` / `.exe`
 
 ### Build from source
+
+**Prerequisites:** Node.js 20+, Rust stable toolchain. macOS and Linux only (Windows is not a build target).
+
+On Linux you also need WebKitGTK and related libraries:
+
+```bash
+sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+```
 
 ```bash
 git clone https://github.com/TheGnarCo/gnar-term.git
@@ -257,94 +272,91 @@ The built app will be in `src-tauri/target/release/bundle/`.
 ### Development
 
 ```bash
-npm install
-npm run dev
+npm install                 # installs deps + lefthook git hooks
+npm run dev                 # start Tauri dev server with hot reload
+npm test                    # run unit tests (vitest)
+npm run typecheck           # tsc --noEmit
+npm run check               # svelte-check
+npm run lint                # eslint
+npm run format              # prettier --write
+npm run vite:build          # frontend-only build (no Rust toolchain needed)
+npm run build               # full Tauri build (frontend + Rust)
 ```
 
 ## Keyboard shortcuts
 
 ### Workspaces
 
-| Shortcut | Action |
-|----------|--------|
-| `⌘N` | New workspace |
-| `⌘1`–`⌘8` | Jump to workspace 1–8 |
-| `⌘9` | Jump to last workspace |
-| `⌃⌘]` | Next workspace |
-| `⌃⌘[` | Previous workspace |
-| `⇧⌘W` | Close workspace |
-| `⇧⌘R` | Rename workspace |
-| `⌘B` | Toggle sidebar |
+| Shortcut  | Action                 |
+| --------- | ---------------------- |
+| `⌘N`      | New workspace          |
+| `⌘1`–`⌘8` | Jump to workspace 1–8  |
+| `⌘9`      | Jump to last workspace |
+| `⌃⌘]`     | Next workspace         |
+| `⌃⌘[`     | Previous workspace     |
+| `⇧⌘W`     | Close workspace        |
+| `⇧⌘R`     | Rename workspace       |
+| `⌘B`      | Toggle sidebar         |
 
 ### Surfaces (tabs)
 
-| Shortcut | Action |
-|----------|--------|
-| `⌘T` | New tab |
-| `⇧⌘]` | Next tab |
-| `⇧⌘[` | Previous tab |
-| `⌃Tab` | Next tab |
-| `⌃⇧Tab` | Previous tab |
-| `⌘W` | Close tab |
+| Shortcut | Action       |
+| -------- | ------------ |
+| `⌘T`     | New tab      |
+| `⇧⌘]`    | Next tab     |
+| `⇧⌘[`    | Previous tab |
+| `⌃Tab`   | Next tab     |
+| `⌃⇧Tab`  | Previous tab |
+| `⌘W`     | Close tab    |
 
 ### Split panes
 
-| Shortcut | Action |
-|----------|--------|
-| `⌘D` | Split right |
-| `⇧⌘D` | Split down |
-| `⌥⌘←→↑↓` | Focus pane directionally |
-| `⇧⌘Enter` | Toggle pane zoom |
-| `⇧⌘H` | Flash focused panel |
+| Shortcut  | Action                   |
+| --------- | ------------------------ |
+| `⌘D`      | Split right              |
+| `⇧⌘D`     | Split down               |
+| `⌥⌘←→↑↓`  | Focus pane directionally |
+| `⇧⌘Enter` | Toggle pane zoom         |
+| `⇧⌘H`     | Flash focused panel      |
 
 ### General
 
-| Shortcut | Action |
-|----------|--------|
-| `⌘P` | Command palette |
-| `⌘K` | Clear scrollback |
+| Shortcut | Action           |
+| -------- | ---------------- |
+| `⌘P`     | Command palette  |
+| `⌘K`     | Clear scrollback |
 
 ## Config
 
 gnar-term reads configuration from:
 
-1. `./gnar-term.json` (per-project, highest priority)
-2. `~/.config/gnar-term/gnar-term.json` (global)
-3. `./cmux.json` (per-project, cmux compatibility)
-4. `~/.config/cmux/cmux.json` (global, cmux compatibility)
+1. `./settings.json` (per-project)
+2. `./gnar-term.json` (legacy per-project)
+3. `./cmux.json` (per-project cmux compat)
+4. `~/.config/gnar-term/settings.json` (global)
+5. `~/.config/cmux/cmux.json` (global cmux compat)
 
-The config format is a superset of [cmux.json](https://cmux.com/docs/custom-commands). Any valid `cmux.json` works as a `gnar-term.json`.
+The config format is a superset of [cmux.json](https://cmux.com/docs/custom-commands). Any valid `cmux.json` works as a `settings.json`.
 
 ### gnar-term extensions
 
-| Key | Type | Description |
-|-----|------|-------------|
-| `theme` | string | Theme ID (e.g. `"tokyo-night"`, `"molly"`, `"github-light"`) |
-| `autoload` | string[] | Workspace command names to launch on startup |
-| `commands[].workspace.layout...surfaces[].type` | `"markdown"` | Markdown preview surface (in addition to `"terminal"`) |
+| Key                                             | Type         | Description                                                  |
+| ----------------------------------------------- | ------------ | ------------------------------------------------------------ |
+| `theme`                                         | string       | Theme ID (e.g. `"tokyo-night"`, `"molly"`, `"github-light"`) |
+| `autoload`                                      | string[]     | Workspace command names to launch on startup                 |
+| `commands[].workspace.layout...surfaces[].type` | `"markdown"` | Markdown preview surface (in addition to `"terminal"`)       |
 
 ### Available theme IDs
 
 `github-dark`, `tokyo-night`, `catppuccin-mocha`, `dracula`, `solarized-dark`, `one-dark`, `molly`, `molly-disco`, `github-light`, `solarized-light`, `catppuccin-latte`
 
-## Adding file preview extensions
+## Extensions
 
-The preview system is modular. To add a new file type:
+GnarTerm has an extension system for adding sidebar tabs, surface types, commands, context menu items, overlays, workspace actions, and settings pages. The built-in preview system, file browser, GitHub integration, and project management are all implemented as extensions.
 
-1. Create `src/preview/myformat.ts`
-2. Call `registerPreviewer()` with file extensions and a render function
-3. Import it in `src/preview/init.ts`
+Extensions are standalone directories that can live anywhere — in the GnarTerm repo, in a separate project, or in their own git repository.
 
-```typescript
-import { registerPreviewer } from "./index";
-
-registerPreviewer({
-  extensions: ["xyz"],
-  render(content, filePath, element) {
-    element.innerHTML = `<pre>${content}</pre>`;
-  },
-});
-```
+See **[EXTENSIONS.md](EXTENSIONS.md)** for the full API reference (manifest, methods, events, commands).
 
 ## MCP integration (agent orchestration)
 
@@ -411,16 +423,16 @@ need to restart Claude Code once; no manual `claude mcp add` is needed.
 
 ### The 20 tools
 
-| Category | Tools |
-|---|---|
-| Session management | `spawn_agent`, `list_sessions`, `get_session_info`, `kill_session` |
-| Interaction | `send_prompt`, `send_keys`, `read_output` |
-| Orchestration | `dispatch_tasks` |
-| UI writes | `render_sidebar`, `remove_sidebar_section`, `create_preview` |
-| Agent introspection | `get_agent_context` |
-| UI introspection | `get_active_workspace`, `list_workspaces`, `get_active_pane`, `list_panes` |
-| Lifecycle events | `poll_events` |
-| Filesystem | `list_dir`, `read_file`, `file_exists` |
+| Category            | Tools                                                                      |
+| ------------------- | -------------------------------------------------------------------------- |
+| Session management  | `spawn_agent`, `list_sessions`, `get_session_info`, `kill_session`         |
+| Interaction         | `send_prompt`, `send_keys`, `read_output`                                  |
+| Orchestration       | `dispatch_tasks`                                                           |
+| UI writes           | `render_sidebar`, `remove_sidebar_section`, `create_preview`               |
+| Agent introspection | `get_agent_context`                                                        |
+| UI introspection    | `get_active_workspace`, `list_workspaces`, `get_active_pane`, `list_panes` |
+| Lifecycle events    | `poll_events`                                                              |
+| Filesystem          | `list_dir`, `read_file`, `file_exists`                                     |
 
 See the Spacebase spec (doc id `jzvBxDRrkevx`) for full argument schemas
 and the wire-level contract, or read `src/lib/services/mcp-server.ts` for
@@ -485,7 +497,7 @@ npm install
 npm run dev
 ```
 
-PRs welcome. Check [ISSUES.md](./ISSUES.md) for known issues and planned enhancements.
+PRs welcome — target the `dev` branch. `dev` merges into `main` for releases. Check [ISSUES.md](./ISSUES.md) for known issues and planned enhancements.
 
 ## License
 

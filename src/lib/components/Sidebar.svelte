@@ -59,9 +59,8 @@
 <!-- Collapsed mode: the sidebar is absolutely positioned so it overlays
      the main column rather than sitting next to it as a flex sibling.
      The main column applies padding-left equal to RAIL_WIDTH_PX so its
-     content scoots out from under the overlay. This avoids any visual
-     seam at the rail/terminal edge. Expanded mode keeps the historical
-     flex-sibling layout. -->
+     content scoots out from under the overlay. Expanded mode keeps the
+     historical flex-sibling layout. -->
 <div
   id="sidebar"
   class:collapsed={!$sidebarVisible}

@@ -72,15 +72,14 @@
   $: effectiveCanDrag = canDrag && $canSidebarDrag;
   $: visible = isDragging || (effectiveCanDrag && railHovered && !locked);
   $: railBorderColor = $theme.border ?? "transparent";
-  // Collapsed mode rail-width policy: thin (4px) when inactive, not
-  // currently hovered/dragged, AND the row's popover/banner isn't open.
-  // Expanded mode keeps the historical 8px rail regardless of state.
+  // Collapsed mode rail-width policy: thin (4px) when inactive and the
+  // row isn't being dragged or showing a popover. Hovering the rail no
+  // longer widens the painted color — the 8px wrapper still catches the
+  // hover for popover triggering, but the rendered stripe stays at 4px
+  // so hover doesn't visually overlap the active-rail width. Expanded
+  // mode keeps the historical 8px rail regardless of state.
   $: narrowRail =
-    !$sidebarVisible &&
-    !isActive &&
-    !railHovered &&
-    !isDragging &&
-    !popoverActive;
+    !$sidebarVisible && !isActive && !isDragging && !popoverActive;
 </script>
 
 <!-- The rail occupies the leftmost 8px of the row, flush with the
@@ -108,8 +107,8 @@
     {mode === 'container'
     ? `flex-shrink: 0; align-self: stretch; box-sizing: border-box;
          ${$sidebarVisible ? `border-left: 1px solid ${railBorderColor};` : ''}
-         border-top: 1px solid ${color};
-         border-bottom: 1px solid ${color};`
+         border-top: 1px solid ${isActive ? color : railBorderColor};
+         border-bottom: 1px solid ${isActive ? color : railBorderColor};`
     : ''}
   "
 >

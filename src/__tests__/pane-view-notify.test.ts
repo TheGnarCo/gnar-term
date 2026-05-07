@@ -136,8 +136,12 @@ describe("PaneView notification chrome", () => {
 
     const root = container.firstChild as HTMLElement;
     expect(root.dataset.unread).toBe("true");
-    // The default github-dark theme.notify is #58a6ff = rgb(88, 166, 255)
-    expect(root.style.border).toContain("rgb(88, 166, 255)");
+    // The default github-dark theme.notify is #58a6ff = rgb(88, 166, 255).
+    // sidebarVisible defaults to true → all four sides paint the notify color.
+    expect(root.style.borderTop).toContain("rgb(88, 166, 255)");
+    expect(root.style.borderRight).toContain("rgb(88, 166, 255)");
+    expect(root.style.borderBottom).toContain("rgb(88, 166, 255)");
+    expect(root.style.borderLeft).toContain("rgb(88, 166, 255)");
     // Corner pip is rendered
     const pip = container.querySelector('[title="New activity in this pane"]');
     expect(pip).not.toBeNull();
@@ -287,7 +291,10 @@ describe("PaneView notification chrome", () => {
 
     const root = container.firstChild as HTMLElement;
     expect(root.dataset.unread).toBe("true");
-    expect(root.style.border).toContain("rgb(88, 166, 255)");
+    expect(root.style.borderTop).toContain("rgb(88, 166, 255)");
+    expect(root.style.borderRight).toContain("rgb(88, 166, 255)");
+    expect(root.style.borderBottom).toContain("rgb(88, 166, 255)");
+    expect(root.style.borderLeft).toContain("rgb(88, 166, 255)");
     // pip + glow are only rendered when paneHasUnread is true — proving the notify
     // ternary branch was taken, not the isActive accent branch.
     const pip = container.querySelector('[title="New activity in this pane"]');

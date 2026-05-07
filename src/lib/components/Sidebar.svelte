@@ -11,6 +11,7 @@
    * render below it in their declared order but aren't reorderable
    * at the top level either.
    */
+  import { onDestroy } from "svelte";
   import { theme } from "../stores/theme";
   import { sidebarVisible, sidebarWidth } from "../stores/ui";
   import { sidebarSectionStore } from "../services/sidebar-section-registry";
@@ -23,6 +24,44 @@
   import ArchiveZone from "./ArchiveZone.svelte";
   import SidebarResizeHandle from "./SidebarResizeHandle.svelte";
   import NewWorkspaceSplitButton from "./NewWorkspaceSplitButton.svelte";
+
+  // Brief grace period so users can drift off the slot for a moment
+  // (e.g. catching the OS scrollbar) without the overlay flashing shut.
+  const HOVER_CLOSE_DELAY_MS = 150;
+
+  let overlayActive = false;
+  let closeTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function clearCloseTimer() {
+    if (closeTimer) {
+      clearTimeout(closeTimer);
+      closeTimer = null;
+    }
+  }
+
+  function handleSlotEnter() {
+    if ($sidebarVisible) return;
+    clearCloseTimer();
+    overlayActive = true;
+  }
+
+  function handleSlotLeave() {
+    if ($sidebarVisible) return;
+    clearCloseTimer();
+    closeTimer = setTimeout(() => {
+      overlayActive = false;
+      closeTimer = null;
+    }, HOVER_CLOSE_DELAY_MS);
+  }
+
+  // Reset overlay state whenever the sidebar expands so the overlay
+  // doesn't linger after the user toggles it back open.
+  $: if ($sidebarVisible) {
+    clearCloseTimer();
+    overlayActive = false;
+  }
+
+  onDestroy(clearCloseTimer);
 
   const iconSvgMap: Record<string, string> = {
     plus: `<line x1="8" y1="3" x2="8" y2="13" /><line x1="3" y1="8" x2="13" y2="8" />`,
@@ -51,10 +90,15 @@
 <div
   id="sidebar"
   class:collapsed={!$sidebarVisible}
+  class:overlay-active={!$sidebarVisible && overlayActive}
+  on:mouseenter={handleSlotEnter}
+  on:mouseleave={handleSlotLeave}
+  role="presentation"
   style="
     width: {$sidebarVisible ? `${$sidebarWidth}px` : '8px'};
     background: {$theme.sidebarBg};
-    display: flex; overflow: hidden;
+    display: flex;
+    overflow: {!$sidebarVisible && overlayActive ? 'visible' : 'hidden'};
     font-size: 13px;
     flex-shrink: 0;
     position: relative;
@@ -73,9 +117,10 @@
       height: 100%;
       display: flex;
       background: {$theme.sidebarBg};
+      transition: box-shadow 120ms ease;
       {$sidebarVisible
       ? ''
-      : 'position: absolute; left: 0; top: 0; z-index: 100;'}
+      : `position: absolute; left: 0; top: 0; z-index: 100; ${overlayActive ? 'box-shadow: 0 0 24px rgba(0, 0, 0, 0.45);' : ''}`}
     "
   >
     <div

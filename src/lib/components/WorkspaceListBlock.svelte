@@ -123,6 +123,10 @@
           // isDashboard) bypass the registered "workspace" renderer and
           // render via WorkspaceItem so the dashboard's icon, accent
           // color, and label come from `dashboardWorkspaceRegistry`.
+          // Dashboard chips are NOT addressable via ⌘N — only core
+          // workspace banners participate in the numbered shortcut, so
+          // the dashboard row gets no `workspaceOnlyIdx` and the count
+          // stays aligned with `keyboard-shortcuts.ts`'s filter.
           const ws = wsById.get(row.id);
           if (
             ws &&
@@ -133,7 +137,6 @@
               row,
               idx,
               key,
-              workspaceOnlyIdx: workspaceCount++,
               standaloneDashboardWs: ws,
             });
             return;

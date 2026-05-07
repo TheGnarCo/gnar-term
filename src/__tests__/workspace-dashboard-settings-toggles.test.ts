@@ -15,6 +15,8 @@ vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn().mockResolvedValue(vi.fn()),
 }));
 
+import { fireEvent } from "@testing-library/svelte";
+import { tick } from "svelte";
 import WorkspaceDashboardSettings from "../lib/components/WorkspaceDashboardSettings.svelte";
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
 import {
@@ -111,6 +113,101 @@ describe("WorkspaceDashboardSettings — Dashboards toggles", () => {
     expect(input?.checked).toBe(true);
     const lockedBadge = row!.querySelector("[data-dashboard-toggle-locked]");
     expect(lockedBadge?.textContent?.trim()).toBe("Required (Overview)");
+  });
+
+  it("toggling a dashboard ON does not switch the active view away from Settings", async () => {
+    // Seed the Settings dashboard for our workspace and pin it as active —
+    // this mirrors the user toggling from inside the Settings panel.
+    workspaces.update((cur) => [
+      ...cur,
+      {
+        id: "ws-settings-1",
+        name: "Settings",
+        paneLayout: {
+          type: "pane",
+          pane: { id: "p", surfaces: [], activeSurfaceId: null },
+        },
+        activePaneId: "p",
+        isDashboard: true,
+        rootWorkspaceId: WORKSPACE.id,
+        dashboardContributionId: "settings",
+      } as never,
+    ]);
+    const settingsIdx = (() => {
+      let idx = -1;
+      const unsub = workspaces.subscribe((list) => {
+        idx = list.findIndex((w) => w.id === "ws-settings-1");
+      });
+      unsub();
+      return idx;
+    })();
+    activeWorkspaceIdx.set(settingsIdx);
+
+    // Diff contribution's create() simulates createWorkspaceFromDef's
+    // auto-switch behavior by appending a dashboard workspace and
+    // pointing activeWorkspaceIdx at it.
+    registerDashboardContribution({
+      id: "diff",
+      source: "diff-viewer",
+      label: "Diff",
+      actionLabel: "Add Diff",
+      capPerWorkspace: 1,
+      create: vi.fn(async () => {
+        workspaces.update((cur) => [
+          ...cur,
+          {
+            id: "ws-diff-new",
+            name: "Diff",
+            paneLayout: {
+              type: "pane",
+              pane: { id: "dp", surfaces: [], activeSurfaceId: null },
+            },
+            activePaneId: "dp",
+            isDashboard: true,
+            rootWorkspaceId: WORKSPACE.id,
+            dashboardContributionId: "diff",
+          } as never,
+        ]);
+        const newIdx = (() => {
+          let idx = -1;
+          const unsub = workspaces.subscribe((list) => {
+            idx = list.findIndex((w) => w.id === "ws-diff-new");
+          });
+          unsub();
+          return idx;
+        })();
+        activeWorkspaceIdx.set(newIdx);
+        return "ws-diff-new";
+      }),
+    });
+
+    const { container } = render(WorkspaceDashboardSettings, {
+      props: { rootWorkspaceId: WORKSPACE.id },
+    });
+
+    const input = container.querySelector<HTMLInputElement>(
+      '[data-dashboard-toggle-row="diff"] [data-dashboard-toggle-input]',
+    );
+    expect(input).not.toBeNull();
+    await fireEvent.click(input!);
+    await tick();
+    // Drain the awaited contribution.create() and the subsequent restore.
+    await new Promise((r) => setTimeout(r, 0));
+    await tick();
+
+    const finalActive = (() => {
+      let idx = -1;
+      const unsub = activeWorkspaceIdx.subscribe((v) => (idx = v));
+      unsub();
+      return idx;
+    })();
+    const finalList = (() => {
+      let v: { id: string }[] = [];
+      const unsub = workspaces.subscribe((list) => (v = list));
+      unsub();
+      return v;
+    })();
+    expect(finalList[finalActive]?.id).toBe("ws-settings-1");
   });
 
   it("reflects active state for user-opt-in contributions", () => {

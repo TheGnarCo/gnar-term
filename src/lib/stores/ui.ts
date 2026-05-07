@@ -4,9 +4,6 @@ import type { MenuItem } from "../context-menu-types";
 export const isFullscreen = writable<boolean>(false);
 export const sidebarVisible = writable<boolean>(true);
 
-/** True while the Meta key is held. Used to preview drag-over states across the sidebar. */
-export const metaPreviewActive = writable<boolean>(false);
-
 /**
  * Id of the sidebar block currently hovered (mouseenter on its
  * drag-grip column). `__workspaces__` for the built-in Workspaces block,

@@ -62,21 +62,12 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
       label: "Agentic Dashboard",
       actionLabel: "Add Agentic Dashboard",
       capPerWorkspace: 1,
-      autoProvision: true,
       icon: BotIcon,
-      lockedReason: "Required by Agentic extension",
       create: (workspace) => createAgenticDashboardWorkspace(api, workspace),
       regenerate: async (workspace) => {
         await writeAgenticDashboardTemplate(api, workspace, { force: true });
       },
     });
-
-    // The Agentic Dashboard contribution is autoProvision: true, so
-    // core's registerDashboardContribution wrapper handles the
-    // post-restore back-fill onto every existing workspace. The
-    // matching teardown on deactivate flows through the registry
-    // cleanup pipeline (closeAutoDashboardsBySource), so neither hook
-    // needs to be wired here.
 
     const CLOSED_KEY = "globalDashboardClosed";
 

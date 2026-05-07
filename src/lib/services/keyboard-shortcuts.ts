@@ -15,7 +15,7 @@ import {
   findBarVisible,
   sidebarVisible,
 } from "../stores/ui";
-import { activeSurface, activePane } from "../stores/workspace";
+import { activeSurface, activePane, workspaces } from "../stores/workspace";
 import { activateWorkspace } from "./workspace-service";
 import { rootRowOrder } from "../stores/root-row-order";
 import { isTerminalSurface } from "../types";
@@ -88,16 +88,20 @@ export function handleAppKeydown(
       return;
     }
 
-    // ⌘1-9: activate nth root Workspace in the primary sidebar.
-    // Flashes the focused pane after activation so the user has a visible
-    // confirmation of which workspace/branch they landed on (avoids the
-    // silent wrong-branch-landing UX when last-active resolved to a
-    // worktree-backed Branched Workspace).
+    // ⌘1-9: activate nth root Workspace banner in the primary sidebar.
+    // Standalone Dashboard Workspaces (Settings, Claude Settings, etc.)
+    // render as chips in the Workspaces list but are NOT addressable via
+    // ⌘N — only core workspace banners participate in the numbered
+    // shortcut. Flashes the focused pane after activation so the user
+    // has a visible confirmation of which workspace/branch they landed on.
     if (e.key >= "1" && e.key <= "9") {
       const n = parseInt(e.key) - 1;
-      const workspaceRows = get(rootRowOrder).filter(
-        (r) => r.kind === "workspace",
-      );
+      const wsById = new Map(get(workspaces).map((w) => [w.id, w] as const));
+      const workspaceRows = get(rootRowOrder).filter((r) => {
+        if (r.kind !== "workspace") return false;
+        const ws = wsById.get(r.id);
+        return ws ? ws.isDashboard !== true : false;
+      });
       const row = workspaceRows[n];
       if (!row) return;
       e.preventDefault();

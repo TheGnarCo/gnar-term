@@ -248,15 +248,32 @@ describe("keyboard-shortcuts — font zoom bindings", () => {
 });
 
 describe("keyboard-shortcuts — ⌘1-9 workspace activation", () => {
+  function makeWs(id: string, extra: Record<string, unknown> = {}) {
+    return {
+      id,
+      name: id,
+      paneLayout: {
+        type: "pane",
+        pane: { id: `${id}-p`, surfaces: [], activeSurfaceId: null },
+      },
+      activePaneId: `${id}-p`,
+      ...extra,
+    } as never;
+  }
+
   beforeEach(async () => {
     mockIsMac = true;
     activateWorkspaceMock.mockReset();
     const { rootRowOrder } = await import("../lib/stores/root-row-order");
+    const { workspace } = await loadModule();
     rootRowOrder.set([]);
+    workspace.workspaces.set([]);
   });
 
   it("activates the nth workspace-kind row, skipping non-workspace rows", async () => {
     const { rootRowOrder } = await import("../lib/stores/root-row-order");
+    const { workspace } = await loadModule();
+    workspace.workspaces.set([makeWs("ws-A"), makeWs("ws-B")]);
     rootRowOrder.set([
       { kind: "pseudo-workspace", id: "nw-1" },
       { kind: "workspace", id: "ws-A" },
@@ -271,6 +288,8 @@ describe("keyboard-shortcuts — ⌘1-9 workspace activation", () => {
 
   it("activates the second workspace-kind row with ⌘2", async () => {
     const { rootRowOrder } = await import("../lib/stores/root-row-order");
+    const { workspace } = await loadModule();
+    workspace.workspaces.set([makeWs("ws-A"), makeWs("ws-B"), makeWs("ws-C")]);
     rootRowOrder.set([
       { kind: "workspace", id: "ws-A" },
       { kind: "pseudo-workspace", id: "nw-1" },
@@ -284,6 +303,8 @@ describe("keyboard-shortcuts — ⌘1-9 workspace activation", () => {
 
   it("does nothing when ⌘N has no workspace at that position", async () => {
     const { rootRowOrder } = await import("../lib/stores/root-row-order");
+    const { workspace } = await loadModule();
+    workspace.workspaces.set([makeWs("ws-only")]);
     rootRowOrder.set([{ kind: "workspace", id: "ws-only" }]);
     const { shortcuts } = await loadModule();
     // ⌘5 — only one workspace exists
@@ -293,6 +314,8 @@ describe("keyboard-shortcuts — ⌘1-9 workspace activation", () => {
 
   it("ignores non-workspace rows when counting positions", async () => {
     const { rootRowOrder } = await import("../lib/stores/root-row-order");
+    const { workspace } = await loadModule();
+    workspace.workspaces.set([makeWs("ws-A"), makeWs("ws-B")]);
     // 9 rows but only 2 are workspace-kind
     rootRowOrder.set([
       { kind: "pseudo-workspace", id: "nw-1" },
@@ -314,9 +337,41 @@ describe("keyboard-shortcuts — ⌘1-9 workspace activation", () => {
     expect(activateWorkspaceMock).not.toHaveBeenCalled();
   });
 
+  it("skips standalone Dashboard Workspace chips when counting ⌘N positions", async () => {
+    const { rootRowOrder } = await import("../lib/stores/root-row-order");
+    const { workspace } = await loadModule();
+    workspace.workspaces.set([
+      makeWs("ws-A"),
+      makeWs("settings-1", {
+        isDashboard: true,
+        dashboardContributionId: "gnar-term:settings",
+      }),
+      makeWs("ws-B"),
+    ]);
+    rootRowOrder.set([
+      { kind: "workspace", id: "ws-A" },
+      { kind: "workspace", id: "settings-1" },
+      { kind: "workspace", id: "ws-B" },
+    ]);
+    const { shortcuts } = await loadModule();
+    // ⌘1 → ws-A (first core banner)
+    shortcuts.handleAppKeydown(mkEvent({ key: "1", meta: true }), ctx);
+    expect(activateWorkspaceMock).toHaveBeenCalledWith("ws-A");
+    activateWorkspaceMock.mockReset();
+    // ⌘2 → ws-B (dashboard chip is skipped, NOT settings-1)
+    shortcuts.handleAppKeydown(mkEvent({ key: "2", meta: true }), ctx);
+    expect(activateWorkspaceMock).toHaveBeenCalledWith("ws-B");
+    activateWorkspaceMock.mockReset();
+    // ⌘3 → no third core banner
+    shortcuts.handleAppKeydown(mkEvent({ key: "3", meta: true }), ctx);
+    expect(activateWorkspaceMock).not.toHaveBeenCalled();
+  });
+
   it("does not activate workspaces via Ctrl+N on non-Mac (⌘-only feature)", async () => {
     mockIsMac = false;
     const { rootRowOrder } = await import("../lib/stores/root-row-order");
+    const { workspace } = await loadModule();
+    workspace.workspaces.set([makeWs("ws-linux")]);
     rootRowOrder.set([{ kind: "workspace", id: "ws-linux" }]);
     const { shortcuts } = await loadModule();
     shortcuts.handleAppKeydown(mkEvent({ key: "1", ctrl: true }), ctx);

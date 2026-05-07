@@ -10,6 +10,7 @@
    *     for this workspace (autoProvision contribs render locked-on)
    *   - Markdown source — read-only path to the Overview preview file
    */
+  import { get } from "svelte/store";
   import { theme } from "../stores/theme";
   import ColorSlotPicker from "./ColorSlotPicker.svelte";
   import { workspacesStore } from "../stores/workspace";
@@ -18,7 +19,8 @@
     updateWorkspace,
     closeDashboardForWorkspace,
   } from "../services/workspace-service";
-  import { workspaces } from "../stores/workspace";
+  import { switchWorkspace } from "../services/workspace-runtime-service";
+  import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
   import {
     dashboardContributionStore,
     type DashboardContribution,
@@ -99,8 +101,20 @@
     if (!workspace) return;
     if (contribution.autoProvision) return;
     if (next) {
+      // Snapshot the active workspace before create() — createWorkspaceFromDef
+      // auto-switches to the freshly created dashboard, which would yank the
+      // user out of the Settings panel they're toggling from.
+      const list = get(workspaces);
+      const prevIdx = get(activeWorkspaceIdx);
+      const prevId = prevIdx >= 0 ? (list[prevIdx]?.id ?? null) : null;
       try {
         await contribution.create(workspace);
+        if (prevId) {
+          const restoredIdx = get(workspaces).findIndex((w) => w.id === prevId);
+          if (restoredIdx >= 0 && restoredIdx !== get(activeWorkspaceIdx)) {
+            switchWorkspace(restoredIdx);
+          }
+        }
       } catch (err) {
         console.error(
           `[workspace-settings] Failed to add "${contribution.id}":`,

@@ -27,9 +27,19 @@ describe("dashboard btn-row — icon only", () => {
     expect(SOURCE).not.toContain("dashboard-tile-label");
   });
 
-  it("pins the Settings dashboard last via sort", () => {
+  it("pins the Settings dashboard last by splitting it from non-settings dashboards", () => {
+    // Non-settings dashboards render first; tile actions render next; the
+    // Settings dashboard renders just before the expand toggle. The split
+    // happens at the data layer rather than via a sort-and-suffix pass.
+    expect(SOURCE).toContain('dashboardContributionId !== "settings"');
     expect(SOURCE).toContain('dashboardContributionId === "settings"');
-    expect(SOURCE).toContain("return aS ? 1 : -1");
+    expect(SOURCE).toContain("nonSettingsDashboards");
+    expect(SOURCE).toContain("settingsDashboard");
+    // The non-settings each block runs before the settings render block.
+    const nonSettingsIdx = SOURCE.indexOf("{#each nonSettingsDashboards");
+    const settingsIdx = SOURCE.indexOf("{#if settingsDashboard}");
+    expect(nonSettingsIdx).toBeGreaterThan(-1);
+    expect(settingsIdx).toBeGreaterThan(nonSettingsIdx);
   });
 
   it("applies active ring using workspace color", () => {

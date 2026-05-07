@@ -49,7 +49,7 @@
 >
   <svelte:component
     this={iconComponent as Component}
-    size={14}
+    size={12}
     color="currentColor"
   />
 </span>
@@ -60,7 +60,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 14px;
-    height: 14px;
+    width: 12px;
+    height: 12px;
   }
 </style>

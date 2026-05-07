@@ -188,10 +188,12 @@ async function createWorkspaceFlow(prefill?: {
   }
 
   // Auto-provision every autoProvision dashboard contribution for the
-  // new workspace (Overview, Settings, and any extension-owned
-  // autoProvision contributions like Agentic). The Overview dashboard
-  // is tracked via `workspace.dashboardWorkspaceId` so
-  // `openWorkspaceDashboard` can activate it directly.
+  // new workspace (currently only Settings — Overview is opt-in via
+  // the Settings panel toggle). If a user later opts in to the
+  // Overview, that flow records the dashboardWorkspaceId so
+  // `openWorkspaceDashboard` can activate it directly; the back-fill
+  // here keeps the binding accurate when the Overview happens to exist
+  // at workspace-create time.
   try {
     await provisionAutoDashboardsForWorkspace(workspace);
     const overview = get(workspaces).find((w) =>
@@ -287,18 +289,16 @@ export async function initWorkspaces(): Promise<void> {
 
   // Core-internal "Workspace Dashboard" contribution — id `group`
   // (stable persisted contribution id, retained across the rename),
-  // capPerWorkspace 1, autoProvision. Materializes the per-workspace
-  // Overview child workspace. `lockedReason` surfaces in the Settings
-  // dashboard's toggle list explaining why the toggle is fixed-on.
+  // capPerWorkspace 1. Opt-in: only the Settings chip is auto-provisioned
+  // by default; users add the Overview from the workspace's Settings
+  // panel toggle.
   registerDashboardContribution({
     id: OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
     source: "core",
     label: "Workspace Dashboard",
     actionLabel: "Add Workspace Dashboard",
     capPerWorkspace: 1,
-    autoProvision: true,
     icon: GridIcon,
-    lockedReason: "Required (Overview)",
     create: async (workspace: Workspace) =>
       await createWorkspaceDashboard(workspace),
     regenerate: async (workspace: Workspace) =>

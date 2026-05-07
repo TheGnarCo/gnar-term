@@ -284,19 +284,26 @@
   let caretHovered = false;
   let dashboardCloseHovered: string | null = null;
 
-  $: dashboardWorkspaces = (() => {
+  // Workspace's dashboards split into the Settings chip (always rendered
+  // last, just before the expansion toggle) and everything else (rendered
+  // first, then the tile actions). Settings is intentionally separated
+  // out at the data layer so the template can interleave it after the
+  // tile-action group instead of relying on a sort-and-suffix pass.
+  $: allDashboards = (() => {
     const wId = workspace?.id;
     if (!wId) return [] as Array<{ ws: Workspace; idx: number }>;
     return $workspaces
       .map((ws, idx) => ({ ws, idx }))
-      .filter(({ ws }) => ws.isDashboard === true && ws.rootWorkspaceId === wId)
-      .sort((a, b) => {
-        const aS = a.ws.dashboardContributionId === "settings";
-        const bS = b.ws.dashboardContributionId === "settings";
-        if (aS === bS) return 0;
-        return aS ? 1 : -1;
-      });
+      .filter(
+        ({ ws }) => ws.isDashboard === true && ws.rootWorkspaceId === wId,
+      );
   })();
+  $: nonSettingsDashboards = allDashboards.filter(
+    ({ ws }) => ws.dashboardContributionId !== "settings",
+  );
+  $: settingsDashboard = allDashboards.find(
+    ({ ws }) => ws.dashboardContributionId === "settings",
+  );
 
   $: tileActions = $workspaceActionStore.filter(
     (a) =>
@@ -466,7 +473,7 @@
       </svelte:fragment>
 
       <svelte:fragment slot="btn-row" let:collapsed let:toggle let:showToggle>
-        {#each dashboardWorkspaces as entry (entry.ws.id)}
+        {#snippet dashboardChip(entry: { ws: Workspace; idx: number })}
           {@const contribId = entry.ws.dashboardContributionId}
           {@const contribution = contribId
             ? getDashboardContribution(contribId)
@@ -479,8 +486,8 @@
             style="
               position: relative;
               flex: 1 1 calc(25% - 3px);
-              min-width: 32px;
-              height: 30px;
+              min-width: 28px;
+              height: 24px;
             "
             on:mouseenter={() => (hoveredDashId = entry.ws.id)}
             on:mouseleave={() => {
@@ -534,10 +541,10 @@
                 on:mouseleave={() => (dashboardCloseHovered = null)}
                 style="
                   position: absolute;
-                  top: 50%; right: 6px;
+                  top: 50%; right: 4px;
                   transform: translateY(-50%);
                   display: flex; align-items: center; justify-content: center;
-                  width: 14px; height: 14px;
+                  width: 12px; height: 12px;
                   color: {dashboardCloseHovered === entry.ws.id
                   ? $theme.danger
                   : $theme.fgDim};
@@ -548,14 +555,18 @@
                   border-radius: 3px;
                   cursor: pointer;
                   padding: 0;
-                  font-size: 8px; line-height: 1;
+                  font-size: 7px; line-height: 1;
                   transition: color 0.1s, border-color 0.1s;
                   -webkit-app-region: no-drag;
                   z-index: 1;
-                "><CloseIcon width="8" height="8" /></button
+                "><CloseIcon width="7" height="7" /></button
               >
             {/if}
           </div>
+        {/snippet}
+
+        {#each nonSettingsDashboards as entry (entry.ws.id)}
+          {@render dashboardChip(entry)}
         {/each}
         {#each tileActions as action (action.id)}
           <button
@@ -579,6 +590,9 @@
             />
           </button>
         {/each}
+        {#if settingsDashboard}
+          {@render dashboardChip(settingsDashboard)}
+        {/if}
         {#if showToggle}
           <button
             class="dash-btn"
@@ -655,9 +669,9 @@
 <style>
   .dash-btn {
     flex: 1 1 calc(25% - 3px);
-    min-width: 32px;
-    height: 30px;
-    border-radius: 6px;
+    min-width: 28px;
+    height: 24px;
+    border-radius: 5px;
     cursor: pointer;
     display: flex;
     align-items: center;

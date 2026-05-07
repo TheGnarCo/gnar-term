@@ -2,7 +2,7 @@
 <script lang="ts">
   import {
     contextMenu,
-    metaPreviewActive,
+    anyReorderActive,
     showConfirmPrompt,
   } from "../stores/ui";
   import { theme } from "../stores/theme";
@@ -11,40 +11,36 @@
   import DragGrip from "./DragGrip.svelte";
 
   let expanded = false;
+  // True when the current expanded state was triggered by a drag entering
+  // the zone, NOT by a user click. The reorder-end watcher only collapses
+  // back when the open state was auto-driven — manual user toggles persist.
+  let autoExpanded = false;
   let archiveZoneEl: HTMLElement | null = null;
   let hoveredRowId: string | null = null;
-
-  let metaPreviewTimer: ReturnType<typeof setTimeout> | null = null;
-
-  function activateMetaPreview() {
-    archiveZoneEl?.setAttribute("data-drag-preview", "true");
-    metaPreviewActive.set(true);
-  }
-  function deactivateMetaPreview() {
-    if (metaPreviewTimer !== null) {
-      clearTimeout(metaPreviewTimer);
-      metaPreviewTimer = null;
-    }
-    archiveZoneEl?.removeAttribute("data-drag-preview");
-    metaPreviewActive.set(false);
-  }
-
-  function onKeyDown(e: KeyboardEvent) {
-    if (e.key === "Meta" && metaPreviewTimer === null) {
-      metaPreviewTimer = setTimeout(activateMetaPreview, 600);
-    }
-  }
-  function onKeyUp(e: KeyboardEvent) {
-    if (e.key === "Meta") deactivateMetaPreview();
-  }
-  function onBlur() {
-    deactivateMetaPreview();
-  }
+  let headerHovered = false;
 
   $: totalCount = $archivedOrder.length;
 
   function toggle() {
     expanded = !expanded;
+    autoExpanded = false;
+  }
+
+  // Drag-hover auto-expand: while a sidebar drag is active and the cursor
+  // enters the archive zone, expand it so the user can see what sits
+  // inside (and where their item lands). Replaces the older Meta-hold
+  // preview overlay — the expansion itself is the discoverability cue.
+  function onZoneEnter() {
+    if ($anyReorderActive && !expanded) {
+      expanded = true;
+      autoExpanded = true;
+    }
+  }
+
+  // When the drag ends, collapse back if (and only if) we auto-expanded.
+  $: if (!$anyReorderActive && autoExpanded) {
+    expanded = false;
+    autoExpanded = false;
   }
 
   function getName(id: string): string {
@@ -137,32 +133,86 @@
   }
 </script>
 
-<svelte:window on:keydown={onKeyDown} on:keyup={onKeyUp} on:blur={onBlur} />
-
+<!-- The archive section sits at the bottom of the sidebar (outside the
+     scrollable content) so it stays visible as a drop target. Inner
+     padding-left of 4px matches the scrollable content's left inset so
+     the row chrome lines up with the workspace rows above. -->
 <div data-archive-zone class="archive-zone" bind:this={archiveZoneEl}>
   <button
     type="button"
     on:click={toggle}
-    class="archive-header"
-    class:has-items={totalCount > 0}
+    on:mouseenter={() => {
+      headerHovered = true;
+      onZoneEnter();
+    }}
+    on:mouseleave={() => (headerHovered = false)}
+    data-archive-header
+    aria-expanded={expanded}
+    style="
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 32px;
+      margin: 0 8px 0 0;
+      padding: 0 12px 0 0;
+      background: {headerHovered
+      ? ($theme.bgHighlight ?? 'rgba(255,255,255,0.05)')
+      : 'transparent'};
+      border: 1px solid {$theme.border ?? 'transparent'};
+      border-radius: 0 6px 6px 0;
+      cursor: pointer;
+      color: rgba(255, 255, 255, 0.55);
+      font-family: inherit;
+      font-size: 13px;
+      transition: background 0.1s;
+    "
   >
-    <svg
+    <DragGrip
+      theme={$theme}
+      visible={false}
+      railColor={$theme.fgDim}
+      railOpacity={0.35}
+    />
+    <span
       aria-hidden="true"
-      width="12"
-      height="8"
-      viewBox="0 0 12 8"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.5"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      style="transition: transform 0.2s ease; transform: rotate({expanded
-        ? 0
-        : 180}deg);"><polyline points="1,1 6,7 11,1" /></svg
+      style="
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 12px;
+        color: inherit;
+        transition: transform 0.15s ease;
+        transform: rotate({expanded ? 90 : 0}deg);
+      "
     >
-    <span>Archive</span>
+      <svg
+        width="10"
+        height="10"
+        viewBox="0 0 12 12"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <polyline points="3,2 8,6 3,10" />
+      </svg>
+    </span>
+    <span style="flex: 1; text-align: left;">Archive</span>
     {#if totalCount > 0}
-      <span class="badge">{totalCount}</span>
+      <span
+        style="
+          background: rgba(255, 255, 255, 0.06);
+          color: rgba(255, 255, 255, 0.55);
+          border-radius: 3px;
+          padding: 1px 5px;
+          font-size: 10px;
+          font-weight: 600;
+        "
+      >
+        {totalCount}
+      </span>
     {/if}
   </button>
 
@@ -196,62 +246,20 @@
 
 <style>
   .archive-zone {
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
     flex-shrink: 0;
     position: relative;
-  }
-
-  .archive-zone:global([data-drag-preview])::after {
-    content: "Archive";
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    background: rgba(55, 55, 55, 0.93);
-    color: rgba(255, 255, 255, 0.7);
-    font-size: 13px;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    z-index: 10;
-    pointer-events: none;
-    border-radius: 4px;
-  }
-
-  .archive-header {
-    width: 100%;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 7px 10px;
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: rgba(255, 255, 255, 0.35);
-  }
-
-  .archive-header.has-items {
-    color: rgba(255, 255, 255, 0.55);
-  }
-
-  .badge {
-    margin-left: auto;
-    background: rgba(255, 255, 255, 0.06);
-    color: rgba(255, 255, 255, 0.35);
-    border-radius: 3px;
-    padding: 1px 5px;
-    font-size: 10px;
+    /* 4px left inset matches the scrollable content's
+       `padding: 8px 0 8px 4px` so the archive row's rail aligns with the
+       workspace rows above it. 8px top breathing room mirrors the
+       scrollable area's vertical inset. */
+    padding: 8px 0 8px 4px;
   }
 
   .archive-list {
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    margin-top: 2px;
     max-height: 160px;
     overflow-y: auto;
-    padding-bottom: 8px;
+    padding: 0 8px 0 0;
   }
 
   .empty-hint {

@@ -44,14 +44,9 @@ export function registerClaudeSettingsExtension(api: ExtensionAPI): void {
       label: "Claude Settings",
       actionLabel: "Add Claude Settings Dashboard",
       capPerWorkspace: 1,
-      autoProvision: true,
       icon: ClaudeMark,
-      lockedReason: "Required by Claude Settings extension",
       create: (workspace) => createClaudeSettingsDashboard(api, workspace),
     });
-    // Auto-provision back-fill onto existing workspaces is handled by
-    // core's registerDashboardContribution wrapper; matching teardown
-    // on deactivate runs through the registry cleanup pipeline.
   });
 }
 

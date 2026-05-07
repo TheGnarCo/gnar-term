@@ -59,7 +59,7 @@ describe("DragGrip", () => {
     expect(stripe!.style.width).toBe("8px");
   });
 
-  it("paints the rail stripe at 6px when narrowRail is set", () => {
+  it("paints the rail stripe at 4px when narrowRail is set", () => {
     const { container } = render(DragGrip, {
       props: {
         theme: stubTheme,
@@ -72,7 +72,7 @@ describe("DragGrip", () => {
       ".drag-grip > div",
     ) as HTMLElement | null;
     expect(stripe).not.toBeNull();
-    expect(stripe!.style.width).toBe("6px");
+    expect(stripe!.style.width).toBe("4px");
   });
 });
 

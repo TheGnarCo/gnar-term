@@ -37,7 +37,7 @@
    * Whether the owning row/container represents the active workspace (or
    * has an active descendant in container mode). Drives rail-width in
    * collapsed sidebar mode: active rails stay 8px so the active row
-   * remains visually anchored, inactive rails shrink to 6px and expand
+   * remains visually anchored, inactive rails shrink to 4px and expand
    * back to 8px on hover. Has no effect when the sidebar is expanded.
    */
   export let isActive: boolean = false;
@@ -72,7 +72,7 @@
   $: effectiveCanDrag = canDrag && $canSidebarDrag;
   $: visible = isDragging || (effectiveCanDrag && railHovered && !locked);
   $: railBorderColor = $theme.border ?? "transparent";
-  // Collapsed mode rail-width policy: thin (6px) when inactive, not
+  // Collapsed mode rail-width policy: thin (4px) when inactive, not
   // currently hovered/dragged, AND the row's popover/banner isn't open.
   // Expanded mode keeps the historical 8px rail regardless of state.
   $: narrowRail =

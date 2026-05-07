@@ -6,7 +6,7 @@
  * The bug: WorkspaceSectionContent used to forward
  *   hasActiveChild={isPrimaryActive}
  * which meant a branched workspace or dashboard child being active left
- * the rail in its narrow inactive width (6px). The fix introduces a
+ * the rail in its narrow inactive width (4px). The fix introduces a
  * dedicated `hasActiveDescendant` derivation that covers the root, every
  * branched workspace, and every dashboard child of the workspace.
  */

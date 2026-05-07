@@ -1,6 +1,6 @@
 /**
  * Verifies the collapsed-mode rail width policy:
- *   - inactive + not hovered + popover closed → 6px stripe (slim accent)
+ *   - inactive + not hovered + popover closed → 4px stripe (slim accent)
  *   - active OR popover open                  → 8px stripe (anchored)
  *   - expanded sidebar                        → always 8px (legacy)
  *
@@ -24,14 +24,14 @@ describe("SidebarRail collapsed-mode rail width", () => {
     sidebarVisible.set(true);
   });
 
-  it("paints a 6px stripe for an inactive row when collapsed", () => {
+  it("paints a 4px stripe for an inactive row when collapsed", () => {
     sidebarVisible.set(false);
     const { container } = render(SidebarRail, {
       props: { mode: "row", color: "#abc", isActive: false },
     });
     const stripe = railStripe(container);
     expect(stripe).not.toBeNull();
-    expect(stripe!.style.width).toBe("6px");
+    expect(stripe!.style.width).toBe("4px");
   });
 
   it("paints an 8px stripe when popoverActive is true (banner shown)", () => {

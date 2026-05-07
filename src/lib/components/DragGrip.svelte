@@ -49,7 +49,7 @@
   /** When set, renders this label in the close/lock slot during meta-hold (shortcutHintsActive). */
   export let shortcutLabel: string | undefined = undefined;
   /**
-   * Renders the rail stripe at the slim 6px width instead of the full
+   * Renders the rail stripe at the slim 4px width instead of the full
    * 8px. Callers set this in collapsed sidebar mode for inactive,
    * non-hovered rows whose popover/banner isn't open, so the rail reads
    * as a thin accent that expands back to 8px the moment any of those
@@ -85,7 +85,7 @@
   $: fritBackgroundRepeat = "repeat";
   $: showDots = visible && alwaysShowDots;
   $: showRailStripe = !visible;
-  $: railStripeWidth = narrowRail ? "6px" : "8px";
+  $: railStripeWidth = narrowRail ? "4px" : "8px";
 </script>
 
 <div

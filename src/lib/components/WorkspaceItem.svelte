@@ -320,6 +320,11 @@
                 : 6}px; border-radius: 50%; background: {badge.color};"
             ></span>
           {/if}
+          <span
+            style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; min-width: 0;"
+          >
+            {agentTaskTitle ?? badge.label}
+          </span>
         </span>
       {/if}
 

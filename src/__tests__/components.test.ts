@@ -126,6 +126,7 @@ import WorkspaceSectionHarness from "./workspace-section-harness.svelte";
 // Store imports
 import {
   sidebarVisible,
+  sidebarWidth,
   commandPaletteOpen,
   findBarVisible,
   contextMenu,
@@ -245,14 +246,7 @@ beforeEach(() => {
 // ===========================================================================
 
 describe("ShortcutReference", () => {
-  it("does not render when open is false", () => {
-    const { container } = render(ShortcutReference, { props: { open: false } });
-    expect(
-      container.querySelector("[data-testid='shortcut-reference']"),
-    ).toBeNull();
-  });
-
-  it("renders when open is true", () => {
+  it("renders the dashboard surface body", () => {
     render(ShortcutReference, { props: { open: true } });
     expect(screen.getByTestId("shortcut-reference")).toBeTruthy();
   });
@@ -1697,6 +1691,45 @@ describe("Sidebar", () => {
       container.querySelectorAll("button"),
     ).find((b) => b.textContent?.trim() === "+ New");
     expect(inlineNewButton).toBeUndefined();
+  });
+
+  it("activates the overlay on hover when collapsed", async () => {
+    sidebarVisible.set(false);
+    sidebarWidth.set(220);
+    const { container } = render(Sidebar, { props: sidebarProps });
+    const slot = container.querySelector("#sidebar") as HTMLElement;
+    const inner = slot.querySelector(".sidebar-content") as HTMLElement;
+
+    expect(inner.style.width).toBe("220px");
+    expect(slot.classList.contains("overlay-active")).toBe(false);
+
+    slot.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+    await tick();
+
+    expect(slot.classList.contains("overlay-active")).toBe(true);
+  });
+
+  it("closes the overlay after the mouseleave grace period", async () => {
+    vi.useFakeTimers();
+    try {
+      sidebarVisible.set(false);
+      const { container } = render(Sidebar, { props: sidebarProps });
+      const slot = container.querySelector("#sidebar") as HTMLElement;
+
+      slot.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+      await tick();
+      expect(slot.classList.contains("overlay-active")).toBe(true);
+
+      slot.dispatchEvent(new MouseEvent("mouseleave", { bubbles: true }));
+      await tick();
+      expect(slot.classList.contains("overlay-active")).toBe(true);
+
+      vi.advanceTimersByTime(200);
+      await tick();
+      expect(slot.classList.contains("overlay-active")).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("renders split button for workspace actions in the top row (sidebar toggles live in TitleBar)", () => {

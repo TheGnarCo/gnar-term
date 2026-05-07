@@ -1,0 +1,123 @@
+import { describe, it, expect, beforeEach, vi } from "vitest";
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("../lib/services/extension-state", () => ({
+  loadExtensionState: vi.fn().mockResolvedValue({}),
+  saveExtensionState: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("../lib/stores/root-row-order", () => ({
+  appendRootRow: vi.fn(),
+  removeRootRow: vi.fn(),
+}));
+vi.mock("../lib/services/workspace-git-dirty-store", () => ({
+  releaseWorkspaceDirtyStore: vi.fn(),
+}));
+vi.mock("../lib/services/workspace-runtime-service", () => ({
+  createWorkspaceFromDef: vi.fn(),
+  closeWorkspace: vi.fn(),
+}));
+vi.mock("../lib/services/event-bus", () => ({
+  eventBus: { emit: vi.fn(), on: vi.fn(), off: vi.fn() },
+}));
+
+import { setWorkspaces, getWorkspaces } from "../lib/stores/workspace";
+import {
+  toggleWorkspaceLock,
+  deleteWorkspace,
+} from "../lib/services/workspace-service";
+import { removeRootRow } from "../lib/stores/root-row-order";
+import type { Workspace } from "../lib/config";
+
+function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
+  return {
+    id: "g1",
+    name: "Test Workspace",
+    path: "/tmp/g1",
+    color: "purple",
+    branchedWorkspaceIds: [],
+    isGit: false,
+    createdAt: "2026-01-01T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
+describe("toggleWorkspaceLock", () => {
+  beforeEach(() => {
+    setWorkspaces([]);
+  });
+
+  it("sets locked to true on first toggle", () => {
+    setWorkspaces([makeWorkspace({ id: "g1" })]);
+    toggleWorkspaceLock("g1");
+    expect(getWorkspaces()[0].locked).toBe(true);
+  });
+
+  it("clears locked back to false on second toggle", () => {
+    setWorkspaces([makeWorkspace({ id: "g1", locked: true })]);
+    toggleWorkspaceLock("g1");
+    expect(getWorkspaces()[0].locked).toBe(false);
+  });
+
+  it("preserves other fields when toggling", () => {
+    setWorkspaces([
+      makeWorkspace({ id: "g1", name: "Keep Me", color: "blue" }),
+    ]);
+    toggleWorkspaceLock("g1");
+    const g = getWorkspaces()[0];
+    expect(g.locked).toBe(true);
+    expect(g.name).toBe("Keep Me");
+    expect(g.color).toBe("blue");
+  });
+
+  it("only mutates the matching workspace", () => {
+    setWorkspaces([makeWorkspace({ id: "g1" }), makeWorkspace({ id: "g2" })]);
+    toggleWorkspaceLock("g2");
+    expect(getWorkspaces()[0].locked).toBeUndefined();
+    expect(getWorkspaces()[1].locked).toBe(true);
+  });
+
+  it("is a no-op for an unknown workspace id", () => {
+    const g = makeWorkspace({ id: "g1" });
+    setWorkspaces([g]);
+    toggleWorkspaceLock("does-not-exist");
+    expect(getWorkspaces()[0]).toEqual(g);
+  });
+});
+
+describe("deleteWorkspace — lock gate", () => {
+  beforeEach(() => {
+    setWorkspaces([]);
+    vi.mocked(removeRootRow).mockClear();
+  });
+
+  it("deletes an unlocked workspace normally", () => {
+    setWorkspaces([makeWorkspace({ id: "g1" })]);
+    deleteWorkspace("g1");
+    expect(getWorkspaces()).toHaveLength(0);
+    expect(removeRootRow).toHaveBeenCalledWith({
+      kind: "workspace",
+      id: "g1",
+    });
+  });
+
+  it("is a no-op when workspace is locked", () => {
+    setWorkspaces([makeWorkspace({ id: "g1", locked: true })]);
+    deleteWorkspace("g1");
+    expect(getWorkspaces()).toHaveLength(1);
+    expect(removeRootRow).not.toHaveBeenCalled();
+  });
+});
+
+describe("archiveWorkspace — lock gate", () => {
+  it("returns false and does not mutate stores when workspace is locked", async () => {
+    const { archiveWorkspace } =
+      await import("../lib/services/archive-service");
+    setWorkspaces([makeWorkspace({ id: "g-locked", locked: true })]);
+    const result = await archiveWorkspace("g-locked");
+    expect(result).toBe(false);
+    expect(getWorkspaces()).toHaveLength(1);
+    expect(getWorkspaces()[0].id).toBe("g-locked");
+  });
+});

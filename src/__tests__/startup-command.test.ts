@@ -36,12 +36,15 @@ vi.mock("@xterm/xterm", () => ({
     onTitleChange = vi.fn();
     loadAddon = vi.fn();
     options: Record<string, unknown> = {};
-    buffer = { active: { getLine: vi.fn() } };
+    buffer = { active: { getLine: vi.fn(), length: 0 } };
     parser = { registerOscHandler: vi.fn() };
     attachCustomKeyEventHandler = vi.fn();
     registerLinkProvider = vi.fn();
     getSelection = vi.fn();
+    hasSelection = vi.fn().mockReturnValue(false);
+    onSelectionChange = vi.fn();
     scrollToBottom = vi.fn();
+    onScroll = vi.fn().mockReturnValue({ dispose: vi.fn() });
   },
 }));
 vi.mock("@xterm/addon-fit", () => ({
@@ -56,12 +59,6 @@ vi.mock("@xterm/addon-webgl", () => ({
     activate = vi.fn();
     dispose = vi.fn();
     onContextLoss = vi.fn();
-  },
-}));
-vi.mock("@xterm/addon-web-links", () => ({
-  WebLinksAddon: class {
-    activate = vi.fn();
-    dispose = vi.fn();
   },
 }));
 vi.mock("@xterm/addon-search", () => ({

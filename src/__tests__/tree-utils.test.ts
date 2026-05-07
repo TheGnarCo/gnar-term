@@ -3,7 +3,7 @@
  * with real tree structures to verify split/collapse operations work correctly.
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import {
   findParentSplit,
   replaceNodeInTree,
@@ -23,7 +23,7 @@ function makePaneNode(id: string): SplitNode & { type: "pane" } {
 function makeSplit(
   dir: "horizontal" | "vertical",
   left: SplitNode,
-  right: SplitNode
+  right: SplitNode,
 ): SplitNode & { type: "split" } {
   return { type: "split", direction: dir, children: [left, right], ratio: 0.5 };
 }
@@ -127,7 +127,7 @@ describe("replaceNodeInTree", () => {
     expect(found).toBe(true);
     expect(root.children[0]).toBe(paneB);
     // Tree is now: root → [B, C]
-    expect(getAllPanes(root).map(p => p.id)).toEqual(["B", "C"]);
+    expect(getAllPanes(root).map((p) => p.id)).toEqual(["B", "C"]);
   });
 
   it("returns false when target is not found", () => {
@@ -152,20 +152,21 @@ describe("split + collapse integration", () => {
     const paneB = makePaneNode("B");
     const split = makeSplit("horizontal", paneA, paneB);
     root = split;
-    expect(getAllPanes(root).map(p => p.id)).toEqual(["A", "B"]);
+    expect(getAllPanes(root).map((p) => p.id)).toEqual(["A", "B"]);
 
     // Close pane B → collapse split, root becomes pane A again
     const parentInfo = findParentSplit(root, "B");
     expect(parentInfo).not.toBeNull();
-    const sibling = parentInfo!.parent.type === "split"
-      ? parentInfo!.parent.children[parentInfo!.index === 0 ? 1 : 0]
-      : null;
+    const sibling =
+      parentInfo!.parent.type === "split"
+        ? parentInfo!.parent.children[parentInfo!.index === 0 ? 1 : 0]
+        : null;
     // Since root === parentInfo.parent, replace root directly
     if (root === parentInfo!.parent) {
       root = sibling!;
     }
     expect(root.type).toBe("pane");
-    expect(getAllPanes(root).map(p => p.id)).toEqual(["A"]);
+    expect(getAllPanes(root).map((p) => p.id)).toEqual(["A"]);
   });
 
   it("closing a deeply nested pane collapses correctly", () => {
@@ -181,13 +182,14 @@ describe("split + collapse integration", () => {
     // Close pane A: find parent (inner), get sibling (B), replace inner with B
     const parentInfo = findParentSplit(root, "A")!;
     expect(parentInfo.parent).toBe(inner);
-    const sibling = parentInfo.parent.type === "split"
-      ? parentInfo.parent.children[parentInfo.index === 0 ? 1 : 0]
-      : null;
+    const sibling =
+      parentInfo.parent.type === "split"
+        ? parentInfo.parent.children[parentInfo.index === 0 ? 1 : 0]
+        : null;
 
     // inner !== root, so use replaceNodeInTree
     replaceNodeInTree(root, parentInfo.parent, sibling!);
     // Tree is now: root → [B, C]
-    expect(getAllPanes(root).map(p => p.id)).toEqual(["B", "C"]);
+    expect(getAllPanes(root).map((p) => p.id)).toEqual(["B", "C"]);
   });
 });

@@ -9,8 +9,10 @@ import {
   closeWorkspacesInWorkspace,
   isDashboardWorkspace,
   provisionAutoDashboardsForWorkspace,
+  activateWorkspace,
 } from "./workspace-service";
 import {
+  activeWorkspace,
   getWorkspace,
   getWorkspaces,
   setWorkspaces,
@@ -92,6 +94,16 @@ export async function archiveWorkspace(workspaceId: string): Promise<boolean> {
     workspace,
     childWorkspaceDefs: workspaceDefs,
   });
+
+  // After the archive's child workspaces close, the runtime active idx
+  // is clamped (Math.min) and can land on a dashboard chip of an
+  // unrelated workspace — or fall off the list entirely. Always route
+  // post-archive activation back to a root workspace's terminal tabs.
+  const after = get(activeWorkspace);
+  if (!after || after.isDashboard === true) {
+    const [nextRoot] = getWorkspaces();
+    if (nextRoot) await activateWorkspace(nextRoot.id);
+  }
   return true;
 }
 

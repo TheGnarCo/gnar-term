@@ -199,7 +199,9 @@
         theme={$theme}
         onDrag={(clientX) => {
           const maxWidth = window.innerWidth * 0.33;
-          sidebarWidth.set(Math.max(140, Math.min(maxWidth, clientX)));
+          // 200px clears the macOS traffic-light cluster (~78px) plus the
+          // right-aligned "+ New" split button (~90px) without overlap.
+          sidebarWidth.set(Math.max(200, Math.min(maxWidth, clientX)));
         }}
       />
     {/if}

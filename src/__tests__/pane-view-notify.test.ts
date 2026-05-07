@@ -207,7 +207,7 @@ describe("PaneView notification chrome", () => {
     expect(surface.hasUnread).toBe(false);
   });
 
-  it("renders accent border when isActive is true and no surface has hasUnread", () => {
+  it("renders default border when isActive is true and no surface has hasUnread", () => {
     const surface = makeTerminalSurface("s1", false);
     const pane = makePane([surface]);
     setupWorkspace(pane);
@@ -229,9 +229,10 @@ describe("PaneView notification chrome", () => {
     });
 
     const root = container.firstChild as HTMLElement;
-    // github-dark theme accent = #58a6ff = rgb(88, 166, 255)
-    expect(root.style.border).toContain("rgb(88, 166, 255)");
-    // No corner pip or glow when only isActive (no unread)
+    // Active pane no longer paints the accent on its outer border — that
+    // signal moved to the active tab's underline. Active + no unread reads
+    // as the default border.
+    expect(root.style.border).not.toContain("rgb(88, 166, 255)");
     expect(
       container.querySelector('[title="New activity in this pane"]'),
     ).toBeNull();

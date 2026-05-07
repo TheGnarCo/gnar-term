@@ -2,7 +2,6 @@
   import { onDestroy, type Component } from "svelte";
   import ContainerRow from "./ContainerRow.svelte";
   import PathStatusLine from "./PathStatusLine.svelte";
-  import SidebarSubtitleRow from "./SidebarSubtitleRow.svelte";
   import WorkspaceDiffPrSubtitle from "./WorkspaceDiffPrSubtitle.svelte";
   import WorkspaceListView from "./WorkspaceListView.svelte";
   import { resolveWorkspaceColor } from "../theme-data";
@@ -42,7 +41,6 @@
   import RenameableLabel from "./RenameableLabel.svelte";
   import GridIcon from "../icons/GridIcon.svelte";
   import GitBranchIcon from "../icons/GitBranchIcon.svelte";
-  import CloseIcon from "../icons/CloseIcon.svelte";
   const tileIconComponents: Record<string, unknown> = {
     "git-branch": GitBranchIcon,
   };
@@ -282,7 +280,6 @@
   let hoveredDashId: string | null = null;
   let hoveredTileActionId: string | null = null;
   let caretHovered = false;
-  let dashboardCloseHovered: string | null = null;
 
   // Workspace's dashboards split into the Settings chip (always rendered
   // last, just before the expansion toggle) and everything else (rendered
@@ -386,23 +383,36 @@
       testId={workspace.id}
       workspaceListViewComponent={WorkspaceListView}
     >
-      <RenameableLabel
-        bind:this={titleLabel}
-        value={workspace.name}
-        onCommit={commitRename}
-        ariaLabel="Workspace name"
-        klass="no-default-outline"
-        style="
-          flex: 1; min-width: 0;
-          font-size: 13px; font-weight: 600; color: {isPrimaryActive
-          ? $theme.fg
-          : ($theme.fgMuted ?? $theme.fg)};
-          overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-          user-select: none;
-          pointer-events: none;
-          padding: 2px 4px; margin-left: -4px; border-radius: 4px;
-        "
-      />
+      <div
+        style="display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0;"
+      >
+        {#if workspaceBotStatus}
+          <span
+            aria-label={workspaceBotStatus.label}
+            title={workspaceBotStatus.label}
+            style="display: inline-flex; align-items: center; color: {workspaceBotStatus.color}; flex-shrink: 0;"
+          >
+            <BotIcon size={13} title={workspaceBotStatus.label} />
+          </span>
+        {/if}
+        <RenameableLabel
+          bind:this={titleLabel}
+          value={workspace.name}
+          onCommit={commitRename}
+          ariaLabel="Workspace name"
+          klass="no-default-outline"
+          style="
+            min-width: 0;
+            font-size: 13px; font-weight: 600; color: {isPrimaryActive
+            ? $theme.fg
+            : ($theme.fgMuted ?? $theme.fg)};
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            user-select: none;
+            pointer-events: none;
+            padding: 2px 4px; margin-left: -4px; border-radius: 4px;
+          "
+        />
+      </div>
 
       <svelte:fragment slot="banner-end" let:bannerHovered>
         {#if isWorkspaceLocked}
@@ -432,25 +442,6 @@
       </svelte:fragment>
 
       <svelte:fragment slot="banner-subtitle">
-        {#if workspaceBotStatus}
-          <SidebarSubtitleRow
-            data-workspace-bot-status-row
-            title={workspaceBotStatus.label}
-            color={workspaceBotStatus.color}
-            padding="0 12px 0 6px"
-            fontSize={10}
-          >
-            <span
-              style="display: inline-flex; align-items: center; opacity: 0.7; flex-shrink: 0;"
-            >
-              <BotIcon size={10} />
-            </span>
-            <span
-              style="white-space: nowrap; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis;"
-              >{workspaceBotStatus.label}</span
-            >
-          </SidebarSubtitleRow>
-        {/if}
         <div style="pointer-events: auto;">
           <PathStatusLine
             target={{
@@ -480,7 +471,6 @@
             : undefined}
           {@const IconComp = contribution?.icon ?? GridIcon}
           {@const isActive = entry.idx === $activeWorkspaceIdx}
-          {@const canDelete = contribution && !contribution.autoProvision}
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div
             style="
@@ -490,10 +480,7 @@
               height: 24px;
             "
             on:mouseenter={() => (hoveredDashId = entry.ws.id)}
-            on:mouseleave={() => {
-              hoveredDashId = null;
-              dashboardCloseHovered = null;
-            }}
+            on:mouseleave={() => (hoveredDashId = null)}
           >
             <button
               class="dash-btn"
@@ -521,47 +508,6 @@
                 isHovered={hoveredDashId === entry.ws.id}
               />
             </button>
-            {#if canDelete && hoveredDashId === entry.ws.id}
-              <button
-                title={`Delete ${contribution.label}`}
-                aria-label={`Delete ${contribution.label}`}
-                on:click|stopPropagation={async () => {
-                  const confirmed = await showConfirmPrompt(
-                    `Delete "${entry.ws.name}"? The backing markdown file stays on disk so you can re-add this dashboard later without losing your edits.`,
-                    {
-                      title: `Delete ${contribution.label}`,
-                      confirmLabel: "Delete",
-                      cancelLabel: "Cancel",
-                    },
-                  );
-                  if (!confirmed) return;
-                  closeWorkspace(entry.idx);
-                }}
-                on:mouseenter={() => (dashboardCloseHovered = entry.ws.id)}
-                on:mouseleave={() => (dashboardCloseHovered = null)}
-                style="
-                  position: absolute;
-                  top: 50%; right: 4px;
-                  transform: translateY(-50%);
-                  display: flex; align-items: center; justify-content: center;
-                  width: 12px; height: 12px;
-                  color: {dashboardCloseHovered === entry.ws.id
-                  ? $theme.danger
-                  : $theme.fgDim};
-                  background: {$theme.bgSurface ?? $theme.bg};
-                  border: 1px solid {dashboardCloseHovered === entry.ws.id
-                  ? $theme.danger
-                  : $theme.fgDim};
-                  border-radius: 3px;
-                  cursor: pointer;
-                  padding: 0;
-                  font-size: 7px; line-height: 1;
-                  transition: color 0.1s, border-color 0.1s;
-                  -webkit-app-region: no-drag;
-                  z-index: 1;
-                "><CloseIcon width="7" height="7" /></button
-              >
-            {/if}
           </div>
         {/snippet}
 

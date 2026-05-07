@@ -268,7 +268,7 @@
               pointer-events: none;
               z-index: 3;
               border-radius: 0 6px 6px 0;
-              margin-right: 8px;
+              margin-right: 4px;
             "
             >
               {entry.ws.name}

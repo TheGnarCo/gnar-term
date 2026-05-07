@@ -47,10 +47,6 @@
     return $archivedDefs.workspaces[id]?.workspace.name ?? id;
   }
 
-  function getBranchCount(id: string): number {
-    return $archivedDefs.workspaces[id]?.childWorkspaceDefs.length ?? 0;
-  }
-
   async function confirmAndUnarchive(id: string) {
     const confirmed = await showConfirmPrompt(
       `Unarchive "${getName(id)}" and restore its branches?`,
@@ -148,24 +144,13 @@
     on:mouseleave={() => (headerHovered = false)}
     data-archive-header
     aria-expanded={expanded}
+    class="archive-banner"
     style="
-      width: 100%;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      min-height: 32px;
-      margin: 0 8px 0 0;
-      padding: 0 12px 0 0;
       background: {headerHovered
-      ? ($theme.bgHighlight ?? 'rgba(255,255,255,0.05)')
-      : 'transparent'};
+      ? $theme.bgHighlight
+      : ($theme.bgSurface ?? 'transparent')};
       border: 1px solid {$theme.border ?? 'transparent'};
-      border-radius: 0 6px 6px 0;
-      cursor: pointer;
-      color: rgba(255, 255, 255, 0.55);
-      font-family: inherit;
-      font-size: 13px;
-      transition: background 0.1s;
+      color: {$theme.fg};
     "
   >
     <DragGrip
@@ -174,46 +159,30 @@
       railColor={$theme.fgDim}
       railOpacity={0.35}
     />
-    <span
-      aria-hidden="true"
-      style="
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 12px;
-        color: inherit;
-        transition: transform 0.15s ease;
-        transform: rotate({expanded ? 90 : 0}deg);
-      "
-    >
-      <svg
-        width="10"
-        height="10"
-        viewBox="0 0 12 12"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.5"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
-        <polyline points="3,2 8,6 3,10" />
-      </svg>
-    </span>
-    <span style="flex: 1; text-align: left;">Archive</span>
-    {#if totalCount > 0}
+    <div class="archive-banner-body">
       <span
-        style="
-          background: rgba(255, 255, 255, 0.06);
-          color: rgba(255, 255, 255, 0.55);
-          border-radius: 3px;
-          padding: 1px 5px;
-          font-size: 10px;
-          font-weight: 600;
-        "
+        aria-hidden="true"
+        class="chevron"
+        style="transform: rotate({expanded ? 90 : 0}deg);"
       >
-        {totalCount}
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 12 12"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polyline points="3,2 8,6 3,10" />
+        </svg>
       </span>
-    {/if}
+      <span class="archive-label">Archive</span>
+      {#if totalCount > 0}
+        <span class="count-chip">{totalCount}</span>
+      {/if}
+    </div>
   </button>
 
   {#if expanded}
@@ -230,13 +199,21 @@
             on:contextmenu|preventDefault={(e) =>
               showItemContextMenu(e.clientX, e.clientY, id)}
             on:mousedown={(e) => startItemDrag(e, id)}
+            style="
+              background: {hoveredRowId === id
+              ? $theme.bgHighlight
+              : ($theme.bgSurface ?? 'transparent')};
+              border: 1px solid {$theme.border ?? 'transparent'};
+              color: {$theme.fg};
+            "
           >
             <DragGrip
               theme={$theme}
               visible={hoveredRowId === id}
+              railColor={$theme.fgDim}
               railOpacity={0.35}
             />
-            <span class="item-name">{getName(id)} ({getBranchCount(id)})</span>
+            <span class="item-name">{getName(id)}</span>
           </div>
         {/each}
       {/if}
@@ -255,11 +232,71 @@
     padding: 8px 0 8px 4px;
   }
 
+  /* Header banner: matches SidebarElement child chrome — drag-grip
+     column, border, hover background, rounded right edge, 4px
+     right-side gap so the right border lines up with the workspace
+     banners' `margin-right: 4px` above. */
+  .archive-banner {
+    width: calc(100% - 4px);
+    box-sizing: border-box;
+    display: flex;
+    align-items: stretch;
+    min-height: 32px;
+    margin: 0;
+    padding: 0;
+    border-radius: 0 6px 6px 0;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 13px;
+    overflow: hidden;
+    transition: background 0.1s;
+  }
+
+  .archive-banner-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 6px;
+  }
+
+  .chevron {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 12px;
+    color: inherit;
+    transition: transform 0.15s ease;
+    flex-shrink: 0;
+  }
+
+  .archive-label {
+    flex: 1;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .count-chip {
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.55);
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-size: 10px;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+
   .archive-list {
     margin-top: 2px;
     max-height: 160px;
     overflow-y: auto;
-    padding: 0 8px 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
   }
 
   .empty-hint {
@@ -270,21 +307,29 @@
     text-align: center;
   }
 
+  /* Archived items: same chrome as a child SidebarElement row.
+     4px right inset matches the banner above and the workspace
+     banners' `margin-right: 4px`. */
   .archive-item {
-    padding: 4px 10px 4px 0;
-    font-size: 12px;
-    color: rgba(255, 255, 255, 0.45);
+    width: calc(100% - 4px);
+    box-sizing: border-box;
     display: flex;
     align-items: center;
+    min-height: 32px;
+    border-radius: 0 6px 6px 0;
+    overflow: hidden;
     user-select: none;
     cursor: grab;
-    gap: 4px;
+    transition: background 0.1s;
   }
 
   .item-name {
+    flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     min-width: 0;
+    padding: 4px 6px;
+    font-size: 13px;
   }
 </style>

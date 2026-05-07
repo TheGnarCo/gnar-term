@@ -81,7 +81,7 @@
   style="
     display: flex;
     position: relative;
-    margin: 0 8px 0 0;
+    margin: 0 4px 0 0;
     border-radius: 0 6px 6px 0;
     overflow: hidden;
     cursor: pointer;

@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   getBranchesOfWorkspace: vi.fn(() => [] as unknown[]),
   closeWorkspacesInWorkspace: vi.fn(),
   provisionAutoDashboardsForWorkspace: vi.fn(() => Promise.resolve()),
+  activateWorkspace: vi.fn(() => Promise.resolve()),
   removeRootRow: vi.fn(),
   appendRootRow: vi.fn(),
 }));
@@ -52,6 +53,7 @@ vi.mock("../lib/services/workspace-service", () => ({
   closeWorkspacesInWorkspace: mocks.closeWorkspacesInWorkspace,
   provisionAutoDashboardsForWorkspace:
     mocks.provisionAutoDashboardsForWorkspace,
+  activateWorkspace: mocks.activateWorkspace,
   isDashboardWorkspace: (ws: { metadata?: { isDashboard?: boolean } }) =>
     ws.metadata?.isDashboard === true,
 }));
@@ -65,7 +67,7 @@ vi.mock("../lib/stores/ui", () => ({
   showConfirmPrompt: mocks.showConfirmPrompt,
 }));
 
-import { workspaces } from "../lib/stores/workspace";
+import { workspaces, activeWorkspace } from "../lib/stores/workspace";
 import {
   initArchiveFromState,
   archivedOrder,
@@ -81,6 +83,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   initArchiveFromState();
   workspaces.set([]);
+  (activeWorkspace as unknown as { set: (v: unknown) => void }).set(null);
   mocks.showConfirmPrompt.mockImplementation(() => Promise.resolve(true));
   mocks.createWorkspaceFromDef.mockImplementation(() =>
     Promise.resolve("new-ws-id"),
@@ -91,6 +94,7 @@ beforeEach(() => {
   mocks.provisionAutoDashboardsForWorkspace.mockImplementation(() =>
     Promise.resolve(),
   );
+  mocks.activateWorkspace.mockImplementation(() => Promise.resolve());
 });
 
 function makeWorkspace(overrides = {}) {
@@ -207,6 +211,52 @@ describe("archiveWorkspace", () => {
     expect(mocks.closeWorkspacesInWorkspace).not.toHaveBeenCalled();
     expect(mocks.setWorkspaces).not.toHaveBeenCalled();
     expect(get(archivedOrder)).toHaveLength(0);
+  });
+
+  it("activates the next root workspace when archive leaves a dashboard active", async () => {
+    const workspace = makeWorkspace();
+    const nextRoot = { id: "g-next", name: "Next" };
+    mocks.getWorkspace.mockReturnValueOnce(workspace);
+    // After the archive operations land, simulate the runtime active idx
+    // having clamped onto a dashboard chip belonging to another workspace.
+    (activeWorkspace as unknown as { set: (v: unknown) => void }).set({
+      id: "dash-x",
+      isDashboard: true,
+    });
+    // First call (filter) returns roots minus the archived; second call
+    // (post-archive lookup of remaining roots) returns the same set.
+    mocks.getWorkspaces.mockReturnValue([nextRoot]);
+
+    const result = await archiveWorkspace("g-1");
+
+    expect(result).toBe(true);
+    expect(mocks.activateWorkspace).toHaveBeenCalledWith("g-next");
+  });
+
+  it("activates the next root workspace when archive leaves no active workspace", async () => {
+    const workspace = makeWorkspace();
+    const nextRoot = { id: "g-next", name: "Next" };
+    mocks.getWorkspace.mockReturnValueOnce(workspace);
+    (activeWorkspace as unknown as { set: (v: unknown) => void }).set(null);
+    mocks.getWorkspaces.mockReturnValue([nextRoot]);
+
+    await archiveWorkspace("g-1");
+
+    expect(mocks.activateWorkspace).toHaveBeenCalledWith("g-next");
+  });
+
+  it("does not re-activate when archive leaves a non-dashboard workspace active", async () => {
+    const workspace = makeWorkspace();
+    mocks.getWorkspace.mockReturnValueOnce(workspace);
+    (activeWorkspace as unknown as { set: (v: unknown) => void }).set({
+      id: "g-other",
+      isDashboard: false,
+    });
+    mocks.getWorkspaces.mockReturnValue([{ id: "g-other" }]);
+
+    await archiveWorkspace("g-1");
+
+    expect(mocks.activateWorkspace).not.toHaveBeenCalled();
   });
 
   it("serializes only non-dashboard workspaces into the archived defs", async () => {

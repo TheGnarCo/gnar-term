@@ -21,6 +21,7 @@
 
   export let pane: Pane;
   export let workspaceId: string = "";
+  export let paneIsActive: boolean = false;
   export let onSelectSurface: (surfaceId: string) => void;
   export let onCloseSurface: (surfaceId: string) => void;
   export let onNewSurface: () => void;
@@ -125,6 +126,7 @@
         {surface}
         index={i}
         isActive={surface.id === pane.activeSurfaceId}
+        {paneIsActive}
         paneId={pane.id}
         {workspaceId}
         onSelect={() => onSelectSurface(surface.id)}

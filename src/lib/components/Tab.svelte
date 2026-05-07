@@ -15,6 +15,7 @@
   export let surface: Surface;
   export let index: number;
   export let isActive: boolean;
+  export let paneIsActive: boolean = false;
   export let onSelect: () => void;
   export let onClose: () => void;
   /** Pane that owns this tab — needed to identify drop targets. */
@@ -132,7 +133,11 @@
     : hovered
       ? $theme.bgHighlight
       : 'transparent'};
-    border-bottom: 2px solid {isActive ? $theme.accent : 'transparent'};
+    border-bottom: 3px solid {isActive
+    ? paneIsActive
+      ? $theme.accent
+      : $theme.border
+    : 'transparent'};
     border-radius: 4px 4px 0 0; white-space: nowrap;
     display: flex; align-items: center; gap: 4px;
   "

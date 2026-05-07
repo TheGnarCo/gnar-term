@@ -223,7 +223,7 @@
           position: relative;
           padding: 4px 6px 4px 0;
           min-height: 40px;
-          margin-right: 8px;
+          margin-right: 4px;
           background: {bannerHovered
           ? ($theme.bgHighlight ?? 'transparent')
           : ($theme.bgSurface ?? 'transparent')};

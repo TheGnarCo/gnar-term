@@ -9,6 +9,7 @@
   import { titleBarButtonStore } from "../services/titlebar-button-registry";
   import TitleBarContributedButton from "./TitleBarContributedButton.svelte";
   import NewWorkspaceSplitButton from "./NewWorkspaceSplitButton.svelte";
+  import KeyboardIcon from "../icons/KeyboardIcon.svelte";
   import { runCommandById } from "../services/command-registry";
 
   // Single source of truth: cfg!(debug_assertions) from Rust, exposed via the
@@ -113,23 +114,7 @@
     use:shortcutHint={{ label: isMac ? "⌘/" : "Ctrl+/", placement: "below" }}
     on:click={() => runCommandById("core.show-keyboard-shortcuts")}
   >
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.5"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      ><path d="M5.5 5.5 a2.5 2.5 0 1 1 3.5 2.3 c-1 0.5 -1 1.2 -1 2.2" /><circle
-        cx="8"
-        cy="12.5"
-        r="0.6"
-        fill="currentColor"
-        stroke="none"
-      /></svg
-    >
+    <KeyboardIcon size={16} />
   </button>
 
   <button

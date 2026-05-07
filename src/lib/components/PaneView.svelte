@@ -23,6 +23,11 @@
   import { tabDragState } from "../services/tab-drag";
   import { workspaceDragState } from "../services/workspace-drag";
   import { dismissPane, relaunchPane } from "../services/pane-service";
+  import {
+    closeWorkspace,
+    switchWorkspace,
+  } from "../services/workspace-runtime-service";
+  import CloseIcon from "../icons/CloseIcon.svelte";
 
   export let pane: Pane;
   export let workspaceId: string = "";
@@ -40,6 +45,22 @@
   let resizeObserver: ResizeObserver;
   let scrollState: Record<string, boolean> = {};
   let previewRefreshKeys: Record<string, number> = {};
+  let closeHovered = false;
+
+  function dismissDashboard() {
+    const list = $workspaces;
+    const idx = list.findIndex((w) => w.id === workspaceId);
+    if (idx < 0) return;
+    const parentId = list[idx]?.rootWorkspaceId;
+    if (parentId) {
+      const parentIdx = list.findIndex((w) => w.id === parentId);
+      if (parentIdx >= 0) {
+        switchWorkspace(parentIdx);
+        return;
+      }
+    }
+    closeWorkspace(idx);
+  }
 
   function handleRefreshPreview() {
     const activeId = pane.activeSurfaceId;
@@ -198,11 +219,7 @@
     position: relative;
     --notify: {$theme.notify};
     --notify-glow: {$theme.notifyGlow};
-    border: 1px solid {paneHasUnread
-    ? $theme.notify
-    : isActive
-      ? $theme.accent
-      : $theme.border};
+    border: 1px solid {paneHasUnread ? $theme.notify : $theme.border};
     border-radius: 4px; overflow: hidden;
     {paneHasUnread
     ? `box-shadow: 0 0 0 1px ${$theme.notifyGlow}, 0 0 14px 1px ${$theme.notifyGlow};`
@@ -215,6 +232,7 @@
     <TabBar
       {pane}
       {workspaceId}
+      paneIsActive={isActive}
       {onSelectSurface}
       {onCloseSurface}
       {onNewSurface}
@@ -226,35 +244,59 @@
       onJumpToBottom={handleJumpToBottom}
       onRefreshPreview={handleRefreshPreview}
     />
-  {:else if onRegenDashboard}
+  {:else}
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
       style="
         display: flex; align-items: center; justify-content: flex-end;
+        gap: 2px;
         background: {$theme.tabBarBg}; border-bottom: 1px solid {$theme.tabBarBorder};
         height: 28px; padding: 0 4px; flex-shrink: 0;
       "
     >
-      <span
-        title={regenDashboardTitle}
-        style="color: {$theme.fgDim}; cursor: pointer; width: 24px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center;"
-        on:click|stopPropagation={onRegenDashboard}
-      >
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 14 14"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.5"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          ><path d="M2 7a5 5 0 1 1 1.5 3.5" /><polyline
-            points="2 11 2 7 6 7"
-          /></svg
+      {#if onRegenDashboard}
+        <span
+          title={regenDashboardTitle}
+          style="color: {$theme.fgDim}; cursor: pointer; width: 24px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center;"
+          on:click|stopPropagation={onRegenDashboard}
         >
-      </span>
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 14 14"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            ><path d="M2 7a5 5 0 1 1 1.5 3.5" /><polyline
+              points="2 11 2 7 6 7"
+            /></svg
+          >
+        </span>
+      {/if}
+      <button
+        title="Close dashboard"
+        aria-label="Close dashboard"
+        on:click|stopPropagation={dismissDashboard}
+        on:mouseenter={() => (closeHovered = true)}
+        on:mouseleave={() => (closeHovered = false)}
+        style="
+          display: flex; align-items: center; justify-content: center;
+          width: 24px; height: 24px;
+          background: transparent;
+          border: none;
+          border-radius: 4px;
+          color: {closeHovered ? $theme.danger : $theme.fgDim};
+          cursor: pointer;
+          padding: 0;
+          transition: color 0.1s;
+          -webkit-app-region: no-drag;
+        "
+      >
+        <CloseIcon width="10" height="10" />
+      </button>
     </div>
   {/if}
 

@@ -1753,7 +1753,11 @@ describe("Sidebar", () => {
     expect(inlineNewButton).toBeUndefined();
   });
 
-  it("activates the overlay on hover when collapsed", async () => {
+  it("does not toggle a whole-sidebar overlay class on hover when collapsed", async () => {
+    // Post per-row-popover refactor: the wrapper no longer reacts to
+    // mouseenter/mouseleave with an `overlay-active` class — hover
+    // expansion is handled per-row by WorkspaceListBlock instead. The
+    // wrapper width and `.sidebar-content` width remain stable.
     sidebarVisible.set(false);
     sidebarWidth.set(220);
     const { container } = render(Sidebar, { props: sidebarProps });
@@ -1765,31 +1769,11 @@ describe("Sidebar", () => {
 
     slot.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
     await tick();
+    expect(slot.classList.contains("overlay-active")).toBe(false);
 
-    expect(slot.classList.contains("overlay-active")).toBe(true);
-  });
-
-  it("closes the overlay after the mouseleave grace period", async () => {
-    vi.useFakeTimers();
-    try {
-      sidebarVisible.set(false);
-      const { container } = render(Sidebar, { props: sidebarProps });
-      const slot = container.querySelector("#sidebar") as HTMLElement;
-
-      slot.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
-      await tick();
-      expect(slot.classList.contains("overlay-active")).toBe(true);
-
-      slot.dispatchEvent(new MouseEvent("mouseleave", { bubbles: true }));
-      await tick();
-      expect(slot.classList.contains("overlay-active")).toBe(true);
-
-      vi.advanceTimersByTime(200);
-      await tick();
-      expect(slot.classList.contains("overlay-active")).toBe(false);
-    } finally {
-      vi.useRealTimers();
-    }
+    slot.dispatchEvent(new MouseEvent("mouseleave", { bubbles: true }));
+    await tick();
+    expect(slot.classList.contains("overlay-active")).toBe(false);
   });
 
   it("renders split button for workspace actions in the top row (sidebar toggles live in TitleBar)", () => {

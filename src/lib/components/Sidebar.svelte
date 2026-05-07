@@ -11,7 +11,6 @@
    * render below it in their declared order but aren't reorderable
    * at the top level either.
    */
-  import { onDestroy } from "svelte";
   import { theme } from "../stores/theme";
   import { sidebarVisible, sidebarWidth } from "../stores/ui";
   import { sidebarSectionStore } from "../services/sidebar-section-registry";
@@ -23,51 +22,12 @@
   import McpSidebarSection from "./McpSidebarSection.svelte";
   import ArchiveZone from "./ArchiveZone.svelte";
   import SidebarResizeHandle from "./SidebarResizeHandle.svelte";
+  import CollapsedRailView from "./CollapsedRailView.svelte";
   import NewWorkspaceSplitButton from "./NewWorkspaceSplitButton.svelte";
 
-  // Brief grace period so users can drift off the slot for a moment
-  // (e.g. catching the OS scrollbar) without the overlay flashing shut.
-  const HOVER_CLOSE_DELAY_MS = 150;
-
-  // Width of the rail-only slot when the sidebar is collapsed. The
-  // workspace banner's grip rail is 8px (DragGrip frit pattern); show
-  // it plus a few pixels of banner past the rail so the colour stripe
-  // is visible without revealing row content.
-  const RAIL_WIDTH_PX = 12;
-
-  let overlayActive = false;
-  let closeTimer: ReturnType<typeof setTimeout> | null = null;
-
-  function clearCloseTimer() {
-    if (closeTimer) {
-      clearTimeout(closeTimer);
-      closeTimer = null;
-    }
-  }
-
-  function handleSlotEnter() {
-    if ($sidebarVisible) return;
-    clearCloseTimer();
-    overlayActive = true;
-  }
-
-  function handleSlotLeave() {
-    if ($sidebarVisible) return;
-    clearCloseTimer();
-    closeTimer = setTimeout(() => {
-      overlayActive = false;
-      closeTimer = null;
-    }, HOVER_CLOSE_DELAY_MS);
-  }
-
-  // Reset overlay state whenever the sidebar expands so the overlay
-  // doesn't linger after the user toggles it back open.
-  $: if ($sidebarVisible) {
-    clearCloseTimer();
-    overlayActive = false;
-  }
-
-  onDestroy(clearCloseTimer);
+  // Width of the rail-only slot when the sidebar is collapsed.
+  // Matches the DragGrip frit-pattern width (8px).
+  const RAIL_WIDTH_PX = 8;
 
   const iconSvgMap: Record<string, string> = {
     plus: `<line x1="8" y1="3" x2="8" y2="13" /><line x1="3" y1="8" x2="13" y2="8" />`,
@@ -96,51 +56,26 @@
 <div
   id="sidebar"
   class:collapsed={!$sidebarVisible}
-  class:overlay-active={!$sidebarVisible && overlayActive}
-  on:mouseenter={handleSlotEnter}
-  on:mouseleave={handleSlotLeave}
   role="presentation"
   style="
     width: {$sidebarVisible ? `${$sidebarWidth}px` : `${RAIL_WIDTH_PX}px`};
     background: {$theme.sidebarBg};
     display: flex;
-    overflow: {!$sidebarVisible && overlayActive ? 'visible' : 'hidden'};
+    overflow: {$sidebarVisible ? 'hidden' : 'visible'};
     font-size: 13px;
     flex-shrink: 0;
     position: relative;
   "
 >
-  <!-- In collapsed mode the inner content is absolutely positioned at
-       its full natural width but clipped by the rail slot's
-       overflow: hidden — exposing only the leftmost RAIL_WIDTH_PX
-       pixels of each row, which is where the workspace grip rail and
-       a sliver of the banner colour live. Hovering lifts the clip so
-       the full sidebar opens over the terminal. -->
-  <div
-    class="sidebar-content"
-    style="
-      width: {$sidebarVisible ? '100%' : `${$sidebarWidth}px`};
-      height: 100%;
-      display: flex;
-      background: {$theme.sidebarBg};
-      transition: box-shadow 120ms ease;
-      {$sidebarVisible
-      ? ''
-      : `position: absolute; left: 0; top: 0; z-index: 100; ${overlayActive ? 'box-shadow: 0 0 24px rgba(0, 0, 0, 0.45);' : ''}`}
-    "
-  >
+  {#if $sidebarVisible}
+    <!-- Full sidebar content -->
     <div
-      style="flex: 1; display: flex; flex-direction: column; overflow: hidden;"
+      class="sidebar-content"
+      style="width: 100%; height: 100%; display: flex; background: {$theme.sidebarBg};"
     >
-      <!-- Top row: traffic-light spacer + any sidebar-zone actions.
-           Always 38px so the sidebar's "+ New" and zone actions stay
-           reachable in every window mode, including native fullscreen
-           where the OS title bar is gone. The window-drag attributes
-           are harmless no-ops when there's no window to drag.
-           Hidden in collapsed mode — the "+ New" split button moves to
-           the TitleBar (Task 5) and zone actions reappear when the
-           overlay opens (Task 4). -->
-      {#if $sidebarVisible}
+      <div
+        style="flex: 1; display: flex; flex-direction: column; overflow: hidden;"
+      >
         <div
           data-tauri-drag-region=""
           style="
@@ -162,48 +97,42 @@
           {/each}
           <NewWorkspaceSplitButton />
         </div>
-      {/if}
 
-      <!-- Scrollable content: the Workspaces section (which includes
-           pseudo-workspace rows via rootRowOrder), any extension-registered
-           SidebarSectionBlocks, and MCP-declared sections — in that order.
-           4px left inset gives a dark strip between the sidebar's left edge
-           and each row's rail. 8px top inset keeps the first row's rounded
-           corner from butting up against the "+ New" chrome above. -->
-      <div style="flex: 1; overflow-y: auto; padding: 8px 0 8px 4px;">
-        <WorkspaceListBlock bind:this={workspaceListBlock} />
+        <!-- Scrollable content: Workspaces section, extension sections,
+             MCP sections. 4px left inset aligns row rails with the left
+             edge stripe. -->
+        <div style="flex: 1; overflow-y: auto; padding: 8px 0 8px 4px;">
+          <WorkspaceListBlock bind:this={workspaceListBlock} />
 
-        <!-- Extension-registered sections (registerSidebarSection API).
-             16px gap above each so they breathe below the Workspaces block. -->
-        {#each $sidebarSectionStore as section (section.id)}
-          <div aria-hidden="true" style="height: 16px;"></div>
-          <SidebarSectionBlock
-            {section}
-            collapsed={collapsedSections[section.id] ?? false}
-            onToggleCollapse={() =>
-              (collapsedSections[section.id] = !collapsedSections[section.id])}
-          />
-        {/each}
+          {#each $sidebarSectionStore as section (section.id)}
+            <div aria-hidden="true" style="height: 16px;"></div>
+            <SidebarSectionBlock
+              {section}
+              collapsed={collapsedSections[section.id] ?? false}
+              onToggleCollapse={() =>
+                (collapsedSections[section.id] =
+                  !collapsedSections[section.id])}
+            />
+          {/each}
 
-        <!-- MCP-declared sections (render_sidebar tool). -->
-        {#each $primarySections as section (section.sectionId)}
-          <McpSidebarSection {section} />
-        {/each}
+          {#each $primarySections as section (section.sectionId)}
+            <McpSidebarSection {section} />
+          {/each}
+        </div>
+
+        <ArchiveZone />
       </div>
-
-      <ArchiveZone />
-    </div>
-    {#if $sidebarVisible}
       <SidebarResizeHandle
         direction="right"
         theme={$theme}
         onDrag={(clientX) => {
           const maxWidth = window.innerWidth * 0.33;
-          // 200px clears the macOS traffic-light cluster (~78px) plus the
-          // right-aligned "+ New" split button (~90px) without overlap.
           sidebarWidth.set(Math.max(200, Math.min(maxWidth, clientX)));
         }}
       />
-    {/if}
-  </div>
+    </div>
+  {:else}
+    <!-- Collapsed: rail strips only. No archive, no dragging. -->
+    <CollapsedRailView sidebarWidth={$sidebarWidth} />
+  {/if}
 </div>

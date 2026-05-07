@@ -57,6 +57,13 @@
    * layout is unaffected.
    */
   export let narrowRail: boolean = false;
+  /**
+   * When true, the grip's primary action is a click (activate the row)
+   * rather than a drag — so the cursor reads `pointer` instead of
+   * `grab`. Callers set this in collapsed sidebar mode where the rail
+   * is the row's main interaction target.
+   */
+  export let primaryClickable: boolean = false;
 
   let closeButtonHovered = false;
   // shortcutLabel takes priority over close/lock when meta-hold is active.
@@ -90,7 +97,13 @@
     align-self: stretch;
     position: relative;
     width: 8px;
-    cursor: {locked ? 'not-allowed' : visible ? 'grab' : 'default'};
+    cursor: {locked
+    ? 'not-allowed'
+    : primaryClickable
+      ? 'pointer'
+      : visible
+        ? 'grab'
+        : 'default'};
     overflow: hidden;
   "
 >

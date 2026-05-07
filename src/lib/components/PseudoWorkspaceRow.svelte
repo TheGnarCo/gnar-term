@@ -119,6 +119,7 @@
       railOpacity={1}
       alwaysShowDots={true}
       {narrowRail}
+      primaryClickable={!$sidebarVisible}
     />
     <div
       aria-hidden="true"

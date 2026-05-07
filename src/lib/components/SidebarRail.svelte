@@ -123,6 +123,7 @@
     {closeTooltip}
     {locked}
     {narrowRail}
+    primaryClickable={!$sidebarVisible && !!onClick}
   />
   {#if mode === "container" && hasActiveStripe}
     <div

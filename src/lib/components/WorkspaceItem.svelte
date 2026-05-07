@@ -119,6 +119,20 @@
   $: processStatusStore = getWorkspaceStatusByCategory(workspace.id, "process");
   $: processItems = $processStatusStore;
   $: agentBadges = aggregateAgentBadges(processItems);
+  // OSC-detectable agents (Claude/Codex/Aider) re-title their PTY to the
+  // active task — "Strategic opportunity assessment for Vellum". When a
+  // single tracked agent surface dominates, surface its current title in
+  // the banner so the user can see what the agent is working on without
+  // switching to that tab.
+  $: agentTaskTitle = (() => {
+    if (processItems.length !== 1) return null;
+    const item = processItems[0];
+    const sid = item?.metadata?.surfaceId;
+    if (typeof sid !== "string") return null;
+    const surface = allSurfaces.find((s) => s.id === sid);
+    const title = surface && "title" in surface ? surface.title : null;
+    return typeof title === "string" && title.length > 0 ? title : null;
+  })();
 
   $: subtitleComponents = $workspaceSubtitleStore;
 
@@ -291,9 +305,12 @@
 
     {#if !hideStatusBadges && agentBadges.length > 0 && agentBadges[0]}
       {@const badge = agentBadges[0]}
+      {@const subtitleLabel = agentTaskTitle ?? badge.label}
       <SidebarSubtitleRow
         data-harness-title-row
-        title={badge.label}
+        title={agentTaskTitle
+          ? `${badge.label} — ${agentTaskTitle}`
+          : badge.label}
         aria-hidden="true"
         color={badge.color}
         padding="0 12px 4px 6px"
@@ -305,8 +322,8 @@
           <BotIcon size={10} />
         </span>
         <span
-          style="white-space: nowrap; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis;"
-          >{badge.label}</span
+          style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+          >{subtitleLabel}</span
         >
       </SidebarSubtitleRow>
     {/if}

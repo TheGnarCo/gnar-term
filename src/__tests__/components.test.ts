@@ -2030,7 +2030,13 @@ describe("WorkspaceItem — harness sub-row", () => {
 
     const harnessEl = container.querySelector("[data-harness-title-row]");
     expect(harnessEl).not.toBeNull();
-    expect(harnessEl?.getAttribute("title")).toBe("1 running");
+    // When a single tracked agent surface exists, its title (e.g. the
+    // current Claude task) is folded into the row label so the user can
+    // see what the agent is working on without leaving the sidebar.
+    expect(harnessEl?.getAttribute("title")).toBe(
+      "1 running — claude > fixing bug",
+    );
+    expect(harnessEl?.textContent ?? "").toContain("claude > fixing bug");
     clearAllStatusForWorkspace(ws.id);
   });
 
@@ -2074,7 +2080,8 @@ describe("WorkspaceItem — harness sub-row", () => {
 
     const harnessEl = container.querySelector("[data-harness-title-row]");
     expect(harnessEl).not.toBeNull();
-    expect(harnessEl?.getAttribute("title")).toBe("1 idle");
+    expect(harnessEl?.getAttribute("title")).toBe("1 idle — claude");
+    expect(harnessEl?.textContent ?? "").toContain("claude");
     clearAllStatusForWorkspace(ws.id);
   });
 
@@ -2108,6 +2115,61 @@ describe("WorkspaceItem — harness sub-row", () => {
     });
 
     expect(container.querySelector("[data-harness-title-row]")).toBeNull();
+    clearAllStatusForWorkspace(ws.id);
+  });
+
+  it("falls back to the badge count when multiple agent surfaces are tracked", async () => {
+    // With two tracked surfaces in the same workspace, no single title
+    // is dominant; the row reverts to the aggregate "N running" count
+    // rather than picking one task at random.
+    const { setStatusItem, clearAllStatusForWorkspace } =
+      await import("../lib/services/status-registry");
+
+    const a = makeSurface("s-a", { title: "Strategic plan A" });
+    const b = makeSurface("s-b", { title: "Strategic plan B" });
+    const pane: Pane = {
+      id: "p1",
+      surfaces: [a, b],
+      activeSurfaceId: "s-a",
+    };
+    const ws: Workspace = {
+      id: "ws-multi",
+      name: "Multi",
+      paneLayout: { type: "pane", pane },
+      activePaneId: "p1",
+    };
+
+    setStatusItem("_agent", ws.id, "surface:s-a", {
+      category: "process",
+      priority: 0,
+      label: "running",
+      variant: "success",
+      metadata: { surfaceId: "s-a" },
+    });
+    setStatusItem("_agent", ws.id, "surface:s-b", {
+      category: "process",
+      priority: 0,
+      label: "running",
+      variant: "success",
+      metadata: { surfaceId: "s-b" },
+    });
+
+    const { container } = render(WorkspaceItem, {
+      props: {
+        workspace: ws,
+        index: 0,
+        isActive: true,
+        onSelect: noop,
+        onClose: noop,
+        onRename: noop,
+        onContextMenu: noop,
+      },
+    });
+
+    const harnessEl = container.querySelector("[data-harness-title-row]");
+    expect(harnessEl).not.toBeNull();
+    expect(harnessEl?.getAttribute("title")).toBe("2 running");
+    expect(harnessEl?.textContent ?? "").toContain("2 running");
     clearAllStatusForWorkspace(ws.id);
   });
 });

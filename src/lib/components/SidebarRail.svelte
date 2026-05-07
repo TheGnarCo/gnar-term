@@ -49,6 +49,13 @@
   $: railBorderColor = $theme.border ?? "transparent";
 </script>
 
+<!-- The rail occupies the leftmost 8px of the row, flush with the
+     viewport edge. A cursor exit through that edge can skip the rail's
+     own `mouseleave`, leaving the grip's expanded "hover pattern" stuck
+     visible. Body-level mouseleave is the authoritative "cursor left
+     the app" signal and resets the rail-hover state. -->
+<svelte:body on:mouseleave={() => (railHovered = false)} />
+
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   data-sidebar-rail={mode}

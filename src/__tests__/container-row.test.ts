@@ -104,4 +104,33 @@ describe("ContainerRow collapse/expand", () => {
 
     expect(container.querySelector("[data-container-children]")).toBeNull();
   });
+
+  it("clears banner hover state when the cursor leaves the document", async () => {
+    // Regression: rows that sit flush with the viewport's left edge can
+    // skip their own `mouseleave` when the cursor exits through that
+    // edge fast (observed on WebKitGTK). The banner stays in its
+    // hovered background until the cursor re-enters and exits via a
+    // different edge. A body-level mouseleave is the authoritative
+    // "cursor left the app" signal — `bannerHovered` must reset to
+    // false in response.
+    const { container } = render(ContainerRowWithSlot, { props: baseProps });
+    const banner = container.querySelector(
+      "[data-container-banner]",
+    ) as HTMLElement;
+    expect(banner).not.toBeNull();
+
+    const restingStyle = banner.getAttribute("style") ?? "";
+
+    await fireEvent.mouseEnter(banner);
+    await tick();
+    const hoveredStyle = banner.getAttribute("style") ?? "";
+    expect(hoveredStyle).not.toBe(restingStyle);
+
+    // Without the body-mouseleave fallback, this would leave the
+    // banner stuck in its hovered style when the cursor exited the
+    // viewport without re-crossing the row's own boundary.
+    await fireEvent.mouseLeave(document.body);
+    await tick();
+    expect(banner.getAttribute("style") ?? "").toBe(restingStyle);
+  });
 });

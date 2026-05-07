@@ -112,6 +112,14 @@
     DefaultWorkspaceListView) as Component;
 </script>
 
+<!-- The banner banner sits flush with the viewport's left edge. When the
+     cursor exits through that edge fast (or out the top into the title
+     bar on Linux/WebKitGTK), the row's own `mouseleave` can be skipped,
+     leaving the banner stuck in its hovered state. A body-level
+     mouseleave is the authoritative "cursor left the app" signal — when
+     it fires we know no DOM element should be considered hovered. -->
+<svelte:body on:mouseleave={() => (bannerHovered = false)} />
+
 {#if parentColor}
   <!-- Child-inside-parent variant — banner only, with left-edge
        colored accent. Uses SidebarElement for unified styling. -->

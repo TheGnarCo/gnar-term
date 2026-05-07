@@ -93,6 +93,13 @@
   $: innerXPadding = isDashboard ? "8px" : "6px";
 </script>
 
+<!-- Sidebar rows sit flush with the viewport edge. Fast cursor exits
+     through the window edge can skip the row's own `mouseleave` (more
+     consistently observed on WebKitGTK), leaving `isHovered` stuck.
+     Body-level mouseleave is the authoritative "cursor left the app"
+     signal and clears the residual hover. -->
+<svelte:body on:mouseleave={() => (isHovered = false)} />
+
 <div
   use:shortcutHint={shortcutLabel}
   data-sidebar-element={isParent ? "workspace" : "child-workspace"}

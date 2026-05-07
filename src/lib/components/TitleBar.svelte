@@ -8,6 +8,7 @@
   import { isDebugBuild } from "../services/service-helpers";
   import { titleBarButtonStore } from "../services/titlebar-button-registry";
   import TitleBarContributedButton from "./TitleBarContributedButton.svelte";
+  import NewWorkspaceSplitButton from "./NewWorkspaceSplitButton.svelte";
   import { runCommandById } from "../services/command-registry";
 
   // Single source of truth: cfg!(debug_assertions) from Rust, exposed via the
@@ -50,6 +51,18 @@
     background: {titleBarBg}; border-bottom: 1px solid {$theme.border};
   "
 >
+  {#if !$sidebarVisible}
+    <!-- Hosts the "+ New" split button while the primary sidebar is
+         collapsed. Sits to the LEFT of the sidebar-toggle so creating
+         a workspace stays in the same visual region as expanding the
+         sidebar. The wrapper carries -webkit-app-region: no-drag so
+         clicks don't initiate a window drag (the TitleBar itself is
+         a Tauri drag region). -->
+    <div style="margin-right: 4px; -webkit-app-region: no-drag;">
+      <NewWorkspaceSplitButton />
+    </div>
+  {/if}
+
   <button
     style="{btnStyle} color: {$sidebarVisible ? btnFg : btnFgDim};"
     title="Toggle Sidebar ({isMac ? modLabel : shiftModLabel}B)"

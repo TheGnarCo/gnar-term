@@ -7,12 +7,12 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { get } from "svelte/store";
 import {
   addWorkspace,
-  addChildToWorkspace,
+  addBranchToWorkspace,
   closeWorkspacesInWorkspace,
   deleteWorkspace,
   getWorkspace,
   getWorkspaces,
-  removeChildFromAllWorkspaces,
+  removeBranchFromAllWorkspaces,
   updateWorkspace,
   WORKSPACE_STATE_CHANGED,
 } from "../workspace-service";
@@ -80,20 +80,20 @@ describe("workspace-service", () => {
     });
   });
 
-  it("addChildToWorkspace is idempotent", () => {
+  it("addBranchToWorkspace is idempotent", () => {
     addWorkspace(makeWorkspace("g1"));
-    expect(addChildToWorkspace("g1", "ws1")).toBe(true);
-    expect(addChildToWorkspace("g1", "ws1")).toBe(false);
+    expect(addBranchToWorkspace("g1", "ws1")).toBe(true);
+    expect(addBranchToWorkspace("g1", "ws1")).toBe(false);
     expect(getWorkspace("g1")?.branchedWorkspaceIds).toEqual(["ws1"]);
   });
 
-  it("removeChildFromAllWorkspaces strips the id across every workspace", () => {
+  it("removeBranchFromAllWorkspaces strips the id across every workspace", () => {
     addWorkspace(makeWorkspace("g1"));
     addWorkspace(makeWorkspace("g2"));
-    addChildToWorkspace("g1", "ws1");
-    addChildToWorkspace("g2", "ws1");
+    addBranchToWorkspace("g1", "ws1");
+    addBranchToWorkspace("g2", "ws1");
 
-    removeChildFromAllWorkspaces("ws1");
+    removeBranchFromAllWorkspaces("ws1");
 
     expect(getWorkspace("g1")?.branchedWorkspaceIds).toEqual([]);
     expect(getWorkspace("g2")?.branchedWorkspaceIds).toEqual([]);

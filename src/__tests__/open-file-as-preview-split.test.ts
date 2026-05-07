@@ -1,10 +1,8 @@
 /**
  * openFileAsPreviewSplit — opens a markdown file as a side-by-side preview.
  *
- * Verifies: horizontal split creation, preview surface placement,
- * deduplication (focus existing instead of opening a second copy),
- * and that md/markdown/mdx are exposed as registered file extensions
- * once the file-browser extension registers its context menu item.
+ * Verifies: horizontal split creation, preview surface placement, and
+ * deduplication (focus existing instead of opening a second copy).
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { get } from "svelte/store";
@@ -27,12 +25,6 @@ import {
   registerPreviewSurface,
   resetPreviewSurfaceRegistry,
 } from "../lib/services/preview-surface-registry";
-import {
-  resetContextMenuItems,
-  registerContextMenuItem,
-  getRegisteredFileExtensions,
-  getContextMenuItemsForFile,
-} from "../lib/services/context-menu-item-registry";
 
 function makeChildWorkspace(id: string): { ws: Workspace; pane: Pane } {
   const pane: Pane = { id: `${id}-pane`, surfaces: [], activeSurfaceId: null };
@@ -114,47 +106,5 @@ describe("openFileAsPreviewSplit", () => {
     openFileAsPreviewSplit("/docs/README.md");
     // No crash, no state change.
     expect(get(workspaces)).toHaveLength(0);
-  });
-});
-
-describe("file-browser markdown context menu item", () => {
-  beforeEach(() => {
-    resetContextMenuItems();
-  });
-
-  it("md, markdown, and mdx appear in registered extensions after the item is registered", () => {
-    registerContextMenuItem({
-      id: "open-as-preview",
-      source: "file-browser",
-      label: "Open as Preview",
-      when: "*.{md,markdown,mdx}",
-      handler: () => {},
-    });
-
-    const exts = getRegisteredFileExtensions();
-    expect(exts).toContain("md");
-    expect(exts).toContain("markdown");
-    expect(exts).toContain("mdx");
-  });
-
-  it("open-as-preview is items[0] for .md files when registered before generic items", () => {
-    // Simulate file-browser registration order: specific item first
-    registerContextMenuItem({
-      id: "file-browser:open-as-preview",
-      source: "file-browser",
-      label: "Open as Preview",
-      when: "*.{md,markdown,mdx}",
-      handler: () => {},
-    });
-    registerContextMenuItem({
-      id: "file-browser:edit",
-      source: "file-browser",
-      label: "Edit",
-      when: "*",
-      handler: () => {},
-    });
-
-    const items = getContextMenuItemsForFile("/path/to/notes.md");
-    expect(items[0]?.id).toBe("file-browser:open-as-preview");
   });
 });

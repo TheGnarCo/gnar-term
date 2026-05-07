@@ -63,7 +63,7 @@ The audit confirmed no other boundary violations exist. All non-terminal content
 
 - `diff-viewer`: Registers its own surface type via the extension API
 - `agentic-orchestrator`: Registers harness surface type via the extension API
-- `file-browser`, `github`, `profile-card`, `branched-workspaces`: All use extension registrations
+- `branched-workspaces`: Uses extension registrations
 
 ### Enforcement
 

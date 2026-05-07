@@ -4,8 +4,8 @@
    * hover/active states, optional workspace banner gradient) for the
    * sidebar.
    *
-   * Used by WorkspaceItem (child-workspace rows, including dashboard rows)
-   * and by ContainerRow's child-inside-parent variant. The root
+   * Used by WorkspaceItem (Branch rows, including dashboard rows)
+   * and by ContainerRow's Branch-inside-Workspace variant. The root
    * ContainerRow variant builds its own banner because its rail spans
    * multiple rows; see that file for details.
    *
@@ -26,7 +26,7 @@
    *                   gradient rail; close/lock affordances are
    *                   suppressed because callers manage closure on the
    *                   banner itself.
-   *   - "child"     — regular child-workspace row (WorkspaceItem).
+   *   - "child"     — regular Branch row (WorkspaceItem).
    *                   Standard 32px height, close button, no banner.
    *   - "dashboard" — workspace's dashboard row. Tighter (30px) height
    *                   with reduced vertical padding.
@@ -61,7 +61,7 @@
   /** Whether the close button should be shown */
   export let canClose: boolean = false;
 
-  /** Color for the left rail (child-workspace accent, workspace hex, etc.) */
+  /** Color for the left rail (Branch accent, workspace hex, etc.) */
   export let color: string = "";
 
   /** Callback when drag grip is pressed */
@@ -102,7 +102,7 @@
 
 <div
   use:shortcutHint={shortcutLabel}
-  data-sidebar-element={isParent ? "workspace" : "child-workspace"}
+  data-sidebar-element={isParent ? "workspace" : "branch"}
   data-active={isActive ? "true" : undefined}
   data-drag-idx={dataDragIdx}
   data-workspace-id={dataWorkspaceId}

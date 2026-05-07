@@ -117,7 +117,7 @@ export function deleteWorkspace(id: string): void {
  * that need a CWD-prefix fallback for unattached workspaces should
  * compose with this result.
  */
-export function getChildrenOfWorkspace(rootWorkspaceId: string): Workspace[] {
+export function getBranchesOfWorkspace(rootWorkspaceId: string): Workspace[] {
   return get(workspaces).filter((w) => w.rootWorkspaceId === rootWorkspaceId);
 }
 
@@ -134,15 +134,15 @@ function closeWorkspaceById(wsId: string): void {
 }
 
 export function closeWorkspacesInWorkspace(id: string): void {
-  for (const ws of getChildrenOfWorkspace(id)) closeWorkspaceById(ws.id);
+  for (const ws of getBranchesOfWorkspace(id)) closeWorkspaceById(ws.id);
 }
 
 /**
- * Appends `workspaceId` to `rootWorkspaceId`'s child-id list if not already
+ * Appends `workspaceId` to `rootWorkspaceId`'s Branch-id list if not already
  * present. No-op when the root workspace is missing (e.g. was just deleted).
  * Returns true when a change was persisted.
  */
-export function addChildToWorkspace(
+export function addBranchToWorkspace(
   rootWorkspaceId: string,
   workspaceId: string,
 ): boolean {
@@ -168,43 +168,11 @@ export function addChildToWorkspace(
 }
 
 /**
- * Inserts `workspaceId` into `rootWorkspaceId`'s child-id list at `positionInWorkspace`.
- * No-op when the root workspace is missing or already contains the child.
- * Returns true when a change was persisted.
- */
-export function insertChildIntoWorkspace(
-  rootWorkspaceId: string,
-  workspaceId: string,
-  positionInWorkspace: number,
-): boolean {
-  const workspaces = getWorkspaces();
-  let changed = false;
-  const next = workspaces.map((w) => {
-    if (w.id !== rootWorkspaceId) return w;
-    const current = w.branchedWorkspaceIds ?? [];
-    if (current.includes(workspaceId)) return w;
-    changed = true;
-    const ids = [...current];
-    ids.splice(
-      Math.max(0, Math.min(ids.length, positionInWorkspace)),
-      0,
-      workspaceId,
-    );
-    return { ...w, branchedWorkspaceIds: ids };
-  });
-  if (!changed) return false;
-  setWorkspaces(next);
-  emitStateChanged({ rootWorkspaceId });
-  schedulePersist();
-  return true;
-}
-
-/**
  * Strips `workspaceId` from every Workspace's `branchedWorkspaceIds`
  * list. Used when a Branch is closed — Branch membership is derived
  * from `rootWorkspaceId`, so the sweep is cheap and idempotent.
  */
-export function removeChildFromAllWorkspaces(workspaceId: string): void {
+export function removeBranchFromAllWorkspaces(workspaceId: string): void {
   const next = getWorkspaces().map((w) => ({
     ...w,
     branchedWorkspaceIds: (w.branchedWorkspaceIds ?? []).filter(
@@ -224,13 +192,6 @@ export function removeChildFromAllWorkspaces(workspaceId: string): void {
 export function workspaceDashboardPath(workspacePath: string): string {
   return `${workspacePath.replace(/\/+$/, "")}/.gnar-term/workspace-dashboard.md`;
 }
-
-/**
- * Legacy filename used before the rename. We migrate by reading the legacy
- * file's contents into the new path on first dashboard write — see
- * writeWorkspaceDashboardTemplate.
- */
-const LEGACY_DASHBOARD_FILENAME = "project-dashboard.md";
 
 function buildWorkspaceDashboardMarkdown(workspace: WorkspaceRecord): string {
   // The Workspace Dashboard is the generic, agent-agnostic landing page for
@@ -283,24 +244,6 @@ async function writeWorkspaceDashboardTemplate(
       () => false,
     );
     if (exists) return;
-
-    // Legacy migration: pre-rename workspaces stored their dashboard at
-    // .gnar-term/project-dashboard.md. If the legacy file is present and
-    // the new one isn't, copy contents so user customizations survive.
-    const legacyPath = `${dir}/${LEGACY_DASHBOARD_FILENAME}`;
-    const legacyExists = await invoke<boolean>("file_exists", {
-      path: legacyPath,
-    }).catch(() => false);
-    if (legacyExists) {
-      try {
-        const legacy = await invoke<string>("read_file", { path: legacyPath });
-        await invoke("ensure_dir", { path: dir });
-        await invoke("write_file", { path, content: legacy });
-        return;
-      } catch {
-        // Fall through to fresh template write
-      }
-    }
   }
   await invoke("ensure_dir", { path: dir });
   await invoke("write_file", {

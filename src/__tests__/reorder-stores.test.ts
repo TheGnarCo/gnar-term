@@ -19,9 +19,9 @@ describe("reorder state stores", () => {
     expect(get(blockReorderActive)).toBe(false);
   });
 
-  it("child-workspace-kind context makes any + inner active, but not block", () => {
+  it("branch-kind context makes any + inner active, but not block", () => {
     reorderContext.set({
-      kind: "child-workspace",
+      kind: "branch",
       scopeId: "__workspaces__",
       containerBlockId: "__workspaces__",
     });
@@ -48,15 +48,15 @@ describe("reorder state stores", () => {
     expect(get(blockReorderActive)).toBe(true);
   });
 
-  it("child-workspace context preserves scopeId + containerBlockId for overlay logic", () => {
+  it("branch context preserves scopeId + containerBlockId for overlay logic", () => {
     reorderContext.set({
-      kind: "child-workspace",
+      kind: "branch",
       scopeId: "project-abc",
       containerBlockId: "projects",
     });
     const ctx = get(reorderContext);
     expect(ctx).toEqual({
-      kind: "child-workspace",
+      kind: "branch",
       scopeId: "project-abc",
       containerBlockId: "projects",
     });

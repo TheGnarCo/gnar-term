@@ -144,7 +144,7 @@
       sourceHeight = s.sourceHeight;
       if (s.active && scopeId && containerBlockId) {
         reorderContext.set({
-          kind: "child-workspace",
+          kind: "branch",
           scopeId,
           containerBlockId,
         });

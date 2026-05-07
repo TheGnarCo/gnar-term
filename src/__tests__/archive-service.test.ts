@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   getWorkspace: vi.fn(() => undefined as unknown),
   getWorkspaces: vi.fn(() => [] as unknown[]),
   setWorkspaces: vi.fn(),
-  getChildrenOfWorkspace: vi.fn(() => [] as unknown[]),
+  getBranchesOfWorkspace: vi.fn(() => [] as unknown[]),
   closeWorkspacesInWorkspace: vi.fn(),
   provisionAutoDashboardsForWorkspace: vi.fn(() => Promise.resolve()),
   removeRootRow: vi.fn(),
@@ -48,7 +48,7 @@ vi.mock("../lib/services/workspace-runtime-service", () => ({
 }));
 
 vi.mock("../lib/services/workspace-service", () => ({
-  getChildrenOfWorkspace: mocks.getChildrenOfWorkspace,
+  getBranchesOfWorkspace: mocks.getBranchesOfWorkspace,
   closeWorkspacesInWorkspace: mocks.closeWorkspacesInWorkspace,
   provisionAutoDashboardsForWorkspace:
     mocks.provisionAutoDashboardsForWorkspace,
@@ -87,7 +87,7 @@ beforeEach(() => {
   );
   mocks.getWorkspace.mockReturnValue(undefined);
   mocks.getWorkspaces.mockReturnValue([]);
-  mocks.getChildrenOfWorkspace.mockReturnValue([]);
+  mocks.getBranchesOfWorkspace.mockReturnValue([]);
   mocks.provisionAutoDashboardsForWorkspace.mockImplementation(() =>
     Promise.resolve(),
   );
@@ -152,7 +152,7 @@ describe("archiveWorkspace", () => {
     mocks.getWorkspaces.mockReturnValue([workspace]);
     // Only the dashboard has a running PTY — counting it would prompt;
     // skipping it should not.
-    mocks.getChildrenOfWorkspace.mockReturnValueOnce([dashboardWs]);
+    mocks.getBranchesOfWorkspace.mockReturnValueOnce([dashboardWs]);
 
     const result = await archiveWorkspace("g-1");
 
@@ -166,7 +166,7 @@ describe("archiveWorkspace", () => {
     const ws2 = makeRunningTerminalWs("ws-2", "W2", -1);
     mocks.getWorkspace.mockReturnValueOnce(workspace);
     mocks.getWorkspaces.mockReturnValue([workspace, { id: "other" }]);
-    mocks.getChildrenOfWorkspace.mockReturnValueOnce([ws1, ws2]);
+    mocks.getBranchesOfWorkspace.mockReturnValueOnce([ws1, ws2]);
 
     const result = await archiveWorkspace("g-1");
 
@@ -198,7 +198,7 @@ describe("archiveWorkspace", () => {
     const workspace = makeWorkspace();
     const wsRunning = makeRunningTerminalWs("ws-1", "W1", 42);
     mocks.getWorkspace.mockReturnValueOnce(workspace);
-    mocks.getChildrenOfWorkspace.mockReturnValueOnce([wsRunning]);
+    mocks.getBranchesOfWorkspace.mockReturnValueOnce([wsRunning]);
     mocks.showConfirmPrompt.mockResolvedValueOnce(false);
 
     const result = await archiveWorkspace("g-1");
@@ -218,7 +218,7 @@ describe("archiveWorkspace", () => {
     };
     mocks.getWorkspace.mockReturnValueOnce(workspace);
     mocks.getWorkspaces.mockReturnValue([workspace]);
-    mocks.getChildrenOfWorkspace.mockReturnValueOnce([ws1, dashboardWs]);
+    mocks.getBranchesOfWorkspace.mockReturnValueOnce([ws1, dashboardWs]);
 
     await archiveWorkspace("g-1");
 

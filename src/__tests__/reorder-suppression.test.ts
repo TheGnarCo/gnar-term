@@ -74,10 +74,10 @@ describe("reorderContext is published on every drag", () => {
     );
   });
 
-  it("WorkspaceListView accepts scopeId + containerBlockId props and publishes child-workspace-kind context", () => {
+  it("WorkspaceListView accepts scopeId + containerBlockId props and publishes branch-kind context", () => {
     expect(WORKSPACE_LIST_VIEW).toMatch(/export let scopeId/);
     expect(WORKSPACE_LIST_VIEW).toMatch(/export let containerBlockId/);
-    expect(WORKSPACE_LIST_VIEW).toMatch(/kind:\s*"child-workspace"/);
+    expect(WORKSPACE_LIST_VIEW).toMatch(/kind:\s*"branch"/);
   });
 
   it("WorkspaceSectionContent threads scopeId={workspace.id} and containerBlockId to WorkspaceListView", () => {

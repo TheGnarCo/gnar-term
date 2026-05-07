@@ -166,7 +166,7 @@ describe("Extension barrier enforcement", () => {
       "agentic-orchestrator/components/Columns.svelte": [
         "../../../lib/services/markdown-component-registry",
       ],
-      // branched-workspaces owns worktree and child-workspace creation;
+      // branched-workspaces owns worktree and Branch creation;
       // these services live in core so existing branches stay operable
       // when the extension is disabled (the service and lifecycle events
       // remain in core). The extension pierces core the same way

@@ -894,7 +894,7 @@ export interface ExtensionAPI {
 /**
  * Describes the sidebar drag-reorder currently in progress.
  *
- * - `kind: "child-workspace"` — a Branch row is being dragged.
+ * - `kind: "branch"` — a Branch row is being dragged.
  *   `scopeId` is the immediate container: `"__workspaces__"` when dragging
  *   from the unattached list, or a Workspace id when dragging inside a
  *   Workspace block. `containerBlockId` is the top-level sidebar block the
@@ -905,7 +905,7 @@ export interface ExtensionAPI {
  *   `sourceBlockId` is the block id.
  */
 export type ReorderContext =
-  | { kind: "child-workspace"; scopeId: string; containerBlockId: string }
+  | { kind: "branch"; scopeId: string; containerBlockId: string }
   | {
       kind: "workspace";
       sourceWorkspaceId: string;
@@ -918,7 +918,7 @@ export type ReorderContext =
       // blocks. `sourceKind` + `sourceId` identify the dragged row so
       // sibling rows (of any kind) can resolve their overlay.
       kind: "rootRow";
-      sourceKind: "child-workspace" | "workspace" | string;
+      sourceKind: "branch" | "workspace" | string;
       sourceId: string;
       containerBlockId: string;
     };

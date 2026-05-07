@@ -19,10 +19,6 @@ import {
 import type { ExtensionManifest } from "../extension-types";
 
 import {
-  fileBrowserManifest,
-  registerFileBrowserExtension,
-} from "../../extensions/file-browser";
-import {
   agenticOrchestratorManifest,
   registerAgenticOrchestratorExtension,
 } from "../../extensions/agentic-orchestrator";
@@ -55,7 +51,6 @@ type IncludedExtension = readonly [
  * activation is independent per extension.
  */
 export const INCLUDED_EXTENSIONS: readonly IncludedExtension[] = [
-  [fileBrowserManifest, registerFileBrowserExtension, "file-browser"],
   [
     agenticOrchestratorManifest,
     registerAgenticOrchestratorExtension,

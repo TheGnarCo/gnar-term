@@ -189,7 +189,7 @@
     onMove: (x, y, ghostEl) => {
       const fromIdx = rootDrag.getState().sourceIdx;
       if (fromIdx === null) return;
-      // Archive zone hit-test runs for all row kinds (child-workspace AND
+      // Archive zone hit-test runs for all row kinds (branch AND
       // workspace). Tracks `overArchiveZone` so the drop commit can route to
       // archiveWorkspace; no visual feedback is painted on the zone — UX
       // calls for the archive section to keep its normal appearance during

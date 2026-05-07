@@ -24,7 +24,7 @@ import {
   setActiveWorkspaceId,
 } from "../stores/workspace";
 import {
-  addChildToWorkspace,
+  addBranchToWorkspace,
   createWorkspaceDashboard,
   createSettingsDashboardWorkspace,
   isDashboardWorkspace,
@@ -32,7 +32,7 @@ import {
   provisionAutoDashboardsForWorkspace,
   reclaimBranchedWorkspaces,
   regenerateWorkspaceDashboardTemplate,
-  removeChildFromAllWorkspaces,
+  removeBranchFromAllWorkspaces,
   updateWorkspace,
 } from "../services/workspace-service";
 import { resolveWorkspaceColor } from "../theme-data";
@@ -96,12 +96,12 @@ function onWorkspaceCreated(event: AppEvent): void {
   const ws = get(workspaces).find((w) => w.id === event.id);
   const rootWorkspaceId = ws?.rootWorkspaceId;
   if (typeof rootWorkspaceId !== "string") return;
-  addChildToWorkspace(rootWorkspaceId, event.id);
+  addBranchToWorkspace(rootWorkspaceId, event.id);
 }
 
 function onWorkspaceClosed(event: AppEvent): void {
   if (event.type !== "workspace:closed") return;
-  removeChildFromAllWorkspaces(event.id);
+  removeBranchFromAllWorkspaces(event.id);
 }
 
 function onWorkspaceActivated(event: AppEvent): void {

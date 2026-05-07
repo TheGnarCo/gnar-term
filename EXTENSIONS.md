@@ -1030,10 +1030,6 @@ The extension API enforces multiple layers of sandboxing:
 
 GnarTerm ships with included extensions on top of three core surface kinds: terminal, extension, and preview. Preview is core (see `src/lib/services/preview-service.ts` and `src/lib/preview/previewers/`); markdown previews can embed `gnar:<name>` "markdown-component" directives that mount Svelte components registered via `api.registerMarkdownComponent`.
 
-### File Browser (`src/extensions/file-browser/`)
-
-Registers a secondary sidebar tab showing the directory tree of the active terminal's CWD. Adds four context menu items: "Edit" (opens in editor, all files), "Show in File Manager" (all files), "Open with Default App" (all files), and "Open as Workspace" (directories only). Also registers a `toggle-file-browser` command. Refreshes the file tree when the active workspace, pane, or surface changes.
-
 ### Agentic Orchestrator (`src/extensions/agentic-orchestrator/`)
 
 Registers the per-Workspace Agentic Dashboard contribution (auto-provisioned, cap 1 per Workspace) and the Global Agentic Dashboard pseudo-workspace, plus a set of `gnar:*` markdown widgets (kanban, agent-list, task-spawner, issues, prs, agent-status-row, columns) that mount inside those dashboards. Consumes core's passive agent detection via `api.agents`; the extension itself owns no detection logic. Requires `"filesystem"` for writing the dashboard's backing markdown.
@@ -1177,7 +1173,6 @@ The included extensions in `src/extensions/` are real-world examples of every ex
 
 | Extension               | Patterns demonstrated                                                                                 |
 | ----------------------- | ----------------------------------------------------------------------------------------------------- |
-| `file-browser/`         | Sidebar tab, sidebar action, context menus, workspace actions                                         |
 | `agentic-orchestrator/` | Dashboard contributions, pseudo-workspaces, markdown widgets, custom events, scoped settings          |
 | `branched-workspaces/`  | Workspace actions, git worktree integration, core event subscription (`worktree:merged`)              |
 | `claude-settings/`      | TitleBar button, dashboard contribution, dedicated Claude-file commands, markdown component embedding |

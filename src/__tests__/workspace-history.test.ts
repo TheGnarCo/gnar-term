@@ -98,8 +98,7 @@ vi.mock("../lib/services/event-bus", () => ({
 }));
 
 vi.mock("../lib/services/workspace-service", () => ({
-  addChildToWorkspace: vi.fn(),
-  insertChildIntoWorkspace: vi.fn(),
+  addBranchToWorkspace: vi.fn(),
   updateWorkspace: vi.fn(),
 }));
 

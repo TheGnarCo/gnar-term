@@ -5,7 +5,7 @@ import {
   createWorkspaceFromDef,
 } from "./workspace-runtime-service";
 import {
-  getChildrenOfWorkspace,
+  getBranchesOfWorkspace,
   closeWorkspacesInWorkspace,
   isDashboardWorkspace,
   provisionAutoDashboardsForWorkspace,
@@ -33,7 +33,7 @@ export async function archiveWorkspace(workspaceId: string): Promise<boolean> {
   if (!workspace) return false;
   if (workspace.locked) return false;
 
-  const allInWorkspace = getChildrenOfWorkspace(workspaceId);
+  const allInWorkspace = getBranchesOfWorkspace(workspaceId);
   const nonDashboard = allInWorkspace.filter(
     (ws) => !isDashboardWorkspace(ws, workspaceId),
   );

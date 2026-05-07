@@ -18,7 +18,7 @@
   import { derived } from "svelte/store";
   import { theme } from "../stores/theme";
   import { workspaces } from "../stores/workspace";
-  import { reorderContext, anyReorderActive } from "../stores/ui";
+  import { reorderContext, canSidebarDrag } from "../stores/ui";
   import {
     rootRowOrder,
     moveRootRow,
@@ -187,7 +187,7 @@
       background: "transparent",
       border: `1px solid ${$theme.border ?? "transparent"}`,
     }),
-    canStart: () => !$anyReorderActive,
+    canStart: () => $canSidebarDrag,
     onDrop: (from, to) => moveRootRow(from, to),
     onMove: (x, y, ghostEl) => {
       const fromIdx = rootDrag.getState().sourceIdx;

@@ -57,6 +57,17 @@ export const anyReorderActive = derived(
 );
 
 /**
+ * True when the sidebar is in a state where banner drag is allowed:
+ * sidebar expanded AND no reorder already in flight. While the sidebar
+ * is collapsed the rails act as a visual index only — drag is disabled
+ * to keep the rail strip stable while the cursor hovers it.
+ */
+export const canSidebarDrag = derived(
+  [sidebarVisible, anyReorderActive],
+  ([$visible, $reordering]) => $visible && !$reordering,
+);
+
+/**
  * True while a within-block (row-level) reorder is in progress. Derived —
  * do not write directly; update `reorderContext` instead.
  */

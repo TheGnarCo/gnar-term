@@ -13,7 +13,7 @@
    *                  hosts the close button inside the grip.
    */
   import { theme } from "../stores/theme";
-  import { anyReorderActive, sidebarVisible } from "../stores/ui";
+  import { sidebarVisible, canSidebarDrag } from "../stores/ui";
   import DragGrip from "./DragGrip.svelte";
 
   export let mode: "row" | "container" = "row";
@@ -44,8 +44,8 @@
 
   let railHovered = false;
 
-  $: visible =
-    isDragging || (canDrag && railHovered && !$anyReorderActive && !locked);
+  $: effectiveCanDrag = canDrag && $canSidebarDrag;
+  $: visible = isDragging || (effectiveCanDrag && railHovered && !locked);
   $: railBorderColor = $theme.border ?? "transparent";
 </script>
 
@@ -63,7 +63,7 @@
   on:mouseenter={() => (railHovered = true)}
   on:mouseleave={() => (railHovered = false)}
   on:mousedown={(e) => {
-    if (railHovered && onGripMouseDown) {
+    if (railHovered && effectiveCanDrag && onGripMouseDown) {
       onGripMouseDown(e);
     }
   }}

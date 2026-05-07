@@ -12,7 +12,7 @@
    * calls onClose() so the registrar can wire up a reopen affordance.
    */
   import { theme } from "../stores/theme";
-  import { reorderContext } from "../stores/ui";
+  import { canSidebarDrag } from "../stores/ui";
   import { activePseudoWorkspaceId } from "../stores/workspace";
   import { activeWorkspaceId } from "../stores/workspace";
   import DragGrip from "./DragGrip.svelte";
@@ -59,7 +59,7 @@
   }
 
   $: isActive = $activePseudoWorkspaceId === pseudo.id;
-  $: gripVisible = rowHovered && $reorderContext === null;
+  $: gripVisible = rowHovered && $canSidebarDrag;
 
   function handleClose(): void {
     unregisterPseudoWorkspace(pseudo.id);

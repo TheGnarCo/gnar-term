@@ -3,16 +3,11 @@
  * the correct DOM structure, text content, and attributes.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen, cleanup } from "@testing-library/svelte";
-import { get } from "svelte/store";
-import type {
-  Workspace,
-  Pane,
-  TerminalSurface,
-  PreviewSurface,
-  Surface,
-  SplitNode,
-} from "../lib/types";
+import { tick } from "svelte";
+import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
+// get is available if needed for store testing
+import { readFileSync } from "fs";
+import type { Workspace, Pane, TerminalSurface } from "../lib/types";
 
 // ---------------------------------------------------------------------------
 // Mocks — must come before any component imports
@@ -27,56 +22,72 @@ vi.mock("@tauri-apps/api/event", () => ({
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
   readText: vi.fn().mockResolvedValue(""),
   writeText: vi.fn().mockResolvedValue(undefined),
+  writeImage: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("@xterm/xterm", () => ({
-  Terminal: class {
-    open = vi.fn();
-    write = vi.fn();
-    focus = vi.fn();
-    dispose = vi.fn();
-    onData = vi.fn();
-    onResize = vi.fn();
-    onTitleChange = vi.fn();
-    loadAddon = vi.fn();
-    options: Record<string, unknown> = {};
-    buffer = { active: { getLine: vi.fn() } };
-    parser = { registerOscHandler: vi.fn() };
-    attachCustomKeyEventHandler = vi.fn();
-    registerLinkProvider = vi.fn();
-    getSelection = vi.fn();
-    scrollToBottom = vi.fn();
-  },
+  Terminal: vi.fn().mockImplementation(function () {
+    return {
+      open: vi.fn(),
+      write: vi.fn(),
+      focus: vi.fn(),
+      dispose: vi.fn(),
+      onData: vi.fn(),
+      onResize: vi.fn(),
+      onTitleChange: vi.fn(),
+      loadAddon: vi.fn(),
+      options: {},
+      buffer: { active: { getLine: vi.fn(), length: 0 } },
+      rows: 24,
+      parser: { registerOscHandler: vi.fn() },
+      attachCustomKeyEventHandler: vi.fn(),
+      registerLinkProvider: vi.fn(),
+      getSelection: vi.fn(),
+      hasSelection: vi.fn().mockReturnValue(false),
+      onSelectionChange: vi.fn(),
+      scrollToBottom: vi.fn(),
+      onScroll: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+    };
+  }),
 }));
 vi.mock("@xterm/addon-fit", () => ({
-  FitAddon: class {
-    fit = vi.fn();
-    activate = vi.fn();
-    dispose = vi.fn();
-  },
+  FitAddon: vi.fn().mockImplementation(function () {
+    return { fit: vi.fn(), activate: vi.fn(), dispose: vi.fn() };
+  }),
 }));
 vi.mock("@xterm/addon-webgl", () => ({
-  WebglAddon: class {
-    activate = vi.fn();
-    dispose = vi.fn();
-    onContextLoss = vi.fn();
-  },
+  WebglAddon: vi.fn().mockImplementation(function () {
+    return { activate: vi.fn(), dispose: vi.fn(), onContextLoss: vi.fn() };
+  }),
 }));
 vi.mock("@xterm/addon-web-links", () => ({
-  WebLinksAddon: class {
-    activate = vi.fn();
-    dispose = vi.fn();
-  },
+  WebLinksAddon: vi.fn().mockImplementation(function () {
+    return { activate: vi.fn(), dispose: vi.fn() };
+  }),
 }));
 vi.mock("@xterm/addon-search", () => ({
-  SearchAddon: class {
-    activate = vi.fn();
-    dispose = vi.fn();
-    findNext = vi.fn();
-    findPrevious = vi.fn();
-    clearDecorations = vi.fn();
-  },
+  SearchAddon: vi.fn().mockImplementation(function () {
+    return {
+      activate: vi.fn(),
+      dispose: vi.fn(),
+      findNext: vi.fn(),
+      findPrevious: vi.fn(),
+      clearDecorations: vi.fn(),
+    };
+  }),
 }));
 vi.mock("@xterm/xterm/css/xterm.css", () => ({}));
+vi.mock("../lib/services/preview-service", () => ({
+  openPreview: vi.fn().mockResolvedValue({
+    element: document.createElement("div"),
+    watchId: 0,
+    dispose: vi.fn(),
+  }),
+  refreshPreviewElement: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("../lib/services/preview-surface-registry", () => ({
+  registerPreviewSurface: vi.fn(),
+  unregisterPreviewSurface: vi.fn(),
+}));
 
 vi.stubGlobal("localStorage", {
   getItem: vi.fn().mockReturnValue(null),
@@ -85,7 +96,8 @@ vi.stubGlobal("localStorage", {
 });
 
 // Mock ResizeObserver (not available in jsdom). Svelte 5.55.4 treats
-// ResizeObserver as a constructor inside $effect — must be a class.
+// ResizeObserver as a constructor inside $effect — it must be a class,
+// not a plain function, so vi.fn() no longer suffices.
 class MockResizeObserver {
   observe = vi.fn();
   unobserve = vi.fn();
@@ -98,6 +110,7 @@ vi.stubGlobal("ResizeObserver", MockResizeObserver);
 // ---------------------------------------------------------------------------
 
 import TitleBar from "../lib/components/TitleBar.svelte";
+import ShortcutReference from "../lib/components/ShortcutReference.svelte";
 import FindBar from "../lib/components/FindBar.svelte";
 import Tab from "../lib/components/Tab.svelte";
 import TabBar from "../lib/components/TabBar.svelte";
@@ -105,19 +118,39 @@ import ContextMenu from "../lib/components/ContextMenu.svelte";
 import CommandPalette from "../lib/components/CommandPalette.svelte";
 import WorkspaceItem from "../lib/components/WorkspaceItem.svelte";
 import PaneView from "../lib/components/PaneView.svelte";
-import PrimarySidebar from "../lib/components/PrimarySidebar.svelte";
-import SecondarySidebar from "../lib/components/SecondarySidebar.svelte";
+import Sidebar from "../lib/components/Sidebar.svelte";
+import NewWorkspaceSplitButton from "../lib/components/NewWorkspaceSplitButton.svelte";
 import TerminalSurfaceComponent from "../lib/components/TerminalSurface.svelte";
+import WorkspaceSectionHarness from "./workspace-section-harness.svelte";
 
 // Store imports
 import {
-  primarySidebarVisible,
-  secondarySidebarVisible,
+  sidebarVisible,
+  sidebarWidth,
   commandPaletteOpen,
   findBarVisible,
   contextMenu,
+  isFullscreen,
 } from "../lib/stores/ui";
+import {
+  registerCommands,
+  unregisterBySource,
+} from "../lib/services/command-registry";
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
+import { rootRowOrder } from "../lib/stores/root-row-order";
+import { registerRootRowRenderer } from "../lib/services/root-row-renderer-registry";
+import WorkspaceRowBody from "../lib/components/WorkspaceRowBody.svelte";
+import { initCoreExtensionAPI } from "../lib/bootstrap/init-core-extension-api";
+import {
+  registerSidebarSection,
+  resetSidebarSections,
+} from "../lib/services/sidebar-section-registry";
+import {
+  registerWorkspaceAction,
+  resetWorkspaceActions,
+} from "../lib/services/workspace-action-registry";
+import { setWorkspaces } from "../lib/stores/workspace";
+import type { WorkspaceRecord } from "../lib/config";
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -141,18 +174,22 @@ function makeSurface(
       onTitleChange: vi.fn(),
       loadAddon: vi.fn(),
       options: {},
-      buffer: { active: { getLine: vi.fn() } },
+      buffer: { active: { getLine: vi.fn(), length: 0 } },
+      rows: 24,
       parser: { registerOscHandler: vi.fn() },
       attachCustomKeyEventHandler: vi.fn(),
       registerLinkProvider: vi.fn(),
       getSelection: vi.fn(),
-    } as any,
-    fitAddon: { fit: vi.fn() } as any,
+      hasSelection: vi.fn().mockReturnValue(false),
+      onSelectionChange: vi.fn(),
+      onScroll: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+    } as unknown as TerminalSurface["terminal"],
+    fitAddon: { fit: vi.fn() } as unknown as TerminalSurface["fitAddon"],
     searchAddon: {
       findNext: vi.fn(),
       findPrevious: vi.fn(),
       clearDecorations: vi.fn(),
-    } as any,
+    } as unknown as TerminalSurface["searchAddon"],
     termElement: document.createElement("div"),
     ptyId: 1,
     title: `Shell ${id}`,
@@ -171,13 +208,18 @@ function makePane(id: string, surfaces?: TerminalSurface[]): Pane {
   };
 }
 
-function makeWorkspace(id: string, name: string, pane?: Pane): Workspace {
+function makeChildWorkspace(id: string, name: string, pane?: Pane): Workspace {
   const p = pane ?? makePane(`${id}-p1`);
   return {
     id,
     name,
-    splitRoot: { type: "pane", pane: p },
+    paneLayout: { type: "pane", pane: p },
     activePaneId: p.id,
+    branchedWorkspaceIds: [],
+    color: "purple",
+    path: `/tmp/${id}`,
+    isGit: false,
+    createdAt: "2026-01-01T00:00:00.000Z",
   };
 }
 
@@ -189,13 +231,71 @@ const noop = () => {};
 
 beforeEach(() => {
   cleanup();
-  primarySidebarVisible.set(true);
-  secondarySidebarVisible.set(false);
+  sidebarVisible.set(true);
   commandPaletteOpen.set(false);
   findBarVisible.set(false);
   contextMenu.set(null);
   workspaces.set([]);
+  rootRowOrder.set([]);
   activeWorkspaceIdx.set(-1);
+  unregisterBySource("test");
+});
+
+// ===========================================================================
+// ShortcutReference
+// ===========================================================================
+
+describe("ShortcutReference", () => {
+  it("renders the dashboard surface body", () => {
+    render(ShortcutReference, { props: { open: true } });
+    expect(screen.getByTestId("shortcut-reference")).toBeTruthy();
+  });
+
+  it("shows corrected label: Select Surface/Tab 1-9 (not Switch Branched Workspace)", () => {
+    render(ShortcutReference, { props: { open: true } });
+    expect(screen.getByText("Select Surface/Tab 1-9")).toBeTruthy();
+    expect(screen.queryByText(/Switch Branched Workspace/)).toBeNull();
+  });
+
+  it("shows Linux bindings for Focus Pane (not —)", () => {
+    render(ShortcutReference, { props: { open: true } });
+    expect(screen.getAllByText("Ctrl+Alt+←").length).toBeGreaterThan(0);
+  });
+
+  it("shows Linux bindings for Resize Pane (not —)", () => {
+    render(ShortcutReference, { props: { open: true } });
+    expect(screen.getByText("Ctrl+Shift+←→↑↓")).toBeTruthy();
+  });
+
+  it("uses Surfaces section title (not Surfaces (Terminals))", () => {
+    render(ShortcutReference, { props: { open: true } });
+    expect(screen.getByText("Surfaces")).toBeTruthy();
+    expect(screen.queryByText("Surfaces (Terminals)")).toBeNull();
+  });
+
+  it("shows Rename Workspace entry", () => {
+    render(ShortcutReference, { props: { open: true } });
+    expect(screen.getByText("Rename Workspace")).toBeTruthy();
+  });
+
+  it("shows Rename Surface/Tab entry", () => {
+    render(ShortcutReference, { props: { open: true } });
+    expect(screen.getByText("Rename Surface/Tab")).toBeTruthy();
+  });
+
+  it("shows Find Next and Find Previous entries", () => {
+    render(ShortcutReference, { props: { open: true } });
+    expect(screen.getByText("Find Next")).toBeTruthy();
+    expect(screen.getByText("Find Previous")).toBeTruthy();
+  });
+
+  it("uses workspace terminology (not Branched Workspace) for nav shortcuts", () => {
+    render(ShortcutReference, { props: { open: true } });
+    expect(screen.getByText("Next Workspace")).toBeTruthy();
+    expect(screen.getByText("Prev Workspace")).toBeTruthy();
+    // Navigation shortcuts use plain "Workspace" — the Surfaces section
+    // correctly uses "Branched Workspace" for Workspace-scoped operations.
+  });
 });
 
 // ===========================================================================
@@ -203,9 +303,11 @@ beforeEach(() => {
 // ===========================================================================
 
 describe("TitleBar", () => {
-  it("renders GNARTERM text", () => {
+  it("renders GnarTerm text", () => {
     render(TitleBar);
-    expect(screen.getByText("GNARTERM")).toBeTruthy();
+    const el =
+      screen.queryByText("GnarTerm") ?? screen.queryByText("GnarTerm (Dev)");
+    expect(el).toBeTruthy();
   });
 
   it("has data-tauri-drag-region attribute", () => {
@@ -220,47 +322,73 @@ describe("TitleBar", () => {
     expect(el.style.height).toBe("38px");
   });
 
-  it("always renders both sidebar toggles", () => {
-    render(TitleBar);
-    expect(screen.getByTitle("Toggle Primary Sidebar (⌘B)")).toBeTruthy();
-    expect(screen.getByTitle("Toggle Secondary Sidebar")).toBeTruthy();
-  });
-});
-
-// ===========================================================================
-// SecondarySidebar
-// ===========================================================================
-
-describe("SecondarySidebar", () => {
-  it("renders when secondarySidebarVisible is true", () => {
-    secondarySidebarVisible.set(true);
-    const { container } = render(SecondarySidebar);
-    expect(container.querySelector("#secondary-sidebar")).toBeTruthy();
+  it("renders primary sidebar toggle", () => {
+    const { container } = render(TitleBar);
+    const primaryBtn = container.querySelector(
+      "button[title^='Toggle Sidebar']",
+    );
+    expect(primaryBtn).toBeTruthy();
   });
 
-  it("does not render when secondarySidebarVisible is false", () => {
-    secondarySidebarVisible.set(false);
-    const { container } = render(SecondarySidebar);
-    expect(container.querySelector("#secondary-sidebar")).toBeNull();
+  it("renders settings button", () => {
+    const { container } = render(TitleBar);
+    const settingsBtn = container.querySelector("button[title*='Settings']");
+    expect(settingsBtn).toBeTruthy();
   });
 
-  it("has data-tauri-drag-region", () => {
-    secondarySidebarVisible.set(true);
-    const { container } = render(SecondarySidebar);
-    const dragRegions = container.querySelectorAll("[data-tauri-drag-region]");
-    expect(dragRegions.length).toBeGreaterThan(0);
+  it("renders the + New split button when sidebar is collapsed", () => {
+    sidebarVisible.set(false);
+    registerWorkspaceAction({
+      id: "core:new-workspace",
+      label: "New Workspace",
+      icon: "plus",
+      shortcut: "Cmd+Shift+N",
+      source: "core",
+      handler: noop,
+    });
+    const { container } = render(TitleBar);
+    const newBtn = Array.from(container.querySelectorAll("button")).find(
+      (b) => b.textContent?.trim() === "+ New",
+    );
+    expect(newBtn).toBeDefined();
   });
 
-  it("shows empty state message when no tabs are registered", () => {
-    secondarySidebarVisible.set(true);
-    render(SecondarySidebar);
-    expect(screen.getByText("No Secondary Sidebar Content")).toBeTruthy();
+  it("does not render the + New split button when sidebar is expanded", () => {
+    sidebarVisible.set(true);
+    registerWorkspaceAction({
+      id: "core:new-workspace",
+      label: "New Workspace",
+      icon: "plus",
+      shortcut: "Cmd+Shift+N",
+      source: "core",
+      handler: noop,
+    });
+    const { container } = render(TitleBar);
+    const newBtn = Array.from(container.querySelectorAll("button")).find(
+      (b) => b.textContent?.trim() === "+ New",
+    );
+    expect(newBtn).toBeUndefined();
   });
 
-  it("does not render toggle in header (lives in TitleBar)", () => {
-    secondarySidebarVisible.set(true);
-    render(SecondarySidebar);
-    expect(screen.queryByTitle("Toggle Secondary Sidebar")).toBeNull();
+  it("places the split button before the sidebar toggle in DOM order when collapsed", () => {
+    sidebarVisible.set(false);
+    registerWorkspaceAction({
+      id: "core:new-workspace",
+      label: "New Workspace",
+      icon: "plus",
+      shortcut: "Cmd+Shift+N",
+      source: "core",
+      handler: noop,
+    });
+    const { container } = render(TitleBar);
+    const buttons = Array.from(container.querySelectorAll("button"));
+    const newIdx = buttons.findIndex((b) => b.textContent?.trim() === "+ New");
+    const toggleIdx = buttons.findIndex(
+      (b) => b.getAttribute("aria-label") === "Toggle Sidebar",
+    );
+    expect(newIdx).toBeGreaterThanOrEqual(0);
+    expect(toggleIdx).toBeGreaterThanOrEqual(0);
+    expect(newIdx).toBeLessThan(toggleIdx);
   });
 });
 
@@ -294,6 +422,89 @@ describe("FindBar", () => {
     render(FindBar);
     const input = screen.getByPlaceholderText("Find...") as HTMLInputElement;
     expect(input.type).toBe("text");
+  });
+
+  it("renders regex, case, and whole-word toggle buttons", () => {
+    findBarVisible.set(true);
+    render(FindBar);
+    expect(screen.getByTitle("Use regular expression")).toBeTruthy();
+    expect(screen.getByTitle("Match case")).toBeTruthy();
+    expect(screen.getByTitle("Match whole word")).toBeTruthy();
+  });
+
+  it("passes regex:true to findNext when regex toggle is enabled", async () => {
+    const surface = makeSurface("s1");
+    const ws = makeChildWorkspace("w1", "test", makePane("p1", [surface]));
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+    findBarVisible.set(true);
+    render(FindBar);
+
+    const input = screen.getByPlaceholderText("Find...") as HTMLInputElement;
+    await fireEvent.input(input, { target: { value: "hello" } });
+
+    const regexBtn = screen.getByTitle("Use regular expression");
+    await fireEvent.click(regexBtn);
+
+    const findNextSpy = surface.searchAddon.findNext as ReturnType<
+      typeof vi.fn
+    >;
+    const lastCall = findNextSpy.mock.calls[findNextSpy.mock.calls.length - 1];
+    expect(lastCall[1]).toMatchObject({
+      regex: true,
+      caseSensitive: false,
+      wholeWord: false,
+    });
+  });
+
+  it("passes caseSensitive:true to findNext when case toggle is enabled", async () => {
+    const surface = makeSurface("s2");
+    const ws = makeChildWorkspace("w2", "test", makePane("p2", [surface]));
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+    findBarVisible.set(true);
+    render(FindBar);
+
+    const input = screen.getByPlaceholderText("Find...") as HTMLInputElement;
+    await fireEvent.input(input, { target: { value: "hello" } });
+
+    const caseBtn = screen.getByTitle("Match case");
+    await fireEvent.click(caseBtn);
+
+    const findNextSpy = surface.searchAddon.findNext as ReturnType<
+      typeof vi.fn
+    >;
+    const lastCall = findNextSpy.mock.calls[findNextSpy.mock.calls.length - 1];
+    expect(lastCall[1]).toMatchObject({
+      regex: false,
+      caseSensitive: true,
+      wholeWord: false,
+    });
+  });
+
+  it("passes wholeWord:true to findNext when whole-word toggle is enabled", async () => {
+    const surface = makeSurface("s3");
+    const ws = makeChildWorkspace("w3", "test", makePane("p3", [surface]));
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+    findBarVisible.set(true);
+    render(FindBar);
+
+    const input = screen.getByPlaceholderText("Find...") as HTMLInputElement;
+    await fireEvent.input(input, { target: { value: "hello" } });
+
+    const wordBtn = screen.getByTitle("Match whole word");
+    await fireEvent.click(wordBtn);
+
+    const findNextSpy = surface.searchAddon.findNext as ReturnType<
+      typeof vi.fn
+    >;
+    const lastCall = findNextSpy.mock.calls[findNextSpy.mock.calls.length - 1];
+    expect(lastCall[1]).toMatchObject({
+      regex: false,
+      caseSensitive: false,
+      wholeWord: true,
+    });
   });
 });
 
@@ -341,9 +552,9 @@ describe("Tab", () => {
         onClose: noop,
       },
     });
-    // When hasUnread && !isActive, the tab renders 3 spans: dot, title, close
+    // When hasUnread && !isActive, the tab renders 2 spans (dot + title) and 1 close button
     const spans = container.querySelectorAll(".tab span");
-    expect(spans.length).toBe(3);
+    expect(spans.length).toBe(2);
     // The first span is the unread dot (empty text content)
     expect(spans[0].textContent).toBe("");
   });
@@ -359,12 +570,12 @@ describe("Tab", () => {
         onClose: noop,
       },
     });
-    // When isActive, the unread dot is not rendered — only title and close spans
+    // When isActive, the unread dot is not rendered — only title span + close button
     const spans = container.querySelectorAll(".tab span");
-    expect(spans.length).toBe(2);
+    expect(spans.length).toBe(1);
   });
 
-  it("renders close button (x symbol)", () => {
+  it("renders close button with aria-label", () => {
     const surface = makeSurface("t1");
     render(Tab, {
       props: {
@@ -375,7 +586,7 @@ describe("Tab", () => {
         onClose: noop,
       },
     });
-    expect(screen.getByText("×")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Close tab" })).toBeTruthy();
   });
 
   it("renders active tab with the tab class", () => {
@@ -406,9 +617,86 @@ describe("Tab", () => {
         onClose: noop,
       },
     });
-    // Without unread, only 2 spans: title and close
+    // Without unread, only 1 span (title) + close button (not a span)
     const spans = container.querySelectorAll(".tab span");
-    expect(spans.length).toBe(2);
+    expect(spans.length).toBe(1);
+  });
+
+  // ---- a11y regression tests (F06) ----------------------------------------
+
+  it("tab div has role=tab and aria-selected", () => {
+    const surface = makeSurface("t1");
+    const { container } = render(Tab, {
+      props: {
+        surface,
+        index: 0,
+        isActive: true,
+        onSelect: noop,
+        onClose: noop,
+      },
+    });
+    const tab = container.querySelector(".tab") as HTMLElement;
+    expect(tab.getAttribute("role")).toBe("tab");
+    expect(tab.getAttribute("aria-selected")).toBe("true");
+    expect(tab.getAttribute("tabindex")).toBe("0");
+  });
+
+  it("Enter key on the tab div calls onSelect", async () => {
+    const surface = makeSurface("t1");
+    const onSelect = vi.fn();
+    const { container } = render(Tab, {
+      props: { surface, index: 0, isActive: false, onSelect, onClose: noop },
+    });
+    const tab = container.querySelector(".tab") as HTMLElement;
+    fireEvent.keyDown(tab, { key: "Enter", target: tab, currentTarget: tab });
+    expect(onSelect).toHaveBeenCalledOnce();
+  });
+
+  it("Space key on the tab div calls onSelect", async () => {
+    const surface = makeSurface("t1");
+    const onSelect = vi.fn();
+    const { container } = render(Tab, {
+      props: { surface, index: 0, isActive: false, onSelect, onClose: noop },
+    });
+    const tab = container.querySelector(".tab") as HTMLElement;
+    fireEvent.keyDown(tab, { key: " ", target: tab, currentTarget: tab });
+    expect(onSelect).toHaveBeenCalledOnce();
+  });
+
+  it("Enter on close button does not call onSelect (bubbling guard)", async () => {
+    const surface = makeSurface("t1");
+    const onSelect = vi.fn();
+    const onClose = vi.fn();
+    const { container } = render(Tab, {
+      props: { surface, index: 0, isActive: true, onSelect, onClose },
+    });
+    const closeBtn = container.querySelector(
+      "button[aria-label='Close tab']",
+    ) as HTMLElement;
+    // Dispatch keydown directly on the close button — it bubbles to the tab
+    // div, but handleTabKeydown should ignore it (target !== currentTarget).
+    closeBtn.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+    );
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("close button has aria-label and is a button element", () => {
+    const surface = makeSurface("t1");
+    const { container } = render(Tab, {
+      props: {
+        surface,
+        index: 0,
+        isActive: true,
+        onSelect: noop,
+        onClose: noop,
+      },
+    });
+    const closeBtn = container.querySelector(
+      "button[aria-label='Close tab']",
+    ) as HTMLButtonElement;
+    expect(closeBtn).toBeTruthy();
+    expect(closeBtn.tagName).toBe("BUTTON");
   });
 });
 
@@ -427,6 +715,7 @@ describe("TabBar", () => {
         onSelectSurface: noop,
         onCloseSurface: noop,
         onNewSurface: noop,
+        onSelectSurfaceType: noop,
         onSplitRight: noop,
         onSplitDown: noop,
         onClosePane: noop,
@@ -444,12 +733,12 @@ describe("TabBar", () => {
         onSelectSurface: noop,
         onCloseSurface: noop,
         onNewSurface: noop,
+        onSelectSurfaceType: noop,
         onSplitRight: noop,
         onSplitDown: noop,
         onClosePane: noop,
       },
     });
-    expect(screen.getByTitle("New surface (⌘T)")).toBeTruthy();
     expect(screen.getByText("+")).toBeTruthy();
   });
 
@@ -461,6 +750,7 @@ describe("TabBar", () => {
         onSelectSurface: noop,
         onCloseSurface: noop,
         onNewSurface: noop,
+        onSelectSurfaceType: noop,
         onSplitRight: noop,
         onSplitDown: noop,
         onClosePane: noop,
@@ -477,6 +767,7 @@ describe("TabBar", () => {
         onSelectSurface: noop,
         onCloseSurface: noop,
         onNewSurface: noop,
+        onSelectSurfaceType: noop,
         onSplitRight: noop,
         onSplitDown: noop,
         onClosePane: noop,
@@ -493,12 +784,50 @@ describe("TabBar", () => {
         onSelectSurface: noop,
         onCloseSurface: noop,
         onNewSurface: noop,
+        onSelectSurfaceType: noop,
         onSplitRight: noop,
         onSplitDown: noop,
         onClosePane: noop,
       },
     });
     expect(screen.getByTitle("Close Pane")).toBeTruthy();
+  });
+
+  it("shows jump-to-bottom button when showJumpToBottom is true", () => {
+    const pane = makePane("p1");
+    const { container } = render(TabBar, {
+      props: {
+        pane,
+        onSelectSurface: noop,
+        onCloseSurface: noop,
+        onNewSurface: noop,
+        onSelectSurfaceType: noop,
+        onSplitRight: noop,
+        onSplitDown: noop,
+        onClosePane: noop,
+        showJumpToBottom: true,
+        onJumpToBottom: noop,
+      },
+    });
+    expect(container.querySelector("[data-jump-to-bottom]")).not.toBeNull();
+  });
+
+  it("hides jump-to-bottom button when showJumpToBottom is false", () => {
+    const pane = makePane("p1");
+    const { container } = render(TabBar, {
+      props: {
+        pane,
+        onSelectSurface: noop,
+        onCloseSurface: noop,
+        onNewSurface: noop,
+        onSelectSurfaceType: noop,
+        onSplitRight: noop,
+        onSplitDown: noop,
+        onClosePane: noop,
+        showJumpToBottom: false,
+      },
+    });
+    expect(container.querySelector("[data-jump-to-bottom]")).toBeNull();
   });
 });
 
@@ -566,6 +895,96 @@ describe("ContextMenu", () => {
     expect(row).toBeTruthy();
     expect(row.style.opacity).toBe("0.5");
   });
+
+  // ---- a11y regression tests (F11) ----------------------------------------
+
+  it("menu container has role=menu", () => {
+    contextMenu.set({ x: 0, y: 0, items: [{ label: "Item", action: noop }] });
+    const { container } = render(ContextMenu);
+    const menu = container.querySelector("#context-menu") as HTMLElement;
+    expect(menu.getAttribute("role")).toBe("menu");
+  });
+
+  it("menu items have role=menuitem and tabindex=-1", () => {
+    contextMenu.set({
+      x: 0,
+      y: 0,
+      items: [
+        { label: "Copy", action: noop },
+        { label: "Paste", action: noop },
+      ],
+    });
+    const { container } = render(ContextMenu);
+    const items = container.querySelectorAll('[role="menuitem"]');
+    expect(items.length).toBe(2);
+    items.forEach((item) => {
+      expect((item as HTMLElement).getAttribute("tabindex")).toBe("-1");
+    });
+  });
+
+  it("separator element has role=separator", () => {
+    contextMenu.set({
+      x: 0,
+      y: 0,
+      items: [
+        { label: "Copy", action: noop },
+        { label: "", action: noop, separator: true },
+        { label: "Paste", action: noop },
+      ],
+    });
+    const { container } = render(ContextMenu);
+    const sep = container.querySelector('[role="separator"]');
+    expect(sep).toBeTruthy();
+  });
+
+  it("ArrowDown/ArrowUp keyboard navigation is wired on the menu container", () => {
+    contextMenu.set({
+      x: 0,
+      y: 0,
+      items: [
+        { label: "First", action: noop },
+        { label: "Second", action: noop },
+        { label: "Third", action: noop },
+      ],
+    });
+    const { container } = render(ContextMenu);
+    const menu = container.querySelector("#context-menu") as HTMLElement;
+    const items = Array.from(
+      container.querySelectorAll<HTMLElement>('[role="menuitem"]'),
+    );
+
+    // Spy on focus for each item and track calls.
+    // Use a mutable "current active" so the handler's document.activeElement
+    // lookup reflects which item was last focused.
+    let activeItem: HTMLElement | null = null;
+    const activeElementSpy = vi
+      .spyOn(document, "activeElement", "get")
+      .mockImplementation(() => activeItem);
+
+    const focusCalls: HTMLElement[] = [];
+    items.forEach((item) => {
+      vi.spyOn(item, "focus").mockImplementation(() => {
+        activeItem = item;
+        focusCalls.push(item);
+      });
+    });
+
+    // ArrowDown from first item should focus second
+    activeItem = items[0]!;
+    menu.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
+    );
+    expect(focusCalls.at(-1)).toBe(items[1]);
+
+    // ArrowUp from second item should focus first
+    activeItem = items[1]!;
+    menu.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }),
+    );
+    expect(focusCalls.at(-1)).toBe(items[0]);
+
+    activeElementSpy.mockRestore();
+  });
 });
 
 // ===========================================================================
@@ -575,56 +994,144 @@ describe("ContextMenu", () => {
 describe("CommandPalette", () => {
   it("does not render when commandPaletteOpen is false", () => {
     commandPaletteOpen.set(false);
-    const { container } = render(CommandPalette, {
-      props: {
-        commands: [{ name: "Test Command", action: noop }],
-      },
-    });
+    const { container } = render(CommandPalette);
     expect(container.querySelector("#cmd-palette-overlay")).toBeNull();
   });
 
   it("renders overlay with input when open", () => {
     commandPaletteOpen.set(true);
-    render(CommandPalette, {
-      props: {
-        commands: [{ name: "New Terminal", action: noop }],
-      },
-    });
+    render(CommandPalette);
     expect(screen.getByPlaceholderText("Type a command...")).toBeTruthy();
   });
 
-  it("renders command list", () => {
-    commandPaletteOpen.set(true);
-    render(CommandPalette, {
-      props: {
-        commands: [
-          { name: "New Terminal", action: noop, shortcut: "⌘T" },
-          { name: "Close Tab", action: noop, shortcut: "⌘W" },
-          { name: "Toggle Sidebar", action: noop },
-        ],
+  it("renders command list from registry", () => {
+    registerCommands([
+      {
+        id: "test.new-terminal",
+        title: "New Terminal",
+        action: noop,
+        shortcut: "⌘T",
+        source: "test",
       },
-    });
+      {
+        id: "test.close-tab",
+        title: "Close Tab",
+        action: noop,
+        shortcut: "⌘W",
+        source: "test",
+      },
+      {
+        id: "test.toggle-sidebar",
+        title: "Toggle Sidebar",
+        action: noop,
+        source: "test",
+      },
+    ]);
+    commandPaletteOpen.set(true);
+    render(CommandPalette);
     expect(screen.getByText("New Terminal")).toBeTruthy();
     expect(screen.getByText("Close Tab")).toBeTruthy();
     expect(screen.getByText("Toggle Sidebar")).toBeTruthy();
   });
 
   it("renders shortcuts for commands that have them", () => {
-    commandPaletteOpen.set(true);
-    render(CommandPalette, {
-      props: {
-        commands: [{ name: "New Terminal", action: noop, shortcut: "⌘T" }],
+    registerCommands([
+      {
+        id: "test.new-terminal",
+        title: "New Terminal",
+        action: noop,
+        shortcut: "⌘T",
+        source: "test",
       },
-    });
+    ]);
+    commandPaletteOpen.set(true);
+    render(CommandPalette);
     expect(screen.getByText("⌘T")).toBeTruthy();
   });
 
   it("renders the overlay element", () => {
     commandPaletteOpen.set(true);
-    const { container } = render(CommandPalette, {
-      props: { commands: [] },
-    });
+    const { container } = render(CommandPalette);
     expect(container.querySelector("#cmd-palette-overlay")).toBeTruthy();
+  });
+
+  // ---- a11y regression tests (F07) ----------------------------------------
+
+  it("overlay has role=dialog and aria-modal", () => {
+    commandPaletteOpen.set(true);
+    const { container } = render(CommandPalette);
+    const overlay = container.querySelector(
+      "#cmd-palette-overlay",
+    ) as HTMLElement;
+    expect(overlay.getAttribute("role")).toBe("dialog");
+    expect(overlay.getAttribute("aria-modal")).toBe("true");
+  });
+
+  it("input has aria-label", () => {
+    commandPaletteOpen.set(true);
+    const { container } = render(CommandPalette);
+    const input = container.querySelector("input") as HTMLInputElement;
+    expect(input.getAttribute("aria-label")).toBe("Command search");
+  });
+
+  it("results container has role=listbox", () => {
+    commandPaletteOpen.set(true);
+    const { container } = render(CommandPalette);
+    const listbox = container.querySelector('[role="listbox"]');
+    expect(listbox).toBeTruthy();
+  });
+
+  it("each command row has role=option and aria-selected", () => {
+    registerCommands([
+      { id: "test.cmd-a", title: "Cmd A", action: noop, source: "test" },
+      { id: "test.cmd-b", title: "Cmd B", action: noop, source: "test" },
+    ]);
+    commandPaletteOpen.set(true);
+    const { container } = render(CommandPalette);
+    const options = container.querySelectorAll('[role="option"]');
+    expect(options.length).toBe(2);
+    // First option is selected by default (selectedIdx = 0)
+    expect(options[0]!.getAttribute("aria-selected")).toBe("true");
+    expect(options[1]!.getAttribute("aria-selected")).toBe("false");
+  });
+
+  it("input aria-activedescendant points to selected option", () => {
+    registerCommands([
+      { id: "test.cmd-a", title: "Cmd A", action: noop, source: "test" },
+    ]);
+    commandPaletteOpen.set(true);
+    const { container } = render(CommandPalette);
+    const input = container.querySelector("input") as HTMLInputElement;
+    expect(input.getAttribute("aria-activedescendant")).toBe("cmd-option-0");
+  });
+
+  it("close-pane command is registered and appears in palette", () => {
+    registerCommands([
+      {
+        id: "core.close-pane",
+        title: "Close Pane",
+        shortcut: "⇧⌘X",
+        action: noop,
+        source: "test",
+      },
+    ]);
+    commandPaletteOpen.set(true);
+    render(CommandPalette);
+    expect(screen.getByText("Close Pane")).toBeTruthy();
+  });
+
+  it("rename-workspace command is registered and appears in palette", () => {
+    registerCommands([
+      {
+        id: "core.rename-workspace",
+        title: "Rename Workspace",
+        action: noop,
+        source: "test",
+      },
+    ]);
+    commandPaletteOpen.set(true);
+    render(CommandPalette);
+    expect(screen.getByText("Rename Workspace")).toBeTruthy();
   });
 });
 
@@ -637,7 +1144,7 @@ describe("WorkspaceItem", () => {
     wsOverrides: Partial<Workspace> = {},
     isActive = true,
   ) {
-    const ws = makeWorkspace("ws1", "My Workspace");
+    const ws = makeChildWorkspace("ws1", "My Workspace");
     Object.assign(ws, wsOverrides);
     return render(WorkspaceItem, {
       props: {
@@ -648,7 +1155,6 @@ describe("WorkspaceItem", () => {
         onClose: noop,
         onRename: noop,
         onContextMenu: noop,
-        onReorder: noop,
       },
     });
   }
@@ -658,21 +1164,31 @@ describe("WorkspaceItem", () => {
     expect(screen.getByText("My Workspace")).toBeTruthy();
   });
 
-  it("renders close button with correct title", () => {
-    renderWorkspaceItem();
-    expect(screen.getByTitle("Close Workspace (⇧⌘W)")).toBeTruthy();
-  });
-
-  it("renders close button with x symbol", () => {
-    renderWorkspaceItem();
-    // The close button renders the multiplication sign
-    expect(screen.getByText("×")).toBeTruthy();
+  it("renders close button in DragGrip when grip is expanded", async () => {
+    const ws = makeChildWorkspace("ws1", "My Workspace");
+    const { container } = render(WorkspaceItem, {
+      props: {
+        workspace: ws,
+        index: 0,
+        isActive: true,
+        onSelect: noop,
+        onClose: noop,
+        onRename: noop,
+        onContextMenu: noop,
+        onGripMouseDown: noop,
+      },
+    });
+    // Hover the row — this makes the grip visible, which shows the close button
+    const row = container.firstElementChild as HTMLElement;
+    await fireEvent.mouseEnter(row);
+    await tick();
+    expect(screen.getByLabelText("Close My Workspace")).toBeTruthy();
   });
 
   it("shows unread badge when surfaces have unread data", () => {
     const surface = makeSurface("s1", { hasUnread: true });
     const pane = makePane("p1", [surface]);
-    const ws = makeWorkspace("ws1", "Unread WS", pane);
+    const ws = makeChildWorkspace("ws1", "Unread WS", pane);
     const { container: withUnread } = render(WorkspaceItem, {
       props: {
         workspace: ws,
@@ -682,7 +1198,6 @@ describe("WorkspaceItem", () => {
         onClose: noop,
         onRename: noop,
         onContextMenu: noop,
-        onReorder: noop,
       },
     });
     // Count spans with unread vs without — the unread badge adds an extra empty span
@@ -692,7 +1207,7 @@ describe("WorkspaceItem", () => {
 
     const surfaceNoUnread = makeSurface("s2", { hasUnread: false });
     const paneNoUnread = makePane("p2", [surfaceNoUnread]);
-    const wsNoUnread = makeWorkspace("ws2", "No Unread WS", paneNoUnread);
+    const wsNoUnread = makeChildWorkspace("ws2", "No Unread WS", paneNoUnread);
     const { container: withoutUnread } = render(WorkspaceItem, {
       props: {
         workspace: wsNoUnread,
@@ -702,14 +1217,13 @@ describe("WorkspaceItem", () => {
         onClose: noop,
         onRename: noop,
         onContextMenu: noop,
-        onReorder: noop,
       },
     });
     const spanCountWithoutUnread =
       withoutUnread.querySelectorAll("span").length;
 
-    // The unread variant should have one more span (the badge)
-    expect(spanCountWithUnread).toBe(spanCountWithoutUnread + 1);
+    // The unread variant should add spans for the chip (outer + inner dot)
+    expect(spanCountWithUnread).toBeGreaterThan(spanCountWithoutUnread);
   });
 
   it("does not show unread badge when no surfaces have unread", () => {
@@ -721,7 +1235,7 @@ describe("WorkspaceItem", () => {
     // Render with unread to get the count with badge
     const surface = makeSurface("s1", { hasUnread: true });
     const pane = makePane("p1", [surface]);
-    const ws = makeWorkspace("ws1", "Unread WS", pane);
+    const ws = makeChildWorkspace("ws1", "Unread WS", pane);
     const { container: withUnread } = render(WorkspaceItem, {
       props: {
         workspace: ws,
@@ -731,7 +1245,6 @@ describe("WorkspaceItem", () => {
         onClose: noop,
         onRename: noop,
         onContextMenu: noop,
-        onReorder: noop,
       },
     });
     const spanCountWithBadge = withUnread.querySelectorAll("span").length;
@@ -740,14 +1253,14 @@ describe("WorkspaceItem", () => {
     expect(spanCountBase).toBeLessThan(spanCountWithBadge);
   });
 
-  it("renders metadata when multiple surfaces exist", () => {
+  it("does not render surface/pane count metadata", () => {
     const s1 = makeSurface("s1");
     const s2 = makeSurface("s2");
     const pane: Pane = { id: "p1", surfaces: [s1, s2], activeSurfaceId: s1.id };
     const ws: Workspace = {
       id: "ws1",
       name: "Multi Surface",
-      splitRoot: { type: "pane", pane },
+      paneLayout: { type: "pane", pane },
       activePaneId: pane.id,
     };
     render(WorkspaceItem, {
@@ -759,17 +1272,16 @@ describe("WorkspaceItem", () => {
         onClose: noop,
         onRename: noop,
         onContextMenu: noop,
-        onReorder: noop,
       },
     });
-    // Should show "2s" for 2 surfaces
-    expect(screen.getByText("2s")).toBeTruthy();
+    // Surface/pane counts are intentionally not rendered
+    expect(screen.queryByText("2s")).toBeNull();
   });
 
   it("renders notification text when a surface has a notification", () => {
     const surface = makeSurface("s1", { notification: "Build complete" });
     const pane = makePane("p1", [surface]);
-    const ws = makeWorkspace("ws1", "Notified", pane);
+    const ws = makeChildWorkspace("ws1", "Notified", pane);
     render(WorkspaceItem, {
       props: {
         workspace: ws,
@@ -779,16 +1291,208 @@ describe("WorkspaceItem", () => {
         onClose: noop,
         onRename: noop,
         onContextMenu: noop,
-        onReorder: noop,
       },
     });
     expect(screen.getByText("Build complete")).toBeTruthy();
   });
 
-  it("is draggable", () => {
+  it("renders a status row when an agent is attached but idle", async () => {
+    // Regression: launching claude in a workspace should immediately
+    // show a status row — even before the tracker transitions to
+    // running/waiting. aggregateAgentBadges consumes process items from
+    // the status registry; a muted item means "agent live, no active
+    // work" and must render a visible row.
+    const { setStatusItem, clearAllStatusForWorkspace } =
+      await import("../lib/services/status-registry");
+    const ws = makeChildWorkspace("ws-agent", "Agent WS");
+    setStatusItem("_agent", ws.id, "surface:s1", {
+      category: "process",
+      priority: 0,
+      label: "idle",
+      variant: "muted",
+      metadata: { surfaceId: "s1" },
+    });
+    const { container } = render(WorkspaceItem, {
+      props: {
+        workspace: ws,
+        index: 0,
+        isActive: false,
+        onSelect: noop,
+        onClose: noop,
+        onRename: noop,
+        onContextMenu: noop,
+      },
+    });
+    const row = container.querySelector("[data-harness-title-row]");
+    expect(row).not.toBeNull();
+    expect(row?.getAttribute("title")).toBe("1 idle");
+    clearAllStatusForWorkspace(ws.id);
+  });
+
+  it("suppresses the notification row when child of a workspace", () => {
+    // Regression: child workspaces render under a workspace's colored
+    // banner that already rolls up status; the long blue notification
+    // row duplicates chrome and crowds the child layout, so it's
+    // suppressed when metadata.rootWorkspaceId is set.
+    const surface = makeSurface("s1", { notification: "Build complete" });
+    const pane = makePane("p1", [surface]);
+    const ws = makeChildWorkspace("ws1", "Child WS", pane);
+    ws.rootWorkspaceId = "g1";
+    render(WorkspaceItem, {
+      props: {
+        workspace: ws,
+        index: 0,
+        isActive: true,
+        onSelect: noop,
+        onClose: noop,
+        onRename: noop,
+        onContextMenu: noop,
+      },
+    });
+    expect(screen.queryByText("Build complete")).toBeNull();
+  });
+
+  it("is reorderable via mouse drag", () => {
     const { container } = renderWorkspaceItem();
-    const draggable = container.querySelector("[draggable='true']");
-    expect(draggable).toBeTruthy();
+    const el = container.querySelector("[data-drag-idx]");
+    expect(el).toBeTruthy();
+  });
+
+  it("has data-drag-idx attribute for mouse-based reordering", () => {
+    const { container } = renderWorkspaceItem();
+    const el = container.querySelector("[data-drag-idx]");
+    expect(el).toBeTruthy();
+    expect(el?.getAttribute("data-drag-idx")).toBe("0");
+  });
+
+  it("uses mouse events for drag reorder (not HTML5 DnD)", () => {
+    const listBlockSource = readFileSync(
+      "src/lib/components/WorkspaceListBlock.svelte",
+      "utf-8",
+    );
+    // Mouse-based drag system (shared utility — HTML5 DnD is broken
+    // in Tauri WKWebView). Root-row drag now lives in
+    // WorkspaceListBlock; Sidebar is a thin host.
+    expect(listBlockSource).toContain("createDragReorder");
+    expect(listBlockSource).toContain("insertIndicator");
+    expect(listBlockSource).toContain("dragActive");
+  });
+
+  it("applies accentColor as DragGrip railColor when provided", () => {
+    const ws = makeChildWorkspace("ws1", "Accent WS");
+    render(WorkspaceItem, {
+      props: {
+        workspace: ws,
+        index: 0,
+        isActive: false,
+        accentColor: "#e06c75",
+        onSelect: noop,
+        onClose: noop,
+        onRename: noop,
+        onContextMenu: noop,
+      },
+    });
+    // WorkspaceItem source should accept accentColor prop
+    const source = readFileSync(
+      "src/lib/components/WorkspaceItem.svelte",
+      "utf-8",
+    );
+    expect(source).toContain("export let accentColor");
+    expect(source).toContain("accentColor");
+    // railColor falls back through dashboard entry color → accentColor prop → theme.accent
+    expect(source).toContain("accentColor");
+    expect(source).toContain("$theme.accent");
+  });
+
+  it("always renders the DragGrip dot pattern at full railColor (no solid-bg wrapper)", () => {
+    const railSource = readFileSync(
+      "src/lib/components/SidebarRail.svelte",
+      "utf-8",
+    );
+    // alwaysShowDots={!locked} + full opacity so the dot pattern reads at rest
+    // without needing a colored wrapper bg (which would appear as a
+    // solid "border" block). Locked items show solid rail instead.
+    expect(railSource).toMatch(/alwaysShowDots=\{!locked\}/);
+    expect(railSource).toMatch(/railOpacity=\{1\}/);
+
+    // WorkspaceItem uses railColor which falls back through:
+    // dashboard entry color → accentColor prop → theme.accent
+    const workspaceSource = readFileSync(
+      "src/lib/components/WorkspaceItem.svelte",
+      "utf-8",
+    );
+    expect(workspaceSource).toContain("railColor");
+  });
+
+  it("passes accentColor through WorkspaceListView", () => {
+    const source = readFileSync(
+      "src/lib/components/WorkspaceListView.svelte",
+      "utf-8",
+    );
+    expect(source).toContain("export let accentColor");
+    expect(source).toContain("{accentColor}");
+  });
+
+  it("does not render a dashboard icon when no dashboardHint is provided", () => {
+    const { container } = renderWorkspaceItem();
+    expect(
+      container.querySelector("[data-workspace-dashboard-icon]"),
+    ).toBeNull();
+  });
+
+  it("renders a clickable dashboard icon when dashboardHint is provided", async () => {
+    const hintOnClick = vi.fn();
+    const ws = makeChildWorkspace("ws-child", "Child WS");
+    const { container } = render(WorkspaceItem, {
+      props: {
+        workspace: ws,
+        index: 0,
+        isActive: false,
+        onSelect: noop,
+        onClose: noop,
+        onRename: noop,
+        onContextMenu: noop,
+        dashboardHint: {
+          id: "dash-1",
+          color: "#ff8800",
+          onClick: hintOnClick,
+        },
+      },
+    });
+    const icon = container.querySelector(
+      "[data-workspace-dashboard-icon]",
+    ) as HTMLElement | null;
+    expect(icon).not.toBeNull();
+    await fireEvent.click(icon!);
+    expect(hintOnClick).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not trigger workspace select when the dashboard icon is clicked", async () => {
+    const onSelect = vi.fn();
+    const hintOnClick = vi.fn();
+    const ws = makeChildWorkspace("ws-child", "Child WS");
+    const { container } = render(WorkspaceItem, {
+      props: {
+        workspace: ws,
+        index: 0,
+        isActive: false,
+        onSelect,
+        onClose: noop,
+        onRename: noop,
+        onContextMenu: noop,
+        dashboardHint: {
+          id: "dash-1",
+          color: "#ff8800",
+          onClick: hintOnClick,
+        },
+      },
+    });
+    const icon = container.querySelector(
+      "[data-workspace-dashboard-icon]",
+    ) as HTMLElement;
+    await fireEvent.click(icon);
+    expect(hintOnClick).toHaveBeenCalledTimes(1);
+    expect(onSelect).not.toHaveBeenCalled();
   });
 });
 
@@ -806,6 +1510,7 @@ describe("PaneView", () => {
         onSelectSurface: noop,
         onCloseSurface: noop,
         onNewSurface: noop,
+        onSelectSurfaceType: noop,
         onSplitRight: noop,
         onSplitDown: noop,
         onClosePane: noop,
@@ -813,6 +1518,83 @@ describe("PaneView", () => {
       },
     });
     expect(screen.getByText("Pane Tab")).toBeTruthy();
+  });
+
+  it("does not render an Overview/Settings tab strip over Workspace Dashboards", () => {
+    // The Settings dashboard is now its own contribution (gear icon,
+    // auto-provisioned). PaneView no longer wraps the Workspace Dashboard
+    // preview in an Overview/Settings tab strip.
+    const ws: Workspace = {
+      id: "ws-dash",
+      name: "Dashboard",
+      paneLayout: { type: "pane", pane: makePane("p1") },
+      activePaneId: "p1",
+      isDashboard: true,
+      rootWorkspaceId: "g1",
+      dashboardContributionId: "group",
+    };
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+    const pane = ws.paneLayout.type === "pane" ? ws.paneLayout.pane : null;
+    if (!pane) throw new Error("expected single-pane workspace");
+    const { container } = render(PaneView, {
+      props: {
+        pane,
+        workspaceId: ws.id,
+        onSelectSurface: noop,
+        onCloseSurface: noop,
+        onNewSurface: noop,
+        onSelectSurfaceType: noop,
+        onSplitRight: noop,
+        onSplitDown: noop,
+        onClosePane: noop,
+        onFocusPane: noop,
+      },
+    });
+    expect(
+      container.querySelector("[data-workspace-dashboard-tabs]"),
+    ).toBeNull();
+    expect(
+      container.querySelector("[data-workspace-dashboard-tab]"),
+    ).toBeNull();
+  });
+
+  it("renders WorkspaceDashboardSettings for a settings-contribution workspace", () => {
+    // Settings contribution → PaneView swaps the surface list for the
+    // shared settings body.
+    const ws: Workspace = {
+      id: "ws-settings",
+      name: "Settings",
+      paneLayout: { type: "pane", pane: makePane("p1") },
+      activePaneId: "p1",
+      isDashboard: true,
+      rootWorkspaceId: "g1",
+      dashboardContributionId: "settings",
+    };
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+    const pane = ws.paneLayout.type === "pane" ? ws.paneLayout.pane : null;
+    if (!pane) throw new Error("expected single-pane workspace");
+    const { container } = render(PaneView, {
+      props: {
+        pane,
+        workspaceId: ws.id,
+        onSelectSurface: noop,
+        onCloseSurface: noop,
+        onNewSurface: noop,
+        onSelectSurfaceType: noop,
+        onSplitRight: noop,
+        onSplitDown: noop,
+        onClosePane: noop,
+        onFocusPane: noop,
+      },
+    });
+    // WorkspaceDashboardSettings renders a settings panel keyed by rootWorkspaceId.
+    // Absent a matching workspace in the store it renders nothing, but the
+    // render branch is still reached — no tab strip appears either way.
+    expect(
+      container.querySelector("[data-workspace-dashboard-tabs]"),
+    ).toBeNull();
   });
 
   it("renders the + button via the embedded TabBar", () => {
@@ -823,13 +1605,14 @@ describe("PaneView", () => {
         onSelectSurface: noop,
         onCloseSurface: noop,
         onNewSurface: noop,
+        onSelectSurfaceType: noop,
         onSplitRight: noop,
         onSplitDown: noop,
         onClosePane: noop,
         onFocusPane: noop,
       },
     });
-    expect(screen.getByTitle("New surface (⌘T)")).toBeTruthy();
+    expect(screen.getByText("+")).toBeTruthy();
   });
 
   it("renders split and close pane controls", () => {
@@ -840,6 +1623,7 @@ describe("PaneView", () => {
         onSelectSurface: noop,
         onCloseSurface: noop,
         onNewSurface: noop,
+        onSelectSurfaceType: noop,
         onSplitRight: noop,
         onSplitDown: noop,
         onClosePane: noop,
@@ -856,65 +1640,401 @@ describe("PaneView", () => {
 // Sidebar
 // ===========================================================================
 
-describe("PrimarySidebar", () => {
+describe("NewWorkspaceSplitButton", () => {
+  beforeEach(() => {
+    resetWorkspaceActions();
+    cleanup();
+  });
+
+  it("renders + New and a search button when core action is registered", () => {
+    registerWorkspaceAction({
+      id: "core:new-workspace",
+      label: "New Workspace",
+      icon: "plus",
+      source: "core",
+      handler: noop,
+    });
+    const { container } = render(NewWorkspaceSplitButton);
+    const buttons = container.querySelectorAll("button");
+    expect(buttons.length).toBe(2);
+    expect(buttons[0].textContent?.trim()).toBe("+ New");
+    expect(buttons[1].getAttribute("title")).toMatch(/Switch Workspace/);
+  });
+
+  it("invokes the core action handler when + New is clicked", async () => {
+    const handler = vi.fn();
+    registerWorkspaceAction({
+      id: "core:new-workspace",
+      label: "New Workspace",
+      icon: "plus",
+      source: "core",
+      handler,
+    });
+    const { container } = render(NewWorkspaceSplitButton);
+    const newBtn = container.querySelectorAll("button")[0] as HTMLButtonElement;
+    await fireEvent.click(newBtn);
+    expect(handler).toHaveBeenCalledOnce();
+  });
+
+  it("falls back to the search-only button when no core action is registered", () => {
+    const { container } = render(NewWorkspaceSplitButton);
+    // No "+ New" — only a single search button (SidebarActionButton fallback).
+    expect(
+      Array.from(container.querySelectorAll("button")).find(
+        (b) => b.textContent?.trim() === "+ New",
+      ),
+    ).toBeUndefined();
+  });
+});
+
+describe("Sidebar", () => {
   const sidebarProps = {
-    onNewWorkspace: noop,
     onSwitchWorkspace: noop,
-    onCloseWorkspace: noop,
     onRenameWorkspace: noop,
     onNewSurface: noop,
-    onReorderWorkspaces: noop,
   };
 
-  it("renders when primarySidebarVisible is true", () => {
-    primarySidebarVisible.set(true);
-    const { container } = render(PrimarySidebar, { props: sidebarProps });
-    expect(container.querySelector("#primary-sidebar")).toBeTruthy();
+  beforeEach(() => {
+    resetSidebarSections();
+    resetWorkspaceActions();
+    cleanup();
+    // Workspace rows render through the registered "workspace"
+    // root-row renderer (mounted via ExtensionWrapper). Register the core
+    // extension API + the renderer so workspace names appear in tests.
+    initCoreExtensionAPI();
+    registerRootRowRenderer({
+      id: "workspace",
+      source: "core",
+      component: WorkspaceRowBody,
+      label: (id: string) => {
+        let result: string | undefined;
+        workspaces.subscribe((list) => {
+          result = list.find((w) => w.id === id)?.name;
+        })();
+        return result;
+      },
+    });
   });
 
-  it("does not render when primarySidebarVisible is false", () => {
-    primarySidebarVisible.set(false);
-    const { container } = render(PrimarySidebar, { props: sidebarProps });
-    expect(container.querySelector("#primary-sidebar")).toBeNull();
+  it("renders when sidebarVisible is true", () => {
+    sidebarVisible.set(true);
+    const { container } = render(Sidebar, { props: sidebarProps });
+    expect(container.querySelector("#sidebar")).toBeTruthy();
   });
 
-  it("renders + button in header (sidebar toggles live in TitleBar)", () => {
-    primarySidebarVisible.set(true);
-    render(PrimarySidebar, { props: sidebarProps });
-    expect(screen.getByTitle("New Workspace (⌘N)")).toBeTruthy();
-    expect(screen.queryByTitle("Toggle Primary Sidebar (⌘B)")).toBeNull();
+  it("renders a fixed-width rail slot when collapsed (sidebarVisible=false)", () => {
+    sidebarVisible.set(false);
+    const { container } = render(Sidebar, { props: sidebarProps });
+    const slot = container.querySelector("#sidebar") as HTMLElement | null;
+    expect(slot).not.toBeNull();
+    expect(slot!.classList.contains("collapsed")).toBe(true);
+    // Wide enough to show the 8px grip rail plus a sliver of banner
+    // past it, but not so wide that row content (icons, labels) leaks
+    // into the collapsed slot.
+    const widthPx = parseInt(slot!.style.width, 10);
+    expect(widthPx).toBeGreaterThanOrEqual(10);
+    expect(widthPx).toBeLessThan(20);
+  });
+
+  it("does not render the + New split button inline when collapsed", () => {
+    sidebarVisible.set(false);
+    registerWorkspaceAction({
+      id: "core:new-workspace",
+      label: "New Workspace",
+      icon: "plus",
+      shortcut: "Cmd+Shift+N",
+      source: "core",
+      handler: noop,
+    });
+    const { container } = render(Sidebar, { props: sidebarProps });
+    const inlineNewButton = Array.from(
+      container.querySelectorAll("button"),
+    ).find((b) => b.textContent?.trim() === "+ New");
+    expect(inlineNewButton).toBeUndefined();
+  });
+
+  it("activates the overlay on hover when collapsed", async () => {
+    sidebarVisible.set(false);
+    sidebarWidth.set(220);
+    const { container } = render(Sidebar, { props: sidebarProps });
+    const slot = container.querySelector("#sidebar") as HTMLElement;
+    const inner = slot.querySelector(".sidebar-content") as HTMLElement;
+
+    expect(inner.style.width).toBe("220px");
+    expect(slot.classList.contains("overlay-active")).toBe(false);
+
+    slot.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+    await tick();
+
+    expect(slot.classList.contains("overlay-active")).toBe(true);
+  });
+
+  it("closes the overlay after the mouseleave grace period", async () => {
+    vi.useFakeTimers();
+    try {
+      sidebarVisible.set(false);
+      const { container } = render(Sidebar, { props: sidebarProps });
+      const slot = container.querySelector("#sidebar") as HTMLElement;
+
+      slot.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+      await tick();
+      expect(slot.classList.contains("overlay-active")).toBe(true);
+
+      slot.dispatchEvent(new MouseEvent("mouseleave", { bubbles: true }));
+      await tick();
+      expect(slot.classList.contains("overlay-active")).toBe(true);
+
+      vi.advanceTimersByTime(200);
+      await tick();
+      expect(slot.classList.contains("overlay-active")).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("renders split button for workspace actions in the top row (sidebar toggles live in TitleBar)", () => {
+    sidebarVisible.set(true);
+    registerWorkspaceAction({
+      id: "core:new-workspace",
+      label: "New Workspace",
+      icon: "plus",
+      shortcut: "Cmd+Shift+N",
+      source: "core",
+      handler: noop,
+    });
+    render(Sidebar, { props: sidebarProps });
+    // "+ New" now sits in the top (title) row alongside any sidebar-
+    // zone action buttons — the old "Workspaces" header row inside
+    // WorkspaceListBlock has been retired.
+    expect(screen.getByText("+ New")).toBeTruthy();
+    expect(screen.queryByText("Workspaces")).toBeNull();
+    expect(screen.queryByTitle("Toggle Sidebar (⌘B)")).toBeNull();
     expect(screen.queryByTitle("Toggle Secondary Sidebar")).toBeNull();
   });
 
   it("renders workspace items from store", () => {
-    primarySidebarVisible.set(true);
-    const ws1 = makeWorkspace("ws1", "Project Alpha");
-    const ws2 = makeWorkspace("ws2", "Project Beta");
+    sidebarVisible.set(true);
+    const ws1 = makeChildWorkspace("ws1", "Project Alpha");
+    const ws2 = makeChildWorkspace("ws2", "Project Beta");
     workspaces.set([ws1, ws2]);
+    rootRowOrder.set([
+      { kind: "workspace", id: "ws1" },
+      { kind: "workspace", id: "ws2" },
+    ]);
     activeWorkspaceIdx.set(0);
-    render(PrimarySidebar, { props: sidebarProps });
+    render(Sidebar, { props: sidebarProps });
     expect(screen.getByText("Project Alpha")).toBeTruthy();
     expect(screen.getByText("Project Beta")).toBeTruthy();
   });
 
-  it("header has data-tauri-drag-region", () => {
-    primarySidebarVisible.set(true);
-    const { container } = render(PrimarySidebar, { props: sidebarProps });
+  it("header has data-tauri-drag-region (when windowed, for traffic-light padding)", () => {
+    sidebarVisible.set(true);
+    isFullscreen.set(false);
+    const { container } = render(Sidebar, { props: sidebarProps });
     const dragRegions = container.querySelectorAll("[data-tauri-drag-region]");
     expect(dragRegions.length).toBeGreaterThan(0);
   });
 
+  it("top row uses overflow:visible so SplitButton dropdown is not clipped", () => {
+    // Regression: overflow:hidden on the 38px top row clipped the "+ New"
+    // dropdown, making it invisible when opened. Must stay overflow:visible
+    // so the absolutely-positioned menu can render below the row.
+    sidebarVisible.set(true);
+    const { container } = render(Sidebar, { props: sidebarProps });
+    const dragRegion = container.querySelector(
+      "[data-tauri-drag-region]",
+    ) as HTMLElement | null;
+    expect(dragRegion).toBeTruthy();
+    expect(dragRegion!.getAttribute("style")).toMatch(/overflow:\s*visible/);
+  });
+
+  it("keeps the top drag region bar rendered in fullscreen so layout stays stable", () => {
+    // The primary sidebar's top row is always rendered — fullscreen toggle
+    // should not swap branches, otherwise blocks snap into a new position.
+    // In fullscreen the drag attributes are harmless no-ops (no window to
+    // drag); the 38px acts as stable top padding.
+    sidebarVisible.set(true);
+    isFullscreen.set(true);
+    const { container } = render(Sidebar, { props: sidebarProps });
+    const dragRegions = container.querySelectorAll("[data-tauri-drag-region]");
+    expect(dragRegions.length).toBeGreaterThan(0);
+    isFullscreen.set(false);
+  });
+
   it("renders correct number of workspace items", () => {
-    primarySidebarVisible.set(true);
-    const ws1 = makeWorkspace("ws1", "WS One");
-    const ws2 = makeWorkspace("ws2", "WS Two");
-    const ws3 = makeWorkspace("ws3", "WS Three");
+    sidebarVisible.set(true);
+    const ws1 = makeChildWorkspace("ws1", "WS One");
+    const ws2 = makeChildWorkspace("ws2", "WS Two");
+    const ws3 = makeChildWorkspace("ws3", "WS Three");
     workspaces.set([ws1, ws2, ws3]);
+    rootRowOrder.set([
+      { kind: "workspace", id: "ws1" },
+      { kind: "workspace", id: "ws2" },
+      { kind: "workspace", id: "ws3" },
+    ]);
     activeWorkspaceIdx.set(1);
-    render(PrimarySidebar, { props: sidebarProps });
+    render(Sidebar, { props: sidebarProps });
     expect(screen.getByText("WS One")).toBeTruthy();
     expect(screen.getByText("WS Two")).toBeTruthy();
     expect(screen.getByText("WS Three")).toBeTruthy();
+  });
+
+  // Sections use collapsible:true so the content area doesn't render
+  // (avoids needing a real Svelte component in tests)
+  function makeSection(id: string, label: string, source: string) {
+    return { id, label, component: "mock", source, collapsible: true };
+  }
+
+  it("does NOT show a 'Re-order Sections' button (reorder is implicit via grip)", () => {
+    sidebarVisible.set(true);
+    registerWorkspaceAction({
+      id: "core:new-workspace",
+      label: "New Workspace",
+      icon: "plus",
+      source: "core",
+      handler: noop,
+    });
+    registerSidebarSection(makeSection("s1", "Section 1", "ext-a"));
+    registerSidebarSection(makeSection("s2", "Section 2", "ext-b"));
+
+    render(Sidebar, { props: { ...sidebarProps } });
+    expect(screen.queryByTitle("Re-order Sections")).toBeNull();
+  });
+
+  it("does not show dropdown caret with no extension sections and no extra actions", () => {
+    sidebarVisible.set(true);
+    registerWorkspaceAction({
+      id: "core:new-workspace",
+      label: "New Workspace",
+      icon: "plus",
+      source: "core",
+      handler: noop,
+    });
+    render(Sidebar, {
+      props: { ...sidebarProps },
+    });
+    // Top row contains: "+ New" chip + Search as a split button. No dropdown caret.
+    // Keyboard Shortcuts has moved to the TitleBar.
+    const splitContainer = screen.getByText("+ New").closest("span")!;
+    const buttons = splitContainer.querySelectorAll("button");
+    expect(buttons.length).toBe(2);
+    expect(screen.queryByTitle("Switch Workspace (⌘O)")).not.toBeNull();
+    expect(screen.queryByTitle("Keyboard Shortcuts (⌘/)")).toBeNull();
+  });
+
+  it("renders extension-registered sidebar sections below the Workspaces block", () => {
+    // The Workspaces section is no longer user-reorderable post-B,
+    // and there are no block-level DragGrips at the top level.
+    // Sections still render, they just can't be dragged.
+    sidebarVisible.set(true);
+    registerWorkspaceAction({
+      id: "core:new-workspace",
+      label: "New Workspace",
+      icon: "plus",
+      source: "core",
+      handler: noop,
+    });
+    registerSidebarSection(makeSection("s1", "Section 1", "ext-a"));
+    registerSidebarSection(makeSection("s2", "Section 2", "ext-b"));
+
+    render(Sidebar, { props: { ...sidebarProps } });
+    expect(screen.getByText("Section 1")).toBeTruthy();
+    expect(screen.getByText("Section 2")).toBeTruthy();
+  });
+
+  it("renders sidebar-zone actions as buttons in the top row", () => {
+    sidebarVisible.set(true);
+    registerWorkspaceAction({
+      id: "core:new-workspace",
+      label: "New Workspace",
+      icon: "plus",
+      source: "core",
+      handler: noop,
+    });
+    registerWorkspaceAction({
+      id: "ext:new-project",
+      label: "New Project",
+      icon: "folder-plus",
+      zone: "sidebar",
+      source: "ext",
+      handler: noop,
+    });
+    render(Sidebar, { props: sidebarProps });
+    // Sidebar-zone action renders as a button in the top row
+    expect(screen.getByTitle("New Project")).toBeTruthy();
+    // Main split button reads "+ New" (lives in the same top row now).
+    expect(screen.getByText("+ New")).toBeTruthy();
+  });
+
+  it("plain + New button still renders when workspace-zone extensions exist", async () => {
+    sidebarVisible.set(true);
+    registerWorkspaceAction({
+      id: "core:new-workspace",
+      label: "New Workspace",
+      icon: "plus",
+      source: "core",
+      handler: noop,
+    });
+    registerWorkspaceAction({
+      id: "ext:new-worktree",
+      label: "New Worktree",
+      icon: "git-branch",
+      source: "ext",
+      handler: noop,
+    });
+    render(Sidebar, { props: sidebarProps });
+    // The sidebar now has a plain "+ New" button (no dropdown).
+    // Non-sidebar-zone extension actions are no longer shown in the top row.
+    expect(screen.getByText("+ New")).toBeTruthy();
+    // No "New Worktree" text in the sidebar top row — only sidebar-zone actions render there.
+    expect(screen.queryByText("New Worktree")).toBeNull();
+  });
+});
+
+// ===========================================================================
+// WorkspaceSectionContent — per-workspace New Worktree button
+// ===========================================================================
+
+describe("WorkspaceSectionContent", () => {
+  beforeEach(() => {
+    resetWorkspaceActions();
+    setWorkspaces([]);
+    cleanup();
+  });
+
+  it("renders workspace-tile zone actions as buttons in the banner row", async () => {
+    // Without any workspace-tile actions, no branch button renders.
+    const workspace: WorkspaceRecord = {
+      id: "grp-1",
+      name: "Test Workspace",
+      path: "/tmp/test-workspace",
+      color: "mint",
+      branchedWorkspaceIds: [],
+      isGit: true,
+      createdAt: new Date().toISOString(),
+    };
+    setWorkspaces([workspace]);
+
+    render(WorkspaceSectionHarness, {
+      props: { rootWorkspaceId: "grp-1" },
+    });
+
+    // No branch button without any registered workspace-tile action.
+    expect(screen.queryByLabelText("Branch Workspace")).toBeNull();
+
+    // Registering a workspace-tile action makes the button appear.
+    registerWorkspaceAction({
+      id: "branched-workspaces:branch",
+      label: "Branch Workspace",
+      icon: "git-branch",
+      zone: "workspace-tile",
+      source: "branched-workspaces",
+      handler: noop,
+      when: (ctx) => ctx.isGit === true,
+    });
+    await tick();
+
+    expect(screen.getByLabelText("Branch Workspace")).toBeTruthy();
   });
 });
 
@@ -959,5 +2079,617 @@ describe("TerminalSurface", () => {
 
     expect(surface.fitAddon.fit).toHaveBeenCalled();
     expect(surface.terminal.scrollToBottom).toHaveBeenCalled();
+  });
+
+  it("does not call scrollToBottom on store-churn re-render while already visible", async () => {
+    const surface = makeSurface("no-churn-test", { opened: true });
+    // Start visible
+    const { rerender } = render(TerminalSurfaceComponent, {
+      props: { surface, visible: true },
+    });
+    await new Promise((r) => requestAnimationFrame(r));
+
+    // Reset mocks after initial mount + first visible render
+    (surface.fitAddon.fit as ReturnType<typeof vi.fn>).mockClear();
+    (surface.terminal.scrollToBottom as ReturnType<typeof vi.fn>).mockClear();
+
+    // Re-render with visible still true — simulates store churn (e.g. markSurfaceUnreadById)
+    await rerender({ surface, visible: true });
+    await new Promise((r) => requestAnimationFrame(r));
+
+    // Edge-triggered block must NOT fire — visible did not transition false→true
+    expect(surface.terminal.scrollToBottom).not.toHaveBeenCalled();
+    expect(surface.fitAddon.fit).not.toHaveBeenCalled();
+  });
+
+  it("sets data-scrolled-up when terminal is scrolled up", async () => {
+    const surface = makeSurface("jump-btn-test", { opened: true });
+    let scrollCallback: ((pos: number) => void) | undefined;
+    (surface.terminal.onScroll as ReturnType<typeof vi.fn>).mockImplementation(
+      (cb: (pos: number) => void) => {
+        scrollCallback = cb;
+        return { dispose: vi.fn() };
+      },
+    );
+    (surface.terminal.buffer.active as Record<string, unknown>).length = 100;
+    (surface.terminal as Record<string, unknown>).rows = 24;
+
+    const { container } = render(TerminalSurfaceComponent, {
+      props: { surface, visible: true },
+    });
+
+    // Not scrolled up at bottom
+    expect(container.querySelector("[data-scrolled-up]")).toBeNull();
+
+    // Simulate user scrolling up (pos 0 < 100-24=76)
+    scrollCallback?.(0);
+    await tick();
+
+    expect(container.querySelector("[data-scrolled-up]")).not.toBeNull();
+  });
+
+  it("clears data-scrolled-up when user scrolls back to bottom", async () => {
+    const surface = makeSurface("jump-btn-hide-test", { opened: true });
+    let scrollCallback: ((pos: number) => void) | undefined;
+    (surface.terminal.onScroll as ReturnType<typeof vi.fn>).mockImplementation(
+      (cb: (pos: number) => void) => {
+        scrollCallback = cb;
+        return { dispose: vi.fn() };
+      },
+    );
+    (surface.terminal.buffer.active as Record<string, unknown>).length = 100;
+    (surface.terminal as Record<string, unknown>).rows = 24;
+
+    const { container } = render(TerminalSurfaceComponent, {
+      props: { surface, visible: true },
+    });
+
+    // Scroll up
+    scrollCallback?.(0);
+    await tick();
+    expect(container.querySelector("[data-scrolled-up]")).not.toBeNull();
+
+    // Scroll back to bottom (pos 76 = 100-24)
+    scrollCallback?.(76);
+    await tick();
+    expect(container.querySelector("[data-scrolled-up]")).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// WorkspaceItem — harness sub-row
+// ---------------------------------------------------------------------------
+
+describe("WorkspaceItem — harness sub-row", () => {
+  it("shows sub-row when the active surface has a detected agent", async () => {
+    const { setStatusItem, clearAllStatusForWorkspace } =
+      await import("../lib/services/status-registry");
+
+    const surface = makeSurface("s1", { title: "claude > fixing bug" });
+    const pane = makePane("p1", [surface]);
+    const ws = makeChildWorkspace("ws-harness", "Harness WS", pane);
+
+    setStatusItem("_agent", ws.id, "surface:s1", {
+      category: "process",
+      priority: 0,
+      label: "running",
+      variant: "success",
+      metadata: { surfaceId: "s1" },
+    });
+
+    const { container } = render(WorkspaceItem, {
+      props: {
+        workspace: ws,
+        index: 0,
+        isActive: true,
+        onSelect: noop,
+        onClose: noop,
+        onRename: noop,
+        onContextMenu: noop,
+      },
+    });
+
+    const harnessEl = container.querySelector("[data-harness-title-row]");
+    expect(harnessEl).not.toBeNull();
+    // When a single tracked agent surface exists, its current task title
+    // is surfaced via the tooltip so the user can see what the agent is
+    // working on without leaving the sidebar.
+    expect(harnessEl?.getAttribute("title")).toBe(
+      "1 running — claude > fixing bug",
+    );
+    clearAllStatusForWorkspace(ws.id);
+  });
+
+  it("shows sub-row when agent is on a non-active surface", async () => {
+    const { setStatusItem, clearAllStatusForWorkspace } =
+      await import("../lib/services/status-registry");
+
+    const active = makeSurface("s-active", { title: "Shell" });
+    const other = makeSurface("s-agent", { title: "claude" });
+    const pane: Pane = {
+      id: "p1",
+      surfaces: [active, other],
+      activeSurfaceId: "s-active",
+    };
+    const ws: Workspace = {
+      id: "ws-hidden",
+      name: "Hidden",
+      paneLayout: { type: "pane", pane },
+      activePaneId: "p1",
+    };
+
+    setStatusItem("_agent", ws.id, "surface:s-agent", {
+      category: "process",
+      priority: 0,
+      label: "idle",
+      variant: "muted",
+      metadata: { surfaceId: "s-agent" },
+    });
+
+    const { container } = render(WorkspaceItem, {
+      props: {
+        workspace: ws,
+        index: 0,
+        isActive: true,
+        onSelect: noop,
+        onClose: noop,
+        onRename: noop,
+        onContextMenu: noop,
+      },
+    });
+
+    const harnessEl = container.querySelector("[data-harness-title-row]");
+    expect(harnessEl).not.toBeNull();
+    expect(harnessEl?.getAttribute("title")).toBe("1 idle — claude");
+    clearAllStatusForWorkspace(ws.id);
+  });
+
+  it("hides sub-row when hideStatusBadges is true", async () => {
+    const { setStatusItem, clearAllStatusForWorkspace } =
+      await import("../lib/services/status-registry");
+
+    const surface = makeSurface("s1", { title: "claude" });
+    const pane = makePane("p1", [surface]);
+    const ws = makeChildWorkspace("ws-hidden2", "Hidden2", pane);
+
+    setStatusItem("_agent", ws.id, "surface:s1", {
+      category: "process",
+      priority: 0,
+      label: "idle",
+      variant: "muted",
+      metadata: { surfaceId: "s1" },
+    });
+
+    const { container } = render(WorkspaceItem, {
+      props: {
+        workspace: ws,
+        index: 0,
+        isActive: true,
+        hideStatusBadges: true,
+        onSelect: noop,
+        onClose: noop,
+        onRename: noop,
+        onContextMenu: noop,
+      },
+    });
+
+    expect(container.querySelector("[data-harness-title-row]")).toBeNull();
+    clearAllStatusForWorkspace(ws.id);
+  });
+
+  it("falls back to the badge count when multiple agent surfaces are tracked", async () => {
+    // With two tracked surfaces in the same workspace, no single title
+    // is dominant; the row reverts to the aggregate "N running" count
+    // rather than picking one task at random.
+    const { setStatusItem, clearAllStatusForWorkspace } =
+      await import("../lib/services/status-registry");
+
+    const a = makeSurface("s-a", { title: "Strategic plan A" });
+    const b = makeSurface("s-b", { title: "Strategic plan B" });
+    const pane: Pane = {
+      id: "p1",
+      surfaces: [a, b],
+      activeSurfaceId: "s-a",
+    };
+    const ws: Workspace = {
+      id: "ws-multi",
+      name: "Multi",
+      paneLayout: { type: "pane", pane },
+      activePaneId: "p1",
+    };
+
+    setStatusItem("_agent", ws.id, "surface:s-a", {
+      category: "process",
+      priority: 0,
+      label: "running",
+      variant: "success",
+      metadata: { surfaceId: "s-a" },
+    });
+    setStatusItem("_agent", ws.id, "surface:s-b", {
+      category: "process",
+      priority: 0,
+      label: "running",
+      variant: "success",
+      metadata: { surfaceId: "s-b" },
+    });
+
+    const { container } = render(WorkspaceItem, {
+      props: {
+        workspace: ws,
+        index: 0,
+        isActive: true,
+        onSelect: noop,
+        onClose: noop,
+        onRename: noop,
+        onContextMenu: noop,
+      },
+    });
+
+    const harnessEl = container.querySelector("[data-harness-title-row]");
+    expect(harnessEl).not.toBeNull();
+    expect(harnessEl?.getAttribute("title")).toBe("2 running");
+    clearAllStatusForWorkspace(ws.id);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TerminalSurface — image drag-drop
+// ---------------------------------------------------------------------------
+
+describe("TerminalSurface — image drag-drop", () => {
+  it("sends \\x16 to PTY for image-only drop and writes image to clipboard", async () => {
+    const { invoke: mockInvokeCore } = await import("@tauri-apps/api/core");
+    const invokespy = vi.mocked(mockInvokeCore);
+    const { writeImage } = await import("@tauri-apps/plugin-clipboard-manager");
+    const writeImageSpy = vi.mocked(writeImage);
+
+    invokespy.mockClear();
+    writeImageSpy.mockClear();
+
+    const surface = makeSurface("s1", { ptyId: 42 });
+    render(TerminalSurfaceComponent, {
+      props: { surface, visible: true },
+    });
+
+    // Simulate Tauri native drag-drop event with an image path
+    const { listen } = await import("@tauri-apps/api/event");
+    const listenSpy = vi.mocked(listen);
+    const dragDropCallback = listenSpy.mock.calls
+      .flatMap((c) => (c[0] === "tauri://drag-drop" ? [c[1]] : []))
+      .at(-1) as ((e: { payload: { paths: string[] } }) => void) | undefined;
+
+    if (dragDropCallback) {
+      dragDropCallback({
+        payload: { paths: ["/tmp/screenshot.png"] },
+      });
+      await new Promise((r) => setTimeout(r, 10));
+
+      expect(writeImageSpy).toHaveBeenCalledWith("/tmp/screenshot.png");
+      const writePtyCall = invokespy.mock.calls.find(
+        (c) =>
+          c[0] === "write_pty" &&
+          (c[1] as Record<string, unknown>)?.data === "\x16",
+      );
+      expect(writePtyCall).toBeDefined();
+    }
+  });
+
+  it("sends shell-escaped path for non-image drop (unchanged behavior)", async () => {
+    const { invoke: mockInvokeCore } = await import("@tauri-apps/api/core");
+    const invokespy = vi.mocked(mockInvokeCore);
+    invokespy.mockClear();
+
+    const surface = makeSurface("s2", { ptyId: 43 });
+    render(TerminalSurfaceComponent, {
+      props: { surface, visible: true },
+    });
+
+    const { listen } = await import("@tauri-apps/api/event");
+    const listenSpy = vi.mocked(listen);
+    const dragDropCallback = listenSpy.mock.calls
+      .flatMap((c) => (c[0] === "tauri://drag-drop" ? [c[1]] : []))
+      .at(-1) as ((e: { payload: { paths: string[] } }) => void) | undefined;
+
+    if (dragDropCallback) {
+      dragDropCallback({
+        payload: { paths: ["/tmp/somefile.txt"] },
+      });
+      await new Promise((r) => setTimeout(r, 10));
+
+      const writePtyCall = invokespy.mock.calls.find(
+        (c) => c[0] === "write_pty",
+      );
+      expect(writePtyCall).toBeDefined();
+      const data = (writePtyCall![1] as Record<string, unknown>)
+        ?.data as string;
+      expect(data).toContain("somefile.txt");
+      expect(data).not.toBe("\x16");
+    }
+  });
+
+  it("handles HTML5 drop of image file without .path (Mac screenshot thumbnail)", async () => {
+    const { invoke: mockInvokeCore } = await import("@tauri-apps/api/core");
+    const invokespy = vi.mocked(mockInvokeCore);
+    const { writeImage } = await import("@tauri-apps/plugin-clipboard-manager");
+    const writeImageSpy = vi.mocked(writeImage);
+
+    invokespy.mockClear();
+    writeImageSpy.mockClear();
+
+    const surface = makeSurface("s3", { ptyId: 44 });
+    const { container } = render(TerminalSurfaceComponent, {
+      props: { surface, visible: true },
+    });
+
+    // Simulate a File with image MIME type but no .path (promised file)
+    const imageBytes = new Uint8Array([137, 80, 78, 71]); // PNG magic bytes
+    const imageFile = new File([imageBytes], "Screenshot.png", {
+      type: "image/png",
+    });
+    // No .path property (unlike Tauri-extended File objects)
+
+    // JSDOM doesn't implement DragEvent; use a plain Event with dataTransfer injected
+    const dropEvent = new Event("drop", { bubbles: true, cancelable: true });
+    Object.defineProperty(dropEvent, "dataTransfer", {
+      value: { files: [imageFile], items: [] },
+    });
+
+    const termDiv = container.firstElementChild as HTMLElement;
+    termDiv.dispatchEvent(dropEvent);
+
+    await vi.waitFor(() => {
+      expect(writeImageSpy).toHaveBeenCalledWith(expect.any(ArrayBuffer));
+    });
+    await vi.waitFor(() => {
+      const writePtyCall = invokespy.mock.calls.find(
+        (c) =>
+          c[0] === "write_pty" &&
+          (c[1] as Record<string, unknown>)?.data === "\x16",
+      );
+      expect(writePtyCall).toBeDefined();
+    });
+  });
+
+  it("handles HTML5 drop via items when files is empty (some drag sources)", async () => {
+    const { invoke: mockInvokeCore } = await import("@tauri-apps/api/core");
+    const invokespy = vi.mocked(mockInvokeCore);
+    const { writeImage } = await import("@tauri-apps/plugin-clipboard-manager");
+    const writeImageSpy = vi.mocked(writeImage);
+
+    invokespy.mockClear();
+    writeImageSpy.mockClear();
+
+    const surface = makeSurface("s4", { ptyId: 45 });
+    const { container } = render(TerminalSurfaceComponent, {
+      props: { surface, visible: true },
+    });
+
+    const imageBytes = new Uint8Array([137, 80, 78, 71]);
+    const imageFile = new File([imageBytes], "screenshot.png", {
+      type: "image/png",
+    });
+
+    // JSDOM doesn't implement DragEvent; use a plain Event with dataTransfer injected
+    const dropEvent = new Event("drop", { bubbles: true, cancelable: true });
+    Object.defineProperty(dropEvent, "dataTransfer", {
+      value: {
+        files: [], // empty files list
+        items: [
+          { kind: "file", type: "image/png", getAsFile: () => imageFile },
+        ],
+      },
+    });
+
+    const termDiv = container.firstElementChild as HTMLElement;
+    termDiv.dispatchEvent(dropEvent);
+
+    await vi.waitFor(() => {
+      expect(writeImageSpy).toHaveBeenCalledWith(expect.any(ArrayBuffer));
+    });
+    await vi.waitFor(() => {
+      const writePtyCall = invokespy.mock.calls.find(
+        (c) =>
+          c[0] === "write_pty" &&
+          (c[1] as Record<string, unknown>)?.data === "\x16",
+      );
+      expect(writePtyCall).toBeDefined();
+    });
+  });
+});
+
+describe("PreviewSurface link interception", () => {
+  it("clicking an https anchor calls open_url and prevents navigation", async () => {
+    const { invoke: invokeFn } = await import("@tauri-apps/api/core");
+    const invokeMockFn = vi.mocked(invokeFn);
+    invokeMockFn.mockClear();
+
+    const { default: PreviewSurface } =
+      await import("../lib/components/PreviewSurface.svelte");
+    const surface = {
+      id: "ps-link-test",
+      kind: "preview" as const,
+      title: "Test",
+      path: "/tmp/test.md",
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { container } = render(PreviewSurface as any, {
+      props: { surface, visible: true },
+    });
+    await tick();
+
+    const previewRoot = container.querySelector("[data-preview-surface-id]")!;
+    const a = document.createElement("a");
+    a.href = "https://example.com";
+    previewRoot.appendChild(a);
+
+    const clickEvent = new MouseEvent("click", { bubbles: true });
+    let defaultPrevented = false;
+    clickEvent.preventDefault = () => {
+      defaultPrevented = true;
+    };
+    a.dispatchEvent(clickEvent);
+
+    expect(invokeMockFn).toHaveBeenCalledWith("open_url", {
+      url: "https://example.com",
+    });
+    expect(defaultPrevented).toBe(true);
+  });
+
+  it("clicking a relative or anchor href does NOT call open_url", async () => {
+    const { invoke: invokeFn } = await import("@tauri-apps/api/core");
+    const invokeMockFn = vi.mocked(invokeFn);
+    invokeMockFn.mockClear();
+
+    // Re-use the same component render approach
+    const { default: PreviewSurface } =
+      await import("../lib/components/PreviewSurface.svelte");
+    const surface = {
+      id: "ps-link-test-neg",
+      kind: "preview" as const,
+      title: "Test",
+      path: "/tmp/test2.md",
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { container } = render(PreviewSurface as any, {
+      props: { surface, visible: true },
+    });
+    await tick();
+
+    const previewRoot = container.querySelector("[data-preview-surface-id]")!;
+
+    for (const href of ["#section", "./page.html", "mailto:x@y.com"]) {
+      const a = document.createElement("a");
+      a.setAttribute("href", href);
+      previewRoot.appendChild(a);
+      a.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      a.remove();
+    }
+
+    expect(invokeMockFn).not.toHaveBeenCalledWith(
+      "open_url",
+      expect.anything(),
+    );
+  });
+});
+
+describe("terminal link handling", () => {
+  it("registerLinkProvider is called and link activate invokes open_url", async () => {
+    const { invoke: invokeMock } = await import("@tauri-apps/api/core");
+    const invokeMockFn = vi.mocked(invokeMock);
+    invokeMockFn.mockClear();
+
+    const { Terminal: TerminalMock } = await import("@xterm/xterm");
+    // TerminalMock is the mock constructor; instances track calls on the instance
+    const TerminalCtor = vi.mocked(
+      TerminalMock as unknown as new (...args: unknown[]) => {
+        registerLinkProvider: ReturnType<typeof vi.fn>;
+        loadAddon: ReturnType<typeof vi.fn>;
+        buffer: { active: { getLine: ReturnType<typeof vi.fn> } };
+      },
+    );
+
+    const { createTerminalSurface } = await import("../lib/terminal-service");
+    const fakePane = {
+      id: "p-link-plain-click",
+      surfaces: [],
+      activeSurfaceId: null,
+    };
+    await createTerminalSurface(
+      fakePane as unknown as Parameters<typeof createTerminalSurface>[0],
+    );
+
+    const termInstance = TerminalCtor.mock.instances.at(-1)!;
+    // 2 calls: URL provider (index 0) + file-path provider (index 1).
+    // OSC 8 is now handled by the built-in linkHandler set in Terminal options
+    // — see terminal-service.ts. The default OSC 8 path routes through
+    // window.confirm, which Tauri remaps to plugin:dialog|confirm and rejects
+    // without `dialog:allow-confirm` permission, so we override it.
+    expect(termInstance.registerLinkProvider).toHaveBeenCalledTimes(2);
+
+    const provider = termInstance.registerLinkProvider.mock.calls[0][0] as {
+      provideLinks: (
+        line: number,
+        cb: (
+          links:
+            | Array<{ activate: (e: MouseEvent, text: string) => void }>
+            | undefined,
+        ) => void,
+      ) => void;
+    };
+
+    // Wire up the mock terminal's buffer so provideLinks can scan a real line
+    const mockLine = {
+      translateToString: vi
+        .fn()
+        .mockReturnValue("visit https://example.com/path for info"),
+    };
+    const getLineMock = vi.fn().mockReturnValue(mockLine);
+    termInstance.buffer = {
+      active: { getLine: getLineMock },
+    };
+
+    let capturedLinks:
+      | Array<{ activate: (e: MouseEvent, text: string) => void }>
+      | undefined;
+    provider.provideLinks(1, (links) => {
+      capturedLinks = links;
+    });
+
+    // lineNumber from xterm is 1-indexed; getLine() is 0-indexed — must subtract 1
+    expect(getLineMock).toHaveBeenCalledWith(0);
+    expect(capturedLinks).toBeDefined();
+    expect(capturedLinks!.length).toBeGreaterThan(0);
+    capturedLinks![0].activate(
+      new MouseEvent("click"),
+      "https://example.com/path",
+    );
+    expect(invokeMockFn).toHaveBeenCalledWith("open_url", {
+      url: "https://example.com/path",
+    });
+  });
+
+  it("OSC 8 linkHandler is wired in Terminal options and invokes open_url", async () => {
+    // Regression: xterm.js's default OSC 8 handler calls window.confirm
+    // before navigating. Tauri remaps window.confirm to plugin:dialog|confirm,
+    // which is not granted in capabilities — so the click rejects with
+    // "dialog.confirm not allowed. Command not found" and the URL never opens.
+    // We override linkHandler in Terminal options to bypass that path.
+    const { invoke: invokeMock } = await import("@tauri-apps/api/core");
+    const invokeMockFn = vi.mocked(invokeMock);
+    invokeMockFn.mockClear();
+
+    const { Terminal: TerminalMock } = await import("@xterm/xterm");
+    const TerminalCtor = vi.mocked(
+      TerminalMock as unknown as new (...args: unknown[]) => unknown,
+    );
+
+    const { createTerminalSurface } = await import("../lib/terminal-service");
+    const fakePane = {
+      id: "p-osc8-linkhandler",
+      surfaces: [],
+      activeSurfaceId: null,
+    };
+    await createTerminalSurface(
+      fakePane as unknown as Parameters<typeof createTerminalSurface>[0],
+    );
+
+    const ctorArgs = TerminalCtor.mock.calls.at(-1)!;
+    const options = ctorArgs[0] as {
+      linkHandler?: {
+        activate: (e: MouseEvent, text: string) => void;
+        allowNonHttpProtocols?: boolean;
+      };
+    };
+    expect(options.linkHandler).toBeDefined();
+    expect(options.linkHandler!.allowNonHttpProtocols).toBe(false);
+
+    options.linkHandler!.activate(
+      new MouseEvent("click"),
+      "https://github.com/foo/bar/pull/1",
+    );
+    expect(invokeMockFn).toHaveBeenCalledWith("open_url", {
+      url: "https://github.com/foo/bar/pull/1",
+    });
   });
 });

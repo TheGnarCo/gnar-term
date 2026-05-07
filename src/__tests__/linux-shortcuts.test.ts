@@ -29,6 +29,7 @@ vi.mock("@xterm/xterm", () => ({
   Terminal: class {
     open = vi.fn();
     write = vi.fn();
+    paste = vi.fn();
     focus = vi.fn();
     dispose = vi.fn();
     cols = 80;
@@ -38,12 +39,15 @@ vi.mock("@xterm/xterm", () => ({
     onTitleChange = vi.fn();
     loadAddon = vi.fn();
     options: Record<string, unknown> = {};
-    buffer = { active: { getLine: vi.fn() } };
+    buffer = { active: { getLine: vi.fn(), length: 0 } };
     parser = { registerOscHandler: vi.fn() };
     attachCustomKeyEventHandler = vi.fn();
     registerLinkProvider = vi.fn();
     getSelection = vi.fn().mockReturnValue("selected text");
+    hasSelection = vi.fn().mockReturnValue(false);
+    onSelectionChange = vi.fn();
     scrollToBottom = vi.fn();
+    onScroll = vi.fn().mockReturnValue({ dispose: vi.fn() });
   },
 }));
 vi.mock("@xterm/addon-fit", () => ({
@@ -58,12 +62,6 @@ vi.mock("@xterm/addon-webgl", () => ({
     activate = vi.fn();
     dispose = vi.fn();
     onContextLoss = vi.fn();
-  },
-}));
-vi.mock("@xterm/addon-web-links", () => ({
-  WebLinksAddon: class {
-    activate = vi.fn();
-    dispose = vi.fn();
   },
 }));
 vi.mock("@xterm/addon-search", () => ({
@@ -163,7 +161,9 @@ describe("Linux keyboard shortcut handling", () => {
         "n",
         "t",
         "d",
+        "e",
         "w",
+        "q",
         "b",
         "p",
         "k",
@@ -171,6 +171,7 @@ describe("Linux keyboard shortcut handling", () => {
         "g",
         "h",
         "r",
+        "~",
       ];
 
       for (const key of appShortcuts) {

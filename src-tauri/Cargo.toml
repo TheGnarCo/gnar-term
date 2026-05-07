@@ -14,7 +14,6 @@ path = "src/main.rs"
 [dependencies]
 tauri = { version = "2", features = ["protocol-asset", "image-png"] }
 libc = "0.2"
-tauri-build = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 portable-pty = "0.9"

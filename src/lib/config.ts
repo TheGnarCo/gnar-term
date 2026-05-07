@@ -263,6 +263,42 @@ let _configPath = "";
 const _configStore = writable<GnarTermConfig>({});
 export const configStore: Readable<GnarTermConfig> = _configStore;
 
+/**
+ * Bring a legacy on-disk config forward to dev's shape. Only rewrites
+ * the deltas that would otherwise break behavior on load:
+ *   - `SurfaceDef.type === "markdown"` → `"preview"` (the markdown
+ *     surface kind was folded into the unified preview surface; the
+ *     `path` field is identical, so the rest of the def survives).
+ * Other dropped fields (e.g. `opacity`) are tolerated as ignored keys.
+ */
+export function migrateLoadedConfig(raw: unknown): GnarTermConfig {
+  if (!raw || typeof raw !== "object") return {} as GnarTermConfig;
+  const cfg = raw as GnarTermConfig;
+  if (Array.isArray(cfg.commands)) {
+    for (const cmd of cfg.commands) {
+      if (cmd?.workspace?.layout) {
+        migrateLayoutSurfaceTypes(cmd.workspace.layout);
+      }
+    }
+  }
+  return cfg;
+}
+
+function migrateLayoutSurfaceTypes(node: LayoutNode): void {
+  if ("pane" in node) {
+    for (const surface of node.pane.surfaces) {
+      // `"markdown"` is not in dev's SurfaceDef union; cast through unknown
+      // so the migration check compiles without widening the public type.
+      if ((surface.type as unknown as string) === "markdown") {
+        surface.type = "preview";
+      }
+    }
+    return;
+  }
+  migrateLayoutSurfaceTypes(node.children[0]);
+  migrateLayoutSurfaceTypes(node.children[1]);
+}
+
 export async function loadConfig(
   explicitPath?: string,
 ): Promise<GnarTermConfig> {
@@ -270,7 +306,7 @@ export async function loadConfig(
   if (explicitPath) {
     try {
       const content = await invoke<string>("read_file", { path: explicitPath });
-      _config = JSON.parse(content) as GnarTermConfig;
+      _config = migrateLoadedConfig(JSON.parse(content));
       _configPath = explicitPath;
       _configStore.set(_config);
       return _config;
@@ -294,7 +330,7 @@ export async function loadConfig(
   for (const path of paths) {
     try {
       const content = await invoke<string>("read_file", { path });
-      _config = JSON.parse(content) as GnarTermConfig;
+      _config = migrateLoadedConfig(JSON.parse(content));
       _configPath = path;
       _configStore.set(_config);
       return _config;

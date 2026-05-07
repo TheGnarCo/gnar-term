@@ -335,6 +335,61 @@ describe("TitleBar", () => {
     const settingsBtn = container.querySelector("button[title*='Settings']");
     expect(settingsBtn).toBeTruthy();
   });
+
+  it("renders the + New split button when sidebar is collapsed", () => {
+    sidebarVisible.set(false);
+    registerWorkspaceAction({
+      id: "core:new-workspace",
+      label: "New Workspace",
+      icon: "plus",
+      shortcut: "Cmd+Shift+N",
+      source: "core",
+      handler: noop,
+    });
+    const { container } = render(TitleBar);
+    const newBtn = Array.from(container.querySelectorAll("button")).find(
+      (b) => b.textContent?.trim() === "+ New",
+    );
+    expect(newBtn).toBeDefined();
+  });
+
+  it("does not render the + New split button when sidebar is expanded", () => {
+    sidebarVisible.set(true);
+    registerWorkspaceAction({
+      id: "core:new-workspace",
+      label: "New Workspace",
+      icon: "plus",
+      shortcut: "Cmd+Shift+N",
+      source: "core",
+      handler: noop,
+    });
+    const { container } = render(TitleBar);
+    const newBtn = Array.from(container.querySelectorAll("button")).find(
+      (b) => b.textContent?.trim() === "+ New",
+    );
+    expect(newBtn).toBeUndefined();
+  });
+
+  it("places the split button before the sidebar toggle in DOM order when collapsed", () => {
+    sidebarVisible.set(false);
+    registerWorkspaceAction({
+      id: "core:new-workspace",
+      label: "New Workspace",
+      icon: "plus",
+      shortcut: "Cmd+Shift+N",
+      source: "core",
+      handler: noop,
+    });
+    const { container } = render(TitleBar);
+    const buttons = Array.from(container.querySelectorAll("button"));
+    const newIdx = buttons.findIndex((b) => b.textContent?.trim() === "+ New");
+    const toggleIdx = buttons.findIndex(
+      (b) => b.getAttribute("aria-label") === "Toggle Sidebar",
+    );
+    expect(newIdx).toBeGreaterThanOrEqual(0);
+    expect(toggleIdx).toBeGreaterThanOrEqual(0);
+    expect(newIdx).toBeLessThan(toggleIdx);
+  });
 });
 
 // ===========================================================================
@@ -2131,13 +2186,12 @@ describe("WorkspaceItem — harness sub-row", () => {
 
     const harnessEl = container.querySelector("[data-harness-title-row]");
     expect(harnessEl).not.toBeNull();
-    // When a single tracked agent surface exists, its title (e.g. the
-    // current Claude task) is folded into the row label so the user can
-    // see what the agent is working on without leaving the sidebar.
+    // When a single tracked agent surface exists, its current task title
+    // is surfaced via the tooltip so the user can see what the agent is
+    // working on without leaving the sidebar.
     expect(harnessEl?.getAttribute("title")).toBe(
       "1 running — claude > fixing bug",
     );
-    expect(harnessEl?.textContent ?? "").toContain("claude > fixing bug");
     clearAllStatusForWorkspace(ws.id);
   });
 
@@ -2182,7 +2236,6 @@ describe("WorkspaceItem — harness sub-row", () => {
     const harnessEl = container.querySelector("[data-harness-title-row]");
     expect(harnessEl).not.toBeNull();
     expect(harnessEl?.getAttribute("title")).toBe("1 idle — claude");
-    expect(harnessEl?.textContent ?? "").toContain("claude");
     clearAllStatusForWorkspace(ws.id);
   });
 
@@ -2270,7 +2323,6 @@ describe("WorkspaceItem — harness sub-row", () => {
     const harnessEl = container.querySelector("[data-harness-title-row]");
     expect(harnessEl).not.toBeNull();
     expect(harnessEl?.getAttribute("title")).toBe("2 running");
-    expect(harnessEl?.textContent ?? "").toContain("2 running");
     clearAllStatusForWorkspace(ws.id);
   });
 });

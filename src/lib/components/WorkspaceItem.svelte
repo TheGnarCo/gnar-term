@@ -11,7 +11,6 @@
   import SidebarElement from "./SidebarElement.svelte";
   import RenameableLabel from "./RenameableLabel.svelte";
   import SidebarSubtitleRow from "./SidebarSubtitleRow.svelte";
-  import ThinkingDots from "./ThinkingDots.svelte";
   import WorktreeIcon from "../icons/WorktreeIcon.svelte";
   import BotIcon from "../icons/BotIcon.svelte";
   import { modLabel } from "../terminal-service";
@@ -290,43 +289,21 @@
             padding: 2px 4px; margin-left: -4px; border-radius: 4px;
           "
         />
+        {#if !hideStatusBadges && agentBadges.length > 0 && agentBadges[0]}
+          {@const badge = agentBadges[0]}
+          {@const isWaiting = badge.variant === "warning"}
+          <span
+            data-harness-title-row
+            title={agentTaskTitle
+              ? `${badge.label} — ${agentTaskTitle}`
+              : badge.label}
+            class:pulse={isWaiting}
+            style="display: inline-flex; align-items: center; flex-shrink: 0; color: {badge.color};"
+          >
+            <BotIcon size={13} />
+          </span>
+        {/if}
       </div>
-
-      {#if !hideStatusBadges && agentBadges.length > 0 && agentBadges[0]}
-        {@const badge = agentBadges[0]}
-        {@const isThinking =
-          badge.variant === "success" || badge.variant === "default"}
-        {@const isWaiting = badge.variant === "warning"}
-        <span
-          data-harness-title-row
-          title={agentTaskTitle
-            ? `${badge.label} — ${agentTaskTitle}`
-            : badge.label}
-          style="display: inline-flex; align-items: center; gap: 4px; padding: 0 3px; flex-shrink: 0; color: {badge.color};"
-        >
-          <span
-            style="display: inline-flex; align-items: center; opacity: 0.7;"
-          >
-            <BotIcon size={10} />
-          </span>
-          {#if isThinking}
-            <ThinkingDots color={badge.color} size={4} label={badge.label} />
-          {:else}
-            <span
-              aria-label={badge.label}
-              class:pulse={isWaiting}
-              style="width: {isWaiting ? 7 : 6}px; height: {isWaiting
-                ? 7
-                : 6}px; border-radius: 50%; background: {badge.color};"
-            ></span>
-          {/if}
-          <span
-            style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; min-width: 0;"
-          >
-            {agentTaskTitle ?? badge.label}
-          </span>
-        </span>
-      {/if}
 
       {#if !hideStatusBadges && hasUnread && agentBadges.length === 0}
         <span

@@ -93,6 +93,47 @@ describe("filterWorkspaces — branch ordering within a Root", () => {
     const ids = result.filter((r) => r.kind === "branch").map((r) => r.ws.id);
     expect(ids).toEqual(["nw-main", "nw-branch", "nw-dash"]);
   });
+
+  it("groups the Root workspace itself under its own header, above its dashboards", () => {
+    // ADR-004: the Root runtime Workspace shares its id with the Record,
+    // and its `rootWorkspaceId` is undefined. It should still appear
+    // nested under its own group, sorted as the type-0 main entry.
+    const root = makeRoot("ws-x", "Agent Skills");
+    const rootSelf = makeWs({ id: "ws-x", name: "Agent Skills" });
+    const settings = makeWs({
+      id: "nw-settings",
+      name: "Settings",
+      rootWorkspaceId: "ws-x",
+      isDashboard: true,
+    });
+    const shortcuts = makeWs({
+      id: "nw-shortcuts",
+      name: "Keyboard Shortcuts",
+      rootWorkspaceId: "ws-x",
+      isDashboard: true,
+    });
+
+    // Supply in wrong order so we know the sort is doing the work.
+    const result = filterWorkspaces(
+      [settings, rootSelf, shortcuts],
+      new Map([["ws-x", root]]),
+      "",
+      [root],
+    );
+
+    // Order: header, root-self (depth=1), dashboards
+    expect(result.map((r) => ({ id: r.ws.id, kind: r.kind }))).toEqual([
+      { id: "ws-x", kind: "root" },
+      { id: "ws-x", kind: "branch" },
+      { id: "nw-settings", kind: "branch" },
+      { id: "nw-shortcuts", kind: "branch" },
+    ]);
+
+    const rootSelfRow = result.find(
+      (r) => r.kind === "branch" && r.ws.id === "ws-x",
+    );
+    expect(rootSelfRow?.depth).toBe(1);
+  });
 });
 
 describe("filterWorkspaces — grouped mode (rootWorkspaces provided)", () => {

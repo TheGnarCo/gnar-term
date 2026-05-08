@@ -213,7 +213,7 @@ describe("createExtensionAPI", () => {
     ).toBeUndefined();
   });
 
-  it("getComponents returns WorkspaceListView, SplitButton, ColorPicker, DragGrip, DropGhost, ContainerRow, PathStatusLine", () => {
+  it("getComponents returns WorkspaceListView, SplitButton, ColorPicker, DragGrip, DropGhost, SidebarBanner, PathStatusLine", () => {
     const { api } = createExtensionAPI(manifest);
     const components = api.getComponents();
     for (const k of [
@@ -222,7 +222,7 @@ describe("createExtensionAPI", () => {
       "ColorPicker",
       "DragGrip",
       "DropGhost",
-      "ContainerRow",
+      "SidebarBanner",
       "PathStatusLine",
     ]) {
       expect(components).toHaveProperty(k);

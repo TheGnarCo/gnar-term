@@ -95,7 +95,7 @@
   // layout — suppress it in that context.
   $: isInsideWorkspace = typeof workspace.rootWorkspaceId === "string";
   // Surface the root Workspace's path-missing flag on every Branch row
-  // inside it. The Workspace banner (ContainerRow) currently has no
+  // inside it. The Workspace banner (SidebarBanner) currently has no
   // affordance for this state — flagging it on the row makes the
   // condition discoverable from anywhere the Branch renders.
   $: rootWorkspacePathMissing = (() => {
@@ -143,6 +143,12 @@
   export let dragActive = false;
   /** Mousedown handler fired when the drag grip is pressed. Drag origin, not row body. */
   export let onGripMouseDown: ((e: MouseEvent) => void) | undefined = undefined;
+  /**
+   * True while this row's collapsed-mode popover/banner is open.
+   * Forwarded to SidebarElement so the rail stays full-width while the
+   * banner is showing.
+   */
+  export let popoverActive: boolean = false;
 </script>
 
 <SidebarElement
@@ -150,6 +156,7 @@
   compact={isChild}
   name={workspace.name}
   {isActive}
+  {popoverActive}
   {isLocked}
   isDragging={dragActive}
   canDrag={!!onGripMouseDown}
@@ -162,6 +169,7 @@
     ? `${modLabel}${shortcutIdx + 1}`
     : undefined}
   {onGripMouseDown}
+  onRailClick={onSelect}
   {onClose}
   onContextMenu={(e) => {
     // Dashboards are non-interactive surfaces; right-click is a no-op.

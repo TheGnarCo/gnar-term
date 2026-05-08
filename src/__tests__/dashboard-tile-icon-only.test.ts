@@ -2,7 +2,7 @@
  * Dashboard buttons in WorkspaceSectionContent's btn-row slot render
  * icon-only: no text label, workspace name lives in the `aria-label`
  * attribute. Regression for the redesign that moved dashboard tiles
- * from WorkspaceListView's grid into the ContainerRow btn-row slot.
+ * from WorkspaceListView's grid into the SidebarBanner btn-row slot.
  */
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";

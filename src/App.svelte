@@ -121,6 +121,10 @@
     restoreWindowBounds,
     saveWindowBounds,
   } from "./lib/services/window-bounds-service";
+  import {
+    restoreSidebarVisible,
+    persistSidebarVisibleChanges,
+  } from "./lib/services/sidebar-persistence-service";
   import { confirmQuit } from "./lib/services/quit-confirmation-service";
 
   // Components
@@ -729,6 +733,11 @@
     // getState() so we don't need to thread the value back through the
     // bootstrap signature. Best-effort; failures are logged and ignored.
     void restoreWindowBounds(getState().windowBounds, getCurrentWindow());
+    // Apply the persisted sidebar expanded/collapsed state, then start
+    // persisting subsequent toggles. Must run after restore so the first
+    // emission (the just-restored value) is the one we skip.
+    restoreSidebarVisible(getState());
+    persistSidebarVisibleChanges();
     // Promote standalone runtime workspaces to Roots and rebuild each
     // Workspace's branchedWorkspaceIds from rootWorkspaceId now that the
     // workspaces store is populated.
@@ -892,10 +901,18 @@
     <TitleBar />
   {/if}
 
+  <!-- Row container is position: relative so the collapsed sidebar can
+       overlay the main column. When collapsed, the sidebar floats on top
+       of the terminal canvas and the main column gains a left padding so
+       its content scoots out from under the rail. This eliminates the
+       flex-sibling boundary that otherwise reads as a vertical seam at
+       the rail/terminal edge. Expanded mode keeps the historical flex
+       layout untouched. -->
   <div
     style="
       flex: 1; display: flex; flex-direction: row;
       min-height: 0; min-width: 0; overflow: hidden;
+      position: relative;
     "
   >
     <Sidebar bind:this={sidebarComponent} />
@@ -904,6 +921,7 @@
       style="
         flex: 1; display: flex; flex-direction: column;
         background: {$theme.bg}; min-width: 0; min-height: 0; overflow: hidden;
+        {$sidebarVisible ? '' : 'padding-left: 12px;'}
       "
     >
       {#if $sidebarVisible}

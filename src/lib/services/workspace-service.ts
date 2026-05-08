@@ -11,7 +11,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { get } from "svelte/store";
 import type { SurfaceDef } from "../config";
-import type { WorkspaceRecord } from "../stores/workspace";
+import type { RootWorkspace } from "../stores/workspace";
 import { WORKSPACE_COLOR_SLOTS } from "../../extensions/api";
 import { appendRootRow, removeRootRow } from "../stores/root-row-order";
 import { workspaces } from "../stores/workspace";
@@ -46,13 +46,13 @@ function emitStateChanged(metadata: Record<string, unknown> = {}): void {
   });
 }
 
-export function addWorkspace(workspace: WorkspaceRecord): void {
+export function addWorkspace(workspace: RootWorkspace): void {
   // Every entry in the unified store is a `Workspace`, so even a
   // record-shaped row needs a paneLayout. When the caller hasn't
   // materialized a tab surface yet, mint a placeholder empty pane —
   // `createWorkspaceFromDef` will overwrite paneLayout / activePaneId
   // when the matching runtime workspace is created.
-  const ensured: WorkspaceRecord = {
+  const ensured: RootWorkspace = {
     ...workspace,
     paneLayout: workspace.paneLayout ?? {
       type: "pane",
@@ -72,7 +72,7 @@ export function addWorkspace(workspace: WorkspaceRecord): void {
 
 export function updateWorkspace(
   id: string,
-  patch: Partial<Omit<WorkspaceRecord, "id">>,
+  patch: Partial<Omit<RootWorkspace, "id">>,
 ): void {
   const next = getWorkspaces().map((w) =>
     w.id === id ? { ...w, ...patch } : w,
@@ -193,7 +193,7 @@ export function workspaceDashboardPath(workspacePath: string): string {
   return `${workspacePath.replace(/\/+$/, "")}/.gnar-term/workspace-dashboard.md`;
 }
 
-function buildWorkspaceDashboardMarkdown(workspace: WorkspaceRecord): string {
+function buildWorkspaceDashboardMarkdown(workspace: RootWorkspace): string {
   // The Workspace Dashboard is the generic, agent-agnostic landing page for
   // a Workspace. It surfaces GitHub work-tracker context — open
   // issues + open PRs — side by side, as a passive read-only browse
@@ -234,7 +234,7 @@ children:
  * workspace never trampling user customizations.
  */
 async function writeWorkspaceDashboardTemplate(
-  workspace: WorkspaceRecord,
+  workspace: RootWorkspace,
   path: string,
   options: { force?: boolean } = {},
 ): Promise<void> {
@@ -259,7 +259,7 @@ async function writeWorkspaceDashboardTemplate(
  * needing the workspace to be closed/recreated.
  */
 export async function regenerateWorkspaceDashboardTemplate(
-  workspace: WorkspaceRecord,
+  workspace: RootWorkspace,
 ): Promise<void> {
   await writeWorkspaceDashboardTemplate(
     workspace,
@@ -271,7 +271,7 @@ export async function regenerateWorkspaceDashboardTemplate(
 }
 
 function createDashboardWorkspaceFromDef(
-  workspace: WorkspaceRecord,
+  workspace: RootWorkspace,
   name: string,
   contribId: string,
   surfaces: SurfaceDef[],
@@ -292,7 +292,7 @@ function createDashboardWorkspaceFromDef(
  * link to it.
  */
 export async function createWorkspaceDashboard(
-  workspace: WorkspaceRecord,
+  workspace: RootWorkspace,
 ): Promise<string> {
   const path = workspaceDashboardPath(workspace.path);
   try {
@@ -319,7 +319,7 @@ export async function createWorkspaceDashboard(
  * contributions.
  */
 export function createSettingsDashboardWorkspace(
-  workspace: WorkspaceRecord,
+  workspace: RootWorkspace,
 ): Promise<string> {
   return createDashboardWorkspaceFromDef(workspace, "Settings", "settings", []);
 }
@@ -379,7 +379,7 @@ function hasDashboardWorkspace(
  * caller has already built the snapshot (e.g. `reconcileWorkspaceDashboards`).
  */
 export async function provisionAutoDashboardsForWorkspace(
-  workspace: WorkspaceRecord,
+  workspace: RootWorkspace,
   existingContribIds?: ReadonlySet<string>,
 ): Promise<void> {
   for (const c of getDashboardContributions()) {
@@ -444,7 +444,7 @@ export function closeDashboardForWorkspace(
  * eagerly on workspace creation, so this is a pure activation call.
  * Returns true on success.
  */
-export function openWorkspaceDashboard(workspace: WorkspaceRecord): boolean {
+export function openWorkspaceDashboard(workspace: RootWorkspace): boolean {
   const targetId = workspace.dashboardWorkspaceId;
   if (!targetId) return false;
   const idx = get(workspaces).findIndex((w) => w.id === targetId);
@@ -506,7 +506,7 @@ export async function activateWorkspace(workspaceId: string): Promise<void> {
  * workspaces store and ripples to `$activeWorkspaceIdx`.
  */
 async function reconcileDashboardsForWorkspace(
-  workspace: WorkspaceRecord,
+  workspace: RootWorkspace,
   dashboardIndex: Map<string, Map<string, Workspace[]>>,
 ): Promise<void> {
   const byContrib = dashboardIndex.get(workspace.id);
@@ -632,9 +632,10 @@ export function reclaimBranchedWorkspaces(): void {
 
 /**
  * Promote every standalone runtime Workspace to a Root by creating a
- * matching WorkspaceRecord with the same id (Root and Record share an
- * id). A "standalone" runtime workspace is one that:
- *   - has no matching Record (no row in the sidebar yet)
+ * matching RootWorkspace with the same id (the Root runtime workspace
+ * and its RootWorkspace entry share an id). A "standalone" runtime
+ * workspace is one that:
+ *   - has no matching RootWorkspace (no row in the sidebar yet)
  *   - is not a Branch (`rootWorkspaceId` unset). Branches are Branches
  *     for life — even orphan Branches (rootWorkspaceId points at a
  *     missing Workspace) are never promoted to Roots
@@ -662,7 +663,7 @@ function materializeStandaloneRoots(): void {
 
     const path = ws.path && ws.path.length > 0 ? ws.path : "~";
 
-    const workspace: WorkspaceRecord = {
+    const workspace: RootWorkspace = {
       id: ws.id,
       name: ws.name,
       path,
@@ -679,7 +680,7 @@ function materializeStandaloneRoots(): void {
 /**
  * Startup reconciliation — called after workspaces are restored.
  * Promotes every standalone runtime Workspace to a Root by creating a
- * matching WorkspaceRecord (shared id). Branch status is derived
+ * matching RootWorkspace (shared id). Branch status is derived
  * directly from `Workspace.rootWorkspaceId`, so no parallel membership
  * registry needs rehydrating at startup.
  *

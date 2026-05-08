@@ -5,8 +5,8 @@
    * sidebar.
    *
    * Used by WorkspaceItem (Branch rows, including dashboard rows)
-   * and by ContainerRow's Branch-inside-Workspace variant. The root
-   * ContainerRow variant builds its own banner because its rail spans
+   * and by SidebarBanner's Branch-inside-Workspace variant. The root
+   * SidebarBanner variant builds its own banner because its rail spans
    * multiple rows; see that file for details.
    *
    * The wrapper itself is intentionally inert — callers that want a
@@ -22,7 +22,7 @@
    * Row variant. Drives chrome (banner gradient, close vs no-close,
    * data-sidebar-element marker) and default density:
    *
-   *   - "parent"    — workspace banner row (ContainerRow). Renders the
+   *   - "parent"    — workspace banner row (SidebarBanner). Renders the
    *                   gradient rail; close/lock affordances are
    *                   suppressed because callers manage closure on the
    *                   banner itself.
@@ -49,6 +49,13 @@
   /** Whether this element is currently active */
   export let isActive: boolean = false;
 
+  /**
+   * True while the row's collapsed-mode hover banner is open. Forwarded
+   * to SidebarRail so the rail stays at full width while the banner is
+   * shown, even after the cursor has left the rail itself.
+   */
+  export let popoverActive: boolean = false;
+
   /** Whether this element is locked (shows lock icon instead of close) */
   export let isLocked: boolean = false;
 
@@ -66,6 +73,13 @@
 
   /** Callback when drag grip is pressed */
   export let onGripMouseDown: ((e: MouseEvent) => void) | undefined = undefined;
+
+  /**
+   * Callback when the rail itself is clicked. Lets the colored rail
+   * stripe act as an activation target alongside the slot content's own
+   * click handler. Pass-through to SidebarRail.
+   */
+  export let onRailClick: (() => void) | undefined = undefined;
 
   /** Callback when close button is clicked */
   export let onClose: (() => void) | undefined = undefined;
@@ -136,7 +150,10 @@
     {canDrag}
     locked={isLocked}
     {isDragging}
+    {isActive}
+    {popoverActive}
     {onGripMouseDown}
+    onClick={onRailClick}
   />
   {#if isParent}
     <!-- Workspace banner rail gradient -->

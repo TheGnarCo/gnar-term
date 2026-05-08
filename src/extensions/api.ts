@@ -844,10 +844,10 @@ export interface ExtensionAPI {
    *   Props: `{ theme: Readable<ThemeDef>, value: string (bindable), colors?: string[] }`
    * - **DragGrip** — left-border drag handle that appears on hover
    *   Props: `{ theme, visible, onMouseDown, ariaLabel? }`
-   * - **ContainerRow** — shared banner + child-list chrome for
-   *   "container workspaces" (workspaces, agent dashboards). Banner can
-   *   represent a first-class workspace by wiring onBannerClick/onClose
-   *   to switchWorkspace/closeWorkspace.
+   * - **SidebarBanner** — root-row chrome for a Workspace banner in the
+   *   primary sidebar. Owns grip + visible bar + nested list. Banner
+   *   can represent a first-class workspace by wiring
+   *   onBannerClick/onClose to switchWorkspace/closeWorkspace.
    *   Props: `{ color, foreground, parentColor?, onGripMouseDown?,
    *     onBannerClick?, onBannerContextMenu?, onClose?, filterIds,
    *     dashboardHintFor?, hideStatusBadges?, scopeId, containerBlockId,
@@ -859,7 +859,7 @@ export interface ExtensionAPI {
     ColorPicker: unknown;
     DragGrip: unknown;
     DropGhost: unknown;
-    ContainerRow: unknown;
+    SidebarBanner: unknown;
     PathStatusLine: unknown;
   };
 

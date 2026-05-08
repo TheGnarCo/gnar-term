@@ -48,6 +48,22 @@
   export let locked: boolean = false;
   /** When set, renders this label in the close/lock slot during meta-hold (shortcutHintsActive). */
   export let shortcutLabel: string | undefined = undefined;
+  /**
+   * Renders the rail stripe at the slim 4px width instead of the full
+   * 8px. Callers set this in collapsed sidebar mode for inactive,
+   * non-hovered rows whose popover/banner isn't open, so the rail reads
+   * as a thin accent that expands back to 8px the moment any of those
+   * conditions flips. The grip wrapper itself stays 8px wide so row
+   * layout is unaffected.
+   */
+  export let narrowRail: boolean = false;
+  /**
+   * When true, the grip's primary action is a click (activate the row)
+   * rather than a drag — so the cursor reads `pointer` instead of
+   * `grab`. Callers set this in collapsed sidebar mode where the rail
+   * is the row's main interaction target.
+   */
+  export let primaryClickable: boolean = false;
 
   let closeButtonHovered = false;
   // shortcutLabel takes priority over close/lock when meta-hold is active.
@@ -67,8 +83,13 @@
   $: fritBackgroundSize = "5px 5px";
   $: fritBackgroundPosition = "0 0, 2.5px 2.5px";
   $: fritBackgroundRepeat = "repeat";
-  $: showDots = visible && alwaysShowDots;
-  $: showRailStripe = !visible;
+  // In narrow-rail mode the painted color stays at 4px even when the
+  // rail is hovered — so the stripe renders regardless of `visible`,
+  // and the hover dot pattern is suppressed (it would otherwise paint
+  // 8px wide and contradict the 4px policy).
+  $: showDots = visible && alwaysShowDots && !narrowRail;
+  $: showRailStripe = !visible || narrowRail;
+  $: railStripeWidth = narrowRail ? "4px" : "8px";
 </script>
 
 <div
@@ -80,7 +101,13 @@
     align-self: stretch;
     position: relative;
     width: 8px;
-    cursor: {locked ? 'not-allowed' : visible ? 'grab' : 'default'};
+    cursor: {locked
+    ? 'not-allowed'
+    : primaryClickable
+      ? 'pointer'
+      : visible
+        ? 'grab'
+        : 'default'};
     overflow: hidden;
   "
 >
@@ -93,9 +120,10 @@
       style="
         position: absolute;
         left: 0; top: 0; bottom: 0;
-        width: 8px;
+        width: {railStripeWidth};
         background: {effectiveColor};
         opacity: {railOpacity};
+        transition: width 0.1s;
       "
     ></div>
   {/if}

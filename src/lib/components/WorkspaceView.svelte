@@ -15,9 +15,9 @@
 </script>
 
 <div
-  style="flex: 1; display: flex; min-height: 0; min-width: 0; {visible
-    ? ''
-    : 'display: none;'}"
+  style="flex: 1; {visible
+    ? 'display: flex'
+    : 'display: none'}; min-height: 0; min-width: 0;"
 >
   <SplitNodeView
     node={workspace.paneLayout}

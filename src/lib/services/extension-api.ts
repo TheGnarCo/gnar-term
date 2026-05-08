@@ -309,12 +309,16 @@ export function createExtensionAPI(
         props,
       });
     },
-    openDashboardTab(workspaceId: string, spec: ExtensionDashboardTabSpec) {
+    openDashboardTab(
+      workspaceId: string,
+      spec: ExtensionDashboardTabSpec,
+      opts?: { activate?: boolean },
+    ) {
       const namespaced: ExtensionDashboardTabSpec =
         spec.kind === "registry" && !spec.surfaceTypeId.includes(":")
           ? { ...spec, surfaceTypeId: `${extId}:${spec.surfaceTypeId}` }
           : spec;
-      return openDashboardSurfaceTab(workspaceId, namespaced);
+      return openDashboardSurfaceTab(workspaceId, namespaced, opts);
     },
     switchWorkspace(workspaceId: string) {
       pendingAction.set({ type: "switch-workspace", workspaceId });

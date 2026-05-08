@@ -1,11 +1,22 @@
 /**
- * Story 5: Settings dashboard exposes a per-workspace toggle row for every
- * registered contribution (except "settings" itself). autoProvision
- * rows render locked (disabled + lockedReason); user-opt-in rows
- * toggle the dashboard workspace on and off.
+ * WorkspaceDashboardSettings — per-workspace dashboard toggle rows.
+ *
+ * Toggles control persisted Settings state ("enabled" — drives chip
+ * presence). They do NOT open or close dashboard tabs. Closing a tab
+ * does not flip the toggle. Settings ↔ chips ↔ tabs are decoupled.
+ *
+ *   - autoProvision rows: locked-on (disabled checkbox + lockedReason).
+ *   - defaultEnabled rows: checked unless `dismissedDashboardContributionIds`
+ *     lists them; toggling off appends, toggling on removes.
+ *   - opt-in rows: checked iff `enabledDashboardContributionIds` lists them;
+ *     toggling on appends, toggling off removes.
+ *
+ *   - The "settings" contribution is excluded from the row list — the user
+ *     is already inside its panel and cannot disable it.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, cleanup } from "@testing-library/svelte";
+import { render, cleanup, fireEvent } from "@testing-library/svelte";
+import { tick } from "svelte";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn().mockResolvedValue(undefined),
@@ -15,8 +26,6 @@ vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn().mockResolvedValue(vi.fn()),
 }));
 
-import { fireEvent } from "@testing-library/svelte";
-import { tick } from "svelte";
 import WorkspaceDashboardSettings from "../lib/components/WorkspaceDashboardSettings.svelte";
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
 import {
@@ -39,6 +48,25 @@ const WORKSPACE = {
   activePaneId: "wp",
 } as never;
 
+function getWorkspaceFromStore(id: string):
+  | {
+      dismissedDashboardContributionIds?: string[];
+      enabledDashboardContributionIds?: string[];
+    }
+  | undefined {
+  let v:
+    | {
+        dismissedDashboardContributionIds?: string[];
+        enabledDashboardContributionIds?: string[];
+      }
+    | undefined;
+  const unsub = workspaces.subscribe((list) => {
+    v = list.find((w) => w.id === id) as typeof v;
+  });
+  unsub();
+  return v;
+}
+
 describe("WorkspaceDashboardSettings — Dashboards toggles", () => {
   beforeEach(() => {
     cleanup();
@@ -56,7 +84,7 @@ describe("WorkspaceDashboardSettings — Dashboards toggles", () => {
       capPerWorkspace: 1,
       autoProvision: true,
       lockedReason: "Required (Overview)",
-      create: vi.fn(async () => "ws-grp"),
+      openAsTab: vi.fn(async () => {}),
     });
     registerDashboardContribution({
       id: "settings",
@@ -65,7 +93,7 @@ describe("WorkspaceDashboardSettings — Dashboards toggles", () => {
       actionLabel: "Add Settings",
       capPerWorkspace: 1,
       autoProvision: true,
-      create: vi.fn(async () => "ws-st"),
+      openAsTab: vi.fn(async () => {}),
     });
     registerDashboardContribution({
       id: "diff",
@@ -73,7 +101,7 @@ describe("WorkspaceDashboardSettings — Dashboards toggles", () => {
       label: "Diff",
       actionLabel: "Add Diff",
       capPerWorkspace: 1,
-      create: vi.fn(async () => "ws-diff"),
+      openAsTab: vi.fn(async () => {}),
     });
 
     const { container } = render(WorkspaceDashboardSettings, {
@@ -96,7 +124,7 @@ describe("WorkspaceDashboardSettings — Dashboards toggles", () => {
       capPerWorkspace: 1,
       autoProvision: true,
       lockedReason: "Required (Overview)",
-      create: vi.fn(async () => "ws-grp"),
+      openAsTab: vi.fn(async () => {}),
     });
 
     const { container } = render(WorkspaceDashboardSettings, {
@@ -115,70 +143,16 @@ describe("WorkspaceDashboardSettings — Dashboards toggles", () => {
     expect(lockedBadge?.textContent?.trim()).toBe("Required (Overview)");
   });
 
-  it("toggling a dashboard ON does not switch the active view away from Settings", async () => {
-    // Seed the Settings dashboard for our workspace and pin it as active —
-    // this mirrors the user toggling from inside the Settings panel.
-    workspaces.update((cur) => [
-      ...cur,
-      {
-        id: "ws-settings-1",
-        name: "Settings",
-        paneLayout: {
-          type: "pane",
-          pane: { id: "p", surfaces: [], activeSurfaceId: null },
-        },
-        activePaneId: "p",
-        isDashboard: true,
-        rootWorkspaceId: WORKSPACE.id,
-        dashboardContributionId: "settings",
-      } as never,
-    ]);
-    const settingsIdx = (() => {
-      let idx = -1;
-      const unsub = workspaces.subscribe((list) => {
-        idx = list.findIndex((w) => w.id === "ws-settings-1");
-      });
-      unsub();
-      return idx;
-    })();
-    activeWorkspaceIdx.set(settingsIdx);
-
-    // Diff contribution's create() simulates createWorkspaceFromDef's
-    // auto-switch behavior by appending a dashboard workspace and
-    // pointing activeWorkspaceIdx at it.
+  it("toggling a defaultEnabled dashboard OFF records dismissal but does NOT close tabs", async () => {
+    const openAsTab = vi.fn(async () => {});
     registerDashboardContribution({
       id: "diff",
       source: "diff-viewer",
       label: "Diff",
       actionLabel: "Add Diff",
       capPerWorkspace: 1,
-      create: vi.fn(async () => {
-        workspaces.update((cur) => [
-          ...cur,
-          {
-            id: "ws-diff-new",
-            name: "Diff",
-            paneLayout: {
-              type: "pane",
-              pane: { id: "dp", surfaces: [], activeSurfaceId: null },
-            },
-            activePaneId: "dp",
-            isDashboard: true,
-            rootWorkspaceId: WORKSPACE.id,
-            dashboardContributionId: "diff",
-          } as never,
-        ]);
-        const newIdx = (() => {
-          let idx = -1;
-          const unsub = workspaces.subscribe((list) => {
-            idx = list.findIndex((w) => w.id === "ws-diff-new");
-          });
-          unsub();
-          return idx;
-        })();
-        activeWorkspaceIdx.set(newIdx);
-        return "ws-diff-new";
-      }),
+      defaultEnabled: true,
+      openAsTab,
     });
 
     const { container } = render(WorkspaceDashboardSettings, {
@@ -188,53 +162,117 @@ describe("WorkspaceDashboardSettings — Dashboards toggles", () => {
     const input = container.querySelector<HTMLInputElement>(
       '[data-dashboard-toggle-row="diff"] [data-dashboard-toggle-input]',
     );
-    expect(input).not.toBeNull();
+    expect(input?.checked).toBe(true);
     await fireEvent.click(input!);
     await tick();
-    // Drain the awaited contribution.create() and the subsequent restore.
-    await new Promise((r) => setTimeout(r, 0));
-    await tick();
 
-    const finalActive = (() => {
-      let idx = -1;
-      const unsub = activeWorkspaceIdx.subscribe((v) => (idx = v));
-      unsub();
-      return idx;
-    })();
-    const finalList = (() => {
-      let v: { id: string }[] = [];
-      const unsub = workspaces.subscribe((list) => (v = list));
-      unsub();
-      return v;
-    })();
-    expect(finalList[finalActive]?.id).toBe("ws-settings-1");
+    const ws = getWorkspaceFromStore(WORKSPACE.id);
+    expect(ws?.dismissedDashboardContributionIds).toEqual(["diff"]);
+    // Toggle is decoupled from tab lifecycle — Settings does not invoke
+    // openAsTab on enable nor close on disable.
+    expect(openAsTab).not.toHaveBeenCalled();
   });
 
-  it("reflects active state for user-opt-in contributions", () => {
+  it("toggling a defaultEnabled dashboard ON clears any prior dismissal", async () => {
+    const openAsTab = vi.fn(async () => {});
     registerDashboardContribution({
       id: "diff",
       source: "diff-viewer",
       label: "Diff",
       actionLabel: "Add Diff",
       capPerWorkspace: 1,
-      create: vi.fn(async () => "ws-diff"),
+      defaultEnabled: true,
+      openAsTab,
     });
-    // Seed an active diff child workspace for this workspace.
-    workspaces.update((cur) => [
-      ...cur,
+    workspaces.set([
+      { ...WORKSPACE, dismissedDashboardContributionIds: ["diff"] } as never,
+    ]);
+
+    const { container } = render(WorkspaceDashboardSettings, {
+      props: { rootWorkspaceId: WORKSPACE.id },
+    });
+
+    const input = container.querySelector<HTMLInputElement>(
+      '[data-dashboard-toggle-row="diff"] [data-dashboard-toggle-input]',
+    );
+    expect(input?.checked).toBe(false);
+    await fireEvent.click(input!);
+    await tick();
+
+    const ws = getWorkspaceFromStore(WORKSPACE.id);
+    expect(ws?.dismissedDashboardContributionIds).toBeUndefined();
+    expect(openAsTab).not.toHaveBeenCalled();
+  });
+
+  it("toggling an opt-in dashboard ON records it in enabledDashboardContributionIds", async () => {
+    const openAsTab = vi.fn(async () => {});
+    registerDashboardContribution({
+      id: "claude-settings",
+      source: "claude-settings",
+      label: "Claude Settings",
+      actionLabel: "Add Claude Settings",
+      capPerWorkspace: 1,
+      openAsTab,
+    });
+
+    const { container } = render(WorkspaceDashboardSettings, {
+      props: { rootWorkspaceId: WORKSPACE.id },
+    });
+
+    const input = container.querySelector<HTMLInputElement>(
+      '[data-dashboard-toggle-row="claude-settings"] [data-dashboard-toggle-input]',
+    );
+    expect(input?.checked).toBe(false);
+    await fireEvent.click(input!);
+    await tick();
+
+    const ws = getWorkspaceFromStore(WORKSPACE.id);
+    expect(ws?.enabledDashboardContributionIds).toEqual(["claude-settings"]);
+    // Toggling does NOT spawn a tab — that's the chip's job.
+    expect(openAsTab).not.toHaveBeenCalled();
+  });
+
+  it("toggling an opt-in dashboard OFF removes it from enabledDashboardContributionIds", async () => {
+    registerDashboardContribution({
+      id: "claude-settings",
+      source: "claude-settings",
+      label: "Claude Settings",
+      actionLabel: "Add Claude Settings",
+      capPerWorkspace: 1,
+      openAsTab: vi.fn(async () => {}),
+    });
+    workspaces.set([
       {
-        id: "ws-diff-1",
-        name: "Diff",
-        paneLayout: {
-          type: "pane",
-          pane: { id: "p", surfaces: [], activeSurfaceId: null },
-        },
-        activePaneId: "p",
-        isDashboard: true,
-        rootWorkspaceId: WORKSPACE.id,
-        dashboardContributionId: "diff",
+        ...WORKSPACE,
+        enabledDashboardContributionIds: ["claude-settings"],
       } as never,
     ]);
+
+    const { container } = render(WorkspaceDashboardSettings, {
+      props: { rootWorkspaceId: WORKSPACE.id },
+    });
+
+    const input = container.querySelector<HTMLInputElement>(
+      '[data-dashboard-toggle-row="claude-settings"] [data-dashboard-toggle-input]',
+    );
+    expect(input?.checked).toBe(true);
+    await fireEvent.click(input!);
+    await tick();
+
+    const ws = getWorkspaceFromStore(WORKSPACE.id);
+    expect(ws?.enabledDashboardContributionIds).toBeUndefined();
+  });
+
+  it("reflects enabled state for defaultEnabled contributions (default-on)", () => {
+    registerDashboardContribution({
+      id: "diff",
+      source: "diff-viewer",
+      label: "Diff",
+      actionLabel: "Add Diff",
+      capPerWorkspace: 1,
+      defaultEnabled: true,
+      openAsTab: vi.fn(async () => {}),
+    });
 
     const { container } = render(WorkspaceDashboardSettings, {
       props: { rootWorkspaceId: WORKSPACE.id },
@@ -246,5 +284,29 @@ describe("WorkspaceDashboardSettings — Dashboards toggles", () => {
       "[data-dashboard-toggle-input]",
     );
     expect(input?.checked).toBe(true);
+  });
+
+  it("opt-in contributions are off by default (no enabled record)", () => {
+    registerDashboardContribution({
+      id: "claude-settings",
+      source: "claude-settings",
+      label: "Claude Settings",
+      actionLabel: "Add Claude Settings",
+      capPerWorkspace: 1,
+      openAsTab: vi.fn(async () => {}),
+    });
+
+    const { container } = render(WorkspaceDashboardSettings, {
+      props: { rootWorkspaceId: WORKSPACE.id },
+    });
+
+    const row = container.querySelector(
+      '[data-dashboard-toggle-row="claude-settings"]',
+    );
+    expect(row?.getAttribute("data-active")).toBeNull();
+    const input = row!.querySelector<HTMLInputElement>(
+      "[data-dashboard-toggle-input]",
+    );
+    expect(input?.checked).toBe(false);
   });
 });

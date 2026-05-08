@@ -278,8 +278,20 @@ export type DashboardTabSpec =
        * omitted, dedup falls back to surfaceTypeId equality.
        */
       matchProps?: Record<string, unknown>;
+      /**
+       * Stable contribution id (e.g. `"overview"`, `"agentic"`,
+       * `"diff-viewer"`). Stamped onto the resulting RegistrySurface so
+       * Settings/close-by-contribution helpers can identify dashboard
+       * tabs without scanning props.
+       */
+      dashboardContributionId?: string;
     }
-  | { kind: "preview"; path: string; title?: string };
+  | {
+      kind: "preview";
+      path: string;
+      title?: string;
+      dashboardContributionId?: string;
+    };
 
 /**
  * Open a dashboard surface as a tab inside the workspace's active pane.
@@ -287,37 +299,37 @@ export type DashboardTabSpec =
  * dashboards (Workspace overview, Agentic, Diff, Settings) inline rather
  * than switching to a separate dashboard workspace.
  *
- * Activates the root runtime workspace (materializes if not yet live;
- * Root runtime workspaces share their id with their RootWorkspace, ADR-004),
- * then dedupes by spec identity across every pane. If a matching tab
- * already exists, focuses it; otherwise pushes a fresh surface onto the
- * workspace's active pane.
+ * Default behavior (`activate: true`): activates the root runtime
+ * workspace (materializes if not yet live; Root runtime workspaces share
+ * their id with their RootWorkspace, ADR-004), dedupes by spec identity
+ * across every pane, and either focuses the matching tab or pushes a
+ * fresh one onto the workspace's active pane.
+ *
+ * Pass `activate: false` for "ensure-tab-exists" semantics — useful when
+ * auto-provisioning dashboards on a workspace the user just created (or
+ * during session restore). The tab gets pushed onto the workspace's
+ * active pane but `activeSurfaceId` is left alone so the user lands on
+ * the original active tab (typically a terminal) rather than the
+ * dashboard. No workspace switch, no focus side-effect.
  */
 export async function openDashboardSurfaceTab(
   rootWorkspaceId: string,
   spec: DashboardTabSpec,
+  opts?: { activate?: boolean },
 ): Promise<void> {
-  await activateWorkspace(rootWorkspaceId);
+  const activate = opts?.activate !== false;
+  if (activate) await activateWorkspace(rootWorkspaceId);
 
   const ws = get(workspaces).find((w) => w.id === rootWorkspaceId);
   if (!ws) return;
 
   for (const pane of getAllPanes(ws.paneLayout)) {
-    const existing = pane.surfaces.find((s) => {
-      if (spec.kind === "preview") {
-        return isPreviewSurface(s) && s.path === spec.path;
-      }
-      if (!isRegistrySurface(s) || s.surfaceTypeId !== spec.surfaceTypeId) {
-        return false;
-      }
-      const match = spec.matchProps;
-      if (!match) return true;
-      const sProps = (s.props ?? {}) as Record<string, unknown>;
-      return Object.entries(match).every(([k, v]) => sProps[k] === v);
-    });
+    const existing = pane.surfaces.find((s) => matchesSpec(s, spec));
     if (existing) {
-      ws.activePaneId = pane.id;
-      selectSurface(pane.id, existing.id);
+      if (activate) {
+        ws.activePaneId = pane.id;
+        selectSurface(pane.id, existing.id);
+      }
       return;
     }
   }
@@ -345,11 +357,16 @@ export async function openDashboardSurfaceTab(
       title: spec.title,
       hasUnread: false,
       props: spec.props,
+      ...(spec.dashboardContributionId
+        ? { dashboardContributionId: spec.dashboardContributionId }
+        : {}),
     };
   }
   targetPane.surfaces.push(surface);
-  targetPane.activeSurfaceId = surface.id;
-  ws.activePaneId = targetPane.id;
+  if (activate) {
+    targetPane.activeSurfaceId = surface.id;
+    ws.activePaneId = targetPane.id;
+  }
   workspaces.update((l) => [...l]);
   eventBus.emit({
     type: "surface:created",
@@ -357,20 +374,127 @@ export async function openDashboardSurfaceTab(
     paneId: targetPane.id,
     kind: surface.kind,
   });
-  void safeFocus(surface);
+  if (activate) void safeFocus(surface);
   schedulePersist();
+}
+
+function matchesSpec(s: Surface, spec: DashboardTabSpec): boolean {
+  if (spec.kind === "preview") {
+    return isPreviewSurface(s) && s.path === spec.path;
+  }
+  if (!isRegistrySurface(s) || s.surfaceTypeId !== spec.surfaceTypeId) {
+    return false;
+  }
+  const match = spec.matchProps;
+  if (!match) return true;
+  const sProps = (s.props ?? {}) as Record<string, unknown>;
+  return Object.entries(match).every(([k, v]) => sProps[k] === v);
+}
+
+/**
+ * Symmetric to `openDashboardSurfaceTab` — finds and removes a matching
+ * dashboard tab from the workspace. Used by Settings-toggle "disable" and
+ * registry-cleanup paths to retire a dashboard's tab presence without
+ * tearing down the workspace itself.
+ *
+ * No-op if the workspace doesn't exist or no matching tab is found.
+ * Iterates every pane so callers don't need to know which split holds
+ * the dashboard. Returns the count of removed tabs (typically 0 or 1;
+ * the matchProps contract guarantees only one matching surface, but
+ * legacy state may carry duplicates).
+ */
+export function closeDashboardSurfaceTab(
+  rootWorkspaceId: string,
+  spec: DashboardTabSpec,
+): number {
+  const ws = get(workspaces).find((w) => w.id === rootWorkspaceId);
+  if (!ws) return 0;
+
+  let removed = 0;
+  for (const pane of getAllPanes(ws.paneLayout)) {
+    for (let i = pane.surfaces.length - 1; i >= 0; i--) {
+      const s = pane.surfaces[i]!;
+      if (matchesSpec(s, spec)) {
+        removeSurface(ws, pane, i);
+        removed++;
+      }
+    }
+  }
+  return removed;
+}
+
+/**
+ * Symmetric helper that closes any registry-backed dashboard tab whose
+ * `dashboardContributionId` matches. Used by Workspace Settings "disable"
+ * toggle to retire a contribution's tab without needing to know the
+ * surfaceTypeId / matchProps the contribution used to open itself.
+ *
+ * Returns the count of removed tabs (typically 0 or 1, but loops every
+ * pane in case legacy state has duplicates).
+ */
+export function closeDashboardContributionTab(
+  rootWorkspaceId: string,
+  contributionId: string,
+): number {
+  const ws = get(workspaces).find((w) => w.id === rootWorkspaceId);
+  if (!ws) return 0;
+
+  let removed = 0;
+  for (const pane of getAllPanes(ws.paneLayout)) {
+    for (let i = pane.surfaces.length - 1; i >= 0; i--) {
+      const s = pane.surfaces[i]!;
+      if (
+        isRegistrySurface(s) &&
+        s.dashboardContributionId === contributionId
+      ) {
+        removeSurface(ws, pane, i);
+        removed++;
+      }
+    }
+  }
+  return removed;
+}
+
+/**
+ * Whether the workspace currently has a tab open for the given dashboard
+ * contribution. Used by Workspace Settings to derive its toggle state
+ * from the live tab presence rather than a parallel field.
+ */
+export function isDashboardContributionTabActive(
+  rootWorkspaceId: string,
+  contributionId: string,
+): boolean {
+  const ws = get(workspaces).find((w) => w.id === rootWorkspaceId);
+  if (!ws) return false;
+  for (const pane of getAllPanes(ws.paneLayout)) {
+    for (const s of pane.surfaces) {
+      if (
+        isRegistrySurface(s) &&
+        s.dashboardContributionId === contributionId
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 export async function openWorkspaceSettingsTab(
   rootWorkspaceId: string,
+  opts?: { activate?: boolean },
 ): Promise<void> {
-  await openDashboardSurfaceTab(rootWorkspaceId, {
-    kind: "registry",
-    surfaceTypeId: "core:workspace-settings",
-    title: "Workspace Settings",
-    props: { rootWorkspaceId },
-    matchProps: { rootWorkspaceId },
-  });
+  await openDashboardSurfaceTab(
+    rootWorkspaceId,
+    {
+      kind: "registry",
+      surfaceTypeId: "core:workspace-settings",
+      title: "Workspace Settings",
+      props: { rootWorkspaceId },
+      matchProps: { rootWorkspaceId },
+      dashboardContributionId: "settings",
+    },
+    opts,
+  );
 }
 
 export function openRegistrySurfaceInPaneById(

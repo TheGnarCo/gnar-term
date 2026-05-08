@@ -1,10 +1,13 @@
 /**
- * Verifies the Agentic Dashboard contribution is registered
- * via the DashboardContributionRegistry when the extension activates,
- * tear-down on deactivate, and that its `create` hook materializes a
- * dashboard workspace with the expected metadata shape.
+ * Verifies the Agentic Dashboard contribution is registered via the
+ * DashboardContributionRegistry when the extension activates, torn down
+ * on deactivate, and that its `openAsTab` hook stamps a registry surface
+ * tagged with `dashboardContributionId: "agentic"` onto the workspace's
+ * primary pane (dashboards-as-tabs model — no separate dashboard
+ * workspace).
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { get } from "svelte/store";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(async (cmd: string) => {
@@ -24,14 +27,6 @@ vi.mock("../../../lib/services/extension-state", () => ({
   deleteExtensionState: vi.fn().mockResolvedValue(undefined),
 }));
 
-const { createWorkspaceFromDefMock } = vi.hoisted(() => ({
-  createWorkspaceFromDefMock: vi.fn(async () => "ws-agentic-new"),
-}));
-vi.mock("../../../lib/services/workspace-runtime-service", () => ({
-  createWorkspaceFromDef: createWorkspaceFromDefMock,
-  closeWorkspace: vi.fn(),
-}));
-
 import {
   agenticOrchestratorManifest,
   registerAgenticOrchestratorExtension,
@@ -46,12 +41,31 @@ import {
   getDashboardContribution,
   resetDashboardContributions,
 } from "../../../lib/services/dashboard-contribution-registry";
+import { workspaces, activeWorkspaceIdx } from "../../../lib/stores/workspace";
+
+function seedRoot(id: string): import("../../../lib/types").Workspace {
+  return {
+    id,
+    name: id.toUpperCase(),
+    path: `/tmp/${id}`,
+    color: "blue",
+    branchedWorkspaceIds: [],
+    isGit: true,
+    createdAt: "2026-04-21T00:00:00.000Z",
+    paneLayout: {
+      type: "pane",
+      pane: { id: `${id}-p`, surfaces: [], activeSurfaceId: null },
+    },
+    activePaneId: `${id}-p`,
+  } as unknown as import("../../../lib/types").Workspace;
+}
 
 describe("agentic extension — Dashboard contribution registration", () => {
   beforeEach(async () => {
     await resetExtensions();
     resetDashboardContributions();
-    createWorkspaceFromDefMock.mockClear();
+    workspaces.set([]);
+    activeWorkspaceIdx.set(-1);
   });
 
   it("registers an 'agentic' contribution with capPerWorkspace=1 on activate", async () => {
@@ -80,7 +94,9 @@ describe("agentic extension — Dashboard contribution registration", () => {
     expect(getDashboardContribution("agentic")).toBeUndefined();
   });
 
-  it("create(workspace) materializes a dashboard child workspace with agentic metadata", async () => {
+  it("openAsTab(workspace) stamps a registry surface tagged with the contribution id", async () => {
+    workspaces.set([seedRoot("grp-1")]);
+
     registerExtension(
       agenticOrchestratorManifest,
       registerAgenticOrchestratorExtension,
@@ -90,44 +106,41 @@ describe("agentic extension — Dashboard contribution registration", () => {
     const contribution = getDashboardContribution("agentic");
     expect(contribution).toBeDefined();
 
-    const workspaceId = await contribution!.create({
-      id: "grp-1",
-      name: "Example",
-      path: "/work/proj",
-      color: "blue",
-      isGit: true,
-    });
+    await contribution!.openAsTab(
+      {
+        id: "grp-1",
+        name: "Example",
+        path: "/work/proj",
+        color: "blue",
+        isGit: true,
+      } as unknown as import("../../../lib/stores/workspace").RootWorkspace,
+      { activate: false },
+    );
 
-    expect(workspaceId).toBe("ws-agentic-new");
-    expect(createWorkspaceFromDefMock).toHaveBeenCalledTimes(1);
-    const def = createWorkspaceFromDefMock.mock.calls[0]![0] as {
-      name: string;
-      layout: {
+    const ws = get(workspaces).find((w) => w.id === "grp-1");
+    expect(ws).toBeDefined();
+    const surfaces = (
+      ws!.paneLayout as unknown as {
         pane: {
           surfaces: Array<{
-            type: string;
-            extensionType?: string;
-            extensionProps?: Record<string, unknown>;
+            kind: string;
+            surfaceTypeId?: string;
+            props?: Record<string, unknown>;
+            dashboardContributionId?: string;
           }>;
         };
-      };
-      isDashboard?: boolean;
-      rootWorkspaceId?: string;
-      dashboardContributionId?: string;
-    };
-    expect(def.name).toBe("Agents");
-    // Agentic Dashboard is registered as a hidden surface type
-    // (`dashboard:agentic`); the workspace seeds a single extension
-    // surface targeting that type with rootWorkspaceId in props.
-    expect(def.layout.pane.surfaces[0]?.type).toBe("registry");
-    expect(def.layout.pane.surfaces[0]?.extensionType).toBe(
-      "dashboard:agentic",
+      }
+    ).pane.surfaces;
+    // Idempotent: provisionAutoDashboardsForWorkspace may have already
+    // back-filled the same tab on activation. Either way, exactly one
+    // tab tagged with the contribution should be present.
+    const dashTabs = surfaces.filter(
+      (s) => s.dashboardContributionId === "agentic",
     );
-    expect(def.layout.pane.surfaces[0]?.extensionProps).toEqual({
-      rootWorkspaceId: "grp-1",
-    });
-    expect(def.isDashboard).toBe(true);
-    expect(def.rootWorkspaceId).toBe("grp-1");
-    expect(def.dashboardContributionId).toBe("agentic");
+    expect(dashTabs).toHaveLength(1);
+    const tab = dashTabs[0]!;
+    expect(tab.kind).toBe("registry");
+    expect(tab.surfaceTypeId).toBe("dashboard:agentic");
+    expect(tab.props).toEqual({ rootWorkspaceId: "grp-1" });
   });
 });

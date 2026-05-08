@@ -125,7 +125,7 @@
       aria-hidden="true"
       class="rail-border"
       style="border-color: {$theme.fgDim};"
-    />
+    ></div>
     <div class="archive-banner-body">
       <span
         aria-hidden="true"
@@ -177,7 +177,7 @@
               aria-hidden="true"
               class="rail-border"
               style="border-color: {$theme.fgDim};"
-            />
+            ></div>
             <span class="item-name">{getName(id)}</span>
           </div>
         {/each}

@@ -50,4 +50,17 @@ describe("dashboard chip grid", () => {
     );
     expect(collapsed).toContain("flex-wrap: wrap");
   });
+
+  // The chip <button> inherits `.dash-btn { width: 28px }` from the
+  // shared button rule. Inside the fluid grid the button is positioned
+  // absolute with left/right insets, and the inherited 28px would pin
+  // it and defeat the stretch. The scoped override below is what lets
+  // chips actually fill their wrapper — losing it silently regresses
+  // layout, so lock it in.
+  it("chip button width is overridden to auto inside the grid", () => {
+    const collapsed = SOURCE.replace(/\s+/g, " ");
+    expect(collapsed).toMatch(
+      /\.dashboard-chip-grid \.dash-btn\s*\{[^}]*width:\s*auto/,
+    );
+  });
 });

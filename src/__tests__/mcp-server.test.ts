@@ -1284,13 +1284,13 @@ describe("MCP mirror tools — sidebar sections", () => {
 
 describe("MCP mirror tools — dashboard workspaces", () => {
   beforeEach(async () => {
-    const mod = await import("../lib/services/dashboard-workspace-service");
-    mod.clearDashboardRegistry();
+    const mod = await import("../lib/services/global-surface-service");
+    mod.clearGlobalSurfaceRegistry();
   });
 
   it("list_dashboard_workspaces returns registered entries", async () => {
-    const mod = await import("../lib/services/dashboard-workspace-service");
-    mod.registerDashboardWorkspaceType({
+    const mod = await import("../lib/services/global-surface-service");
+    mod.registerGlobalSurface({
       id: "ext:settings",
       label: "Settings",
       icon: {} as import("svelte").Component,

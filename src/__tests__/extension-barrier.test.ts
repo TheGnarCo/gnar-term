@@ -45,13 +45,13 @@ describe("Extension barrier enforcement", () => {
     const FILE_EXCEPTIONS: Record<string, string[]> = {
       // The Diff Dashboard contribution's `create(workspace)` materializes
       // a dashboard workspace via createWorkspaceFromDef — mirrors the
-      // agentic-orchestrator piercing below. dashboard-workspace-service
+      // agentic-orchestrator piercing below. global-surface-service
       // is the core registry for extension-contributed dashboard
       // components (parallel to api.registerSurfaceType, but components
       // bind to a workspace rather than a surface).
       "diff-viewer/index.ts": [
         "../../lib/services/workspace-runtime-service",
-        "../../lib/services/dashboard-workspace-service",
+        "../../lib/services/global-surface-service",
       ],
       // DiffDashboardBody is the diff dashboard's component body — it
       // reads DashboardHostContext to discover the root workspace and
@@ -85,10 +85,10 @@ describe("Extension barrier enforcement", () => {
         // directly. No public ExtensionAPI surface exposes the registry.
         "../../lib/services/dashboard-section-registry",
         // The Agentic Dashboard component is registered as a hidden
-        // surface type via registerDashboardWorkspaceType so PaneView's
+        // surface type via registerGlobalSurface so PaneView's
         // normal extension-surface render path mounts it. Same piercing
         // as diff-viewer/index.ts.
-        "../../lib/services/dashboard-workspace-service",
+        "../../lib/services/global-surface-service",
       ],
       // Issues + TaskSpawner widgets call the shared spawn-helper
       // (core service that composes worktree-service + agent command
@@ -156,11 +156,9 @@ describe("Extension barrier enforcement", () => {
         "../../lib/stores/workspace",
       ],
       // claude-settings/index.ts registers the dashboard component as a
-      // hidden surface type via registerDashboardWorkspaceType so PaneView's
+      // hidden surface type via registerGlobalSurface so PaneView's
       // normal extension-surface render path mounts it.
-      "claude-settings/index.ts": [
-        "../../lib/services/dashboard-workspace-service",
-      ],
+      "claude-settings/index.ts": ["../../lib/services/global-surface-service"],
       // ClaudeSettingsWidget reads dashboard scope via DashboardHostContext
       // and workspace.path via workspaces — same piercing as Kanban.
       "claude-settings/components/ClaudeSettingsWidget.svelte": [

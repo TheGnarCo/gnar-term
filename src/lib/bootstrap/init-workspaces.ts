@@ -22,9 +22,9 @@ import {
   OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
 } from "../services/dashboard-contribution-registry";
 import {
-  registerDashboardWorkspaceType,
-  dashboardSurfaceTypeId,
-} from "../services/dashboard-workspace-service";
+  registerGlobalSurface,
+  globalSurfaceTypeId,
+} from "../services/global-surface-service";
 import { eventBus, type AppEvent } from "../services/event-bus";
 import { appendRootRow } from "../stores/root-row-order";
 import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
@@ -325,9 +325,7 @@ export async function initWorkspaces(): Promise<void> {
     openAsTab: async (workspace: Workspace) => {
       await openDashboardSurfaceTab(workspace.id, {
         kind: "registry",
-        surfaceTypeId: dashboardSurfaceTypeId(
-          OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
-        ),
+        surfaceTypeId: globalSurfaceTypeId(OVERVIEW_DASHBOARD_CONTRIBUTION_ID),
         title: "Dashboard",
         props: { rootWorkspaceId: workspace.id },
         matchProps: { rootWorkspaceId: workspace.id },
@@ -335,7 +333,7 @@ export async function initWorkspaces(): Promise<void> {
     },
   });
 
-  registerDashboardWorkspaceType({
+  registerGlobalSurface({
     id: OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
     label: "Workspace Dashboard",
     icon: GridIcon,

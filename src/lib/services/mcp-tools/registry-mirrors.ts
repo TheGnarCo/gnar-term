@@ -9,7 +9,7 @@ import {
   getContextMenuItemsForFile,
 } from "../context-menu-item-registry";
 import { sidebarSectionStore } from "../sidebar-section-registry";
-import { dashboardWorkspaceRegistry } from "../dashboard-workspace-service";
+import { globalSurfaceRegistry } from "../global-surface-service";
 import { workspaceSubtitleStore } from "../workspace-subtitle-registry";
 import { dashboardTabStore } from "../dashboard-tab-registry";
 import {
@@ -220,14 +220,14 @@ export const registryMirrorTools: ToolDef[] = [
     },
   },
 
-  // ---- Dashboard Workspaces (mirror of dashboardWorkspaceRegistry) ----
+  // ---- Dashboard Workspaces (mirror of globalSurfaceRegistry) ----
   {
     name: "list_dashboard_workspaces",
     description:
       "List singleton Dashboard Workspaces registered by core and extensions. Returns `{ id, label, source }` for each. Use spawn_or_navigate (or the owning extension's TitleBar button / command) to open one.",
     inputSchema: { type: "object", properties: {} },
     handler: () => {
-      const entries = Array.from(get(dashboardWorkspaceRegistry).values()).map(
+      const entries = Array.from(get(globalSurfaceRegistry).values()).map(
         (e) => ({ id: e.id, label: e.label, source: e.source }),
       );
       return { dashboardWorkspaces: entries };

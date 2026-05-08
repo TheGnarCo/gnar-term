@@ -35,7 +35,7 @@ import {
   getDashboardContributions,
   OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
 } from "./dashboard-contribution-registry";
-import { dashboardSurfaceTypeId } from "./dashboard-workspace-service";
+import { globalSurfaceTypeId } from "./global-surface-service";
 import { releaseWorkspaceDirtyStore } from "./workspace-git-dirty-store";
 
 export const WORKSPACE_STATE_CHANGED = "extension:workspace:state-changed";
@@ -219,9 +219,7 @@ export async function createWorkspaceDashboard(
     [
       {
         type: "registry",
-        extensionType: dashboardSurfaceTypeId(
-          OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
-        ),
+        extensionType: globalSurfaceTypeId(OVERVIEW_DASHBOARD_CONTRIBUTION_ID),
         extensionProps: { rootWorkspaceId: workspace.id },
         name: "Dashboard",
         focus: true,

@@ -10,10 +10,10 @@ import DiffSurface from "./DiffSurface.svelte";
 import DiffDashboardBody from "./DiffDashboardBody.svelte";
 import DiffIcon from "./DiffIcon.svelte";
 import {
-  registerDashboardWorkspaceType,
-  unregisterDashboardWorkspaceType,
-  dashboardSurfaceTypeId,
-} from "../../lib/services/dashboard-workspace-service";
+  registerGlobalSurface,
+  unregisterGlobalSurface,
+  globalSurfaceTypeId,
+} from "../../lib/services/global-surface-service";
 
 export const diffViewerManifest: ExtensionManifest = {
   id: "diff-viewer",
@@ -104,7 +104,7 @@ export function registerDiffViewerExtension(api: ExtensionAPI): void {
     // dashboard workspace holds a single dashboard surface seeded with
     // the parent workspace id so DiffDashboardBody can resolve the repo
     // path. TabBar + split affordances work like any other workspace.
-    registerDashboardWorkspaceType({
+    registerGlobalSurface({
       id: "diff",
       label: "Diff",
       icon: DiffIcon as unknown as Component,
@@ -122,7 +122,7 @@ export function registerDiffViewerExtension(api: ExtensionAPI): void {
       openAsTab: async (workspace) => {
         await api.openDashboardTab(workspace.id, {
           kind: "registry",
-          surfaceTypeId: dashboardSurfaceTypeId("diff"),
+          surfaceTypeId: globalSurfaceTypeId("diff"),
           title: "Diff",
           props: { rootWorkspaceId: workspace.id },
           matchProps: { rootWorkspaceId: workspace.id },
@@ -132,7 +132,7 @@ export function registerDiffViewerExtension(api: ExtensionAPI): void {
   });
 
   api.onDeactivate(() => {
-    unregisterDashboardWorkspaceType("diff");
+    unregisterGlobalSurface("diff");
   });
 }
 
@@ -147,7 +147,7 @@ async function createDiffDashboardWorkspace(
         surfaces: [
           {
             type: "registry",
-            extensionType: dashboardSurfaceTypeId("diff"),
+            extensionType: globalSurfaceTypeId("diff"),
             extensionProps: { rootWorkspaceId: workspace.id },
             name: "Diff",
             focus: true,

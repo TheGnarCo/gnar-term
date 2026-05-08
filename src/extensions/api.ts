@@ -409,12 +409,16 @@ export interface ExtensionAPI {
     options?: { hideFromNewSurface?: boolean },
   ): void;
   /**
-   * Register a singleton Dashboard Workspace. Returns a `spawnOrNavigate`
+   * Register a singleton global surface. Returns a `spawnOrNavigate`
    * function — call it (e.g. from a TitleBar button onClick) to open the
-   * workspace or switch to it if already open. The workspace is draggable,
-   * closeable, and persists across restarts.
+   * surface or switch to it if already open. The host workspace is draggable,
+   * closeable, and persists across restarts. Global surfaces render
+   * tab-less (PaneView suppresses the TabBar for top-level dashboard
+   * workspaces); use this for app-wide overlays like Settings, Keyboard
+   * Shortcuts, and user-level Claude Settings rather than per-workspace
+   * dashboards (those go through `registerDashboardContribution`).
    */
-  registerDashboardWorkspace(
+  registerGlobalSurface(
     id: string,
     options: {
       label: string;

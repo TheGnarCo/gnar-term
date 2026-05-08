@@ -150,9 +150,9 @@
   import WorkspaceCreateOverlay from "./lib/components/WorkspaceCreateOverlay.svelte";
   import { surfaceTypeStore } from "./lib/services/surface-type-registry";
   import {
-    registerDashboardWorkspaceType,
+    registerGlobalSurface,
     spawnOrNavigate,
-  } from "./lib/services/dashboard-workspace-service";
+  } from "./lib/services/global-surface-service";
   import SettingsPanel from "./lib/components/SettingsPanel.svelte";
   import GearIcon from "./lib/icons/GearIcon.svelte";
   import WorkspaceOverviewDashboard from "./lib/components/WorkspaceOverviewDashboard.svelte";
@@ -687,9 +687,9 @@
     // Dashboard contribution are available before extensions activate.
     await initWorkspaces();
 
-    // Register the core settings Dashboard Workspace before extensions so the
+    // Register the core settings global surface before extensions so the
     // gear button is wired before any extension activates.
-    registerDashboardWorkspaceType({
+    registerGlobalSurface({
       id: "gnar-term:settings",
       label: "Settings",
       icon: GearIcon as unknown as Component,
@@ -697,16 +697,16 @@
       accentColor: "#8998A8",
     });
 
-    // Register the global Workspaces overview dashboard.
-    registerDashboardWorkspaceType({
+    // Register the Workspaces overview global surface.
+    registerGlobalSurface({
       id: "gnar-term:workspace-overview",
       label: "Workspaces",
       icon: GridIcon as unknown as Component,
       component: WorkspaceOverviewDashboard as unknown as Component,
     });
 
-    // Register the keyboard-shortcuts reference dashboard (⌘/).
-    registerDashboardWorkspaceType({
+    // Register the keyboard-shortcuts reference global surface (⌘/).
+    registerGlobalSurface({
       id: "gnar-term:keyboard-shortcuts",
       label: "Keyboard Shortcuts",
       icon: KeyboardIcon as unknown as Component,

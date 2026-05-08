@@ -32,7 +32,7 @@
   import { contrastColor } from "../utils/contrast";
   import { contextMenu } from "../stores/ui";
   import { confirmAndCloseWorkspace } from "../services/worktree-service";
-  import { dashboardWorkspaceRegistry } from "../services/dashboard-workspace-service";
+  import { globalSurfaceRegistry } from "../services/global-surface-service";
   import { buildWorkspaceContextMenuItems } from "../utils/workspace-context-menu";
 
   /** Set of workspace IDs to display. If undefined, shows all. */
@@ -179,7 +179,7 @@
     if (sourceWs?.isDashboard !== true) return railColor;
     const id = sourceWs.dashboardContributionId;
     if (typeof id === "string") {
-      return $dashboardWorkspaceRegistry.get(id)?.accentColor ?? railColor;
+      return $globalSurfaceRegistry.get(id)?.accentColor ?? railColor;
     }
     return railColor;
   })();

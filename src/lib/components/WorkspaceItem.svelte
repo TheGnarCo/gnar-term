@@ -3,7 +3,7 @@
   import { theme } from "../stores/theme";
   import { anyReorderActive } from "../stores/ui";
   import { getWorkspaceStatusByCategory } from "../services/status-registry";
-  import { dashboardWorkspaceRegistry } from "../services/dashboard-workspace-service";
+  import { globalSurfaceRegistry } from "../services/global-surface-service";
   import { aggregateAgentBadges } from "../status-colors";
   import { workspaceSubtitleStore } from "../services/workspace-subtitle-registry";
   import { getExtensionApiById } from "../services/extension-loader";
@@ -72,7 +72,7 @@
     if (workspace.isDashboard !== true) return null;
     const id = workspace.dashboardContributionId;
     if (typeof id !== "string") return null;
-    return $dashboardWorkspaceRegistry.get(id) ?? null;
+    return $globalSurfaceRegistry.get(id) ?? null;
   })();
   $: dashboardWorkspaceIcon = dashboardWorkspaceEntry?.icon ?? null;
   // Workspaces spawned by a dashboard (Global Agentic or per-workspace)

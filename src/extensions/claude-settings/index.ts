@@ -4,10 +4,10 @@ import ClaudeMark from "./icons/ClaudeMark.svelte";
 import UserSettingsPanel from "./components/UserSettingsPanel.svelte";
 import ClaudeSettingsBody from "./components/ClaudeSettingsBody.svelte";
 import {
-  registerDashboardWorkspaceType,
-  unregisterDashboardWorkspaceType,
-  dashboardSurfaceTypeId,
-} from "../../lib/services/dashboard-workspace-service";
+  registerGlobalSurface,
+  unregisterGlobalSurface,
+  globalSurfaceTypeId,
+} from "../../lib/services/global-surface-service";
 
 // --- Manifest ---
 
@@ -27,7 +27,7 @@ export const claudeSettingsManifest: ExtensionManifest = {
 
 export function registerClaudeSettingsExtension(api: ExtensionAPI): void {
   api.onActivate(() => {
-    const openUserSettings = api.registerDashboardWorkspace("user-settings", {
+    const openUserSettings = api.registerGlobalSurface("user-settings", {
       label: "Claude Settings",
       icon: ClaudeMark,
       component: UserSettingsPanel,
@@ -40,7 +40,7 @@ export function registerClaudeSettingsExtension(api: ExtensionAPI): void {
       onClick: openUserSettings,
     });
 
-    registerDashboardWorkspaceType({
+    registerGlobalSurface({
       id: "claude-settings",
       label: "Claude Settings",
       icon: ClaudeMark as unknown as Component,
@@ -58,7 +58,7 @@ export function registerClaudeSettingsExtension(api: ExtensionAPI): void {
       openAsTab: async (workspace) => {
         await api.openDashboardTab(workspace.id, {
           kind: "registry",
-          surfaceTypeId: dashboardSurfaceTypeId("claude-settings"),
+          surfaceTypeId: globalSurfaceTypeId("claude-settings"),
           title: "Claude Settings",
           props: { rootWorkspaceId: workspace.id },
           matchProps: { rootWorkspaceId: workspace.id },
@@ -68,7 +68,7 @@ export function registerClaudeSettingsExtension(api: ExtensionAPI): void {
   });
 
   api.onDeactivate(() => {
-    unregisterDashboardWorkspaceType("claude-settings");
+    unregisterGlobalSurface("claude-settings");
   });
 }
 
@@ -85,7 +85,7 @@ async function createClaudeSettingsDashboard(
         surfaces: [
           {
             type: "registry",
-            extensionType: dashboardSurfaceTypeId("claude-settings"),
+            extensionType: globalSurfaceTypeId("claude-settings"),
             extensionProps: { rootWorkspaceId: workspace.id },
             name: "Claude Settings",
             focus: true,

@@ -132,7 +132,7 @@ export async function createWorkspaceFromDef(
         }
       }
       // Dashboard workspaces hold a single dashboard surface (registered
-      // by the contributing extension via registerDashboardWorkspaceType).
+      // by the contributing extension via registerGlobalSurface).
       // The "settings" dashboard is the one exception — it carries no
       // surfaces and PaneView renders WorkspaceDashboardSettings directly.
       // Skip the auto-terminal fallback for any dashboard workspace.

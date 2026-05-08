@@ -70,9 +70,14 @@
   // Dashboard workspaces render via the standard surface pipeline — the
   // dashboard component is registered as a hidden surface type and the
   // workspace is spawned with a single dashboard surface as its initial
-  // content. TabBar + split affordances work as for any other workspace.
-  // Settings dashboards seed a `core:workspace-settings` surface, so they
-  // flow through the same path with no special-case branch.
+  // content. Per-workspace dashboards (those with `rootWorkspaceId`) keep
+  // their TabBar so users get split / new-surface affordances; top-level
+  // global surfaces (gear-button targets like Settings, Claude Settings,
+  // Keyboard Shortcuts, the Workspace Dashboard) suppress the TabBar
+  // because they're single-purpose surfaces with no add-tab story.
+  $: workspace = $workspaces.find((w) => w.id === workspaceId);
+  $: isGlobalSurface =
+    workspace?.isDashboard === true && workspace.rootWorkspaceId == null;
 
   $: surfaceSplitZone =
     $tabDragState?.dropTarget?.kind === "surface-split" &&
@@ -176,20 +181,22 @@
   "
   on:mousedown={handleFocus}
 >
-  <TabBar
-    {pane}
-    {workspaceId}
-    paneIsActive={isActive}
-    {onSelectSurface}
-    {onCloseSurface}
-    {onNewSurface}
-    {onSelectSurfaceType}
-    {onSplitRight}
-    {onSplitDown}
-    {showJumpToBottom}
-    onJumpToBottom={handleJumpToBottom}
-    onRefreshPreview={handleRefreshPreview}
-  />
+  {#if !isGlobalSurface}
+    <TabBar
+      {pane}
+      {workspaceId}
+      paneIsActive={isActive}
+      {onSelectSurface}
+      {onCloseSurface}
+      {onNewSurface}
+      {onSelectSurfaceType}
+      {onSplitRight}
+      {onSplitDown}
+      {showJumpToBottom}
+      onJumpToBottom={handleJumpToBottom}
+      onRefreshPreview={handleRefreshPreview}
+    />
+  {/if}
 
   {#each pane.surfaces.filter((s) => s.id === pane.activeSurfaceId && isTerminalSurface(s)) as activeTerm (activeTerm.id)}
     {#if isTerminalSurface(activeTerm)}

@@ -20,12 +20,12 @@ vi.mock("../lib/stores/workspace", () => ({
 vi.mock("../lib/services/service-helpers", () => ({}));
 
 import {
-  registerDashboardWorkspaceType,
-  unregisterDashboardWorkspaceType,
+  registerGlobalSurface,
+  unregisterGlobalSurface,
   spawnOrNavigate,
-  dashboardWorkspaceRegistry,
-  clearDashboardRegistry,
-} from "../lib/services/dashboard-workspace-service";
+  globalSurfaceRegistry,
+  clearGlobalSurfaceRegistry,
+} from "../lib/services/global-surface-service";
 import {
   createWorkspaceFromDef,
   switchWorkspace,
@@ -39,47 +39,47 @@ function makeEntry(id = "ext:foo") {
   return { id, label: "Foo", icon: MockIcon, component: MockComponent };
 }
 
-describe("registerDashboardWorkspaceType", () => {
-  beforeEach(() => clearDashboardRegistry());
+describe("registerGlobalSurface", () => {
+  beforeEach(() => clearGlobalSurfaceRegistry());
 
   it("adds entry to registry store", () => {
-    registerDashboardWorkspaceType(makeEntry("ext:foo"));
-    expect(get(dashboardWorkspaceRegistry).get("ext:foo")).toBeDefined();
+    registerGlobalSurface(makeEntry("ext:foo"));
+    expect(get(globalSurfaceRegistry).get("ext:foo")).toBeDefined();
   });
 
   it("overwrites duplicate id", () => {
-    registerDashboardWorkspaceType(makeEntry("ext:foo"));
-    registerDashboardWorkspaceType({ ...makeEntry("ext:foo"), label: "Bar" });
-    expect(get(dashboardWorkspaceRegistry).get("ext:foo")!.label).toBe("Bar");
+    registerGlobalSurface(makeEntry("ext:foo"));
+    registerGlobalSurface({ ...makeEntry("ext:foo"), label: "Bar" });
+    expect(get(globalSurfaceRegistry).get("ext:foo")!.label).toBe("Bar");
   });
 });
 
-describe("unregisterDashboardWorkspaceType", () => {
-  beforeEach(() => clearDashboardRegistry());
+describe("unregisterGlobalSurface", () => {
+  beforeEach(() => clearGlobalSurfaceRegistry());
 
   it("removes entry from registry", () => {
-    registerDashboardWorkspaceType(makeEntry("ext:foo"));
-    unregisterDashboardWorkspaceType("ext:foo");
-    expect(get(dashboardWorkspaceRegistry).get("ext:foo")).toBeUndefined();
+    registerGlobalSurface(makeEntry("ext:foo"));
+    unregisterGlobalSurface("ext:foo");
+    expect(get(globalSurfaceRegistry).get("ext:foo")).toBeUndefined();
   });
 });
 
-describe("getDashboardEntry (via dashboardWorkspaceRegistry)", () => {
-  beforeEach(() => clearDashboardRegistry());
+describe("getGlobalSurfaceEntry (via globalSurfaceRegistry)", () => {
+  beforeEach(() => clearGlobalSurfaceRegistry());
 
   it("returns undefined for unknown id", () => {
-    expect(get(dashboardWorkspaceRegistry).get("ext:unknown")).toBeUndefined();
+    expect(get(globalSurfaceRegistry).get("ext:unknown")).toBeUndefined();
   });
 
   it("returns entry after registration", () => {
-    registerDashboardWorkspaceType(makeEntry("ext:foo"));
-    expect(get(dashboardWorkspaceRegistry).get("ext:foo")?.label).toBe("Foo");
+    registerGlobalSurface(makeEntry("ext:foo"));
+    expect(get(globalSurfaceRegistry).get("ext:foo")?.label).toBe("Foo");
   });
 });
 
 describe("spawnOrNavigate", () => {
   beforeEach(() => {
-    clearDashboardRegistry();
+    clearGlobalSurfaceRegistry();
     vi.clearAllMocks();
   });
 
@@ -94,11 +94,12 @@ describe("spawnOrNavigate", () => {
       cb([]);
       return () => {};
     });
-    registerDashboardWorkspaceType(makeEntry("ext:foo"));
+    registerGlobalSurface(makeEntry("ext:foo"));
     await spawnOrNavigate("ext:foo");
-    // The created workspace seeds a single hidden dashboard surface
-    // (`dashboard:ext:foo`) so PaneView's standard registry-surface
-    // render path mounts the dashboard component.
+    // The created workspace seeds a single hidden global surface
+    // (`dashboard:ext:foo` — prefix preserved for persisted-data
+    // compatibility) so PaneView's standard registry-surface render
+    // path mounts the surface component.
     expect(createWorkspaceFromDef).toHaveBeenCalledWith(
       expect.objectContaining({
         name: "Foo",
@@ -132,7 +133,7 @@ describe("spawnOrNavigate", () => {
       ]);
       return () => {};
     });
-    registerDashboardWorkspaceType(makeEntry("ext:foo"));
+    registerGlobalSurface(makeEntry("ext:foo"));
     await spawnOrNavigate("ext:foo");
     expect(switchWorkspace).toHaveBeenCalledWith(0);
     expect(createWorkspaceFromDef).not.toHaveBeenCalled();

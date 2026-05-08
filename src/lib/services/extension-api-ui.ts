@@ -27,9 +27,9 @@ import { registerChildRowContributor } from "./child-row-contributor-registry";
 import { registerDashboardContribution as registryRegisterDashboardContribution } from "./dashboard-contribution-registry";
 import { registerPseudoWorkspace as registryRegisterPseudoWorkspace } from "./pseudo-workspace-registry";
 import {
-  registerDashboardWorkspaceType,
+  registerGlobalSurface,
   spawnOrNavigate,
-} from "./dashboard-workspace-service";
+} from "./global-surface-service";
 import { provisionAutoDashboardsForWorkspace } from "./workspace-service";
 import { waitRestored } from "../bootstrap/restore-workspaces";
 import { getWorkspaces } from "../stores/workspace";
@@ -53,7 +53,7 @@ export function createUIRegistrationAPI(
   | "appendRootRow"
   | "removeRootRow"
   | "registerSurfaceType"
-  | "registerDashboardWorkspace"
+  | "registerGlobalSurface"
   | "registerTheme"
   | "registerCommand"
   | "runCommand"
@@ -133,7 +133,7 @@ export function createUIRegistrationAPI(
       });
     },
 
-    registerDashboardWorkspace(
+    registerGlobalSurface(
       id: string,
       options: {
         label: string;
@@ -143,7 +143,7 @@ export function createUIRegistrationAPI(
       },
     ): () => void {
       const stableId = `${extId}:${id}`;
-      registerDashboardWorkspaceType({
+      registerGlobalSurface({
         id: stableId,
         label: options.label,
         icon: options.icon as import("svelte").Component,

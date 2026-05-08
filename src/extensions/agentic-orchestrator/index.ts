@@ -25,10 +25,10 @@ import {
   unregisterDashboardSection,
 } from "../../lib/services/dashboard-section-registry";
 import {
-  registerDashboardWorkspaceType,
-  unregisterDashboardWorkspaceType,
-  dashboardSurfaceTypeId,
-} from "../../lib/services/dashboard-workspace-service";
+  registerGlobalSurface,
+  unregisterGlobalSurface,
+  globalSurfaceTypeId,
+} from "../../lib/services/global-surface-service";
 import BotIcon from "./icons/BotIcon.svelte";
 import GlobalAgenticDashboardBody from "./components/GlobalAgenticDashboardBody.svelte";
 import AgenticDashboardBody from "./components/AgenticDashboardBody.svelte";
@@ -65,7 +65,7 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
       openAsTab: async (workspace) => {
         await api.openDashboardTab(workspace.id, {
           kind: "registry",
-          surfaceTypeId: dashboardSurfaceTypeId("agentic"),
+          surfaceTypeId: globalSurfaceTypeId("agentic"),
           title: "Agents",
           props: { rootWorkspaceId: workspace.id },
           matchProps: { rootWorkspaceId: workspace.id },
@@ -73,7 +73,7 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
       },
     });
 
-    registerDashboardWorkspaceType({
+    registerGlobalSurface({
       id: "agentic",
       label: "Agentic Dashboard",
       icon: BotIcon,
@@ -82,7 +82,7 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
     });
 
     api.onDeactivate(() => {
-      unregisterDashboardWorkspaceType("agentic");
+      unregisterGlobalSurface("agentic");
     });
 
     const CLOSED_KEY = "globalDashboardClosed";
@@ -173,7 +173,7 @@ async function createAgenticDashboardWorkspace(
         surfaces: [
           {
             type: "registry",
-            extensionType: dashboardSurfaceTypeId("agentic"),
+            extensionType: globalSurfaceTypeId("agentic"),
             extensionProps: { rootWorkspaceId: workspace.id },
             name: "Agents",
             focus: true,

@@ -96,7 +96,7 @@
     workspaceOnlyIdx?: number;
     /**
      * Set when the row represents a standalone Dashboard Workspace
-     * (created via `spawnOrNavigate` from a `registerDashboardWorkspace`
+     * (created via `spawnOrNavigate` from a `registerGlobalSurface`
      * button — Settings, Claude Settings, etc.). These have
      * `isDashboard: true`, `dashboardContributionId`, and no
      * `rootWorkspaceId`. The registered "workspace" renderer (built for
@@ -129,7 +129,7 @@
           // Standalone Dashboard Workspaces (no rootWorkspaceId,
           // isDashboard) bypass the registered "workspace" renderer and
           // render via WorkspaceItem so the dashboard's icon, accent
-          // color, and label come from `dashboardWorkspaceRegistry`.
+          // color, and label come from `globalSurfaceRegistry`.
           // Dashboard chips are NOT addressable via ⌘N — only core
           // workspace banners participate in the numbered shortcut, so
           // the dashboard row gets no `workspaceOnlyIdx` and the count

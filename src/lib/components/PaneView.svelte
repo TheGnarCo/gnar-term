@@ -79,8 +79,10 @@
   // content. Per-workspace dashboards (those with `rootWorkspaceId`) keep
   // their TabBar so users get split / new-surface affordances; top-level
   // global surfaces (gear-button targets like Settings, Claude Settings,
-  // Keyboard Shortcuts, the Workspace Dashboard) suppress the TabBar
-  // because they're single-purpose surfaces with no add-tab story.
+  // Keyboard Shortcuts, Spacebase) suppress the TabBar because they have
+  // no add-tab story. Some global surfaces (e.g. Spacebase) host an
+  // internal split layout for previews — see `closeGlobalSurface` below
+  // for how multi-pane close behaves.
   $: workspace = $workspaces.find((w) => w.id === workspaceId);
   $: isGlobalSurface =
     workspace?.isDashboard === true && workspace.rootWorkspaceId == null;

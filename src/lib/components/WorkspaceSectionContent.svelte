@@ -301,10 +301,10 @@
   let hoveredTileActionId: string | null = null;
   let caretHovered = false;
 
-  // Workspace's dashboards rendered as chips in the btn-row. Auto-
-  // provisioned contributions (currently just Settings) are excluded
-  // because they have dedicated UI — the banner-end gear chip opens
-  // Settings as a tab inside the workspace via openWorkspaceSettingsTab.
+  // Workspace's dashboards rendered as chips in the children-leading
+  // slot. Auto-provisioned contributions (currently just Settings) are
+  // excluded because they have dedicated UI — the banner-end gear chip
+  // opens Settings as a tab inside the workspace via openWorkspaceSettingsTab.
   $: workspaceDashboards = (() => {
     const wId = workspace?.id;
     if (!wId) return [] as Array<{ ws: Workspace; idx: number }>;

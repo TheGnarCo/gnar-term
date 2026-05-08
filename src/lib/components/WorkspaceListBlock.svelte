@@ -37,6 +37,7 @@
     type PseudoWorkspace,
   } from "../services/pseudo-workspace-registry";
   import { createDragReorder } from "../actions/drag-reorder";
+  import { portal } from "../actions/portal";
   import PseudoWorkspaceRow from "./PseudoWorkspaceRow.svelte";
   import DropGhost from "./DropGhost.svelte";
   import ExtensionWrapper from "./ExtensionWrapper.svelte";
@@ -535,8 +536,16 @@
          expanded mode (and matches the wrapper's collapsed rail
          placement). Width subtracts the gutter so the right edge stays
          flush at viewport x = sidebarWidth. -->
+    <!-- Portaled to <body> so the popover sits outside the Sidebar's
+         `overflow: hidden` + `z-index: 2` stacking/clipping context.
+         Without the portal, real-world WKWebView (Tauri on macOS) confined
+         pointer events to the sidebar's 12px visual rect even though
+         `position: fixed` is supposed to escape ancestor overflow. The
+         popover painted at the row's y but clicks/hovers fell through to
+         the underlying terminal canvas. -->
     <div
       bind:this={popoverEl}
+      use:portal
       class="root-row-popover"
       data-root-row-popover={popoverEntry.key}
       style="

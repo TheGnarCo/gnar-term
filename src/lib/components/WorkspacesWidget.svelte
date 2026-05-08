@@ -41,6 +41,17 @@
     if (idx >= 0) switchWorkspace(idx);
   }
 
+  function openDashboard(ws: import("../types").Workspace): void {
+    const contribution = ws.dashboardContributionId
+      ? getDashboardContribution(ws.dashboardContributionId)
+      : undefined;
+    if (contribution?.openAsTab && rootWorkspace) {
+      void contribution.openAsTab(rootWorkspace);
+    } else {
+      navigate(ws.id);
+    }
+  }
+
   function getContribInfo(ws: import("../types").Workspace): {
     icon: unknown;
     label: string;
@@ -75,7 +86,7 @@
             data-dashboard-card
             data-workspace-id={ws.id}
             title={ws.name}
-            on:click={() => navigate(ws.id)}
+            on:click={() => openDashboard(ws)}
             style="
               background: {$theme.bgSurface ?? 'transparent'};
               color: {$theme.fg};

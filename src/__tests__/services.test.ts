@@ -42,7 +42,7 @@ import type {
   Workspace,
   Pane,
   TerminalSurface,
-  ExtensionSurface,
+  RegistrySurface,
   SplitNode,
 } from "../lib/types";
 import { uid } from "../lib/types";
@@ -73,7 +73,7 @@ import {
   prevSurface,
   selectSurfaceByNumber,
   closeActiveSurface,
-  openExtensionSurfaceInPane,
+  openRegistrySurfaceInPane,
 } from "../lib/services/surface-service";
 
 import { saveState } from "../lib/config";
@@ -102,14 +102,14 @@ function mockTerminalSurface(
   };
 }
 
-function mockExtensionSurface(
-  overrides: Partial<ExtensionSurface> = {},
-): ExtensionSurface {
+function mockRegistrySurface(
+  overrides: Partial<RegistrySurface> = {},
+): RegistrySurface {
   return {
-    kind: "extension",
+    kind: "registry",
     id: uid(),
     surfaceTypeId: "test:panel",
-    title: "Test Extension",
+    title: "Test Registry",
     hasUnread: false,
     props: {},
     ...overrides,
@@ -447,8 +447,8 @@ describe("workspace-service", () => {
       });
     });
 
-    it("serializes an extension surface", () => {
-      const ext = mockExtensionSurface({
+    it("serializes a registry surface", () => {
+      const ext = mockRegistrySurface({
         title: "Preview",
         surfaceTypeId: "preview:preview",
         props: { filePath: "/tmp/readme.md" },
@@ -466,7 +466,7 @@ describe("workspace-service", () => {
         pane: {
           surfaces: [
             {
-              type: "extension",
+              type: "registry",
               name: "Preview",
               focus: true,
               extensionType: "preview:preview",
@@ -477,8 +477,8 @@ describe("workspace-service", () => {
       });
     });
 
-    it("strips non-serializable props (element, watchId) from extension surfaces", () => {
-      const ext = mockExtensionSurface({
+    it("strips non-serializable props (element, watchId) from registry surfaces", () => {
+      const ext = mockRegistrySurface({
         props: {
           filePath: "/tmp/a.md",
           element: document.createElement("div"),
@@ -1335,8 +1335,8 @@ describe("surface-service", () => {
     });
   });
 
-  describe("openExtensionSurfaceInPane", () => {
-    it("adds an extension surface to the active pane", () => {
+  describe("openRegistrySurfaceInPane", () => {
+    it("adds a registry surface to the active pane", () => {
       const s = mockTerminalSurface();
       const pane = makePane([s]);
       const ws = makeChildWorkspace({
@@ -1346,21 +1346,21 @@ describe("surface-service", () => {
       workspaces.set([ws]);
       activeWorkspaceIdx.set(0);
 
-      openExtensionSurfaceInPane("preview:preview", "README", {
+      openRegistrySurfaceInPane("preview:preview", "README", {
         filePath: "/tmp/readme.md",
       });
 
       expect(pane.surfaces).toHaveLength(2);
       const ext = pane.surfaces[1];
-      expect(ext.kind).toBe("extension");
-      expect((ext as ExtensionSurface).surfaceTypeId).toBe("preview:preview");
-      expect((ext as ExtensionSurface).title).toBe("README");
-      expect((ext as ExtensionSurface).props).toEqual({
+      expect(ext.kind).toBe("registry");
+      expect((ext as RegistrySurface).surfaceTypeId).toBe("preview:preview");
+      expect((ext as RegistrySurface).title).toBe("README");
+      expect((ext as RegistrySurface).props).toEqual({
         filePath: "/tmp/readme.md",
       });
     });
 
-    it("sets the new extension surface as active", () => {
+    it("sets the new registry surface as active", () => {
       const s = mockTerminalSurface();
       const pane = makePane([s]);
       const ws = makeChildWorkspace({
@@ -1370,7 +1370,7 @@ describe("surface-service", () => {
       workspaces.set([ws]);
       activeWorkspaceIdx.set(0);
 
-      openExtensionSurfaceInPane("test:panel", "Test Panel");
+      openRegistrySurfaceInPane("test:panel", "Test Panel");
 
       expect(pane.activeSurfaceId).toBe(pane.surfaces[1].id);
     });
@@ -1385,9 +1385,9 @@ describe("surface-service", () => {
       workspaces.set([ws]);
       activeWorkspaceIdx.set(0);
 
-      openExtensionSurfaceInPane("test:panel", "Test Panel");
+      openRegistrySurfaceInPane("test:panel", "Test Panel");
 
-      expect((pane.surfaces[1] as ExtensionSurface).props).toEqual({});
+      expect((pane.surfaces[1] as RegistrySurface).props).toEqual({});
     });
   });
 });

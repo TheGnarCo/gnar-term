@@ -45,8 +45,22 @@ describe("Extension barrier enforcement", () => {
     const FILE_EXCEPTIONS: Record<string, string[]> = {
       // The Diff Dashboard contribution's `create(workspace)` materializes
       // a dashboard workspace via createWorkspaceFromDef — mirrors the
-      // agentic-orchestrator piercing below.
-      "diff-viewer/index.ts": ["../../lib/services/workspace-runtime-service"],
+      // agentic-orchestrator piercing below. global-surface-service
+      // is the core registry for extension-contributed dashboard
+      // components (parallel to api.registerSurfaceType, but components
+      // bind to a workspace rather than a surface).
+      "diff-viewer/index.ts": [
+        "../../lib/services/workspace-runtime-service",
+        "../../lib/services/global-surface-service",
+      ],
+      // DiffDashboardBody is the diff dashboard's component body — it
+      // reads DashboardHostContext to discover the root workspace and
+      // looks up the workspace by id from the workspaces store. Same
+      // piercing shape as Kanban / ClaudeSettingsWidget.
+      "diff-viewer/DiffDashboardBody.svelte": [
+        "../../lib/contexts/dashboard-host",
+        "../../lib/stores/workspace",
+      ],
       // The Agentic Dashboard contribution's `create(workspace)` must
       // materialize a dashboard workspace; reaching for
       // createWorkspaceFromDef keeps the contribution on the same code
@@ -66,6 +80,15 @@ describe("Extension barrier enforcement", () => {
         // waitRestored() resolves immediately on runtime-enable, defers
         // during startup — no ExtensionAPI hook exposes this signal.
         "../../lib/bootstrap/restore-workspaces",
+        // Issues + PRs are also published as dashboard sections so core
+        // dashboard bodies (Workspace Overview) can compose them
+        // directly. No public ExtensionAPI surface exposes the registry.
+        "../../lib/services/dashboard-section-registry",
+        // The Agentic Dashboard component is registered as a hidden
+        // surface type via registerGlobalSurface so PaneView's
+        // normal extension-surface render path mounts it. Same piercing
+        // as diff-viewer/index.ts.
+        "../../lib/services/global-surface-service",
       ],
       // Issues + TaskSpawner widgets call the shared spawn-helper
       // (core service that composes worktree-service + agent command
@@ -101,15 +124,24 @@ describe("Extension barrier enforcement", () => {
       "agentic-orchestrator/components/Kanban.svelte": [
         "../../../lib/contexts/dashboard-host",
       ],
-      // GlobalAgenticDashboardBody is the Global Agentic Dashboard
-      // pseudo-workspace's body; it installs a DashboardHostContext
-      // (global scope) and drives the same markdown-preview pipeline
-      // core uses for real dashboards. This piercing exists because
-      // the pseudo-workspace replaced the orchestrator root row.
+      // AgenticDashboardBody is the per-workspace Agentic Dashboard's
+      // body — registered as a hidden surface type and mounted via
+      // PaneView's normal extension surface render path. Reads
+      // workspace via the workspaces store, projects rootWorkspaceId
+      // into a DashboardHostContext for nested widgets, and resolves
+      // theme tokens for chrome (header bar). Same piercing shape as
+      // ClaudeSettingsWidget and the other dashboard bodies.
+      "agentic-orchestrator/components/AgenticDashboardBody.svelte": [
+        "../../../lib/stores/workspace",
+        "../../../lib/contexts/dashboard-host",
+        "../../../lib/stores/theme",
+      ],
+      // GlobalAgenticDashboardBody installs a DashboardHostContext (global
+      // scope) and composes Kanban + AgentList directly — no markdown
+      // intermediary. The piercing covers the host-context / theme /
+      // config touchpoints the body needs from core.
       "agentic-orchestrator/components/GlobalAgenticDashboardBody.svelte": [
         "../../../lib/contexts/dashboard-host",
-        "../../../lib/services/preview-surface-registry",
-        "../../../lib/services/preview-service",
         // Reads `pseudoWorkspaceColors` from the live config store and
         // saves color picks back from the Settings tab.
         "../../../lib/config",
@@ -117,31 +149,27 @@ describe("Extension barrier enforcement", () => {
         // theme + WORKSPACE_COLOR_SLOTS palette.
         "../../../lib/stores/theme",
         "../../../lib/theme-data",
-        // Regenerate Dashboard button shows a confirmation prompt before
-        // overwriting user edits — same pattern as WorkspaceDashboardSettings.
-        "../../../lib/stores/ui",
       ],
       "agentic-orchestrator/widget-helpers.ts": [
         "../../lib/contexts/dashboard-host",
         "../../lib/stores/workspace",
         "../../lib/stores/workspace",
       ],
-      // claude-settings/index.ts mirrors the agentic-orchestrator piercing
-      // pattern: createWorkspaceFromDef to materialize the workspace dashboard,
-      // workspace-service + workspaces for auto-provision on
-      // activate, and restore-workspaces to defer the back-fill loop until
-      // workspaces are restored.
-      "claude-settings/index.ts": [
-        "../../lib/services/workspace-runtime-service",
-        "../../lib/services/workspace-service",
-        "../../lib/stores/workspace",
-        "../../lib/bootstrap/restore-workspaces",
-      ],
+      // claude-settings/index.ts registers the dashboard component as a
+      // hidden surface type via registerGlobalSurface so PaneView's
+      // normal extension-surface render path mounts it.
+      "claude-settings/index.ts": ["../../lib/services/global-surface-service"],
       // ClaudeSettingsWidget reads dashboard scope via DashboardHostContext
       // and workspace.path via workspaces — same piercing as Kanban.
       "claude-settings/components/ClaudeSettingsWidget.svelte": [
         "../../../lib/contexts/dashboard-host",
         "../../../lib/stores/workspace",
+      ],
+      // ClaudeSettingsBody is the surface-type body for the per-workspace
+      // Claude Settings Dashboard. Projects rootWorkspaceId into a
+      // DashboardHostContext so the embedded widget resolves scope.
+      "claude-settings/components/ClaudeSettingsBody.svelte": [
+        "../../../lib/contexts/dashboard-host",
       ],
       // SettingsFileEditor imports from the extension's own lib/ directory —
       // these are intra-extension imports, not core piercings. The test regex
@@ -157,14 +185,6 @@ describe("Extension barrier enforcement", () => {
       ],
       "claude-settings/components/sections/OtherSection.svelte": [
         "../../lib/settings-schema",
-      ],
-      // Columns layout widget looks up registered markdown components by
-      // name so authors can place arbitrary `gnar:*` widgets in columns
-      // from the dashboard template. Reaching the core registry is the
-      // cleanest hook for that — no extension-facing API exposes it and
-      // duplicating the lookup logic would invite drift.
-      "agentic-orchestrator/components/Columns.svelte": [
-        "../../../lib/services/markdown-component-registry",
       ],
       // branched-workspaces owns worktree and Branch creation;
       // these services live in core so existing branches stay operable

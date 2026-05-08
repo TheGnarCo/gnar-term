@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { theme } from "../stores/theme";
   import { isFullscreen, sidebarVisible } from "../stores/ui";
-  import { spawnOrNavigate } from "../services/dashboard-workspace-service";
+  import { spawnOrNavigate } from "../services/global-surface-service";
   import { isMac, modLabel, shiftModLabel } from "../terminal-service";
   import { shortcutHint } from "../actions/shortcut-hint";
   import { isDebugBuild } from "../services/service-helpers";

@@ -92,11 +92,11 @@ describe("safeFocus", () => {
 
   it("does nothing for non-terminal surface", async () => {
     const { safeFocus } = await import("../lib/services/service-helpers");
-    const extensionSurface = {
-      kind: "extension",
+    const registrySurface = {
+      kind: "registry",
       id: "ext-1",
     } as unknown as Surface;
-    await safeFocus(extensionSurface);
+    await safeFocus(registrySurface);
     expect(mockedTick).not.toHaveBeenCalled();
   });
 
@@ -128,7 +128,7 @@ describe("getActiveCwd", () => {
   });
 
   it("returns undefined for non-terminal surface", async () => {
-    activeSurface.set({ kind: "extension", id: "ext-1" } as unknown as Surface);
+    activeSurface.set({ kind: "registry", id: "ext-1" } as unknown as Surface);
     const { getActiveCwd } = await import("../lib/services/service-helpers");
     const result = await getActiveCwd();
     expect(result).toBeUndefined();

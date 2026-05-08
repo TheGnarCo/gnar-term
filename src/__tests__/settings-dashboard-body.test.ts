@@ -1,7 +1,10 @@
 /**
- * PaneView renders the shared `WorkspaceDashboardSettings` body (not a
- * preview surface, not a tab strip) for a workspace whose metadata
- * marks it as the "settings" dashboard contribution.
+ * PaneView renders the shared `WorkspaceDashboardSettings` body for a
+ * settings dashboard workspace via the unified surface pipeline: the
+ * dashboard seeds a `core:workspace-settings` registry surface, and
+ * PaneView renders it the same way it renders any other registered
+ * surface type. No early-return / bypass code path is special-cased
+ * for Settings.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, cleanup } from "@testing-library/svelte";
@@ -23,15 +26,19 @@ globalThis.ResizeObserver =
   ResizeObserverStub as unknown as typeof ResizeObserver;
 
 import PaneView from "../lib/components/PaneView.svelte";
+import WorkspaceDashboardSettings from "../lib/components/WorkspaceDashboardSettings.svelte";
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
-import type { Workspace, Pane } from "../lib/types";
+import {
+  registerSurfaceType,
+  resetSurfaceTypes,
+} from "../lib/services/surface-type-registry";
+import type { Workspace, Pane, RegistrySurface } from "../lib/types";
 
-function makePane(id: string): Pane {
+function makePane(id: string, surfaces: RegistrySurface[] = []): Pane {
   return {
     id,
-    surfaces: [],
-    activeSurfaceId: undefined,
-    activeIdx: 0,
+    surfaces,
+    activeSurfaceId: surfaces[0]?.id ?? null,
   } as unknown as Pane;
 }
 
@@ -40,11 +47,20 @@ const noop = () => {};
 describe("PaneView — settings dashboard body", () => {
   beforeEach(() => {
     cleanup();
+    resetSurfaceTypes();
     workspaces.set([]);
     activeWorkspaceIdx.set(-1);
   });
 
-  it("renders WorkspaceDashboardSettings for a settings contribution workspace", () => {
+  it("renders WorkspaceDashboardSettings via the registry surface pipeline", () => {
+    registerSurfaceType({
+      id: "core:workspace-settings",
+      label: "Workspace Settings",
+      component: WorkspaceDashboardSettings,
+      source: "core",
+      hideFromNewSurface: true,
+    });
+
     const root: Workspace = {
       id: "g1",
       name: "My Workspace",
@@ -57,10 +73,19 @@ describe("PaneView — settings dashboard body", () => {
       activePaneId: "g1-p",
     } as unknown as Workspace;
 
+    const settingsSurface: RegistrySurface = {
+      kind: "registry",
+      id: "s1",
+      surfaceTypeId: "core:workspace-settings",
+      title: "Settings",
+      hasUnread: false,
+      props: { rootWorkspaceId: "g1" },
+    };
+
     const ws: Workspace = {
       id: "ws-settings",
       name: "Settings",
-      paneLayout: { type: "pane", pane: makePane("p1") },
+      paneLayout: { type: "pane", pane: makePane("p1", [settingsSurface]) },
       activePaneId: "p1",
       isDashboard: true,
       rootWorkspaceId: "g1",
@@ -90,9 +115,5 @@ describe("PaneView — settings dashboard body", () => {
     );
     expect(panel).not.toBeNull();
     expect(panel?.getAttribute("data-workspace-id")).toBe("g1");
-    // No tab strip — Settings is its own dashboard now.
-    expect(
-      container.querySelector("[data-workspace-dashboard-tabs]"),
-    ).toBeNull();
   });
 });

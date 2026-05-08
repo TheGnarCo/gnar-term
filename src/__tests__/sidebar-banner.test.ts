@@ -41,6 +41,7 @@ Element.prototype.animate = vi.fn().mockImplementation(() => {
 import SidebarBannerWithSlot from "./sidebar-banner-with-slot.svelte";
 import WorkspaceListViewStub from "./workspace-list-view-stub.svelte";
 import { workspaces } from "../lib/stores/workspace";
+import { bannerCollapsedState } from "../lib/stores/ui";
 
 // Seed the workspaces store so nonDashboardCount reflects filterIds correctly.
 function makeWs(id: string) {
@@ -55,36 +56,46 @@ const baseProps = {
 };
 
 describe("SidebarBanner collapse/expand", () => {
-  beforeEach(() => workspaces.set([makeWs("ws-1"), makeWs("ws-2")] as never[]));
+  beforeEach(() => {
+    workspaces.set([makeWs("ws-1"), makeWs("ws-2")] as never[]);
+    bannerCollapsedState.set(new Map());
+  });
   afterEach(() => {
     workspaces.set([]);
+    bannerCollapsedState.set(new Map());
     cleanup();
   });
 
-  it("is expanded by default and collapses on chevron click", async () => {
+  it("is collapsed by default and expands on chevron click", async () => {
+    const { container } = render(SidebarBannerWithSlot, { props: baseProps });
+
+    expect(
+      container.querySelector("[data-sidebar-banner-children]"),
+    ).toBeNull();
+
+    const chevron = container.querySelector("button") as HTMLElement;
+    await fireEvent.click(chevron);
+    await tick();
+
+    expect(
+      container.querySelector("[data-sidebar-banner-children]"),
+    ).not.toBeNull();
+  });
+
+  it("uses the persisted expanded flag when the store is pre-seeded", async () => {
+    bannerCollapsedState.set(new Map([[baseProps.scopeId, false]]));
     const { container } = render(SidebarBannerWithSlot, { props: baseProps });
 
     expect(
       container.querySelector("[data-sidebar-banner-children]"),
     ).not.toBeNull();
-
-    const chevron = container.querySelector("button") as HTMLElement;
-    await fireEvent.click(chevron);
-    await tick();
-
-    expect(
-      container.querySelector("[data-sidebar-banner-children]"),
-    ).toBeNull();
   });
 
-  it("auto-expands when a workspace is added while collapsed", async () => {
+  it("auto-expands when a workspace is added to a populated collapsed banner", async () => {
     const { container, rerender } = render(SidebarBannerWithSlot, {
       props: baseProps,
     });
 
-    const chevron = container.querySelector("button") as HTMLElement;
-    await fireEvent.click(chevron);
-    await tick();
     expect(
       container.querySelector("[data-sidebar-banner-children]"),
     ).toBeNull();
@@ -102,9 +113,6 @@ describe("SidebarBanner collapse/expand", () => {
       props: { ...baseProps, filterIds: new Set(["ws-1", "ws-2"]) },
     });
 
-    const chevron = container.querySelector("button") as HTMLElement;
-    await fireEvent.click(chevron);
-    await tick();
     expect(
       container.querySelector("[data-sidebar-banner-children]"),
     ).toBeNull();
@@ -115,6 +123,46 @@ describe("SidebarBanner collapse/expand", () => {
     expect(
       container.querySelector("[data-sidebar-banner-children]"),
     ).toBeNull();
+  });
+
+  it("two banner instances with the same scopeId share collapsed state via store", async () => {
+    // Simulates the collapsed-sidebar setup where both the
+    // main-view banner (clipped under the 12px rail strip) and the
+    // popover banner are mounted simultaneously for the same row.
+    // Toggling either chevron must update the rail height in the
+    // other so the strip stays in sync with what the user just did.
+    bannerCollapsedState.set(new Map([[baseProps.scopeId, false]]));
+    const a = render(SidebarBannerWithSlot, { props: baseProps });
+    const b = render(SidebarBannerWithSlot, { props: baseProps });
+
+    expect(
+      a.container.querySelector("[data-sidebar-banner-children]"),
+    ).not.toBeNull();
+    expect(
+      b.container.querySelector("[data-sidebar-banner-children]"),
+    ).not.toBeNull();
+
+    const chevronA = a.container.querySelector("button") as HTMLElement;
+    await fireEvent.click(chevronA);
+    await tick();
+
+    expect(
+      a.container.querySelector("[data-sidebar-banner-children]"),
+    ).toBeNull();
+    expect(
+      b.container.querySelector("[data-sidebar-banner-children]"),
+    ).toBeNull();
+
+    const chevronB = b.container.querySelector("button") as HTMLElement;
+    await fireEvent.click(chevronB);
+    await tick();
+
+    expect(
+      a.container.querySelector("[data-sidebar-banner-children]"),
+    ).not.toBeNull();
+    expect(
+      b.container.querySelector("[data-sidebar-banner-children]"),
+    ).not.toBeNull();
   });
 
   it("clears banner hover state when the cursor leaves the document", async () => {

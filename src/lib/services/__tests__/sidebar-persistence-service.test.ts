@@ -8,6 +8,10 @@
  *   - `persistSidebarVisibleChanges` skips the initial emission (the
  *     just-restored value) but persists subsequent toggles via
  *     `saveState({ sidebarVisible })`.
+ *   - `restoreBannerCollapsed` rehydrates `bannerCollapsedState` from
+ *     the persisted record and tolerates missing/malformed input.
+ *   - `persistBannerCollapsedChanges` skips the initial emission and
+ *     serializes subsequent updates back to disk.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { get } from "svelte/store";
@@ -26,10 +30,12 @@ vi.mock("../../config", async () => {
   };
 });
 
-import { sidebarVisible } from "../../stores/ui";
+import { sidebarVisible, bannerCollapsedState } from "../../stores/ui";
 import {
   restoreSidebarVisible,
   persistSidebarVisibleChanges,
+  restoreBannerCollapsed,
+  persistBannerCollapsedChanges,
 } from "../sidebar-persistence-service";
 
 describe("sidebar-persistence-service", () => {
@@ -98,6 +104,85 @@ describe("sidebar-persistence-service", () => {
       unsubscribe();
 
       sidebarVisible.set(true);
+      expect(saveStateMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("restoreBannerCollapsed", () => {
+    beforeEach(() => bannerCollapsedState.set(new Map()));
+
+    it("rehydrates the store from a persisted record", () => {
+      restoreBannerCollapsed({
+        bannerCollapsedById: { "ws-1": true, "ws-2": false },
+      });
+      const map = get(bannerCollapsedState);
+      expect(map.get("ws-1")).toBe(true);
+      expect(map.get("ws-2")).toBe(false);
+      expect(map.size).toBe(2);
+    });
+
+    it("is a no-op when bannerCollapsedById is absent", () => {
+      bannerCollapsedState.set(new Map([["pre", true]]));
+      restoreBannerCollapsed({});
+      expect(get(bannerCollapsedState).get("pre")).toBe(true);
+    });
+
+    it("ignores non-boolean values inside the record", () => {
+      restoreBannerCollapsed({
+        bannerCollapsedById: {
+          "ws-1": true,
+          "ws-2": "yes",
+          "ws-3": 1,
+        } as unknown as Record<string, boolean>,
+      });
+      const map = get(bannerCollapsedState);
+      expect(map.get("ws-1")).toBe(true);
+      expect(map.has("ws-2")).toBe(false);
+      expect(map.has("ws-3")).toBe(false);
+    });
+  });
+
+  describe("persistBannerCollapsedChanges", () => {
+    beforeEach(() => bannerCollapsedState.set(new Map()));
+
+    it("skips the first emission (the restored value)", () => {
+      bannerCollapsedState.set(new Map([["ws-1", true]]));
+      const unsubscribe = persistBannerCollapsedChanges();
+      expect(saveStateMock).not.toHaveBeenCalled();
+      unsubscribe();
+    });
+
+    it("serializes subsequent updates to a record on disk", () => {
+      const unsubscribe = persistBannerCollapsedChanges();
+
+      bannerCollapsedState.set(
+        new Map([
+          ["ws-1", true],
+          ["ws-2", false],
+        ]),
+      );
+      expect(saveStateMock).toHaveBeenCalledTimes(1);
+      expect(saveStateMock).toHaveBeenLastCalledWith({
+        bannerCollapsedById: { "ws-1": true, "ws-2": false },
+      });
+
+      bannerCollapsedState.set(new Map([["ws-1", false]]));
+      expect(saveStateMock).toHaveBeenCalledTimes(2);
+      expect(saveStateMock).toHaveBeenLastCalledWith({
+        bannerCollapsedById: { "ws-1": false },
+      });
+
+      unsubscribe();
+    });
+
+    it("stops persisting after unsubscribe", () => {
+      const unsubscribe = persistBannerCollapsedChanges();
+      bannerCollapsedState.set(new Map([["ws-1", true]]));
+      expect(saveStateMock).toHaveBeenCalledTimes(1);
+
+      unsubscribe();
+
+      bannerCollapsedState.set(new Map([["ws-1", false]]));
       expect(saveStateMock).toHaveBeenCalledTimes(1);
     });
   });

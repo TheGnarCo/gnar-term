@@ -31,7 +31,7 @@ function makeChildWorkspace(surfaceId: string, title = "Tab"): Workspace {
         id: "pane-1",
         surfaces: [
           {
-            kind: "extension",
+            kind: "registry",
             id: surfaceId,
             surfaceTypeId: "test",
             title,

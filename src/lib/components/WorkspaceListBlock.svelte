@@ -96,7 +96,7 @@
     workspaceOnlyIdx?: number;
     /**
      * Set when the row represents a standalone Dashboard Workspace
-     * (created via `spawnOrNavigate` from a `registerDashboardWorkspace`
+     * (created via `spawnOrNavigate` from a `registerGlobalSurface`
      * button — Settings, Claude Settings, etc.). These have
      * `isDashboard: true`, `dashboardContributionId`, and no
      * `rootWorkspaceId`. The registered "workspace" renderer (built for
@@ -129,7 +129,7 @@
           // Standalone Dashboard Workspaces (no rootWorkspaceId,
           // isDashboard) bypass the registered "workspace" renderer and
           // render via WorkspaceItem so the dashboard's icon, accent
-          // color, and label come from `dashboardWorkspaceRegistry`.
+          // color, and label come from `globalSurfaceRegistry`.
           // Dashboard chips are NOT addressable via ⌘N — only core
           // workspace banners participate in the numbered shortcut, so
           // the dashboard row gets no `workspaceOnlyIdx` and the count
@@ -181,6 +181,13 @@
 
   let popoverRow: { key: string; top: number; height: number } | null = null;
   let popoverGraceTimer: ReturnType<typeof setTimeout> | null = null;
+  let popoverEl: HTMLDivElement | null = null;
+  // Geometry-based hover tracking: descendants like the workspace title
+  // use `pointer-events: none`, which makes the popover wrapper's
+  // mouseenter/mouseleave fire spuriously as the cursor moves over them.
+  // Tracking cursor position directly against the popover's rect
+  // sidesteps that quirk entirely.
+  const rowEls = new Map<string, HTMLDivElement>();
 
   function clearPopoverGraceTimer() {
     if (popoverGraceTimer) {
@@ -201,12 +208,46 @@
 
   function clearPopoverWithGrace() {
     if ($sidebarVisible) return;
-    clearPopoverGraceTimer();
+    if (popoverGraceTimer) return;
     popoverGraceTimer = setTimeout(() => {
       popoverRow = null;
       hoveredRootRowKey.set(null);
       popoverGraceTimer = null;
     }, POPOVER_GRACE_MS);
+  }
+
+  function pointInRect(x: number, y: number, el: HTMLElement | null): boolean {
+    if (!el) return false;
+    const r = el.getBoundingClientRect();
+    return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+  }
+
+  function rowElRef(node: HTMLDivElement, key: string) {
+    rowEls.set(key, node);
+    return {
+      destroy() {
+        if (rowEls.get(key) === node) rowEls.delete(key);
+      },
+    };
+  }
+
+  function handleGlobalMouseMove(e: MouseEvent) {
+    if (!popoverRow) return;
+    const rowEl = rowEls.get(popoverRow.key) ?? null;
+    const inside =
+      pointInRect(e.clientX, e.clientY, popoverEl) ||
+      pointInRect(e.clientX, e.clientY, rowEl);
+    if (inside) {
+      clearPopoverGraceTimer();
+    } else {
+      clearPopoverWithGrace();
+    }
+  }
+
+  $: if (popoverRow && typeof document !== "undefined") {
+    document.addEventListener("mousemove", handleGlobalMouseMove);
+  } else if (typeof document !== "undefined") {
+    document.removeEventListener("mousemove", handleGlobalMouseMove);
   }
 
   // Drop the popover whenever the sidebar expands so it doesn't linger
@@ -219,6 +260,9 @@
 
   onDestroy(() => {
     clearPopoverGraceTimer();
+    if (typeof document !== "undefined") {
+      document.removeEventListener("mousemove", handleGlobalMouseMove);
+    }
     if ($hoveredRootRowKey !== null) hoveredRootRowKey.set(null);
   });
 
@@ -465,7 +509,7 @@
         data-root-row-key={entry.key}
         style="position: relative;"
         on:mouseenter={(e) => setPopoverFromEvent(e, entry.key)}
-        on:mouseleave={clearPopoverWithGrace}
+        use:rowElRef={entry.key}
       >
         {@render rowBody(entry)}
       </div>
@@ -491,8 +535,8 @@
          expanded mode (and matches the wrapper's collapsed rail
          placement). Width subtracts the gutter so the right edge stays
          flush at viewport x = sidebarWidth. -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
+      bind:this={popoverEl}
       class="root-row-popover"
       data-root-row-popover={popoverEntry.key}
       style="
@@ -504,8 +548,6 @@
         pointer-events: auto;
         background: transparent;
       "
-      on:mouseenter={clearPopoverGraceTimer}
-      on:mouseleave={clearPopoverWithGrace}
     >
       {@render rowBody(popoverEntry)}
     </div>

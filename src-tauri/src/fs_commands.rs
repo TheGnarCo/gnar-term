@@ -576,12 +576,13 @@ pub(crate) async fn open_with_default_app(path: String) -> Result<(), String> {
     Ok(())
 }
 
-/// Open a URL in the system default browser
+/// Open a URL in the system default browser (or default app for `file://`).
 #[tauri::command]
 pub(crate) async fn open_url(url: String) -> Result<(), String> {
     let parsed = url::Url::parse(&url).map_err(|e| format!("Invalid URL: {e}"))?;
-    if parsed.scheme() != "https" && parsed.scheme() != "http" {
-        return Err(format!("Rejected non-http URL scheme: {}", parsed.scheme()));
+    let scheme = parsed.scheme();
+    if scheme != "https" && scheme != "http" && scheme != "file" {
+        return Err(format!("Rejected non-http URL scheme: {scheme}"));
     }
     let url = parsed.to_string();
     #[cfg(target_os = "macos")]
@@ -1439,14 +1440,18 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn open_url_rejects_file_scheme() {
-        let result = open_url("file:///etc/passwd".to_string()).await;
-        assert!(result.is_err());
+    async fn open_url_accepts_file_scheme() {
+        // file:// URLs are intentionally allowed so users can click links like
+        // `file:///Users/.../report.html` printed in the terminal and have the
+        // host OS open the file in its default application.
+        let result = open_url("file:///dev/null".to_string()).await;
+        assert!(result.is_ok(), "expected file:// to be allowed: {result:?}");
     }
 
     #[tokio::test]
     async fn open_url_rejects_non_http_scheme() {
-        // Covers ftp://, data:, javascript:, file:// etc.
+        // Covers ftp://, data:, javascript:, etc. — but not file://, which is
+        // explicitly allowed (see open_url_accepts_file_scheme).
         for bad in &[
             "ftp://example.com",
             "data:text/html,x",

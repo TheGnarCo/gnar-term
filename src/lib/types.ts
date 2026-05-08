@@ -48,6 +48,14 @@ export interface Workspace {
    * Dashboard registry.
    */
   dashboardContributionId?: string;
+  /**
+   * Set on a root Workspace ONLY. Contribution ids the user has dismissed
+   * for this workspace — `defaultEnabled` contributions in this list are
+   * NOT re-provisioned by `provisionAutoDashboardsForWorkspace`. Cleared
+   * for a contribution when the user re-enables it from Workspace Settings.
+   * Has no effect on `autoProvision` contributions (those are locked-on).
+   */
+  dismissedDashboardContributionIds?: string[];
   // Extension data — replaces open-ended metadata index signature
   extensionData?: Record<string, unknown>;
   // Root Workspace reference — presence discriminates Branches from root Workspaces
@@ -131,14 +139,14 @@ export interface TerminalSurface {
   userDefinedTitle?: string;
 }
 
-export interface ExtensionSurface {
-  kind: "extension";
+export interface RegistrySurface {
+  kind: "registry";
   id: string;
   surfaceTypeId: string; // maps to SurfaceTypeDef.id in the registry
   title: string;
   hasUnread: boolean;
   notification?: string;
-  props?: Record<string, unknown>; // arbitrary data passed to the extension component
+  props?: Record<string, unknown>; // arbitrary data passed to the surface component
   dispose?: () => void;
 }
 
@@ -154,7 +162,7 @@ export interface PreviewSurface {
   notification?: string;
 }
 
-export type Surface = TerminalSurface | ExtensionSurface | PreviewSurface;
+export type Surface = TerminalSurface | RegistrySurface | PreviewSurface;
 
 export interface Pane {
   id: string;
@@ -188,8 +196,8 @@ export function isTerminalSurface(s: Surface): s is TerminalSurface {
   return s.kind === "terminal";
 }
 
-export function isExtensionSurface(s: Surface): s is ExtensionSurface {
-  return s.kind === "extension";
+export function isRegistrySurface(s: Surface): s is RegistrySurface {
+  return s.kind === "registry";
 }
 
 export function isPreviewSurface(s: Surface): s is PreviewSurface {

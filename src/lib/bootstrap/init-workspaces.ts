@@ -10,10 +10,21 @@
 import { get } from "svelte/store";
 import { registerCommand } from "../services/command-registry";
 import { registerRootRowRenderer } from "../services/root-row-renderer-registry";
+import { registerSurfaceType } from "../services/surface-type-registry";
+import {
+  openDashboardSurfaceTab,
+  openWorkspaceSettingsTab,
+} from "../services/surface-service";
+import WorkspaceDashboardSettings from "../components/WorkspaceDashboardSettings.svelte";
+import WorkspaceOverviewBody from "../components/WorkspaceOverviewBody.svelte";
 import {
   registerDashboardContribution,
   OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
 } from "../services/dashboard-contribution-registry";
+import {
+  registerGlobalSurface,
+  globalSurfaceTypeId,
+} from "../services/global-surface-service";
 import { eventBus, type AppEvent } from "../services/event-bus";
 import { appendRootRow } from "../stores/root-row-order";
 import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
@@ -31,7 +42,6 @@ import {
   openWorkspaceDashboard,
   provisionAutoDashboardsForWorkspace,
   reclaimBranchedWorkspaces,
-  regenerateWorkspaceDashboardTemplate,
   removeBranchFromAllWorkspaces,
   updateWorkspace,
 } from "../services/workspace-service";
@@ -40,8 +50,6 @@ import { theme } from "../stores/theme";
 import WorkspaceRowBody from "../components/WorkspaceRowBody.svelte";
 import GearIcon from "../icons/GearIcon.svelte";
 import GridIcon from "../icons/GridIcon.svelte";
-import WorkspacesWidget from "../components/WorkspacesWidget.svelte";
-import { registerMarkdownComponent } from "../services/markdown-component-registry";
 import type { RootWorkspace as Workspace } from "../stores/workspace";
 import {
   pendingCreateResolver,
@@ -302,18 +310,35 @@ export async function initWorkspaces(): Promise<void> {
   // (stable persisted contribution id, retained across the rename),
   // capPerWorkspace 1. Opt-in: only the Settings chip is auto-provisioned
   // by default; users add the Overview from the workspace's Settings
-  // panel toggle.
+  // panel toggle. The dashboard renders WorkspaceOverviewBody as a tab
+  // inside the root workspace's pane via openAsTab — same model as
+  // Workspace Settings, so users keep TabBar / split affordances.
   registerDashboardContribution({
     id: OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
-    source: "core",
+    source: SOURCE,
     label: "Workspace Dashboard",
     actionLabel: "Add Workspace Dashboard",
     capPerWorkspace: 1,
     icon: GridIcon,
     create: async (workspace: Workspace) =>
       await createWorkspaceDashboard(workspace),
-    regenerate: async (workspace: Workspace) =>
-      await regenerateWorkspaceDashboardTemplate(workspace),
+    openAsTab: async (workspace: Workspace) => {
+      await openDashboardSurfaceTab(workspace.id, {
+        kind: "registry",
+        surfaceTypeId: globalSurfaceTypeId(OVERVIEW_DASHBOARD_CONTRIBUTION_ID),
+        title: "Dashboard",
+        props: { rootWorkspaceId: workspace.id },
+        matchProps: { rootWorkspaceId: workspace.id },
+      });
+    },
+  });
+
+  registerGlobalSurface({
+    id: OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
+    label: "Workspace Dashboard",
+    icon: GridIcon,
+    component: WorkspaceOverviewBody,
+    source: SOURCE,
   });
 
   // Core-internal "Settings" contribution — id `settings`,
@@ -332,15 +357,25 @@ export async function initWorkspaces(): Promise<void> {
     lockedReason: "Required (Settings)",
     create: async (workspace: Workspace) =>
       await createSettingsDashboardWorkspace(workspace),
+    openAsTab: async (workspace: Workspace) => {
+      await openWorkspaceSettingsTab(workspace.id);
+    },
+  });
+
+  // Core-internal surface type for the per-workspace Settings panel.
+  // Spawned as a tab inside the workspace's primary pane via the
+  // banner gear chip, so users can edit settings without leaving the
+  // workspace. Hidden from the "+ new surface" menu — it's reached
+  // through the gear, not from an empty pane.
+  registerSurfaceType({
+    id: "core:workspace-settings",
+    label: "Workspace Settings",
+    component: WorkspaceDashboardSettings,
+    source: "core",
+    hideFromNewSurface: true,
   });
 
   eventBus.on("workspace:created", onWorkspaceCreated);
   eventBus.on("workspace:closed", onWorkspaceClosed);
   eventBus.on("workspace:activated", onWorkspaceActivated);
-
-  registerMarkdownComponent({
-    name: "workspaces",
-    component: WorkspacesWidget,
-    source: SOURCE,
-  });
 }

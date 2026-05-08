@@ -44,7 +44,7 @@ import type {
   Workspace,
   Pane,
   TerminalSurface,
-  ExtensionSurface,
+  RegistrySurface,
 } from "../lib/types";
 import { uid, getAllPanes } from "../lib/types";
 import { createTerminalSurface } from "../lib/terminal-service";
@@ -67,7 +67,7 @@ async function createWorkspace(name: string): Promise<void> {
 import { splitPane, focusPane, closePane } from "../lib/services/pane-service";
 import { getCwdForSurface } from "../lib/services/service-helpers";
 import {
-  openExtensionSurfaceInPane,
+  openRegistrySurfaceInPane,
   closeSurfaceById,
   newSurface,
 } from "../lib/services/surface-service";
@@ -381,7 +381,7 @@ describe("Workflow: extension surface lifecycle", () => {
     expect(get(surfaceTypeStore)[0].id).toBe("test-ext:detail-panel");
 
     // Open an extension surface in the active pane
-    openExtensionSurfaceInPane("test-ext:detail-panel", "Issue #42", {
+    openRegistrySurfaceInPane("test-ext:detail-panel", "Issue #42", {
       issueId: 42,
       repo: "gnar-term",
     });
@@ -391,8 +391,8 @@ describe("Workflow: extension surface lifecycle", () => {
     // Original terminal surface + new extension surface
     expect(pane.surfaces).toHaveLength(2);
 
-    const extSurface = pane.surfaces[1] as ExtensionSurface;
-    expect(extSurface.kind).toBe("extension");
+    const extSurface = pane.surfaces[1] as RegistrySurface;
+    expect(extSurface.kind).toBe("registry");
     expect(extSurface.surfaceTypeId).toBe("test-ext:detail-panel");
     expect(extSurface.title).toBe("Issue #42");
     expect(extSurface.props).toEqual({ issueId: 42, repo: "gnar-term" });
@@ -426,8 +426,8 @@ describe("Workflow: extension surface lifecycle", () => {
     });
 
     // Open two extension surfaces
-    openExtensionSurfaceInPane("notes:editor", "Note A", { noteId: "a" });
-    openExtensionSurfaceInPane("notes:editor", "Note B", { noteId: "b" });
+    openRegistrySurfaceInPane("notes:editor", "Note A", { noteId: "a" });
+    openRegistrySurfaceInPane("notes:editor", "Note B", { noteId: "b" });
 
     const pane = get(activePane)!;
     // 1 terminal + 2 extension surfaces
@@ -440,7 +440,7 @@ describe("Workflow: extension surface lifecycle", () => {
     const updated = get(activePane)!;
     expect(updated.surfaces).toHaveLength(2);
     expect(updated.surfaces[0].kind).toBe("terminal");
-    expect((updated.surfaces[1] as ExtensionSurface).title).toBe("Note B");
+    expect((updated.surfaces[1] as RegistrySurface).title).toBe("Note B");
   });
 
   it("closing the last surface keeps the workspace alive with a replacement terminal", () => {

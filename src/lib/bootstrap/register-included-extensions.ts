@@ -27,10 +27,6 @@ import {
   registerDiffViewerExtension,
 } from "../../extensions/diff-viewer";
 import {
-  jrvsThemesManifest,
-  registerJrvsThemesExtension,
-} from "../../extensions/jrvs-themes";
-import {
   claudeSettingsManifest,
   registerClaudeSettingsExtension,
 } from "../../extensions/claude-settings";
@@ -57,7 +53,6 @@ export const INCLUDED_EXTENSIONS: readonly IncludedExtension[] = [
     "agentic-orchestrator",
   ],
   [diffViewerManifest, registerDiffViewerExtension, "diff-viewer"],
-  [jrvsThemesManifest, registerJrvsThemesExtension, "jrvs-themes"],
   [claudeSettingsManifest, registerClaudeSettingsExtension, "claude-settings"],
   [
     branchedWorkspacesManifest,

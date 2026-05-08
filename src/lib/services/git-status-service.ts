@@ -253,14 +253,6 @@ function applyGitStatusResults(
       label: shorthand,
       tooltip: dirtyTooltip(info),
       variant: "warning",
-      action: {
-        command: "open-surface",
-        args: [
-          "diff-viewer:diff",
-          "Uncommitted Changes",
-          { repoPath: gitRoot },
-        ],
-      },
       metadata: {
         modified: info.modified,
         added: info.added,

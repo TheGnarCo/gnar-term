@@ -387,6 +387,58 @@
       position: relative;
     "
   >
+    {#snippet dashboardChip(entry: { ws: Workspace; idx: number })}
+      {@const contribId = entry.ws.dashboardContributionId}
+      {@const contribution = contribId
+        ? getDashboardContribution(contribId)
+        : undefined}
+      {@const IconComp = contribution?.icon ?? GridIcon}
+      {@const isActive = entry.idx === $activeWorkspaceIdx}
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div
+        style="
+          position: relative;
+          flex: 1 0 calc((100% - 8px) / 3);
+          min-width: calc((100% - 8px) / 3);
+          height: 24px;
+        "
+        on:mouseenter={() => (hoveredDashId = entry.ws.id)}
+        on:mouseleave={() => (hoveredDashId = null)}
+      >
+        <button
+          class="dash-btn"
+          data-dashboard-item={entry.ws.id}
+          data-dashboard-contribution={contribId}
+          data-active={isActive ? "true" : undefined}
+          aria-label={entry.ws.name}
+          on:click|stopPropagation={() => {
+            if (contribution?.openAsTab && workspace) {
+              void contribution.openAsTab(workspace);
+            } else {
+              switchWorkspace(entry.idx);
+            }
+          }}
+          on:contextmenu|preventDefault|stopPropagation={(e) =>
+            showDashboardContextMenu(e.clientX, e.clientY, entry.idx)}
+          style="
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: {$theme.bgSurface ?? 'transparent'};
+            border: 1px solid {$theme.border ?? 'transparent'};
+            {isActive ? `box-shadow: 0 0 0 1.5px ${workspaceHex};` : ''}
+          "
+        >
+          <DashboardTileIcon
+            iconComponent={IconComp}
+            baseColor={workspaceHex}
+            contributionId={contribId}
+            workspacePath={workspace?.path}
+            {isActive}
+            isHovered={hoveredDashId === entry.ws.id}
+          />
+        </button>
+      </div>
+    {/snippet}
     <SidebarBanner
       color={workspaceHex}
       {onGripMouseDown}
@@ -401,6 +453,7 @@
       containerLabel={workspace.name}
       testId={workspace.id}
       workspaceListViewComponent={WorkspaceListView}
+      dashboardCount={workspaceDashboards.length}
     >
       <div
         style="display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0;"
@@ -501,62 +554,6 @@
       </svelte:fragment>
 
       <svelte:fragment slot="btn-row" let:collapsed let:toggle let:showToggle>
-        {#snippet dashboardChip(entry: { ws: Workspace; idx: number })}
-          {@const contribId = entry.ws.dashboardContributionId}
-          {@const contribution = contribId
-            ? getDashboardContribution(contribId)
-            : undefined}
-          {@const IconComp = contribution?.icon ?? GridIcon}
-          {@const isActive = entry.idx === $activeWorkspaceIdx}
-          <!-- svelte-ignore a11y_no_static_element_interactions -->
-          <div
-            style="
-              position: relative;
-              flex: 0 0 auto;
-              width: 28px;
-              height: 24px;
-            "
-            on:mouseenter={() => (hoveredDashId = entry.ws.id)}
-            on:mouseleave={() => (hoveredDashId = null)}
-          >
-            <button
-              class="dash-btn"
-              data-dashboard-item={entry.ws.id}
-              data-dashboard-contribution={contribId}
-              data-active={isActive ? "true" : undefined}
-              aria-label={entry.ws.name}
-              on:click|stopPropagation={() => {
-                if (contribution?.openAsTab && workspace) {
-                  void contribution.openAsTab(workspace);
-                } else {
-                  switchWorkspace(entry.idx);
-                }
-              }}
-              on:contextmenu|preventDefault|stopPropagation={(e) =>
-                showDashboardContextMenu(e.clientX, e.clientY, entry.idx)}
-              style="
-                position: absolute;
-                top: 0; left: 0; right: 0; bottom: 0;
-                background: {$theme.bgSurface ?? 'transparent'};
-                border: 1px solid {$theme.border ?? 'transparent'};
-                {isActive ? `box-shadow: 0 0 0 1.5px ${workspaceHex};` : ''}
-              "
-            >
-              <DashboardTileIcon
-                iconComponent={IconComp}
-                baseColor={workspaceHex}
-                contributionId={contribId}
-                workspacePath={workspace?.path}
-                {isActive}
-                isHovered={hoveredDashId === entry.ws.id}
-              />
-            </button>
-          </div>
-        {/snippet}
-
-        {#each workspaceDashboards as entry (entry.ws.id)}
-          {@render dashboardChip(entry)}
-        {/each}
         {#each tileActions as action (action.id)}
           <button
             class="dash-btn"
@@ -609,6 +606,16 @@
         {/if}
       </svelte:fragment>
 
+      <svelte:fragment slot="children-leading">
+        {#if workspaceDashboards.length > 0}
+          <div class="dashboard-chip-grid">
+            {#each workspaceDashboards as entry (entry.ws.id)}
+              {@render dashboardChip(entry)}
+            {/each}
+          </div>
+        {/if}
+      </svelte:fragment>
+
       <svelte:fragment slot="after-children">
         {#if childRows.length > 0}
           <div
@@ -653,6 +660,12 @@
 {/if}
 
 <style>
+  .dashboard-chip-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 4px 6px;
+  }
   .dash-btn {
     flex: 0 0 auto;
     width: 28px;

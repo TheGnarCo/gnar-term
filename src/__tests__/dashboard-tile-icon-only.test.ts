@@ -1,8 +1,9 @@
 /**
- * Dashboard buttons in WorkspaceSectionContent's btn-row slot render
- * icon-only: no text label, workspace name lives in the `aria-label`
- * attribute. Regression for the redesign that moved dashboard tiles
- * from WorkspaceListView's grid into the SidebarBanner btn-row slot.
+ * Dashboard buttons in WorkspaceSectionContent render under the
+ * SidebarBanner's `children-leading` slot (above the branched
+ * workspace list), as icon-only tiles in a stretch-to-fill grid.
+ * Workspace name lives in `aria-label`. Regression for the move out
+ * of the banner btn-row.
  */
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
@@ -27,20 +28,22 @@ describe("dashboard btn-row — icon only", () => {
     expect(SOURCE).not.toContain("dashboard-tile-label");
   });
 
-  it("excludes auto-provisioned dashboards (e.g. Settings) from the btn-row chips", () => {
-    // Auto-provisioned dashboards have dedicated UI (e.g. Settings via
-    // the banner-end gear) and must not appear as user-clickable chips.
-    // The filter now keys off contribution.autoProvision rather than a
-    // hardcoded "settings" id so any future auto-provisioned
-    // contribution is hidden by the same rule.
+  it("excludes auto-provisioned dashboards (e.g. Settings) from the chip grid", () => {
     expect(SOURCE).toContain("workspaceDashboards");
     expect(SOURCE).toContain("{#each workspaceDashboards");
     expect(SOURCE).toContain("contribution?.autoProvision");
-    // The {#if settingsDashboard} block in btn-row that rendered the
-    // Settings chip after non-settings dashboards has been removed.
     expect(SOURCE).not.toContain(
       "{#if settingsDashboard} {@render dashboardChip(settingsDashboard)}",
     );
+  });
+
+  it('renders chips under slot="children-leading", not in btn-row', () => {
+    const btnRowIdx = SOURCE.indexOf('slot="btn-row"');
+    const leadingIdx = SOURCE.indexOf('slot="children-leading"');
+    expect(btnRowIdx).toBeGreaterThan(-1);
+    expect(leadingIdx).toBeGreaterThan(btnRowIdx);
+    const btnRowSection = SOURCE.slice(btnRowIdx, leadingIdx);
+    expect(btnRowSection).not.toContain("{#each workspaceDashboards");
   });
 
   it("chip click prefers contribution.openAsTab over switchWorkspace", () => {

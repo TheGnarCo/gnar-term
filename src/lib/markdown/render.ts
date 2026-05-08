@@ -1,13 +1,15 @@
 /**
- * Markdown HTML renderer for the core preview pipeline.
+ * Markdown renderer for the core preview pipeline.
  *
- * Renders a markdown source to a sanitized HTML string. The previewer
- * mounts the result via DOMPurify to defend against script injection.
+ * Parses markdown source and returns a sanitized DocumentFragment ready
+ * to mount with `replaceChildren`. Sanitization happens here (via
+ * DOMPurify) so callers don't have to re-sanitize.
  */
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 
-/** Render `source` as sanitized HTML. */
-export function renderMarkdownHtml(source: string): string {
-  return DOMPurify.sanitize(marked.parse(source, { async: false }) as string);
+/** Render `source` as a sanitized DocumentFragment. */
+export function renderMarkdownFragment(source: string): DocumentFragment {
+  const html = marked.parse(source, { async: false }) as string;
+  return DOMPurify.sanitize(html, { RETURN_DOM_FRAGMENT: true });
 }

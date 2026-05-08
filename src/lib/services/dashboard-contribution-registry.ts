@@ -11,11 +11,12 @@ import type { RootWorkspace as Workspace } from "../config";
 
 /**
  * Stable persisted id for the built-in Workspace overview dashboard.
- * The string `"group"` predates the Workspace/Workspace rename and
- * is preserved verbatim — it's stamped onto every overview dashboard
- * workspace's `metadata.dashboardContributionId` and survives across
- * upgrades. Tests, fixtures, and unrelated `spawnedBy.kind: "group"`
- * literals do NOT use this constant.
+ * The string `"group"` predates the rename to "Workspace" vocabulary
+ * and is preserved verbatim for persisted-data compatibility — it's
+ * stamped onto every overview dashboard workspace's
+ * `metadata.dashboardContributionId` and survives across upgrades.
+ * Tests, fixtures, and unrelated `spawnedBy.kind: "group"` literals
+ * do NOT use this constant.
  */
 export const OVERVIEW_DASHBOARD_CONTRIBUTION_ID = "group";
 
@@ -30,8 +31,8 @@ export interface DashboardContribution {
   /**
    * Stable identifier, also stamped onto the dashboard workspace as
    * `metadata.dashboardContributionId`. Core's built-in uses `"group"`
-   * (preserved across the Workspace→Workspace rename for
-   * persisted-data compatibility); the agentic extension uses
+   * (preserved for persisted-data compatibility from before the rename
+   * to "Workspace" vocabulary); the agentic extension uses
    * `"agentic"`. Unique across all contributions.
    */
   id: string;

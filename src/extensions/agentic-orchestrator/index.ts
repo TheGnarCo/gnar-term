@@ -155,11 +155,11 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
 
 /**
  * Materialize a workspace's Agentic Dashboard. The dashboard workspace
- * holds a single hidden-surface-type extension surface
+ * holds a single hidden-surface-type registry surface
  * (`dashboard:agentic`); the registered AgenticDashboardBody renders
  * inside the standard pane render path, so TabBar + split affordances
  * work like any other workspace. `rootWorkspaceId` is forwarded via
- * `extensionProps` so the body component can project it into a
+ * surface props so the body component can project it into a
  * DashboardHostContext for embedded widgets.
  */
 async function createAgenticDashboardWorkspace(

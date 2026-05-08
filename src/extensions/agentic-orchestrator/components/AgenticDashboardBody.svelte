@@ -3,7 +3,7 @@
    * Agentic Dashboard body — landing page for a workspace's Agentic
    * Dashboard. Registered as a hidden surface type
    * (`dashboard:agentic`) by the agentic-orchestrator extension and
-   * mounted via PaneView's normal extension surface render path. The
+   * mounted via PaneView's normal registry surface render path. The
    * spawn flow seeds `surface.props.rootWorkspaceId`, which we project
    * into a DashboardHostContext so embedded widgets (Kanban,
    * TaskSpawner, Issues) derive their scope unchanged.

@@ -13,7 +13,7 @@ import {
 
 /**
  * Surface-type id derived from a dashboard workspace registration. Each
- * dashboard component is mounted as a normal extension surface, so the
+ * dashboard component is mounted as a normal registry surface, so the
  * pane keeps its tab bar, split affordances, and tab-add menu — users
  * can split a dashboard and put a terminal next to it without losing
  * the dashboard surface. Hidden from the "+ new surface" menu so users

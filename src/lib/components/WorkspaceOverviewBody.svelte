@@ -2,7 +2,7 @@
   /**
    * Workspace Overview Dashboard — landing page for a Workspace.
    * Registered as a hidden surface type (`dashboard:group`) by
-   * init-workspaces and mounted via PaneView's normal extension surface
+   * init-workspaces and mounted via PaneView's normal registry surface
    * render path. The spawn flow seeds `surface.props.rootWorkspaceId`,
    * which we project into a DashboardHostContext so embedded sections
    * (Issues, PRs) and WorkspacesWidget resolve their scope unchanged.

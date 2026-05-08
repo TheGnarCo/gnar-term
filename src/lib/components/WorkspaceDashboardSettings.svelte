@@ -30,7 +30,7 @@
 
   export let rootWorkspaceId: string;
   /**
-   * When this component is mounted as an extension surface, PaneView passes
+   * When this component is mounted as a registry surface, PaneView passes
    * `visible` so inactive tabs collapse to display:none (matching
    * Terminal/Preview surface behavior). Default true for direct-render use
    * sites (e.g. the settings dashboard workspace).

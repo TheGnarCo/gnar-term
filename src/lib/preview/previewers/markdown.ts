@@ -1,9 +1,8 @@
-import DOMPurify from "dompurify";
 import {
   registerPreviewer,
   type PreviewContext,
 } from "../../services/preview-registry";
-import { renderMarkdownHtml } from "../../markdown/render";
+import { renderMarkdownFragment } from "../../markdown/render";
 import "github-markdown-css/github-markdown-dark.css";
 
 function renderMarkdown(
@@ -15,9 +14,7 @@ function renderMarkdown(
   element.classList.add("markdown-body");
   element.style.display = "block";
 
-  const html = renderMarkdownHtml(content);
-  const sanitized = DOMPurify.sanitize(html, { RETURN_DOM_FRAGMENT: true });
-  element.replaceChildren(sanitized);
+  element.replaceChildren(renderMarkdownFragment(content));
 
   if (ctx && filePath) {
     const dir = filePath.includes("/")

@@ -21,6 +21,8 @@
   import { tabDragState } from "../services/tab-drag";
   import { workspaceDragState } from "../services/workspace-drag";
   import { dismissPane, relaunchPane } from "../services/pane-service";
+  import { closeWorkspace } from "../services/workspace-runtime-service";
+  import CloseButton from "./CloseButton.svelte";
 
   export let pane: Pane;
   export let workspaceId: string = "";
@@ -78,6 +80,11 @@
   $: workspace = $workspaces.find((w) => w.id === workspaceId);
   $: isGlobalSurface =
     workspace?.isDashboard === true && workspace.rootWorkspaceId == null;
+
+  function closeGlobalSurface() {
+    const idx = $workspaces.findIndex((w) => w.id === workspaceId);
+    if (idx >= 0) closeWorkspace(idx);
+  }
 
   $: surfaceSplitZone =
     $tabDragState?.dropTarget?.kind === "surface-split" &&
@@ -196,6 +203,19 @@
       onJumpToBottom={handleJumpToBottom}
       onRefreshPreview={handleRefreshPreview}
     />
+  {:else}
+    <div
+      style="
+        position: absolute; top: 6px; right: 8px;
+        z-index: 10;
+      "
+    >
+      <CloseButton
+        size="container"
+        label="Close"
+        on:click={closeGlobalSurface}
+      />
+    </div>
   {/if}
 
   {#each pane.surfaces.filter((s) => s.id === pane.activeSurfaceId && isTerminalSurface(s)) as activeTerm (activeTerm.id)}

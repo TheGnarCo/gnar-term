@@ -921,7 +921,7 @@
       style="
         flex: 1; display: flex; flex-direction: column;
         background: {$theme.bg}; min-width: 0; min-height: 0; overflow: hidden;
-        {$sidebarVisible ? '' : 'padding-left: 12px;'}
+        {$sidebarVisible ? '' : 'padding-left: 17px;'}
       "
     >
       {#if $sidebarVisible}

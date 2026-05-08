@@ -95,7 +95,7 @@ describe("WorkspaceListBlock per-row popover (collapsed sidebar)", () => {
     expect(get(hoveredRootRowKey)).toBe(row!.getAttribute("data-root-row-key"));
   });
 
-  it("clears the popover after mouseleave grace period", async () => {
+  it("clears the popover after the cursor leaves the popover region", async () => {
     vi.useFakeTimers();
     const { container } = render(WorkspaceListBlock);
     const row = container.querySelector("[data-root-row-key]") as HTMLElement;
@@ -103,7 +103,11 @@ describe("WorkspaceListBlock per-row popover (collapsed sidebar)", () => {
     await tick();
     expect(container.querySelector("[data-root-row-popover]")).not.toBeNull();
 
-    await fireEvent.mouseLeave(row);
+    // Simulate cursor moving to a clearly out-of-bounds position. The
+    // document-level mousemove handler hit-tests against the row and
+    // popover rects; in jsdom getBoundingClientRect returns zeros, so
+    // any non-origin coordinate counts as "outside".
+    await fireEvent.mouseMove(document, { clientX: 999, clientY: 999 });
     await tick();
     // Still present — grace timer hasn't fired yet.
     expect(container.querySelector("[data-root-row-popover]")).not.toBeNull();
@@ -112,6 +116,42 @@ describe("WorkspaceListBlock per-row popover (collapsed sidebar)", () => {
     await tick();
     expect(container.querySelector("[data-root-row-popover]")).toBeNull();
     expect(get(hoveredRootRowKey)).toBeNull();
+    vi.useRealTimers();
+  });
+
+  it("keeps the popover open while the cursor is inside its rect", async () => {
+    vi.useFakeTimers();
+    const { container } = render(WorkspaceListBlock);
+    const row = container.querySelector("[data-root-row-key]") as HTMLElement;
+    await fireEvent.mouseEnter(row);
+    await tick();
+    const popover = container.querySelector(
+      "[data-root-row-popover]",
+    ) as HTMLElement;
+    expect(popover).not.toBeNull();
+
+    // Stub the popover's bounding rect so the geometry check returns true
+    // for a point inside it. Without this, jsdom reports a zero-rect.
+    popover.getBoundingClientRect = () =>
+      ({
+        left: 0,
+        right: 200,
+        top: 0,
+        bottom: 100,
+        x: 0,
+        y: 0,
+        width: 200,
+        height: 100,
+        toJSON: () => ({}),
+      }) as DOMRect;
+
+    // Cursor moves to a point inside the popover — even after a long
+    // wait, the popover must stay open because each mousemove clears
+    // the grace timer.
+    await fireEvent.mouseMove(document, { clientX: 50, clientY: 50 });
+    vi.advanceTimersByTime(500);
+    await tick();
+    expect(container.querySelector("[data-root-row-popover]")).not.toBeNull();
     vi.useRealTimers();
   });
 

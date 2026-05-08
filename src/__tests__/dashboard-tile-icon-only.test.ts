@@ -27,19 +27,43 @@ describe("dashboard btn-row — icon only", () => {
     expect(SOURCE).not.toContain("dashboard-tile-label");
   });
 
-  it("pins the Settings dashboard last by splitting it from non-settings dashboards", () => {
-    // Non-settings dashboards render first; tile actions render next; the
-    // Settings dashboard renders just before the expand toggle. The split
-    // happens at the data layer rather than via a sort-and-suffix pass.
-    expect(SOURCE).toContain('dashboardContributionId !== "settings"');
-    expect(SOURCE).toContain('dashboardContributionId === "settings"');
-    expect(SOURCE).toContain("nonSettingsDashboards");
-    expect(SOURCE).toContain("settingsDashboard");
-    // The non-settings each block runs before the settings render block.
-    const nonSettingsIdx = SOURCE.indexOf("{#each nonSettingsDashboards");
-    const settingsIdx = SOURCE.indexOf("{#if settingsDashboard}");
-    expect(nonSettingsIdx).toBeGreaterThan(-1);
-    expect(settingsIdx).toBeGreaterThan(nonSettingsIdx);
+  it("excludes auto-provisioned dashboards (e.g. Settings) from the btn-row chips", () => {
+    // Auto-provisioned dashboards have dedicated UI (e.g. Settings via
+    // the banner-end gear) and must not appear as user-clickable chips.
+    // The filter now keys off contribution.autoProvision rather than a
+    // hardcoded "settings" id so any future auto-provisioned
+    // contribution is hidden by the same rule.
+    expect(SOURCE).toContain("workspaceDashboards");
+    expect(SOURCE).toContain("{#each workspaceDashboards");
+    expect(SOURCE).toContain("contribution?.autoProvision");
+    // The {#if settingsDashboard} block in btn-row that rendered the
+    // Settings chip after non-settings dashboards has been removed.
+    expect(SOURCE).not.toContain(
+      "{#if settingsDashboard} {@render dashboardChip(settingsDashboard)}",
+    );
+  });
+
+  it("chip click prefers contribution.openAsTab over switchWorkspace", () => {
+    // Workspace-level dashboards (overview, agentic, diff) implement
+    // openAsTab to open inline as tabs in the parent workspace rather
+    // than switching to a separate dashboard workspace. The chip
+    // onClick falls back to switchWorkspace only when the contribution
+    // does not provide openAsTab.
+    expect(SOURCE).toContain("contribution?.openAsTab");
+    expect(SOURCE).toContain("contribution.openAsTab(workspace)");
+    expect(SOURCE).toContain("switchWorkspace(entry.idx)");
+  });
+
+  it("renders a settings gear chip in banner-end on hover, before the close chip", () => {
+    // On banner hover, the gear chip appears to the LEFT of the close
+    // chip; clicking it opens the Settings panel as a NEW TAB inside
+    // the workspace's own pane (not as a separate dashboard workspace).
+    expect(SOURCE).toContain('variant="settings"');
+    expect(SOURCE).toContain("openWorkspaceSettingsTab(workspace!.id)");
+    const gearIdx = SOURCE.indexOf('variant="settings"');
+    const closeIdx = SOURCE.indexOf('variant="close"');
+    expect(gearIdx).toBeGreaterThan(-1);
+    expect(closeIdx).toBeGreaterThan(gearIdx);
   });
 
   it("applies active ring using workspace color", () => {

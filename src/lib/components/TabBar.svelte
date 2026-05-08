@@ -3,7 +3,8 @@
   import Tab from "./Tab.svelte";
   import NewSurfaceButton from "./NewSurfaceButton.svelte";
   import CloseButton from "./CloseButton.svelte";
-  import { zoomedSurfaceId } from "../stores/workspace";
+  import { workspaces, zoomedSurfaceId } from "../stores/workspace";
+  import { resolveWorkspaceColor } from "../theme-data";
   import type { Pane } from "../types";
   import { getWorkspaceStatusByCategory } from "../services/status-registry";
   import {
@@ -45,6 +46,21 @@
     ? getWorkspaceStatusByCategory(workspaceId, "process")
     : emptyStore;
   $: processItems = $processStatusStore;
+
+  // Resolve the workspace's accent color so the active tab's underline
+  // reads as "this is workspace X". Branches inherit from their root.
+  $: workspaceAccentColor = (() => {
+    if (!workspaceId) return undefined;
+    const ws = $workspaces.find((w) => w.id === workspaceId);
+    if (!ws) return undefined;
+    const colorSlot =
+      ws.color ??
+      (ws.rootWorkspaceId
+        ? $workspaces.find((w) => w.id === ws.rootWorkspaceId)?.color
+        : undefined);
+    if (!colorSlot) return undefined;
+    return resolveWorkspaceColor(colorSlot, $theme);
+  })();
 
   $: drag = $tabDragState;
   $: reorderInsertIdx =
@@ -129,6 +145,7 @@
         {paneIsActive}
         paneId={pane.id}
         {workspaceId}
+        activeAccentColor={workspaceAccentColor}
         onSelect={() => onSelectSurface(surface.id)}
         onClose={() => onCloseSurface(surface.id)}
         agentDotColor={agentDotColorForSurface(processItems, surface.id)}

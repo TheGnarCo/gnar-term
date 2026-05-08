@@ -63,9 +63,18 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
       actionLabel: "Add Agentic Dashboard",
       capPerWorkspace: 1,
       icon: BotIcon,
+      defaultEnabled: true,
       create: (workspace) => createAgenticDashboardWorkspace(api, workspace),
       regenerate: async (workspace) => {
         await writeAgenticDashboardTemplate(api, workspace, { force: true });
+      },
+      openAsTab: async (workspace) => {
+        const path = await writeAgenticDashboardTemplate(api, workspace);
+        await api.openDashboardTab(workspace.id, {
+          kind: "preview",
+          path,
+          title: "Agents",
+        });
       },
     });
 

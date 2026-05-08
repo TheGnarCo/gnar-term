@@ -1,8 +1,10 @@
 /**
- * diff-viewer registers a per-group Diff dashboard contribution. When
- * the extension activates, the contribution appears in the dashboard
- * registry; invoking `create(group)` materializes a workspace backed
- * by a `diff-viewer:diff` surface pointed at the group's repo.
+ * diff-viewer registers a per-workspace Diff dashboard contribution. The
+ * contribution is `defaultEnabled`: it materializes on every workspace by
+ * default but the user can dismiss it from the workspace's Settings panel.
+ * These tests pin the registered shape (defaultEnabled set, no autoProvision /
+ * lockedReason), verify that activation back-fills existing workspaces, and
+ * that `dismissedDashboardContributionIds` is respected.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { get } from "svelte/store";
@@ -27,9 +29,34 @@ import {
 import { workspaces, activeWorkspaceIdx } from "../../../lib/stores/workspace";
 import { resetSurfaceTypes } from "../../../lib/services/surface-type-registry";
 import { resetCommands } from "../../../lib/services/command-registry";
+import {
+  markRestored,
+  resetRestoreSignal,
+} from "../../../lib/bootstrap/restore-workspaces";
+
+function seedRoot(
+  id: string,
+  color: string,
+): import("../../../lib/types").Workspace {
+  return {
+    id,
+    name: id.toUpperCase(),
+    path: `/tmp/${id}`,
+    color,
+    branchedWorkspaceIds: [],
+    isGit: true,
+    createdAt: "2026-04-21T00:00:00.000Z",
+    paneLayout: {
+      type: "pane",
+      pane: { id: `${id}-p`, surfaces: [], activeSurfaceId: null },
+    },
+    activePaneId: `${id}-p`,
+  } as unknown as import("../../../lib/types").Workspace;
+}
 
 describe("Diff dashboard contribution", () => {
   beforeEach(async () => {
+    resetRestoreSignal();
     await resetExtensions();
     resetCommands();
     resetSurfaceTypes();
@@ -50,10 +77,12 @@ describe("Diff dashboard contribution", () => {
     expect(diff?.capPerWorkspace).toBe(1);
     expect(diff?.paneConstraints?.singleSurface).toBe(true);
     expect(diff?.autoProvision).toBeFalsy();
+    expect(diff?.defaultEnabled).toBe(true);
+    expect(diff?.lockedReason).toBeUndefined();
     expect(diff?.icon).toBeDefined();
   });
 
-  it("create(group) materializes a workspace with a diff-viewer:diff surface", async () => {
+  it("create(workspace) materializes a workspace with a diff-viewer:diff surface", async () => {
     registerExtension(diffViewerManifest, registerDiffViewerExtension);
     await activateExtension("diff-viewer");
 
@@ -62,8 +91,8 @@ describe("Diff dashboard contribution", () => {
 
     await diff!.create({
       id: "g1",
-      name: "My Group",
-      path: "/tmp/my-group",
+      name: "My Workspace",
+      path: "/tmp/my-workspace",
       color: "blue",
       branchedWorkspaceIds: [],
       isGit: true,
@@ -75,5 +104,49 @@ describe("Diff dashboard contribution", () => {
     expect(created).toBeTruthy();
     expect(created!.isDashboard).toBe(true);
     expect(created!.rootWorkspaceId).toBe("g1");
+  });
+
+  it("back-fills the Diff Dashboard onto existing workspaces on activate", async () => {
+    workspaces.set([seedRoot("g1", "blue"), seedRoot("g2", "green")]);
+    markRestored();
+
+    registerExtension(diffViewerManifest, registerDiffViewerExtension);
+    await activateExtension("diff-viewer");
+
+    await new Promise((r) => setTimeout(r, 50));
+
+    const diffForRoot = (rootId: string): boolean =>
+      get(workspaces).some(
+        (w) =>
+          w.dashboardContributionId === "diff" &&
+          w.rootWorkspaceId === rootId &&
+          w.isDashboard === true,
+      );
+    expect(diffForRoot("g1")).toBe(true);
+    expect(diffForRoot("g2")).toBe(true);
+  });
+
+  it("respects dismissedDashboardContributionIds and skips dismissed workspaces", async () => {
+    const g1 = seedRoot("g1", "blue");
+    const g2 = seedRoot("g2", "green");
+    (
+      g1 as { dismissedDashboardContributionIds?: string[] }
+    ).dismissedDashboardContributionIds = ["diff"];
+    workspaces.set([g1, g2]);
+    markRestored();
+
+    registerExtension(diffViewerManifest, registerDiffViewerExtension);
+    await activateExtension("diff-viewer");
+    await new Promise((r) => setTimeout(r, 50));
+
+    const diffForRoot = (rootId: string): boolean =>
+      get(workspaces).some(
+        (w) =>
+          w.dashboardContributionId === "diff" &&
+          w.rootWorkspaceId === rootId &&
+          w.isDashboard === true,
+      );
+    expect(diffForRoot("g1")).toBe(false);
+    expect(diffForRoot("g2")).toBe(true);
   });
 });

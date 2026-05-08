@@ -38,7 +38,9 @@ import {
   markSurfaceUnreadById,
   focusSurfaceById,
   openFileAsPreviewSplit,
+  openDashboardSurfaceTab,
 } from "./surface-service";
+import type { ExtensionDashboardTabSpec } from "../../extensions/api";
 import {
   pendingAction,
   showInputPrompt as coreShowInputPrompt,
@@ -306,6 +308,13 @@ export function createExtensionAPI(
         title,
         props,
       });
+    },
+    openDashboardTab(workspaceId: string, spec: ExtensionDashboardTabSpec) {
+      const namespaced: ExtensionDashboardTabSpec =
+        spec.kind === "extension" && !spec.surfaceTypeId.includes(":")
+          ? { ...spec, surfaceTypeId: `${extId}:${spec.surfaceTypeId}` }
+          : spec;
+      return openDashboardSurfaceTab(workspaceId, namespaced);
     },
     switchWorkspace(workspaceId: string) {
       pendingAction.set({ type: "switch-workspace", workspaceId });

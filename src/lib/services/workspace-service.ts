@@ -253,6 +253,20 @@ async function writeWorkspaceDashboardTemplate(
 }
 
 /**
+ * Ensure the Workspace Overview Dashboard markdown exists at the
+ * workspace's canonical path. Creates the seeded template only when
+ * the file is missing — user customizations survive. Returns the
+ * markdown's path so callers can wire it into a preview surface.
+ */
+export async function ensureWorkspaceDashboardMarkdown(
+  workspace: RootWorkspace,
+): Promise<string> {
+  const path = workspaceDashboardPath(workspace.path);
+  await writeWorkspaceDashboardTemplate(workspace, path);
+  return path;
+}
+
+/**
  * Public regenerate hook for the Workspace Overview Dashboard
  * contribution. Force-rewrites the markdown at `workspaceDashboardPath`;
  * the preview surface watching that file picks up the change without
@@ -367,11 +381,16 @@ function hasDashboardWorkspace(
 }
 
 /**
- * Provision every registered `autoProvision` dashboard contribution for
- * `workspace`. Called after a workspace is created and on startup
- * reconciliation so auto-provision contributions (settings, agentic)
- * always have their workspace available. Idempotent — a contribution
- * already backed by a workspace is skipped.
+ * Provision every registered auto-provisioning dashboard contribution
+ * for `workspace`. Called after a workspace is created and on startup
+ * reconciliation so:
+ *
+ *   - `autoProvision` contributions (settings) — always materialize.
+ *   - `defaultEnabled` contributions (diff, agentic) — materialize unless
+ *     the workspace's `dismissedDashboardContributionIds` lists them, so
+ *     a user-removed default-on dashboard does not come back on reconcile.
+ *
+ * Idempotent — a contribution already backed by a workspace is skipped.
  *
  * `existingContribIds` is an optional precomputed set of contribution
  * ids already backed by a dashboard workspace for this parent. Pass it
@@ -382,8 +401,12 @@ export async function provisionAutoDashboardsForWorkspace(
   workspace: RootWorkspace,
   existingContribIds?: ReadonlySet<string>,
 ): Promise<void> {
+  const dismissed = new Set(workspace.dismissedDashboardContributionIds ?? []);
   for (const c of getDashboardContributions()) {
-    if (!c.autoProvision) continue;
+    if (!c.autoProvision && !c.defaultEnabled) continue;
+    // autoProvision is locked-on; defaultEnabled honors the per-workspace
+    // dismissal list.
+    if (!c.autoProvision && dismissed.has(c.id)) continue;
     const exists = existingContribIds
       ? existingContribIds.has(c.id)
       : hasDashboardWorkspace(workspace.id, c.id);
@@ -426,17 +449,65 @@ export function closeAutoDashboardsBySource(source: string): void {
  * Locate the dashboard workspace for `rootWorkspaceId` + `contributionId` and
  * close it. Used by the Settings toggle UI and by MCP to remove a
  * dashboard contribution from a workspace.
+ *
+ * Records a dismissal for `defaultEnabled` contributions so the next
+ * reconcile pass does not recreate the dashboard. `autoProvision`
+ * contributions are locked-on and refuse to close.
  */
 export function closeDashboardForWorkspace(
   rootWorkspaceId: string,
   contributionId: string,
 ): boolean {
-  const match = findDashboardWorkspace(rootWorkspaceId, contributionId);
-  if (!match) return false;
   const contribution = getDashboardContribution(contributionId);
   if (contribution?.autoProvision) return false;
+  if (contribution?.defaultEnabled) {
+    recordDashboardDismissal(rootWorkspaceId, contributionId);
+  }
+  const match = findDashboardWorkspace(rootWorkspaceId, contributionId);
+  if (!match) return false;
   closeWorkspaceById(match.id);
   return true;
+}
+
+/**
+ * Append `contributionId` to the workspace's
+ * `dismissedDashboardContributionIds` so future reconciliation passes do
+ * not re-provision the dashboard. Idempotent — duplicates are coalesced.
+ * No-op when the workspace has no matching root entry.
+ */
+export function recordDashboardDismissal(
+  rootWorkspaceId: string,
+  contributionId: string,
+): void {
+  const ws = getWorkspace(rootWorkspaceId);
+  if (!ws) return;
+  const current = ws.dismissedDashboardContributionIds ?? [];
+  if (current.includes(contributionId)) return;
+  updateWorkspace(rootWorkspaceId, {
+    dismissedDashboardContributionIds: [...current, contributionId],
+  });
+}
+
+/**
+ * Remove `contributionId` from the workspace's dismissal list. Called
+ * when the user re-enables a previously dismissed `defaultEnabled`
+ * contribution from Workspace Settings, so the next provisioning pass
+ * (or the immediate `create()` in the toggle handler) is the only
+ * source of truth for the dashboard's lifecycle. No-op when the id
+ * isn't present in the list.
+ */
+export function clearDashboardDismissal(
+  rootWorkspaceId: string,
+  contributionId: string,
+): void {
+  const ws = getWorkspace(rootWorkspaceId);
+  if (!ws) return;
+  const current = ws.dismissedDashboardContributionIds ?? [];
+  if (!current.includes(contributionId)) return;
+  const next = current.filter((id) => id !== contributionId);
+  updateWorkspace(rootWorkspaceId, {
+    dismissedDashboardContributionIds: next.length > 0 ? next : undefined,
+  });
 }
 
 /**

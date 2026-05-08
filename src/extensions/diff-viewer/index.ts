@@ -103,8 +103,18 @@ export function registerDiffViewerExtension(api: ExtensionAPI): void {
       actionLabel: "Add Diff Dashboard",
       capPerWorkspace: 1,
       icon: DiffIcon,
+      defaultEnabled: true,
       paneConstraints: { singleSurface: true },
       create: (workspace) => createDiffDashboardWorkspace(workspace),
+      openAsTab: async (workspace) => {
+        await api.openDashboardTab(workspace.id, {
+          kind: "extension",
+          surfaceTypeId: "diff-viewer:diff",
+          title: "Uncommitted Changes",
+          props: { repoPath: workspace.path, baseBranch: "HEAD" },
+          matchProps: { repoPath: workspace.path, baseBranch: "HEAD" },
+        });
+      },
     });
   });
 }

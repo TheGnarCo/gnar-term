@@ -237,12 +237,13 @@ export function createUIRegistrationAPI(
         ...contribution,
         source: extId,
       });
-      // Auto-provision contributions back-fill onto every existing
-      // workspace once restore completes, so extensions activated after
-      // bootstrap (or whose contributions were unknown at workspace
-      // create time) still materialize their tile. Idempotent —
-      // workspaces already backed by this contribution are skipped.
-      if (contribution.autoProvision) {
+      // Auto-provision and default-enabled contributions back-fill onto
+      // every existing workspace once restore completes, so extensions
+      // activated after bootstrap (or whose contributions were unknown
+      // at workspace create time) still materialize their tile.
+      // Idempotent — workspaces already backed by this contribution,
+      // or that have dismissed it, are skipped.
+      if (contribution.autoProvision || contribution.defaultEnabled) {
         void (async () => {
           await waitRestored();
           for (const ws of getWorkspaces()) {

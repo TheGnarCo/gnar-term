@@ -21,6 +21,7 @@
     WORKSPACE_STATE_CHANGED,
     toggleWorkspaceLock,
   } from "../services/workspace-service";
+  import { openWorkspaceSettingsTab } from "../services/surface-service";
   import { archiveWorkspace } from "../services/archive-service";
   import {
     type WorkspaceActionContext,
@@ -300,26 +301,24 @@
   let hoveredTileActionId: string | null = null;
   let caretHovered = false;
 
-  // Workspace's dashboards split into the Settings chip (always rendered
-  // last, just before the expansion toggle) and everything else (rendered
-  // first, then the tile actions). Settings is intentionally separated
-  // out at the data layer so the template can interleave it after the
-  // tile-action group instead of relying on a sort-and-suffix pass.
-  $: allDashboards = (() => {
+  // Workspace's dashboards rendered as chips in the btn-row. Auto-
+  // provisioned contributions (currently just Settings) are excluded
+  // because they have dedicated UI — the banner-end gear chip opens
+  // Settings as a tab inside the workspace via openWorkspaceSettingsTab.
+  $: workspaceDashboards = (() => {
     const wId = workspace?.id;
     if (!wId) return [] as Array<{ ws: Workspace; idx: number }>;
     return $workspaces
       .map((ws, idx) => ({ ws, idx }))
-      .filter(
-        ({ ws }) => ws.isDashboard === true && ws.rootWorkspaceId === wId,
-      );
+      .filter(({ ws }) => {
+        if (ws.isDashboard !== true || ws.rootWorkspaceId !== wId) return false;
+        const contribId = ws.dashboardContributionId;
+        const contribution = contribId
+          ? getDashboardContribution(contribId)
+          : undefined;
+        return !contribution?.autoProvision;
+      });
   })();
-  $: nonSettingsDashboards = allDashboards.filter(
-    ({ ws }) => ws.dashboardContributionId !== "settings",
-  );
-  $: settingsDashboard = allDashboards.find(
-    ({ ws }) => ws.dashboardContributionId === "settings",
-  );
 
   $: tileActions = $workspaceActionStore.filter(
     (a) =>
@@ -436,19 +435,37 @@
 
       <svelte:fragment slot="banner-end" let:bannerHovered>
         {#if isWorkspaceLocked}
-          <SidebarChipButton
-            variant="lock"
-            title="Unlock Workspace"
-            idleColor={workspaceHex}
-            onClick={() => void handleUnlockWorkspace()}
-          />
+          <div style="display: flex; align-items: center; gap: 2px;">
+            {#if bannerHovered}
+              <SidebarChipButton
+                variant="settings"
+                title="Workspace Settings"
+                idleColor={workspaceHex}
+                onClick={() => void openWorkspaceSettingsTab(workspace!.id)}
+              />
+            {/if}
+            <SidebarChipButton
+              variant="lock"
+              title="Unlock Workspace"
+              idleColor={workspaceHex}
+              onClick={() => void handleUnlockWorkspace()}
+            />
+          </div>
         {:else if bannerHovered}
-          <SidebarChipButton
-            variant="close"
-            title="Delete Workspace"
-            idleColor={workspaceHex}
-            onClick={() => void handleDeleteWorkspace()}
-          />
+          <div style="display: flex; align-items: center; gap: 2px;">
+            <SidebarChipButton
+              variant="settings"
+              title="Workspace Settings"
+              idleColor={workspaceHex}
+              onClick={() => void openWorkspaceSettingsTab(workspace!.id)}
+            />
+            <SidebarChipButton
+              variant="close"
+              title="Delete Workspace"
+              idleColor={workspaceHex}
+              onClick={() => void handleDeleteWorkspace()}
+            />
+          </div>
         {:else if shortcutIdx !== undefined && shortcutIdx < 9 && $shortcutHintsActive}
           <span
             aria-hidden="true"
@@ -495,8 +512,8 @@
           <div
             style="
               position: relative;
-              flex: 1 1 calc(25% - 3px);
-              min-width: 28px;
+              flex: 0 0 auto;
+              width: 28px;
               height: 24px;
             "
             on:mouseenter={() => (hoveredDashId = entry.ws.id)}
@@ -508,7 +525,13 @@
               data-dashboard-contribution={contribId}
               data-active={isActive ? "true" : undefined}
               aria-label={entry.ws.name}
-              on:click|stopPropagation={() => switchWorkspace(entry.idx)}
+              on:click|stopPropagation={() => {
+                if (contribution?.openAsTab && workspace) {
+                  void contribution.openAsTab(workspace);
+                } else {
+                  switchWorkspace(entry.idx);
+                }
+              }}
               on:contextmenu|preventDefault|stopPropagation={(e) =>
                 showDashboardContextMenu(e.clientX, e.clientY, entry.idx)}
               style="
@@ -531,7 +554,7 @@
           </div>
         {/snippet}
 
-        {#each nonSettingsDashboards as entry (entry.ws.id)}
+        {#each workspaceDashboards as entry (entry.ws.id)}
           {@render dashboardChip(entry)}
         {/each}
         {#each tileActions as action (action.id)}
@@ -556,12 +579,9 @@
             />
           </button>
         {/each}
-        {#if settingsDashboard}
-          {@render dashboardChip(settingsDashboard)}
-        {/if}
         {#if showToggle}
           <button
-            class="dash-btn"
+            class="dash-btn dash-btn-expand"
             on:click|stopPropagation={toggle}
             on:mouseenter={() => (caretHovered = true)}
             on:mouseleave={() => (caretHovered = false)}
@@ -634,8 +654,8 @@
 
 <style>
   .dash-btn {
-    flex: 1 1 calc(25% - 3px);
-    min-width: 28px;
+    flex: 0 0 auto;
+    width: 28px;
     height: 24px;
     border-radius: 5px;
     cursor: pointer;
@@ -644,6 +664,11 @@
     justify-content: center;
     color: inherit;
     -webkit-app-region: no-drag;
+  }
+  .dash-btn-expand {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 28px;
   }
   .dash-btn:hover {
     filter: brightness(1.1);

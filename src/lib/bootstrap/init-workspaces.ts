@@ -10,6 +10,8 @@
 import { get } from "svelte/store";
 import { registerCommand } from "../services/command-registry";
 import { registerRootRowRenderer } from "../services/root-row-renderer-registry";
+import { registerSurfaceType } from "../services/surface-type-registry";
+import WorkspaceDashboardSettings from "../components/WorkspaceDashboardSettings.svelte";
 import {
   registerDashboardContribution,
   OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
@@ -27,6 +29,7 @@ import {
   addBranchToWorkspace,
   createWorkspaceDashboard,
   createSettingsDashboardWorkspace,
+  ensureWorkspaceDashboardMarkdown,
   isDashboardWorkspace,
   openWorkspaceDashboard,
   provisionAutoDashboardsForWorkspace,
@@ -35,6 +38,7 @@ import {
   removeBranchFromAllWorkspaces,
   updateWorkspace,
 } from "../services/workspace-service";
+import { openDashboardSurfaceTab } from "../services/surface-service";
 import { resolveWorkspaceColor } from "../theme-data";
 import { theme } from "../stores/theme";
 import WorkspaceRowBody from "../components/WorkspaceRowBody.svelte";
@@ -314,6 +318,14 @@ export async function initWorkspaces(): Promise<void> {
       await createWorkspaceDashboard(workspace),
     regenerate: async (workspace: Workspace) =>
       await regenerateWorkspaceDashboardTemplate(workspace),
+    openAsTab: async (workspace: Workspace) => {
+      const path = await ensureWorkspaceDashboardMarkdown(workspace);
+      await openDashboardSurfaceTab(workspace.id, {
+        kind: "preview",
+        path,
+        title: "Dashboard",
+      });
+    },
   });
 
   // Core-internal "Settings" contribution — id `settings`,
@@ -332,6 +344,19 @@ export async function initWorkspaces(): Promise<void> {
     lockedReason: "Required (Settings)",
     create: async (workspace: Workspace) =>
       await createSettingsDashboardWorkspace(workspace),
+  });
+
+  // Core-internal surface type for the per-workspace Settings panel.
+  // Spawned as a tab inside the workspace's primary pane via the
+  // banner gear chip, so users can edit settings without leaving the
+  // workspace. Hidden from the "+ new surface" menu — it's reached
+  // through the gear, not from an empty pane.
+  registerSurfaceType({
+    id: "core:workspace-settings",
+    label: "Workspace Settings",
+    component: WorkspaceDashboardSettings,
+    source: "core",
+    hideFromNewSurface: true,
   });
 
   eventBus.on("workspace:created", onWorkspaceCreated);

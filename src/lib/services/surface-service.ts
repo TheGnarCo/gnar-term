@@ -15,6 +15,7 @@ import {
   uid,
   isTerminalSurface,
   isExtensionSurface,
+  isPreviewSurface,
   type Workspace,
   type Pane,
   type Surface,
@@ -25,6 +26,7 @@ import { closeWorkspace, schedulePersist } from "./workspace-runtime-service";
 import { findPreviewSurfaceByPath } from "./preview-surface-registry";
 import { canPreview } from "./preview-registry";
 import { safeFocus, getCwdForSurface } from "./service-helpers";
+import { activateWorkspace } from "./workspace-service";
 import { eventBus } from "./event-bus";
 
 export function selectSurface(paneId: string, surfaceId: string) {
@@ -250,6 +252,124 @@ export function openExtensionSurfaceInPane(
   pane.surfaces.push(surface);
   pane.activeSurfaceId = surface.id;
   workspaces.update((l) => [...l]);
+}
+
+/**
+ * Open the per-workspace Settings panel as a new tab inside the workspace's
+ * own runtime — never as a separate dashboard workspace, never as a split.
+ * Reused for any workspace chip action that needs to surface inside its
+ * owning workspace.
+ *
+ * Activates the root runtime workspace (materializes if not yet live;
+ * Root runtime workspaces share their id with their RootWorkspace, ADR-004),
+ * then dedupes by surfaceTypeId + props.rootWorkspaceId across every pane
+ * of that workspace. If a matching tab already exists, focuses it; otherwise
+ * pushes a fresh ExtensionSurface onto the workspace's active pane.
+ */
+export type DashboardTabSpec =
+  | {
+      kind: "extension";
+      surfaceTypeId: string;
+      title: string;
+      props?: Record<string, unknown>;
+      /**
+       * Subset of `props` used to dedupe an existing matching tab. When
+       * omitted, dedup falls back to surfaceTypeId equality.
+       */
+      matchProps?: Record<string, unknown>;
+    }
+  | { kind: "preview"; path: string; title?: string };
+
+/**
+ * Open a dashboard surface as a tab inside the workspace's active pane.
+ * Used by `DashboardContribution.openAsTab` implementations to spawn
+ * dashboards (Workspace overview, Agentic, Diff, Settings) inline rather
+ * than switching to a separate dashboard workspace.
+ *
+ * Activates the root runtime workspace (materializes if not yet live;
+ * Root runtime workspaces share their id with their RootWorkspace, ADR-004),
+ * then dedupes by spec identity across every pane. If a matching tab
+ * already exists, focuses it; otherwise pushes a fresh surface onto the
+ * workspace's active pane.
+ */
+export async function openDashboardSurfaceTab(
+  rootWorkspaceId: string,
+  spec: DashboardTabSpec,
+): Promise<void> {
+  await activateWorkspace(rootWorkspaceId);
+
+  const ws = get(workspaces).find((w) => w.id === rootWorkspaceId);
+  if (!ws) return;
+
+  for (const pane of getAllPanes(ws.paneLayout)) {
+    const existing = pane.surfaces.find((s) => {
+      if (spec.kind === "preview") {
+        return isPreviewSurface(s) && s.path === spec.path;
+      }
+      if (!isExtensionSurface(s) || s.surfaceTypeId !== spec.surfaceTypeId) {
+        return false;
+      }
+      const match = spec.matchProps;
+      if (!match) return true;
+      const sProps = (s.props ?? {}) as Record<string, unknown>;
+      return Object.entries(match).every(([k, v]) => sProps[k] === v);
+    });
+    if (existing) {
+      ws.activePaneId = pane.id;
+      selectSurface(pane.id, existing.id);
+      return;
+    }
+  }
+
+  const panes = getAllPanes(ws.paneLayout);
+  const targetPane = panes.find((p) => p.id === ws.activePaneId) ?? panes[0];
+  if (!targetPane) return;
+
+  let surface: Surface;
+  if (spec.kind === "preview") {
+    const basename = spec.path.split("/").pop() || spec.path;
+    const title = spec.title ?? basename.replace(/\.md$/, "");
+    surface = {
+      kind: "preview",
+      id: uid(),
+      title,
+      path: spec.path,
+      hasUnread: false,
+    };
+  } else {
+    surface = {
+      kind: "extension",
+      id: uid(),
+      surfaceTypeId: spec.surfaceTypeId,
+      title: spec.title,
+      hasUnread: false,
+      props: spec.props,
+    };
+  }
+  targetPane.surfaces.push(surface);
+  targetPane.activeSurfaceId = surface.id;
+  ws.activePaneId = targetPane.id;
+  workspaces.update((l) => [...l]);
+  eventBus.emit({
+    type: "surface:created",
+    id: surface.id,
+    paneId: targetPane.id,
+    kind: surface.kind,
+  });
+  void safeFocus(surface);
+  schedulePersist();
+}
+
+export async function openWorkspaceSettingsTab(
+  rootWorkspaceId: string,
+): Promise<void> {
+  await openDashboardSurfaceTab(rootWorkspaceId, {
+    kind: "extension",
+    surfaceTypeId: "core:workspace-settings",
+    title: "Workspace Settings",
+    props: { rootWorkspaceId },
+    matchProps: { rootWorkspaceId },
+  });
 }
 
 export function openExtensionSurfaceInPaneById(

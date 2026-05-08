@@ -66,6 +66,7 @@ export interface WorkspaceTemplate {
   isDashboard?: boolean;
   dashboardContributionId?: string;
   dashboardWorkspaceId?: string;
+  dismissedDashboardContributionIds?: string[];
   lastActiveBranchedWorkspaceId?: string;
   locked?: boolean;
   autoRunRestoreCommands?: boolean;
@@ -103,6 +104,13 @@ export interface WorkspaceDef {
   // Navigation
   lastActiveBranchedWorkspaceId?: string;
   dashboardWorkspaceId?: string;
+  /**
+   * Dashboard contribution ids the user has dismissed on this root
+   * Workspace — `defaultEnabled` contributions in this list are NOT
+   * re-provisioned on reconcile. Persisted so the dismissal survives
+   * restart.
+   */
+  dismissedDashboardContributionIds?: string[];
   // Membership / kind discriminants. `rootWorkspaceId` identifies
   // which Workspace this Branch (or Dashboard) belongs to.
   rootWorkspaceId?: string;

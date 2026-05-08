@@ -48,6 +48,14 @@ export interface Workspace {
    * Dashboard registry.
    */
   dashboardContributionId?: string;
+  /**
+   * Set on a root Workspace ONLY. Contribution ids the user has dismissed
+   * for this workspace — `defaultEnabled` contributions in this list are
+   * NOT re-provisioned by `provisionAutoDashboardsForWorkspace`. Cleared
+   * for a contribution when the user re-enables it from Workspace Settings.
+   * Has no effect on `autoProvision` contributions (those are locked-on).
+   */
+  dismissedDashboardContributionIds?: string[];
   // Extension data — replaces open-ended metadata index signature
   extensionData?: Record<string, unknown>;
   // Root Workspace reference — presence discriminates Branches from root Workspaces

@@ -18,6 +18,7 @@
     workspaceDashboardPath,
     updateWorkspace,
     closeDashboardForWorkspace,
+    clearDashboardDismissal,
   } from "../services/workspace-service";
   import { switchWorkspace } from "../services/workspace-runtime-service";
   import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
@@ -30,6 +31,13 @@
   import GridIcon from "../icons/GridIcon.svelte";
 
   export let rootWorkspaceId: string;
+  /**
+   * When this component is mounted as an extension surface, PaneView passes
+   * `visible` so inactive tabs collapse to display:none (matching
+   * Terminal/Preview surface behavior). Default true for direct-render use
+   * sites (e.g. the settings dashboard workspace).
+   */
+  export let visible: boolean = true;
 
   /** Per-row regenerate-in-flight flag. Keyed by contribution id. */
   let regeneratingRow: string | null = null;
@@ -101,6 +109,11 @@
     if (!workspace) return;
     if (contribution.autoProvision) return;
     if (next) {
+      // Re-enabling clears any prior dismissal so the next reconcile pass
+      // does not skip a defaultEnabled contribution we just re-added.
+      if (contribution.defaultEnabled) {
+        clearDashboardDismissal(workspace.id, contribution.id);
+      }
       // Snapshot the active workspace before create() — createWorkspaceFromDef
       // auto-switches to the freshly created dashboard, which would yank the
       // user out of the Settings panel they're toggling from.
@@ -170,7 +183,9 @@
     data-workspace-id={workspace.id}
     style="
       flex: 1; min-width: 0; min-height: 0; overflow: auto;
-      padding: 24px 32px; display: flex; flex-direction: column; gap: 24px;
+      padding: 24px 32px;
+      display: {visible ? 'flex' : 'none'};
+      flex-direction: column; gap: 24px;
       background: {$theme.bg}; color: {$theme.fg};
     "
   >

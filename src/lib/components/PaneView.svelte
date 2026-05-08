@@ -231,6 +231,8 @@
     ? `box-shadow: 0 0 0 1px ${$theme.notifyGlow}, 0 0 14px 1px ${$theme.notifyGlow};`
     : ''}
     {arriving ? 'animation: paneNotifySwell 1.8s ease-out 1;' : ''}
+    opacity: {isActive ? 1 : 0.35};
+    transition: opacity 0.15s ease;
   "
   on:mousedown={handleFocus}
 >

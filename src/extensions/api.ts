@@ -681,6 +681,19 @@ export interface ExtensionAPI {
     title: string,
     props?: Record<string, unknown>,
   ): void;
+  /**
+   * Open a dashboard surface as a tab inside `workspaceId`'s active pane.
+   * Used by `DashboardContribution.openAsTab` implementations to push
+   * Workspace overview / Agentic / Diff / etc. into the parent workspace
+   * instead of switching to a separate dashboard workspace. Dedupes by
+   * path (preview specs) or surfaceTypeId+matchProps (extension specs).
+   * Extension surface ids without `:` are namespaced under the calling
+   * extension's id.
+   */
+  openDashboardTab(
+    workspaceId: string,
+    spec: ExtensionDashboardTabSpec,
+  ): Promise<void>;
 
   // Workspace management — switch and close by ID
   switchWorkspace(workspaceId: string): void;
@@ -1010,6 +1023,25 @@ export interface WorkspaceRef {
 }
 
 /**
+ * Spec passed to `ExtensionAPI.openDashboardTab`. Extension surface ids
+ * without `:` are namespaced under the calling extension's id at call
+ * time. Mirrors the internal `DashboardTabSpec`.
+ */
+export type ExtensionDashboardTabSpec =
+  | {
+      kind: "extension";
+      surfaceTypeId: string;
+      title: string;
+      props?: Record<string, unknown>;
+      /**
+       * Subset of `props` used to dedupe an existing matching tab. When
+       * omitted, dedup falls back to surfaceTypeId equality.
+       */
+      matchProps?: Record<string, unknown>;
+    }
+  | { kind: "preview"; path: string; title?: string };
+
+/**
  * Arguments for `ExtensionAPI.registerDashboardContribution`. See the
  * registry docs in `src/lib/services/dashboard-contribution-registry.ts`
  * for lifecycle details.
@@ -1061,6 +1093,17 @@ export interface DashboardContributionInput {
    */
   autoProvision?: boolean;
   /**
+   * When true, the contribution materializes automatically for every
+   * workspace on first creation / reconciliation, but the user CAN
+   * remove it. Closing a defaultEnabled dashboard records the
+   * dismissal on the workspace so the next reconcile pass does not
+   * recreate it. Re-enabling from Settings clears the dismissal.
+   *
+   * Use this for default-on extension dashboards. `autoProvision` and
+   * `defaultEnabled` are mutually exclusive — `autoProvision` wins.
+   */
+  defaultEnabled?: boolean;
+  /**
    * Hints for how PaneView should render the dashboard workspace.
    * `singleSurface: true` documents that the contribution's
    * workspace is a tab-less / split-less single-surface pane.
@@ -1072,6 +1115,13 @@ export interface DashboardContributionInput {
    * alongside `autoProvision: true`.
    */
   lockedReason?: string;
+  /**
+   * Optional override for the dashboard chip's click behavior. When
+   * defined, a chip click opens the dashboard *as a tab* inside the
+   * parent workspace's active pane instead of switching to a separate
+   * dashboard workspace.
+   */
+  openAsTab?: (workspace: WorkspaceRef) => Promise<void>;
 }
 
 /**

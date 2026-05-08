@@ -213,12 +213,9 @@
     {/if}
 
     {#if showPr && pr}
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div
-        style="display: flex; align-items: center; gap: 3px; min-width: 0; overflow: hidden; cursor: pointer;"
+        style="display: flex; align-items: center; gap: 3px; min-width: 0; overflow: hidden;"
         title="#{pr.number} {pr.title}{isDraft ? ' (draft)' : ''}"
-        on:click={() => pr && invoke("open_url", { url: pr.url })}
       >
         <svg
           width="10"
@@ -237,8 +234,12 @@
           <path d="M13 6h3a2 2 0 0 1 2 2v7" />
           <line x1="6" x2="6" y1="9" y2="21" />
         </svg>
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
         <span
-          style="font-size: 10px; color: {prColor}; white-space: nowrap; flex-shrink: 0; text-decoration: underline;"
+          style="font-size: 10px; color: {prColor}; white-space: nowrap; flex-shrink: 0; text-decoration: underline; cursor: pointer;"
+          on:click|stopPropagation={() =>
+            pr && invoke("open_url", { url: pr.url })}
         >
           #{pr.number}{isDraft ? " draft" : ""}
         </span>

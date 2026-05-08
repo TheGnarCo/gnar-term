@@ -3,7 +3,6 @@
   import { activeWorkspace, workspaces } from "../stores/workspace";
   import { getWorkspaceStatus } from "../services/status-registry";
   import { GIT_STATUS_SOURCE } from "../services/git-status-service";
-  import type { StatusItem } from "../types/status";
 
   export let workspaceId: string;
   export let accentColor: string | undefined = undefined;
@@ -37,15 +36,6 @@
   function variantColor(variant: string | undefined, fallback: string): string {
     if (!variant || variant === "default") return fallback;
     return VARIANT_COLORS[variant] ?? fallback;
-  }
-
-  function handleAction(action: StatusItem["action"]) {
-    if (!action) return;
-    const event = new CustomEvent("status-action", {
-      detail: action,
-      bubbles: true,
-    });
-    document.dispatchEvent(event);
   }
 
   $: topRowHasContent = Boolean(cwdItem || branchItem);
@@ -90,28 +80,14 @@
         >
       {/if}
       {#if worktreeDirtyItem && isActiveWorkspace}
-        {#if worktreeDirtyItem.action && isActiveWorkspace}
-          <button
-            style="font-size: 10px; color: {variantColor(
-              worktreeDirtyItem.variant,
-              fgMuted,
-            )}; text-decoration: underline; cursor: pointer; white-space: nowrap; background: none; border: none; padding: 0; font-family: inherit;"
-            title={worktreeDirtyItem.tooltip || worktreeDirtyItem.label}
-            aria-label={worktreeDirtyItem.tooltip || worktreeDirtyItem.label}
-            on:click|stopPropagation={() =>
-              handleAction(worktreeDirtyItem.action)}
-            >{worktreeDirtyItem.label}</button
-          >
-        {:else}
-          <span
-            style="font-size: 10px; color: {variantColor(
-              worktreeDirtyItem.variant,
-              fgMuted,
-            )}; white-space: nowrap;"
-            title={worktreeDirtyItem.tooltip || worktreeDirtyItem.label}
-            >{worktreeDirtyItem.label}</span
-          >
-        {/if}
+        <span
+          style="font-size: 10px; color: {variantColor(
+            worktreeDirtyItem.variant,
+            fgMuted,
+          )}; white-space: nowrap;"
+          title={worktreeDirtyItem.tooltip || worktreeDirtyItem.label}
+          >{worktreeDirtyItem.label}</span
+        >
       {/if}
     </div>
   {/if}

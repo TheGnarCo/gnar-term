@@ -59,7 +59,6 @@
     extensionErrorStore,
     reportExtensionError,
     flushAllExtensionState,
-    ensureProviderAndThen,
     getExtensionApiById,
   } from "./lib/services/extension-loader";
   import ExtensionWrapper from "./lib/components/ExtensionWrapper.svelte";
@@ -796,25 +795,6 @@
     await listen("menu-close-tab", () => {
       closeActiveSurface();
     });
-
-    // Handle status item actions (e.g., clicking "3 modified" opens diff surface)
-    document.addEventListener("status-action", ((e: CustomEvent) => {
-      const action = e.detail as { command: string; args?: unknown[] };
-      if (action.command === "open-url" && action.args?.[0]) {
-        void invoke("open_url", {
-          url: action.args[0] as string,
-        });
-      } else if (action.command === "open-surface" && action.args) {
-        const [surfaceTypeId, title, props] = action.args as [
-          string,
-          string,
-          Record<string, unknown> | undefined,
-        ];
-        const open = () =>
-          openRegistrySurfaceInPane(surfaceTypeId, title, props);
-        void ensureProviderAndThen(surfaceTypeId, open);
-      }
-    }) as EventListener);
 
     // Track fullscreen state for layout adjustments (e.g. traffic light padding)
     const appWindow = getCurrentWindow();

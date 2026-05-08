@@ -72,8 +72,8 @@ describe("WorkspaceListBlock per-row popover (collapsed sidebar)", () => {
   });
 
   it("does not render a popover when no row is hovered", () => {
-    const { container } = render(WorkspaceListBlock);
-    expect(container.querySelector("[data-root-row-popover]")).toBeNull();
+    render(WorkspaceListBlock);
+    expect(document.body.querySelector("[data-root-row-popover]")).toBeNull();
   });
 
   it("renders one popover positioned at the hovered row when the sidebar is collapsed", async () => {
@@ -84,7 +84,7 @@ describe("WorkspaceListBlock per-row popover (collapsed sidebar)", () => {
     expect(row).not.toBeNull();
     await fireEvent.mouseEnter(row!);
     await tick();
-    const popover = container.querySelector(
+    const popover = document.body.querySelector(
       "[data-root-row-popover]",
     ) as HTMLElement | null;
     expect(popover).not.toBeNull();
@@ -101,7 +101,9 @@ describe("WorkspaceListBlock per-row popover (collapsed sidebar)", () => {
     const row = container.querySelector("[data-root-row-key]") as HTMLElement;
     await fireEvent.mouseEnter(row);
     await tick();
-    expect(container.querySelector("[data-root-row-popover]")).not.toBeNull();
+    expect(
+      document.body.querySelector("[data-root-row-popover]"),
+    ).not.toBeNull();
 
     // Simulate cursor moving to a clearly out-of-bounds position. The
     // document-level mousemove handler hit-tests against the row and
@@ -110,11 +112,13 @@ describe("WorkspaceListBlock per-row popover (collapsed sidebar)", () => {
     await fireEvent.mouseMove(document, { clientX: 999, clientY: 999 });
     await tick();
     // Still present — grace timer hasn't fired yet.
-    expect(container.querySelector("[data-root-row-popover]")).not.toBeNull();
+    expect(
+      document.body.querySelector("[data-root-row-popover]"),
+    ).not.toBeNull();
 
     vi.advanceTimersByTime(151);
     await tick();
-    expect(container.querySelector("[data-root-row-popover]")).toBeNull();
+    expect(document.body.querySelector("[data-root-row-popover]")).toBeNull();
     expect(get(hoveredRootRowKey)).toBeNull();
     vi.useRealTimers();
   });
@@ -125,7 +129,7 @@ describe("WorkspaceListBlock per-row popover (collapsed sidebar)", () => {
     const row = container.querySelector("[data-root-row-key]") as HTMLElement;
     await fireEvent.mouseEnter(row);
     await tick();
-    const popover = container.querySelector(
+    const popover = document.body.querySelector(
       "[data-root-row-popover]",
     ) as HTMLElement;
     expect(popover).not.toBeNull();
@@ -151,7 +155,9 @@ describe("WorkspaceListBlock per-row popover (collapsed sidebar)", () => {
     await fireEvent.mouseMove(document, { clientX: 50, clientY: 50 });
     vi.advanceTimersByTime(500);
     await tick();
-    expect(container.querySelector("[data-root-row-popover]")).not.toBeNull();
+    expect(
+      document.body.querySelector("[data-root-row-popover]"),
+    ).not.toBeNull();
     vi.useRealTimers();
   });
 
@@ -160,11 +166,13 @@ describe("WorkspaceListBlock per-row popover (collapsed sidebar)", () => {
     const row = container.querySelector("[data-root-row-key]") as HTMLElement;
     await fireEvent.mouseEnter(row);
     await tick();
-    expect(container.querySelector("[data-root-row-popover]")).not.toBeNull();
+    expect(
+      document.body.querySelector("[data-root-row-popover]"),
+    ).not.toBeNull();
 
     sidebarVisible.set(true);
     await tick();
-    expect(container.querySelector("[data-root-row-popover]")).toBeNull();
+    expect(document.body.querySelector("[data-root-row-popover]")).toBeNull();
     expect(get(hoveredRootRowKey)).toBeNull();
   });
 
@@ -174,6 +182,6 @@ describe("WorkspaceListBlock per-row popover (collapsed sidebar)", () => {
     const row = container.querySelector("[data-root-row-key]") as HTMLElement;
     await fireEvent.mouseEnter(row);
     await tick();
-    expect(container.querySelector("[data-root-row-popover]")).toBeNull();
+    expect(document.body.querySelector("[data-root-row-popover]")).toBeNull();
   });
 });

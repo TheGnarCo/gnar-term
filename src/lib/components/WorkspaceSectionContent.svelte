@@ -644,6 +644,13 @@
     gap: 4px;
     padding: 4px 8px;
   }
+  /* Inside the grid the chip button is absolutely positioned to fill
+     its fluid wrapper. The class default `width: 28px` would pin it
+     to 28px and break the stretch — force auto so left/right insets
+     win. */
+  .dashboard-chip-grid .dash-btn {
+    width: auto;
+  }
   .dash-btn {
     flex: 0 0 auto;
     width: 28px;

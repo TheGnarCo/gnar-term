@@ -128,7 +128,12 @@ export async function createWorkspaceFromDef(
           if (sDef.focus) pane.activeSurfaceId = surface.id;
         }
       }
-      if (pane.surfaces.length === 0) {
+      // Dashboard workspaces are routing-only shells rendered by PaneView
+      // via dashboardWorkspaceRegistry — they intentionally carry no
+      // surfaces. Skip the auto-terminal fallback for them; the
+      // workspace exists purely to associate a dashboard contribution
+      // with a parent root.
+      if (pane.surfaces.length === 0 && def.isDashboard !== true) {
         await createTerminalSurface(pane, inheritedCwd, inheritedEnv);
       }
       return { type: "pane", pane };

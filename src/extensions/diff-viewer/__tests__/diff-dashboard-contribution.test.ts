@@ -75,14 +75,13 @@ describe("Diff dashboard contribution", () => {
     expect(diff?.label).toBe("Diff");
     expect(diff?.source).toBe("diff-viewer");
     expect(diff?.capPerWorkspace).toBe(1);
-    expect(diff?.paneConstraints?.singleSurface).toBe(true);
     expect(diff?.autoProvision).toBeFalsy();
     expect(diff?.defaultEnabled).toBe(true);
     expect(diff?.lockedReason).toBeUndefined();
     expect(diff?.icon).toBeDefined();
   });
 
-  it("create(workspace) materializes a workspace with a diff-viewer:diff surface", async () => {
+  it("create(workspace) materializes a routing-only Branch tagged with the diff contribution", async () => {
     registerExtension(diffViewerManifest, registerDiffViewerExtension);
     await activateExtension("diff-viewer");
 
@@ -104,6 +103,11 @@ describe("Diff dashboard contribution", () => {
     expect(created).toBeTruthy();
     expect(created!.isDashboard).toBe(true);
     expect(created!.rootWorkspaceId).toBe("g1");
+    // Diff Dashboard is component-rendered now — the workspace carries no surfaces.
+    const panes = (
+      created!.paneLayout as unknown as { pane: { surfaces: unknown[] } }
+    ).pane.surfaces;
+    expect(panes).toEqual([]);
   });
 
   it("back-fills the Diff Dashboard onto existing workspaces on activate", async () => {

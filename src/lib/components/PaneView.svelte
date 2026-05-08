@@ -357,11 +357,15 @@
     {@const entryApi = dashboardWorkspaceEntry.source
       ? getExtensionApiById(dashboardWorkspaceEntry.source)
       : null}
+    {@const dashboardHost = workspaceMetadata
+      ? { metadata: workspaceMetadata as unknown as Record<string, unknown> }
+      : undefined}
     {#if entryApi}
       <ExtensionWrapper
         api={entryApi}
         component={dashboardWorkspaceEntry.component}
         props={{}}
+        host={dashboardHost}
       />
     {:else}
       <svelte:component this={dashboardWorkspaceEntry.component} />

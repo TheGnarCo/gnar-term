@@ -45,8 +45,22 @@ describe("Extension barrier enforcement", () => {
     const FILE_EXCEPTIONS: Record<string, string[]> = {
       // The Diff Dashboard contribution's `create(workspace)` materializes
       // a dashboard workspace via createWorkspaceFromDef — mirrors the
-      // agentic-orchestrator piercing below.
-      "diff-viewer/index.ts": ["../../lib/services/workspace-runtime-service"],
+      // agentic-orchestrator piercing below. dashboard-workspace-service
+      // is the core registry for extension-contributed dashboard
+      // components (parallel to api.registerSurfaceType, but components
+      // bind to a workspace rather than a surface).
+      "diff-viewer/index.ts": [
+        "../../lib/services/workspace-runtime-service",
+        "../../lib/services/dashboard-workspace-service",
+      ],
+      // DiffDashboardBody is the diff dashboard's component body — it
+      // reads DashboardHostContext to discover the root workspace and
+      // looks up the workspace by id from the workspaces store. Same
+      // piercing shape as Kanban / ClaudeSettingsWidget.
+      "diff-viewer/DiffDashboardBody.svelte": [
+        "../../lib/contexts/dashboard-host",
+        "../../lib/stores/workspace",
+      ],
       // The Agentic Dashboard contribution's `create(workspace)` must
       // materialize a dashboard workspace; reaching for
       // createWorkspaceFromDef keeps the contribution on the same code

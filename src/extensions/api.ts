@@ -353,6 +353,12 @@ export interface ExtensionAPI {
       icon: unknown;
       title: string;
       isActive?: Readable<boolean>;
+      /**
+       * When provided, the button only renders while this store emits
+       * true. Use it to gate a button on an extension setting without
+       * unregistering on every change.
+       */
+      visible?: Readable<boolean>;
       onClick: () => void;
     },
   ): void;

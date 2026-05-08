@@ -6,7 +6,9 @@ import {
   type AuthStore,
   type AuthStatus,
 } from "./auth-store";
-import { type Readable } from "svelte/store";
+import { derived, type Readable } from "svelte/store";
+import SpacebaseMark from "./icons/SpacebaseMark.svelte";
+import SpacebaseRegistry from "./SpacebaseRegistry.svelte";
 
 let authStoreSingleton: AuthStore | null = null;
 
@@ -78,6 +80,24 @@ export function registerSpacebaseExtension(api: ExtensionAPI): void {
         createSpacebaseClient({ apiKey: cfg.apiKey, baseUrl: cfg.baseUrl }),
     });
     authStoreSingleton = store;
+
+    const openRegistry = api.registerGlobalSurface("registry", {
+      label: "Spacebase",
+      icon: SpacebaseMark,
+      component: SpacebaseRegistry,
+    });
+
+    const visible = derived(
+      api.settings,
+      ($s) => $s.showTitleBarIcon !== false,
+    );
+    api.registerTitleBarButton("registry", {
+      icon: SpacebaseMark,
+      title: "Spacebase",
+      visible,
+      onClick: openRegistry,
+    });
+
     await store.refresh();
   });
   api.onDeactivate(() => {

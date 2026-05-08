@@ -19,7 +19,7 @@
  *   2. The `agentic.global` pseudo-workspace (synthetic metadata with
  *      `isGlobalAgenticDashboard: true` → global scope).
  */
-import type { ExtensionManifest, ExtensionAPI, WorkspaceRef } from "../api";
+import type { ExtensionManifest, ExtensionAPI } from "../api";
 import {
   registerDashboardSection,
   unregisterDashboardSection,
@@ -61,15 +61,19 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
       capPerWorkspace: 1,
       icon: BotIcon,
       defaultEnabled: true,
-      create: (workspace) => createAgenticDashboardWorkspace(api, workspace),
-      openAsTab: async (workspace) => {
-        await api.openDashboardTab(workspace.id, {
-          kind: "registry",
-          surfaceTypeId: globalSurfaceTypeId("agentic"),
-          title: "Agents",
-          props: { rootWorkspaceId: workspace.id },
-          matchProps: { rootWorkspaceId: workspace.id },
-        });
+      openAsTab: async (workspace, opts) => {
+        await api.openDashboardTab(
+          workspace.id,
+          {
+            kind: "registry",
+            surfaceTypeId: globalSurfaceTypeId("agentic"),
+            title: "Agents",
+            props: { rootWorkspaceId: workspace.id },
+            matchProps: { rootWorkspaceId: workspace.id },
+            dashboardContributionId: "agentic",
+          },
+          opts,
+        );
       },
     });
 
@@ -152,37 +156,3 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
 }
 
 // --- Internal helpers ---
-
-/**
- * Materialize a workspace's Agentic Dashboard. The dashboard workspace
- * holds a single hidden-surface-type registry surface
- * (`dashboard:agentic`); the registered AgenticDashboardBody renders
- * inside the standard pane render path, so TabBar + split affordances
- * work like any other workspace. `rootWorkspaceId` is forwarded via
- * surface props so the body component can project it into a
- * DashboardHostContext for embedded widgets.
- */
-async function createAgenticDashboardWorkspace(
-  api: ExtensionAPI,
-  workspace: WorkspaceRef,
-): Promise<string> {
-  return await api.createWorkspaceFromDef({
-    name: "Agents",
-    layout: {
-      pane: {
-        surfaces: [
-          {
-            type: "registry",
-            extensionType: globalSurfaceTypeId("agentic"),
-            extensionProps: { rootWorkspaceId: workspace.id },
-            name: "Agents",
-            focus: true,
-          },
-        ],
-      },
-    },
-    isDashboard: true,
-    rootWorkspaceId: workspace.id,
-    dashboardContributionId: "agentic",
-  });
-}

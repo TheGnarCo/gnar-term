@@ -666,10 +666,16 @@ export interface ExtensionAPI {
    * path (preview specs) or surfaceTypeId+matchProps (extension specs).
    * Extension surface ids without `:` are namespaced under the calling
    * extension's id.
+   *
+   * Pass `opts.activate = false` for "ensure-tab-exists" semantics —
+   * auto-provisioning paths use this so the dashboard becomes part of
+   * the workspace's tab strip without stealing focus from the active
+   * surface.
    */
   openDashboardTab(
     workspaceId: string,
     spec: ExtensionDashboardTabSpec,
+    opts?: { activate?: boolean },
   ): Promise<void>;
 
   // Workspace management — switch and close by ID
@@ -1015,8 +1021,19 @@ export type ExtensionDashboardTabSpec =
        * omitted, dedup falls back to surfaceTypeId equality.
        */
       matchProps?: Record<string, unknown>;
+      /**
+       * Stable contribution id (e.g. `"agentic"`). Stamped onto the
+       * resulting RegistrySurface so close-by-contribution helpers can
+       * find dashboard tabs without scanning props.
+       */
+      dashboardContributionId?: string;
     }
-  | { kind: "preview"; path: string; title?: string };
+  | {
+      kind: "preview";
+      path: string;
+      title?: string;
+      dashboardContributionId?: string;
+    };
 
 /**
  * Arguments for `ExtensionAPI.registerDashboardContribution`. See the
@@ -1035,15 +1052,10 @@ export interface DashboardContributionInput {
   /** Context-menu verb (e.g. "Add Agentic Dashboard"). */
   actionLabel: string;
   /**
-   * Maximum coexisting dashboards of this kind per workspace. `1` is the
-   * canonical exclusive cap; `Number.POSITIVE_INFINITY` for unlimited.
+   * Maximum coexisting dashboard tabs of this kind per workspace. `1` is
+   * the canonical exclusive cap; `Number.POSITIVE_INFINITY` for unlimited.
    */
   capPerWorkspace: number;
-  /**
-   * Materialize the dashboard for the given workspace. Must resolve to
-   * the new workspace's id.
-   */
-  create: (workspace: WorkspaceRef) => Promise<string>;
   /**
    * Optional "delete and regenerate" hook surfaced as a button next to
    * the dashboard's row in Workspace Settings. Implementations typically
@@ -1093,12 +1105,18 @@ export interface DashboardContributionInput {
    */
   lockedReason?: string;
   /**
-   * Optional override for the dashboard chip's click behavior. When
-   * defined, a chip click opens the dashboard *as a tab* inside the
-   * parent workspace's active pane instead of switching to a separate
-   * dashboard workspace.
+   * Open this dashboard as a tab inside the workspace's active pane.
+   * Required — dashboards live as tabs, not as separate workspaces.
+   *
+   * Pass `activate: false` to push the tab into the pane without
+   * activating the workspace or focusing the new surface (used during
+   * auto-provisioning so the workspace's seeded terminal stays focused
+   * after creation).
    */
-  openAsTab?: (workspace: WorkspaceRef) => Promise<void>;
+  openAsTab: (
+    workspace: WorkspaceRef,
+    opts?: { activate?: boolean },
+  ) => Promise<void>;
 }
 
 /**

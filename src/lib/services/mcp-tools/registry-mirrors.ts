@@ -1,6 +1,5 @@
 import { get } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
-import { workspaces } from "../../stores/workspace";
 import { surfaceTypeStore } from "../surface-type-registry";
 import { commandStore } from "../command-registry";
 import { workspaceActionStore } from "../workspace-action-registry";
@@ -18,9 +17,9 @@ import {
   getDashboardContribution,
 } from "../dashboard-contribution-registry";
 import {
-  closeDashboardForWorkspace,
-  isDashboardWorkspace,
-} from "../workspace-service";
+  closeDashboardContributionTab,
+  isDashboardContributionTabActive,
+} from "../surface-service";
 import { getWorkspace } from "../../stores/workspace";
 import type { ToolDef } from "../mcp-types";
 
@@ -290,7 +289,6 @@ export const registryMirrorTools: ToolDef[] = [
       if (p.workspace_id && !workspace) {
         throw new Error(`Unknown workspace: ${p.workspace_id}`);
       }
-      const wsList = workspace ? get(workspaces) : [];
       return {
         contributions: contribs.map((c) => {
           const base = {
@@ -303,13 +301,9 @@ export const registryMirrorTools: ToolDef[] = [
             locked_reason: c.lockedReason,
           };
           if (!workspace) return base;
-          const wsForContrib = wsList.find((w) =>
-            isDashboardWorkspace(w, workspace.id, c.id),
-          );
           return {
             ...base,
-            active: Boolean(wsForContrib),
-            branched_workspace_id: wsForContrib?.id,
+            active: isDashboardContributionTabActive(workspace.id, c.id),
           };
         }),
       };
@@ -318,7 +312,7 @@ export const registryMirrorTools: ToolDef[] = [
   {
     name: "add_dashboard_to_workspace",
     description:
-      "Materialize a dashboard child workspace for a Workspace by running the contribution's create hook. Errors when the contribution is autoProvision (those materialize automatically and cannot be added manually), already at its per-workspace cap, unknown, or gated out by the contribution's availability predicate. Returns the new child workspace id.",
+      "Open a dashboard contribution as a tab in the Workspace's primary pane by running the contribution's openAsTab hook. Errors when the contribution is autoProvision (those open automatically and cannot be added manually), already at its per-workspace cap, unknown, or gated out by the contribution's availability predicate. Returns `{ added: true }` on success.",
     inputSchema: {
       type: "object",
       properties: {
@@ -337,12 +331,15 @@ export const registryMirrorTools: ToolDef[] = [
       }
       if (contribution.autoProvision) {
         throw new Error(
-          `Dashboard contribution "${p.contribution_id}" is autoProvision — it materializes automatically and cannot be added manually.`,
+          `Dashboard contribution "${p.contribution_id}" is autoProvision — it opens automatically and cannot be added manually.`,
         );
       }
-      const currentCount = get(workspaces).filter((w) =>
-        isDashboardWorkspace(w, workspace.id, contribution.id),
-      ).length;
+      const currentCount = isDashboardContributionTabActive(
+        workspace.id,
+        contribution.id,
+      )
+        ? 1
+        : 0;
       if (
         !canAddContributionToWorkspace(workspace, contribution.id, currentCount)
       ) {
@@ -350,14 +347,14 @@ export const registryMirrorTools: ToolDef[] = [
           `Cannot add "${p.contribution_id}" to workspace "${p.workspace_id}" (at cap or gated by availability).`,
         );
       }
-      const branchedWorkspaceId = await contribution.create(workspace);
-      return { branched_workspace_id: branchedWorkspaceId };
+      await contribution.openAsTab(workspace);
+      return { added: true };
     },
   },
   {
     name: "remove_dashboard_from_workspace",
     description:
-      "Close the dashboard child workspace for `{workspace_id, contribution_id}`. Errors when the contribution is autoProvision (core Overview, core Settings, and the Agentic dashboard cannot be removed this way). Returns `{ removed: true }` on success, `{ removed: false }` when no such child workspace existed.",
+      "Close the dashboard tab for `{workspace_id, contribution_id}` in the workspace's pane. Errors when the contribution is autoProvision (core Settings cannot be removed this way). Returns `{ removed: true }` on success, `{ removed: false }` when no such tab existed.",
     inputSchema: {
       type: "object",
       properties: {
@@ -377,11 +374,11 @@ export const registryMirrorTools: ToolDef[] = [
           `Dashboard contribution "${p.contribution_id}" is autoProvision — locked on this workspace.`,
         );
       }
-      const removed = closeDashboardForWorkspace(
+      const removed = closeDashboardContributionTab(
         p.workspace_id,
         p.contribution_id,
       );
-      return { removed };
+      return { removed: removed > 0 };
     },
   },
 ];

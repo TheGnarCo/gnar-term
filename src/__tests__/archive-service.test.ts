@@ -54,8 +54,6 @@ vi.mock("../lib/services/workspace-service", () => ({
   provisionAutoDashboardsForWorkspace:
     mocks.provisionAutoDashboardsForWorkspace,
   activateWorkspace: mocks.activateWorkspace,
-  isDashboardWorkspace: (ws: { metadata?: { isDashboard?: boolean } }) =>
-    ws.metadata?.isDashboard === true,
 }));
 
 vi.mock("../lib/stores/root-row-order", () => ({
@@ -144,24 +142,6 @@ describe("archiveWorkspace", () => {
     expect(result).toBe(false);
     expect(mocks.closeWorkspacesInWorkspace).not.toHaveBeenCalled();
     expect(mocks.setWorkspaces).not.toHaveBeenCalled();
-  });
-
-  it("skips dashboard workspaces when counting running PTYs", async () => {
-    const workspace = makeWorkspace();
-    const dashboardWs = {
-      ...makeRunningTerminalWs("ws-dash", "Dashboard", 99),
-      metadata: { isDashboard: true },
-    };
-    mocks.getWorkspace.mockReturnValueOnce(workspace);
-    mocks.getWorkspaces.mockReturnValue([workspace]);
-    // Only the dashboard has a running PTY — counting it would prompt;
-    // skipping it should not.
-    mocks.getBranchesOfWorkspace.mockReturnValueOnce([dashboardWs]);
-
-    const result = await archiveWorkspace("g-1");
-
-    expect(mocks.showConfirmPrompt).not.toHaveBeenCalled();
-    expect(result).toBe(true);
   });
 
   it("closes workspaces, removes workspace, removes root row, and adds to archive", async () => {
@@ -257,24 +237,6 @@ describe("archiveWorkspace", () => {
     await archiveWorkspace("g-1");
 
     expect(mocks.activateWorkspace).not.toHaveBeenCalled();
-  });
-
-  it("serializes only non-dashboard workspaces into the archived defs", async () => {
-    const workspace = makeWorkspace();
-    const ws1 = makeRunningTerminalWs("ws-1", "Real", -1);
-    const dashboardWs = {
-      ...makeRunningTerminalWs("ws-dash", "Dashboard", -1),
-      metadata: { isDashboard: true },
-    };
-    mocks.getWorkspace.mockReturnValueOnce(workspace);
-    mocks.getWorkspaces.mockReturnValue([workspace]);
-    mocks.getBranchesOfWorkspace.mockReturnValueOnce([ws1, dashboardWs]);
-
-    await archiveWorkspace("g-1");
-
-    const stored = get(archivedDefs).workspaces["g-1"];
-    expect(stored?.childWorkspaceDefs).toHaveLength(1);
-    expect(stored?.childWorkspaceDefs[0]?.id).toBe("ws-1");
   });
 });
 

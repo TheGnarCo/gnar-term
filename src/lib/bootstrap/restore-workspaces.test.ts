@@ -1,17 +1,12 @@
 /**
- * Regression test for "blank sidebar after reload" bug:
+ * `restoreWorkspaces` — startup hydration of persisted state.
  *
- * `restoreWorkspaces` clears the workspaces store with `workspaces.set([])`
- * after seeding it from disk, then reads `getWorkspaces()` to compute the
- * set of "known" workspace ids it uses to filter persisted dashboards.
- * Because the store has just been cleared, that set is always empty and
- * EVERY persisted dashboard whose `rootWorkspaceId` points at a workspace
- * gets stripped — even when the owning workspace is in `runtimeDefs` and
- * about to be re-created. The result: dashboards never make it back into
- * the store on restart, and downstream sidebar tiles disappear.
- *
- * Fix: compute `knownWorkspaceIds` from `runtimeDefs` (the persisted
- * source of truth that drives re-creation), not from the cleared store.
+ * Dashboards live as tabs inside the root workspace's pane tree, so any
+ * persisted `isDashboard: true` workspace entry from older app versions
+ * is silently dropped on restore (auto-provisioning re-establishes each
+ * dashboard contribution as a tab via `openAsTab` instead). Root
+ * workspaces are re-created normally; the dashboard records do not
+ * become independent workspaces.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { get } from "svelte/store";
@@ -57,7 +52,7 @@ const ROOT: WorkspaceDef = {
   layout: { pane: { surfaces: [] } },
 };
 
-const OWNED_DASHBOARD: WorkspaceDef = {
+const LEGACY_DASHBOARD: WorkspaceDef = {
   id: "dash-1",
   name: "Dashboard",
   rootWorkspaceId: "root-1",
@@ -66,7 +61,7 @@ const OWNED_DASHBOARD: WorkspaceDef = {
   layout: { pane: { surfaces: [] } },
 };
 
-describe("restoreWorkspaces — owned dashboards survive restart", () => {
+describe("restoreWorkspaces — legacy dashboard records dropped on restore", () => {
   beforeEach(() => {
     workspaces.set([]);
     activeWorkspaceIdx.set(-1);
@@ -74,9 +69,9 @@ describe("restoreWorkspaces — owned dashboards survive restart", () => {
     resetRestoreSignal();
   });
 
-  it("re-creates a persisted dashboard whose owning workspace is also persisted", async () => {
+  it("drops persisted isDashboard entries; only the root workspace survives", async () => {
     const state: AppState = {
-      workspaces: [ROOT, OWNED_DASHBOARD],
+      workspaces: [ROOT, LEGACY_DASHBOARD],
       activeWorkspaceId: "root-1",
     };
     const loadStateSpy = vi.spyOn(config, "loadState").mockResolvedValue(state);
@@ -94,17 +89,17 @@ describe("restoreWorkspaces — owned dashboards survive restart", () => {
     );
 
     const restored = get(workspaces);
-    const ids = restored.map((w) => w.id).sort();
-    expect(ids).toEqual(["dash-1", "root-1"]);
+    const ids = restored.map((w) => w.id);
+    expect(ids).toEqual(["root-1"]);
 
+    // No restored workspace carries the dashboard discriminants — the
+    // legacy entry was silently dropped, not retagged.
     const dash = restored.find((w) => w.id === "dash-1");
-    expect(dash?.isDashboard).toBe(true);
-    expect(dash?.rootWorkspaceId).toBe("root-1");
-    expect(dash?.dashboardContributionId).toBe("group");
+    expect(dash).toBeUndefined();
+    expect(restored.some((w) => w.isDashboard)).toBe(false);
 
-    // Regression: root-shaped Workspaces must own a (possibly empty)
-    // `branchedWorkspaceIds` array. RootWorkspace's contract requires
-    // it; consumers like WorkspaceSectionContent crash if it's undefined.
+    // Root retains its `branchedWorkspaceIds` invariant (RootWorkspace
+    // contract — consumers like WorkspaceSectionContent require it).
     const root = restored.find((w) => w.id === "root-1");
     expect(Array.isArray(root?.branchedWorkspaceIds)).toBe(true);
 

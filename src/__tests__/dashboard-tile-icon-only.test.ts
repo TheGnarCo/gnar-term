@@ -2,8 +2,10 @@
  * Dashboard buttons in WorkspaceSectionContent render under the
  * SidebarBanner's `children-leading` slot (above the branched
  * workspace list), as icon-only tiles in a stretch-to-fill grid.
- * Workspace name lives in `aria-label`. Regression for the move out
- * of the banner btn-row.
+ * Each tile drives a registered DashboardContribution (not a
+ * dashboard workspace), and clicking it routes through
+ * `contribution.openAsTab(workspace)` so the dashboard opens as a
+ * tab inside the workspace's pane.
  */
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
@@ -15,12 +17,12 @@ const SOURCE = readFileSync(
 
 describe("dashboard btn-row — icon only", () => {
   it("renders data-dashboard-item and data-dashboard-contribution on each button", () => {
-    expect(SOURCE).toContain("data-dashboard-item={entry.ws.id}");
-    expect(SOURCE).toContain("data-dashboard-contribution={contribId}");
+    expect(SOURCE).toContain("data-dashboard-item={contribution.id}");
+    expect(SOURCE).toContain("data-dashboard-contribution={contribution.id}");
   });
 
-  it("preserves the workspace name in the button's aria-label attribute", () => {
-    expect(SOURCE).toContain("aria-label={entry.ws.name}");
+  it("preserves the contribution label in the button's aria-label attribute", () => {
+    expect(SOURCE).toContain("aria-label={contribution.label}");
   });
 
   it("uses DashboardTileIcon for icon rendering (icon-only, no label)", () => {
@@ -31,10 +33,10 @@ describe("dashboard btn-row — icon only", () => {
   it("excludes auto-provisioned dashboards (e.g. Settings) from the chip grid", () => {
     expect(SOURCE).toContain("workspaceDashboards");
     expect(SOURCE).toContain("{#each workspaceDashboards");
-    expect(SOURCE).toContain("contribution?.autoProvision");
-    expect(SOURCE).not.toContain(
-      "{#if settingsDashboard} {@render dashboardChip(settingsDashboard)}",
-    );
+    // Settings (the only autoProvision contribution today) is filtered
+    // out via `c.autoProvision` and surfaced via the banner-end gear chip
+    // instead of a tile.
+    expect(SOURCE).toContain("c.autoProvision");
   });
 
   it('renders chips under slot="children-leading", not in btn-row', () => {
@@ -46,15 +48,12 @@ describe("dashboard btn-row — icon only", () => {
     expect(btnRowSection).not.toContain("{#each workspaceDashboards");
   });
 
-  it("chip click prefers contribution.openAsTab over switchWorkspace", () => {
-    // Workspace-level dashboards (overview, agentic, diff) implement
-    // openAsTab to open inline as tabs in the parent workspace rather
-    // than switching to a separate dashboard workspace. The chip
-    // onClick falls back to switchWorkspace only when the contribution
-    // does not provide openAsTab.
-    expect(SOURCE).toContain("contribution?.openAsTab");
+  it("chip click routes through contribution.openAsTab — dashboards are tabs, not workspaces", () => {
     expect(SOURCE).toContain("contribution.openAsTab(workspace)");
-    expect(SOURCE).toContain("switchWorkspace(entry.idx)");
+    // The OLD model fell back to switchWorkspace; in the dashboards-as-tabs
+    // model every contribution implements openAsTab and there is no
+    // separate dashboard workspace to switch to.
+    expect(SOURCE).not.toContain("switchWorkspace(entry.idx)");
   });
 
   it("renders a settings gear chip in banner-end on hover, before the close chip", () => {
@@ -69,7 +68,11 @@ describe("dashboard btn-row — icon only", () => {
     expect(closeIdx).toBeGreaterThan(gearIdx);
   });
 
-  it("applies active ring using workspace color", () => {
-    expect(SOURCE).toContain("box-shadow: 0 0 0 1.5px ${workspaceHex}");
+  it("derives chip presence from persisted Settings state via isDashboardContributionEnabled (NOT live tab state)", () => {
+    // Chips are persistent affordances tied to the per-workspace toggle,
+    // not to whether a dashboard tab is currently open. Closing a tab
+    // must NOT remove its chip — the user re-opens it by clicking the chip.
+    expect(SOURCE).toContain("isDashboardContributionEnabled");
+    expect(SOURCE).not.toContain("isDashboardContributionTabActive");
   });
 });

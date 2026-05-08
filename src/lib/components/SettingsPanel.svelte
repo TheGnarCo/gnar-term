@@ -271,7 +271,7 @@
     style="
       width: 160px; flex-shrink: 0;
       border-right: 1px solid {$theme.border};
-      padding: 16px 0;
+      padding: 16px 0 0;
       display: flex; flex-direction: column; gap: 2px;
     "
   >
@@ -333,12 +333,15 @@
     <!-- Push MCP indicator to bottom of nav -->
     <div style="flex: 1;" aria-hidden="true"></div>
 
-    <!-- MCP status indicator -->
+    <!-- MCP status indicator. Match the right column's version bar
+         total height (48px = 28px Apply button + 10px/10px vertical
+         padding) so their border-tops align across the column divider. -->
     <div
       data-mcp-status-indicator
       use:tooltip={MCP_STATUS_TOOLTIP[$mcpStatus]}
       style="
-        padding: 10px 16px 8px;
+        padding: 10px 16px;
+        min-height: 48px; box-sizing: border-box; flex-shrink: 0;
         display: flex; align-items: center; gap: 6px;
         border-top: 1px solid {$theme.border};
         cursor: default;

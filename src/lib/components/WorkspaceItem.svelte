@@ -200,19 +200,6 @@
       <div
         style="flex: 1; overflow: hidden; display: flex; align-items: center; gap: 4px;"
       >
-        {#if isAgentSpawned}
-          <span
-            aria-hidden="true"
-            data-workspace-agent-icon
-            title={agentSpawnTooltip}
-            style="
-              flex-shrink: 0; display: inline-flex; align-items: center;
-              justify-content: center; color: {railColor};
-            "
-          >
-            <BotIcon size={12} />
-          </span>
-        {/if}
         {#if isManaged && !shouldShowWorktreeStatus}
           <span
             aria-hidden="true"
@@ -224,6 +211,19 @@
             "
           >
             <WorktreeIcon size={12} />
+          </span>
+        {/if}
+        {#if isAgentSpawned}
+          <span
+            aria-hidden="true"
+            data-workspace-agent-icon
+            title={agentSpawnTooltip}
+            style="
+              flex-shrink: 0; display: inline-flex; align-items: center;
+              justify-content: center; color: {railColor};
+            "
+          >
+            <BotIcon size={12} />
           </span>
         {/if}
         {#if dashboardHint}

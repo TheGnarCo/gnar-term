@@ -3,11 +3,11 @@ import { getAllSurfaces, isTerminalSurface, type Workspace } from "../types";
 import {
   serializeLayout,
   createWorkspaceFromDef,
+  closeWorkspace,
 } from "./workspace-runtime-service";
 import {
   getBranchesOfWorkspace,
   closeWorkspacesInWorkspace,
-  isDashboardWorkspace,
   provisionAutoDashboardsForWorkspace,
   activateWorkspace,
 } from "./workspace-service";
@@ -35,10 +35,23 @@ export async function archiveWorkspace(workspaceId: string): Promise<boolean> {
   if (!workspace) return false;
   if (workspace.locked) return false;
 
-  const allInWorkspace = getBranchesOfWorkspace(workspaceId);
-  const nonDashboard = allInWorkspace.filter(
-    (ws) => !isDashboardWorkspace(ws, workspaceId),
-  );
+  // Global registry workspaces (standalone dashboards: Settings, Keyboard
+  // Shortcuts, etc.) have no archive lifecycle — there's nothing to
+  // restore on unarchive because they're owned by `globalSurfaceRegistry`,
+  // not by user data. Treat archive as delete: tear down the workspace
+  // and skip the archive entry entirely.
+  if (
+    workspace.isDashboard === true &&
+    typeof workspace.rootWorkspaceId !== "string"
+  ) {
+    const idx = getWorkspaces().findIndex((w) => w.id === workspaceId);
+    if (idx >= 0) closeWorkspace(idx);
+    return true;
+  }
+
+  // Dashboards are tabs in the workspace's pane, not separate
+  // workspaces — branches are the only entries returned here.
+  const nonDashboard = getBranchesOfWorkspace(workspaceId);
 
   const runningCount = nonDashboard.reduce(
     (sum, ws) => sum + countRunningPtys(ws),

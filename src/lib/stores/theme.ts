@@ -35,7 +35,14 @@ function createThemeStore() {
   function applyTheme(newId: string, t: ThemeDef): void {
     store.set(t);
     id.set(newId);
-    document.documentElement.style.setProperty("--bg", t.bg);
+    const root = document.documentElement.style;
+    root.setProperty("--bg", t.bg);
+    // Exposed for `:global` rules that can't reach the Svelte theme store
+    // (e.g. xterm.js's `.xterm-slider` thumb, which lives outside any
+    // component scope). Keep the surface narrow — only add what global
+    // selectors actually need.
+    root.setProperty("--theme-fg-dim", t.fgDim);
+    root.setProperty("--theme-fg", t.fg);
     document.body.style.background = t.bg;
   }
 

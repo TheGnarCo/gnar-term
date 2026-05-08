@@ -1,11 +1,12 @@
 /**
  * provisionAutoDashboardsForWorkspace — called on workspace create and on startup
  * reconciliation. Iterates every registered DashboardContribution with
- * `autoProvision: true` and invokes contribution.create(workspace) for any
- * that isn't already backed by a workspace. Idempotent.
+ * `autoProvision: true` (and `defaultEnabled: true` unless dismissed), then
+ * invokes `contribution.openAsTab(workspace, { activate: false })` so each
+ * dashboard becomes a tab in the workspace's pane. Idempotent — `openAsTab`
+ * dedupes via the surface registry's matchProps.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { get } from "svelte/store";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn().mockResolvedValue(undefined),
@@ -42,9 +43,10 @@ describe("provisionAutoDashboardsForWorkspace", () => {
     resetDashboardContributions();
   });
 
-  it("calls create() for every autoProvision contribution", async () => {
-    const aCreate = vi.fn(async () => "ws-a");
-    const bCreate = vi.fn(async () => "ws-b");
+  it("calls openAsTab for every autoProvision contribution and skips opt-in ones", async () => {
+    const aOpen = vi.fn(async () => {});
+    const bOpen = vi.fn(async () => {});
+    const cOpen = vi.fn(async () => {});
     registerDashboardContribution({
       id: "a",
       source: "core",
@@ -52,7 +54,7 @@ describe("provisionAutoDashboardsForWorkspace", () => {
       actionLabel: "Add A",
       capPerWorkspace: 1,
       autoProvision: true,
-      create: aCreate,
+      openAsTab: aOpen,
     });
     registerDashboardContribution({
       id: "b",
@@ -61,7 +63,7 @@ describe("provisionAutoDashboardsForWorkspace", () => {
       actionLabel: "Add B",
       capPerWorkspace: 1,
       autoProvision: true,
-      create: bCreate,
+      openAsTab: bOpen,
     });
     registerDashboardContribution({
       id: "c",
@@ -69,26 +71,56 @@ describe("provisionAutoDashboardsForWorkspace", () => {
       label: "C",
       actionLabel: "Add C",
       capPerWorkspace: 1,
-      create: vi.fn(async () => "ws-c"),
+      // Neither autoProvision nor defaultEnabled — must NOT auto-open.
+      openAsTab: cOpen,
     });
 
     const workspace = makeWorkspace("g1");
     await provisionAutoDashboardsForWorkspace(workspace);
 
-    expect(aCreate).toHaveBeenCalledWith(workspace);
-    expect(bCreate).toHaveBeenCalledWith(workspace);
-    // Non-autoProvision contributions are NOT auto-materialized.
-    expect(
-      (
-        registerDashboardContribution as unknown as {
-          mock?: { calls: unknown[][] };
-        }
-      ).mock,
-    ).toBeUndefined();
+    expect(aOpen).toHaveBeenCalledWith(workspace, { activate: false });
+    expect(bOpen).toHaveBeenCalledWith(workspace, { activate: false });
+    expect(cOpen).not.toHaveBeenCalled();
   });
 
-  it("skips contributions whose dashboard workspace already exists for the workspace", async () => {
-    const aCreate = vi.fn(async () => "ws-a");
+  it("opens defaultEnabled contributions unless the workspace dismissed them", async () => {
+    const dOpen = vi.fn(async () => {});
+    const eOpen = vi.fn(async () => {});
+    registerDashboardContribution({
+      id: "d",
+      source: "ext",
+      label: "D",
+      actionLabel: "Add D",
+      capPerWorkspace: 1,
+      defaultEnabled: true,
+      openAsTab: dOpen,
+    });
+    registerDashboardContribution({
+      id: "e",
+      source: "ext",
+      label: "E",
+      actionLabel: "Add E",
+      capPerWorkspace: 1,
+      defaultEnabled: true,
+      openAsTab: eOpen,
+    });
+
+    const workspace = makeWorkspace("g1");
+    (
+      workspace as Workspace & { dismissedDashboardContributionIds?: string[] }
+    ).dismissedDashboardContributionIds = ["d"];
+
+    await provisionAutoDashboardsForWorkspace(workspace);
+
+    expect(dOpen).not.toHaveBeenCalled();
+    expect(eOpen).toHaveBeenCalledWith(workspace, { activate: false });
+  });
+
+  it("swallows errors from one contribution so others still get provisioned", async () => {
+    const aOpen = vi.fn(async () => {
+      throw new Error("boom");
+    });
+    const bOpen = vi.fn(async () => {});
     registerDashboardContribution({
       id: "a",
       source: "core",
@@ -96,44 +128,7 @@ describe("provisionAutoDashboardsForWorkspace", () => {
       actionLabel: "Add A",
       capPerWorkspace: 1,
       autoProvision: true,
-      create: aCreate,
-    });
-
-    const workspace = makeWorkspace("g1");
-    // Seed the workspaces store with an existing dashboard for "a".
-    workspaces.set([
-      {
-        id: "ws-existing",
-        name: "A",
-        layout: { pane: { id: "p", surfaces: [], activeIdx: 0 } },
-        isDashboard: true,
-        rootWorkspaceId: workspace.id,
-        dashboardContributionId: "a",
-      } as never,
-    ]);
-
-    await provisionAutoDashboardsForWorkspace(workspace);
-
-    expect(aCreate).not.toHaveBeenCalled();
-    // Sanity: no new workspaces added.
-    expect(get(workspaces)).toHaveLength(1);
-  });
-
-  it("is idempotent — calling twice does not double-materialize", async () => {
-    const bCreate = vi.fn(async () => {
-      // Simulate create by pushing a workspace into the store.
-      workspaces.update((ws) => [
-        ...ws,
-        {
-          id: `ws-${ws.length + 1}`,
-          name: "B",
-          layout: { pane: { id: "p", surfaces: [], activeIdx: 0 } },
-          isDashboard: true,
-          rootWorkspaceId: "g1",
-          dashboardContributionId: "b",
-        } as never,
-      ]);
-      return "ws-1";
+      openAsTab: aOpen,
     });
     registerDashboardContribution({
       id: "b",
@@ -142,13 +137,14 @@ describe("provisionAutoDashboardsForWorkspace", () => {
       actionLabel: "Add B",
       capPerWorkspace: 1,
       autoProvision: true,
-      create: bCreate,
+      openAsTab: bOpen,
     });
 
     const workspace = makeWorkspace("g1");
-    await provisionAutoDashboardsForWorkspace(workspace);
-    await provisionAutoDashboardsForWorkspace(workspace);
-
-    expect(bCreate).toHaveBeenCalledTimes(1);
+    await expect(
+      provisionAutoDashboardsForWorkspace(workspace),
+    ).resolves.toBeUndefined();
+    expect(aOpen).toHaveBeenCalled();
+    expect(bOpen).toHaveBeenCalled();
   });
 });

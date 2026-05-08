@@ -1,10 +1,13 @@
 /**
  * diff-viewer registers a per-workspace Diff dashboard contribution. The
- * contribution is `defaultEnabled`: it materializes on every workspace by
- * default but the user can dismiss it from the workspace's Settings panel.
- * These tests pin the registered shape (defaultEnabled set, no autoProvision /
- * lockedReason), verify that activation back-fills existing workspaces, and
- * that `dismissedDashboardContributionIds` is respected.
+ * contribution is `defaultEnabled`: a tab is back-filled into every
+ * existing workspace by default but the user can dismiss it from the
+ * workspace's Settings panel. These tests pin the registered shape
+ * (defaultEnabled set, no autoProvision / lockedReason), verify that
+ * `openAsTab` stamps a registry surface tagged with
+ * `dashboardContributionId: "diff"` onto the workspace's primary pane,
+ * verify that activation back-fills existing workspaces, and that
+ * `dismissedDashboardContributionIds` is respected.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { get } from "svelte/store";
@@ -54,6 +57,20 @@ function seedRoot(
   } as unknown as import("../../../lib/types").Workspace;
 }
 
+function hasDashboardTab(rootId: string, contributionId: string): boolean {
+  const ws = get(workspaces).find((w) => w.id === rootId);
+  if (!ws) return false;
+  const layout = ws.paneLayout as unknown as {
+    pane: {
+      surfaces: Array<{ kind: string; dashboardContributionId?: string }>;
+    };
+  };
+  return layout.pane.surfaces.some(
+    (s) =>
+      s.kind === "registry" && s.dashboardContributionId === contributionId,
+  );
+}
+
 describe("Diff dashboard contribution", () => {
   beforeEach(async () => {
     resetRestoreSignal();
@@ -81,51 +98,52 @@ describe("Diff dashboard contribution", () => {
     expect(diff?.icon).toBeDefined();
   });
 
-  it("create(workspace) materializes a routing-only Branch tagged with the diff contribution", async () => {
+  it("openAsTab(workspace) stamps a Diff dashboard tab onto the workspace's pane", async () => {
+    workspaces.set([seedRoot("g1", "blue")]);
     registerExtension(diffViewerManifest, registerDiffViewerExtension);
     await activateExtension("diff-viewer");
 
     const diff = get(dashboardContributionStore).find((c) => c.id === "diff");
     expect(diff).toBeTruthy();
 
-    await diff!.create({
-      id: "g1",
-      name: "My Workspace",
-      path: "/tmp/my-workspace",
-      color: "blue",
-      branchedWorkspaceIds: [],
-      isGit: true,
-      createdAt: "2026-04-21T00:00:00.000Z",
-    });
+    await diff!.openAsTab(
+      {
+        id: "g1",
+        name: "My Workspace",
+        path: "/tmp/my-workspace",
+        color: "blue",
+        branchedWorkspaceIds: [],
+        isGit: true,
+        createdAt: "2026-04-21T00:00:00.000Z",
+      } as unknown as import("../../../lib/stores/workspace").RootWorkspace,
+      { activate: false },
+    );
 
-    const all = get(workspaces);
-    const created = all.find((w) => w.dashboardContributionId === "diff");
-    expect(created).toBeTruthy();
-    expect(created!.isDashboard).toBe(true);
-    expect(created!.rootWorkspaceId).toBe("g1");
-    // Diff Dashboard is registered as a hidden surface type
-    // (`dashboard:diff`); the dashboard workspace seeds a single
-    // extension surface targeting that type with `rootWorkspaceId` in
-    // props so the body component can resolve the workspace via the
-    // workspaces store.
-    const panes = (
-      created!.paneLayout as unknown as {
+    const ws = get(workspaces).find((w) => w.id === "g1");
+    expect(ws).toBeDefined();
+    const surfaces = (
+      ws!.paneLayout as unknown as {
         pane: {
           surfaces: Array<{
             kind: string;
             surfaceTypeId?: string;
             props?: Record<string, unknown>;
+            dashboardContributionId?: string;
           }>;
         };
       }
     ).pane.surfaces;
-    expect(panes).toHaveLength(1);
-    expect(panes[0]?.kind).toBe("registry");
-    expect(panes[0]?.surfaceTypeId).toBe("dashboard:diff");
-    expect(panes[0]?.props).toEqual({ rootWorkspaceId: "g1" });
+    const dashTabs = surfaces.filter(
+      (s) => s.dashboardContributionId === "diff",
+    );
+    expect(dashTabs).toHaveLength(1);
+    const tab = dashTabs[0]!;
+    expect(tab.kind).toBe("registry");
+    expect(tab.surfaceTypeId).toBe("dashboard:diff");
+    expect(tab.props).toEqual({ rootWorkspaceId: "g1" });
   });
 
-  it("back-fills the Diff Dashboard onto existing workspaces on activate", async () => {
+  it("back-fills the Diff Dashboard tab onto existing workspaces on activate", async () => {
     workspaces.set([seedRoot("g1", "blue"), seedRoot("g2", "green")]);
     markRestored();
 
@@ -134,15 +152,8 @@ describe("Diff dashboard contribution", () => {
 
     await new Promise((r) => setTimeout(r, 50));
 
-    const diffForRoot = (rootId: string): boolean =>
-      get(workspaces).some(
-        (w) =>
-          w.dashboardContributionId === "diff" &&
-          w.rootWorkspaceId === rootId &&
-          w.isDashboard === true,
-      );
-    expect(diffForRoot("g1")).toBe(true);
-    expect(diffForRoot("g2")).toBe(true);
+    expect(hasDashboardTab("g1", "diff")).toBe(true);
+    expect(hasDashboardTab("g2", "diff")).toBe(true);
   });
 
   it("respects dismissedDashboardContributionIds and skips dismissed workspaces", async () => {
@@ -158,14 +169,7 @@ describe("Diff dashboard contribution", () => {
     await activateExtension("diff-viewer");
     await new Promise((r) => setTimeout(r, 50));
 
-    const diffForRoot = (rootId: string): boolean =>
-      get(workspaces).some(
-        (w) =>
-          w.dashboardContributionId === "diff" &&
-          w.rootWorkspaceId === rootId &&
-          w.isDashboard === true,
-      );
-    expect(diffForRoot("g1")).toBe(false);
-    expect(diffForRoot("g2")).toBe(true);
+    expect(hasDashboardTab("g1", "diff")).toBe(false);
+    expect(hasDashboardTab("g2", "diff")).toBe(true);
   });
 });

@@ -81,6 +81,8 @@ export function workspaceDefToTemplate(
   if (def.dismissedDashboardContributionIds !== undefined)
     nwDef.dismissedDashboardContributionIds =
       def.dismissedDashboardContributionIds;
+  if (def.enabledDashboardContributionIds !== undefined)
+    nwDef.enabledDashboardContributionIds = def.enabledDashboardContributionIds;
 
   // Structural / discriminant fields.
   if (def.rootWorkspaceId !== undefined)
@@ -294,6 +296,8 @@ export function serializeWorkspace(ws: Workspace): WorkspaceDef {
   if (ws.dismissedDashboardContributionIds !== undefined)
     def.dismissedDashboardContributionIds =
       ws.dismissedDashboardContributionIds;
+  if (ws.enabledDashboardContributionIds !== undefined)
+    def.enabledDashboardContributionIds = ws.enabledDashboardContributionIds;
   if (ws.rootWorkspaceId !== undefined)
     def.rootWorkspaceId = ws.rootWorkspaceId;
   if (ws.isDashboard !== undefined) def.isDashboard = ws.isDashboard;

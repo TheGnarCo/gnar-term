@@ -9,17 +9,17 @@
    *   - Dashboards toggles — enable/disable each registered contribution
    *     for this workspace (autoProvision contribs render locked-on)
    */
-  import { get } from "svelte/store";
   import { theme } from "../stores/theme";
   import ColorSlotPicker from "./ColorSlotPicker.svelte";
   import { workspacesStore } from "../stores/workspace";
   import {
     updateWorkspace,
-    closeDashboardForWorkspace,
     clearDashboardDismissal,
+    recordDashboardDismissal,
+    recordDashboardEnable,
+    clearDashboardEnable,
+    isDashboardContributionEnabled,
   } from "../services/workspace-service";
-  import { switchWorkspace } from "../services/workspace-runtime-service";
-  import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
   import {
     dashboardContributionStore,
     type DashboardContribution,
@@ -82,57 +82,44 @@
     (c) => c.id !== "settings",
   );
 
-  // Precompute the set of active contribution ids for this workspace as
-  // a reactive derivation. `{@const active = activeIds.has(c.id)}` in
-  // the template picks up changes to `$workspaces` immediately —
-  // calling a helper that reads `$workspaces` internally does NOT
-  // re-run on store updates in Svelte 5 (only the direct reference does).
-  $: activeContributionIds = new Set<string>(
-    workspace
-      ? $workspaces
-          .filter(
-            (w) =>
-              w.isDashboard === true && w.rootWorkspaceId === workspace!.id,
-          )
-          .map((w) => w.dashboardContributionId)
-          .filter((v): v is string => typeof v === "string")
-      : [],
-  );
+  // Active contribution ids derive from the persisted Settings "enabled"
+  // state — independent of whether a dashboard tab is currently open.
+  // Toggling controls chip presence; the chip itself opens/navigates to
+  // the tab. Closing a tab does NOT flip the toggle.
+  $: activeContributionIds = (() => {
+    void $workspacesStore;
+    if (!workspace) return new Set<string>();
+    const ids = new Set<string>();
+    for (const c of $dashboardContributionStore) {
+      if (isDashboardContributionEnabled(workspace, c.id)) {
+        ids.add(c.id);
+      }
+    }
+    return ids;
+  })();
 
-  async function toggleDashboard(
+  function toggleDashboard(
     contribution: DashboardContribution,
     next: boolean,
-  ): Promise<void> {
+  ): void {
     if (!workspace) return;
     if (contribution.autoProvision) return;
+    // Toggle controls only the persisted "enabled" state (chip presence).
+    // It does NOT open or close dashboard tabs — the chip summons the tab
+    // when clicked, and tabs close independently. Settings ↔ chips ↔ tabs
+    // are decoupled by design.
     if (next) {
-      // Re-enabling clears any prior dismissal so the next reconcile pass
-      // does not skip a defaultEnabled contribution we just re-added.
       if (contribution.defaultEnabled) {
         clearDashboardDismissal(workspace.id, contribution.id);
-      }
-      // Snapshot the active workspace before create() — createWorkspaceFromDef
-      // auto-switches to the freshly created dashboard, which would yank the
-      // user out of the Settings panel they're toggling from.
-      const list = get(workspaces);
-      const prevIdx = get(activeWorkspaceIdx);
-      const prevId = prevIdx >= 0 ? (list[prevIdx]?.id ?? null) : null;
-      try {
-        await contribution.create(workspace);
-        if (prevId) {
-          const restoredIdx = get(workspaces).findIndex((w) => w.id === prevId);
-          if (restoredIdx >= 0 && restoredIdx !== get(activeWorkspaceIdx)) {
-            switchWorkspace(restoredIdx);
-          }
-        }
-      } catch (err) {
-        console.error(
-          `[workspace-settings] Failed to add "${contribution.id}":`,
-          err,
-        );
+      } else {
+        recordDashboardEnable(workspace.id, contribution.id);
       }
     } else {
-      closeDashboardForWorkspace(workspace.id, contribution.id);
+      if (contribution.defaultEnabled) {
+        recordDashboardDismissal(workspace.id, contribution.id);
+      } else {
+        clearDashboardEnable(workspace.id, contribution.id);
+      }
     }
   }
 
@@ -371,7 +358,7 @@
               checked={active || locked}
               on:change={(e) => {
                 const checked = (e.currentTarget as HTMLInputElement).checked;
-                void toggleDashboard(contribution, checked);
+                toggleDashboard(contribution, checked);
               }}
             />
           </label>

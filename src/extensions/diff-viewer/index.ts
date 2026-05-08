@@ -4,7 +4,7 @@
  * Registers a "diff" surface type for rendering unified git diffs,
  * plus commands for showing uncommitted changes and comparing branches.
  */
-import type { ExtensionManifest, ExtensionAPI, WorkspaceRef } from "../api";
+import type { ExtensionManifest, ExtensionAPI } from "../api";
 import type { Component } from "svelte";
 import DiffSurface from "./DiffSurface.svelte";
 import DiffDashboardBody from "./DiffDashboardBody.svelte";
@@ -118,45 +118,24 @@ export function registerDiffViewerExtension(api: ExtensionAPI): void {
       capPerWorkspace: 1,
       icon: DiffIcon,
       defaultEnabled: true,
-      create: (workspace) => createDiffDashboardWorkspace(api, workspace),
-      openAsTab: async (workspace) => {
-        await api.openDashboardTab(workspace.id, {
-          kind: "registry",
-          surfaceTypeId: globalSurfaceTypeId("diff"),
-          title: "Diff",
-          props: { rootWorkspaceId: workspace.id },
-          matchProps: { rootWorkspaceId: workspace.id },
-        });
+      openAsTab: async (workspace, opts) => {
+        await api.openDashboardTab(
+          workspace.id,
+          {
+            kind: "registry",
+            surfaceTypeId: globalSurfaceTypeId("diff"),
+            title: "Diff",
+            props: { rootWorkspaceId: workspace.id },
+            matchProps: { rootWorkspaceId: workspace.id },
+            dashboardContributionId: "diff",
+          },
+          opts,
+        );
       },
     });
   });
 
   api.onDeactivate(() => {
     unregisterGlobalSurface("diff");
-  });
-}
-
-async function createDiffDashboardWorkspace(
-  api: ExtensionAPI,
-  workspace: WorkspaceRef,
-): Promise<string> {
-  return await api.createWorkspaceFromDef({
-    name: "Diff",
-    layout: {
-      pane: {
-        surfaces: [
-          {
-            type: "registry",
-            extensionType: globalSurfaceTypeId("diff"),
-            extensionProps: { rootWorkspaceId: workspace.id },
-            name: "Diff",
-            focus: true,
-          },
-        ],
-      },
-    },
-    isDashboard: true,
-    rootWorkspaceId: workspace.id,
-    dashboardContributionId: "diff",
   });
 }

@@ -78,7 +78,6 @@
     type CliArgs,
   } from "./lib/bootstrap/restore-workspaces";
   import {
-    reconcileWorkspaceDashboards,
     reconcilePrimaryWorkspaces,
     validateWorkspaceRootPaths,
   } from "./lib/services/workspace-service";
@@ -736,8 +735,8 @@
 
     await restoreWorkspaces(cliArgs, config);
     // Signal that workspaces are in the store so deferred work (the
-    // agentic extension's provision loop, reconcileWorkspaceDashboards) can
-    // safely read and write the workspaces store without racing restore.
+    // agentic extension's provision loop) can safely read and write the
+    // workspaces store without racing restore.
     markRestored();
 
     // Re-apply the persisted window bounds. `restoreWorkspaces` calls
@@ -756,7 +755,6 @@
     // Workspace's branchedWorkspaceIds from rootWorkspaceId now that the
     // workspaces store is populated.
     await reconcilePrimaryWorkspaces();
-    void reconcileWorkspaceDashboards();
     // Stamp `pathMissing` on workspaces whose root directory has gone
     // missing across sessions. Runs in the background — a slow FS
     // probe shouldn't block the rest of bootstrap.
@@ -1017,6 +1015,25 @@
     outline: 2px solid var(--theme-accent, #7c6aff);
     outline-offset: 2px;
     border-radius: 2px;
+  }
+
+  /* xterm.js v6 ships an unstyled `.xterm-slider` thumb (its CSS
+     depends on a VSCode scrollbar-slider var that we don't set), which
+     leaves an empty rail with no visible handle in terminal panes.
+     Paint the thumb with the theme's dimmed-foreground and brighten on
+     hover/active so it's discoverable across light and dark themes. */
+  :global(.xterm-slider) {
+    background: var(--theme-fg-dim, rgba(255, 255, 255, 0.25));
+    border-radius: 4px;
+    opacity: 0.5;
+    transition: opacity 0.15s;
+  }
+  :global(.xterm-scrollable-element:hover .xterm-slider) {
+    opacity: 0.8;
+  }
+  :global(.xterm-slider:hover),
+  :global(.xterm-slider.active) {
+    opacity: 1;
   }
 
   :global(.no-default-outline) {

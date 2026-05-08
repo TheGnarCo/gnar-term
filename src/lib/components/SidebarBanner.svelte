@@ -221,17 +221,25 @@
           <slot />
           <slot name="banner-end" />
         </div>
-        <slot name="banner-subtitle" {collapsed} />
-        {#if $$slots["btn-row"]}
-          <div class="sidebar-banner-btn-row">
-            <slot
-              name="btn-row"
-              {collapsed}
-              toggle={toggleCollapsed}
-              showToggle={expandable}
-            />
+        <div
+          style="display: flex; align-items: flex-end; gap: 6px; min-width: 0;"
+        >
+          <div
+            style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;"
+          >
+            <slot name="banner-subtitle" {collapsed} />
           </div>
-        {/if}
+          {#if $$slots["btn-row"]}
+            <div class="sidebar-banner-btn-row">
+              <slot
+                name="btn-row"
+                {collapsed}
+                toggle={toggleCollapsed}
+                showToggle={expandable}
+              />
+            </div>
+          {/if}
+        </div>
       </div>
     </SidebarElement>
     {#if !collapsed && expandable}
@@ -335,17 +343,25 @@
             <slot {bannerHovered} />
             <slot name="banner-end" {bannerHovered} {collapsed} />
           </div>
-          <slot name="banner-subtitle" {bannerHovered} {collapsed} />
-          {#if $$slots["btn-row"]}
-            <div class="sidebar-banner-btn-row">
-              <slot
-                name="btn-row"
-                {collapsed}
-                toggle={toggleCollapsed}
-                showToggle={expandable}
-              />
+          <div
+            style="display: flex; align-items: flex-end; gap: 6px; min-width: 0;"
+          >
+            <div
+              style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;"
+            >
+              <slot name="banner-subtitle" {bannerHovered} {collapsed} />
             </div>
-          {/if}
+            {#if $$slots["btn-row"]}
+              <div class="sidebar-banner-btn-row">
+                <slot
+                  name="btn-row"
+                  {collapsed}
+                  toggle={toggleCollapsed}
+                  showToggle={expandable}
+                />
+              </div>
+            {/if}
+          </div>
         </div>
       </div>
       {#if !collapsed && expandable}
@@ -387,9 +403,9 @@
 <style>
   .sidebar-banner-btn-row {
     display: flex;
-    flex-wrap: wrap;
+    align-items: center;
     gap: 4px;
-    margin: 4px 0 2px;
+    flex-shrink: 0;
   }
   :global([data-sidebar-banner-mode="root"] button) {
     cursor: pointer;

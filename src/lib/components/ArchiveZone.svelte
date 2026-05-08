@@ -127,28 +127,33 @@
       style="border-color: {$theme.fgDim};"
     ></div>
     <div class="archive-banner-body">
+      <span class="archive-label">Archive</span>
       <span
         aria-hidden="true"
-        class="chevron"
-        style="transform: rotate({expanded ? 90 : 0}deg);"
+        class="expand-chip"
+        style="background: {$theme.bgSurface ?? 'transparent'};"
       >
+        {#if totalCount > 0 && !expanded}
+          <span class="expand-count" style="color: {$theme.fgDim};"
+            >{totalCount}</span
+          >
+        {/if}
         <svg
-          width="10"
-          height="10"
-          viewBox="0 0 12 12"
+          width="12"
+          height="8"
+          viewBox="0 0 12 8"
           fill="none"
-          stroke="currentColor"
+          stroke={$theme.fgDim}
           stroke-width="1.5"
           stroke-linecap="round"
           stroke-linejoin="round"
+          style="transition: transform 0.2s ease; transform: rotate({expanded
+            ? 0
+            : 180}deg);"
         >
-          <polyline points="3,2 8,6 3,10" />
+          <polyline points="1,1 6,7 11,1" />
         </svg>
       </span>
-      <span class="archive-label">Archive</span>
-      {#if totalCount > 0}
-        <span class="count-chip">{totalCount}</span>
-      {/if}
     </div>
   </button>
 
@@ -230,16 +235,6 @@
     padding: 4px 6px;
   }
 
-  .chevron {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 12px;
-    color: inherit;
-    transition: transform 0.15s ease;
-    flex-shrink: 0;
-  }
-
   .archive-label {
     flex: 1;
     text-align: left;
@@ -248,14 +243,23 @@
     white-space: nowrap;
   }
 
-  .count-chip {
-    background: rgba(255, 255, 255, 0.06);
-    color: rgba(255, 255, 255, 0.55);
-    border-radius: 3px;
-    padding: 1px 5px;
-    font-size: 10px;
+  .expand-chip {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 24px;
+    min-width: 28px;
+    padding: 0 6px;
+    border-radius: 5px;
+  }
+
+  .expand-count {
+    font-size: 11px;
     font-weight: 600;
-    flex-shrink: 0;
+    line-height: 1;
+    pointer-events: none;
   }
 
   .archive-list {

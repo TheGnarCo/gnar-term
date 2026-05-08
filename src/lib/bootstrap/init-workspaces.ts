@@ -11,28 +11,15 @@ import { get } from "svelte/store";
 import { registerCommand } from "../services/command-registry";
 import { registerRootRowRenderer } from "../services/root-row-renderer-registry";
 import { registerSurfaceType } from "../services/surface-type-registry";
-import {
-  openDashboardSurfaceTab,
-  openWorkspaceSettingsTab,
-} from "../services/surface-service";
+import { openWorkspaceSettingsTab } from "../services/surface-service";
 import WorkspaceDashboardSettings from "../components/WorkspaceDashboardSettings.svelte";
-import WorkspaceOverviewBody from "../components/WorkspaceOverviewBody.svelte";
-import {
-  getDashboardContribution,
-  registerDashboardContribution,
-  OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
-} from "../services/dashboard-contribution-registry";
-import {
-  registerGlobalSurface,
-  globalSurfaceTypeId,
-} from "../services/global-surface-service";
+import { registerDashboardContribution } from "../services/dashboard-contribution-registry";
 import { eventBus, type AppEvent } from "../services/event-bus";
 import { appendRootRow } from "../stores/root-row-order";
-import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
+import { workspaces } from "../stores/workspace";
 import {
   loadWorkspaces,
   getWorkspaces,
-  getActiveWorkspaceId,
   setActiveWorkspaceId,
 } from "../stores/workspace";
 import {
@@ -46,7 +33,6 @@ import { resolveWorkspaceColor } from "../theme-data";
 import { theme } from "../stores/theme";
 import WorkspaceRowBody from "../components/WorkspaceRowBody.svelte";
 import GearIcon from "../icons/GearIcon.svelte";
-import GridIcon from "../icons/GridIcon.svelte";
 import type { RootWorkspace as Workspace } from "../stores/workspace";
 import {
   pendingCreateResolver,
@@ -193,9 +179,8 @@ export async function createWorkspaceFlow(prefill?: {
   }
 
   // Auto-provision every autoProvision dashboard contribution for the
-  // new workspace (currently only Settings — Overview is opt-in via
-  // the Settings panel toggle). Dashboards are tabs in the workspace's
-  // pane now; openAsTab handles dedupe internally.
+  // new workspace (currently only Settings). Dashboards are tabs in
+  // the workspace's pane; openAsTab handles dedupe internally.
   try {
     await provisionAutoDashboardsForWorkspace(workspace);
   } catch (err) {
@@ -248,86 +233,6 @@ export async function initWorkspaces(): Promise<void> {
     action: () => {
       void createWorkspaceFlow();
     },
-  });
-
-  registerCommand({
-    id: "open-workspace-dashboard",
-    title: "Open Workspace Dashboard...",
-    source: SOURCE,
-    action: () => {
-      const workspaces = getWorkspaces();
-      if (workspaces.length === 0) return;
-      const activeId = getActiveWorkspaceId();
-      const workspace = activeId
-        ? workspaces.find((w) => w.id === activeId)
-        : workspaces[0];
-      if (!workspace) return;
-      const contribution = getDashboardContribution(
-        OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
-      );
-      if (contribution) void contribution.openAsTab(workspace);
-    },
-  });
-
-  // Surfaced in PaneView's TabBar for workspaces belonging to a
-  // workspace.
-  registerCommand({
-    id: "workspaces:regenerate-active-workspace-dashboard",
-    title: "Spawn Workspace Dashboard",
-    source: SOURCE,
-    action: () => {
-      const list = get(workspaces);
-      const idx = get(activeWorkspaceIdx);
-      const ws = typeof idx === "number" ? list[idx] : undefined;
-      const rootWorkspaceId = ws?.rootWorkspaceId;
-      if (typeof rootWorkspaceId !== "string") return;
-      const workspace = getWorkspaces().find((w) => w.id === rootWorkspaceId);
-      if (!workspace) return;
-      const contribution = getDashboardContribution(
-        OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
-      );
-      if (contribution) void contribution.openAsTab(workspace);
-    },
-  });
-
-  // Core-internal "Workspace Dashboard" contribution — id `group`
-  // (stable persisted contribution id, retained across the rename),
-  // capPerWorkspace 1. Opt-in: only the Settings chip is auto-provisioned
-  // by default; users add the Overview from the workspace's Settings
-  // panel toggle. The dashboard renders WorkspaceOverviewBody as a tab
-  // inside the root workspace's pane via openAsTab — same model as
-  // Workspace Settings, so users keep TabBar / split affordances.
-  registerDashboardContribution({
-    id: OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
-    source: SOURCE,
-    label: "Workspace Dashboard",
-    actionLabel: "Add Workspace Dashboard",
-    capPerWorkspace: 1,
-    icon: GridIcon,
-    openAsTab: async (workspace: Workspace, opts) => {
-      await openDashboardSurfaceTab(
-        workspace.id,
-        {
-          kind: "registry",
-          surfaceTypeId: globalSurfaceTypeId(
-            OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
-          ),
-          title: "Dashboard",
-          props: { rootWorkspaceId: workspace.id },
-          matchProps: { rootWorkspaceId: workspace.id },
-          dashboardContributionId: OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
-        },
-        opts,
-      );
-    },
-  });
-
-  registerGlobalSurface({
-    id: OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
-    label: "Workspace Dashboard",
-    icon: GridIcon,
-    component: WorkspaceOverviewBody,
-    source: SOURCE,
   });
 
   // Core-internal "Settings" contribution — id `settings`,

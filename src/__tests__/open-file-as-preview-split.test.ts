@@ -155,4 +155,118 @@ describe("openFileAsPreviewSplit", () => {
     );
     expect(openCalls).toHaveLength(0);
   });
+
+  it("honors opts.ratio on the resulting split", () => {
+    const { ws } = makeChildWorkspace("ws-1");
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+
+    openFileAsPreviewSplit("/docs/README.md", { ratio: 1 / 3 });
+
+    const layout = get(workspaces)[0]!.paneLayout;
+    expect(layout.type).toBe("split");
+    if (layout.type === "split") {
+      expect(layout.ratio).toBeCloseTo(1 / 3, 5);
+    }
+  });
+
+  // Pins the contract documented on OpenPreviewSplitOptions.ratio: the
+  // ratio applies to the originally-active pane (children[0]), and the
+  // new preview pane (children[1]) gets `1 - ratio`. Callers that want a
+  // narrow preview should pass a ratio > 0.5.
+  it("places the active pane at children[0] and the new preview at children[1]", () => {
+    const { ws, pane } = makeChildWorkspace("ws-1");
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+
+    openFileAsPreviewSplit("/docs/README.md", { ratio: 2 / 3 });
+
+    const layout = get(workspaces)[0]!.paneLayout;
+    expect(layout.type).toBe("split");
+    if (layout.type === "split") {
+      const [first, second] = layout.children;
+      expect(first?.type).toBe("pane");
+      expect(second?.type).toBe("pane");
+      if (first?.type === "pane" && second?.type === "pane") {
+        // Originally-active pane survives at index 0; new preview pane at index 1.
+        expect(first.pane.id).toBe(pane.id);
+        expect(second.pane.id).not.toBe(pane.id);
+        expect(second.pane.surfaces[0]?.kind).toBe("preview");
+      }
+      // Active pane gets 2/3 of the width; preview gets the remaining 1/3.
+      expect(layout.ratio).toBeCloseTo(2 / 3, 5);
+    }
+  });
+
+  it("clamps an out-of-range ratio to a sensible bound", () => {
+    const { ws } = makeChildWorkspace("ws-1");
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+
+    openFileAsPreviewSplit("/docs/README.md", { ratio: -1 });
+
+    const layout = get(workspaces)[0]!.paneLayout;
+    if (layout.type === "split") {
+      expect(layout.ratio).toBeGreaterThan(0);
+      expect(layout.ratio).toBeLessThan(1);
+    }
+  });
+
+  it("opts.exclusive closes other preview surfaces in the active workspace", () => {
+    // Layout: a pre-existing horizontal split where the active pane is
+    // empty and a sibling pane holds a stale preview. Exclusive open
+    // should close the stale preview (collapsing its pane) before
+    // splitting the active pane in the new preview. This mirrors the
+    // shape produced by an earlier openFileAsPreviewSplit call so we
+    // exercise the realistic incoming layout, not the contrived
+    // single-pane setup that would trigger spawnReplacementTerminal.
+    const activeSidePane: Pane = {
+      id: "active-pane",
+      surfaces: [],
+      activeSurfaceId: null,
+    };
+    const stalePane: Pane = {
+      id: "stale-pane",
+      surfaces: [
+        {
+          id: "stale-preview",
+          kind: "preview",
+          title: "stale.md",
+          path: "/docs/stale.md",
+        } as never,
+      ],
+      activeSurfaceId: "stale-preview",
+    };
+    const ws: Workspace = {
+      id: "ws-1",
+      name: "ws-1",
+      paneLayout: {
+        type: "split",
+        direction: "horizontal",
+        ratio: 0.5,
+        children: [
+          { type: "pane", pane: activeSidePane },
+          { type: "pane", pane: stalePane },
+        ],
+      },
+      activePaneId: activeSidePane.id,
+    };
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+    registerPreviewSurface({
+      surfaceId: "stale-preview",
+      path: "/docs/stale.md",
+      paneId: stalePane.id,
+      workspaceId: "ws-1",
+    });
+
+    openFileAsPreviewSplit("/docs/README.md", { exclusive: true });
+
+    // Exactly one preview should remain — the new one.
+    const surfaces = getAllSurfaces(get(workspaces)[0]!).filter(
+      isPreviewSurface,
+    );
+    expect(surfaces).toHaveLength(1);
+    expect(surfaces[0]!.path).toBe("/docs/README.md");
+  });
 });

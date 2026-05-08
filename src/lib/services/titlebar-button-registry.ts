@@ -7,6 +7,12 @@ export interface TitleBarButton {
   icon: unknown;
   title: string;
   isActive?: Readable<boolean>;
+  /**
+   * When provided, the button only renders while this store emits true.
+   * Lets extensions hide a contributed button reactively (e.g., from a
+   * "show in title bar" setting) without unregistering it.
+   */
+  visible?: Readable<boolean>;
   onClick: () => void;
 }
 

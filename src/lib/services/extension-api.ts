@@ -291,8 +291,11 @@ export function createExtensionAPI(
     openInEditor(filePath: string) {
       pendingAction.set({ type: "open-in-editor", filePath });
     },
-    openPreviewSplit(filePath: string) {
-      openFileAsPreviewSplit(filePath);
+    openPreviewSplit(
+      filePath: string,
+      opts?: { ratio?: number; exclusive?: boolean },
+    ) {
+      openFileAsPreviewSplit(filePath, opts);
     },
     openSurface(
       surfaceTypeId: string,

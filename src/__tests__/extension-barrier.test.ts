@@ -61,6 +61,14 @@ describe("Extension barrier enforcement", () => {
         "../../lib/contexts/dashboard-host",
         "../../lib/stores/workspace",
       ],
+      // SpacebaseWorkspaceDashboard is the per-workspace Spacebase
+      // dashboard's body — registered as a hidden surface type and
+      // resolves the host workspace's CWD by id from the workspaces
+      // store so it can scan `{cwd}/{syncDir}` for local .md files.
+      // Same piercing shape as DiffDashboardBody.
+      "spacebase/SpacebaseWorkspaceDashboard.svelte": [
+        "../../lib/stores/workspace",
+      ],
       // The Agentic Dashboard contribution's `create(workspace)` must
       // materialize a dashboard workspace; reaching for
       // createWorkspaceFromDef keeps the contribution on the same code

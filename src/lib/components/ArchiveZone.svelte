@@ -195,7 +195,7 @@
   .archive-zone {
     flex-shrink: 0;
     position: relative;
-    padding: 8px 0 8px 4px;
+    padding: 8px 4px;
   }
 
   .archive-banner {
@@ -237,7 +237,7 @@
 
   .archive-label {
     flex: 1;
-    text-align: left;
+    text-align: center;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

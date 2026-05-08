@@ -275,6 +275,44 @@ describe("workspace persistence", () => {
     loadStateSpy.mockRestore();
   });
 
+  it("createWorkspaceFromDef restores dashboard toggle state (regression)", async () => {
+    // Both fields drive Workspace dashboard toggle persistence:
+    //   - dismissedDashboardContributionIds: defaultEnabled contributions
+    //     toggled OFF (chip hidden, auto-provision skipped).
+    //   - enabledDashboardContributionIds: opt-in contributions toggled ON
+    //     (chip shown).
+    // Earlier the restore path only re-hydrated dismissed*; enabled* was
+    // dropped, so opt-in toggles silently reverted to off after a reload.
+    const { createWorkspaceFromDef } =
+      await import("../lib/services/workspace-runtime-service");
+
+    workspaces.set([]);
+    await createWorkspaceFromDef(
+      {
+        id: "ws-toggle-restore",
+        name: "Toggle Restore",
+        path: "/tmp/toggle-restore",
+        color: "blue",
+        isGit: false,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        layout: { pane: { surfaces: [] } },
+        dismissedDashboardContributionIds: ["diff"],
+        enabledDashboardContributionIds: ["claude-settings"],
+      },
+      { restoring: true },
+    );
+
+    let restored: import("../lib/types").Workspace | undefined;
+    const unsub = workspaces.subscribe((list) => {
+      restored = list.find((w) => w.id === "ws-toggle-restore");
+    });
+    unsub();
+    expect(restored?.dismissedDashboardContributionIds).toEqual(["diff"]);
+    expect(restored?.enabledDashboardContributionIds).toEqual([
+      "claude-settings",
+    ]);
+  });
+
   it("restore uses saved state when workspaces exist", async () => {
     const config = await import("../lib/config");
 

@@ -128,10 +128,9 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
     }
 
     // Dashboard-section registrations — let other dashboard bodies
-    // (e.g. core's WorkspaceOverviewBody) compose these widgets without
-    // going through the markdown widget pipeline. Each section is
-    // mounted via ExtensionWrapper using `source` to resolve this
-    // extension's API at render time.
+    // compose these widgets without going through the markdown widget
+    // pipeline. Each section is mounted via ExtensionWrapper using
+    // `source` to resolve this extension's API at render time.
     registerDashboardSection({
       id: "issues",
       source: "agentic-orchestrator",

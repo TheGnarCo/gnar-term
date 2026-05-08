@@ -98,7 +98,7 @@ function makeDashboard(): Workspace {
     name: "Overview",
     rootWorkspaceId: ROOT_ID,
     isDashboard: true,
-    dashboardContributionId: "group",
+    dashboardContributionId: "test-overview",
     paneLayout: {
       type: "pane",
       pane: { id: "p-dash", surfaces: [], activeSurfaceId: null },

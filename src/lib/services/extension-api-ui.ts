@@ -75,6 +75,7 @@ export function createUIRegistrationAPI(
         icon: unknown;
         title: string;
         isActive?: import("svelte/store").Readable<boolean>;
+        visible?: import("svelte/store").Readable<boolean>;
         onClick: () => void;
       },
     ) {
@@ -84,6 +85,7 @@ export function createUIRegistrationAPI(
         icon: options.icon,
         title: options.title,
         isActive: options.isActive,
+        visible: options.visible,
         onClick: options.onClick,
       });
     },

@@ -20,6 +20,7 @@ import {
   type Pane,
   type Surface,
   type PreviewSurface,
+  type SplitNode,
 } from "../types";
 import { removePane, splitPaneEmpty } from "./pane-service";
 import { closeWorkspace, schedulePersist } from "./workspace-runtime-service";
@@ -662,7 +663,30 @@ export function createPreviewSurfaceInPane(
  * system default application (`open_with_default_app`) instead of opening
  * an empty preview surface that immediately renders an error.
  */
-export function openFileAsPreviewSplit(filePath: string): void {
+export interface OpenPreviewSplitOptions {
+  /**
+   * Ratio of the parent (active) pane after the split. The new preview
+   * pane gets `1 - ratio`. Default `0.5`. Clamped to [0.05, 0.95] to
+   * avoid degenerate panes.
+   */
+  ratio?: number;
+  /**
+   * Close all other preview surfaces in the active workspace before
+   * opening. The matching-path dedup runs first, so reopening the same
+   * path still focuses the existing preview without churning the layout.
+   */
+  exclusive?: boolean;
+}
+
+function clampRatio(r: number): number {
+  if (!Number.isFinite(r)) return 0.5;
+  return Math.min(0.95, Math.max(0.05, r));
+}
+
+export function openFileAsPreviewSplit(
+  filePath: string,
+  opts: OpenPreviewSplitOptions = {},
+): void {
   const existing = findPreviewSurfaceByPath(filePath);
   if (existing) {
     focusSurfaceById(existing.surfaceId);
@@ -679,13 +703,60 @@ export function openFileAsPreviewSplit(filePath: string): void {
     return;
   }
 
+  const ws = get(activeWorkspace);
+  if (opts.exclusive && ws) {
+    // Snapshot the closures since closeSurfaceById mutates the workspace
+    // tree under our feet.
+    const previews: Array<{ paneId: string; surfaceId: string }> = [];
+    for (const pane of getAllPanes(ws.paneLayout)) {
+      for (const s of pane.surfaces) {
+        if (isPreviewSurface(s)) {
+          previews.push({ paneId: pane.id, surfaceId: s.id });
+        }
+      }
+    }
+    for (const { paneId, surfaceId } of previews) {
+      closeSurfaceById(paneId, surfaceId);
+    }
+  }
+
   const pane = get(activePane);
   if (!pane) return;
 
   const result = splitPaneEmpty(pane.id, "horizontal");
   if (!result) return;
 
+  if (opts.ratio !== undefined) {
+    setSplitRatioForPane(result.newPane.id, clampRatio(opts.ratio));
+  }
+
   createPreviewSurfaceInPane(result.newPane.id, filePath);
+}
+
+/**
+ * Adjust the ratio of the split that contains `paneId` (as one of its
+ * children). No-op when the pane isn't inside a split. Used by the
+ * preview-split helper to honor `OpenPreviewSplitOptions.ratio`.
+ */
+function setSplitRatioForPane(paneId: string, ratio: number): void {
+  workspaces.update((wsList) => {
+    for (const ws of wsList) {
+      if (visit(ws.paneLayout, paneId, ratio)) return [...wsList];
+    }
+    return wsList;
+  });
+}
+
+function visit(node: SplitNode, paneId: string, ratio: number): boolean {
+  if (node.type !== "split") return false;
+  for (const child of node.children) {
+    if (child.type === "pane" && child.pane.id === paneId) {
+      node.ratio = ratio;
+      return true;
+    }
+    if (visit(child, paneId, ratio)) return true;
+  }
+  return false;
 }
 
 export function renameActiveSurface(): void {

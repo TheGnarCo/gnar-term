@@ -20,7 +20,11 @@
   import ExtensionWrapper from "./ExtensionWrapper.svelte";
   import { tabDragState } from "../services/tab-drag";
   import { workspaceDragState } from "../services/workspace-drag";
-  import { dismissPane, relaunchPane } from "../services/pane-service";
+  import {
+    closePane,
+    dismissPane,
+    relaunchPane,
+  } from "../services/pane-service";
   import { closeWorkspace } from "../services/workspace-runtime-service";
   import CloseButton from "./CloseButton.svelte";
 
@@ -75,13 +79,25 @@
   // content. Per-workspace dashboards (those with `rootWorkspaceId`) keep
   // their TabBar so users get split / new-surface affordances; top-level
   // global surfaces (gear-button targets like Settings, Claude Settings,
-  // Keyboard Shortcuts, the Workspace Dashboard) suppress the TabBar
-  // because they're single-purpose surfaces with no add-tab story.
+  // Keyboard Shortcuts, Spacebase) suppress the TabBar because they have
+  // no add-tab story. Some global surfaces (e.g. Spacebase) host an
+  // internal split layout for previews — see `closeGlobalSurface` below
+  // for how multi-pane close behaves.
   $: workspace = $workspaces.find((w) => w.id === workspaceId);
   $: isGlobalSurface =
     workspace?.isDashboard === true && workspace.rootWorkspaceId == null;
 
   function closeGlobalSurface() {
+    // Multi-pane global dashboards (e.g. Spacebase browser + a preview
+    // split) should retire the active pane only — closing one half of a
+    // split must not tear down the other half. The button only collapses
+    // the entire workspace when this pane is the sole pane left.
+    const ws = $workspaces.find((w) => w.id === workspaceId);
+    if (!ws) return;
+    if (ws.paneLayout.type === "split") {
+      closePane(pane.id);
+      return;
+    }
     const idx = $workspaces.findIndex((w) => w.id === workspaceId);
     if (idx >= 0) closeWorkspace(idx);
   }

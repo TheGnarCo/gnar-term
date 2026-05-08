@@ -570,8 +570,7 @@
             aria-label={collapsed ? "Expand workspace" : "Collapse workspace"}
             title={collapsed ? "Expand workspace" : "Collapse workspace"}
             style="background: {$theme.bgSurface ??
-              'transparent'}; border: 1px solid {$theme.border ??
-              'transparent'}; gap: 6px;"
+              'transparent'}; border: none; gap: 6px;"
           >
             {#if collapsed && branchedIds.size > 0}
               <span
@@ -694,9 +693,10 @@
     -webkit-app-region: no-drag;
   }
   .dash-btn-expand {
-    flex: 1 1 auto;
+    flex: 0 0 auto;
     width: auto;
     min-width: 28px;
+    padding: 0 6px;
   }
   .dash-btn:hover {
     filter: brightness(1.1);

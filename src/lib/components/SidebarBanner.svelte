@@ -100,6 +100,14 @@
    * is being shown, even after the cursor has left the rail itself.
    */
   export let popoverActive: boolean = false;
+  /**
+   * Number of dashboard chips this banner will render in its
+   * children-leading slot. Combined with `nonDashboardCount` it
+   * determines whether the banner is expandable and whether the
+   * children container renders. Default 0 keeps the legacy behavior
+   * for callers that haven't migrated.
+   */
+  export let dashboardCount: number = 0;
 
   let bannerHovered = false;
 
@@ -110,14 +118,16 @@
   ).length;
 
   let collapsed = false;
-  let prevNonDashboardCount = -1;
+  let prevExpandableCount = -1;
+  $: expandableCount = nonDashboardCount + dashboardCount;
+  $: expandable = expandableCount > 0;
   $: {
-    const count = nonDashboardCount;
-    if (prevNonDashboardCount >= 0) {
-      if (count > prevNonDashboardCount) collapsed = false;
+    const count = expandableCount;
+    if (prevExpandableCount >= 0) {
+      if (count > prevExpandableCount) collapsed = false;
       else if (count === 0) collapsed = true;
     }
-    prevNonDashboardCount = count;
+    prevExpandableCount = count;
   }
 
   $: WorkspaceListViewResolved = (workspaceListViewComponent ??
@@ -170,13 +180,13 @@
               name="btn-row"
               {collapsed}
               toggle={() => (collapsed = !collapsed)}
-              showToggle={nonDashboardCount > 0}
+              showToggle={expandable}
             />
           </div>
         {/if}
       </div>
     </SidebarElement>
-    {#if !collapsed && nonDashboardCount > 0}
+    {#if !collapsed && expandable}
       <div
         data-sidebar-banner-children={scopeId}
         data-children-count={nonDashboardCount}
@@ -280,13 +290,13 @@
                 name="btn-row"
                 {collapsed}
                 toggle={() => (collapsed = !collapsed)}
-                showToggle={nonDashboardCount > 0}
+                showToggle={expandable}
               />
             </div>
           {/if}
         </div>
       </div>
-      {#if !collapsed && nonDashboardCount > 0}
+      {#if !collapsed && expandable}
         <div
           data-sidebar-banner-children={scopeId}
           data-children-count={nonDashboardCount}

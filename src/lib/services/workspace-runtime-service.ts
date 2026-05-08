@@ -191,6 +191,8 @@ export async function createWorkspaceFromDef(
   if (def.dismissedDashboardContributionIds !== undefined)
     ws.dismissedDashboardContributionIds =
       def.dismissedDashboardContributionIds;
+  if (def.enabledDashboardContributionIds !== undefined)
+    ws.enabledDashboardContributionIds = def.enabledDashboardContributionIds;
   if (def.lastActiveBranchedWorkspaceId !== undefined)
     ws.lastActiveBranchedWorkspaceId = def.lastActiveBranchedWorkspaceId;
   if (def.locked !== undefined) ws.locked = def.locked;

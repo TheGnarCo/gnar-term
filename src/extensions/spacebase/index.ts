@@ -1,4 +1,4 @@
-import type { ExtensionManifest, ExtensionAPI, WorkspaceRef } from "../api";
+import type { ExtensionManifest, ExtensionAPI } from "../api";
 import { createSpacebaseClient } from "./api-client";
 import {
   createAuthStore,
@@ -11,8 +11,14 @@ import SpacebaseMark from "./icons/SpacebaseMark.svelte";
 import SpacebaseRegistry from "./SpacebaseRegistry.svelte";
 import SpacebaseWorkspaceDashboard from "./SpacebaseWorkspaceDashboard.svelte";
 
-const WORKSPACE_DASHBOARD_ID = "workspace-dashboard";
-const WORKSPACE_DASHBOARD_SURFACE = "spacebase:workspace-dashboard";
+const DASHBOARD_CONTRIBUTION_ID = "spacebase-dashboard";
+/**
+ * Surface type id (pre-namespacing) for the per-workspace Spacebase
+ * dashboard body. `api.registerSurfaceType` and `api.openDashboardTab`
+ * both apply the `spacebase:` extension prefix automatically, so the
+ * persisted surface ends up as `spacebase:spacebase-dashboard`.
+ */
+const DASHBOARD_SURFACE_ID = DASHBOARD_CONTRIBUTION_ID;
 
 let authStoreSingleton: AuthStore | null = null;
 
@@ -54,15 +60,8 @@ export const spacebaseManifest: ExtensionManifest = {
           type: "string",
           title: "Default project ID",
           description:
-            "Default Spacebase project for the workspace dashboard. Resolved from /me when blank.",
+            "Default Spacebase project for the per-workspace dashboard. Resolved from /me when blank (used when the user has a single project).",
           default: "",
-        },
-        syncDir: {
-          type: "string",
-          title: "Sync directory",
-          description:
-            "Path (relative to workspace CWD) scanned for local .md files in the workspace dashboard. Mirrors spacebase-sync.sh's SYNC_DIR.",
-          default: ".",
         },
         showTitleBarIcon: {
           type: "boolean",
@@ -102,49 +101,41 @@ export function registerSpacebaseExtension(api: ExtensionAPI): void {
       onClick: openRegistry,
     });
 
-    api.registerSurfaceType(
-      WORKSPACE_DASHBOARD_ID,
-      SpacebaseWorkspaceDashboard,
-      { hideFromNewSurface: true },
-    );
+    api.registerSurfaceType(DASHBOARD_SURFACE_ID, SpacebaseWorkspaceDashboard, {
+      hideFromNewSurface: true,
+    });
+
     api.registerDashboardContribution({
-      id: WORKSPACE_DASHBOARD_ID,
+      id: DASHBOARD_CONTRIBUTION_ID,
       label: "Spacebase",
       actionLabel: "Add Spacebase Dashboard",
       capPerWorkspace: 1,
       icon: SpacebaseMark,
-      create: (workspace) => createWorkspaceDashboard(api, workspace),
+      // Default-on: the contribution back-fills onto every workspace
+      // when the extension activates (and tears down on deactivate via
+      // the registry's auto-dashboard cleanup). Users can still dismiss
+      // per-workspace from Workspace Settings.
+      defaultEnabled: true,
+      openAsTab: async (workspace, opts) => {
+        await api.openDashboardTab(
+          workspace.id,
+          {
+            kind: "registry",
+            surfaceTypeId: DASHBOARD_SURFACE_ID,
+            title: "Spacebase",
+            props: { rootWorkspaceId: workspace.id },
+            matchProps: { rootWorkspaceId: workspace.id },
+            dashboardContributionId: DASHBOARD_CONTRIBUTION_ID,
+          },
+          opts,
+        );
+      },
     });
 
     await store.refresh();
   });
   api.onDeactivate(() => {
     authStoreSingleton = null;
-  });
-}
-
-async function createWorkspaceDashboard(
-  api: ExtensionAPI,
-  workspace: WorkspaceRef,
-): Promise<string> {
-  return await api.createWorkspaceFromDef({
-    name: "Spacebase",
-    layout: {
-      pane: {
-        surfaces: [
-          {
-            type: "registry",
-            extensionType: WORKSPACE_DASHBOARD_SURFACE,
-            extensionProps: { rootWorkspaceId: workspace.id },
-            name: "Spacebase",
-            focus: true,
-          },
-        ],
-      },
-    },
-    isDashboard: true,
-    rootWorkspaceId: workspace.id,
-    dashboardContributionId: WORKSPACE_DASHBOARD_ID,
   });
 }
 

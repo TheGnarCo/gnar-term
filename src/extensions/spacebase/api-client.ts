@@ -5,9 +5,15 @@
  * override so tests (and the network sandbox, which blocks `*.thegnar.com`)
  * can supply a mock without monkey-patching globals.
  *
+ * The default fetch routes through `@tauri-apps/plugin-http`, which dispatches
+ * the request through the Rust backend's reqwest. This bypasses the WebView's
+ * CORS preflight (Spacebase responds 401 to OPTIONS because the OPTIONS has
+ * no Authorization header) and the app's CSP `connect-src` allowlist.
+ *
  * Endpoint reference:
  * `~/.claude/plugins/marketplaces/gnar/spacebase/skills/spacebase-api/references/api-endpoints.md`
  */
+import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 
 export type SpacebaseProjectRef = { id: string; name: string };
 
@@ -84,7 +90,7 @@ export class SpacebaseError extends Error {
 export function createSpacebaseClient(
   opts: SpacebaseClientOptions,
 ): SpacebaseClient {
-  const fetchImpl = opts.fetch ?? globalThis.fetch;
+  const fetchImpl = opts.fetch ?? tauriFetch;
   const root = opts.baseUrl.replace(/\/+$/, "");
   const auth = `Bearer ${opts.apiKey}`;
 

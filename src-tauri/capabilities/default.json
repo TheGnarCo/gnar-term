@@ -20,6 +20,10 @@
     "notification:default",
     "updater:default",
     "process:default",
-    "process:allow-restart"
+    "process:allow-restart",
+    {
+      "identifier": "http:default",
+      "allow": [{ "url": "https://spacebase.thegnar.com/*" }]
+    }
   ]
 }

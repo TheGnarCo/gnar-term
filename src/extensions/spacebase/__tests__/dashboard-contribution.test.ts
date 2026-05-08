@@ -1,7 +1,9 @@
 /**
  * Pins the registered shape of the Spacebase per-workspace dashboard
- * contribution and the body's hidden surface type. Mirrors the test
- * pattern used by diff-viewer's diff-dashboard-contribution.test.ts.
+ * contribution and the body's hidden global surface type. The
+ * contribution opens as a tab inside the host workspace via
+ * `openAsTab` (the post-9363fcd dashboards-as-tabs API); the surface
+ * is registered globally so the tab can mount in any workspace.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { get } from "svelte/store";
@@ -31,6 +33,26 @@ import {
 import { resetCommands } from "../../../lib/services/command-registry";
 import { resetRestoreSignal } from "../../../lib/bootstrap/restore-workspaces";
 
+function seedRoot(
+  id: string,
+  color: string,
+): import("../../../lib/types").Workspace {
+  return {
+    id,
+    name: id.toUpperCase(),
+    path: `/tmp/${id}`,
+    color,
+    branchedWorkspaceIds: [],
+    isGit: true,
+    createdAt: "2026-04-21T00:00:00.000Z",
+    paneLayout: {
+      type: "pane",
+      pane: { id: `${id}-p`, surfaces: [], activeSurfaceId: null },
+    },
+    activePaneId: `${id}-p`,
+  } as unknown as import("../../../lib/types").Workspace;
+}
+
 describe("Spacebase workspace dashboard contribution", () => {
   beforeEach(async () => {
     resetRestoreSignal();
@@ -42,78 +64,83 @@ describe("Spacebase workspace dashboard contribution", () => {
     activeWorkspaceIdx.set(-1);
   });
 
-  it("registers a 'workspace-dashboard' contribution on activation", async () => {
+  it("registers a 'spacebase-dashboard' contribution on activation", async () => {
     registerExtension(spacebaseManifest, registerSpacebaseExtension);
     await activateExtension("spacebase");
 
     const contrib = get(dashboardContributionStore).find(
-      (c) => c.id === "workspace-dashboard",
+      (c) => c.id === "spacebase-dashboard",
     );
     expect(contrib).toBeTruthy();
     expect(contrib?.label).toBe("Spacebase");
     expect(contrib?.actionLabel).toBe("Add Spacebase Dashboard");
     expect(contrib?.source).toBe("spacebase");
     expect(contrib?.capPerWorkspace).toBe(1);
-    // Opt-in (matches architecture.md): user must explicitly add it from
-    // the workspace's "Add Dashboard" menu — not auto-provisioned and
-    // not default-on.
+    // Default-on: the contribution back-fills onto every workspace when
+    // the extension activates and tears down on deactivate via the
+    // registry's auto-dashboard cleanup. Users can dismiss per-workspace
+    // from Workspace Settings.
     expect(contrib?.autoProvision).toBeFalsy();
-    expect(contrib?.defaultEnabled).toBeFalsy();
+    expect(contrib?.defaultEnabled).toBe(true);
     expect(contrib?.icon).toBeDefined();
   });
 
-  it("registers the dashboard body as a hidden surface type", async () => {
+  it("registers the dashboard body as a hidden, extension-namespaced surface type", async () => {
     registerExtension(spacebaseManifest, registerSpacebaseExtension);
     await activateExtension("spacebase");
 
     const surface = get(surfaceTypeStore).find(
-      (s) => s.id === "spacebase:workspace-dashboard",
+      (s) => s.id === "spacebase:spacebase-dashboard",
     );
     expect(surface).toBeTruthy();
     expect(surface?.hideFromNewSurface).toBe(true);
     expect(surface?.source).toBe("spacebase");
   });
 
-  it("create(workspace) materializes a dashboard workspace tagged with the contribution", async () => {
+  it("openAsTab(workspace) stamps a Spacebase dashboard tab onto the workspace's pane", async () => {
+    workspaces.set([seedRoot("g1", "blue")]);
     registerExtension(spacebaseManifest, registerSpacebaseExtension);
     await activateExtension("spacebase");
 
     const contrib = get(dashboardContributionStore).find(
-      (c) => c.id === "workspace-dashboard",
+      (c) => c.id === "spacebase-dashboard",
     );
     expect(contrib).toBeTruthy();
 
-    await contrib!.create({
-      id: "g1",
-      name: "My Workspace",
-      path: "/tmp/my-workspace",
-      color: "blue",
-      branchedWorkspaceIds: [],
-      isGit: true,
-      createdAt: "2026-04-21T00:00:00.000Z",
-    });
-
-    const created = get(workspaces).find(
-      (w) => w.dashboardContributionId === "workspace-dashboard",
+    await contrib!.openAsTab(
+      {
+        id: "g1",
+        name: "My Workspace",
+        path: "/tmp/my-workspace",
+        color: "blue",
+        branchedWorkspaceIds: [],
+        isGit: true,
+        createdAt: "2026-04-21T00:00:00.000Z",
+      } as unknown as import("../../../lib/stores/workspace").RootWorkspace,
+      { activate: false },
     );
-    expect(created).toBeTruthy();
-    expect(created!.isDashboard).toBe(true);
-    expect(created!.rootWorkspaceId).toBe("g1");
 
-    const panes = (
-      created!.paneLayout as unknown as {
+    const ws = get(workspaces).find((w) => w.id === "g1");
+    expect(ws).toBeDefined();
+    const surfaces = (
+      ws!.paneLayout as unknown as {
         pane: {
           surfaces: Array<{
             kind: string;
             surfaceTypeId?: string;
             props?: Record<string, unknown>;
+            dashboardContributionId?: string;
           }>;
         };
       }
     ).pane.surfaces;
-    expect(panes).toHaveLength(1);
-    expect(panes[0]?.kind).toBe("registry");
-    expect(panes[0]?.surfaceTypeId).toBe("spacebase:workspace-dashboard");
-    expect(panes[0]?.props).toEqual({ rootWorkspaceId: "g1" });
+    const dashTabs = surfaces.filter(
+      (s) => s.dashboardContributionId === "spacebase-dashboard",
+    );
+    expect(dashTabs).toHaveLength(1);
+    const tab = dashTabs[0]!;
+    expect(tab.kind).toBe("registry");
+    expect(tab.surfaceTypeId).toBe("spacebase:spacebase-dashboard");
+    expect(tab.props).toEqual({ rootWorkspaceId: "g1" });
   });
 });

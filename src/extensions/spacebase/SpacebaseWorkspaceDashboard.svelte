@@ -1,131 +1,216 @@
 <script lang="ts">
   import { getContext, onMount } from "svelte";
-  import { writable, get, derived } from "svelte/store";
+  import { writable, get } from "svelte/store";
   import { EXTENSION_API_KEY, type ExtensionAPI } from "../api";
-  import { workspaces } from "../../lib/stores/workspace";
-  import { createSpacebaseClient, type DocSummary } from "./api-client";
-  import { resolveAuthConfig } from "./auth-store";
   import {
-    computeDashboardEntries,
-    type DashboardEntry,
-  } from "./dashboard-data";
-  import { walkMarkdownFiles, type DirEntry } from "./fs-walk";
+    createSpacebaseClient,
+    type DocSummary,
+    type SpacebaseProjectRef,
+  } from "./api-client";
+  import { resolveAuthConfig } from "./auth-store";
+  import { __getSpacebaseAuthStoreForTest } from "./index";
+  import { openDocFlow } from "./registry-data";
+  import { buildDocTree } from "./doc-tree";
+  import {
+    loadRepoConfig,
+    writeRepoConfig,
+    type RepoConfigDeps,
+  } from "./repo-config";
+  import { workspaces } from "../../lib/stores/workspace";
+  import DocTree from "./DocTree.svelte";
 
   export let rootWorkspaceId: string | undefined = undefined;
 
   const api = getContext<ExtensionAPI>(EXTENSION_API_KEY);
   const theme = api.theme;
+  const authStore = __getSpacebaseAuthStoreForTest();
 
-  const entries = writable<DashboardEntry[]>([]);
+  const docs = writable<DocSummary[]>([]);
   const loading = writable<boolean>(false);
   const error = writable<string | null>(null);
+  const expandedFolders = writable<Set<string>>(new Set());
+  const repoProjectId = writable<string | null>(null);
+  const repoConfigLoaded = writable<boolean>(false);
+  const savingAssociation = writable<boolean>(false);
 
-  // Resolve the host workspace's CWD from its id.
-  $: workspace = $workspaces.find((w) => w.id === rootWorkspaceId);
-  $: workspacePath = workspace?.path ?? null;
+  $: status = authStore?.status;
+  $: settings = api.settings;
 
-  // Surface settings reactively so a settings change (projectId, syncDir)
-  // triggers a refresh.
-  const settings = api.settings;
-  const projectId = derived(settings, ($s) => ($s.projectId as string) ?? "");
-  const syncDir = derived(settings, ($s) => ($s.syncDir as string) || ".");
+  // Resolve the host workspace's filesystem path so the dashboard can
+  // read/write `<path>/.gnar-term/spacebase.json`. Tracks the live store
+  // so a rename or path change reflows the repo-config lookup.
+  $: workspacePath = (() => {
+    if (!rootWorkspaceId) return null;
+    const ws = $workspaces.find((w) => w.id === rootWorkspaceId);
+    return ws?.path ?? null;
+  })();
+
+  const repoConfigDeps: RepoConfigDeps = {
+    fileExists: (p) => api.invoke<boolean>("file_exists", { path: p }),
+    readFile: (p) => api.invoke<string>("read_file", { path: p }),
+    writeFile: (p, content) => api.invoke("write_file", { path: p, content }),
+    ensureDir: (p) => api.invoke("ensure_dir", { path: p }),
+  };
+
+  // Repo config wins over auth-store resolved project id. When the repo
+  // pins a projectId that the user no longer has access to, fall through
+  // to the auth-store resolution rather than rendering a dead state.
+  $: project = (() => {
+    if (!$status || $status.kind !== "valid") return null;
+    if ($repoProjectId) {
+      const match = $status.projects.find((p) => p.id === $repoProjectId);
+      if (match) return match;
+    }
+    const id = $status.resolvedProjectId;
+    if (id) return $status.projects.find((p) => p.id === id) ?? null;
+    return $status.projects.length === 1 ? $status.projects[0]! : null;
+  })();
+
+  function toggleFolder(path: string): void {
+    expandedFolders.update((s) => {
+      const next = new Set(s);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+  }
+
+  function docPath(doc: DocSummary): string {
+    return doc.folder_path ? `${doc.folder_path}/${doc.title}` : doc.title;
+  }
+
+  $: tree = buildDocTree($docs.map((d) => ({ path: docPath(d), data: d })));
 
   function clientNow() {
     const cfg = resolveAuthConfig(get(settings), {});
     return createSpacebaseClient({ apiKey: cfg.apiKey, baseUrl: cfg.baseUrl });
   }
 
-  async function listDirRemote(path: string): Promise<DirEntry[]> {
-    return api.invoke<DirEntry[]>("mcp_list_dir", {
-      path,
-      includeHidden: false,
-    });
-  }
-
-  function joinPath(base: string, rel: string): string {
-    const baseClean = base.replace(/\/+$/, "");
-    if (rel === "" || rel === ".") return baseClean;
-    const relClean = rel.replace(/^\/+/, "");
-    return `${baseClean}/${relClean}`;
+  // Spacebase has no public POST /projects endpoint — projects are
+  // minted in the web UI. The dashboard's "Create new project" button
+  // hands off to the configured baseUrl so the user can finish there
+  // and come back to associate it.
+  function openCreateProjectInBrowser(): void {
+    const cfg = resolveAuthConfig(get(settings), {});
+    void api.invoke("open_url", { url: cfg.baseUrl });
   }
 
   async function refresh(): Promise<void> {
-    if (!workspacePath) {
-      entries.set([]);
+    if (!project) {
+      docs.set([]);
       return;
     }
     loading.set(true);
     error.set(null);
     try {
-      const root = joinPath(workspacePath, get(syncDir));
-      const localFiles = await walkMarkdownFiles(root, listDirRemote);
-      const pid = get(projectId);
-      let remoteDocs: DocSummary[] = [];
-      const apiKey = (get(settings).apiKey as string) ?? "";
-      if (pid && apiKey) {
-        try {
-          remoteDocs = await clientNow().listDocs(pid);
-        } catch (err) {
-          // Surface fetch failure as a non-fatal banner; still show local-only.
-          const msg = err instanceof Error ? err.message : String(err);
-          error.set(`Failed to load remote docs: ${msg}`);
-        }
-      }
-      entries.set(computeDashboardEntries(localFiles, remoteDocs));
+      const list = await clientNow().listDocs(project.id);
+      docs.set(list);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       error.set(msg);
-      entries.set([]);
+      docs.set([]);
     } finally {
       loading.set(false);
     }
   }
 
+  async function loadAssociation(path: string): Promise<void> {
+    repoConfigLoaded.set(false);
+    try {
+      const cfg = await loadRepoConfig(repoConfigDeps, path);
+      repoProjectId.set(cfg?.projectId ?? null);
+    } catch {
+      repoProjectId.set(null);
+    } finally {
+      repoConfigLoaded.set(true);
+    }
+  }
+
   onMount(() => {
-    void refresh();
+    if (authStore) void authStore.refresh();
   });
 
-  // Re-run when the workspace path or relevant settings change.
-  let lastKey: string | null = null;
+  // Re-load the repo config whenever the host workspace's path changes
+  // (e.g. workspaces store hydrating after restore).
+  let lastPathLoaded: string | null = null;
+  $: if (workspacePath && workspacePath !== lastPathLoaded) {
+    lastPathLoaded = workspacePath;
+    void loadAssociation(workspacePath);
+  }
+
+  // Re-fetch whenever the resolved project changes (auth refresh,
+  // repo association change, settings.projectId change, etc.).
+  let lastProjectId: string | null = null;
   $: {
-    const key = `${workspacePath ?? ""}::${$projectId}::${$syncDir}`;
-    if (key !== lastKey) {
-      lastKey = key;
+    const pid = project?.id ?? null;
+    if (pid !== lastProjectId) {
+      lastProjectId = pid;
       void refresh();
     }
   }
 
-  function onClickEntry(entry: DashboardEntry): void {
-    if (entry.status === "remote-only" || !workspacePath) return;
-    const abs = joinPath(workspacePath, get(syncDir));
-    api.openPreviewSplit(`${abs.replace(/\/+$/, "")}/${entry.relPath}`);
-  }
-
-  function badgeColor(status: DashboardEntry["status"]): string {
-    switch (status) {
-      case "synced":
-        return $theme.accent;
-      case "locked":
-        return $theme.fgMuted;
-      case "local-only":
-        return $theme.warning;
-      case "remote-only":
-        return $theme.fgMuted;
+  async function associateProject(chosen: SpacebaseProjectRef): Promise<void> {
+    if (!workspacePath) return;
+    savingAssociation.set(true);
+    error.set(null);
+    try {
+      await writeRepoConfig(repoConfigDeps, workspacePath, {
+        projectId: chosen.id,
+      });
+      repoProjectId.set(chosen.id);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      error.set(`Failed to save project association: ${msg}`);
+    } finally {
+      savingAssociation.set(false);
     }
   }
 
-  function badgeLabel(status: DashboardEntry["status"]): string {
-    switch (status) {
-      case "synced":
-        return "synced";
-      case "locked":
-        return "locked";
-      case "local-only":
-        return "local only";
-      case "remote-only":
-        return "remote only";
+  async function clearAssociation(): Promise<void> {
+    if (!workspacePath) return;
+    savingAssociation.set(true);
+    error.set(null);
+    try {
+      await writeRepoConfig(repoConfigDeps, workspacePath, {});
+      repoProjectId.set(null);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      error.set(`Failed to clear project association: ${msg}`);
+    } finally {
+      savingAssociation.set(false);
     }
   }
+
+  async function openDoc(doc: DocSummary): Promise<void> {
+    if (!project) return;
+    try {
+      await openDocFlow(
+        {
+          client: clientNow(),
+          ensureDir: (path) => api.invoke("ensure_dir", { path }),
+          writeFile: (path, content) =>
+            api.invoke("write_file", { path, content }),
+          openPreviewSplit: (path) =>
+            api.openPreviewSplit(path, { ratio: 1 / 3, exclusive: true }),
+          getHome: () => api.invoke<string>("get_home"),
+        },
+        project.id,
+        doc.id,
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      error.set(`Failed to open "${doc.title}": ${msg}`);
+    }
+  }
+
+  // Show the picker UI when auth is valid, the user has projects, but
+  // we don't have a resolved project for this workspace yet (no repo
+  // config and no global default selection).
+  $: showPicker =
+    $status?.kind === "valid" &&
+    $repoConfigLoaded &&
+    !project &&
+    $status.projects.length > 0;
 </script>
 
 <div class="dash" style="background: {$theme.bg}; color: {$theme.fg};">
@@ -137,16 +222,34 @@
         class="refresh"
         style="color: {$theme.fgMuted};"
         on:click={() => void refresh()}
-        disabled={$loading}
+        disabled={$loading || !project}
       >
         {$loading ? "Refreshing…" : "Refresh"}
       </button>
     </div>
     <p style="color: {$theme.fgMuted};">
-      {#if workspacePath}
-        Local <code>{$syncDir}</code> in <code>{workspacePath}</code>
+      {#if !authStore || !$status || $status.kind === "checking"}
+        Checking…
+      {:else if $status.kind === "not-configured"}
+        Set your Spacebase API key in extension settings to load project docs.
+      {:else if $status.kind === "invalid"}
+        Auth failed (status {$status.status}): {$status.message}
+      {:else if project}
+        Project <code>{project.name}</code>
+        {#if $repoProjectId === project.id && workspacePath}
+          <button
+            type="button"
+            class="disassociate"
+            style="color: {$theme.fgMuted}; border-color: {$theme.border};"
+            on:click={() => void clearAssociation()}
+            disabled={$savingAssociation}
+            title="Remove this workspace's project pin"
+          >
+            Disassociate
+          </button>
+        {/if}
       {:else}
-        No workspace path resolved.
+        This workspace isn't associated with a Spacebase project.
       {/if}
     </p>
   </header>
@@ -155,31 +258,79 @@
     <p class="error" style="color: {$theme.danger};">{$error}</p>
   {/if}
 
-  {#if $entries.length === 0 && !$loading}
-    <p class="state" style="color: {$theme.fgMuted};">
-      No markdown files to show.
-    </p>
-  {:else}
-    <ul class="files">
-      {#each $entries as entry (entry.relPath + ":" + entry.status)}
-        <li>
+  {#if showPicker && $status?.kind === "valid"}
+    <div class="picker">
+      <p style="color: {$theme.fgMuted};">
+        This workspace isn't associated with a Spacebase project yet. Associate
+        it with an existing project, or create a new one.
+      </p>
+      <h3 class="picker-heading" style="color: {$theme.fg};">
+        Associate with an existing project
+      </h3>
+      <ul>
+        {#each $status.projects as p (p.id)}
+          <li>
+            <button
+              type="button"
+              class="picker-btn"
+              style="color: {$theme.accent}; border-color: {$theme.border};"
+              on:click={() => void associateProject(p)}
+              disabled={$savingAssociation}
+            >
+              {p.name}
+            </button>
+          </li>
+        {/each}
+      </ul>
+      <h3 class="picker-heading" style="color: {$theme.fg};">
+        Or create a new one
+      </h3>
+      <p class="picker-help" style="color: {$theme.fgMuted};">
+        Spacebase projects are created in the web app. We'll open it in your
+        browser; come back here once the project exists to associate it.
+      </p>
+      <button
+        type="button"
+        class="picker-btn picker-create"
+        style="color: {$theme.accent}; border-color: {$theme.border};"
+        on:click={openCreateProjectInBrowser}
+        disabled={$savingAssociation}
+      >
+        Create new project in Spacebase…
+      </button>
+      <p class="picker-help" style="color: {$theme.fgDim ?? $theme.fgMuted};">
+        Selection saved to <code>.gnar-term/spacebase.json</code>.
+      </p>
+    </div>
+  {/if}
+
+  {#if project}
+    {#if $loading && $docs.length === 0}
+      <p class="state" style="color: {$theme.fgMuted};">Loading…</p>
+    {:else if $docs.length === 0}
+      <p class="state" style="color: {$theme.fgMuted};">
+        No Spacebase docs in <code>{project.name}</code> yet.
+      </p>
+    {:else}
+      <DocTree
+        nodes={tree}
+        expanded={$expandedFolders}
+        onToggle={toggleFolder}
+        folderColor={$theme.fg}
+        chevronColor={$theme.fgMuted}
+      >
+        {#snippet leaf({ node })}
           <button
             type="button"
-            class="row"
-            on:click={() => onClickEntry(entry)}
-            disabled={entry.status === "remote-only"}
-            style="color: {$theme.fg};"
+            class="leaf-btn"
+            style="color: {$theme.accent};"
+            on:click={() => openDoc(node.data)}
           >
-            <span class="rel" style="color: {$theme.accent};">
-              {entry.relPath}
-            </span>
-            <span class="badge" style="color: {badgeColor(entry.status)};">
-              {badgeLabel(entry.status)}
-            </span>
+            {node.name}
           </button>
-        </li>
-      {/each}
-    </ul>
+        {/snippet}
+      </DocTree>
+    {/if}
   {/if}
 </div>
 
@@ -221,48 +372,78 @@
     opacity: 0.5;
     cursor: default;
   }
+  .disassociate {
+    background: none;
+    border: 1px solid;
+    border-radius: 4px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 11px;
+    padding: 2px 8px;
+    margin-left: 6px;
+  }
+  .disassociate:hover:not(:disabled) {
+    text-decoration: underline;
+  }
+  .disassociate:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
   .state,
   .error {
     font-size: 12px;
   }
-  .files {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-  }
-  .files > li {
-    margin: 2px 0;
-  }
-  .row {
-    display: flex;
-    width: 100%;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 12px;
+  .leaf-btn {
     background: none;
     border: 0;
-    padding: 4px 0;
+    padding: 2px 0;
     font: inherit;
-    text-align: left;
     cursor: pointer;
+    text-align: left;
   }
-  .row:disabled {
-    cursor: default;
-  }
-  .row:hover:not(:disabled) .rel {
+  .leaf-btn:hover {
     text-decoration: underline;
   }
-  .rel {
-    font-family: ui-monospace, Menlo, monospace;
-    font-size: 12px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  .picker {
+    margin: 12px 0;
   }
-  .badge {
-    font-size: 11px;
+  .picker-heading {
+    margin: 14px 0 6px 0;
+    font-size: 12px;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.4px;
+  }
+  .picker-help {
+    margin: 4px 0 0 0;
+    font-size: 12px;
+  }
+  .picker-create {
+    margin-top: 8px;
+  }
+  .picker ul {
+    list-style: none;
+    padding: 0;
+    margin: 8px 0 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .picker-btn {
+    background: none;
+    border: 1px solid;
+    padding: 6px 10px;
+    font: inherit;
+    cursor: pointer;
+    text-align: left;
+    border-radius: 4px;
+  }
+  .picker-btn:hover:not(:disabled) {
+    text-decoration: underline;
+  }
+  .picker-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
   }
   code {
     font-family: ui-monospace, Menlo, monospace;

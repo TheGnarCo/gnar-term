@@ -1525,7 +1525,7 @@ describe("PaneView", () => {
       activePaneId: "p1",
       isDashboard: true,
       rootWorkspaceId: "g1",
-      dashboardContributionId: "group",
+      dashboardContributionId: "test-overview",
     };
     workspaces.set([ws]);
     activeWorkspaceIdx.set(0);

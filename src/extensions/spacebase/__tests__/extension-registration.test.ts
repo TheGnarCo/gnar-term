@@ -17,7 +17,7 @@ describe("spacebase extension manifest", () => {
   it("declares the expected settings fields", () => {
     const fields = spacebaseManifest.contributes?.settings?.fields ?? {};
     expect(Object.keys(fields).sort()).toEqual(
-      ["apiKey", "baseUrl", "projectId", "showTitleBarIcon", "syncDir"].sort(),
+      ["apiKey", "baseUrl", "projectId", "showTitleBarIcon"].sort(),
     );
   });
 

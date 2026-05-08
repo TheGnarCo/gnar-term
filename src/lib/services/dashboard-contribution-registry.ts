@@ -10,17 +10,6 @@ import { createRegistry } from "./create-registry";
 import type { RootWorkspace as Workspace } from "../config";
 
 /**
- * Stable persisted id for the built-in Workspace overview dashboard.
- * The string `"group"` predates the rename to "Workspace" vocabulary
- * and is preserved verbatim for persisted-data compatibility — it's
- * stamped onto every overview dashboard workspace's
- * `metadata.dashboardContributionId` and survives across upgrades.
- * Tests, fixtures, and unrelated `spawnedBy.kind: "group"` literals
- * do NOT use this constant.
- */
-export const OVERVIEW_DASHBOARD_CONTRIBUTION_ID = "group";
-
-/**
  * A kind of dashboard that can attach to a Workspace. The
  * registry stores the declarative metadata; workspace actions ("Add
  * <Dashboard>", "Remove <Dashboard>") read from it to build their menus,
@@ -30,10 +19,7 @@ export const OVERVIEW_DASHBOARD_CONTRIBUTION_ID = "group";
 export interface DashboardContribution {
   /**
    * Stable identifier, also stamped onto the dashboard workspace as
-   * `metadata.dashboardContributionId`. Core's built-in uses `"group"`
-   * (preserved for persisted-data compatibility from before the rename
-   * to "Workspace" vocabulary); the agentic extension uses
-   * `"agentic"`. Unique across all contributions.
+   * `metadata.dashboardContributionId`. Unique across all contributions.
    */
   id: string;
   /**
@@ -74,9 +60,7 @@ export interface DashboardContribution {
   regenerate?: (workspace: Workspace) => Promise<void>;
   /**
    * Optional availability gate. When returns false, the contribution
-   * is hidden from the workspace's "Add Dashboard" menu — e.g. the core
-   * Workspace Dashboard contribution uses this to hide itself when the
-   * user has toggled `workspaceDashboardEnabled` off.
+   * is hidden from the workspace's "Add Dashboard" menu.
    */
   isAvailableFor?: (workspace: Workspace) => boolean;
   /**

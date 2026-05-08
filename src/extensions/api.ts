@@ -534,11 +534,10 @@ export interface ExtensionAPI {
    * materialize the dashboard Branch. Automatically unregistered on
    * extension deactivate.
    *
-   * Core's built-in Workspace Dashboard registers under `id: "group"`
-   * (a stable persisted-data key kept across the rename). The agentic extension registers under
-   * `id: "agentic"`. Dashboard tiles carry
-   * `metadata.dashboardContributionId = contribution.id` so the
-   * multi-dashboard grid can attribute them back to their contribution.
+   * The agentic extension registers under `id: "agentic"`. Dashboard
+   * tiles carry `metadata.dashboardContributionId = contribution.id`
+   * so the multi-dashboard grid can attribute them back to their
+   * contribution.
    */
   registerDashboardContribution(contribution: DashboardContributionInput): void;
 
@@ -657,8 +656,20 @@ export interface ExtensionAPI {
    */
   onWorkspacesRestored(callback: () => void): () => void;
   openInEditor(filePath: string): void;
-  /** Open a file as a preview surface in a new pane split to the right. Deduplicates by path. */
-  openPreviewSplit(filePath: string): void;
+  /**
+   * Open a file as a preview surface in a new pane split to the right.
+   * Deduplicates by path — reopening the same path focuses the existing
+   * preview rather than spawning a new one.
+   *
+   * `opts.ratio` sets the resulting split's ratio (proportion of the
+   * source pane). The new preview pane gets `1 - ratio`. Default `0.5`.
+   * `opts.exclusive` closes any other preview surfaces in the active
+   * workspace before opening the new one.
+   */
+  openPreviewSplit(
+    filePath: string,
+    opts?: { ratio?: number; exclusive?: boolean },
+  ): void;
   openSurface(
     surfaceTypeId: string,
     title: string,

@@ -6,10 +6,9 @@
  * Real dashboard workspaces project their structural fields (e.g.
  * `{ rootWorkspaceId }`) into this context. The Global Agentic
  * Dashboard pseudo-workspace provides a synthetic context with
- * `metadata = { isGlobalAgenticDashboard: true }`. Widgets
- * (`gnar:agent-list`, `gnar:kanban`, `gnar:task-spawner`) read from
- * this context via `getDashboardHost()` and never need props threaded
- * through markdown.
+ * `metadata = { isGlobalAgenticDashboard: true }`. Embedded components
+ * (AgentList, Kanban, TaskSpawner, Issues, PRs) read from this context
+ * via `getDashboardHost()` and never need props threaded through.
  *
  * Scope derivation inside widgets:
  *   - `metadata.isGlobalAgenticDashboard === true` → { kind: "global" }

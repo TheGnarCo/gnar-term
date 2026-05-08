@@ -1,9 +1,9 @@
 /**
- * Shared helpers for the markdown-component widgets registered by the
+ * Shared helpers for the dashboard components in the
  * agentic-orchestrator extension (Kanban, Issues, AgentList,
  * AgentStatusRow, TaskSpawner). Centralizes throttling, scope
- * resolution, jump-to-pane, and a few small utilities so each widget
- * stays focused on rendering.
+ * resolution, jump-to-pane, and a few small utilities so each
+ * component stays focused on rendering.
  */
 import { derived, readable, get, type Readable } from "svelte/store";
 import type { AgentRef, ExtensionAPI } from "../api";

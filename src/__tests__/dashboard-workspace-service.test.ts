@@ -96,10 +96,24 @@ describe("spawnOrNavigate", () => {
     });
     registerDashboardWorkspaceType(makeEntry("ext:foo"));
     await spawnOrNavigate("ext:foo");
+    // The created workspace seeds a single hidden dashboard surface
+    // (`dashboard:ext:foo`) so PaneView's standard registry-surface
+    // render path mounts the dashboard component.
     expect(createWorkspaceFromDef).toHaveBeenCalledWith(
       expect.objectContaining({
         name: "Foo",
-        layout: { pane: { surfaces: [] } },
+        layout: {
+          pane: {
+            surfaces: [
+              {
+                type: "registry",
+                extensionType: "dashboard:ext:foo",
+                name: "Foo",
+                focus: true,
+              },
+            ],
+          },
+        },
         dashboardContributionId: "ext:foo",
         isDashboard: true,
       }),

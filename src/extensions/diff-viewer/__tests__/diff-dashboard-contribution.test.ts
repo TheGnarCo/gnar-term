@@ -103,11 +103,26 @@ describe("Diff dashboard contribution", () => {
     expect(created).toBeTruthy();
     expect(created!.isDashboard).toBe(true);
     expect(created!.rootWorkspaceId).toBe("g1");
-    // Diff Dashboard is component-rendered now — the workspace carries no surfaces.
+    // Diff Dashboard is registered as a hidden surface type
+    // (`dashboard:diff`); the dashboard workspace seeds a single
+    // extension surface targeting that type with `rootWorkspaceId` in
+    // props so the body component can resolve the workspace via the
+    // workspaces store.
     const panes = (
-      created!.paneLayout as unknown as { pane: { surfaces: unknown[] } }
+      created!.paneLayout as unknown as {
+        pane: {
+          surfaces: Array<{
+            kind: string;
+            surfaceTypeId?: string;
+            props?: Record<string, unknown>;
+          }>;
+        };
+      }
     ).pane.surfaces;
-    expect(panes).toEqual([]);
+    expect(panes).toHaveLength(1);
+    expect(panes[0]?.kind).toBe("registry");
+    expect(panes[0]?.surfaceTypeId).toBe("dashboard:diff");
+    expect(panes[0]?.props).toEqual({ rootWorkspaceId: "g1" });
   });
 
   it("back-fills the Diff Dashboard onto existing workspaces on activate", async () => {

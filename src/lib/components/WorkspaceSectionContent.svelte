@@ -18,6 +18,7 @@
     activateWorkspace,
     WORKSPACE_STATE_CHANGED,
     toggleWorkspaceLock,
+    closeDashboardForWorkspace,
   } from "../services/workspace-service";
   import { openWorkspaceSettingsTab } from "../services/surface-service";
   import { archiveWorkspace } from "../services/archive-service";
@@ -30,10 +31,7 @@
     getChildRowsFor,
   } from "../services/child-row-contributor-registry";
   import { getRootRowRenderer } from "../services/root-row-renderer-registry";
-  import {
-    switchWorkspace,
-    closeWorkspace,
-  } from "../services/workspace-runtime-service";
+  import { switchWorkspace } from "../services/workspace-runtime-service";
   import { getDashboardContribution } from "../services/dashboard-contribution-registry";
   import DashboardTileIcon from "./DashboardTileIcon.svelte";
   import SidebarChipButton from "./SidebarChipButton.svelte";
@@ -335,21 +333,13 @@
     if (typeof contribId !== "string") return;
     const contribution = getDashboardContribution(contribId);
     if (!contribution || contribution.autoProvision) return;
+    const rootId = ws.rootWorkspaceId;
+    if (!rootId) return;
     const items: MenuItem[] = [
       {
-        label: `Delete ${contribution.label}`,
-        danger: true,
-        action: async () => {
-          const confirmed = await showConfirmPrompt(
-            `Delete "${ws.name}"? The backing markdown file stays on disk so you can re-add this dashboard later without losing your edits.`,
-            {
-              title: `Delete ${contribution.label}`,
-              confirmLabel: "Delete",
-              cancelLabel: "Cancel",
-            },
-          );
-          if (!confirmed) return;
-          closeWorkspace(globalIdx);
+        label: `Hide ${contribution.label}`,
+        action: () => {
+          closeDashboardForWorkspace(rootId, contribId);
         },
       },
     ];
@@ -390,6 +380,7 @@
           data-dashboard-contribution={contribId}
           data-active={isActive ? "true" : undefined}
           aria-label={entry.ws.name}
+          title={entry.ws.name}
           on:click|stopPropagation={() => {
             if (contribution?.openAsTab && workspace) {
               void contribution.openAsTab(workspace);
@@ -536,6 +527,7 @@
           <button
             class="dash-btn"
             aria-label={action.label}
+            title={action.label}
             on:click|stopPropagation={() =>
               action.handler(workspaceContext ?? {})}
             on:mouseenter={() => (hoveredTileActionId = action.id)}
@@ -561,6 +553,7 @@
             on:mouseenter={() => (caretHovered = true)}
             on:mouseleave={() => (caretHovered = false)}
             aria-label={collapsed ? "Expand workspace" : "Collapse workspace"}
+            title={collapsed ? "Expand workspace" : "Collapse workspace"}
             style="background: {$theme.bgSurface ??
               'transparent'}; border: 1px solid {$theme.border ??
               'transparent'};"

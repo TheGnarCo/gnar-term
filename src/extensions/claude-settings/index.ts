@@ -1,7 +1,13 @@
 import type { ExtensionManifest, ExtensionAPI, WorkspaceRef } from "../api";
+import type { Component } from "svelte";
 import ClaudeMark from "./icons/ClaudeMark.svelte";
 import UserSettingsPanel from "./components/UserSettingsPanel.svelte";
-import ClaudeSettingsWidget from "./components/ClaudeSettingsWidget.svelte";
+import ClaudeSettingsBody from "./components/ClaudeSettingsBody.svelte";
+import {
+  registerDashboardWorkspaceType,
+  unregisterDashboardWorkspaceType,
+  dashboardSurfaceTypeId,
+} from "../../lib/services/dashboard-workspace-service";
 
 // --- Manifest ---
 
@@ -34,10 +40,13 @@ export function registerClaudeSettingsExtension(api: ExtensionAPI): void {
       onClick: openUserSettings,
     });
 
-    api.registerMarkdownComponent(
-      "claude-settings-editor",
-      ClaudeSettingsWidget,
-    );
+    registerDashboardWorkspaceType({
+      id: "claude-settings",
+      label: "Claude Settings",
+      icon: ClaudeMark as unknown as Component,
+      component: ClaudeSettingsBody as unknown as Component,
+      source: "claude-settings",
+    });
 
     api.registerDashboardContribution({
       id: "claude-settings",
@@ -46,51 +55,38 @@ export function registerClaudeSettingsExtension(api: ExtensionAPI): void {
       capPerWorkspace: 1,
       icon: ClaudeMark,
       create: (workspace) => createClaudeSettingsDashboard(api, workspace),
+      openAsTab: async (workspace) => {
+        await api.openDashboardTab(workspace.id, {
+          kind: "registry",
+          surfaceTypeId: dashboardSurfaceTypeId("claude-settings"),
+          title: "Claude Settings",
+          props: { rootWorkspaceId: workspace.id },
+          matchProps: { rootWorkspaceId: workspace.id },
+        });
+      },
     });
+  });
+
+  api.onDeactivate(() => {
+    unregisterDashboardWorkspaceType("claude-settings");
   });
 }
 
 // --- Dashboard creation ---
 
-function claudeSettingsMarkdownPath(workspace: WorkspaceRef): string {
-  const path = workspace.path ?? "";
-  return `${path.replace(/\/+$/, "")}/.gnar-term/claude-settings.md`;
-}
-
-async function writeClaudeSettingsTemplate(
-  api: ExtensionAPI,
-  workspace: WorkspaceRef,
-  options: { force?: boolean } = {},
-): Promise<string> {
-  const mdPath = claudeSettingsMarkdownPath(workspace);
-  if (!options.force) {
-    const exists = await api
-      .invoke<boolean>("file_exists", { path: mdPath })
-      .catch(() => false);
-    if (exists) return mdPath;
-  }
-  const dir = mdPath.replace(/\/[^/]+$/, "");
-  await api.invoke("ensure_dir", { path: dir });
-  await api.invoke("write_file", {
-    path: mdPath,
-    content: "# Claude Settings\n\n```gnar:claude-settings-editor\n```\n",
-  });
-  return mdPath;
-}
-
 async function createClaudeSettingsDashboard(
   api: ExtensionAPI,
   workspace: WorkspaceRef,
 ): Promise<string> {
-  const mdPath = await writeClaudeSettingsTemplate(api, workspace);
   return api.createWorkspaceFromDef({
     name: "Claude Settings",
     layout: {
       pane: {
         surfaces: [
           {
-            type: "preview",
-            path: mdPath,
+            type: "registry",
+            extensionType: dashboardSurfaceTypeId("claude-settings"),
+            extensionProps: { rootWorkspaceId: workspace.id },
             name: "Claude Settings",
             focus: true,
           },

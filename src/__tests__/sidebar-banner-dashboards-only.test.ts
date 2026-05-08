@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { tick } from "svelte";
-import { render, cleanup, fireEvent } from "@testing-library/svelte";
+import { render, cleanup } from "@testing-library/svelte";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn().mockResolvedValue(undefined),
@@ -39,11 +39,16 @@ Element.prototype.animate = vi.fn().mockImplementation(() => {
 import Harness from "./sidebar-banner-with-leading-slot.svelte";
 import WorkspaceListViewStub from "./workspace-list-view-stub.svelte";
 import { workspaces } from "../lib/stores/workspace";
+import { bannerCollapsedState } from "../lib/stores/ui";
 
 describe("SidebarBanner with dashboards only", () => {
-  beforeEach(() => workspaces.set([] as never[]));
+  beforeEach(() => {
+    workspaces.set([] as never[]);
+    bannerCollapsedState.set(new Map());
+  });
   afterEach(() => {
     workspaces.set([]);
+    bannerCollapsedState.set(new Map());
     cleanup();
   });
 
@@ -54,9 +59,18 @@ describe("SidebarBanner with dashboards only", () => {
     workspaceListViewComponent: WorkspaceListViewStub,
   };
 
+  // Banners now default to collapsed; pre-seed the expanded flag for
+  // tests that assert children-container structure or slot rendering.
+  const expandedProps = (
+    props: typeof baseProps & { dashboardCount: number },
+  ) => {
+    bannerCollapsedState.set(new Map([[props.scopeId, false]]));
+    return props;
+  };
+
   it("renders the children container when dashboardCount > 0 and no branches", async () => {
     const { container } = render(Harness, {
-      props: { ...baseProps, dashboardCount: 2 },
+      props: expandedProps({ ...baseProps, dashboardCount: 2 }),
     });
     await tick();
 
@@ -85,17 +99,12 @@ describe("SidebarBanner with dashboards only", () => {
     ).toBeNull();
   });
 
-  it("auto-expands when dashboardCount grows from zero while collapsed", async () => {
+  it("auto-expands when dashboardCount grows on a populated collapsed banner", async () => {
     const { container, rerender } = render(Harness, {
       props: { ...baseProps, dashboardCount: 1 },
     });
     await tick();
 
-    const toggle = container.querySelector(
-      '[data-testid="toggle"]',
-    ) as HTMLElement;
-    await fireEvent.click(toggle);
-    await tick();
     expect(
       container.querySelector("[data-sidebar-banner-children]"),
     ).toBeNull();
@@ -109,7 +118,7 @@ describe("SidebarBanner with dashboards only", () => {
 
   it("renders children-leading slot inside the children container when expanded", async () => {
     const { container } = render(Harness, {
-      props: { ...baseProps, dashboardCount: 1 },
+      props: expandedProps({ ...baseProps, dashboardCount: 1 }),
     });
     await tick();
 
@@ -125,12 +134,6 @@ describe("SidebarBanner with dashboards only", () => {
     const { container } = render(Harness, {
       props: { ...baseProps, dashboardCount: 1 },
     });
-    await tick();
-
-    const toggle = container.querySelector(
-      '[data-testid="toggle"]',
-    ) as HTMLElement;
-    await fireEvent.click(toggle);
     await tick();
 
     expect(container.querySelector('[data-testid="leading"]')).toBeNull();

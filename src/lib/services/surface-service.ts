@@ -14,7 +14,7 @@ import {
   getAllPanes,
   uid,
   isTerminalSurface,
-  isExtensionSurface,
+  isRegistrySurface,
   isPreviewSurface,
   type Workspace,
   type Pane,
@@ -43,10 +43,11 @@ export function selectSurface(paneId: string, surfaceId: string) {
 }
 
 /**
- * Close all extension surfaces matching the given surface type IDs across all
- * workspaces. Used during extension deactivation to prevent orphaned surfaces.
+ * Close all registry-backed surfaces matching the given surface type IDs across
+ * all workspaces. Used during extension deactivation to prevent orphaned
+ * surfaces (the registered Svelte component is about to be unloaded).
  */
-export function closeExtensionSurfaces(surfaceTypeIds: string[]): void {
+export function closeRegistrySurfaces(surfaceTypeIds: string[]): void {
   if (surfaceTypeIds.length === 0) return;
   const typeSet = new Set(surfaceTypeIds);
   const wsList = get(workspaces);
@@ -57,7 +58,7 @@ export function closeExtensionSurfaces(surfaceTypeIds: string[]): void {
       // Collect indices in reverse order to preserve splice correctness
       for (let i = pane.surfaces.length - 1; i >= 0; i--) {
         const s = pane.surfaces[i]!;
-        if (isExtensionSurface(s) && typeSet.has(s.surfaceTypeId)) {
+        if (isRegistrySurface(s) && typeSet.has(s.surfaceTypeId)) {
           removeSurface(ws, pane, i);
         }
       }
@@ -233,7 +234,7 @@ export function closeActiveSurface() {
   removeSurface(ws, pane, idx);
 }
 
-export function openExtensionSurfaceInPane(
+export function openRegistrySurfaceInPane(
   surfaceTypeId: string,
   title: string,
   props?: Record<string, unknown>,
@@ -242,7 +243,7 @@ export function openExtensionSurfaceInPane(
   const pane = get(activePane);
   if (!ws || !pane) return;
   const surface = {
-    kind: "extension" as const,
+    kind: "registry" as const,
     id: uid(),
     surfaceTypeId,
     title,
@@ -264,11 +265,11 @@ export function openExtensionSurfaceInPane(
  * Root runtime workspaces share their id with their RootWorkspace, ADR-004),
  * then dedupes by surfaceTypeId + props.rootWorkspaceId across every pane
  * of that workspace. If a matching tab already exists, focuses it; otherwise
- * pushes a fresh ExtensionSurface onto the workspace's active pane.
+ * pushes a fresh RegistrySurface onto the workspace's active pane.
  */
 export type DashboardTabSpec =
   | {
-      kind: "extension";
+      kind: "registry";
       surfaceTypeId: string;
       title: string;
       props?: Record<string, unknown>;
@@ -306,7 +307,7 @@ export async function openDashboardSurfaceTab(
       if (spec.kind === "preview") {
         return isPreviewSurface(s) && s.path === spec.path;
       }
-      if (!isExtensionSurface(s) || s.surfaceTypeId !== spec.surfaceTypeId) {
+      if (!isRegistrySurface(s) || s.surfaceTypeId !== spec.surfaceTypeId) {
         return false;
       }
       const match = spec.matchProps;
@@ -338,7 +339,7 @@ export async function openDashboardSurfaceTab(
     };
   } else {
     surface = {
-      kind: "extension",
+      kind: "registry",
       id: uid(),
       surfaceTypeId: spec.surfaceTypeId,
       title: spec.title,
@@ -364,7 +365,7 @@ export async function openWorkspaceSettingsTab(
   rootWorkspaceId: string,
 ): Promise<void> {
   await openDashboardSurfaceTab(rootWorkspaceId, {
-    kind: "extension",
+    kind: "registry",
     surfaceTypeId: "core:workspace-settings",
     title: "Workspace Settings",
     props: { rootWorkspaceId },
@@ -372,7 +373,7 @@ export async function openWorkspaceSettingsTab(
   });
 }
 
-export function openExtensionSurfaceInPaneById(
+export function openRegistrySurfaceInPaneById(
   paneId: string,
   surfaceTypeId: string,
   title: string,
@@ -391,7 +392,7 @@ export function openExtensionSurfaceInPaneById(
   }
   if (!pane) return null;
   const surface = {
-    kind: "extension" as const,
+    kind: "registry" as const,
     id: uid(),
     surfaceTypeId,
     title,
@@ -480,7 +481,7 @@ export function newSurfaceFromSidebar() {
  * Searches all workspaces (not just the active one) — preview surfaces
  * can be spawned from MCP / extensions, where the target workspace may
  * differ from the user's focused one. Mirrors
- * openExtensionSurfaceInPaneById's lookup.
+ * openRegistrySurfaceInPaneById's lookup.
  */
 export function createPreviewSurfaceInPane(
   paneId: string,

@@ -35,6 +35,7 @@ import {
   getDashboardContributions,
   OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
 } from "./dashboard-contribution-registry";
+import { dashboardSurfaceTypeId } from "./dashboard-workspace-service";
 import { releaseWorkspaceDirtyStore } from "./workspace-git-dirty-store";
 
 export const WORKSPACE_STATE_CHANGED = "extension:workspace:state-changed";
@@ -200,12 +201,13 @@ function createDashboardWorkspaceFromDef(
 }
 
 /**
- * Create the Workspace Overview Dashboard for a workspace: a routing-only
- * Branch (`isDashboard = true`, no surfaces). PaneView mounts
- * `WorkspaceOverviewBody` for any workspace tagged with
- * `dashboardContributionId === OVERVIEW_DASHBOARD_CONTRIBUTION_ID` —
- * Workspace listings + Issues + PRs are rendered as direct Svelte
- * composition, not a markdown preview.
+ * Create the Workspace Overview Dashboard for a workspace. Seeds a
+ * single hidden dashboard surface (`dashboard:group`) registered by
+ * `init-workspaces` against `WorkspaceOverviewBody`; the standard pane
+ * render path mounts it, so TabBar / split affordances work like any
+ * other workspace. `rootWorkspaceId` is forwarded via `extensionProps`
+ * so the body can project it into a DashboardHostContext for embedded
+ * widgets (Issues, PRs, WorkspacesWidget).
  */
 export async function createWorkspaceDashboard(
   workspace: RootWorkspace,
@@ -214,23 +216,40 @@ export async function createWorkspaceDashboard(
     workspace,
     "Dashboard",
     OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
-    [],
+    [
+      {
+        type: "registry",
+        extensionType: dashboardSurfaceTypeId(
+          OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
+        ),
+        extensionProps: { rootWorkspaceId: workspace.id },
+        name: "Dashboard",
+        focus: true,
+      },
+    ],
   );
 }
 
 /**
  * Materialize the Settings dashboard workspace for a workspace — a
  * constrained dashboard (metadata.isDashboard = true,
- * dashboardContributionId = "settings") whose body PaneView renders as
- * the shared `<WorkspaceDashboardSettings>` component. The workspace carries
- * a single empty preview surface so it satisfies the workspace schema;
- * PaneView intercepts and replaces the surface render for settings
- * contributions.
+ * dashboardContributionId = "settings") that seeds a single
+ * `core:workspace-settings` registry surface. The standard pane render
+ * path mounts `WorkspaceDashboardSettings`, so TabBar / split affordances
+ * work uniformly with every other dashboard.
  */
 export function createSettingsDashboardWorkspace(
   workspace: RootWorkspace,
 ): Promise<string> {
-  return createDashboardWorkspaceFromDef(workspace, "Settings", "settings", []);
+  return createDashboardWorkspaceFromDef(workspace, "Settings", "settings", [
+    {
+      type: "registry",
+      extensionType: "core:workspace-settings",
+      extensionProps: { rootWorkspaceId: workspace.id },
+      name: "Settings",
+      focus: true,
+    },
+  ]);
 }
 
 /**

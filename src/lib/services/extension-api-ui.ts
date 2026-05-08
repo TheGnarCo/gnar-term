@@ -23,7 +23,6 @@ import {
   removeRootRow as storeRemoveRootRow,
 } from "../stores/root-row-order";
 import { registerTheme as registryRegisterTheme } from "./theme-registry";
-import { registerMarkdownComponent as registryRegisterMarkdownComponent } from "./markdown-component-registry";
 import { registerChildRowContributor } from "./child-row-contributor-registry";
 import { registerDashboardContribution as registryRegisterDashboardContribution } from "./dashboard-contribution-registry";
 import { registerPseudoWorkspace as registryRegisterPseudoWorkspace } from "./pseudo-workspace-registry";
@@ -60,7 +59,6 @@ export function createUIRegistrationAPI(
   | "runCommand"
   | "registerContextMenuItem"
   | "registerMcpTool"
-  | "registerMarkdownComponent"
   | "registerChildRowContributor"
   | "registerDashboardContribution"
   | "registerPseudoWorkspace"
@@ -203,22 +201,6 @@ export function createUIRegistrationAPI(
         options.inputSchema,
         options.handler,
       );
-    },
-
-    registerMarkdownComponent(
-      name: string,
-      component: unknown,
-      options?: { configSchema?: Record<string, unknown> },
-    ) {
-      // No id-prefix on the component name — markdown directives
-      // (`gnar:<name>`) stay short and stable. Source tracking still uses
-      // extId for cleanup.
-      registryRegisterMarkdownComponent({
-        name,
-        component,
-        source: extId,
-        configSchema: options?.configSchema,
-      });
     },
 
     registerChildRowContributor(

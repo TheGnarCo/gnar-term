@@ -31,5 +31,6 @@ const registry = createRegistry<SurfaceTypeDef>();
 
 export const surfaceTypeStore = registry.store;
 export const registerSurfaceType = registry.register;
+export const unregisterSurfaceType = registry.unregister;
 export const unregisterSurfaceTypesBySource = registry.unregisterBySource;
 export const resetSurfaceTypes = registry.reset;

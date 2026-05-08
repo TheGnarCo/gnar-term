@@ -1,16 +1,19 @@
 <script lang="ts">
+  /**
+   * Diff dashboard body — registered as a hidden surface type
+   * (`dashboard:diff`) by the diff-viewer extension. The spawn flow
+   * seeds `surface.props.rootWorkspaceId`; we resolve it here, then
+   * mount DiffSurface against the workspace's repo path.
+   */
   import { workspaces } from "../../lib/stores/workspace";
-  import { getDashboardHost } from "../../lib/contexts/dashboard-host";
   import DiffSurface from "./DiffSurface.svelte";
 
-  const host = getDashboardHost();
-  $: rootWorkspaceId =
-    typeof host?.metadata.rootWorkspaceId === "string"
-      ? host.metadata.rootWorkspaceId
-      : null;
-  $: workspace = rootWorkspaceId
-    ? $workspaces.find((w) => w.id === rootWorkspaceId)
-    : undefined;
+  export let rootWorkspaceId: string | undefined = undefined;
+
+  $: workspace =
+    typeof rootWorkspaceId === "string"
+      ? $workspaces.find((w) => w.id === rootWorkspaceId)
+      : undefined;
   $: repoPath = workspace?.path;
 </script>
 

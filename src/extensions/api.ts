@@ -473,33 +473,6 @@ export interface ExtensionAPI {
   ): void;
 
   /**
-   * Register a live "markdown-component" that can be embedded inside a
-   * markdown preview. Markdown rendered through the core preview
-   * pipeline may contain fenced code blocks with the info string
-   * `gnar:<name>` — the renderer looks `<name>` up in this registry and
-   * mounts the registered Svelte component, passing the parsed YAML
-   * config as props.
-   *
-   * The component `name` is registered as-is (no extension-id prefix)
-   * so markdown directives stay short and stable. Conflicts across
-   * extensions resolve last-wins and are non-deterministic — namespace
-   * defensively (e.g. `mything-kanban` rather than `kanban`) when
-   * collisions are likely.
-   *
-   * `options.configSchema` is reserved for future MCP discoverability
-   * and isn't enforced at runtime.
-   *
-   * Automatically unregistered on extension deactivate.
-   */
-  registerMarkdownComponent(
-    name: string,
-    component: unknown,
-    options?: {
-      configSchema?: Record<string, unknown>;
-    },
-  ): void;
-
-  /**
    * Contribute child rows to another extension's parent rows. The
    * `parentType` matches the kind of a row registered via
    * `registerRootRowRenderer` (e.g. "workspace", "dashboard"); given a
@@ -1023,13 +996,13 @@ export interface WorkspaceRef {
 }
 
 /**
- * Spec passed to `ExtensionAPI.openDashboardTab`. Extension surface ids
- * without `:` are namespaced under the calling extension's id at call
- * time. Mirrors the internal `DashboardTabSpec`.
+ * Spec passed to `ExtensionAPI.openDashboardTab`. Surface ids without `:`
+ * are namespaced under the calling extension's id at call time. Mirrors
+ * the internal `DashboardTabSpec`.
  */
 export type ExtensionDashboardTabSpec =
   | {
-      kind: "extension";
+      kind: "registry";
       surfaceTypeId: string;
       title: string;
       props?: Record<string, unknown>;
@@ -1168,16 +1141,22 @@ export interface PseudoWorkspaceInput {
  * are expected to set.
  */
 export interface SurfaceDefInput {
-  type: "terminal" | "browser" | "extension" | "preview";
+  /**
+   * `"registry"` is the modern spelling for surfaces resolved through the
+   * surface-type registry. `"extension"` is accepted as a deprecated alias
+   * — existing user configs and contributors still using the old name keep
+   * working.
+   */
+  type: "terminal" | "browser" | "registry" | "extension" | "preview";
   name?: string;
   command?: string;
   cwd?: string;
   env?: Record<string, string>;
   /** Browser surfaces only. */
   url?: string;
-  /** `<extension-id>:<surface-id>` for extension-typed surfaces. */
+  /** `<extension-id>:<surface-id>` for registry-typed surfaces. */
   extensionType?: string;
-  /** Opaque props forwarded to the extension surface component. */
+  /** Opaque props forwarded to the surface component. */
   extensionProps?: Record<string, unknown>;
   /** Absolute path for preview-typed surfaces. */
   path?: string;
@@ -1258,9 +1237,9 @@ export interface AgentRef {
   lastStatusChange: string;
 }
 
-/** Shape of a surface created by an extension, as delivered to surface components. */
-export interface ExtensionSurfacePayload {
-  kind: "extension";
+/** Shape of a registry-backed surface, as delivered to surface components. */
+export interface RegistrySurfacePayload {
+  kind: "registry";
   id: string;
   surfaceTypeId: string;
   title: string;

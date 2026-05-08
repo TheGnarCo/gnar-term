@@ -2,7 +2,6 @@
   import { theme } from "../stores/theme";
   import Tab from "./Tab.svelte";
   import NewSurfaceButton from "./NewSurfaceButton.svelte";
-  import CloseButton from "./CloseButton.svelte";
   import { workspaces, zoomedSurfaceId } from "../stores/workspace";
   import { resolveWorkspaceColor } from "../theme-data";
   import type { Pane } from "../types";
@@ -29,7 +28,6 @@
   export let onSelectSurfaceType: (typeId: string) => void;
   export let onSplitRight: () => void;
   export let onSplitDown: () => void;
-  export let onClosePane: () => void;
   export let showJumpToBottom: boolean = false;
   export let onJumpToBottom: (() => void) | undefined = undefined;
   export let onRefreshPreview: (() => void) | undefined = undefined;
@@ -281,6 +279,5 @@
         /></svg
       >
     </button>
-    <CloseButton size="container" label="Close Pane" on:click={onClosePane} />
   </div>
 </div>

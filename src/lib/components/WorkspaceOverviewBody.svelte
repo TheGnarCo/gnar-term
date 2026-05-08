@@ -1,11 +1,11 @@
 <script lang="ts">
   /**
    * Workspace Overview Dashboard — landing page for a Workspace.
-   * Mounted by PaneView via dashboardWorkspaceRegistry under the "group"
-   * contribution id (OVERVIEW_DASHBOARD_CONTRIBUTION_ID). PaneView passes
-   * the dashboard workspace's metadata as DashboardHostContext, so
-   * `WorkspacesWidget` and any registered sections (Issues, PRs)
-   * resolve their workspace scope from that context.
+   * Registered as a hidden surface type (`dashboard:group`) by
+   * init-workspaces and mounted via PaneView's normal extension surface
+   * render path. The spawn flow seeds `surface.props.rootWorkspaceId`,
+   * which we project into a DashboardHostContext so embedded sections
+   * (Issues, PRs) and WorkspacesWidget resolve their scope unchanged.
    *
    * Sections (Issues, PRs) live in extensions; we mount them through
    * ExtensionWrapper so the wrapped widget sees the registering
@@ -13,7 +13,7 @@
    */
   import { theme } from "../stores/theme";
   import { workspaces } from "../stores/workspace";
-  import { getDashboardHost } from "../contexts/dashboard-host";
+  import { setDashboardHost } from "../contexts/dashboard-host";
   import {
     dashboardSectionStore,
     type DashboardSectionEntry,
@@ -22,16 +22,17 @@
   import ExtensionWrapper from "./ExtensionWrapper.svelte";
   import WorkspacesWidget from "./WorkspacesWidget.svelte";
 
-  const host = getDashboardHost();
+  export let rootWorkspaceId: string | undefined = undefined;
 
-  $: rootWorkspaceId =
-    typeof host?.metadata.rootWorkspaceId === "string"
-      ? host.metadata.rootWorkspaceId
-      : null;
+  const hostMetadata: Record<string, unknown> = {
+    ...(typeof rootWorkspaceId === "string" ? { rootWorkspaceId } : {}),
+  };
+  setDashboardHost({ metadata: hostMetadata });
 
-  $: workspace = rootWorkspaceId
-    ? $workspaces.find((w) => w.id === rootWorkspaceId)
-    : undefined;
+  $: workspace =
+    typeof rootWorkspaceId === "string"
+      ? $workspaces.find((w) => w.id === rootWorkspaceId)
+      : undefined;
 
   $: issuesSection =
     $dashboardSectionStore.find((s) => s.id === "issues") ?? null;
@@ -83,7 +84,7 @@
               {api}
               component={issuesSection.component}
               props={{ state: "open", displayOnly: true }}
-              host={{ metadata: host?.metadata ?? {} }}
+              host={{ metadata: hostMetadata }}
             />
           {/if}
         {/if}
@@ -94,7 +95,7 @@
               {api}
               component={prsSection.component}
               props={{ state: "open" }}
-              host={{ metadata: host?.metadata ?? {} }}
+              host={{ metadata: hostMetadata }}
             />
           {/if}
         {/if}

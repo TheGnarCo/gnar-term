@@ -22,7 +22,6 @@ import {
   isDashboardWorkspace,
 } from "../workspace-service";
 import { getWorkspace } from "../../stores/workspace";
-import { listMarkdownComponents } from "../markdown-component-registry";
 import type { ToolDef } from "../mcp-types";
 
 export const registryMirrorTools: ToolDef[] = [
@@ -383,22 +382,6 @@ export const registryMirrorTools: ToolDef[] = [
         p.contribution_id,
       );
       return { removed };
-    },
-  },
-
-  // ---- Markdown components ----
-  {
-    name: "list_markdown_components",
-    description:
-      "List all registered markdown components — the things `gnar:<name>` markdown directives can reference. Returns `{ name, source, configSchema? }` for each.",
-    inputSchema: { type: "object", properties: {} },
-    handler: () => {
-      const components = listMarkdownComponents().map((c) => ({
-        name: c.name,
-        source: c.source,
-        configSchema: c.configSchema,
-      }));
-      return { components };
     },
   },
 ];

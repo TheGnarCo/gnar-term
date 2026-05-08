@@ -9,10 +9,10 @@ import type { Component } from "svelte";
 import DiffSurface from "./DiffSurface.svelte";
 import DiffDashboardBody from "./DiffDashboardBody.svelte";
 import DiffIcon from "./DiffIcon.svelte";
-import { createWorkspaceFromDef } from "../../lib/services/workspace-runtime-service";
 import {
   registerDashboardWorkspaceType,
   unregisterDashboardWorkspaceType,
+  dashboardSurfaceTypeId,
 } from "../../lib/services/dashboard-workspace-service";
 
 export const diffViewerManifest: ExtensionManifest = {
@@ -100,8 +100,10 @@ export function registerDiffViewerExtension(api: ExtensionAPI): void {
     });
 
     // Diff dashboard contribution — opt-in per Workspace. The dashboard
-    // workspace is a routing-only Branch (no surfaces); PaneView renders
-    // DiffDashboardBody, which mounts DiffSurface against the workspace's repo.
+    // component is registered as a hidden surface type, and the
+    // dashboard workspace holds a single dashboard surface seeded with
+    // the parent workspace id so DiffDashboardBody can resolve the repo
+    // path. TabBar + split affordances work like any other workspace.
     registerDashboardWorkspaceType({
       id: "diff",
       label: "Diff",
@@ -116,7 +118,16 @@ export function registerDiffViewerExtension(api: ExtensionAPI): void {
       capPerWorkspace: 1,
       icon: DiffIcon,
       defaultEnabled: true,
-      create: (workspace) => createDiffDashboardWorkspace(workspace),
+      create: (workspace) => createDiffDashboardWorkspace(api, workspace),
+      openAsTab: async (workspace) => {
+        await api.openDashboardTab(workspace.id, {
+          kind: "registry",
+          surfaceTypeId: dashboardSurfaceTypeId("diff"),
+          title: "Diff",
+          props: { rootWorkspaceId: workspace.id },
+          matchProps: { rootWorkspaceId: workspace.id },
+        });
+      },
     });
   });
 
@@ -125,17 +136,25 @@ export function registerDiffViewerExtension(api: ExtensionAPI): void {
   });
 }
 
-/**
- * Materialize a Diff dashboard workspace for `workspace` — a routing-only
- * Branch with no surfaces. PaneView intercepts and renders
- * DiffDashboardBody for any workspace whose `dashboardContributionId === "diff"`.
- */
 async function createDiffDashboardWorkspace(
+  api: ExtensionAPI,
   workspace: WorkspaceRef,
 ): Promise<string> {
-  return await createWorkspaceFromDef({
+  return await api.createWorkspaceFromDef({
     name: "Diff",
-    layout: { pane: { surfaces: [] } },
+    layout: {
+      pane: {
+        surfaces: [
+          {
+            type: "registry",
+            extensionType: dashboardSurfaceTypeId("diff"),
+            extensionProps: { rootWorkspaceId: workspace.id },
+            name: "Diff",
+            focus: true,
+          },
+        ],
+      },
+    },
     isDashboard: true,
     rootWorkspaceId: workspace.id,
     dashboardContributionId: "diff",

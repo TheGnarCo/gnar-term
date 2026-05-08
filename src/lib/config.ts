@@ -21,7 +21,7 @@ import type { ThemeDef } from "./theme-data";
 // --- Types (cmux-compatible + extensions) ---
 
 export interface SurfaceDef {
-  type?: "terminal" | "browser" | "extension" | "preview";
+  type?: "terminal" | "browser" | "extension" | "preview" | "registry";
   name?: string;
   command?: string;
   cwd?: string;
@@ -252,6 +252,11 @@ export interface AppState {
   // Primary sidebar expanded (true) / collapsed (false). See stores/ui.ts
   // and services/sidebar-persistence-service.ts.
   sidebarVisible?: boolean;
+  // Per-banner collapsed flag, keyed by SidebarBanner.scopeId (workspace
+  // id for root banners). Missing entries default to collapsed; an
+  // explicit `false` keeps a banner expanded across launches. See
+  // services/sidebar-persistence-service.ts.
+  bannerCollapsedById?: Record<string, boolean>;
 }
 
 export interface ArchivedWorkspaceDef {

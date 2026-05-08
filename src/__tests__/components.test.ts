@@ -718,7 +718,6 @@ describe("TabBar", () => {
         onSelectSurfaceType: noop,
         onSplitRight: noop,
         onSplitDown: noop,
-        onClosePane: noop,
       },
     });
     expect(screen.getByText("Tab One")).toBeTruthy();
@@ -736,7 +735,6 @@ describe("TabBar", () => {
         onSelectSurfaceType: noop,
         onSplitRight: noop,
         onSplitDown: noop,
-        onClosePane: noop,
       },
     });
     expect(screen.getByText("+")).toBeTruthy();
@@ -753,7 +751,6 @@ describe("TabBar", () => {
         onSelectSurfaceType: noop,
         onSplitRight: noop,
         onSplitDown: noop,
-        onClosePane: noop,
       },
     });
     expect(screen.getByTitle("Split Right (⌘D)")).toBeTruthy();
@@ -770,13 +767,12 @@ describe("TabBar", () => {
         onSelectSurfaceType: noop,
         onSplitRight: noop,
         onSplitDown: noop,
-        onClosePane: noop,
       },
     });
     expect(screen.getByTitle("Split Down (⇧⌘D)")).toBeTruthy();
   });
 
-  it("renders close pane button", () => {
+  it("does not render a Close Pane button", () => {
     const pane = makePane("p1");
     render(TabBar, {
       props: {
@@ -787,10 +783,9 @@ describe("TabBar", () => {
         onSelectSurfaceType: noop,
         onSplitRight: noop,
         onSplitDown: noop,
-        onClosePane: noop,
       },
     });
-    expect(screen.getByTitle("Close Pane")).toBeTruthy();
+    expect(screen.queryByTitle("Close Pane")).toBeNull();
   });
 
   it("shows jump-to-bottom button when showJumpToBottom is true", () => {
@@ -804,7 +799,6 @@ describe("TabBar", () => {
         onSelectSurfaceType: noop,
         onSplitRight: noop,
         onSplitDown: noop,
-        onClosePane: noop,
         showJumpToBottom: true,
         onJumpToBottom: noop,
       },
@@ -823,7 +817,6 @@ describe("TabBar", () => {
         onSelectSurfaceType: noop,
         onSplitRight: noop,
         onSplitDown: noop,
-        onClosePane: noop,
         showJumpToBottom: false,
       },
     });
@@ -1615,7 +1608,7 @@ describe("PaneView", () => {
     expect(screen.getByText("+")).toBeTruthy();
   });
 
-  it("renders split and close pane controls", () => {
+  it("renders split controls but no Close Pane button", () => {
     const pane = makePane("p1");
     render(PaneView, {
       props: {
@@ -1632,7 +1625,7 @@ describe("PaneView", () => {
     });
     expect(screen.getByTitle("Split Right (⌘D)")).toBeTruthy();
     expect(screen.getByTitle("Split Down (⇧⌘D)")).toBeTruthy();
-    expect(screen.getByTitle("Close Pane")).toBeTruthy();
+    expect(screen.queryByTitle("Close Pane")).toBeNull();
   });
 });
 
@@ -2321,75 +2314,10 @@ describe("WorkspaceItem — harness sub-row", () => {
 // ---------------------------------------------------------------------------
 
 describe("TerminalSurface — image drag-drop", () => {
-  it("sends \\x16 to PTY for image-only drop and writes image to clipboard", async () => {
-    const { invoke: mockInvokeCore } = await import("@tauri-apps/api/core");
-    const invokespy = vi.mocked(mockInvokeCore);
-    const { writeImage } = await import("@tauri-apps/plugin-clipboard-manager");
-    const writeImageSpy = vi.mocked(writeImage);
-
-    invokespy.mockClear();
-    writeImageSpy.mockClear();
-
-    const surface = makeSurface("s1", { ptyId: 42 });
-    render(TerminalSurfaceComponent, {
-      props: { surface, visible: true },
-    });
-
-    // Simulate Tauri native drag-drop event with an image path
-    const { listen } = await import("@tauri-apps/api/event");
-    const listenSpy = vi.mocked(listen);
-    const dragDropCallback = listenSpy.mock.calls
-      .flatMap((c) => (c[0] === "tauri://drag-drop" ? [c[1]] : []))
-      .at(-1) as ((e: { payload: { paths: string[] } }) => void) | undefined;
-
-    if (dragDropCallback) {
-      dragDropCallback({
-        payload: { paths: ["/tmp/screenshot.png"] },
-      });
-      await new Promise((r) => setTimeout(r, 10));
-
-      expect(writeImageSpy).toHaveBeenCalledWith("/tmp/screenshot.png");
-      const writePtyCall = invokespy.mock.calls.find(
-        (c) =>
-          c[0] === "write_pty" &&
-          (c[1] as Record<string, unknown>)?.data === "\x16",
-      );
-      expect(writePtyCall).toBeDefined();
-    }
-  });
-
-  it("sends shell-escaped path for non-image drop (unchanged behavior)", async () => {
-    const { invoke: mockInvokeCore } = await import("@tauri-apps/api/core");
-    const invokespy = vi.mocked(mockInvokeCore);
-    invokespy.mockClear();
-
-    const surface = makeSurface("s2", { ptyId: 43 });
-    render(TerminalSurfaceComponent, {
-      props: { surface, visible: true },
-    });
-
-    const { listen } = await import("@tauri-apps/api/event");
-    const listenSpy = vi.mocked(listen);
-    const dragDropCallback = listenSpy.mock.calls
-      .flatMap((c) => (c[0] === "tauri://drag-drop" ? [c[1]] : []))
-      .at(-1) as ((e: { payload: { paths: string[] } }) => void) | undefined;
-
-    if (dragDropCallback) {
-      dragDropCallback({
-        payload: { paths: ["/tmp/somefile.txt"] },
-      });
-      await new Promise((r) => setTimeout(r, 10));
-
-      const writePtyCall = invokespy.mock.calls.find(
-        (c) => c[0] === "write_pty",
-      );
-      expect(writePtyCall).toBeDefined();
-      const data = (writePtyCall![1] as Record<string, unknown>)
-        ?.data as string;
-      expect(data).toContain("somefile.txt");
-      expect(data).not.toBe("\x16");
-    }
-  });
+  // Tauri-native drag-drop routing lives in drag-drop-pane-router (so a
+  // window-wide drop is dispatched only to the pane under the cursor —
+  // see drag-drop-pane-router.test.ts). Tests below cover the surviving
+  // HTML5 drop path on the surface element itself.
 
   it("handles HTML5 drop of image file without .path (Mac screenshot thumbnail)", async () => {
     const { invoke: mockInvokeCore } = await import("@tauri-apps/api/core");
@@ -2666,7 +2594,9 @@ describe("terminal link handling", () => {
       };
     };
     expect(options.linkHandler).toBeDefined();
-    expect(options.linkHandler!.allowNonHttpProtocols).toBe(false);
+    // `true` so OSC 8 file:// hyperlinks reach our activate() handler.
+    // open_url enforces the actual scheme allowlist on the Rust side.
+    expect(options.linkHandler!.allowNonHttpProtocols).toBe(true);
 
     options.linkHandler!.activate(
       new MouseEvent("click"),

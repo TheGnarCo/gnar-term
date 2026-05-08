@@ -51,6 +51,7 @@
   import { relaunch } from "@tauri-apps/plugin-process";
   import { ask, message } from "@tauri-apps/plugin-dialog";
   import { eventBus } from "./lib/services/event-bus";
+  import { initDragDropPaneRouter } from "./lib/services/drag-drop-pane-router";
 
   // Extension lifecycle
   import {
@@ -59,7 +60,9 @@
     reportExtensionError,
     flushAllExtensionState,
     ensureProviderAndThen,
+    getExtensionApiById,
   } from "./lib/services/extension-loader";
+  import ExtensionWrapper from "./lib/components/ExtensionWrapper.svelte";
   import { loadExternalExtensions } from "./lib/services/extension-management";
   import { registerIncludedExtensions } from "./lib/bootstrap/register-included-extensions";
   import { initWorktrees } from "./lib/bootstrap/init-worktrees";
@@ -104,8 +107,8 @@
     nextSurface,
     prevSurface,
     closeActiveSurface,
-    openExtensionSurfaceInPane,
-    openExtensionSurfaceInPaneById,
+    openRegistrySurfaceInPane,
+    openRegistrySurfaceInPaneById,
     newSurfaceWithCommand,
     newSurfaceFromSidebar,
   } from "./lib/services/surface-service";
@@ -124,6 +127,8 @@
   import {
     restoreSidebarVisible,
     persistSidebarVisibleChanges,
+    restoreBannerCollapsed,
+    persistBannerCollapsedChanges,
   } from "./lib/services/sidebar-persistence-service";
   import { confirmQuit } from "./lib/services/quit-confirmation-service";
 
@@ -547,7 +552,7 @@
     } else if (action.type === "open-in-editor") {
       void openInEditor(action.filePath);
     } else if (action.type === "open-surface") {
-      openExtensionSurfaceInPane(
+      openRegistrySurfaceInPane(
         action.surfaceTypeId,
         action.title,
         action.props,
@@ -576,13 +581,20 @@
   // ---- Initialization ----
   let _cleanupShortcutHints: (() => void) | null = null;
   let _cleanupVisibilityRecover: (() => void) | null = null;
+  let _cleanupDragDropRouter: (() => void) | null = null;
   onDestroy(() => {
     _cleanupShortcutHints?.();
     _cleanupVisibilityRecover?.();
+    _cleanupDragDropRouter?.();
   });
 
   onMount(async () => {
     _cleanupShortcutHints = initShortcutHints();
+    initDragDropPaneRouter()
+      .then((dispose) => {
+        _cleanupDragDropRouter = dispose;
+      })
+      .catch((e) => console.warn("[drag-drop] init failed:", e));
 
     // OS sleep/resume can return the GPU context with a corrupted texture
     // atlas — visible as garbled multi-color glyphs that "fix themselves"
@@ -738,6 +750,8 @@
     // emission (the just-restored value) is the one we skip.
     restoreSidebarVisible(getState());
     persistSidebarVisibleChanges();
+    restoreBannerCollapsed(getState());
+    persistBannerCollapsedChanges();
     // Promote standalone runtime workspaces to Roots and rebuild each
     // Workspace's branchedWorkspaceIds from rootWorkspaceId now that the
     // workspaces store is populated.
@@ -799,7 +813,7 @@
           Record<string, unknown> | undefined,
         ];
         const open = () =>
-          openExtensionSurfaceInPane(surfaceTypeId, title, props);
+          openRegistrySurfaceInPane(surfaceTypeId, title, props);
         void ensureProviderAndThen(surfaceTypeId, open);
       }
     }) as EventListener);
@@ -943,7 +957,7 @@
             onSelectSurfaceType={(paneId, typeId) => {
               const typeDef = $surfaceTypeStore.find((t) => t.id === typeId);
               if (typeDef) {
-                openExtensionSurfaceInPaneById(paneId, typeId, typeDef.label);
+                openRegistrySurfaceInPaneById(paneId, typeId, typeDef.label);
               }
             }}
             onSplitRight={(paneId) => splitPane(paneId, "horizontal")}
@@ -954,6 +968,7 @@
         {/each}
 
         {#each $pseudoWorkspaceStore as pseudo (pseudo.id)}
+          {@const pseudoApi = getExtensionApiById(pseudo.source)}
           <div
             data-pseudo-workspace-view={pseudo.id}
             style="
@@ -964,9 +979,13 @@
               flex-direction: column;
             "
           >
-            <svelte:component
-              this={pseudo.render as import("svelte").Component}
-            />
+            {#if pseudoApi}
+              <ExtensionWrapper api={pseudoApi} component={pseudo.render} />
+            {:else}
+              <svelte:component
+                this={pseudo.render as import("svelte").Component}
+              />
+            {/if}
           </div>
         {/each}
 

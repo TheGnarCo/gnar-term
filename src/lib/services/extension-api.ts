@@ -34,7 +34,7 @@ import {
 } from "./surface-output-observer";
 import { reportExtensionError } from "./extension-loader";
 import {
-  closeExtensionSurfaces,
+  closeRegistrySurfaces,
   markSurfaceUnreadById,
   focusSurfaceById,
   openFileAsPreviewSplit,
@@ -311,7 +311,7 @@ export function createExtensionAPI(
     },
     openDashboardTab(workspaceId: string, spec: ExtensionDashboardTabSpec) {
       const namespaced: ExtensionDashboardTabSpec =
-        spec.kind === "extension" && !spec.surfaceTypeId.includes(":")
+        spec.kind === "registry" && !spec.surfaceTypeId.includes(":")
           ? { ...spec, surfaceTypeId: `${extId}:${spec.surfaceTypeId}` }
           : spec;
       return openDashboardSurfaceTab(workspaceId, namespaced);
@@ -621,7 +621,7 @@ export function cleanupExtensionResources(
     .filter((t) => t.source === id)
     .map((t) => t.id);
   if (extSurfaceTypeIds.length > 0) {
-    closeExtensionSurfaces(extSurfaceTypeIds);
+    closeRegistrySurfaces(extSurfaceTypeIds);
   }
 
   // Clean up all registered contributions

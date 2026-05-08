@@ -71,10 +71,14 @@ export async function createWorkspaceFromDef(
       const pane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
       for (const sDef of nodeDef.pane.surfaces) {
         const cwd = sDef.cwd || inheritedCwd;
-        if (sDef.type === "extension" && sDef.extensionType) {
-          // Generic extension surface from config
+        if (
+          (sDef.type === "registry" || sDef.type === "extension") &&
+          sDef.extensionType
+        ) {
+          // Registry-backed surface from config. Legacy configs wrote
+          // `type: "extension"`; both spellings deserialize the same way.
           const surface = {
-            kind: "extension" as const,
+            kind: "registry" as const,
             id: uid(),
             surfaceTypeId: sDef.extensionType,
             title: sDef.name || sDef.extensionType,
@@ -85,9 +89,8 @@ export async function createWorkspaceFromDef(
           if (!pane.activeSurfaceId || sDef.focus)
             pane.activeSurfaceId = surface.id;
         } else if (sDef.type === "preview" && sDef.path) {
-          // Preview surface from config — backed by a file path. The
-          // markdown previewer is what renders markdown-component directives;
-          // any previewable file type works here.
+          // Preview surface from config — backed by a file path. Any
+          // previewable file type works here.
           const basename = sDef.path.split("/").pop() || sDef.path;
           const surface: PreviewSurface = {
             kind: "preview",
@@ -128,11 +131,11 @@ export async function createWorkspaceFromDef(
           if (sDef.focus) pane.activeSurfaceId = surface.id;
         }
       }
-      // Dashboard workspaces are routing-only shells rendered by PaneView
-      // via dashboardWorkspaceRegistry — they intentionally carry no
-      // surfaces. Skip the auto-terminal fallback for them; the
-      // workspace exists purely to associate a dashboard contribution
-      // with a parent root.
+      // Dashboard workspaces hold a single dashboard surface (registered
+      // by the contributing extension via registerDashboardWorkspaceType).
+      // The "settings" dashboard is the one exception — it carries no
+      // surfaces and PaneView renders WorkspaceDashboardSettings directly.
+      // Skip the auto-terminal fallback for any dashboard workspace.
       if (pane.surfaces.length === 0 && def.isDashboard !== true) {
         await createTerminalSurface(pane, inheritedCwd, inheritedEnv);
       }

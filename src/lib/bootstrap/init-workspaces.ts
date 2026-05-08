@@ -11,13 +11,20 @@ import { get } from "svelte/store";
 import { registerCommand } from "../services/command-registry";
 import { registerRootRowRenderer } from "../services/root-row-renderer-registry";
 import { registerSurfaceType } from "../services/surface-type-registry";
+import {
+  openDashboardSurfaceTab,
+  openWorkspaceSettingsTab,
+} from "../services/surface-service";
 import WorkspaceDashboardSettings from "../components/WorkspaceDashboardSettings.svelte";
 import WorkspaceOverviewBody from "../components/WorkspaceOverviewBody.svelte";
 import {
   registerDashboardContribution,
   OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
 } from "../services/dashboard-contribution-registry";
-import { registerDashboardWorkspaceType } from "../services/dashboard-workspace-service";
+import {
+  registerDashboardWorkspaceType,
+  dashboardSurfaceTypeId,
+} from "../services/dashboard-workspace-service";
 import { eventBus, type AppEvent } from "../services/event-bus";
 import { appendRootRow } from "../stores/root-row-order";
 import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
@@ -43,8 +50,6 @@ import { theme } from "../stores/theme";
 import WorkspaceRowBody from "../components/WorkspaceRowBody.svelte";
 import GearIcon from "../icons/GearIcon.svelte";
 import GridIcon from "../icons/GridIcon.svelte";
-import WorkspacesWidget from "../components/WorkspacesWidget.svelte";
-import { registerMarkdownComponent } from "../services/markdown-component-registry";
 import type { RootWorkspace as Workspace } from "../stores/workspace";
 import {
   pendingCreateResolver,
@@ -305,9 +310,9 @@ export async function initWorkspaces(): Promise<void> {
   // (stable persisted contribution id, retained across the rename),
   // capPerWorkspace 1. Opt-in: only the Settings chip is auto-provisioned
   // by default; users add the Overview from the workspace's Settings
-  // panel toggle. The dashboard renders WorkspaceOverviewBody directly
-  // (registered with dashboardWorkspaceRegistry below) — no markdown
-  // backing file, no openAsTab.
+  // panel toggle. The dashboard renders WorkspaceOverviewBody as a tab
+  // inside the root workspace's pane via openAsTab — same model as
+  // Workspace Settings, so users keep TabBar / split affordances.
   registerDashboardContribution({
     id: OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
     source: SOURCE,
@@ -317,6 +322,17 @@ export async function initWorkspaces(): Promise<void> {
     icon: GridIcon,
     create: async (workspace: Workspace) =>
       await createWorkspaceDashboard(workspace),
+    openAsTab: async (workspace: Workspace) => {
+      await openDashboardSurfaceTab(workspace.id, {
+        kind: "registry",
+        surfaceTypeId: dashboardSurfaceTypeId(
+          OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
+        ),
+        title: "Dashboard",
+        props: { rootWorkspaceId: workspace.id },
+        matchProps: { rootWorkspaceId: workspace.id },
+      });
+    },
   });
 
   registerDashboardWorkspaceType({
@@ -343,6 +359,9 @@ export async function initWorkspaces(): Promise<void> {
     lockedReason: "Required (Settings)",
     create: async (workspace: Workspace) =>
       await createSettingsDashboardWorkspace(workspace),
+    openAsTab: async (workspace: Workspace) => {
+      await openWorkspaceSettingsTab(workspace.id);
+    },
   });
 
   // Core-internal surface type for the per-workspace Settings panel.
@@ -361,10 +380,4 @@ export async function initWorkspaces(): Promise<void> {
   eventBus.on("workspace:created", onWorkspaceCreated);
   eventBus.on("workspace:closed", onWorkspaceClosed);
   eventBus.on("workspace:activated", onWorkspaceActivated);
-
-  registerMarkdownComponent({
-    name: "workspaces",
-    component: WorkspacesWidget,
-    source: SOURCE,
-  });
 }

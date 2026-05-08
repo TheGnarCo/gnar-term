@@ -3,10 +3,6 @@
  * "sections" (issue lists, kanban boards, etc.) by id. Other dashboard
  * bodies look the section up by id and mount it via ExtensionWrapper so
  * the wrapped component sees the registering extension's API.
- *
- * Parallel to (and intentionally simpler than) markdown-component-registry:
- * no widget config schema, no markdown serialization — sections are
- * mounted directly with ordinary Svelte props.
  */
 import type { Component } from "svelte";
 import { createRegistry } from "./create-registry";

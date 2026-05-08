@@ -29,6 +29,27 @@ export const sidebarVisible = writable<boolean>(true);
 export const hoveredSidebarBlockId = writable<string | null>(null);
 
 /**
+ * Per-banner collapsed state, keyed by `scopeId` (the workspace id for
+ * root banners). Lifted out of SidebarBanner local state so the
+ * popover banner (rendered when the sidebar is collapsed) and the
+ * main-view banner (the same row clipped to the 12px rail strip)
+ * share one source of truth — toggling one keeps the rail height in
+ * the other in sync. Missing entries default to `true` (collapsed) at
+ * the consumer; explicit entries are persisted across launches via
+ * `services/sidebar-persistence-service`.
+ */
+export const bannerCollapsedState = writable<Map<string, boolean>>(new Map());
+
+export function setBannerCollapsed(scopeId: string, value: boolean): void {
+  bannerCollapsedState.update((m) => {
+    if ((m.get(scopeId) ?? true) === value) return m;
+    const n = new Map(m);
+    n.set(scopeId, value);
+    return n;
+  });
+}
+
+/**
  * Key of the root row currently hovered inside the Workspaces section
  * — encoded as `"kind:id"` (e.g. `"workspace:g-42"`, `"branch:w-7"`),
  * or null when no row is hovered. Row renderers (WorkspaceRowBody,

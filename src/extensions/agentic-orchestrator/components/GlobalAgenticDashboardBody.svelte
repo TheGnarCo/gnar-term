@@ -2,118 +2,33 @@
   /**
    * Body for the Global Agentic Dashboard pseudo-workspace.
    *
-   * Renders a two-tab surface:
-   *   - Overview — the live markdown preview with embedded
-   *     `gnar:*` widgets (kanban / agent-list / task-spawner). A
-   *     synthetic preview-surface entry carries the global
-   *     `DashboardHostContext` through to widgets mounted via the
-   *     markdown previewer's detached `mount()` tree.
-   *   - Settings — color picker for the sidebar row + the configured
-   *     markdown path indicator.
+   * Renders a two-tab layout:
+   *   - Overview — Kanban + AgentList composed directly. The host metadata
+   *     (`isGlobalAgenticDashboard: true`) projected via DashboardHostContext
+   *     resolves global scope for embedded widgets without a markdown
+   *     intermediary.
+   *   - Settings — color picker for the sidebar row.
    */
-  import { getContext, onDestroy, onMount } from "svelte";
   import { setDashboardHost } from "../../../lib/contexts/dashboard-host";
-  import {
-    registerPreviewSurface,
-    unregisterPreviewSurface,
-  } from "../../../lib/services/preview-surface-registry";
-  import {
-    openPreview,
-    type PreviewResult,
-  } from "../../../lib/services/preview-service";
   import { getConfig, saveConfig, configStore } from "../../../lib/config";
-  import { EXTENSION_API_KEY, type ExtensionAPI } from "../../api";
-  import { showConfirmPrompt } from "../../../lib/stores/ui";
   import { theme } from "../../../lib/stores/theme";
   import {
     WORKSPACE_COLOR_SLOTS,
     resolveWorkspaceColor,
     type WorkspaceColorSlot,
   } from "../../../lib/theme-data";
-
-  const DEFAULT_TEMPLATE = `# Agents
-
-Every detected agent in gnar-term.
-
-\`\`\`gnar:kanban
-\`\`\`
-
-\`\`\`gnar:agent-list
-title: Active Agents
-\`\`\`
-`;
+  import Kanban from "./Kanban.svelte";
+  import AgentList from "./AgentList.svelte";
 
   const PSEUDO_ID = "agentic.global";
   const hostMetadata = { isGlobalAgenticDashboard: true };
-  const surfaceId = `pseudo.agentic.global:${Math.random().toString(36).slice(2, 8)}`;
-
-  const api = getContext<ExtensionAPI>(EXTENSION_API_KEY);
 
   setDashboardHost({ metadata: hostMetadata });
 
-  let container: HTMLElement;
-  let loadError: string | null = null;
-  let result: PreviewResult | null = null;
   let activeTab: "overview" | "settings" = "overview";
-  let markdownPathResolved = "";
-  let regenerating = false;
-  let regenerateError = "";
 
   $: currentColorSlot =
     $configStore.pseudoWorkspaceColors?.[PSEUDO_ID] ?? "purple";
-
-  async function resolveMarkdownPath(): Promise<string> {
-    const configured = api
-      .getSetting<string>("globalAgentsMarkdownPath")
-      ?.trim();
-    if (configured) return configured;
-    const home = await api.invoke<string>("get_home").catch(() => "");
-    const root = home ? `${home}/.gnar-term` : ".gnar-term";
-    return `${root}/global-agents.md`;
-  }
-
-  async function ensureMarkdownPath(): Promise<string> {
-    const path = await resolveMarkdownPath();
-    const exists = await api
-      .invoke<boolean>("file_exists", { path })
-      .catch(() => false);
-    if (!exists) {
-      const dir = path.replace(/\/[^/]+$/, "");
-      await api.invoke("ensure_dir", { path: dir }).catch(() => {});
-      await api
-        .invoke("write_file", {
-          path,
-          content: DEFAULT_TEMPLATE,
-        })
-        .catch(() => {});
-    }
-    return path;
-  }
-
-  onMount(async () => {
-    try {
-      markdownPathResolved = await ensureMarkdownPath();
-      registerPreviewSurface({
-        surfaceId,
-        path: markdownPathResolved,
-        paneId: "",
-        workspaceId: "",
-        hostMetadata,
-      });
-      result = await openPreview(markdownPathResolved, { surfaceId });
-      container.appendChild(result.element);
-    } catch (err) {
-      loadError = err instanceof Error ? err.message : String(err);
-    }
-  });
-
-  onDestroy(() => {
-    result?.dispose?.();
-    if (result?.watchId && result.watchId > 0) {
-      api.invoke("unwatch_file", { watchId: result.watchId }).catch(() => {});
-    }
-    unregisterPreviewSurface(surfaceId);
-  });
 
   async function selectColor(slot: string): Promise<void> {
     const existing = getConfig().pseudoWorkspaceColors ?? {};
@@ -159,30 +74,6 @@ title: Active Agents
       document
         .querySelector<HTMLElement>(`[data-color-slot="${nextSlot}"]`)
         ?.focus();
-    }
-  }
-
-  async function regenerateDashboard(): Promise<void> {
-    const confirmed = await showConfirmPrompt(
-      "Regenerate the Global Agents dashboard? Any custom edits to its markdown will be lost.",
-      {
-        title: "Regenerate Dashboard",
-        confirmLabel: "Regenerate",
-        cancelLabel: "Cancel",
-      },
-    );
-    if (!confirmed) return;
-    regenerating = true;
-    regenerateError = "";
-    try {
-      await api.invoke("write_file", {
-        path: markdownPathResolved,
-        content: DEFAULT_TEMPLATE,
-      });
-    } catch (err) {
-      regenerateError = `Failed to regenerate: ${err instanceof Error ? err.message : String(err)}`;
-    } finally {
-      regenerating = false;
     }
   }
 </script>
@@ -234,32 +125,22 @@ title: Active Agents
     {/each}
   </div>
 
-  <!-- Overview pane: always mounted so the preview's live-reload
-       subscription + host-context wiring stays intact across tab
-       switches. `display: none` hides it when Settings is active. -->
-  <div
-    bind:this={container}
-    role="tabpanel"
-    id="global-agentic-dashboard-panel-overview"
-    aria-labelledby="global-agentic-dashboard-tab-overview"
-    aria-hidden={activeTab !== "overview"}
-    data-preview-surface-id={surfaceId}
-    data-global-agentic-dashboard-overview
-    style="
-      flex: 1; min-width: 0; min-height: 0; overflow: auto;
-      display: {activeTab === 'overview' ? 'flex' : 'none'};
-      flex-direction: column;
-    "
-  >
-    {#if loadError}
-      <div
-        data-global-agentic-dashboard-error
-        style="padding: 16px; font-family: monospace; font-size: 13px;"
-      >
-        {loadError}
-      </div>
-    {/if}
-  </div>
+  {#if activeTab === "overview"}
+    <div
+      role="tabpanel"
+      id="global-agentic-dashboard-panel-overview"
+      aria-labelledby="global-agentic-dashboard-tab-overview"
+      data-global-agentic-dashboard-overview
+      style="
+        flex: 1; min-width: 0; min-height: 0; overflow: auto;
+        padding: 24px 32px;
+        display: flex; flex-direction: column; gap: 20px;
+      "
+    >
+      <Kanban />
+      <AgentList title="Active Agents" />
+    </div>
+  {/if}
 
   {#if activeTab === "settings"}
     <div
@@ -309,60 +190,6 @@ title: Active Agents
             ></button>
           {/each}
         </div>
-      </section>
-
-      <section style="display: flex; flex-direction: column; gap: 4px;">
-        <h3 style="margin: 0; font-size: 14px; font-weight: 600;">
-          Markdown source
-        </h3>
-        <p style="margin: 0; color: {$theme.fgDim}; font-size: 12px;">
-          Backing file for this dashboard's Overview tab. Edit the path in
-          Settings → Extensions → Agentic Orchestrator.
-        </p>
-        <code
-          data-markdown-path
-          style="
-            margin-top: 4px; padding: 6px 10px;
-            background: {$theme.bgSurface}; border: 1px solid {$theme.border};
-            border-radius: 4px; font-size: 12px;
-          ">{markdownPathResolved || "(resolving…)"}</code
-        >
-      </section>
-
-      <section style="display: flex; flex-direction: column; gap: 8px;">
-        <h3 style="margin: 0; font-size: 14px; font-weight: 600;">
-          Regenerate dashboard
-        </h3>
-        <p style="margin: 0; color: {$theme.fgDim}; font-size: 12px;">
-          Overwrite the backing markdown with the default template. Any custom
-          edits will be lost.
-        </p>
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <button
-          data-global-agentic-dashboard-regenerate
-          type="button"
-          on:click|preventDefault={() => void regenerateDashboard()}
-          disabled={regenerating}
-          title="Delete and regenerate the Global Agents dashboard from its default template"
-          style="
-            align-self: flex-start;
-            background: transparent; color: {$theme.fgDim};
-            border: 1px solid {$theme.border}; border-radius: 3px;
-            padding: 4px 12px; font-size: 12px;
-            cursor: {regenerating ? 'wait' : 'pointer'};
-            opacity: {regenerating ? 0.6 : 1};
-          "
-        >
-          {regenerating ? "Regenerating…" : "Regenerate Dashboard"}
-        </button>
-        {#if regenerateError}
-          <div
-            data-global-agentic-dashboard-regenerate-error
-            style="color: {$theme.danger}; font-size: 11px;"
-          >
-            {regenerateError}
-          </div>
-        {/if}
       </section>
     </div>
   {/if}

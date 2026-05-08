@@ -26,6 +26,11 @@
   import { slide } from "svelte/transition";
   import { theme } from "../stores/theme";
   import { workspaces } from "../stores/workspace";
+  import {
+    bannerCollapsedState,
+    setBannerCollapsed,
+    sidebarVisible,
+  } from "../stores/ui";
   import SidebarElement from "./SidebarElement.svelte";
   import SidebarRail from "./SidebarRail.svelte";
   import DefaultWorkspaceListView from "./WorkspaceListView.svelte";
@@ -117,15 +122,31 @@
     (ws) => filterIds.has(ws.id) && ws.isDashboard !== true,
   ).length;
 
-  let collapsed = false;
+  // Collapsed state is read from the shared `bannerCollapsedState`
+  // store keyed by scopeId. This keeps the popover banner (rendered
+  // over the terminal area when the sidebar is collapsed) and the
+  // main-view banner (clipped behind the 12px rail strip) in sync —
+  // toggling the chevron in the popover updates the rail height in
+  // the strip the same way it updates inside an expanded sidebar.
+  // Default is collapsed for fresh banners; the user's explicit
+  // toggle is persisted via banner-collapse-persistence-service.
+  $: collapsed = $bannerCollapsedState.get(scopeId) ?? true;
+  function toggleCollapsed() {
+    setBannerCollapsed(scopeId, !collapsed);
+  }
   let prevExpandableCount = -1;
   $: expandableCount = nonDashboardCount + dashboardCount;
   $: expandable = expandableCount > 0;
   $: {
     const count = expandableCount;
-    if (prevExpandableCount >= 0) {
-      if (count > prevExpandableCount) collapsed = false;
-      else if (count === 0) collapsed = true;
+    // Auto-expand only when an existing populated banner gains a child.
+    // Skip the from-zero growth case so the count climbing from 0 to N
+    // during initial workspace load doesn't override a persisted
+    // collapsed flag. Auto-collapse when the banner empties out.
+    if (prevExpandableCount > 0 && count > prevExpandableCount) {
+      setBannerCollapsed(scopeId, false);
+    } else if (prevExpandableCount > 0 && count === 0) {
+      setBannerCollapsed(scopeId, true);
     }
     prevExpandableCount = count;
   }
@@ -179,7 +200,7 @@
             <slot
               name="btn-row"
               {collapsed}
-              toggle={() => (collapsed = !collapsed)}
+              toggle={toggleCollapsed}
               showToggle={expandable}
             />
           </div>
@@ -293,7 +314,7 @@
               <slot
                 name="btn-row"
                 {collapsed}
-                toggle={() => (collapsed = !collapsed)}
+                toggle={toggleCollapsed}
                 showToggle={expandable}
               />
             </div>
@@ -305,7 +326,16 @@
           data-sidebar-banner-children={scopeId}
           data-children-count={nonDashboardCount}
           data-dashboard-count={dashboardCount}
-          style="display: flex; flex-direction: column; margin-left: -2px; margin-top: -2px;"
+          style="
+            display: flex; flex-direction: column;
+            {!$sidebarVisible
+            ? `margin-right: 4px;
+                 background: ${$theme.sidebarBg ?? $theme.bg ?? '#000'}cc;
+                 backdrop-filter: blur(10px);
+                 -webkit-backdrop-filter: blur(10px);
+                 border-radius: 0 0 6px 0;`
+            : 'margin-left: -2px; margin-top: -2px;'}
+          "
           transition:slide={{ duration: 200 }}
         >
           <slot name="children-leading" />

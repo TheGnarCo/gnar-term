@@ -73,7 +73,7 @@ import {
   type SidebarItem,
 } from "../stores/mcp-sidebar";
 import {
-  openExtensionSurfaceInPaneById,
+  openRegistrySurfaceInPaneById,
   createPreviewSurfaceInPane,
   focusSurfaceById,
   closeSurfaceById,
@@ -1175,7 +1175,7 @@ registerTool({
     } else {
       targetPane = hostPane;
     }
-    const result = openExtensionSurfaceInPaneById(
+    const result = openRegistrySurfaceInPaneById(
       targetPane.id,
       p.surface_type_id,
       p.title,
@@ -1243,7 +1243,7 @@ registerTool({
 registerTool({
   name: "spawn_preview",
   description:
-    "Open a file as a preview surface in a pane. Markdown files render with gnar:<name> markdown-components as live widgets. If a preview surface for the same path is already open anywhere in the app, focuses it instead of opening a duplicate. Returns the new (or existing) surface id. IMPORTANT: the file must already exist on disk before calling this — call write_file first, or use create_preview_file which does both atomically.",
+    "Open a file as a preview surface in a pane. If a preview surface for the same path is already open anywhere in the app, focuses it instead of opening a duplicate. Returns the new (or existing) surface id. IMPORTANT: the file must already exist on disk before calling this — call write_file first, or use create_preview_file which does both atomically.",
   inputSchema: {
     type: "object",
     properties: {

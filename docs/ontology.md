@@ -94,8 +94,12 @@ produced by Agentic spawns with worktree provenance.
 **Aliases:** "Dashboard" (when context is unambiguous).
 **Do NOT use:** Dashboard Workspace as a separate type.
 **Definition:** A Branch with `isDashboard: true` and a
-`dashboardContributionId`. A constrained Branch hosting the markdown-
-backed surface registered by a **Dashboard Contribution**.
+`dashboardContributionId`. A constrained Branch hosting the
+component-backed surface registered by a **Dashboard Contribution**.
+The dashboard component is registered as a hidden surface type via
+`registerDashboardWorkspaceType`; the dashboard Branch is seeded with
+a single extension surface so PaneView's normal render path mounts the
+component (preserving TabBar / split affordances).
 **Examples:** the Overview Dashboard, the Agentic Dashboard, the
 Diff Dashboard, the Claude Settings Dashboard.
 
@@ -135,9 +139,10 @@ contributions registered by their respective extensions.
 **Do NOT use:** "Group dashboard", "Workspace dashboard" (ambiguous
 — every Dashboard belongs to a Workspace).
 **Definition:** The built-in Dashboard Contribution provided by core
-(`id: "group"`, `capPerGroup: 1`). Renders the markdown file at the
-root Workspace's `.gnar-term/overview.md`. Linked from the root via
-its `dashboardWorkspaceId`.
+(`id: "group"`, `capPerGroup: 1`). Renders `WorkspaceOverviewBody`
+directly — no markdown file. Composes Issues, PRs, and the workspaces
+list with scope projected via `DashboardHostContext`. Linked from the
+root via its `dashboardWorkspaceId`.
 
 ---
 
@@ -147,10 +152,11 @@ its `dashboardWorkspaceId`.
 **Do NOT use:** "Orchestrator", "Agent Orchestrator", "Workspace
 Orchestrator".
 **Definition:** The Dashboard Contribution registered by the
-`agentic-orchestrator` extension. Hosts agent-orchestration widgets
-(`gnar:kanban`, `gnar:task-spawner`, `gnar:issues`). Cap of 1 per
-Workspace. The widgets read scope from the enclosing
-`DashboardHostContext`, not from props.
+`agentic-orchestrator` extension. The dashboard body
+(`AgenticDashboardBody`) composes the Kanban, AgentList, and
+TaskSpawner components directly. Cap of 1 per Workspace. The
+components read scope from the enclosing `DashboardHostContext`, not
+from props.
 
 ---
 
@@ -223,7 +229,7 @@ preferences without touching core fields.
 dashboard spawned it: `{ kind: "global" }` or
 `{ kind: "workspace"; rootWorkspaceId }`. Drives the bot-icon
 affordance in the sidebar and the "jump to active branch"
-navigation on widgets. Companion field `spawnedFromIssues: number[]`
+navigation. Companion field `spawnedFromIssues: number[]`
 records GitHub issue numbers a worktree Branch was spawned to
 handle.
 

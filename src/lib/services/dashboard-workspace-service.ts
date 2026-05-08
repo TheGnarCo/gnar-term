@@ -6,12 +6,27 @@ import {
   switchWorkspace,
 } from "./workspace-runtime-service";
 import { createRegistry } from "./create-registry";
+import {
+  registerSurfaceType,
+  unregisterSurfaceType,
+} from "./surface-type-registry";
+
+/**
+ * Surface-type id derived from a dashboard workspace registration. Each
+ * dashboard component is mounted as a normal extension surface, so the
+ * pane keeps its tab bar, split affordances, and tab-add menu — users
+ * can split a dashboard and put a terminal next to it without losing
+ * the dashboard surface. Hidden from the "+ new surface" menu so users
+ * don't try to spawn a free-floating dashboard surface from an empty pane.
+ */
+export function dashboardSurfaceTypeId(dashboardId: string): string {
+  return `dashboard:${dashboardId}`;
+}
 
 interface DashboardWorkspaceEntry {
   id: string;
   label: string;
   icon: Component;
-  component: Component;
   /** Extension ID that registered this entry — used to provide API context when rendering. */
   source: string;
   /** Overrides the workspace row rail/icon color. When absent, falls back to theme accent. */
@@ -30,13 +45,31 @@ export const dashboardWorkspaceRegistry: Readable<
 });
 
 export function registerDashboardWorkspaceType(
-  entry: Omit<DashboardWorkspaceEntry, "source"> & { source?: string },
+  entry: Omit<DashboardWorkspaceEntry, "source"> & {
+    source?: string;
+    component: Component;
+  },
 ): void {
-  registry.register({ source: "", ...entry });
+  const source = entry.source ?? "";
+  registerSurfaceType({
+    id: dashboardSurfaceTypeId(entry.id),
+    label: entry.label,
+    component: entry.component,
+    source,
+    hideFromNewSurface: true,
+  });
+  registry.register({
+    id: entry.id,
+    label: entry.label,
+    icon: entry.icon,
+    source,
+    accentColor: entry.accentColor,
+  });
 }
 
 export function unregisterDashboardWorkspaceType(id: string): void {
   registry.unregister(id);
+  unregisterSurfaceType(dashboardSurfaceTypeId(id));
 }
 
 function getDashboardEntry(id: string): DashboardWorkspaceEntry | undefined {
@@ -66,6 +99,17 @@ export async function spawnOrNavigate(id: string): Promise<void> {
     name: entry.label,
     isDashboard: true,
     dashboardContributionId: id,
-    layout: { pane: { surfaces: [] } },
+    layout: {
+      pane: {
+        surfaces: [
+          {
+            type: "registry",
+            extensionType: dashboardSurfaceTypeId(id),
+            name: entry.label,
+            focus: true,
+          },
+        ],
+      },
+    },
   });
 }

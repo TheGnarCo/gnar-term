@@ -56,6 +56,14 @@ export interface Workspace {
    * Has no effect on `autoProvision` contributions (those are locked-on).
    */
   dismissedDashboardContributionIds?: string[];
+  /**
+   * Set on a root Workspace ONLY. Contribution ids the user has explicitly
+   * enabled for this workspace via Workspace Settings. Drives chip presence
+   * for opt-in (neither autoProvision nor defaultEnabled) contributions.
+   * Independent of whether a dashboard tab is currently open — closing a
+   * tab does not remove the contribution from this list.
+   */
+  enabledDashboardContributionIds?: string[];
   // Extension data — replaces open-ended metadata index signature
   extensionData?: Record<string, unknown>;
   // Root Workspace reference — presence discriminates Branches from root Workspaces
@@ -148,6 +156,15 @@ export interface RegistrySurface {
   notification?: string;
   props?: Record<string, unknown>; // arbitrary data passed to the surface component
   dispose?: () => void;
+  /**
+   * Identifies a registry surface as the tab manifestation of a
+   * `DashboardContribution`. Stamped by `openDashboardSurfaceTab` from
+   * `DashboardTabSpec.dashboardContributionId`. Used by the Settings
+   * panel (active-state detection) and `closeDashboardContributionTab`
+   * (find-and-remove-by-contribution) without leaking structural
+   * metadata into the surface component's `props`.
+   */
+  dashboardContributionId?: string;
 }
 
 export interface PreviewSurface {

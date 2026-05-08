@@ -4,8 +4,11 @@
  *   - add_dashboard_to_workspace
  *   - remove_dashboard_from_workspace
  *
- * The first mirrors the in-app Settings dashboard's toggle list; the
- * second/third drive the same toggle interaction from an agent.
+ * Dashboards live as tabs inside the root workspace's pane tree (not as
+ * separate workspaces). `add_dashboard_to_workspace` invokes the
+ * contribution's `openAsTab` hook; `remove_dashboard_from_workspace`
+ * closes any matching tab. `active` annotation reflects live tab presence
+ * (a registry surface stamped with `dashboardContributionId`).
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -50,6 +53,41 @@ function seedWorkspace(id: string) {
   ]);
 }
 
+/**
+ * Stamp a registry surface tagged with `dashboardContributionId` directly
+ * onto the workspace's primary pane so `isDashboardContributionTabActive`
+ * reports the contribution as active without going through openAsTab.
+ */
+function seedDashboardTab(rootWorkspaceId: string, contributionId: string) {
+  workspaces.update((cur) =>
+    cur.map((w) =>
+      w.id === rootWorkspaceId
+        ? ({
+            ...w,
+            paneLayout: {
+              type: "pane",
+              pane: {
+                id: `${rootWorkspaceId}-p`,
+                surfaces: [
+                  {
+                    id: `s-${contributionId}`,
+                    kind: "registry",
+                    surfaceTypeId: `tab-${contributionId}`,
+                    title: contributionId,
+                    props: {},
+                    matchProps: {},
+                    dashboardContributionId: contributionId,
+                  },
+                ],
+                activeSurfaceId: `s-${contributionId}`,
+              },
+            },
+          } as never)
+        : w,
+    ),
+  );
+}
+
 describe("MCP dashboard contribution tools", () => {
   beforeEach(() => {
     invokeMock.mockReset();
@@ -69,7 +107,7 @@ describe("MCP dashboard contribution tools", () => {
         capPerWorkspace: 1,
         autoProvision: true,
         lockedReason: "Required",
-        create: vi.fn(async () => "ws-ov"),
+        openAsTab: vi.fn(async () => {}),
       });
       registerDashboardContribution({
         id: "diff",
@@ -77,7 +115,7 @@ describe("MCP dashboard contribution tools", () => {
         label: "Diff",
         actionLabel: "Add Diff Dashboard",
         capPerWorkspace: 1,
-        create: vi.fn(async () => "ws-diff"),
+        openAsTab: vi.fn(async () => {}),
       });
 
       const resp = await dispatch(
@@ -109,24 +147,11 @@ describe("MCP dashboard contribution tools", () => {
         label: "Diff",
         actionLabel: "Add Diff",
         capPerWorkspace: 1,
-        create: vi.fn(async () => "ws-diff"),
+        openAsTab: vi.fn(async () => {}),
       });
-      // Seed an active dashboard workspace for this contribution.
-      workspaces.update((cur) => [
-        ...cur,
-        {
-          id: "ws-abc",
-          name: "Diff",
-          paneLayout: {
-            type: "pane",
-            pane: { id: "p", surfaces: [], activeSurfaceId: null },
-          },
-          activePaneId: "p",
-          isDashboard: true,
-          rootWorkspaceId: "g1",
-          dashboardContributionId: "diff",
-        } as never,
-      ]);
+      // Tab presence drives `active` — stamp a registry surface with the
+      // matching contribution id onto the workspace's pane.
+      seedDashboardTab("g1", "diff");
 
       const resp = await dispatch(
         rpc("tools/call", {
@@ -138,25 +163,23 @@ describe("MCP dashboard contribution tools", () => {
         .contributions as Array<{
         id: string;
         active: boolean;
-        branched_workspace_id?: string;
       }>;
       const diff = rows.find((r) => r.id === "diff");
       expect(diff?.active).toBe(true);
-      expect(diff?.branched_workspace_id).toBe("ws-abc");
     });
   });
 
   describe("add_dashboard_to_workspace", () => {
-    it("invokes contribution.create and returns the new child workspace id", async () => {
+    it("invokes contribution.openAsTab and returns added=true", async () => {
       seedWorkspace("g1");
-      const create = vi.fn(async () => "ws-new");
+      const openAsTab = vi.fn(async () => {});
       registerDashboardContribution({
         id: "diff",
         source: "diff-viewer",
         label: "Diff",
         actionLabel: "Add Diff",
         capPerWorkspace: 1,
-        create,
+        openAsTab,
       });
 
       const resp = await dispatch(
@@ -165,10 +188,8 @@ describe("MCP dashboard contribution tools", () => {
           arguments: { workspace_id: "g1", contribution_id: "diff" },
         }),
       );
-      expect((resp as any).result.structuredContent.branched_workspace_id).toBe(
-        "ws-new",
-      );
-      expect(create).toHaveBeenCalledTimes(1);
+      expect((resp as any).result.structuredContent.added).toBe(true);
+      expect(openAsTab).toHaveBeenCalledTimes(1);
     });
 
     it("rejects an autoProvision contribution", async () => {
@@ -180,7 +201,7 @@ describe("MCP dashboard contribution tools", () => {
         actionLabel: "Add Agentic",
         capPerWorkspace: 1,
         autoProvision: true,
-        create: vi.fn(async () => "ws-never"),
+        openAsTab: vi.fn(async () => {}),
       });
 
       const resp = await dispatch(
@@ -199,7 +220,7 @@ describe("MCP dashboard contribution tools", () => {
         label: "Diff",
         actionLabel: "Add Diff",
         capPerWorkspace: 1,
-        create: vi.fn(async () => "ws-new"),
+        openAsTab: vi.fn(async () => {}),
       });
 
       const respWorkspace = await dispatch(
@@ -222,7 +243,7 @@ describe("MCP dashboard contribution tools", () => {
   });
 
   describe("remove_dashboard_from_workspace", () => {
-    it("returns removed=false when no workspace exists for the pair", async () => {
+    it("returns removed=false when no tab exists for the pair", async () => {
       seedWorkspace("g1");
       registerDashboardContribution({
         id: "diff",
@@ -230,7 +251,7 @@ describe("MCP dashboard contribution tools", () => {
         label: "Diff",
         actionLabel: "Add Diff",
         capPerWorkspace: 1,
-        create: vi.fn(async () => "ws-new"),
+        openAsTab: vi.fn(async () => {}),
       });
 
       const resp = await dispatch(
@@ -251,7 +272,7 @@ describe("MCP dashboard contribution tools", () => {
         actionLabel: "Add Agentic",
         capPerWorkspace: 1,
         autoProvision: true,
-        create: vi.fn(async () => "ws-x"),
+        openAsTab: vi.fn(async () => {}),
       });
 
       const resp = await dispatch(

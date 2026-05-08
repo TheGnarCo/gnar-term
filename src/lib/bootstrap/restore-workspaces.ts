@@ -24,7 +24,6 @@ import { workspaceDefToTemplate } from "../stores/workspace";
 import { initArchiveFromState } from "../stores/archive";
 import { createWorkspaceFromDef } from "../services/workspace-runtime-service";
 import { switchWorkspace } from "../services/workspace-runtime-service";
-import { OVERVIEW_DASHBOARD_CONTRIBUTION_ID } from "../services/dashboard-contribution-registry";
 
 // Restore-complete signal — lets async work (extension provision loops,
 // reconcileWorkspaceDashboards) defer safely until workspaces are in the store.
@@ -115,37 +114,13 @@ export async function restoreWorkspaces(
   if (Array.isArray(state.workspaces) && state.workspaces.length > 0) {
     const runtimeDefs = state.workspaces as WorkspaceDef[];
 
-    // Persisted dashboards are dropped if their owning Workspace isn't
-    // about to be re-created. Drive the check off `runtimeDefs` (the
-    // source of truth for re-creation) rather than the live store,
-    // which is empty until `createWorkspaceFromDef` runs below.
-    const knownWorkspaceIds = new Set(
-      runtimeDefs
-        .filter(
-          (def) =>
-            def.isDashboard !== true &&
-            typeof def.rootWorkspaceId !== "string" &&
-            typeof def.worktreePath !== "string",
-        )
-        .map((def) => def.id)
-        .filter((id): id is string => typeof id === "string"),
-    );
-    const seenDashboards = new Set<string>();
-    const filteredDefs = runtimeDefs.filter((def) => {
-      const isDashboard = def.isDashboard === true;
-      const ownerWorkspaceId = def.rootWorkspaceId;
-      if (!isDashboard) return true;
-      if (typeof ownerWorkspaceId !== "string") return true;
-      if (!knownWorkspaceIds.has(ownerWorkspaceId)) return false;
-      const contributionId =
-        typeof def.dashboardContributionId === "string"
-          ? def.dashboardContributionId
-          : OVERVIEW_DASHBOARD_CONTRIBUTION_ID;
-      const dedupeKey = `${ownerWorkspaceId}:${contributionId}`;
-      if (seenDashboards.has(dedupeKey)) return false;
-      seenDashboards.add(dedupeKey);
-      return true;
-    });
+    // Dashboards are tabs now, not workspaces. Silently drop any
+    // persisted `isDashboard: true` entry — auto-provisioning runs
+    // during `createWorkspaceFromDef` on the surviving root workspaces
+    // and re-establishes each contribution as a tab inline. This also
+    // implicitly cleans up orphaned dashboards (whose owner workspace
+    // is no longer in the persisted set).
+    const filteredDefs = runtimeDefs.filter((def) => def.isDashboard !== true);
     for (const def of filteredDefs) {
       const nwDef = workspaceDefToTemplate(def);
       await createWorkspaceFromDef(nwDef, { restoring: true });

@@ -10,12 +10,10 @@
  */
 import { invoke } from "@tauri-apps/api/core";
 import { get } from "svelte/store";
-import type { SurfaceDef } from "../config";
 import type { RootWorkspace } from "../stores/workspace";
 import { WORKSPACE_COLOR_SLOTS } from "../../extensions/api";
 import { appendRootRow, removeRootRow } from "../stores/root-row-order";
 import { workspaces } from "../stores/workspace";
-import { activeWorkspaceId } from "../stores/workspace";
 import {
   getWorkspace,
   getWorkspaces,
@@ -30,12 +28,7 @@ import {
 import { schedulePersist } from "./workspace-persist";
 import { eventBus } from "./event-bus";
 import { type Workspace } from "../types";
-import {
-  getDashboardContribution,
-  getDashboardContributions,
-  OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
-} from "./dashboard-contribution-registry";
-import { globalSurfaceTypeId } from "./global-surface-service";
+import { getDashboardContributions } from "./dashboard-contribution-registry";
 import { releaseWorkspaceDirtyStore } from "./workspace-git-dirty-store";
 
 export const WORKSPACE_STATE_CHANGED = "extension:workspace:state-changed";
@@ -185,146 +178,28 @@ export function removeBranchFromAllWorkspaces(workspaceId: string): void {
   schedulePersist();
 }
 
-function createDashboardWorkspaceFromDef(
-  workspace: RootWorkspace,
-  name: string,
-  contribId: string,
-  surfaces: SurfaceDef[],
-): Promise<string> {
-  return createWorkspaceFromDef({
-    name,
-    layout: { pane: { surfaces } },
-    isDashboard: true,
-    rootWorkspaceId: workspace.id,
-    dashboardContributionId: contribId,
-  });
-}
-
-/**
- * Create the Workspace Overview Dashboard for a workspace. Seeds a
- * single hidden dashboard surface (`dashboard:group`) registered by
- * `init-workspaces` against `WorkspaceOverviewBody`; the standard pane
- * render path mounts it, so TabBar / split affordances work like any
- * other workspace. `rootWorkspaceId` is forwarded via `extensionProps`
- * so the body can project it into a DashboardHostContext for embedded
- * widgets (Issues, PRs, WorkspacesWidget).
- */
-export async function createWorkspaceDashboard(
-  workspace: RootWorkspace,
-): Promise<string> {
-  return createDashboardWorkspaceFromDef(
-    workspace,
-    "Dashboard",
-    OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
-    [
-      {
-        type: "registry",
-        extensionType: globalSurfaceTypeId(OVERVIEW_DASHBOARD_CONTRIBUTION_ID),
-        extensionProps: { rootWorkspaceId: workspace.id },
-        name: "Dashboard",
-        focus: true,
-      },
-    ],
-  );
-}
-
-/**
- * Materialize the Settings dashboard workspace for a workspace — a
- * constrained dashboard (metadata.isDashboard = true,
- * dashboardContributionId = "settings") that seeds a single
- * `core:workspace-settings` registry surface. The standard pane render
- * path mounts `WorkspaceDashboardSettings`, so TabBar / split affordances
- * work uniformly with every other dashboard.
- */
-export function createSettingsDashboardWorkspace(
-  workspace: RootWorkspace,
-): Promise<string> {
-  return createDashboardWorkspaceFromDef(workspace, "Settings", "settings", [
-    {
-      type: "registry",
-      extensionType: "core:workspace-settings",
-      extensionProps: { rootWorkspaceId: workspace.id },
-      name: "Settings",
-      focus: true,
-    },
-  ]);
-}
-
-/**
- * Canonical predicate for workspace dashboard membership.
- *
- * - No `contribId` → matches any dashboard workspace for the workspace.
- * - `contribId` provided, `allowLegacyUndefined = false` → strict exact
- *   match (use for lookups where the contribution is known).
- * - `contribId` provided, `allowLegacyUndefined = true` → matches exact
- *   OR a workspace whose `dashboardContributionId` is still `undefined`
- *   (pre-stamp legacy records). Use for the workspace-overview reconcile pass.
- */
-export function isDashboardWorkspace(
-  ws: import("../types").Workspace,
-  rootWorkspaceId: string,
-  contribId?: string,
-  allowLegacyUndefined = false,
-): boolean {
-  if (ws.isDashboard !== true) return false;
-  if (ws.rootWorkspaceId !== rootWorkspaceId) return false;
-  if (contribId === undefined) return true;
-  const contribution = ws.dashboardContributionId;
-  if (allowLegacyUndefined) {
-    return contribution === undefined || contribution === contribId;
-  }
-  return contribution === contribId;
-}
-
-function findDashboardWorkspace(rootWorkspaceId: string, contribId: string) {
-  return get(workspaces).find((w) =>
-    isDashboardWorkspace(w, rootWorkspaceId, contribId),
-  );
-}
-
-/** True when a workspace exists for the given workspace + contribution pair. */
-function hasDashboardWorkspace(
-  rootWorkspaceId: string,
-  contribId: string,
-): boolean {
-  return get(workspaces).some((w) =>
-    isDashboardWorkspace(w, rootWorkspaceId, contribId),
-  );
-}
-
 /**
  * Provision every registered auto-provisioning dashboard contribution
- * for `workspace`. Called after a workspace is created and on startup
- * reconciliation so:
+ * for `workspace`. Routes through `openAsTab` with `{ activate: false }`:
+ * each dashboard becomes a tab in the workspace's active pane
+ * (deduplicated by the surface registry's matchProps).
  *
- *   - `autoProvision` contributions (settings) — always materialize.
- *   - `defaultEnabled` contributions (diff, agentic) — materialize unless
- *     the workspace's `dismissedDashboardContributionIds` lists them, so
- *     a user-removed default-on dashboard does not come back on reconcile.
+ *   - `autoProvision` contributions (settings) — always opened.
+ *   - `defaultEnabled` contributions (diff, agentic) — opened unless
+ *     the workspace's `dismissedDashboardContributionIds` lists them,
+ *     so a user-removed default-on dashboard does not come back.
  *
- * Idempotent — a contribution already backed by a workspace is skipped.
- *
- * `existingContribIds` is an optional precomputed set of contribution
- * ids already backed by a dashboard workspace for this parent. Pass it
- * to skip the per-call O(N) scan over child workspaces when the
- * caller has already built the snapshot (e.g. `reconcileWorkspaceDashboards`).
+ * Idempotent — `openAsTab` is a no-op when a matching tab already exists.
  */
 export async function provisionAutoDashboardsForWorkspace(
   workspace: RootWorkspace,
-  existingContribIds?: ReadonlySet<string>,
 ): Promise<void> {
   const dismissed = new Set(workspace.dismissedDashboardContributionIds ?? []);
   for (const c of getDashboardContributions()) {
     if (!c.autoProvision && !c.defaultEnabled) continue;
-    // autoProvision is locked-on; defaultEnabled honors the per-workspace
-    // dismissal list.
     if (!c.autoProvision && dismissed.has(c.id)) continue;
-    const exists = existingContribIds
-      ? existingContribIds.has(c.id)
-      : hasDashboardWorkspace(workspace.id, c.id);
-    if (exists) continue;
     try {
-      await c.create(workspace);
+      await c.openAsTab(workspace, { activate: false });
     } catch (err) {
       console.warn(
         `[workspace-service] auto-provision failed for "${c.id}":`,
@@ -335,56 +210,78 @@ export async function provisionAutoDashboardsForWorkspace(
 }
 
 /**
- * Close every workspace whose `dashboardContributionId` belongs to a
- * contribution registered by `source` and marked autoProvision. Used on
- * extension deactivate so auto-provisioned dashboards disappear
- * alongside their owning extension.
+ * True when `contributionId` is enabled for `workspace` per the persisted
+ * Settings state — independent of whether a tab is currently open. Drives
+ * sidebar chip presence: closing a dashboard tab does NOT remove its chip,
+ * so the chip must derive from this enabled state, not from live tab presence.
+ *
+ * Enabled when:
+ *   - `autoProvision` contributions — always (lock-on)
+ *   - `defaultEnabled` contributions — unless dismissed via Settings
+ *   - opt-in contributions — only when present in `enabledDashboardContributionIds`
+ *
+ * Returns false when the contribution isn't registered.
  */
-export function closeAutoDashboardsBySource(source: string): void {
-  const autoIds = new Set(
-    getDashboardContributions()
-      .filter((c) => c.source === source && c.autoProvision)
-      .map((c) => c.id),
+export function isDashboardContributionEnabled(
+  workspace: RootWorkspace,
+  contributionId: string,
+): boolean {
+  const contribution = getDashboardContributions().find(
+    (c) => c.id === contributionId,
   );
-  if (autoIds.size === 0) return;
-  const matchIds = get(workspaces)
-    .filter((w) => {
-      if (w.isDashboard !== true) return false;
-      const contrib = w.dashboardContributionId;
-      return typeof contrib === "string" && autoIds.has(contrib);
-    })
-    .map((w) => w.id);
-  for (const wsId of matchIds) closeWorkspaceById(wsId);
+  if (!contribution) return false;
+  if (contribution.autoProvision) return true;
+  if (contribution.defaultEnabled) {
+    const dismissed = workspace.dismissedDashboardContributionIds ?? [];
+    return !dismissed.includes(contributionId);
+  }
+  const enabled = workspace.enabledDashboardContributionIds ?? [];
+  return enabled.includes(contributionId);
 }
 
 /**
- * Locate the dashboard workspace for `rootWorkspaceId` + `contributionId` and
- * close it. Used by the Settings toggle UI and by MCP to remove a
- * dashboard contribution from a workspace.
- *
- * Records a dismissal for `defaultEnabled` contributions so the next
- * reconcile pass does not recreate the dashboard. `autoProvision`
- * contributions are locked-on and refuse to close.
+ * Add `contributionId` to the workspace's `enabledDashboardContributionIds`
+ * so its sidebar chip appears. Used for opt-in contributions toggled on
+ * from Workspace Settings. Idempotent — duplicates are coalesced. No-op
+ * when the workspace has no matching root entry.
  */
-export function closeDashboardForWorkspace(
+export function recordDashboardEnable(
   rootWorkspaceId: string,
   contributionId: string,
-): boolean {
-  const contribution = getDashboardContribution(contributionId);
-  if (contribution?.autoProvision) return false;
-  if (contribution?.defaultEnabled) {
-    recordDashboardDismissal(rootWorkspaceId, contributionId);
-  }
-  const match = findDashboardWorkspace(rootWorkspaceId, contributionId);
-  if (!match) return false;
-  closeWorkspaceById(match.id);
-  return true;
+): void {
+  const ws = getWorkspace(rootWorkspaceId);
+  if (!ws) return;
+  const current = ws.enabledDashboardContributionIds ?? [];
+  if (current.includes(contributionId)) return;
+  updateWorkspace(rootWorkspaceId, {
+    enabledDashboardContributionIds: [...current, contributionId],
+  });
+}
+
+/**
+ * Remove `contributionId` from the workspace's
+ * `enabledDashboardContributionIds`. Called when the user toggles off an
+ * opt-in contribution from Workspace Settings. No-op when the id isn't
+ * present.
+ */
+export function clearDashboardEnable(
+  rootWorkspaceId: string,
+  contributionId: string,
+): void {
+  const ws = getWorkspace(rootWorkspaceId);
+  if (!ws) return;
+  const current = ws.enabledDashboardContributionIds ?? [];
+  if (!current.includes(contributionId)) return;
+  const next = current.filter((id) => id !== contributionId);
+  updateWorkspace(rootWorkspaceId, {
+    enabledDashboardContributionIds: next.length > 0 ? next : undefined,
+  });
 }
 
 /**
  * Append `contributionId` to the workspace's
- * `dismissedDashboardContributionIds` so future reconciliation passes do
- * not re-provision the dashboard. Idempotent — duplicates are coalesced.
+ * `dismissedDashboardContributionIds` so future provisioning passes do
+ * not re-open the dashboard tab. Idempotent — duplicates are coalesced.
  * No-op when the workspace has no matching root entry.
  */
 export function recordDashboardDismissal(
@@ -403,10 +300,7 @@ export function recordDashboardDismissal(
 /**
  * Remove `contributionId` from the workspace's dismissal list. Called
  * when the user re-enables a previously dismissed `defaultEnabled`
- * contribution from Workspace Settings, so the next provisioning pass
- * (or the immediate `create()` in the toggle handler) is the only
- * source of truth for the dashboard's lifecycle. No-op when the id
- * isn't present in the list.
+ * contribution from Workspace Settings. No-op when the id isn't present.
  */
 export function clearDashboardDismissal(
   rootWorkspaceId: string,
@@ -420,20 +314,6 @@ export function clearDashboardDismissal(
   updateWorkspace(rootWorkspaceId, {
     dismissedDashboardContributionIds: next.length > 0 ? next : undefined,
   });
-}
-
-/**
- * Switch to a workspace's Dashboard workspace. The Dashboard is created
- * eagerly on workspace creation, so this is a pure activation call.
- * Returns true on success.
- */
-export function openWorkspaceDashboard(workspace: RootWorkspace): boolean {
-  const targetId = workspace.dashboardWorkspaceId;
-  if (!targetId) return false;
-  const idx = get(workspaces).findIndex((w) => w.id === targetId);
-  if (idx < 0) return false;
-  activeWorkspaceId.set(targetId);
-  return true;
 }
 
 /**
@@ -467,107 +347,6 @@ export async function activateWorkspace(workspaceId: string): Promise<void> {
   if (!rootId) return;
   const newIdx = get(workspaces).findIndex((w) => w.id === rootId);
   if (newIdx >= 0) switchWorkspace(newIdx);
-}
-
-/**
- * Called on app startup (after workspaces are restored) — ensures every
- * workspace has exactly one Dashboard Workspace. Prior releases
- * matched the dashboard via `workspace.dashboardWorkspaceId`; child workspace
- * ids were unstable across restarts, so on every reload the lookup
- * missed and a fresh dashboard was spawned. The cleanup runs in three
- * passes:
- *
- *   1. Adopt the first workspace matching `metadata.isDashboard ===
- *      true && rootWorkspaceId === workspace.id` (with no contribution id,
- *      or an explicit `OVERVIEW_DASHBOARD_CONTRIBUTION_ID` id) — rebinding the workspace's
- *      `dashboardWorkspaceId` to that workspace.
- *   2. Close every extra Workspace Dashboard for the same workspace (users end
- *      up with these when pre-fix state carried duplicates).
- *   3. Only when no dashboard exists at all, create a fresh one.
- *
- * The loop is sequential because `closeWorkspace` mutates the
- * workspaces store and ripples to `$activeWorkspaceIdx`.
- */
-async function reconcileDashboardsForWorkspace(
-  workspace: RootWorkspace,
-  dashboardIndex: Map<string, Map<string, Workspace[]>>,
-): Promise<void> {
-  const byContrib = dashboardIndex.get(workspace.id);
-
-  // Deduplicate every autoProvision contribution type — keeps the first
-  // match, closes the rest. Previously only "group" was covered; the
-  // startup race could leave duplicate "settings" or extension-owned
-  // dashboards (e.g. "agentic") that are now caught here too.
-  for (const c of getDashboardContributions()) {
-    if (!c.autoProvision) continue;
-    const dupeMatches = byContrib?.get(c.id) ?? [];
-    if (dupeMatches.length <= 1) continue;
-    const [keep, ...extras] = dupeMatches;
-    for (const dup of extras) closeWorkspaceById(dup.id);
-    // Prune the index to mirror the store mutation; the post-dedupe
-    // `existingContribIds` snapshot below relies on this.
-    if (keep) byContrib?.set(c.id, [keep]);
-  }
-
-  // Back-fill any autoProvision contribution (including OVERVIEW_DASHBOARD_CONTRIBUTION_ID if
-  // it is still missing after the dedupe pass, plus `"settings"` and
-  // extension-owned autoProvision contributions).
-  try {
-    const existingContribIds = new Set(byContrib?.keys() ?? []);
-    await provisionAutoDashboardsForWorkspace(workspace, existingContribIds);
-    // Rebind `dashboardWorkspaceId` to the current OVERVIEW_DASHBOARD_CONTRIBUTION_ID overview —
-    // either the one that survived dedupe or the one just provisioned.
-    // Check the index first (O(1)); fall back to a store scan only for
-    // dashboards provisioned after the index was built.
-    const overview =
-      byContrib?.get(OVERVIEW_DASHBOARD_CONTRIBUTION_ID)?.[0] ??
-      get(workspaces).find((w) =>
-        isDashboardWorkspace(
-          w,
-          workspace.id,
-          OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
-          true,
-        ),
-      );
-    if (overview && overview.id !== workspace.dashboardWorkspaceId) {
-      updateWorkspace(workspace.id, {
-        dashboardWorkspaceId: overview.id,
-      });
-    }
-  } catch (err) {
-    console.warn("[workspace-service] Dashboard reconciliation failed:", err);
-  }
-}
-
-export async function reconcileWorkspaceDashboards(): Promise<void> {
-  // Single pass over workspaces builds an index keyed by
-  // (parentId → contribId → matching workspaces). Without it, each
-  // workspace × autoProvision-contribution iteration would scan the full
-  // workspaces list (W*C cold-start cost). The index is mutated
-  // in lock-step with closeWorkspaceById below so the dedupe pass
-  // and the post-dedupe `existingContribIds` snapshot stay in sync.
-  const dashboardIndex = new Map<string, Map<string, Workspace[]>>();
-  for (const w of get(workspaces)) {
-    if (w.isDashboard !== true) continue;
-    const parentId = w.rootWorkspaceId;
-    if (typeof parentId !== "string") continue;
-    const contribId = w.dashboardContributionId;
-    if (typeof contribId !== "string") continue;
-    let byContrib = dashboardIndex.get(parentId);
-    if (!byContrib) {
-      byContrib = new Map();
-      dashboardIndex.set(parentId, byContrib);
-    }
-    const list = byContrib.get(contribId) ?? [];
-    list.push(w);
-    byContrib.set(contribId, list);
-  }
-
-  await Promise.allSettled(
-    getWorkspaces().map((workspace) =>
-      reconcileDashboardsForWorkspace(workspace, dashboardIndex),
-    ),
-  );
 }
 
 /**

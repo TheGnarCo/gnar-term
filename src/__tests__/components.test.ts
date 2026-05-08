@@ -150,6 +150,7 @@ import {
   resetWorkspaceActions,
 } from "../lib/services/workspace-action-registry";
 import { setWorkspaces } from "../lib/stores/workspace";
+import { setBannerCollapsed } from "../lib/stores/ui";
 import type { RootWorkspace } from "../lib/config";
 
 // ---------------------------------------------------------------------------
@@ -1979,8 +1980,8 @@ describe("WorkspaceSectionContent", () => {
     cleanup();
   });
 
-  it("renders workspace-tile zone actions as buttons in the banner row", async () => {
-    // Without any workspace-tile actions, no branch button renders.
+  it("renders workspace-tile zone actions as chips in the children-leading dashboard chip grid", async () => {
+    // Without any workspace-tile actions, no branch chip renders.
     const workspace: RootWorkspace = {
       id: "grp-1",
       name: "Test Workspace",
@@ -1991,15 +1992,19 @@ describe("WorkspaceSectionContent", () => {
       createdAt: new Date().toISOString(),
     };
     setWorkspaces([workspace]);
+    // Tile-action chips render in the SidebarBanner's children-leading
+    // slot, which is gated on `!collapsed`. Tests must explicitly expand
+    // the banner; the default is collapsed.
+    setBannerCollapsed("grp-1", false);
 
     render(WorkspaceSectionHarness, {
       props: { rootWorkspaceId: "grp-1" },
     });
 
-    // No branch button without any registered workspace-tile action.
+    // No branch chip without any registered workspace-tile action.
     expect(screen.queryByLabelText("Branch Workspace")).toBeNull();
 
-    // Registering a workspace-tile action makes the button appear.
+    // Registering a workspace-tile action makes the chip appear.
     registerWorkspaceAction({
       id: "branched-workspaces:branch",
       label: "Branch Workspace",

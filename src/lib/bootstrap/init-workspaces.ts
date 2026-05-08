@@ -18,6 +18,7 @@ import {
 import WorkspaceDashboardSettings from "../components/WorkspaceDashboardSettings.svelte";
 import WorkspaceOverviewBody from "../components/WorkspaceOverviewBody.svelte";
 import {
+  getDashboardContribution,
   registerDashboardContribution,
   OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
 } from "../services/dashboard-contribution-registry";
@@ -36,10 +37,6 @@ import {
 } from "../stores/workspace";
 import {
   addBranchToWorkspace,
-  createWorkspaceDashboard,
-  createSettingsDashboardWorkspace,
-  isDashboardWorkspace,
-  openWorkspaceDashboard,
   provisionAutoDashboardsForWorkspace,
   reclaimBranchedWorkspaces,
   removeBranchFromAllWorkspaces,
@@ -56,10 +53,7 @@ import {
   createDialogPrefill,
 } from "../stores/workspaces-ui";
 import { invoke } from "@tauri-apps/api/core";
-import {
-  createWorkspaceFromDef,
-  switchWorkspace,
-} from "../services/workspace-runtime-service";
+import { createWorkspaceFromDef } from "../services/workspace-runtime-service";
 import type { WorkspaceTemplate } from "../config";
 
 /**
@@ -200,19 +194,10 @@ export async function createWorkspaceFlow(prefill?: {
 
   // Auto-provision every autoProvision dashboard contribution for the
   // new workspace (currently only Settings — Overview is opt-in via
-  // the Settings panel toggle). If a user later opts in to the
-  // Overview, that flow records the dashboardWorkspaceId so
-  // `openWorkspaceDashboard` can activate it directly; the back-fill
-  // here keeps the binding accurate when the Overview happens to exist
-  // at workspace-create time.
+  // the Settings panel toggle). Dashboards are tabs in the workspace's
+  // pane now; openAsTab handles dedupe internally.
   try {
     await provisionAutoDashboardsForWorkspace(workspace);
-    const overview = get(workspaces).find((w) =>
-      isDashboardWorkspace(w, workspace.id, OVERVIEW_DASHBOARD_CONTRIBUTION_ID),
-    );
-    if (overview) {
-      updateWorkspace(id, { dashboardWorkspaceId: overview.id });
-    }
   } catch (err) {
     console.error(
       `[workspaces] Failed to auto-provision dashboards: ${
@@ -221,14 +206,6 @@ export async function createWorkspaceFlow(prefill?: {
     );
   }
 
-  // Each auto-provisioned dashboard goes through createWorkspaceFromDef,
-  // which auto-switches activeWorkspaceIdx to the freshly created
-  // dashboard. Restore the active workspace to the workspace itself so
-  // the user lands on the workspace's tabs surface, not Settings.
-  const newIdx = get(workspaces).findIndex((w) => w.id === id);
-  if (newIdx >= 0 && newIdx !== get(activeWorkspaceIdx)) {
-    switchWorkspace(newIdx);
-  }
   setActiveWorkspaceId(id);
   return id;
 }
@@ -285,7 +262,10 @@ export async function initWorkspaces(): Promise<void> {
         ? workspaces.find((w) => w.id === activeId)
         : workspaces[0];
       if (!workspace) return;
-      void openWorkspaceDashboard(workspace);
+      const contribution = getDashboardContribution(
+        OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
+      );
+      if (contribution) void contribution.openAsTab(workspace);
     },
   });
 
@@ -302,7 +282,11 @@ export async function initWorkspaces(): Promise<void> {
       const rootWorkspaceId = ws?.rootWorkspaceId;
       if (typeof rootWorkspaceId !== "string") return;
       const workspace = getWorkspaces().find((w) => w.id === rootWorkspaceId);
-      if (workspace) void openWorkspaceDashboard(workspace);
+      if (!workspace) return;
+      const contribution = getDashboardContribution(
+        OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
+      );
+      if (contribution) void contribution.openAsTab(workspace);
     },
   });
 
@@ -320,16 +304,21 @@ export async function initWorkspaces(): Promise<void> {
     actionLabel: "Add Workspace Dashboard",
     capPerWorkspace: 1,
     icon: GridIcon,
-    create: async (workspace: Workspace) =>
-      await createWorkspaceDashboard(workspace),
-    openAsTab: async (workspace: Workspace) => {
-      await openDashboardSurfaceTab(workspace.id, {
-        kind: "registry",
-        surfaceTypeId: globalSurfaceTypeId(OVERVIEW_DASHBOARD_CONTRIBUTION_ID),
-        title: "Dashboard",
-        props: { rootWorkspaceId: workspace.id },
-        matchProps: { rootWorkspaceId: workspace.id },
-      });
+    openAsTab: async (workspace: Workspace, opts) => {
+      await openDashboardSurfaceTab(
+        workspace.id,
+        {
+          kind: "registry",
+          surfaceTypeId: globalSurfaceTypeId(
+            OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
+          ),
+          title: "Dashboard",
+          props: { rootWorkspaceId: workspace.id },
+          matchProps: { rootWorkspaceId: workspace.id },
+          dashboardContributionId: OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
+        },
+        opts,
+      );
     },
   });
 
@@ -355,10 +344,8 @@ export async function initWorkspaces(): Promise<void> {
     autoProvision: true,
     icon: GearIcon,
     lockedReason: "Required (Settings)",
-    create: async (workspace: Workspace) =>
-      await createSettingsDashboardWorkspace(workspace),
-    openAsTab: async (workspace: Workspace) => {
-      await openWorkspaceSettingsTab(workspace.id);
+    openAsTab: async (workspace: Workspace, opts) => {
+      await openWorkspaceSettingsTab(workspace.id, opts);
     },
   });
 

@@ -1,10 +1,12 @@
 /**
  * Agentic Dashboard contribution registration. The Agentic Dashboard is
- * `defaultEnabled`: it materializes on every workspace by default but
- * the user can dismiss it from the workspace's Settings panel. These
- * tests pin the registered shape (icon present, defaultEnabled set, no
- * autoProvision / lockedReason) and verify that activation back-fills
- * existing workspaces with an Agentic Dashboard.
+ * `defaultEnabled`: a tab is back-filled into every existing workspace
+ * on activation, but the user can dismiss it from the workspace's
+ * Settings panel. These tests pin the registered shape (icon present,
+ * defaultEnabled set, no autoProvision / lockedReason) and verify that
+ * activation back-fills a registry surface tagged with
+ * `dashboardContributionId: "agentic"` onto each workspace's primary
+ * pane.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { get } from "svelte/store";
@@ -66,6 +68,25 @@ function seedRoot(
   } as unknown as import("../../../lib/types").Workspace;
 }
 
+/**
+ * True when the workspace's primary pane contains a registry surface
+ * stamped with the given dashboardContributionId — the shape produced
+ * by `openDashboardTab` / `provisionAutoDashboardsForWorkspace`.
+ */
+function hasDashboardTab(rootId: string, contributionId: string): boolean {
+  const ws = get(workspaces).find((w) => w.id === rootId);
+  if (!ws) return false;
+  const layout = ws.paneLayout as unknown as {
+    pane: {
+      surfaces: Array<{ kind: string; dashboardContributionId?: string }>;
+    };
+  };
+  return layout.pane.surfaces.some(
+    (s) =>
+      s.kind === "registry" && s.dashboardContributionId === contributionId,
+  );
+}
+
 describe("agentic auto-provision", () => {
   beforeEach(async () => {
     resetRestoreSignal();
@@ -90,7 +111,7 @@ describe("agentic auto-provision", () => {
     expect(contribution?.icon).toBeDefined();
   });
 
-  it("back-fills the Agentic Dashboard onto existing workspaces on activate", async () => {
+  it("back-fills an Agentic dashboard tab onto existing workspaces on activate", async () => {
     workspaces.set([seedRoot("g1", "blue"), seedRoot("g2", "green")]);
     // Simulate workspaces already restored (runtime-enable path).
     markRestored();
@@ -104,15 +125,8 @@ describe("agentic auto-provision", () => {
     // Drain the deferred microtasks the registry queues for back-fill.
     await new Promise((r) => setTimeout(r, 50));
 
-    const agenticForRoot = (rootId: string): boolean =>
-      get(workspaces).some(
-        (w) =>
-          w.dashboardContributionId === "agentic" &&
-          w.rootWorkspaceId === rootId &&
-          w.isDashboard === true,
-      );
-    expect(agenticForRoot("g1")).toBe(true);
-    expect(agenticForRoot("g2")).toBe(true);
+    expect(hasDashboardTab("g1", "agentic")).toBe(true);
+    expect(hasDashboardTab("g2", "agentic")).toBe(true);
   });
 
   it("respects dismissedDashboardContributionIds and skips dismissed workspaces", async () => {
@@ -131,14 +145,7 @@ describe("agentic auto-provision", () => {
     await activateExtension("agentic-orchestrator");
     await new Promise((r) => setTimeout(r, 50));
 
-    const agenticForRoot = (rootId: string): boolean =>
-      get(workspaces).some(
-        (w) =>
-          w.dashboardContributionId === "agentic" &&
-          w.rootWorkspaceId === rootId &&
-          w.isDashboard === true,
-      );
-    expect(agenticForRoot("g1")).toBe(false);
-    expect(agenticForRoot("g2")).toBe(true);
+    expect(hasDashboardTab("g1", "agentic")).toBe(false);
+    expect(hasDashboardTab("g2", "agentic")).toBe(true);
   });
 });

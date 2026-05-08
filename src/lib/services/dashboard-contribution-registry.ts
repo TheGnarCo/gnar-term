@@ -55,20 +55,12 @@ export interface DashboardContribution {
    */
   actionLabel: string;
   /**
-   * Maximum number of this contribution's dashboards that may coexist
-   * inside a single workspace. `1` means exclusive (agentic) and
+   * Maximum number of this contribution's dashboard tabs that may
+   * coexist inside a single workspace. `1` means exclusive (agentic) and
    * `Number.POSITIVE_INFINITY` allows unlimited. Enforced at
    * "Add <Dashboard>" time via `canAddContributionToWorkspace`.
    */
   capPerWorkspace: number;
-  /**
-   * Materialize a dashboard workspace for `workspace`. Writes any backing
-   * markdown, creates the workspace via core services, and returns the
-   * new workspace's id. Callers stamp `metadata.dashboardContributionId
-   * = contribution.id` on the created workspace so the grid can
-   * attribute tiles back to their contribution.
-   */
-  create: (workspace: Workspace) => Promise<string>;
   /**
    * Optional "delete and regenerate" hook surfaced as a button next to
    * the dashboard's row in Workspace Settings. Implementations typically
@@ -77,7 +69,7 @@ export interface DashboardContribution {
    * (e.g. Diff, Settings) omit this; the button does not render.
    *
    * The preview-surface file watcher reloads markdown on rewrite, so
-   * implementations rarely need to close / recreate the host workspace.
+   * implementations rarely need to close / recreate the host tab.
    */
   regenerate?: (workspace: Workspace) => Promise<void>;
   /**
@@ -130,14 +122,20 @@ export interface DashboardContribution {
    */
   lockedReason?: string;
   /**
-   * Optional override for the dashboard chip's click behavior. When
-   * defined, a chip click opens the dashboard *as a tab* inside the
-   * parent workspace's active pane (via `openDashboardSurfaceTab` or
-   * a custom flow) instead of switching to a separate dashboard
-   * workspace. Contributions without this hook fall through to the
-   * default behavior (switch to the dashboard workspace).
+   * Open the dashboard *as a tab* inside the workspace's active pane.
+   * This is the primary path for both user-driven opens (chip click,
+   * Settings toggle enable) and silent provisioning (auto-provision on
+   * workspace creation, defaultEnabled reconciliation).
+   *
+   * Default behavior (`opts` omitted or `activate: true`) — switch to
+   * the workspace and focus the dashboard tab. Provisioning callers
+   * pass `{ activate: false }` to ensure-tab-exists without yanking
+   * focus off whatever the user is doing.
    */
-  openAsTab?: (workspace: Workspace) => Promise<void>;
+  openAsTab: (
+    workspace: Workspace,
+    opts?: { activate?: boolean },
+  ) => Promise<void>;
 }
 
 const registry = createRegistry<DashboardContribution>();

@@ -270,10 +270,18 @@ export async function createWorkspaceFromDef(
   // the user-driven switch path. Session restore skips the auto-switch
   // because it'll restore the persisted active idx once every workspace
   // has been rebuilt, and we don't want N+1 activation events along
-  // the way.
+  // the way. Per-workspace Dashboards (isDashboard + rootWorkspaceId)
+  // are also exempt — they're children of a Root accessed via banner
+  // chips, so creation (auto-provision on extension activate, Settings
+  // toggle, "Add Dashboard" action) should never yank focus off whatever
+  // the user was looking at. Global Dashboards (isDashboard, no
+  // rootWorkspaceId — e.g. the title-bar Settings workspace) keep the
+  // auto-switch since spawnOrNavigate is a user-driven open action.
   const finalIdx = get(workspaces).findIndex((w) => w.id === ws.id);
+  const isPerWorkspaceDashboard =
+    def.isDashboard === true && typeof def.rootWorkspaceId === "string";
   if (!restoring) {
-    if (finalIdx >= 0) switchWorkspace(finalIdx);
+    if (finalIdx >= 0 && !isPerWorkspaceDashboard) switchWorkspace(finalIdx);
     // Reveal the new banner: when the user creates a root-shaped workspace
     // (not a branch, dashboard, or session restore), make sure the primary
     // sidebar is open so the new row is visible.
@@ -281,9 +289,11 @@ export async function createWorkspaceFromDef(
   } else {
     if (finalIdx >= 0) activeWorkspaceIdx.set(finalIdx);
   }
-  const ap = getAllPanes(paneLayout).find((p) => p.id === ws.activePaneId);
-  const as_ = ap?.surfaces.find((s) => s.id === ap.activeSurfaceId);
-  void safeFocus(as_);
+  if (!isPerWorkspaceDashboard) {
+    const ap = getAllPanes(paneLayout).find((p) => p.id === ws.activePaneId);
+    const as_ = ap?.surfaces.find((s) => s.id === ap.activeSurfaceId);
+    void safeFocus(as_);
+  }
   schedulePersist();
   return ws.id;
 }

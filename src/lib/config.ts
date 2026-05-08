@@ -67,6 +67,7 @@ export interface WorkspaceTemplate {
   dashboardContributionId?: string;
   dashboardWorkspaceId?: string;
   dismissedDashboardContributionIds?: string[];
+  enabledDashboardContributionIds?: string[];
   lastActiveBranchedWorkspaceId?: string;
   locked?: boolean;
   autoRunRestoreCommands?: boolean;
@@ -111,6 +112,13 @@ export interface WorkspaceDef {
    * restart.
    */
   dismissedDashboardContributionIds?: string[];
+  /**
+   * Dashboard contribution ids the user has explicitly enabled on this
+   * root Workspace via Workspace Settings. Drives chip presence for
+   * opt-in (neither autoProvision nor defaultEnabled) contributions.
+   * Persisted so the enabled state survives restart.
+   */
+  enabledDashboardContributionIds?: string[];
   // Membership / kind discriminants. `rootWorkspaceId` identifies
   // which Workspace this Branch (or Dashboard) belongs to.
   rootWorkspaceId?: string;

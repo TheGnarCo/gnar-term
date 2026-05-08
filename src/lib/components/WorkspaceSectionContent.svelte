@@ -18,9 +18,14 @@
     activateWorkspace,
     WORKSPACE_STATE_CHANGED,
     toggleWorkspaceLock,
-    closeDashboardForWorkspace,
+    recordDashboardDismissal,
+    clearDashboardEnable,
+    isDashboardContributionEnabled,
   } from "../services/workspace-service";
-  import { openWorkspaceSettingsTab } from "../services/surface-service";
+  import {
+    openWorkspaceSettingsTab,
+    closeDashboardContributionTab,
+  } from "../services/surface-service";
   import { archiveWorkspace } from "../services/archive-service";
   import {
     type WorkspaceActionContext,
@@ -31,21 +36,27 @@
     getChildRowsFor,
   } from "../services/child-row-contributor-registry";
   import { getRootRowRenderer } from "../services/root-row-renderer-registry";
-  import { switchWorkspace } from "../services/workspace-runtime-service";
-  import { getDashboardContribution } from "../services/dashboard-contribution-registry";
+  import {
+    dashboardContributionStore,
+    type DashboardContribution,
+  } from "../services/dashboard-contribution-registry";
   import DashboardTileIcon from "./DashboardTileIcon.svelte";
   import SidebarChipButton from "./SidebarChipButton.svelte";
   import RenameableLabel from "./RenameableLabel.svelte";
   import GridIcon from "../icons/GridIcon.svelte";
   import GitBranchIcon from "../icons/GitBranchIcon.svelte";
+  import WorktreeIcon from "../icons/WorktreeIcon.svelte";
   const tileIconComponents: Record<string, unknown> = {
-    "git-branch": GitBranchIcon,
+    "git-branch": WorktreeIcon,
   };
   import BotIcon from "../icons/BotIcon.svelte";
   import type { MenuItem } from "../context-menu-types";
-  import { contextMenu, showConfirmPrompt } from "../stores/ui";
+  import {
+    contextMenu,
+    showConfirmPrompt,
+    setBannerCollapsed,
+  } from "../stores/ui";
   import { contrastColor } from "../utils/contrast";
-  import type { Workspace } from "../types";
   import { agentsStore } from "../services/agent-detection-service";
   import { variantColor } from "../status-colors";
   import { shortcutHintsActive } from "../stores/shortcut-hints";
@@ -298,22 +309,19 @@
   let caretHovered = false;
 
   // Workspace's dashboards rendered as chips in the children-leading
-  // slot. Auto-provisioned contributions (currently just Settings) are
+  // slot. Chip presence is driven by the persisted Settings "enabled"
+  // state — closing a dashboard tab does NOT remove its chip; clicking
+  // the chip summons (or re-opens) the corresponding tab.
+  // Auto-provisioned contributions (currently just Settings) are
   // excluded because they have dedicated UI — the banner-end gear chip
   // opens Settings as a tab inside the workspace via openWorkspaceSettingsTab.
   $: workspaceDashboards = (() => {
-    const wId = workspace?.id;
-    if (!wId) return [] as Array<{ ws: Workspace; idx: number }>;
-    return $workspaces
-      .map((ws, idx) => ({ ws, idx }))
-      .filter(({ ws }) => {
-        if (ws.isDashboard !== true || ws.rootWorkspaceId !== wId) return false;
-        const contribId = ws.dashboardContributionId;
-        const contribution = contribId
-          ? getDashboardContribution(contribId)
-          : undefined;
-        return !contribution?.autoProvision;
-      });
+    void $workspacesStore;
+    const ws = workspace;
+    if (!ws) return [] as DashboardContribution[];
+    return $dashboardContributionStore.filter(
+      (c) => !c.autoProvision && isDashboardContributionEnabled(ws, c.id),
+    );
   })();
 
   $: tileActions = $workspaceActionStore.filter(
@@ -325,21 +333,21 @@
   function showDashboardContextMenu(
     x: number,
     y: number,
-    globalIdx: number,
+    contribution: DashboardContribution,
   ): void {
-    const ws = $workspaces[globalIdx];
-    if (!ws) return;
-    const contribId = ws.dashboardContributionId;
-    if (typeof contribId !== "string") return;
-    const contribution = getDashboardContribution(contribId);
-    if (!contribution || contribution.autoProvision) return;
-    const rootId = ws.rootWorkspaceId;
+    if (contribution.autoProvision) return;
+    const rootId = workspace?.id;
     if (!rootId) return;
     const items: MenuItem[] = [
       {
         label: `Hide ${contribution.label}`,
         action: () => {
-          closeDashboardForWorkspace(rootId, contribId);
+          if (contribution.defaultEnabled) {
+            recordDashboardDismissal(rootId, contribution.id);
+          } else {
+            clearDashboardEnable(rootId, contribution.id);
+          }
+          closeDashboardContributionTab(rootId, contribution.id);
         },
       },
     ];
@@ -356,55 +364,84 @@
       position: relative;
     "
   >
-    {#snippet dashboardChip(entry: { ws: Workspace; idx: number })}
-      {@const contribId = entry.ws.dashboardContributionId}
-      {@const contribution = contribId
-        ? getDashboardContribution(contribId)
-        : undefined}
-      {@const IconComp = contribution?.icon ?? GridIcon}
-      {@const isActive = entry.idx === $activeWorkspaceIdx}
+    {#snippet tileActionChip(action: (typeof tileActions)[number])}
+      {@const IconComp = tileIconComponents[action.icon] ?? GridIcon}
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div
         style="
           position: relative;
-          flex: 1 0 calc((100% - 8px) / 3);
-          min-width: calc((100% - 8px) / 3);
+          flex: 0 0 calc((100% - 12px) / 4);
+          min-width: calc((100% - 12px) / 4);
           height: 24px;
         "
-        on:mouseenter={() => (hoveredDashId = entry.ws.id)}
-        on:mouseleave={() => (hoveredDashId = null)}
+        on:mouseenter={() => (hoveredTileActionId = action.id)}
+        on:mouseleave={() => (hoveredTileActionId = null)}
       >
         <button
           class="dash-btn"
-          data-dashboard-item={entry.ws.id}
-          data-dashboard-contribution={contribId}
-          data-active={isActive ? "true" : undefined}
-          aria-label={entry.ws.name}
-          title={entry.ws.name}
+          data-tile-action={action.id}
+          aria-label={action.label}
+          title={action.label}
           on:click|stopPropagation={() => {
-            if (contribution?.openAsTab && workspace) {
-              void contribution.openAsTab(workspace);
-            } else {
-              switchWorkspace(entry.idx);
-            }
+            if (workspace) setBannerCollapsed(workspace.id, false);
+            void action.handler(workspaceContext ?? {});
           }}
-          on:contextmenu|preventDefault|stopPropagation={(e) =>
-            showDashboardContextMenu(e.clientX, e.clientY, entry.idx)}
           style="
             position: absolute;
             top: 0; left: 0; right: 0; bottom: 0;
             background: {$theme.bgSurface ?? 'transparent'};
             border: 1px solid {$theme.border ?? 'transparent'};
-            {isActive ? `box-shadow: 0 0 0 1.5px ${workspaceHex};` : ''}
           "
         >
           <DashboardTileIcon
             iconComponent={IconComp}
             baseColor={workspaceHex}
-            contributionId={contribId}
+            contributionId={undefined}
+            workspacePath={undefined}
+            isActive={false}
+            isHovered={hoveredTileActionId === action.id}
+          />
+        </button>
+      </div>
+    {/snippet}
+    {#snippet dashboardChip(contribution: DashboardContribution)}
+      {@const IconComp = contribution.icon ?? GridIcon}
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div
+        style="
+          position: relative;
+          flex: 0 0 calc((100% - 12px) / 4);
+          min-width: calc((100% - 12px) / 4);
+          height: 24px;
+        "
+        on:mouseenter={() => (hoveredDashId = contribution.id)}
+        on:mouseleave={() => (hoveredDashId = null)}
+      >
+        <button
+          class="dash-btn"
+          data-dashboard-item={contribution.id}
+          data-dashboard-contribution={contribution.id}
+          aria-label={contribution.label}
+          title={contribution.label}
+          on:click|stopPropagation={() => {
+            if (workspace) void contribution.openAsTab(workspace);
+          }}
+          on:contextmenu|preventDefault|stopPropagation={(e) =>
+            showDashboardContextMenu(e.clientX, e.clientY, contribution)}
+          style="
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: {$theme.bgSurface ?? 'transparent'};
+            border: 1px solid {$theme.border ?? 'transparent'};
+          "
+        >
+          <DashboardTileIcon
+            iconComponent={IconComp}
+            baseColor={workspaceHex}
+            contributionId={contribution.id}
             workspacePath={workspace?.path}
-            {isActive}
-            isHovered={hoveredDashId === entry.ws.id}
+            isActive={false}
+            isHovered={hoveredDashId === contribution.id}
           />
         </button>
       </div>
@@ -423,7 +460,7 @@
       containerLabel={workspace.name}
       testId={workspace.id}
       workspaceListViewComponent={WorkspaceListView}
-      dashboardCount={workspaceDashboards.length}
+      dashboardCount={workspaceDashboards.length + tileActions.length}
     >
       <div
         style="display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0;"
@@ -524,29 +561,6 @@
       </svelte:fragment>
 
       <svelte:fragment slot="btn-row" let:collapsed let:toggle let:showToggle>
-        {#each tileActions as action (action.id)}
-          <button
-            class="dash-btn"
-            aria-label={action.label}
-            title={action.label}
-            on:click|stopPropagation={() =>
-              action.handler(workspaceContext ?? {})}
-            on:mouseenter={() => (hoveredTileActionId = action.id)}
-            on:mouseleave={() => (hoveredTileActionId = null)}
-            style="background: {$theme.bgSurface ??
-              'transparent'}; border: 1px solid {$theme.border ??
-              'transparent'};"
-          >
-            <DashboardTileIcon
-              iconComponent={tileIconComponents[action.icon] ?? GridIcon}
-              baseColor={workspaceHex}
-              contributionId={undefined}
-              workspacePath={undefined}
-              isActive={false}
-              isHovered={hoveredTileActionId === action.id}
-            />
-          </button>
-        {/each}
         {#if showToggle}
           <button
             class="dash-btn dash-btn-expand"
@@ -557,8 +571,21 @@
             title={collapsed ? "Expand workspace" : "Collapse workspace"}
             style="background: {$theme.bgSurface ??
               'transparent'}; border: 1px solid {$theme.border ??
-              'transparent'};"
+              'transparent'}; gap: 6px;"
           >
+            {#if collapsed && branchedIds.size > 0}
+              <span
+                data-branch-count
+                aria-label="{branchedIds.size} branch{branchedIds.size === 1
+                  ? ''
+                  : 'es'}"
+                style="
+                  font-size: 11px; font-weight: 600;
+                  color: {caretHovered ? workspaceHex : dimIconColor};
+                  line-height: 1; pointer-events: none;
+                ">{branchedIds.size}</span
+              >
+            {/if}
             <svg
               width="12"
               height="8"
@@ -579,10 +606,13 @@
       </svelte:fragment>
 
       <svelte:fragment slot="children-leading">
-        {#if workspaceDashboards.length > 0}
+        {#if tileActions.length > 0 || workspaceDashboards.length > 0}
           <div class="dashboard-chip-grid">
-            {#each workspaceDashboards as entry (entry.ws.id)}
-              {@render dashboardChip(entry)}
+            {#each tileActions as action (action.id)}
+              {@render tileActionChip(action)}
+            {/each}
+            {#each workspaceDashboards as contribution (contribution.id)}
+              {@render dashboardChip(contribution)}
             {/each}
           </div>
         {/if}
@@ -636,7 +666,13 @@
     display: flex;
     flex-wrap: wrap;
     gap: 4px;
-    padding: 4px 8px;
+    /* Visible gap above/below the chip strip is 8px on each side.
+       Top: chip-grid padding-top (10px) minus the children container's
+       margin-top: -2px collapse against the banner border = 8px.
+       Bottom: chip-grid padding-bottom (0) plus WorkspaceListView's
+       margin-top: 8px = 8px. Keep these in sync if either neighbor
+       changes its margin contribution. */
+    padding: 10px 8px 0 8px;
   }
   /* Inside the grid the chip button is absolutely positioned to fill
      its fluid wrapper. The class default `width: 28px` would pin it

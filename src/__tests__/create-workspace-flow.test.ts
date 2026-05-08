@@ -1,11 +1,11 @@
 /**
  * Regression: when creating a new workspace, the user should land on the
  * workspace itself (its tabs surface) — NOT on the auto-provisioned
- * Settings dashboard. createWorkspaceFromDef auto-switches activeWorkspaceIdx
- * to whichever workspace it just created, so each Settings auto-provision
- * inside provisionAutoDashboardsForWorkspace would otherwise leave the
- * user staring at Settings. createWorkspaceFlow restores the active idx
- * to the new workspace at the end.
+ * Settings dashboard. createWorkspaceFromDef no longer touches the active
+ * idx when the def is a Dashboard (isDashboard === true), so the user's
+ * focus stays on the just-created Workspace through the auto-provision
+ * loop. The mocked `create()` below mirrors that contract — it appends
+ * a dashboard workspace WITHOUT mutating activeWorkspaceIdx.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { get } from "svelte/store";
@@ -46,25 +46,23 @@ describe("createWorkspaceFlow — final active workspace", () => {
       capPerWorkspace: 1,
       autoProvision: true,
       create: vi.fn(async (workspace) => {
-        workspaces.update((cur) => {
-          const next = [
-            ...cur,
-            {
-              id: "ws-settings-auto",
-              name: "Settings",
-              paneLayout: {
-                type: "pane",
-                pane: { id: "sp", surfaces: [], activeSurfaceId: null },
-              },
-              activePaneId: "sp",
-              isDashboard: true,
-              rootWorkspaceId: workspace.id,
-              dashboardContributionId: "settings",
-            } as never,
-          ];
-          activeWorkspaceIdx.set(next.length - 1);
-          return next;
-        });
+        // Mirrors createWorkspaceFromDef's no-activate path for dashboards:
+        // append the dashboard workspace, leave activeWorkspaceIdx alone.
+        workspaces.update((cur) => [
+          ...cur,
+          {
+            id: "ws-settings-auto",
+            name: "Settings",
+            paneLayout: {
+              type: "pane",
+              pane: { id: "sp", surfaces: [], activeSurfaceId: null },
+            },
+            activePaneId: "sp",
+            isDashboard: true,
+            rootWorkspaceId: workspace.id,
+            dashboardContributionId: "settings",
+          } as never,
+        ]);
         return "ws-settings-auto";
       }),
     });

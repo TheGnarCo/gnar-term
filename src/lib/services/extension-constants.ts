@@ -21,7 +21,6 @@ import { unregisterChildRowContributorsBySource } from "./child-row-contributor-
 import { unregisterDashboardContributionsBySource } from "./dashboard-contribution-registry";
 import { unregisterPseudoWorkspacesBySource } from "./pseudo-workspace-registry";
 import { unregisterMcpToolsBySource } from "./mcp-server";
-import { closeAutoDashboardsBySource } from "./workspace-service";
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 
 // --- Tauri commands safe for extension use (allowlist) ---
@@ -170,9 +169,6 @@ export const REGISTRY_CLEANUP_FNS: Array<(source: string) => void> = [
   unregisterRootRowRenderersBySource,
   unregisterThemesBySource,
   unregisterChildRowContributorsBySource,
-  // Must run before unregisterDashboardContributionsBySource so the
-  // closer can still resolve which contributions belonged to source.
-  closeAutoDashboardsBySource,
   unregisterDashboardContributionsBySource,
   unregisterPseudoWorkspacesBySource,
   unregisterMcpToolsBySource,

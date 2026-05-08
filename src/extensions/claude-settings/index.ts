@@ -1,4 +1,4 @@
-import type { ExtensionManifest, ExtensionAPI, WorkspaceRef } from "../api";
+import type { ExtensionManifest, ExtensionAPI } from "../api";
 import type { Component } from "svelte";
 import ClaudeMark from "./icons/ClaudeMark.svelte";
 import UserSettingsPanel from "./components/UserSettingsPanel.svelte";
@@ -54,47 +54,24 @@ export function registerClaudeSettingsExtension(api: ExtensionAPI): void {
       actionLabel: "Add Claude Settings Dashboard",
       capPerWorkspace: 1,
       icon: ClaudeMark,
-      create: (workspace) => createClaudeSettingsDashboard(api, workspace),
-      openAsTab: async (workspace) => {
-        await api.openDashboardTab(workspace.id, {
-          kind: "registry",
-          surfaceTypeId: globalSurfaceTypeId("claude-settings"),
-          title: "Claude Settings",
-          props: { rootWorkspaceId: workspace.id },
-          matchProps: { rootWorkspaceId: workspace.id },
-        });
+      openAsTab: async (workspace, opts) => {
+        await api.openDashboardTab(
+          workspace.id,
+          {
+            kind: "registry",
+            surfaceTypeId: globalSurfaceTypeId("claude-settings"),
+            title: "Claude Settings",
+            props: { rootWorkspaceId: workspace.id },
+            matchProps: { rootWorkspaceId: workspace.id },
+            dashboardContributionId: "claude-settings",
+          },
+          opts,
+        );
       },
     });
   });
 
   api.onDeactivate(() => {
     unregisterGlobalSurface("claude-settings");
-  });
-}
-
-// --- Dashboard creation ---
-
-async function createClaudeSettingsDashboard(
-  api: ExtensionAPI,
-  workspace: WorkspaceRef,
-): Promise<string> {
-  return api.createWorkspaceFromDef({
-    name: "Claude Settings",
-    layout: {
-      pane: {
-        surfaces: [
-          {
-            type: "registry",
-            extensionType: globalSurfaceTypeId("claude-settings"),
-            extensionProps: { rootWorkspaceId: workspace.id },
-            name: "Claude Settings",
-            focus: true,
-          },
-        ],
-      },
-    },
-    isDashboard: true,
-    rootWorkspaceId: workspace.id,
-    dashboardContributionId: "claude-settings",
   });
 }

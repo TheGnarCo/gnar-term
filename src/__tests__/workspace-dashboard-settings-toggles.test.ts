@@ -77,10 +77,10 @@ describe("WorkspaceDashboardSettings — Dashboards toggles", () => {
 
   it("renders a row for every contribution except 'settings'", () => {
     registerDashboardContribution({
-      id: "group",
+      id: "test-overview",
       source: "core",
-      label: "Workspace Dashboard",
-      actionLabel: "Add Workspace Dashboard",
+      label: "Test Overview",
+      actionLabel: "Add Test Overview",
       capPerWorkspace: 1,
       autoProvision: true,
       lockedReason: "Required (Overview)",
@@ -112,15 +112,15 @@ describe("WorkspaceDashboardSettings — Dashboards toggles", () => {
     const ids = Array.from(rows).map((r) =>
       r.getAttribute("data-dashboard-toggle-row"),
     );
-    expect(ids).toEqual(["group", "diff"]);
+    expect(ids).toEqual(["test-overview", "diff"]);
   });
 
   it("renders autoProvision rows as locked (disabled + reason)", () => {
     registerDashboardContribution({
-      id: "group",
+      id: "test-overview",
       source: "core",
-      label: "Workspace Dashboard",
-      actionLabel: "Add Workspace Dashboard",
+      label: "Test Overview",
+      actionLabel: "Add Test Overview",
       capPerWorkspace: 1,
       autoProvision: true,
       lockedReason: "Required (Overview)",
@@ -131,7 +131,9 @@ describe("WorkspaceDashboardSettings — Dashboards toggles", () => {
       props: { rootWorkspaceId: WORKSPACE.id },
     });
 
-    const row = container.querySelector('[data-dashboard-toggle-row="group"]');
+    const row = container.querySelector(
+      '[data-dashboard-toggle-row="test-overview"]',
+    );
     expect(row).not.toBeNull();
     expect(row?.getAttribute("data-locked")).toBe("true");
     const input = row!.querySelector<HTMLInputElement>(

@@ -233,11 +233,24 @@
   ];
 
   $: extensionPages = $extensionStore
-    .filter((ext) => ext.manifest.contributes?.settings)
+    .filter(
+      (ext) =>
+        ext.manifest.contributes?.settings && effectiveEnabled[ext.manifest.id],
+    )
     .map((ext) => ({
       id: `ext:${ext.manifest.id}` as SettingsPage,
       label: ext.manifest.name,
     }));
+
+  // If the active page belongs to an extension that just got disabled
+  // (via the Extensions tab toggle), redirect back to the Extensions
+  // list so the user isn't stranded on an orphan page.
+  $: if (activePage.startsWith("ext:")) {
+    const id = activePage.slice(4);
+    if (!effectiveEnabled[id]) {
+      activePage = "extensions";
+    }
+  }
 
   function getActiveExtForPage(
     page: string,

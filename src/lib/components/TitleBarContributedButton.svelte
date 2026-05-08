@@ -9,14 +9,17 @@
   export let fgActive: string;
 
   $: activeStore = button.isActive ?? readable(false);
+  $: visibleStore = button.visible ?? readable(true);
   $: icon = button.icon as Component;
 </script>
 
-<button
-  style="{btnStyle} color: {$activeStore ? fgActive : fg};"
-  title={button.title}
-  aria-label={button.title}
-  on:click={button.onClick}
->
-  <svelte:component this={icon} width={16} height={16} />
-</button>
+{#if $visibleStore}
+  <button
+    style="{btnStyle} color: {$activeStore ? fgActive : fg};"
+    title={button.title}
+    aria-label={button.title}
+    on:click={button.onClick}
+  >
+    <svelte:component this={icon} width={16} height={16} />
+  </button>
+{/if}

@@ -40,9 +40,16 @@ export function filterWorkspaces(
 ): SwitcherRow[] {
   const q = query.trim().toLowerCase();
 
+  // Dashboards live as tabs inside their parent workspace (or, in the
+  // standalone case, as a pinned row in the root list) — never as their
+  // own pickable rows in the switcher. Filter them out before any
+  // grouping or ordering work.
+  const pickable = workspaces.filter((ws) => ws.isDashboard !== true);
+
   // Flat mode (no root Workspaces): preserve original behavior
   if (rootWorkspaces.length === 0) {
-    const rows: SwitcherRow[] = workspaces.map((ws, idx) => {
+    const rows: SwitcherRow[] = pickable.map((ws) => {
+      const idx = workspaces.indexOf(ws);
       const rootId = ws.rootWorkspaceId;
       const root = rootId ? rootMap.get(rootId) : undefined;
       return {
@@ -71,6 +78,7 @@ export function filterWorkspaces(
 
   for (let idx = 0; idx < workspaces.length; idx++) {
     const ws = workspaces[idx]!;
+    if (ws.isDashboard === true) continue;
     // A workspace nests under a Root if it points at one (branches +
     // dashboards) or if it IS the Root itself (the runtime entry shares
     // its id with the RootWorkspace per ADR-004).

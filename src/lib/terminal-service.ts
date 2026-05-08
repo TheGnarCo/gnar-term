@@ -676,7 +676,7 @@ export function startCwdPolling() {
 
 // --- Surface Creation helpers ---
 
-const _urlRegex = /https?:\/\/[^\s"'<>()[\]{}]+/g;
+const _urlRegex = /(?:https?|file):\/\/[^\s"'<>()[\]{}]+/g;
 
 /** Link provider for plain https?:// URLs — opens them via the Tauri shell. */
 function createUrlLinkProvider(terminal: Terminal) {
@@ -1064,7 +1064,9 @@ export async function createTerminalSurface(
           console.warn("[terminal-service] open_url failed:", err),
         );
       },
-      allowNonHttpProtocols: false,
+      // Allow `file://` (and other schemes) through; open_url validates the
+      // final scheme list, so the terminal can hand off any URL it parses.
+      allowNonHttpProtocols: true,
     },
   });
 

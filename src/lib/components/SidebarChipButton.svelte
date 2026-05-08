@@ -1,14 +1,16 @@
 <script lang="ts">
   /**
-   * SidebarChipButton — small 14×14 close/lock button used in the
-   * primary sidebar (child workspace rows, workspace banners). Encapsulates the
-   * shared idle/hover color logic and stopPropagation wiring.
+   * SidebarChipButton — small 14×14 close/lock/settings button used in
+   * the primary sidebar (child workspace rows, workspace banners).
+   * Encapsulates the shared idle/hover color logic and stopPropagation
+   * wiring.
    */
   import { theme } from "../stores/theme";
   import CloseIcon from "../icons/CloseIcon.svelte";
   import LockIcon from "../icons/LockIcon.svelte";
+  import GearIcon from "../icons/GearIcon.svelte";
 
-  export let variant: "close" | "lock";
+  export let variant: "close" | "lock" | "settings";
   export let title: string;
   /** Idle color. Defaults to theme.fgDim. */
   export let idleColor: string | undefined = undefined;
@@ -17,7 +19,7 @@
   let hovered = false;
 
   $: idle = idleColor ?? $theme.fgDim;
-  $: hoverColor = variant === "lock" ? $theme.fg : $theme.danger;
+  $: hoverColor = variant === "close" ? $theme.danger : $theme.fg;
 </script>
 
 <button
@@ -41,6 +43,8 @@
 >
   {#if variant === "lock"}
     <LockIcon width="9" height="9" />
+  {:else if variant === "settings"}
+    <GearIcon size={10} />
   {:else}
     <CloseIcon width="9" height="9" />
   {/if}

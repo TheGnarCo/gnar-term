@@ -102,16 +102,30 @@ describe("agentic extension — Dashboard contribution registration", () => {
     expect(createWorkspaceFromDefMock).toHaveBeenCalledTimes(1);
     const def = createWorkspaceFromDefMock.mock.calls[0]![0] as {
       name: string;
-      layout: { pane: { surfaces: Array<{ type: string; path: string }> } };
+      layout: {
+        pane: {
+          surfaces: Array<{
+            type: string;
+            extensionType?: string;
+            extensionProps?: Record<string, unknown>;
+          }>;
+        };
+      };
       isDashboard?: boolean;
       rootWorkspaceId?: string;
       dashboardContributionId?: string;
     };
     expect(def.name).toBe("Agents");
-    expect(def.layout.pane.surfaces[0]?.type).toBe("preview");
-    expect(def.layout.pane.surfaces[0]?.path).toBe(
-      "/work/proj/.gnar-term/agentic-dashboard.md",
+    // Agentic Dashboard is registered as a hidden surface type
+    // (`dashboard:agentic`); the workspace seeds a single extension
+    // surface targeting that type with rootWorkspaceId in props.
+    expect(def.layout.pane.surfaces[0]?.type).toBe("registry");
+    expect(def.layout.pane.surfaces[0]?.extensionType).toBe(
+      "dashboard:agentic",
     );
+    expect(def.layout.pane.surfaces[0]?.extensionProps).toEqual({
+      rootWorkspaceId: "grp-1",
+    });
     expect(def.isDashboard).toBe(true);
     expect(def.rootWorkspaceId).toBe("grp-1");
     expect(def.dashboardContributionId).toBe("agentic");

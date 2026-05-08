@@ -32,10 +32,6 @@ import {
   registerPreviewSurface,
   resetPreviewSurfaceRegistry,
 } from "../lib/services/preview-surface-registry";
-import {
-  registerMarkdownComponent,
-  resetMarkdownComponents,
-} from "../lib/services/markdown-component-registry";
 
 function rpc(method: string, params?: unknown, id: number = 1) {
   return { jsonrpc: "2.0" as const, id, method, params };
@@ -60,7 +56,6 @@ describe("MCP — spawn_preview", () => {
     invokeMock.mockReset();
     _resetMcpServerForTest();
     resetPreviewSurfaceRegistry();
-    resetMarkdownComponents();
     workspaces.set([]);
     activeWorkspaceIdx.set(-1);
   });
@@ -167,7 +162,6 @@ describe("MCP — create_preview_file", () => {
     invokeMock.mockReset();
     _resetMcpServerForTest();
     resetPreviewSurfaceRegistry();
-    resetMarkdownComponents();
     workspaces.set([]);
     activeWorkspaceIdx.set(-1);
   });
@@ -334,55 +328,5 @@ describe("MCP — close_preview", () => {
     );
     const result = (resp as any).result.structuredContent;
     expect(result).toEqual({ closed: false });
-  });
-});
-
-describe("MCP — list_markdown_components", () => {
-  beforeEach(() => {
-    _resetMcpServerForTest();
-    resetMarkdownComponents();
-  });
-
-  it("returns each registered component with name + source + configSchema", async () => {
-    registerMarkdownComponent({
-      name: "kanban",
-      component: {},
-      source: "agentic-orchestrator",
-      configSchema: { fields: { columns: { type: "number" } } },
-    });
-    registerMarkdownComponent({
-      name: "counter",
-      component: {},
-      source: "core",
-    });
-
-    const resp = await dispatch(
-      rpc("tools/call", { name: "list_markdown_components", arguments: {} }),
-    );
-    const result = (resp as any).result.structuredContent;
-    const sorted = (
-      result.components as Array<{
-        name: string;
-        source: string;
-        configSchema?: Record<string, unknown>;
-      }>
-    )
-      .slice()
-      .sort((a, b) => a.name.localeCompare(b.name));
-    expect(sorted).toEqual([
-      { name: "counter", source: "core", configSchema: undefined },
-      {
-        name: "kanban",
-        source: "agentic-orchestrator",
-        configSchema: { fields: { columns: { type: "number" } } },
-      },
-    ]);
-  });
-
-  it("returns an empty list when nothing is registered", async () => {
-    const resp = await dispatch(
-      rpc("tools/call", { name: "list_markdown_components", arguments: {} }),
-    );
-    expect((resp as any).result.structuredContent).toEqual({ components: [] });
   });
 });

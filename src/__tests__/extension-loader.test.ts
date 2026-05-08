@@ -683,7 +683,7 @@ describe("Extension lifecycle", () => {
             surfaces: [
               {
                 id: "ext-surface-1",
-                kind: "extension",
+                kind: "registry",
                 surfaceTypeId: "surface-orphan:viewer",
               },
               {
@@ -1616,7 +1616,7 @@ describe("api.getWorkspaceIdForSurface", () => {
               // Non-terminal surface should be excluded.
               {
                 id: "s-ext",
-                kind: "extension",
+                kind: "registry",
                 surfaceTypeId: "some:viewer",
                 title: "Viewer",
               },

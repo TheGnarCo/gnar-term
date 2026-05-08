@@ -1,5 +1,6 @@
 <script lang="ts">
   import { theme, allThemes } from "../stores/theme";
+  import SettingsThemesTab from "./SettingsThemesTab.svelte";
 
   export let currentTheme: string;
   export let fontSize: number;
@@ -136,5 +137,11 @@
       "
       />
     </label>
+  </div>
+
+  <!-- Imported themes — manage user-imported theme files alongside the
+       built-in Theme dropdown above. -->
+  <div style="margin-top: 24px;">
+    <SettingsThemesTab />
   </div>
 </div>

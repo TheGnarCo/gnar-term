@@ -34,11 +34,13 @@ import {
 } from "./surface-output-observer";
 import { reportExtensionError } from "./extension-loader";
 import {
-  closeExtensionSurfaces,
+  closeRegistrySurfaces,
   markSurfaceUnreadById,
   focusSurfaceById,
   openFileAsPreviewSplit,
+  openDashboardSurfaceTab,
 } from "./surface-service";
+import type { ExtensionDashboardTabSpec } from "../../extensions/api";
 import {
   pendingAction,
   showInputPrompt as coreShowInputPrompt,
@@ -306,6 +308,13 @@ export function createExtensionAPI(
         title,
         props,
       });
+    },
+    openDashboardTab(workspaceId: string, spec: ExtensionDashboardTabSpec) {
+      const namespaced: ExtensionDashboardTabSpec =
+        spec.kind === "registry" && !spec.surfaceTypeId.includes(":")
+          ? { ...spec, surfaceTypeId: `${extId}:${spec.surfaceTypeId}` }
+          : spec;
+      return openDashboardSurfaceTab(workspaceId, namespaced);
     },
     switchWorkspace(workspaceId: string) {
       pendingAction.set({ type: "switch-workspace", workspaceId });
@@ -612,7 +621,7 @@ export function cleanupExtensionResources(
     .filter((t) => t.source === id)
     .map((t) => t.id);
   if (extSurfaceTypeIds.length > 0) {
-    closeExtensionSurfaces(extSurfaceTypeIds);
+    closeRegistrySurfaces(extSurfaceTypeIds);
   }
 
   // Clean up all registered contributions

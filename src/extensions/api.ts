@@ -409,12 +409,16 @@ export interface ExtensionAPI {
     options?: { hideFromNewSurface?: boolean },
   ): void;
   /**
-   * Register a singleton Dashboard Workspace. Returns a `spawnOrNavigate`
+   * Register a singleton global surface. Returns a `spawnOrNavigate`
    * function — call it (e.g. from a TitleBar button onClick) to open the
-   * workspace or switch to it if already open. The workspace is draggable,
-   * closeable, and persists across restarts.
+   * surface or switch to it if already open. The host workspace is draggable,
+   * closeable, and persists across restarts. Global surfaces render
+   * tab-less (PaneView suppresses the TabBar for top-level dashboard
+   * workspaces); use this for app-wide overlays like Settings, Keyboard
+   * Shortcuts, and user-level Claude Settings rather than per-workspace
+   * dashboards (those go through `registerDashboardContribution`).
    */
-  registerDashboardWorkspace(
+  registerGlobalSurface(
     id: string,
     options: {
       label: string;
@@ -469,33 +473,6 @@ export interface ExtensionAPI {
       description: string;
       inputSchema: Record<string, unknown>;
       handler: (args: Record<string, unknown>) => unknown | Promise<unknown>;
-    },
-  ): void;
-
-  /**
-   * Register a live "markdown-component" that can be embedded inside a
-   * markdown preview. Markdown rendered through the core preview
-   * pipeline may contain fenced code blocks with the info string
-   * `gnar:<name>` — the renderer looks `<name>` up in this registry and
-   * mounts the registered Svelte component, passing the parsed YAML
-   * config as props.
-   *
-   * The component `name` is registered as-is (no extension-id prefix)
-   * so markdown directives stay short and stable. Conflicts across
-   * extensions resolve last-wins and are non-deterministic — namespace
-   * defensively (e.g. `mything-kanban` rather than `kanban`) when
-   * collisions are likely.
-   *
-   * `options.configSchema` is reserved for future MCP discoverability
-   * and isn't enforced at runtime.
-   *
-   * Automatically unregistered on extension deactivate.
-   */
-  registerMarkdownComponent(
-    name: string,
-    component: unknown,
-    options?: {
-      configSchema?: Record<string, unknown>;
     },
   ): void;
 
@@ -681,6 +658,19 @@ export interface ExtensionAPI {
     title: string,
     props?: Record<string, unknown>,
   ): void;
+  /**
+   * Open a dashboard surface as a tab inside `workspaceId`'s active pane.
+   * Used by `DashboardContribution.openAsTab` implementations to push
+   * Workspace overview / Agentic / Diff / etc. into the parent workspace
+   * instead of switching to a separate dashboard workspace. Dedupes by
+   * path (preview specs) or surfaceTypeId+matchProps (extension specs).
+   * Extension surface ids without `:` are namespaced under the calling
+   * extension's id.
+   */
+  openDashboardTab(
+    workspaceId: string,
+    spec: ExtensionDashboardTabSpec,
+  ): Promise<void>;
 
   // Workspace management — switch and close by ID
   switchWorkspace(workspaceId: string): void;
@@ -1010,6 +1000,25 @@ export interface WorkspaceRef {
 }
 
 /**
+ * Spec passed to `ExtensionAPI.openDashboardTab`. Surface ids without `:`
+ * are namespaced under the calling extension's id at call time. Mirrors
+ * the internal `DashboardTabSpec`.
+ */
+export type ExtensionDashboardTabSpec =
+  | {
+      kind: "registry";
+      surfaceTypeId: string;
+      title: string;
+      props?: Record<string, unknown>;
+      /**
+       * Subset of `props` used to dedupe an existing matching tab. When
+       * omitted, dedup falls back to surfaceTypeId equality.
+       */
+      matchProps?: Record<string, unknown>;
+    }
+  | { kind: "preview"; path: string; title?: string };
+
+/**
  * Arguments for `ExtensionAPI.registerDashboardContribution`. See the
  * registry docs in `src/lib/services/dashboard-contribution-registry.ts`
  * for lifecycle details.
@@ -1061,6 +1070,17 @@ export interface DashboardContributionInput {
    */
   autoProvision?: boolean;
   /**
+   * When true, the contribution materializes automatically for every
+   * workspace on first creation / reconciliation, but the user CAN
+   * remove it. Closing a defaultEnabled dashboard records the
+   * dismissal on the workspace so the next reconcile pass does not
+   * recreate it. Re-enabling from Settings clears the dismissal.
+   *
+   * Use this for default-on extension dashboards. `autoProvision` and
+   * `defaultEnabled` are mutually exclusive — `autoProvision` wins.
+   */
+  defaultEnabled?: boolean;
+  /**
    * Hints for how PaneView should render the dashboard workspace.
    * `singleSurface: true` documents that the contribution's
    * workspace is a tab-less / split-less single-surface pane.
@@ -1072,6 +1092,13 @@ export interface DashboardContributionInput {
    * alongside `autoProvision: true`.
    */
   lockedReason?: string;
+  /**
+   * Optional override for the dashboard chip's click behavior. When
+   * defined, a chip click opens the dashboard *as a tab* inside the
+   * parent workspace's active pane instead of switching to a separate
+   * dashboard workspace.
+   */
+  openAsTab?: (workspace: WorkspaceRef) => Promise<void>;
 }
 
 /**
@@ -1118,16 +1145,22 @@ export interface PseudoWorkspaceInput {
  * are expected to set.
  */
 export interface SurfaceDefInput {
-  type: "terminal" | "browser" | "extension" | "preview";
+  /**
+   * `"registry"` is the modern spelling for surfaces resolved through the
+   * surface-type registry. `"extension"` is accepted as a deprecated alias
+   * — existing user configs and contributors still using the old name keep
+   * working.
+   */
+  type: "terminal" | "browser" | "registry" | "extension" | "preview";
   name?: string;
   command?: string;
   cwd?: string;
   env?: Record<string, string>;
   /** Browser surfaces only. */
   url?: string;
-  /** `<extension-id>:<surface-id>` for extension-typed surfaces. */
+  /** `<extension-id>:<surface-id>` for registry-typed surfaces. */
   extensionType?: string;
-  /** Opaque props forwarded to the extension surface component. */
+  /** Opaque props forwarded to the surface component. */
   extensionProps?: Record<string, unknown>;
   /** Absolute path for preview-typed surfaces. */
   path?: string;
@@ -1208,9 +1241,9 @@ export interface AgentRef {
   lastStatusChange: string;
 }
 
-/** Shape of a surface created by an extension, as delivered to surface components. */
-export interface ExtensionSurfacePayload {
-  kind: "extension";
+/** Shape of a registry-backed surface, as delivered to surface components. */
+export interface RegistrySurfacePayload {
+  kind: "registry";
   id: string;
   surfaceTypeId: string;
   title: string;

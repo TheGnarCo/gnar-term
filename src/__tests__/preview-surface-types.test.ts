@@ -5,10 +5,10 @@ import { describe, it, expect } from "vitest";
 import {
   isPreviewSurface,
   isTerminalSurface,
-  isExtensionSurface,
+  isRegistrySurface,
   type Surface,
   type PreviewSurface,
-  type ExtensionSurface,
+  type RegistrySurface,
   type TerminalSurface,
 } from "../lib/types";
 
@@ -22,9 +22,9 @@ function mkPreview(): PreviewSurface {
   };
 }
 
-function mkExt(): ExtensionSurface {
+function mkExt(): RegistrySurface {
   return {
-    kind: "extension",
+    kind: "registry",
     id: "x1",
     surfaceTypeId: "ext:thing",
     title: "Thing",
@@ -52,14 +52,14 @@ describe("isPreviewSurface predicate", () => {
     expect(isPreviewSurface(mkTerm())).toBe(false);
   });
 
-  it("returns false for an ExtensionSurface", () => {
+  it("returns false for a RegistrySurface", () => {
     expect(isPreviewSurface(mkExt())).toBe(false);
   });
 
   it("is mutually exclusive with the other predicates", () => {
     const m = mkPreview();
     expect(isTerminalSurface(m)).toBe(false);
-    expect(isExtensionSurface(m)).toBe(false);
+    expect(isRegistrySurface(m)).toBe(false);
   });
 });
 

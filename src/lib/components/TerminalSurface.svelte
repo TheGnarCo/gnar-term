@@ -2,7 +2,6 @@
   import { onMount, onDestroy, tick } from "svelte";
   import { WebglAddon } from "@xterm/addon-webgl";
   import { invoke } from "@tauri-apps/api/core";
-  import { listen } from "@tauri-apps/api/event";
   import { writeImage } from "@tauri-apps/plugin-clipboard-manager";
   import { connectPty } from "../terminal-service";
   import { theme } from "../stores/theme";
@@ -18,69 +17,9 @@
 
   let termEl: HTMLElement;
   let dragOver = false;
-  let unlistenDragDrop: (() => void) | undefined;
   export let userScrolledUp = false;
   let scrollDisposable: { dispose(): void } | undefined;
   let errorMessage: string | undefined = undefined;
-
-  const IMAGE_EXTS = new Set([
-    "png",
-    "jpg",
-    "jpeg",
-    "gif",
-    "webp",
-    "bmp",
-    "svg",
-    "tiff",
-    "ico",
-    "avif",
-  ]);
-
-  function isImageFile(path: string): boolean {
-    const ext = path.split(".").pop()?.toLowerCase() ?? "";
-    return IMAGE_EXTS.has(ext);
-  }
-
-  /** Shell-escape a file path by wrapping in single quotes. */
-  function shellEscape(path: string): string {
-    return "'" + path.replace(/'/g, "'\\''") + "'";
-  }
-
-  async function handleDropPaths(paths: string[]): Promise<void> {
-    if (!paths.length || surface.ptyId < 0) return;
-
-    const imagePaths: string[] = [];
-    const textParts: string[] = [];
-
-    for (const path of paths) {
-      if (isImageFile(path)) {
-        imagePaths.push(path);
-      } else {
-        textParts.push(shellEscape(path));
-      }
-    }
-
-    if (imagePaths.length > 0) {
-      try {
-        await writeImage(imagePaths[0]!);
-      } catch (e) {
-        console.warn("Failed to write image to clipboard:", e);
-        return;
-      }
-    }
-
-    if (textParts.length > 0) {
-      void invoke("write_pty", {
-        ptyId: surface.ptyId,
-        data: textParts.join(" ") + " ",
-      });
-    } else if (imagePaths.length > 0) {
-      // Image is now in clipboard; send Ctrl+V so the terminal app
-      // reads it. Claude Code CLI interprets \x16 as a clipboard paste
-      // and shows [Image 1], matching manual Ctrl+V behavior.
-      void invoke("write_pty", { ptyId: surface.ptyId, data: "\x16" });
-    }
-  }
 
   function handleDragOver(e: DragEvent) {
     e.preventDefault();
@@ -215,19 +154,9 @@
     }
 
     registerScrollTracking();
-
-    // Tauri native file drop (more reliable than HTML5 on Linux WebKitGTK)
-    unlistenDragDrop = await listen<{
-      paths: string[];
-      position: { x: number; y: number };
-    }>("tauri://drag-drop", (event) => {
-      if (!visible || surface.ptyId < 0) return;
-      void handleDropPaths(event.payload.paths);
-    });
   });
 
   onDestroy(() => {
-    unlistenDragDrop?.();
     scrollDisposable?.dispose();
   });
 

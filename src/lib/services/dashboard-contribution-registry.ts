@@ -11,11 +11,12 @@ import type { RootWorkspace as Workspace } from "../config";
 
 /**
  * Stable persisted id for the built-in Workspace overview dashboard.
- * The string `"group"` predates the Workspace/Workspace rename and
- * is preserved verbatim — it's stamped onto every overview dashboard
- * workspace's `metadata.dashboardContributionId` and survives across
- * upgrades. Tests, fixtures, and unrelated `spawnedBy.kind: "group"`
- * literals do NOT use this constant.
+ * The string `"group"` predates the rename to "Workspace" vocabulary
+ * and is preserved verbatim for persisted-data compatibility — it's
+ * stamped onto every overview dashboard workspace's
+ * `metadata.dashboardContributionId` and survives across upgrades.
+ * Tests, fixtures, and unrelated `spawnedBy.kind: "group"` literals
+ * do NOT use this constant.
  */
 export const OVERVIEW_DASHBOARD_CONTRIBUTION_ID = "group";
 
@@ -30,8 +31,8 @@ export interface DashboardContribution {
   /**
    * Stable identifier, also stamped onto the dashboard workspace as
    * `metadata.dashboardContributionId`. Core's built-in uses `"group"`
-   * (preserved across the Workspace→Workspace rename for
-   * persisted-data compatibility); the agentic extension uses
+   * (preserved for persisted-data compatibility from before the rename
+   * to "Workspace" vocabulary); the agentic extension uses
    * `"agentic"`. Unique across all contributions.
    */
   id: string;
@@ -102,6 +103,19 @@ export interface DashboardContribution {
    */
   autoProvision?: boolean;
   /**
+   * When true, the contribution materializes automatically for every
+   * workspace on first creation / reconciliation, but the user CAN
+   * remove it. Removal is recorded on the workspace as a dismissal so
+   * provisioning doesn't recreate the dashboard on the next reconcile.
+   * Re-enabling from Settings clears the dismissal.
+   *
+   * Use this for "default-on" extension dashboards (e.g. Diff, Agentic)
+   * where the dashboard should appear out-of-the-box but the user
+   * retains control. `autoProvision` and `defaultEnabled` are mutually
+   * exclusive — `autoProvision` always wins when both are set.
+   */
+  defaultEnabled?: boolean;
+  /**
    * Hints for how PaneView should render the dashboard workspace.
    * `singleSurface: true` marks the pane as tab-less / split-less —
    * the existing `metadata.isDashboard` check already hides TabBar,
@@ -115,6 +129,15 @@ export interface DashboardContribution {
    * alongside `autoProvision: true`.
    */
   lockedReason?: string;
+  /**
+   * Optional override for the dashboard chip's click behavior. When
+   * defined, a chip click opens the dashboard *as a tab* inside the
+   * parent workspace's active pane (via `openDashboardSurfaceTab` or
+   * a custom flow) instead of switching to a separate dashboard
+   * workspace. Contributions without this hook fall through to the
+   * default behavior (switch to the dashboard workspace).
+   */
+  openAsTab?: (workspace: Workspace) => Promise<void>;
 }
 
 const registry = createRegistry<DashboardContribution>();

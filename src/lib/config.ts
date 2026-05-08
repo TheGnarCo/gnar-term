@@ -21,7 +21,7 @@ import type { ThemeDef } from "./theme-data";
 // --- Types (cmux-compatible + extensions) ---
 
 export interface SurfaceDef {
-  type?: "terminal" | "browser" | "extension" | "preview";
+  type?: "terminal" | "browser" | "extension" | "preview" | "registry";
   name?: string;
   command?: string;
   cwd?: string;
@@ -66,6 +66,7 @@ export interface WorkspaceTemplate {
   isDashboard?: boolean;
   dashboardContributionId?: string;
   dashboardWorkspaceId?: string;
+  dismissedDashboardContributionIds?: string[];
   lastActiveBranchedWorkspaceId?: string;
   locked?: boolean;
   autoRunRestoreCommands?: boolean;
@@ -103,6 +104,13 @@ export interface WorkspaceDef {
   // Navigation
   lastActiveBranchedWorkspaceId?: string;
   dashboardWorkspaceId?: string;
+  /**
+   * Dashboard contribution ids the user has dismissed on this root
+   * Workspace — `defaultEnabled` contributions in this list are NOT
+   * re-provisioned on reconcile. Persisted so the dismissal survives
+   * restart.
+   */
+  dismissedDashboardContributionIds?: string[];
   // Membership / kind discriminants. `rootWorkspaceId` identifies
   // which Workspace this Branch (or Dashboard) belongs to.
   rootWorkspaceId?: string;
@@ -244,6 +252,11 @@ export interface AppState {
   // Primary sidebar expanded (true) / collapsed (false). See stores/ui.ts
   // and services/sidebar-persistence-service.ts.
   sidebarVisible?: boolean;
+  // Per-banner collapsed flag, keyed by SidebarBanner.scopeId (workspace
+  // id for root banners). Missing entries default to collapsed; an
+  // explicit `false` keeps a banner expanded across launches. See
+  // services/sidebar-persistence-service.ts.
+  bannerCollapsedById?: Record<string, boolean>;
 }
 
 export interface ArchivedWorkspaceDef {

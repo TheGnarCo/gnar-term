@@ -23,14 +23,13 @@ import {
   removeRootRow as storeRemoveRootRow,
 } from "../stores/root-row-order";
 import { registerTheme as registryRegisterTheme } from "./theme-registry";
-import { registerMarkdownComponent as registryRegisterMarkdownComponent } from "./markdown-component-registry";
 import { registerChildRowContributor } from "./child-row-contributor-registry";
 import { registerDashboardContribution as registryRegisterDashboardContribution } from "./dashboard-contribution-registry";
 import { registerPseudoWorkspace as registryRegisterPseudoWorkspace } from "./pseudo-workspace-registry";
 import {
-  registerDashboardWorkspaceType,
+  registerGlobalSurface,
   spawnOrNavigate,
-} from "./dashboard-workspace-service";
+} from "./global-surface-service";
 import { provisionAutoDashboardsForWorkspace } from "./workspace-service";
 import { waitRestored } from "../bootstrap/restore-workspaces";
 import { getWorkspaces } from "../stores/workspace";
@@ -54,13 +53,12 @@ export function createUIRegistrationAPI(
   | "appendRootRow"
   | "removeRootRow"
   | "registerSurfaceType"
-  | "registerDashboardWorkspace"
+  | "registerGlobalSurface"
   | "registerTheme"
   | "registerCommand"
   | "runCommand"
   | "registerContextMenuItem"
   | "registerMcpTool"
-  | "registerMarkdownComponent"
   | "registerChildRowContributor"
   | "registerDashboardContribution"
   | "registerPseudoWorkspace"
@@ -135,7 +133,7 @@ export function createUIRegistrationAPI(
       });
     },
 
-    registerDashboardWorkspace(
+    registerGlobalSurface(
       id: string,
       options: {
         label: string;
@@ -145,7 +143,7 @@ export function createUIRegistrationAPI(
       },
     ): () => void {
       const stableId = `${extId}:${id}`;
-      registerDashboardWorkspaceType({
+      registerGlobalSurface({
         id: stableId,
         label: options.label,
         icon: options.icon as import("svelte").Component,
@@ -205,22 +203,6 @@ export function createUIRegistrationAPI(
       );
     },
 
-    registerMarkdownComponent(
-      name: string,
-      component: unknown,
-      options?: { configSchema?: Record<string, unknown> },
-    ) {
-      // No id-prefix on the component name — markdown directives
-      // (`gnar:<name>`) stay short and stable. Source tracking still uses
-      // extId for cleanup.
-      registryRegisterMarkdownComponent({
-        name,
-        component,
-        source: extId,
-        configSchema: options?.configSchema,
-      });
-    },
-
     registerChildRowContributor(
       parentType: string,
       contribute: (parentId: string) => Array<{ kind: string; id: string }>,
@@ -237,12 +219,13 @@ export function createUIRegistrationAPI(
         ...contribution,
         source: extId,
       });
-      // Auto-provision contributions back-fill onto every existing
-      // workspace once restore completes, so extensions activated after
-      // bootstrap (or whose contributions were unknown at workspace
-      // create time) still materialize their tile. Idempotent —
-      // workspaces already backed by this contribution are skipped.
-      if (contribution.autoProvision) {
+      // Auto-provision and default-enabled contributions back-fill onto
+      // every existing workspace once restore completes, so extensions
+      // activated after bootstrap (or whose contributions were unknown
+      // at workspace create time) still materialize their tile.
+      // Idempotent — workspaces already backed by this contribution,
+      // or that have dismissed it, are skipped.
+      if (contribution.autoProvision || contribution.defaultEnabled) {
         void (async () => {
           await waitRestored();
           for (const ws of getWorkspaces()) {

@@ -7,12 +7,12 @@ import {
   getAllPanes,
   getAllSurfaces,
   isTerminalSurface,
-  isExtensionSurface,
+  isRegistrySurface,
   type Pane,
   type SplitNode,
   type Workspace,
   type TerminalSurface,
-  type ExtensionSurface,
+  type RegistrySurface,
 } from "../lib/types";
 
 function makeMockTerminalSurface(id: string): TerminalSurface {
@@ -30,12 +30,12 @@ function makeMockTerminalSurface(id: string): TerminalSurface {
   };
 }
 
-function makeMockExtensionSurface(id: string): ExtensionSurface {
+function makeMockRegistrySurface(id: string): RegistrySurface {
   return {
-    kind: "extension",
+    kind: "registry",
     id,
     surfaceTypeId: "custom-viewer",
-    title: `Extension ${id}`,
+    title: `Registry ${id}`,
     hasUnread: false,
     props: { filePath: "/some/path" },
   };
@@ -52,17 +52,17 @@ describe("uid()", () => {
   });
 });
 
-describe("isTerminalSurface / isExtensionSurface type guards", () => {
+describe("isTerminalSurface / isRegistrySurface type guards", () => {
   it("correctly identifies terminal surfaces", () => {
     const ts = makeMockTerminalSurface("t1");
     expect(isTerminalSurface(ts)).toBe(true);
-    expect(isExtensionSurface(ts)).toBe(false);
+    expect(isRegistrySurface(ts)).toBe(false);
   });
 
-  it("correctly identifies extension surfaces", () => {
-    const es = makeMockExtensionSurface("e1");
+  it("correctly identifies registry surfaces", () => {
+    const es = makeMockRegistrySurface("e1");
     expect(isTerminalSurface(es)).toBe(false);
-    expect(isExtensionSurface(es)).toBe(true);
+    expect(isRegistrySurface(es)).toBe(true);
   });
 });
 
@@ -105,7 +105,7 @@ describe("getAllPanes()", () => {
 describe("getAllSurfaces()", () => {
   it("returns all surfaces from a workspace", () => {
     const t1 = makeMockTerminalSurface("t1");
-    const e1 = makeMockExtensionSurface("e1");
+    const e1 = makeMockRegistrySurface("e1");
     const t2 = makeMockTerminalSurface("t2");
 
     const pane1: Pane = {
@@ -135,9 +135,9 @@ describe("getAllSurfaces()", () => {
     expect(surfaces.map((s) => s.id)).toEqual(["t1", "e1", "t2"]);
   });
 
-  it("correctly mixes terminal and extension surfaces", () => {
+  it("correctly mixes terminal and registry surfaces", () => {
     const t1 = makeMockTerminalSurface("t1");
-    const e1 = makeMockExtensionSurface("e1");
+    const e1 = makeMockRegistrySurface("e1");
 
     const pane: Pane = {
       id: "pane1",
@@ -153,22 +153,22 @@ describe("getAllSurfaces()", () => {
 
     const surfaces = getAllSurfaces(ws);
     expect(surfaces[0].kind).toBe("terminal");
-    expect(surfaces[1].kind).toBe("extension");
+    expect(surfaces[1].kind).toBe("registry");
     expect(isTerminalSurface(surfaces[0])).toBe(true);
-    expect(isExtensionSurface(surfaces[1])).toBe(true);
+    expect(isRegistrySurface(surfaces[1])).toBe(true);
   });
 });
 
-describe("ExtensionSurface", () => {
-  it("isExtensionSurface correctly identifies extension surfaces", () => {
-    const es = makeMockExtensionSurface("e1");
-    expect(isExtensionSurface(es)).toBe(true);
+describe("RegistrySurface", () => {
+  it("isRegistrySurface correctly identifies registry surfaces", () => {
+    const es = makeMockRegistrySurface("e1");
+    expect(isRegistrySurface(es)).toBe(true);
     expect(isTerminalSurface(es)).toBe(false);
   });
 
-  it("extension surfaces can coexist with terminal surfaces in a pane", () => {
+  it("registry surfaces can coexist with terminal surfaces in a pane", () => {
     const t1 = makeMockTerminalSurface("t1");
-    const e1 = makeMockExtensionSurface("e1");
+    const e1 = makeMockRegistrySurface("e1");
 
     const pane: Pane = {
       id: "pane1",
@@ -184,12 +184,12 @@ describe("ExtensionSurface", () => {
 
     const surfaces = getAllSurfaces(ws);
     expect(surfaces).toHaveLength(2);
-    expect(surfaces[1].kind).toBe("extension");
-    expect(isExtensionSurface(surfaces[1])).toBe(true);
+    expect(surfaces[1].kind).toBe("registry");
+    expect(isRegistrySurface(surfaces[1])).toBe(true);
   });
 
-  it("extension surface carries surfaceTypeId and arbitrary props", () => {
-    const es = makeMockExtensionSurface("e1");
+  it("registry surface carries surfaceTypeId and arbitrary props", () => {
+    const es = makeMockRegistrySurface("e1");
     expect(es.surfaceTypeId).toBe("custom-viewer");
     expect(es.props).toEqual({ filePath: "/some/path" });
   });

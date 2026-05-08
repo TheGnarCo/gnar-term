@@ -1245,6 +1245,12 @@ describe("ExtensionAPI invoke allowlist", () => {
         path: "/home/user/.config/gnar-term/state.json",
       }),
     ).rejects.toThrow(/Access denied/);
+
+    await expect(
+      api.invoke("mcp_list_dir", {
+        path: "/home/user/.config/gnar-term",
+      }),
+    ).rejects.toThrow(/Access denied/);
   });
 });
 

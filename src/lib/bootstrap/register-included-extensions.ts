@@ -34,6 +34,10 @@ import {
   branchedWorkspacesManifest,
   registerBranchedWorkspacesExtension,
 } from "../../extensions/branched-workspaces";
+import {
+  spacebaseManifest,
+  registerSpacebaseExtension,
+} from "../../extensions/spacebase";
 
 type IncludedExtension = readonly [
   ExtensionManifest,
@@ -59,6 +63,7 @@ export const INCLUDED_EXTENSIONS: readonly IncludedExtension[] = [
     registerBranchedWorkspacesExtension,
     "branched-workspaces",
   ],
+  [spacebaseManifest, registerSpacebaseExtension, "spacebase"],
 ] as const;
 
 export async function registerIncludedExtensions(

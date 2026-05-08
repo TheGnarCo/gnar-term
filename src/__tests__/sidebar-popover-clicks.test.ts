@@ -95,10 +95,16 @@ describe("Collapsed sidebar popover clicks", () => {
     await fireEvent.mouseEnter(row!);
     await tick();
 
-    const popover = container.querySelector(
+    // The popover is portaled to <body> so it escapes the sidebar's
+    // overflow/stacking context — query the document, not the
+    // mount container.
+    const popover = document.body.querySelector(
       "[data-root-row-popover]",
     ) as HTMLElement | null;
     expect(popover).not.toBeNull();
+    // Sanity: the popover is NOT inside the test container (proves the
+    // portal moved it out of the WorkspaceListBlock subtree).
+    expect(container.contains(popover)).toBe(false);
 
     // The chevron toggle button lives in the banner's btn-row slot. Find
     // it by its aria-label inside the popover (excludes the clipped

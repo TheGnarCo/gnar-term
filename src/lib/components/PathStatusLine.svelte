@@ -14,9 +14,9 @@
    *
    * The uncommitted-changes badge previously lived here; it moved to
    * the per-workspace Diff dashboard contribution. Open PR badges also
-   * lived here; they moved to the per-workspace `gnar:prs` widget on
-   * the Workspace Overview Dashboard, which has the room to render the
-   * full list without crowding the banner.
+   * lived here; they moved to the Workspace Overview Dashboard's PRs
+   * section, which has the room to render the full list without
+   * crowding the banner.
    */
   import { getContext } from "svelte";
   import { EXTENSION_API_KEY, type ExtensionAPI } from "../../extensions/api";

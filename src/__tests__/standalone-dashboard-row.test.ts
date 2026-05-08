@@ -2,7 +2,7 @@
  * Regression test for "Settings / Claude Settings never appear in the sidebar":
  *
  * Standalone Dashboard Workspaces (those spawned by `spawnOrNavigate` from
- * a `registerDashboardWorkspace` button — Settings, Claude Settings, etc.)
+ * a `registerGlobalSurface` button — Settings, Claude Settings, etc.)
  * land in `_workspaces` with `isDashboard: true`,
  * `dashboardContributionId: id`, and NO `rootWorkspaceId`. The runtime
  * service appends a
@@ -113,9 +113,9 @@ import {
 import { rootRowOrder } from "../lib/stores/root-row-order";
 import { registerRootRowRenderer } from "../lib/services/root-row-renderer-registry";
 import {
-  registerDashboardWorkspaceType,
-  clearDashboardRegistry,
-} from "../lib/services/dashboard-workspace-service";
+  registerGlobalSurface,
+  clearGlobalSurfaceRegistry,
+} from "../lib/services/global-surface-service";
 import { initCoreExtensionAPI } from "../lib/bootstrap/init-core-extension-api";
 import { resetSidebarSections } from "../lib/services/sidebar-section-registry";
 import { resetWorkspaceActions } from "../lib/services/workspace-action-registry";
@@ -152,7 +152,7 @@ describe("standalone Dashboard Workspaces render in the sidebar", () => {
     cleanup();
     resetSidebarSections();
     resetWorkspaceActions();
-    clearDashboardRegistry();
+    clearGlobalSurfaceRegistry();
     workspaces.set([]);
     rootRowOrder.set([]);
     activeWorkspaceIdx.set(-1);
@@ -177,7 +177,7 @@ describe("standalone Dashboard Workspaces render in the sidebar", () => {
     });
 
     // Production wires this in App.svelte before extensions activate.
-    registerDashboardWorkspaceType({
+    registerGlobalSurface({
       id: "gnar-term:settings",
       label: "Settings",
       icon: GearIcon as unknown as import("svelte").Component,

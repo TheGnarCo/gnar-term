@@ -26,6 +26,12 @@
   export let agentDotColor: string | null = null;
   /** Optional agent status label ("running", "waiting", etc). */
   export let agentStatus: string | null = null;
+  /**
+   * Optional workspace accent color used for the active-tab underline so
+   * the focused tab visually ties to its owning workspace's color. Falls
+   * back to the theme accent when the workspace has no color assigned.
+   */
+  export let activeAccentColor: string | undefined = undefined;
   $: isWaiting = agentStatus === "waiting";
   $: isThinking = agentStatus === "running" || agentStatus === "active";
 
@@ -135,7 +141,7 @@
       : 'transparent'};
     border-bottom: 3px solid {isActive
     ? paneIsActive
-      ? $theme.accent
+      ? (activeAccentColor ?? $theme.accent)
       : $theme.border
     : 'transparent'};
     border-radius: 4px 4px 0 0; white-space: nowrap;

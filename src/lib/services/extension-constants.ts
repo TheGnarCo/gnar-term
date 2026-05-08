@@ -17,7 +17,6 @@ import { unregisterStatusBySource } from "./status-registry";
 import { unregisterWorkspaceSubtitlesBySource } from "./workspace-subtitle-registry";
 import { unregisterRootRowRenderersBySource } from "./root-row-renderer-registry";
 import { unregisterThemesBySource } from "./theme-registry";
-import { unregisterMarkdownComponentsBySource } from "./markdown-component-registry";
 import { unregisterChildRowContributorsBySource } from "./child-row-contributor-registry";
 import { unregisterDashboardContributionsBySource } from "./dashboard-contribution-registry";
 import { unregisterPseudoWorkspacesBySource } from "./pseudo-workspace-registry";
@@ -170,7 +169,6 @@ export const REGISTRY_CLEANUP_FNS: Array<(source: string) => void> = [
   unregisterWorkspaceSubtitlesBySource,
   unregisterRootRowRenderersBySource,
   unregisterThemesBySource,
-  unregisterMarkdownComponentsBySource,
   unregisterChildRowContributorsBySource,
   // Must run before unregisterDashboardContributionsBySource so the
   // closer can still resolve which contributions belonged to source.

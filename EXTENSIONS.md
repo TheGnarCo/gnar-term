@@ -1046,10 +1046,6 @@ TitleBar button opens a user-level overlay onto `~/.claude/settings.json`; auto-
 
 Registers a surface type for viewing unified diffs with syntax highlighting. Provides commands for showing uncommitted changes, staged changes, file diffs, and branch comparisons. Adds context menu items for file-level diffs. Registers a "Changes" secondary sidebar tab that lists modified files in the active workspace. Listens for the core `worktree:merged` event to auto-refresh the changes view after merge operations. Configurable via settings: diff mode (unified/split), context lines, and whitespace handling.
 
-### Jrvs Themes (`src/extensions/jrvs-themes/`)
-
-A pack of additional themes (Kirby-inspired). Registers theme entries that show up in the command palette and theme switcher. Pure registration — no UI surfaces.
-
 ---
 
 ## Developing External Extensions
@@ -1177,4 +1173,3 @@ The included extensions in `src/extensions/` are real-world examples of every ex
 | `branched-workspaces/`  | Workspace actions, git worktree integration, core event subscription (`worktree:merged`)              |
 | `claude-settings/`      | TitleBar button, dashboard contribution, dedicated Claude-file commands, markdown component embedding |
 | `diff-viewer/`          | Surface type, commands, context menus, core event subscription (`worktree:merged`), settings          |
-| `jrvs-themes/`          | Theme pack registration                                                                               |

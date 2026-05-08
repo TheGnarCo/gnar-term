@@ -38,7 +38,7 @@ import type {
   Workspace,
   Pane,
   TerminalSurface,
-  ExtensionSurface,
+  RegistrySurface,
 } from "../lib/types";
 import { uid } from "../lib/types";
 
@@ -71,14 +71,14 @@ function mockTerminalSurface(
   };
 }
 
-function mockExtensionSurface(
-  overrides: Partial<ExtensionSurface> = {},
-): ExtensionSurface {
+function mockRegistrySurface(
+  overrides: Partial<RegistrySurface> = {},
+): RegistrySurface {
   return {
-    kind: "extension",
+    kind: "registry",
     id: uid(),
     surfaceTypeId: "test:panel",
-    title: "Test Extension",
+    title: "Test Registry",
     hasUnread: false,
     props: {},
     ...overrides,
@@ -86,7 +86,7 @@ function mockExtensionSurface(
 }
 
 function makePane(
-  surfaces?: (TerminalSurface | ExtensionSurface)[],
+  surfaces?: (TerminalSurface | RegistrySurface)[],
   overrides: Partial<Pane> = {},
 ): Pane {
   const surfs = surfaces ?? [mockTerminalSurface()];
@@ -148,7 +148,7 @@ describe("findSurfaceLocation", () => {
   });
 
   it("works with extension surfaces", () => {
-    const extSurface = mockExtensionSurface();
+    const extSurface = mockRegistrySurface();
     const pane = makePane([extSurface]);
     const ws = makeChildWorkspace({
       paneLayout: { type: "pane", pane },

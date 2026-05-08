@@ -167,7 +167,6 @@ describe("MCP server JSON-RPC", () => {
         "list_dashboard_contributions",
         "list_dashboard_tabs",
         "list_dir",
-        "list_markdown_components",
         "list_open_previews",
         "list_dashboard_workspaces",
         "list_panes",
@@ -194,7 +193,7 @@ describe("MCP server JSON-RPC", () => {
         "write_file",
       ].sort(),
     );
-    expect(names).toHaveLength(47);
+    expect(names).toHaveLength(46);
     for (const t of tools) {
       expect(t).toHaveProperty("inputSchema");
     }
@@ -967,7 +966,7 @@ describe("MCP mirror tools — surface types", () => {
     expect(r.workspace_id).toBe("ws-1");
     const placed = getAllSurfaces(get(workspaces)[0]!);
     expect(placed).toHaveLength(1);
-    expect(placed[0]!.kind).toBe("extension");
+    expect(placed[0]!.kind).toBe("registry");
     expect(placed[0]!.title).toBe("Test Panel");
     expect((placed[0] as { props: Record<string, unknown> }).props).toEqual({
       hello: "world",
@@ -1285,13 +1284,13 @@ describe("MCP mirror tools — sidebar sections", () => {
 
 describe("MCP mirror tools — dashboard workspaces", () => {
   beforeEach(async () => {
-    const mod = await import("../lib/services/dashboard-workspace-service");
-    mod.clearDashboardRegistry();
+    const mod = await import("../lib/services/global-surface-service");
+    mod.clearGlobalSurfaceRegistry();
   });
 
   it("list_dashboard_workspaces returns registered entries", async () => {
-    const mod = await import("../lib/services/dashboard-workspace-service");
-    mod.registerDashboardWorkspaceType({
+    const mod = await import("../lib/services/global-surface-service");
+    mod.registerGlobalSurface({
       id: "ext:settings",
       label: "Settings",
       icon: {} as import("svelte").Component,
@@ -1434,8 +1433,8 @@ describe("tool metadata", () => {
     }
   });
 
-  it("tool count matches spec (47)", () => {
-    expect(_getToolsForTest()).toHaveLength(47);
+  it("tool count matches spec (46)", () => {
+    expect(_getToolsForTest()).toHaveLength(46);
   });
 });
 

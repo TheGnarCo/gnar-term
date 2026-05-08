@@ -61,7 +61,7 @@ const rootMap = new Map<string, RootWorkspace>([
 // ---- Grouped mode tests ----
 
 describe("filterWorkspaces — branch ordering within a Root", () => {
-  it("sorts: main workspace first, branches second, dashboards last", () => {
+  it("sorts: main workspace first, branches second, and skips dashboards entirely", () => {
     const root = makeRoot("ws-x", "My Root");
     const dashboard = makeWs({
       id: "nw-dash",
@@ -91,14 +91,16 @@ describe("filterWorkspaces — branch ordering within a Root", () => {
     );
 
     const ids = result.filter((r) => r.kind === "branch").map((r) => r.ws.id);
-    expect(ids).toEqual(["nw-main", "nw-branch", "nw-dash"]);
+    // Dashboards are filtered out — switcher only lists workspaces and
+    // branched workspaces.
+    expect(ids).toEqual(["nw-main", "nw-branch"]);
   });
 
-  it("groups the Root workspace itself under its own header, above its dashboards", () => {
+  it("groups the Root workspace itself under its own header and excludes dashboards", () => {
     // ADR-004: the Root runtime Workspace shares its id with the
     // RootWorkspace, and its `rootWorkspaceId` is undefined. It should
     // still appear nested under its own group, sorted as the type-0
-    // main entry.
+    // main entry. Dashboards under that root are filtered out.
     const root = makeRoot("ws-x", "Agent Skills");
     const rootSelf = makeWs({ id: "ws-x", name: "Agent Skills" });
     const settings = makeWs({
@@ -122,12 +124,11 @@ describe("filterWorkspaces — branch ordering within a Root", () => {
       [root],
     );
 
-    // Order: header, root-self (depth=1), dashboards
+    // Order: header, root-self (depth=1). Dashboards are not pickable
+    // and don't appear at all.
     expect(result.map((r) => ({ id: r.ws.id, kind: r.kind }))).toEqual([
       { id: "ws-x", kind: "root" },
       { id: "ws-x", kind: "branch" },
-      { id: "nw-settings", kind: "branch" },
-      { id: "nw-shortcuts", kind: "branch" },
     ]);
 
     const rootSelfRow = result.find(

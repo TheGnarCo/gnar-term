@@ -15,12 +15,12 @@
     deleteWorkspace,
     updateWorkspace,
     closeWorkspacesInWorkspace,
-    workspaceDashboardPath,
-    openWorkspaceDashboard,
     activateWorkspace,
     WORKSPACE_STATE_CHANGED,
     toggleWorkspaceLock,
+    closeDashboardForWorkspace,
   } from "../services/workspace-service";
+  import { openWorkspaceSettingsTab } from "../services/surface-service";
   import { archiveWorkspace } from "../services/archive-service";
   import {
     type WorkspaceActionContext,
@@ -31,10 +31,7 @@
     getChildRowsFor,
   } from "../services/child-row-contributor-registry";
   import { getRootRowRenderer } from "../services/root-row-renderer-registry";
-  import {
-    switchWorkspace,
-    closeWorkspace,
-  } from "../services/workspace-runtime-service";
+  import { switchWorkspace } from "../services/workspace-runtime-service";
   import { getDashboardContribution } from "../services/dashboard-contribution-registry";
   import DashboardTileIcon from "./DashboardTileIcon.svelte";
   import SidebarChipButton from "./SidebarChipButton.svelte";
@@ -48,7 +45,7 @@
   import type { MenuItem } from "../context-menu-types";
   import { contextMenu, showConfirmPrompt } from "../stores/ui";
   import { contrastColor } from "../utils/contrast";
-  import { getAllSurfaces, isPreviewSurface, type Workspace } from "../types";
+  import type { Workspace } from "../types";
   import { agentsStore } from "../services/agent-detection-service";
   import { variantColor } from "../status-colors";
   import { shortcutHintsActive } from "../stores/shortcut-hints";
@@ -300,26 +297,24 @@
   let hoveredTileActionId: string | null = null;
   let caretHovered = false;
 
-  // Workspace's dashboards split into the Settings chip (always rendered
-  // last, just before the expansion toggle) and everything else (rendered
-  // first, then the tile actions). Settings is intentionally separated
-  // out at the data layer so the template can interleave it after the
-  // tile-action group instead of relying on a sort-and-suffix pass.
-  $: allDashboards = (() => {
+  // Workspace's dashboards rendered as chips in the children-leading
+  // slot. Auto-provisioned contributions (currently just Settings) are
+  // excluded because they have dedicated UI — the banner-end gear chip
+  // opens Settings as a tab inside the workspace via openWorkspaceSettingsTab.
+  $: workspaceDashboards = (() => {
     const wId = workspace?.id;
     if (!wId) return [] as Array<{ ws: Workspace; idx: number }>;
     return $workspaces
       .map((ws, idx) => ({ ws, idx }))
-      .filter(
-        ({ ws }) => ws.isDashboard === true && ws.rootWorkspaceId === wId,
-      );
+      .filter(({ ws }) => {
+        if (ws.isDashboard !== true || ws.rootWorkspaceId !== wId) return false;
+        const contribId = ws.dashboardContributionId;
+        const contribution = contribId
+          ? getDashboardContribution(contribId)
+          : undefined;
+        return !contribution?.autoProvision;
+      });
   })();
-  $: nonSettingsDashboards = allDashboards.filter(
-    ({ ws }) => ws.dashboardContributionId !== "settings",
-  );
-  $: settingsDashboard = allDashboards.find(
-    ({ ws }) => ws.dashboardContributionId === "settings",
-  );
 
   $: tileActions = $workspaceActionStore.filter(
     (a) =>
@@ -338,44 +333,17 @@
     if (typeof contribId !== "string") return;
     const contribution = getDashboardContribution(contribId);
     if (!contribution || contribution.autoProvision) return;
+    const rootId = ws.rootWorkspaceId;
+    if (!rootId) return;
     const items: MenuItem[] = [
       {
-        label: `Delete ${contribution.label}`,
-        danger: true,
-        action: async () => {
-          const confirmed = await showConfirmPrompt(
-            `Delete "${ws.name}"? The backing markdown file stays on disk so you can re-add this dashboard later without losing your edits.`,
-            {
-              title: `Delete ${contribution.label}`,
-              confirmLabel: "Delete",
-              cancelLabel: "Cancel",
-            },
-          );
-          if (!confirmed) return;
-          closeWorkspace(globalIdx);
+        label: `Hide ${contribution.label}`,
+        action: () => {
+          closeDashboardForWorkspace(rootId, contribId);
         },
       },
     ];
     contextMenu.set({ x, y, items });
-  }
-
-  // Dashboard-hint for child workspaces: any workspace hosting a
-  // preview surface pointed at the workspace's dashboard path gets a
-  // dashboard icon.
-  function hintForWorkspaceDashboardHost(ws: Workspace) {
-    if (!workspace) return undefined;
-    const path = workspaceDashboardPath(workspace.path);
-    const hosts = getAllSurfaces(ws).some(
-      (s) => isPreviewSurface(s) && s.path === path,
-    );
-    if (!hosts) return undefined;
-    return {
-      id: workspace.id,
-      color: workspaceHex,
-      onClick: () => {
-        if (workspace) void openWorkspaceDashboard(workspace);
-      },
-    };
   }
 </script>
 
@@ -388,6 +356,59 @@
       position: relative;
     "
   >
+    {#snippet dashboardChip(entry: { ws: Workspace; idx: number })}
+      {@const contribId = entry.ws.dashboardContributionId}
+      {@const contribution = contribId
+        ? getDashboardContribution(contribId)
+        : undefined}
+      {@const IconComp = contribution?.icon ?? GridIcon}
+      {@const isActive = entry.idx === $activeWorkspaceIdx}
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div
+        style="
+          position: relative;
+          flex: 1 0 calc((100% - 8px) / 3);
+          min-width: calc((100% - 8px) / 3);
+          height: 24px;
+        "
+        on:mouseenter={() => (hoveredDashId = entry.ws.id)}
+        on:mouseleave={() => (hoveredDashId = null)}
+      >
+        <button
+          class="dash-btn"
+          data-dashboard-item={entry.ws.id}
+          data-dashboard-contribution={contribId}
+          data-active={isActive ? "true" : undefined}
+          aria-label={entry.ws.name}
+          title={entry.ws.name}
+          on:click|stopPropagation={() => {
+            if (contribution?.openAsTab && workspace) {
+              void contribution.openAsTab(workspace);
+            } else {
+              switchWorkspace(entry.idx);
+            }
+          }}
+          on:contextmenu|preventDefault|stopPropagation={(e) =>
+            showDashboardContextMenu(e.clientX, e.clientY, entry.idx)}
+          style="
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: {$theme.bgSurface ?? 'transparent'};
+            border: 1px solid {$theme.border ?? 'transparent'};
+            {isActive ? `box-shadow: 0 0 0 1.5px ${workspaceHex};` : ''}
+          "
+        >
+          <DashboardTileIcon
+            iconComponent={IconComp}
+            baseColor={workspaceHex}
+            contributionId={contribId}
+            workspacePath={workspace?.path}
+            {isActive}
+            isHovered={hoveredDashId === entry.ws.id}
+          />
+        </button>
+      </div>
+    {/snippet}
     <SidebarBanner
       color={workspaceHex}
       {onGripMouseDown}
@@ -396,12 +417,12 @@
       filterIds={branchedIds}
       hasActiveChild={hasActiveDescendant}
       {popoverActive}
-      dashboardHintFor={hintForWorkspaceDashboardHost}
       scopeId={workspace.id}
       {containerBlockId}
       containerLabel={workspace.name}
       testId={workspace.id}
       workspaceListViewComponent={WorkspaceListView}
+      dashboardCount={workspaceDashboards.length}
     >
       <div
         style="display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0;"
@@ -436,19 +457,37 @@
 
       <svelte:fragment slot="banner-end" let:bannerHovered>
         {#if isWorkspaceLocked}
-          <SidebarChipButton
-            variant="lock"
-            title="Unlock Workspace"
-            idleColor={workspaceHex}
-            onClick={() => void handleUnlockWorkspace()}
-          />
+          <div style="display: flex; align-items: center; gap: 2px;">
+            {#if bannerHovered}
+              <SidebarChipButton
+                variant="settings"
+                title="Workspace Settings"
+                idleColor={workspaceHex}
+                onClick={() => void openWorkspaceSettingsTab(workspace!.id)}
+              />
+            {/if}
+            <SidebarChipButton
+              variant="lock"
+              title="Unlock Workspace"
+              idleColor={workspaceHex}
+              onClick={() => void handleUnlockWorkspace()}
+            />
+          </div>
         {:else if bannerHovered}
-          <SidebarChipButton
-            variant="close"
-            title="Delete Workspace"
-            idleColor={workspaceHex}
-            onClick={() => void handleDeleteWorkspace()}
-          />
+          <div style="display: flex; align-items: center; gap: 2px;">
+            <SidebarChipButton
+              variant="settings"
+              title="Workspace Settings"
+              idleColor={workspaceHex}
+              onClick={() => void openWorkspaceSettingsTab(workspace!.id)}
+            />
+            <SidebarChipButton
+              variant="close"
+              title="Delete Workspace"
+              idleColor={workspaceHex}
+              onClick={() => void handleDeleteWorkspace()}
+            />
+          </div>
         {:else if shortcutIdx !== undefined && shortcutIdx < 9 && $shortcutHintsActive}
           <span
             aria-hidden="true"
@@ -484,60 +523,11 @@
       </svelte:fragment>
 
       <svelte:fragment slot="btn-row" let:collapsed let:toggle let:showToggle>
-        {#snippet dashboardChip(entry: { ws: Workspace; idx: number })}
-          {@const contribId = entry.ws.dashboardContributionId}
-          {@const contribution = contribId
-            ? getDashboardContribution(contribId)
-            : undefined}
-          {@const IconComp = contribution?.icon ?? GridIcon}
-          {@const isActive = entry.idx === $activeWorkspaceIdx}
-          <!-- svelte-ignore a11y_no_static_element_interactions -->
-          <div
-            style="
-              position: relative;
-              flex: 1 1 calc(25% - 3px);
-              min-width: 28px;
-              height: 24px;
-            "
-            on:mouseenter={() => (hoveredDashId = entry.ws.id)}
-            on:mouseleave={() => (hoveredDashId = null)}
-          >
-            <button
-              class="dash-btn"
-              data-dashboard-item={entry.ws.id}
-              data-dashboard-contribution={contribId}
-              data-active={isActive ? "true" : undefined}
-              aria-label={entry.ws.name}
-              on:click|stopPropagation={() => switchWorkspace(entry.idx)}
-              on:contextmenu|preventDefault|stopPropagation={(e) =>
-                showDashboardContextMenu(e.clientX, e.clientY, entry.idx)}
-              style="
-                position: absolute;
-                top: 0; left: 0; right: 0; bottom: 0;
-                background: {$theme.bgSurface ?? 'transparent'};
-                border: 1px solid {$theme.border ?? 'transparent'};
-                {isActive ? `box-shadow: 0 0 0 1.5px ${workspaceHex};` : ''}
-              "
-            >
-              <DashboardTileIcon
-                iconComponent={IconComp}
-                baseColor={workspaceHex}
-                contributionId={contribId}
-                workspacePath={workspace?.path}
-                {isActive}
-                isHovered={hoveredDashId === entry.ws.id}
-              />
-            </button>
-          </div>
-        {/snippet}
-
-        {#each nonSettingsDashboards as entry (entry.ws.id)}
-          {@render dashboardChip(entry)}
-        {/each}
         {#each tileActions as action (action.id)}
           <button
             class="dash-btn"
             aria-label={action.label}
+            title={action.label}
             on:click|stopPropagation={() =>
               action.handler(workspaceContext ?? {})}
             on:mouseenter={() => (hoveredTileActionId = action.id)}
@@ -556,16 +546,14 @@
             />
           </button>
         {/each}
-        {#if settingsDashboard}
-          {@render dashboardChip(settingsDashboard)}
-        {/if}
         {#if showToggle}
           <button
-            class="dash-btn"
+            class="dash-btn dash-btn-expand"
             on:click|stopPropagation={toggle}
             on:mouseenter={() => (caretHovered = true)}
             on:mouseleave={() => (caretHovered = false)}
             aria-label={collapsed ? "Expand workspace" : "Collapse workspace"}
+            title={collapsed ? "Expand workspace" : "Collapse workspace"}
             style="background: {$theme.bgSurface ??
               'transparent'}; border: 1px solid {$theme.border ??
               'transparent'};"
@@ -586,6 +574,16 @@
               <polyline points="1,1 6,7 11,1" />
             </svg>
           </button>
+        {/if}
+      </svelte:fragment>
+
+      <svelte:fragment slot="children-leading">
+        {#if workspaceDashboards.length > 0}
+          <div class="dashboard-chip-grid">
+            {#each workspaceDashboards as entry (entry.ws.id)}
+              {@render dashboardChip(entry)}
+            {/each}
+          </div>
         {/if}
       </svelte:fragment>
 
@@ -633,9 +631,22 @@
 {/if}
 
 <style>
+  .dashboard-chip-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 4px 8px;
+  }
+  /* Inside the grid the chip button is absolutely positioned to fill
+     its fluid wrapper. The class default `width: 28px` would pin it
+     to 28px and break the stretch — force auto so left/right insets
+     win. */
+  .dashboard-chip-grid .dash-btn {
+    width: auto;
+  }
   .dash-btn {
-    flex: 1 1 calc(25% - 3px);
-    min-width: 28px;
+    flex: 0 0 auto;
+    width: 28px;
     height: 24px;
     border-radius: 5px;
     cursor: pointer;
@@ -644,6 +655,11 @@
     justify-content: center;
     color: inherit;
     -webkit-app-region: no-drag;
+  }
+  .dash-btn-expand {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 28px;
   }
   .dash-btn:hover {
     filter: brightness(1.1);

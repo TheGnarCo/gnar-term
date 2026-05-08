@@ -5,9 +5,15 @@
  * plus commands for showing uncommitted changes and comparing branches.
  */
 import type { ExtensionManifest, ExtensionAPI, WorkspaceRef } from "../api";
+import type { Component } from "svelte";
 import DiffSurface from "./DiffSurface.svelte";
+import DiffDashboardBody from "./DiffDashboardBody.svelte";
 import DiffIcon from "./DiffIcon.svelte";
-import { createWorkspaceFromDef } from "../../lib/services/workspace-runtime-service";
+import {
+  registerGlobalSurface,
+  unregisterGlobalSurface,
+  globalSurfaceTypeId,
+} from "../../lib/services/global-surface-service";
 
 export const diffViewerManifest: ExtensionManifest = {
   id: "diff-viewer",
@@ -93,42 +99,57 @@ export function registerDiffViewerExtension(api: ExtensionAPI): void {
       });
     });
 
-    // Diff dashboard contribution — lets a Workspace opt in to a
-    // dedicated Diff dashboard tile (gear sibling). The tile's workspace
-    // hosts a single diff-viewer:diff surface for the workspace's repo;
-    // no split / new-surface affordances because the pane is a Dashboard.
+    // Diff dashboard contribution — opt-in per Workspace. The dashboard
+    // component is registered as a hidden surface type, and the
+    // dashboard workspace holds a single dashboard surface seeded with
+    // the parent workspace id so DiffDashboardBody can resolve the repo
+    // path. TabBar + split affordances work like any other workspace.
+    registerGlobalSurface({
+      id: "diff",
+      label: "Diff",
+      icon: DiffIcon as unknown as Component,
+      component: DiffDashboardBody as unknown as Component,
+      source: "diff-viewer",
+    });
     api.registerDashboardContribution({
       id: "diff",
       label: "Diff",
       actionLabel: "Add Diff Dashboard",
       capPerWorkspace: 1,
       icon: DiffIcon,
-      paneConstraints: { singleSurface: true },
-      create: (workspace) => createDiffDashboardWorkspace(workspace),
+      defaultEnabled: true,
+      create: (workspace) => createDiffDashboardWorkspace(api, workspace),
+      openAsTab: async (workspace) => {
+        await api.openDashboardTab(workspace.id, {
+          kind: "registry",
+          surfaceTypeId: globalSurfaceTypeId("diff"),
+          title: "Diff",
+          props: { rootWorkspaceId: workspace.id },
+          matchProps: { rootWorkspaceId: workspace.id },
+        });
+      },
     });
+  });
+
+  api.onDeactivate(() => {
+    unregisterGlobalSurface("diff");
   });
 }
 
-/**
- * Materialize a Diff dashboard workspace for `workspace`. The dashboard
- * owns a single `diff-viewer:diff` surface pointed at the workspace's
- * repository; the `Uncommitted Changes` name mirrors the surface the
- * old sidebar-banner diff link used to spawn. Surface props match
- * the `show-uncommitted` command so the rendered diff is identical.
- */
 async function createDiffDashboardWorkspace(
+  api: ExtensionAPI,
   workspace: WorkspaceRef,
 ): Promise<string> {
-  return await createWorkspaceFromDef({
+  return await api.createWorkspaceFromDef({
     name: "Diff",
     layout: {
       pane: {
         surfaces: [
           {
-            type: "extension",
-            extensionType: "diff-viewer:diff",
-            extensionProps: { repoPath: workspace.path, baseBranch: "HEAD" },
-            name: "Uncommitted Changes",
+            type: "registry",
+            extensionType: globalSurfaceTypeId("diff"),
+            extensionProps: { rootWorkspaceId: workspace.id },
+            name: "Diff",
             focus: true,
           },
         ],

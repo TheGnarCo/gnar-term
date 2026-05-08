@@ -2,8 +2,8 @@
   import { theme } from "../stores/theme";
   import Tab from "./Tab.svelte";
   import NewSurfaceButton from "./NewSurfaceButton.svelte";
-  import CloseButton from "./CloseButton.svelte";
-  import { zoomedSurfaceId } from "../stores/workspace";
+  import { workspaces, zoomedSurfaceId } from "../stores/workspace";
+  import { resolveWorkspaceColor } from "../theme-data";
   import type { Pane } from "../types";
   import { getWorkspaceStatusByCategory } from "../services/status-registry";
   import {
@@ -28,7 +28,6 @@
   export let onSelectSurfaceType: (typeId: string) => void;
   export let onSplitRight: () => void;
   export let onSplitDown: () => void;
-  export let onClosePane: () => void;
   export let showJumpToBottom: boolean = false;
   export let onJumpToBottom: (() => void) | undefined = undefined;
   export let onRefreshPreview: (() => void) | undefined = undefined;
@@ -45,6 +44,21 @@
     ? getWorkspaceStatusByCategory(workspaceId, "process")
     : emptyStore;
   $: processItems = $processStatusStore;
+
+  // Resolve the workspace's accent color so the active tab's underline
+  // reads as "this is workspace X". Branches inherit from their root.
+  $: workspaceAccentColor = (() => {
+    if (!workspaceId) return undefined;
+    const ws = $workspaces.find((w) => w.id === workspaceId);
+    if (!ws) return undefined;
+    const colorSlot =
+      ws.color ??
+      (ws.rootWorkspaceId
+        ? $workspaces.find((w) => w.id === ws.rootWorkspaceId)?.color
+        : undefined);
+    if (!colorSlot) return undefined;
+    return resolveWorkspaceColor(colorSlot, $theme);
+  })();
 
   $: drag = $tabDragState;
   $: reorderInsertIdx =
@@ -129,6 +143,7 @@
         {paneIsActive}
         paneId={pane.id}
         {workspaceId}
+        activeAccentColor={workspaceAccentColor}
         onSelect={() => onSelectSurface(surface.id)}
         onClose={() => onCloseSurface(surface.id)}
         agentDotColor={agentDotColorForSurface(processItems, surface.id)}
@@ -264,6 +279,5 @@
         /></svg
       >
     </button>
-    <CloseButton size="container" label="Close Pane" on:click={onClosePane} />
   </div>
 </div>

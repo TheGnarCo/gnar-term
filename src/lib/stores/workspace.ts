@@ -78,6 +78,9 @@ export function workspaceDefToTemplate(
     nwDef.lastActiveBranchedWorkspaceId = def.lastActiveBranchedWorkspaceId;
   if (def.dashboardWorkspaceId !== undefined)
     nwDef.dashboardWorkspaceId = def.dashboardWorkspaceId;
+  if (def.dismissedDashboardContributionIds !== undefined)
+    nwDef.dismissedDashboardContributionIds =
+      def.dismissedDashboardContributionIds;
 
   // Structural / discriminant fields.
   if (def.rootWorkspaceId !== undefined)
@@ -221,7 +224,7 @@ export function resetWorkspaceStoreForTest(): void {
 import {
   isTerminalSurface,
   isPreviewSurface,
-  isExtensionSurface,
+  isRegistrySurface,
   type SplitNode,
 } from "../types";
 
@@ -241,11 +244,11 @@ export function serializeLayout(node: SplitNode): LayoutNode {
         if (s.id === node.pane.activeSurfaceId) def.focus = true;
         return def;
       }
-      // Extension surface
-      const def: Record<string, unknown> = { type: "extension" };
+      // Registry-backed surface
+      const def: Record<string, unknown> = { type: "registry" };
       if (s.title) def.name = s.title;
       if (s.id === node.pane.activeSurfaceId) def.focus = true;
-      if (isExtensionSurface(s)) {
+      if (isRegistrySurface(s)) {
         def.extensionType = s.surfaceTypeId;
         if (s.props) {
           const {
@@ -288,6 +291,9 @@ export function serializeWorkspace(ws: Workspace): WorkspaceDef {
     def.lastActiveBranchedWorkspaceId = ws.lastActiveBranchedWorkspaceId;
   if (ws.dashboardWorkspaceId !== undefined)
     def.dashboardWorkspaceId = ws.dashboardWorkspaceId;
+  if (ws.dismissedDashboardContributionIds !== undefined)
+    def.dismissedDashboardContributionIds =
+      ws.dismissedDashboardContributionIds;
   if (ws.rootWorkspaceId !== undefined)
     def.rootWorkspaceId = ws.rootWorkspaceId;
   if (ws.isDashboard !== undefined) def.isDashboard = ws.isDashboard;

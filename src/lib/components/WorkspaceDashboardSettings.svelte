@@ -8,16 +8,15 @@
    *   - Banner color picker — writes `color` on the workspace
    *   - Dashboards toggles — enable/disable each registered contribution
    *     for this workspace (autoProvision contribs render locked-on)
-   *   - Markdown source — read-only path to the Overview preview file
    */
   import { get } from "svelte/store";
   import { theme } from "../stores/theme";
   import ColorSlotPicker from "./ColorSlotPicker.svelte";
   import { workspacesStore } from "../stores/workspace";
   import {
-    workspaceDashboardPath,
     updateWorkspace,
     closeDashboardForWorkspace,
+    clearDashboardDismissal,
   } from "../services/workspace-service";
   import { switchWorkspace } from "../services/workspace-runtime-service";
   import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
@@ -30,6 +29,13 @@
   import GridIcon from "../icons/GridIcon.svelte";
 
   export let rootWorkspaceId: string;
+  /**
+   * When this component is mounted as a registry surface, PaneView passes
+   * `visible` so inactive tabs collapse to display:none (matching
+   * Terminal/Preview surface behavior). Default true for direct-render use
+   * sites (e.g. the settings dashboard workspace).
+   */
+  export let visible: boolean = true;
 
   /** Per-row regenerate-in-flight flag. Keyed by contribution id. */
   let regeneratingRow: string | null = null;
@@ -37,7 +43,6 @@
 
   $: workspace = $workspacesStore.find((w) => w.id === rootWorkspaceId);
   $: currentColorSlot = workspace?.color ?? "purple";
-  $: markdownPath = workspace ? workspaceDashboardPath(workspace.path) : "";
 
   let nameDraft = "";
   let editingName = false;
@@ -101,6 +106,11 @@
     if (!workspace) return;
     if (contribution.autoProvision) return;
     if (next) {
+      // Re-enabling clears any prior dismissal so the next reconcile pass
+      // does not skip a defaultEnabled contribution we just re-added.
+      if (contribution.defaultEnabled) {
+        clearDashboardDismissal(workspace.id, contribution.id);
+      }
       // Snapshot the active workspace before create() — createWorkspaceFromDef
       // auto-switches to the freshly created dashboard, which would yank the
       // user out of the Settings panel they're toggling from.
@@ -170,7 +180,9 @@
     data-workspace-id={workspace.id}
     style="
       flex: 1; min-width: 0; min-height: 0; overflow: auto;
-      padding: 24px 32px; display: flex; flex-direction: column; gap: 24px;
+      padding: 24px 32px;
+      display: {visible ? 'flex' : 'none'};
+      flex-direction: column; gap: 24px;
       background: {$theme.bg}; color: {$theme.fg};
     "
   >
@@ -373,23 +385,6 @@
           </div>
         {/if}
       </div>
-    </section>
-
-    <section style="display: flex; flex-direction: column; gap: 4px;">
-      <h3 style="margin: 0; font-size: 14px; font-weight: 600;">
-        Markdown source
-      </h3>
-      <p style="margin: 0; color: {$theme.fgDim}; font-size: 12px;">
-        Backing file for this dashboard's Overview tab.
-      </p>
-      <code
-        data-markdown-path
-        style="
-          margin-top: 4px; padding: 6px 10px;
-          background: {$theme.bgSurface}; border: 1px solid {$theme.border};
-          border-radius: 4px; font-size: 12px;
-        ">{markdownPath}</code
-      >
     </section>
   </div>
 {/if}

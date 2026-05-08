@@ -26,6 +26,11 @@
   import { slide } from "svelte/transition";
   import { theme } from "../stores/theme";
   import { workspaces } from "../stores/workspace";
+  import {
+    bannerCollapsedState,
+    setBannerCollapsed,
+    sidebarVisible,
+  } from "../stores/ui";
   import SidebarElement from "./SidebarElement.svelte";
   import SidebarRail from "./SidebarRail.svelte";
   import DefaultWorkspaceListView from "./WorkspaceListView.svelte";
@@ -100,6 +105,14 @@
    * is being shown, even after the cursor has left the rail itself.
    */
   export let popoverActive: boolean = false;
+  /**
+   * Number of dashboard chips this banner will render in its
+   * children-leading slot. Combined with `nonDashboardCount` it
+   * determines whether the banner is expandable and whether the
+   * children container renders. Default 0 keeps the legacy behavior
+   * for callers that haven't migrated.
+   */
+  export let dashboardCount: number = 0;
 
   let bannerHovered = false;
 
@@ -109,15 +122,33 @@
     (ws) => filterIds.has(ws.id) && ws.isDashboard !== true,
   ).length;
 
-  let collapsed = false;
-  let prevNonDashboardCount = -1;
+  // Collapsed state is read from the shared `bannerCollapsedState`
+  // store keyed by scopeId. This keeps the popover banner (rendered
+  // over the terminal area when the sidebar is collapsed) and the
+  // main-view banner (clipped behind the 12px rail strip) in sync —
+  // toggling the chevron in the popover updates the rail height in
+  // the strip the same way it updates inside an expanded sidebar.
+  // Default is collapsed for fresh banners; the user's explicit
+  // toggle is persisted via banner-collapse-persistence-service.
+  $: collapsed = $bannerCollapsedState.get(scopeId) ?? true;
+  function toggleCollapsed() {
+    setBannerCollapsed(scopeId, !collapsed);
+  }
+  let prevExpandableCount = -1;
+  $: expandableCount = nonDashboardCount + dashboardCount;
+  $: expandable = expandableCount > 0;
   $: {
-    const count = nonDashboardCount;
-    if (prevNonDashboardCount >= 0) {
-      if (count > prevNonDashboardCount) collapsed = false;
-      else if (count === 0) collapsed = true;
+    const count = expandableCount;
+    // Auto-expand only when an existing populated banner gains a child.
+    // Skip the from-zero growth case so the count climbing from 0 to N
+    // during initial workspace load doesn't override a persisted
+    // collapsed flag. Auto-collapse when the banner empties out.
+    if (prevExpandableCount > 0 && count > prevExpandableCount) {
+      setBannerCollapsed(scopeId, false);
+    } else if (prevExpandableCount > 0 && count === 0) {
+      setBannerCollapsed(scopeId, true);
     }
-    prevNonDashboardCount = count;
+    prevExpandableCount = count;
   }
 
   $: WorkspaceListViewResolved = (workspaceListViewComponent ??
@@ -169,29 +200,33 @@
             <slot
               name="btn-row"
               {collapsed}
-              toggle={() => (collapsed = !collapsed)}
-              showToggle={nonDashboardCount > 0}
+              toggle={toggleCollapsed}
+              showToggle={expandable}
             />
           </div>
         {/if}
       </div>
     </SidebarElement>
-    {#if !collapsed && nonDashboardCount > 0}
+    {#if !collapsed && expandable}
       <div
         data-sidebar-banner-children={scopeId}
         data-children-count={nonDashboardCount}
+        data-dashboard-count={dashboardCount}
         style="display: flex; flex-direction: column;"
         transition:slide={{ duration: 200 }}
       >
-        <svelte:component
-          this={WorkspaceListViewResolved}
-          {filterIds}
-          accentColor={color}
-          {scopeId}
-          {containerBlockId}
-          {dashboardHintFor}
-          {hideStatusBadges}
-        />
+        <slot name="children-leading" />
+        {#if nonDashboardCount > 0}
+          <svelte:component
+            this={WorkspaceListViewResolved}
+            {filterIds}
+            accentColor={color}
+            {scopeId}
+            {containerBlockId}
+            {dashboardHintFor}
+            {hideStatusBadges}
+          />
+        {/if}
       </div>
     {/if}
     <slot name="after-children" />
@@ -279,29 +314,42 @@
               <slot
                 name="btn-row"
                 {collapsed}
-                toggle={() => (collapsed = !collapsed)}
-                showToggle={nonDashboardCount > 0}
+                toggle={toggleCollapsed}
+                showToggle={expandable}
               />
             </div>
           {/if}
         </div>
       </div>
-      {#if !collapsed && nonDashboardCount > 0}
+      {#if !collapsed && expandable}
         <div
           data-sidebar-banner-children={scopeId}
           data-children-count={nonDashboardCount}
-          style="display: flex; flex-direction: column; margin-left: -2px; margin-top: -2px;"
+          data-dashboard-count={dashboardCount}
+          style="
+            display: flex; flex-direction: column;
+            {!$sidebarVisible
+            ? `margin-right: 4px;
+                 background: ${$theme.sidebarBg ?? $theme.bg ?? '#000'}cc;
+                 backdrop-filter: blur(10px);
+                 -webkit-backdrop-filter: blur(10px);
+                 border-radius: 0 0 6px 0;`
+            : 'margin-left: -2px; margin-top: -2px;'}
+          "
           transition:slide={{ duration: 200 }}
         >
-          <svelte:component
-            this={WorkspaceListViewResolved}
-            {filterIds}
-            accentColor={color}
-            {scopeId}
-            {containerBlockId}
-            {dashboardHintFor}
-            {hideStatusBadges}
-          />
+          <slot name="children-leading" />
+          {#if nonDashboardCount > 0}
+            <svelte:component
+              this={WorkspaceListViewResolved}
+              {filterIds}
+              accentColor={color}
+              {scopeId}
+              {containerBlockId}
+              {dashboardHintFor}
+              {hideStatusBadges}
+            />
+          {/if}
         </div>
       {/if}
       <slot name="after-children" />

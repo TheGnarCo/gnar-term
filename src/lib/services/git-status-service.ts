@@ -10,9 +10,9 @@
  * sub-second reactivity for actual git ops.
  *
  * PR/CI state was historically registered here under itemId `"pr"`; the
- * pill was retired in favor of the Workspace Dashboards' `gnar:prs` widget,
- * which renders the full open-PR list with row actions instead of a
- * single per-workspace badge.
+ * pill was retired in favor of the Workspace Overview Dashboard's PRs
+ * section, which renders the full open-PR list with row actions
+ * instead of a single per-workspace badge.
  */
 import { invoke } from "@tauri-apps/api/core";
 import { get } from "svelte/store";

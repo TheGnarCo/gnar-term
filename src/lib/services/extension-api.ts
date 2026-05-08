@@ -61,7 +61,7 @@ import {
   sendNotification as notifSend,
 } from "@tauri-apps/plugin-notification";
 import WorkspaceListView from "../components/WorkspaceListView.svelte";
-import ContainerRow from "../components/ContainerRow.svelte";
+import SidebarBanner from "../components/SidebarBanner.svelte";
 import PathStatusLine from "../components/PathStatusLine.svelte";
 import SplitButton from "../components/SplitButton.svelte";
 import ColorPicker from "../components/ColorPicker.svelte";
@@ -523,7 +523,7 @@ export function createExtensionAPI(
         ColorPicker,
         DragGrip,
         DropGhost,
-        ContainerRow,
+        SidebarBanner,
         PathStatusLine,
       };
     },

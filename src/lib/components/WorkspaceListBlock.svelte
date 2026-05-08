@@ -16,9 +16,16 @@
    * WorkspaceListView.
    */
   import { derived } from "svelte/store";
+  import { onDestroy } from "svelte";
   import { theme } from "../stores/theme";
   import { workspaces } from "../stores/workspace";
-  import { reorderContext, anyReorderActive } from "../stores/ui";
+  import {
+    reorderContext,
+    canSidebarDrag,
+    sidebarVisible,
+    sidebarWidth,
+    hoveredRootRowKey,
+  } from "../stores/ui";
   import {
     rootRowOrder,
     moveRootRow,
@@ -93,7 +100,7 @@
      * button — Settings, Claude Settings, etc.). These have
      * `isDashboard: true`, `dashboardContributionId`, and no
      * `rootWorkspaceId`. The registered "workspace" renderer (built for
-     * `WorkspaceRecord` rows with paths and branches) can't draw them, so
+     * `RootWorkspace` rows with paths and branches) can't draw them, so
      * the block routes them through `WorkspaceItem` directly.
      */
     standaloneDashboardWs?: Workspace;
@@ -162,6 +169,59 @@
   );
   $: renderedRows = $renderedRowsStore;
 
+  // --- Per-row popover (collapsed sidebar only) ---
+  //
+  // When the sidebar is collapsed, hovering an individual row's rail
+  // surfaces THAT row's full banner as an absolutely-positioned popover
+  // anchored at the row's y-coordinate. Other rails stay 12px-clipped.
+  // The hovered row's key drives both the popover render here AND the
+  // shared `hoveredRootRowKey` store so peer chrome (status badges, etc.)
+  // can react.
+  const POPOVER_GRACE_MS = 150;
+
+  let popoverRow: { key: string; top: number; height: number } | null = null;
+  let popoverGraceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function clearPopoverGraceTimer() {
+    if (popoverGraceTimer) {
+      clearTimeout(popoverGraceTimer);
+      popoverGraceTimer = null;
+    }
+  }
+
+  function setPopoverFromEvent(e: MouseEvent, key: string) {
+    if ($sidebarVisible) return;
+    clearPopoverGraceTimer();
+    const target = e.currentTarget as HTMLElement | null;
+    if (!target) return;
+    const rect = target.getBoundingClientRect();
+    popoverRow = { key, top: rect.top, height: rect.height };
+    hoveredRootRowKey.set(key);
+  }
+
+  function clearPopoverWithGrace() {
+    if ($sidebarVisible) return;
+    clearPopoverGraceTimer();
+    popoverGraceTimer = setTimeout(() => {
+      popoverRow = null;
+      hoveredRootRowKey.set(null);
+      popoverGraceTimer = null;
+    }, POPOVER_GRACE_MS);
+  }
+
+  // Drop the popover whenever the sidebar expands so it doesn't linger
+  // after the user toggles state mid-hover.
+  $: if ($sidebarVisible) {
+    clearPopoverGraceTimer();
+    popoverRow = null;
+    if ($hoveredRootRowKey !== null) hoveredRootRowKey.set(null);
+  }
+
+  onDestroy(() => {
+    clearPopoverGraceTimer();
+    if ($hoveredRootRowKey !== null) hoveredRootRowKey.set(null);
+  });
+
   // --- Unified drag pipeline for the root list ---
   //
   // One createDragReorder owns reordering across all root rows
@@ -187,7 +247,7 @@
       background: "transparent",
       border: `1px solid ${$theme.border ?? "transparent"}`,
     }),
-    canStart: () => !$anyReorderActive,
+    canStart: () => $canSidebarDrag,
     onDrop: (from, to) => moveRootRow(from, to),
     onMove: (x, y, ghostEl) => {
       const fromIdx = rootDrag.getState().sourceIdx;
@@ -316,6 +376,51 @@
      moved up into Sidebar's top row so it aligns with the
      other title-row buttons. -->
 
+{#snippet rowBody(entry: RenderedRow)}
+  {@const popoverActive = popoverRow?.key === entry.key}
+  {#if entry.row.kind === "pseudo-workspace" && entry.pseudoWorkspace}
+    <PseudoWorkspaceRow
+      pseudo={entry.pseudoWorkspace}
+      onGripMouseDown={(e) => startRootRowDrag(e, entry.idx)}
+      {popoverActive}
+    />
+  {:else if entry.standaloneDashboardWs}
+    {@const ws = entry.standaloneDashboardWs}
+    {@const globalIdx = $workspaces.findIndex((w) => w.id === ws.id)}
+    <WorkspaceItem
+      workspace={ws}
+      index={globalIdx}
+      isActive={globalIdx === $activeWorkspaceIdx}
+      onSelect={() => {
+        if (globalIdx >= 0) switchWorkspace(globalIdx);
+      }}
+      onClose={() => {
+        if (globalIdx >= 0) closeWorkspace(globalIdx);
+      }}
+      onRename={() => {}}
+      onContextMenu={() => {}}
+      onGripMouseDown={(e) => startRootRowDrag(e, entry.idx)}
+      dragActive={false}
+      shortcutIdx={entry.workspaceOnlyIdx}
+      {popoverActive}
+    />
+  {:else if entry.rendererComponent && entry.rendererSource}
+    {@const extApi = getExtensionApiById(entry.rendererSource)}
+    {#if extApi}
+      <ExtensionWrapper
+        api={extApi}
+        component={entry.rendererComponent}
+        props={{
+          id: entry.row.id,
+          onGripMouseDown: (e: MouseEvent) => startRootRowDrag(e, entry.idx),
+          shortcutIdx: entry.workspaceOnlyIdx,
+          popoverActive,
+        }}
+      />
+    {/if}
+  {/if}
+{/snippet}
+
 <!-- Root rows: Workspaces and pinned extension blocks interleaved per
      $rootRowOrder. Each row is shelled with a core-drawn DragGrip
      (left) + content (right). Non-source rows during a drag get a
@@ -355,51 +460,14 @@
   {#if !isSource}
     <div class="root-row" data-root-row-container={entry.idx}>
       <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div data-root-row-idx={entry.idx} style="position: relative;">
-        <!-- Row content — the renderer draws its OWN grip (via
-             onGripMouseDown) so the row looks self-contained (no gap
-             between active workspace bg and its rail). Core still owns
-             the drag pipeline — the renderer's grip just calls back
-             into startRootRowDrag. -->
-        {#if entry.row.kind === "pseudo-workspace" && entry.pseudoWorkspace}
-          <PseudoWorkspaceRow
-            pseudo={entry.pseudoWorkspace}
-            onGripMouseDown={(e) => startRootRowDrag(e, entry.idx)}
-          />
-        {:else if entry.standaloneDashboardWs}
-          {@const ws = entry.standaloneDashboardWs}
-          {@const globalIdx = $workspaces.findIndex((w) => w.id === ws.id)}
-          <WorkspaceItem
-            workspace={ws}
-            index={globalIdx}
-            isActive={globalIdx === $activeWorkspaceIdx}
-            onSelect={() => {
-              if (globalIdx >= 0) switchWorkspace(globalIdx);
-            }}
-            onClose={() => {
-              if (globalIdx >= 0) closeWorkspace(globalIdx);
-            }}
-            onRename={() => {}}
-            onContextMenu={() => {}}
-            onGripMouseDown={(e) => startRootRowDrag(e, entry.idx)}
-            dragActive={isSource}
-            shortcutIdx={entry.workspaceOnlyIdx}
-          />
-        {:else if entry.rendererComponent && entry.rendererSource}
-          {@const extApi = getExtensionApiById(entry.rendererSource)}
-          {#if extApi}
-            <ExtensionWrapper
-              api={extApi}
-              component={entry.rendererComponent}
-              props={{
-                id: entry.row.id,
-                onGripMouseDown: (e: MouseEvent) =>
-                  startRootRowDrag(e, entry.idx),
-                shortcutIdx: entry.workspaceOnlyIdx,
-              }}
-            />
-          {/if}
-        {/if}
+      <div
+        data-root-row-idx={entry.idx}
+        data-root-row-key={entry.key}
+        style="position: relative;"
+        on:mouseenter={(e) => setPopoverFromEvent(e, entry.key)}
+        on:mouseleave={clearPopoverWithGrace}
+      >
+        {@render rowBody(entry)}
       </div>
     </div>
   {/if}
@@ -414,6 +482,35 @@
     </div>
   {/if}
 {/each}
+
+{#if !$sidebarVisible && popoverRow}
+  {@const popoverEntry = renderedRows.find((r) => r.key === popoverRow!.key)}
+  {#if popoverEntry}
+    <!-- Popover anchors at left:4px so the row's rail lines up with the
+         4px gutter painted by the sidebar wrapper's padding-left:4px in
+         expanded mode (and matches the wrapper's collapsed rail
+         placement). Width subtracts the gutter so the right edge stays
+         flush at viewport x = sidebarWidth. -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      class="root-row-popover"
+      data-root-row-popover={popoverEntry.key}
+      style="
+        position: fixed;
+        top: {popoverRow.top}px;
+        left: 4px;
+        width: {$sidebarWidth - 4}px;
+        z-index: 200;
+        pointer-events: auto;
+        background: transparent;
+      "
+      on:mouseenter={clearPopoverGraceTimer}
+      on:mouseleave={clearPopoverWithGrace}
+    >
+      {@render rowBody(popoverEntry)}
+    </div>
+  {/if}
+{/if}
 
 <style>
   /* Inter-row gap — matches the child workspace inter-row gap

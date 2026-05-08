@@ -42,7 +42,7 @@ import GearIcon from "../icons/GearIcon.svelte";
 import GridIcon from "../icons/GridIcon.svelte";
 import WorkspacesWidget from "../components/WorkspacesWidget.svelte";
 import { registerMarkdownComponent } from "../services/markdown-component-registry";
-import type { WorkspaceRecord as Workspace } from "../stores/workspace";
+import type { RootWorkspace as Workspace } from "../stores/workspace";
 import {
   pendingCreateResolver,
   createDialogPrefill,
@@ -239,8 +239,8 @@ export async function initWorkspaces(): Promise<void> {
   // from the canonical tag on each load.
   reclaimBranchedWorkspaces();
 
-  // Root-row renderer for "workspace" kind. ContainerRow inside
-  // the renderer owns the grip/banner/child-list chrome; the rail
+  // Root-row renderer for "workspace" kind. SidebarBanner inside
+  // the renderer owns the grip/bar/child-list chrome; the rail
   // color + label resolvers let the outer list paint the grip in the
   // workspace's color and show its name in the drag overlay.
   registerRootRowRenderer({

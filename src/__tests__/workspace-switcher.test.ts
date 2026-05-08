@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { filterWorkspaces } from "../lib/services/workspace-switcher-filter";
 import type { Workspace } from "../lib/types";
-import type { WorkspaceRecord } from "../lib/config";
+import type { RootWorkspace } from "../lib/config";
 
 // ---- Minimal stubs ----
 
@@ -22,7 +22,7 @@ function makeWs(
   } as Workspace;
 }
 
-function makeParent(id: string, name: string): WorkspaceRecord {
+function makeParent(id: string, name: string): RootWorkspace {
   return {
     id,
     name,
@@ -47,7 +47,7 @@ const branches = [
   makeWs({ id: "nw-5", name: "standalone" }), // no parent
 ];
 
-const parentMap = new Map<string, WorkspaceRecord>([
+const parentMap = new Map<string, RootWorkspace>([
   ["ws-a", parentA],
   ["ws-b", parentB],
 ]);

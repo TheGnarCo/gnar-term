@@ -11,7 +11,6 @@
    * render below it in their declared order but aren't reorderable
    * at the top level either.
    */
-  import { onDestroy } from "svelte";
   import { theme } from "../stores/theme";
   import { sidebarVisible, sidebarWidth } from "../stores/ui";
   import { sidebarSectionStore } from "../services/sidebar-section-registry";
@@ -25,49 +24,13 @@
   import SidebarResizeHandle from "./SidebarResizeHandle.svelte";
   import NewWorkspaceSplitButton from "./NewWorkspaceSplitButton.svelte";
 
-  // Brief grace period so users can drift off the slot for a moment
-  // (e.g. catching the OS scrollbar) without the overlay flashing shut.
-  const HOVER_CLOSE_DELAY_MS = 150;
-
   // Width of the rail-only slot when the sidebar is collapsed. The
-  // workspace banner's grip rail is 8px (DragGrip frit pattern); show
-  // it plus a few pixels of banner past the rail so the colour stripe
-  // is visible without revealing row content.
+  // wrapper paints a 12px-wide rail strip via overflow:hidden; each
+  // row inside renders at its natural width but is clipped here so
+  // only the leftmost rail edge shows. Per-row hover popovers (owned
+  // by WorkspaceListBlock) escape this clip via position:fixed so
+  // they appear at the row's y-coordinate at full sidebar width.
   const RAIL_WIDTH_PX = 12;
-
-  let overlayActive = false;
-  let closeTimer: ReturnType<typeof setTimeout> | null = null;
-
-  function clearCloseTimer() {
-    if (closeTimer) {
-      clearTimeout(closeTimer);
-      closeTimer = null;
-    }
-  }
-
-  function handleSlotEnter() {
-    if ($sidebarVisible) return;
-    clearCloseTimer();
-    overlayActive = true;
-  }
-
-  function handleSlotLeave() {
-    if ($sidebarVisible) return;
-    clearCloseTimer();
-    closeTimer = setTimeout(() => {
-      overlayActive = false;
-      closeTimer = null;
-    }, HOVER_CLOSE_DELAY_MS);
-  }
-
-  // Reset overlay state whenever the sidebar expands so the overlay
-  // doesn't linger after the user toggles it back open.
-  $: if ($sidebarVisible) {
-    clearCloseTimer();
-    overlayActive = false;
-  }
-
-  onDestroy(clearCloseTimer);
 
   const iconSvgMap: Record<string, string> = {
     plus: `<line x1="8" y1="3" x2="8" y2="13" /><line x1="3" y1="8" x2="13" y2="8" />`,
@@ -93,40 +56,39 @@
   }
 </script>
 
+<!-- Collapsed mode: the sidebar is absolutely positioned so it overlays
+     the main column rather than sitting next to it as a flex sibling.
+     The main column applies padding-left equal to RAIL_WIDTH_PX so its
+     content scoots out from under the overlay. Expanded mode keeps the
+     historical flex-sibling layout. -->
 <div
   id="sidebar"
   class:collapsed={!$sidebarVisible}
-  class:overlay-active={!$sidebarVisible && overlayActive}
-  on:mouseenter={handleSlotEnter}
-  on:mouseleave={handleSlotLeave}
   role="presentation"
   style="
-    width: {$sidebarVisible ? `${$sidebarWidth}px` : `${RAIL_WIDTH_PX}px`};
-    background: {$theme.sidebarBg};
+    {$sidebarVisible
+    ? `position: relative; width: ${$sidebarWidth}px; flex-shrink: 0;`
+    : `position: absolute; left: 0; top: 0; bottom: 0; width: ${RAIL_WIDTH_PX}px; z-index: 2;`}
+    background: {$sidebarVisible ? $theme.sidebarBg : $theme.bg};
     display: flex;
-    overflow: {!$sidebarVisible && overlayActive ? 'visible' : 'hidden'};
+    overflow: hidden;
     font-size: 13px;
-    flex-shrink: 0;
-    position: relative;
   "
 >
-  <!-- In collapsed mode the inner content is absolutely positioned at
-       its full natural width but clipped by the rail slot's
-       overflow: hidden — exposing only the leftmost RAIL_WIDTH_PX
-       pixels of each row, which is where the workspace grip rail and
-       a sliver of the banner colour live. Hovering lifts the clip so
-       the full sidebar opens over the terminal. -->
+  <!-- In collapsed mode the wrapper is a 12px rail strip clipped via
+       overflow:hidden. Each row inside renders at its natural width
+       (clipped at the wrapper) — only the leftmost rail is visible.
+       Per-row hover popovers (rendered by WorkspaceListBlock) escape
+       this clip via position:fixed so they appear at the row's y. -->
   <div
     class="sidebar-content"
     style="
       width: {$sidebarVisible ? '100%' : `${$sidebarWidth}px`};
       height: 100%;
       display: flex;
-      background: {$theme.sidebarBg};
+      background: {$sidebarVisible ? $theme.sidebarBg : $theme.bg};
       transition: box-shadow 120ms ease;
-      {$sidebarVisible
-      ? ''
-      : `position: absolute; left: 0; top: 0; z-index: 100; ${overlayActive ? 'box-shadow: 0 0 24px rgba(0, 0, 0, 0.45);' : ''}`}
+      {$sidebarVisible ? '' : 'position: absolute; left: 0; top: 0;'}
     "
   >
     <div
@@ -191,7 +153,9 @@
         {/each}
       </div>
 
-      <ArchiveZone />
+      {#if $sidebarVisible}
+        <ArchiveZone />
+      {/if}
     </div>
     {#if $sidebarVisible}
       <SidebarResizeHandle

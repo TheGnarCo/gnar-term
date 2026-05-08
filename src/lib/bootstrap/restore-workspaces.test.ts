@@ -103,7 +103,7 @@ describe("restoreWorkspaces — owned dashboards survive restart", () => {
     expect(dash?.dashboardContributionId).toBe("group");
 
     // Regression: root-shaped Workspaces must own a (possibly empty)
-    // `branchedWorkspaceIds` array. WorkspaceRecord's contract requires
+    // `branchedWorkspaceIds` array. RootWorkspace's contract requires
     // it; consumers like WorkspaceSectionContent crash if it's undefined.
     const root = restored.find((w) => w.id === "root-1");
     expect(Array.isArray(root?.branchedWorkspaceIds)).toBe(true);

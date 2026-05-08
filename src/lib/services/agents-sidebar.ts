@@ -7,7 +7,7 @@
  */
 import type { DetectedAgent } from "./agent-detection-service";
 import type { Workspace } from "../types";
-import type { WorkspaceRecord } from "../config";
+import type { RootWorkspace } from "../config";
 
 export interface AgentRow extends DetectedAgent {
   /** Display name of the Branch the agent lives in. */
@@ -26,7 +26,7 @@ export interface AgentRow extends DetectedAgent {
 export function buildAgentRows(
   agents: DetectedAgent[],
   branchedWsList: Workspace[],
-  workspaces: WorkspaceRecord[],
+  workspaces: RootWorkspace[],
 ): AgentRow[] {
   return agents
     .filter((a) => a.status !== "closed")

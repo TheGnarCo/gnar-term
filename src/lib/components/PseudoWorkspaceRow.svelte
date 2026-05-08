@@ -12,7 +12,7 @@
    * calls onClose() so the registrar can wire up a reopen affordance.
    */
   import { theme } from "../stores/theme";
-  import { reorderContext } from "../stores/ui";
+  import { canSidebarDrag, sidebarVisible } from "../stores/ui";
   import { activePseudoWorkspaceId } from "../stores/workspace";
   import { activeWorkspaceId } from "../stores/workspace";
   import DragGrip from "./DragGrip.svelte";
@@ -33,6 +33,12 @@
   export let onGripMouseDown: ((e: MouseEvent) => void) | undefined = undefined;
   /** Sidebar position index for the ⌘N shortcut hint. */
   export let shortcutIdx: number | undefined = undefined;
+  /**
+   * True while this row's collapsed-mode popover/banner is open. Keeps
+   * the rail at full width while the banner is showing, even after the
+   * cursor has left the rail itself.
+   */
+  export let popoverActive: boolean = false;
 
   $: rowBodyApi = pseudo.rowBody
     ? getExtensionApiById(pseudo.source)
@@ -59,7 +65,12 @@
   }
 
   $: isActive = $activePseudoWorkspaceId === pseudo.id;
-  $: gripVisible = rowHovered && $reorderContext === null;
+  $: gripVisible = rowHovered && $canSidebarDrag;
+  // Mirror SidebarRail's collapsed-mode rail-width policy: thin when
+  // inactive, not currently hovered, AND the popover isn't open.
+  // Expanded mode keeps 8px.
+  $: narrowRail =
+    !$sidebarVisible && !isActive && !rowHovered && !popoverActive;
 
   function handleClose(): void {
     unregisterPseudoWorkspace(pseudo.id);
@@ -107,6 +118,8 @@
       railColor={bannerBackground}
       railOpacity={1}
       alwaysShowDots={true}
+      {narrowRail}
+      primaryClickable={!$sidebarVisible}
     />
     <div
       aria-hidden="true"

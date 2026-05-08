@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, type Component } from "svelte";
-  import ContainerRow from "./ContainerRow.svelte";
+  import SidebarBanner from "./SidebarBanner.svelte";
   import PathStatusLine from "./PathStatusLine.svelte";
   import WorkspaceDiffPrSubtitle from "./WorkspaceDiffPrSubtitle.svelte";
   import WorkspaceListView from "./WorkspaceListView.svelte";
@@ -9,7 +9,7 @@
 
   import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
   import { eventBus, type ExtensionEvent } from "../services/event-bus";
-  import type { WorkspaceRecord } from "../config";
+  import type { RootWorkspace } from "../config";
   import { workspacesStore, getWorkspace } from "../stores/workspace";
   import {
     deleteWorkspace,
@@ -57,13 +57,13 @@
   export let rootWorkspaceId: string;
   /**
    * The namespaced sidebar-block id that hosts this workspace — forwarded
-   * to the ContainerRow's child WorkspaceListView so workspace-drag
+   * to the SidebarBanner's child WorkspaceListView so workspace-drag
    * ReorderContext publishes the actual block id.
    */
   export let containerBlockId: string = "";
   /**
    * Forwarded from WorkspaceRowBody — the drag grip is owned by
-   * ContainerRow in root mode.
+   * SidebarBanner in root mode.
    */
   export let onGripMouseDown: ((e: MouseEvent) => void) | undefined = undefined;
   /**
@@ -77,8 +77,14 @@
     | null = null;
   /** Position among workspace-kind rows only (0-indexed), for Cmd+N shortcut label. */
   export let shortcutIdx: number | undefined = undefined;
+  /**
+   * True while this row's collapsed-mode popover/banner is open.
+   * Forwarded to SidebarBanner → SidebarRail so the rail stays full-width
+   * while the popover is shown.
+   */
+  export let popoverActive: boolean = false;
 
-  let workspace: WorkspaceRecord | undefined;
+  let workspace: RootWorkspace | undefined;
   let stateVersion = 0;
 
   const onWorkspaceStateChanged = () => {
@@ -112,9 +118,9 @@
   // happening in a child Workspace.
   $: filterIds = workspace ? new Set([workspace.id]) : new Set<string>();
 
-  // The Root runtime Workspace shares its id with the Record (ADR-004).
-  // It drives the container row's status dot and renders when the row
-  // is clicked.
+  // The Root runtime Workspace shares its id with its RootWorkspace
+  // entry (ADR-004). It drives the container row's status dot and
+  // renders when the row is clicked.
   $: primaryWs = workspace
     ? $workspaces.find((w) => w.id === workspace!.id)
     : undefined;
@@ -151,11 +157,24 @@
   })();
 
   // True when the primary workspace of this workspace is currently active.
-  // Makes the container row border solid only when the primary workspace
+  // Makes the banner border solid only when the primary workspace
   // is selected (not when a child workspace is selected).
   $: isPrimaryActive = (() => {
     if (!primaryWs) return false;
     return $activeWorkspaceIdx === $workspaces.indexOf(primaryWs);
+  })();
+
+  // True when ANY workspace inside this banner (the root itself, any
+  // branched workspace, or any dashboard child) is the active workspace.
+  // Used to keep the collapsed-mode rail at full width while a descendant
+  // is active — the rail represents the whole workspace, not just the root.
+  $: hasActiveDescendant = (() => {
+    if (!workspace) return false;
+    const active = $workspaces[$activeWorkspaceIdx];
+    if (!active) return false;
+    return (
+      active.id === workspace.id || active.rootWorkspaceId === workspace.id
+    );
   })();
 
   // Re-evaluate contributed children when contributors register/unregister.
@@ -369,13 +388,14 @@
       position: relative;
     "
   >
-    <ContainerRow
+    <SidebarBanner
       color={workspaceHex}
       {onGripMouseDown}
       onBannerContextMenu={handleBannerContextMenu}
       onBannerClick={handleBannerClick}
       filterIds={branchedIds}
-      hasActiveChild={isPrimaryActive}
+      hasActiveChild={hasActiveDescendant}
+      {popoverActive}
       dashboardHintFor={hintForWorkspaceDashboardHost}
       scopeId={workspace.id}
       {containerBlockId}
@@ -588,7 +608,7 @@
           </div>
         {/if}
       </svelte:fragment>
-    </ContainerRow>
+    </SidebarBanner>
 
     {#if overlay}
       <div

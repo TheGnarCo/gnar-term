@@ -215,7 +215,6 @@
     position: absolute;
     inset: 0;
     border: 3px solid;
-    border-left-width: 6px;
     border-radius: 6px;
     opacity: 0.35;
     pointer-events: none;

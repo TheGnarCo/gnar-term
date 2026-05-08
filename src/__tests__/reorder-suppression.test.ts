@@ -24,16 +24,16 @@ const EXTENSION_API = readFileSync(
 describe("grip visibility suppression", () => {
   it("WorkspaceItem keeps its own grip collapsed when any reorder is active unless the item is the drag source", () => {
     // SidebarRail owns the grip visibility logic for both row and
-    // container modes. The gate tracks rail-level hover and suppresses
-    // expansion while any reorder is in progress unless the row is the
-    // drag source (isDragging).
+    // container modes. The gate now uses the canSidebarDrag derived store
+    // (sidebarVisible && !anyReorderActive) via effectiveCanDrag, and
+    // suppresses expansion unless the row is the drag source (isDragging).
     const RAIL = readFileSync(
       "src/lib/components/SidebarRail.svelte",
       "utf-8",
     ).replace(/\s+/g, " ");
-    expect(RAIL).toContain("anyReorderActive");
+    expect(RAIL).toContain("canSidebarDrag");
     expect(RAIL).toMatch(
-      /isDragging\s*\|\|\s*\(\s*canDrag\s*&&\s*railHovered\s*&&\s*!\s*\$anyReorderActive\s*&&\s*!\s*locked\s*\)/,
+      /isDragging\s*\|\|\s*\(\s*effectiveCanDrag\s*&&\s*railHovered\s*&&\s*!\s*locked\s*\)/,
     );
   });
 
@@ -42,14 +42,14 @@ describe("grip visibility suppression", () => {
     // its own grip (flush with the row) and forwards onMouseDown to
     // core's startRootRowDrag. Gate: createDragReorder is present.
     expect(WORKSPACE_LIST_BLOCK).toContain("createDragReorder");
-    expect(WORKSPACE_LIST_BLOCK).toContain("anyReorderActive");
+    expect(WORKSPACE_LIST_BLOCK).toContain("canSidebarDrag");
   });
 });
 
 describe("canStart gating", () => {
-  it("WorkspaceListBlock's unified root drag gates canStart on anyReorderActive", () => {
+  it("WorkspaceListBlock's unified root drag gates canStart on canSidebarDrag", () => {
     expect(WORKSPACE_LIST_BLOCK).toMatch(
-      /canStart:\s*\(\)\s*=>\s*!\s*\$anyReorderActive/,
+      /canStart:\s*\(\)\s*=>\s*\$canSidebarDrag/,
     );
   });
 

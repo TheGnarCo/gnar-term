@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { theme } from "../stores/theme";
+  import { sidebarVisible } from "../stores/ui";
   import { workspaces } from "../stores/workspace";
   import { commandStore } from "../services/command-registry";
   import TabBar from "./TabBar.svelte";
@@ -219,8 +220,13 @@
     position: relative;
     --notify: {$theme.notify};
     --notify-glow: {$theme.notifyGlow};
-    border: 1px solid {paneHasUnread ? $theme.notify : $theme.border};
-    border-radius: 4px; overflow: hidden;
+    border-top: 1px solid {paneHasUnread ? $theme.notify : $theme.border};
+    border-right: 1px solid {paneHasUnread ? $theme.notify : $theme.border};
+    border-bottom: 1px solid {paneHasUnread ? $theme.notify : $theme.border};
+    border-left: {$sidebarVisible
+    ? `1px solid ${paneHasUnread ? $theme.notify : $theme.border}`
+    : 'none'};
+    border-radius: {$sidebarVisible ? '4px' : '0 4px 4px 0'}; overflow: hidden;
     {paneHasUnread
     ? `box-shadow: 0 0 0 1px ${$theme.notifyGlow}, 0 0 14px 1px ${$theme.notifyGlow};`
     : ''}

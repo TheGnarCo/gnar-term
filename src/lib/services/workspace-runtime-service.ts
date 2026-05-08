@@ -222,7 +222,11 @@ export async function createWorkspaceFromDef(
   // A runtime workspace whose id matches an existing root entry IS the
   // Workspace's own Root tab surface — merge the runtime fields onto
   // the existing record-shaped entry rather than appending a duplicate
-  // row. Otherwise append as a new entry.
+  // row. Otherwise append as a new entry, but guard against re-appending
+  // a Branch or Dashboard whose id is already in the store (getWorkspace
+  // only sees root-shaped entries, so duplicate Branches/Dashboards
+  // would otherwise slip past the merge above and land as duplicate
+  // keys in the keyed each that renders WorkspaceView).
   const isWorkspaceOwnRoot = getWorkspace(ws.id) !== undefined;
   if (isWorkspaceOwnRoot) {
     workspaces.update((list) =>
@@ -237,10 +241,12 @@ export async function createWorkspaceFromDef(
       ),
     );
   } else {
-    workspaces.update((list) => [...list, ws]);
+    workspaces.update((list) =>
+      list.some((w) => w.id === ws.id) ? list : [...list, ws],
+    );
     // Branches (have rootWorkspaceId) live nested inside their root and
     // never get a row of their own. Roots get a `kind: "workspace"` row
-    // here; the matching WorkspaceRecord append (via `addWorkspace`)
+    // here; the matching RootWorkspace append (via `addWorkspace`)
     // is idempotent on the same id+kind.
     if (typeof ws.rootWorkspaceId !== "string") {
       appendRootRow({ kind: "workspace", id: ws.id });

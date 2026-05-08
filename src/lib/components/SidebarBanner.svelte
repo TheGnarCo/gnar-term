@@ -190,18 +190,22 @@
       <div
         data-sidebar-banner-children={scopeId}
         data-children-count={nonDashboardCount}
+        data-dashboard-count={dashboardCount}
         style="display: flex; flex-direction: column;"
         transition:slide={{ duration: 200 }}
       >
-        <svelte:component
-          this={WorkspaceListViewResolved}
-          {filterIds}
-          accentColor={color}
-          {scopeId}
-          {containerBlockId}
-          {dashboardHintFor}
-          {hideStatusBadges}
-        />
+        <slot name="children-leading" />
+        {#if nonDashboardCount > 0}
+          <svelte:component
+            this={WorkspaceListViewResolved}
+            {filterIds}
+            accentColor={color}
+            {scopeId}
+            {containerBlockId}
+            {dashboardHintFor}
+            {hideStatusBadges}
+          />
+        {/if}
       </div>
     {/if}
     <slot name="after-children" />
@@ -300,18 +304,22 @@
         <div
           data-sidebar-banner-children={scopeId}
           data-children-count={nonDashboardCount}
+          data-dashboard-count={dashboardCount}
           style="display: flex; flex-direction: column; margin-left: -2px; margin-top: -2px;"
           transition:slide={{ duration: 200 }}
         >
-          <svelte:component
-            this={WorkspaceListViewResolved}
-            {filterIds}
-            accentColor={color}
-            {scopeId}
-            {containerBlockId}
-            {dashboardHintFor}
-            {hideStatusBadges}
-          />
+          <slot name="children-leading" />
+          {#if nonDashboardCount > 0}
+            <svelte:component
+              this={WorkspaceListViewResolved}
+              {filterIds}
+              accentColor={color}
+              {scopeId}
+              {containerBlockId}
+              {dashboardHintFor}
+              {hideStatusBadges}
+            />
+          {/if}
         </div>
       {/if}
       <slot name="after-children" />

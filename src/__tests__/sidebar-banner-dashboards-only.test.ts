@@ -106,4 +106,33 @@ describe("SidebarBanner with dashboards only", () => {
       container.querySelector("[data-sidebar-banner-children]"),
     ).not.toBeNull();
   });
+
+  it("renders children-leading slot inside the children container when expanded", async () => {
+    const { container } = render(Harness, {
+      props: { ...baseProps, dashboardCount: 1 },
+    });
+    await tick();
+
+    const childrenContainer = container.querySelector(
+      "[data-sidebar-banner-children]",
+    );
+    expect(childrenContainer).not.toBeNull();
+    const leading = childrenContainer?.querySelector('[data-testid="leading"]');
+    expect(leading).not.toBeNull();
+  });
+
+  it("does not render children-leading slot content when collapsed", async () => {
+    const { container } = render(Harness, {
+      props: { ...baseProps, dashboardCount: 1 },
+    });
+    await tick();
+
+    const toggle = container.querySelector(
+      '[data-testid="toggle"]',
+    ) as HTMLElement;
+    await fireEvent.click(toggle);
+    await tick();
+
+    expect(container.querySelector('[data-testid="leading"]')).toBeNull();
+  });
 });

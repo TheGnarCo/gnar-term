@@ -226,4 +226,59 @@ describe("createAuthStore", () => {
     const v = get(store.status);
     expect(v.kind).toBe("invalid");
   });
+
+  // Regression: a slow first /me must not overwrite a faster second
+  // /me's result. The naive implementation awaits validateAuth then
+  // unconditionally publishes — under racy refreshes (settings flip
+  // mid-flight, onMount + settings subscription firing back-to-back),
+  // the older response would clobber the newer one. The generation
+  // counter ensures only the latest call can publish.
+  it("ignores a stale slow refresh that resolves after a newer one", async () => {
+    let cfgKey = "sw_first";
+    let release: (() => void) | null = null;
+    const slowMe = vi.fn().mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = () =>
+            resolve({
+              type: "api_key",
+              projects: [{ id: "proj_first", name: "First" }],
+            });
+        }),
+    );
+    const fastMe = vi.fn().mockResolvedValue({
+      type: "api_key",
+      projects: [{ id: "proj_second", name: "Second" }],
+    });
+    const store = createAuthStore({
+      getConfig: () => ({
+        apiKey: cfgKey,
+        baseUrl: "https://spacebase.thegnar.com",
+        projectId: "",
+      }),
+      makeClient: () =>
+        cfgKey === "sw_first"
+          ? fakeClient({ me: slowMe })
+          : fakeClient({ me: fastMe }),
+    });
+
+    const slow = store.refresh();
+    cfgKey = "sw_second";
+    await store.refresh();
+    // The fast (newer) call has resolved — store reflects "Second".
+    let v = get(store.status);
+    expect(v.kind).toBe("valid");
+    if (v.kind === "valid") {
+      expect(v.projects[0]?.id).toBe("proj_second");
+    }
+
+    // Now release the stale slow call. Its result must NOT overwrite.
+    release?.();
+    await slow;
+    v = get(store.status);
+    expect(v.kind).toBe("valid");
+    if (v.kind === "valid") {
+      expect(v.projects[0]?.id).toBe("proj_second");
+    }
+  });
 });

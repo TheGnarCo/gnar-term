@@ -170,6 +170,34 @@ describe("openFileAsPreviewSplit", () => {
     }
   });
 
+  // Pins the contract documented on OpenPreviewSplitOptions.ratio: the
+  // ratio applies to the originally-active pane (children[0]), and the
+  // new preview pane (children[1]) gets `1 - ratio`. Callers that want a
+  // narrow preview should pass a ratio > 0.5.
+  it("places the active pane at children[0] and the new preview at children[1]", () => {
+    const { ws, pane } = makeChildWorkspace("ws-1");
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+
+    openFileAsPreviewSplit("/docs/README.md", { ratio: 2 / 3 });
+
+    const layout = get(workspaces)[0]!.paneLayout;
+    expect(layout.type).toBe("split");
+    if (layout.type === "split") {
+      const [first, second] = layout.children;
+      expect(first?.type).toBe("pane");
+      expect(second?.type).toBe("pane");
+      if (first?.type === "pane" && second?.type === "pane") {
+        // Originally-active pane survives at index 0; new preview pane at index 1.
+        expect(first.pane.id).toBe(pane.id);
+        expect(second.pane.id).not.toBe(pane.id);
+        expect(second.pane.surfaces[0]?.kind).toBe("preview");
+      }
+      // Active pane gets 2/3 of the width; preview gets the remaining 1/3.
+      expect(layout.ratio).toBeCloseTo(2 / 3, 5);
+    }
+  });
+
   it("clamps an out-of-range ratio to a sensible bound", () => {
     const { ws } = makeChildWorkspace("ws-1");
     workspaces.set([ws]);

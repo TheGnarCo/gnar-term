@@ -8,7 +8,7 @@
     type SpacebaseProjectRef,
   } from "./api-client";
   import { resolveAuthConfig } from "./auth-store";
-  import { __getSpacebaseAuthStoreForTest } from "./index";
+  import { getSpacebaseAuthStore } from "./index";
   import { openDocFlow } from "./registry-data";
   import { buildDocTree } from "./doc-tree";
   import {
@@ -23,7 +23,7 @@
 
   const api = getContext<ExtensionAPI>(EXTENSION_API_KEY);
   const theme = api.theme;
-  const authStore = __getSpacebaseAuthStoreForTest();
+  const authStore = getSpacebaseAuthStore();
 
   const docs = writable<DocSummary[]>([]);
   const loading = writable<boolean>(false);
@@ -191,7 +191,7 @@
           writeFile: (path, content) =>
             api.invoke("write_file", { path, content }),
           openPreviewSplit: (path) =>
-            api.openPreviewSplit(path, { ratio: 1 / 3, exclusive: true }),
+            api.openPreviewSplit(path, { ratio: 2 / 3, exclusive: true }),
           getHome: () => api.invoke<string>("get_home"),
         },
         project.id,

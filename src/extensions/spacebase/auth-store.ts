@@ -110,16 +110,26 @@ export function createAuthStore(deps: AuthStoreDeps): AuthStore {
     kind: "not-configured",
     reason: "API key not set",
   });
+  // Generation counter for the latest in-flight refresh. validateAuth
+  // is async, so two refreshes started in quick succession (e.g. an
+  // onMount hook racing a settings-change subscription) could otherwise
+  // resolve in either order and leave the store reflecting the older
+  // request. Each refresh tags its work with a generation number; only
+  // the most recent generation may publish its result.
+  let generation = 0;
   async function refresh(): Promise<void> {
+    const myGen = ++generation;
     const cfg = deps.getConfig();
     if (!cfg.apiKey) {
-      status.set({ kind: "not-configured", reason: "API key not set" });
+      if (myGen === generation) {
+        status.set({ kind: "not-configured", reason: "API key not set" });
+      }
       return;
     }
-    status.set({ kind: "checking" });
+    if (myGen === generation) status.set({ kind: "checking" });
     const client = deps.makeClient(cfg);
     const next = await validateAuth(client, cfg.projectId);
-    status.set(next);
+    if (myGen === generation) status.set(next);
   }
   return { status: { subscribe: status.subscribe }, refresh };
 }

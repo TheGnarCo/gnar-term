@@ -10,13 +10,27 @@ import type { SpacebaseClient } from "./api-client";
 
 const CACHE_SEGMENT = ".gnar-term/spacebase/cache";
 
+/**
+ * Reject any segment that could escape the cache root or land on a
+ * filesystem-significant name. The Spacebase server controls the IDs
+ * we interpolate here; treat them as untrusted input.
+ */
+function safeSegment(s: string): string {
+  if (!s) throw new Error("empty path segment");
+  if (s === "." || s === "..")
+    throw new Error(`unsafe path segment: ${JSON.stringify(s)}`);
+  if (/[/\\\0]/.test(s))
+    throw new Error(`unsafe path segment: ${JSON.stringify(s)}`);
+  return s;
+}
+
 export function cachePathFor(
   home: string,
   projectId: string,
   docId: string,
 ): string {
   const root = home.replace(/\/+$/, "");
-  return `${root}/${CACHE_SEGMENT}/${projectId}/${docId}.md`;
+  return `${root}/${CACHE_SEGMENT}/${safeSegment(projectId)}/${safeSegment(docId)}.md`;
 }
 
 export type OpenDocFlowDeps = {
@@ -34,7 +48,7 @@ export async function openDocFlow(
 ): Promise<void> {
   const raw = await deps.client.getDocRaw(projectId, docId);
   const home = await deps.getHome();
-  const dir = `${home.replace(/\/+$/, "")}/${CACHE_SEGMENT}/${projectId}`;
+  const dir = `${home.replace(/\/+$/, "")}/${CACHE_SEGMENT}/${safeSegment(projectId)}`;
   await deps.ensureDir(dir);
   const path = cachePathFor(home, projectId, docId);
   await deps.writeFile(path, raw);

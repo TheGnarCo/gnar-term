@@ -14,6 +14,25 @@ describe("cachePathFor", () => {
       "/Users/me/.gnar-term/spacebase/cache/p/d.md",
     );
   });
+
+  // Regression: server-supplied projectId/docId values flow into the
+  // filesystem path. A hostile or buggy server must not be able to
+  // escape the cache root. The guard rejects path separators, traversal
+  // components, and empty segments outright.
+  it.each([
+    ["projectId with slash", "p/../../etc", "doc"],
+    ["docId with slash", "p", "d/../../escape"],
+    ["projectId with backslash", "p\\..", "d"],
+    ["docId with NUL", "p", "d\u0000evil"],
+    ["projectId is ..", "..", "d"],
+    ["docId is .", "p", "."],
+    ["empty projectId", "", "d"],
+    ["empty docId", "p", ""],
+  ])("rejects %s", (_label, projectId, docId) => {
+    expect(() => cachePathFor("/Users/me", projectId, docId)).toThrow(
+      /unsafe path segment|empty path segment/,
+    );
+  });
 });
 
 describe("openDocFlow", () => {
@@ -50,6 +69,31 @@ describe("openDocFlow", () => {
     expect(openPreviewSplit).toHaveBeenCalledWith(
       "/Users/me/.gnar-term/spacebase/cache/proj_x/doc_y.md",
     );
+  });
+
+  // Regression for the cachePathFor traversal guard wiring: openDocFlow
+  // must reject hostile IDs before touching the filesystem. Otherwise a
+  // malicious docId would still write through ensureDir+writeFile.
+  it("rejects a path-traversal docId before touching the filesystem", async () => {
+    const c = client();
+    const ensureDir = vi.fn().mockResolvedValue(undefined);
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    const openPreviewSplit = vi.fn();
+    await expect(
+      openDocFlow(
+        {
+          client: c,
+          ensureDir,
+          writeFile,
+          openPreviewSplit,
+          getHome: vi.fn().mockResolvedValue("/Users/me"),
+        },
+        "proj",
+        "../../../.gnar-term/spacebase",
+      ),
+    ).rejects.toThrow(/unsafe path segment/);
+    expect(writeFile).not.toHaveBeenCalled();
+    expect(openPreviewSplit).not.toHaveBeenCalled();
   });
 
   it("propagates a getDocRaw failure (no preview opened)", async () => {

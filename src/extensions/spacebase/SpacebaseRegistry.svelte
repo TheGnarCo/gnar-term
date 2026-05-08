@@ -5,7 +5,7 @@
   import { createSpacebaseClient, type DocSummary } from "./api-client";
   import { resolveAuthConfig } from "./auth-store";
   import { openDocFlow } from "./registry-data";
-  import { __getSpacebaseAuthStoreForTest } from "./index";
+  import { getSpacebaseAuthStore } from "./index";
   import { buildDocTree } from "./doc-tree";
   import DocTree from "./DocTree.svelte";
 
@@ -20,7 +20,7 @@
     loading: boolean;
   };
 
-  const authStore = __getSpacebaseAuthStoreForTest();
+  const authStore = getSpacebaseAuthStore();
   const projectDocs = writable<Record<string, ProjectDocs>>({});
   const loadError = writable<string | null>(null);
   const expandedProjects = writable<Set<string>>(new Set());
@@ -109,7 +109,7 @@
           writeFile: (path, content) =>
             api.invoke("write_file", { path, content }),
           openPreviewSplit: (path) =>
-            api.openPreviewSplit(path, { ratio: 1 / 3, exclusive: true }),
+            api.openPreviewSplit(path, { ratio: 2 / 3, exclusive: true }),
           getHome: () => api.invoke<string>("get_home"),
         },
         projectId,

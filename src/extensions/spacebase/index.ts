@@ -22,9 +22,21 @@ const DASHBOARD_SURFACE_ID = DASHBOARD_CONTRIBUTION_ID;
 
 let authStoreSingleton: AuthStore | null = null;
 
-/** Test-only accessor for the auth store materialized at activate time. */
-export function __getSpacebaseAuthStoreForTest(): AuthStore | null {
+/**
+ * Accessor for the auth store materialized at activate time. Used by
+ * extension-side Svelte components (registry, per-workspace dashboard)
+ * to subscribe to auth status, and by tests to assert the store's
+ * lifecycle.
+ */
+export function getSpacebaseAuthStore(): AuthStore | null {
   return authStoreSingleton;
+}
+
+function authSignature(s: Record<string, unknown>): string {
+  const k = typeof s.apiKey === "string" ? s.apiKey : "";
+  const b = typeof s.baseUrl === "string" ? s.baseUrl : "";
+  const p = typeof s.projectId === "string" ? s.projectId : "";
+  return `${k}|${b}|${p}`;
 }
 
 export type { AuthStatus };
@@ -75,6 +87,8 @@ export const spacebaseManifest: ExtensionManifest = {
 };
 
 export function registerSpacebaseExtension(api: ExtensionAPI): void {
+  let unsubSettings: (() => void) | null = null;
+
   api.onActivate(async () => {
     const env = readSpacebaseEnv();
     const store = createAuthStore({
@@ -83,6 +97,26 @@ export function registerSpacebaseExtension(api: ExtensionAPI): void {
         createSpacebaseClient({ apiKey: cfg.apiKey, baseUrl: cfg.baseUrl }),
     });
     authStoreSingleton = store;
+
+    // Re-validate whenever the auth-relevant settings change. Without
+    // this, a user editing the API key or base URL never sees the
+    // status flip from `not-configured`/`invalid` to `valid` until the
+    // app reloads. Compare a stable signature so unrelated settings
+    // mutations (e.g. showTitleBarIcon) don't thrash /me.
+    let lastSig = authSignature(api.getSettings());
+    let firstEmit = true;
+    unsubSettings = api.settings.subscribe((s) => {
+      const sig = authSignature(s);
+      if (firstEmit) {
+        firstEmit = false;
+        lastSig = sig;
+        return;
+      }
+      if (sig !== lastSig) {
+        lastSig = sig;
+        void store.refresh();
+      }
+    });
 
     const openRegistry = api.registerGlobalSurface("registry", {
       label: "Spacebase",
@@ -135,6 +169,10 @@ export function registerSpacebaseExtension(api: ExtensionAPI): void {
     await store.refresh();
   });
   api.onDeactivate(() => {
+    if (unsubSettings) {
+      unsubSettings();
+      unsubSettings = null;
+    }
     authStoreSingleton = null;
   });
 }

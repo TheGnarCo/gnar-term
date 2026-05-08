@@ -416,6 +416,7 @@
       onBannerClick={handleBannerClick}
       filterIds={branchedIds}
       hasActiveChild={hasActiveDescendant}
+      {isPrimaryActive}
       {popoverActive}
       scopeId={workspace.id}
       {containerBlockId}

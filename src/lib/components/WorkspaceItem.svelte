@@ -353,9 +353,9 @@
     {/if}
 
     {#if !isDashboardWorkspaceRow && subtitleComponents.length > 0}
-      <SidebarSubtitleRow color={$theme.fgMuted}>
-        {#each subtitleComponents as sub (sub.id)}
-          {@const subApi = getExtensionApiById(sub.source)}
+      {#each subtitleComponents as sub (sub.id)}
+        {@const subApi = getExtensionApiById(sub.source)}
+        <SidebarSubtitleRow color={$theme.fgMuted}>
           {#if subApi}
             <ExtensionWrapper
               api={subApi}
@@ -369,8 +369,8 @@
               accentColor={railColor}
             />
           {/if}
-        {/each}
-      </SidebarSubtitleRow>
+        </SidebarSubtitleRow>
+      {/each}
     {/if}
 
     {#if latestNotification && !hideStatusBadges && !isInsideWorkspace && agentBadges.length === 0}

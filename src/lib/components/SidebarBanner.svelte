@@ -75,12 +75,19 @@
   /** Forwarded: suppress per-row status badges when the banner aggregates. */
   export let hideStatusBadges: boolean = false;
   /**
-   * When true, a child workspace inside this banner is the active
-   * workspace. The bar swaps its idle `$theme.border` stroke for the
-   * banner's `color` so the active state ties the workspace banner
-   * to its active child visually.
+   * When true, any descendant of this banner (the root workspace itself,
+   * a branched workspace, or a dashboard child) is the active workspace.
+   * Drives the rail's collapsed-mode width and the active-stripe accent
+   * — both represent "this banner contains the active workspace".
    */
   export let hasActiveChild: boolean = false;
+  /**
+   * When true, the root workspace this banner represents is itself the
+   * active workspace (not a child of it). Drives the bar's border stroke
+   * — the border lights up only when the root is selected, not when a
+   * child branch is, since branches own their own row chrome.
+   */
+  export let isPrimaryActive: boolean = false;
   /** Drag scope id (banner id). */
   export let scopeId: string;
   /** Sidebar block id the banner belongs to (for drag context). */
@@ -115,6 +122,21 @@
   export let dashboardCount: number = 0;
 
   let bannerHovered = false;
+
+  // Wrapper-level click for the banner body. The visible bar, the
+  // banner-subtitle slots, and any empty space in the row should all
+  // count as activating the workspace — especially in collapsed mode,
+  // where the popover spans more area than the bar alone. Clicks that
+  // originate inside a self-handling descendant (the rail, which fires
+  // `onBannerClick` itself, or a nested SidebarElement row that owns
+  // its own activation) are ignored so they don't double-fire.
+  function handleWrapperClick(e: MouseEvent) {
+    const t = e.target as HTMLElement | null;
+    if (!t) return;
+    if (t.closest("[data-sidebar-rail]")) return;
+    if (t.closest("[data-sidebar-element]")) return;
+    onBannerClick?.();
+  }
 
   // Non-dashboard count: dashboards don't count as real child workspaces for
   // the purposes of showing the toggle button and auto-expand/collapse.
@@ -166,20 +188,25 @@
 {#if parentColor}
   <!-- Nested variant — bar only, with left-edge colored accent. Uses
        SidebarElement for unified styling. -->
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     data-sidebar-banner={testId ?? ""}
     data-sidebar-banner-mode="child"
     style="position: relative;"
+    on:click|stopPropagation={handleWrapperClick}
   >
     <SidebarElement
       kind="parent"
       name={containerLabel}
-      isActive={false}
+      isActive={isPrimaryActive}
       isLocked={locked}
       isDragging={false}
       canDrag={false}
       canClose={!!onClose}
       {color}
+      {popoverActive}
+      onRailClick={onBannerClick}
       {onClose}
       onContextMenu={onBannerContextMenu}
     >
@@ -238,11 +265,13 @@
        the inactive dashboard-tile stroke) wraps only the bar; the
        child workspace list renders below the border so children carry
        their own chrome. -->
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     data-sidebar-banner={testId ?? ""}
     data-sidebar-banner-mode="root"
-    style="display: flex; position: relative; align-items: stretch;"
+    style="display: flex; position: relative; align-items: stretch; cursor: pointer;"
+    on:click|stopPropagation={handleWrapperClick}
   >
     {#if onGripMouseDown}
       <SidebarRail
@@ -265,7 +294,6 @@
         min-width: 0;
       "
     >
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div
         data-sidebar-banner-row
@@ -278,13 +306,13 @@
           ? ($theme.bgHighlight ?? 'transparent')
           : ($theme.bgSurface ?? 'transparent')};
           color: {$theme.fg};
-          border-top: 1px solid {hasActiveChild
+          border-top: 1px solid {isPrimaryActive
           ? color
           : ($theme.border ?? 'transparent')};
-          border-right: 1px solid {hasActiveChild
+          border-right: 1px solid {isPrimaryActive
           ? color
           : ($theme.border ?? 'transparent')};
-          border-bottom: 1px solid {hasActiveChild
+          border-bottom: 1px solid {isPrimaryActive
           ? color
           : ($theme.border ?? 'transparent')};
           border-left: none;
@@ -293,7 +321,6 @@
           transition: background 0.15s;
         "
         on:contextmenu={onBannerContextMenu}
-        on:click={onBannerClick}
         on:mouseenter={() => (bannerHovered = true)}
         on:mouseleave={() => (bannerHovered = false)}
       >

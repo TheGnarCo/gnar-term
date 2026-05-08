@@ -28,6 +28,7 @@ import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 export const EXTENSION_ALLOWED_COMMANDS: Set<string> = new Set([
   "file_exists",
   "list_dir",
+  "mcp_list_dir",
   "read_file",
   "read_file_base64",
   "get_home",
@@ -114,6 +115,7 @@ export const VALID_PERMISSIONS: Set<string> = new Set([
 export const PATH_COMMANDS: Set<string> = new Set([
   "file_exists",
   "list_dir",
+  "mcp_list_dir",
   "read_file",
   "read_file_base64",
   "write_file",

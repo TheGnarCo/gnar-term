@@ -1,4 +1,4 @@
-import type { ExtensionManifest, ExtensionAPI } from "../api";
+import type { ExtensionManifest, ExtensionAPI, WorkspaceRef } from "../api";
 import { createSpacebaseClient } from "./api-client";
 import {
   createAuthStore,
@@ -9,6 +9,10 @@ import {
 import { derived, type Readable } from "svelte/store";
 import SpacebaseMark from "./icons/SpacebaseMark.svelte";
 import SpacebaseRegistry from "./SpacebaseRegistry.svelte";
+import SpacebaseWorkspaceDashboard from "./SpacebaseWorkspaceDashboard.svelte";
+
+const WORKSPACE_DASHBOARD_ID = "workspace-dashboard";
+const WORKSPACE_DASHBOARD_SURFACE = "spacebase:workspace-dashboard";
 
 let authStoreSingleton: AuthStore | null = null;
 
@@ -98,10 +102,49 @@ export function registerSpacebaseExtension(api: ExtensionAPI): void {
       onClick: openRegistry,
     });
 
+    api.registerSurfaceType(
+      WORKSPACE_DASHBOARD_ID,
+      SpacebaseWorkspaceDashboard,
+      { hideFromNewSurface: true },
+    );
+    api.registerDashboardContribution({
+      id: WORKSPACE_DASHBOARD_ID,
+      label: "Spacebase",
+      actionLabel: "Add Spacebase Dashboard",
+      capPerWorkspace: 1,
+      icon: SpacebaseMark,
+      create: (workspace) => createWorkspaceDashboard(api, workspace),
+    });
+
     await store.refresh();
   });
   api.onDeactivate(() => {
     authStoreSingleton = null;
+  });
+}
+
+async function createWorkspaceDashboard(
+  api: ExtensionAPI,
+  workspace: WorkspaceRef,
+): Promise<string> {
+  return await api.createWorkspaceFromDef({
+    name: "Spacebase",
+    layout: {
+      pane: {
+        surfaces: [
+          {
+            type: "registry",
+            extensionType: WORKSPACE_DASHBOARD_SURFACE,
+            extensionProps: { rootWorkspaceId: workspace.id },
+            name: "Spacebase",
+            focus: true,
+          },
+        ],
+      },
+    },
+    isDashboard: true,
+    rootWorkspaceId: workspace.id,
+    dashboardContributionId: WORKSPACE_DASHBOARD_ID,
   });
 }
 

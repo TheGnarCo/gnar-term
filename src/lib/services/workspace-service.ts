@@ -184,106 +184,6 @@ export function removeBranchFromAllWorkspaces(workspaceId: string): void {
   schedulePersist();
 }
 
-/**
- * Path of the markdown file backing a workspace's Dashboard. Lives inside
- * the workspace's own `.gnar-term/` directory so multi-machine sync /
- * checkout follows the workspace itself.
- */
-export function workspaceDashboardPath(workspacePath: string): string {
-  return `${workspacePath.replace(/\/+$/, "")}/.gnar-term/workspace-dashboard.md`;
-}
-
-function buildWorkspaceDashboardMarkdown(workspace: RootWorkspace): string {
-  // The Workspace Dashboard is the generic, agent-agnostic landing page for
-  // a Workspace. It surfaces GitHub work-tracker context — open
-  // issues + open PRs — side by side, as a passive read-only browse
-  // panel. Spawn-on-issue lives on the per-workspace Agentic Dashboard tile
-  // (which mounts the same `gnar:issues` widget without `displayOnly`).
-  //
-  // `gnar:columns`, `gnar:issues`, and `gnar:prs` are all registered by
-  // the agentic extension. When that extension is disabled the markdown
-  // previewer renders unknown widgets as a fallback, so the Dashboard
-  // degrades gracefully for users who don't want agents.
-  return `# ${workspace.name}
-
-Workspace at \`${workspace.path}\`.
-
-\`\`\`gnar:workspaces
-\`\`\`
-
-\`\`\`gnar:columns
-children:
-  - name: issues
-    config:
-      state: open
-      displayOnly: true
-  - name: prs
-    config:
-      state: open
-\`\`\`
-`;
-}
-
-/**
- * Write the Workspace Overview Dashboard markdown template to `path`.
- *
- * `force: true` overwrites any existing file — used by the
- * "Regenerate" action in Workspace Settings to refresh user-stale
- * templates after the seeded layout changes. The default skips the
- * write when a file is already present so first-create on an existing
- * workspace never trampling user customizations.
- */
-async function writeWorkspaceDashboardTemplate(
-  workspace: RootWorkspace,
-  path: string,
-  options: { force?: boolean } = {},
-): Promise<void> {
-  const dir = path.replace(/\/[^/]+$/, "");
-  if (!options.force) {
-    const exists = await invoke<boolean>("file_exists", { path }).catch(
-      () => false,
-    );
-    if (exists) return;
-  }
-  await invoke("ensure_dir", { path: dir });
-  await invoke("write_file", {
-    path,
-    content: buildWorkspaceDashboardMarkdown(workspace),
-  });
-}
-
-/**
- * Ensure the Workspace Overview Dashboard markdown exists at the
- * workspace's canonical path. Creates the seeded template only when
- * the file is missing — user customizations survive. Returns the
- * markdown's path so callers can wire it into a preview surface.
- */
-export async function ensureWorkspaceDashboardMarkdown(
-  workspace: RootWorkspace,
-): Promise<string> {
-  const path = workspaceDashboardPath(workspace.path);
-  await writeWorkspaceDashboardTemplate(workspace, path);
-  return path;
-}
-
-/**
- * Public regenerate hook for the Workspace Overview Dashboard
- * contribution. Force-rewrites the markdown at `workspaceDashboardPath`;
- * the preview surface watching that file picks up the change without
- * needing the workspace to be closed/recreated.
- */
-export async function regenerateWorkspaceDashboardTemplate(
-  workspace: RootWorkspace,
-): Promise<void> {
-  await writeWorkspaceDashboardTemplate(
-    workspace,
-    workspaceDashboardPath(workspace.path),
-    {
-      force: true,
-    },
-  );
-}
-
 function createDashboardWorkspaceFromDef(
   workspace: RootWorkspace,
   name: string,
@@ -300,26 +200,21 @@ function createDashboardWorkspaceFromDef(
 }
 
 /**
- * Create the Dashboard workspace for a workspace: a constrained workspace
- * (`isDashboard = true`) hosting a single Live Preview of the workspace's
- * markdown file. Returns the new workspace id so the workspace record can
- * link to it.
+ * Create the Workspace Overview Dashboard for a workspace: a routing-only
+ * Branch (`isDashboard = true`, no surfaces). PaneView mounts
+ * `WorkspaceOverviewBody` for any workspace tagged with
+ * `dashboardContributionId === OVERVIEW_DASHBOARD_CONTRIBUTION_ID` —
+ * Workspace listings + Issues + PRs are rendered as direct Svelte
+ * composition, not a markdown preview.
  */
 export async function createWorkspaceDashboard(
   workspace: RootWorkspace,
 ): Promise<string> {
-  const path = workspaceDashboardPath(workspace.path);
-  try {
-    await writeWorkspaceDashboardTemplate(workspace, path);
-  } catch {
-    // Best-effort write — the workspace can still be created; the
-    // preview surface will surface the backing-file error if relevant.
-  }
   return createDashboardWorkspaceFromDef(
     workspace,
     "Dashboard",
     OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
-    [{ type: "preview", path, name: workspace.name, focus: true }],
+    [],
   );
 }
 

@@ -8,14 +8,12 @@
    *   - Banner color picker — writes `color` on the workspace
    *   - Dashboards toggles — enable/disable each registered contribution
    *     for this workspace (autoProvision contribs render locked-on)
-   *   - Markdown source — read-only path to the Overview preview file
    */
   import { get } from "svelte/store";
   import { theme } from "../stores/theme";
   import ColorSlotPicker from "./ColorSlotPicker.svelte";
   import { workspacesStore } from "../stores/workspace";
   import {
-    workspaceDashboardPath,
     updateWorkspace,
     closeDashboardForWorkspace,
     clearDashboardDismissal,
@@ -45,7 +43,6 @@
 
   $: workspace = $workspacesStore.find((w) => w.id === rootWorkspaceId);
   $: currentColorSlot = workspace?.color ?? "purple";
-  $: markdownPath = workspace ? workspaceDashboardPath(workspace.path) : "";
 
   let nameDraft = "";
   let editingName = false;
@@ -388,23 +385,6 @@
           </div>
         {/if}
       </div>
-    </section>
-
-    <section style="display: flex; flex-direction: column; gap: 4px;">
-      <h3 style="margin: 0; font-size: 14px; font-weight: 600;">
-        Markdown source
-      </h3>
-      <p style="margin: 0; color: {$theme.fgDim}; font-size: 12px;">
-        Backing file for this dashboard's Overview tab.
-      </p>
-      <code
-        data-markdown-path
-        style="
-          margin-top: 4px; padding: 6px 10px;
-          background: {$theme.bgSurface}; border: 1px solid {$theme.border};
-          border-radius: 4px; font-size: 12px;
-        ">{markdownPath}</code
-      >
     </section>
   </div>
 {/if}

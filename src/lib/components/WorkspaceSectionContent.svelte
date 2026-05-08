@@ -15,8 +15,6 @@
     deleteWorkspace,
     updateWorkspace,
     closeWorkspacesInWorkspace,
-    workspaceDashboardPath,
-    openWorkspaceDashboard,
     activateWorkspace,
     WORKSPACE_STATE_CHANGED,
     toggleWorkspaceLock,
@@ -49,7 +47,7 @@
   import type { MenuItem } from "../context-menu-types";
   import { contextMenu, showConfirmPrompt } from "../stores/ui";
   import { contrastColor } from "../utils/contrast";
-  import { getAllSurfaces, isPreviewSurface, type Workspace } from "../types";
+  import type { Workspace } from "../types";
   import { agentsStore } from "../services/agent-detection-service";
   import { variantColor } from "../status-colors";
   import { shortcutHintsActive } from "../stores/shortcut-hints";
@@ -357,25 +355,6 @@
     ];
     contextMenu.set({ x, y, items });
   }
-
-  // Dashboard-hint for child workspaces: any workspace hosting a
-  // preview surface pointed at the workspace's dashboard path gets a
-  // dashboard icon.
-  function hintForWorkspaceDashboardHost(ws: Workspace) {
-    if (!workspace) return undefined;
-    const path = workspaceDashboardPath(workspace.path);
-    const hosts = getAllSurfaces(ws).some(
-      (s) => isPreviewSurface(s) && s.path === path,
-    );
-    if (!hosts) return undefined;
-    return {
-      id: workspace.id,
-      color: workspaceHex,
-      onClick: () => {
-        if (workspace) void openWorkspaceDashboard(workspace);
-      },
-    };
-  }
 </script>
 
 {#if workspace}
@@ -447,7 +426,6 @@
       filterIds={branchedIds}
       hasActiveChild={hasActiveDescendant}
       {popoverActive}
-      dashboardHintFor={hintForWorkspaceDashboardHost}
       scopeId={workspace.id}
       {containerBlockId}
       containerLabel={workspace.name}
@@ -664,7 +642,7 @@
     display: flex;
     flex-wrap: wrap;
     gap: 4px;
-    padding: 4px 6px;
+    padding: 4px 8px;
   }
   .dash-btn {
     flex: 0 0 auto;

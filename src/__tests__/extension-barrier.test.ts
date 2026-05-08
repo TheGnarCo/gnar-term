@@ -80,6 +80,12 @@ describe("Extension barrier enforcement", () => {
         // waitRestored() resolves immediately on runtime-enable, defers
         // during startup — no ExtensionAPI hook exposes this signal.
         "../../lib/bootstrap/restore-workspaces",
+        // Issues + PRs are also published as dashboard sections so core
+        // dashboard bodies (Workspace Overview) can compose them
+        // directly without the markdown widget pipeline. No public
+        // ExtensionAPI surface exposes the registry — same piercing
+        // shape as the markdown-component-registry one in Columns.
+        "../../lib/services/dashboard-section-registry",
       ],
       // Issues + TaskSpawner widgets call the shared spawn-helper
       // (core service that composes worktree-service + agent command

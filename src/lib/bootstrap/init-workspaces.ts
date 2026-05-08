@@ -12,10 +12,12 @@ import { registerCommand } from "../services/command-registry";
 import { registerRootRowRenderer } from "../services/root-row-renderer-registry";
 import { registerSurfaceType } from "../services/surface-type-registry";
 import WorkspaceDashboardSettings from "../components/WorkspaceDashboardSettings.svelte";
+import WorkspaceOverviewBody from "../components/WorkspaceOverviewBody.svelte";
 import {
   registerDashboardContribution,
   OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
 } from "../services/dashboard-contribution-registry";
+import { registerDashboardWorkspaceType } from "../services/dashboard-workspace-service";
 import { eventBus, type AppEvent } from "../services/event-bus";
 import { appendRootRow } from "../stores/root-row-order";
 import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
@@ -29,16 +31,13 @@ import {
   addBranchToWorkspace,
   createWorkspaceDashboard,
   createSettingsDashboardWorkspace,
-  ensureWorkspaceDashboardMarkdown,
   isDashboardWorkspace,
   openWorkspaceDashboard,
   provisionAutoDashboardsForWorkspace,
   reclaimBranchedWorkspaces,
-  regenerateWorkspaceDashboardTemplate,
   removeBranchFromAllWorkspaces,
   updateWorkspace,
 } from "../services/workspace-service";
-import { openDashboardSurfaceTab } from "../services/surface-service";
 import { resolveWorkspaceColor } from "../theme-data";
 import { theme } from "../stores/theme";
 import WorkspaceRowBody from "../components/WorkspaceRowBody.svelte";
@@ -306,26 +305,26 @@ export async function initWorkspaces(): Promise<void> {
   // (stable persisted contribution id, retained across the rename),
   // capPerWorkspace 1. Opt-in: only the Settings chip is auto-provisioned
   // by default; users add the Overview from the workspace's Settings
-  // panel toggle.
+  // panel toggle. The dashboard renders WorkspaceOverviewBody directly
+  // (registered with dashboardWorkspaceRegistry below) — no markdown
+  // backing file, no openAsTab.
   registerDashboardContribution({
     id: OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
-    source: "core",
+    source: SOURCE,
     label: "Workspace Dashboard",
     actionLabel: "Add Workspace Dashboard",
     capPerWorkspace: 1,
     icon: GridIcon,
     create: async (workspace: Workspace) =>
       await createWorkspaceDashboard(workspace),
-    regenerate: async (workspace: Workspace) =>
-      await regenerateWorkspaceDashboardTemplate(workspace),
-    openAsTab: async (workspace: Workspace) => {
-      const path = await ensureWorkspaceDashboardMarkdown(workspace);
-      await openDashboardSurfaceTab(workspace.id, {
-        kind: "preview",
-        path,
-        title: "Dashboard",
-      });
-    },
+  });
+
+  registerDashboardWorkspaceType({
+    id: OVERVIEW_DASHBOARD_CONTRIBUTION_ID,
+    label: "Workspace Dashboard",
+    icon: GridIcon,
+    component: WorkspaceOverviewBody,
+    source: SOURCE,
   });
 
   // Core-internal "Settings" contribution — id `settings`,

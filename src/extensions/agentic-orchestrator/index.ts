@@ -16,6 +16,10 @@
  *      `isGlobalAgenticDashboard: true` → global scope).
  */
 import type { ExtensionManifest, ExtensionAPI, WorkspaceRef } from "../api";
+import {
+  registerDashboardSection,
+  unregisterDashboardSection,
+} from "../../lib/services/dashboard-section-registry";
 import BotIcon from "./icons/BotIcon.svelte";
 import GlobalAgenticDashboardBody from "./components/GlobalAgenticDashboardBody.svelte";
 import AgentStatusGrid from "./components/AgentStatusGrid.svelte";
@@ -115,6 +119,27 @@ export function registerAgenticOrchestratorExtension(api: ExtensionAPI): void {
     } else {
       registerGlobalDashboard();
     }
+
+    // Dashboard-section registrations — let other dashboard bodies
+    // (e.g. core's WorkspaceOverviewBody) compose these widgets without
+    // going through the markdown widget pipeline. Each section is
+    // mounted via ExtensionWrapper using `source` to resolve this
+    // extension's API at render time.
+    registerDashboardSection({
+      id: "issues",
+      source: "agentic-orchestrator",
+      component: Issues,
+    });
+    registerDashboardSection({
+      id: "prs",
+      source: "agentic-orchestrator",
+      component: Prs,
+    });
+
+    api.onDeactivate(() => {
+      unregisterDashboardSection("issues");
+      unregisterDashboardSection("prs");
+    });
 
     api.registerMarkdownComponent("kanban", Kanban, {
       configSchema: {

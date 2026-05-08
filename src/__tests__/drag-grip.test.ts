@@ -47,6 +47,33 @@ describe("DragGrip", () => {
     await fireEvent.mouseDown(grip);
     expect(onMouseDown).toHaveBeenCalledTimes(1);
   });
+
+  it("paints the rail stripe at 8px by default", () => {
+    const { container } = render(DragGrip, {
+      props: { theme: stubTheme, visible: false, railColor: "#abcdef" },
+    });
+    const stripe = container.querySelector(
+      ".drag-grip > div",
+    ) as HTMLElement | null;
+    expect(stripe).not.toBeNull();
+    expect(stripe!.style.width).toBe("8px");
+  });
+
+  it("paints the rail stripe at 4px when narrowRail is set", () => {
+    const { container } = render(DragGrip, {
+      props: {
+        theme: stubTheme,
+        visible: false,
+        railColor: "#abcdef",
+        narrowRail: true,
+      },
+    });
+    const stripe = container.querySelector(
+      ".drag-grip > div",
+    ) as HTMLElement | null;
+    expect(stripe).not.toBeNull();
+    expect(stripe!.style.width).toBe("4px");
+  });
 });
 
 const SOURCE = readFileSync(

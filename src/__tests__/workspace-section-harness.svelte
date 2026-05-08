@@ -13,4 +13,8 @@
   });
 </script>
 
-<WorkspaceSectionContent {rootWorkspaceId} containerBlockId="" />
+<WorkspaceSectionContent
+  {rootWorkspaceId}
+  containerBlockId=""
+  onGripMouseDown={() => {}}
+/>

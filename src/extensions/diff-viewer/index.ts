@@ -113,7 +113,7 @@ export function registerDiffViewerExtension(api: ExtensionAPI): void {
  * Materialize a Diff dashboard workspace for `workspace`. The dashboard
  * owns a single `diff-viewer:diff` surface pointed at the workspace's
  * repository; the `Uncommitted Changes` name mirrors the surface the
- * old container-banner diff link used to spawn. Surface props match
+ * old sidebar-banner diff link used to spawn. Surface props match
  * the `show-uncommitted` command so the rendered diff is identical.
  */
 async function createDiffDashboardWorkspace(

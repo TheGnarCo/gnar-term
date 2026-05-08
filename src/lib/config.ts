@@ -187,11 +187,11 @@ export interface AgentsConfig {
 export type { Workspace } from "./types";
 
 /**
- * Re-export WorkspaceRecord from its canonical location so callers
+ * Re-export RootWorkspace from its canonical location so callers
  * that import from this module continue to compile. The canonical
  * definition lives in `./stores/workspaces`.
  */
-export type { WorkspaceRecord } from "./stores/workspace";
+export type { RootWorkspace } from "./stores/workspace";
 
 export interface GnarTermConfig {
   // gnar-term extensions
@@ -241,10 +241,13 @@ export interface AppState {
   archivedDefs?: {
     workspaces: Record<string, ArchivedWorkspaceDef>;
   };
+  // Primary sidebar expanded (true) / collapsed (false). See stores/ui.ts
+  // and services/sidebar-persistence-service.ts.
+  sidebarVisible?: boolean;
 }
 
 export interface ArchivedWorkspaceDef {
-  workspace: import("./stores/workspace").WorkspaceRecord;
+  workspace: import("./stores/workspace").RootWorkspace;
   childWorkspaceDefs: (WorkspaceTemplate & { name: string })[];
 }
 

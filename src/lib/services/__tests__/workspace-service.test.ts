@@ -24,7 +24,7 @@ import { eventBus } from "../event-bus";
 import { rootRowOrder } from "../../stores/root-row-order";
 import { workspaces, activeWorkspaceIdx } from "../../stores/workspace";
 import type { Workspace } from "../../types";
-import type { WorkspaceRecord } from "../../config";
+import type { RootWorkspace } from "../../config";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn().mockResolvedValue(undefined),
@@ -32,8 +32,8 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 function makeWorkspace(
   id: string,
-  overrides: Partial<WorkspaceRecord> = {},
-): WorkspaceRecord {
+  overrides: Partial<RootWorkspace> = {},
+): RootWorkspace {
   return {
     id,
     name: `Workspace ${id}`,

@@ -1,5 +1,5 @@
 import type { Workspace } from "../types";
-import type { WorkspaceRecord } from "../config";
+import type { RootWorkspace } from "../config";
 
 export interface SwitcherRow {
   ws: Workspace;
@@ -34,9 +34,9 @@ export interface SwitcherRow {
  */
 export function filterWorkspaces(
   workspaces: Workspace[],
-  rootMap: Map<string, WorkspaceRecord>,
+  rootMap: Map<string, RootWorkspace>,
   query: string,
-  rootWorkspaces: WorkspaceRecord[] = [],
+  rootWorkspaces: RootWorkspace[] = [],
 ): SwitcherRow[] {
   const q = query.trim().toLowerCase();
 
@@ -71,22 +71,30 @@ export function filterWorkspaces(
 
   for (let idx = 0; idx < workspaces.length; idx++) {
     const ws = workspaces[idx]!;
-    const rootId = ws.rootWorkspaceId;
-    const isUnderRoot = !!(rootId && rootIds.has(rootId));
-    const root = isUnderRoot ? rootMap.get(rootId!) : undefined;
+    // A workspace nests under a Root if it points at one (branches +
+    // dashboards) or if it IS the Root itself (the runtime entry shares
+    // its id with the RootWorkspace per ADR-004).
+    const rootRef = ws.rootWorkspaceId;
+    const isOwnRoot = rootIds.has(ws.id);
+    const bucketRootId = isOwnRoot
+      ? ws.id
+      : rootRef && rootIds.has(rootRef)
+        ? rootRef
+        : undefined;
+    const root = bucketRootId ? rootMap.get(bucketRootId) : undefined;
 
     const row: SwitcherRow = {
       ws,
       idx,
       rootLabel: root?.name ?? "",
       kind: "branch",
-      depth: isUnderRoot ? 1 : 0,
+      depth: bucketRootId ? 1 : 0,
     };
 
-    if (isUnderRoot && rootId) {
-      const bucket = byRoot.get(rootId) ?? [];
+    if (bucketRootId) {
+      const bucket = byRoot.get(bucketRootId) ?? [];
       bucket.push(row);
-      byRoot.set(rootId, bucket);
+      byRoot.set(bucketRootId, bucket);
     } else {
       standaloneRows.push(row);
     }
@@ -138,7 +146,7 @@ function wsTypeOrder(ws: Workspace): number {
   return 2; // dashboards last
 }
 
-function makeRootRow(root: WorkspaceRecord): SwitcherRow {
+function makeRootRow(root: RootWorkspace): SwitcherRow {
   // The ws field on root rows holds a minimal Workspace-shaped object.
   // Consumers must check kind === "root" before treating it as a real branch workspace.
   return {

@@ -363,6 +363,43 @@ describe("S-RELAUNCH: dismissPane", () => {
     dismissPane("p1");
     expect(getAllPanes(get(workspaces)[0].paneLayout)).toHaveLength(1);
   });
+
+  it("spawns a fresh terminal instead of closing the workspace when dismissing the only pane", async () => {
+    // Single-pane workspace — dismissing would normally collapse the only
+    // pane and remove the workspace entirely. New behavior: spawn a fresh
+    // terminal in place so the workspace stays open (matches manual
+    // close-last-tab).
+    const pane: Pane = {
+      id: "p1",
+      surfaces: [],
+      activeSurfaceId: null,
+      exitedSurface: { code: 0 },
+    };
+    const ws: Workspace = {
+      id: "ws1",
+      name: "Test",
+      paneLayout: { type: "pane", pane },
+      activePaneId: "p1",
+      path: "/tmp/test-ws",
+    };
+    workspaces.set([ws]);
+    activeWorkspaceIdx.set(0);
+
+    dismissPane("p1");
+    // Allow the awaited createTerminalSurface microtask to settle.
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // Workspace still exists, pane still exists, exitedSurface cleared,
+    // and a fresh surface is attached.
+    const wsList = get(workspaces);
+    expect(wsList).toHaveLength(1);
+    expect(wsList[0].id).toBe("ws1");
+    const panes = getAllPanes(wsList[0].paneLayout);
+    expect(panes).toHaveLength(1);
+    expect(panes[0].exitedSurface).toBeUndefined();
+    expect(panes[0].surfaces).toHaveLength(1);
+  });
 });
 
 describe("S-RELAUNCH: relaunchPane", () => {

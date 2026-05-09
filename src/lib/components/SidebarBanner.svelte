@@ -113,6 +113,13 @@
    */
   export let popoverActive: boolean = false;
   /**
+   * True when any workspace inside this banner's tree (root or any
+   * branched workspace) has an agent with status "waiting". Forwarded
+   * to SidebarRail so the collapsed-mode rail can paint a yellow hat
+   * + pulse to surface the attention without expanding the sidebar.
+   */
+  export let needsAttention: boolean = false;
+  /**
    * Number of dashboard chips this banner will render in its
    * children-leading slot. Combined with `nonDashboardCount` it
    * determines whether the banner is expandable and whether the
@@ -290,6 +297,7 @@
         hasActiveStripe={hasActiveChild && collapsed}
         isActive={hasActiveChild}
         {popoverActive}
+        {needsAttention}
         {onGripMouseDown}
         onClick={onBannerClick}
         {onClose}

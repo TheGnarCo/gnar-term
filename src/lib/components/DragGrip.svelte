@@ -3,6 +3,9 @@
   import { shortcutHintsActive } from "../stores/shortcut-hints";
   import CloseIcon from "../icons/CloseIcon.svelte";
   import LockIcon from "../icons/LockIcon.svelte";
+  import { variantColor } from "../status-colors";
+
+  const warningColor = variantColor("warning");
 
   export let theme: ThemeDef;
   export let visible: boolean = false;
@@ -156,10 +159,11 @@
         left: 0; top: 0;
         width: 4px;
         height: 12px;
+        --rail-attention-glow: {warningColor};
         background: linear-gradient(
           to bottom,
-          #e8b73a 0,
-          #e8b73a 10px,
+          {warningColor} 0,
+          {warningColor} 10px,
           rgba(0, 0, 0, 0.55) 10px,
           rgba(0, 0, 0, 0.55) 12px
         );
@@ -271,16 +275,17 @@
 
 <style>
   .rail-attention-hat {
-    animation: rail-hat-glow 1.6s ease-in-out infinite;
+    animation: dg-rail-hat-glow 1.6s ease-in-out infinite;
   }
 
-  @keyframes rail-hat-glow {
+  @keyframes dg-rail-hat-glow {
     0%,
     100% {
-      box-shadow: 0 0 0 0 rgba(232, 183, 58, 0);
+      box-shadow: 0 0 0 0 transparent;
     }
     50% {
-      box-shadow: 0 0 4px 1.5px rgba(232, 183, 58, 0.55);
+      box-shadow: 0 0 4px 1.5px
+        color-mix(in srgb, var(--rail-attention-glow) 55%, transparent);
     }
   }
 </style>

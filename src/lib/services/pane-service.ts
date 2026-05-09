@@ -175,6 +175,30 @@ export function dismissPane(paneId: string): void {
   const pane = getAllPanes(ws.paneLayout).find((p) => p.id === paneId);
   if (!pane) return;
   pane.exitedSurface = undefined;
+  // Last pane in a non-dashboard workspace: spawn a fresh terminal in
+  // place rather than removing the pane (which would close the whole
+  // workspace). Mirrors removeSurface's last-tab behavior.
+  const paneCount = getAllPanes(ws.paneLayout).length;
+  if (paneCount === 1 && ws.isDashboard !== true) {
+    pane.activeSurfaceId = null;
+    workspaces.update((l) => [...l]);
+    void (async () => {
+      const cwd =
+        (ws as { worktreePath?: string }).worktreePath ?? ws.path ?? undefined;
+      const surface = await createTerminalSurface(pane, cwd);
+      pane.activeSurfaceId = surface.id;
+      workspaces.update((l) => [...l]);
+      eventBus.emit({
+        type: "surface:created",
+        id: surface.id,
+        paneId: pane.id,
+        kind: "terminal",
+      });
+      void safeFocus(surface);
+      schedulePersist();
+    })();
+    return;
+  }
   removePane(ws, pane);
   schedulePersist();
 }

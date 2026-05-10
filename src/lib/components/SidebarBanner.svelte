@@ -113,12 +113,12 @@
    */
   export let popoverActive: boolean = false;
   /**
-   * True when any workspace inside this banner's tree (root or any
-   * branched workspace) has an agent with status "waiting". Forwarded
-   * to SidebarRail so the collapsed-mode rail can paint a yellow hat
-   * + pulse to surface the attention without expanding the sidebar.
+   * Aggregated bot status across this banner's tree (root + branches).
+   * Forwarded to SidebarRail so the collapsed-mode rail paints the
+   * appropriate hat: green ("thinking") for any active agent, pulsing
+   * yellow ("attention") when one needs input, nothing for "none".
    */
-  export let needsAttention: boolean = false;
+  export let botStatus: "none" | "thinking" | "attention" = "none";
   /**
    * Number of dashboard chips this banner will render in its
    * children-leading slot. Combined with `nonDashboardCount` it
@@ -297,7 +297,7 @@
         hasActiveStripe={hasActiveChild && collapsed}
         isActive={hasActiveChild}
         {popoverActive}
-        {needsAttention}
+        {botStatus}
         {onGripMouseDown}
         onClick={onBannerClick}
         {onClose}

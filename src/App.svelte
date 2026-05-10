@@ -52,6 +52,7 @@
   import { ask, message } from "@tauri-apps/plugin-dialog";
   import { eventBus } from "./lib/services/event-bus";
   import { initDragDropPaneRouter } from "./lib/services/drag-drop-pane-router";
+  import { handleMenuPaste } from "./lib/services/menu-paste-router";
 
   // Extension lifecycle
   import {
@@ -794,6 +795,10 @@
 
     await listen("menu-close-tab", () => {
       closeActiveSurface();
+    });
+
+    await listen("menu-paste", () => {
+      void handleMenuPaste();
     });
 
     // Track fullscreen state for layout adjustments (e.g. traffic light padding)

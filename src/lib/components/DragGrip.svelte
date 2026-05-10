@@ -3,6 +3,9 @@
   import { shortcutHintsActive } from "../stores/shortcut-hints";
   import CloseIcon from "../icons/CloseIcon.svelte";
   import LockIcon from "../icons/LockIcon.svelte";
+  import { variantColor } from "../status-colors";
+
+  const warningColor = variantColor("warning");
 
   export let theme: ThemeDef;
   export let visible: boolean = false;
@@ -64,6 +67,15 @@
    * is the row's main interaction target.
    */
   export let primaryClickable: boolean = false;
+  /**
+   * Collapsed-mode attention signal. When true and the rail is in
+   * narrowRail mode, paints a 10px yellow "hat" at the top of the
+   * rail with a 2px dark divider below it and a gentle pulse glow.
+   * The hat sits flush over the rail stripe; the workspace accent
+   * color shows through below the divider. Ignored when narrowRail
+   * is false (expanded sidebar uses per-row badges instead).
+   */
+  export let needsAttention: boolean = false;
 
   let closeButtonHovered = false;
   // shortcutLabel takes priority over close/lock when meta-hold is active.
@@ -90,6 +102,10 @@
   $: showDots = visible && alwaysShowDots && !narrowRail;
   $: showRailStripe = !visible || narrowRail;
   $: railStripeWidth = narrowRail ? "4px" : "8px";
+  // Hat only renders in collapsed-mode (narrowRail). In expanded
+  // mode the per-row status badges already cover attention, so the
+  // hat would be redundant noise.
+  $: showAttentionHat = narrowRail && needsAttention;
 </script>
 
 <div
@@ -124,6 +140,35 @@
         background: {effectiveColor};
         opacity: {railOpacity};
         transition: width 0.1s;
+      "
+    ></div>
+  {/if}
+  {#if showAttentionHat}
+    <!-- F2 hat overlay: 10px canonical-warning yellow at the top of
+         the rail, a 2px dark divider, then the underlying rail
+         stripe color shows through. Width matches the narrow rail
+         (4px) so the rail does not get visually thicker. The
+         box-shadow keyframe pulses a gentle glow that survives the
+         amber-accent collision case (where the rail color and the
+         hat color match). -->
+    <div
+      aria-hidden="true"
+      class="rail-attention-hat"
+      style="
+        position: absolute;
+        left: 0; top: 0;
+        width: 4px;
+        height: 12px;
+        --rail-attention-glow: {warningColor};
+        background: linear-gradient(
+          to bottom,
+          {warningColor} 0,
+          {warningColor} 10px,
+          rgba(0, 0, 0, 0.55) 10px,
+          rgba(0, 0, 0, 0.55) 12px
+        );
+        pointer-events: none;
+        z-index: 2;
       "
     ></div>
   {/if}
@@ -227,3 +272,20 @@
     </div>
   {/if}
 </div>
+
+<style>
+  .rail-attention-hat {
+    animation: dg-rail-hat-glow 1.6s ease-in-out infinite;
+  }
+
+  @keyframes dg-rail-hat-glow {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 transparent;
+    }
+    50% {
+      box-shadow: 0 0 4px 1.5px
+        color-mix(in srgb, var(--rail-attention-glow) 55%, transparent);
+    }
+  }
+</style>

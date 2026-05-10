@@ -58,6 +58,7 @@
   } from "../stores/ui";
   import { contrastColor } from "../utils/contrast";
   import { agentsStore } from "../services/agent-detection-service";
+  import { rootNeedsRailAttention } from "../services/rail-attention";
   import { variantColor } from "../status-colors";
   import { shortcutHintsActive } from "../stores/shortcut-hints";
   import { modLabel } from "../terminal-service";
@@ -163,6 +164,15 @@
       return { label: `${idle} idle`, color: variantColor("muted") };
     return null;
   })();
+
+  // Rail attention — collapsed-mode signal for the rail. Scope is
+  // intentionally Root + all branches (worktree AND dashboard branches,
+  // both live in branchedWorkspaceIds). This is the only attention
+  // surface in collapsed mode; banner-level workspaceBotStatus above
+  // stays root-only by design.
+  $: railNeedsAttention = workspace
+    ? rootNeedsRailAttention(workspace, $agentsStore)
+    : false;
 
   // True when the primary workspace of this workspace is currently active.
   // Makes the banner border solid only when the primary workspace
@@ -455,6 +465,7 @@
       hasActiveChild={hasActiveDescendant}
       {isPrimaryActive}
       {popoverActive}
+      needsAttention={railNeedsAttention}
       scopeId={workspace.id}
       {containerBlockId}
       containerLabel={workspace.name}

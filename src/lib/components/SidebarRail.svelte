@@ -49,6 +49,13 @@
    * popover body. Has no effect when the sidebar is expanded.
    */
   export let popoverActive: boolean = false;
+  /**
+   * True when any workspace in this Root's tree (root + branched
+   * workspaces) has a waiting agent. Drives the collapsed-mode hat
+   * overlay rendered by DragGrip; ignored when the sidebar is
+   * expanded.
+   */
+  export let needsAttention: boolean = false;
 
   /** Mousedown handler for drag start. */
   export let onGripMouseDown: ((e: MouseEvent) => void) | undefined = undefined;
@@ -122,6 +129,7 @@
     {closeTooltip}
     {locked}
     {narrowRail}
+    {needsAttention}
     primaryClickable={!$sidebarVisible && !!onClick}
   />
   {#if mode === "container" && hasActiveStripe}

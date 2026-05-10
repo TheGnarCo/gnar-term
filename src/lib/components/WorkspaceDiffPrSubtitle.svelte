@@ -1,3 +1,26 @@
+<script context="module" lang="ts">
+  // Module-level PR cache keyed by repoRoot. The collapsed-mode hover
+  // popover mounts a fresh subtitle on every hover, so without a cache
+  // each hover would re-fetch from `gh_view_pr` and re-paint from
+  // `pr = null` → loaded, causing the popover height to jump as the PR
+  // row appears. Seeding from the cache on mount paints the loaded
+  // state instantly on every hover after the first.
+  //
+  // MUST live in `<script context="module">` — vars in the per-instance
+  // `<script>` are scoped per component instance, not shared across
+  // mounts, so an in-instance cache would defeat the purpose.
+  export interface GhPrView {
+    number: number;
+    title: string;
+    state: string;
+    url: string;
+    headRefName: string;
+    isDraft: boolean;
+    ciStatus: string;
+  }
+  const prCache = new Map<string, GhPrView | null>();
+</script>
+
 <script lang="ts">
   /**
    * WorkspaceDiffPrSubtitle — compact diff + PR statusline for individual
@@ -98,16 +121,6 @@
       ].filter(Boolean)
     : [];
 
-  interface GhPrView {
-    number: number;
-    title: string;
-    state: string;
-    url: string;
-    headRefName: string;
-    isDraft: boolean;
-    ciStatus: string;
-  }
-
   function ciColor(status: string, fallback: string): string {
     if (status === "SUCCESS") return "#4ec957";
     if (status === "FAILURE") return "#e85454";
@@ -118,6 +131,11 @@
   let pr: GhPrView | null = null;
   let prTimer: ReturnType<typeof setInterval> | null = null;
   let lastRepoRoot: string | null = null;
+  // True once we have any answer for the current repoRoot — either a
+  // cache hit on mount, or the initial fetch resolved. Drives the
+  // skeleton-placeholder reservation so the popover height stays
+  // stable through the very first ever load too.
+  let prInitialResolved = false;
 
   const PR_REFRESH_MS = 5_000;
 
@@ -127,14 +145,27 @@
         repoPath: root,
       });
       pr = result ?? null;
+      prCache.set(root, pr);
     } catch {
-      pr = null;
+      // Transient failure: don't clobber the cache (so a network blip
+      // doesn't flush a known-good PR row), but mark resolved so we
+      // stop reserving placeholder space.
+      pr = prCache.get(root) ?? null;
+    } finally {
+      prInitialResolved = true;
     }
   }
 
   function startPrPolling(root: string): void {
     if (prTimer) clearInterval(prTimer);
     lastRepoRoot = root;
+    if (prCache.has(root)) {
+      pr = prCache.get(root) ?? null;
+      prInitialResolved = true;
+    } else {
+      pr = null;
+      prInitialResolved = false;
+    }
     void refreshPr(root);
     prTimer = setInterval(() => void refreshPr(root), PR_REFRESH_MS);
   }
@@ -152,6 +183,7 @@
   $: if (!repoRoot && lastRepoRoot) {
     stopPrPolling();
     pr = null;
+    prInitialResolved = false;
     lastRepoRoot = null;
   }
 
@@ -161,6 +193,11 @@
     isRootWorkspace &&
     pr !== null &&
     (pr.state === "OPEN" || pr.state === "open");
+  // True for root workspaces whose PR fetch hasn't returned yet.
+  // Drives a hidden-but-spaced placeholder so the popover paints at
+  // its final height from the start instead of jumping when the PR
+  // row appears.
+  $: prLoading = isRootWorkspace && !!repoRoot && !prInitialResolved;
   $: isDraft = pr?.isDraft ?? false;
   $: prColor = pr
     ? isDraft
@@ -169,7 +206,7 @@
     : fgMuted;
 </script>
 
-{#if showDiff || showPr || showRemote}
+{#if showDiff || showPr || showRemote || prLoading}
   <div
     style="display: flex; flex-direction: column; gap: 1px; padding: 0 12px 0 6px; overflow: hidden;"
   >
@@ -253,6 +290,7 @@
 
     {#if showPr && pr}
       <div
+        data-pr-row
         style="display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden;"
         title="#{pr.number} {pr.title}{isDraft ? ' (draft)' : ''}"
       >
@@ -282,6 +320,28 @@
         >
           #{pr.number}{isDraft ? " draft" : ""}
         </span>
+      </div>
+    {:else if prLoading}
+      <!-- Skeleton placeholder: same structure and dimensions as the
+           real PR row but invisible. Reserves vertical space so the
+           hover popover paints at its loaded height even on the very
+           first hover, before `gh_view_pr` resolves. -->
+      <div
+        data-pr-row-placeholder
+        aria-hidden="true"
+        style="display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; visibility: hidden;"
+      >
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="transparent"
+          aria-hidden="true"
+        >
+          <circle cx="18" cy="18" r="3" />
+        </svg>
+        <span style="font-size: 10px;">#0</span>
       </div>
     {/if}
   </div>

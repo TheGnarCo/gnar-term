@@ -34,6 +34,7 @@
 import { writable, get, type Readable } from "svelte/store";
 import { eventBus } from "./event-bus";
 import { getConfig } from "../config";
+import { type AgentType } from "./agent-type";
 import {
   addOutputObserver,
   removeOutputObserver,
@@ -57,6 +58,9 @@ import {
 export interface DetectedAgent {
   agentId: string;
   agentName: string;
+  /** Typed classification of the agent. Populated from AgentPattern.agentType,
+   *  falling back to "generic" when the matched pattern has no agentType. */
+  agentType: AgentType;
   surfaceId: string;
   workspaceId: string;
   status: string;
@@ -68,6 +72,8 @@ export interface AgentPattern {
   name: string;
   titlePatterns: string[];
   oscDetectable: boolean;
+  /** Typed agent classification. Omit to fall back to "generic". */
+  agentType?: AgentType;
 }
 
 export type TrackerMode = "osc" | "title-only";
@@ -76,14 +82,65 @@ export type HarnessStatus = "running" | "waiting" | "idle" | "active" | "done";
 // --- Defaults ---
 
 const DEFAULT_PATTERNS: AgentPattern[] = [
-  { name: "Claude Code", titlePatterns: ["claude"], oscDetectable: true },
-  { name: "Codex", titlePatterns: ["codex"], oscDetectable: true },
-  { name: "Aider", titlePatterns: ["aider"], oscDetectable: true },
-  { name: "Cursor", titlePatterns: ["cursor"], oscDetectable: false },
+  {
+    name: "Claude Code",
+    titlePatterns: ["claude"],
+    oscDetectable: true,
+    agentType: "claude",
+  },
+  {
+    name: "Codex",
+    titlePatterns: ["codex"],
+    oscDetectable: true,
+    agentType: "codex",
+  },
+  {
+    name: "Gemini",
+    titlePatterns: ["gemini"],
+    oscDetectable: false,
+    agentType: "gemini",
+  },
+  {
+    name: "Goose",
+    titlePatterns: ["goose"],
+    oscDetectable: false,
+    agentType: "goose",
+  },
+  {
+    name: "Aider",
+    titlePatterns: ["aider"],
+    oscDetectable: true,
+    agentType: "aider",
+  },
+  {
+    name: "OpenCode",
+    titlePatterns: ["opencode"],
+    oscDetectable: false,
+    agentType: "opencode",
+  },
+  {
+    name: "Cline",
+    titlePatterns: ["cline"],
+    oscDetectable: false,
+    agentType: "cline",
+  },
+  {
+    name: "Amp",
+    titlePatterns: ["amp"],
+    oscDetectable: false,
+    agentType: "amp",
+  },
+  {
+    name: "Cursor Agent",
+    titlePatterns: ["cursor"],
+    oscDetectable: false,
+    agentType: "cursor-agent",
+  },
   {
     name: "GitHub Copilot",
     titlePatterns: ["ghcs", "github-copilot"],
     oscDetectable: false,
+    // No agentType — intentionally "generic" fallback
   },
 ];
 
@@ -106,6 +163,36 @@ const ALT_SCREEN_ENTER_RE = /\x1b\[\?1049h/;
 
 const _agentsStore = writable<DetectedAgent[]>([]);
 export const agentsStore: Readable<DetectedAgent[]> = _agentsStore;
+
+/** Entry stored per pane in the per-pane agent-type store. */
+export interface PaneAgentEntry {
+  agentType: AgentType;
+  /** How confident/strong the detection signal was. */
+  confidence: "argv" | "osc" | "title" | "heuristic";
+  /** ISO timestamp of initial detection. */
+  detectedAt: string;
+}
+
+/**
+ * Reactive map of paneId → PaneAgentEntry. Additive alongside agentsStore —
+ * extensions can subscribe to this for fine-grained per-pane agent information
+ * without the full DetectedAgent shape. Undefined for panes with no agent.
+ */
+const _paneAgentTypeStore = writable<Record<string, PaneAgentEntry>>({});
+export const paneAgentTypeStore: Readable<Record<string, PaneAgentEntry>> =
+  _paneAgentTypeStore;
+
+function setPaneEntry(paneId: string, entry: PaneAgentEntry): void {
+  _paneAgentTypeStore.update((m) => ({ ...m, [paneId]: entry }));
+}
+
+function clearPaneEntry(paneId: string): void {
+  _paneAgentTypeStore.update((m) => {
+    const next = { ...m };
+    delete next[paneId];
+    return next;
+  });
+}
 
 let _agents: DetectedAgent[] = [];
 let _idCounter = 0;
@@ -268,6 +355,9 @@ function createStatusTracker(
 
 interface TrackedSurface {
   surfaceId: string;
+  /** The pane that owns this surface. Captured from surface:created/ptyReady events
+   *  or looked up from the workspace store on bootstrap. Used to key paneAgentTypeStore. */
+  paneId: string | null;
   ptyId: number | null;
   /** pty id the current observer is bound to; lets wireObserver detect a rewire. */
   wiredPtyId: number | null;
@@ -347,9 +437,15 @@ function allTerminalSurfaces(): Array<{
   id: string;
   title: string;
   workspaceId: string;
+  paneId: string;
 }> {
   const all = get(workspaces);
-  const out: Array<{ id: string; title: string; workspaceId: string }> = [];
+  const out: Array<{
+    id: string;
+    title: string;
+    workspaceId: string;
+    paneId: string;
+  }> = [];
   for (const ws of all) {
     for (const pane of getAllPanes(ws.paneLayout)) {
       for (const surface of pane.surfaces) {
@@ -358,6 +454,7 @@ function allTerminalSurfaces(): Array<{
             id: surface.id,
             title: surface.title,
             workspaceId: ws.id,
+            paneId: pane.id,
           });
         }
       }
@@ -403,10 +500,12 @@ function attachAgent(
     mode,
   );
 
+  const agentType: AgentType = pattern.agentType ?? "generic";
   const now = new Date().toISOString();
   _agents.push({
     agentId,
     agentName: pattern.name,
+    agentType,
     surfaceId: tracked.surfaceId,
     workspaceId,
     status: "idle",
@@ -418,6 +517,14 @@ function attachAgent(
   tracked.agentId = agentId;
   tracked.agentPattern = pattern;
   tracked.tracker = tracker;
+
+  // Populate the per-pane store when we know the paneId.
+  if (tracked.paneId) {
+    const confidence: PaneAgentEntry["confidence"] = pattern.oscDetectable
+      ? "osc"
+      : "title";
+    setPaneEntry(tracked.paneId, { agentType, confidence, detectedAt: now });
+  }
 
   // The tracker starts at "idle" but only fires onStatusChange on
   // transitions, so publish the initial idle state explicitly. Without
@@ -472,6 +579,11 @@ function detachAgent(tracked: TrackedSurface): void {
     workspaces.update((l) => [...l]);
   }
 
+  // Clear the per-pane store entry on detach.
+  if (tracked.paneId) {
+    clearPaneEntry(tracked.paneId);
+  }
+
   tracked.agentId = null;
   tracked.agentPattern = null;
   tracked.tracker = null;
@@ -502,7 +614,11 @@ export function initAgentDetection(): void {
   const patterns = loadPatternList();
   const idleTimeoutMs = loadIdleTimeoutMs();
 
-  const attachToSurface = (surfaceId: string, initialTitle: string): void => {
+  const attachToSurface = (
+    surfaceId: string,
+    initialTitle: string,
+    knownPaneId?: string,
+  ): void => {
     if (trackedSurfaces.has(surfaceId)) return;
 
     const resolvedPty = resolvePtyIdForSurface(surfaceId);
@@ -511,6 +627,7 @@ export function initAgentDetection(): void {
     // "not ready yet" and defer observer wiring to surface:ptyReady.
     const tracked: TrackedSurface = {
       surfaceId,
+      paneId: knownPaneId ?? null,
       ptyId: resolvedPty !== null && resolvedPty >= 0 ? resolvedPty : null,
       wiredPtyId: null,
       agentId: null,
@@ -641,7 +758,7 @@ export function initAgentDetection(): void {
     if (event.kind !== "terminal") return;
     const surfaces = allTerminalSurfaces();
     const info = surfaces.find((s) => s.id === event.id);
-    attachToSurface(event.id, info?.title ?? "");
+    attachToSurface(event.id, info?.title ?? "", event.paneId);
   };
   const handleTitle = (event: {
     type: "surface:titleChanged";
@@ -720,11 +837,15 @@ export function initAgentDetection(): void {
       // attach now using the current title from the workspace store
       // (may be empty if workspaces haven't loaded yet) and fall
       // through to observer wiring.
-      const currentTitleForPty =
-        allTerminalSurfaces().find((s) => s.id === event.id)?.title ?? "";
-      attachToSurface(event.id, currentTitleForPty);
+      const surfaceInfo = allTerminalSurfaces().find((s) => s.id === event.id);
+      attachToSurface(event.id, surfaceInfo?.title ?? "", surfaceInfo?.paneId);
       tracked = trackedSurfaces.get(event.id);
       if (!tracked) return;
+    }
+    // Backfill paneId if surface:created raced and didn't know it yet.
+    if (!tracked.paneId) {
+      const surfaceInfo = allTerminalSurfaces().find((s) => s.id === event.id);
+      if (surfaceInfo?.paneId) tracked.paneId = surfaceInfo.paneId;
     }
     tracked.ptyId = event.ptyId;
     wireObserver(tracked);
@@ -745,7 +866,7 @@ export function initAgentDetection(): void {
   // fires for surfaces created AFTER this listener attached, so restored
   // surfaces would otherwise be permanently untracked.
   for (const info of allTerminalSurfaces()) {
-    attachToSurface(info.id, info.title);
+    attachToSurface(info.id, info.title, info.paneId);
   }
 
   // Re-detect agents when the workspace store is populated or updated.
@@ -755,14 +876,21 @@ export function initAgentDetection(): void {
   // without agents. When workspaces load, this subscription re-checks
   // unattached surfaces against their now-known titles.
   const unsubWorkspaces = workspaces.subscribe(() => {
-    // Build the surface-title lookup once per emission rather than calling
-    // allTerminalSurfaces() for each unattached surface (O(W×P×S) vs.
-    // O(tracked × W×P×S) per emission — F12 perf fix).
+    // Build the surface-title and surface-paneId lookups once per emission
+    // rather than calling allTerminalSurfaces() for each unattached surface
+    // (O(W×P×S) vs. O(tracked × W×P×S) per emission — F12 perf fix).
     const surfaceTitleById = new Map<string, string>();
+    const surfacePaneById = new Map<string, string>();
     for (const s of allTerminalSurfaces()) {
       surfaceTitleById.set(s.id, s.title);
+      surfacePaneById.set(s.id, s.paneId);
     }
     for (const [, tracked] of trackedSurfaces) {
+      // Backfill paneId when the workspace store becomes available.
+      if (!tracked.paneId) {
+        const resolvedPane = surfacePaneById.get(tracked.surfaceId);
+        if (resolvedPane) tracked.paneId = resolvedPane;
+      }
       if (tracked.agentId) {
         // Backfill the status item for agents attached before their workspace
         // was known — the initial publishStatus("idle") wrote nothing because
@@ -774,6 +902,24 @@ export function initAgentDetection(): void {
             agent.workspaceId = resolved;
             syncStore();
             publishStatus(tracked, resolved, agent.status);
+          }
+        }
+        // Also backfill paneAgentTypeStore if paneId was resolved above.
+        if (tracked.paneId && tracked.agentPattern) {
+          const existing = get(_paneAgentTypeStore)[tracked.paneId];
+          if (!existing) {
+            const agentType: AgentType =
+              tracked.agentPattern.agentType ?? "generic";
+            const confidence: PaneAgentEntry["confidence"] = tracked
+              .agentPattern.oscDetectable
+              ? "osc"
+              : "title";
+            const agent2 = _agents.find((a) => a.agentId === tracked.agentId);
+            setPaneEntry(tracked.paneId, {
+              agentType,
+              confidence,
+              detectedAt: agent2?.createdAt ?? new Date().toISOString(),
+            });
           }
         }
         continue;
@@ -843,6 +989,7 @@ export function destroyAgentDetection(): void {
   }
   _agents = [];
   syncStore();
+  _paneAgentTypeStore.set({});
 }
 
 /** For tests only — reset module-level state between cases. */

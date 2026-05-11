@@ -50,12 +50,13 @@
    */
   export let popoverActive: boolean = false;
   /**
-   * Aggregated bot status across this Root's tree (root + branched
-   * workspaces). Drives the collapsed-mode hat overlay rendered by
-   * DragGrip — green for "thinking", pulsing yellow for "attention",
-   * nothing for "none". Ignored when the sidebar is expanded.
+   * Bot status for the row this rail belongs to. Drives the hat
+   * overlay rendered by DragGrip — pulsing yellow for "attention",
+   * green for "thinking", muted-grey for "idle", nothing for
+   * "none". Renders at every sidebar width so bot presence stays
+   * visible whether the sidebar is collapsed or expanded.
    */
-  export let botStatus: "none" | "thinking" | "attention" = "none";
+  export let botStatus: "none" | "thinking" | "attention" | "idle" = "none";
 
   /** Mousedown handler for drag start. */
   export let onGripMouseDown: ((e: MouseEvent) => void) | undefined = undefined;

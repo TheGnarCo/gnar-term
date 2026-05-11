@@ -114,11 +114,13 @@
   export let popoverActive: boolean = false;
   /**
    * Aggregated bot status across this banner's tree (root + branches).
-   * Forwarded to SidebarRail so the collapsed-mode rail paints the
-   * appropriate hat: green ("thinking") for any active agent, pulsing
-   * yellow ("attention") when one needs input, nothing for "none".
+   * Forwarded to SidebarRail so the rail paints the appropriate hat at
+   * every sidebar width: pulsing yellow ("attention") when one needs
+   * input, green ("thinking") for any actively-working agent, muted
+   * grey ("idle") when an agent is attached but quiet, nothing for
+   * "none".
    */
-  export let botStatus: "none" | "thinking" | "attention" = "none";
+  export let botStatus: "none" | "thinking" | "attention" | "idle" = "none";
   /**
    * Number of dashboard chips this banner will render in its
    * children-leading slot. Combined with `nonDashboardCount` it

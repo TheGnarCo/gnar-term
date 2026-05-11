@@ -476,7 +476,13 @@
       <div
         style="display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0;"
       >
-        {#if workspaceBotStatus}
+        {#if workspaceBotStatus && workspace.spawnedBy != null}
+          <!-- BotIcon next to the title is reserved for orchestrator-
+               spawned workspaces — for those, the icon doubles as
+               provenance ("this row was created by an agent"). For
+               every other workspace the rail "hat" carries bot
+               status, so painting the icon here too would be
+               redundant. -->
           <span
             aria-label={workspaceBotStatus.label}
             title={workspaceBotStatus.label}

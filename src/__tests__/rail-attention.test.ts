@@ -1,7 +1,7 @@
 /**
  * Tests for rootRailBotStatus — pure aggregator that decides which
- * collapsed-mode rail hat (none / thinking / attention) a Root
- * workspace's rail should paint.
+ * rail hat (none / thinking / attention) a Root workspace's rail
+ * should paint. The hat renders at every sidebar width.
  */
 import { describe, it, expect } from "vitest";
 import { rootRailBotStatus } from "../lib/services/rail-attention";
@@ -81,13 +81,39 @@ describe("rootRailBotStatus", () => {
     expect(rootRailBotStatus(root, agents)).toBe("attention");
   });
 
-  it("returns 'none' when every agent is idle/done/closed", () => {
+  it("returns 'idle' when every present agent is idle/done", () => {
     const root = makeRoot("root-1", ["br-1"]);
     const agents = [
       makeAgent({ workspaceId: "root-1", status: "idle" }),
       makeAgent({ workspaceId: "br-1", status: "done" }),
+    ];
+    expect(rootRailBotStatus(root, agents)).toBe("idle");
+  });
+
+  it("ignores 'closed' agents (the process is gone, no hat)", () => {
+    const root = makeRoot("root-1", ["br-1"]);
+    const agents = [
+      makeAgent({ workspaceId: "root-1", status: "closed" }),
       makeAgent({ workspaceId: "br-1", status: "closed" }),
     ];
     expect(rootRailBotStatus(root, agents)).toBe("none");
+  });
+
+  it("returns 'idle' over 'none' when at least one agent is still attached", () => {
+    const root = makeRoot("root-1", ["br-1"]);
+    const agents = [
+      makeAgent({ workspaceId: "root-1", status: "idle" }),
+      makeAgent({ workspaceId: "br-1", status: "closed" }),
+    ];
+    expect(rootRailBotStatus(root, agents)).toBe("idle");
+  });
+
+  it("'thinking' wins over 'idle' co-presence", () => {
+    const root = makeRoot("root-1", ["br-1"]);
+    const agents = [
+      makeAgent({ workspaceId: "root-1", status: "idle" }),
+      makeAgent({ workspaceId: "br-1", status: "running" }),
+    ];
+    expect(rootRailBotStatus(root, agents)).toBe("thinking");
   });
 });

@@ -34,6 +34,7 @@ import {
   type WorktreeWorkspaceConfig,
 } from "./worktree-service";
 import { workspaces } from "../stores/workspace";
+import { getConfig } from "../config";
 import {
   getAllPanes,
   isTerminalSurface,
@@ -48,6 +49,90 @@ const AGENT_COMMANDS: Record<Exclude<SpawnAgentType, "custom">, string> = {
   codex: "codex",
   aider: "aider",
 };
+
+/**
+ * Map `AgentPreset.intendedAgent` (detection-side AgentType) onto the
+ * spawn-helper's SpawnAgentType. Detection identifies more agents than the
+ * spawn helper has built-in launchers for — anything that doesn't map falls
+ * back to "custom" so the preset's literal command is honored verbatim.
+ */
+const INTENDED_AGENT_TO_SPAWN_TYPE: Record<string, SpawnAgentType> = {
+  claude: "claude-code",
+  codex: "codex",
+  aider: "aider",
+};
+
+/**
+ * Resolved view of an `AgentPreset` ready to feed into either spawn path
+ * (worktree branch or ad-hoc pane). The worktree path ignores `cwd` —
+ * it uses the worktree directory — but the non-worktree path honors it
+ * as the working directory hint for the new terminal surface.
+ */
+export interface ResolvedAgentPreset {
+  type: SpawnAgentType;
+  /** Literal launcher command, e.g. `"claude --model opus"`. */
+  command: string;
+  /** First-arg task context (becomes the agent's initial prompt). */
+  taskContext?: string;
+  /** Working directory hint for non-worktree spawns. */
+  cwd?: string;
+  env?: Record<string, string>;
+}
+
+/**
+ * Resolve a preset name from `settings.json#agents[]` into spawn args.
+ * Throws when the preset is missing. Honors every preset field that
+ * affects a spawn:
+ *   - `intendedAgent` → SpawnAgentType (falls back to "custom")
+ *   - `command` → literal launcher
+ *   - `initialPrompt` → taskContext (prepended to the launcher)
+ *   - `defaultCwd` → cwd hint for ad-hoc / non-worktree spawns
+ *   - `env` → env vars
+ */
+export function resolveAgentPresetForSpawn(
+  presetName: string,
+): ResolvedAgentPreset {
+  const presets = getConfig().agents ?? [];
+  const preset = presets.find((p) => p.name === presetName);
+  if (!preset) {
+    throw new Error(
+      `agent preset "${presetName}" not found in settings.json agents[]`,
+    );
+  }
+  const type: SpawnAgentType = preset.intendedAgent
+    ? (INTENDED_AGENT_TO_SPAWN_TYPE[preset.intendedAgent] ?? "custom")
+    : "custom";
+  const resolved: ResolvedAgentPreset = {
+    type,
+    command: preset.command,
+  };
+  if (preset.initialPrompt !== undefined && preset.initialPrompt !== "") {
+    resolved.taskContext = preset.initialPrompt;
+  }
+  if (preset.defaultCwd !== undefined && preset.defaultCwd !== "") {
+    resolved.cwd = preset.defaultCwd;
+  }
+  if (preset.env && Object.keys(preset.env).length > 0) {
+    resolved.env = preset.env;
+  }
+  return resolved;
+}
+
+/**
+ * Find the first `AgentPreset` with `autoSpawn: true` in `settings.json#agents[]`
+ * and return its resolved spawn shape. Returns `null` when no preset opts in.
+ *
+ * First-match policy is intentional — the presets array is ordered, so the
+ * user controls priority by editing settings.json. Resolution delegates to
+ * `resolveAgentPresetForSpawn` so there is exactly one place that turns a
+ * preset record into a spawn payload (single source of truth).
+ */
+export function resolveAutoSpawnPreset(): ResolvedAgentPreset | null {
+  const presets = getConfig().agents ?? [];
+  const preset = presets.find((p) => p.autoSpawn === true);
+  if (!preset) return null;
+  return resolveAgentPresetForSpawn(preset.name);
+}
 
 /**
  * Provenance marker attached to workspaces spawned from a dashboard.

@@ -26,9 +26,15 @@ const { spawnAgentInWorktreeMock } = vi.hoisted(() => ({
   spawnAgentInWorktreeMock: vi.fn(),
 }));
 
-vi.mock("../lib/services/spawn-helper", () => ({
-  spawnAgentInWorktree: spawnAgentInWorktreeMock,
-}));
+vi.mock("../lib/services/spawn-helper", async () => {
+  const actual = await vi.importActual<
+    typeof import("../lib/services/spawn-helper")
+  >("../lib/services/spawn-helper");
+  return {
+    ...actual,
+    spawnAgentInWorktree: spawnAgentInWorktreeMock,
+  };
+});
 
 // --- agent-detection-service mock (needed by mcp-server imports) ---
 

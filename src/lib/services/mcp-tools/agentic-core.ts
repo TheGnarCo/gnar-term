@@ -21,59 +21,13 @@ import {
   pushExternalAttention,
   type AttentionEventKind,
 } from "../attention-api";
-import { spawnAgentInWorktree } from "../spawn-helper";
-import type { SpawnAgentType } from "../spawn-helper";
+import {
+  spawnAgentInWorktree,
+  resolveAgentPresetForSpawn,
+  type ResolvedAgentPreset,
+} from "../spawn-helper";
 import { createWorktreeWorkspaceFromConfig } from "../worktree-service";
-import { getConfig } from "../../config";
 import type { ToolDef } from "../mcp-types";
-
-// ---------------------------------------------------------------------------
-// AgentPreset resolution
-// ---------------------------------------------------------------------------
-
-interface ResolvedAgentArgs {
-  type: SpawnAgentType;
-  command: string;
-  initialPrompt?: string;
-  env?: Record<string, string>;
-}
-
-/**
- * Map `AgentPreset.intendedAgent` (detection-side AgentType) onto the
- * spawn-helper's SpawnAgentType. Detection identifies more agents than the
- * spawn helper has built-in launchers for — anything that doesn't map falls
- * back to "custom" so the preset's literal command is honored verbatim.
- */
-const INTENDED_AGENT_TO_SPAWN_TYPE: Record<string, SpawnAgentType> = {
-  claude: "claude-code",
-  codex: "codex",
-  aider: "aider",
-};
-
-/**
- * Resolve a preset name (from `getConfig().agents`) into the args the spawn
- * helper consumes. `intendedAgent` informs the SpawnAgentType (so the
- * downstream pane carries the right agent identity); when no mapping exists
- * we fall back to "custom" and the preset's literal command runs verbatim.
- */
-function resolveAgentPreset(presetName: string): ResolvedAgentArgs {
-  const presets = getConfig().agents ?? [];
-  const preset = presets.find((p) => p.name === presetName);
-  if (!preset) {
-    throw new Error(
-      `spawn_branch: agent preset "${presetName}" not found in settings.json agents[]`,
-    );
-  }
-  const spawnType: SpawnAgentType = preset.intendedAgent
-    ? (INTENDED_AGENT_TO_SPAWN_TYPE[preset.intendedAgent] ?? "custom")
-    : "custom";
-  return {
-    type: spawnType,
-    command: preset.command,
-    initialPrompt: preset.initialPrompt,
-    env: preset.env,
-  };
-}
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -194,14 +148,16 @@ export const agenticCoreTools: ToolDef[] = [
 
       // Explicit agent arg wins over preset. Otherwise fall back to preset
       // resolution; either source produces the same downstream call.
-      const resolved: ResolvedAgentArgs | null = p.agent
+      const resolved: ResolvedAgentPreset | null = p.agent
         ? {
             type: p.agent.type,
             command: p.agent.command ?? "",
-            initialPrompt: p.agent.initialPrompt,
+            ...(p.agent.initialPrompt !== undefined
+              ? { taskContext: p.agent.initialPrompt }
+              : {}),
           }
         : p.agent_preset_name
-          ? resolveAgentPreset(p.agent_preset_name)
+          ? resolveAgentPresetForSpawn(p.agent_preset_name)
           : null;
 
       if (resolved) {
@@ -219,8 +175,8 @@ export const agenticCoreTools: ToolDef[] = [
               ? { command: p.agent.command }
               : {}
             : { command: resolved.command }),
-          ...(resolved.initialPrompt !== undefined
-            ? { taskContext: resolved.initialPrompt }
+          ...(resolved.taskContext !== undefined
+            ? { taskContext: resolved.taskContext }
             : {}),
           ...(resolved.env ? { env: resolved.env } : {}),
           repoPath: p.repoPath.trim(),

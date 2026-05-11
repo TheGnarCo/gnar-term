@@ -74,6 +74,7 @@
   import { initAttentionApi } from "./lib/services/attention-api";
   import { initBranchLifecycle } from "./lib/services/branch-lifecycle";
   import { startPrStatePoller } from "./lib/services/pr-state-poller";
+  import { startBranchCommitsPoller } from "./lib/services/branch-commits-poller";
   import { initCoreExtensionAPI } from "./lib/bootstrap/init-core-extension-api";
   import {
     initWorkspaces,
@@ -591,11 +592,13 @@
   let _rootPathSweepInterval: number | null = null;
   let _gitRecheckInterval: ReturnType<typeof setInterval> | null = null;
   let _cleanupPrPoller: (() => void) | null = null;
+  let _cleanupCommitsPoller: (() => void) | null = null;
   onDestroy(() => {
     _cleanupShortcutHints?.();
     _cleanupVisibilityRecover?.();
     _cleanupDragDropRouter?.();
     _cleanupPrPoller?.();
+    _cleanupCommitsPoller?.();
     if (_rootPathSweepInterval !== null)
       window.clearInterval(_rootPathSweepInterval);
     if (_gitRecheckInterval !== null) clearInterval(_gitRecheckInterval);
@@ -699,6 +702,7 @@
     initAttentionApi();
     initBranchLifecycle();
     _cleanupPrPoller = startPrStatePoller();
+    _cleanupCommitsPoller = startBranchCommitsPoller();
 
     // Workspaces (formerly the project-scope extension) —
     // registered from core so the root-row renderer, commands, and

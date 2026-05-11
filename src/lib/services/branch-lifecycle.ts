@@ -219,6 +219,8 @@ interface BranchDescriptor {
   branchId: string;
   repoPath: string;
   branch: string;
+  /** Base branch the worktree was forked from (e.g. "main"). Empty when unknown. */
+  baseBranch: string;
   hasCommits: boolean;
   wipOnly: boolean;
   paneId: string | null;
@@ -280,6 +282,7 @@ function syncBranchesFromWorkspaces(): void {
       existing.workspaceId === ws.id &&
       existing.paneId === paneId &&
       existing.repoPath === (ws.repoPath ?? "") &&
+      existing.baseBranch === (ws.baseBranch ?? "") &&
       existing.lastActivityAt === createdAtMs
     ) {
       continue;
@@ -289,6 +292,7 @@ function syncBranchesFromWorkspaces(): void {
       branchId,
       repoPath: ws.repoPath ?? "",
       branch: ws.branch,
+      baseBranch: ws.baseBranch ?? "",
       hasCommits: existing?.hasCommits ?? true,
       wipOnly: existing?.wipOnly ?? false,
       paneId,
@@ -477,12 +481,14 @@ export function listBranchDescriptors(): ReadonlyArray<{
   branchId: string;
   repoPath: string;
   branch: string;
+  baseBranch: string;
   paneId: string | null;
 }> {
   return [..._branches.values()].map((d) => ({
     branchId: d.branchId,
     repoPath: d.repoPath,
     branch: d.branch,
+    baseBranch: d.baseBranch,
     paneId: d.paneId,
   }));
 }
@@ -533,6 +539,7 @@ export async function markAbandoned(branchId: string): Promise<void> {
 interface SeedBranchOptions {
   repoPath: string;
   branch: string;
+  baseBranch?: string;
   hasCommits: boolean;
   wipOnly?: boolean;
   prState: PrState | null;
@@ -556,6 +563,7 @@ export const _testHelpers = {
       branchId,
       repoPath: opts.repoPath,
       branch: opts.branch,
+      baseBranch: opts.baseBranch ?? "",
       hasCommits: opts.hasCommits,
       wipOnly: opts.wipOnly ?? false,
       prState: opts.prState,

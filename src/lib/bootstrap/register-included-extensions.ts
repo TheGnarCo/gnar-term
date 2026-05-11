@@ -19,10 +19,6 @@ import {
 import type { ExtensionManifest } from "../extension-types";
 
 import {
-  agenticOrchestratorManifest,
-  registerAgenticOrchestratorExtension,
-} from "../../extensions/agentic-orchestrator";
-import {
   diffViewerManifest,
   registerDiffViewerExtension,
 } from "../../extensions/diff-viewer";
@@ -51,11 +47,6 @@ type IncludedExtension = readonly [
  * activation is independent per extension.
  */
 export const INCLUDED_EXTENSIONS: readonly IncludedExtension[] = [
-  [
-    agenticOrchestratorManifest,
-    registerAgenticOrchestratorExtension,
-    "agentic-orchestrator",
-  ],
   [diffViewerManifest, registerDiffViewerExtension, "diff-viewer"],
   [claudeSettingsManifest, registerClaudeSettingsExtension, "claude-settings"],
   [

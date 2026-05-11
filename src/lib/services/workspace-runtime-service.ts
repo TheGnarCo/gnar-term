@@ -268,7 +268,7 @@ export async function createWorkspaceFromDef(
   }
   eventBus.emit({ type: "workspace:created", id: ws.id, name: wsName });
   // Route through switchWorkspace so workspace:activated listeners
-  // (e.g. agentic-orchestrator's dashboard workspace re-spawn hook)
+  // (e.g. an extension's dashboard workspace re-spawn hook)
   // fire on creation — auto-switching to the fresh workspace matches
   // the user-driven switch path. Session restore skips the auto-switch
   // because it'll restore the persisted active idx once every workspace

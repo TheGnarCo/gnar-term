@@ -125,8 +125,7 @@
    * Number of dashboard chips this banner will render in its
    * children-leading slot. Combined with `nonDashboardCount` it
    * determines whether the banner is expandable and whether the
-   * children container renders. Default 0 keeps the legacy behavior
-   * for callers that haven't migrated.
+   * children container renders.
    */
   export let dashboardCount: number = 0;
 

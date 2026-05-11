@@ -3,10 +3,8 @@
  *
  * Settings file locations (in priority order):
  *   ./settings.json                     (per-project)
- *   ./gnar-term.json                    (legacy per-project)
  *   ./cmux.json                         (per-project, cmux compat)
  *   ~/.config/gnar-term/settings.json   (global)
- *   ~/.config/gnar-term/gnar-term.json  (legacy global)
  *   ~/.config/cmux/cmux.json            (global, cmux compat)
  *
  * Runtime state:
@@ -246,9 +244,8 @@ export interface GnarTermConfig {
   extensions?: Record<string, ExtensionConfig>;
   worktrees?: WorktreesConfig;
   /**
-   * Agent detection settings (renamed from `agents` in the legacy config).
-   * Carries user-tunable pattern entries and idle timeout for the passive
-   * agent-detection service.
+   * Agent detection settings — user-tunable pattern entries and idle
+   * timeout for the passive agent-detection service.
    */
   agentDetection?: AgentsConfig;
   /**
@@ -310,11 +307,7 @@ export interface ArchivedWorkspaceDef {
 
 // --- Config file paths ---
 
-const CONFIG_FILENAMES = [
-  "settings.json",
-  "gnar-term.json", // legacy
-  "cmux.json",
-];
+const CONFIG_FILENAMES = ["settings.json", "cmux.json"];
 
 // --- Read/Write via Rust backend ---
 
@@ -324,11 +317,14 @@ const _configStore = writable<GnarTermConfig>({});
 export const configStore: Readable<GnarTermConfig> = _configStore;
 
 /**
- * Bring a legacy on-disk config forward to dev's shape. Only rewrites
- * the deltas that would otherwise break behavior on load:
+ * Migration map — transforms an on-disk config into the current shape on
+ * load. Only rewrites the deltas that would otherwise break behavior:
  *   - `SurfaceDef.type === "markdown"` → `"preview"` (the markdown
  *     surface kind was folded into the unified preview surface; the
  *     `path` field is identical, so the rest of the def survives).
+ *   - `agents` (detection shape) → `agentDetection`, with the new
+ *     `agents[]` preset array taking the freed name. See
+ *     `migrateAgentsConfig`.
  * Other dropped fields (e.g. `opacity`) are tolerated as ignored keys.
  */
 export function migrateLoadedConfig(raw: unknown): GnarTermConfig {
@@ -391,12 +387,9 @@ export async function loadConfig(
   const [home, configDir] = await Promise.all([getHome(), getConfigDir()]);
 
   // Try per-project config first (higher priority), then global.
-  // Legacy global `gnar-term.json` is still read so existing installs keep
-  // working after the rename to `settings.json`.
   const paths = [
-    ...CONFIG_FILENAMES, // ./settings.json, ./gnar-term.json, ./cmux.json
+    ...CONFIG_FILENAMES, // ./settings.json, ./cmux.json
     `${configDir}/settings.json`,
-    `${configDir}/gnar-term.json`,
     `${home}/.config/cmux/cmux.json`,
   ];
 

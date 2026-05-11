@@ -1197,11 +1197,11 @@ export function initAgentDetection(): void {
   cleanups.push(unsubWorkspaces);
 
   // Subscribe to the OSC notification store. Each new notification drives
-  // both the per-pane state machine (cycle-4) and — for OSC-detectable
-  // trackers attached to that pane — the legacy "waiting" status flip
-  // that used to be powered by an inline regex in the output observer.
-  // This is the single source of OSC awareness; the observer just feeds
-  // raw output into the typed parser via feedPaneOutput.
+  // both the per-pane state machine and — for OSC-detectable trackers
+  // attached to that pane — the per-agent `tracker.onNotification` path
+  // that flips `DetectedAgent.status` to "waiting". This is the single
+  // source of OSC awareness; the observer just feeds raw output into the
+  // typed parser via feedPaneOutput.
   let lastOscLen = 0;
   const unsubOsc = oscNotificationStore.subscribe((notifications) => {
     if (notifications.length <= lastOscLen) {
@@ -1212,7 +1212,7 @@ export function initAgentDetection(): void {
       const n = notifications[i];
       if (!n) continue;
       applyPaneStateEvent(n.paneId, oscKindToStateEvent(n.kind));
-      // Drive the legacy tracker.onNotification path for OSC-detectable
+      // Fan out to the per-tracker notification handler for OSC-detectable
       // agents whose pane matches this notification.
       const tracked = findTrackedByPaneId(n.paneId);
       if (tracked?.tracker && tracked.agentPattern?.oscDetectable) {

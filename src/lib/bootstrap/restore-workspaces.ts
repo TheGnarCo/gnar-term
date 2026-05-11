@@ -106,10 +106,9 @@ export async function restoreWorkspaces(
   initArchiveFromState();
 
   // ---------------------------------------------------------------------------
-  // Unified format: state.workspaces[] is the canonical on-disk shape.
-  // Convert each WorkspaceDef back to a legacy WorkspaceTemplate and feed
-  // through `createWorkspaceFromDef` so PTY surfaces hydrate via the
-  // existing path.
+  // state.workspaces[] is the canonical on-disk shape. Convert each
+  // WorkspaceDef into the WorkspaceTemplate that `createWorkspaceFromDef`
+  // consumes so PTY surfaces hydrate through the standard path.
   // ---------------------------------------------------------------------------
   if (Array.isArray(state.workspaces) && state.workspaces.length > 0) {
     const runtimeDefs = state.workspaces as WorkspaceDef[];

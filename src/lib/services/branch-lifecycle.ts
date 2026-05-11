@@ -380,8 +380,18 @@ export function initBranchLifecycle(prStateProvider?: PrStateProvider): void {
 
   const cleanups: Array<() => void> = [];
 
-  // Subscribe to paneAgentStateStore — recompute when agent states change.
-  const unsubState = paneAgentStateStore.subscribe(() => {
+  // Subscribe to paneAgentStateStore — bump lastActivityAt for every branch
+  // whose pane has recorded a more recent transition than the descriptor's
+  // current activity timestamp, then recompute. bumpBranchActivity no-ops
+  // when the timestamp is not newer, so this is cheap to call broadly.
+  const unsubState = paneAgentStateStore.subscribe((stateMap) => {
+    for (const desc of _branches.values()) {
+      if (!desc.paneId) continue;
+      const entry = stateMap.get(desc.paneId);
+      if (!entry) continue;
+      const t = Date.parse(entry.transitionedAt);
+      if (Number.isFinite(t)) bumpBranchActivity(desc.branchId, t);
+    }
     void recomputeAll();
   });
   cleanups.push(unsubState);

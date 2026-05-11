@@ -251,7 +251,13 @@ function matchesPattern(
 function loadPatternList(): AgentPattern[] {
   const patterns = [...DEFAULT_PATTERNS];
   const config = getConfig();
-  const userPatterns = config.agents?.knownAgents;
+  // `agentDetection` is the canonical field name; fall back to the old
+  // `agents` object shape for configs that haven't been migrated yet
+  // (cycle-1 coexistence guard).
+  const userPatterns =
+    config.agentDetection?.knownAgents ??
+    (config as unknown as Record<string, { knownAgents?: unknown }>).agents
+      ?.knownAgents;
   if (Array.isArray(userPatterns)) {
     for (const p of userPatterns) {
       if (p.name && Array.isArray(p.titlePatterns)) {
@@ -268,7 +274,11 @@ function loadPatternList(): AgentPattern[] {
 
 function loadIdleTimeoutMs(): number {
   const config = getConfig();
-  const raw = config.agents?.idleTimeout;
+  // Same coexistence fallback as loadPatternList.
+  const raw =
+    config.agentDetection?.idleTimeout ??
+    (config as unknown as Record<string, { idleTimeout?: unknown }>).agents
+      ?.idleTimeout;
   const seconds = typeof raw === "number" && raw > 0 ? raw : 30;
   return seconds * 1000;
 }

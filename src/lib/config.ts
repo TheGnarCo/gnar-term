@@ -17,6 +17,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { writable, type Readable } from "svelte/store";
 import { getHome, getConfigDir } from "./services/service-helpers";
 import type { ThemeDef } from "./theme-data";
+import { migrateAgentsConfig, type AgentPreset } from "./agents-config";
 
 // --- Types (cmux-compatible + extensions) ---
 
@@ -216,6 +217,8 @@ export type { Workspace } from "./types";
  */
 export type { RootWorkspace } from "./stores/workspace";
 
+export { type AgentPreset } from "./agents-config";
+
 export interface GnarTermConfig {
   // gnar-term extensions
   theme?: string;
@@ -226,7 +229,17 @@ export interface GnarTermConfig {
   autoload?: string[]; // workspace command names to launch on startup
   extensions?: Record<string, ExtensionConfig>;
   worktrees?: WorktreesConfig;
-  agents?: AgentsConfig;
+  /**
+   * Agent detection settings (renamed from `agents` in the legacy config).
+   * Carries user-tunable pattern entries and idle timeout for the passive
+   * agent-detection service.
+   */
+  agentDetection?: AgentsConfig;
+  /**
+   * Agent spawn presets — launchable agent configurations shown in the
+   * command palette. Different concept from `agentDetection`.
+   */
+  agents?: AgentPreset[];
   /**
    * Per-pseudo-workspace color overrides, keyed by pseudo id
    * (e.g. `"agentic.global"`). Values are slot names from
@@ -304,7 +317,20 @@ export const configStore: Readable<GnarTermConfig> = _configStore;
  */
 export function migrateLoadedConfig(raw: unknown): GnarTermConfig {
   if (!raw || typeof raw !== "object") return {} as GnarTermConfig;
-  const cfg = raw as GnarTermConfig;
+
+  // Migrate agents field: old detection shape → agentDetection; new preset
+  // array → stays as agents. Returns normalised sub-fields + remaining keys.
+  const { agentDetection, agents, otherFields } = migrateAgentsConfig(raw);
+
+  // Rebuild the config object with migrated fields. We spread otherFields first
+  // so that any top-level keys we don't explicitly manage are preserved for
+  // round-trip compat (cmux.json unknown keys survive save → load).
+  const cfg = {
+    ...otherFields,
+    ...(agentDetection !== undefined ? { agentDetection } : {}),
+    ...(agents !== undefined ? { agents } : {}),
+  } as GnarTermConfig;
+
   if (Array.isArray(cfg.commands)) {
     for (const cmd of cfg.commands) {
       if (cmd?.workspace?.layout) {

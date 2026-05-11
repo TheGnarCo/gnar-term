@@ -211,6 +211,12 @@ export interface AgentDetectionPattern {
 export interface AgentsConfig {
   knownAgents?: AgentDetectionPattern[];
   idleTimeout?: number;
+  /**
+   * Number of days of inactivity (no git commits, no agent running, no PR)
+   * after which a Worktree Branch is classified as `abandoned`.
+   * Default: 14.
+   */
+  abandonedAfterDays?: number;
 }
 
 /**

@@ -62,10 +62,19 @@ export interface SpawnAgentInWorktreeArgs {
   /** Display name for the spawned workspace. */
   name: string;
   agent: SpawnAgentType;
-  /** Required when agent === "custom". Ignored otherwise. */
+  /**
+   * Literal command override. Required when agent === "custom". For built-in
+   * agent types it is optional — when present, it replaces the AGENT_COMMANDS
+   * default (used by AgentPreset to thread `claude --model opus` etc.).
+   */
   command?: string;
   /** Optional free-text task; prepended as the agent's first argument. */
   taskContext?: string;
+  /**
+   * Extra environment variables to merge into the spawned workspace's root env.
+   * Honored alongside the worktree-service's GNARTERM_WORKTREE_ROOT default.
+   */
+  env?: Record<string, string>;
   /**
    * Source repo path. When omitted, the caller has no context — error is
    * raised. (The MCP handler is responsible for resolving from the
@@ -151,10 +160,12 @@ export function buildStartupCommand(
     if (!customCommand) {
       throw new Error('agent "custom" requires a command parameter');
     }
-    // Custom commands pass through verbatim — caller owns the shape.
     return customCommand;
   }
-  const base = AGENT_COMMANDS[agent];
+  // Built-in agents: caller may override the launcher (e.g. AgentPreset
+  // supplies `claude --model opus`). When no override is given, fall back
+  // to the canonical binary name.
+  const base = customCommand?.trim() || AGENT_COMMANDS[agent];
   if (!base) {
     throw new Error(`unknown agent: ${agent}`);
   }
@@ -211,6 +222,7 @@ export async function spawnAgentInWorktree(
     base,
     worktreePath,
     startupCommand,
+    ...(args.env && Object.keys(args.env).length > 0 ? { env: args.env } : {}),
     ...(args.rootWorkspaceId ? { rootWorkspaceId: args.rootWorkspaceId } : {}),
     ...(args.spawnedBy ? { spawnedBy: args.spawnedBy } : {}),
     ...(args.spawnedFromIssues && args.spawnedFromIssues.length > 0

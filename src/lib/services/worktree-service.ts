@@ -132,6 +132,12 @@ export interface WorktreeWorkspaceConfig {
    */
   startupCommand?: string;
   /**
+   * Extra environment variables — merged into the workspace's root env on
+   * top of the GNARTERM_WORKTREE_ROOT default. Supplied by AgentPreset so
+   * user-authored env (e.g. CLAUDE_MODEL) reaches the spawned shell.
+   */
+  env?: Record<string, string>;
+  /**
    * Dashboard provenance — when the worktree is spawned from the Global
    * Agentic Dashboard or an Agentic Dashboard contribution on a workspace,
    * this records which. Surfaces as `metadata.spawnedBy` on the new
@@ -209,7 +215,10 @@ export async function createWorktreeWorkspaceFromConfig(
   await createWorkspaceFromDef({
     name: wsName,
     cwd: config.worktreePath,
-    env: { GNARTERM_WORKTREE_ROOT: config.repoPath },
+    env: {
+      GNARTERM_WORKTREE_ROOT: config.repoPath,
+      ...(config.env ?? {}),
+    },
     worktreePath: config.worktreePath,
     branch: config.branch,
     baseBranch: config.base,

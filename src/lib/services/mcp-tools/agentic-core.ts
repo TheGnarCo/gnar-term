@@ -22,8 +22,58 @@ import {
   type AttentionEventKind,
 } from "../attention-api";
 import { spawnAgentInWorktree } from "../spawn-helper";
+import type { SpawnAgentType } from "../spawn-helper";
 import { createWorktreeWorkspaceFromConfig } from "../worktree-service";
+import { getConfig } from "../../config";
 import type { ToolDef } from "../mcp-types";
+
+// ---------------------------------------------------------------------------
+// AgentPreset resolution
+// ---------------------------------------------------------------------------
+
+interface ResolvedAgentArgs {
+  type: SpawnAgentType;
+  command: string;
+  initialPrompt?: string;
+  env?: Record<string, string>;
+}
+
+/**
+ * Map `AgentPreset.intendedAgent` (detection-side AgentType) onto the
+ * spawn-helper's SpawnAgentType. Detection identifies more agents than the
+ * spawn helper has built-in launchers for — anything that doesn't map falls
+ * back to "custom" so the preset's literal command is honored verbatim.
+ */
+const INTENDED_AGENT_TO_SPAWN_TYPE: Record<string, SpawnAgentType> = {
+  claude: "claude-code",
+  codex: "codex",
+  aider: "aider",
+};
+
+/**
+ * Resolve a preset name (from `getConfig().agents`) into the args the spawn
+ * helper consumes. `intendedAgent` informs the SpawnAgentType (so the
+ * downstream pane carries the right agent identity); when no mapping exists
+ * we fall back to "custom" and the preset's literal command runs verbatim.
+ */
+function resolveAgentPreset(presetName: string): ResolvedAgentArgs {
+  const presets = getConfig().agents ?? [];
+  const preset = presets.find((p) => p.name === presetName);
+  if (!preset) {
+    throw new Error(
+      `spawn_branch: agent preset "${presetName}" not found in settings.json agents[]`,
+    );
+  }
+  const spawnType: SpawnAgentType = preset.intendedAgent
+    ? (INTENDED_AGENT_TO_SPAWN_TYPE[preset.intendedAgent] ?? "custom")
+    : "custom";
+  return {
+    type: spawnType,
+    command: preset.command,
+    initialPrompt: preset.initialPrompt,
+    env: preset.env,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -94,7 +144,7 @@ export const agenticCoreTools: ToolDef[] = [
         agent: {
           type: "object",
           description:
-            "When provided, spawn an AI coding agent inside the new Branch after creation.",
+            "When provided, spawn an AI coding agent inside the new Branch after creation. Wins over agent_preset_name when both are passed.",
           properties: {
             type: {
               type: "string",
@@ -114,6 +164,11 @@ export const agenticCoreTools: ToolDef[] = [
           },
           required: ["type"],
         },
+        agent_preset_name: {
+          type: "string",
+          description:
+            "Name of an AgentPreset from settings.json `agents[]`. Resolves to agent type + command + initialPrompt + env. Ignored when `agent` is provided.",
+        },
       },
       required: ["name"],
     },
@@ -127,6 +182,7 @@ export const agenticCoreTools: ToolDef[] = [
           command?: string;
           initialPrompt?: string;
         };
+        agent_preset_name?: string;
       };
 
       if (!p.name || !p.name.trim()) {
@@ -136,9 +192,19 @@ export const agenticCoreTools: ToolDef[] = [
       const branch = p.name.trim().replace(/\s+/g, "-");
       const base = p.base?.trim() || "main";
 
-      // If an agent is requested, delegate entirely to spawnAgentInWorktree
-      // which handles worktree creation + agent startup atomically.
-      if (p.agent) {
+      // Explicit agent arg wins over preset. Otherwise fall back to preset
+      // resolution; either source produces the same downstream call.
+      const resolved: ResolvedAgentArgs | null = p.agent
+        ? {
+            type: p.agent.type,
+            command: p.agent.command ?? "",
+            initialPrompt: p.agent.initialPrompt,
+          }
+        : p.agent_preset_name
+          ? resolveAgentPreset(p.agent_preset_name)
+          : null;
+
+      if (resolved) {
         if (!p.repoPath || !p.repoPath.trim()) {
           throw new Error(
             "spawn_branch: repoPath is required when spawning an agent (no workspace context to derive it from)",
@@ -147,9 +213,16 @@ export const agenticCoreTools: ToolDef[] = [
 
         const result = await spawnAgentInWorktree({
           name: p.name.trim(),
-          agent: p.agent.type,
-          command: p.agent.command,
-          taskContext: p.agent.initialPrompt,
+          agent: resolved.type,
+          ...(p.agent
+            ? p.agent.command !== undefined
+              ? { command: p.agent.command }
+              : {}
+            : { command: resolved.command }),
+          ...(resolved.initialPrompt !== undefined
+            ? { taskContext: resolved.initialPrompt }
+            : {}),
+          ...(resolved.env ? { env: resolved.env } : {}),
           repoPath: p.repoPath.trim(),
           branch,
           base,

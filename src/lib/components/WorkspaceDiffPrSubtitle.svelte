@@ -1,3 +1,42 @@
+<script context="module" lang="ts">
+  import { writable } from "svelte/store";
+
+  // Module-level PR cache keyed by repoRoot. The collapsed-mode hover
+  // popover reuses the same subtitle instance with a changing
+  // `workspaceId` prop, so without a cache each hover would re-fetch
+  // from `gh_view_pr` and re-paint from `pr = null` → loaded, making
+  // the popover height jump as the PR row appears.
+  //
+  // Backing the cache with a writable store (and reassigning the Map
+  // on every update) means subscribers re-derive their displayed PR
+  // whenever any row's data lands. Combined with deriving `pr` from
+  // `(repoRoot, $prCacheStore)` rather than imperatively setting it,
+  // this rules out the prior "floating PR" race where the displayed
+  // value briefly held the previous row's PR after the prop changed
+  // but before the new fetch resolved.
+  //
+  // MUST live in `<script context="module">` — vars in the per-instance
+  // `<script>` are scoped per component instance, not shared across
+  // mounts, so an in-instance cache would defeat the purpose.
+  export interface GhPrView {
+    number: number;
+    title: string;
+    state: string;
+    url: string;
+    headRefName: string;
+    isDraft: boolean;
+    ciStatus: string;
+  }
+  const prCacheStore = writable(new Map<string, GhPrView | null>());
+  function setPrCache(root: string, value: GhPrView | null): void {
+    prCacheStore.update((m) => {
+      const next = new Map(m);
+      next.set(root, value);
+      return next;
+    });
+  }
+</script>
+
 <script lang="ts">
   /**
    * WorkspaceDiffPrSubtitle — compact diff + PR statusline for individual
@@ -98,16 +137,6 @@
       ].filter(Boolean)
     : [];
 
-  interface GhPrView {
-    number: number;
-    title: string;
-    state: string;
-    url: string;
-    headRefName: string;
-    isDraft: boolean;
-    ciStatus: string;
-  }
-
   function ciColor(status: string, fallback: string): string {
     if (status === "SUCCESS") return "#4ec957";
     if (status === "FAILURE") return "#e85454";
@@ -115,20 +144,36 @@
     return fallback;
   }
 
-  let pr: GhPrView | null = null;
   let prTimer: ReturnType<typeof setInterval> | null = null;
   let lastRepoRoot: string | null = null;
 
   const PR_REFRESH_MS = 5_000;
+
+  // Derive both `pr` and `prInitialResolved` directly from the
+  // current `repoRoot` and the cache store. Imperative assignment
+  // would let `pr` lag behind a `repoRoot` change long enough to
+  // briefly paint the previous row's PR — exactly the "floating PR"
+  // bug. Derived state ties the displayed PR to the row identity by
+  // construction.
+  $: pr = repoRoot ? ($prCacheStore.get(repoRoot) ?? null) : null;
+  $: prInitialResolved = repoRoot ? $prCacheStore.has(repoRoot) : true;
 
   async function refreshPr(root: string): Promise<void> {
     try {
       const result = await invoke<GhPrView | null>("gh_view_pr", {
         repoPath: root,
       });
-      pr = result ?? null;
+      setPrCache(root, result ?? null);
     } catch {
-      pr = null;
+      // Transient failure: don't clobber a known-good cache entry,
+      // but seed `null` if we have no prior answer so the placeholder
+      // reservation can clear.
+      prCacheStore.update((m) => {
+        if (m.has(root)) return m;
+        const next = new Map(m);
+        next.set(root, null);
+        return next;
+      });
     }
   }
 
@@ -151,7 +196,6 @@
   }
   $: if (!repoRoot && lastRepoRoot) {
     stopPrPolling();
-    pr = null;
     lastRepoRoot = null;
   }
 
@@ -161,6 +205,11 @@
     isRootWorkspace &&
     pr !== null &&
     (pr.state === "OPEN" || pr.state === "open");
+  // True for root workspaces whose PR fetch hasn't returned yet.
+  // Drives a hidden-but-spaced placeholder so the popover paints at
+  // its final height from the start instead of jumping when the PR
+  // row appears.
+  $: prLoading = isRootWorkspace && !!repoRoot && !prInitialResolved;
   $: isDraft = pr?.isDraft ?? false;
   $: prColor = pr
     ? isDraft
@@ -169,7 +218,7 @@
     : fgMuted;
 </script>
 
-{#if showDiff || showPr || showRemote}
+{#if showDiff || showPr || showRemote || prLoading}
   <div
     style="display: flex; flex-direction: column; gap: 1px; padding: 0 12px 0 6px; overflow: hidden;"
   >
@@ -253,6 +302,7 @@
 
     {#if showPr && pr}
       <div
+        data-pr-row
         style="display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden;"
         title="#{pr.number} {pr.title}{isDraft ? ' (draft)' : ''}"
       >
@@ -282,6 +332,28 @@
         >
           #{pr.number}{isDraft ? " draft" : ""}
         </span>
+      </div>
+    {:else if prLoading}
+      <!-- Skeleton placeholder: same structure and dimensions as the
+           real PR row but invisible. Reserves vertical space so the
+           hover popover paints at its loaded height even on the very
+           first hover, before `gh_view_pr` resolves. -->
+      <div
+        data-pr-row-placeholder
+        aria-hidden="true"
+        style="display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; visibility: hidden;"
+      >
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="transparent"
+          aria-hidden="true"
+        >
+          <circle cx="18" cy="18" r="3" />
+        </svg>
+        <span style="font-size: 10px;">#0</span>
       </div>
     {/if}
   </div>

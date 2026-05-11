@@ -119,21 +119,23 @@
   $: processStatusStore = getWorkspaceStatusByCategory(workspace.id, "process");
   $: processItems = $processStatusStore;
   $: agentBadges = aggregateAgentBadges(processItems);
-  // OSC-detectable agents (Claude/Codex/Aider) re-title their PTY to the
-  // active task — "Strategic opportunity assessment for Vellum". When a
-  // single tracked agent surface dominates, surface its current title in
-  // the banner so the user can see what the agent is working on without
-  // switching to that tab.
-  $: agentTaskTitle = (() => {
-    if (processItems.length !== 1) return null;
-    const item = processItems[0];
-    const sid = item?.metadata?.surfaceId;
-    if (typeof sid !== "string") return null;
-    const surface = allSurfaces.find((s) => s.id === sid);
-    const title = surface && "title" in surface ? surface.title : null;
-    return typeof title === "string" && title.length > 0 ? title : null;
+  // Per-row bot status for the rail hat. Precedence (highest first):
+  //   attention (waiting) → thinking (running) → idle (any other
+  //   tracked process item like muted/done) → none.
+  // A waiting agent always wins so the pulse can't be hidden by a
+  // co-resident running or idle agent. Mirrors rootRailBotStatus.
+  $: rowBotStatus = (() => {
+    let sawThinking = false;
+    let sawIdle = false;
+    for (const item of processItems) {
+      if (item.variant === "warning") return "attention" as const;
+      if (item.variant === "success") sawThinking = true;
+      else sawIdle = true;
+    }
+    if (sawThinking) return "thinking" as const;
+    if (sawIdle) return "idle" as const;
+    return "none" as const;
   })();
-
   $: subtitleComponents = $workspaceSubtitleStore;
 
   export async function startRename(): Promise<void> {
@@ -168,6 +170,7 @@
   shortcutLabel={shortcutIdx !== undefined && shortcutIdx < 9
     ? `${modLabel}${shortcutIdx + 1}`
     : undefined}
+  botStatus={hideStatusBadges ? "none" : rowBotStatus}
   {onGripMouseDown}
   onRailClick={onSelect}
   {onClose}
@@ -297,20 +300,6 @@
             padding: 2px 4px; margin-left: -4px; border-radius: 4px;
           "
         />
-        {#if !hideStatusBadges && agentBadges.length > 0 && agentBadges[0]}
-          {@const badge = agentBadges[0]}
-          {@const isWaiting = badge.variant === "warning"}
-          <span
-            data-harness-title-row
-            title={agentTaskTitle
-              ? `${badge.label} — ${agentTaskTitle}`
-              : badge.label}
-            class:pulse={isWaiting}
-            style="display: inline-flex; align-items: center; flex-shrink: 0; color: {badge.color};"
-          >
-            <BotIcon size={13} />
-          </span>
-        {/if}
       </div>
 
       {#if !hideStatusBadges && hasUnread && agentBadges.length === 0}
@@ -382,20 +371,3 @@
     {/if}
   </div>
 </SidebarElement>
-
-<style>
-  .pulse {
-    animation: pulse 1.4s ease-in-out infinite;
-  }
-  @keyframes pulse {
-    0%,
-    100% {
-      opacity: 1;
-      transform: scale(1);
-    }
-    50% {
-      opacity: 0.5;
-      transform: scale(1.25);
-    }
-  }
-</style>

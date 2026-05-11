@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  GnarTerm runs MCP-driven coding agents (Claude Code) inside its
+  panes. Those agents browse the filesystem on the user's behalf and
+  routinely stat paths that fall under macOS TCC-protected user-data
+  directories. Without these usage-description strings, the resulting
+  prompts are generic ("GnarTerm wants to access files in your
+  Documents folder") with no app-supplied reason, and macOS may
+  refuse to persist the user's grant cleanly across launches.
+
+  Adding the strings does not suppress the first prompt per
+  directory — that's macOS-mandated — but it makes each prompt
+  intelligible and lets the grant stick.
+-->
+<plist version="1.0">
+<dict>
+  <key>NSDocumentsFolderUsageDescription</key>
+  <string>GnarTerm and the coding agents running inside it (e.g. Claude Code) read files in your Documents folder when you point them at projects or ask them to explore.</string>
+  <key>NSDownloadsFolderUsageDescription</key>
+  <string>GnarTerm and the coding agents running inside it read files in your Downloads folder when you open or reference them in a workspace.</string>
+  <key>NSDesktopFolderUsageDescription</key>
+  <string>GnarTerm and the coding agents running inside it read files on your Desktop when you point them at projects or drop a folder onto a pane.</string>
+  <key>NSAppleMusicUsageDescription</key>
+  <string>GnarTerm needs this to walk into your ~/Music tree when an agent enumerates or searches under your home directory; it does not access Apple Music itself.</string>
+  <key>NSPhotoLibraryUsageDescription</key>
+  <string>GnarTerm needs this to walk into your ~/Pictures tree when an agent enumerates or searches under your home directory; it does not import photos.</string>
+  <key>NSRemovableVolumesUsageDescription</key>
+  <string>GnarTerm reads files on removable volumes when you open a workspace whose path lives on one.</string>
+  <key>NSNetworkVolumesUsageDescription</key>
+  <string>GnarTerm reads files on network volumes when you open a workspace whose path lives on one.</string>
+</dict>
+</plist>

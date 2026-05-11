@@ -353,7 +353,7 @@ pub fn run() {
             // but Cmd+T/Cmd+W/Cmd+N are passed down to JS.
             #[cfg(target_os = "macos")]
             {
-                use tauri::menu::{Menu, PredefinedMenuItem, Submenu};
+                use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
                 let handle = app.handle();
 
                 // GnarTerm Menu
@@ -375,13 +375,16 @@ pub fn run() {
                     ],
                 )?;
 
-                // Edit Menu — Copy/Cut/Paste/Select All are PredefinedMenuItems
-                // which enable native clipboard in the WebView for non-terminal
-                // content (preview surfaces, command palette, etc.).
-                // Terminal surfaces override Cmd+C/V via attachCustomKeyEventHandler.
+                // Edit Menu — Cut/Copy/Select All stay PredefinedMenuItems
+                // (their native NSText actions work fine for both terminal and
+                // non-terminal surfaces). Paste is a custom MenuItem so the
+                // Cmd+V accelerator routes through us — the native paste:
+                // action bypasses xterm.js's bracketed-paste wrapping, which
+                // breaks TUIs (notably Claude Code) that rely on the
+                // `\x1b[200~…\x1b[201~` envelope to recognize a paste.
                 let cut = PredefinedMenuItem::cut(handle, None)?;
                 let copy = PredefinedMenuItem::copy(handle, None)?;
-                let paste = PredefinedMenuItem::paste(handle, None)?;
+                let paste = MenuItem::with_id(handle, "paste", "Paste", true, Some("CmdOrCtrl+V"))?;
                 let select_all = PredefinedMenuItem::select_all(handle, None)?;
 
                 let edit_menu =
@@ -398,7 +401,6 @@ pub fn run() {
                     MenuItem::with_id(handle, "close-tab", "Close Tab", true, Some("CmdOrCtrl+W"))?;
 
                 // View > Theme submenu
-                use tauri::menu::MenuItem;
                 let theme_github = MenuItem::with_id(
                     handle,
                     "theme-github-dark",
@@ -509,6 +511,8 @@ pub fn run() {
                 let _ = app.emit("menu-cmd-palette", ());
             } else if id == "close-tab" {
                 let _ = app.emit("menu-close-tab", ());
+            } else if id == "paste" {
+                let _ = app.emit("menu-paste", ());
             }
         })
         .run(tauri::generate_context!())

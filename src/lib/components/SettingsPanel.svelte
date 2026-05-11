@@ -22,8 +22,10 @@
   let isDev = import.meta.env.DEV;
 
   import SettingsGeneralTab from "./SettingsGeneralTab.svelte";
+  import SettingsAgentsTab from "./SettingsAgentsTab.svelte";
   import SettingsExtensionsTab from "./SettingsExtensionsTab.svelte";
   import SettingsExtensionPage from "./SettingsExtensionPage.svelte";
+  import type { AgentPreset } from "../agents-config";
   import { mcpStatus, type McpStatus } from "../services/mcp-server";
   import { tooltip } from "../actions/tooltip";
 
@@ -48,7 +50,7 @@
 
   let installError = "";
 
-  type SettingsPage = "general" | "extensions" | `ext:${string}`;
+  type SettingsPage = "general" | "agents" | "extensions" | `ext:${string}`;
   let activePage: SettingsPage = "general";
 
   let currentTheme = "";
@@ -58,6 +60,18 @@
   let shell = "";
   let availableFonts: string[] = [];
   let fontLoadError = "";
+
+  // Draft of `agents` for the Agents tab. `null` while pristine — the
+  // Apply button stays disabled until the user actually edits something,
+  // and saveConfig only fires when this is non-null.
+  let pendingAgents: AgentPreset[] | null = null;
+
+  function handleAgentsChange(next: AgentPreset[]) {
+    pendingAgents = next;
+    dirty = true;
+  }
+
+  $: agentsForTab = pendingAgents ?? getConfig().agents ?? [];
 
   function loadSettings() {
     const cfg = getConfig();
@@ -82,6 +96,7 @@
     loadSettings();
     pendingExtToggle = {};
     pendingExtSettings = {};
+    pendingAgents = null;
     showUnsavedWarning = false;
     [appVersion, isDev] = await Promise.all([getVersion(), isDebugBuild()]);
   });
@@ -188,8 +203,12 @@
     ) {
       void saveConfig({ extensions });
     }
+    if (pendingAgents !== null) {
+      void saveConfig({ agents: pendingAgents });
+    }
     pendingExtToggle = {};
     pendingExtSettings = {};
+    pendingAgents = null;
     dirty = false;
   }
 
@@ -224,11 +243,13 @@
     dirty = false;
     pendingExtToggle = {};
     pendingExtSettings = {};
+    pendingAgents = null;
     loadSettings();
   }
 
   const corePages: Array<{ id: SettingsPage; label: string }> = [
     { id: "general", label: "General" },
+    { id: "agents", label: "Agents" },
     { id: "extensions", label: "Extensions" },
   ];
 
@@ -399,6 +420,11 @@
           onFontFamilyChange={handleFontFamilyChange}
           onScrollbackChange={handleScrollbackChange}
           onShellChange={handleShellChange}
+        />
+      {:else if activePage === "agents"}
+        <SettingsAgentsTab
+          presets={agentsForTab}
+          onChange={handleAgentsChange}
         />
       {:else if activePage === "extensions"}
         <SettingsExtensionsTab

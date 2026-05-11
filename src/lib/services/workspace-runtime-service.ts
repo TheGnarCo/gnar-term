@@ -199,6 +199,7 @@ export async function createWorkspaceFromDef(
   if (def.autoRunRestoreCommands !== undefined)
     ws.autoRunRestoreCommands = def.autoRunRestoreCommands;
   if (def.path !== undefined) ws.path = def.path;
+  if (def.pathInode !== undefined) ws.pathInode = def.pathInode;
   if (def.color !== undefined) ws.color = def.color;
   if (def.isGit !== undefined) ws.isGit = def.isGit;
   if (def.createdAt !== undefined) ws.createdAt = def.createdAt;

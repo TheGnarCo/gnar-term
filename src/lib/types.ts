@@ -23,6 +23,13 @@ export interface Workspace {
   activePaneId: string | null;
   // Workspace-level (present on path-rooted Workspaces, absent on Branches)
   path?: string;
+  /**
+   * Inode of `path` at last successful sweep. Used by the rename-
+   * detection probe in `validateWorkspaceRootPaths` to rediscover the
+   * workspace when its directory is renamed within the same parent on
+   * a Unix filesystem. Unset until the first sweep populates it.
+   */
+  pathInode?: number;
   color?: string;
   isGit?: boolean;
   createdAt?: string;

@@ -1,6 +1,7 @@
 import type { Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
 import type { SearchAddon } from "@xterm/addon-search";
+import type { AgentType } from "./services/agent-type";
 
 let _id = 0;
 export function uid(): string {
@@ -195,6 +196,14 @@ export interface Pane {
   resizeObserver?: ResizeObserver;
   element?: HTMLElement;
   exitedSurface?: { code: number; definedCommand?: string; cwd?: string };
+  /**
+   * Optional hint for the intended agent type. Set by `createWorkspaceFromDef`
+   * when a pane definition carries `intendedAgent`. The detection service
+   * prefers a *confirmed detected* agent over this hint — `intendedAgent`
+   * is only used as an initial value for `paneAgentTypeStore` before
+   * any detection fires.
+   */
+  intendedAgent?: AgentType;
 }
 
 export type SplitNode =

@@ -567,6 +567,22 @@ function allTerminalSurfaces(): Array<{
   return out;
 }
 
+/**
+ * Look up the `intendedAgent` hint from the Pane that owns this paneId.
+ * Returns null if the pane is not found or has no hint set.
+ */
+function lookupPaneIntendedAgent(paneId: string): AgentType | null {
+  const all = get(workspaces);
+  for (const ws of all) {
+    for (const pane of getAllPanes(ws.paneLayout)) {
+      if (pane.id === paneId) {
+        return pane.intendedAgent ?? null;
+      }
+    }
+  }
+  return null;
+}
+
 // --- Attach / detach ---
 
 function attachAgent(
@@ -786,6 +802,18 @@ export function initAgentDetection(): void {
     const initialMatch = matchesPattern(initialTitle, patterns);
     if (initialMatch) {
       attachAgent(tracked, initialMatch, idleTimeoutMs);
+    } else if (tracked.paneId) {
+      // No detection yet — fall back to Pane.intendedAgent so that
+      // paneAgentTypeStore has an initial value before detection fires.
+      // Confirmed detection (via attachAgent) will overwrite this entry.
+      const hint = lookupPaneIntendedAgent(tracked.paneId);
+      if (hint !== null && !get(_paneAgentTypeStore)[tracked.paneId]) {
+        setPaneEntry(tracked.paneId, {
+          agentType: hint,
+          confidence: "heuristic",
+          detectedAt: new Date().toISOString(),
+        });
+      }
     }
 
     if (tracked.ptyId !== null) {
@@ -1049,6 +1077,17 @@ export function initAgentDetection(): void {
         if (resolvedPane) {
           tracked.paneId = resolvedPane;
           initPaneStateIfAbsent(tracked.paneId);
+          // Also backfill intendedAgent hint if no detection yet.
+          if (!tracked.agentId && !get(_paneAgentTypeStore)[tracked.paneId]) {
+            const hint = lookupPaneIntendedAgent(tracked.paneId);
+            if (hint !== null) {
+              setPaneEntry(tracked.paneId, {
+                agentType: hint,
+                confidence: "heuristic",
+                detectedAt: new Date().toISOString(),
+              });
+            }
+          }
         }
       }
       if (tracked.agentId) {

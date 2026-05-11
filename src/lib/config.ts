@@ -44,6 +44,11 @@ export interface SurfaceDef {
 
 export interface PaneDef {
   surfaces: SurfaceDef[];
+  /**
+   * Optional intended agent hint. Round-trips through serialize/hydrate.
+   * The detection service prefers confirmed detection over this value.
+   */
+  intendedAgent?: import("./services/agent-type").AgentType;
 }
 
 export interface SplitDef {

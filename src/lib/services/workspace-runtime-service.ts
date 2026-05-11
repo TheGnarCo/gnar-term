@@ -70,6 +70,9 @@ export async function createWorkspaceFromDef(
   ): Promise<SplitNode> {
     if ("pane" in nodeDef) {
       const pane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
+      if (nodeDef.pane.intendedAgent !== undefined) {
+        pane.intendedAgent = nodeDef.pane.intendedAgent;
+      }
       for (const sDef of nodeDef.pane.surfaces) {
         const cwd = sDef.cwd || inheritedCwd;
         if (

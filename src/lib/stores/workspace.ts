@@ -274,7 +274,13 @@ export function serializeLayout(node: SplitNode): LayoutNode {
       }
       return def;
     });
-    return { pane: { surfaces } };
+    const paneDef: import("../config").PaneDef = {
+      surfaces: surfaces as import("../config").SurfaceDef[],
+    };
+    if (node.pane.intendedAgent !== undefined) {
+      paneDef.intendedAgent = node.pane.intendedAgent;
+    }
+    return { pane: paneDef };
   }
   return {
     direction: node.direction,

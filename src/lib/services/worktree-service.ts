@@ -26,6 +26,7 @@ import {
   closeWorkspace,
 } from "./workspace-runtime-service";
 import { workspaces } from "../stores/workspace";
+import { buildStartupCommand, resolveAutoSpawnPreset } from "./spawn-helper";
 
 /** Result of a git_merge Tauri command invocation. */
 interface MergeResult {
@@ -103,6 +104,9 @@ export async function createWorktreeWorkspace(
       ctx.rootWorkspaceId !== undefined && ctx.rootWorkspaceId !== null
         ? String(ctx.rootWorkspaceId)
         : undefined,
+    // Interactive "New Branch" — user did not name an agent, so allow the
+    // autoSpawn preset (if any) to fill the new workspace's terminal.
+    autoSpawnEligible: true,
   });
 }
 
@@ -155,6 +159,17 @@ export interface WorktreeWorkspaceConfig {
    * into a single workspace's array.
    */
   spawnedFromIssues?: number[];
+  /**
+   * When true, and `startupCommand` is not already supplied, the first
+   * `AgentPreset` in `settings.json#agents[]` with `autoSpawn: true` is
+   * spawned into the new workspace's terminal. Defaults to false — explicit
+   * opt-in so MCP / scripted paths don't unintentionally spawn agents.
+   *
+   * The interactive "New Branch" UI sets this to true; explicit `spawn_agent`
+   * / `spawn_branch` MCP calls leave it false (they already drive the agent
+   * choice themselves).
+   */
+  autoSpawnEligible?: boolean;
 }
 
 export async function createWorktreeWorkspaceFromConfig(
@@ -170,6 +185,30 @@ export async function createWorktreeWorkspaceFromConfig(
     throw new Error(
       `Failed to create worktree at ${config.worktreePath} for branch ${config.branch}`,
     );
+  }
+
+  // AgentPreset autoSpawn hook. Only fires when:
+  //   1. The caller opted in via `autoSpawnEligible: true` (e.g. the
+  //      interactive "New Branch" UI).
+  //   2. No explicit `startupCommand` was supplied — preserves the
+  //      caller's intent when they already chose a command.
+  //   3. A preset with `autoSpawn: true` exists in settings.json#agents[].
+  // Source-of-truth: presets are read directly from getConfig() — no
+  // parallel preset store.
+  let effectiveStartupCommand = config.startupCommand;
+  let effectiveEnv = config.env;
+  if (config.autoSpawnEligible && !effectiveStartupCommand) {
+    const auto = resolveAutoSpawnPreset();
+    if (auto) {
+      effectiveStartupCommand = buildStartupCommand(
+        auto.type,
+        auto.taskContext,
+        auto.command,
+      );
+      if (auto.env) {
+        effectiveEnv = { ...(effectiveEnv ?? {}), ...auto.env };
+      }
+    }
   }
 
   const settings = getWorktreeSettings();
@@ -217,7 +256,7 @@ export async function createWorktreeWorkspaceFromConfig(
     cwd: config.worktreePath,
     env: {
       GNARTERM_WORKTREE_ROOT: config.repoPath,
-      ...(config.env ?? {}),
+      ...(effectiveEnv ?? {}),
     },
     worktreePath: config.worktreePath,
     branch: config.branch,
@@ -235,8 +274,8 @@ export async function createWorktreeWorkspaceFromConfig(
         surfaces: [
           {
             type: "terminal",
-            ...(config.startupCommand
-              ? { command: config.startupCommand }
+            ...(effectiveStartupCommand
+              ? { command: effectiveStartupCommand }
               : {}),
           },
         ],

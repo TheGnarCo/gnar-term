@@ -73,6 +73,7 @@
   import { initAgentDetectionBootstrap } from "./lib/bootstrap/init-agent-detection";
   import { initAttentionApi } from "./lib/services/attention-api";
   import { initBranchLifecycle } from "./lib/services/branch-lifecycle";
+  import { startPrStatePoller } from "./lib/services/pr-state-poller";
   import { initCoreExtensionAPI } from "./lib/bootstrap/init-core-extension-api";
   import {
     initWorkspaces,
@@ -589,10 +590,12 @@
   let _cleanupDragDropRouter: (() => void) | null = null;
   let _rootPathSweepInterval: number | null = null;
   let _gitRecheckInterval: ReturnType<typeof setInterval> | null = null;
+  let _cleanupPrPoller: (() => void) | null = null;
   onDestroy(() => {
     _cleanupShortcutHints?.();
     _cleanupVisibilityRecover?.();
     _cleanupDragDropRouter?.();
+    _cleanupPrPoller?.();
     if (_rootPathSweepInterval !== null)
       window.clearInterval(_rootPathSweepInterval);
     if (_gitRecheckInterval !== null) clearInterval(_gitRecheckInterval);
@@ -695,6 +698,7 @@
     // start them after detection so initial fan-out lands on live subs.
     initAttentionApi();
     initBranchLifecycle();
+    _cleanupPrPoller = startPrStatePoller();
 
     // Workspaces (formerly the project-scope extension) —
     // registered from core so the root-row renderer, commands, and

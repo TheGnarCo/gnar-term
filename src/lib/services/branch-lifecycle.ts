@@ -422,6 +422,72 @@ export function resetBranchLifecycleForTests(): void {
 }
 
 // ---------------------------------------------------------------------------
+// Producer-side write APIs — used by passive observers (PR poller, git-log
+// poller, activity tracker) to feed real data into the lifecycle derivation.
+// Each call is a no-op when the branch is unknown so observers can fire
+// freely without coordinating against the workspaces-store sync pass.
+// ---------------------------------------------------------------------------
+
+export function updateBranchPrState(
+  branchId: string,
+  prState: PrState | null,
+): void {
+  const desc = _branches.get(branchId);
+  if (!desc) return;
+  if (
+    desc.prState === prState ||
+    (desc.prState &&
+      prState &&
+      desc.prState.state === prState.state &&
+      desc.prState.isDraft === prState.isDraft &&
+      desc.prState.merged === prState.merged)
+  ) {
+    return;
+  }
+  desc.prState = prState;
+  desc.lastActivityAt = Date.now();
+  void recomputeAll();
+}
+
+export function updateBranchCommitState(
+  branchId: string,
+  hasCommits: boolean,
+  wipOnly: boolean,
+): void {
+  const desc = _branches.get(branchId);
+  if (!desc) return;
+  if (desc.hasCommits === hasCommits && desc.wipOnly === wipOnly) return;
+  desc.hasCommits = hasCommits;
+  desc.wipOnly = wipOnly;
+  desc.lastActivityAt = Date.now();
+  void recomputeAll();
+}
+
+export function bumpBranchActivity(branchId: string, atMs?: number): void {
+  const desc = _branches.get(branchId);
+  if (!desc) return;
+  const next = atMs ?? Date.now();
+  if (next <= desc.lastActivityAt) return;
+  desc.lastActivityAt = next;
+  void recomputeAll();
+}
+
+/** Iterate over the current branch registry — read-only snapshot. */
+export function listBranchDescriptors(): ReadonlyArray<{
+  branchId: string;
+  repoPath: string;
+  branch: string;
+  paneId: string | null;
+}> {
+  return [..._branches.values()].map((d) => ({
+    branchId: d.branchId,
+    repoPath: d.repoPath,
+    branch: d.branch,
+    paneId: d.paneId,
+  }));
+}
+
+// ---------------------------------------------------------------------------
 // Actions
 // ---------------------------------------------------------------------------
 

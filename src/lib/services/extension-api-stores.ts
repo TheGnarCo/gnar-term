@@ -1,4 +1,4 @@
-import type { Readable } from "svelte/store";
+import { derived, type Readable } from "svelte/store";
 import {
   workspaces,
   activeWorkspace,
@@ -16,6 +16,9 @@ import {
 import { agentsStore } from "./agent-detection-service";
 import { branchLifecycleStore } from "./branch-lifecycle";
 import { attentionStore } from "./attention-api";
+import { mcpDispatchLogStore } from "./mcp-server";
+import { sessionLogsStore } from "./session-log-service";
+import { configStore } from "../config";
 import type { ExtensionAPI } from "../extension-types";
 
 /** Read-only store wrappers that project internal state to safe public types. */
@@ -28,8 +31,11 @@ export function createStoreProjections(
   | "activePane"
   | "activeSurface"
   | "agents"
+  | "agentPresets"
   | "branchLifecycle"
   | "attention"
+  | "mcpEvents"
+  | "sessions"
   | "theme"
   | "reorderContext"
   | "hoveredSidebarBlockId"
@@ -121,10 +127,38 @@ export function createStoreProjections(
       },
     } as ExtensionAPI["activeSurface"],
     agents: readOnly(agentsStore) as unknown as ExtensionAPI["agents"],
+    agentPresets: readOnly(
+      derived(configStore, ($c) => $c.agents ?? []),
+    ) as unknown as ExtensionAPI["agentPresets"],
     branchLifecycle: readOnly(
       branchLifecycleStore,
     ) as unknown as ExtensionAPI["branchLifecycle"],
     attention: readOnly(attentionStore) as unknown as ExtensionAPI["attention"],
+    mcpEvents: readOnly(
+      mcpDispatchLogStore,
+    ) as unknown as ExtensionAPI["mcpEvents"],
+    sessions: readOnly(
+      derived(sessionLogsStore, ($logs) => {
+        const flat: Array<{
+          workspaceId: string;
+          surfaceName: string;
+          logPath: string;
+          timestamp: number;
+        }> = [];
+        for (const [workspaceId, entries] of Object.entries($logs)) {
+          for (const e of entries) {
+            flat.push({
+              workspaceId,
+              surfaceName: e.surfaceName,
+              logPath: e.logPath,
+              timestamp: e.timestamp,
+            });
+          }
+        }
+        flat.sort((a, b) => a.timestamp - b.timestamp);
+        return flat;
+      }),
+    ) as unknown as ExtensionAPI["sessions"],
     theme: readOnly(theme) as unknown as ExtensionAPI["theme"],
     reorderContext: readOnly(
       reorderContext,

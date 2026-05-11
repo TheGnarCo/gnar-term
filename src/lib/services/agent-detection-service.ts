@@ -73,6 +73,10 @@ export interface DetectedAgent {
    *  falling back to "generic" when the matched pattern has no agentType. */
   agentType: AgentType;
   surfaceId: string;
+  /** Pane hosting the agent's surface. May be null briefly during startup
+   *  before the workspace store has loaded the parent pane; backfilled when
+   *  the surface→pane mapping becomes known. */
+  paneId: string | null;
   workspaceId: string;
   status: string;
   createdAt: string;
@@ -666,6 +670,7 @@ function attachAgent(
     agentName: pattern.name,
     agentType,
     surfaceId: tracked.surfaceId,
+    paneId: tracked.paneId ?? null,
     workspaceId,
     status: "idle",
     createdAt: now,
@@ -1076,6 +1081,13 @@ export function initAgentDetection(): void {
       if (surfaceInfo?.paneId) {
         tracked.paneId = surfaceInfo.paneId;
         initPaneStateIfAbsent(tracked.paneId);
+        if (tracked.agentId) {
+          const agent = _agents.find((a) => a.agentId === tracked.agentId);
+          if (agent && agent.paneId !== surfaceInfo.paneId) {
+            agent.paneId = surfaceInfo.paneId;
+            syncStore();
+          }
+        }
       }
     }
     tracked.ptyId = event.ptyId;
@@ -1123,6 +1135,13 @@ export function initAgentDetection(): void {
         if (resolvedPane) {
           tracked.paneId = resolvedPane;
           initPaneStateIfAbsent(tracked.paneId);
+          if (tracked.agentId) {
+            const agent = _agents.find((a) => a.agentId === tracked.agentId);
+            if (agent && agent.paneId !== resolvedPane) {
+              agent.paneId = resolvedPane;
+              syncStore();
+            }
+          }
           // Backfill agent-type entry if no detection yet — argv first
           // (strongest signal), intendedAgent as heuristic fallback.
           if (!tracked.agentId && !get(_paneAgentTypeStore)[tracked.paneId]) {

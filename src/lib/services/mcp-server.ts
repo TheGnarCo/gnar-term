@@ -404,12 +404,23 @@ interface DispatchLogEntry {
 
 const DISPATCH_LOG_MAX = 500;
 const dispatchLog: DispatchLogEntry[] = [];
+const dispatchLogStore = writable<readonly DispatchLogEntry[]>(dispatchLog);
+
+/**
+ * Public read-only view of the MCP dispatch log. Backs
+ * `ExtensionAPI.mcpEvents` via a projection in extension-api-stores.ts.
+ * Newest-last with a rolling cap of {@link DISPATCH_LOG_MAX}.
+ */
+export const mcpDispatchLogStore: {
+  subscribe: typeof dispatchLogStore.subscribe;
+} = { subscribe: dispatchLogStore.subscribe };
 
 function logDispatch(entry: DispatchLogEntry): void {
   dispatchLog.push(entry);
   if (dispatchLog.length > DISPATCH_LOG_MAX) {
     dispatchLog.shift();
   }
+  dispatchLogStore.set(dispatchLog.slice());
   // Echo to console in a structured single line so devtools can grep.
   const resolved = entry.resolved
     ? `resolved={ws=${entry.resolved.workspaceId},pane=${entry.resolved.paneId ?? "-"},src=${entry.resolved.source}}`
@@ -912,26 +923,54 @@ registerTool({
 registerTool({
   name: "send_prompt",
   description:
-    "Send text to an MCP session's PTY. Appends Enter unless press_enter is false.",
+    "Send text to a terminal. Target by `session_id` (MCP-spawned session) " +
+    "or `pane_id` (any pane's active terminal surface). " +
+    "Appends Enter unless press_enter is false.",
   inputSchema: {
     type: "object",
     properties: {
       session_id: { type: "string" },
+      pane_id: { type: "string" },
       text: { type: "string" },
       press_enter: { type: "boolean" },
     },
-    required: ["session_id", "text"],
+    required: ["text"],
   },
   handler: async (args) => {
     const p = args as {
-      session_id: string;
+      session_id?: string;
+      pane_id?: string;
       text: string;
       press_enter?: boolean;
     };
-    const session = sessions.get(p.session_id);
-    if (!session) throw new Error(`session ${p.session_id} not found`);
+    if (!p.session_id && !p.pane_id) {
+      throw new Error("send_prompt requires either session_id or pane_id");
+    }
     const data = p.text + (p.press_enter === false ? "" : "\r");
-    await invoke("write_pty", { ptyId: session.ptyId, data });
+    let ptyId: number;
+    if (p.session_id) {
+      const session = sessions.get(p.session_id);
+      if (!session) throw new Error(`session ${p.session_id} not found`);
+      ptyId = session.ptyId;
+    } else {
+      const found = findPaneById(p.pane_id!);
+      if (!found) {
+        throw new Error(
+          `pane_id "${p.pane_id}" not found (it may have been closed)`,
+        );
+      }
+      const { pane } = found;
+      const active = pane.surfaces.find((s) => s.id === pane.activeSurfaceId);
+      const terminal =
+        active && active.kind === "terminal"
+          ? active
+          : pane.surfaces.find((s) => s.kind === "terminal");
+      if (!terminal || terminal.kind !== "terminal") {
+        throw new Error(`pane "${p.pane_id}" has no terminal surface`);
+      }
+      ptyId = terminal.ptyId;
+    }
+    await invoke("write_pty", { ptyId, data });
     return { ok: true };
   },
 });

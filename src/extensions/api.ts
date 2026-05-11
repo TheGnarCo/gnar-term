@@ -820,6 +820,13 @@ export interface ExtensionAPI {
    */
   agents: Readable<AgentRef[]>;
   /**
+   * Reactive list of agent spawn presets defined in `settings.json` under
+   * `agents[]`. The store reflects the canonical config; mutations go
+   * through the Settings UI or direct config edits. Use this to power
+   * preset pickers, kanban "spawn agent" affordances, and similar UI.
+   */
+  agentPresets: Readable<AgentPresetRef[]>;
+  /**
    * Reactive map of branch-id → derived lifecycle entry. The map is
    * recomputed by core whenever any canonical input (git state, PR
    * state, agent state, activity) moves. Subscribe here to render
@@ -834,6 +841,21 @@ export interface ExtensionAPI {
    * Pair with the `attention:event` event for transition-only handlers.
    */
   attention: Readable<AttentionEventRef[]>;
+  /**
+   * Reactive log of MCP tool dispatches (most-recent-last, cap 500). Each
+   * entry captures the tool name, args, optional resolved target, and
+   * outcome. Subscribe to this to render an "agent activity" timeline or
+   * to derive secondary indicators (last successful spawn, error rate).
+   */
+  mcpEvents: Readable<McpEventRef[]>;
+  /**
+   * Reactive flat list of recorded terminal sessions across all
+   * workspaces, derived from the per-workspace session-log store.
+   * Each entry carries the owning `workspaceId`, surface name, log path,
+   * and recording timestamp. Useful for building cross-workspace session
+   * browsers, replays, or audit views.
+   */
+  sessions: Readable<SessionRef[]>;
   /**
    * Read-only snapshot of every branch core is currently tracking.
    * Returns the same set of branchIds keyed by the `branchLifecycle`
@@ -1293,6 +1315,28 @@ export interface PaneRef {
 }
 
 /**
+ * Public projection of a `GnarTermConfig.agents[]` preset entry. Mirrors
+ * the canonical `AgentPreset` shape in `src/lib/agents-config.ts` so the
+ * public API surface stays decoupled from core internals.
+ */
+export interface AgentPresetRef {
+  /** Human-readable label shown in spawn pickers. */
+  name: string;
+  /** Shell command used to start the agent, e.g. `"claude"`. */
+  command: string;
+  /** Extra environment variables injected into the spawned pane. */
+  env?: Record<string, string>;
+  /** Which detection entry this preset maps to (e.g. `"claude-code"`). */
+  intendedAgent?: string;
+  /** Override working directory for the spawned pane. */
+  defaultCwd?: string;
+  /** When true, automatically spawn this preset in matching workspaces. */
+  autoSpawn?: boolean;
+  /** Text sent to the agent pane immediately after spawn. */
+  initialPrompt?: string;
+}
+
+/**
  * Public projection of a detected agent. Matches the core
  * DetectedAgent type but keeps the extension-visible shape narrow so
  * the public API can evolve without breaking downstream extensions.
@@ -1301,6 +1345,9 @@ export interface AgentRef {
   agentId: string;
   agentName: string;
   surfaceId: string;
+  /** Pane hosting the agent's surface. May be null briefly during startup
+   *  before the surface→pane mapping resolves. */
+  paneId: string | null;
   workspaceId: string;
   status: string;
   createdAt: string;
@@ -1382,6 +1429,39 @@ export interface AttentionEventRef {
   level?: string;
   source: AttentionEventSource;
   createdAt: number;
+}
+
+/**
+ * MCP dispatch log entry projected to the public extension surface. Backs the
+ * `mcpEvents` readable; the store is newest-last with a rolling cap of 500.
+ * `resolved` is populated for tools that take a workspace/pane target.
+ */
+export interface McpEventRef {
+  /** ISO timestamp when the tool dispatch completed. */
+  ts: string;
+  connectionId: number;
+  tool: string;
+  args: unknown;
+  resolved?: {
+    workspaceId: string;
+    paneId: string | null;
+    source: string;
+  };
+  result?: { kind: "ok"; summary: string } | { kind: "error"; message: string };
+}
+
+/**
+ * Per-workspace recorded session entry projected to the public extension
+ * surface. Backs the `sessions` readable as a flat newest-last list across
+ * all workspaces.
+ */
+export interface SessionRef {
+  workspaceId: string;
+  surfaceName: string;
+  /** Absolute path to the recorded session log file. */
+  logPath: string;
+  /** Epoch milliseconds when the session was recorded. */
+  timestamp: number;
 }
 
 /** Shape of a registry-backed surface, as delivered to surface components. */

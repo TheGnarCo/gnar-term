@@ -581,10 +581,13 @@
   let _cleanupShortcutHints: (() => void) | null = null;
   let _cleanupVisibilityRecover: (() => void) | null = null;
   let _cleanupDragDropRouter: (() => void) | null = null;
+  let _rootPathSweepInterval: number | null = null;
   onDestroy(() => {
     _cleanupShortcutHints?.();
     _cleanupVisibilityRecover?.();
     _cleanupDragDropRouter?.();
+    if (_rootPathSweepInterval !== null)
+      window.clearInterval(_rootPathSweepInterval);
   });
 
   onMount(async () => {
@@ -821,7 +824,17 @@
           }
         }
       }
+      // Re-sweep workspace root paths on focus — picks up directories
+      // that were renamed in Finder/`mv` while gnar-term was unfocused.
+      void validateWorkspaceRootPaths();
     });
+
+    // Periodic sweep — catches renames that happen while gnar-term is
+    // focused but idle. 60s is a pragmatic floor; the sweep is cheap
+    // (one `stat` per workspace). Cleared in the top-level onDestroy.
+    _rootPathSweepInterval = window.setInterval(() => {
+      void validateWorkspaceRootPaths();
+    }, 60_000);
 
     // Flush workspace and extension state to disk before the window closes.
     // Tauri v2: the window closes synchronously unless we preventDefault the

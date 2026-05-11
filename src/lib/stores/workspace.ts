@@ -70,6 +70,7 @@ export function workspaceDefToTemplate(
   // Workspace-level fields
   if (def.color !== undefined) nwDef.color = def.color;
   if (def.path !== undefined) nwDef.path = def.path;
+  if (def.pathInode !== undefined) nwDef.pathInode = def.pathInode;
   if (def.isGit !== undefined) nwDef.isGit = def.isGit;
   if (def.createdAt !== undefined) nwDef.createdAt = def.createdAt;
   if (def.autoRunRestoreCommands !== undefined)
@@ -284,6 +285,7 @@ export function serializeWorkspace(ws: Workspace): WorkspaceDef {
     layout: serializeLayout(ws.paneLayout),
   };
   if (ws.path !== undefined) def.path = ws.path;
+  if (ws.pathInode !== undefined) def.pathInode = ws.pathInode;
   if (ws.color !== undefined) def.color = ws.color;
   if (ws.isGit !== undefined) def.isGit = ws.isGit;
   if (ws.createdAt !== undefined) def.createdAt = ws.createdAt;

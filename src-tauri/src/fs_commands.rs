@@ -73,6 +73,58 @@ pub(crate) async fn file_exists(path: String) -> bool {
     }
 }
 
+/// Return the inode number for `path`. Used by the workspace-rename detector
+/// to fingerprint a CWD so a later sweep can rediscover it after rename.
+/// Returns `Err` on unsupported platforms (Windows) or unreadable paths.
+#[tauri::command]
+pub(crate) async fn get_path_inode(path: String) -> Result<u64, String> {
+    if is_blocked_path(&path) {
+        return Err(format!("Access denied: {path}"));
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let meta = std::fs::metadata(&path).map_err(|e| format!("Failed to stat {path}: {e}"))?;
+        Ok(meta.ino())
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+        Err("Inode not supported on this platform".to_string())
+    }
+}
+
+/// Scan `parent` for a directory whose inode matches `inode`. Used to
+/// rediscover a workspace CWD that was renamed within its parent directory.
+/// Returns `Ok(None)` if no entry matches; `Err` if `parent` cannot be read.
+#[tauri::command]
+pub(crate) async fn find_dir_by_inode(
+    parent: String,
+    inode: u64,
+) -> Result<Option<String>, String> {
+    if is_blocked_path(&parent) {
+        return Err(format!("Access denied: {parent}"));
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let entries =
+            std::fs::read_dir(&parent).map_err(|e| format!("Failed to read dir {parent}: {e}"))?;
+        for entry in entries.flatten() {
+            let Ok(meta) = entry.metadata() else { continue };
+            if meta.is_dir() && meta.ino() == inode {
+                return Ok(Some(entry.path().to_string_lossy().to_string()));
+            }
+        }
+        Ok(None)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (parent, inode);
+        Err("Inode not supported on this platform".to_string())
+    }
+}
+
 /// List filenames in a directory (non-recursive, files only)
 #[tauri::command]
 pub(crate) async fn list_dir(path: String) -> Result<Vec<String>, String> {

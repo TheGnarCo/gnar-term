@@ -74,6 +74,52 @@ describe("DragGrip", () => {
     expect(stripe).not.toBeNull();
     expect(stripe!.style.width).toBe("4px");
   });
+
+  it("renders the bot-status hat in narrow (collapsed) mode", () => {
+    const { container } = render(DragGrip, {
+      props: {
+        theme: stubTheme,
+        visible: false,
+        railColor: "#abcdef",
+        narrowRail: true,
+        botStatus: "thinking",
+      },
+    });
+    const hat = container.querySelector(".rail-bot-hat") as HTMLElement | null;
+    expect(hat).not.toBeNull();
+    expect(hat!.style.width).toBe("4px");
+  });
+
+  it("renders the bot-status hat in expanded (full-width) mode too", () => {
+    // Regression: bot status used to be hidden when the sidebar was
+    // expanded. Now the hat must paint at every rail width so agent
+    // notifications stay visible regardless of sidebar layout.
+    const { container } = render(DragGrip, {
+      props: {
+        theme: stubTheme,
+        visible: false,
+        railColor: "#abcdef",
+        narrowRail: false,
+        botStatus: "attention",
+      },
+    });
+    const hat = container.querySelector(".rail-bot-hat") as HTMLElement | null;
+    expect(hat).not.toBeNull();
+    expect(hat!.style.width).toBe("8px");
+    expect(hat!.classList.contains("pulses")).toBe(true);
+  });
+
+  it("hides the bot-status hat when botStatus is none", () => {
+    const { container } = render(DragGrip, {
+      props: {
+        theme: stubTheme,
+        visible: false,
+        railColor: "#abcdef",
+        botStatus: "none",
+      },
+    });
+    expect(container.querySelector(".rail-bot-hat")).toBeNull();
+  });
 });
 
 const SOURCE = readFileSync(

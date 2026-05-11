@@ -1290,39 +1290,6 @@ describe("WorkspaceItem", () => {
     expect(screen.getByText("Build complete")).toBeTruthy();
   });
 
-  it("renders a status row when an agent is attached but idle", async () => {
-    // Regression: launching claude in a workspace should immediately
-    // show a status row — even before the tracker transitions to
-    // running/waiting. aggregateAgentBadges consumes process items from
-    // the status registry; a muted item means "agent live, no active
-    // work" and must render a visible row.
-    const { setStatusItem, clearAllStatusForWorkspace } =
-      await import("../lib/services/status-registry");
-    const ws = makeChildWorkspace("ws-agent", "Agent WS");
-    setStatusItem("_agent", ws.id, "surface:s1", {
-      category: "process",
-      priority: 0,
-      label: "idle",
-      variant: "muted",
-      metadata: { surfaceId: "s1" },
-    });
-    const { container } = render(WorkspaceItem, {
-      props: {
-        workspace: ws,
-        index: 0,
-        isActive: false,
-        onSelect: noop,
-        onClose: noop,
-        onRename: noop,
-        onContextMenu: noop,
-      },
-    });
-    const row = container.querySelector("[data-harness-title-row]");
-    expect(row).not.toBeNull();
-    expect(row?.getAttribute("title")).toBe("1 idle");
-    clearAllStatusForWorkspace(ws.id);
-  });
-
   it("suppresses the notification row when child of a workspace", () => {
     // Regression: child workspaces render under a workspace's colored
     // banner that already rolls up status; the long blue notification
@@ -2143,7 +2110,7 @@ describe("TerminalSurface", () => {
 // ---------------------------------------------------------------------------
 
 describe("WorkspaceItem — harness sub-row", () => {
-  it("shows sub-row when the active surface has a detected agent", async () => {
+  it("paints a green 'thinking' rail hat for a running agent", async () => {
     const { setStatusItem, clearAllStatusForWorkspace } =
       await import("../lib/services/status-registry");
 
@@ -2171,18 +2138,17 @@ describe("WorkspaceItem — harness sub-row", () => {
       },
     });
 
-    const harnessEl = container.querySelector("[data-harness-title-row]");
-    expect(harnessEl).not.toBeNull();
-    // When a single tracked agent surface exists, its current task title
-    // is surfaced via the tooltip so the user can see what the agent is
-    // working on without leaving the sidebar.
-    expect(harnessEl?.getAttribute("title")).toBe(
-      "1 running — claude > fixing bug",
-    );
+    const hat = container.querySelector(".rail-bot-hat") as HTMLElement | null;
+    expect(hat).not.toBeNull();
+    // "thinking" hat is static, not pulsing.
+    expect(hat!.classList.contains("pulses")).toBe(false);
     clearAllStatusForWorkspace(ws.id);
   });
 
-  it("shows sub-row when agent is on a non-active surface", async () => {
+  it("paints a muted 'idle' rail hat when an agent is attached but idle", async () => {
+    // Idle agents still warrant a hat — it's the "currently
+    // thinking" presence indicator that survives the BotIcon
+    // removal. Color is muted-grey, no pulse.
     const { setStatusItem, clearAllStatusForWorkspace } =
       await import("../lib/services/status-registry");
 
@@ -2220,13 +2186,13 @@ describe("WorkspaceItem — harness sub-row", () => {
       },
     });
 
-    const harnessEl = container.querySelector("[data-harness-title-row]");
-    expect(harnessEl).not.toBeNull();
-    expect(harnessEl?.getAttribute("title")).toBe("1 idle — claude");
+    const hat = container.querySelector(".rail-bot-hat") as HTMLElement | null;
+    expect(hat).not.toBeNull();
+    expect(hat!.classList.contains("pulses")).toBe(false);
     clearAllStatusForWorkspace(ws.id);
   });
 
-  it("hides sub-row when hideStatusBadges is true", async () => {
+  it("hides the rail hat when hideStatusBadges is true", async () => {
     const { setStatusItem, clearAllStatusForWorkspace } =
       await import("../lib/services/status-registry");
 
@@ -2255,14 +2221,13 @@ describe("WorkspaceItem — harness sub-row", () => {
       },
     });
 
-    expect(container.querySelector("[data-harness-title-row]")).toBeNull();
+    expect(container.querySelector(".rail-bot-hat")).toBeNull();
     clearAllStatusForWorkspace(ws.id);
   });
 
-  it("falls back to the badge count when multiple agent surfaces are tracked", async () => {
-    // With two tracked surfaces in the same workspace, no single title
-    // is dominant; the row reverts to the aggregate "N running" count
-    // rather than picking one task at random.
+  it("paints a single 'thinking' hat regardless of how many agents are running", async () => {
+    // Multiple agents collapse to one hat — the hat is a per-row
+    // signal, not a per-agent one. Color stays the running-green.
     const { setStatusItem, clearAllStatusForWorkspace } =
       await import("../lib/services/status-registry");
 
@@ -2307,9 +2272,42 @@ describe("WorkspaceItem — harness sub-row", () => {
       },
     });
 
-    const harnessEl = container.querySelector("[data-harness-title-row]");
-    expect(harnessEl).not.toBeNull();
-    expect(harnessEl?.getAttribute("title")).toBe("2 running");
+    const hats = container.querySelectorAll(".rail-bot-hat");
+    expect(hats.length).toBe(1);
+    clearAllStatusForWorkspace(ws.id);
+  });
+
+  it("paints a pulsing 'attention' hat for a waiting agent", async () => {
+    const { setStatusItem, clearAllStatusForWorkspace } =
+      await import("../lib/services/status-registry");
+
+    const surface = makeSurface("s1", { title: "claude" });
+    const pane = makePane("p1", [surface]);
+    const ws = makeChildWorkspace("ws-attn", "Attention WS", pane);
+
+    setStatusItem("_agent", ws.id, "surface:s1", {
+      category: "process",
+      priority: 0,
+      label: "waiting",
+      variant: "warning",
+      metadata: { surfaceId: "s1" },
+    });
+
+    const { container } = render(WorkspaceItem, {
+      props: {
+        workspace: ws,
+        index: 0,
+        isActive: true,
+        onSelect: noop,
+        onClose: noop,
+        onRename: noop,
+        onContextMenu: noop,
+      },
+    });
+
+    const hat = container.querySelector(".rail-bot-hat") as HTMLElement | null;
+    expect(hat).not.toBeNull();
+    expect(hat!.classList.contains("pulses")).toBe(true);
     clearAllStatusForWorkspace(ws.id);
   });
 });

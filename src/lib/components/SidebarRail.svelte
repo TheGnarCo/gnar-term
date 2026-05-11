@@ -50,12 +50,13 @@
    */
   export let popoverActive: boolean = false;
   /**
-   * True when any workspace in this Root's tree (root + branched
-   * workspaces) has a waiting agent. Drives the collapsed-mode hat
-   * overlay rendered by DragGrip; ignored when the sidebar is
-   * expanded.
+   * Bot status for the row this rail belongs to. Drives the hat
+   * overlay rendered by DragGrip — pulsing yellow for "attention",
+   * green for "thinking", muted-grey for "idle", nothing for
+   * "none". Renders at every sidebar width so bot presence stays
+   * visible whether the sidebar is collapsed or expanded.
    */
-  export let needsAttention: boolean = false;
+  export let botStatus: "none" | "thinking" | "attention" | "idle" = "none";
 
   /** Mousedown handler for drag start. */
   export let onGripMouseDown: ((e: MouseEvent) => void) | undefined = undefined;
@@ -129,7 +130,7 @@
     {closeTooltip}
     {locked}
     {narrowRail}
-    {needsAttention}
+    {botStatus}
     primaryClickable={!$sidebarVisible && !!onClick}
   />
   {#if mode === "container" && hasActiveStripe}

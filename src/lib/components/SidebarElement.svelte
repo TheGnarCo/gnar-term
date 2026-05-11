@@ -95,6 +95,16 @@
   /** Floating ⌘N hint label shown when shortcut hints are active. */
   export let shortcutLabel: string | undefined = undefined;
 
+  /**
+   * Bot status for this row. Forwarded to SidebarRail / DragGrip,
+   * which paints the colored "hat" at the top of the rail at every
+   * sidebar width. "attention" pulses yellow (waiting on user),
+   * "thinking" is green (active agent), "idle" is muted-grey
+   * (agent attached but not actively working), "none" hides the
+   * hat entirely.
+   */
+  export let botStatus: "none" | "thinking" | "attention" | "idle" = "none";
+
   let isHovered = false;
 
   $: effectiveColor = color || $theme.accent;
@@ -152,6 +162,7 @@
     {isDragging}
     {isActive}
     {popoverActive}
+    {botStatus}
     {onGripMouseDown}
     onClick={onRailClick}
   />

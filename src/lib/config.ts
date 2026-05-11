@@ -3,8 +3,10 @@
  *
  * Settings file locations (in priority order):
  *   ./settings.json                     (per-project)
+ *   ./gnar-term.json                    (per-project; one-shot migration → settings.json)
  *   ./cmux.json                         (per-project, cmux compat)
  *   ~/.config/gnar-term/settings.json   (global)
+ *   ~/.config/gnar-term/gnar-term.json  (global; one-shot migration → settings.json)
  *   ~/.config/cmux/cmux.json            (global, cmux compat)
  *
  * Runtime state:
@@ -305,10 +307,6 @@ export interface ArchivedWorkspaceDef {
   childWorkspaceDefs: (WorkspaceTemplate & { name: string })[];
 }
 
-// --- Config file paths ---
-
-const CONFIG_FILENAMES = ["settings.json", "cmux.json"];
-
 // --- Read/Write via Rust backend ---
 
 let _config: GnarTermConfig = {};
@@ -386,18 +384,30 @@ export async function loadConfig(
 
   const [home, configDir] = await Promise.all([getHome(), getConfigDir()]);
 
-  // Try per-project config first (higher priority), then global.
-  const paths = [
-    ...CONFIG_FILENAMES, // ./settings.json, ./cmux.json
-    `${configDir}/settings.json`,
-    `${home}/.config/cmux/cmux.json`,
+  // Try per-project config first (higher priority), then global. Each
+  // entry is `{ read, writeForward? }`: `read` is the file we try to
+  // load; `writeForward` (if set) is the canonical path to redirect
+  // _configPath to so the next saveConfig writes the new filename and
+  // orphans the old one. This is the migration map — once-per-install:
+  // the next save lands at `writeForward`, after which `read` is never
+  // consulted again.
+  const candidates: { read: string; writeForward?: string }[] = [
+    { read: "settings.json" },
+    { read: "gnar-term.json", writeForward: "settings.json" },
+    { read: "cmux.json" },
+    { read: `${configDir}/settings.json` },
+    {
+      read: `${configDir}/gnar-term.json`,
+      writeForward: `${configDir}/settings.json`,
+    },
+    { read: `${home}/.config/cmux/cmux.json` },
   ];
 
-  for (const path of paths) {
+  for (const { read, writeForward } of candidates) {
     try {
-      const content = await invoke<string>("read_file", { path });
+      const content = await invoke<string>("read_file", { path: read });
       _config = migrateLoadedConfig(JSON.parse(content));
-      _configPath = path;
+      _configPath = writeForward ?? read;
       _configStore.set(_config);
       return _config;
     } catch {}

@@ -58,7 +58,7 @@
   } from "../stores/ui";
   import { contrastColor } from "../utils/contrast";
   import { agentsStore } from "../services/agent-detection-service";
-  import { rootRailBotStatusFromAttention } from "../services/rail-attention";
+  import { rootRailBotStatus } from "../services/rail-attention";
   import { attentionStore } from "../services/attention-api";
   import { getAllPanes } from "../types";
   import { variantColor } from "../status-colors";
@@ -172,10 +172,6 @@
   // both live in branchedWorkspaceIds). This is the only bot-status
   // surface in collapsed mode; banner-level workspaceBotStatus above
   // stays root-only by design.
-  //
-  // Consumes attentionStore so OSC-driven attention events (cycle-5) win
-  // over the legacy DetectedAgent.status path; the helper falls back to
-  // the legacy thinking/idle aggregation when no in-scope event is active.
   $: paneIdsByWorkspaceId = (() => {
     if (!workspace) return new Map<string, string[]>();
     const scopeIds = [workspace.id, ...workspace.branchedWorkspaceIds];
@@ -191,7 +187,7 @@
     return map;
   })();
   $: railBotStatus = workspace
-    ? rootRailBotStatusFromAttention(
+    ? rootRailBotStatus(
         workspace,
         $agentsStore,
         $attentionStore,

@@ -456,28 +456,81 @@ export async function reconcilePrimaryWorkspaces(): Promise<void> {
  * Stamp `pathMissing: true` on any workspace whose `path` no longer
  * exists on disk (e.g. the user deleted the directory between sessions
  * or moved a worktree out from under the app). The flag is runtime-only
- * — not persisted — and is re-derived on every startup. Sidebar
+ * — not persisted — and is re-derived on every sweep. Sidebar
  * components surface a "path missing" affordance when the flag is set.
  *
- * Best-effort: a failing `file_exists` invoke is treated as "not
- * missing" so a transient FS error doesn't paint every workspace red.
- * Idempotent: a workspace whose path now exists has its flag cleared on
- * the next sweep.
+ * On each pass:
+ * - When the path exists, record its inode in `pathInode` (persisted)
+ *   so a future rename can be detected.
+ * - When the path does NOT exist but a `pathInode` is known, scan the
+ *   parent directory for a sibling with the same inode. If found, the
+ *   directory was renamed within its parent — update `path` to the new
+ *   location and clear `pathMissing` instead of flagging it.
+ *
+ * Best-effort: failing FS invokes are treated as "not missing" so a
+ * transient error doesn't paint every workspace red. Idempotent.
  */
 export async function validateWorkspaceRootPaths(): Promise<void> {
   const workspaces = getWorkspaces();
   for (const workspace of workspaces) {
+    if (!workspace.path) continue;
     let exists = true;
     try {
       exists = await invoke<boolean>("file_exists", { path: workspace.path });
     } catch {
       exists = true;
     }
-    const missing = !exists;
-    if ((workspace.pathMissing ?? false) !== missing) {
-      updateWorkspace(workspace.id, { pathMissing: missing });
+    if (exists) {
+      const patch: { pathMissing?: boolean; pathInode?: number } = {};
+      if ((workspace.pathMissing ?? false) !== false) patch.pathMissing = false;
+      try {
+        const inode = await invoke<number>("get_path_inode", {
+          path: workspace.path,
+        });
+        if (workspace.pathInode !== inode) patch.pathInode = inode;
+      } catch {
+        // Inode unavailable (Windows / unsupported FS). Skip cache
+        // refresh — rename detection just won't fire on this workspace.
+      }
+      if (Object.keys(patch).length > 0) {
+        updateWorkspace(workspace.id, patch);
+      }
+      continue;
+    }
+
+    // Path missing — try inode-based rediscovery before flagging.
+    const cachedInode = workspace.pathInode;
+    if (typeof cachedInode === "number") {
+      const parent = dirname(workspace.path);
+      try {
+        const found = await invoke<string | null>("find_dir_by_inode", {
+          parent,
+          inode: cachedInode,
+        });
+        if (found) {
+          updateWorkspace(workspace.id, {
+            path: found,
+            pathMissing: false,
+          });
+          continue;
+        }
+      } catch {
+        // Parent unreadable or platform doesn't support inodes. Fall
+        // through to flagging the workspace as missing.
+      }
+    }
+    if ((workspace.pathMissing ?? false) !== true) {
+      updateWorkspace(workspace.id, { pathMissing: true });
     }
   }
+}
+
+/** POSIX-style parent directory. Trailing slashes are stripped. */
+function dirname(path: string): string {
+  const trimmed = path.replace(/\/+$/, "");
+  const idx = trimmed.lastIndexOf("/");
+  if (idx <= 0) return "/";
+  return trimmed.slice(0, idx);
 }
 
 export { getWorkspace, getWorkspaces, setActiveWorkspaceId };

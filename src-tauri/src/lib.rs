@@ -20,10 +20,10 @@ mod pty;
 
 use file_watch::{unwatch_claude_file, unwatch_file, watch_claude_file, watch_file};
 use fs_commands::{
-    detect_font, ensure_dir, file_exists, find_file, get_global_config_dir, get_home,
-    is_debug_build, list_claude_dir, list_dir, mcp_file_info, mcp_list_dir, open_url,
-    open_with_default_app, read_claude_file, read_file, read_file_base64, show_in_file_manager,
-    write_claude_file, write_file,
+    detect_font, ensure_dir, file_exists, find_dir_by_inode, find_file, get_global_config_dir,
+    get_home, get_path_inode, is_debug_build, list_claude_dir, list_dir, mcp_file_info,
+    mcp_list_dir, open_url, open_with_default_app, read_claude_file, read_file, read_file_base64,
+    show_in_file_manager, write_claude_file, write_file,
 };
 use pty::{
     get_all_pty_cwds, get_pty_cwd, get_pty_pid, get_pty_title, kill_pty, pause_pty, resize_pty,
@@ -253,6 +253,8 @@ pub fn run() {
             get_pty_pid,
             get_pty_title,
             file_exists,
+            get_path_inode,
+            find_dir_by_inode,
             list_dir,
             read_file,
             read_file_base64,

@@ -39,6 +39,7 @@ import { confirmAndCloseWorkspace } from "./worktree-service";
 import { isBranchedWorkspace, getAllPanes, type Workspace } from "../types";
 import { workspaces } from "../stores/workspace";
 import type { AgentState } from "./agent-state";
+import { eventBus } from "./event-bus";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -348,6 +349,17 @@ async function recomputeAll(): Promise<void> {
     ) {
       next.set(id, cached);
     } else {
+      // Emit a transition event when the lifecycle value itself moves.
+      // `from = null` covers first-observation, so extensions can wire
+      // an init-or-change handler the same way.
+      if (!cached || cached.lifecycle !== newEntry.lifecycle) {
+        eventBus.emit({
+          type: "branch:lifecycleChanged",
+          branchId: id,
+          from: cached?.lifecycle ?? null,
+          to: newEntry.lifecycle,
+        });
+      }
       _entryCache.set(id, newEntry);
       next.set(id, newEntry);
     }

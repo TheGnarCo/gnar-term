@@ -137,6 +137,10 @@ import {
   unregisterBySource,
 } from "../lib/services/command-registry";
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
+import {
+  _testHelpers as branchLifecycleTestHelpers,
+  destroyBranchLifecycle,
+} from "../lib/services/branch-lifecycle";
 import { rootRowOrder } from "../lib/stores/root-row-order";
 import { registerRootRowRenderer } from "../lib/services/root-row-renderer-registry";
 import WorkspaceRowBody from "../lib/components/WorkspaceRowBody.svelte";
@@ -1454,6 +1458,169 @@ describe("WorkspaceItem", () => {
     await fireEvent.click(icon);
     expect(hintOnClick).toHaveBeenCalledTimes(1);
     expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  // ---------------------------------------------------------------------------
+  // Branch lifecycle subtitle (Cycle 3 — UI consumer for branchLifecycleStore)
+  // ---------------------------------------------------------------------------
+
+  describe("branch lifecycle subtitle", () => {
+    beforeEach(() => {
+      destroyBranchLifecycle();
+    });
+
+    function makeBranchedWorkspace(
+      id: string,
+      branch: string,
+      rootId: string,
+    ): Workspace {
+      const ws = makeChildWorkspace(id, branch);
+      Object.assign(ws, {
+        rootWorkspaceId: rootId,
+        worktreePath: `/tmp/gnar-${id}`,
+        branch,
+        repoPath: "/tmp/gnar",
+      });
+      return ws;
+    }
+
+    it("renders a lifecycle row for branched workspaces with a seeded entry", async () => {
+      const ws = makeBranchedWorkspace("br1", "feat/x", "root");
+      await branchLifecycleTestHelpers.seedBranch("feat/x", {
+        repoPath: "/tmp/gnar",
+        branch: "feat/x",
+        hasCommits: false,
+        wipOnly: false,
+        prState: null,
+        lastActivityAt: Date.now(),
+        paneId: null,
+        workspaceId: ws.id,
+      });
+      const { container } = render(WorkspaceItem, {
+        props: {
+          workspace: ws,
+          index: 0,
+          isActive: false,
+          onSelect: noop,
+          onClose: noop,
+          onRename: noop,
+          onContextMenu: noop,
+        },
+      });
+      await tick();
+      const row = container.querySelector(
+        "[data-workspace-branch-lifecycle]",
+      ) as HTMLElement | null;
+      expect(row).not.toBeNull();
+      expect(row?.getAttribute("data-workspace-branch-lifecycle")).toBe(
+        "draft",
+      );
+      expect(row?.textContent).toContain("draft");
+    });
+
+    it("does not render a lifecycle row for non-branched workspaces", () => {
+      const ws = makeChildWorkspace("plain", "Plain WS");
+      const { container } = render(WorkspaceItem, {
+        props: {
+          workspace: ws,
+          index: 0,
+          isActive: false,
+          onSelect: noop,
+          onClose: noop,
+          onRename: noop,
+          onContextMenu: noop,
+        },
+      });
+      expect(
+        container.querySelector("[data-workspace-branch-lifecycle]"),
+      ).toBeNull();
+    });
+
+    it("does not render a lifecycle row when no entry exists for the branch", () => {
+      const ws = makeBranchedWorkspace("br2", "feat/missing", "root");
+      // No seed — store is empty for this branch.
+      const { container } = render(WorkspaceItem, {
+        props: {
+          workspace: ws,
+          index: 0,
+          isActive: false,
+          onSelect: noop,
+          onClose: noop,
+          onRename: noop,
+          onContextMenu: noop,
+        },
+      });
+      expect(
+        container.querySelector("[data-workspace-branch-lifecycle]"),
+      ).toBeNull();
+    });
+
+    it("reflects the seeded lifecycle state via the data attribute", async () => {
+      const ws = makeBranchedWorkspace("br3", "feat/y", "root");
+      // Force `active` by overriding the pane agent state.
+      const paneId = "br3-p1";
+      await branchLifecycleTestHelpers.seedBranch("feat/y", {
+        repoPath: "/tmp/gnar",
+        branch: "feat/y",
+        hasCommits: true,
+        wipOnly: false,
+        prState: null,
+        lastActivityAt: Date.now(),
+        paneId,
+        workspaceId: ws.id,
+      });
+      await branchLifecycleTestHelpers.setPaneAgentState(paneId, "running");
+      const { container } = render(WorkspaceItem, {
+        props: {
+          workspace: ws,
+          index: 0,
+          isActive: false,
+          onSelect: noop,
+          onClose: noop,
+          onRename: noop,
+          onContextMenu: noop,
+        },
+      });
+      await tick();
+      const row = container.querySelector(
+        "[data-workspace-branch-lifecycle]",
+      ) as HTMLElement | null;
+      expect(row).not.toBeNull();
+      expect(row?.getAttribute("data-workspace-branch-lifecycle")).toBe(
+        "active",
+      );
+      expect(row?.textContent).toContain("active");
+    });
+
+    it("hides the lifecycle row when hideStatusBadges is true", async () => {
+      const ws = makeBranchedWorkspace("br4", "feat/z", "root");
+      await branchLifecycleTestHelpers.seedBranch("feat/z", {
+        repoPath: "/tmp/gnar",
+        branch: "feat/z",
+        hasCommits: false,
+        wipOnly: false,
+        prState: null,
+        lastActivityAt: Date.now(),
+        paneId: null,
+        workspaceId: ws.id,
+      });
+      const { container } = render(WorkspaceItem, {
+        props: {
+          workspace: ws,
+          index: 0,
+          isActive: false,
+          hideStatusBadges: true,
+          onSelect: noop,
+          onClose: noop,
+          onRename: noop,
+          onContextMenu: noop,
+        },
+      });
+      await tick();
+      expect(
+        container.querySelector("[data-workspace-branch-lifecycle]"),
+      ).toBeNull();
+    });
   });
 });
 

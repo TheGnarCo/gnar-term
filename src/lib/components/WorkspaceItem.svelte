@@ -17,10 +17,14 @@
   import { discoEmojiFor, discoColorFor } from "../utils/disco-decoration";
 
   $: isDisco = $theme.name === "Molly Disco";
-  import { getAllSurfaces } from "../types";
+  import { getAllSurfaces, isBranchedWorkspace } from "../types";
   import type { Workspace } from "../types";
   import { workspaceSurfaceMap } from "../services/workspace-runtime-service";
   import { workspacesStore } from "../stores/workspace";
+  import {
+    branchLifecycleStore,
+    type BranchLifecycle,
+  } from "../services/branch-lifecycle";
 
   export let workspace: Workspace;
   export let index: number;
@@ -136,6 +140,52 @@
     return "none" as const;
   })();
   $: subtitleComponents = $workspaceSubtitleStore;
+
+  // Branch lifecycle subtitle — populated only for BranchedWorkspaces. Reads
+  // the derived store keyed by branch name; absent when the producer hasn't
+  // synced the workspace yet (e.g. mid-creation) or for non-branched rows.
+  $: branchLifecycleEntry = (() => {
+    if (!isBranchedWorkspace(workspace)) return null;
+    return $branchLifecycleStore.get(workspace.branch) ?? null;
+  })();
+  $: lifecycleDisplay = branchLifecycleEntry
+    ? lifecycleLabel(branchLifecycleEntry.lifecycle)
+    : "";
+  $: lifecycleColor = branchLifecycleEntry
+    ? lifecycleColorFor(branchLifecycleEntry.lifecycle)
+    : $theme.fgMuted;
+
+  function lifecycleLabel(state: BranchLifecycle): string {
+    switch (state) {
+      case "draft":
+        return "draft";
+      case "active":
+        return "active";
+      case "awaiting_review":
+        return "awaiting review";
+      case "in_review":
+        return "in review";
+      case "merged":
+        return "merged";
+      case "abandoned":
+        return "abandoned";
+    }
+  }
+  function lifecycleColorFor(state: BranchLifecycle): string {
+    switch (state) {
+      case "active":
+        return $theme.accent;
+      case "awaiting_review":
+      case "in_review":
+        return $theme.notify;
+      case "merged":
+      case "abandoned":
+        return $theme.fgDim;
+      case "draft":
+      default:
+        return $theme.fgMuted;
+    }
+  }
 
   export async function startRename(): Promise<void> {
     await labelComponent?.startRename();
@@ -322,6 +372,23 @@
           style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
         >
           {worktreeDirName}
+        </span>
+      </SidebarSubtitleRow>
+    {/if}
+
+    {#if branchLifecycleEntry && !hideStatusBadges}
+      <SidebarSubtitleRow
+        data-workspace-branch-lifecycle={branchLifecycleEntry.lifecycle}
+        color={lifecycleColor}
+        title={branchLifecycleEntry.reason ??
+          `Branch lifecycle: ${lifecycleDisplay}`}
+      >
+        <span
+          style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+        >
+          {lifecycleDisplay}{#if !branchLifecycleEntry.prStateKnown}
+            <span style="opacity: 0.7;"> · gh offline</span>
+          {/if}
         </span>
       </SidebarSubtitleRow>
     {/if}

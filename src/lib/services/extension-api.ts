@@ -79,6 +79,10 @@ import { getActiveCwd, lookupSurfaceWorkspaceId } from "./service-helpers";
 import { workspaces } from "../stores/workspace";
 import { getAllSurfaces, isTerminalSurface } from "../types";
 import { createWorkspaceFromDef as coreCreateWorkspaceFromDef } from "./workspace-runtime-service";
+import {
+  listBranchDescriptors,
+  markAbandoned as coreMarkBranchAbandoned,
+} from "./branch-lifecycle";
 import { waitRestored } from "../bootstrap/restore-workspaces";
 import type { WorkspaceTemplate } from "../config";
 import type { WorkspaceDefInput } from "../../extensions/api";
@@ -341,6 +345,12 @@ export function createExtensionAPI(
     },
     reportError(message: string): void {
       reportExtensionError(extId, message);
+    },
+    listBranches() {
+      return listBranchDescriptors();
+    },
+    markBranchAbandoned(branchId: string) {
+      return coreMarkBranchAbandoned(branchId);
     },
     getAllTerminalSurfaces() {
       const out: Array<{ id: string; workspaceId: string; title: string }> = [];

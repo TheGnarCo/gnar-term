@@ -14,6 +14,7 @@ import {
   hoveredRootRowKey,
 } from "../stores/ui";
 import { agentsStore } from "./agent-detection-service";
+import { branchLifecycleStore } from "./branch-lifecycle";
 import type { ExtensionAPI } from "../extension-types";
 
 /** Read-only store wrappers that project internal state to safe public types. */
@@ -26,6 +27,7 @@ export function createStoreProjections(
   | "activePane"
   | "activeSurface"
   | "agents"
+  | "branchLifecycle"
   | "theme"
   | "reorderContext"
   | "hoveredSidebarBlockId"
@@ -117,6 +119,9 @@ export function createStoreProjections(
       },
     } as ExtensionAPI["activeSurface"],
     agents: readOnly(agentsStore) as unknown as ExtensionAPI["agents"],
+    branchLifecycle: readOnly(
+      branchLifecycleStore,
+    ) as unknown as ExtensionAPI["branchLifecycle"],
     theme: readOnly(theme) as unknown as ExtensionAPI["theme"],
     reorderContext: readOnly(
       reorderContext,

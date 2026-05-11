@@ -135,7 +135,8 @@ export type AppEventType =
   | "worktree:merged"
   | "agent:statusChanged"
   | "agent:interrupted"
-  | "agent:killed";
+  | "agent:killed"
+  | "branch:lifecycleChanged";
 
 /** Base shape for all events delivered to extension handlers. */
 export interface AppEvent {
@@ -817,6 +818,28 @@ export interface ExtensionAPI {
    * store in place and emit `agent:statusChanged` on the event bus.
    */
   agents: Readable<AgentRef[]>;
+  /**
+   * Reactive map of branch-id → derived lifecycle entry. The map is
+   * recomputed by core whenever any canonical input (git state, PR
+   * state, agent state, activity) moves. Subscribe here to render
+   * kanban-style swimlanes; pair with the `branch:lifecycleChanged`
+   * event for transition-only handlers.
+   */
+  branchLifecycle: Readable<Map<string, BranchLifecycleEntry>>;
+  /**
+   * Read-only snapshot of every branch core is currently tracking.
+   * Returns the same set of branchIds keyed by the `branchLifecycle`
+   * store, with their repo/pane context attached.
+   */
+  listBranches(): ReadonlyArray<BranchDescriptorRef>;
+  /**
+   * Mark a branch as abandoned by closing its owning workspace through
+   * the standard confirmAndCloseWorkspace path. No-op when the branch
+   * is unknown. The store transitions to `abandoned` as a side effect
+   * of the workspace disappearing — extensions never mutate lifecycle
+   * directly.
+   */
+  markBranchAbandoned(branchId: string): Promise<void>;
   theme: Readable<ExtensionTheme>;
   /** The sidebar drag-reorder currently in progress, or null when idle. */
   reorderContext: Readable<ReorderContext | null>;
@@ -1274,6 +1297,52 @@ export interface AgentRef {
   status: string;
   createdAt: string;
   lastStatusChange: string;
+}
+
+// --- Branch lifecycle projections ---
+//
+// Lifecycle is DERIVED in core by branch-lifecycle.ts from canonical
+// inputs (git state, PR state, paneAgentStateStore, activity timestamp).
+// Extensions consume the derived store read-only; the only state-
+// mutating action surfaced here is `markBranchAbandoned`, which routes
+// through the workspace-close path.
+
+/**
+ * Lifecycle states a Branch can occupy. See `branch-lifecycle.ts` for
+ * the derivation table. When `gh` is unavailable, `in_review` / `merged`
+ * collapse to `awaiting_review` and `prStateKnown` is set to `false`.
+ */
+export type BranchLifecycle =
+  | "draft"
+  | "active"
+  | "awaiting_review"
+  | "in_review"
+  | "merged"
+  | "abandoned";
+
+/** Entry stored per-branch in the `branchLifecycle` store. */
+export interface BranchLifecycleEntry {
+  lifecycle: BranchLifecycle;
+  /** False when `gh` is unavailable, so UI can show an appropriate hint. */
+  prStateKnown: boolean;
+  /** Unix millisecond timestamp of the most recent detected activity. */
+  lastActivityAt: number;
+  /** Optional human-readable explanation of why this lifecycle was computed. */
+  reason?: string;
+}
+
+/**
+ * Read-only descriptor returned by `listBranches`. Pairs each branchId
+ * with its repo/pane context so extensions can resolve a branch back to
+ * its worktree or active pane without re-deriving from the workspaces
+ * store.
+ */
+export interface BranchDescriptorRef {
+  branchId: string;
+  repoPath: string;
+  branch: string;
+  baseBranch: string;
+  paneId: string | null;
 }
 
 /** Shape of a registry-backed surface, as delivered to surface components. */

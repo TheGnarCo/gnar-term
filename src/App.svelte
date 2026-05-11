@@ -71,6 +71,8 @@
   import { initGitStatus } from "./lib/bootstrap/init-git-status";
   import { initPreview } from "./lib/bootstrap/init-preview";
   import { initAgentDetectionBootstrap } from "./lib/bootstrap/init-agent-detection";
+  import { initAttentionApi } from "./lib/services/attention-api";
+  import { initBranchLifecycle } from "./lib/services/branch-lifecycle";
   import { initCoreExtensionAPI } from "./lib/bootstrap/init-core-extension-api";
   import {
     initWorkspaces,
@@ -689,6 +691,10 @@
     initGitStatus();
     initPreview();
     initAgentDetectionBootstrap();
+    // Attention API + BranchLifecycle subscribe to detection's stores —
+    // start them after detection so initial fan-out lands on live subs.
+    initAttentionApi();
+    initBranchLifecycle();
 
     // Workspaces (formerly the project-scope extension) —
     // registered from core so the root-row renderer, commands, and

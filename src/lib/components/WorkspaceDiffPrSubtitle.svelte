@@ -1,10 +1,19 @@
 <script context="module" lang="ts">
+  import { writable } from "svelte/store";
+
   // Module-level PR cache keyed by repoRoot. The collapsed-mode hover
-  // popover mounts a fresh subtitle on every hover, so without a cache
-  // each hover would re-fetch from `gh_view_pr` and re-paint from
-  // `pr = null` → loaded, causing the popover height to jump as the PR
-  // row appears. Seeding from the cache on mount paints the loaded
-  // state instantly on every hover after the first.
+  // popover reuses the same subtitle instance with a changing
+  // `workspaceId` prop, so without a cache each hover would re-fetch
+  // from `gh_view_pr` and re-paint from `pr = null` → loaded, making
+  // the popover height jump as the PR row appears.
+  //
+  // Backing the cache with a writable store (and reassigning the Map
+  // on every update) means subscribers re-derive their displayed PR
+  // whenever any row's data lands. Combined with deriving `pr` from
+  // `(repoRoot, $prCacheStore)` rather than imperatively setting it,
+  // this rules out the prior "floating PR" race where the displayed
+  // value briefly held the previous row's PR after the prop changed
+  // but before the new fetch resolved.
   //
   // MUST live in `<script context="module">` — vars in the per-instance
   // `<script>` are scoped per component instance, not shared across
@@ -18,7 +27,14 @@
     isDraft: boolean;
     ciStatus: string;
   }
-  const prCache = new Map<string, GhPrView | null>();
+  const prCacheStore = writable(new Map<string, GhPrView | null>());
+  function setPrCache(root: string, value: GhPrView | null): void {
+    prCacheStore.update((m) => {
+      const next = new Map(m);
+      next.set(root, value);
+      return next;
+    });
+  }
 </script>
 
 <script lang="ts">
@@ -128,44 +144,42 @@
     return fallback;
   }
 
-  let pr: GhPrView | null = null;
   let prTimer: ReturnType<typeof setInterval> | null = null;
   let lastRepoRoot: string | null = null;
-  // True once we have any answer for the current repoRoot — either a
-  // cache hit on mount, or the initial fetch resolved. Drives the
-  // skeleton-placeholder reservation so the popover height stays
-  // stable through the very first ever load too.
-  let prInitialResolved = false;
 
   const PR_REFRESH_MS = 5_000;
+
+  // Derive both `pr` and `prInitialResolved` directly from the
+  // current `repoRoot` and the cache store. Imperative assignment
+  // would let `pr` lag behind a `repoRoot` change long enough to
+  // briefly paint the previous row's PR — exactly the "floating PR"
+  // bug. Derived state ties the displayed PR to the row identity by
+  // construction.
+  $: pr = repoRoot ? ($prCacheStore.get(repoRoot) ?? null) : null;
+  $: prInitialResolved = repoRoot ? $prCacheStore.has(repoRoot) : true;
 
   async function refreshPr(root: string): Promise<void> {
     try {
       const result = await invoke<GhPrView | null>("gh_view_pr", {
         repoPath: root,
       });
-      pr = result ?? null;
-      prCache.set(root, pr);
+      setPrCache(root, result ?? null);
     } catch {
-      // Transient failure: don't clobber the cache (so a network blip
-      // doesn't flush a known-good PR row), but mark resolved so we
-      // stop reserving placeholder space.
-      pr = prCache.get(root) ?? null;
-    } finally {
-      prInitialResolved = true;
+      // Transient failure: don't clobber a known-good cache entry,
+      // but seed `null` if we have no prior answer so the placeholder
+      // reservation can clear.
+      prCacheStore.update((m) => {
+        if (m.has(root)) return m;
+        const next = new Map(m);
+        next.set(root, null);
+        return next;
+      });
     }
   }
 
   function startPrPolling(root: string): void {
     if (prTimer) clearInterval(prTimer);
     lastRepoRoot = root;
-    if (prCache.has(root)) {
-      pr = prCache.get(root) ?? null;
-      prInitialResolved = true;
-    } else {
-      pr = null;
-      prInitialResolved = false;
-    }
     void refreshPr(root);
     prTimer = setInterval(() => void refreshPr(root), PR_REFRESH_MS);
   }
@@ -182,8 +196,6 @@
   }
   $: if (!repoRoot && lastRepoRoot) {
     stopPrPolling();
-    pr = null;
-    prInitialResolved = false;
     lastRepoRoot = null;
   }
 

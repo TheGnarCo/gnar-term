@@ -178,4 +178,67 @@ describe("WorkspaceDiffPrSubtitle", () => {
     expect(container.querySelector("[data-pr-row]")).not.toBeNull();
     expect(container.textContent).toMatch(/#42/);
   });
+
+  it("never paints the previous row's PR after the workspaceId prop changes", async () => {
+    // Regression: the collapsed-rail popover reuses one subtitle
+    // instance with a changing `workspaceId` prop. Imperatively-set
+    // `pr` would briefly show row A's PR after switching to row B,
+    // until the `repoRoot` reactive chain caught up. The fix derives
+    // `pr` from `(repoRoot, prCacheStore)` so the displayed PR can
+    // never be from a different repo root than the one we're
+    // currently rendering.
+    const { invoke } = await import("@tauri-apps/api/core");
+    const invokeMock = vi.mocked(invoke);
+
+    const prA = {
+      number: 11,
+      title: "PR A",
+      state: "OPEN",
+      url: "https://example.com/pr/11",
+      headRefName: "feat-a",
+      isDraft: false,
+      ciStatus: "SUCCESS",
+    };
+    const prB = {
+      number: 22,
+      title: "PR B",
+      state: "OPEN",
+      url: "https://example.com/pr/22",
+      headRefName: "feat-b",
+      isDraft: false,
+      ciStatus: "SUCCESS",
+    };
+    invokeMock.mockImplementation(async (cmd: string, args?: unknown) => {
+      if (cmd !== "gh_view_pr") return null;
+      const path = (args as { repoPath: string }).repoPath;
+      if (path === "/repos/A") return prA;
+      if (path === "/repos/B") return prB;
+      return null;
+    });
+
+    workspaces.set([makeRootWorkspace("ws-A"), makeRootWorkspace("ws-B")]);
+    setBranch("ws-A", "/repos/A");
+    setBranch("ws-B", "/repos/B");
+
+    const view = render(WorkspaceDiffPrSubtitle, {
+      props: { workspaceId: "ws-A" },
+    });
+    // Drain enough microtasks for invoke + reactive flush so #11 lands.
+    await tick();
+    for (let i = 0; i < 8; i++) await Promise.resolve();
+    await tick();
+    expect(view.container.textContent).toMatch(/#11/);
+
+    // Switch the prop without remounting — same instance, new row.
+    await view.rerender({ workspaceId: "ws-B" });
+    await tick();
+    // At this exact moment, the displayed PR must NOT be A's #11.
+    // It can be a placeholder, B's #22 from a fresh-cache hit, or
+    // null while pending — anything but A's PR data.
+    expect(view.container.textContent).not.toMatch(/#11/);
+
+    for (let i = 0; i < 8; i++) await Promise.resolve();
+    await tick();
+    expect(view.container.textContent).toMatch(/#22/);
+  });
 });

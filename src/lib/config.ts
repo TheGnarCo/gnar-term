@@ -72,6 +72,7 @@ export interface WorkspaceTemplate {
   locked?: boolean;
   autoRunRestoreCommands?: boolean;
   path?: string;
+  pathInode?: number;
   isGit?: boolean;
   createdAt?: string;
   worktreePath?: string;
@@ -98,6 +99,12 @@ export interface WorkspaceDef {
   layout: LayoutNode;
   // Workspace-level fields (path-rooted Workspaces only)
   path?: string;
+  /**
+   * Inode of `path` at last successful sweep — persisted so rename
+   * detection still works for renames that happened while gnar-term
+   * was closed. See `validateWorkspaceRootPaths`.
+   */
+  pathInode?: number;
   color?: string;
   isGit?: boolean;
   createdAt?: string;

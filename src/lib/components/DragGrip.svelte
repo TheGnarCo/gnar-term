@@ -6,6 +6,8 @@
   import { variantColor } from "../status-colors";
 
   const warningColor = variantColor("warning");
+  const successColor = variantColor("success");
+  const mutedColor = variantColor("muted");
 
   export let theme: ThemeDef;
   export let visible: boolean = false;
@@ -68,14 +70,25 @@
    */
   export let primaryClickable: boolean = false;
   /**
-   * Collapsed-mode attention signal. When true and the rail is in
-   * narrowRail mode, paints a 10px yellow "hat" at the top of the
-   * rail with a 2px dark divider below it and a gentle pulse glow.
-   * The hat sits flush over the rail stripe; the workspace accent
-   * color shows through below the divider. Ignored when narrowRail
-   * is false (expanded sidebar uses per-row badges instead).
+   * Bot-status signal. Drives the rail "hat" (a 4–8px colored cap
+   * at the top of the rail). Highest precedence first:
+   *   - "attention":   yellow pulsing hat — at least one agent is
+   *                    waiting on user input. Supersedes everything.
+   *   - "thinking":    green static hat — at least one agent is
+   *                    actively running/working but none waiting.
+   *   - "idle":        muted-grey static hat — agent is attached
+   *                    and "currently thinking" (idle / done /
+   *                    detected-but-not-active). Lowest visual
+   *                    weight, but still surfaces presence so the
+   *                    bot's existence is never invisible.
+   *   - "none":        no hat painted. Only when no agent is
+   *                    detected at all.
+   *
+   * Renders in BOTH collapsed (narrowRail) and expanded sidebar
+   * modes — bot status is the only universal signal we surface on
+   * the rail itself, so it stays visible at every width.
    */
-  export let needsAttention: boolean = false;
+  export let botStatus: "none" | "thinking" | "attention" | "idle" = "none";
 
   let closeButtonHovered = false;
   // shortcutLabel takes priority over close/lock when meta-hold is active.
@@ -102,10 +115,20 @@
   $: showDots = visible && alwaysShowDots && !narrowRail;
   $: showRailStripe = !visible || narrowRail;
   $: railStripeWidth = narrowRail ? "4px" : "8px";
-  // Hat only renders in collapsed-mode (narrowRail). In expanded
-  // mode the per-row status badges already cover attention, so the
-  // hat would be redundant noise.
-  $: showAttentionHat = narrowRail && needsAttention;
+  // Hat renders at every rail width — bot status is the one signal
+  // we always surface on the rail itself so notification visibility
+  // doesn't depend on whether the sidebar is collapsed.
+  $: showHat = botStatus !== "none";
+  $: hatColor =
+    botStatus === "attention"
+      ? warningColor
+      : botStatus === "thinking"
+        ? successColor
+        : mutedColor;
+  $: hatPulses = botStatus === "attention";
+  // Hat matches the rail's painted width so it caps the rail cleanly
+  // in both collapsed (4px) and expanded (8px) modes.
+  $: hatWidth = railStripeWidth;
 </script>
 
 <div
@@ -143,27 +166,30 @@
       "
     ></div>
   {/if}
-  {#if showAttentionHat}
-    <!-- F2 hat overlay: 10px canonical-warning yellow at the top of
-         the rail, a 2px dark divider, then the underlying rail
-         stripe color shows through. Width matches the narrow rail
-         (4px) so the rail does not get visually thicker. The
-         box-shadow keyframe pulses a gentle glow that survives the
-         amber-accent collision case (where the rail color and the
-         hat color match). -->
+  {#if showHat}
+    <!-- Bot-status hat overlay: 10px solid color at the top of the
+         rail, a 2px dark divider, then the underlying rail stripe
+         color shows through. Width tracks the rail stripe (4px in
+         collapsed mode, 8px in expanded) so the hat caps the rail
+         cleanly without ever appearing thicker than the rail itself.
+         The "attention" variant pulses via box-shadow; the
+         "thinking" variant is static green. The pulse glow survives
+         the rare case where the rail color and hat color match
+         (e.g. amber accent + yellow attention). -->
     <div
       aria-hidden="true"
-      class="rail-attention-hat"
+      class="rail-bot-hat"
+      class:pulses={hatPulses}
       style="
         position: absolute;
         left: 0; top: 0;
-        width: 4px;
+        width: {hatWidth};
         height: 12px;
-        --rail-attention-glow: {warningColor};
+        --rail-hat-glow: {hatColor};
         background: linear-gradient(
           to bottom,
-          {warningColor} 0,
-          {warningColor} 10px,
+          {hatColor} 0,
+          {hatColor} 10px,
           rgba(0, 0, 0, 0.55) 10px,
           rgba(0, 0, 0, 0.55) 12px
         );
@@ -274,7 +300,7 @@
 </div>
 
 <style>
-  .rail-attention-hat {
+  .rail-bot-hat.pulses {
     animation: dg-rail-hat-glow 1.6s ease-in-out infinite;
   }
 
@@ -285,7 +311,7 @@
     }
     50% {
       box-shadow: 0 0 4px 1.5px
-        color-mix(in srgb, var(--rail-attention-glow) 55%, transparent);
+        color-mix(in srgb, var(--rail-hat-glow) 55%, transparent);
     }
   }
 </style>

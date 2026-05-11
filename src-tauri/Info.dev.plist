@@ -10,5 +10,25 @@
   <string>com.gnar.gnarterm.dev</string>
   <key>CFBundleExecutable</key>
   <string>gnar-term</string>
+  <!--
+    Mirror the release Info.plist usage descriptions so dev builds
+    surface the same intelligible TCC prompts (and persist grants)
+    when claude / other in-pane agents stat into protected user-data
+    directories. See src-tauri/Info.plist for the rationale.
+  -->
+  <key>NSDocumentsFolderUsageDescription</key>
+  <string>GnarTerm (Dev) and the coding agents running inside it read files in your Documents folder when you point them at projects or ask them to explore.</string>
+  <key>NSDownloadsFolderUsageDescription</key>
+  <string>GnarTerm (Dev) and the coding agents running inside it read files in your Downloads folder when you open or reference them in a workspace.</string>
+  <key>NSDesktopFolderUsageDescription</key>
+  <string>GnarTerm (Dev) and the coding agents running inside it read files on your Desktop when you point them at projects or drop a folder onto a pane.</string>
+  <key>NSAppleMusicUsageDescription</key>
+  <string>GnarTerm (Dev) needs this to walk into your ~/Music tree when an agent enumerates or searches under your home directory; it does not access Apple Music itself.</string>
+  <key>NSPhotoLibraryUsageDescription</key>
+  <string>GnarTerm (Dev) needs this to walk into your ~/Pictures tree when an agent enumerates or searches under your home directory; it does not import photos.</string>
+  <key>NSRemovableVolumesUsageDescription</key>
+  <string>GnarTerm (Dev) reads files on removable volumes when you open a workspace whose path lives on one.</string>
+  <key>NSNetworkVolumesUsageDescription</key>
+  <string>GnarTerm (Dev) reads files on network volumes when you open a workspace whose path lives on one.</string>
 </dict>
 </plist>

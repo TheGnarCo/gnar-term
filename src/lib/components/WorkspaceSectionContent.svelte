@@ -58,7 +58,7 @@
   } from "../stores/ui";
   import { contrastColor } from "../utils/contrast";
   import { agentsStore } from "../services/agent-detection-service";
-  import { rootNeedsRailAttention } from "../services/rail-attention";
+  import { rootRailBotStatus } from "../services/rail-attention";
   import { variantColor } from "../status-colors";
   import { shortcutHintsActive } from "../stores/shortcut-hints";
   import { modLabel } from "../terminal-service";
@@ -165,14 +165,14 @@
     return null;
   })();
 
-  // Rail attention — collapsed-mode signal for the rail. Scope is
+  // Rail bot status — collapsed-mode signal for the rail. Scope is
   // intentionally Root + all branches (worktree AND dashboard branches,
-  // both live in branchedWorkspaceIds). This is the only attention
+  // both live in branchedWorkspaceIds). This is the only bot-status
   // surface in collapsed mode; banner-level workspaceBotStatus above
   // stays root-only by design.
-  $: railNeedsAttention = workspace
-    ? rootNeedsRailAttention(workspace, $agentsStore)
-    : false;
+  $: railBotStatus = workspace
+    ? rootRailBotStatus(workspace, $agentsStore)
+    : ("none" as const);
 
   // True when the primary workspace of this workspace is currently active.
   // Makes the banner border solid only when the primary workspace
@@ -465,7 +465,7 @@
       hasActiveChild={hasActiveDescendant}
       {isPrimaryActive}
       {popoverActive}
-      needsAttention={railNeedsAttention}
+      botStatus={railBotStatus}
       scopeId={workspace.id}
       {containerBlockId}
       containerLabel={workspace.name}
@@ -476,7 +476,13 @@
       <div
         style="display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0;"
       >
-        {#if workspaceBotStatus}
+        {#if workspaceBotStatus && workspace.spawnedBy != null}
+          <!-- BotIcon next to the title is reserved for orchestrator-
+               spawned workspaces — for those, the icon doubles as
+               provenance ("this row was created by an agent"). For
+               every other workspace the rail "hat" carries bot
+               status, so painting the icon here too would be
+               redundant. -->
           <span
             aria-label={workspaceBotStatus.label}
             title={workspaceBotStatus.label}

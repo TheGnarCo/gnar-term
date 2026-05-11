@@ -52,6 +52,15 @@ import {
   lookupSurfaceWorkspaceId,
   lookupPtyIdForSurface,
 } from "./service-helpers";
+import {
+  oscNotificationStore,
+  type OscNotification,
+} from "./osc-notification-service";
+import {
+  transitionAgentState,
+  type AgentState,
+  type AgentStateEvent,
+} from "./agent-state";
 
 // --- Public types ---
 
@@ -192,6 +201,91 @@ function clearPaneEntry(paneId: string): void {
     delete next[paneId];
     return next;
   });
+}
+
+// --- Per-pane AgentState machine store ---
+
+/** Entry stored per pane in the per-pane agent-state store. */
+export interface PaneAgentStateEntry {
+  state: AgentState;
+  /** ISO timestamp of the most recent state transition. */
+  transitionedAt: string;
+  /** The event that caused the most recent transition, if any. */
+  lastEvent?: AgentStateEvent;
+}
+
+/**
+ * Reactive Map of paneId → PaneAgentStateEntry.
+ * Consumed by the Attention API (cycle-5) and any extension that wants
+ * fine-grained agent lifecycle state per pane.
+ *
+ * Design: Map (not Record) so consumers can use .size / .has / .get without
+ * dealing with Object.prototype pollution.
+ */
+const _paneAgentStateStore = writable<Map<string, PaneAgentStateEntry>>(
+  new Map(),
+);
+export const paneAgentStateStore: Readable<Map<string, PaneAgentStateEntry>> =
+  _paneAgentStateStore;
+
+// Default heartbeat idle timeout for the state machine (ms).
+const HEARTBEAT_IDLE_TIMEOUT_MS = 5_000;
+
+function setPaneStateEntry(paneId: string, entry: PaneAgentStateEntry): void {
+  _paneAgentStateStore.update((m) => {
+    const next = new Map(m);
+    next.set(paneId, entry);
+    return next;
+  });
+}
+
+function deletePaneStateEntry(paneId: string): void {
+  _paneAgentStateStore.update((m) => {
+    const next = new Map(m);
+    next.delete(paneId);
+    return next;
+  });
+}
+
+function applyPaneStateEvent(paneId: string, event: AgentStateEvent): void {
+  const current = get(_paneAgentStateStore).get(paneId);
+  const currentState: AgentState = current?.state ?? "unknown";
+  const nextState = transitionAgentState(currentState, event);
+  // Always update the entry (even if state is unchanged) so transitionedAt
+  // and lastEvent reflect the most recent signal.
+  setPaneStateEntry(paneId, {
+    state: nextState,
+    transitionedAt: new Date().toISOString(),
+    lastEvent: event,
+  });
+}
+
+/**
+ * Dispatch a typed AgentStateEvent into the per-pane state machine.
+ * No-op if paneId is not tracked.
+ * Exported for callers (argv classifier, MCP event handler, tests) that
+ * need to drive transitions from outside the OSC subscription path.
+ */
+export function dispatchPaneAgentStateEvent(
+  paneId: string,
+  event: AgentStateEvent,
+): void {
+  // Accept any paneId — callers may dispatch before the surface is tracked.
+  applyPaneStateEvent(paneId, event);
+}
+
+// Map OSC notification kinds to AgentStateEvent kinds.
+function oscKindToStateEvent(kind: OscNotification["kind"]): AgentStateEvent {
+  switch (kind) {
+    case "notify":
+      return { kind: "osc_notify" };
+    case "progress":
+      return { kind: "osc_progress" };
+    case "complete":
+      return { kind: "osc_complete" };
+    case "error":
+      return { kind: "osc_error" };
+  }
 }
 
 let _agents: DetectedAgent[] = [];
@@ -624,6 +718,41 @@ export function initAgentDetection(): void {
   const patterns = loadPatternList();
   const idleTimeoutMs = loadIdleTimeoutMs();
 
+  // Per-pane heartbeat timers: if no output is observed for
+  // HEARTBEAT_IDLE_TIMEOUT_MS, emit heartbeat_idle.
+  const heartbeatTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+  function resetHeartbeat(paneId: string): void {
+    const existing = heartbeatTimers.get(paneId);
+    if (existing !== undefined) clearTimeout(existing);
+    heartbeatTimers.set(
+      paneId,
+      setTimeout(() => {
+        heartbeatTimers.delete(paneId);
+        applyPaneStateEvent(paneId, { kind: "heartbeat_idle" });
+      }, HEARTBEAT_IDLE_TIMEOUT_MS),
+    );
+    // Emit heartbeat_output immediately (output was just observed).
+    applyPaneStateEvent(paneId, { kind: "heartbeat_output" });
+  }
+
+  function clearHeartbeat(paneId: string): void {
+    const existing = heartbeatTimers.get(paneId);
+    if (existing !== undefined) {
+      clearTimeout(existing);
+      heartbeatTimers.delete(paneId);
+    }
+  }
+
+  function initPaneStateIfAbsent(paneId: string): void {
+    if (!get(_paneAgentStateStore).has(paneId)) {
+      setPaneStateEntry(paneId, {
+        state: "unknown",
+        transitionedAt: new Date().toISOString(),
+      });
+    }
+  }
+
   const attachToSurface = (
     surfaceId: string,
     initialTitle: string,
@@ -648,6 +777,11 @@ export function initAgentDetection(): void {
       detachTimer: null,
     };
     trackedSurfaces.set(surfaceId, tracked);
+
+    // Initialize the pane state entry as soon as we know the paneId.
+    if (tracked.paneId) {
+      initPaneStateIfAbsent(tracked.paneId);
+    }
 
     const initialMatch = matchesPattern(initialTitle, patterns);
     if (initialMatch) {
@@ -678,6 +812,11 @@ export function initAgentDetection(): void {
     const observer = (data: string) => {
       const probe = oscTailBuffer + data;
       oscTailBuffer = probe.slice(-OSC_PREAMBLE_MAX);
+      // Heartbeat: any output resets the idle debounce for the pane
+      // state machine (→ heartbeat_output now, heartbeat_idle after timeout).
+      if (tracked.paneId) {
+        resetHeartbeat(tracked.paneId);
+      }
       try {
         if (tracked.tracker) {
           // Only real notification OSCs (9 / 99 / 777) flip the
@@ -756,6 +895,11 @@ export function initAgentDetection(): void {
     }
     if (tracked.agentId) detachAgent(tracked);
     if (tracked.unsubscribeOutput) tracked.unsubscribeOutput();
+    // Clear the pane state entry and heartbeat timer on surface close.
+    if (tracked.paneId) {
+      clearHeartbeat(tracked.paneId);
+      deletePaneStateEntry(tracked.paneId);
+    }
     trackedSurfaces.delete(surfaceId);
   };
 
@@ -855,7 +999,10 @@ export function initAgentDetection(): void {
     // Backfill paneId if surface:created raced and didn't know it yet.
     if (!tracked.paneId) {
       const surfaceInfo = allTerminalSurfaces().find((s) => s.id === event.id);
-      if (surfaceInfo?.paneId) tracked.paneId = surfaceInfo.paneId;
+      if (surfaceInfo?.paneId) {
+        tracked.paneId = surfaceInfo.paneId;
+        initPaneStateIfAbsent(tracked.paneId);
+      }
     }
     tracked.ptyId = event.ptyId;
     wireObserver(tracked);
@@ -899,7 +1046,10 @@ export function initAgentDetection(): void {
       // Backfill paneId when the workspace store becomes available.
       if (!tracked.paneId) {
         const resolvedPane = surfacePaneById.get(tracked.surfaceId);
-        if (resolvedPane) tracked.paneId = resolvedPane;
+        if (resolvedPane) {
+          tracked.paneId = resolvedPane;
+          initPaneStateIfAbsent(tracked.paneId);
+        }
       }
       if (tracked.agentId) {
         // Backfill the status item for agents attached before their workspace
@@ -951,6 +1101,25 @@ export function initAgentDetection(): void {
   });
   cleanups.push(unsubWorkspaces);
 
+  // Subscribe to the OSC notification store. Each new notification drives
+  // a state transition in the per-pane state machine. We track the last
+  // seen length to process only incremental events (the store is append-only
+  // and ring-buffered to 200).
+  let lastOscLen = 0;
+  const unsubOsc = oscNotificationStore.subscribe((notifications) => {
+    if (notifications.length <= lastOscLen) {
+      // Store was reset (tests) or wrapped — reprocess all.
+      lastOscLen = 0;
+    }
+    for (let i = lastOscLen; i < notifications.length; i++) {
+      const n = notifications[i];
+      if (!n) continue;
+      applyPaneStateEvent(n.paneId, oscKindToStateEvent(n.kind));
+    }
+    lastOscLen = notifications.length;
+  });
+  cleanups.push(unsubOsc);
+
   _current = {
     destroy() {
       for (const tracked of trackedSurfaces.values()) {
@@ -960,8 +1129,13 @@ export function initAgentDetection(): void {
         }
         if (tracked.agentId) detachAgent(tracked);
         if (tracked.unsubscribeOutput) tracked.unsubscribeOutput();
+        // Clear any pending heartbeat timers.
+        if (tracked.paneId) clearHeartbeat(tracked.paneId);
       }
       trackedSurfaces.clear();
+      // Clear all remaining heartbeat timers (paranoia sweep).
+      for (const timer of heartbeatTimers.values()) clearTimeout(timer);
+      heartbeatTimers.clear();
       for (const cleanup of cleanups) cleanup();
       cleanups.length = 0;
       // Belt-and-suspenders: detachAgent already clears per-surface
@@ -1000,6 +1174,7 @@ export function destroyAgentDetection(): void {
   _agents = [];
   syncStore();
   _paneAgentTypeStore.set({});
+  _paneAgentStateStore.set(new Map());
 }
 
 /** For tests only — reset module-level state between cases. */

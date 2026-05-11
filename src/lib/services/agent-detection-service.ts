@@ -34,7 +34,7 @@
 import { writable, get, type Readable } from "svelte/store";
 import { eventBus } from "./event-bus";
 import { getConfig } from "../config";
-import { type AgentType } from "./agent-type";
+import { type AgentType, parseAgentTypeFromArgv } from "./agent-type";
 import {
   addOutputObserver,
   removeOutputObserver,
@@ -54,6 +54,8 @@ import {
 } from "./service-helpers";
 import {
   oscNotificationStore,
+  feedPaneOutput,
+  resetOscNotificationStoreForTests,
   type OscNotification,
 } from "./osc-notification-service";
 import {
@@ -155,11 +157,6 @@ const DEFAULT_PATTERNS: AgentPattern[] = [
 
 const AGENT_SURFACE_ITEM_PREFIX = "surface:";
 const AGENT_STATUS_SOURCE = "_agent";
-
-// OSC notification sequences we treat as "agent waiting on user". OSC 0/2
-// (title) deliberately excluded — every title ping used to pin Claude in
-// "waiting" and kill the idle timer.
-const NOTIFICATION_OSC_RE = /\x1b\](?:9|99|777);/;
 
 // Alternate-screen mode toggles. TUI harnesses (Claude Code, Codex, etc.)
 // enter the alt screen on launch and leave it on exit. Watching the exit
@@ -568,6 +565,48 @@ function allTerminalSurfaces(): Array<{
 }
 
 /**
+ * Look up the startupCommand / definedCommand recorded on the terminal
+ * surface. Returns the first non-empty value or null. Used by the
+ * argv-based classifier — surface commands are the only argv source on
+ * a TrackedSurface (the PTY spawn flow doesn't pass argv into the
+ * detection service directly).
+ */
+function lookupSurfaceCommand(surfaceId: string): string | null {
+  const all = get(workspaces);
+  for (const ws of all) {
+    for (const pane of getAllPanes(ws.paneLayout)) {
+      for (const surface of pane.surfaces) {
+        if (surface.id === surfaceId && isTerminalSurface(surface)) {
+          return surface.startupCommand || surface.definedCommand || null;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/** Tokenize a shell-ish command into argv0 + argv. Splits on whitespace
+ *  without quote-awareness — sufficient for binary-name extraction. */
+function splitCommandToArgv(cmd: string): { argv0: string; argv: string[] } {
+  const tokens = cmd.trim().split(/\s+/).filter(Boolean);
+  const argv0 = tokens[0] ?? "";
+  const argv = tokens.slice(1);
+  return { argv0, argv };
+}
+
+/**
+ * Look up the surface's spawn-time command (if any) and classify the
+ * agent type from its argv. Returns null when there is no command or
+ * the command does not match any known agent binary.
+ */
+function classifyFromSurfaceCommand(surfaceId: string): AgentType | null {
+  const cmd = lookupSurfaceCommand(surfaceId);
+  if (!cmd) return null;
+  const { argv0, argv } = splitCommandToArgv(cmd);
+  return parseAgentTypeFromArgv(argv0, argv);
+}
+
+/**
  * Look up the `intendedAgent` hint from the Pane that owns this paneId.
  * Returns null if the pane is not found or has no hint set.
  */
@@ -803,16 +842,27 @@ export function initAgentDetection(): void {
     if (initialMatch) {
       attachAgent(tracked, initialMatch, idleTimeoutMs);
     } else if (tracked.paneId) {
-      // No detection yet — fall back to Pane.intendedAgent so that
-      // paneAgentTypeStore has an initial value before detection fires.
-      // Confirmed detection (via attachAgent) will overwrite this entry.
-      const hint = lookupPaneIntendedAgent(tracked.paneId);
-      if (hint !== null && !get(_paneAgentTypeStore)[tracked.paneId]) {
+      // No title-match detection yet. Try argv-based classification first
+      // (strongest signal — the spawn-time command). Fall back to
+      // Pane.intendedAgent (heuristic) when argv yields nothing.
+      // A confirmed detection (via attachAgent) will overwrite this entry
+      // later with osc/title confidence reflecting the actual signal.
+      const argvType = classifyFromSurfaceCommand(tracked.surfaceId);
+      if (argvType !== null && !get(_paneAgentTypeStore)[tracked.paneId]) {
         setPaneEntry(tracked.paneId, {
-          agentType: hint,
-          confidence: "heuristic",
+          agentType: argvType,
+          confidence: "argv",
           detectedAt: new Date().toISOString(),
         });
+      } else {
+        const hint = lookupPaneIntendedAgent(tracked.paneId);
+        if (hint !== null && !get(_paneAgentTypeStore)[tracked.paneId]) {
+          setPaneEntry(tracked.paneId, {
+            agentType: hint,
+            confidence: "heuristic",
+            detectedAt: new Date().toISOString(),
+          });
+        }
       }
     }
 
@@ -846,20 +896,16 @@ export function initAgentDetection(): void {
         resetHeartbeat(tracked.paneId);
       }
       try {
+        // Any output ticks an attached tracker. Notification-class OSCs
+        // (9 / 99 / 777) flip the tracker to "waiting" via the typed
+        // oscNotificationStore subscription below, which fires
+        // synchronously when feedPaneOutput parses a complete sequence.
+        // Order matters: onOutput first so onNotification (if any) wins.
+        tracked.tracker?.onOutput();
+        if (tracked.paneId) {
+          feedPaneOutput(tracked.paneId, probe);
+        }
         if (tracked.tracker) {
-          // Only real notification OSCs (9 / 99 / 777) flip the
-          // tracker to "waiting". A bare `ESC ]` match is too broad —
-          // every OSC 0/2 title update hit it, which pinned OSC-mode
-          // agents (e.g. Claude) in "waiting" forever because
-          // onNotification also clears the idle timer.
-          if (
-            tracked.agentPattern?.oscDetectable &&
-            NOTIFICATION_OSC_RE.test(probe)
-          ) {
-            tracked.tracker.onNotification(data);
-          } else {
-            tracked.tracker.onOutput();
-          }
           // OSC-detectable harnesses (Claude Code, Codex, …) live in the
           // alternate screen. The shell often doesn't re-emit an OSC title
           // after the harness quits, so the title-mismatch detach path is
@@ -1077,15 +1123,25 @@ export function initAgentDetection(): void {
         if (resolvedPane) {
           tracked.paneId = resolvedPane;
           initPaneStateIfAbsent(tracked.paneId);
-          // Also backfill intendedAgent hint if no detection yet.
+          // Backfill agent-type entry if no detection yet — argv first
+          // (strongest signal), intendedAgent as heuristic fallback.
           if (!tracked.agentId && !get(_paneAgentTypeStore)[tracked.paneId]) {
-            const hint = lookupPaneIntendedAgent(tracked.paneId);
-            if (hint !== null) {
+            const argvType = classifyFromSurfaceCommand(tracked.surfaceId);
+            if (argvType !== null) {
               setPaneEntry(tracked.paneId, {
-                agentType: hint,
-                confidence: "heuristic",
+                agentType: argvType,
+                confidence: "argv",
                 detectedAt: new Date().toISOString(),
               });
+            } else {
+              const hint = lookupPaneIntendedAgent(tracked.paneId);
+              if (hint !== null) {
+                setPaneEntry(tracked.paneId, {
+                  agentType: hint,
+                  confidence: "heuristic",
+                  detectedAt: new Date().toISOString(),
+                });
+              }
             }
           }
         }
@@ -1141,9 +1197,11 @@ export function initAgentDetection(): void {
   cleanups.push(unsubWorkspaces);
 
   // Subscribe to the OSC notification store. Each new notification drives
-  // a state transition in the per-pane state machine. We track the last
-  // seen length to process only incremental events (the store is append-only
-  // and ring-buffered to 200).
+  // both the per-pane state machine (cycle-4) and — for OSC-detectable
+  // trackers attached to that pane — the legacy "waiting" status flip
+  // that used to be powered by an inline regex in the output observer.
+  // This is the single source of OSC awareness; the observer just feeds
+  // raw output into the typed parser via feedPaneOutput.
   let lastOscLen = 0;
   const unsubOsc = oscNotificationStore.subscribe((notifications) => {
     if (notifications.length <= lastOscLen) {
@@ -1154,10 +1212,23 @@ export function initAgentDetection(): void {
       const n = notifications[i];
       if (!n) continue;
       applyPaneStateEvent(n.paneId, oscKindToStateEvent(n.kind));
+      // Drive the legacy tracker.onNotification path for OSC-detectable
+      // agents whose pane matches this notification.
+      const tracked = findTrackedByPaneId(n.paneId);
+      if (tracked?.tracker && tracked.agentPattern?.oscDetectable) {
+        tracked.tracker.onNotification(n.body ?? "");
+      }
     }
     lastOscLen = notifications.length;
   });
   cleanups.push(unsubOsc);
+
+  function findTrackedByPaneId(paneId: string): TrackedSurface | undefined {
+    for (const t of trackedSurfaces.values()) {
+      if (t.paneId === paneId) return t;
+    }
+    return undefined;
+  }
 
   _current = {
     destroy() {
@@ -1219,5 +1290,9 @@ export function destroyAgentDetection(): void {
 /** For tests only — reset module-level state between cases. */
 export function resetAgentDetectionForTests(): void {
   destroyAgentDetection();
+  // The OSC store is module-level in osc-notification-service and is now
+  // fed by every observer chunk; clear it so notifications from a prior
+  // test don't re-fire when the next initAgentDetection runs.
+  resetOscNotificationStoreForTests();
   _idCounter = 0;
 }

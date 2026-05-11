@@ -204,6 +204,162 @@ describe("agent-detection-service — intendedAgent fallback", () => {
     expect(entry?.agentType).toBe("codex");
   });
 
+  it("argv classification beats intendedAgent heuristic", async () => {
+    const { initAgentDetection, paneAgentTypeStore } =
+      await import("../lib/services/agent-detection-service");
+    const { workspaces } = await import("../lib/stores/workspace");
+
+    // intendedAgent hints 'codex' but startupCommand is 'claude' — argv wins.
+    const ws = {
+      id: "ws-argv-vs-hint",
+      name: "ws-argv-vs-hint",
+      activePaneId: "pane-argv-vs-hint",
+      paneLayout: {
+        type: "pane" as const,
+        pane: {
+          id: "pane-argv-vs-hint",
+          activeSurfaceId: "surf-argv-vs-hint",
+          intendedAgent: "codex" as const,
+          surfaces: [
+            {
+              id: "surf-argv-vs-hint",
+              kind: "terminal" as const,
+              title: "bash",
+              cwd: "/tmp",
+              ptyId: 201,
+              startupCommand: "claude",
+              terminal: { dispose: vi.fn(), focus: vi.fn() },
+            },
+          ],
+        },
+      },
+    };
+
+    workspaces.set([ws]);
+    initAgentDetection();
+
+    const entry = get(paneAgentTypeStore)["pane-argv-vs-hint"];
+    expect(entry).toBeDefined();
+    expect(entry?.agentType).toBe("claude");
+    expect(entry?.confidence).toBe("argv");
+  });
+
+  it("argv classification recognizes node-wrapped claude-code cli", async () => {
+    const { initAgentDetection, paneAgentTypeStore } =
+      await import("../lib/services/agent-detection-service");
+    const { workspaces } = await import("../lib/stores/workspace");
+
+    const ws = {
+      id: "ws-argv-node",
+      name: "ws-argv-node",
+      activePaneId: "pane-argv-node",
+      paneLayout: {
+        type: "pane" as const,
+        pane: {
+          id: "pane-argv-node",
+          activeSurfaceId: "surf-argv-node",
+          surfaces: [
+            {
+              id: "surf-argv-node",
+              kind: "terminal" as const,
+              title: "bash",
+              cwd: "/tmp",
+              ptyId: 202,
+              startupCommand:
+                "node node_modules/@anthropic-ai/claude-code/cli.js",
+              terminal: { dispose: vi.fn(), focus: vi.fn() },
+            },
+          ],
+        },
+      },
+    };
+
+    workspaces.set([ws]);
+    initAgentDetection();
+
+    const entry = get(paneAgentTypeStore)["pane-argv-node"];
+    expect(entry).toBeDefined();
+    expect(entry?.agentType).toBe("claude");
+    expect(entry?.confidence).toBe("argv");
+  });
+
+  it("non-agent startupCommand falls through to intendedAgent heuristic", async () => {
+    const { initAgentDetection, paneAgentTypeStore } =
+      await import("../lib/services/agent-detection-service");
+    const { workspaces } = await import("../lib/stores/workspace");
+
+    const ws = {
+      id: "ws-argv-fallthrough",
+      name: "ws-argv-fallthrough",
+      activePaneId: "pane-argv-fallthrough",
+      paneLayout: {
+        type: "pane" as const,
+        pane: {
+          id: "pane-argv-fallthrough",
+          activeSurfaceId: "surf-argv-fallthrough",
+          intendedAgent: "codex" as const,
+          surfaces: [
+            {
+              id: "surf-argv-fallthrough",
+              kind: "terminal" as const,
+              title: "bash",
+              cwd: "/tmp",
+              ptyId: 203,
+              startupCommand: "ls -la",
+              terminal: { dispose: vi.fn(), focus: vi.fn() },
+            },
+          ],
+        },
+      },
+    };
+
+    workspaces.set([ws]);
+    initAgentDetection();
+
+    const entry = get(paneAgentTypeStore)["pane-argv-fallthrough"];
+    expect(entry).toBeDefined();
+    expect(entry?.agentType).toBe("codex");
+    expect(entry?.confidence).toBe("heuristic");
+  });
+
+  it("definedCommand is used when startupCommand is absent", async () => {
+    const { initAgentDetection, paneAgentTypeStore } =
+      await import("../lib/services/agent-detection-service");
+    const { workspaces } = await import("../lib/stores/workspace");
+
+    const ws = {
+      id: "ws-argv-defined",
+      name: "ws-argv-defined",
+      activePaneId: "pane-argv-defined",
+      paneLayout: {
+        type: "pane" as const,
+        pane: {
+          id: "pane-argv-defined",
+          activeSurfaceId: "surf-argv-defined",
+          surfaces: [
+            {
+              id: "surf-argv-defined",
+              kind: "terminal" as const,
+              title: "bash",
+              cwd: "/tmp",
+              ptyId: 204,
+              definedCommand: "aider",
+              terminal: { dispose: vi.fn(), focus: vi.fn() },
+            },
+          ],
+        },
+      },
+    };
+
+    workspaces.set([ws]);
+    initAgentDetection();
+
+    const entry = get(paneAgentTypeStore)["pane-argv-defined"];
+    expect(entry).toBeDefined();
+    expect(entry?.agentType).toBe("aider");
+    expect(entry?.confidence).toBe("argv");
+  });
+
   it("confirmed detection takes priority over intendedAgent", async () => {
     const { initAgentDetection, paneAgentTypeStore } =
       await import("../lib/services/agent-detection-service");

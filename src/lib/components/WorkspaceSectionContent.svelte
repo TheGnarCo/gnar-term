@@ -58,7 +58,10 @@
   } from "../stores/ui";
   import { contrastColor } from "../utils/contrast";
   import { agentsStore } from "../services/agent-detection-service";
-  import { rootRailBotStatus } from "../services/rail-attention";
+  import {
+    rootRailBotStatus,
+    workspaceRailBotStatus,
+  } from "../services/rail-attention";
   import { attentionStore } from "../services/attention-api";
   import { getAllPanes } from "../types";
   import { variantColor } from "../status-colors";
@@ -147,25 +150,12 @@
       )
     : new Set<string>();
 
-  // Most-active bot status across all workspaces in this workspace.
+  // Most-active bot status across the Root workspace's own surfaces.
+  // Precedence is derived from the same rail-attention pipeline that
+  // drives the rail hat (attention → thinking → idle), so the banner
+  // badge and the rail can't disagree.  Counts are scoped to the root
+  // workspace only — branch banners roll up their own status separately.
   $: workspaceAgents = $agentsStore.filter((a) => filterIds.has(a.workspaceId));
-  $: workspaceBotStatus = (() => {
-    if (workspaceAgents.length === 0) return null;
-    const running = workspaceAgents.filter(
-      (a) => a.status === "running" || a.status === "active",
-    ).length;
-    const waiting = workspaceAgents.filter(
-      (a) => a.status === "waiting",
-    ).length;
-    const idle = workspaceAgents.filter((a) => a.status === "idle").length;
-    if (running > 0)
-      return { label: `${running} running`, color: variantColor("success") };
-    if (waiting > 0)
-      return { label: `${waiting} waiting`, color: variantColor("warning") };
-    if (idle > 0)
-      return { label: `${idle} idle`, color: variantColor("muted") };
-    return null;
-  })();
 
   // Rail bot status — collapsed-mode signal for the rail. Scope is
   // intentionally Root + all branches (worktree AND dashboard branches,
@@ -194,6 +184,53 @@
         paneIdsByWorkspaceId,
       )
     : ("none" as const);
+
+  // Banner badge precedence — root-only scope. Reuses the same
+  // rail-attention helper so badge + rail can't disagree on state.
+  // Label counts come from the canonical agentsStore for thinking/idle
+  // and from a union of (waiting agents ∪ panes with attention events)
+  // for the attention state, so OSC-driven attention counts even when
+  // DetectedAgent.status hasn't flipped to "waiting" yet.
+  $: rootPaneIds = workspace
+    ? (paneIdsByWorkspaceId.get(workspace.id) ?? [])
+    : [];
+  $: bannerRailBotStatus = workspace
+    ? workspaceRailBotStatus(
+        workspace.id,
+        rootPaneIds,
+        $agentsStore,
+        $attentionStore,
+      )
+    : ("none" as const);
+  $: workspaceBotStatus = (() => {
+    if (!workspace) return null;
+    if (bannerRailBotStatus === "attention") {
+      const rootPaneSet = new Set(rootPaneIds);
+      const waitingAgents = workspaceAgents.filter(
+        (a) => a.status === "waiting",
+      ).length;
+      const attentionPanes = new Set(
+        $attentionStore
+          .filter((ev) => rootPaneSet.has(ev.paneId))
+          .map((ev) => ev.paneId),
+      ).size;
+      const count = Math.max(waitingAgents, attentionPanes, 1);
+      return { label: `${count} waiting`, color: variantColor("warning") };
+    }
+    if (bannerRailBotStatus === "thinking") {
+      const running = workspaceAgents.filter(
+        (a) => a.status === "running" || a.status === "active",
+      ).length;
+      return { label: `${running} running`, color: variantColor("success") };
+    }
+    if (bannerRailBotStatus === "idle") {
+      const idle = workspaceAgents.filter(
+        (a) => a.status === "idle" || a.status === "done",
+      ).length;
+      return { label: `${idle} idle`, color: variantColor("muted") };
+    }
+    return null;
+  })();
 
   // True when the primary workspace of this workspace is currently active.
   // Makes the banner border solid only when the primary workspace

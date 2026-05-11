@@ -8,6 +8,8 @@
 // Type-only import — no runtime cycle even though branch-lifecycle.ts
 // imports the eventBus value back. TypeScript strips `import type`.
 import type { BranchLifecycle } from "./branch-lifecycle";
+import type { AttentionEventKind, AttentionEventSource } from "./attention-api";
+import type { AgentType } from "./agent-type";
 
 // --- Event types ---
 
@@ -79,6 +81,22 @@ export type AppEvent =
       branchId: string;
       from: BranchLifecycle | null;
       to: BranchLifecycle;
+    }
+  | {
+      // Emitted by attention-api whenever a new AttentionEvent is appended
+      // to attentionStore. Extensions and chrome that need transition-only
+      // handlers (e.g. play a chime, ping a notification provider) subscribe
+      // here instead of diffing the store themselves.
+      type: "attention:event";
+      paneId: string;
+      surfaceId?: string;
+      agentType?: AgentType;
+      kind: AttentionEventKind;
+      title?: string;
+      body?: string;
+      level?: string;
+      source: AttentionEventSource;
+      createdAt: number;
     };
 
 export type AppEventType = AppEvent["type"];

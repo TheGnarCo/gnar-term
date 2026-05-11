@@ -136,7 +136,8 @@ export type AppEventType =
   | "agent:statusChanged"
   | "agent:interrupted"
   | "agent:killed"
-  | "branch:lifecycleChanged";
+  | "branch:lifecycleChanged"
+  | "attention:event";
 
 /** Base shape for all events delivered to extension handlers. */
 export interface AppEvent {
@@ -827,6 +828,13 @@ export interface ExtensionAPI {
    */
   branchLifecycle: Readable<Map<string, BranchLifecycleEntry>>;
   /**
+   * Reactive list of attention events derived by core from agent state
+   * transitions (awaiting_input / errored) and OSC notifications. The
+   * list is newest-first with a per-pane cap of 50 and total cap of 500.
+   * Pair with the `attention:event` event for transition-only handlers.
+   */
+  attention: Readable<AttentionEventRef[]>;
+  /**
    * Read-only snapshot of every branch core is currently tracking.
    * Returns the same set of branchIds keyed by the `branchLifecycle`
    * store, with their repo/pane context attached.
@@ -1343,6 +1351,37 @@ export interface BranchDescriptorRef {
   branch: string;
   baseBranch: string;
   paneId: string | null;
+}
+
+// --- Attention projections ---
+//
+// Attention events are DERIVED in core by attention-api.ts from
+// paneAgentStateStore (state transitions into awaiting_input/errored)
+// and oscNotificationStore (notify/error/progress/complete kinds).
+// Extensions consume the derived store read-only; mutations go through
+// `dismissAttention` (per-pane clear) or `pushExternalAttention` (out
+// of band injection from MCP / extensions).
+
+export type AttentionEventKind =
+  | "awaiting_input"
+  | "errored"
+  | "completed"
+  | "notify"
+  | "progress";
+
+export type AttentionEventSource = "agent-state" | "osc" | "external";
+
+/** Entry stored in the `attention` store, newest first. */
+export interface AttentionEventRef {
+  paneId: string;
+  surfaceId?: string;
+  agentType?: string;
+  kind: AttentionEventKind;
+  title?: string;
+  body?: string;
+  level?: string;
+  source: AttentionEventSource;
+  createdAt: number;
 }
 
 /** Shape of a registry-backed surface, as delivered to surface components. */

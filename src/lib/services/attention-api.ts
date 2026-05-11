@@ -30,6 +30,7 @@ import {
   oscNotificationStore,
   type OscNotification,
 } from "./osc-notification-service";
+import { eventBus } from "./event-bus";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -111,6 +112,22 @@ function appendEvent(event: AttentionEvent): void {
     }
 
     return next;
+  });
+
+  // Mirror the appended event onto the event bus so extensions / chrome can
+  // subscribe to transitions without diffing the store themselves. The store
+  // remains the source of truth — this is a fan-out, not a parallel buffer.
+  eventBus.emit({
+    type: "attention:event",
+    paneId: event.paneId,
+    ...(event.surfaceId !== undefined && { surfaceId: event.surfaceId }),
+    ...(event.agentType !== undefined && { agentType: event.agentType }),
+    kind: event.kind,
+    ...(event.title !== undefined && { title: event.title }),
+    ...(event.body !== undefined && { body: event.body }),
+    ...(event.level !== undefined && { level: event.level }),
+    source: event.source,
+    createdAt: event.createdAt,
   });
 }
 

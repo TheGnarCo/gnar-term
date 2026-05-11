@@ -47,8 +47,10 @@
    * `gh_view_pr` on a 60s timer, keyed on the repo root from the branch
    * item's metadata.
    *
-   * Renders the same two rows as DiffPrStatusLine but driven by the
-   * status registry instead of self-contained polling.
+   * Diff comes from the git-status registry; PR is fetched on a 5s
+   * timer via `gh_view_pr` to keep CI status fresh. (The slower 60s
+   * `pr-state-poller` only resolves lifecycle states — it doesn't
+   * carry the full PR view this row renders.)
    */
   import { onDestroy } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
@@ -56,6 +58,7 @@
   import { getWorkspaceStatusByCategory } from "../services/status-registry";
   import { GIT_STATUS_SOURCE } from "../services/git-status-service";
   import { workspaces } from "../stores/workspace";
+  import { isBranchedWorkspace } from "../types";
   import type { StatusItem } from "../types/status";
 
   export let workspaceId: string;
@@ -69,7 +72,7 @@
     thisWs !== undefined &&
     thisWs.rootWorkspaceId === undefined &&
     thisWs.isDashboard !== true &&
-    typeof (thisWs as { worktreePath?: string }).worktreePath !== "string";
+    !isBranchedWorkspace(thisWs);
 
   $: fgMuted = ($theme["fgMuted"] ?? $theme.fgDim) as string;
   $: iconFg = accentColor ?? fgMuted;

@@ -1296,3 +1296,14 @@ export function resetAgentDetectionForTests(): void {
   resetOscNotificationStoreForTests();
   _idCounter = 0;
 }
+
+/**
+ * For tests only — directly inject a snapshot into `_agentsStore`. Lets
+ * component tests exercise UI surfaces that derive from the canonical
+ * `agentsStore` (rail-attention hat, banner badge) without spinning up
+ * the full detection pipeline (PTY chunks, OSC handler, title scanner).
+ */
+export function setAgentsForTests(agents: DetectedAgent[]): void {
+  _agents = agents.slice();
+  syncStore();
+}

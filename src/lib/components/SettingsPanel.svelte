@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { theme } from "../stores/theme";
-  import { getConfig, saveConfig } from "../config";
+  import { getConfig, configStore, saveConfig } from "../config";
   import {
     extensionStore,
     activateExtension,
@@ -71,7 +71,11 @@
     dirty = true;
   }
 
-  $: agentsForTab = pendingAgents ?? getConfig().agents ?? [];
+  // Read agents reactively off configStore so an external reload (or any
+  // saveConfig mutation from elsewhere) re-renders the tab. While the
+  // user is editing, the local draft `pendingAgents` takes precedence
+  // until applied or discarded.
+  $: agentsForTab = pendingAgents ?? $configStore.agents ?? [];
 
   function loadSettings() {
     const cfg = getConfig();

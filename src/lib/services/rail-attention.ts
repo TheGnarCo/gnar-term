@@ -1,12 +1,9 @@
 /**
- * Rail bot status — pure aggregator that decides whether a Root
- * workspace's rail should paint a status hat and which variant. The
- * hat renders at every sidebar width (collapsed and expanded) since
+ * Rail bot status — pure aggregator that decides whether a workspace
+ * row's rail should paint a status hat and which variant. The hat
+ * renders at every sidebar width (collapsed and expanded) since
  * it's the canonical bot-notification surface. Mirrors the
- * buildAgentRows pattern (pure, store-free, vitest-testable). Scope
- * is intentionally Root + all branches, in contrast to
- * WorkspaceSectionContent's banner-level workspaceBotStatus, which
- * is root-only.
+ * buildAgentRows pattern (pure, store-free, vitest-testable).
  *
  *   - "attention": an in-scope pane has an active attention event
  *                  (awaiting_input / errored / notify), OR an
@@ -20,6 +17,10 @@
  *                  static hat. Surfaces "agent attached, currently
  *                  thinking" so presence is never invisible.
  *   - "none":      no agents in the tree → no hat painted.
+ *
+ * `rootRailBotStatus` aggregates Root + all branches (used by the
+ * SidebarBanner rail). `workspaceRailBotStatus` aggregates a single
+ * workspace (used by WorkspaceItem rows for per-branch hats).
  */
 import type { DetectedAgent } from "./agent-detection-service";
 import type { RootWorkspace } from "../config";
@@ -35,25 +36,17 @@ const ATTENTION_KINDS = new Set(["awaiting_input", "errored", "notify"]);
 // through to "none" too.
 
 /**
- * Compute the rail bot status for a Root workspace. Consumes both the
- * Attention API (cycle-5) and the `DetectedAgent[]` runtime list, so
- * OSC-driven attention events light the hat with "attention" before
- * the slower `DetectedAgent.status="waiting"` flip would.
+ * Core aggregator. Decides the hat variant for an arbitrary set of
+ * workspace ids and their associated pane ids. Both `rootRailBotStatus`
+ * and `workspaceRailBotStatus` are thin scope-building wrappers around
+ * this function so per-row and per-section signals stay consistent.
  */
-export function rootRailBotStatus(
-  root: RootWorkspace,
+function computeRailBotStatus(
+  workspaceIds: ReadonlySet<string>,
+  scopedPaneIds: ReadonlySet<string>,
   agents: DetectedAgent[],
   attentionEvents: AttentionEvent[],
-  paneIdsByWorkspaceId: Map<string, string[]>,
 ): RailBotStatus {
-  const workspaceIds = new Set([root.id, ...root.branchedWorkspaceIds]);
-
-  const scopedPaneIds = new Set<string>();
-  for (const wsId of workspaceIds) {
-    const panes = paneIdsByWorkspaceId.get(wsId) ?? [];
-    for (const pId of panes) scopedPaneIds.add(pId);
-  }
-
   for (const ev of attentionEvents) {
     if (scopedPaneIds.has(ev.paneId) && ATTENTION_KINDS.has(ev.kind)) {
       return "attention";
@@ -71,4 +64,50 @@ export function rootRailBotStatus(
   if (sawThinking) return "thinking";
   if (sawIdle) return "idle";
   return "none";
+}
+
+/**
+ * Compute the rail bot status for a Root workspace. Consumes both the
+ * Attention API (cycle-5) and the `DetectedAgent[]` runtime list, so
+ * OSC-driven attention events light the hat with "attention" before
+ * the slower `DetectedAgent.status="waiting"` flip would.
+ */
+export function rootRailBotStatus(
+  root: RootWorkspace,
+  agents: DetectedAgent[],
+  attentionEvents: AttentionEvent[],
+  paneIdsByWorkspaceId: Map<string, string[]>,
+): RailBotStatus {
+  const workspaceIds = new Set([root.id, ...root.branchedWorkspaceIds]);
+  const scopedPaneIds = new Set<string>();
+  for (const wsId of workspaceIds) {
+    const panes = paneIdsByWorkspaceId.get(wsId) ?? [];
+    for (const pId of panes) scopedPaneIds.add(pId);
+  }
+  return computeRailBotStatus(
+    workspaceIds,
+    scopedPaneIds,
+    agents,
+    attentionEvents,
+  );
+}
+
+/**
+ * Compute the rail bot status for a single workspace (used by
+ * WorkspaceItem rows). Same precedence as `rootRailBotStatus`, scoped
+ * to one workspace + its panes — so a Branch row shows attention only
+ * for events tied to its own panes/agents.
+ */
+export function workspaceRailBotStatus(
+  workspaceId: string,
+  paneIds: ReadonlyArray<string>,
+  agents: DetectedAgent[],
+  attentionEvents: AttentionEvent[],
+): RailBotStatus {
+  return computeRailBotStatus(
+    new Set([workspaceId]),
+    new Set(paneIds),
+    agents,
+    attentionEvents,
+  );
 }

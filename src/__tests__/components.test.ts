@@ -2278,20 +2278,25 @@ describe("TerminalSurface", () => {
 
 describe("WorkspaceItem — harness sub-row", () => {
   it("paints a green 'thinking' rail hat for a running agent", async () => {
-    const { setStatusItem, clearAllStatusForWorkspace } =
-      await import("../lib/services/status-registry");
+    const { setAgentsForTests } =
+      await import("../lib/services/agent-detection-service");
 
     const surface = makeSurface("s1", { title: "claude > fixing bug" });
     const pane = makePane("p1", [surface]);
     const ws = makeChildWorkspace("ws-harness", "Harness WS", pane);
 
-    setStatusItem("_agent", ws.id, "surface:s1", {
-      category: "process",
-      priority: 0,
-      label: "running",
-      variant: "success",
-      metadata: { surfaceId: "s1" },
-    });
+    setAgentsForTests([
+      {
+        agentId: "a1",
+        agentName: "Claude Code",
+        agentType: "claude",
+        surfaceId: "s1",
+        workspaceId: ws.id,
+        status: "running",
+        createdAt: new Date().toISOString(),
+        lastStatusChange: new Date().toISOString(),
+      },
+    ]);
 
     const { container } = render(WorkspaceItem, {
       props: {
@@ -2309,15 +2314,15 @@ describe("WorkspaceItem — harness sub-row", () => {
     expect(hat).not.toBeNull();
     // "thinking" hat is static, not pulsing.
     expect(hat!.classList.contains("pulses")).toBe(false);
-    clearAllStatusForWorkspace(ws.id);
+    setAgentsForTests([]);
   });
 
   it("paints a muted 'idle' rail hat when an agent is attached but idle", async () => {
     // Idle agents still warrant a hat — it's the "currently
     // thinking" presence indicator that survives the BotIcon
     // removal. Color is muted-grey, no pulse.
-    const { setStatusItem, clearAllStatusForWorkspace } =
-      await import("../lib/services/status-registry");
+    const { setAgentsForTests } =
+      await import("../lib/services/agent-detection-service");
 
     const active = makeSurface("s-active", { title: "Shell" });
     const other = makeSurface("s-agent", { title: "claude" });
@@ -2333,13 +2338,18 @@ describe("WorkspaceItem — harness sub-row", () => {
       activePaneId: "p1",
     };
 
-    setStatusItem("_agent", ws.id, "surface:s-agent", {
-      category: "process",
-      priority: 0,
-      label: "idle",
-      variant: "muted",
-      metadata: { surfaceId: "s-agent" },
-    });
+    setAgentsForTests([
+      {
+        agentId: "a1",
+        agentName: "Claude Code",
+        agentType: "claude",
+        surfaceId: "s-agent",
+        workspaceId: ws.id,
+        status: "idle",
+        createdAt: new Date().toISOString(),
+        lastStatusChange: new Date().toISOString(),
+      },
+    ]);
 
     const { container } = render(WorkspaceItem, {
       props: {
@@ -2356,7 +2366,7 @@ describe("WorkspaceItem — harness sub-row", () => {
     const hat = container.querySelector(".rail-bot-hat") as HTMLElement | null;
     expect(hat).not.toBeNull();
     expect(hat!.classList.contains("pulses")).toBe(false);
-    clearAllStatusForWorkspace(ws.id);
+    setAgentsForTests([]);
   });
 
   it("hides the rail hat when hideStatusBadges is true", async () => {
@@ -2395,8 +2405,8 @@ describe("WorkspaceItem — harness sub-row", () => {
   it("paints a single 'thinking' hat regardless of how many agents are running", async () => {
     // Multiple agents collapse to one hat — the hat is a per-row
     // signal, not a per-agent one. Color stays the running-green.
-    const { setStatusItem, clearAllStatusForWorkspace } =
-      await import("../lib/services/status-registry");
+    const { setAgentsForTests } =
+      await import("../lib/services/agent-detection-service");
 
     const a = makeSurface("s-a", { title: "Strategic plan A" });
     const b = makeSurface("s-b", { title: "Strategic plan B" });
@@ -2412,20 +2422,29 @@ describe("WorkspaceItem — harness sub-row", () => {
       activePaneId: "p1",
     };
 
-    setStatusItem("_agent", ws.id, "surface:s-a", {
-      category: "process",
-      priority: 0,
-      label: "running",
-      variant: "success",
-      metadata: { surfaceId: "s-a" },
-    });
-    setStatusItem("_agent", ws.id, "surface:s-b", {
-      category: "process",
-      priority: 0,
-      label: "running",
-      variant: "success",
-      metadata: { surfaceId: "s-b" },
-    });
+    const now = new Date().toISOString();
+    setAgentsForTests([
+      {
+        agentId: "a1",
+        agentName: "Claude Code",
+        agentType: "claude",
+        surfaceId: "s-a",
+        workspaceId: ws.id,
+        status: "running",
+        createdAt: now,
+        lastStatusChange: now,
+      },
+      {
+        agentId: "a2",
+        agentName: "Claude Code",
+        agentType: "claude",
+        surfaceId: "s-b",
+        workspaceId: ws.id,
+        status: "running",
+        createdAt: now,
+        lastStatusChange: now,
+      },
+    ]);
 
     const { container } = render(WorkspaceItem, {
       props: {
@@ -2441,24 +2460,29 @@ describe("WorkspaceItem — harness sub-row", () => {
 
     const hats = container.querySelectorAll(".rail-bot-hat");
     expect(hats.length).toBe(1);
-    clearAllStatusForWorkspace(ws.id);
+    setAgentsForTests([]);
   });
 
   it("paints a pulsing 'attention' hat for a waiting agent", async () => {
-    const { setStatusItem, clearAllStatusForWorkspace } =
-      await import("../lib/services/status-registry");
+    const { setAgentsForTests } =
+      await import("../lib/services/agent-detection-service");
 
     const surface = makeSurface("s1", { title: "claude" });
     const pane = makePane("p1", [surface]);
     const ws = makeChildWorkspace("ws-attn", "Attention WS", pane);
 
-    setStatusItem("_agent", ws.id, "surface:s1", {
-      category: "process",
-      priority: 0,
-      label: "waiting",
-      variant: "warning",
-      metadata: { surfaceId: "s1" },
-    });
+    setAgentsForTests([
+      {
+        agentId: "a1",
+        agentName: "Claude Code",
+        agentType: "claude",
+        surfaceId: "s1",
+        workspaceId: ws.id,
+        status: "waiting",
+        createdAt: new Date().toISOString(),
+        lastStatusChange: new Date().toISOString(),
+      },
+    ]);
 
     const { container } = render(WorkspaceItem, {
       props: {
@@ -2475,7 +2499,7 @@ describe("WorkspaceItem — harness sub-row", () => {
     const hat = container.querySelector(".rail-bot-hat") as HTMLElement | null;
     expect(hat).not.toBeNull();
     expect(hat!.classList.contains("pulses")).toBe(true);
-    clearAllStatusForWorkspace(ws.id);
+    setAgentsForTests([]);
   });
 });
 

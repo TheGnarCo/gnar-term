@@ -15,6 +15,7 @@ import {
 } from "../stores/ui";
 import { agentsStore } from "./agent-detection-service";
 import { branchLifecycleStore } from "./branch-lifecycle";
+import { attentionStore } from "./attention-api";
 import type { ExtensionAPI } from "../extension-types";
 
 /** Read-only store wrappers that project internal state to safe public types. */
@@ -28,6 +29,7 @@ export function createStoreProjections(
   | "activeSurface"
   | "agents"
   | "branchLifecycle"
+  | "attention"
   | "theme"
   | "reorderContext"
   | "hoveredSidebarBlockId"
@@ -122,6 +124,7 @@ export function createStoreProjections(
     branchLifecycle: readOnly(
       branchLifecycleStore,
     ) as unknown as ExtensionAPI["branchLifecycle"],
+    attention: readOnly(attentionStore) as unknown as ExtensionAPI["attention"],
     theme: readOnly(theme) as unknown as ExtensionAPI["theme"],
     reorderContext: readOnly(
       reorderContext,

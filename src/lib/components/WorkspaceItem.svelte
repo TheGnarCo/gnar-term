@@ -17,7 +17,7 @@
   import { discoEmojiFor, discoColorFor } from "../utils/disco-decoration";
 
   $: isDisco = $theme.name === "Molly Disco";
-  import { getAllSurfaces, isBranchedWorkspace } from "../types";
+  import { getAllSurfaces, getAllPanes, isBranchedWorkspace } from "../types";
   import type { Workspace } from "../types";
   import { workspaceSurfaceMap } from "../services/workspace-runtime-service";
   import { workspacesStore } from "../stores/workspace";
@@ -25,6 +25,9 @@
     branchLifecycleStore,
     type BranchLifecycle,
   } from "../services/branch-lifecycle";
+  import { agentsStore } from "../services/agent-detection-service";
+  import { attentionStore } from "../services/attention-api";
+  import { workspaceRailBotStatus } from "../services/rail-attention";
 
   export let workspace: Workspace;
   export let index: number;
@@ -122,23 +125,19 @@
   $: processStatusStore = getWorkspaceStatusByCategory(workspace.id, "process");
   $: processItems = $processStatusStore;
   $: agentBadges = aggregateAgentBadges(processItems);
-  // Per-row bot status for the rail hat. Precedence (highest first):
-  //   attention (waiting) → thinking (running) → idle (any other
-  //   tracked process item like muted/done) → none.
-  // A waiting agent always wins so the pulse can't be hidden by a
-  // co-resident running or idle agent. Mirrors rootRailBotStatus.
-  $: rowBotStatus = (() => {
-    let sawThinking = false;
-    let sawIdle = false;
-    for (const item of processItems) {
-      if (item.variant === "warning") return "attention" as const;
-      if (item.variant === "success") sawThinking = true;
-      else sawIdle = true;
-    }
-    if (sawThinking) return "thinking" as const;
-    if (sawIdle) return "idle" as const;
-    return "none" as const;
-  })();
+  // Per-row bot status for the rail hat. Derived from the same
+  // pipeline as the Root-level rootRailBotStatus so per-branch hats
+  // and the collapsed-rail hat agree on precedence and stay in sync
+  // with OSC-driven attention events that bypass DetectedAgent.status.
+  $: rowPaneIds = workspace.paneLayout
+    ? getAllPanes(workspace.paneLayout).map((p) => p.id)
+    : [];
+  $: rowBotStatus = workspaceRailBotStatus(
+    workspace.id,
+    rowPaneIds,
+    $agentsStore,
+    $attentionStore,
+  );
   $: subtitleComponents = $workspaceSubtitleStore;
 
   // Branch lifecycle subtitle — populated only for BranchedWorkspaces. Reads

@@ -149,10 +149,12 @@ describe("MCP server JSON-RPC", () => {
         "close_preview",
         "create_preview_file",
         "dispatch_tasks",
+        "emit_attention",
         "file_exists",
         "get_active_pane",
         "get_active_workspace",
         "get_agent_context",
+        "get_pane_agent",
         "get_session_info",
         "get_status_for_workspace",
         "invoke_command",
@@ -188,12 +190,13 @@ describe("MCP server JSON-RPC", () => {
         "send_prompt",
         "set_workspace_lock",
         "spawn_agent",
+        "spawn_branch",
         "spawn_preview",
         "split_pane",
         "write_file",
       ].sort(),
     );
-    expect(names).toHaveLength(46);
+    expect(names).toHaveLength(49);
     for (const t of tools) {
       expect(t).toHaveProperty("inputSchema");
     }
@@ -1433,8 +1436,8 @@ describe("tool metadata", () => {
     }
   });
 
-  it("tool count matches spec (46)", () => {
-    expect(_getToolsForTest()).toHaveLength(46);
+  it("tool count matches spec (49)", () => {
+    expect(_getToolsForTest()).toHaveLength(49);
   });
 });
 

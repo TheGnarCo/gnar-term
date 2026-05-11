@@ -95,6 +95,7 @@ export type { ConnectionBinding, ConnectionContext, ToolDef };
 import { filesystemTools } from "./mcp-tools/filesystem";
 import { registryMirrorTools } from "./mcp-tools/registry-mirrors";
 import { introspectionTools } from "./mcp-tools/introspection";
+import { agenticCoreTools } from "./mcp-tools/agentic-core";
 
 // ---- Types ----
 
@@ -1373,6 +1374,7 @@ for (const t of [
   ...filesystemTools,
   ...registryMirrorTools,
   ...introspectionTools,
+  ...agenticCoreTools,
 ]) {
   TOOLS.push(t);
 }

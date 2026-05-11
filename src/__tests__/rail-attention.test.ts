@@ -4,8 +4,12 @@
  * should paint. The hat renders at every sidebar width.
  */
 import { describe, it, expect } from "vitest";
-import { rootRailBotStatus } from "../lib/services/rail-attention";
+import {
+  rootRailBotStatus,
+  rootRailBotStatusFromAttention,
+} from "../lib/services/rail-attention";
 import type { DetectedAgent } from "../lib/services/agent-detection-service";
+import type { AttentionEvent } from "../lib/services/attention-api";
 import type { RootWorkspace } from "../lib/config";
 
 function makeAgent(overrides: Partial<DetectedAgent> = {}): DetectedAgent {
@@ -115,5 +119,129 @@ describe("rootRailBotStatus", () => {
       makeAgent({ workspaceId: "br-1", status: "running" }),
     ];
     expect(rootRailBotStatus(root, agents)).toBe("thinking");
+  });
+});
+
+function makeAttention(
+  overrides: Partial<AttentionEvent> = {},
+): AttentionEvent {
+  return {
+    paneId: "p-1",
+    kind: "awaiting_input",
+    source: "osc",
+    createdAt: Date.now(),
+    ...overrides,
+  };
+}
+
+describe("rootRailBotStatusFromAttention", () => {
+  it("returns 'attention' when an in-scope pane has an awaiting_input event", () => {
+    const root = makeRoot("root-1", ["br-1"]);
+    const paneIdsByWorkspaceId = new Map<string, string[]>([
+      ["root-1", ["p-root"]],
+      ["br-1", ["p-branch"]],
+    ]);
+    const events: AttentionEvent[] = [
+      makeAttention({ paneId: "p-branch", kind: "awaiting_input" }),
+    ];
+
+    expect(
+      rootRailBotStatusFromAttention(root, [], events, paneIdsByWorkspaceId),
+    ).toBe("attention");
+  });
+
+  it("returns 'attention' for errored and notify in-scope events", () => {
+    const root = makeRoot("root-1", []);
+    const paneIdsByWorkspaceId = new Map<string, string[]>([
+      ["root-1", ["p-root"]],
+    ]);
+    expect(
+      rootRailBotStatusFromAttention(
+        root,
+        [],
+        [makeAttention({ paneId: "p-root", kind: "errored" })],
+        paneIdsByWorkspaceId,
+      ),
+    ).toBe("attention");
+    expect(
+      rootRailBotStatusFromAttention(
+        root,
+        [],
+        [makeAttention({ paneId: "p-root", kind: "notify" })],
+        paneIdsByWorkspaceId,
+      ),
+    ).toBe("attention");
+  });
+
+  it("ignores out-of-scope attention events", () => {
+    const root = makeRoot("root-1", ["br-1"]);
+    const paneIdsByWorkspaceId = new Map<string, string[]>([
+      ["root-1", ["p-root"]],
+      ["br-1", ["p-branch"]],
+    ]);
+    const events: AttentionEvent[] = [
+      makeAttention({ paneId: "p-elsewhere", kind: "awaiting_input" }),
+    ];
+
+    expect(
+      rootRailBotStatusFromAttention(root, [], events, paneIdsByWorkspaceId),
+    ).toBe("none");
+  });
+
+  it("falls back to legacy agent status when no attention event is in scope", () => {
+    const root = makeRoot("root-1", []);
+    const paneIdsByWorkspaceId = new Map<string, string[]>([
+      ["root-1", ["p-root"]],
+    ]);
+    const agents = [makeAgent({ workspaceId: "root-1", status: "running" })];
+
+    expect(
+      rootRailBotStatusFromAttention(root, agents, [], paneIdsByWorkspaceId),
+    ).toBe("thinking");
+  });
+
+  it("attention beats legacy thinking when both are present", () => {
+    const root = makeRoot("root-1", []);
+    const paneIdsByWorkspaceId = new Map<string, string[]>([
+      ["root-1", ["p-root"]],
+    ]);
+    const agents = [makeAgent({ workspaceId: "root-1", status: "running" })];
+    const events: AttentionEvent[] = [
+      makeAttention({ paneId: "p-root", kind: "awaiting_input" }),
+    ];
+
+    expect(
+      rootRailBotStatusFromAttention(
+        root,
+        agents,
+        events,
+        paneIdsByWorkspaceId,
+      ),
+    ).toBe("attention");
+  });
+
+  it("'completed' and 'progress' events do not trigger attention", () => {
+    const root = makeRoot("root-1", []);
+    const paneIdsByWorkspaceId = new Map<string, string[]>([
+      ["root-1", ["p-root"]],
+    ]);
+    const agents = [makeAgent({ workspaceId: "root-1", status: "idle" })];
+
+    expect(
+      rootRailBotStatusFromAttention(
+        root,
+        agents,
+        [makeAttention({ paneId: "p-root", kind: "completed" })],
+        paneIdsByWorkspaceId,
+      ),
+    ).toBe("idle");
+    expect(
+      rootRailBotStatusFromAttention(
+        root,
+        agents,
+        [makeAttention({ paneId: "p-root", kind: "progress" })],
+        paneIdsByWorkspaceId,
+      ),
+    ).toBe("idle");
   });
 });

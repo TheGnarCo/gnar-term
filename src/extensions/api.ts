@@ -842,6 +842,27 @@ export interface ExtensionAPI {
    */
   attention: Readable<AttentionEventRef[]>;
   /**
+   * Clear all attention events for a pane — typically called when the
+   * user acknowledges the pane (focuses it, dismisses a card, etc.).
+   * Routes through core's attention store so all subscribers update.
+   */
+  dismissAttention(paneId: string): void;
+  /**
+   * Inject an externally-sourced attention event (e.g. from a CI
+   * webhook, a long-running CLI agent, or a remote system). Core forces
+   * `source: "external"` and stamps `createdAt`, so callers omit both.
+   */
+  pushExternalAttention(
+    event: Omit<AttentionEventRef, "createdAt" | "source">,
+  ): void;
+  /**
+   * O(n) lookup over the live agents store: returns the agent currently
+   * hosted in `paneId`, or null if the pane has no detected agent.
+   * Convenience for UI that renders per-pane agent chrome on every
+   * render; for batch reads, subscribe to `agents` directly.
+   */
+  getAgentByPane(paneId: string): AgentRef | null;
+  /**
    * Reactive log of MCP tool dispatches (most-recent-last, cap 500). Each
    * entry captures the tool name, args, optional resolved target, and
    * outcome. Subscribe to this to render an "agent activity" timeline or

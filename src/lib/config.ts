@@ -22,7 +22,7 @@ import { migrateAgentsConfig, type AgentPreset } from "./agents-config";
 // --- Types (cmux-compatible + extensions) ---
 
 export interface SurfaceDef {
-  type?: "terminal" | "browser" | "extension" | "preview" | "registry";
+  type?: "terminal" | "browser" | "extension" | "preview" | "registry" | "ssh";
   name?: string;
   command?: string;
   cwd?: string;
@@ -35,6 +35,11 @@ export interface SurfaceDef {
   /** Absolute path to the backing file for preview surfaces. */
   path?: string;
   focus?: boolean;
+  /**
+   * SSH surface config. Present when `type === "ssh"`. Persisted so the
+   * SSH connection can be re-spawned on workspace reload.
+   */
+  sshConfig?: import("./surfaces/ssh-surface").SshSurfaceConfig;
 }
 
 export interface PaneDef {

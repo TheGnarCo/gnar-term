@@ -33,6 +33,7 @@ import {
   type SplitNode,
   type PreviewSurface,
 } from "../types";
+import { buildSshStartupCommand } from "../surfaces/ssh-surface";
 import {
   saveConfig,
   getConfig,
@@ -100,6 +101,22 @@ export async function createWorkspaceFromDef(
             hasUnread: false,
           };
           pane.surfaces.push(surface);
+          if (!pane.activeSurfaceId || sDef.focus)
+            pane.activeSurfaceId = surface.id;
+        } else if (sDef.type === "ssh" && sDef.sshConfig) {
+          // SSH surface — a normal PTY that spawns the system `ssh` binary.
+          // The sshConfig is persisted on the surface def; on restore we
+          // re-spawn ssh with the same args. sshConfig is attached to the
+          // runtime TerminalSurface so serializeLayout can emit type:"ssh".
+          const sshStartup = buildSshStartupCommand(sDef.sshConfig);
+          const surface = await createTerminalSurface(pane, cwd);
+          if (sDef.name) surface.title = sDef.name;
+          if (sshStartup) {
+            surface.startupCommand = sshStartup;
+          }
+          // Attach sshConfig to the runtime surface for re-serialization
+          (surface as unknown as Record<string, unknown>).sshConfig =
+            sDef.sshConfig;
           if (!pane.activeSurfaceId || sDef.focus)
             pane.activeSurfaceId = surface.id;
         } else {

@@ -508,3 +508,126 @@ describe("BranchLifecycle: service lifecycle", () => {
     expect(map.size).toBe(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Producer: workspaces store → _branches registry
+// ---------------------------------------------------------------------------
+
+describe("BranchLifecycle: producer (workspaces → registry)", () => {
+  function makeBranchedWorkspace(opts: {
+    id: string;
+    branch: string;
+    repoPath: string;
+    paneId: string;
+    createdAt?: string;
+  }) {
+    return {
+      id: opts.id,
+      name: opts.branch,
+      activePaneId: opts.paneId,
+      paneLayout: {
+        type: "pane" as const,
+        pane: { id: opts.paneId, surfaces: [], activeSurfaceId: null },
+      },
+      rootWorkspaceId: "root-ws",
+      worktreePath: `/repos/wt-${opts.branch}`,
+      branch: opts.branch,
+      baseBranch: "main",
+      repoPath: opts.repoPath,
+      createdAt: opts.createdAt ?? new Date().toISOString(),
+    };
+  }
+
+  it("creating a BranchedWorkspace produces a lifecycle entry", async () => {
+    const { workspaces: workspacesStore } =
+      await import("../lib/stores/workspace");
+
+    initBranchLifecycle();
+
+    (workspacesStore as unknown as { set: (v: unknown[]) => void }).set([
+      makeBranchedWorkspace({
+        id: "ws-1",
+        branch: "feat/wired-up",
+        repoPath: "/repos/test",
+        paneId: "pane-1",
+      }),
+    ]);
+
+    // Allow async recompute to settle
+    await new Promise((r) => setTimeout(r, 0));
+
+    const map = get(branchLifecycleStore);
+    const entry = map.get("feat/wired-up");
+    expect(entry).toBeDefined();
+    // No agent running, hasCommits defaulted true, no PR → awaiting_review
+    expect(entry?.lifecycle).toBe("awaiting_review");
+  });
+
+  it("removing a BranchedWorkspace removes its lifecycle entry", async () => {
+    const { workspaces: workspacesStore } =
+      await import("../lib/stores/workspace");
+
+    initBranchLifecycle();
+
+    const ws = makeBranchedWorkspace({
+      id: "ws-2",
+      branch: "feat/will-be-removed",
+      repoPath: "/repos/test",
+      paneId: "pane-2",
+    });
+
+    (workspacesStore as unknown as { set: (v: unknown[]) => void }).set([ws]);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(get(branchLifecycleStore).get("feat/will-be-removed")).toBeDefined();
+
+    (workspacesStore as unknown as { set: (v: unknown[]) => void }).set([]);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(
+      get(branchLifecycleStore).get("feat/will-be-removed"),
+    ).toBeUndefined();
+  });
+
+  it("running agent in branched workspace's pane transitions to 'active'", async () => {
+    const { workspaces: workspacesStore } =
+      await import("../lib/stores/workspace");
+
+    initBranchLifecycle();
+
+    (workspacesStore as unknown as { set: (v: unknown[]) => void }).set([
+      makeBranchedWorkspace({
+        id: "ws-3",
+        branch: "feat/active-agent",
+        repoPath: "/repos/test",
+        paneId: "pane-3",
+      }),
+    ]);
+    await new Promise((r) => setTimeout(r, 0));
+
+    await _testHelpers.setPaneAgentState("pane-3", "running");
+
+    const entry = get(branchLifecycleStore).get("feat/active-agent");
+    expect(entry?.lifecycle).toBe("active");
+  });
+
+  it("non-branched workspaces are ignored", async () => {
+    const { workspaces: workspacesStore } =
+      await import("../lib/stores/workspace");
+
+    initBranchLifecycle();
+
+    (workspacesStore as unknown as { set: (v: unknown[]) => void }).set([
+      {
+        id: "ws-plain",
+        name: "Plain",
+        activePaneId: "p",
+        paneLayout: {
+          type: "pane" as const,
+          pane: { id: "p", surfaces: [], activeSurfaceId: null },
+        },
+      },
+    ]);
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(get(branchLifecycleStore).size).toBe(0);
+  });
+});

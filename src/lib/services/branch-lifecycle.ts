@@ -36,7 +36,7 @@ import { isGhAvailable } from "./gh-availability";
 import { paneAgentStateStore } from "./agent-detection-service";
 import { getConfig } from "../config";
 import { confirmAndCloseWorkspace } from "./worktree-service";
-import type { Workspace } from "../types";
+import { isBranchedWorkspace, getAllPanes, type Workspace } from "../types";
 import { workspaces } from "../stores/workspace";
 import type { AgentState } from "./agent-state";
 
@@ -238,6 +238,82 @@ function getAbandonedAfterDays(): number {
   return typeof raw === "number" && raw > 0 ? raw : 14;
 }
 
+/**
+ * Sync the `_branches` registry from the workspaces store. Each
+ * BranchedWorkspace contributes one descriptor; descriptors for workspaces
+ * that have since been removed are deleted.
+ *
+ * Inputs we can derive cheaply from the workspace alone:
+ *   - branchId / branch / repoPath / worktreePath / workspaceId
+ *   - paneId (first pane in layout — drives `active` lifecycle via
+ *     paneAgentStateStore)
+ *   - lastActivityAt (Workspace.createdAt parsed as ms; falls back to now)
+ *
+ * Inputs we cannot derive without git/gh — currently defaulted; future
+ * work will add async git-log + PR pollers feeding this same registry:
+ *   - hasCommits=true (worktrees always branch from a commit), wipOnly=false
+ *   - prState=null (gh poller will populate)
+ *
+ * Manual test-seeded entries (via `_testHelpers.seedBranch`) coexist with
+ * producer-managed entries; producer overwrites on collision because the
+ * canonical workspace state should win.
+ */
+function syncBranchesFromWorkspaces(): void {
+  const allWorkspaces = get(workspaces) as Workspace[];
+  const seenBranchIds = new Set<string>();
+  let mutated = false;
+
+  for (const ws of allWorkspaces) {
+    if (!isBranchedWorkspace(ws)) continue;
+    const branchId = ws.branch;
+    seenBranchIds.add(branchId);
+
+    const panes = getAllPanes(ws.paneLayout);
+    const paneId = panes[0]?.id ?? null;
+    const createdAtMs = ws.createdAt
+      ? Date.parse(ws.createdAt) || Date.now()
+      : Date.now();
+
+    const existing = _branches.get(branchId);
+    if (
+      existing &&
+      existing.workspaceId === ws.id &&
+      existing.paneId === paneId &&
+      existing.repoPath === (ws.repoPath ?? "") &&
+      existing.lastActivityAt === createdAtMs
+    ) {
+      continue;
+    }
+
+    _branches.set(branchId, {
+      branchId,
+      repoPath: ws.repoPath ?? "",
+      branch: ws.branch,
+      hasCommits: existing?.hasCommits ?? true,
+      wipOnly: existing?.wipOnly ?? false,
+      paneId,
+      prState: existing?.prState ?? null,
+      lastActivityAt: existing?.lastActivityAt ?? createdAtMs,
+      workspaceId: ws.id,
+    });
+    mutated = true;
+  }
+
+  // Drop descriptors whose workspaces are gone. Skip entries that were never
+  // wired to a workspace — those are test seeds and survive until cleared.
+  for (const [branchId, desc] of _branches) {
+    if (desc.workspaceId && !seenBranchIds.has(branchId)) {
+      _branches.delete(branchId);
+      _entryCache.delete(branchId);
+      mutated = true;
+    }
+  }
+
+  if (mutated) {
+    void recomputeAll();
+  }
+}
+
 async function recomputeAll(): Promise<void> {
   const ghAvailable = await isGhAvailable();
   const abandonedAfterDays = getAbandonedAfterDays();
@@ -306,6 +382,14 @@ export function initBranchLifecycle(prStateProvider?: PrStateProvider): void {
   });
   cleanups.push(unsubState);
 
+  // Subscribe to the workspaces store — sync the branch registry whenever
+  // workspaces appear/disappear/change layout. syncBranchesFromWorkspaces
+  // triggers its own recompute when mutated, so we don't double-trigger here.
+  const unsubWorkspaces = workspaces.subscribe(() => {
+    syncBranchesFromWorkspaces();
+  });
+  cleanups.push(unsubWorkspaces);
+
   _current = {
     destroy() {
       for (const cleanup of cleanups) cleanup();
@@ -313,7 +397,8 @@ export function initBranchLifecycle(prStateProvider?: PrStateProvider): void {
     },
   };
 
-  // Trigger initial computation.
+  // Trigger initial computation. syncBranchesFromWorkspaces fires from the
+  // subscription above; this covers the empty-branches case.
   void recomputeAll();
 
   // prStateProvider is accepted for future PR-poll loop extension.

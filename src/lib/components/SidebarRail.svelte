@@ -107,6 +107,8 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   data-sidebar-rail={mode}
+  class:rail-container={mode === "container"}
+  class:collapsed-borderless={mode === "container" && narrowRail}
   role="presentation"
   on:mousedown={(e) => {
     if (effectiveCanDrag && onGripMouseDown) onGripMouseDown(e);
@@ -117,8 +119,8 @@
     position: relative;
     {mode === 'container'
     ? `flex-shrink: 0; align-self: stretch; box-sizing: border-box;
-         border-top: 1px solid ${topBorderColor};
-         border-bottom: 1px solid ${isActive ? color : railBorderColor};`
+         --rail-border-top-color: ${topBorderColor};
+         --rail-border-bottom-color: ${isActive ? color : railBorderColor};`
     : ''}
   "
 >
@@ -155,3 +157,31 @@
     ></div>
   {/if}
 </div>
+
+<style>
+  /* Container-mode borders are CSS-driven so the collapsed-borderless
+     :hover rule below can override the color without fighting inline
+     styles. Colors come in as CSS custom properties set inline by the
+     component template (`--rail-border-top-color` / `--rail-border-bottom-color`),
+     so the existing reactive logic for hat/active/theme.border colors
+     still drives the rendered values. */
+  .rail-container {
+    border-top: 1px solid var(--rail-border-top-color);
+    border-bottom: 1px solid var(--rail-border-bottom-color);
+  }
+  /* Collapsed-mode banner rails: when the row is in narrow-rail state
+     (sidebar collapsed AND inactive/idle/no popover/no drag), the
+     small top + bottom 1px caps that frame the rail read as dark
+     tick marks above and below each workspace banner. Hide them by
+     default and let CSS `:hover` reveal them on demand — a deliberate
+     hover still surfaces the frame, but the resting collapsed state
+     is a clean colored stripe with nothing capping it. */
+  .rail-container.collapsed-borderless {
+    border-top-color: transparent;
+    border-bottom-color: transparent;
+  }
+  .rail-container.collapsed-borderless:hover {
+    border-top-color: var(--rail-border-top-color);
+    border-bottom-color: var(--rail-border-bottom-color);
+  }
+</style>

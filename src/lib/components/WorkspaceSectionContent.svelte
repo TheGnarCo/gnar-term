@@ -3,6 +3,10 @@
   import SidebarBanner from "./SidebarBanner.svelte";
   import PathStatusLine from "./PathStatusLine.svelte";
   import WorkspaceDiffPrSubtitle from "./WorkspaceDiffPrSubtitle.svelte";
+  import SidebarSubtitleRow from "./SidebarSubtitleRow.svelte";
+  import ExtensionWrapper from "./ExtensionWrapper.svelte";
+  import { workspaceSubtitleStore } from "../services/workspace-subtitle-registry";
+  import { getExtensionApiById } from "../services/extension-loader";
   import WorkspaceListView from "./WorkspaceListView.svelte";
   import { resolveWorkspaceColor } from "../theme-data";
   import { theme } from "../stores/theme";
@@ -633,6 +637,29 @@
             />
           </div>
         {/if}
+        {#each $workspaceSubtitleStore as sub (sub.id)}
+          {@const subApi = getExtensionApiById(sub.source)}
+          <div style="pointer-events: auto;">
+            <SidebarSubtitleRow color={$theme.fgMuted}>
+              {#if subApi}
+                <ExtensionWrapper
+                  api={subApi}
+                  component={sub.component}
+                  props={{
+                    workspaceId: workspace.id,
+                    accentColor: workspaceHex,
+                  }}
+                />
+              {:else}
+                <svelte:component
+                  this={sub.component as Component}
+                  workspaceId={workspace.id}
+                  accentColor={workspaceHex}
+                />
+              {/if}
+            </SidebarSubtitleRow>
+          </div>
+        {/each}
       </svelte:fragment>
 
       <svelte:fragment slot="btn-row" let:collapsed let:toggle let:showToggle>

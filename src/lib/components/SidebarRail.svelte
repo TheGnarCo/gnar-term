@@ -122,7 +122,6 @@
     position: relative;
     {mode === 'container'
     ? `flex-shrink: 0; align-self: stretch; box-sizing: border-box;
-         ${$sidebarVisible ? `border-left: 1px solid ${railBorderColor};` : ''}
          border-top: 1px solid ${topBorderColor};
          border-bottom: 1px solid ${isActive ? color : railBorderColor};`
     : ''}
@@ -142,11 +141,16 @@
     primaryClickable={!$sidebarVisible && !!onClick}
   />
   {#if mode === "container" && hasActiveStripe}
+    <!-- Active-descendant stripe. When a hat is painted, the stripe
+         starts below the hat so it never reads as "1px of workspace
+         accent framing the hat" — the hat owns the top 12px and the
+         stripe owns everything below it. -->
     <div
       aria-hidden="true"
       style="
         position: absolute;
-        top: 0; left: 0; bottom: 0;
+        top: {hatColor ? '12px' : '0'};
+        left: 0; bottom: 0;
         width: 1px;
         background: {color};
         pointer-events: none;

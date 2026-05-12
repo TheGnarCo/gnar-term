@@ -16,12 +16,16 @@ vi.mock("@tauri-apps/api/event", () => ({
 vi.mock("../header/spawn-branch-flow", () => ({
   openSpawnBranchFlow: vi.fn().mockResolvedValue(undefined),
 }));
+vi.mock("../header/bot-task-flow", () => ({
+  openBotTaskFlow: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("../header/preset-library", () => ({
   openPresetLibrary: vi.fn(),
 }));
 
 import DashboardHeader from "../header/DashboardHeader.svelte";
 import { openSpawnBranchFlow } from "../header/spawn-branch-flow";
+import { openBotTaskFlow } from "../header/bot-task-flow";
 import { openPresetLibrary } from "../header/preset-library";
 
 function makeFakeApi() {
@@ -58,6 +62,31 @@ describe("DashboardHeader", () => {
     expect(btn!.textContent).toContain("New agentic branch");
   });
 
+  it("renders the 'New Bot Task' button", async () => {
+    const api = makeFakeApi();
+    const { container } = renderWithApi(api);
+    await tick();
+    const btn = container.querySelector("[data-header-btn='new-bot-task']");
+    expect(btn).not.toBeNull();
+    expect(btn!.textContent).toContain("New Bot Task");
+  });
+
+  it("renders the bot icon inside the New Bot Task button", async () => {
+    const api = makeFakeApi();
+    const { container } = renderWithApi(api);
+    await tick();
+    const btn = container.querySelector("[data-header-btn='new-bot-task']");
+    expect(btn!.querySelector("svg.bot-icon")).not.toBeNull();
+  });
+
+  it("does NOT render the bot icon inside the new-branch button", async () => {
+    const api = makeFakeApi();
+    const { container } = renderWithApi(api);
+    await tick();
+    const btn = container.querySelector("[data-header-btn='new-branch']");
+    expect(btn!.querySelector("svg")).toBeNull();
+  });
+
   it("renders the 'AgentPreset library' button", async () => {
     const api = makeFakeApi();
     const { container } = renderWithApi(api);
@@ -77,6 +106,18 @@ describe("DashboardHeader", () => {
     await fireEvent.click(btn!);
     await tick();
     expect(openSpawnBranchFlow).toHaveBeenCalledWith(api);
+  });
+
+  it("clicking new-bot-task invokes openBotTaskFlow with the api", async () => {
+    const api = makeFakeApi();
+    const { container } = renderWithApi(api);
+    await tick();
+    const btn = container.querySelector<HTMLElement>(
+      "[data-header-btn='new-bot-task']",
+    );
+    await fireEvent.click(btn!);
+    await tick();
+    expect(openBotTaskFlow).toHaveBeenCalledWith(api);
   });
 
   it("clicking preset-library invokes openPresetLibrary with the api", async () => {

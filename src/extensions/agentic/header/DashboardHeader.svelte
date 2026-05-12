@@ -4,6 +4,7 @@
   import { getContext } from "svelte";
   import { EXTENSION_API_KEY, type ExtensionAPI } from "../../api";
   import { openSpawnBranchFlow } from "./spawn-branch-flow";
+  import { openBotTaskFlow } from "./bot-task-flow";
   import { openPresetLibrary } from "./preset-library";
 
   const api = getContext<ExtensionAPI>(EXTENSION_API_KEY);
@@ -11,10 +12,19 @@
 
 <div class="dashboard-header">
   <button
-    class="header-btn primary"
+    class="header-btn"
     data-header-btn="new-branch"
     onclick={() => {
       void openSpawnBranchFlow(api);
+    }}
+  >
+    + New agentic branch
+  </button>
+  <button
+    class="header-btn primary"
+    data-header-btn="new-bot-task"
+    onclick={() => {
+      void openBotTaskFlow(api);
     }}
   >
     <svg
@@ -37,7 +47,7 @@
       <path d="M15 13v2" />
       <path d="M9 13v2" />
     </svg>
-    New agentic branch
+    New Bot Task
   </button>
   <button
     class="header-btn"

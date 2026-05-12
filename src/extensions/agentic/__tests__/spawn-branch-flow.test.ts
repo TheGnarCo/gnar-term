@@ -158,7 +158,7 @@ describe("openSpawnBranchFlow", () => {
     );
   });
 
-  it("falls back to built-in default presets when the user list is empty", async () => {
+  it("shows info field instead of preset select when presets list is empty", async () => {
     const { api, showFormPrompt } = makeFakeApi([]);
     // form cancelled to avoid going further
     showFormPrompt.mockResolvedValue(null);
@@ -167,19 +167,16 @@ describe("openSpawnBranchFlow", () => {
     const fields = showFormPrompt.mock.calls[0][1] as Array<{
       key: string;
       type?: string;
-      options?: Array<{ value: string }>;
     }>;
     const keys = fields.map((f) => f.key);
-    // should HAVE a "preset" select populated from defaults
-    expect(keys).toContain("preset");
-    const presetField = fields.find((f) => f.key === "preset")!;
-    expect(presetField.type).toBe("select");
-    const values = (presetField.options ?? []).map((o) => o.value);
-    expect(values).toContain("Claude Code");
-    // should still have name + base + task
+    // should NOT have a "preset" select field
+    expect(keys).not.toContain("preset");
+    // should have an info field
+    const infoField = fields.find((f) => f.type === "info");
+    expect(infoField).toBeDefined();
+    // should still have name + base
     expect(keys).toContain("name");
     expect(keys).toContain("base");
-    expect(keys).toContain("task");
   });
 
   it("includes a preset select field when presets are available", async () => {
@@ -196,70 +193,6 @@ describe("openSpawnBranchFlow", () => {
     expect(presetField!.type).toBe("select");
     // no info field
     expect(fields.find((f) => f.type === "info")).toBeUndefined();
-  });
-
-  it("appends the task field as a quoted shell arg to the preset command", async () => {
-    const preset = makePreset({ name: "Claude", command: "claude" });
-    const { api, showFormPrompt, createWorkspaceFromDef } = makeFakeApi([
-      preset,
-    ]);
-    showFormPrompt.mockResolvedValue({
-      name: "feat/cool",
-      base: "main",
-      preset: "Claude",
-      task: "Land the auth refactor",
-    });
-
-    await openSpawnBranchFlow(api);
-
-    expect(createWorkspaceFromDef).toHaveBeenCalledWith(
-      expect.objectContaining({
-        layout: expect.objectContaining({
-          pane: expect.objectContaining({
-            surfaces: expect.arrayContaining([
-              expect.objectContaining({
-                type: "terminal",
-                command: "claude $'Land the auth refactor'",
-              }),
-            ]),
-          }),
-        }),
-      }),
-    );
-  });
-
-  it("falls back to the preset initialPrompt when no task is typed", async () => {
-    const preset = makePreset({
-      name: "Claude",
-      command: "claude",
-      initialPrompt: "Continue from where we left off",
-    });
-    const { api, showFormPrompt, createWorkspaceFromDef } = makeFakeApi([
-      preset,
-    ]);
-    showFormPrompt.mockResolvedValue({
-      name: "feat/cool",
-      base: "main",
-      preset: "Claude",
-      task: "",
-    });
-
-    await openSpawnBranchFlow(api);
-
-    expect(createWorkspaceFromDef).toHaveBeenCalledWith(
-      expect.objectContaining({
-        layout: expect.objectContaining({
-          pane: expect.objectContaining({
-            surfaces: expect.arrayContaining([
-              expect.objectContaining({
-                type: "terminal",
-                command: "claude $'Continue from where we left off'",
-              }),
-            ]),
-          }),
-        }),
-      }),
-    );
   });
 
   it("calls reportError and does not invoke when name is empty after trim", async () => {

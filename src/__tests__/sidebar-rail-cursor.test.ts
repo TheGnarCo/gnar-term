@@ -1,8 +1,12 @@
 /**
- * Verifies the rail cursor policy:
- *   - collapsed sidebar + rail has onClick → `pointer` (click is primary)
- *   - expanded sidebar                     → falls through to drag/default
- *   - locked                                → `not-allowed`
+ * Verifies the rail cursor policy. Cursor is no longer set as an inline
+ * style; it's now class-driven CSS on the `.drag-grip` element so the
+ * grip's `:hover` look survives the leftmost-viewport-edge race that
+ * used to drop synthetic mouseleave events. These tests assert the
+ * marker classes instead:
+ *   - collapsed sidebar + rail has onClick → `.primary-clickable` (CSS: pointer)
+ *   - expanded sidebar                     → no `.primary-clickable` (CSS: drag/default)
+ *   - locked                               → `.locked` (CSS: not-allowed; overrides primary)
  */
 import { describe, it, expect, afterEach } from "vitest";
 import { render, cleanup } from "@testing-library/svelte";
@@ -19,27 +23,28 @@ describe("SidebarRail cursor policy", () => {
     sidebarVisible.set(true);
   });
 
-  it("uses pointer cursor when collapsed and onClick is wired", () => {
+  it("marks the grip primary-clickable when collapsed and onClick is wired", () => {
     sidebarVisible.set(false);
     const { container } = render(SidebarRail, {
       props: { mode: "row", color: "#abc", onClick: () => {} },
     });
     const g = grip(container);
     expect(g).not.toBeNull();
-    expect(g!.style.cursor).toBe("pointer");
+    expect(g!.classList.contains("primary-clickable")).toBe(true);
+    expect(g!.classList.contains("locked")).toBe(false);
   });
 
-  it("does NOT use pointer cursor when expanded, even if onClick is wired", () => {
+  it("does NOT mark the grip primary-clickable when expanded, even if onClick is wired", () => {
     sidebarVisible.set(true);
     const { container } = render(SidebarRail, {
       props: { mode: "row", color: "#abc", onClick: () => {} },
     });
     const g = grip(container);
     expect(g).not.toBeNull();
-    expect(g!.style.cursor).not.toBe("pointer");
+    expect(g!.classList.contains("primary-clickable")).toBe(false);
   });
 
-  it("uses not-allowed cursor when locked, even when collapsed and clickable", () => {
+  it("marks the grip locked when locked, even when collapsed and clickable", () => {
     sidebarVisible.set(false);
     const { container } = render(SidebarRail, {
       props: {
@@ -51,6 +56,6 @@ describe("SidebarRail cursor policy", () => {
     });
     const g = grip(container);
     expect(g).not.toBeNull();
-    expect(g!.style.cursor).toBe("not-allowed");
+    expect(g!.classList.contains("locked")).toBe(true);
   });
 });

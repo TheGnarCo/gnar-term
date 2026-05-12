@@ -9,8 +9,6 @@
  *   get_pane_agent — Return agentType + agentState + intendedAgent for a pane.
  */
 import { get } from "svelte/store";
-import { workspaces } from "../../stores/workspace";
-import { getAllPanes } from "../../types";
 import type { AgentType } from "../agent-type";
 import type { AgentState } from "../agent-state";
 import {
@@ -24,49 +22,12 @@ import {
 import {
   spawnAgentInWorktree,
   resolveAgentPresetForSpawn,
+  deriveWorktreePath,
   type ResolvedAgentPreset,
 } from "../spawn-helper";
+import { paneExists, lookupPaneIntendedAgent } from "../pane-lookup";
 import { createWorktreeWorkspaceFromConfig } from "../worktree-service";
 import type { ToolDef } from "../mcp-types";
-
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Derive a default worktree path from the repo path and branch name.
- * Pattern: `<parent-of-repo>/<repo-basename>-<branch-hyphenated>`.
- */
-function deriveWorktreePath(repoPath: string, branch: string): string {
-  const normalised = repoPath.replace(/[/\\]+$/, "");
-  const parts = normalised.split(/[/\\]/);
-  const repoName = parts[parts.length - 1] ?? "repo";
-  const parent = parts.slice(0, -1).join("/") || "/";
-  const safeBranch = branch.replace(/[/\\]/g, "-");
-  return `${parent}/${repoName}-${safeBranch}`;
-}
-
-/** Lookup a pane's `intendedAgent` from the workspaces store. */
-function lookupPaneIntendedAgent(paneId: string): AgentType | null {
-  for (const ws of get(workspaces)) {
-    for (const pane of getAllPanes(ws.paneLayout)) {
-      if (pane.id === paneId) {
-        return pane.intendedAgent ?? null;
-      }
-    }
-  }
-  return null;
-}
-
-/** Return true if a pane exists in the workspaces store. */
-function paneExists(paneId: string): boolean {
-  for (const ws of get(workspaces)) {
-    for (const pane of getAllPanes(ws.paneLayout)) {
-      if (pane.id === paneId) return true;
-    }
-  }
-  return false;
-}
 
 // ---------------------------------------------------------------------------
 // Tool definitions

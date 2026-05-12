@@ -863,6 +863,14 @@ export interface ExtensionAPI {
    */
   getAgentByPane(paneId: string): AgentRef | null;
   /**
+   * Derive the canonical worktree path for a `<repoPath, branch>` pair:
+   * `<parent-of-repo>/<repo-basename>-<branch-hyphenated>`. Shared with
+   * core's spawn-helper and the `spawn_branch` MCP tool so extension-
+   * driven spawn flows and MCP-driven flows produce identical paths.
+   * Cross-platform — accepts `/` or `\` separators.
+   */
+  deriveWorktreePath(repoPath: string, branch: string): string;
+  /**
    * Reactive log of MCP tool dispatches (most-recent-last, cap 500). Each
    * entry captures the tool name, args, optional resolved target, and
    * outcome. Subscribe to this to render an "agent activity" timeline or

@@ -27,6 +27,10 @@ function makeFakeApi(
   const invoke = vi.fn().mockResolvedValue(undefined);
   const createWorkspaceFromDef = vi.fn().mockResolvedValue("ws-new");
   const reportError = vi.fn();
+  const deriveWorktreePath = vi.fn(
+    (repoPath: string, branch: string) =>
+      `${repoPath}-${branch.replace(/[/\\]/g, "-")}`,
+  );
 
   const api = {
     agentPresets,
@@ -36,6 +40,7 @@ function makeFakeApi(
     invoke,
     createWorkspaceFromDef,
     reportError,
+    deriveWorktreePath,
   } as unknown as ExtensionAPI;
 
   return {
@@ -46,6 +51,7 @@ function makeFakeApi(
     invoke,
     createWorkspaceFromDef,
     reportError,
+    deriveWorktreePath,
   };
 }
 
@@ -59,6 +65,10 @@ function makeFakeApiNoCwd(presets: AgentPresetRef[] = []) {
   const invoke = vi.fn().mockResolvedValue(undefined);
   const createWorkspaceFromDef = vi.fn().mockResolvedValue("ws-new");
   const reportError = vi.fn();
+  const deriveWorktreePath = vi.fn(
+    (repoPath: string, branch: string) =>
+      `${repoPath}-${branch.replace(/[/\\]/g, "-")}`,
+  );
 
   const api = {
     agentPresets,
@@ -68,6 +78,7 @@ function makeFakeApiNoCwd(presets: AgentPresetRef[] = []) {
     invoke,
     createWorkspaceFromDef,
     reportError,
+    deriveWorktreePath,
   } as unknown as ExtensionAPI;
 
   return {

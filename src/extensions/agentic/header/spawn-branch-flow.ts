@@ -107,20 +107,6 @@ async function fetchBaseOptionsViaApi(
 }
 
 /**
- * Derive the worktree path from a repo path and a branch name.
- * Pattern: `<parent-of-repo>/<repo-basename>-<branch-hyphenated>`.
- * Mirrors the private helper in mcp-tools/agentic-core.ts without importing it.
- */
-function deriveWorktreePath(repoPath: string, branch: string): string {
-  const normalised = repoPath.replace(/[/\\]+$/, "");
-  const parts = normalised.split(/[/\\]/);
-  const repoName = parts[parts.length - 1] ?? "repo";
-  const parent = parts.slice(0, -1).join("/") || "/";
-  const safeBranch = branch.replace(/[/\\]/g, "-");
-  return `${parent}/${repoName}-${safeBranch}`;
-}
-
-/**
  * Open a multi-step form to spawn a new agentic branch.
  *
  * Deviation from intent.md AC-3:
@@ -239,7 +225,7 @@ export async function openSpawnBranchFlow(api: ExtensionAPI): Promise<void> {
     return;
   }
 
-  const worktreePath = deriveWorktreePath(repoPath, name);
+  const worktreePath = api.deriveWorktreePath(repoPath, name);
 
   // Step f: create the worktree
   try {

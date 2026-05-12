@@ -208,12 +208,22 @@ function defaultBranchFor(agent: SpawnAgentType): string {
   return `agent/${agent}/${shortTimestamp()}`;
 }
 
-function deriveWorktreePath(repoPath: string, branch: string): string {
-  const trimmed = repoPath.replace(/\/+$/, "");
-  const repoName = trimmed.split("/").pop() || "repo";
-  const parentDir = trimmed.substring(0, trimmed.lastIndexOf("/"));
-  const safeBranch = branch.replace(/\//g, "-");
-  return `${parentDir}/${repoName}-${safeBranch}`;
+/**
+ * Derive a default worktree path from the repo path and branch name.
+ * Pattern: `<parent-of-repo>/<repo-basename>-<branch-hyphenated>`.
+ *
+ * Exported because three call sites used to hand-roll this with
+ * subtly different regex (Unix-only vs cross-platform); the shared
+ * implementation accepts both `/` and `\` separators so windows-style
+ * repo paths don't collapse to "/repo-<branch>".
+ */
+export function deriveWorktreePath(repoPath: string, branch: string): string {
+  const normalised = repoPath.replace(/[/\\]+$/, "");
+  const parts = normalised.split(/[/\\]/);
+  const repoName = parts[parts.length - 1] || "repo";
+  const parent = parts.slice(0, -1).join("/") || "/";
+  const safeBranch = branch.replace(/[/\\]/g, "-");
+  return `${parent}/${repoName}-${safeBranch}`;
 }
 
 /**

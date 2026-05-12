@@ -48,6 +48,7 @@ import { statusRegistry } from "./status-registry";
 import { markSurfaceUnreadById } from "./surface-service";
 import { workspaces } from "../stores/workspace";
 import { getAllPanes, isTerminalSurface } from "../types";
+import { lookupPaneIntendedAgent } from "./pane-lookup";
 import {
   lookupSurfaceWorkspaceId,
   lookupPtyIdForSurface,
@@ -608,22 +609,6 @@ function classifyFromSurfaceCommand(surfaceId: string): AgentType | null {
   if (!cmd) return null;
   const { argv0, argv } = splitCommandToArgv(cmd);
   return parseAgentTypeFromArgv(argv0, argv);
-}
-
-/**
- * Look up the `intendedAgent` hint from the Pane that owns this paneId.
- * Returns null if the pane is not found or has no hint set.
- */
-function lookupPaneIntendedAgent(paneId: string): AgentType | null {
-  const all = get(workspaces);
-  for (const ws of all) {
-    for (const pane of getAllPanes(ws.paneLayout)) {
-      if (pane.id === paneId) {
-        return pane.intendedAgent ?? null;
-      }
-    }
-  }
-  return null;
 }
 
 // --- Attach / detach ---

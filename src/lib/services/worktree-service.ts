@@ -170,6 +170,13 @@ export interface WorktreeWorkspaceConfig {
    * choice themselves).
    */
   autoSpawnEligible?: boolean;
+  /**
+   * Mark the resulting workspace as a Controlled (agentic) workspace.
+   * Set by MCP `spawn_branch`, `spawn-helper.spawnAgentForBranch`, and
+   * the agentic dashboard's spawn flow. Manual "New Branch" creation
+   * leaves this unset.
+   */
+  controlled?: boolean;
 }
 
 export async function createWorktreeWorkspaceFromConfig(
@@ -269,6 +276,7 @@ export async function createWorktreeWorkspaceFromConfig(
     ...(config.spawnedFromIssues && config.spawnedFromIssues.length > 0
       ? { spawnedFromIssues: config.spawnedFromIssues }
       : {}),
+    ...(config.controlled ? { controlled: true } : {}),
     layout: {
       pane: {
         surfaces: [

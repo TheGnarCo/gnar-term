@@ -307,6 +307,7 @@ export async function spawnAgentInWorktree(
     base,
     worktreePath,
     startupCommand,
+    controlled: true,
     ...(args.env && Object.keys(args.env).length > 0 ? { env: args.env } : {}),
     ...(args.rootWorkspaceId ? { rootWorkspaceId: args.rootWorkspaceId } : {}),
     ...(args.spawnedBy ? { spawnedBy: args.spawnedBy } : {}),

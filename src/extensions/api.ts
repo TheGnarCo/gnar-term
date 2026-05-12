@@ -1308,6 +1308,21 @@ export interface WorkspaceDefInput {
   rootWorkspaceId?: string;
   isDashboard?: boolean;
   dashboardContributionId?: string;
+  /**
+   * Worktree-backed branched workspace fields. Set together when the
+   * caller is materializing an agentic Controlled Workspace from an
+   * extension (e.g. the agentic dashboard's spawn flow). `worktreePath`
+   * + `branch` are what `isBranchedWorkspace` checks for.
+   */
+  worktreePath?: string;
+  branch?: string;
+  baseBranch?: string;
+  repoPath?: string;
+  /**
+   * Marks the resulting workspace as agentic-Controlled. Drives
+   * lifecycle-pill visibility and agentic-dashboard participation.
+   */
+  controlled?: boolean;
   extensionData?: Record<string, unknown>;
 }
 

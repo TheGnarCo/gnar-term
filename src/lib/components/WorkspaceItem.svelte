@@ -140,11 +140,16 @@
   );
   $: subtitleComponents = $workspaceSubtitleStore;
 
-  // Branch lifecycle subtitle — populated only for BranchedWorkspaces. Reads
-  // the derived store keyed by branch name; absent when the producer hasn't
-  // synced the workspace yet (e.g. mid-creation) or for non-branched rows.
+  // Branch lifecycle subtitle — populated only for Controlled
+  // BranchedWorkspaces (spawned through the agentic flow). Manual
+  // branches never set `controlled`, so the lifecycle pill stays
+  // hidden on them — gh-derived "awaiting review" state for a hand-
+  // rolled branch is not a useful signal in the sidebar. Absent when
+  // the producer hasn't synced the workspace yet (e.g. mid-creation)
+  // or for non-branched rows.
   $: branchLifecycleEntry = (() => {
     if (!isBranchedWorkspace(workspace)) return null;
+    if (workspace.controlled !== true) return null;
     return $branchLifecycleStore.get(workspace.branch) ?? null;
   })();
   $: lifecycleDisplay = branchLifecycleEntry

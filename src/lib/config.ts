@@ -94,6 +94,12 @@ export interface WorkspaceTemplate {
     | { kind: "global" }
     | { kind: "workspace"; rootWorkspaceId: string };
   spawnedFromIssues?: number[];
+  /**
+   * Set when this workspace template represents an agentic-Controlled
+   * Workspace (spawned via MCP / agentic dashboard / spawn-helper).
+   * Round-trips through serialize/hydrate via `WorkspaceDef.controlled`.
+   */
+  controlled?: boolean;
   extensionData?: Record<string, unknown>;
 }
 
@@ -150,6 +156,14 @@ export interface WorkspaceDef {
   repoPath?: string;
   // Flags
   locked?: boolean;
+  /**
+   * Persisted "Controlled Workspace" marker. True when the workspace
+   * was spawned through the agentic flow (MCP `spawn_branch`, agentic
+   * dashboard, or spawn-helper). Drives lifecycle-pill visibility and
+   * agentic-dashboard participation. Absent / false on manually-
+   * created branches.
+   */
+  controlled?: boolean;
   // Extension data
   extensionData?: Record<string, unknown>;
 }

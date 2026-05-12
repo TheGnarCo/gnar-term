@@ -328,6 +328,7 @@ export function serializeWorkspace(ws: Workspace): WorkspaceDef {
   if ("repoPath" in ws && ws.repoPath !== undefined)
     def.repoPath = ws.repoPath as string;
   if (ws.locked !== undefined) def.locked = ws.locked;
+  if (ws.controlled !== undefined) def.controlled = ws.controlled;
   if (ws.extensionData !== undefined) def.extensionData = ws.extensionData;
   return def;
 }

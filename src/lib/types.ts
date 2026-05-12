@@ -98,6 +98,15 @@ export interface Workspace {
    * Issues widget.
    */
   spawnedFromIssues?: number[];
+  /**
+   * Marks a workspace as agentic-Controlled — spawned through the
+   * agentic flow (MCP `spawn_branch`, the agentic dashboard's spawn
+   * affordance, or `spawn-helper.spawnAgentForBranch`) rather than the
+   * generic "New Branch" UI. Drives lifecycle-pill visibility,
+   * swimlane participation in the agentic dashboard, and any future
+   * agentic-only affordances. Manual branches never set this.
+   */
+  controlled?: boolean;
 }
 
 /**

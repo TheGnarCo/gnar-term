@@ -1473,6 +1473,7 @@ describe("WorkspaceItem", () => {
       id: string,
       branch: string,
       rootId: string,
+      opts: { controlled?: boolean } = {},
     ): Workspace {
       const ws = makeChildWorkspace(id, branch);
       Object.assign(ws, {
@@ -1480,6 +1481,11 @@ describe("WorkspaceItem", () => {
         worktreePath: `/tmp/gnar-${id}`,
         branch,
         repoPath: "/tmp/gnar",
+        // Tests in this block exercise the lifecycle-pill path, which
+        // is gated to Controlled Workspaces. Default to controlled so
+        // existing assertions keep their meaning; the manual-branch
+        // regression test below overrides to `false`.
+        controlled: opts.controlled ?? true,
       });
       return ws;
     }
@@ -1590,6 +1596,41 @@ describe("WorkspaceItem", () => {
         "active",
       );
       expect(row?.textContent).toContain("active");
+    });
+
+    it("does not render a lifecycle row for a manually-spawned (uncontrolled) branched workspace", async () => {
+      // Manual "New Branch" path leaves `controlled` unset. The
+      // lifecycle pill must stay hidden even when the store has a
+      // matching entry — gh-derived states like "awaiting review"
+      // shouldn't surface on a hand-rolled branch.
+      const ws = makeBranchedWorkspace("br-manual", "feat/manual", "root", {
+        controlled: false,
+      });
+      await branchLifecycleTestHelpers.seedBranch("feat/manual", {
+        repoPath: "/tmp/gnar",
+        branch: "feat/manual",
+        hasCommits: false,
+        wipOnly: false,
+        prState: null,
+        lastActivityAt: Date.now(),
+        paneId: null,
+        workspaceId: ws.id,
+      });
+      const { container } = render(WorkspaceItem, {
+        props: {
+          workspace: ws,
+          index: 0,
+          isActive: false,
+          onSelect: noop,
+          onClose: noop,
+          onRename: noop,
+          onContextMenu: noop,
+        },
+      });
+      await tick();
+      expect(
+        container.querySelector("[data-workspace-branch-lifecycle]"),
+      ).toBeNull();
     });
 
     it("hides the lifecycle row when hideStatusBadges is true", async () => {

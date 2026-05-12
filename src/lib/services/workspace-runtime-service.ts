@@ -240,6 +240,7 @@ export async function createWorkspaceFromDef(
   if (def.spawnedBy !== undefined) ws.spawnedBy = def.spawnedBy;
   if (def.spawnedFromIssues !== undefined)
     ws.spawnedFromIssues = def.spawnedFromIssues;
+  if (def.controlled !== undefined) ws.controlled = def.controlled;
   if (def.extensionData !== undefined) ws.extensionData = def.extensionData;
 
   // Root-shaped Workspaces own a (possibly empty) members list. Branches

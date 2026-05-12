@@ -137,6 +137,11 @@ export async function openSpawnBranchFlow(api: ExtensionAPI): Promise<void> {
       name,
       cwd: worktreePath,
       ...(activeWs?.id ? { rootWorkspaceId: activeWs.id } : {}),
+      worktreePath,
+      branch: name,
+      baseBranch: result.base?.trim() || "main",
+      repoPath,
+      controlled: true,
       layout: {
         pane: {
           surfaces: [

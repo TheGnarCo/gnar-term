@@ -204,6 +204,7 @@ export const agenticCoreTools: ToolDef[] = [
         branch,
         base,
         worktreePath,
+        controlled: true,
       });
 
       return {

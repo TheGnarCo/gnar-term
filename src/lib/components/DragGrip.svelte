@@ -175,14 +175,14 @@
 
   {#if showHat}
     <!-- Bot-status hat overlay: a small rounded "cap" that protrudes
-         4px above the row plus solid color inside the row. Width tracks
-         the rail stripe (4px in collapsed mode, 8px in expanded) so the
-         cap caps the rail cleanly without ever appearing thicker than
-         the rail itself. In expanded mode the bottom 2px is a dark
-         divider so the hat reads as a discrete chunk above the rail; in
-         narrowRail mode the divider is dropped — at 4px width it reads
-         as a broken seam between hat color and rail color rather than a
-         visual separator. -->
+         4px above the row plus solid color inside the row, with a 2px
+         dark divider at the bottom so the hat reads as a discrete
+         chunk above the rail stripe. Width tracks the rail stripe
+         (4px in collapsed mode, 8px in expanded) so the cap caps the
+         rail cleanly without ever appearing thicker than the rail
+         itself. The divider paints at every rail width — the
+         separation between hat and rail is the whole point of the
+         hat shape. -->
     <div
       aria-hidden="true"
       class="rail-bot-hat"
@@ -190,15 +190,13 @@
       style="
         width: {hatWidth};
         --rail-hat-glow: {hatColor};
-        background: {narrowRail
-        ? hatColor
-        : `linear-gradient(
+        background: linear-gradient(
           to bottom,
-          ${hatColor} 0,
-          ${hatColor} 14px,
+          {hatColor} 0,
+          {hatColor} 14px,
           rgba(0, 0, 0, 0.55) 14px,
           rgba(0, 0, 0, 0.55) 16px
-        )`};
+        );
       "
     ></div>
   {/if}

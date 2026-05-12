@@ -90,6 +90,29 @@ describe("DragGrip", () => {
     expect(hat!.style.width).toBe("4px");
   });
 
+  it("paints the 2px dark divider between hat and rail in narrow (collapsed) mode", () => {
+    // Regression: an earlier iteration dropped the divider in narrowRail
+    // mode on the theory that 4px was too thin to read as a separator.
+    // In practice, removing it made the hat color flow straight into
+    // the rail color — losing the discrete "hat above rail" silhouette
+    // that's the whole point of the shape. The divider must paint at
+    // every rail width.
+    const { container } = render(DragGrip, {
+      props: {
+        theme: stubTheme,
+        visible: false,
+        railColor: "#abcdef",
+        narrowRail: true,
+        botStatus: "thinking",
+      },
+    });
+    const hat = container.querySelector(".rail-bot-hat") as HTMLElement | null;
+    expect(hat).not.toBeNull();
+    const background = hat!.style.background;
+    expect(background).toContain("linear-gradient");
+    expect(background).toContain("rgba(0, 0, 0, 0.55)");
+  });
+
   it("renders the bot-status hat in expanded (full-width) mode too", () => {
     // Regression: bot status used to be hidden when the sidebar was
     // expanded. Now the hat must paint at every rail width so agent

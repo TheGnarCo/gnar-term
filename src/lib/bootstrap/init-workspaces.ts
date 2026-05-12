@@ -95,21 +95,40 @@ function onWorkspaceClosed(event: AppEvent): void {
   removeBranchFromAllWorkspaces(event.id);
 }
 
+/**
+ * Re-run `is_git_repo` for a root workspace and patch `isGit` if the
+ * filesystem has diverged from the stored value. Called whenever
+ * something signals the user may have changed the repo state at that
+ * path — workspace activation, window refocus, etc.
+ *
+ * Silently no-ops if the workspace is missing or the invoke fails
+ * (e.g. path no longer exists).
+ */
+export async function recheckWorkspaceIsGit(
+  rootWorkspaceId: string,
+): Promise<void> {
+  const workspace = getWorkspaces().find((w) => w.id === rootWorkspaceId);
+  if (!workspace) return;
+  try {
+    const isGit = await invoke<boolean>("is_git_repo", {
+      path: workspace.path,
+    });
+    if (isGit !== workspace.isGit) {
+      updateWorkspace(rootWorkspaceId, { isGit });
+    }
+  } catch {
+    // Path doesn't exist or invoke unavailable — leave isGit alone.
+  }
+}
+
 function onWorkspaceActivated(event: AppEvent): void {
   if (event.type !== "workspace:activated") return;
   const ws = get(workspaces).find((w) => w.id === event.id);
   if (!ws) return;
-  const rootWorkspaceId = ws.rootWorkspaceId;
-  if (typeof rootWorkspaceId !== "string") return;
-  const workspace = getWorkspaces().find((w) => w.id === rootWorkspaceId);
-  if (!workspace) return;
-  void invoke<boolean>("is_git_repo", { path: workspace.path })
-    .then((isGit) => {
-      if (isGit !== workspace.isGit) {
-        updateWorkspace(rootWorkspaceId, { isGit });
-      }
-    })
-    .catch(() => {});
+  // A root workspace has no `rootWorkspaceId` — its own id is the root.
+  // A branch carries its root's id. Either way, refresh that root.
+  const rootWorkspaceId = ws.rootWorkspaceId ?? ws.id;
+  void recheckWorkspaceIsGit(rootWorkspaceId);
 }
 
 /**

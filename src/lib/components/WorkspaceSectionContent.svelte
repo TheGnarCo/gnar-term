@@ -1,8 +1,6 @@
 <script lang="ts">
   import { onDestroy, type Component } from "svelte";
   import SidebarBanner from "./SidebarBanner.svelte";
-  import PathStatusLine from "./PathStatusLine.svelte";
-  import WorkspaceDiffPrSubtitle from "./WorkspaceDiffPrSubtitle.svelte";
   import SidebarSubtitleRow from "./SidebarSubtitleRow.svelte";
   import ExtensionWrapper from "./ExtensionWrapper.svelte";
   import { workspaceSubtitleStore } from "../services/workspace-subtitle-registry";
@@ -373,7 +371,6 @@
     ? resolveWorkspaceColor(workspace.color, $theme)
     : "";
   $: headerFg = workspace ? contrastColor(workspaceHex) : $theme.fg;
-  $: subtitleFg = $theme.fgMuted ?? $theme.fgDim ?? $theme.fg;
   $: dimIconColor = ($theme.fgDim ?? $theme.fgMuted ?? "#888") as string;
 
   let hoveredDashId: string | null = null;
@@ -618,25 +615,6 @@
       </svelte:fragment>
 
       <svelte:fragment slot="banner-subtitle">
-        <div style="pointer-events: auto;">
-          <PathStatusLine
-            target={{
-              id: workspace.id,
-              path: workspace.path,
-              isGit: workspace.isGit,
-            }}
-            fgColor={subtitleFg}
-            iconColor={workspaceHex}
-          />
-        </div>
-        {#if primaryWs}
-          <div style="pointer-events: auto;">
-            <WorkspaceDiffPrSubtitle
-              workspaceId={primaryWs.id}
-              accentColor={workspaceHex}
-            />
-          </div>
-        {/if}
         {#each $workspaceSubtitleStore as sub (sub.id)}
           {@const subApi = getExtensionApiById(sub.source)}
           <div style="pointer-events: auto;">

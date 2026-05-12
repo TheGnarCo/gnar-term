@@ -20,6 +20,6 @@ export function initAgentStatus(): void {
     id: `${AGENT_STATUS_SOURCE}:subtitle`,
     source: AGENT_STATUS_SOURCE,
     component: WorkspaceAgentSubtitle,
-    priority: 30,
+    priority: 5,
   });
 }

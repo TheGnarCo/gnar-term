@@ -100,7 +100,7 @@ describe("WorkspaceAgentSubtitle", () => {
     ).toBeNull();
   });
 
-  it("renders the agent count badge when active agents exist", () => {
+  it("exposes the active agent count on the container as data-agent-count", () => {
     setAgentsForTests([
       makeAgent({ agentId: "a1", workspaceId: "ws-1", status: "active" }),
       makeAgent({
@@ -114,13 +114,12 @@ describe("WorkspaceAgentSubtitle", () => {
     const { container } = render(WorkspaceAgentSubtitle, {
       props: { workspaceId: "ws-1" },
     });
-    const badge = container.querySelector("[data-agent-count]");
-    expect(badge).toBeTruthy();
-    expect(badge!.getAttribute("data-agent-count")).toBe("2");
-    expect(badge!.textContent).toMatch(/2\s+agents/);
+    const root = container.querySelector("[data-workspace-agent-subtitle]");
+    expect(root).toBeTruthy();
+    expect(root!.getAttribute("data-agent-count")).toBe("2");
   });
 
-  it("does not count terminal-status agents toward the badge", () => {
+  it("does not count terminal-status agents toward the active count", () => {
     setAgentsForTests([
       makeAgent({ agentId: "a1", workspaceId: "ws-1", status: "active" }),
       makeAgent({
@@ -134,12 +133,11 @@ describe("WorkspaceAgentSubtitle", () => {
     const { container } = render(WorkspaceAgentSubtitle, {
       props: { workspaceId: "ws-1" },
     });
-    const badge = container.querySelector("[data-agent-count]");
-    expect(badge!.getAttribute("data-agent-count")).toBe("1");
-    expect(badge!.textContent).toMatch(/1\s+agent/);
+    const root = container.querySelector("[data-workspace-agent-subtitle]");
+    expect(root!.getAttribute("data-agent-count")).toBe("1");
   });
 
-  it("renders one inline agent row per active agent (name + status pill)", () => {
+  it("renders distinct title-cased statuses comma-separated (no chip, no name)", () => {
     setAgentsForTests([
       makeAgent({
         agentId: "a1",
@@ -160,17 +158,37 @@ describe("WorkspaceAgentSubtitle", () => {
       props: { workspaceId: "ws-1" },
     });
     const rows = container.querySelectorAll("[data-agent-row]");
-    expect(rows).toHaveLength(2);
-    const ids = Array.from(rows).map((r) => r.getAttribute("data-agent-row"));
-    expect(ids.sort()).toEqual(["a1", "a2"]);
-    const claudeRow = container.querySelector("[data-agent-row='a1']");
-    expect(claudeRow!.textContent).toContain("claude");
-    expect(
-      claudeRow!.querySelector("[data-status]")!.getAttribute("data-status"),
-    ).toBe("active");
+    expect(rows).toHaveLength(1);
+    const status = container.querySelector("[data-status]");
+    expect(status).toBeTruthy();
+    // waiting takes precedence in the dominant-bucket attribute.
+    expect(status!.getAttribute("data-status")).toBe("attention");
+    // Distinct buckets joined in precedence order, title-cased.
+    expect(status!.textContent?.trim()).toBe("Waiting, Running");
+    // No agent names rendered inline.
+    expect(container.textContent ?? "").not.toContain("claude");
+    expect(container.textContent ?? "").not.toContain("gemini");
   });
 
-  it("excludes terminal-status agents from the inline rows", () => {
+  it("collapses duplicate buckets when multiple agents share a status", () => {
+    setAgentsForTests([
+      makeAgent({ agentId: "a1", workspaceId: "ws-1", status: "active" }),
+      makeAgent({
+        agentId: "a2",
+        workspaceId: "ws-1",
+        status: "running",
+        surfaceId: "surf-2",
+        paneId: "pane-2",
+      }),
+    ]);
+    const { container } = render(WorkspaceAgentSubtitle, {
+      props: { workspaceId: "ws-1" },
+    });
+    const status = container.querySelector("[data-status]");
+    expect(status!.textContent?.trim()).toBe("Running");
+  });
+
+  it("excludes terminal-status agents from the aggregate status", () => {
     setAgentsForTests([
       makeAgent({ agentId: "a1", workspaceId: "ws-1", status: "errored" }),
       makeAgent({
@@ -191,12 +209,12 @@ describe("WorkspaceAgentSubtitle", () => {
     const { container } = render(WorkspaceAgentSubtitle, {
       props: { workspaceId: "ws-1" },
     });
-    const rows = container.querySelectorAll("[data-agent-row]");
-    expect(rows).toHaveLength(1);
-    expect(rows[0]!.getAttribute("data-agent-row")).toBe("a3");
+    const status = container.querySelector("[data-status]");
+    expect(status!.getAttribute("data-status")).toBe("thinking");
+    expect(status!.textContent?.trim()).toBe("Running");
   });
 
-  it("clicking an agent row focuses that agent's surface", async () => {
+  it("clicking the row focuses the first active agent's surface", async () => {
     setAgentsForTests([
       makeAgent({
         agentId: "a1",
@@ -210,7 +228,7 @@ describe("WorkspaceAgentSubtitle", () => {
       props: { workspaceId: "ws-1" },
     });
     const row = container.querySelector(
-      "[data-agent-row='a1']",
+      "[data-agent-row='ws-1']",
     ) as HTMLButtonElement;
     await fireEvent.click(row);
     expect(focusSurfaceByIdMock).toHaveBeenCalledWith("surf-42");

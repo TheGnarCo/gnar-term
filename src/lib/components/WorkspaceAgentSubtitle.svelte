@@ -1,13 +1,20 @@
 <script lang="ts">
   /**
-   * WorkspaceAgentSubtitle — per-Workspace agent status, rendered as
-   * an inline subtitle row between the workspace title and its CWD.
+   * WorkspaceAgentSubtitle — per-Workspace agent status rendered as an
+   * inline subtitle row between the workspace title and its CWD.
    *
-   * Layout: a flex-column inside the parent SidebarSubtitleRow.
-   *   - Header line: agent-count badge + branch-lifecycle pill (when
-   *     exactly one workspace branch matches a pane).
-   *   - One line per active agent: name + status pill, clickable to
-   *     focus the agent's surface.
+   * Format mirrors the surrounding GitStatusLine: bot icon (colored by
+   * the workspace's aggregate bot bucket) followed by the status as
+   * plain lowercase text — no name, no pill. When exactly one workspace
+   * branch matches a pane, the branch-lifecycle pill rides on the same
+   * row.
+   *
+   * Scope is intentionally narrower than the rail "hat" — the hat on
+   * the workspace banner aggregates the root workspace AND its branched
+   * workspaces, while this inline row reports only the bots whose
+   * `workspaceId` matches the row's own workspace. Branched workspace
+   * rows therefore show their own scope, and the root banner shows
+   * only the root's own bots even when branches have activity.
    *
    * Hides itself entirely when no active agents are present (and no
    * lifecycle pill would render). Registered by core in
@@ -15,16 +22,19 @@
    * visibility ships with the Workspace itself.
    */
   import { derived, get } from "svelte/store";
-  import {
-    agentsStore,
-    type DetectedAgent,
-  } from "../services/agent-detection-service";
+  import { agentsStore } from "../services/agent-detection-service";
   import {
     branchLifecycleStore,
     listBranchDescriptors,
   } from "../services/branch-lifecycle";
   import { focusSurfaceById } from "../services/surface-service";
-  import { TERMINAL_AGENT_STATUSES } from "../services/agent-status-service";
+  import {
+    TERMINAL_AGENT_STATUSES,
+    agentStatusBucket,
+  } from "../services/agent-status-service";
+  import { theme } from "../stores/theme";
+  import { botHatColor, type BotHatStatus } from "../utils/bot-hat-color";
+  import BotIcon from "../icons/BotIcon.svelte";
 
   export let workspaceId: string;
 
@@ -54,51 +64,67 @@
     },
   );
 
-  function handleAgentClick(agent: DetectedAgent) {
-    const live = get(agentsStore).find((a) => a.agentId === agent.agentId);
+  // Render distinct buckets present across this workspace's own active
+  // agents, in precedence order (waiting > running > idle). The inline
+  // status reports only the workspace's own bots — the rail "hat"
+  // aggregates root + branches and lives elsewhere.
+  const BUCKET_LABEL: Record<BotHatStatus, string> = {
+    attention: "Waiting",
+    thinking: "Running",
+    idle: "Idle",
+    none: "",
+  };
+  const BUCKET_ORDER: BotHatStatus[] = ["attention", "thinking", "idle"];
+
+  $: fgMuted = ($theme["fgMuted"] ?? $theme.fgDim) as string;
+  $: presentBuckets = (() => {
+    const seen = new Set<BotHatStatus>();
+    for (const a of $activeAgents) {
+      const b = agentStatusBucket(a.status);
+      if (b !== "none") seen.add(b);
+    }
+    return BUCKET_ORDER.filter((b) => seen.has(b));
+  })();
+  $: statusLabel = presentBuckets.map((b) => BUCKET_LABEL[b]).join(", ");
+  $: dominantBucket = presentBuckets[0] ?? "none";
+  $: iconColor = botHatColor(dominantBucket) ?? fgMuted;
+  $: shouldRender = statusLabel !== "" || $lifecycleEntry !== undefined;
+
+  function handleClick() {
+    const live = get(activeAgents)[0];
     if (live) focusSurfaceById(live.surfaceId);
   }
 </script>
 
-{#if $activeAgents.length > 0 || $lifecycleEntry}
+{#if shouldRender}
   <div
     class="workspace-agent-subtitle"
     data-workspace-agent-subtitle={workspaceId}
+    data-agent-count={$activeAgents.length}
+    data-bot-status={dominantBucket}
   >
-    {#if $activeAgents.length > 0 || $lifecycleEntry}
-      <div class="header-row">
-        {#if $activeAgents.length > 0}
-          <span
-            class="agent-count-badge"
-            data-agent-count={$activeAgents.length}
-          >
-            {$activeAgents.length}
-            {$activeAgents.length === 1 ? "agent" : "agents"}
-          </span>
-        {/if}
-        {#if $lifecycleEntry}
-          <span
-            class="lifecycle-pill"
-            data-lifecycle={$lifecycleEntry.lifecycle}
-          >
-            {$lifecycleEntry.lifecycle}
-          </span>
-        {/if}
-      </div>
-    {/if}
-    {#each $activeAgents as agent (agent.agentId)}
-      <button
-        type="button"
-        class="agent-row"
-        data-agent-row={agent.agentId}
-        on:click|stopPropagation={() => handleAgentClick(agent)}
-      >
-        <span class="agent-name">{agent.agentName}</span>
-        <span class="status-pill" data-status={agent.status}
-          >{agent.status}</span
+    <button
+      type="button"
+      class="agent-row"
+      data-agent-row={workspaceId}
+      title="agents in this workspace"
+      on:click|stopPropagation={handleClick}
+      style="color: {fgMuted};"
+    >
+      <span class="icon" aria-hidden="true">
+        <BotIcon size={10} color={iconColor} />
+      </span>
+      {#if statusLabel}
+        <span class="status-text" data-status={dominantBucket}
+          >{statusLabel}</span
         >
-      </button>
-    {/each}
+      {/if}
+      {#if $lifecycleEntry}
+        <span class="lifecycle-pill" data-lifecycle={$lifecycleEntry.lifecycle}>
+          {$lifecycleEntry.lifecycle}
+        </span>
+      {/if}
+    </button>
   </div>
 {/if}
 
@@ -106,63 +132,55 @@
   .workspace-agent-subtitle {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    padding: 0 12px 0 6px;
+    overflow: hidden;
+    line-height: 1.2;
     flex: 1;
     min-width: 0;
-    font-size: 0.75rem;
-  }
-
-  .header-row {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    opacity: 0.8;
-  }
-
-  .agent-count-badge {
-    font-variant-numeric: tabular-nums;
-  }
-
-  .lifecycle-pill {
-    padding: 1px 5px;
-    border-radius: 99px;
-    font-size: 0.65rem;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    background: color-mix(in srgb, currentColor 15%, transparent);
   }
 
   .agent-row {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
+    min-width: 0;
     width: 100%;
     background: transparent;
     border: 0;
     padding: 0;
-    color: inherit;
     text-align: left;
     cursor: pointer;
     font: inherit;
+    font-size: 10px;
+    line-height: 1.2;
   }
 
-  .agent-row:hover {
-    background: rgba(255, 255, 255, 0.05);
+  .agent-row:hover .status-text {
+    text-decoration: underline;
   }
 
-  .agent-name {
+  .icon {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    opacity: 0.9;
+  }
+
+  .status-text {
     flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .status-pill {
-    padding: 1px 6px;
+  .lifecycle-pill {
+    padding: 0 5px;
     border-radius: 99px;
-    font-size: 0.65rem;
+    font-size: 9px;
+    line-height: 1.4;
     text-transform: uppercase;
     letter-spacing: 0.03em;
     background: color-mix(in srgb, currentColor 15%, transparent);
+    flex-shrink: 0;
   }
 </style>

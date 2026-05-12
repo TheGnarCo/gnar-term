@@ -167,15 +167,17 @@
   {/if}
   {#if showHat}
     <!-- Bot-status hat overlay: a small rounded "cap" that protrudes
-         4px above the row, plus 10px of solid color inside the row,
-         and a 2px dark divider before the rail stripe color shows
-         through. Width tracks the rail stripe (4px in collapsed mode,
-         8px in expanded) so the cap caps the rail cleanly without ever
-         appearing thicker than the rail itself. The "attention"
-         variant pulses via box-shadow; the "thinking" variant is
-         static green. The pulse glow survives the rare case where the
-         rail color and hat color match (e.g. amber accent + yellow
-         attention). -->
+         4px above the row plus solid color inside the row. Width tracks
+         the rail stripe (4px in collapsed mode, 8px in expanded) so the
+         cap caps the rail cleanly without ever appearing thicker than
+         the rail itself. In expanded mode the bottom 2px is a dark
+         divider so the hat reads as a discrete chunk above the rail; in
+         narrowRail mode the divider is dropped — at 4px width it reads
+         as a broken seam between hat color and rail color rather than a
+         visual separator. The "attention" variant pulses via box-shadow;
+         the "thinking" variant is static green. The pulse glow survives
+         the rare case where the rail color and hat color match (e.g.
+         amber accent + yellow attention). -->
     <div
       aria-hidden="true"
       class="rail-bot-hat"
@@ -186,13 +188,15 @@
         width: {hatWidth};
         height: 16px;
         --rail-hat-glow: {hatColor};
-        background: linear-gradient(
+        background: {narrowRail
+        ? hatColor
+        : `linear-gradient(
           to bottom,
-          {hatColor} 0,
-          {hatColor} 14px,
+          ${hatColor} 0,
+          ${hatColor} 14px,
           rgba(0, 0, 0, 0.55) 14px,
           rgba(0, 0, 0, 0.55) 16px
-        );
+        )`};
         border-top-left-radius: 3px;
         border-top-right-radius: 3px;
         pointer-events: none;

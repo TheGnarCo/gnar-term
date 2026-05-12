@@ -136,7 +136,7 @@ describe("WorkspaceDiffPrSubtitle", () => {
     expect(queried).toBe(true);
   });
 
-  it("renders a hidden placeholder PR row while the store has no entry for the repo", async () => {
+  it("renders nothing while the store has no entry for the repo", async () => {
     workspaces.set([makeRootWorkspace("ws-1")]);
     setBranch("ws-1", "/repos/placeholder-test");
 
@@ -147,8 +147,8 @@ describe("WorkspaceDiffPrSubtitle", () => {
     await tick();
     await tick();
 
-    expect(container.querySelector("[data-pr-row-placeholder]")).not.toBeNull();
     expect(container.querySelector("[data-pr-row]")).toBeNull();
+    expect(container.textContent?.trim() ?? "").toBe("");
   });
 
   it("paints the real PR row when the shared store has an entry for the repo", async () => {
@@ -162,7 +162,6 @@ describe("WorkspaceDiffPrSubtitle", () => {
 
     await tick();
 
-    expect(container.querySelector("[data-pr-row-placeholder]")).toBeNull();
     expect(container.querySelector("[data-pr-row]")).not.toBeNull();
     expect(container.textContent).toMatch(/#42/);
   });

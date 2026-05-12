@@ -90,6 +90,29 @@ describe("DragGrip", () => {
     expect(hat!.style.width).toBe("4px");
   });
 
+  it("paints the 2px dark divider between hat and rail in narrow (collapsed) mode", () => {
+    // Regression: an earlier iteration dropped the divider in narrowRail
+    // mode on the theory that 4px was too thin to read as a separator.
+    // In practice, removing it made the hat color flow straight into
+    // the rail color — losing the discrete "hat above rail" silhouette
+    // that's the whole point of the shape. The divider must paint at
+    // every rail width.
+    const { container } = render(DragGrip, {
+      props: {
+        theme: stubTheme,
+        visible: false,
+        railColor: "#abcdef",
+        narrowRail: true,
+        botStatus: "thinking",
+      },
+    });
+    const hat = container.querySelector(".rail-bot-hat") as HTMLElement | null;
+    expect(hat).not.toBeNull();
+    const background = hat!.style.background;
+    expect(background).toContain("linear-gradient");
+    expect(background).toContain("rgba(0, 0, 0, 0.55)");
+  });
+
   it("renders the bot-status hat in expanded (full-width) mode too", () => {
     // Regression: bot status used to be hidden when the sidebar was
     // expanded. Now the hat must paint at every rail width so agent
@@ -133,16 +156,32 @@ describe("DragGrip visual states", () => {
     expect(SOURCE).toMatch(/width:\s*8px/);
   });
 
-  it("shows solid stripe normally, suppressing dots", () => {
-    // When not hovered (!visible), show solid stripe. When hovered (visible) and
-    // alwaysShowDots is true, show dots instead. Never both at the same time.
-    expect(SOURCE).toMatch(/showRailStripe\s*=\s*!visible/);
-    expect(SOURCE).toMatch(/\{#if showRailStripe\}/);
+  it("shows solid stripe normally, suppressing dots on hover", () => {
+    // Stripe and dots are always rendered in the DOM (CSS-driven hover);
+    // the swap is a `display: none` rule keyed off `.drag-grip:hover` (or
+    // `.force-hover`). Hover state is owned by CSS so synthetic
+    // mouseleave drops at the leftmost viewport edge can't leave the
+    // rail stuck in a hovered look.
+    expect(SOURCE).toMatch(/class="rail-stripe"/);
+    expect(SOURCE).toMatch(
+      /\.drag-grip\.has-dots\.can-hover:hover \.rail-stripe,\s*\.drag-grip\.has-dots\.force-hover \.rail-stripe\s*\{\s*display:\s*none;\s*\}/,
+    );
   });
 
   it("renders a uniform diamond-grip dot pattern on hover when alwaysShowDots is true", () => {
-    expect(SOURCE).toMatch(/showDots\s*=\s*visible\s*&&\s*alwaysShowDots/);
-    expect(SOURCE).toMatch(/\{#if showDots\}/);
+    // Dot pattern is always rendered when `dotsRender` is truthy; CSS
+    // toggles its `display` between `none` (rest) and `block` (hover or
+    // force-hover). `dotsRender = alwaysShowDots && !narrowRail` gates
+    // the render so the 4px collapsed rail never paints dots.
+    expect(SOURCE).toMatch(
+      /dotsRender\s*=\s*alwaysShowDots\s*&&\s*!narrowRail/,
+    );
+    expect(SOURCE).toMatch(/\{#if dotsRender\}/);
+    expect(SOURCE).toMatch(/class="rail-dots"/);
+    expect(SOURCE).toMatch(/\.rail-dots\s*\{[^}]*display:\s*none;/);
+    expect(SOURCE).toMatch(
+      /\.drag-grip\.has-dots\.can-hover:hover \.rail-dots,\s*\.drag-grip\.has-dots\.force-hover \.rail-dots\s*\{\s*display:\s*block;\s*\}/,
+    );
     // Both rest and expanded states use the same 2-gradient diamond-grip
     // tile (dots at (0,0) and (2.5, 2.5)). Only the radius + fade change.
     const gradientCount = (SOURCE.match(/radial-gradient\(circle,/g) ?? [])

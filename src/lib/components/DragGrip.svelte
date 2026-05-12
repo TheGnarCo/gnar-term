@@ -10,7 +10,6 @@
   const mutedColor = variantColor("muted");
 
   export let theme: ThemeDef;
-  export let visible: boolean = false;
   /**
    * Optional mousedown binding. Consumers now typically attach the drag
    * start handler at the row level (so hovering the row expands the
@@ -28,9 +27,9 @@
   export let dotColor: string | undefined = undefined;
   /**
    * When true, the dot pattern renders whether or not the grip is in the
-   * `visible` (hover/drag) state — so a colored frit is always shown on
-   * the rail. The rail stripe is suppressed in this mode to avoid
-   * painting two layers on top of each other.
+   * hover (or force-hover) state — so a colored frit is always shown on
+   * the rail. The rail stripe is suppressed in this mode whenever the
+   * dots are visible, to avoid painting two layers on top of each other.
    */
   export let alwaysShowDots: boolean = false;
   /**
@@ -40,7 +39,7 @@
    * unfaded so the pattern runs the full rail height cleanly.
    */
   export let fadeRight: boolean = false;
-  /** When provided, renders a × chip at the top of the grip whenever the grip is expanded. */
+  /** When provided, renders a × chip at the top of the grip whenever the grip is in hover/force-hover state. */
   export let onClose: (() => void) | undefined = undefined;
   /** Tooltip text for the close button. */
   export let closeTooltip: string | undefined = undefined;
@@ -89,11 +88,28 @@
    * the rail itself, so it stays visible at every width.
    */
   export let botStatus: "none" | "thinking" | "attention" | "idle" = "none";
+  /**
+   * Whether the grip should respond to CSS `:hover` at all. False
+   * suppresses hover effects when the row is locked or sidebar drag is
+   * globally suspended — set by callers from their own gating logic.
+   * Hover state is otherwise driven entirely by the CSS pseudo-class
+   * on the grip element, so cursor exits that drop the synthetic
+   * `mouseleave` (e.g., off the leftmost viewport edge) no longer
+   * leave the rail stuck in a "hovered" state.
+   */
+  export let canHover: boolean = true;
+  /**
+   * Force the hover-state visual (dots, close button, grab cursor)
+   * regardless of CSS `:hover`. Callers set this for drag-in-progress
+   * so the rail stays in its expanded look while the pointer leaves
+   * the grip.
+   */
+  export let forceHover: boolean = false;
 
   let closeButtonHovered = false;
   // shortcutLabel takes priority over close/lock when meta-hold is active.
   $: showShortcut = !!shortcutLabel && $shortcutHintsActive;
-  $: showClose = onClose != null && visible && !locked && !showShortcut;
+  $: hasClose = onClose != null && !locked && !showShortcut;
   $: showLock = locked && !showShortcut;
 
   $: effectiveColor = railColor ?? theme.fgDim;
@@ -109,12 +125,11 @@
   $: fritBackgroundPosition = "0 0, 2.5px 2.5px";
   $: fritBackgroundRepeat = "repeat";
   // In narrow-rail mode the painted color stays at 4px even when the
-  // rail is hovered — so the stripe renders regardless of `visible`,
-  // and the hover dot pattern is suppressed (it would otherwise paint
-  // 8px wide and contradict the 4px policy).
-  $: showDots = visible && alwaysShowDots && !narrowRail;
-  $: showRailStripe = !visible || narrowRail;
+  // rail is hovered — so the stripe never hides, and the dot pattern
+  // is gated out (it would otherwise paint 8px wide and contradict the
+  // 4px policy).
   $: railStripeWidth = narrowRail ? "4px" : "8px";
+  $: dotsRender = alwaysShowDots && !narrowRail;
   // Hat renders at every rail width — bot status is the one signal
   // we always surface on the rail itself so notification visibility
   // doesn't depend on whether the sidebar is collapsed.
@@ -131,60 +146,49 @@
   $: hatWidth = railStripeWidth;
 </script>
 
+<!-- The grip is the rail's hover target. Hover state is `:hover`-driven
+     so it stays accurate even when synthetic mouseenter/mouseleave
+     events get dropped (cursor leaving the leftmost viewport edge,
+     popovers stealing pointer events, etc.). `forceHover` lets callers
+     paint the same state from outside (drag in progress). `canHover`
+     gates hover entirely — when false, `:hover` is a no-op (locked
+     grip, sidebar drag globally suspended). -->
 <div
   aria-hidden="true"
   class="drag-grip"
+  class:can-hover={canHover}
+  class:force-hover={forceHover}
+  class:locked
+  class:primary-clickable={primaryClickable}
+  class:narrow-rail={narrowRail}
+  class:has-dots={dotsRender}
+  class:has-shortcut={showShortcut}
   on:mousedown={onMouseDown ?? (() => {})}
-  style="
-    flex-shrink: 0;
-    align-self: stretch;
-    position: relative;
-    width: 8px;
-    cursor: {locked
-    ? 'not-allowed'
-    : primaryClickable
-      ? 'pointer'
-      : visible
-        ? 'grab'
-        : 'default'};
-  "
 >
-  <!-- Rail stripe + dot pattern fill the full grip height (no vertical
-       inset) so the rail's top + bottom are flush with the row. Inter-
-       row breathing is handled by the parent list's margin-top rule
-       now, not by an inset inside the grip. -->
-  {#if showRailStripe}
-    <div
-      style="
-        position: absolute;
-        left: 0; top: 0; bottom: 0;
-        width: {railStripeWidth};
-        background: {effectiveColor};
-        opacity: {railOpacity};
-        transition: width 0.1s;
-      "
-    ></div>
-  {/if}
+  <!-- Rail stripe: always rendered. In expanded mode, CSS hides it
+       while hovered (or force-hovered) and the dot pattern takes over;
+       in narrow-rail mode the stripe stays visible regardless. -->
+  <div
+    class="rail-stripe"
+    style="width: {railStripeWidth}; background: {effectiveColor}; opacity: {railOpacity};"
+  ></div>
+
   {#if showHat}
     <!-- Bot-status hat overlay: a small rounded "cap" that protrudes
-         4px above the row, plus 10px of solid color inside the row,
-         and a 2px dark divider before the rail stripe color shows
-         through. Width tracks the rail stripe (4px in collapsed mode,
-         8px in expanded) so the cap caps the rail cleanly without ever
-         appearing thicker than the rail itself. The "attention"
-         variant pulses via box-shadow; the "thinking" variant is
-         static green. The pulse glow survives the rare case where the
-         rail color and hat color match (e.g. amber accent + yellow
-         attention). -->
+         4px above the row plus solid color inside the row, with a 2px
+         dark divider at the bottom so the hat reads as a discrete
+         chunk above the rail stripe. Width tracks the rail stripe
+         (4px in collapsed mode, 8px in expanded) so the cap caps the
+         rail cleanly without ever appearing thicker than the rail
+         itself. The divider paints at every rail width — the
+         separation between hat and rail is the whole point of the
+         hat shape. -->
     <div
       aria-hidden="true"
       class="rail-bot-hat"
       class:pulses={hatPulses}
       style="
-        position: absolute;
-        left: 0; top: -4px;
         width: {hatWidth};
-        height: 16px;
         --rail-hat-glow: {hatColor};
         background: linear-gradient(
           to bottom,
@@ -193,25 +197,21 @@
           rgba(0, 0, 0, 0.55) 14px,
           rgba(0, 0, 0, 0.55) 16px
         );
-        border-top-left-radius: 3px;
-        border-top-right-radius: 3px;
-        pointer-events: none;
-        z-index: 3;
       "
     ></div>
   {/if}
-  {#if showDots}
+
+  {#if dotsRender}
     {@const fadeMask =
       "linear-gradient(to right, rgba(0,0,0,1) 0%, rgba(0,0,0,0.5) 60%, rgba(0,0,0,0) 100%)"}
-    <!-- Frit dot pattern. Optional L→R fade (fadeRight prop) so the
-         rail's right edge softens into the row content. Branches opt
-         in; root Workspaces keep the pattern running clean. -->
+    <!-- Frit dot pattern. Hidden by default; CSS reveals it when the
+         grip is hovered (or force-hovered), at which point the stripe
+         is hidden so only one rail layer paints at a time. Optional
+         L→R fade (fadeRight prop) so the rail's right edge softens
+         into the row content. -->
     <div
+      class="rail-dots"
       style="
-        position: absolute;
-        left: 0; top: 0; bottom: 0;
-        width: 8px;
-        pointer-events: none;
         background-image: {fritBackgroundImage};
         background-size: {fritBackgroundSize};
         background-position: {fritBackgroundPosition};
@@ -222,50 +222,23 @@
       "
     ></div>
   {/if}
+
   {#if showShortcut}
     <div
       aria-hidden="true"
-      style="
-        position: absolute;
-        top: 4px; left: 1px; right: 1px;
-        height: 14px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: {theme.accent};
-        color: {theme.bg};
-        border-radius: 3px;
-        font-size: 9px;
-        font-weight: 700;
-        pointer-events: none;
-        white-space: nowrap;
-        overflow: hidden;
-      "
+      class="grip-chip shortcut-chip"
+      style="background: {theme.accent}; color: {theme.bg};"
     >
       {shortcutLabel}
     </div>
   {/if}
-  {#if showClose}
+
+  {#if hasClose}
     <button
+      class="grip-chip close-button"
       title={closeTooltip}
       aria-label={closeTooltip ?? "Close"}
-      style="
-        position: absolute;
-        top: 4px; left: 1px; right: 1px;
-        height: 14px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: {closeButtonHovered ? theme.danger : effectiveColor};
-        background: transparent;
-        border: none;
-        border-radius: 3px;
-        cursor: pointer;
-        padding: 0;
-        line-height: 1;
-        -webkit-app-region: no-drag;
-        transition: background 0.1s, color 0.1s, border-color 0.1s;
-      "
+      style="color: {closeButtonHovered ? theme.danger : effectiveColor};"
       on:mousedown|stopPropagation
       on:click|stopPropagation={onClose}
       on:mouseenter={() => (closeButtonHovered = true)}
@@ -274,6 +247,7 @@
       <CloseIcon width="9" height="9" />
     </button>
   {/if}
+
   {#if showLock}
     <!-- Lock chip: visual-only indicator that the workspace is locked.
          Renders in the same slot the close button would occupy so the
@@ -281,20 +255,9 @@
          the lock state is toggled from the context menu. -->
     <div
       aria-hidden="true"
+      class="grip-chip lock-chip"
       title="Workspace locked"
-      style="
-        position: absolute;
-        top: 4px; left: 1px; right: 1px;
-        height: 14px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: {effectiveColor};
-        background: transparent;
-        border: none;
-        border-radius: 3px;
-        pointer-events: none;
-      "
+      style="color: {effectiveColor};"
     >
       <LockIcon width="9" height="9" />
     </div>
@@ -302,8 +265,108 @@
 </div>
 
 <style>
+  .drag-grip {
+    flex-shrink: 0;
+    align-self: stretch;
+    position: relative;
+    width: 8px;
+    cursor: default;
+  }
+  .drag-grip.locked {
+    cursor: not-allowed;
+  }
+  .drag-grip.primary-clickable:not(.locked) {
+    cursor: pointer;
+  }
+  .drag-grip.can-hover:not(.locked):not(.primary-clickable):hover,
+  .drag-grip.force-hover:not(.locked):not(.primary-clickable) {
+    cursor: grab;
+  }
+
+  .rail-stripe {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    transition: width 0.1s;
+  }
+  /* Expanded-mode hover: dots take over, stripe hides. Narrow-rail
+     keeps the 4px stripe regardless of hover state. */
+  .drag-grip.has-dots.can-hover:hover .rail-stripe,
+  .drag-grip.has-dots.force-hover .rail-stripe {
+    display: none;
+  }
+
+  .rail-dots {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 8px;
+    pointer-events: none;
+    display: none;
+  }
+  .drag-grip.has-dots.can-hover:hover .rail-dots,
+  .drag-grip.has-dots.force-hover .rail-dots {
+    display: block;
+  }
+
+  .rail-bot-hat {
+    position: absolute;
+    left: 0;
+    top: -4px;
+    height: 16px;
+    border-top-left-radius: 3px;
+    border-top-right-radius: 3px;
+    pointer-events: none;
+    z-index: 3;
+  }
   .rail-bot-hat.pulses {
     animation: dg-rail-hat-glow 1.6s ease-in-out infinite;
+  }
+
+  .grip-chip {
+    position: absolute;
+    top: 4px;
+    left: 1px;
+    right: 1px;
+    height: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .shortcut-chip {
+    font-size: 9px;
+    font-weight: 700;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+
+  .close-button {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+    -webkit-app-region: no-drag;
+    transition: color 0.1s;
+    /* Hidden until the grip is hovered (or force-hovered). The
+       `hasClose` render guard already factors in locked + shortcut
+       state, so the only thing left to gate on is hover. */
+    display: none;
+  }
+  .drag-grip.can-hover:hover .close-button,
+  .drag-grip.force-hover .close-button {
+    display: flex;
+  }
+
+  .lock-chip {
+    background: transparent;
+    border: none;
+    pointer-events: none;
   }
 
   @keyframes dg-rail-hat-glow {
